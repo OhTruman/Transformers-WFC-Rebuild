@@ -14,7 +14,7 @@
 #include "game/WeaponMesh.h"
 #include "game/WeaponFx.h"
 #include "game/SoundCues.h"
-#include "game/VehicleBoostFx.h"
+#include "game/VehicleFx.h"
 
 namespace render { class IRenderer; }
 
@@ -96,8 +96,14 @@ private:
     bool prevTransforming_ = false;
     SoundCues cues_;
 
-    // Vehicle boost presentation (OptimusTruckForm.BoostFx + HmPlayerVehicleAudioComponent boost sounds).
-    VehicleBoostFx boostFx_;
+    // Vehicle-form presentation (OptimusTruckForm BoostFx / HoverFX / JumpFX + boost sounds).
+    VehicleFx vehicleFx_;
+    int boostInst_[2] = {-1, -1};
+    int hoverInst_[6] = {-1, -1, -1, -1, -1, -1};
+    int jumpInst_[3] = {-1, -1, -1};
+    bool hoverActive_ = false;
+    bool vehiclePrevGrounded_ = true;
+    int jumpCount_ = 0;
     bool boostActive_ = false;
     float boostAge_ = 0.0f;
     bool boostWheelsChecked_ = false;

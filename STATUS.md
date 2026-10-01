@@ -3,6 +3,18 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS PASS 5 (2026-10-01) — HOVER THRUSTERS + JUMP BOOSTERS
+- Vehicle form now shows Optimus's authored hover thrusters (`CarHover_A_01_FX` on the six wheel
+  HoverBooster sockets, with their socket scale): red light cones and orange rings looping, plus a
+  spark / electro-ring / pulse burst whenever hover engages. Hover switches off while boosting (the truck
+  drops to its wheels) and when transforming.
+- Vehicle jumps fire `Jump_FX` on JumpBoostSocket_C/R/L: a 0.5 s burst of downward thruster cones,
+  energon cones, glows, booster smoke, sparks and electro rings.
+- `VehicleFx` replaces `VehicleBoostFx` as one data-driven system for boost / hover / jump.
+- Verified: idle hover, boost (hover off, boost unchanged), jump take-off, transform out; robot weapon FX unchanged.
+- PROV: light-cylinder intensity (DustPower 0.1 stands in for the volumetric shader), procedural spark
+  texture, ring velocity reading. Open: RamFX, drive/jump/land engine audio.
+
 ## SYSTEMS PASS 4 (2026-10-01) — VEHICLE BOOST PRESENTATION
 - Holding boost in vehicle form now shows Optimus's authored afterburner (`bumble_boost_small1_FX` on
   BoostSocket_L/R, the two exhaust stacks): ignition burst of thruster cones + bullet cone + glow, then
@@ -13,7 +25,7 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
   out while holding boost (effect + loop stop, END plays). Robot fire/reload FX unchanged.
 - Diagnostics: `WFC_BOOSTLOG=1` (state, particle count, mph, socket positions). Test:
   `WFC_STARTVEHICLE=1 WFC_AUTOBOOST=1 [WFC_AUTOWALK=1]`.
-- Open: hover thrusters (HoverFX), jump boosters (JumpFX), ram FX, drive/jump/land engine audio.
+- Open: ram FX, drive/jump/land engine audio (hover + jump FX: SYSTEMS PASS 5).
 
 ## SYSTEMS PASS 3 (2026-10-01) — SHELL, MAGAZINE AND RELOAD FX
 - Every shot ejects the authored shell mesh (GrenadeAmmo_STAT) from ShellSocket with a vent smoke puff;
