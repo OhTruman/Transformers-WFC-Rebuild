@@ -62,4 +62,4 @@ Run from the worktree root (the reference sheet path is relative). Assets are re
 - The legacy `tests/GameplayTests.cpp` targets an API that no longer exists (`game/Gameplay.h`) and is not built; this harness supersedes it.
 - The in-game `WFC_SMOKE_FRAMES` path integrates wall-clock time, so its numbers vary per run; prefer this harness for numbers and `capture.ps1` for pictures.
 
-Findings from the first run, by owning workstream: [FINDINGS.md](FINDINGS.md).
+Findings by owning workstream: [FINDINGS.md](FINDINGS.md). Integration checkpoint (four owner patches, duplicated-work merge warning): [CHECKPOINT.md](CHECKPOINT.md).

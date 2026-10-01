@@ -1,5 +1,7 @@
 # Fidelity harness — findings for owning workstreams (2026-10-01)
 
+> Integration checkpoint with the four owner patches and the merge warning: [CHECKPOINT.md](CHECKPOINT.md).
+
 ## Branch scoreboard (ab.ps1, same harness for every ref)
 | Ref | pass | FAIL | KNOWN | Notes vs main |
 |---|---|---|---|---|
