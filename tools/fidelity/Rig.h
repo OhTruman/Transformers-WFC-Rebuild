@@ -91,6 +91,9 @@ public:
 
     // One fixed step with the given input (pressed[] edges are consumed this step).
     void step(const platform::InputFrame& in);
+    // A render frame that runs ZERO fixed steps (Application::run: handleInput every frame,
+    // applyToPawn per fixed step). Happens whenever the frame rate exceeds the 60 Hz sim rate.
+    void frameWithoutStep(const platform::InputFrame& in) { controller().handleInput(in, dt_); }
     // Hold an input for `seconds` (edges only on the first step).
     void hold(const platform::InputFrame& in, double seconds);
     void idle(double seconds) { hold(platform::InputFrame{}, seconds); }

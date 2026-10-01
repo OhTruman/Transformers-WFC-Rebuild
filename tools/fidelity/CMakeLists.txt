@@ -3,6 +3,7 @@
 add_executable(wfc_fidelity
     main.cpp
     Checks.cpp
+    PlaytestChecks.cpp
     Rig.cpp
     WorldStub.cpp
     ${CMAKE_SOURCE_DIR}/src/game/Character.cpp

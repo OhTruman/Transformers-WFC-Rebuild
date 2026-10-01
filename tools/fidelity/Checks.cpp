@@ -1,4 +1,5 @@
 #include "Checks.h"
+#include "CheckUtil.h"
 #include "Rig.h"
 #include "assets/Gltf.h"
 #include "assets/Json.h"
@@ -18,44 +19,6 @@ using namespace core::config;
 
 namespace {
 Options gOpt;
-
-float hspeed(const Frame& f) { return std::sqrt(f.vel.x * f.vel.x + f.vel.z * f.vel.z); }
-
-void save(const Rig& r, const std::string& name) {
-    if (!gOpt.traceDir.empty()) r.writeCsv(gOpt.traceDir + "/" + name + ".csv");
-}
-
-bool loadJsonFile(const std::string& path, assets::Json& out) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) return false;
-    std::stringstream ss;
-    ss << f.rdbuf();
-    return assets::Json::parse(ss.str(), out);
-}
-
-// World point -> normalized device coordinates through the production camera.
-core::Vec3 toNdc(const render::Camera& cam, const core::Vec3& p) {
-    core::Mat4 m = cam.proj() * cam.view();
-    float x = m.m[0] * p.x + m.m[4] * p.y + m.m[8] * p.z + m.m[12];
-    float y = m.m[1] * p.x + m.m[5] * p.y + m.m[9] * p.z + m.m[13];
-    float z = m.m[2] * p.x + m.m[6] * p.y + m.m[10] * p.z + m.m[14];
-    float w = m.m[3] * p.x + m.m[7] * p.y + m.m[11] * p.z + m.m[15];
-    return {x / w, y / w, z / w};
-}
-
-float angleDeg(core::Vec3 a, core::Vec3 b) {
-    float d = core::clampf(core::dot(core::normalize(a), core::normalize(b)), -1.0f, 1.0f);
-    return core::degrees(std::acos(d));
-}
-
-// Time (relative to t0) of the first frame satisfying `pred`; -1 if never.
-template <class P> double firstAfter(const Rig& r, double t0, P pred) {
-    for (const Frame& f : r.trace()) if (f.t > t0 + 1e-9 && pred(f)) return f.t - t0;
-    return -1;
-}
-
-const char* kGameplay = "Gameplay";
-const char* kSystems = "Systems";
 } // namespace
 
 const Options& options() { return gOpt; }

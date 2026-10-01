@@ -25,6 +25,15 @@ void checkDeterminism(Report& r);
 void checkPerformance(Report& r);
 void checkMap(Report& r);
 
+// Milestone-01 playtest suites (PlaytestChecks.cpp).
+void checkTransformMomentum(Report& r);
+void checkFastMovement(Report& r);
+void checkFineAim(Report& r);
+void checkBoost(Report& r);
+void checkVehicleMaterials(Report& r);
+void checkMapContent(Report& r);
+void checkInputEdges(Report& r);
+
 // Compare measured metrics against values captured from the ORIGINAL game.
 void compareReference(Report& r, const std::string& path);
 
