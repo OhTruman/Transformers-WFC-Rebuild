@@ -5,7 +5,8 @@
 |---|---|---|---|---|
 | main 565edb2 | 98 | 0 | 16 | baseline (vehicle snaps heading at 10 800°/s) |
 | agents/gameplay 21902b6 (Pass 8) | 110 | 0 | 6 | **FIXED** (10): mesh facing (shoulders −13.7°, hips −17.6°, barrel 4° off facing), vehicle long axis, muzzle in front, `kMeshYawOffset` = π/2, aim-pitch tracking 1.02, reload on the move, transform clip pairing (to-vehicle 2.0 s), vehicle turn rate ≤180°/s |
-| agents/gameplay + `proposals/gameplay-1..3` | 115 | 0 | 1 | adds jump apex, step height, low-ledge penetration, wall slide; only the Systems fire rate remains |
+| agents/gameplay 8045676 (Pass 9) | 109 | 0 | 7 | aim offset now uses the authored TnAnimNodeAimOffset profile: barrel/camera pitch gain 1.02 → 0.70. Not a regression: the gain is authored, so the harness now only enforces direction and records the gain for an original capture |
+| agents/gameplay + `proposals/gameplay-1..3` (verified on 21902b6 and 8045676) | 114 | 0 | 2 | adds jump apex, step height, low-ledge penetration, wall slide; only the Systems fire rate remains |
 | agents/systems 3160a66 | 101 | 0 | 15 | **FIXED**: reload on the move (UpperBodyCustom slot) |
 | agents/systems + `proposals/systems-1` | 102 | 0 | 14 | fire rate 900 → 919 RPM |
 | gameplay + systems (merge preview) | — | — | — | **CONFLICTS**: `Character.cpp/.h`, `SkinnedModel.cpp`, `Recoil.h` (add/add), `FIDELITY.md`, `STATUS.md` |

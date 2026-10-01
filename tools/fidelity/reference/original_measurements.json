@@ -19,6 +19,7 @@
   "orientation.vehicle_max_yaw_rate":    {"original": null, "tol": 10,   "unit": "deg/s","method": "full-lock turn at cruise; heading change per second"},
   "orientation.camera_distance":         {"original": null, "tol": 0.5,  "unit": "m",   "method": "chase cam pivot-to-lens distance (from screen-space size of Optimus at known height)"},
   "orientation.pawn_screen_x":           {"original": null, "tol": 0.03, "unit": "ndc", "method": "horizontal screen position of the robot's spine in default chase cam (shoulder offset)"},
+  "animation.aim_pitch_tracking":       {"original": null, "tol": 0.1,  "unit": "ratio","method": "barrel pitch change / camera pitch change between looking ~23 deg up and down (side-on capture)"},
   "orientation.mouse_up_pitch_delta":    {"original": null, "tol": 0.0,  "unit": "rad", "method": "sign only: default look inversion (positive = up looks up)"},
   "weapon.rounds_per_minute":            {"original": null, "tol": 15,   "unit": "rpm", "method": "audio/flash count over a full 50-round magazine dump"},
   "weapon.mag_empty_time":               {"original": null, "tol": 0.05, "unit": "s",   "method": "frames from first to 50th shot"},
