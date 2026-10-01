@@ -55,40 +55,54 @@ void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
     R.pivotL = mdl.clipByName("Nav_IdlePivot90_L");
     R.pivotR = mdl.clipByName("Nav_IdlePivot90_R");
 
+    // TnAnimNodeAimOffset "Default" profile [CONF Robot_ANIMTREE]: the bones it drives, baked from
+    // the cells' poses (AnimName_* = Shooting_Aim_{L,F,R}_{D,C,U}). Bake rule (verified against the
+    // shipped AimComponents to <0.07 deg / 0 mm, work/pass8/verify_aim.js): for each bone and cell,
+    //   offsetRot = Gp * (L_cell * inv(L_centre)) * inv(Gp),   offsetPos = Gp * (t_cell - t_centre)
+    // with Gp the parent's model-space rotation in that cell's pose.
+    static const char* kAimBones[] = {
+        "C_Spine01_Lumbar01_XB", "C_Spine02_Lumbar02_XB", "C_Spine03_Neck01_XB", "C_Spine04_Head_XB",
+        "L_Arm01_Clav_XB", "L_Arm02_Shoulder_XB", "L_Arm03_Elbow_XB", "L_Arm04_Hand_XB",
+        "R_Arm01_Clav_XB", "R_Arm02_Shoulder_XB", "R_Arm03_Elbow_XB"};
     static const char* kCols[3] = {"L", "F", "R"};
     static const char* kRows[3] = {"D", "C", "U"};
+    assets::LocalPose cell[3][3];
     for (int c = 0; c < 3; ++c)
         for (int r = 0; r < 3; ++r) {
             int ci = mdl.clipByName(std::string("Shooting_Aim_") + kCols[c] + "_" + kRows[r]);
             if (ci < 0) return;
-            assets::samplePose(mdl, ci, 0.0f, false, R.aim[c][r]);
+            assets::samplePose(mdl, ci, 0.0f, false, cell[c][r]);
         }
-    R.aimValid = true;
+    const assets::LocalPose& centre = cell[1][1];
+    for (const char* bn : kAimBones) {
+        RobotRig::AimComp comp;
+        comp.node = mdl.nodeByName(bn);
+        if (comp.node < 0) continue;
+        size_t b = (size_t)comp.node;
+        int par = mdl.nodes[b].parent;
+        for (int c = 0; c < 3; ++c)
+            for (int r = 0; r < 3; ++r) {
+                const assets::LocalPose& P = cell[c][r];
+                core::Quat gp = par >= 0 ? assets::meshRotation(mdl, P, par) : core::Quat{};
+                core::Quat gpInv{-gp.x, -gp.y, -gp.z, gp.w};
+                core::Quat cInv{-centre.r[b].x, -centre.r[b].y, -centre.r[b].z, centre.r[b].w};
+                comp.q[c][r] = assets::quatMul(assets::quatMul(gp, assets::quatMul(P.r[b], cInv)), gpInv);
+                comp.t[c][r] = assets::quatRotate(gp, P.t[b] - centre.t[b]);
+            }
+        R.aimComps.push_back(comp);
+    }
+    std::sort(R.aimComps.begin(), R.aimComps.end(),
+              [](const RobotRig::AimComp& a, const RobotRig::AimComp& b) { return a.node < b.node; });
+    R.aimValid = !R.aimComps.empty();
+    LOG_INFO("aim rig: Default aim profile baked for %zu bones", R.aimComps.size());
 
-    // Calibrate the grid from the authored poses: measure the Ion Blaster barrel direction
-    // (socket bone * WeaponSocket_Primary * barrel +X) per row (pitch, F column) and per column
-    // (yaw, C row), so aim angles map onto the grid such that the barrel tracks the aim.
+    // Facing evidence (Pass 7): the straight-ahead pose points the barrel along model +X.
     if (weaponBone_ >= 0) {
-        auto barrelDir = [&](const assets::LocalPose& pose) {
-            std::vector<core::Mat4> g;
-            assets::poseGlobals(mdl, pose, g);
-            return core::normalize(core::transformDir(g[(size_t)weaponBone_] * weaponOffset_,
-                                                      core::Vec3{1, 0, 0}));
-        };
-        auto pitchOf = [](core::Vec3 d) { return std::asin(core::clampf(d.y, -1.0f, 1.0f)); };
-        auto yawOf = [](core::Vec3 d) { return std::atan2(d.z, d.x); };   // model +Z = right
-        core::Vec3 dc = barrelDir(R.aim[1][1]);
+        std::vector<core::Mat4> g;
+        assets::poseGlobals(mdl, centre, g);
+        core::Vec3 dc = core::normalize(core::transformDir(g[(size_t)weaponBone_] * weaponOffset_,
+                                                           core::Vec3{1, 0, 0}));
         LOG_INFO("aim rig: Shooting_Aim_F_C barrel dir (model space) %.2f %.2f %.2f", dc.x, dc.y, dc.z);
-        float pd = pitchOf(barrelDir(R.aim[1][0])), pc = pitchOf(dc), pu = pitchOf(barrelDir(R.aim[1][2]));
-        bool ok = pu > pc + 0.05f && pc > pd + 0.05f;
-        if (ok) { R.pitchD = pd; R.pitchC = pc; R.pitchU = pu; }
-        LOG_INFO("aim rig: barrel pitch D=%.1f C=%.1f U=%.1f deg (%s)", pd * 57.2958f, pc * 57.2958f,
-                 pu * 57.2958f, ok ? "calibrated" : "fallback +-0.8 rad");
-        float yl = yawOf(barrelDir(R.aim[0][1])), yc = yawOf(dc), yr = yawOf(barrelDir(R.aim[2][1]));
-        bool okY = yr > yc + 0.05f && yc > yl + 0.05f;
-        if (okY) { R.yawL = yl; R.yawC = yc; R.yawR = yr; }
-        LOG_INFO("aim rig: barrel yaw L=%.1f C=%.1f R=%.1f deg (%s)", yl * 57.2958f, yc * 57.2958f,
-                 yr * 57.2958f, okY ? "calibrated" : "fallback +-1.2 rad");
     }
 }
 
@@ -232,28 +246,37 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
     float speed = std::sqrt(velocity_.x * velocity_.x + velocity_.z * velocity_.z);
     const RobotRig& R = robotRig_;
 
-    // 1) Upper-body aim offset (TnAnimNodeAimOffset): the authored 3x3 Shooting_Aim grid as a delta
-    // from F_C on the C_Spine01_Lumbar01 subtree. Rows follow the aim pitch; columns follow the
-    // aim yaw relative to the legs (TurnInPlaceOffset = legYaw_). Inputs interpolate at the
-    // node's InterpSpeed [CONF 12].
+    // 1) Aim offset (TnAnimNodeAimOffset, "Default" profile): bilinear blend of the 9 cells, each
+    // bone rotated (and, for R_Arm01_Clav, moved) in model space about its pivot, parent first,
+    // as UE3 applies AimComponents. Input = the pawn's aim as a fraction of 90 deg (pitch; yaw of
+    // the aim relative to the legs = TurnInPlaceOffset), remapped from PawnAimOffsetRange onto
+    // the profile range and interpolated at InterpSpeed 12 [CONF].
     bool wantAim = robotRig && steady && R.aimValid && weaponBone_ >= 0;
     aimW_ = approach(aimW_, wantAim ? 1.0f : 0.0f, dt, core::config::kSlotBlend);
     if (robotRig && R.aimValid && aimW_ > 0.0f) {
-        float p = aimPitch_;
-        float pitchT = (p >= R.pitchC) ? (p - R.pitchC) / (R.pitchU - R.pitchC)
-                                       : (p - R.pitchC) / (R.pitchC - R.pitchD);
-        float y = legYaw_;   // aim is right of the legs by legYaw_
-        float yawT = (y >= 0.0f) ? y / (R.yawR - R.yawC) : y / (R.yawC - R.yawL);
-        float k = std::min(1.0f, core::config::kAimInterpSpeed * dt);
-        aimPitchN_ += (core::clampf(pitchT, -1.0f, 1.0f) - aimPitchN_) * k;
-        aimYawN_ += (core::clampf(yawT, -1.0f, 1.0f) - aimYawN_) * k;
+        namespace cfg = core::config;
+        // Remap preserving the centre (each side scaled separately) [PROV interpretation].
+        auto remap = [](float v, float pMin, float pMax, float oMin, float oMax) {
+            v = core::clampf(v, pMin, pMax);
+            return v >= 0.0f ? (pMax > 0.0f ? v / pMax * oMax : 0.0f) : (pMin < 0.0f ? v / pMin * oMin : 0.0f);
+        };
+        const float kQuarter = 1.5707963f;   // 16384 UU: AimOffsetPct unit
+        float y = remap(aimPitch_ / kQuarter, cfg::kAimPawnVMin, cfg::kAimPawnVMax, cfg::kAimProfVMin, cfg::kAimProfVMax);
+        float x = remap(legYaw_ / kQuarter, cfg::kAimPawnHMin, cfg::kAimPawnHMax, cfg::kAimProfHMin, cfg::kAimProfHMax);
+        float k = std::min(1.0f, cfg::kAimInterpSpeed * dt);
+        aimPitchN_ += (y - aimPitchN_) * k;
+        aimYawN_ += (x - aimYawN_) * k;
         int col = aimYawN_ >= 0.0f ? 2 : 0, row = aimPitchN_ >= 0.0f ? 2 : 0;
-        float ya = std::fabs(aimYawN_), pa = std::fabs(aimPitchN_);
-        assets::blendPose(R.aim[1][1], R.aim[col][1], ya, layerPose_);        // centre row
-        assets::blendPose(R.aim[1][row], R.aim[col][row], ya, deltaPose_);    // up/down row
-        assets::blendPose(layerPose_, deltaPose_, pa, layerPose_);
-        assets::deltaPose(R.aim[1][1], layerPose_, deltaPose_);
-        assets::addPose(finalPose_, deltaPose_, aimW_, &R.upperMask);
+        float xa = std::fabs(aimYawN_), ya = std::fabs(aimPitchN_);
+        for (const RobotRig::AimComp& c : R.aimComps) {
+            core::Quat qMid = assets::quatSlerp(c.q[1][1], c.q[col][1], xa);
+            core::Quat qRow = assets::quatSlerp(c.q[1][row], c.q[col][row], xa);
+            core::Quat q = assets::quatSlerp(core::Quat{}, assets::quatSlerp(qMid, qRow, ya), aimW_);
+            core::Vec3 tMid = c.t[1][1] + (c.t[col][1] - c.t[1][1]) * xa;
+            core::Vec3 tRow = c.t[1][row] + (c.t[col][row] - c.t[1][row]) * xa;
+            core::Vec3 t = (tMid + (tRow - tMid) * ya) * aimW_;
+            assets::applyMeshSpace(mdl, finalPose_, c.node, q, t);
+        }
     }
 
     // 2) Unwind lower body (TnAnimTurnInPlaceRotator): rotate the skeleton root by legYaw_ so the

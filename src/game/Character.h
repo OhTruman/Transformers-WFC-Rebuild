@@ -124,10 +124,15 @@ private:
     // Authored pose rigs, built once per model from the GLB clip set.
     struct RobotRig {
         bool built = false;
-        assets::LocalPose aim[3][3];             // Shooting_Aim_{L,F,R}_{D,C,U}: [col][row]
+        // TnAnimNodeAimOffset "Default" profile: per-bone mesh-space offsets for the 9 cells
+        // [col L,C,R][row D,C,U], baked at load from Shooting_Aim_* by the UE3 bake rule.
+        struct AimComp {
+            int node = -1;
+            core::Quat q[3][3];
+            core::Vec3 t[3][3];
+        };
+        std::vector<AimComp> aimComps;
         bool aimValid = false;
-        float pitchD = -0.8f, pitchC = 0.0f, pitchU = 0.8f;   // barrel pitch per row (rad)
-        float yawL = -1.2f, yawC = 0.0f, yawR = 1.2f;         // barrel yaw per column (rad, + = right)
         int rootRef = -1, spine = -1, rightArm = -1;           // C_Root_Reference / recoil bones
         int pivotL = -1, pivotR = -1;                          // Nav_IdlePivot90_{L,R}
         std::vector<float> upperMask;            // C_Spine01_Lumbar01_XB subtree

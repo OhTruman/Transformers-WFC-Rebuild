@@ -3,6 +3,26 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## FIDELITY PASS 9 (2026-10-01): AUTHORED AIM OFFSET PROFILE (TnAnimNodeAimOffset "Default")
+- **The aim offset is now the shipped profile, not a pose-derived approximation.** The Ion Blaster
+  uses the `Default` profile (selected by `WeaponTypeObserved`). It drives 11 bones (spine chain,
+  head, both arms) with 9 cells each, baked from `Shooting_Aim_{L,F,R}_{D,C,U}`.
+- **Bake rule cracked and verified:** for each bone/cell, rotation = Gp·(L_cell·L_centre⁻¹)·Gp⁻¹
+  and position = Gp·(t_cell − t_centre), where Gp is the parent's model-space rotation in that
+  cell. UE → glTF conversion: rotation `(−x,−z,−y,w)`, position `(x,z,y)·0.01`. Against the
+  authored AimComponents: mean 0.01°, worst 0.07°, translations 0 mm (`work/pass8/verify_aim.js`).
+  So the runtime bakes the profile from the clips (no asset data committed) and applies it the
+  UE3 way: bilinear cells, each bone rotated/moved in model space, parent first.
+- **Input ranges recovered:** profile H [−1,1] / V [−1,0.8]; RemapPawnAimRange from pawn aim
+  (fraction of 90°) H [−1,0.85] / V [−0.7,1]. The remap is centre-preserving (PROV reading).
+  Measured barrel pitch at aim −69/−34/0/+34/+69° → −42/−21/+3/+27/+50°: the gun trails the
+  camera at the extremes, as the authored ranges imply.
+- Turn-in-place yaw columns: the barrel stays within 5–13° of the aim while the legs lag up to 67°.
+  During a pivot step the gun arm swings ≈50° and back. That swing is authored in
+  `Nav_IdlePivot90_*` (root-discarded chest ±7°, forearm −50°), and the shipped tree layers the
+  aim offset over it unchanged, so it is kept.
+- Regression: recoil +12°, reload on the move, transforms both ways, jump 6.41 m; clean build.
+
 ## FIDELITY PASS 8 (2026-10-01): WEAPON RECOIL, TURN IN PLACE, FULL AIM GRID (shipped anim tree)
 Gameplay agent. Evidence: shipped `TR_Shared_ANIMTREE_p.Robot_ANIMTREE` and class defaults, read
 read-only from cooked packages (`work/pass8/dump_animtree.py` → `work/pass8/dump_*.json`).

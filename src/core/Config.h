@@ -89,6 +89,13 @@ constexpr float kTurnThreshold       = 0.3926991f; // 4096 UU = 22.5 deg [CONF]
 constexpr float kTurnTransitionBlend = 0.1f;       // s [CONF]
 constexpr float kTurnAbortPct        = 0.5f;       // [CONF]
 constexpr float kAimInterpSpeed      = 12.0f;      // [CONF]
+// Aim offset "Default" profile ranges [CONF Robot_ANIMTREE TnAnimNodeAimOffset]: profile
+// Horizontal [-1,1] / Vertical [-1,0.8]; RemapPawnAimRange with PawnAimOffsetRange
+// Horizontal [-1,0.85] / Vertical [-0.7,1] (pawn aim as a fraction of 90 deg).
+constexpr float kAimProfHMin = -1.0f,  kAimProfHMax = 1.0f;
+constexpr float kAimProfVMin = -1.0f,  kAimProfVMax = 0.8f;
+constexpr float kAimPawnHMin = -1.0f,  kAimPawnHMax = 0.85f;
+constexpr float kAimPawnVMin = -0.7f,  kAimPawnVMax = 1.0f;
 
 // Asset source: local, legally-owned extracted vertical slice (never committed).
 // Override at runtime with the WFC_ASSETS environment variable.

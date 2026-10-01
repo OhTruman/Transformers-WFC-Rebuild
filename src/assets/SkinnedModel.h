@@ -128,6 +128,8 @@ void deltaPose(const LocalPose& ref, const LocalPose& p, LocalPose& out);
 // Quaternion helpers (Hamilton product, axis-angle with a unit axis).
 core::Quat quatMul(const core::Quat& a, const core::Quat& b);
 core::Quat quatAxisAngle(const core::Vec3& axis, float angle);
+core::Quat quatSlerp(const core::Quat& a, const core::Quat& b, float t);
+core::Vec3 quatRotate(const core::Quat& q, const core::Vec3& v);
 // Model-space rotation of `node` under `pose` (composed parent chain; scale ignored).
 core::Quat meshRotation(const SkinnedModel& model, const LocalPose& pose, int node);
 // Skel-control style edit: rotate `node` by `meshRot` about its own pivot and move it by

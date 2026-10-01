@@ -437,6 +437,13 @@ core::Quat quatAxisAngle(const core::Vec3& axis, float angle) {
     return {axis.x * s, axis.y * s, axis.z * s, std::cos(angle * 0.5f)};
 }
 
+core::Quat quatSlerp(const core::Quat& a, const core::Quat& b, float t) { return slerp(a, b, t); }
+
+core::Vec3 quatRotate(const core::Quat& q, const core::Vec3& v) {
+    core::Quat r = qmul(qmul(q, core::Quat{v.x, v.y, v.z, 0.0f}), qconj(q));
+    return {r.x, r.y, r.z};
+}
+
 core::Quat meshRotation(const SkinnedModel& model, const LocalPose& pose, int node) {
     core::Quat q;
     for (int n = node; n >= 0 && (size_t)n < pose.size(); n = model.nodes[(size_t)n].parent)
