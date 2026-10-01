@@ -114,6 +114,9 @@ void Rig::record() {
     fr.ammo = c.weapon().ammo;
     fr.reserve = c.weapon().reserve;
     fr.spread = c.weapon().spread;
+    fr.reloadW = layer::reloadSlotWeight(c);
+    fr.aimW = layer::aimWeight(c, 0);
+    fr.aimPitchN = layer::aimPitchNorm(c, 0);
     fr.shots = (int)(shotLog().size() - shotBase_);
     if (fr.weaponVisible)
         fr.muzzle = core::transformPoint(c.weaponWorld(), core::Vec3{core::config::kMuzzleLocalX,
@@ -132,16 +135,16 @@ bool Rig::writeCsv(const std::string& path) const {
     std::FILE* f = std::fopen(path.c_str(), "wb");
     if (!f) return false;
     std::fprintf(f, "step,t,x,y,z,vx,vy,vz,hspeed,yaw_deg,cam_yaw_deg,cam_pitch_deg,grounded,form,"
-                    "transforming,anim,anim_t,ammo,reserve,reloading,spread,shots,weapon_visible,"
+                    "transforming,anim,anim_t,ammo,reserve,reloading,spread,shots,weapon_visible,reload_w,aim_w,aim_pitch_n,"
                     "muzzle_x,muzzle_y,muzzle_z\n");
     for (const Frame& r : trace_) {
         std::fprintf(f, "%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d,%s,%d,%s,%.4f,"
-                        "%d,%d,%d,%.4f,%d,%d,%.4f,%.4f,%.4f\n",
+                        "%d,%d,%d,%.4f,%d,%d,%.3f,%.3f,%.3f,%.4f,%.4f,%.4f\n",
                      r.step, r.t, r.pos.x, r.pos.y, r.pos.z, r.vel.x, r.vel.y, r.vel.z,
                      std::sqrt(r.vel.x * r.vel.x + r.vel.z * r.vel.z), core::degrees(r.yaw),
                      core::degrees(r.camYaw), core::degrees(r.camPitch), (int)r.grounded,
                      game::formName(r.form), (int)r.transforming, r.anim.c_str(), r.animT, r.ammo,
-                     r.reserve, (int)r.reloading, r.spread, r.shots, (int)r.weaponVisible,
+                     r.reserve, (int)r.reloading, r.spread, r.shots, (int)r.weaponVisible, r.reloadW, r.aimW, r.aimPitchN,
                      r.muzzle.x, r.muzzle.y, r.muzzle.z);
     }
     std::fclose(f);

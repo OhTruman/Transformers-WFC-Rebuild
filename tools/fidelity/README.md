@@ -14,6 +14,19 @@ Built by default with the main tree (`.\build.ps1 -Jobs 2` → `build/bin/wfc_fi
 .\build\bin\wfc_fidelity.exe --dump-models         # clip names/categories/durations + skeleton
 .\tools\fidelity\capture.ps1 -Name strafe -Frames 120 -Env @{ WFC_AUTOSTRAFE='1' }   # PNG still
 ```
+### Cross-branch A/B and merge gating
+```powershell
+.\tools\fidelity\ab.ps1 -Ref agents/gameplay                        # → work\ab\agents_gameplay\report.json
+.\tools\fidelity\ab.ps1 -Ref HEAD -Patch my.patch -Name trial       # prototype a fix without committing
+.\tools\fidelity\ab.ps1 -Ref agents/gameplay -Merge agents/systems  # merge preview (exit 3 + file list on conflict)
+.\tools\fidelity\diff-reports.ps1 work\ab\main\report.json work\ab\agents_gameplay\report.json
+```
+`ab.ps1` uses `git archive` / `git merge-tree` (no worktree, index or ref is touched), overlays
+*this* harness so every ref is judged by identical checks, builds into `work\ab\<name>\build` with
+this worktree's toolchain. `diff-reports.ps1` tags REGRESSED / FIXED / changed / moved and exits 1
+on new FAILs. Optional Character accessors (layer weights) are detected at compile time
+(`fid::layer` in `Rig.h`), so API differences between branches don't break the build.
+
 Run from the worktree root (the reference sheet path is relative). Assets are read-only, from
 `WFC_ASSETS` or `Config.h kAssetRootDefault`.
 

@@ -98,8 +98,10 @@ void checkConstants(Report& r) {
     r.near("fine_aim_speed_mult", kFineAimSpeedMult, 0.5, 1e-4, "", "Xe-TransGame.ini TnFineAimManager._GroundSpeedMultiplier");
     r.near("transform_blend_in", kTransformBlendIn, 0.115, 1e-4, "s", "Xe-TransGame.ini TnTransformation._BlendInTime");
     r.near("transform_blend_out", kTransformBlendOut, 0.25, 1e-4, "s", "Xe-TransGame.ini TnTransformation._BlendOutTime");
-    r.near("mesh_yaw_offset", kMeshYawOffset, 0.0, 1e-6, "rad", "FIDELITY pass 6 runtime geometry check",
-           "Config.h comment above kMeshYawOffset still describes a +90 deg rotation; value is 0 (comment stale)");
+    r.known("mesh_yaw_offset", kMeshYawOffset, core::PI * 0.5, 1e-4, "rad",
+            "UE meshes are +X-forward (umodel keeps UE +X as glTF +X), rebuild forward is -Z; verified by "
+            "muzzle.mesh_facing_vs_yaw_* and agents/gameplay 10cba8a (Shooting_Aim_F_C barrel along +X)", kGameplay,
+            "0 renders the robot/truck side-on; fixed on agents/gameplay 10cba8a, pending merge");
 
     // Camera projection: authored horizontal FOV must survive the vertical conversion.
     render::Camera cam;
@@ -674,13 +676,54 @@ void checkAnimation(Report& r) {
         rig.hold(Rig::down({Button::Fire}), 0.3);
         rig.step(Rig::press(Button::Reload));
         rig.idle(0.5);
-        r.truth("reload_clip", rig.last().anim == "Shooting_Reload_IonBlaster_ROBO", "robot.glb reload category",
-                "anim=" + rig.last().anim);
+        // Either the full-body base clip (pre-layer builds) or the upper-body reload slot (layered).
+        const Frame& lf = rig.last();
+        r.truth("reload_clip", lf.anim == "Shooting_Reload_IonBlaster_ROBO" || lf.reloadW > 0.5f,
+                "robot.glb reload category (base clip or reload slot weight > 0.5)",
+                "anim=" + lf.anim + " reloadW=" + std::to_string(lf.reloadW));
+        save(rig, "anim_reload");
+
+        Rig mv(60, true);
+        mv.idle(0.3);
+        mv.hold(Rig::down({Button::Fire}), 0.3);
+        platform::InputFrame f = Rig::down({Button::Forward});
+        f.pressed[(int)Button::Reload] = true;
+        mv.step(f);
+        mv.hold(Rig::down({Button::Forward}), 0.5);
+        const Frame& mf = mv.last();
+        bool legsRun = mf.anim.find("Strafe") != std::string::npos;
+        r.knownTruth("reload_on_the_move", legsRun && mf.reloadW > 0.5f && mf.reloading,
+                     "WFC layers the reload over locomotion (robot.glb ADD_Shooting_Reload_* / upper-body slot): "
+                     "legs keep jogging while the arms reload", kGameplay,
+                     "anim=" + mf.anim + " reloadW=" + std::to_string(mf.reloadW));
+        save(mv, "anim_reload_moving");
+    }
+    {
+        // Upper-body aim offset: the barrel should follow the camera pitch (reticle).
+        auto barrelPitchAt = [](float pitch, float& outAimN) {
+            Rig rig(60, true);
+            rig.idle(0.2);
+            platform::InputFrame look;
+            look.mouseDY = -(pitch - rig.controller().camPitch()) / kMouseSens;
+            rig.step(look);
+            rig.idle(0.6);   // let any aim smoothing settle
+            outAimN = rig.last().aimPitchN;
+            core::Vec3 b = core::normalize(core::transformDir(rig.pawn().weaponWorld(), {1, 0, 0}));
+            return core::degrees(std::asin(core::clampf(b.y, -1, 1)));
+        };
+        float nUp, nDn, nMid;
+        float up = barrelPitchAt(0.4f, nUp), dn = barrelPitchAt(-0.4f, nDn), mid = barrelPitchAt(0.0f, nMid);
+        double ratio = (up - dn) / core::degrees(0.8f);
+        r.info("barrel_pitch_cam_up_0p4", up, "deg", "camera pitch +22.9 deg");
+        r.info("barrel_pitch_cam_level", mid, "deg", "camera pitch 0");
+        r.info("barrel_pitch_cam_down_0p4", dn, "deg", "camera pitch -22.9 deg");
+        r.known("aim_pitch_tracking", ratio, 1.0, 0.25, "ratio",
+                "robot.glb Shooting_Aim_F_{D,C,U} aim-offset grid points the gun at the reticle", kGameplay,
+                "d(barrel pitch)/d(camera pitch) over +-0.4 rad; 0 = gun ignores aim pitch");
         int rc = m->robot.clipByName("Shooting_Reload_IonBlaster_ROBO");
         if (rc >= 0)
             r.info("reload_clip_vs_gameplay", m->robot.clips[(size_t)rc].duration, "s",
                    "clip length vs WeaponReloadAnimTime 1.5: clip is cut when the timer ends", 1.5);
-        save(rig, "anim_reload");
     }
 }
 

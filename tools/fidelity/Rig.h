@@ -19,6 +19,29 @@
 
 namespace fid {
 
+// Optional Character accessors, detected at compile time so one harness builds against every
+// branch (ab.ps1). Each returns -1 when the Character under test lacks the accessor.
+namespace layer {
+#define FID_OPTIONAL_ACCESSOR(name)                                                              \
+    template <class C> auto name(const C& c, int) -> decltype((float)c.name()) { return c.name(); } \
+    template <class C> float name(const C&, long) { return -1.0f; }
+FID_OPTIONAL_ACCESSOR(reloadWeight)
+FID_OPTIONAL_ACCESSOR(aimWeight)
+FID_OPTIONAL_ACCESSOR(aimPitchNorm)
+FID_OPTIONAL_ACCESSOR(upperWeight)       // agents/systems UpperBodyCustom slot
+#undef FID_OPTIONAL_ACCESSOR
+template <class C> auto upperAnimName(const C& c, int) -> decltype(std::string(c.upperAnimName())) { return c.upperAnimName(); }
+template <class C> std::string upperAnimName(const C&, long) { return ""; }
+
+// Reload-slot weight under either layering API (Gameplay reloadWeight / Systems UpperBodyCustom).
+template <class C> float reloadSlotWeight(const C& c) {
+    float w = reloadWeight(c, 0);
+    if (w >= 0) return w;
+    if (upperAnimName(c, 0).find("Reload") != std::string::npos) return upperWeight(c, 0);
+    return -1.0f;
+}
+} // namespace layer
+
 // Hitscan calls captured by the World::fireHitscan stub (WorldStub.cpp).
 struct ShotRecord { double t; core::Vec3 origin, dir; };
 std::vector<ShotRecord>& shotLog();
@@ -36,6 +59,8 @@ struct Frame {
     float animT = 0;
     int ammo = 0, reserve = 0, shots = 0;
     float spread = 0;
+    // Animation-layer weights when the Character exposes them (agents/gameplay Pass 7+); -1 otherwise.
+    float reloadW = -1, aimW = -1, aimPitchN = -1;
     core::Vec3 muzzle;   // world-space barrel tip (valid when weaponVisible)
 };
 

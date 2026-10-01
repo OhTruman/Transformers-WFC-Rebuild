@@ -1,11 +1,43 @@
 # Fidelity harness — findings for owning workstreams (2026-10-01)
 
+## Branch scoreboard (ab.ps1, same harness for every ref)
+| Ref | pass | FAIL | KNOWN | Notes vs main |
+|---|---|---|---|---|
+| main 565edb2 | 97 | 0 | 16 | baseline |
+| agents/gameplay 10cba8a | 104 | 0 | 9 | **FIXED** (7): mesh facing (shoulders −13.7°, hips −17.6°, barrel 4° off facing), vehicle long axis, muzzle in front, `kMeshYawOffset` = π/2, aim-pitch tracking 1.02, reload on the move |
+| agents/systems 9a4a734 | 98 | 0 | 15 | **FIXED**: reload on the move (UpperBodyCustom slot). Fire rate still 900 RPM (#9) |
+| gameplay + systems (merge preview) | — | — | — | **CONFLICTS** in `Character.cpp`, `Character.h` and `SkinnedModel.cpp` |
+
+### ⚠ Coordination: Gameplay and Systems built the same animation layer twice
+Both branches added overlapping code:
+- `Character::setAimPitch`
+- an `assets::LocalPose` base/overlay pose
+- an upper-body mask rooted at `C_Spine01_Lumbar01_XB`
+- an upper-body reload slot
+
+The two sets of names differ:
+- Gameplay: `reloadWeight` / `aimWeight` / `RobotRig`
+- Systems: `upperAnimName` / `upperWeight` / `RecoilControl` / `updateUpperBody`
+
+Systems also adds recoil skel-controls and weapon owner animations. Gameplay adds aim offset,
+vehicle hover blends and land/take-off. These are not textual conflicts that can be resolved line
+by line: the integrator must choose **one** layering framework (suggest Gameplay's, since
+locomotion and transform depend on it). Systems' recoil and owner-anim slot then need porting
+onto it.
+
+After resolving, gate the merge with:
+```powershell
+.\tools\fidelity\ab.ps1 -Ref <merge-commit> -Name merged
+.\tools\fidelity\diff-reports.ps1 work\ab\gameplay\report.json work\ab\merged\report.json
+```
+Expect 0 REGRESSED. The harness reads either layer API, so it judges both branches the same way.
+
 These come from `wfc_fidelity` and screenshots taken in this worktree. **No product code was
 changed.** Each item shows as `KNOWN owner=…` in the harness and turns to `RESOLVED` when fixed.
 
 ## HIGH — Gameplay
 
-### 1. Robot and vehicle render 90° off their gameplay facing (`kMeshYawOffset`)
+### 1. Robot and vehicle render 90° off their gameplay facing (`kMeshYawOffset`) — fixed on agents/gameplay 10cba8a
 - Skeleton-derived facing, `forward = up × (R_shoulder − L_shoulder)`: shoulders **−104°**, hips
   **−108°** from the gameplay yaw. The vehicle's bind-pose long axis is X (6.68 m vs 3.13 m), so it
   sits **90°** to its travel direction: the truck drives sideways.
