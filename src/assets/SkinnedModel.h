@@ -98,6 +98,52 @@ struct SkinnedModel {
 
 bool loadSkinnedGlb(const std::string& path, SkinnedModel& out);
 
+// Parent-relative bone transforms for every node: the blendable pose representation
+// (UE3 FBoneAtom space). Layering (crossfade, per-bone masks, additive overlays, aim offsets)
+// happens here, before skinning.
+struct LocalPose {
+    std::vector<core::Vec3> t, s;
+    std::vector<core::Quat> r;
+    size_t size() const { return r.size(); }
+    bool empty() const { return r.empty(); }
+};
+
+// Sample `clip` at `timeSec`. Full clips start from the bind/rest pose; additive (ADD_) clips
+// start from identity, so the result is a pure delta for addPose().
+void samplePose(const SkinnedModel& model, int clip, float timeSec, bool loop, LocalPose& out,
+                bool additive = false);
+// out = lerp/slerp(a, b, alpha * mask[bone]); mask null = all bones. `out` may alias a or b.
+void blendPose(const LocalPose& a, const LocalPose& b, float alpha, LocalPose& out,
+               const std::vector<float>* mask = nullptr);
+// As blendPose with a per-bone mask, but rotations blend in MESH space (UE3 AnimNodeBlendPerBone
+// default, bForceLocalSpaceBlend=false): a masked branch keeps b's model-space orientation even
+// when a turns the branch's parent (e.g. upper-body slot over strafe hips). `out` may alias a.
+void blendPoseMeshSpace(const SkinnedModel& model, const LocalPose& a, const LocalPose& b, float alpha,
+                        const std::vector<float>& mask, LocalPose& out);
+// base = base (+) delta * weight * mask[bone]  (translation add, rotation base*delta, scale mul).
+void addPose(LocalPose& base, const LocalPose& delta, float weight,
+             const std::vector<float>* mask = nullptr);
+// out = the delta that turns `ref` into `p` under addPose (p.t-ref.t, inv(ref.r)*p.r, p.s/ref.s).
+void deltaPose(const LocalPose& ref, const LocalPose& p, LocalPose& out);
+// Quaternion helpers (Hamilton product, axis-angle with a unit axis).
+core::Quat quatMul(const core::Quat& a, const core::Quat& b);
+core::Quat quatAxisAngle(const core::Vec3& axis, float angle);
+core::Quat quatSlerp(const core::Quat& a, const core::Quat& b, float t);
+core::Vec3 quatRotate(const core::Quat& q, const core::Vec3& v);
+// Model-space rotation of `node` under `pose` (composed parent chain; scale ignored).
+core::Quat meshRotation(const SkinnedModel& model, const LocalPose& pose, int node);
+// Skel-control style edit: rotate `node` by `meshRot` about its own pivot and move it by
+// `meshOffset`, both expressed in model space; descendants follow.
+void applyMeshSpace(const SkinnedModel& model, LocalPose& pose, int node, const core::Quat& meshRot,
+                    const core::Vec3& meshOffset);
+// Per-node weight: 1 for `rootNode` and its descendants, 0 elsewhere.
+std::vector<float> subtreeMask(const SkinnedModel& model, int rootNode);
+// Resolve hierarchy into `global` (per-node model-space matrices) and CPU-skin into `outMesh`.
+void skinPose(const SkinnedModel& model, const LocalPose& pose,
+              std::vector<core::Mat4>& global, render::MeshData& outMesh);
+// Hierarchy only (no skinning): per-node model-space matrices for `pose`.
+void poseGlobals(const SkinnedModel& model, const LocalPose& pose, std::vector<core::Mat4>& global);
+
 // Evaluate `clip` at `timeSec` and CPU-skin into `outMesh` (positions+normals+indices).
 // `scratch` is reused across calls (per-node global matrices); pass a persistent vector.
 void evaluatePose(const SkinnedModel& model, int clip, float timeSec,

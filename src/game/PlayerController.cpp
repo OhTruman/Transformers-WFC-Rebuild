@@ -3,6 +3,8 @@
 #include "game/World.h"
 #include "core/Config.h"
 
+#include <cstdlib>
+
 namespace game {
 
 void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
@@ -51,6 +53,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
     MoveIntent step = intent_;
     step.wantJump = wantJumpLatched_;
     CharacterMovement::update(*pawn_, step, dt, world.collision());
+    pawn_->setAimPitch(camPitch_);   // drives the upper-body aim offset
     wantJumpLatched_ = false;
     pawn_->weapon().tick(dt);
     pawn_->ability().tick(dt);
@@ -61,6 +64,8 @@ void PlayerController::applyToPawn(World& world, float dt) {
     if (wantFire_ && pawn_->form() == Form::Robot) {
         if (w.canFire()) {
             w.onFired();
+            static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
+            if (!noRecoil) pawn_->notifyFired();   // per-shot skeletal recoil (TnRecoiler)
             core::Vec3 eye = pawn_->position() + core::Vec3{0, core::config::kCamHeight, 0};
             core::Vec3 dir = core::forwardFromYawPitch(camYaw_, camPitch_);
             world.fireHitscan(eye, dir);

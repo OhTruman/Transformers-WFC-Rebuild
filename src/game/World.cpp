@@ -313,9 +313,10 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     shots_.push_back({muzzle, hitPoint, 0.06f});
     if (std::getenv("WFC_MUZZLELOG") && player_.pawn().hasWeapon()) {
         const core::Mat4& wm = player_.pawn().weaponWorld();
-        LOG_INFO("MUZZLE hand=%.2f,%.2f,%.2f tip=%.2f,%.2f,%.2f (|offset|=%.2fm)",
+        LOG_INFO("MUZZLE hand=%.2f,%.2f,%.2f tip=%.2f,%.2f,%.2f (|offset|=%.2fm) aimYaw=%.3f legYaw=%.3f",
                  wm.m[12], wm.m[13], wm.m[14], muzzle.x, muzzle.y, muzzle.z,
-                 core::length(muzzle - core::Vec3{wm.m[12], wm.m[13], wm.m[14]}));
+                 core::length(muzzle - core::Vec3{wm.m[12], wm.m[13], wm.m[14]}), player_.pawn().yaw(),
+                 player_.pawn().legYaw());
     }
     playSfx(Sfx::Fire, muzzle);
 }

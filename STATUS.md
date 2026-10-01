@@ -33,6 +33,97 @@ FIDELITY.md "PASS 7"). The legacy fixed-function path remains as an automatic fa
   used; 24 vertex-lightmapped props unlit by lightmap; dynamic shadows (ShadowMask) = 1;
   DirectLightAmbientContribution = 0; 1 material with an absent master.
 
+## FIDELITY PASS 10 (2026-10-01): LOCOMOTION BLEND FROM THE SHIPPED TREE; SPEED + STEP HEIGHT CONFIRMED
+- **Moving state rebuilt to match Robot_ANIMTREE:** TnVelocityAnimBlend (450→1200 UU/s) mixes a
+  walk and a jog TnStraferAnimBlend. Each strafer weights F/B/R/L by the travel direction relative
+  to the facing, eased over `_BlendSpeed` 0.2. All 8 sequences are phase-locked like the "Strafers"
+  AnimNodeSynch group (shared phase, highest-weight clip sets the rate). Idle↔Moving crossfade
+  0.2 s (AmpCrossFadeCondition). Replaces "pick one F/B/L/R clip + 0.15 s crossfade".
+- **Clip ground speeds measured:** walk ≈3.5 m/s, jog ≈12.1 m/s. The tree's 1200 UU/s MaxSpeed
+  equals the jog's authored speed, so the blend is speed-matched by design.
+- **Robot ground speed 5.5 m/s confirmed from script:** `TnPawn.PostBeginPlay` runs
+  `_BaseGroundSpeed = GroundSpeed`, and `UpdateSpeeds` sets `GroundSpeed = _BaseGroundSpeed ×
+  Π SpeedMultiplierFactors` (bytecode decoded). TnPlayerPawn GroundSpeed 550 × Ion Blaster
+  GroundSpeedMultiplier 1.0. So the player's Moving state is ≈87% walk / 13% jog, as authored.
+- **MaxStepHeight 35 UU (0.35 m) applied** (`TnRobotForm._MovementCapabilities`; was PROV 0.6).
+  A deterministic A/B (`WFC_NOMOUSE`) on 12 routes shows no new snagging.
+- Diagnostics: `WFC_NOMOUSE` (ignore live mouse in tests), `WFC_STEPUP=m` (A/B override).
+- Regression: reload on the move, transforms both ways, turn in place, recoil +12°, jump 6.36 m,
+  vehicle hover; clean build.
+
+## FIDELITY PASS 9 (2026-10-01): AUTHORED AIM OFFSET PROFILE (TnAnimNodeAimOffset "Default")
+- **The aim offset is now the shipped profile, not a pose-derived approximation.** The Ion Blaster
+  uses the `Default` profile (selected by `WeaponTypeObserved`). It drives 11 bones (spine chain,
+  head, both arms) with 9 cells each, baked from `Shooting_Aim_{L,F,R}_{D,C,U}`.
+- **Bake rule cracked and verified:** for each bone/cell, rotation = Gp·(L_cell·L_centre⁻¹)·Gp⁻¹
+  and position = Gp·(t_cell − t_centre), where Gp is the parent's model-space rotation in that
+  cell. UE → glTF conversion: rotation `(−x,−z,−y,w)`, position `(x,z,y)·0.01`. Against the
+  authored AimComponents: mean 0.01°, worst 0.07°, translations 0 mm (`work/pass8/verify_aim.js`).
+  So the runtime bakes the profile from the clips (no asset data committed) and applies it the
+  UE3 way: bilinear cells, each bone rotated/moved in model space, parent first.
+- **Input ranges recovered:** profile H [−1,1] / V [−1,0.8]; RemapPawnAimRange from pawn aim
+  (fraction of 90°) H [−1,0.85] / V [−0.7,1]. The remap is centre-preserving (PROV reading).
+  Measured barrel pitch at aim −69/−34/0/+34/+69° → −42/−21/+3/+27/+50°: the gun trails the
+  camera at the extremes, as the authored ranges imply.
+- Turn-in-place yaw columns: the barrel stays within 5–13° of the aim while the legs lag up to 67°.
+  During a pivot step the gun arm swings ≈50° and back. That swing is authored in
+  `Nav_IdlePivot90_*` (root-discarded chest ±7°, forearm −50°), and the shipped tree layers the
+  aim offset over it unchanged, so it is kept.
+- Regression: recoil +12°, reload on the move, transforms both ways, jump 6.41 m; clean build.
+
+## FIDELITY PASS 8 (2026-10-01): WEAPON RECOIL, TURN IN PLACE, FULL AIM GRID (shipped anim tree)
+Gameplay agent. Evidence: shipped `TR_Shared_ANIMTREE_p.Robot_ANIMTREE` and class defaults, read
+read-only from cooked packages (`work/pass8/dump_animtree.py` → `work/pass8/dump_*.json`).
+- **Weapon recoil (was NOT YET):** a reconstruction of `HmSkelControlRecoil` (UE3
+  `GameSkelCtrl_Recoil`), restarted per shot (`TnRecoiler`). Bones come from the tree's
+  SkelControlLists: SpineRecoil → `C_Spine02_Lumbar02_XB`, RightHandRecoil → `R_Arm02_Shoulder_XB`.
+  Ion Blaster values = `Default__TnWeaponMesh` archetype + IonBlaster_WEPMESH overrides. A/B
+  (`WFC_NORECOIL`): during sustained fire the barrel climbs +12° (6.8° → 19.1°) with ±3° random yaw.
+- **Turn in place (was NOT YET):** `TnAnimTurnInPlace` / `TnAnimTurnInPlaceRotator` ("UnwindLowerBody").
+  Standing, the legs keep their world yaw while the torso follows the aim through the aim
+  offset's L/R columns. At 22.5° short of a transition's 90°/180° (`TransitionThresholdAngle` 4096),
+  `Nav_IdlePivot90_{L,R}` plays with root rotation discarded (`RRO_Discard`) and unwinds the
+  offset along the clip's own root-yaw curve. Blend 0.1 s, abort after 50%. Verified: a slow pan
+  holds the legs to 67°, then a 90° step returns the offset to ≈0; a fast pan (143°/s) chains pivots.
+- **Aim offset is now the full 3×3 grid:** the yaw columns are calibrated from the poses
+  (barrel L −90.7° / R +81.2°), and the inputs interpolate at the authored `InterpSpeed` 12.
+- **Fixed (pre-existing):** robot→vehicle picked `Transform_ToVehicle_SuperBoost_Veh` (0.8 s) as
+  the incoming clip. It now pairs `Transform_ToVehicle_VEH` by name (matched 1.97 s fold).
+- Diagnostics: `WFC_AUTOTURN=rad/s`, `WFC_NORECOIL`, `WFC_LOGEVERY=N`; the frame log adds
+  legYaw/aimYawN/turn/recoil.
+- Regression: jump 6.39 m, transforms both ways, reload on the move, vehicle hover; clean build.
+
+## FIDELITY PASS 7 (2026-10-01): ANIMATION LAYERS, MESH FACING CORRECTED, VEHICLE HOVER POSES
+Gameplay agent (`agents/gameplay`). Verified by runtime screenshots + numeric logs (`work/pass7/`).
+- **Mesh facing was 90° off; now fixed (+90°).** The authored straight-ahead aim pose
+  `Shooting_Aim_F_C` points the Ion Blaster barrel along model **+X** (logged at load:
+  `barrel dir (model space) 1.00 -0.06 -0.02`), UE's forward axis. Pass 6's `kMeshYawOffset=0`
+  left the whole robot (and truck) side-on to the chase camera, with the gun 90° right of the
+  reticle. Pass 6's `face·toCam` check only tested the yaw math, never the mesh. Restored
+  `kMeshYawOffset=+π/2`. Now: the chase cam sees the robot's back and the truck's rear; the muzzle
+  points along the aim yaw (`MUZZLE` log); `WFC_FACELOG` measures the real mesh +X.
+- **Bone-space pose layering** (`assets::LocalPose`: sample / blend / mesh-space per-bone blend /
+  additive / skin). Locomotion crossfades are now bone-space, not vertex lerps.
+- **Upper-body aim offset (was NOT YET):** the authored `Shooting_Aim_F_{D,C,U}` poses, applied as
+  a delta from F_C on the `C_Spine01_Lumbar01_XB` subtree, driven by camera pitch. The grid is
+  calibrated from the poses' own barrel pitch (D −47.6°, C −3.3°, U +72.2°). Verified in profile
+  at pitch −0.6/0/+0.6: the barrel measures ≈−27°/+7°/+42°.
+- **Reload on the move (was PARTIAL):** the authored `Shooting_Reload_IonBlaster_ROBO` now plays as
+  an upper-body slot over locomotion, blended in mesh space like UE3 `AnimNodeBlendPerBone`, so
+  the torso stays forward over the strafe clips' turned hips. Full body when standing still.
+- **Vehicle animation fixed:** moving used to loop `Nav_BoostToHover_VEH`, a one-shot
+  transition. It now blends the authored directional poses `Nav_Hover_{Pose,F,B,L,R}_VEH` by local
+  velocity, plus the additive `ADD_Nav_Hover_VEH` hover bob.
+- **Vehicle turn rate applied:** the truck steers toward its travel direction at the recovered
+  π rad/s (`AiMaxAngularSpeed`) instead of snapping.
+- **Robot idle:** `NAV_Idle` (Optimus's own gameplay idle) replaces `Cust_Idle`, the
+  customization-screen idle that was being picked as first-of-category. Take-off plays once;
+  `Nav_Land` plays on touchdown after ≥0.3 s airborne.
+- Regression: jump 6.36 m, transforms both directions, vehicle hover 2 m, no idle drift; clean build.
+- New diagnostic: `WFC_FIXPITCH=rad` pins camera/aim pitch. The frame log adds yaw/aimW/aimN/reloadW.
+- **Still open (gameplay):** ~~turn-in-place~~, ~~weapon recoil~~ (done in Pass 8), boost/dodge
+  clips, camera tuning.
+
 ## FIDELITY PASS 6 (2026-10-01) — INTERACTIVE PLAYER FIXES (orientation, locomotion, muzzle, reload, transform)
 Runtime observation (replaying the exe) drove this pass, not headless smoke. Fixed, in the
 player's priority order:
@@ -227,4 +318,7 @@ map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.j
 - `WFC_AUTOFIRE=1`      hold the trigger (scripted weapon test).
 - `WFC_AUTOTRANSFORM=F` trigger a transform at frame F.
 - `WFC_DEBUGDRAW=1`     enable the debug overlay from start (same as toggling B).
+- `WFC_FIXYAW=rad` / `WFC_FIXPITCH=rad`  pin the camera (= aim) yaw / pitch.
+- `WFC_STARTVEHICLE=1`  start in vehicle form. `WFC_AUTOSTRAFE/AUTOBACK/AUTORELOAD/AUTOJUMP=1`
+  scripted inputs; `WFC_FACELOG`/`WFC_MUZZLELOG` facing/muzzle diagnostics.
 - `WFC_ASSETS=dir`      override the asset root.
