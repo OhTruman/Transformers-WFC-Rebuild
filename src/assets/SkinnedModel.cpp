@@ -430,6 +430,34 @@ void deltaPose(const LocalPose& ref, const LocalPose& p, LocalPose& out) {
     }
 }
 
+core::Quat quatMul(const core::Quat& a, const core::Quat& b) { return qmul(a, b); }
+
+core::Quat quatAxisAngle(const core::Vec3& axis, float angle) {
+    float s = std::sin(angle * 0.5f);
+    return {axis.x * s, axis.y * s, axis.z * s, std::cos(angle * 0.5f)};
+}
+
+core::Quat meshRotation(const SkinnedModel& model, const LocalPose& pose, int node) {
+    core::Quat q;
+    for (int n = node; n >= 0 && (size_t)n < pose.size(); n = model.nodes[(size_t)n].parent)
+        q = qmul(pose.r[(size_t)n], q);
+    return q;
+}
+
+void applyMeshSpace(const SkinnedModel& model, LocalPose& pose, int node, const core::Quat& meshRot,
+                    const core::Vec3& meshOffset) {
+    if (node < 0 || (size_t)node >= pose.size()) return;
+    int par = model.nodes[(size_t)node].parent;
+    core::Quat pg = par >= 0 ? meshRotation(model, pose, par) : core::Quat{};
+    core::Quat inv = qconj(pg);
+    // global' = meshRot * global  ->  local' = inv(Pg) * meshRot * Pg * local
+    pose.r[(size_t)node] = qmul(qmul(qmul(inv, meshRot), pg), pose.r[(size_t)node]);
+    // Offset: rotate the model-space vector into the parent's frame.
+    core::Quat v{meshOffset.x, meshOffset.y, meshOffset.z, 0.0f};
+    core::Quat lv = qmul(qmul(inv, v), pg);
+    pose.t[(size_t)node] += core::Vec3{lv.x, lv.y, lv.z};
+}
+
 std::vector<float> subtreeMask(const SkinnedModel& model, int rootNode) {
     std::vector<float> m(model.nodes.size(), 0.0f);
     if (rootNode < 0 || rootNode >= (int)model.nodes.size()) return m;

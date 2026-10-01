@@ -7,6 +7,7 @@
 #include "game/Health.h"
 #include "game/Weapon.h"
 #include "game/Ability.h"
+#include "game/Recoil.h"
 #include "render/Renderer.h"
 #include "render/Mesh.h"
 
@@ -71,6 +72,14 @@ public:
     float aimWeight() const { return aimW_; }
     float reloadWeight() const { return reloadW_; }
     float aimPitchNorm() const { return aimPitchN_; }
+    float aimYawNorm() const { return aimYawN_; }
+    // Turn-in-place: lower-body yaw offset from the aim (rad, + = legs left of aim) and state.
+    float legYaw() const { return legYaw_; }
+    bool turningInPlace() const { return turnClip_ >= 0; }
+    bool recoiling() const { return recoilSpine_.active || recoilHand_.active; }
+
+    // A shot was fired this step: restart the weapon recoil skel-controls (TnRecoiler.Recoil).
+    void notifyFired() { recoilSpine_.start(); recoilHand_.start(); }
 
     // Controller aim pitch (radians, camera pitch) driving the upper-body aim offset.
     void setAimPitch(float p) { aimPitch_ = p; }
@@ -115,9 +124,12 @@ private:
     // Authored pose rigs, built once per model from the GLB clip set.
     struct RobotRig {
         bool built = false;
-        assets::LocalPose aimD, aimC, aimU;      // Shooting_Aim_F_{D,C,U}
+        assets::LocalPose aim[3][3];             // Shooting_Aim_{L,F,R}_{D,C,U}: [col][row]
         bool aimValid = false;
-        float pitchD = -0.8f, pitchC = 0.0f, pitchU = 0.8f;   // barrel pitch per pose (rad)
+        float pitchD = -0.8f, pitchC = 0.0f, pitchU = 0.8f;   // barrel pitch per row (rad)
+        float yawL = -1.2f, yawC = 0.0f, yawR = 1.2f;         // barrel yaw per column (rad, + = right)
+        int rootRef = -1, spine = -1, rightArm = -1;           // C_Root_Reference / recoil bones
+        int pivotL = -1, pivotR = -1;                          // Nav_IdlePivot90_{L,R}
         std::vector<float> upperMask;            // C_Spine01_Lumbar01_XB subtree
         int reloadClip = -1, idleClip = -1, landClip = -1;
     } robotRig_;
@@ -130,7 +142,15 @@ private:
     void buildRobotRig(const assets::SkinnedModel& mdl);
     void buildVehicleRig(const assets::SkinnedModel& mdl);
 
-    float aimPitch_ = 0.0f, aimPitchN_ = 0.0f, aimW_ = 0.0f;
+    float aimPitch_ = 0.0f, aimPitchN_ = 0.0f, aimYawN_ = 0.0f, aimW_ = 0.0f;
+    // Turn in place (TnAnimTurnInPlace): legs keep their world yaw while the pawn follows the aim.
+    float legYaw_ = 0.0f, lastYaw_ = 0.0f;
+    bool yawInit_ = false;
+    int turnClip_ = -1;                       // active Nav_IdlePivot90 transition, -1 = none
+    float turnT_ = 0.0f, turnStartOffset_ = 0.0f, turnProg_ = 0.0f;
+    void updateTurnInPlace(const assets::SkinnedModel& mdl, float dt, bool standing);
+    float pivotProgress(const assets::SkinnedModel& mdl, int clip, float t) const;
+    RecoilControl recoilSpine_{ionBlasterSpineRecoil()}, recoilHand_{ionBlasterRightHandRecoil()};
     float reloadW_ = 0.0f, reloadT_ = 0.0f;
     bool prevReloading_ = false;
     std::vector<float> reloadMask_;

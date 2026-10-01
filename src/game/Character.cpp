@@ -29,6 +29,7 @@ void Character::beginTransform() {
     animTime_ = 0.0f;
     clip_ = -1;                 // force a clip change so the blend-in snapshot fires
     velocity_ = {0, 0, 0};
+    legYaw_ = 0.0f; turnClip_ = -1; yawInit_ = false;   // the fold starts square to the aim
 }
 
 // Robot rig: the 9-pose Shooting_Aim grid (we use the F column: the body always faces the aim
@@ -46,37 +47,107 @@ void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
     if (R.idleClip < 0) R.idleClip = mdl.firstClipOfCategory("idle");
     R.landClip = mdl.clipByName("Nav_Land");
 
-    int cd = mdl.clipByName("Shooting_Aim_F_D"), cc = mdl.clipByName("Shooting_Aim_F_C"),
-        cu = mdl.clipByName("Shooting_Aim_F_U");
-    if (cd < 0 || cc < 0 || cu < 0) return;
-    assets::samplePose(mdl, cd, 0.0f, false, R.aimD);
-    assets::samplePose(mdl, cc, 0.0f, false, R.aimC);
-    assets::samplePose(mdl, cu, 0.0f, false, R.aimU);
+    R.rootRef = mdl.nodeByName("C_Root_Reference_XR");
+    R.spine = mdl.nodeByName("C_Spine02_Lumbar02_XB");      // SpineRecoil bone (Robot_ANIMTREE)
+    R.rightArm = mdl.nodeByName("R_Arm02_Shoulder_XB");     // RightHandRecoil bone (Robot_ANIMTREE)
+    // Turn-in-place transitions [CONF Robot_ANIMTREE TnWeaponAnimChooser, WS_ONE_HANDED]:
+    // Rt_90/Rt_180 -> Nav_IdlePivot90_R, Lt_90/Lt_180 -> Nav_IdlePivot90_L.
+    R.pivotL = mdl.clipByName("Nav_IdlePivot90_L");
+    R.pivotR = mdl.clipByName("Nav_IdlePivot90_R");
+
+    static const char* kCols[3] = {"L", "F", "R"};
+    static const char* kRows[3] = {"D", "C", "U"};
+    for (int c = 0; c < 3; ++c)
+        for (int r = 0; r < 3; ++r) {
+            int ci = mdl.clipByName(std::string("Shooting_Aim_") + kCols[c] + "_" + kRows[r]);
+            if (ci < 0) return;
+            assets::samplePose(mdl, ci, 0.0f, false, R.aim[c][r]);
+        }
     R.aimValid = true;
 
-    // Calibrate the grid from the authored poses: measure the Ion Blaster barrel pitch in the
-    // D/C/U poses (socket bone * WeaponSocket_Primary * barrel +X), so camera pitch maps onto
-    // the grid such that the barrel pitch tracks the aim pitch.
+    // Calibrate the grid from the authored poses: measure the Ion Blaster barrel direction
+    // (socket bone * WeaponSocket_Primary * barrel +X) per row (pitch, F column) and per column
+    // (yaw, C row), so aim angles map onto the grid such that the barrel tracks the aim.
     if (weaponBone_ >= 0) {
-        auto barrelPitch = [&](const assets::LocalPose& pose) {
+        auto barrelDir = [&](const assets::LocalPose& pose) {
             std::vector<core::Mat4> g;
             assets::poseGlobals(mdl, pose, g);
-            core::Vec3 d = core::normalize(core::transformDir(g[(size_t)weaponBone_] * weaponOffset_,
-                                                             core::Vec3{1, 0, 0}));
-            return std::asin(core::clampf(d.y, -1.0f, 1.0f));
+            return core::normalize(core::transformDir(g[(size_t)weaponBone_] * weaponOffset_,
+                                                      core::Vec3{1, 0, 0}));
         };
-        float pd = barrelPitch(R.aimD), pc = barrelPitch(R.aimC), pu = barrelPitch(R.aimU);
-        {
-            std::vector<core::Mat4> g;
-            assets::poseGlobals(mdl, R.aimC, g);
-            core::Vec3 d = core::normalize(core::transformDir(g[(size_t)weaponBone_] * weaponOffset_,
-                                                             core::Vec3{1, 0, 0}));
-            LOG_INFO("aim rig: Shooting_Aim_F_C barrel dir (model space) %.2f %.2f %.2f", d.x, d.y, d.z);
-        }
+        auto pitchOf = [](core::Vec3 d) { return std::asin(core::clampf(d.y, -1.0f, 1.0f)); };
+        auto yawOf = [](core::Vec3 d) { return std::atan2(d.z, d.x); };   // model +Z = right
+        core::Vec3 dc = barrelDir(R.aim[1][1]);
+        LOG_INFO("aim rig: Shooting_Aim_F_C barrel dir (model space) %.2f %.2f %.2f", dc.x, dc.y, dc.z);
+        float pd = pitchOf(barrelDir(R.aim[1][0])), pc = pitchOf(dc), pu = pitchOf(barrelDir(R.aim[1][2]));
         bool ok = pu > pc + 0.05f && pc > pd + 0.05f;
         if (ok) { R.pitchD = pd; R.pitchC = pc; R.pitchU = pu; }
         LOG_INFO("aim rig: barrel pitch D=%.1f C=%.1f U=%.1f deg (%s)", pd * 57.2958f, pc * 57.2958f,
                  pu * 57.2958f, ok ? "calibrated" : "fallback +-0.8 rad");
+        float yl = yawOf(barrelDir(R.aim[0][1])), yc = yawOf(dc), yr = yawOf(barrelDir(R.aim[2][1]));
+        bool okY = yr > yc + 0.05f && yc > yl + 0.05f;
+        if (okY) { R.yawL = yl; R.yawC = yc; R.yawR = yr; }
+        LOG_INFO("aim rig: barrel yaw L=%.1f C=%.1f R=%.1f deg (%s)", yl * 57.2958f, yc * 57.2958f,
+                 yr * 57.2958f, okY ? "calibrated" : "fallback +-1.2 rad");
+    }
+}
+
+// Normalized progress (0..1) of a pivot transition at time t, from the clip's own root-bone yaw
+// curve (the turn the clip authors on C_Root_Reference_XR before RRO_Discard removes it).
+float Character::pivotProgress(const assets::SkinnedModel& mdl, int clip, float t) const {
+    if (clip < 0 || robotRig_.rootRef < 0) return 1.0f;
+    float dur = mdl.clips[(size_t)clip].duration;
+    auto rootYaw = [&](float time) {
+        assets::LocalPose p;
+        assets::samplePose(mdl, clip, time, false, p);
+        core::Quat q = p.r[(size_t)robotRig_.rootRef];
+        float vx = 1 - 2 * (q.y * q.y + q.z * q.z), vz = 2 * (q.x * q.z - q.w * q.y);
+        return std::atan2(-vz, vx);
+    };
+    float end = rootYaw(dur);
+    if (std::fabs(end) < 1e-3f) return core::clampf(t / (dur > 0 ? dur : 1.0f), 0.0f, 1.0f);
+    return core::clampf(rootYaw(std::min(t, dur)) / end, 0.0f, 1.0f);
+}
+
+// TnAnimTurnInPlace [values CONF Default__TnAnimTurnInPlace; trigger/unwind semantics PROV]: the
+// pawn follows the aim yaw every frame, but while standing the lower body keeps its world yaw
+// (legYaw_ accumulates the opposite of the pawn's rotation; "UnwindLowerBody") and the aim
+// offset's L/R columns twist the torso back onto the aim. When the offset comes within
+// TransitionThresholdAngle (4096 UU = 22.5 deg) of a RotTransition's RotationOffset (90/180 deg),
+// that transition plays (pivot clip, root rotation discarded) and unwinds its RotationOffset
+// along the clip's own root-yaw curve, so the stepping feet match the authored turn. A new
+// transition may interrupt once PercentageToAllowAbort (0.5) of the current one has played.
+void Character::updateTurnInPlace(const assets::SkinnedModel& mdl, float dt, bool standing) {
+    const float kTwoPi = 6.2831853f;
+    if (!yawInit_) { lastYaw_ = yaw_; yawInit_ = true; }
+    float dYaw = std::remainder(yaw_ - lastYaw_, kTwoPi);
+    lastYaw_ = yaw_;
+    if (!standing) {
+        // ResetYawOffsetWhenZeroWeight: locomotion owns the legs; ease the offset out.
+        turnClip_ = -1;
+        legYaw_ *= std::max(0.0f, 1.0f - dt / core::config::kTurnTransitionBlend);
+        return;
+    }
+    legYaw_ = core::clampf(std::remainder(legYaw_ - dYaw, kTwoPi), -3.1416f, 3.1416f);
+    if (turnClip_ >= 0) {
+        turnT_ += dt;
+        float p = pivotProgress(mdl, turnClip_, turnT_);
+        legYaw_ -= turnStartOffset_ * (p - turnProg_);
+        turnProg_ = p;
+        if (turnT_ >= mdl.clips[(size_t)turnClip_].duration) turnClip_ = -1;
+    }
+    bool canStart = turnClip_ < 0 || turnProg_ >= core::config::kTurnAbortPct;
+    float mag = std::fabs(legYaw_);
+    const float k90 = 1.5707963f, k180 = 3.1415927f;   // RotTransitions 16384 / 32768 UU [CONF]
+    if (canStart && mag >= k90 - core::config::kTurnThreshold) {
+        // legYaw_ < 0: legs are right of the aim -> turn left (Lt_*), and vice versa.
+        int c = legYaw_ < 0.0f ? robotRig_.pivotL : robotRig_.pivotR;
+        if (c < 0) return;
+        float rot = (mag >= k180 - core::config::kTurnThreshold) ? k180 : k90;   // *_180 vs *_90
+        turnClip_ = c;
+        turnT_ = 0.0f; turnProg_ = 0.0f;
+        turnStartOffset_ = legYaw_ < 0.0f ? -rot : rot;   // signed RotationOffset to unwind
+        clip_ = -2;   // force the base layer to (re)start the transition with its blend
     }
 }
 
@@ -159,41 +230,83 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
     bool robotRig = (&mdl == robotModel_) && robotRig_.built;
     bool steady = trans_ == Transition::None;
     float speed = std::sqrt(velocity_.x * velocity_.x + velocity_.z * velocity_.z);
+    const RobotRig& R = robotRig_;
 
-    // Reload slot: the authored Ion Blaster reload clip over the UPPER body (C_Spine01_Lumbar01
-    // subtree) so the robot can reload on the move; standing still, the slot covers the whole
-    // body (the full-body clip as authored). Blended in mesh space like UE3's per-bone blend, so
-    // the reloading torso stays facing forward over the strafe clips' turned hips.
-    // [PROV] mask root + slot blend time.
+    // 1) Upper-body aim offset (TnAnimNodeAimOffset): the authored 3x3 Shooting_Aim grid as a delta
+    // from F_C on the C_Spine01_Lumbar01 subtree. Rows follow the aim pitch; columns follow the
+    // aim yaw relative to the legs (TurnInPlaceOffset = legYaw_). Inputs interpolate at the
+    // node's InterpSpeed [CONF 12].
+    bool wantAim = robotRig && steady && R.aimValid && weaponBone_ >= 0;
+    aimW_ = approach(aimW_, wantAim ? 1.0f : 0.0f, dt, core::config::kSlotBlend);
+    if (robotRig && R.aimValid && aimW_ > 0.0f) {
+        float p = aimPitch_;
+        float pitchT = (p >= R.pitchC) ? (p - R.pitchC) / (R.pitchU - R.pitchC)
+                                       : (p - R.pitchC) / (R.pitchC - R.pitchD);
+        float y = legYaw_;   // aim is right of the legs by legYaw_
+        float yawT = (y >= 0.0f) ? y / (R.yawR - R.yawC) : y / (R.yawC - R.yawL);
+        float k = std::min(1.0f, core::config::kAimInterpSpeed * dt);
+        aimPitchN_ += (core::clampf(pitchT, -1.0f, 1.0f) - aimPitchN_) * k;
+        aimYawN_ += (core::clampf(yawT, -1.0f, 1.0f) - aimYawN_) * k;
+        int col = aimYawN_ >= 0.0f ? 2 : 0, row = aimPitchN_ >= 0.0f ? 2 : 0;
+        float ya = std::fabs(aimYawN_), pa = std::fabs(aimPitchN_);
+        assets::blendPose(R.aim[1][1], R.aim[col][1], ya, layerPose_);        // centre row
+        assets::blendPose(R.aim[1][row], R.aim[col][row], ya, deltaPose_);    // up/down row
+        assets::blendPose(layerPose_, deltaPose_, pa, layerPose_);
+        assets::deltaPose(R.aim[1][1], layerPose_, deltaPose_);
+        assets::addPose(finalPose_, deltaPose_, aimW_, &R.upperMask);
+    }
+
+    // 2) Unwind lower body (TnAnimTurnInPlaceRotator): rotate the skeleton root by legYaw_ so the
+    // legs keep their world yaw; the aim columns above bring the torso back onto the aim.
+    if (robotRig && R.rootRef >= 0 && std::fabs(legYaw_) > 1e-4f)
+        assets::applyMeshSpace(mdl, finalPose_, R.rootRef, assets::quatAxisAngle({0, 1, 0}, legYaw_), {0, 0, 0});
+
+    // 3) Reload slot: the authored Ion Blaster reload clip over the UPPER body, blended in mesh
+    // space like UE3's per-bone blend (torso stays on the aim over strafe hips / planted legs).
+    // Standing still the legs also take the clip, locally, keeping the root's yaw.
+    // [PROV] slot blend time.
     bool reloading = weapon_.reloading();
     if (reloading && !prevReloading_) reloadT_ = 0.0f;
     prevReloading_ = reloading;
     reloadT_ += dt;
-    bool wantReload = robotRig && steady && reloading && robotRig_.reloadClip >= 0;
+    bool wantReload = robotRig && steady && reloading && R.reloadClip >= 0;
     reloadW_ = approach(reloadW_, wantReload ? 1.0f : 0.0f, dt, core::config::kSlotBlend);
-    if (robotRig && reloadW_ > 0.0f && robotRig_.reloadClip >= 0) {
+    if (robotRig && reloadW_ > 0.0f && R.reloadClip >= 0) {
         float standW = onGround_ ? 1.0f - core::clampf((speed - 0.4f) / 1.0f, 0.0f, 1.0f) : 0.0f;
-        reloadMask_.resize(robotRig_.upperMask.size());
-        for (size_t i = 0; i < reloadMask_.size(); ++i)
-            reloadMask_[i] = robotRig_.upperMask[i] + (1.0f - robotRig_.upperMask[i]) * standW;
-        assets::samplePose(mdl, robotRig_.reloadClip, reloadT_, false, layerPose_);
-        assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, reloadW_, reloadMask_, finalPose_);
+        reloadMask_.resize(R.upperMask.size());
+        for (size_t i = 0; i < reloadMask_.size(); ++i) {
+            bool isRoot = (int)i == R.rootRef || mdl.nodes[i].parent < 0;
+            reloadMask_[i] = isRoot ? 0.0f : (1.0f - R.upperMask[i]) * standW;
+        }
+        assets::samplePose(mdl, R.reloadClip, reloadT_, false, layerPose_);
+        assets::blendPose(finalPose_, layerPose_, reloadW_, finalPose_, &reloadMask_);
+        assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, reloadW_, R.upperMask, finalPose_);
     }
 
-    // Upper-body aim offset: pitch the spine/arms by the authored Shooting_Aim_F_{D,C,U} grid
-    // (delta from the centre pose), driven by the controller pitch. Weapon-held robot only.
-    bool wantAim = robotRig && steady && robotRig_.aimValid && weaponBone_ >= 0;
-    aimW_ = approach(aimW_, wantAim ? 1.0f : 0.0f, dt, core::config::kSlotBlend);
-    if (robotRig && robotRig_.aimValid && aimW_ > 0.0f) {
-        const RobotRig& R = robotRig_;
-        float p = aimPitch_;
-        aimPitchN_ = (p >= R.pitchC) ? (p - R.pitchC) / (R.pitchU - R.pitchC)
-                                     : (p - R.pitchC) / (R.pitchC - R.pitchD);
-        aimPitchN_ = core::clampf(aimPitchN_, -1.0f, 1.0f);
-        if (aimPitchN_ >= 0.0f) assets::blendPose(R.aimC, R.aimU, aimPitchN_, layerPose_);
-        else assets::blendPose(R.aimC, R.aimD, -aimPitchN_, layerPose_);
-        assets::deltaPose(R.aimC, layerPose_, deltaPose_);
-        assets::addPose(finalPose_, deltaPose_, aimW_, &R.upperMask);
+    // 4) Weapon recoil skel-controls (HmSkelControlRecoil via TnRecoiler), restarted per shot.
+    // Applied in mesh space in the aim frame (bBoneSpaceRecoil=false): SpineRecoil on
+    // C_Spine02_Lumbar02_XB, RightHandRecoil on R_Arm02_Shoulder_XB [CONF Robot_ANIMTREE].
+    recoilSpine_.tick(dt);
+    recoilHand_.tick(dt);
+    if (robotRig && steady && weaponBone_ >= 0) {
+        const float kU2R = 6.2831853f / 65536.0f;
+        core::Quat aim = assets::quatAxisAngle({0, 0, 1}, aimPitch_);       // pitch about model right
+        core::Quat aimInv = assets::quatAxisAngle({0, 0, 1}, -aimPitch_);
+        auto apply = [&](const RecoilControl& rc, int node) {
+            if (!rc.active || node < 0) return;
+            // UE rotator -> model axes (fwd +X, up +Y, right +Z): pitch about +Z, yaw (rightward)
+            // about -Y, roll about +X; FRotationMatrix order = Yaw * Pitch * Roll.
+            core::Quat q = assets::quatMul(assets::quatMul(
+                assets::quatAxisAngle({0, 1, 0}, -rc.rotOffset.y * kU2R),
+                assets::quatAxisAngle({0, 0, 1}, rc.rotOffset.x * kU2R)),
+                assets::quatAxisAngle({1, 0, 0}, rc.rotOffset.z * kU2R));
+            q = assets::quatMul(assets::quatMul(aim, q), aimInv);
+            core::Quat v{rc.locOffset.x * 0.01f, rc.locOffset.z * 0.01f, rc.locOffset.y * 0.01f, 0.0f};
+            core::Quat w = assets::quatMul(assets::quatMul(aim, v), aimInv);
+            assets::applyMeshSpace(mdl, finalPose_, node, q, {w.x, w.y, w.z});
+        };
+        apply(recoilSpine_, R.spine);      // parent first: the arm inherits the spine kick
+        apply(recoilHand_, R.rightArm);
     }
 
     // Vehicle hover bob: the additive ADD_Nav_Hover_VEH loop on top of the hover poses.
@@ -230,7 +343,17 @@ void Character::updateAnimation(float dt) {
             const assets::SkinnedModel* nm = currentModel();
             std::string inCat = (form_ == Form::Vehicle) ? "vehicle_transform_to_vehicle"
                                                          : "transform_to_robot";
-            int ic = nm ? nm->firstClipOfCategory(inCat) : -1;
+            // Partner clip by name (Transform_ToVehicle_ROBO <-> Transform_ToVehicle_VEH): first-of-
+            // category would pick Transform_ToVehicle_SuperBoost_Veh (0.8 s), which does not pair.
+            int ic = -1;
+            if (nm) {
+                std::string partner = mdl->clips[(size_t)transClip_].name;
+                size_t us = partner.find_last_of('_');
+                if (us != std::string::npos)
+                    partner = partner.substr(0, us) + (form_ == Form::Vehicle ? "_VEH" : "_ROBO");
+                ic = nm->clipByName(partner);
+                if (ic < 0) ic = nm->firstClipOfCategory(inCat);
+            }
             if (ic >= 0) {
                 trans_ = Transition::Incoming; transClip_ = ic; mdl = nm;
                 beginBase(*mdl, ic, core::config::kTransformBlendIn);  // model change: hard cut
@@ -256,6 +379,7 @@ void Character::updateAnimation(float dt) {
     float blend = justExitedTransform_ ? core::config::kTransformBlendOut : core::config::kLocomotionBlend;
 
     if (form_ == Form::Vehicle) {
+        legYaw_ = 0.0f; turnClip_ = -1; yawInit_ = false;
         if (vehicleRig_.valid) {
             if (clip_ != kVehicleHoverKey) justExitedTransform_ = false;
             beginBase(*mdl, kVehicleHoverKey, blend);
@@ -284,8 +408,12 @@ void Character::updateAnimation(float dt) {
     }
     if (landT_ > 0.0f) landT_ -= dt;
 
+    // Turn in place while standing (not during landing / reload-free idle only matters for legs).
+    updateTurnInPlace(*mdl, dt, onGround_ && speed <= 0.4f);
+
     std::string cat;
-    if (!onGround_) cat = (velocity_.y > 0.5f) ? "jump" : "fall";
+    if (turnClip_ >= 0) cat = "turn";
+    else if (!onGround_) cat = (velocity_.y > 0.5f) ? "jump" : "fall";
     else if (speed > 3.0f) cat = "run";
     else if (speed > 0.4f) cat = "walk";
     else cat = (landT_ > 0.0f) ? "land" : "idle";
@@ -306,14 +434,22 @@ void Character::updateAnimation(float dt) {
     if (cat == "walk" || cat == "run") clip = mdl->clipOfCategoryNamed(cat, suf);
     else if (cat == "idle") clip = robotRig_.idleClip;
     else if (cat == "land") { clip = robotRig_.landClip; loop = false; }
+    else if (cat == "turn") { clip = turnClip_; loop = false; blend = core::config::kTurnTransitionBlend; }
     else { clip = mdl->firstClipOfCategory(cat); loop = (cat != "jump"); }  // take-off plays once
     if (clip < 0 && cat == "run") clip = mdl->clipOfCategoryNamed("walk", suf);
     if (clip < 0 && cat == "walk") clip = mdl->clipOfCategoryNamed("run", suf);
     if (clip < 0) clip = mdl->firstClipOfCategory("idle");
     if (clip < 0) clip = mdl->clips.empty() ? -1 : 0;
 
+    // Leaving a pivot transition also uses TransitionBlendTime [CONF 0.1 s].
+    if (cat != "turn" && clip_ >= 0 && (clip_ == robotRig_.pivotL || clip_ == robotRig_.pivotR))
+        blend = core::config::kTurnTransitionBlend;
     if (clip != clip_) justExitedTransform_ = false;
     playClip(*mdl, clip, loop, dt, blend);
+    // RRO_Discard [CONF Default__TnAnimTurnInPlacePlayer]: the pivot's authored root turn is not
+    // applied; the unwinding legYaw_ supplies the rotation instead.
+    if (cat == "turn" && robotRig_.rootRef >= 0)
+        basePose_.r[(size_t)robotRig_.rootRef] = mdl->nodes[(size_t)robotRig_.rootRef].r;
     finalizePose(*mdl, dt);
 }
 

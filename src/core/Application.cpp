@@ -81,6 +81,10 @@ void Application::run() {
 
         if (const char* fy = std::getenv("WFC_FIXYAW"))   // diagnostic: pin the camera yaw
             world_.player().controller().setCameraYaw((float)std::atof(fy));
+        if (const char* at = std::getenv("WFC_AUTOTURN")) {  // diagnostic: rotate the aim (rad/s)
+            auto& pc = world_.player().controller();
+            pc.setCameraYaw(pc.camYaw() + (float)std::atof(at) * (float)realDt);
+        }
         if (const char* fp = std::getenv("WFC_FIXPITCH")) // diagnostic: pin the camera/aim pitch
             world_.player().controller().setCameraPitch((float)std::atof(fp));
         // Per-frame input (camera orientation, buffered movement intent).
@@ -105,15 +109,17 @@ void Application::run() {
             LOG_INFO("jump frame %ld y=%.2f vy=%.2f grounded=%d", frame,
                      pw.position().y, pw.velocity().y, (int)pw.onGround());
         }
-        if (smokeFrames > 0 && frame % 30 == 0) {
+        static const long logEvery = std::getenv("WFC_LOGEVERY") ? std::atol(std::getenv("WFC_LOGEVERY")) : 30;
+        if (smokeFrames > 0 && logEvery > 0 && frame % logEvery == 0) {
             const auto& pawn = world_.player().pawn();
             core::Vec3 p = pawn.position();
             LOG_INFO("frame %ld pos %.2f %.2f %.2f grounded=%d form=%s anim=%s t=%.2f ammo=%d/%d reloading=%d "
-                     "yaw=%.2f aimW=%.2f aimN=%.2f reloadW=%.2f",
+                     "yaw=%.2f aimW=%.2f aimN=%.2f reloadW=%.2f legYaw=%.1f aimYawN=%.2f turn=%d recoil=%d",
                      frame, p.x, p.y, p.z, (int)pawn.onGround(), game::formName(pawn.form()),
                      pawn.animName(), pawn.animTime(), pawn.weapon().ammo, pawn.weapon().reserve,
                      (int)pawn.weapon().reloading(), pawn.yaw(), pawn.aimWeight(), pawn.aimPitchNorm(),
-                     pawn.reloadWeight());
+                     pawn.reloadWeight(), pawn.legYaw() * 57.2958f, pawn.aimYawNorm(),
+                     (int)pawn.turningInPlace(), (int)pawn.recoiling());
         }
 
         // Camera + render.

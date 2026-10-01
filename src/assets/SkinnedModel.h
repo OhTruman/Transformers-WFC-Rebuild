@@ -125,6 +125,15 @@ void addPose(LocalPose& base, const LocalPose& delta, float weight,
              const std::vector<float>* mask = nullptr);
 // out = the delta that turns `ref` into `p` under addPose (p.t-ref.t, inv(ref.r)*p.r, p.s/ref.s).
 void deltaPose(const LocalPose& ref, const LocalPose& p, LocalPose& out);
+// Quaternion helpers (Hamilton product, axis-angle with a unit axis).
+core::Quat quatMul(const core::Quat& a, const core::Quat& b);
+core::Quat quatAxisAngle(const core::Vec3& axis, float angle);
+// Model-space rotation of `node` under `pose` (composed parent chain; scale ignored).
+core::Quat meshRotation(const SkinnedModel& model, const LocalPose& pose, int node);
+// Skel-control style edit: rotate `node` by `meshRot` about its own pivot and move it by
+// `meshOffset`, both expressed in model space; descendants follow.
+void applyMeshSpace(const SkinnedModel& model, LocalPose& pose, int node, const core::Quat& meshRot,
+                    const core::Vec3& meshOffset);
 // Per-node weight: 1 for `rootNode` and its descendants, 0 elsewhere.
 std::vector<float> subtreeMask(const SkinnedModel& model, int rootNode);
 // Resolve hierarchy into `global` (per-node model-space matrices) and CPU-skin into `outMesh`.

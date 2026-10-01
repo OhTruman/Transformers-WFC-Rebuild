@@ -82,6 +82,13 @@ constexpr float kLocomotionBlend   = 0.15f;  // s [PROV] crossfade between locom
 // the minimum airborne time before Nav_Land plays on touchdown (filters curb step-offs).
 constexpr float kSlotBlend         = 0.15f;  // s [PROV]
 constexpr float kLandMinAirTime    = 0.3f;   // s [PROV]
+// Turn in place. [CONF] TransGame.Default__TnAnimTurnInPlace: TransitionThresholdAngle 4096 UU,
+// TransitionBlendTime 0.1, PercentageToAllowAbort 0.5. Aim offset InterpSpeed [CONF]
+// Default__TnAnimNodeAimOffset 12.
+constexpr float kTurnThreshold       = 0.3926991f; // 4096 UU = 22.5 deg [CONF]
+constexpr float kTurnTransitionBlend = 0.1f;       // s [CONF]
+constexpr float kTurnAbortPct        = 0.5f;       // [CONF]
+constexpr float kAimInterpSpeed      = 12.0f;      // [CONF]
 
 // Asset source: local, legally-owned extracted vertical slice (never committed).
 // Override at runtime with the WFC_ASSETS environment variable.

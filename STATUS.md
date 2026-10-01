@@ -3,6 +3,28 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## FIDELITY PASS 8 (2026-10-01): WEAPON RECOIL, TURN IN PLACE, FULL AIM GRID (shipped anim tree)
+Gameplay agent. Evidence: shipped `TR_Shared_ANIMTREE_p.Robot_ANIMTREE` and class defaults, read
+read-only from cooked packages (`work/pass8/dump_animtree.py` → `work/pass8/dump_*.json`).
+- **Weapon recoil (was NOT YET):** a reconstruction of `HmSkelControlRecoil` (UE3
+  `GameSkelCtrl_Recoil`), restarted per shot (`TnRecoiler`). Bones come from the tree's
+  SkelControlLists: SpineRecoil → `C_Spine02_Lumbar02_XB`, RightHandRecoil → `R_Arm02_Shoulder_XB`.
+  Ion Blaster values = `Default__TnWeaponMesh` archetype + IonBlaster_WEPMESH overrides. A/B
+  (`WFC_NORECOIL`): during sustained fire the barrel climbs +12° (6.8° → 19.1°) with ±3° random yaw.
+- **Turn in place (was NOT YET):** `TnAnimTurnInPlace` / `TnAnimTurnInPlaceRotator` ("UnwindLowerBody").
+  Standing, the legs keep their world yaw while the torso follows the aim through the aim
+  offset's L/R columns. At 22.5° short of a transition's 90°/180° (`TransitionThresholdAngle` 4096),
+  `Nav_IdlePivot90_{L,R}` plays with root rotation discarded (`RRO_Discard`) and unwinds the
+  offset along the clip's own root-yaw curve. Blend 0.1 s, abort after 50%. Verified: a slow pan
+  holds the legs to 67°, then a 90° step returns the offset to ≈0; a fast pan (143°/s) chains pivots.
+- **Aim offset is now the full 3×3 grid:** the yaw columns are calibrated from the poses
+  (barrel L −90.7° / R +81.2°), and the inputs interpolate at the authored `InterpSpeed` 12.
+- **Fixed (pre-existing):** robot→vehicle picked `Transform_ToVehicle_SuperBoost_Veh` (0.8 s) as
+  the incoming clip. It now pairs `Transform_ToVehicle_VEH` by name (matched 1.97 s fold).
+- Diagnostics: `WFC_AUTOTURN=rad/s`, `WFC_NORECOIL`, `WFC_LOGEVERY=N`; the frame log adds
+  legYaw/aimYawN/turn/recoil.
+- Regression: jump 6.39 m, transforms both ways, reload on the move, vehicle hover; clean build.
+
 ## FIDELITY PASS 7 (2026-10-01): ANIMATION LAYERS, MESH FACING CORRECTED, VEHICLE HOVER POSES
 Gameplay agent (`agents/gameplay`). Verified by runtime screenshots + numeric logs (`work/pass7/`).
 - **Mesh facing was 90° off; now fixed (+90°).** The authored straight-ahead aim pose
@@ -31,8 +53,8 @@ Gameplay agent (`agents/gameplay`). Verified by runtime screenshots + numeric lo
   `Nav_Land` plays on touchdown after ≥0.3 s airborne.
 - Regression: jump 6.36 m, transforms both directions, vehicle hover 2 m, no idle drift; clean build.
 - New diagnostic: `WFC_FIXPITCH=rad` pins camera/aim pitch. The frame log adds yaw/aimW/aimN/reloadW.
-- **Still open (gameplay):** turn-in-place pivots (`Nav_Pivot*`), weapon recoil skel-controls
-  (`SpineRecoil`/`RightHandRecoil` data present in weapon.json), boost/dodge clips, camera tuning.
+- **Still open (gameplay):** ~~turn-in-place~~, ~~weapon recoil~~ (done in Pass 8), boost/dodge
+  clips, camera tuning.
 
 ## FIDELITY PASS 6 (2026-10-01) — INTERACTIVE PLAYER FIXES (orientation, locomotion, muzzle, reload, transform)
 Runtime observation (replaying the exe) drove this pass, not headless smoke. Fixed, in the
