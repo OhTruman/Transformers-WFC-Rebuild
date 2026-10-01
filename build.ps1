@@ -3,7 +3,8 @@
 param(
     [switch]$Run,
     [switch]$Clean,
-    [string]$Config = "Debug"
+    [string]$Config = "Debug",
+    [ValidateRange(1,64)][int]$Jobs = 2
 )
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -20,7 +21,12 @@ foreach ($p in @($clangDir, $cmakeExe, $ninjaExe)) {
 
 $env:PATH = "$clangDir;" + $env:PATH
 
-if ($Clean -and (Test-Path $build)) { Remove-Item -Recurse -Force $build }
+if ($Clean -and (Test-Path $build)) {
+    $expected = [IO.Path]::GetFullPath((Join-Path $root "build"))
+    $resolved = (Resolve-Path -LiteralPath $build).Path
+    if ($resolved -ne $expected -or (Get-Item -LiteralPath $build).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Unsafe build cleanup target: $resolved" }
+    Remove-Item -LiteralPath $resolved -Recurse -Force
+}
 New-Item -ItemType Directory -Force $build | Out-Null
 
 & $cmakeExe -S $root -B $build -G Ninja `
@@ -30,7 +36,7 @@ New-Item -ItemType Directory -Force $build | Out-Null
     "-DCMAKE_CXX_COMPILER=$clangDir\clang++.exe"
 if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }
 
-& $cmakeExe --build $build
+& $cmakeExe --build $build --parallel $Jobs
 if ($LASTEXITCODE -ne 0) { throw "build failed" }
 
 $exe = Join-Path $build "bin\wfc_rebuild.exe"
