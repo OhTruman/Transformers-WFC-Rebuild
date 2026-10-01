@@ -3,6 +3,74 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 01 (2026-10-01) — branch `integration/milestone-01`
+Integration only: no new features. All four agent checkpoints were merged with `--no-ff`, one at a
+time, building and running the fidelity harness after each merge.
+
+| Order | Branch | Head | Conflicts |
+|---|---|---|---|
+| 1 | agents/experimental | 6dc6523 | none |
+| 2 | agents/rendering | dd21838 | `.gitignore` (kept both rule sets) |
+| 3 | agents/gameplay | 5dd1b09 | `STATUS.md`, `FIDELITY.md` (kept all sections from both sides) |
+| 4 | agents/systems | ca9cd25 | `Character.cpp/.h`, `Recoil.h` (add/add), `SkinnedModel.cpp`, `Renderer.h`, `STATUS.md`, `FIDELITY.md` |
+
+**Duplicate Gameplay/Systems work, resolved per tools/fidelity/CHECKPOINT.md:** both branches
+implemented the reload upper-body slot, the TnAnimNodeAimOffset "Default" profile and
+HmSkelControlRecoil, with identical recovered data. The merged build keeps **Gameplay's**
+implementation, because locomotion, turn-in-place, transform and hover depend on it. Systems'
+`AimOffset.h`, `updateUpperBody`/`evalLayered`, shot-serial recoil trigger, second `setAimPitch`
+call and parallel `LocalPose` API were not merged. `WeaponMesh` was ported onto Gameplay's
+`samplePose`/`blendPose`/`skinPose`, with the same semantics. Recoil fires once per shot
+(`PlayerController` → `notifyFired`). Everything unique to Systems is kept: the animated Ion Blaster
+and its sockets, AnimNotifies, original FX (muzzle flash, tracer, impact, shells, reload
+flare/smoke, magazine drop), SoundCues, the audio voice API, and the glTF+.bin loader.
+`Renderer.h` keeps Rendering's `loadMapRenderData`/`setVisibilityQuery` **and** Systems'
+`drawParticles`. `GLRenderer::drawParticles` now restores the caller's `GL_FOG` state instead of
+force-enabling it. Fixed-function fog stays off in the WFC shader path.
+
+**Validation (clean build, `.\build.ps1 -Jobs 2 -Clean`):** `wfc_rebuild.exe` and `wfc_fidelity.exe`
+build with 0 compiler warnings.
+- `wfc_fidelity`: **110 pass / 0 FAIL / 6 known / 51 info / 1 skip** (exit 0). `--map`: 112/0/6/67/0.
+  `--no-assets`: 79/0/6/25/10.
+- vs the Experimental baseline (main code, 100/0/16): 0 REGRESSED, 10 KNOWN→PASS (Gameplay fixes).
+- vs agents/gameplay head: identical. vs agents/systems head: 0 REGRESSED, 9 KNOWN→PASS.
+- Runtime, with scripted `capture.ps1` runs (logs and PNGs in `work/fidelity/shots/int_*`):
+  - World loads; WFC shader path active (168/169 materials, 1973 lightmapped components,
+    268 lights, fog). Optimus, the vehicle and the Ion Blaster render through their WFC materials.
+    The `WFC_LEGACYRENDER` fallback works.
+  - Walk/strafe pick the directional clips. Facing follows the aim with the back to the chase cam
+    (`face.toCam -0.91`).
+  - Transformation works both ways (to vehicle → hover, to robot). The vehicle drives and boosts,
+    and stops at walls.
+  - Fire: SoundCue layers, impact cues, recoil, `IonBlaster_Fire` and muzzle/tracer/impact/shell
+    FX all run. A full 50-round mag dump gives 50 shell notifies, then auto-reload.
+  - Reload on the move: upper slot weight 1 over `Nav_StrafeWalk_F`, reload cues, flare/smoke
+    @0.034, magazine drop @0.174 at MagSocket.
+- Render data must be generated per worktree:
+  `powershell -ExecutionPolicy Bypass -File tools\render\build_render_data.ps1` (→ `work/render`).
+
+**Known issues carried into the playtest (none introduced as harness FAILs):**
+- **Frame time while firing:** about 6 ms standing → 40–46 ms during sustained fire (WFC path).
+  - About 20–28 ms of this is inherited from Systems: the agents/systems head alone shows
+    +20 ms while firing on the legacy renderer.
+  - About 8–12 ms is a merge interaction: each moving shell/magazine mesh particle is drawn as a
+    dynamic object. It misses Rendering's 4–8 slot light-environment cache, so it re-traces
+    visibility rays for every candidate light each frame. Measured with visibility traces
+    disabled: 34 ms.
+  - Not fixed here, because the fix changes FX lighting behaviour. Owners: Rendering and Systems.
+- `collision.max_step_height` is 0.70 m effective, against 0.35 m CONF. Gameplay's constant is 0.35,
+  but it is still applied twice (Experimental patch #2, not applied). Jump apex, wall slide,
+  low-obstacle and fire-interval KNOWNs remain; they are Experimental patches 1–4 for the owners.
+- Reload/owner-anim slot blend: Gameplay `kSlotBlend` 0.15 s [PROV] vs Systems-recovered
+  0.1/0.1 s [CONF]. For Gameplay to reconcile.
+- Systems' fixed-function particles composite into Rendering's linear HDR target without
+  sRGB→linear conversion. They may read slightly brighter/flatter than the original. Visual check
+  in playtest.
+- `SHOOT_TAIL` can fire mid-burst when a frame hitch exceeds 2× FireInterval (Systems
+  edge-detect on wall-clock time).
+- `LightMapTexture2D_882/_5049.png` in ExtractedAssets fail to decode for the legacy lightmap path.
+  This predates the merge; the WFC path uses its own regenerated atlases.
+
 ## RENDERING PASS 7 (2026-10-01) — ORIGINAL WFC RENDER PATH (shaders, materials, lighting, post)
 Branch `agents/rendering`. The runtime now renders Streets and Optimus through a GL 3.3 shader path
 whose every stage was recovered from the original game data/binaries (details + provenance:
