@@ -15,6 +15,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ue3obj import Repo, tags_to_dict, ASSETTOOLS  # noqa: E402
 sys.path.insert(0, ASSETTOOLS)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Engine class defaults (Engine.xxx Default__*): verified by reading the CDOs.
 LIGHT_DEFAULTS = {'Brightness': 1.0, 'LightColor': [255, 255, 255, 0], 'bEnabled': True, 'CastShadows': True,
@@ -284,6 +285,48 @@ def write_glb(path, prims):
         f.write(struct.pack('<II', len(bin_), 0x004E4942)); f.write(bytes(bin_))
 
 
+def postprocess(mapname, out):
+    """Persistent-level post settings: the map's TnWorldInfo.DefaultPostProcessSettings (the BASE
+    package is the persistent level: TransLevels.ini MapFilename) layered over Engine
+    Default__WorldInfo, plus the authored ColorCorrectionTexture (Texture3D CLUT) decoded from its
+    Xbox-tiled A8R8G8B8 volume (xbox_texture.decode_volume_argb8) into a 1024x32 PNG strip
+    (u = x + 32*z, v = y)."""
+    from PIL import Image
+    import xbox_texture
+    eng = Repo(['Engine.xxx'])
+    base = Repo(['%s_BASE_m.xxx' % mapname])
+
+    def settings(tags):
+        d = {}
+        for t in tags or []:
+            v = t['value']
+            if isinstance(v, dict) and 'ref' in v: v = v['ref']
+            elif isinstance(v, list) and v and isinstance(v[0], dict) and 'name' in v[0]: v = {x['name']: x['value'] for x in v}
+            d[t['name']] = v
+        return d
+    wi_def = eng.obj('Engine.Default__WorldInfo') or {}
+    pp = settings(wi_def.get('DefaultPostProcessSettings'))
+    src = {k: 'Engine.Default__WorldInfo' for k in pp}
+    wi = next((path for path in base.index if base.cls(path) == 'TnWorldInfo' and 'default__' not in path), None)
+    over = settings((base.obj(wi) or {}).get('DefaultPostProcessSettings')) if wi else {}
+    for k, v in over.items(): pp[k] = v; src[k] = wi
+    res = {'settings': pp, 'source': src, 'world_info': wi, 'clut': None}
+    clut = pp.get('ColorCorrectionTexture')
+    if clut and base.find(clut):
+        o = base.obj(clut) or {}
+        sx, sy, sz = o.get('SizeX', 32), o.get('SizeY', 32), o.get('SizeZ', 32)
+        _, tail = base.native_tail(clut)
+        # bulk header [flags][count][size][offset][extra] then the top mip (verified: offset 20 decodes
+        # to a smooth near-identity grade; offset 16 does not)
+        vol = xbox_texture.decode_volume_argb8(tail[20:20 + sx * sy * sz * 4], sx, sy, sz)
+        strip = vol.transpose(1, 0, 2, 3).reshape(sy, sz * sx, 4)       # row y, column z*sx + x
+        fn = os.path.join(out, 'clut.png')
+        Image.fromarray(strip).save(fn)
+        res['clut'] = {'object': clut, 'file': fn.replace(os.sep, '/'), 'size': [sx, sy, sz],
+                       'srgb': bool(o.get('SRGB', False))}       # Default__Texture3D SRGB=False
+    return res
+
+
 def main():
     mapname, out, umodel_dir = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(os.path.join(out, 'lightmaps'), exist_ok=True)
@@ -293,6 +336,7 @@ def main():
     props.update(bsp_props)
     L = lights(repo, 0)
     F = fog(repo, 0)
+    PP = postprocess(mapname, out)
     atl = sorted({a for r in props.values() for a in r['coeffs']})
     copied = 0
     for root, _, files in os.walk(umodel_dir):
@@ -305,11 +349,12 @@ def main():
                        '(decoded from the original Xenon base-pass shader microcode).',
                'lightmap_type_counts': kinds,
                'lightmaps': {'props': props, 'atlases': atl},
-               'lights': L, 'fog': F},
+               'lights': L, 'fog': F, 'postprocess': PP},
               open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
     from collections import Counter
     print('lightmapped components: %d (types %s); atlases %d; copied %d PNGs' % (len(props), kinds, len(atl), copied))
     print('lights:', Counter(l['class'] for l in L))
+    print('postprocess:', {k: v for k, v in PP['settings'].items() if 'Bloom' in k or 'DOF' in k or 'Scene' in k or 'Color' in k})
     print('fog:', {k: F[k] for k in ('Height', 'Density', 'LightColor', 'LightBrightness', 'StartDistance', 'ExtinctionDistance')})
 
 

@@ -95,6 +95,18 @@ private:
     void ensureTargets(int w, int h);
     static void buildVertices(const MeshData& m, std::vector<float>& v);
 
+    // Authored post-process (map TnWorldInfo.DefaultPostProcessSettings over Default__WorldInfo).
+    struct Post {
+        bool bloom = true, dof = false;
+        float bloomScale = 1.0f, bloomThreshold = 1.0f;
+        float dofPacked[4] = {0, 1.0f / 2000.0f, 4.0f, 1.0f / 2000.0f};
+        float dofMaxBlur[2] = {1.0f, 1.0f};
+        core::Vec3 shadows{0, 0, 0}, highlights{1, 1, 1}, midtones{1, 1, 1};
+        float desat = 0.0f;
+    } post_;
+    GLuint clutTex_ = 0;
+    int clutSize_ = 32;
+    float znear_ = 0.1f, zfar_ = 20000.0f;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
     bool active_ = false;
     std::string dataDir_;
@@ -136,7 +148,7 @@ private:
     float time_ = 0.0f;
     float frustum_[6][4] = {};
     int vpW_ = 0, vpH_ = 0;
-    GLuint fbo_ = 0, colorTex_ = 0, depthRb_ = 0, postProg_ = 0, postVao_ = 0;
+    GLuint fbo_ = 0, colorTex_ = 0, depthTex_ = 0, postProg_ = 0, postVao_ = 0;
     GLuint bloomGatherProg_ = 0, blurProg_ = 0, bloomFbo_[2] = {0, 0}, bloomTex_[2] = {0, 0};
     int bloomW_ = 1, bloomH_ = 1;
     int fbW_ = 0, fbH_ = 0;

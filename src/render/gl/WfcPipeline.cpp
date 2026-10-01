@@ -226,25 +226,48 @@ void main() {
 )";
 
 // UE3 DOFAndBloom gather (decoded TDOFAndBloomGatherPixelShader): 4 taps of scene colour clamped
-// to [0,4]; a tap contributes only if any channel exceeds BloomThreshold; sum * 0.25 * BloomScale.
+// to [0,4] and their linear depths. Bloom = taps where any channel exceeds BloomThreshold, summed,
+// * 0.25 * BloomScale. DOF weight a' = min(MaxBlur, pow(sat(|avgDepth - FocusDistance| * InvFalloff),
+// FalloffExponent)) (near/far parameters by sign). Output rgb = avgScene * a' + bloom, alpha = a'.
 const char* kBloomGatherFS = R"(#version 330 compatibility
 in vec2 vUV;
 uniform sampler2D uScene;
+uniform sampler2D uDepth;
 uniform vec2 uTexel;
 uniform float uBloomScale, uBloomThreshold;
+uniform vec4 uDofPacked;      // FocusDistance, 1/NearFalloff, FalloffExponent, 1/FarFalloff (UE units)
+uniform vec2 uDofMaxBlur;     // MaxNearBlurAmount, MaxFarBlurAmount
+uniform int uDofOn;
+uniform vec2 uNearFar;        // camera near/far (m)
 layout(location=0) out vec4 oColor;
-vec3 tap(vec2 o) {
-    vec3 c = clamp(texture(uScene, vUV + o * uTexel).rgb, 0.0, 4.0);
-    return any(greaterThan(c, vec3(uBloomThreshold))) ? c : vec3(0.0);
+float linDepthUE(vec2 uv) {
+    float d = texture(uDepth, uv).r * 2.0 - 1.0;
+    float n = uNearFar.x, f = uNearFar.y;
+    return (2.0 * n * f / (f + n - d * (f - n))) * 100.0;
 }
 void main() {
-    vec3 b = tap(vec2(-1.0, -1.0)) + tap(vec2(1.0, -1.0)) + tap(vec2(-1.0, 1.0)) + tap(vec2(1.0, 1.0));
-    oColor = vec4(b * 0.25 * uBloomScale, 1.0);
+    vec3 scene = vec3(0.0), bloom = vec3(0.0); float dsum = 0.0;
+    for (int i = 0; i < 4; ++i) {
+        vec2 o = vec2((i & 1) == 0 ? -1.0 : 1.0, (i & 2) == 0 ? -1.0 : 1.0);
+        vec2 uv = vUV + o * uTexel;
+        vec3 c = clamp(texture(uScene, uv).rgb, 0.0, 4.0);
+        scene += c;
+        if (any(greaterThan(c, vec3(uBloomThreshold)))) bloom += c;
+        dsum += linDepthUE(uv);
+    }
+    float a = 0.0;
+    if (uDofOn != 0) {
+        float dz = dsum * 0.25 - uDofPacked.x;
+        float inv = dz >= 0.0 ? uDofPacked.w : uDofPacked.y;
+        float mx = dz > 0.0 ? uDofMaxBlur.y : uDofMaxBlur.x;
+        a = min(mx, pow(max(clamp(abs(dz) * inv, 0.0, 1.0), 0.0001), uDofPacked.z));
+    }
+    oColor = vec4(scene * 0.25 * a + bloom * 0.25 * uBloomScale, a);
 }
 )";
 
-// Separable Gaussian (UE3 DOFAndBloom blur). [PROV] kernel: radius = DOF_BlurKernelSize (16 px
-// full-res, WorldInfo default) / 4 at quarter resolution, sigma = radius / 2.
+// Separable Gaussian (UE3 DOFAndBloom blur) over rgb + DOF weight. [PROV] kernel: radius =
+// DOF_BlurKernelSize (16 px full-res) / 4 at quarter resolution, sigma = radius / 2.
 const char* kBlurFS = R"(#version 330 compatibility
 in vec2 vUV;
 uniform sampler2D uSrc;
@@ -253,36 +276,54 @@ layout(location=0) out vec4 oColor;
 void main() {
     const int R = 4;
     float sigma = float(R) * 0.5;
-    vec3 acc = vec3(0.0); float wsum = 0.0;
+    vec4 acc = vec4(0.0); float wsum = 0.0;
     for (int i = -R; i <= R; ++i) {
         float w = exp(-0.5 * float(i * i) / (sigma * sigma));
-        acc += texture(uSrc, vUV + uStep * float(i)).rgb * w; wsum += w;
+        acc += texture(uSrc, vUV + uStep * float(i)) * w; wsum += w;
     }
-    oColor = vec4(acc / wsum, 1.0);
+    oColor = acc / wsum;
 }
 )";
 
-// FUberPostProcessPixelShader (decoded): (scene + bloom) -> sat(x - SceneShadows) * InvHighLights
-// -> pow(MidTones) -> x*(1-Desat) + lum*Desat + Overlay -> sat(* ColorScale) -> pow(1/DisplayGamma).
-// Streets has no PostProcessVolume and the persistent level is a stub in the dump, so WorldInfo
-// defaults apply: Shadows 0, HighLights 1, MidTones 1, Desaturation 0, identity CLUT, gamma 2.2.
+// FUberPostProcessPixelShader + ColorCorrection variant (decoded):
+//   a = DOF weight at full-res depth; c = ((1-a)*scene + blur.rgb) / ((1-a) + blur.a)
+//   -> sat(c - SceneShadows) * InvHighLights -> pow(MidTones) -> x*(1-Desat)+lum*Desat+Overlay
+//   -> sat(* ColorScale) -> pow(1/DisplayGamma) -> tex3D(CLUT, c * Scale + Bias).
+// Settings: the map's TnWorldInfo.DefaultPostProcessSettings over Engine Default__WorldInfo.
 const char* kPostFS = R"(#version 330 compatibility
 in vec2 vUV;
 uniform sampler2D uScene;
 uniform sampler2D uBloom;
-uniform int uBloomOn;
+uniform sampler2D uDepth;
+uniform sampler3D uClut;
+uniform int uBloomOn, uClutOn, uDofOn;
+uniform vec4 uDofPacked;
+uniform vec2 uDofMaxBlur;
+uniform vec2 uNearFar;
+uniform vec2 uClutScaleBias;
 uniform vec3 uShadows, uInvHighLights, uMidTones;
 uniform float uDesat;
 uniform float uInvGamma;
 layout(location=0) out vec4 oColor;
 void main() {
-    vec3 c = texture(uScene, vUV).rgb;
-    if (uBloomOn != 0) c += texture(uBloom, vUV).rgb;
+    vec3 scene = texture(uScene, vUV).rgb;
+    float a = 0.0;
+    if (uDofOn != 0) {
+        float d = texture(uDepth, vUV).r * 2.0 - 1.0;
+        float n = uNearFar.x, f = uNearFar.y;
+        float dz = (2.0 * n * f / (f + n - d * (f - n))) * 100.0 - uDofPacked.x;
+        float inv = dz >= 0.0 ? uDofPacked.w : uDofPacked.y;
+        float mx = dz > 0.0 ? uDofMaxBlur.y : uDofMaxBlur.x;
+        a = min(mx, pow(max(clamp(abs(dz) * inv, 0.0, 1.0), 0.0001), uDofPacked.z));
+    }
+    vec4 blur = uBloomOn != 0 ? texture(uBloom, vUV) : vec4(0.0);
+    vec3 c = ((1.0 - a) * scene + blur.rgb) / max((1.0 - a) + blur.a, 0.0001);
     c = clamp(c - uShadows, 0.0, 1.0) * uInvHighLights;
     c = pow(max(c, vec3(0.0001)), uMidTones);
     c = c * (1.0 - uDesat) + vec3(dot(c, vec3(0.3, 0.59, 0.11)) * uDesat);
     c = clamp(c, 0.0, 1.0);
     c = pow(max(c, vec3(0.0001)), vec3(uInvGamma));
+    if (uClutOn != 0) c = texture(uClut, c * uClutScaleBias.x + uClutScaleBias.y).rgb;
     oColor = vec4(c, 1.0);
 }
 )";
@@ -445,6 +486,58 @@ bool Pipeline::load(const std::string& mapName) {
                   srgbToLinear(c[2].asFloat(255) / 255.0f) * br};
     }
 
+    {
+        const assets::Json& P = L["postprocess"]["settings"];
+        auto f = [&](const char* k, float d) { return P[k].asFloat(d); };
+        post_.bloom = P["bEnableBloom"].asBool(true);
+        post_.dof = P["bEnableDOF"].asBool(false);
+        post_.bloomScale = f("Bloom_Scale", 1.0f);
+        post_.bloomThreshold = f("Bloom_Threshold", 1.0f);
+        // [MED] UE3 DOF PackedParameters = (FocusDistance, 1/FocusNearFalloff, FalloffExponent,
+        // 1/FocusFarFalloff), MinMaxBlurClamp = (MaxNear, MaxFar): layout from the decoded gather/uber PS.
+        post_.dofPacked[0] = f("DOF_FocusDistance", 0.0f);
+        post_.dofPacked[1] = 1.0f / std::max(f("DOF_FocusNearFalloff", 2000.0f), 1.0f);
+        post_.dofPacked[2] = f("DOF_FalloffExponent", 4.0f);
+        post_.dofPacked[3] = 1.0f / std::max(f("DOF_FocusFarFalloff", 2000.0f), 1.0f);
+        post_.dofMaxBlur[0] = f("DOF_MaxNearBlurAmount", 1.0f);
+        post_.dofMaxBlur[1] = f("DOF_MaxFarBlurAmount", 1.0f);
+        auto v3 = [&](const char* k, core::Vec3 d) {
+            const assets::Json& a = P[k];
+            return a.isArray() ? core::Vec3{a[0].asFloat(d.x), a[1].asFloat(d.y), a[2].asFloat(d.z)} : d;
+        };
+        post_.shadows = v3("Scene_Shadows", {0, 0, 0});
+        post_.highlights = v3("Scene_HighLights", {1, 1, 1});
+        post_.midtones = v3("Scene_MidTones", {1, 1, 1});
+        post_.desat = f("Scene_Desaturation", 0.0f);
+        if (!P["bEnableSceneEffect"].asBool(true)) {
+            post_.shadows = {0, 0, 0}; post_.highlights = {1, 1, 1}; post_.midtones = {1, 1, 1}; post_.desat = 0;
+        }
+        const assets::Json& C = L["postprocess"]["clut"];
+        ImageData strip;
+        if (C.isObject() && platform::decodeImage(C["file"].asString(), strip) && strip.valid()) {
+            int n = C["size"][0].asInt(32);
+            std::vector<uint8_t> vol((size_t)n * n * n * 4);
+            for (int z = 0; z < n; ++z)
+                for (int y = 0; y < n; ++y)
+                    for (int x = 0; x < n; ++x)
+                        std::memcpy(&vol[(((size_t)z * n + y) * n + x) * 4],
+                                    &strip.rgba[((size_t)y * strip.w + (size_t)z * n + x) * 4], 4);
+            glGenTextures(1, &clutTex_);
+            glBindTexture(GL_TEXTURE_3D, clutTex_);
+            glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+            TexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, n, n, n, 0, GL_RGBA, GL_UNSIGNED_BYTE, vol.data());   // SRGB=False
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+            glBindTexture(GL_TEXTURE_3D, 0);
+            clutSize_ = n;
+        }
+        LOG_INFO("wfc: post: bloom %d scale %.2f, DOF %d far max %.2f falloff %.0f, CLUT %s", (int)post_.bloom,
+                 post_.bloomScale, (int)post_.dof, post_.dofMaxBlur[1], 1.0f / post_.dofPacked[3],
+                 clutTex_ ? C["object"].asString().c_str() : "none");
+    }
     whiteTex_ = makeTex1x1(255, 255, 255, 255);
     blackTex_ = makeTex1x1(0, 0, 0, 0);
     flatNormalTex_ = makeTex1x1(128, 128, 255, 255);
@@ -1005,7 +1098,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
 // ------------------------------------------------------------------------- frame
 void Pipeline::ensureTargets(int w, int h) {
     if (fbo_ && w == fbW_ && h == fbH_) return;
-    if (!fbo_) { GenFramebuffers(1, &fbo_); glGenTextures(1, &colorTex_); GenRenderbuffers(1, &depthRb_); }
+    if (!fbo_) { GenFramebuffers(1, &fbo_); glGenTextures(1, &colorTex_); glGenTextures(1, &depthTex_); }
     glBindTexture(GL_TEXTURE_2D, colorTex_);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -1013,11 +1106,16 @@ void Pipeline::ensureTargets(int w, int h) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
-    BindRenderbuffer(GL_RENDERBUFFER, depthRb_);
-    RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, w, h);
+    glBindTexture(GL_TEXTURE_2D, depthTex_);       // sampled by DOF
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
     FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex_, 0);
-    FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRb_);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTex_, 0);
     if (CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) LOG_ERROR("wfc: HDR framebuffer incomplete");
     // quarter-res bloom ping-pong targets
     int bw = std::max(w / 4, 1), bh = std::max(h / 4, 1);
@@ -1050,6 +1148,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     glClearColor(fogIn_.x, fogIn_.y, fogIn_.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     camPos_ = cam.pos;
+    znear_ = cam.znear; zfar_ = cam.zfar;
     viewProj_ = cam.proj() * cam.view();
     // frustum planes (Gribb/Hartmann, column-major m[col*4+row])
     const float* m = viewProj_.m;
@@ -1077,17 +1176,26 @@ void Pipeline::endFrame() {
     glDisable(GL_FOG);
     BindVertexArray(postVao_);
     ActiveTexture(GL_TEXTURE0);
-    // [CONF] WorldInfo DefaultPostProcessSettings: bEnableBloom, Bloom_Scale 1.0, Bloom_Threshold 1.0.
-    bool bloom = bloomGatherProg_ && blurProg_ && !std::getenv("WFC_NOBLOOM");
+    // Authored settings (TnWorldInfo over Default__WorldInfo), see load(). The quarter-res
+    // gather/blur carries both bloom and the DOF-blurred scene, as in UE3's DOFAndBloom effect.
+    bool dof = post_.dof && !std::getenv("WFC_NODOF");
+    bool bloom = bloomGatherProg_ && blurProg_ && ((post_.bloom && !std::getenv("WFC_NOBLOOM")) || dof);
     if (bloom) {
         BindFramebuffer(GL_FRAMEBUFFER, bloomFbo_[0]);
         glViewport(0, 0, bloomW_, bloomH_);
         UseProgram(bloomGatherProg_);
-        glBindTexture(GL_TEXTURE_2D, colorTex_);
-        Uniform1i(GetUniformLocation(bloomGatherProg_, "uScene"), 0);
-        Uniform2f(GetUniformLocation(bloomGatherProg_, "uTexel"), 1.0f / (float)fbW_, 1.0f / (float)fbH_);
-        Uniform1f(GetUniformLocation(bloomGatherProg_, "uBloomScale"), 1.0f);
-        Uniform1f(GetUniformLocation(bloomGatherProg_, "uBloomThreshold"), 1.0f);
+        auto G = [&](const char* n) { return GetUniformLocation(bloomGatherProg_, n); };
+        ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, depthTex_);
+        ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, colorTex_);
+        Uniform1i(G("uScene"), 0);
+        Uniform1i(G("uDepth"), 1);
+        Uniform2f(G("uTexel"), 1.0f / (float)fbW_, 1.0f / (float)fbH_);
+        Uniform1f(G("uBloomScale"), (post_.bloom && !std::getenv("WFC_NOBLOOM")) ? post_.bloomScale : 0.0f);
+        Uniform1f(G("uBloomThreshold"), post_.bloomThreshold);
+        Uniform4f(G("uDofPacked"), post_.dofPacked[0], post_.dofPacked[1], post_.dofPacked[2], post_.dofPacked[3]);
+        Uniform2f(G("uDofMaxBlur"), post_.dofMaxBlur[0], post_.dofMaxBlur[1]);
+        Uniform1i(G("uDofOn"), dof ? 1 : 0);
+        Uniform2f(G("uNearFar"), znear_, zfar_);
         glDrawArrays(GL_TRIANGLES, 0, 3);
         UseProgram(blurProg_);
         Uniform1i(GetUniformLocation(blurProg_, "uSrc"), 0);
@@ -1102,22 +1210,35 @@ void Pipeline::endFrame() {
     BindFramebuffer(GL_FRAMEBUFFER, 0);
     glViewport(0, 0, vpW_, vpH_);
     UseProgram(postProg_);
-    ActiveTexture(GL_TEXTURE0 + 1);
-    glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
-    ActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, colorTex_);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, bloomTex_[0]);
+    ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, depthTex_);
+    ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, clutTex_);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, colorTex_);
     auto U = [&](const char* n) { return GetUniformLocation(postProg_, n); };
     Uniform1i(U("uScene"), 0);
     Uniform1i(U("uBloom"), 1);
+    Uniform1i(U("uDepth"), 2);
+    Uniform1i(U("uClut"), 3);
     Uniform1i(U("uBloomOn"), bloom ? 1 : 0);
-    Uniform3f(U("uShadows"), 0.0f, 0.0f, 0.0f);          // Scene_Shadows
-    Uniform3f(U("uInvHighLights"), 1.0f, 1.0f, 1.0f);    // 1 / Scene_HighLights
-    Uniform3f(U("uMidTones"), 1.0f, 1.0f, 1.0f);         // Scene_MidTones
-    Uniform1f(U("uDesat"), 0.0f);                        // Scene_Desaturation
+    Uniform1i(U("uDofOn"), dof ? 1 : 0);
+    Uniform4f(U("uDofPacked"), post_.dofPacked[0], post_.dofPacked[1], post_.dofPacked[2], post_.dofPacked[3]);
+    Uniform2f(U("uDofMaxBlur"), post_.dofMaxBlur[0], post_.dofMaxBlur[1]);
+    Uniform2f(U("uNearFar"), znear_, zfar_);
+    bool clut = clutTex_ && !std::getenv("WFC_NOCLUT");
+    Uniform1i(U("uClutOn"), clut ? 1 : 0);
+    // UE3 ColorCorrectionTexCoordScaleBias for an N^3 LUT: scale (N-1)/N, bias 0.5/N
+    Uniform2f(U("uClutScaleBias"), (float)(clutSize_ - 1) / (float)clutSize_, 0.5f / (float)clutSize_);
+    Uniform3f(U("uShadows"), post_.shadows.x, post_.shadows.y, post_.shadows.z);
+    Uniform3f(U("uInvHighLights"), 1.0f / std::max(post_.highlights.x, 1e-4f), 1.0f / std::max(post_.highlights.y, 1e-4f),
+              1.0f / std::max(post_.highlights.z, 1e-4f));
+    Uniform3f(U("uMidTones"), post_.midtones.x, post_.midtones.y, post_.midtones.z);
+    Uniform1f(U("uDesat"), post_.desat);
     Uniform1f(U("uInvGamma"), 1.0f / 2.2f);              // Xe-TransEngine.ini DisplayGamma=2.2
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
     UseProgram(0);
+    ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, 0);
+    ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, 0);
     glEnable(GL_DEPTH_TEST);
