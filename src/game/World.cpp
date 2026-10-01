@@ -88,11 +88,19 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     mapMesh_ = renderer.uploadMesh(mapMesh);
     player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
-    // Ion Blaster: static mesh held at the robot's primary weapon socket.
+    // Ion Blaster: animated skeletal mesh held at the robot's primary weapon socket (falls back
+    // to the static bind-pose mesh if the skinned load fails).
     render::MeshData weaponMesh;
-    if (assets::loadGlb(root + "/Weapons/IonBlaster/weapon.glb", weaponMesh)) {
-        resolveTextures(weaponMesh.mats);
-        weaponMesh_ = renderer.uploadMesh(weaponMesh);
+    bool okWeaponSkin = assets::loadSkinnedGlb(root + "/Weapons/IonBlaster/weapon.glb", weaponModel_);
+    if (okWeaponSkin) {
+        resolveTextures(weaponModel_.mats);
+        weaponAnim_.setModel(&weaponModel_);
+    }
+    if (okWeaponSkin || assets::loadGlb(root + "/Weapons/IonBlaster/weapon.glb", weaponMesh)) {
+        if (!okWeaponSkin) {
+            resolveTextures(weaponMesh.mats);
+            weaponMesh_ = renderer.uploadMesh(weaponMesh);
+        }
         int bone = robotModel_.nodeByName("R_Arm03_Elbow_XB");
         // [CONF] WeaponSocket_Primary relative transform (character.json): loc_ue [-40,0,0],
         // rot_ue [pitch 0, yaw 31311, roll 5461] -> gltf-space socket matrix (column-major).
@@ -292,7 +300,10 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     // tip transformed by the weapon's world matrix (not the hand attach point), so the tracer and
     // flash leave the end of the gun rather than the fist.
     core::Vec3 muzzle = origin;
-    if (player_.pawn().hasWeapon()) {
+    core::Mat4 ms;
+    if (weaponSocketWorld("MuzzleFlash", ms)) {
+        muzzle = {ms.m[12], ms.m[13], ms.m[14]};          // [CONF] MuzzleFlash socket
+    } else if (player_.pawn().hasWeapon()) {
         const core::Mat4& wm = player_.pawn().weaponWorld();
         muzzle = core::transformPoint(wm, core::Vec3{core::config::kMuzzleLocalX,
                      core::config::kMuzzleLocalY, core::config::kMuzzleLocalZ});
@@ -330,9 +341,47 @@ void World::playSfx(Sfx s, const core::Vec3& pos) {
     }
 }
 
+bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
+    if (!weaponAnim_.valid() || !player_.pawn().hasWeapon()) return false;
+    core::Mat4 local;
+    if (!weaponAnim_.socketLocal(socket, local)) return false;
+    out = player_.pawn().weaponWorld() * local;
+    return true;
+}
+
+// Weapon-mesh event animations (TnWeaponMesh.WeaponEventAnims) + their AnimNotifies.
+void World::tickWeaponPresentation(float dt) {
+    const Weapon& w = player_.pawn().weapon();
+    if (w.reloadSerial != weaponSeenReload_) { weaponSeenReload_ = w.reloadSerial; weaponAnim_.play(WeaponMesh::Event::Reload); }
+    if (w.shotSerial != weaponSeenShot_)     { weaponSeenShot_ = w.shotSerial;     weaponAnim_.play(WeaponMesh::Event::Fire); }
+    notifies_.clear();
+    weaponAnim_.tick(dt, notifies_);
+    if (player_.pawn().hasWeapon())
+        for (const WeaponNotify& n : notifies_) handleWeaponNotify(n);
+}
+
+void World::handleWeaponNotify(const WeaponNotify& n) {
+    if (std::getenv("WFC_NOTIFYLOG"))
+        LOG_INFO("NOTIFY %s %s @%.3f %s", n.kind == WeaponNotify::Kind::Sound ? "sound" : "fx",
+                 n.what.c_str(), n.time, n.socket.c_str());
+}
+
 void World::tick(float dt) {
     player_.controller().applyToPawn(*this, dt);
+    player_.pawn().setAimPitch(player_.controller().camPitch());
     player_.pawn().updateAnimation(dt);
+    tickWeaponPresentation(dt);
+    if (std::getenv("WFC_ANIMLOG")) {                       // layering diagnostics
+        static int n = 0;
+        if (++n % 6 == 0) {
+            const Character& pc = player_.pawn();
+            const core::Vec3& v = pc.velocity();
+            LOG_INFO("ANIM base=%s t=%.2f | upper=%s w=%.2f | recoil=%d | weapon=%s | spd=%.2f reload=%d ammo=%d",
+                     pc.animName(), pc.animTime(), pc.upperAnimName(), pc.upperWeight(),
+                     (int)pc.recoilActive(), weaponAnim_.clipName(), std::sqrt(v.x * v.x + v.z * v.z),
+                     (int)pc.weapon().reloading(), pc.weapon().ammo);
+        }
+    }
     for (size_t i = 0; i < shots_.size();) {
         shots_[i].ttl -= dt;
         if (shots_[i].ttl <= 0) { shots_[i] = shots_.back(); shots_.pop_back(); }
@@ -374,7 +423,9 @@ void World::draw(render::IRenderer& r) const {
     player_.draw(r);
 
     // Ion Blaster mesh held at the weapon socket (robot form only).
-    if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
+    if (weaponAnim_.valid() && player_.pawn().hasWeapon())
+        r.drawDynamicMesh(weaponAnim_.pose(), player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
+    else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
         r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
 
     // Tracers + muzzle flashes for recent shots.

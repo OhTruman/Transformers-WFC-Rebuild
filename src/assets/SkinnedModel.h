@@ -103,4 +103,32 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& out);
 void evaluatePose(const SkinnedModel& model, int clip, float timeSec,
                   std::vector<core::Mat4>& scratch, render::MeshData& outMesh, bool loop = true);
 
+// ---- layered evaluation (UE3 AnimTree-style: sample -> blend -> skel controls -> skin) ----
+
+// Local (parent-relative) bone transforms for every node.
+struct LocalPose {
+    std::vector<core::Vec3> t, s;
+    std::vector<core::Quat> r;
+};
+
+// A model-space post-process applied to one bone's global transform before its children are
+// resolved (UE3 SkelControl): global = translate(loc) * pivot(rot about the bone origin) * global.
+struct BoneAdjust {
+    int node = -1;
+    core::Mat4 rot = core::Mat4::identity();   // model-space rotation (about the bone origin)
+    core::Vec3 loc{0, 0, 0};                   // model-space translation
+};
+
+void bindPose(const SkinnedModel& model, LocalPose& out);
+// Overwrite the channels `clip` animates (bind pose elsewhere if `out` was reset with bindPose).
+void samplePose(const SkinnedModel& model, int clip, float timeSec, bool loop, LocalPose& out);
+// base = lerp(base, over, w * mask[node]) per node (slerp rotations). Empty mask == all nodes.
+void blendPose(LocalPose& base, const LocalPose& over, const std::vector<float>& mask, float w);
+// Per-node weight 1 for `rootNode` and its whole subtree, 0 elsewhere (AnimNodeBlendPerBone /
+// AnimNodeBlendMultiBone with InitTargetStartBone + PerBoneIncrease 1.0).
+std::vector<float> subtreeMask(const SkinnedModel& model, int rootNode);
+void computeGlobals(const SkinnedModel& model, const LocalPose& pose, std::vector<core::Mat4>& global,
+                    const BoneAdjust* adj = nullptr, int nAdj = 0);
+void skinMesh(const SkinnedModel& model, const std::vector<core::Mat4>& global, render::MeshData& out);
+
 } // namespace assets

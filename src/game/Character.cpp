@@ -35,7 +35,7 @@ void Character::playClip(const assets::SkinnedModel& mdl, int clip, bool loop, f
         lastModel_ = &mdl;
     }
     animName_ = mdl.clips[(size_t)clip].name;
-    assets::evaluatePose(mdl, clip, animTime_, animScratch_, curPose_, loop);
+    evalLayered(mdl, clip, animTime_, loop, curPose_);
 
     bool blending = blendT_ < blendDur_ && !blendFrom_.positions.empty() &&
                     blendFrom_.positions.size() == curPose_.positions.size();
@@ -67,6 +67,7 @@ void Character::updateAnimation(float dt) {
     if (!mdl || !mdl->valid()) return;
 
     animTime_ += dt;   // advance the active clip's time (reset to 0 by playClip on a change)
+    updateUpperBody(dt);
 
     // --- transformation timeline (overrides locomotion; plays once, no loop) ---
     if (trans_ != Transition::None) {
@@ -135,21 +136,93 @@ void Character::updateAnimation(float dt) {
     if (clip < 0) clip = mdl->firstClipOfCategory("vehicle_idle");
     if (clip < 0) clip = mdl->clips.empty() ? -1 : 0;
 
-    // Reload: the Ion Blaster reload is a one-shot full-body clip that overrides locomotion while
-    // the weapon's reload timer runs (WeaponReloadAnimTime). [PARTIAL] WFC layers the additive
-    // ADD_Shooting_Reload_* upper-body overlay so you can reload on the move; that needs additive
-    // blending and is not yet implemented, so here it plays as a grounded full-body action.
+    // Reload is NOT a full-body override: it plays in the upper-body slot (updateUpperBody /
+    // evalLayered) so the legs keep the locomotion clip chosen above (reload on the move).
     bool loop = true;
-    if (form_ == Form::Robot && onGround_ && weapon_.reloading()) {
-        int rc = mdl->clipOfCategoryNamed("reload", "IonBlaster");
-        if (rc >= 0) { clip = rc; loop = false; }
-    }
 
     // Leaving a transform blends out over 0.25 s; ordinary locomotion changes use a short blend.
     float blend = justExitedTransform_ ? core::config::kTransformBlendOut : core::config::kLocomotionBlend;
     if (clip != clip_) justExitedTransform_ = false;
     playClip(*mdl, clip, loop, dt, blend);
     updateWeaponSocket();
+}
+
+// Weapon owner animation + recoil. Mirrors TnWeaponOwnerAnimator (WEP_IonBlaster_p.
+// IonBlaster_WEPDATA.TnWeaponOwnerAnimator_10029) driving Robot_ANIMTREE's UpperBodyCustom slot:
+//   ReloadAnimation = Shooting_Reload_IonBlaster_ROBO, non-additive, BlendIn/Out 0.1 s [CONF: the
+//   struct is left at the TnWeaponOwnerAnimator CDO defaults]. No FireAmmoAnimations are authored
+//   for the Ion Blaster, so firing drives only the HmSkelControlRecoil controls.
+void Character::updateUpperBody(float dt) {
+    const assets::SkinnedModel* mdl = robotModel_;
+    if (!mdl || !mdl->valid()) return;
+    if (upperMaskModel_ != mdl) {
+        upperMaskModel_ = mdl;
+        upperMask_ = assets::subtreeMask(*mdl, mdl->nodeByName("C_Spine01_Lumbar01_XB"));
+        nodeSpineRecoil_ = mdl->nodeByName("C_Spine02_Lumbar02_XB");
+        nodeRHandRecoil_ = mdl->nodeByName("R_Arm02_Shoulder_XB");
+        upperClip_ = mdl->clipByName("Shooting_Reload_IonBlaster_ROBO");
+        if (upperClip_ < 0) upperClip_ = mdl->clipOfCategoryNamed("reload", "IonBlaster");
+    }
+    constexpr float kBlendIn = 0.1f, kBlendOut = 0.1f;   // [CONF] TnWeaponOwnerAnimator CDO
+
+    // Weapon events (edge-detected via the weapon's serials).
+    if (weapon_.reloadSerial != seenReload_) {
+        seenReload_ = weapon_.reloadSerial;
+        if (form_ == Form::Robot && upperClip_ >= 0) { upperTime_ = 0.0f; upperWant_ = true; }
+    }
+    if (weapon_.shotSerial != seenShot_) {
+        seenShot_ = weapon_.shotSerial;
+        if (form_ == Form::Robot) {                          // WP_Fire -> TnRecoiler
+            recoilSpine_.play(ionBlasterSpineRecoil());
+            recoilRHand_.play(ionBlasterRightHandRecoil());
+        }
+    }
+    recoilSpine_.tick(dt);
+    recoilRHand_.tick(dt);
+
+    if (trans_ != Transition::None || form_ != Form::Robot) { upperWant_ = false; upperW_ = 0.0f; }
+    if (upperWant_) {
+        upperTime_ += dt;
+        float len = upperClip_ >= 0 ? mdl->clips[(size_t)upperClip_].duration : 0.0f;
+        // The slot releases when the weapon's reload completes (WeaponReloadAnimTime 1.5 s) and
+        // blends out over 0.1 s while the 1.633 s clip finishes, or when the clip itself ends.
+        if (!weapon_.reloading() || upperTime_ >= len - kBlendOut) upperWant_ = false;
+        upperW_ = std::fmin(1.0f, upperW_ + dt / kBlendIn);
+    } else if (upperW_ > 0.0f) {
+        upperTime_ += dt;
+        upperW_ = std::fmax(0.0f, upperW_ - dt / kBlendOut);
+    }
+    upperName_ = (upperW_ > 0.0f && upperClip_ >= 0) ? mdl->clips[(size_t)upperClip_].name : "-";
+}
+
+// Base clip -> UpperBodyCustom slot (masked) -> recoil skel controls -> CPU skin.
+void Character::evalLayered(const assets::SkinnedModel& mdl, int clip, float t, bool loop, render::MeshData& out) {
+    assets::bindPose(mdl, basePose_);
+    assets::samplePose(mdl, clip, t, loop, basePose_);
+    bool robot = (&mdl == robotModel_) && trans_ == Transition::None;
+    if (robot && upperW_ > 0.0f && upperClip_ >= 0) {
+        assets::bindPose(mdl, overPose_);
+        assets::samplePose(mdl, upperClip_, upperTime_, /*loop*/ false, overPose_);
+        assets::blendPose(basePose_, overPose_, upperMask_, upperW_);
+    }
+    assets::BoneAdjust adj[2];
+    int nAdj = 0;
+    if (robot && (recoilSpine_.active() || recoilRHand_.active())) {
+        // Aim space in model space: mesh forward is -Z (kMeshYawOffset 0), pitched by the aim.
+        core::Vec3 fwd = core::forwardFromYawPitch(0.0f, aimPitch_);
+        core::Vec3 right{1, 0, 0};
+        core::Vec3 up = core::cross(right, fwd);
+        if (recoilSpine_.active() && nodeSpineRecoil_ >= 0) {
+            adj[nAdj].node = nodeSpineRecoil_;
+            recoilSpine_.aimSpaceOffset(fwd, right, up, adj[nAdj].rot, adj[nAdj].loc); ++nAdj;
+        }
+        if (recoilRHand_.active() && nodeRHandRecoil_ >= 0) {
+            adj[nAdj].node = nodeRHandRecoil_;
+            recoilRHand_.aimSpaceOffset(fwd, right, up, adj[nAdj].rot, adj[nAdj].loc); ++nAdj;
+        }
+    }
+    assets::computeGlobals(mdl, basePose_, animScratch_, adj, nAdj);
+    assets::skinMesh(mdl, animScratch_, out);
 }
 
 void Character::updateWeaponSocket() {

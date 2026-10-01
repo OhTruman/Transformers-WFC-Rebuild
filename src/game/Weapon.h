@@ -32,6 +32,13 @@ struct Weapon {
 
     float reloadTimer   = 0.0f;
 
+    // Event serials (WP_Fire / WP_Reload): incremented per event so presentation layers
+    // (owner + weapon-mesh animation, recoil, FX, cues) can edge-detect without coupling.
+    unsigned shotSerial   = 0;
+    unsigned reloadSerial = 0;
+    bool lowAmmo() const { return ammo <= lowAmmoThreshold; }
+    int  lowAmmoThreshold = 5;      // [CONF] IonBlaster_WEPMESH.LowAmmoThreshold (WP_LowAmmoFire)
+
     void tick(float dt) {
         if (cooldown > 0) cooldown -= dt;
         sinceFire += dt;
@@ -46,6 +53,7 @@ struct Weapon {
     void onFired() {
         cooldown = fireInterval;
         if (ammo > 0) --ammo;
+        ++shotSerial;
         sinceFire = 0.0f;
         spread = spread + spreadPerShot < spreadMax ? spread + spreadPerShot : spreadMax;
     }
@@ -58,7 +66,7 @@ struct Weapon {
     }
 
     bool canReload() const { return !reloading() && ammo < magSize && reserve > 0; }
-    void beginReload() { if (canReload()) reloadTimer = reloadTime; }
+    void beginReload() { if (canReload()) { reloadTimer = reloadTime; ++reloadSerial; } }
     void finishReload() {
         int need = magSize - ammo;
         int take = need < reserve ? need : reserve;

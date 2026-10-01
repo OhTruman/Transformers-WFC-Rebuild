@@ -7,10 +7,10 @@
 #include "game/Health.h"
 #include "game/Weapon.h"
 #include "game/Ability.h"
+#include "game/Recoil.h"
+#include "assets/SkinnedModel.h"
 #include "render/Renderer.h"
 #include "render/Mesh.h"
-
-namespace assets { struct SkinnedModel; }
 
 namespace game {
 
@@ -68,6 +68,12 @@ public:
     const char* animName() const { return animName_.c_str(); }
     float animTime() const { return animTime_; }
 
+    // Weapon owner-animation layer (Robot_ANIMTREE "UpperBodyCustom" slot) + recoil controls.
+    void setAimPitch(float p) { aimPitch_ = p; }
+    const char* upperAnimName() const { return upperName_.c_str(); }
+    float upperWeight() const { return upperW_; }
+    bool recoilActive() const { return recoilSpine_.active() || recoilRHand_.active(); }
+
     void draw(render::IRenderer& r) const override;
 
 private:
@@ -100,6 +106,24 @@ private:
     float blendDur_ = 0.0f;          // 0 = hard cut
     const assets::SkinnedModel* lastModel_ = nullptr;
     void playClip(const assets::SkinnedModel& mdl, int clip, bool loop, float dt, float blendOnChange);
+
+    // --- UpperBodyCustom slot (AnimNodeSlot under AnimNodeBlendMultiBone_4930) [CONF] ---
+    // Per-bone weight 1 from C_Spine01_Lumbar01_XB down its subtree; legs/pelvis keep locomotion.
+    int upperClip_ = -1;
+    float upperTime_ = 0.0f;
+    float upperW_ = 0.0f;            // current slot weight (linear blend in/out)
+    bool upperWant_ = false;
+    std::string upperName_ = "-";
+    std::vector<float> upperMask_;
+    const assets::SkinnedModel* upperMaskModel_ = nullptr;
+    unsigned seenShot_ = 0, seenReload_ = 0;
+    // --- skel controls (Robot_ANIMTREE SkelControlLists) ---
+    RecoilControl recoilSpine_, recoilRHand_;
+    int nodeSpineRecoil_ = -1, nodeRHandRecoil_ = -1;
+    float aimPitch_ = 0.0f;
+    assets::LocalPose basePose_, overPose_;
+    void updateUpperBody(float dt);
+    void evalLayered(const assets::SkinnedModel& mdl, int clip, float t, bool loop, render::MeshData& out);
 
     int weaponBone_ = -1;
     core::Mat4 weaponOffset_ = core::Mat4::identity();
