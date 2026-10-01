@@ -17,6 +17,22 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## PASS 10 — LOCOMOTION BLEND, GROUND SPEED, STEP HEIGHT (2026-10-01, gameplay agent)
+
+| Behaviour | Original (WFC) | Source | Conf | Rebuild status |
+|---|---|---|---|---|
+| Moving-state structure | TnVelocityAnimBlend(Walking, Jogging) over TnStraferAnimBlend(F,B,R,L) of `Nav_Strafe{Walk,Jog}_*` (OneHanded) | Robot_ANIMTREE | CONF | **APPLIED** |
+| Walk→jog speeds | MinSpeed 450 / MaxSpeed 1200 UU/s (class default 100/1000 overridden) | `TnVelocityAnimBlend_10449` | CONF | **APPLIED** (linear weight; PROV formula) |
+| Clip ground speeds | walk ≈3.5 m/s, jog ≈12.1 m/s (planted-toe stance speed) | robot.glb measurement (`work/pass8/stride.js`) | HI | Explains 1200 = jog speed |
+| Direction weights | from local velocity; `_BlendSpeed` 0.2 | `Default__TnStraferAnimBlend` | CONF (value) / PROV (max(0,±dot) normalized, eased) | **APPLIED** |
+| Phase sync | "Strafers" AnimNodeSynch group (all 16 strafe sequences, RateScale 1) | `AnimNodeSynch_581` | CONF | **APPLIED** (shared phase, master = highest weight) |
+| Idle↔Moving transition | AmpCrossFadeCondition 0.2 s | IdleToMoving / MovingToIdle | CONF | **APPLIED** (was PROV 0.15) |
+| Robot ground speed | GroundSpeed = _BaseGroundSpeed (=GroundSpeed 550 at PostBeginPlay) × Π speed multipliers; Ion Blaster GroundSpeedMultiplier 1.0 | TnPawn.PostBeginPlay / UpdateSpeeds bytecode; Default__TnWeaponData | CONF | 5.5 m/s confirmed (TnPawn `_BaseGroundSpeed` 600 default is overwritten for the player) |
+| MaxStepHeight | 35 UU = 0.35 m (WalkableFloorZ 0.7, MaxFallHeight 3400) | `Default__TnRobotForm._MovementCapabilities` | CONF | **APPLIED** step 0.35 m (was PROV 0.6); deterministic A/B shows no new snagging. WalkableFloorZ not yet enforced. |
+| Idle clip names | Tree defaults `NAV_Idle_01` / `AI_Nav_Idle_Pose_05` / `ADD_NAV_Idle` resolved per character by choosers | Robot_ANIMTREE idle branch | — | Optimus set lacks them; `NAV_Idle` kept |
+
+---
+
 ## PASS 9 — AUTHORED AIM OFFSET PROFILE (2026-10-01, gameplay agent)
 
 | Behaviour | Original (WFC) | Source | Conf | Rebuild status |
@@ -276,9 +292,9 @@ isolated effort, not cut into this pass to avoid leaving the build broken.
 
 ## PROVISIONAL / APPROXIMATE (rebuild guesses — NOT evidence)
 - Camera follow distance (9 m); mouse sensitivity; ground-cam pitch limits.
-- MaxStepHeight (kStepUp 0.6 m) — not found overridden; Engine.Pawn default 35 UU=0.35 m.
+- ~~MaxStepHeight (kStepUp 0.6 m)~~ → 0.35 m CONF (Pass 10, TnRobotForm).
 - Audio attenuation radii / reverb (master 0.5 + generic falloff).
-- Locomotion crossfade time (0.15 s).
+- Locomotion crossfade time (0.15 s) for non-moving transitions (idle↔moving is CONF 0.2 s, Pass 10).
 
 ## AUDIO (investigated + fixed)
 - Original Streets audio = 40 `AmbientSound` + 17 `HmAmbientSoundVolumeEmitter` +

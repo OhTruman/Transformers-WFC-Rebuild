@@ -135,6 +135,7 @@ private:
         bool aimValid = false;
         int rootRef = -1, spine = -1, rightArm = -1;           // C_Root_Reference / recoil bones
         int pivotL = -1, pivotR = -1;                          // Nav_IdlePivot90_{L,R}
+        int walk[4] = {-1, -1, -1, -1}, jog[4] = {-1, -1, -1, -1};   // Nav_Strafe{Walk,Jog}_{F,B,R,L}
         std::vector<float> upperMask;            // C_Spine01_Lumbar01_XB subtree
         int reloadClip = -1, idleClip = -1, landClip = -1;
     } robotRig_;
@@ -153,6 +154,12 @@ private:
     bool yawInit_ = false;
     int turnClip_ = -1;                       // active Nav_IdlePivot90 transition, -1 = none
     float turnT_ = 0.0f, turnStartOffset_ = 0.0f, turnProg_ = 0.0f;
+    // Moving state (Robot_ANIMTREE): walk/jog TnStraferAnimBlends mixed by TnVelocityAnimBlend,
+    // all strafe sequences phase-locked by the "Strafers" AnimNodeSynch group.
+    float locoPhase_ = 0.0f;                  // shared normalized phase of the sync group
+    float dirW_[4] = {1.0f, 0.0f, 0.0f, 0.0f};   // F, B, R, L
+    float jogW_ = 0.0f;
+    void robotLocomotion(const assets::SkinnedModel& mdl, float dt);
     void updateTurnInPlace(const assets::SkinnedModel& mdl, float dt, bool standing);
     float pivotProgress(const assets::SkinnedModel& mdl, int clip, float t) const;
     RecoilControl recoilSpine_{ionBlasterSpineRecoil()}, recoilHand_{ionBlasterRightHandRecoil()};

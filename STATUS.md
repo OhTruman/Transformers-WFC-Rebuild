@@ -3,6 +3,24 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## FIDELITY PASS 10 (2026-10-01): LOCOMOTION BLEND FROM THE SHIPPED TREE; SPEED + STEP HEIGHT CONFIRMED
+- **Moving state rebuilt to match Robot_ANIMTREE:** TnVelocityAnimBlend (450→1200 UU/s) mixes a
+  walk and a jog TnStraferAnimBlend. Each strafer weights F/B/R/L by the travel direction relative
+  to the facing, eased over `_BlendSpeed` 0.2. All 8 sequences are phase-locked like the "Strafers"
+  AnimNodeSynch group (shared phase, highest-weight clip sets the rate). Idle↔Moving crossfade
+  0.2 s (AmpCrossFadeCondition). Replaces "pick one F/B/L/R clip + 0.15 s crossfade".
+- **Clip ground speeds measured:** walk ≈3.5 m/s, jog ≈12.1 m/s. The tree's 1200 UU/s MaxSpeed
+  equals the jog's authored speed, so the blend is speed-matched by design.
+- **Robot ground speed 5.5 m/s confirmed from script:** `TnPawn.PostBeginPlay` runs
+  `_BaseGroundSpeed = GroundSpeed`, and `UpdateSpeeds` sets `GroundSpeed = _BaseGroundSpeed ×
+  Π SpeedMultiplierFactors` (bytecode decoded). TnPlayerPawn GroundSpeed 550 × Ion Blaster
+  GroundSpeedMultiplier 1.0. So the player's Moving state is ≈87% walk / 13% jog, as authored.
+- **MaxStepHeight 35 UU (0.35 m) applied** (`TnRobotForm._MovementCapabilities`; was PROV 0.6).
+  A deterministic A/B (`WFC_NOMOUSE`) on 12 routes shows no new snagging.
+- Diagnostics: `WFC_NOMOUSE` (ignore live mouse in tests), `WFC_STEPUP=m` (A/B override).
+- Regression: reload on the move, transforms both ways, turn in place, recoil +12°, jump 6.36 m,
+  vehicle hover; clean build.
+
 ## FIDELITY PASS 9 (2026-10-01): AUTHORED AIM OFFSET PROFILE (TnAnimNodeAimOffset "Default")
 - **The aim offset is now the shipped profile, not a pose-derived approximation.** The Ion Blaster
   uses the `Default` profile (selected by `WeaponTypeObserved`). It drives 11 bones (spine chain,

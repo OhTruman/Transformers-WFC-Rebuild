@@ -4,10 +4,13 @@
 #include "core/Config.h"
 
 #include <cmath>
+#include <cstdlib>
 
 namespace game::CharacterMovement {
 
-static constexpr float kStepUp = 0.6f;      // [PROV] MaxStepHeight not found overridden (Engine default 35 UU)
+static constexpr float kStepUpConf = 0.35f; // [CONF] TnRobotForm._MovementCapabilities.MaxStepHeight 35 UU
+// WFC_STEPUP=m overrides it for A/B diagnostics only.
+static const float kStepUp = std::getenv("WFC_STEPUP") ? (float)std::atof(std::getenv("WFC_STEPUP")) : kStepUpConf;
 static constexpr float kSnapDown = 1.0f;    // follow downward slopes/stairs while grounded
 // Wall-block probe uses the recovered capsule radius [CONF] (CylinderRadius 175 UU = 1.75 m).
 static constexpr float kProbeRadius = 1.75f;

@@ -11,6 +11,7 @@ namespace game {
 
 namespace {
 constexpr int kVehicleHoverKey = -1000;    // base-layer key for the vehicle directional blend
+constexpr int kRobotMoveKey = -1001;       // base-layer key for the robot Moving-state blend
 float approach(float cur, float target, float dt, float blendTime) {
     float step = blendTime > 0.0f ? dt / blendTime : 1.0f;
     return cur < target ? std::min(target, cur + step) : std::max(target, cur - step);
@@ -54,6 +55,11 @@ void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
     // Rt_90/Rt_180 -> Nav_IdlePivot90_R, Lt_90/Lt_180 -> Nav_IdlePivot90_L.
     R.pivotL = mdl.clipByName("Nav_IdlePivot90_L");
     R.pivotR = mdl.clipByName("Nav_IdlePivot90_R");
+    static const char* kDirs[4] = {"F", "B", "R", "L"};
+    for (int i = 0; i < 4; ++i) {
+        R.walk[i] = mdl.clipByName(std::string("Nav_StrafeWalk_") + kDirs[i]);
+        R.jog[i] = mdl.clipByName(std::string("Nav_StrafeJog_") + kDirs[i]);
+    }
 
     // TnAnimNodeAimOffset "Default" profile [CONF Robot_ANIMTREE]: the bones it drives, baked from
     // the cells' poses (AnimName_* = Shooting_Aim_{L,F,R}_{D,C,U}). Bake rule (verified against the
@@ -104,6 +110,54 @@ void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
                                                            core::Vec3{1, 0, 0}));
         LOG_INFO("aim rig: Shooting_Aim_F_C barrel dir (model space) %.2f %.2f %.2f", dc.x, dc.y, dc.z);
     }
+}
+
+// Moving state [CONF structure Robot_ANIMTREE]: TnVelocityAnimBlend (MinSpeed 450 / MaxSpeed 1200
+// UU/s) mixes a walk and a jog TnStraferAnimBlend; each strafer weights its F/B/R/L sequences by
+// the travel direction relative to the facing (eased over _BlendSpeed 0.2 s [CONF value; easing
+// PROV]). Every strafe sequence is in the "Strafers" AnimNodeSynch group: one shared normalized
+// phase, advanced at the rate of the highest-weight clip (UE3 synch master).
+void Character::robotLocomotion(const assets::SkinnedModel& mdl, float dt) {
+    const RobotRig& R = robotRig_;
+    core::Vec3 fwd = core::forwardFromYawPitch(yaw_, 0.0f);
+    core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
+    float speed = std::sqrt(velocity_.x * velocity_.x + velocity_.z * velocity_.z);
+    if (speed > 0.05f) {
+        float f = (velocity_.x * fwd.x + velocity_.z * fwd.z) / speed;
+        float r = (velocity_.x * right.x + velocity_.z * right.z) / speed;
+        float tgt[4] = {std::max(0.0f, f), std::max(0.0f, -f), std::max(0.0f, r), std::max(0.0f, -r)};
+        float sum = tgt[0] + tgt[1] + tgt[2] + tgt[3];
+        float k = std::min(1.0f, dt / core::config::kStraferBlendTime);
+        for (int i = 0; i < 4; ++i) dirW_[i] += (tgt[i] / sum - dirW_[i]) * k;
+    }
+    jogW_ = core::clampf((speed - core::config::kVelBlendMinSpeed) /
+                         (core::config::kVelBlendMaxSpeed - core::config::kVelBlendMinSpeed), 0.0f, 1.0f);
+
+    int clips[8];
+    float w[8];
+    for (int i = 0; i < 4; ++i) {
+        clips[i] = R.walk[i]; w[i] = dirW_[i] * (1.0f - jogW_);
+        clips[4 + i] = R.jog[i]; w[4 + i] = dirW_[i] * jogW_;
+    }
+    int master = 0;
+    for (int i = 1; i < 8; ++i) if (w[i] > w[master] && clips[i] >= 0) master = i;
+    float mDur = clips[master] >= 0 ? mdl.clips[(size_t)clips[master]].duration : 1.0f;
+    locoPhase_ = std::fmod(locoPhase_ + dt / std::max(mDur, 1e-3f), 1.0f);
+
+    float total = 0.0f;
+    for (int i = 0; i < 8; ++i) {
+        if (clips[i] < 0 || w[i] <= 1e-3f) continue;
+        float t = locoPhase_ * mdl.clips[(size_t)clips[i]].duration;
+        if (total <= 0.0f) {
+            assets::samplePose(mdl, clips[i], t, true, basePose_);
+            total = w[i];
+        } else {
+            assets::samplePose(mdl, clips[i], t, true, layerPose_);
+            total += w[i];
+            assets::blendPose(basePose_, layerPose_, w[i] / total, basePose_);
+        }
+    }
+    animName_ = mdl.clips[(size_t)(clips[master] >= 0 ? clips[master] : 0)].name;
 }
 
 // Normalized progress (0..1) of a pivot transition at time t, from the clip's own root-bone yaw
@@ -419,8 +473,8 @@ void Character::updateAnimation(float dt) {
         return;
     }
 
-    // Robot. GroundSpeed (5.5 m/s) is the jog; the Nav_StrafeJog set is the standard locomotion.
-    // A slow walk (Nav_StrafeWalk) is reserved for low analog input (<~3 m/s).
+    // Robot. Grounded and moving -> the tree's Moving state (walk/jog strafer blend); otherwise
+    // Idle (with turn in place), jump/fall or land.
     if (onGround_) {
         if (airTime_ > core::config::kLandMinAirTime && robotRig_.landClip >= 0)
             landT_ = mdl->clips[(size_t)robotRig_.landClip].duration;
@@ -431,36 +485,36 @@ void Character::updateAnimation(float dt) {
     }
     if (landT_ > 0.0f) landT_ -= dt;
 
-    // Turn in place while standing (not during landing / reload-free idle only matters for legs).
+    // Turn in place while standing.
     updateTurnInPlace(*mdl, dt, onGround_ && speed <= 0.4f);
 
     std::string cat;
     if (turnClip_ >= 0) cat = "turn";
     else if (!onGround_) cat = (velocity_.y > 0.5f) ? "jump" : "fall";
-    else if (speed > 3.0f) cat = "run";
-    else if (speed > 0.4f) cat = "walk";
+    else if (speed > 0.4f) cat = "move";
     else cat = (landT_ > 0.0f) ? "land" : "idle";
 
-    // Directional locomotion: the body faces the aim, so choose the F/B/L/R strafe clip by the
-    // travel direction relative to facing (dot of velocity with the facing's forward/right axes).
-    const char* suf = "_F";
-    {
-        core::Vec3 fwd = core::forwardFromYawPitch(yaw_, 0.0f);
-        core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
-        float along = velocity_.x * fwd.x + velocity_.z * fwd.z;
-        float side = velocity_.x * right.x + velocity_.z * right.z;
-        if (std::fabs(along) >= std::fabs(side)) suf = (along >= 0.0f) ? "_F" : "_B";
-        else suf = (side >= 0.0f) ? "_R" : "_L";
+    // Idle <-> Moving crossfades (IdleToMovingTransition / MovingToIdleTransition) [CONF 0.2 s].
+    bool wasMoving = clip_ == kRobotMoveKey;
+    if ((cat == "move") != wasMoving && !justExitedTransform_) blend = core::config::kIdleMoveBlend;
+
+    bool haveLoco = robotRig_.walk[0] >= 0 && robotRig_.jog[0] >= 0;
+    if (cat == "move" && haveLoco) {
+        if (!wasMoving) justExitedTransform_ = false;
+        beginBase(*mdl, kRobotMoveKey, blend);
+        robotLocomotion(*mdl, dt);
+        finishBaseBlend(dt);
+        finalizePose(*mdl, dt);
+        return;
     }
+
     int clip;
     bool loop = true;
-    if (cat == "walk" || cat == "run") clip = mdl->clipOfCategoryNamed(cat, suf);
+    if (cat == "move") clip = mdl->clipOfCategoryNamed("run", "_F");      // no strafe set: fallback
     else if (cat == "idle") clip = robotRig_.idleClip;
     else if (cat == "land") { clip = robotRig_.landClip; loop = false; }
     else if (cat == "turn") { clip = turnClip_; loop = false; blend = core::config::kTurnTransitionBlend; }
     else { clip = mdl->firstClipOfCategory(cat); loop = (cat != "jump"); }  // take-off plays once
-    if (clip < 0 && cat == "run") clip = mdl->clipOfCategoryNamed("walk", suf);
-    if (clip < 0 && cat == "walk") clip = mdl->clipOfCategoryNamed("run", suf);
     if (clip < 0) clip = mdl->firstClipOfCategory("idle");
     if (clip < 0) clip = mdl->clips.empty() ? -1 : 0;
 

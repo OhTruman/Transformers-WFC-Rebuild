@@ -78,6 +78,13 @@ constexpr float kTransformBlendOut = 0.25f;  // s [CONF]
 // unavoidable cross-mesh pop (different vertex counts can't be vertex-blended).
 constexpr float kTransformHandoffFrac = 0.5f; // [PROV]
 constexpr float kLocomotionBlend   = 0.15f;  // s [PROV] crossfade between locomotion clips
+// Robot Moving state [CONF Robot_ANIMTREE]: TnVelocityAnimBlend MinSpeed 450 / MaxSpeed 1200 UU/s
+// (walk -> jog; the clips' authored ground speeds are ~3.5 / ~12.1 m/s), TnStraferAnimBlend
+// _BlendSpeed 0.2, Idle<->Moving AmpCrossFadeCondition TransitionTime 0.2 s.
+constexpr float kVelBlendMinSpeed  = 4.5f;   // m/s [CONF]
+constexpr float kVelBlendMaxSpeed  = 12.0f;  // m/s [CONF]
+constexpr float kStraferBlendTime  = 0.2f;   // s [CONF value; used as an easing time PROV]
+constexpr float kIdleMoveBlend     = 0.2f;   // s [CONF]
 // Animation layers. Upper-body slot (reload) / aim-offset / hover-additive weight ease time, and
 // the minimum airborne time before Nav_Land plays on touchdown (filters curb step-offs).
 constexpr float kSlotBlend         = 0.15f;  // s [PROV]

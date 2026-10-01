@@ -61,6 +61,7 @@ void Application::run() {
         if (input.wasPressed(platform::Button::Quit)) break;
 
         if (autoWalk) input.down[(int)platform::Button::Forward] = true;  // scripted move for tests
+        if (std::getenv("WFC_NOMOUSE")) { input.mouseDX = 0; input.mouseDY = 0; }   // deterministic tests
         if (std::getenv("WFC_AUTOSTRAFE")) input.down[(int)platform::Button::Right] = true;
         if (std::getenv("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
         if (std::getenv("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
