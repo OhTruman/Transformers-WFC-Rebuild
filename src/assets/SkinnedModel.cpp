@@ -1,5 +1,6 @@
 #include "assets/SkinnedModel.h"
 #include "assets/Json.h"
+#include "assets/Gltf.h"
 #include "core/Log.h"
 
 #include <algorithm>
@@ -216,27 +217,8 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
         std::string dir;
         size_t s = path.find_last_of("/\\"); dir = (s == std::string::npos) ? "." : path.substr(0, s);
         const Json& jmats = root["materials"];
-        const Json& jtex = root["textures"];
-        const Json& jimg = root["images"];
         m.mats.resize(jmats.size());
-        for (size_t i = 0; i < jmats.size(); ++i) {
-            render::Material& M = m.mats[i];
-            const Json& pbr = jmats[i]["pbrMetallicRoughness"];
-            if (pbr.has("baseColorFactor") && pbr["baseColorFactor"].size() >= 3)
-                M.color = {pbr["baseColorFactor"][0].asFloat(1.0f), pbr["baseColorFactor"][1].asFloat(1.0f),
-                           pbr["baseColorFactor"][2].asFloat(1.0f)};
-            int tIdx = pbr["baseColorTexture"]["index"].asInt(-1);
-            if (tIdx >= 0 && (size_t)tIdx < jtex.size()) {
-                int imgIdx = jtex[(size_t)tIdx]["source"].asInt(-1);
-                if (imgIdx >= 0 && (size_t)imgIdx < jimg.size()) {
-                    std::string uri = jimg[(size_t)imgIdx]["uri"].asString();
-                    if (!uri.empty() && uri.rfind("data:", 0) != 0) M.baseColorUri = dir + "/" + uri;
-                }
-            }
-            size_t bc = M.baseColorUri.find("basecolor");
-            if (bc != std::string::npos)
-                M.emissiveUri = M.baseColorUri.substr(0, bc) + "emissive" + M.baseColorUri.substr(bc + 9);
-        }
+        for (size_t i = 0; i < jmats.size(); ++i) parseGltfMaterial(root, i, dir, m.mats[i]);
     }
 
     // ---- animations ----

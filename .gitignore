@@ -26,3 +26,7 @@ Thumbs.db
 
 # Runtime log written to the working directory by core::Log
 wfc.log
+
+# Python bytecode
+__pycache__/
+*.pyc

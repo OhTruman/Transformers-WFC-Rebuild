@@ -1,6 +1,8 @@
 // Clean-room reconstruction — rendering abstraction.
 // Gameplay/presentation code issues draw calls through this; no GL types leak out.
 #pragma once
+#include <functional>
+#include <string>
 #include "core/Math.h"
 #include "render/Camera.h"
 #include "render/Mesh.h"
@@ -36,6 +38,16 @@ public:
 
     // Draw a transient mesh (e.g. CPU-skinned each frame) without uploading/retaining it.
     virtual void drawDynamicMesh(const MeshData& mesh, const core::Mat4& model, const core::Vec3& color) = 0;
+
+    // Original-data rendering (WFC shader path): load the map's compiled materials, baked
+    // directional lightmaps, static lights and height fog produced by tools/render/*.py.
+    // Returns false when unavailable; the renderer then keeps its legacy fixed-function path.
+    virtual bool loadMapRenderData(const std::string& mapName) { (void)mapName; return false; }
+
+    // Segment occlusion query (true == blocked) used for dynamic-object light visibility,
+    // like UE3's light-environment visibility traces. Optional.
+    using VisibilityQuery = std::function<bool(const core::Vec3& from, const core::Vec3& to)>;
+    virtual void setVisibilityQuery(VisibilityQuery q) { (void)q; }
 
     // Save the current framebuffer to a 24-bit BMP (debug/automated verification).
     virtual bool captureScreenshot(const char* path) = 0;
