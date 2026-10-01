@@ -7,6 +7,7 @@
 #include <GL/gl.h>
 
 #include "render/Renderer.h"
+#include "render/gl/WfcPipeline.h"
 #include "core/Log.h"
 
 // GL 1.2 enums the GL 1.1 header may omit (drivers still support them).
@@ -79,10 +80,17 @@ public:
         return true;
     }
 
-    void beginFrame(const Camera& cam, int vpW, int vpH) override {
+    void beginFrame(const Camera& camIn, int vpW, int vpH) override {
+        const Camera& cam0 = camIn;
         glViewport(0, 0, vpW, vpH);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        // Diagnostic camera override for render inspection: WFC_RENDERCAM="x,y,z,yawRad,pitchRad".
+        Camera camOv = cam0;
+        if (const char* rc = std::getenv("WFC_RENDERCAM"))
+            std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
+        const Camera& cam = camOv;
+        if (wfc_.active()) wfc_.beginFrame(cam, vpW, vpH);
         glMatrixMode(GL_PROJECTION);
         core::Mat4 p = cam.proj();
         glLoadMatrixf(p.m);
@@ -96,11 +104,23 @@ public:
         glLightfv(GL_LIGHT0, GL_POSITION, lightDir);
     }
 
-    void endFrame() override { glFlush(); }
+    void endFrame() override {
+        if (wfc_.active()) wfc_.endFrame();
+        glFlush();
+    }
+
+    bool loadMapRenderData(const std::string& mapName) override {
+        bool ok = wfc_.load(mapName);
+        if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
+        return ok;
+    }
+
+    void setVisibilityQuery(VisibilityQuery q) override { wfc_.setVisibility(std::move(q)); }
 
     MeshHandle uploadMesh(const MeshData& mesh) override {
         if (mesh.empty()) return kInvalidMesh;
         meshes_.push_back(mesh);            // keep a CPU copy for GL 1.1 client arrays
+        gpu_.push_back(wfc_.active() ? wfc_.upload(mesh) : -1);
         return (MeshHandle)(meshes_.size() - 1);
     }
 
@@ -121,11 +141,13 @@ public:
 
     void drawMesh(MeshHandle h, const core::Mat4& model, const core::Vec3& color) override {
         if (h < 0 || (size_t)h >= meshes_.size()) return;
+        if (wfc_.active() && gpu_[(size_t)h] >= 0) { wfc_.draw(gpu_[(size_t)h], model); glLoadMatrixf(view_.m); return; }
         drawMeshArrays(meshes_[(size_t)h], model, color);
     }
 
     void drawDynamicMesh(const MeshData& m, const core::Mat4& model, const core::Vec3& color) override {
         if (m.empty()) return;
+        if (wfc_.active()) { wfc_.drawDynamic(m, model); glLoadMatrixf(view_.m); return; }
         drawMeshArrays(m, model, color);
     }
 
@@ -359,6 +381,8 @@ private:
     }
 
     core::Mat4 view_;
+    wfc::Pipeline wfc_;
+    std::vector<int> gpu_;
     std::vector<MeshData> meshes_;
     std::vector<GLuint> textures_;
 };

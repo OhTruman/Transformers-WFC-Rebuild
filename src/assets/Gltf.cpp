@@ -223,6 +223,11 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
             sm.indexOffset = indexStart;
             sm.indexCount = (uint32_t)idx.size();
             sm.material = prim.has("material") ? prim["material"].asInt(-1) : -1;
+            if (node.has("extras")) {
+                sm.component = node["extras"]["component"].asString();
+                if (node["extras"]["kind"].asString() == "bsp")      // level BSP (unlit in world.glb)
+                    sm.component = "bsp:" + node["extras"]["source"].asString();
+            }
             // Baked-lightmap binding carried on the node extras (per prop instance).
             if (node.has("extras") && node["extras"].has("lm_atlas") && !uv1.empty()) {
                 const Json& ex = node["extras"];
@@ -247,6 +252,34 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
 }
 
 } // namespace
+
+static std::string imageUri(const Json& root, int texIdx, const std::string& dir) {
+    const Json& jtex = root["textures"];
+    const Json& jimg = root["images"];
+    if (texIdx < 0 || (size_t)texIdx >= jtex.size()) return std::string();
+    int imgIdx = jtex[(size_t)texIdx]["source"].asInt(-1);
+    if (imgIdx < 0 || (size_t)imgIdx >= jimg.size()) return std::string();
+    std::string uri = jimg[(size_t)imgIdx]["uri"].asString();
+    if (uri.empty() || uri.rfind("data:", 0) == 0) return std::string();
+    return dir + "/" + uri;
+}
+
+void parseGltfMaterial(const Json& root, size_t i, const std::string& dir, render::Material& M) {
+    const Json& jm = root["materials"][i];
+    const Json& pbr = jm["pbrMetallicRoughness"];
+    if (pbr.has("baseColorFactor") && pbr["baseColorFactor"].size() >= 3)
+        M.color = {pbr["baseColorFactor"][0].asFloat(1.0f), pbr["baseColorFactor"][1].asFloat(1.0f),
+                   pbr["baseColorFactor"][2].asFloat(1.0f)};
+    M.baseColorUri = imageUri(root, pbr["baseColorTexture"]["index"].asInt(-1), dir);
+    M.normalUri = imageUri(root, jm["normalTexture"]["index"].asInt(-1), dir);
+    M.wfcName = jm["extras"]["wfc_material"].asString();
+    // Derive the parallel emissive/specular textures (AssetTools names them *_basecolor / *_emissive).
+    size_t bc = M.baseColorUri.find("basecolor");
+    if (bc != std::string::npos) {
+        M.emissiveUri = M.baseColorUri.substr(0, bc) + "emissive" + M.baseColorUri.substr(bc + 9);
+        M.specularUri = M.baseColorUri.substr(0, bc) + "specular" + M.baseColorUri.substr(bc + 9);
+    }
+}
 
 bool loadGlb(const std::string& path, render::MeshData& out) {
     Glb g;
@@ -289,28 +322,8 @@ bool loadGlb(const std::string& path, render::MeshData& out) {
     std::string dir;
     { size_t s = path.find_last_of("/\\"); dir = (s == std::string::npos) ? "." : path.substr(0, s); }
     const Json& jmats = root["materials"];
-    const Json& jtex = root["textures"];
-    const Json& jimg = root["images"];
     out.mats.resize(jmats.size());
-    for (size_t i = 0; i < jmats.size(); ++i) {
-        render::Material& M = out.mats[i];
-        const Json& pbr = jmats[i]["pbrMetallicRoughness"];
-        if (pbr.has("baseColorFactor") && pbr["baseColorFactor"].size() >= 3)
-            M.color = {pbr["baseColorFactor"][0].asFloat(1.0f), pbr["baseColorFactor"][1].asFloat(1.0f),
-                       pbr["baseColorFactor"][2].asFloat(1.0f)};
-        int tIdx = pbr["baseColorTexture"]["index"].asInt(-1);
-        if (tIdx >= 0 && (size_t)tIdx < jtex.size()) {
-            int imgIdx = jtex[(size_t)tIdx]["source"].asInt(-1);
-            if (imgIdx >= 0 && (size_t)imgIdx < jimg.size()) {
-                std::string uri = jimg[(size_t)imgIdx]["uri"].asString();
-                if (!uri.empty() && uri.rfind("data:", 0) != 0) M.baseColorUri = dir + "/" + uri;
-            }
-        }
-        // Derive the parallel emissive texture (AssetTools names them *_basecolor / *_emissive).
-        size_t bc = M.baseColorUri.find("basecolor");
-        if (bc != std::string::npos)
-            M.emissiveUri = M.baseColorUri.substr(0, bc) + "emissive" + M.baseColorUri.substr(bc + 9);
-    }
+    for (size_t i = 0; i < jmats.size(); ++i) parseGltfMaterial(root, i, dir, out.mats[i]);
 
     if (out.empty()) { LOG_WARN("glb: no triangles baked from %s", path.c_str()); return false; }
     LOG_INFO("glb: %s -> %zu verts, %zu tris, bounds [%.1f %.1f %.1f]..[%.1f %.1f %.1f]",

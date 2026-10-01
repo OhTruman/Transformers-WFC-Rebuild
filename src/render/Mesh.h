@@ -24,6 +24,7 @@ struct SubMesh {
     int material = -1;                // index into MeshData::mats
     // Baked lightmap (per prop instance): atlas texture + UV1 transform (uv1*scale+bias).
     std::string lightmapName;         // _LM atlas object name; resolved to a handle at load
+    std::string component;            // source UE3 component object path (lightmap/data join key)
     TextureHandle lightmapTex = kInvalidTexture;
     float lmScale[2] = {1, 1};
     float lmBias[2] = {0, 0};
@@ -34,6 +35,9 @@ struct SubMesh {
 struct Material {
     std::string baseColorUri;         // relative to the source asset; empty == untextured
     std::string emissiveUri;          // WFC glow (Autobot lights, energon); empty == none
+    std::string normalUri;            // tangent-space normal map; empty == none
+    std::string specularUri;          // baked specular colour (character customization); empty == none
+    std::string wfcName;              // original UE3 material object path (glTF extras.wfc_material)
     core::Vec3 color{1, 1, 1};        // baseColorFactor (tint / fallback colour)
     TextureHandle tex = kInvalidTexture;   // base colour, filled in after upload
     TextureHandle emissiveTexHandle = kInvalidTexture;  // emissive, filled in after upload
