@@ -233,6 +233,8 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
             sm.material = prim.has("material") ? prim["material"].asInt(-1) : -1;
             if (node.has("extras")) {
                 sm.component = node["extras"]["component"].asString();
+                sm.sourceMesh = node["extras"]["mesh"].asString();
+                sm.sourceSection = (int)pi;
                 if (node["extras"]["kind"].asString() == "bsp")      // level BSP (unlit in world.glb)
                     sm.component = "bsp:" + node["extras"]["source"].asString();
             }

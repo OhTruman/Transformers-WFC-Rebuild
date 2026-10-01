@@ -69,6 +69,7 @@ private:
     struct Sub {
         uint32_t first = 0, count = 0;
         int prog = -1;
+        std::string matName;      // original material path (diagnostics)
         int lmTex[3] = {-1, -1, -1};
         float lmScale[3][3] = {};
         float lmCoord[4] = {1, 1, 0, 0};
@@ -119,6 +120,7 @@ private:
                     std::vector<std::vector<float>> umin, umax; int blend = 0; bool twoSided = false, lit = true;
                     float clip = 0.3333f; };
     std::map<std::string, MatSrc> mats_;
+    std::map<std::string, std::string> slotMaterials_;   // "mesh|section" -> original material
     struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; };
     std::map<std::string, LMRec> lightmaps_;
     std::vector<Light> lights_;

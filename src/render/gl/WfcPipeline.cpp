@@ -426,6 +426,12 @@ bool Pipeline::load(const std::string& mapName) {
         mats_[kv.first] = std::move(s);
     }
 
+    {
+        assets::Json S;
+        std::string sj = readText(dataDir_ + "/slot_materials.json");
+        if (!sj.empty() && assets::Json::parse(sj, S))
+            for (const auto& kv : S.obj) slotMaterials_[kv.first] = kv.second.asString();
+    }
     const assets::Json& lp = L["lightmaps"]["props"];
     for (const auto& kv : lp.obj) {
         LMRec r;
@@ -945,7 +951,13 @@ int Pipeline::upload(const MeshData& m) {
             d.lmCoord[0] = r.cs[0]; d.lmCoord[1] = r.cs[1]; d.lmCoord[2] = r.cb[0]; d.lmCoord[3] = r.cb[1];
             ++nLM;
         }
-        d.prog = programFor(mat ? mat->wfcName : std::string(), mat, lm);
+        std::string matName = mat ? mat->wfcName : std::string();
+        if (matName.empty() && !s.sourceMesh.empty()) {   // section left unresolved by the extractor
+            auto it = slotMaterials_.find(s.sourceMesh + "|" + std::to_string(s.sourceSection));
+            if (it != slotMaterials_.end()) matName = it->second;
+        }
+        d.prog = programFor(matName, mat, lm);
+        d.matName = matName;
         if (d.prog >= 0) ++nProg;
         // bounds
         bool init = false;
@@ -996,6 +1008,21 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
     for (int pass = 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
         for (Sub& s : g.subs) {
             if (s.prog < 0) continue;
+            static const char* skipMat = std::getenv("WFC_SKIPMAT");   // diagnostics: hide by material
+            if (skipMat) {                    // ';'-separated substrings, "<none>" = no material identity
+                bool hide = false;
+                std::string list = skipMat;
+                size_t a = 0;
+                while (a <= list.size() && !hide) {
+                    size_t b = list.find(';', a);
+                    std::string tok = list.substr(a, b == std::string::npos ? std::string::npos : b - a);
+                    if (tok == "<none>" ? s.matName.empty() : (!tok.empty() && s.matName.find(tok) != std::string::npos))
+                        hide = true;
+                    if (b == std::string::npos) break;
+                    a = b + 1;
+                }
+                if (hide) continue;
+            }
             const Program& P = progs_[(size_t)s.prog];
             bool trans = P.blend >= 2;
             if ((pass == 1) != trans) continue;

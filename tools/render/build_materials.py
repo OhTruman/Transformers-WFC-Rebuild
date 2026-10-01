@@ -130,6 +130,40 @@ def umodel_export(repo, objs, out):
     return got
 
 
+def resolve_default_slots(repo, j):
+    """world.glb sections that AssetTools left on WFC_Default (its asset DB could not resolve the
+    static mesh's section material). umodel's per-mesh glTF still names the section material
+    (FStaticMeshElement.Material); resolve that name against the map packages' Material/MIC
+    exports (same source package preferred). 'dummy_material_N' = null reference in the original
+    (UE3 renders those with the engine default material) and stays unresolved."""
+    from collections import defaultdict
+    byname = defaultdict(list)
+    for k, (pi, ix) in repo.index.items():
+        pk = repo.pkgs[pi]
+        if pk.class_name(pk.exports[ix - 1]) in ('Material', 'MaterialInstanceConstant'):
+            byname[k.rsplit('.', 1)[-1]].append(pk.object_path(ix))
+    nomat = {i for i, m in enumerate(j['materials']) if not m.get('extras', {}).get('wfc_material')}
+    meshname = {n['mesh']: n.get('extras', {}).get('mesh') for n in j['nodes'] if 'mesh' in n}
+    out = {}
+    for mi, m in enumerate(j['meshes']):
+        for k, pr in enumerate(m['primitives']):
+            if pr.get('material') not in nomat: continue
+            mesh = meshname.get(mi)
+            if not mesh: continue
+            gl = os.path.join(CONTENT, *mesh.split('.')) + '.gltf'
+            if not os.path.exists(gl): continue
+            g = json.load(open(gl, encoding='utf-8'))
+            # vs_map skipped empty LOD sections; keep the same order of non-empty primitives
+            prims = [q for q in g['meshes'][0]['primitives'] if g['accessors'][q['indices']]['count'] > 0]
+            if k >= len(prims): continue
+            nm = (g['materials'][prims[k].get('material', 0)].get('name') or '').lower()
+            cands = byname.get(nm, [])
+            if not cands: continue
+            pref = [c for c in cands if c.split('.')[0].lower() == mesh.split('.')[0].lower()]
+            out[(mesh, k)] = (pref or cands)[0]
+    return out
+
+
 def main():
     mapname = sys.argv[1]
     out = sys.argv[2]
@@ -142,6 +176,11 @@ def main():
         f = os.path.join(out, extra_glb)
         if os.path.exists(f):
             names |= {m.get('extras', {}).get('wfc_material') for m in glb_json(f).get('materials', [])}
+    slot_map = resolve_default_slots(repo, j)
+    names |= set(slot_map.values())
+    json.dump({'%s|%d' % k: v for k, v in slot_map.items()},
+              open(os.path.join(out, 'slot_materials.json'), 'w'), indent=1)
+    print('default-material slots resolved to original materials: %d' % len(slot_map))
     mats = sorted(names - {None}) + extra
     tr = TexResolver(repo, out)
 
