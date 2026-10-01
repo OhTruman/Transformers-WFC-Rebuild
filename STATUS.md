@@ -3,6 +3,18 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS PASS 4 (2026-10-01) — VEHICLE BOOST PRESENTATION
+- Holding boost in vehicle form now shows Optimus's authored afterburner (`bumble_boost_small1_FX` on
+  BoostSocket_L/R, the two exhaust stacks): ignition burst of thruster cones + bullet cone + glow, then
+  looping cones (3-4/s) and glows (20/s) attached in local space; release kills them (bKillOnDeactivate).
+- Original boost audio: VEH_OPTIMUS_BOOST_START, the speed-driven VEH_OPTIMUS_BOOST_LOOP (5 looping
+  layers, mph parameter), VEH_OPTIMUS_BOOST_END with the 0.15 s fade, and the 0.27 s grounded wheels peel-out.
+- Verified: accelerating, stationary (against a wall), airborne after a vehicle jump, and transforming
+  out while holding boost (effect + loop stop, END plays). Robot fire/reload FX unchanged.
+- Diagnostics: `WFC_BOOSTLOG=1` (state, particle count, mph, socket positions). Test:
+  `WFC_STARTVEHICLE=1 WFC_AUTOBOOST=1 [WFC_AUTOWALK=1]`.
+- Open: hover thrusters (HoverFX), jump boosters (JumpFX), ram FX, drive/jump/land engine audio.
+
 ## SYSTEMS PASS 3 (2026-10-01) — SHELL, MAGAZINE AND RELOAD FX
 - Every shot ejects the authored shell mesh (GrenadeAmmo_STAT) from ShellSocket with a vent smoke puff;
   the reload vents a blue flare + 0.75 s smoke stream at the muzzle (@0.034 s) and drops the Ion Blaster
@@ -237,4 +249,4 @@ map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.j
 - `WFC_AUTOTRANSFORM=F` trigger a transform at frame F.
 - `WFC_DEBUGDRAW=1`     enable the debug overlay from start (same as toggling B).
 - `WFC_ASSETS=dir`      override the asset root.
-- `WFC_ANIMLOG=1` / `WFC_NOTIFYLOG=1` / `WFC_CUELOG=1`  weapon layering / AnimNotify / SoundCue logs.
+- `WFC_ANIMLOG=1` / `WFC_NOTIFYLOG=1` / `WFC_CUELOG=1` / `WFC_BOOSTLOG=1`  weapon layering / AnimNotify / SoundCue / vehicle boost logs.

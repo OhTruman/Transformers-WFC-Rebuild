@@ -286,6 +286,53 @@ public:
         glEnable(GL_FOG);
     }
 
+    void drawMeshFx(MeshHandle h, const core::Mat4& model, float r, float g, float b, float a,
+                    float colorScale) override {
+        if (h < 0 || (size_t)h >= meshes_.size()) return;
+        const MeshData& m = meshes_[(size_t)h];
+        core::Mat4 mv = view_ * model;
+        glLoadMatrixf(mv.m);
+        glDisable(GL_LIGHTING);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_FOG);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glVertexPointer(3, GL_FLOAT, 0, m.positions.data());
+        bool haveUV = m.hasUV();
+        if (haveUV) { glEnableClientState(GL_TEXTURE_COORD_ARRAY); glTexCoordPointer(2, GL_FLOAT, 0, m.uv.data()); }
+        float sc = colorScale >= 4.0f ? 4.0f : (colorScale >= 2.0f ? 2.0f : 1.0f);
+        glColor4f(r, g, b, a);
+        std::vector<SubMesh> all;
+        if (m.subs.empty()) { SubMesh whole; whole.indexCount = (uint32_t)m.indices.size(); all.push_back(whole); }
+        for (const SubMesh& s : m.subs.empty() ? all : m.subs) {
+            const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
+            bool tex = haveUV && mat && mat->tex >= 0 && (size_t)mat->tex < textures_.size();
+            if (tex) {
+                glEnable(GL_TEXTURE_2D);
+                glBindTexture(GL_TEXTURE_2D, textures_[(size_t)mat->tex]);
+                glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+                glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+                glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_RGB, GL_TEXTURE);
+                glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB, GL_PRIMARY_COLOR);
+                glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, sc);
+            } else {
+                glDisable(GL_TEXTURE_2D);
+            }
+            glDrawElements(GL_TRIANGLES, (GLsizei)s.indexCount, GL_UNSIGNED_INT, m.indices.data() + s.indexOffset);
+            if (tex) { glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f); glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); }
+        }
+        if (haveUV) glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisable(GL_TEXTURE_2D);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+        glEnable(GL_CULL_FACE);
+        glEnable(GL_FOG);
+        glLoadMatrixf(view_.m);
+    }
+
 private:
     void drawMeshArrays(const MeshData& m, const core::Mat4& model, const core::Vec3& color) {
         core::Mat4 mv = view_ * model;

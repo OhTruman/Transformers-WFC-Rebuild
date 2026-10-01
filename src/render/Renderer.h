@@ -60,6 +60,11 @@ public:
     // Textured particle quads (depth-tested, no depth write, unfogged for additive).
     virtual void drawParticles(const ParticleBatch& batch) = 0;
 
+    // Mesh particle (UE3 ParticleModuleTypeDataMesh with an additive, unlit, two-sided material):
+    // the uploaded mesh's base-colour texture x colour (x colorScale 1/2/4 overbright).
+    virtual void drawMeshFx(MeshHandle mesh, const core::Mat4& model, float r, float g, float b, float a,
+                            float colorScale) = 0;
+
     // Save the current framebuffer to a 24-bit BMP (debug/automated verification).
     virtual bool captureScreenshot(const char* path) = 0;
 };

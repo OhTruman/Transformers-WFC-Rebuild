@@ -26,6 +26,7 @@ public:
 
     float camYaw() const { return camYaw_; }
     float camPitch() const { return camPitch_; }
+    bool boostHeld() const { return intent_.wantBoost; }   // read-only, for vehicle boost presentation
     void setCameraYaw(float y) { camYaw_ = y; }
 
 private:

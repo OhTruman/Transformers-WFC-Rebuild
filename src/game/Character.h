@@ -44,6 +44,17 @@ public:
     // Advance the animation state machine + CPU-skin into the pose buffer (call once per step).
     void updateAnimation(float dt);
 
+    // World transform of a bone of the currently displayed model (this step's pose).
+    bool boneWorld(const std::string& bone, core::Mat4& out) const {
+        const assets::SkinnedModel* mdl = currentModel();
+        if (!mdl) return false;
+        int n = mdl->nodeByName(bone);
+        if (n < 0 || (size_t)n >= animScratch_.size() || lastModel_ != mdl) return false;
+        out = core::Mat4::translate(pos_) * core::Mat4::rotateY(yaw_ + meshYawOffset()) * animScratch_[(size_t)n];
+        return true;
+    }
+    static float meshYawOffset();
+
     // Weapon socket (robot form): the bone node to follow + a local offset transform.
     void setWeaponSocket(int boneNode, const core::Mat4& offset) {
         weaponBone_ = boneNode; weaponOffset_ = offset;

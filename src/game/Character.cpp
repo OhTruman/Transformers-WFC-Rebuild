@@ -235,6 +235,8 @@ void Character::evalLayered(const assets::SkinnedModel& mdl, int clip, float t, 
     assets::skinMesh(mdl, animScratch_, out);
 }
 
+float Character::meshYawOffset() { return core::config::kMeshYawOffset; }
+
 void Character::updateWeaponSocket() {
     weaponValid_ = false;
     // The Ion Blaster is holstered through the whole transform — no floating gun during the fold.

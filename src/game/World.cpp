@@ -90,6 +90,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     mapMesh_ = renderer.uploadMesh(mapMesh);
     fx_.load(renderer, root + "/../content/");
     fx_.loadMeshes(renderer, root + "/../content/");
+    boostFx_.load(renderer, root + "/../content/");
     player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
     // Ion Blaster: animated skeletal mesh held at the robot's primary weapon socket (falls back
@@ -357,6 +358,68 @@ void World::playSfx(Sfx s, const core::Vec3& pos) {
     }
 }
 
+// Vehicle boost presentation. [CONF] TR_Optimus_VEHDEF_p.OptimusTruckForm:
+//   BoostFx: BoostSocket_L / BoostSocket_R -> FX_Navigation_p.bumble_boost_small1_FX
+//   AudioComp (HmPlayerVehicleAudioComponent_6670): BoostSound Auto_Boost_Start, BoostLoops
+//   Auto_Boost_Loop, BoostStopSound Auto_Boost_End, BoostWheelsSound Auto_Boost_Wheels,
+//   BoostFadeOutTime 0.15 s, BoostWheelsGroundCheckDelay 0.27 s; Veh_Optimus_Prime_SoundSet maps
+//   those events to BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START / _LOOP / _END / _WHEELS.
+// Boost state = the movement code's boost condition (vehicle form + boost held), outside transforms.
+void World::tickVehicleBoost(float dt) {
+    Character& pc = player_.pawn();
+    bool active = pc.form() == Form::Vehicle && !pc.isTransforming() && player_.controller().boostHeld();
+
+    // Socket world matrices: bone (current pose) x socket relative transform (UE -> glTF, vs_common).
+    static const float relL[16] = {0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, -0.35f, 1};
+    static const float relR[16] = {0, 0, 1, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 0.35f, 1};
+    core::Mat4 bl, br, sl, sr;
+    const core::Mat4* sockets[2] = {nullptr, nullptr};
+    if (pc.form() == Form::Vehicle) {
+        if (pc.boneWorld("L_Robo23_XT", bl)) { sl = bl * core::mat4FromArray(relL); sockets[0] = &sl; }
+        if (pc.boneWorld("R_Robo23_XT", br)) { sr = br * core::mat4FromArray(relR); sockets[1] = &sr; }
+    }
+    boostFx_.tick(dt, active, sockets);
+
+    // Audio at the AUDIO_ROOT socket (C_Reference_XR + 147.25 UU up); speed parameter in mph.
+    const core::Vec3& v = pc.velocity();
+    float mph = core::length(v) * 2.23694f;
+    core::Vec3 ap = pc.position() + core::Vec3{0, 1.4725f, 0};
+    if (active && !boostActive_) {
+        cues_.play("VEH_OPTIMUS_BOOST_START", ap, 0.0f, mph);
+        boostLoopCue_ = cues_.play("VEH_OPTIMUS_BOOST_LOOP", ap, 0.0f, mph);
+        boostAge_ = 0.0f; boostWheelsChecked_ = false;
+    } else if (!active && boostActive_) {
+        cues_.stop(boostLoopCue_, 0.15f);            // BoostFadeOutTime
+        boostLoopCue_ = -1;
+        cues_.play("VEH_OPTIMUS_BOOST_END", ap, 0.0f, mph);
+    }
+    if (active) {
+        boostAge_ += dt;
+        cues_.update(boostLoopCue_, ap, mph);
+        if (!boostWheelsChecked_ && boostAge_ >= 0.27f) {   // BoostWheelsGroundCheckDelay
+            boostWheelsChecked_ = true;
+            if (pc.onGround()) cues_.play("VEH_OPTIMUS_BOOST_WHEELS", ap, 0.0f, mph);
+        }
+    }
+    boostActive_ = active;
+
+    if (std::getenv("WFC_BOOSTLOG")) {
+        static int n = 0;
+        if (++n % 6 == 0 && pc.form() == Form::Vehicle)
+            LOG_INFO("BOOST active=%d parts=%zu mph=%.1f ground=%d yaw=%.2f pos=%.2f,%.2f,%.2f sockL=%s sockR=%s",
+                     (int)active, boostFx_.liveParticles(), mph, (int)pc.onGround(), pc.yaw(),
+                     pc.position().x, pc.position().y, pc.position().z,
+                     sockets[0] ? "ok" : "-", sockets[1] ? "ok" : "-");
+        if (n % 6 == 0 && sockets[0] && sockets[1]) {
+            core::Vec3 a{sl.m[12], sl.m[13], sl.m[14]}, b{sr.m[12], sr.m[13], sr.m[14]};
+            core::Vec3 rel = a - pc.position(), relr = b - pc.position();
+            core::Vec3 xa = core::normalize(core::Vec3{sl.m[0], sl.m[1], sl.m[2]});
+            LOG_INFO("BOOST sockL rel=%.2f,%.2f,%.2f sockR rel=%.2f,%.2f,%.2f L.x-axis=%.2f,%.2f,%.2f",
+                     rel.x, rel.y, rel.z, relr.x, relr.y, relr.z, xa.x, xa.y, xa.z);
+        }
+    }
+}
+
 bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
     if (!weaponAnim_.valid() || !player_.pawn().hasWeapon()) return false;
     core::Mat4 local;
@@ -409,6 +472,7 @@ void World::tick(float dt) {
         player_.pawn().setAimPitch((float)std::atof(ap));
     player_.pawn().updateAnimation(dt);
     tickWeaponPresentation(dt);
+    tickVehicleBoost(dt);
     if (std::getenv("WFC_ANIMLOG")) {                       // layering diagnostics
         static int n = 0;
         if (++n % 6 == 0) {
@@ -485,8 +549,9 @@ void World::draw(render::IRenderer& r) const {
     else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
         r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
 
-    // Weapon effects last (translucent/additive over the opaque scene).
+    // Weapon + vehicle boost effects last (translucent/additive over the opaque scene).
     fx_.draw(r);
+    boostFx_.draw(r);
 
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {
