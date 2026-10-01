@@ -3,6 +3,27 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## RENDERING PASS 8 (2026-10-01) — VEHICLE MATERIAL FIX + STREETS COMPOSITION AUDIT
+- **Optimus vehicle regression fixed.** Root cause: the vehicle MIC enables `UseReconstructedNormal`
+  (normal X in the alpha of DXT5 `VH_Optimus_NORM`, Y in green); its cooked `UnpackMin` covers R,G,B
+  only, so X stayed in [0,1] and every vehicle normal was tilted (lighting, specular and the
+  reflection that feeds emissive all wrong). The original compiled character PS unpacks both
+  channels `(A,G)*2-1`; the translator now does the same. Robot unaffected (DXT1 RGB normal map).
+  Diffuse/customization path verified identical to the AssetTools bake (`WFC_ALBEDO` A/B).
+- **Authored post-process applied** (persistent level = `MP_IAC_Streets_BASE_m`, TransLevels.ini):
+  Streets CLUT `ENV_MPCLUT_p.MP_Streets_CLUT` (32³ volume, decoded), Bloom_Scale 0.1, far DOF
+  (max 0.6, falloff 40000 UU). PASS 7 wrongly assumed engine defaults (the BL_LVL stub misled it).
+- **25 static decals recovered** from cooked receiver geometry (landmark chevrons/corners, additive
+  unlit, 2105 tris) → `decals.glb`.
+- **15 mesh sections** left on the default grey material by the extractor now use their original
+  materials (`slot_materials.json`); 6 are null in the original data.
+- Mirrored-instance winding restored (1 prop).
+- Streets composition verified complete: BASE streams only ART + AUDIO (both composed); all 34
+  prefab-instance actors and all 1952 props present; prop placement cross-checked against decal
+  receiver geometry.
+- New diagnostics: `WFC_ALBEDO`, `WFC_GLTFMATERIALS`, `WFC_SKIPMAT`, `WFC_NODOF`, `WFC_NOCLUT`,
+  `WFC_NODECALS`.
+
 ## RENDERING PASS 7 (2026-10-01) — ORIGINAL WFC RENDER PATH (shaders, materials, lighting, post)
 Branch `agents/rendering`. The runtime now renders Streets and Optimus through a GL 3.3 shader path
 whose every stage was recovered from the original game data/binaries (details + provenance:
