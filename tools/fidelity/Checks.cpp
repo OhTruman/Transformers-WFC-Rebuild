@@ -327,17 +327,25 @@ void checkOrientation(Report& r) {
         const Frame& f = rig.last();
         r.near("vehicle_faces_travel", angleDeg(core::forwardFromYawPitch(f.yaw, 0), {f.vel.x, 0, f.vel.z}), 0.0, 0.5,
                "deg", "vehicle faces its velocity (steering), not the aim (FIDELITY pass 6, MED)");
+        save(rig, "orient_vehicle_turn");
+        // Saturating manoeuvre: full reversal at cruise demands a 180 deg heading change at once.
+        Rig rev(60, false);
+        rev.pawn().setForm(game::Form::Vehicle);
+        rev.idle(0.2);
+        rev.hold(Rig::down({Button::Forward}), 1.5);
+        size_t from = rev.trace().size();
+        rev.hold(Rig::down({Button::Back}), 2.5);
         double maxRate = 0;
-        const auto& tr = rig.trace();
-        for (size_t i = 1; i < tr.size(); ++i) {
+        const auto& tr = rev.trace();
+        for (size_t i = from; i < tr.size(); ++i) {
             double d = std::remainder((double)tr[i].yaw - tr[i - 1].yaw, 2 * core::PI);
-            maxRate = std::max(maxRate, std::fabs(d) / rig.dt());
+            maxRate = std::max(maxRate, std::fabs(d) / rev.dt());
         }
         r.known("vehicle_max_yaw_rate", core::degrees((float)maxRate), 180.0, 5.0, "deg/s",
                 "Default__TnHoverCarSimulationBlueprint.AiMaxAngularSpeed ~pi rad/s", kGameplay,
-                "facing = velocity direction, so turn rate is bounded only by accel; FIDELITY marks turn rate PARTIAL. "
-                "Confirm in an original capture whether the 'Ai' rate also limits player steering.");
-        save(rig, "orient_vehicle_turn");
+                "measured on a full reversal at cruise. Unlimited = facing snaps to velocity. Confirm in an "
+                "original capture whether the 'Ai' rate also limits player steering.");
+        save(rev, "orient_vehicle_reverse");
     }
 }
 
@@ -514,6 +522,25 @@ void checkCollision(Report& r) {
                 "CharacterMovement zeroes ALL horizontal velocity when the probe hits, so diagonal input against a "
                 "wall sticks instead of sliding (WFC street corners/doorways feel sticky)");
         save(sl, "col_wall_slide");
+    }
+    {
+        // Ramps: UE3 WalkableFloorZ default 0.7 -> surfaces up to ~45.6 deg are walkable.
+        auto climbs = [&](float deg) {
+            BoxScene s;
+            s.floor(0, 100);
+            s.ramp(-30, 30, -4, 10, deg);
+            game::CollisionWorld col;
+            col.build(s.mesh);
+            Rig rig(60, false);
+            rig.setCollision(&col);
+            rig.idle(0.2);
+            rig.hold(Rig::down({Button::Forward}), 5.0);
+            if (!gOpt.traceDir.empty()) save(rig, "col_ramp_" + std::to_string((int)deg));
+            return rig.pawn().position().z < -14.5f;   // reached the top platform
+        };
+        r.truth("ramp_20deg_climbable", climbs(20), "UE3 WalkableFloorZ 0.7: gentle ramps are walkable");
+        r.truth("ramp_35deg_climbable", climbs(35), "UE3 WalkableFloorZ 0.7 (~45.6 deg)");
+        r.truth("ramp_60deg_blocks", !climbs(60), "UE3 WalkableFloorZ 0.7: a 60 deg slope is a wall");
     }
     {
         // Step / ledge probe: raised platform of height h ahead of the pawn.
@@ -881,18 +908,42 @@ void checkMap(Report& r) {
     bool hit = col.groundHeight(spawn.x, spawn.z, spawn.y + 0.5f, 1.0f, gy, n);
     r.truth("spawn_has_floor", hit, "authored FFA spawn sits on collision");
     if (hit) r.info("spawn_floor_y", gy, "m", "STATUS: -724.5");
-    Rig rig(60, false);
-    rig.setCollision(&col);
-    rig.pawn().setPosition({spawn.x, hit ? gy : spawn.y, spawn.z});
-    rig.idle(0.3);
-    auto t1 = std::chrono::steady_clock::now();
-    for (Button b : {Button::Forward, Button::Right, Button::Back, Button::Left}) rig.hold(Rig::down({b}), 2.0);
-    double stepMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t1).count() / 480.0;
-    int grounded = 0;
-    for (const Frame& f : rig.trace()) grounded += f.grounded;
-    r.info("spawn_box_walk_grounded_frac", (double)grounded / rig.trace().size(), "", "W/D/S/A 2 s each from spawn");
-    r.info("collision_step_cost", stepMs, "ms", "movement step against 1.85 M-tri grid");
-    save(rig, "map_spawn_box_walk");
+    // Traversal sweep: from the spawn, walk 4 s in 8 compass directions (camera yaw rotated) and
+    // record how far the pawn gets, how long it is stuck against input and how often it leaves
+    // the ground. Compare runs with diff-reports.ps1 to see how a collision change plays on the
+    // real street layout (synthetic boxes cannot show this).
+    double totalDist = 0, stuck = 0, steps = 0, air = 0, stepMs = 0, minY = 1e9, maxY = -1e9;
+    for (int k = 0; k < 8; ++k) {
+        Rig rig(60, false);
+        rig.setCollision(&col);
+        rig.pawn().setPosition({spawn.x, hit ? gy : spawn.y, spawn.z});
+        rig.controller().setCameraYaw(core::PI * 0.25f * k);
+        rig.idle(0.3);
+        core::Vec3 p0 = rig.pawn().position();
+        size_t first = rig.trace().size();
+        auto t1 = std::chrono::steady_clock::now();
+        rig.hold(Rig::down({Button::Forward}), 4.0);
+        stepMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t1).count();
+        core::Vec3 p1 = rig.pawn().position();
+        double d = core::length(core::Vec3{p1.x - p0.x, 0, p1.z - p0.z});
+        totalDist += d;
+        for (size_t i = first; i < rig.trace().size(); ++i) {
+            const Frame& f = rig.trace()[i];
+            steps += 1;
+            if (f.t - rig.trace()[first].t > 0.4 && hspeed(f) < 0.5f) stuck += rig.dt();
+            if (!f.grounded) air += 1;
+            minY = std::min(minY, (double)f.pos.y);
+            maxY = std::max(maxY, (double)f.pos.y);
+        }
+        r.info("sweep_dist_dir" + std::to_string(k * 45), d, "m", "", kRobotMoveSpeed * 4.0);
+        save(rig, "map_sweep_" + std::to_string(k * 45));
+    }
+    r.info("sweep_total_distance", totalDist, "m", "8 directions x 4 s", 8 * kRobotMoveSpeed * 4.0);
+    r.info("sweep_stuck_time", stuck, "s", "input held but speed < 0.5 m/s (after 0.4 s spin-up)");
+    r.info("sweep_airborne_frac", air / steps, "", "fraction of steps not grounded");
+    r.info("sweep_height_range", maxY - minY, "m", "");
+    r.truth("sweep_no_fall_through", minY > (hit ? gy : spawn.y) - 30.0, "pawn never drops through the street floor");
+    r.info("collision_step_cost", stepMs / (8 * 240), "ms", "movement step against the 1.85 M-tri grid");
 }
 
 // ---------------------------------------------------------------------------------------------

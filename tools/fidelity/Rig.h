@@ -122,6 +122,8 @@ struct BoxScene {
     render::MeshData mesh;
     void floor(float y, float half);
     void box(const core::Vec3& mn, const core::Vec3& mx);
+    // Ramp rising toward -Z: starts at z0 (height 0) and climbs at `deg` over `len` metres.
+    void ramp(float x0, float x1, float z0, float len, float deg);
 };
 
 } // namespace fid

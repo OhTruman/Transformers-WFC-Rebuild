@@ -1,0 +1,42 @@
+From 83b01635c1c67520536249f884cee7119a5edf5b Mon Sep 17 00:00:00 2001
+From: x <x@x>
+Date: Thu, 1 Oct 2026 16:20:50 -0500
+Subject: [PATCH] A jump integration
+
+---
+ src/game/CharacterMovement.cpp | 12 ++++++++----
+ 1 file changed, 8 insertions(+), 4 deletions(-)
+
+diff --git a/src/game/CharacterMovement.cpp b/src/game/CharacterMovement.cpp
+index 92c57f5..a994c6f 100644
+--- a/src/game/CharacterMovement.cpp
++++ b/src/game/CharacterMovement.cpp
+@@ -44,17 +44,21 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld*
+     if (hs > cap && hs > 1e-5f) hv = hv * (cap / hs);
+     v.x = hv.x; v.z = hv.z;
+ 
+-    // [CONF] pawn gravity -29.4 m/s^2; vehicles use RB-scaled gravity (0.66) -> -19.4 m/s^2.
+-    float g = (c.form() == Form::Vehicle) ? core::config::kVehicleGravity : core::config::kGravity;
+-    v.y -= g * dt;
+-
+     if (in.wantJump && c.onGround() && t.jumpSpeed > 0.0f) {
+         v.y = t.jumpSpeed;
+         c.setOnGround(false);
+     }
+ 
++    // [CONF] pawn gravity -29.4 m/s^2; vehicles use RB-scaled gravity (0.66) -> -19.4 m/s^2.
++    // Vertical motion integrates with the average of the old and new velocity (UE3 physFalling),
++    // which is exact under constant gravity: the apex lands on MaxJumpHeight at any tick rate.
++    float g = (c.form() == Form::Vehicle) ? core::config::kVehicleGravity : core::config::kGravity;
++    float vy0 = v.y;
++    v.y -= g * dt;
++
+     core::Vec3 oldPos = c.position();
+     core::Vec3 p = oldPos + v * dt;
++    p.y = oldPos.y + 0.5f * (vy0 + v.y) * dt;
+ 
+     // --- Horizontal wall block (crude): stop horizontal motion if a wall is in the way ---
+     if (col) {
+-- 
+2.56.0.windows.1
+

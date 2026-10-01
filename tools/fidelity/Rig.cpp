@@ -173,6 +173,13 @@ void BoxScene::floor(float y, float h) {
     quad(mesh, {-h, y, -h}, {-h, y, h}, {h, y, h}, {h, y, -h});   // CCW from above -> +Y normal
 }
 
+void BoxScene::ramp(float x0, float x1, float z0, float len, float deg) {
+    float h = len * std::tan(core::radians(deg));
+    float z1 = z0 - len;
+    quad(mesh, {x0, 0, z0}, {x1, 0, z0}, {x1, h, z1}, {x0, h, z1});
+    box({x0, 0, z1 - 20}, {x1, h, z1});   // landing platform at the top
+}
+
 void BoxScene::box(const core::Vec3& n, const core::Vec3& x) {
     quad(mesh, {n.x, x.y, n.z}, {n.x, x.y, x.z}, {x.x, x.y, x.z}, {x.x, x.y, n.z});   // top
     quad(mesh, {n.x, n.y, n.z}, {x.x, n.y, n.z}, {x.x, n.y, x.z}, {n.x, n.y, x.z});   // bottom

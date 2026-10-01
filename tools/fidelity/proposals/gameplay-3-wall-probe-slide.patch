@@ -1,0 +1,120 @@
+From ddf87eb39c8eb86e32d36b8d830c3dfc127b8b1a Mon Sep 17 00:00:00 2001
+From: x <x@x>
+Date: Thu, 1 Oct 2026 16:23:50 -0500
+Subject: [PATCH] C wall probes and slide
+
+---
+ src/game/CharacterMovement.cpp | 46 ++++++++++++++++++++++++----------
+ src/game/Collision.cpp         |  8 +++++-
+ src/game/Collision.h           |  2 ++
+ 3 files changed, 42 insertions(+), 14 deletions(-)
+
+diff --git a/src/game/CharacterMovement.cpp b/src/game/CharacterMovement.cpp
+index b1d40c6..acfd4ce 100644
+--- a/src/game/CharacterMovement.cpp
++++ b/src/game/CharacterMovement.cpp
+@@ -12,6 +12,8 @@ static constexpr float kStepUp = 0.35f;
+ static constexpr float kSnapDown = 1.0f;    // follow downward slopes/stairs while grounded
+ // Wall-block probe uses the recovered capsule radius [CONF] (CylinderRadius 175 UU = 1.75 m).
+ static constexpr float kProbeRadius = 1.75f;
++// UE3 Pawn.WalkableFloorZ default 0.7 (~45.6 deg): steeper surfaces are walls. [CONF-default]
++static constexpr float kWalkableFloorZ = 0.7f;
+ 
+ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* col) {
+     FormTuning t = tuningFor(c.form());
+@@ -61,22 +63,40 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld*
+     core::Vec3 p = oldPos + v * dt;
+     p.y = oldPos.y + 0.5f * (vy0 + v.y) * dt;
+ 
+-    // --- Horizontal wall block (crude): stop horizontal motion if a wall is in the way ---
++    // --- Horizontal walls: probe the cylinder's front at three heights and slide ---
++    // Probes sit just above the step height, at the capsule centre and near the top, so anything
++    // too tall to step onto blocks (a single centre ray let 0.4-2 m ledges be walked into).
++    // Walkable surfaces (normal.y >= UE3 WalkableFloorZ 0.7) are left to ground resolution so
++    // ramps still climb. On a wall hit the velocity component into the wall is removed and the
++    // tangential part kept (UE3 SlideAlongSurface) instead of zeroing all horizontal motion.
+     if (col) {
+-        float torso = core::config::kPawnHalfHeight;   // probe at capsule centre (~2 m)
+-        core::Vec3 a = oldPos + core::Vec3{0, torso, 0};
+-        core::Vec3 b = core::Vec3{p.x, oldPos.y + torso, p.z};
+-        core::Vec3 dir = b - a;
+-        float dist = core::length(dir);
+-        if (dist > 1e-4f) {
+-            core::Vec3 bEx = a + dir * ((dist + kProbeRadius) / dist); // probe slightly ahead
+-            float tHit;
+-            if (col->segmentHit(a, bEx, tHit) && tHit * (dist + kProbeRadius) < dist + kProbeRadius) {
+-                // Blocked: cancel horizontal advance this step.
+-                p.x = oldPos.x; p.z = oldPos.z;
+-                v.x = 0; v.z = 0;
++        const float probeY[3] = {kStepUp + 0.02f, core::config::kPawnHalfHeight,
++                                 2.0f * core::config::kPawnHalfHeight - 0.1f};
++        auto wallAhead = [&](core::Vec3 d, core::Vec3& outN) {
++            float dist = core::length(d);
++            if (dist < 1e-5f) return false;
++            core::Vec3 reach = d * ((dist + kProbeRadius) / dist);   // keep one radius of clearance
++            for (float h : probeY) {
++                core::Vec3 a = oldPos + core::Vec3{0, h, 0};
++                float tHit; core::Vec3 n;
++                if (col->segmentHit(a, a + reach, tHit, n) && std::fabs(n.y) < kWalkableFloorZ) {
++                    outN = core::normalize(core::Vec3{n.x, 0, n.z});
++                    if (core::dot(outN, d) > 0) outN = outN * -1.0f;   // face the incoming motion
++                    return true;
++                }
+             }
++            return false;
++        };
++        core::Vec3 d{p.x - oldPos.x, 0, p.z - oldPos.z};
++        core::Vec3 n;
++        for (int iter = 0; iter < 2 && wallAhead(d, n); ++iter) {
++            float into = core::dot(d, n);
++            d = d - n * into;                                   // slide: drop the into-wall part
++            float vInto = core::dot(core::Vec3{v.x, 0, v.z}, n);
++            if (vInto < 0) { v.x -= n.x * vInto; v.z -= n.z * vInto; }
++            if (iter == 1 && wallAhead(d, n)) { d = {0, 0, 0}; v.x = 0; v.z = 0; }   // corner
+         }
++        p.x = oldPos.x + d.x; p.z = oldPos.z + d.z;
+     }
+ 
+     // --- Ground resolution --- (vehicles hover SuspensionRadius=2 m above the surface) ---
+diff --git a/src/game/Collision.cpp b/src/game/Collision.cpp
+index c957868..82f183f 100644
+--- a/src/game/Collision.cpp
++++ b/src/game/Collision.cpp
+@@ -90,6 +90,12 @@ bool CollisionWorld::groundHeight(float x, float z, float nearY, float stepUp,
+ }
+ 
+ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const {
++    core::Vec3 n;
++    return segmentHit(a, b, outT, n);
++}
++
++bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT,
++                                core::Vec3& outNormal) const {
+     // Möller–Trumbore over triangles in the cells the segment's endpoints touch (coarse).
+     core::Vec3 d = b - a;
+     float bestT = 1e30f;
+@@ -111,7 +117,7 @@ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float&
+             float v = core::dot(d, q) * inv;
+             if (v < 0 || u + v > 1) continue;
+             float tt = core::dot(e2, q) * inv;
+-            if (tt >= 0 && tt <= 1 && tt < bestT) { bestT = tt; hit = true; }
++            if (tt >= 0 && tt <= 1 && tt < bestT) { bestT = tt; outNormal = t.n; hit = true; }
+         }
+     };
+ 
+diff --git a/src/game/Collision.h b/src/game/Collision.h
+index c2e1675..4b80788 100644
+--- a/src/game/Collision.h
++++ b/src/game/Collision.h
+@@ -23,6 +23,8 @@ public:
+ 
+     // Does the segment a->b hit any triangle? (used as a crude wall block). Returns nearest t in [0,1].
+     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
++    // Same, also returning the hit triangle's unit normal (used to slide along walls).
++    bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outNormal) const;
+ 
+ private:
+     struct Tri { core::Vec3 a, b, c, n; };
+-- 
+2.56.0.windows.1
+

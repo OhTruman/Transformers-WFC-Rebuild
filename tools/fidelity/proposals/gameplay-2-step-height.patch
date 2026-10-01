@@ -1,0 +1,40 @@
+From 73f9e6023b88a8ba5ffd2845d6a72bceffaf6d6b Mon Sep 17 00:00:00 2001
+From: x <x@x>
+Date: Thu, 1 Oct 2026 16:22:58 -0500
+Subject: [PATCH] B step height
+
+---
+ src/game/CharacterMovement.cpp | 10 +++++++---
+ 1 file changed, 7 insertions(+), 3 deletions(-)
+
+diff --git a/src/game/CharacterMovement.cpp b/src/game/CharacterMovement.cpp
+index a994c6f..b1d40c6 100644
+--- a/src/game/CharacterMovement.cpp
++++ b/src/game/CharacterMovement.cpp
+@@ -7,7 +7,8 @@
+ 
+ namespace game::CharacterMovement {
+ 
+-static constexpr float kStepUp = 0.6f;      // [PROV] MaxStepHeight not found overridden (Engine default 35 UU)
++// UE3 Pawn.MaxStepHeight default 35 UU; no TnPawn/TnPlayerPawn override found. [CONF-default]
++static constexpr float kStepUp = 0.35f;
+ static constexpr float kSnapDown = 1.0f;    // follow downward slopes/stairs while grounded
+ // Wall-block probe uses the recovered capsule radius [CONF] (CylinderRadius 175 UU = 1.75 m).
+ static constexpr float kProbeRadius = 1.75f;
+@@ -83,8 +84,11 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld*
+     float hover = vehicle ? core::config::kVehicleHoverH : 0.0f;
+     if (col) {
+         float gy; core::Vec3 n;
+-        float searchTop = (c.onGround() ? oldPos.y : p.y) + kStepUp + hover;
+-        if (col->groundHeight(p.x, p.z, searchTop, kStepUp + hover, gy, n)) {
++        // Accept surfaces up to one step above the current base (feet for the robot, hover floor
++        // + step for the vehicle). groundHeight adds `stepUp` to `nearY` itself, so the step is
++        // counted once (previously kStepUp + hover was added twice: ~1.2 m robot "steps").
++        float base = (c.onGround() ? oldPos.y : p.y) - hover;
++        if (col->groundHeight(p.x, p.z, base, kStepUp + hover, gy, n)) {
+             float floorY = gy + hover;
+             if (p.y <= floorY + 0.001f) {       // at/below hover floor -> settle on it (incl. step-up)
+                 p.y = floorY; if (v.y < 0) v.y = 0; grounded = true;
+-- 
+2.56.0.windows.1
+

@@ -11,7 +11,7 @@
 # Compare two runs with diff-reports.ps1.
 param(
     [Parameter(Mandatory)][string]$Ref,
-    [string]$Patch = "",
+    [string[]]$Patch = @(),
     [string]$Merge = "",
     [string]$Name = "",
     [switch]$Exe,
@@ -20,7 +20,7 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-if (-not $Name) { $Name = ($Ref -replace '[^A-Za-z0-9._-]', '_') + $(if ($Merge) { "+" + ($Merge -replace '[^A-Za-z0-9._-]', '_') } else { "" }) + $(if ($Patch) { "+" + [IO.Path]::GetFileNameWithoutExtension($Patch) } else { "" }) }
+if (-not $Name) { $Name = ($Ref -replace '[^A-Za-z0-9._-]', '_') + $(if ($Merge) { "+" + ($Merge -replace '[^A-Za-z0-9._-]', '_') } else { "" }) + $(if ($Patch) { "+" + [IO.Path]::GetFileNameWithoutExtension($Patch[-1]) } else { "" }) }
 $abRoot = Join-Path $root "work\ab"
 $dest = Join-Path $abRoot $Name
 New-Item -ItemType Directory -Force $abRoot | Out-Null
@@ -52,7 +52,9 @@ if ($Merge) {
 $tarFile = Join-Path $dest "src.tar"
 git -C $root archive --format=tar -o $tarFile $tree
 if ($LASTEXITCODE -ne 0) { throw "git archive failed" }
-tar -xf $tarFile -C $dest
+# Windows bsdtar explicitly: GNU tar from a Git Bash PATH treats "F:\..." as a remote host.
+& (Join-Path $env:SystemRoot "System32\tar.exe") -xf $tarFile -C $dest
+if ($LASTEXITCODE -ne 0) { throw "extract failed" }
 Remove-Item $tarFile
 
 # Overlay the current harness (working copy) and make sure the CMake hook exists.
@@ -66,11 +68,18 @@ if (-not (Select-String -Path $cml -Pattern "tools/fidelity" -Quiet)) {
     Add-Content -Path $cml -Value "`noption(WFC_BUILD_FIDELITY `"`" ON)`nif(WFC_BUILD_FIDELITY)`n    enable_testing()`n    add_subdirectory(tools/fidelity)`nendif()"
 }
 
-if ($Patch) {
-    $pp = (Resolve-Path $Patch).Path
+foreach ($one in $Patch) {   # applied in the order given (stacked patches)
+    $pp = (Resolve-Path $one).Path
     Push-Location $dest
-    try { git apply --whitespace=nowarn $pp; if ($LASTEXITCODE -ne 0) { throw "patch did not apply: $pp" } }
-    finally { Pop-Location }
+    # work/ab lives inside this worktree: stop repo discovery at the export, otherwise git apply
+    # treats it as a repo subdirectory and silently SKIPS every path.
+    $env:GIT_CEILING_DIRECTORIES = $abRoot
+    try {
+        $ErrorActionPreference = "Continue"   # PS 5.1 turns native stderr lines into errors
+        $applyOut = git apply --verbose --whitespace=nowarn $pp 2>&1 | Out-String
+        $ErrorActionPreference = "Stop"
+        if ($LASTEXITCODE -ne 0 -or $applyOut -match 'Skipped patch') { throw "patch did not apply: $pp`n$applyOut" }
+    } finally { Pop-Location; Remove-Item Env:GIT_CEILING_DIRECTORIES }
 }
 
 # Build with this worktree's toolchain into the export's own build dir.
@@ -94,7 +103,7 @@ try {
     & (Join-Path $build "bin\wfc_fidelity.exe") --json $report @HarnessArgs *> $run
     $code = $LASTEXITCODE
 } finally { Pop-Location }
-Set-Content -Path (Join-Path $dest "SOURCE.txt") -Value "ref=$Ref sha=$sha patch=$Patch"
+Set-Content -Path (Join-Path $dest "SOURCE.txt") -Value "ref=$Ref sha=$sha patch=$($Patch -join ';')"
 $summary = (Select-String -Path $run -Pattern '^SUMMARY').Line
 Write-Host "[$Name] $Ref$(if ($Merge) { " + $Merge" })@$sha  $summary  (exit $code)"
 Write-Host "  report: $report"

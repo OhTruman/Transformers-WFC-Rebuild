@@ -3,27 +3,34 @@
 ## Branch scoreboard (ab.ps1, same harness for every ref)
 | Ref | pass | FAIL | KNOWN | Notes vs main |
 |---|---|---|---|---|
-| main 565edb2 | 97 | 0 | 16 | baseline |
-| agents/gameplay 10cba8a | 104 | 0 | 9 | **FIXED** (7): mesh facing (shoulders −13.7°, hips −17.6°, barrel 4° off facing), vehicle long axis, muzzle in front, `kMeshYawOffset` = π/2, aim-pitch tracking 1.02, reload on the move |
-| agents/systems 9a4a734 | 98 | 0 | 15 | **FIXED**: reload on the move (UpperBodyCustom slot). Fire rate still 900 RPM (#9) |
-| gameplay + systems (merge preview) | — | — | — | **CONFLICTS** in `Character.cpp`, `Character.h` and `SkinnedModel.cpp` |
+| main 565edb2 | 98 | 0 | 16 | baseline (vehicle snaps heading at 10 800°/s) |
+| agents/gameplay 21902b6 (Pass 8) | 110 | 0 | 6 | **FIXED** (10): mesh facing (shoulders −13.7°, hips −17.6°, barrel 4° off facing), vehicle long axis, muzzle in front, `kMeshYawOffset` = π/2, aim-pitch tracking 1.02, reload on the move, transform clip pairing (to-vehicle 2.0 s), vehicle turn rate ≤180°/s |
+| agents/gameplay + `proposals/gameplay-1..3` | 115 | 0 | 1 | adds jump apex, step height, low-ledge penetration, wall slide; only the Systems fire rate remains |
+| agents/systems 3160a66 | 101 | 0 | 15 | **FIXED**: reload on the move (UpperBodyCustom slot) |
+| agents/systems + `proposals/systems-1` | 102 | 0 | 14 | fire rate 900 → 919 RPM |
+| gameplay + systems (merge preview) | — | — | — | **CONFLICTS**: `Character.cpp/.h`, `SkinnedModel.cpp`, `Recoil.h` (add/add), `FIDELITY.md`, `STATUS.md` |
 
-### ⚠ Coordination: Gameplay and Systems built the same animation layer twice
-Both branches added overlapping code:
-- `Character::setAimPitch`
-- an `assets::LocalPose` base/overlay pose
-- an upper-body mask rooted at `C_Spine01_Lumbar01_XB`
-- an upper-body reload slot
+Validated fix patches, with before/after numbers: [proposals/README.md](proposals/README.md).
+
+### ⚠ Coordination: Gameplay and Systems keep building the same animation features
+Both branches now independently implement:
+- the upper-body layer: `Character::setAimPitch`, an `assets::LocalPose` base/overlay pose, an
+  upper-body mask rooted at `C_Spine01_Lumbar01_XB`, and an upper-body reload slot
+- **weapon recoil**: each adds its own `src/game/Recoil.h` (Gameplay Pass 8, Systems 501ec10)
+- **upper-body aim offset**: Gameplay Pass 7/8 (`Shooting_Aim` grid), Systems 3160a66
+  (`TnAnimNodeAimOffset`)
 
 The two sets of names differ:
 - Gameplay: `reloadWeight` / `aimWeight` / `RobotRig`
 - Systems: `upperAnimName` / `upperWeight` / `RecoilControl` / `updateUpperBody`
 
-Systems also adds recoil skel-controls and weapon owner animations. Gameplay adds aim offset,
-vehicle hover blends and land/take-off. These are not textual conflicts that can be resolved line
-by line: the integrator must choose **one** layering framework (suggest Gameplay's, since
-locomotion and transform depend on it). Systems' recoil and owner-anim slot then need porting
-onto it.
+These are not textual conflicts that can be resolved line by line. The integrator must choose
+**one** layering, recoil and aim-offset implementation. I suggest Gameplay's, since locomotion,
+turn-in-place and transform depend on it. Systems' weapon owner-anim slot, FX and SoundCues then
+port onto it.
+
+**Recommendation:** freeze `Character.*` / `SkinnedModel.*` / `Recoil.h` to one owner (Gameplay)
+until the merge. Systems should consume that API rather than extend it in parallel.
 
 After resolving, gate the merge with:
 ```powershell
