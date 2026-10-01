@@ -3,6 +3,27 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS PASS 1 (2026-10-01) — WEAPON LAYERING, RECOIL, ANIMATED WEAPON, ORIGINAL FX + SOUNDCUES
+Systems-agent branch `agents/systems`. All values recovered from cooked data (details and
+confidence in FIDELITY.md PASS 7; decoders in `tools/systems/`).
+- **Reload on the move**: reload plays in the original `UpperBodyCustom` slot masked from
+  `C_Spine01_Lumbar01_XB` (AnimNodeBlendMultiBone), blend 0.1/0.1 s; the legs keep the strafe/jog
+  clip (no more glide). Verified: base `Nav_StrafeJog_F` at 5.5 m/s + upper `Shooting_Reload_IonBlaster_ROBO`.
+- **Recoil**: HmSkelControlRecoil port on SpineRecoil / RightHandRecoil with the Ion Blaster's
+  authored RecoilDefs (restart per shot, decaying sinusoid in aim space).
+- **Animated weapon**: the Ion Blaster is its 34-joint skeletal mesh playing its own
+  Fire / Reload_AP / Idle anims with authored sockets; the muzzle is the MuzzleFlash socket.
+- **Event timing**: weapon AnimNotifies drive reload/idle sounds at the authored times.
+- **FX**: muzzle flash, tracer bolt + smoke trail, impact squib rebuilt from the cooked
+  ParticleSystems (original textures, blend modes, bursts, lifetimes, sizes, velocities,
+  colour/alpha/size curves, squib rules). Replaces the yellow line + box placeholder.
+- **Audio**: original SoundCues: layered fire (near/mid/distant by distance), low-ammo, tail,
+  impact, reload, idle; dB/semitone variation, timed events, concurrency, FMOD inverse rolloff.
+- Diagnostics: `WFC_ANIMLOG` (base/upper/recoil/weapon clip), `WFC_NOTIFYLOG`, `WFC_CUELOG`.
+- **Not done / handed off:** camera recoil + shake (camera owned by Gameplay), dry-fire trigger,
+  upper-body aim offset, shell/magazine/reload FX rendering, mixer/reverb. The idle base clip
+  `Cust_Idle` (showcase idle) should be `NAV_Idle`; that is Gameplay's locomotion selection.
+
 ## FIDELITY PASS 6 (2026-10-01) — INTERACTIVE PLAYER FIXES (orientation, locomotion, muzzle, reload, transform)
 Runtime observation (replaying the exe) drove this pass, not headless smoke. Fixed, in the
 player's priority order:
@@ -198,3 +219,4 @@ map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.j
 - `WFC_AUTOTRANSFORM=F` trigger a transform at frame F.
 - `WFC_DEBUGDRAW=1`     enable the debug overlay from start (same as toggling B).
 - `WFC_ASSETS=dir`      override the asset root.
+- `WFC_ANIMLOG=1` / `WFC_NOTIFYLOG=1` / `WFC_CUELOG=1`  weapon layering / AnimNotify / SoundCue logs.
