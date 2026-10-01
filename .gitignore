@@ -1,0 +1,25 @@
+# Build output
+/build/
+
+# Bundled toolchain (large; fetched locally, not committed)
+/.toolchain/
+
+# Extracted / local game data (never commit proprietary assets)
+/gamedata/
+/assets_extracted/
+
+# Editor / OS cruft
+*.obj
+*.o
+*.exe
+*.pdb
+*.ilk
+.vs/
+.vscode/
+*.user
+Thumbs.db
+
+# Per-worktree scratch, reverse-engineering snapshots and logs
+/work/
+/.claude/
+
