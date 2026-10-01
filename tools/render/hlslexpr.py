@@ -144,7 +144,7 @@ class P:
             t = max(a[0][1], a[1][1]) if name != 'clamp' else a[0][1]
             if name == 'smoothstep': t = a[2][1]
             x = [conv(a[0][0], a[0][1], t), conv(a[1][0], a[1][1], t),
-                 a[2][0] if (a[2][1] == 1 and name != 'smoothstep') else conv(a[2][0], a[2][1], t)]
+                 a[2][0] if (a[2][1] == 1 and name == 'lerp') else conv(a[2][0], a[2][1], t)]
             if name == 'smoothstep': x = [a[0][0], a[1][0], a[2][0]]
             return '%s(%s, %s, %s)' % (g, x[0], x[1], x[2]), t
         raise ValueError('unknown HLSL function %s' % name)

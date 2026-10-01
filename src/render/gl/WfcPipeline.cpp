@@ -368,6 +368,9 @@ bool Pipeline::load(const std::string& mapName) {
             s.files.push_back(t["file"].asString());
             s.srgb.push_back(t["srgb"].asBool(true));
             s.cube.push_back(t["kind"].asString() == "cube");
+            std::vector<std::string> fc;
+            for (size_t k = 0; k < t["faces"].size(); ++k) fc.push_back(t["faces"][k].asString());
+            s.faces.push_back(fc);
             s.clampU.push_back(t["address_x"].asString() == "TA_Clamp");
             s.clampV.push_back(t["address_y"].asString() == "TA_Clamp");
             std::vector<float> mn(4, 0.0f), mx(4, 1.0f);
@@ -501,6 +504,38 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
     return id;
 }
 
+// Cooked Xbox TextureCube faces (decoded by tools/render/xbox_texture.py) in UE3/D3D face order
+// +X -X +Y -Y +Z -Z. GL uses the same major-axis face convention; rows are uploaded top-first,
+// matching D3D's top-left texel origin, and lookups use the UE world-space direction directly.
+GLuint Pipeline::cubeTexture(const std::vector<std::string>& faces, bool srgb) {
+    std::string key = "cube|" + faces[0] + (srgb ? "|s" : "|l");
+    auto it = texCache_.find(key);
+    if (it != texCache_.end()) return it->second;
+    GLuint id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    bool ok = true;
+    for (int f = 0; f < 6 && ok; ++f) {
+        ImageData img;
+        ok = platform::decodeImage(faces[(size_t)f], img) && img.valid();
+        if (ok) glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, srgb ? GL_SRGB8_ALPHA8 : GL_RGBA, img.w, img.h, 0,
+                             GL_RGBA, GL_UNSIGNED_BYTE, img.rgba.data());
+    }
+    if (!ok) { LOG_WARN("wfc: cubemap decode failed: %s", faces[0].c_str()); glDeleteTextures(1, &id); id = 0; }
+    else {
+        GenerateMipmap(GL_TEXTURE_CUBE_MAP);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+    }
+    glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+    texCache_[key] = id;
+    return id;
+}
+
 // ------------------------------------------------------------------------- programs
 int Pipeline::buildProgram(const std::string& key, const std::string& body, const std::vector<Program::Slot>& slots,
                            const std::vector<bool>& slotIsCube, int blend, bool twoSided, bool lit, float clip,
@@ -511,7 +546,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         std::string n = std::to_string(k);
         if (slotIsCube[k]) {
             fs += "uniform samplerCube uTex" + n + ";\n";
-            // UE world direction -> GL cube lookup [PROV: original cubemaps not yet decoded]
+            // UE world direction -> cube lookup (faces in UE/D3D order, see cubeTexture)
             fs += "vec4 wfcSC_" + n + "(vec3 d) { return texture(uTex" + n + ", d); }\n";
             replaceAll(code, "wfcSampleCube(" + n + ", ", "wfcSC_" + n + "(");
         } else {
@@ -579,7 +614,10 @@ int Pipeline::programFor(const std::string& matName, const Material* gm, bool li
         for (size_t k = 0; k < s.files.size(); ++k) {
             Program::Slot sl{};
             sl.cube = s.cube[k];
-            if (sl.cube) sl.tex = blackCube_;   // [GAP] TextureCube decode not yet implemented
+            if (sl.cube) {
+                GLuint c = s.faces[k].size() == 6 ? cubeTexture(s.faces[k], s.srgb[k]) : 0;
+                sl.tex = c ? c : blackCube_;
+            }
             else {
                 GLuint t = texture(s.files[k], s.srgb[k], s.clampU[k], s.clampV[k]);
                 sl.tex = t ? t : blackTex_;

@@ -12,6 +12,7 @@ import json, os, struct, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ue3obj import Repo, CONTENT, COOKED  # noqa: E402
 import matc  # noqa: E402
+import xbox_texture  # noqa: E402
 
 UMODEL = r'F:/Transformers Rebuild/AssetTools/bin/umodel/umodel_64.exe'
 VS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice'
@@ -44,6 +45,31 @@ class TexResolver:
                 'unpack_min': [um.get(k, 0.0) for k in range(4)] if isinstance(um, dict) else None,
                 'compression': o.get('CompressionSettings')}
 
+    def native_decode(self, path, cls, name):
+        """Decode Xbox-tiled cooked TextureCube / TextureFlipBook data (tools/render/xbox_texture.py)
+        that umodel does not export. Writes PNGs into <out>/tex (never the shared tree)."""
+        from PIL import Image
+        os.makedirs(os.path.join(self.out, 'tex'), exist_ok=True)
+        o = self.R.obj(path) or {}
+        fmt = o.get('Format', 'PF_DXT1')
+        try:
+            _, tail = self.R.native_tail(path)
+            if cls == 'TextureCube':
+                files = [os.path.join(self.out, 'tex', '%s_f%d.png' % (name, k)) for k in range(6)]
+                if not all(os.path.exists(x) for x in files):
+                    for img, fn in zip(xbox_texture.decode_cube(tail, fmt, int(o.get('EdgeSize', 256))), files):
+                        Image.fromarray(img).save(fn)
+                return files[0], files
+            fn = os.path.join(self.out, 'tex', name + '.png')
+            if not os.path.exists(fn):
+                mips, _ = xbox_texture.read_mip_chain(tail, 0)
+                sx, sy, data = next(m for m in mips if m[2])
+                Image.fromarray(xbox_texture.decode_mip(sx, sy, data, fmt)).save(fn)
+            return fn, None
+        except Exception as ex:
+            print('native decode failed %s: %s' % (path, ex))
+            return None, None
+
     def __call__(self, path):
         if not path: return None
         if path in self.cache: return self.cache[path]
@@ -56,12 +82,17 @@ class TexResolver:
             lst = self.by_name.get(name.lower(), [])
             pref = [x for x in lst if parts[0].lower() in x.lower()]
             f = (pref or lst or [None])[0]
+        cls = self.R.cls(path)
+        faces = None
+        if not f and cls in ('TextureCube', 'TextureFlipBook') and self.R.find(path):
+            f, faces = self.native_decode(path, cls, name)
         if not f:
             loc = os.path.join(self.out, 'tex', name + '.png')
             f = loc if os.path.exists(loc) else None
             if not f:
                 self.missing[path] = loc
-        d = {'object': path, 'file': f.replace('\\', '/') if f else None, 'class': self.R.cls(path)}
+        d = {'object': path, 'file': f.replace('\\', '/') if f else None, 'class': cls}
+        if faces: d['faces'] = [x.replace('\\', '/') for x in faces]
         d.update(self.props(path))
         self.cache[path] = d
         return d

@@ -84,6 +84,7 @@ private:
     };
 
     GLuint texture(const std::string& file, bool srgb, bool clampU, bool clampV);
+    GLuint cubeTexture(const std::vector<std::string>& faces, bool srgb);
     int programFor(const std::string& matName, const Material* gltfMat, bool lightmapped);
     int buildProgram(const std::string& key, const std::string& body, const std::vector<Program::Slot>& slots,
                      const std::vector<bool>& slotIsCube, int blend, bool twoSided, bool lit, float clip,
@@ -100,7 +101,7 @@ private:
     IRenderer::VisibilityQuery vis_;
 
     // render data
-    struct MatSrc { std::string glsl; std::vector<std::string> files; std::vector<bool> srgb, cube, clampU, clampV;
+    struct MatSrc { std::string glsl; std::vector<std::string> files; std::vector<std::vector<std::string>> faces; std::vector<bool> srgb, cube, clampU, clampV;
                     std::vector<std::vector<float>> umin, umax; int blend = 0; bool twoSided = false, lit = true;
                     float clip = 0.3333f; };
     std::map<std::string, MatSrc> mats_;
