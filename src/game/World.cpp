@@ -1,6 +1,7 @@
 #include "game/World.h"
 #include "game/DamageTarget.h"
 #include "render/Renderer.h"
+#include "render/Camera.h"
 #include "assets/Gltf.h"
 #include "assets/Json.h"
 #include "platform/Image.h"
@@ -10,6 +11,7 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <map>
 #include <sstream>
@@ -321,27 +323,34 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
                  wm.m[12], wm.m[13], wm.m[14], muzzle.x, muzzle.y, muzzle.z,
                  core::length(muzzle - core::Vec3{wm.m[12], wm.m[13], wm.m[14]}));
     }
-    playSfx(Sfx::Fire, muzzle);
+    // WP_Fire / WP_LowAmmoFire SoundCue (LowAmmoThreshold 5). kSmartPan_PreferPlayer: the
+    // distance-layer parameter is measured from the owning player, not the camera.
+    float ownDist = core::length(muzzle - origin);
+    cues_.play(w.lowAmmo() ? "SHOOT_LOW_AMMO" : "SHOOT", muzzle, ownDist);
+    burstActive_ = true; sinceShot_ = 0.0f;
+    // DefaultImpactSound (world) / damage impact cue at the hit point.
+    if (hitTarget) cues_.play("IMPT_DMG", hitPoint, core::length(hitPoint - listenerPos_));
+    else if (dist < range - 0.01f) cues_.play("IMPT_WORLD", hitPoint, core::length(hitPoint - listenerPos_));
 }
 
 void World::setAudio(audio::IAudio* a) {
     audio_ = a;
     if (!a) return;
     const std::string base = assetRoot() + "/../content/";
-    sndFire_      = a->load(base + "WL_GUN_ION_BLASTER/GUN_ION_BLASTER_HEAD.wav");
-    sndReload_    = a->load(base + "WL_GUN_FOLEY/GUN_RIFLE_CLIP_RELOAD.wav");
+    // Weapon audio = the original SoundCues (fire/tail/low-ammo, reload + idle notifies, impacts).
+    cues_.load(a, base);
+    // [PROV] non-weapon placeholders (transform/land cues not yet recovered).
     sndTransform_ = a->load(base + "WL_EVENT_IACON/EVENT_IACON_BRIDGE_TRANSFORM_GEARS.wav");
     sndLand_      = a->load(base + "WL_GUN_FOLEY/RELOAD_AIR_RELEASE_THUMP.wav");
-    LOG_INFO("audio: cues fire=%d reload=%d transform=%d land=%d",
-             sndFire_, sndReload_, sndTransform_, sndLand_);
+    LOG_INFO("audio: transform=%d land=%d", sndTransform_, sndLand_);
 }
 
 void World::playSfx(Sfx s, const core::Vec3& pos) {
     if (!audio_) return;
     // refDist/maxDist in metres [PROV] — exact SoundCue attenuation radii not yet extracted.
     switch (s) {
-        case Sfx::Fire:      audio_->playAt(sndFire_, pos, 0.8f, 8.0f, 150.0f); break;
-        case Sfx::Reload:    audio_->playAt(sndReload_, pos, 0.9f, 4.0f, 40.0f); break;
+        case Sfx::Fire:      cues_.play("SHOOT", pos, 0.0f); break;
+        case Sfx::Reload:    break;   // driven by the reload animation's AnimNotifies
         case Sfx::Transform: audio_->playAt(sndTransform_, pos, 0.9f, 10.0f, 90.0f); break;
         case Sfx::Land:      audio_->playAt(sndLand_, pos, 0.8f, 5.0f, 50.0f); break;
     }
@@ -370,9 +379,23 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
     if (std::getenv("WFC_NOTIFYLOG"))
         LOG_INFO("NOTIFY %s %s @%.3f %s", n.kind == WeaponNotify::Kind::Sound ? "sound" : "fx",
                  n.what.c_str(), n.time, n.socket.c_str());
+    if (n.kind == WeaponNotify::Kind::Sound) {
+        // HmAnimNotify_Sound plays its cue at the weapon mesh (owned by the local player).
+        const core::Mat4& wm = player_.pawn().weaponWorld();
+        core::Vec3 p{wm.m[12], wm.m[13], wm.m[14]};
+        const char* name = n.what.c_str();
+        const char* dot = std::strrchr(name, '.');
+        if (n.what.rfind("BL_WPN_GUN_ION_BLASTER.", 0) == 0 && dot) name = dot + 1;
+        cues_.play(name, p, core::length(p - player_.pawn().position()));
+    }
 }
 
 void World::tick(float dt) {
+    {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
+        render::Camera cam;
+        player_.controller().updateCamera(cam);
+        listenerPos_ = cam.pos;
+    }
     player_.controller().applyToPawn(*this, dt);
     player_.pawn().setAimPitch(player_.controller().camPitch());
     player_.pawn().updateAnimation(dt);
@@ -402,9 +425,16 @@ void World::tick(float dt) {
         bool tf = player_.pawn().isTransforming();
         if (tf && !prevTransforming_) playSfx(Sfx::Transform, pp);
         prevTransforming_ = tf;
-        bool rl = player_.pawn().weapon().reloading();
-        if (rl && !prevReloading_) playSfx(Sfx::Reload, pp);
-        prevReloading_ = rl;
+        // WP_LoopingTail: the SHOOT_TAIL cue when a burst ends (trigger released / mag empty).
+        sinceShot_ += dt;
+        const Weapon& w = player_.pawn().weapon();
+        if (burstActive_ && sinceShot_ > w.fireInterval * 2.0f) {
+            burstActive_ = false;
+            core::Mat4 ms;
+            core::Vec3 tp = weaponSocketWorld("MuzzleFlash", ms) ? core::Vec3{ms.m[12], ms.m[13], ms.m[14]} : pp;
+            cues_.play("SHOOT_TAIL", tp, core::length(tp - pp));
+        }
+        cues_.tick(dt);
     }
 
     if (player_.pawn().position().y < killZ_) {

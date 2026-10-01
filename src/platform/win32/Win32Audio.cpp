@@ -72,13 +72,17 @@ bool loadWav(const std::string& path, std::vector<int16_t>& out) {
 
 struct Voice {
     const std::vector<int16_t>* data = nullptr;
-    size_t pos = 0;
+    double pos = 0.0;             // frame position (fractional when pitched)
+    double rate = 1.0;            // playback rate (pitch)
     float vol = 1.0f;
     bool positional = false;
+    bool inverse = false;         // FMOD inverse rolloff (cue voices) vs legacy linear
     core::Vec3 wpos{0, 0, 0};
-    float refDist = 5.0f, maxDist = 60.0f;
+    float refDist = 5.0f, maxDist = 60.0f, rolloff = 1.0f;
+    float pan2D = 0.0f, pan3D = 0.0f;
     float gL = 1.0f, gR = 1.0f;   // per-block resolved channel gains
     bool active = false;
+    int gen = 0;
 };
 
 class Win32Audio final : public IAudio {
@@ -115,23 +119,50 @@ public:
         return (Sound)(sounds_.size() - 1);
     }
 
-    Voice* freeVoice() {
-        for (Voice& v : voices_) if (!v.active) return &v;
-        voices_.push_back(Voice{});
-        return &voices_.back();
+    // Fixed voice pool so handles stay valid; handle = index | generation << 12.
+    static constexpr int kMaxVoices = 96;
+    Voice* freeVoice(int& index) {
+        for (int i = 0; i < (int)voices_.size(); ++i)
+            if (!voices_[(size_t)i].active) { index = i; return &voices_[(size_t)i]; }
+        if ((int)voices_.size() < kMaxVoices) {
+            voices_.push_back(Voice{}); index = (int)voices_.size() - 1; return &voices_.back();
+        }
+        return nullptr;   // pool exhausted: drop the request
+    }
+    Voice* start(Sound s, int& index) {
+        if (!ok_ || s < 0 || (size_t)s >= sounds_.size()) return nullptr;
+        Voice* v = freeVoice(index);
+        if (!v) return nullptr;
+        int gen = (v->gen + 1) & 0x7FFFF;
+        *v = Voice{}; v->gen = gen; v->data = &sounds_[(size_t)s]; v->active = true;
+        return v;
     }
 
     void play(Sound s, float volume) override {
-        if (!ok_ || s < 0 || (size_t)s >= sounds_.size()) return;
-        Voice* v = freeVoice();
-        *v = Voice{}; v->data = &sounds_[(size_t)s]; v->vol = volume; v->active = true;
+        int i; Voice* v = start(s, i);
+        if (v) v->vol = volume;
     }
 
     void playAt(Sound s, const core::Vec3& pos, float volume, float refDist, float maxDist) override {
-        if (!ok_ || s < 0 || (size_t)s >= sounds_.size()) return;
-        Voice* v = freeVoice();
-        *v = Voice{}; v->data = &sounds_[(size_t)s]; v->vol = volume; v->active = true;
-        v->positional = true; v->wpos = pos; v->refDist = refDist; v->maxDist = maxDist;
+        int i; Voice* v = start(s, i);
+        if (!v) return;
+        v->vol = volume; v->positional = true; v->wpos = pos; v->refDist = refDist; v->maxDist = maxDist;
+    }
+
+    audio::Voice playVoice(Sound s, const VoiceParams& p) override {
+        int i; Voice* v = start(s, i);
+        if (!v) return kInvalidVoice;
+        v->vol = p.volume; v->rate = p.pitch > 0.05f ? p.pitch : 0.05f;
+        v->positional = p.positional; v->inverse = true; v->wpos = p.pos;
+        v->refDist = p.minDist; v->maxDist = p.maxDist; v->rolloff = p.rolloff;
+        v->pan2D = p.pan2D; v->pan3D = p.pan3D;
+        return i | (v->gen << 12);
+    }
+
+    void stopVoice(audio::Voice h) override {
+        if (h < 0) return;
+        int i = h & 0xFFF, gen = h >> 12;
+        if ((size_t)i < voices_.size() && voices_[(size_t)i].gen == gen) voices_[(size_t)i].active = false;
     }
 
     void setListener(const core::Vec3& pos, const core::Vec3& fwd, const core::Vec3& right) override {
@@ -163,11 +194,19 @@ private:
         if (!v.positional) { v.gL = v.gR = g; return; }
         core::Vec3 d = v.wpos - lpos_;
         float dist = core::length(d);
-        float atten = dist <= v.refDist ? 1.0f
-                     : (dist >= v.maxDist ? 0.0f : (v.maxDist - dist) / (v.maxDist - v.refDist));
+        float atten;
+        if (v.inverse) {
+            float dd = dist < v.maxDist ? dist : v.maxDist;
+            atten = dd <= v.refDist ? 1.0f : v.refDist / (v.refDist + v.rolloff * (dd - v.refDist));
+        } else {
+            atten = dist <= v.refDist ? 1.0f
+                  : (dist >= v.maxDist ? 0.0f : (v.maxDist - dist) / (v.maxDist - v.refDist));
+        }
         g *= atten;
         float pan = 0.0f;
         if (dist > 1e-3f) pan = core::clampf(core::dot(d * (1.0f / dist), lright_), -1.0f, 1.0f);
+        if (v.pan3D > v.pan2D)        // SmartPan: centred near the listener, full pan further out
+            pan *= core::clampf((dist - v.pan2D) / (v.pan3D - v.pan2D), 0.0f, 1.0f);
         float ang = (pan + 1.0f) * 0.25f * core::PI;   // equal-power pan: -1=>L, +1=>R
         v.gL = std::cos(ang) * g;
         v.gR = std::sin(ang) * g;
@@ -180,10 +219,14 @@ private:
             if (!v.active) continue;
             resolveGains(v);
             const std::vector<int16_t>& s = *v.data;
+            size_t frames = s.size() / 2;
             for (int f = 0; f < kBlockFrames; ++f) {
-                if (v.pos + 1 >= s.size()) { v.active = false; break; }
-                int16_t sl = s[v.pos], sr = s[v.pos + 1];
-                v.pos += 2;
+                size_t fi = (size_t)v.pos;
+                if (fi + 1 >= frames) { v.active = false; break; }
+                float u = (float)(v.pos - (double)fi);       // linear interpolation for pitch
+                int16_t sl = (int16_t)(s[fi * 2] + (s[fi * 2 + 2] - s[fi * 2]) * u);
+                int16_t sr = (int16_t)(s[fi * 2 + 1] + (s[fi * 2 + 3] - s[fi * 2 + 1]) * u);
+                v.pos += v.rate;
                 if (v.positional) {
                     int32_t mono = (sl + sr) / 2;
                     acc[f * 2]     += (int32_t)(mono * v.gL);
@@ -217,6 +260,8 @@ public:
     Sound load(const std::string&) override { return kInvalidSound; }
     void play(Sound, float) override {}
     void playAt(Sound, const core::Vec3&, float, float, float) override {}
+    audio::Voice playVoice(Sound, const VoiceParams&) override { return kInvalidVoice; }
+    void stopVoice(audio::Voice) override {}
     void setListener(const core::Vec3&, const core::Vec3&, const core::Vec3&) override {}
     void update() override {}
 };

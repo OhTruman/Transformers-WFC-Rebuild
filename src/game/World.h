@@ -13,6 +13,7 @@
 #include "audio/Audio.h"
 #include "game/WeaponMesh.h"
 #include "game/WeaponFx.h"
+#include "game/SoundCues.h"
 
 namespace render { class IRenderer; }
 
@@ -88,11 +89,14 @@ private:
     WeaponFx fx_;
 
     audio::IAudio* audio_ = nullptr;
-    audio::Sound sndFire_ = audio::kInvalidSound, sndReload_ = audio::kInvalidSound,
+    audio::Sound
                  sndTransform_ = audio::kInvalidSound, sndLand_ = audio::kInvalidSound;
     bool prevGrounded_ = true;
     bool prevTransforming_ = false;
-    bool prevReloading_ = false;
+    SoundCues cues_;
+    bool burstActive_ = false;
+    float sinceShot_ = 0.0f;
+    core::Vec3 listenerPos_{0, 0, 0};
 };
 
 } // namespace game
