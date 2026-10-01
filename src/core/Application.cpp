@@ -81,6 +81,8 @@ void Application::run() {
 
         if (const char* fy = std::getenv("WFC_FIXYAW"))   // diagnostic: pin the camera yaw
             world_.player().controller().setCameraYaw((float)std::atof(fy));
+        if (const char* fp = std::getenv("WFC_FIXPITCH")) // diagnostic: pin the camera/aim pitch
+            world_.player().controller().setCameraPitch((float)std::atof(fp));
         // Per-frame input (camera orientation, buffered movement intent).
         world_.handleInput(input, (float)realDt);
 
@@ -106,10 +108,12 @@ void Application::run() {
         if (smokeFrames > 0 && frame % 30 == 0) {
             const auto& pawn = world_.player().pawn();
             core::Vec3 p = pawn.position();
-            LOG_INFO("frame %ld pos %.2f %.2f %.2f grounded=%d form=%s anim=%s t=%.2f ammo=%d/%d reloading=%d",
+            LOG_INFO("frame %ld pos %.2f %.2f %.2f grounded=%d form=%s anim=%s t=%.2f ammo=%d/%d reloading=%d "
+                     "yaw=%.2f aimW=%.2f aimN=%.2f reloadW=%.2f",
                      frame, p.x, p.y, p.z, (int)pawn.onGround(), game::formName(pawn.form()),
                      pawn.animName(), pawn.animTime(), pawn.weapon().ammo, pawn.weapon().reserve,
-                     (int)pawn.weapon().reloading());
+                     (int)pawn.weapon().reloading(), pawn.yaw(), pawn.aimWeight(), pawn.aimPitchNorm(),
+                     pawn.reloadWeight());
         }
 
         // Camera + render.
@@ -131,7 +135,9 @@ void Application::run() {
         if (std::getenv("WFC_FACELOG") && smokeFrames > 0 && frame % 10 == 0) {
             const auto& pw = world_.player().pawn();
             core::Vec3 pp = pw.position();
-            core::Vec3 face = core::forwardFromYawPitch(pw.yaw() + core::config::kMeshYawOffset, 0.0f);
+            // The mesh's authored forward is model +X, so measure it through the actual draw rotation.
+            core::Vec3 face = core::transformDir(core::Mat4::rotateY(pw.yaw() + core::config::kMeshYawOffset),
+                                                 core::Vec3{1, 0, 0});
             core::Vec3 toCam = core::normalize(camera_.pos - pp);
             // dot<0 => character faces AWAY from camera (back shown, correct for chase cam).
             LOG_INFO("FACE f%ld pawnYaw=%.2f camYaw=%.2f face.toCam=%.2f", frame, pw.yaw(), camera_.yaw,

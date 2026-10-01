@@ -17,6 +17,28 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## PASS 7 — ANIMATION LAYERS & MESH FACING (2026-10-01, gameplay agent)
+
+| Behaviour | Original (WFC) | Source | Conf | Rebuild status |
+|---|---|---|---|---|
+| Mesh forward axis | Skeletal meshes face model **+X** (UE convention; umodel `(x,z,y)` keeps X). | `Shooting_Aim_F_C` barrel dir in model space = (1.00,−0.06,−0.02) | CONF | **FIXED** `kMeshYawOffset=+π/2` (Pass 6's 0 left robot/truck side-on, gun 90° off the reticle). Verified: chase cam sees back/rear; muzzle along aim yaw. |
+| Upper-body aim offset | `Shooting_Aim_*` 9-pose grid points the gun at the aim. | `robot.glb` category `aim`; weapon.json `owner_animations.aim` | HI | **APPLIED**: F column (body faces aim yaw → yaw offset 0), delta from F_C on `C_Spine01_Lumbar01_XB` subtree, driven by controller pitch. |
+| Aim pitch → grid mapping | UE3 AimOffset normalized pitch range (exact range not recovered) | Calibrated from the poses: barrel pitch D −47.6° / C −3.3° / U +72.2° | CONF-derived | **APPLIED**: piecewise-linear so barrel pitch ≈ aim pitch (measured −27/+7/+42° at −34/0/+34°). |
+| Reload while moving | Owner reload clip over locomotion | weapon.json `owner_animations.reload_robot` = `Shooting_Reload_IonBlaster_ROBO` | HI (clip) / PROV (mask) | **APPLIED**: upper-body slot (mask root `C_Spine01_Lumbar01_XB` PROV), full body when standing, mesh-space per-bone blend (UE3 `AnimNodeBlendPerBone` default). |
+| Slot / aim / additive ease time | — | — | GUESS | `kSlotBlend=0.15 s` **PROVISIONAL**. |
+| Vehicle move animation | Directional single-frame hover poses + additive hover bob | `vehicle.glb` `Nav_Hover_{Pose,F,B,L,R}_VEH`, `ADD_Nav_Hover_VEH` (additive=true) | HI (clips) / PROV (weights) | **FIXED** (was looping the one-shot `Nav_BoostToHover_VEH` transition). Weights = local velocity / MaxLinearSpeed per axis. |
+| Vehicle turn rate | **~π rad/s** | `TnHoverCarSimulationBlueprint.AiMaxAngularSpeed` | CONF | **APPLIED** (was instant snap). |
+| Robot gameplay idle | Character-specific nav idle | `NAV_Idle` from `Optimus_ROBO_ANIM`; `Cust_Idle` = customization screen | MED | **FIXED** (was `Cust_Idle`, first of category). |
+| Jump / land | Take-off once → descent loop → land | `Nav_TakeOff_01`, `Nav_Jump_Descent`, `Nav_Land` | MED | **APPLIED**: take-off non-looping; land after ≥0.3 s airborne (`kLandMinAirTime` PROV), skipped when moving. |
+| Weapon recoil | Spine (0.8 s, amp [500,1000,0] UU-rot) + right hand (0.5 s, amp [2000,500,−2000], freq [15,10,10]) skel-control recoil | weapon.json `SpineRecoil`, `RightHandRecoil` | CONF (data) | **NOT YET**. Data located; needs a UE3 `GameSkelCtrl_Recoil` reimplementation. |
+| Turn in place | `Nav_IdlePivot90_{L,R}`, `Nav_Pivot{90,180}_{L,R}` | `robot.glb` category `turn` | — | NOT YET (body snaps to aim yaw every frame). |
+
+Additive-clip convention: `ADD_*` clips are stored as **deltas** (identity-ish quats, zero
+translations at rest), so `samplePose(additive=true)` starts from identity and `addPose` composes
+`base * delta` in bone-local space.
+
+---
+
 ## PASS 6 — PLAYER-CONTROL, ANIMATION & WEAPON PRESENTATION (2026-10-01)
 Driven by replaying the exe (runtime observation overrides headless smoke). Priority order as
 the player reported it.
@@ -24,10 +46,10 @@ the player reported it.
 | Behaviour | Original (WFC) | Source | Conf | Rebuild status |
 |---|---|---|---|---|
 | Body facing | Robot faces the **aim/camera (mouse) yaw every frame**; WASD = move dir relative to it (strafe shooter). User confirmed: "camera facing = character facing; WASD = move direction." | Observed original + user | HI | **APPLIED** — `CharacterMovement` robot `setYaw(faceYaw)` always; removed the stand-then-walk snap. `face·toCam≈−0.9` verified. |
-| Mesh yaw offset | Extracted meshes align to the rebuild's −Z-forward yaw with **no** extra rotation. | Runtime geometry check | CONF | **APPLIED** `kMeshYawOffset=0` (earlier "+90°" was a diagnostic-ordering artifact, reverted). |
+| Mesh yaw offset | ~~Extracted meshes align to the rebuild's −Z-forward yaw with no extra rotation.~~ **Superseded by Pass 7:** meshes face model +X; offset is +90°. | ~~Runtime geometry check~~ (only tested yaw math) | — | ~~`kMeshYawOffset=0`~~ → **+π/2** (Pass 7). |
 | Vehicle facing | Faces its **travel direction** (steering), not the aim. | Observed | MED | **APPLIED** `yaw=atan2(-vx,-vz)` when moving. |
 | Directional locomotion | `Nav_Strafe{Jog,Walk}_{F/B/L/R}` chosen by travel dir **relative to facing**. | `robot.glb` clip set (category `run`/`walk`) | HI | **APPLIED** (dot of velocity with facing fwd/right). Verified strafe-R → `Nav_StrafeJog_R`. |
-| Upper-body aim offset | `Shooting_Aim_{F/L/R}_{C/D/U}` 9-pose grid points the gun at the reticle. | `robot.glb` category `aim` | — | **NOT YET** (needs additive/partial-skeleton blend) — PROVISIONAL. |
+| Upper-body aim offset | `Shooting_Aim_{F/L/R}_{C/D/U}` 9-pose grid points the gun at the reticle. | `robot.glb` category `aim` | — | ~~NOT YET~~ **APPLIED in Pass 7**. |
 | Transform pairing | Robot & vehicle transform clips share a duration (ToVehicle **1.97 s**, ToRobot **1.13 s**) — one fold authored per mesh, played **in sync**. | `robot.glb`/`vehicle.glb` clip durations | HI | **APPLIED** — outgoing mesh → midpoint → partner mesh resumed at same normalized time (was sequential = the "crack"). Weapon holstered through the fold. |
 | Transform cross-fade point | exact visibility/alpha handoff curve | — | GUESS | `kTransformHandoffFrac=0.5` **PROVISIONAL**; cross-mesh pop minimised, not removed. |
 | Muzzle origin | Ion Blaster **barrel tip** (MuzzleFlash socket). Socket transform not extracted; used geometric tip. | `weapon.glb` frontmost vertex slice | CONF-derived | **APPLIED** — weapon-local (2.063,0.017,0.141) m → +2.07 m forward of the hand; tracer+flash leave the barrel. |
@@ -84,7 +106,7 @@ isolated effort, not cut into this pass to avoid leaving the build broken.
 | Vehicle dash duration | **0.3 s** | `…DashDuration` | CONF | APPLIED (dash accel = 50/0.3) |
 | Vehicle hover height | **200 UU = 2.0 m** | `…SuspensionRadius` | CONF | **APPLIED** (vehicle floats above terrain) |
 | Vehicle jump speed | **1200 UU/s = 12 m/s** | `…JumpLinearSpeed` | CONF | APPLIED |
-| Vehicle turn rate | **~π rad/s** (180°/s) | `…AiMaxAngularSpeed` | CONF | PARTIAL (facing is instant) |
+| Vehicle turn rate | **~π rad/s** (180°/s) | `…AiMaxAngularSpeed` | CONF | **APPLIED** (Pass 7: yaw steers toward travel dir at π rad/s) |
 | Vehicle terminal velocity | 8000 UU/s = 80 m/s | `Default__TnTransformer.TerminalVelocity` | CONF | n/a (fall uncapped) |
 
 ---

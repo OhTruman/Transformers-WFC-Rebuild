@@ -27,6 +27,7 @@ public:
     float camYaw() const { return camYaw_; }
     float camPitch() const { return camPitch_; }
     void setCameraYaw(float y) { camYaw_ = y; }
+    void setCameraPitch(float p) { camPitch_ = p; }
 
 private:
     Character* pawn_ = nullptr;

@@ -56,7 +56,9 @@ constexpr float kFineAimSpeedMult = 0.5f;  // [CONF] TnFineAimManager._GroundSpe
 
 // Mesh facing offset. [CONF] extracted meshes keep UE's +X-forward convention (v_gltf maps
 // UE +X -> gltf +X), while our yaw/camera use -Z-forward; a +90 deg model rotation aligns them.
-constexpr float kMeshYawOffset = 0.0f;   // mesh local forward == -Z (matches yaw/camera)
+// Evidence: the authored straight-ahead aim pose Shooting_Aim_F_C points the Ion Blaster barrel
+// along model (1.00,-0.06,-0.02), i.e. +X (logged at load as "aim rig: ... barrel dir").
+constexpr float kMeshYawOffset = 1.5707963f;   // rotateY(+90deg): mesh +X -> world forward (-Z)
 
 // Weapon muzzle. [CONF-derived] Ion Blaster barrel-tip centroid in weapon-local gltf metres
 // (frontmost vertex slice of weapon.glb). The MuzzleFlash socket transform was not extracted;
@@ -76,6 +78,10 @@ constexpr float kTransformBlendOut = 0.25f;  // s [CONF]
 // unavoidable cross-mesh pop (different vertex counts can't be vertex-blended).
 constexpr float kTransformHandoffFrac = 0.5f; // [PROV]
 constexpr float kLocomotionBlend   = 0.15f;  // s [PROV] crossfade between locomotion clips
+// Animation layers. Upper-body slot (reload) / aim-offset / hover-additive weight ease time, and
+// the minimum airborne time before Nav_Land plays on touchdown (filters curb step-offs).
+constexpr float kSlotBlend         = 0.15f;  // s [PROV]
+constexpr float kLandMinAirTime    = 0.3f;   // s [PROV]
 
 // Asset source: local, legally-owned extracted vertical slice (never committed).
 // Override at runtime with the WFC_ASSETS environment variable.

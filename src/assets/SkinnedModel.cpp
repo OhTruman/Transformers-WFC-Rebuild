@@ -312,50 +312,157 @@ const float* keyVal(const AnimSampler& s, int k) {
 }
 } // namespace
 
-void evaluatePose(const SkinnedModel& model, int clip, float timeSec,
-                  std::vector<core::Mat4>& global, render::MeshData& out, bool loop) {
-    size_t nn = model.nodes.size();
-    std::vector<core::Vec3> T(nn), S(nn);
-    std::vector<core::Quat> R(nn);
-    for (size_t i = 0; i < nn; ++i) { T[i] = model.nodes[i].t; R[i] = model.nodes[i].r; S[i] = model.nodes[i].s; }
+namespace {
+core::Quat qmul(const core::Quat& a, const core::Quat& b) {
+    return {a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+            a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+            a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+            a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z};
+}
+core::Quat qconj(const core::Quat& q) { return {-q.x, -q.y, -q.z, q.w}; }
+core::Vec3 vlerp(const core::Vec3& a, const core::Vec3& b, float u) {
+    return {a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u, a.z + (b.z - a.z) * u};
+}
+} // namespace
 
-    if (clip >= 0 && clip < (int)model.clips.size()) {
-        const AnimClip& c = model.clips[(size_t)clip];
-        float t = c.duration > 0 ? (loop ? std::fmod(timeSec, c.duration)
-                                          : std::min(timeSec, c.duration)) : 0.0f;
-        for (const AnimChannel& ch : c.channels) {
-            const AnimSampler& s = c.samplers[(size_t)ch.sampler];
-            if (s.times.empty() || (int)ch.node >= (int)nn) continue;
-            int k0, k1; float u; segment(s, t, k0, k1, u);
-            const float* a = keyVal(s, k0); const float* b = keyVal(s, k1);
-            if (ch.path == AnimPath::Rotation) {
-                core::Quat qa{a[0], a[1], a[2], a[3]}, qb{b[0], b[1], b[2], b[3]};
-                R[(size_t)ch.node] = s.interp == Interp::Step ? qa : slerp(qa, qb, u);
-            } else {
-                core::Vec3 va{a[0], a[1], a[2]}, vb{b[0], b[1], b[2]};
-                core::Vec3 r = s.interp == Interp::Step ? va : core::Vec3{va.x + (vb.x - va.x) * u, va.y + (vb.y - va.y) * u, va.z + (vb.z - va.z) * u};
-                if (ch.path == AnimPath::Translation) T[(size_t)ch.node] = r; else S[(size_t)ch.node] = r;
-            }
+void samplePose(const SkinnedModel& model, int clip, float timeSec, bool loop, LocalPose& out,
+                bool additive) {
+    size_t nn = model.nodes.size();
+    out.t.resize(nn); out.r.resize(nn); out.s.resize(nn);
+    for (size_t i = 0; i < nn; ++i) {
+        if (additive) { out.t[i] = {0, 0, 0}; out.r[i] = core::Quat{}; out.s[i] = {1, 1, 1}; }
+        else { out.t[i] = model.nodes[i].t; out.r[i] = model.nodes[i].r; out.s[i] = model.nodes[i].s; }
+    }
+    if (clip < 0 || clip >= (int)model.clips.size()) return;
+    const AnimClip& c = model.clips[(size_t)clip];
+    float t = c.duration > 0 ? (loop ? std::fmod(timeSec, c.duration)
+                                      : std::min(timeSec, c.duration)) : 0.0f;
+    for (const AnimChannel& ch : c.channels) {
+        const AnimSampler& s = c.samplers[(size_t)ch.sampler];
+        if (s.times.empty() || ch.node >= (int)nn) continue;
+        int k0, k1; float u; segment(s, t, k0, k1, u);
+        const float* a = keyVal(s, k0); const float* b = keyVal(s, k1);
+        if (ch.path == AnimPath::Rotation) {
+            core::Quat qa{a[0], a[1], a[2], a[3]}, qb{b[0], b[1], b[2], b[3]};
+            out.r[(size_t)ch.node] = s.interp == Interp::Step ? qa : slerp(qa, qb, u);
+        } else {
+            core::Vec3 va{a[0], a[1], a[2]}, vb{b[0], b[1], b[2]};
+            core::Vec3 r = s.interp == Interp::Step ? va : vlerp(va, vb, u);
+            if (ch.path == AnimPath::Translation) out.t[(size_t)ch.node] = r; else out.s[(size_t)ch.node] = r;
         }
     }
+}
 
-    global.assign(nn, core::Mat4::identity());
-    // Resolve the hierarchy parent-before-child via a DFS pre-order from the roots.
-    std::vector<int> order;
+void blendPose(const LocalPose& a, const LocalPose& b, float alpha, LocalPose& out,
+               const std::vector<float>* mask) {
+    size_t n = std::min(a.size(), b.size());
+    if (&out != &a && &out != &b) out = a;
+    for (size_t i = 0; i < n; ++i) {
+        float u = alpha * (mask ? (i < mask->size() ? (*mask)[i] : 0.0f) : 1.0f);
+        u = std::min(std::max(u, 0.0f), 1.0f);
+        core::Vec3 t = vlerp(a.t[i], b.t[i], u), s = vlerp(a.s[i], b.s[i], u);
+        core::Quat r = u <= 0.0f ? a.r[i] : (u >= 1.0f ? b.r[i] : slerp(a.r[i], b.r[i], u));
+        out.t[i] = t; out.r[i] = r; out.s[i] = s;
+    }
+}
+
+void blendPoseMeshSpace(const SkinnedModel& model, const LocalPose& a, const LocalPose& b, float alpha,
+                        const std::vector<float>& mask, LocalPose& out) {
+    size_t nn = model.nodes.size();
+    if (a.size() < nn || b.size() < nn) { blendPose(a, b, alpha, out, &mask); return; }
+    // Parent-before-child order.
+    std::vector<int> order, st;
     order.reserve(nn);
     for (int r : model.roots) {
-        std::vector<int> st{r};
+        st.assign(1, r);
         while (!st.empty()) {
             int n = st.back(); st.pop_back();
             order.push_back(n);
             for (int ch : model.nodes[(size_t)n].children) st.push_back(ch);
         }
     }
+    auto meshRot = [&](const LocalPose& p, std::vector<core::Quat>& g) {
+        g.assign(nn, core::Quat{});
+        for (int n : order) {
+            int par = model.nodes[(size_t)n].parent;
+            g[(size_t)n] = par >= 0 ? qmul(g[(size_t)par], p.r[(size_t)n]) : p.r[(size_t)n];
+        }
+    };
+    std::vector<core::Quat> ga, gb, go(nn);
+    meshRot(a, ga);
+    meshRot(b, gb);
+    if (&out != &a) out = a;
     for (int n : order) {
-        core::Mat4 local = core::mat4FromTRS(T[(size_t)n], R[(size_t)n], S[(size_t)n]);
-        int p = model.nodes[(size_t)n].parent;
-        global[(size_t)n] = (p >= 0) ? global[(size_t)p] * local : local;
+        size_t i = (size_t)n;
+        int par = model.nodes[i].parent;
+        core::Quat pg = par >= 0 ? go[(size_t)par] : core::Quat{};
+        float u = std::min(std::max(alpha * (i < mask.size() ? mask[i] : 0.0f), 0.0f), 1.0f);
+        if (u <= 0.0f) { go[i] = qmul(pg, out.r[i]); continue; }   // keep a's local rotation
+        core::Quat target = u >= 1.0f ? gb[i] : slerp(ga[i], gb[i], u);
+        out.r[i] = qmul(qconj(pg), target);
+        go[i] = target;
+        out.t[i] = vlerp(a.t[i], b.t[i], u);
+        out.s[i] = vlerp(a.s[i], b.s[i], u);
     }
+}
+
+void addPose(LocalPose& base, const LocalPose& delta, float weight, const std::vector<float>* mask) {
+    size_t n = std::min(base.size(), delta.size());
+    for (size_t i = 0; i < n; ++i) {
+        float w = weight * (mask ? (i < mask->size() ? (*mask)[i] : 0.0f) : 1.0f);
+        if (w <= 0.0f) continue;
+        base.t[i] += delta.t[i] * w;
+        core::Quat d = (w >= 1.0f) ? delta.r[i] : slerp(core::Quat{}, delta.r[i], w);
+        base.r[i] = qmul(base.r[i], d);
+        core::Vec3 ds = vlerp({1, 1, 1}, delta.s[i], w);
+        base.s[i] = {base.s[i].x * ds.x, base.s[i].y * ds.y, base.s[i].z * ds.z};
+    }
+}
+
+void deltaPose(const LocalPose& ref, const LocalPose& p, LocalPose& out) {
+    size_t n = std::min(ref.size(), p.size());
+    out.t.resize(n); out.r.resize(n); out.s.resize(n);
+    for (size_t i = 0; i < n; ++i) {
+        out.t[i] = p.t[i] - ref.t[i];
+        out.r[i] = qmul(qconj(ref.r[i]), p.r[i]);
+        auto div = [](float x, float y) { return std::fabs(y) > 1e-6f ? x / y : 1.0f; };
+        out.s[i] = {div(p.s[i].x, ref.s[i].x), div(p.s[i].y, ref.s[i].y), div(p.s[i].z, ref.s[i].z)};
+    }
+}
+
+std::vector<float> subtreeMask(const SkinnedModel& model, int rootNode) {
+    std::vector<float> m(model.nodes.size(), 0.0f);
+    if (rootNode < 0 || rootNode >= (int)model.nodes.size()) return m;
+    std::vector<int> st{rootNode};
+    while (!st.empty()) {
+        int n = st.back(); st.pop_back();
+        m[(size_t)n] = 1.0f;
+        for (int ch : model.nodes[(size_t)n].children) st.push_back(ch);
+    }
+    return m;
+}
+
+void poseGlobals(const SkinnedModel& model, const LocalPose& pose, std::vector<core::Mat4>& global) {
+    size_t nn = model.nodes.size();
+    global.assign(nn, core::Mat4::identity());
+    if (pose.size() < nn) return;
+    // Resolve the hierarchy parent-before-child via a DFS pre-order from the roots.
+    std::vector<int> st;
+    for (int r : model.roots) {
+        st.assign(1, r);
+        while (!st.empty()) {
+            int n = st.back(); st.pop_back();
+            core::Mat4 local = core::mat4FromTRS(pose.t[(size_t)n], pose.r[(size_t)n], pose.s[(size_t)n]);
+            int p = model.nodes[(size_t)n].parent;
+            global[(size_t)n] = (p >= 0) ? global[(size_t)p] * local : local;
+            for (int ch : model.nodes[(size_t)n].children) st.push_back(ch);
+        }
+    }
+}
+
+void skinPose(const SkinnedModel& model, const LocalPose& pose,
+              std::vector<core::Mat4>& global, render::MeshData& out) {
+    poseGlobals(model, pose, global);
 
     // Joint matrices = global(joint) * invBind(joint).
     std::vector<core::Mat4> jm(model.skinJoints.size());
@@ -389,6 +496,13 @@ void evaluatePose(const SkinnedModel& model, int clip, float timeSec,
         core::Vec3 nn2 = core::normalize(sn);
         out.normals[i * 3] = nn2.x; out.normals[i * 3 + 1] = nn2.y; out.normals[i * 3 + 2] = nn2.z;
     }
+}
+
+void evaluatePose(const SkinnedModel& model, int clip, float timeSec,
+                  std::vector<core::Mat4>& global, render::MeshData& out, bool loop) {
+    LocalPose pose;
+    samplePose(model, clip, timeSec, loop, pose);
+    skinPose(model, pose, global, out);
 }
 
 } // namespace assets

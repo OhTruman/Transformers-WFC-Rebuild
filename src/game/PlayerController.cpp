@@ -51,6 +51,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
     MoveIntent step = intent_;
     step.wantJump = wantJumpLatched_;
     CharacterMovement::update(*pawn_, step, dt, world.collision());
+    pawn_->setAimPitch(camPitch_);   // drives the upper-body aim offset
     wantJumpLatched_ = false;
     pawn_->weapon().tick(dt);
     pawn_->ability().tick(dt);

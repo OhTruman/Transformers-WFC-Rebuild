@@ -3,6 +3,37 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## FIDELITY PASS 7 (2026-10-01): ANIMATION LAYERS, MESH FACING CORRECTED, VEHICLE HOVER POSES
+Gameplay agent (`agents/gameplay`). Verified by runtime screenshots + numeric logs (`work/pass7/`).
+- **Mesh facing was 90° off; now fixed (+90°).** The authored straight-ahead aim pose
+  `Shooting_Aim_F_C` points the Ion Blaster barrel along model **+X** (logged at load:
+  `barrel dir (model space) 1.00 -0.06 -0.02`), UE's forward axis. Pass 6's `kMeshYawOffset=0`
+  left the whole robot (and truck) side-on to the chase camera, with the gun 90° right of the
+  reticle. Pass 6's `face·toCam` check only tested the yaw math, never the mesh. Restored
+  `kMeshYawOffset=+π/2`. Now: the chase cam sees the robot's back and the truck's rear; the muzzle
+  points along the aim yaw (`MUZZLE` log); `WFC_FACELOG` measures the real mesh +X.
+- **Bone-space pose layering** (`assets::LocalPose`: sample / blend / mesh-space per-bone blend /
+  additive / skin). Locomotion crossfades are now bone-space, not vertex lerps.
+- **Upper-body aim offset (was NOT YET):** the authored `Shooting_Aim_F_{D,C,U}` poses, applied as
+  a delta from F_C on the `C_Spine01_Lumbar01_XB` subtree, driven by camera pitch. The grid is
+  calibrated from the poses' own barrel pitch (D −47.6°, C −3.3°, U +72.2°). Verified in profile
+  at pitch −0.6/0/+0.6: the barrel measures ≈−27°/+7°/+42°.
+- **Reload on the move (was PARTIAL):** the authored `Shooting_Reload_IonBlaster_ROBO` now plays as
+  an upper-body slot over locomotion, blended in mesh space like UE3 `AnimNodeBlendPerBone`, so
+  the torso stays forward over the strafe clips' turned hips. Full body when standing still.
+- **Vehicle animation fixed:** moving used to loop `Nav_BoostToHover_VEH`, a one-shot
+  transition. It now blends the authored directional poses `Nav_Hover_{Pose,F,B,L,R}_VEH` by local
+  velocity, plus the additive `ADD_Nav_Hover_VEH` hover bob.
+- **Vehicle turn rate applied:** the truck steers toward its travel direction at the recovered
+  π rad/s (`AiMaxAngularSpeed`) instead of snapping.
+- **Robot idle:** `NAV_Idle` (Optimus's own gameplay idle) replaces `Cust_Idle`, the
+  customization-screen idle that was being picked as first-of-category. Take-off plays once;
+  `Nav_Land` plays on touchdown after ≥0.3 s airborne.
+- Regression: jump 6.36 m, transforms both directions, vehicle hover 2 m, no idle drift; clean build.
+- New diagnostic: `WFC_FIXPITCH=rad` pins camera/aim pitch. The frame log adds yaw/aimW/aimN/reloadW.
+- **Still open (gameplay):** turn-in-place pivots (`Nav_Pivot*`), weapon recoil skel-controls
+  (`SpineRecoil`/`RightHandRecoil` data present in weapon.json), boost/dodge clips, camera tuning.
+
 ## FIDELITY PASS 6 (2026-10-01) — INTERACTIVE PLAYER FIXES (orientation, locomotion, muzzle, reload, transform)
 Runtime observation (replaying the exe) drove this pass, not headless smoke. Fixed, in the
 player's priority order:
@@ -197,4 +228,7 @@ map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.j
 - `WFC_AUTOFIRE=1`      hold the trigger (scripted weapon test).
 - `WFC_AUTOTRANSFORM=F` trigger a transform at frame F.
 - `WFC_DEBUGDRAW=1`     enable the debug overlay from start (same as toggling B).
+- `WFC_FIXYAW=rad` / `WFC_FIXPITCH=rad`  pin the camera (= aim) yaw / pitch.
+- `WFC_STARTVEHICLE=1`  start in vehicle form. `WFC_AUTOSTRAFE/AUTOBACK/AUTORELOAD/AUTOJUMP=1`
+  scripted inputs; `WFC_FACELOG`/`WFC_MUZZLELOG` facing/muzzle diagnostics.
 - `WFC_ASSETS=dir`      override the asset root.

@@ -3,6 +3,8 @@
 #include "game/Collision.h"
 #include "core/Config.h"
 
+#include <cmath>
+
 namespace game::CharacterMovement {
 
 static constexpr float kStepUp = 0.6f;      // [PROV] MaxStepHeight not found overridden (Engine default 35 UU)
@@ -99,8 +101,15 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     if (c.form() == Form::Robot) {
         c.setYaw(in.faceYaw);
     } else {
+        // Steer toward the travel direction at the recovered turn rate [CONF] AiMaxAngularSpeed
+        // (~pi rad/s) instead of snapping; the lag shows as the L/R hover lean poses.
         core::Vec3 hv2{v.x, 0, v.z};
-        if (core::length(hv2) > 1.0f) c.setYaw(std::atan2(-v.x, -v.z));
+        if (core::length(hv2) > 1.0f) {
+            float target = std::atan2(-v.x, -v.z);
+            float d = std::remainder(target - c.yaw(), 6.2831853f);
+            float maxStep = core::config::kVehicleTurnRate * dt;
+            c.setYaw(c.yaw() + core::clampf(d, -maxStep, maxStep));
+        }
     }
 }
 
