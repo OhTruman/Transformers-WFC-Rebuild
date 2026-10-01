@@ -138,9 +138,10 @@ def main():
     repo = Repo(['%s_BASE_m.xxx' % mapname, '%s_ART_m.xxx' % mapname])
     j = glb_json(os.path.join(VS, 'Maps', mapname, 'world.glb'))
     names = {m.get('extras', {}).get('wfc_material') for m in j['materials']}
-    bspf = os.path.join(out, 'bsp.glb')          # BSP rebuilt by build_lighting.py (run it first)
-    if os.path.exists(bspf):
-        names |= {m.get('extras', {}).get('wfc_material') for m in glb_json(bspf).get('materials', [])}
+    for extra_glb in ('bsp.glb', 'decals.glb'):  # rebuilt by build_lighting.py (run it first)
+        f = os.path.join(out, extra_glb)
+        if os.path.exists(f):
+            names |= {m.get('extras', {}).get('wfc_material') for m in glb_json(f).get('materials', [])}
     mats = sorted(names - {None}) + extra
     tr = TexResolver(repo, out)
 

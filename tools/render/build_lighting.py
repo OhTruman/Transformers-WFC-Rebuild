@@ -23,6 +23,7 @@ LIGHT_DEFAULTS = {'Brightness': 1.0, 'LightColor': [255, 255, 255, 0], 'bEnabled
 POINT_DEFAULTS = {'Radius': 1024.0, 'FalloffExponent': 2.0, 'ShadowFalloffExponent': 2.0}
 SPOT_DEFAULTS = {'OuterConeAngle': 44.0, 'InnerConeAngle': 0.0}
 CHANNEL_DEFAULTS = {'BSP': True, 'Static': True, 'Dynamic': True, 'CompositeDynamic': True}
+VS_MAPS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
 FOG_DEFAULTS = {'bEnabled': True, 'Density': 5e-05, 'LightBrightness': 0.1, 'LightColor': [255, 255, 255, 0],
                 'ExtinctionDistance': 100000000.0, 'StartDistance': 0.0, 'Height': 0.0}
 
@@ -244,7 +245,7 @@ def bsp_lighting(repo, out):
     return lm_props
 
 
-def write_glb(path, prims):
+def write_glb(path, prims, kind='bsp_element'):
     bin_ = bytearray()
     acc, views, meshes, nodes, mats = [], [], [], [], []
     matidx = {}
@@ -271,7 +272,7 @@ def write_glb(path, prims):
         meshes.append({'primitives': [{'attributes': attrs, 'indices': add(q['I'], 'SCALAR', 34963),
                                        'material': matidx[mk]}]})
         nodes.append({'name': q['key'].split('.')[-1], 'mesh': len(meshes) - 1,
-                      'extras': {'component': q['key'], 'kind': 'bsp_element'}})
+                      'extras': {'component': q['key'], 'kind': kind}})
     j = {'asset': {'version': '2.0', 'generator': 'Rebuild-Rendering tools/render/build_lighting.py'},
          'scene': 0, 'scenes': [{'nodes': list(range(len(nodes)))}], 'nodes': nodes, 'meshes': meshes,
          'materials': mats, 'accessors': acc, 'bufferViews': views, 'buffers': [{'byteLength': len(bin_)}]}
@@ -283,6 +284,76 @@ def write_glb(path, prims):
         f.write(struct.pack('<III', 0x46546C67, 2, total))
         f.write(struct.pack('<II', len(js), 0x4E4F534A)); f.write(js)
         f.write(struct.pack('<II', len(bin_), 0x004E4942)); f.write(bytes(bin_))
+
+
+def decals(repo, out):
+    """Static decals from their COOKED receiver geometry (DecalComponent native tail, licensee 144):
+    [NumReceivers] x ([ReceiverComponent][VertexStride=28][NumVerts] verts{pos(3f, receiver-local),
+    TangentX, TangentZ (packed), ShadowTexCoord(2f)} [IndexStride=2][NumIndices] u16 indices
+    [NumTriangles][int32]). BSP receivers are clipped to the decal box; static-mesh receivers keep
+    whole intersecting triangles (UE3 behaviour), so UVs may exceed [0,1] there.
+    UV per the original decal vertex shader: 0.5 - (DecalWorldToTexCoordMatrix * (P - DecalWorldLocation)).xy
+    + DecalOffset, with matrix rows HitTangent*TileX/Width, HitBinormal*TileY/Height (validated:
+    clipped BSP receivers project to exactly [-0.5, 0.5])."""
+    p = repo.pkgs[0]; pr = repo.readers[0]
+    smca = {}
+    for i, e in enumerate(p.exports):
+        if p.class_name(e) == 'StaticMeshCollectionActor':
+            t, used = pr.read_object(i + 1)
+            d = tags_to_dict(t)
+            comps = [x.get('ref') if isinstance(x, dict) else None for x in (d.get('StaticMeshComponents') or [])]
+            raw = p.data[e['serial_offset'] + used:e['serial_offset'] + e['serial_size']]
+            if len(raw) >= 64 * len(comps):
+                mats = np.frombuffer(raw[:64 * len(comps)], '>f4').reshape(-1, 4, 4).astype('f8')
+                for k, c in enumerate(comps):
+                    if c: smca[c.lower()] = mats[k]
+    pj = json.load(open(os.path.join(VS_MAPS, p.name.rsplit('_', 2)[0], 'props.json'), encoding='utf-8'))
+    byact = {x['actor']: np.array(x['ue_matrix']) for x in pj['props'] if not x.get('component')}
+
+    def receiver_matrix(ci):
+        cls = p.class_name(p.exports[ci - 1])
+        if cls == 'ModelComponent': return np.eye(4)
+        m = smca.get(p.object_path(ci).lower())
+        if m is not None: return m
+        return byact.get(p.obj_name(p.exports[ci - 1]['outer']))
+
+    prims = []
+    skipped = 0
+    for i, e in enumerate(p.exports):
+        if p.class_name(e) != 'DecalComponent': continue
+        t, used = pr.read_object(i + 1)
+        d = tags_to_dict(t)
+        mat = (d.get('DecalMaterial') or {}).get('ref')
+        tail = p.data[e['serial_offset'] + used:e['serial_offset'] + e['serial_size']]
+        L = np.array(d['Location']); T = np.array(d['HitTangent']); B = np.array(d['HitBinormal'])
+        W = d.get('Width', 200.0); H = d.get('Height', 200.0)
+        tx, ty = d.get('TileX', 1.0), d.get('TileY', 1.0); ox, oy = d.get('OffsetX', 0.0), d.get('OffsetY', 0.0)
+        o = 4
+        P_, N_, UV_, I_ = [], [], [], []
+        for _ in range(struct.unpack_from('>i', tail, 0)[0]):
+            comp, stride, cnt = struct.unpack_from('>iii', tail, o); o += 12
+            verts = tail[o:o + stride * cnt]; o += stride * cnt
+            es, ic = struct.unpack_from('>ii', tail, o); o += 8
+            idx = struct.unpack_from('>%dH' % ic, tail, o); o += es * ic + 8
+            M = receiver_matrix(comp) if comp > 0 else None
+            if M is None: skipped += 1; continue
+            if cnt == 0 or not idx: continue
+            P = np.array([struct.unpack_from('>3f', verts, q * stride) for q in range(cnt)])
+            Pw = (np.c_[P, np.ones(len(P))] @ M)[:, :3]
+            u = 0.5 - ((Pw - L) @ T) * tx / W + ox
+            v = 0.5 - ((Pw - L) @ B) * ty / H + oy
+            base = len(P_)
+            for q in range(cnt):
+                P_.append([Pw[q, 0] * 0.01, Pw[q, 2] * 0.01, Pw[q, 1] * 0.01])
+                N_.append([0.0, 1.0, 0.0]); UV_.append([u[q], v[q]])
+            I_ += [base + x for x in idx]
+        if not I_: continue
+        prims.append({'key': p.object_path(i + 1), 'material': mat, 'two_sided': False,
+                      'P': np.array(P_, 'f4'), 'N': np.array(N_, 'f4'), 'UV': np.array(UV_, 'f4'),
+                      'SUV': np.zeros((len(P_), 2), 'f4'), 'I': np.array(I_, 'u4')})
+    write_glb(os.path.join(out, 'decals.glb'), prims, kind='decal')
+    print('decals: %d (%d tris), %d receivers without transform' %
+          (len(prims), sum(len(q['I']) // 3 for q in prims), skipped))
 
 
 def postprocess(mapname, out):
@@ -337,6 +408,7 @@ def main():
     L = lights(repo, 0)
     F = fog(repo, 0)
     PP = postprocess(mapname, out)
+    decals(repo, out)
     atl = sorted({a for r in props.values() for a in r['coeffs']})
     copied = 0
     for root, _, files in os.walk(umodel_dir):

@@ -80,7 +80,8 @@ private:
         GLuint vao = 0, vbo = 0, ibo = 0;
         std::vector<Sub> subs;
         bool world = false;
-        bool drawsBsp = false;    // replaced its level-BSP submeshes with the lit bspMesh_
+        bool drawsBsp = false;
+        bool decal = false;       // static decal geometry (clip to decal box)    // replaced its level-BSP submeshes with the lit bspMesh_
     };
 
     GLuint texture(const std::string& file, bool srgb, bool clampU, bool clampV);
@@ -108,6 +109,7 @@ private:
     int clutSize_ = 32;
     float znear_ = 0.1f, zfar_ = 20000.0f;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
+    int decalMesh_ = -1;          // static decals from their cooked receiver geometry
     bool active_ = false;
     std::string dataDir_;
     IRenderer::VisibilityQuery vis_;

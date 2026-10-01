@@ -104,6 +104,7 @@ uniform int uMasked;
 uniform float uClip;
 uniform int uLit;
 uniform int uDebug;          // 1 = lighting only (diffuse 0.5 grey, no emissive)
+uniform int uDecalClip;      // static decal: clip to the decal box (uv in [0,1])
 struct MatIn { vec2 uv0; vec2 uv1; vec4 vertexColor; vec3 worldPosUE; vec3 cameraVector; vec3 reflectionVector;
                vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; };
 struct MatOut { vec3 DiffuseColor; vec3 SpecularColor; float SpecularPower; vec3 Normal; vec3 EmissiveColor;
@@ -150,6 +151,7 @@ const vec3 LMB1 = vec3(-0.70710678, -0.40824829, 0.57735027);
 const vec3 LMB2 = vec3(0.70710678, -0.40824829, 0.57735027);
 void main() {
     mat3 tbn; MatIn m = wfcBuildInput(tbn);
+    if (uDecalClip != 0 && (any(lessThan(vUV0, vec2(0.0))) || any(greaterThan(vUV0, vec2(1.0))))) discard;
     MatOut o; wfcMaterial(m, o);
     if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;
     if (uDebug == 1) { o.DiffuseColor = vec3(0.5); o.EmissiveColor = vec3(0.0); o.SpecularColor = vec3(0.0); }
@@ -178,6 +180,7 @@ uniform vec4 uLCol[3];   // rgb linear colour * brightness, w = falloff exponent
 uniform vec4 uLSpot[3];  // x cos(outer), y 1/(cos(inner)-cos(outer)), w = visibility (shadow) term
 void main() {
     mat3 tbn; MatIn m = wfcBuildInput(tbn);
+    if (uDecalClip != 0 && (any(lessThan(vUV0, vec2(0.0))) || any(greaterThan(vUV0, vec2(1.0))))) discard;
     MatOut o; wfcMaterial(m, o);
     if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;
     if (uDebug == 1) { o.DiffuseColor = vec3(0.5); o.EmissiveColor = vec3(0.0); o.SpecularColor = vec3(0.0); }
@@ -568,6 +571,12 @@ bool Pipeline::load(const std::string& mapName) {
         MeshData bsp;
         if (assets::loadGlb(dataDir_ + "/bsp.glb", bsp)) bspMesh_ = upload(bsp);
         else LOG_WARN("wfc: bsp.glb missing; level BSP stays unlit");
+        MeshData dec;
+        if (assets::loadGlb(dataDir_ + "/decals.glb", dec)) {
+            decalMesh_ = upload(dec);
+            if (decalMesh_ >= 0) meshes_[(size_t)decalMesh_].decal = true;
+        }
+        else LOG_WARN("wfc: decals.glb missing; static decals not drawn");
     }
     LOG_INFO("wfc: shader path active: %zu materials, %zu lightmapped components, %zu lights, fog %s (%s)",
              mats_.size(), lightmaps_.size(), lights_.size(), fogOn_ ? "on" : "off", dataDir_.c_str());
@@ -1001,6 +1010,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                 if (out) continue;
             }
             bindCommon(P, model);
+            Uniform1i(GetUniformLocation(P.id, "uDecalClip"), g.decal ? 1 : 0);
             if (P.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
             switch (P.blend) {
                 case 2: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE); break;
@@ -1065,6 +1075,13 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     GpuMesh& g = meshes_[(size_t)id];
     drawSubs(g, model, !g.world);
     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
+    if (g.drawsBsp && decalMesh_ >= 0 && decalMesh_ != id && !std::getenv("WFC_NODECALS")) {
+        // DecalComponent DepthBias (-0.0002): pull decals toward the camera over their receivers.
+        glEnable(GL_POLYGON_OFFSET_FILL);
+        glPolygonOffset(-1.0f, -4.0f);
+        drawSubs(meshes_[(size_t)decalMesh_], model, false);
+        glDisable(GL_POLYGON_OFFSET_FILL);
+    }
 }
 
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
