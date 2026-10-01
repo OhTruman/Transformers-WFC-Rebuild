@@ -17,6 +17,8 @@
 
 namespace game {
 
+class CollisionWorld;
+
 class WeaponFx {
 public:
     // Loads the original FX textures (ExtractedAssets/content/FX_Textures_p/...).
@@ -28,8 +30,20 @@ public:
     // Returns false when the squib was culled (percentage / distance / max-count rules).
     bool spawnImpact(const core::Vec3& pos, const core::Vec3& normal, const core::Vec3& viewPos);
 
+    // Weapon AnimNotify effects (HmAnimNotify_PlayEffect), spawned at the named socket's frame:
+    //   FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX   (IonBlaster_Fire @0.005, ShellSocket)
+    //   FX_AssaultRifle_p.FX.Reload_AssaultRifle_FX  (Reload_AP @0.034, MuzzleFlash)
+    //   FX_IonBlaster_p.FX.Magazine_IonBlaster_FX    (Reload_AP @0.174, MagSocket)
+    // Returns false for an unknown ParticleSystem name.
+    bool spawnNotifyEffect(const std::string& psName, const core::Mat4& socketWorld);
+
+    // Mesh-particle assets (ejected shell + magazine): original meshes + their textures.
+    void loadMeshes(render::IRenderer& r, const std::string& contentRoot);
+
     // `muzzleNow`: current socket transform for local-space emitters (null if holstered).
-    void tick(float dt, const core::Mat4* muzzleNow);
+    // `col` (optional): mesh particles settle on the collision floor.
+    void tick(float dt, const core::Mat4* muzzleNow, const CollisionWorld* col = nullptr);
+    size_t liveMeshes() const { return meshParts_.size(); }
     void draw(render::IRenderer& r) const;
 
     size_t liveParticles() const { return parts_.size(); }
@@ -62,6 +76,15 @@ public:
         float gravity;                  // m/s^2 (down)
     };
 
+    // Mesh particle emitter (ParticleModuleTypeDataMesh).
+    struct MeshDef {
+        int mesh;                       // index into meshes_
+        float life;
+        core::Vec3 scale;               // StartSize (mesh scale)
+        core::Vec3 spinMin, spinMax;    // turns/s per local axis
+        core::Vec3 velMin, velMax;      // socket frame, m/s
+    };
+
 private:
     struct Part {
         const EmitterDef* def;
@@ -73,7 +96,22 @@ private:
     };
     struct TracerSmoke { core::Vec3 a, b; float age; };
 
-    void emit(const EmitterDef& d, const core::Mat4& frame, int effect, float lifeCap = 1e9f);
+    void emit(const EmitterDef& d, const core::Mat4& frame, int effect, float lifeCap = 1e9f, int count = -1);
+
+    // Continuous emitter (SpawnRate over EmitterDuration) following the muzzle socket.
+    struct Stream { const EmitterDef* def; float age, duration, rate, acc; };
+    std::vector<Stream> streams_;
+
+    struct MeshPart {
+        const MeshDef* def;
+        core::Mat4 basis;               // spawn orientation (socket axes, orthonormal)
+        core::Vec3 pos, vel, ang, spin; // ang/spin: radians, radians/s per local axis
+        float age;
+        bool resting;
+    };
+    void emitMesh(const MeshDef& d, const core::Mat4& frame);
+    std::vector<render::MeshHandle> meshes_;
+    std::vector<MeshPart> meshParts_;
 
     std::vector<render::TextureHandle> tex_;
     std::vector<Part> parts_;

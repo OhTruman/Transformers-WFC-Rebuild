@@ -1,5 +1,7 @@
 #include "game/WeaponFx.h"
 #include "platform/Image.h"
+#include "game/Collision.h"
+#include "assets/Gltf.h"
 #include "core/Log.h"
 
 #include <algorithm>
@@ -17,7 +19,7 @@ constexpr float UU = 0.01f;   // Unreal units -> metres
 // Texture table (ExtractedAssets/content/...). `smoke` textures are greyscale RGB whose
 // luminance is the opacity (translucent smoke); it is baked into alpha at load.
 struct TexDef { const char* path; bool smoke; };
-enum Tex { kBolt, kFlashSide, kSmokeball02, kSparksCurved, kMuzzleFlash2, kSparkTrail, kSmokeThin, kDiffClouds, kTexCount };
+enum Tex { kBolt, kFlashSide, kSmokeball02, kSparksCurved, kMuzzleFlash2, kSparkTrail, kSmokeThin, kDiffClouds, kSmokeball01, kTexCount };
 const TexDef kTex[kTexCount] = {
     {"FX_Textures_p/Textures/Bolt_CLR.png", false},               // Bolt_ADD_MAT
     {"FX_Textures_p/Textures/MuzzleFlash_Side_02_CLR.png", false}, // MuzzleFlash_Side_02_MAT_INST
@@ -27,6 +29,7 @@ const TexDef kTex[kTexCount] = {
     {"FX_Textures_p/FX_SparkTrail.png", false},                   // Spark_Tail_MAT
     {"FX_Textures_p/Textures/SmokeThin_CLR.png", true},           // SmokeCoolDepth_Mat
     {"FX_Textures_p/Textures/DiffClouds_CLR.png", true},          // Tracer_Smoke_MAT (trail)
+    {"FX_Textures_p/Textures/smokeball_01_CLR.png", false},      // flareball01_MAT (reload flare)
 };
 
 // Default effect colour: the native colour constant in the muzzle/tracer LOD streams,
@@ -107,6 +110,71 @@ const ED kImpactSmoke = {"Smoke_Dup", kSmokeThin, ParticleBlend::Translucent, fa
     {100 * UU, 100 * UU, 0}, {150 * UU, 150 * UU, 0}, {-100 * UU, -100 * UU, -100 * UU}, {100 * UU, 100 * UU, 100 * UU},
     {0, 0, 0}, {0, 0, 0}, {0.86f, 0.86f, 0.9f}, 1.0f, 1.0f, true, 1, 1, {kImpactSmokeAlpha}, {kImpactSmokeGrow}, {}, 0.0f, 0.0f};
 
+// ---- Notify effects (weapon AnimNotifies) --------------------------------------------------
+// Smoke growth tables (SizeMultLife X, 21 entries): the impact smoke grows 1 -> 5, the vent
+// puffs below 1 -> 3 (decoded entries 1, 1.0145, 1.056, ... 2.1495 at t=0.55; tail completed
+// with the same ease-in-out profile).
+const std::vector<float> kVentSmokeGrow = {1, 1.0145f, 1.056f, 1.1215f, 1.208f, 1.3125f, 1.432f, 1.5635f, 1.704f,
+                                           1.8505f, 2.0f, 2.1495f, 2.296f, 2.4365f, 2.568f, 2.6875f, 2.792f,
+                                           2.8785f, 2.9435f, 2.9855f, 3.0f};
+const std::vector<float> kLinearOut01 = {0.1f, 0.0f};                // AlphaOverLife 0.1 -> 0
+const std::vector<float> kLinearOut1 = {1.0f, 0.0f};                 // AlphaOverLife 1 -> 0
+const std::vector<float> kFadeTo01 = {1.0f, 0.1f};                   // ColorOverLife 1 -> 0.1
+const std::vector<float> kReloadSmokeAlpha = {0, 0.0114f, 0.0345f, 0.0659f, 0.1026f, 0.1411f, 0.1784f, 0.2112f,
+                                              0.2362f, 0.2502f, 0.25f, 0.2362f, 0.2133f, 0.1837f, 0.15f, 0.1145f,
+                                              0.08f, 0.0487f, 0.0233f, 0.0062f, 0};
+const std::vector<float> kReloadFlareAlpha = {0, 0.0208f, 0.0704f, 0.1296f, 0.1792f, 0.2f, 0.1975f, 0.1903f, 0.1792f,
+                                              0.1649f, 0.1481f, 0.1296f, 0.11f, 0.09f, 0.0704f, 0.0519f, 0.0351f,
+                                              0.0208f, 0.0097f, 0.0025f, 0};
+// Reload flare brightness 20 -> 1 over the first half of life (x0.25 here; batch overbright x4).
+const std::vector<float> kReloadFlareBright = {5.0f, 4.525f, 4.05f, 3.575f, 3.1f, 2.625f, 2.15f, 1.675f, 1.2f, 0.725f,
+                                               0.25f, 0.25f, 0.25f, 0.25f, 0.25f, 0.25f, 0.25f, 0.25f, 0.25f, 0.25f, 0.25f};
+const std::vector<float> kShrink15 = {1.5f, 0.1f};                   // SizeMultLife 1.5 -> 0.1
+
+// Shell_AssaultRifle_FX "SMOKE": SmokeCoolDepth, burst 4, life U[0.5,0.75], size U[50,100] UU,
+//   alpha 0.1 -> 0, velocity U[(100,-300,-300),(300,300,300)] UU/s.
+const ED kShellSmoke = {"Shell.SMOKE", kSmokeThin, ParticleBlend::Translucent, false, false, false, 4, 0.5f, 0.75f,
+    {50 * UU, 50 * UU, 0}, {100 * UU, 100 * UU, 0}, {100 * UU, -300 * UU, -300 * UU}, {300 * UU, 300 * UU, 300 * UU},
+    {0, 0, 0}, {0, 0, 0}, {1, 1, 1}, 1.0f, 1.0f, true, 1, 1, {kLinearOut01}, {kVentSmokeGrow}, {}, 0.0f, 0.0f};
+// Magazine_IonBlaster_FX "Smoke_Dup_Dup_Dup": as above, alpha 1 -> 0, colour 1 -> 0.1.
+const ED kMagSmoke = {"Magazine.Smoke", kSmokeThin, ParticleBlend::Translucent, false, false, false, 4, 0.5f, 0.75f,
+    {50 * UU, 50 * UU, 0}, {100 * UU, 100 * UU, 0}, {100 * UU, -300 * UU, -300 * UU}, {300 * UU, 300 * UU, 300 * UU},
+    {0, 0, 0}, {0, 0, 0}, {1, 1, 1}, 1.0f, 1.0f, true, 1, 1, {kLinearOut1}, {kVentSmokeGrow}, {kFadeTo01}, 0.0f, 0.0f};
+// Reload_AssaultRifle_FX "GLOW_Dup_Dup": flareball01 (smokeball_01), local space, burst 10, life
+//   U[0.2,0.5], random rotation, start size U[20,35] UU x (1.5 -> 0.1), alpha peak 0.2, brightness
+//   20 -> 1; velocity U[(50,-20,-20),(200,20,20)] UU/s [MED: uniform-curve decode].
+const ED kReloadFlare = {"Reload.GLOW", kSmokeball01, ParticleBlend::Additive, false, false, true, 10, 0.2f, 0.5f,
+    {20 * UU, 20 * UU, 0}, {35 * UU, 35 * UU, 0}, {50 * UU, -20 * UU, -20 * UU}, {200 * UU, 20 * UU, 20 * UU},
+    {0, 0, 0}, {0, 0, 0}, kIonBlue, 1.0f, 4.0f, true, 1, 1, {kReloadFlareAlpha}, {kShrink15}, {kReloadFlareBright}, 0.0f, 0.0f};
+// Reload_AssaultRifle_FX "Smoke_Dup": SmokeCoolDepth, SpawnRate 20/s for EmitterDuration 0.75 s,
+//   life U[0.5,0.75], size U[100,200] UU growing 1 -> 3, alpha peak 0.25, velocity
+//   U[(50,-150,-150),(150,150,150)] UU/s, grey 0.83-0.90, location -50 UU (behind the muzzle).
+const ED kReloadSmoke = {"Reload.Smoke", kSmokeThin, ParticleBlend::Translucent, false, false, false, 1, 0.5f, 0.75f,
+    {100 * UU, 100 * UU, 0}, {200 * UU, 200 * UU, 0}, {50 * UU, -150 * UU, -150 * UU}, {150 * UU, 150 * UU, 150 * UU},
+    {-50 * UU, 0, 0}, {-50 * UU, 0, 0}, {0.86f, 0.86f, 0.9f}, 1.0f, 1.0f, true, 1, 1, {kReloadSmokeAlpha}, {kVentSmokeGrow}, {}, 0.0f, 0.0f};
+constexpr float kReloadSmokeRate = 20.0f, kReloadSmokeDuration = 0.75f;
+// Omitted (no GL1 path / negligible): ShellGlow + GLOW (Glow_Mod_MAT, modulate), Shimmer
+// (distortion), BackSteam/BackJet (alpha <= 0.05), Blaster_Trail ribbons on the shell/magazine.
+
+// Mesh meshes (ParticleModuleTypeDataMesh) + their material diffuse textures.
+struct MeshAsset { const char* gltf; const char* texture; };
+const MeshAsset kMeshAssets[] = {
+    {"FX_GrenadeLauncher_p/GrenadeAmmo_STAT.gltf", "WEP_GrenadeLauncher_p/WEP_GrenadeLauncher_CLR.png"},  // WEP_GrenadeLauncher_MATINST
+    {"FX_IonBlaster_p/IonBlaster_Mag_STAT.gltf", "WEP_IonBlaster_p/WEP_IonBlaster_CLR.png"},              // IonBlaster_Mag_MATINST
+};
+// Shell_AssaultRifle_FX "Shell": GrenadeAmmo_STAT, burst 1, life 1.0, StartSize (0.75,0.3,0.3),
+//   spin U[(-1,-1,-1),(5,5,1)] turns/s. Its ejection velocity is authored on the paired ShellGlow
+//   emitter (same socket): U[(300,-300,100),(1000,-300,300)] UU/s [MED: shared velocity].
+const WeaponFx::MeshDef kShellMesh = {0, 1.0f, {0.75f, 0.3f, 0.3f}, {-1, -1, -1}, {5, 5, 1},
+    {300 * UU, -300 * UU, 100 * UU}, {1000 * UU, -300 * UU, 300 * UU}};
+// Magazine_IonBlaster_FX "Shell": IonBlaster_Mag_STAT, burst 1, life 3.0, StartSize (1,1,1),
+//   spin U[-1,1] turns/s, velocity (200,300,300) UU/s.
+const WeaponFx::MeshDef kMagMesh = {1, 3.0f, {1, 1, 1}, {-1, -1, -1}, {1, 1, 1},
+    {200 * UU, 300 * UU, 300 * UU}, {200 * UU, 300 * UU, 300 * UU}};
+// [PROV] No acceleration module is authored on either mesh emitter; they fall under the world's
+// pawn gravity (WorldInfo.DefaultGravityZ -2940 UU/s^2) and come to rest on the collision floor.
+constexpr float kMeshGravity = 29.4f;
+
 constexpr float kSquibPercentage = 0.6f;     // [CONF] ImpactSquibPercentage
 constexpr int   kSquibMaxCount = 5;          // [CONF] ImpactSquibMaxCount
 constexpr float kMaxImpactDistance = 25.0f;  // [CONF] MaxImpactEffectDistance 2500 UU
@@ -116,6 +184,11 @@ float lerp(float a, float b, float t) { return a + (b - a) * t; }
 Vec3 lerpRand(const Vec3& a, const Vec3& b) { return {lerp(a.x, b.x, frand()), lerp(a.y, b.y, frand()), lerp(a.z, b.z, frand())}; }
 
 core::Vec3 col(const core::Mat4& m, int c) { return {m.m[c * 4], m.m[c * 4 + 1], m.m[c * 4 + 2]}; }
+core::Mat4 rotZ(float a) {
+    core::Mat4 r; float c = std::cos(a), s = std::sin(a);
+    r.m[0] = c; r.m[1] = s; r.m[4] = -s; r.m[5] = c;
+    return r;
+}
 
 // Orthonormal frame with X along `fwd`, positioned at `pos`.
 core::Mat4 frameFrom(const Vec3& pos, const Vec3& fwdIn) {
@@ -164,9 +237,10 @@ void WeaponFx::load(render::IRenderer& r, const std::string& contentRoot) {
     LOG_INFO("weapon fx: %d/%d original FX textures loaded", ok, (int)kTexCount);
 }
 
-void WeaponFx::emit(const EmitterDef& d, const core::Mat4& frame, int effect, float lifeCap) {
+void WeaponFx::emit(const EmitterDef& d, const core::Mat4& frame, int effect, float lifeCap, int count) {
     Vec3 fx = col(frame, 0), fy = col(frame, 1), fz = col(frame, 2), o = col(frame, 3);
-    for (int i = 0; i < d.burst; ++i) {
+    int n = count >= 0 ? count : d.burst;
+    for (int i = 0; i < n; ++i) {
         Part p{};
         p.def = &d;
         p.effect = effect;
@@ -190,6 +264,70 @@ void WeaponFx::emit(const EmitterDef& d, const core::Mat4& frame, int effect, fl
         }
         parts_.push_back(p);
     }
+}
+
+// Socket frame with unit axes (weapon/bone matrices may carry scale).
+static core::Mat4 orthonormal(const core::Mat4& m) {
+    core::Mat4 r = m;
+    for (int c = 0; c < 3; ++c) {
+        Vec3 v = core::normalize(col(m, c));
+        r.m[c * 4] = v.x; r.m[c * 4 + 1] = v.y; r.m[c * 4 + 2] = v.z;
+    }
+    return r;
+}
+
+void WeaponFx::loadMeshes(render::IRenderer& r, const std::string& contentRoot) {
+    meshes_.assign(sizeof(kMeshAssets) / sizeof(kMeshAssets[0]), render::kInvalidMesh);
+    int ok = 0;
+    for (size_t i = 0; i < meshes_.size(); ++i) {
+        render::MeshData md;
+        if (!assets::loadGlb(contentRoot + kMeshAssets[i].gltf, md)) continue;
+        render::ImageData img;
+        render::TextureHandle th = render::kInvalidTexture;
+        if (platform::decodeImage(contentRoot + kMeshAssets[i].texture, img)) th = r.uploadTexture(img);
+        for (render::Material& m : md.mats) { m.tex = th; m.color = {1, 1, 1}; }
+        meshes_[i] = r.uploadMesh(md);
+        if (meshes_[i] != render::kInvalidMesh) ++ok;
+    }
+    LOG_INFO("weapon fx: %d/%zu mesh-particle meshes loaded", ok, meshes_.size());
+}
+
+void WeaponFx::emitMesh(const MeshDef& d, const core::Mat4& frame) {
+    if (d.mesh < 0 || (size_t)d.mesh >= meshes_.size() || meshes_[(size_t)d.mesh] == render::kInvalidMesh) return;
+    core::Mat4 f = orthonormal(frame);
+    MeshPart p{};
+    p.def = &d;
+    p.basis = f;
+    p.basis.m[12] = p.basis.m[13] = p.basis.m[14] = 0.0f;
+    p.pos = col(f, 3);
+    Vec3 lv = lerpRand(d.velMin, d.velMax);
+    p.vel = col(f, 0) * lv.x + col(f, 1) * lv.y + col(f, 2) * lv.z;
+    p.spin = lerpRand(d.spinMin, d.spinMax) * (2.0f * core::PI);
+    p.ang = {0, 0, 0};
+    p.age = 0.0f;
+    p.resting = false;
+    meshParts_.push_back(p);
+}
+
+bool WeaponFx::spawnNotifyEffect(const std::string& ps, const core::Mat4& socketWorld) {
+    core::Mat4 f = orthonormal(socketWorld);
+    if (ps == "FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX") {
+        emitMesh(kShellMesh, f);
+        emit(kShellSmoke, f, -1);
+        return true;
+    }
+    if (ps == "FX_IonBlaster_p.FX.Magazine_IonBlaster_FX") {
+        emitMesh(kMagMesh, f);
+        emit(kMagSmoke, f, -1);
+        return true;
+    }
+    if (ps == "FX_AssaultRifle_p.FX.Reload_AssaultRifle_FX") {
+        muzzleNow_ = socketWorld; haveMuzzle_ = true;
+        emit(kReloadFlare, socketWorld, -1);
+        streams_.push_back({&kReloadSmoke, 0.0f, kReloadSmokeDuration, kReloadSmokeRate, 0.0f});
+        return true;
+    }
+    return false;
 }
 
 void WeaponFx::spawnMuzzleFlash(const core::Mat4& socketWorld) {
@@ -232,8 +370,38 @@ bool WeaponFx::spawnImpact(const Vec3& pos, const Vec3& normal, const Vec3& view
     return true;
 }
 
-void WeaponFx::tick(float dt, const core::Mat4* muzzleNow) {
+void WeaponFx::tick(float dt, const core::Mat4* muzzleNow, const CollisionWorld* colw) {
     if (muzzleNow) { muzzleNow_ = *muzzleNow; haveMuzzle_ = true; } else haveMuzzle_ = false;
+    // Continuous emitters: SpawnRate particles/s at the current muzzle frame for EmitterDuration.
+    for (size_t i = 0; i < streams_.size();) {
+        Stream& st = streams_[i];
+        st.age += dt;
+        if (haveMuzzle_) {
+            st.acc += st.rate * dt;
+            int n = (int)st.acc;
+            if (n > 0) { st.acc -= (float)n; emit(*st.def, orthonormal(muzzleNow_), -1, 1e9f, n); }
+        }
+        if (st.age >= st.duration || !haveMuzzle_) { streams_[i] = streams_.back(); streams_.pop_back(); } else ++i;
+    }
+    // Mesh particles: ballistic until they reach the collision floor, then rest.
+    for (size_t i = 0; i < meshParts_.size();) {
+        MeshPart& m = meshParts_[i];
+        m.age += dt;
+        if (m.age >= m.def->life) { meshParts_[i] = meshParts_.back(); meshParts_.pop_back(); continue; }
+        if (!m.resting) {
+            m.vel.y -= kMeshGravity * dt;
+            Vec3 next = m.pos + m.vel * dt;
+            float gy; Vec3 n;
+            if (colw && m.vel.y < 0.0f && colw->groundHeight(next.x, next.z, m.pos.y + 0.05f, 0.05f, gy, n) && next.y <= gy + 0.03f) {
+                next.y = gy + 0.03f;
+                m.resting = true;
+                m.vel = {0, 0, 0};
+            }
+            m.pos = next;
+            m.ang += m.spin * dt;
+        }
+        ++i;
+    }
     for (size_t i = 0; i < parts_.size();) {
         Part& p = parts_[i];
         p.age += dt;
@@ -252,8 +420,17 @@ void WeaponFx::tick(float dt, const core::Mat4* muzzleNow) {
 
 void WeaponFx::draw(render::IRenderer& r) const {
     // Group by (texture, blend, colour scale): one batch per emitter definition.
-    const EmitterDef* defs[] = {&kImpactSmoke, &kImpactGlow, &kImpactSparks, &kTracerBolt,
-                                &kFlashTop, &kFlashLong, &kFlashSparks};
+    const EmitterDef* defs[] = {&kReloadSmoke, &kShellSmoke, &kMagSmoke, &kImpactSmoke, &kImpactGlow,
+                                &kImpactSparks, &kTracerBolt, &kFlashTop, &kFlashLong, &kFlashSparks,
+                                &kReloadFlare};
+
+    // Mesh particles (opaque, lit like the weapon).
+    for (const MeshPart& m : meshParts_) {
+        render::MeshHandle h = meshes_[(size_t)m.def->mesh];
+        core::Mat4 model = core::Mat4::translate(m.pos) * m.basis * core::Mat4::rotateX(m.ang.x) *
+                           core::Mat4::rotateY(m.ang.y) * rotZ(m.ang.z) * core::Mat4::scale(m.def->scale);
+        r.drawMesh(h, model, core::Vec3{1, 1, 1});
+    }
     std::vector<render::Particle> q;
 
     // Tracer smoke ribbons (translucent, drawn first).

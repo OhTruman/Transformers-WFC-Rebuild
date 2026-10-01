@@ -89,6 +89,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
 
     mapMesh_ = renderer.uploadMesh(mapMesh);
     fx_.load(renderer, root + "/../content/");
+    fx_.loadMeshes(renderer, root + "/../content/");
     player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
     // Ion Blaster: animated skeletal mesh held at the robot's primary weapon socket (falls back
@@ -379,6 +380,12 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
     if (std::getenv("WFC_NOTIFYLOG"))
         LOG_INFO("NOTIFY %s %s @%.3f %s", n.kind == WeaponNotify::Kind::Sound ? "sound" : "fx",
                  n.what.c_str(), n.time, n.socket.c_str());
+    if (n.kind == WeaponNotify::Kind::Effect) {
+        // HmAnimNotify_PlayEffect: spawn the authored ParticleSystem at the notify's socket.
+        core::Mat4 sw;
+        if (weaponSocketWorld(n.socket.c_str(), sw) && !fx_.spawnNotifyEffect(n.what, sw))
+            LOG_WARN("notify effect %s not reconstructed", n.what.c_str());
+    }
     if (n.kind == WeaponNotify::Kind::Sound) {
         // HmAnimNotify_Sound plays its cue at the weapon mesh (owned by the local player).
         const core::Mat4& wm = player_.pawn().weaponWorld();
@@ -411,6 +418,7 @@ void World::tick(float dt) {
                      pc.animName(), pc.animTime(), pc.aimProfile().x, pc.aimProfile().y, pc.upperAnimName(), pc.upperWeight(),
                      (int)pc.recoilActive(), weaponAnim_.clipName(), std::sqrt(v.x * v.x + v.z * v.z),
                      (int)pc.weapon().reloading(), pc.weapon().ammo);
+            LOG_INFO("FX particles=%zu meshes=%zu impacts=%d", fx_.liveParticles(), fx_.liveMeshes(), fx_.liveImpacts());
             core::Mat4 ms;
             if (weaponSocketWorld("MuzzleFlash", ms)) {
                 core::Vec3 bx = core::normalize(core::Vec3{ms.m[0], ms.m[1], ms.m[2]});
@@ -427,7 +435,7 @@ void World::tick(float dt) {
     {
         core::Mat4 ms;
         bool have = weaponSocketWorld("MuzzleFlash", ms);
-        fx_.tick(dt, have ? &ms : nullptr);
+        fx_.tick(dt, have ? &ms : nullptr, collision_.valid() ? &collision_ : nullptr);
     }
     // Event-driven audio via edge detection on pawn state.
     {

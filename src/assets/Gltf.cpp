@@ -250,7 +250,21 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
 
 bool loadGlb(const std::string& path, render::MeshData& out) {
     Glb g;
-    if (!openGlb(path, g)) return false;
+    std::vector<uint8_t> extBin;   // .gltf: JSON text + external buffers[0].uri (umodel exports)
+    bool textGltf = path.size() > 5 && path.compare(path.size() - 5, 5, ".gltf") == 0;
+    if (textGltf) {
+        if (!readFile(path, g.file)) { LOG_ERROR("gltf: cannot read %s", path.c_str()); return false; }
+        g.json = g.file.data(); g.jsonLen = g.file.size();
+        Json probe;
+        if (Json::parse(reinterpret_cast<const char*>(g.json), g.jsonLen, probe) && probe["buffers"].size() > 0) {
+            std::string uri = probe["buffers"][0]["uri"].asString();
+            size_t s = path.find_last_of("/\\");
+            std::string dir = (s == std::string::npos) ? "." : path.substr(0, s);
+            if (!uri.empty() && readFile(dir + "/" + uri, extBin)) { g.bin = extBin.data(); g.binLen = extBin.size(); }
+        }
+    } else if (!openGlb(path, g)) {
+        return false;
+    }
 
     Json root;
     if (!Json::parse(reinterpret_cast<const char*>(g.json), g.jsonLen, root) || !root.isObject()) {

@@ -3,6 +3,13 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS PASS 3 (2026-10-01) — SHELL, MAGAZINE AND RELOAD FX
+- Every shot ejects the authored shell mesh (GrenadeAmmo_STAT) from ShellSocket with a vent smoke puff;
+  the reload vents a blue flare + 0.75 s smoke stream at the muzzle (@0.034 s) and drops the Ion Blaster
+  magazine mesh from MagSocket (@0.174 s, 3 s life) with a smoke puff. Values from the cooked
+  ParticleSystems (FIDELITY PASS 7c); gravity/ground contact for the meshes is PROV (none authored).
+- `WFC_ANIMLOG` now also prints live particle / mesh / impact counts.
+
 ## SYSTEMS PASS 2 (2026-10-01) — UPPER-BODY AIM OFFSET
 - Robot_ANIMTREE `TnAnimNodeAimOffset` (profile Default, 11 bones x 9 authored rotations) now aims the
   spine, head and arms at the camera pitch, between locomotion and the reload slot (original tree order).
@@ -32,7 +39,7 @@ confidence in FIDELITY.md PASS 7; decoders in `tools/systems/`).
   impact, reload, idle; dB/semitone variation, timed events, concurrency, FMOD inverse rolloff.
 - Diagnostics: `WFC_ANIMLOG` (base/upper/recoil/weapon clip), `WFC_NOTIFYLOG`, `WFC_CUELOG`.
 - **Not done / handed off:** camera recoil + shake (camera owned by Gameplay), dry-fire trigger,
-  shell/magazine/reload FX rendering, mixer/reverb. The idle base clip
+  mixer/reverb. The idle base clip
   `Cust_Idle` (showcase idle) should be `NAV_Idle`; that is Gameplay's locomotion selection.
 
 ## FIDELITY PASS 6 (2026-10-01) — INTERACTIVE PLAYER FIXES (orientation, locomotion, muzzle, reload, transform)
