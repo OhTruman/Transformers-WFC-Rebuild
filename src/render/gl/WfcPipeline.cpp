@@ -153,6 +153,7 @@ void main() {
     MatOut o; wfcMaterial(m, o);
     if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;
     if (uDebug == 1) { o.DiffuseColor = vec3(0.5); o.EmissiveColor = vec3(0.0); o.SpecularColor = vec3(0.0); }
+    if (uDebug == 2) { oColor = vec4(o.DiffuseColor, 1.0); return; }
     vec3 c = o.EmissiveColor;
     if (uLit != 0) {
         vec3 n = normalize(o.Normal);
@@ -180,6 +181,7 @@ void main() {
     MatOut o; wfcMaterial(m, o);
     if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;
     if (uDebug == 1) { o.DiffuseColor = vec3(0.5); o.EmissiveColor = vec3(0.0); o.SpecularColor = vec3(0.0); }
+    if (uDebug == 2) { oColor = vec4(o.DiffuseColor, 1.0); return; }
     vec3 c = o.EmissiveColor;
     if (uLit != 0) {
         vec3 Nw = normalize(tbn * normalize(o.Normal));
@@ -598,7 +600,8 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
 
 int Pipeline::programFor(const std::string& matName, const Material* gm, bool lightmapped) {
     std::string key = (matName.empty() ? std::string("<gltf>") : matName) + (lightmapped ? "|LM" : "|UBER");
-    auto mit = mats_.find(matName);
+    static const bool gltfOnly = std::getenv("WFC_GLTFMATERIALS") != nullptr;   // A/B: AssetTools bakes
+    auto mit = (gltfOnly && !lightmapped) ? mats_.end() : mats_.find(matName);
     if (mit == mats_.end() && gm) {
         // No compiled original graph: build from the glTF material (character/weapon textures
         // baked by AssetTools from the original customization shader).
@@ -871,7 +874,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(P.uMasked, P.blend == 1 ? 1 : 0);
     Uniform1f(P.uClip, P.clip);
     Uniform1i(P.uLit, P.lit ? 1 : 0);
-    static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : 0;
+    static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
     Uniform1i(GetUniformLocation(P.id, "uDebug"), dbg);
     Uniform1i(P.uFogOn, fogOn_ ? 1 : 0);
     Uniform1f(P.uFogMaxH, fogMaxH_); Uniform1f(P.uFogScale, fogScale_);

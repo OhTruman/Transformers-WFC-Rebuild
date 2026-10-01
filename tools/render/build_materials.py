@@ -39,10 +39,17 @@ class TexResolver:
     def props(self, path):
         o = self.R.obj(path) or {}
         um = o.get('UnpackMin'); ux = o.get('UnpackMax')
+        unpack = [um.get(k, 0.0) for k in range(4)] if isinstance(um, dict) else None
+        # [CONF] DXT5 xGxA normal maps (X in alpha, Y in green; UnpackMin authored -1 on R,G,B only):
+        # the ORIGINAL compiled character pixel shader unpacks BOTH fetched channels, (A, G) * 2 - 1
+        # (MP_IAC_Streets_BASE_m ShaderCache, reconstructed-normal UberLight PS: tfetch .yw then
+        # mad r.xy, r.zy, c251.x(=2.0), c254.w(=-1.0)). Apply the R unpack to alpha as well.
+        if o.get('Format') == 'PF_DXT5' and unpack and unpack[:3] == [-1.0, -1.0, -1.0] and unpack[3] == 0.0:
+            unpack[3] = -1.0
         return {'srgb': bool(o.get('SRGB', True)), 'format': o.get('Format'),
                 'address_x': o.get('AddressX', 'TA_Wrap'), 'address_y': o.get('AddressY', 'TA_Wrap'),
                 'lod_group': o.get('LODGroup'), 'size': [o.get('SizeX'), o.get('SizeY')],
-                'unpack_min': [um.get(k, 0.0) for k in range(4)] if isinstance(um, dict) else None,
+                'unpack_min': unpack,
                 'compression': o.get('CompressionSettings')}
 
     def native_decode(self, path, cls, name):
