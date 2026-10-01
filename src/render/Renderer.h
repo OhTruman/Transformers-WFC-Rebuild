@@ -7,6 +7,26 @@
 
 namespace render {
 
+// Particle sprites (weapon/impact FX). Built into quads by the renderer from its view so
+// gameplay code never needs the camera basis.
+enum class ParticleBlend { Additive, Translucent };
+struct Particle {
+    core::Vec3 pos;                 // quad centre (world)
+    core::Vec3 axis{0, 0, 0};       // non-zero: velocity-aligned (the quad's length runs along it)
+    float w = 1.0f, h = 1.0f;       // width (across) / height-or-length (along axis), metres
+    float rot = 0.0f;               // radians, camera-facing sprites only
+    float r = 1, g = 1, b = 1, a = 1;
+    float u0 = 0, v0 = 0, u1 = 1, v1 = 1;
+    bool uAlongAxis = false;        // texture long axis is U (rotate UVs 90 deg for aligned quads)
+};
+struct ParticleBatch {
+    TextureHandle tex = kInvalidTexture;
+    ParticleBlend blend = ParticleBlend::Additive;
+    float colorScale = 1.0f;        // 1, 2 or 4: overbright (UE3 HDR emissive > 1)
+    const Particle* p = nullptr;
+    size_t n = 0;
+};
+
 class IRenderer {
 public:
     virtual ~IRenderer() = default;
@@ -36,6 +56,9 @@ public:
 
     // Draw a transient mesh (e.g. CPU-skinned each frame) without uploading/retaining it.
     virtual void drawDynamicMesh(const MeshData& mesh, const core::Mat4& model, const core::Vec3& color) = 0;
+
+    // Textured particle quads (depth-tested, no depth write, unfogged for additive).
+    virtual void drawParticles(const ParticleBatch& batch) = 0;
 
     // Save the current framebuffer to a 24-bit BMP (debug/automated verification).
     virtual bool captureScreenshot(const char* path) = 0;

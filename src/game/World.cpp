@@ -86,6 +86,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     LOG_INFO("lightmaps: %d/%zu submeshes bound to atlases", lmBound, mapMesh.subs.size());
 
     mapMesh_ = renderer.uploadMesh(mapMesh);
+    fx_.load(renderer, root + "/../content/");
     player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
     // Ion Blaster: animated skeletal mesh held at the robot's primary weapon socket (falls back
@@ -308,7 +309,12 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
         muzzle = core::transformPoint(wm, core::Vec3{core::config::kMuzzleLocalX,
                      core::config::kMuzzleLocalY, core::config::kMuzzleLocalZ});
     }
-    shots_.push_back({muzzle, hitPoint, 0.06f});
+    // WP_Fire presentation: muzzle flash at the MuzzleFlash socket, tracer muzzle -> impact,
+    // impact squib where the trace hit something (world or target).
+    if (weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(ms);
+    fx_.spawnTracer(muzzle, hitPoint);
+    if (dist < range - 0.01f)
+        fx_.spawnImpact(hitPoint, dir * -1.0f, origin);
     if (std::getenv("WFC_MUZZLELOG") && player_.pawn().hasWeapon()) {
         const core::Mat4& wm = player_.pawn().weaponWorld();
         LOG_INFO("MUZZLE hand=%.2f,%.2f,%.2f tip=%.2f,%.2f,%.2f (|offset|=%.2fm)",
@@ -382,10 +388,10 @@ void World::tick(float dt) {
                      (int)pc.weapon().reloading(), pc.weapon().ammo);
         }
     }
-    for (size_t i = 0; i < shots_.size();) {
-        shots_[i].ttl -= dt;
-        if (shots_[i].ttl <= 0) { shots_[i] = shots_.back(); shots_.pop_back(); }
-        else ++i;
+    {
+        core::Mat4 ms;
+        bool have = weaponSocketWorld("MuzzleFlash", ms);
+        fx_.tick(dt, have ? &ms : nullptr);
     }
     // Event-driven audio via edge detection on pawn state.
     {
@@ -428,11 +434,8 @@ void World::draw(render::IRenderer& r) const {
     else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
         r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
 
-    // Tracers + muzzle flashes for recent shots.
-    for (const Shot& s : shots_) {
-        r.drawLine(s.a, s.b, core::Vec3{1.0f, 0.85f, 0.35f});
-        r.drawBox(s.a, core::Vec3{0.35f, 0.35f, 0.35f}, core::Vec3{1.0f, 0.9f, 0.4f});
-    }
+    // Weapon effects last (translucent/additive over the opaque scene).
+    fx_.draw(r);
 
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {

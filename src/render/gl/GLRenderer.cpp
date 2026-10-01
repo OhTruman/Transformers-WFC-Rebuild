@@ -28,6 +28,7 @@
 #define GL_PRIMARY_COLOR 0x8577
 #endif
 
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -206,6 +207,83 @@ public:
         glVertex3f(a.x, a.y, a.z);
         glVertex3f(b.x, b.y, b.z);
         glEnd();
+    }
+
+    void drawParticles(const ParticleBatch& b) override {
+        if (!b.p || b.n == 0) return;
+        glLoadMatrixf(view_.m);
+        // Camera basis from the view matrix (rows of the rotation part).
+        core::Vec3 camR{view_.m[0], view_.m[4], view_.m[8]};
+        core::Vec3 camU{view_.m[1], view_.m[5], view_.m[9]};
+        core::Vec3 camF{-view_.m[2], -view_.m[6], -view_.m[10]};
+        glDisable(GL_LIGHTING);
+        glDisable(GL_CULL_FACE);
+        glEnable(GL_BLEND);
+        glDepthMask(GL_FALSE);
+        bool add = b.blend == ParticleBlend::Additive;
+        if (add) { glBlendFunc(GL_SRC_ALPHA, GL_ONE); glDisable(GL_FOG); }
+        else glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        bool tex = b.tex >= 0 && (size_t)b.tex < textures_.size();
+        if (tex) {
+            glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, textures_[(size_t)b.tex]);
+            if (b.colorScale > 1.0f) {
+                glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+                glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+                glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_RGB, GL_TEXTURE);
+                glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB, GL_PRIMARY_COLOR);
+                glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, b.colorScale >= 4.0f ? 4.0f : (b.colorScale >= 2.0f ? 2.0f : 1.0f));
+                // Alpha: texture alpha x vertex alpha (smoke opacity is baked into alpha at load).
+                glTexEnvi(GL_TEXTURE_ENV, 0x8572 /*GL_COMBINE_ALPHA*/, GL_MODULATE);
+                glTexEnvi(GL_TEXTURE_ENV, 0x8588 /*GL_SOURCE0_ALPHA*/, GL_TEXTURE);
+                glTexEnvi(GL_TEXTURE_ENV, 0x8598 /*GL_OPERAND0_ALPHA*/, GL_SRC_ALPHA);
+                glTexEnvi(GL_TEXTURE_ENV, 0x8589 /*GL_SOURCE1_ALPHA*/, GL_PRIMARY_COLOR);
+                glTexEnvi(GL_TEXTURE_ENV, 0x8599 /*GL_OPERAND1_ALPHA*/, GL_SRC_ALPHA);
+            }
+        } else {
+            glDisable(GL_TEXTURE_2D);
+        }
+        glBegin(GL_QUADS);
+        for (size_t i = 0; i < b.n; ++i) {
+            const Particle& p = b.p[i];
+            core::Vec3 ax, ay;   // ax: across (width), ay: up/along (height/length)
+            float al = core::length(p.axis);
+            if (al > 1e-5f) {
+                ay = p.axis * (1.0f / al);
+                ax = core::normalize(core::cross(camF, ay));
+                if (core::length(ax) < 1e-4f) ax = camR;
+            } else {
+                float c = std::cos(p.rot), s = std::sin(p.rot);
+                ax = camR * c + camU * s;
+                ay = camU * c - camR * s;
+            }
+            core::Vec3 hx = ax * (p.w * 0.5f), hy = ay * (p.h * 0.5f);
+            glColor4f(p.r, p.g, p.b, p.a);
+            core::Vec3 q[4] = {p.pos - hx - hy, p.pos + hx - hy, p.pos + hx + hy, p.pos - hx + hy};
+            // UVs: v0 (texture top) at the +axis end; uAlongAxis maps U along the axis instead.
+            float uv[4][2];
+            if (p.uAlongAxis) {
+                uv[0][0] = p.u0; uv[0][1] = p.v1; uv[1][0] = p.u0; uv[1][1] = p.v0;
+                uv[2][0] = p.u1; uv[2][1] = p.v0; uv[3][0] = p.u1; uv[3][1] = p.v1;
+            } else {
+                uv[0][0] = p.u0; uv[0][1] = p.v1; uv[1][0] = p.u1; uv[1][1] = p.v1;
+                uv[2][0] = p.u1; uv[2][1] = p.v0; uv[3][0] = p.u0; uv[3][1] = p.v0;
+            }
+            for (int k = 0; k < 4; ++k) {
+                glTexCoord2f(uv[k][0], uv[k][1]);
+                glVertex3f(q[k].x, q[k].y, q[k].z);
+            }
+        }
+        glEnd();
+        if (tex && b.colorScale > 1.0f) {
+            glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f);
+            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        }
+        glDisable(GL_TEXTURE_2D);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+        glEnable(GL_CULL_FACE);
+        glEnable(GL_FOG);
     }
 
 private:

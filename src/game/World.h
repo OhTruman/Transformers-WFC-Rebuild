@@ -12,6 +12,7 @@
 #include "assets/SkinnedModel.h"
 #include "audio/Audio.h"
 #include "game/WeaponMesh.h"
+#include "game/WeaponFx.h"
 
 namespace render { class IRenderer; }
 
@@ -83,9 +84,8 @@ private:
     // World transform of a weapon socket (MuzzleFlash/ShellSocket/MagSocket); false if unavailable.
     bool weaponSocketWorld(const char* socket, core::Mat4& out) const;
 
-    // Transient weapon-fire effects (tracers + muzzle flash).
-    struct Shot { core::Vec3 a, b; float ttl; };
-    std::vector<Shot> shots_;
+    // Original weapon effects (muzzle flash, tracer, impact squib) from the cooked FX data.
+    WeaponFx fx_;
 
     audio::IAudio* audio_ = nullptr;
     audio::Sound sndFire_ = audio::kInvalidSound, sndReload_ = audio::kInvalidSound,
