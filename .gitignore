@@ -23,3 +23,7 @@ Thumbs.db
 /work/
 /.claude/
 
+
+# Python bytecode
+__pycache__/
+*.pyc
