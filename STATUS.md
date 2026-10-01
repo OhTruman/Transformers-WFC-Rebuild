@@ -3,6 +3,13 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS PASS 7 (2026-10-01) — VEHICLE ENGINE AUDIO
+- Optimus's authored engine audio in vehicle form: off-load (idle/coasting) and on-load (throttle) drive
+  loops, the jump-rev loop while airborne and the jump-start one-shot, and hover/wheels light/heavy landing
+  cues by time in air; 0.2 s engine fades; all layers follow the mph speed parameter. The drive loop yields
+  to the boost loop while boosting. Tire squeal not done (needs a slip signal from Gameplay).
+- Read-only `PlayerController::throttleHeld()` added for the on/off-load choice.
+
 ## SYSTEMS PASS 6 (2026-10-01) — TRUCK NITRO / RAM (state, FX, audio)
 - New abstract input action `Dash` (**PROV** temporary key **Q**). DASH while boosting on wheels starts
   the authored nitro: **3 s**, cooldown **8 s**; `RamFX` (rim-lit flame wedge on RamSocket) runs for its

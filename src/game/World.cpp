@@ -404,7 +404,10 @@ void World::tickVehicleBoost(float dt) {
     hoverActive_ = hover;
     // Jump boosters: one-shot burst on vehicle take-off; killed if the vehicle form ends.
     bool grounded = pc.onGround();
-    if (vehicle && vehiclePrevGrounded_ && !grounded && pc.velocity().y > 2.0f) {
+    bool tookOff = vehicle && vehiclePrevGrounded_ && !grounded && pc.velocity().y > 2.0f;
+    bool landed = vehicle && !vehiclePrevGrounded_ && grounded;
+    tickEngineAudio(dt, vehicle, boost, grounded, tookOff, landed);
+    if (tookOff) {
         jumpInst_[0] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpC);
         jumpInst_[1] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpR);
         jumpInst_[2] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpL);
@@ -472,6 +475,47 @@ void World::tickVehicleBoost(float dt) {
             }
         }
     }
+}
+
+// Engine audio. [CONF] OptimusTruckForm.HmPlayerVehicleAudioComponent_6670 + Veh_Optimus_Prime_SoundSet:
+//   DriveSounds: gear MaxSpeed 20 and 110, both OnLoadLoops Auto_Engine_Gear_1_OnLoad -> VEH_OPTIMUS_DRIVE_ONLOAD,
+//   OffLoadLoops Auto_Engine_Gear_1_OffLoad -> VEH_OPTIMUS_DRIVE_OFFLOAD (one-shots map to None); ReverseSound
+//   maps to the same two cues; JumpRevSounds UseJumpRev, Auto_Jump_Loop -> VEH_OPTIMUS_DRIVE_JUMP_LOOP;
+//   AscendSound Auto_Jump_Start -> VEH_OPTIMUS_DRIVE_JUMP_START; EngineFadeOutTime 0.2 s;
+//   HoverLandSound {0.15 s air: HOVER_LAND_LIGHT, 2.0 s: HOVER_LAND_HEAVY}; BoostLandSound {0.15 s:
+//   WHEELS_LAND_LIGHT, 2.0 s: WHEELS_LAND_HEAVY}; speed parameter Optimus_Prime_Speed (mph).
+// [MED] on-load = throttle input held; the engine loop yields to the boost loop while boosting (the boost
+// cue carries its own engine layers); airborne = jump-rev loop.
+void World::tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, bool tookOff, bool landed) {
+    Character& pc = player_.pawn();
+    float mph = core::length(pc.velocity()) * 2.23694f;
+    core::Vec3 ap = pc.position() + core::Vec3{0, 1.4725f, 0};   // AUDIO_ROOT socket
+    EngineState want = EngineState::Off;
+    if (vehicle) {
+        if (!grounded) want = EngineState::JumpRev;
+        else if (boost) want = EngineState::Boost;
+        else want = player_.controller().throttleHeld() ? EngineState::OnLoad : EngineState::OffLoad;
+    }
+    if (want != engineState_) {
+        if (engineCue_ >= 0) cues_.stop(engineCue_, 0.2f);   // EngineFadeOutTime
+        engineCue_ = -1;
+        const char* cue = want == EngineState::OnLoad ? "VEH_OPTIMUS_DRIVE_ONLOAD"
+                        : want == EngineState::OffLoad ? "VEH_OPTIMUS_DRIVE_OFFLOAD"
+                        : want == EngineState::JumpRev ? "VEH_OPTIMUS_DRIVE_JUMP_LOOP" : nullptr;
+        if (cue) engineCue_ = cues_.play(cue, ap, 0.0f, mph);
+        engineState_ = want;
+    }
+    if (engineCue_ >= 0) cues_.update(engineCue_, ap, mph);
+
+    if (tookOff) cues_.play("VEH_OPTIMUS_DRIVE_JUMP_START", ap, 0.0f, mph);   // AscendSound
+    if (vehicle && !grounded) airTime_ += dt;
+    if (landed) {
+        const char* cue = nullptr;
+        if (airTime_ >= 2.0f) cue = boost ? "VEH_OPTIMUS_WHEELS_LAND_HEAVY" : "VEH_OPTIMUS_HOVER_LAND_HEAVY";
+        else if (airTime_ >= 0.15f) cue = boost ? "VEH_OPTIMUS_WHEELS_LAND_LIGHT" : "VEH_OPTIMUS_HOVER_LAND_LIGHT";
+        if (cue) cues_.play(cue, ap, 0.0f, mph);
+    }
+    if (grounded || !vehicle) airTime_ = 0.0f;
 }
 
 void World::notifyRamImpact(const core::Vec3& pos) {
@@ -563,7 +607,8 @@ void World::tick(float dt) {
     {
         core::Vec3 pp = player_.pawn().position();
         bool grounded = player_.pawn().onGround();
-        if (grounded && !prevGrounded_) playSfx(Sfx::Land, pp);
+        // Robot-form landing placeholder; vehicle landings use the authored land cues.
+        if (grounded && !prevGrounded_ && player_.pawn().form() == Form::Robot) playSfx(Sfx::Land, pp);
         prevGrounded_ = grounded;
         bool tf = player_.pawn().isTransforming();
         if (tf && !prevTransforming_) playSfx(Sfx::Transform, pp);

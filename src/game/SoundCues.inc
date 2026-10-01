@@ -105,3 +105,35 @@
     {"VEH_TRUCK_RAM_IMPACT", 0, -6.0f, 0.0f, 0.0f, 0.0f, -2.0f, 2.0f, 5000.0f, 35000.0f, 2.0f, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/MECH_IMPT_VEHICLE_RAM_01.wav", "WL_TRUCK/MECH_IMPT_VEHICLE_RAM_02.wav", "WL_TRUCK/MECH_IMPT_VEHICLE_RAM_03.wav"}, {}, {}, {}, {}},
     }},
+    {"VEH_OPTIMUS_DRIVE_ONLOAD", 0, -12.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, Param::Speed, {
+        {0.0119618f, -6.0f, 0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0, true, {"WL_TRUCK/SYNTH_ENERGY_MOD_PAN_LP.wav"}, {{0.0f, 0.354813f}, {9.96169f, 0.645669f}, {16.3985f, 0.649606f}, {33.0f, 0.336945f}, {120.0f, 0.0498511f}}, {{0.0f, -6.0f}, {33.0f, 1.41732f}, {110.0f, 7.0888f}}, {}, {}},
+        {0.0f, -5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, {"WL_TRUCK/AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav"}, {{0.0f, 0.619621f}, {8.73563f, 1.0f}, {14.8659f, 1.0f}, {20.0766f, 1.0f}, {25.4406f, 1.0f}}, {{0.278129f, -4.0f}, {33.0f, 1.5f}, {120.0f, 9.07087f}}, {}, {}},
+    }},
+    {"VEH_OPTIMUS_DRIVE_OFFLOAD", 0, -16.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, Param::Speed, {
+        {0.0f, -7.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, {"WL_TRUCK/SYNTH_ENERGY_MOD_PAN_LP.wav"}, {{0.0f, 0.464567f}, {16.3985f, 0.665354f}, {33.7165f, 0.401575f}, {85.0f, 0.0339026f}}, {{0.0f, -9.0f}, {33.7165f, -2.26772f}, {120.0f, 9.73469f}}, {}, {}},
+        {0.0f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, {"WL_TRUCK/AUTO_OPTIMUS_IDLE_LR_LP.wav"}, {{0.0f, 1.0f}, {5.97701f, 1.0f}, {12.8736f, 1.0f}, {18.5441f, 1.0f}, {24.3678f, 1.0f}, {33.0f, 1.0f}}, {{0.0f, -0.566929f}, {5.51724f, 0.0f}, {33.41f, -0.566929f}, {120.0f, 9.07087f}}, {}, {}},
+        {0.0f, -5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, {"WL_TRUCK/AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav"}, {{0.0f, 0.619621f}, {8.73563f, 1.0f}, {14.8659f, 1.0f}, {20.0766f, 1.0f}, {25.4406f, 1.0f}}, {{0.278129f, -4.0f}, {33.0f, 1.5f}, {120.0f, 9.07087f}}, {}, {}},
+    }},
+    {"VEH_OPTIMUS_DRIVE_JUMP_START", 0, -8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, Param::None, {
+        {0.0f, -6.0f, 0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/SYNTH_AIR_RELEASE_04.wav"}, {}, {}, {}, {}},
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TANK/TANK_JUMP_LR.wav"}, {}, {}, {}, {}},
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, {"WL_TRUCK/AUTO_OPTIMUS_JUMP_LR.wav"}, {}, {}, {}, {}},
+    }},
+    {"VEH_OPTIMUS_DRIVE_JUMP_LOOP", 0, -19.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, Param::Speed, {
+        {0.0f, -7.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0, true, {"WL_TRUCK/SYNTH_ENERGY_MOD_PAN_LP.wav"}, {{0.0f, 0.477244f}, {9.04215f, 0.706023f}, {19.3103f, 1.0f}, {33.0f, 0.354813f}, {85.0f, 0.0339026f}}, {{0.0f, -9.0f}, {33.0f, 3.0f}, {120.0f, 13.0394f}}, {}, {}},
+        {0.0f, -3.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0, true, {"WL_TRUCK/AUTO_OPTIMUS_IDLE_LR_LP.wav"}, {{0.0f, 1.0f}, {5.97701f, 1.0f}, {12.8736f, 1.0f}, {18.3908f, 1.0f}, {24.3678f, 1.0f}, {38.4674f, 1.0f}}, {{0.0f, -0.566929f}, {5.51724f, 0.0f}, {33.0f, 5.0f}, {120.0f, 9.07087f}}, {}, {}},
+    }},
+    {"VEH_OPTIMUS_HOVER_LAND_LIGHT", 0, -20.0f, 0.0f, 0.0f, 0.0f, -0.5f, 0.0f, 5000.0f, 35000.0f, 2.0f, Param::None, {
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TANK/MECH_TANK_LAND_LIGHT_01.wav", "WL_TANK/MECH_TANK_LAND_LIGHT_02.wav", "WL_TANK/MECH_TANK_LAND_LIGHT_03.wav"}, {}, {}, {}, {}},
+    }},
+    {"VEH_OPTIMUS_HOVER_LAND_HEAVY", 0, -18.0f, 0.0f, 0.0f, 0.0f, -2.0f, 1.0f, 5000.0f, 35000.0f, 2.0f, Param::None, {
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TANK/MECH_TANK_LAND_HARD_01.wav", "WL_TANK/MECH_TANK_LAND_HARD_02.wav", "WL_TANK/MECH_TANK_LAND_HARD_03.wav"}, {}, {}, {}, {}},
+    }},
+    {"VEH_OPTIMUS_WHEELS_LAND_LIGHT", 0, -19.0f, 0.0f, 0.0f, 0.0f, -8.0f, 0.5f, 5000.0f, 35000.0f, 2.0f, Param::None, {
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/MECH_TRUCK_LAND_HEAVY_01.wav", "WL_TRUCK/MECH_TRUCK_LAND_HEAVY_02.wav", "WL_TRUCK/MECH_TRUCK_LAND_HEAVY_03.wav"}, {}, {}, {}, {}},
+        {0.0915257f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 30, false, {"WL_TRUCK/AIR_SEMI_RELEASE_09.wav"}, {}, {}, {}, {}},
+    }},
+    {"VEH_OPTIMUS_WHEELS_LAND_HEAVY", 0, -15.0f, 0.0f, 0.0f, 0.0f, -0.5f, 0.5f, 5000.0f, 35000.0f, 2.0f, Param::None, {
+        {0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/MECH_TRUCK_BOTTOM_OUT_01.wav", "WL_TRUCK/MECH_TRUCK_BOTTOM_OUT_02.wav", "WL_TRUCK/MECH_TRUCK_BOTTOM_OUT_03.wav"}, {}, {}, {}, {}},
+        {0.090788f, -3.0f, 0.0f, 0.0f, -2.0f, 0.0f, 0.0f, 0, false, {"WL_AUTO/AUTO_BOOST_PEELOUT_CAR.wav"}, {}, {}, {{0.0866371f, 0.0f}, {0.146512f, 1.0f}, {0.282894f, 1.0f}, {0.558983f, 0.333333f}, {1.028f, 0.0f}}, {}},
+    }},

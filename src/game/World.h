@@ -116,6 +116,13 @@ private:
     VehicleNitro nitro_;
     bool dashLatched_ = false;   // abstract Dash action, latched per frame for the fixed-step tick
     int ramInst_ = -1;
+
+    // Vehicle engine audio (HmPlayerVehicleAudioComponent DriveSounds / JumpRev / land sounds).
+    enum class EngineState { Off, OnLoad, OffLoad, JumpRev, Boost };
+    EngineState engineState_ = EngineState::Off;
+    int engineCue_ = -1;
+    float airTime_ = 0.0f;
+    void tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, bool tookOff, bool landed);
     float boostAge_ = 0.0f;
     bool boostWheelsChecked_ = false;
     int boostLoopCue_ = -1;
