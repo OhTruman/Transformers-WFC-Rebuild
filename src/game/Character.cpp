@@ -200,6 +200,13 @@ void Character::evalLayered(const assets::SkinnedModel& mdl, int clip, float t, 
     assets::bindPose(mdl, basePose_);
     assets::samplePose(mdl, clip, t, loop, basePose_);
     bool robot = (&mdl == robotModel_) && trans_ == Transition::None;
+    if (robot) {
+        // TnAnimNodeAimOffset (below the UpperBodyCustom slot): the body already faces the aim
+        // yaw, so pawn aim X = 0; Y = pitch normalised to 90 deg (UE3 pawn aim offset).
+        if (!aim_.bound(mdl)) aim_.bind(mdl);
+        aimProfile_ = AimOffset::profileAim(0.0f, aimPitch_ / (0.5f * core::PI));
+        aim_.apply(basePose_, aimProfile_.x, aimProfile_.y, 1.0f);
+    }
     if (robot && upperW_ > 0.0f && upperClip_ >= 0) {
         assets::bindPose(mdl, overPose_);
         assets::samplePose(mdl, upperClip_, upperTime_, /*loop*/ false, overPose_);
@@ -208,9 +215,12 @@ void Character::evalLayered(const assets::SkinnedModel& mdl, int clip, float t, 
     assets::BoneAdjust adj[2];
     int nAdj = 0;
     if (robot && (recoilSpine_.active() || recoilRHand_.active())) {
-        // Aim space in model space: mesh forward is -Z (kMeshYawOffset 0), pitched by the aim.
-        core::Vec3 fwd = core::forwardFromYawPitch(0.0f, aimPitch_);
-        core::Vec3 right{1, 0, 0};
+        // Aim space in model space. The skeleton faces +X (measured from robot.glb: eyes are +X of
+        // the head, left clavicle at -Z, gun forearm along +X) with +Z = right, independent of the
+        // renderer's yaw offset; the aim pitches about +Z.
+        float cp = std::cos(aimPitch_), sp = std::sin(aimPitch_);
+        core::Vec3 fwd{cp, sp, 0.0f};
+        core::Vec3 right{0, 0, 1};
         core::Vec3 up = core::cross(right, fwd);
         if (recoilSpine_.active() && nodeSpineRecoil_ >= 0) {
             adj[nAdj].node = nodeSpineRecoil_;

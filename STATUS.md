@@ -3,6 +3,17 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS PASS 2 (2026-10-01) — UPPER-BODY AIM OFFSET
+- Robot_ANIMTREE `TnAnimNodeAimOffset` (profile Default, 11 bones x 9 authored rotations) now aims the
+  spine, head and arms at the camera pitch, between locomotion and the reload slot (original tree order).
+  Space/axes verified against the Shooting_Aim_* clips. Measured: aim 22.9 deg -> barrel 21.6-23.8 deg while
+  jogging and firing; +0.9 / 0 / -0.9 rad screenshots show the gun raised / level / lowered.
+- **Found, for Gameplay:** the robot mesh faces +X in model space but `kMeshYawOffset = 0` draws it as if it
+  faced -Z, so Optimus renders 90 deg off the aim (barrel heading = aim - ~100 deg). Fix: `kMeshYawOffset = +pi/2`
+  (evidence in FIDELITY PASS 7b). Not changed here (Gameplay-owned).
+- Diagnostics: `WFC_AIMPITCH=<rad>` forces the aim pitch (camera untouched); `WFC_ANIMLOG` prints the aim
+  values plus barrel pitch/yaw vs aim.
+
 ## SYSTEMS PASS 1 (2026-10-01) — WEAPON LAYERING, RECOIL, ANIMATED WEAPON, ORIGINAL FX + SOUNDCUES
 Systems-agent branch `agents/systems`. All values recovered from cooked data (details and
 confidence in FIDELITY.md PASS 7; decoders in `tools/systems/`).
@@ -21,7 +32,7 @@ confidence in FIDELITY.md PASS 7; decoders in `tools/systems/`).
   impact, reload, idle; dB/semitone variation, timed events, concurrency, FMOD inverse rolloff.
 - Diagnostics: `WFC_ANIMLOG` (base/upper/recoil/weapon clip), `WFC_NOTIFYLOG`, `WFC_CUELOG`.
 - **Not done / handed off:** camera recoil + shake (camera owned by Gameplay), dry-fire trigger,
-  upper-body aim offset, shell/magazine/reload FX rendering, mixer/reverb. The idle base clip
+  shell/magazine/reload FX rendering, mixer/reverb. The idle base clip
   `Cust_Idle` (showcase idle) should be `NAV_Idle`; that is Gameplay's locomotion selection.
 
 ## FIDELITY PASS 6 (2026-10-01) — INTERACTIVE PLAYER FIXES (orientation, locomotion, muzzle, reload, transform)

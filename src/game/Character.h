@@ -8,6 +8,7 @@
 #include "game/Weapon.h"
 #include "game/Ability.h"
 #include "game/Recoil.h"
+#include "game/AimOffset.h"
 #include "assets/SkinnedModel.h"
 #include "render/Renderer.h"
 #include "render/Mesh.h"
@@ -70,9 +71,11 @@ public:
 
     // Weapon owner-animation layer (Robot_ANIMTREE "UpperBodyCustom" slot) + recoil controls.
     void setAimPitch(float p) { aimPitch_ = p; }
+    float aimPitchValue() const { return aimPitch_; }
     const char* upperAnimName() const { return upperName_.c_str(); }
     float upperWeight() const { return upperW_; }
     bool recoilActive() const { return recoilSpine_.active() || recoilRHand_.active(); }
+    const core::Vec3& aimProfile() const { return aimProfile_; }
 
     void draw(render::IRenderer& r) const override;
 
@@ -121,6 +124,8 @@ private:
     RecoilControl recoilSpine_, recoilRHand_;
     int nodeSpineRecoil_ = -1, nodeRHandRecoil_ = -1;
     float aimPitch_ = 0.0f;
+    AimOffset aim_;
+    core::Vec3 aimProfile_{0, 0, 0};
     assets::LocalPose basePose_, overPose_;
     void updateUpperBody(float dt);
     void evalLayered(const assets::SkinnedModel& mdl, int clip, float t, bool loop, render::MeshData& out);

@@ -398,6 +398,8 @@ void World::tick(float dt) {
     }
     player_.controller().applyToPawn(*this, dt);
     player_.pawn().setAimPitch(player_.controller().camPitch());
+    if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
+        player_.pawn().setAimPitch((float)std::atof(ap));
     player_.pawn().updateAnimation(dt);
     tickWeaponPresentation(dt);
     if (std::getenv("WFC_ANIMLOG")) {                       // layering diagnostics
@@ -405,10 +407,21 @@ void World::tick(float dt) {
         if (++n % 6 == 0) {
             const Character& pc = player_.pawn();
             const core::Vec3& v = pc.velocity();
-            LOG_INFO("ANIM base=%s t=%.2f | upper=%s w=%.2f | recoil=%d | weapon=%s | spd=%.2f reload=%d ammo=%d",
-                     pc.animName(), pc.animTime(), pc.upperAnimName(), pc.upperWeight(),
+            LOG_INFO("ANIM base=%s t=%.2f | aim=%.2f,%.2f | upper=%s w=%.2f | recoil=%d | weapon=%s | spd=%.2f reload=%d ammo=%d",
+                     pc.animName(), pc.animTime(), pc.aimProfile().x, pc.aimProfile().y, pc.upperAnimName(), pc.upperWeight(),
                      (int)pc.recoilActive(), weaponAnim_.clipName(), std::sqrt(v.x * v.x + v.z * v.z),
                      (int)pc.weapon().reloading(), pc.weapon().ammo);
+            core::Mat4 ms;
+            if (weaponSocketWorld("MuzzleFlash", ms)) {
+                core::Vec3 bx = core::normalize(core::Vec3{ms.m[0], ms.m[1], ms.m[2]});
+                core::Vec3 aimDir = core::forwardFromYawPitch(player_.controller().camYaw(), pc.aimPitchValue());
+                float aimYaw = player_.controller().camYaw();
+                float barrelYaw = std::atan2(-bx.x, -bx.z);       // same convention as forwardFromYawPitch
+                float rel = core::degrees(std::remainder(barrelYaw - aimYaw, 2.0f * core::PI));
+                LOG_INFO("AIM barrelPitch=%.1fdeg aimPitch=%.1fdeg barrel.aim=%.2f barrelYaw-aimYaw=%.1fdeg pawnYaw-aimYaw=%.1fdeg",
+                         core::degrees(std::asin(bx.y)), core::degrees(pc.aimPitchValue()), core::dot(bx, aimDir), rel,
+                         core::degrees(std::remainder(pc.yaw() - aimYaw, 2.0f * core::PI)));
+            }
         }
     }
     {

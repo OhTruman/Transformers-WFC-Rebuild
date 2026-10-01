@@ -53,8 +53,26 @@ plus class defaults (CDOs) in `TransGame.xxx` / `HM_Engine.xxx`.
 Open items for the Gameplay agent: the robot's idle base clip is currently `Cust_Idle` (the
 customisation-screen showcase idle, first entry of category `idle`), which turns the body and
 points the gun away from the aim; `NAV_Idle` / `Nav_Idle_Pose` is the gameplay idle. Upper-body
-aim (Robot_ANIMTREE `TnAnimNodeAimOffset_14979`, profile "Default", per-bone 9-way quaternions on
-the spine chain) is recovered data but not yet applied.
+aim offset: applied in PASS 7b. Mesh yaw offset: see PASS 7b (should be +pi/2).
+
+### PASS 7b — upper-body aim offset (Systems agent)
+- **Space and axes verified from data:** recomputing the `Shooting_Aim_F_U` vs `Shooting_Aim_F_C` mesh-space
+  delta in robot.glb reproduces the authored Spine01 CU rotation exactly (0.0926), and the Spine02 delta
+  (0.318) is the sum of the Spine01 + Spine02 increments. The authored rotations are therefore **mesh-space
+  increments applied in hierarchy order**. The UE -> glTF quaternion mapping is (x,y,z,w) -> (-x,-z,-y,w).
+- **Tree order [CONF]:** the AimOffset node sits under the `UpperBodyCustom` slot's source (via
+  TnAnimTurnInPlaceRotator "UnwindLowerBody"), so it is: locomotion -> aim offset -> reload slot -> recoil.
+  A playing reload replaces the aimed spine/arm rotations, as in the original.
+- **Pawn aim input [MED]:** X = 0 (the body already faces the aim yaw); Y = camera pitch / 90 deg (UE3 pawn
+  aim convention), remapped piecewise-linearly through PawnAimOffsetRange -> profile range. The exact
+  TnAnimNodeAimOffset remap and the active-profile choice (`WeaponTypeObserved`; Default for the Ion
+  Blaster) are not decompiled.
+- **Mesh facing bug found (Gameplay-owned, not changed here):** the skeleton faces **+X** in model space
+  (eyes are +X of the head, left clavicle at -Z, gun forearm along +X in NAV_Idle, StrafeJog_F and
+  Shooting_Aim_F_C), but `core::config::kMeshYawOffset = 0` renders the mesh as if it faced -Z. The robot
+  is therefore drawn rotated 90 deg from the aim; measured barrel heading = aim - 97..102 deg. With the
+  renderer's rotateY convention the correct value is **kMeshYawOffset = +pi/2**. The recoil aim frame
+  now uses the measured +X forward, so it is correct either way.
 
 ---
 
@@ -68,7 +86,7 @@ the player reported it.
 | Mesh yaw offset | Extracted meshes align to the rebuild's −Z-forward yaw with **no** extra rotation. | Runtime geometry check | CONF | **APPLIED** `kMeshYawOffset=0` (earlier "+90°" was a diagnostic-ordering artifact, reverted). |
 | Vehicle facing | Faces its **travel direction** (steering), not the aim. | Observed | MED | **APPLIED** `yaw=atan2(-vx,-vz)` when moving. |
 | Directional locomotion | `Nav_Strafe{Jog,Walk}_{F/B/L/R}` chosen by travel dir **relative to facing**. | `robot.glb` clip set (category `run`/`walk`) | HI | **APPLIED** (dot of velocity with facing fwd/right). Verified strafe-R → `Nav_StrafeJog_R`. |
-| Upper-body aim offset | `Shooting_Aim_{F/L/R}_{C/D/U}` 9-pose grid points the gun at the reticle. | `robot.glb` category `aim` | — | **NOT YET** (needs additive/partial-skeleton blend) — PROVISIONAL. |
+| Upper-body aim offset | Robot_ANIMTREE `TnAnimNodeAimOffset_14979`, profile **Default**: 11 bones (spine chain, head, both arms) x 9 authored rotations (L/C/R x U/C/D) baked from `Shooting_Aim_*`; ranges H [-1,1] V [-1,0.8]; RemapPawnAimRange from pawn H [-1,0.85] V [-0.7,1] | `TR_Shared_ANIMTREE_p.Robot_ANIMTREE` | CONF (data) / MED (remap) | **APPLIED** (Systems PASS 7b): mesh-space increments in hierarchy order, below the reload slot. Verified: aim 22.9 deg -> barrel 21.6-23.8 deg while jogging + firing. |
 | Transform pairing | Robot & vehicle transform clips share a duration (ToVehicle **1.97 s**, ToRobot **1.13 s**) — one fold authored per mesh, played **in sync**. | `robot.glb`/`vehicle.glb` clip durations | HI | **APPLIED** — outgoing mesh → midpoint → partner mesh resumed at same normalized time (was sequential = the "crack"). Weapon holstered through the fold. |
 | Transform cross-fade point | exact visibility/alpha handoff curve | — | GUESS | `kTransformHandoffFrac=0.5` **PROVISIONAL**; cross-mesh pop minimised, not removed. |
 | Muzzle origin | Ion Blaster **barrel tip** (MuzzleFlash socket). Socket transform not extracted; used geometric tip. | `weapon.glb` frontmost vertex slice | CONF-derived | **APPLIED** — weapon-local (2.063,0.017,0.141) m → +2.07 m forward of the hand; tracer+flash leave the barrel. |
