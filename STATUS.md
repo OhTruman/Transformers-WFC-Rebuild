@@ -124,6 +124,53 @@ Gameplay agent (`agents/gameplay`). Verified by runtime screenshots + numeric lo
 - **Still open (gameplay):** ~~turn-in-place~~, ~~weapon recoil~~ (done in Pass 8), boost/dodge
   clips, camera tuning.
 
+> **Integration note (integration/milestone-01):** Systems Passes 1–2 below describe the Systems
+> branch's own upper-body slot, aim offset and recoil code. Gameplay Passes 7–9 implemented the same
+> features independently, so the merged build keeps **Gameplay's** implementation
+> (`Character.cpp` RobotRig, `Recoil.h`, recoil triggered once per shot from `PlayerController`).
+> Systems' `AimOffset.h`, `updateUpperBody`/`evalLayered` and its second recoil trigger were not
+> merged. Everything else in the Systems passes (animated weapon mesh, notifies, FX, SoundCues) is
+> in the merged build. See INTEGRATION MILESTONE 01.
+
+## SYSTEMS PASS 3 (2026-10-01) — SHELL, MAGAZINE AND RELOAD FX
+- Every shot ejects the authored shell mesh (GrenadeAmmo_STAT) from ShellSocket with a vent smoke puff;
+  the reload vents a blue flare + 0.75 s smoke stream at the muzzle (@0.034 s) and drops the Ion Blaster
+  magazine mesh from MagSocket (@0.174 s, 3 s life) with a smoke puff. Values from the cooked
+  ParticleSystems (FIDELITY PASS 7c); gravity/ground contact for the meshes is PROV (none authored).
+- `WFC_ANIMLOG` now also prints live particle / mesh / impact counts.
+
+## SYSTEMS PASS 2 (2026-10-01) — UPPER-BODY AIM OFFSET
+- Robot_ANIMTREE `TnAnimNodeAimOffset` (profile Default, 11 bones x 9 authored rotations) now aims the
+  spine, head and arms at the camera pitch, between locomotion and the reload slot (original tree order).
+  Space/axes verified against the Shooting_Aim_* clips. Measured: aim 22.9 deg -> barrel 21.6-23.8 deg while
+  jogging and firing; +0.9 / 0 / -0.9 rad screenshots show the gun raised / level / lowered.
+- **Found, for Gameplay:** the robot mesh faces +X in model space but `kMeshYawOffset = 0` draws it as if it
+  faced -Z, so Optimus renders 90 deg off the aim (barrel heading = aim - ~100 deg). Fix: `kMeshYawOffset = +pi/2`
+  (evidence in FIDELITY PASS 7b). Not changed here (Gameplay-owned).
+- Diagnostics: `WFC_AIMPITCH=<rad>` forces the aim pitch (camera untouched); `WFC_ANIMLOG` prints the aim
+  values plus barrel pitch/yaw vs aim.
+
+## SYSTEMS PASS 1 (2026-10-01) — WEAPON LAYERING, RECOIL, ANIMATED WEAPON, ORIGINAL FX + SOUNDCUES
+Systems-agent branch `agents/systems`. All values recovered from cooked data (details and
+confidence in FIDELITY.md PASS 7; decoders in `tools/systems/`).
+- **Reload on the move**: reload plays in the original `UpperBodyCustom` slot masked from
+  `C_Spine01_Lumbar01_XB` (AnimNodeBlendMultiBone), blend 0.1/0.1 s; the legs keep the strafe/jog
+  clip (no more glide). Verified: base `Nav_StrafeJog_F` at 5.5 m/s + upper `Shooting_Reload_IonBlaster_ROBO`.
+- **Recoil**: HmSkelControlRecoil port on SpineRecoil / RightHandRecoil with the Ion Blaster's
+  authored RecoilDefs (restart per shot, decaying sinusoid in aim space).
+- **Animated weapon**: the Ion Blaster is its 34-joint skeletal mesh playing its own
+  Fire / Reload_AP / Idle anims with authored sockets; the muzzle is the MuzzleFlash socket.
+- **Event timing**: weapon AnimNotifies drive reload/idle sounds at the authored times.
+- **FX**: muzzle flash, tracer bolt + smoke trail, impact squib rebuilt from the cooked
+  ParticleSystems (original textures, blend modes, bursts, lifetimes, sizes, velocities,
+  colour/alpha/size curves, squib rules). Replaces the yellow line + box placeholder.
+- **Audio**: original SoundCues: layered fire (near/mid/distant by distance), low-ammo, tail,
+  impact, reload, idle; dB/semitone variation, timed events, concurrency, FMOD inverse rolloff.
+- Diagnostics: `WFC_ANIMLOG` (base/upper/recoil/weapon clip), `WFC_NOTIFYLOG`, `WFC_CUELOG`.
+- **Not done / handed off:** camera recoil + shake (camera owned by Gameplay), dry-fire trigger,
+  mixer/reverb. The idle base clip
+  `Cust_Idle` (showcase idle) should be `NAV_Idle`; that is Gameplay's locomotion selection.
+
 ## FIDELITY PASS 6 (2026-10-01) — INTERACTIVE PLAYER FIXES (orientation, locomotion, muzzle, reload, transform)
 Runtime observation (replaying the exe) drove this pass, not headless smoke. Fixed, in the
 player's priority order:
@@ -322,3 +369,4 @@ map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.j
 - `WFC_STARTVEHICLE=1`  start in vehicle form. `WFC_AUTOSTRAFE/AUTOBACK/AUTORELOAD/AUTOJUMP=1`
   scripted inputs; `WFC_FACELOG`/`WFC_MUZZLELOG` facing/muzzle diagnostics.
 - `WFC_ASSETS=dir`      override the asset root.
+- `WFC_ANIMLOG=1` / `WFC_NOTIFYLOG=1` / `WFC_CUELOG=1`  weapon layering / AnimNotify / SoundCue logs.

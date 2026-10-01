@@ -1,6 +1,7 @@
 #include "game/World.h"
 #include "game/DamageTarget.h"
 #include "render/Renderer.h"
+#include "render/Camera.h"
 #include "assets/Gltf.h"
 #include "assets/Json.h"
 #include "platform/Image.h"
@@ -11,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <map>
 #include <sstream>
@@ -88,13 +90,23 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     LOG_INFO("lightmaps: %d/%zu submeshes bound to atlases", lmBound, mapMesh.subs.size());
 
     mapMesh_ = renderer.uploadMesh(mapMesh);
+    fx_.load(renderer, root + "/../content/");
+    fx_.loadMeshes(renderer, root + "/../content/");
     player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
-    // Ion Blaster: static mesh held at the robot's primary weapon socket.
+    // Ion Blaster: animated skeletal mesh held at the robot's primary weapon socket (falls back
+    // to the static bind-pose mesh if the skinned load fails).
     render::MeshData weaponMesh;
-    if (assets::loadGlb(root + "/Weapons/IonBlaster/weapon.glb", weaponMesh)) {
-        resolveTextures(weaponMesh.mats);
-        weaponMesh_ = renderer.uploadMesh(weaponMesh);
+    bool okWeaponSkin = assets::loadSkinnedGlb(root + "/Weapons/IonBlaster/weapon.glb", weaponModel_);
+    if (okWeaponSkin) {
+        resolveTextures(weaponModel_.mats);
+        weaponAnim_.setModel(&weaponModel_);
+    }
+    if (okWeaponSkin || assets::loadGlb(root + "/Weapons/IonBlaster/weapon.glb", weaponMesh)) {
+        if (!okWeaponSkin) {
+            resolveTextures(weaponMesh.mats);
+            weaponMesh_ = renderer.uploadMesh(weaponMesh);
+        }
         int bone = robotModel_.nodeByName("R_Arm03_Elbow_XB");
         // [CONF] WeaponSocket_Primary relative transform (character.json): loc_ue [-40,0,0],
         // rot_ue [pitch 0, yaw 31311, roll 5461] -> gltf-space socket matrix (column-major).
@@ -305,12 +317,20 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     // tip transformed by the weapon's world matrix (not the hand attach point), so the tracer and
     // flash leave the end of the gun rather than the fist.
     core::Vec3 muzzle = origin;
-    if (player_.pawn().hasWeapon()) {
+    core::Mat4 ms;
+    if (weaponSocketWorld("MuzzleFlash", ms)) {
+        muzzle = {ms.m[12], ms.m[13], ms.m[14]};          // [CONF] MuzzleFlash socket
+    } else if (player_.pawn().hasWeapon()) {
         const core::Mat4& wm = player_.pawn().weaponWorld();
         muzzle = core::transformPoint(wm, core::Vec3{core::config::kMuzzleLocalX,
                      core::config::kMuzzleLocalY, core::config::kMuzzleLocalZ});
     }
-    shots_.push_back({muzzle, hitPoint, 0.06f});
+    // WP_Fire presentation: muzzle flash at the MuzzleFlash socket, tracer muzzle -> impact,
+    // impact squib where the trace hit something (world or target).
+    if (weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(ms);
+    fx_.spawnTracer(muzzle, hitPoint);
+    if (dist < range - 0.01f)
+        fx_.spawnImpact(hitPoint, dir * -1.0f, origin);
     if (std::getenv("WFC_MUZZLELOG") && player_.pawn().hasWeapon()) {
         const core::Mat4& wm = player_.pawn().weaponWorld();
         LOG_INFO("MUZZLE hand=%.2f,%.2f,%.2f tip=%.2f,%.2f,%.2f (|offset|=%.2fm) aimYaw=%.3f legYaw=%.3f",
@@ -318,39 +338,118 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
                  core::length(muzzle - core::Vec3{wm.m[12], wm.m[13], wm.m[14]}), player_.pawn().yaw(),
                  player_.pawn().legYaw());
     }
-    playSfx(Sfx::Fire, muzzle);
+    // WP_Fire / WP_LowAmmoFire SoundCue (LowAmmoThreshold 5). kSmartPan_PreferPlayer: the
+    // distance-layer parameter is measured from the owning player, not the camera.
+    float ownDist = core::length(muzzle - origin);
+    cues_.play(w.lowAmmo() ? "SHOOT_LOW_AMMO" : "SHOOT", muzzle, ownDist);
+    burstActive_ = true; sinceShot_ = 0.0f;
+    // DefaultImpactSound (world) / damage impact cue at the hit point.
+    if (hitTarget) cues_.play("IMPT_DMG", hitPoint, core::length(hitPoint - listenerPos_));
+    else if (dist < range - 0.01f) cues_.play("IMPT_WORLD", hitPoint, core::length(hitPoint - listenerPos_));
 }
 
 void World::setAudio(audio::IAudio* a) {
     audio_ = a;
     if (!a) return;
     const std::string base = assetRoot() + "/../content/";
-    sndFire_      = a->load(base + "WL_GUN_ION_BLASTER/GUN_ION_BLASTER_HEAD.wav");
-    sndReload_    = a->load(base + "WL_GUN_FOLEY/GUN_RIFLE_CLIP_RELOAD.wav");
+    // Weapon audio = the original SoundCues (fire/tail/low-ammo, reload + idle notifies, impacts).
+    cues_.load(a, base);
+    // [PROV] non-weapon placeholders (transform/land cues not yet recovered).
     sndTransform_ = a->load(base + "WL_EVENT_IACON/EVENT_IACON_BRIDGE_TRANSFORM_GEARS.wav");
     sndLand_      = a->load(base + "WL_GUN_FOLEY/RELOAD_AIR_RELEASE_THUMP.wav");
-    LOG_INFO("audio: cues fire=%d reload=%d transform=%d land=%d",
-             sndFire_, sndReload_, sndTransform_, sndLand_);
+    LOG_INFO("audio: transform=%d land=%d", sndTransform_, sndLand_);
 }
 
 void World::playSfx(Sfx s, const core::Vec3& pos) {
     if (!audio_) return;
     // refDist/maxDist in metres [PROV] — exact SoundCue attenuation radii not yet extracted.
     switch (s) {
-        case Sfx::Fire:      audio_->playAt(sndFire_, pos, 0.8f, 8.0f, 150.0f); break;
-        case Sfx::Reload:    audio_->playAt(sndReload_, pos, 0.9f, 4.0f, 40.0f); break;
+        case Sfx::Fire:      cues_.play("SHOOT", pos, 0.0f); break;
+        case Sfx::Reload:    break;   // driven by the reload animation's AnimNotifies
         case Sfx::Transform: audio_->playAt(sndTransform_, pos, 0.9f, 10.0f, 90.0f); break;
         case Sfx::Land:      audio_->playAt(sndLand_, pos, 0.8f, 5.0f, 50.0f); break;
     }
 }
 
+bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
+    if (!weaponAnim_.valid() || !player_.pawn().hasWeapon()) return false;
+    core::Mat4 local;
+    if (!weaponAnim_.socketLocal(socket, local)) return false;
+    out = player_.pawn().weaponWorld() * local;
+    return true;
+}
+
+// Weapon-mesh event animations (TnWeaponMesh.WeaponEventAnims) + their AnimNotifies.
+void World::tickWeaponPresentation(float dt) {
+    const Weapon& w = player_.pawn().weapon();
+    if (w.reloadSerial != weaponSeenReload_) { weaponSeenReload_ = w.reloadSerial; weaponAnim_.play(WeaponMesh::Event::Reload); }
+    if (w.shotSerial != weaponSeenShot_)     { weaponSeenShot_ = w.shotSerial;     weaponAnim_.play(WeaponMesh::Event::Fire); }
+    notifies_.clear();
+    weaponAnim_.tick(dt, notifies_);
+    if (player_.pawn().hasWeapon())
+        for (const WeaponNotify& n : notifies_) handleWeaponNotify(n);
+}
+
+void World::handleWeaponNotify(const WeaponNotify& n) {
+    if (std::getenv("WFC_NOTIFYLOG"))
+        LOG_INFO("NOTIFY %s %s @%.3f %s", n.kind == WeaponNotify::Kind::Sound ? "sound" : "fx",
+                 n.what.c_str(), n.time, n.socket.c_str());
+    if (n.kind == WeaponNotify::Kind::Effect) {
+        // HmAnimNotify_PlayEffect: spawn the authored ParticleSystem at the notify's socket.
+        core::Mat4 sw;
+        if (weaponSocketWorld(n.socket.c_str(), sw) && !fx_.spawnNotifyEffect(n.what, sw))
+            LOG_WARN("notify effect %s not reconstructed", n.what.c_str());
+    }
+    if (n.kind == WeaponNotify::Kind::Sound) {
+        // HmAnimNotify_Sound plays its cue at the weapon mesh (owned by the local player).
+        const core::Mat4& wm = player_.pawn().weaponWorld();
+        core::Vec3 p{wm.m[12], wm.m[13], wm.m[14]};
+        const char* name = n.what.c_str();
+        const char* dot = std::strrchr(name, '.');
+        if (n.what.rfind("BL_WPN_GUN_ION_BLASTER.", 0) == 0 && dot) name = dot + 1;
+        cues_.play(name, p, core::length(p - player_.pawn().position()));
+    }
+}
+
 void World::tick(float dt) {
-    player_.controller().applyToPawn(*this, dt);
+    {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
+        render::Camera cam;
+        player_.controller().updateCamera(cam);
+        listenerPos_ = cam.pos;
+    }
+    player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
+    if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
+        player_.pawn().setAimPitch((float)std::atof(ap));
     player_.pawn().updateAnimation(dt);
-    for (size_t i = 0; i < shots_.size();) {
-        shots_[i].ttl -= dt;
-        if (shots_[i].ttl <= 0) { shots_[i] = shots_.back(); shots_.pop_back(); }
-        else ++i;
+    tickWeaponPresentation(dt);
+    if (std::getenv("WFC_ANIMLOG")) {                       // layering diagnostics
+        static int n = 0;
+        if (++n % 6 == 0) {
+            const Character& pc = player_.pawn();
+            const core::Vec3& v = pc.velocity();
+            LOG_INFO("ANIM base=%s t=%.2f | aim=%.2f,%.2f w=%.2f | reload w=%.2f | recoil=%d | weapon=%s | spd=%.2f reload=%d ammo=%d",
+                     pc.animName(), pc.animTime(), pc.aimYawNorm(), pc.aimPitchNorm(), pc.aimWeight(), pc.reloadWeight(),
+                     (int)pc.recoiling(), weaponAnim_.clipName(), std::sqrt(v.x * v.x + v.z * v.z),
+                     (int)pc.weapon().reloading(), pc.weapon().ammo);
+            LOG_INFO("FX particles=%zu meshes=%zu impacts=%d", fx_.liveParticles(), fx_.liveMeshes(), fx_.liveImpacts());
+            core::Mat4 ms;
+            if (weaponSocketWorld("MuzzleFlash", ms)) {
+                core::Vec3 bx = core::normalize(core::Vec3{ms.m[0], ms.m[1], ms.m[2]});
+                const float aimPitch = player_.controller().camPitch();
+                core::Vec3 aimDir = core::forwardFromYawPitch(player_.controller().camYaw(), aimPitch);
+                float aimYaw = player_.controller().camYaw();
+                float barrelYaw = std::atan2(-bx.x, -bx.z);       // same convention as forwardFromYawPitch
+                float rel = core::degrees(std::remainder(barrelYaw - aimYaw, 2.0f * core::PI));
+                LOG_INFO("AIM barrelPitch=%.1fdeg aimPitch=%.1fdeg barrel.aim=%.2f barrelYaw-aimYaw=%.1fdeg pawnYaw-aimYaw=%.1fdeg",
+                         core::degrees(std::asin(bx.y)), core::degrees(aimPitch), core::dot(bx, aimDir), rel,
+                         core::degrees(std::remainder(pc.yaw() - aimYaw, 2.0f * core::PI)));
+            }
+        }
+    }
+    {
+        core::Mat4 ms;
+        bool have = weaponSocketWorld("MuzzleFlash", ms);
+        fx_.tick(dt, have ? &ms : nullptr, collision_.valid() ? &collision_ : nullptr);
     }
     // Event-driven audio via edge detection on pawn state.
     {
@@ -361,9 +460,16 @@ void World::tick(float dt) {
         bool tf = player_.pawn().isTransforming();
         if (tf && !prevTransforming_) playSfx(Sfx::Transform, pp);
         prevTransforming_ = tf;
-        bool rl = player_.pawn().weapon().reloading();
-        if (rl && !prevReloading_) playSfx(Sfx::Reload, pp);
-        prevReloading_ = rl;
+        // WP_LoopingTail: the SHOOT_TAIL cue when a burst ends (trigger released / mag empty).
+        sinceShot_ += dt;
+        const Weapon& w = player_.pawn().weapon();
+        if (burstActive_ && sinceShot_ > w.fireInterval * 2.0f) {
+            burstActive_ = false;
+            core::Mat4 ms;
+            core::Vec3 tp = weaponSocketWorld("MuzzleFlash", ms) ? core::Vec3{ms.m[12], ms.m[13], ms.m[14]} : pp;
+            cues_.play("SHOOT_TAIL", tp, core::length(tp - pp));
+        }
+        cues_.tick(dt);
     }
 
     if (player_.pawn().position().y < killZ_) {
@@ -388,14 +494,13 @@ void World::draw(render::IRenderer& r) const {
     player_.draw(r);
 
     // Ion Blaster mesh held at the weapon socket (robot form only).
-    if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
+    if (weaponAnim_.valid() && player_.pawn().hasWeapon())
+        r.drawDynamicMesh(weaponAnim_.pose(), player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
+    else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
         r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
 
-    // Tracers + muzzle flashes for recent shots.
-    for (const Shot& s : shots_) {
-        r.drawLine(s.a, s.b, core::Vec3{1.0f, 0.85f, 0.35f});
-        r.drawBox(s.a, core::Vec3{0.35f, 0.35f, 0.35f}, core::Vec3{1.0f, 0.9f, 0.4f});
-    }
+    // Weapon effects last (translucent/additive over the opaque scene).
+    fx_.draw(r);
 
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {

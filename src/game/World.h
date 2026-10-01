@@ -11,6 +11,9 @@
 #include "render/Mesh.h"
 #include "assets/SkinnedModel.h"
 #include "audio/Audio.h"
+#include "game/WeaponMesh.h"
+#include "game/WeaponFx.h"
+#include "game/SoundCues.h"
 
 namespace render { class IRenderer; }
 
@@ -72,16 +75,28 @@ private:
     assets::SkinnedModel robotModel_;
     assets::SkinnedModel vehicleModel_;
 
-    // Transient weapon-fire effects (tracers + muzzle flash).
-    struct Shot { core::Vec3 a, b; float ttl; };
-    std::vector<Shot> shots_;
+    // Ion Blaster as an animated skeletal mesh (own Fire/Reload/Idle anims, sockets, notifies).
+    assets::SkinnedModel weaponModel_;
+    WeaponMesh weaponAnim_;
+    unsigned weaponSeenShot_ = 0, weaponSeenReload_ = 0;
+    std::vector<WeaponNotify> notifies_;
+    void tickWeaponPresentation(float dt);
+    void handleWeaponNotify(const WeaponNotify& n);
+    // World transform of a weapon socket (MuzzleFlash/ShellSocket/MagSocket); false if unavailable.
+    bool weaponSocketWorld(const char* socket, core::Mat4& out) const;
+
+    // Original weapon effects (muzzle flash, tracer, impact squib) from the cooked FX data.
+    WeaponFx fx_;
 
     audio::IAudio* audio_ = nullptr;
-    audio::Sound sndFire_ = audio::kInvalidSound, sndReload_ = audio::kInvalidSound,
+    audio::Sound
                  sndTransform_ = audio::kInvalidSound, sndLand_ = audio::kInvalidSound;
     bool prevGrounded_ = true;
     bool prevTransforming_ = false;
-    bool prevReloading_ = false;
+    SoundCues cues_;
+    bool burstActive_ = false;
+    float sinceShot_ = 0.0f;
+    core::Vec3 listenerPos_{0, 0, 0};
 };
 
 } // namespace game
