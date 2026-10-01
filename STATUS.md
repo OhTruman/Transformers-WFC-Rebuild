@@ -3,6 +3,14 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS CHECKPOINT (2026-10-01) — end of round
+- Branch `agents/systems`, clean build. Implemented this round: weapon layering / recoil / aim offset,
+  animated Ion Blaster + notifies, weapon FX (muzzle, tracer, impact, shell, magazine, reload), weapon
+  SoundCues, vehicle boost / hover / jump / ram FX, boost + nitro + engine / jump / land audio.
+- Vehicle mechanics provenance (normal boost vs hover dash vs ram/nitro): FIDELITY.md "VEHICLE MECHANICS".
+- Deliberately NOT done (Gameplay-owned): tire squeal (needs a lateral-slip signal), nitro camera change,
+  nitro speed/steering scaling, hover dash, final Dash / RMB bindings (RMB: robot Fine Aim, vehicle Boost).
+
 ## SYSTEMS PASS 7 (2026-10-01) — VEHICLE ENGINE AUDIO
 - Optimus's authored engine audio in vehicle form: off-load (idle/coasting) and on-load (throttle) drive
   loops, the jump-rev loop while airborne and the jump-start one-shot, and hover/wheels light/heavy landing
