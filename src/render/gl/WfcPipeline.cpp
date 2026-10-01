@@ -923,7 +923,24 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
                 const LightEnv* env;
                 if (dynamicObject) {
-                    if (!dynEnvReady) { computeEnv(origin + core::Vec3{0, 2.0f, 0}, true, dynEnv); dynEnvReady = true; }
+                    if (!dynEnvReady) {
+                        core::Vec3 p = origin + core::Vec3{0, 2.0f, 0};
+                        EnvCache* best = nullptr;
+                        for (EnvCache& c : envCache_)
+                            if (core::length(c.pos - p) < 0.3f) { best = &c; break; }
+                        if (!best) {
+                            // reuse the nearest stale slot (same object moved) or add one
+                            for (EnvCache& c : envCache_)
+                                if (!best || core::length(c.pos - p) < core::length(best->pos - p)) best = &c;
+                            if (!best || envCache_.size() < 4) { envCache_.push_back({}); best = &envCache_.back(); }
+                            if (best->lastFrame == frameNo_ && envCache_.size() < 8) { envCache_.push_back({}); best = &envCache_.back(); }
+                            best->pos = p;
+                            computeEnv(p, true, best->env);
+                        }
+                        best->lastFrame = frameNo_;
+                        dynEnv = best->env;
+                        dynEnvReady = true;
+                    }
                     env = &dynEnv;
                 } else {
                     if (!s.envReady) { computeEnv((s.bmin + s.bmax) * 0.5f, false, s.env); s.envReady = true; }
@@ -1019,6 +1036,7 @@ void Pipeline::ensureTargets(int w, int h) {
 }
 
 void Pipeline::beginFrame(const Camera& cam, int w, int h) {
+    ++frameNo_;
     static auto t0 = std::chrono::steady_clock::now();
     time_ = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
     vpW_ = w; vpH_ = h;
@@ -1043,6 +1061,13 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
 }
 
 void Pipeline::endFrame() {
+    if (std::getenv("WFC_RENDERSTATS")) {          // CPU frame-to-frame time, logged every 120 frames
+        static auto last = std::chrono::steady_clock::now();
+        static int frames = 0; static double acc = 0;
+        auto now = std::chrono::steady_clock::now();
+        acc += std::chrono::duration<double, std::milli>(now - last).count(); last = now;
+        if (++frames == 120) { LOG_INFO("wfc: avg frame %.2f ms (%.0f fps)", acc / frames, 1000.0 * frames / acc); frames = 0; acc = 0; }
+    }
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glDisable(GL_BLEND);

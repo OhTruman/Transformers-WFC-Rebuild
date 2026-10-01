@@ -120,6 +120,12 @@ private:
     std::map<std::string, int> lmIndex_;
     GLuint whiteTex_ = 0, blackTex_ = 0, flatNormalTex_ = 0, blackCube_ = 0;
 
+    // Dynamic-object light environments, rebuilt only when the owner moves more than
+    // UpdateDistanceThreshold (TnRobotForm/TnVehicleForm: 30 UU = 0.3 m) [CONF].
+    struct EnvCache { core::Vec3 pos; LightEnv env; int lastFrame = 0; };
+    std::vector<EnvCache> envCache_;
+    int frameNo_ = 0;
+
     // dynamic stream
     GLuint dynVao_ = 0, dynVbo_ = 0, dynIbo_ = 0;
     std::map<const Material*, int> dynProgCache_;

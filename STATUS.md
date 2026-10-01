@@ -3,6 +3,36 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## RENDERING PASS 7 (2026-10-01) — ORIGINAL WFC RENDER PATH (shaders, materials, lighting, post)
+Branch `agents/rendering`. The runtime now renders Streets and Optimus through a GL 3.3 shader path
+whose every stage was recovered from the original game data/binaries (details + provenance:
+FIDELITY.md "PASS 7"). The legacy fixed-function path remains as an automatic fallback.
+- **Materials from the original graphs:** `tools/render/matc.py` translates the cooked UE3 material
+  expression graphs (master + WFC MaterialFunctions + MIC params, **static switches**, **TextureSets**,
+  WFC HLSL `ShaderCode` snippets) into per-instance GLSL — 168/169 materials (world, BSP, Optimus
+  robot/vehicle, Ion Blaster). Fixes the old extraction's biggest error: world materials were drawn
+  with their *decal* texture (`Rust_C_CLR`) as diffuse; the real diffuse/normal/masks live in TextureSets.
+- **Directional lightmaps, all 3 coefficients**, decoded from the original Xenon base-pass shader
+  microcode (`tools/render/xenos_dis.py`): `L = Σ dot(N_t,B_i)² · LM_i · Scale_i`, sRGB-decoded atlases.
+- **BSP lightmaps:** BSP rebuilt from the cooked `FModelVertexBuffer` (ShadowTexCoord) split per
+  ModelComponent element with its own lightmap (180 lit elements, 2460 tris) → `bsp.glb`.
+- **Normal maps / specular / gloss / emissive / reflections:** all as authored by the graphs; cubemaps
+  and flipbooks decoded natively from Xbox-tiled data (`tools/render/xbox_texture.py`).
+- **Dynamic-character lighting:** WFC UberLight decoded from microcode (ambient cube + wrapped²
+  diffuse + Phong spec), light environment built from the 268 authored lights (TotalLightCount 2,
+  0.3 m update threshold from TnRobotForm/TnVehicleForm), dynamic-only SkyLight, raycast visibility.
+- **Fog / post:** UE3 height fog (authored component, LightBrightness 0.1 default), HDR target,
+  decoded bloom gather + UberPostProcess (WorldInfo defaults), DisplayGamma 2.2.
+- **Performance:** ~200 fps (RX 7900 XTX) standing and walking; VBOs, per-submesh frustum culling.
+- **Render data:** generated into `work/render/<Map>` (untracked) by
+  `powershell -ExecutionPolicy Bypass -File tools\render\build_render_data.ps1` — run once per worktree
+  before launching. Missing data ⇒ legacy renderer.
+- **New env vars:** `WFC_LEGACYRENDER`, `WFC_RENDER_DATA=dir`, `WFC_LIGHTINGONLY`, `WFC_NOBLOOM`,
+  `WFC_NOFOG`, `WFC_RENDERCAM=x,y,z,yaw,pitch`, `WFC_RENDERSTATS`, `WFC_DUMPSHADER` (`WFC_NOLIGHTMAP` kept).
+- **Still open:** LightsVisibilitiesVolume (precomputed light visibility, format partly decoded) not
+  used; 24 vertex-lightmapped props unlit by lightmap; dynamic shadows (ShadowMask) = 1;
+  DirectLightAmbientContribution = 0; 1 material with an absent master.
+
 ## FIDELITY PASS 6 (2026-10-01) — INTERACTIVE PLAYER FIXES (orientation, locomotion, muzzle, reload, transform)
 Runtime observation (replaying the exe) drove this pass, not headless smoke. Fixed, in the
 player's priority order:

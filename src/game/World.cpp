@@ -8,6 +8,7 @@
 #include "core/Debug.h"
 #include "core/Log.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
@@ -111,7 +112,15 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     if (assets::loadGlb(root + "/Maps/MP_IAC_Streets/collision.glb", colMesh)) {
         collision_.build(colMesh);
         renderer.setVisibilityQuery([this](const core::Vec3& a, const core::Vec3& b) {
-            float t; return collision_.segmentHit(a, b, t);
+            // March in short pieces: segmentHit scans every grid cell in the segment's AABB,
+            // which is prohibitive for long light-visibility rays.
+            core::Vec3 d = b - a;
+            float len = core::length(d);
+            int n = std::max(1, (int)std::ceil(len / 2.0f));
+            float t;
+            for (int i = 0; i < n; ++i)
+                if (collision_.segmentHit(a + d * ((float)i / n), a + d * ((float)(i + 1) / n), t)) return true;
+            return false;
         });
         killZ_ = collision_.boundsMin().y - 25.0f;   // fell out of the world
     }
