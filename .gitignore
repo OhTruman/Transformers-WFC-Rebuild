@@ -23,3 +23,6 @@ Thumbs.db
 /work/
 /.claude/
 
+
+# Runtime log written to the working directory by core::Log
+wfc.log

@@ -45,3 +45,10 @@ endif()
 
 set_target_properties(wfc_rebuild PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+# Fidelity regression/measurement harness (tools/fidelity/README.md).
+option(WFC_BUILD_FIDELITY "Build the wfc_fidelity harness" ON)
+if(WFC_BUILD_FIDELITY)
+    enable_testing()
+    add_subdirectory(tools/fidelity)
+endif()

@@ -1,0 +1,102 @@
+// WFC fidelity harness — deterministic, windowless simulation rig.
+//
+// Drives the PRODUCTION gameplay code (PlayerController -> CharacterMovement -> Weapon ->
+// Character::updateAnimation) at a fixed step with scripted InputFrames, exactly in the order
+// World::tick uses. No renderer, no wall clock: the same script always yields the same trace,
+// which the in-game WFC_SMOKE_FRAMES path cannot guarantee (it integrates real frame time).
+#pragma once
+#include <memory>
+#include <string>
+#include <vector>
+#include "assets/SkinnedModel.h"
+#include "game/Character.h"
+#include "game/CharacterMovement.h"
+#include "game/Collision.h"
+#include "game/Player.h"
+#include "game/World.h"
+#include "platform/Input.h"
+#include "render/Camera.h"
+
+namespace fid {
+
+// Hitscan calls captured by the World::fireHitscan stub (WorldStub.cpp).
+struct ShotRecord { double t; core::Vec3 origin, dir; };
+std::vector<ShotRecord>& shotLog();
+void setShotClock(double t);
+
+// One row of the per-step trace.
+struct Frame {
+    int step = 0;
+    double t = 0;
+    core::Vec3 pos, vel;
+    float yaw = 0, camYaw = 0, camPitch = 0;
+    bool grounded = false, transforming = false, reloading = false, weaponVisible = false;
+    game::Form form = game::Form::Robot;
+    std::string anim;
+    float animT = 0;
+    int ammo = 0, reserve = 0, shots = 0;
+    float spread = 0;
+    core::Vec3 muzzle;   // world-space barrel tip (valid when weaponVisible)
+};
+
+// Extracted Optimus models, loaded once and shared by every rig (read-only asset access).
+struct Models {
+    assets::SkinnedModel robot, vehicle;
+    bool ok = false;
+    int weaponBone = -1;
+    core::Mat4 socket;
+    static const Models* get();          // null when assets are unavailable / disabled
+    static void disable();
+    static std::string assetRoot();
+};
+
+class Rig {
+public:
+    explicit Rig(double hz = 60.0, bool withModels = true);
+
+    game::Character& pawn() { return player_.pawn(); }
+    game::PlayerController& controller() { return player_.controller(); }
+    bool hasModels() const { return models_ != nullptr; }
+    float dt() const { return dt_; }
+    double time() const { return t_; }
+
+    // Optional collision. When set, movement runs through CharacterMovement directly with
+    // the controller-computed intent (World's collision member is private to World).
+    void setCollision(const game::CollisionWorld* c) { col_ = c; }
+
+    // One fixed step with the given input (pressed[] edges are consumed this step).
+    void step(const platform::InputFrame& in);
+    // Hold an input for `seconds` (edges only on the first step).
+    void hold(const platform::InputFrame& in, double seconds);
+    void idle(double seconds) { hold(platform::InputFrame{}, seconds); }
+
+    const std::vector<Frame>& trace() const { return trace_; }
+    const Frame& last() const { return trace_.back(); }
+    render::Camera camera() const;
+    bool writeCsv(const std::string& path) const;
+
+    static platform::InputFrame press(platform::Button b);
+    static platform::InputFrame down(std::initializer_list<platform::Button> bs);
+
+private:
+    void record();
+
+    game::Player player_;
+    game::World world_;              // never loaded; only used as the applyToPawn sink
+    const game::CollisionWorld* col_ = nullptr;
+    const Models* models_ = nullptr;
+    float dt_;
+    double t_ = 0;
+    int step_ = 0;
+    size_t shotBase_ = 0;
+    std::vector<Frame> trace_;
+};
+
+// Synthetic collision geometry builder (axis-aligned boxes + floor) for collision probes.
+struct BoxScene {
+    render::MeshData mesh;
+    void floor(float y, float half);
+    void box(const core::Vec3& mn, const core::Vec3& mx);
+};
+
+} // namespace fid
