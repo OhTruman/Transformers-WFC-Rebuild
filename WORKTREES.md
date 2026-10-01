@@ -9,11 +9,11 @@ Integration: F:\Transformers Rebuild\Rebuild on main. Keep this tree idle while 
 | Rebuild-Systems | agents/systems | Weapons, audio, general gameplay systems |
 | Rebuild-Experimental | agents/experimental | Experiments and reverse-engineering bridge |
 
-Each worker has a private .toolchain copy, empty build directory, and private work directory. Experimental also has its own copy of the preexisting work data, including the Ghidra snapshot. No build caches were copied from integration: CMake caches contain absolute paths.
+Each worker has a private .toolchain copy, independently configured build directory, and private work directory. Experimental also has its own copy of the preexisting work data, including the Ghidra snapshot. No build caches were copied from integration: CMake caches contain absolute paths.
 
 Original ExtractedAssets and Game Dump remain outside Git and all worktrees. Their read-only policy is documented in CLAUDE.md/AGENTS.md; Windows permissions were not changed. Existing folders and data were left in place.
 
-A full pre-setup backup is at F:\Transformers Rebuild\Backups\Rebuild-before-worktrees-20261001. The initial baseline commit tracks source, documentation and scripts, excluding toolchains, builds and work scratch. The backup preserves those excluded files too. No remote repository was configured or uploaded. Setup commits use the per-command identity Codex Local Setup <codex-local@localhost>; your global Git identity was not changed. Configure your own Git identity before authoring future commits if needed.
+A full pre-setup backup is at F:\Transformers Rebuild\Backups\Rebuild-before-worktrees-20261001. The initial baseline commit tracks source, documentation and scripts, excluding toolchains, builds and work scratch. The backup preserves those excluded files too. The origin remote is https://github.com/OhTruman/Transformers-WFC-Rebuild.git, as supplied by the user. No commits have been uploaded. Setup commits use the per-command identity Codex Local Setup <codex-local@localhost>; your global Git identity was not changed. Configure your own Git identity before authoring future commits if needed.
 
 Open four separate PowerShell terminals and run one pair in each:
 
@@ -44,3 +44,4 @@ git merge --no-ff agents/gameplay
 ```
 
 Repeat for the other branches only when their work is ready. Coordinate worker updates to main after integration; do not perform concurrent repository-wide maintenance. Four isolated trees prevent file/build collisions but do not guarantee low CPU consumption.
+Setup validation: all five Git working trees are clean. All four worker CMake caches reference their own source, compiler and Ninja paths. Gameplay completed a full compile/link using build.ps1 -Jobs 2. The other three workers configured successfully; no interactive gameplay test was performed.
