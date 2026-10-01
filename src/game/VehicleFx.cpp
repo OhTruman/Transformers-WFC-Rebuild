@@ -27,6 +27,7 @@ const VehicleFx::SocketDef kSockets[VehicleFx::kSocketCount] = {
     {"JumpBoostSocket_C", "C_Body_XB", {0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, -1.464059f, -1.0025f, 0, 1}},
     {"JumpBoostSocket_R", "C_Body_XB", {0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0.969948f, -0.93f, 1.14068f, 1}},
     {"JumpBoostSocket_L", "C_Body_XB", {0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0.97f, -0.93f, -1.14068f, 1}},
+    {"RamSocket", "C_Body_XB", {1, 0, 0, 0, 0, 1.5f, 0, 0, 0, 0, 1.5f, 0, 3.8f, -0.4f, 0, 1}},   // (380,0,-40) UU, scale (1,1.5,1.5)
 };
 
 // ---- assets ----------------------------------------------------------------------------------
@@ -39,8 +40,8 @@ const char* kTexPaths[kTexCount] = {
     nullptr,                                            // Spark_MAT: procedural (generated below)
 };
 // `intensity`: material emissive scale where the GL1 path cannot evaluate the shader graph.
-struct MeshAsset { const char* gltf; const char* texture; float intensity; };
-enum Mesh { kBooster02, kBullet, kBooster03, kCircuit, kLightCyl, kMeshCount };
+struct MeshAsset { const char* gltf; const char* texture; float intensity; float fresnelExp = 0, fresnelScale = 1, fresnelPower = 1; };
+enum Mesh { kBooster02, kBullet, kBooster03, kCircuit, kLightCyl, kRamMesh, kMeshCount };
 const MeshAsset kMeshes[kMeshCount] = {
     {"FX_Navigation_p/Boostermesh_02_STATMESH.gltf", "FX_Textures_p/Textures/LightBeam_Falloff_01_CLR.png", 1.0f}, // Boostermaterial_02_MAT
     {"FX_Navigation_p/bulletshape_fx_STAT.gltf", "FX_Textures_p/Textures/SphereGlow_01_CLR.png", 1.0f},            // bumble_boostcone_MAT
@@ -49,6 +50,11 @@ const MeshAsset kMeshes[kMeshCount] = {
     // LightCylinder_Rays_MAT_INST -> LightVolume_Base_MAT: view-dependent volumetric (side-view/near
     // fade, depth bias, dust); only its DustPower 0.1 is applied as an intensity [PROV].
     {"FX_Mesh_p/Light_Cylinder_STAT.gltf", "FX_Textures_p/Textures/LightBeam_Falloff_01_CLR.png", 0.1f},
+    // Ram_model_MAT: additive, two-sided, four panning Flame_Tile layers (only one drawn, static).
+    // Its emissive = 2 x (vertex colour x c)^2 with c = saturate(pow(1 - N.V, FresnelExponent 2) x
+    // FresnelScaleUp 1.5) x 2 x lerp(A x L1, L1, 0.4) [CONF graph]: a rim-lit shield. The fresnel is
+    // applied per vertex (squared, as in the graph); the panning-layer term is one static layer [PROV].
+    {"FX_Mesh_p/Mesh/Ram_STAT.gltf", "FX_Textures_p/Textures/Flame_Tile_CLR.png", 1.0f, 2.0f, 1.5f, 2.0f},
 };
 
 // ---- shared curves (21-entry baked tables over normalized life) -------------------------------
@@ -230,6 +236,21 @@ const std::vector<const ED*>& jumpEmitters() {
     return v;
 }
 
+// ======================= RamFX: Truck_ram_FX (looping while the nitro runs) =======================
+// Emitter "None": Ram_STAT mesh (Ram_model_MAT), SpawnRate 20/s, looping; distributions in order:
+// 1.0, 8.0, 0, 0, 0, 0.35, (2,1.8,1.3), (-250,0,-10), curve 1. Read as life 1.0 s, alpha 0.35,
+// HDR colour (2,1.8,1.3), location -250 UU (the wedge envelops the truck nose) [MED roles].
+// Omitted: "dust" (Distortion_Cloud_01) and "rays_Dup" (Trail_Distort) distortion emitters.
+const std::vector<const ED*>& ramEmitters() {
+    static std::vector<const ED*> v;
+    if (!v.empty()) return v;
+    static ED shell = [] { ED e = base("Ram"); e.mesh = kRamMesh; e.rateMin = e.rateMax = 20;
+        e.lifeMin = e.lifeMax = 1.0f; e.alpha = {{0.35f}}; e.color = {2.0f, 1.8f, 1.3f};
+        e.locX = -250; return e; }();
+    v = {&shell};
+    return v;
+}
+
 float frand() { return (float)std::rand() / (float)RAND_MAX; }
 float lerp(float a, float b, float t) { return a + (b - a) * t; }
 Vec3 lerpRand(const Vec3& a, const Vec3& b) { float t = frand(); return {lerp(a.x, b.x, t), lerp(a.y, b.y, t), lerp(a.z, b.z, t)}; }
@@ -280,7 +301,7 @@ float VehicleFx::Curve1::eval(float t) const {
 }
 
 const std::vector<const ED*>& VehicleFx::emitters(System s) const {
-    return s == Boost ? boostEmitters() : (s == Hover ? hoverEmitters() : jumpEmitters());
+    return s == Boost ? boostEmitters() : (s == Hover ? hoverEmitters() : (s == Jump ? jumpEmitters() : ramEmitters()));
 }
 
 void VehicleFx::load(render::IRenderer& r, const std::string& contentRoot) {
@@ -393,7 +414,7 @@ void VehicleFx::tick(float dt) {
 
 void VehicleFx::draw(render::IRenderer& r) const {
     std::vector<render::Particle> q;
-    for (System sys : {Boost, Hover, Jump}) {
+    for (System sys : {Boost, Hover, Jump, Ram}) {
         for (const ED* d : emitters(sys)) {
             float br, bg, bb, scale;
             hdr(d->color, d->colorMul, br, bg, bb, scale);
@@ -409,8 +430,10 @@ void VehicleFx::draw(render::IRenderer& r) const {
                     Vec3 s{p.size.x * g.x, p.size.z * g.z, p.size.y * g.y};
                     core::Mat4 model = sockets_[p.socket] * core::Mat4::translate(p.pos) * core::Mat4::scale(s);
                     float mi = kMeshes[d->mesh].intensity;
+                    const MeshAsset& ma = kMeshes[d->mesh];
                     r.drawMeshFx(h, model, std::min(1.0f, br * cl.x * k * mi), std::min(1.0f, bg * cl.y * k * mi),
-                                 std::min(1.0f, bb * cl.z * k * mi), d->alpha.eval(t), scale);
+                                 std::min(1.0f, bb * cl.z * k * mi), d->alpha.eval(t), scale,
+                                 ma.fresnelExp, ma.fresnelScale, ma.fresnelPower);
                 }
                 continue;
             }

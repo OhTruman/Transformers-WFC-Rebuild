@@ -3,6 +3,17 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS PASS 6 (2026-10-01) — TRUCK NITRO / RAM (state, FX, audio)
+- New abstract input action `Dash` (**PROV** temporary key **Q**). DASH while boosting on wheels starts
+  the authored nitro: **3 s**, cooldown **8 s**; `RamFX` (rim-lit flame wedge on RamSocket) runs for its
+  duration; `VEH_OPTIMUS_RAM_NITRO_START` + `VEH_TRUCK_RAM_ALERT` play at start. Releasing boost stops it.
+- For Gameplay (read-only): `World::vehicleNitro()` -> `nitroActive()`, `ramActive()`, `timeRemaining()`,
+  `cooldownRemaining()`, `speedScale()` (1.5 while active), `steeringScale()` (0.3 while active);
+  `World::notifyRamImpact(pos)` plays the ram impact cue. Systems does **not** change speed or steering.
+- Documented, not changed: Optimus's truck physics blueprints differ from the rebuild's dash values
+  (HoverTruck_Physics DashSpeed 3000 / DashDuration 0.5 vs current 5000 / 0.3) — see FIDELITY PASS 10.
+- Test: `WFC_STARTVEHICLE=1 WFC_AUTOBOOST=1 WFC_AUTODASH=1 WFC_BOOSTLOG=1` (NITRO lines).
+
 ## SYSTEMS PASS 5 (2026-10-01) — HOVER THRUSTERS + JUMP BOOSTERS
 - Vehicle form now shows Optimus's authored hover thrusters (`CarHover_A_01_FX` on the six wheel
   HoverBooster sockets, with their socket scale): red light cones and orange rings looping, plus a
@@ -13,7 +24,7 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
 - `VehicleFx` replaces `VehicleBoostFx` as one data-driven system for boost / hover / jump.
 - Verified: idle hover, boost (hover off, boost unchanged), jump take-off, transform out; robot weapon FX unchanged.
 - PROV: light-cylinder intensity (DustPower 0.1 stands in for the volumetric shader), procedural spark
-  texture, ring velocity reading. Open: RamFX, drive/jump/land engine audio.
+  texture, ring velocity reading. Open: drive/jump/land engine audio (RamFX: SYSTEMS PASS 6).
 
 ## SYSTEMS PASS 4 (2026-10-01) — VEHICLE BOOST PRESENTATION
 - Holding boost in vehicle form now shows Optimus's authored afterburner (`bumble_boost_small1_FX` on
@@ -243,7 +254,7 @@ map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.j
   `WFC_SMOKE_FRAMES`; not a product blocker.)
 
 ## CONTROLS
-- WASD move, mouse look, Space jump, LMB fire (hold = auto), R reload, F transform,
+- WASD move, mouse look, Space jump, LMB fire (hold = auto), R reload, F transform, Q dash/ram (PROV),
   C free/capture cursor, B debug overlay, Esc quit.
 
 ## ASSET PATHS (root = `F:/Transformers Rebuild/ExtractedAssets/VerticalSlice`, override `WFC_ASSETS`)

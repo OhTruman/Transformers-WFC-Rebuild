@@ -243,6 +243,7 @@ void World::buildGraybox() {
 
 void World::handleInput(const platform::InputFrame& in, float dt) {
     player_.controller().handleInput(in, dt);
+    if (in.wasPressed(platform::Button::Dash) || std::getenv("WFC_AUTODASH")) dashLatched_ = true;
 }
 
 static bool rayAabb(const core::Vec3& o, const core::Vec3& d, float len,
@@ -411,6 +412,21 @@ void World::tickVehicleBoost(float dt) {
     }
     if (!vehicle) for (int& id : jumpInst_) if (id >= 0) { vehicleFx_.deactivate(id); id = -1; }
     vehiclePrevGrounded_ = grounded;
+
+    // Nitro / ram: DASH while driving on wheels (= boosting). Systems runs state, RamFX and audio;
+    // the speed/steering scales are exposed for Gameplay, not applied here.
+    VehicleNitro::Event ne = nitro_.update(dt, boost, dashLatched_);
+    dashLatched_ = false;
+    if (ne == VehicleNitro::Event::Started) {
+        ramInst_ = vehicleFx_.start(VehicleFx::Ram, VehicleFx::RamSocket);
+        core::Vec3 ap0 = pc.position() + core::Vec3{0, 1.4725f, 0};
+        float mph0 = core::length(pc.velocity()) * 2.23694f;
+        cues_.play("VEH_OPTIMUS_RAM_NITRO_START", ap0, 0.0f, mph0);   // NitroSound Auto_Ram_Nitro
+        cues_.play("VEH_TRUCK_RAM_ALERT", ap0, 0.0f, mph0);           // CustomLoopingSound Auto_Ram_Alert [MED: once]
+    } else if (ne == VehicleNitro::Event::Stopped) {
+        vehicleFx_.deactivate(ramInst_);
+        ramInst_ = -1;
+    }
     vehicleFx_.tick(dt);
 
     // Boost audio at the AUDIO_ROOT socket (C_Reference_XR + 147.25 UU up); speed parameter in mph.
@@ -438,6 +454,10 @@ void World::tickVehicleBoost(float dt) {
 
     if (std::getenv("WFC_BOOSTLOG")) {
         static int n = 0;
+        if (n % 6 == 5 && pc.form() == Form::Vehicle)
+            LOG_INFO("NITRO active=%d remaining=%.2f cooldown=%.2f speedScale=%.1f steeringScale=%.1f",
+                     (int)nitro_.nitroActive(), nitro_.timeRemaining(), nitro_.cooldownRemaining(),
+                     nitro_.speedScale(), nitro_.steeringScale());
         if (++n % 6 == 0 && pc.form() == Form::Vehicle) {
             LOG_INFO("VFX boost=%d hover=%d jumps=%d parts=%zu mph=%.1f ground=%d vy=%.2f sockets=%d/%d",
                      (int)boost, (int)hover, jumpCount_, vehicleFx_.liveParticles(), mph, (int)grounded,
@@ -452,6 +472,10 @@ void World::tickVehicleBoost(float dt) {
             }
         }
     }
+}
+
+void World::notifyRamImpact(const core::Vec3& pos) {
+    cues_.play("VEH_TRUCK_RAM_IMPACT", pos, core::length(pos - listenerPos_));   // RamSound Auto_Ram_Impact
 }
 
 bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {

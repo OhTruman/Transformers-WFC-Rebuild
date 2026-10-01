@@ -24,6 +24,7 @@ int vkFor(Button b) {
         case Button::Transform:    return 'F';
         case Button::Fire:         return VK_LBUTTON;
         case Button::Sprint:       return VK_SHIFT;
+        case Button::Dash:         return 'Q';   // [PROV] temporary test binding (no PC binding recovered)
         case Button::Reload:       return 'R';
         case Button::CameraToggle: return 'C';
         case Button::Debug:        return 'B';

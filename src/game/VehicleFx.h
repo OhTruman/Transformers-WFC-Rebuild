@@ -3,6 +3,7 @@
 //   BoostFx: BoostSocket_L/R                     -> FX_Navigation_p.bumble_boost_small1_FX
 //   HoverFX: HoverBooster_{L,R}{Front,Back,Back2} -> FX_Navigation_p.CarHover_A_01_FX
 //   JumpFX:  JumpBoostSocket_{C,R,L}             -> FX_Navigation_p.Jump_FX
+//   RamFX:   RamSocket                           -> FX_Navigation_p.FX.Truck_ram_FX (during the nitro)
 // Every emitter of these systems is bUseLocalSpace (particles ride their socket). Values are the
 // LOD-0 data decoded from the cooked ParticleSystems (see FIDELITY.md PASS 8/9).
 #pragma once
@@ -19,12 +20,13 @@ public:
         BoostL, BoostR,
         HoverLBack, HoverRBack, HoverLFront, HoverRFront, HoverLBack2, HoverRBack2,
         JumpC, JumpR, JumpL,
+        RamSocket,
         kSocketCount
     };
     struct SocketDef { const char* name; const char* bone; float rel[16]; };   // glTF, incl. socket scale
     static const SocketDef& socketDef(int s);
 
-    enum System { Boost, Hover, Jump };
+    enum System { Boost, Hover, Jump, Ram };
 
     void load(render::IRenderer& r, const std::string& contentRoot);
     // World matrix of each socket for this step (null = unavailable, e.g. robot form).

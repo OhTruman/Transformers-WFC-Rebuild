@@ -83,3 +83,25 @@
     {"VEH_OPTIMUS_BOOST_WHEELS", 1, -18.0f, -6.0f, 0.0f, 0.0f, -2.0f, 2.0f, 5000.0f, 35000.0f, 1.0f, Param::None, {
         {0.343593f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 50, false, {"WL_TRUCK/AUTO_BOOST_PEELOUT_TRUCK.wav"}, {}, {}, {}, {}},
     }},
+    {"VEH_OPTIMUS_RAM_NITRO_START", 0, -5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, Param::None, {
+        {0.140513f, -3.0f, 0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/SYNTH_ENGINE_ACCEL.wav"}, {}, {}, {}, {}},
+        {0.0f, -3.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0, false, {"WL_WHSH_JET/WHSH_BOOST_FLARE_LR_03.wav"}, {}, {}, {}, {}},
+        {0.0f, -3.0f, 0.0f, 0.0f, 6.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/SYNTH_AIR_RELEASE_04.wav"}, {}, {}, {}, {}},
+        {0.630271f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/SYNTH_AIR_RELEASE_08.wav"}, {}, {}, {}, {}},
+        {0.0f, 0.0f, 0.0f, 0.0f, 2.0f, -1.0f, 2.0f, 0, false, {"WL_TRUCK/AUTO_OPTIMUS_BOOST_START_LR.wav"}, {{0.0f, 0.501187f}, {110.0f, 1.0f}}, {{0.0f, -2.0f}, {60.0f, 0.0f}, {85.0f, 2.0f}, {110.0f, 2.64093f}}, {}, {}},
+        {0.371947f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/SYNTH_AIR_RELEASE_07.wav"}, {}, {}, {}, {}},
+        {0.0909203f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/MECH_TRANS_RAM_ACTIVATE.wav"}, {}, {}, {}, {}},
+    }},
+    {"VEH_OPTIMUS_RAM_BOOST_START", 0, -8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, Param::None, {
+        {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0, false, {"WL_WHSH_JET/WHSH_BOOST_FLARE_LR_03.wav"}, {}, {}, {}, {}},
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/SYNTH_AIR_RELEASE_08.wav"}, {}, {}, {}, {}},
+        {0.0f, 0.0f, 0.0f, 0.0f, 6.0f, -1.0f, 2.0f, 0, false, {"WL_TRUCK/AUTO_OPTIMUS_BOOST_START_LR.wav"}, {{0.0f, 0.501187f}, {110.0f, 1.0f}}, {{0.0f, -2.0f}, {60.0f, 0.0f}, {85.0f, 2.0f}, {110.0f, 2.64093f}}, {{0.657481f, 1.0f}, {1.12035f, 0.0f}}, {}},
+        {0.0826548f, -6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/MECH_TRANS_RAM_ACTIVATE.wav"}, {}, {}, {}, {}},
+        {0.34715f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/AUTO_OPTIMUS_BOOST_END_LR.wav"}, {}, {}, {}, {}},
+    }},
+    {"VEH_TRUCK_RAM_ALERT", 0, -15.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 2.0f, Param::None, {
+        {0.0f, 0.0f, 0.0f, 0.0f, -4.0f, 0.0f, 0.0f, 0, false, {"WL_MECH/MECH_ORB_ARM_04.wav"}, {}, {}, {}, {{0.0063388f, 0.0f}, {1.19944f, 6.0f}}},
+    }},
+    {"VEH_TRUCK_RAM_IMPACT", 0, -6.0f, 0.0f, 0.0f, 0.0f, -2.0f, 2.0f, 5000.0f, 35000.0f, 2.0f, Param::None, {
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, {"WL_TRUCK/MECH_IMPT_VEHICLE_RAM_01.wav", "WL_TRUCK/MECH_IMPT_VEHICLE_RAM_02.wav", "WL_TRUCK/MECH_IMPT_VEHICLE_RAM_03.wav"}, {}, {}, {}, {}},
+    }},

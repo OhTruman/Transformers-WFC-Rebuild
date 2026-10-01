@@ -15,6 +15,7 @@
 #include "game/WeaponFx.h"
 #include "game/SoundCues.h"
 #include "game/VehicleFx.h"
+#include "game/VehicleNitro.h"
 
 namespace render { class IRenderer; }
 
@@ -47,6 +48,13 @@ public:
     void playSfx(Sfx s, const core::Vec3& pos);
 
     Player& player() { return player_; }
+
+    // Truck nitro / ram state (Systems-owned, read-only for Gameplay: nitroActive(), ramActive(),
+    // speedScale(), steeringScale() — Gameplay applies the movement effect).
+    const VehicleNitro& vehicleNitro() const { return nitro_; }
+    // Ram impact presentation (TnTruckForm.AttemptToRam -> RamSound Auto_Ram_Impact); for Gameplay's
+    // vehicle collision code to call when the ram hits a pawn.
+    void notifyRamImpact(const core::Vec3& pos);
     bool usingSlice() const { return usingSlice_; }
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).
@@ -105,6 +113,9 @@ private:
     bool vehiclePrevGrounded_ = true;
     int jumpCount_ = 0;
     bool boostActive_ = false;
+    VehicleNitro nitro_;
+    bool dashLatched_ = false;   // abstract Dash action, latched per frame for the fixed-step tick
+    int ramInst_ = -1;
     float boostAge_ = 0.0f;
     bool boostWheelsChecked_ = false;
     int boostLoopCue_ = -1;

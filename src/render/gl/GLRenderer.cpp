@@ -287,7 +287,7 @@ public:
     }
 
     void drawMeshFx(MeshHandle h, const core::Mat4& model, float r, float g, float b, float a,
-                    float colorScale) override {
+                    float colorScale, float fresnelExp, float fresnelScale, float fresnelPower) override {
         if (h < 0 || (size_t)h >= meshes_.size()) return;
         const MeshData& m = meshes_[(size_t)h];
         core::Mat4 mv = view_ * model;
@@ -304,6 +304,27 @@ public:
         if (haveUV) { glEnableClientState(GL_TEXTURE_COORD_ARRAY); glTexCoordPointer(2, GL_FLOAT, 0, m.uv.data()); }
         float sc = colorScale >= 4.0f ? 4.0f : (colorScale >= 2.0f ? 2.0f : 1.0f);
         glColor4f(r, g, b, a);
+        // Fresnel rim: per-vertex colour from the view direction (camera position from the view).
+        std::vector<float> fcol;
+        bool fres = fresnelExp > 0.0f && m.normals.size() == m.positions.size();
+        if (fres) {
+            core::Mat4 inv = view_;   // eye = -R^T t
+            core::Vec3 eye{-(inv.m[0] * inv.m[12] + inv.m[1] * inv.m[13] + inv.m[2] * inv.m[14]),
+                           -(inv.m[4] * inv.m[12] + inv.m[5] * inv.m[13] + inv.m[6] * inv.m[14]),
+                           -(inv.m[8] * inv.m[12] + inv.m[9] * inv.m[13] + inv.m[10] * inv.m[14])};
+            size_t vc = m.vertexCount();
+            fcol.resize(vc * 4);
+            for (size_t i = 0; i < vc; ++i) {
+                core::Vec3 p = core::transformPoint(model, {m.positions[i * 3], m.positions[i * 3 + 1], m.positions[i * 3 + 2]});
+                core::Vec3 n = core::normalize(core::transformDir(model, {m.normals[i * 3], m.normals[i * 3 + 1], m.normals[i * 3 + 2]}));
+                core::Vec3 v = core::normalize(eye - p);
+                float f = std::pow(std::max(0.0f, 1.0f - std::fabs(core::dot(n, v))), fresnelExp) * fresnelScale;
+                f = std::pow(core::clampf(f, 0.0f, 1.0f), fresnelPower);
+                fcol[i * 4] = r * f; fcol[i * 4 + 1] = g * f; fcol[i * 4 + 2] = b * f; fcol[i * 4 + 3] = a;
+            }
+            glEnableClientState(GL_COLOR_ARRAY);
+            glColorPointer(4, GL_FLOAT, 0, fcol.data());
+        }
         std::vector<SubMesh> all;
         if (m.subs.empty()) { SubMesh whole; whole.indexCount = (uint32_t)m.indices.size(); all.push_back(whole); }
         for (const SubMesh& s : m.subs.empty() ? all : m.subs) {
@@ -324,6 +345,7 @@ public:
             if (tex) { glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f); glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); }
         }
         if (haveUV) glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        if (fres) glDisableClientState(GL_COLOR_ARRAY);
         glDisableClientState(GL_VERTEX_ARRAY);
         glDisable(GL_TEXTURE_2D);
         glDepthMask(GL_TRUE);

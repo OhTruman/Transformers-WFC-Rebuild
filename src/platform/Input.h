@@ -8,6 +8,9 @@ enum class Button {
     Forward, Back, Left, Right,
     Jump, Transform, Fire, Sprint,
     Reload, CameraToggle, Debug, Quit,
+    // Vehicle DASH / ram action. [CONF] TnTruckForm.Driving.UpdateNitro starts the nitro ram on the
+    // dash input while driving on wheels (boosting). Final control mapping belongs to Gameplay.
+    Dash,
     Count
 };
 

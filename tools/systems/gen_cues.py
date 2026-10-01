@@ -17,7 +17,9 @@ CUES = [
                                'BL_WPN_GUN_ION_BLASTER.IDLE_02', 'BL_WPN_GUN_ION_BLASTER.IMPT_WORLD',
                                'BL_WPN_GUN_ION_BLASTER.IMPT_DMG', 'BL_WPN_FOLEY.SHOOT_DRY_FIRE_ELECTRICITY']),
     ('A1_IAC_Base_m', ['BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START', 'BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_LOOP',
-                       'BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_END', 'BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_WHEELS']),
+                       'BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_END', 'BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_WHEELS',
+                       'BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_RAM_NITRO_START', 'BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_RAM_BOOST_START',
+                       'BL_VEH_SOUNDWAVE.VEH_TRUCK_RAM_ALERT', 'BL_VEH_SOUNDWAVE.VEH_TRUCK_RAM_IMPACT']),
 ]
 ROOTDEF = {'Volume': -6.0, 'DistanceMin': 400.0, 'DistanceMax': 6400.0, 'RolloffFactor': 1.0, 'Pitch': 0.0,
            'VolumeVariationMin': 0.0, 'VolumeVariationMax': 0.0, 'PitchVariationMin': 0.0, 'PitchVariationMax': 0.0}
@@ -33,7 +35,7 @@ def curve(c):
 
 def short(c):
     pkg, name = c.split('.', 1)
-    return {'BL_WPN_GUN_ION_BLASTER': '', 'BL_WPN_FOLEY': 'FOLEY.', 'BL_VEH_OPTIMUS_PRIME': ''}[pkg] + name
+    return {'BL_WPN_GUN_ION_BLASTER': '', 'BL_WPN_FOLEY': 'FOLEY.', 'BL_VEH_OPTIMUS_PRIME': '', 'BL_VEH_SOUNDWAVE': ''}[pkg] + name
 
 out, missing = [], []
 for pkgname, cues in CUES:

@@ -114,7 +114,7 @@ via `SoundEvents_Vehicles_Trans.Veh_Optimus_Prime_SoundSet`.
 | Boost activation | presentation follows the movement code's boost condition (vehicle form + boost held, not transforming), so stationary boost shows the effect | MED | the 0.3 s DashDuration-vs-sustained question belongs to Gameplay movement |
 | Material / emissive changes on boost | none authored on OptimusTruckForm (only overshield / defrag materials) | CONF (absence) | n/a |
 | Camera feedback | not on the truck form or its audio component; camera behaviours belong to Gameplay | - | not applied |
-| Related | HoverFX / JumpFX: implemented in PASS 9. RamFX: RamSocket -> `Truck_ram_FX`, and the drive / jump / land engine cues in the same SoundEventSet | CONF data | RamFX + engine cues **open** |
+| Related | HoverFX / JumpFX: PASS 9. RamFX + nitro: PASS 10. Drive / jump / land engine cues in the same SoundEventSet | CONF data | engine cues **open** |
 
 Cue system extension (used by the boost cues): `bLooping` wave events, VolumeCurve/PitchCurve keyed by the
 root SoundParameter (SOUND_DISTANCE or speed), Envelope volume/pitch curves over playback time,
@@ -138,6 +138,34 @@ carries the PASS 8 boost tables unchanged).
 | Spark_MAT | no texture; procedural streak from texture-coordinate math | CONF (absence) | **PROV**: generated soft-streak texture |
 | Rings trailing (150,0,0) | role undecided (location vs velocity) | MED | used as velocity (as an offset it puts rings 4.5 m from the wheels) |
 | Omitted | hover base_glow (Glow_Mod_MAT modulate), rays_Dup (Trail_Distort distortion); every material's secondary panning cloud/energon layers | - | not rendered |
+
+### PASS 10 — truck nitro / ram (Systems state + FX + audio; movement effect owned by Gameplay)
+Source: TransGame.TnTruckForm compiled UnrealScript (TransGame.xxx) — function/state names and float
+literals in the getters' bytecode — plus `OptimusTruckForm.RamFX` and the audio component / sound set.
+
+| Item | Original (WFC) | Conf | Rebuild |
+|---|---|---|---|
+| Trigger | state **Driving** (on wheels = boosting): `UpdateNitro` starts the nitro on the **DASH** input (`_Dashing`) when the cooldown allows; `Driving.EndState` calls `StopNitro`; in state **Hovering** dash is a plain hover dash (`DoDash`) | CONF (script structure) | **APPLIED** in `VehicleNitro`: driving = vehicle form + boost held, not transforming |
+| Nitro duration | `get_NitroDuration` = **3.0 s** x NitroDurationModifier (1.0) | CONF | **APPLIED** |
+| Speed scale | `get_NitroSpeedScale` = **1.5** x modifier | CONF | **exposed** (`speedScale()`), **not applied** — Gameplay owns movement |
+| Steering scale | `get_NitroSteeringScale` = **0.3** x modifier | CONF | **exposed** (`steeringScale()`), **not applied** — Gameplay owns handling |
+| Cooldown | `get_TimeBetweenNitros` = **8.0 s** x modifier | CONF value / MED reference point | **APPLIED**, measured from nitro start |
+| Max ram mass | `get_MaxRamMass` = 1000 | CONF | exposed constant (ram collision is Gameplay's) |
+| StartNitro side effects | RamFX on RamSocket, NitroForceFeedback (3 s), nitro camera state | CONF | RamFX **APPLIED**; force feedback / camera not (no rumble path; camera = Gameplay) |
+| RamFX | `Truck_ram_FX` on RamSocket (C_Body_XB (380,0,-40) UU, scale (1,1.5,1.5)): Ram_STAT wedge mesh, 20/s, life 1.0, alpha 0.35, colour (2,1.8,1.3), -250 UU; dust + rays are distortion (omitted) | CONF data / MED roles | **APPLIED** |
+| Ram_model_MAT | emissive = 2 x (vertex colour x c)^2, c = saturate(pow(1-N.V, FresnelExponent 2) x FresnelScaleUp 1.5) x 2 x lerp(A x L1, L1, 0.4) over four panning Flame_Tile layers | CONF graph | fresnel rim applied per vertex (squared); panning layers = one static Flame_Tile **PROV** |
+| Nitro audio | NitroSound Auto_Ram_Nitro -> `VEH_OPTIMUS_RAM_NITRO_START` (7 events); CustomLoopingSound Auto_Ram_Alert -> `BL_VEH_SOUNDWAVE.VEH_TRUCK_RAM_ALERT` | CONF | **APPLIED** at nitro start; the alert plays once **MED** (component-level looping not decoded) |
+| Ram impact audio | RamSound Auto_Ram_Impact -> `BL_VEH_SOUNDWAVE.VEH_TRUCK_RAM_IMPACT` (from AttemptToRam) | CONF | hook `World::notifyRamImpact(pos)` for Gameplay's ram collision |
+| BoosterSound | Auto_Ram_Boost -> `VEH_OPTIMUS_RAM_BOOST_START` | CONF mapping | in the cue table; trigger not decoded, not played |
+| Dash input | abstract `platform::Button::Dash` | - | **PROV** temporary key **Q** (no PC binding recovered; right mouse reserved for Gameplay fine-aim). Final mapping = Gameplay |
+
+**Value conflict to resolve in Gameplay (documented, not changed here):** the rebuild's vehicle boost uses
+`Default__TnHoverCarSimulationBlueprint` DashSpeed 5000 UU/s / DashDuration 0.3 s (core::config
+kVehicleBoostSpeed / kVehicleDashTime). Optimus's truck actually references `VEH_SHARED_p.HoverTruck_Physics`
+(TnHoverCarSimulationBlueprint) with **DashSpeed 3000 UU/s, DashDuration 0.5 s**, SuspensionRadius 185 UU,
+and, for the Driving (wheels) state, `VEH_SHARED_p.Truck_Physics` (TnCarPhysicsBlueprint) with MaxSpeed
+3000 UU/s, MaxAcceleration 2500, JumpLinearVelocity (600,0,1400), Mass 2500. The hover DASH is a separate
+mechanic from the nitro (Hovering.DoDash vs Driving nitro). Systems did not modify any vehicle movement value.
 
 ---
 
