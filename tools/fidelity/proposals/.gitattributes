@@ -1,0 +1,2 @@
+# Patches must stay byte-exact (some target CRLF files); never EOL-convert them.
+*.patch -text
