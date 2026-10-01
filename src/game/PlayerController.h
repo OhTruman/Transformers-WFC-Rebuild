@@ -4,8 +4,11 @@
 #include "platform/Input.h"
 #include "render/Camera.h"
 #include "game/CharacterMovement.h"
+#include "core/Config.h"
 
 namespace game {
+
+class CollisionWorld;
 
 class Character;
 class World;
@@ -23,11 +26,16 @@ public:
 
     // Third-person follow camera positioned behind the pawn.
     void updateCamera(render::Camera& cam) const;
+    // Camera eye position (anchor + orbit + over-the-shoulder offset), shared by the renderer
+    // camera and the crosshair trace.
+    core::Vec3 cameraPos() const;
 
     float camYaw() const { return camYaw_; }
     float camPitch() const { return camPitch_; }
     void setCameraYaw(float y) { camYaw_ = y; }
     void setCameraPitch(float p) { camPitch_ = p; }
+    bool fineAiming() const { return fineAiming_; }
+    float fovXDeg() const { return fovCur_; }
 
 private:
     Character* pawn_ = nullptr;
@@ -37,6 +45,15 @@ private:
     bool wantJumpLatched_ = false;
     bool wantFire_ = false;
     bool wantReload_ = false;
+    // TnFineAimManager: bWantsToFineAim (input) vs bFineAiming (active when CanFineAim allows).
+    bool fineAimWanted_ = false;
+    bool fineAiming_ = false;
+    float fovCur_ = core::config::kCamFovXDeg;   // smoothed horizontal FOV (TnFovCameraBehavior)
+    float fovSmooth_ = core::config::kCamFovSmooth;
+    float shoulder_ = 0.0f;                      // smoothed lateral camera offset (m)
+    const CollisionWorld* col_ = nullptr;        // for the third-person camera collision
+    bool canFineAim() const;
+    void tickFineAim();
 };
 
 } // namespace game

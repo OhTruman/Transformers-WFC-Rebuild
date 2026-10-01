@@ -3,6 +3,38 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## FIDELITY PASS 11 (2026-10-01): TRANSFORM MOMENTUM, ROBOT RUN SPEED, FINE AIM (player-control pass)
+Driven by the integrated human playtest. Evidence: UnrealScript bytecode decoded from TransGame.xxx
+(`work/pass11/ue3dis.py`), shipped input bindings, Optimus/truck/camera content objects.
+- **Transform hard-stop: root cause found and fixed.** The rebuild did two non-original things:
+  it zeroed velocity in `beginTransform`, and it locked all input during the fold. In WFC nothing on
+  the transform path touches velocity, and no movement code checks IsTransforming. The target form
+  becomes the movement form at the START of the fold (`BeginTransformation`). Robot→vehicle hands
+  the velocity (≤35 m/s, `kMaxTransformSpeed`) and the rotation to the vehicle's rigid body
+  (`TnVehicleForm.OnActivate`). Vehicle→robot keeps the velocity, and the robot's `CalcVelocity`
+  preserves overspeed with the TruckTransformerMomentum InAir set while transforming.
+  Verified on the real executable: running 14→15 m/s into the vehicle; cruising 15→14 m/s into the
+  robot; boosting 30 m/s → robot 28.7 m/s after the fold, then a momentum run down to 14; strafe and
+  diagonal folds continuous; standstill both ways clean.
+- **"Missing fast movement" = the robot's real run speed.** `TnPawn.ApplyTransformer` applies the
+  character definition (Optimus_ROBODEF): GroundSpeed 14 m/s, AccelRate 120 m/s², AirSpeed 12,
+  AirControl 0.4, jump 5 m, collision r2.0 m. Passes 2/10 had used class defaults (5.5 m/s). WFC
+  has no robot sprint key: full input runs at 14 m/s on the jog clips; partial pad input walks at
+  ≥4.5 m/s; vehicle→robot carries vehicle/boost speed.
+- **Fine aim (robot only):** RMB toggles, pad LT holds. Speed ×0.5 (7 m/s), FOV 80→45 in 0.1 s
+  (exit 0.4 s), look speed ×0.5, spread ×0.5. Drops during reload and resumes. In the vehicle,
+  RMB/LT = boost.
+- **Camera from the robot strategy:** FOV 80, orbit 8 m, anchor 4 m, pitch ±75°, over-the-shoulder
+  offset curve, basic camera collision, and traces aimed through the crosshair.
+- **Truck:** boost 30 m/s / 0.5 s, hover 1.85 m.
+- **Fixed pre-existing bug:** the ground/step query counted step-up and hover twice (robots stepped
+  0.7 m; vehicles could snap onto decks 4.4 m above).
+- Regression: jump 5.12 m, turn in place, recoil +12°, reload layer, the step A/B identical on 12
+  routes; clean build.
+- **Known issues:** foot slip is higher at the new speeds (≈1.1–1.8 m/s at 14 m/s, ≈1.6–2.0 m/s at
+  7 m/s; no playback-rate scaling evidence); the vehicle hover/steering model is PROV; fine-aim
+  target snap and fine-aim sounds are not implemented.
+
 ## FIDELITY PASS 10 (2026-10-01): LOCOMOTION BLEND FROM THE SHIPPED TREE; SPEED + STEP HEIGHT CONFIRMED
 - **Moving state rebuilt to match Robot_ANIMTREE:** TnVelocityAnimBlend (450→1200 UU/s) mixes a
   walk and a jog TnStraferAnimBlend. Each strafer weights F/B/R/L by the travel direction relative
@@ -271,7 +303,7 @@ map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.j
   `WFC_SMOKE_FRAMES`; not a product blocker.)
 
 ## CONTROLS
-- WASD move, mouse look, Space jump, LMB fire (hold = auto), R reload, F transform,
+- WASD move, mouse look, Space jump, LMB fire (hold = auto), RMB fine aim (robot, toggle) / boost (vehicle, hold), R reload, F transform,
   C free/capture cursor, B debug overlay, Esc quit.
 
 ## ASSET PATHS (root = `F:/Transformers Rebuild/ExtractedAssets/VerticalSlice`, override `WFC_ASSETS`)

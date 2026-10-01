@@ -28,6 +28,7 @@ int vkFor(Button b) {
         case Button::CameraToggle: return 'C';
         case Button::Debug:        return 'B';
         case Button::Quit:         return VK_ESCAPE;
+        case Button::FineAim:      return VK_RBUTTON;
         default:                   return 0;
     }
 }
@@ -162,9 +163,11 @@ private:
             input.padLY = axis(st.Gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
             input.padRX = axis(st.Gamepad.sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
             input.padRY = axis(st.Gamepad.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+            input.padLT = st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ? st.Gamepad.bLeftTrigger / 255.0f : 0.0f;
         } else {
             input.padConnected = false;
             input.padLX = input.padLY = input.padRX = input.padRY = 0.0f;
+            input.padLT = 0.0f;
         }
     }
 

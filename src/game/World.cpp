@@ -145,6 +145,7 @@ void World::respawnPlayer() {
     player_.pawn().setPosition(p);
     player_.pawn().setYaw(spawnYaw_);
     player_.pawn().velocity() = {0, 0, 0};
+    player_.pawn().setHoverApplied(0.0f);   // placed on the floor
     player_.pawn().groundY = spawnPos_.y;
     player_.controller().setCameraYaw(spawnYaw_);
 }
@@ -263,7 +264,9 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
         core::Vec3 rt = core::normalize(core::cross(dir, up));
         core::Vec3 u2 = core::normalize(core::cross(rt, dir));
         auto rf = [] { return (float)std::rand() / (float)RAND_MAX * 2.0f - 1.0f; };
-        dir = core::normalize(dir + rt * (rf() * w.spread) + u2 * (rf() * w.spread));
+        // Fine aim scales spread by the weapon's FineAimSpreadModifier (Ion Blaster 0.5) [CONF data].
+        float spread = w.spread * (player_.pawn().fineAiming() ? core::config::kFineAimSpreadMult : 1.0f);
+        dir = core::normalize(dir + rt * (rf() * spread) + u2 * (rf() * spread));
     }
     core::Vec3 end = origin + dir * range;
 

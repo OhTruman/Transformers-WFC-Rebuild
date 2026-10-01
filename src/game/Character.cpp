@@ -29,8 +29,18 @@ void Character::beginTransform() {
     transClip_ = c;
     animTime_ = 0.0f;
     clip_ = -1;                 // force a clip change so the blend-in snapshot fires
-    velocity_ = {0, 0, 0};
     legYaw_ = 0.0f; turnClip_ = -1; yawInit_ = false;   // the fold starts square to the aim
+    // Momentum is kept: nothing in TnPawn.Transform / BeginTransformation / TnTransformation.Execute
+    // touches velocity. The target form becomes the movement form now (see moveForm()).
+    transTarget_ = (form_ == Form::Robot) ? Form::Vehicle : Form::Robot;
+    transStartYaw_ = yaw_;
+    if (transTarget_ == Form::Vehicle) {
+        // TnVehicleForm.OnActivate: Velocity = ClampLength(pawn Velocity, kMaxTransformSpeed);
+        // the rigid body takes that velocity and the pawn's rotation (heading preserved).
+        float sp = core::length(velocity_);
+        if (sp > core::config::kMaxTransformSpeed)
+            velocity_ = velocity_ * (core::config::kMaxTransformSpeed / sp);
+    }
 }
 
 // Robot rig: the 9-pose Shooting_Aim grid (we use the F column: the body always faces the aim
@@ -407,6 +417,7 @@ void Character::updateAnimation(float dt) {
     if (vehicleModel_ && !vehicleRig_.built && vehicleModel_->valid()) buildVehicleRig(*vehicleModel_);
 
     animTime_ += dt;   // advance the active clip's time (reset to 0 by beginBase on a change)
+    if (shiftRemain_ > 0.0f) shiftRemain_ = std::max(0.0f, shiftRemain_ - dt);
 
     // --- transformation timeline (overrides locomotion; plays once, no loop) ---
     if (trans_ != Transition::None) {
@@ -536,7 +547,7 @@ void Character::updateWeaponSocket() {
     if (trans_ != Transition::None) return;
     if (form_ != Form::Robot || weaponBone_ < 0) return;
     if ((size_t)weaponBone_ >= animScratch_.size()) return;
-    core::Mat4 model = core::Mat4::translate(pos_) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
+    core::Mat4 model = core::Mat4::translate(pos_ + meshOffset()) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
     weaponWorld_ = model * animScratch_[(size_t)weaponBone_] * weaponOffset_;
     weaponValid_ = true;
 }
@@ -544,7 +555,7 @@ void Character::updateWeaponSocket() {
 void Character::draw(render::IRenderer& r) const {
     const assets::SkinnedModel* mdl = currentModel();
     if (mdl && mdl->valid() && !poseBuf_.empty()) {
-        core::Mat4 model = core::Mat4::translate(pos_) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
+        core::Mat4 model = core::Mat4::translate(pos_ + meshOffset()) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
         r.drawDynamicMesh(poseBuf_, model, color_);
         return;
     }

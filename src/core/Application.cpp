@@ -66,6 +66,17 @@ void Application::run() {
         if (std::getenv("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
         if (std::getenv("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
         if (std::getenv("WFC_AUTOBOOST")) input.down[(int)platform::Button::Sprint] = true;
+        if (const char* s = std::getenv("WFC_AUTOWALK_UNTIL"))           // release scripted input
+            if (frame > std::atol(s)) {
+                input.down[(int)platform::Button::Forward] = false;
+                input.down[(int)platform::Button::Right] = false;
+                input.down[(int)platform::Button::Sprint] = false;
+            }
+        // Fine-aim test hooks: press the FineAim button (toggle) on the given frames; WFC_PADLT holds
+        // the pad trigger instead.
+        if (const char* s = std::getenv("WFC_FINEAIM_ON"))  if (frame == std::atol(s)) input.pressed[(int)platform::Button::FineAim] = true;
+        if (const char* s = std::getenv("WFC_FINEAIM_OFF")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::FineAim] = true;
+        if (std::getenv("WFC_PADLT")) input.padLT = 1.0f;
         if (std::getenv("WFC_AUTOJUMP") && frame == 20) input.pressed[(int)platform::Button::Jump] = true;
         if (std::getenv("WFC_AUTORELOAD")) {                       // fire a few rounds, then reload
             if (frame <= 12) input.down[(int)platform::Button::Fire] = true;
@@ -115,12 +126,16 @@ void Application::run() {
             const auto& pawn = world_.player().pawn();
             core::Vec3 p = pawn.position();
             LOG_INFO("frame %ld pos %.2f %.2f %.2f grounded=%d form=%s anim=%s t=%.2f ammo=%d/%d reloading=%d "
-                     "yaw=%.2f aimW=%.2f aimN=%.2f reloadW=%.2f legYaw=%.1f aimYawN=%.2f turn=%d recoil=%d",
+                     "yaw=%.2f aimW=%.2f aimN=%.2f reloadW=%.2f legYaw=%.1f aimYawN=%.2f turn=%d recoil=%d "
+                     "hspeed=%.2f moveForm=%s fineAim=%d fov=%.1f",
                      frame, p.x, p.y, p.z, (int)pawn.onGround(), game::formName(pawn.form()),
                      pawn.animName(), pawn.animTime(), pawn.weapon().ammo, pawn.weapon().reserve,
                      (int)pawn.weapon().reloading(), pawn.yaw(), pawn.aimWeight(), pawn.aimPitchNorm(),
                      pawn.reloadWeight(), pawn.legYaw() * 57.2958f, pawn.aimYawNorm(),
-                     (int)pawn.turningInPlace(), (int)pawn.recoiling());
+                     (int)pawn.turningInPlace(), (int)pawn.recoiling(),
+                     std::sqrt(pawn.velocity().x * pawn.velocity().x + pawn.velocity().z * pawn.velocity().z),
+                     game::formName(pawn.moveForm()), (int)world_.player().controller().fineAiming(),
+                     world_.player().controller().fovXDeg());
         }
 
         // Camera + render.
