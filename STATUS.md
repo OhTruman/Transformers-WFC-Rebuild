@@ -602,6 +602,14 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 03 PASS 2 (2026-10-02, agents/rendering)
+- Distortion pass from Xenon microcode; hover rings refract; Trail_Distort / Distortion_Cloud / Glow_Mod ready for Systems' emitters.
+- Vehicle material audit: docs/rendering/vehicle_material_audit.md. Render audit captures: tools/render/capture_audit.sh (docs/rendering/audit/).
+- Flat pink/lavender floors = 44 mis-wound BSP polygons (fixed). Hidden actors not drawn; no-light components emissive-only.
+- Character light visibility uses the authored robot/vehicle sample offsets (fractional visibility).
+- Prewarm removes first-use builds; perf must be measured in Release (Debug inflates CPU costs ~10x).
+- Diagnostics: WFC_LOCKSTEP, WFC_FRAMEREPORT, WFC_NODISTORTION, WFC_NOCULL, WFC_SHOWHIDDEN, WFC_SKIPMAT comp:, tools/render/pick_material.py.
+
 ## RENDERING MILESTONE 03 (2026-10-02, agents/rendering)
 - Material translation verified against compiled permutations: 187/202 match (`tools/render/verify_permutations.py`).
 - Vehicle/robot: CS_World camera/reflection vectors, cube LOD bias, Fresnel Exp; vehicle + robot MICs match their compiled permutations.

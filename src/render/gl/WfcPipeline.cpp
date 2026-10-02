@@ -573,6 +573,7 @@ bool Pipeline::load(const std::string& mapName) {
         l.cosOuter = std::cos(outer);
         float cin = std::cos(std::min(inner, outer));
         l.invConeRange = 1.0f / std::max(cin - l.cosOuter, 0.001f);
+        l.name = e["name"].asString();
         l.chStatic = e["channels"]["Static"].asBool(true);
         l.chDynamic = e["channels"]["Dynamic"].asBool(true) || e["channels"]["CompositeDynamic"].asBool(true);
         l.castShadows = e["cast_shadows"].asBool(true);
@@ -1015,7 +1016,25 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
     for (const Cand& c : cands) {
         // Visibility trace (UE3 light environments trace each light to the primitive).
         float vis = 1.0f;
-        if (vis_ && c.l->castShadows) {
+        if (vis_ && c.l->castShadows && dynamicObject && envSamples_ && !envSamples_->empty()) {
+            // TnRobotForm / TnVehicleForm LightEnvironmentComponent NormalizedSampleOffsets [CONF data]:
+            // visibility = fraction of samples (bounds origin + offset * extent) with a clear path to
+            // the light [HIGH: UE3 light-environment sampling].
+            int clear = 0;
+            for (const core::Vec3& o : *envSamples_) {
+                core::Vec3 from = envBoundsCenter_ + core::Vec3{o.x * envBoundsExtent_.x, o.y * envBoundsExtent_.y,
+                                                                o.z * envBoundsExtent_.z};
+                core::Vec3 to = c.l->type == 2 ? from + c.L * 300.0f : c.l->pos;
+                auto q = [](float v) { return (uint64_t)(uint32_t)(int32_t)std::floor(v * 4.0f) & 0xFFFFull; };
+                uint64_t key = ((uint64_t)(c.l - lights_.data()) << 48) | (q(from.x) << 32) | (q(from.y) << 16) | q(from.z);
+                auto hit = visMemo_.find(key);
+                bool occluded;
+                if (hit != visMemo_.end()) occluded = hit->second;
+                else { ++gStats.visCalls; occluded = vis_(from, to); visMemo_.emplace(key, occluded); }
+                if (!occluded) ++clear;
+            }
+            vis = (float)clear / (float)envSamples_->size();
+        } else if (vis_ && c.l->castShadows) {
             core::Vec3 from = p + core::Vec3{0, 0.05f, 0};
             core::Vec3 to = c.l->type == 2 ? from + c.L * 300.0f : c.l->pos;
             auto q = [](float v) { return (uint64_t)(uint32_t)(int32_t)std::floor(v * 4.0f) & 0xFFFFull; };
@@ -1030,6 +1049,7 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
         if (env.n < maxDirect) {
             int i = env.n++;
             const Light& l = *c.l;
+            env.light[i] = (int)(c.l - lights_.data());
             env.pos[i][0] = l.pos.x; env.pos[i][1] = l.pos.y; env.pos[i][2] = l.pos.z;
             env.pos[i][3] = l.type == 2 ? 0.0f : 1.0f / l.radius;
             core::Vec3 d = l.type == 2 ? c.L : l.dir;
@@ -1255,6 +1275,9 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
     core::Vec3 origin{model.m[12], model.m[13], model.m[14]};
     LightEnv dynEnv;
     bool dynEnvReady = false;
+    static const long reportAt = std::getenv("WFC_FRAMEREPORT") && std::getenv("WFC_SMOKE_FRAMES")
+                                     ? std::atol(std::getenv("WFC_SMOKE_FRAMES")) : -1;
+    const bool reportFrame = reportAt > 0 && frameNo_ == (int)reportAt;
     // small dynamic object (world-space bounding radius < 0.5 m): shares a per-cell environment
     bool smallDynamic = false;
     if (dynamicObject && !g.subs.empty()) {
@@ -1381,6 +1404,21 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                     }
                     env = &s.env;
                 }
+                if (reportFrame && dynamicObject && !frameFx_) {
+                    char buf[512];
+                    std::string ls;
+                    for (int i = 0; i < env->n; ++i) {
+                        int li = env->light[i];
+                        std::snprintf(buf, sizeof buf, "%s%s(vis %.2f)", i ? ", " : "",
+                                      li >= 0 ? lights_[(size_t)li].name.c_str() : "?", env->spot[i][3]);
+                        ls += buf;
+                    }
+                    std::snprintf(buf, sizeof buf, "%s: %d direct [%s]; ambient cube +Y (%.3f %.3f %.3f) -Y (%.3f %.3f %.3f); samples %s",
+                                  s.matName.c_str(), env->n, ls.c_str(), env->cube[2].x, env->cube[2].y, env->cube[2].z,
+                                  env->cube[3].x, env->cube[3].y, env->cube[3].z,
+                                  envSamples_ ? (envSamples_->size() == 6 ? "robot(6)" : "vehicle(5)") : "centre(1)");
+                    frameEnvs_.push_back(buf);
+                }
                 Uniform3fv(P.uAmb, 6, &env->cube[0].x);
                 Uniform1i(P.uNumLights, env->n);
                 Uniform4fv(P.uLPos, 3, &env->pos[0][0]);
@@ -1390,6 +1428,12 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
             }
             glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
             ++gStats.draws;
+            if (reportFrame) {
+                FrameDraw& fd = frameDraws_[s.matName.empty() ? std::string("<gltf>") : s.matName];
+                ++fd.draws; fd.blend = P.blend; fd.lit = P.lit; fd.lightmapped |= s.lmTex[0] >= 0;
+                fd.vertexLM |= s.vlmTex != 0; fd.distortion |= P.distProg >= 0; fd.dynamic |= dynamicObject;
+                fd.fx |= frameFx_;
+            }
             if (!trans) depthDirty_ = true;
             if (P.distProg >= 0 && distFbo_ && !std::getenv("WFC_NODISTORTION")) {
                 const Program& D = progs_[(size_t)P.distProg];
@@ -1441,6 +1485,31 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     gStats.dynUploadMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tb1).count();
     setupAttribs();
     BindVertexArray(0);
+    // Which LightEnvironmentComponent draws this mesh: the Optimus robot (and its weapon, which uses the
+    // owner's environment) or vehicle form, identified by the cooked packages of its materials.
+    static const std::vector<core::Vec3> kRobotSamples = [] {   // UE (x,y,z) -> glTF (x,z,y)
+        const float u[6][3] = {{0, 0, 0.9f}, {0, 0, -0.7f}, {0.7f, 0.7f, 0.7f}, {-0.7f, -0.7f, 0.7f},
+                               {0.7f, -0.7f, -0.7f}, {-0.7f, 0.7f, -0.7f}};
+        std::vector<core::Vec3> v; for (auto& o : u) v.push_back({o[0], o[2], o[1]}); return v; }();
+    static const std::vector<core::Vec3> kVehicleSamples = [] {
+        const float u[5][3] = {{0, 0, 0.7f}, {0.8f, 0.8f, 0}, {0.8f, -0.8f, 0}, {-0.8f, 0.8f, 0}, {-0.8f, -0.8f, 0}};
+        std::vector<core::Vec3> v; for (auto& o : u) v.push_back({o[0], o[2], o[1]}); return v; }();
+    envSamples_ = nullptr;
+    for (const Material& mt : m.mats) {
+        if (mt.wfcName.find("_VEH_p.") != std::string::npos) { envSamples_ = &kVehicleSamples; break; }
+        if (mt.wfcName.find("_ROBO_p.") != std::string::npos || mt.wfcName.rfind("WEP_", 0) == 0) { envSamples_ = &kRobotSamples; break; }
+    }
+    if (envSamples_ && m.vertexCount() > 0) {          // world-space bounds of the posed mesh
+        core::Vec3 mn{1e30f, 1e30f, 1e30f}, mx{-1e30f, -1e30f, -1e30f};
+        for (size_t i = 0; i < m.vertexCount(); ++i) {
+            core::Vec3 p{m.positions[i * 3], m.positions[i * 3 + 1], m.positions[i * 3 + 2]};
+            mn = {std::min(mn.x, p.x), std::min(mn.y, p.y), std::min(mn.z, p.z)};
+            mx = {std::max(mx.x, p.x), std::max(mx.y, p.y), std::max(mx.z, p.z)};
+        }
+        core::Vec3 c = core::transformPoint(model, (mn + mx) * 0.5f), e = (mx - mn) * 0.5f;
+        envBoundsCenter_ = c;
+        envBoundsExtent_ = {e.x, e.y, e.z};   // model scale is 1 for characters; yaw-only: axis-aligned extent kept
+    }
     GpuMesh g;
     g.vao = dynVao_;
     std::vector<SubMesh> subs = m.subs;
@@ -1454,9 +1523,11 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         if (it == dynProgCache_.end())
             it = dynProgCache_.emplace(mk, programFor(mat ? mat->wfcName : std::string(), mat, false)).first;
         d.prog = it->second;
+        d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
         g.subs.push_back(d);
     }
     drawSubs(g, model, true);
+    envSamples_ = nullptr;
 }
 
 // ------------------------------------------------------------------------- effects
@@ -1493,6 +1564,25 @@ void Pipeline::applyDistortion() {
     glDepthMask(GL_TRUE); glEnable(GL_DEPTH_TEST);
 }
 
+void Pipeline::writeFrameReport() {
+    FILE* f = std::fopen(std::getenv("WFC_FRAMEREPORT"), "w");
+    if (!f) return;
+    static const char* kBlend[] = {"opaque", "masked", "translucent", "additive", "modulate"};
+    std::fprintf(f, "frame %d camera (%.2f %.2f %.2f) fog %s post bloom=%d dof=%d clut=%d distortion_pass=%d\n", frameNo_,
+                 camPos_.x, camPos_.y, camPos_.z, fogOn_ ? "on" : "off", post_.bloom ? 1 : 0, post_.dof ? 1 : 0,
+                 clutTex_ ? 1 : 0, distUsed_ ? 1 : 0);
+    std::fprintf(f, "materials drawn (draws, blend, lit, lightmap, dynamic, fx, distortion):\n");
+    for (const auto& kv : frameDraws_) {
+        const FrameDraw& d = kv.second;
+        std::fprintf(f, "  %-70s %4d %-11s %s %s %s %s %s\n", kv.first.c_str(), d.draws, kBlend[std::min(std::max(d.blend, 0), 4)],
+                     d.lit ? "lit" : "unlit", d.vertexLM ? "vertexLM" : d.lightmapped ? "lightmap" : "-",
+                     d.dynamic ? "dynamic" : "static", d.fx ? "fx" : "-", d.distortion ? "distortion" : "-");
+    }
+    std::fprintf(f, "dynamic light environments (UberLight, TotalLightCount 2):\n");
+    for (const std::string& e : frameEnvs_) std::fprintf(f, "  %s\n", e.c_str());
+    std::fclose(f);
+}
+
 void Pipeline::ensureSceneDepth() {
     if (!depthDirty_ || !depthCopyFbo_) return;
     BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
@@ -1515,7 +1605,9 @@ bool Pipeline::drawFx(int id, const core::Mat4& model, const float color[4]) {
     for (const Sub& s : g.subs)
         if (s.prog < 0 || !progs_[(size_t)s.prog].original) return false;
     std::copy(color, color + 4, fxColor_);
+    frameFx_ = true;
     drawSubs(g, model, true);
+    frameFx_ = false;
     std::fill(fxColor_, fxColor_ + 4, 1.0f);
     VertexAttrib4f(5, 1, 1, 1, 1);
     return true;
@@ -1570,7 +1662,9 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
     d.first = 0; d.count = (uint32_t)idx.size(); d.prog = it->second;
     d.matName = material;                                  // diagnostics (WFC_SKIPMAT)
     g.subs.push_back(d);
+    frameFx_ = true;
     drawSubs(g, core::Mat4::identity(), true);
+    frameFx_ = false;
     return true;
 }
 
@@ -1718,6 +1812,9 @@ void Pipeline::endFrame() {
         }
     }
     if (distUsed_) applyDistortion();
+    if (std::getenv("WFC_FRAMEREPORT") && std::getenv("WFC_SMOKE_FRAMES") &&
+        frameNo_ == (int)std::atol(std::getenv("WFC_SMOKE_FRAMES")))
+        writeFrameReport();
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glDisable(GL_BLEND);

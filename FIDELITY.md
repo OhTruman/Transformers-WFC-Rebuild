@@ -17,6 +17,33 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 PASS 2 — RENDERING (2026-10-02, branch agents/rendering)
+Marks: **CONFIRMED ORIGINAL** (cooked data / Xenon microcode / shipped ini) · **HIGH** (standard UE3 semantics on
+confirmed data) · **PROV** · **UNKNOWN**. Deterministic captures: `WFC_LOCKSTEP=1`; audit set
+`bash tools/render/capture_audit.sh` (frame reports in docs/rendering/audit/).
+
+| Item | Original (WFC) | Source | Mark | Rebuild |
+|---|---|---|---|---|
+| Distortion accumulate | s = 4·Distortion.xy; kill if dot(s,s) − 0.1 < 0; clamp ±255; ×1/255; RG = max(s,0), BA = abs(min(s,0)) | Xenon PS of Ring_Distort_Add_MAT (BASE shader cache; literals 1.25 / −0.15 / 0.1 identify it) | CONFIRMED | **APPLIED** per-material variant, additive, scene-depth tested |
+| Distortion apply | uv + (acc.rg − acc.ba)·(0.25, −0.25) (D3D v-down), SceneColor fetch | engine PS (AccumulatedDistortionTexture / SceneColorTexture) | CONFIRMED | **APPLIED** before post |
+| Distortion RT | 8-bit UNORM implied by the ±255 / 255 encode | microcode encode | HIGH | RGBA8 |
+| Distortion order | after translucency, before post | UE3 frame order | HIGH | applied in endFrame |
+| Hover / ram emitter materials | base_glow → Glow_Mod_MAT (modulate), rays_Dup → Trail_Distort_MAT (distortion), ram dust → Distortion_Cloud_01_MAT | ParticleModuleRequired.Material | CONFIRMED | all compiled with distortion / modulate paths; **emitters not spawned (Systems)** |
+| Vehicle slots | slot 0 RB_OptimusPrime_Cust2_Mat_INST (9728 tris), slot 1 InteriorAlt_Energon_MAT_INST (1923) | cooked slot table (umodel) | CONFIRMED | matches; full audit docs/rendering/vehicle_material_audit.md |
+| Vehicle normal map | VH_Optimus_NORM DXT5; graph reads .a (X) and .g (Y); unpack −1; UseReconstructedNormal = True | texture + graph + MIC switch | CONFIRMED | matches |
+| Energon colour | compiled permutations of both Optimus MICs embed only the red EnergonColor default (1.25, 0.05, 0.05) | FMaterialResource | CONFIRMED | red |
+| BSP polygon winding | cooked vertex order consistent with the surface normal (Newell: 0 of 889 polygons need flipping) | cooked FModelVertexBuffer + surface normals | CONFIRMED | **FIXED**: 44 polygons had been flipped by a degenerate first-triangle test and culled from above, showing the fog-coloured clear (flat pink / lavender floors) |
+| Hidden actors | bHidden InterpActors (RepairNodeB ×2, Base_D, Base_A) | props_authored.json (effective values) | CONFIRMED | not drawn (WFC_SHOWHIDDEN to inspect) |
+| No-light components | bAcceptsLights False / empty LightingChannels: 123 unlit FX meshes + AutobotSign ×2, CityBackdrop ×2, SpaceDome | props_authored.json; UE3 channel overlap | CONFIRMED data / HIGH semantics | zero light environment (emissive only) |
+| Unlit props without baked lighting | 124 MLM_Unlit FX meshes (light planes, beams, glow spheres, stains) | materials | CONFIRMED | intentionally none |
+| Dark spire wall (spawn 10) | baked lightmap at map percentile 42 (dark blue) | lightmap texels | CONFIRMED | authored appearance |
+| Character light visibility | LightEnvironmentComponent NormalizedSampleOffsets: robot (0,0,.9) (0,0,−.7) (.7,.7,.7) (−.7,−.7,.7) (.7,−.7,−.7) (−.7,.7,−.7); vehicle (0,0,.7) (±.8,±.8,0); TotalLightCount 2; UpdateDistanceThreshold 30 UU | TransGame Default__TnRobotForm / TnVehicleForm | CONFIRMED data | **APPLIED**: visibility = fraction of samples at bounds origin + offset·extent with a clear path (HIGH semantics); form chosen by material package (_ROBO_p / WEP_ → robot, _VEH_p → vehicle) |
+| Lighting channels | robot mesh adds PlayerOnly; Streets lights: 266 all-channel, 2 dynamic-only, none PlayerOnly | TransGame + level lights | CONFIRMED | no change needed |
+| Character shadows | modulated projected shadows: SceneColor ×= lerp(lerp(1, ModShadowColor, atten), 1, lit²); 4-tap PCF, receiver depth clamp 0.999; atten = spot² · (1 − sat(abs(d/R)²)^ShadowFalloffExponent); ini ShadowFilterQuality 0, Min/MaxShadowResolution 128/1024, ShadowTexelsPerPixel 1, ModShadowFadeDistanceExponent 0.2, LightEnvironmentShadows True; ~35 lights bCastCompositeShadow | engine PS microcode + Xe-TransEngine.ini + light props | CONFIRMED (projection / filter) / UNKNOWN (shadow light selection) | **NOT IMPLEMENTED**: the WFC LightEnvironmentComponent shadow-light (composite) selection is in default.xex (ReVa request) |
+| Light visibility volume | LightsVisibilitiesVolume_2224 (Location (19072, −43008, −72448), DrawScale3D 26729): 744772-byte native blob = octree head (714056 B: BE int32 child indices, 32-byte light bitmasks per node) + 7679 (u16 light index 0..267, u16 visibility in 1/20 steps) pairs, preceded by per-cell even byte counts | cooked native data | CONFIRMED fragments / UNKNOWN cell → pair mapping | **NOT USED**: node record layout + light index order need default.xex (ReVa request); runtime traces kept |
+| First-shot hitch | no renderer resource is created during combat on this branch (first-use log empty; render span 6.2 ms on shot frames); the M02 hitch (programFor → texture → decodeImage) is now prewarmed at load | WFC_RENDERSTATS first-use / spike log | CONFIRMED (measurement) | prewarm of all unused compiled materials after frame 1 |
+| Build configuration | M03 perf numbers were Debug builds; Release: skinned vertex rebuild 3.13 → 0.24 ms, idle submit 5.75 → 1.93 ms | measurement | CONFIRMED | measure with Release (build/release) |
+
 ## MILESTONE 03 — RENDERING FIDELITY (2026-10-02, branch agents/rendering)
 Verification tooling: `tools/render/verify_permutations.py` diffs every translated graph's parameter reads against
 the parameter list of the material's COMPILED FMaterialResource (uniform expressions in the cooked native tail):

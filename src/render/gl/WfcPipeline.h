@@ -31,6 +31,7 @@ struct Light {
     float falloff = 2.0f;
     float cosOuter = 0.0f, invConeRange = 1.0f;
     bool chStatic = true, chDynamic = true, castShadows = true, enabled = true;
+    std::string name;             // source light component (frame report)
 };
 
 // Lighting inputs of a dynamic (or unbuilt static) primitive, UE3 light-environment style.
@@ -38,6 +39,7 @@ struct LightEnv {
     core::Vec3 cube[6];           // ambient cube irradiance: +X -X +Y -Y +Z -Z (glTF axes)
     int n = 0;
     float pos[3][4], dir[3][4], col[3][4], spot[3][4];
+    int light[3] = {-1, -1, -1};  // index into lights_ (frame report)
 };
 
 struct Program {
@@ -109,6 +111,17 @@ private:
                      const std::vector<bool>& slotIsCube, int blend, bool twoSided, bool lit, float clip,
                      bool lightmapped, const std::vector<std::string>& rtParams = {});
     void computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env) const;
+    // Light-visibility samples of the drawing character's LightEnvironmentComponent
+    // (NormalizedSampleOffsets, glTF axes) and its world bounds; null = single centre trace.
+    const std::vector<core::Vec3>* envSamples_ = nullptr;
+    // Frame report (WFC_FRAMEREPORT=<file>, written on the WFC_SMOKE_FRAMES frame): what was drawn.
+    struct FrameDraw { int draws = 0; int blend = 0; bool lit = false, lightmapped = false, vertexLM = false,
+                       distortion = false, dynamic = false, fx = false; };
+    std::map<std::string, FrameDraw> frameDraws_;
+    std::vector<std::string> frameEnvs_;
+    bool frameFx_ = false;
+    void writeFrameReport();
+    core::Vec3 envBoundsCenter_, envBoundsExtent_;
     void bindCommon(const Program& P, const core::Mat4& model);
     void drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject);
     void ensureTargets(int w, int h);
