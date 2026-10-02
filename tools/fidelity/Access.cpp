@@ -34,3 +34,10 @@ namespace fid {
 game::CollisionWorld& worldCollision(game::World& w) { return w.collision_; }
 const render::MeshData& drawnPose(const game::Character& c) { return c.poseBuf_; }
 } // namespace fid
+
+namespace fid {
+// Partner mesh pose (gameplay Pass 13+ dual-mesh transform display); nullptr on builds without it.
+template <class C> auto partnerPoseImpl(const C& c, int) -> decltype(&c.partnerBuf_) { return &c.partnerBuf_; }
+template <class C> const render::MeshData* partnerPoseImpl(const C&, long) { return nullptr; }
+const render::MeshData* partnerPose(const game::Character& c) { return partnerPoseImpl(c, 0); }
+} // namespace fid

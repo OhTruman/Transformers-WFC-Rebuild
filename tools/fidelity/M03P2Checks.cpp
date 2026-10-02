@@ -42,19 +42,22 @@ float heightAboveGround(Rig& g) {
 
 // =============================================================================================
 // TRANSFORMATION ANALYZER
-// Authored overlap windows [CONFIRMED, integration brief M03 pass 2]: both meshes visible
-//   robot->vehicle 0.396 .. 0.880 s, vehicle->robot 0.098 .. 0.663 s (elapsed since the press).
-// Outside the window only the source (before) or the target (after) mesh is visible.
+// Native M03 P10 (CONFIRMED notify data + script): TnAnimNotify_ToggleHidden at
+//   Transform_ToVehicle_VEH 0.3958 (show) / _ROBO 0.8796 (hide)  -> both visible R->V 0.3958 .. 0.8796 s
+//   Transform_ToRobot_ROBO 0.0984 (show) / _VEH 0.6634 (hide)    -> both visible V->R 0.0984 .. 0.6634 s
+// (times / transform Rate; Rate 1 here, no downed state). Outside the window only the source (before)
+// or the target (after) mesh is visible. Visibility = current form mesh + Character::partnerShown().
 void checkTransformAnalyzer(Report& r) {
     r.setGroup("transform_analyzer");
     const Models* m = Models::get();
     if (!m) { r.skip("transform_analyzer", "needs Optimus models"); return; }
-    const char* win = "authored mesh-overlap windows (R->V 0.396-0.880 s, V->R 0.098-0.663 s; M03 pass-2 brief)";
+    const char* win = "native M03 P10 ToggleHidden notifies (R->V 0.3958-0.8796 s, V->R 0.0984-0.6634 s, / Rate)";
+    const double tolStep = 1.5 / 60.0;   // a notify takes effect on the first 60 Hz step at or after its time
     BoxScene floor;
     floor.floor(0, 400);
     struct Case { const char* id; bool r2v, moving; double w0, w1; };
-    for (Case c : {Case{"r2v_stand", true, false, 0.396, 0.880}, Case{"r2v_moving", true, true, 0.396, 0.880},
-                   Case{"v2r_stand", false, false, 0.098, 0.663}, Case{"v2r_moving", false, true, 0.098, 0.663}}) {
+    for (Case c : {Case{"r2v_stand", true, false, 0.3958, 0.8796}, Case{"r2v_moving", true, true, 0.3958, 0.8796},
+                   Case{"v2r_stand", false, false, 0.0984, 0.6634}, Case{"v2r_moving", false, true, 0.0984, 0.6634}}) {
         Rig g(60, true);
         g.useWorldCollision(floor.mesh);
         g.pawn().setForm(c.r2v ? game::Form::Robot : game::Form::Vehicle);
@@ -75,7 +78,6 @@ void checkTransformAnalyzer(Report& r) {
         int cj = c.r2v ? m->vehicle.clipByName(dst) : m->robot.clipByName(dst);
         double durS = ci >= 0 ? (c.r2v ? m->robot.clips[(size_t)ci].duration : m->vehicle.clips[(size_t)ci].duration) : 0;
         double durD = cj >= 0 ? (c.r2v ? m->vehicle.clips[(size_t)cj].duration : m->robot.clips[(size_t)cj].duration) : 0;
-        const int srcModel = c.r2v ? 0 : 1, dstModel = c.r2v ? 1 : 0;
 
         // Analyzer CSV: one row per step from the press to 0.3 s after the fold.
         std::FILE* f = nullptr;
@@ -86,7 +88,7 @@ void checkTransformAnalyzer(Report& r) {
                             "root_x,root_y,root_z,root_yaw_deg,vel_x,vel_y,vel_z,cam_x,cam_y,cam_z,cam_target_x,cam_target_y,"
                             "cam_target_z,pose_delta,bb_h,flags\n");
         int frozenRun = 0, maxFrozen = 0, neither = 0, overlapOutside = 0, missingOverlap = 0, usableNoMuzzle = 0;
-        int rootJumps = 0, yawJumps = 0, camPops = 0, authoredHolds = 0, farSteps = 0;
+        int rootJumps = 0, yawJumps = 0, camPops = 0, authoredHolds = 0, farSteps = 0, farVisibleSteps = 0, armSteps = 0;
         double appear = -1, hide = -1, appearNorm = -1, bbJump = 0, maxCamErr = 0, maxRootErr = 0, foldEnd = -1, farMax = 0;
         double camSwing = 0, camSwingMaxStep = 0;
         std::vector<core::Mat4> scratch;
@@ -112,8 +114,12 @@ void checkTransformAnalyzer(Report& r) {
             double e = b.t - t0;
             if (!b.transforming && foldEnd < 0 && e > 0.05) foldEnd = e;
             if (foldEnd >= 0 && e > foldEnd + 0.3) break;
-            bool robotVis = b.drawnModel == 0, vehVis = b.drawnModel == 1;
+            bool robotVis = b.robotVisible, vehVis = b.vehicleVisible;
             bool inWin = e >= c.w0 && e <= c.w1;
+            bool inWinStrict = e >= c.w0 + tolStep && e <= c.w1 - tolStep;           // must show both
+            bool outWinStrict = e < c.w0 - tolStep / 3 || e > c.w1 + tolStep;        // must not show both
+            bool srcVis = c.r2v ? robotVis : vehVis, dstVis = c.r2v ? vehVis : robotVis;
+            bool srcVisPrev = c.r2v ? a.robotVisible : a.vehicleVisible;
             bool before = e < c.w0;
             bool expSrc = before || inWin, expDst = !before;
             if (foldEnd >= 0) { expSrc = false; expDst = true; }
@@ -131,12 +137,13 @@ void checkTransformAnalyzer(Report& r) {
                 } else {
                     frozenRun = 0;
                 }
-                if (inWin && !(robotVis && vehVis)) { ++missingOverlap; flags += "missing_authored_overlap;"; }
+                if (inWinStrict && !(robotVis && vehVis)) { ++missingOverlap; flags += "missing_authored_overlap;"; }
                 if (b.wUsable > 0 && !b.weaponVisible) { ++usableNoMuzzle; flags += "usable_without_muzzle;"; }
                 if (b.farVerts > 0) { ++farSteps; farMax = std::max(farMax, (double)b.farMax); flags += "far_vertices;"; }
+                if (b.farVerts + b.partnerFarVerts > 0) { ++farVisibleSteps; flags += "far_geometry_visible;"; }
             }
-            if (robotVis && vehVis && !inWin) { ++overlapOutside; flags += "overlap_outside_window;"; }
-            if (appear < 0 && b.drawnModel == dstModel) {
+            if (robotVis && vehVis && outWinStrict && b.transforming) { ++overlapOutside; flags += "overlap_outside_window;"; }
+            if (appear < 0 && dstVis && i > i0) {
                 appear = e;
                 appearNorm = durD > 0 ? e / durD : -1;
                 if (a.drawnModel >= 0) {   // silhouette jump at the switch: bounds change in one step
@@ -145,10 +152,11 @@ void checkTransformAnalyzer(Report& r) {
                 }
                 flags += "target_mesh_appears;";
             }
-            if (hide < 0 && a.drawnModel == srcModel && b.drawnModel != srcModel && i > i0) hide = e;
-            if (i > i0) {
-                // root continuity (drawn root = position + mesh offset): beyond velocity*dt
-                core::Vec3 d = (b.pos + b.meshOff) - (a.pos + a.meshOff);
+            if (hide < 0 && srcVisPrev && !srcVis && i > i0) hide = e;
+            if (i > 0) {   // includes the press step itself (compared with the step before it)
+                // Root continuity of the drawn mesh (Frame::drawRoot = meshOrigin(form) on Pass 13+ builds)
+                // beyond velocity*dt; only between steps drawing the same form (the handoff changes mesh).
+                core::Vec3 d = b.form == a.form ? b.drawRoot - a.drawRoot : core::Vec3{0, 0, 0};
                 double err = std::max(0.0, (double)core::length(d) - core::length(a.vel) * g.dt());
                 maxRootErr = std::max(maxRootErr, err);
                 if (err > 0.15) { ++rootJumps; flags += "root_jump;"; }
@@ -163,12 +171,13 @@ void checkTransformAnalyzer(Report& r) {
                 camSwing = std::max(camSwing, (double)core::length((b.camPos - b.camFocus) - off0));
                 camSwingMaxStep = std::max(camSwingMaxStep, ce);
             }
+            if (b.transforming && b.arm > 0) ++armSteps;
             if (f) {
                 core::Vec3 root = b.pos + b.meshOff;
-                std::fprintf(f, "%d,%.4f,%.4f,%.4f,%s,%.4f,%d,%d,%d,%d,-1,%d,%d,%s,%s,%.4f,%.4f,%.4f,%.2f,%.3f,%.3f,%.3f,"
+                std::fprintf(f, "%d,%.4f,%.4f,%.4f,%s,%.4f,%d,%d,%d,%d,%d,%d,%d,%s,%s,%.4f,%.4f,%.4f,%.2f,%.3f,%.3f,%.3f,"
                                 "%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.5f,%.3f,%s\n",
                              b.step, e, c.r2v ? e / durS : e / durD, c.r2v ? e / durD : e / durS, b.anim.c_str(), b.animT,
-                             (int)robotVis, (int)vehVis, (int)expRobot, (int)expVeh, (int)b.weaponVisible, (int)(b.wUsable > 0),
+                             (int)robotVis, (int)vehVis, (int)expRobot, (int)expVeh, (int)b.arm, (int)b.weaponVisible, (int)(b.wUsable > 0),
                              game::formName(b.form), b.moveForm == 1 ? "VEHICLE" : (b.moveForm == 0 ? "ROBOT" : "n/a"),
                              root.x, root.y, root.z, core::degrees(b.yaw), b.vel.x, b.vel.y, b.vel.z, b.camPos.x, b.camPos.y,
                              b.camPos.z, b.camFocus.x, b.camFocus.y, b.camFocus.z, b.poseDelta, b.bbMax.y - b.bbMin.y, flags.c_str());
@@ -181,13 +190,13 @@ void checkTransformAnalyzer(Report& r) {
         r.truth(id + ".no_step_without_mesh", neither == 0, "a mesh is drawn on every fold step", std::to_string(neither) + " steps");
         r.truth(id + ".no_overlap_outside_window", overlapOutside == 0, win, std::to_string(overlapOutside) + " steps");
         r.confTruth(id + ".overlap_inside_authored_window", missingOverlap == 0, win, kGameplay,
-                    std::to_string(missingOverlap) + " steps inside the window show only one mesh (rebuild draws currentModel() only)");
-        // Evidenced (authored windows): the incoming mesh appears at the window start and the outgoing
-        // mesh is hidden at its end, within two 60 Hz steps. KNOWN Gameplay until the dual-mesh display lands.
-        r.conf(id + ".target_mesh_first_visible", appear, c.w0, 2.0 / 60.0, "s", win, kGameplay,
+                    std::to_string(missingOverlap) + " steps inside the window show only one mesh");
+        // Native notify times: the incoming mesh shows on the first step at/after its Show notify and the
+        // outgoing mesh hides on the first step at/after its Hide notify (tolerance 1.5 steps).
+        r.conf(id + ".target_mesh_first_visible", appear, c.w0, tolStep, "s", win, kGameplay,
                "incoming mesh first drawn (" + dst + " normalized " + f3(appearNorm) +
                    " at that moment: it pops in mid-animation rather than growing in)");
-        r.conf(id + ".source_mesh_hidden", hide, c.w1, 2.0 / 60.0, "s", win, kGameplay, "outgoing mesh last drawn");
+        r.conf(id + ".source_mesh_hidden", hide, c.w1, tolStep, "s", win, kGameplay, "first step without the outgoing mesh");
         r.info(id + ".switch_bounds_jump", bbJump, "m", "largest one-step change of the drawn silhouette's bounds at the mesh switch");
         r.knownTruth(id + ".no_usable_weapon_without_muzzle", usableNoMuzzle == 0,
                      "weapon never usable while no visible weapon/muzzle exists", kGameplay,
@@ -201,11 +210,15 @@ void checkTransformAnalyzer(Report& r) {
                    f3(camSwingMaxStep * 60) + " m/s - human check: vehicle camera");
         r.info(id + ".authored_hold_steps", authoredHolds, "steps", "identical consecutive poses that the played clip itself holds (not flagged)");
         r.info(id + ".far_vertex_steps", farSteps, "steps",
-               "fold steps drawing vertices > 10 m from the root (max " + f3(farMax) +
-                   " m): parts the authored clip parks far away - the original's two-mesh display may hide them; human check");
+               "fold steps whose current-form pose has vertices > 10 m from the root (max " + f3(farMax) + " m)");
+        // Native P9 asserts only that the vehicle is hidden after its 0.6634 s Hide notify (source_mesh_hidden);
+        // far-parked geometry INSIDE a visible window is authored clip data (likely below the floor): INFO.
+        r.info(id + ".far_geometry_visible_steps", farVisibleSteps, "steps",
+               "fold steps drawing vertices > 10 m from the root while that mesh is legitimately visible (authored clip "
+               "data; native P9 hides the vehicle after 0.6634 s - see source_mesh_hidden). Human check: not visible above ground");
+        r.info(id + ".arm_mesh_steps", armSteps, "steps", "fold steps drawing the separate Optimus arm mesh");
         r.info(id + ".fold_end", foldEnd, "s", "isTransforming() clears");
     }
-    r.info("arm_mesh_visible", -1, "", "CP_OptimusArm_SKEL visibility is not represented in the rebuild (column arm_visible = -1)");
     r.info("debug_geometry", -1, "",
            "not observable in the windowless harness; transform-capture.ps1 checks the real exe frames (debug overlay "
            "requires DebugFlags, toggled by the Debug key or WFC_DEBUGDRAW)");
@@ -389,7 +402,8 @@ void checkVehicleProfiles(Report& r) {
         g.pawn().setForm(game::Form::Vehicle);
         g.idle(1.0);
         double ride = heightAboveGround(g);
-        put("vertical.hover_height", ride, "m", "CONFIRMED ORIGINAL", "TnCarForm hover height 185 UU", 1.85);
+        put("vertical.rest_com_height", g.last().comH, "m", "HIGH CONFIDENCE",
+            "native M03 P1 L_eq = 250 - 1940.4*(M/4)/10000 UU (algorithm CONFIRMED, mass link HIGH); 185 UU is the probe radius, not a height", 1.287);
         g.pawn().setPosition(g.pawn().position() + core::Vec3{0, 1.0f, 0});
         double t0 = g.time();
         g.idle(3.0);
@@ -404,14 +418,14 @@ void checkVehicleProfiles(Report& r) {
             }
             prev = e; first = false;
         }
-        put("vertical.drop1m_undershoot", lo, "m", "UNKNOWN", "lowest height error after release from +1 m (negative = sinks below ride height)");
-        put("vertical.drop1m_crossings", cross, "n", "UNKNOWN", "zero crossings of the height error (0 = no spring: snapped or overdamped)");
+        put("vertical.drop1m_undershoot", lo, "m", "HIGH CONFIDENCE", "lowest height error after release from +1 m; native springs K 10000 / B 4000 / m M/4 give damping ratio ~0.8 (small overshoot)");
+        put("vertical.drop1m_crossings", cross, "n", "HIGH CONFIDENCE", "zero crossings of the height error (native: underdamped ~0.8, at most one small overshoot)");
         put("vertical.drop1m_oscillation_period", (tFirstMin > 0 && tFirstMax > 0) ? 2 * (tFirstMax - tFirstMin) : -1, "s", "UNKNOWN",
             "-1 = no oscillation to measure");
-        put("vertical.drop1m_settle", firstAfter(g, t0, [&](const Frame& f) { return std::fabs(f.pos.y - ride) < 0.02; }), "s", "UNKNOWN",
-            "time to |error| < 2 cm (damping)");
-        put("vertical.body_pitch_roll", 0, "deg", "UNKNOWN",
-            "structural: Character::draw rotates the mesh by yaw only - no pitch/roll exists to respond to slopes, bumps or accel");
+        put("vertical.drop1m_settle", firstAfter(g, t0, [&](const Frame& f) { return std::fabs(f.pos.y - ride) < 0.02; }), "s", "HIGH CONFIDENCE",
+            "time to |error| < 2 cm (native spring settles over ~1 s; 1 step = a snap)");
+        put("vertical.body_attitude_represented", g.last().att.valid ? 1 : 0, "", "CONFIRMED ORIGINAL",
+            "native M03 P2: grounded pitch/roll come from the 4 spring forces (no upright controller); measured over steps in native_vehicle.*");
         save(g, "vp_drop");
     }
     for (Terrain& T : terrains()) {
@@ -449,7 +463,7 @@ void checkVehicleProfiles(Report& r) {
                 float y; core::Vec3 n;
                 double hag = worldCollision(g.world()).groundHeight(f.pos.x, f.pos.z, f.pos.y, 0.5f, y, n) ? f.pos.y - y : NAN;
                 if (std::isfinite(hag)) {
-                    double e = hag - (f.veh.valid ? f.veh.ride : 1.85);   // vs the state's own ride height
+                    double e = hag - (f.veh.valid ? f.veh.ride : 1.287);   // vs the state's own ride height
                     if (hag < -0.05) ++below;   // hull origin below the walkable surface under it
                     maxErr = std::max(maxErr, std::fabs(e));
                     if (wasAir && tLand >= 0 && tRecover < 0 && std::fabs(e) < 0.05) tRecover = f.t - t0 - tLand;

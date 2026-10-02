@@ -6,6 +6,7 @@ add_executable(wfc_fidelity
     PlaytestChecks.cpp
     M03Checks.cpp
     M03P2Checks.cpp
+    NativeVehicleChecks.cpp
     Rig.cpp
     Access.cpp
     WorldStub.cpp

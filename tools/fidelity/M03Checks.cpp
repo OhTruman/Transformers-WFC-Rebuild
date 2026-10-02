@@ -23,7 +23,7 @@ std::string f2(double v) { char b[32]; std::snprintf(b, sizeof b, "%.3f", v); re
 template <class B> constexpr auto dashIdx(int) -> decltype(B::Dash, int()) { return (int)B::Dash; }
 template <class B> constexpr int dashIdx(long) { return -1; }
 
-core::Vec3 rootOf(const Frame& f) { return f.pos + f.meshOff; }
+core::Vec3 rootOf(const Frame& f) { return f.drawRoot; }   // where the current form's mesh is drawn
 float yawDiffDeg(float a, float b) { return std::fabs(core::degrees((float)std::remainder((double)a - b, 2 * core::PI))); }
 } // namespace
 
@@ -38,15 +38,14 @@ void checkTransformTimeline(Report& r) {
     // has no absorption - not a shipping path, noted as INFO).
     BoxScene floor;
     floor.floor(0, 200);
-    game::CollisionWorld col;
-    col.build(floor.mesh);
     r.info("flat_fallback_has_no_shift_absorption", 0, "",
            "CharacterMovement's col==nullptr branch lifts to hover height without addTransformShift (graybox fallback only)");
     struct Case { const char* id; game::Form from; bool moving; };
     for (Case c : {Case{"r2v_stand", game::Form::Robot, false}, Case{"r2v_moving", game::Form::Robot, true},
                    Case{"v2r_stand", game::Form::Vehicle, false}, Case{"v2r_moving", game::Form::Vehicle, true}}) {
         Rig rig(60, true);
-        rig.setCollision(&col);
+        rig.useWorldCollision(floor.mesh);   // production PlayerController::applyToPawn path (the legacy
+                                             // Rig::setCollision shortcut skips the transform shift absorption)
         rig.pawn().setForm(c.from);
         rig.idle(0.3);
         platform::InputFrame in = c.moving ? Rig::down({Button::Forward}) : platform::InputFrame{};
@@ -75,7 +74,8 @@ void checkTransformTimeline(Report& r) {
             if (b.wUsable > 0 && !b.weaponVisible) ++usableNoMuzzle;
             if (b.form != a.form && handoffIdx < 0) handoffIdx = (int)i;
             // root continuity: drawn root may move by velocity*dt plus the authored height blend
-            core::Vec3 d = rootOf(b) - rootOf(a);
+            // (only between steps drawing the same form: at the handoff the current mesh changes identity)
+            core::Vec3 d = b.form == a.form ? rootOf(b) - rootOf(a) : core::Vec3{0, 0, 0};
             double expected = core::length(core::Vec3{a.vel.x, a.vel.y, a.vel.z}) * rig.dt();
             double err = std::max(0.0, (double)core::length(d) - expected);
             maxRootErr = std::max(maxRootErr, err);
@@ -99,16 +99,31 @@ void checkTransformTimeline(Report& r) {
             const Frame& h = tr[(size_t)handoffIdx];
             r.info(id + ".mesh_handoff_progress", h.progress, "frac", "displayed mesh switches here; rebuild shows ONE mesh at a time");
         }
-        // Original: both meshes animate for the whole fold, source detached at the end (RE HANDOFF #4).
-        r.confTruth(id + ".both_meshes_visible_during_fold", false,
-                    "RE HANDOFF #4 (both meshes animate the whole duration; source mesh detached at t=Duration)", kGameplay,
-                    "Character::draw draws only currentModel(): one mesh, switched at the mid-fold handoff (" +
-                        (handoffIdx >= 0 ? f2(tr[(size_t)handoffIdx].progress) : std::string("n/a")) + ")");
+        // Native M03 P10: both meshes are visible inside the ToggleHidden notify window (not the whole fold;
+        // the old "whole duration" reading is superseded). Data-driven from Character::partnerShown().
+        int both = 0, partnerKnown = 0;
+        for (const Frame& f : tr) if (f.t > t0 && f.transforming) { both += f.robotVisible && f.vehicleVisible; partnerKnown += f.partner >= 0; }
+        r.confTruth(id + ".both_meshes_visible_in_fold", both > 0,
+                    "native M03 P10 (ToggleHidden notifies: both meshes visible R->V 0.3958-0.8796 s, V->R 0.0984-0.6634 s)", kGameplay,
+                    partnerKnown ? std::to_string(both) + " fold steps draw both meshes (exact window: transform_analyzer)"
+                                 : std::string("no partner-mesh state in this build: one mesh, switched mid-fold"));
     }
-    r.knownTruth("separate_arm_mesh", false,
-                 "RE TARGETED_PASS2 #9: the Optimus arm mesh is shown when no weapon is drawn (transform-in, melee, holster) and "
-                 "hidden with the hand bone scaled 0.1 while the Ion Blaster is drawn", kGameplay,
-                 "no arm mesh/visibility state exists in the rebuild (nothing to record)");
+    {   // Native/RE: the arm mesh is shown when no weapon is drawn (transform, holster); data-driven.
+        Rig g(60, true);
+        BoxScene fl; fl.floor(0, 200);
+        g.useWorldCollision(fl.mesh);
+        g.idle(0.5);
+        g.step(Rig::press(Button::Transform));
+        g.idle(3.0);
+        g.step(Rig::press(Button::Transform));
+        g.idle(2.0);
+        int armSteps = 0, known = 0;
+        for (const Frame& f : g.trace()) { armSteps += f.arm > 0; known += f.arm >= 0; }
+        r.confTruth("separate_arm_mesh", armSteps > 0,
+                    "RE TARGETED_PASS2 #9 / native M03 P7: the Optimus arm mesh is shown while no weapon is drawn", kGameplay,
+                    known ? std::to_string(armSteps) + " steps with the arm mesh drawn over a R->V->R cycle"
+                          : std::string("no arm mesh/visibility state in this build"));
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -158,7 +173,8 @@ template <class B> static void vehicleFeelImpl(Report& r) {
     // Hover height + oscillation
     {
         Rig g(60, false); veh(g, 1.0f);
-        r.info("ride_height", g.last().veh.valid ? g.last().veh.ride : g.last().pos.y - g.pawn().groundY, "m", "", 1.85);
+        r.info("rest_com_height", g.last().comH, "m", "COM height at rest without collision (graybox path; the collision-floor value is "
+               "movement.vehicle_rest_com_height)", 1.287);
         g.pawn().setPosition(g.pawn().position() + core::Vec3{0, 1.0f, 0});   // lift 1 m and release
         double t0 = g.time();
         g.idle(3.0);
@@ -217,7 +233,7 @@ template <class B> static void vehicleFeelImpl(Report& r) {
         g.hold(Rig::down({Button::Forward}), 1.5);
         double t0 = g.time();
         g.hold(boostHeld({Button::Forward}), 3.0);
-        r.conf("boost_top_speed", hspeed(g.last()), 30.0, 0.1, "m/s", bd, kGameplay);
+        r.info("boost_speed_after_3s", hspeed(g.last()), "m/s", "speed after a fixed boost window: the rise depends on the PROVISIONAL tire model; the CONFIRMED MaxSpeed 3000 cap is asserted by native_vehicle.boost.top_speed_6s", 30.0);
         r.info("boost_t90", firstAfter(g, t0, [](const Frame& f) { return hspeed(f) >= 27.0f; }), "s", "cruise -> 90% boost speed");
         r.confTruth("boost_driving_state", g.last().veh.valid && g.last().veh.driving, bd, kGameplay, "vehicleState().driving while boost held");
         save(g, "vf_boost");
@@ -271,7 +287,7 @@ template <class B> static void vehicleFeelImpl(Report& r) {
         n.hold(boostHeld({Button::Forward}), 4.0);
         double npeak = 0, nlen = 0;
         for (const Frame& f : n.trace()) if (f.t > tn) { npeak = std::max(npeak, (double)hspeed(f)); if (f.veh.nitro > 0) nlen += n.dt(); }
-        r.conf("nitro_peak_speed", npeak, 45.0, 0.5, "m/s", bd, kGameplay, "Driving 30 x1.5");
+        r.info("nitro_peak_after_2s_boost", npeak, "m/s", "x1.5 of the speed reached after 2 s of boost (rise PROVISIONAL); the 45 m/s cap is asserted by native_vehicle.nitro.peak_after_full_boost", 45.0);
         r.conf("nitro_duration", nlen, 3.0, 0.05, "s", bd, kGameplay);
         r.conf("nitro_cooldown", n.last().veh.valid ? n.last().veh.nitroCd + (n.time() - tn) : 0, 8.0, 0.1, "s", bd, kGameplay,
                "cooldown remaining + elapsed since nitro start");

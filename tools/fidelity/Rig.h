@@ -16,6 +16,7 @@
 #include "game/World.h"
 #include "platform/Input.h"
 #include "render/Camera.h"
+#include "core/Config.h"
 
 namespace fid {
 
@@ -36,7 +37,36 @@ FID_OPTIONAL_ACCESSOR(transformProgress) // milestone-02 Character: normalized f
 FID_OPTIONAL_ACCESSOR(weaponUsable)      // milestone-02: weapon may fire (restored + equipped)
 FID_OPTIONAL_ACCESSOR(weaponRestored)    // milestone-02: weapon restored during V->R
 FID_OPTIONAL_ACCESSOR(hoverApplied)      // milestone-02: hover authority applied
+FID_OPTIONAL_ACCESSOR(partnerShown)      // gameplay Pass 13+: second mesh drawn (transform overlap)
+FID_OPTIONAL_ACCESSOR(armShown)          // gameplay Pass 13b+: separate Optimus arm mesh drawn
+FID_OPTIONAL_ACCESSOR(handShrunk)        // gameplay Pass 14: HandSkelControl R_Arm04_Hand_XB scale 0.1
+FID_OPTIONAL_ACCESSOR(rammedRemain)      // gameplay Pass 14: robot RammedReaction time remaining
 #undef FID_OPTIONAL_ACCESSOR
+
+// Vehicle rigid-body attitude / suspension (gameplay Pass 13+ VehicleState); valid=false otherwise.
+struct VehAtt {
+    bool valid = false, onGround = false;
+    float pitch = 0, roll = 0;          // rad, UE sense (pitch + = nose up, roll + = right side down)
+    core::Vec3 angVel;                  // body-local, UE axes (x roll, y pitch, z yaw)
+    int contacts = 0;
+    float springMean = -1;              // mean TnSpring length of the contacting probes (m)
+};
+template <class C> auto vehAttitude(const C& c, int) -> decltype(c.vehicleState().spLen[0], c.vehicleState().angVel, VehAtt()) {
+    const auto& v = c.vehicleState();
+    VehAtt a;
+    a.valid = true; a.pitch = v.pitch; a.roll = v.roll; a.angVel = v.angVel; a.contacts = v.contacts;
+    a.onGround = v.onTheGround;
+    float s = 0; int n = 0;
+    for (float l : v.spLen) if (l >= 0) { s += l; ++n; }
+    a.springMean = n ? s / n : -1.0f;
+    return a;
+}
+template <class C> VehAtt vehAttitude(const C&, long) { return VehAtt(); }
+// Robot ram reaction / vehicle AddVelocity (Pass 14); return false when the build lacks them.
+template <class C> auto ramRobot(C& c, const core::Vec3& d, int) -> decltype(c.rammedAsRobot(d), bool()) { c.rammedAsRobot(d); return true; }
+template <class C> bool ramRobot(C&, const core::Vec3&, long) { return false; }
+template <class C> auto addVehVelocity(C& c, const core::Vec3& v, int) -> decltype(c.addVelocityInVehicle(v), bool()) { c.addVelocityInVehicle(v); return true; }
+template <class C> bool addVehVelocity(C&, const core::Vec3&, long) { return false; }
 
 // Vehicle state machine snapshot (milestone-02 Character::vehicleState()); valid=false otherwise.
 struct VehSnap {
@@ -53,6 +83,18 @@ template <class C> auto vehicleSnap(const C& c, int) -> decltype(c.vehicleState(
 template <class C> VehSnap vehicleSnap(const C&, long) { return VehSnap(); }
 template <class C> auto meshOffsetOf(const C& c, int) -> decltype(c.meshOffset(), core::Vec3()) { return c.meshOffset(); }
 template <class C> core::Vec3 meshOffsetOf(const C&, long) { return core::Vec3{0, 0, 0}; }
+// Drawn mesh root: gameplay Pass 13+ draws each form at meshOrigin(form) (actor location minus that
+// form's mesh-to-actor offset); older builds draw at position() + meshOffset().
+template <class C> auto drawRootOf(const C& c, int) -> decltype(c.meshOrigin(c.form()), core::Vec3()) { return c.meshOrigin(c.form()); }
+template <class C> core::Vec3 drawRootOf(const C& c, long) { return c.position() + meshOffsetOf(c, 0); }
+// Model matrix of form f's drawn mesh (Pass 13+: meshMatrix(f) incl. the vehicle body pitch/roll).
+template <class C> auto drawMatrixOf(const C& c, game::Form f, int) -> decltype(c.meshMatrix(f), core::Mat4()) { return c.meshMatrix(f); }
+template <class C> core::Mat4 drawMatrixOf(const C& c, game::Form, long) {
+    return core::Mat4::translate(c.position() + meshOffsetOf(c, 0)) * core::Mat4::rotateY(c.yaw() + core::config::kMeshYawOffset);
+}
+// Camera anchor base: Pass 13+ orbits actorLocation() (shared by both forms during a transform).
+template <class C> auto actorLocationOf(const C& c, int) -> decltype(c.actorLocation(), core::Vec3()) { return c.actorLocation(); }
+template <class C> core::Vec3 actorLocationOf(const C& c, long) { return c.position() + meshOffsetOf(c, 0); }
 template <class C> auto upperAnimName(const C& c, int) -> decltype(std::string(c.upperAnimName())) { return c.upperAnimName(); }
 template <class C> std::string upperAnimName(const C&, long) { return ""; }
 
@@ -68,6 +110,7 @@ template <class C> float reloadSlotWeight(const C& c) {
 // Harness-only access to private product members (Access.cpp).
 game::CollisionWorld& worldCollision(game::World& w);
 const render::MeshData& drawnPose(const game::Character& c);
+const render::MeshData* partnerPose(const game::Character& c);   // nullptr when the build has no partner mesh
 
 // Hitscan calls captured by the World::fireHitscan stub (WorldStub.cpp).
 struct ShotRecord { double t; core::Vec3 origin, dir; };
@@ -98,17 +141,27 @@ struct Frame {
     core::Vec3 muzzle;   // world-space barrel tip (valid when weaponVisible)
     // Camera (PlayerController::updateCamera) and the drawn skinned pose.
     core::Vec3 camPos, camFocus;   // camera position; anchor it orbits (pawn + mesh offset + Offset Z)
+    float viewYaw = 0;             // rendered camera yaw (after camera smoothing; camYaw is the input yaw)
     float camFov = 0;              // horizontal FOV (deg)
     int drawnModel = -1;           // 0 robot mesh, 1 vehicle mesh, -1 none (fallback box)
     float poseDelta = -1;          // max model-space vertex move vs the previous step (-1: model changed / none)
     core::Vec3 bbMin, bbMax;       // world-space bounds of the drawn pose (1st..99th percentile per axis)
     int farVerts = 0;              // drawn vertices more than 10 m from the root
     float farMax = 0;              // farthest drawn vertex from the root (m)
+    // Pass 13+/14 state (-1 / invalid when the build lacks it).
+    float partner = -1, arm = -1, hand = -1, rammed = -1;
+    core::Vec3 drawRoot;           // where the current form's mesh is drawn (see layer::drawRootOf)
+    int partnerFarVerts = 0;       // partner-mesh vertices > 10 m from the root while the partner is drawn
+    layer::VehAtt att;
+    float comH = -1;               // vehicle centre-of-mass height above the floor under it (m; rig floor y = 0 / world collision)
+    float comY = 0;                // vehicle centre-of-mass world height (m)
+    bool robotVisible = false, vehicleVisible = false;   // meshes actually drawn (current + partner)
 };
 
 // Extracted Optimus models, loaded once and shared by every rig (read-only asset access).
 struct Models {
-    assets::SkinnedModel robot, vehicle;
+    assets::SkinnedModel robot, vehicle, arm;   // arm: CP_OptimusArm_SKEL (gameplay Pass 13b+ arm display)
+    bool armOk = false;
     bool ok = false;
     int weaponBone = -1;
     core::Mat4 socket;

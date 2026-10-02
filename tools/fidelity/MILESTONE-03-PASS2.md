@@ -342,3 +342,20 @@ Gate defects found and fixed while validating:
   no longer show 12 m/s as a prediction.
 - **Baseline harness refreshed:** 262 / 0 / 44 / 321. Gate self-check: 345 PASS / 0 FAIL / 79 KNOWN,
   0 regressions.
+
+## Native-RE validation update (gameplay 6dfaf0d)
+Stale expectations were replaced and native P1–P10 assertions promoted; see
+[VEHICLE-RE-REQUEST.md](VEHICLE-RE-REQUEST.md) and
+[results/xbranch-gameplay-6dfaf0d](results/xbranch-gameplay-6dfaf0d/README.md).
+- 6dfaf0d: 325 PASS / 0 FAIL / 15 KNOWN / 365 INFO.
+- milestone-02 baseline (re-measured): 267 / 0 / 66 / 363.
+- milestone-02 → 6dfaf0d: 51 FIXED, 0 regressed.
+
+Harness semantics corrected for Pass 13+ trees:
+- the drawn root is `meshOrigin(form)` and the body attitude is applied via `meshMatrix(form)`
+- the camera anchor is `actorLocation()`
+- heading is compared with the rendered camera yaw
+- both-mesh visibility comes from `partnerShown()`
+- the arm model is loaded
+
+The analyzer previously skipped the press step in its root-continuity check; it no longer does.

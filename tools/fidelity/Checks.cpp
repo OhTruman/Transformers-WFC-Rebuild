@@ -60,7 +60,11 @@ void checkConstants(Report& r) {
     r.conf("vehicle_boost_speed", kVehicleBoostSpeed, 3000 / 100.0, 1e-4, "m/s",
            std::string(ht) + "Driving MaxSpeed 3000 / hover dash 3000", kGameplay);
     r.conf("vehicle_dash_duration", kVehicleDashTime, 0.5, 1e-4, "s", std::string(ht) + "hover dash 0.5 s, forward only, 2 s cooldown", kGameplay);
-    r.conf("vehicle_hover_height", kVehicleHoverH, 185 / 100.0, 1e-4, "m", std::string(ht) + "SuspensionRadius=185", kGameplay);
+    // SuspensionRadius 185 is the HORIZONTAL radius of the four hover suspension probes around the COM
+    // (native M03 P1: probe offset Normal(1,1,0)*185 -> +-130.8 UU), not a ride height. The rest height
+    // is a separate quantity measured in movement.vehicle_rest_com_height.
+    r.conf("vehicle_suspension_radius", kVehicleHoverH, 185 / 100.0, 1e-4, "m",
+           "native M03 P1 (HoverTruck_Physics SuspensionRadius 185 = probe radius around the COM)", kGameplay);
     r.near("vehicle_jump_speed", kVehicleJumpSpeed, 1200 / 100.0, 1e-4, "m/s", std::string(hc) + "JumpLinearSpeed=1200");
     r.info("vehicle_turn_rate", kVehicleTurnRate, "rad/s",
            "AiMaxAngularSpeed is AI-only: the player's hover heading yaw-tracks the CAMERA every physics step "
@@ -332,7 +336,8 @@ void checkOrientation(Report& r) {
         rig.hold(Rig::down({Button::Right}), 1.5);   // pure strafe at camera yaw 0
         auto headingErr = [](const Rig& g) {
             const Frame& f = g.last();
-            return std::fabs(core::degrees((float)std::remainder((double)f.yaw - f.camYaw, 2 * core::PI)));
+            // Native M03 P2: the frame of reference is the rendered camera yaw (after camera smoothing).
+            return std::fabs(core::degrees((float)std::remainder((double)f.yaw - f.viewYaw, 2 * core::PI)));
         };
         r.conf("vehicle_heading_follows_camera_strafe", headingErr(rig), 0.0, 1.0, "deg", hv, kGameplay,
                "heading minus camera yaw while strafing right in hover");
@@ -341,7 +346,7 @@ void checkOrientation(Report& r) {
         rig.step(turn);
         rig.hold(Rig::down({Button::Forward}), 0.1);
         r.conf("vehicle_heading_follows_camera_turn", headingErr(rig), 0.0, 1.0, "deg", hv, kGameplay,
-               "heading minus camera yaw 0.1 s after a mouse turn");
+               "heading minus rendered camera yaw 0.1 s after a mouse turn");
         save(rig, "orient_vehicle_heading");
         // Reversal manoeuvre kept as a measurement (AiMaxAngularSpeed is AI steering, not the player hover).
         Rig rev(60, false);
@@ -462,8 +467,23 @@ void checkMovement(Report& r) {
         Rig rig(60, false);
         rig.pawn().setForm(game::Form::Vehicle);
         rig.idle(0.5);
-        r.conf("vehicle_hover_height", rig.pawn().position().y - rig.pawn().groundY, 1.85, 0.01, "m",
-               "RE TARGETED_PASS2 #2 / Pass 11: VEH_SHARED_p.HoverTruck_Physics SuspensionRadius 185", kGameplay);
+        {   // Rest centre-of-mass height above flat ground (production path + collision floor, settled 3 s).
+            // Native M03 P1: implicit springs with gravity compensation -> equilibrium probe length
+            // L_eq = RestingLength - |g_RB| * (M/4) / Stiffness = 250 - 1940.4 * 625 / 10000 = 128.7 UU
+            // (probes sit on the COM plane, so L_eq is the COM height on level ground). Algorithm and
+            // constants CONFIRMED; the hover RB mass link M = 2500 is HIGH (Truck_Physics Mass).
+            Rig rc(60, false);
+            BoxScene fl; fl.floor(0, 200);
+            rc.useWorldCollision(fl.mesh);
+            rc.pawn().setForm(game::Form::Vehicle);
+            rc.idle(3.0);
+            r.conf("vehicle_rest_com_height", rc.last().comH, 2.5 - 19.404 * (2500.0 / 4.0) / 10000.0, 0.02, "m",
+                   "native M03 P1: L_eq = 250 - 1940.4*(M/4)/10000 UU (algorithm CONFIRMED, mass link M=2500 HIGH)", kGameplay,
+                   "COM height above the floor at rest; replaces the stale 1.85 m 'hover height' (185 = SuspensionRadius)");
+            if (rc.last().att.valid)
+                r.info("vehicle_rest_spring_length", rc.last().att.springMean, "m", "mean TnSpring length of the 4 probes at rest (rebuild state)",
+                       1.287);
+        }
         double t0 = rig.time();
         rig.hold(Rig::down({Button::Forward}), 2.0);
         r.near("vehicle_cruise_speed", hspeed(rig.last()), kVehicleMoveSpeed, 1e-3, "m/s", "MaxLinearSpeed 1500");
@@ -477,7 +497,7 @@ void checkMovement(Report& r) {
                          "Hovering with 0.5 s drift)";
         double t1 = rig.time();
         rig.hold(boostHeld({Button::Forward}), 2.0);   // authored boost input (FineAim button) when the build has it
-        r.conf("vehicle_boost_top_speed", hspeed(rig.last()), 30.0, 0.05, "m/s", bd, kGameplay);
+        r.info("vehicle_boost_speed_after_2s", hspeed(rig.last()), "m/s", "speed after a fixed boost window: the rise depends on the PROVISIONAL tire model; the CONFIRMED MaxSpeed 3000 cap is asserted by native_vehicle.boost.top_speed_6s", 30.0);
         r.info("vehicle_boost_rise_time",
                firstAfter(rig, t1, [](const Frame& f) { return hspeed(f) >= kVehicleBoostSpeed - 1e-3f; }), "s",
                "cruise -> boost top speed; original MaxAccel 2500 UU/s2 (low-speed extra accel PROV)", (30.0 - 15.0) / 25.0);
@@ -507,9 +527,10 @@ void checkMovement(Report& r) {
         vj.idle(2.0);
         double apex = base;
         for (const Frame& f : vj.trace()) apex = std::max(apex, (double)f.pos.y);
-        r.known("vehicle_jump_apex", apex - base, kVehicleJumpSpeed * kVehicleJumpSpeed / (2 * kVehicleGravity), 0.05, "m",
-                "JumpLinearSpeed 1200 under RB gravity -19.4 (derived)", kGameplay,
-                "vehicle jump: apex above hover height (RB jump; integration and authority PROV)");
+        r.info("vehicle_jump_apex", apex - base, "m",
+               "native M03 P4: 1200^2/(2*1940.4) = 3.71 m is the ballistic rise BEFORE the springs re-engage (a lower bound, not the "
+               "total apex); graybox path. Collision-path value: native_vehicle.hover_jump.apex_above_rest",
+               kVehicleJumpSpeed * kVehicleJumpSpeed / (2 * kVehicleGravity));
         save(vj, "move_vehicle_jump");
     }
 }

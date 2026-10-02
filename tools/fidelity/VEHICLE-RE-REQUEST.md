@@ -1,60 +1,45 @@
-# Targeted native RE request: HoverTruck physics, Dash direction (ReVa, read-only)
+# Vehicle native RE: status
 
-**Status:** the vehicle physical response is measured but NOT asserted. Nothing below may be tuned by
-feel. Each item flips its `vehicle_profiles` probe from INFO (UNKNOWN) to a `conf()` check (owner
-Gameplay) once answered. The merge gate then enforces it automatically.
+The original request (suspension, pitch/roll, jump, Dash direction, grip) was **answered** by
+`RE-Workspace/notes/MILESTONE03_VEHICLE_NATIVE_FIDELITY.md` (P1–P10). Those answers are now asserted
+by the harness suites `native_vehicle` / `native_robot` and the `transform_analyzer` notify windows.
+They were validated on agents/gameplay 6dfaf0d (`results/xbranch-gameplay-6dfaf0d`).
 
-Already CONFIRMED and passing:
-- hover height 1.85 m
-- Boost = Driving 30 m/s
-- Dash 30 m/s × 0.5 s, cooldown 2 s
-- Nitro ×1.5 (45 m/s) for 3 s, cooldown 8 s, steer ×0.3
-- hover heading follows the camera
+## Answered → asserted (conf, owner Gameplay)
+| native item | harness checks |
+|---|---|
+| P1 suspension: 4 body-down probes on the COM plane, implicit push-only springs (K 10000, B 4000, m = M/4), RB gravity −1940.4, zero RB damping, no ride-height target | `native_vehicle.rest.*`, `free_fall.*`, `push_only.no_pull`, `step_*.no_one_frame_snap`, `step_*.rest_com_on_top`, `drop10.*`, `movement.vehicle_rest_com_height` |
+| P2 attitude: grounded pitch/roll from the springs; yaw = camera each tick; upright 5 %/tick only when airborne or upside down | `step_*.attitude_follows_terrain`, `camera_turn.heading_vs_view_yaw`, `upright.airborne_ratio_per_tick`, `orientation.vehicle_heading_follows_camera_*` |
+| P3 hover velocity: one ClampLength 3000 on local X/Y, no separate grip | `release_forward/lateral.time_to_stop` |
+| P4 jumps: hover +1200 world-Z additive + local ω −1; Driving local (600, 0, 1400) | `hover_jump*.dvz`, `*.horizontal_kept`, `hover_jump.pitch_kick`, `boost_jump.dv_up/dv_forward` |
+| P5 Dash: body forward, mask (1,1,1), exit snap to 1500, stick ignored | `dash.*` |
+| P6 fine-aim offset: orbit-space translation, X toward the pawn (150 → −50) | `native_robot.fine_aim.camera_back_shift / lateral_shift` (level pitch only) |
+| P7 hand shrink | `native_robot.hand_shrink.*` |
+| P8 ram reaction | `native_robot.ram.*` (the reaction is invoked directly; victim selection is not testable) |
+| P9/P10 transform notifies | `transform_analyzer.*.target_mesh_first_visible / source_mesh_hidden / overlap_*` |
 
-## Measured rebuild behaviour (milestone-02 baseline, `results/m03-baseline/vehicle_profiles.json`)
-| probe | rebuild | why it matters |
-|---|---|---|
-| 0.5 m step / 0.25 m bumps (`*.max_vertical_step`) | full height change in ONE 1/60 s step, vertical speed 0 | hull snaps to terrain |
-| +1 m release (`vertical.drop1m_*`) | 0 oscillations, settles in 1 step | no spring / damper |
-| 4 m ledge (`ledge.*`) | 0.63 s airtime, lands at −12.3 m/s, ride height back in 1 step | no landing compression |
-| body pitch/roll (`vertical.body_pitch_roll`) | none (mesh rotates by yaw only) | no lean on slopes / accel / turns |
-| accel t90 / release-to-stop (`long.HOVER.*`) | 0.45 s / 0.47 s | symmetric response |
-| velocity vs heading after a 90° camera step (`steer.*.max_slip_deg`) | up to 88° (heading instant, velocity lags) | crab / skid |
-| jump (`vertical.jump_launch_vy`) | 0 m/s | dead jump |
-| Dash after a 90° camera step (`steer.DASH.velocity_t_to_81deg`) | velocity re-aimed in 3 frames | dash steerable instantly |
+## Stale expectations retired by this answer
+- "Hover height 1.85 m" is gone. 185 UU is the SuspensionRadius (horizontal probe radius,
+  `constants.vehicle_suspension_radius`). The rest height is the separately measured COM height
+  1.287 m (`vehicle_rest_com_height`, mass link HIGH). The spring rest length (250 UU), pawn origin
+  height and visual mesh clearance are reported separately as INFO.
+- **Ballistic jump apex 3.71 m.** Native calls it the rise before the springs re-engage, so it is a
+  lower bound now (INFO).
+- **Boost / nitro speed after short windows.** The native fact is the cap (asserted over 6 s). The rise
+  depends on the PROVISIONAL tire model.
+- **Heading vs input yaw.** Native P2 tracks the CAMERA rotation, so checks compare with the rendered
+  view yaw.
+- **"One mesh at a time" / "no arm mesh".** These are now data-driven (`partnerShown()`, `armShown()`).
+- **Far-parked clip geometry inside a visible window.** INFO; P9 only asserts the hide after 0.6634 s.
 
-## Questions
-1. **Suspension / ride-height correction.** `TnCarForm` / HoverTruck hovering physics.
-   - How is ride height maintained: spring constant, damping, max correction speed or force, per-wheel
-     or per-thruster probes (count, positions, trace length)?
-   - Is the correction applied as a force (mass, `RBPhysicsGravityScaling` 0.66) or as a position lerp?
-   - What happens over a step higher than the probe reach, and on landing from a fall?
-2. **Body pitch/roll.**
-   - Does the vehicle mesh/actor rotation take pitch/roll from the ground normal(s), from acceleration
-     or turning, or from the rigid body?
-   - Limits and interpolation rates.
-   - Is it different in Hovering vs Driving?
-3. **Jump.**
-   - Is `JumpLinearSpeed` 1200 UU/s applied, in which states (Hovering / Driving), along which axis?
-   - Airborne gravity scale for the vehicle.
-   - Air control and landing behaviour.
-4. **Dash direction.**
-   - Is the dash vector fixed at activation ("forward only") or re-aimed with the camera/heading during
-     its 0.5 s?
-   - What does Dash do with no stick input?
-5. **Accel/decel asymmetry and lateral grip.**
-   - Hover truck acceleration vs braking/deceleration rates.
-   - Lateral friction / velocity alignment toward the heading (the 88° slip).
-
-## Not physics, already evidenced (owner Gameplay; gate checks in place)
-- **Robot→vehicle mesh display.** The rebuild shows one mesh and switches at 1.017 s; the authored
-  window shows both meshes 0.396–0.880 s. Checks: `transform_analyzer.r2v_*.target_mesh_first_visible`
-  / `source_mesh_hidden` / `overlap_inside_authored_window`.
-- **Vehicle→robot.** The switch is at 0.583 s; the authored window is 0.098–0.663 s. Same checks for
-  `v2r_*`.
-- **Weapon usable before the gun is visible** (5 steps): `*.no_usable_weapon_without_muzzle`.
-- **Driving (Boost/Nitro) passes through a 0.5 m raised surface at constant height:**
-  `vehicle_profiles.step.{BOOST,NITRO}.never_below_surface`.
-- **Vehicle clip geometry ~39.5 m below the pawn for 17 steps** of `Transform_ToRobot_VEH`
-  (`*.far_vertex_steps`, INFO). It is authored clip data. Whether the original hides it (two-mesh
-  display / visibility) is a human/RE check; it is not asserted.
+## Still open (PROVISIONAL / PARTIAL: not promoted)
+1. **Hover RB mass link** (M = 2500 from Truck_Physics). Rest height and damping ratio depend on it (HIGH).
+2. **Vehicle hull contact.** Minimum clearance (rebuild 0.6 m) and ceiling probe: PhysicalVehicleMesh hull
+   not recovered.
+3. **Boost tire lateral coefficient** (the 2(M/4)|g| cap is native). This sets the boost/nitro rise and
+   cornering.
+4. **Driving wheel steering behaviour.**
+5. **Camera offset curve between keys** (CurveAutoClamped tangent rule). Only level pitch (a key) is
+   asserted.
+6. **Ram victim selection** (TnPawn only, mass ≤ 1000, other team). It lives in World code that the
+   harness does not link, and the slice spawns no pawn victims: UNTESTED.

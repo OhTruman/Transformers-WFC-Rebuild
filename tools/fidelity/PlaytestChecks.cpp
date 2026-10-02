@@ -404,7 +404,7 @@ void checkBoost(Report& r) {
     if (viaAuthored > boostSpeed) { boostSpeed = viaAuthored; boostKey = "FineAim(RMB/LT)"; }
     r.truth("physics_boost_activates", boostSpeed > kVehicleMoveSpeed + 0.5, "a boost input exists and raises speed above hover cruise",
             "via " + boostKey);
-    r.conf("physics_boost_speed", boostSpeed, 30.0, 0.05, "m/s", bs, kGameplay);
+    r.info("physics_boost_speed", boostSpeed, "m/s", "speed after a fixed boost window: the rise depends on the PROVISIONAL tire model; the CONFIRMED MaxSpeed 3000 cap is asserted by native_vehicle.boost.top_speed_6s", 30.0);
     r.confTruth("boost_on_authored_input", viaAuthored > kVehicleMoveSpeed + 0.5,
                 std::string(bs) + "; Xe-TransInput.ini RightMouseButton=ToggleFineAim|Boost, LT=FineAim|Boost, LeftShift="
                 "Ability0|VehicleSpecialMove", kGameplay,

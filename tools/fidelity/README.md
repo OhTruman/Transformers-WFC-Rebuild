@@ -58,7 +58,8 @@ Results and ownership: [MILESTONE-03.md](MILESTONE-03.md); preserved evidence: [
 | `vehicle-visual.ps1` | Fixed-camera vehicle stills (idle angles WFC / legacy / glTF bakes, hover FX, boost, dash, nitro on an open run, transform midpoint, darkest/brightest spawn) with a material sidecar (slots, chain, textures by role, switches, runtime params, EnergonColor, customization push). |
 | `map-audit.ps1` | Streets inventory in seven classes, per object; consumes Rendering's `map_audit.json` when present; resolves PrefabInstances through member tags; covers ambient audio (runtime), movers, pickups, the destructible. |
 | `perf-report.ps1` (rebased) / `perf-counters.ps1` | Costs: collision, visibility, lighting, skinning, particles, audio, render, gameplay. Origins: hitscan vs camera-aim ray, shell/magazine meshes, vehicle FX. Exact counters for visibility rays, `segmentHit`, light envs, skinning, dynamic/mesh draws. |
-| `ab.ps1 -Measure` | Also builds prof + observe for any ref in isolation (cross-branch validation). |
+| harness `native_vehicle` / `native_robot` | Native RE M03 P1–P8 assertions (rest COM height, probes, push-only springs, RB gravity, release, steps, drop, airborne upright, camera-yaw heading, hover/boost jumps, Dash, fine-aim orbit offset, hand shrink, ram reaction); provisional items reported as INFO. Validation of gameplay 6dfaf0d: [results/xbranch-gameplay-6dfaf0d](results/xbranch-gameplay-6dfaf0d/README.md). |
+| `ab.ps1 -Measure` | Also builds prof / observe / count for any ref in isolation (cross-branch validation). |
 Shared helpers: `lib/Run.ps1` (process env, frame-log parser, report writer, sheets), `lib/ImageStats.cs`.
 Human checklist: [HUMAN-CHECK.md](HUMAN-CHECK.md). Pass-2 findings: [MILESTONE-03-PASS2.md](MILESTONE-03-PASS2.md). Open native-RE items: [VEHICLE-RE-REQUEST.md](VEHICLE-RE-REQUEST.md), [FINE-AIM-EVIDENCE-REQUEST.md](FINE-AIM-EVIDENCE-REQUEST.md).
 
