@@ -7,8 +7,6 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
-#include <sstream>
 
 namespace game {
 using namespace cuedata;
@@ -21,6 +19,10 @@ double ticksToMs(LARGE_INTEGER_T t) { return (double)t / 1e6; }
 const CueDef kCues[] = {
 #include "game/SoundCues.inc"
 };
+
+// FSB4 sample-header loop regions of the looping vehicle waves (AssetTools vehicle_audio_loops.json).
+struct FsbLoop { const char* wav; int rate, channels; uint32_t totalSamples, loopStart, loopEnd; bool headerLoopFlag; };
+#include "game/VehicleLoops.inc"
 
 constexpr float UU = 0.01f;
 constexpr float kInstanceTail = 10.0f;  // upper bound on a one-shot instance's life after its last event
@@ -119,23 +121,17 @@ void SoundCues::load(audio::IAudio* a, const std::string& contentRoot) {
         for (size_t e = 0; e < cues_[c].events.size(); ++e) { ok += (int)waves_[c][e].size(); total += (int)cues_[c].events[e].waves.size(); }
     }
     LOG_INFO("sound cues: %zu cues, %d/%d waves loaded", cues_.size(), ok, total);
+    applyLoopPoints();
 }
 
-int SoundCues::loadLoopPoints(const std::string& path) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) { LOG_INFO("sound cues: no FSB loop metadata (%s) - loop points UNKNOWN, looping waves wrap at the sample end", path.c_str()); return -1; }
-    std::stringstream ss; ss << f.rdbuf();
-    assets::Json root;
-    if (!assets::Json::parse(ss.str(), root)) { LOG_WARN("sound cues: bad json %s", path.c_str()); return -1; }
-    int applied = 0, total = 0;
-    for (const auto& kv : root.obj) {
-        ++total;
-        const assets::Json& v = kv.second;
-        if (!audio_ || v.size() < 2) continue;
-        audio::Sound s = audio_->load(contentRoot_ + kv.first);     // cached by path
-        if (s != audio::kInvalidSound && audio_->setLoopPoints(s, (uint32_t)v[0].asInt(0), (uint32_t)v[1].asInt(0))) ++applied;
+int SoundCues::applyLoopPoints() {
+    int applied = 0;
+    for (const FsbLoop& l : kFsbLoops) {
+        audio::Sound s = audio_ ? audio_->load(contentRoot_ + l.wav) : audio::kInvalidSound;   // cached by path
+        if (s != audio::kInvalidSound && audio_->setLoopPoints(s, l.loopStart, l.loopEnd)) ++applied;
     }
-    LOG_INFO("sound cues: FSB loop points %d/%d applied (%s)", applied, total, path.c_str());
+    LOG_INFO("sound cues: FSB loop regions %d/%d applied (whole sample; no header LOOP flag)", applied,
+             (int)(sizeof(kFsbLoops) / sizeof(kFsbLoops[0])));
     return applied;
 }
 

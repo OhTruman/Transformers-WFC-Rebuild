@@ -3,6 +3,26 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 03 PASS 6 (2026-10-02) — AssetTools 7a69756 authored-data handoff
+- **Footsteps / landing:** the default `FS_DEFAULT_*` → `BL_FS_LRG_BOT` cues are the authored Streets sounds
+  (one footstep table across all Streets physmats); no surface variants exist.
+- **Concurrency:** 71 cues match authored values (no change). The `MECH_WPN_VOICE_THRESHOLD` channel-count duck
+  on the SHOOT category stays UNKNOWN (native runtime).
+- **Vehicle loops:**
+  - FSB header regions = whole sample, applied from `VehicleLoops.inc`;
+  - seamless wrap fix in Win32Audio;
+  - how loop mode is enabled without a header LOOP flag stays UNKNOWN.
+- **Pickups:**
+  - `PickupPresentation`: 27 authored factories, script-confirmed effect activation (highlight off at spawn, on
+    after the first respawn) and PickupSound attached to the recipient;
+  - Gameplay drives it (no Systems timers);
+  - the particle systems are not drawn: module flag semantics UNKNOWN.
+- **Validation:**
+  - suite 523/0; audio-attach 247/0/13 (0 player-owned);
+  - wfc_fidelity 194/0/19; probe 31/0/1;
+  - frame times (ms, range / mean): idle 6.4–10.6 / 7.0, movement 4.6–10.5 / 5.5, firing 6.7–13.1 / 10.3,
+    sustained 6.5–13.1 / 9.7, hover 3.7–7.7 / 4.4, Boost 3.6–8.0 / 4.6, Nitro 4.3–7.8 / 5.1; particles/meshes → 0 after vehicle runs.
+
 ## SYSTEMS MILESTONE 03 PASS 5 (2026-10-02) — native audio runtime semantics (RE 7c4a2e0, supersedes 7b42621 provisionals)
 - **Mixer** (`SoundMixer`):
   - native Enable / Disable / ref-count / priority insertion (equal priority: the earlier wins);
@@ -16,7 +36,7 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
   - Default before the first touch and after a level load.
 - **Channel modes, dB conversion, emitters:** k2D / k3D / SmartPan confirmed; native dBToLinear (−96 → 0, never above
   0 dB); line and box emitter placement promoted to CONFIRMED.
-- **Vehicle loops:** behaviour confirmed. FSB loop-point plumbing is ready (`fsb_loop_points.json`); the exact
+- **Vehicle loops:** behaviour confirmed. FSB loop regions delivered in PASS 6 (whole sample); previously the exact
   samples stay UNKNOWN pending AssetTools.
 - **Validation:**
   - native suite 173/0;

@@ -256,3 +256,17 @@
         {0.0f, 0.0f, -6.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/GUNf_MVMNT_03.wav", "WL_GUN_FOLEY/GUNf_MVMNT_04.wav"}, {}, {}, {}, {}},
         {0.0f, 0.0f, -6.0f, 0.0f, 7.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_01.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_02.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_03.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_04.wav"}, {}, {}, {}, {}},
     }},
+    // BL_HUD_INTERFACE.HEALTH_PU_AMMO
+    {"BL_HUD_INTERFACE.HEALTH_PU_AMMO", 5, Limit::KillFarthest, -16.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 800.0f, 6400.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_INTERACT", "", true, Spatial::ThreeD, Param::None, {
+        {0.0f, 0.0f, 0.0f, 0.0f, -3.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/RELOAD_BOLT_07.wav"}, {}, {}, {}, {}},
+        {0.198694f, 0.0f, 0.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/RELOAD_BOLT_07.wav"}, {}, {}, {}, {}},
+        {0.0f, 0.0f, 0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_NULLRAY/TRANS_NULLRAY_EQUIP_SLIDE.wav"}, {}, {}, {}, {}},
+    }},
+    // BL_HUD_INTERFACE.HEALTH_PU_ENERGON
+    {"BL_HUD_INTERFACE.HEALTH_PU_ENERGON", 5, Limit::KillFarthest, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 6400.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_INTERACT", "", true, Spatial::ThreeD, Param::None, {
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_HUD_INTERFACE/SYNTH_ENERGON_POWERUP.wav"}, {}, {}, {}, {}},
+    }},
+    // BL_HUD_INTERFACE.OVERSHIELD_POWER_UP
+    {"BL_HUD_INTERFACE.OVERSHIELD_POWER_UP", 5, Limit::KillFarthest, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 2500.0f, 10000.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_AI_WPN", "", true, Spatial::ThreeD, Param::None, {
+        {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRANS_POWER/SYNTH_OVERSHIELD_AI_POWERUP.wav"}, {}, {}, {}, {}},
+    }},

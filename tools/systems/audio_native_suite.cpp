@@ -7,6 +7,7 @@
 #include "game/AmbientAudio.h"
 #include "game/SoundCues.h"
 #include "game/SoundMixer.h"
+#include "game/PickupPresentation.h"
 #include "assets/Json.h"
 #include <chrono>
 #include <cmath>
@@ -29,8 +30,16 @@ struct Rec : IAudio {
     struct V { VoiceParams p; Vec3 pos; bool live = true; };
     std::map<int, V> v;
     std::vector<Environment> envs;
+    std::map<std::string, int> paths;
+    struct Loop { int sound; uint32_t start, end; };
+    std::vector<Loop> loops;
     int n = 0;
-    Sound load(const std::string&) override { return 0; }
+    Sound load(const std::string& path) override {
+        auto it = paths.find(path);
+        if (it != paths.end()) return it->second;
+        int id = (int)paths.size(); paths[path] = id; return id;
+    }
+    bool setLoopPoints(Sound s, uint32_t a, uint32_t b) override { loops.push_back({s, a, b}); return true; }
     void play(Sound, float) override {}
     void playAt(Sound, const Vec3&, float, float, float) override {}
     Voice playVoice(Sound, const VoiceParams& p) override { v[n] = {p, p.pos, true}; return n++; }
@@ -458,7 +467,126 @@ static void testChannelModes() {
     delete a;
 }
 
+// ---------------------------------------------------------------- AssetTools 7a69756 authored data
+static const std::string kMan = "F:/Transformers Rebuild/AssetTools/manifests/";
+static std::string tableName(const std::string& full) {   // tools/systems/gen_cues.py short()
+    std::string pkg = full.substr(0, full.find('.')), name = full.substr(full.find('.') + 1);
+    if (pkg == "BL_WPN_GUN_ION_BLASTER" || pkg == "BL_VEH_OPTIMUS_PRIME" || pkg == "BL_VEH_SOUNDWAVE") return name;
+    if (pkg == "BL_WPN_FOLEY") return "FOLEY." + name;
+    return full;
+}
+
+static void testAuthored() {
+    std::printf("[authored data 7a69756]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    game::AmbientAudio amb;
+    amb.load(kRoot + "/Maps/MP_IAC_Streets/audio.json", kRoot + "/../content/", cues, &rec);
+
+    // Footsteps / landing: every Streets surface resolves to the same FS_DEFAULT_* events; Optimus maps them
+    // to BL_FS_LRG_BOT. The table holds exactly those cues and nothing surface-specific.
+    assets::Json sa = loadJson(kMan + "streets_surface_audio.json");
+    CHECK(sa["headline"]["distinct_footstep_tables_across_streets_physmats"].asInt(0) == 1, "one footstep table across Streets physmats");
+    int mapped = 0;
+    for (const auto& kv : sa["event_to_cue (Optimus robot)"].obj) {
+        const std::string cue = kv.second["cue"].asString();
+        if (cue.empty()) continue;          // unmapped (JOG / CROUCH_*): silent
+        ++mapped;
+        CHECK(cues.hasCue(cue.c_str()), "footstep event %s -> %s in the cue table", kv.first.c_str(), cue.c_str());
+    }
+    CHECK(mapped == 8, "8 mapped Optimus footstep/landing events (%d)", mapped);
+    for (const auto& kv : sa["physical_materials"].obj)
+        for (const auto& sl : kv.second["slots"].obj) {
+            std::string ev = sl.second["event"].asString();
+            CHECK(ev.empty() || ev.rfind("SoundEvents_Footsteps.FS_DEFAULT_", 0) == 0, "%s %s -> %s is a default event",
+                  kv.first.c_str(), sl.first.c_str(), ev.c_str());
+        }
+    for (const char* surf : {"CONCRETE", "METAL", "MTL", "DIRT", "WATER", "GRASS", "WOOD"}) {
+        std::string c1 = std::string("BL_FS_LRG_BOT.FS_WALK_") + surf;
+        CHECK(!cues.hasCue(c1.c_str()), "no surface variant %s", c1.c_str());
+    }
+
+    // Concurrency: authored MaxConcurrentPlayCount / InstanceLimiting (or the inherited Engine.Default__SoundCue
+    // 5 / kKillFarthest) for every manifest cue the rebuild plays.
+    assets::Json cc = loadJson(kMan + "vertical_slice_audio_concurrency.json");
+    int compared = 0;
+    for (size_t i = 0; i < cc["cues"].size(); ++i) {
+        const assets::Json& c = cc["cues"][i];
+        std::string tn = tableName(c["cue"].asString());
+        const game::cuedata::CueDef* d = cues.cueDef(tn.c_str());
+        if (!d) continue;
+        ++compared;
+        int mc = c["cue_fields"]["MaxConcurrentPlayCount"]["value"].asInt(-1);
+        std::string il = c["cue_fields"]["InstanceLimiting"]["value"].asString();
+        game::cuedata::Limit want = il == "kKillOldest" ? game::cuedata::Limit::KillOldest
+                                  : il == "kKillNewest" ? game::cuedata::Limit::KillNewest : game::cuedata::Limit::KillFarthest;
+        CHECK(d->maxConcurrent == mc && d->limit == want, "%s: max %d (authored %d) limit %d (authored %s)", tn.c_str(),
+              d->maxConcurrent, mc, (int)d->limit, il.c_str());
+    }
+    std::printf("  concurrency compared for %d cues\n", compared);
+    CHECK(compared >= 40, "concurrency coverage (%d)", compared);
+
+    // Vehicle loops: the FSB header region of every looping vehicle wave (whole sample) is applied at load.
+    assets::Json vl = loadJson(kMan + "vehicle_audio_loops.json");
+    CHECK(vl["census"]["with_custom_loop_range"].asInt(-1) == 0 && vl["census"]["with_LOOP_mode_flag"].asInt(-1) == 0,
+          "FSB census: no custom ranges / loop flags");
+    CHECK(rec.loops.size() == 7, "7 looping vehicle waves get their FSB loop region (%zu)", rec.loops.size());
+    for (const auto& l : rec.loops) {
+        std::string path;
+        for (const auto& kv : rec.paths) if (kv.second == l.sound) path = kv.first;
+        std::string key = path.substr(path.find("content/") + 8);
+        key = key.substr(0, key.size() - 4);
+        key[key.find('/')] = '.';
+        const assets::Json& w = vl["waves"][key];
+        CHECK(l.start == 0 && (int)l.end == w["total_samples"].asInt(-1) - 1 && (int)l.end == w["loop"]["loopend_sample"].asInt(-1),
+              "%s loop [%u, %u] = whole sample (%d)", key.c_str(), l.start, l.end, w["total_samples"].asInt(-1));
+    }
+
+    // Pickups: authored factories + script-confirmed effect activation and the PickupSound.
+    using PP = game::PickupPresentation;
+    int nAmmo = 0, nHealth = 0, nShield = 0, nObj = 0;
+    for (int i = 0; i < PP::count(); ++i) {
+        PP::Kind k = PP::def(i).kind;
+        if (k == PP::Kind::AmmoCrate) ++nAmmo; else if (k == PP::Kind::Health) ++nHealth;
+        else if (k == PP::Kind::OverShield) ++nShield; else ++nObj;
+    }
+    CHECK(PP::count() == 27 && nAmmo == 14 && nHealth == 9 && nShield == 1 && nObj == 3, "27 factories 14/9/1/3");
+    PP pp;
+    for (int i = 0; i < PP::count(); ++i) {
+        const PP::FactoryDef& d = PP::def(i);
+        bool custom = d.kind == PP::Kind::Health || d.kind == PP::Kind::OverShield;
+        bool objective = d.kind == PP::Kind::ObjectiveFlag || d.kind == PP::Kind::ObjectiveBomb;
+        CHECK(pp.effectState(i).customActive == custom && !pp.effectState(i).highlightActive,
+              "%s spawn: custom %d, highlight off (bAutoActivate false)", d.actor, (int)pp.effectState(i).customActive);
+        CHECK(!d.pickupSound || cues.hasCue(d.pickupSound), "%s PickupSound %s in table", d.actor, d.pickupSound ? d.pickupSound : "-");
+        CHECK(d.pickupEffectAttached == !custom, "%s PickupEffect attachment", d.actor);
+        CHECK(d.highlightFx == (d.kind == PP::Kind::AmmoCrate || objective), "%s ShouldDisplayHighlightFx", d.actor);
+        CHECK((d.requiredGameRule != nullptr) == objective, "%s RequiredGameRuleClass", d.actor);
+        pp.setPickupHidden(i);
+        CHECK(!pp.effectState(i).customActive && !pp.effectState(i).highlightActive && pp.effectState(i).customHidden == custom,
+              "%s SetPickupHidden", d.actor);
+        pp.setPickupVisible(i);
+        CHECK(pp.effectState(i).customActive == custom && pp.effectState(i).highlightActive == d.highlightFx,
+              "%s SetPickupVisible: highlight %d", d.actor, (int)d.highlightFx);
+    }
+    // PickupSound is attached to the recipient pawn: its voices follow the pawn.
+    Vec3 pawn{10, 0, 0};
+    cues.setResolver([&](int owner, const std::string&, const Vec3& off, Vec3& out) {
+        if (owner != 0) return false;
+        out = pawn + off; return true;
+    });
+    int first = rec.n;
+    game::SoundCues::Emitter recipient{pawn, 0, {0, 0, 0}, ""};
+    int id = pp.announcePickup(0, cues, recipient, 5.0f);
+    CHECK(id >= 0 && rec.n > first, "ammo pickup sound plays (%d voices)", rec.n - first);
+    pawn = Vec3{14, 0, 3};
+    for (int k = 0; k < 3; ++k) cues.tick(1.0f / 60.0f);
+    bool follows = rec.n > first;
+    for (int v = first; v < rec.n; ++v) if (rec.v[v].live && core::length(rec.v[v].pos - pawn) > 1e-3f) follows = false;
+    CHECK(follows, "pickup sound follows the recipient");
+}
+
 int main() {
+    testAuthored();
     testMixer();
     testZones();
     testEmitters();

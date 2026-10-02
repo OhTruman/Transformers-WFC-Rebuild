@@ -35,6 +35,10 @@ CUES = [
                                'BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01', 'BL_TRANSFORM.OPTIMUS_BOT2VEH',
                                'BL_TRANSFORM.OPTIMUS_VEH2BOT', 'BL_FOLY_IDLES.OPTIMUS_IDLE',
                                'BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START', 'BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END']),
+    # Pickup sounds: the PickupSound of the Streets pickup inventory classes (AssetTools 7a69756
+    # streets_pickup_factories.json: TnAmmoCratePickup / TnHealthPickup / TnOverShieldPickup).
+    ('A1_IAC_Base_m', ['BL_HUD_INTERFACE.HEALTH_PU_AMMO', 'BL_HUD_INTERFACE.HEALTH_PU_ENERGON',
+                       'BL_HUD_INTERFACE.OVERSHIELD_POWER_UP']),
 ]
 ROOTDEF = {'Volume': -6.0, 'DistanceMin': 400.0, 'DistanceMax': 6400.0, 'RolloffFactor': 1.0, 'Pitch': 0.0,
            'SmartPanDistance2D': 400.0, 'SmartPanDistance3D': 800.0, 'SmartPanAttenuation3D': 0.0, 'RearAttenuation': 0.0,
@@ -59,7 +63,7 @@ def curve(c):
 
 def short(c):
     pkg, name = c.split('.', 1)
-    if pkg in ('BL_FS_LRG_BOT', 'BL_TRANSFORM', 'BL_FOLY_IDLES', 'BL_WPN_GUN_PULSE_RIFLE'): return c
+    if pkg in ('BL_FS_LRG_BOT', 'BL_TRANSFORM', 'BL_FOLY_IDLES', 'BL_WPN_GUN_PULSE_RIFLE', 'BL_HUD_INTERFACE'): return c
     return {'BL_WPN_GUN_ION_BLASTER': '', 'BL_WPN_FOLEY': 'FOLEY.', 'BL_VEH_OPTIMUS_PRIME': '', 'BL_VEH_SOUNDWAVE': ''}[pkg] + name
 
 out, missing = [], []

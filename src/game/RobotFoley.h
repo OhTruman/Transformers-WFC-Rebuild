@@ -15,9 +15,13 @@
 //     {1000,1200} Nav_Land, {4500,0} Nav_Land_03, {500,0} Nav_Land_02, {250,0} Nav_Land.
 // [MED] AnimNodeSynch default bFireSlaveNotifies=false: only the Strafers master clip fires notifies.
 // [CONF HmFootstepComponent script] FootstepType 0 (no Type: walk clips) -> FootstepWalk / DefaultWalkSound,
-//       4 -> Run, 1 Scuff, 3 Land, 10 HardLand; no speed-based choice. The surface's PhysicalMaterial
-//       HmPhysicalMaterialProperty.FootstepSounds override the defaults; none are recovered for Streets
-//       (AssetTools request), so the HM_Engine.Default__HmFootstepComponent defaults apply [HIGH].
+//       4 -> Run, 1 Scuff, 3 Land, 10 HardLand; no speed-based choice.
+// [CONF authored, AssetTools 7a69756 streets_surface_audio.json] Streets has no surface-specific footstep
+//       or landing audio: every Streets PhysicalMaterial (Metal - also the engine DefaultPhysMaterialName and
+//       the two BlockingVolume overrides - Rubber, Water, ForceField, and surfaces with no property) resolves
+//       every slot to the same FS_DEFAULT_* events (TransGame.Default__TnPawn.FootstepComp0 defaults, no
+//       PhysicalMaterialOverride, no SeqAct_SetFootstepMaterialOverride). These cues ARE the authored sound,
+//       not a fallback, so no surface trace is needed. Which surface the native trace samples is moot.
 // [CONF TnAcrobaticsManager script] LandingAnims: first match in array order on FallDistance (height
 //       where the last fall began - ledge, or the jump apex - minus landing height) and ForwardSpeed
 //       |Velocity . facing|; below 250 UU (or landing higher) no landing anim, so no landing sound.

@@ -14,6 +14,7 @@
 #include "game/WeaponMesh.h"
 #include "game/WeaponFx.h"
 #include "game/SoundCues.h"
+#include "game/PickupPresentation.h"
 #include "game/VehicleFx.h"
 #include "game/VehicleNitro.h"
 #include "game/RobotFoley.h"
@@ -51,6 +52,12 @@ public:
     void setAudio(audio::IAudio* a);
 
     Player& player() { return player_; }
+
+    // Pickup presentation (Systems-owned: effect activation + PickupSound) of the 27 authored Streets
+    // factories. Gameplay's factory state machine (in World) drives it: announcePickup(i, cues_, atPawn(), d) +
+    // setPickupHidden(i) on GiveTo, setPickupVisible(i) when Sleeping ends (see PickupPresentation.h).
+    PickupPresentation& pickupPresentation() { return pickupFx_; }
+    SoundCues& cues() { return cues_; }
 
     // Truck nitro / ram state (Systems-owned, read-only for Gameplay: nitroActive(), ramActive(),
     // speedScale(), steeringScale() — Gameplay applies the movement effect).
@@ -111,6 +118,7 @@ private:
 
     audio::IAudio* audio_ = nullptr;
     SoundCues cues_;
+    PickupPresentation pickupFx_;
     // Cue owners (SoundCues::Emitter::owner): attached AudioComponents follow these every tick.
     // Owner ids: the player pawn (its mesh origin, or a bone/socket of the displayed skeleton) and
     // the Ion Blaster (its mesh origin, or a WeaponMesh socket such as MuzzleFlash).

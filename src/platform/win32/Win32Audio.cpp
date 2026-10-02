@@ -245,7 +245,7 @@ private:
 struct Sample {
     std::vector<int16_t> pcm;
     int srcRate = 0;
-    double loopStart = 0.0, loopEnd = -1.0;   // loopEnd < 0: wrap at the sample end
+    double loopStart = 0.0, loopEnd = -1.0;   // output frames; loopEnd exclusive, < 0: the sample end
 };
 
 struct Voice {
@@ -398,7 +398,7 @@ public:
         Sample& smp = sounds_[(size_t)s];
         double k = (double)kRate / (double)std::max(1, smp.srcRate);    // source frames -> output frames
         smp.loopStart = (double)start * k;
-        smp.loopEnd = std::min((double)(smp.pcm.size() / 2 - 1), (double)(end + 1) * k);
+        smp.loopEnd = std::min((double)(smp.pcm.size() / 2), (double)(end + 1) * k);   // end inclusive
         return true;
     }
     bool isPlaying(audio::Voice h) const override {
@@ -543,20 +543,19 @@ private:
             const std::vector<int16_t>& s = *v.data;
             size_t frames = s.size() / 2;
             for (int f = 0; f < kBlockFrames; ++f) {
+                // Loop region [loopStart, loopEnd): the FSB sample-header region (whole sample for every
+                // slice wave); the last frame interpolates into loopStart, so a period is exactly the region.
+                const double lstart = v.sample->loopStart;
+                const double lend = v.sample->loopEnd > 0.0 ? v.sample->loopEnd : (double)frames;
+                const bool loops = v.loop && lend - lstart >= 2.0;
+                if (loops && v.pos >= lend) v.pos = lstart + std::fmod(v.pos - lend, lend - lstart);
                 size_t fi = (size_t)v.pos;
-                // Loop region: the sample's FSB loop points when known, else its whole length.
-                const double lend = v.loop && v.sample->loopEnd > 0.0 ? v.sample->loopEnd : (double)(frames - 1);
-                if (v.loop && v.pos >= lend && lend > v.sample->loopStart) {
-                    v.pos = v.sample->loopStart + std::fmod(v.pos - lend, lend - v.sample->loopStart);
-                    fi = (size_t)v.pos;
-                }
-                if (fi + 1 >= frames) {
-                    if (v.loop && frames > 2) { v.pos -= (double)(frames - 1); fi = (size_t)v.pos; }
-                    else { v.active = false; break; }
-                }
+                size_t fn = fi + 1;
+                if (loops) { if ((double)fn >= lend) fn = (size_t)lstart; }
+                else if (fn >= frames) { v.active = false; break; }
                 float u = (float)(v.pos - (double)fi);       // linear interpolation for pitch
-                float sl = (s[fi * 2] + (s[fi * 2 + 2] - s[fi * 2]) * u) * k;
-                float sr = (s[fi * 2 + 1] + (s[fi * 2 + 3] - s[fi * 2 + 1]) * u) * k;
+                float sl = (s[fi * 2] + (s[fn * 2] - s[fi * 2]) * u) * k;
+                float sr = (s[fi * 2 + 1] + (s[fn * 2 + 1] - s[fi * 2 + 1]) * u) * k;
                 v.pos += v.rate;
                 if (v.positional) {
                     float mono = (sl + sr) * 0.5f;

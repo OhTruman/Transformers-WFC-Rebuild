@@ -11,6 +11,7 @@ add_executable(wfc_fidelity
     ${CMAKE_SOURCE_DIR}/src/game/Collision.cpp
     ${CMAKE_SOURCE_DIR}/src/game/PlayerController.cpp
     ${CMAKE_SOURCE_DIR}/src/game/SoundMixer.cpp
+    ${CMAKE_SOURCE_DIR}/src/game/PickupPresentation.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/SkinnedModel.cpp
     ${CMAKE_SOURCE_DIR}/src/assets/Gltf.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp

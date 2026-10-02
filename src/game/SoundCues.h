@@ -103,12 +103,12 @@ public:
     bool hasCue(const char* name) const { return findCue(name) >= 0; }
     // The FmodAudioDevice mixer (presets, categories, MASTER_WET environment).
     SoundMixer& mixer() { return mixer_; }
-    // FSB sample-header loop points (AssetTools: {"<pkg>/<wave>.wav": [loopStartFrame, loopEndFrame], ...},
-    // source-file sample frames, end inclusive). Looping is per wave event (bLooping -> FMOD LOOP_NORMAL);
-    // there is no cue-level loop region. Waves without an entry wrap at the sample end, which is only right
-    // when the FSB header has no loop points [UNKNOWN until AssetTools]. Returns the entries applied, -1 if
-    // the file is absent.
-    int loadLoopPoints(const std::string& jsonPath);
+    // FSB4 sample-header loop regions (AssetTools 7a69756 vehicle_audio_loops.json -> VehicleLoops.inc,
+    // applied by load()) [CONF data]: every looping vehicle wave loops its whole sample [0, total-1]; no slice
+    // FSB sample (1929) has a custom range or a header LOOP flag, so other looping waves use the same whole-
+    // sample region by default. Looping itself is per wave event (bLooping) [CONF native A6]; how FMOD's loop
+    // mode is enabled when the header has no LOOP flag is UNKNOWN (native). Returns the entries applied.
+    int applyLoopPoints();
     const cuedata::CueDef* cueDef(const char* name) const;
     void setMaxConcurrent(const char* name, int n) { int c = findCue(name); if (c >= 0) cues_[(size_t)c].maxConcurrent = n; }
 

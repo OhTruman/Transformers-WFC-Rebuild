@@ -17,6 +17,141 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 SYSTEMS PASS 6 — ASSETTOOLS AUTHORED-DATA HANDOFF (2026-10-02, agents/systems)
+
+**Source:** AssetTools commit **7a69756**, manifests (read only):
+* `streets_surface_audio.json`
+* `vertical_slice_audio_concurrency.json`
+* `vehicle_audio_loops.json`
+* `streets_pickup_factories.json`
+* `streets_pickup_fx.json`
+
+The pickup activation flow also comes from decompiled script (RE-Workspace `work/script/decomp`, read only):
+* `Engine.PickupFactory`, `Engine.Inventory`;
+* `TransGame.TnPickupFactory`, `TnHealthPickupFactory`.
+
+No new asset recovery or native RE was done. Builds on Systems 35145f3 (PASS 5).
+**Confidence:** CONFIRMED ORIGINAL · HIGH · PROVISIONAL · UNKNOWN.
+
+### Footsteps / landing — CONFIRMED AUTHORED (no longer "fallback")
+* **One table for the whole map:** every Streets PhysicalMaterial resolves every footstep slot to the same
+  `SoundEvents_Footsteps.FS_DEFAULT_*` events.
+  * Materials: Metal (also `Engine.DefaultPhysMaterialName` and both BlockingVolume overrides), Rubber, Water,
+    ForceField, and surfaces with no property.
+  * Supporting data: `TnPawn.FootstepComp0` defaults, no PhysicalMaterialOverride, 0
+    SeqAct_SetFootstepMaterialOverride.
+* **Optimus mapping:** `SoundEvents.CHR_OPTIMUS` maps 8 events to `BL_FS_LRG_BOT.*`: WALK, RUN, SCUFF, JUMP,
+  JUMP_CHARGED, LAND, HARD_LAND, LAND_HIGH_FALL.
+  * JOG, CROUCH_* and DashLand are unmapped and therefore silent, which RobotFoley already does.
+* **Consequence:**
+  * the cues the rebuild plays **are** the authored Streets footstep and landing sounds;
+  * no surface trace is needed, and no surface variants exist (the suite checks that none are in the table);
+  * which surface the native trace samples is moot.
+
+Earlier "missing Streets surface table" requests (PASS 2, 3, 5) are resolved.
+
+### Cue concurrency — CONFIRMED AUTHORED
+* All 71 manifest cues the rebuild plays match authored MaxConcurrentPlayCount / InstanceLimiting exactly (or the
+  inherited Engine.Default__SoundCue 5 / kKillFarthest). This covers 44 table cues, the 3 new pickup cues and the
+  map bank, including EMIT_FLOOD_LIGHTS / EMIT_MONRAIL_IDLE_LP = 3.
+* No value changed.
+* The 7 authored kKillNewest cues (Soundwave / Trypticon impacts) are not played by the slice.
+* **Root `PlayMixerPreset = Default`** (137 cues): a no-op in the native mixer. Default is always active, so
+  Enable/Disable only bumps its ref-count. It is not applied.
+* **UNKNOWN (native; no field defines the runtime):**
+  * category `ChannelCountMixerPreset`. **SFX_WET_COMBAT_ROBOT_WPN_SHOOT** (the Ion Blaster SHOOT category)
+    authors `MECH_WPN_VOICE_THRESHOLD`, Threshold 8, Time 0. That preset (Priority 481, FadeIn 1.0, FadeOut 0.5)
+    ducks SFX_WET_AMB / SFX_DRY_AMB to 0.158 and SFX_WET_NAV to 0.501.
+  * How the voice count is measured, the compare, and when it is disabled are not recovered, so it is **not
+    implemented** (ReVa request). It can audibly duck ambience during sustained fire in the original.
+  * per-owner vs global limits; virtualization; priority stealing.
+
+### Vehicle loops — CONFIRMED AUTHORED regions, UNKNOWN loop-enable mechanism
+* **Census:** 1929 FSB4 samples, 0 with a custom loop range, 0 with a header LOOP flag.
+* **The 7 looping vehicle waves:** loop [0, total−1], the whole sample. All 39 vehicle waves' extracted .wav
+  files match their FSB headers exactly (rate, channels, sample count).
+  * Waves: ENGINE_MID / ENGINE_BOOST / IDLE (48 kHz stereo), SYNTH_ENERGY_MOD_PAN, TIRE_NOISE_02,
+    TIRE_SQUEAL_HEAVY (24 kHz), JET_TURBO_WHINE (36 kHz).
+* **`tools/systems/gen_loops.py` → `VehicleLoops.inc`:** asserts each wave against its FSB header;
+  `SoundCues::applyLoopPoints()` applies the regions at load. This replaces PASS 5's never-delivered
+  `fsb_loop_points.json`.
+* **Fix (Win32Audio):** the loop region is now [start, end+1), and the last frame interpolates into the loop start.
+  * PASS 5 wrapped at frames−1 without wrap interpolation, which was one frame short per period.
+  * Non-looping playback is unchanged.
+* **Unchanged:** start/loop/end cue presentation and the native fades (engine 0.2 s, boost 0.15 s).
+* **UNKNOWN (native):**
+  * how FMOD loop mode is enabled for a bLooping wave event when the header has no LOOP_NORMAL bit (A6 reads
+    LOOP_NORMAL from bLooping at channel create);
+  * whether the XMA seek/loop tables shift the start for gapless XMA looping.
+
+  Neither is inferred from waveform content.
+
+### Pickups — presentation (Systems), data CONFIRMED AUTHORED, flow CONFIRMED (script)
+* **Data:** `tools/systems/gen_pickups.py` → `PickupPresentation.inc`, the 27 factories:
+  * 14 ammo crates (RespawnTime 30), 9 health (60), 1 overshield (120), 2 flag + 1 bomb objectives;
+  * per factory: positions, PickupSound, CustomPickupEffect / PickupEffect templates, attachment,
+    ShouldDisplayHighlightFx, RequiredGameRuleClass.
+* **Pickup sounds:** the 3 PickupSound cues are added to the cue table: HEALTH_PU_AMMO (−16 dB root),
+  HEALTH_PU_ENERGON, OVERSHIELD_POWER_UP.
+* **`PickupPresentation`, transcribed from script:**
+  * **Spawn:** CustomPickupEffect (HealthPickup_FX / OvershieldPickup_FX) is active; the highlight PickupEffect
+    (Pickup_FX) is **inactive** (bAutoActivate false).
+  * **`SetPickupHidden`:** hides and deactivates the custom effect; deactivates the highlight when
+    ShouldDisplayHighlightFx.
+  * **`SetPickupVisible`:** the reverse. So the ammo-crate beam first lights up when the crate respawns.
+  * **Highlight rendering:** PickupEffect renders only for the ammo crate and objectives (it is in their
+    Components). Health and overshield have ShouldDisplayHighlightFx false and the component unattached.
+  * **`announcePickup`:** `Inventory.AnnouncePickup` → `Other.PlaySound(PickupSound)`, a sound attached to the
+    recipient pawn.
+* **Ownership:**
+  * The factory actors, touch, Sleeping/respawn timers and game-rule gating are Gameplay's state machine (not
+    built yet on any branch). PickupPresentation keeps no timers, so it can't duplicate that state machine.
+  * World exposes `pickupPresentation()`; Gameplay calls `announcePickup` + `setPickupHidden` on GiveTo and
+    `setPickupVisible` when Sleeping ends.
+  * The graybox scaffold pickups are untouched (Gameplay).
+* **Particle systems not drawn** (Rendering + Systems): the decoded Pickup_FX / HealthPickup_FX /
+  OvershieldPickup_FX streams report per-module flags (`flagA` / `flagB`, modules outside the record list) whose
+  semantics pstream does **not assert**.
+  * These decide whether modules run at spawn or update, or at all. One case: GlowADD has an infinite lifetime and
+    an alpha-over-life of 0 at t=0, so it is invisible unless its ColorScaleOverLife is inactive or on emitter
+    time.
+  * Drawing them now would invent visuals. They stay UNKNOWN until the flag semantics are recovered (AssetTools /
+    ReVa request).
+  * `effectState()` already exposes which components the original has active.
+  * Mesh note: the overshield emitter references `PROP_NEU_Pickups_p.OvershieldPickup.PROP_NEU_Overshield_STAT`,
+    but the extracted mesh is `PROP_NEU_OvershieldPickup_STAT` (AssetTools check).
+
+### Validation
+* **Native suite** (`tools/systems/audio_native_suite.cpp`): **523 pass / 0 fail**. New authored-data block:
+  * footstep events → table cues; no surface variants;
+  * concurrency for 71 cues;
+  * 7 FSB loop regions = whole sample;
+  * 27 factories: spawn / hidden / visible states, highlight and attachment flags, PickupSound cue present, and
+    the sound following the recipient.
+* **Regression:** wfc_fidelity 194/0/19; collision 0 mismatches; probe 31 PASS / 0 FAIL / 1 KNOWN (Rendering
+  `boost_fx_emitted`).
+* **Audio-attach:** 247 pass / 0 FAIL / 13 KNOWN. All 13 are `PP_DECO_MECH_*` zone pool one-shots, world-fixed
+  by design (count varies with random pool timing). **0 player-owned sounds left behind.**
+* **Game runs:** 13 scenarios, footsteps/landing log only  default cues (walk, run, jump, hard land);
+  repeated Boost start/loop/end and the BOOST_END duck unchanged; transform-out leaves no vehicle cue. Frame time (ms,
+  range / mean): idle 6.4–10.6 / 7.0, movement 4.6–10.5 / 5.5, firing 6.7–13.1 / 10.3, sustained 6.5–13.1 / 9.7
+  (PASS 5: 6.9–13.4), hover 3.7–7.7 / 4.4, Boost 3.6–8.0 / 4.6, Nitro 4.3–7.8 / 5.1. Particles/meshes → 0 after
+  vehicle runs; queued events bounded.
+
+### Dependencies
+* **AssetTools:**
+  * pstream module-flag semantics (or ReVa: ParticleModule spawn/update flags in the compiled stream);
+  * the overshield mesh name mismatch.
+* **ReVa:**
+  * ChannelCountMixerPreset runtime;
+  * FMOD loop enable without a header LOOP flag;
+  * XMA loop tables.
+* **Gameplay:** the pickup factory state machine (drives PickupPresentation); vehicle jump.
+* **Rendering:** drawing the 3 pickup particle systems through their materials once the module semantics are
+  known; the PASS 4 material handoff is unchanged.
+
+---
+
 ## MILESTONE 03 SYSTEMS PASS 5 — NATIVE AUDIO RUNTIME SEMANTICS (2026-10-02, agents/systems)
 
 **Source:** `RE-Workspace/notes/MILESTONE03_AUDIO_NATIVE_FIDELITY.md`, follow-up sections A1–A8 (ReverseEngineering
@@ -123,13 +258,11 @@ vehicle-FX material/HDR handoff.
 **New: loop-point plumbing.**
 * `IAudio::setLoopPoints(sound, startFrame, endFrame)`; Win32Audio stores a per-sample loop region (source frames
   scaled to the output rate).
-* `SoundCues::loadLoopPoints` reads `<content>/fsb_loop_points.json`, formatted
-  `{"<pkg>/<wave>.wav": [loopStart, loopEnd]}` in source-file sample frames, end inclusive.
-* World loads it at startup.
+* (Superseded by PASS 6: the regions come from AssetTools vehicle_audio_loops.json via VehicleLoops.inc;
+  `fsb_loop_points.json` was never produced and its loader is removed.)
 
 **UNKNOWN (AssetTools):**
-* the exact FSB loop start/end samples. The file is absent today, which is logged; looping waves then wrap at the
-  sample end.
+* the exact FSB loop start/end samples (RESOLVED in PASS 6: whole sample, from the FSB headers).
 * That fallback is FMOD's behaviour only when a sample has no header loop points, so it is **not** claimed as
   correct for the vehicle loops.
 * The extracted .wav files carry no `smpl` chunk (0 of 400 `*_LP` files checked).
@@ -220,8 +353,8 @@ vehicle-FX material/HDR handoff.
 
 ### Dependencies
 * **AssetTools:**
-  * Vehicle FSB sample-header loop start/end → `fsb_loop_points.json`; nothing is fabricated in the meantime.
-  * Streets physical material → surface footstep and landing sounds (the generic fallback stays).
+  * Vehicle FSB sample-header loop start/end (RESOLVED in PASS 6).
+  * Streets physical material → surface footstep and landing sounds (RESOLVED in PASS 6: no surface variation exists).
   * Pending pickup effect mesh/emitter data.
 * **Rendering:** unchanged. The 4 material-only vehicle emitters and the HDR material path draw once 5e74895's
   renderer is integrated.
@@ -352,7 +485,8 @@ This pass supersedes PASS 3 where they differ; in particular the listener-only S
   * SoundNodeRoot LoopStart / LoopEnd;
   * line / volume emitter placement;
   * dB2lin exact formula.
-* **AssetTools (standing):** Streets HmPhysicalMaterialProperty FootstepSounds; pickup FX mesh data.
+* **AssetTools (standing):** Streets HmPhysicalMaterialProperty FootstepSounds (RESOLVED PASS 6); pickup FX mesh data
+  (delivered 7a69756; see PASS 6).
 
 ---
 
@@ -403,7 +537,8 @@ Values CONF; envelope and priority resolution HIGH. Verified: boost end triggers
 * **[CONF] Footsteps** (HmFootstepComponent):
   * FootstepType 0 → Walk, 4 → Run, 1 Scuff, 3 Land, 10 HardLand; no speed-based choice.
   * The surface PhysicalMaterial's HmPhysicalMaterialProperty.FootstepSounds override the defaults.
-  * None are in authored.db (0 objects), so the component defaults apply [HIGH] (AssetTools request).
+  * None are in authored.db (0 objects), so the component defaults apply. CONFIRMED AUTHORED in PASS 6: every
+    Streets surface resolves to these defaults.
 * **Landing loudness, proved from data:**
   * The milestone-02 "soft/squishy" landing was the wrong cue (`RELOAD_AIR_RELEASE_THUMP` placeholder,
     Experimental's spy log).
@@ -520,8 +655,8 @@ Values CONF; envelope and priority resolution HIGH. Verified: boost end triggers
   5. MaxConcurrentPlayCount resolution (steal vs reject).
   6. SpatializationType enum order (class default).
 * **AssetTools:**
-  1. Streets PhysicalMaterial → HmPhysicalMaterialProperty.FootstepSounds.
-  2. Cue-level MaxConcurrentPlayCount in audio.json.
+  1. Streets PhysicalMaterial → HmPhysicalMaterialProperty.FootstepSounds (RESOLVED PASS 6).
+  2. Cue-level MaxConcurrentPlayCount in audio.json (RESOLVED PASS 6: values match).
   3. (standing) pickup FX mesh data.
 
 ---

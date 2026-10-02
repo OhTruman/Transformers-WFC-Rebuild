@@ -71,7 +71,7 @@ public:
     // True while the voice is still sounding (backends that cannot tell report false).
     virtual bool isPlaying(Voice) const { return false; }
     // A sample's own loop region (FSB sample-header loop start / end, in source-file sample frames, end
-    // inclusive). Without one a looping voice wraps at the sample's end (FMOD LOOP_NORMAL default).
+    // inclusive). Without one a looping voice loops the whole sample.
     // Backends that cannot loop a region return false.
     virtual bool setLoopPoints(Sound, uint32_t /*startFrame*/, uint32_t /*endFrame*/) { return false; }
     virtual bool reportsVoices() const { return false; }   // isPlaying() is meaningful
