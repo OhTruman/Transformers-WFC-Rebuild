@@ -9,6 +9,7 @@
 //  * UE3 per-vertex height fog, linear-light HDR target, DisplayGamma 2.2 resolve.
 #pragma once
 #include <map>
+#include <unordered_map>
 #include <string>
 #include <vector>
 #include "render/gl/GLExt.h"
@@ -49,6 +50,8 @@ struct Program {
     std::vector<Slot> slots;
     int blend = 0;                // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
     bool twoSided = false, lit = true;
+    bool original = false;        // compiled from the original material graph (not the glTF fallback)
+    bool sceneDepth = false;      // reads scene depth (DepthBiasedAlpha / SceneDepth)
     float clip = 0.3333f;
 };
 
@@ -56,7 +59,7 @@ class Pipeline {
 public:
     bool load(const std::string& mapName);
     bool active() const { return active_; }
-    void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); }
+    void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
     void setCharacterColors(const CharacterColors& c) { charColors_ = c; }
 
     void beginFrame(const Camera& cam, int w, int h);
@@ -66,6 +69,11 @@ public:
     int upload(const MeshData& m);
     void draw(int id, const core::Mat4& model);
     void drawDynamic(const MeshData& m, const core::Mat4& model);
+    // Effects shaded by their original material graphs; `color` is the particle colour (vertex colour,
+    // HDR). drawFx returns false when the mesh has no compiled original material (caller falls back).
+    bool drawFx(int id, const core::Mat4& model, const float color[4]);
+    struct Sprite { core::Vec3 c[4]; float uv[4][2]; float color[4]; };
+    bool drawSprites(const char* material, const Sprite* s, size_t n, const core::Vec3& facing);
 
 private:
     struct Sub {
@@ -75,6 +83,8 @@ private:
         int lmTex[3] = {-1, -1, -1};
         float lmScale[3][3] = {};
         float lmCoord[4] = {1, 1, 0, 0};
+        GLuint vlmTex = 0;        // vertex (LMT_1D) lightmap: RGB32F, width = vertices, rows = coefficients
+        int vlmBase = 0;          // first vertex of the component in the VBO (gl_VertexID - base)
         core::Vec3 bmin, bmax;
         bool envReady = false;
         LightEnv env;
@@ -120,6 +130,9 @@ private:
     bool active_ = false;
     std::string dataDir_;
     IRenderer::VisibilityQuery vis_;
+    // light-visibility memo: (light, 0.25 m cell) -> occluded. Static lights + static world make the
+    // trace a function of position; the cell matches the 0.3 m light-environment reuse tolerance.
+    mutable std::unordered_map<uint64_t, bool> visMemo_;
 
     // render data
     struct MatSrc { std::vector<std::string> rtParams; std::string glsl; std::vector<std::string> files; std::vector<std::vector<std::string>> faces; std::vector<bool> srgb, cube, clampU, clampV;
@@ -129,6 +142,9 @@ private:
     std::map<std::string, std::string> slotMaterials_;   // "mesh|section" -> original material
     struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; };
     std::map<std::string, LMRec> lightmaps_;
+    std::map<std::string, std::string> actorComponent_;
+    struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };
+    std::map<std::string, VertexLM> vertexLMs_;          // component (lower) -> decoded samples   // actor (lower) -> its only lightmapped component
     std::vector<Light> lights_;
     bool fogOn_ = false;
     float fogMaxH_ = 0, fogScale_ = 0, fogStart_ = 0, fogExt_ = 1e8f;
@@ -150,7 +166,9 @@ private:
 
     // dynamic stream
     GLuint dynVao_ = 0, dynVbo_ = 0, dynIbo_ = 0;
-    std::map<const Material*, int> dynProgCache_;
+    // Keyed by material CONTENT, not address: dynamic meshes (the character pose buffer) reuse their
+    // storage across robot/vehicle, so a pointer key handed the vehicle the robot's programs.
+    std::map<std::string, int> dynProgCache_;
 
     // frame
     core::Mat4 viewProj_;
@@ -159,6 +177,13 @@ private:
     float frustum_[6][4] = {};
     int vpW_ = 0, vpH_ = 0;
     GLuint fbo_ = 0, colorTex_ = 0, depthTex_ = 0, postProg_ = 0, postVao_ = 0;
+    GLuint depthCopyFbo_ = 0, depthCopyTex_ = 0;   // scene depth for translucent (soft) materials
+    bool depthDirty_ = true;
+    void ensureSceneDepth();
+    float fxColor_[4] = {1, 1, 1, 1};
+    GLuint spriteVao_ = 0, spriteVbo_ = 0, spriteCbo_ = 0, spriteIbo_ = 0;
+    std::map<std::string, int> spriteProg_;
+    std::string resolveName(const std::string& name) const;
     GLuint bloomGatherProg_ = 0, blurProg_ = 0, bloomFbo_[2] = {0, 0}, bloomTex_[2] = {0, 0};
     int bloomW_ = 1, bloomH_ = 1;
     int fbW_ = 0, fbH_ = 0;

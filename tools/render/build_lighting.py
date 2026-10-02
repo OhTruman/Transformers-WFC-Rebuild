@@ -43,6 +43,8 @@ def lm_records(repo, pkg_index):
     shared = None
     out = {}
     kinds = {}
+    vertex_lm = []
+    vertex_samples = {}
 
     def lm_name(idx):
         if idx > 0 and idx - 1 < len(p.exports) and p.class_name(p.exports[idx - 1]) == 'LightMapTexture2D':
@@ -57,6 +59,10 @@ def lm_records(repo, pkg_index):
         if len(nat) <= 40: continue
         ltype = struct.unpack_from('<i', nat, 16)[0]
         if ltype in (0, 1, 2): kinds[ltype] = kinds.get(ltype, 0) + 1
+        if ltype == 1:   # LMT_1D: per-vertex lightmap samples
+            vertex_lm.append(p.object_path(i + 1))
+            v = parse_lightmap_1d(nat)
+            if v: vertex_samples[p.object_path(i + 1)] = v
         if shared is None and ltype == 2: shared = nat[21:37]
         if shared is None or ltype != 2: continue
         g = nat.find(shared)
@@ -71,7 +77,31 @@ def lm_records(repo, pkg_index):
         out[p.object_path(i + 1)] = {'coeffs': [c[0] for c in co], 'scales': [c[1] for c in co],
                                      'coordScale': list(struct.unpack_from('>2f', nat, o)),
                                      'coordBias': list(struct.unpack_from('>2f', nat, o + 8))}
+    kinds['vertex_components'] = vertex_lm
+    kinds['vertex_samples'] = vertex_samples
     return out, kinds
+
+
+def parse_lightmap_1d(nat):
+    """FLightMap1D (StaticMeshComponent LODData[0].LightMap, LightMapType 1), big-endian ints at offset 1:
+    [13] type=1, [17] LightGuids.Num, GUIDs, Owner(4), DirectionalSamples bulk data
+    (Flags, ElementCount, SizeOnDisk, OffsetInFile, ElementCount x FQuantizedDirectionalLightSample =
+    3 x FColor, 4 bytes each, alpha byte last), then ScaleVectors[3] (FVector). Returns raw sample bytes
+    (hex) + scales; vertex order = the mesh's LOD0 vertex buffer."""
+    if len(nat) < 40 or struct.unpack_from('>i', nat, 13)[0] != 1:
+        return None
+    ng = struct.unpack_from('>i', nat, 17)[0]
+    o = 21 + 16 * ng + 4                       # GUIDs, Owner
+    _flags, count, size = struct.unpack_from('>iii', nat, o); o += 20   # bulk header: 5 ints on this build
+    if count <= 0 or size != count * 12 or o + size + 36 > len(nat):
+        return None
+    data = nat[o:o + size]; o += size
+    scales = [list(struct.unpack_from('>3f', nat, o + 12 * k)) for k in range(3)]
+    # FColor serialized as a byte-swapped DWColor: A,R,G,B. A is 255/254; each R/G/B channel of each
+    # coefficient is normalized to 255 (max over the vertices), i.e. ScaleVectors = per-channel maxima.
+    if any(data[k * 4] < 250 for k in range(min(count * 3, 64))):
+        return None
+    return {'count': count, 'samples_hex': data.hex(), 'scales': scales}
 
 
 def lights(repo, pkg_index):
@@ -419,7 +449,8 @@ def main():
                'note': 'Directional lightmaps: L = sum_i dot(N_t, B_i)^2 * tex_i.rgb(sRGB-decoded) * scales[i]; '
                        'B0=(0,sqrt(2/3),1/sqrt3) B1=(-1/sqrt2,-1/sqrt6,1/sqrt3) B2=(1/sqrt2,-1/sqrt6,1/sqrt3) '
                        '(decoded from the original Xenon base-pass shader microcode).',
-               'lightmap_type_counts': kinds,
+               'lightmap_type_counts': {k: v for k, v in kinds.items() if k != 'vertex_samples'},
+               'vertex_lightmaps': kinds.get('vertex_samples', {}),
                'lightmaps': {'props': props, 'atlases': atl},
                'lights': L, 'fog': F, 'postprocess': PP},
               open(os.path.join(out, 'lighting.json'), 'w'), indent=0)

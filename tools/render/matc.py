@@ -67,7 +67,8 @@ class MatCompiler:
         self.uses = set()
         self.notes = []
         self.runtime_params = runtime_params
-        self.rt_used = {}                # name -> MIC-level authored value (or None = per-expression default)
+        self.rt_used = {}
+        self.params_read = {'Scalar': set(), 'Vector': set(), 'Texture': set()}   # vs compiled permutation                # name -> MIC-level authored value (or None = per-expression default)
         # resolve instance chain -> master + params
         self.scalars, self.vectors, self.textures, self.texsets = {}, {}, {}, {}
         self.switches, self.masks = {}, {}
@@ -178,11 +179,13 @@ class MatCompiler:
 
     def x_ScalarParameter(self, c, n, p, o):
         nm = n.get('ParameterName')
+        self.params_read['Scalar'].add(nm)
         v = self.scalars.get(nm, n.get('DefaultValue', 0.0))
         return glf(v), 1
 
     def x_VectorParameter(self, c, n, p, o):
         nm = n.get('ParameterName')
+        self.params_read['Vector'].add(nm)
         v = self.vectors.get(nm, n.get('DefaultValue') or [0, 0, 0, 1])
         authored = 'vec4(%s)' % ', '.join(glf(x) for x in v)
         if self.runtime_params and nm in self.RUNTIME_PARAMS:
@@ -295,13 +298,22 @@ class MatCompiler:
         self.uses.add('depth'); return 'm.pixelDepth', 1
 
     def x_ScreenPosition(self, c, n, p, o):
+        # bScreenAlign: xy/w mapped to [0,1] screen UV (ScreenPositionScaleBias); otherwise clip position
+        if n.get('bScreenAlign'):
+            return 'vec4(m.screenPos.xy / m.screenPos.w * vec2(0.5, -0.5) + 0.5, m.screenPos.zw)', 4
         return 'm.screenPos', 4
 
     def x_CameraVector(self, c, n, p, o):
-        self.uses.add('camvec'); return 'm.cameraVector', 3
+        self.uses.add('camvec')
+        if n.get('CoordinateSpace') == 'CS_World':      # UE world space (Z up)
+            self.uses.add('tbn'); return 'tangentToWorldUE(m, m.cameraVector)', 3
+        return 'm.cameraVector', 3
 
     def x_ReflectionVector(self, c, n, p, o):
-        self.uses.add('reflvec'); return 'm.reflectionVector', 3
+        self.uses.add('reflvec')
+        if n.get('CoordinateSpace') == 'CS_World':      # UE world space (Z up)
+            self.uses.add('tbn'); return 'tangentToWorldUE(m, m.reflectionVector)', 3
+        return 'm.reflectionVector', 3
 
     def x_WorldPosition(self, c, n, p, o):
         return 'm.worldPosUE', 3
@@ -349,8 +361,12 @@ class MatCompiler:
         self.uses.add('normal'); return 'm.normal', 3
 
     def x_MeshEmitterVertexColor(self, c, n, p, o):
-        # particle mesh-emitter colour: static world meshes are not emitted -> white
-        return ['vec4(1.0)', '1.0', '1.0', '1.0', '1.0'][min(o, 4)], (4 if o == 0 else 1)
+        # mesh-particle emitter colour (the particle colour); static world meshes see white.
+        # UE3 compiles it as a VectorParameter named MeshEmitterVertexColor.
+        self.uses.add('vcolor')
+        self.params_read['Vector'].add('MeshEmitterVertexColor')
+        return ['m.vertexColor', 'm.vertexColor.r', 'm.vertexColor.g', 'm.vertexColor.b', 'm.vertexColor.a'][min(o, 4)], \
+            (4 if o == 0 else 1)
 
     def x_ConstantClamp(self, c, n, p, o):
         x, t = self.req(c, n, 'Input', p)
@@ -376,12 +392,34 @@ class MatCompiler:
     def x_Fresnel(self, c, n, p, o):
         nrm = self.input(c, n, 'Normal', ('vec3(0.0, 0.0, 1.0)', 3))
         self.uses.add('camvec')
-        return 'pow(max(1.0 - max(dot(%s, m.cameraVector), 0.0), 0.0), %s)' % (cast(nrm[0], nrm[1], 3),
-                                                                           glf(n.get('Exponent', 3.0))), 1
+        ex = self.input(c, n, 'Exp')            # WFC extension: exponent driven by an expression
+        exc = cast(ex[0], ex[1], 1) if ex else glf(n.get('Exponent', 3.0))
+        return 'pow(max(1.0 - max(dot(%s, m.cameraVector), 0.0), 0.0), %s)' % (cast(nrm[0], nrm[1], 3), exc), 1
 
     def x_DepthBiasedAlpha(self, c, n, p, o):
+        # UE3 DepthBiasedAlpha: Alpha * saturate((SceneDepth - PixelDepth) / max((1 - Bias) * BiasScale, 0.001)),
+        # depths in UE units. WFC adds BiasScaleInput (expression overriding the BiasScale constant).
         a = self.input(c, n, 'Alpha', ('1.0', 1))
-        return cast(a[0], a[1], 1), 1        # [PROV] scene-depth soft fade not modelled
+        b = self.input(c, n, 'Bias', ('0.0', 1))
+        sc = self.input(c, n, 'BiasScaleInput')
+        scale = cast(sc[0], sc[1], 1) if sc else glf(n.get('BiasScale', 1.0))
+        self.uses.add('scenedepth')
+        return 'wfcDepthBiasedAlpha(m, %s, %s, %s)' % (cast(a[0], a[1], 1), cast(b[0], b[1], 1), scale), 1
+
+    def x_SceneDepth(self, c, n, p, o):
+        self.uses.add('scenedepth'); return 'm.sceneDepth', 1
+
+    def x_DestDepth(self, c, n, p, o):
+        self.uses.add('scenedepth'); return 'm.sceneDepth', 1
+
+    def x_DynamicParameter(self, c, n, p, o):
+        # particle DynamicParameter (Param1..4); emitters do not drive it here -> authored default 1
+        return ['m.dynParam', 'm.dynParam.x', 'm.dynParam.y', 'm.dynParam.z', 'm.dynParam.w'][min(o, 4)], \
+            (4 if o == 0 else 1)
+
+    def x_ParticleSubUV(self, c, n, p, o):
+        tex = (n.get('Texture') or {}).get('ref')
+        return self._sample2d(c, n, p, o, tex)
 
     def x_BumpOffset(self, c, n, p, o):
         uv = self.input(c, n, 'Coordinate', ('m.uv0', 2))
@@ -421,6 +459,7 @@ class MatCompiler:
 
     def x_TextureSampleParameter2D(self, c, n, p, o):
         nm = n.get('ParameterName')
+        self.params_read['Texture'].add(nm)
         tex = self.textures.get(nm) or (n.get('Texture') or {}).get('ref')
         return self._sample2d(c, n, p, o, tex, nm)
 
@@ -431,17 +470,23 @@ class MatCompiler:
         if not uv:
             self.uses.add('reflvec'); self.uses.add('tbn')
             uv = ('tangentToWorldUE(m, m.reflectionVector)', 3)
-        s = self.tmp(4, 'wfcSampleCube(%d, %s)' % (slot, cast(uv[0], uv[1], 3)))
+        bias = self.input(c, n, 'LODBias')
+        if bias:
+            s = self.tmp(4, 'wfcSampleCubeBias(%d, %s, %s)' % (slot, cast(uv[0], uv[1], 3), cast(bias[0], bias[1], 1)))
+        else:
+            s = self.tmp(4, 'wfcSampleCube(%d, %s)' % (slot, cast(uv[0], uv[1], 3)))
         if o == 0: return s, 4
         return '%s.%s' % (s, 'rgba'[min(o, 4) - 1]), 1
 
     def x_TextureSampleParameterCube(self, c, n, p, o):
         nm = n.get('ParameterName')
+        self.params_read['Texture'].add(nm)
         tex = self.textures.get(nm) or (n.get('Texture') or {}).get('ref')
         return self._samplecube(c, n, p, o, tex)
 
     def x_TextureSetSampleParameter(self, c, n, p, o):
         nm = n.get('ParameterName')
+        self.params_read['Texture'].add(nm)
         ts = self.texsets.get(nm) or (n.get('DefaultValue') or {}).get('ref')
         tso = self.R.obj(ts) or {}
         inter = [x.get('ref') for x in (tso.get('Intermediates') or []) if isinstance(x, dict)]
@@ -480,9 +525,14 @@ class MatCompiler:
         return self.x_ShaderCode(c, n, p, o)
 
     def x_IOBlock(self, c, n, p, o):
-        # reference to a function's input block: output index == pin Id
+        # reference to a function's input block: output index == pin Id. Arguments are compiled
+        # lazily (in the caller's frame) so inputs a static switch leaves unused emit no code.
         if o in c.inputs:
-            return c.inputs[o]
+            v = c.inputs[o]
+            if callable(v):
+                v = v()
+                c.inputs[o] = v
+            return v
         return '0.0', 1
 
     def x_Function(self, c, n, p, o):
@@ -500,8 +550,12 @@ class MatCompiler:
             if k < len(call_inputs):
                 r = self.expr_ref(call_inputs[k])
                 if r:
-                    code, t = self.compile(c, r[0], r[1])
-                    args[int(pin.get('Id', k))] = (code, t)
+                    def thunk(r=r, c=c):
+                        code, t = self.compile(c, r[0], r[1])
+                        if r[2]:
+                            code = '(%s).%s' % (cast(code, t, 4), r[2]); t = len(r[2])
+                        return code, t
+                    args[int(pin.get('Id', k))] = thunk
         sub = Ctx(args, name='%s>%s' % (c.name, p))
         pin = next((x for x in out_pins if int(x.get('Id', -1)) == o), None)
         if pin is None:
@@ -518,7 +572,8 @@ class MatCompiler:
         m = self.mat
         root = Ctx()
         outs = {}
-        spec = [('DiffuseColor', 3, 'vec3(0.0)'), ('SpecularColor', 3, 'vec3(0.0)'), ('SpecularPower', 1, '15.0'),
+        spec = [('Distortion', 3, 'vec3(0.0)'),
+                ('DiffuseColor', 3, 'vec3(0.0)'), ('SpecularColor', 3, 'vec3(0.0)'), ('SpecularPower', 1, '15.0'),
                 ('Normal', 3, 'vec3(0.0, 0.0, 1.0)'), ('EmissiveColor', 3, 'vec3(0.0)'),
                 ('Opacity', 1, '1.0'), ('OpacityMask', 1, '1.0'), ('CustomLighting', 3, 'vec3(0.0)')]
         # Normal first: UE3 computes the material normal before inputs that depend on it.
@@ -547,6 +602,7 @@ class MatCompiler:
             'connected': sorted(connected), 'uses': sorted(self.uses),
             'switches': self.switches, 'textures': self.tex_slots, 'notes': self.notes,
             'runtime_params': sorted(self.rt_used),
+            'params_read': {k: sorted(x for x in v if x) for k, v in self.params_read.items()},
         }
         return '\n'.join(self.lines), info
 

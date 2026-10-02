@@ -27,6 +27,10 @@ struct ParticleBatch {
     float colorScale = 1.0f;        // 1, 2 or 4: overbright (UE3 HDR emissive > 1)
     const Particle* p = nullptr;
     size_t n = 0;
+    // Original emitter material (object name or path, e.g. "Ring_Distort_Add_MAT"). When the renderer
+    // has compiled it, the sprites are shaded by that graph (particle colour = vertex colour, depth-biased
+    // alpha, panners, blend mode) and `tex` is ignored; otherwise the textured fallback is drawn.
+    const char* material = nullptr;
 };
 
 // Runtime character customization as pushed by WFC's TnCharacterApplier onto every character mesh
@@ -76,6 +80,19 @@ public:
 
     // Character customization for subsequent dynamic draws (see CharacterColors). Optional.
     virtual void setCharacterColors(const CharacterColors& c) { (void)c; }
+
+    // HUD weapon crosshair (UI_GFxHud_p Hud_GFX.gfx, mc_crosshairIonBlaster), drawn by the renderer
+    // from the movie's own geometry; gameplay supplies the state each frame. weaponSpread is the
+    // value TnHUD passes to NotifyWeaponSpreadChanged; targetType as NotifyTargetTypeChanged
+    // (0, 1, other = no tint). Fine aim keeps this crosshair for the Ion Blaster (the HUD's
+    // NotifyFineAimChanged shows a scope only for HeavyPistol/BurstRifle/SniperRifle). Optional.
+    // True when effect meshes/sprites are shaded by their compiled original material graphs
+    // (drawMeshFx / ParticleBatch::material): callers must then pass the authored particle colour
+    // only, without GL1 stand-ins for graph terms (intensity scales, fresnel approximations).
+    virtual bool evaluatesFxMaterials() const { return false; }
+
+    struct ReticleState { bool visible = false; float weaponSpread = 0.0f; int targetType = -1; };
+    virtual void setReticle(const ReticleState& s) { (void)s; }
 
     // Segment occlusion query (true == blocked) used for dynamic-object light visibility,
     // like UE3's light-environment visibility traces. Optional.

@@ -33,6 +33,9 @@ typedef ptrdiff_t GLintptr;
 #define GL_MIRRORED_REPEAT 0x8370
 #define GL_SRGB8_ALPHA8 0x8C43
 #define GL_RGBA16F 0x881A
+#ifndef GL_RGB32F
+#define GL_RGB32F 0x8815
+#endif
 #define GL_HALF_FLOAT 0x140B
 #define GL_FRAMEBUFFER 0x8D40
 #define GL_READ_FRAMEBUFFER 0x8CA8
@@ -96,6 +99,7 @@ namespace glx {
     X(void, BindRenderbuffer, (GLenum, GLuint)) \
     X(void, RenderbufferStorage, (GLenum, GLenum, GLsizei, GLsizei)) \
     X(void, FramebufferRenderbuffer, (GLenum, GLenum, GLenum, GLuint)) \
+    X(void, VertexAttrib4f, (GLuint, GLfloat, GLfloat, GLfloat, GLfloat)) \
     X(void, TexImage3D, (GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*))     X(void, BlitFramebuffer, (GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum))
 
 #define WFC_GL_DECL(ret, name, args) typedef ret(APIENTRY* PFN_##name) args; extern PFN_##name name;

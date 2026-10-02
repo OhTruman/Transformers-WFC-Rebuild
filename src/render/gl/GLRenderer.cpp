@@ -8,6 +8,8 @@
 
 #include "render/Renderer.h"
 #include "render/gl/WfcPipeline.h"
+#include "platform/Image.h"
+#include "core/Config.h"
 #include "core/Log.h"
 
 // GL 1.2 enums the GL 1.1 header may omit (drivers still support them).
@@ -29,7 +31,10 @@
 #define GL_PRIMARY_COLOR 0x8577
 #endif
 
+#include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <string>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -92,6 +97,7 @@ public:
             std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
         const Camera& cam = camOv;
         if (wfc_.active()) wfc_.beginFrame(cam, vpW, vpH);
+        vpW_ = vpW; vpH_ = vpH;
         glMatrixMode(GL_PROJECTION);
         core::Mat4 p = cam.proj();
         glLoadMatrixf(p.m);
@@ -107,7 +113,77 @@ public:
 
     void endFrame() override {
         if (wfc_.active()) wfc_.endFrame();
+        drawReticle();
         glFlush();
+    }
+
+    void setReticle(const ReticleState& s) override { reticle_ = s; }
+    bool evaluatesFxMaterials() const override { return wfc_.active(); }
+
+    // mc_crosshairIonBlaster (Hud_GFX.gfx char 404), at crosshairAnchor_mc = stage (560, 360) of the
+    // 1120x720 movie: three prong_mc clips (char 402 -> shape 401) under rotations 0/120/240 deg, each
+    // the 32x16 bitmap 400 (Hud_GFX_I190.png) stretched by its fill matrix to (-15..15, -6..6) px.
+    // Its DoAction: SpreadMultiplier 300; on WeaponSpread change every prong_mc._y eases to
+    // -300 * WeaponSpread over 0.2 s ("easeout"). Tint: NotifyTargetTypeChanged 0 -> 0x50B5D5,
+    // 1 -> 0xFF3333, else white, eased over 0.2 s. [PROV] stage scale mode (ShowAll assumed) and the
+    // HmActionScript easeout curve (quadratic ease-out assumed).
+    void drawReticle() {
+        if (!reticle_.visible || vpW_ <= 0 || vpH_ <= 0) return;
+        if (reticleTex_ == 0 && !reticleTried_) {
+            reticleTried_ = true;
+            ImageData img;
+            std::string path = std::string(core::config::kAssetRootDefault) + "/../content/UI_GFxHud_p/Hud_GFX_I190.png";
+            if (platform::decodeImage(path, img)) {
+                glGenTextures(1, &reticleTex_);
+                glBindTexture(GL_TEXTURE_2D, reticleTex_);
+                glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img.rgba.data());
+            } else {
+                LOG_WARN("reticle: %s not found; crosshair not drawn", path.c_str());
+            }
+        }
+        if (reticleTex_ == 0) return;
+        // tweens (prong offset, tint) driven by wall time like the Flash timeline
+        static auto t0 = std::chrono::steady_clock::now();
+        float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+        auto tween = [&](Tween& tw, float target, float dur) {
+            if (target != tw.to) { tw.from = tw.value(now); tw.to = target; tw.start = now; tw.dur = dur; }
+            return tw.value(now);
+        };
+        float off = tween(prongTween_, 300.0f * reticle_.weaponSpread, 0.2f);
+        uint32_t rgb = reticle_.targetType == 0 ? 0x50B5D5u : reticle_.targetType == 1 ? 0xFF3333u : 0xFFFFFFu;
+        float tint[3];
+        for (int c = 0; c < 3; ++c) tint[c] = tween(tintTween_[c], (float)((rgb >> (16 - 8 * c)) & 0xFF) / 255.0f, 0.2f);
+
+        float scale = std::min((float)vpW_ / 1120.0f, (float)vpH_ / 720.0f);
+        float cx = vpW_ * 0.5f, cy = vpH_ * 0.5f;
+        glViewport(0, 0, vpW_, vpH_);
+        glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
+        glOrtho(0, vpW_, vpH_, 0, -1, 1);                       // Flash stage axes: y down
+        glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
+        glDisable(GL_DEPTH_TEST); glDisable(GL_LIGHTING); glDisable(GL_CULL_FACE); glDisable(GL_FOG);
+        glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glEnable(GL_TEXTURE_2D); glBindTexture(GL_TEXTURE_2D, reticleTex_);
+        glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        glColor4f(tint[0], tint[1], tint[2], 1.0f);
+        glBegin(GL_QUADS);
+        for (int k = 0; k < 3; ++k) {
+            float a = (float)k * 2.0943951f, ca = std::cos(a), sa = std::sin(a);
+            const float px[4] = {-15, 15, 15, -15}, py[4] = {-6, -6, 6, 6}, u[4] = {0, 1, 1, 0}, v[4] = {0, 0, 1, 1};
+            for (int i = 0; i < 4; ++i) {
+                float x = px[i], y = py[i] - off;                  // prong_mc._y = -300 * spread
+                glTexCoord2f(u[i], v[i]);
+                glVertex2f(cx + scale * (ca * x - sa * y), cy + scale * (sa * x + ca * y));
+            }
+        }
+        glEnd();
+        glDisable(GL_TEXTURE_2D); glDisable(GL_BLEND); glEnable(GL_DEPTH_TEST);
+        glMatrixMode(GL_PROJECTION); glPopMatrix();
+        glMatrixMode(GL_MODELVIEW); glPopMatrix();
     }
 
     bool loadMapRenderData(const std::string& mapName) override {
@@ -239,6 +315,22 @@ public:
         core::Vec3 camR{view_.m[0], view_.m[4], view_.m[8]};
         core::Vec3 camU{view_.m[1], view_.m[5], view_.m[9]};
         core::Vec3 camF{-view_.m[2], -view_.m[6], -view_.m[10]};
+        if (wfc_.active() && b.material) {
+            // Original emitter material: same quad construction as below, shaded by the compiled graph.
+            std::vector<wfc::Pipeline::Sprite> sp(b.n);
+            for (size_t i = 0; i < b.n; ++i) {
+                const Particle& p = b.p[i];
+                core::Vec3 ax, ay;
+                particleAxes(p, camR, camU, camF, ax, ay);
+                core::Vec3 hx = ax * (p.w * 0.5f), hy = ay * (p.h * 0.5f);
+                wfc::Pipeline::Sprite& s = sp[i];
+                s.c[0] = p.pos - hx - hy; s.c[1] = p.pos + hx - hy; s.c[2] = p.pos + hx + hy; s.c[3] = p.pos - hx + hy;
+                particleUVs(p, s.uv);
+                float k = b.colorScale;
+                s.color[0] = p.r * k; s.color[1] = p.g * k; s.color[2] = p.b * k; s.color[3] = p.a;
+            }
+            if (wfc_.drawSprites(b.material, sp.data(), sp.size(), camF * -1.0f)) { glLoadMatrixf(view_.m); return; }
+        }
         glDisable(GL_LIGHTING);
         glDisable(GL_CULL_FACE);
         glEnable(GL_BLEND);
@@ -272,28 +364,12 @@ public:
         for (size_t i = 0; i < b.n; ++i) {
             const Particle& p = b.p[i];
             core::Vec3 ax, ay;   // ax: across (width), ay: up/along (height/length)
-            float al = core::length(p.axis);
-            if (al > 1e-5f) {
-                ay = p.axis * (1.0f / al);
-                ax = core::normalize(core::cross(camF, ay));
-                if (core::length(ax) < 1e-4f) ax = camR;
-            } else {
-                float c = std::cos(p.rot), s = std::sin(p.rot);
-                ax = camR * c + camU * s;
-                ay = camU * c - camR * s;
-            }
+            particleAxes(p, camR, camU, camF, ax, ay);
             core::Vec3 hx = ax * (p.w * 0.5f), hy = ay * (p.h * 0.5f);
             glColor4f(p.r, p.g, p.b, p.a);
             core::Vec3 q[4] = {p.pos - hx - hy, p.pos + hx - hy, p.pos + hx + hy, p.pos - hx + hy};
-            // UVs: v0 (texture top) at the +axis end; uAlongAxis maps U along the axis instead.
             float uv[4][2];
-            if (p.uAlongAxis) {
-                uv[0][0] = p.u0; uv[0][1] = p.v1; uv[1][0] = p.u0; uv[1][1] = p.v0;
-                uv[2][0] = p.u1; uv[2][1] = p.v0; uv[3][0] = p.u1; uv[3][1] = p.v1;
-            } else {
-                uv[0][0] = p.u0; uv[0][1] = p.v1; uv[1][0] = p.u1; uv[1][1] = p.v1;
-                uv[2][0] = p.u1; uv[2][1] = p.v0; uv[3][0] = p.u0; uv[3][1] = p.v0;
-            }
+            particleUVs(p, uv);
             for (int k = 0; k < 4; ++k) {
                 glTexCoord2f(uv[k][0], uv[k][1]);
                 glVertex3f(q[k].x, q[k].y, q[k].z);
@@ -311,9 +387,39 @@ public:
         if (fogWas) glEnable(GL_FOG); else glDisable(GL_FOG);
     }
 
+    static void particleAxes(const Particle& p, const core::Vec3& camR, const core::Vec3& camU, const core::Vec3& camF,
+                             core::Vec3& ax, core::Vec3& ay) {
+        float al = core::length(p.axis);
+        if (al > 1e-5f) {
+            ay = p.axis * (1.0f / al);
+            ax = core::normalize(core::cross(camF, ay));
+            if (core::length(ax) < 1e-4f) ax = camR;
+        } else {
+            float c = std::cos(p.rot), s = std::sin(p.rot);
+            ax = camR * c + camU * s;
+            ay = camU * c - camR * s;
+        }
+    }
+    // UVs: v0 (texture top) at the +axis end; uAlongAxis maps U along the axis instead.
+    static void particleUVs(const Particle& p, float uv[4][2]) {
+        if (p.uAlongAxis) {
+            uv[0][0] = p.u0; uv[0][1] = p.v1; uv[1][0] = p.u0; uv[1][1] = p.v0;
+            uv[2][0] = p.u1; uv[2][1] = p.v0; uv[3][0] = p.u1; uv[3][1] = p.v1;
+        } else {
+            uv[0][0] = p.u0; uv[0][1] = p.v1; uv[1][0] = p.u1; uv[1][1] = p.v1;
+            uv[2][0] = p.u1; uv[2][1] = p.v0; uv[3][0] = p.u0; uv[3][1] = p.v0;
+        }
+    }
+
     void drawMeshFx(MeshHandle h, const core::Mat4& model, float r, float g, float b, float a,
                     float colorScale, float fresnelExp, float fresnelScale, float fresnelPower) override {
         if (h < 0 || (size_t)h >= meshes_.size()) return;
+        if (wfc_.active() && (size_t)h < gpu_.size() && gpu_[(size_t)h] >= 0) {
+            // Mesh emitter with its original material: the graph supplies fresnel/panning/depth fade;
+            // the particle colour (HDR) is the mesh-emitter vertex colour.
+            float sc = colorScale, col[4] = {r * sc, g * sc, b * sc, a};
+            if (wfc_.drawFx(gpu_[(size_t)h], model, col)) { glLoadMatrixf(view_.m); return; }
+        }
         const MeshData& m = meshes_[(size_t)h];
         core::Mat4 mv = view_ * model;
         glLoadMatrixf(mv.m);
@@ -531,6 +637,19 @@ private:
     }
 
     core::Mat4 view_;
+    int vpW_ = 0, vpH_ = 0;
+    ReticleState reticle_;
+    GLuint reticleTex_ = 0;
+    bool reticleTried_ = false;
+    struct Tween {
+        float from = 0, to = 0, start = -1, dur = 0.2f;
+        float value(float now) const {                          // quadratic ease-out
+            if (start < 0 || dur <= 0) return to;
+            float t = std::min(std::max((now - start) / dur, 0.0f), 1.0f);
+            return from + (to - from) * (1.0f - (1.0f - t) * (1.0f - t));
+        }
+    };
+    Tween prongTween_, tintTween_[3] = {{1, 1}, {1, 1}, {1, 1}};
     wfc::Pipeline wfc_;
     std::vector<int> gpu_;
     std::vector<MeshData> meshes_;

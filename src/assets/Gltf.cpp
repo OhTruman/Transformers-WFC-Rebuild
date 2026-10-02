@@ -237,6 +237,10 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
                 sm.sourceSection = (int)pi;
                 if (node["extras"]["kind"].asString() == "bsp")      // level BSP (unlit in world.glb)
                     sm.component = "bsp:" + node["extras"]["source"].asString();
+                // StaticMeshActor / (Static)InterpActor nodes name only their actor: the renderer
+                // resolves the actor's single StaticMeshComponent (lightmap join key).
+                else if (sm.component.empty() && !node["extras"]["actor"].asString().empty())
+                    sm.component = "actor:" + node["extras"]["actor"].asString();
             }
             // Baked-lightmap binding carried on the node extras (per prop instance).
             if (node.has("extras") && node["extras"].has("lm_atlas") && !uv1.empty()) {

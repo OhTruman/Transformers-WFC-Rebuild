@@ -167,7 +167,7 @@ def resolve_default_slots(repo, j):
 def main():
     mapname = sys.argv[1]
     out = sys.argv[2]
-    extra = sys.argv[3:]
+    extra = [a.strip() for a in sys.argv[3:] if a.strip()]   # tolerate CRLF list files
     os.makedirs(out, exist_ok=True)
     repo = Repo(['%s_BASE_m.xxx' % mapname, '%s_ART_m.xxx' % mapname])
     j = glb_json(os.path.join(VS, 'Maps', mapname, 'world.glb'))
@@ -188,7 +188,9 @@ def main():
         res = {}
         for mp in mats:
             try:
-                mc = matc.MatCompiler(repo, mp, tr, runtime_params=mp in extra)
+                # TnCharacterApplier targets character meshes and their weapon only
+                rt = mp in extra and mp.split('.')[0].upper().startswith(('TR_', 'WEP_'))
+                mc = matc.MatCompiler(repo, mp, tr, runtime_params=rt)
                 glsl, info = mc.build()
                 res[mp] = {'glsl': glsl, 'info': info, 'error': None}
             except Exception as ex:

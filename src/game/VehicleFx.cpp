@@ -39,6 +39,10 @@ const char* kTexPaths[kTexCount] = {
     "FX_Textures_p/Textures/SmokeThin_CLR.png",         // booster_smoke1_MAT (additive)
     nullptr,                                            // Spark_MAT: procedural (generated below)
 };
+// Original emitter materials (ParticleModuleRequired.Material) for the sprite textures above: the
+// renderer shades the sprites with these compiled graphs when available, else draws the texture.
+const char* kTexMaterials[kTexCount] = {"Basic_Particle_Add_MAT", "Ring_Distort_Add_MAT", "ElectroRing01_Mat",
+                                        "booster_smoke1_MAT", "Spark_MAT"};
 // `intensity`: material emissive scale where the GL1 path cannot evaluate the shader graph.
 struct MeshAsset { const char* gltf; const char* texture; float intensity; float fresnelExp = 0, fresnelScale = 1, fresnelPower = 1; };
 enum Mesh { kBooster02, kBullet, kBooster03, kCircuit, kLightCyl, kRamMesh, kMeshCount };
@@ -429,7 +433,8 @@ void VehicleFx::draw(render::IRenderer& r) const {
                     // Mesh scale is authored in UE axes; umodel meshes are (UE x, UE z, UE y).
                     Vec3 s{p.size.x * g.x, p.size.z * g.z, p.size.y * g.y};
                     core::Mat4 model = sockets_[p.socket] * core::Mat4::translate(p.pos) * core::Mat4::scale(s);
-                    float mi = kMeshes[d->mesh].intensity;
+                    // GL1 stand-in for the material's own emissive scale; the compiled graph applies it itself
+                    float mi = r.evaluatesFxMaterials() ? 1.0f : kMeshes[d->mesh].intensity;
                     const MeshAsset& ma = kMeshes[d->mesh];
                     r.drawMeshFx(h, model, std::min(1.0f, br * cl.x * k * mi), std::min(1.0f, bg * cl.y * k * mi),
                                  std::min(1.0f, bb * cl.z * k * mi), d->alpha.eval(t), scale,
@@ -460,7 +465,8 @@ void VehicleFx::draw(render::IRenderer& r) const {
                 q.push_back(o);
             }
             if (!q.empty() && d->texture >= 0 && (size_t)d->texture < tex_.size())
-                r.drawParticles({tex_[(size_t)d->texture], render::ParticleBlend::Additive, scale, q.data(), q.size()});
+                r.drawParticles({tex_[(size_t)d->texture], render::ParticleBlend::Additive, scale, q.data(), q.size(),
+                                 kTexMaterials[d->texture]});
         }
     }
 }

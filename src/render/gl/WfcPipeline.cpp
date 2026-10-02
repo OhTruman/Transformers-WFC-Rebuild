@@ -50,6 +50,7 @@ layout(location=1) in vec3 aNrm;
 layout(location=2) in vec4 aTan;
 layout(location=3) in vec2 aUV0;
 layout(location=4) in vec2 aUV1;
+layout(location=5) in vec4 aColor;   // particle colour (FX draws); constant white otherwise
 uniform mat4 uViewProj;
 uniform mat4 uModel;
 uniform vec3 uCamPos;
@@ -57,7 +58,11 @@ uniform vec4 uLMCoord;
 uniform int uFogOn;
 uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
 uniform vec3 uFogIn;
+uniform int uVertexLM;       // LMT_1D vertex lightmap: coefficients per vertex from uVLM (rows 0..2)
+uniform int uVLMBase;
+uniform sampler2D uVLM;
 out vec3 vPos; out vec3 vNrm; out vec4 vTan; out vec2 vUV0; out vec2 vUV1; out vec4 vFog; out vec4 vColor;
+out vec3 vVLM0; out vec3 vVLM1; out vec3 vVLM2;
 
 // UE3 vertex height fog (THeightFogVertexShader / CalcHeightFog), single authored layer, UE units.
 // Layer spans [-HALF_WORLD_MAX, FogMaxHeight]; scattering = exp2(FogDistanceScale *
@@ -88,7 +93,15 @@ void main() {
     vTan = vec4(nm * aTan.xyz, aTan.w);
     vUV0 = aUV0;
     vUV1 = aUV1 * uLMCoord.xy + uLMCoord.zw;
-    vColor = vec4(1.0);
+    vColor = aColor;
+    if (uVertexLM != 0) {
+        int vi = gl_VertexID - uVLMBase;
+        vVLM0 = texelFetch(uVLM, ivec2(vi, 0), 0).rgb;
+        vVLM1 = texelFetch(uVLM, ivec2(vi, 1), 0).rgb;
+        vVLM2 = texelFetch(uVLM, ivec2(vi, 2), 0).rgb;
+    } else {
+        vVLM0 = vVLM1 = vVLM2 = vec3(0.0);
+    }
     vFog = heightFog(wp.xyz);
     gl_Position = uViewProj * wp;
 }
@@ -105,10 +118,31 @@ uniform float uClip;
 uniform int uLit;
 uniform int uDebug;          // 1 = lighting only (diffuse 0.5 grey, no emissive)
 uniform int uDecalClip;      // static decal: clip to the decal box (uv in [0,1])
+uniform int uBlend;          // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
+uniform vec2 uNearFar;       // metres
+uniform vec2 uViewport;      // pixels
+uniform sampler2D uSceneDepth;
+uniform int uHasSceneDepth;
 struct MatIn { vec2 uv0; vec2 uv1; vec4 vertexColor; vec3 worldPosUE; vec3 cameraVector; vec3 reflectionVector;
-               vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; };
-struct MatOut { vec3 DiffuseColor; vec3 SpecularColor; float SpecularPower; vec3 Normal; vec3 EmissiveColor;
-                float Opacity; float OpacityMask; vec3 CustomLighting; };
+               vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; float sceneDepth;
+               vec4 dynParam; };
+struct MatOut { vec3 Distortion; vec3 DiffuseColor; vec3 SpecularColor; float SpecularPower; vec3 Normal;
+                vec3 EmissiveColor; float Opacity; float OpacityMask; vec3 CustomLighting; };
+// window depth -> view-space Z in UE units (UE3 PixelDepth / SceneDepth are view Z)
+float wfcLinearDepth(float d) {
+    float z = d * 2.0 - 1.0, n = uNearFar.x, f = uNearFar.y;
+    return 2.0 * n * f / (f + n - z * (f - n)) * 100.0;
+}
+// UE3 DepthBiasedAlpha: Alpha * saturate((SceneDepth - PixelDepth) / max((1 - Bias) * BiasScale, 0.001))
+float wfcDepthBiasedAlpha(MatIn m, float a, float bias, float scale) {
+    return a * clamp((m.sceneDepth - m.pixelDepth) / max((1.0 - bias) * scale, 0.001), 0.0, 1.0);
+}
+// UE3 base-pass fog per blend mode: additive keeps no in-scatter, modulate fades toward 1.
+vec3 wfcFog(vec3 c) {
+    if (uBlend == 3) return c * vFog.a;
+    if (uBlend == 4) return mix(vec3(1.0), c, vFog.a);
+    return c * vFog.a + vFog.rgb;
+}
 // UE3: ReflectionVector = -CameraVector + Normal * dot(Normal, CameraVector) * 2 (tangent space)
 void wfcSetNormal(inout MatIn m, vec3 n) {
     m.normal = normalize(n);
@@ -136,8 +170,13 @@ MatIn wfcBuildInput(out mat3 tbn) {
     m.reflectionVector = -m.cameraVector + vec3(0.0, 0.0, 2.0 * m.cameraVector.z);
     m.tbnUE = mat3(T.xzy, B.xzy, N.xzy);
     m.time = uTime;
-    m.pixelDepth = length(uCamPos - vPos) * 100.0;
-    m.screenPos = vec4(gl_FragCoord.xy, 0.0, 1.0);
+    m.pixelDepth = wfcLinearDepth(gl_FragCoord.z);
+    m.sceneDepth = uHasSceneDepth != 0 ? wfcLinearDepth(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r) : 1e9;
+    m.dynParam = vec4(1.0);
+    // UE3 ScreenPosition (bScreenAlign false) = clip-space position. UE3's infinite-far perspective
+    // gives w = view Z and z = view Z - near (UE units).
+    vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
+    m.screenPos = vec4(ndc * m.pixelDepth, m.pixelDepth - uNearFar.x * 100.0, m.pixelDepth);
     return m;
 }
 )";
@@ -146,6 +185,8 @@ MatIn wfcBuildInput(out mat3 tbn) {
 const char* kFSMainLM = R"(
 uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
 uniform vec3 uLMScale[3];
+uniform int uVertexLM;
+in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
 const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
 const vec3 LMB1 = vec3(-0.70710678, -0.40824829, 0.57735027);
 const vec3 LMB2 = vec3(0.70710678, -0.40824829, 0.57735027);
@@ -160,12 +201,13 @@ void main() {
     if (uLit != 0) {
         vec3 n = normalize(o.Normal);
         float w0 = dot(n, LMB0), w1 = dot(n, LMB1), w2 = dot(n, LMB2);
-        vec3 L = w0 * w0 * texture(uLM0, vUV1).rgb * uLMScale[0]
-               + w1 * w1 * texture(uLM1, vUV1).rgb * uLMScale[1]
-               + w2 * w2 * texture(uLM2, vUV1).rgb * uLMScale[2];
+        vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
+        vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
+        vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
+        vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
         c += o.DiffuseColor * L;
     }
-    c = c * vFog.a + vFog.rgb;
+    c = wfcFog(c);
     oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
 }
 )";
@@ -214,7 +256,7 @@ void main() {
             c += (o.DiffuseColor * (wr * wr) + o.SpecularColor * sp) * uLCol[i].rgb * att * uLSpot[i].w;
         }
     }
-    c = c * vFog.a + vFog.rgb;
+    c = wfcFog(c);
     oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
 }
 )";
@@ -446,6 +488,38 @@ bool Pipeline::load(const std::string& mapName) {
         std::string key = kv.first;
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
         lightmaps_[key] = r;
+        // <level>.TheWorld.PersistentLevel.<Actor>.<Component>: index single-component actors
+        size_t a = key.find(".persistentlevel.");
+        if (a != std::string::npos) {
+            std::string rest = key.substr(a + 17);
+            size_t d = rest.find('.');
+            if (d != std::string::npos) {
+                std::string actor = rest.substr(0, d);
+                auto ins = actorComponent_.emplace(actor, key);
+                if (!ins.second) ins.first->second.clear();   // several components: ambiguous
+            }
+        }
+    }
+
+    // LMT_1D vertex lightmaps: A,R,G,B bytes per coefficient, per-channel normalized; decoded as
+    // pow(byte/255, 2.2) (UE3 quantizes with pow(x, 1/2.2)) [PROV: vertex-LM shader not disassembled].
+    const assets::Json& jv = L["vertex_lightmaps"];
+    for (const auto& kv : jv.obj) {
+        VertexLM v;
+        v.count = kv.second["count"].asInt(0);
+        const std::string hex = kv.second["samples_hex"].asString();
+        if (v.count <= 0 || hex.size() != (size_t)v.count * 24) continue;
+        for (int k = 0; k < 3; ++k)
+            for (int c = 0; c < 3; ++c) v.scale[k][c] = kv.second["scales"][(size_t)k][(size_t)c].asFloat(1.0f);
+        auto byteAt = [&](size_t i) { return (float)std::stoi(hex.substr(i * 2, 2), nullptr, 16); };
+        v.rgb.resize((size_t)v.count * 9);   // row-major: coefficient k, vertex i, channel c
+        for (int i = 0; i < v.count; ++i)
+            for (int k = 0; k < 3; ++k)
+                for (int c = 0; c < 3; ++c)
+                    v.rgb[((size_t)k * v.count + i) * 3 + c] = std::pow(byteAt(((size_t)i * 3 + k) * 4 + 1 + c) / 255.0f, 2.2f);
+        std::string key = kv.first;
+        std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        vertexLMs_[key] = std::move(v);
     }
 
     const assets::Json& jl = L["lights"];
@@ -679,6 +753,9 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             // UE world direction -> cube lookup (faces in UE/D3D order, see cubeTexture)
             fs += "vec4 wfcSC_" + n + "(vec3 d) { return texture(uTex" + n + ", d); }\n";
             replaceAll(code, "wfcSampleCube(" + n + ", ", "wfcSC_" + n + "(");
+            // WFC LODBias input (e.g. Reflection_LOD_Scale): mip bias in levels, as tex2Dbias/texCUBEbias
+            fs += "vec4 wfcSCB_" + n + "(vec3 d, float b) { return texture(uTex" + n + ", d, b); }\n";
+            replaceAll(code, "wfcSampleCubeBias(" + n + ", ", "wfcSCB_" + n + "(");
         } else {
             fs += "uniform sampler2D uTex" + n + "; uniform vec4 uUnpackMin" + n + "; uniform vec4 uUnpackScale" + n + ";\n";
             fs += "vec4 wfcS2D_" + n + "(vec2 uv) { return texture(uTex" + n + ", uv) * uUnpackScale" + n +
@@ -713,6 +790,8 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
     P.slots = slots;
     P.blend = blend; P.twoSided = twoSided; P.lit = lit; P.clip = clip;
+    P.sceneDepth = code.find("m.sceneDepth") != std::string::npos || code.find("wfcDepthBiasedAlpha(") != std::string::npos;
+    if (slots.size() > 12) LOG_WARN("wfc: %s uses %zu texture slots (unit 12 is scene depth)", key.c_str(), slots.size());
     UseProgram(id);
     for (size_t k = 0; k < slots.size(); ++k) {
         std::string n = std::to_string(k);
@@ -725,6 +804,8 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         P.slots[k].unit = (int)k;
     }
     Uniform1i(U("uLM0"), 13); Uniform1i(U("uLM1"), 14); Uniform1i(U("uLM2"), 15);
+    Uniform1i(U("uSceneDepth"), 12);
+    Uniform1i(U("uVLM"), 11);
     UseProgram(0);
     progs_.push_back(P);
     progIndex_[key] = (int)progs_.size() - 1;
@@ -745,6 +826,15 @@ std::string Pipeline::resolveBySourceName(const Material* m) const {
     return std::string();
 }
 
+static std::string materialKey(const Material* m) {
+    if (!m) return "<none>";
+    char buf[96];
+    std::snprintf(buf, sizeof buf, "|%d|%d|%.4f,%.4f,%.4f", (int)m->tex, (int)m->emissiveTexHandle, m->color.x, m->color.y,
+                  m->color.z);
+    return m->wfcName + "|" + m->sourceName + "|" + m->baseColorUri + "|" + m->emissiveUri + "|" + m->normalUri + "|" +
+           m->specularUri + buf;
+}
+
 int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool lightmapped) {
     std::string matName = matNameIn;
     if (matName.empty()) matName = resolveBySourceName(gm);
@@ -754,8 +844,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
     if (mit == mats_.end() && gm) {
         // No compiled original graph: build from the glTF material (character/weapon textures
         // baked by AssetTools from the original customization shader).
-        char buf[64]; std::snprintf(buf, sizeof buf, "|%p", (const void*)gm);
-        key += buf;
+        key += "|" + materialKey(gm);
     }
     auto pit = progIndex_.find(key);
     if (pit != progIndex_.end()) return pit->second;
@@ -778,7 +867,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             slots.push_back(sl);
         }
         int r = buildProgram(key, s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
-        if (r >= 0) return r;
+        if (r >= 0) { progs_[(size_t)r].original = true; return r; }
         LOG_WARN("wfc: material %s failed to build; using glTF fallback", matName.c_str());
     }
     // glTF fallback material
@@ -824,7 +913,16 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
 }
 
 // ------------------------------------------------------------------------- light environment
+namespace {
+struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0; } gStats;
+std::chrono::steady_clock::time_point gFrameStart;
+}
+
 void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env) const {
+    auto tEnv = std::chrono::steady_clock::now();
+    struct EnvTimer { std::chrono::steady_clock::time_point t; ~EnvTimer() {
+        gStats.envMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); } } envTimer{tEnv};
+    ++gStats.envCalls;
     for (auto& c : env.cube) c = {0, 0, 0};
     // [CONF] TnRobotForm/TnVehicleForm LightEnvironmentComponent TotalLightCount = 2 (TransGame.xxx):
     // the brightest 2 lights stay direct, everything else is folded into the ambient cube.
@@ -871,7 +969,13 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
         if (vis_ && c.l->castShadows) {
             core::Vec3 from = p + core::Vec3{0, 0.05f, 0};
             core::Vec3 to = c.l->type == 2 ? from + c.L * 300.0f : c.l->pos;
-            if (vis_(from, to)) vis = 0.0f;
+            auto q = [](float v) { return (uint64_t)(uint32_t)(int32_t)std::floor(v * 4.0f) & 0xFFFFull; };
+            uint64_t key = ((uint64_t)(c.l - lights_.data()) << 48) | (q(from.x) << 32) | (q(from.y) << 16) | q(from.z);
+            auto hit = visMemo_.find(key);
+            bool occluded;
+            if (hit != visMemo_.end()) occluded = hit->second;
+            else { ++gStats.visCalls; occluded = vis_(from, to); visMemo_.emplace(key, occluded); }
+            if (occluded) vis = 0.0f;
         }
         if (vis <= 0.0f) continue;
         if (env.n < maxDirect) {
@@ -975,9 +1079,38 @@ int Pipeline::upload(const MeshData& m) {
         if (bspMesh_ >= 0 && s.component.rfind("bsp:", 0) == 0) { g.drawsBsp = true; continue; }
         std::string key = s.component;
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        if (key.rfind("actor:", 0) == 0) {
+            auto ac = actorComponent_.find(key.substr(6));
+            if (ac != actorComponent_.end() && !ac->second.empty()) key = ac->second;
+        }
         auto lit = lightmaps_.find(key);
         bool lm = lit != lightmaps_.end() && m.hasUV1() && !std::getenv("WFC_NOLIGHTMAP");
-        if (lm) {
+        auto vit = vertexLMs_.find(key);
+        if (!lm && vit != vertexLMs_.end() && !std::getenv("WFC_NOLIGHTMAP") && !std::getenv("WFC_NOVERTEXLM") &&
+            s.indexCount > 0) {
+            uint32_t lo = UINT32_MAX, hi = 0;
+            for (uint32_t k = 0; k < s.indexCount; ++k) {
+                uint32_t vi = m.indices[s.indexOffset + k];
+                lo = std::min(lo, vi); hi = std::max(hi, vi);
+            }
+            const VertexLM& v = vit->second;
+            if ((int)(hi - lo + 1) == v.count) {
+                glGenTextures(1, &d.vlmTex);
+                glBindTexture(GL_TEXTURE_2D, d.vlmTex);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, v.count, 3, 0, GL_RGB, GL_FLOAT, v.rgb.data());
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                glBindTexture(GL_TEXTURE_2D, 0);
+                d.vlmBase = (int)lo;
+                for (int k = 0; k < 3; ++k)
+                    for (int c = 0; c < 3; ++c) d.lmScale[k][c] = v.scale[k][c];
+                lm = true;
+                ++nLM;
+            } else {
+                LOG_WARN("wfc: vertex lightmap %s: %d samples vs %u vertices; not bound", key.c_str(), v.count, hi - lo + 1);
+            }
+        }
+        if (lm && !d.vlmTex) {
             const LMRec& r = lit->second;
             for (int i = 0; i < 3; ++i) {
                 auto li = lmIndex_.find(r.coeff[i]);
@@ -1001,6 +1134,19 @@ int Pipeline::upload(const MeshData& m) {
         d.prog = programFor(matName, mat, lm);
         d.matName = matName;
         if (d.prog >= 0) ++nProg;
+        if (const char* dump = std::getenv("WFC_AUDIT_DUMP")) {   // ACTIVE side of tools/render/audit_map.py
+            static FILE* f = std::fopen(dump, "w");
+            if (f) {
+                const Program* P = d.prog >= 0 ? &progs_[(size_t)d.prog] : nullptr;
+                std::fprintf(f, "{\"mesh_id\":%zu,\"component\":\"%s\",\"source_mesh\":\"%s\",\"section\":%d,"
+                             "\"material\":\"%s\",\"program\":\"%s\",\"blend\":%d,\"lit\":%d,\"lightmapped\":%d,"
+                             "\"scene_depth\":%d,\"tris\":%u}\n",
+                             meshes_.size(), s.component.c_str(), s.sourceMesh.c_str(), s.sourceSection, matName.c_str(),
+                             !P ? "none" : P->original ? "original" : "gltf_fallback", P ? P->blend : -1, P && P->lit ? 1 : 0,
+                             lm ? 1 : 0, P && P->sceneDepth ? 1 : 0, d.count / 3);
+                std::fflush(f);
+            }
+        }
         // bounds
         bool init = false;
         for (uint32_t k = 0; k < d.count; ++k) {
@@ -1030,6 +1176,13 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(P.uMasked, P.blend == 1 ? 1 : 0);
     Uniform1f(P.uClip, P.clip);
     Uniform1i(P.uLit, P.lit ? 1 : 0);
+    Uniform1i(GetUniformLocation(P.id, "uBlend"), P.blend);
+    Uniform1i(GetUniformLocation(P.id, "uVertexLM"), 0);
+    Uniform2f(GetUniformLocation(P.id, "uNearFar"), znear_, zfar_);
+    Uniform2f(GetUniformLocation(P.id, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
+    Uniform1i(GetUniformLocation(P.id, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
+    if (P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_); }
+    VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
     static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
     Uniform1i(GetUniformLocation(P.id, "uDebug"), dbg);
     Uniform1i(P.uFogOn, fogOn_ ? 1 : 0);
@@ -1097,13 +1250,22 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                 case 4: glEnable(GL_BLEND); glBlendFunc(GL_DST_COLOR, GL_ZERO); glDepthMask(GL_FALSE); break;
                 default: glDisable(GL_BLEND); glDepthMask(GL_TRUE); break;
             }
-            if (s.lmTex[0] >= 0) {
+            if (s.vlmTex) {
+                Uniform4f(P.uLMCoord, 1, 1, 0, 0);
+                Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
+                Uniform1i(GetUniformLocation(P.id, "uVertexLM"), 1);
+                Uniform1i(GetUniformLocation(P.id, "uVLMBase"), s.vlmBase);
+                ActiveTexture(GL_TEXTURE0 + 11);
+                glBindTexture(GL_TEXTURE_2D, s.vlmTex);
+            } else if (s.lmTex[0] >= 0) {
                 Uniform4f(P.uLMCoord, s.lmCoord[0], s.lmCoord[1], s.lmCoord[2], s.lmCoord[3]);
                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
                 for (int i = 0; i < 3; ++i) {
                     ActiveTexture(GL_TEXTURE0 + 13 + i);
                     glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)s.lmTex[i]] ? lmTextures_[(size_t)s.lmTex[i]] : blackTex_);
                 }
+            } else if (!P.lit) {
+                Uniform4f(P.uLMCoord, 1, 1, 0, 0);
             } else {
                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
                 const LightEnv* env;
@@ -1139,6 +1301,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                 Uniform4fv(P.uLSpot, 3, &env->spot[0][0]);
             }
             glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+            ++gStats.draws;
+            if (!trans) depthDirty_ = true;
         }
     }
     glDisable(GL_BLEND);
@@ -1183,13 +1347,97 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
         Sub d;
         d.first = s.indexOffset; d.count = s.indexCount;
-        auto it = dynProgCache_.find(mat);
+        std::string mk = materialKey(mat);
+        auto it = dynProgCache_.find(mk);
         if (it == dynProgCache_.end())
-            it = dynProgCache_.emplace(mat, programFor(mat ? mat->wfcName : std::string(), mat, false)).first;
+            it = dynProgCache_.emplace(mk, programFor(mat ? mat->wfcName : std::string(), mat, false)).first;
         d.prog = it->second;
         g.subs.push_back(d);
     }
     drawSubs(g, model, true);
+}
+
+// ------------------------------------------------------------------------- effects
+// Scene depth as seen by translucency: copied from the HDR target whenever opaque geometry was drawn
+// since the last copy (UE3 resolves scene depth before the translucent pass).
+void Pipeline::ensureSceneDepth() {
+    if (!depthDirty_ || !depthCopyFbo_) return;
+    BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+    BindFramebuffer(GL_DRAW_FRAMEBUFFER, depthCopyFbo_);
+    BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    depthDirty_ = false;
+}
+
+std::string Pipeline::resolveName(const std::string& name) const {
+    if (mats_.count(name)) return name;
+    Material tmp;
+    tmp.sourceName = name.substr(name.rfind('.') == std::string::npos ? 0 : name.rfind('.') + 1);
+    return resolveBySourceName(&tmp);
+}
+
+bool Pipeline::drawFx(int id, const core::Mat4& model, const float color[4]) {
+    if (id < 0 || (size_t)id >= meshes_.size()) return false;
+    GpuMesh& g = meshes_[(size_t)id];
+    for (const Sub& s : g.subs)
+        if (s.prog < 0 || !progs_[(size_t)s.prog].original) return false;
+    std::copy(color, color + 4, fxColor_);
+    drawSubs(g, model, true);
+    std::fill(fxColor_, fxColor_ + 4, 1.0f);
+    VertexAttrib4f(5, 1, 1, 1, 1);
+    return true;
+}
+
+bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
+    if (!material || !sp || n == 0) return false;
+    auto it = spriteProg_.find(material);
+    if (it == spriteProg_.end()) {
+        std::string nm = resolveName(material);
+        int prog = nm.empty() ? -1 : programFor(nm, nullptr, false);
+        if (prog >= 0 && !progs_[(size_t)prog].original) prog = -1;
+        if (prog < 0) LOG_WARN("wfc: particle material %s not compiled; textured fallback", material);
+        it = spriteProg_.emplace(material, prog).first;
+    }
+    if (it->second < 0) return false;
+    if (!spriteVao_) {
+        GenVertexArrays(1, &spriteVao_);
+        GenBuffers(1, &spriteVbo_); GenBuffers(1, &spriteCbo_); GenBuffers(1, &spriteIbo_);
+    }
+    std::vector<float> v(n * 4 * 14), col(n * 4 * 4);
+    std::vector<uint32_t> idx(n * 6);
+    core::Vec3 N = core::normalize(facing);
+    for (size_t i = 0; i < n; ++i) {
+        const Sprite& s = sp[i];
+        core::Vec3 T = core::normalize(s.c[1] - s.c[0]);   // +U across the quad
+        for (int k = 0; k < 4; ++k) {
+            float* o = &v[(i * 4 + (size_t)k) * 14];
+            o[0] = s.c[k].x; o[1] = s.c[k].y; o[2] = s.c[k].z;
+            o[3] = N.x; o[4] = N.y; o[5] = N.z;
+            o[6] = T.x; o[7] = T.y; o[8] = T.z; o[9] = 1.0f;
+            o[10] = s.uv[k][0]; o[11] = s.uv[k][1]; o[12] = 0; o[13] = 0;
+            std::copy(s.color, s.color + 4, &col[(i * 4 + (size_t)k) * 4]);
+        }
+        uint32_t b = (uint32_t)(i * 4);
+        uint32_t q[6] = {b, b + 1, b + 2, b, b + 2, b + 3};
+        std::copy(q, q + 6, &idx[i * 6]);
+    }
+    BindVertexArray(spriteVao_);
+    BindBuffer(GL_ARRAY_BUFFER, spriteVbo_);
+    BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STREAM_DRAW);
+    setupAttribs();
+    BindBuffer(GL_ARRAY_BUFFER, spriteCbo_);
+    BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(col.size() * sizeof(float)), col.data(), GL_STREAM_DRAW);
+    EnableVertexAttribArray(5); VertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 0, (void*)0);
+    BindBuffer(GL_ELEMENT_ARRAY_BUFFER, spriteIbo_);
+    BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(idx.size() * 4), idx.data(), GL_STREAM_DRAW);
+    BindVertexArray(0);
+    GpuMesh g;
+    g.vao = spriteVao_;
+    Sub d;
+    d.first = 0; d.count = (uint32_t)idx.size(); d.prog = it->second;
+    g.subs.push_back(d);
+    drawSubs(g, core::Mat4::identity(), true);
+    return true;
 }
 
 // ------------------------------------------------------------------------- frame
@@ -1214,6 +1462,15 @@ void Pipeline::ensureTargets(int w, int h) {
     FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex_, 0);
     FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTex_, 0);
     if (CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) LOG_ERROR("wfc: HDR framebuffer incomplete");
+    if (!depthCopyFbo_) { GenFramebuffers(1, &depthCopyFbo_); glGenTextures(1, &depthCopyTex_); }
+    glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    BindFramebuffer(GL_FRAMEBUFFER, depthCopyFbo_);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthCopyTex_, 0);
+    glDrawBuffer(GL_NONE); glReadBuffer(GL_NONE);
     // quarter-res bloom ping-pong targets
     int bw = std::max(w / 4, 1), bh = std::max(h / 4, 1);
     for (int i = 0; i < 2; ++i) {
@@ -1235,6 +1492,7 @@ void Pipeline::ensureTargets(int w, int h) {
 
 void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     ++frameNo_;
+    gFrameStart = std::chrono::steady_clock::now();
     static auto t0 = std::chrono::steady_clock::now();
     time_ = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
     vpW_ = w; vpH_ = h;
@@ -1244,6 +1502,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     // Clear to the fog in-scatter colour: what an infinitely distant ray converges to.
     glClearColor(fogIn_.x, fogIn_.y, fogIn_.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    depthDirty_ = true;
     camPos_ = cam.pos;
     znear_ = cam.znear; zfar_ = cam.zfar;
     viewProj_ = cam.proj() * cam.view();
@@ -1260,12 +1519,22 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
 }
 
 void Pipeline::endFrame() {
+    gStats.renderMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gFrameStart).count();
     if (std::getenv("WFC_RENDERSTATS")) {          // CPU frame-to-frame time, logged every 120 frames
+        auto g0 = std::chrono::steady_clock::now();   // diagnostics only: wait for the GPU on the scene
+        glFinish();
+        gStats.gpuMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - g0).count();
         static auto last = std::chrono::steady_clock::now();
         static int frames = 0; static double acc = 0;
         auto now = std::chrono::steady_clock::now();
         acc += std::chrono::duration<double, std::milli>(now - last).count(); last = now;
-        if (++frames == 120) { LOG_INFO("wfc: avg frame %.2f ms (%.0f fps)", acc / frames, 1000.0 * frames / acc); frames = 0; acc = 0; }
+        if (++frames == 120) {
+            LOG_INFO("wfc: avg frame %.2f ms (%.0f fps); scene submit %.2f ms, gpu wait %.2f ms; per frame: %.1f draws, "
+                     "%.1f light envs (%.2f ms), %.1f visibility traces",
+                     acc / frames, 1000.0 * frames / acc, gStats.renderMs / 120.0, gStats.gpuMs / 120.0, gStats.draws / 120.0, gStats.envCalls / 120.0, gStats.envMs / 120.0,
+                     gStats.visCalls / 120.0);
+            frames = 0; acc = 0; gStats = RenderStats{};
+        }
     }
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);

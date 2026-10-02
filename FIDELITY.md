@@ -17,6 +17,37 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 — RENDERING FIDELITY (2026-10-02, branch agents/rendering)
+Verification tooling: `tools/render/verify_permutations.py` diffs every translated graph's parameter reads against
+the parameter list of the material's COMPILED FMaterialResource (uniform expressions in the cooked native tail):
+30 → **187 / 202 materials match** (remaining: 10 unknown = unnamed "None" parameters or textures the original
+compiler eliminated; 1 differs = DeadBodies_Mat_INST, static switches not decoded). `tools/render/audit_map.py`
+writes `work/render/<Map>/map_audit.json` (EXPECTED from cooked levels + AssetTools exports vs ACTIVE from the
+renderer's upload dump `WFC_AUDIT_DUMP`).
+
+| Item | Original (WFC) | Source | Conf | Rebuild |
+|---|---|---|---|---|
+| CameraVector / ReflectionVector space | `CoordinateSpace = CS_World` on 11/9 nodes (vehicle, robot, world reflections) | expression props | CONF | **FIXED**: world-space vectors (were tangent) |
+| Cube reflection LOD | WFC `TextureSampleParameterCube.LODBias` input (Reflection_LOD_Scale) | expression props | CONF | **FIXED**: texture(…, bias) |
+| Fresnel exponent input | WFC `Fresnel.Exp` input overrides Exponent | expression props | CONF | **FIXED** |
+| Static switch decode | MIC native tail arrays validated against real StaticSwitchParameter names | cooked MICs | CONF | **FIXED** (bogus `_DialogEventManager` records rejected) |
+| Lazy function inputs | unused material-function inputs emit no code (switch-dependent reads) | compiled permutations | CONF | **FIXED** |
+| DepthBiasedAlpha | Alpha·saturate((SceneDepth−PixelDepth)/max((1−Bias)·BiasScale,.001)); WFC BiasScaleInput | UE3 semantics + props | MED | **APPLIED**: scene-depth copy (blit when opaque drawn), view-Z depths |
+| PixelDepth | view-space Z (UE units) | UE3 semantics | MED | **FIXED** (was eye distance) |
+| ScreenPosition (bScreenAlign false, all 16 nodes) | clip-space position; UE3 infinite-far: w = view Z, z = view Z − near | UE3 semantics | MED | **FIXED** (was fragcoord, z = 0 ⇒ Boostermaterial_02 near-fade made the flame black; light-volume materials affected too) |
+| Blend-mode fog | additive: c·fog.a; modulate: lerp(1,c,fog.a); others c·fog.a+inscatter | UE3 base pass | MED | **APPLIED** (additive surfaces no longer gain fog colour) |
+| Vehicle / weapon FX materials | emitter materials (ParticleModuleRequired.Material) of bumble_boost_small1_FX, CarHover_A_01_FX, Truck_ram_FX, weapon FX: 27 graphs | cooked ParticleSystems | CONF | **COMPILED** (`tools/render/fx_materials.txt`); mesh emitters + sprites shaded by them (`ParticleBatch.material`, drawMeshFx) |
+| MeshEmitterVertexColor | compiled as VectorParameter "MeshEmitterVertexColor" = particle colour | compiled permutations | CONF | particle colour → vertex colour |
+| Ram_model_MAT rim | WFC ShaderCode `saturate(pow(saturate(abs(dot(CameraVector(CS_World), Normal))*1.5),2))` | expression props | CONF graph / PROV semantics | reproduced literally (Normal node = tangent normal, as for all other users); brightness depends on view elevation — confirm with microcode |
+| Actor-placed props | StaticMeshActor / StaticInterpActor nodes carry only `actor` in world.glb | world.glb, lighting records | CONF | **FIXED**: actor → its single StaticMeshComponent ⇒ 38 submeshes now use their baked lightmaps |
+| Vertex lightmaps (LMT_1D) | 24 components (Arch_4096, Core_RoutingWallA, PowerTubeCircle, CoolantSurfaceHole, declogo): bulk FQuantizedDirectionalLightSample (3 × FColor A,R,G,B; per-channel normalized to 255) + ScaleVectors[3] | cooked StaticMeshComponent native tail | CONF layout / PROV gamma | **APPLIED**: decoded pow(b/255, 2.2)·scale through the 3-coefficient directional formula (vertex count matches LOD0 for all 24) |
+| BSP elements without lightmaps | 360/540 elements: LightMapType 0, no IrrelevantLights / ShadowMaps / light GUIDs | cooked FModelComponent | CONF data / PROV runtime | dynamic light environment (assumed UE3 uncached interactions) — audit status `unknown` |
+| HUD crosshair (Ion Blaster) | Hud_GFX.gfx `mc_crosshairIonBlaster`: 3 × bitmap 400 (32×16, fill-stretched to 30×12) at 0/120/240°, anchor stage (560,360) of 1120×720; prong `_y` eases (0.2 s) to −300·WeaponSpread; tint by target type 0x50B5D5 / 0xFF3333 / white | GFx tags + AVM1 (sprite 404, 621) | CONF | **APPLIED** (`IRenderer::setReticle`); scale mode + easeout curve PROV |
+| Fine aim presentation | `NotifyFineAimChanged`: scope only for HeavyPistol/BurstRifle/SniperRifle; Ion Blaster → `hideScope` (crosshair unchanged; prongs follow WeaponSpread) | AVM1 sprite 621 | CONF | matches: no scope for the Ion Blaster |
+| Transformed-vehicle / robot materials (mottled grey-pink vehicle, wrong energon after transform) | each form's own MICs | renderer bug | CONF | **FIXED**: dynamic-mesh program cache was keyed by Material* address; the character pose buffer reuses storage across forms, so the vehicle got the robot's programs (robot textures on vehicle UVs). Now keyed by material content |
+| FX GL1 stand-ins | Systems' per-mesh intensity (LightCylinder 0.1 = DustPower) double-applied once the real graph runs | — | CONF | `IRenderer::evaluatesFxMaterials()`; VehicleFx drops the stand-in when true (hover light cones visible again) |
+| Light-env visibility traces | per-light traces from the object (static lights/world) | UE3 light env | CONF | memoized per (light, 0.25 m cell); unlit (FX) programs skip the env entirely |
+
 ## PASS 9 — CHARACTER CUSTOMIZATION (2026-10-01, branch agents/rendering)
 | Item | Original (WFC) | Source | Conf | Rebuild |
 |---|---|---|---|---|

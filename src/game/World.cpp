@@ -675,6 +675,12 @@ void World::draw(render::IRenderer& r) const {
     fx_.draw(r);
     vehicleFx_.draw(r);
 
+    // HUD crosshair state (presentation only; drawn by the renderer from the original HUD movie).
+    render::IRenderer::ReticleState reticle;
+    reticle.visible = player_.pawn().hasWeapon();
+    reticle.weaponSpread = player_.pawn().weapon().spread;
+    r.setReticle(reticle);
+
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {
         auto wireBox = [&](core::Vec3 c, core::Vec3 half, core::Vec3 col) {

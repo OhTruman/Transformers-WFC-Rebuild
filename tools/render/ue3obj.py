@@ -84,6 +84,18 @@ class Repo:
         return p, p.data[e['serial_offset'] + used:e['serial_offset'] + e['serial_size']]
 
     # ------------------------------------------------------------------ MIC static params
+    def switch_names(self):
+        """ParameterName of every StaticSwitchParameter expression in the loaded packages."""
+        if getattr(self, '_switch_names', None) is None:
+            out = set()
+            for k, (pi, ix) in self.index.items():
+                pk = self.pkgs[pi]
+                if pk.class_name(pk.exports[ix - 1]) == 'MaterialExpressionStaticSwitchParameter':
+                    nm = (self.obj(pk.object_path(ix)) or {}).get('ParameterName')
+                    if nm: out.add(nm)
+            self._switch_names = out
+        return self._switch_names
+
     def mic_static_params(self, path):
         """Decode the static parameter set that follows the compiled static-permutation resource
         in a MaterialInstanceConstant's native tail. Returns ({switch: bool}, {mask: (r,g,b,a)}).
@@ -94,6 +106,7 @@ class Repo:
         where such an array parses cleanly and names are StaticSwitchParameter names."""
         p, t = self.native_tail(path)
         names = p.names
+        valid = self.switch_names()
         best = None
         for o in range(0, len(t) - 4, 4):
             n = struct.unpack_from('>i', t, o)[0]
@@ -104,6 +117,8 @@ class Repo:
                 b = o + 4 + 32 * k
                 ni, nn, val, ovr = struct.unpack_from('>iiII', t, b)
                 if not (0 <= ni < len(names)) or nn != 0 or val > 1 or ovr > 1:
+                    ok = False; break
+                if names[ni] not in valid:          # must be a real StaticSwitchParameter name
                     ok = False; break
                 sw[names[ni]] = (bool(val), bool(ovr))
             if not ok: continue

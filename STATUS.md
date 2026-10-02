@@ -602,6 +602,17 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 03 (2026-10-02, agents/rendering)
+- Material translation verified against compiled permutations: 187/202 match (`tools/render/verify_permutations.py`).
+- Vehicle/robot: CS_World camera/reflection vectors, cube LOD bias, Fresnel Exp; vehicle + robot MICs match their compiled permutations.
+- Boost/hover/ram FX shaded by their original emitter materials (27 FX graphs compiled; soft depth fade, panners, blend-mode fog).
+- Streets audit: `python tools/render/audit_map.py MP_IAC_Streets work/render/MP_IAC_Streets` (needs a `WFC_AUDIT_DUMP` run) → map_audit.json.
+- Fixed: actor-placed props lightmaps (38 submeshes), vertex lightmaps (24 components), ScreenPosition, PixelDepth.
+- Fixed: mottled grey/pink vehicle after transform (program cache keyed by Material* reused across robot/vehicle pose buffers).
+- HUD Ion Blaster crosshair from Hud_GFX.gfx (spread-driven prongs); no scope in fine aim (per HUD script).
+- Renderer cost of shooting: light-env visibility memo + no env for unlit FX (env 3.5 ms → 0.4 ms/frame); the remaining ~55 ms/frame while firing is outside the renderer (simulation).
+- Captures: `bash tools/render/capture.sh <outdir>`; env: `WFC_RENDERSTATS`, `WFC_AUDIT_DUMP=<file>`, `WFC_NOVERTEXLM`.
+
 ## FIDELITY PASS 1 (2026-10-01) — recover original WFC behaviour from authored data
 Evidence root: cooked UE3 config `ExtractedAssets/config/Coalesced_ini/.../Cooked/*.ini`,
 map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.json`.
