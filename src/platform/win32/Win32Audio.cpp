@@ -35,7 +35,7 @@ uint32_t rd32(const uint8_t* p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((u
 uint16_t rd16(const uint8_t* p) { return (uint16_t)(p[0] | (p[1] << 8)); }
 
 // Decode a PCM WAV and resample/rechannel to kRate/kChannels int16 interleaved.
-bool loadWav(const std::string& path, std::vector<int16_t>& out) {
+bool loadWav(const std::string& path, std::vector<int16_t>& out, int* srcRate = nullptr) {
     std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f) return false;
     std::streamoff n = f.tellg();
@@ -59,6 +59,7 @@ bool loadWav(const std::string& path, std::vector<int16_t>& out) {
         off += 8 + sz + (sz & 1);
     }
     if (!data || ch < 1 || rate < 1) return false;
+    if (srcRate) *srcRate = rate;
     if (fmt != 1 || bits != 16) { LOG_WARN("wav: unsupported fmt=%d bits=%d %s", fmt, bits, path.c_str()); return false; }
 
     const int16_t* src = reinterpret_cast<const int16_t*>(data);
@@ -79,6 +80,11 @@ bool loadWav(const std::string& path, std::vector<int16_t>& out) {
 
 float mbToGain(float mb) { return mb <= -9999.0f ? 0.0f : std::pow(10.0f, mb / 2000.0f); }
 float dbGain(float db) { return std::pow(10.0f, db / 20.0f); }
+// WFC dBToLinear (0x82CBED00) [CONF]: clamp to [-96, 0] dB, -96 -> silence; never above unity.
+float dbToLinear(float x) {
+    x = std::min(0.0f, std::max(-96.0f, x));
+    return x > -96.0f ? (float)std::pow(10.0, (double)x * 0.05) : 0.0f;
+}
 
 // MASTER_WET environment DSP: the zone preset's Echo followed by an FMOD-style I3DL2 SFX reverb
 // (send). Structure [MED]: HF shelf on the send (RoomHF at HFReference), a tapped early-reflection
@@ -235,8 +241,16 @@ private:
     float thr_ = 1.0f, makeup_ = 1.0f, att_ = 0.0f, rel_ = 0.0f, env_ = 0.0f;
 };
 
+// A loaded sample: PCM at kRate plus its loop region in output frames (whole sample unless set).
+struct Sample {
+    std::vector<int16_t> pcm;
+    int srcRate = 0;
+    double loopStart = 0.0, loopEnd = -1.0;   // loopEnd < 0: wrap at the sample end
+};
+
 struct Voice {
     const std::vector<int16_t>* data = nullptr;
+    const Sample* sample = nullptr;
     double pos = 0.0;             // frame position (fractional when pitched)
     double rate = 1.0;            // playback rate (pitch)
     float vol = 1.0f;
@@ -298,10 +312,10 @@ public:
             auto it = loaded_.find(path);
             if (it != loaded_.end()) return it->second;
         }
-        std::vector<int16_t> pcm;                      // decode outside the lock
-        if (!loadWav(path, pcm)) return kInvalidSound;
+        Sample smp;                                    // decode outside the lock
+        if (!loadWav(path, smp.pcm, &smp.srcRate)) return kInvalidSound;
         std::lock_guard<std::mutex> lk(mx_);
-        sounds_.push_back(std::move(pcm));             // deque: existing voices' data pointers stay valid
+        sounds_.push_back(std::move(smp));             // deque: existing voices' data pointers stay valid
         loaded_[path] = (Sound)(sounds_.size() - 1);
         return (Sound)(sounds_.size() - 1);
     }
@@ -321,7 +335,7 @@ public:
         Voice* v = freeVoice(index);
         if (!v) return nullptr;
         int gen = (v->gen + 1) & 0x7FFFF;
-        *v = Voice{}; v->gen = gen; v->data = &sounds_[(size_t)s]; v->active = true;
+        *v = Voice{}; v->gen = gen; v->data = &sounds_[(size_t)s].pcm; v->sample = &sounds_[(size_t)s]; v->active = true;
         return v;
     }
 
@@ -376,6 +390,15 @@ public:
         if ((size_t)i >= voices_.size() || voices_[(size_t)i].gen != gen || !voices_[(size_t)i].active) return false;
         const Voice& v = voices_[(size_t)i];
         o.dist = v.dDist; o.pan = v.dPan; o.atten = v.dAtten; o.gainL = v.gL; o.gainR = v.gR;
+        return true;
+    }
+    bool setLoopPoints(Sound s, uint32_t start, uint32_t end) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        if (s < 0 || (size_t)s >= sounds_.size() || end <= start) return false;
+        Sample& smp = sounds_[(size_t)s];
+        double k = (double)kRate / (double)std::max(1, smp.srcRate);    // source frames -> output frames
+        smp.loopStart = (double)start * k;
+        smp.loopEnd = std::min((double)(smp.pcm.size() / 2 - 1), (double)(end + 1) * k);
         return true;
     }
     bool isPlaying(audio::Voice h) const override {
@@ -481,7 +504,7 @@ private:
         }
         core::Vec3 dir = dist > 1e-4f ? d * (1.0f / dist) : lfwd_;
         float f = core::dot(lfwd_, dir);
-        if (f < 0.0f) atten *= 1.0f - (1.0f - dbGain(v.rearAttenDb)) * (-f);     // behind the listener
+        if (f < 0.0f) atten *= 1.0f - (1.0f - dbToLinear(v.rearAttenDb)) * (-f);     // behind the listener
         float amount = 1.0f;                                  // k3D: fully 3D
         if (v.spatial == 2 || v.spatial == 3) {               // kSmartPan / kSmartPan_PreferPlayer
             float ds = v.spatial == 3 ? core::length(prefLoc_ - v.wpos) : dist;
@@ -492,7 +515,7 @@ private:
                 float t = core::clampf((core::clampf(ds, lo, hi) - lo) / (hi - lo), 0.0f, 1.0f);
                 amount = d2 < d3 ? t : 1.0f - t;
             }
-            atten *= 1.0f - (1.0f - dbGain(v.panAtten3DDb)) * amount;      // SmartPanGain
+            atten *= 1.0f - (1.0f - dbToLinear(v.panAtten3DDb)) * amount;      // SmartPanGain
         }
         g *= atten;
         float pan = core::clampf(core::dot(dir, lright_), -1.0f, 1.0f) * amount;
@@ -521,6 +544,12 @@ private:
             size_t frames = s.size() / 2;
             for (int f = 0; f < kBlockFrames; ++f) {
                 size_t fi = (size_t)v.pos;
+                // Loop region: the sample's FSB loop points when known, else its whole length.
+                const double lend = v.loop && v.sample->loopEnd > 0.0 ? v.sample->loopEnd : (double)(frames - 1);
+                if (v.loop && v.pos >= lend && lend > v.sample->loopStart) {
+                    v.pos = v.sample->loopStart + std::fmod(v.pos - lend, lend - v.sample->loopStart);
+                    fi = (size_t)v.pos;
+                }
                 if (fi + 1 >= frames) {
                     if (v.loop && frames > 2) { v.pos -= (double)(frames - 1); fi = (size_t)v.pos; }
                     else { v.active = false; break; }
@@ -570,7 +599,7 @@ private:
     std::vector<float> dry_, wet_;
     std::map<std::string, Sound> loaded_;
     core::Vec3 lpos_{0, 0, 0}, lfwd_{0, 0, -1}, lright_{1, 0, 0};
-    std::deque<std::vector<int16_t>> sounds_;
+    std::deque<Sample> sounds_;
     mutable std::mutex mx_;
     std::thread thread_;
     std::atomic<bool> run_{false};

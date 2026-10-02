@@ -18,6 +18,7 @@
 #include <vector>
 #include "audio/Audio.h"
 #include "core/Math.h"
+#include "game/SoundMixer.h"
 
 namespace assets { class Json; }
 
@@ -100,6 +101,14 @@ public:
     // Add the cue graphs of a map's audio.json "cues" object (BL_LVL_* map bank). Returns the count.
     int addCues(const assets::Json& cues, const std::string& contentRoot);
     bool hasCue(const char* name) const { return findCue(name) >= 0; }
+    // The FmodAudioDevice mixer (presets, categories, MASTER_WET environment).
+    SoundMixer& mixer() { return mixer_; }
+    // FSB sample-header loop points (AssetTools: {"<pkg>/<wave>.wav": [loopStartFrame, loopEndFrame], ...},
+    // source-file sample frames, end inclusive). Looping is per wave event (bLooping -> FMOD LOOP_NORMAL);
+    // there is no cue-level loop region. Waves without an entry wrap at the sample end, which is only right
+    // when the FSB header has no loop points [UNKNOWN until AssetTools]. Returns the entries applied, -1 if
+    // the file is absent.
+    int loadLoopPoints(const std::string& jsonPath);
     const cuedata::CueDef* cueDef(const char* name) const;
     void setMaxConcurrent(const char* name, int n) { int c = findCue(name); if (c >= 0) cues_[(size_t)c].maxConcurrent = n; }
 
@@ -124,7 +133,7 @@ public:
     bool instancePos(int instance, core::Vec3& out) const;
 
 private:
-    struct VoiceRef { audio::Voice v; int event; float baseDb, baseSt; };
+    struct VoiceRef { audio::Voice v; int event; float baseGain, baseSt; };
     struct Pending { int inst; float t; int event; };
     struct Instance {
         int cue; int id; float age; core::Vec3 pos; float distM, param;
@@ -132,6 +141,7 @@ private:
         float volume = 1.0f;
         float occl = 0.0f, occlTarget = 0.0f, occlCheck = 0.0f;   // 0 = clear .. 1 = fully occluded
         float fadeInLen = 0.0f;                                   // FadeIn ramp over the instance age
+        float lastGain = 1.0f;                                    // gainOf() at the last refresh
         std::vector<VoiceRef> voices;
         float fade = -1.0f, fadeLeft = 0.0f;   // fade-out duration / remaining (fade < 0 = none)
         bool looping = false;
@@ -144,15 +154,11 @@ private:
     bool resolve(Instance& in);
     static float level(const Instance& in);
     float paramFor(const Instance& in) const;
-    // Mixer presets (SoundMixerProperties.MixerPresets + per-category DSPPreset volume) activated by cues.
-    // Ref-counted per preset (enabled on cue play, disabled when that instance ends) [CONF native].
-    struct ActivePreset { int preset; int refs; float t; float w; bool fadingOut; };
-    std::vector<ActivePreset> presets_;
-    void activatePreset(const std::string& name);
-    void deactivatePreset(const std::string& name);
-    void retire(size_t liveIndex);              // remove an instance (stop voices, unregister its preset)
-    float categoryGain(const std::string& category) const;
-    float gainOf(const Instance& in) const { return level(in) * categoryGain(cues_[(size_t)in.cue].category); }
+    void retire(size_t liveIndex);              // remove an instance (stop voices, disable its mixer preset)
+    // Instance level x the mixer's category volume (linear amplitude) for the cue's category.
+    float gainOf(const Instance& in) const { return level(in) * mixer_.categoryVolume(cues_[(size_t)in.cue].category); }
+    SoundMixer mixer_;
+    std::string contentRoot_;
     Instance* find(int id);
 
     audio::IAudio* audio_ = nullptr;

@@ -7,6 +7,8 @@
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 
 namespace game {
 using namespace cuedata;
@@ -28,27 +30,22 @@ constexpr float kOcclCheck = 0.25f;      // [CONF] Xe-TransEngine.ini AudioDevic
 constexpr float kOcclDb = -6.0f;         // [CONF] Default__PhysicalMaterial AudioOcclusionVolume (61/63 materials)
 constexpr float kOcclTime = 0.5f;        // [CONF] Default__PhysicalMaterial AudioOcclusionTransitionTime
 
-// [CONF] SoundConfig.SoundMixerProperties: the mixer presets slice cues play (PlayMixerPreset), their
-// MixerPresets entry (Priority, FadeInTime, Duration, FadeOutTime) and the categories whose DSPPreset of
-// that name differs from Default (Volume).
-// [CONF native, FmodAudioDevice 0x8277FE88 / mixer vt+0x24/+0x28] a cue's preset is enabled when its
-// AudioComponent plays and disabled when it stops; presets are ref-counted per name, kept sorted by
-// Priority; re-enabling an active preset bumps the ref-count and resets its elapsed timer.
-// [UNKNOWN, native applier not recovered] the per-tick fade curve (here linear over FadeInTime /
-// FadeOutTime), how overlapping presets combine per category (here: the highest Priority one), and
-// what Duration > 0 does on expiry (not applied).
-struct MixerPreset { const char* name; float priority, fadeIn, duration, fadeOut; const char* category; float volume; };
-const MixerPreset kMixerPresets[] = {
-    {"VEHICLE_JUMP", 270.0f, 0.3f, 1.0f, 1.0f, "SFX_WET_VEH_ENGINE", 0.1258925f},       // -18 dB (DRIVE_JUMP_START)
-    {"VEHICLE_BOOST_END", 264.0f, 0.2f, 1.0f, 3.0f, "SFX_WET_VEH_ENGINE", 0.6309574f},  // -4 dB (BOOST_END)
-};
-constexpr int kPresetCount = (int)(sizeof(kMixerPresets) / sizeof(kMixerPresets[0]));
 
 
 float frand() { return (float)std::rand() / (float)RAND_MAX; }
 float randRange(float a, float b) { return a + (b - a) * frand(); }   // ranges may be authored inverted
-float dbToGain(float db) { return std::pow(10.0f, db / 20.0f); }
-float stToRate(float st) { return std::pow(2.0f, st / 12.0f); }
+float dbToGain(float db) { return std::pow(10.0f, db / 20.0f); }   // root Volume: clamp UNKNOWN (A8), unclamped
+// [CONF native dBToLinear 0x82CBED00] x = clamp(x, -96, 0); x > -96 ? 10^(x/20) : 0. Used for wave-event
+// Volume, random volume variation, rear / SmartPan / occlusion attenuation. Never boosts above unity.
+float dbToLinear(float x) {
+    x = std::min(0.0f, std::max(-96.0f, x));
+    return x > -96.0f ? (float)std::pow(10.0, (double)x * 0.05) : 0.0f;
+}
+// [CONF native SemitonesToRatio 0x82CBEE20] clamp(s, -36, 36); 2^(s/12).
+float stToRate(float st) {
+    st = std::min(36.0f, std::max(-36.0f, st));
+    return (float)std::pow(2.0, (double)st / 12.0);
+}
 
 float evalCurve(const std::vector<CurvePt>& c, float x, float empty) {
     if (c.empty()) return empty;
@@ -112,6 +109,7 @@ void SoundCues::loadWaves(size_t c, const std::string& contentRoot) {
 
 void SoundCues::load(audio::IAudio* a, const std::string& contentRoot) {
     audio_ = a;
+    contentRoot_ = contentRoot;
     cues_.assign(std::begin(kCues), std::end(kCues));
     waves_.clear();
     if (!a) return;
@@ -121,6 +119,24 @@ void SoundCues::load(audio::IAudio* a, const std::string& contentRoot) {
         for (size_t e = 0; e < cues_[c].events.size(); ++e) { ok += (int)waves_[c][e].size(); total += (int)cues_[c].events[e].waves.size(); }
     }
     LOG_INFO("sound cues: %zu cues, %d/%d waves loaded", cues_.size(), ok, total);
+}
+
+int SoundCues::loadLoopPoints(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) { LOG_INFO("sound cues: no FSB loop metadata (%s) - loop points UNKNOWN, looping waves wrap at the sample end", path.c_str()); return -1; }
+    std::stringstream ss; ss << f.rdbuf();
+    assets::Json root;
+    if (!assets::Json::parse(ss.str(), root)) { LOG_WARN("sound cues: bad json %s", path.c_str()); return -1; }
+    int applied = 0, total = 0;
+    for (const auto& kv : root.obj) {
+        ++total;
+        const assets::Json& v = kv.second;
+        if (!audio_ || v.size() < 2) continue;
+        audio::Sound s = audio_->load(contentRoot_ + kv.first);     // cached by path
+        if (s != audio::kInvalidSound && audio_->setLoopPoints(s, (uint32_t)v[0].asInt(0), (uint32_t)v[1].asInt(0))) ++applied;
+    }
+    LOG_INFO("sound cues: FSB loop points %d/%d applied (%s)", applied, total, path.c_str());
+    return applied;
 }
 
 // A map bank's cue graphs as AssetTools vs_audio.py writes them: {name: {tree: {class, params,
@@ -252,7 +268,7 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
             stop(victim, 0.0f);
         }
     }
-    if (!cd.mixerPreset.empty()) activatePreset(cd.mixerPreset);     // SoundNodeRoot.PlayMixerPreset
+    if (!cd.mixerPreset.empty()) mixer_.enable(cd.mixerPreset);      // SoundNodeRoot.PlayMixerPreset (AC play)
     // A new instance starts with the current occlusion (no fade-in from clear).
     if (cd.occlusion && occlusion_ && in.owner != kUI && cd.spatial != Spatial::TwoD) {
         in.occl = in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
@@ -277,10 +293,11 @@ void SoundCues::launch(Instance& in, int e) {
     audio::Sound s = w[(size_t)(std::rand() % (int)w.size())];
     VoiceRef ref;
     ref.event = e;
-    ref.baseDb = cd.volDb + randRange(cd.volVarMin, cd.volVarMax) + ed.volDb + randRange(ed.volVarMin, ed.volVarMax);
+    ref.baseGain = dbToGain(cd.volDb) * dbToLinear(randRange(cd.volVarMin, cd.volVarMax)) *
+                   dbToLinear(ed.volDb) * dbToLinear(randRange(ed.volVarMin, ed.volVarMax));
     ref.baseSt = cd.pitchSt + randRange(cd.pitchVarMin, cd.pitchVarMax) + ed.pitchSt + randRange(ed.pitchVarMin, ed.pitchVarMax);
     float x = paramFor(in);
-    float gain = dbToGain(ref.baseDb) * ed.stereoGain * gainOf(in) * dbToGain(kOcclDb * in.occl) *
+    float gain = ref.baseGain * ed.stereoGain * gainOf(in) * dbToLinear(kOcclDb * in.occl) *
                  evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f);
     if (gain <= 0.0f && !ed.loop) return;          // silent one-shot layer (distance layering)
     audio::VoiceParams p;
@@ -302,7 +319,7 @@ void SoundCues::launch(Instance& in, int e) {
     static const bool log = std::getenv("WFC_CUELOG") != nullptr;
     if (log)
         LOG_INFO("CUE %s ev%d t=%.3f wave=%d gain=%.3f (%.1f dB, param %.2f) pitch=%.3f loop=%d voice=%d owner=%d occl=%.2f pos=%.2f,%.2f,%.2f",
-                 cd.name.c_str(), e, in.age, s, p.volume, ref.baseDb, x, p.pitch, (int)ed.loop, ref.v, in.owner, in.occl,
+                 cd.name.c_str(), e, in.age, s, p.volume, 20.0f * std::log10(std::max(1e-6f, ref.baseGain)), x, p.pitch, (int)ed.loop, ref.v, in.owner, in.occl,
                  in.pos.x, in.pos.y, in.pos.z);
 }
 
@@ -322,14 +339,17 @@ void SoundCues::refresh(Instance& in) {
     float x = paramFor(in);
     float fade = in.fade > 0.0f ? core::clampf(in.fadeLeft / in.fade, 0.0f, 1.0f) : 1.0f;
     const bool moved = resolve(in) || in.posDirty;
+    const float g = gainOf(in);
+    const bool mixerMoving = g != in.lastGain;            // category volume ramp / instance level changed
+    in.lastGain = g;
     in.posDirty = false;
     const bool occlChanging = in.occl != in.occlTarget;
     for (const VoiceRef& r : in.voices) {
         const EventDef& ed = cd.events[(size_t)r.event];
         if (!moved && !occlChanging && in.occl == 0.0f && ed.volCurve.empty() && ed.pitchCurve.empty() &&
-            ed.envVol.empty() && ed.envPitch.empty() && in.fade <= 0.0f && gainOf(in) == 1.0f && presets_.empty())
+            ed.envVol.empty() && ed.envPitch.empty() && in.fade <= 0.0f && g == 1.0f && !mixerMoving)
             continue;                                // static world one-shot: nothing to update
-        float gain = dbToGain(r.baseDb) * ed.stereoGain * gainOf(in) * dbToGain(kOcclDb * in.occl) *
+        float gain = r.baseGain * ed.stereoGain * gainOf(in) * dbToLinear(kOcclDb * in.occl) *
                      evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f) * fade;
         float pitch = stToRate(r.baseSt + evalCurve(ed.pitchCurve, x, 0.0f) + evalCurve(ed.envPitch, in.age, 0.0f));
         audio_->updateVoice(r.v, gain, pitch, in.pos);
@@ -365,46 +385,9 @@ int SoundCues::occludedInstances() const {
     return n;
 }
 
-void SoundCues::activatePreset(const std::string& name) {
-    for (int i = 0; i < kPresetCount; ++i) {
-        if (name != kMixerPresets[i].name) continue;
-        static const bool log = std::getenv("WFC_CUELOG") != nullptr;
-        for (ActivePreset& a : presets_)
-            if (a.preset == i) {                     // already active: ref-count, reset elapsed
-                ++a.refs; a.t = 0.0f; a.fadingOut = false;
-                if (log) LOG_INFO("MIXER preset %s refs=%d", kMixerPresets[i].name, a.refs);
-                return;
-            }
-        presets_.push_back({i, 1, 0.0f, 0.0f, false});
-        if (log) LOG_INFO("MIXER preset %s on %s -> %.3f", kMixerPresets[i].name, kMixerPresets[i].category, kMixerPresets[i].volume);
-        return;
-    }
-}
-
-void SoundCues::deactivatePreset(const std::string& name) {
-    for (ActivePreset& a : presets_)
-        if (name == kMixerPresets[a.preset].name && !a.fadingOut) {
-            a.refs = a.refs > 0 ? a.refs - 1 : 0;
-            if (a.refs == 0) { a.fadingOut = true; a.t = 0.0f; }
-            static const bool log = std::getenv("WFC_CUELOG") != nullptr;
-            if (log) LOG_INFO("MIXER preset %s refs=%d%s", name.c_str(), a.refs, a.fadingOut ? " (fading out)" : "");
-            return;
-        }
-}
-
-float SoundCues::categoryGain(const std::string& category) const {
-    const ActivePreset* best = nullptr;
-    for (const ActivePreset& a : presets_) {
-        const MixerPreset& p = kMixerPresets[a.preset];
-        if (category != p.category || (best && kMixerPresets[best->preset].priority >= p.priority)) continue;
-        best = &a;
-    }
-    return best ? 1.0f + (kMixerPresets[best->preset].volume - 1.0f) * best->w : 1.0f;
-}
-
 void SoundCues::retire(size_t i) {
     const CueDef& cd = cues_[(size_t)live_[i].cue];
-    if (!cd.mixerPreset.empty()) deactivatePreset(cd.mixerPreset);   // AudioComponent stopped
+    if (!cd.mixerPreset.empty()) mixer_.disable(cd.mixerPreset, false);   // AC stopped: non-forced Disable
     live_[i] = live_.back();
     live_.pop_back();
 }
@@ -442,17 +425,10 @@ void SoundCues::stop(int id, float fade) {
 
 void SoundCues::tick(float dt) {
     if (!audio_) return;
-    for (size_t i = 0; i < presets_.size();) {
-        ActivePreset& a = presets_[i];
-        const MixerPreset& p = kMixerPresets[a.preset];
-        a.t += dt;
-        if (!a.fadingOut) a.w = std::min(1.0f, p.fadeIn > 0.0f ? a.w + dt / p.fadeIn : 1.0f);
-        else {
-            a.w = std::max(0.0f, p.fadeOut > 0.0f ? a.w - dt / p.fadeOut : 0.0f);
-            if (a.w <= 0.0f) { presets_[i] = presets_.back(); presets_.pop_back(); continue; }
-        }
-        ++i;
-    }
+    // Mixer: timers / Duration expiry, then linear parameter ramps; MASTER_WET goes to the backend as-is
+    // (the mixer ramp is the only fade).
+    mixer_.tick(dt);
+    if (mixer_.environmentChanged()) audio_->setEnvironment(mixer_.environment(), 0.0f);
     for (Instance& in : live_) in.age += dt;
     for (size_t i = 0; i < pending_.size();) {
         Pending& p = pending_[i];

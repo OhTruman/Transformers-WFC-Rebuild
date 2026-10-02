@@ -17,6 +17,223 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 SYSTEMS PASS 5 — NATIVE AUDIO RUNTIME SEMANTICS (2026-10-02, agents/systems)
+
+**Source:** `RE-Workspace/notes/MILESTONE03_AUDIO_NATIVE_FIDELITY.md`, follow-up sections A1–A8 (ReverseEngineering
+commit **7c4a2e0**, read only), plus `SoundConfig.SoundMixerProperties` and the Streets `audio.json` (read only).
+**Supersedes:** the provisional runtime-audio semantics of Systems checkpoint **7b42621** (PASS 4). Everything confirmed
+in PASS 4 is unchanged: PreferPlayer pan reference, native spatialization, concurrency, occlusion, attachment, and the
+vehicle-FX material/HDR handoff.
+**Confidence:** CONFIRMED ORIGINAL · HIGH · PROVISIONAL · UNKNOWN.
+
+### Mixer — `src/game/SoundMixer.{h,cpp}`, generated `SoundMixer.inc` (`tools/systems/gen_mixer.py`)
+**CONFIRMED ORIGINAL (A2–A4):**
+* **Runtime preset entry:** {Priority, FadeIn, FadeOut, Duration, RefCount, Elapsed}, plus the built-in **Default**
+  preset (Priority 0, fades 0.5, Duration −1) that mixer Init enables.
+* **Enable (0x82772778):**
+  * Elapsed = 0 on every Enable, including re-enabling an active preset.
+  * An inactive preset is inserted before the first lower-priority entry, so equal priority goes after existing
+    equals and the **earlier-enabled preset wins**.
+  * RefCount += 1.
+* **Disable(force) (0x827728E0):** force sets RefCount to 1; at RefCount 1 the preset is removed and categories
+  retarget; then RefCount = max(0, RefCount − 1).
+* **Tick (0x82756180):** for active presets, last → first: Elapsed += dt. A non-Default preset with Duration ≥ 0 and
+  Elapsed ≥ Duration gets a non-forced Disable.
+  * Duration < 0 is infinite.
+  * Duration 0 expires on the next tick.
+  * RefCount n expires over n ticks.
+* **Selecting each category's value (0x827661C8):** the first active preset, in priority order, that **defines** the
+  category wins outright. Otherwise selection falls through, ultimately to Default. There is no adding, multiplying or
+  averaging.
+* **Fades:** one linear ramp per parameter (0x827560A8 / 0x827560F8), in authored units.
+  * **Units:** Volume = **linear amplitude** (clamped to [0,1], never dB-converted); reverb levels in **mB**; times in
+    s; frequencies in Hz.
+  * **Fade time:** the new preset's FadeIn when its priority is ≥ the current one's, otherwise the outgoing preset's
+    FadeOut.
+  * **Interruption:** a new target restarts from the **current value** with the full new time, without snapping.
+* Replaces PASS 4's per-cue preset list (fade curve, overlap combining and Duration were UNKNOWN placeholders there).
+* **Applied categories:**
+  * SFX_WET_VEH_ENGINE Volume: VEHICLE_JUMP −18 dB = 0.1258925 and VEHICLE_BOOST_END −4 dB = 0.6309574.
+  * MASTER_WET Reverb + Echo: the 10 REVERB_TRANS_MP_STREETS_* presets.
+
+  The backend receives the ramped MASTER_WET values every tick; the mixer ramp is the only fade.
+
+**HIGH:** inside one tick, timers advance before ramps (vtable order AdvanceTimers +0x44 → UpdateCategories +0x48).
+
+**UNKNOWN:**
+* the IsPlayerPOV enable flag (device +0xC0 bit 0x08000000); no slice preset uses IsPlayerPOV;
+* the per-parameter FMOD clamp constants of non-reverb effects;
+* categories other than the two above keep Default. No slice preset defines them, so this has no audible effect.
+
+### Zones / reverb (A1) — CONFIRMED ORIGINAL
+* **`SoundMixer::activateReverb` = `SeqAct_Reverb.Activated` (0x82764858):**
+  * keeps one global current-reverb slot (0x8374FCCC);
+  * a different preset → Enable(new), then **explicitly** Disable(previous, force 0);
+  * the same preset → no-op (no Enable, no ref-count change, no timer reset);
+  * Flush (level change) resets the slot to None and leaves only Default active.
+* **`AmbientAudio` zone touch:**
+  * a Touch fires on the frame the local pawn starts overlapping a trigger volume;
+  * Zone.Enter (0x827892D8) changes the current zone only when it differs;
+  * the previous zone's scene ends (its pool stops), and the new zone's scene starts its pool and the reverb.
+* **No exit restoration:** none of the 9 Streets zones links UnTouched. Leaving every volume keeps the last reverb and
+  pool, and walking back from an inner volume into a still-overlapping outer one keeps the inner reverb. The PASS 4
+  "INFERRED" zone stack is removed.
+* **Default (dry):** before the first Touch and after a level load (`AmbientAudio::load` → mixer Flush).
+* **Zone geometry checks:** previously every 0.2 s, now every frame, with Touch edges.
+* **HIGH:** several Touches in the same frame are processed in zone order, so the last one wins.
+* **PROVISIONAL (unchanged):**
+  * the pawn is tested as a point 1 m above its origin, not as its collision cylinder;
+  * the I3DL2 reverb DSP internals; the preset parameters and the path into the DSP are CONFIRMED.
+
+### Channel modes (A5) — CONFIRMED ORIGINAL
+* **k2D:** non-positional, with no WFC distance attenuation, rear attenuation or occlusion.
+* **k3D:** positional, pan level 1.0, inverse rolloff, rear attenuation.
+* **kSmartPan / PreferPlayer:** positional; pan level = the 2D↔3D amount; distance attenuation and SmartPanGain
+  still apply.
+* The mode is per cue. No slice cue authors k2D; it is validated with synthetic cues.
+* PASS 4's resolveGains already implemented this; this pass only routes rear and SmartPan attenuation through the
+  native dB conversion.
+
+**UNKNOWN:**
+* FMOD's internal set3DPanLevel mixing law, approximated as equal-power pan × amount (the stereo source is mixed to
+  mono);
+* FMOD's own 3D rolloff for these channels.
+
+### dB → linear (A8) — CONFIRMED ORIGINAL
+* `dBToLinear(x)`: clamp to [−96, 0], with x ≤ −96 giving exactly 0. `SemitonesToRatio(s)`: clamp to ±36, then 2^(s/12).
+  Both use double-precision `pow` rounded to float.
+* **Used for:** wave-event Volume, random volume variation, rear attenuation, SmartPanAttenuation3D and occlusion
+  volume. **Not used for mixer volumes.**
+* **Authored positive path:** FOLEY.SHOOT_DRY_FIRE_ELECTRICITY's variation layer (−1…+1 dB) is now capped at
+  0 dB, so no boost.
+* **HIGH:** the variation is converted separately and multiplied with the event Volume, since the report lists them as
+  separate uses.
+* **UNKNOWN:** whether the clamp applies to root-level `Volume`, which is not separately re-checked in A8. That path
+  stays unclamped; all slice root volumes are ≤ 0 dB, so there is no audible difference.
+
+### Vehicle loops (A6)
+**CONFIRMED ORIGINAL, already implemented by PASS 3 VehicleAudio and re-validated:**
+* looping is per wave event (bLooping → loop);
+* intro, loop and outro are separate cues (BOOST_START → BOOST_LOOP → BOOST_END; DRIVE_ONLOAD / OFFLOAD);
+* cue-level LoopStart / LoopEnd are unused;
+* stop is an immediate linear fade (engine 0.2 s, boost 0.15 s; fade-in 0.1 s), with no loop-boundary wait;
+* a state switch crossfades;
+* replaying the same cue is a no-op.
+
+**New: loop-point plumbing.**
+* `IAudio::setLoopPoints(sound, startFrame, endFrame)`; Win32Audio stores a per-sample loop region (source frames
+  scaled to the output rate).
+* `SoundCues::loadLoopPoints` reads `<content>/fsb_loop_points.json`, formatted
+  `{"<pkg>/<wave>.wav": [loopStart, loopEnd]}` in source-file sample frames, end inclusive.
+* World loads it at startup.
+
+**UNKNOWN (AssetTools):**
+* the exact FSB loop start/end samples. The file is absent today, which is logged; looping waves then wrap at the
+  sample end.
+* That fallback is FMOD's behaviour only when a sample has no header loop points, so it is **not** claimed as
+  correct for the vehicle loops.
+* The extracted .wav files carry no `smpl` chunk (0 of 400 `*_LP` files checked).
+
+**HIGH:** the AudioComponent FadeIn/FadeOut curve is stock UE3 linear (per the report; not re-verified natively).
+
+### Line / volume emitters (A7) — CONFIRMED ORIGINAL
+* The PASS 2 placement already matches the native formulas, recomputed every frame:
+  * **Line:** the closest point on origin ∓ X·LineLength/2 (X includes DrawScale3D), clamped to the ends.
+  * **Volume:** an oriented box, with the listener's local coordinates clamped to ±Radius per axis. Inside the box,
+    the source is at the listener.
+* The AudioComponent sits at that point, so pan, attenuation, SmartPan distance and occlusion all use it.
+* Promoted from PROVISIONAL.
+
+### Validation
+**Native-semantics suite** (`tools/systems/audio_native_suite.cpp`; recording backends plus the real Win32 backend):
+**173 pass / 0 fail**.
+* **Mixer** (real authored presets plus synthetic tables):
+  * higher, lower and equal priority activation; per-category fall-through;
+  * Duration 1 expiry with the outgoing FadeOut; Duration 0 on the next tick; Duration −1 infinite;
+  * re-enable resets the timer, and RefCount 2 expires over two ticks;
+  * interrupted fade continues from the current value; forced vs plain Disable; Flush;
+  * MASTER_WET ramps linearly in mB, seconds and Hz.
+* **Zones:**
+  * all 9 Streets zones entered in sequence; exactly one REVERB_* is active after each switch (the explicit-Disable
+    path), and each settled Room matches audio.json;
+  * re-entering the current zone does nothing (no Enable, no environment update);
+  * leaving all volumes keeps the reverb;
+  * DEC_ROOM_UPPER (223) → EXTERIOR (182) fades linearly over the outgoing 0.25 s;
+  * nested Touch: outer → inner → back to outer keeps the inner reverb (pair EXTERIOR / DEC_ROOM_UPPER);
+  * level reset returns to Default (dry).
+* **Emitters,** checked against an independent re-implementation of A7 in UE space:
+  * line: perpendicular, parallel travel and beyond either end; the source moves with the listener and is never at
+    the actor origin;
+  * volume boxes, axis-aligned and rotated: inside → at the listener; outside → a corner point, not on a sphere;
+  * occluding cues trace to the runtime point; cues authored `EnableOcclusionVolume=False` never trace.
+* **Gain:**
+  * −96 and −97 dB → silent, so no voice launches;
+  * −6 dB → 0.5011872; 0 dB → 1; +3 dB → 1;
+  * the authored ±1 dB variation never exceeds the 0 dB level.
+* **Channel modes on the Win32 backend:**
+  * k2D: atten 1 and pan 0 at 1000 m.
+  * k3D: rolloff 0.4, pan ±1, following a moving source.
+  * Cull: silent beyond DistanceMax, with no floor.
+  * Rear attenuation: −6 dB behind.
+  * SmartPan: pan level 0.5 with attenuation kept.
+  * PreferPlayer:
+    * within 14 m: pan 0, with volume from listener → true source;
+    * beyond 14 m: a linear 0.5 s transition to the listener reference;
+    * the source never moves.
+
+**Game runs** (`WFC_CUELOG`, `WFC_MIXERLOG`, `WFC_SYSPROF`, `WFC_RENDERSTATS`):
+* scenarios: idle, movement, Fine Aim with fire, firing, sustained firing, transform still and moving, jump, hover,
+  Boost, repeated Boost (`WFC_AUTOBOOST_CYCLE`, a new test-input hook), Nitro/Ram with Dash, and transform out of the
+  vehicle while its audio is active.
+* **Repeated Boost:**
+  * the BOOST_START, BOOST_LOOP and BOOST_END cues each play;
+  * VEHICLE_BOOST_END ducks SFX_WET_VEH_ENGINE over 0.2 s and restores over 3.0 s;
+  * loops stop with 0.15 s / 0.2 s fades.
+* **Transform out of the vehicle:** ONLOAD stops (0.2 s) and the squeal stops (0.5 s); no vehicle cue remains.
+* **Not exercised in game:** vehicle jump (DRIVE_JUMP_START / VEHICLE_JUMP). Gameplay movement has no vehicle jump;
+  the preset is covered by the suite.
+* **Frame time (ms, 120-frame averages):**
+
+  | Scenario | Range | Mean |
+  |---|---|---|
+  | idle | 6.1–10.6 | 6.7 |
+  | movement | 4.5–10.2 | 5.4 |
+  | Fine Aim | 6.9–13.0 | 9.4 |
+  | firing | 6.9–13.5 | 10.2 |
+  | sustained firing | 6.9–13.4 | 9.6 (PASS 4: 7.2–13.4) |
+  | hover | 3.8–7.8 | 4.5 |
+  | Boost | 3.7–8.0 | 4.6 |
+  | repeated Boost | 3.7–8.0 | 4.3 |
+  | Nitro | 4.3–8.0 | 5.0 |
+
+  Zone transition + emitter placement costs 0.005 ms/frame (suite, `-O2`).
+* **Cleanup:**
+  * after vehicle runs, particles and meshes → 0;
+  * queued events stay bounded (idle 1–13, sustained 4–17); orphaned events are dropped;
+  * live cues ≈ 25 = the ambient bed.
+* **Regression:**
+  * wfc_fidelity 194 / 0 / 19;
+  * collision seg 0 mismatches;
+  * runtime probe 31 PASS / 0 FAIL, 1 KNOWN (`boost_fx_emitted`, Rendering);
+  * Experimental audio-attach 240 pass / 0 FAIL / 10 KNOWN (world impacts and zone pools; 0 player-owned left
+    behind).
+
+### Dependencies
+* **AssetTools:**
+  * Vehicle FSB sample-header loop start/end → `fsb_loop_points.json`; nothing is fabricated in the meantime.
+  * Streets physical material → surface footstep and landing sounds (the generic fallback stays).
+  * Pending pickup effect mesh/emitter data.
+* **Rendering:** unchanged. The 4 material-only vehicle emitters and the HDR material path draw once 5e74895's
+  renderer is integrated.
+* **Gameplay:** vehicle jump (needed to exercise DRIVE_JUMP_START / VEHICLE_JUMP in game).
+* **ReVa:**
+  * the IsPlayerPOV flag;
+  * the root `Volume` dB clamp;
+  * FMOD set3DPanLevel law;
+  * FMOD channel rolloff settings.
+
+---
+
 ## MILESTONE 03 SYSTEMS PASS 4 — NATIVE AUDIO FIDELITY + RENDERING FX HANDOFF (2026-10-02, agents/systems)
 
 Evidence: RE lane report `RE-Workspace/notes/MILESTONE03_AUDIO_NATIVE_FIDELITY.md` (commit 76bb0a, read-only),

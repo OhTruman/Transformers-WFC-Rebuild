@@ -27,20 +27,6 @@ float inverseGain(float d, float minM, float maxM, float rolloff) {
     return dd <= minM ? 1.0f : minM / (minM + rolloff * (dd - minM));
 }
 
-audio::Environment envFrom(const assets::Json& dsp) {
-    audio::Environment e;
-    const assets::Json& r = dsp["Reverb"];
-    e.room = r["Room"].asFloat(-10000.0f); e.roomHF = r["RoomHF"].asFloat(-10000.0f);
-    e.decayTime = r["DecayTime"].asFloat(1.0f); e.decayHFRatio = r["DecayHFRatio"].asFloat(1.0f);
-    e.reflections = r["ReflectionsLevel"].asFloat(-10000.0f); e.reflectionsDelay = r["ReflectionsDelay"].asFloat(0.0f);
-    e.reverb = r["Level"].asFloat(-10000.0f); e.reverbDelay = r["Delay"].asFloat(0.0f);
-    e.diffusion = r["Diffusion"].asFloat(100.0f); e.density = r["Density"].asFloat(100.0f);
-    e.hfReference = r["HFReference"].asFloat(5000.0f);
-    const assets::Json& ec = dsp["Echo"];
-    e.echoDelayMs = ec["Delay"].asFloat(500.0f); e.echoDecay = ec["DecayRatio"].asFloat(0.5f);
-    e.echoWet = ec["WetMix"].asFloat(0.0f); e.echoDry = ec["DryMix"].asFloat(1.0f);
-    return e;
-}
 
 // Moller-Trumbore, ray (any t > 0).
 bool rayTri(const core::Vec3& o, const core::Vec3& d, const core::Vec3& a, const core::Vec3& b, const core::Vec3& c) {
@@ -61,6 +47,9 @@ bool rayTri(const core::Vec3& o, const core::Vec3& d, const core::Vec3& a, const
 
 bool AmbientAudio::load(const std::string& path, const std::string& contentRoot, SoundCues& cues, audio::IAudio* a) {
     audio_ = a;
+    // Level change: mixer Flush (0x8276AB60) - only Default active, current-reverb slot None.
+    cues.mixer().flush();
+    zone_ = -1;
     std::ifstream f(path, std::ios::binary);
     if (!f) { LOG_WARN("ambient: %s not found", path.c_str()); return false; }
     std::stringstream ss; ss << f.rdbuf();
@@ -116,11 +105,9 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
             }
         }
         const assets::Json& pr = presets[j["reverb_preset"].asString()];
-        z.env = envFrom(pr["dsp_by_category"]["MASTER_WET"]);
-        z.fadeIn = pr["mixer_preset"]["FadeInTime"].asFloat(0.25f);
-        z.fadeOut = pr["mixer_preset"]["FadeOutTime"].asFloat(0.25f);
-        z.priority = pr["mixer_preset"]["Priority"].asFloat(0.0f);
+        z.priority = pr["mixer_preset"]["Priority"].asFloat(0.0f);   // diagnostics; the mixer orders presets
         z.preset = j["reverb_preset"].asString();
+        if (!cues.mixer().hasPreset(z.preset)) LOG_WARN("ambient: zone %s preset %s not in the mixer", z.name.c_str(), z.preset.c_str());
         const assets::Json& pools = j["one_shot_pool"];
         for (size_t p = 0; p < pools.size(); ++p) {
             const assets::Json& q = pools[p];
@@ -153,26 +140,17 @@ bool AmbientAudio::inside(const Zone& z, const core::Vec3& p) const {
     return (hits & 1) != 0;
 }
 
-// SeqAct_AmbientAudioZone "Enter" -> SeqAct_Reverb -> EnableMixerPreset(REVERB_*) [CONF path]: the
-// MASTER_WET reverb comes from the highest-Priority enabled REVERB_* preset, cross-fading 0.25 s [CONF data].
-// [INFERRED, AssetTools / ReVa request] entering a zone ends the previous zone's scene, i.e. its preset is
-// disabled, so one zone preset is enabled at a time; the priority rule decides any overlap.
-void AmbientAudio::enterZone(int z) {
-    int prev = zone_;
-    zone_ = z;
-    if (prev >= 0)
-        for (size_t i = 0; i < enabledZones_.size(); ++i)
-            if (enabledZones_[i] == prev) { enabledZones_.erase(enabledZones_.begin() + (long)i); break; }
-    bool have = false;
-    for (int e : enabledZones_) have = have || e == z;
-    if (!have) enabledZones_.push_back(z);
-    int top = z;
-    for (int e : enabledZones_) if (zones_[(size_t)e].priority > zones_[(size_t)top].priority) top = e;
-    if (audio_) audio_->setEnvironment(zones_[(size_t)top].env, zones_[(size_t)top].fadeIn);
+// SeqAct_AmbientAudioZone.OnInput(Enter) (0x827892D8) -> "Scene 0 Begun" -> SeqAct_Reverb [CONF, RE A1].
+void AmbientAudio::enterZone(int z, SoundCues& cues) {
+    if (z == zone_) return;                              // already the PC's AmbientAudioZone: no-op
+    const int prev = zone_;
+    zone_ = z;                                           // prev "Scene 0 Ended" (pool stops), new scene begins
+    cues.mixer().activateReverb(zones_[(size_t)z].preset);
     poolTimers_.clear();
     for (const Pool& p : zones_[(size_t)z].pools) poolTimers_.push_back(p.delayMin + frand() * (p.delayMax - p.delayMin));
-    LOG_INFO("ambient: entered zone %s (preset %s, priority %.0f; active reverb %s)", zones_[(size_t)z].name.c_str(),
-             zones_[(size_t)z].preset.c_str(), zones_[(size_t)z].priority, zones_[(size_t)top].preset.c_str());
+    LOG_INFO("ambient: entered zone %s (from %s; preset %s, priority %.0f; mixer [%s])", zones_[(size_t)z].name.c_str(),
+             prev >= 0 ? zones_[(size_t)prev].name.c_str() : "None", zones_[(size_t)z].preset.c_str(),
+             zones_[(size_t)z].priority, cues.mixer().activeList().c_str());
 }
 
 core::Vec3 AmbientAudio::placeFor(const Emitter& e, const core::Vec3& l) const {
@@ -196,14 +174,16 @@ core::Vec3 AmbientAudio::placeFor(const Emitter& e, const core::Vec3& l) const {
 void AmbientAudio::tick(float dt, const core::Vec3& listener, const core::Vec3& pawn, SoundCues& cues) {
     if (!loaded_) return;
 
-    // Zones: TriggerVolume touch by the pawn (checked a few times per second).
-    zoneTimer_ -= dt;
-    if (zoneTimer_ <= 0.0f || !zoneChecked_) {
-        zoneTimer_ = 0.2f;
-        zoneChecked_ = true;
-        core::Vec3 p = pawn + core::Vec3{0, 1.0f, 0};
-        for (int z = 0; z < (int)zones_.size(); ++z)
-            if (z != zone_ && inside(zones_[(size_t)z], p)) { enterZone(z); break; }
+    // Zones: SeqEvent_Touch (local player pawn, client side, camera ignored) fires on the frame the pawn
+    // starts overlapping a trigger volume; UnTouched is unlinked. Several Touches in one frame run in zone
+    // order, so the last one wins [HIGH: same-frame Touch order is the engine's touch list order].
+    // [PROVISIONAL] the pawn is a point 1 m above its origin, not its collision cylinder.
+    touching_.resize(zones_.size(), 0);
+    const core::Vec3 p = pawn + core::Vec3{0, 1.0f, 0};
+    for (int z = 0; z < (int)zones_.size(); ++z) {
+        const bool in = inside(zones_[(size_t)z], p);
+        if (in && !touching_[(size_t)z]) enterZone(z, cues);
+        touching_[(size_t)z] = in ? 1 : 0;
     }
     // Zone one-shot pools (SeqAct_PlayPlayerPositionalSound): world one-shots around the player.
     if (zone_ >= 0) {

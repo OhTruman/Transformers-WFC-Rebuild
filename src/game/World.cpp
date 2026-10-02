@@ -385,6 +385,7 @@ void World::setAudio(audio::IAudio* a) {
     const std::string base = assetRoot() + "/../content/";
     // All audio = the original SoundCues (weapon, vehicle, robot movement, transformation, fine aim).
     cues_.load(a, base);
+    cues_.loadLoopPoints(base + "fsb_loop_points.json");     // AssetTools FSB headers (pending)
     ambient_.load(assetRoot() + "/Maps/MP_IAC_Streets/audio.json", base, cues_, a);
     // Occlusion line check listener -> source against the world collision. Attached (player-owned)
     // sounds are tested against the pawn's body (mesh origin + 1.5 m), not the socket tip, which can

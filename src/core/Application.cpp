@@ -66,6 +66,10 @@ void Application::run() {
         if (std::getenv("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
         if (std::getenv("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
         if (std::getenv("WFC_AUTOBOOST")) input.down[(int)platform::Button::FineAim] = true;   // vehicle Boost (RMB held)
+        if (const char* s = std::getenv("WFC_AUTOBOOST_CYCLE"))         // repeated Boost: hold N frames, release N
+            if (long n = std::atol(s); n > 0 && (frame / n) % 2 == 1) input.down[(int)platform::Button::FineAim] = true;
+        if (const char* s = std::getenv("WFC_AUTOJUMP_EVERY"))          // repeated Jump press every N frames
+            if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0) input.pressed[(int)platform::Button::Jump] = true;
         if (const char* s = std::getenv("WFC_AUTODASH")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
         if (const char* s = std::getenv("WFC_AUTODASH2")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
         if (const char* s = std::getenv("WFC_AUTOWALK_UNTIL"))           // release scripted input

@@ -3,6 +3,27 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 03 PASS 5 (2026-10-02) — native audio runtime semantics (RE 7c4a2e0, supersedes 7b42621 provisionals)
+- **Mixer** (`SoundMixer`):
+  - native Enable / Disable / ref-count / priority insertion (equal priority: the earlier wins);
+  - per-category first-defining-preset selection;
+  - linear ramps in authored units (volume as linear amplitude);
+  - FadeIn up / FadeOut down; restart from the current value;
+  - Duration expiry (< 0 infinite, 0 on the next tick).
+- **Zones:**
+  - SeqAct_Reverb's explicit enable-new / disable-previous on a global reverb slot;
+  - Touch edges with the last touch winning; no exit restoration (no Streets zone has UnTouched);
+  - Default before the first touch and after a level load.
+- **Channel modes, dB conversion, emitters:** k2D / k3D / SmartPan confirmed; native dBToLinear (−96 → 0, never above
+  0 dB); line and box emitter placement promoted to CONFIRMED.
+- **Vehicle loops:** behaviour confirmed. FSB loop-point plumbing is ready (`fsb_loop_points.json`); the exact
+  samples stay UNKNOWN pending AssetTools.
+- **Validation:**
+  - native suite 173/0;
+  - audio-attach 240/0/10 (0 player-owned left behind);
+  - wfc_fidelity 194/0/19; probe 31/0/1;
+  - sustained fire 6.9–13.4 ms; cleanup clean.
+
 ## SYSTEMS MILESTONE 03 PASS 4 (2026-10-02) — native audio fidelity + Rendering FX handoff
 - **Native spatialization** (RE report 76bb0a):
   - inverse rolloff with a hard cull at DistanceMax;

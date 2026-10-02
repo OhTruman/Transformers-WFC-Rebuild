@@ -7,13 +7,18 @@
 // ignored): entering one runs SeqAct_Reverb (a SoundMixerProperties preset: MASTER_WET Reverb / Echo,
 // FadeInTime) and starts its SeqAct_PlayPlayerPositionalSound pools (looping random one-shots every
 // DelayMin..DelayMax s, DistanceMin..Max from the player); "Scene 0 Ended" stops the pool.
-// [INFERRED, AssetTools] entering a zone ends the previous zone's scene (one reverb + pool at a time);
-// leaving a zone without entering another keeps it (no on_untouched ops); a player in a gap at spawn
-// has the Default (dry) environment. Volume-emitter half extents = Radius x actor scale; line =
-// LineLength x scale X along the actor X axis.
-// [PROVISIONAL] how native code places a shaped emitter's sound (HmAmbientSoundLineEmitter.GetLinePoints /
-// HmAmbientSoundVolumeEmitter.GetExtents are native): here the nearest point of the box / line to the
-// listener (inside a box: at the listener, i.e. non-directional room tone). ReVa request.
+// [CONF native, RE 7c4a2e0 A1] Zone.Enter (0x827892D8) on a Touch: when the local PlayerController's
+// AmbientAudioZone differs, the previous zone stops (IsEntered false -> "Scene 0 Ended": its pool stops), the
+// new zone becomes current and its "Scene 0 Begun" fires SeqAct_Reverb, which enables the new REVERB_* preset
+// and explicitly disables the previous one (SoundMixer::activateReverb). Touching the current zone again does
+// nothing. No Streets zone links UnTouched: leaving every volume keeps the last zone's reverb and pool, and an
+// inner volume's reverb persists when walking back into a still-overlapping outer one (no new Touch). The
+// Default (dry) state exists only before the first Touch and after a level change (mixer Flush).
+// [CONF native A7] shaped emitters, every frame: line (LineEmitter 0x82760110) = closest point on the segment
+// origin -/+ X * LineLength/2 (X includes DrawScale3D), clamped to the ends; volume (VolumeEmitter
+// 0x82760278) = listener in actor-local space clamped to +/-Radius per axis (an oriented box, scaled by
+// DrawScale3D; inside -> the listener itself). The AudioComponent sits at that point, so pan, attenuation,
+// SmartPan distance and occlusion all use it.
 // [PROVISIONAL] voice budget: the most audible kMaxActive emitters play; the rest are virtual. The original
 // device has MaxChannels=96 (Xe-TransEngine.ini [HM_Engine.FmodAudioDevice]); its virtual-voice policy is native.
 #pragma once
@@ -58,8 +63,6 @@ private:
         std::string name;
         std::vector<core::Vec3> tris;   // triangle soup of the trigger volume (glTF)
         core::Vec3 bmin, bmax;
-        audio::Environment env;
-        float fadeIn = 0.25f, fadeOut = 0.25f;
         float priority = 0.0f;          // REVERB_* mixer preset Priority (higher wins) [CONF]
         std::string preset;
         std::vector<Pool> pools;
@@ -67,19 +70,17 @@ private:
 
     core::Vec3 placeFor(const Emitter& e, const core::Vec3& listener) const;
     bool inside(const Zone& z, const core::Vec3& p) const;
-    void enterZone(int z);
-    std::vector<int> enabledZones_;      // zones whose REVERB_* preset is enabled (mixer preset stack)
+    void enterZone(int z, SoundCues& cues);
+    std::vector<char> touching_;         // per zone: the pawn overlapped it at the last check (Touch edge)
 
     bool loaded_ = false;
     audio::IAudio* audio_ = nullptr;
     std::vector<Emitter> emitters_;
     std::vector<Zone> zones_;
-    int zone_ = -1;
-    bool zoneChecked_ = false;
+    int zone_ = -1;                      // PlayerController.AmbientAudioZone (-1 = None)
     std::vector<float> poolTimers_;
     int active_ = 0;
     int oneShots_ = 0;
-    float zoneTimer_ = 0.0f;
 };
 
 } // namespace game
