@@ -462,12 +462,9 @@ void checkBoost(Report& r) {
         if (n.find("Boost") != std::string::npos) { ++sockets; sockList += n + "@" + s["bone"].asString() + " "; }
     }
     r.info("authored_vehicle_boost_sockets", sockets, "sockets", sockList);
-    r.knownTruth("boost_presentation_emitted", false,
-                 "original boost = physics + VEH_OPTIMUS_BOOST_START/LOOP/END cues + booster FX at BoostSocket_*/HoverBooster_*",
-                 kSystems,
-                 "integrated build has no boost state, cue or FX (boost is CharacterMovement physics only). Runtime "
-                 "confirmation: runtime-probe.ps1 'vehicle_boost' scenario (no VEH_OPTIMUS_BOOST cue logged). Particle "
-                 "templates for the boost were not located in the extracted data (UNKNOWN; AssetTools)");
+    r.info("boost_presentation_runtime_check", 0, "",
+           "boost cues/FX are World-side (not linked in this windowless harness): verified by runtime-probe.ps1 "
+           "boost_presentation.{boost_cue_played,boost_fx_emitted} (VEH_OPTIMUS_BOOST_* cues, VFX parts while Driving)");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -703,15 +700,24 @@ void checkMapContent(Report& r) {
     r.known("missing.static_destructibles", 0, cnt("TnStaticDestructibleActor"), 0, "actors",
             "map.json unhandled TnStaticDestructibleActor", kAssetTools, "not composed (extraction gap)");
     // (b) extracted counts the runtime has no path for.
-    r.known("unrendered.decals", 0, mj["decals"].asDouble(), 0, "decals", "map.json decals (DecalActor/components)",
-            kRendering, "no decal pass in the integrated renderer (grep: no decal code): extracted-but-not-rendered");
+    {   // Rendering (milestone-02) recovers the static decals into render data decals.glb (one node each).
+        assets::Json dg;
+        int decals = loadGlbJson(renderDataDir() + "/decals.glb", dg) ? (int)dg["nodes"].size() : 0;
+        r.known("decals_in_render_data", decals, mj["decals"].asDouble(), 0, "decals",
+                "map.json decals vs render data decals.glb nodes (drawn by the WFC path's decal pass)", kRendering,
+                decals ? "count mismatch" : "decals.glb absent in " + renderDataDir() + " (decals not drawn)");
+    }
     r.known("unrendered.level_emitters", 0, mj["emitters"].asDouble(), 0, "emitters", "map.json emitters (level ParticleSystems)",
             kSystems, "WeaponFx handles weapon emitters only; level Emitter actors are not spawned");
     r.info("heightfog_actor", cnt("HeightFog"), "actors", "listed unhandled in map.json but recovered separately (FIDELITY: HeightFog CONF, applied)");
+    int ambient = cnt("AmbientSound") + cnt("HmAmbientSoundLineEmitter") + cnt("HmAmbientSoundVolumeEmitter");
+    r.known("unplayed.ambient_sound_actors", 0, ambient, 0, "actors",
+            "map.json AmbientSound 40 + HmAmbientSoundLineEmitter 13 + HmAmbientSoundVolumeEmitter 17 (the Streets ambient bed)",
+            kSystems, "no ambient-sound actor is instantiated by the runtime (no ambient code in src/game)");
     // (c) intentional / non-visual.
     std::string nonvis;
-    for (const char* k : {"BRUSH (builder brushes; geometry lives in level BSP)", "Model", "Sequence", "TnWorldInfo", "AmbientSound",
-                          "HmAmbientSoundLineEmitter", "HmAmbientSoundVolumeEmitter", "BeastSettingsReferer", "CameraActor",
+    for (const char* k : {"BRUSH (builder brushes; geometry lives in level BSP)", "Model", "Sequence", "TnWorldInfo",
+                          "BeastSettingsReferer", "CameraActor",
                           "TnAssetReferencesMultiplayer"})
         nonvis += std::string(k).substr(0, std::string(k).find(' ')) + "=" + std::to_string(cnt(k)) + " ";
     r.info("nonvisual_actor_classes", 0, "", "intentionally not geometry: " + nonvis + "; volumes=" + std::to_string(mj["volumes"].asInt()));

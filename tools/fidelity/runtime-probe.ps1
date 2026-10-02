@@ -134,13 +134,14 @@ Info "input_edges" "runtime_reload_press_registered" ([int]$pressed) "" "intermi
 
 # ---- 4. vehicle boost: physics AND presentation -----------------------------------------------
 if ($Sections -contains "boost") {
-$L = Run-Scenario "vehicle_boost" @{ WFC_STARTVEHICLE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOBOOST = "1"; WFC_CUELOG = "1"; WFC_ANIMLOG = "1"; WFC_LOGEVERY = "5" } 600 -Shot
+$L = Run-Scenario "vehicle_boost" @{ WFC_STARTVEHICLE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOBOOST = "1"; WFC_BOOSTLOG = "1"; WFC_CUELOG = "1"; WFC_ANIMLOG = "1"; WFC_LOGEVERY = "5" } 600 -Shot
 $g = "boost_presentation"
 $vmax = MaxNum $L "boost frame \d+ speed=([\d.]+)"
 Add-Result $g "physics_speed_max" ($(if ($vmax -gt 15.5) { "PASS" } else { "FAIL" })) $vmax 30 "m/s" "" "boost held via WFC_AUTOBOOST (exe-side key); original boost = Driving, Truck MaxSpeed 3000" "CONFIRMED: RE HANDOFF #6 (boost = Driving mode)"
 $boostCues = @($L | Select-String "CUE (\S*BOOST\S*)" | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique)
 Known $g "boost_cue_played" ($boostCues.Count -gt 0) "Systems" "expected BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START/LOOP/END (character.json sounds.vehicle); seen: [$($boostCues -join ' ')]; all cues during boost: $(Count $L 'CUE ')"
-Known $g "boost_fx_emitted" ((MaxNum $L "FX particles=(\d+)") -gt 0) "Systems" "expected booster FX at BoostSocket_L/R, HoverBooster_* (vehicle sockets); max live particles while boosting: $(MaxNum $L 'FX particles=(\d+)'). Boost particle templates UNKNOWN (not located in extracted data)"
+$vfxMax = MaxNum $L "VFX boost=1 .*parts=(\d+)"
+Known $g "boost_fx_emitted" ($vfxMax -gt 0) "Systems" "vehicle FX live particles while Driving (VFX boost=1 parts=N, WFC_BOOSTLOG): max $vfxMax; authored booster FX at BoostSocket_L/R, HoverBooster_*"
 $vanims = @($L | Select-String "ANIM base=(\S+)" | ForEach-Object { $_.Matches[0].Groups[1].Value } | Sort-Object -Unique)
 Known $g "boost_anim_seen" ($vanims -contains "Nav_HoverToBoost_VEH") "Gameplay" "vehicle.glb Nav_HoverToBoost_VEH; base clips seen: $($vanims -join ' ')"
 }

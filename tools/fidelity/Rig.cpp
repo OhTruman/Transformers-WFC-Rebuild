@@ -118,6 +118,11 @@ void Rig::record() {
     fr.moveForm = layer::moveForm(c, 0);
     fr.fineAim = layer::fineAiming(controller(), 0);
     fr.fov = layer::fovXDeg(controller(), 0);
+    fr.progress = layer::transformProgress(c, 0);
+    fr.wUsable = layer::weaponUsable(c, 0);
+    fr.wRestored = layer::weaponRestored(c, 0);
+    fr.meshOff = layer::meshOffsetOf(c, 0);
+    fr.veh = layer::vehicleSnap(c, 0);
     fr.aimW = layer::aimWeight(c, 0);
     fr.aimPitchN = layer::aimPitchNorm(c, 0);
     fr.shots = (int)(shotLog().size() - shotBase_);
@@ -139,16 +144,20 @@ bool Rig::writeCsv(const std::string& path) const {
     if (!f) return false;
     std::fprintf(f, "step,t,x,y,z,vx,vy,vz,hspeed,yaw_deg,cam_yaw_deg,cam_pitch_deg,grounded,form,"
                     "transforming,anim,anim_t,ammo,reserve,reloading,spread,shots,weapon_visible,reload_w,aim_w,aim_pitch_n,"
-                    "muzzle_x,muzzle_y,muzzle_z\n");
+                    "muzzle_x,muzzle_y,muzzle_z,move_form,progress,weapon_usable,weapon_restored,mesh_off_y,"
+                    "veh_driving,veh_ride,veh_dash,veh_dash_cd,veh_nitro,veh_nitro_cd,fine_aim,fov\n");
     for (const Frame& r : trace_) {
         std::fprintf(f, "%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d,%s,%d,%s,%.4f,"
-                        "%d,%d,%d,%.4f,%d,%d,%.3f,%.3f,%.3f,%.4f,%.4f,%.4f\n",
+                        "%d,%d,%d,%.4f,%d,%d,%.3f,%.3f,%.3f,%.4f,%.4f,%.4f,"
+                        "%.0f,%.4f,%.0f,%.0f,%.4f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.0f,%.2f\n",
                      r.step, r.t, r.pos.x, r.pos.y, r.pos.z, r.vel.x, r.vel.y, r.vel.z,
                      std::sqrt(r.vel.x * r.vel.x + r.vel.z * r.vel.z), core::degrees(r.yaw),
                      core::degrees(r.camYaw), core::degrees(r.camPitch), (int)r.grounded,
                      game::formName(r.form), (int)r.transforming, r.anim.c_str(), r.animT, r.ammo,
                      r.reserve, (int)r.reloading, r.spread, r.shots, (int)r.weaponVisible, r.reloadW, r.aimW, r.aimPitchN,
-                     r.muzzle.x, r.muzzle.y, r.muzzle.z);
+                     r.muzzle.x, r.muzzle.y, r.muzzle.z,
+                     r.moveForm, r.progress, r.wUsable, r.wRestored, r.meshOff.y,
+                     (int)r.veh.driving, r.veh.ride, r.veh.dash, r.veh.dashCd, r.veh.nitro, r.veh.nitroCd, r.fineAim, r.fov);
     }
     std::fclose(f);
     return true;

@@ -30,6 +30,21 @@ It also runs an offline material-consistency check, and turns logs into the same
 The exe integrates wall-clock time, so probe scenarios assert presence and counts, not timings;
 exact numbers come from `wfc_fidelity`.
 
+### Measurement builds (milestone 03)
+Opt-in CMake targets compile the **unmodified** product sources plus one instrumentation file:
+```powershell
+.\.toolchain\cmake-4.4.3-windows-x86_64\bin\cmake.exe -S . -B build -DWFC_BUILD_MEASURE=ON
+.\.toolchain\cmake-4.4.3-windows-x86_64\bin\cmake.exe --build build --target wfc_rebuild_prof wfc_rebuild_audiospy
+.\tools\fidelity\perf-profile.ps1      # idle/walk/fineaim/burst/held_fire  -> work\fidelity\perf\
+.\tools\fidelity\perf-report.ps1       # cost x origin attribution, hot functions, accumulation regression
+.\tools\fidelity\audio-attach.ps1      # sounds left at their trigger point while the owner moves
+.\tools\fidelity\stills.ps1            # transform contact sheets + vehicle material angles
+.\build\bin\wfc_fidelity.exe --map --only trace_cost   # deterministic per-ray collision cost
+```
+`wfc_rebuild_prof` samples the main thread at ~1 kHz (SEH unwind; `WFC_PROF=<file>`).
+`wfc_rebuild_audiospy` replaces only `Win32Audio.cpp` with a recorder (`WFC_AUDIOSPY=<file>`).
+Results and ownership: [MILESTONE-03.md](MILESTONE-03.md).
+
 ### Cross-branch A/B and merge gating
 ```powershell
 .\tools\fidelity\ab.ps1 -Ref agents/gameplay                        # → work\ab\agents_gameplay\report.json

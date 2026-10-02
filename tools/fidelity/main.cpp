@@ -64,6 +64,8 @@ int main(int argc, char** argv) {
         {"fine_aim", fid::checkFineAim},        {"boost", fid::checkBoost},
         {"vehicle_materials", fid::checkVehicleMaterials}, {"map_content", fid::checkMapContent},
         {"input_edges", fid::checkInputEdges},
+        {"transform_timeline", fid::checkTransformTimeline}, {"vehicle_feel", fid::checkVehicleFeel},
+        {"fine_aim_presentation", fid::checkFineAimPresentation}, {"trace_cost", fid::checkTraceCost},
     };
     fid::Report report;
     std::printf("wfc_fidelity: assets=%s (%s)\n", fid::Models::get() ? "loaded" : "unavailable",

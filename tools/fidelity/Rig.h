@@ -32,7 +32,27 @@ FID_OPTIONAL_ACCESSOR(upperWeight)       // agents/systems UpperBodyCustom slot
 FID_OPTIONAL_ACCESSOR(moveForm)          // agents/gameplay Pass 11: movement/physics form (switches at fold start)
 FID_OPTIONAL_ACCESSOR(fineAiming)        // PlayerController (Pass 11)
 FID_OPTIONAL_ACCESSOR(fovXDeg)           // PlayerController smoothed FOV (Pass 11)
+FID_OPTIONAL_ACCESSOR(transformProgress) // milestone-02 Character: normalized fold progress
+FID_OPTIONAL_ACCESSOR(weaponUsable)      // milestone-02: weapon may fire (restored + equipped)
+FID_OPTIONAL_ACCESSOR(weaponRestored)    // milestone-02: weapon restored during V->R
+FID_OPTIONAL_ACCESSOR(hoverApplied)      // milestone-02: hover authority applied
 #undef FID_OPTIONAL_ACCESSOR
+
+// Vehicle state machine snapshot (milestone-02 Character::vehicleState()); valid=false otherwise.
+struct VehSnap {
+    bool valid = false, driving = false;
+    float ride = 0, drift = 0, dash = 0, dashCd = 0, nitro = 0, nitroCd = 0;
+};
+template <class C> auto vehicleSnap(const C& c, int) -> decltype(c.vehicleState().nitroCooldown, VehSnap()) {
+    const auto& v = c.vehicleState();
+    VehSnap s;
+    s.valid = true; s.driving = v.driving; s.ride = v.rideHeight; s.drift = v.driftRemain;
+    s.dash = v.dashRemain; s.dashCd = v.dashCooldown; s.nitro = v.nitroRemain; s.nitroCd = v.nitroCooldown;
+    return s;
+}
+template <class C> VehSnap vehicleSnap(const C&, long) { return VehSnap(); }
+template <class C> auto meshOffsetOf(const C& c, int) -> decltype(c.meshOffset(), core::Vec3()) { return c.meshOffset(); }
+template <class C> core::Vec3 meshOffsetOf(const C&, long) { return core::Vec3{0, 0, 0}; }
 template <class C> auto upperAnimName(const C& c, int) -> decltype(std::string(c.upperAnimName())) { return c.upperAnimName(); }
 template <class C> std::string upperAnimName(const C&, long) { return ""; }
 
@@ -67,6 +87,10 @@ struct Frame {
     float moveForm = -1;     // 0 robot / 1 vehicle movement form, -1 if the build has no moveForm()
     float fineAim = -1;      // controller fine-aim active (1/0), -1 if unavailable
     float fov = -1;          // controller FOV (deg), -1 if unavailable
+    float progress = -1;     // transform progress 0..1 (-1 unavailable)
+    float wUsable = -1, wRestored = -1;   // weapon usable / restored (1/0, -1 unavailable)
+    core::Vec3 meshOff;      // drawn-mesh offset from the pawn origin (transform height blend)
+    layer::VehSnap veh;      // vehicle state machine (valid=false when not exposed)
     core::Vec3 muzzle;   // world-space barrel tip (valid when weaponVisible)
 };
 

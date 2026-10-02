@@ -34,6 +34,12 @@ void checkVehicleMaterials(Report& r);
 void checkMapContent(Report& r);
 void checkInputEdges(Report& r);
 
+// Milestone-03 suites (M03Checks.cpp).
+void checkTransformTimeline(Report& r);
+void checkVehicleFeel(Report& r);
+void checkFineAimPresentation(Report& r);
+void checkTraceCost(Report& r);
+
 // Compare measured metrics against values captured from the ORIGINAL game.
 void compareReference(Report& r, const std::string& path);
 
