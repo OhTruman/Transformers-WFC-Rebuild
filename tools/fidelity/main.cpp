@@ -60,6 +60,10 @@ int main(int argc, char** argv) {
         {"transform", fid::checkTransform},     {"animation", fid::checkAnimation},
         {"muzzle", fid::checkMuzzle},           {"determinism", fid::checkDeterminism},
         {"performance", fid::checkPerformance}, {"map", fid::checkMap},
+        {"transform_momentum", fid::checkTransformMomentum}, {"fast_movement", fid::checkFastMovement},
+        {"fine_aim", fid::checkFineAim},        {"boost", fid::checkBoost},
+        {"vehicle_materials", fid::checkVehicleMaterials}, {"map_content", fid::checkMapContent},
+        {"input_edges", fid::checkInputEdges},
     };
     fid::Report report;
     std::printf("wfc_fidelity: assets=%s (%s)\n", fid::Models::get() ? "loaded" : "unavailable",

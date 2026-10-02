@@ -14,6 +14,22 @@ Built by default with the main tree (`.\build.ps1 -Jobs 2` → `build/bin/wfc_fi
 .\build\bin\wfc_fidelity.exe --dump-models         # clip names/categories/durations + skeleton
 .\tools\fidelity\capture.ps1 -Name strafe -Frames 120 -Env @{ WFC_AUTOSTRAFE='1' }   # PNG still
 ```
+### Playtest suites and the runtime probe
+`PlaytestChecks.cpp` adds `transform_momentum`, `fast_movement`, `fine_aim`, `boost`,
+`input_edges`, `vehicle_materials` and `map_content` (see [PLAYTEST-01.md](PLAYTEST-01.md)). The
+material and map suites read Rendering's generated render data when `WFC_RENDER_DATA` points at
+it (`tools/render/build_render_data.ps1`).
+
+`runtime-probe.ps1` drives the real `wfc_rebuild.exe` through scripted scenarios: startup,
+sustained fire, reload while moving, manual reload press, boost, transform and fixed-camera stills.
+It also runs an offline material-consistency check, and turns logs into the same report JSON:
+```powershell
+.\tools\fidelity\runtime-probe.ps1 -Exe work\ab\int\build\bin\wfc_rebuild.exe -RenderData work\int-src\work\render -Name int
+.\tools\fidelity\runtime-probe.ps1 -Exe … -RenderData … -Name m -Sections materials   # one section
+```
+The exe integrates wall-clock time, so probe scenarios assert presence and counts, not timings;
+exact numbers come from `wfc_fidelity`.
+
 ### Cross-branch A/B and merge gating
 ```powershell
 .\tools\fidelity\ab.ps1 -Ref agents/gameplay                        # → work\ab\agents_gameplay\report.json
@@ -61,5 +77,7 @@ Run from the worktree root (the reference sheet path is relative). Assets are re
 - `WorldStub.cpp` replaces `World::fireHitscan` (records shots). World.cpp is not linked.
 - The legacy `tests/GameplayTests.cpp` targets an API that no longer exists (`game/Gameplay.h`) and is not built; this harness supersedes it.
 - The in-game `WFC_SMOKE_FRAMES` path integrates wall-clock time, so its numbers vary per run; prefer this harness for numbers and `capture.ps1` for pictures.
+
+Expectations confirmed from native RE: [RE-EXPECTATIONS.md](RE-EXPECTATIONS.md) (`conf` checks: PASS when the build matches a CONFIRMED original, KNOWN with an owner otherwise).
 
 Findings by owning workstream: [FINDINGS.md](FINDINGS.md). Integration checkpoint (four owner patches, duplicated-work merge warning): [CHECKPOINT.md](CHECKPOINT.md).

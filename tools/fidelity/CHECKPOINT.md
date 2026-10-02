@@ -1,5 +1,10 @@
 # Experimental / Fidelity — integration checkpoint (2026-10-01)
 
+> **Superseded in part by native RE evidence:** see [RE-EXPECTATIONS.md](RE-EXPECTATIONS.md).
+> - Patch 4 is withdrawn.
+> - Patches 1–3 no longer apply to Gameplay Pass 12. Their intent (trapezoidal jump, 37 UU step,
+>   projected wall slide) is now CONFIRMED; see [proposals/README.md](proposals/README.md).
+
 Branch `agents/experimental`. Tooling and findings only: **no product code in this branch was
 changed, and nothing was applied to Gameplay or Systems.** Validated against owner heads
 **agents/gameplay 8045676 (Pass 9)** and **agents/systems 3160a66**. Neither head has moved since.
@@ -74,7 +79,11 @@ The patches are LF and apply cleanly to both LF and CRLF checkouts.
     overload is kept, so `World::fireHitscan` is unchanged.
 - **Overlap:** none. Neither branch touches `Collision.*`.
 
-### 4. `systems-1-fire-interval-remainder.patch`
+### 4. ~~`systems-1-fire-interval-remainder.patch`~~ — WITHDRAWN (native RE, 2026-10-01)
+The original's refire timer is non-looping, uses a strict `>` and discards overshoot, giving
+0.0667 s ≈ 900 RPM at 30/60 Hz (RE TARGETED_PASS #6). The rebuild already matches it, and the
+patch file is deleted. The original text is kept below for history only.
+
 - **Owner:** Systems.
 - **Subsystem:** weapon refire timing.
 - **Bug:** the Ion Blaster fires at 900 RPM against the authored FireInterval 0.065 s (923 RPM).

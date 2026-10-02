@@ -23,12 +23,15 @@ namespace fid {
 // branch (ab.ps1). Each returns -1 when the Character under test lacks the accessor.
 namespace layer {
 #define FID_OPTIONAL_ACCESSOR(name)                                                              \
-    template <class C> auto name(const C& c, int) -> decltype((float)c.name()) { return c.name(); } \
+    template <class C> auto name(const C& c, int) -> decltype((float)c.name()) { return (float)c.name(); } \
     template <class C> float name(const C&, long) { return -1.0f; }
 FID_OPTIONAL_ACCESSOR(reloadWeight)
 FID_OPTIONAL_ACCESSOR(aimWeight)
 FID_OPTIONAL_ACCESSOR(aimPitchNorm)
 FID_OPTIONAL_ACCESSOR(upperWeight)       // agents/systems UpperBodyCustom slot
+FID_OPTIONAL_ACCESSOR(moveForm)          // agents/gameplay Pass 11: movement/physics form (switches at fold start)
+FID_OPTIONAL_ACCESSOR(fineAiming)        // PlayerController (Pass 11)
+FID_OPTIONAL_ACCESSOR(fovXDeg)           // PlayerController smoothed FOV (Pass 11)
 #undef FID_OPTIONAL_ACCESSOR
 template <class C> auto upperAnimName(const C& c, int) -> decltype(std::string(c.upperAnimName())) { return c.upperAnimName(); }
 template <class C> std::string upperAnimName(const C&, long) { return ""; }
@@ -61,6 +64,9 @@ struct Frame {
     float spread = 0;
     // Animation-layer weights when the Character exposes them (agents/gameplay Pass 7+); -1 otherwise.
     float reloadW = -1, aimW = -1, aimPitchN = -1;
+    float moveForm = -1;     // 0 robot / 1 vehicle movement form, -1 if the build has no moveForm()
+    float fineAim = -1;      // controller fine-aim active (1/0), -1 if unavailable
+    float fov = -1;          // controller FOV (deg), -1 if unavailable
     core::Vec3 muzzle;   // world-space barrel tip (valid when weaponVisible)
 };
 
@@ -91,6 +97,18 @@ public:
 
     // One fixed step with the given input (pressed[] edges are consumed this step).
     void step(const platform::InputFrame& in);
+    // A render frame that runs ZERO fixed steps (Application::run: handleInput every frame,
+    // applyToPawn per fixed step). Happens whenever the frame rate exceeds the 60 Hz sim rate.
+    void frameWithoutStep(const platform::InputFrame& in) { controller().handleInput(in, dt_); }
+    // A real key tap: one step with `b` pressed+held, then one step released (other keys in `base`
+    // stay held). Works for press-triggered and release-triggered (WFC reload) handling alike.
+    void tap(platform::Button b, platform::InputFrame base = {}) {
+        platform::InputFrame f = base;
+        f.down[(int)b] = true;
+        f.pressed[(int)b] = true;
+        step(f);
+        step(base);
+    }
     // Hold an input for `seconds` (edges only on the first step).
     void hold(const platform::InputFrame& in, double seconds);
     void idle(double seconds) { hold(platform::InputFrame{}, seconds); }

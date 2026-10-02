@@ -1,4 +1,5 @@
 #include "Checks.h"
+#include "CheckUtil.h"
 #include "Rig.h"
 #include "assets/Gltf.h"
 #include "assets/Json.h"
@@ -18,44 +19,6 @@ using namespace core::config;
 
 namespace {
 Options gOpt;
-
-float hspeed(const Frame& f) { return std::sqrt(f.vel.x * f.vel.x + f.vel.z * f.vel.z); }
-
-void save(const Rig& r, const std::string& name) {
-    if (!gOpt.traceDir.empty()) r.writeCsv(gOpt.traceDir + "/" + name + ".csv");
-}
-
-bool loadJsonFile(const std::string& path, assets::Json& out) {
-    std::ifstream f(path, std::ios::binary);
-    if (!f) return false;
-    std::stringstream ss;
-    ss << f.rdbuf();
-    return assets::Json::parse(ss.str(), out);
-}
-
-// World point -> normalized device coordinates through the production camera.
-core::Vec3 toNdc(const render::Camera& cam, const core::Vec3& p) {
-    core::Mat4 m = cam.proj() * cam.view();
-    float x = m.m[0] * p.x + m.m[4] * p.y + m.m[8] * p.z + m.m[12];
-    float y = m.m[1] * p.x + m.m[5] * p.y + m.m[9] * p.z + m.m[13];
-    float z = m.m[2] * p.x + m.m[6] * p.y + m.m[10] * p.z + m.m[14];
-    float w = m.m[3] * p.x + m.m[7] * p.y + m.m[11] * p.z + m.m[15];
-    return {x / w, y / w, z / w};
-}
-
-float angleDeg(core::Vec3 a, core::Vec3 b) {
-    float d = core::clampf(core::dot(core::normalize(a), core::normalize(b)), -1.0f, 1.0f);
-    return core::degrees(std::acos(d));
-}
-
-// Time (relative to t0) of the first frame satisfying `pred`; -1 if never.
-template <class P> double firstAfter(const Rig& r, double t0, P pred) {
-    for (const Frame& f : r.trace()) if (f.t > t0 + 1e-9 && pred(f)) return f.t - t0;
-    return -1;
-}
-
-const char* kGameplay = "Gameplay";
-const char* kSystems = "Systems";
 } // namespace
 
 const Options& options() { return gOpt; }
@@ -68,18 +31,21 @@ void checkConstants(Report& r) {
     r.near("gravity_pawn", kGravity, 2940 / 100.0, 1e-4, "m/s2", std::string(ini) + "DefaultGravityZ=-2940");
     r.near("gravity_vehicle", kVehicleGravity, 2940 * 0.66 / 100.0, 0.01, "m/s2",
            std::string(ini) + "RBPhysicsGravityScaling=0.66");
-    const char* pp = "TransGame.xxx Default__TnPlayerPawn.";
-    r.near("robot_ground_speed", kRobotMoveSpeed, 550 / 100.0, 1e-4, "m/s", std::string(pp) + "GroundSpeed=550");
-    r.near("robot_accel", kRobotAccel, 2048 / 100.0, 1e-4, "m/s2", "Engine.xxx Default__Pawn.AccelRate=2048");
-    r.near("robot_air_control", kAirControl, 0.70, 1e-4, "", std::string(pp) + "AirControl=0.70");
-    r.near("robot_air_speed", kAirSpeed, 1500 / 100.0, 1e-4, "m/s", std::string(pp) + "AirSpeed=1500");
-    const char* wmc = "Default__TnPawn._WorkingMovementCapabilities.";
-    r.near("robot_max_jump_height", kRobotMaxJumpH, 625 / 100.0, 1e-4, "m", std::string(wmc) + "MaxJumpHeight=625");
-    r.near("robot_jump_speed_derived", kRobotJumpSpeed, std::sqrt(2.0 * kGravity * kRobotMaxJumpH), 0.01, "m/s",
-           "JumpZ = sqrt(2 g MaxJumpHeight) (derived, keeps apex at MaxJumpHeight)");
-    r.near("pawn_radius", kPawnRadius, 175 / 100.0, 1e-4, "m", std::string(wmc) + "CylinderRadius=175");
-    r.near("pawn_half_height", kPawnHalfHeight, 200 / 100.0, 1e-4, "m", std::string(wmc) + "CylinderHeight=200");
-    r.near("pawn_eye_height", kEyeHeight, (200 + 80) / 100.0, 1e-4, "m", "CylinderHeight 200 + Default__TnPawn.BaseEyeHeight 80");
+    // Robot movement values. Default__TnPlayerPawn/Default__TnPawn class defaults (550/2048/0.7/625,
+    // used until 2026-10-01) are OVERWRITTEN at spawn by TnPawn.ApplyTransformer from Optimus_ROBODEF.
+    const char* rd = "RE-Workspace notes/HANDOFF_2026-10-01.md #1 (TnPawn.ApplyTransformer + Optimus_ROBODEF) ";
+    r.conf("robot_ground_speed", kRobotMoveSpeed, 1400 / 100.0, 1e-4, "m/s", std::string(rd) + "BaseGroundSpeed=1400", kGameplay,
+           "class default 550 is superseded; full stick input = 14 m/s jog (the 'missing fast movement')");
+    r.conf("robot_accel", kRobotAccel, 12000 / 100.0, 1e-4, "m/s2", std::string(rd) + "AccelRate=12000", kGameplay);
+    r.conf("robot_air_control", kAirControl, 0.40, 1e-4, "", std::string(rd) + "AirControl=0.4", kGameplay);
+    r.conf("robot_air_speed", kAirSpeed, 1200 / 100.0, 1e-4, "m/s", std::string(rd) + "AirSpeed=1200", kGameplay);
+    r.conf("robot_max_jump_height", kRobotMaxJumpH, 500 / 100.0, 1e-4, "m", std::string(rd) + "JumpHeight=500 (SharedAcrobatics)", kGameplay);
+    r.conf("robot_jump_speed", kRobotJumpSpeed, std::sqrt(2.0 * 29.40 * 5.0), 0.01, "m/s",
+           std::string(rd) + "JumpZ = sqrt(2*2940*500) = 1714.6 UU/s", kGameplay);
+    r.conf("pawn_radius", kPawnRadius, 200 / 100.0, 1e-4, "m", std::string(rd) + "cylinder R200", kGameplay);
+    r.near("pawn_half_height", kPawnHalfHeight, 200 / 100.0, 1e-4, "m", std::string(rd) + "cylinder H200");
+    r.conf("pawn_eye_height", kEyeHeight, (200 + 150) / 100.0, 1e-4, "m", std::string(rd) + "CylinderHeight 200 + BaseEyeHeight 150",
+           kGameplay);
     game::FormTuning rt = game::tuningFor(game::Form::Robot);
     r.truth("robot_box_matches_cylinder", rt.boxSize.x == 2 * kPawnRadius && rt.boxSize.y == 2 * kPawnHalfHeight,
             "tuningFor(Robot).boxSize == capsule diameter x full height");
@@ -87,14 +53,23 @@ void checkConstants(Report& r) {
     const char* hc = "TransGame.xxx Default__TnHoverCarSimulationBlueprint.";
     r.near("vehicle_max_speed", kVehicleMoveSpeed, 1500 / 100.0, 1e-4, "m/s", std::string(hc) + "MaxLinearSpeed=1500");
     r.near("vehicle_accel", kVehicleAccel, 3000 / 100.0, 1e-4, "m/s2", std::string(hc) + "MaxLinearAcceleration=3000");
-    r.near("vehicle_dash_speed", kVehicleBoostSpeed, 5000 / 100.0, 1e-4, "m/s", std::string(hc) + "DashSpeed=5000");
-    r.near("vehicle_dash_duration", kVehicleDashTime, 0.3, 1e-4, "s", std::string(hc) + "DashDuration=0.3");
-    r.near("vehicle_hover_height", kVehicleHoverH, 200 / 100.0, 1e-4, "m", std::string(hc) + "SuspensionRadius=200");
+    // Optimus uses VEH_SHARED_p.HoverTruck_Physics, not the class defaults (DashSpeed 5000 / 0.3 s are
+    // unused class defaults). Boost (LT/RMB) = Driving mode, Truck MaxSpeed 3000; the 3000 UU/s x 0.5 s
+    // dash is the VehicleSpecialMove (Shift / RB). Both top out at 30 m/s.
+    const char* ht = "RE-Workspace notes/TARGETED_PASS2_2026-10-01.md #2 + HANDOFF #6 (HoverTruck_Physics) ";
+    r.conf("vehicle_boost_speed", kVehicleBoostSpeed, 3000 / 100.0, 1e-4, "m/s",
+           std::string(ht) + "Driving MaxSpeed 3000 / hover dash 3000", kGameplay);
+    r.conf("vehicle_dash_duration", kVehicleDashTime, 0.5, 1e-4, "s", std::string(ht) + "hover dash 0.5 s, forward only, 2 s cooldown", kGameplay);
+    r.conf("vehicle_hover_height", kVehicleHoverH, 185 / 100.0, 1e-4, "m", std::string(ht) + "SuspensionRadius=185", kGameplay);
     r.near("vehicle_jump_speed", kVehicleJumpSpeed, 1200 / 100.0, 1e-4, "m/s", std::string(hc) + "JumpLinearSpeed=1200");
-    r.near("vehicle_turn_rate", kVehicleTurnRate, 3.14159, 1e-3, "rad/s", std::string(hc) + "AiMaxAngularSpeed");
+    r.info("vehicle_turn_rate", kVehicleTurnRate, "rad/s",
+           "AiMaxAngularSpeed is AI-only: the player's hover heading yaw-tracks the CAMERA every physics step "
+           "(RE HANDOFF #7); see orientation.vehicle_heading_follows_camera");
 
-    r.near("camera_fov_horizontal", kCamFovXDeg, 75.0, 1e-4, "deg", "Xe-TransCamera.ini TnFovCameraBehavior DefaultFOV=75");
-    r.near("camera_fov_smooth", kCamFovSmooth, 0.4, 1e-4, "s", "Xe-TransCamera.ini TnFovCameraBehavior SmoothTime=0.4");
+    r.conf("camera_fov_horizontal", kCamFovXDeg, 80.0, 1e-4, "deg",
+           "RE TARGETED_PASS #3: CAM_Strategies_p.OverTheShoulder_STRATEGY TnFovCameraBehavior FOV 80 "
+           "(Xe-TransCamera.ini DefaultFOV 75 is the class default the strategy overrides)", kGameplay);
+    r.near("camera_fov_smooth", kCamFovSmooth, 0.4, 1e-4, "s", "OverTheShoulder_STRATEGY FOV SmoothTime 0.4 (RE TARGETED_PASS #3)");
     r.near("fine_aim_speed_mult", kFineAimSpeedMult, 0.5, 1e-4, "", "Xe-TransGame.ini TnFineAimManager._GroundSpeedMultiplier");
     r.near("transform_blend_in", kTransformBlendIn, 0.115, 1e-4, "s", "Xe-TransGame.ini TnTransformation._BlendInTime");
     r.near("transform_blend_out", kTransformBlendOut, 0.25, 1e-4, "s", "Xe-TransGame.ini TnTransformation._BlendOutTime");
@@ -106,11 +81,13 @@ void checkConstants(Report& r) {
     // Camera projection: authored horizontal FOV must survive the vertical conversion.
     render::Camera cam;
     cam.aspect = (float)kWindowWidth / (float)kWindowHeight;
+    cam.fovXDeg = kCamFovXDeg;
     core::Mat4 p = cam.proj();
     double hfov = 2.0 * std::atan(1.0 / p.m[0]);
-    r.near("camera_projected_hfov", core::degrees((float)hfov), 75.0, 0.01, "deg",
-           "render::Camera::proj() at 16:9 must keep the authored 75 deg horizontal FOV");
-    r.info("sim_rate", kSimHz, "Hz", "rebuild fixed step; original 360 tick rate not yet measured (30 Hz typical)");
+    r.near("camera_projected_hfov", core::degrees((float)hfov), kCamFovXDeg, 0.01, "deg",
+           "render::Camera::proj() at 16:9 must keep the configured horizontal FOV (UE3 FOV is horizontal)");
+    r.info("sim_rate", kSimHz, "Hz", "rebuild fixed step. Original: UE3 runs exactly one sim tick per rendered frame "
+           "(RE TARGETED_PASS2 #5), 30/60 Hz");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -175,15 +152,16 @@ void checkWeaponBehaviour(Report& r) {
         // Only shots from the first magazine (auto-reload follows).
         int mag = std::min<int>((int)shots.size(), ref.magSize);
         double interval = mag > 1 ? (shots[(size_t)mag - 1].t - shots[0].t) / (mag - 1) : 0;
-        r.known("fire_interval_effective", interval, ref.fireInterval, 0.0005, "s",
-                "weapon.json FireIntervalModifier 0.065 s (923 RPM)", kSystems,
-                "Weapon::onFired sets cooldown = interval, discarding the sub-step remainder, so at 60 Hz "
-                "every shot waits a whole 4th step (66.7 ms, 900 RPM, mag empties ~0.08 s late). UE3 looping "
-                "refire timers subtract Rate and keep the remainder (MED: verify in original capture). "
-                "Fix: cooldown += fireInterval.");
-        r.info("rounds_per_minute", interval > 0 ? 60.0 / interval : 0, "rpm", "", 60.0 / ref.fireInterval);
-        r.info("mag_empty_time", mag > 1 ? shots[(size_t)mag - 1].t - shots[0].t : 0, "s",
-               "first to 50th shot", (ref.magSize - 1) * ref.fireInterval);
+        // Original cadence: RefireCheckTimer is a NON-looping SetTimer re-armed each shot; native
+        // SetTimer resets Count=0 and TickTimers fires when Rate < Count (strict), so overshoot is
+        // discarded and the interval is the first frame boundary > 0.065 s: 1/15 s at 30 or 60 Hz.
+        const char* cad = "RE TARGETED_PASS #6 / PASS2 #6: SetTimer 0x82F292A8 (Count=0), TickTimers 0x82F867C8 "
+                          "(strict >, overshoot discarded) -> 0.0667 s at 30/60 Hz (~900 RPM) despite authored 0.065";
+        r.conf("fire_interval_effective", interval, 1.0 / 15.0, 0.0005, "s", cad, kSystems,
+               "do NOT carry the remainder (the withdrawn 923-RPM proposal was wrong)");
+        r.conf("rounds_per_minute", interval > 0 ? 60.0 / interval : 0, 900.0, 5.0, "rpm", cad, kSystems);
+        r.conf("mag_empty_time", mag > 1 ? shots[(size_t)mag - 1].t - shots[0].t : 0, (ref.magSize - 1) / 15.0, 0.02, "s",
+               std::string(cad) + "; first to 50th shot = 49 intervals", kSystems);
         const Frame* reloadStart = nullptr;
         const Frame* reloadEnd = nullptr;
         for (const Frame& f : rig.trace()) {
@@ -206,11 +184,13 @@ void checkWeaponBehaviour(Report& r) {
         while (rig.last().shots < 10) rig.step(Rig::down({Button::Fire}));
         r.near("spread_after_10", rig.pawn().weapon().spread, ref.spreadMin + 10 * ref.spreadPerShot, 1e-4, "",
                "PerShotSpreadModifier: 0.08 + 10 x 0.005");
-        rig.step(Rig::press(Button::Reload));
-        double t0 = rig.time();
+        double tp = rig.time();
+        rig.tap(Button::Reload);   // reload starts on the press (older builds) or on the tap release (WFC, RE PASS2 #5)
         rig.idle(2.0);
-        r.truth("manual_reload_starts", rig.trace()[rig.trace().size() - 120].reloading, "R starts a reload with a partial mag");
-        double dur = firstAfter(rig, t0, [](const Frame& f) { return !f.reloading; });   // reload began in the press step
+        double start = firstAfter(rig, tp, [](const Frame& f) { return f.reloading; });
+        r.truth("manual_reload_starts", start >= 0 && start <= 2 * rig.dt() + 1e-6, "an R tap starts a reload with a partial mag",
+                "reload began " + std::to_string(start) + " s after the tap");
+        double dur = start >= 0 ? firstAfter(rig, tp + start, [](const Frame& f) { return !f.reloading; }) : -1;
         r.near("manual_reload_duration", dur, ref.reloadTime, rig.dt() + 1e-6, "s", "weapon.json WeaponReloadAnimTime 1.5");
         r.near("manual_reload_reserve", rig.last().reserve, ref.reserve - 10, 0, "rnd", "only the spent 10 rounds are drawn");
         r.near("spread_after_cooldown", rig.pawn().weapon().spread, ref.spreadMin, 1e-6, "",
@@ -290,10 +270,18 @@ void checkOrientation(Report& r) {
         core::Vec3 toCam = cam.pos - eye;
         core::Vec3 toCamH = core::normalize(core::Vec3{toCam.x, 0, toCam.z});
         core::Vec3 face = core::forwardFromYawPitch(rig.pawn().yaw(), 0);
-        r.near("camera_behind_body", core::dot(face, toCamH), -1.0, 1e-3, "dot",
-               "third-person chase cam sits directly behind the facing direction");
-        r.info("camera_distance", core::length(toCam), "m", "kCamDistance [PROV] - TnCamera orbit data not recovered");
-        r.info("pawn_screen_x", toNdc(cam, eye).x, "ndc", "0 = centred; WFC shoulder offset (if any) not recovered");
+        r.truth("camera_behind_body", core::dot(face, toCamH) < -0.85f,
+                "third-person cam sits behind the facing direction (OverTheShoulder: shoulder offset moves it sideways)",
+                "dot(face, toCam) = " + std::to_string(core::dot(face, toCamH)));
+        core::Vec3 rightAx = core::normalize(core::cross(face, {0, 1, 0}));
+        r.info("camera_shoulder_offset", core::dot(toCam, rightAx), "m",
+               "lateral camera offset (+ = right); RE OverTheShoulder offset (150,300,..) UU, semantics PROV");
+        r.info("camera_distance", core::length(toCam), "m",
+               "eye->camera. Original (RE TARGETED_PASS #3, CONFIRMED values): orbit 800 UU from an anchor at actor+200 Z; "
+               "metric definitions differ, compare via a capture");
+        r.info("pawn_screen_x", toNdc(cam, eye).x, "ndc",
+               "Original shoulder offset (150,300,{150,-35,150}) UU by pitch -75/0/75, smooth 0.3 (values CONFIRMED, "
+               "screen-space semantics PROV)");
         r.info("pawn_feet_screen_y", toNdc(cam, rig.pawn().position()).y, "ndc", "framing of the feet");
     }
     {
@@ -308,9 +296,24 @@ void checkOrientation(Report& r) {
         if (shotLog().size() > base) {
             const ShotRecord& s = shotLog()[base];
             render::Camera cam = rig.camera();
-            core::Vec3 n = toNdc(cam, s.origin + core::normalize(s.dir) * 50.0f);
-            r.near("aim_ray_through_crosshair", std::sqrt(n.x * n.x + n.y * n.y), 0.0, 1e-3, "ndc",
-                   "hitscan dir = camera forward from the eye; impact must land under the crosshair");
+            // Shot ray vs camera centre ray: the shot must pass through the crosshair point (on the
+            // camera ray), from the eye; with a shoulder offset the two rays converge rather than coincide.
+            core::Vec3 cf = core::forwardFromYawPitch(cam.yaw, cam.pitch), sd = core::normalize(s.dir);
+            core::Vec3 w0 = s.origin - cam.pos;
+            float b = core::dot(cf, sd), dd = core::dot(cf, w0), e = core::dot(sd, w0);
+            float den = 1.0f - b * b;
+            float tc = 0, us = 0, miss;
+            if (den < 1e-6f) {   // parallel: perpendicular distance between the lines
+                miss = core::length(w0 - cf * dd);
+            } else {
+                tc = (dd - b * e) / den;
+                us = (b * dd - e) / den;
+                miss = core::length((s.origin + sd * us) - (cam.pos + cf * tc));
+            }
+            r.near("aim_ray_through_crosshair", miss, 0.0, 0.05, "m",
+                   "hitscan ray from the eye passes through the crosshair point (camera centre ray)");
+            r.info("aim_convergence_distance", den < 1e-6f ? 0.0 : tc, "m",
+                   "distance along the camera ray where the shot crosses it (0 = rays coincide)");
             r.near("aim_origin_eye_height", s.origin.y - rig.pawn().position().y, kEyeHeight, 1e-4, "m",
                    "PlayerController: trace starts at pawn eye (CylinderHeight+BaseEyeHeight)");
         } else {
@@ -318,17 +321,29 @@ void checkOrientation(Report& r) {
         }
     }
     {
-        // Vehicle steers toward its travel direction.
+        // Hover vehicle heading: the original yaw-tracks the CAMERA every physics step and the stick
+        // strafes in vehicle-local axes (travel-direction facing exists only in Driving/boost).
+        const char* hv = "RE HANDOFF #7 / TARGETED_PASS2 #1 heading row (SetRBRotation = Pawn.Rotation; hover yaw-tracks "
+                         "the camera every step)";
         Rig rig(60, false);
         rig.pawn().setForm(game::Form::Vehicle);
         rig.idle(0.2);
-        rig.hold(Rig::down({Button::Forward}), 1.5);
-        rig.hold(Rig::down({Button::Right}), 2.0);
-        const Frame& f = rig.last();
-        r.near("vehicle_faces_travel", angleDeg(core::forwardFromYawPitch(f.yaw, 0), {f.vel.x, 0, f.vel.z}), 0.0, 0.5,
-               "deg", "vehicle faces its velocity (steering), not the aim (FIDELITY pass 6, MED)");
-        save(rig, "orient_vehicle_turn");
-        // Saturating manoeuvre: full reversal at cruise demands a 180 deg heading change at once.
+        rig.hold(Rig::down({Button::Forward}), 1.0);
+        rig.hold(Rig::down({Button::Right}), 1.5);   // pure strafe at camera yaw 0
+        auto headingErr = [](const Rig& g) {
+            const Frame& f = g.last();
+            return std::fabs(core::degrees((float)std::remainder((double)f.yaw - f.camYaw, 2 * core::PI)));
+        };
+        r.conf("vehicle_heading_follows_camera_strafe", headingErr(rig), 0.0, 1.0, "deg", hv, kGameplay,
+               "heading minus camera yaw while strafing right in hover");
+        platform::InputFrame turn = Rig::down({Button::Forward});
+        turn.mouseDX = 300;   // ~38 deg camera turn in one frame
+        rig.step(turn);
+        rig.hold(Rig::down({Button::Forward}), 0.1);
+        r.conf("vehicle_heading_follows_camera_turn", headingErr(rig), 0.0, 1.0, "deg", hv, kGameplay,
+               "heading minus camera yaw 0.1 s after a mouse turn");
+        save(rig, "orient_vehicle_heading");
+        // Reversal manoeuvre kept as a measurement (AiMaxAngularSpeed is AI steering, not the player hover).
         Rig rev(60, false);
         rev.pawn().setForm(game::Form::Vehicle);
         rev.idle(0.2);
@@ -341,10 +356,8 @@ void checkOrientation(Report& r) {
             double d = std::remainder((double)tr[i].yaw - tr[i - 1].yaw, 2 * core::PI);
             maxRate = std::max(maxRate, std::fabs(d) / rev.dt());
         }
-        r.known("vehicle_max_yaw_rate", core::degrees((float)maxRate), 180.0, 5.0, "deg/s",
-                "Default__TnHoverCarSimulationBlueprint.AiMaxAngularSpeed ~pi rad/s", kGameplay,
-                "measured on a full reversal at cruise. Unlimited = facing snaps to velocity. Confirm in an "
-                "original capture whether the 'Ai' rate also limits player steering.");
+        r.info("vehicle_max_yaw_rate_on_reversal", core::degrees((float)maxRate), "deg/s",
+               "original hover heading does not follow travel at all (camera-tracked); kept as a measurement");
         save(rev, "orient_vehicle_reverse");
     }
 }
@@ -376,20 +389,22 @@ void checkMovement(Report& r) {
         double t0 = rig.time();
         rig.hold(Rig::down({Button::Forward}), 2.0);
         double tTop = firstAfter(rig, t0, [](const Frame& f) { return hspeed(f) >= kRobotMoveSpeed - 1e-3f; });
-        r.near("robot_time_to_top_speed", tTop, kRobotMoveSpeed / kRobotAccel, dt60 + 1e-6, "s",
-               "GroundSpeed 550 / AccelRate 2048 (linear accel)");
-        r.near("robot_top_speed", hspeed(rig.last()), kRobotMoveSpeed, 1e-3, "m/s", "Default__TnPlayerPawn.GroundSpeed 550");
+        // TnPawn.CalcVelocity (RE HANDOFF #2, pseudocode TARGETED_PASS #1e): per-local-axis accel clamp at
+        // AccelRate (momentum P only applies above MaxSpeed); no stick on ground -> desired 0.
+        const char* cv = "RE HANDOFF #1/#2: TnPawn.CalcVelocity, Optimus_ROBODEF GroundSpeed 1400 AccelRate 12000";
+        r.conf("robot_time_to_top_speed", tTop, 1400.0 / 12000.0, dt60 + 1e-6, "s", cv, kGameplay);
+        r.conf("robot_top_speed", hspeed(rig.last()), 14.0, 0.01, "m/s", cv, kGameplay,
+               "no sprint state exists: full input = 14 m/s jog (the playtest's 'missing fast movement')");
         double t1 = rig.time();
         rig.idle(1.0);
         double tStop = firstAfter(rig, t1, [](const Frame& f) { return hspeed(f) < 1e-3f; });
         core::Vec3 pStop = rig.last().pos;
         const Frame* at = nullptr;
         for (const Frame& f : rig.trace()) if (std::fabs(f.t - t1) < 1e-6) at = &f;
-        r.info("robot_stop_time", tStop, "s",
-               "rebuild brakes at AccelRate; original UE3 walking braking (friction) not yet captured",
-               kRobotMoveSpeed / kRobotAccel);
-        if (at) r.info("robot_stop_distance", core::length(pStop - at->pos), "m", "",
-                       kRobotMoveSpeed * kRobotMoveSpeed / (2 * kRobotAccel));
+        r.conf("robot_stop_time", tStop, 1400.0 / 12000.0, dt60 + 1e-6, "s",
+               std::string(cv) + "; no input on ground -> desired 0, braking at AccelRate", kGameplay);
+        if (at) r.conf("robot_stop_distance", core::length(pStop - at->pos), 14.0 * 14.0 / (2 * 120.0), 0.15, "m",
+                       std::string(cv) + "; v^2/2a", kGameplay);
         save(rig, "move_robot_run_stop");
     }
     {
@@ -405,18 +420,17 @@ void checkMovement(Report& r) {
     {
         double apex, air;
         jumpMetrics(60, apex, air);
-        r.known("robot_jump_apex", apex, kRobotMaxJumpH, 0.05, "m",
-                "Default__TnPawn MaxJumpHeight 625 UU", kGameplay,
-                "explicit Euler (velocity updated before position) overshoots by ~JumpZ*dt/2 and varies with "
-                "tick rate; UE3 physFalling integrates with the average of old/new velocity, which lands on "
-                "MaxJumpHeight. Fix: p += (vOld + vNew) * 0.5 * dt for the vertical axis.");
+        // physFalling 0x82F71D88: 0.05 s substeps, trapezoidal -> apex exactly JumpHeight at any frame rate.
+        const char* fl = "RE STEPUP_LEDGE #4 (physFalling, trapezoidal 0.05 s substeps) + JumpHeight 500 (Optimus_ROBODEF)";
+        r.conf("robot_jump_apex", apex, 5.0, 0.05, "m", fl, kGameplay,
+               "explicit Euler overshoots by ~JumpZ*dt/2 (Experimental proposal gameplay-1 = trapezoid)");
         r.near("robot_jump_airtime", air, 2 * kRobotJumpSpeed / kGravity, 2 * dt60, "s",
-               "2 JumpZ / g (derived from MaxJumpHeight + DefaultGravityZ)");
+               "2 JumpZ / g (derived from the configured jump speed + DefaultGravityZ)");
         double a30, x30, a120, x120;
         jumpMetrics(30, a30, x30);
         jumpMetrics(120, a120, x120);
-        r.info("robot_jump_apex_30hz", a30, "m", "frame-rate dependence (original apex is rate-independent)", kRobotMaxJumpH);
-        r.info("robot_jump_apex_120hz", a120, "m", "", kRobotMaxJumpH);
+        r.conf("robot_jump_apex_30hz", a30, 5.0, 0.05, "m", fl, kGameplay, "apex must not depend on tick rate");
+        r.conf("robot_jump_apex_120hz", a120, 5.0, 0.05, "m", fl, kGameplay, "apex must not depend on tick rate");
     }
     {
         Rig rig(60, false);
@@ -441,38 +455,48 @@ void checkMovement(Report& r) {
         ac.step(Rig::press(Button::Jump));
         ac.hold(Rig::down({Button::Right}), 0.6);
         r.info("robot_air_control_lateral_speed_0p6s", hspeed(ac.last()), "m/s",
-               "standing jump + strafe: AirControl 0.70 x AccelRate, capped at GroundSpeed",
-               std::min(0.6 * kRobotAccel * kAirControl, (double)kRobotMoveSpeed));
+               "standing jump + strafe; original air CalcVelocity MaxSpeed = AirSpeed 1200, AirControl 0.4 (application PROV)",
+               std::min(0.6 * kRobotAccel * kAirControl, (double)kAirSpeed));
     }
     {
         Rig rig(60, false);
         rig.pawn().setForm(game::Form::Vehicle);
         rig.idle(0.5);
-        r.near("vehicle_hover_height", rig.pawn().position().y - rig.pawn().groundY, kVehicleHoverH, 1e-3, "m",
-               "TnHoverCarSimulationBlueprint.SuspensionRadius 200");
+        r.conf("vehicle_hover_height", rig.pawn().position().y - rig.pawn().groundY, 1.85, 0.01, "m",
+               "RE TARGETED_PASS2 #2 / Pass 11: VEH_SHARED_p.HoverTruck_Physics SuspensionRadius 185", kGameplay);
         double t0 = rig.time();
         rig.hold(Rig::down({Button::Forward}), 2.0);
         r.near("vehicle_cruise_speed", hspeed(rig.last()), kVehicleMoveSpeed, 1e-3, "m/s", "MaxLinearSpeed 1500");
         r.near("vehicle_time_to_cruise",
                firstAfter(rig, t0, [](const Frame& f) { return hspeed(f) >= kVehicleMoveSpeed - 1e-3f; }),
                kVehicleMoveSpeed / kVehicleAccel, dt60 + 1e-6, "s", "MaxLinearAcceleration 3000");
+        // Boost (held) = Hovering -> Driving: wheeled car sim, Truck MaxSpeed 3000, MaxAccel 2500 (extra
+        // accel up to 5000 at low speed); release -> Hovering with a 0.5 s drift ramp. The rebuild's boost
+        // key is Sprint (Shift); the original is RMB / LT (see boost.boost_on_authored_input).
+        const char* bd = "RE HANDOFF #6 / TARGETED_PASS2 #2.1 (Driving: Truck MaxSpeed 3000, MaxAccel 2500; release -> "
+                         "Hovering with 0.5 s drift)";
         double t1 = rig.time();
-        rig.hold(Rig::down({Button::Forward, Button::Sprint}), 2.0);
-        r.near("vehicle_dash_speed", hspeed(rig.last()), kVehicleBoostSpeed, 1e-3, "m/s", "DashSpeed 5000");
-        r.info("vehicle_dash_rise_time",
+        rig.hold(boostHeld({Button::Forward}), 2.0);   // authored boost input (FineAim button) when the build has it
+        r.conf("vehicle_boost_top_speed", hspeed(rig.last()), 30.0, 0.05, "m/s", bd, kGameplay);
+        r.info("vehicle_boost_rise_time",
                firstAfter(rig, t1, [](const Frame& f) { return hspeed(f) >= kVehicleBoostSpeed - 1e-3f; }), "s",
-               "cruise -> DashSpeed", (kVehicleBoostSpeed - kVehicleMoveSpeed) / (kVehicleBoostSpeed / kVehicleDashTime));
+               "cruise -> boost top speed; original MaxAccel 2500 UU/s2 (low-speed extra accel PROV)", (30.0 - 15.0) / 25.0);
         double above = 0;
         for (const Frame& f : rig.trace()) if (f.t > t1 && hspeed(f) > kVehicleMoveSpeed + 0.5f) above += rig.dt();
-        r.info("vehicle_dash_sustained", above, "s",
-               "SUSPECT (MED): held Sprint sustains DashSpeed indefinitely; DashDuration 0.3 suggests a timed burst. "
-               "Owner Gameplay - capture original boost speed curve", kVehicleDashTime);
+        r.confTruth("vehicle_boost_sustained_while_held", above >= 2.0 - 0.6, bd, kGameplay,
+                    "Driving lasts while boost is held (not a timed burst); above-cruise time over a 2 s hold: " +
+                        std::to_string(above) + " s");
         double t2 = rig.time();
+        double vRel = hspeed(rig.last());
         rig.hold(Rig::down({Button::Forward}), 2.0);
-        r.info("vehicle_dash_decay_time",
+        double vNext = 0;
+        for (const Frame& f : rig.trace()) if (f.t > t2) { vNext = hspeed(f); break; }
+        r.confTruth("vehicle_boost_release_no_snap", vNext >= vRel - 1.0, bd, kGameplay,
+                    "speed one step after release " + std::to_string(vNext) + " m/s (from " + std::to_string(vRel) +
+                        "); original drifts back over 0.5 s");
+        r.info("vehicle_boost_decay_time",
                firstAfter(rig, t2, [](const Frame& f) { return hspeed(f) <= kVehicleMoveSpeed + 1e-3f; }), "s",
-               "SUSPECT (MED): releasing Sprint snaps 50 -> 15 m/s in one step (grounded speed cap clamps instantly). "
-               "Model value = decel at MaxLinearAcceleration", (kVehicleBoostSpeed - kVehicleMoveSpeed) / kVehicleAccel);
+               "boost release -> hover cruise (0.5 s drift ramp + hover accel; exact curve via capture)");
         save(rig, "move_vehicle_cruise_dash");
 
         Rig vj(60, false);
@@ -485,7 +509,7 @@ void checkMovement(Report& r) {
         for (const Frame& f : vj.trace()) apex = std::max(apex, (double)f.pos.y);
         r.known("vehicle_jump_apex", apex - base, kVehicleJumpSpeed * kVehicleJumpSpeed / (2 * kVehicleGravity), 0.05, "m",
                 "JumpLinearSpeed 1200 under RB gravity -19.4 (derived)", kGameplay,
-                "same explicit-Euler overshoot as robot_jump_apex");
+                "vehicle jump: apex above hover height (RB jump; integration and authority PROV)");
         save(vj, "move_vehicle_jump");
     }
 }
@@ -517,11 +541,37 @@ void checkCollision(Report& r) {
         double x0 = sl.pawn().position().x, t0 = sl.time();
         sl.hold(Rig::down({Button::Forward, Button::Right}), 2.0);
         double along = (sl.pawn().position().x - x0) / (sl.time() - t0);
-        r.known("wall_slide_speed", along, kRobotMoveSpeed * std::sqrt(0.5), 0.3, "m/s",
-                "UE3 SlideAlongSurface keeps the tangential velocity on contact (engine behaviour)", kGameplay,
-                "CharacterMovement zeroes ALL horizontal velocity when the probe hits, so diagonal input against a "
-                "wall sticks instead of sliding (WFC street corners/doorways feel sticky)");
+        r.conf("wall_slide_speed", along, kRobotMoveSpeed * std::sqrt(0.5), 0.3, "m/s",
+               "RE STEPUP_LEDGE #1 (walking sweep: delta projected on the wall + 2 UU push-out, up to 3 sweeps; "
+               "velocity rebuilt from the actual displacement)", kGameplay,
+               "zeroing all horizontal velocity on contact makes diagonal input stick to walls");
         save(sl, "col_wall_slide");
+    }
+    {
+        // Ledges: the player robot ALWAYS walks off (no stop, no MayFall); horizontal velocity kept, Vz = 0.
+        BoxScene s;
+        s.floor(0, 100);
+        s.box({-30, 0, -6}, {30, 3, 30});   // 3 m platform the pawn starts on; edge at z = -6
+        game::CollisionWorld col;
+        col.build(s.mesh);
+        Rig rig(60, false);
+        rig.setCollision(&col);
+        rig.pawn().setPosition({0, 3.0f, 0});
+        rig.idle(0.2);
+        rig.hold(Rig::down({Button::Forward}), 3.0);
+        const Frame* leave = nullptr;
+        double vBefore = 0;
+        for (const Frame& f : rig.trace()) {
+            if (f.grounded && f.pos.y > 2.9f) vBefore = hspeed(f);
+            if (!leave && !f.grounded && f.t > 0.3) leave = &f;
+        }
+        bool walkedOff = rig.pawn().position().z < -6.0f && rig.pawn().position().y < 0.1f;
+        r.confTruth("walks_off_ledges", walkedOff, "RE STEPUP_LEDGE #3 (player robot always walks off ledges)", kGameplay,
+                    "final z " + std::to_string(rig.pawn().position().z) + ", y " + std::to_string(rig.pawn().position().y));
+        if (leave)
+            r.conf("ledge_leave_speed_ratio", vBefore > 0 ? hspeed(*leave) / vBefore : 0, 1.0, 0.05, "",
+                   "RE STEPUP_LEDGE #3 (horizontal velocity kept when walking off)", kGameplay);
+        save(rig, "col_ledge_walk_off");
     }
     {
         // Ramps: UE3 WalkableFloorZ default 0.7 -> surfaces up to ~45.6 deg are walkable.
@@ -544,33 +594,39 @@ void checkCollision(Report& r) {
     }
     {
         // Step / ledge probe: raised platform of height h ahead of the pawn.
-        const float hs[] = {0.2f, 0.3f, 0.35f, 0.4f, 0.5f, 0.6f, 0.7f, 0.9f, 1.1f, 1.3f, 1.6f, 1.9f};
+        const float hs[] = {0.2f, 0.3f, 0.35f, 0.36f, 0.38f, 0.4f, 0.5f, 0.6f, 0.7f, 0.9f, 1.1f, 1.3f, 1.6f, 1.9f};
         float maxClimb = 0;
         float firstPenetrated = -1;
         std::string detail;
         for (float h : hs) {
+            // Long platform (z -6 .. -90) and a 2.5 s run so the pawn never reaches the far edge at any
+            // recovered speed (14 m/s x 2.5 s = 35 m); classify from the trace while over the platform.
             BoxScene s;
             s.floor(0, 100);
-            s.box({-30, 0, -40}, {30, h, -6});
+            s.box({-30, 0, -90}, {30, h, -6});
             game::CollisionWorld col;
             col.build(s.mesh);
             Rig rig(60, false);
             rig.setCollision(&col);
             rig.idle(0.2);
-            rig.hold(Rig::down({Button::Forward}), 3.0);
-            core::Vec3 p = rig.pawn().position();
-            bool climbed = p.z < -6.5f && std::fabs(p.y - h) < 0.01f;
-            bool inside = p.z < -6.0f && p.y < h - 0.01f;
+            rig.hold(Rig::down({Button::Forward}), 2.5);
+            bool climbed = false, inside = false;
+            for (const Frame& f : rig.trace()) {
+                if (f.pos.z > -8.0f || f.pos.z < -88.0f) continue;   // only while clearly over the platform
+                if (std::fabs(f.pos.y - h) < 0.01f) climbed = true;
+                if (f.pos.y < h - 0.01f) inside = true;
+            }
+            climbed = climbed && !inside;
             if (climbed) maxClimb = std::max(maxClimb, h);
             if (inside && firstPenetrated < 0) firstPenetrated = h;
             char buf[64];
             std::snprintf(buf, sizeof buf, "%.2f:%s ", h, climbed ? "climb" : inside ? "INSIDE" : "blocked");
             detail += buf;
         }
-        r.known("max_step_height", maxClimb, 0.35, 0.05, "m",
-                "UE3 Pawn.MaxStepHeight default 35 UU (no TnPawn override found - CharacterMovement.cpp note)", kGameplay,
-                "kStepUp 0.6 is applied twice (search top + groundHeight window) so ledges up to ~1.2 m are "
-                "stepped onto. Per-height: " + detail);
+        r.conf("max_step_height", maxClimb, 0.37, 0.015, "m",
+               "RE STEPUP_LEDGE #2 (APawn::stepUp 0x82F65358: instant pop up to MaxStepHeight 35 + 2 = 37 UU; "
+               "TnRobotForm MaxStepHeight 35)", kGameplay,
+               "sweep samples 0.35/0.36/0.38/0.40: expect 0.36 climbed, 0.38 blocked. Per-height: " + detail);
         r.knownTruth("no_low_obstacle_penetration", firstPenetrated < 0,
                      "collision invariant: the pawn cylinder never ends inside solid geometry", kGameplay,
                      "wall probe is one ray at capsule centre (2 m): ledges above the step window but below 2 m "
@@ -606,13 +662,27 @@ void checkTransform(Report& r) {
         rig.idle(0.5);
         double t0 = rig.time();
         rig.step(Rig::press(Button::Transform));
-        rig.hold(Rig::down({Button::Forward, Button::Fire}), 1.0);    // must be ignored while folding
+        rig.hold(Rig::down({Button::Forward, Button::Fire}), 1.0);    // movement stays live in the original
         rig.idle(2.0);
         std::string id = c.name;
-        // Times are measured from the start of the step in which the button was pressed.
+        // Original timing (RE HANDOFF #4 / TARGETED_PASS2 #1): target form Activate() + physics swap at
+        // t=0; source Deactivate() / target BeginPlay() at t = min(src clip, dst clip) / Rate (Rate 4 if
+        // downed); both meshes animate the whole duration, source mesh detached at the end.
+        const char* tt = "RE HANDOFF #4 / TARGETED_PASS2 #1 (Activate + physics swap at t=0; end at min(src,dst clip)/Rate)";
         double handoff = firstAfter(rig, t0, [&](const Frame& f) { return f.form != c.from; });
         double end = firstAfter(rig, t0, [&](const Frame& f) { return !f.transforming; });
-        r.info(id + "_handoff_time", handoff, "s", "kTransformHandoffFrac [PROV] x clip", c.clip * kTransformHandoffFrac);
+        r.info(id + "_mesh_handoff_time", handoff, "s",
+               "rebuild switches the drawn mesh at kTransformHandoffFrac; original animates both meshes for the whole "
+               "duration and detaches the source at the end (rendering model, not enforced)", c.clip * kTransformHandoffFrac);
+        float target = c.from == game::Form::Robot ? 1.0f : 0.0f;
+        // Relative to t0 (start of the press step): a switch on the press step itself reads 1 step.
+        double physSwitch = firstAfter(rig, t0, [&](const Frame& f) { return f.moveForm == target; });
+        if (rig.last().moveForm >= 0)
+            r.conf(id + "_movement_form_switch_time", physSwitch, rig.dt(), rig.dt() * 0.5 + 1e-6, "s", tt, kGameplay,
+                   "first step that simulates with the target form's movement");
+        else
+            r.confTruth(id + "_movement_form_switch_at_start", handoff >= 0 && handoff <= rig.dt() + 1e-6, tt, kGameplay,
+                        "build has no moveForm(); falls back to form(), which switches at " + std::to_string(handoff) + " s");
         bool outOk = false, inOk = false;
         std::string inPlayed;
         for (const Frame& f : rig.trace()) {
@@ -627,20 +697,32 @@ void checkTransform(Report& r) {
                      "Transform_ToVehicle_SuperBoost_Veh (0.80 s) first in vehicle_transform_to_vehicle, so the 1.97 s "
                      "robot fold hands off into the wrong (SuperBoost) clip at 50% -> visible pop + transform ends "
                      "~0.5 s early. Played: " + inPlayed + ". Fix: select by name / exclude SuperBoost / match duration.");
-        r.known(id + "_total_time", end, c.clip, 2 * rig.dt() + 1e-6, "s", "transform lasts one paired clip", kGameplay,
-                "includes 1 swallowed step (playClip resets animTime on the first transform step) and the clip "
-                "pairing bug above where present");
+        r.conf(id + "_total_time", end, c.clip, 2 * rig.dt() + 1e-6, "s", tt, kGameplay,
+               "min(src,dst) of the paired clips = the clip length");
         bool moved = false, fired = false, gun = false;
         std::string seq, lastAnim;
         for (const Frame& f : rig.trace()) {
             if (f.t <= t0 || !f.transforming) continue;
-            moved |= hspeed(f) > 1e-4f;
+            moved |= hspeed(f) > 0.5f;
             gun |= f.weaponVisible;
             fired |= f.shots > 0;
             if (f.anim != lastAnim) { seq += (seq.empty() ? "" : " > ") + f.anim; lastAnim = f.anim; }
         }
-        r.truth(id + "_input_locked", !moved && !fired, "TnTransformation: movement/fire input ignored during the fold");
-        r.truth(id + "_weapon_holstered", !gun, "Ion Blaster hidden for the whole transform (pass 6)");
+        // Input is live from frame 0 (controller state flips at DoTransform); only a second transform
+        // and weapon switching are refused.
+        r.confTruth(id + "_movement_input_live", moved,
+                    "RE TARGETED_PASS2 #1 (input accepted from frame 0; only StartTransform/PreWeaponSwitch/IsAbleToFire "
+                    "check IsTransforming)", kGameplay, "W held from the press: pawn moved > 0.5 m/s during the fold = " +
+                        std::string(moved ? "yes" : "no"));
+        if (c.from == game::Form::Robot) {
+            // R->V stores the robot weapon at the start (InstantReload + SetCurrentWeapon(none)).
+            r.truth(id + "_robot_weapon_stored", !gun && !fired,
+                    "RE TARGETED_PASS2 #7: R->V stores the robot weapon at transform start (no robot shots, gun hidden)");
+        } else {
+            // V->R restores it at 25% elapsed, then normal equip (0.2 s); firing may begin once active.
+            r.info(id + "_robot_shots_during_fold", rig.last().shots, "shots",
+                   "original may fire once the weapon is restored (25% elapsed) and equipped (0.2 s) - RE TARGETED_PASS2 #7");
+        }
         r.info(id + "_post_anim_settle", end, "s", "clips: " + seq + " -> " + rig.last().anim);
         save(rig, std::string("transform_") + c.name);
     }
@@ -650,10 +732,11 @@ void checkTransform(Report& r) {
         rig.hold(Rig::down({Button::Forward}), 1.0);
         platform::InputFrame f = Rig::down({Button::Forward});
         f.pressed[(int)Button::Transform] = true;
+        double before = hspeed(rig.last());
         rig.step(f);
-        r.info("transform_while_running_speed", hspeed(rig.last()), "m/s",
-               "SUSPECT (LOW): rebuild zeroes velocity at transform start; WFC transforming on the move appears "
-               "to keep momentum - capture original");
+        r.conf("transform_while_running_speed", hspeed(rig.last()), std::min(before, 35.0), 0.5, "m/s",
+               "RE TARGETED_PASS2 #1 (R->V: Velocity = ClampLength(Velocity, 3500) written to the RB at t=0)", kGameplay,
+               "speed on the press step vs pre-transform " + std::to_string(before) + " m/s (detailed: transform_momentum.*)");
     }
 }
 
@@ -681,6 +764,28 @@ void checkAnimation(Report& r) {
                 "robot.glb Nav_Strafe*_{F,B,L,R} chosen by travel relative to facing", "anim=" + a);
     }
     {
+        // Foot sliding at full speed is ORIGINAL: no speed-based playback-rate scaling anywhere in the
+        // shipped Robot_ANIMTREE ('Strafers' AnimNodeSynch RateScale 1.0, no ScaleRateBySpeed nodes), so
+        // the jog clip plays at 1.0x at 14 m/s and the feet slide ~10 %. Guard against "fixing" it.
+        Rig rig(60, true);
+        rig.idle(0.3);
+        rig.hold(Rig::down({Button::Forward}), 2.5);
+        const auto& tr = rig.trace();
+        double sum = 0, n = 0;
+        for (size_t i = tr.size() > 60 ? tr.size() - 60 : 1; i < tr.size(); ++i) {
+            if (tr[i].anim != tr[i - 1].anim) continue;
+            double d = (double)tr[i].animT - tr[i - 1].animT;
+            if (d <= 0) continue;                              // loop wrap
+            sum += d / rig.dt(); n += 1;
+        }
+        r.confTruth("locomotion_rate_1x_at_full_speed", n > 10 && std::fabs(sum / n - 1.0) < 0.02,
+                    "RE TARGETED_PASS2 #3 (no AnimNodeScalePlayRate/ScaleRateBySpeed in shipped trees; 'Strafers' "
+                    "AnimNodeSynch RateScale 1.0) - full-speed foot sliding is original, NOT a reconstruction failure",
+                    kGameplay, "mean clip-time rate over the last second at top speed: " + std::to_string(n > 0 ? sum / n : 0) +
+                        " (anim " + rig.last().anim + ")");
+        save(rig, "anim_rate_full_speed");
+    }
+    {
         Rig rig(60, true);
         rig.idle(1.0);
         int c = m->robot.clipByName(rig.last().anim);
@@ -701,7 +806,7 @@ void checkAnimation(Report& r) {
         Rig rig(60, true);
         rig.idle(0.3);
         rig.hold(Rig::down({Button::Fire}), 0.3);
-        rig.step(Rig::press(Button::Reload));
+        rig.tap(Button::Reload);
         rig.idle(0.5);
         // Either the full-body base clip (pre-layer builds) or the upper-body reload slot (layered).
         const Frame& lf = rig.last();
@@ -713,9 +818,7 @@ void checkAnimation(Report& r) {
         Rig mv(60, true);
         mv.idle(0.3);
         mv.hold(Rig::down({Button::Fire}), 0.3);
-        platform::InputFrame f = Rig::down({Button::Forward});
-        f.pressed[(int)Button::Reload] = true;
-        mv.step(f);
+        mv.tap(Button::Reload, Rig::down({Button::Forward}));
         mv.hold(Rig::down({Button::Forward}), 0.5);
         const Frame& mf = mv.last();
         bool legsRun = mf.anim.find("Strafe") != std::string::npos;
@@ -963,8 +1066,13 @@ void compareReference(Report& r, const std::string& path) {
         double rebuild;
         if (!r.metric(kv.first, rebuild)) { r.skip(kv.first, "no rebuild metric with this id"); continue; }
         if (!e["original"].isNumber()) { ++pending; continue; }
-        r.near(kv.first, rebuild, e["original"].asDouble(), e["tol"].asDouble(0.0), e["unit"].asString(),
-               "original capture: " + e["method"].asString());
+        std::string how = e["evidence"].asString().empty() ? "original capture" : e["evidence"].asString();
+        if (e["owner"].isString())   // confirmed value a product branch may not have adopted yet
+            r.conf(kv.first, rebuild, e["original"].asDouble(), e["tol"].asDouble(0.0), e["unit"].asString(),
+                   how + ": " + e["method"].asString(), e["owner"].asString());
+        else
+            r.near(kv.first, rebuild, e["original"].asDouble(), e["tol"].asDouble(0.0), e["unit"].asString(),
+                   how + ": " + e["method"].asString());
     }
     r.info("pending_original_captures", pending, "", "reference entries still awaiting an original-game measurement");
 }

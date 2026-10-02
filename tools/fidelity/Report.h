@@ -80,6 +80,24 @@ public:
         add(r);
     }
 
+    // CONFIRMED original value (native RE / authored data) that a product branch may not have
+    // adopted yet: PASS when it matches, KNOWN (owner) otherwise. Unlike known(), a match is the
+    // expected steady state, so it is not flagged "RESOLVED".
+    void conf(const std::string& id, double measured, double expected, double tol, const std::string& unit,
+              const std::string& source, const std::string& owner, const std::string& note = "") {
+        Result r = num(id, measured, expected, tol, unit, "CONFIRMED: " + source, note);
+        r.status = std::fabs(measured - expected) <= tol ? Status::Pass : Status::Known;
+        if (r.status == Status::Known) r.owner = owner;
+        add(r);
+    }
+    void confTruth(const std::string& id, bool originalBehaviourHolds, const std::string& source,
+                   const std::string& owner, const std::string& note = "") {
+        Result r; r.id = id; r.source = "CONFIRMED: " + source; r.note = note;
+        r.status = originalBehaviourHolds ? Status::Pass : Status::Known;
+        if (!originalBehaviourHolds) r.owner = owner;
+        add(r);
+    }
+
     // Measurement without a confirmed original value (`expected` is the rebuild model's own
     // prediction when one exists; it is shown, never enforced).
     void info(const std::string& id, double measured, const std::string& unit, const std::string& note,

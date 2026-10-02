@@ -115,6 +115,9 @@ void Rig::record() {
     fr.reserve = c.weapon().reserve;
     fr.spread = c.weapon().spread;
     fr.reloadW = layer::reloadSlotWeight(c);
+    fr.moveForm = layer::moveForm(c, 0);
+    fr.fineAim = layer::fineAiming(controller(), 0);
+    fr.fov = layer::fovXDeg(controller(), 0);
     fr.aimW = layer::aimWeight(c, 0);
     fr.aimPitchN = layer::aimPitchNorm(c, 0);
     fr.shots = (int)(shotLog().size() - shotBase_);
