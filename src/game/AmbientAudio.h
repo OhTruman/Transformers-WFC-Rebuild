@@ -59,13 +59,16 @@ private:
         std::vector<core::Vec3> tris;   // triangle soup of the trigger volume (glTF)
         core::Vec3 bmin, bmax;
         audio::Environment env;
-        float fadeIn = 0.25f;
+        float fadeIn = 0.25f, fadeOut = 0.25f;
+        float priority = 0.0f;          // REVERB_* mixer preset Priority (higher wins) [CONF]
+        std::string preset;
         std::vector<Pool> pools;
     };
 
     core::Vec3 placeFor(const Emitter& e, const core::Vec3& listener) const;
     bool inside(const Zone& z, const core::Vec3& p) const;
     void enterZone(int z);
+    std::vector<int> enabledZones_;      // zones whose REVERB_* preset is enabled (mixer preset stack)
 
     bool loaded_ = false;
     audio::IAudio* audio_ = nullptr;

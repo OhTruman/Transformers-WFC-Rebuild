@@ -755,11 +755,8 @@ void World::tick(float dt) {
         }
         sysprof::Scope sp(sysprof::Cues);
         cues_.setListener(listenerPos_);
-        if (audio_) {
-            static const bool preferPlayer = std::getenv("WFC_SMARTPAN_PREFERPLAYER") != nullptr;
-            // Same reference point as pawn-attached sources (the actor Location the original PlaySound uses).
-            audio_->setSmartPanPlayer(player_.pawn().position() + player_.pawn().meshOffset(), true, preferPlayer);
-        }
+        if (audio_)   // PreferPlayer pan reference: the local pawn's origin (same point pawn-attached sources use)
+            audio_->setSmartPanPlayer(player_.pawn().position() + player_.pawn().meshOffset(), true);
         ambient_.tick(dt, listenerPos_, player_.pawn().position(), cues_);
         static const bool ambLog = std::getenv("WFC_AMBLOG") != nullptr;
         static float ambT = 0.0f;

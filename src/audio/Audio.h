@@ -11,9 +11,9 @@ constexpr Sound kInvalidSound = -1;
 using Voice = int;
 constexpr Voice kInvalidVoice = -1;
 
-// One playing wave. Distances in metres. With rolloff > 0 the gain follows FMOD Ex's 3D inverse
-// model (WFC's Hm sound system sits on FMOD): 1 inside minDist, minDist / (minDist + rolloff *
-// (d - minDist)) beyond it, held constant past maxDist.
+// One playing wave. Distances in metres. Cue voices follow FmodAudioDevice's per-source spatialization
+// [CONF native 0x82759B08]: inverse rolloff Min / ((max(d,Min) - Min) * Rolloff + Min), culled when
+// max(d,Min) > Max, rear attenuation, and the SmartPan 2D <-> 3D mix (see Win32Audio).
 struct VoiceParams {
     float volume = 1.0f;        // linear
     float pitch = 1.0f;         // playback-rate multiplier
@@ -24,7 +24,8 @@ struct VoiceParams {
     bool loop = false;                 // wave loops until stopVoice
     float rearAttenDb = 0.0f;          // SoundNodeRoot.RearAttenuation: extra dB for sources behind the listener
     bool wet = true;                   // routed through the MASTER_WET bus (environment reverb / echo)
-    bool preferPlayer = false;         // SpatializationType kSmartPan_PreferPlayer
+    int spatial = 0;                   // SoundNodeRoot.Spatialization: 0 k3D, 1 k2D, 2 kSmartPan, 3 kSmartPan_PreferPlayer
+    float panAtten3DDb = 0.0f;         // SmartPanAttenuation3D
 };
 
 // MASTER_WET environment (SoundMixerProperties DSP preset of a Kismet SeqAct_Reverb zone): FMOD Ex SFX
@@ -76,9 +77,8 @@ public:
     virtual void setMasterCompressor(float /*thresholdDb*/, float /*attackMs*/, float /*releaseMs*/, float /*makeupDb*/) {}
     virtual bool mixStats(MixStats&) const { return false; }
     virtual bool voiceInfo(Voice, VoiceInfo&) const { return false; }
-    // Local player position for kSmartPan_PreferPlayer voices (FmodAudioDevice MaxPlayerSmartPanRadius /
-    // SmartPanPreferPlayerTransitionTime). The PreferPlayer model is only applied when enabled.
-    virtual void setSmartPanPlayer(const core::Vec3& /*pos*/, bool /*valid*/, bool /*enablePreferPlayer*/) {}
+    // Local player pawn origin (Actor.Location) for kSmartPan_PreferPlayer voices; valid = a local pawn exists.
+    virtual void setSmartPanPlayer(const core::Vec3& /*pos*/, bool /*valid*/) {}
 
     // Listener (camera) pose, set once per frame before update().
     virtual void setListener(const core::Vec3& pos, const core::Vec3& forward,

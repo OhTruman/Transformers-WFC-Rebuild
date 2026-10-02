@@ -17,6 +17,128 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 SYSTEMS PASS 4 — NATIVE AUDIO FIDELITY + RENDERING FX HANDOFF (2026-10-02, agents/systems)
+
+Evidence: RE lane report `RE-Workspace/notes/MILESTONE03_AUDIO_NATIVE_FIDELITY.md` (commit 76bb0a, read-only),
+Engine/HM_Engine class defaults in authored.db, and Rendering checkpoint 5e74895 (interface only).
+Classification: **CONF** confirmed original · **HIGH** · **PROV** provisional · **UNK** unknown.
+This pass supersedes PASS 3 where they differ; in particular the listener-only SmartPan default is gone.
+
+### Spatialization — native `FmodAudioDevice::ComputeSourceSpatialization` (0x82759B08) [CONF]
+| Term | Implementation |
+|---|---|
+| Source position | the AudioComponent / socket's own world location; never moved to the pawn |
+| Volume | `Min / ((max(d,Min) - Min) * Rolloff + Min)`, d = listener → source |
+| Cull | `max(d,Min) > DistanceMax` → silent (previously held at the DistanceMax level) |
+| Rear | `× (1 - (1 - dB2lin(RearAttenuation)) * (-f))` when `f = Front · dir < 0` (previously dB-scaled) |
+| Spatialization enum | 0 **k3D (class default)**, 1 k2D, 2 kSmartPan, 3 kSmartPan_PreferPlayer. The 9 unauthored slice cues are k3D (fully 3D), not SmartPan as PASS 3 assumed |
+| SmartPan amount | `ds` = listener distance (kSmartPan) or **PreferPlayer reference distance** (type 3); equal 2D/3D distances → step; otherwise linear between them (reversed if 2D > 3D) |
+| SmartPanAttenuation3D | gain `1 - (1 - dB2lin(SPA3D)) * amount` — new; authored −3 on vehicle cues, −6 SHOOT_LOW_AMMO, −9 SHOOT_TAIL, 0 SHOOT |
+| Secondary category | by distance when EnableSecondaryCategory; no slice root enables it (class default false) → no effect here |
+| dB2lin | assumed 10^(x/20) [HIGH, per report] |
+
+### PreferPlayer pan reference (`UpdatePreferPlayerLocation` 0x8275F658) [CONF]
+* `pref = P + (L − P) · ramp`, with P = local pawn origin and L = listener. The ramp targets 0 while the camera
+  is within MaxPlayerSmartPanRadius 1400 UU of the pawn and 1 beyond.
+* `SetTarget` gives a linear rate that reaches the target in SmartPanPreferPlayerTransitionTime 0.5 s;
+  overshoot clamps.
+* Only the type-3 pan amount uses it; volume and cull keep listener → true source. Always on;
+  the PASS 3 `WFC_SMARTPAN_PREFERPLAYER` switch is removed.
+* **Measured:**
+  * Footsteps, jump, landing, transform and vehicle cues (type 3) now pan 0.00 with the camera at 8–10 m.
+  * Their sources stay at the pawn origin, the socket, or AUDIO_ROOT (0.2–1.5 m from the owner).
+  * k3D cues (Optimus idle foley, weapon idle notifies) keep full 3D pan −0.19…−0.29 and listener rolloff
+    (0.45–0.49).
+  * SHOOT stays at gain 1.0.
+* [HIGH] P is our pawn mesh origin, which is also where pawn-attached sources sit. UE3 uses Actor.Location for
+  both, so their relative distance is the same.
+
+### Concurrency (`USoundCue::RegisterInstanceLimiting` 0x82E767B8) [CONF]
+* `Engine.Default__SoundCue`: **MaxConcurrentPlayCount 5, InstanceLimiting kKillFarthest**.
+  * None of the slice's 73 cues authors InstanceLimiting, so all are KillFarthest.
+  * The 55 that author no count are limited to 5, not unlimited as before (e.g. 12 crater emitters → 5 sounding).
+* Policies:
+  * 0 = unlimited;
+  * kKillOldest stops the oldest registered;
+  * kKillNewest refuses the new sound;
+  * kKillFarthest walks newest → oldest, keeping the instance at least as far (squared distance to the
+    listener) as the new sound, ties → older. It stops that instance, or refuses the new sound when it is
+    itself the farthest.
+* Stops are immediate. Registration order = instance id. The guessed "steal oldest" is removed.
+* Attached cues at one point (SHOOT at the muzzle) tie → the oldest is stopped, matching the native tie rule.
+
+### Mixer presets (P13) — CONF parts only
+* **CONF:**
+  * the cue's PlayMixerPreset is enabled when its instance plays and disabled when it ends;
+  * presets are ref-counted per name, priority-ordered, and re-enabling resets the elapsed timer;
+  * data VEHICLE_JUMP (−18 dB) and VEHICLE_BOOST_END (−4 dB) on SFX_WET_VEH_ENGINE.
+* **UNK** (not filled by ear):
+  * the fade curve (linear over the authored FadeIn/FadeOut times is used as a placeholder);
+  * per-category combination of overlapping presets (highest priority is used);
+  * Duration > 0 expiry (not applied; the PASS 3 duration hold was removed).
+
+### Reverb / Streets zones (P14)
+* **CONF path:** FMOD I3DL2 reverb on MASTER_WET, selected by REVERB_* mixer presets. Ambient-zone Enter →
+  SeqAct_Reverb → EnableMixerPreset; fade in/out 0.25 s.
+* **CONF priorities:**
+  * EXTERIOR 182, NEU_BASE 183, AUTO_ROOM_01 216, DEC_ROOM_LOWER 217, NEU_HALL 218, TRAIN_DEPOT 219,
+    AUTO_ROOM_02 220, TRAIN_TUNNEL 221, NEU_STAIRWELL 222, DEC_ROOM_UPPER 223;
+  * the enabled zone presets resolve highest-first.
+* **Verified** with the real AmbientAudio and audio.json (`work/m3/zonetest`, recording backend), every switch
+  at fade 0.25 s:
+  * EXTERIOR −800 / 2.65 / −600;
+  * NEU_BASE −650 / 2.06;
+  * TRAIN_TUNNEL −900 / 4.32 / −800;
+  * DEC_ROOM_UPPER −936 / 3.14;
+  * AUTO_ROOM_02 −900 / 4.81 / −800.
+* **INFERRED (ReVa request):** entering a zone disables the previous zone's preset (the native
+  AmbientAudioZone exit path was not recovered).
+* **PROV:** the reverb DSP internals (FMOD's SFX-reverb algorithm) and the Echo stage; parameters are CONF.
+
+### Rendering handoff 5e74895 — vehicle FX
+* **Materials:** every VehicleFx emitter now carries its cooked ParticleModuleRequired.Material path.
+  * Sprite batches pass it as `ParticleBatch::material`.
+  * When `IRenderer::evaluatesFxMaterials()`, colours are the authored HDR values (colour × colorMul ×
+    colour-over-life × brightness × tint), unclamped, with colorScale 1 and no GL1 stand-ins (intensity 0.1,
+    fresnel).
+  * Otherwise the previous GL1 fallback runs unchanged.
+* **Renderer interface:** Rendering's `Renderer.h` hunk (material field, evaluatesFxMaterials, reticle
+  declarations) was applied verbatim so the merge is clean; this branch's renderer returns false until
+  integration.
+* **Four material-only emitters now spawn** (drawn only through their original graphs, no substitute visual):
+  * hover `base_glow_Dup_Dup` (Glow_Mod_MAT);
+  * hover `rays_Dup` (Trail_Distort_MAT);
+  * ram `dust` (Distortion_Cloud_01_MAT);
+  * ram `rays_Dup` (Trail_Distort_MAT, world space).
+
+  LOD-0 values are CONF, roles MED.
+* **Per-loop bursts:** EmitterLoops 0 emitters re-fire their BurstList every loop of EmitterDuration (Rings_Dup
+  0.2 s, boost loop glow 0.5 s, base_glow 0.5 s, dust U[0.1,0.2] s) [HIGH: UE3 emitter loop semantics].
+* **Bounded:** hover live parts ~250 (was ~110), all → 0 after leaving the vehicle.
+
+### Validation
+* **Scenarios:** stationary foley, movement, transform while moving, fine aim, jump/landing, hover, boost,
+  dash, nitro, firing, ambience, zone transitions (`WFC_SPATIALLOG`, `WFC_AMBLOG`, `WFC_CUELOG`).
+* **Attachment:** Experimental audio-attach (local spy build) — 0 player-owned left behind; 10 KNOWN =
+  world pools / impacts.
+* **Performance and harnesses:**
+  * sustained-fire windows 7.2–13.4 ms (unchanged); ~900 RPM unchanged;
+  * wfc_fidelity 194/0/19; probe 31/0/1; collision 0 mismatches.
+* **Cleanup:** queued events → 0, weapon particles / meshes → 0.
+
+### Requests
+* **ReVa:**
+  * AmbientAudioZone exit / previous-zone preset disable;
+  * mixer applier fade curve and overlap combine;
+  * Duration expiry;
+  * FMOD k2D / k3D channel mode;
+  * SoundNodeRoot LoopStart / LoopEnd;
+  * line / volume emitter placement;
+  * dB2lin exact formula.
+* **AssetTools (standing):** Streets HmPhysicalMaterialProperty FootstepSounds; pickup FX mesh data.
+
+---
+
 ## MILESTONE 03 SYSTEMS PASS 3 — SCRIPT-CONFIRMED VEHICLE AUDIO, LANDING RULES, SPATIALIZATION EVIDENCE, AUDIO THREAD (2026-10-02, agents/systems)
 
 New evidence used (read-only):

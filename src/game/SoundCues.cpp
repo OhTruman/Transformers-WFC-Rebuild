@@ -2,6 +2,7 @@
 #include "assets/Json.h"
 #include "core/Log.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -29,8 +30,13 @@ constexpr float kOcclTime = 0.5f;        // [CONF] Default__PhysicalMaterial Aud
 
 // [CONF] SoundConfig.SoundMixerProperties: the mixer presets slice cues play (PlayMixerPreset), their
 // MixerPresets entry (Priority, FadeInTime, Duration, FadeOutTime) and the categories whose DSPPreset of
-// that name differs from Default (Volume). Envelope [HIGH]: fade in to the preset volume over FadeInTime,
-// hold until Duration, fade back over FadeOutTime; the highest Priority active preset sets a category.
+// that name differs from Default (Volume).
+// [CONF native, FmodAudioDevice 0x8277FE88 / mixer vt+0x24/+0x28] a cue's preset is enabled when its
+// AudioComponent plays and disabled when it stops; presets are ref-counted per name, kept sorted by
+// Priority; re-enabling an active preset bumps the ref-count and resets its elapsed timer.
+// [UNKNOWN, native applier not recovered] the per-tick fade curve (here linear over FadeInTime /
+// FadeOutTime), how overlapping presets combine per category (here: the highest Priority one), and
+// what Duration > 0 does on expiry (not applied).
 struct MixerPreset { const char* name; float priority, fadeIn, duration, fadeOut; const char* category; float volume; };
 const MixerPreset kMixerPresets[] = {
     {"VEHICLE_JUMP", 270.0f, 0.3f, 1.0f, 1.0f, "SFX_WET_VEH_ENGINE", 0.1258925f},       // -18 dB (DRIVE_JUMP_START)
@@ -38,12 +44,6 @@ const MixerPreset kMixerPresets[] = {
 };
 constexpr int kPresetCount = (int)(sizeof(kMixerPresets) / sizeof(kMixerPresets[0]));
 
-float presetWeight(const MixerPreset& p, float t) {
-    if (t < p.fadeIn) return p.fadeIn > 0.0f ? t / p.fadeIn : 1.0f;
-    if (t < p.duration) return 1.0f;
-    float u = p.fadeOut > 0.0f ? (t - p.duration) / p.fadeOut : 1.0f;
-    return u >= 1.0f ? 0.0f : 1.0f - u;
-}
 
 float frand() { return (float)std::rand() / (float)RAND_MAX; }
 float randRange(float a, float b) { return a + (b - a) * frand(); }   // ranges may be authored inverted
@@ -133,7 +133,9 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
         const assets::Json& rp = root["params"];
         CueDef d;
         d.name = kv.first;
-        d.maxConcurrent = kv.second["MaxConcurrentPlayCount"].asInt(0);
+        d.maxConcurrent = kv.second["MaxConcurrentPlayCount"].asInt(5);   // Engine.Default__SoundCue
+        d.limit = Limit::KillFarthest;                                      // (no map-bank cue authors one)
+        d.panAtten3DDb = rp["SmartPanAttenuation3D"].asFloat(0.0f);
         d.volDb = rp["Volume"].asFloat(-6.0f);                     // HM_Engine.Default__SoundNodeRoot
         d.volVarMin = rp["VolumeVariationMin"].asFloat(0.0f); d.volVarMax = rp["VolumeVariationMax"].asFloat(0.0f);
         d.pitchSt = rp["Pitch"].asFloat(0.0f);
@@ -147,7 +149,7 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
         d.occlusion = rp["EnableOcclusionVolume"].asBool(true);
         const std::string sp = rp["SpatializationType"].asString();
         d.spatial = sp == "k2D" ? Spatial::TwoD : sp == "kSmartPan" ? Spatial::SmartPan
-                  : sp == "kSmartPan_PreferPlayer" ? Spatial::SmartPanPreferPlayer : Spatial::Default;
+                  : sp == "kSmartPan_PreferPlayer" ? Spatial::SmartPanPreferPlayer : Spatial::ThreeD;
         d.param = Param::None;
         const assets::Json& kids = root["children"];
         for (size_t i = 0; i < kids.size(); ++i) {
@@ -221,21 +223,36 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     int c = findCue(name);
     if (c < 0) { LOG_WARN("sound cue %s not in table", name); return -1; }
     const CueDef& cd = cues_[(size_t)c];
-    // MaxConcurrentPlayCount: steal the oldest instance of this cue.
-    if (cd.maxConcurrent > 0) {
-        int count = 0, oldest = -1;
-        for (int i = 0; i < (int)live_.size(); ++i) {
-            if (live_[(size_t)i].cue != c) continue;
-            ++count;
-            if (oldest < 0 || live_[(size_t)i].age > live_[(size_t)oldest].age) oldest = i;
-        }
-        if (count >= cd.maxConcurrent && oldest >= 0) stop(live_[(size_t)oldest].id, 0.0f);
-    }
-    if (!cd.mixerPreset.empty()) activatePreset(cd.mixerPreset);     // SoundNodeRoot.PlayMixerPreset
     Instance in;
     in.cue = c; in.id = nextId_++; in.age = 0.0f; in.distM = distM; in.param = param;
     in.owner = em.owner; in.offset = em.offset; in.socket = em.socket; in.pos = em.pos;
     resolve(in);
+    // USoundCue::RegisterInstanceLimiting [CONF native 0x82E767B8]: 0 = unlimited; at the limit,
+    // kKillOldest stops the oldest registered instance, kKillNewest refuses the new sound, kKillFarthest
+    // walks newest -> oldest keeping the farthest (ties -> the older) of the instances at least as far
+    // from the listener as the new sound, stops it, or refuses the new sound if none is. A stop is
+    // immediate (no fade).
+    if (cd.maxConcurrent > 0) {
+        std::vector<size_t> playing;                     // registration order = instance id
+        for (size_t i = 0; i < live_.size(); ++i) if (live_[i].cue == c) playing.push_back(i);
+        if ((int)playing.size() >= cd.maxConcurrent) {
+            std::sort(playing.begin(), playing.end(), [&](size_t a, size_t b) { return live_[a].id < live_[b].id; });
+            int victim = -1;
+            if (cd.limit == Limit::KillNewest) return -1;
+            if (cd.limit == Limit::KillOldest) victim = live_[playing.front()].id;
+            else {
+                auto d2 = [&](const core::Vec3& p) { core::Vec3 v = p - listener_; return core::dot(v, v); };
+                float best = d2(in.pos);
+                for (size_t k = playing.size(); k-- > 0;) {
+                    float d = d2(live_[playing[k]].pos);
+                    if (d - best >= 0.0f || std::fabs(d - best) < 1e-6f) { best = d; victim = live_[playing[k]].id; }
+                }
+                if (victim < 0) return -1;               // the new sound is the farthest: refused
+            }
+            stop(victim, 0.0f);
+        }
+    }
+    if (!cd.mixerPreset.empty()) activatePreset(cd.mixerPreset);     // SoundNodeRoot.PlayMixerPreset
     // A new instance starts with the current occlusion (no fade-in from clear).
     if (cd.occlusion && occlusion_ && in.owner != kUI && cd.spatial != Spatial::TwoD) {
         in.occl = in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
@@ -270,7 +287,8 @@ void SoundCues::launch(Instance& in, int e) {
     p.volume = gain;
     p.pitch = stToRate(ref.baseSt + evalCurve(ed.pitchCurve, x, 0.0f) + evalCurve(ed.envPitch, in.age, 0.0f));
     p.positional = in.owner != kUI && cd.spatial != Spatial::TwoD;
-    p.preferPlayer = cd.spatial == Spatial::SmartPanPreferPlayer;
+    p.spatial = (int)cd.spatial;
+    p.panAtten3DDb = cd.panAtten3DDb;
     p.pos = in.pos;
     p.minDist = cd.distMinUU * UU;
     p.maxDist = cd.distMaxUU * UU;
@@ -350,23 +368,45 @@ int SoundCues::occludedInstances() const {
 void SoundCues::activatePreset(const std::string& name) {
     for (int i = 0; i < kPresetCount; ++i) {
         if (name != kMixerPresets[i].name) continue;
-        for (ActivePreset& a : presets_) if (a.preset == i) { a.t = 0.0f; return; }   // re-trigger restarts it
-        presets_.push_back({i, 0.0f});
         static const bool log = std::getenv("WFC_CUELOG") != nullptr;
+        for (ActivePreset& a : presets_)
+            if (a.preset == i) {                     // already active: ref-count, reset elapsed
+                ++a.refs; a.t = 0.0f; a.fadingOut = false;
+                if (log) LOG_INFO("MIXER preset %s refs=%d", kMixerPresets[i].name, a.refs);
+                return;
+            }
+        presets_.push_back({i, 1, 0.0f, 0.0f, false});
         if (log) LOG_INFO("MIXER preset %s on %s -> %.3f", kMixerPresets[i].name, kMixerPresets[i].category, kMixerPresets[i].volume);
         return;
     }
 }
 
+void SoundCues::deactivatePreset(const std::string& name) {
+    for (ActivePreset& a : presets_)
+        if (name == kMixerPresets[a.preset].name && !a.fadingOut) {
+            a.refs = a.refs > 0 ? a.refs - 1 : 0;
+            if (a.refs == 0) { a.fadingOut = true; a.t = 0.0f; }
+            static const bool log = std::getenv("WFC_CUELOG") != nullptr;
+            if (log) LOG_INFO("MIXER preset %s refs=%d%s", name.c_str(), a.refs, a.fadingOut ? " (fading out)" : "");
+            return;
+        }
+}
+
 float SoundCues::categoryGain(const std::string& category) const {
-    const MixerPreset* best = nullptr;
-    float w = 0.0f;
+    const ActivePreset* best = nullptr;
     for (const ActivePreset& a : presets_) {
         const MixerPreset& p = kMixerPresets[a.preset];
-        if (category != p.category || (best && best->priority >= p.priority)) continue;
-        best = &p; w = presetWeight(p, a.t);
+        if (category != p.category || (best && kMixerPresets[best->preset].priority >= p.priority)) continue;
+        best = &a;
     }
-    return best ? 1.0f + (best->volume - 1.0f) * w : 1.0f;
+    return best ? 1.0f + (kMixerPresets[best->preset].volume - 1.0f) * best->w : 1.0f;
+}
+
+void SoundCues::retire(size_t i) {
+    const CueDef& cd = cues_[(size_t)live_[i].cue];
+    if (!cd.mixerPreset.empty()) deactivatePreset(cd.mixerPreset);   // AudioComponent stopped
+    live_[i] = live_.back();
+    live_.pop_back();
 }
 
 float SoundCues::level(const Instance& in) {
@@ -397,15 +437,21 @@ void SoundCues::stop(int id, float fade) {
     if (fade > 0.0f) { in->fade = fade; in->fadeLeft = fade; return; }
     for (const VoiceRef& r : in->voices) audio_->stopVoice(r.v);
     for (size_t i = 0; i < live_.size(); ++i)
-        if (live_[i].id == id) { live_[i] = live_.back(); live_.pop_back(); break; }
+        if (live_[i].id == id) { retire(i); break; }
 }
 
 void SoundCues::tick(float dt) {
     if (!audio_) return;
     for (size_t i = 0; i < presets_.size();) {
-        const MixerPreset& p = kMixerPresets[presets_[i].preset];
-        presets_[i].t += dt;
-        if (presets_[i].t > p.duration + p.fadeOut) { presets_[i] = presets_.back(); presets_.pop_back(); } else ++i;
+        ActivePreset& a = presets_[i];
+        const MixerPreset& p = kMixerPresets[a.preset];
+        a.t += dt;
+        if (!a.fadingOut) a.w = std::min(1.0f, p.fadeIn > 0.0f ? a.w + dt / p.fadeIn : 1.0f);
+        else {
+            a.w = std::max(0.0f, p.fadeOut > 0.0f ? a.w - dt / p.fadeOut : 0.0f);
+            if (a.w <= 0.0f) { presets_[i] = presets_.back(); presets_.pop_back(); continue; }
+        }
+        ++i;
     }
     for (Instance& in : live_) in.age += dt;
     for (size_t i = 0; i < pending_.size();) {
@@ -432,13 +478,13 @@ void SoundCues::tick(float dt) {
             bool sounding = !audio_->reportsVoices();   // unknown: keep following until kInstanceTail
             for (const VoiceRef& r : in.voices) if (audio_->isPlaying(r.v)) { sounding = true; break; }
             if (!sounding || in.age > lastEventTime(cues_[(size_t)in.cue]) + kInstanceTail) {
-                live_[i] = live_.back(); live_.pop_back();
+                retire(i);
                 continue;
             }
         }
         if (done) {
             for (const VoiceRef& r : in.voices) audio_->stopVoice(r.v);
-            live_[i] = live_.back(); live_.pop_back();
+            retire(i);
             continue;
         }
         // Occlusion: line check from the listener every OcclusionCheckInterval (staggered by instance

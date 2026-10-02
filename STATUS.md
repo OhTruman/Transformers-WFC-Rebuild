@@ -3,6 +3,25 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 03 PASS 4 (2026-10-02) — native audio fidelity + Rendering FX handoff
+- **Native spatialization** (RE report 76bb0a):
+  - inverse rolloff with a hard cull at DistanceMax;
+  - linear rear attenuation;
+  - k3D as the class default;
+  - SmartPan mix with SmartPanAttenuation3D;
+  - **PreferPlayer pan reference** (pawn origin within 1400 UU, 0.5 s linear ramp). Pan only: the emitters
+    stay at their true positions and volume uses listener distance.
+- **Concurrency:** native rules, with class defaults max 5 / kKillFarthest.
+- **Mixer presets:** enabled on cue play and disabled on stop (ref-counted); fade curve and overlap combine
+  stay UNKNOWN.
+- **Reverb:** REVERB_* priorities; zone switches verified (0.25 s, table values).
+- **Vehicle FX** (Rendering 5e74895): original material names and unclamped HDR colour on the material path;
+  4 material-only emitters spawned (hover base_glow / rays, ram dust / rays); per-loop bursts.
+- **Validation:**
+  - 0 player-owned sounds left behind;
+  - sustained-fire windows 7.2–13.4 ms; leak suite clean;
+  - wfc_fidelity 194/0/19; probe 31/0/1.
+
 ## SYSTEMS MILESTONE 03 PASS 3 (2026-10-02) — script-confirmed vehicle audio, landing rules, audio thread
 - **Vehicle audio:** a port of the decompiled HmVehicleAudioComponent / HmPlayerVehicleAudioComponentImpl:
   - wheels loop only if grounded at boost start; jump-rev after 0.25 s airborne; reverse load from back input;

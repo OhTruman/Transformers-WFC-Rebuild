@@ -118,6 +118,9 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
         const assets::Json& pr = presets[j["reverb_preset"].asString()];
         z.env = envFrom(pr["dsp_by_category"]["MASTER_WET"]);
         z.fadeIn = pr["mixer_preset"]["FadeInTime"].asFloat(0.25f);
+        z.fadeOut = pr["mixer_preset"]["FadeOutTime"].asFloat(0.25f);
+        z.priority = pr["mixer_preset"]["Priority"].asFloat(0.0f);
+        z.preset = j["reverb_preset"].asString();
         const assets::Json& pools = j["one_shot_pool"];
         for (size_t p = 0; p < pools.size(); ++p) {
             const assets::Json& q = pools[p];
@@ -150,12 +153,26 @@ bool AmbientAudio::inside(const Zone& z, const core::Vec3& p) const {
     return (hits & 1) != 0;
 }
 
+// SeqAct_AmbientAudioZone "Enter" -> SeqAct_Reverb -> EnableMixerPreset(REVERB_*) [CONF path]: the
+// MASTER_WET reverb comes from the highest-Priority enabled REVERB_* preset, cross-fading 0.25 s [CONF data].
+// [INFERRED, AssetTools / ReVa request] entering a zone ends the previous zone's scene, i.e. its preset is
+// disabled, so one zone preset is enabled at a time; the priority rule decides any overlap.
 void AmbientAudio::enterZone(int z) {
+    int prev = zone_;
     zone_ = z;
-    if (audio_) audio_->setEnvironment(zones_[(size_t)z].env, zones_[(size_t)z].fadeIn);
+    if (prev >= 0)
+        for (size_t i = 0; i < enabledZones_.size(); ++i)
+            if (enabledZones_[i] == prev) { enabledZones_.erase(enabledZones_.begin() + (long)i); break; }
+    bool have = false;
+    for (int e : enabledZones_) have = have || e == z;
+    if (!have) enabledZones_.push_back(z);
+    int top = z;
+    for (int e : enabledZones_) if (zones_[(size_t)e].priority > zones_[(size_t)top].priority) top = e;
+    if (audio_) audio_->setEnvironment(zones_[(size_t)top].env, zones_[(size_t)top].fadeIn);
     poolTimers_.clear();
     for (const Pool& p : zones_[(size_t)z].pools) poolTimers_.push_back(p.delayMin + frand() * (p.delayMax - p.delayMin));
-    LOG_INFO("ambient: entered zone %s", zones_[(size_t)z].name.c_str());
+    LOG_INFO("ambient: entered zone %s (preset %s, priority %.0f; active reverb %s)", zones_[(size_t)z].name.c_str(),
+             zones_[(size_t)z].preset.c_str(), zones_[(size_t)z].priority, zones_[(size_t)top].preset.c_str());
 }
 
 core::Vec3 AmbientAudio::placeFor(const Emitter& e, const core::Vec3& l) const {

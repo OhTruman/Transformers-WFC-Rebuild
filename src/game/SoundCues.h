@@ -26,9 +26,11 @@ namespace game {
 namespace cuedata {
 struct CurvePt { float x, y; };
 enum class Param { None, Distance, Speed, TireSqueal };
-// SoundNodeRoot.SpatializationType. Default = not authored: the class default enum value is UNKNOWN
-// (5258 of 8794 cooked roots author none); treated as SmartPan here [PROVISIONAL].
-enum class Spatial { Default, TwoD, SmartPan, SmartPanPreferPlayer };
+// SoundNodeRoot.SpatializationType [CONF HM_Engine enum]: 0 k3D (class default), 1 k2D, 2 kSmartPan,
+// 3 kSmartPan_PreferPlayer.
+enum class Spatial { ThreeD, TwoD, SmartPan, SmartPanPreferPlayer };
+// SoundCue.InstanceLimiting [CONF Engine enum; class default kKillFarthest].
+enum class Limit { KillOldest, KillNewest, KillFarthest };
 struct EventDef {
     float time, volDb, volVarMin, volVarMax, pitchSt, pitchVarMin, pitchVarMax;
     int chanceNone;                      // ChanceToPlayNone (percent)
@@ -42,10 +44,12 @@ struct EventDef {
 };
 struct CueDef {
     std::string name;
-    int maxConcurrent;                   // SoundCue.MaxConcurrentPlayCount (0 = unlimited)
+    int maxConcurrent;                   // SoundCue.MaxConcurrentPlayCount (0 = unlimited; class default 5)
+    Limit limit;                         // SoundCue.InstanceLimiting
     float volDb, volVarMin, volVarMax, pitchSt, pitchVarMin, pitchVarMax;
     float distMinUU, distMaxUU, rolloff;
     float pan2DUU, pan3DUU;              // SmartPanDistance2D / 3D (class default 400 / 800)
+    float panAtten3DDb;                  // SmartPanAttenuation3D (gain toward fully 3D)
     float rearAttenDb;                   // RearAttenuation (sources behind the listener)
     std::string category;                // SoundMixerCategoryName (SFX_WET_* route through MASTER_WET)
     std::string mixerPreset;             // PlayMixerPreset (SoundMixerPresetName), "" = none
@@ -141,9 +145,12 @@ private:
     static float level(const Instance& in);
     float paramFor(const Instance& in) const;
     // Mixer presets (SoundMixerProperties.MixerPresets + per-category DSPPreset volume) activated by cues.
-    struct ActivePreset { int preset; float t; };
+    // Ref-counted per preset (enabled on cue play, disabled when that instance ends) [CONF native].
+    struct ActivePreset { int preset; int refs; float t; float w; bool fadingOut; };
     std::vector<ActivePreset> presets_;
     void activatePreset(const std::string& name);
+    void deactivatePreset(const std::string& name);
+    void retire(size_t liveIndex);              // remove an instance (stop voices, unregister its preset)
     float categoryGain(const std::string& category) const;
     float gainOf(const Instance& in) const { return level(in) * categoryGain(cues_[(size_t)in.cue].category); }
     Instance* find(int id);

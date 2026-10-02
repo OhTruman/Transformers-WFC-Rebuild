@@ -247,7 +247,8 @@ struct Voice {
     float pan2D = 0.0f, pan3D = 0.0f;
     float rearAttenDb = 0.0f;
     bool wet = false;             // MASTER_WET bus (environment) vs dry
-    bool preferPlayer = false;    // kSmartPan_PreferPlayer
+    int spatial = 0;              // 0 k3D, 1 k2D, 2 kSmartPan, 3 kSmartPan_PreferPlayer
+    float panAtten3DDb = 0.0f;    // SmartPanAttenuation3D
     float gL = 1.0f, gR = 1.0f;   // per-block resolved channel gains
     float dDist = 0.0f, dPan = 0.0f, dAtten = 1.0f;   // diagnostics of the last resolve
     bool active = false;
@@ -345,7 +346,7 @@ public:
         v->positional = p.positional; v->inverse = true; v->wpos = p.pos;
         v->refDist = p.minDist; v->maxDist = p.maxDist; v->rolloff = p.rolloff;
         v->pan2D = p.pan2D; v->pan3D = p.pan3D;
-        v->rearAttenDb = p.rearAttenDb; v->wet = p.wet; v->preferPlayer = p.preferPlayer;
+        v->rearAttenDb = p.rearAttenDb; v->wet = p.wet; v->spatial = p.spatial; v->panAtten3DDb = p.panAtten3DDb;
         v->loop = p.loop;
         return i | (v->gen << 12);
     }
@@ -360,9 +361,9 @@ public:
     }
 
     void setEnvironment(const Environment& e, float fade) override { std::lock_guard<std::mutex> lk(mx_); env_.set(e, fade); }
-    void setSmartPanPlayer(const core::Vec3& pos, bool valid, bool enable) override {
+    void setSmartPanPlayer(const core::Vec3& pos, bool valid) override {
         std::lock_guard<std::mutex> lk(mx_);
-        ppos_ = pos; pvalid_ = valid; ppEnabled_ = enable;
+        ppos_ = pos; pvalid_ = valid;
     }
     void setMasterCompressor(float t, float a, float r, float m) override { std::lock_guard<std::mutex> lk(mx_); comp_.set(t, a, r, m); }
     bool mixStats(MixStats& s) const override { std::lock_guard<std::mutex> lk(mx_); s = stats_; return ok_; }
@@ -438,38 +439,65 @@ private:
         stats_.maxUpdateBlocks = std::max(stats_.maxUpdateBlocks, mixed);
     }
 
+    // FmodAudioDevice::UpdatePreferPlayerLocation [CONF native 0x8275F658]: once per update, the reference
+    // ramps linearly between the local pawn origin (camera within MaxPlayerSmartPanRadius 1400 UU) and the
+    // listener (camera farther), over SmartPanPreferPlayerTransitionTime 0.5 s (Xe-TransEngine.ini).
+    void updatePreferPlayer(float dt) {
+        prefLoc_ = lpos_;
+        if (!pvalid_) return;
+        constexpr float kRadius = 14.0f, kTransition = 0.5f;
+        float target = core::length(lpos_ - ppos_) >= kRadius ? 1.0f : 0.0f;
+        if (target != rampTarget_) {                          // Ramp.SetTarget(t, T)
+            rampTarget_ = target;
+            rampRate_ = (target - rampValue_) / kTransition; rampRemaining_ = kTransition; rampActive_ = true;
+        }
+        if (rampActive_) {                                    // Ramp.Update(dt)
+            rampRemaining_ -= dt;
+            rampValue_ += rampRate_ * dt;
+            bool over = (rampRate_ > 0.0f && rampValue_ >= rampTarget_) || (rampRate_ < 0.0f && rampValue_ <= rampTarget_);
+            if (rampRemaining_ <= 0.0f || over) { rampValue_ = rampTarget_; rampActive_ = false; }
+        }
+        prefLoc_ = ppos_ + (lpos_ - ppos_) * rampValue_;
+    }
+
+    // FmodAudioDevice::ComputeSourceSpatialization [CONF native 0x82759B08]. The source stays at its own
+    // position (the AudioComponent / socket); volume rolloff, cull and rear attenuation use listener ->
+    // source; only the SmartPan 2D <-> 3D mix of kSmartPan_PreferPlayer measures from the PreferPlayer
+    // reference. Stereo direction: equal-power pan of the source direction against the listener's right
+    // axis, scaled by the 3D amount (0 = centred / 2D, 1 = fully 3D).
     void resolveGains(Voice& v) {
         float g = v.vol * master_;
-        if (!v.positional) { v.gL = v.gR = g; return; }
+        if (!v.positional) { v.gL = v.gR = g; v.dPan = 0.0f; v.dAtten = 1.0f; return; }
         core::Vec3 d = v.wpos - lpos_;
         float dist = core::length(d);
         float atten;
         if (v.inverse) {
-            float dd = dist < v.maxDist ? dist : v.maxDist;
-            atten = dd <= v.refDist ? 1.0f : v.refDist / (v.refDist + v.rolloff * (dd - v.refDist));
+            float dc = std::max(dist, v.refDist);
+            if (dc > v.maxDist) { v.gL = v.gR = 0.0f; v.dDist = dist; v.dAtten = 0.0f; v.dPan = 0.0f; return; }   // culled
+            atten = v.refDist / ((dc - v.refDist) * v.rolloff + v.refDist);
         } else {
             atten = dist <= v.refDist ? 1.0f
                   : (dist >= v.maxDist ? 0.0f : (v.maxDist - dist) / (v.maxDist - v.refDist));
         }
-        g *= atten;
-        // RearAttenuation: sources behind the listener lose up to RearAttenuation dB [MED: linear in
-        // the behind-ness of the direction].
-        if (v.rearAttenDb != 0.0f && dist > 1e-3f) {
-            float behind = -core::dot(d * (1.0f / dist), lfwd_);
-            if (behind > 0.0f) g *= dbGain(v.rearAttenDb * behind);
+        core::Vec3 dir = dist > 1e-4f ? d * (1.0f / dist) : lfwd_;
+        float f = core::dot(lfwd_, dir);
+        if (f < 0.0f) atten *= 1.0f - (1.0f - dbGain(v.rearAttenDb)) * (-f);     // behind the listener
+        float amount = 1.0f;                                  // k3D: fully 3D
+        if (v.spatial == 2 || v.spatial == 3) {               // kSmartPan / kSmartPan_PreferPlayer
+            float ds = v.spatial == 3 ? core::length(prefLoc_ - v.wpos) : dist;
+            float d2 = v.pan2D, d3 = v.pan3D;
+            if (d2 == d3) amount = ds < d2 ? 0.0f : 1.0f;
+            else {
+                float lo = std::min(d2, d3), hi = std::max(d2, d3);
+                float t = core::clampf((core::clampf(ds, lo, hi) - lo) / (hi - lo), 0.0f, 1.0f);
+                amount = d2 < d3 ? t : 1.0f - t;
+            }
+            atten *= 1.0f - (1.0f - dbGain(v.panAtten3DDb)) * amount;      // SmartPanGain
         }
-        float pan = 0.0f;
-        if (dist > 1e-3f) pan = core::clampf(core::dot(d * (1.0f / dist), lright_), -1.0f, 1.0f);
-        // SmartPan: centred inside SmartPanDistance2D, full pan beyond SmartPanDistance3D, measured from the
-        // listener. [PROVISIONAL, off unless enabled] kSmartPan_PreferPlayer: measured from the local player
-        // while within MaxPlayerSmartPanRadius (1400 UU) of the listener, blended over
-        // SmartPanPreferPlayerTransitionTime (0.5 s) [values CONF Xe-TransEngine.ini, semantics inferred].
-        float panDist = dist;
-        if (v.preferPlayer && ppW_ > 0.0f) panDist = panDist + (core::length(v.wpos - ppos_) - panDist) * ppW_;
-        if (v.pan3D > v.pan2D)
-            pan *= core::clampf((panDist - v.pan2D) / (v.pan3D - v.pan2D), 0.0f, 1.0f);
+        g *= atten;
+        float pan = core::clampf(core::dot(dir, lright_), -1.0f, 1.0f) * amount;
         v.dDist = dist; v.dPan = pan; v.dAtten = atten;
-        float ang = (pan + 1.0f) * 0.25f * core::PI;   // equal-power pan: -1=>L, +1=>R
+        float ang = (pan + 1.0f) * 0.25f * core::PI;          // equal-power pan: -1 => L, +1 => R
         v.gL = std::cos(ang) * g;
         v.gR = std::sin(ang) * g;
     }
@@ -479,11 +507,7 @@ private:
     void mixBlock(std::vector<int16_t>& dst) {
         LARGE_INTEGER t0, t1, fq;
         QueryPerformanceCounter(&t0);
-        {   // PreferPlayer weight: ramps over SmartPanPreferPlayerTransitionTime (0.5 s) [CONF value]
-            bool want = ppEnabled_ && pvalid_ && core::length(ppos_ - lpos_) < 14.0f;   // MaxPlayerSmartPanRadius 1400 UU
-            float step = (float)kBlockFrames / kRate / 0.5f;
-            ppW_ = want ? std::min(1.0f, ppW_ + step) : std::max(0.0f, ppW_ - step);
-        }
+        updatePreferPlayer((float)kBlockFrames / kRate);
         dry_.assign(kBlockSamples, 0.0f);
         wet_.assign(kBlockSamples, 0.0f);
         int nv = 0, nw = 0;
@@ -536,8 +560,11 @@ private:
     float master_ = 0.5f;                 // [PROV] overall SFX level (was far too loud at 1.0)
     EnvDsp env_;
     core::Vec3 ppos_{0, 0, 0};
-    bool pvalid_ = false, ppEnabled_ = false;
-    float ppW_ = 0.0f;
+    bool pvalid_ = false;
+    core::Vec3 prefLoc_{0, 0, 0};      // FmodAudioDevice PreferPlayerLocation (+0x1A0)
+    // Linear ramp (device+0x188, SetTarget 0x827560A8 / Update 0x827560F8): 0 = pawn origin, 1 = listener.
+    float rampValue_ = 0.0f, rampTarget_ = 0.0f, rampRate_ = 0.0f, rampRemaining_ = 0.0f;
+    bool rampActive_ = false;
     Compressor comp_;
     MixStats stats_;
     std::vector<float> dry_, wet_;
