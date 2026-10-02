@@ -210,8 +210,11 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
                 out.normals.push_back(wn.z);
                 out.uv.push_back(i * 2 < uv.size() ? uv[i * 2] : 0.0f);
                 out.uv.push_back(i * 2 + 1 < uv.size() ? uv[i * 2 + 1] : 0.0f);
-                out.uv1.push_back(i * 2 < uv1.size() ? uv1[i * 2] : 0.0f);
-                out.uv1.push_back(i * 2 + 1 < uv1.size() ? uv1[i * 2 + 1] : 0.0f);
+                // No TEXCOORD_1: UE3's vertex factory binds the last available channel (UV0) for
+                // missing texcoords, so material TexCoord[1] reads UV0 (e.g. Light_Cylinder_STAT).
+                const std::vector<float>& u1 = uv1.empty() ? uv : uv1;
+                out.uv1.push_back(i * 2 < u1.size() ? u1[i * 2] : 0.0f);
+                out.uv1.push_back(i * 2 + 1 < u1.size() ? u1[i * 2 + 1] : 0.0f);
                 if (!boundsInit) { out.boundsMin = out.boundsMax = wp; boundsInit = true; }
                 else {
                     out.boundsMin = {std::min(out.boundsMin.x, wp.x), std::min(out.boundsMin.y, wp.y), std::min(out.boundsMin.z, wp.z)};

@@ -609,6 +609,8 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
 - Streets audit: `python tools/render/audit_map.py MP_IAC_Streets work/render/MP_IAC_Streets` (needs a `WFC_AUDIT_DUMP` run) → map_audit.json.
 - Fixed: actor-placed props lightmaps (38 submeshes), vertex lightmaps (24 components), ScreenPosition, PixelDepth.
 - Fixed: mottled grey/pink vehicle after transform (program cache keyed by Material* reused across robot/vehicle pose buffers).
+- Fixed: hover light-cone plumes (TexCoord1 = UV0 on single-UV meshes); debug overlay toggle ignored in scripted runs; shell/mesh-particle light envs shared per 1 m cell.
+- Energon red on Optimus confirmed from compiled permutations (blue is the False branch).
 - HUD Ion Blaster crosshair from Hud_GFX.gfx (spread-driven prongs); no scope in fine aim (per HUD script).
 - Renderer cost of shooting: light-env visibility memo + no env for unlit FX (env 3.5 ms → 0.4 ms/frame); the remaining ~55 ms/frame while firing is outside the renderer (simulation).
 - Captures: `bash tools/render/capture.sh <outdir>`; env: `WFC_RENDERSTATS`, `WFC_AUDIT_DUMP=<file>`, `WFC_NOVERTEXLM`.

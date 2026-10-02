@@ -92,7 +92,9 @@ void Application::run() {
             mouseCaptured_ = !mouseCaptured_;
             window_->setMouseCaptured(mouseCaptured_);
         }
-        if (input.wasPressed(platform::Button::Debug))
+        // Scripted smoke runs ignore the interactive toggle (a stray 'B' typed while a capture runs
+        // drew the debug capsule box + aim ray into screenshots); use WFC_DEBUGDRAW there.
+        if (smokeFrames <= 0 && input.wasPressed(platform::Button::Debug))
             core::DebugFlags::get().enabled = !core::DebugFlags::get().enabled;
 
         if (const char* fy = std::getenv("WFC_FIXYAW"))   // diagnostic: pin the camera yaw

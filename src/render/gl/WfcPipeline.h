@@ -142,9 +142,9 @@ private:
     std::map<std::string, std::string> slotMaterials_;   // "mesh|section" -> original material
     struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; };
     std::map<std::string, LMRec> lightmaps_;
-    std::map<std::string, std::string> actorComponent_;
+    std::map<std::string, std::string> actorComponent_;   // actor (lower) -> its only lightmapped component
     struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };
-    std::map<std::string, VertexLM> vertexLMs_;          // component (lower) -> decoded samples   // actor (lower) -> its only lightmapped component
+    std::map<std::string, VertexLM> vertexLMs_;          // component (lower) -> decoded samples
     std::vector<Light> lights_;
     bool fogOn_ = false;
     float fogMaxH_ = 0, fogScale_ = 0, fogStart_ = 0, fogExt_ = 1e8f;
@@ -162,6 +162,11 @@ private:
     // UpdateDistanceThreshold (TnRobotForm/TnVehicleForm: 30 UU = 0.3 m) [CONF].
     struct EnvCache { core::Vec3 pos; LightEnv env; int lastFrame = 0; };
     std::vector<EnvCache> envCache_;
+    // Small short-lived dynamic meshes (shells, mesh particles): one shared environment per 1 m cell,
+    // refreshed every kCellEnvFrames frames, as UE3 mesh emitters share their particle system's
+    // light environment instead of each particle tracing its own.
+    struct CellEnv { LightEnv env; int frame = -100000; };
+    std::unordered_map<uint64_t, CellEnv> cellEnv_;
     int frameNo_ = 0;
 
     // dynamic stream

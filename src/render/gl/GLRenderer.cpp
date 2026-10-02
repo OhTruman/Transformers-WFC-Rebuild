@@ -329,6 +329,11 @@ public:
                 float k = b.colorScale;
                 s.color[0] = p.r * k; s.color[1] = p.g * k; s.color[2] = p.b * k; s.color[3] = p.a;
             }
+            if (std::getenv("WFC_FXLOG")) {
+                static int logged = 0;
+                if (logged++ < 8) LOG_INFO("fx sprites %s: n=%zu color0=(%.2f,%.2f,%.2f,%.2f)", b.material, sp.size(),
+                                           sp[0].color[0], sp[0].color[1], sp[0].color[2], sp[0].color[3]);
+            }
             if (wfc_.drawSprites(b.material, sp.data(), sp.size(), camF * -1.0f)) { glLoadMatrixf(view_.m); return; }
         }
         glDisable(GL_LIGHTING);

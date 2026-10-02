@@ -63,6 +63,7 @@ uniform int uVLMBase;
 uniform sampler2D uVLM;
 out vec3 vPos; out vec3 vNrm; out vec4 vTan; out vec2 vUV0; out vec2 vUV1; out vec4 vFog; out vec4 vColor;
 out vec3 vVLM0; out vec3 vVLM1; out vec3 vVLM2;
+out vec2 vUV1Mat;            // raw second UV channel (material TexCoord[1]); vUV1 is the lightmap UV
 
 // UE3 vertex height fog (THeightFogVertexShader / CalcHeightFog), single authored layer, UE units.
 // Layer spans [-HALF_WORLD_MAX, FogMaxHeight]; scattering = exp2(FogDistanceScale *
@@ -93,6 +94,7 @@ void main() {
     vTan = vec4(nm * aTan.xyz, aTan.w);
     vUV0 = aUV0;
     vUV1 = aUV1 * uLMCoord.xy + uLMCoord.zw;
+    vUV1Mat = aUV1;
     vColor = aColor;
     if (uVertexLM != 0) {
         int vi = gl_VertexID - uVLMBase;
@@ -109,6 +111,7 @@ void main() {
 
 const char* kFSHead = R"(#version 330 compatibility
 in vec3 vPos; in vec3 vNrm; in vec4 vTan; in vec2 vUV0; in vec2 vUV1; in vec4 vFog; in vec4 vColor;
+in vec2 vUV1Mat;
 layout(location=0) out vec4 oColor;
 uniform vec3 uCamPos;
 uniform float uTime;
@@ -162,7 +165,7 @@ MatIn wfcBuildInput(out mat3 tbn) {
     vec3 B = cross(N, T) * (vTan.w < 0.0 ? -1.0 : 1.0);
     tbn = mat3(T, B, N);
     MatIn m;
-    m.uv0 = vUV0; m.uv1 = vUV1; m.vertexColor = vColor;
+    m.uv0 = vUV0; m.uv1 = vUV1Mat; m.vertexColor = vColor;
     m.worldPosUE = vPos.xzy * 100.0;                     // glTF metres -> UE units/axes
     vec3 V = normalize(uCamPos - vPos);
     m.cameraVector = vec3(dot(V, T), dot(V, B), dot(V, N));
@@ -1041,7 +1044,9 @@ void Pipeline::buildVertices(const MeshData& m, std::vector<float>& v) {
         T = core::normalize(T);
         o[6] = T.x; o[7] = T.y; o[8] = T.z; o[9] = w;
         o[10] = uv ? m.uv[i * 2] : 0.0f; o[11] = uv ? m.uv[i * 2 + 1] : 0.0f;
-        o[12] = hasUV1 ? m.uv1[i * 2] : 0.0f; o[13] = hasUV1 ? m.uv1[i * 2 + 1] : 0.0f;
+        // UE3 FLocalVertexFactory binds the last available texcoord channel for missing ones, so
+        // TexCoord[1] on a single-UV mesh (e.g. Light_Cylinder_STAT) reads UV0.
+        o[12] = hasUV1 ? m.uv1[i * 2] : o[10]; o[13] = hasUV1 ? m.uv1[i * 2 + 1] : o[11];
     }
 }
 
@@ -1200,6 +1205,19 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
     core::Vec3 origin{model.m[12], model.m[13], model.m[14]};
     LightEnv dynEnv;
     bool dynEnvReady = false;
+    // small dynamic object (world-space bounding radius < 0.5 m): shares a per-cell environment
+    bool smallDynamic = false;
+    if (dynamicObject && !g.subs.empty()) {
+        core::Vec3 mn = g.subs[0].bmin, mx = g.subs[0].bmax;
+        for (const Sub& s : g.subs) {
+            mn = {std::min(mn.x, s.bmin.x), std::min(mn.y, s.bmin.y), std::min(mn.z, s.bmin.z)};
+            mx = {std::max(mx.x, s.bmax.x), std::max(mx.y, s.bmax.y), std::max(mx.z, s.bmax.z)};
+        }
+        float sc = std::max(core::length(core::Vec3{model.m[0], model.m[1], model.m[2]}),
+                   std::max(core::length(core::Vec3{model.m[4], model.m[5], model.m[6]}),
+                            core::length(core::Vec3{model.m[8], model.m[9], model.m[10]})));
+        smallDynamic = core::length(mx - mn) * 0.5f * sc < 0.5f && core::length(mx - mn) > 0.0f;
+    }
     for (int pass = 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
         for (Sub& s : g.subs) {
             if (s.prog < 0) continue;
@@ -1269,6 +1287,20 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
             } else {
                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
                 const LightEnv* env;
+                if (dynamicObject && !dynEnvReady && smallDynamic) {
+                    core::Vec3 p = origin;
+                    auto q = [](float v) { return (uint64_t)(uint32_t)(int32_t)std::floor(v) & 0x1FFFFFull; };
+                    uint64_t key = (q(p.x) << 42) | (q(p.y) << 21) | q(p.z);
+                    CellEnv& ce = cellEnv_[key];
+                    constexpr int kCellEnvFrames = 60;
+                    if (frameNo_ - ce.frame > kCellEnvFrames) {
+                        core::Vec3 c{std::floor(p.x) + 0.5f, std::floor(p.y) + 0.5f, std::floor(p.z) + 0.5f};
+                        computeEnv(c, true, ce.env);
+                        ce.frame = frameNo_;
+                    }
+                    dynEnv = ce.env;
+                    dynEnvReady = true;
+                }
                 if (dynamicObject) {
                     if (!dynEnvReady) {
                         core::Vec3 p = origin + core::Vec3{0, 2.0f, 0};
@@ -1435,6 +1467,7 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
     g.vao = spriteVao_;
     Sub d;
     d.first = 0; d.count = (uint32_t)idx.size(); d.prog = it->second;
+    d.matName = material;                                  // diagnostics (WFC_SKIPMAT)
     g.subs.push_back(d);
     drawSubs(g, core::Mat4::identity(), true);
     return true;
