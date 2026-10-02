@@ -15,7 +15,8 @@ struct MoveIntent {
     float moveRight = 0.0f;
     float faceYaw = 0.0f;   // desired facing (radians), usually camera yaw
     bool  wantJump = false;
-    bool  wantBoost = false;   // vehicle dash/boost (Sprint)
+    bool  wantBoost = false;   // Boost held (vehicle: Hovering -> Driving)
+    bool  wantDash = false;    // Dash edge (VehicleSpecialMove), latched until a step consumes it
 };
 
 namespace CharacterMovement {

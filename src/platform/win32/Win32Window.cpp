@@ -23,11 +23,14 @@ int vkFor(Button b) {
         case Button::Jump:         return VK_SPACE;
         case Button::Transform:    return 'F';
         case Button::Fire:         return VK_LBUTTON;
-        case Button::Sprint:       return VK_SHIFT;
+        case Button::Sprint:       return 0;        // no sprint in WFC (no binding)
         case Button::Reload:       return 'R';
         case Button::CameraToggle: return 'C';
         case Button::Debug:        return 'B';
         case Button::Quit:         return VK_ESCAPE;
+        case Button::FineAim:      return VK_RBUTTON;
+        case Button::Dash:         return VK_SHIFT; // [CONF] Shift = "Ability0 | VehicleSpecialMove";
+                                                    // PlayerInCarForm.StartVehicleSpecialMove -> set_DashingInput
         default:                   return 0;
     }
 }
@@ -162,9 +165,11 @@ private:
             input.padLY = axis(st.Gamepad.sThumbLY, XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE);
             input.padRX = axis(st.Gamepad.sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
             input.padRY = axis(st.Gamepad.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
+            input.padLT = st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ? st.Gamepad.bLeftTrigger / 255.0f : 0.0f;
         } else {
             input.padConnected = false;
             input.padLX = input.padLY = input.padRX = input.padRY = 0.0f;
+            input.padLT = 0.0f;
         }
     }
 

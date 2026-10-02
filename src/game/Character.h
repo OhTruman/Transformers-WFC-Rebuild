@@ -1,5 +1,6 @@
 // Clean-room reconstruction — Character/Pawn: a controllable embodied actor.
 #pragma once
+#include <algorithm>
 #include <string>
 #include <vector>
 #include "game/Actor.h"
@@ -26,12 +27,41 @@ public:
         boxSize_ = t.boxSize;
         color_ = t.color;
     }
-    Form form() const { return form_; }
+    Form form() const { return form_; }      // displayed form (mesh handoff happens mid-fold)
+    // Movement form: TnPawn.Transforming.BeginTransformation sets _CurrentForm = TargetForm and the
+    // target form's movement capabilities at the START of a transformation [CONF bytecode], so
+    // physics follows the target form for the whole fold while the mesh still hands off mid-fold.
+    Form moveForm() const { return trans_ != Transition::None ? transTarget_ : form_; }
+    // Normalized progress through the whole fold (the incoming clip resumes at the outgoing
+    // clip's normalized time, so animTime/duration of the active transform clip spans 0..1).
+    float transformProgress() const {
+        const assets::SkinnedModel* m = currentModel();
+        if (trans_ == Transition::None || !m || transClip_ < 0) return 1.0f;
+        float d = m->clips[(size_t)transClip_].duration;
+        return d > 0.0f ? std::min(1.0f, animTime_ / d) : 1.0f;
+    }
+    float transformStartYaw() const { return transStartYaw_; }
     void toggleForm() { setForm(form_ == Form::Robot ? Form::Vehicle : Form::Robot); }
 
     // Transformation: plays paired transform clips with a mid-sequence skeleton handoff.
     void beginTransform();
     bool isTransforming() const { return trans_ != Transition::None; }
+
+    // TnPawn speed multipliers (SetSpeedMultiplier / UpdateSpeeds): GroundSpeed/AirSpeed scale.
+    void setSpeedMultiplier(float m) { speedMult_ = m; }
+    float speedMultiplier() const { return speedMult_; }
+    // Fine aim state (TnFineAimManager.bFineAiming), owned by the controller.
+    void setFineAiming(bool b) { fineAiming_ = b; }
+    bool fineAiming() const { return fineAiming_; }
+    // Hover offset the pawn currently carries above its supporting surface (vehicle suspension).
+    float hoverApplied() const { return hoverApplied_; }
+    void setHoverApplied(float h) { hoverApplied_ = h; }
+    // Visual-only mesh offset absorbing a position shift during a transformation; decays to zero
+    // over kTransformShiftBlend (TnPawn.Transforming.OnUpdate OffsetMeshes).
+    void addTransformShift(const core::Vec3& s) { meshShift_ = meshOffset() + s; shiftRemain_ = core::config::kTransformShiftBlend; }
+    core::Vec3 meshOffset() const {
+        return shiftRemain_ > 0.0f ? meshShift_ * (shiftRemain_ / core::config::kTransformShiftBlend) : core::Vec3{0, 0, 0};
+    }
 
     // Real skinned models per form (owned elsewhere). If unset, draws a fallback box.
     void setFormModels(const assets::SkinnedModel* robot, const assets::SkinnedModel* vehicle) {
@@ -56,6 +86,17 @@ public:
     bool onGround() const { return onGround_; }
     void setOnGround(bool g) { onGround_ = g; }
     float groundY = 0.0f;
+    Form transTarget_ = Form::Robot;
+    float restoreTimer_ = -1.0f;      // time since the weapon was restored during a vehicle->robot fold
+    bool lastDriving_ = false;
+    int vehTransClip_ = -1;
+    float vehTransT_ = 0.0f;
+    float transStartYaw_ = 0.0f;
+    float speedMult_ = 1.0f;
+    bool fineAiming_ = false;
+    float hoverApplied_ = 0.0f;
+    core::Vec3 meshShift_{0, 0, 0};
+    float shiftRemain_ = 0.0f;
 
     const core::Vec3& boxSize() const { return boxSize_; }
     const core::Vec3& color() const { return color_; }
@@ -77,6 +118,26 @@ public:
     float legYaw() const { return legYaw_; }
     bool turningInPlace() const { return turnClip_ >= 0; }
     bool recoiling() const { return recoilSpine_.active || recoilHand_.active; }
+
+    // Vehicle mechanics state (TnCarForm Hovering/Driving, hover dash, truck nitro). Owned by the
+    // movement code; read by animation and diagnostics.
+    struct VehicleState {
+        bool driving = false;         // TnCarForm state Driving (normal boost, wheels)
+        float rideHeight = 0.0f;      // current suspension height above the support surface (m)
+        float driftRemain = 0.0f;     // Hovering.BeginState Drift(): steering authority ramp
+        float dashRemain = 0.0f;      // hover dash time remaining
+        float dashCooldown = 0.0f;    // special-move cooldown (TimeBetweenDashes)
+        core::Vec3 dashDir{0, 0, 0};  // local (x = forward, z = right)
+        float nitroRemain = 0.0f;     // truck nitro (ram) time remaining
+        float nitroCooldown = 0.0f;   // TimeBetweenNitros, from nitro start
+    };
+    VehicleState veh_;
+    VehicleState& vehicleState() { return veh_; }
+    const VehicleState& vehicleState() const { return veh_; }
+    // Weapon usable: robot control form and, during vehicle->robot, restored at 25% of the fold
+    // plus the 0.2 s equip [CONF]. Robot->vehicle stores the weapon at fold start.
+    bool weaponUsable() const;
+    bool weaponRestored() const;
 
     // A shot was fired this step: restart the weapon recoil skel-controls (TnRecoiler.Recoil).
     void notifyFired() { recoilSpine_.start(); recoilHand_.start(); }
@@ -144,6 +205,7 @@ private:
         assets::LocalPose idle, f, b, l, r;      // Nav_Hover_{Pose,F,B,L,R}_VEH
         bool valid = false;
         int hoverAddClip = -1;                   // ADD_Nav_Hover_VEH
+        int hoverToBoost = -1, boostToHover = -1, wheels = -1;   // Driving (normal boost) clips
     } vehicleRig_;
     void buildRobotRig(const assets::SkinnedModel& mdl);
     void buildVehicleRig(const assets::SkinnedModel& mdl);

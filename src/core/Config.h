@@ -19,40 +19,95 @@ constexpr float kGravity          = 29.4f;   // m/s^2 (pawn)
 constexpr float kVehicleGravity   = 19.4f;   // m/s^2 (-2940 * 0.66 / 100) [CONF]
 constexpr float kGroundY = 0.0f;
 
-// Robot movement. [CONF] recovered from Default__TnPlayerPawn / Default__TnPawn (TransGame.xxx).
-constexpr float kRobotMoveSpeed   = 5.5f;    // GroundSpeed 550 UU/s  [CONF]
-constexpr float kRobotAccel       = 20.48f;  // AccelRate 2048 UU/s^2 [CONF]
-constexpr float kRobotMaxJumpH    = 6.25f;   // MaxJumpHeight 625 UU  [CONF]
-// JumpZ is derived so jump height stays MaxJumpHeight under WFC gravity: v=sqrt(2*g*h).
-constexpr float kRobotJumpSpeed   = 19.17f;  // = sqrt(2*29.4*6.25) m/s [CONF-derived]
-constexpr float kAirControl       = 0.70f;   // AirControl 0.70       [CONF]
-constexpr float kAirSpeed         = 15.0f;   // AirSpeed 1500 UU/s    [CONF]
+// Robot movement. [CONF] TnPawn.ApplyTransformer copies the character definition
+// (TR_Optimus_ROBODEF_p.Optimus_ROBODEF, a TnTransformer) onto the pawn at spawn: AccelRate,
+// set_BaseGroundSpeed(BaseGroundSpeed), set_BaseAirSpeed(AirSpeed), AirControl, collision size,
+// MaxJumpHeight = AcrobaticsManagerBlueprint.JumpHeight, JumpZ = sqrt(-2*GravityZ*JumpHeight).
+// All six playable ROBODEFs checked share 1400/12000/1200/0.4/SharedAcrobatics. (Passes 2/10 used
+// the TnPlayerPawn/Engine.Pawn class defaults 550/2048/1500/0.7, which ApplyTransformer replaces.)
+constexpr float kRobotMoveSpeed   = 14.0f;   // BaseGroundSpeed 1400 UU/s [CONF]
+constexpr float kRobotAccel       = 120.0f;  // AccelRate 12000 UU/s^2   [CONF]
+constexpr float kRobotMaxJumpH    = 5.0f;    // SharedAcrobatics.JumpHeight 500 UU [CONF]
+constexpr float kRobotJumpSpeed   = 17.146f; // JumpZ = sqrt(2*29.4*5.0) m/s [CONF formula, ApplyTransformer]
+constexpr float kAirControl       = 0.40f;   // AirControl 0.4          [CONF]
+constexpr float kAirSpeed         = 12.0f;   // AirSpeed 1200 UU/s      [CONF]
+constexpr float kRobotTerminalVel = 60.0f;   // TerminalVelocity 6000 UU/s [CONF]
+// TnPawn.CalculateDesiredFlatVelocity: any movement input targets at least 450 UU/s [CONF].
+constexpr float kRobotMinMoveSpeed = 4.5f;
+// TnTransformerMomentumBlueprint TR_Acrobatics_p.TruckTransformerMomentum [CONF]. Used by
+// TnPawn.CalculateMomentumPreservation only while flat speed exceeds the max speed:
+// MaxAcceleration = AccelRate / (1 + Preservation); the InAir set applies while falling OR
+// transforming (TnPawn.CalculateMaxAcceleration / CalculateMomentumPreservation bytecode).
+constexpr float kMomentumGroundFwd = 7.0f, kMomentumGroundNeutral = 3.0f, kMomentumGroundBack = 1.0f;
+constexpr float kMomentumAirFwd = 100.0f, kMomentumAirNeutral = 100.0f, kMomentumAirBack = 5.0f;
+constexpr float kMomentumFwdCos = 0.866f;    // input within 30 deg of the velocity = "forward" [CONF]
 
-// Pawn collision cylinder. [CONF] Default__TnPawn _WorkingMovementCapabilities.
-constexpr float kPawnRadius       = 1.75f;   // CylinderRadius 175 UU [CONF]
-constexpr float kPawnHalfHeight   = 2.0f;    // CylinderHeight 200 UU [CONF] (full height 4 m)
-constexpr float kEyeHeight        = 2.8f;    // CollisionHeight 200 + BaseEyeHeight 80 UU [CONF]
+// Pawn collision cylinder. [CONF] Optimus_ROBODEF.Collision (ApplyTransformer SetCollisionSize).
+constexpr float kPawnRadius       = 2.0f;    // CollisionRadius 200 UU [CONF] (Default__TnPawn: 175)
+constexpr float kPawnHalfHeight   = 2.0f;    // CollisionHeight 200 UU [CONF] (full height 4 m)
+// BaseEyeHeight: Optimus_ROBODEF keeps Default__TnTransformer.BaseEyeHeight 150 UU (applied by
+// ApplyTransformer) -> eye 2.0 + 1.5 m above the feet; used as the weapon trace origin [CONF].
+constexpr float kEyeHeight        = 3.5f;
 
 // Vehicle movement. [CONF] recovered from Default__TnHoverCarSimulationBlueprint (TransGame.xxx)
 // — WFC ground vehicles HOVER. (TnCarSimulationBlueprint = non-hover, MaxSpeed 500; unused here.)
 constexpr float kVehicleMoveSpeed = 15.0f;   // MaxLinearSpeed 1500 UU/s        [CONF]
 constexpr float kVehicleAccel     = 30.0f;   // MaxLinearAcceleration 3000 UU/s^2 [CONF]
-constexpr float kVehicleBoostSpeed= 50.0f;   // DashSpeed 5000 UU/s             [CONF]
-constexpr float kVehicleDashTime  = 0.3f;    // DashDuration 0.3 s              [CONF]
-constexpr float kVehicleHoverH    = 2.0f;    // SuspensionRadius 200 UU (hover) [CONF]
+// Three distinct vehicle mechanics (RE notes, Systems checkpoint; TnCarForm/TnTruckForm/TnHoverCarSimulation
+// bytecode). Do not conflate them:
+//  1) Normal boost: Boost held -> TnCarForm state Driving (wheels, VEH_SHARED_p.Truck_Physics).
+//  2) Hover dash: Dash input while Hovering -> TnHoverCarSimulation.Dash (HoverTruck_Physics).
+//  3) Ram/nitro: Dash input while Driving -> TnTruckForm.Driving nitro (script literals).
+// (1) Truck_Physics (TnCarPhysicsBlueprint) [CONF]:
+constexpr float kTruckDriveSpeed  = 30.0f;   // MaxSpeed 3000 UU/s
+constexpr float kTruckDriveAccel  = 25.0f;   // MaxAcceleration 2500 UU/s^2
+constexpr float kWheelsDropTime   = 0.27f;   // BoostWheelsGroundCheckDelay: wheels reach the ground [CONF value, use PROV]
+// (2) Hover dash [CONF]: HoverTruck_Physics overrides + TnHoverCarSimulation.UpdateDash literals.
+constexpr float kVehicleBoostSpeed= 30.0f;   // hover DashSpeed 3000 UU/s (class default 5000)
+constexpr float kVehicleDashTime  = 0.5f;    // hover DashDuration 0.5 s (class default 0.3)
+constexpr float kHoverDashAccel   = 1000.0f; // get_DashAcceleration / get_DashDeceleration 100000 UU/s^2
+constexpr float kHoverDashCooldown = 2.0f;   // TnCarForm.get_TimeBetweenDashes = 2.0 x modifier
+// (3) Nitro [CONF script literals, TnTruckForm getters]:
+constexpr float kNitroDuration    = 3.0f;
+constexpr float kNitroSpeedScale  = 1.5f;
+constexpr float kNitroSteerScale  = 0.3f;
+constexpr float kNitroCooldown    = 8.0f;    // TimeBetweenNitros (measured from nitro start)
+// Hover steering authority after entering Hovering (TnCarForm.Hovering.BeginState -> Drift):
+// accel scale = (1 - DriftTimeRemaining/DriftDuration)^2 [CONF bytecode, DriftDuration class default 0.5].
+constexpr float kHoverDriftDuration = 0.5f;
+constexpr float kVehicleHoverH    = 1.85f;   // SuspensionRadius 185 UU (class default 200) [CONF]
+// TnVehicleForm.OnActivate: Velocity = ClampLength(pawn Velocity, 3500) is handed to the rigid body
+// with the pawn rotation when the vehicle form activates (start of robot->vehicle) [CONF].
+constexpr float kMaxTransformSpeed = 35.0f;  // TnVehicleForm.kMaxTransformSpeed 3500 UU/s
 constexpr float kVehicleJumpSpeed = 12.0f;   // JumpLinearSpeed 1200 UU/s       [CONF]
-constexpr float kVehicleTurnRate  = 3.1416f; // AiMaxAngularSpeed ~pi rad/s     [CONF]
+// [PROV] player steering rate not recovered. (Pass 7's source, AiMaxAngularSpeed, is an AI-only
+// field and is 20 rad/s for the Optimus truck.)
+constexpr float kVehicleTurnRate  = 3.1416f;
 
-// Camera. [CONF] default FOV = 75 deg HORIZONTAL (Xe-TransCamera.ini TnFovCameraBehavior).
-// Converted to vertical per aspect in render::Camera.
-constexpr float kCamFovXDeg    = 75.0f;    // horizontal FOV [CONF]
+// Camera. Robot strategy [CONF] CAM_Strategies_p.OverTheShoulder_STRATEGY (FOV is HORIZONTAL,
+// UE3 convention; converted to vertical per aspect in render::Camera):
+//   TnFovCameraBehavior DefaultFOV 80 / SmoothTime 0.4; FOVsByPCS TnPCS_FineAim 45 / 0.1
+//   TnLocationOffsetCameraBehavior DefaultOrbitDistance 800 (no generic FineAim override)
+//   HmOffsetAnchorPointRelativeToActorCameraBehavior Offset Z 200 (above the actor = cylinder centre)
+//   TnOrbitRotationCameraBehavior look Yaw/Pitch 50/25, FineAim 25/12.5, PitchRange -75..75
+constexpr float kCamFovXDeg    = 80.0f;    // horizontal FOV [CONF strategy instance; ini class default 75]
 constexpr float kCamFovSmooth  = 0.4f;     // DefaultFOV SmoothTime [CONF]
 constexpr float kMouseSens     = 0.0022f;  // radians per pixel [PROV]
-constexpr float kCamDistance   = 9.0f;     // follow distance (m) [PROV — HM camera data not recovered]
-constexpr float kCamHeight     = kEyeHeight; // pivot at the pawn eye (2.8 m) [CONF-derived]
-constexpr float kPitchMin      = -1.2f;    // [PROV]
-constexpr float kPitchMax      =  1.2f;    // [PROV]
-constexpr float kFineAimSpeedMult = 0.5f;  // [CONF] TnFineAimManager._GroundSpeedMultiplier
+constexpr float kCamDistance   = 8.0f;     // DefaultOrbitDistance 800 UU [CONF]
+constexpr float kCamHeight     = kPawnHalfHeight + 2.0f; // actor centre + anchor Offset Z 200 UU [CONF]
+constexpr float kPitchMin      = -1.309f;  // PitchRange -75 deg [CONF]
+constexpr float kPitchMax      =  1.309f;  // PitchRange +75 deg [CONF]
+// Fine aim (robot only; TnPlayerController.PlayerWalking.FineAim -> TnFineAimManager).
+constexpr float kFineAimSpeedMult  = 0.5f;  // _GroundSpeedMultiplier -> SetSpeedMultiplier [CONF]
+constexpr float kFineAimFovXDeg    = 45.0f; // TnPCS_FineAim FOV [CONF]
+constexpr float kFineAimFovSmooth  = 0.1f;  // TnPCS_FineAim SmoothTime [CONF]
+constexpr float kFineAimLookScale  = 0.5f;  // FineAim look speed 25/12.5 vs default 50/25 [CONF ratio]
+constexpr float kFineAimSpreadMult = 0.5f;  // IonBlaster WEPDATA FineAimSpreadModifier [CONF]
+// TnScreenSpaceOffsetByPitchCameraBehavior DefaultOffsetCurve [150,300,150] UU over pitch -75/0/75,
+// SmoothTime 0.3 [CONF values]; interpreted as a rightward camera offset [PROV semantics].
+constexpr float kShoulderOffsetMid    = 3.0f;
+constexpr float kShoulderOffsetEnd    = 1.5f;
+constexpr float kShoulderOffsetSmooth = 0.3f;
 
 // Mesh facing offset. [CONF] extracted meshes keep UE's +X-forward convention (v_gltf maps
 // UE +X -> gltf +X), while our yaw/camera use -Z-forward; a +90 deg model rotation aligns them.
@@ -95,6 +150,15 @@ constexpr float kLandMinAirTime    = 0.3f;   // s [PROV]
 constexpr float kTurnThreshold       = 0.3926991f; // 4096 UU = 22.5 deg [CONF]
 constexpr float kTurnTransitionBlend = 0.1f;       // s [CONF]
 constexpr float kTurnAbortPct        = 0.5f;       // [CONF]
+// Transformation mesh offset: TnPawn.Transforming.OnUpdate OffsetMeshes(Remaining/0.5 * Shift)
+// [CONF shape]; used here to absorb the height change when the movement form switches at fold start.
+constexpr float kTransformShiftBlend = 0.5f;
+// Weapon restore on vehicle->robot [CONF, Xe-TransGame.ini TnPawn._RestoreWeaponTransformFractionRemaining
+// = 0.75 => restored when 25% of the fold has elapsed], usable after the weapon's EquipTime 0.2 s [CONF].
+constexpr float kRestoreWeaponElapsed = 0.25f;
+constexpr float kWeaponEquipTime      = 0.2f;
+// Input latching [CONF RE]: reload fires on release of a tap shorter than this.
+constexpr float kReloadTapTime        = 0.3f;
 constexpr float kAimInterpSpeed      = 12.0f;      // [CONF]
 // Aim offset "Default" profile ranges [CONF Robot_ANIMTREE TnAnimNodeAimOffset]: profile
 // Horizontal [-1,1] / Vertical [-1,0.8]; RemapPawnAimRange with PawnAimOffsetRange

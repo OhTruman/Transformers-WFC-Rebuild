@@ -29,8 +29,29 @@ void Character::beginTransform() {
     transClip_ = c;
     animTime_ = 0.0f;
     clip_ = -1;                 // force a clip change so the blend-in snapshot fires
-    velocity_ = {0, 0, 0};
     legYaw_ = 0.0f; turnClip_ = -1; yawInit_ = false;   // the fold starts square to the aim
+    // Momentum is kept: nothing in TnPawn.Transform / BeginTransformation / TnTransformation.Execute
+    // touches velocity. The target form becomes the movement form now (see moveForm()).
+    transTarget_ = (form_ == Form::Robot) ? Form::Vehicle : Form::Robot;
+    transStartYaw_ = yaw_;
+    if (transTarget_ == Form::Vehicle) {
+        // Vehicle form activates hovering: Hovering.BeginState -> Drift() (authority ramp 0.5 s).
+        veh_ = VehicleState{};
+        veh_.rideHeight = core::config::kVehicleHoverH;
+        veh_.driftRemain = core::config::kHoverDriftDuration;
+    } else {
+        // Vehicle->robot: the local player keeps full velocity and enters falling [CONF RE].
+        onGround_ = false;
+        restoreTimer_ = -1.0f;
+        veh_.driving = false; veh_.nitroRemain = 0.0f; veh_.dashRemain = 0.0f;
+    }
+    if (transTarget_ == Form::Vehicle) {
+        // TnVehicleForm.OnActivate: Velocity = ClampLength(pawn Velocity, kMaxTransformSpeed);
+        // the rigid body takes that velocity and the pawn's rotation (heading preserved).
+        float sp = core::length(velocity_);
+        if (sp > core::config::kMaxTransformSpeed)
+            velocity_ = velocity_ * (core::config::kMaxTransformSpeed / sp);
+    }
 }
 
 // Robot rig: the 9-pose Shooting_Aim grid (we use the F column: the body always faces the aim
@@ -227,6 +248,9 @@ void Character::buildVehicleRig(const assets::SkinnedModel& mdl) {
         cb = mdl.clipByName("Nav_Hover_B_VEH"), cl = mdl.clipByName("Nav_Hover_L_VEH"),
         cr = mdl.clipByName("Nav_Hover_R_VEH");
     V.hoverAddClip = mdl.clipByName("ADD_Nav_Hover_VEH");
+    V.hoverToBoost = mdl.clipByName("Nav_HoverToBoost_VEH");
+    V.boostToHover = mdl.clipByName("Nav_BoostToHover_VEH");
+    V.wheels = mdl.clipByName("Nav_Idle_Wheels_VEH");
     if (ci < 0 || cf < 0 || cb < 0 || cl < 0 || cr < 0) return;
     assets::samplePose(mdl, ci, 0.0f, false, V.idle);
     assets::samplePose(mdl, cf, 0.0f, false, V.f);
@@ -387,7 +411,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
     }
 
     // Vehicle hover bob: the additive ADD_Nav_Hover_VEH loop on top of the hover poses.
-    bool vehRig = (&mdl == vehicleModel_) && vehicleRig_.built && vehicleRig_.hoverAddClip >= 0;
+    bool vehRig = (&mdl == vehicleModel_) && vehicleRig_.built && vehicleRig_.hoverAddClip >= 0 && !veh_.driving;
     hoverT_ += dt;
     hoverW_ = approach(hoverW_, (vehRig && steady) ? 1.0f : 0.0f, dt, core::config::kSlotBlend);
     if (vehRig && hoverW_ > 0.0f) {
@@ -407,6 +431,13 @@ void Character::updateAnimation(float dt) {
     if (vehicleModel_ && !vehicleRig_.built && vehicleModel_->valid()) buildVehicleRig(*vehicleModel_);
 
     animTime_ += dt;   // advance the active clip's time (reset to 0 by beginBase on a change)
+    if (shiftRemain_ > 0.0f) shiftRemain_ = std::max(0.0f, shiftRemain_ - dt);
+    // Weapon restore clock during vehicle->robot: starts when 25% of the fold has elapsed (the
+    // restore point is measured on the fold even before the robot mesh is displayed).
+    if (trans_ != Transition::None && transTarget_ == Form::Robot) {
+        if (restoreTimer_ < 0.0f && transformProgress() >= core::config::kRestoreWeaponElapsed) restoreTimer_ = 0.0f;
+        else if (restoreTimer_ >= 0.0f) restoreTimer_ += dt;
+    }
 
     // --- transformation timeline (overrides locomotion; plays once, no loop) ---
     if (trans_ != Transition::None) {
@@ -457,7 +488,24 @@ void Character::updateAnimation(float dt) {
 
     if (form_ == Form::Vehicle) {
         legYaw_ = 0.0f; turnClip_ = -1; yawInit_ = false;
-        if (vehicleRig_.valid) {
+        // Normal boost switches TnCarForm Hovering <-> Driving: Nav_HoverToBoost_VEH into the wheels
+        // pose Nav_Idle_Wheels_VEH, Nav_BoostToHover_VEH back to the hover poses [clip names CONF,
+        // sequencing PROV].
+        const VehicleRig& V = vehicleRig_;
+        if (veh_.driving != lastDriving_) {
+            lastDriving_ = veh_.driving;
+            vehTransClip_ = veh_.driving ? V.hoverToBoost : V.boostToHover;
+            vehTransT_ = 0.0f;
+        }
+        vehTransT_ += dt;
+        bool inVehTrans = vehTransClip_ >= 0 && vehTransT_ < mdl->clips[(size_t)vehTransClip_].duration;
+        if (vehicleRig_.valid && inVehTrans) {
+            justExitedTransform_ = false;
+            playClip(*mdl, vehTransClip_, false, dt, core::config::kLocomotionBlend);
+        } else if (vehicleRig_.valid && veh_.driving && V.wheels >= 0) {
+            justExitedTransform_ = false;
+            playClip(*mdl, V.wheels, true, dt, core::config::kLocomotionBlend);
+        } else if (vehicleRig_.valid) {
             if (clip_ != kVehicleHoverKey) justExitedTransform_ = false;
             beginBase(*mdl, kVehicleHoverKey, blend);
             animName_ = "Nav_Hover_FBLR_VEH";
@@ -530,13 +578,26 @@ void Character::updateAnimation(float dt) {
     finalizePose(*mdl, dt);
 }
 
+bool Character::weaponRestored() const {
+    if (trans_ == Transition::None) return form_ == Form::Robot;
+    // Restored once 25% of a vehicle->robot fold has elapsed; needs the robot skeleton displayed.
+    return transTarget_ == Form::Robot && form_ == Form::Robot &&
+           transformProgress() >= core::config::kRestoreWeaponElapsed;
+}
+
+bool Character::weaponUsable() const {
+    if (moveForm() != Form::Robot) return false;
+    if (trans_ == Transition::None) return true;
+    return restoreTimer_ >= core::config::kWeaponEquipTime;   // restored + EquipTime 0.2 s
+}
+
 void Character::updateWeaponSocket() {
     weaponValid_ = false;
     // The Ion Blaster is holstered through the whole transform: no floating gun during the fold.
-    if (trans_ != Transition::None) return;
+    if (trans_ != Transition::None && !weaponRestored()) return;
     if (form_ != Form::Robot || weaponBone_ < 0) return;
     if ((size_t)weaponBone_ >= animScratch_.size()) return;
-    core::Mat4 model = core::Mat4::translate(pos_) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
+    core::Mat4 model = core::Mat4::translate(pos_ + meshOffset()) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
     weaponWorld_ = model * animScratch_[(size_t)weaponBone_] * weaponOffset_;
     weaponValid_ = true;
 }
@@ -544,7 +605,7 @@ void Character::updateWeaponSocket() {
 void Character::draw(render::IRenderer& r) const {
     const assets::SkinnedModel* mdl = currentModel();
     if (mdl && mdl->valid() && !poseBuf_.empty()) {
-        core::Mat4 model = core::Mat4::translate(pos_) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
+        core::Mat4 model = core::Mat4::translate(pos_ + meshOffset()) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
         r.drawDynamicMesh(poseBuf_, model, color_);
         return;
     }

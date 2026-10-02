@@ -8,6 +8,8 @@ enum class Button {
     Forward, Back, Left, Right,
     Jump, Transform, Fire, Sprint,
     Reload, CameraToggle, Debug, Quit,
+    FineAim,   // WFC: RightMouseButton = "ToggleFineAim | Boost"; pad LeftTrigger = "FineAim | Boost"
+    Dash,      // Dash = VehicleSpecialMove (hover dash / nitro): PC Shift, pad RightShoulder [CONF]
     Count
 };
 
@@ -20,6 +22,7 @@ struct InputFrame {
     bool  padConnected = false;
     float padLX = 0, padLY = 0;   // left stick, -1..1
     float padRX = 0, padRY = 0;   // right stick, -1..1
+    float padLT = 0;              // left trigger, 0..1
 
     bool isDown(Button b) const { return down[(int)b]; }
     bool wasPressed(Button b) const { return pressed[(int)b]; }
