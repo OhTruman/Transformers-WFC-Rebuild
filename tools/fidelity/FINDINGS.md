@@ -1,6 +1,10 @@
 # Fidelity harness — findings for owning workstreams (2026-10-01)
 
 > Integration checkpoint with the four owner patches and the merge warning: [CHECKPOINT.md](CHECKPOINT.md).
+>
+> **Native RE update (2026-10-01):** expectations are now CONFIRMED from `RE-Workspace/notes`; see
+> [RE-EXPECTATIONS.md](RE-EXPECTATIONS.md). Item 9 (fire rate) is **withdrawn**: the original also
+> fires at ≈900 RPM.
 
 ## Branch scoreboard (ab.ps1, same harness for every ref)
 | Ref | pass | FAIL | KNOWN | Notes vs main |
@@ -10,7 +14,7 @@
 | agents/gameplay 8045676 (Pass 9) | 109 | 0 | 7 | aim offset now uses the authored TnAnimNodeAimOffset profile: barrel/camera pitch gain 1.02 → 0.70. Not a regression: the gain is authored, so the harness now only enforces direction and records the gain for an original capture |
 | agents/gameplay + `proposals/gameplay-1..3` (verified on 21902b6 and 8045676) | 114 | 0 | 2 | adds jump apex, step height, low-ledge penetration, wall slide; only the Systems fire rate remains |
 | agents/systems 3160a66 | 101 | 0 | 15 | **FIXED**: reload on the move (UpperBodyCustom slot) |
-| agents/systems + `proposals/systems-1` | 102 | 0 | 14 | fire rate 900 → 919 RPM |
+| ~~agents/systems + `proposals/systems-1`~~ | — | — | — | **withdrawn**: the original is ≈900 RPM too (RE TARGETED_PASS #6) |
 | gameplay + systems (merge preview) | — | — | — | **CONFLICTS**: `Character.cpp/.h`, `SkinnedModel.cpp`, `Recoil.h` (add/add), `FIDELITY.md`, `STATUS.md` |
 
 Validated fix patches, with before/after numbers: [proposals/README.md](proposals/README.md).
@@ -96,10 +100,11 @@ changed.** Each item shows as `KNOWN owner=…` in the harness and turns to `RES
    about 1 step. Minor.
 
 ## MED — Systems
-9. **Fire rate 900 RPM vs authored 923 RPM** (0.065 s). `Weapon::onFired` sets
-   `cooldown = fireInterval` and throws away the sub-step remainder, so every shot waits 4 steps
-   at 60 Hz and a mag dump takes 3.27 s instead of 3.19 s. Fix: `cooldown += fireInterval` (clamp
-   when idle). UE3 looping timers keep the remainder; confirm against an original capture.
+9. ~~Fire rate 900 RPM vs authored 923 RPM~~ **WITHDRAWN.** Native RE (TARGETED_PASS #6:
+   SetTimer 0x82F292A8 resets Count; TickTimers 0x82F867C8 fires on strict `>`, overshoot
+   discarded) shows the original also runs at 0.0667 s ≈ 900 RPM. The rebuild was right, and the
+   proposed remainder carry would have been a regression. The harness now enforces 900 RPM as
+   CONFIRMED.
 
 ## Verified OK (regression-locked now)
 - All `[CONF]` constants match their UU sources.

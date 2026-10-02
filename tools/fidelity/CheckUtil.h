@@ -69,6 +69,18 @@ template <class P> double firstAfter(const Rig& r, double t0, P pred) {
     return -1;
 }
 
+// Authored boost input: WFC binds Boost to the same button as FineAim (RMB / LT, RE TARGETED_PASS #4).
+// Returns that button's index when the build has Button::FineAim, else the legacy Sprint key.
+template <class B> constexpr auto authoredBoostIndexImpl(int) -> decltype(B::FineAim, int()) { return (int)B::FineAim; }
+template <class B> constexpr int authoredBoostIndexImpl(long) { return (int)B::Sprint; }
+inline constexpr int authoredBoostIndex() { return authoredBoostIndexImpl<platform::Button>(0); }
+inline platform::InputFrame boostHeld(std::initializer_list<platform::Button> also) {
+    platform::InputFrame f = Rig::down(also);
+    f.down[authoredBoostIndex()] = true;
+    f.pressed[authoredBoostIndex()] = true;   // hold() clears edges after the first step
+    return f;
+}
+
 // Cooked UE3 config root (read-only shared original data).
 inline std::string cookedConfigDir() {
     return Models::assetRoot() + "/../config/Coalesced_ini/TransGame/Config/Xenon/Cooked";

@@ -1,5 +1,33 @@
 # Playtest 01 validation (integration/milestone-01 e62250e)
 
+> **Corrections from native RE (2026-10-01; details in [RE-EXPECTATIONS.md](RE-EXPECTATIONS.md)).**
+> The measurements below stand; these expectations and conclusions changed:
+> - **§1–3 Transform:** the original behaviour is **CONFIRMED**, no longer UNKNOWN.
+>   - Robot→vehicle keeps velocity, clamped to 3500 UU/s.
+>   - Vehicle→robot keeps velocity and decays only above robot MaxSpeed (InAir momentum).
+>   - Movement input is live from frame 0; the target form and physics switch at t=0.
+>   - Weapon restore at 25% elapsed is CONFIRMED in script.
+> - **§4 Fast movement:** there is **no sprint state**. The "faster movement" is the base speed,
+>   Optimus_ROBODEF GroundSpeed **1400** (14 m/s) with AccelRate 12000. The `boost_dodge` clips
+>   belong to the Dodge *ability*.
+> - **§5 Fine aim:** the expected profile is the generic `[TnPCS_FineAim]` row:
+>   - FOV **80 → 45** (smoothing 0.1 / 0.4)
+>   - look ×0.5, speed ×0.5, spread ×0.5
+>   - shoulder X 150 → −50 UU
+>   - blocked while reloading
+>
+>   The 35/45/55 bands are `TnPointOfInterest`, not fine aim.
+> - **§6 Boost:** boost is the **Driving** mode (30 m/s, sustained while held) on **RMB/LT**, shared
+>   with FineAim. The 50 m/s / 0.3 s DashSpeed were unused class defaults; the dash is the separate
+>   special move (30 m/s × 0.5 s).
+> - **§7 Energon colour:** the colour is applied at runtime by `TnCharacterApplier` (`EnergonColor`
+>   from character data or the robot MIC). The compiled red constant is probably the parent default
+>   that the rebuild never overrides.
+> - **Input edges:** reload fires on the **release** of a tap shorter than 0.3 s. The original runs
+>   one tick per frame, so it never loses edges.
+> - **Not a defect:** full-speed foot sliding (1.0× clip rate) and the ≈900 RPM fire cadence are
+>   original behaviour.
+
 Independent validation of the human playtest observations against the integrated build.
 **No product code was changed.**
 

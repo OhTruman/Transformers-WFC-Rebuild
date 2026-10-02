@@ -29,6 +29,27 @@ template <class B> constexpr int fineAimButton(long) { return -1; }
 template <class B> constexpr auto boostButton(int) -> decltype(B::Boost, int()) { return (int)B::Boost; }
 template <class B> constexpr int boostButton(long) { return -1; }
 
+// Vehicle speed after holding the FineAim (= authored Boost) button for 1 s from cruise; 0 if the
+// build has no such button.
+template <class B> double boostViaFineAim() {
+    constexpr int fa = fineAimButton<B>(0);
+    if constexpr (fa < 0) {
+        return 0.0;
+    } else {
+        Rig rig(60, false);
+        rig.pawn().setForm(game::Form::Vehicle);
+        rig.idle(0.3);
+        rig.hold(Rig::down({B::Forward}), 1.5);
+        platform::InputFrame f = Rig::down({B::Forward});
+        f.down[fa] = true;
+        f.pressed[fa] = true;
+        rig.step(f);
+        f.pressed[fa] = false;
+        rig.hold(f, 1.0);
+        return std::sqrt(rig.last().vel.x * rig.last().vel.x + rig.last().vel.z * rig.last().vel.z);
+    }
+}
+
 platform::InputFrame withPress(platform::InputFrame f, Button b) {
     f.pressed[(int)b] = true;
     return f;
@@ -70,7 +91,7 @@ void checkTransformMomentum(Report& r) {
         {"v2r_standstill", game::Form::Vehicle, {}, 0.5},
         {"v2r_cruise", game::Form::Vehicle, {Button::Forward}, 2.0},
         {"v2r_angled", game::Form::Vehicle, {Button::Forward, Button::Right}, 2.0},
-        {"v2r_boost", game::Form::Vehicle, {Button::Forward, Button::Sprint}, 1.5},   // rebuild boost key
+        {"v2r_boost", game::Form::Vehicle, {Button::Forward, static_cast<Button>(authoredBoostIndex())}, 1.5},   // authored boost key
     };
     std::string summary;
     for (const Case& c : cases) {
@@ -122,20 +143,52 @@ void checkTransformMomentum(Report& r) {
             double regain = -1;
             for (const Frame& f : tr) if (end && f.t >= end->t && hspeed(f) >= 0.9 * std::min(vb, (double)tuningFor(f.form).moveSpeed)) { regain = f.t - t0; break; }
             r.info(id + ".time_to_regain_90pct", regain, "s", "press -> 90% of min(pre-transform speed, new form top speed)");
-            r.knownTruth(id + ".momentum_kept", vf >= 0.5 * vb && vMinDuring >= 0.25 * vb,
-                         "playtest: transforming must not dead-stop the player. Original transfer factor UNKNOWN "
-                         "(FIDELITY: 'velocity transfer at transform (currently zeroed)')", kGameplay,
-                         verdict + ": " + fmt(vb, "%.2f") + " m/s -> first step " + fmt(vf, "%.2f") + ", min during fold " +
-                             fmt(vMinDuring, "%.2f") + ". Causes in code: Character::beginTransform sets velocity_ = 0; "
-                             "PlayerController::handleInput zeroes move intent while isTransforming().");
+            std::string detail = verdict + ": " + fmt(vb, "%.2f") + " m/s -> first step " + fmt(vf, "%.2f") +
+                                 ", min during fold " + fmt(vMinDuring, "%.2f") + ", end " + fmt(sp(end), "%.2f");
+            if (c.from == game::Form::Robot) {
+                // R->V (CONFIRMED): TnVehicleForm.OnActivate writes ClampLength(Velocity, 3500) into the RB at
+                // t=0; hover authority fades in over 0.5 s, so the carried velocity persists.
+                const char* rv = "RE TARGETED_PASS #1d / PASS2 #1: R->V Velocity = ClampLength(Velocity, 3500) at t=0";
+                double carried = std::min(vb, 35.0);
+                r.conf(id + ".v_first_step_carried", vf, carried, 1.0, "m/s", rv, kGameplay, detail);
+                r.confTruth(id + ".momentum_kept_through_fold", vMinDuring >= 0.8 * carried - 0.5, rv, kGameplay, detail);
+            } else {
+                // V->R (CONFIRMED): TnRobotForm.OnActivate leaves velocity; robot falls (PHYS_Falling) and
+                // CalcVelocity only decelerates while above robot MaxSpeed, at InAir momentum ~118.8 UU/s^2
+                // (pushing forward/neutral), so the vehicle speed carries into the robot.
+                const char* vr = "RE TARGETED_PASS #1e / PASS2 #1: V->R keeps velocity; InAir momentum decel ~1.19 m/s2 "
+                                 "only above robot MaxSpeed";
+                r.conf(id + ".v_first_step_carried", vf, vb, 1.0, "m/s", vr, kGameplay, detail);
+                double floorSpeed = std::max(0.0, std::min(vb, 14.0) - 0.6);
+                r.confTruth(id + ".momentum_kept_through_fold", vMinDuring >= floorSpeed, vr, kGameplay,
+                            detail + "; expected >= " + fmt(floorSpeed, "%.2f") + " (min(vb, robot 14 m/s) - margin)");
+            }
         }
         summary += std::string(c.id) + "=" + verdict + "; ";
     }
     r.info("summary", 0, "", summary);
 
+    // Input live from frame 0: start from standstill, press transform, THEN push the stick.
+    for (game::Form from : {game::Form::Robot, game::Form::Vehicle}) {
+        Rig rig(60, true);
+        rig.pawn().setForm(from);
+        rig.idle(0.3);
+        double t0 = rig.time();
+        rig.step(Rig::press(Button::Transform));
+        rig.hold(Rig::down({Button::Forward}), 0.5);
+        double vmax = 0;
+        for (const Frame& f : rig.trace()) if (f.t > t0 && f.transforming) vmax = std::max(vmax, (double)hspeed(f));
+        std::string id = from == game::Form::Robot ? "r2v" : "v2r";
+        r.confTruth(id + "_input_live_from_frame0", vmax > 1.0,
+                    "RE TARGETED_PASS2 #1 (PC state flips at DoTransform; target form simulates from frame 0)", kGameplay,
+                    "max speed in the first 0.5 s of the fold with W pressed after the transform press: " + fmt(vmax, "%.2f") + " m/s");
+        save(rig, "tm_" + id + "_input_live");
+    }
+
     // [CONF] Xe-TransGame.ini [TransGame.TnPawn] _RestoreWeaponTransformFractionRemaining=0.75
-    // ("1 = at the beginning of the transform, 0 = at the end"): the weapon returns when 75% of
-    // the to-robot fold remains.
+    // ("1 = at the beginning of the transform, 0 = at the end"), CONFIRMED in script by RE
+    // (TnPawn.TransformingToRobot.AttemptRestoreRobotWeapon: RemainingTimeAsFactor <= 0.75):
+    // vehicle->robot only, weapon visible/attached at 25% elapsed, usable after EquipTime 0.2 s.
     {
         Rig rig(60, true);
         rig.pawn().setForm(game::Form::Vehicle);
@@ -146,10 +199,12 @@ void checkTransformMomentum(Report& r) {
         double end = firstAfter(rig, t0, [](const Frame& f) { return !f.transforming; });
         double vis = firstAfter(rig, t0, [](const Frame& f) { return f.weaponVisible; });
         double fold = std::max(end, 1e-3);
-        r.known("weapon_restore_frac_elapsed_to_robot", vis >= 0 ? vis / fold : -1, 0.25, 0.05, "frac",
-                "Xe-TransGame.ini [TransGame.TnPawn] _RestoreWeaponTransformFractionRemaining=0.75", kGameplay,
-                "rebuild holsters the weapon for the whole fold (weapon reappears at " + fmt(vis, "%.3f") + " s of " +
-                    fmt(end, "%.3f") + " s); original restores it with 75% of the fold remaining");
+        r.conf("weapon_restore_frac_elapsed_to_robot", vis >= 0 ? vis / fold : -1, 0.25, 0.05, "frac",
+               "Xe-TransGame.ini TnPawn._RestoreWeaponTransformFractionRemaining=0.75 + RE TARGETED_PASS2 #7 "
+               "(RemainingTimeAsFactor <= 0.75 = 75% remaining / 25% elapsed, vehicle->robot only)", kGameplay,
+               "weapon visible at " + fmt(vis, "%.3f") + " s of a " + fmt(end, "%.3f") + " s fold. Rebuild attaches the gun "
+               "to the drawn robot mesh, which appears at kTransformHandoffFrac; the original animates both meshes for "
+               "the whole fold (RE HANDOFF #4), so the gun can show at 25%");
     }
 }
 
@@ -178,12 +233,13 @@ void checkFastMovement(Report& r) {
         if (vmax > fastest + 0.05) { fastest = vmax; fastestKey = k.name; }
         if (k.b == Button::Sprint) save(rig, "fast_robot_sprint");
     }
-    r.knownTruth("faster_robot_state_reachable", fastest > jog + 0.5,
-                 "playtest: original robot has a faster movement state. Activation, speed and clip UNKNOWN "
-                 "(authored hints only: robot.glb boost_dodge clips Nav_Boost_{F,B,L,R} 0.47 s, Nav_Slide_{F,B}, Nav_Hover; "
-                 "robot BoosterSocket_L/C/R; cue BL_FS_LRG_BOT.FOLEY_JUMPJETS_BOOST; Xe-TransInput.ini has NO Sprint/Run "
-                 "command: LeftShift=Ability0|VehicleSpecialMove, RMB=ToggleFineAim|Boost, LT=FineAim|Boost)",
-                 kGameplay, "fastest reachable: " + fmt(fastest, "%.2f") + " m/s via " + fastestKey + " (jog " + fmt(jog, "%.2f") + ")");
+    // RE TARGETED_PASS #2: there is NO robot sprint/run input in WFC script. The playtest's "missing fast
+    // movement" is the base speed itself: Optimus_ROBODEF BaseGroundSpeed 1400 / AccelRate 12000.
+    const char* nf = "RE TARGETED_PASS #2 (no sprint state; Optimus_ROBODEF BaseGroundSpeed 1400 via TnPawn.ApplyTransformer)";
+    r.conf("robot_full_input_speed", jog, 14.0, 0.05, "m/s", nf, kGameplay, "full stick = 14 m/s jog (no separate fast state)");
+    r.truth("no_sprint_state", fastest <= jog + 0.05,
+            "RE TARGETED_PASS #2: no input raises robot ground speed above the jog (robot OnStartBoost is empty)",
+            "fastest reachable: " + fmt(fastest, "%.2f") + " m/s via " + fastestKey + " (jog " + fmt(jog, "%.2f") + ")");
 
     // Which authored robot clip categories are ever selected by the runtime state machine.
     const Models* m = Models::get();
@@ -221,8 +277,9 @@ void checkFastMovement(Report& r) {
            "authored robot clip categories never selected as the BASE clip by these input scenarios (layered slots "
            "and synthetic blend labels are not attributed): " + unreached);
     r.knownTruth("boost_dodge_clips_reachable", reached.count("boost_dodge") > 0,
-                 "robot.glb category boost_dodge (Nav_Boost_*, Nav_Slide_*, Nav_Hover) exists in the shipped set", kGameplay,
-                 "no input reaches these clips; trigger UNKNOWN until RE/AssetTools recovers it");
+                 "RE TARGETED_PASS #2: dodge is an ABILITY (TnAbilityDodge on Ability0/1 = RB/LB per class loadout; "
+                 "SharedAcrobatics DodgeSpeed 3000, DodgeTime 0.5) and hover is TnAbilityHover - not sprint", kGameplay,
+                 "no input reaches these clips; Optimus's ability loadout (which slot holds Dodge) is UNKNOWN");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -233,16 +290,18 @@ void checkFineAim(Report& r) { fineAimImpl<Button>(r); }
 
 template <class B> static void fineAimImpl(Report& r) {
     r.setGroup("fine_aim");
-    // Provenance for the expected values (shown so the owner sees what to implement against).
+    // CONFIRMED generic profile (RE TARGETED_PASS #3 / PASS2 #4): the Ion Blaster has no WeaponPCS, so the
+    // generic [TnPCS_FineAim] row of CAM_Strategies_p.OverTheShoulder_STRATEGY applies.
+    const char* fp = "RE TARGETED_PASS #3 / PASS2 #4: OverTheShoulder_STRATEGY generic [TnPCS_FineAim] row "
+                     "(FOV 80->45 smooth 0.1 / exit 0.4; look 50/25 -> 25/12.5; offset X 150 -> -50 UU; "
+                     "TnFineAimManager speed x0.5; FineAimSpreadModifier 0.5; blocked while reloading/meleeing/dodging, "
+                     "auto-resumes)";
     std::string ini;
     bool haveIni = readFileText(cookedConfigDir() + "/Xe-TransGame.ini", ini);
-    bool iniHas = haveIni && ini.find("_GroundSpeedMultiplier=0.5") != std::string::npos &&
-                  ini.find("CloseFov=(FOV=35") != std::string::npos && ini.find("MediumFov=(FOV=45") != std::string::npos &&
-                  ini.find("FarFov=(FOV=55") != std::string::npos;
     if (haveIni)
-        r.truth("authored_values_present", iniHas,
-                "Xe-TransGame.ini [TnFineAimManager] _GroundSpeedMultiplier=0.5, _TargetSnapTimeout=1.0; "
-                "[TnPointOfInterest] Close/Medium/Far FOV 35/45/55 (SmoothTime 1.25)");
+        r.truth("authored_values_present", ini.find("_GroundSpeedMultiplier=0.5") != std::string::npos &&
+                                               ini.find("_TargetSnapTimeout=1.0") != std::string::npos,
+                "Xe-TransGame.ini [TnFineAimManager] _GroundSpeedMultiplier=0.5, _TargetSnapTimeout=1.0");
     else
         r.skip("authored_values_present", "cooked config not found at " + cookedConfigDir());
     r.near("config_fine_aim_speed_mult", kFineAimSpeedMult, 0.5, 1e-6, "", "Xe-TransGame.ini TnFineAimManager._GroundSpeedMultiplier");
@@ -250,37 +309,73 @@ template <class B> static void fineAimImpl(Report& r) {
     constexpr int fa = fineAimButton<B>(0);
     if constexpr (fa < 0) {
         r.knownTruth("fine_aim_input_exists", false,
-                     "Xe-TransInput.ini: RightMouseButton=ToggleFineAim|Boost, XboxTypeS_LeftTrigger=FineAim|Boost "
-                     "(FineAim -> FineAim | OnRelease StopFineAim)", kGameplay,
-                     "platform::Button has no FineAim; nothing to activate. When added, this suite measures FOV, speed, "
-                     "sensitivity and spread against 35/45/55 deg, 0.5x speed, 0.5x spread (weapon.json FineAimSpreadModifier)");
-        r.info("expected_fov_close_med_far", 35, "deg", "45 / 55 by point-of-interest distance (TnPointOfInterest) [CONF]; "
-               "which band applies when is UNKNOWN");
-        r.info("expected_speed_mult", 0.5, "", "TnFineAimManager._GroundSpeedMultiplier [CONF]");
-        r.info("expected_spread_mult", 0.5, "", "weapon.json FineAimSpreadModifier [CONF]");
-        r.info("expected_sensitivity_mult", 0, "", "UNKNOWN (not recovered)");
-        r.info("expected_camera_offset", 0, "", "UNKNOWN (HM camera behaviour data not recovered)");
+                     "Xe-TransInput.ini RightMouseButton=ToggleFineAim|Boost, XboxTypeS_LeftTrigger=FineAim|Boost; " +
+                         std::string(fp), kGameplay,
+                     "platform::Button has no FineAim; when added this suite measures FOV, speed, look scale, camera "
+                     "offset and the reload block against the confirmed generic profile");
+        r.info("expected_fov", 45, "deg", "from 80, SmoothTime 0.1 (exit 0.4) [CONFIRMED]");
+        r.info("expected_speed_mult", 0.5, "", "[CONFIRMED]");
+        r.info("expected_look_scale", 0.5, "", "yaw/pitch 25/12.5 vs 50/25 [CONFIRMED]");
+        r.info("expected_spread_mult", 0.5, "", "[CONFIRMED]");
     } else {
-        Rig base(60, Models::get() != nullptr), aim(60, Models::get() != nullptr);
+        const bool models = Models::get() != nullptr;
+        // Activation: press edge + hold (PC RMB toggles on the press; pad LT holds).
+        platform::InputFrame on;
+        on.down[fa] = true;
+        on.pressed[fa] = true;
+        platform::InputFrame held;
+        held.down[fa] = true;
+        Rig base(60, models), aim(60, models);
         base.idle(0.3);
         aim.idle(0.3);
-        platform::InputFrame f;
-        f.down[fa] = true;
-        aim.hold(f, 1.5);   // FOV SmoothTime 1.25 s
+        aim.step(on);
+        aim.hold(held, 0.6);   // > 5 x SmoothTime 0.1
         render::Camera c0 = base.camera(), c1 = aim.camera();
-        r.info("fov_normal", c0.fovXDeg, "deg", "");
-        bool fovOk = std::fabs(c1.fovXDeg - 35) < 1 || std::fabs(c1.fovXDeg - 45) < 1 || std::fabs(c1.fovXDeg - 55) < 1;
-        r.truth("fov_is_authored_band", fovOk, "TnPointOfInterest Close/Medium/Far FOV 35/45/55", "fov=" + fmt(c1.fovXDeg, "%.1f"));
-        r.info("camera_offset_change", core::length(c1.pos - c0.pos), "m", "expected UNKNOWN");
-        platform::InputFrame w = f;
+        r.conf("fov_normal", c0.fovXDeg, 80.0, 0.5, "deg", fp, kGameplay);
+        r.conf("fov_fine_aim", c1.fovXDeg, 45.0, 0.5, "deg", fp, kGameplay, "after 0.6 s of fine aim");
+        r.confTruth("fine_aim_active", aim.last().fineAim != 0.0f, fp, kGameplay,
+                    "controller fineAiming() = " + fmt(aim.last().fineAim, "%.0f") + " (-1 = accessor unavailable)");
+        // Camera offset: shoulder X 150 -> -50 UU (screen-space semantics PROV): lateral camera shift.
+        core::Vec3 rightAxis = core::normalize(core::cross(core::forwardFromYawPitch(c0.yaw, 0), {0, 1, 0}));
+        r.info("camera_lateral_shift", core::dot(c1.pos - c0.pos, rightAxis), "m",
+               "authored shoulder offset X 150 -> -50 UU (values CONFIRMED, axis semantics PROV)", -2.0);
+        platform::InputFrame w = held;
         w.down[(int)Button::Forward] = true;
         aim.hold(w, 1.5);
-        r.near("speed_mult", hspeed(aim.last()) / kRobotMoveSpeed, 0.5, 0.02, "", "TnFineAimManager._GroundSpeedMultiplier");
-        platform::InputFrame look = f;
+        Rig jog(60, models);
+        jog.idle(0.3);
+        jog.hold(Rig::down({Button::Forward}), 1.5);
+        r.conf("speed_mult", hspeed(aim.last()) / std::max(0.01f, hspeed(jog.last())), 0.5, 0.03, "", fp, kGameplay);
+        platform::InputFrame look = held;
         look.mouseDX = 100;
         float y0 = aim.controller().camYaw();
         aim.step(look);
-        r.info("sensitivity_mult", -(aim.controller().camYaw() - y0) / (100 * kMouseSens), "", "expected UNKNOWN");
+        Rig lb(60, models);
+        lb.idle(0.3);
+        platform::InputFrame look0;
+        look0.mouseDX = 100;
+        float b0 = lb.controller().camYaw();
+        lb.step(look0);
+        double sAim = -(aim.controller().camYaw() - y0), sBase = -(lb.controller().camYaw() - b0);
+        r.conf("look_scale", sBase != 0 ? sAim / sBase : 0, 0.5, 0.02, "", fp, kGameplay);
+        // Blocked while reloading; auto-resumes once the reload ends if still wanted.
+        aim.hold(Rig::down({Button::Fire}), 0.2);            // spend rounds
+        aim.hold(held, 0.3);                                  // fine aim back on
+        platform::InputFrame rel = held;
+        rel.down[(int)Button::Reload] = true;
+        rel.pressed[(int)Button::Reload] = true;
+        aim.step(rel);
+        aim.step(held);                                       // tap released (reload fires on release in WFC)
+        aim.hold(held, 0.5);
+        bool reloading = aim.last().reloading;
+        float fovReload = aim.camera().fovXDeg;
+        r.confTruth("blocked_while_reloading", reloading && fovReload > 60.0f, fp, kGameplay,
+                    "0.5 s into a reload: reloading=" + std::to_string(reloading) + " fov=" + fmt(fovReload, "%.1f"));
+        aim.hold(held, 2.0);
+        float fovAfter = aim.camera().fovXDeg;
+        r.confTruth("resumes_after_reload", !aim.last().reloading && std::fabs(fovAfter - 45.0f) < 1.0f, fp, kGameplay,
+                    "after the reload, still wanted: fov=" + fmt(fovAfter, "%.1f"));
+        save(aim, "fine_aim");
     }
 }
 
@@ -301,14 +396,20 @@ void checkBoost(Report& r) {
         double v = hspeed(rig.last());
         if (v > kVehicleMoveSpeed + 0.5 && v > boostSpeed) { boostSpeed = v; boostKey = k.name; }
     }
-    r.truth("physics_boost_activates", boostSpeed > kVehicleMoveSpeed + 0.5,
-            "TnHoverCarSimulationBlueprint.DashSpeed 5000 UU: a boost input exists and raises speed", "via " + boostKey);
-    r.near("physics_boost_speed", boostSpeed, kVehicleBoostSpeed, 0.05, "m/s", "DashSpeed 5000 UU/s [CONF]");
-    constexpr int bb = boostButton<Button>(0), fa = fineAimButton<Button>(0);
-    r.knownTruth("boost_on_authored_input", bb >= 0 || fa >= 0,
-                 "Xe-TransInput.ini: Boost shares RMB / LeftTrigger with FineAim (RightMouseButton=ToggleFineAim|Boost); "
-                 "LeftShift is Ability0|VehicleSpecialMove", kGameplay,
-                 "rebuild boost is on " + boostKey + " (platform::Button::Sprint = VK_SHIFT); no Boost/FineAim button exists");
+    // Boost (held) = Hovering -> Driving: Truck MaxSpeed 3000 (RE HANDOFF #6). Not the dash: the
+    // 3000 UU/s x 0.5 s dash is the VehicleSpecialMove (Shift / RB), and 5000/0.3 are unused defaults.
+    const char* bs = "RE HANDOFF #6 / TARGETED_PASS #4 / PASS2 #2.1 (boost = Driving mode, Truck MaxSpeed 3000; "
+                     "input LT/RMB shared with FineAim)";
+    double viaAuthored = boostViaFineAim<Button>();
+    if (viaAuthored > boostSpeed) { boostSpeed = viaAuthored; boostKey = "FineAim(RMB/LT)"; }
+    r.truth("physics_boost_activates", boostSpeed > kVehicleMoveSpeed + 0.5, "a boost input exists and raises speed above hover cruise",
+            "via " + boostKey);
+    r.conf("physics_boost_speed", boostSpeed, 30.0, 0.05, "m/s", bs, kGameplay);
+    r.confTruth("boost_on_authored_input", viaAuthored > kVehicleMoveSpeed + 0.5,
+                std::string(bs) + "; Xe-TransInput.ini RightMouseButton=ToggleFineAim|Boost, LT=FineAim|Boost, LeftShift="
+                "Ability0|VehicleSpecialMove", kGameplay,
+                "holding the FineAim (RMB/LT) button in vehicle form " +
+                    std::string(fineAimButton<Button>(0) < 0 ? "is impossible (no Button::FineAim)" : "reaches " + fmt(viaAuthored, "%.1f") + " m/s"));
 
     // 2) Presentation, part the harness can see: the vehicle's authored boost transition clips.
     const Models* m = Models::get();
@@ -320,7 +421,7 @@ void checkBoost(Report& r) {
         rig.idle(0.3);
         rig.hold(Rig::down({Button::Forward}), 1.0);
         double b0 = rig.time();
-        rig.hold(Rig::down({Button::Forward, Button::Sprint}), 1.0);
+        rig.hold(boostHeld({Button::Forward}), 1.0);
         double b1 = rig.time();
         rig.hold(Rig::down({Button::Forward}), 1.5);
         save(rig, "boost_vehicle_anim");
@@ -376,7 +477,11 @@ void checkBoost(Report& r) {
 // still reach the simulation. Found by runtime-probe (R press lost at ~200 fps).
 void checkInputEdges(Report& r) {
     r.setGroup("input_edges");
+    // RE TARGETED_PASS2 #5: UE3 runs one sim tick per rendered frame, so edges are never lost in the
+    // original. Pattern to reproduce: exec on edge, set a latch, consume in the sim step.
+    static const char* kEdges = "RE TARGETED_PASS2 #5 (latch on edge, consume in the sim step; original has 1 tick per frame)";
     auto zeroStepThenStep = [](platform::InputFrame press, Rig& rig) {
+        for (int i = 0; i < (int)Button::Count; ++i) press.down[i] = press.down[i] || press.pressed[i];   // a real press
         rig.frameWithoutStep(press);           // the frame that carries the press: no sim step
         rig.step(platform::InputFrame{});      // next frame: key released, one step
     };
@@ -386,10 +491,36 @@ void checkInputEdges(Report& r) {
         rig.hold(Rig::down({Button::Fire}), 0.3);   // spend some rounds so a reload is possible
         rig.idle(0.1);
         zeroStepThenStep(Rig::press(Button::Reload), rig);
-        r.knownTruth("reload_press_survives_zero_step_frame", rig.pawn().weapon().reloading(),
-                     "a pressed R must start the reload regardless of render rate", kGameplay,
-                     "PlayerController::handleInput assigns wantReload_ = wasPressed(Reload) every render frame "
-                     "(Jump uses a latch); a press on a zero-step frame is overwritten before applyToPawn runs");
+        r.confTruth("reload_press_survives_zero_step_frame", rig.pawn().weapon().reloading(), kEdges, kGameplay,
+                    "a reload tap must reach the sim regardless of render rate (original: 1 tick per frame, so never lost)");
+    }
+    {
+        // Reload fires on the RELEASE of a tap shorter than 0.3 s; a hold >= 0.3 s is revive/pickup, not reload.
+        Rig tap(60, Models::get() != nullptr);
+        tap.idle(0.2);
+        tap.hold(Rig::down({Button::Fire}), 0.3);
+        tap.idle(0.1);
+        platform::InputFrame dn = Rig::down({Button::Reload});
+        dn.pressed[(int)Button::Reload] = true;
+        tap.step(dn);
+        tap.step(Rig::down({Button::Reload}));               // still held, 2 steps in
+        bool onPress = tap.pawn().weapon().reloading();
+        tap.step(platform::InputFrame{});                     // released at ~0.03 s
+        bool onRelease = tap.pawn().weapon().reloading();
+        r.confTruth("reload_on_tap_release", !onPress && onRelease,
+                    "RE TARGETED_PASS2 #5 (HmButtonInputStateHandler: tap released < 0.3 s -> ReloadWeapon)", kGameplay,
+                    "reloading while held=" + std::to_string(onPress) + ", after release=" + std::to_string(onRelease));
+        Rig hold(60, Models::get() != nullptr);
+        hold.idle(0.2);
+        hold.hold(Rig::down({Button::Fire}), 0.3);
+        hold.idle(0.1);
+        hold.step(dn);
+        hold.hold(Rig::down({Button::Reload}), 0.5);
+        hold.step(platform::InputFrame{});
+        hold.idle(0.1);
+        r.confTruth("reload_hold_is_not_reload", !hold.pawn().weapon().reloading(),
+                    "RE TARGETED_PASS2 #5 (hold >= 0.3 s -> revive/pickup event, not reload)", kGameplay,
+                    "after a 0.5 s hold and release: reloading=" + std::to_string(hold.pawn().weapon().reloading()));
     }
     {
         Rig rig(60, false);
@@ -409,10 +540,9 @@ void checkInputEdges(Report& r) {
         rig.idle(0.2);
         int before = rig.last().shots;
         zeroStepThenStep(Rig::down({Button::Fire}), rig);   // click shorter than one sim step
-        r.knownTruth("fire_tap_survives_zero_step_frame", rig.last().shots > before,
-                     "a mouse click shorter than one 60 Hz step must still fire", kGameplay,
-                     "wantFire_ = isDown(Fire) is reassigned every render frame; a tap that begins and ends between "
-                     "steps never fires (latch the press like Jump)");
+        r.confTruth("fire_tap_survives_zero_step_frame", rig.last().shots > before, kEdges, kGameplay,
+                    "fire is the bDeferredFire latch consumed in PlayerTick; a click that lands on a zero-step render "
+                    "frame must still fire");
     }
 }
 
