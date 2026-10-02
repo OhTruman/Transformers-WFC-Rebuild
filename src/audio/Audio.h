@@ -21,6 +21,7 @@ struct VoiceParams {
     core::Vec3 pos{0, 0, 0};
     float minDist = 4.0f, maxDist = 64.0f, rolloff = 1.0f;
     float pan2D = 2.0f, pan3D = 4.0f;  // SmartPan: centred inside pan2D, fully panned beyond pan3D
+    bool loop = false;                 // wave loops until stopVoice
 };
 
 class IAudio {
@@ -41,6 +42,8 @@ public:
     // Full-control voice (SoundCue wave events). Returns a handle usable with stopVoice.
     virtual Voice playVoice(Sound s, const VoiceParams& p) = 0;
     virtual void stopVoice(Voice v) = 0;
+    // Live update of a playing voice (looping engine/boost layers follow speed and position).
+    virtual void updateVoice(Voice v, float volume, float pitch, const core::Vec3& pos) = 0;
 
     // Listener (camera) pose, set once per frame before update().
     virtual void setListener(const core::Vec3& pos, const core::Vec3& forward,

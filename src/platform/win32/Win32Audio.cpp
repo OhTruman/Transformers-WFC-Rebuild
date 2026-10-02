@@ -82,6 +82,7 @@ struct Voice {
     float pan2D = 0.0f, pan3D = 0.0f;
     float gL = 1.0f, gR = 1.0f;   // per-block resolved channel gains
     bool active = false;
+    bool loop = false;
     int gen = 0;
 };
 
@@ -156,7 +157,16 @@ public:
         v->positional = p.positional; v->inverse = true; v->wpos = p.pos;
         v->refDist = p.minDist; v->maxDist = p.maxDist; v->rolloff = p.rolloff;
         v->pan2D = p.pan2D; v->pan3D = p.pan3D;
+        v->loop = p.loop;
         return i | (v->gen << 12);
+    }
+
+    void updateVoice(audio::Voice h, float volume, float pitch, const core::Vec3& pos) override {
+        if (h < 0) return;
+        int i = h & 0xFFF, gen = h >> 12;
+        if ((size_t)i >= voices_.size() || voices_[(size_t)i].gen != gen || !voices_[(size_t)i].active) return;
+        Voice& v = voices_[(size_t)i];
+        v.vol = volume; v.rate = pitch > 0.05f ? pitch : 0.05f; v.wpos = pos;
     }
 
     void stopVoice(audio::Voice h) override {
@@ -222,7 +232,10 @@ private:
             size_t frames = s.size() / 2;
             for (int f = 0; f < kBlockFrames; ++f) {
                 size_t fi = (size_t)v.pos;
-                if (fi + 1 >= frames) { v.active = false; break; }
+                if (fi + 1 >= frames) {
+                    if (v.loop && frames > 2) { v.pos -= (double)(frames - 1); fi = (size_t)v.pos; }
+                    else { v.active = false; break; }
+                }
                 float u = (float)(v.pos - (double)fi);       // linear interpolation for pitch
                 int16_t sl = (int16_t)(s[fi * 2] + (s[fi * 2 + 2] - s[fi * 2]) * u);
                 int16_t sr = (int16_t)(s[fi * 2 + 1] + (s[fi * 2 + 3] - s[fi * 2 + 1]) * u);
@@ -262,6 +275,7 @@ public:
     void playAt(Sound, const core::Vec3&, float, float, float) override {}
     audio::Voice playVoice(Sound, const VoiceParams&) override { return kInvalidVoice; }
     void stopVoice(audio::Voice) override {}
+    void updateVoice(audio::Voice, float, float, const core::Vec3&) override {}
     void setListener(const core::Vec3&, const core::Vec3&, const core::Vec3&) override {}
     void update() override {}
 };

@@ -14,6 +14,8 @@
 #include "game/WeaponMesh.h"
 #include "game/WeaponFx.h"
 #include "game/SoundCues.h"
+#include "game/VehicleFx.h"
+#include "game/VehicleNitro.h"
 
 namespace render { class IRenderer; }
 
@@ -46,6 +48,15 @@ public:
     void playSfx(Sfx s, const core::Vec3& pos);
 
     Player& player() { return player_; }
+
+    // Truck nitro / ram state (Systems-owned, read-only for Gameplay: nitroActive(), ramActive(),
+    // speedScale(), steeringScale() — Gameplay applies the movement effect).
+    const VehicleNitro& vehicleNitro() const { return nitro_; }
+    // Ram hit (TnTruckForm.AttemptToRam): for Gameplay's vehicle collision code. Returns true when
+    // the hit counts — nitro active and `target` not yet hit this nitro — and then plays the ram
+    // impact cue (RamSound Auto_Ram_Impact). Damage / momentum stay with Gameplay (values in
+    // VehicleNitro::kRamDamage* / kExtraRamZVelocityUU).
+    bool notifyRamHit(const void* target, const core::Vec3& pos);
     bool usingSlice() const { return usingSlice_; }
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).
@@ -94,6 +105,29 @@ private:
     bool prevGrounded_ = true;
     bool prevTransforming_ = false;
     SoundCues cues_;
+
+    // Vehicle-form presentation (OptimusTruckForm BoostFx / HoverFX / JumpFX + boost sounds).
+    VehicleFx vehicleFx_;
+    int boostInst_[2] = {-1, -1};
+    int hoverInst_[6] = {-1, -1, -1, -1, -1, -1};
+    int jumpInst_[3] = {-1, -1, -1};
+    bool hoverActive_ = false;
+    bool vehiclePrevGrounded_ = true;
+    int jumpCount_ = 0;
+    bool boostActive_ = false;
+    VehicleNitro nitro_;         // follows Gameplay's vehicleState().nitroRemain (presentation side)
+    int ramInst_ = -1;
+
+    // Vehicle engine audio (HmPlayerVehicleAudioComponent DriveSounds / JumpRev / land sounds).
+    enum class EngineState { Off, OnLoad, OffLoad, JumpRev, Boost };
+    EngineState engineState_ = EngineState::Off;
+    int engineCue_ = -1;
+    float airTime_ = 0.0f;
+    void tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, bool tookOff, bool landed);
+    float boostAge_ = 0.0f;
+    bool boostWheelsChecked_ = false;
+    int boostLoopCue_ = -1;
+    void tickVehicleBoost(float dt);
     bool burstActive_ = false;
     float sinceShot_ = 0.0f;
     core::Vec3 listenerPos_{0, 0, 0};

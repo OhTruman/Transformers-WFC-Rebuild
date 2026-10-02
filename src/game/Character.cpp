@@ -591,6 +591,8 @@ bool Character::weaponUsable() const {
     return restoreTimer_ >= core::config::kWeaponEquipTime;   // restored + EquipTime 0.2 s
 }
 
+float Character::meshYawOffset() { return core::config::kMeshYawOffset; }
+
 void Character::updateWeaponSocket() {
     weaponValid_ = false;
     // The Ion Blaster is holstered through the whole transform: no floating gun during the fold.

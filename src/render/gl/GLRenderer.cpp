@@ -311,6 +311,75 @@ public:
         if (fogWas) glEnable(GL_FOG); else glDisable(GL_FOG);
     }
 
+    void drawMeshFx(MeshHandle h, const core::Mat4& model, float r, float g, float b, float a,
+                    float colorScale, float fresnelExp, float fresnelScale, float fresnelPower) override {
+        if (h < 0 || (size_t)h >= meshes_.size()) return;
+        const MeshData& m = meshes_[(size_t)h];
+        core::Mat4 mv = view_ * model;
+        glLoadMatrixf(mv.m);
+        glDisable(GL_LIGHTING);
+        glDisable(GL_CULL_FACE);
+        glDisable(GL_FOG);
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+        glDepthMask(GL_FALSE);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glVertexPointer(3, GL_FLOAT, 0, m.positions.data());
+        bool haveUV = m.hasUV();
+        if (haveUV) { glEnableClientState(GL_TEXTURE_COORD_ARRAY); glTexCoordPointer(2, GL_FLOAT, 0, m.uv.data()); }
+        float sc = colorScale >= 4.0f ? 4.0f : (colorScale >= 2.0f ? 2.0f : 1.0f);
+        glColor4f(r, g, b, a);
+        // Fresnel rim: per-vertex colour from the view direction (camera position from the view).
+        std::vector<float> fcol;
+        bool fres = fresnelExp > 0.0f && m.normals.size() == m.positions.size();
+        if (fres) {
+            core::Mat4 inv = view_;   // eye = -R^T t
+            core::Vec3 eye{-(inv.m[0] * inv.m[12] + inv.m[1] * inv.m[13] + inv.m[2] * inv.m[14]),
+                           -(inv.m[4] * inv.m[12] + inv.m[5] * inv.m[13] + inv.m[6] * inv.m[14]),
+                           -(inv.m[8] * inv.m[12] + inv.m[9] * inv.m[13] + inv.m[10] * inv.m[14])};
+            size_t vc = m.vertexCount();
+            fcol.resize(vc * 4);
+            for (size_t i = 0; i < vc; ++i) {
+                core::Vec3 p = core::transformPoint(model, {m.positions[i * 3], m.positions[i * 3 + 1], m.positions[i * 3 + 2]});
+                core::Vec3 n = core::normalize(core::transformDir(model, {m.normals[i * 3], m.normals[i * 3 + 1], m.normals[i * 3 + 2]}));
+                core::Vec3 v = core::normalize(eye - p);
+                float f = std::pow(std::max(0.0f, 1.0f - std::fabs(core::dot(n, v))), fresnelExp) * fresnelScale;
+                f = std::pow(core::clampf(f, 0.0f, 1.0f), fresnelPower);
+                fcol[i * 4] = r * f; fcol[i * 4 + 1] = g * f; fcol[i * 4 + 2] = b * f; fcol[i * 4 + 3] = a;
+            }
+            glEnableClientState(GL_COLOR_ARRAY);
+            glColorPointer(4, GL_FLOAT, 0, fcol.data());
+        }
+        std::vector<SubMesh> all;
+        if (m.subs.empty()) { SubMesh whole; whole.indexCount = (uint32_t)m.indices.size(); all.push_back(whole); }
+        for (const SubMesh& s : m.subs.empty() ? all : m.subs) {
+            const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
+            bool tex = haveUV && mat && mat->tex >= 0 && (size_t)mat->tex < textures_.size();
+            if (tex) {
+                glEnable(GL_TEXTURE_2D);
+                glBindTexture(GL_TEXTURE_2D, textures_[(size_t)mat->tex]);
+                glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_COMBINE);
+                glTexEnvi(GL_TEXTURE_ENV, GL_COMBINE_RGB, GL_MODULATE);
+                glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE0_RGB, GL_TEXTURE);
+                glTexEnvi(GL_TEXTURE_ENV, GL_SOURCE1_RGB, GL_PRIMARY_COLOR);
+                glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, sc);
+            } else {
+                glDisable(GL_TEXTURE_2D);
+            }
+            glDrawElements(GL_TRIANGLES, (GLsizei)s.indexCount, GL_UNSIGNED_INT, m.indices.data() + s.indexOffset);
+            if (tex) { glTexEnvf(GL_TEXTURE_ENV, GL_RGB_SCALE, 1.0f); glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE); }
+        }
+        if (haveUV) glDisableClientState(GL_TEXTURE_COORD_ARRAY);
+        if (fres) glDisableClientState(GL_COLOR_ARRAY);
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisable(GL_TEXTURE_2D);
+        glDepthMask(GL_TRUE);
+        glDisable(GL_BLEND);
+        glEnable(GL_CULL_FACE);
+        glEnable(GL_FOG);
+        glLoadMatrixf(view_.m);
+    }
+
 private:
     void drawMeshArrays(const MeshData& m, const core::Mat4& model, const core::Vec3& color) {
         core::Mat4 mv = view_ * model;

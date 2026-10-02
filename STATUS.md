@@ -311,6 +311,76 @@ Gameplay agent (`agents/gameplay`). Verified by runtime screenshots + numeric lo
 > merged. Everything else in the Systems passes (animated weapon mesh, notifies, FX, SoundCues) is
 > in the merged build. See INTEGRATION MILESTONE 01.
 
+> **Integration note (integration/milestone-02):** the Systems sections below mention a temporary
+> `Q` Dash binding and a Systems-run nitro timer. In the merged build, **Shift** is the only Dash
+> binding (Gameplay, CONF). Gameplay's movement code owns the nitro/hover-dash timers, cooldowns and
+> scales. `VehicleNitro` follows Gameplay's `vehicleState().nitroRemain` for RamFX, the nitro cues
+> and the ram-hit registry. Boost presentation follows Gameplay's Driving state. See INTEGRATION
+> MILESTONE 02.
+
+## SYSTEMS NATIVE-RE UPDATE (2026-10-01)
+- Ion Blaster cadence = original ~900 RPM: one-shot refire timer reset to 0 per shot, fires when elapsed
+  > 0.065 s, overshoot discarded, max one shot per tick (standalone check: 900 shots/min). Experimental's
+  923-RPM patch is NOT applied.
+- Nitro: cooldown starts on activation [CONF]; ends on Boost release [CONF]; ram hits gated to one per target
+  per nitro (`VehicleNitro::registerRamHit`, `World::notifyRamHit`); authored ram damage 175/300/175/300 and
+  ExtraRamZVelocity 7000 UU/s exposed for Gameplay.
+- Confirmed vehicle states (Boost LT/RMB, Hover Dash RB 3000 UU/s 0.5 s 2 s cooldown, Nitro RB while
+  boosting) recorded in FIDELITY.md "Native RE confirmation".
+- Gameplay handoff: `PlayerController` clears `wantFire_` after every fixed step but sets it once per render
+  frame, so a frame that runs 2 steps drops the second step's shot (measured ~4.4 ticks/shot in-game vs 4.0).
+  A held trigger should stay set for every step.
+
+## SYSTEMS CHECKPOINT (2026-10-01) — end of round
+- Branch `agents/systems`, clean build. Implemented this round: weapon layering / recoil / aim offset,
+  animated Ion Blaster + notifies, weapon FX (muzzle, tracer, impact, shell, magazine, reload), weapon
+  SoundCues, vehicle boost / hover / jump / ram FX, boost + nitro + engine / jump / land audio.
+- Vehicle mechanics provenance (normal boost vs hover dash vs ram/nitro): FIDELITY.md "VEHICLE MECHANICS".
+- Deliberately NOT done (Gameplay-owned): tire squeal (needs a lateral-slip signal), nitro camera change,
+  nitro speed/steering scaling, hover dash, final Dash / RMB bindings (RMB: robot Fine Aim, vehicle Boost).
+
+## SYSTEMS PASS 7 (2026-10-01) — VEHICLE ENGINE AUDIO
+- Optimus's authored engine audio in vehicle form: off-load (idle/coasting) and on-load (throttle) drive
+  loops, the jump-rev loop while airborne and the jump-start one-shot, and hover/wheels light/heavy landing
+  cues by time in air; 0.2 s engine fades; all layers follow the mph speed parameter. The drive loop yields
+  to the boost loop while boosting. Tire squeal not done (needs a slip signal from Gameplay).
+- Read-only `PlayerController::throttleHeld()` added for the on/off-load choice.
+
+## SYSTEMS PASS 6 (2026-10-01) — TRUCK NITRO / RAM (state, FX, audio)
+- New abstract input action `Dash` (**PROV** temporary key **Q**). DASH while boosting on wheels starts
+  the authored nitro: **3 s**, cooldown **8 s**; `RamFX` (rim-lit flame wedge on RamSocket) runs for its
+  duration; `VEH_OPTIMUS_RAM_NITRO_START` + `VEH_TRUCK_RAM_ALERT` play at start. Releasing boost stops it.
+- For Gameplay (read-only): `World::vehicleNitro()` -> `nitroActive()`, `ramActive()`, `timeRemaining()`,
+  `cooldownRemaining()`, `speedScale()` (1.5 while active), `steeringScale()` (0.3 while active);
+  `World::notifyRamImpact(pos)` plays the ram impact cue. Systems does **not** change speed or steering.
+- Documented, not changed: Optimus's truck physics blueprints differ from the rebuild's dash values
+  (HoverTruck_Physics DashSpeed 3000 / DashDuration 0.5 vs current 5000 / 0.3) — see FIDELITY PASS 10.
+- Test: `WFC_STARTVEHICLE=1 WFC_AUTOBOOST=1 WFC_AUTODASH=1 WFC_BOOSTLOG=1` (NITRO lines).
+
+## SYSTEMS PASS 5 (2026-10-01) — HOVER THRUSTERS + JUMP BOOSTERS
+- Vehicle form now shows Optimus's authored hover thrusters (`CarHover_A_01_FX` on the six wheel
+  HoverBooster sockets, with their socket scale): red light cones and orange rings looping, plus a
+  spark / electro-ring / pulse burst whenever hover engages. Hover switches off while boosting (the truck
+  drops to its wheels) and when transforming.
+- Vehicle jumps fire `Jump_FX` on JumpBoostSocket_C/R/L: a 0.5 s burst of downward thruster cones,
+  energon cones, glows, booster smoke, sparks and electro rings.
+- `VehicleFx` replaces `VehicleBoostFx` as one data-driven system for boost / hover / jump.
+- Verified: idle hover, boost (hover off, boost unchanged), jump take-off, transform out; robot weapon FX unchanged.
+- PROV: light-cylinder intensity (DustPower 0.1 stands in for the volumetric shader), procedural spark
+  texture, ring velocity reading. Open: drive/jump/land engine audio (RamFX: SYSTEMS PASS 6).
+
+## SYSTEMS PASS 4 (2026-10-01) — VEHICLE BOOST PRESENTATION
+- Holding boost in vehicle form now shows Optimus's authored afterburner (`bumble_boost_small1_FX` on
+  BoostSocket_L/R, the two exhaust stacks): ignition burst of thruster cones + bullet cone + glow, then
+  looping cones (3-4/s) and glows (20/s) attached in local space; release kills them (bKillOnDeactivate).
+- Original boost audio: VEH_OPTIMUS_BOOST_START, the speed-driven VEH_OPTIMUS_BOOST_LOOP (5 looping
+  layers, mph parameter), VEH_OPTIMUS_BOOST_END with the 0.15 s fade, and the 0.27 s grounded wheels peel-out.
+- Verified: accelerating, stationary (against a wall), airborne after a vehicle jump, and transforming
+  out while holding boost (effect + loop stop, END plays). Robot fire/reload FX unchanged.
+- Diagnostics: `WFC_BOOSTLOG=1` (state, particle count, mph, socket positions). Test:
+  `WFC_STARTVEHICLE=1 WFC_AUTOBOOST=1 [WFC_AUTOWALK=1]`.
+- Open: ram FX, drive/jump/land engine audio (hover + jump FX: SYSTEMS PASS 5).
+
 ## SYSTEMS PASS 3 (2026-10-01) — SHELL, MAGAZINE AND RELOAD FX
 - Every shot ejects the authored shell mesh (GrenadeAmmo_STAT) from ShellSocket with a vent smoke puff;
   the reload vents a blue flare + 0.75 s smoke stream at the muzzle (@0.034 s) and drops the Ion Blaster
@@ -527,7 +597,8 @@ map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.j
   `WFC_SMOKE_FRAMES`; not a product blocker.)
 
 ## CONTROLS
-- WASD move, mouse look, Space jump, LMB fire (hold = auto), RMB fine aim (robot, toggle) / boost (vehicle, hold), R reload, F transform,
+- WASD move, mouse look, Space jump, LMB fire (hold = auto), RMB fine aim (robot, toggle) / boost (vehicle, hold),
+  Shift dash (vehicle: hover dash; nitro/ram while boosting) [CONF], R reload (tap), F transform,
   C free/capture cursor, B debug overlay, Esc quit.
 
 ## ASSET PATHS (root = `F:/Transformers Rebuild/ExtractedAssets/VerticalSlice`, override `WFC_ASSETS`)
@@ -548,4 +619,4 @@ map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.j
 - `WFC_STARTVEHICLE=1`  start in vehicle form. `WFC_AUTOSTRAFE/AUTOBACK/AUTORELOAD/AUTOJUMP=1`
   scripted inputs; `WFC_FACELOG`/`WFC_MUZZLELOG` facing/muzzle diagnostics.
 - `WFC_ASSETS=dir`      override the asset root.
-- `WFC_ANIMLOG=1` / `WFC_NOTIFYLOG=1` / `WFC_CUELOG=1`  weapon layering / AnimNotify / SoundCue logs.
+- `WFC_ANIMLOG=1` / `WFC_NOTIFYLOG=1` / `WFC_CUELOG=1` / `WFC_BOOSTLOG=1`  weapon layering / AnimNotify / SoundCue / vehicle boost logs.

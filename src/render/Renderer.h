@@ -85,6 +85,14 @@ public:
     // Textured particle quads (depth-tested, no depth write, unfogged for additive).
     virtual void drawParticles(const ParticleBatch& batch) = 0;
 
+    // Mesh particle (UE3 ParticleModuleTypeDataMesh with an additive, unlit, two-sided material):
+    // the uploaded mesh's base-colour texture x colour (x colorScale 1/2/4 overbright).
+    // fresnelExp > 0: per-vertex rim term f = saturate(pow(1 - |N.V|, exp) * scale), raised to
+    // `fresnelPower` (materials whose emissive is built from a camera-vector fresnel).
+    virtual void drawMeshFx(MeshHandle mesh, const core::Mat4& model, float r, float g, float b, float a,
+                            float colorScale, float fresnelExp = 0.0f, float fresnelScale = 1.0f,
+                            float fresnelPower = 1.0f) = 0;
+
     // Save the current framebuffer to a 24-bit BMP (debug/automated verification).
     virtual bool captureScreenshot(const char* path) = 0;
 };

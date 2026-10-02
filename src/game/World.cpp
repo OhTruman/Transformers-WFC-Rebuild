@@ -92,6 +92,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     mapMesh_ = renderer.uploadMesh(mapMesh);
     fx_.load(renderer, root + "/../content/");
     fx_.loadMeshes(renderer, root + "/../content/");
+    vehicleFx_.load(renderer, root + "/../content/");
     player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
     // Ion Blaster: animated skeletal mesh held at the robot's primary weapon socket (falls back
@@ -255,7 +256,7 @@ void World::buildGraybox() {
 }
 
 void World::handleInput(const platform::InputFrame& in, float dt) {
-    player_.controller().handleInput(in, dt);
+    player_.controller().handleInput(in, dt);   // Dash (Shift) is latched by PlayerController
 }
 
 static bool rayAabb(const core::Vec3& o, const core::Vec3& d, float len,
@@ -374,6 +375,172 @@ void World::playSfx(Sfx s, const core::Vec3& pos) {
     }
 }
 
+// Vehicle-form presentation. [CONF] TR_Optimus_VEHDEF_p.OptimusTruckForm:
+//   BoostFx: BoostSocket_L / BoostSocket_R -> FX_Navigation_p.bumble_boost_small1_FX
+//   HoverFX: 6 x HoverBooster_* (on the wheel bones) -> FX_Navigation_p.CarHover_A_01_FX
+//   JumpFX:  JumpBoostSocket_C/R/L -> FX_Navigation_p.Jump_FX (one-shot, 0.5 s)
+//   AudioComp (HmPlayerVehicleAudioComponent_6670): BoostSound Auto_Boost_Start, BoostLoops
+//   Auto_Boost_Loop, BoostStopSound Auto_Boost_End, BoostWheelsSound Auto_Boost_Wheels,
+//   BoostFadeOutTime 0.15 s, BoostWheelsGroundCheckDelay 0.27 s; Veh_Optimus_Prime_SoundSet maps
+//   those events to BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START / _LOOP / _END / _WHEELS.
+// Boost state = the movement code's boost condition (Gameplay's TnCarForm Driving state), outside
+// transforms.
+// Hover state [MED]: the truck rides its HoverBlueprint (wheel-mounted hover thrusters) except while
+// boosting, when it drops to its wheels (the audio component's Hover vs Boost/Wheels land sounds
+// and the boost wheels peel-out). Jump [MED]: vehicle take-off with upward velocity.
+void World::tickVehicleBoost(float dt) {
+    Character& pc = player_.pawn();
+    bool vehicle = pc.form() == Form::Vehicle && !pc.isTransforming();
+    bool boost = vehicle && pc.vehicleState().driving;
+    bool hover = vehicle && !boost;
+
+    // Socket world matrices: bone (current pose) x socket relative transform (incl. socket scale).
+    core::Mat4 sw[VehicleFx::kSocketCount];
+    int haveSockets = 0;
+    for (int i = 0; i < VehicleFx::kSocketCount; ++i) {
+        const VehicleFx::SocketDef& sd = VehicleFx::socketDef(i);
+        core::Mat4 bone;
+        bool ok = pc.form() == Form::Vehicle && pc.boneWorld(sd.bone, bone);
+        if (ok) { sw[i] = bone * core::mat4FromArray(sd.rel); ++haveSockets; }
+        vehicleFx_.setSocket(i, ok ? &sw[i] : nullptr);
+    }
+
+    // Boost afterburners (looping while held; bKillOnDeactivate).
+    if (boost && !boostActive_) {
+        boostInst_[0] = vehicleFx_.start(VehicleFx::Boost, VehicleFx::BoostL);
+        boostInst_[1] = vehicleFx_.start(VehicleFx::Boost, VehicleFx::BoostR);
+    } else if (!boost && boostActive_) {
+        for (int& id : boostInst_) { vehicleFx_.deactivate(id); id = -1; }
+    }
+    // Hover thrusters on all six wheel sockets.
+    if (hover && !hoverActive_) {
+        for (int i = 0; i < 6; ++i) hoverInst_[i] = vehicleFx_.start(VehicleFx::Hover, VehicleFx::HoverLBack + i);
+    } else if (!hover && hoverActive_) {
+        for (int& id : hoverInst_) { vehicleFx_.deactivate(id); id = -1; }
+    }
+    hoverActive_ = hover;
+    // Jump boosters: one-shot burst on vehicle take-off; killed if the vehicle form ends.
+    bool grounded = pc.onGround();
+    bool tookOff = vehicle && vehiclePrevGrounded_ && !grounded && pc.velocity().y > 2.0f;
+    bool landed = vehicle && !vehiclePrevGrounded_ && grounded;
+    tickEngineAudio(dt, vehicle, boost, grounded, tookOff, landed);
+    if (tookOff) {
+        jumpInst_[0] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpC);
+        jumpInst_[1] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpR);
+        jumpInst_[2] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpL);
+        jumpCount_++;
+    }
+    if (!vehicle) for (int& id : jumpInst_) if (id >= 0) { vehicleFx_.deactivate(id); id = -1; }
+    vehiclePrevGrounded_ = grounded;
+
+    // Nitro / ram: DASH while driving on wheels (= boosting). Gameplay's movement code owns the
+    // nitro timer/cooldown and the speed/steering scales; Systems follows that state for RamFX,
+    // audio and the ram-hit registry.
+    VehicleNitro::Event ne = nitro_.follow(pc.vehicleState().nitroRemain > 0.0f);
+    if (ne == VehicleNitro::Event::Started) {
+        ramInst_ = vehicleFx_.start(VehicleFx::Ram, VehicleFx::RamSocket);
+        core::Vec3 ap0 = pc.position() + core::Vec3{0, 1.4725f, 0};
+        float mph0 = core::length(pc.velocity()) * 2.23694f;
+        cues_.play("VEH_OPTIMUS_RAM_NITRO_START", ap0, 0.0f, mph0);   // NitroSound Auto_Ram_Nitro
+        cues_.play("VEH_TRUCK_RAM_ALERT", ap0, 0.0f, mph0);           // CustomLoopingSound Auto_Ram_Alert [MED: once]
+    } else if (ne == VehicleNitro::Event::Stopped) {
+        vehicleFx_.deactivate(ramInst_);
+        ramInst_ = -1;
+    }
+    vehicleFx_.tick(dt);
+
+    // Boost audio at the AUDIO_ROOT socket (C_Reference_XR + 147.25 UU up); speed parameter in mph.
+    const core::Vec3& v = pc.velocity();
+    float mph = core::length(v) * 2.23694f;
+    core::Vec3 ap = pc.position() + core::Vec3{0, 1.4725f, 0};
+    if (boost && !boostActive_) {
+        cues_.play("VEH_OPTIMUS_BOOST_START", ap, 0.0f, mph);
+        boostLoopCue_ = cues_.play("VEH_OPTIMUS_BOOST_LOOP", ap, 0.0f, mph);
+        boostAge_ = 0.0f; boostWheelsChecked_ = false;
+    } else if (!boost && boostActive_) {
+        cues_.stop(boostLoopCue_, 0.15f);            // BoostFadeOutTime
+        boostLoopCue_ = -1;
+        cues_.play("VEH_OPTIMUS_BOOST_END", ap, 0.0f, mph);
+    }
+    if (boost) {
+        boostAge_ += dt;
+        cues_.update(boostLoopCue_, ap, mph);
+        if (!boostWheelsChecked_ && boostAge_ >= 0.27f) {   // BoostWheelsGroundCheckDelay
+            boostWheelsChecked_ = true;
+            if (pc.onGround()) cues_.play("VEH_OPTIMUS_BOOST_WHEELS", ap, 0.0f, mph);
+        }
+    }
+    boostActive_ = boost;
+
+    if (std::getenv("WFC_BOOSTLOG")) {
+        static int n = 0;
+        if (n % 6 == 5 && pc.form() == Form::Vehicle)
+            LOG_INFO("NITRO active=%d remaining=%.2f cooldown=%.2f speedScale=%.1f steeringScale=%.1f",
+                     (int)nitro_.nitroActive(), pc.vehicleState().nitroRemain, pc.vehicleState().nitroCooldown,
+                     nitro_.speedScale(), nitro_.steeringScale());
+        if (++n % 6 == 0 && pc.form() == Form::Vehicle) {
+            LOG_INFO("VFX boost=%d hover=%d jumps=%d parts=%zu mph=%.1f ground=%d vy=%.2f sockets=%d/%d",
+                     (int)boost, (int)hover, jumpCount_, vehicleFx_.liveParticles(), mph, (int)grounded,
+                     v.y, haveSockets, (int)VehicleFx::kSocketCount);
+            for (int i : {(int)VehicleFx::BoostL, (int)VehicleFx::HoverLFront, (int)VehicleFx::JumpC}) {
+                if (pc.form() != Form::Vehicle) break;
+                core::Vec3 rel = core::Vec3{sw[i].m[12], sw[i].m[13], sw[i].m[14]} - pc.position();
+                core::Vec3 xa = core::normalize(core::Vec3{sw[i].m[0], sw[i].m[1], sw[i].m[2]});
+                LOG_INFO("VFX socket %s rel=%.2f,%.2f,%.2f x-axis=%.2f,%.2f,%.2f scale=%.2f", VehicleFx::socketDef(i).name,
+                         rel.x, rel.y, rel.z, xa.x, xa.y, xa.z,
+                         core::length(core::Vec3{sw[i].m[0], sw[i].m[1], sw[i].m[2]}));
+            }
+        }
+    }
+}
+
+// Engine audio. [CONF] OptimusTruckForm.HmPlayerVehicleAudioComponent_6670 + Veh_Optimus_Prime_SoundSet:
+//   DriveSounds: gear MaxSpeed 20 and 110, both OnLoadLoops Auto_Engine_Gear_1_OnLoad -> VEH_OPTIMUS_DRIVE_ONLOAD,
+//   OffLoadLoops Auto_Engine_Gear_1_OffLoad -> VEH_OPTIMUS_DRIVE_OFFLOAD (one-shots map to None); ReverseSound
+//   maps to the same two cues; JumpRevSounds UseJumpRev, Auto_Jump_Loop -> VEH_OPTIMUS_DRIVE_JUMP_LOOP;
+//   AscendSound Auto_Jump_Start -> VEH_OPTIMUS_DRIVE_JUMP_START; EngineFadeOutTime 0.2 s;
+//   HoverLandSound {0.15 s air: HOVER_LAND_LIGHT, 2.0 s: HOVER_LAND_HEAVY}; BoostLandSound {0.15 s:
+//   WHEELS_LAND_LIGHT, 2.0 s: WHEELS_LAND_HEAVY}; speed parameter Optimus_Prime_Speed (mph).
+// [MED] on-load = throttle input held; the engine loop yields to the boost loop while boosting (the boost
+// cue carries its own engine layers); airborne = jump-rev loop.
+void World::tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, bool tookOff, bool landed) {
+    Character& pc = player_.pawn();
+    float mph = core::length(pc.velocity()) * 2.23694f;
+    core::Vec3 ap = pc.position() + core::Vec3{0, 1.4725f, 0};   // AUDIO_ROOT socket
+    EngineState want = EngineState::Off;
+    if (vehicle) {
+        if (!grounded) want = EngineState::JumpRev;
+        else if (boost) want = EngineState::Boost;
+        else want = player_.controller().throttleHeld() ? EngineState::OnLoad : EngineState::OffLoad;
+    }
+    if (want != engineState_) {
+        if (engineCue_ >= 0) cues_.stop(engineCue_, 0.2f);   // EngineFadeOutTime
+        engineCue_ = -1;
+        const char* cue = want == EngineState::OnLoad ? "VEH_OPTIMUS_DRIVE_ONLOAD"
+                        : want == EngineState::OffLoad ? "VEH_OPTIMUS_DRIVE_OFFLOAD"
+                        : want == EngineState::JumpRev ? "VEH_OPTIMUS_DRIVE_JUMP_LOOP" : nullptr;
+        if (cue) engineCue_ = cues_.play(cue, ap, 0.0f, mph);
+        engineState_ = want;
+    }
+    if (engineCue_ >= 0) cues_.update(engineCue_, ap, mph);
+
+    if (tookOff) cues_.play("VEH_OPTIMUS_DRIVE_JUMP_START", ap, 0.0f, mph);   // AscendSound
+    if (vehicle && !grounded) airTime_ += dt;
+    if (landed) {
+        const char* cue = nullptr;
+        if (airTime_ >= 2.0f) cue = boost ? "VEH_OPTIMUS_WHEELS_LAND_HEAVY" : "VEH_OPTIMUS_HOVER_LAND_HEAVY";
+        else if (airTime_ >= 0.15f) cue = boost ? "VEH_OPTIMUS_WHEELS_LAND_LIGHT" : "VEH_OPTIMUS_HOVER_LAND_LIGHT";
+        if (cue) cues_.play(cue, ap, 0.0f, mph);
+    }
+    if (grounded || !vehicle) airTime_ = 0.0f;
+}
+
+bool World::notifyRamHit(const void* target, const core::Vec3& pos) {
+    if (!nitro_.registerRamHit(target)) return false;
+    cues_.play("VEH_TRUCK_RAM_IMPACT", pos, core::length(pos - listenerPos_));   // RamSound Auto_Ram_Impact
+    return true;
+}
+
 bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
     if (!weaponAnim_.valid() || !player_.pawn().hasWeapon()) return false;
     core::Mat4 local;
@@ -425,6 +592,7 @@ void World::tick(float dt) {
         player_.pawn().setAimPitch((float)std::atof(ap));
     player_.pawn().updateAnimation(dt);
     tickWeaponPresentation(dt);
+    tickVehicleBoost(dt);
     if (std::getenv("WFC_ANIMLOG")) {                       // layering diagnostics
         static int n = 0;
         if (++n % 6 == 0) {
@@ -458,7 +626,8 @@ void World::tick(float dt) {
     {
         core::Vec3 pp = player_.pawn().position();
         bool grounded = player_.pawn().onGround();
-        if (grounded && !prevGrounded_) playSfx(Sfx::Land, pp);
+        // Robot-form landing placeholder; vehicle landings use the authored land cues.
+        if (grounded && !prevGrounded_ && player_.pawn().form() == Form::Robot) playSfx(Sfx::Land, pp);
         prevGrounded_ = grounded;
         bool tf = player_.pawn().isTransforming();
         if (tf && !prevTransforming_) playSfx(Sfx::Transform, pp);
@@ -502,8 +671,9 @@ void World::draw(render::IRenderer& r) const {
     else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
         r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
 
-    // Weapon effects last (translucent/additive over the opaque scene).
+    // Weapon + vehicle boost effects last (translucent/additive over the opaque scene).
     fx_.draw(r);
+    vehicleFx_.draw(r);
 
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {

@@ -32,6 +32,8 @@ public:
 
     float camYaw() const { return camYaw_; }
     float camPitch() const { return camPitch_; }
+    bool boostHeld() const { return intent_.wantBoost; }   // read-only, for vehicle boost presentation
+    bool throttleHeld() const { return intent_.moveForward != 0.0f || intent_.moveRight != 0.0f; }   // read-only, engine audio
     void setCameraYaw(float y) { camYaw_ = y; }
     void setCameraPitch(float p) { camPitch_ = p; }
     bool fineAiming() const { return fineAiming_; }
