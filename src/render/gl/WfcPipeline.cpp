@@ -185,6 +185,19 @@ MatIn wfcBuildInput(out mat3 tbn) {
 )";
 
 // FDirectionalTextureLightMapPolicy base pass (decoded from the original microcode).
+// Distortion accumulate (Xenon microcode of the material's distortion PS, e.g. Ring_Distort_Add_MAT):
+// s = Distortion.xy * 4; kill if dot(s,s) - 0.1 < 0; s = clamp(s, -255, 255) / 255;
+// out = (max(s,0), |min(s,0)|) into an 8-bit target with additive blending.
+const char* kFSMainDistort = R"(
+void main() {
+    mat3 tbn; MatIn m = wfcBuildInput(tbn);
+    MatOut o; wfcMaterial(m, o);
+    vec2 s = o.Distortion.xy * 4.0;
+    if (dot(s, s) - 0.1 < 0.0) discard;
+    s = clamp(s, -255.0, 255.0) / 255.0;
+    oColor = vec4(max(s, 0.0), abs(min(s, 0.0)));
+}
+)";
 const char* kFSMainLM = R"(
 uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
 uniform vec3 uLMScale[3];
@@ -768,7 +781,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
     fs += "void wfcMaterial(in MatIn m, out MatOut o) {\n" + code + "\n}\n";
     fs += kFSPrologue;
-    fs += lightmapped ? kFSMainLM : kFSMainUber;
+    fs += mainOverride_ ? mainOverride_ : (lightmapped ? kFSMainLM : kFSMainUber);
 
     static GLuint vsShared = 0;
     if (!vsShared) vsShared = compile(GL_VERTEX_SHADER, kVS, "world.vs");
@@ -870,7 +883,17 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             slots.push_back(sl);
         }
         int r = buildProgram(key, s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
-        if (r >= 0) { progs_[(size_t)r].original = true; return r; }
+        if (r >= 0) {
+            progs_[(size_t)r].original = true;
+            if (!lightmapped && s.glsl.find("o.Distortion = vec3(0.0);") == std::string::npos &&
+                s.glsl.find("o.Distortion =") != std::string::npos) {
+                mainOverride_ = kFSMainDistort;
+                int d = buildProgram(key + "|DIST", s.glsl, slots, s.cube, 3, s.twoSided, false, s.clip, false, s.rtParams);
+                mainOverride_ = nullptr;
+                if (d >= 0) { progs_[(size_t)d].original = true; progs_[(size_t)r].distProg = d; }
+            }
+            return r;
+        }
         LOG_WARN("wfc: material %s failed to build; using glTF fallback", matName.c_str());
     }
     // glTF fallback material
@@ -1335,6 +1358,16 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
             glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
             ++gStats.draws;
             if (!trans) depthDirty_ = true;
+            if (P.distProg >= 0 && distFbo_ && !std::getenv("WFC_NODISTORTION")) {
+                const Program& D = progs_[(size_t)P.distProg];
+                BindFramebuffer(GL_FRAMEBUFFER, distFbo_);
+                if (!distUsed_) { glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT); distUsed_ = true; }
+                bindCommon(D, model);
+                glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE); glDepthMask(GL_FALSE);
+                glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+                BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+                bindCommon(P, model);   // restore the colour program's state for the next sub
+            }
         }
     }
     glDisable(GL_BLEND);
@@ -1392,6 +1425,37 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
 // ------------------------------------------------------------------------- effects
 // Scene depth as seen by translucency: copied from the HDR target whenever opaque geometry was drawn
 // since the last copy (UE3 resolves scene depth before the translucent pass).
+// Distortion apply (Xenon microcode, engine shader with AccumulatedDistortionTexture/SceneColorTexture):
+// uv' = uv + (acc.rg - acc.ba) * (0.25, -0.25) in D3D texture space (y down) -> +0.25 in GL; out =
+// SceneColor(uv'). Applied full-screen (zero offset elsewhere reproduces the scene unchanged).
+void Pipeline::applyDistortion() {
+    if (!distApplyProg_) {
+        const char* vs = "#version 330 core\nout vec2 vUV;\nvoid main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);"
+                         " vUV = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }\n";
+        const char* fs = "#version 330 core\nin vec2 vUV; out vec4 oColor; uniform sampler2D uScene; uniform sampler2D uAcc;\n"
+                         "void main(){ vec4 a = texture(uAcc, vUV); vec2 uv = vUV + (a.rg - a.ba) * vec2(0.25, 0.25);"
+                         " oColor = texture(uScene, uv); }\n";
+        GLuint v = compile(GL_VERTEX_SHADER, vs, "distort.vs"), f = compile(GL_FRAGMENT_SHADER, fs, "distort.fs");
+        if (v && f) distApplyProg_ = link(v, f, "distort");
+        if (!distApplyProg_) { distUsed_ = false; return; }
+    }
+    BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+    BindFramebuffer(GL_DRAW_FRAMEBUFFER, sceneCopyFbo_);
+    BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE); glDepthMask(GL_FALSE);
+    UseProgram(distApplyProg_);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, distTex_);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_);
+    Uniform1i(GetUniformLocation(distApplyProg_, "uScene"), 0);
+    Uniform1i(GetUniformLocation(distApplyProg_, "uAcc"), 1);
+    BindVertexArray(postVao_);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    BindVertexArray(0);
+    UseProgram(0);
+    glDepthMask(GL_TRUE); glEnable(GL_DEPTH_TEST);
+}
+
 void Pipeline::ensureSceneDepth() {
     if (!depthDirty_ || !depthCopyFbo_) return;
     BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
@@ -1495,6 +1559,25 @@ void Pipeline::ensureTargets(int w, int h) {
     FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex_, 0);
     FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTex_, 0);
     if (CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) LOG_ERROR("wfc: HDR framebuffer incomplete");
+    // distortion accumulation (RGBA8) sharing the scene depth buffer, and a scene-colour copy
+    if (!distFbo_) { GenFramebuffers(1, &distFbo_); glGenTextures(1, &distTex_); GenFramebuffers(1, &sceneCopyFbo_); glGenTextures(1, &sceneCopyTex_); }
+    glBindTexture(GL_TEXTURE_2D, distTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, sceneCopyTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    BindFramebuffer(GL_FRAMEBUFFER, distFbo_);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, distTex_, 0);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTex_, 0);
+    if (CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) LOG_ERROR("wfc: distortion framebuffer incomplete");
+    BindFramebuffer(GL_FRAMEBUFFER, sceneCopyFbo_);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sceneCopyTex_, 0);
     if (!depthCopyFbo_) { GenFramebuffers(1, &depthCopyFbo_); glGenTextures(1, &depthCopyTex_); }
     glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
@@ -1527,7 +1610,8 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     ++frameNo_;
     gFrameStart = std::chrono::steady_clock::now();
     static auto t0 = std::chrono::steady_clock::now();
-    time_ = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+    static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures
+    time_ = lockstep ? (float)frameNo_ / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
     vpW_ = w; vpH_ = h;
     ensureTargets(std::max(w, 1), std::max(h, 1));
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
@@ -1536,6 +1620,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     glClearColor(fogIn_.x, fogIn_.y, fogIn_.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     depthDirty_ = true;
+    distUsed_ = false;
     camPos_ = cam.pos;
     znear_ = cam.znear; zfar_ = cam.zfar;
     viewProj_ = cam.proj() * cam.view();
@@ -1569,6 +1654,7 @@ void Pipeline::endFrame() {
             frames = 0; acc = 0; gStats = RenderStats{};
         }
     }
+    if (distUsed_) applyDistortion();
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glDisable(GL_BLEND);

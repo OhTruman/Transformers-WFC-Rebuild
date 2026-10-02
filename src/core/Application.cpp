@@ -56,6 +56,9 @@ void Application::run() {
         double realDt = now - last;
         last = now;
         if (realDt > 0.25) realDt = 0.25;
+        // Deterministic captures (render A/B): one 60 Hz step per frame regardless of wall time.
+        static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
+        if (lockstep) realDt = 1.0 / 60.0;
 
         if (!window_->pump(input)) break;
         if (input.wasPressed(platform::Button::Quit)) break;

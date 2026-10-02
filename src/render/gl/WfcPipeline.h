@@ -52,6 +52,7 @@ struct Program {
     bool twoSided = false, lit = true;
     bool original = false;        // compiled from the original material graph (not the glTF fallback)
     bool sceneDepth = false;      // reads scene depth (DepthBiasedAlpha / SceneDepth)
+    int distProg = -1;            // distortion-accumulate variant (material Distortion connected)
     float clip = 0.3333f;
 };
 
@@ -183,6 +184,11 @@ private:
     int vpW_ = 0, vpH_ = 0;
     GLuint fbo_ = 0, colorTex_ = 0, depthTex_ = 0, postProg_ = 0, postVao_ = 0;
     GLuint depthCopyFbo_ = 0, depthCopyTex_ = 0;   // scene depth for translucent (soft) materials
+    // UE3 distortion: accumulate (RGBA8, additive, scene depth tested) then apply before post
+    GLuint distFbo_ = 0, distTex_ = 0, sceneCopyFbo_ = 0, sceneCopyTex_ = 0, distApplyProg_ = 0;
+    bool distUsed_ = false;
+    const char* mainOverride_ = nullptr;
+    void applyDistortion();
     bool depthDirty_ = true;
     void ensureSceneDepth();
     float fxColor_[4] = {1, 1, 1, 1};

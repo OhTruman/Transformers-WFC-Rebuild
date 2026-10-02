@@ -25,3 +25,4 @@ FX_Navigation_p.bumble_boostcone_MAT
 FX_Materials_p.Materials.flareball01_MAT
 FX_Navigation_p.tank_hover_pattern_MAT
 FX_Navigation_p.booster_glow1_MAT
+FX_Materials_p.Materials.Distortion_Cloud_01_MAT

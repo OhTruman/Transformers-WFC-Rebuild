@@ -149,7 +149,9 @@ public:
         if (reticleTex_ == 0) return;
         // tweens (prong offset, tint) driven by wall time like the Flash timeline
         static auto t0 = std::chrono::steady_clock::now();
-        float now = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+        static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
+        static int frames = 0;
+        float now = lockstep ? (float)(++frames) / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
         auto tween = [&](Tween& tw, float target, float dur) {
             if (target != tw.to) { tw.from = tw.value(now); tw.to = target; tw.start = now; tw.dur = dur; }
             return tw.value(now);

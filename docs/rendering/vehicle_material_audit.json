@@ -1,0 +1,251 @@
+[
+ {
+  "section": 0,
+  "material": "TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST",
+  "tris": 9728,
+  "permutation": "CONFIRMED",
+  "switches": {
+   "UseDiffuseReflection": true,
+   "UseEmissiveReflection": true,
+   "UseSpecPower_S_Curve": true,
+   "UseReconstructedNormal": true,
+   "UseNeutralEnergonColor": false,
+   "UseAutobotEnergonColor": true,
+   "enableUPLight": false,
+   "enableScanLines": false,
+   "enableOvershield": false,
+   "Enable_Autobot_Lut": false,
+   "Use_Neutral_Lut": false,
+   "Enable_Decepticon_Lut": false
+  },
+  "textures": [
+   {
+    "object": "TR_Optimus_VEH_p.VH_Optimus_NORM",
+    "file": "F:/Transformers Rebuild/ExtractedAssets/content/TR_Optimus_VEH_p/VH_Optimus_NORM.png",
+    "class": "Texture2D",
+    "srgb": false,
+    "format": "PF_DXT5",
+    "address_x": "TA_Wrap",
+    "address_y": "TA_Wrap",
+    "lod_group": "TEXTUREGROUP_Character",
+    "size": [
+     1024,
+     1024
+    ],
+    "unpack_min": [
+     -1.0,
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    "compression": null,
+    "slot": 0,
+    "kind": "2d",
+    "key": [
+     "2d",
+     "TR_Optimus_VEH_p.VH_Optimus_NORM"
+    ]
+   },
+   {
+    "object": "TR_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP3D",
+    "file": "work/render/MP_IAC_Streets/tex/CHR_Metals_CUBEMAP3D_f0.png",
+    "class": "TextureCube",
+    "faces": [
+     "work/render/MP_IAC_Streets/tex/CHR_Metals_CUBEMAP3D_f0.png",
+     "work/render/MP_IAC_Streets/tex/CHR_Metals_CUBEMAP3D_f1.png",
+     "work/render/MP_IAC_Streets/tex/CHR_Metals_CUBEMAP3D_f2.png",
+     "work/render/MP_IAC_Streets/tex/CHR_Metals_CUBEMAP3D_f3.png",
+     "work/render/MP_IAC_Streets/tex/CHR_Metals_CUBEMAP3D_f4.png",
+     "work/render/MP_IAC_Streets/tex/CHR_Metals_CUBEMAP3D_f5.png"
+    ],
+    "srgb": true,
+    "format": "PF_DXT1",
+    "address_x": "TA_Wrap",
+    "address_y": "TA_Wrap",
+    "lod_group": null,
+    "size": [
+     null,
+     null
+    ],
+    "unpack_min": null,
+    "compression": null,
+    "slot": 1,
+    "kind": "cube",
+    "key": [
+     "cube",
+     "TR_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP3D"
+    ]
+   },
+   {
+    "object": "TR_Optimus_VEH_p.VH_Optimus_SpecPwr_DifLum_EnrGlow",
+    "file": "F:/Transformers Rebuild/ExtractedAssets/content/TR_Optimus_VEH_p/VH_Optimus_SpecPwr_DifLum_EnrGlow.png",
+    "class": "Texture2D",
+    "srgb": true,
+    "format": "PF_DXT1",
+    "address_x": "TA_Wrap",
+    "address_y": "TA_Wrap",
+    "lod_group": "TEXTUREGROUP_Character",
+    "size": [
+     2048,
+     2048
+    ],
+    "unpack_min": null,
+    "compression": null,
+    "slot": 2,
+    "kind": "2d",
+    "key": [
+     "2d",
+     "TR_Optimus_VEH_p.VH_Optimus_SpecPwr_DifLum_EnrGlow"
+    ]
+   },
+   {
+    "object": "TR_Optimus_VEH_p.VH_Optimus_GrungeClr",
+    "file": "F:/Transformers Rebuild/ExtractedAssets/content/TR_Optimus_VEH_p/VH_Optimus_GrungeClr.png",
+    "class": "Texture2D",
+    "srgb": true,
+    "format": "PF_DXT1",
+    "address_x": "TA_Wrap",
+    "address_y": "TA_Wrap",
+    "lod_group": "TEXTUREGROUP_Character",
+    "size": [
+     512,
+     512
+    ],
+    "unpack_min": null,
+    "compression": null,
+    "slot": 3,
+    "kind": "2d",
+    "key": [
+     "2d",
+     "TR_Optimus_VEH_p.VH_Optimus_GrungeClr"
+    ]
+   },
+   {
+    "object": "TR_Optimus_VEH_p.VH_Optimus_CustAB_AuxGlow",
+    "file": "F:/Transformers Rebuild/ExtractedAssets/content/TR_Optimus_VEH_p/VH_Optimus_CustAB_AuxGlow.png",
+    "class": "Texture2D",
+    "srgb": true,
+    "format": "PF_DXT1",
+    "address_x": "TA_Wrap",
+    "address_y": "TA_Wrap",
+    "lod_group": "TEXTUREGROUP_Character",
+    "size": [
+     1024,
+     1024
+    ],
+    "unpack_min": null,
+    "compression": null,
+    "slot": 4,
+    "kind": "2d",
+    "key": [
+     "2d",
+     "TR_Optimus_VEH_p.VH_Optimus_CustAB_AuxGlow"
+    ]
+   },
+   {
+    "object": "TR_AllShader_p.Textures.fractalMaps",
+    "file": "F:/Transformers Rebuild/ExtractedAssets/content/TR_AllShader_p/Textures/fractalMaps.png",
+    "class": "Texture2D",
+    "srgb": true,
+    "format": "PF_DXT1",
+    "address_x": "TA_Wrap",
+    "address_y": "TA_Wrap",
+    "lod_group": null,
+    "size": [
+     512,
+     512
+    ],
+    "unpack_min": null,
+    "compression": null,
+    "slot": 5,
+    "kind": "2d",
+    "key": [
+     "2d",
+     "TR_AllShader_p.Textures.fractalMaps"
+    ]
+   }
+  ]
+ },
+ {
+  "section": 1,
+  "material": "TR_Optimus_VEH_p.InteriorAlt_Energon_MAT_INST",
+  "tris": 1923,
+  "permutation": "CONFIRMED",
+  "switches": {
+   "UseAutobotEnergonColor": true
+  },
+  "textures": [
+   {
+    "object": "TR_AllShader_p.Textures.Interior_Norm",
+    "file": "F:/Transformers Rebuild/ExtractedAssets/content/TR_AllShader_p/Textures/Interior_Norm.png",
+    "class": "Texture2D",
+    "srgb": false,
+    "format": "PF_DXT1",
+    "address_x": "TA_Wrap",
+    "address_y": "TA_Wrap",
+    "lod_group": "TEXTUREGROUP_WorldNormalMap",
+    "size": [
+     1024,
+     1024
+    ],
+    "unpack_min": [
+     -1.0,
+     -1.0,
+     -1.0,
+     0.0
+    ],
+    "compression": null,
+    "slot": 0,
+    "kind": "2d",
+    "key": [
+     "2d",
+     "TR_AllShader_p.Textures.Interior_Norm"
+    ]
+   },
+   {
+    "object": "TR_AllShader_p.Textures.Interior_Color",
+    "file": "F:/Transformers Rebuild/ExtractedAssets/content/TR_AllShader_p/Textures/Interior_Color.png",
+    "class": "Texture2D",
+    "srgb": true,
+    "format": "PF_DXT1",
+    "address_x": "TA_Wrap",
+    "address_y": "TA_Wrap",
+    "lod_group": null,
+    "size": [
+     1024,
+     1024
+    ],
+    "unpack_min": null,
+    "compression": null,
+    "slot": 1,
+    "kind": "2d",
+    "key": [
+     "2d",
+     "TR_AllShader_p.Textures.Interior_Color"
+    ]
+   },
+   {
+    "object": "TR_AllShader_p.Textures.Interior_Emiss",
+    "file": "F:/Transformers Rebuild/ExtractedAssets/content/TR_AllShader_p/Textures/Interior_Emiss.png",
+    "class": "Texture2D",
+    "srgb": true,
+    "format": "PF_DXT1",
+    "address_x": "TA_Wrap",
+    "address_y": "TA_Wrap",
+    "lod_group": null,
+    "size": [
+     1024,
+     1024
+    ],
+    "unpack_min": null,
+    "compression": null,
+    "slot": 2,
+    "kind": "2d",
+    "key": [
+     "2d",
+     "TR_AllShader_p.Textures.Interior_Emiss"
+    ]
+   }
+  ]
+ }
+]
