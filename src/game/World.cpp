@@ -119,6 +119,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     mapMesh_ = renderer.uploadMesh(mapMesh);
     fx_.load(renderer, root + "/../content/");
     fx_.loadMeshes(renderer, root + "/../content/");
+    levelFx_.load(renderer, root + "/Maps/MP_IAC_Streets/map_fx.json", root + "/../content/");
     vehicleFx_.load(renderer, root + "/../content/");
     player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
@@ -369,7 +370,7 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     // WP_Fire / WP_LowAmmoFire SoundCue (LowAmmoThreshold 5). kSmartPan_PreferPlayer: the
     // distance-layer parameter is measured from the owning player, not the camera.
     float ownDist = core::length(muzzle - origin);
-    SoundCues::Emitter me = atWeapon(kOwnMuzzle);
+    SoundCues::Emitter me = atWeapon("MuzzleFlash");
     me.pos = muzzle;
     cues_.play(w.lowAmmo() ? "SHOOT_LOW_AMMO" : "SHOOT", me, ownDist);
     burstActive_ = true; sinceShot_ = 0.0f;
@@ -384,37 +385,47 @@ void World::setAudio(audio::IAudio* a) {
     const std::string base = assetRoot() + "/../content/";
     // All audio = the original SoundCues (weapon, vehicle, robot movement, transformation, fine aim).
     cues_.load(a, base);
-    // Attached cues follow their owner: the pawn's mesh origin (+ an up offset such as the truck's
-    // AUDIO_ROOT socket), the Ion Blaster mesh, or its MuzzleFlash socket. An owner that is not
-    // available this tick (weapon holstered mid-transform) keeps its last position.
-    cues_.setResolver([this](int owner, const core::Vec3& off, core::Vec3& out) {
-        const Character& pc = player_.pawn();
-        if (owner == kOwnPawn) { out = pc.position() + pc.meshOffset() + off; return true; }
-        if (!pc.hasWeapon()) return false;
-        if (owner == kOwnMuzzle) {
-            core::Mat4 ms;
-            if (weaponSocketWorld("MuzzleFlash", ms)) { out = {ms.m[12], ms.m[13], ms.m[14]}; return true; }
-        }
-        const core::Mat4& wm = pc.weaponWorld();
-        out = {wm.m[12], wm.m[13], wm.m[14]};
-        return true;
+    ambient_.load(assetRoot() + "/Maps/MP_IAC_Streets/audio.json", base, cues_, a);
+    // Attached cues follow their owner every tick (see resolveCueOwner); world cues stay put.
+    cues_.setResolver([this](int owner, const std::string& socket, const core::Vec3& off, core::Vec3& out) {
+        return resolveCueOwner(owner, socket, off, out);
     });
 }
 
-SoundCues::Emitter World::atPawn(const core::Vec3& up) const {
+// Current world position of an attached AudioComponent. Pawn: the skeletal mesh origin (the
+// transform shift included) or, with a socket, that bone of the displayed skeleton; `offset` is
+// added in world space (the truck's AUDIO_ROOT is C_Reference_XR + 147.25 UU up). Weapon: the
+// Ion Blaster mesh or one of its sockets; while it is holstered (transform), the pawn carrying it
+// [MED: chest height]. A pawn bone missing on the displayed skeleton falls back to the mesh origin.
+bool World::resolveCueOwner(int owner, const std::string& socket, const core::Vec3& offset, core::Vec3& out) const {
     const Character& pc = player_.pawn();
-    return SoundCues::Emitter{pc.position() + pc.meshOffset() + up, kOwnPawn, up};
+    if (owner == kOwnPawn) {
+        core::Mat4 bm;
+        if (!socket.empty() && pc.boneWorld(socket, bm)) { out = core::Vec3{bm.m[12], bm.m[13], bm.m[14]} + offset; return true; }
+        out = pc.position() + pc.meshOffset() + offset;
+        return true;
+    }
+    if (owner == kOwnWeapon) {
+        // Holstered (mid-transform): the gun is carried by the pawn, so its sounds go with the pawn.
+        if (!pc.hasWeapon()) { out = pc.position() + pc.meshOffset() + core::Vec3{0, 1.5f, 0}; return true; }
+        core::Mat4 ms;
+        if (!socket.empty() && weaponSocketWorld(socket.c_str(), ms)) { out = {ms.m[12], ms.m[13], ms.m[14]}; return true; }
+        const core::Mat4& wm = pc.weaponWorld();
+        out = {wm.m[12], wm.m[13], wm.m[14]};
+        return true;
+    }
+    return false;
 }
 
-SoundCues::Emitter World::atWeapon(int owner) const {
-    SoundCues::Emitter e{player_.pawn().position(), owner, {0, 0, 0}};
-    core::Mat4 ms;
-    if (owner == kOwnMuzzle && weaponSocketWorld("MuzzleFlash", ms)) {
-        e.pos = {ms.m[12], ms.m[13], ms.m[14]};
-    } else if (player_.pawn().hasWeapon()) {
-        const core::Mat4& wm = player_.pawn().weaponWorld();
-        e.pos = {wm.m[12], wm.m[13], wm.m[14]};
-    }
+SoundCues::Emitter World::atPawn(const core::Vec3& up, const char* socket) const {
+    SoundCues::Emitter e{player_.pawn().position(), kOwnPawn, up, socket};
+    resolveCueOwner(e.owner, e.socket, e.offset, e.pos);
+    return e;
+}
+
+SoundCues::Emitter World::atWeapon(const char* socket) const {
+    SoundCues::Emitter e{player_.pawn().position(), kOwnWeapon, {0, 0, 0}, socket};
+    resolveCueOwner(e.owner, e.socket, e.offset, e.pos);
     return e;
 }
 
@@ -433,11 +444,19 @@ void World::tickCharacterAudio(float dt) {
         const bool toVehicle = transformTarget_ == Form::Vehicle;
         const float at = toVehicle ? 0.125f / 2.0f : 0.0f;          // notify time / authored length
         if (pc.transformProgress() >= at) {
-            cues_.play(toVehicle ? "BL_TRANSFORM.OPTIMUS_BOT2VEH" : "BL_TRANSFORM.OPTIMUS_VEH2BOT", atPawn(), 0.0f);
+            transformCue_ = cues_.play(toVehicle ? "BL_TRANSFORM.OPTIMUS_BOT2VEH" : "BL_TRANSFORM.OPTIMUS_VEH2BOT", atPawn(), 0.0f);
             transformCuePlayed_ = true;
         }
     }
     prevTransforming_ = tf;
+    static const bool track = std::getenv("WFC_CUETRACK") != nullptr;   // attachment check: cue vs pawn
+    core::Vec3 tp;
+    if (track && transformCue_ >= 0 && cues_.instancePos(transformCue_, tp) && (trackT_ += dt) >= 0.25f) {
+        trackT_ = 0.0f;
+        core::Vec3 pp = pc.position() + pc.meshOffset();
+        LOG_INFO("CUETRACK transform cue pos=%.2f,%.2f,%.2f pawn=%.2f,%.2f,%.2f |d|=%.3f m", tp.x, tp.y, tp.z, pp.x, pp.y,
+                 pp.z, core::length(tp - pp));
+    }
 
     foleyCues_.clear();
     robotFoley_.tick(pc, dt, foleyCues_);
@@ -454,7 +473,7 @@ void World::tickCharacterAudio(float dt) {
     bool fa = pc.fineAiming() && pc.hasWeapon();
     if (fa != prevFineAim_)
         cues_.play(fa ? "BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START" : "BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END",
-                   atWeapon(kOwnWeapon), 0.0f);
+                   atWeapon(), 0.0f);
     prevFineAim_ = fa;
 }
 
@@ -564,6 +583,32 @@ void World::tickVehicleBoost(float dt) {
     }
     boostActive_ = boost;
 
+    // Tire squeal [CONF HmPlayerVehicleAudioComponent_6670 + Veh_Optimus_Prime_SoundSet]: Auto_Tire_Squeal_Default
+    // -> VEH_OPTIMUS_TIRE_SQUEAL (looping MECH_TIRE_SQUEAL_HEAVY_LP; volume curve 0 -> 1 at 0.425 rad, pitch
+    // -1 -> +2 st), TireSquealCrossfadeTime 0.5 s, TireSquealSpeedMin 20 [MED: mph like the speed parameter].
+    // [MED] on the wheels only (Driving, grounded).
+    {
+        core::Vec3 hv{v.x, 0.0f, v.z};
+        float hs = core::length(hv);
+        float slip = 0.0f;
+        static const bool derived = std::getenv("WFC_TIRESLIP_DERIVED") != nullptr;
+        const bool haveSlip = tireSlipOverride_ >= 0.0f || derived;
+        if (tireSlipOverride_ >= 0.0f) slip = tireSlipOverride_;
+        else if (derived && hs > 0.5f) {
+            core::Vec3 fwd = core::forwardFromYawPitch(pc.yaw(), 0.0f);
+            slip = std::acos(core::clampf(std::fabs(core::dot(fwd, hv * (1.0f / hs))), 0.0f, 1.0f));
+        }
+        tireSlip_ = slip;
+        bool squeal = haveSlip && boost && pc.onGround() && hs * 2.23694f >= 20.0f;
+        tireSquealLevel_ += core::clampf((squeal ? 1.0f : 0.0f) - tireSquealLevel_, -dt / 0.5f, dt / 0.5f);
+        if (tireSquealLevel_ > 0.0f && tireSquealCue_ < 0)
+            tireSquealCue_ = cues_.play("VEH_OPTIMUS_TIRE_SQUEAL", aroot, 0.0f, slip);
+        if (tireSquealCue_ >= 0) {
+            if (tireSquealLevel_ <= 0.0f) { cues_.stop(tireSquealCue_, 0.0f); tireSquealCue_ = -1; }
+            else { cues_.update(tireSquealCue_, ap, slip); cues_.setVolume(tireSquealCue_, tireSquealLevel_); }
+        }
+    }
+
     if (std::getenv("WFC_BOOSTLOG")) {
         static int n = 0;
         if (n % 6 == 5 && pc.form() == Form::Vehicle)
@@ -571,9 +616,9 @@ void World::tickVehicleBoost(float dt) {
                      (int)nitro_.nitroActive(), pc.vehicleState().nitroRemain, pc.vehicleState().nitroCooldown,
                      nitro_.speedScale(), nitro_.steeringScale());
         if (++n % 6 == 0 && pc.form() == Form::Vehicle) {
-            LOG_INFO("VFX boost=%d hover=%d jumps=%d parts=%zu mph=%.1f ground=%d vy=%.2f sockets=%d/%d",
+            LOG_INFO("VFX boost=%d hover=%d jumps=%d parts=%zu mph=%.1f ground=%d vy=%.2f sockets=%d/%d slip=%.3f squeal=%.2f",
                      (int)boost, (int)hover, jumpCount_, vehicleFx_.liveParticles(), mph, (int)grounded,
-                     v.y, haveSockets, (int)VehicleFx::kSocketCount);
+                     v.y, haveSockets, (int)VehicleFx::kSocketCount, tireSlip_, tireSquealLevel_);
             for (int i : {(int)VehicleFx::BoostL, (int)VehicleFx::HoverLFront, (int)VehicleFx::JumpC}) {
                 if (pc.form() != Form::Vehicle) break;
                 core::Vec3 rel = core::Vec3{sw[i].m[12], sw[i].m[13], sw[i].m[14]} - pc.position();
@@ -664,7 +709,7 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
     }
     if (n.kind == WeaponNotify::Kind::Sound) {
         // HmAnimNotify_Sound: an AudioComponent on the weapon mesh, following it.
-        SoundCues::Emitter e = atWeapon(kOwnWeapon);
+        SoundCues::Emitter e = atWeapon();
         const char* name = n.what.c_str();
         const char* dot = std::strrchr(name, '.');
         if (n.what.rfind("BL_WPN_GUN_ION_BLASTER.", 0) == 0 && dot) name = dot + 1;
@@ -712,6 +757,7 @@ void World::tick(float dt) {
         core::Mat4 ms;
         bool have = weaponSocketWorld("MuzzleFlash", ms);
         sysprof::Scope sp(sysprof::FxTick);
+        levelFx_.tick(dt);
         fx_.tick(dt, have ? &ms : nullptr, collision_.valid() ? &collision_ : nullptr);
     }
     // Event-driven audio via edge detection on pawn state.
@@ -723,10 +769,23 @@ void World::tick(float dt) {
         const Weapon& w = player_.pawn().weapon();
         if (burstActive_ && sinceShot_ > w.fireInterval * 2.0f) {
             burstActive_ = false;
-            SoundCues::Emitter te = atWeapon(kOwnMuzzle);   // WP_LoopingTail on the weapon
+            SoundCues::Emitter te = atWeapon("MuzzleFlash");   // WP_LoopingTail on the weapon
             cues_.play("SHOOT_TAIL", te, core::length(te.pos - pp));
         }
         sysprof::Scope sp(sysprof::Cues);
+        ambient_.tick(dt, listenerPos_, player_.pawn().position(), cues_);
+        static const bool ambLog = std::getenv("WFC_AMBLOG") != nullptr;
+        static float ambT = 0.0f;
+        if (ambLog && (ambT += dt) >= 0.5f) {
+            ambT = 0.0f;
+            audio::MixStats ms;
+            bool have = audio_ && audio_->mixStats(ms);
+            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu pending=%zu voices=%d wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block levelfx=%zu",
+                     ambient_.zoneName(), ambient_.activeEmitters(), ambient_.emitterCount(), ambient_.oneShotsPlayed(),
+                     cues_.liveInstances(), cues_.pendingEvents(), have ? ms.voices : -1, have ? ms.wetVoices : -1,
+                     have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f,
+                     levelFx_.liveParticles());
+        }
         cues_.tick(dt);
     }
 
@@ -760,7 +819,7 @@ void World::draw(render::IRenderer& r) const {
             r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
     }
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene).
-    { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
+    { sysprof::Scope sp(sysprof::DrawFx); levelFx_.draw(r); fx_.draw(r); }
     { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
     sysprof::cueInst = cues_.liveInstances(); sysprof::cuePending = cues_.pendingEvents();
     sysprof::frame(fx_.liveParticles(), fx_.liveMeshes());

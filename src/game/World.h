@@ -17,6 +17,8 @@
 #include "game/VehicleFx.h"
 #include "game/VehicleNitro.h"
 #include "game/RobotFoley.h"
+#include "game/AmbientAudio.h"
+#include "game/LevelFx.h"
 
 namespace render { class IRenderer; }
 
@@ -58,6 +60,12 @@ public:
     // VehicleNitro::kRamDamage* / kExtraRamZVelocityUU).
     bool notifyRamHit(const void* target, const core::Vec3& pos);
     bool usingSlice() const { return usingSlice_; }
+    // Tire squeal (HmPlayerVehicleAudioComponent TireSquealSoundParameter Optimus_Prime_Tire_Squeal,
+    // Max 1.57 = pi/2): the wheels' slip angle in radians. Gameplay may supply its own value each step
+    // (>= 0). Until Gameplay provides it the squeal stays silent: heading-vs-velocity measured here is
+    // not a slip signal in the current driving model (0.3-1.2 rad in straight-line driving).
+    // WFC_TIRESLIP_DERIVED=1 uses that measurement anyway (diagnostic).
+    void setTireSlipAngle(float rad) { tireSlipOverride_ = rad; }
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).
     const CollisionWorld* collision() const { return collision_.valid() ? &collision_ : nullptr; }
@@ -98,22 +106,35 @@ private:
 
     // Original weapon effects (muzzle flash, tracer, impact squib) from the cooked FX data.
     WeaponFx fx_;
+    // Authored level particle emitters (map_fx.json: 8 x Steam_Sm_FX).
+    LevelFx levelFx_;
 
     audio::IAudio* audio_ = nullptr;
     SoundCues cues_;
     // Cue owners (SoundCues::Emitter::owner): attached AudioComponents follow these every tick.
-    enum CueOwner { kOwnPawn = 0, kOwnWeapon = 1, kOwnMuzzle = 2 };
-    SoundCues::Emitter atPawn(const core::Vec3& up = {0, 0, 0}) const;
-    SoundCues::Emitter atWeapon(int owner) const;
+    // Owner ids: the player pawn (its mesh origin, or a bone/socket of the displayed skeleton) and
+    // the Ion Blaster (its mesh origin, or a WeaponMesh socket such as MuzzleFlash).
+    enum CueOwner { kOwnPawn = 0, kOwnWeapon = 1 };
+    bool resolveCueOwner(int owner, const std::string& socket, const core::Vec3& offset, core::Vec3& out) const;
+    SoundCues::Emitter atPawn(const core::Vec3& up = {0, 0, 0}, const char* socket = "") const;
+    SoundCues::Emitter atWeapon(const char* socket = "") const;
     // Robot movement foley (footsteps / jump / landing / idle / pivots) from the authored notifies.
     RobotFoley robotFoley_;
+    // Streets world sound bed: map emitters, Kismet reverb zones, one-shot pools (audio.json).
+    AmbientAudio ambient_;
     std::vector<const char*> foleyCues_;
     // Transformation cue (HmAnimNotify_Sound on the Optimus transform clips) for the current fold.
     bool transformCuePlayed_ = false;
+    int transformCue_ = -1;
+    float trackT_ = 0.0f;
     bool prevTransforming_ = false;
     Form transformTarget_ = Form::Robot;
     bool prevFineAim_ = false;
     int ramAlertCue_ = -1;
+    float tireSlipOverride_ = -1.0f;
+    int tireSquealCue_ = -1;
+    float tireSquealLevel_ = 0.0f;
+    float tireSlip_ = 0.0f;
     void tickCharacterAudio(float dt);
 
     // Vehicle-form presentation (OptimusTruckForm BoostFx / HoverFX / JumpFX + boost sounds).

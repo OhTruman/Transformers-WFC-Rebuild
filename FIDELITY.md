@@ -17,6 +17,150 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 SYSTEMS PASS 2 — WORLD SOUND BED, ZONE REVERB, MIXER, LEVEL FX, ATTACHMENT AUDIT (2026-10-02, agents/systems)
+
+### Attached-audio model (reusable; nothing hard-coded per cue)
+`SoundCues::Emitter{pos, owner, offset, socket}` with a World resolver (`World::resolveCueOwner`):
+| Class | Original mechanism | Owner | Examples | Conf |
+|---|---|---|---|---|
+| A actor-attached | HmAnimNotify_Sound / HmAnimNotify_SoundEvent (no SocketName), HmPlayerVehicleAudioComponent | `kOwnPawn` (+ world offset, e.g. AUDIO_ROOT +147.25 UU) | transform, footsteps, landing, idle foley, vehicle boost / engine / jump / land / nitro / alert | CONF class / HI attach |
+| B socket-attached | notify SocketName / weapon sockets | `kOwnPawn` + bone, `kOwnWeapon` + socket | SHOOT / SHOOT_TAIL at MuzzleFlash, reload / idle notifies on the weapon mesh, fine aim | HI |
+| C persistent loops | vehicle audio component loops | attached as A | engine ONLOAD / OFFLOAD / JUMP_LOOP, boost loop, tire squeal | CONF |
+| D world one-shots / world loops | impacts at the hit, map AmbientSound / shaped emitters, Kismet PlayerPositionalSound pools | `kWorld` | IMPT_WORLD / IMPT_DMG / RAM_IMPACT, 70 map emitters, PP_* pools | CONF |
+| E non-positional | — (no slice cue needs it) | `kUI` | API only | — |
+
+Delayed wave events start at the owner's position at launch time. Voices of attached instances follow the owner
+every tick until the voice ends (`IAudio::isPlaying`; a backend that cannot report keeps updating to the
+10 s bound). A holstered weapon (mid-transform) resolves to the pawn carrying it.
+**Measured with Experimental's `audio-attach.ps1`** (their recording backend built locally against this
+branch, same six scenarios; not committed):
+* milestone-02: 20 KNOWN "left behind".
+* now: **0 player-owned left behind**. The 19 remaining KNOWN are world sounds that must stay put:
+  Ion Blaster `IMPT_WORLD` impact layers (MTL_BULLET_IMPT_SHEET_*, ELEC_SPARKBLAST_FLANGE_*) and the
+  `PP_CORRIDORS` zone pool (PP_DECO_MECH_*).
+* Experimental handoff: classify `IMPT_*` / `PP_*` voices as world.
+* `WFC_CUETRACK=1` logs the transform cue position vs the pawn: it tracks within one step (≤0.26 m at
+  14 m/s) in both directions.
+
+### SoundCue runtime
+* **Node types:** the slice uses only SoundNodeRoot → SoundNodeWaveEvent → SoundNodeWaveEx. That covers 41
+  table cues + 32 map cues: weapon, Optimus, vehicle, transform, Streets. No mixer / concat / modulator /
+  attenuation nodes exist in WFC cues; the root carries attenuation and the wave event carries randomization,
+  delay (Time), looping and curves.
+* **Supported now:** root volume/pitch + variation, DistanceMin/Max + RolloffFactor (FMOD inverse), SmartPan
+  2D/3D, **RearAttenuation**, Category (wet/dry routing), SoundParameter (distance / speed / tire slip);
+  event Time, volume/pitch + variation, ChanceToPlayNone, bLooping, random wave choice, Volume/PitchCurve,
+  Envelope; **5.1 pan matrix folded to stereo** (Default__SoundNodeWaveEvent: Center/BackL/BackR/LFE −96 dB;
+  rear-only layers −3 dB [MED]).
+* **Data-loaded cues:** cues load from the generated table and from a map's `audio.json`.
+* **Not used by any slice cue (not implemented):** root DelayMin/Max, LoopStart/LoopEnd (2 map cues carry the
+  class-default LoopEnd), occlusion, Doppler, SecondaryCategory.
+
+### Attenuation / panning (audit)
+* **Source:** each instance's resolved 3D position (owner, socket or world).
+* **Listener:** the camera pose given to `IAudio::setListener` each frame (position, forward, right).
+* **Gain:** FMOD inverse rolloff `min/(min + rolloff·(d−min))`, flat inside DistanceMin, held past DistanceMax
+  (FMOD Ex inverse semantics).
+* **Pan:** equal-power `dot(dir, listenerRight)` (sin of the azimuth, gentler than FMOD's speaker-angle pan,
+  no exaggerated separation), blended to centre inside SmartPanDistance2D and full beyond SmartPanDistance3D.
+* **Rear:** RearAttenuation dB for sources behind the listener.
+* **Not world origin, not player-based.** [MED] kSmartPan_PreferPlayer may measure the local player's own
+  sounds from the pawn rather than the camera (that would make own sounds more centred); unresolved without
+  native RE.
+
+### Mixer / sound class (gain staging)
+* **Routing:** voices route to MASTER_WET (every `SFX_WET_*` category; all slice cues) or MASTER_DRY, as in
+  `SoundMixerProperties.SoundGroupCategoryMappings`.
+* **Category volumes:** all 1.0 on the slice's paths (see pass 1), so no relative category gain.
+* **Master compressor:** Master's Default preset, Threshold −6 dB, Attack 10 ms, Release 50 ms, GainMakeup 0.
+  Read from audio.json; applied as a hard-knee limiting compressor [MED: DSPEffectConfig bit 32 read as the
+  compressor; FMOD Ex compressor ratio not documented].
+  * Measured peaks: −19…−15 dBFS idle, −8 dBFS sustained fire, −7 dBFS fire + movement. It does **not**
+    engage in these scenarios, so the weapon mix is unchanged.
+* **Master level:** Master's own Default volume is 0.708 (−3 dB); the rebuild keeps master 0.5 [PROV] (the
+  original's FMOD output scaling is unknown), so the relative mix is what is reproduced.
+
+### Environment / reverb
+`AmbientAudio` loads ExtractedAssets/VerticalSlice/Maps/MP_IAC_Streets/audio.json at runtime.
+* **9 Kismet zones:**
+  * TriggerVolume polygons, a ray-parity point test on the pawn (camera ignored, as authored), checked every 0.2 s.
+  * Entering a zone applies its `REVERB_TRANS_MP_STREETS_*` MASTER_WET preset (Reverb + Echo) with the
+    preset's FadeInTime (0.25 s) and starts its PlayPlayerPositionalSound pools (looping random one-shots,
+    DelayMin–Max, 20 m from the player, world-fixed, [MED] random horizontal bearing).
+  * Leaving without entering another keeps the zone (INFERRED, no on_untouched ops).
+  * The default spawn is in DEC_ROOM_LOWER.
+* **Reverb DSP [MED structure, CONF parameters]:**
+  * send HF shelf at HFReference/RoomHF; 4 early-reflection taps from ReflectionsDelay at Room+Reflections mB;
+  * stereo 8-comb + 4-allpass late tank at Room+Reverb mB, comb feedback for the authored DecayTime (RT60),
+    DecayHFRatio as in-loop damping, Diffusion as allpass gain, pre-delay ReflectionsDelay+ReverbDelay;
+  * Echo: Delay / DecayRatio / WetMix / DryMix;
+  * parameters cross-fade over the preset fade.
+* **70 map emitters:**
+  * 40 point, 17 volume, 13 line, all looping map-bank cues at their authored volume/distances.
+  * Volume emitters sound from the nearest point of their box (Radius × actor scale) to the listener, and on
+    the listener when inside (the 7 AMB_* room-tone beds); line emitters from the nearest point of their segment [MED].
+  * [PROV] voice budget: the 24 most audible play, the rest are virtual; 0.5 s fades in/out.
+* **Cost:** mixer 0.7 ms per 21 ms block (1.1–1.4 ms with ~70 voices), about 0.2 ms per frame.
+* **Diagnostic:** `WFC_AMBLOG=1` logs zone, emitters, voices, peak, gain reduction and mix cost.
+
+### Robot movement / landing (pass-1 work kept; status)
+* The landing cue already follows the authored data: LandingAnims by fall height (and horizontal speed) →
+  FS_LAND_DEFAULT / FS_LAND_HARD / FS_LAND_HIGH_FALL + groan.
+* Gameplay still plays Nav_Land for every landing and exposes no landing-clip state, so Systems evaluates the
+  same authored table (handoff below).
+* Footstep notifies: only the Strafers master fires, MinWeight-gated, with no idle/walk flicker duplicates.
+* "Too loud / disconnected": the old placeholder thump (0.8 linear, linear rolloff) is gone. Footsteps now use
+  authored SmartPan 75/150 UU, sit in the zone reverb and pass through the master compressor; no level was
+  changed by ear.
+
+### Vehicle sound bed (state map)
+| State | Cues (authored) | Notes |
+|---|---|---|
+| Hover idle / movement | DRIVE_OFFLOAD (no throttle) / DRIVE_ONLOAD (throttle), speed-keyed pitch, 0.2 s EngineFadeOutTime | gear set MaxSpeed 20 / 110 share the cues |
+| Normal boost | BOOST_START, BOOST_LOOP (speed), BOOST_END, BOOST_WHEELS after 0.27 s on ground, 0.15 s fade | engine yields to the boost loop [MED] |
+| Hover dash | none authored (no dash clip / notify; BoosterSound trigger is native, undecoded) | not invented |
+| Ram / nitro | RAM_NITRO_START + VEH_TRUCK_RAM_ALERT (one-shot, cut at nitro end) | RAM_IMPACT via notifyRamHit (world) |
+| Jump / air | DRIVE_JUMP_START (AscendSound) + DRIVE_JUMP_LOOP (JumpRev) | |
+| Landing | HOVER_ / WHEELS_LAND_LIGHT (>=0.15 s air) / _HEAVY (>=2.0 s) | |
+| Transform | BL_TRANSFORM BOT2VEH / VEH2BOT attached; vehicle FX on at 1.8 s of the fold | |
+| Tire squeal | VEH_OPTIMUS_TIRE_SQUEAL, parameter = slip angle 0..pi/2 rad (Max 1.57), full volume at 0.425 rad, pitch −1 → +2 st, 0.5 s crossfade, speed >= 20 | **hook only** (below) |
+All vehicle loops are attached (AUDIO_ROOT) and move with the truck.
+
+**Tire squeal — prepared, not invented.** Gameplay exposes no slip scalar. Heading vs horizontal velocity measured
+in Systems reads 0.3–1.2 rad in straight-line Driving in the current model (velocity not aligned to yaw), so it is
+not a usable slip signal. The squeal plays only when Gameplay calls `World::setTireSlipAngle(rad)` each step
+(Driving, grounded, >= 20 mph). `WFC_TIRESLIP_DERIVED=1` enables the measured value for diagnostics only.
+
+### Level effects
+`LevelFx` reproduces the 8 authored Streets level emitters (`Emitter` actors with `FX_Level_Generic_p.FX.Steam_Sm_FX`,
+map_fx.json):
+* emitter "Smoke_Dup", Steam_Mat → SmokeBall_CLR translucent, emissive ×0.5;
+* LOD0 stream values CONF, roles by the established order MED: spawn U[2,3]/s, life U[1,2] s, size U[6,10] m
+  ×1→3, alpha 0→0.3→0, velocity ±(3,1,1) m/s, ±5 m along the emitter X, colour (0.9,0.9,1)→1;
+* UE location/yaw → glTF as the other map records.
+Verified in fixed-camera stills (`work/m3/steam_sheet.png`). Not reproduced (Rendering): the material's panned
+SmokeTile UV distortion and depth-biased (soft) alpha.
+
+### Vehicle FX event completeness
+OptimusTruckForm authors exactly BoostFx (BoostSocket_L/R), HoverFX (6 HoverBooster_*), JumpFX (JumpBoostSocket_C/R/L)
+and RamFX (RamSocket); TnCarForm / TnTruckForm / TnVehicleForm defaults add none (no dash or landing FX).
+* **Driven:** Hover while hovering and from 1.8 s of the to-vehicle fold; Boost while Driving; Jump on take-off,
+  killed when the vehicle form ends; Ram for the nitro.
+* **Cleanup:** after transforming back to robot all vehicle parts drain to 0.
+
+### Performance (final suite, RX 7900 XTX, WFC path)
+* Idle 6.4–6.5 ms (ambient bed, reverb and level FX included).
+* Short burst + reload 6.5 ms.
+* Sustained fire: firing windows **9.6–13.6 ms** (drawFx 2.4–5.9 ms = Rendering's per-shell light environments).
+* Boost / nitro / transform back 6.3–8.7 ms; transform cycling 5.5 ms; fire + move + turn 5.7–8.9 ms.
+* ~900 RPM cadence unchanged.
+* Leaks: cue instances settle at the ~25 ambient loops; pending events bounded; weapon particles → 0 after
+  firing; vehicle parts → 0 after leaving the vehicle; level FX steady at ~30 particles.
+* Collision: `work/segtest` 0 mismatches.
+* Harness: wfc_fidelity 194/0/19/119/1, runtime probe 31/0/1.
+
+---
+
 ## MILESTONE 03 SYSTEMS — AUDIO OWNERSHIP, ROBOT MOVEMENT SOUND, TRANSFORM AUDIO, FIRING COST (2026-10-02, agents/systems)
 
 ### Audio source ownership (systemic fix)

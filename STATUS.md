@@ -3,6 +3,31 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 03 PASS 2 (2026-10-02) — world sound bed, zone reverb, mixer, level FX
+- **Attachment:**
+  - Reusable owner/socket model; all 20 of Experimental's player-owned "left behind" sounds are fixed
+    (their recorder, same scenarios).
+  - The remaining 19 KNOWN are world impacts / zone pools, which must stay world-fixed.
+- **Streets world audio from audio.json:**
+  - 70 map emitters (point / volume / line, virtualized to the 24 most audible);
+  - 9 Kismet reverb zones (MASTER_WET reverb + echo with preset fade);
+  - zone one-shot pools;
+  - Master compressor (−6 dB / 10 / 50 ms).
+- **SoundCue runtime:** RearAttenuation, 5.1 pan fold-down, wet/dry category routing, data-loaded map cues,
+  tire-squeal parameter, UI owner.
+- **Level FX:** the 8 authored Steam_Sm_FX emitters.
+- **Tire squeal:** authored cue, curves and gating ready; plays only once Gameplay supplies `World::setTireSlipAngle`.
+- **Validation:**
+  - Perf: idle 6.5 ms; sustained fire 9.6–13.6 ms; mixer about 0.2 ms/frame.
+  - Leak suite clean; wfc_fidelity 194/0/19; runtime probe 31/0/1.
+- **Handoffs:**
+  - **Gameplay:** slip-angle scalar; landing-clip state (Nav_Land_02/_03); ram collision → notifyRamHit.
+  - **Rendering:**
+    - per-shell light environments;
+    - Steam_Mat soft alpha + UV distortion;
+    - hover/boost ring materials.
+  - **Experimental:** classify IMPT_* / PP_* voices as world in audio-attach.
+
 ## SYSTEMS MILESTONE 03 (2026-10-02) — branch `agents/systems` (synced to integration/milestone-02 e8036f6)
 - **Firing cost 65–70 → 10–11 ms/frame.** The `CollisionWorld::segmentHit` grid walk (exact, brute-force
   verified) fixes the weapon trace, Gameplay's per-shot camera ray and the renderer's light-visibility rays.
