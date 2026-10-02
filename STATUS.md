@@ -3,6 +3,20 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 16 (2026-10-02) — RE d50e2a9 runtime semantics (narrow)
+- Pickups:
+  - touch is an overlap begin; health re-checks overlapping pawns on respawn (CheckTouching);
+  - sleeping keeps collision but ignores touches;
+  - the highlight beam is only for ammo crates; the ammo crate rotates while available;
+  - events carry the visual state and the receiving pawn's position for the pickup sound.
+- Weapon spread:
+  - linear per-tick recovery (whole range in 2 s);
+  - airborne ×2 ramp (0.25 s up / 0.5 s down);
+  - fine aim ×0.5;
+  - the same effective spread drives the hitscan cone.
+- HUD: TnHUD notify calls (spread > 0.002 filter; weapon class + fine aim together) via `PlayerController::hudNotifies()`.
+- Harness: `weapon.spread_after_10` / `spread_cap` now fail against their superseded expectations (see FIDELITY PASS 16); Experimental should update them.
+
 ## GAMEPLAY PASS 15 (2026-10-02) — AssetTools 7a69756 authored-data handoff
 - Fine aim:
   - the Ion Blaster keeps its authored crosshair (no scope or ADS);

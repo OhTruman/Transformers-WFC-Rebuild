@@ -369,7 +369,7 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
         core::Vec3 u2 = core::normalize(core::cross(rt, dir));
         auto rf = [] { return (float)std::rand() / (float)RAND_MAX * 2.0f - 1.0f; };
         // Fine aim scales spread by the weapon's FineAimSpreadModifier (Ion Blaster 0.5) [CONF data].
-        float spread = w.spread * (player_.pawn().fineAiming() ? core::config::kFineAimSpreadMult : 1.0f);
+        float spread = player_.pawn().effectiveSpread();   // bloom x airborne x fine aim (HmWeapon.GetSpread)
         dir = core::normalize(dir + rt * (rf() * spread) + u2 * (rf() * spread));
     }
     core::Vec3 end = origin + dir * range;

@@ -124,6 +124,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     prevReloadDown_ = reloadDown;
 
     updateCameraStrategy(in, dt);
+    tickHud();
     // Hovering faces the controller rotation, which PlayerInVehicleForm.PlayerMove sets to the CAMERA
     // rotation (after the strategy's orbit smoother) [CONF bytecode]; the robot faces the aim.
     intent_.faceYaw = vehicleForm ? viewYaw_ : camYaw_;
@@ -226,13 +227,31 @@ FineAimState PlayerController::fineAimState() const {
     return s;
 }
 
+// TnHUD tick [CONF RE d50e2a9]: TnHudDataObserverWeaponSpread sends the raw spread (ConversionFactor 1)
+// whenever it moves by more than 0.002; TnHudDataObserverCurrentWeaponAndAim sends
+// NotifyCurrentWeaponChanged(class) and NotifyFineAimChanged(0/1) together whenever either changes.
+void PlayerController::tickHud() {
+    hudNotifies_.clear();
+    HudAimState s = hudAimState();
+    if (!hudInit_ || std::fabs(s.spread - hudSpreadSent_) > 0.002f) {
+        hudSpreadSent_ = s.spread;
+        hudNotifies_.push_back({HudNotify::Type::WeaponSpread, s.spread, 0, ""});
+    }
+    if (!hudInit_ || std::string(s.weaponClass) != hudWeaponSent_ || s.aimType != hudAimSent_) {
+        hudWeaponSent_ = s.weaponClass; hudAimSent_ = s.aimType;
+        hudNotifies_.push_back({HudNotify::Type::CurrentWeapon, 0.0f, 0, s.weaponClass});
+        hudNotifies_.push_back({HudNotify::Type::FineAim, 0.0f, s.aimType, ""});
+    }
+    hudInit_ = true;
+}
+
 HudAimState PlayerController::hudAimState() const {
     HudAimState s;
     if (!pawn_) return s;
     bool drawn = pawn_->hasWeapon();                 // gun attached on a displayed robot mesh
     s.weaponClass = drawn ? "TnWeaponIonBlaster" : "";
     s.aimType = fineAiming_ ? 1 : 0;
-    s.spread = pawn_->weapon().spread * (fineAiming_ ? core::config::kFineAimSpreadMult : 1.0f);
+    s.spread = pawn_->effectiveSpread();             // raw spread: bloom x airborne x fine aim [CONF RE d50e2a9]
     s.crosshairVisible = drawn;
     return s;
 }
@@ -295,6 +314,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
     wantDashLatched_ = false;   // consumed by this step
     CharacterMovement::update(*pawn_, step, dt, world.collision());
     pawn_->setAimPitch(camPitch_);   // drives the upper-body aim offset
+    pawn_->tickSpreadModifier(dt);   // TnWeaponSpreadModifier airborne ramp
     wantJumpLatched_ = false;
     pawn_->weapon().tick(dt);
     pawn_->ability().tick(dt);

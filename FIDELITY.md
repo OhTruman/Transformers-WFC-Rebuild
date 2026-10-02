@@ -75,6 +75,30 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 16 — RUNTIME SEMANTICS, RE d50e2a9 (2026-10-02, gameplay agent)
+Source: `RE-Workspace/notes/MILESTONE03_RUNTIME_SEMANTICS_ASSETTOOLS_7a69756.md` (RE commit d50e2a9). It corrects
+AssetTools §2: TnPickupFactory SetPickupVisible/Hidden, IsReadyToPickup, GiveTo, TakePickUp and GetRespawnTime have bytecode.
+Measured with `WFC_PICKUPTEST=1` (slice world, fixed 60 Hz), `WFC_HUDLOG=1` and the frame log.
+
+| Item | Native/script (d50e2a9) | Conf | Rebuild | Measured |
+|---|---|---|---|---|
+| Factory states | 'Pickup' (visible, ammo crate PHYS_Rotating Yaw 10000) → valid Touch → GiveTo → the same frame enters 'Sleeping' (SetPickupHidden); collision kept, touches ignored; exactly RespawnTime; → 'Pickup' (SetPickupVisible). Actor never destroyed. Availability = !bPickupHidden | CONFIRMED | **APPLIED** | Ammo 30.02 s, health 60.02 s, overshield 119.99 s. Overlap while sleeping ignored |
+| Touch semantics | Touch = overlap begin. TnHealthPickupFactory.SetPickupVisible → CheckTouching | CONFIRMED | **APPLIED** (was a per-tick overlap test) | Standing on the factory at respawn: health re-taken at once; ammo/overshield not re-taken until a new touch |
+| Sounds | PickupSound plays on the receiving pawn (AnnouncePickup); no respawn effect/sound (RespawnEffectTime 0) | CONFIRMED | Event `receiverPos` + sound on Taken only | — |
+| Highlight beam | PickupEffect.ActivateSystem in SetPickupVisible / DeactivateSystem in SetPickupHidden, only if ShouldDisplayHighlightFx (true only for TnAmmoCratePickupFactory) | CONFIRMED | `beamActive()` / event `beamActive` | Ammo beam 1 while available; health/overshield beam 0, custom FX 1 while available |
+| ValidTouch / PickupQuery | ValidTouch: !bHidden, controller, line of sight; TnGame.PickupQuery not traced | PARTIAL | "nothing to gain" rejection stays **[PROV]** | — |
+| HUD spread | NotifyWeaponSpreadChanged(raw), sent when it changes by > 0.002; raw = CurrentSpread × CurrentAirborneMultiplier × (fine aim ? 0.5 : 1) + Data.Spread (0) | CONFIRMED | `hudNotifies()` per HUD tick; `Character::effectiveSpread()` also drives the hitscan cone | Fine aim 0.080→0.040. Filter verified (WFC_HUDLOG) |
+| Weapon/aim notify | NotifyCurrentWeaponChanged(class) + NotifyFineAimChanged(0/1), sent together when either changes | CONFIRMED | **APPLIED** | — |
+| Spread model | IncrementSpread +0.005/shot; CooldownSpread every tick −(Max−Min)·dt/Cooldown (whole range in 2 s); Ion Blaster MP 0.08–0.18 | CONFIRMED | **APPLIED** (was "snap to Min after 2 s idle") | 10-shot burst 0.095 → back to 0.080 in ~0.3 s |
+| Airborne | TnWeaponSpreadModifier AirborneMultiplier 2.0, ramp up 0.25 s, land ramp down 0.5 s (hover 0.1 s n/a) | CONFIRMED values / HIGH linear ramp | **APPLIED** (robot form) | Jump: 0.080 → 0.160 in 0.25 s; back over 0.5 s after landing |
+
+**Harness note (Experimental):**
+- `weapon.spread_after_10` (expects 0.13) and `weapon.spread_cap` (expects 0.18 after 2.5 s of fire) encode the superseded no-recovery-while-firing model.
+- Under per-tick CooldownSpread at 15 shots/s the net bloom is +0.025/s: 0.10 after 10 shots, and the cap is reached after ~4 s.
+- The check expectations need updating to d50e2a9; Gameplay did not edit the harness.
+
+---
+
 ## PASS 15 — AUTHORED-DATA HANDOFF, AssetTools 7a69756 (2026-10-02, gameplay agent)
 Sources: `AssetTools/manifests/fineaim_hud.json`, `streets_pickup_factories.json`, `streets_pickup_fx.json`,
 `streets_destructibles.json` (commit 7a69756). Placement data comes from the slice's existing `gameplay.json` and

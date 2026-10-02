@@ -6,6 +6,9 @@
 #include "game/CharacterMovement.h"
 #include "core/Config.h"
 
+#include <string>
+#include <vector>
+
 namespace game {
 
 class CollisionWorld;
@@ -34,6 +37,15 @@ struct HudAimState {
                                     // 0.5 in fine aim) [HIGH: the native combination is not recovered]
     int targetType = 2;             // ETargetTypeForHud TTFH_None
     bool crosshairVisible = false;  // ShowCrosshair: a weapon with ammo capacity is drawn
+};
+
+// HUD notifications produced this frame by the TnHUD observers (Movie.Invoke calls) [CONF RE d50e2a9].
+struct HudNotify {
+    enum class Type { WeaponSpread, CurrentWeapon, FineAim };
+    Type type;
+    float spread;              // _global.NotifyWeaponSpreadChanged(rawSpread)
+    int aimType;               // _global.NotifyFineAimChanged(0/1)
+    const char* weaponClass;   // _global.NotifyCurrentWeaponChanged(className)
 };
 
 // Fine aim state for presentation (reticle/sight UI): active flag, the TnPCS_FineAim blend implied by
@@ -72,6 +84,7 @@ public:
     float fovXDeg() const { return fovCur_; }
     FineAimState fineAimState() const;
     HudAimState hudAimState() const;
+    const std::vector<HudNotify>& hudNotifies() const { return hudNotifies_; }
     // Active camera strategy (diagnostics): 0 = OverTheShoulder, 1 = HoverTruck, 2 = Truck (Driving).
     int cameraStrategy() const { return strategy_; }
     float viewYaw() const { return viewYaw_; }
@@ -104,6 +117,12 @@ private:
     float wiggleT_ = 0.0f;
     float steerSmoothed_ = 0.0f;
     const CollisionWorld* col_ = nullptr;        // for the third-person camera collision
+    std::vector<HudNotify> hudNotifies_;
+    float hudSpreadSent_ = 0.0f;
+    std::string hudWeaponSent_;
+    int hudAimSent_ = -1;
+    bool hudInit_ = false;
+    void tickHud();
     bool canFineAim() const;
     void tickFineAim();
     void updateCameraStrategy(const platform::InputFrame& in, float dt);

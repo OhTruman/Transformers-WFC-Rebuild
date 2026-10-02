@@ -102,6 +102,21 @@ public:
     float rammedRemain_ = 0.0f;
     float rammedBaseY_ = 0.0f;
     bool handShrunk() const { return handShrunk_; }
+    // TnWeaponSpreadModifier (robot form) [CONF RE d50e2a9]: AirborneMultiplier 2.0, ramps up over 0.25 s while
+    // airborne and back down over 0.5 s after landing (hover ramp-down 0.1 s applies to the acrobatic hover,
+    // not in the slice). Linear ramps [HIGH].
+    void tickSpreadModifier(float dt) {
+        bool air = moveForm() == Form::Robot && !onGround_;
+        float target = air ? 2.0f : 1.0f, rate = air ? 1.0f / 0.25f : 1.0f / 0.5f;
+        airSpreadMult_ += std::max(-rate * dt, std::min(rate * dt, target - airSpreadMult_));
+    }
+    float airborneSpreadMultiplier() const { return airSpreadMult_; }
+    // HmWeapon.GetSpread for the robot weapon: Data.Spread (0 for the Ion Blaster) + CurrentSpread x
+    // CurrentAirborneMultiplier x (fine aim ? FineAimSpreadModifier 0.5 : 1) [CONF RE d50e2a9].
+    float effectiveSpread() const {
+        return weapon_.spread * airSpreadMult_ * (fineAiming_ ? core::config::kFineAimSpreadMult : 1.0f);
+    }
+    float airSpreadMult_ = 1.0f;
     // TnOverShieldPickup granted (amount/duration are native and not recovered: state flag only [PARTIAL]).
     void grantOverShield() { overShield_ = true; ++overShieldGrants_; }
     bool overShield() const { return overShield_; }

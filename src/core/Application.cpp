@@ -9,6 +9,7 @@
 #include "game/Destructible.h"
 
 #include <algorithm>
+#include <string>
 
 #include <chrono>
 
@@ -181,6 +182,13 @@ void Application::run() {
                      (int)world_.player().controller().hudAimState().crosshairVisible);
         }
 
+        if (std::getenv("WFC_HUDLOG"))   // diagnostic: the TnHUD Movie.Invoke calls produced this frame
+            for (const auto& n : world_.player().controller().hudNotifies())
+                LOG_INFO("HUD f%ld %s", frame,
+                         n.type == game::HudNotify::Type::WeaponSpread ? ("NotifyWeaponSpreadChanged(" + std::to_string(n.spread) + ")").c_str()
+                         : n.type == game::HudNotify::Type::FineAim ? ("NotifyFineAimChanged(" + std::to_string(n.aimType) + ")").c_str()
+                         : ("NotifyCurrentWeaponChanged(" + std::string(n.weaponClass) + ")").c_str());
+
         // Camera + render.
         world_.player().controller().updateCamera(camera_);
         camera_.aspect = (float)window_->width() / (float)(window_->height() > 0 ? window_->height() : 1);
@@ -267,41 +275,44 @@ void Application::runPickupTest() {
     };
     const auto& fac = world_.pickupFactories();
     float t = 0.0f;
+    auto idxOf = [&](const game::PickupFactory* f) { return (int)(std::find(fac.begin(), fac.end(), f) - fac.begin()); };
     for (int kind = 0; kind < 3; ++kind) {
         const game::PickupFactory* f = nullptr;
         for (auto* x : fac) if ((int)x->kind() == kind) { f = x; break; }
         if (!f) continue;
-        // Make the pickup useful: damage health / spend reserve ammo.
-        pawn.health().current = 30.0f;
-        pawn.weapon().reserve = 10;
-        int healthBefore = (int)pawn.health().current, reserveBefore = pawn.weapon().reserve, osBefore = pawn.overShieldGrants();
-        pawn.setPosition(f->position());
-        pawn.velocity() = {0, 0, 0};
-        float tTaken = -1.0f, tBack = -1.0f;
-        int taken = 0;
-        for (int i = 0; i < (int)((f->respawnTime() + 5.0f) / dt); ++i) {
-            world_.tick(dt);
-            t += dt;
+        const char* cls = game::PickupFactory::className(f->kind());
+        LOG_INFO("PICKUPTEST %s initial: available=%d mesh=%d customFx=%d beam=%d", cls, (int)f->available(),
+                 (int)f->meshVisible(), (int)f->customEffectActive(), (int)f->beamActive());
+        pawn.health().current = 30.0f; pawn.weapon().reserve = 10;
+        pawn.setPosition(f->position()); pawn.velocity() = {0, 0, 0};
+        int taken = 0, respawned = 0; float tTaken = -1.0f, tBack = -1.0f, tRetake = -1.0f;
+        bool stillOn = true;
+        for (int i = 0; i < (int)((f->respawnTime() + 3.0f) / dt); ++i) {
+            // While sleeping, keep the pawn standing on it and eligible again (overlap must be ignored).
+            if (taken == 1 && respawned == 0) { pawn.health().current = 30.0f; pawn.weapon().reserve = 10; }
+            pawn.setPosition(f->position()); pawn.velocity() = {0, 0, 0};
+            world_.tick(dt); t += dt;
             for (const auto& e : world_.pickupEvents()) {
-                if (e.factory != (int)(std::find(fac.begin(), fac.end(), f) - fac.begin())) continue;
-                if (e.type == game::PickupEvent::Type::Taken) { ++taken; if (tTaken < 0) tTaken = t; }
-                else if (tBack < 0) tBack = t;
+                if (e.factory != idxOf(f)) continue;
+                LOG_INFO("PICKUPTEST t=%7.2f %s %s available=%d mesh=%d customFx=%d beam=%d sound=%s", t, cls,
+                         e.type == game::PickupEvent::Type::Taken ? "TAKEN" : "RESPAWNED", (int)e.available, (int)e.meshVisible,
+                         (int)e.customEffectActive, (int)e.beamActive, e.pickupSound ? e.pickupSound : "-");
+                if (e.type == game::PickupEvent::Type::Taken) { ++taken; if (tTaken < 0) tTaken = t; else if (tRetake < 0) tRetake = t; }
+                else { ++respawned; tBack = t; }
             }
-            logEvents(t);
-            if (tBack > 0) break;
+            if (respawned && t > tBack + 1.0f) break;
         }
-        LOG_INFO("PICKUPTEST %s: taken x%d at t=%.2f, respawned after %.2f s (authored %.0f); health %d->%d reserve %d->%d overshield grants %d->%d",
-                 game::PickupFactory::className(f->kind()), taken, tTaken, tBack - tTaken, f->respawnTime(),
-                 healthBefore, (int)pawn.health().current, reserveBefore, pawn.weapon().reserve, osBefore, pawn.overShieldGrants());
-        // Standing on it with nothing to gain: not consumed again (ValidTouch [PROV]).
-        pawn.health().current = pawn.health().max;
-        pawn.weapon().reserve = pawn.weapon().reserveMax;
-        if (f->kind() != game::PickupFactory::Kind::OverShield) {
-            world_.tick(dt); t += dt; logEvents(t);
-            LOG_INFO("PICKUPTEST %s with nothing to gain: available=%d", game::PickupFactory::className(f->kind()), (int)f->available());
+        (void)stillOn;
+        LOG_INFO("PICKUPTEST %s: taken at %.2f, sleeping overlap ignored, respawn after %.2f s (authored %.0f); still standing on it at respawn -> %s",
+                 cls, tTaken, tBack - tTaken, f->respawnTime(), tRetake > 0 ? "RE-TAKEN (CheckTouching)" : "not re-taken (Touch = overlap begin)");
+        // Step off and back on: a fresh Touch.
+        if (f->available()) {
+            pawn.health().current = 30.0f; pawn.weapon().reserve = 10;
+            pawn.setPosition(f->position() + core::Vec3{0, 50.0f, 0}); world_.tick(dt); t += dt;
+            pawn.setPosition(f->position()); world_.tick(dt); t += dt;
+            LOG_INFO("PICKUPTEST %s: step off and back on -> available=%d", cls, (int)f->available());
         }
-        pawn.setPosition(pawn.position() + core::Vec3{0, 50.0f, 0});   // step off
-        world_.tick(dt); t += dt;
+        pawn.setPosition(f->position() + core::Vec3{0, 50.0f, 0}); world_.tick(dt); t += dt;
     }
     for (auto* dc : world_.destructibles()) {
         auto* d = const_cast<game::Destructible*>(dc);

@@ -33,9 +33,15 @@ struct PickupEvent {
     int factory = -1;          // index into World::pickupFactories()
     Kind kind = Kind::Health;
     Type type = Type::Taken;
-    bool available = false;    // PickupStatusChange bPickupAvailable after the transition
+    bool available = false;    // PickupStatusChange bPickupAvailable after the transition (= !bPickupHidden)
     core::Vec3 pos{0, 0, 0};
-    const char* pickupSound = nullptr;   // authored PickupSound of the inventory class (Taken only)
+    // Taken only: AnnouncePickup -> P.PlaySound(PickupSound) plays on the RECEIVING pawn, at receiverPos.
+    // Respawned carries no sound (RespawnEffect is empty, RespawnEffectTime 0) [CONF RE d50e2a9].
+    const char* pickupSound = nullptr;
+    core::Vec3 receiverPos{0, 0, 0};
+    // Visual state after the transition (SetPickupVisible / SetPickupHidden): mesh, CustomPickupEffect and,
+    // only where ShouldDisplayHighlightFx, the PickupEffect highlight beam.
+    bool meshVisible = false, customEffectActive = false, beamActive = false;
 };
 
 class PickupFactory : public Actor {
@@ -52,6 +58,14 @@ public:
     bool available() const { return available_; }
     float respawnRemaining() const { return respawnRemain_; }
     float respawnTime() const { return respawnTime_; }
+    // Visual state for Rendering/Systems (SetPickupVisible / SetPickupHidden) [CONF RE d50e2a9]:
+    bool meshVisible() const { return available_; }
+    // CustomPickupEffect (HealthPickup_FX / OvershieldPickup_FX): shown and active only while available.
+    bool customEffectActive() const { return available_ && kind_ != Kind::AmmoCrate; }
+    // PickupEffect (Pickup_FX) highlight beam: ActivateSystem in SetPickupVisible only when
+    // ShouldDisplayHighlightFx, which is true only for the ammo-crate (weapon) factory.
+    bool beamActive() const { return available_ && shouldDisplayHighlightFx(kind_); }
+    static bool shouldDisplayHighlightFx(Kind k) { return k == Kind::AmmoCrate; }
     // Authored inventory data.
     static const char* className(Kind k);
     static const char* pickupSound(Kind k);
@@ -66,7 +80,10 @@ private:
     int index_;
     bool available_ = true;
     float respawnRemain_ = 0.0f;
+    bool overlapping_ = false;      // the player pawn's cylinder overlapped last step (Touch = overlap begin)
+    bool overlaps(const Character& c) const;
     bool tryGive(Character& c);
+    void take(World& world, Character& c);
 };
 
 } // namespace game
