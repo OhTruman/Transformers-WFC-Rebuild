@@ -386,6 +386,23 @@ void World::setAudio(audio::IAudio* a) {
     // All audio = the original SoundCues (weapon, vehicle, robot movement, transformation, fine aim).
     cues_.load(a, base);
     ambient_.load(assetRoot() + "/Maps/MP_IAC_Streets/audio.json", base, cues_, a);
+    // Occlusion line check listener -> source against the world collision. Attached (player-owned)
+    // sounds are tested against the pawn's body (mesh origin + 1.5 m), not the socket tip, which can
+    // poke into walls (the arm / gun have no collision). The last 0.5 m at the source and 0.25 m at
+    // the listener are ignored so the floor under the feet or an emitter's mounting surface does
+    // not count as an occluder [MED].
+    cues_.setOcclusion([this](const core::Vec3& from, const core::Vec3& to, int owner) {
+        if (!collision_.valid()) return false;
+        const Character& pc = player_.pawn();
+        core::Vec3 src = owner >= 0 ? pc.position() + pc.meshOffset() + core::Vec3{0, 1.5f, 0}
+                                    : to + core::Vec3{0, 0.5f, 0};
+        core::Vec3 d = src - from;
+        float len = core::length(d);
+        if (len < 1.0f) return false;
+        core::Vec3 n = d * (1.0f / len);
+        float t;
+        return collision_.segmentHit(from + n * 0.25f, src - n * 0.5f, t);
+    });
     // Attached cues follow their owner every tick (see resolveCueOwner); world cues stay put.
     cues_.setResolver([this](int owner, const std::string& socket, const core::Vec3& off, core::Vec3& out) {
         return resolveCueOwner(owner, socket, off, out);
@@ -773,6 +790,7 @@ void World::tick(float dt) {
             cues_.play("SHOOT_TAIL", te, core::length(te.pos - pp));
         }
         sysprof::Scope sp(sysprof::Cues);
+        cues_.setListener(listenerPos_);
         ambient_.tick(dt, listenerPos_, player_.pawn().position(), cues_);
         static const bool ambLog = std::getenv("WFC_AMBLOG") != nullptr;
         static float ambT = 0.0f;
@@ -780,9 +798,9 @@ void World::tick(float dt) {
             ambT = 0.0f;
             audio::MixStats ms;
             bool have = audio_ && audio_->mixStats(ms);
-            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu pending=%zu voices=%d wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block levelfx=%zu",
+            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d pending=%zu voices=%d wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block levelfx=%zu",
                      ambient_.zoneName(), ambient_.activeEmitters(), ambient_.emitterCount(), ambient_.oneShotsPlayed(),
-                     cues_.liveInstances(), cues_.pendingEvents(), have ? ms.voices : -1, have ? ms.wetVoices : -1,
+                     cues_.liveInstances(), cues_.occludedInstances(), cues_.pendingEvents(), have ? ms.voices : -1, have ? ms.wetVoices : -1,
                      have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f,
                      levelFx_.liveParticles());
         }
@@ -838,6 +856,14 @@ void World::draw(render::IRenderer& r) const {
             core::Vec3 mn = collision_.boundsMin(), mx = collision_.boundsMax();
             wireBox((mn + mx) * 0.5f, (mx - mn) * 0.5f, {0.2f, 0.8f, 1.0f});
         }
+        // Live sound sources (human validation of attachment / occlusion): green = pawn-attached,
+        // yellow = weapon-attached, blue = world; red when occluded.
+        cues_.forEachInstance([&](const core::Vec3& p, int owner, float occl) {
+            core::Vec3 col = owner == kOwnPawn ? core::Vec3{0.2f, 1.0f, 0.3f}
+                           : owner == kOwnWeapon ? core::Vec3{1.0f, 0.9f, 0.2f} : core::Vec3{0.3f, 0.5f, 1.0f};
+            if (occl > 0.5f) col = {1.0f, 0.15f, 0.1f};
+            wireBox(p, {0.35f, 0.35f, 0.35f}, col);
+        });
         core::Vec3 pp = player_.pawn().position();
         core::Vec3 bs = player_.pawn().boxSize();
         wireBox(pp + core::Vec3{0, bs.y * 0.5f, 0}, bs * 0.5f, {0.3f, 1.0f, 0.4f});

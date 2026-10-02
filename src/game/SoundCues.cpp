@@ -18,6 +18,9 @@ constexpr float UU = 0.01f;
 constexpr float kInstanceTail = 10.0f;  // upper bound on a one-shot instance's life after its last event
 constexpr float kSpeedParamMax = 120.0f; // [CONF] SoundParameters.Optimus_Prime_Speed.Max
 constexpr float kSlipParamMax = 1.57f;   // [CONF] SoundParameters.Optimus_Prime_Tire_Squeal.Max
+constexpr float kOcclCheck = 0.25f;      // [CONF] Xe-TransEngine.ini AudioDevice OcclusionCheckInterval
+constexpr float kOcclDb = -6.0f;         // [CONF] Default__PhysicalMaterial AudioOcclusionVolume (61/63 materials)
+constexpr float kOcclTime = 0.5f;        // [CONF] Default__PhysicalMaterial AudioOcclusionTransitionTime
 
 float frand() { return (float)std::rand() / (float)RAND_MAX; }
 float randRange(float a, float b) { return a + (b - a) * frand(); }   // ranges may be authored inverted
@@ -117,6 +120,7 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
         d.pan2DUU = rp["SmartPanDistance2D"].asFloat(400.0f); d.pan3DUU = rp["SmartPanDistance3D"].asFloat(800.0f);
         d.rearAttenDb = rp["RearAttenuation"].asFloat(0.0f);
         d.category = rp["Category"].asString();
+        d.occlusion = rp["EnableOcclusionVolume"].asBool(true);
         d.param = Param::None;
         const assets::Json& kids = root["children"];
         for (size_t i = 0; i < kids.size(); ++i) {
@@ -201,6 +205,11 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     in.cue = c; in.id = nextId_++; in.age = 0.0f; in.distM = distM; in.param = param;
     in.owner = em.owner; in.offset = em.offset; in.socket = em.socket; in.pos = em.pos;
     resolve(in);
+    // A new instance starts with the current occlusion (no fade-in from clear).
+    if (cd.occlusion && occlusion_ && in.owner != kUI) {
+        in.occl = in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
+        in.occlCheck = kOcclCheck * (float)(in.id % 8) / 8.0f;
+    }
     for (const EventDef& e : cd.events) if (e.loop) in.looping = true;
     live_.push_back(in);
     int id = in.id;
@@ -223,8 +232,8 @@ void SoundCues::launch(Instance& in, int e) {
     ref.baseDb = cd.volDb + randRange(cd.volVarMin, cd.volVarMax) + ed.volDb + randRange(ed.volVarMin, ed.volVarMax);
     ref.baseSt = cd.pitchSt + randRange(cd.pitchVarMin, cd.pitchVarMax) + ed.pitchSt + randRange(ed.pitchVarMin, ed.pitchVarMax);
     float x = paramFor(in);
-    float gain = dbToGain(ref.baseDb) * ed.stereoGain * in.volume * evalCurve(ed.volCurve, x, 1.0f) *
-                 evalCurve(ed.envVol, in.age, 1.0f);
+    float gain = dbToGain(ref.baseDb) * ed.stereoGain * in.volume * dbToGain(kOcclDb * in.occl) *
+                 evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f);
     if (gain <= 0.0f && !ed.loop) return;          // silent one-shot layer (distance layering)
     audio::VoiceParams p;
     p.volume = gain;
@@ -242,8 +251,8 @@ void SoundCues::launch(Instance& in, int e) {
     if (ref.v != audio::kInvalidVoice) in.voices.push_back(ref);
     static const bool log = std::getenv("WFC_CUELOG") != nullptr;
     if (log)
-        LOG_INFO("CUE %s ev%d t=%.3f wave=%d gain=%.3f (%.1f dB, param %.2f) pitch=%.3f loop=%d voice=%d owner=%d pos=%.2f,%.2f,%.2f",
-                 cd.name.c_str(), e, in.age, s, p.volume, ref.baseDb, x, p.pitch, (int)ed.loop, ref.v, in.owner,
+        LOG_INFO("CUE %s ev%d t=%.3f wave=%d gain=%.3f (%.1f dB, param %.2f) pitch=%.3f loop=%d voice=%d owner=%d occl=%.2f pos=%.2f,%.2f,%.2f",
+                 cd.name.c_str(), e, in.age, s, p.volume, ref.baseDb, x, p.pitch, (int)ed.loop, ref.v, in.owner, in.occl,
                  in.pos.x, in.pos.y, in.pos.z);
 }
 
@@ -264,13 +273,14 @@ void SoundCues::refresh(Instance& in) {
     float fade = in.fade > 0.0f ? core::clampf(in.fadeLeft / in.fade, 0.0f, 1.0f) : 1.0f;
     const bool moved = resolve(in) || in.posDirty;
     in.posDirty = false;
+    const bool occlChanging = in.occl != in.occlTarget;
     for (const VoiceRef& r : in.voices) {
         const EventDef& ed = cd.events[(size_t)r.event];
-        if (!moved && ed.volCurve.empty() && ed.pitchCurve.empty() && ed.envVol.empty() && ed.envPitch.empty() &&
-            in.fade <= 0.0f && in.volume == 1.0f)
+        if (!moved && !occlChanging && in.occl == 0.0f && ed.volCurve.empty() && ed.pitchCurve.empty() &&
+            ed.envVol.empty() && ed.envPitch.empty() && in.fade <= 0.0f && in.volume == 1.0f)
             continue;                                // static world one-shot: nothing to update
-        float gain = dbToGain(r.baseDb) * ed.stereoGain * in.volume * evalCurve(ed.volCurve, x, 1.0f) *
-                     evalCurve(ed.envVol, in.age, 1.0f) * fade;
+        float gain = dbToGain(r.baseDb) * ed.stereoGain * in.volume * dbToGain(kOcclDb * in.occl) *
+                     evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f) * fade;
         float pitch = stToRate(r.baseSt + evalCurve(ed.pitchCurve, x, 0.0f) + evalCurve(ed.envPitch, in.age, 0.0f));
         audio_->updateVoice(r.v, gain, pitch, in.pos);
     }
@@ -281,6 +291,12 @@ void SoundCues::update(int id, const core::Vec3& pos, float param) {
     if (!in) return;
     if (in->owner == kWorld) { in->pos = pos; in->posDirty = true; }
     in->param = param;
+}
+
+int SoundCues::occludedInstances() const {
+    int n = 0;
+    for (const Instance& in : live_) if (in.occlTarget > 0.0f) ++n;
+    return n;
 }
 
 void SoundCues::setVolume(int id, float linear) {
@@ -337,6 +353,17 @@ void SoundCues::tick(float dt) {
             for (const VoiceRef& r : in.voices) audio_->stopVoice(r.v);
             live_[i] = live_.back(); live_.pop_back();
             continue;
+        }
+        // Occlusion: line check from the listener every OcclusionCheckInterval (staggered by instance
+        // id), then a linear fade over AudioOcclusionTransitionTime.
+        const CueDef& cd = cues_[(size_t)in.cue];
+        if (cd.occlusion && occlusion_ && in.owner != kUI) {
+            in.occlCheck -= dt;
+            if (in.occlCheck <= 0.0f) {
+                in.occlCheck = kOcclCheck;
+                in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
+            }
+            in.occl += core::clampf(in.occlTarget - in.occl, -dt / kOcclTime, dt / kOcclTime);
         }
         refresh(in);
         ++i;

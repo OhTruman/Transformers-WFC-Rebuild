@@ -45,6 +45,7 @@ struct CueDef {
     float pan2DUU, pan3DUU;              // SmartPanDistance2D / 3D (class default 400 / 800)
     float rearAttenDb;                   // RearAttenuation (sources behind the listener)
     std::string category;                // SoundMixerCategoryName (SFX_WET_* route through MASTER_WET)
+    bool occlusion;                      // EnableOcclusionVolume (class default true)
     Param param;                         // SoundNodeRoot.SoundParameter
     std::vector<EventDef> events;
 };
@@ -69,6 +70,18 @@ public:
     using Resolver = std::function<bool(int owner, const std::string& socket, const core::Vec3& offset,
                                         core::Vec3& outPos)>;
     void setResolver(Resolver r) { resolver_ = std::move(r); }
+    // Occlusion (UE3 AudioDevice bEnableOcclusion, OcclusionCheckInterval 0.25 s): `blocked(listener,
+    // source)` is a world line check; an occluded instance fades to the PhysicalMaterial
+    // AudioOcclusionVolume (-6 dB) over AudioOcclusionTransitionTime (0.5 s).
+    // `owner` lets the caller test an attached sound against its owner's body rather than a socket tip.
+    using OcclusionQuery = std::function<bool(const core::Vec3& from, const core::Vec3& to, int owner)>;
+    void setOcclusion(OcclusionQuery q) { occlusion_ = std::move(q); }
+    void setListener(const core::Vec3& p) { listener_ = p; }
+    int occludedInstances() const;
+    // Diagnostics: visit every live instance (resolved position, owner id, occlusion 0..1).
+    template <class F> void forEachInstance(F&& f) const {
+        for (const Instance& in : live_) f(in.pos, in.owner, in.occl);
+    }
 
     // Load every wave the built-in cue table references (ExtractedAssets/content/<pkg>/<wave>.wav).
     void load(audio::IAudio* a, const std::string& contentRoot);
@@ -103,6 +116,7 @@ private:
         int cue; int id; float age; core::Vec3 pos; float distM, param;
         int owner = kWorld; core::Vec3 offset{0, 0, 0}; std::string socket; bool posDirty = false;
         float volume = 1.0f;
+        float occl = 0.0f, occlTarget = 0.0f, occlCheck = 0.0f;   // 0 = clear .. 1 = fully occluded
         std::vector<VoiceRef> voices;
         float fade = -1.0f, fadeLeft = 0.0f;   // fade-out duration / remaining (fade < 0 = none)
         bool looping = false;
@@ -118,6 +132,8 @@ private:
 
     audio::IAudio* audio_ = nullptr;
     Resolver resolver_;
+    OcclusionQuery occlusion_;
+    core::Vec3 listener_{0, 0, 0};
     std::vector<cuedata::CueDef> cues_;
     std::vector<std::vector<std::vector<audio::Sound>>> waves_;   // [cue][event][wave]
     std::vector<Instance> live_;

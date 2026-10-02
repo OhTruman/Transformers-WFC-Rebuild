@@ -54,7 +54,7 @@ branch, same six scenarios; not committed):
   rear-only layers −3 dB [MED]).
 * **Data-loaded cues:** cues load from the generated table and from a map's `audio.json`.
 * **Not used by any slice cue (not implemented):** root DelayMin/Max, LoopStart/LoopEnd (2 map cues carry the
-  class-default LoopEnd), occlusion, Doppler, SecondaryCategory.
+  class-default LoopEnd), Doppler, SecondaryCategory. Occlusion: see "Occlusion" below.
 
 ### Attenuation / panning (audit)
 * **Source:** each instance's resolved 3D position (owner, socket or world).
@@ -102,6 +102,47 @@ branch, same six scenarios; not committed):
   * [PROV] voice budget: the 24 most audible play, the rest are virtual; 0.5 s fades in/out.
 * **Cost:** mixer 0.7 ms per 21 ms block (1.1–1.4 ms with ~70 voices), about 0.2 ms per frame.
 * **Diagnostic:** `WFC_AMBLOG=1` logs zone, emitters, voices, peak, gain reduction and mix cost.
+
+### Occlusion [CONF parameters, MED trace geometry]
+* **Parameters:**
+  * Engine: `AudioDevice.bEnableOcclusion = true`, `OcclusionCheckInterval = 0.25 s` (Xe-TransEngine.ini).
+  * Per cue: `SoundNodeRoot.EnableOcclusionVolume` defaults to true; only the BL_TRANSFORM cues author it off.
+  * Per surface: `PhysicalMaterial.AudioOcclusionVolume = -6 dB`, `AudioOcclusionTransitionTime = 0.5 s`. That
+    is the class default, used by 61 of 63 materials (one sets the same values explicitly, one 0 / 0);
+    `AudioOcclusionPitch` is unset → no pitch change.
+* **Implemented:**
+  * Every occluding instance re-checks a listener → source line against the collision mesh every 0.25 s
+    (staggered), and fades to -6 dB over 0.5 s.
+  * New instances start at the current state.
+  * The collision mesh carries no physical materials, so the default applies everywhere.
+* **[MED] trace geometry:**
+  * Attached (player-owned) sounds are tested against the pawn body (mesh origin + 1.5 m) rather than the
+    socket. The gun / arm have no collision and the muzzle can poke into walls: testing the socket occluded
+    26 % of shots while walking into walls, the body test 0.8 %.
+  * The last 0.5 m at the source and 0.25 m at the listener are ignored (floor under the feet, an emitter's
+    mounting surface).
+* **Effect:**
+  * Sustained fire standing: 2 of ~300 shots occluded; the weapon mix is unchanged in normal play.
+  * About a third of the map emitter / pool instances are occluded behind walls at the spawn.
+
+### Human-validation aid
+With the debug overlay (B or `WFC_DEBUGDRAW=1`), every live sound source draws as a wire cube: green = pawn-attached,
+yellow = weapon-attached, blue = world, red = occluded. `WFC_CUELOG` lines now carry the occlusion level.
+
+### Pickup / objective FX — not implemented (request)
+`map_fx.json` has 37 more authored particle components on pickup factories:
+* `Pickup_FX` ×27 on ammo, health, flag, bomb and overshield factories;
+* `HealthPickup_FX` ×9;
+* `OvershieldPickup_FX` ×1.
+
+They are not instantiated, because:
+* the factories themselves are not in the rebuild (Gameplay owns pickups: placement, availability, respawn);
+* their emitters with no material are mesh emitters whose TypeDataMesh / mesh is not in map_fx.json;
+* several of their vector distributions are ambiguous between size and scale.
+
+**AssetTools request:** TypeDataMesh (Mesh, bOverrideMaterial) and the per-emitter module class list, if any
+survives, for FX_Pickups_p.FX.{Pickup_FX, HealthPickup_FX, OvershieldPickup_FX}.
+**Gameplay request:** pickup factory actors from spawnpoints.json, with an availability flag the FX can follow.
 
 ### Robot movement / landing (pass-1 work kept; status)
 * The landing cue already follows the authored data: LandingAnims by fall height (and horizontal speed) →

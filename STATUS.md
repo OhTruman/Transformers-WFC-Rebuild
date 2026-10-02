@@ -17,6 +17,10 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
   tire-squeal parameter, UI owner.
 - **Level FX:** the 8 authored Steam_Sm_FX emitters.
 - **Tire squeal:** authored cue, curves and gating ready; plays only once Gameplay supplies `World::setTireSlipAngle`.
+- **Occlusion:** the original -6 dB / 0.5 s PhysicalMaterial occlusion, 0.25 s line checks; player-owned
+  sounds are tested against the pawn body.
+- **Validation aid:** debug overlay (B) draws every live sound source, coloured by owner, red when occluded.
+- **Not done:** pickup / objective FX (37 components); AssetTools + Gameplay request in FIDELITY.md.
 - **Validation:**
   - Perf: idle 6.5 ms; sustained fire 9.6–13.6 ms; mixer about 0.2 ms/frame.
   - Leak suite clean; wfc_fidelity 194/0/19; runtime probe 31/0/1.
