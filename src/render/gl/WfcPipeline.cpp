@@ -538,6 +538,14 @@ bool Pipeline::load(const std::string& mapName) {
         vertexLMs_[key] = std::move(v);
     }
 
+    const assets::Json& jf = L["component_flags"];
+    for (const auto& kv : jf.obj) {
+        std::string key = kv.first;
+        std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        if (kv.second["hidden"].asBool(false)) hiddenComponents_.insert(key);
+        if (kv.second["no_lights"].asBool(false)) noLightComponents_.insert(key);
+    }
+
     const assets::Json& jl = L["lights"];
     for (size_t i = 0; i < jl.size(); ++i) {
         const assets::Json& e = jl[i];
@@ -698,10 +706,24 @@ bool Pipeline::load(const std::string& mapName) {
     return true;
 }
 
+// First-use accounting (WFC_RENDERSTATS): resources created after the first frame are logged with
+// their cost, to find mid-game hitches (e.g. the first shot).
+struct FirstUseTimer {
+    const char* kind; std::string name; int frame;
+    std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+    ~FirstUseTimer() {
+        static const bool on = std::getenv("WFC_RENDERSTATS") != nullptr;
+        if (!on || frame <= 2) return;
+        double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        LOG_INFO("wfc first-use: frame %d %s %s %.2f ms", frame, kind, name.c_str(), ms);
+    }
+};
+
 GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool clampV) {
     std::string key = file + (srgb ? "|s" : "|l") + (clampU ? "c" : "w") + (clampV ? "c" : "w");
     auto it = texCache_.find(key);
     if (it != texCache_.end()) return it->second;
+    FirstUseTimer fu{"texture", file, frameNo_};
     ImageData img;
     GLuint id = 0;
     if (!file.empty() && platform::decodeImage(file, img) && img.valid()) {
@@ -864,6 +886,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
     }
     auto pit = progIndex_.find(key);
     if (pit != progIndex_.end()) return pit->second;
+    FirstUseTimer fu{"program", key, frameNo_};
 
     if (mit != mats_.end()) {
         const MatSrc& s = mit->second;
@@ -940,7 +963,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
 
 // ------------------------------------------------------------------------- light environment
 namespace {
-struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0; } gStats;
+struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0, dynBuildMs = 0, dynUploadMs = 0; } gStats;
 std::chrono::steady_clock::time_point gFrameStart;
 }
 
@@ -1084,6 +1107,7 @@ static void setupAttribs() {
 
 int Pipeline::upload(const MeshData& m) {
     if (!active_ || m.empty()) return -1;
+    FirstUseTimer fu{"mesh", std::to_string(m.vertexCount()) + " verts", frameNo_};
     GpuMesh g;
     std::vector<float> v;
     buildVertices(m, v);
@@ -1107,6 +1131,8 @@ int Pipeline::upload(const MeshData& m) {
         if (bspMesh_ >= 0 && s.component.rfind("bsp:", 0) == 0) { g.drawsBsp = true; continue; }
         std::string key = s.component;
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        if (hiddenComponents_.count(key) && !std::getenv("WFC_SHOWHIDDEN")) continue;   // authored bHidden
+        d.noLights = noLightComponents_.count(key) > 0;
         if (key.rfind("actor:", 0) == 0) {
             auto ac = actorComponent_.find(key.substr(6));
             if (ac != actorComponent_.end() && !ac->second.empty()) key = ac->second;
@@ -1161,6 +1187,7 @@ int Pipeline::upload(const MeshData& m) {
         if (matName.empty()) matName = resolveBySourceName(mat);
         d.prog = programFor(matName, mat, lm);
         d.matName = matName;
+        d.comp = s.component;
         if (d.prog >= 0) ++nProg;
         if (const char* dump = std::getenv("WFC_AUDIT_DUMP")) {   // ACTIVE side of tools/render/audit_map.py
             static FILE* f = std::fopen(dump, "w");
@@ -1252,7 +1279,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                 while (a <= list.size() && !hide) {
                     size_t b = list.find(';', a);
                     std::string tok = list.substr(a, b == std::string::npos ? std::string::npos : b - a);
-                    if (tok == "<none>" ? s.matName.empty() : (!tok.empty() && s.matName.find(tok) != std::string::npos))
+                    if (tok.rfind("comp:", 0) == 0) { if (s.comp.find(tok.substr(5)) != std::string::npos) hide = true; }
+                    else if (tok == "<none>" ? s.matName.empty() : (!tok.empty() && s.matName.find(tok) != std::string::npos))
                         hide = true;
                     if (b == std::string::npos) break;
                     a = b + 1;
@@ -1284,7 +1312,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                     if (set) Uniform4f(P.uRT[i], src[i][0], src[i][1], src[i][2], src[i][3]);
                 }
             }
-            if (P.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+            static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;   // diagnostics: winding check
+            if (P.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
             switch (P.blend) {
                 case 2: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE); break;
                 case 3: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE); glDepthMask(GL_FALSE); break;
@@ -1345,7 +1374,11 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                     }
                     env = &dynEnv;
                 } else {
-                    if (!s.envReady) { computeEnv((s.bmin + s.bmax) * 0.5f, false, s.env); s.envReady = true; }
+                    if (!s.envReady) {
+                        if (s.noLights) s.env = LightEnv{};    // no overlapping lighting channel: emissive only
+                        else computeEnv((s.bmin + s.bmax) * 0.5f, false, s.env);
+                        s.envReady = true;
+                    }
                     env = &s.env;
                 }
                 Uniform3fv(P.uAmb, 6, &env->cube[0].x);
@@ -1396,12 +1429,16 @@ void Pipeline::draw(int id, const core::Mat4& model) {
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     if (m.empty()) return;
     std::vector<float> v;
+    auto tb0 = std::chrono::steady_clock::now();
     buildVertices(m, v);
+    auto tb1 = std::chrono::steady_clock::now();
     BindVertexArray(dynVao_);
     BindBuffer(GL_ARRAY_BUFFER, dynVbo_);
     BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STREAM_DRAW);
     BindBuffer(GL_ELEMENT_ARRAY_BUFFER, dynIbo_);
     BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(m.indices.size() * 4), m.indices.data(), GL_STREAM_DRAW);
+    gStats.dynBuildMs += std::chrono::duration<double, std::milli>(tb1 - tb0).count();
+    gStats.dynUploadMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tb1).count();
     setupAttribs();
     BindVertexArray(0);
     GpuMesh g;
@@ -1608,6 +1645,19 @@ void Pipeline::ensureTargets(int w, int h) {
 
 void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     ++frameNo_;
+    if (frameNo_ == 2) {
+        // Prewarm: build every compiled original material not yet used (effect, weapon, character
+        // materials) and decode its textures now, as the original had them resident from the map's
+        // cooked packages before combat -- instead of on first draw (the first-shot hitch).
+        auto t0 = std::chrono::steady_clock::now();
+        int built = 0;
+        for (const auto& kv : mats_) {
+            if (progIndex_.count(kv.first + "|UBER") || progIndex_.count(kv.first + "|LM")) continue;
+            if (programFor(kv.first, nullptr, false) >= 0) ++built;
+        }
+        LOG_INFO("wfc: prewarmed %d material programs in %.0f ms", built,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+    }
     gFrameStart = std::chrono::steady_clock::now();
     static auto t0 = std::chrono::steady_clock::now();
     static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures
@@ -1637,16 +1687,29 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
 }
 
 void Pipeline::endFrame() {
-    gStats.renderMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gFrameStart).count();
+    double thisRenderMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gFrameStart).count();
+    gStats.renderMs += thisRenderMs;
+    if (std::getenv("WFC_RENDERSTATS")) {             // hitch attribution: whole frame vs render span
+        static auto lastEnd = std::chrono::steady_clock::now();
+        auto nowT = std::chrono::steady_clock::now();
+        double frameMs = std::chrono::duration<double, std::milli>(nowT - lastEnd).count();
+        lastEnd = nowT;
+        if (frameMs > 50.0 && frameNo_ > 3)
+            LOG_INFO("wfc spike: frame %d total %.1f ms, render span %.1f ms", frameNo_, frameMs, thisRenderMs);
+    }
     if (std::getenv("WFC_RENDERSTATS")) {          // CPU frame-to-frame time, logged every 120 frames
         auto g0 = std::chrono::steady_clock::now();   // diagnostics only: wait for the GPU on the scene
         glFinish();
-        gStats.gpuMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - g0).count();
+        double gms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - g0).count();
+        gStats.gpuMs += gms;
+        if (gms > 20.0 && frameNo_ > 3) LOG_INFO("wfc spike: frame %d gpu/driver wait %.1f ms", frameNo_, gms);
         static auto last = std::chrono::steady_clock::now();
         static int frames = 0; static double acc = 0;
         auto now = std::chrono::steady_clock::now();
         acc += std::chrono::duration<double, std::milli>(now - last).count(); last = now;
         if (++frames == 120) {
+            LOG_INFO("wfc: dynamic meshes: vertex build %.2f ms, upload %.2f ms per frame", gStats.dynBuildMs / 120.0,
+                     gStats.dynUploadMs / 120.0);
             LOG_INFO("wfc: avg frame %.2f ms (%.0f fps); scene submit %.2f ms, gpu wait %.2f ms; per frame: %.1f draws, "
                      "%.1f light envs (%.2f ms), %.1f visibility traces",
                      acc / frames, 1000.0 * frames / acc, gStats.renderMs / 120.0, gStats.gpuMs / 120.0, gStats.draws / 120.0, gStats.envCalls / 120.0, gStats.envMs / 120.0,

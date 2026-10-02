@@ -9,6 +9,7 @@
 //  * UE3 per-vertex height fog, linear-light HDR target, DisplayGamma 2.2 resolve.
 #pragma once
 #include <map>
+#include <set>
 #include <unordered_map>
 #include <string>
 #include <vector>
@@ -81,10 +82,12 @@ private:
         uint32_t first = 0, count = 0;
         int prog = -1;
         std::string matName;      // original material path (diagnostics)
+        std::string comp;         // source component (diagnostics: WFC_SKIPMAT "comp:<substring>")
         int lmTex[3] = {-1, -1, -1};
         float lmScale[3][3] = {};
         float lmCoord[4] = {1, 1, 0, 0};
         GLuint vlmTex = 0;        // vertex (LMT_1D) lightmap: RGB32F, width = vertices, rows = coefficients
+        bool noLights = false;    // authored: receives no light (bAcceptsLights false / no lighting channels)
         int vlmBase = 0;          // first vertex of the component in the VBO (gl_VertexID - base)
         core::Vec3 bmin, bmax;
         bool envReady = false;
@@ -146,6 +149,7 @@ private:
     std::map<std::string, std::string> actorComponent_;   // actor (lower) -> its only lightmapped component
     struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };
     std::map<std::string, VertexLM> vertexLMs_;          // component (lower) -> decoded samples
+    std::set<std::string> hiddenComponents_, noLightComponents_;   // authored render flags (lower-case keys)
     std::vector<Light> lights_;
     bool fogOn_ = false;
     float fogMaxH_ = 0, fogScale_ = 0, fogStart_ = 0, fogExt_ = 1e8f;

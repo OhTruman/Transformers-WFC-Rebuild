@@ -82,6 +82,29 @@ def lm_records(repo, pkg_index):
     return out, kinds
 
 
+def component_flags(mapname):
+    """Authored per-component render flags (AssetTools props_authored.json, effective values merged over the
+    archetype chain): hidden actors (bHidden, not drawn in game) and components that receive no light
+    (bAcceptsLights False or an empty LightingChannels set: UE3 lights only affect overlapping channels).
+    Keyed by component path and by 'actor:<Actor>' (world.glb tags actor-placed nodes that way)."""
+    p = os.path.join('F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps', mapname, 'props_authored.json')
+    if not os.path.exists(p):
+        return {}
+    out = {}
+    for pr in json.load(open(p))['props']:
+        r = pr.get('render') or {}
+        f = {}
+        if (pr.get('movement') or {}).get('bHidden'):
+            f['hidden'] = True
+        if r.get('bAcceptsLights') is False or pr.get('lighting_channels_on') == []:
+            f['no_lights'] = True
+        if f:
+            out[pr['component']] = f
+            if pr.get('container_class') != 'StaticMeshCollectionActor':
+                out['actor:' + pr['actor']] = f
+    return out
+
+
 def parse_lightmap_1d(nat):
     """FLightMap1D (StaticMeshComponent LODData[0].LightMap, LightMapType 1), big-endian ints at offset 1:
     [13] type=1, [17] LightGuids.Num, GUIDs, Owner(4), DirectionalSamples bulk data
@@ -258,8 +281,14 @@ def bsp_lighting(repo, out):
             nrm = M['vectors'][int(s['vNormal'])]
             gn = np.array([nrm[0], nrm[2], nrm[1]], 'f8'); gn /= (np.linalg.norm(gn) or 1)
             tris = [(0, j, j + 1) for j in range(1, k - 1)]
-            c = np.cross(gp[1] - gp[0], gp[2] - gp[0])
-            if np.dot(c, gn) < 0: tris = [(a, cc, b) for a, b, cc in tris]
+            # Winding from the whole polygon (Newell normal): BSP polygons often start with collinear
+            # vertices, where the first triangle's normal is degenerate and its sign arbitrary.
+            nw = np.zeros(3)
+            for i in range(k):
+                pa, pb = gp[i], gp[(i + 1) % k]
+                nw += np.array([(pa[1] - pb[1]) * (pa[2] + pb[2]), (pa[2] - pb[2]) * (pa[0] + pb[0]),
+                                (pa[0] - pb[0]) * (pa[1] + pb[1])])
+            if np.dot(nw, gn) < 0: tris = [(a, cc, b) for a, b, cc in tris]
             base = len(P)
             for j in range(k):
                 P.append(gp[j]); N.append(gn); UV.append(v['uv'][j]); SUV.append(v['suv'][j])
@@ -451,6 +480,7 @@ def main():
                        '(decoded from the original Xenon base-pass shader microcode).',
                'lightmap_type_counts': {k: v for k, v in kinds.items() if k != 'vertex_samples'},
                'vertex_lightmaps': kinds.get('vertex_samples', {}),
+               'component_flags': component_flags(mapname),
                'lightmaps': {'props': props, 'atlases': atl},
                'lights': L, 'fog': F, 'postprocess': PP},
               open(os.path.join(out, 'lighting.json'), 'w'), indent=0)
