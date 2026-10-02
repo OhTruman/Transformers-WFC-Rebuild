@@ -256,7 +256,8 @@ uniform vec4 uLSpot[3];  // x cos(outer), y 1/(cos(inner)-cos(outer)), w = visib
 // colour = ambient * (1 - DirectLightAmbientContribution * S) + direct * (1 - S) (+ other material terms).
 uniform sampler2D uShadowMask;
 uniform float uDSLS;     // DynamicShadowLuminanceScale (c6.x), shipped 0, CPU-clamped to [0,1]
-uniform vec3 uDLAC;      // DirectLightAmbientContribution (c38.rgb); CPU derivation UNKNOWN
+uniform vec3 uDLAC;      // DirectLightAmbientContribution (c38.rgb), per light environment (0x82CCE0A8)
+uniform vec2 uShadowMaskTexelOffset;   // ShadowMaskTexelOffset (0.5 / mask size) (0x82DDAEF0)
 void main() {
     mat3 tbn; MatIn m = wfcBuildInput(tbn);
     if (uDecalClip != 0 && (any(lessThan(vUV0, vec2(0.0))) || any(greaterThan(vUV0, vec2(1.0))))) discard;
@@ -270,7 +271,7 @@ void main() {
         vec3 n2 = Nw * Nw;
         vec3 amb = n2.x * (Nw.x >= 0.0 ? uAmb[0] : uAmb[1]) + n2.y * (Nw.y >= 0.0 ? uAmb[2] : uAmb[3])
                  + n2.z * (Nw.z >= 0.0 ? uAmb[4] : uAmb[5]);
-        float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport).x;
+        float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;
         float S = (1.0 - mask) * (1.0 - uDSLS);
         vec3 ambient = o.DiffuseColor * amb;
         vec3 direct = vec3(0.0);
@@ -1414,11 +1415,11 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform4f(GetUniformLocation(P.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
     {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
         static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
-        static const float dlac = std::getenv("WFC_DLAC") ? (float)std::atof(std::getenv("WFC_DLAC")) : 0.0f;
         Uniform1f(GetUniformLocation(P.id, "uDSLS"), dsls);
-        Uniform3f(GetUniformLocation(P.id, "uDLAC"), dlac, dlac, dlac);
+        Uniform3f(GetUniformLocation(P.id, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
         ActiveTexture(GL_TEXTURE0 + 10);
         glBindTexture(GL_TEXTURE_2D, shadowMaskTexFor(dynamicMaskDraw_));
+        Uniform2f(GetUniformLocation(P.id, "uShadowMaskTexelOffset"), maskTexelOffset_[0], maskTexelOffset_[1]);
     }
     Uniform2f(GetUniformLocation(P.id, "uNearFar"), znear_, zfar_);
     Uniform2f(GetUniformLocation(P.id, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
@@ -1597,6 +1598,9 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                 Uniform4fv(P.uLDir, 3, &env->dir[0][0]);
                 Uniform4fv(P.uLCol, 3, &env->col[0][0]);
                 Uniform4fv(P.uLSpot, 3, &env->spot[0][0]);
+                static const char* dlacOverride = std::getenv("WFC_DLAC");   // test override only
+                if (dlacOverride) { float v = (float)std::atof(dlacOverride); Uniform3f(GetUniformLocation(P.id, "uDLAC"), v, v, v); }
+                else Uniform3f(GetUniformLocation(P.id, "uDLAC"), env->dlac[0], env->dlac[1], env->dlac[2]);
             }
             glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
             ++gStats.draws;
@@ -1708,10 +1712,13 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
         g.subs.push_back(d);
     }
+    if (envSamples_ && !weapon) {                     // composite shadow into the ShadowMask (opt-in, see WfcShadows.cpp)
+        int li = shadowLightFor();
+        if (li >= 0) castCharacterShadow(g, model, li);
+    }
     dynamicMaskDraw_ = envSamples_ != nullptr;
     drawSubs(g, model, true);
     dynamicMaskDraw_ = false;
-    if (envSamples_ && !weapon) renderShadowDepth(g, model);
     envSamples_ = nullptr;
     envForm_ = -1;
 }
@@ -1771,20 +1778,43 @@ void Pipeline::writeFrameReport() {
                      st.fullUpdates, st.queuedFull, st.lastFullFrame, st.known.size(), st.directCount, st.crossfade,
                      st.shadowLight >= 0 ? lights_[(size_t)st.shadowLight].name.c_str() : "none", st.shadowStrength,
                      st.shadowCandidates);
+        std::fprintf(f, "  DirectLightAmbientContribution (%.4f %.4f %.4f), ShadowMask %s this frame\n", st.env.dlac[0],
+                     st.env.dlac[1], st.env.dlac[2], maskDrawnFrame_ == frameNo_ ? "projected" : "clear (1,1,1,1)");
         if (st.shadowTop >= 0)
-            std::fprintf(f, "  composite top %s: lum %.4f, smoothed vis %.3f, runner-up lum %.4f\n",
-                         lights_[(size_t)st.shadowTop].name.c_str(), st.shadowTopScore, st.shadowTopVis, st.shadowNextScore);
+            std::fprintf(f, "  composite top %s (%s): lum %.4f, smoothed vis %.3f, runner-up lum %.4f\n",
+                         lights_[(size_t)st.shadowTop].name.c_str(), lvv_.isBaked(st.shadowTop) ? "baked" : "unbaked",
+                         st.shadowTopScore, st.shadowTopVis, st.shadowNextScore);
+    }
+    if (const char* md = std::getenv("WFC_MASKDUMP")) {     // ShadowMask R channel as PGM (top row first)
+        if (maskDrawnFrame_ == frameNo_ && maskFbo_) {
+            std::vector<unsigned char> px((size_t)maskW_ * maskH_ * 4);
+            BindFramebuffer(GL_READ_FRAMEBUFFER, maskFbo_);
+            glReadPixels(0, 0, maskW_, maskH_, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+            BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+            if (FILE* pf = std::fopen(md, "wb")) {
+                std::fprintf(pf, "P5\n%d %d\n255\n", maskW_, maskH_);
+                for (int y = maskH_ - 1; y >= 0; --y)
+                    for (int x = 0; x < maskW_; ++x) std::fputc(px[((size_t)y * maskW_ + x) * 4], pf);
+                std::fclose(pf);
+            }
+        }
+        std::fprintf(f, "ShadowMask %dx%d, projected this frame: %s\n", maskW_, maskH_, maskDrawnFrame_ == frameNo_ ? "yes" : "no");
     }
     std::fprintf(f, "dynamic light environments (UberLight, TotalLightCount 2):\n");
     for (const std::string& e : frameEnvs_) std::fprintf(f, "  %s\n", e.c_str());
     std::fclose(f);
 }
 
-// ShadowMaskTexture for a draw. The production of the mask from the composite shadow is UNKNOWN (native
-// projection pass not recovered): the neutral 1x1 mask (1.0 = lit) is bound, which is exactly the
-// unshadowed original case. Test hook WFC_SHADOWMASKTEST=<v> binds a uniform mask value to character
-// draws to validate the DSLS / DirectLightAmbientContribution arithmetic.
+// ShadowMaskTexture for a draw: the frame's mask once a shadow was projected into it; otherwise the mask
+// is all (1,1,1,1) (cleared, nothing drawn, blur skipped - 0x82DEC190), represented by a neutral 1x1
+// texture. Test hook WFC_SHADOWMASKTEST=<v> binds a uniform mask value to character draws.
 GLuint Pipeline::shadowMaskTexFor(bool character) {
+    maskTexelOffset_[0] = maskTexelOffset_[1] = 0.0f;
+    if (character && maskDrawnFrame_ == frameNo_ && maskTex_) {
+        maskTexelOffset_[0] = 0.5f / (float)maskW_;
+        maskTexelOffset_[1] = 0.5f / (float)maskH_;
+        return maskTex_;
+    }
     auto make = [](float v) {
         GLuint t = 0;
         glGenTextures(1, &t);
@@ -2028,6 +2058,8 @@ void Pipeline::endFrame() {
             LOG_INFO("wfc: DirectLightEnv per frame: %.2f updates (%.4f ms), %.2f volume queries (%.4f ms), %.2f shadow rays",
                      statEnvCalls_ / 120.0, statUpdateMs_ / 120.0, statLvvQueries_ / 120.0, statLvvMs_ / 120.0,
                      statVisCalls_ / 120.0);
+            LOG_INFO("wfc: ShadowMask per frame: %.2f projections, %.2f gated", statShadowProj_ / 120.0, statShadowGated_ / 120.0);
+            statShadowProj_ = statShadowGated_ = 0;
             statEnvCalls_ = statVisCalls_ = statLvvQueries_ = 0; statLvvMs_ = 0.0; statUpdateMs_ = 0.0;
             LOG_INFO("wfc: avg frame %.2f ms (%.0f fps); scene submit %.2f ms, gpu wait %.2f ms; per frame: %.1f draws, "
                      "%.1f light envs (%.2f ms), %.1f visibility traces",
@@ -2036,7 +2068,7 @@ void Pipeline::endFrame() {
             frames = 0; acc = 0; gStats = RenderStats{};
         }
     }
-    applyShadows();
+    if (std::getenv("WFC_SHADOWSELFTEST") && frameNo_ == 3) runShadowMaskSelfTest();
     if (distUsed_) applyDistortion();
     if (std::getenv("WFC_FRAMEREPORT") && std::getenv("WFC_SMOKE_FRAMES") &&
         frameNo_ == (int)std::atol(std::getenv("WFC_SMOKE_FRAMES")))

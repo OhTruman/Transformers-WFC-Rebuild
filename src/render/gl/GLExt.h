@@ -51,6 +51,13 @@ typedef ptrdiff_t GLintptr;
 #define GL_TEXTURE_3D 0x806F
 #define GL_TEXTURE_WRAP_R 0x8072
 #define GL_DEPTH_COMPONENT 0x1902
+#define GL_DEPTH24_STENCIL8 0x88F0
+#define GL_DEPTH_STENCIL_ATTACHMENT 0x821A
+#define GL_INCR_WRAP 0x8507
+#define GL_DECR_WRAP 0x8508
+#ifndef GL_DEPTH_CLAMP
+#define GL_DEPTH_CLAMP 0x864F
+#endif
 
 namespace glx {
 
@@ -101,6 +108,8 @@ namespace glx {
     X(void, RenderbufferStorage, (GLenum, GLenum, GLsizei, GLsizei)) \
     X(void, FramebufferRenderbuffer, (GLenum, GLenum, GLenum, GLuint)) \
     X(void, VertexAttrib4f, (GLuint, GLfloat, GLfloat, GLfloat, GLfloat)) \
+    X(void, BlendFuncSeparate, (GLenum, GLenum, GLenum, GLenum)) \
+    X(void, StencilOpSeparate, (GLenum, GLenum, GLenum, GLenum)) \
     X(void, TexImage3D, (GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*))     X(void, BlitFramebuffer, (GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum))
 
 #define WFC_GL_DECL(ret, name, args) typedef ret(APIENTRY* PFN_##name) args; extern PFN_##name name;

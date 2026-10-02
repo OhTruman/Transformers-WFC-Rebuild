@@ -156,13 +156,16 @@ public:
             if (target != tw.to) { tw.from = tw.value(now); tw.to = target; tw.start = now; tw.dur = dur; }
             return tw.value(now);
         };
+        // the clip's first WeaponSpread is applied instantly, later changes ease (fineaim_hud.json, AssetTools 7a69756)
+        if (!prongSet_) { prongTween_.to = 300.0f * reticle_.weaponSpread; prongTween_.start = -1.0f; prongSet_ = true; }
         float off = tween(prongTween_, 300.0f * reticle_.weaponSpread, 0.2f);
         uint32_t rgb = reticle_.targetType == 0 ? 0x50B5D5u : reticle_.targetType == 1 ? 0xFF3333u : 0xFFFFFFu;
         float tint[3];
         for (int c = 0; c < 3; ++c) tint[c] = tween(tintTween_[c], (float)((rgb >> (16 - 8 * c)) & 0xFF) / 255.0f, 0.2f);
 
         float scale = std::min((float)vpW_ / 1120.0f, (float)vpH_ / 720.0f);
-        float cx = vpW_ * 0.5f, cy = vpH_ * 0.5f;
+        // midCenter_mc (560, 360) -> crosshair controller sprite 621 at (0.2, 0.2) -> crosshairAnchor_mc (0, 0)
+        float cx = vpW_ * 0.5f + 0.2f * scale, cy = vpH_ * 0.5f + 0.2f * scale;
         glViewport(0, 0, vpW_, vpH_);
         glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
         glOrtho(0, vpW_, vpH_, 0, -1, 1);                       // Flash stage axes: y down
@@ -657,6 +660,7 @@ private:
         }
     };
     Tween prongTween_, tintTween_[3] = {{1, 1}, {1, 1}, {1, 1}};
+    bool prongSet_ = false;
     wfc::Pipeline wfc_;
     std::vector<int> gpu_;
     std::vector<MeshData> meshes_;

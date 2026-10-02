@@ -43,7 +43,25 @@ struct Light {
     LightVisibilityVolume::Guid guid;
     float modShadowColor[4] = {0, 0, 0, 1};   // FLinearColor (ModShadowColor)
     float shadowFalloffExponent = 2.0f;
+    // Light render flags tested by FProjectedShadowInfo::RenderProjection (0x8304EF70): bit 0x4 and the
+    // depth-priority-group bit (bit 5 + DPG). Which lights carry them is UNKNOWN (source not traced): all
+    // lights are given both; WFC_LIGHTRENDERFLAGS=<hex> overrides for gate tests.
+    uint32_t renderFlags = 0x4u | 0x20u;
 };
+
+// Native shadow constants (ReverseEngineering 13c0953): GetShadowDepthResolution 0x830101E0 and the
+// BranchingPCF projection SetParameters 0x82CFB598. Shipped Xe-TransEngine.ini values.
+constexpr int kMaxShadowResolution = 1024;
+constexpr float kMaskedShadowsDepthBias = 0.2f;
+constexpr float kShadowFilterRadius = 6.0f;
+int shadowDepthResolution(int maxShadowResolution);                       // clamp(Max, 1, 2048)
+float shadowDepthBiasParabolic(int res, float maskedShadowsDepthBias, float shadowFilterRadius);
+bool shadowProjectionAllowed(uint32_t lightRenderFlags, int dpg);
+extern const float kEdgeSampleOffsets[8];       // 4 x float2 (0x83711DFC)
+extern const float kRefiningSampleOffsets[24];  // 12 x float2 (0x83711EC0)
+// DirectLightAmbientContribution (FDirectLightEnv::BuildSceneProxyData 0x82CCE0A8):
+// CubeSum(LightsSH) / (CubeSum(AmbientSH + LightsSH) + 0.001) per channel, w = 0.
+void directLightAmbientContribution(const core::Vec3 total[6], const core::Vec3 lights[6], float out[3]);
 
 // Lighting inputs of a dynamic (or unbuilt static) primitive, UE3 light-environment style.
 struct LightEnv {
@@ -51,6 +69,7 @@ struct LightEnv {
     int n = 0;
     float pos[3][4], dir[3][4], col[3][4], spot[3][4];
     int light[3] = {-1, -1, -1};  // index into lights_ (frame report)
+    float dlac[3] = {0, 0, 0};    // DirectLightAmbientContribution (DirectLightEnv only)
 };
 
 struct Program {
@@ -254,14 +273,25 @@ private:
     const char* mainOverride_ = nullptr;
     void applyDistortion();
     // Modulated projected shadows (WfcShadows.cpp): non-native stages from the cooked shaders.
-    struct ShadowRequest { int light = -1; GLuint tex = 0; int res = 0; core::Mat4 viewProj; float zRow[4] = {0, 0, 0, 0};
-                           float invMaxSubjectDepth = 1, depthBias = 0; float modColor[4] = {0, 0, 0, 1}; };
-    std::vector<ShadowRequest> shadowRequests_;
-    GLuint shadowFbo_ = 0, shadowProjProg_ = 0, randomAnglesTex_ = 0;
+    struct ShadowRequest { int light = -1; int res = 0; core::Mat4 viewProj; float zRow[4] = {0, 0, 0, 0};
+                           float invMaxSubjectDepth = 1, depthBias = 0; float modColor[4] = {1, 1, 1, 1}; };
+    GLuint shadowFbo_ = 0, shadowDepthTex_ = 0, shadowProjProg_ = 0, randomAnglesTex_ = 0;
+    GLuint maskDepthProg_ = 0, constProg_ = 0, volVao_ = 0, volVbo_ = 0;
+    GLuint maskFbo_ = 0, maskTex_ = 0, maskDepthRb_ = 0;
+    int maskW_ = 0, maskH_ = 0, maskForW_ = 0, maskForH_ = 0, maskClearedFrame_ = -1, maskDrawnFrame_ = -1;
+    float maskTexelOffset_[2] = {0, 0};
     int randomAnglesSize_ = 0;
+    int statShadowProj_ = 0, statShadowGated_ = 0;
     int shadowLightFor() const;
-    void renderShadowDepth(GpuMesh& g, const core::Mat4& model);
-    void applyShadows();
+    bool ensureShadowPrograms();
+    void ensureShadowMask();
+    void beginShadowMask();
+    void fillMaskDepth();
+    void drawShadowVolume(const core::Vec3 corners[8], const core::Mat4& vp, GLuint prog);
+    void castCharacterShadow(GpuMesh& g, const core::Mat4& model, int light);
+    bool renderShadowDepth(GpuMesh& g, const core::Mat4& model, int light, ShadowRequest& rq);
+    void depthPrepass(GpuMesh& g, const core::Mat4& model);
+    void runShadowMaskSelfTest();
     bool depthDirty_ = true;
     void ensureSceneDepth();
     float fxColor_[4] = {1, 1, 1, 1};

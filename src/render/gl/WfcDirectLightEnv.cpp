@@ -170,6 +170,8 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
     std::vector<Ranked> direct, overflow, shadow, shadowOverflow;
     LightEnv env;
     for (auto& c : env.cube) c = {0, 0, 0};
+    core::Vec3 lightsSH[6];               // LightsSH (+0x108): direct lights folded into the ambient cube
+    for (auto& c : lightsSH) c = {0, 0, 0};
     const core::Vec3 axes[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
     for (int li : st.known) {
         const Light& l = lights_[(size_t)li];
@@ -266,8 +268,11 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
         const Light& l = lights_[(size_t)r.light];
         core::Vec3 L = l.type == 2 ? core::normalize(l.dir) * -1.0f : core::normalize(l.pos - origin);
         float att = l.brightness > 0 ? intensityAt(l, origin) / l.brightness : 0.0f;
-        for (int fc = 0; fc < 6; ++fc)
-            env.cube[fc] = env.cube[fc] + l.color * (std::max(core::dot(L, axes[fc]), 0.0f) * att * r.vis * scale);
+        for (int fc = 0; fc < 6; ++fc) {
+            core::Vec3 add = l.color * (std::max(core::dot(L, axes[fc]), 0.0f) * att * r.vis * scale);
+            env.cube[fc] = env.cube[fc] + add;
+            lightsSH[fc] = lightsSH[fc] + add;
+        }
     };
     for (const Ranked& r : overflow) addLobe(r, 1.0f);
     env.n = 0;
@@ -285,6 +290,7 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
         env.col[k2][0] = l.color.x; env.col[k2][1] = l.color.y; env.col[k2][2] = l.color.z; env.col[k2][3] = l.falloff;
         env.spot[k2][0] = l.cosOuter; env.spot[k2][1] = l.invConeRange; env.spot[k2][2] = 0; env.spot[k2][3] = r.vis * scale;
     }
+    directLightAmbientContribution(env.cube, lightsSH, env.dlac);   // T = AmbientSH + LightsSH = env.cube
     st.env = env;
     st.crossfade = f;
     st.directCount = N;
@@ -303,6 +309,14 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
         st.shadowCandidates = (int)shadow.size() + (int)shadowOverflow.size();
     }
     statUpdateMs_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tUpd).count();
+}
+
+void directLightAmbientContribution(const core::Vec3 total[6], const core::Vec3 lights[6], float out[3]) {
+    core::Vec3 sl{0, 0, 0}, st{0, 0, 0};   // CubeSum (0x82CED980): per channel, sum of the 6 faces
+    for (int i = 0; i < 6; ++i) { sl = sl + lights[i]; st = st + total[i]; }
+    out[0] = sl.x / (st.x + 0.001f);
+    out[1] = sl.y / (st.y + 0.001f);
+    out[2] = sl.z / (st.z + 0.001f);
 }
 
 } // namespace wfc

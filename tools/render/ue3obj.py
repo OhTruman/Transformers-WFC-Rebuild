@@ -37,15 +37,19 @@ def struct_dict(v):
 
 
 class Repo:
-    def __init__(self, packages):
-        self.pkgs = [ue3pkg.Package(os.path.join(COOKED, p)) for p in packages]
+    def __init__(self, packages, fallback=()):
+        # fallback packages only supply objects absent from `packages`
+        self.pkgs = [ue3pkg.Package(os.path.join(COOKED, p)) for p in list(packages) + list(fallback)]
         self.readers = [propsmod.PropReader(p) for p in self.pkgs]
         self.index = {}
+        nprimary = len(packages)
         for k, p in enumerate(self.pkgs):
             for i in range(len(p.exports)):
                 path = p.object_path(i + 1).lower()
                 e = p.exports[i]
                 prev = self.index.get(path)
+                if k >= nprimary and prev is not None and prev[0] < nprimary:
+                    continue
                 # prefer the copy with the largest serialized body (full cooked copy)
                 if prev is None or e['serial_size'] > self.pkgs[prev[0]].exports[prev[1] - 1]['serial_size']:
                     self.index[path] = (k, i + 1)

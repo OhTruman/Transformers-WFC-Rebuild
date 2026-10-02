@@ -602,6 +602,12 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 03 PASS 4 (2026-10-02, agents/rendering)
+- Native ShadowMask (ReverseEngineering 13c0953): RGBA8 at scene/2 (SizeX > 960), cleared to 1, z-fail stencil frustum, multiplicative DestColor x Src (alpha untouched), read as .r + half texel by the character pass.
+- DirectLightAmbientContribution from the light environment (CubeSum ratio); BranchingPCF native tables; ShadowDepthBias 1165.08; projection gates (flag 0x4 + DPG bit).
+- WFC_SHADOWSELFTEST 18/18, WFC_DLETEST 20/20. Character projection still opt-in (WFC_CHARSHADOWS) — shadowFactor link, shadow matrix, blur kernel, creation gates UNKNOWN.
+- AssetTools 7a69756: Ion Blaster fine-aim HUD (no scope; instant first spread, fine-aim spread), pickup FX + wall-panel materials compiled (TransGame fallback package).
+
 ## RENDERING MILESTONE 03 PASS 3 (2026-10-02, agents/rendering)
 - Native LightsVisibilitiesVolume decoder + query (ReverseEngineering b52dca9); Streets blob validated, C++ == Python port.
 - Native DirectLightEnv for robot / vehicle (b52dca9 + c95dadd): gather, baked/unbaked visibility, ranking, composite shadow, update queue. WFC_DLETEST 20/20.

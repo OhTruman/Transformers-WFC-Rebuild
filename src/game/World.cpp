@@ -678,7 +678,12 @@ void World::draw(render::IRenderer& r) const {
     // HUD crosshair state (presentation only; drawn by the renderer from the original HUD movie).
     render::IRenderer::ReticleState reticle;
     reticle.visible = player_.pawn().hasWeapon();
-    reticle.weaponSpread = player_.pawn().weapon().spread;
+    // NotifyWeaponSpreadChanged: the same spread the shots use, so fine aim (Ion Blaster
+    // FineAimSpreadModifier 0.5) pulls the prongs inward; no scope / replacement reticle for the Ion
+    // Blaster (AssetTools 7a69756 fineaim_hud.json). How the native spread combines both modifiers is
+    // still native [HIGH].
+    reticle.weaponSpread = player_.pawn().weapon().spread *
+                           (player_.pawn().fineAiming() ? core::config::kFineAimSpreadMult : 1.0f);
     r.setReticle(reticle);
 
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.

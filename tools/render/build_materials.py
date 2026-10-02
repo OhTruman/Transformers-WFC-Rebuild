@@ -169,7 +169,9 @@ def main():
     out = sys.argv[2]
     extra = [a.strip() for a in sys.argv[3:] if a.strip()]   # tolerate CRLF list files
     os.makedirs(out, exist_ok=True)
-    repo = Repo(['%s_BASE_m.xxx' % mapname, '%s_ART_m.xxx' % mapname])
+    # TransGame.xxx (startup package) cooks the pickup FX and their materials (AssetTools 7a69756
+    # streets_pickup_fx.json: package TransGame); map copies win when both exist (largest export).
+    repo = Repo(['%s_BASE_m.xxx' % mapname, '%s_ART_m.xxx' % mapname], fallback=['TransGame.xxx'])
     j = glb_json(os.path.join(VS, 'Maps', mapname, 'world.glb'))
     names = {m.get('extras', {}).get('wfc_material') for m in j['materials']}
     for extra_glb in ('bsp.glb', 'decals.glb'):  # rebuilt by build_lighting.py (run it first)

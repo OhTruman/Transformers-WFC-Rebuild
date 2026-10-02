@@ -17,6 +17,36 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 PASS 4 — NATIVE CHARACTER SHADOW MASK, DLAC, BIAS / PCF (2026-10-02)
+Native provenance: RE-Workspace `notes/MILESTONE03_RENDERING_CHARACTER_SHADOW_PATH.md`, ReverseEngineering commit
+**13c0953** (supersedes the pass-3 UNKNOWN rows for the shadow-mask write path and the DLAC formula). Authored data:
+AssetTools commit **7a69756** (`manifests/fineaim_hud.json`, `streets_pickup_fx.json`, `streets_destructibles.json`).
+
+| Item | Original (WFC) | Source | Mark | Rebuild |
+|---|---|---|---|---|
+| ShadowMask target | A8R8G8B8 at the scene buffer size SizeX/f x SizeY/f, f = (SizeX > 960) ? 2 : 1 (640x360 at 720p) | 0x83037390, 0x8302AE28 (factor read from the image this pass) | **CONFIRMED ORIGINAL** | **APPLIED** (RGBA8 + D24S8 stencil buffer) |
+| Mask clear / convention | cleared once per build to (1,1,1,1); stores visibility (1 = lit) | 0x83010218 (`*0x8370AE88`) | **CONFIRMED ORIGINAL** | **APPLIED**; no projection -> mask stays 1 (neutral texture) |
+| Projection region | z-fail stencil volume of the 8 frustum corners (front zfail Inc, back zfail Dec, Always), then the box drawn where stencil != 0; stencil cleared after each light | 0x8304EF70 | **CONFIRMED ORIGINAL** | **APPLIED** (GL_INCR_WRAP / DECR_WRAP, depth clamp, back faces once per pixel) |
+| Mask combination | blend Src = DestColor, Dst = Zero (rgb), alpha Src = Zero, Dst = One: mask.rgb *= projection.rgb, alpha untouched; every shadow multiplies into one mask | 0x82CF8048 | **CONFIRMED ORIGINAL** | **APPLIED** (BlendFuncSeparate) |
+| Resolve / blur | resolve, then BlurShadowMask (horizontal, vertical) only if something was drawn | 0x82DEC190, 0x82DDB070 | placement **CONFIRMED ORIGINAL** / kernel **UNKNOWN** | resolve implicit; blur NOT run (no invented kernel) |
+| Character read | ShadowMaskTexture .r at screen UV + ShadowMaskTexelOffset (0.5 / mask size) | 0x82DDAEF0 + uber-shader microcode | **CONFIRMED ORIGINAL** | **APPLIED** (point sampled; GL pixel-centre screen UV) |
+| DirectLightAmbientContribution | rgb = CubeSum(LightsSH) / (CubeSum(AmbientSH + LightsSH) + 0.001), w = 0; LightsSH = overflow lights + (1 − f) of the crossfaded light; per environment, every update | 0x82CCE0A8, 0x82CED7F8, 0x82CED980, 0x82E2EDA8 | **CONFIRMED ORIGINAL** (copy to +0x1D0 HIGH) | **APPLIED** from the env's ambient cube (Streets: no SH probes; cube vs SH basis PARTIAL as before); measured 0 … 0.95 across spawns |
+| ShadowDepthBias | (Res · MaskedShadowsDepthBias / ShadowFilterRadius)² = (1024 · 0.2 / 6)² = 1165.08, parabolic; no slope-scaled / receiver bias; DepthBias (0) unused | 0x82CFB598 | **CONFIRMED ORIGINAL** (CPU) | **APPLIED** in the decoded projection bias term |
+| Shipped shadow constants | MaxShadowResolution 1024 (Res clamp [1, 2048]), MaskedShadowsDepthBias 0.2, ShadowFilterRadius 6, DepthBias 0, ShadowFilterQuality 0, bEnableBranchingPCFShadows True | Xe-TransEngine.ini, 0x830101E0 | **CONFIRMED ORIGINAL** | **APPLIED**; shadow buffer Res x Res, per-shadow viewport |
+| BranchingPCF | 4 edge taps rotated by RandomAngleTexture, then 12 refining taps when lit is fractional; offsets = native tables x 6 / Res | 0x83711DFC, 0x83711EC0, 0x82CF1A00 | **CONFIRMED ORIGINAL** | **APPLIED** (exact tables) |
+| Projection gates | light render flags bit 0x4 and the DPG bit (bit 5 + DPG) | 0x8304EF70 | **CONFIRMED ORIGINAL** (which lights set the bits UNKNOWN) | **APPLIED**; all lights carry both bits; WFC_LIGHTRENDERFLAGS test override |
+| Composite light eligibility | baked lights can be the composite light; robot and vehicle identical path | 13c0953 §4 | **CONFIRMED ORIGINAL** | baked PointLight_4177_LC selected at spawn 18 (robot, vehicle, transform, walk) |
+| shadowFactor -> projection strength | ShadowModulateColor = lerp(1, ModShadowColor, FadeAlpha) confirmed; the link from the composite record's shadowFactor to that light / FadeAlpha not proven | 0x82D077F8, §1.6 | **PARTIAL / UNKNOWN** | not wired; opt-in path uses the light's ModShadowColor, FadeAlpha 1 (WFC_SHADOWFADEALPHA) |
+| Projection shader bias / offset use | in-shader use of ShadowDepthBias / offsets (decoded here earlier from engine microcode; 13c0953 leaves it PARTIAL) | — | **PARTIAL** | decoded microcode form |
+| ScreenToShadowMatrix | VMX construction not decoded | 0x82CFB598 | **UNKNOWN** | inverse view-projection + subject-fit matrix [PROV] |
+| Projected-shadow creation gates | distance / resolution / cast-flag cuts not traced | — | **UNKNOWN** | none added |
+| Downsampled depth for the mask stencil | which depth the mask-sized stencil test uses | 0x83010218 binds SceneDepth | **PARTIAL** | point-sampled scene depth |
+| Normal-play status | — | — | — | character projection stays opt-in (WFC_CHARSHADOWS=1) until shadowFactor, the shadow matrix and creation gates are recovered; the default mask is the native "nothing drawn" (1,1,1,1) |
+| Ion Blaster fine-aim HUD | no scope / ADS overlay; mc_crosshairIonBlaster in both states; prongs move by spread x 300 stage px, 0.2 s easeout, first value instant; controller at (0.2, 0.2) px; FineAimSpreadModifier 0.5 | AssetTools 7a69756 fineaim_hud.json | CONFIRMED AUTHORED DATA (spread combination HIGH) | first value instant, +0.2 px anchor, HUD spread uses the fine-aim modifier |
+| Pickup FX materials | LightVolume_WepPickup_MAT, Glow_Mod_Depth_MAT, ParticleBase_BW_MAT, Basic_Particle_Add_MAT, EnergonCube_Circuits_MATINST, Overshield_MATINST, WEP_Crates_MAT (cooked in TransGame) | streets_pickup_fx.json | CONFIRMED AUTHORED DATA | compiled from TransGame.xxx (fallback package); all match their shipped permutations; emitters are Systems-owned |
+| Wall-panel destructible | TnStaticDestructibleActor_14465 at (896, 89968, −352), ~139k UU from the play space; WallPanelSign_MATINST / _EMISSOFF_MATINST states | streets_destructibles.json | CONFIRMED AUTHORED DATA | state materials compiled; actor not moved / not drawn (outside the playable area) |
+| TR_AllShader_p.Textures.bubbles | not cooked in the Streets packages; TransGame copy: Texture2D DXT1, SRGB False | TransGame.xxx | CONFIRMED | ENV_EngergonGlass_MAT_INST now uses the real flags (was defaulted SRGB True) |
+
 ## MILESTONE 03 PASS 3 — NATIVE LIGHT VISIBILITY, CHARACTER LIGHTING, SHADOW STRENGTH, COLOUR (2026-10-02)
 Native provenance: RE-Workspace `notes/MILESTONE03_RENDERING_LIGHTVIS_SHADOW.md`, ReverseEngineering commits
 **b52dca9** (LightsVisibilitiesVolume + DirectLightEnv), **c95dadd** (gather, spot intensity, update queue,
