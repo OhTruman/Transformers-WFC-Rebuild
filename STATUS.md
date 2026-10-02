@@ -3,6 +3,29 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 03 PASS 3 (2026-10-02) — script-confirmed vehicle audio, landing rules, audio thread
+- **Vehicle audio:** a port of the decompiled HmVehicleAudioComponent / HmPlayerVehicleAudioComponentImpl:
+  - wheels loop only if grounded at boost start; jump-rev after 0.25 s airborne; reverse load from back input;
+    0.1 s fade-ins; 15-sample speed;
+  - hover dash = BoosterSound (RAM_BOOST_START); ram impact attached;
+  - **ram alert removed** (no script plays it).
+- **Mixer presets:** VEHICLE_JUMP (engine −18 dB) and VEHICLE_BOOST_END (−4 dB).
+- **Landing:** fall height from where the descent begins and ForwardSpeed `|v · facing|`, per TnAcrobaticsManager.
+  The landing cue level is as authored; the earlier report came from the placeholder.
+- **Spatialization:** FmodAudioDevice PreferPlayer evidence (1400 UU, 0.5 s) recorded; the listener-based
+  default is kept as PROVISIONAL with `WFC_SMARTPAN_PREFERPLAYER` A/B; `WFC_SPATIALLOG` instrumentation;
+  `k2D` cues play 2D.
+- **Zone pools:** reference = listener (script).
+- **Ambient:** MaxConcurrentPlayCount 3 on flood lights and monorail.
+- **First-play audio:** game-thread stalls (17 / 170 ms) were waveOutWrite blocking; mixing and submission
+  now run on an audio thread.
+- **Validation:**
+  - perf: idle 6.1 ms; sustained-fire windows 7.7–13.6 ms; leak suite clean;
+  - wfc_fidelity 194/0/19; runtime probe 31/0/1; audio-attach 0 player-owned left behind.
+- **Handoffs:**
+  - Gameplay: CarSimulation.SlipAngle → `World::setTireSlipAngle`; landing-clip state; ram collision → notifyRamHit.
+  - Rendering: first-use program/texture prewarm (~520 ms first frame); per-shell light environments.
+
 ## SYSTEMS MILESTONE 03 PASS 2 (2026-10-02) — world sound bed, zone reverb, mixer, level FX
 - **Attachment:**
   - Reusable owner/socket model; all 20 of Experimental's player-owned "left behind" sounds are fixed

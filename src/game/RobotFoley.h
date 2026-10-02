@@ -14,9 +14,13 @@
 //   * TR_Acrobatics_p.SharedAcrobatics.LandingAnims (MinHeight / MinSpeed UU): {1200,1200} Nav_Land_03,
 //     {1000,1200} Nav_Land, {4500,0} Nav_Land_03, {500,0} Nav_Land_02, {250,0} Nav_Land.
 // [MED] AnimNodeSynch default bFireSlaveNotifies=false: only the Strafers master clip fires notifies.
-// [MED] kFootstep -> FS_DEFAULT_WALK (the walk clips carry it; CHR_OPTIMUS has no JOG entry).
-// [MED] LandingAnims are tested in array order (first match) on the fall height (apex -> landing) and
-//       the horizontal speed at touchdown; below 250 UU no landing anim plays, so no landing sound.
+// [CONF HmFootstepComponent script] FootstepType 0 (no Type: walk clips) -> FootstepWalk / DefaultWalkSound,
+//       4 -> Run, 1 Scuff, 3 Land, 10 HardLand; no speed-based choice. The surface's PhysicalMaterial
+//       HmPhysicalMaterialProperty.FootstepSounds override the defaults; none are recovered for Streets
+//       (AssetTools request), so the HM_Engine.Default__HmFootstepComponent defaults apply [HIGH].
+// [CONF TnAcrobaticsManager script] LandingAnims: first match in array order on FallDistance (height
+//       where the last fall began - ledge, or the jump apex - minus landing height) and ForwardSpeed
+//       |Velocity . facing|; below 250 UU (or landing higher) no landing anim, so no landing sound.
 // The sound always comes from the clip the ORIGINAL would play; Gameplay currently plays Nav_Land for
 // every landing (handoff: Nav_Land_02 / _03 per the same table).
 #pragma once
@@ -47,7 +51,8 @@ private:
 
     bool active_ = false;            // robot form, not transforming, last step
     bool grounded_ = true;
-    float apexY_ = 0.0f;
+    float apexY_ = 0.0f;             // _FallBaseHeight
+    float prevVy_ = 0.0f;
     std::string clip_;               // base clip last step
     float norm_ = 0.0f;              // locomotion: sync-group phase last step
     float time_ = 0.0f;              // other clips: clip time last step (s)

@@ -2,6 +2,7 @@
 #include "assets/Json.h"
 #include "core/Log.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -9,6 +10,10 @@
 namespace game {
 using namespace cuedata;
 namespace {
+
+using LARGE_INTEGER_T = long long;
+LARGE_INTEGER_T nowTicks() { return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+double ticksToMs(LARGE_INTEGER_T t) { return (double)t / 1e6; }
 
 const CueDef kCues[] = {
 #include "game/SoundCues.inc"
@@ -21,6 +26,24 @@ constexpr float kSlipParamMax = 1.57f;   // [CONF] SoundParameters.Optimus_Prime
 constexpr float kOcclCheck = 0.25f;      // [CONF] Xe-TransEngine.ini AudioDevice OcclusionCheckInterval
 constexpr float kOcclDb = -6.0f;         // [CONF] Default__PhysicalMaterial AudioOcclusionVolume (61/63 materials)
 constexpr float kOcclTime = 0.5f;        // [CONF] Default__PhysicalMaterial AudioOcclusionTransitionTime
+
+// [CONF] SoundConfig.SoundMixerProperties: the mixer presets slice cues play (PlayMixerPreset), their
+// MixerPresets entry (Priority, FadeInTime, Duration, FadeOutTime) and the categories whose DSPPreset of
+// that name differs from Default (Volume). Envelope [HIGH]: fade in to the preset volume over FadeInTime,
+// hold until Duration, fade back over FadeOutTime; the highest Priority active preset sets a category.
+struct MixerPreset { const char* name; float priority, fadeIn, duration, fadeOut; const char* category; float volume; };
+const MixerPreset kMixerPresets[] = {
+    {"VEHICLE_JUMP", 270.0f, 0.3f, 1.0f, 1.0f, "SFX_WET_VEH_ENGINE", 0.1258925f},       // -18 dB (DRIVE_JUMP_START)
+    {"VEHICLE_BOOST_END", 264.0f, 0.2f, 1.0f, 3.0f, "SFX_WET_VEH_ENGINE", 0.6309574f},  // -4 dB (BOOST_END)
+};
+constexpr int kPresetCount = (int)(sizeof(kMixerPresets) / sizeof(kMixerPresets[0]));
+
+float presetWeight(const MixerPreset& p, float t) {
+    if (t < p.fadeIn) return p.fadeIn > 0.0f ? t / p.fadeIn : 1.0f;
+    if (t < p.duration) return 1.0f;
+    float u = p.fadeOut > 0.0f ? (t - p.duration) / p.fadeOut : 1.0f;
+    return u >= 1.0f ? 0.0f : 1.0f - u;
+}
 
 float frand() { return (float)std::rand() / (float)RAND_MAX; }
 float randRange(float a, float b) { return a + (b - a) * frand(); }   // ranges may be authored inverted
@@ -120,7 +143,11 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
         d.pan2DUU = rp["SmartPanDistance2D"].asFloat(400.0f); d.pan3DUU = rp["SmartPanDistance3D"].asFloat(800.0f);
         d.rearAttenDb = rp["RearAttenuation"].asFloat(0.0f);
         d.category = rp["Category"].asString();
+        d.mixerPreset.clear();                                   // map bank cues author none
         d.occlusion = rp["EnableOcclusionVolume"].asBool(true);
+        const std::string sp = rp["SpatializationType"].asString();
+        d.spatial = sp == "k2D" ? Spatial::TwoD : sp == "kSmartPan" ? Spatial::SmartPan
+                  : sp == "kSmartPan_PreferPlayer" ? Spatial::SmartPanPreferPlayer : Spatial::Default;
         d.param = Param::None;
         const assets::Json& kids = root["children"];
         for (size_t i = 0; i < kids.size(); ++i) {
@@ -188,6 +215,9 @@ int SoundCues::play(const char* name, const core::Vec3& pos, float distM, float 
 
 int SoundCues::play(const char* name, const Emitter& em, float distM, float param) {
     if (!audio_) return -1;
+    static const bool timeLog = std::getenv("WFC_AUDIOTIME") != nullptr;
+    LARGE_INTEGER_T t0 = timeLog ? nowTicks() : 0;
+    struct Done { bool on; LARGE_INTEGER_T t0; const char* n; ~Done() { if (on) { double ms = ticksToMs(nowTicks() - t0); if (ms > 0.05) LOG_INFO("AUDIOTIME play %s %.3f ms", n, ms); } } } done{timeLog, t0, name};
     int c = findCue(name);
     if (c < 0) { LOG_WARN("sound cue %s not in table", name); return -1; }
     const CueDef& cd = cues_[(size_t)c];
@@ -201,12 +231,13 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
         }
         if (count >= cd.maxConcurrent && oldest >= 0) stop(live_[(size_t)oldest].id, 0.0f);
     }
+    if (!cd.mixerPreset.empty()) activatePreset(cd.mixerPreset);     // SoundNodeRoot.PlayMixerPreset
     Instance in;
     in.cue = c; in.id = nextId_++; in.age = 0.0f; in.distM = distM; in.param = param;
     in.owner = em.owner; in.offset = em.offset; in.socket = em.socket; in.pos = em.pos;
     resolve(in);
     // A new instance starts with the current occlusion (no fade-in from clear).
-    if (cd.occlusion && occlusion_ && in.owner != kUI) {
+    if (cd.occlusion && occlusion_ && in.owner != kUI && cd.spatial != Spatial::TwoD) {
         in.occl = in.occlTarget = occlusion_(listener_, in.pos, in.owner) ? 1.0f : 0.0f;
         in.occlCheck = kOcclCheck * (float)(in.id % 8) / 8.0f;
     }
@@ -232,13 +263,14 @@ void SoundCues::launch(Instance& in, int e) {
     ref.baseDb = cd.volDb + randRange(cd.volVarMin, cd.volVarMax) + ed.volDb + randRange(ed.volVarMin, ed.volVarMax);
     ref.baseSt = cd.pitchSt + randRange(cd.pitchVarMin, cd.pitchVarMax) + ed.pitchSt + randRange(ed.pitchVarMin, ed.pitchVarMax);
     float x = paramFor(in);
-    float gain = dbToGain(ref.baseDb) * ed.stereoGain * in.volume * dbToGain(kOcclDb * in.occl) *
+    float gain = dbToGain(ref.baseDb) * ed.stereoGain * gainOf(in) * dbToGain(kOcclDb * in.occl) *
                  evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f);
     if (gain <= 0.0f && !ed.loop) return;          // silent one-shot layer (distance layering)
     audio::VoiceParams p;
     p.volume = gain;
     p.pitch = stToRate(ref.baseSt + evalCurve(ed.pitchCurve, x, 0.0f) + evalCurve(ed.envPitch, in.age, 0.0f));
-    p.positional = in.owner != kUI;
+    p.positional = in.owner != kUI && cd.spatial != Spatial::TwoD;
+    p.preferPlayer = cd.spatial == Spatial::SmartPanPreferPlayer;
     p.pos = in.pos;
     p.minDist = cd.distMinUU * UU;
     p.maxDist = cd.distMaxUU * UU;
@@ -277,9 +309,9 @@ void SoundCues::refresh(Instance& in) {
     for (const VoiceRef& r : in.voices) {
         const EventDef& ed = cd.events[(size_t)r.event];
         if (!moved && !occlChanging && in.occl == 0.0f && ed.volCurve.empty() && ed.pitchCurve.empty() &&
-            ed.envVol.empty() && ed.envPitch.empty() && in.fade <= 0.0f && in.volume == 1.0f)
+            ed.envVol.empty() && ed.envPitch.empty() && in.fade <= 0.0f && gainOf(in) == 1.0f && presets_.empty())
             continue;                                // static world one-shot: nothing to update
-        float gain = dbToGain(r.baseDb) * ed.stereoGain * in.volume * dbToGain(kOcclDb * in.occl) *
+        float gain = dbToGain(r.baseDb) * ed.stereoGain * gainOf(in) * dbToGain(kOcclDb * in.occl) *
                      evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f) * fade;
         float pitch = stToRate(r.baseSt + evalCurve(ed.pitchCurve, x, 0.0f) + evalCurve(ed.envPitch, in.age, 0.0f));
         audio_->updateVoice(r.v, gain, pitch, in.pos);
@@ -293,10 +325,60 @@ void SoundCues::update(int id, const core::Vec3& pos, float param) {
     in->param = param;
 }
 
+void SoundCues::logSpatial(const char* tag, const core::Vec3& ownerPos, bool worldToo) const {
+    for (const Instance& in : live_) {
+        if (in.owner == kWorld && !worldToo) continue;
+        audio::VoiceInfo vi;
+        bool have = false;
+        for (const VoiceRef& r : in.voices) if (audio_ && audio_->voiceInfo(r.v, vi)) { have = true; break; }
+        LOG_INFO("SPATIAL %s cue=%s owner=%d socket=%s src=%.2f,%.2f,%.2f ownerPos=%.2f,%.2f,%.2f src-owner=%.2fm "
+                 "listener=%.2f,%.2f,%.2f dist=%.2fm pan=%+.2f atten=%.3f occl=%.2f gL=%.3f gR=%.3f%s",
+                 tag, cues_[(size_t)in.cue].name.c_str(), in.owner, in.socket.empty() ? "-" : in.socket.c_str(),
+                 in.pos.x, in.pos.y, in.pos.z, ownerPos.x, ownerPos.y, ownerPos.z, core::length(in.pos - ownerPos),
+                 listener_.x, listener_.y, listener_.z, have ? vi.dist : core::length(in.pos - listener_),
+                 have ? vi.pan : 0.0f, have ? vi.atten : 1.0f, in.occl, have ? vi.gainL : 0.0f, have ? vi.gainR : 0.0f,
+                 have ? "" : " (no live voice)");
+    }
+}
+
 int SoundCues::occludedInstances() const {
     int n = 0;
     for (const Instance& in : live_) if (in.occlTarget > 0.0f) ++n;
     return n;
+}
+
+void SoundCues::activatePreset(const std::string& name) {
+    for (int i = 0; i < kPresetCount; ++i) {
+        if (name != kMixerPresets[i].name) continue;
+        for (ActivePreset& a : presets_) if (a.preset == i) { a.t = 0.0f; return; }   // re-trigger restarts it
+        presets_.push_back({i, 0.0f});
+        static const bool log = std::getenv("WFC_CUELOG") != nullptr;
+        if (log) LOG_INFO("MIXER preset %s on %s -> %.3f", kMixerPresets[i].name, kMixerPresets[i].category, kMixerPresets[i].volume);
+        return;
+    }
+}
+
+float SoundCues::categoryGain(const std::string& category) const {
+    const MixerPreset* best = nullptr;
+    float w = 0.0f;
+    for (const ActivePreset& a : presets_) {
+        const MixerPreset& p = kMixerPresets[a.preset];
+        if (category != p.category || (best && best->priority >= p.priority)) continue;
+        best = &p; w = presetWeight(p, a.t);
+    }
+    return best ? 1.0f + (best->volume - 1.0f) * w : 1.0f;
+}
+
+float SoundCues::level(const Instance& in) {
+    float f = in.fadeInLen > 0.0f ? core::clampf(in.age / in.fadeInLen, 0.0f, 1.0f) : 1.0f;
+    return in.volume * f;
+}
+
+void SoundCues::fadeIn(int id, float seconds) {
+    Instance* in = find(id);
+    if (!in) return;
+    in->fadeInLen = seconds + in->age;     // ramp from the instance start
+    refresh(*in);
 }
 
 void SoundCues::setVolume(int id, float linear) {
@@ -320,6 +402,11 @@ void SoundCues::stop(int id, float fade) {
 
 void SoundCues::tick(float dt) {
     if (!audio_) return;
+    for (size_t i = 0; i < presets_.size();) {
+        const MixerPreset& p = kMixerPresets[presets_[i].preset];
+        presets_[i].t += dt;
+        if (presets_[i].t > p.duration + p.fadeOut) { presets_[i] = presets_.back(); presets_.pop_back(); } else ++i;
+    }
     for (Instance& in : live_) in.age += dt;
     for (size_t i = 0; i < pending_.size();) {
         Pending& p = pending_[i];
@@ -357,7 +444,7 @@ void SoundCues::tick(float dt) {
         // Occlusion: line check from the listener every OcclusionCheckInterval (staggered by instance
         // id), then a linear fade over AudioOcclusionTransitionTime.
         const CueDef& cd = cues_[(size_t)in.cue];
-        if (cd.occlusion && occlusion_ && in.owner != kUI) {
+        if (cd.occlusion && occlusion_ && in.owner != kUI && cd.spatial != Spatial::TwoD) {
             in.occlCheck -= dt;
             if (in.occlCheck <= 0.0f) {
                 in.occlCheck = kOcclCheck;

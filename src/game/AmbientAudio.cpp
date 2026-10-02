@@ -67,6 +67,10 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
     assets::Json root;
     if (!assets::Json::parse(ss.str(), root)) { LOG_WARN("ambient: bad json %s", path.c_str()); return false; }
     int nc = cues.addCues(root["cues"], contentRoot);
+    // [CONF] SoundCue.MaxConcurrentPlayCount of the map bank (MP_IAC_Streets_AUDIO_m; not in audio.json,
+    // read from the cooked cues): the only two non-zero entries.
+    cues.setMaxConcurrent("BL_LVL_MP_IAC_STREETS.EMIT_FLOOD_LIGHTS", 3);
+    cues.setMaxConcurrent("BL_LVL_MP_IAC_STREETS.EMIT_MONRAIL_IDLE_LP", 3);
 
     // Emitters.
     const char* kinds[3] = {"point", "volume", "line"};
@@ -191,9 +195,13 @@ void AmbientAudio::tick(float dt, const core::Vec3& listener, const core::Vec3& 
             poolTimers_[i] -= dt;
             if (poolTimers_[i] > 0.0f) continue;
             const Pool& p = z.pools[i];
-            float ang = frand() * 6.2831853f;                 // [MED] horizontal random bearing
+            // [CONF SeqAct_PlayPlayerPositionalSound.CalculatePosition] random yaw 0..359 deg, distance
+            // RandRange(DistanceMin, DistanceMax) in the horizontal plane, around GetReferencePoint(): the
+            // "Source Actor" variable, else AudioDevice Listeners[0].Location. The recovered pools link no
+            // Source Actor [HIGH], so the reference is the listener. World-fixed (bUseLocation, not attached).
+            float ang = frand() * (359.0f / 360.0f) * 6.2831853f;
             float d = p.distMinM + frand() * (p.distMaxM - p.distMinM);
-            core::Vec3 at = pawn + core::Vec3{std::cos(ang) * d, 0.0f, std::sin(ang) * d};
+            core::Vec3 at = listener + core::Vec3{std::cos(ang) * d, 0.0f, std::sin(ang) * d};
             cues.play(p.cue.c_str(), at, core::length(at - listener));
             ++oneShots_;
             poolTimers_[i] = p.looping ? p.delayMin + frand() * (p.delayMax - p.delayMin) : 1e30f;
@@ -211,7 +219,20 @@ void AmbientAudio::tick(float dt, const core::Vec3& listener, const core::Vec3& 
         if (db > kAudibleDb) rank.push_back({db, i});
     }
     std::sort(rank.begin(), rank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-    for (size_t r = 0; r < rank.size() && (int)r < kMaxActive; ++r) emitters_[(size_t)rank[r].second].want = true;
+    // Most audible first, at most MaxConcurrentPlayCount instances per cue (the cue's own limit), within
+    // the voice budget.
+    std::vector<std::pair<std::string, int>> perCue;
+    int taken = 0;
+    for (size_t r = 0; r < rank.size() && taken < kMaxActive; ++r) {
+        Emitter& e = emitters_[(size_t)rank[r].second];
+        const cuedata::CueDef* cd = cues.cueDef(e.cue.c_str());
+        int* count = nullptr;
+        for (auto& pc : perCue) if (pc.first == e.cue) count = &pc.second;
+        if (!count) { perCue.push_back({e.cue, 0}); count = &perCue.back().second; }
+        if (cd && cd->maxConcurrent > 0 && *count >= cd->maxConcurrent) continue;
+        ++*count; ++taken;
+        e.want = true;
+    }
 
     active_ = 0;
     for (Emitter& e : emitters_) {

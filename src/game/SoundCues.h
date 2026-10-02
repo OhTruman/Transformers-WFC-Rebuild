@@ -26,6 +26,9 @@ namespace game {
 namespace cuedata {
 struct CurvePt { float x, y; };
 enum class Param { None, Distance, Speed, TireSqueal };
+// SoundNodeRoot.SpatializationType. Default = not authored: the class default enum value is UNKNOWN
+// (5258 of 8794 cooked roots author none); treated as SmartPan here [PROVISIONAL].
+enum class Spatial { Default, TwoD, SmartPan, SmartPanPreferPlayer };
 struct EventDef {
     float time, volDb, volVarMin, volVarMax, pitchSt, pitchVarMin, pitchVarMax;
     int chanceNone;                      // ChanceToPlayNone (percent)
@@ -45,7 +48,9 @@ struct CueDef {
     float pan2DUU, pan3DUU;              // SmartPanDistance2D / 3D (class default 400 / 800)
     float rearAttenDb;                   // RearAttenuation (sources behind the listener)
     std::string category;                // SoundMixerCategoryName (SFX_WET_* route through MASTER_WET)
+    std::string mixerPreset;             // PlayMixerPreset (SoundMixerPresetName), "" = none
     bool occlusion;                      // EnableOcclusionVolume (class default true)
+    Spatial spatial;                     // k2D plays non-positional [CONF]
     Param param;                         // SoundNodeRoot.SoundParameter
     std::vector<EventDef> events;
 };
@@ -82,6 +87,9 @@ public:
     template <class F> void forEachInstance(F&& f) const {
         for (const Instance& in : live_) f(in.pos, in.owner, in.occl);
     }
+    // Diagnostics: one line per live attached (or all, `worldToo`) instance: cue, owner/socket,
+    // source, listener, distance, pan, attenuation, occlusion, first voice's channel gains.
+    void logSpatial(const char* tag, const core::Vec3& ownerPos, bool worldToo) const;
 
     // Load every wave the built-in cue table references (ExtractedAssets/content/<pkg>/<wave>.wav).
     void load(audio::IAudio* a, const std::string& contentRoot);
@@ -89,6 +97,7 @@ public:
     int addCues(const assets::Json& cues, const std::string& contentRoot);
     bool hasCue(const char* name) const { return findCue(name) >= 0; }
     const cuedata::CueDef* cueDef(const char* name) const;
+    void setMaxConcurrent(const char* name, int n) { int c = findCue(name); if (c >= 0) cues_[(size_t)c].maxConcurrent = n; }
 
     // Play a cue; returns an instance id (-1 on failure). `distM` drives SOUND_DISTANCE curves (for
     // the local player's own sounds, kSmartPan_PreferPlayer, the distance from the player); `param`
@@ -98,6 +107,7 @@ public:
     // Live parameters for a playing (e.g. looping) instance; `pos` is ignored for attached instances.
     void update(int instance, const core::Vec3& pos, float param);
     void setVolume(int instance, float linear);      // AudioComponent VolumeMultiplier / fades
+    void fadeIn(int instance, float seconds);        // AudioComponent.FadeIn(FadeInDuration, 1.0)
     // Stop an instance, fading its voices out over `fade` seconds (0 = immediate).
     void stop(int instance, float fade);
     bool playing(int instance) const;
@@ -117,6 +127,7 @@ private:
         int owner = kWorld; core::Vec3 offset{0, 0, 0}; std::string socket; bool posDirty = false;
         float volume = 1.0f;
         float occl = 0.0f, occlTarget = 0.0f, occlCheck = 0.0f;   // 0 = clear .. 1 = fully occluded
+        float fadeInLen = 0.0f;                                   // FadeIn ramp over the instance age
         std::vector<VoiceRef> voices;
         float fade = -1.0f, fadeLeft = 0.0f;   // fade-out duration / remaining (fade < 0 = none)
         bool looping = false;
@@ -127,7 +138,14 @@ private:
     void launch(Instance& in, int event);
     void refresh(Instance& in);
     bool resolve(Instance& in);
+    static float level(const Instance& in);
     float paramFor(const Instance& in) const;
+    // Mixer presets (SoundMixerProperties.MixerPresets + per-category DSPPreset volume) activated by cues.
+    struct ActivePreset { int preset; float t; };
+    std::vector<ActivePreset> presets_;
+    void activatePreset(const std::string& name);
+    float categoryGain(const std::string& category) const;
+    float gainOf(const Instance& in) const { return level(in) * categoryGain(cues_[(size_t)in.cue].category); }
     Instance* find(int id);
 
     audio::IAudio* audio_ = nullptr;

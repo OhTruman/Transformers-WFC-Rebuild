@@ -24,6 +24,7 @@ struct VoiceParams {
     bool loop = false;                 // wave loops until stopVoice
     float rearAttenDb = 0.0f;          // SoundNodeRoot.RearAttenuation: extra dB for sources behind the listener
     bool wet = true;                   // routed through the MASTER_WET bus (environment reverb / echo)
+    bool preferPlayer = false;         // SpatializationType kSmartPan_PreferPlayer
 };
 
 // MASTER_WET environment (SoundMixerProperties DSP preset of a Kismet SeqAct_Reverb zone): FMOD Ex SFX
@@ -38,9 +39,13 @@ struct Environment {
     float echoDelayMs = 500.0f, echoDecay = 0.5f, echoWet = 0.0f, echoDry = 1.0f;
 };
 
+// Read-back of one voice as last mixed (diagnostics): pan -1..1 after SmartPan, distance gain, channel gains.
+struct VoiceInfo { float dist = 0.0f, pan = 0.0f, atten = 1.0f, gainL = 0.0f, gainR = 0.0f; };
+
 // Read-back of the mixer (diagnostics).
 struct MixStats { float peakDb = -96.0f; float gainReductionDb = 0.0f; int voices = 0; int wetVoices = 0;
-                  float mixMsPerBlock = 0.0f; };   // CPU cost of one 1024-frame block (~21 ms of audio)
+                  float mixMsPerBlock = 0.0f;      // CPU cost of one 1024-frame block (~21 ms of audio)
+                  float lastUpdateMs = 0.0f, lastMixMs = 0.0f; int lastUpdateBlocks = 0; int maxUpdateBlocks = 0; };
 
 class IAudio {
 public:
@@ -70,6 +75,10 @@ public:
     // Master category DSP: compressor (dB threshold, ms attack/release, dB make-up).
     virtual void setMasterCompressor(float /*thresholdDb*/, float /*attackMs*/, float /*releaseMs*/, float /*makeupDb*/) {}
     virtual bool mixStats(MixStats&) const { return false; }
+    virtual bool voiceInfo(Voice, VoiceInfo&) const { return false; }
+    // Local player position for kSmartPan_PreferPlayer voices (FmodAudioDevice MaxPlayerSmartPanRadius /
+    // SmartPanPreferPlayerTransitionTime). The PreferPlayer model is only applied when enabled.
+    virtual void setSmartPanPlayer(const core::Vec3& /*pos*/, bool /*valid*/, bool /*enablePreferPlayer*/) {}
 
     // Listener (camera) pose, set once per frame before update().
     virtual void setListener(const core::Vec3& pos, const core::Vec3& forward,

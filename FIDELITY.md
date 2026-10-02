@@ -17,6 +17,176 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 SYSTEMS PASS 3 — SCRIPT-CONFIRMED VEHICLE AUDIO, LANDING RULES, SPATIALIZATION EVIDENCE, AUDIO THREAD (2026-10-02, agents/systems)
+
+New evidence used (read-only):
+* the RE lane's decompiled UnrealScript (`RE-Workspace/work/script/decomp`): HmVehicleAudioComponent,
+  HmPlayerVehicleAudioComponentImpl, TnCarForm, TnTruckForm, TnAcrobaticsManager, HmFootstepComponent,
+  HmPawn, SeqAct_PlayPlayerPositionalSound;
+* its notes (`TARGETED_PASS2`);
+* `Xe-TransEngine.ini [HM_Engine.FmodAudioDevice]`;
+* cooked SoundMixerProperties and MP_IAC_Streets_AUDIO_m.
+
+Classification: **CONF** = confirmed original, **HIGH** = high confidence, **PROV** = provisional, **UNK** = unknown.
+
+### Vehicle audio — now a port of the original script (`VehicleAudio`)
+| Behaviour | Original | Class |
+|---|---|---|
+| Boost start | `PlayBoostSound`: BoostSound (BOOST_START) as a looping component, FadeIn 0.1; **wheels loop only if `_IsOnGround`**, same fade | CONF |
+| Boost wheels | stopped (fade 0.15) once `BoostWheelsTimer >= 0.27` and not on ground | CONF |
+| Boost end | `StopBoostSound`: fade both 0.15, play BoostStopSound (BOOST_END) | CONF |
+| Engine states | Boosting > JumpReving (airborne >= JumpRevTime 0.25) > Forward/Reverse On/OffLoad from MovementDirection (speed > 1 mph, `Velocity . Rotation >= 0`) and `_EngineLoadState` | CONF |
+| Engine load | Hovering.UpdateSounds: 1 if stick forward > 0.01, 2 if back < -0.01, else 0 | CONF |
+| Engine fades | EngineFadeIn 0.1 / FadeOut 0.2, BoostFadeIn 0.1 / FadeOut 0.15; loops faded in (new `SoundCues::fadeIn`) | CONF |
+| Speed parameter | 15-sample moving average of `|Velocity| x 0.0223694` mph | CONF |
+| Land | on touchdown, the highest TimeInAirThreshold (0.15 / 2.0) reached; Boosting -> wheels table, else hover | CONF |
+| Hover dash | `TnTruckForm.Hovering.DoDash` -> `PlayBoosterSound` = VEH_OPTIMUS_RAM_BOOST_START (was unassigned) | CONF |
+| Nitro | `StartNitro` -> `PlayNitroSound` only | CONF |
+| Ram alert | no script calls `PlayCustomLoopingSound` -> **removed** (was played at nitro start) | CONF (absent from script) |
+| Ram impact | `ClientPlayRammingSound` -> `PlayRamSound` on the truck: **owner-attached** (was world at the hit point) | CONF path / HIGH attach |
+| Jump | `PlayAscendSound` on Hovering/Driving jumps | CONF |
+| Tire squeal | `_IsOnGround && avg mph >= 20` with `_WheelSlipRatio`: Hovering feeds 0, Driving feeds `CarSimulation.SlipAngle` (Gameplay). Not gated on boost | CONF; driving input pending Gameplay |
+| One-shot events | `HmPawn.PlaySoundEvent` -> `PlaySound(cue, bNotReplicated, , bStopWhenOwnerDestroyed=true)` without SoundLocation | CONF script / HIGH attach |
+
+### Mixer presets (PlayMixerPreset) — new
+`DRIVE_JUMP_START` → **VEHICLE_JUMP**: SFX_WET_VEH_ENGINE ×0.126 (−18 dB), fade in 0.3, duration 1.0, fade out 1.0, priority 270.
+`BOOST_END` → **VEHICLE_BOOST_END**: ×0.631 (−4 dB), 0.2 / 1.0 / 3.0, priority 264.
+Values CONF; envelope and priority resolution HIGH. Verified: boost end triggers the duck.
+
+### Robot landing / footsteps
+* **[CONF] Landing selection** (TnAcrobaticsManager):
+  * `FallDistance = _FallBaseHeight - Height`, where `_FallBaseHeight` is set by `Falling.BeginState` (the
+    ledge, or the jump apex: Jumping → FallingFromJump on descent) and on ground.
+  * `ForwardSpeed = |Velocity . Rotation|`.
+  * First `LandingAnims` match in array order; none while transforming / meleeing.
+  * Implemented exactly (the speed was previously horizontal magnitude).
+  * Standing and running jumps fall 514 UU → Nav_Land_02 → FS_LAND_HARD.
+* **[CONF] Footsteps** (HmFootstepComponent):
+  * FootstepType 0 → Walk, 4 → Run, 1 Scuff, 3 Land, 10 HardLand; no speed-based choice.
+  * The surface PhysicalMaterial's HmPhysicalMaterialProperty.FootstepSounds override the defaults.
+  * None are in authored.db (0 objects), so the component defaults apply [HIGH] (AssetTools request).
+* **Landing loudness, proved from data:**
+  * The milestone-02 "soft/squishy" landing was the wrong cue (`RELOAD_AIR_RELEASE_THUMP` placeholder,
+    Experimental's spy log).
+  * The authored FS_LAND_HARD is −5 dB root (main layer), servo −4 (var −3) and groan −4 (var −6), category
+    SFX_WET_NAV (1.0), DistanceMin 15 m. Ion Blaster SHOOT is −9 dB root × its distance curve, same
+    category gain. A hard landing is therefore authored ~4–6 dB above a single shot.
+  * No class or attenuation error was found. Levels unchanged.
+
+### Player-owned spatialization (PRIORITY 1)
+* **Evidence:**
+  * 32 of the slice's 41 table cues are `kSmartPan_PreferPlayer`; 9 author none (class default enum UNK).
+  * `[HM_Engine.FmodAudioDevice] SmartPanPreferPlayerTransitionTime=0.5, MaxPlayerSmartPanRadius=1400.0`
+    (also `MaxChannels=96`, `OcclusionCheckInterval=0.25`).
+  * The names indicate PreferPlayer SmartPan is measured from the local player while the player is within
+    14 m of the listener, which would centre the player's own sounds. The native code is not decoded.
+* **Default kept: listener (camera) reference — PROV.**
+  * `WFC_SMARTPAN_PREFERPLAYER=1` enables the player-referenced model (ramp 0.5 s, 1400 UU radius) for A/B.
+    Verified: footsteps pan −0.29 → 0.00, weapon −0.13 → −0.06.
+* **`k2D` cues play non-positional and unoccluded [CONF]:** only `PP_OPEN_ROOMS` (AUTO_ROOM_02 pool).
+* **Instrumentation** `WFC_SPATIALLOG=1` (every 0.25 s per attached instance): cue, owner/socket, source,
+  owner position, source–owner distance, listener, distance, pan, attenuation, occlusion, channel gains —
+  read back from the mixer.
+* **Measured** (walk, transform, jump, boost, fire):
+  * Sources stay 0–0.3 m from the pawn origin; the weapon sits 2.7–3.9 m out (the muzzle/hand socket);
+    vehicle cues sit at AUDIO_ROOT 1.5 m.
+  * Camera listener 5–10 m away; own sounds pan −0.29 (Optimus left of centre), vehicle 0.00 (inside its
+    2–10 m SmartPan band).
+  * Footstep / transform / vehicle distance gain 1.0; weapon idle notifies 0.43 (DistanceMin 4 m).
+
+### Streets environment
+* **[CONF] Structure:** no ReverbVolume / AudioVolume actors in Streets; the environment is 9
+  SeqAct_AmbientAudioZone + 9 SeqAct_Reverb on 10 TriggerVolumes.
+* **[CONF] Zone pools** (SeqAct_PlayPlayerPositionalSound script):
+  * first delay `Rand(DelayMin, DelayMax)` on START, re-rolled per play, STOP ends scheduling;
+  * position: random yaw 0–359°, `Rand(DistanceMin, DistanceMax)` in the horizontal plane, world-fixed
+    component;
+  * reference = "Source Actor" variable, else `AudioDevice.Listeners[0].Location`. No variable is linked
+    [HIGH], so the reference is now the **listener** (was the pawn).
+* **PROV:** the reverb DSP topology is still my reconstruction from authored I3DL2/Echo parameters; FMOD Ex's
+  SFX reverb implementation is not recoverable from local data (ReVa request). Fade and wet/dry routing per
+  category are CONF.
+
+### Ambient emitters
+* **[CONF]** 40 AmbientSound AudioComponents: bAutoPlay, VolumeMultiplier 1, PitchMultiplier 1,
+  bAllowSpatialization, bUseOwnerLocation.
+* **[CONF] Concurrency:** MaxConcurrentPlayCount 3 on EMIT_FLOOD_LIGHTS (5 emitters) and EMIT_MONRAIL_IDLE_LP
+  (from the cooked cues; audio.json lacks it). The virtualizer keeps the 3 most audible.
+* **PROV:**
+  * shaped-emitter placement (GetLinePoints / GetExtents are native);
+  * the 24-voice budget and 0.5 s fades;
+  * always-on activation of the 30 shaped emitters (no component data).
+
+### SoundCue nodes (PRIORITY 4)
+* **[CONF] Nodes in use:** the slice cues use only SoundNodeRoot (41) → SoundNodeWaveEvent (134) →
+  SoundNodeWaveEx (262); Streets uses the same three classes.
+* **No other node types exist in the slice:** random, mixer, modulator, concatenator, delay, attenuation and
+  distance-crossfade nodes are absent. Their roles are fields of these classes and are implemented:
+  * random variant choice and ChanceToPlayNone;
+  * volume/pitch variation;
+  * event `Time` delays;
+  * bLooping;
+  * distance attenuation and SmartPan;
+  * VolumeCurve over SOUND_DISTANCE (distance crossfade);
+  * Envelope.
+* **Authored but not modelled:**
+  * LoopStart/LoopEnd (8/11 vehicle roots, semantics native: UNK, ReVa);
+  * SmartPanAttenuation3D (19), EnableDoppler (15), Priority / OverridePriority / PlayWhenSilent;
+  * NonLocalPlayerPitch (remote players only);
+  * SecondaryCategory (all None in the slice).
+
+### First-play audio cost (PRIORITY 5)
+* **Measured:** cue `play()` 0.05–0.2 ms, wave decode at load only, mixing 0.7–1.4 ms per 21 ms block.
+* **The cost was `waveOutWrite` blocking inside the driver on the game thread:** 17–19 ms at device start,
+  and **~170 ms** when the 4-block queue had drained during load (driver restart).
+* **Fixed:** mixing and submission run on a dedicated audio thread (2 ms pump; game-thread calls take a short
+  mutex; `waveOutWrite` outside the lock; wave storage made reference-stable).
+* **Game thread now:** no audio stall. The remaining first-frame hitch (~520 ms at tick 4) is Rendering's
+  first-use shader/texture builds.
+* **Prewarm:** the original loads the level's banks with the map, which is equivalent to our load-time decode;
+  no extra preloading.
+
+### Occlusion validation (PRIORITY 6)
+* **Rays:** 76–192 occlusion rays/s (4/s per live instance at the authored 0.25 s); Systems cue section
+  0.05–0.17 ms/frame.
+* **Player-owned:** body-referenced, 2 of ~300 standing shots and 0.8 % while walking into walls muffled.
+* **Map emitters:** about half the live instances are occluded at the indoor spawn.
+
+### Cleanup (PRIORITY 8)
+* **Suite:** idle, burst, sustained fire (full magazines + reloads), boost/nitro/transform back, transform
+  cycling, fire+move+turn.
+* **Results:**
+  * queued events return to 0;
+  * weapon particles / meshes → 0;
+  * vehicle parts → 0 after leaving the vehicle;
+  * cue instances settle at the ~25 ambient loops;
+  * level FX steady at ~30 particles.
+* No caps added.
+
+### Performance
+* Idle 6.1 ms (audio off the game thread).
+* Sustained-fire windows 7.7–13.6 ms.
+* Boost / nitro / back 5.2–8.4 ms; transform cycling 5.0–5.9 ms.
+* ~900 RPM unchanged.
+* wfc_fidelity 194/0/19; runtime probe 31/0/1; collision 0 mismatches.
+* Experimental audio-attach (local spy build): 0 player-owned left behind; 11 KNOWN = world pools/impacts.
+
+### Requests
+* **ReVa:**
+  1. `FmodAudioDevice` SmartPan PreferPlayer code (the reference point and radius use).
+  2. SoundNodeRoot LoopStart/LoopEnd playback (is a looping component looped over that region?).
+  3. `HmAmbientSoundLineEmitter.GetLinePoints` / `HmAmbientSoundVolumeEmitter.GetExtents` and emitter
+     activation.
+  4. FMOD SFX reverb / DSPEffectConfig bit map.
+  5. MaxConcurrentPlayCount resolution (steal vs reject).
+  6. SpatializationType enum order (class default).
+* **AssetTools:**
+  1. Streets PhysicalMaterial → HmPhysicalMaterialProperty.FootstepSounds.
+  2. Cue-level MaxConcurrentPlayCount in audio.json.
+  3. (standing) pickup FX mesh data.
+
+---
+
 ## MILESTONE 03 SYSTEMS PASS 2 — WORLD SOUND BED, ZONE REVERB, MIXER, LEVEL FX, ATTACHMENT AUDIT (2026-10-02, agents/systems)
 
 ### Attached-audio model (reusable; nothing hard-coded per cue)

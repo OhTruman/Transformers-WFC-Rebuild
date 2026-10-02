@@ -10,12 +10,16 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
+#include <deque>
 #include <map>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace audio {
@@ -243,7 +247,9 @@ struct Voice {
     float pan2D = 0.0f, pan3D = 0.0f;
     float rearAttenDb = 0.0f;
     bool wet = false;             // MASTER_WET bus (environment) vs dry
+    bool preferPlayer = false;    // kSmartPan_PreferPlayer
     float gL = 1.0f, gR = 1.0f;   // per-block resolved channel gains
+    float dDist = 0.0f, dPan = 0.0f, dAtten = 1.0f;   // diagnostics of the last resolve
     bool active = false;
     bool loop = false;
     int gen = 0;
@@ -274,16 +280,27 @@ public:
         }
         env_.init();
         ok_ = true;
+        // Mixing and waveOut submission run on their own thread: waveOutWrite can block inside the driver
+        // (measured 17 ms at device start and ~170 ms when the queue drained during a load), which must not
+        // stall the game thread. Game-thread calls only take mx_ briefly.
+        run_ = true;
+        thread_ = std::thread([this] {
+            while (run_) { pump(); Sleep(2); }
+        });
         return true;
     }
 
     // A wave referenced by several cues / events is decoded once.
     Sound load(const std::string& path) override {
-        auto it = loaded_.find(path);
-        if (it != loaded_.end()) return it->second;
-        std::vector<int16_t> pcm;
+        {
+            std::lock_guard<std::mutex> lk(mx_);
+            auto it = loaded_.find(path);
+            if (it != loaded_.end()) return it->second;
+        }
+        std::vector<int16_t> pcm;                      // decode outside the lock
         if (!loadWav(path, pcm)) return kInvalidSound;
-        sounds_.push_back(std::move(pcm));
+        std::lock_guard<std::mutex> lk(mx_);
+        sounds_.push_back(std::move(pcm));             // deque: existing voices' data pointers stay valid
         loaded_[path] = (Sound)(sounds_.size() - 1);
         return (Sound)(sounds_.size() - 1);
     }
@@ -308,69 +325,83 @@ public:
     }
 
     void play(Sound s, float volume) override {
+        std::lock_guard<std::mutex> lk(mx_);
         int i; Voice* v = start(s, i);
         if (v) v->vol = volume;
     }
 
     void playAt(Sound s, const core::Vec3& pos, float volume, float refDist, float maxDist) override {
+        std::lock_guard<std::mutex> lk(mx_);
         int i; Voice* v = start(s, i);
         if (!v) return;
         v->vol = volume; v->positional = true; v->wpos = pos; v->refDist = refDist; v->maxDist = maxDist;
     }
 
     audio::Voice playVoice(Sound s, const VoiceParams& p) override {
+        std::lock_guard<std::mutex> lk(mx_);
         int i; Voice* v = start(s, i);
         if (!v) return kInvalidVoice;
         v->vol = p.volume; v->rate = p.pitch > 0.05f ? p.pitch : 0.05f;
         v->positional = p.positional; v->inverse = true; v->wpos = p.pos;
         v->refDist = p.minDist; v->maxDist = p.maxDist; v->rolloff = p.rolloff;
         v->pan2D = p.pan2D; v->pan3D = p.pan3D;
-        v->rearAttenDb = p.rearAttenDb; v->wet = p.wet;
+        v->rearAttenDb = p.rearAttenDb; v->wet = p.wet; v->preferPlayer = p.preferPlayer;
         v->loop = p.loop;
         return i | (v->gen << 12);
     }
 
     void updateVoice(audio::Voice h, float volume, float pitch, const core::Vec3& pos) override {
         if (h < 0) return;
+        std::lock_guard<std::mutex> lk(mx_);
         int i = h & 0xFFF, gen = h >> 12;
         if ((size_t)i >= voices_.size() || voices_[(size_t)i].gen != gen || !voices_[(size_t)i].active) return;
         Voice& v = voices_[(size_t)i];
         v.vol = volume; v.rate = pitch > 0.05f ? pitch : 0.05f; v.wpos = pos;
     }
 
-    void setEnvironment(const Environment& e, float fade) override { env_.set(e, fade); }
-    void setMasterCompressor(float t, float a, float r, float m) override { comp_.set(t, a, r, m); }
-    bool mixStats(MixStats& s) const override { s = stats_; return ok_; }
+    void setEnvironment(const Environment& e, float fade) override { std::lock_guard<std::mutex> lk(mx_); env_.set(e, fade); }
+    void setSmartPanPlayer(const core::Vec3& pos, bool valid, bool enable) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        ppos_ = pos; pvalid_ = valid; ppEnabled_ = enable;
+    }
+    void setMasterCompressor(float t, float a, float r, float m) override { std::lock_guard<std::mutex> lk(mx_); comp_.set(t, a, r, m); }
+    bool mixStats(MixStats& s) const override { std::lock_guard<std::mutex> lk(mx_); s = stats_; return ok_; }
 
     bool reportsVoices() const override { return ok_; }
+    bool voiceInfo(audio::Voice h, VoiceInfo& o) const override {
+        if (h < 0) return false;
+        std::lock_guard<std::mutex> lk(mx_);
+        int i = h & 0xFFF, gen = h >> 12;
+        if ((size_t)i >= voices_.size() || voices_[(size_t)i].gen != gen || !voices_[(size_t)i].active) return false;
+        const Voice& v = voices_[(size_t)i];
+        o.dist = v.dDist; o.pan = v.dPan; o.atten = v.dAtten; o.gainL = v.gL; o.gainR = v.gR;
+        return true;
+    }
     bool isPlaying(audio::Voice h) const override {
         if (h < 0) return false;
+        std::lock_guard<std::mutex> lk(mx_);
         int i = h & 0xFFF, gen = h >> 12;
         return (size_t)i < voices_.size() && voices_[(size_t)i].gen == gen && voices_[(size_t)i].active;
     }
 
     void stopVoice(audio::Voice h) override {
         if (h < 0) return;
+        std::lock_guard<std::mutex> lk(mx_);
         int i = h & 0xFFF, gen = h >> 12;
         if ((size_t)i < voices_.size() && voices_[(size_t)i].gen == gen) voices_[(size_t)i].active = false;
     }
 
     void setListener(const core::Vec3& pos, const core::Vec3& fwd, const core::Vec3& right) override {
+        std::lock_guard<std::mutex> lk(mx_);
         lpos_ = pos; lfwd_ = fwd; lright_ = right;
     }
 
-    void update() override {
-        if (!ok_) return;
-        for (int b = 0; b < kNumBlocks; ++b) {
-            if (!(hdr_[b].dwFlags & WHDR_DONE)) continue;
-            mixBlock(blocks_[b]);
-            hdr_[b].dwFlags &= ~WHDR_DONE;
-            hdr_[b].dwBufferLength = kBlockSamples * sizeof(int16_t);
-            waveOutWrite(wo_, &hdr_[b], sizeof(WAVEHDR));
-        }
-    }
+    // The audio thread does the work; the game thread's per-frame pump has nothing to do.
+    void update() override {}
 
     ~Win32Audio() override {
+        run_ = false;
+        if (thread_.joinable()) thread_.join();
         if (ok_) {
             waveOutReset(wo_);
             for (int b = 0; b < kNumBlocks; ++b) waveOutUnprepareHeader(wo_, &hdr_[b], sizeof(WAVEHDR));
@@ -379,6 +410,34 @@ public:
     }
 
 private:
+    // Audio thread: mix every free block (under mx_) and queue it (outside mx_; waveOutWrite may block).
+    void pump() {
+        LARGE_INTEGER t0, t1, fq;
+        QueryPerformanceCounter(&t0);
+        int mixed = 0;
+        long long mixTicks = 0;
+        for (int b = 0; b < kNumBlocks; ++b) {
+            if (!(hdr_[b].dwFlags & WHDR_DONE)) continue;
+            ++mixed;
+            {
+                std::lock_guard<std::mutex> lk(mx_);
+                LARGE_INTEGER m0, m1; QueryPerformanceCounter(&m0);
+                mixBlock(blocks_[b]);
+                QueryPerformanceCounter(&m1); mixTicks += m1.QuadPart - m0.QuadPart;
+            }
+            hdr_[b].dwFlags &= ~WHDR_DONE;
+            hdr_[b].dwBufferLength = kBlockSamples * sizeof(int16_t);
+            waveOutWrite(wo_, &hdr_[b], sizeof(WAVEHDR));
+        }
+        if (!mixed) return;
+        QueryPerformanceCounter(&t1); QueryPerformanceFrequency(&fq);
+        std::lock_guard<std::mutex> lk(mx_);
+        stats_.lastUpdateMs = (float)(1000.0 * (double)(t1.QuadPart - t0.QuadPart) / (double)fq.QuadPart);
+        stats_.lastUpdateBlocks = mixed;
+        stats_.lastMixMs = (float)(1000.0 * (double)mixTicks / (double)fq.QuadPart);
+        stats_.maxUpdateBlocks = std::max(stats_.maxUpdateBlocks, mixed);
+    }
+
     void resolveGains(Voice& v) {
         float g = v.vol * master_;
         if (!v.positional) { v.gL = v.gR = g; return; }
@@ -401,8 +460,15 @@ private:
         }
         float pan = 0.0f;
         if (dist > 1e-3f) pan = core::clampf(core::dot(d * (1.0f / dist), lright_), -1.0f, 1.0f);
-        if (v.pan3D > v.pan2D)        // SmartPan: centred near the listener, full pan further out
-            pan *= core::clampf((dist - v.pan2D) / (v.pan3D - v.pan2D), 0.0f, 1.0f);
+        // SmartPan: centred inside SmartPanDistance2D, full pan beyond SmartPanDistance3D, measured from the
+        // listener. [PROVISIONAL, off unless enabled] kSmartPan_PreferPlayer: measured from the local player
+        // while within MaxPlayerSmartPanRadius (1400 UU) of the listener, blended over
+        // SmartPanPreferPlayerTransitionTime (0.5 s) [values CONF Xe-TransEngine.ini, semantics inferred].
+        float panDist = dist;
+        if (v.preferPlayer && ppW_ > 0.0f) panDist = panDist + (core::length(v.wpos - ppos_) - panDist) * ppW_;
+        if (v.pan3D > v.pan2D)
+            pan *= core::clampf((panDist - v.pan2D) / (v.pan3D - v.pan2D), 0.0f, 1.0f);
+        v.dDist = dist; v.dPan = pan; v.dAtten = atten;
         float ang = (pan + 1.0f) * 0.25f * core::PI;   // equal-power pan: -1=>L, +1=>R
         v.gL = std::cos(ang) * g;
         v.gR = std::sin(ang) * g;
@@ -413,6 +479,11 @@ private:
     void mixBlock(std::vector<int16_t>& dst) {
         LARGE_INTEGER t0, t1, fq;
         QueryPerformanceCounter(&t0);
+        {   // PreferPlayer weight: ramps over SmartPanPreferPlayerTransitionTime (0.5 s) [CONF value]
+            bool want = ppEnabled_ && pvalid_ && core::length(ppos_ - lpos_) < 14.0f;   // MaxPlayerSmartPanRadius 1400 UU
+            float step = (float)kBlockFrames / kRate / 0.5f;
+            ppW_ = want ? std::min(1.0f, ppW_ + step) : std::max(0.0f, ppW_ - step);
+        }
         dry_.assign(kBlockSamples, 0.0f);
         wet_.assign(kBlockSamples, 0.0f);
         int nv = 0, nw = 0;
@@ -464,12 +535,18 @@ private:
     bool ok_ = false;
     float master_ = 0.5f;                 // [PROV] overall SFX level (was far too loud at 1.0)
     EnvDsp env_;
+    core::Vec3 ppos_{0, 0, 0};
+    bool pvalid_ = false, ppEnabled_ = false;
+    float ppW_ = 0.0f;
     Compressor comp_;
     MixStats stats_;
     std::vector<float> dry_, wet_;
     std::map<std::string, Sound> loaded_;
     core::Vec3 lpos_{0, 0, 0}, lfwd_{0, 0, -1}, lright_{1, 0, 0};
-    std::vector<std::vector<int16_t>> sounds_;
+    std::deque<std::vector<int16_t>> sounds_;
+    mutable std::mutex mx_;
+    std::thread thread_;
+    std::atomic<bool> run_{false};
     std::vector<Voice> voices_;
     std::vector<int16_t> blocks_[kNumBlocks];
     WAVEHDR hdr_[kNumBlocks];

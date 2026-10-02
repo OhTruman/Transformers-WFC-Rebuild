@@ -96,19 +96,23 @@ void RobotFoley::tick(const Character& pc, float dt, std::vector<const char*>& o
     const bool active = pc.form() == Form::Robot && !pc.isTransforming() && pc.currentModel();
     const bool grounded = pc.onGround();
     const float y = pc.position().y;
-    if (!active) { active_ = false; grounded_ = grounded; apexY_ = y; clip_.clear(); delayed_.clear(); return; }
+    if (!active) { active_ = false; grounded_ = grounded; apexY_ = y; prevVy_ = 0.0f; clip_.clear(); delayed_.clear(); return; }
 
     // Take-off: Nav_TakeOff_01 (FS_DEFAULT_JUMP @0, MinWeight 0) when the jump launches.
     if (active_ && grounded_ && !grounded && pc.velocity().y > 0.5f) out.push_back(kJump);
-    if (!grounded) {
-        if (grounded_ || !active_) apexY_ = y;
-        apexY_ = std::max(apexY_, y);
-    }
-    // Landing: the clip LandingAnims would pick, and its notifies.
+    // _FallBaseHeight [CONF TnAcrobaticsManager]: the ground height (OnTheGroundBase.BeginState), reset by
+    // Falling.BeginState when a fall starts - walking off a ledge, or Jumping/DoubleJumping turning into
+    // (FallingFromJump/)Falling as soon as the pawn descends.
+    const float vy = pc.velocity().y;
+    if (!grounded && (!active_ || (prevVy_ > 0.0f && vy <= 0.0f))) apexY_ = y;
+    prevVy_ = vy;
+    // Landing: OnTheGroundBase.PlayLandingAnimation -> FindLandingAnimationParams [CONF]:
+    // FallDistance = _FallBaseHeight - Height; ForwardSpeed = |Velocity . Rotation|; first LandingAnims
+    // entry with ForwardSpeed >= MinSpeed && FallDistance >= MinHeight; none while transforming.
     if (active_ && !grounded_ && grounded) {
         const core::Vec3& v = pc.velocity();
         float fallUU = (apexY_ - y) / UU;
-        float speedUU = std::sqrt(v.x * v.x + v.z * v.z) / UU;
+        float speedUU = std::fabs(core::dot(v, core::forwardFromYawPitch(pc.yaw(), 0.0f))) / UU;
         const char* clip = nullptr;
         for (const LandingAnim& la : kLandingAnims)
             if (fallUU >= la.minHeight && speedUU >= la.minSpeed) { clip = la.clip; break; }
@@ -122,6 +126,7 @@ void RobotFoley::tick(const Character& pc, float dt, std::vector<const char*>& o
             delayed_.push_back({0.432f, kGroan});
         }
     }
+    if (grounded) apexY_ = y;                           // OnTheGroundBase.BeginState / standing
 
     // Base-clip notifies (locomotion master, pivots, idle). The landing clip's own notifies are
     // handled above from the authored selection, so Nav_Land* clips are skipped here.

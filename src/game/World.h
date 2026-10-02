@@ -19,6 +19,7 @@
 #include "game/RobotFoley.h"
 #include "game/AmbientAudio.h"
 #include "game/LevelFx.h"
+#include "game/VehicleAudio.h"
 
 namespace render { class IRenderer; }
 
@@ -62,9 +63,8 @@ public:
     bool usingSlice() const { return usingSlice_; }
     // Tire squeal (HmPlayerVehicleAudioComponent TireSquealSoundParameter Optimus_Prime_Tire_Squeal,
     // Max 1.57 = pi/2): the wheels' slip angle in radians. Gameplay may supply its own value each step
-    // (>= 0). Until Gameplay provides it the squeal stays silent: heading-vs-velocity measured here is
-    // not a slip signal in the current driving model (0.3-1.2 rad in straight-line driving).
-    // WFC_TIRESLIP_DERIVED=1 uses that measurement anyway (diagnostic).
+    // (>= 0) = TnCarForm.Driving.UpdateSounds' CarSimulation.SlipAngle; hovering feeds 0 [CONF]. Until
+    // Gameplay provides it the driving value is 0 (the squeal loop runs silent per its volume curve).
     void setTireSlipAngle(float rad) { tireSlipOverride_ = rad; }
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).
@@ -130,10 +130,7 @@ private:
     bool prevTransforming_ = false;
     Form transformTarget_ = Form::Robot;
     bool prevFineAim_ = false;
-    int ramAlertCue_ = -1;
     float tireSlipOverride_ = -1.0f;
-    int tireSquealCue_ = -1;
-    float tireSquealLevel_ = 0.0f;
     float tireSlip_ = 0.0f;
     void tickCharacterAudio(float dt);
 
@@ -149,15 +146,12 @@ private:
     VehicleNitro nitro_;         // follows Gameplay's vehicleState().nitroRemain (presentation side)
     int ramInst_ = -1;
 
-    // Vehicle engine audio (HmPlayerVehicleAudioComponent DriveSounds / JumpRev / land sounds).
-    enum class EngineState { Off, OnLoad, OffLoad, JumpRev, Boost };
-    EngineState engineState_ = EngineState::Off;
-    int engineCue_ = -1;
-    float airTime_ = 0.0f;
-    void tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, bool tookOff, bool landed);
-    float boostAge_ = 0.0f;
-    bool boostWheelsChecked_ = false;
-    int boostLoopCue_ = -1;
+    // Vehicle audio component (boost, engine states, jump, land, booster, nitro, ram, tire squeal).
+    VehicleAudio vehicleAudio_;
+    int vehLoadState_ = 0;
+    bool prevDashing_ = false;
+    float lastAudioMs_ = 0.0f;
+    int occlusionRays_ = 0;
     void tickVehicleBoost(float dt);
     bool burstActive_ = false;
     float sinceShot_ = 0.0f;

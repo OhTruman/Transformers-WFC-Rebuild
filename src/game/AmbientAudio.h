@@ -11,9 +11,11 @@
 // leaving a zone without entering another keeps it (no on_untouched ops); a player in a gap at spawn
 // has the Default (dry) environment. Volume-emitter half extents = Radius x actor scale; line =
 // LineLength x scale X along the actor X axis.
-// [MED] how native code places a shaped emitter's sound: here the nearest point of the box / line to
-// the listener (inside a box: at the listener, i.e. non-directional room tone).
-// [PROV] voice budget: the most audible kMaxActive emitters play; the rest are virtual (FMOD-style).
+// [PROVISIONAL] how native code places a shaped emitter's sound (HmAmbientSoundLineEmitter.GetLinePoints /
+// HmAmbientSoundVolumeEmitter.GetExtents are native): here the nearest point of the box / line to the
+// listener (inside a box: at the listener, i.e. non-directional room tone). ReVa request.
+// [PROVISIONAL] voice budget: the most audible kMaxActive emitters play; the rest are virtual. The original
+// device has MaxChannels=96 (Xe-TransEngine.ini [HM_Engine.FmodAudioDevice]); its virtual-voice policy is native.
 #pragma once
 #include <string>
 #include <vector>

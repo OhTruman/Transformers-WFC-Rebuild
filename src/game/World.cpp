@@ -393,6 +393,7 @@ void World::setAudio(audio::IAudio* a) {
     // not count as an occluder [MED].
     cues_.setOcclusion([this](const core::Vec3& from, const core::Vec3& to, int owner) {
         if (!collision_.valid()) return false;
+        ++occlusionRays_;
         const Character& pc = player_.pawn();
         core::Vec3 src = owner >= 0 ? pc.position() + pc.meshOffset() + core::Vec3{0, 1.5f, 0}
                                     : to + core::Vec3{0, 0.5f, 0};
@@ -475,6 +476,14 @@ void World::tickCharacterAudio(float dt) {
                  pp.z, core::length(tp - pp));
     }
 
+    static const bool spatialLog = std::getenv("WFC_SPATIALLOG") != nullptr;
+    static float spatialT = 0.0f;
+    if (spatialLog && (spatialT += dt) >= 0.25f) {
+        spatialT = 0.0f;
+        cues_.logSpatial(pc.isTransforming() ? "transform" : (pc.form() == Form::Vehicle ? "vehicle" : "robot"),
+                         pc.position() + pc.meshOffset(), false);
+    }
+
     foleyCues_.clear();
     robotFoley_.tick(pc, dt, foleyCues_);
     for (const char* c : foleyCues_) cues_.play(c, atPawn(), 0.0f);
@@ -535,6 +544,7 @@ void World::tickVehicleBoost(float dt) {
     } else if (!boost && boostActive_) {
         for (int& id : boostInst_) { vehicleFx_.deactivate(id); id = -1; }
     }
+    boostActive_ = boost;
     // Hover thrusters on all six wheel sockets.
     if (hover && !hoverActive_) {
         for (int i = 0; i < 6; ++i) hoverInst_[i] = vehicleFx_.start(VehicleFx::Hover, VehicleFx::HoverLBack + i);
@@ -546,7 +556,7 @@ void World::tickVehicleBoost(float dt) {
     bool grounded = pc.onGround();
     bool tookOff = vehicle && vehiclePrevGrounded_ && !grounded && pc.velocity().y > 2.0f;
     bool landed = vehicle && !vehiclePrevGrounded_ && grounded;
-    tickEngineAudio(dt, vehicle, boost, grounded, tookOff, landed);
+    (void)landed;
     if (tookOff) {
         jumpInst_[0] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpC);
         jumpInst_[1] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpR);
@@ -562,68 +572,38 @@ void World::tickVehicleBoost(float dt) {
     VehicleNitro::Event ne = nitro_.follow(pc.vehicleState().nitroRemain > 0.0f);
     if (ne == VehicleNitro::Event::Started) {
         ramInst_ = vehicleFx_.start(VehicleFx::Ram, VehicleFx::RamSocket);
-        float mph0 = core::length(pc.velocity()) * 2.23694f;
-        cues_.play("VEH_OPTIMUS_RAM_NITRO_START", atPawn({0, 1.4725f, 0}), 0.0f, mph0);   // NitroSound Auto_Ram_Nitro
-        // CustomLoopingSound Auto_Ram_Alert. The cue's wave event is authored non-looping (plays once); it is
-        // cut if still sounding when the nitro ends [MED].
-        if (ramAlertCue_ >= 0) cues_.stop(ramAlertCue_, 0.0f);
-        ramAlertCue_ = cues_.play("VEH_TRUCK_RAM_ALERT", atPawn({0, 1.4725f, 0}), 0.0f, mph0);
+        // StartNitro: RamFX, NitroForceFeedback, then PlayNitroSound (VehicleAudio below). No script calls
+        // PlayCustomLoopingSound (Auto_Ram_Alert) [CONF: decompiled TransGame / HM_Engine], so it is not played.
     } else if (ne == VehicleNitro::Event::Stopped) {
         vehicleFx_.deactivate(ramInst_);
         ramInst_ = -1;
-        if (ramAlertCue_ >= 0) cues_.stop(ramAlertCue_, 0.15f);   // [PROV] fade = BoostFadeOutTime
-        ramAlertCue_ = -1;
     }
     vehicleFx_.tick(dt);
 
-    // Boost audio at the AUDIO_ROOT socket (C_Reference_XR + 147.25 UU up); speed parameter in mph.
+    // Vehicle audio component (HmVehicleAudioComponent + HmPlayerVehicleAudioComponentImpl port), attached
+    // at AUDIO_ROOT (C_Reference_XR + 147.25 UU up).
     const core::Vec3& v = pc.velocity();
     float mph = core::length(v) * 2.23694f;
-    core::Vec3 ap = pc.position() + core::Vec3{0, 1.4725f, 0};
-    const SoundCues::Emitter aroot = atPawn({0, 1.4725f, 0});   // attached at AUDIO_ROOT
-    if (boost && !boostActive_) {
-        cues_.play("VEH_OPTIMUS_BOOST_START", aroot, 0.0f, mph);
-        boostLoopCue_ = cues_.play("VEH_OPTIMUS_BOOST_LOOP", aroot, 0.0f, mph);
-        boostAge_ = 0.0f; boostWheelsChecked_ = false;
-    } else if (!boost && boostActive_) {
-        cues_.stop(boostLoopCue_, 0.15f);            // BoostFadeOutTime
-        boostLoopCue_ = -1;
-        cues_.play("VEH_OPTIMUS_BOOST_END", aroot, 0.0f, mph);
-    }
-    if (boost) {
-        boostAge_ += dt;
-        cues_.update(boostLoopCue_, ap, mph);
-        if (!boostWheelsChecked_ && boostAge_ >= 0.27f) {   // BoostWheelsGroundCheckDelay
-            boostWheelsChecked_ = true;
-            if (pc.onGround()) cues_.play("VEH_OPTIMUS_BOOST_WHEELS", aroot, 0.0f, mph);
-        }
-    }
-    boostActive_ = boost;
-
-    // Tire squeal [CONF HmPlayerVehicleAudioComponent_6670 + Veh_Optimus_Prime_SoundSet]: Auto_Tire_Squeal_Default
-    // -> VEH_OPTIMUS_TIRE_SQUEAL (looping MECH_TIRE_SQUEAL_HEAVY_LP; volume curve 0 -> 1 at 0.425 rad, pitch
-    // -1 -> +2 st), TireSquealCrossfadeTime 0.5 s, TireSquealSpeedMin 20 [MED: mph like the speed parameter].
-    // [MED] on the wheels only (Driving, grounded).
     {
-        core::Vec3 hv{v.x, 0.0f, v.z};
-        float hs = core::length(hv);
-        float slip = 0.0f;
-        static const bool derived = std::getenv("WFC_TIRESLIP_DERIVED") != nullptr;
-        const bool haveSlip = tireSlipOverride_ >= 0.0f || derived;
-        if (tireSlipOverride_ >= 0.0f) slip = tireSlipOverride_;
-        else if (derived && hs > 0.5f) {
-            core::Vec3 fwd = core::forwardFromYawPitch(pc.yaw(), 0.0f);
-            slip = std::acos(core::clampf(std::fabs(core::dot(fwd, hv * (1.0f / hs))), 0.0f, 1.0f));
-        }
-        tireSlip_ = slip;
-        bool squeal = haveSlip && boost && pc.onGround() && hs * 2.23694f >= 20.0f;
-        tireSquealLevel_ += core::clampf((squeal ? 1.0f : 0.0f) - tireSquealLevel_, -dt / 0.5f, dt / 0.5f);
-        if (tireSquealLevel_ > 0.0f && tireSquealCue_ < 0)
-            tireSquealCue_ = cues_.play("VEH_OPTIMUS_TIRE_SQUEAL", aroot, 0.0f, slip);
-        if (tireSquealCue_ >= 0) {
-            if (tireSquealLevel_ <= 0.0f) { cues_.stop(tireSquealCue_, 0.0f); tireSquealCue_ = -1; }
-            else { cues_.update(tireSquealCue_, ap, slip); cues_.setVolume(tireSquealCue_, tireSquealLevel_); }
-        }
+        VehicleAudio::Input in;
+        in.entered = vehicle;
+        in.boosting = boost;
+        in.onGround = grounded;
+        const float fwdIn = player_.controller().moveForwardInput();
+        if (!boost) vehLoadState_ = fwdIn > 0.01f ? 1 : (fwdIn < -0.01f ? 2 : 0);   // Hovering.UpdateSounds
+        in.loadState = vehLoadState_;
+        // WheelSlipRatio: 0 while hovering [CONF]; CarSimulation.SlipAngle while driving, which only Gameplay
+        // can provide (World::setTireSlipAngle); none -> 0.
+        in.wheelSlip = boost && tireSlipOverride_ >= 0.0f ? tireSlipOverride_ : 0.0f;
+        tireSlip_ = in.wheelSlip;
+        in.velocity = v;
+        in.forward = core::forwardFromYawPitch(pc.yaw(), 0.0f);
+        in.ascend = tookOff;
+        const bool dashing = pc.vehicleState().dashRemain > 0.0f;
+        in.booster = vehicle && !boost && dashing && !prevDashing_;              // TnTruckForm.Hovering.DoDash
+        prevDashing_ = dashing;
+        in.nitro = ne == VehicleNitro::Event::Started;
+        vehicleAudio_.tick(dt, in, cues_, [this] { return atPawn({0, 1.4725f, 0}); });
     }
 
     if (std::getenv("WFC_BOOSTLOG")) {
@@ -633,9 +613,10 @@ void World::tickVehicleBoost(float dt) {
                      (int)nitro_.nitroActive(), pc.vehicleState().nitroRemain, pc.vehicleState().nitroCooldown,
                      nitro_.speedScale(), nitro_.steeringScale());
         if (++n % 6 == 0 && pc.form() == Form::Vehicle) {
-            LOG_INFO("VFX boost=%d hover=%d jumps=%d parts=%zu mph=%.1f ground=%d vy=%.2f sockets=%d/%d slip=%.3f squeal=%.2f",
+            LOG_INFO("VFX boost=%d hover=%d jumps=%d parts=%zu mph=%.1f ground=%d vy=%.2f sockets=%d/%d slip=%.3f engine=%s avgMph=%.1f",
                      (int)boost, (int)hover, jumpCount_, vehicleFx_.liveParticles(), mph, (int)grounded,
-                     v.y, haveSockets, (int)VehicleFx::kSocketCount, tireSlip_, tireSquealLevel_);
+                     v.y, haveSockets, (int)VehicleFx::kSocketCount, tireSlip_, vehicleAudio_.engineState(),
+                     vehicleAudio_.speedMph());
             for (int i : {(int)VehicleFx::BoostL, (int)VehicleFx::HoverLFront, (int)VehicleFx::JumpC}) {
                 if (pc.form() != Form::Vehicle) break;
                 core::Vec3 rel = core::Vec3{sw[i].m[12], sw[i].m[13], sw[i].m[14]} - pc.position();
@@ -648,50 +629,13 @@ void World::tickVehicleBoost(float dt) {
     }
 }
 
-// Engine audio. [CONF] OptimusTruckForm.HmPlayerVehicleAudioComponent_6670 + Veh_Optimus_Prime_SoundSet:
-//   DriveSounds: gear MaxSpeed 20 and 110, both OnLoadLoops Auto_Engine_Gear_1_OnLoad -> VEH_OPTIMUS_DRIVE_ONLOAD,
-//   OffLoadLoops Auto_Engine_Gear_1_OffLoad -> VEH_OPTIMUS_DRIVE_OFFLOAD (one-shots map to None); ReverseSound
-//   maps to the same two cues; JumpRevSounds UseJumpRev, Auto_Jump_Loop -> VEH_OPTIMUS_DRIVE_JUMP_LOOP;
-//   AscendSound Auto_Jump_Start -> VEH_OPTIMUS_DRIVE_JUMP_START; EngineFadeOutTime 0.2 s;
-//   HoverLandSound {0.15 s air: HOVER_LAND_LIGHT, 2.0 s: HOVER_LAND_HEAVY}; BoostLandSound {0.15 s:
-//   WHEELS_LAND_LIGHT, 2.0 s: WHEELS_LAND_HEAVY}; speed parameter Optimus_Prime_Speed (mph).
-// [MED] on-load = throttle input held; the engine loop yields to the boost loop while boosting (the boost
-// cue carries its own engine layers); airborne = jump-rev loop.
-void World::tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, bool tookOff, bool landed) {
-    Character& pc = player_.pawn();
-    float mph = core::length(pc.velocity()) * 2.23694f;
-    core::Vec3 ap = pc.position() + core::Vec3{0, 1.4725f, 0};   // AUDIO_ROOT socket
-    EngineState want = EngineState::Off;
-    if (vehicle) {
-        if (!grounded) want = EngineState::JumpRev;
-        else if (boost) want = EngineState::Boost;
-        else want = player_.controller().throttleHeld() ? EngineState::OnLoad : EngineState::OffLoad;
-    }
-    if (want != engineState_) {
-        if (engineCue_ >= 0) cues_.stop(engineCue_, 0.2f);   // EngineFadeOutTime
-        engineCue_ = -1;
-        const char* cue = want == EngineState::OnLoad ? "VEH_OPTIMUS_DRIVE_ONLOAD"
-                        : want == EngineState::OffLoad ? "VEH_OPTIMUS_DRIVE_OFFLOAD"
-                        : want == EngineState::JumpRev ? "VEH_OPTIMUS_DRIVE_JUMP_LOOP" : nullptr;
-        if (cue) engineCue_ = cues_.play(cue, atPawn({0, 1.4725f, 0}), 0.0f, mph);
-        engineState_ = want;
-    }
-    if (engineCue_ >= 0) cues_.update(engineCue_, ap, mph);
-
-    if (tookOff) cues_.play("VEH_OPTIMUS_DRIVE_JUMP_START", atPawn({0, 1.4725f, 0}), 0.0f, mph);   // AscendSound
-    if (vehicle && !grounded) airTime_ += dt;
-    if (landed) {
-        const char* cue = nullptr;
-        if (airTime_ >= 2.0f) cue = boost ? "VEH_OPTIMUS_WHEELS_LAND_HEAVY" : "VEH_OPTIMUS_HOVER_LAND_HEAVY";
-        else if (airTime_ >= 0.15f) cue = boost ? "VEH_OPTIMUS_WHEELS_LAND_LIGHT" : "VEH_OPTIMUS_HOVER_LAND_LIGHT";
-        if (cue) cues_.play(cue, atPawn({0, 1.4725f, 0}), 0.0f, mph);
-    }
-    if (grounded || !vehicle) airTime_ = 0.0f;
-}
 
 bool World::notifyRamHit(const void* target, const core::Vec3& pos) {
     if (!nitro_.registerRamHit(target)) return false;
-    cues_.play("VEH_TRUCK_RAM_IMPACT", pos, core::length(pos - listenerPos_));   // RamSound Auto_Ram_Impact
+    // AttemptToRam -> ServerPlayRammingSound -> ClientPlayRammingSound -> PlayRamSound: the truck's
+    // audio component plays RamSound (owner-attached), not a world sound at the hit point [CONF script].
+    (void)pos;
+    vehicleAudio_.ram(cues_, [this] { return atPawn({0, 1.4725f, 0}); });
     return true;
 }
 
@@ -735,6 +679,15 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
 }
 
 void World::tick(float dt) {
+    static const bool hitchLog = std::getenv("WFC_HITCHLOG") != nullptr;   // game-thread gaps between ticks
+    if (hitchLog) {
+        static auto last = std::chrono::steady_clock::now();
+        static int n = 0;
+        auto now = std::chrono::steady_clock::now();
+        double ms = std::chrono::duration<double, std::milli>(now - last).count();
+        last = now;
+        if (++n > 1 && ms > 30.0) LOG_INFO("HITCH tick %d: %.1f ms since the previous tick", n, ms);
+    }
     {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
         render::Camera cam;
         player_.controller().updateCamera(cam);
@@ -789,8 +742,24 @@ void World::tick(float dt) {
             SoundCues::Emitter te = atWeapon("MuzzleFlash");   // WP_LoopingTail on the weapon
             cues_.play("SHOOT_TAIL", te, core::length(te.pos - pp));
         }
+        static const bool audioTime = std::getenv("WFC_AUDIOTIME") != nullptr;
+        if (audioTime && audio_) {
+            audio::MixStats ms;
+            static int af = 0; ++af;
+            if (audio_->mixStats(ms) && ms.lastUpdateMs > 0.5f && (ms.lastUpdateMs != lastAudioMs_))
+            {
+                lastAudioMs_ = ms.lastUpdateMs;
+                LOG_INFO("AUDIOTIME tick %d: last update %d blocks %.3f ms (mixing %.3f ms, rest = waveOut) mix avg %.3f ms/block",
+                         af, ms.lastUpdateBlocks, ms.lastUpdateMs, ms.lastMixMs, ms.mixMsPerBlock);
+            }
+        }
         sysprof::Scope sp(sysprof::Cues);
         cues_.setListener(listenerPos_);
+        if (audio_) {
+            static const bool preferPlayer = std::getenv("WFC_SMARTPAN_PREFERPLAYER") != nullptr;
+            // Same reference point as pawn-attached sources (the actor Location the original PlaySound uses).
+            audio_->setSmartPanPlayer(player_.pawn().position() + player_.pawn().meshOffset(), true, preferPlayer);
+        }
         ambient_.tick(dt, listenerPos_, player_.pawn().position(), cues_);
         static const bool ambLog = std::getenv("WFC_AMBLOG") != nullptr;
         static float ambT = 0.0f;
@@ -798,11 +767,12 @@ void World::tick(float dt) {
             ambT = 0.0f;
             audio::MixStats ms;
             bool have = audio_ && audio_->mixStats(ms);
-            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d pending=%zu voices=%d wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block levelfx=%zu",
+            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block levelfx=%zu",
                      ambient_.zoneName(), ambient_.activeEmitters(), ambient_.emitterCount(), ambient_.oneShotsPlayed(),
-                     cues_.liveInstances(), cues_.occludedInstances(), cues_.pendingEvents(), have ? ms.voices : -1, have ? ms.wetVoices : -1,
+                     cues_.liveInstances(), cues_.occludedInstances(), occlusionRays_ / 0.5f, cues_.pendingEvents(), have ? ms.voices : -1, have ? ms.wetVoices : -1,
                      have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f,
                      levelFx_.liveParticles());
+            occlusionRays_ = 0;
         }
         cues_.tick(dt);
     }
