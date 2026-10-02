@@ -68,7 +68,7 @@ void Application::run() {
         if (std::getenv("WFC_AUTOSTRAFE")) input.down[(int)platform::Button::Right] = true;
         if (std::getenv("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
         if (std::getenv("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
-        if (std::getenv("WFC_AUTOBOOST")) input.down[(int)platform::Button::FineAim] = true;   // vehicle Boost (RMB held)
+        if (const char* s = std::getenv("WFC_AUTOBOOST")) if (frame >= std::atol(s)) input.down[(int)platform::Button::FineAim] = true;   // vehicle Boost (RMB held) from frame N
         if (const char* s = std::getenv("WFC_AUTODASH")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
         if (const char* s = std::getenv("WFC_AUTODASH2")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
         if (const char* s = std::getenv("WFC_AUTOWALK_UNTIL"))           // release scripted input
@@ -154,7 +154,8 @@ void Application::run() {
             core::Vec3 p = pawn.position();
             LOG_INFO("frame %ld pos %.2f %.2f %.2f grounded=%d form=%s anim=%s t=%.2f ammo=%d/%d reloading=%d "
                      "yaw=%.2f aimW=%.2f aimN=%.2f reloadW=%.2f legYaw=%.1f aimYawN=%.2f turn=%d recoil=%d "
-                     "hspeed=%.2f moveForm=%s fineAim=%d fov=%.1f drv=%d ride=%.2f dash=%.2f nitro=%.2f wpn=%d",
+                     "hspeed=%.2f moveForm=%s fineAim=%d fov=%.1f drv=%d ride=%.2f dash=%.2f nitro=%.2f wpn=%d "
+                     "vy=%.2f pitch=%.1f roll=%.1f cont=%d vgnd=%d camS=%d vyaw=%.2f both=%d hasW=%d camD=%.2f camH=%.2f",
                      frame, p.x, p.y, p.z, (int)pawn.onGround(), game::formName(pawn.form()),
                      pawn.animName(), pawn.animTime(), pawn.weapon().ammo, pawn.weapon().reserve,
                      (int)pawn.weapon().reloading(), pawn.yaw(), pawn.aimWeight(), pawn.aimPitchNorm(),
@@ -164,7 +165,13 @@ void Application::run() {
                      game::formName(pawn.moveForm()), (int)world_.player().controller().fineAiming(),
                      world_.player().controller().fovXDeg(),
                      (int)pawn.vehicleState().driving, pawn.vehicleState().rideHeight,
-                     pawn.vehicleState().dashRemain, pawn.vehicleState().nitroRemain, (int)pawn.weaponUsable());
+                     pawn.vehicleState().dashRemain, pawn.vehicleState().nitroRemain, (int)pawn.weaponUsable(),
+                     pawn.velocity().y, pawn.vehicleState().pitch * 57.2958f, pawn.vehicleState().roll * 57.2958f,
+                     pawn.vehicleState().contacts, (int)pawn.vehicleState().onTheGround,
+                     world_.player().controller().cameraStrategy(), world_.player().controller().viewYaw(),
+                     (int)pawn.partnerShown(), (int)pawn.hasWeapon(),
+                     core::length(world_.player().controller().cameraPos() - pawn.actorLocation()),
+                     world_.player().controller().cameraPos().y - pawn.position().y);
         }
 
         // Camera + render.

@@ -75,6 +75,30 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 13 — VEHICLE BODY, VEHICLE CAMERA, TRANSFORM HANDOFF (2026-10-02, gameplay agent)
+
+| Behaviour | Original (WFC) | Source | Conf | Rebuild status |
+|---|---|---|---|---|
+| Hover support | 4 TnSuspension rays from COM + Normal(1,1,0)×185 at 90° steps, along body −Z, length 250; TnSpring implicit (K=10000/m, B=4000/m, m=Mass/4); force along body up × Dot(up,N) | TnHoverCarSimulation.UpdateSuspension/CalculateSuspensionLocation/InitializeSuspension, TnSpring.Update/CalculateSpringVelocity/Reset, HoverTruck_Suspension | CONF | **APPLIED**; COM 1.36 m (was a fixed 1.85 m ride height = misread SuspensionRadius) |
+| Body mass/COM/inertia | 2500; (−47,0,20)−(0,0,15); 2.27e7/4.64e7/5.89e7 | TnCarSimulation.InitializeFromBlueprint, Truck_Physics, OptimusTruckForm.ChassisOffset | CONF | **APPLIED** |
+| Roll/pitch | UpdateRoll: local angular accel X = RightLeft − ωz; uprighting 0.05/tick only with no contact or upside down; damping 0 | UpdateRoll/UpdateTurn/Activate | CONF (sign HIGH; per-tick factor at 30 Hz PROV) | **APPLIED** |
+| Vehicle jump | Hovering: on ground (N.Z>0.707), interval 0.3 s, +1200 Z, ω(0,−1,0). Driving: local (600,0,1400), ω(0,−2,0), air control 2600/12, pitch-forward −25°/3 | Hovering/Driving.UpdateJumping, TnHoverCarSimulation/TnCarSimulation.Jump, UpdateAirControl | CONF | **APPLIED** |
+| Hover dash | Truck: forward only; refused if unstable; local all-axis strafe to 3000 then one-tick decel to 1500 | TnTruckForm.Hovering.DoDash, UpdateDash | CONF | **APPLIED** (Pass 12 dominant-axis superseded) |
+| Boost acceleration | Lerp(2500, Drag(Max), v/Max) + ExtraBoost (8×, to 0.5·Max, ≤5000) × BoostScale; Drag = v²·g_RB/6000² | UpdateBoost/CalculateExtraBoostAcceleration/CalculateDragAcceleration | CONF | **APPLIED** (tire steering PROV) |
+| Driving exit on impact | Frontal contact (N·fwd > 0.866) → Hovering | Driving.OnRigidBodyCollision | CONF | **APPLIED** (normal approximated by blocked travel) |
+| Driving steering | Steering = sign(s)·s² of GetNormalizedTurn (look X) | PlayerInCarForm.SetLocalInputs, Driving.UpdateSimulationInputs | CONF input / PROV yaw rate | **APPLIED** |
+| Vehicle camera | HoverTruck: anchor 185, orbit 950, FOV 80, pitch −20..30, orbit smoother 0.1, offset Z (45,0,120) over ±25°. Truck: 215/1050/85, nitro 100 & 650, yaw = pawn, pitch chase 3/s, smoother 0.25 | CAM_Driving_Strategies_p, TnDrivingOrbitRotationCameraBehavior, HmOrbitSmootherCameraBehavior | CONF | **APPLIED** |
+| Hover yaw source | Controller rotation = camera rotation (after smoothing) | PlayerInVehicleForm.PlayerMove | CONF | **APPLIED** |
+| Camera smoothing | HmC2Smoother: ω = 4/SmoothTime, Padé exp | HM_Engine bytecode | CONF | **APPLIED** (FOV, offsets, rotation) |
+| Robot camera offset | Offsets[3] vectors: (150,300,150) (150,300,−35) (150,300,150); FineAim (−50,300,80)/(−50,300,−35)/(−50,300,80) | raw property data (static array) | CONF values / interpolation PROV | **APPLIED** (Pass 11 lateral-only reading superseded) |
+| Strategy blend | TransitionTime of the new strategy: OTS 1.5, Hover 1.5, Truck 1.0 | strategy objects | CONF / blend curve PROV | **APPLIED** |
+| Transform visibility | ToVeh: robot hide 0.880, vehicle unhide 0.396; ToRobot: robot unhide 0.098, vehicle hide 0.663 | AssetTools notifies (EVIDENCE_TARGETED_PASS 5a–5d) | CONF | **APPLIED**, both meshes on the shared clip time |
+| Shared actor location | RB placed at pawn Location + vehicle mesh translation (−bounds centre) | TnVehicleForm.OnActivate/CalculateCylinderBounds | CONF | **APPLIED** (vertical only) |
+| Weapon on V→R | Restore at 25%, usable +0.2 s; drawn on the robot mesh | TARGETED_PASS2 §7 | CONF | **APPLIED** + firing requires the drawn gun |
+| Arm mesh | CP_OptimusArm_SKEL when no weapon (R→V fold, V→R before 25%) | TARGETED_PASS2 §9 | CONF | **NOT DONE** (asset not in the runtime set) |
+
+---
+
 ## PASS 12 — RECONCILED WITH NATIVE RE (2026-10-01, gameplay agent)
 
 | Behaviour | Original (WFC) | Source | Conf | Rebuild status |

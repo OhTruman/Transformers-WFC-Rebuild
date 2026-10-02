@@ -63,6 +63,22 @@ public:
         return shiftRemain_ > 0.0f ? meshShift_ * (shiftRemain_ / core::config::kTransformShiftBlend) : core::Vec3{0, 0, 0};
     }
 
+    // Actor location (UE pawn Location: robot cylinder centre / vehicle RB actor) above the mesh origin of
+    // form f. The robot mesh hangs CollisionHeight below the cylinder centre; TnVehicleForm.CalculateCylinderBounds
+    // translates the vehicle mesh by -(bounds centre). position() is the mesh origin of moveForm().
+    float meshToActor(Form f) const {
+        if (f == Form::Robot) return core::config::kPawnHalfHeight;
+        return vehicleModel_ ? 0.5f * (vehicleModel_->boundsMin.y + vehicleModel_->boundsMax.y) : 1.0f;
+    }
+    // Height of the vehicle mesh top above its origin (bind-pose bounds).
+    float meshTopAboveOrigin() const { return vehicleModel_ ? vehicleModel_->boundsMax.y : 2.5f; }
+    core::Vec3 actorLocation() const { return pos_ + meshOffset() + core::Vec3{0, meshToActor(moveForm()), 0}; }
+    // Mesh origin of form f (both meshes hang off the shared actor location during a transformation).
+    core::Vec3 meshOrigin(Form f) const { return actorLocation() - core::Vec3{0, meshToActor(f), 0}; }
+    // Model matrix of form f's mesh: yaw, plus the vehicle rigid body's pitch/roll.
+    core::Mat4 meshMatrix(Form f) const;
+    bool partnerShown() const { return partnerVisible_; }   // second mesh drawn (transformation overlap)
+
     // Real skinned models per form (owned elsewhere). If unset, draws a fallback box.
     void setFormModels(const assets::SkinnedModel* robot, const assets::SkinnedModel* vehicle) {
         robotModel_ = robot; vehicleModel_ = vehicle;
@@ -81,7 +97,7 @@ public:
         int n = mdl->nodeByName(bone);
         if (n < 0 || (size_t)n >= animScratch_.size() || lastModel_ != mdl) return false;
         // Same model transform as draw()/updateWeaponSocket(), including the transform-shift offset.
-        out = core::Mat4::translate(pos_ + meshOffset()) * core::Mat4::rotateY(yaw_ + meshYawOffset()) * animScratch_[(size_t)n];
+        out = meshMatrix(form_) * animScratch_[(size_t)n];
         return true;
     }
     static float meshYawOffset();
@@ -90,7 +106,7 @@ public:
     void setWeaponSocket(int boneNode, const core::Mat4& offset) {
         weaponBone_ = boneNode; weaponOffset_ = offset;
     }
-    bool hasWeapon() const { return form_ == Form::Robot && weaponBone_ >= 0 && weaponValid_; }
+    bool hasWeapon() const { return weaponBone_ >= 0 && weaponValid_; }   // robot mesh shown (either slot)
     const core::Mat4& weaponWorld() const { return weaponWorld_; }
 
     core::Vec3& velocity() { return velocity_; }
@@ -135,13 +151,25 @@ public:
     // movement code; read by animation and diagnostics.
     struct VehicleState {
         bool driving = false;         // TnCarForm state Driving (normal boost, wheels)
-        float rideHeight = 0.0f;      // current suspension height above the support surface (m)
+        float rideHeight = 0.0f;      // diagnostics: COM height above the surface below it (m)
         float driftRemain = 0.0f;     // Hovering.BeginState Drift(): steering authority ramp
         float dashRemain = 0.0f;      // hover dash time remaining
         float dashCooldown = 0.0f;    // special-move cooldown (TimeBetweenDashes)
         core::Vec3 dashDir{0, 0, 0};  // local (x = forward, z = right)
         float nitroRemain = 0.0f;     // truck nitro (ram) time remaining
         float nitroCooldown = 0.0f;   // TimeBetweenNitros, from nitro start
+        // Rigid-body attitude (UE rotator sense: pitch + = nose up, roll + = right side down) and
+        // body-local angular velocity (UE axes: x = roll axis, y = pitch axis, z = yaw, + = turn right).
+        float pitch = 0.0f, roll = 0.0f;
+        core::Vec3 angVel{0, 0, 0};
+        float spLen[4] = {-1.0f, -1.0f, -1.0f, -1.0f}; // TnSpring._Length per ray (m); Reset() sets -1
+        int contacts = 0;             // suspension rays touching (TnHoverCarSimulation._NumContacts)
+        core::Vec3 contactN{0, 1, 0}; // averaged contact normal
+        bool onTheGround = false;     // hover: ContactNormal.Z > CosGroundAngle; driving: wheels down
+        float jumpWait = 0.0f;        // TnCarForm._TimeBeforeNextJump
+        float jumpBoost = 0.0f;       // TnCarSimulation._JumpTimeRemaining (Driving jump, FX colour)
+        float steer = 0.0f;           // Driving steering after sign(s)*s^2 and SteeringScale
+        float yawRate = 0.0f;         // rad/s, UE sense (+ = turning right)
     };
     VehicleState veh_;
     VehicleState& vehicleState() { return veh_; }
@@ -181,6 +209,17 @@ private:
     Transition trans_ = Transition::None;
     int transClip_ = -1;
     bool justExitedTransform_ = false;
+    // Second mesh during a transformation: the form not in form_, posed from its partner clip at the
+    // shared clip time and drawn inside its authored visibility window.
+    int partnerClip_ = -1;
+    bool partnerVisible_ = false;
+    assets::LocalPose partnerPose_;
+    std::vector<core::Mat4> partnerScratch_;
+    render::MeshData partnerBuf_;
+    Form partnerForm() const { return form_ == Form::Robot ? Form::Vehicle : Form::Robot; }
+    const assets::SkinnedModel* modelOf(Form f) const { return f == Form::Robot ? robotModel_ : vehicleModel_; }
+    bool meshVisible(Form f, float clipT) const;
+    void updatePartner(float clipT);
 
     // Base layer (bone space) with a snapshot crossfade. [CONF] transform blend-in/out
     // = 0.115 / 0.25 s. Overlays (reload slot, aim offset, hover additive) go on finalPose_.

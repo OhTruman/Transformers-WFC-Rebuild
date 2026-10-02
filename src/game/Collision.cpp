@@ -127,6 +127,11 @@ bool CollisionWorld::groundHeight(float x, float z, float nearY, float stepUp,
 CollisionWorld::Stats& CollisionWorld::stats() { static Stats s; return s; }
 
 bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const {
+    core::Vec3 n;
+    return segmentHit(a, b, outT, n);
+}
+
+bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN) const {
     static const bool perf = std::getenv("WFC_PERFLOG") != nullptr;
     auto t0 = perf ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     long tested = 0;
@@ -134,6 +139,7 @@ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float&
     core::Vec3 d = b - a;
     float bestT = 1e30f;
     bool hit = false;
+    int bestTri = -1;
 
     auto testCell = [&](int cx, int cz) {
         if (cx < 0 || cz < 0 || cx >= gx_ || cz >= gz_) return;
@@ -152,7 +158,7 @@ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float&
             float v = core::dot(d, q) * inv;
             if (v < 0 || u + v > 1) continue;
             float tt = core::dot(e2, q) * inv;
-            if (tt >= 0 && tt <= 1 && tt < bestT) { bestT = tt; hit = true; }
+            if (tt >= 0 && tt <= 1 && tt < bestT) { bestT = tt; hit = true; bestTri = ti; }
         }
     };
 
@@ -209,7 +215,7 @@ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float&
         ++s.calls; s.tris += tested;
         s.ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     }
-    if (hit) outT = bestT;
+    if (hit) { outT = bestT; outN = tris_[(size_t)bestTri].n; }
     return hit;
 }
 

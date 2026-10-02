@@ -3,6 +3,69 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 13 / MILESTONE 03 (2026-10-02) — vehicle body, vehicle camera, transform handoff, firing cost
+Branch agents/gameplay, fast-forwarded to integration/milestone-02 (e8036f6) first; clean build OK.
+Driven by the Milestone 02 human playtest. Evidence: TransGame/HM_Engine bytecode (work/pass13/vehdis.txt,
+camdis.txt, pcdis.txt via work/pass11/ue3dis.py) and authored data (VEH_SHARED_p, CAM_Driving_Strategies_p).
+
+- **Hover = rigid body on four springs** (TnHoverCarSimulation.UpdateSuspension + TnSuspension/TnSpring):
+  - mounts at SuspensionRadius 185 around the COM (Pass 7–12 wrongly used 185 as a ride height);
+  - rays along body −Z, RestingLength 250;
+  - implicit spring with Stiffness 10000 / Damping 4000 and per-spring mass Mass/4;
+  - Truck_Physics mass 2500, COM (−47,0,5), inertia 2.27e7/4.64e7/5.89e7;
+  - world gravity in the spring and RB gravity ×0.66 on the body;
+  - result: the COM settles at 1.36 m.
+  Pitch and roll now come from the springs and terrain, plus UpdateRoll (strafe input − yaw rate):
+  - about 7° transient (2° held) when strafing;
+  - about 4° banking into turns;
+  - curbs and ledges tilt the body.
+  Uprighting applies only with no contact. Yaw tracks the smoothed camera (PlayerInVehicleForm.PlayerMove).
+- **Vehicle jump** (Hovering.UpdateJumping):
+  - requires the ground (contact normal Z > 0.707), with a 0.3 s interval;
+  - +1200 UU/s vertical, nose up 1 rad/s;
+  - verified about 4.2 m rise, spring landing and rebound.
+  Driving jump: local (600,0,1400) plus nose up 2 rad/s, air control, pitch-forward limit −25°.
+- **Hover dash is forward only** (TnTruckForm.Hovering.DoDash overrides the car's dominant-axis dash):
+  - refused while unstable (>30°);
+  - local Z velocity is cancelled during the dash;
+  - it ends with an immediate 100000 UU/s² decel to 1500.
+- **Normal boost** = TnCarSimulation.UpdateBoost/Drag:
+  - Lerp(MaxAccel, Drag(MaxSpeed), v/MaxSpeed) + ExtraBoost, so 30 m/s is the emergent limit;
+  - the truck drops onto its wheels;
+  - a frontal wall hit returns to Hovering (OnRigidBodyCollision 0.866).
+  Steering = look-X input (GetNormalizedTurn), sign·s². Tire model PROV.
+- **Nitro** unchanged in rules (×1.5 speed, ×0.3 steering, 3 s / 8 s). Ram collision is still not implemented.
+- **Vehicle camera strategies** (HoverTruck_Optimus / Truck_Optimus; OverTheShoulder for the robot):
+  - anchor, orbit, FOV and pitch-range per strategy;
+  - HmC2Smoother (decoded) for FOV, offsets and orbit rotation;
+  - strategy blends of 1.5 / 1.5 / 1.0 s;
+  - nitro FOV 100 and orbit 650 (in 0.5 s, out 2.0 s);
+  - Driving yaw locked to the truck, pitch chase at rate 3;
+  - Wiggler3.
+- **Robot camera offset corrected:** TnScreenSpaceOffsetByPitch Offsets is a static array of three vectors.
+  - Default: (150,300,{150,−35,150}).
+  - Fine aim: (−50,300,{80,−35,80}).
+  Pass 11 read only the first vector.
+- **Transform handoff:** the authored ToggleHidden notifies replace the 50% mesh swap.
+  - Both meshes are drawn on the shared clip time: to vehicle 0.396–0.880 s, to robot 0.098–0.663 s.
+  - Both meshes hang off the shared actor location: robot cylinder centre / vehicle bounds centre
+    (TnVehicleForm.CalculateCylinderBounds).
+  - The robot→vehicle "flattened robot freezes then the truck appears" came from the robot clip reaching its
+    folded pose at 0.88 s while the truck was only shown from 1.0 s.
+- **Weapon on vehicle→robot:**
+  - the gun is attached to the robot mesh, drawn from 0.098 s;
+  - restored at 25% of the fold (0.28 s), usable at +0.2 s (0.48 s);
+  - firing also requires the gun to be drawn that step, so no gunless shot is possible.
+- **Firing performance:** the gameplay traces were 23–34 ms/frame during sustained fire (AABB cell scan of two
+  300 m rays per shot). The grid-walk traversal gives identical hits (0/3000 mismatches vs brute force) and
+  about 0.1 ms. WFC_PERFLOG=N logs it.
+- **Fine aim state** for presentation: `PlayerController::fineAimState()` (wanted, active, FOV blend, FOV).
+- **Not done:**
+  - CP_OptimusArm_SKEL attachment (raw umodel glTF, not loaded by the runtime);
+  - the vehicle hull is approximated (min clearance, ceiling probe, wall probe);
+  - ram collision;
+  - wheel/tire steering.
+
 ## INTEGRATION MILESTONE 02 (2026-10-02) — branch `integration/milestone-02`
 Integration and stabilisation only, no new features. Branched from milestone-01 (e62250e).
 Each branch was merged with `--no-ff`, one at a time, then built and checked with the harness.

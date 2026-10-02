@@ -54,6 +54,12 @@ struct Mat4 {
         r.m[0] = c; r.m[2] = -s; r.m[8] = s; r.m[10] = c;
         return r;
     }
+    static Mat4 rotateZ(float a) {
+        Mat4 r;
+        float c = std::cos(a), s = std::sin(a);
+        r.m[0] = c; r.m[1] = s; r.m[4] = -s; r.m[5] = c;
+        return r;
+    }
     static Mat4 rotateX(float a) {
         Mat4 r;
         float c = std::cos(a), s = std::sin(a);

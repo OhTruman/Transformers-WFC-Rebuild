@@ -146,7 +146,13 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
                  spawnPos_.x, spawnPos_.y, spawnPos_.z, spawnYaw_);
     }
     respawnPlayer();
-    if (std::getenv("WFC_STARTVEHICLE")) player_.pawn().setForm(Form::Vehicle);  // for vehicle tests
+    LOG_INFO("vehicle mesh: actor %.2f m above origin, top %.2f m", player_.pawn().meshToActor(Form::Vehicle), player_.pawn().meshTopAboveOrigin());
+    if (std::getenv("WFC_STARTVEHICLE")) {   // for vehicle tests: vehicle mesh hung off the same actor location
+        Character& pc = player_.pawn();
+        float above = pc.meshToActor(Form::Robot) - pc.meshToActor(Form::Vehicle);
+        pc.setForm(Form::Vehicle);
+        pc.setPosition(pc.position() + core::Vec3{0, above, 0});
+    }
 
     // A couple of pickups near spawn for visual life, plus a weapon-test dummy.
     actors_.clear();

@@ -17,6 +17,7 @@ struct MoveIntent {
     bool  wantJump = false;
     bool  wantBoost = false;   // Boost held (vehicle: Hovering -> Driving)
     bool  wantDash = false;    // Dash edge (VehicleSpecialMove), latched until a step consumes it
+    float steer = 0.0f;        // Driving steering input -1..1 (TnPlayerInput.GetNormalizedTurn: look X)
 };
 
 namespace CharacterMovement {
