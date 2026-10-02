@@ -9,6 +9,7 @@ enum class Button {
     Jump, Transform, Fire, Sprint,
     Reload, CameraToggle, Debug, Quit,
     FineAim,   // WFC: RightMouseButton = "ToggleFineAim | Boost"; pad LeftTrigger = "FineAim | Boost"
+    Dash,      // Dash = VehicleSpecialMove (hover dash / nitro): PC Shift, pad RightShoulder [CONF]
     Count
 };
 

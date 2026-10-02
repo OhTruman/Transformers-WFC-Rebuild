@@ -3,6 +3,46 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## FIDELITY PASS 12 (2026-10-01): RECONCILED WITH NATIVE RE; THREE VEHICLE MECHANICS; INPUT LATCHES
+Inputs: confirmed native RE notes (transformation, locomotion, fine aim, input, weapon restore) and the
+Systems checkpoint "VEHICLE MECHANICS" (agents/systems 3700965), plus new bytecode (TnCarForm Hovering/
+Driving, TnHoverCarSimulation Update/Strafe/Turn/Dash/Drift).
+- **Vehicle->robot now enters FALLING with full velocity** [RE]. Pass 11 snapped it to the ground and
+  absorbed the drop with a mesh offset; that is removed. Verified: 15 m/s kept, a 1.85 m drop over
+  ~0.2 s, then jogging at 14.
+- **Robot->vehicle:** velocity is written to the vehicle unchanged (≤35 m/s, no reprojection); the
+  vehicle starts on the robot yaw; hover steering authority fades in over 0.5 s
+  (DriftScale = (1 − t/0.5)², from Hovering.BeginState → Drift). Verified 14 → 15 m/s as authority returns.
+- **Hover mode corrected:** the hover truck faces the VIEW yaw and STRAFES in that frame
+  (Hovering.DoUpdate passes the view yaw; UpdateTurn matches it; UpdateStrafe: 15 m/s, 30 m/s²
+  clamped radially). Pass 7's "face the travel direction at π rad/s" was wrong for hovering.
+- **Three vehicle mechanics, not conflated:**
+  - Normal boost: hold RMB / pad LT → Driving (wheels; Truck_Physics 30 m/s, 25 m/s²); blocked during
+    the drift ramp; release → Hovering + drift. Animation: Nav_HoverToBoost_VEH → Nav_Idle_Wheels_VEH,
+    then Nav_BoostToHover_VEH on exit.
+  - Hover dash: Dash while hovering → 30 m/s along the dominant input axis for 0.5 s (100000 UU/s²);
+    cooldown 2 s.
+  - Nitro: Dash while driving → speed ×1.5 (45 m/s) and steering ×0.3 for 3 s; cooldown 8 s; ends on
+    leaving Driving.
+- **Dash binding recovered:** Dash = VehicleSpecialMove = **Shift** (pad RightShoulder);
+  PlayerInCarForm.StartVehicleSpecialMove → set_DashingInput. (Systems used a provisional Q.) Shift
+  is no longer a boost alias.
+- **Input latches [RE]:** the fire held flag persists; reload fires on release of a tap < 0.3 s; jump
+  and dash edges stay latched until a simulation step consumes them; transform fires on press.
+- **Weapon restore [RE]:** vehicle→robot restores the weapon at 25% elapsed (0.75 remaining) and it is
+  usable after the 0.2 s equip. Verified usable at t = 0.48 s of the 1.13 s fold.
+- **Fine aim:** transforming to the vehicle ends it (the wish is cleared); during vehicle→robot the
+  control form is the robot.
+- **Locomotion:** no play-rate compensation; clips stay at 1.0× (the original has the same stride
+  mismatch) [RE].
+- Regression: jump 5.12 m, turn in place, recoil, reload on the move, fine aim 7 m/s / FOV 45, step
+  routes unchanged; clean build.
+- **Known:** the weapon becomes usable at 25%+0.2 s, but the robot mesh (and so the visible gun)
+  appears at the 50% mesh handoff [PROV]. Driving steering/throttle is PROV (wheel physics not
+  recovered). The vehicle camera strategy (Truck_Optimus_CAMSET) is not recovered (the robot camera
+  is still used). Ram collision is not implemented. Nitro state is duplicated with Systems'
+  VehicleNitro: unify at integration.
+
 ## FIDELITY PASS 11 (2026-10-01): TRANSFORM MOMENTUM, ROBOT RUN SPEED, FINE AIM (player-control pass)
 Driven by the integrated human playtest. Evidence: UnrealScript bytecode decoded from TransGame.xxx
 (`work/pass11/ue3dis.py`), shipped input bindings, Optimus/truck/camera content objects.

@@ -53,9 +53,28 @@ constexpr float kEyeHeight        = 3.5f;
 // — WFC ground vehicles HOVER. (TnCarSimulationBlueprint = non-hover, MaxSpeed 500; unused here.)
 constexpr float kVehicleMoveSpeed = 15.0f;   // MaxLinearSpeed 1500 UU/s        [CONF]
 constexpr float kVehicleAccel     = 30.0f;   // MaxLinearAcceleration 3000 UU/s^2 [CONF]
-// Optimus truck overrides [CONF] VEH_SHARED_p.HoverTruck_Physics (OptimusTruckForm.HoverBlueprint):
-constexpr float kVehicleBoostSpeed= 30.0f;   // DashSpeed 3000 UU/s (class default 5000) [CONF]
-constexpr float kVehicleDashTime  = 0.5f;    // DashDuration 0.5 s (class default 0.3)   [CONF]
+// Three distinct vehicle mechanics (RE notes, Systems checkpoint; TnCarForm/TnTruckForm/TnHoverCarSimulation
+// bytecode). Do not conflate them:
+//  1) Normal boost: Boost held -> TnCarForm state Driving (wheels, VEH_SHARED_p.Truck_Physics).
+//  2) Hover dash: Dash input while Hovering -> TnHoverCarSimulation.Dash (HoverTruck_Physics).
+//  3) Ram/nitro: Dash input while Driving -> TnTruckForm.Driving nitro (script literals).
+// (1) Truck_Physics (TnCarPhysicsBlueprint) [CONF]:
+constexpr float kTruckDriveSpeed  = 30.0f;   // MaxSpeed 3000 UU/s
+constexpr float kTruckDriveAccel  = 25.0f;   // MaxAcceleration 2500 UU/s^2
+constexpr float kWheelsDropTime   = 0.27f;   // BoostWheelsGroundCheckDelay: wheels reach the ground [CONF value, use PROV]
+// (2) Hover dash [CONF]: HoverTruck_Physics overrides + TnHoverCarSimulation.UpdateDash literals.
+constexpr float kVehicleBoostSpeed= 30.0f;   // hover DashSpeed 3000 UU/s (class default 5000)
+constexpr float kVehicleDashTime  = 0.5f;    // hover DashDuration 0.5 s (class default 0.3)
+constexpr float kHoverDashAccel   = 1000.0f; // get_DashAcceleration / get_DashDeceleration 100000 UU/s^2
+constexpr float kHoverDashCooldown = 2.0f;   // TnCarForm.get_TimeBetweenDashes = 2.0 x modifier
+// (3) Nitro [CONF script literals, TnTruckForm getters]:
+constexpr float kNitroDuration    = 3.0f;
+constexpr float kNitroSpeedScale  = 1.5f;
+constexpr float kNitroSteerScale  = 0.3f;
+constexpr float kNitroCooldown    = 8.0f;    // TimeBetweenNitros (measured from nitro start)
+// Hover steering authority after entering Hovering (TnCarForm.Hovering.BeginState -> Drift):
+// accel scale = (1 - DriftTimeRemaining/DriftDuration)^2 [CONF bytecode, DriftDuration class default 0.5].
+constexpr float kHoverDriftDuration = 0.5f;
 constexpr float kVehicleHoverH    = 1.85f;   // SuspensionRadius 185 UU (class default 200) [CONF]
 // TnVehicleForm.OnActivate: Velocity = ClampLength(pawn Velocity, 3500) is handed to the rigid body
 // with the pawn rotation when the vehicle form activates (start of robot->vehicle) [CONF].
@@ -134,6 +153,12 @@ constexpr float kTurnAbortPct        = 0.5f;       // [CONF]
 // Transformation mesh offset: TnPawn.Transforming.OnUpdate OffsetMeshes(Remaining/0.5 * Shift)
 // [CONF shape]; used here to absorb the height change when the movement form switches at fold start.
 constexpr float kTransformShiftBlend = 0.5f;
+// Weapon restore on vehicle->robot [CONF, Xe-TransGame.ini TnPawn._RestoreWeaponTransformFractionRemaining
+// = 0.75 => restored when 25% of the fold has elapsed], usable after the weapon's EquipTime 0.2 s [CONF].
+constexpr float kRestoreWeaponElapsed = 0.25f;
+constexpr float kWeaponEquipTime      = 0.2f;
+// Input latching [CONF RE]: reload fires on release of a tap shorter than this.
+constexpr float kReloadTapTime        = 0.3f;
 constexpr float kAimInterpSpeed      = 12.0f;      // [CONF]
 // Aim offset "Default" profile ranges [CONF Robot_ANIMTREE TnAnimNodeAimOffset]: profile
 // Horizontal [-1,1] / Vertical [-1,0.8]; RemapPawnAimRange with PawnAimOffsetRange

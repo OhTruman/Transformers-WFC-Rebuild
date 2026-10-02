@@ -61,6 +61,88 @@ core::Vec3 robotCalcVelocity(const Character& c, const core::Vec3& wish, const c
     return prev + accel * dt;
 }
 
+// Vehicle (TnCarForm + TnHoverCarSimulation / Truck_Physics), three mechanics:
+//  Hovering (default): TnCarForm.Hovering.DoUpdate passes the VIEW yaw to TnHoverCarSimulation.Update;
+//    UpdateTurn matches the rigid body yaw to it each step (yaw factor 1/dt) and UpdateStrafe drives the
+//    local velocity toward (ForwardBack, RightLeft) x MaxLinearSpeed with
+//    ClampLength(accel, MaxLinearAcceleration x DriftScale), DriftScale = (1 - Drift/0.5)^2 [CONF bytecode].
+//  Hover dash (Dash while Hovering, cooldown 2 s): local axis of the dominant input, toward DashSpeed at
+//    100000 UU/s^2 for DashDuration [CONF bytecode + HoverTruck_Physics].
+//  Driving (Boost held, after the drift ramp): Truck_Physics MaxSpeed 30 m/s, MaxAcceleration 25 m/s^2,
+//    wheels on the ground. [PROV] car steering/throttle model (wheel physics not recovered): full throttle
+//    along the heading, heading turns toward the view yaw at kVehicleTurnRate.
+//  Nitro (Dash while Driving, 3 s, cooldown 8 s): speed x1.5, steering x0.3 [CONF literals].
+core::Vec3 vehicleVelocity(Character& c, const MoveIntent& in, core::Vec3 hv, float dt) {
+    namespace cfg = core::config;
+    Character::VehicleState& vs = c.vehicleState();
+    vs.driftRemain = std::max(0.0f, vs.driftRemain - dt);
+    vs.dashRemain = std::max(0.0f, vs.dashRemain - dt);
+    vs.dashCooldown = std::max(0.0f, vs.dashCooldown - dt);
+    vs.nitroRemain = std::max(0.0f, vs.nitroRemain - dt);
+    vs.nitroCooldown = std::max(0.0f, vs.nitroCooldown - dt);
+
+    // Hovering.UpdateBoosting: Boost && !IsDrifting -> Driving; Driving.UpdateBoosting: !Boost -> Hovering
+    // (Hovering.BeginState -> Drift; Driving.EndState -> StopNitro).
+    if (!vs.driving && in.wantBoost && vs.driftRemain <= 0.0f) vs.driving = true;
+    else if (vs.driving && !in.wantBoost) {
+        vs.driving = false;
+        vs.driftRemain = cfg::kHoverDriftDuration;
+        vs.nitroRemain = 0.0f;
+    }
+
+    if (in.wantDash) {
+        if (!vs.driving && vs.dashCooldown <= 0.0f) {
+            // DoDash: MakeVector(0, Sign(RightLeft), 0) if |RightLeft| > |ForwardBack| else
+            // MakeVector(Sign(ForwardBack), 0, 0); StartSpecialMoveCooldown(TimeBetweenDashes).
+            auto sgn = [](float x) { return x > 0.0f ? 1.0f : (x < 0.0f ? -1.0f : 0.0f); };
+            vs.dashDir = std::fabs(in.moveRight) > std::fabs(in.moveForward)
+                             ? core::Vec3{0, 0, sgn(in.moveRight)} : core::Vec3{sgn(in.moveForward), 0, 0};
+            vs.dashRemain = cfg::kVehicleDashTime;
+            vs.dashCooldown = cfg::kHoverDashCooldown;
+        } else if (vs.driving && vs.nitroCooldown <= 0.0f) {
+            vs.nitroRemain = cfg::kNitroDuration;
+            vs.nitroCooldown = cfg::kNitroCooldown;
+        }
+    }
+
+    // Ride height: hover suspension vs wheels on the ground (reached after the wheels delay).
+    float targetRide = vs.driving ? 0.0f : cfg::kVehicleHoverH;
+    float rideRate = cfg::kVehicleHoverH / cfg::kWheelsDropTime;
+    vs.rideHeight += core::clampf(targetRide - vs.rideHeight, -rideRate * dt, rideRate * dt);
+
+    if (!vs.driving) {
+        c.setYaw(in.faceYaw);                                 // UpdateTurn: match the view yaw
+        core::Vec3 fwd = core::forwardFromYawPitch(in.faceYaw, 0.0f);
+        core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
+        core::Vec3 desired;
+        float maxAccel;
+        if (vs.dashRemain > 0.0f) {
+            desired = (fwd * vs.dashDir.x + right * vs.dashDir.z) * cfg::kVehicleBoostSpeed;
+            maxAccel = cfg::kHoverDashAccel;
+        } else {
+            desired = (fwd * core::clampf(in.moveForward, -1.0f, 1.0f) +
+                       right * core::clampf(in.moveRight, -1.0f, 1.0f)) * cfg::kVehicleMoveSpeed;
+            float drift = 1.0f - vs.driftRemain / cfg::kHoverDriftDuration;
+            maxAccel = cfg::kVehicleAccel * drift * drift;
+        }
+        core::Vec3 a = (desired - hv) * (1.0f / dt);
+        float al = core::length(a);
+        if (al > maxAccel && al > 1e-6f) a = a * (maxAccel / al);
+        return hv + a * dt;
+    }
+
+    // Driving (normal boost) [PROV handling].
+    float steer = cfg::kVehicleTurnRate * (vs.nitroRemain > 0.0f ? cfg::kNitroSteerScale : 1.0f);
+    float d = std::remainder(in.faceYaw - c.yaw(), 6.2831853f);
+    c.setYaw(c.yaw() + core::clampf(d, -steer * dt, steer * dt));
+    core::Vec3 heading = core::forwardFromYawPitch(c.yaw(), 0.0f);
+    float top = cfg::kTruckDriveSpeed * (vs.nitroRemain > 0.0f ? cfg::kNitroSpeedScale : 1.0f);
+    core::Vec3 a = (heading * top - hv) * (1.0f / dt);
+    float al = core::length(a);
+    if (al > cfg::kTruckDriveAccel && al > 1e-6f) a = a * (cfg::kTruckDriveAccel / al);
+    return hv + a * dt;
+}
+
 } // namespace
 
 void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* col) {
@@ -81,21 +163,9 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     if (!vehicle) {
         hv = robotCalcVelocity(c, wish, hv, !wasGround, in.faceYaw, dt);
     } else {
-        // Vehicle [CONF values, HoverTruck_Physics]: MaxLinearSpeed 15, accel 30, Dash 30 / 0.5 s.
-        // [PROV] the hover-sim force model itself is not recovered; this is an accel-limited
-        // approach toward the input velocity.
-        bool boosting = in.wantBoost;
-        float topSpeed = boosting ? core::config::kVehicleBoostSpeed : t.moveSpeed;
-        core::Vec3 targetVel = wish * topSpeed;
-        core::Vec3 dv = targetVel - hv;
-        float accel = wasGround ? t.accel : t.accel * core::config::kAirControl;
-        if (boosting) accel = core::config::kVehicleBoostSpeed / core::config::kVehicleDashTime;
-        float maxDelta = accel * dt;
-        float dvLen = core::length(dv);
-        if (dvLen > maxDelta && dvLen > 1e-5f) dv = dv * (maxDelta / dvLen);
-        hv += dv;
-        // No hard speed clamp: speed handed over by a transformation (up to kMaxTransformSpeed)
-        // decays through the acceleration limit instead of snapping.
+        // Velocity handed over at transform start (<= kMaxTransformSpeed) is written straight into
+        // the vehicle body; no reprojection, it decays through the acceleration limit.
+        hv = vehicleVelocity(c, in, hv, dt);
     }
     v.x = hv.x; v.z = hv.z;
 
@@ -133,7 +203,7 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
 
     // --- Ground resolution --- (vehicles hover SuspensionRadius above the surface) ---
     bool grounded = false;
-    float hover = vehicle ? core::config::kVehicleHoverH : 0.0f;
+    float hover = vehicle ? c.vehicleState().rideHeight : 0.0f;
     if (col) {
         float gy; core::Vec3 n;
         // Support search: highest surface at most MaxStepHeight above the body (groundHeight()
@@ -168,9 +238,9 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     if (grounded) c.setHoverApplied(hover);
     c.setPosition(p);
 
-    // Facing: the robot faces the aim (camera) yaw every frame; the vehicle steers toward its
-    // travel direction. On robot->vehicle the vehicle starts on the pawn rotation (OnActivate
-    // SetRBRotation(pawn Rotation)) because yaw is continuous here.
+    // Facing: the robot faces the aim (camera) yaw every frame. The vehicle's yaw is set in
+    // vehicleVelocity(); on robot->vehicle it starts on the pawn rotation (OnActivate
+    // SetRBRotation(pawn Rotation)), which is the robot's aim yaw.
     if (!vehicle && c.isTransforming()) {
         // Vehicle->robot fold: turn from the vehicle heading to the aim along the fold instead of
         // snapping the still-visible vehicle mesh [PROV: turn timing not recovered].
@@ -180,15 +250,7 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         c.setYaw(c.transformStartYaw() + d * s);
     } else if (!vehicle) {
         c.setYaw(in.faceYaw);
-    } else {
-        core::Vec3 hv2{v.x, 0, v.z};
-        if (core::length(hv2) > 1.0f) {
-            float target = std::atan2(-v.x, -v.z);
-            float d = std::remainder(target - c.yaw(), 6.2831853f);
-            float maxStep = core::config::kVehicleTurnRate * dt;
-            c.setYaw(c.yaw() + core::clampf(d, -maxStep, maxStep));
-        }
-    }
+    }   // vehicle yaw is set by vehicleVelocity() (view yaw while hovering; steering while driving)
 }
 
 } // namespace game::CharacterMovement

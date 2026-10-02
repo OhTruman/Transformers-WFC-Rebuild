@@ -87,6 +87,10 @@ public:
     void setOnGround(bool g) { onGround_ = g; }
     float groundY = 0.0f;
     Form transTarget_ = Form::Robot;
+    float restoreTimer_ = -1.0f;      // time since the weapon was restored during a vehicle->robot fold
+    bool lastDriving_ = false;
+    int vehTransClip_ = -1;
+    float vehTransT_ = 0.0f;
     float transStartYaw_ = 0.0f;
     float speedMult_ = 1.0f;
     bool fineAiming_ = false;
@@ -114,6 +118,26 @@ public:
     float legYaw() const { return legYaw_; }
     bool turningInPlace() const { return turnClip_ >= 0; }
     bool recoiling() const { return recoilSpine_.active || recoilHand_.active; }
+
+    // Vehicle mechanics state (TnCarForm Hovering/Driving, hover dash, truck nitro). Owned by the
+    // movement code; read by animation and diagnostics.
+    struct VehicleState {
+        bool driving = false;         // TnCarForm state Driving (normal boost, wheels)
+        float rideHeight = 0.0f;      // current suspension height above the support surface (m)
+        float driftRemain = 0.0f;     // Hovering.BeginState Drift(): steering authority ramp
+        float dashRemain = 0.0f;      // hover dash time remaining
+        float dashCooldown = 0.0f;    // special-move cooldown (TimeBetweenDashes)
+        core::Vec3 dashDir{0, 0, 0};  // local (x = forward, z = right)
+        float nitroRemain = 0.0f;     // truck nitro (ram) time remaining
+        float nitroCooldown = 0.0f;   // TimeBetweenNitros, from nitro start
+    };
+    VehicleState veh_;
+    VehicleState& vehicleState() { return veh_; }
+    const VehicleState& vehicleState() const { return veh_; }
+    // Weapon usable: robot control form and, during vehicle->robot, restored at 25% of the fold
+    // plus the 0.2 s equip [CONF]. Robot->vehicle stores the weapon at fold start.
+    bool weaponUsable() const;
+    bool weaponRestored() const;
 
     // A shot was fired this step: restart the weapon recoil skel-controls (TnRecoiler.Recoil).
     void notifyFired() { recoilSpine_.start(); recoilHand_.start(); }
@@ -181,6 +205,7 @@ private:
         assets::LocalPose idle, f, b, l, r;      // Nav_Hover_{Pose,F,B,L,R}_VEH
         bool valid = false;
         int hoverAddClip = -1;                   // ADD_Nav_Hover_VEH
+        int hoverToBoost = -1, boostToHover = -1, wheels = -1;   // Driving (normal boost) clips
     } vehicleRig_;
     void buildRobotRig(const assets::SkinnedModel& mdl);
     void buildVehicleRig(const assets::SkinnedModel& mdl);

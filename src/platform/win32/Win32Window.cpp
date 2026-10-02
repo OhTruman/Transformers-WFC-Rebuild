@@ -23,12 +23,14 @@ int vkFor(Button b) {
         case Button::Jump:         return VK_SPACE;
         case Button::Transform:    return 'F';
         case Button::Fire:         return VK_LBUTTON;
-        case Button::Sprint:       return VK_SHIFT;
+        case Button::Sprint:       return 0;        // no sprint in WFC (no binding)
         case Button::Reload:       return 'R';
         case Button::CameraToggle: return 'C';
         case Button::Debug:        return 'B';
         case Button::Quit:         return VK_ESCAPE;
         case Button::FineAim:      return VK_RBUTTON;
+        case Button::Dash:         return VK_SHIFT; // [CONF] Shift = "Ability0 | VehicleSpecialMove";
+                                                    // PlayerInCarForm.StartVehicleSpecialMove -> set_DashingInput
         default:                   return 0;
     }
 }

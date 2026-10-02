@@ -44,7 +44,10 @@ private:
     MoveIntent intent_;
     bool wantJumpLatched_ = false;
     bool wantFire_ = false;
-    bool wantReload_ = false;
+    bool wantReload_ = false;     // latched on release of a tap < kReloadTapTime
+    bool wantDashLatched_ = false;
+    bool prevReloadDown_ = false;
+    float reloadHeld_ = 0.0f;
     // TnFineAimManager: bWantsToFineAim (input) vs bFineAiming (active when CanFineAim allows).
     bool fineAimWanted_ = false;
     bool fineAiming_ = false;

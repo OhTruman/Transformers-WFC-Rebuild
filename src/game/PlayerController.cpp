@@ -36,20 +36,22 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
         rgt += in.padLX;
     }
 
-    // WFC keeps processing movement input during a transformation: no movement path in
-    // TnPlayerController checks IsTransforming (only IsAbleToFire / PreWeaponSwitch /
-    // StartTransform do) [CONF bytecode]. Firing, reloading and jumping stay blocked mid-fold.
+    // Movement input is live from frame 0 of a transformation in both directions [CONF RE]; the
+    // control form switches at transform start (see Character::moveForm).
     bool transforming = pawn_ && pawn_->isTransforming();
     bool vehicleForm = pawn_ && pawn_->moveForm() == Form::Vehicle;
 
     intent_.moveForward = core::clampf(fwd, -1.0f, 1.0f);
     intent_.moveRight   = core::clampf(rgt, -1.0f, 1.0f);
     intent_.faceYaw     = camYaw_;
-    // Boost (vehicle only): RightMouseButton / LeftTrigger = "FineAim | Boost" [CONF bindings];
-    // the robot's OnStartBoost is empty. Shift kept as a legacy alias.
-    bool boostKey = in.isDown(Button::FineAim) || in.padLT > 0.5f || in.isDown(Button::Sprint);
+    // Boost (vehicle only, held): RightMouseButton / LeftTrigger = "FineAim | Boost" [CONF bindings];
+    // the robot's OnStartBoost is empty.
+    bool boostKey = in.isDown(Button::FineAim) || in.padLT > 0.5f;
     intent_.wantBoost   = vehicleForm && boostKey;
-    if (!transforming && in.wasPressed(Button::Jump)) wantJumpLatched_ = true;
+    // Edge latches persist until a simulation step consumes them [CONF RE input semantics], so a
+    // press on a render frame that runs zero 60 Hz steps is not lost.
+    if (in.wasPressed(Button::Jump)) wantJumpLatched_ = true;
+    if (in.wasPressed(Button::Dash)) wantDashLatched_ = true;
 
     // Fine aim wants (robot): PC RightMouseButton = ToggleFineAim; pad LeftTrigger = FineAim |
     // OnRelease StopFineAim (hold) [CONF Xe-TransInput.ini]. Vehicle states ignore FineAim.
@@ -61,12 +63,21 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
         padHeld = padNow;
     }
 
-    // Transform (edge-triggered); StartTransform refuses while already transforming.
-    if (!transforming && in.wasPressed(Button::Transform) && pawn_) pawn_->beginTransform();
+    // Transform activates immediately on press; StartTransform refuses while already transforming.
+    // Transforming to the vehicle ends fine aim [CONF RE] (the wish is dropped, not just paused).
+    if (!transforming && in.wasPressed(Button::Transform) && pawn_) {
+        if (pawn_->moveForm() == Form::Robot) fineAimWanted_ = false;
+        pawn_->beginTransform();
+    }
 
-    // Fire (auto while held) + reload, resolved against the world in applyToPawn.
-    wantFire_   = !transforming && in.isDown(Button::Fire);
-    wantReload_ = !transforming && in.wasPressed(Button::Reload);
+    // Fire: held flag persists across frames (consumed per simulation step while held) [CONF RE].
+    wantFire_ = in.isDown(Button::Fire);
+    // Reload: activates on RELEASE of a tap shorter than 0.3 s [CONF RE]; latched until consumed.
+    bool reloadDown = in.isDown(Button::Reload);
+    if (reloadDown) reloadHeld_ += dt;
+    if (!reloadDown && prevReloadDown_ && reloadHeld_ < core::config::kReloadTapTime) wantReload_ = true;
+    if (!reloadDown) reloadHeld_ = 0.0f;
+    prevReloadDown_ = reloadDown;
 
     // FOV (TnFovCameraBehavior): smooth toward the active state's FOV with that state's SmoothTime
     // (FineAim 45/0.1, default 80/0.4) [CONF values; smoothing curve PROV: ~98% at SmoothTime].
@@ -112,10 +123,11 @@ core::Vec3 PlayerController::cameraPos() const {
 }
 
 // TnPlayerController.PlayerWalking.CanFineAim [CONF bytecode]: not while meleeing, reloading or
-// dodging; vehicle states return false. Weapon holstered during a fold -> not while transforming.
+// dodging (no melee/dodge in the rebuild yet); vehicle states return false. The control form is the
+// robot from the start of a vehicle->robot fold [CONF RE].
 bool PlayerController::canFineAim() const {
     if (!pawn_) return false;
-    if (pawn_->moveForm() != Form::Robot || pawn_->isTransforming()) return false;
+    if (pawn_->moveForm() != Form::Robot) return false;
     if (pawn_->weapon().reloading()) return false;
     return true;
 }
@@ -140,6 +152,8 @@ void PlayerController::applyToPawn(World& world, float dt) {
     tickFineAim();
     MoveIntent step = intent_;
     step.wantJump = wantJumpLatched_;
+    step.wantDash = wantDashLatched_;
+    wantDashLatched_ = false;   // consumed by this step
     CharacterMovement::update(*pawn_, step, dt, world.collision());
     pawn_->setAimPitch(camPitch_);   // drives the upper-body aim offset
     wantJumpLatched_ = false;
@@ -147,9 +161,15 @@ void PlayerController::applyToPawn(World& world, float dt) {
     pawn_->ability().tick(dt);
 
     Weapon& w = pawn_->weapon();
-    if (wantReload_) w.beginReload();
-    // Ion Blaster: hitscan while the trigger is held; auto-reload on an empty mag.
-    if (wantFire_ && pawn_->form() == Form::Robot) {
+    // Weapon gate: robot control form, and during vehicle->robot only once restored (25% of the
+    // fold) + EquipTime 0.2 s [CONF]. Robot->vehicle stores the weapon at fold start.
+    bool usable = pawn_->weaponUsable();
+    if (wantReload_) {                       // latched tap; consumed by this step
+        if (usable) w.beginReload();
+        wantReload_ = false;
+    }
+    // Ion Blaster: hitscan while the trigger is held (held flag persists across render frames).
+    if (wantFire_ && usable) {
         if (w.canFire()) {
             w.onFired();
             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
@@ -170,7 +190,6 @@ void PlayerController::applyToPawn(World& world, float dt) {
             w.beginReload();
         }
     }
-    wantFire_ = false; wantReload_ = false;
 }
 
 void PlayerController::updateCamera(render::Camera& cam) const {
