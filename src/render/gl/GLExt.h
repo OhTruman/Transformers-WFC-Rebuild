@@ -45,6 +45,9 @@ typedef ptrdiff_t GLintptr;
 #define GL_TEXTURE_MAX_ANISOTROPY_EXT 0x84FE
 #define GL_LINEAR_MIPMAP_LINEAR 0x2703
 #define GL_TEXTURE_MAX_LEVEL 0x813D
+#define GL_TEXTURE_3D 0x806F
+#define GL_TEXTURE_WRAP_R 0x8072
+#define GL_DEPTH_COMPONENT 0x1902
 
 namespace glx {
 
@@ -93,7 +96,7 @@ namespace glx {
     X(void, BindRenderbuffer, (GLenum, GLuint)) \
     X(void, RenderbufferStorage, (GLenum, GLenum, GLsizei, GLsizei)) \
     X(void, FramebufferRenderbuffer, (GLenum, GLenum, GLenum, GLuint)) \
-    X(void, BlitFramebuffer, (GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum))
+    X(void, TexImage3D, (GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*))     X(void, BlitFramebuffer, (GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum))
 
 #define WFC_GL_DECL(ret, name, args) typedef ret(APIENTRY* PFN_##name) args; extern PFN_##name name;
 WFC_GL_FUNCS(WFC_GL_DECL)

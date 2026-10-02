@@ -29,6 +29,16 @@ struct ParticleBatch {
     size_t n = 0;
 };
 
+// Runtime character customization as pushed by WFC's TnCharacterApplier onto every character mesh
+// (robot, vehicle, separate arm, weapon): material vector parameters Cust_Color_A, Cust_COLOR_B and
+// EnergonColor, linear RGBA. A value whose RGB is all zero SKIPS the override (the material keeps
+// its authored value). The faction selects which colour set the caller passes.
+struct CharacterColors {
+    float primary[4] = {0, 0, 0, 1};     // Cust_Color_A
+    float secondary[4] = {0, 0, 0, 1};   // Cust_COLOR_B
+    float energon[4] = {0, 0, 0, 1};     // EnergonColor
+};
+
 class IRenderer {
 public:
     virtual ~IRenderer() = default;
@@ -63,6 +73,9 @@ public:
     // directional lightmaps, static lights and height fog produced by tools/render/*.py.
     // Returns false when unavailable; the renderer then keeps its legacy fixed-function path.
     virtual bool loadMapRenderData(const std::string& mapName) { (void)mapName; return false; }
+
+    // Character customization for subsequent dynamic draws (see CharacterColors). Optional.
+    virtual void setCharacterColors(const CharacterColors& c) { (void)c; }
 
     // Segment occlusion query (true == blocked) used for dynamic-object light visibility,
     // like UE3's light-environment visibility traces. Optional.

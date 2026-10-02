@@ -50,7 +50,12 @@ class Ctx:
 
 
 class MatCompiler:
-    def __init__(self, repo, inst_path, texture_resolver):
+    # TnCharacterApplier (TransGame.Default__TnCharacterApplier) pushes these vector parameters onto
+    # character meshes at runtime (robot, vehicle, separate arm, weapon); an all-zero value skips the
+    # override, leaving each expression's authored value.
+    RUNTIME_PARAMS = ('Cust_Color_A', 'Cust_COLOR_B', 'EnergonColor')
+
+    def __init__(self, repo, inst_path, texture_resolver, runtime_params=False):
         self.R = repo
         self.inst = inst_path
         self.texres = texture_resolver
@@ -61,6 +66,8 @@ class MatCompiler:
         self.tex_index = {}
         self.uses = set()
         self.notes = []
+        self.runtime_params = runtime_params
+        self.rt_used = {}                # name -> MIC-level authored value (or None = per-expression default)
         # resolve instance chain -> master + params
         self.scalars, self.vectors, self.textures, self.texsets = {}, {}, {}, {}
         self.switches, self.masks = {}, {}
@@ -177,7 +184,13 @@ class MatCompiler:
     def x_VectorParameter(self, c, n, p, o):
         nm = n.get('ParameterName')
         v = self.vectors.get(nm, n.get('DefaultValue') or [0, 0, 0, 1])
-        return 'vec4(%s)' % ', '.join(glf(x) for x in v), 4
+        authored = 'vec4(%s)' % ', '.join(glf(x) for x in v)
+        if self.runtime_params and nm in self.RUNTIME_PARAMS:
+            # Runtime applier override; when not set (all-zero = skip) every same-named expression
+            # keeps its OWN authored value (MIC value, else that expression's default).
+            self.rt_used[nm] = self.vectors.get(nm)
+            return '(uRTSet_%s != 0 ? uRT_%s : %s)' % (nm, nm, authored), 4
+        return authored, 4
 
     def x_StaticSwitchParameter(self, c, n, p, o):
         nm = n.get('ParameterName')
@@ -533,6 +546,7 @@ class MatCompiler:
             'opacity_mask_clip': m.get('OpacityMaskClipValue', 0.3333),
             'connected': sorted(connected), 'uses': sorted(self.uses),
             'switches': self.switches, 'textures': self.tex_slots, 'notes': self.notes,
+            'runtime_params': sorted(self.rt_used),
         }
         return '\n'.join(self.lines), info
 

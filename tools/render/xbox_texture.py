@@ -120,3 +120,31 @@ def decode_cube(tail, fmt, edge):
         faces.append(decode_mip(edge, edge, data, fmt))
         o = found + 24 + S
     return faces
+
+
+def _tiled_combine(oib, bank, pipe, ylsb):
+    return ((ylsb << 4) | (pipe << 6) | (bank << 11) | (oib & 0b1111) | (((oib >> 4) & 1) << 5) |
+            (((oib >> 5) & 0b111) << 8) | ((oib >> 8) << 12))
+
+
+def tiled3d_offset(x, y, z, pitch_aligned, height_aligned, bpb_log2):
+    """Xenos 3D tiled byte address (per xenia src/xenia/gpu/texture_address.h Tiled3D)."""
+    outer = ((((z >> 2) * (height_aligned >> 4) + (y >> 4)) * (pitch_aligned >> 5)) + (x >> 5)) << 7
+    inner = ((z & 3) << 5) | (((y >> 1) & 3) << 3) | (x & 7)
+    oib = (outer | inner) << bpb_log2
+    bank = ((y >> 3) ^ (z >> 2)) & 1
+    pipe = ((x >> 3) & 3) ^ (bank << 1)
+    return _tiled_combine(oib, bank, pipe, y & 1)
+
+
+def decode_volume_argb8(data, sx, sy, sz):
+    """Big-endian A8R8G8B8 Xbox-tiled volume -> numpy [z][y][x][rgba] uint8."""
+    pa, ha = (sx + 31) & ~31, (sy + 31) & ~31
+    out = np.zeros((sz, sy, sx, 4), 'u1')
+    for z in range(sz):
+        for y in range(sy):
+            for x in range(sx):
+                o = tiled3d_offset(x, y, z, pa, ha, 2)
+                a, r, g, b = data[o:o + 4]
+                out[z, y, x] = (r, g, b, a)
+    return out

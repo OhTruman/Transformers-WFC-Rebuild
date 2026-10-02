@@ -45,6 +45,7 @@ struct Program {
           uLCol = -1, uLSpot = -1, uFogOn = -1, uFogMaxH = -1, uFogScale = -1, uFogStart = -1, uFogExt = -1,
           uFogIn = -1;
     struct Slot { int unit; GLuint tex; bool cube; float umin[4]; float uscale[4]; };
+    GLint uRT[3] = {-1, -1, -1}, uRTSet[3] = {-1, -1, -1};   // applier params (Cust_Color_A/B, EnergonColor)
     std::vector<Slot> slots;
     int blend = 0;                // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
     bool twoSided = false, lit = true;
@@ -56,6 +57,7 @@ public:
     bool load(const std::string& mapName);
     bool active() const { return active_; }
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); }
+    void setCharacterColors(const CharacterColors& c) { charColors_ = c; }
 
     void beginFrame(const Camera& cam, int w, int h);
     void endFrame();
@@ -69,6 +71,7 @@ private:
     struct Sub {
         uint32_t first = 0, count = 0;
         int prog = -1;
+        std::string matName;      // original material path (diagnostics)
         int lmTex[3] = {-1, -1, -1};
         float lmScale[3][3] = {};
         float lmCoord[4] = {1, 1, 0, 0};
@@ -80,31 +83,50 @@ private:
         GLuint vao = 0, vbo = 0, ibo = 0;
         std::vector<Sub> subs;
         bool world = false;
-        bool drawsBsp = false;    // replaced its level-BSP submeshes with the lit bspMesh_
+        bool drawsBsp = false;
+        bool decal = false;       // static decal geometry (clip to decal box)    // replaced its level-BSP submeshes with the lit bspMesh_
     };
 
     GLuint texture(const std::string& file, bool srgb, bool clampU, bool clampV);
     GLuint cubeTexture(const std::vector<std::string>& faces, bool srgb);
     int programFor(const std::string& matName, const Material* gltfMat, bool lightmapped);
+    std::string resolveBySourceName(const Material* m) const;
     int buildProgram(const std::string& key, const std::string& body, const std::vector<Program::Slot>& slots,
                      const std::vector<bool>& slotIsCube, int blend, bool twoSided, bool lit, float clip,
-                     bool lightmapped);
+                     bool lightmapped, const std::vector<std::string>& rtParams = {});
     void computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env) const;
     void bindCommon(const Program& P, const core::Mat4& model);
     void drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject);
     void ensureTargets(int w, int h);
     static void buildVertices(const MeshData& m, std::vector<float>& v);
 
+    // Authored post-process (map TnWorldInfo.DefaultPostProcessSettings over Default__WorldInfo).
+    struct Post {
+        bool bloom = true, dof = false;
+        float bloomScale = 1.0f, bloomThreshold = 1.0f;
+        float dofPacked[4] = {0, 1.0f / 2000.0f, 4.0f, 1.0f / 2000.0f};
+        float dofMaxBlur[2] = {1.0f, 1.0f};
+        core::Vec3 shadows{0, 0, 0}, highlights{1, 1, 1}, midtones{1, 1, 1};
+        float desat = 0.0f;
+    } post_;
+    GLuint clutTex_ = 0;
+    int clutSize_ = 32;
+    float znear_ = 0.1f, zfar_ = 20000.0f;
+    CharacterColors charColors_;   // default all-zero -> every override skipped (authored values)
+    int testMesh_ = -1;           // WFC_TESTMESH render verification hook
+    core::Mat4 testModel_;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
+    int decalMesh_ = -1;          // static decals from their cooked receiver geometry
     bool active_ = false;
     std::string dataDir_;
     IRenderer::VisibilityQuery vis_;
 
     // render data
-    struct MatSrc { std::string glsl; std::vector<std::string> files; std::vector<std::vector<std::string>> faces; std::vector<bool> srgb, cube, clampU, clampV;
+    struct MatSrc { std::vector<std::string> rtParams; std::string glsl; std::vector<std::string> files; std::vector<std::vector<std::string>> faces; std::vector<bool> srgb, cube, clampU, clampV;
                     std::vector<std::vector<float>> umin, umax; int blend = 0; bool twoSided = false, lit = true;
                     float clip = 0.3333f; };
     std::map<std::string, MatSrc> mats_;
+    std::map<std::string, std::string> slotMaterials_;   // "mesh|section" -> original material
     struct LMRec { std::string coeff[3]; float scale[3][3]; float cs[2], cb[2]; };
     std::map<std::string, LMRec> lightmaps_;
     std::vector<Light> lights_;
@@ -136,7 +158,7 @@ private:
     float time_ = 0.0f;
     float frustum_[6][4] = {};
     int vpW_ = 0, vpH_ = 0;
-    GLuint fbo_ = 0, colorTex_ = 0, depthRb_ = 0, postProg_ = 0, postVao_ = 0;
+    GLuint fbo_ = 0, colorTex_ = 0, depthTex_ = 0, postProg_ = 0, postVao_ = 0;
     GLuint bloomGatherProg_ = 0, blurProg_ = 0, bloomFbo_[2] = {0, 0}, bloomTex_[2] = {0, 0};
     int bloomW_ = 1, bloomH_ = 1;
     int fbW_ = 0, fbH_ = 0;

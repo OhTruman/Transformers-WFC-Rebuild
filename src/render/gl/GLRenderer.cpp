@@ -117,6 +117,7 @@ public:
     }
 
     void setVisibilityQuery(VisibilityQuery q) override { wfc_.setVisibility(std::move(q)); }
+    void setCharacterColors(const CharacterColors& c) override { wfc_.setCharacterColors(c); }
 
     MeshHandle uploadMesh(const MeshData& mesh) override {
         if (mesh.empty()) return kInvalidMesh;

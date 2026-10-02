@@ -218,6 +218,14 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
                     out.boundsMax = {std::max(out.boundsMax.x, wp.x), std::max(out.boundsMax.y, wp.y), std::max(out.boundsMax.z, wp.z)};
                 }
             }
+            // Mirrored instance (negative determinant): baking into world space reverses the
+            // triangle winding, which back-face culling would then reject. UE3 compensates with
+            // LocalToWorldRotDeterminantFlip; restore the winding here.
+            const float* w = world.m;
+            float det = w[0] * (w[5] * w[10] - w[9] * w[6]) - w[4] * (w[1] * w[10] - w[9] * w[2]) +
+                        w[8] * (w[1] * w[6] - w[5] * w[2]);
+            if (det < 0.0f && idx.size() % 3 == 0)
+                for (size_t t = 0; t < idx.size(); t += 3) std::swap(idx[t + 1], idx[t + 2]);
             for (uint32_t i : idx) out.indices.push_back(base + i);
             render::SubMesh sm;
             sm.indexOffset = indexStart;
@@ -225,6 +233,8 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
             sm.material = prim.has("material") ? prim["material"].asInt(-1) : -1;
             if (node.has("extras")) {
                 sm.component = node["extras"]["component"].asString();
+                sm.sourceMesh = node["extras"]["mesh"].asString();
+                sm.sourceSection = (int)pi;
                 if (node["extras"]["kind"].asString() == "bsp")      // level BSP (unlit in world.glb)
                     sm.component = "bsp:" + node["extras"]["source"].asString();
             }
@@ -273,6 +283,7 @@ void parseGltfMaterial(const Json& root, size_t i, const std::string& dir, rende
     M.baseColorUri = imageUri(root, pbr["baseColorTexture"]["index"].asInt(-1), dir);
     M.normalUri = imageUri(root, jm["normalTexture"]["index"].asInt(-1), dir);
     M.wfcName = jm["extras"]["wfc_material"].asString();
+    M.sourceName = jm["name"].asString();
     // Derive the parallel emissive/specular textures (AssetTools names them *_basecolor / *_emissive).
     size_t bc = M.baseColorUri.find("basecolor");
     if (bc != std::string::npos) {

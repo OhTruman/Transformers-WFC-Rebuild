@@ -39,10 +39,17 @@ class TexResolver:
     def props(self, path):
         o = self.R.obj(path) or {}
         um = o.get('UnpackMin'); ux = o.get('UnpackMax')
+        unpack = [um.get(k, 0.0) for k in range(4)] if isinstance(um, dict) else None
+        # [CONF] DXT5 xGxA normal maps (X in alpha, Y in green; UnpackMin authored -1 on R,G,B only):
+        # the ORIGINAL compiled character pixel shader unpacks BOTH fetched channels, (A, G) * 2 - 1
+        # (MP_IAC_Streets_BASE_m ShaderCache, reconstructed-normal UberLight PS: tfetch .yw then
+        # mad r.xy, r.zy, c251.x(=2.0), c254.w(=-1.0)). Apply the R unpack to alpha as well.
+        if o.get('Format') == 'PF_DXT5' and unpack and unpack[:3] == [-1.0, -1.0, -1.0] and unpack[3] == 0.0:
+            unpack[3] = -1.0
         return {'srgb': bool(o.get('SRGB', True)), 'format': o.get('Format'),
                 'address_x': o.get('AddressX', 'TA_Wrap'), 'address_y': o.get('AddressY', 'TA_Wrap'),
                 'lod_group': o.get('LODGroup'), 'size': [o.get('SizeX'), o.get('SizeY')],
-                'unpack_min': [um.get(k, 0.0) for k in range(4)] if isinstance(um, dict) else None,
+                'unpack_min': unpack,
                 'compression': o.get('CompressionSettings')}
 
     def native_decode(self, path, cls, name):
@@ -123,6 +130,40 @@ def umodel_export(repo, objs, out):
     return got
 
 
+def resolve_default_slots(repo, j):
+    """world.glb sections that AssetTools left on WFC_Default (its asset DB could not resolve the
+    static mesh's section material). umodel's per-mesh glTF still names the section material
+    (FStaticMeshElement.Material); resolve that name against the map packages' Material/MIC
+    exports (same source package preferred). 'dummy_material_N' = null reference in the original
+    (UE3 renders those with the engine default material) and stays unresolved."""
+    from collections import defaultdict
+    byname = defaultdict(list)
+    for k, (pi, ix) in repo.index.items():
+        pk = repo.pkgs[pi]
+        if pk.class_name(pk.exports[ix - 1]) in ('Material', 'MaterialInstanceConstant'):
+            byname[k.rsplit('.', 1)[-1]].append(pk.object_path(ix))
+    nomat = {i for i, m in enumerate(j['materials']) if not m.get('extras', {}).get('wfc_material')}
+    meshname = {n['mesh']: n.get('extras', {}).get('mesh') for n in j['nodes'] if 'mesh' in n}
+    out = {}
+    for mi, m in enumerate(j['meshes']):
+        for k, pr in enumerate(m['primitives']):
+            if pr.get('material') not in nomat: continue
+            mesh = meshname.get(mi)
+            if not mesh: continue
+            gl = os.path.join(CONTENT, *mesh.split('.')) + '.gltf'
+            if not os.path.exists(gl): continue
+            g = json.load(open(gl, encoding='utf-8'))
+            # vs_map skipped empty LOD sections; keep the same order of non-empty primitives
+            prims = [q for q in g['meshes'][0]['primitives'] if g['accessors'][q['indices']]['count'] > 0]
+            if k >= len(prims): continue
+            nm = (g['materials'][prims[k].get('material', 0)].get('name') or '').lower()
+            cands = byname.get(nm, [])
+            if not cands: continue
+            pref = [c for c in cands if c.split('.')[0].lower() == mesh.split('.')[0].lower()]
+            out[(mesh, k)] = (pref or cands)[0]
+    return out
+
+
 def main():
     mapname = sys.argv[1]
     out = sys.argv[2]
@@ -131,9 +172,15 @@ def main():
     repo = Repo(['%s_BASE_m.xxx' % mapname, '%s_ART_m.xxx' % mapname])
     j = glb_json(os.path.join(VS, 'Maps', mapname, 'world.glb'))
     names = {m.get('extras', {}).get('wfc_material') for m in j['materials']}
-    bspf = os.path.join(out, 'bsp.glb')          # BSP rebuilt by build_lighting.py (run it first)
-    if os.path.exists(bspf):
-        names |= {m.get('extras', {}).get('wfc_material') for m in glb_json(bspf).get('materials', [])}
+    for extra_glb in ('bsp.glb', 'decals.glb'):  # rebuilt by build_lighting.py (run it first)
+        f = os.path.join(out, extra_glb)
+        if os.path.exists(f):
+            names |= {m.get('extras', {}).get('wfc_material') for m in glb_json(f).get('materials', [])}
+    slot_map = resolve_default_slots(repo, j)
+    names |= set(slot_map.values())
+    json.dump({'%s|%d' % k: v for k, v in slot_map.items()},
+              open(os.path.join(out, 'slot_materials.json'), 'w'), indent=1)
+    print('default-material slots resolved to original materials: %d' % len(slot_map))
     mats = sorted(names - {None}) + extra
     tr = TexResolver(repo, out)
 
@@ -141,7 +188,7 @@ def main():
         res = {}
         for mp in mats:
             try:
-                mc = matc.MatCompiler(repo, mp, tr)
+                mc = matc.MatCompiler(repo, mp, tr, runtime_params=mp in extra)
                 glsl, info = mc.build()
                 res[mp] = {'glsl': glsl, 'info': info, 'error': None}
             except Exception as ex:
