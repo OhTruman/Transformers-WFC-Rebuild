@@ -21,6 +21,21 @@ struct C2Smoother {
     void reset() { vel = 0.0f; }
 };
 
+// HUD aim state, mirroring the TnHUD data observers [AssetTools 7a69756 fineaim_hud.json]:
+//  CurrentWeaponAndAim -> NotifyCurrentWeaponChanged(class name) + NotifyFineAimChanged(EHudAimType)
+//  WeaponSpreadObserver -> NotifyWeaponSpreadChanged(spread); the Ion Blaster crosshair moves its 3 prongs
+//  to spread * 300 px (eased 0.2 s). The Ion Blaster keeps mc_crosshairIonBlaster in fine aim: no scope
+//  (HasFineAimScope false; the movie shows scopes only for HeavyPistol/BurstRifle/SniperRifle) [CONF].
+//  TargetType -> NotifyTargetTypeChanged (Friend 0 / Enemy 1 / None 2; targeting not implemented -> None).
+struct HudAimState {
+    const char* weaponClass = "";   // e.g. "TnWeaponIonBlaster"; "" when no robot weapon is drawn
+    int aimType = 0;                // EHudAimType: 0 kHudStandardAim, 1 kHudFineAim
+    float spread = 0.0f;            // effective weapon spread (PerShotSpreadModifier bloom x FineAimSpreadModifier
+                                    // 0.5 in fine aim) [HIGH: the native combination is not recovered]
+    int targetType = 2;             // ETargetTypeForHud TTFH_None
+    bool crosshairVisible = false;  // ShowCrosshair: a weapon with ammo capacity is drawn
+};
+
 // Fine aim state for presentation (reticle/sight UI): active flag, the TnPCS_FineAim blend implied by
 // the smoothed FOV (0 = default 80, 1 = fine aim 45), and the current horizontal FOV.
 struct FineAimState {
@@ -56,6 +71,7 @@ public:
     bool fineAiming() const { return fineAiming_; }
     float fovXDeg() const { return fovCur_; }
     FineAimState fineAimState() const;
+    HudAimState hudAimState() const;
     // Active camera strategy (diagnostics): 0 = OverTheShoulder, 1 = HoverTruck, 2 = Truck (Driving).
     int cameraStrategy() const { return strategy_; }
     float viewYaw() const { return viewYaw_; }

@@ -5,6 +5,10 @@
 #include "platform/Window.h"
 #include "render/Renderer.h"
 #include "game/VehicleTests.h"
+#include "game/PickupFactory.h"
+#include "game/Destructible.h"
+
+#include <algorithm>
 
 #include <chrono>
 
@@ -27,6 +31,7 @@ bool Application::init() {
     if (std::getenv("WFC_DEBUGDRAW")) core::DebugFlags::get().enabled = true;
 
     world_.load(*renderer_);
+    if (std::getenv("WFC_PICKUPTEST")) { runPickupTest(); return false; }   // measurements only
     world_.setAudio(audio_);
     gameMode_.begin(world_);
 
@@ -154,7 +159,7 @@ void Application::run() {
             LOG_INFO("frame %ld pos %.2f %.2f %.2f grounded=%d form=%s anim=%s t=%.2f ammo=%d/%d reloading=%d "
                      "yaw=%.2f aimW=%.2f aimN=%.2f reloadW=%.2f legYaw=%.1f aimYawN=%.2f turn=%d recoil=%d "
                      "hspeed=%.2f moveForm=%s fineAim=%d fov=%.1f drv=%d ride=%.2f dash=%.2f nitro=%.2f wpn=%d "
-                     "vy=%.2f pitch=%.1f roll=%.1f cont=%d vgnd=%d camS=%d vyaw=%.2f both=%d hasW=%d camD=%.2f camH=%.2f arm=%d hand=%d ram=%.2f",
+                     "vy=%.2f pitch=%.1f roll=%.1f cont=%d vgnd=%d camS=%d vyaw=%.2f both=%d hasW=%d camD=%.2f camH=%.2f arm=%d hand=%d ram=%.2f hudAim=%d hudSpread=%.4f hudW=%s xhair=%d",
                      frame, p.x, p.y, p.z, (int)pawn.onGround(), game::formName(pawn.form()),
                      pawn.animName(), pawn.animTime(), pawn.weapon().ammo, pawn.weapon().reserve,
                      (int)pawn.weapon().reloading(), pawn.yaw(), pawn.aimWeight(), pawn.aimPitchNorm(),
@@ -170,7 +175,10 @@ void Application::run() {
                      world_.player().controller().cameraStrategy(), world_.player().controller().viewYaw(),
                      (int)pawn.partnerShown(), (int)pawn.hasWeapon(),
                      core::length(world_.player().controller().cameraPos() - pawn.actorLocation()),
-                     world_.player().controller().cameraPos().y - pawn.position().y, (int)pawn.armShown(), (int)pawn.handShrunk(), pawn.rammedRemain());
+                     world_.player().controller().cameraPos().y - pawn.position().y, (int)pawn.armShown(), (int)pawn.handShrunk(), pawn.rammedRemain(),
+                     world_.player().controller().hudAimState().aimType, world_.player().controller().hudAimState().spread,
+                     world_.player().controller().hudAimState().weaponClass[0] ? world_.player().controller().hudAimState().weaponClass : "-",
+                     (int)world_.player().controller().hudAimState().crosshairVisible);
         }
 
         // Camera + render.
@@ -241,6 +249,76 @@ void Application::updateTitleHud(double realDt) {
                   w.ammo, w.reserve, w.reloading() ? " RELOAD" : "",
                   core::DebugFlags::get().enabled ? " | DBG" : "");
     window_->setTitle(title);
+}
+
+// WFC_PICKUPTEST: deterministic pickup / destructible validation on the loaded slice world at the fixed
+// 60 Hz step. Places the pawn on one factory of each kind, logs every PickupEvent / DestructibleEvent and
+// the availability transitions through the authored RespawnTime.
+void Application::runPickupTest() {
+    const float dt = (float)clock_.stepSeconds();
+    auto& pawn = world_.player().pawn();
+    auto logEvents = [&](float t) {
+        for (const auto& e : world_.pickupEvents())
+            LOG_INFO("PICKUPTEST t=%7.2f event factory=%d %s %s available=%d sound=%s", t, e.factory,
+                     game::PickupFactory::className(e.kind), e.type == game::PickupEvent::Type::Taken ? "TAKEN" : "RESPAWNED",
+                     (int)e.available, e.pickupSound ? e.pickupSound : "-");
+        for (const auto& e : world_.destructibleEvents())
+            LOG_INFO("PICKUPTEST t=%7.2f destructible %d state %d -> %d", t, e.actor, e.fromState, e.toState);
+    };
+    const auto& fac = world_.pickupFactories();
+    float t = 0.0f;
+    for (int kind = 0; kind < 3; ++kind) {
+        const game::PickupFactory* f = nullptr;
+        for (auto* x : fac) if ((int)x->kind() == kind) { f = x; break; }
+        if (!f) continue;
+        // Make the pickup useful: damage health / spend reserve ammo.
+        pawn.health().current = 30.0f;
+        pawn.weapon().reserve = 10;
+        int healthBefore = (int)pawn.health().current, reserveBefore = pawn.weapon().reserve, osBefore = pawn.overShieldGrants();
+        pawn.setPosition(f->position());
+        pawn.velocity() = {0, 0, 0};
+        float tTaken = -1.0f, tBack = -1.0f;
+        int taken = 0;
+        for (int i = 0; i < (int)((f->respawnTime() + 5.0f) / dt); ++i) {
+            world_.tick(dt);
+            t += dt;
+            for (const auto& e : world_.pickupEvents()) {
+                if (e.factory != (int)(std::find(fac.begin(), fac.end(), f) - fac.begin())) continue;
+                if (e.type == game::PickupEvent::Type::Taken) { ++taken; if (tTaken < 0) tTaken = t; }
+                else if (tBack < 0) tBack = t;
+            }
+            logEvents(t);
+            if (tBack > 0) break;
+        }
+        LOG_INFO("PICKUPTEST %s: taken x%d at t=%.2f, respawned after %.2f s (authored %.0f); health %d->%d reserve %d->%d overshield grants %d->%d",
+                 game::PickupFactory::className(f->kind()), taken, tTaken, tBack - tTaken, f->respawnTime(),
+                 healthBefore, (int)pawn.health().current, reserveBefore, pawn.weapon().reserve, osBefore, pawn.overShieldGrants());
+        // Standing on it with nothing to gain: not consumed again (ValidTouch [PROV]).
+        pawn.health().current = pawn.health().max;
+        pawn.weapon().reserve = pawn.weapon().reserveMax;
+        if (f->kind() != game::PickupFactory::Kind::OverShield) {
+            world_.tick(dt); t += dt; logEvents(t);
+            LOG_INFO("PICKUPTEST %s with nothing to gain: available=%d", game::PickupFactory::className(f->kind()), (int)f->available());
+        }
+        pawn.setPosition(pawn.position() + core::Vec3{0, 50.0f, 0});   // step off
+        world_.tick(dt); t += dt;
+    }
+    for (auto* dc : world_.destructibles()) {
+        auto* d = const_cast<game::Destructible*>(dc);
+        LOG_INFO("PICKUPTEST destructible %s at %.2f %.2f %.2f state %d health %.0f", d->name().c_str(),
+                 d->position().x, d->position().y, d->position().z, d->state(), d->health());
+        // State machine in place (the panel stays at its authored location): 15 damage (stays intact),
+        // 15 more (health 20 reached -> destroyed), then the 10 s AutomaticTransitionTime -> settled.
+        d->applyDamage(world_, 15.0f); logEvents(t);
+        LOG_INFO("PICKUPTEST destructible after 15 dmg: state %d health %.0f", d->state(), d->health());
+        world_.tick(dt); t += dt;
+        d->applyDamage(world_, 15.0f);
+        float t1 = t;
+        for (int i = 0; i < (int)(11.0f / dt) && d->state() != 2; ++i) { world_.tick(dt); t += dt; logEvents(t); }
+        LOG_INFO("PICKUPTEST destructible: destroyed at t=%.2f, settled %.2f s later (authored 10); position still %.2f %.2f %.2f",
+                 t1, t - t1, d->position().x, d->position().y, d->position().z);
+    }
+    LOG_INFO("PICKUPTEST factories loaded: %zu", fac.size());
 }
 
 void Application::shutdown() {

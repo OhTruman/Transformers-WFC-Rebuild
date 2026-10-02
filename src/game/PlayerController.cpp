@@ -226,6 +226,17 @@ FineAimState PlayerController::fineAimState() const {
     return s;
 }
 
+HudAimState PlayerController::hudAimState() const {
+    HudAimState s;
+    if (!pawn_) return s;
+    bool drawn = pawn_->hasWeapon();                 // gun attached on a displayed robot mesh
+    s.weaponClass = drawn ? "TnWeaponIonBlaster" : "";
+    s.aimType = fineAiming_ ? 1 : 0;
+    s.spread = pawn_->weapon().spread * (fineAiming_ ? core::config::kFineAimSpreadMult : 1.0f);
+    s.crosshairVisible = drawn;
+    return s;
+}
+
 core::Vec3 PlayerController::cameraPos() const {
     // HmOrbitUpdateLocationRotation: Location = anchor + (OrbitLocationOffset rotated by the orbit
     // rotation). Anchor = actor location (shared by both forms during a transformation) + the

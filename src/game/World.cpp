@@ -162,10 +162,10 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         pc.setPosition(pc.position() + core::Vec3{0, above, 0});
     }
 
-    // A couple of pickups near spawn for visual life, plus a weapon-test dummy.
+    // Authored Streets pickup factories and destructibles (AssetTools 7a69756), plus the weapon-test dummy.
     actors_.clear();
-    actors_.push_back(std::make_unique<Pickup>(spawnPos_ + core::Vec3{3, 0, 0}, Pickup::Kind::Health));
-    actors_.push_back(std::make_unique<Pickup>(spawnPos_ + core::Vec3{-3, 0, 2}, Pickup::Kind::Ammo));
+    loadPickupFactories(root + "/Maps/MP_IAC_Streets/gameplay.json");
+    loadDestructibles(root + "/Maps/MP_IAC_Streets/physics.json", root + "/../content/");
     {
         core::Vec3 d = spawnPos_ + core::forwardFromYawPitch(spawnYaw_, 0.0f) * 10.0f;
         if (collision_.valid()) { float gy; core::Vec3 n; if (collision_.groundHeight(d.x, d.z, d.y + 0.5f, 1.5f, gy, n)) d.y = gy; }
@@ -188,6 +188,70 @@ void World::respawnPlayer() {
     player_.pawn().setHoverApplied(0.0f);   // placed on the floor
     player_.pawn().groundY = spawnPos_.y;
     player_.controller().setCameraYaw(spawnYaw_);
+}
+
+// gameplay.json "pickups": the placed TnAmmoCrate/TnHealth/TnOverShield pickup factories with their
+// authored effective RespawnTime (30 / 60 / 120 s). Objective factories (flag/bomb) require
+// TnGameRules_SingleFlagCTF / ScoreBombingRun, which the slice does not run, and are not instanced.
+void World::loadPickupFactories(const std::string& path) {
+    pickupFactories_.clear();
+    std::string text;
+    assets::Json root;
+    if (!readTextFile(path, text) || !assets::Json::parse(text, root)) { LOG_WARN("pickups: cannot read %s", path.c_str()); return; }
+    const assets::Json& list = root["pickups"];
+    int counts[3] = {0, 0, 0};
+    for (size_t i = 0; i < list.size(); ++i) {
+        const assets::Json& p = list[i];
+        const std::string& cls = p["class"].asString();
+        PickupFactory::Kind kind;
+        if (cls == "TnAmmoCratePickupFactory") kind = PickupFactory::Kind::AmmoCrate;
+        else if (cls == "TnHealthPickupFactory") kind = PickupFactory::Kind::Health;
+        else if (cls == "TnOverShieldPickupFactory") kind = PickupFactory::Kind::OverShield;
+        else continue;
+        const assets::Json& L = p["location_gltf"];
+        if (L.size() < 3) continue;
+        float respawn = p["effective"]["RespawnTime"].asFloat(-1.0f);
+        if (respawn < 0.0f) continue;
+        auto f = std::make_unique<PickupFactory>(p["actor"].asString(), kind,
+                                                 core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()},
+                                                 respawn, (int)pickupFactories_.size());
+        pickupFactories_.push_back(f.get());
+        actors_.push_back(std::move(f));
+        ++counts[(int)kind];
+    }
+    LOG_INFO("pickups: %zu factories (ammo crate %d, health %d, overshield %d) from %s", pickupFactories_.size(),
+             counts[0], counts[1], counts[2], path.c_str());
+}
+
+// physics.json "destructibles": the placed TnStaticDestructibleActor(s) at their authored location
+// (UE -> glTF metres: 0.01 * (X, Z, Y)). The damage/touch box is the Base piece mesh bounds at the piece
+// transform (Z -160 UU) [CONF mesh + transform].
+void World::loadDestructibles(const std::string& path, const std::string& contentRoot) {
+    destructibles_.clear();
+    std::string text;
+    assets::Json root;
+    if (!readTextFile(path, text) || !assets::Json::parse(text, root)) return;
+    const assets::Json& list = root["destructibles"];
+    for (size_t i = 0; i < list.size(); ++i) {
+        const assets::Json& d = list[i];
+        const assets::Json& loc = d["props"]["Location"];
+        core::Vec3 p{loc["X"].asFloat() * 0.01f, loc["Z"].asFloat() * 0.01f, loc["Y"].asFloat() * 0.01f};
+        core::Vec3 bmin{-1, -1, -1}, bmax{1, 1, 1};
+        render::MeshData mesh;
+        if (assets::loadGlb(contentRoot + "DES_IAC_WallPanelSign_p/Meshes/WallPanelSign_Base_STAT.gltf", mesh) && mesh.positions.size() >= 3) {
+            bmin = bmax = core::Vec3{mesh.positions[0], mesh.positions[1], mesh.positions[2]};
+            for (size_t k = 0; k + 2 < mesh.positions.size(); k += 3) {
+                core::Vec3 v{mesh.positions[k], mesh.positions[k + 1], mesh.positions[k + 2]};
+                bmin = {std::min(bmin.x, v.x), std::min(bmin.y, v.y), std::min(bmin.z, v.z)};
+                bmax = {std::max(bmax.x, v.x), std::max(bmax.y, v.y), std::max(bmax.z, v.z)};
+            }
+            bmin.y -= 1.6f; bmax.y -= 1.6f;                     // piece Transform Position Z -160 UU
+        }
+        auto a = std::make_unique<Destructible>(d["actor"].asString(), p, bmin, bmax, (int)destructibles_.size());
+        LOG_INFO("destructible: %s at authored %.2f %.2f %.2f (state 0, health %.0f)", a->name().c_str(), p.x, p.y, p.z, a->health());
+        destructibles_.push_back(a.get());
+        actors_.push_back(std::move(a));
+    }
 }
 
 bool World::loadSpawn(const std::string& path, core::Vec3& outPos, float& outYaw) {
@@ -327,9 +391,18 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
         float th;
         if (rayAabb(origin, dir, range, bmin, bmax, th) && th < targetDist) { targetDist = th; hitTarget = tgt; }
     }
-    float dist = hitTarget ? targetDist : bestDist;
+    // Authored destructibles (HmGenericDamageDestructionTrigger) in front of any closer hit.
+    Destructible* hitDes = nullptr;
+    for (Destructible* d : destructibles_) {
+        float th;
+        if (d->state() == 0 && rayAabb(origin, dir, range, d->boxMin(), d->boxMax(), th) && th < targetDist) {
+            targetDist = th; hitDes = d; hitTarget = nullptr;
+        }
+    }
+    float dist = (hitTarget || hitDes) ? targetDist : bestDist;
     core::Vec3 hitPoint = origin + dir * dist;
     if (hitTarget) hitTarget->applyDamage(w.damageAt(dist));   // [CONF] range-based falloff
+    if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
 
     // Tracer from the barrel muzzle to the impact point. The muzzle is the weapon-local barrel
     // tip transformed by the weapon's world matrix (not the hand attach point), so the tracer and
@@ -613,6 +686,8 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
 }
 
 void World::tick(float dt) {
+    pickupEvents_.clear();
+    destructibleEvents_.clear();
     {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
         render::Camera cam;
         player_.controller().updateCamera(cam);

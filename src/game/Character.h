@@ -102,6 +102,12 @@ public:
     float rammedRemain_ = 0.0f;
     float rammedBaseY_ = 0.0f;
     bool handShrunk() const { return handShrunk_; }
+    // TnOverShieldPickup granted (amount/duration are native and not recovered: state flag only [PARTIAL]).
+    void grantOverShield() { overShield_ = true; ++overShieldGrants_; }
+    bool overShield() const { return overShield_; }
+    int overShieldGrants() const { return overShieldGrants_; }
+    bool overShield_ = false;
+    int overShieldGrants_ = 0;
     const assets::SkinnedModel* currentModel() const {
         return form_ == Form::Robot ? robotModel_ : vehicleModel_;
     }

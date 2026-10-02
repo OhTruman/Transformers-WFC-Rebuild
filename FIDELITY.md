@@ -75,6 +75,41 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 15 — AUTHORED-DATA HANDOFF, AssetTools 7a69756 (2026-10-02, gameplay agent)
+Sources: `AssetTools/manifests/fineaim_hud.json`, `streets_pickup_factories.json`, `streets_pickup_fx.json`,
+`streets_destructibles.json` (commit 7a69756). Placement data comes from the slice's existing `gameplay.json` and
+`physics.json` (no new extraction). Measurements come from `WFC_PICKUPTEST=1`, which runs the loaded slice world
+at the fixed 60 Hz step.
+
+| Item | Authored evidence | Conf | Rebuild |
+|---|---|---|---|
+| Ion Blaster fine-aim presentation | No special reticle or scope. HasFineAimScope unset (false); NotifyFineAimChanged shows scopes only for HeavyPistol/BurstRifle/SniperRifle; mc_crosshairIonBlaster stays in both aim states | CONFIRMED AUTHORED DATA | No scope/ADS asset is expected. `PlayerController::hudAimState()` exposes weaponClass (TnWeaponIonBlaster), EHudAimType (0/1), spread, crosshairVisible and TTFH_None |
+| Fine-aim visible change | Prongs move to spread × 300 px (eased 0.2 s); FineAimSpreadModifier 0.5; PerShotSpreadModifier 0.08–0.18, +0.005/shot, cooldown 2 | CONFIRMED (HUD/data) / HIGH (native spread combination) | hudAimState.spread = bloom × 0.5 in fine aim. Measured 0.105→0.150 while firing; 0.090 at the cap in fine aim |
+| Camera in fine aim | TnPCS_FineAim (no authored props) | — | Unchanged native camera (PASS 14): FOV 45, orbit-space offset |
+| Pickup factories | 14 TnAmmoCrate (RespawnTime 30), 9 TnHealth (60), 1 TnOverShield (120). Touch cylinder r200/h100, COLLIDE_TouchAll | CONFIRMED AUTHORED DATA | `PickupFactory` actors at the authored gameplay.json placements. The graybox near-spawn pickups are removed |
+| Objective factories | Flag ×2 / Bomb ×1, RequiredGameRuleClass CTF / BombingRun | CONFIRMED AUTHORED DATA | Not instanced: those modes are out of scope |
+| Payloads | Health AddedHealth 50; AmmoCrate ValidWeaponTypes Primary/Secondary/Vehicle; OverShield no authored amount | CONFIRMED (health, types) / native (amounts) | Health +50. Ammo refills the reserve to MaxAmmoCount **[PROV amount]**. Overshield sets a granted flag only **[PARTIAL]** |
+| Factory states | Pickup ↔ Sleeping; SeqEvent_PickupStatusChange; TakePickUp/GiveTo/ValidTouch native | CONFIRMED (states/events) / native (bodies) | One PickupEvent per transition (Taken/Respawned, available flag, authored PickupSound). A pawn with nothing to gain does not consume **[PROV ValidTouch]** |
+| Pickup FX/meshes | Health/OverShield CustomPickupEffect auto-active while available; ammo crate mesh + inactive Pickup_FX | CONFIRMED / HIGH | Not drawn by Gameplay. Rendering/Systems consume `pickupFactories()` / `pickupEvents()` |
+| Wall panel | TnStaticDestructibleActor_14465, WallPanelSign: state 0 health 20 → 1 (damage/touch/kismet) → 2 after 10 s. No damaged state. Initial state 0 | CONFIRMED AUTHORED DATA (initial state HIGH) | `Destructible` at its authored location (8.96, −3.52, 899.68 m) with the Base-piece damage/touch box. One DestructibleEvent per transition; meshes/FX/cues stay with Rendering/Systems |
+| Wall panel placement | ~1400 m from the player starts, only actor above Z −50000 | CONFIRMED (positions) | Kept authored. Its absence from the playable view is not a reconstruction failure |
+
+Measured with WFC_PICKUPTEST:
+- **Ammo crate:** taken once (reserve 10→250), respawned after 30.02 s.
+- **Health:** taken once (30→80), respawned after 60.02 s.
+- **Overshield:** taken once (grant 0→1), respawned after 119.99 s.
+- **Events:** exactly one Taken and one Respawned per cycle. Full health/ammo leaves the pickup available.
+- **Wall panel:** 15+15 damage → destroyed → settled 10.00 s later, position unchanged.
+
+**Superseded by 7a69756** (kept in older rows for history):
+- "missing Ion Blaster ADS scope/reticle" and the ADS/spread-visualization TODO: there is no ADS scope; the crosshair + spread is the presentation.
+- FIDELITY PASS 11 robot-camera "shoulder offset ... PROV semantics" row: resolved in PASS 13/14.
+- "missing static destructible / visible destructible geometry" (harness KNOWN `missing.static_destructibles`, PLAYTEST-01): the single placed instance is authored far outside the play space. Experimental should retire that KNOWN.
+- STATUS "Footsteps deferred (no clear footstep asset)": superseded. Streets surface audio is recovered (AssetTools 7a69756) and owned by Systems.
+- Graybox pickup scaffold ("pickups near spawn for visual life"): replaced by the authored factories.
+
+---
+
 ## PASS 14 — NATIVE RE MILESTONE 03 RECONCILE (2026-10-02, gameplay agent)
 Source: `RE-Workspace/notes/MILESTONE03_VEHICLE_NATIVE_FIDELITY.md` (native RE 76bb0a). Measurements from
 `WFC_VEHTEST=1`, which runs the real 60 Hz vehicle step on generated geometry (src/game/VehicleTests.cpp).

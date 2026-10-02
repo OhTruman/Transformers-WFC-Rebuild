@@ -6,6 +6,8 @@
 #include "core/Math.h"
 #include "game/Player.h"
 #include "game/Pickup.h"
+#include "game/PickupFactory.h"
+#include "game/Destructible.h"
 #include "game/SpawnPoint.h"
 #include "game/Collision.h"
 #include "render/Mesh.h"
@@ -58,6 +60,17 @@ public:
     // VehicleNitro::kRamDamage* / kExtraRamZVelocityUU).
     bool notifyRamHit(const void* target, const core::Vec3& pos);
     void gameplayRamContacts();   // Gameplay: nitro ram contacts -> notifyRamHit + ram damage
+
+    // Authored pickup factories (Gameplay-owned state) and their transition events. Events raised during
+    // this World::tick (cleared at its start), one per Pickup<->Sleeping transition: Systems plays
+    // PickupSound/dialog, Rendering drives the pickup FX/mesh from available().
+    const std::vector<PickupFactory*>& pickupFactories() const { return pickupFactories_; }
+    const std::vector<PickupEvent>& pickupEvents() const { return pickupEvents_; }
+    void raisePickupEvent(const PickupEvent& e) { pickupEvents_.push_back(e); }
+    // Authored destructibles (state 0 intact / 1 destroyed / 2 settled) and their transition events.
+    const std::vector<Destructible*>& destructibles() const { return destructibles_; }
+    const std::vector<DestructibleEvent>& destructibleEvents() const { return destructibleEvents_; }
+    void raiseDestructibleEvent(const DestructibleEvent& e) { destructibleEvents_.push_back(e); }
     bool usingSlice() const { return usingSlice_; }
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).
@@ -72,6 +85,12 @@ private:
     Player player_;
     std::vector<Block> blocks_;
     std::vector<std::unique_ptr<Actor>> actors_;
+    std::vector<PickupFactory*> pickupFactories_;     // owned by actors_
+    std::vector<PickupEvent> pickupEvents_;
+    std::vector<Destructible*> destructibles_;        // owned by actors_
+    std::vector<DestructibleEvent> destructibleEvents_;
+    void loadPickupFactories(const std::string& gameplayJson);
+    void loadDestructibles(const std::string& physicsJson, const std::string& contentRoot);
     std::vector<SpawnPoint> spawns_;
     CollisionWorld collision_;
 

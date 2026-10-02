@@ -3,6 +3,23 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 15 (2026-10-02) — AssetTools 7a69756 authored-data handoff
+- Fine aim:
+  - the Ion Blaster keeps its authored crosshair (no scope or ADS);
+  - Gameplay exposes `PlayerController::hudAimState()` (weapon class, standard/fine aim type, spread, crosshair visibility, target type);
+  - the native camera is unchanged.
+- Pickups:
+  - 24 authored Streets factories (14 ammo crate / 9 health / 1 overshield) from gameplay.json;
+  - authored respawn times, touch cylinder, health +50;
+  - one event per state transition via `World::pickupEvents()`;
+  - objective factories not instanced (CTF/Bombing modes).
+- Wall panel: authored destructible state machine (20 health → destroyed → settled after 10 s) at its authored, out-of-play location.
+- Graybox near-spawn pickups removed.
+- Test modes:
+  - `WFC_PICKUPTEST=1` (pickup respawn and destructible validation);
+  - HUD fields added to the frame log.
+- Details and superseded assumptions: FIDELITY.md PASS 15.
+
 ## GAMEPLAY PASS 14 (2026-10-02) — native RE Milestone 03 vehicle reconcile
 Implements only what MILESTONE03_VEHICLE_NATIVE_FIDELITY.md confirms; provenance and measurements are in FIDELITY.md
 PASS 14. Changes:
