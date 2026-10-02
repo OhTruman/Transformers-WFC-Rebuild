@@ -1,0 +1,567 @@
+[info ] skinned glb: F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Characters/Optimus/robot.glb -> 10424 verts, 106 joints, 75 clips
+[info ] skinned glb: F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Characters/Optimus/vehicle.glb -> 10219 verts, 69 joints, 13 clips
+wfc_fidelity: assets=loaded (F:/Transformers Rebuild/ExtractedAssets/VerticalSlice)
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..10.0]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..3.0]
+[info ] collision: 16 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..3.6]
+[info ] collision: 16 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..7.0]
+[info ] collision: 16 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..17.3]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..0.2]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..0.3]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..0.3]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..0.4]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..0.4]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..0.4]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..0.5]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..0.6]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..0.7]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..0.9]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..1.1]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..1.3]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..1.6]
+[info ] collision: 14 tris, grid 100x100 (cell 2.0m), bounds Y [0.0..1.9]
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] glb: F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps/MP_IAC_Streets/collision.glb -> 1915083 verts, 1851215 tris, bounds [-163.8 -800.0 -783.1]..[599.5 -329.3 -72.3]
+[info ] collision: 1851215 tris, grid 382x356 (cell 2.0m), bounds Y [-800.0..-329.3]
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] collision: 2 tris, grid 200x200 (cell 2.0m), bounds Y [0.0..0.0]
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] aim rig: Default aim profile baked for 11 bones
+[info ] aim rig: Shooting_Aim_F_C barrel dir (model space) 1.00 -0.06 -0.02
+[info ] glb: F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps/MP_IAC_Streets/collision.glb -> 1915083 verts, 1851215 tris, bounds [-163.8 -800.0 -783.1]..[599.5 -329.3 -72.3]
+[info ] collision: 1851215 tris, grid 382x356 (cell 2.0m), bounds Y [-800.0..-329.3]
+
+[constants]
+  INFO  vehicle_turn_rate                                3.1416 rad/s
+        AiMaxAngularSpeed is AI-only: the player's hover heading yaw-tracks the CAMERA every physics step (RE HANDOFF #7); see orientation.vehicle_heading_follows_camera
+  INFO  sim_rate                                        60.0000 Hz   
+        rebuild fixed step. Original: UE3 runs exactly one sim tick per rendered frame (RE TARGETED_PASS2 #5), 30/60 Hz
+
+[weapon_data]
+  INFO  put_down_time                                    0.5000 s    
+        authored; not yet modelled (no weapon switching)
+  INFO  fine_aim_spread_mult                             0.5000      
+        authored; not yet modelled (no ADS)
+  INFO  damage_at_175m                                  11.2500 hp    (model 11.2500)
+        linear interpolation between keys assumed (UE3 curve shape unverified)
+
+[weapon]
+  INFO  vehicle_form_shots                               0.0000 shots
+        rebuild: Ion Blaster is robot-only. WFC alt-modes carry vehicle weapons (not yet extracted for this slice)
+
+[orientation]
+  INFO  mouse_up_pitch_delta                             0.1100 rad  
+        positive = mouse-up looks up (non-inverted); WFC default inversion setting not yet confirmed
+  INFO  pitch_max                                        1.3090 rad  
+        kPitchMax [PROV]
+  INFO  pitch_min                                       -1.3090 rad  
+        kPitchMin [PROV]
+  INFO  camera_shoulder_offset                           2.6316 m    
+        lateral camera offset (+ = right); RE OverTheShoulder offset (150,300,..) UU, semantics PROV
+  INFO  camera_distance                                  8.5071 m    
+        eye->camera. Original (RE TARGETED_PASS #3, CONFIRMED values): orbit 800 UU from an anchor at actor+200 Z; metric definitions differ, compare via a capture
+  INFO  pawn_screen_x                                   -0.3884 ndc  
+        Original shoulder offset (150,300,{150,-35,150}) UU by pitch -75/0/75, smooth 0.3 (values CONFIRMED, screen-space semantics PROV)
+  INFO  pawn_feet_screen_y                              -0.9746 ndc  
+        framing of the feet
+  INFO  aim_convergence_distance                       301.1912 m    
+        distance along the camera ray where the shot crosses it (0 = rays coincide)
+  INFO  vehicle_max_yaw_rate_on_reversal                 0.0000 deg/s
+        original hover heading does not follow travel at all (camera-tracked); kept as a measurement
+
+[movement]
+  INFO  robot_backpedal_speed                           14.0000 m/s  
+        rebuild = GroundSpeed; any WFC backpedal scale not recovered
+  KNOWN robot_jump_apex                                  5.1427 m     (orig 5.0000 +-0.05) owner=Gameplay
+        explicit Euler overshoots by ~JumpZ*dt/2 (Experimental proposal gameplay-1 = trapezoid)
+  KNOWN robot_jump_apex_30hz                             5.2896 m     (orig 5.0000 +-0.05) owner=Gameplay
+        apex must not depend on tick rate
+  KNOWN robot_jump_apex_120hz                            5.0712 m     (orig 5.0000 +-0.05) owner=Gameplay
+        apex must not depend on tick rate
+  INFO  robot_running_jump_distance                     16.2386 m     (model 16.3295)
+        jog jump
+  INFO  robot_running_jump_land_time                     1.0833 s    
+  INFO  robot_air_control_lateral_speed_0p6s            12.0000 m/s   (model 12.0000)
+        standing jump + strafe; original air CalcVelocity MaxSpeed = AirSpeed 1200, AirControl 0.4 (application PROV)
+  INFO  vehicle_boost_rise_time                          0.6000 s     (model 0.6000)
+        cruise -> boost top speed; original MaxAccel 2500 UU/s2 (low-speed extra accel PROV)
+  INFO  vehicle_boost_decay_time                         0.8500 s    
+        boost release -> hover cruise (0.5 s drift ramp + hover accel; exact curve via capture)
+  KNOWN vehicle_jump_apex                                0.0000 m     (orig 3.7113 +-0.05) owner=Gameplay
+        vehicle jump: apex above hover height (RB jump; integration and authority PROV)
+
+[collision]
+  KNOWN wall_slide_speed                                 0.2992 m/s   (orig 9.8995 +-0.3) owner=Gameplay
+        zeroing all horizontal velocity on contact makes diagonal input stick to walls
+  KNOWN max_step_height                                  0.3500 m     (orig 0.3700 +-0.015) owner=Gameplay
+        sweep samples 0.35/0.36/0.38/0.40: expect 0.36 climbed, 0.38 blocked. Per-height: 0.20:climb 0.30:climb 0.35:climb 0.36:INSIDE 0.38:INSIDE 0.40:INSIDE 0.50:INSIDE 0.60:INSIDE 0.70:INSIDE 0.90:INSIDE 1.10:INSIDE 1.30:INSIDE 1.60:INSIDE 1.90:INSIDE 
+  KNOWN no_low_obstacle_penetration                  owner=Gameplay
+        wall probe is one ray at capsule centre (2 m): ledges above the step window but below 2 m are entered. First penetrated height: 0.360000
+
+[transform]
+  INFO  superboost_variants                              0.3333 s    
+        Transform_ToVehicle_SuperBoost_Robo (Veh: 0.800000 s) share the transform categories - a separate dash-transform, not the normal fold
+  INFO  to_vehicle_mesh_handoff_time                     1.0167 s     (model 0.9833)
+        rebuild switches the drawn mesh at kTransformHandoffFrac; original animates both meshes for the whole duration and detaches the source at the end (rendering model, not enforced)
+  INFO  to_vehicle_post_anim_settle                      2.0000 s    
+        clips: Transform_ToVehicle_ROBO > Transform_ToVehicle_VEH -> Nav_Hover_FBLR_VEH
+  INFO  to_robot_mesh_handoff_time                       0.5833 s     (model 0.5667)
+        rebuild switches the drawn mesh at kTransformHandoffFrac; original animates both meshes for the whole duration and detaches the source at the end (rendering model, not enforced)
+  INFO  to_robot_robot_shots_during_fold                 8.0000 shots
+        original may fire once the weapon is restored (25% elapsed) and equipped (0.2 s) - RE TARGETED_PASS2 #7
+  INFO  to_robot_post_anim_settle                        1.1667 s    
+        clips: Transform_ToRobot_VEH > Transform_ToRobot_ROBO -> NAV_Idle
+
+[animation]
+  INFO  robot_clip_count                                75.0000 clips
+        STATUS: 75
+  INFO  vehicle_clip_count                              13.0000 clips
+        STATUS: 13
+  INFO  barrel_pitch_cam_up_0p4                         19.1464 deg  
+        camera pitch +22.9 deg
+  INFO  barrel_pitch_cam_level                           3.4329 deg  
+        camera pitch 0
+  INFO  barrel_pitch_cam_down_0p4                      -13.0351 deg  
+        camera pitch -22.9 deg
+  INFO  aim_pitch_tracking                               0.7021 ratio
+        d(barrel pitch)/d(camera pitch) over +-0.4 rad; gain set by the authored aim-offset profile, not enforced (capture original to compare)
+  INFO  reload_clip_vs_gameplay                          1.6333 s     (model 1.5000)
+        clip length vs WeaponReloadAnimTime 1.5: clip is cut when the timer ends
+
+[muzzle]
+  INFO  vehicle_bind_extent_x                            6.6765 m    
+  INFO  vehicle_bind_extent_z                            3.1330 m    
+  INFO  weapon_origin_forward                            0.5565 m    
+        weapon attach (socket) in facing frame
+  INFO  weapon_origin_right                              1.0946 m    
+  INFO  muzzle_forward                                   2.5953 m    
+        idle pose, facing frame
+  INFO  muzzle_right                                     1.4238 m    
+        + = right of the body
+  INFO  muzzle_height                                    2.6177 m    
+        above feet
+  INFO  barrel_vs_facing_deg                             5.2285 deg  
+        horizontal angle between barrel axis (+X weapon-local) and facing; 0 = gun points where the body faces
+  INFO  barrel_pitch_deg                                -2.8508 deg  
+  INFO  muzzle_to_aim_ray_dist                           1.5040 m    
+        tracer starts here but damage traces from the eye; large values = visible tracer/impact mismatch
+  INFO  muzzle_bob_running                               0.7063 m    
+        vertical muzzle travel during the jog cycle
+
+[performance]
+  INFO  robot_vertices                               10424.0000 verts
+        CPU-skinned every sim step
+  INFO  sim_step_cost_running                            0.7834 ms   
+        controller + movement + anim eval + CPU skin + crossfade (Debug build unless configured Release); budget at 60 Hz is 16.7 ms total
+
+[map]
+  INFO  collision_triangles                          1851215.0000 tris 
+        STATUS: ~1.85 M
+  INFO  collision_load_build                          2167.9280 ms   
+        glb load + grid build
+  INFO  spawn_floor_y                                 -724.4799 m    
+        STATUS: -724.5
+  INFO  sweep_dist_dir0                                  8.2001 m     (model 56.0000)
+  INFO  sweep_dist_dir45                                11.9657 m     (model 56.0000)
+  INFO  sweep_dist_dir90                                55.3010 m     (model 56.0000)
+  INFO  sweep_dist_dir135                               22.8981 m     (model 56.0000)
+  INFO  sweep_dist_dir180                               32.5672 m     (model 56.0000)
+  INFO  sweep_dist_dir225                               26.9312 m     (model 56.0000)
+  INFO  sweep_dist_dir270                               40.5674 m     (model 56.0000)
+  INFO  sweep_dist_dir315                               10.8991 m     (model 56.0000)
+  INFO  sweep_total_distance                           209.3299 m     (model 448.0000)
+        8 directions x 4 s
+  INFO  sweep_stuck_time                                16.4333 s    
+        input held but speed < 0.5 m/s (after 0.4 s spin-up)
+  INFO  sweep_airborne_frac                              0.0000      
+        fraction of steps not grounded
+  INFO  sweep_height_range                               0.3201 m    
+  INFO  collision_step_cost                              0.0180 ms   
+        movement step against the 1.85 M-tri grid
+
+[transform_momentum]
+  INFO  r2v_standstill.v_before                          0.0000 m/s  
+        held input: 0 key(s)
+  INFO  r2v_standstill.v_first_step                      0.0000 m/s  
+        first simulated step of the transform
+  INFO  r2v_standstill.v_mid_outgoing                    0.0000 m/s  
+        halfway to the mesh handoff
+  INFO  r2v_standstill.v_handoff                         0.0000 m/s  
+        first step on the new form/mesh
+  INFO  r2v_standstill.v_end                             0.0000 m/s  
+        first step after the fold
+  INFO  r2v_standstill.v_end_plus_0p25                   0.0000 m/s  
+        input still held
+  INFO  r2v_standstill.fold_time                         2.0000 s    
+        press -> controllable
+  INFO  r2v_forward.v_before                            14.0000 m/s  
+        held input: 1 key(s)
+  INFO  r2v_forward.v_first_step                        14.0006 m/s  
+        first simulated step of the transform
+  INFO  r2v_forward.v_mid_outgoing                      15.0000 m/s  
+        halfway to the mesh handoff
+  INFO  r2v_forward.v_handoff                           15.0000 m/s  
+        first step on the new form/mesh
+  INFO  r2v_forward.v_end                               15.0000 m/s  
+        first step after the fold
+  INFO  r2v_forward.v_end_plus_0p25                     15.0000 m/s  
+        input still held
+  INFO  r2v_forward.fold_time                            2.0000 s    
+        press -> controllable
+  INFO  r2v_forward.time_to_regain_90pct                 2.0000 s    
+        press -> 90% of min(pre-transform speed, new form top speed)
+  INFO  r2v_angled.v_before                             14.0000 m/s  
+        held input: 2 key(s)
+  INFO  r2v_angled.v_first_step                         14.0006 m/s  
+        first simulated step of the transform
+  INFO  r2v_angled.v_mid_outgoing                       19.7528 m/s  
+        halfway to the mesh handoff
+  INFO  r2v_angled.v_handoff                            21.2132 m/s  
+        first step on the new form/mesh
+  INFO  r2v_angled.v_end                                21.2132 m/s  
+        first step after the fold
+  INFO  r2v_angled.v_end_plus_0p25                      21.2132 m/s  
+        input still held
+  INFO  r2v_angled.fold_time                             2.0000 s    
+        press -> controllable
+  INFO  r2v_angled.time_to_regain_90pct                  2.0000 s    
+        press -> 90% of min(pre-transform speed, new form top speed)
+  INFO  v2r_standstill.v_before                          0.0000 m/s  
+        held input: 0 key(s)
+  INFO  v2r_standstill.v_first_step                      0.0000 m/s  
+        first simulated step of the transform
+  INFO  v2r_standstill.v_mid_outgoing                    0.0000 m/s  
+        halfway to the mesh handoff
+  INFO  v2r_standstill.v_handoff                         0.0000 m/s  
+        first step on the new form/mesh
+  INFO  v2r_standstill.v_end                             0.0000 m/s  
+        first step after the fold
+  INFO  v2r_standstill.v_end_plus_0p25                   0.0000 m/s  
+        input still held
+  INFO  v2r_standstill.fold_time                         1.1667 s    
+        press -> controllable
+  INFO  v2r_cruise.v_before                             15.0000 m/s  
+        held input: 1 key(s)
+  INFO  v2r_cruise.v_first_step                         14.9921 m/s  
+        first simulated step of the transform
+  INFO  v2r_cruise.v_mid_outgoing                       14.8574 m/s  
+        halfway to the mesh handoff
+  INFO  v2r_cruise.v_handoff                            14.5564 m/s  
+        first step on the new form/mesh
+  INFO  v2r_cruise.v_end                                14.0000 m/s  
+        first step after the fold
+  INFO  v2r_cruise.v_end_plus_0p25                      14.0000 m/s  
+        input still held
+  INFO  v2r_cruise.fold_time                             1.1667 s    
+        press -> controllable
+  INFO  v2r_cruise.time_to_regain_90pct                  1.1667 s    
+        press -> 90% of min(pre-transform speed, new form top speed)
+  INFO  v2r_angled.v_before                             21.2132 m/s  
+        held input: 2 key(s)
+  INFO  v2r_angled.v_first_step                         21.2020 m/s  
+        first simulated step of the transform
+  INFO  v2r_angled.v_mid_outgoing                       21.0116 m/s  
+        halfway to the mesh handoff
+  INFO  v2r_angled.v_handoff                            20.5859 m/s  
+        first step on the new form/mesh
+  INFO  v2r_angled.v_end                                19.6057 m/s  
+        first step after the fold
+  INFO  v2r_angled.v_end_plus_0p25                      14.3024 m/s  
+        input still held
+  INFO  v2r_angled.fold_time                             1.1667 s    
+        press -> controllable
+  INFO  v2r_angled.time_to_regain_90pct                  1.1667 s    
+        press -> 90% of min(pre-transform speed, new form top speed)
+  INFO  v2r_boost.v_before                              30.0000 m/s  
+        held input: 2 key(s)
+  INFO  v2r_boost.v_first_step                          29.9921 m/s  
+        first simulated step of the transform
+  INFO  v2r_boost.v_mid_outgoing                        29.6554 m/s  
+        halfway to the mesh handoff
+  INFO  v2r_boost.v_handoff                             29.3188 m/s  
+        first step on the new form/mesh
+  INFO  v2r_boost.v_end                                 28.6257 m/s  
+        first step after the fold
+  INFO  v2r_boost.v_end_plus_0p25                       24.8757 m/s  
+        input still held
+  INFO  v2r_boost.fold_time                              1.1667 s    
+        press -> controllable
+  INFO  v2r_boost.time_to_regain_90pct                   1.1667 s    
+        press -> 90% of min(pre-transform speed, new form top speed)
+  INFO  summary                                          0.0000      
+        r2v_standstill=standstill; r2v_forward=KEPT; r2v_angled=KEPT; v2r_standstill=standstill; v2r_cruise=KEPT; v2r_angled=KEPT; v2r_boost=KEPT; 
+  KNOWN weapon_restore_frac_elapsed_to_robot             0.5000 frac  (orig 0.2500 +-0.05) owner=Gameplay
+        weapon visible at 0.583 s of a 1.167 s fold. Rebuild attaches the gun to the drawn robot mesh, which appears at kTransformHandoffFrac; the original animates both meshes for the whole fold (RE HANDOFF #4), so the gun can show at 25%
+
+[fast_movement]
+  INFO  robot_jog_speed                                 14.0000 m/s  
+        W only (GroundSpeed 550 UU CONF)
+  INFO  robot_speed_W+Sprint(Shift)                     14.0000 m/s  
+        max grounded horizontal speed; anim Nav_StrafeJog_F
+  INFO  robot_speed_W+Jump                              14.0000 m/s  
+        max grounded horizontal speed; anim Nav_StrafeJog_F
+  INFO  robot_speed_W+Fire                              14.0000 m/s  
+        max grounded horizontal speed; anim Nav_StrafeJog_F
+  INFO  robot_categories_unreached                       9.0000 cats 
+        authored robot clip categories never selected as the BASE clip by these input scenarios (layered slots and synthetic blend labels are not attributed): aim boost_dodge death equip fire hit_reaction melee reload turn 
+  KNOWN boost_dodge_clips_reachable                  owner=Gameplay
+        no input reaches these clips; Optimus's ability loadout (which slot holds Dodge) is UNKNOWN
+
+[fine_aim]
+  INFO  camera_lateral_shift                             0.0518 m     (model -2.0000)
+        authored shoulder offset X 150 -> -50 UU (values CONFIRMED, axis semantics PROV)
+
+[boost]
+  INFO  authored_boost_cues                              6.0000 cues 
+        BL_FS_LRG_BOT.FOLEY_JUMPJETS_BOOST BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_END BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_LOOP BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_WHEELS BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_RAM_BOOST_START 
+  INFO  authored_vehicle_boost_sockets                  11.0000 sockets
+        JumpBoostSocket_R@C_Body_XB HoverBooster_LFront@L_Wheel01_XB HoverBooster_RBack2@R_Wheel03_XB BoostSocket_R@R_Robo23_XT BoostSocket_L@L_Robo23_XT HoverBooster_RFront@R_Wheel01_XB JumpBoostSocket_L@C_Body_XB HoverBooster_RBack@R_Wheel02_XB HoverBooster_LBack2@L_Wheel03_XB JumpBoostSocket_C@C_Body_XB HoverBooster_LBack@L_Wheel02_XB 
+  INFO  boost_presentation_runtime_check                 0.0000      
+        boost cues/FX are World-side (not linked in this windowless harness): verified by runtime-probe.ps1 boost_presentation.{boost_cue_played,boost_fx_emitted} (VEH_OPTIMUS_BOOST_* cues, VFX parts while Driving)
+
+[vehicle_materials]
+  INFO  vehicle.authored_scalars_differing_from_robot    14.0000 params
+        ColorBrightness 0.6 (robot 1.5), Emissive_Intensity 3 (robot 20), EnergonPanUVTile 10 (robot 5), Energon_Intensity 1 (robot 0.5), PowerDown 0.5 (robot 1), ReflectionMipLevelScale 1 (robot 3), Reflection_Intensity 0.2 (robot 0.6), SpecSpowerAdd 0.15 (robot 0.2), SpecSpower_P_Constrast 0.6 (robot 0.65), SpecSpower_S_Constrast 15 (robot 10), SpecularColor_Desaturation 0 (robot 0.25), SpecularPower_Intensity 35 (robot 25), Specular_Intensity 0.65 (robot 0.4), energonIntensity 0.56 (robot 0.55), 
+  INFO  vehicle.compiled_switches_differing_from_robot     1.0000      
+        UseReconstructedNormal=true (robot false) 
+  INFO  vehicle.normal_map_unpack_alpha_min             -1.0000      
+        VH_Optimus_NORM PF_DXT5, authored UnpackMin [-1,-1,-1,-1]; graph uses X=.a, Y=.g, Z=sqrt(1-x2-y2) (UseReconstructedNormal). With alpha in [0,1] X is never negative - Rendering to confirm 360 sampling of DXT5 normal alpha
+
+[map_content]
+  INFO  props_lightmapped                             1755.0000 props
+        world.glb nodes with a lightmap binding
+  KNOWN missing.prefab_instances                         0.0000 actors (orig 16.0000 +-0) owner=AssetTools/RE
+        not composed into world.glb: original content absent (extraction gap, not a rendering bug)
+  KNOWN missing.static_destructibles                     0.0000 actors (orig 1.0000 +-0) owner=AssetTools/RE
+        not composed (extraction gap)
+  KNOWN unrendered.level_emitters                        0.0000 emitters (orig 8.0000 +-0) owner=Systems
+        WeaponFx handles weapon emitters only; level Emitter actors are not spawned
+  INFO  heightfog_actor                                  1.0000 actors
+        listed unhandled in map.json but recovered separately (FIDELITY: HeightFog CONF, applied)
+  KNOWN unplayed.ambient_sound_actors                    0.0000 actors (orig 70.0000 +-0) owner=Systems
+        no ambient-sound actor is instantiated by the runtime (no ambient code in src/game)
+  INFO  nonvisual_actor_classes                          0.0000      
+        intentionally not geometry: BRUSH=109 Model=3 Sequence=3 TnWorldInfo=3 BeastSettingsReferer=1 CameraActor=1 TnAssetReferencesMultiplayer=1 ; volumes=101
+  INFO  world_materials_compiled                       166.0000 mats 
+        of 166 world materials
+  INFO  render_lights                                  268.0000 lights
+        lighting.json (map.json counts 1 light actor; components in lighting.json)
+
+[input_edges]
+  KNOWN fire_tap_survives_zero_step_frame            owner=Gameplay
+        fire is the bDeferredFire latch consumed in PlayerTick; a click that lands on a zero-step render frame must still fire
+
+[transform_timeline]
+  INFO  flat_fallback_has_no_shift_absorption            0.0000      
+        CharacterMovement's col==nullptr branch lifts to hover height without addTransformShift (graybox fallback only)
+  INFO  r2v_stand.max_root_excess                        0.0618 m    
+        largest per-step drawn-root move beyond velocity*dt
+  INFO  r2v_stand.fold_time                              1.9833 s    
+  INFO  r2v_stand.mesh_handoff_progress                  0.5085 frac 
+        displayed mesh switches here; rebuild shows ONE mesh at a time
+  KNOWN r2v_stand.both_meshes_visible_during_fold    owner=Gameplay
+        Character::draw draws only currentModel(): one mesh, switched at the mid-fold handoff (0.508)
+  INFO  r2v_moving.max_root_excess                       0.0080 m    
+        largest per-step drawn-root move beyond velocity*dt
+  INFO  r2v_moving.fold_time                             1.9833 s    
+  INFO  r2v_moving.mesh_handoff_progress                 0.5085 frac 
+        displayed mesh switches here; rebuild shows ONE mesh at a time
+  KNOWN r2v_moving.both_meshes_visible_during_fold   owner=Gameplay
+        Character::draw draws only currentModel(): one mesh, switched at the mid-fold handoff (0.508)
+  KNOWN v2r_stand.no_usable_weapon_without_muzzle    owner=Gameplay
+        5 steps: weaponUsable() (restored at 25% + 0.2 s equip) turns true before the robot mesh is displayed (mid-fold handoff), so shots leave an invisible gun
+  INFO  v2r_stand.max_root_excess                        0.0082 m    
+        largest per-step drawn-root move beyond velocity*dt
+  INFO  v2r_stand.fold_time                              1.1500 s    
+  INFO  v2r_stand.mesh_handoff_progress                  0.5000 frac 
+        displayed mesh switches here; rebuild shows ONE mesh at a time
+  KNOWN v2r_stand.both_meshes_visible_during_fold    owner=Gameplay
+        Character::draw draws only currentModel(): one mesh, switched at the mid-fold handoff (0.500)
+  KNOWN v2r_moving.no_usable_weapon_without_muzzle   owner=Gameplay
+        5 steps: weaponUsable() (restored at 25% + 0.2 s equip) turns true before the robot mesh is displayed (mid-fold handoff), so shots leave an invisible gun
+  INFO  v2r_moving.max_root_excess                       0.0044 m    
+        largest per-step drawn-root move beyond velocity*dt
+  INFO  v2r_moving.fold_time                             1.1500 s    
+  INFO  v2r_moving.mesh_handoff_progress                 0.5000 frac 
+        displayed mesh switches here; rebuild shows ONE mesh at a time
+  KNOWN v2r_moving.both_meshes_visible_during_fold   owner=Gameplay
+        Character::draw draws only currentModel(): one mesh, switched at the mid-fold handoff (0.500)
+  KNOWN separate_arm_mesh                            owner=Gameplay
+        no arm mesh/visibility state exists in the rebuild (nothing to record)
+
+[vehicle_feel]
+  INFO  accel_t90_forward                                0.4500 s    
+        0 -> 90% hover cruise
+  INFO  cruise_speed                                    15.0000 m/s   (model 15.0000)
+        RE TARGETED_PASS2 #2 (HoverTruck_Physics; hover strafe sim, max 1500)
+  INFO  decel_t_to_1ms                                   0.4667 s    
+        release at cruise -> < 1 m/s (hover damping; capture original to compare)
+  INFO  accel_t90_lateral                                0.4500 s    
+        strafe right from rest (hover strafes in vehicle-local axes)
+  INFO  lateral_retention_0p5s                           4.0398 m/s  
+        velocity still along the pre-turn direction 0.5 s after a 90 deg camera turn
+  INFO  heading_error_after_turn_deg                     0.0000 deg  
+        hover heading tracks the camera (RE HANDOFF #7) - expect ~0
+  INFO  ride_height                                      1.8500 m     (model 1.8500)
+  INFO  hover_drop_undershoot                            0.0000 m    
+        min height error after a 1 m drop (negative = sinks below ride height)
+  INFO  hover_drop_crossings                             0.0000 n    
+        oscillation zero-crossings after a 1 m drop (0 = critically damped / snapped)
+  INFO  hover_settle_time                                0.3167 s    
+  INFO  roll_pitch_represented                           0.0000      
+        vehicle body has yaw only (no roll/pitch state exposed)
+  INFO  jump_launch_vy                                   0.0000 m/s   (model 12.0000)
+        HoverTruck JumpLinearSpeed 1200 UU/s expected if the jump fires
+  INFO  jump_apex_above_hover                            0.0000 m    
+  INFO  jump_landing_vy                                  0.0000 m/s  
+        vertical speed on touchdown
+  INFO  jump_airtime                                     0.1000 s    
+  INFO  reversal_t_to_minus90                            0.9500 s    
+        forward cruise -> 90% reverse speed
+  INFO  boost_t90                                        0.4833 s    
+        cruise -> 90% boost speed
+  INFO  dash_no_stick_peak_speed                         0.0000 m/s  
+        Dash pressed with no stick input (expected behaviour UNKNOWN)
+  INFO  dash_time_above_cruise                           0.9667 s    
+        plateau + decay back to hover cruise (decay curve not recovered)
+  INFO  weight_is_a_human_call                           0.0000      
+        these probes explain feel differences; they do not prove 'weight' - compare with an original capture
+
+[fine_aim_presentation]
+  INFO  state_fine_aiming                                1.0000      
+        controller fineAiming() after an RMB toggle (-1 = not exposed)
+  INFO  fov                                             45.0000 deg   (model 45.0000)
+        CONFIRMED 45 (RE TARGETED_PASS #3)
+  INFO  spread_multiplier_applied_in                     0.0000      
+        World::fireHitscan scales spread by kFineAimSpreadMult (0.5, CONFIRMED) while pawn.fineAiming(); not observable in the windowless harness (World is stubbed) - code-level check only
+  KNOWN start_end_audio                              owner=Systems
+        no fine-aim start/stop cue is wired in the rebuild (no matching SoundCues entry / call)
+  INFO  reticle_hud                                      0.0000      
+        no HUD/reticle exists (window-title HUD only); the reticle asset relationship is not recovered - not asserted
+
+[trace_cost]
+  INFO  segment_2m_ms                                    0.0223 ms   
+        mean CollisionWorld::segmentHit cost (0/40 hit); this build's config
+  INFO  segment_30m_ms                                   0.6996 ms   
+        mean CollisionWorld::segmentHit cost (28/40 hit); this build's config
+  INFO  segment_300m_ms                                 32.3440 ms   
+        mean CollisionWorld::segmentHit cost (6/6 hit); this build's config
+  KNOWN hitscan_trace_under_1ms                      owner=Gameplay
+        segmentHit tests every grid cell in the segment's XZ bounding rectangle (O(area), 2 m cells, 1.85 M tris) instead of walking the cells the segment crosses (O(length)); 32.344 ms per 300 m ray
+
+[original_vs_rebuild]
+  KNOWN collision.max_step_height                        0.3500 m     (orig 0.3700 +-0.015) owner=Gameplay
+  KNOWN collision.wall_slide_speed                       0.2992 m/s   (orig 9.9000 +-0.4) owner=Gameplay
+  KNOWN movement.robot_jump_apex                         5.1427 m     (orig 5.0000 +-0.05) owner=Gameplay
+  KNOWN transform_momentum.weapon_restore_frac_elapsed_to_robot     0.5000 frac  (orig 0.2500 +-0.05) owner=Gameplay
+  INFO  pending_original_captures                       15.0000      
+        reference entries still awaiting an original-game measurement
+
+SUMMARY: 223 pass, 0 FAIL, 27 known-deviation, 176 info, 0 skip

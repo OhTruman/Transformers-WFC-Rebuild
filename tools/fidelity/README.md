@@ -43,7 +43,7 @@ Opt-in CMake targets compile the **unmodified** product sources plus one instrum
 ```
 `wfc_rebuild_prof` samples the main thread at ~1 kHz (SEH unwind; `WFC_PROF=<file>`).
 `wfc_rebuild_audiospy` replaces only `Win32Audio.cpp` with a recorder (`WFC_AUDIOSPY=<file>`).
-Results and ownership: [MILESTONE-03.md](MILESTONE-03.md).
+Results and ownership: [MILESTONE-03.md](MILESTONE-03.md); preserved evidence: [results/milestone-03/](results/milestone-03/README.md).
 
 ### Cross-branch A/B and merge gating
 ```powershell
