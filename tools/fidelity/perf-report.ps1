@@ -6,20 +6,25 @@
 #   present        Win32Window::present (SwapBuffers: driver queue / GPU-bound wait)
 #   visibility     Pipeline::computeEnv -> light visibility rays (CollisionWorld::segmentHit)
 #   lighting       Pipeline::computeEnv (light environment) without the rays
-#   trace          CollisionWorld::segmentHit/groundHeight outside lighting (hitscan, camera, movement)
+#   collision      CollisionWorld queries outside lighting (hitscan, camera aim ray, movement, camera)
+#   first_use      first-use GPU program / texture / static mesh builds (startup hitches)
+#   skinning       CPU skinning + dynamic vertex build/upload (skinPose, Pipeline::buildVertices/drawDynamic)
 #   particles      WeaponFx / VehicleFx code, renderer particle submission
 #   audio          SoundCues, Win32Audio
 #   weapon         WeaponMesh, weapon presentation/notifies, fireHitscan bookkeeping, recoil
-#   anim           SkinnedModel pose/skin, Character animation
+#   anim           pose sampling/blending, Character animation (not skinning)
 #   render         other renderer / GL driver work
-#   sim            other World::tick / movement / controller
+#   gameplay       CharacterMovement / PlayerController / Weapon logic
+#   sim            other World::tick
 #   other
 # ORIGIN (which subsystem's request caused it):
-#   shell_mag      WeaponFx::draw mesh-particle loop (WeaponFx.cpp:428-433) -> renderer drawMesh
+#   shell_mag      WeaponFx::draw -> renderer mesh draw (shell / magazine mesh particles)
 #   weapon_fx      other WeaponFx draw/tick/emit
 #   vehicle_fx     VehicleFx
 #   character      Character draw/animation (robot/vehicle/weapon meshes)
-#   hitscan        World::fireHitscan / PlayerController aim trace
+#   hitscan        World::fireHitscan (weapon trace)
+#   camera_aim     PlayerController::applyToPawn camera-ray aim trace
+#   movement       CharacterMovement (ground/wall queries)
 #   world          map draw, frame setup, post-process
 #   audio, sim, present, other
 param([string]$PerfDir = "", [string]$Exe = "")
@@ -27,7 +32,8 @@ $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 if (-not $PerfDir) { $PerfDir = Join-Path $root "work\fidelity\perf" }
 if (-not $Exe) { $Exe = Join-Path $root "build\bin\wfc_rebuild_prof.exe" }
-$sym = Join-Path $root ".toolchain\llvm-mingw-20260922-ucrt-x86_64\bin\llvm-symbolizer.exe"
+. (Join-Path $PSScriptRoot "lib\Run.ps1")
+$sym = Find-WfcTool "llvm-symbolizer" $root
 $imageBase = [UInt64]"0x140000000"
 
 # ---- load samples ------------------------------------------------------------------------------
@@ -79,28 +85,36 @@ function Describe($sc, $fr) {
 }
 
 function Classify($stack) {
+    # stack: leaf first. Cost = what the CPU does; origin = which subsystem asked for it.
     $fns = ($stack | ForEach-Object { $_.fn }) -join " | "
     $files = ($stack | ForEach-Object { $_.file }) -join " | "
     $cost =
         if ($fns -match "Win32Window::present") { "present" }
         elseif ($fns -match 'computeEnv' -and $fns -match 'segmentHit|World::load\(.*\)::\$_') { "visibility" }
         elseif ($fns -match "computeEnv") { "lighting" }
-        elseif ($fns -match "CollisionWorld::(segmentHit|groundHeight)") { "trace" }
-        elseif ($fns -match "WeaponFx::|VehicleFx::|drawParticles") { "particles" }
-        elseif ($fns -match "SoundCues::" -or $files -match "Win32Audio") { "audio" }
+        elseif ($fns -match "CollisionWorld::") { "collision" }
+        elseif ($fns -match "Pipeline::(programFor|buildProgram|texture|cubeTexture|upload)(\(|\s|$)") { "first_use" }   # symbolized names may carry a parameter list
+        elseif ($fns -match "skinPose|Pipeline::buildVertices|Pipeline::drawDynamic") { "skinning" }
+        elseif ($fns -match "WeaponFx::|VehicleFx::|drawParticles|drawSprites|drawFx") { "particles" }
+        elseif ($fns -match "SoundCues::|RobotFoley::" -or $files -match "Win32Audio|SpyAudio") { "audio" }
         elseif ($fns -match "WeaponMesh::|tickWeaponPresentation|handleWeaponNotify|fireHitscan|Recoil") { "weapon" }
-        elseif ($fns -match "samplePose|skinPose|blendPose|evaluatePose|Character::updateAnimation|Character::finalizePose" -or $files -match "SkinnedModel") { "anim" }
+        elseif ($fns -match "samplePose|blendPose|evaluatePose|poseGlobals|Character::updateAnimation|Character::finalizePose" -or $files -match "SkinnedModel") { "anim" }
         elseif ($files -match "src/render/|opengl32|atio|amd|nvogl|ig\w+icd") { "render" }
-        elseif ($fns -match "World::tick|CharacterMovement|PlayerController|Application::run") { "sim" }
+        elseif ($fns -match "CharacterMovement|PlayerController|Weapon::") { "gameplay" }
+        elseif ($fns -match "World::tick|Application::run") { "sim" }
         else { "other" }
     $origin = "other"
+    $drawing = $false
     foreach ($f in $stack) {
-        if ($f.fn -match "WeaponFx::draw" -and $f.line -ge 428 -and $f.line -le 433) { $origin = "shell_mag"; break }
+        if ($f.fn -match "Pipeline::(draw|drawSubs|computeEnv)\b|drawMesh") { $drawing = $true }
+        if ($f.fn -match "WeaponFx::draw") { $origin = $(if ($drawing) { "shell_mag" } else { "weapon_fx" }); break }   # mesh particles (shells/mags) go through drawMesh
         if ($f.fn -match "WeaponFx::") { $origin = "weapon_fx"; break }
         if ($f.fn -match "VehicleFx::") { $origin = "vehicle_fx"; break }
-        if ($f.fn -match "fireHitscan|PlayerController::applyToPawn|aimTrace|cameraTrace") { $origin = "hitscan"; break }
-        if ($f.fn -match "SoundCues::|tickEngineAudio" -or $f.file -match "Win32Audio") { $origin = "audio"; break }
+        if ($f.fn -match "fireHitscan") { $origin = "hitscan"; break }
+        if ($f.fn -match "PlayerController::applyToPawn" -and $fns -match "CollisionWorld::segmentHit") { $origin = "camera_aim"; break }
+        if ($f.fn -match "SoundCues::|RobotFoley::|tickEngineAudio" -or $f.file -match "Win32Audio") { $origin = "audio"; break }
         if ($f.fn -match "Character::(draw|updateAnimation)|WeaponMesh::|World::draw.*weapon") { $origin = "character"; break }
+        if ($f.fn -match "CharacterMovement::") { $origin = "movement"; break }
         if ($f.fn -match "Win32Window::present") { $origin = "present"; break }
     }
     if ($origin -eq "other") {
@@ -140,8 +154,8 @@ function Phases($name, $frames) {
 }
 
 $report = New-Object System.Collections.Generic.List[object]
-$costs = "present", "visibility", "lighting", "trace", "particles", "audio", "weapon", "anim", "render", "sim", "other"
-$origins = "shell_mag", "weapon_fx", "vehicle_fx", "character", "hitscan", "world", "audio", "sim", "present", "other"
+$costs = "present", "visibility", "lighting", "collision", "first_use", "skinning", "particles", "audio", "weapon", "anim", "render", "gameplay", "sim", "other"
+$origins = "shell_mag", "weapon_fx", "vehicle_fx", "character", "hitscan", "camera_aim", "movement", "world", "audio", "sim", "present", "other"
 foreach ($name in $scen.Keys) {
     $sc = $scen[$name]
     # profiler clock starts at static init, frame clock at process launch: align on the first sample in
@@ -225,6 +239,16 @@ $hot | Write-Output
 
 $csv = Join-Path $PerfDir "attribution.csv"
 $report | Export-Csv $csv -NoTypeInformation
-$report | Format-Table phase, frames, frame_ms, p95_ms, meshes, particles, cost_present, cost_visibility, cost_lighting, cost_trace, cost_particles, cost_render, cost_anim, cost_audio, cost_weapon, cost_sim -AutoSize | Out-String -Width 260
-$report | Where-Object { $_.samples -gt 0 } | Format-Table phase, frame_ms, origin_shell_mag, origin_weapon_fx, origin_vehicle_fx, origin_character, origin_hitscan, origin_world, origin_audio, origin_sim, origin_present, origin_other -AutoSize | Out-String -Width 260
+$report | Format-Table phase, frames, frame_ms, p95_ms, meshes, particles, cost_present, cost_visibility, cost_lighting, cost_collision, cost_first_use, cost_skinning, cost_particles, cost_render, cost_anim, cost_audio, cost_weapon, cost_gameplay, cost_sim -AutoSize | Out-String -Width 260
+$report | Where-Object { $_.samples -gt 0 } | Format-Table phase, frame_ms, origin_shell_mag, origin_weapon_fx, origin_vehicle_fx, origin_character, origin_hitscan, origin_camera_aim, origin_movement, origin_world, origin_audio, origin_sim, origin_present, origin_other -AutoSize | Out-String -Width 260
 "-> $csv"
+
+# ---- owning lane per cost (for handoffs) ----
+$lane = [ordered]@{ first_use = "Rendering (first-use program/texture builds)"; collision = "Gameplay (queries) / Systems (CollisionWorld::segmentHit traversal fix)"; visibility = "Rendering (light visibility rays)"
+                    lighting = "Rendering (dynamic light selection / env)"; skinning = "Rendering + Gameplay (CPU skinning / upload)"; render = "Rendering"
+                    particles = "Systems (effects)"; audio = "Systems"; weapon = "Gameplay"; anim = "Gameplay"; gameplay = "Gameplay"; sim = "Gameplay"; present = "GPU/driver" }
+$top = $report | Where-Object { $_.phase -match "held.mag1_2_3s|burst.firing" } | Select-Object -First 1
+if ($top) {
+    "PRIMARY COSTS in $($top.phase) ($($top.frame_ms) ms/frame):"
+    $lane.Keys | ForEach-Object { [pscustomobject]@{ cost = $_; ms = $top."cost_$_"; owner = $lane[$_] } } | Sort-Object ms -Descending | Select-Object -First 6 | Format-Table -AutoSize | Out-String -Width 200
+}

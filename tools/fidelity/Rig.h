@@ -65,6 +65,10 @@ template <class C> float reloadSlotWeight(const C& c) {
 }
 } // namespace layer
 
+// Harness-only access to private product members (Access.cpp).
+game::CollisionWorld& worldCollision(game::World& w);
+const render::MeshData& drawnPose(const game::Character& c);
+
 // Hitscan calls captured by the World::fireHitscan stub (WorldStub.cpp).
 struct ShotRecord { double t; core::Vec3 origin, dir; };
 std::vector<ShotRecord>& shotLog();
@@ -92,6 +96,14 @@ struct Frame {
     core::Vec3 meshOff;      // drawn-mesh offset from the pawn origin (transform height blend)
     layer::VehSnap veh;      // vehicle state machine (valid=false when not exposed)
     core::Vec3 muzzle;   // world-space barrel tip (valid when weaponVisible)
+    // Camera (PlayerController::updateCamera) and the drawn skinned pose.
+    core::Vec3 camPos, camFocus;   // camera position; anchor it orbits (pawn + mesh offset + Offset Z)
+    float camFov = 0;              // horizontal FOV (deg)
+    int drawnModel = -1;           // 0 robot mesh, 1 vehicle mesh, -1 none (fallback box)
+    float poseDelta = -1;          // max model-space vertex move vs the previous step (-1: model changed / none)
+    core::Vec3 bbMin, bbMax;       // world-space bounds of the drawn pose (1st..99th percentile per axis)
+    int farVerts = 0;              // drawn vertices more than 10 m from the root
+    float farMax = 0;              // farthest drawn vertex from the root (m)
 };
 
 // Extracted Optimus models, loaded once and shared by every rig (read-only asset access).
@@ -111,6 +123,7 @@ public:
 
     game::Character& pawn() { return player_.pawn(); }
     game::PlayerController& controller() { return player_.controller(); }
+    game::World& world() { return world_; }
     bool hasModels() const { return models_ != nullptr; }
     float dt() const { return dt_; }
     double time() const { return t_; }
@@ -118,6 +131,9 @@ public:
     // Optional collision. When set, movement runs through CharacterMovement directly with
     // the controller-computed intent (World's collision member is private to World).
     void setCollision(const game::CollisionWorld* c) { col_ = c; }
+    // Collision through World (World::collision()): the production PlayerController::applyToPawn
+    // path (full intent mapping incl. Boost/Dash/FineAim, camera collision, aim trace) runs against it.
+    void useWorldCollision(const render::MeshData& mesh) { worldCollision(world_).build(mesh); }
 
     // One fixed step with the given input (pressed[] edges are consumed this step).
     void step(const platform::InputFrame& in);
@@ -156,6 +172,8 @@ private:
     double t_ = 0;
     int step_ = 0;
     size_t shotBase_ = 0;
+    std::vector<float> prevPose_;
+    int prevModel_ = -2;
     std::vector<Frame> trace_;
 };
 

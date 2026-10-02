@@ -1,0 +1,69 @@
+﻿{
+    "idle":  {
+                 "visibility_rays":  {
+                                         "per_frame":  0
+                                     },
+                 "segment_hits":  {
+                                      "per_frame":  1.99
+                                  },
+                 "light_envs":  {
+                                    "per_frame":  0
+                                },
+                 "skin_calls":  {
+                                    "per_frame":  1.99
+                                },
+                 "dynamic_draws":  {
+                                       "per_frame":  1.99
+                                   },
+                 "vertex_builds":  {
+                                       "per_frame":  1.99
+                                   },
+                 "mesh_draws":  {
+                                    "per_frame":  1
+                                },
+                 "fx_draws":  {
+                                  "per_frame":  1
+                              },
+                 "hitscans":  {
+                                  "per_frame":  0
+                              }
+             },
+    "held_fire":  {
+                      "visibility_rays":  {
+                                              "per_frame":  56.17,
+                                              "per_firing_frame":  59.08
+                                          },
+                      "segment_hits":  {
+                                           "per_frame":  401.52,
+                                           "per_firing_frame":  419.08
+                                       },
+                      "light_envs":  {
+                                         "per_frame":  6.54,
+                                         "per_firing_frame":  6.92
+                                     },
+                      "skin_calls":  {
+                                         "per_frame":  1.98,
+                                         "per_firing_frame":  2
+                                     },
+                      "dynamic_draws":  {
+                                            "per_frame":  1.98,
+                                            "per_firing_frame":  2
+                                        },
+                      "vertex_builds":  {
+                                            "per_frame":  1.98,
+                                            "per_firing_frame":  2
+                                        },
+                      "mesh_draws":  {
+                                         "per_frame":  14.04,
+                                         "per_firing_frame":  14.2
+                                     },
+                      "fx_draws":  {
+                                       "per_frame":  0.99,
+                                       "per_firing_frame":  1
+                                   },
+                      "hitscans":  {
+                                       "per_frame":  0.25,
+                                       "per_firing_frame":  1
+                                   }
+                  }
+}

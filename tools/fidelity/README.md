@@ -34,7 +34,7 @@ exact numbers come from `wfc_fidelity`.
 Opt-in CMake targets compile the **unmodified** product sources plus one instrumentation file:
 ```powershell
 .\.toolchain\cmake-4.4.3-windows-x86_64\bin\cmake.exe -S . -B build -DWFC_BUILD_MEASURE=ON
-.\.toolchain\cmake-4.4.3-windows-x86_64\bin\cmake.exe --build build --target wfc_rebuild_prof wfc_rebuild_audiospy
+.\.toolchain\cmake-4.4.3-windows-x86_64\bin\cmake.exe --build build --target wfc_rebuild_prof wfc_rebuild_observe wfc_rebuild_count
 .\tools\fidelity\perf-profile.ps1      # idle/walk/fineaim/burst/held_fire  -> work\fidelity\perf\
 .\tools\fidelity\perf-report.ps1       # cost x origin attribution, hot functions, accumulation regression
 .\tools\fidelity\audio-attach.ps1      # sounds left at their trigger point while the owner moves
@@ -42,8 +42,25 @@ Opt-in CMake targets compile the **unmodified** product sources plus one instrum
 .\build\bin\wfc_fidelity.exe --map --only trace_cost   # deterministic per-ray collision cost
 ```
 `wfc_rebuild_prof` samples the main thread at ~1 kHz (SEH unwind; `WFC_PROF=<file>`).
-`wfc_rebuild_audiospy` replaces only `Win32Audio.cpp` with a recorder (`WFC_AUDIOSPY=<file>`).
 Results and ownership: [MILESTONE-03.md](MILESTONE-03.md); preserved evidence: [results/milestone-03/](results/milestone-03/README.md).
+
+### Milestone 03 pass 2: deterministic exe, analyzers, merge gate
+| Target / script | What |
+|---|---|
+| `wfc_rebuild_observe` | **Lockstep** exe: `Time.cpp` → `measure/LockstepClock.cpp` (exactly one 60 Hz step per frame, so frame N is always the same moment), frame grabber (`WFC_GRAB=60:180:2`, `WFC_GRAB_DIR`), debug-overlay record (`WFC_DEBUGSTATE`), audio recorder (`measure/SpyAudio.cpp`: simulation-time stamps, models `isPlaying()`). Product sources are unmodified. |
+| `wfc_rebuild_count` | Lockstep, plus `-finstrument-functions` on collision / world / FX / skinning / WFC pipeline → `measure/CallCounter.cpp`. Gives exact per-frame call counts; absolute times are inflated, so use counts only. |
+| `m03-gate.ps1` | **Milestone 03 acceptance gate** (Integration runs `.	oolsidelitym03-gate.ps1` after merging): build, render data, every suite below, comparison with `results/m03-baseline`, `M03-GATE.md` (PASS/FAIL/KNOWN/INFO plus PERFORMANCE / VISUAL / AUDIO / TRANSFORMATION / VEHICLE / MAP regressions and the HUMAN CHECK list), exit 1 on any FAIL. `-Quick`, `-SkipBuild`, `-ReportOnly` (re-compare an existing run), `-WriteBaseline` (Experimental only), `-CounterTimeoutSec`. |
+| `transform-capture.ps1` | Real-exe transform analyzer: lockstep grabs through both folds (fixed side camera and moving chase camera), per-frame CSV, image-continuity pops, exact debug-geometry record, camera pops, labelled contact sheets. |
+| harness `transform_analyzer` | Simulation side: authored overlap windows (R→V 0.396–0.880 s, V→R 0.098–0.663 s), drawn-pose freeze vs authored holds, mesh appearance time / normalized clip time, silhouette jump, far-flung vertices, camera cut / swing, usable weapon without a muzzle; per-step `transform_<case>.csv`. |
+| harness `vehicle_profiles` | HOVER / BOOST / DASH / NITRO through the production `PlayerController::applyToPawn` path on synthetic terrain (flat, 0.5 m step, bumps, 4 m ledge): accel/decel, steering at speed, yaw lag, lateral, reversal, hover height / drop / oscillation, terrain snap, airtime / landing, jump. Every value tagged CONFIRMED ORIGINAL / HIGH CONFIDENCE / UNKNOWN; `vehicle_profiles.json`. |
+| harness `fine_aim_probe` | State, RMB toggle, FOV entry/exit time, camera distance and lateral offset (unresolved: [FINE-AIM-EVIDENCE-REQUEST.md](FINE-AIM-EVIDENCE-REQUEST.md)), look / move / spread multipliers, reload interrupt / resume, transform cancel, start/end audio wiring, reticle. |
+| `audio-attach.ps1` | Every sound instance joined with the owner pose of its frame: cue (via the tree's own `SoundCues.inc`), attachment, owner-local offset, attenuation, pan, gain, lifetime. Flags sounds that stop following the pawn; presence checks for footsteps / transform / landing / fine-aim cues; `offending_cues.txt`. |
+| `vehicle-visual.ps1` | Fixed-camera vehicle stills (idle angles WFC / legacy / glTF bakes, hover FX, boost, dash, nitro on an open run, transform midpoint, darkest/brightest spawn) with a material sidecar (slots, chain, textures by role, switches, runtime params, EnergonColor, customization push). |
+| `map-audit.ps1` | Streets inventory in seven classes, per object; consumes Rendering's `map_audit.json` when present; resolves PrefabInstances through member tags; covers ambient audio (runtime), movers, pickups, the destructible. |
+| `perf-report.ps1` (rebased) / `perf-counters.ps1` | Costs: collision, visibility, lighting, skinning, particles, audio, render, gameplay. Origins: hitscan vs camera-aim ray, shell/magazine meshes, vehicle FX. Exact counters for visibility rays, `segmentHit`, light envs, skinning, dynamic/mesh draws. |
+| `ab.ps1 -Measure` | Also builds prof + observe for any ref in isolation (cross-branch validation). |
+Shared helpers: `lib/Run.ps1` (process env, frame-log parser, report writer, sheets), `lib/ImageStats.cs`.
+Human checklist: [HUMAN-CHECK.md](HUMAN-CHECK.md). Pass-2 findings: [MILESTONE-03-PASS2.md](MILESTONE-03-PASS2.md).
 
 ### Cross-branch A/B and merge gating
 ```powershell

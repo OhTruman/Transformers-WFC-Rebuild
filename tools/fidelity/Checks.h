@@ -39,6 +39,9 @@ void checkTransformTimeline(Report& r);
 void checkVehicleFeel(Report& r);
 void checkFineAimPresentation(Report& r);
 void checkTraceCost(Report& r);
+void checkTransformAnalyzer(Report& r);   // M03 pass 2: authored overlap windows, pose/camera/root flags
+void checkVehicleProfiles(Report& r);     // M03 pass 2: HOVER/BOOST/DASH/NITRO on terrain, production path
+void checkFineAimProbe(Report& r);        // M03 pass 2: full fine-aim probe
 
 // Compare measured metrics against values captured from the ORIGINAL game.
 void compareReference(Report& r, const std::string& path);

@@ -44,7 +44,9 @@ public:
         samples_.reserve(kMaxSamples);   // never allocate while the main thread is suspended
         timeBeginPeriod(1);
         running_ = true;
+        mainTid_ = GetCurrentThreadId();
         thread_ = CreateThread(nullptr, 0, &Profiler::threadMain, this, 0, nullptr);
+        watchdog_ = CreateThread(nullptr, 0, &Profiler::watchdogMain, this, 0, nullptr);
         std::atexit(&Profiler::onExit);
         self() = this;
     }
@@ -53,12 +55,43 @@ public:
 private:
     static DWORD WINAPI threadMain(LPVOID p) { static_cast<Profiler*>(p)->loop(); return 0; }
 
+    // The main thread may own a lock the unwinder needs (loader lock during LoadLibrary, the
+    // function-table lock): suspending it there and calling RtlLookupFunctionEntry deadlocks.
+    // (1) skip samples while the main thread owns the PEB loader lock; (2) a watchdog resumes the
+    // main thread if a sample takes > 20 ms, and that sample is discarded. state_: 1 = suspended by
+    // the sampler; whoever moves it 1 -> 0 calls ResumeThread (exactly once).
+    bool mainOwnsLoaderLock() const {
+        auto* peb = reinterpret_cast<const char*>(__readgsqword(0x60));
+        auto* ll = *reinterpret_cast<RTL_CRITICAL_SECTION* const*>(peb + 0x110);   // PEB.LoaderLock (x64)
+        return ll && ll->OwningThread && (DWORD)(uintptr_t)ll->OwningThread == mainTid_ && ll->RecursionCount > 0;
+    }
+    void resumeOnce() { if (InterlockedCompareExchange(&state_, 0, 1) == 1) ResumeThread(main_); }
+
+    static DWORD WINAPI watchdogMain(LPVOID p) {
+        auto* self = static_cast<Profiler*>(p);
+        while (self->running_) {
+            Sleep(5);
+            LONG64 at = InterlockedCompareExchange64(&self->suspendedAt_, 0, 0);
+            if (self->state_ == 1 && at) {
+                LARGE_INTEGER now; QueryPerformanceCounter(&now);
+                if ((now.QuadPart - at) * 1000 > self->freq_.QuadPart * 20) { self->rescued_ = true; self->resumeOnce(); }
+            }
+        }
+        return 0;
+    }
+
     void loop() {
         SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
         while (running_) {
             Sleep(periodMs_);
             if (samples_.size() >= kMaxSamples) break;   // buffer full: stop rather than reallocate
+            if (mainOwnsLoaderLock()) { ++skipped_; continue; }
+            rescued_ = false;
             if (SuspendThread(main_) == (DWORD)-1) break;
+            LARGE_INTEGER sus; QueryPerformanceCounter(&sus);
+            InterlockedExchange64(&suspendedAt_, sus.QuadPart);
+            InterlockedExchange(&state_, 1);
+            if (mainOwnsLoaderLock()) { resumeOnce(); ++skipped_; continue; }   // took it between check and suspend
             CONTEXT ctx;
             ctx.ContextFlags = CONTEXT_FULL;
             if (GetThreadContext(main_, &ctx)) {
@@ -70,7 +103,7 @@ private:
                 // Every stack read is bounds-checked against the main thread's stack; the unwinder
                 // only reads unwind tables and the (suspended) stack. No allocation happens here.
                 s.depth = 0;
-                for (int i = 0; i < 48 && ctx.Rip; ++i) {
+                for (int i = 0; i < 48 && ctx.Rip && !rescued_; ++i) {
                     if (ctx.Rsp < stackLo_ || ctx.Rsp + 64 > stackHi_) break;
                     s.pc[s.depth++] = ctx.Rip;
                     DWORD64 base = 0;
@@ -84,24 +117,19 @@ private:
                     DWORD64 frame = 0;
                     RtlVirtualUnwind(UNW_FLAG_NHANDLER, base, ctx.Rip, fn, &ctx, &handler, &frame, nullptr);
                 }
-                samples_.push_back(s);
+                if (!rescued_) samples_.push_back(s); else ++skipped_;   // stack moved under us: drop
             }
-            ResumeThread(main_);
+            InterlockedExchange64(&suspendedAt_, 0);
+            resumeOnce();
         }
     }
 
     static void onExit() {
         Profiler* p = self();
-        std::fprintf(stderr, "PROF onExit running=%d n=%zu\n", p ? (int)p->running_ : -1, p ? p->samples_.size() : (size_t)0);
-        std::fflush(stderr);
         if (!p || !p->running_) return;
         p->running_ = false;
         WaitForSingleObject(p->thread_, 2000);
-        std::fprintf(stderr, "PROF joined\n");
-        std::fflush(stderr);
         p->write();
-        std::fprintf(stderr, "PROF written\n");
-        std::fflush(stderr);
     }
 
     void write() {
@@ -123,7 +151,7 @@ private:
             mods[m] = id;
             return id;
         };
-        std::fprintf(f, "# samples %zu period_ms %lu\n", samples_.size(), (unsigned long)periodMs_);
+        std::fprintf(f, "# samples %zu period_ms %lu skipped %ld\n", samples_.size(), (unsigned long)periodMs_, (long)skipped_);
         std::string body;
         char buf[64];
         for (const Sample& s : samples_) {
@@ -144,7 +172,12 @@ private:
 
     static constexpr size_t kMaxSamples = 1 << 16;
     std::string out_;
-    HANDLE main_ = nullptr, thread_ = nullptr;
+    HANDLE main_ = nullptr, thread_ = nullptr, watchdog_ = nullptr;
+    DWORD mainTid_ = 0;
+    volatile LONG state_ = 0;            // 1 while the sampler holds the main thread suspended
+    volatile LONG64 suspendedAt_ = 0;    // QPC time of the current suspension (0 = none)
+    volatile bool rescued_ = false;      // the watchdog resumed the main thread mid-sample
+    volatile long skipped_ = 0;          // samples skipped (loader lock held / rescued)
     DWORD periodMs_ = 1;
     ULONG_PTR stackLo_ = 0, stackHi_ = 0;
     LARGE_INTEGER freq_{}, t0_{};

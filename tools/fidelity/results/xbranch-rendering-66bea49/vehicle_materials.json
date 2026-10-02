@@ -1,0 +1,88 @@
+﻿{
+    "vehicle_glb_materials":  2,
+    "game_pushes_customization":  false,
+    "customization_note":  "no setCharacterColors call in World.cpp: Cust_Color_A/B and EnergonColor keep the compiled defaults",
+    "slots":  [
+                  {
+                      "glb_material":  "RB_OptimusPrime_Cust2_Mat_INST",
+                      "resolved":  "TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST",
+                      "compiled":  true,
+                      "error":  null,
+                      "chain":  "TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST",
+                      "master":  "TR_AllShader_p.Release.CHR_Transformer_NormSpec_Cust_E_Mat",
+                      "lighting_model":  "MLM_Phong",
+                      "blend":  "BLEND_Opaque",
+                      "connected":  [
+                                        "DiffuseColor",
+                                        "EmissiveColor",
+                                        "Normal",
+                                        "SpecularColor",
+                                        "SpecularPower"
+                                    ],
+                      "textures":  {
+                                       "normal":  [
+                                                      "TR_Optimus_VEH_p.VH_Optimus_NORM"
+                                                  ],
+                                       "cubemap":  [
+                                                       "TR_AllShader_p.CubeMaps.CHR_Metals_CUBEMAP3D"
+                                                   ],
+                                       "emissive":  [
+                                                        "TR_Optimus_VEH_p.VH_Optimus_SpecPwr_DifLum_EnrGlow",
+                                                        "TR_Optimus_VEH_p.VH_Optimus_CustAB_AuxGlow"
+                                                    ],
+                                       "diffuse":  [
+                                                       "TR_Optimus_VEH_p.VH_Optimus_GrungeClr"
+                                                   ],
+                                       "other":  [
+                                                     "TR_AllShader_p.Textures.fractalMaps"
+                                                 ]
+                                   },
+                      "switches_on":  [
+                                          "UseDiffuseReflection",
+                                          "UseEmissiveReflection",
+                                          "UseSpecPower_S_Curve",
+                                          "UseReconstructedNormal",
+                                          "UseAutobotEnergonColor"
+                                      ],
+                      "runtime_params":  [
+                                             "Cust_COLOR_B",
+                                             "Cust_Color_A",
+                                             "EnergonColor"
+                                         ],
+                      "energon_color":  "compiled default (no runtime override)"
+                  },
+                  {
+                      "glb_material":  "InteriorAlt_Energon_MAT_INST",
+                      "resolved":  "TR_Optimus_VEH_p.InteriorAlt_Energon_MAT_INST",
+                      "compiled":  true,
+                      "error":  null,
+                      "chain":  "TR_Optimus_VEH_p.InteriorAlt_Energon_MAT_INST",
+                      "master":  "TR_AllShader_p.Release.InteriorAlt_Energon_MAT",
+                      "lighting_model":  "MLM_Phong",
+                      "blend":  "BLEND_Opaque",
+                      "connected":  [
+                                        "DiffuseColor",
+                                        "EmissiveColor",
+                                        "Normal",
+                                        "SpecularColor",
+                                        "SpecularPower"
+                                    ],
+                      "textures":  {
+                                       "normal":  [
+                                                      "TR_AllShader_p.Textures.Interior_Norm"
+                                                  ],
+                                       "diffuse":  [
+                                                       "TR_AllShader_p.Textures.Interior_Color"
+                                                   ],
+                                       "emissive":  [
+                                                        "TR_AllShader_p.Textures.Interior_Emiss"
+                                                    ]
+                                   },
+                      "switches_on":  "UseAutobotEnergonColor",
+                      "runtime_params":  {
+
+                                         },
+                      "energon_color":  "compiled default (no runtime override)"
+                  }
+              ]
+}

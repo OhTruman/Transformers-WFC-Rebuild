@@ -1,0 +1,669 @@
+﻿{
+    "summary":  {
+                    "pass":  39,
+                    "fail":  0,
+                    "known":  24,
+                    "info":  30,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "audio_attach.stationary_transform.ran",
+                        "status":  "PASS",
+                        "measured":  8,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  1.85,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.GUNf_MVMNT_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  1.85,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.EVENT_IACON_BRIDGE_TRANSFORM_GEARS.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue (no cue) EVENT_IACON_BRIDGE_TRANSFORM_GEARS.WAV: 1 instance(s) (fixed); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.GUNf_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.AUTO_OPTIMUS_IDLE_LR_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.ran",
+                        "status":  "PASS",
+                        "measured":  7,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "KNOWN",
+                        "measured":  12.742,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 1 of 1 instance(s) stop following the pawn (never-updated); offset grew up to 12.7 m while the pawn moved 15.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.GUNf_MVMNT_03.wav",
+                        "status":  "PASS",
+                        "measured":  2.831,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) follow the pawn (never-updated) while it moved 2.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.EVENT_IACON_BRIDGE_TRANSFORM_GEARS.wav",
+                        "status":  "KNOWN",
+                        "measured":  29.055,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue (no cue) EVENT_IACON_BRIDGE_TRANSFORM_GEARS.WAV: 1 of 1 instance(s) stop following the pawn (fixed); offset grew up to 29.1 m while the pawn moved 29.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  2.513,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 1 instance(s) follow the pawn (updated) while it moved 2.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  2.513,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 1 instance(s) follow the pawn (updated) while it moved 2.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.ran",
+                        "status":  "PASS",
+                        "measured":  10,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "KNOWN",
+                        "measured":  12.891,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 1 of 2 instance(s) stop following the pawn (never-updated); offset grew up to 12.9 m while the pawn moved 15.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.GUNf_MVMNT_03.wav",
+                        "status":  "PASS",
+                        "measured":  2.831,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 2 instance(s) follow the pawn (never-updated) while it moved 2.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.GUN_RIFLE_BOLT_ACTION.wav",
+                        "status":  "KNOWN",
+                        "measured":  2.506,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue IDLE_02: 1 of 2 instance(s) stop following the pawn (never-updated); offset grew up to 2.5 m while the pawn moved 5.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  1.002,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.GUNf_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.863,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.ran",
+                        "status":  "PASS",
+                        "measured":  8,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "KNOWN",
+                        "measured":  8.17,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 1 of 2 instance(s) stop following the pawn (never-updated); offset grew up to 8.2 m while the pawn moved 12.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.GUNf_MVMNT_03.wav",
+                        "status":  "PASS",
+                        "measured":  2.83,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 2 instance(s) follow the pawn (never-updated) while it moved 2.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.RELOAD_AIR_RELEASE_THUMP.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01: 1 instance(s) (fixed); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.GUN_RIFLE_BOLT_ACTION.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_02: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.hover_move.ran",
+                        "status":  "PASS",
+                        "measured":  2,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.hover_move.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  36.796,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 1 instance(s) follow the pawn (updated) while it moved 36.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.hover_move.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  36.796,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 1 instance(s) follow the pawn (updated) while it moved 36.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.ran",
+                        "status":  "PASS",
+                        "measured":  11,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.AUTO_OPTIMUS_BOOST_START_LR.wav",
+                        "status":  "KNOWN",
+                        "measured":  54.452,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 1 of 1 instance(s) stop following the pawn (updated); offset grew up to 54.5 m while the pawn moved 55.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.WHSH_BOOST_FLARE_LR_03.wav",
+                        "status":  "KNOWN",
+                        "measured":  13.797,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 1 of 1 instance(s) stop following the pawn (never-updated); offset grew up to 13.8 m while the pawn moved 15.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.SYNTH_ENGINE_ACCEL.wav",
+                        "status":  "KNOWN",
+                        "measured":  12.893,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START: 1 of 1 instance(s) stop following the pawn (never-updated); offset grew up to 12.9 m while the pawn moved 14.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.SYNTH_AIR_RELEASE_04.wav",
+                        "status":  "KNOWN",
+                        "measured":  2.467,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_DRIVE_JUMP_START: 1 of 1 instance(s) stop following the pawn (never-updated); offset grew up to 2.5 m while the pawn moved 3.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.SYNTH_AIR_RELEASE_08.wav",
+                        "status":  "KNOWN",
+                        "measured":  11.34,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 1 of 1 instance(s) stop following the pawn (never-updated); offset grew up to 11.3 m while the pawn moved 11.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.JET_TURBO_WHINE_LP.wav",
+                        "status":  "PASS",
+                        "measured":  54.282,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 1 instance(s) follow the pawn (updated) while it moved 54.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.MECH_OPTIMUS_TIRE_NOISE_02_LP.wav",
+                        "status":  "PASS",
+                        "measured":  54.282,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 1 instance(s) follow the pawn (updated) while it moved 54.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  54.282,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 1 instance(s) follow the pawn (updated) while it moved 54.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.AUTO_OPTIMUS_ENGINE_BOOST_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  54.137,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 1 instance(s) follow the pawn (updated) while it moved 54.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  54.137,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 1 instance(s) follow the pawn (updated) while it moved 54.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.AUTO_BOOST_PEELOUT_TRUCK.wav",
+                        "status":  "KNOWN",
+                        "measured":  17.503,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_WHEELS: 1 of 1 instance(s) stop following the pawn (never-updated); offset grew up to 17.5 m while the pawn moved 17.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.dash.ran",
+                        "status":  "PASS",
+                        "measured":  2,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  55.64,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 1 instance(s) follow the pawn (updated) while it moved 55.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  55.64,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 1 instance(s) follow the pawn (updated) while it moved 55.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.ran",
+                        "status":  "PASS",
+                        "measured":  19,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.AUTO_OPTIMUS_BOOST_START_LR.wav",
+                        "status":  "KNOWN",
+                        "measured":  55.481,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 2 of 2 instance(s) stop following the pawn (updated); offset grew up to 55.5 m while the pawn moved 56.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.WHSH_BOOST_FLARE_LR_03.wav",
+                        "status":  "KNOWN",
+                        "measured":  15.686,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 2 of 2 instance(s) stop following the pawn (never-updated); offset grew up to 15.7 m while the pawn moved 17.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.SYNTH_ENGINE_ACCEL.wav",
+                        "status":  "KNOWN",
+                        "measured":  12.893,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START: 2 of 2 instance(s) stop following the pawn (never-updated); offset grew up to 12.9 m while the pawn moved 14.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.SYNTH_AIR_RELEASE_04.wav",
+                        "status":  "KNOWN",
+                        "measured":  8.917,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_DRIVE_JUMP_START: 2 of 2 instance(s) stop following the pawn (never-updated); offset grew up to 8.9 m while the pawn moved 10.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.SYNTH_AIR_RELEASE_08.wav",
+                        "status":  "KNOWN",
+                        "measured":  11.34,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 1 of 1 instance(s) stop following the pawn (never-updated); offset grew up to 11.3 m while the pawn moved 11.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.JET_TURBO_WHINE_LP.wav",
+                        "status":  "PASS",
+                        "measured":  55.23,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 1 instance(s) follow the pawn (updated) while it moved 55.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.MECH_OPTIMUS_TIRE_NOISE_02_LP.wav",
+                        "status":  "PASS",
+                        "measured":  55.23,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 1 instance(s) follow the pawn (updated) while it moved 55.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  55.23,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 1 instance(s) follow the pawn (updated) while it moved 55.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.AUTO_OPTIMUS_ENGINE_BOOST_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  55.083,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 1 instance(s) follow the pawn (updated) while it moved 55.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  55.083,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 1 instance(s) follow the pawn (updated) while it moved 55.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.AUTO_BOOST_PEELOUT_TRUCK.wav",
+                        "status":  "KNOWN",
+                        "measured":  17.503,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_BOOST_WHEELS: 1 of 1 instance(s) stop following the pawn (never-updated); offset grew up to 17.5 m while the pawn moved 17.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.MECH_ORB_ARM_04.wav",
+                        "status":  "KNOWN",
+                        "measured":  15.976,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_TRUCK_RAM_ALERT: 1 of 1 instance(s) stop following the pawn (updated); offset grew up to 16.0 m while the pawn moved 17.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.MECH_TRANS_RAM_ACTIVATE.wav",
+                        "status":  "KNOWN",
+                        "measured":  13.669,
+                        "unit":  "m",
+                        "owner":  "Systems",
+                        "note":  "cue VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 1 of 1 instance(s) stop following the pawn (never-updated); offset grew up to 13.7 m while the pawn moved 14.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.ran",
+                        "status":  "PASS",
+                        "measured":  2,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  12.005,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 1 instance(s) follow the pawn (updated) while it moved 12.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  12.005,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 1 instance(s) follow the pawn (updated) while it moved 12.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.ran",
+                        "status":  "PASS",
+                        "measured":  364,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_ION_BLASTER_HEAD.wav",
+                        "status":  "PASS",
+                        "measured":  6.343,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 68 instance(s) follow the pawn (updated) while it moved 6.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_SHELL_SLUG_DROP_CONCRT_03.wav",
+                        "status":  "PASS",
+                        "measured":  3.735,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 12 instance(s) follow the pawn (updated) while it moved 3.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_SHELL_SLUG_DROP_CONCRT_01.wav",
+                        "status":  "PASS",
+                        "measured":  3.735,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 22 instance(s) follow the pawn (updated) while it moved 3.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_HANDCANNON_SHOOT_LR_01.wav",
+                        "status":  "PASS",
+                        "measured":  6.686,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 67 instance(s) follow the pawn (updated) while it moved 6.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_SHELL_SLUG_DROP_CONCRT_02.wav",
+                        "status":  "PASS",
+                        "measured":  4.463,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 18 instance(s) follow the pawn (updated) while it moved 4.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_SHELL_SLUG_DROP_CONCRT_04.wav",
+                        "status":  "PASS",
+                        "measured":  6.288,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 20 instance(s) follow the pawn (updated) while it moved 6.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.LOW_AMMO_WARNING_01.wav",
+                        "status":  "INFO",
+                        "measured":  1.434,
+                        "unit":  "m",
+                        "note":  "cue SHOOT_LOW_AMMO|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY: 6 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_SERVO_MECH_05.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_AIR_RELEASE_THUMP.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_DW2_REDEEM_RELOAD_START.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_ION_BLASTER_TAIL.wav",
+                        "status":  "INFO",
+                        "measured":  0.822,
+                        "unit":  "m",
+                        "note":  "cue SHOOT_TAIL: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_FOLEY_MG_SERVO_MTL_SYNTH_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.197,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_SYNTH_BUBBLE.wav",
+                        "status":  "INFO",
+                        "measured":  0.788,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_MTL_SCRAPE_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.SERVO_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0.466,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.SERVO_IDLE_FOLY_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.566,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_BOLT_07.wav",
+                        "status":  "INFO",
+                        "measured":  0.262,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY: 4 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_RIFLE_CLIP_RELOAD.wav",
+                        "status":  "INFO",
+                        "measured":  0.539,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_FLANGE_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.827,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.ran",
+                        "status":  "PASS",
+                        "measured":  7,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 2 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.GUNf_MVMNT_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 2 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.GUNf_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.GUN_RIFLE_BOLT_ACTION.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_02: 1 instance(s) (never-updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.present.robot_footsteps.BL_FS_LRG_BOT_FS__",
+                        "status":  "KNOWN",
+                        "measured":  0,
+                        "owner":  "Systems",
+                        "note":  "robot footsteps (BL_FS_LRG_BOT, authored notifies)"
+                    },
+                    {
+                        "id":  "audio_attach.present.stationary_transform.BL_TRANSFORM_OPTIMUS_BOT2VEH",
+                        "status":  "KNOWN",
+                        "measured":  0,
+                        "owner":  "Systems",
+                        "note":  "transform to vehicle cue (BL_TRANSFORM.OPTIMUS_BOT2VEH)"
+                    },
+                    {
+                        "id":  "audio_attach.present.jump_land.BL_FS_LRG_BOT_FS_LAND_",
+                        "status":  "KNOWN",
+                        "measured":  0,
+                        "owner":  "Systems",
+                        "note":  "robot landing cue (BL_FS_LRG_BOT.FS_LAND_*)"
+                    },
+                    {
+                        "id":  "audio_attach.present.fine_aim._FINE_AIM_START",
+                        "status":  "KNOWN",
+                        "measured":  0,
+                        "owner":  "Systems",
+                        "note":  "fine aim start cue (WP_StartFineAim -\u003e FINE_AIM_START)"
+                    },
+                    {
+                        "id":  "audio_attach.present.fine_aim._FINE_AIM_END",
+                        "status":  "KNOWN",
+                        "measured":  0,
+                        "owner":  "Systems",
+                        "note":  "fine aim end cue (FINE_AIM_END)"
+                    },
+                    {
+                        "id":  "audio_attach.present.hover_move._",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "vehicle loops present (any cue while hovering)"
+                    }
+                ]
+}

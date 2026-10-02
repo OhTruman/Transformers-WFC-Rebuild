@@ -329,9 +329,15 @@ void checkFineAimPresentation(Report& r) {
     r.info("spread_multiplier_applied_in", 0, "",
            "World::fireHitscan scales spread by kFineAimSpreadMult (0.5, CONFIRMED) while pawn.fineAiming(); not observable "
            "in the windowless harness (World is stubbed) - code-level check only");
-    r.knownTruth("start_end_audio", false,
-                 "RE TARGETED_PASS #3: StartFineAim/StopFineAim fire weapon events 15/16 (WP_StartFineAim sound)", kSystems,
-                 "no fine-aim start/stop cue is wired in the rebuild (no matching SoundCues entry / call)");
+    {   // source scan of the tree under test (run from the worktree root); runtime: audio-attach.ps1
+        std::string inc, world;
+        bool wired = readFileText("src/game/SoundCues.inc", inc) && inc.find("FINE_AIM_START") != std::string::npos &&
+                     readFileText("src/game/World.cpp", world) && world.find("FINE_AIM_START") != std::string::npos;
+        r.knownTruth("start_end_audio", wired,
+                     "RE TARGETED_PASS #3: StartFineAim/StopFineAim fire weapon events 15/16 (WP_StartFineAim sound)", kSystems,
+                     wired ? "FINE_AIM_START/END cues present and played by World.cpp"
+                           : "no fine-aim start/stop cue is wired in the rebuild (no matching SoundCues entry / call)");
+    }
     r.info("reticle_hud", 0, "", "no HUD/reticle exists (window-title HUD only); the reticle asset relationship is not recovered - "
            "not asserted");
     save(g, "fine_aim_presentation");

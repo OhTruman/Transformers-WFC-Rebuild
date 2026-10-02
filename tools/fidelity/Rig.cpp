@@ -3,6 +3,8 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <algorithm>
+#include <cmath>
 
 namespace fid {
 
@@ -129,6 +131,52 @@ void Rig::record() {
     if (fr.weaponVisible)
         fr.muzzle = core::transformPoint(c.weaponWorld(), core::Vec3{core::config::kMuzzleLocalX,
                                          core::config::kMuzzleLocalY, core::config::kMuzzleLocalZ});
+    {
+        render::Camera cam = camera();
+        fr.camPos = cam.pos;
+        fr.camFov = cam.fovXDeg;
+        fr.camFocus = c.position() + fr.meshOff + core::Vec3{0, core::config::kCamHeight, 0};
+    }
+    // Drawn pose (Character::draw: currentModel() skinned into poseBuf_ at pos + meshOffset, yaw).
+    const assets::SkinnedModel* mdl = c.currentModel();
+    const render::MeshData& pose = drawnPose(c);
+    fr.drawnModel = (mdl && mdl->valid() && !pose.empty()) ? (models_ && mdl == &models_->vehicle ? 1 : 0) : -1;
+    if (fr.drawnModel >= 0) {
+        core::Mat4 model = core::Mat4::translate(c.position() + fr.meshOff) * core::Mat4::rotateY(c.yaw() + core::config::kMeshYawOffset);
+        const std::vector<float>& p = pose.positions;
+        // Robust bounds (1st..99th percentile per axis) so a few far-flung vertices do not dominate;
+        // vertices > 10 m from the root are counted separately (farVerts / farMax).
+        float d2 = 0;
+        bool same = fr.drawnModel == prevModel_ && prevPose_.size() == p.size();
+        core::Vec3 root = c.position() + fr.meshOff;
+        std::vector<float> ax[3];
+        for (auto& v : ax) v.reserve(p.size() / 3);
+        fr.farVerts = 0; fr.farMax = 0;
+        for (size_t i = 0; i + 2 < p.size(); i += 3) {
+            core::Vec3 w = core::transformPoint(model, core::Vec3{p[i], p[i + 1], p[i + 2]});
+            ax[0].push_back(w.x); ax[1].push_back(w.y); ax[2].push_back(w.z);
+            float dr = core::length(w - root);
+            if (dr > 10.0f) { ++fr.farVerts; fr.farMax = std::max(fr.farMax, dr); }
+            if (same) {
+                float dx = p[i] - prevPose_[i], dy = p[i + 1] - prevPose_[i + 1], dz = p[i + 2] - prevPose_[i + 2];
+                d2 = std::max(d2, dx * dx + dy * dy + dz * dz);
+            }
+        }
+        float lo[3], hi[3];
+        for (int k = 0; k < 3; ++k) {
+            std::vector<float>& v = ax[k];
+            size_t n = v.size(), a = n / 100, b = n - 1 - n / 100;
+            std::nth_element(v.begin(), v.begin() + (long)a, v.end()); lo[k] = v[a];
+            std::nth_element(v.begin(), v.begin() + (long)b, v.end()); hi[k] = v[b];
+        }
+        fr.bbMin = {lo[0], lo[1], lo[2]};
+        fr.bbMax = {hi[0], hi[1], hi[2]};
+        fr.poseDelta = same ? std::sqrt(d2) : -1.0f;
+        prevPose_ = p;
+    } else {
+        prevPose_.clear();
+    }
+    prevModel_ = fr.drawnModel;
     trace_.push_back(fr);
 }
 
@@ -145,11 +193,14 @@ bool Rig::writeCsv(const std::string& path) const {
     std::fprintf(f, "step,t,x,y,z,vx,vy,vz,hspeed,yaw_deg,cam_yaw_deg,cam_pitch_deg,grounded,form,"
                     "transforming,anim,anim_t,ammo,reserve,reloading,spread,shots,weapon_visible,reload_w,aim_w,aim_pitch_n,"
                     "muzzle_x,muzzle_y,muzzle_z,move_form,progress,weapon_usable,weapon_restored,mesh_off_y,"
-                    "veh_driving,veh_ride,veh_dash,veh_dash_cd,veh_nitro,veh_nitro_cd,fine_aim,fov\n");
+                    "veh_driving,veh_ride,veh_dash,veh_dash_cd,veh_nitro,veh_nitro_cd,fine_aim,fov,"
+                    "cam_x,cam_y,cam_z,cam_focus_x,cam_focus_y,cam_focus_z,cam_fov,drawn_model,pose_delta,"
+                    "bb_min_x,bb_min_y,bb_min_z,bb_max_x,bb_max_y,bb_max_z\n");
     for (const Frame& r : trace_) {
         std::fprintf(f, "%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.3f,%.3f,%.3f,%d,%s,%d,%s,%.4f,"
                         "%d,%d,%d,%.4f,%d,%d,%.3f,%.3f,%.3f,%.4f,%.4f,%.4f,"
-                        "%.0f,%.4f,%.0f,%.0f,%.4f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.0f,%.2f\n",
+                        "%.0f,%.4f,%.0f,%.0f,%.4f,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.0f,%.2f,"
+                        "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%d,%.5f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
                      r.step, r.t, r.pos.x, r.pos.y, r.pos.z, r.vel.x, r.vel.y, r.vel.z,
                      std::sqrt(r.vel.x * r.vel.x + r.vel.z * r.vel.z), core::degrees(r.yaw),
                      core::degrees(r.camYaw), core::degrees(r.camPitch), (int)r.grounded,
@@ -157,7 +208,9 @@ bool Rig::writeCsv(const std::string& path) const {
                      r.reserve, (int)r.reloading, r.spread, r.shots, (int)r.weaponVisible, r.reloadW, r.aimW, r.aimPitchN,
                      r.muzzle.x, r.muzzle.y, r.muzzle.z,
                      r.moveForm, r.progress, r.wUsable, r.wRestored, r.meshOff.y,
-                     (int)r.veh.driving, r.veh.ride, r.veh.dash, r.veh.dashCd, r.veh.nitro, r.veh.nitroCd, r.fineAim, r.fov);
+                     (int)r.veh.driving, r.veh.ride, r.veh.dash, r.veh.dashCd, r.veh.nitro, r.veh.nitroCd, r.fineAim, r.fov,
+                     r.camPos.x, r.camPos.y, r.camPos.z, r.camFocus.x, r.camFocus.y, r.camFocus.z, r.camFov, r.drawnModel,
+                     r.poseDelta, r.bbMin.x, r.bbMin.y, r.bbMin.z, r.bbMax.x, r.bbMax.y, r.bbMax.z, r.farVerts, r.farMax);
     }
     std::fclose(f);
     return true;
