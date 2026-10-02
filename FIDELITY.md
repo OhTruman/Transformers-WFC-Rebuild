@@ -132,7 +132,7 @@ Earlier "missing Streets surface table" requests (PASS 2, 3, 5) are resolved.
   `boost_fx_emitted`).
 * **Audio-attach:** 247 pass / 0 FAIL / 13 KNOWN. All 13 are `PP_DECO_MECH_*` zone pool one-shots, world-fixed
   by design (count varies with random pool timing). **0 player-owned sounds left behind.**
-* **Game runs:** 13 scenarios, footsteps/landing log only  default cues (walk, run, jump, hard land);
+* **Game runs:** 13 scenarios, footsteps/landing log only `BL_FS_LRG_BOT` default cues (walk, run, jump, hard land);
   repeated Boost start/loop/end and the BOOST_END duck unchanged; transform-out leaves no vehicle cue. Frame time (ms,
   range / mean): idle 6.4–10.6 / 7.0, movement 4.6–10.5 / 5.5, firing 6.7–13.1 / 10.3, sustained 6.5–13.1 / 9.7
   (PASS 5: 6.9–13.4), hover 3.7–7.7 / 4.4, Boost 3.6–8.0 / 4.6, Nitro 4.3–7.8 / 5.1. Particles/meshes → 0 after
