@@ -518,8 +518,10 @@ void World::tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, b
     if (grounded || !vehicle) airTime_ = 0.0f;
 }
 
-void World::notifyRamImpact(const core::Vec3& pos) {
+bool World::notifyRamHit(const void* target, const core::Vec3& pos) {
+    if (!nitro_.registerRamHit(target)) return false;
     cues_.play("VEH_TRUCK_RAM_IMPACT", pos, core::length(pos - listenerPos_));   // RamSound Auto_Ram_Impact
+    return true;
 }
 
 bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {

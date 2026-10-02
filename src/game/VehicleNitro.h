@@ -13,9 +13,13 @@
 //   (_Dashing) when the cooldown allows; StartNitro plays RamFX + NitroForceFeedback (3 s) and sets
 //   the nitro camera state; StopNitro stops RamFX and restores the scales to 1.0; leaving Driving
 //   (Driving.EndState) calls StopNitro. In state Hovering, dash is a plain hover dash (DoDash).
-// [MED] the 8 s cooldown is measured from nitro start (the bytecode compares it against the nitro
-// timer; the exact reference point is not decoded).
+// [CONF, native RE] the 8 s cooldown starts on activation; the nitro ends immediately when normal
+// Boost is released (leaving Driving); the Dash action (RB / abstract Dash) only starts a nitro while
+// Driving with Boost already active — while Hovering the same action is the hover dash (Gameplay).
+// No ram animation is authored: RamFX + the nitro/ram cues are the whole presentation.
+// Ram collision is active only during the nitro and hits each target at most once per nitro.
 #pragma once
+#include <vector>
 
 namespace game {
 
@@ -26,6 +30,15 @@ public:
     static constexpr float kSteeringScale = 0.3f;   // [CONF] NitroSteeringScale (Gameplay applies)
     static constexpr float kCooldown      = 8.0f;   // [CONF] TimeBetweenNitros
     static constexpr float kMaxRamMass    = 1000.0f;// [CONF] MaxRamMass
+
+    // [CONF] ram damage / momentum, TR_Optimus_VEHDEF_p.OptimusTruckForm (TnTruckFormBlueprint) x the
+    // TnTruckForm modifiers (all 1.0). Class defaults (Default__TnTruckFormBlueprint) in comments.
+    // For Gameplay's ram collision; Systems does not apply damage or impulses.
+    static constexpr float kRamDamageToPlayerRobots   = 175.0f;   // default 50
+    static constexpr float kRamDamageToAiRobots       = 300.0f;   // default 100
+    static constexpr float kRamDamageToPlayerVehicles = 175.0f;   // default 50
+    static constexpr float kRamDamageToAiVehicles     = 300.0f;   // default 100
+    static constexpr float kExtraRamZVelocityUU       = 7000.0f;  // default 1000 (UU/s upward on the rammed target)
 
     enum class Event { None, Started, Stopped };
 
@@ -40,6 +53,7 @@ public:
         }
         if (driving && dashPressed && sinceStart_ >= kCooldown) {
             active_ = true; remaining_ = kDuration; sinceStart_ = 0.0f;
+            rammed_.clear();                               // one hit per target per nitro
             return Event::Started;
         }
         return Event::None;
@@ -54,10 +68,20 @@ public:
     float speedScale() const { return active_ ? kSpeedScale : 1.0f; }
     float steeringScale() const { return active_ ? kSteeringScale : 1.0f; }
 
+    // Ram collision gate for Gameplay: true only during the nitro and only the first time `target`
+    // is hit in this nitro (AttemptToRam's _RammedPawns).
+    bool registerRamHit(const void* target) {
+        if (!active_ || !target) return false;
+        for (const void* t : rammed_) if (t == target) return false;
+        rammed_.push_back(target);
+        return true;
+    }
+
 private:
     bool active_ = false;
     float remaining_ = 0.0f;
     float sinceStart_ = 1e9f;
+    std::vector<const void*> rammed_;
 };
 
 } // namespace game

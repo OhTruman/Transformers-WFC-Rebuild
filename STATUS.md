@@ -3,6 +3,19 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS NATIVE-RE UPDATE (2026-10-01)
+- Ion Blaster cadence = original ~900 RPM: one-shot refire timer reset to 0 per shot, fires when elapsed
+  > 0.065 s, overshoot discarded, max one shot per tick (standalone check: 900 shots/min). Experimental's
+  923-RPM patch is NOT applied.
+- Nitro: cooldown starts on activation [CONF]; ends on Boost release [CONF]; ram hits gated to one per target
+  per nitro (`VehicleNitro::registerRamHit`, `World::notifyRamHit`); authored ram damage 175/300/175/300 and
+  ExtraRamZVelocity 7000 UU/s exposed for Gameplay.
+- Confirmed vehicle states (Boost LT/RMB, Hover Dash RB 3000 UU/s 0.5 s 2 s cooldown, Nitro RB while
+  boosting) recorded in FIDELITY.md "Native RE confirmation".
+- Gameplay handoff: `PlayerController` clears `wantFire_` after every fixed step but sets it once per render
+  frame, so a frame that runs 2 steps drops the second step's shot (measured ~4.4 ticks/shot in-game vs 4.0).
+  A held trigger should stay set for every step.
+
 ## SYSTEMS CHECKPOINT (2026-10-01) — end of round
 - Branch `agents/systems`, clean build. Implemented this round: weapon layering / recoil / aim offset,
   animated Ion Blaster + notifies, weapon FX (muzzle, tracer, impact, shell, magazine, reload), weapon

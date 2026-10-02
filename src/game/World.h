@@ -52,9 +52,11 @@ public:
     // Truck nitro / ram state (Systems-owned, read-only for Gameplay: nitroActive(), ramActive(),
     // speedScale(), steeringScale() — Gameplay applies the movement effect).
     const VehicleNitro& vehicleNitro() const { return nitro_; }
-    // Ram impact presentation (TnTruckForm.AttemptToRam -> RamSound Auto_Ram_Impact); for Gameplay's
-    // vehicle collision code to call when the ram hits a pawn.
-    void notifyRamImpact(const core::Vec3& pos);
+    // Ram hit (TnTruckForm.AttemptToRam): for Gameplay's vehicle collision code. Returns true when
+    // the hit counts — nitro active and `target` not yet hit this nitro — and then plays the ram
+    // impact cue (RamSound Auto_Ram_Impact). Damage / momentum stay with Gameplay (values in
+    // VehicleNitro::kRamDamage* / kExtraRamZVelocityUU).
+    bool notifyRamHit(const void* target, const core::Vec3& pos);
     bool usingSlice() const { return usingSlice_; }
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).

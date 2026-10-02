@@ -8,7 +8,11 @@ struct Weapon {
     const char* name = "Ion Blaster";
     float damage        = 15.0f;    // [CONF] InstantHitDamage
     float fireInterval  = 0.065f;   // [CONF] FireIntervalModifier.IntervalRange (Min=Max)
-    float cooldown      = 0.0f;
+    // Refire timer. [CONF, native RE] one-shot timer reset to zero after each shot; the weapon fires
+    // when elapsed > FireInterval (strictly), the fractional overshoot is discarded, and at most one
+    // shot fires per simulation tick. At 60 Hz this is a shot every 4th tick = ~900 RPM, which IS the
+    // original runtime cadence (not the 923 RPM a remainder-carrying timer would give).
+    float sinceShot     = 999.0f;
     int   magSize       = 50;       // [CONF] MaxAmmoClipCount
     int   ammo          = 50;
     int   reserveMax    = 250;      // [CONF] MaxAmmoCount
@@ -40,7 +44,7 @@ struct Weapon {
     int  lowAmmoThreshold = 5;      // [CONF] IonBlaster_WEPMESH.LowAmmoThreshold (WP_LowAmmoFire)
 
     void tick(float dt) {
-        if (cooldown > 0) cooldown -= dt;
+        if (sinceShot < 999.0f) sinceShot += dt;
         sinceFire += dt;
         if (sinceFire > spreadCooldown) spread = spreadMin;   // decay bloom after a pause
         if (reloadTimer > 0) {
@@ -49,9 +53,9 @@ struct Weapon {
         }
     }
     bool reloading() const { return reloadTimer > 0.0f; }
-    bool canFire() const { return cooldown <= 0.0f && ammo > 0 && !reloading(); }
+    bool canFire() const { return sinceShot > fireInterval && ammo > 0 && !reloading(); }
     void onFired() {
-        cooldown = fireInterval;
+        sinceShot = 0.0f;                       // reset to zero: overshoot discarded
         if (ammo > 0) --ammo;
         ++shotSerial;
         sinceFire = 0.0f;
