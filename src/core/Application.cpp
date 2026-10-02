@@ -4,6 +4,9 @@
 #include "core/Log.h"
 #include "platform/Window.h"
 #include "render/Renderer.h"
+#include "game/Collision.h"
+
+#include <chrono>
 
 #include <cmath>
 #include <cstdio>
@@ -107,11 +110,31 @@ void Application::run() {
         world_.handleInput(input, (float)realDt);
 
         // Fixed-step simulation.
+        static const long perfEvery = std::getenv("WFC_PERFLOG") ? std::atol(std::getenv("WFC_PERFLOG")) : 0;
+        auto simT0 = std::chrono::steady_clock::now();
+        game::CollisionWorld::Stats colBefore = game::CollisionWorld::stats();
         int steps = clock_.tick(realDt);
         float step = clock_.stepSeconds();
         for (int i = 0; i < steps; ++i) {
             world_.tick(step);
             gameMode_.tick(world_, step);
+        }
+        if (perfEvery > 0) {
+            // Gameplay-side cost (WFC_PERFLOG=N): simulation time and the segment traces issued by
+            // the simulation (movement, camera, aim and hitscan) vs the rest of the frame.
+            static double simMs = 0, frameMs = 0, simTraceMs = 0; static long simTraceCalls = 0, simTris = 0, n = 0;
+            const game::CollisionWorld::Stats& s = game::CollisionWorld::stats();
+            simMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - simT0).count();
+            simTraceMs += s.ms - colBefore.ms; simTraceCalls += s.calls - colBefore.calls; simTris += s.tris - colBefore.tris;
+            frameMs += realDt * 1000.0; ++n;
+            if (n == perfEvery) {
+                const auto& w = world_.player().pawn().weapon();
+                LOG_INFO("PERF f%ld frame=%.2fms sim=%.3fms simTrace=%.3fms calls=%.1f tris=%.0f/frame ammo=%d allTraceCalls=%ld allTraceMs=%.1f",
+                         frame, frameMs / n, simMs / n, simTraceMs / n, (double)simTraceCalls / n, (double)simTris / n,
+                         w.ammo, s.calls, s.ms);
+                simMs = frameMs = simTraceMs = 0; simTraceCalls = simTris = 0; n = 0;
+                game::CollisionWorld::stats() = {};
+            }
         }
 
         if (smokeFrames > 0 && std::getenv("WFC_AUTOBOOST") && frame % 3 == 0) {

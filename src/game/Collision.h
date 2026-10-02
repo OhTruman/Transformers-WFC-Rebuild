@@ -24,6 +24,10 @@ public:
     // Does the segment a->b hit any triangle? (used as a crude wall block). Returns nearest t in [0,1].
     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
 
+    // Diagnostics (WFC_PERFLOG): segment queries since the last reset, triangles tested, time.
+    struct Stats { long calls = 0; long tris = 0; double ms = 0.0; };
+    static Stats& stats();
+
 private:
     struct Tri { core::Vec3 a, b, c, n; };
 
