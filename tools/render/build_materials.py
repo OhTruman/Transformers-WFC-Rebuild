@@ -188,7 +188,7 @@ def main():
         res = {}
         for mp in mats:
             try:
-                mc = matc.MatCompiler(repo, mp, tr)
+                mc = matc.MatCompiler(repo, mp, tr, runtime_params=mp in extra)
                 glsl, info = mc.build()
                 res[mp] = {'glsl': glsl, 'info': info, 'error': None}
             except Exception as ex:

@@ -9,6 +9,16 @@
 
 namespace render {
 
+// Runtime character customization as pushed by WFC's TnCharacterApplier onto every character mesh
+// (robot, vehicle, separate arm, weapon): material vector parameters Cust_Color_A, Cust_COLOR_B and
+// EnergonColor, linear RGBA. A value whose RGB is all zero SKIPS the override (the material keeps
+// its authored value). The faction selects which colour set the caller passes.
+struct CharacterColors {
+    float primary[4] = {0, 0, 0, 1};     // Cust_Color_A
+    float secondary[4] = {0, 0, 0, 1};   // Cust_COLOR_B
+    float energon[4] = {0, 0, 0, 1};     // EnergonColor
+};
+
 class IRenderer {
 public:
     virtual ~IRenderer() = default;
@@ -46,6 +56,9 @@ public:
 
     // Segment occlusion query (true == blocked) used for dynamic-object light visibility,
     // like UE3's light-environment visibility traces. Optional.
+    // Character customization for subsequent dynamic draws (see CharacterColors). Optional.
+    virtual void setCharacterColors(const CharacterColors& c) { (void)c; }
+
     using VisibilityQuery = std::function<bool(const core::Vec3& from, const core::Vec3& to)>;
     virtual void setVisibilityQuery(VisibilityQuery q) { (void)q; }
 

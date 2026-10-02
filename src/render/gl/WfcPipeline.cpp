@@ -401,6 +401,8 @@ bool Pipeline::load(const std::string& mapName) {
         if (!e["glsl"].isString()) continue;
         MatSrc s;
         s.glsl = e["glsl"].asString();
+        for (size_t k = 0; k < e["info"]["runtime_params"].size(); ++k)
+            s.rtParams.push_back(e["info"]["runtime_params"][k].asString());
         const assets::Json& info = e["info"];
         const std::string bm = info["blend_mode"].asString();
         s.blend = bm == "BLEND_Masked" ? 1 : bm == "BLEND_Translucent" ? 2 : bm == "BLEND_Additive" ? 3
@@ -584,6 +586,23 @@ bool Pipeline::load(const std::string& mapName) {
         }
         else LOG_WARN("wfc: decals.glb missing; static decals not drawn");
     }
+    if (const char* cc = std::getenv("WFC_CHARCOLORS")) {   // verification: "pr,pg,pb;sr,sg,sb;er,eg,eb"
+        float v[9] = {};
+        std::sscanf(cc, "%f,%f,%f;%f,%f,%f;%f,%f,%f", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8]);
+        for (int i = 0; i < 3; ++i) { charColors_.primary[i] = v[i]; charColors_.secondary[i] = v[3 + i]; charColors_.energon[i] = v[6 + i]; }
+    }
+    if (const char* tm = std::getenv("WFC_TESTMESH")) {   // "file.glb|x,y,z|yawRad" (verification)
+        std::string spec = tm;
+        std::string file = spec.substr(0, spec.find('|'));
+        float x = 0, y = 0, z = 0, yaw = 0;
+        size_t a = spec.find('|');
+        if (a != std::string::npos) std::sscanf(spec.c_str() + a + 1, "%f,%f,%f|%f", &x, &y, &z, &yaw);
+        MeshData tmesh;
+        if (assets::loadGlb(file, tmesh)) {
+            testMesh_ = upload(tmesh);
+            testModel_ = core::Mat4::translate(core::Vec3{x, y, z}) * core::Mat4::rotateY(yaw);
+        }
+    }
     LOG_INFO("wfc: shader path active: %zu materials, %zu lightmapped components, %zu lights, fog %s (%s)",
              mats_.size(), lightmaps_.size(), lights_.size(), fogOn_ ? "on" : "off", dataDir_.c_str());
     return true;
@@ -649,9 +668,10 @@ GLuint Pipeline::cubeTexture(const std::vector<std::string>& faces, bool srgb) {
 // ------------------------------------------------------------------------- programs
 int Pipeline::buildProgram(const std::string& key, const std::string& body, const std::vector<Program::Slot>& slots,
                            const std::vector<bool>& slotIsCube, int blend, bool twoSided, bool lit, float clip,
-                           bool lightmapped) {
+                           bool lightmapped, const std::vector<std::string>& rtParams) {
     std::string fs = kFSHead;
     std::string code = body;
+    for (const std::string& n : rtParams) fs += "uniform vec4 uRT_" + n + "; uniform int uRTSet_" + n + ";\n";
     for (size_t k = 0; k < slots.size(); ++k) {
         std::string n = std::to_string(k);
         if (slotIsCube[k]) {
@@ -686,6 +706,11 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     P.uLPos = U("uLPos"); P.uLDir = U("uLDir"); P.uLCol = U("uLCol"); P.uLSpot = U("uLSpot");
     P.uFogOn = U("uFogOn"); P.uFogMaxH = U("uFogMaxH"); P.uFogScale = U("uFogScale"); P.uFogStart = U("uFogStart");
     P.uFogExt = U("uFogExt"); P.uFogIn = U("uFogIn");
+    static const char* kRT[3] = {"Cust_Color_A", "Cust_COLOR_B", "EnergonColor"};
+    for (int i = 0; i < 3; ++i) {
+        P.uRT[i] = U((std::string("uRT_") + kRT[i]).c_str());
+        P.uRTSet[i] = U((std::string("uRTSet_") + kRT[i]).c_str());
+    }
     P.slots = slots;
     P.blend = blend; P.twoSided = twoSided; P.lit = lit; P.clip = clip;
     UseProgram(id);
@@ -706,7 +731,23 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     return (int)progs_.size() - 1;
 }
 
-int Pipeline::programFor(const std::string& matName, const Material* gm, bool lightmapped) {
+// Raw umodel glTF meshes (e.g. CP_OptimusArm_SKEL, RB_OptimusWeaponArm_SKEL) carry the UE3 material
+// object NAME, not its path: resolve it against the compiled original materials.
+std::string Pipeline::resolveBySourceName(const Material* m) const {
+    if (!m || m->sourceName.empty()) return std::string();
+    std::string want = "." + m->sourceName;
+    std::transform(want.begin(), want.end(), want.begin(), ::tolower);
+    for (const auto& kv : mats_) {     // first in path order; same-named MICs share their master
+        std::string k = kv.first;
+        std::transform(k.begin(), k.end(), k.begin(), ::tolower);
+        if (k.size() >= want.size() && k.compare(k.size() - want.size(), want.size(), want) == 0) return kv.first;
+    }
+    return std::string();
+}
+
+int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool lightmapped) {
+    std::string matName = matNameIn;
+    if (matName.empty()) matName = resolveBySourceName(gm);
     std::string key = (matName.empty() ? std::string("<gltf>") : matName) + (lightmapped ? "|LM" : "|UBER");
     static const bool gltfOnly = std::getenv("WFC_GLTFMATERIALS") != nullptr;   // A/B: AssetTools bakes
     auto mit = (gltfOnly && !lightmapped) ? mats_.end() : mats_.find(matName);
@@ -736,7 +777,7 @@ int Pipeline::programFor(const std::string& matName, const Material* gm, bool li
             for (int c = 0; c < 4; ++c) { sl.umin[c] = s.umin[k][(size_t)c]; sl.uscale[c] = s.umax[k][(size_t)c] - s.umin[k][(size_t)c]; }
             slots.push_back(sl);
         }
-        int r = buildProgram(key, s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped);
+        int r = buildProgram(key, s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
         if (r >= 0) return r;
         LOG_WARN("wfc: material %s failed to build; using glTF fallback", matName.c_str());
     }
@@ -956,6 +997,7 @@ int Pipeline::upload(const MeshData& m) {
             auto it = slotMaterials_.find(s.sourceMesh + "|" + std::to_string(s.sourceSection));
             if (it != slotMaterials_.end()) matName = it->second;
         }
+        if (matName.empty()) matName = resolveBySourceName(mat);
         d.prog = programFor(matName, mat, lm);
         d.matName = matName;
         if (d.prog >= 0) ++nProg;
@@ -1038,6 +1080,16 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
             }
             bindCommon(P, model);
             Uniform1i(GetUniformLocation(P.id, "uDecalClip"), g.decal ? 1 : 0);
+            {
+                // TnCharacterApplier params: dynamic (character) draws only; all-zero RGB skips.
+                const float* src[3] = {charColors_.primary, charColors_.secondary, charColors_.energon};
+                for (int i = 0; i < 3; ++i) {
+                    if (P.uRTSet[i] < 0) continue;
+                    bool set = dynamicObject && (src[i][0] != 0.0f || src[i][1] != 0.0f || src[i][2] != 0.0f);
+                    Uniform1i(P.uRTSet[i], set ? 1 : 0);
+                    if (set) Uniform4f(P.uRT[i], src[i][0], src[i][1], src[i][2], src[i][3]);
+                }
+            }
             if (P.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
             switch (P.blend) {
                 case 2: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE); break;
@@ -1102,6 +1154,7 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     GpuMesh& g = meshes_[(size_t)id];
     drawSubs(g, model, !g.world);
     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
+    if (g.drawsBsp && testMesh_ >= 0) drawSubs(meshes_[(size_t)testMesh_], testModel_, true);
     if (g.drawsBsp && decalMesh_ >= 0 && decalMesh_ != id && !std::getenv("WFC_NODECALS")) {
         // DecalComponent DepthBias (-0.0002): pull decals toward the camera over their receivers.
         glEnable(GL_POLYGON_OFFSET_FILL);

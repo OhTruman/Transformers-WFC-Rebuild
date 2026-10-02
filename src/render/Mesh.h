@@ -40,6 +40,7 @@ struct Material {
     std::string normalUri;            // tangent-space normal map; empty == none
     std::string specularUri;          // baked specular colour (character customization); empty == none
     std::string wfcName;              // original UE3 material object path (glTF extras.wfc_material)
+    std::string sourceName;           // glTF material name (umodel exports: the UE3 object name)
     core::Vec3 color{1, 1, 1};        // baseColorFactor (tint / fallback colour)
     TextureHandle tex = kInvalidTexture;   // base colour, filled in after upload
     TextureHandle emissiveTexHandle = kInvalidTexture;  // emissive, filled in after upload

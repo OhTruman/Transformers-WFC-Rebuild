@@ -283,6 +283,7 @@ void parseGltfMaterial(const Json& root, size_t i, const std::string& dir, rende
     M.baseColorUri = imageUri(root, pbr["baseColorTexture"]["index"].asInt(-1), dir);
     M.normalUri = imageUri(root, jm["normalTexture"]["index"].asInt(-1), dir);
     M.wfcName = jm["extras"]["wfc_material"].asString();
+    M.sourceName = jm["name"].asString();
     // Derive the parallel emissive/specular textures (AssetTools names them *_basecolor / *_emissive).
     size_t bc = M.baseColorUri.find("basecolor");
     if (bc != std::string::npos) {

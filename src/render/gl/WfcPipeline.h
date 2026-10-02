@@ -45,6 +45,7 @@ struct Program {
           uLCol = -1, uLSpot = -1, uFogOn = -1, uFogMaxH = -1, uFogScale = -1, uFogStart = -1, uFogExt = -1,
           uFogIn = -1;
     struct Slot { int unit; GLuint tex; bool cube; float umin[4]; float uscale[4]; };
+    GLint uRT[3] = {-1, -1, -1}, uRTSet[3] = {-1, -1, -1};   // applier params (Cust_Color_A/B, EnergonColor)
     std::vector<Slot> slots;
     int blend = 0;                // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
     bool twoSided = false, lit = true;
@@ -56,6 +57,7 @@ public:
     bool load(const std::string& mapName);
     bool active() const { return active_; }
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); }
+    void setCharacterColors(const CharacterColors& c) { charColors_ = c; }
 
     void beginFrame(const Camera& cam, int w, int h);
     void endFrame();
@@ -88,9 +90,10 @@ private:
     GLuint texture(const std::string& file, bool srgb, bool clampU, bool clampV);
     GLuint cubeTexture(const std::vector<std::string>& faces, bool srgb);
     int programFor(const std::string& matName, const Material* gltfMat, bool lightmapped);
+    std::string resolveBySourceName(const Material* m) const;
     int buildProgram(const std::string& key, const std::string& body, const std::vector<Program::Slot>& slots,
                      const std::vector<bool>& slotIsCube, int blend, bool twoSided, bool lit, float clip,
-                     bool lightmapped);
+                     bool lightmapped, const std::vector<std::string>& rtParams = {});
     void computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env) const;
     void bindCommon(const Program& P, const core::Mat4& model);
     void drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject);
@@ -109,6 +112,9 @@ private:
     GLuint clutTex_ = 0;
     int clutSize_ = 32;
     float znear_ = 0.1f, zfar_ = 20000.0f;
+    CharacterColors charColors_;   // default all-zero -> every override skipped (authored values)
+    int testMesh_ = -1;           // WFC_TESTMESH render verification hook
+    core::Mat4 testModel_;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
     int decalMesh_ = -1;          // static decals from their cooked receiver geometry
     bool active_ = false;
@@ -116,7 +122,7 @@ private:
     IRenderer::VisibilityQuery vis_;
 
     // render data
-    struct MatSrc { std::string glsl; std::vector<std::string> files; std::vector<std::vector<std::string>> faces; std::vector<bool> srgb, cube, clampU, clampV;
+    struct MatSrc { std::vector<std::string> rtParams; std::string glsl; std::vector<std::string> files; std::vector<std::vector<std::string>> faces; std::vector<bool> srgb, cube, clampU, clampV;
                     std::vector<std::vector<float>> umin, umax; int blend = 0; bool twoSided = false, lit = true;
                     float clip = 0.3333f; };
     std::map<std::string, MatSrc> mats_;
