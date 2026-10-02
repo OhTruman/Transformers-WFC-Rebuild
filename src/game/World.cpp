@@ -77,6 +77,14 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     resolveTextures(mapMesh.mats);
     resolveTextures(robotModel_.mats);
     resolveTextures(vehicleModel_.mats);
+    // Optimus_ROBODEF.ArmBlueprint: CP_OptimusArm_SKEL + OptimusArm_ROBO_ANIM (ARM_Equip / ARM_Unequip),
+    // umodel glTF exports in the same Y-up metre convention as robot.glb.
+    if (assets::loadSkinnedGlb(root + "/../content/TR_Optimus_ROBO_p/CP_OptimusArm_SKEL.gltf", armModel_)) {
+        assets::loadAnimationsByName(root + "/../content/TR_HeavyMedium_ANM_p/OptimusArm_ROBO_ANIM.anim.gltf", armModel_);
+        resolveTextures(armModel_.mats);
+        player_.pawn().setArmModel(&armModel_);
+        for (const auto& c : armModel_.clips) LOG_INFO("arm clip %s %.2f s", c.name.c_str(), c.duration);
+    }
     LOG_INFO("textures: %d loaded, %d failed, %zu unique", loaded, failed, texCache.size());
 
     // Baked lightmap atlases: resolve each submesh's _LM atlas name to a GL texture.
@@ -541,6 +549,34 @@ void World::tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, b
     if (grounded || !vehicle) airTime_ = 0.0f;
 }
 
+// Gameplay: TnTruckForm.AttemptToRam (from Driving.OnRigidBodyCollision / RigidBodyTrigger) [CONF rules].
+// Only while nitro runs (RamState 1); the target must be an enemy pawn with Mass <= MaxRamMass 1000, once
+// per pawn per nitro (notifyRamHit owns that registry and the impact cue). Damage TnDamageTypeRammed:
+// 300 to AI robots (OptimusTruckForm.RamDamageToAiRobots); momentum +7000 UU/s Z (the slice's targets are
+// static dummies, so no knock-back). A successful ram does not drop to Hovering.
+// [PROV] contact = the truck's bind-pose footprint box vs the target's box.
+void World::gameplayRamContacts() {
+    Character& pc = player_.pawn();
+    const Character::VehicleState& vs = pc.vehicleState();
+    if (pc.moveForm() != Form::Vehicle || !vs.driving || vs.nitroRemain <= 0.0f) return;
+    core::Vec3 c = pc.actorLocation();
+    core::Vec3 fwd = core::forwardFromYawPitch(pc.yaw(), 0.0f);
+    core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
+    const float halfLen = 3.34f, halfWid = 1.57f, halfH = 1.22f;   // vehicle bind extents 6.68 x 3.13 x 2.44 m
+    for (auto& a : actors_) {
+        auto* t = dynamic_cast<DamageTarget*>(a.get());
+        if (!t || !t->alive()) continue;
+        core::Vec3 tc = t->position() + core::Vec3{0, t->halfExtent().y, 0};
+        core::Vec3 d = tc - c;
+        float r = std::max(t->halfExtent().x, t->halfExtent().z);
+        if (std::fabs(core::dot(d, fwd)) > halfLen + r || std::fabs(core::dot(d, right)) > halfWid + r ||
+            std::fabs(d.y) > halfH + t->halfExtent().y) continue;
+        if (!notifyRamHit(t, tc)) continue;                  // already rammed this nitro
+        t->applyDamage(VehicleNitro::kRamDamageToAiRobots);
+        LOG_INFO("ram: hit target at %.1f %.1f %.1f (hp %.0f)", tc.x, tc.y, tc.z, t->hp());
+    }
+}
+
 bool World::notifyRamHit(const void* target, const core::Vec3& pos) {
     if (!nitro_.registerRamHit(target)) return false;
     cues_.play("VEH_TRUCK_RAM_IMPACT", pos, core::length(pos - listenerPos_));   // RamSound Auto_Ram_Impact
@@ -594,6 +630,7 @@ void World::tick(float dt) {
         listenerPos_ = cam.pos;
     }
     player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
+    gameplayRamContacts();
     if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
         player_.pawn().setAimPitch((float)std::atof(ap));
     player_.pawn().updateAnimation(dt);

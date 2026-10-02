@@ -3,6 +3,28 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 13b (2026-10-02) — Milestone 03 handoffs (Experimental + Systems)
+- Experimental's "weapon usable before a visible gun" and "vehicle jump missing" were measured on milestone-02, before
+  049f614. With Pass 13 the gun is drawn at 0.28 s and first usable at 0.50 s. Firing requires the drawn gun. The
+  vehicle jump exists (hover + driving).
+- Fine-aim offset semantics (raw OffsetCurvesByPCS): Y (lateral) = 300 UU in every row, so there is no lateral
+  shift between default and fine aim (Experimental's ~0.05 m is expected). The 2 m difference is orbit-space X
+  (+150 → −50: the camera moves 2 m back along the view; TnLocationOffset writes X = −OrbitDistance) [CONF].
+- Arm: CP_OptimusArm_SKEL + OptimusArm_ROBO_ANIM loaded (text glTF + name-matched anims), attached at
+  WeaponSocket_Secondary (R_Arm03_Elbow_XB, pitch 180), TnArmAttachment rules:
+  - shown whenever the robot mesh is displayed with no drawn weapon (all of R→V, V→R before the restore);
+  - ARM_Unequip (0.8 s) once the gun is drawn, then detached.
+  HandSkelControl not applied (PROV).
+- Landing: SharedAcrobatics.LandingAnims table picks Nav_Land / Nav_Land_02 / Nav_Land_03 by fall height and speed.
+  None below 250 UU; a standing jump gives Nav_Land_02.
+- Stop flicker (idle/walk for 1–2 frames): caused by the wall block zeroing velocity and parking one probe radius
+  out, so the next, slower step crept forward. The wall block now advances to the gap, removes only the velocity
+  into the wall and slides the rest of the step along it (re-probed for corners, no back-slide), with physWalking's
+  displacement velocity. The harness wall-slide checks now pass (181/0/21).
+- Ram: World::gameplayRamContacts → notifyRamHit during nitro (once per target per nitro), 300 damage (AI robot).
+- CollisionWorld::segmentHit is Systems' validated grid walk verbatim. Gameplay only adds a normal-returning
+  overload (suspension contact normals).
+
 ## GAMEPLAY PASS 13 / MILESTONE 03 (2026-10-02) — vehicle body, vehicle camera, transform handoff, firing cost
 Branch agents/gameplay, fast-forwarded to integration/milestone-02 (e8036f6) first; clean build OK.
 Driven by the Milestone 02 human playtest. Evidence: TransGame/HM_Engine bytecode (work/pass13/vehdis.txt,

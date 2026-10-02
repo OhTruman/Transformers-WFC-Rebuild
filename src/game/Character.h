@@ -83,6 +83,14 @@ public:
     void setFormModels(const assets::SkinnedModel* robot, const assets::SkinnedModel* vehicle) {
         robotModel_ = robot; vehicleModel_ = vehicle;
     }
+    // Optimus_ROBODEF.ArmBlueprint: CP_OptimusArm_SKEL (+ OptimusArm_ROBO_ANIM ARM_Equip/ARM_Unequip),
+    // attached at WeaponSocket_Secondary (R_Arm03_Elbow_XB, pitch 180) while no robot weapon is drawn.
+    void setArmModel(const assets::SkinnedModel* arm) {
+        armModel_ = arm;
+        armEquipClip_ = arm ? arm->clipByName("ARM_Equip") : -1;
+        armUnequipClip_ = arm ? arm->clipByName("ARM_Unequip") : -1;
+    }
+    bool armShown() const { return armVisible_; }
     const assets::SkinnedModel* currentModel() const {
         return form_ == Form::Robot ? robotModel_ : vehicleModel_;
     }
@@ -249,7 +257,7 @@ private:
         int pivotL = -1, pivotR = -1;                          // Nav_IdlePivot90_{L,R}
         int walk[4] = {-1, -1, -1, -1}, jog[4] = {-1, -1, -1, -1};   // Nav_Strafe{Walk,Jog}_{F,B,R,L}
         std::vector<float> upperMask;            // C_Spine01_Lumbar01_XB subtree
-        int reloadClip = -1, idleClip = -1, landClip = -1;
+        int reloadClip = -1, idleClip = -1, landClip = -1, land2Clip = -1, land3Clip = -1;   // Nav_Land / _02 / _03
     } robotRig_;
     struct VehicleRig {
         bool built = false;
@@ -279,8 +287,22 @@ private:
     float reloadW_ = 0.0f, reloadT_ = 0.0f;
     bool prevReloading_ = false;
     std::vector<float> reloadMask_;
-    float airTime_ = 0.0f, landT_ = 0.0f;
+    float airTime_ = 0.0f, landT_ = 0.0f, airApexY_ = 0.0f;
+    int landClipSel_ = -1;                    // landing clip picked from SharedAcrobatics.LandingAnims
     float hoverW_ = 0.0f, hoverT_ = 0.0f;
+
+    // TnArmAttachment states: Hidden (detached), Equipping (ARM_Equip, then held), Unequipping (ARM_Unequip).
+    enum class ArmState { Hidden, Equipping, Unequipping };
+    const assets::SkinnedModel* armModel_ = nullptr;
+    int armEquipClip_ = -1, armUnequipClip_ = -1;
+    ArmState armState_ = ArmState::Hidden;
+    float armT_ = 0.0f;
+    bool armVisible_ = false;
+    assets::LocalPose armPose_;
+    std::vector<core::Mat4> armScratch_;
+    render::MeshData armBuf_;
+    core::Mat4 armWorld_ = core::Mat4::identity();
+    void updateArm(float dt);
 
     int weaponBone_ = -1;
     core::Mat4 weaponOffset_ = core::Mat4::identity();

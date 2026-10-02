@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace game {
 
@@ -84,6 +85,8 @@ void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
     if (R.idleClip < 0) R.idleClip = mdl.clipByName("Nav_Idle_Base");
     if (R.idleClip < 0) R.idleClip = mdl.firstClipOfCategory("idle");
     R.landClip = mdl.clipByName("Nav_Land");
+    R.land2Clip = mdl.clipByName("Nav_Land_02");
+    R.land3Clip = mdl.clipByName("Nav_Land_03");
 
     R.rootRef = mdl.nodeByName("C_Root_Reference_XR");
     R.spine = mdl.nodeByName("C_Spine02_Lumbar02_XB");      // SpineRecoil bone (Robot_ANIMTREE)
@@ -466,6 +469,7 @@ void Character::updateAnimation(float dt) {
             const assets::SkinnedModel* nm = modelOf(partnerForm());
             int ic = partnerClip_;
             if (nm && ic >= 0) {
+                struct ArmTick { Character* c; float dt; ~ArmTick() { c->updateArm(dt); } } armTick{this, dt};
                 int oldClip = transClip_;
                 setForm(partnerForm());
                 trans_ = Transition::Incoming; transClip_ = ic; partnerClip_ = oldClip; mdl = nm;
@@ -486,10 +490,12 @@ void Character::updateAnimation(float dt) {
             playClip(*mdl, transClip_, /*loop*/ false, dt, core::config::kTransformBlendIn);
             finalizePose(*mdl, dt);
             updatePartner(animTime_);
+            updateArm(dt);
             return;
         }
     }
     partnerVisible_ = false;
+    struct ArmTick { Character* c; float dt; ~ArmTick() { c->updateArm(dt); } } armTick{this, dt};   // after the pose
 
     float speed = std::sqrt(velocity_.x * velocity_.x + velocity_.z * velocity_.z);
     // Leaving a transform blends out over 0.25 s; ordinary locomotion changes use a short blend.
@@ -533,10 +539,26 @@ void Character::updateAnimation(float dt) {
     // Robot. Grounded and moving -> the tree's Moving state (walk/jog strafer blend); otherwise
     // Idle (with turn in place), jump/fall or land.
     if (onGround_) {
-        if (airTime_ > core::config::kLandMinAirTime && robotRig_.landClip >= 0)
-            landT_ = mdl->clips[(size_t)robotRig_.landClip].duration;
+        // TR_Acrobatics_p.SharedAcrobatics.LandingAnims [CONF data; Systems handoff], tested in array
+        // order on the apex->touchdown height and the horizontal speed (UU): {1200,1200} Nav_Land_03,
+        // {1000,1200} Nav_Land, {4500,0} Nav_Land_03, {500,0} Nav_Land_02, {250,0} Nav_Land. Below 250 UU
+        // no landing anim plays. [MED order/measure semantics; replaces the PROV 0.3 s air-time rule]
+        if (airTime_ > 0.0f) {
+            float h = (airApexY_ - pos_.y) * 100.0f;
+            float sp = std::sqrt(velocity_.x * velocity_.x + velocity_.z * velocity_.z) * 100.0f;
+            struct LandingAnim { float minH, minSpeed; int clip; };
+            const LandingAnim table[] = {{1200, 1200, robotRig_.land3Clip}, {1000, 1200, robotRig_.landClip},
+                                         {4500, 0, robotRig_.land3Clip}, {500, 0, robotRig_.land2Clip},
+                                         {250, 0, robotRig_.landClip}};
+            landClipSel_ = -1;
+            for (const LandingAnim& la : table)
+                if (h >= la.minH && sp >= la.minSpeed) { landClipSel_ = la.clip; break; }
+            if (landClipSel_ >= 0) landT_ = mdl->clips[(size_t)landClipSel_].duration;
+        }
         airTime_ = 0.0f;
     } else {
+        if (airTime_ == 0.0f) airApexY_ = pos_.y;
+        airApexY_ = std::max(airApexY_, pos_.y);
         airTime_ += dt;
         landT_ = 0.0f;
     }
@@ -569,7 +591,7 @@ void Character::updateAnimation(float dt) {
     bool loop = true;
     if (cat == "move") clip = mdl->clipOfCategoryNamed("run", "_F");      // no strafe set: fallback
     else if (cat == "idle") clip = robotRig_.idleClip;
-    else if (cat == "land") { clip = robotRig_.landClip; loop = false; }
+    else if (cat == "land") { clip = landClipSel_; loop = false; }
     else if (cat == "turn") { clip = turnClip_; loop = false; blend = core::config::kTurnTransitionBlend; }
     else { clip = mdl->firstClipOfCategory(cat); loop = (cat != "jump"); }  // take-off plays once
     if (clip < 0) clip = mdl->firstClipOfCategory("idle");
@@ -613,6 +635,40 @@ void Character::updatePartner(float t) {
     assets::samplePose(*pm, partnerClip_, t, false, partnerPose_);
     assets::skinPose(*pm, partnerPose_, partnerScratch_, partnerBuf_);
     partnerVisible_ = true;
+    updateWeaponSocket();     // the robot may be this partner mesh (vehicle->robot before the vehicle hides)
+}
+
+// TnArmAttachment (TARGETED_PASS2 §9) [CONF rules]: the arm is needed while no robot weapon is drawn
+// (ShouldAlwaysEquip: no active weapon / not attached) — the whole robot->vehicle fold (weapon stored at
+// t = 0) and vehicle->robot until the 25% restore. Becoming needed plays ARM_Equip (attached to
+// WeaponSocket_Secondary); no longer needed plays ARM_Unequip, then detaches. Detached whenever the
+// robot mesh is hidden. [PROV] HandSkelControl (hand bone scale 0.1 with a weapon) not applied: the
+// rebuild's body mesh is RB_Optimus_A_SKELMESH.
+void Character::updateArm(float dt) {
+    armVisible_ = false;
+    static const bool noArm = std::getenv("WFC_NOARM") != nullptr;   // A/B diagnostic
+    if (noArm || !armModel_ || !armModel_->valid() || weaponBone_ < 0) return;
+    const std::vector<core::Mat4>* robotScratch = nullptr;
+    if (form_ == Form::Robot && lastModel_ == robotModel_) robotScratch = &animScratch_;
+    else if (trans_ != Transition::None && partnerVisible_ && partnerForm() == Form::Robot) robotScratch = &partnerScratch_;
+    if (!robotScratch || (size_t)weaponBone_ >= robotScratch->size()) { armState_ = ArmState::Hidden; return; }
+    bool needed = !weaponValid_;
+    if (needed && armState_ != ArmState::Equipping) { armState_ = ArmState::Equipping; armT_ = 0.0f; }
+    else if (!needed && armState_ == ArmState::Equipping) { armState_ = ArmState::Unequipping; armT_ = 0.0f; }
+    else armT_ += dt;
+    int clip = armState_ == ArmState::Equipping ? armEquipClip_ : armUnequipClip_;
+    if (armState_ == ArmState::Hidden) return;
+    if (armState_ == ArmState::Unequipping && (clip < 0 || armT_ >= armModel_->clips[(size_t)clip].duration)) {
+        armState_ = ArmState::Hidden;
+        return;
+    }
+    if (clip >= 0) assets::samplePose(*armModel_, clip, armT_, false, armPose_);   // holds the last frame
+    else assets::samplePose(*armModel_, 0, 0.0f, false, armPose_);
+    assets::skinPose(*armModel_, armPose_, armScratch_, armBuf_);
+    // WeaponSocket_Secondary: bone R_Arm03_Elbow_XB, relative rotation pitch 32768 (180 deg about UE Y =
+    // glTF Z), no offset [CONF character.json].
+    armWorld_ = meshMatrix(Form::Robot) * (*robotScratch)[(size_t)weaponBone_] * core::Mat4::rotateZ(3.1415927f);
+    armVisible_ = true;
 }
 
 core::Mat4 Character::meshMatrix(Form f) const {
@@ -653,6 +709,7 @@ void Character::draw(render::IRenderer& r) const {
     if (mdl && mdl->valid() && !poseBuf_.empty()) {
         r.drawDynamicMesh(poseBuf_, meshMatrix(form_), color_);
         if (partnerVisible_ && !partnerBuf_.empty()) r.drawDynamicMesh(partnerBuf_, meshMatrix(partnerForm()), color_);
+        if (armVisible_ && !armBuf_.empty()) r.drawDynamicMesh(armBuf_, armWorld_, color_);
         return;
     }
     // Fallback graybox.

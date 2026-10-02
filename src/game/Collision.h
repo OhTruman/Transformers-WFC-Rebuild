@@ -26,10 +26,6 @@ public:
     // Same query, also returning the hit triangle's unit normal (orientation as authored).
     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN) const;
 
-    // Diagnostics (WFC_PERFLOG): segment queries since the last reset, triangles tested, time.
-    struct Stats { long calls = 0; long tris = 0; double ms = 0.0; };
-    static Stats& stats();
-
 private:
     struct Tri { core::Vec3 a, b, c, n; };
 

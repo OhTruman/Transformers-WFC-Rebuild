@@ -62,24 +62,41 @@ core::Vec3 robotCalcVelocity(const Character& c, const core::Vec3& wish, const c
     return prev + accel * dt;
 }
 
-// Horizontal wall block (crude): stop horizontal motion if a wall is in the way at body height.
+// Horizontal wall block against world geometry, probed at body height (one ray along the step,
+// probeR ahead). On contact the body advances up to the gap, the velocity INTO the wall (horizontal hit
+// normal) is removed and the rest of the step continues along the wall plane, re-probed for a second
+// or third wall (corners), like physWalking's wall slide. (Zeroing all velocity and parking one probe
+// radius out made the next, slower step creep forward, flipping Idle/Moving for a frame or two when
+// stopping against a wall.) [PROV collision model: no capsule sweep]
 bool wallBlock(const CollisionWorld* col, const core::Vec3& oldPos, core::Vec3& p, core::Vec3& v, float probeR) {
     if (!col) return false;
-    float torso = core::config::kPawnHalfHeight;   // probe at capsule centre (~2 m)
-    core::Vec3 a = oldPos + core::Vec3{0, torso, 0};
-    core::Vec3 b = core::Vec3{p.x, oldPos.y + torso, p.z};
-    core::Vec3 dir = b - a;
-    float dist = core::length(dir);
-    if (dist > 1e-4f) {
-        core::Vec3 bEx = a + dir * ((dist + probeR) / dist); // probe slightly ahead
-        float tHit;
-        if (col->segmentHit(a, bEx, tHit) && tHit * (dist + probeR) < dist + probeR) {
-            p.x = oldPos.x; p.z = oldPos.z;
-            v.x = 0; v.z = 0;
-            return true;
-        }
+    const float torso = core::config::kPawnHalfHeight;   // probe at capsule centre (~2 m)
+    core::Vec3 start{oldPos.x, oldPos.y + torso, oldPos.z};
+    core::Vec3 move{p.x - oldPos.x, 0.0f, p.z - oldPos.z};
+    const core::Vec3 move0 = move;
+    bool blocked = false;
+    for (int iter = 0; iter < 3; ++iter) {
+        float dist = core::length(move);
+        if (dist < 1e-4f) break;
+        core::Vec3 dn = move * (1.0f / dist);
+        float tHit; core::Vec3 n;
+        if (!col->segmentHit(start, start + dn * (dist + probeR), tHit, n)) { start = start + move; move = {0, 0, 0}; break; }
+        blocked = true;
+        float allowed = std::max(0.0f, std::min(dist, tHit * (dist + probeR) - probeR));
+        start = start + dn * allowed;
+        core::Vec3 nh{n.x, 0.0f, n.z};
+        float nl = core::length(nh);
+        if (nl < 0.3f) { v.x = 0; v.z = 0; move = {0, 0, 0}; break; }   // not a wall face: stop
+        nh = nh * (1.0f / nl);
+        if (core::dot(nh, dn) > 0.0f) nh = nh * -1.0f;                  // face against the motion
+        float vn = v.x * nh.x + v.z * nh.z;
+        if (vn < 0.0f) { v.x -= nh.x * vn; v.z -= nh.z * vn; }
+        core::Vec3 rest = dn * (dist - allowed);
+        move = rest - nh * core::dot(rest, nh);                          // remainder along the wall
+        if (core::dot(move, move0) <= 0.0f) { move = {0, 0, 0}; break; } // wedged (corner): no back-slide
     }
-    return false;
+    if (blocked) { p.x = start.x; p.z = start.z; }
+    return blocked;
 }
 
 // Vehicle body axes in world space (UE local axes: x = forward, y = right, z = up), from the yaw and the
@@ -415,7 +432,10 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     core::Vec3 oldPos = c.position();
     core::Vec3 p = oldPos + v * dt;
 
-    wallBlock(col, oldPos, p, v, core::config::kPawnRadius);
+    // physWalking: after a blocked move the velocity is the actual displacement over the step.
+    if (wallBlock(col, oldPos, p, v, core::config::kPawnRadius)) {
+        v.x = (p.x - oldPos.x) / dt; v.z = (p.z - oldPos.z) / dt;
+    }
 
     // --- Ground resolution ---
     bool grounded = false;

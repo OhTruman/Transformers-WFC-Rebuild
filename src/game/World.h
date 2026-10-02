@@ -57,6 +57,7 @@ public:
     // impact cue (RamSound Auto_Ram_Impact). Damage / momentum stay with Gameplay (values in
     // VehicleNitro::kRamDamage* / kExtraRamZVelocityUU).
     bool notifyRamHit(const void* target, const core::Vec3& pos);
+    void gameplayRamContacts();   // Gameplay: nitro ram contacts -> notifyRamHit + ram damage
     bool usingSlice() const { return usingSlice_; }
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).
@@ -84,6 +85,7 @@ private:
     bool usingSlice_ = false;
 
     assets::SkinnedModel robotModel_;
+    assets::SkinnedModel armModel_;      // CP_OptimusArm_SKEL (TnArmAttachment), Gameplay
     assets::SkinnedModel vehicleModel_;
 
     // Ion Blaster as an animated skeletal mesh (own Fire/Reload/Idle anims, sockets, notifies).

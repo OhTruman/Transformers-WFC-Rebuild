@@ -223,7 +223,7 @@ constexpr float kIdleMoveBlend     = 0.2f;   // s [CONF]
 // Animation layers. Upper-body slot (reload) / aim-offset / hover-additive weight ease time, and
 // the minimum airborne time before Nav_Land plays on touchdown (filters curb step-offs).
 constexpr float kSlotBlend         = 0.15f;  // s [PROV]
-constexpr float kLandMinAirTime    = 0.3f;   // s [PROV]
+constexpr float kLandMinAirTime    = 0.3f;   // s SUPERSEDED (Pass 13): SharedAcrobatics.LandingAnims table in Character
 // Turn in place. [CONF] TransGame.Default__TnAnimTurnInPlace: TransitionThresholdAngle 4096 UU,
 // TransitionBlendTime 0.1, PercentageToAllowAbort 0.5. Aim offset InterpSpeed [CONF]
 // Default__TnAnimNodeAimOffset 12.

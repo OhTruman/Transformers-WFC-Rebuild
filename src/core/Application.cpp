@@ -4,7 +4,6 @@
 #include "core/Log.h"
 #include "platform/Window.h"
 #include "render/Renderer.h"
-#include "game/Collision.h"
 
 #include <chrono>
 
@@ -112,7 +111,6 @@ void Application::run() {
         // Fixed-step simulation.
         static const long perfEvery = std::getenv("WFC_PERFLOG") ? std::atol(std::getenv("WFC_PERFLOG")) : 0;
         auto simT0 = std::chrono::steady_clock::now();
-        game::CollisionWorld::Stats colBefore = game::CollisionWorld::stats();
         int steps = clock_.tick(realDt);
         float step = clock_.stepSeconds();
         for (int i = 0; i < steps; ++i) {
@@ -120,20 +118,15 @@ void Application::run() {
             gameMode_.tick(world_, step);
         }
         if (perfEvery > 0) {
-            // Gameplay-side cost (WFC_PERFLOG=N): simulation time and the segment traces issued by
-            // the simulation (movement, camera, aim and hitscan) vs the rest of the frame.
-            static double simMs = 0, frameMs = 0, simTraceMs = 0; static long simTraceCalls = 0, simTris = 0, n = 0;
-            const game::CollisionWorld::Stats& s = game::CollisionWorld::stats();
+            // Gameplay-side cost (WFC_PERFLOG=N): simulation time (movement, camera, aim, hitscan)
+            // vs the whole frame.
+            static double simMs = 0, frameMs = 0; static long n = 0;
             simMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - simT0).count();
-            simTraceMs += s.ms - colBefore.ms; simTraceCalls += s.calls - colBefore.calls; simTris += s.tris - colBefore.tris;
             frameMs += realDt * 1000.0; ++n;
             if (n == perfEvery) {
-                const auto& w = world_.player().pawn().weapon();
-                LOG_INFO("PERF f%ld frame=%.2fms sim=%.3fms simTrace=%.3fms calls=%.1f tris=%.0f/frame ammo=%d allTraceCalls=%ld allTraceMs=%.1f",
-                         frame, frameMs / n, simMs / n, simTraceMs / n, (double)simTraceCalls / n, (double)simTris / n,
-                         w.ammo, s.calls, s.ms);
-                simMs = frameMs = simTraceMs = 0; simTraceCalls = simTris = 0; n = 0;
-                game::CollisionWorld::stats() = {};
+                LOG_INFO("PERF f%ld frame=%.2fms sim=%.3fms ammo=%d", frame, frameMs / n, simMs / n,
+                         world_.player().pawn().weapon().ammo);
+                simMs = frameMs = 0; n = 0;
             }
         }
 
@@ -155,7 +148,7 @@ void Application::run() {
             LOG_INFO("frame %ld pos %.2f %.2f %.2f grounded=%d form=%s anim=%s t=%.2f ammo=%d/%d reloading=%d "
                      "yaw=%.2f aimW=%.2f aimN=%.2f reloadW=%.2f legYaw=%.1f aimYawN=%.2f turn=%d recoil=%d "
                      "hspeed=%.2f moveForm=%s fineAim=%d fov=%.1f drv=%d ride=%.2f dash=%.2f nitro=%.2f wpn=%d "
-                     "vy=%.2f pitch=%.1f roll=%.1f cont=%d vgnd=%d camS=%d vyaw=%.2f both=%d hasW=%d camD=%.2f camH=%.2f",
+                     "vy=%.2f pitch=%.1f roll=%.1f cont=%d vgnd=%d camS=%d vyaw=%.2f both=%d hasW=%d camD=%.2f camH=%.2f arm=%d",
                      frame, p.x, p.y, p.z, (int)pawn.onGround(), game::formName(pawn.form()),
                      pawn.animName(), pawn.animTime(), pawn.weapon().ammo, pawn.weapon().reserve,
                      (int)pawn.weapon().reloading(), pawn.yaw(), pawn.aimWeight(), pawn.aimPitchNorm(),
@@ -171,7 +164,7 @@ void Application::run() {
                      world_.player().controller().cameraStrategy(), world_.player().controller().viewYaw(),
                      (int)pawn.partnerShown(), (int)pawn.hasWeapon(),
                      core::length(world_.player().controller().cameraPos() - pawn.actorLocation()),
-                     world_.player().controller().cameraPos().y - pawn.position().y);
+                     world_.player().controller().cameraPos().y - pawn.position().y, (int)pawn.armShown());
         }
 
         // Camera + render.

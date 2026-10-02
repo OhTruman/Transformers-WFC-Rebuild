@@ -95,7 +95,11 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 | Transform visibility | ToVeh: robot hide 0.880, vehicle unhide 0.396; ToRobot: robot unhide 0.098, vehicle hide 0.663 | AssetTools notifies (EVIDENCE_TARGETED_PASS 5a–5d) | CONF | **APPLIED**, both meshes on the shared clip time |
 | Shared actor location | RB placed at pawn Location + vehicle mesh translation (−bounds centre) | TnVehicleForm.OnActivate/CalculateCylinderBounds | CONF | **APPLIED** (vertical only) |
 | Weapon on V→R | Restore at 25%, usable +0.2 s; drawn on the robot mesh | TARGETED_PASS2 §7 | CONF | **APPLIED** + firing requires the drawn gun |
-| Arm mesh | CP_OptimusArm_SKEL when no weapon (R→V fold, V→R before 25%) | TARGETED_PASS2 §9 | CONF | **NOT DONE** (asset not in the runtime set) |
+| Arm mesh | CP_OptimusArm_SKEL when no weapon (R→V fold, V→R before 25%), ARM_Equip / ARM_Unequip, WeaponSocket_Secondary | TARGETED_PASS2 §9, character.json | CONF | **APPLIED** (13b); HandSkelControl PROV/not applied |
+| Fine-aim offset | Lateral Y 300 in all rows; fine aim changes orbit X (+150 → −50) and Z ends (150 → 80) | raw OffsetCurvesByPCS + TnLocationOffset/HmOrbitUpdateLocationRotation bytecode | CONF | **APPLIED** (no lateral change by design) |
+| Landing clip | SharedAcrobatics.LandingAnims {1200,1200}_03, {1000,1200}Land, {4500,0}_03, {500,0}_02, {250,0}Land | authored data (Systems handoff) | CONF data / MED semantics | **APPLIED** (13b) |
+| Wall contact | physWalking slide: velocity into the wall removed, displacement velocity | stock UE3 | HIGH | **APPLIED** (13b, single-ray probe PROV) |
+| Ram | AttemptToRam during nitro: once per target, 300 to AI robots | TnTruckForm bytecode + OptimusTruckForm | CONF | **APPLIED** vs damage targets (13b); knock-back n/a |
 
 ---
 
