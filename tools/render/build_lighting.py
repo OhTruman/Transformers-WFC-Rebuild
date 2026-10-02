@@ -162,6 +162,19 @@ def lights(repo, pkg_index):
                 'channels': ch, 'affects_classification': c.get('LightAffectsClassification'),
                 'lower_color_srgb8': (c.get('LowerColor') or [255, 255, 255, 0])[:3],
                 'lower_brightness': c.get('LowerBrightness', 0.0),
+                # modulated (projected) shadow inputs; defaults from Engine Default__LightComponent /
+                # Default__PointLightComponent (CastDynamicShadows True, ModShadowColor (0,0,0,1),
+                # ShadowFalloffExponent 2.0). ModShadowColor is an FLinearColor (no conversion).
+                'light_guid': [int(x) & 0xFFFFFFFF for x in (c.get('LightGuid') or [0, 0, 0, 0])],
+                # DirectLightEnv relevance (native 0x82DD3EF0): RadiusOfInfluence, class default -1 (UE units)
+                'radius_of_influence_m': (c.get('RadiusOfInfluence') if c.get('RadiusOfInfluence') is not None else -1.0) * 0.01,
+                'use_volumes': bool(c.get('bUseVolumes', False)),
+                'only_same_levels': bool(c.get('bOnlyAffectSameAndSpecifiedLevels', False)),
+                'has_light_function': c.get('Function') is not None,
+                'cast_dynamic_shadows': bool(c.get('CastDynamicShadows', True)),
+                'cast_composite_shadow': bool(c.get('bCastCompositeShadow', False)),
+                'mod_shadow_color': list(c.get('ModShadowColor') or [0.0, 0.0, 0.0, 1.0]),
+                'shadow_falloff_exponent': c.get('ShadowFalloffExponent', 2.0),
                 'ue_matrix': M.tolist(),
             })
     return res
@@ -457,6 +470,28 @@ def postprocess(mapname, out):
     return res
 
 
+def light_visibility_volumes(repo, out):
+    """WFC LightsVisibilitiesVolume: export the cooked native blob verbatim (lvv_<n>.bin) + its actor
+    transform. The layout is being recovered natively (ReVa); facts confirmed so far (see
+    test_light_visibility.py): octree head with big-endian int32 child indices and 32-byte light bitmasks,
+    then (u16 light index, u16 visibility) pairs with visibility in 1/20 steps."""
+    p = repo.pkgs[0]; pr = repo.readers[0]
+    vols = []
+    for i, e in enumerate(p.exports):
+        if p.class_name(e) != 'LightsVisibilitiesVolume':
+            continue
+        props, used = pr.read_object(i + 1)
+        o = {t['name']: t['value'] for t in props}
+        nat = p.data[e['serial_offset'] + used:e['serial_offset'] + e['serial_size']]
+        fn = 'lvv_%d.bin' % len(vols)
+        open(os.path.join(out, fn), 'wb').write(nat)
+        vols.append({'name': p.object_path(i + 1), 'file': fn, 'bytes': len(nat),
+                     'location_ue': list(o.get('Location') or [0, 0, 0]),
+                     'draw_scale3d': list(o.get('DrawScale3D') or [1, 1, 1]),
+                     'draw_scale': o.get('DrawScale', 1.0)})
+    return vols
+
+
 def main():
     mapname, out, umodel_dir = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(os.path.join(out, 'lightmaps'), exist_ok=True)
@@ -481,6 +516,7 @@ def main():
                'lightmap_type_counts': {k: v for k, v in kinds.items() if k != 'vertex_samples'},
                'vertex_lightmaps': kinds.get('vertex_samples', {}),
                'component_flags': component_flags(mapname),
+               'light_visibility_volumes': light_visibility_volumes(repo, out),
                'lightmaps': {'props': props, 'atlases': atl},
                'lights': L, 'fog': F, 'postprocess': PP},
               open(os.path.join(out, 'lighting.json'), 'w'), indent=0)

@@ -24,6 +24,9 @@ scen=(
 "firing|90|WFC_AUTOFIRE=1|Ion Blaster weapon FX (Systems, GL1 textured path: no material passed yet)|weapon sprite FX not material-shaded until Systems passes ParticleBatch::material"
 "fineaim|90|WFC_FINEAIM_ON=20|-|HUD scale mode / easeout curve PROV; no scope for the Ion Blaster (HUD script CONF)"
 "streets_floor|60|WFC_SPAWN_INDEX=2|-|-"
+"transform_r2v_end|420|WFC_AUTOTRANSFORM=30|-|robot -> vehicle complete (separate vehicle LightEnvironment)"
+"transform_v2r_end|420|WFC_STARTVEHICLE=1 WFC_AUTOTRANSFORM=30|-|vehicle -> robot complete"
+"walk|240|WFC_AUTOWALK=1 WFC_AUTOTURN=0.6|-|moving through light-volume cells (full updates every 90 UU)"
 )
 idx="$out/INDEX.md"
 {
@@ -35,7 +38,7 @@ idx="$out/INDEX.md"
 for s in "${scen[@]}"; do
   IFS='|' read -r name frames envs fx notes <<< "$s"
   rm -f "$out/$name.bmp" "$out/$name.txt"
-  env WFC_LOCKSTEP=1 WFC_SMOKE_FRAMES="$frames" WFC_SHOT="$out/$name.bmp" WFC_FRAMEREPORT="$out/$name.txt" $envs \
+  env WFC_LOCKSTEP=1 ${AUDIT_ENV:-} WFC_SMOKE_FRAMES="$frames" WFC_SHOT="$out/$name.bmp" WFC_FRAMEREPORT="$out/$name.txt" $envs \
       timeout 600 "$exe" > "$out/$name.log" 2>&1
   echo "$name exit=$? errors=$(grep -c '\[error\]' "$out/$name.log")"
   "$py" -c "from PIL import Image; Image.open(r'$out/$name.bmp').save(r'$out/$name.png')" 2>/dev/null && rm -f "$out/$name.bmp"

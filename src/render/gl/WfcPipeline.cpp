@@ -53,6 +53,8 @@ layout(location=4) in vec2 aUV1;
 layout(location=5) in vec4 aColor;   // particle colour (FX draws); constant white otherwise
 uniform mat4 uViewProj;
 uniform mat4 uModel;
+uniform vec4 uShadowDepth;   // shadow caster pass: x on, y InvMaxSubjectDepth, z DepthBias
+uniform vec4 uShadowZ;       // world -> shadow-space z row
 uniform vec3 uCamPos;
 uniform vec4 uLMCoord;
 uniform int uFogOn;
@@ -106,6 +108,10 @@ void main() {
     }
     vFog = heightFog(wp.xyz);
     gl_Position = uViewProj * wp;
+    if (uShadowDepth.x > 0.5) {   // shadow depth VS: z = saturate(shadowZ * InvMaxSubjectDepth + DepthBias) * w
+        float d = clamp(dot(uShadowZ, vec4(wp.xyz, 1.0)) * uShadowDepth.y + uShadowDepth.z, 0.0, 1.0);
+        gl_Position.z = (d * 2.0 - 1.0) * gl_Position.w;
+    }
 }
 )";
 
@@ -196,6 +202,15 @@ void main() {
     if (dot(s, s) - 0.1 < 0.0) discard;
     s = clamp(s, -255.0, 255.0) / 255.0;
     oColor = vec4(max(s, 0.0), abs(min(s, 0.0)));
+}
+)";
+// Shadow depth: opaque materials write depth only; masked materials clip on OpacityMaskClipValue.
+const char* kFSMainShadow = R"(
+void main() {
+    mat3 tbn; MatIn m = wfcBuildInput(tbn);
+    MatOut o; wfcMaterial(m, o);
+    if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;
+    oColor = vec4(0.0);
 }
 )";
 const char* kFSMainLM = R"(
@@ -436,6 +451,9 @@ GLuint makeTex1x1(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
 
 } // namespace
 
+GLuint compileShader(GLenum type, const std::string& src, const std::string& tag) { return compile(type, src, tag); }
+GLuint linkProgram(GLuint vs, GLuint fs, const std::string& tag) { return link(vs, fs, tag); }
+
 // ------------------------------------------------------------------------- loading
 bool Pipeline::load(const std::string& mapName) {
     if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
@@ -517,8 +535,9 @@ bool Pipeline::load(const std::string& mapName) {
         }
     }
 
-    // LMT_1D vertex lightmaps: A,R,G,B bytes per coefficient, per-channel normalized; decoded as
-    // pow(byte/255, 2.2) (UE3 quantizes with pow(x, 1/2.2)) [PROV: vertex-LM shader not disassembled].
+    // LMT_1D vertex lightmaps: A,R,G,B bytes per coefficient, per-channel normalized. Decode from the
+    // Xenon vertex-lightmap VS (BASE shader cache, LightMapScale[3]): exp2(log2(max(|c|, 0.0001)) * 2.2)
+    // * LightMapScale[k], per vertex [CONFIRMED microcode].
     const assets::Json& jv = L["vertex_lightmaps"];
     for (const auto& kv : jv.obj) {
         VertexLM v;
@@ -532,10 +551,23 @@ bool Pipeline::load(const std::string& mapName) {
         for (int i = 0; i < v.count; ++i)
             for (int k = 0; k < 3; ++k)
                 for (int c = 0; c < 3; ++c)
-                    v.rgb[((size_t)k * v.count + i) * 3 + c] = std::pow(byteAt(((size_t)i * 3 + k) * 4 + 1 + c) / 255.0f, 2.2f);
+                    v.rgb[((size_t)k * v.count + i) * 3 + c] =
+                        std::pow(std::max(byteAt(((size_t)i * 3 + k) * 4 + 1 + c) / 255.0f, 0.0001f), 2.2f);
         std::string key = kv.first;
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
         vertexLMs_[key] = std::move(v);
+    }
+
+    {   // LightsVisibilitiesVolume: load + structural self-check; used once decode() lands (ReVa layout)
+        const assets::Json& jv2 = L["light_visibility_volumes"];
+        if (jv2.size() > 0) {
+            const assets::Json& v = jv2[0];
+            if (lvv_.load(dataDir_ + "/" + v["file"].asString())) {
+                std::string why;
+                bool ok = lvv_.selfCheck(why);
+                LOG_INFO("wfc: LightsVisibilitiesVolume %s: %s", ok ? "decoded" : "FAILED", why.c_str());
+            }
+        }
     }
 
     const assets::Json& jf = L["component_flags"];
@@ -574,6 +606,43 @@ bool Pipeline::load(const std::string& mapName) {
         float cin = std::cos(std::min(inner, outer));
         l.invConeRange = 1.0f / std::max(cin - l.cosOuter, 0.001f);
         l.name = e["name"].asString();
+        l.castDynamicShadows = e["cast_dynamic_shadows"].asBool(true);
+        l.castCompositeShadow = e["cast_composite_shadow"].asBool(false);
+        l.castStaticShadows = e["cast_static_shadows"].asBool(true);
+        l.radiusOfInfluence = e["radius_of_influence_m"].asFloat(-0.01f);
+        {   // LightingChannels -> bits (MSB-first); an absent struct keeps the LightComponent default
+            static const std::pair<const char*, uint32_t> kBits[] = {
+                {"bInitialized", 0x80000000u}, {"BSP", 0x40000000u}, {"Static", 0x20000000u}, {"Dynamic", 0x10000000u},
+                {"CompositeDynamic", 0x08000000u}, {"Skybox", 0x04000000u}, {"Unnamed_1", 0x02000000u},
+                {"Unnamed_2", 0x01000000u}, {"Unnamed_3", 0x00800000u}, {"Unnamed_4", 0x00400000u},
+                {"Unnamed_5", 0x00200000u}, {"Unnamed_6", 0x00100000u}, {"Cinematic_1", 0x00080000u},
+                {"Cinematic_2", 0x00040000u}, {"Cinematic_3", 0x00020000u}, {"Cinematic_4", 0x00010000u},
+                {"Cinematic_5", 0x00008000u}, {"Cinematic_6", 0x00004000u}, {"Gameplay_1", 0x00002000u},
+                {"Gameplay_2", 0x00001000u}, {"Gameplay_3", 0x00000800u}, {"Gameplay_4", 0x00000400u},
+                {"Crowd", 0x00000200u}, {"PlayerOnly", 0x00000100u}, {"NPCOnly", 0x00000080u}};
+            const assets::Json& ch = e["channels"];
+            uint32_t m = 0;
+            bool any = false;
+            for (const auto& kb : kBits)
+                if (ch.has(kb.first)) { any = true; if (ch[kb.first].asBool(false)) m |= kb.second; }
+            l.chMask = any ? m : 0xF8000000u;     // Default__LightComponent: bInitialized BSP Static Dynamic CompositeDynamic
+        }
+        {   // spot IntensityAt cones (0x82E2CFE0): inner clamp [0, 89] deg; outer clamp [inner + 0.001, 1.5543429] rad
+            float inner = std::min(std::max(e["inner_cone_deg"].asFloat(0.0f), 0.0f), 89.0f) * 0.017453292f;
+            float outer = std::min(std::max(e["outer_cone_deg"].asFloat(44.0f) * 0.017453292f, inner + 0.001f), 1.5543429f);
+            l.spotCosI = std::cos(inner); l.spotCosO = std::cos(outer); l.spotOuterRad = outer;
+        }
+        l.hasLightFunction = e["has_light_function"].asBool(false);
+        l.brightness = e["brightness"].asFloat(1.0f);
+        l.colorByte = {e["color_srgb8"][0].asFloat(255) / 255.0f, e["color_srgb8"][1].asFloat(255) / 255.0f,
+                       e["color_srgb8"][2].asFloat(255) / 255.0f};
+        {
+            const assets::Json& g = e["light_guid"];
+            l.guid.a = (uint32_t)g[0].asDouble(0); l.guid.b = (uint32_t)g[1].asDouble(0);
+            l.guid.c = (uint32_t)g[2].asDouble(0); l.guid.d = (uint32_t)g[3].asDouble(0);
+        }
+        for (int k = 0; k < 4; ++k) l.modShadowColor[k] = e["mod_shadow_color"][(size_t)k].asFloat(k == 3 ? 1.0f : 0.0f);
+        l.shadowFalloffExponent = e["shadow_falloff_exponent"].asFloat(2.0f);
         l.chStatic = e["channels"]["Static"].asBool(true);
         l.chDynamic = e["channels"]["Dynamic"].asBool(true) || e["channels"]["CompositeDynamic"].asBool(true);
         l.castShadows = e["cast_shadows"].asBool(true);
@@ -585,6 +654,32 @@ bool Pipeline::load(const std::string& mapName) {
     if (F.isObject() && F["bEnabled"].asBool(true)) {
         fogOn_ = !std::getenv("WFC_NOFOG");
         fogMaxH_ = F["Height"].asFloat(0.0f);
+    if (lvv_.valid()) {                  // bind the octree light table by LightComponent.LightGuid
+        std::vector<LightVisibilityVolume::Guid> g;
+        for (const Light& l : lights_) g.push_back(l.guid);
+        lvv_.bind(g);
+        int bound = 0;
+        for (size_t i = 0; i < lights_.size(); ++i) bound += lvv_.isBaked((int)i) ? 1 : 0;
+        LOG_INFO("wfc: LightsVisibilitiesVolume: %d of %zu level lights bound by LightGuid (%zu table entries)", bound,
+                 lights_.size(), lvv_.lightGuids().size());
+        if (std::getenv("WFC_DLETEST")) runDirectLightEnvSelfTest();
+        if (const char* dump = std::getenv("WFC_LVVDUMP")) {   // cross-check vs tools/render/lvv_decode.py
+            FILE* df = std::fopen(dump, "w");
+            uint32_t s = 2024u;
+            auto rnd = [&]() { s = s * 1664525u + 1013904223u; return (float)(s >> 8) / 16777216.0f; };
+            for (int i = 0; i < 400 && df; ++i) {
+                // 360 points around the playable area + 40 outside the root cube
+                core::Vec3 p = i < 360 ? core::Vec3{-20000.0f + rnd() * 80000.0f, -70000.0f + rnd() * 50000.0f, -74000.0f + rnd() * 8000.0f}
+                                       : core::Vec3{60000.0f + rnd() * 10000.0f, 0.0f, -72000.0f};
+                std::vector<int> ls; std::vector<float> vs;
+                bool hit = lvv_.query(p, ls, vs);
+                std::fprintf(df, "%.3f %.3f %.3f %d", p.x, p.y, p.z, hit ? 1 : 0);
+                for (size_t k = 0; k < ls.size(); ++k) std::fprintf(df, " %s:%d", lights_[(size_t)ls[k]].name.c_str(), (int)std::lround(vs[k] * 65535.0f));
+                std::fprintf(df, "\n");
+            }
+            if (df) std::fclose(df);
+        }
+    }
         // [MED] UE3 FHeightFogSceneInfo: FogDistanceScale = -Density / ln(2) (exp2 in shader),
         // FogInScattering = FLinearColor(LightColor) * LightBrightness.
         fogScale_ = -F["Density"].asFloat(5e-5f) / std::log(2.0f);
@@ -720,6 +815,53 @@ struct FirstUseTimer {
     }
 };
 
+// Xenos gamma texture fetch (UE3 SRGB textures use the D3D gamma formats): piecewise-linear degamma
+// to 10-bit linear, as reconstructed by xenia from Source Engine X360GammaToLinear + D3D9 code in
+// Xbox 360 executables [HIGH: hardware behaviour]. Four segments at 64/96/192 of 255 with slopes
+// 1/2/4/8 (in 1/1024 units) plus a truncated correction term, then /1023. Not the sRGB curve (GL
+// sRGB textures) and not pow 2.2 (that is the CPU FColor table PowOneOver255Table at 0x82251110).
+static float pwlGammaToLinear(float gamma) {
+    gamma = std::min(std::max(gamma, 0.0f), 1.0f);
+    float scale, offset;
+    if (gamma >= 96.0f / 255.0f) {
+        if (gamma >= 192.0f / 255.0f) { scale = 8.0f / 1024.0f; offset = -1024.0f; }
+        else { scale = 4.0f / 1024.0f; offset = -256.0f; }
+    } else {
+        if (gamma >= 64.0f / 255.0f) { scale = 2.0f / 1024.0f; offset = -64.0f; }
+        else { scale = 1.0f / 1024.0f; offset = 0.0f; }
+    }
+    float linear = gamma * ((255.0f * 1024.0f) * scale) + offset;
+    linear += std::trunc(linear * scale);
+    return linear * (1.0f / 1023.0f);
+}
+
+// RGBA8 (gamma-encoded RGB) -> RGBA16 linear through the PWL table; alpha is not gamma-converted.
+static std::vector<uint16_t> pwlToLinear16(const ImageData& img) {
+    static uint16_t lut[256];
+    static bool init = false;
+    if (!init) {
+        for (int i = 0; i < 256; ++i) lut[i] = (uint16_t)std::lround(pwlGammaToLinear(i / 255.0f) * 65535.0f);
+        init = true;
+    }
+    std::vector<uint16_t> out(img.rgba.size());
+    for (size_t i = 0; i < img.rgba.size(); i += 4) {
+        out[i] = lut[img.rgba[i]]; out[i + 1] = lut[img.rgba[i + 1]]; out[i + 2] = lut[img.rgba[i + 2]];
+        out[i + 3] = (uint16_t)(img.rgba[i + 3] * 257);
+    }
+    return out;
+}
+
+static void uploadTex(GLenum target, const ImageData& img, bool srgb) {
+    static const bool srgbCurve = std::getenv("WFC_SRGBCURVE") != nullptr;   // A/B: GL sRGB curve
+    if (srgb && !srgbCurve) {
+        std::vector<uint16_t> lin = pwlToLinear16(img);
+        glTexImage2D(target, 0, GL_RGBA16, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_SHORT, lin.data());
+    } else {
+        glTexImage2D(target, 0, srgb ? GL_SRGB8_ALPHA8 : GL_RGBA, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                     img.rgba.data());
+    }
+}
+
 GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool clampV) {
     std::string key = file + (srgb ? "|s" : "|l") + (clampU ? "c" : "w") + (clampV ? "c" : "w");
     auto it = texCache_.find(key);
@@ -731,8 +873,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
         glGenTextures(1, &id);
         glBindTexture(GL_TEXTURE_2D, id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, srgb ? GL_SRGB8_ALPHA8 : GL_RGBA, img.w, img.h, 0, GL_RGBA,
-                     GL_UNSIGNED_BYTE, img.rgba.data());
+        uploadTex(GL_TEXTURE_2D, img, srgb);
         GenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -761,8 +902,7 @@ GLuint Pipeline::cubeTexture(const std::vector<std::string>& faces, bool srgb) {
     for (int f = 0; f < 6 && ok; ++f) {
         ImageData img;
         ok = platform::decodeImage(faces[(size_t)f], img) && img.valid();
-        if (ok) glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, srgb ? GL_SRGB8_ALPHA8 : GL_RGBA, img.w, img.h, 0,
-                             GL_RGBA, GL_UNSIGNED_BYTE, img.rgba.data());
+        if (ok) uploadTex(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)f, img, srgb);
     }
     if (!ok) { LOG_WARN("wfc: cubemap decode failed: %s", faces[0].c_str()); glDeleteTextures(1, &id); id = 0; }
     else {
@@ -916,6 +1056,12 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
                 mainOverride_ = nullptr;
                 if (d >= 0) { progs_[(size_t)d].original = true; progs_[(size_t)r].distProg = d; }
             }
+            if (!lightmapped && s.blend <= 1) {          // caster variant for projected shadows
+                mainOverride_ = kFSMainShadow;
+                int sh = buildProgram(key + "|SHADOW", s.glsl, slots, s.cube, s.blend, s.twoSided, false, s.clip, false, s.rtParams);
+                mainOverride_ = nullptr;
+                if (sh >= 0) { progs_[(size_t)sh].original = true; progs_[(size_t)r].shadowProg = sh; }
+            }
             return r;
         }
         LOG_WARN("wfc: material %s failed to build; using glTF fallback", matName.c_str());
@@ -1016,7 +1162,7 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
     for (const Cand& c : cands) {
         // Visibility trace (UE3 light environments trace each light to the primitive).
         float vis = 1.0f;
-        if (vis_ && c.l->castShadows && dynamicObject && envSamples_ && !envSamples_->empty()) {
+        if (false) {                          // (superseded: characters use WfcDirectLightEnv.cpp)
             // TnRobotForm / TnVehicleForm LightEnvironmentComponent NormalizedSampleOffsets [CONF data]:
             // visibility = fraction of samples (bounds origin + offset * extent) with a clear path to
             // the light [HIGH: UE3 light-environment sampling].
@@ -1253,6 +1399,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(P.uLit, P.lit ? 1 : 0);
     Uniform1i(GetUniformLocation(P.id, "uBlend"), P.blend);
     Uniform1i(GetUniformLocation(P.id, "uVertexLM"), 0);
+    Uniform4f(GetUniformLocation(P.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
     Uniform2f(GetUniformLocation(P.id, "uNearFar"), znear_, zfar_);
     Uniform2f(GetUniformLocation(P.id, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
     Uniform1i(GetUniformLocation(P.id, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
@@ -1376,6 +1523,11 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                     dynEnv = ce.env;
                     dynEnvReady = true;
                 }
+                if (dynamicObject && !dynEnvReady && envForm_ >= 0 && dle_.count(envForm_) &&
+                    dle_[envForm_].initialized && !std::getenv("WFC_OLDCHARENV")) {
+                    dynEnv = dle_[envForm_].env;
+                    dynEnvReady = true;
+                }
                 if (dynamicObject) {
                     if (!dynEnvReady) {
                         core::Vec3 p = origin + core::Vec3{0, 2.0f, 0};
@@ -1495,9 +1647,12 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         const float u[5][3] = {{0, 0, 0.7f}, {0.8f, 0.8f, 0}, {0.8f, -0.8f, 0}, {-0.8f, 0.8f, 0}, {-0.8f, -0.8f, 0}};
         std::vector<core::Vec3> v; for (auto& o : u) v.push_back({o[0], o[2], o[1]}); return v; }();
     envSamples_ = nullptr;
+    envForm_ = -1;
+    bool weapon = false;
     for (const Material& mt : m.mats) {
-        if (mt.wfcName.find("_VEH_p.") != std::string::npos) { envSamples_ = &kVehicleSamples; break; }
-        if (mt.wfcName.find("_ROBO_p.") != std::string::npos || mt.wfcName.rfind("WEP_", 0) == 0) { envSamples_ = &kRobotSamples; break; }
+        if (mt.wfcName.find("_VEH_p.") != std::string::npos) { envSamples_ = &kVehicleSamples; envForm_ = 1; break; }
+        if (mt.wfcName.find("_ROBO_p.") != std::string::npos) { envSamples_ = &kRobotSamples; envForm_ = 0; break; }
+        if (mt.wfcName.rfind("WEP_", 0) == 0) { envSamples_ = &kRobotSamples; envForm_ = 0; weapon = true; break; }
     }
     if (envSamples_ && m.vertexCount() > 0) {          // world-space bounds of the posed mesh
         core::Vec3 mn{1e30f, 1e30f, 1e30f}, mx{-1e30f, -1e30f, -1e30f};
@@ -1509,6 +1664,13 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         core::Vec3 c = core::transformPoint(model, (mn + mx) * 0.5f), e = (mx - mn) * 0.5f;
         envBoundsCenter_ = c;
         envBoundsExtent_ = {e.x, e.y, e.z};   // model scale is 1 for characters; yaw-only: axis-aligned extent kept
+        // the weapon is lit by its owner's environment (no update from the weapon's own bounds)
+        if (dleRobotSamples_.empty()) { dleRobotSamples_ = kRobotSamples; dleVehicleSamples_ = kVehicleSamples; }
+        DirectLightEnvState& st = dle_[envForm_];
+        if (!weapon && st.lastFrame != frameNo_ && !std::getenv("WFC_OLDCHARENV")) {
+            st.lastFrame = frameNo_;
+            tickDirectLightEnv(envForm_, c, envBoundsExtent_, core::Vec3{model.m[12], model.m[13], model.m[14]});
+        }
     }
     GpuMesh g;
     g.vao = dynVao_;
@@ -1527,7 +1689,9 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         g.subs.push_back(d);
     }
     drawSubs(g, model, true);
+    if (envSamples_ && !weapon) renderShadowDepth(g, model);
     envSamples_ = nullptr;
+    envForm_ = -1;
 }
 
 // ------------------------------------------------------------------------- effects
@@ -1577,6 +1741,17 @@ void Pipeline::writeFrameReport() {
         std::fprintf(f, "  %-70s %4d %-11s %s %s %s %s %s\n", kv.first.c_str(), d.draws, kBlend[std::min(std::max(d.blend, 0), 4)],
                      d.lit ? "lit" : "unlit", d.vertexLM ? "vertexLM" : d.lightmapped ? "lightmap" : "-",
                      d.dynamic ? "dynamic" : "static", d.fx ? "fx" : "-", d.distortion ? "distortion" : "-");
+    }
+    for (const auto& kv : dle_) {
+        const DirectLightEnvState& st = kv.second;
+        std::fprintf(f, "DirectLightEnv %s: full updates %d (queued %d, last at frame %d), known %zu, direct %d (crossfade %.3f),"
+                        " composite shadow %s (strength %.3f, %d candidates)\n", kv.first == 0 ? "robot" : "vehicle",
+                     st.fullUpdates, st.queuedFull, st.lastFullFrame, st.known.size(), st.directCount, st.crossfade,
+                     st.shadowLight >= 0 ? lights_[(size_t)st.shadowLight].name.c_str() : "none", st.shadowStrength,
+                     st.shadowCandidates);
+        if (st.shadowTop >= 0)
+            std::fprintf(f, "  composite top %s: lum %.4f, smoothed vis %.3f, runner-up lum %.4f\n",
+                         lights_[(size_t)st.shadowTop].name.c_str(), st.shadowTopScore, st.shadowTopVis, st.shadowNextScore);
     }
     std::fprintf(f, "dynamic light environments (UberLight, TotalLightCount 2):\n");
     for (const std::string& e : frameEnvs_) std::fprintf(f, "  %s\n", e.c_str());
@@ -1804,6 +1979,10 @@ void Pipeline::endFrame() {
         if (++frames == 120) {
             LOG_INFO("wfc: dynamic meshes: vertex build %.2f ms, upload %.2f ms per frame", gStats.dynBuildMs / 120.0,
                      gStats.dynUploadMs / 120.0);
+            LOG_INFO("wfc: DirectLightEnv per frame: %.2f updates (%.4f ms), %.2f volume queries (%.4f ms), %.2f shadow rays",
+                     statEnvCalls_ / 120.0, statUpdateMs_ / 120.0, statLvvQueries_ / 120.0, statLvvMs_ / 120.0,
+                     statVisCalls_ / 120.0);
+            statEnvCalls_ = statVisCalls_ = statLvvQueries_ = 0; statLvvMs_ = 0.0; statUpdateMs_ = 0.0;
             LOG_INFO("wfc: avg frame %.2f ms (%.0f fps); scene submit %.2f ms, gpu wait %.2f ms; per frame: %.1f draws, "
                      "%.1f light envs (%.2f ms), %.1f visibility traces",
                      acc / frames, 1000.0 * frames / acc, gStats.renderMs / 120.0, gStats.gpuMs / 120.0, gStats.draws / 120.0, gStats.envCalls / 120.0, gStats.envMs / 120.0,
@@ -1811,6 +1990,7 @@ void Pipeline::endFrame() {
             frames = 0; acc = 0; gStats = RenderStats{};
         }
     }
+    applyShadows();
     if (distUsed_) applyDistortion();
     if (std::getenv("WFC_FRAMEREPORT") && std::getenv("WFC_SMOKE_FRAMES") &&
         frameNo_ == (int)std::atol(std::getenv("WFC_SMOKE_FRAMES")))

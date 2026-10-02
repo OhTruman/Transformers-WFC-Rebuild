@@ -72,6 +72,7 @@ namespace glx {
     X(void, Uniform1i, (GLint, GLint)) \
     X(void, Uniform1f, (GLint, GLfloat)) \
     X(void, Uniform2f, (GLint, GLfloat, GLfloat)) \
+    X(void, Uniform2fv, (GLint, GLsizei, const GLfloat*)) \
     X(void, Uniform3f, (GLint, GLfloat, GLfloat, GLfloat)) \
     X(void, Uniform4f, (GLint, GLfloat, GLfloat, GLfloat, GLfloat)) \
     X(void, Uniform1iv, (GLint, GLsizei, const GLint*)) \

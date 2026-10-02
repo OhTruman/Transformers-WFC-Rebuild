@@ -113,15 +113,19 @@ class Repo:
             if not (1 <= n <= 64) or o + 4 + n * 32 > len(t): continue
             ok = True
             sw = {}
+            known = 0
             for k in range(n):
                 b = o + 4 + 32 * k
                 ni, nn, val, ovr = struct.unpack_from('>iiII', t, b)
-                if not (0 <= ni < len(names)) or nn != 0 or val > 1 or ovr > 1:
+                if not (0 < ni < len(names)) or not (0 <= nn < 1000) or val > 1 or ovr > 1:
                     ok = False; break
-                if names[ni] not in valid:          # must be a real StaticSwitchParameter name
-                    ok = False; break
-                sw[names[ni]] = (bool(val), bool(ovr))
-            if not ok: continue
+                nm = names[ni] if nn == 0 else '%s_%d' % (names[ni], nn - 1)   # FName instance number
+                known += nm in valid
+                sw[nm] = (bool(val), bool(ovr))
+            # Names must be (almost all) real StaticSwitchParameter names: rejects coincidental arrays,
+            # tolerates stale entries a MIC keeps for switches no longer in its parent graph
+            # (e.g. DeadBodies_Mat_INST: 36 of 37 known, Use_Lerp_UVindex stale).
+            if not ok or known < max(1, int(0.8 * n + 0.999)): continue
             # following component-mask array
             m = o + 4 + 32 * n
             masks = {}

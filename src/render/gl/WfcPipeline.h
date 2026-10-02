@@ -17,6 +17,7 @@
 #include "render/Camera.h"
 #include "render/Mesh.h"
 #include "render/Renderer.h"
+#include "render/LightVisibilityVolume.h"
 
 namespace render {
 namespace wfc {
@@ -32,6 +33,16 @@ struct Light {
     float cosOuter = 0.0f, invConeRange = 1.0f;
     bool chStatic = true, chDynamic = true, castShadows = true, enabled = true;
     std::string name;             // source light component (frame report)
+    bool castDynamicShadows = true, castCompositeShadow = false, hasLightFunction = false;
+    float brightness = 1.0f;
+    core::Vec3 colorByte{1, 1, 1};   // LightColor / 255 (DirectLightEnv ranking colour)
+    uint32_t chMask = 0;             // LightingChannels (MSB-first bits)
+    float radiusOfInfluence = -0.01f;   // metres (class default -1 UU)
+    bool castStaticShadows = true;
+    float spotCosI = 1.0f, spotCosO = 0.0f, spotOuterRad = 0.0f;   // IntensityAt clamped cones (0x82E2CFE0)
+    LightVisibilityVolume::Guid guid;
+    float modShadowColor[4] = {0, 0, 0, 1};   // FLinearColor (ModShadowColor)
+    float shadowFalloffExponent = 2.0f;
 };
 
 // Lighting inputs of a dynamic (or unbuilt static) primitive, UE3 light-environment style.
@@ -56,6 +67,7 @@ struct Program {
     bool original = false;        // compiled from the original material graph (not the glTF fallback)
     bool sceneDepth = false;      // reads scene depth (DepthBiasedAlpha / SceneDepth)
     int distProg = -1;            // distortion-accumulate variant (material Distortion connected)
+    int shadowProg = -1;          // shadow-depth variant (opaque/masked: depth, masked clip)
     float clip = 0.3333f;
 };
 
@@ -163,6 +175,38 @@ private:
     struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };
     std::map<std::string, VertexLM> vertexLMs_;          // component (lower) -> decoded samples
     std::set<std::string> hiddenComponents_, noLightComponents_;   // authored render flags (lower-case keys)
+    LightVisibilityVolume lvv_;   // WFC LightsVisibilitiesVolume (native layout, b52dca9)
+    // WFC DirectLightEnv per character form (0 robot, 1 vehicle): WfcDirectLightEnv.cpp
+    struct DirectLightEnvState {
+        bool initialized = false, wasMoving = false;
+        float lastTickTime = -1.0f, pendingDt = 0.0f;
+        core::Vec3 lastActorPos, velUE, curCenter, curExtent, lastUpdatePosUE, originGltf, extentGltf;
+        int fullUpdates = 0, queuedFull = 0, lastFullFrame = -1;
+        std::vector<int> known;
+        struct PerLight { bool hasVis = false; float vis = 0.0f; int stagger = 0; };
+        std::map<int, PerLight> lights;
+        uint32_t rng = 12345u;
+        LightEnv env;
+        int directCount = 0, shadowLight = -1, shadowCandidates = 0, lastFrame = -1;
+        float crossfade = 1.0f, shadowStrength = 0.0f;
+        int shadowTop = -1;                       // top composite candidate (before the 0.05 drop)
+        float shadowTopScore = 0, shadowTopVis = 0, shadowNextScore = -1;
+    };
+    std::map<int, DirectLightEnvState> dle_;
+    int envForm_ = -1;                 // form of the dynamic mesh being drawn (-1 none)
+    float intensityAt(const Light& l, const core::Vec3& pGltf) const;
+    uint32_t envChannels(int form) const;
+    bool lightAffectsEnv(const Light& l, uint32_t envCh, const core::Vec3& c, float radius) const;
+    void tickDirectLightEnv(int form, const core::Vec3& boundsCenter, const core::Vec3& boundsExtent,
+                            const core::Vec3& actorPos);
+    void doDirectLightEnvUpdate(int form, bool full);
+    void runDirectLightEnvSelfTest();
+    struct DleQueueEntry { int form; int mode; int deadline; };   // global queue 0x83833084
+    std::vector<DleQueueEntry> dleQueue_;
+    std::vector<core::Vec3> dleRobotSamples_, dleVehicleSamples_;
+    double statUpdateMs_ = 0.0;
+    int statEnvCalls_ = 0, statVisCalls_ = 0, statLvvQueries_ = 0;
+    double statLvvMs_ = 0.0;
     std::vector<Light> lights_;
     bool fogOn_ = false;
     float fogMaxH_ = 0, fogScale_ = 0, fogStart_ = 0, fogExt_ = 1e8f;
@@ -206,6 +250,15 @@ private:
     bool distUsed_ = false;
     const char* mainOverride_ = nullptr;
     void applyDistortion();
+    // Modulated projected shadows (WfcShadows.cpp): non-native stages from the cooked shaders.
+    struct ShadowRequest { int light = -1; GLuint tex = 0; int res = 0; core::Mat4 viewProj; float zRow[4] = {0, 0, 0, 0};
+                           float invMaxSubjectDepth = 1, depthBias = 0; float modColor[4] = {0, 0, 0, 1}; };
+    std::vector<ShadowRequest> shadowRequests_;
+    GLuint shadowFbo_ = 0, shadowProjProg_ = 0, randomAnglesTex_ = 0;
+    int randomAnglesSize_ = 0;
+    int shadowLightFor() const;
+    void renderShadowDepth(GpuMesh& g, const core::Mat4& model);
+    void applyShadows();
     bool depthDirty_ = true;
     void ensureSceneDepth();
     float fxColor_[4] = {1, 1, 1, 1};
