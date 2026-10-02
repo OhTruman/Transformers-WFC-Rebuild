@@ -3,6 +3,95 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 02 (2026-10-02) — branch `integration/milestone-02`
+Integration and stabilisation only, no new features. Branched from milestone-01 (e62250e).
+Each branch was merged with `--no-ff`, one at a time, then built and checked with the harness.
+
+| Order | Branch | Head | Conflicts |
+|---|---|---|---|
+| 1 | agents/experimental | c9592f0 | none |
+| 2 | agents/rendering | 13128bb | `Renderer.h` (Systems particle structs vs Rendering `CharacterColors`: kept both), `STATUS.md` |
+| 3 | agents/gameplay | 21862a2 | `STATUS.md`, `FIDELITY.md` (sections kept from both sides; PROVISIONAL list combined) |
+| 4 | agents/systems | b8fed05 | `Input.h`, `Win32Window.cpp`, `STATUS.md` |
+
+**Cross-branch resolutions (ownership rules):**
+- **Dash input:** Gameplay's mapping is authoritative. **Shift = Dash** (pad RB); **RMB** = Fine Aim
+  in robot form and Boost in vehicle form. Systems' duplicate `Dash` enum, temporary **Q**
+  binding and World-side Dash latch were dropped. That latch also latched every frame whenever
+  `WFC_AUTODASH` was set, which clashed with Gameplay's frame-number hook.
+- **Vehicle state:** Gameplay's `CharacterMovement` owns Driving, the hover dash, the nitro timers
+  and cooldowns, and the speed/steering scales. Systems' `VehicleNitro::update` timer was replaced
+  by `follow(vehicleState().nitroRemain > 0)`. RamFX, the nitro/alert cues and the ram-hit
+  registry now track Gameplay's single state machine. Boost FX/audio follow Gameplay's Driving
+  state instead of raw button state. Values are identical on both sides (3 s, ×1.5, ×0.3, 8 s).
+- `Character::boneWorld` (Systems, vehicle FX sockets) now includes Gameplay's transform
+  `meshOffset()`, matching `draw()`.
+- Recoil, aim offset and upper-body layering: still exactly one implementation (Gameplay's), and
+  recoil fires once per shot (`PlayerController` → `notifyFired`).
+- **Ion Blaster cadence:** Systems' native-RE one-shot timer (strict `>`, overshoot discarded,
+  ~900 RPM). The 923 RPM patch is not applied; Experimental withdrew it.
+
+**Render data:** `tools\render\build_render_data.ps1` regenerated `work/render/MP_IAC_Streets`:
+175/175 materials, 25 decals (`decals.glb`), `clut.png`, the post-process block, BSP, 268 lights
+and 78 atlases. Output is byte-identical to agents/rendering's own output, apart from the
+embedded worktree path. `slot_materials.json` is `{}` (0 default-material slots) on both.
+
+**Validation (`.\build.ps1 -Jobs 2 -Clean`):** `wfc_rebuild.exe` and `wfc_fidelity.exe` build
+with 0 compiler warnings.
+- `wfc_fidelity` (latest Experimental harness): **194 pass / 0 FAIL / 19 known / 119 info / 1 skip**.
+  `--map`: 196/0/19/135/0. `--no-assets`: 139/0/16/37/18.
+- The same harness on milestone-01 (`ab.ps1`) gives 125/0/71/118/3. vs that baseline:
+  **0 REGRESSED**, 49 FIXED, and the new checks (fine aim, form switch at t=0, map content,
+  vehicle materials) pass. The Systems merge changed no check (identical to post-Gameplay).
+- `runtime-probe.ps1`: 30 pass / 0 FAIL / 4 known.
+- Runtime scripted runs (logs and stills in `work/fidelity/m2shots/`):
+  - Robot jog 14 m/s forward/back/diagonal with directional clips; facing tracks the camera.
+  - Jump about 5 m.
+  - Fine aim: FOV 80→45; blocked during reload; resumes after.
+  - Sustained fire: 200 shells, 3 magazine drops.
+  - Reload while jogging: slot 1.0, legs keep `Nav_StrafeJog_F`.
+  - Transformations both ways, stationary and moving:
+    - robot→vehicle carries 14 → 15 m/s with heading continuous;
+    - vehicle→robot carries 15 → 14.7 m/s until a wall;
+    - the movement form switches at t=0.
+  - Hover 1.85 m, camera-relative strafe 15 m/s.
+  - RMB Boost: Driving on wheels, 30 m/s.
+  - Shift hover dash: 30 m/s × 0.5 s.
+  - Shift while boosting: nitro 3 s above 30 m/s, with RamFX and nitro cues once. Releasing Boost
+    ends it immediately.
+- Rendering: WFC path, CLUT grade, bloom, far DOF, robot/vehicle WFC materials, boost afterburners.
+
+**Performance (RX 7900 XTX, WFC path):**
+- Idle 6.1 ms; jog 4.7 ms; boosting 3.9 ms.
+- **Sustained fire 62–68 ms** (Milestone 01: 40–46 ms).
+- On the same renderer, firing costs +20.8 ms/frame on both agents/gameplay head and the merged
+  build, so the increase is inherited, not a merge error. Gameplay now also traces the camera ray
+  per shot. The Milestone 01 light-environment/mesh-particle interaction still applies. Not fixed
+  (owners: Gameplay, Systems, Rendering).
+
+**Known issues carried into the playtest:**
+- Vehicle→robot: the weapon becomes usable and visible at the mesh handoff (~50% of the fold),
+  not the confirmed 25% + 0.2 s equip. KNOWN `weapon_restore_frac_elapsed_to_robot` (Gameplay).
+- Vehicle-specific camera incomplete; no vehicle shoulder offset (Gameplay, documented).
+- Ram collision is not implemented in any branch; `World::notifyRamHit` exists but nothing calls it.
+- Original transformation sounds are not present in any branch: the generic gears wav still
+  plays (KNOWN `transform_cue_is_authored`).
+- Harness KNOWNs remain:
+  - jump apex 5.14 vs 5.0;
+  - step-up 0.35 vs 0.37;
+  - wall slide;
+  - low-obstacle penetration;
+  - vehicle jump;
+  - dodge clips unreachable;
+  - zero-step fire tap;
+  - missing prefab/destructible actors;
+  - level emitters.
+- Two harness notes predate other branches' work. `unrendered.decals` says there's no decal pass,
+  but the decals render. The probe's `boost_fx_emitted` reads weapon-FX counters only; vehicle FX
+  log `VFX parts=26–28` while boosting. These are for Experimental to update.
+- Robot/vehicle energon hue (AssetTools bake blue vs compiled red constant): KNOWN, Rendering.
+- `LightMapTexture2D_882/_5049.png` decode warnings are pre-existing (legacy path only).
+
 ## INTEGRATION MILESTONE 01 (2026-10-01) — branch `integration/milestone-01`
 Integration only: no new features. All four agent checkpoints were merged with `--no-ff`, one at a
 time, building and running the fidelity harness after each merge.
