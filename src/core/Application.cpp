@@ -4,6 +4,7 @@
 #include "core/Log.h"
 #include "platform/Window.h"
 #include "render/Renderer.h"
+#include "game/VehicleTests.h"
 
 #include <chrono>
 
@@ -15,6 +16,7 @@ namespace core {
 
 bool Application::init() {
     LOG_INFO("WFC Rebuild starting (clean-room skeleton)");
+    if (std::getenv("WFC_VEHTEST")) { game::runVehicleTests(); return false; }   // measurements only
     window_ = platform::createWindow(config::kWindowWidth, config::kWindowHeight, config::kWindowTitle);
     if (!window_) { LOG_ERROR("window creation failed"); return false; }
 
@@ -89,6 +91,10 @@ void Application::run() {
         }
         if (autoTransform > 0 && frame == autoTransform) world_.player().pawn().beginTransform();
         if (const char* s = std::getenv("WFC_PRESSTRANSFORM")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Transform] = true;
+        if (const char* s = std::getenv("WFC_RAMSELF")) if (frame == std::atol(s)) {   // diagnostic: robot ram reaction
+            auto& pw = world_.player().pawn();
+            pw.rammedAsRobot(core::forwardFromYawPitch(pw.yaw(), 0.0f) * -1.0f);
+        }
 
         if (input.wasPressed(platform::Button::CameraToggle)) {
             mouseCaptured_ = !mouseCaptured_;
@@ -148,7 +154,7 @@ void Application::run() {
             LOG_INFO("frame %ld pos %.2f %.2f %.2f grounded=%d form=%s anim=%s t=%.2f ammo=%d/%d reloading=%d "
                      "yaw=%.2f aimW=%.2f aimN=%.2f reloadW=%.2f legYaw=%.1f aimYawN=%.2f turn=%d recoil=%d "
                      "hspeed=%.2f moveForm=%s fineAim=%d fov=%.1f drv=%d ride=%.2f dash=%.2f nitro=%.2f wpn=%d "
-                     "vy=%.2f pitch=%.1f roll=%.1f cont=%d vgnd=%d camS=%d vyaw=%.2f both=%d hasW=%d camD=%.2f camH=%.2f arm=%d",
+                     "vy=%.2f pitch=%.1f roll=%.1f cont=%d vgnd=%d camS=%d vyaw=%.2f both=%d hasW=%d camD=%.2f camH=%.2f arm=%d hand=%d ram=%.2f",
                      frame, p.x, p.y, p.z, (int)pawn.onGround(), game::formName(pawn.form()),
                      pawn.animName(), pawn.animTime(), pawn.weapon().ammo, pawn.weapon().reserve,
                      (int)pawn.weapon().reloading(), pawn.yaw(), pawn.aimWeight(), pawn.aimPitchNorm(),
@@ -164,7 +170,7 @@ void Application::run() {
                      world_.player().controller().cameraStrategy(), world_.player().controller().viewYaw(),
                      (int)pawn.partnerShown(), (int)pawn.hasWeapon(),
                      core::length(world_.player().controller().cameraPos() - pawn.actorLocation()),
-                     world_.player().controller().cameraPos().y - pawn.position().y, (int)pawn.armShown());
+                     world_.player().controller().cameraPos().y - pawn.position().y, (int)pawn.armShown(), (int)pawn.handShrunk(), pawn.rammedRemain());
         }
 
         // Camera + render.

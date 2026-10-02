@@ -91,6 +91,17 @@ public:
         armUnequipClip_ = arm ? arm->clipByName("ARM_Unequip") : -1;
     }
     bool armShown() const { return armVisible_; }
+
+    // Ram victim reactions [CONF native M03 P8]. Robot: TnAcrobaticsManager.Rammed -> RammedReaction:
+    // Falling, Velocity = dir * RammedSpeed (SharedAcrobatics 5000) + base velocity, for 0.5 s; EndState:
+    // Velocity = (0, 0, base Z). dir = Normal(victim Location - rammer Location). Vehicle:
+    // TnPawn.InVehicleForm.AddVelocity(v): rigid body += v * 0.5.
+    void rammedAsRobot(const core::Vec3& dir);
+    void addVelocityInVehicle(const core::Vec3& v) { velocity_ = velocity_ + v * 0.5f; }
+    float rammedRemain() const { return rammedRemain_; }
+    float rammedRemain_ = 0.0f;
+    float rammedBaseY_ = 0.0f;
+    bool handShrunk() const { return handShrunk_; }
     const assets::SkinnedModel* currentModel() const {
         return form_ == Form::Robot ? robotModel_ : vehicleModel_;
     }
@@ -303,6 +314,10 @@ private:
     render::MeshData armBuf_;
     core::Mat4 armWorld_ = core::Mat4::identity();
     void updateArm(float dt);
+
+    int handBone_ = -1;           // R_Arm04_Hand_XB (Robot_ANIMTREE HandSkelControl)
+    bool handShrunk_ = false;
+    void applyHandControl(const assets::SkinnedModel& mdl, assets::LocalPose& pose);
 
     int weaponBone_ = -1;
     core::Mat4 weaponOffset_ = core::Mat4::identity();

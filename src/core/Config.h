@@ -16,7 +16,7 @@ constexpr double kSimHz = 60.0;
 // World gravity. [CONF] WorldInfo.DefaultGravityZ = -2940 UU/s^2 -> -29.4 m/s^2
 // (Xe-TransGame.ini [Engine.WorldInfo]). Vehicles additionally scale RB gravity by 0.66.
 constexpr float kGravity          = 29.4f;   // m/s^2 (pawn)
-constexpr float kVehicleGravity   = 19.4f;   // m/s^2 (-2940 * 0.66 / 100) [CONF]
+constexpr float kVehicleGravity   = 19.404f; // m/s^2 (-2940 * 0.66 / 100) [CONF]
 constexpr float kGroundY = 0.0f;
 
 // Robot movement. [CONF] TnPawn.ApplyTransformer copies the character definition
@@ -210,8 +210,10 @@ constexpr float kTransformHandoffFrac = 0.5f; // SUPERSEDED (Pass 13) by the aut
 //   Transform_ToRobot_ROBO Unhide @0.098; Transform_ToRobot_VEH Hide @0.663.
 // Both clips of a pair start together and have identical lengths, so both meshes are drawn in the
 // overlap (0.396-0.880 s to vehicle, 0.098-0.663 s to robot) on the shared clip time.
-constexpr float kToVehRobotHide = 0.880f, kToVehVehicleShow = 0.396f;
-constexpr float kToRobotRobotShow = 0.098f, kToRobotVehicleHide = 0.663f;
+constexpr float kToVehRobotHide = 0.8796f, kToVehVehicleShow = 0.3958f;   // [CONF native M03 P10]
+constexpr float kToRobotRobotShow = 0.0984f, kToRobotVehicleHide = 0.6634f;
+// Transformation Rate: notify times are divided by it (4 when downed; the slice has no downed state).
+constexpr float kTransformRate = 1.0f;
 constexpr float kLocomotionBlend   = 0.15f;  // s [PROV] crossfade between locomotion clips
 // Robot Moving state [CONF Robot_ANIMTREE]: TnVelocityAnimBlend MinSpeed 450 / MaxSpeed 1200 UU/s
 // (walk -> jog; the clips' authored ground speeds are ~3.5 / ~12.1 m/s), TnStraferAnimBlend

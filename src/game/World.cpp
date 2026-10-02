@@ -549,31 +549,20 @@ void World::tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, b
     if (grounded || !vehicle) airTime_ = 0.0f;
 }
 
-// Gameplay: TnTruckForm.AttemptToRam (from Driving.OnRigidBodyCollision / RigidBodyTrigger) [CONF rules].
-// Only while nitro runs (RamState 1); the target must be an enemy pawn with Mass <= MaxRamMass 1000, once
-// per pawn per nitro (notifyRamHit owns that registry and the impact cue). Damage TnDamageTypeRammed:
-// 300 to AI robots (OptimusTruckForm.RamDamageToAiRobots); momentum +7000 UU/s Z (the slice's targets are
-// static dummies, so no knock-back). A successful ram does not drop to Hovering.
-// [PROV] contact = the truck's bind-pose footprint box vs the target's box.
+// Gameplay: TnTruckForm.AttemptToRam (Driving.OnRigidBodyCollision / RigidBodyTrigger) [CONF native M03 P8].
+// Only while nitro runs (RamState 1). The victim must be a TnPawn of another team with Mass <= MaxRamMass 1000,
+// once per pawn per nitro (notifyRamHit owns that registry and the impact cue). Robot victims enter
+// RammedReaction (Character::rammedAsRobot, dir = Normal(victim - rammer)); vehicle victims get
+// AddVelocity(momentum/Mass) x 0.5 with momentum = rammer RB velocity + (0,0,ExtraRamZVelocity 7000).
+// The slice spawns no other pawns: the weapon-test dummy (DamageTarget) is not a TnPawn and is not
+// rammable in the original, so nothing is hit here until pawn victims exist. [PARTIAL: victim masses]
 void World::gameplayRamContacts() {
     Character& pc = player_.pawn();
     const Character::VehicleState& vs = pc.vehicleState();
     if (pc.moveForm() != Form::Vehicle || !vs.driving || vs.nitroRemain <= 0.0f) return;
-    core::Vec3 c = pc.actorLocation();
-    core::Vec3 fwd = core::forwardFromYawPitch(pc.yaw(), 0.0f);
-    core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
-    const float halfLen = 3.34f, halfWid = 1.57f, halfH = 1.22f;   // vehicle bind extents 6.68 x 3.13 x 2.44 m
     for (auto& a : actors_) {
-        auto* t = dynamic_cast<DamageTarget*>(a.get());
-        if (!t || !t->alive()) continue;
-        core::Vec3 tc = t->position() + core::Vec3{0, t->halfExtent().y, 0};
-        core::Vec3 d = tc - c;
-        float r = std::max(t->halfExtent().x, t->halfExtent().z);
-        if (std::fabs(core::dot(d, fwd)) > halfLen + r || std::fabs(core::dot(d, right)) > halfWid + r ||
-            std::fabs(d.y) > halfH + t->halfExtent().y) continue;
-        if (!notifyRamHit(t, tc)) continue;                  // already rammed this nitro
-        t->applyDamage(VehicleNitro::kRamDamageToAiRobots);
-        LOG_INFO("ram: hit target at %.1f %.1f %.1f (hp %.0f)", tc.x, tc.y, tc.z, t->hp());
+        auto* victim = dynamic_cast<Character*>(a.get());   // other pawns only
+        if (!victim || victim == &pc) continue;
     }
 }
 

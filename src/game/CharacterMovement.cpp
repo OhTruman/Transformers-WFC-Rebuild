@@ -199,7 +199,7 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         const float K = cfg::kSuspStiffness / ms, Bd = cfg::kSuspDamping / ms, rest = cfg::kSuspRestLength;
         core::Vec3 com = p + B.x * cfg::kVehComFwd + B.z * cfg::kVehComUp;
         core::Vec3 down = B.z * -1.0f;
-        float gs = B.z.y * -cfg::kGravity;          // (-Direction.Z) * Owner.GetGravityZ() (world gravity)
+        float gs = B.z.y * -gRB;   // (-Direction.Z) * GetGravityZ(): PHYS_RigidBody -> -2940 x 0.66 [CONF native M03 P1]
         core::Vec3 nsum{0, 0, 0};
         int contacts = 0;
         for (int i = 0; i < 4; ++i) {
@@ -314,9 +314,13 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             float boostScale = 1.0f - (core::clampf(B.x.y, 0.5f, 0.866f) - 0.5f) / (0.866f - 0.5f);
             float acc = cfg::kTruckDriveAccel + (dragMax - cfg::kTruckDriveAccel) * (fwd / maxS) + extra;
             accel = accel + B.x * (acc * boostScale);
-            // [PROV] tires: lateral grip and a steering yaw rate (wheel assemblies not decoded).
-            core::Vec3 lat = R * core::dot(v, R);
-            v = v - lat * (1.0f - std::exp(-cfg::kDriveLateralGrip * dt));
+            // Tires (Driving only) [native M03 P3: F = clamp(-v_lat * coeff * scale * Load, +-2 (M/4)|g|) per
+            // wheel]: the cap is CONF (summed over 4 wheels: 2|g| of lateral acceleration); the coefficient
+            // and load are not recovered, so the decay rate stays [PROV] under the confirmed cap.
+            float vlat = core::dot(v, R);
+            float alat = core::clampf(-vlat * cfg::kDriveLateralGrip, -2.0f * gRB, 2.0f * gRB);
+            if (std::fabs(alat * dt) > std::fabs(vlat)) alat = -vlat / dt;
+            v = v + R * (alat * dt);
             vs.angVel.z = vs.steer * cfg::kDriveTurnRate;
             vs.angVel.x = 0.0f;
             if (vs.angVel.y > 0.0f) vs.angVel.y = 0.0f;       // keep a jump's nose-up rate, else level
@@ -416,8 +420,15 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     bool wasGround = c.onGround();
     core::Vec3& v = c.velocity();
     core::Vec3 hv{v.x, 0, v.z};
-    hv = robotCalcVelocity(c, wish, hv, !wasGround, in.faceYaw, dt);
-    v.x = hv.x; v.z = hv.z;
+    if (c.rammedRemain_ > 0.0f) {
+        // RammedReaction [CONF native M03 P8]: the forced velocity set on entry carries for 0.5 s (no
+        // movement input); EndState restores air movement with Velocity = (0, 0, base Z).
+        c.rammedRemain_ -= dt;
+        if (c.rammedRemain_ <= 0.0f) { c.rammedRemain_ = 0.0f; v.x = 0.0f; v.z = 0.0f; v.y = c.rammedBaseY_; }
+    } else {
+        hv = robotCalcVelocity(c, wish, hv, !wasGround, in.faceYaw, dt);
+        v.x = hv.x; v.z = hv.z;
+    }
 
     // [CONF] pawn gravity -29.4 m/s^2.
     v.y -= core::config::kGravity * dt;

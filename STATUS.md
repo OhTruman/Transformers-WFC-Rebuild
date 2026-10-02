@@ -3,6 +3,23 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 14 (2026-10-02) — native RE Milestone 03 vehicle reconcile
+Implements only what MILESTONE03_VEHICLE_NATIVE_FIDELITY.md confirms; provenance and measurements are in FIDELITY.md
+PASS 14. Changes:
+- spring gravity is the rigid-body GetGravityZ (−1940.4), giving rest COM 1.287 m = native L_eq;
+- TnAccelerationAnimBlend hover pose weights;
+- CurveAutoClamped camera offset curve;
+- HandSkelControl hand shrink (0.1, instant);
+- ram victims restricted to TnPawns, with robot RammedReaction and vehicle AddVelocity ×0.5 implemented;
+- exact notify times with transform Rate.
+WFC_VEHTEST=1 runs the deterministic handling measurements (rest, coast-down, 0.25/0.5 m bumps, 10 m drop,
+hover/boost jump, dash, drift turn).
+Still PARTIAL/PROV:
+- hover RB mass link (M=2500);
+- boost tire coefficient;
+- hull contact (min clearance, ceiling probe);
+- ram victim masses (no pawn victims in the slice).
+
 ## GAMEPLAY PASS 13b (2026-10-02) — Milestone 03 handoffs (Experimental + Systems)
 - Experimental's "weapon usable before a visible gun" and "vehicle jump missing" were measured on milestone-02, before
   049f614. With Pass 13 the gun is drawn at 0.28 s and first usable at 0.50 s. Firing requires the drawn gun. The

@@ -89,6 +89,7 @@ void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
     R.land3Clip = mdl.clipByName("Nav_Land_03");
 
     R.rootRef = mdl.nodeByName("C_Root_Reference_XR");
+    handBone_ = mdl.nodeByName("R_Arm04_Hand_XB");          // HandSkelControl bone (Robot_ANIMTREE)
     R.spine = mdl.nodeByName("C_Spine02_Lumbar02_XB");      // SpineRecoil bone (Robot_ANIMTREE)
     R.rightArm = mdl.nodeByName("R_Arm02_Shoulder_XB");     // RightHandRecoil bone (Robot_ANIMTREE)
     // Turn-in-place transitions [CONF Robot_ANIMTREE TnWeaponAnimChooser, WS_ONE_HANDED]:
@@ -314,18 +315,26 @@ void Character::playClip(const assets::SkinnedModel& mdl, int clip, bool loop, f
     finishBaseBlend(dt);
 }
 
-// Vehicle base layer: blend the authored single-frame hover poses by the travel direction
-// relative to the vehicle's facing (F/B/L/R), toward Nav_Hover_Pose_VEH at rest.
-// [PROV] weight mapping: local velocity / MaxLinearSpeed per axis.
+// Vehicle base layer: VEH_Car_ANIMTREE TnAccelerationAnimBlend [CONF native M03 P2] — velocity-driven
+// despite the name: m = ClampLength(Velocity, 2000) in local space / 2000 x max(0, up.Z);
+// child 0 (Nav_Hover_Pose_VEH) = 1 - |m|, directional children = max(0, +-sign * m^2 / |m|).
 void Character::vehicleHoverBlend() {
     const VehicleRig& V = vehicleRig_;
     core::Vec3 fwd = core::forwardFromYawPitch(yaw_, 0.0f);
     core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
-    float inv = 1.0f / core::config::kVehicleMoveSpeed;
-    float f = core::clampf((velocity_.x * fwd.x + velocity_.z * fwd.z) * inv, -1.0f, 1.0f);
-    float r = core::clampf((velocity_.x * right.x + velocity_.z * right.z) * inv, -1.0f, 1.0f);
-    float wF = std::max(0.0f, f), wB = std::max(0.0f, -f), wR = std::max(0.0f, r), wL = std::max(0.0f, -r);
-    float total = std::max(0.0f, 1.0f - (wF + wB + wR + wL));
+    const float maxV = 20.0f;                                   // MaxVelocity 2000 UU/s
+    float upZ = std::max(0.0f, std::cos(veh_.pitch) * std::cos(veh_.roll));
+    float f = (velocity_.x * fwd.x + velocity_.z * fwd.z), r = (velocity_.x * right.x + velocity_.z * right.z);
+    float len = std::sqrt(f * f + r * r);
+    float k = (len > maxV ? maxV / len : 1.0f) / maxV * upZ;
+    f *= k; r *= k;
+    float m = std::sqrt(f * f + r * r);
+    float wF = 0.0f, wB = 0.0f, wR = 0.0f, wL = 0.0f;
+    if (m > 1e-6f) {
+        wF = std::max(0.0f, f * std::fabs(f) / m); wB = std::max(0.0f, -f * std::fabs(f) / m);
+        wR = std::max(0.0f, r * std::fabs(r) / m); wL = std::max(0.0f, -r * std::fabs(r) / m);
+    }
+    float total = std::max(0.0f, 1.0f - m);
     basePose_ = V.idle;
     auto add = [&](const assets::LocalPose& p, float w) {
         if (w <= 0.0f) return;
@@ -438,6 +447,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
         assets::addPose(finalPose_, layerPose_, hoverW_);
     }
 
+    if (&mdl == robotModel_) applyHandControl(mdl, finalPose_);
     assets::skinPose(mdl, finalPose_, animScratch_, poseBuf_);
     updateWeaponSocket();
 }
@@ -449,7 +459,9 @@ void Character::updateAnimation(float dt) {
     if (robotModel_ && !robotRig_.built && robotModel_->valid()) buildRobotRig(*robotModel_);
     if (vehicleModel_ && !vehicleRig_.built && vehicleModel_->valid()) buildVehicleRig(*vehicleModel_);
 
-    animTime_ += dt;   // advance the active clip's time (reset to 0 by beginBase on a change)
+    // Advance the active clip's time (reset to 0 by beginBase on a change). A transformation plays at its
+    // Rate (1; 4 when downed), so the authored notify times are reached at t/Rate [CONF native M03 P10].
+    animTime_ += dt * (trans_ != Transition::None ? core::config::kTransformRate : 1.0f);
     if (shiftRemain_ > 0.0f) shiftRemain_ = std::max(0.0f, shiftRemain_ - dt);
     // Weapon restore clock during vehicle->robot: starts when 25% of the fold has elapsed (the
     // restore point is measured on the fold even before the robot mesh is displayed).
@@ -633,6 +645,7 @@ void Character::updatePartner(float t) {
     if (trans_ == Transition::None || !pm || !pm->valid() || partnerClip_ < 0) return;
     if (!meshVisible(partnerForm(), t)) return;
     assets::samplePose(*pm, partnerClip_, t, false, partnerPose_);
+    if (pm == robotModel_) applyHandControl(*pm, partnerPose_);
     assets::skinPose(*pm, partnerPose_, partnerScratch_, partnerBuf_);
     partnerVisible_ = true;
     updateWeaponSocket();     // the robot may be this partner mesh (vehicle->robot before the vehicle hides)
@@ -669,6 +682,26 @@ void Character::updateArm(float dt) {
     // glTF Z), no offset [CONF character.json].
     armWorld_ = meshMatrix(Form::Robot) * (*robotScratch)[(size_t)weaponBone_] * core::Mat4::rotateZ(3.1415927f);
     armVisible_ = true;
+}
+
+// TnArmAttachment.UpdateHand [CONF native M03 P7]: HandSkelControl (SkelControlSingleBone on R_Arm04_Hand_XB,
+// BoneScale 0.1) strength = ShouldEquipHand ? 0 : 1, blend time 0 (binary, every tick).
+// ShouldEquipHand = ShouldAlwaysEquip || weapon.IsHandRequired (Ion Blaster: false); ShouldAlwaysEquip = no
+// weapon || not attached || (holstered && !equipping). The robot weapon is attached and drawn when not
+// transforming, and from the 25% restore of vehicle->robot (it starts equipping then); stored on robot->vehicle.
+void Character::applyHandControl(const assets::SkinnedModel& mdl, assets::LocalPose& pose) {
+    handShrunk_ = weaponBone_ >= 0 && (trans_ == Transition::None ? form_ == Form::Robot
+                                                                 : (transTarget_ == Form::Robot &&
+                                                                    transformProgress() >= core::config::kRestoreWeaponElapsed));
+    if (!handShrunk_ || handBone_ < 0 || (size_t)handBone_ >= pose.s.size() || &mdl != robotModel_) return;
+    pose.s[(size_t)handBone_] = pose.s[(size_t)handBone_] * 0.1f;
+}
+
+void Character::rammedAsRobot(const core::Vec3& dir) {
+    rammedBaseY_ = velocity_.y;
+    velocity_ = dir * 50.0f + velocity_;      // RammedSpeed 5000 UU/s + base velocity
+    rammedRemain_ = 0.5f;
+    onGround_ = false;                        // Physics = PHYS_Falling
 }
 
 core::Mat4 Character::meshMatrix(Form f) const {

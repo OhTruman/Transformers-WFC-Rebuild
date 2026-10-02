@@ -75,6 +75,29 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 14 — NATIVE RE MILESTONE 03 RECONCILE (2026-10-02, gameplay agent)
+Source: `RE-Workspace/notes/MILESTONE03_VEHICLE_NATIVE_FIDELITY.md` (native RE 76bb0a). Measurements from
+`WFC_VEHTEST=1`, which runs the real 60 Hz vehicle step on generated geometry (src/game/VehicleTests.cpp).
+
+| Item | Native report | Rebuild | Measured |
+|---|---|---|---|
+| P1 suspension | 4 COM-relative probes ±130.8, body-down rays 250, implicit spring K/m, B/m, m=M/4, g = −dir.Z·GetGravityZ (RB −1940.4), push-only, cos-scaled, RB damping 0 | **APPLIED**; spring gravity corrected from world −2940 to RB −1940.4 | Rest COM 1.2872 m = native L_eq 128.7 UU (mass link M=2500 stays **PARTIAL** per report) |
+| P1 bumps / drop | — | springs only, no ride-height target | 0.25 m step @15 m/s: COM 1.075–1.575 m, pitch −1.8..4.0°; 0.5 m: 0.863–1.857 m, −3.0..8.1°; 10 m drop: impact 17.1 m/s, min COM 0.60 m (PROV hull clearance), settles 1.287 m |
+| P2 attitude | grounded pitch/roll = springs + UpdateRoll; yaw = camera each tick; upright 5%/tick only airborne/upside down | **APPLIED** (Pass 13) | — |
+| P2 visual lean | TnAccelerationAnimBlend: m = ClampLength(v,2000)/2000 × max(0,up.Z); child0 = 1−|m|, dirs max(0,±sign·m²/|m|) | **APPLIED** (was velocity/1500 per axis PROV); ADD_Nav_Hover_VEH additive kept | — |
+| P3 hover velocity | local X/Y toward stick×1500, one ClampLength 3000·(1−drift/0.5)²·up.Z²; no hover grip model | **APPLIED** | Coast-down 15→0 m/s in 0.500 s forward and sideways |
+| P3 boost tires | F = clamp(−v_lat·coeff·scale·Load, ±2(M/4)|g|) | cap **APPLIED**; coefficient **PROV** (not recovered) | — |
+| P3 drift turn | heading = camera; authority ramps | **APPLIED** | Camera +90° after boost release: yaw 90° at once, travel heading 0.2° @0.15 s → 11.9° @0.6 s |
+| P4 hover jump | +1200 world Z additive, local ω −1, 0.3 s ground cooldown | **APPLIED** | vy +12.00, apex +3.80 m over rest (ballistic 3.71 + spring push), horizontal kept |
+| P4 boost jump | local (600,0,1400), ω (0,−2,0) | **APPLIED** | +6.0 fwd, +14 up (13.68 after one tick of g), pitch rate 1.8 rad/s after air damping |
+| P5 dash | body-local (1,0,0); mask (1,1,1); 100000; exit snap fwd 1500; refuse/cancel unstable | **APPLIED** | Stick right ignored: tick 2 = 29.8 fwd / 0.08 lat (one 30 Hz tick = two 60 Hz ticks), 30.0 during, exit 15.0 fwd |
+| P6 camera offset | orbit-space translation, full camera rotation, X toward pawn, Y right, Z up; CurveAutoClamped cubic; C2 smoother (T/2) | **APPLIED**; curve now Hermite with flat end/extremum tangents | Fine aim at level pitch: camera 7.35 → 9.16 m from the actor (X +150 → −50), no lateral change |
+| P7 hand | HandSkelControl R_Arm04_Hand_XB scale 0.1, strength 0/1 instant; ShouldEquipHand rules | **APPLIED** | Shrunk with the gun drawn; full size during R→V and V→R before the restore; shrinks on the restore tick |
+| P8 ram | TnPawn victims only (mass ≤ 1000, other team); robot RammedReaction (falling, dir·5000+base for 0.5 s, then (0,0,baseZ)); vehicle AddVelocity ×0.5 | victim rule **APPLIED** (the DamageTarget dummy is not a TnPawn and is no longer rammed); robot reaction + vehicle AddVelocity implemented | WFC_RAMSELF: 50 m/s + base for 0.5 s, horizontal 0 after. The slice has no pawn victims; masses **PARTIAL** |
+| P9/P10 visibility | notifies 0.8796 / 0.3958 / 0.0984 / 0.6634 s, ÷ Rate (4 downed), final state at BeginState | **APPLIED** (exact times, Rate constant 1; no downed state) | Vehicle hidden from 0.6634 s; clip geometry untouched |
+
+---
+
 ## PASS 13 — VEHICLE BODY, VEHICLE CAMERA, TRANSFORM HANDOFF (2026-10-02, gameplay agent)
 
 | Behaviour | Original (WFC) | Source | Conf | Rebuild status |

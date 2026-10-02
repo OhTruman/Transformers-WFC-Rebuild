@@ -13,11 +13,18 @@ namespace game {
 
 namespace {
 float smoothstep01(float x) { x = core::clampf(x, 0.0f, 1.0f); return x * x * (3.0f - 2.0f * x); }
-// HmCurveVector through the three TnCameraOffsetCurve points at pitch fraction 0 / 0.5 / 1.
-// [PROV] interpolation: quadratic through the three points (UE3 curve auto-tangents not recovered).
+// HmCurveVector.Build through the three TnCameraOffsetCurve points at InVal 0 / 0.5 / 1 [CONF native M03 P6]:
+// cubic (InterpMode 3), end tangents 0, inner tangent (next - prev)/2, AutoClamped (a local extremum gets a
+// flat tangent [HIGH: UE3 CurveAutoClamped]); evaluated as UE3 CubicInterp(P0, T0*Diff, P1, T1*Diff, a).
 float curve3(float a, float b, float c, float f) {
-    float l0 = 2.0f * (f - 0.5f) * (f - 1.0f), l1 = -4.0f * f * (f - 1.0f), l2 = 2.0f * f * (f - 0.5f);
-    return a * l0 + b * l1 + c * l2;
+    f = core::clampf(f, 0.0f, 1.0f);
+    float tm = ((b < a && b < c) || (b > a && b > c)) ? 0.0f : (c - a) * 0.5f;
+    auto hermite = [](float p0, float t0, float p1, float t1, float u) {
+        float u2 = u * u, u3 = u2 * u;
+        return (2 * u3 - 3 * u2 + 1) * p0 + (u3 - 2 * u2 + u) * t0 + (-2 * u3 + 3 * u2) * p1 + (u3 - u2) * t1;
+    };
+    const float diff = 0.5f;
+    return f < 0.5f ? hermite(a, 0.0f, b, tm * diff, f / 0.5f) : hermite(b, tm * diff, c, 0.0f, (f - 0.5f) / 0.5f);
 }
 // TnScreenSpaceOffsetByPitchCameraBehavior.GetPitchFractionOfLimits.
 float pitchFraction(float pitch, float lo, float hi) { return core::clampf((pitch - lo) / (hi - lo), 0.0f, 1.0f); }
