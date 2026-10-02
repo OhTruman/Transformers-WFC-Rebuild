@@ -25,6 +25,7 @@ struct CueDef {
     int maxConcurrent;                   // SoundCue.MaxConcurrentPlayCount (0 = unlimited)
     float volDb, volVarMin, volVarMax, pitchSt, pitchVarMin, pitchVarMax;
     float distMinUU, distMaxUU, rolloff;
+    float pan2DUU, pan3DUU;              // SoundNodeRoot SmartPanDistance2D / 3D (default 400 / 800)
     Param param;                         // SoundNodeRoot.SoundParameter
     std::vector<EventDef> events;
 };
@@ -35,8 +36,7 @@ const CueDef kCues[] = {
 constexpr int kCueCount = (int)(sizeof(kCues) / sizeof(kCues[0]));
 
 constexpr float UU = 0.01f;
-constexpr float kSmartPan2D = 200 * UU, kSmartPan3D = 400 * UU;   // SoundNodeRoot SmartPanDistance2D/3D
-constexpr float kInstanceTail = 2.0f;   // [PROV] seconds a one-shot instance counts as live after its last event
+constexpr float kInstanceTail = 10.0f;  // upper bound on a one-shot instance's life after its last event
 constexpr float kSpeedParamMax = 120.0f; // [CONF] SoundParameters.Optimus_Prime_Speed.Max
 
 float frand() { return (float)std::rand() / (float)RAND_MAX; }
@@ -111,6 +111,10 @@ float SoundCues::paramFor(const Instance& in) const {
 }
 
 int SoundCues::play(const char* name, const core::Vec3& pos, float distM, float speedMph) {
+    return play(name, Emitter{pos, kWorld, {0, 0, 0}}, distM, speedMph);
+}
+
+int SoundCues::play(const char* name, const Emitter& em, float distM, float speedMph) {
     if (!audio_) return -1;
     int c = findCue(name);
     if (c < 0) { LOG_WARN("sound cue %s not in table", name); return -1; }
@@ -126,7 +130,9 @@ int SoundCues::play(const char* name, const core::Vec3& pos, float distM, float 
         if (count >= cd.maxConcurrent && oldest >= 0) stop(live_[(size_t)oldest].id, 0.0f);
     }
     Instance in;
-    in.cue = c; in.id = nextId_++; in.age = 0.0f; in.pos = pos; in.distM = distM; in.speedMph = speedMph;
+    in.cue = c; in.id = nextId_++; in.age = 0.0f; in.distM = distM; in.speedMph = speedMph;
+    in.owner = em.owner; in.offset = em.offset; in.pos = em.pos;
+    resolve(in);
     for (const EventDef& e : cd.events) if (e.loop) in.looping = true;
     live_.push_back(in);
     int id = in.id;
@@ -159,25 +165,39 @@ void SoundCues::launch(Instance& in, int e) {
     p.minDist = cd.distMinUU * UU;
     p.maxDist = cd.distMaxUU * UU;
     p.rolloff = cd.rolloff;
-    p.pan2D = kSmartPan2D; p.pan3D = kSmartPan3D;
+    p.pan2D = cd.pan2DUU * UU; p.pan3D = cd.pan3DUU * UU;
     p.loop = ed.loop;
     ref.v = audio_->playVoice(s, p);
     if (ref.v != audio::kInvalidVoice) in.voices.push_back(ref);
     static const bool log = std::getenv("WFC_CUELOG") != nullptr;
     if (log)
-        LOG_INFO("CUE %s ev%d t=%.3f wave=%d gain=%.3f (%.1f dB, param %.0f) pitch=%.3f loop=%d voice=%d",
-                 cd.name, e, in.age, s, p.volume, ref.baseDb, x, p.pitch, (int)ed.loop, ref.v);
+        LOG_INFO("CUE %s ev%d t=%.3f wave=%d gain=%.3f (%.1f dB, param %.0f) pitch=%.3f loop=%d voice=%d owner=%d pos=%.2f,%.2f,%.2f",
+                 cd.name, e, in.age, s, p.volume, ref.baseDb, x, p.pitch, (int)ed.loop, ref.v, in.owner,
+                 in.pos.x, in.pos.y, in.pos.z);
 }
 
-// Re-evaluate parameter curves, envelopes and fade for every voice of an instance.
+// Attached instances (an AudioComponent on its owner, e.g. HmAnimNotify_Sound / the vehicle audio
+// component) take their owner's current position; world instances keep where they were played.
+bool SoundCues::resolve(Instance& in) {
+    if (in.owner == kWorld || !resolver_) return false;
+    core::Vec3 p;
+    if (!resolver_(in.owner, in.offset, p)) return false;   // owner unavailable: hold the last position
+    in.pos = p;
+    return true;
+}
+
+// Re-evaluate parameter curves, envelopes, fade and (attached) position for every voice.
 void SoundCues::refresh(Instance& in) {
     const CueDef& cd = kCues[in.cue];
     float x = paramFor(in);
     float fade = in.fade > 0.0f ? core::clampf(in.fadeLeft / in.fade, 0.0f, 1.0f) : 1.0f;
+    const bool moved = resolve(in) || in.posDirty;
+    in.posDirty = false;
     for (const VoiceRef& r : in.voices) {
         const EventDef& ed = cd.events[(size_t)r.event];
-        if (ed.volCurve.empty() && ed.pitchCurve.empty() && ed.envVol.empty() && ed.envPitch.empty() && in.fade <= 0.0f)
-            continue;                                // static one-shot: nothing to update
+        if (!moved && ed.volCurve.empty() && ed.pitchCurve.empty() && ed.envVol.empty() && ed.envPitch.empty() &&
+            in.fade <= 0.0f)
+            continue;                                // static world one-shot: nothing to update
         float gain = dbToGain(r.baseDb) * evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f) * fade;
         float pitch = stToRate(r.baseSt + evalCurve(ed.pitchCurve, x, 0.0f) + evalCurve(ed.envPitch, in.age, 0.0f));
         audio_->updateVoice(r.v, gain, pitch, in.pos);
@@ -187,12 +207,15 @@ void SoundCues::refresh(Instance& in) {
 void SoundCues::update(int id, const core::Vec3& pos, float speedMph) {
     Instance* in = find(id);
     if (!in) return;
-    in->pos = pos; in->speedMph = speedMph;
+    if (in->owner == kWorld) { in->pos = pos; in->posDirty = true; }
+    in->speedMph = speedMph;
 }
 
 void SoundCues::stop(int id, float fade) {
     Instance* in = find(id);
     if (!in) return;
+    static const bool log = std::getenv("WFC_CUELOG") != nullptr;
+    if (log) LOG_INFO("CUE %s stop fade=%.2f age=%.2f", kCues[in->cue].name, fade, in->age);
     // No further events from a stopped instance.
     for (size_t i = 0; i < pending_.size();) {
         if (pending_[i].inst == id) { pending_[i] = pending_.back(); pending_.pop_back(); } else ++i;
@@ -211,6 +234,7 @@ void SoundCues::tick(float dt) {
         Instance* in = find(p.inst);
         if (!in) { pending_[i] = pending_.back(); pending_.pop_back(); continue; }
         if (in->age >= p.t) {
+            resolve(*in);                            // a delayed wave event starts at the owner's position now
             launch(*in, p.event);
             pending_[i] = pending_.back(); pending_.pop_back();
             continue;
@@ -223,9 +247,15 @@ void SoundCues::tick(float dt) {
         if (in.fade > 0.0f) {
             in.fadeLeft -= dt;
             if (in.fadeLeft <= 0.0f) done = true;
-        } else if (!in.looping && in.age > lastEventTime(kCues[in.cue]) + kInstanceTail) {
-            live_[i] = live_.back(); live_.pop_back();   // one-shot voices finish on their own
-            continue;
+        } else if (!in.looping && in.age > lastEventTime(kCues[in.cue])) {
+            // One-shot: retire once every voice has finished (attached voices keep following their
+            // owner until then); kInstanceTail bounds it for backends that cannot report voices.
+            bool sounding = false;
+            for (const VoiceRef& r : in.voices) if (audio_->isPlaying(r.v)) { sounding = true; break; }
+            if (!sounding || in.age > lastEventTime(kCues[in.cue]) + kInstanceTail) {
+                live_[i] = live_.back(); live_.pop_back();
+                continue;
+            }
         }
         if (done) {
             for (const VoiceRef& r : in.voices) audio_->stopVoice(r.v);

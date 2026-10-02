@@ -3,6 +3,32 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 03 (2026-10-02) — branch `agents/systems` (synced to integration/milestone-02 e8036f6)
+- **Firing cost 65–70 → 10–11 ms/frame.** The `CollisionWorld::segmentHit` grid walk (exact, brute-force
+  verified) fixes the weapon trace, Gameplay's per-shot camera ray and the renderer's light-visibility rays.
+  ~900 RPM cadence untouched.
+- **Audio ownership:** cue instances attach to pawn / weapon / muzzle and follow them every tick (one-shots
+  and delayed wave events included); world impacts stay world-fixed. Per-cue SmartPan distances from the
+  cooked SoundNodeRoot.
+- **Transform audio:** the original BL_TRANSFORM.OPTIMUS_BOT2VEH / VEH2BOT at their notify times, attached
+  to the pawn. Generic gears wav removed. Vehicle FX enable at 1.8 s of the to-vehicle fold.
+- **Robot movement sound:** the original BL_FS_LRG_BOT footsteps / scuffs / jump / land / hard land / high
+  fall, idle and pivot foley, from the authored clip notifies and the LandingAnims height table. Replaces
+  the RELOAD_AIR_RELEASE_THUMP placeholder landing.
+- **Fine aim:** BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START / END on the weapon.
+- Diagnostics: `WFC_SYSPROF=1` (Systems CPU sections, live FX/cue counts), `WFC_FOLEYLOG=1`, and
+  `WFC_CUELOG` now logs owner, position and stops.
+- Validation:
+  - `wfc_fidelity`: 194 pass / 0 FAIL / 19 known / 119 info / 1 skip (unchanged).
+  - `runtime-probe.ps1`: 31 pass / 0 FAIL / 1 known (was 30/0/4; `transform_cue_is_authored` now passes).
+- **Handoffs:**
+  - **Rendering:** mesh-particle light environments (one per PSC, not per shell); hover/boost ring
+    material treatment.
+  - **Gameplay:**
+    - play Nav_Land_02 / _03 per LandingAnims;
+    - stop-transition idle↔walk flicker;
+    - call `World::notifyRamHit` from ram collision.
+
 ## INTEGRATION MILESTONE 02 (2026-10-02) — branch `integration/milestone-02`
 Integration and stabilisation only, no new features. Branched from milestone-01 (e62250e).
 Each branch was merged with `--no-ff`, one at a time, then built and checked with the harness.

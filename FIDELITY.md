@@ -17,6 +17,128 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 SYSTEMS — AUDIO OWNERSHIP, ROBOT MOVEMENT SOUND, TRANSFORM AUDIO, FIRING COST (2026-10-02, agents/systems)
+
+### Audio source ownership (systemic fix)
+Every SoundCue instance now has an **owner**. `SoundCues::Emitter{pos, owner, offset}` with a World resolver:
+`kWorld` (fixed position), `kOwnPawn` (pawn mesh origin + offset, e.g. the truck AUDIO_ROOT +147.25 UU),
+`kOwnWeapon` (Ion Blaster mesh), `kOwnMuzzle` (MuzzleFlash socket). Attached instances re-resolve their
+position **every tick for every voice**: one-shots, loops and *delayed wave events*, which now launch at the
+owner's current position. Before this, one-shot voices were frozen where they started. That was the
+"transform sound stays behind" defect, and it applied to every non-looping cue. One-shot instances now live
+exactly as long as their voices (`IAudio::isPlaying`, default false; Win32 implements it), so a long attached
+wave keeps following to its end.
+
+| Source | Original mechanism | Owner now | Conf |
+|---|---|---|---|
+| Ion Blaster SHOOT / LOW_AMMO / SHOOT_TAIL | TnWeapon WP_Fire / WP_LoopingTail on the weapon | muzzle (attached) | HI |
+| Reload / idle weapon notifies | HmAnimNotify_Sound on WEP_IonBlaster_ANIM (no socket) | weapon mesh | CONF class / HI attach |
+| IMPT_WORLD / IMPT_DMG, VEH_TRUCK_RAM_IMPACT | impact at hit location | world | CONF |
+| Transform BOT2VEH / VEH2BOT | HmAnimNotify_Sound on the Optimus transform clips (no SocketName, bStopWhenActorDestroyed) | pawn | CONF |
+| Footsteps / scuffs / jump / landing / idle + pivot foley | AnimNotify_Footstep, HmAnimNotify_SoundEvent, HmAnimNotify_Sound on the robot clips | pawn | CONF |
+| Fine aim START / END | TnWeaponIonBlaster WP_StartFineAim / WP_EndFineAim | weapon | CONF cue / HI attach |
+| Vehicle boost / engine / jump / land / nitro / alert | HmPlayerVehicleAudioComponent on OptimusTruckForm | pawn @ AUDIO_ROOT | CONF |
+
+**Per-cue SmartPan [CONF]:** `SoundNodeRoot.SmartPanDistance2D/3D` (class default 400/800 UU) is now read per
+cue. The player previously used 200/400 UU for every cue. Footsteps author 75/150 UU and FS_LAND_HIGH_FALL
+1000/1500, so close movement sounds are placed at the actor instead of mixed nearly centred. Vehicle cues are
+200/1000; transform and idle foley use the default 400/800. **The Ion Blaster fire cues author exactly
+200/400, so the weapon mix is unchanged.**
+
+**Mixer categories [CONF, `SoundConfig.SoundMixerProperties`]:** 47 categories with DSP presets. Each cue's
+`Category` is now emitted into the table (SFX_WET_COMBAT_ROBOT_WPN, SFX_WET_NAV, SFX_WET_COMBAT_TRANS,
+SFX_WET_VEH*). Every category on these cues' paths has a `Default` preset volume of **1.0**. The exceptions are
+**Master 0.708 (−3 dB)**, MUSIC_DRY 0.708 and SFX_SWORD_HUM 0.501, so the original mixer adds **no relative
+category gain** between weapon, movement, transform and vehicle sounds. Reverb lives on `MASTER_WET` zone
+presets (map Kismet zones): audited, **not implemented** (out of scope this pass). The rebuild's own master
+level 0.5 [PROV] is not the original −3 dB; it is left unchanged to keep the weapon mix.
+
+Still MED: `kSmartPan_PreferPlayer`. Pan and attenuation are measured from the camera listener; the original
+may measure the local player's own sounds from the pawn. EnableOcclusionVolume/Pitch (on by default, off on the
+transform cues) and Doppler are not modelled.
+
+### Transformation audio [CONF]
+* Robot→vehicle: `Transform_ToVehicle_ROBO` HmAnimNotify_Sound **BL_TRANSFORM.OPTIMUS_BOT2VEH @0.125 s of 2.0 s**.
+  The cue is −4 dB, 1500–15000 UU, category SFX_WET_COMBAT_TRANS, and layers six wave events:
+  servos 0.0, main 0.152, truck land thump (3 variants) 0.642, boost flare 1.440, air release 1.586, boost
+  finish 1.674 s.
+* Vehicle→robot: `Transform_ToRobot_ROBO` **BL_TRANSFORM.OPTIMUS_VEH2BOT @0.0** (MinWeight 0). The cue is −7 dB:
+  servos and a truck light impact (3 variants) at 0.0, main at 0.141.
+* Fired by fold progress (notify time / authored length), attached to the pawn. The generic
+  `EVENT_IACON_BRIDGE_TRANSFORM_GEARS.wav` placeholder and `World::playSfx` are removed.
+* Measured while moving: the delayed layers start at the pawn's current position (VEH2BOT main layer 0.15 s
+  later at 358.3,−345.0 vs 360.0,−344.0 at the start). Runtime probe `transform_cue_is_authored`: KNOWN → PASS.
+* Vehicle FX: `Transform_ToVehicle_VEH` TnAnimNotify_ToggleVehicleFx enables at **1.8 s** of the 2.0 s fold.
+  Hover FX now start there instead of at fold completion; `Transform_ToRobot_VEH` disables them at 0.0.
+
+### Robot movement sound [CONF data; MED where noted]
+Chain: AnimNotify on the playing clip → `HmFootstepComponent` default type→event → `Optimus_ROBODEF.SoundEventSet
+= SoundEvents.CHR_OPTIMUS` → `BL_FS_LRG_BOT.*` (large-robot footsteps).
+
+| Event | Clip notifies (authored s / length) | Cue | Root dB, distance, SmartPan |
+|---|---|---|---|
+| run step (kFootstepRun) | Nav_StrafeJog_F 0.091 / 0.513 of 0.767 (B 0.194/0.543, L 0.137/0.523, R 0.132/0.529) | FS_RUN_DEFAULT | −8 (var −3), 1500–15000 rolloff 2, 75/150 |
+| walk step (kFootstep) [MED: →WALK] | Nav_StrafeWalk_F 0.238 / 0.855 of 1.133 (B/L/R similar) | FS_WALK_DEFAULT | −12 (var −3) |
+| scuff + steps + servo groan | Nav_IdlePivot90_L/R | FS_SCUFF_DEFAULT, FOLEY_FS_GROAN_SERVO_01 (−19) | |
+| jump | Nav_TakeOff_01 FS_DEFAULT_JUMP @0 | FS_JUMP | −10 |
+| land | Nav_Land kLand @0 | FS_LAND_DEFAULT | −8 |
+| hard land | Nav_Land_02 kHardLand @0 | FS_LAND_HARD | −5 |
+| high fall | Nav_Land_03 FS_DEFAULT_LAND_HIGH_FALL + kHardLand @0, groan @0.432, Long_Fall_Landing_1_FX | FS_LAND_HIGH_FALL (0 dB, SmartPan 1000/1500) + FS_LAND_HARD | |
+| idle foley | Optimus NAV_Idle BL_FOLY_IDLES.OPTIMUS_IDLE @0 (15 events) | OPTIMUS_IDLE | −21, 650 UU |
+
+* **Heavier-landing threshold exists [CONF]:** `TR_Acrobatics_p.SharedAcrobatics.LandingAnims` (MinHeight /
+  MinSpeed UU) are {1200,1200} Nav_Land_03, {1000,1200} Nav_Land, {4500,0} Nav_Land_03, {500,0} Nav_Land_02
+  and {250,0} Nav_Land. A fall under 250 UU plays no landing anim and so no landing sound.
+  [MED] They are tested in array order on apex→touchdown height and horizontal speed. A standing jump
+  (514 UU) → Nav_Land_02 → **FS_LAND_HARD**.
+* **The old landing sound was not the original.** `WL_GUN_FOLEY/RELOAD_AIR_RELEASE_THUMP.wav` played at 0.8
+  linear for every robot landing, with a linear 5–50 m rolloff. That is the "soft/squishy, too loud" sound.
+  It is replaced by the authored cues above.
+* [MED] Only the Strafers sync master fires notifies (AnimNodeSynch bFireSlaveNotifies default false), gated
+  by the master weight vs MinWeight (default 0.25). Non-looping clip notifies are gated by the blend-in
+  reaching MinWeight (Idle↔Moving 0.2 s, pivot 0.1 s), so a one-step idle flicker does not fire them.
+* Runtime: jog 14 m/s gives two FS_RUN steps per 0.767 s cycle at phases 0.119 / 0.669.
+* `Character` gained read-only `locoPhase()` / `locoMasterWeight()` (Gameplay file, additive).
+
+### Vehicle sound bed
+The three mechanics stay distinct. **Normal boost** uses BOOST_START / LOOP (speed parameter) / END / WHEELS
+(0.27 s ground check). **Nitro** uses RAM_NITRO_START + VEH_TRUCK_RAM_ALERT. **Hover dash** has no authored cue:
+no dash clip and no dash notify exist in Optimus_VEH_ANIM, and `BoosterSound` (VEH_OPTIMUS_RAM_BOOST_START, a
+7 s cue with LoopStart 6.62 / LoopEnd 7.20) is not referenced in TransGame script, so its trigger is native and
+undecoded. It is not assigned to the dash. The engine (ONLOAD / OFFLOAD / JUMP_LOOP, speed-keyed pitch) and
+the land cues (hover vs wheels, 0.15 / 2.0 s) are unchanged; all vehicle cues are now attached at AUDIO_ROOT.
+Correction to the M02 note: **VEH_TRUCK_RAM_ALERT's wave event is authored non-looping**. It plays once per
+nitro and is cut if still sounding when the nitro ends; it never looped forever.
+
+### Vehicle FX
+Driven at the authored sockets as before (BoostSocket_L/R, 6 × HoverBooster_*, JumpBoostSocket_C/R/L,
+RamSocket) from decoded templates. The only change is the ToggleVehicleFx timing above.
+Not reconstructed (authored, but not reachable or not on Optimus):
+* Nav_Land_03 `FX_Navigation_p.Long_Fall_Landing_1_FX` @BoosterSocket_R (high falls only).
+* Robot dodge `DashPulse_1_FX` (dodge unreachable, Gameplay).
+* `Trails_Bumblebee_FX` (sockets not on the Optimus mesh).
+The "crude" look of the hover/boost rings is material/blend treatment → Rendering handoff.
+
+### Firing performance [measured, RX 7900 XTX, WFC path, sustained auto-fire]
+| | avg frame | Systems hitscan | controller (incl. Gameplay camera ray) | drawFx |
+|---|---|---|---|---|
+| before (milestone-02 head) | **65–70 ms** (peaks 70) | 21–26 ms | 32–52 ms | 3.5 ms |
+| after | **10–11 ms** (idle 6.4–7.1) | 0.02 ms | 0.02–0.06 ms | 3.5–4.9 ms |
+
+* Root cause: `CollisionWorld::segmentHit` tested **every grid cell of the segment's XZ bounding box**. The
+  300 m weapon trace and Gameplay's per-shot camera ray each scanned thousands of 2 m cells per call.
+* It now walks only the cells the ray crosses (2D DDA, clipped to the grid) and stops at the first cell whose
+  exit lies beyond the nearest hit. It is exact against a brute-force all-triangle reference: 20,000 random,
+  vertical and axis-aligned segments, 0 mismatches (`work/segtest`).
+* The renderer's light-visibility callback no longer marches 2 m pieces.
+* Cadence untouched: ~900 RPM, one-shot timer.
+* No leaks: particles, mesh parts, cue instances and pending events all drain to 0 after firing (4000-frame run).
+* Remaining firing cost is Rendering's: each shell/magazine mesh particle gets its own dynamic light
+  environment (computeEnv with visibility traces against 268 lights), ~0.25 ms per mesh part, 3–5 ms with 15
+  live. CPU skinning in drawPlayer is 3.2 ms.
+
+---
+
 ## PASS 9 — CHARACTER CUSTOMIZATION (2026-10-01, branch agents/rendering)
 | Item | Original (WFC) | Source | Conf | Rebuild |
 |---|---|---|---|---|
@@ -640,8 +762,9 @@ isolated effort, not cut into this pass to avoid leaving the build broken.
   attenuation. **Fixed:** master level 0.5 [PROV], and a 3D path (distance attenuation +
   equal-power stereo pan vs the camera listener) via `IAudio::playAt`/`setListener`. Fire is
   positioned at the muzzle; land/transform/reload at the pawn.
-- Remaining: real SoundCue min/max radii + falloff curves, the ambient emitter bed, reverb,
-  interior/exterior treatment, concurrency/voice limits, pitch randomization.
+- Remaining: the ambient emitter bed, reverb (MASTER_WET zone presets), interior/exterior treatment,
+  occlusion. Cue radii/falloff/variation/concurrency, per-cue SmartPan and owner attachment are done
+  (see MILESTONE 03 SYSTEMS).
 
 ## NOT YET IMPLEMENTED
 - Normal/specular/emissive materials; lightmaps/baked lighting; HeightFog; post FX (bloom/DOF).

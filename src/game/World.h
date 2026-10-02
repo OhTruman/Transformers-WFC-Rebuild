@@ -16,6 +16,7 @@
 #include "game/SoundCues.h"
 #include "game/VehicleFx.h"
 #include "game/VehicleNitro.h"
+#include "game/RobotFoley.h"
 
 namespace render { class IRenderer; }
 
@@ -42,10 +43,9 @@ public:
     // spread, range and range-based damage falloff). Damages the nearest target.
     void fireHitscan(const core::Vec3& origin, const core::Vec3& dir);
 
-    // Audio: wired by the application; World loads cues and plays them on gameplay events.
-    enum class Sfx { Fire, Reload, Transform, Land };
+    // Audio: wired by the application; World loads the original SoundCues and plays them on
+    // gameplay / animation events, attached to their owner where the original attaches them.
     void setAudio(audio::IAudio* a);
-    void playSfx(Sfx s, const core::Vec3& pos);
 
     Player& player() { return player_; }
 
@@ -100,11 +100,21 @@ private:
     WeaponFx fx_;
 
     audio::IAudio* audio_ = nullptr;
-    audio::Sound
-                 sndTransform_ = audio::kInvalidSound, sndLand_ = audio::kInvalidSound;
-    bool prevGrounded_ = true;
-    bool prevTransforming_ = false;
     SoundCues cues_;
+    // Cue owners (SoundCues::Emitter::owner): attached AudioComponents follow these every tick.
+    enum CueOwner { kOwnPawn = 0, kOwnWeapon = 1, kOwnMuzzle = 2 };
+    SoundCues::Emitter atPawn(const core::Vec3& up = {0, 0, 0}) const;
+    SoundCues::Emitter atWeapon(int owner) const;
+    // Robot movement foley (footsteps / jump / landing / idle / pivots) from the authored notifies.
+    RobotFoley robotFoley_;
+    std::vector<const char*> foleyCues_;
+    // Transformation cue (HmAnimNotify_Sound on the Optimus transform clips) for the current fold.
+    bool transformCuePlayed_ = false;
+    bool prevTransforming_ = false;
+    Form transformTarget_ = Form::Robot;
+    bool prevFineAim_ = false;
+    int ramAlertCue_ = -1;
+    void tickCharacterAudio(float dt);
 
     // Vehicle-form presentation (OptimusTruckForm BoostFx / HoverFX / JumpFX + boost sounds).
     VehicleFx vehicleFx_;

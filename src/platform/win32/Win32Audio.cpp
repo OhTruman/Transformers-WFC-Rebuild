@@ -169,6 +169,12 @@ public:
         v.vol = volume; v.rate = pitch > 0.05f ? pitch : 0.05f; v.wpos = pos;
     }
 
+    bool isPlaying(audio::Voice h) const override {
+        if (h < 0) return false;
+        int i = h & 0xFFF, gen = h >> 12;
+        return (size_t)i < voices_.size() && voices_[(size_t)i].gen == gen && voices_[(size_t)i].active;
+    }
+
     void stopVoice(audio::Voice h) override {
         if (h < 0) return;
         int i = h & 0xFFF, gen = h >> 12;

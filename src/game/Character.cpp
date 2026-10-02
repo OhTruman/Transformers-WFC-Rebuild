@@ -164,6 +164,7 @@ void Character::robotLocomotion(const assets::SkinnedModel& mdl, float dt) {
     for (int i = 1; i < 8; ++i) if (w[i] > w[master] && clips[i] >= 0) master = i;
     float mDur = clips[master] >= 0 ? mdl.clips[(size_t)clips[master]].duration : 1.0f;
     locoPhase_ = std::fmod(locoPhase_ + dt / std::max(mDur, 1e-3f), 1.0f);
+    locoMasterW_ = w[master];
 
     float total = 0.0f;
     for (int i = 0; i < 8; ++i) {

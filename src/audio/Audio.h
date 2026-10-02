@@ -44,6 +44,8 @@ public:
     virtual void stopVoice(Voice v) = 0;
     // Live update of a playing voice (looping engine/boost layers follow speed and position).
     virtual void updateVoice(Voice v, float volume, float pitch, const core::Vec3& pos) = 0;
+    // True while the voice is still sounding (backends that cannot tell report false).
+    virtual bool isPlaying(Voice) const { return false; }
 
     // Listener (camera) pose, set once per frame before update().
     virtual void setListener(const core::Vec3& pos, const core::Vec3& forward,
