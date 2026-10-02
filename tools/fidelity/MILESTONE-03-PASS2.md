@@ -331,3 +331,14 @@ Gate defects found and fixed while validating:
 - Python stderr treated as fatal
 - toolchain lookup in exports
 - pinned scene spawns, so lighting changes cannot change which place is filmed
+
+## Checkpoint addendum (integration brief, post pass 2)
+- **Transform windows enforced.** `transform_analyzer.*.target_mesh_first_visible` and
+  `*.source_mesh_hidden` are now `conf()` checks against the authored windows (±2 steps), KNOWN
+  Gameplay. They flip to PASS when the dual-mesh display lands. Weapon-before-visible and the Driving
+  pass-through were already KNOWN Gameplay.
+- **Native physics held as UNKNOWN, not tuned.** Suspension/spring/damping, pitch/roll, jump speed +
+  airborne gravity, Dash direction: see [VEHICLE-RE-REQUEST.md](VEHICLE-RE-REQUEST.md). The jump probes
+  no longer show 12 m/s as a prediction.
+- **Baseline harness refreshed:** 262 / 0 / 44 / 321. Gate self-check: 345 PASS / 0 FAIL / 79 KNOWN,
+  0 regressions.

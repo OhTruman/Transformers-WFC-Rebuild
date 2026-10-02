@@ -60,7 +60,7 @@ Results and ownership: [MILESTONE-03.md](MILESTONE-03.md); preserved evidence: [
 | `perf-report.ps1` (rebased) / `perf-counters.ps1` | Costs: collision, visibility, lighting, skinning, particles, audio, render, gameplay. Origins: hitscan vs camera-aim ray, shell/magazine meshes, vehicle FX. Exact counters for visibility rays, `segmentHit`, light envs, skinning, dynamic/mesh draws. |
 | `ab.ps1 -Measure` | Also builds prof + observe for any ref in isolation (cross-branch validation). |
 Shared helpers: `lib/Run.ps1` (process env, frame-log parser, report writer, sheets), `lib/ImageStats.cs`.
-Human checklist: [HUMAN-CHECK.md](HUMAN-CHECK.md). Pass-2 findings: [MILESTONE-03-PASS2.md](MILESTONE-03-PASS2.md).
+Human checklist: [HUMAN-CHECK.md](HUMAN-CHECK.md). Pass-2 findings: [MILESTONE-03-PASS2.md](MILESTONE-03-PASS2.md). Open native-RE items: [VEHICLE-RE-REQUEST.md](VEHICLE-RE-REQUEST.md), [FINE-AIM-EVIDENCE-REQUEST.md](FINE-AIM-EVIDENCE-REQUEST.md).
 
 ### Cross-branch A/B and merge gating
 ```powershell

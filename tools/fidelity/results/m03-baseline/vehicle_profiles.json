@@ -106,7 +106,7 @@
     {"id": "ledge.NITRO.airtime", "value": 0.63333, "unit": "s", "class": "UNKNOWN"},
     {"id": "ledge.NITRO.landing_vy", "value": -12.287, "unit": "m/s", "class": "UNKNOWN"},
     {"id": "ledge.NITRO.landing_recovery", "value": 0.016667, "unit": "s", "class": "UNKNOWN"},
-    {"id": "vertical.jump_launch_vy", "value": 0, "unit": "m/s", "class": "HIGH CONFIDENCE", "original": 12},
+    {"id": "vertical.jump_launch_vy", "value": 0, "unit": "m/s", "class": "UNKNOWN"},
     {"id": "vertical.jump_apex", "value": 0, "unit": "m", "class": "UNKNOWN"}
   ]
 }

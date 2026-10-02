@@ -1,6 +1,6 @@
-﻿# Milestone 03 gate - agents/experimental @ 69ee161 (20261002-051322)
+﻿# Milestone 03 gate - agents/experimental @ 2729e3d (20261002-125255)
 
-**PASS 345 / FAIL 0 / KNOWN 71 / INFO 388 / SKIP 0**  (baseline: m03-baseline)
+**PASS 345 / FAIL 0 / KNOWN 79 / INFO 380 / SKIP 0**  (baseline: m03-baseline)
 
 Steps: build reused (report only); build_measure reused (report only); harness reused (report only); transform_capture reused (report only); audio_attach reused (report only); vehicle_visual reused (report only); map_audit reused (report only); perf_profile reused (report only); perf_counters reused (report only)
 

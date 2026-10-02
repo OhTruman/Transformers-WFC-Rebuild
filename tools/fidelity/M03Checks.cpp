@@ -192,7 +192,8 @@ template <class B> static void vehicleFeelImpl(Report& r) {
             vLaunch = std::max(vLaunch, (double)f.vel.y);
             if (tLand < 0 && f.t > t0 + 0.1 && f.pos.y <= base + 0.01) { tLand = f.t - t0; vLand = g.trace()[i - 1].vel.y; }
         }
-        r.info("jump_launch_vy", vLaunch, "m/s", "HoverTruck JumpLinearSpeed 1200 UU/s expected if the jump fires", 12.0);
+        r.info("jump_launch_vy", vLaunch, "m/s",
+               "pending native RE (VEHICLE-RE-REQUEST.md #3); authored JumpLinearSpeed 1200 UU/s is context, not a target");
         r.info("jump_apex_above_hover", apex - base, "m", "");
         r.info("jump_landing_vy", vLand, "m/s", "vertical speed on touchdown");
         r.info("jump_airtime", tLand, "s", "");

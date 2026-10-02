@@ -182,10 +182,12 @@ void checkTransformAnalyzer(Report& r) {
         r.truth(id + ".no_overlap_outside_window", overlapOutside == 0, win, std::to_string(overlapOutside) + " steps");
         r.confTruth(id + ".overlap_inside_authored_window", missingOverlap == 0, win, kGameplay,
                     std::to_string(missingOverlap) + " steps inside the window show only one mesh (rebuild draws currentModel() only)");
-        r.info(id + ".target_mesh_first_visible", appear, "s",
-               std::string("[CONFIRMED window start ") + f3(c.w0) + " s] incoming mesh first drawn (" + dst + " normalized " +
-                   f3(appearNorm) + " at that moment: it pops in mid-animation rather than growing in)", c.w0);
-        r.info(id + ".source_mesh_hidden", hide, "s", std::string("[CONFIRMED window end ") + f3(c.w1) + " s] outgoing mesh last drawn", c.w1);
+        // Evidenced (authored windows): the incoming mesh appears at the window start and the outgoing
+        // mesh is hidden at its end, within two 60 Hz steps. KNOWN Gameplay until the dual-mesh display lands.
+        r.conf(id + ".target_mesh_first_visible", appear, c.w0, 2.0 / 60.0, "s", win, kGameplay,
+               "incoming mesh first drawn (" + dst + " normalized " + f3(appearNorm) +
+                   " at that moment: it pops in mid-animation rather than growing in)");
+        r.conf(id + ".source_mesh_hidden", hide, c.w1, 2.0 / 60.0, "s", win, kGameplay, "outgoing mesh last drawn");
         r.info(id + ".switch_bounds_jump", bbJump, "m", "largest one-step change of the drawn silhouette's bounds at the mesh switch");
         r.knownTruth(id + ".no_usable_weapon_without_muzzle", usableNoMuzzle == 0,
                      "weapon never usable while no visible weapon/muzzle exists", kGameplay,
@@ -491,7 +493,9 @@ void checkVehicleProfiles(Report& r) {
         double apex = base, vUp = 0;
         for (const Frame& f : g.trace()) if (f.t > t0) { apex = std::max(apex, (double)f.pos.y); vUp = std::max(vUp, (double)f.vel.y); }
         save(g, "vp_jump");
-        put("vertical.jump_launch_vy", vUp, "m/s", "HIGH CONFIDENCE", "HoverTruck JumpLinearSpeed 1200 UU/s (authored; jump behaviour not RE-confirmed)", 12.0);
+        put("vertical.jump_launch_vy", vUp, "m/s", "UNKNOWN",
+            "pending native RE (VEHICLE-RE-REQUEST.md #3): authored HoverTruck JumpLinearSpeed 1200 UU/s is context, not a "
+            "target - do not tune to it");
         put("vertical.jump_apex", apex - base, "m", "UNKNOWN", "apex above hover height");
     }
     if (js) { std::fprintf(js, "\n  ]\n}\n"); std::fclose(js); }
