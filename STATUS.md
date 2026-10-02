@@ -602,6 +602,14 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 03 PASS 3 (2026-10-02, agents/rendering)
+- Native LightsVisibilitiesVolume decoder + query (ReverseEngineering b52dca9); Streets blob validated, C++ == Python port.
+- Native DirectLightEnv for robot / vehicle (b52dca9 + c95dadd): gather, baked/unbaked visibility, ranking, composite shadow, update queue. WFC_DLETEST 20/20.
+- DynamicShadowLuminanceScale consumption in the character uber shader (31f9a9b); shipped DSLS 0; mask production and DLAC CPU formula UNKNOWN (neutral mask).
+- Xenos PWL degamma for SRGB textures; vertex-lightmap decode from microcode.
+- Character shadows: all non-native stages implemented, opt-in WFC_CHARSHADOWS pending native bias/offsets.
+- Tools: lvv_decode.py, lvv_query_check.py, perf_suite.sh; env WFC_DSLS / WFC_DLAC / WFC_SHADOWMASKTEST / WFC_LVVDUMP.
+
 ## RENDERING MILESTONE 03 PASS 2 (2026-10-02, agents/rendering)
 - Distortion pass from Xenon microcode; hover rings refract; Trail_Distort / Distortion_Cloud / Glow_Mod ready for Systems' emitters.
 - Vehicle material audit: docs/rendering/vehicle_material_audit.md. Render audit captures: tools/render/capture_audit.sh (docs/rendering/audit/).

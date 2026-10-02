@@ -251,6 +251,12 @@ uniform vec4 uLPos[3];   // xyz position (m), w = 1/radius (0 = directional)
 uniform vec4 uLDir[3];   // xyz: directional -> towards light; spot -> spot axis (forward); w = isSpot
 uniform vec4 uLCol[3];   // rgb linear colour * brightness, w = falloff exponent
 uniform vec4 uLSpot[3];  // x cos(outer), y 1/(cos(inner)-cos(outer)), w = visibility (shadow) term
+// FShadowMaskPolicy (TLightPixelShader<One/Two/ThreeLightUberLightPolicy,FShadowMaskPolicy>, Xenos microcode,
+// ReverseEngineering 31f9a9b): mask = ShadowMaskTexture(screenUV).x; S = (1 - mask)(1 - DSLS);
+// colour = ambient * (1 - DirectLightAmbientContribution * S) + direct * (1 - S) (+ other material terms).
+uniform sampler2D uShadowMask;
+uniform float uDSLS;     // DynamicShadowLuminanceScale (c6.x), shipped 0, CPU-clamped to [0,1]
+uniform vec3 uDLAC;      // DirectLightAmbientContribution (c38.rgb); CPU derivation UNKNOWN
 void main() {
     mat3 tbn; MatIn m = wfcBuildInput(tbn);
     if (uDecalClip != 0 && (any(lessThan(vUV0, vec2(0.0))) || any(greaterThan(vUV0, vec2(1.0))))) discard;
@@ -264,7 +270,10 @@ void main() {
         vec3 n2 = Nw * Nw;
         vec3 amb = n2.x * (Nw.x >= 0.0 ? uAmb[0] : uAmb[1]) + n2.y * (Nw.y >= 0.0 ? uAmb[2] : uAmb[3])
                  + n2.z * (Nw.z >= 0.0 ? uAmb[4] : uAmb[5]);
-        c += o.DiffuseColor * amb;
+        float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport).x;
+        float S = (1.0 - mask) * (1.0 - uDSLS);
+        vec3 ambient = o.DiffuseColor * amb;
+        vec3 direct = vec3(0.0);
         vec3 V = normalize(uCamPos - vPos);
         vec3 R = reflect(-V, Nw);
         for (int i = 0; i < 3; ++i) {
@@ -284,8 +293,10 @@ void main() {
             }
             float wr = clamp(dot(Nw, L) * 0.6778 + 0.3333, 0.0, 1.0);
             float sp = pow(max(clamp(dot(R, L), 0.0, 1.0), 0.0001), max(o.SpecularPower, 0.0001));
-            c += (o.DiffuseColor * (wr * wr) + o.SpecularColor * sp) * uLCol[i].rgb * att * uLSpot[i].w;
+            direct += (o.DiffuseColor * (wr * wr) + o.SpecularColor * sp) * uLCol[i].rgb * att * uLSpot[i].w;
         }
+        c += ambient * (1.0 - uDLAC * S);      // r3 = r5 * (1 - DLAC*S) + r3
+        c += direct * (1.0 - S);               // r3 = r4 * (1 - S) + r3: one mask for the summed lights
     }
     c = wfcFog(c);
     oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
@@ -985,6 +996,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     Uniform1i(U("uLM0"), 13); Uniform1i(U("uLM1"), 14); Uniform1i(U("uLM2"), 15);
     Uniform1i(U("uSceneDepth"), 12);
     Uniform1i(U("uVLM"), 11);
+    Uniform1i(U("uShadowMask"), 10);
     UseProgram(0);
     progs_.push_back(P);
     progIndex_[key] = (int)progs_.size() - 1;
@@ -1400,6 +1412,14 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(GetUniformLocation(P.id, "uBlend"), P.blend);
     Uniform1i(GetUniformLocation(P.id, "uVertexLM"), 0);
     Uniform4f(GetUniformLocation(P.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+    {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
+        static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
+        static const float dlac = std::getenv("WFC_DLAC") ? (float)std::atof(std::getenv("WFC_DLAC")) : 0.0f;
+        Uniform1f(GetUniformLocation(P.id, "uDSLS"), dsls);
+        Uniform3f(GetUniformLocation(P.id, "uDLAC"), dlac, dlac, dlac);
+        ActiveTexture(GL_TEXTURE0 + 10);
+        glBindTexture(GL_TEXTURE_2D, shadowMaskTexFor(dynamicMaskDraw_));
+    }
     Uniform2f(GetUniformLocation(P.id, "uNearFar"), znear_, zfar_);
     Uniform2f(GetUniformLocation(P.id, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
     Uniform1i(GetUniformLocation(P.id, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
@@ -1688,7 +1708,9 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
         g.subs.push_back(d);
     }
+    dynamicMaskDraw_ = envSamples_ != nullptr;
     drawSubs(g, model, true);
+    dynamicMaskDraw_ = false;
     if (envSamples_ && !weapon) renderShadowDepth(g, model);
     envSamples_ = nullptr;
     envForm_ = -1;
@@ -1756,6 +1778,30 @@ void Pipeline::writeFrameReport() {
     std::fprintf(f, "dynamic light environments (UberLight, TotalLightCount 2):\n");
     for (const std::string& e : frameEnvs_) std::fprintf(f, "  %s\n", e.c_str());
     std::fclose(f);
+}
+
+// ShadowMaskTexture for a draw. The production of the mask from the composite shadow is UNKNOWN (native
+// projection pass not recovered): the neutral 1x1 mask (1.0 = lit) is bound, which is exactly the
+// unshadowed original case. Test hook WFC_SHADOWMASKTEST=<v> binds a uniform mask value to character
+// draws to validate the DSLS / DirectLightAmbientContribution arithmetic.
+GLuint Pipeline::shadowMaskTexFor(bool character) {
+    auto make = [](float v) {
+        GLuint t = 0;
+        glGenTextures(1, &t);
+        glBindTexture(GL_TEXTURE_2D, t);
+        unsigned char px[4] = {(unsigned char)std::lround(std::min(std::max(v, 0.0f), 1.0f) * 255.0f), 0, 0, 255};
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        return t;
+    };
+    if (!neutralMaskTex_) neutralMaskTex_ = make(1.0f);
+    static const char* test = std::getenv("WFC_SHADOWMASKTEST");
+    if (character && test) {
+        if (!testMaskTex_) testMaskTex_ = make((float)std::atof(test));
+        return testMaskTex_;
+    }
+    return neutralMaskTex_;
 }
 
 void Pipeline::ensureSceneDepth() {

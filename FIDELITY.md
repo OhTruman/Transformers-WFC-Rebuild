@@ -17,6 +17,41 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 PASS 3 — NATIVE LIGHT VISIBILITY, CHARACTER LIGHTING, SHADOW STRENGTH, COLOUR (2026-10-02)
+Native provenance: RE-Workspace `notes/MILESTONE03_RENDERING_LIGHTVIS_SHADOW.md`, ReverseEngineering commits
+**b52dca9** (LightsVisibilitiesVolume + DirectLightEnv), **c95dadd** (gather, spot intensity, update queue,
+transitions), **31f9a9b** (DynamicShadowLuminanceScale shader consumption). Marks: CONFIRMED ORIGINAL / HIGH /
+PARTIAL / UNKNOWN.
+
+| Item | Original (WFC) | Source | Mark | Rebuild |
+|---|---|---|---|---|
+| LightsVisibilitiesVolume layout | u8 bHasOctree; recursive node {8 x i32 corner (low 16 bits), i32 hasData, u8 hasChildren, 8 children}; centre, root half, u32 +0x18, finest half; GUID table; u16 corner remap; per-sample count bytes; u32 pair pool | 0x82DF5748 / 0x82DF5590 | CONFIRMED | **APPLIED** (render/LightVisibilityVolume.*) |
+| Streets blob | 18153 nodes, centre (19072, −43008, −72448), root half 26729.2, finest half 512, 268 GUIDs (256 bound to level lights by LightGuid), 17487 corners, 3096 samples, 7679 pairs, indices strictly ascending, bit 7 never set | lvv_decode.py / runtime self-check | CONFIRMED (data) | validated at load |
+| Count-byte halving | archive flag halves count bytes on load; Streets pool only matches with halved counts | blob arithmetic | CONFIRMED for Streets / PARTIAL flag identity | applied when the halved counts match the pool |
+| Octree +0x18 | 0x45800000 (4096.0 as a float); not read by the query | blob | UNKNOWN meaning | ignored (as the query) |
+| Count bit 7 | honoured as "invalid" on the face path only | 0x82DDDA08 | PARTIAL meaning | reproduced literally |
+| Query | strict root test; child (x>c)<<2|(y>c)<<1|(z>c); corner bit0 X; remap; plain trilinear (0-pair corners renormalized away) or T-junction face blend (6 faces x 4 corners, weight 1/3, finer neighbours); 16-bit fixed-point merge with truncation; renormalize 1/(1−emptyW); outside / empty leaf -> no data | 0x82DDE200 / 0x82DDDA08 / 0x82DDD798 / 0x82E03238 | CONFIRMED | **APPLIED**; C++ == independent Python port at 400 points (163 outside, 130 empty leaves, 77 trilinear, 30 face-blend) |
+| Baked vs unbaked | baked lights (bound in the table): volume visibility at the bounds origin, no rays, 0 outside / empty; unbaked: N = clamp(round(15·√lum(colour·Imax) + 0.5), 1, samples) sample rays, 0.03 / 0.01 thresholds, stagger mod 5, ray gate CastShadows && CastStaticShadows, ray ends 15 UU short | 0x82CE1918 / 0x82CC2700 | CONFIRMED | **APPLIED** (no rays for baked lights) |
+| Gather | LightAffectsEnv: enabled; light function only with composite shadow; CompositeDynamic -> Dynamic; shared channel; special channels ⊆ env; point/spot RadiusOfInfluence + bounds radius; spot sphere-vs-cone (clamped outer) | 0x82DF5068 / 0x82CC2608 / 0x82DD3EF0 / 0x82E2CDF8 | CONFIRMED (cone test arithmetic HIGH) | **APPLIED**; env channels robot Dynamic+PlayerOnly, vehicle Dynamic (HIGH) |
+| IntensityAt | point B·max(0, 1 − (d/R)²)^F; spot point · cone², cones clamped (inner [0, 89]°, outer [inner + 0.001, 1.5543429] rad); directional B | 0x82DC1F60 / 0x82E2CFE0 / 0x82DBEAC0 | CONFIRMED | **APPLIED** |
+| Ranking | direct: lum(LightColor/255 · I) · vis (0.3/0.59/0.11), cap TotalLightCount 2, boundary crossfade into ambient; composite: lum without visibility, cap 1, 0.2 runner-up fade, × smoothed visibility, factor 1 − fade, drop within 0.05 | 0x82CDDE70 / 0x82CCB110 / 0x82CD4540 | CONFIRMED | **APPLIED** |
+| Updates | mode 1 when the bounds origin moves > DetailScale[DetailMode 2]=3 × 30 UU (×100 squared after 0.1 s unrendered) or settles; mode 2 incremental every tick; full updates through the global queue (deadline frame + 2, FIFO 2 ms budget); first update after attach immediate | 0x82DD17C8 / 0x82CD2538 / 0x82CDD438 / 0x82DBEF90 | CONFIRMED (budget availability PARTIAL) | **APPLIED** |
+| Transitions | visibility moves linearly at clamp(|v|·0.002, 0.2, 1)/0.5 per second inside updates only; no between-update interpolation for WFC pawns | 0x82CDDE70 / 0x82CD3840 | CONFIRMED | **APPLIED** |
+| DirectLightEnv self-test | 20 checks (RoI boundary, channels, spot cones, queue deadline, first update, transition) | WFC_DLETEST | — | 20/20 PASS |
+| DynamicShadowLuminanceScale shader use | mask = ShadowMaskTexture.x; S = (1 − mask)(1 − DSLS); character uber pass: ambient·(1 − DLAC·S) + direct·(1 − S), one mask for the summed lights; per-light pass light·material·(1 − S); before SceneColorBiasFactor, linear, no clamp | Xenos microcode (31f9a9b) | **CONFIRMED ORIGINAL** | **APPLIED** in the uber pass |
+| DSLS shipped value | 0 (BSS; no config sets it) -> full native dynamic-shadow strength | 0x8382DDF4 | CONFIRMED | 0 (WFC_DSLS test override, clamped [0, 1]) |
+| DirectLightAmbientContribution CPU calculation | SH ratio in proxy build 0x82CCE0A8 (HIGH), formula not recovered | 31f9a9b | **PARTIAL / UNKNOWN** | 0 (inert while the mask is 1); WFC_DLAC test override |
+| Shadow-mask write generation | how the composite shadowFactor reaches ShadowMaskTexture | — | **PARTIAL / UNKNOWN** | neutral mask 1.0 (= the unshadowed original); WFC_SHADOWMASKTEST test hook |
+| DSLS validation | DSLS 1 bit-identical to the unmasked render; world pixels untouched; DSLS 0 < 0.5 < 1 on characters; default render bit-identical to the previous checkpoint | lockstep matrix (robot/vehicle bright+dark, transform, walk) | — | PASS |
+| Projected shadow stages | caster depth VS, branching-PCF projection PS, RandomAngles texture, frustum-bounded projection | engine/BASE microcode | CONFIRMED | implemented; opt-in WFC_CHARSHADOWS (native DepthBias / ShadowDepthBias / PCF offset tables UNKNOWN) |
+| Texture gamma | UE3 SRGB textures use Xenos gamma formats: PWL degamma (64/96/192 segments, trunc correction, /1023) | xenia (Source X360GammaToLinear + D3D9 disassembly) | HIGH | **APPLIED** (RGBA16 linear upload; WFC_SRGBCURVE A/B) |
+| Lightmap textures | LightMapTexture2D inherits Default__Texture SRGB=True -> PWL | Engine defaults | CONFIRMED | PWL |
+| Vertex lightmaps | exp2(log2(max(|c|, 1e-4))·2.2)·LightMapScale[k] per vertex | vertex-lightmap VS microcode | CONFIRMED | **APPLIED** |
+| CPU colours | FColor -> FLinearColor through pow(i/255, 2.2) table (light colours, ModShadowColor) | PowOneOver255Table 0x82251110 | CONFIRMED | pow 2.2 |
+| HUD textures | UI_GFxHud_p textures SRGB False, composited raw | cooked flags | CONFIRMED | raw |
+| Weapon muzzle light | TnWeaponMesh.MuzzleFlashLight = IonBlaster PointLightComponent (Radius 3000, FalloffExponent 75, RadiusOfInfluence 504.7, Brightness 10, colour 255/143/140, bCastCompositeShadow, ModShadowColor (3, 0.05, 0.04)), all light channels | WEP_IonBlaster_p archetype | CONFIRMED data | not driven (Systems/Gameplay owner) |
+| DeadBodies_Mat_INST | static switch array with a numbered FName and a stale entry | MIC native tail | CONFIRMED | decoded; permutation now matches (189/203) |
+
 ## MILESTONE 03 PASS 2 — RENDERING (2026-10-02, branch agents/rendering)
 Marks: **CONFIRMED ORIGINAL** (cooked data / Xenon microcode / shipped ini) · **HIGH** (standard UE3 semantics on
 confirmed data) · **PROV** · **UNKNOWN**. Deterministic captures: `WFC_LOCKSTEP=1`; audit set

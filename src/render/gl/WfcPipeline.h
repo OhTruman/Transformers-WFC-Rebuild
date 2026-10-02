@@ -201,6 +201,9 @@ private:
                             const core::Vec3& actorPos);
     void doDirectLightEnvUpdate(int form, bool full);
     void runDirectLightEnvSelfTest();
+    GLuint shadowMaskTexFor(bool character);
+    GLuint neutralMaskTex_ = 0, testMaskTex_ = 0;
+    bool dynamicMaskDraw_ = false;
     struct DleQueueEntry { int form; int mode; int deadline; };   // global queue 0x83833084
     std::vector<DleQueueEntry> dleQueue_;
     std::vector<core::Vec3> dleRobotSamples_, dleVehicleSamples_;
