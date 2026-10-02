@@ -104,10 +104,12 @@ public:
     // The FmodAudioDevice mixer (presets, categories, MASTER_WET environment).
     SoundMixer& mixer() { return mixer_; }
     // FSB4 sample-header loop regions (AssetTools 7a69756 vehicle_audio_loops.json -> VehicleLoops.inc,
-    // applied by load()) [CONF data]: every looping vehicle wave loops its whole sample [0, total-1]; no slice
-    // FSB sample (1929) has a custom range or a header LOOP flag, so other looping waves use the same whole-
-    // sample region by default. Looping itself is per wave event (bLooping) [CONF native A6]; how FMOD's loop
-    // mode is enabled when the header has no LOOP flag is UNKNOWN (native). Returns the entries applied.
+    // applied by load()) [CONF data]: every looping vehicle wave's region is its whole sample [0, total-1]; no
+    // slice FSB sample (1929) has a custom range, so other looping waves use the same whole-sample default.
+    // [CONF native, RE d50c2a9 P1] Looping is enabled only by the wave node: SoundNodeWaveEvent.bLooping ->
+    // FMOD_LOOP_NORMAL at channel create (0x82768820); WFC sets no loop points or loop count, so FMOD loops the
+    // FSB region 0..N-1 indefinitely. Neither the cue root LoopStart / LoopEnd nor the FSB header loop flag is
+    // consulted. Returns the entries applied.
     int applyLoopPoints();
     const cuedata::CueDef* cueDef(const char* name) const;
     void setMaxConcurrent(const char* name, int n) { int c = findCue(name); if (c >= 0) cues_[(size_t)c].maxConcurrent = n; }

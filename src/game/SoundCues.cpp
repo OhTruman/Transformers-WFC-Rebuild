@@ -21,6 +21,7 @@ const CueDef kCues[] = {
 };
 
 // FSB4 sample-header loop regions of the looping vehicle waves (AssetTools vehicle_audio_loops.json).
+// headerLoopFlag is informational only: loop enable is the wave event's bLooping (RE d50c2a9).
 struct FsbLoop { const char* wav; int rate, channels; uint32_t totalSamples, loopStart, loopEnd; bool headerLoopFlag; };
 #include "game/VehicleLoops.inc"
 

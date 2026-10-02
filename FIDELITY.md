@@ -17,6 +17,55 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 SYSTEMS PASS 7 — VEHICLE LOOP ENABLE CONFIRMED (2026-10-02, agents/systems)
+
+**Source:** `RE-Workspace/notes/MILESTONE03_RUNTIME_SEMANTICS_ASSETTOOLS_7a69756.md` §P1 and its VEHICLE LOOP
+HANDOFF (ReverseEngineering commit **d50c2a9**; the handoff cited "d50e2a9", but the repository HEAD is d50c2a9).
+This is a narrow correction of PASS 6 (757347c). Only provenance and comments change; runtime behaviour is unchanged.
+
+**CONFIRMED ORIGINAL:**
+* **Loop enable:** looping is enabled only by the wave node.
+  * `SoundNodeWaveEvent.bLooping` (node+0x34, bit 0x80000000) → `FMOD_LOOP_NORMAL` at channel create
+    (0x82768820).
+  * WFC sets no loop points and no loop count (infinite), so FMOD loops the FSB region 0…N−1, i.e. the whole
+    decoded sample, indefinitely.
+  * Neither the cue-root LoopStart / LoopEnd nor the FSB header loop flag is consulted.
+* **Rebuild loop enable:** already `VoiceParams::loop = EventDef::loop` (the wave event's bLooping). No code
+  derives looping from the cue root or the FSB header; `FsbLoop::headerLoopFlag` is informational only.
+* **Loop region:** the whole-sample FSB regions from AssetTools 7a69756 (`VehicleLoops.inc`) are kept. They equal
+  FMOD's default region, now CONFIRMED rather than PASS 6's "UNKNOWN loop enable".
+* **States and fades:**
+  * start, loop and stop are separate cues/components driven by the HmVehicleAudioComponent /
+    HmPlayerVehicleAudioComponentImpl states;
+  * entering a state fades in over 0.1 s; engine fade-out 0.2 s, boost fade-out 0.15 s;
+  * state changes overlap as crossfades;
+  * `FadeOut` fades linearly from the current playback position without waiting for a loop boundary; time 0 stops
+    immediately; then auto-destroy.
+
+  All of this is already implemented: VehicleAudio and `SoundCues::stop` / `fadeIn`.
+* **Removed:** no provisional loop-enable code existed, so nothing was removed. The PASS 6 "UNKNOWN: how FMOD loop
+  mode is enabled" entries are resolved.
+
+**UNKNOWN (FMOD internal, per the report):** the XMA decoder seam behaviour at the loop point.
+
+**Validation:**
+* **Suite:** 533 pass / 0 fail. New loop-runtime block:
+  * the loop flag is per wave event (DRIVE_ONLOAD all looping, BOOST_END none);
+  * a loop stopped at an arbitrary position (0.367 s) is at half level 0.1 s into a 0.2 s fade, then stops and
+    auto-destroys;
+  * a zero fade stops immediately;
+  * on the Win32 backend, a looping wave plays past its 2.0 s length, while a non-looping 0.43 s wave ends.
+* **Game runs:**
+  * hover / engine loop and repeated Boost: START → LOOP → END with 0.15 / 0.2 s fades and the BOOST_END duck;
+  * transform out of the vehicle: ONLOAD 0.2 s, squeal 0.5 s, no vehicle cue left.
+* **Regression:**
+  * audio-attach 238 pass / 0 FAIL / 13 KNOWN (all `PP_DECO_MECH_*` zone pools; 0 player-owned);
+  * wfc_fidelity 194/0/19; collision 0 mismatches; probe 31/0/1;
+  * sustained fire 6.5–14.1 ms (mean 10.0; PASS 6 6.5–13.1 / 9.7; no runtime change, run-to-run variation);
+  * cleanup clean.
+
+---
+
 ## MILESTONE 03 SYSTEMS PASS 6 — ASSETTOOLS AUTHORED-DATA HANDOFF (2026-10-02, agents/systems)
 
 **Source:** AssetTools commit **7a69756**, manifests (read only):
@@ -66,7 +115,7 @@ Earlier "missing Streets surface table" requests (PASS 2, 3, 5) are resolved.
     implemented** (ReVa request). It can audibly duck ambience during sustained fire in the original.
   * per-owner vs global limits; virtualization; priority stealing.
 
-### Vehicle loops — CONFIRMED AUTHORED regions, UNKNOWN loop-enable mechanism
+### Vehicle loops — CONFIRMED AUTHORED regions (loop enable CONFIRMED in PASS 7)
 * **Census:** 1929 FSB4 samples, 0 with a custom loop range, 0 with a header LOOP flag.
 * **The 7 looping vehicle waves:** loop [0, total−1], the whole sample. All 39 vehicle waves' extracted .wav
   files match their FSB headers exactly (rate, channels, sample count).
@@ -79,9 +128,9 @@ Earlier "missing Streets surface table" requests (PASS 2, 3, 5) are resolved.
   * PASS 5 wrapped at frames−1 without wrap interpolation, which was one frame short per period.
   * Non-looping playback is unchanged.
 * **Unchanged:** start/loop/end cue presentation and the native fades (engine 0.2 s, boost 0.15 s).
+* **Loop enable (RESOLVED in PASS 7, RE d50c2a9):** the wave event's bLooping → FMOD_LOOP_NORMAL, with no
+  loop points or count.
 * **UNKNOWN (native):**
-  * how FMOD loop mode is enabled for a bLooping wave event when the header has no LOOP_NORMAL bit (A6 reads
-    LOOP_NORMAL from bLooping at channel create);
   * whether the XMA seek/loop tables shift the start for gapless XMA looping.
 
   Neither is inferred from waveform content.
@@ -144,7 +193,6 @@ Earlier "missing Streets surface table" requests (PASS 2, 3, 5) are resolved.
   * the overshield mesh name mismatch.
 * **ReVa:**
   * ChannelCountMixerPreset runtime;
-  * FMOD loop enable without a header LOOP flag;
   * XMA loop tables.
 * **Gameplay:** the pickup factory state machine (drives PickupPresentation); vehicle jump.
 * **Rendering:** drawing the 3 pickup particle systems through their materials once the module semantics are

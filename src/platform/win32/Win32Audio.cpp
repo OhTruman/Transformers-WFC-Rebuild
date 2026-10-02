@@ -545,6 +545,7 @@ private:
             for (int f = 0; f < kBlockFrames; ++f) {
                 // Loop region [loopStart, loopEnd): the FSB sample-header region (whole sample for every
                 // slice wave); the last frame interpolates into loopStart, so a period is exactly the region.
+                // Loops only when the voice was started with loop (wave event bLooping), indefinitely.
                 const double lstart = v.sample->loopStart;
                 const double lend = v.sample->loopEnd > 0.0 ? v.sample->loopEnd : (double)frames;
                 const bool loops = v.loop && lend - lstart >= 2.0;

@@ -3,6 +3,16 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 03 PASS 7 (2026-10-02) — vehicle loop enable confirmed (RE d50c2a9)
+- **Loop enable:** `SoundNodeWaveEvent.bLooping` → FMOD_LOOP_NORMAL, with no loop points or count, so the whole
+  FSB sample loops (CONFIRMED). The rebuild already behaved this way; only comments and provenance change.
+- **Start / loop / stop:** the cues, crossfades and fades (0.1 in, 0.2 engine / 0.15 boost out, from the current
+  position, 0 = immediate) are unchanged.
+- **Validation:**
+  - suite 533/0 (new loop-runtime block); audio-attach 238/0/13 (0 player-owned);
+  - wfc_fidelity 194/0/19; probe 31/0/1;
+  - sustained fire 6.5–14.1 ms.
+
 ## SYSTEMS MILESTONE 03 PASS 6 (2026-10-02) — AssetTools 7a69756 authored-data handoff
 - **Footsteps / landing:** the default `FS_DEFAULT_*` → `BL_FS_LRG_BOT` cues are the authored Streets sounds
   (one footstep table across all Streets physmats); no surface variants exist.
@@ -11,7 +21,7 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
 - **Vehicle loops:**
   - FSB header regions = whole sample, applied from `VehicleLoops.inc`;
   - seamless wrap fix in Win32Audio;
-  - how loop mode is enabled without a header LOOP flag stays UNKNOWN.
+  - loop enable: resolved in PASS 7 (wave event bLooping).
 - **Pickups:**
   - `PickupPresentation`: 27 authored factories, script-confirmed effect activation (highlight off at spawn, on
     after the first respawn) and PickupSound attached to the recipient;

@@ -27,7 +27,7 @@ static bool near(float a, float b, float eps = 1e-3f) { return std::fabs(a - b) 
 
 // ---- recording backend
 struct Rec : IAudio {
-    struct V { VoiceParams p; Vec3 pos; bool live = true; };
+    struct V { VoiceParams p; Vec3 pos; bool live = true; float vol = 1.0f; };
     std::map<int, V> v;
     std::vector<Environment> envs;
     std::map<std::string, int> paths;
@@ -42,9 +42,9 @@ struct Rec : IAudio {
     bool setLoopPoints(Sound s, uint32_t a, uint32_t b) override { loops.push_back({s, a, b}); return true; }
     void play(Sound, float) override {}
     void playAt(Sound, const Vec3&, float, float, float) override {}
-    Voice playVoice(Sound, const VoiceParams& p) override { v[n] = {p, p.pos, true}; return n++; }
+    Voice playVoice(Sound, const VoiceParams& p) override { v[n] = {p, p.pos, true, p.volume}; return n++; }
     void stopVoice(Voice h) override { if (v.count(h)) v[h].live = false; }
-    void updateVoice(Voice h, float, float, const Vec3& pos) override { if (v.count(h)) v[h].pos = pos; }
+    void updateVoice(Voice h, float vol, float, const Vec3& pos) override { if (v.count(h)) { v[h].pos = pos; v[h].vol = vol; } }
     void setListener(const Vec3&, const Vec3&, const Vec3&) override {}
     void update() override {}
     void setEnvironment(const Environment& e, float) override { envs.push_back(e); }
@@ -585,7 +585,60 @@ static void testAuthored() {
     CHECK(follows, "pickup sound follows the recipient");
 }
 
+// ---------------------------------------------------------------- vehicle loop runtime (RE d50c2a9 P1)
+static void testLoopRuntime() {
+    std::printf("[vehicle loop runtime]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    // Loop enable is per wave event: DRIVE_ONLOAD's events are bLooping, BOOST_END's are not.
+    const game::cuedata::CueDef* on = cues.cueDef("VEH_OPTIMUS_DRIVE_ONLOAD");
+    const game::cuedata::CueDef* end = cues.cueDef("VEH_OPTIMUS_BOOST_END");
+    bool allLoop = on && !on->events.empty(), noneLoop = end && !end->events.empty();
+    for (const auto& e : on->events) allLoop = allLoop && e.loop;
+    for (const auto& e : end->events) noneLoop = noneLoop && !e.loop;
+    CHECK(allLoop && noneLoop, "loop flag per wave event (ONLOAD all loop, BOOST_END none)");
+    // Stop at an arbitrary playback position: linear fade from the current level, no loop-boundary wait.
+    int first = rec.n;
+    int id = cues.play("VEH_OPTIMUS_DRIVE_ONLOAD", Vec3{0, 0, 0}, 0.0f, 30.0f);
+    for (int k = 0; k < 22; ++k) cues.tick(1.0f / 60.0f);      // 0.367 s: mid-sample
+    std::vector<float> v0;
+    for (int v = first; v < rec.n; ++v) { CHECK(rec.v[v].p.loop, "ONLOAD voice %d loops", v - first); v0.push_back(rec.v[v].vol); }
+    cues.stop(id, 0.2f);                                          // EngineFadeOutTime
+    for (int k = 0; k < 6; ++k) cues.tick(1.0f / 60.0f);       // 0.1 s into the fade
+    for (int v = first; v < rec.n; ++v)
+        CHECK(rec.v[v].live && near(rec.v[v].vol, v0[(size_t)(v - first)] * 0.5f, v0[(size_t)(v - first)] * 0.06f + 1e-5f),
+              "fade at 0.1 s = half the level (%.4f vs %.4f)", rec.v[v].vol, v0[(size_t)(v - first)]);
+    for (int k = 0; k < 7; ++k) cues.tick(1.0f / 60.0f);       // past 0.2 s
+    bool stopped = true;
+    for (int v = first; v < rec.n; ++v) stopped = stopped && !rec.v[v].live;
+    CHECK(stopped && !cues.playing(id), "loop stopped when the fade ends (auto-destroy)");
+    // Zero fade stops immediately.
+    first = rec.n;
+    id = cues.play("VEH_OPTIMUS_BOOST_LOOP", Vec3{0, 0, 0}, 0.0f, 30.0f);
+    for (int k = 0; k < 40; ++k) cues.tick(1.0f / 60.0f);
+    cues.stop(id, 0.0f);
+    stopped = rec.n > first;
+    for (int v = first; v < rec.n; ++v) stopped = stopped && !rec.v[v].live;
+    CHECK(stopped && !cues.playing(id), "zero fade stops immediately");
+
+    // Real backend: a looping wave plays past its length (whole-sample loop), a one-shot ends.
+    IAudio* a = createAudio();
+    if (!a || !a->reportsVoices()) { std::printf("  SKIP backend: no audio device\n"); return; }
+    a->setListener(Vec3{0, 0, 0}, Vec3{0, 0, -1}, Vec3{1, 0, 0});
+    Sound sq = a->load(kRoot + "/../content/WL_TRUCK/MECH_TIRE_SQUEAL_HEAVY_LP.wav");   // 48000 frames @ 24 kHz = 2.0 s
+    Sound os = a->load(kRoot + "/../content/WL_TRUCK/SYNTH_AIR_RELEASE_04.wav");        // 20608 frames @ 48 kHz = 0.43 s
+    CHECK(a->setLoopPoints(sq, 0, 47999), "FSB region applied to the squeal loop");
+    VoiceParams lp; lp.volume = 0.01f; lp.loop = true;
+    VoiceParams op; op.volume = 0.01f; op.loop = false;
+    Voice vl = a->playVoice(sq, lp), vo = a->playVoice(os, op);
+    std::this_thread::sleep_for(std::chrono::milliseconds(2600));
+    CHECK(a->isPlaying(vl), "looping wave still playing after 2.6 s (> its 2.0 s length)");
+    CHECK(!a->isPlaying(vo), "non-looping wave ended after its 0.43 s length");
+    a->stopVoice(vl);
+    delete a;
+}
+
 int main() {
+    testLoopRuntime();
     testAuthored();
     testMixer();
     testZones();
