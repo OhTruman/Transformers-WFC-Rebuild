@@ -112,7 +112,7 @@ constexpr float kHoverUprightPerTick = 0.05f;   // UpdateTurn TurnRate (0.05,0.0
                                                 // contact or upside down [per-tick factor; 30 Hz tick PROV]
 constexpr float kHoverJumpAngSpeed = 1.0f;      // JumpAngularSpeed (class default 1): local -Y = nose up
 constexpr float kVehJumpInterval   = 0.3f;      // TnCarForm.get_TimeBetweenJumps
-constexpr float kHoverMinClearance = 0.6f;      // [PROV] chassis-vs-ground contact (PhysicalVehicleMesh hull not recovered)
+constexpr float kHoverMinClearance = 0.6f;      // SUPERSEDED (Pass 17): authored hull bottom (CharacterMovement kHullBottom)
 // Driving (TnCarSimulation + Truck_Physics / class defaults) [CONF bytecode unless marked]:
 constexpr float kDriveLowSpeedBoostScale = 8.0f;     // ExtraBoost = MaxAccel*8 at 0 speed ...
 constexpr float kDriveLowSpeedBoostThreshold = 0.5f; // ... falling quadratically to 0 at MaxSpeed*0.5
@@ -127,9 +127,9 @@ constexpr float kDrivePitchFwdLimit = -0.43633f;     // -25 deg
 constexpr float kDrivePitchFwdAccel = 3.0f;          // rad/s^2 nose-down while airborne above the limit
 constexpr float kDriveAngularDamping = 5.0f;         // AngularDamping class default; x (1-|steer|)^2 on wheels
 constexpr float kDriveTerminalVel = 35.0f, kDriveLandingVel = 20.0f, kDriveLandingTrace = 10.0f;
-constexpr float kDriveTurnRate = 3.1416f;            // [PROV] wheel/tire steering not recovered: yaw rate at full steer
-constexpr float kDriveLateralGrip = 8.0f;            // [PROV] lateral velocity decay on wheels (1/s)
-constexpr float kDriveMouseSteer = 0.012f;           // [PROV] PC mouse delta -> GetNormalizedTurn
+// (Pass 18) kDriveTurnRate removed: boost yaw comes from the recovered wheel/tire model (CharacterMovement).
+// (Pass 18) kDriveLateralGrip removed: lateral behaviour comes only from the tire forces.
+constexpr float kDriveMouseFullRate = 1200.0f;       // [PROV] PC: mouse X rate (px/s) that equals full right-stick X
 
 // Camera. Robot strategy [CONF] CAM_Strategies_p.OverTheShoulder_STRATEGY (FOV is HORIZONTAL,
 // UE3 convention; converted to vertical per aspect in render::Camera):

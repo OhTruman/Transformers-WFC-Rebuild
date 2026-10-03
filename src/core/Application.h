@@ -20,6 +20,8 @@ public:
 private:
     void updateTitleHud(double realDt);
     void runPickupTest();
+    void runTraverseTest();
+    void runMapTraverse();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

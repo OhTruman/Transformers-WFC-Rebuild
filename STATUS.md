@@ -240,6 +240,49 @@ Left as the owners labelled them:
 - **Systems:** add `PickupPresentation.cpp` to the audio suite's documented build line.
 - **Systems/Gameplay:** nobody calls `notifyRamHit` yet (no pawn victims in the slice).
 
+## GAMEPLAY PASS 19 (2026-10-03) — Streets world state + corrected world/collision (AssetTools 8d8195e)
+- Corrected 8d8195e world.glb, collision GLBs and physics.json, consumed fresh at load (no collision cache).
+- Authored traversal: 852/852 TnReachSpec runs (robot + hover truck), 0 falls, 0 floor gaps.
+- 984 boost/jump sweeps: 0 KillZ falls, 0 bound exits.
+- Coherence audit: 0 missing/displaced collision; authored hull-smaller-than-mesh cases listed in FIDELITY.md.
+- Match mode = authored TnOnlineGameSettings rule set (exact HasRule gating). World::setMatchMode.
+- Spawn class per mode, authored start yaw.
+- Gameplay pushes rules, actor hidden state, pickup FX state and the map clock to the renderer (setMapClock is new: Rendering handoff).
+- SkyBeam: quat slerp + rotation-only InitialTM (validated). KOTH 60 s ZoneActiveTime rotation [HIGH].
+- Tests: WFC_MAPTRAVERSE (oracle + tour + sweeps + coherence + camera). WFC_MODETEST adds rules + SkyBeam checks.
+- Details: FIDELITY.md PASS 19.
+
+## GAMEPLAY PASS 18 (2026-10-03) — boost steering + Streets mode state (RE a1666c2 / 0ab03b2)
+- Boost steering now uses the recovered input path:
+  - right-stick X (PC: mouse X), radial 0.25 deadzone, s·|s|, Nitro 0.3;
+  - 25° front wheels and the tire lateral-force law, with yaw from torque and damping 5·(1−|s|)²;
+  - the fixed yaw rate and lateral grip are removed;
+  - the left stick is RollControl only.
+- Streets mode table:
+  - objective bases shown in CTF/EXT;
+  - flag/bomb factories Disabled outside CTF/EXT;
+  - capture/plant points inert outside their mode;
+  - totems visible only in Conquest;
+  - one Active KOTH zone.
+- Markers: type strings for the future HUD.
+- Tests:
+  - WFC_VEHTEST boost-steering table;
+  - WFC_MODETEST per-mode state;
+  - WFC_STEERSTICK test hook.
+- Details: FIDELITY.md PASS 18.
+
+## GAMEPLAY PASS 17 (2026-10-03) — Milestone 04 Streets world state (AssetTools a23c675)
+- Collision: movement uses the authored collision_pawn.glb; hitscan and visibility use collision_weapon.glb; KillZ −750 m.
+- Truck hull extents now drive wall probe, clearance and ceiling.
+- MapState (single clock from GameplayStarted):
+  - rotating domes and the SkyBeam Matinee, with moving collision;
+  - mode-dependent objective bases (WFC_GAMEMODE, default DM);
+  - objective objects with marker data for the future HUD.
+- Wall panel collision switches with its state.
+- Test spawns: WFC_START / WFC_START_ACTOR, F6/F7 cycle the 84 authored starts.
+- The test dummy only appears with WFC_TESTDUMMY=1.
+- WFC_TRAVERSE=1 traversal test: 160 runs, 0 falls, 0 snags.
+
 ## GAMEPLAY PASS 16 (2026-10-02) — RE d50e2a9 runtime semantics (narrow)
 - Pickups:
   - touch is an overlap begin; health re-checks overlapping pawns on respawn (CheckTouching);

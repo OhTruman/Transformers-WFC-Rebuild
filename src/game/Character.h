@@ -214,6 +214,8 @@ public:
         float jumpBoost = 0.0f;       // TnCarSimulation._JumpTimeRemaining (Driving jump, FX colour)
         float steer = 0.0f;           // Driving steering after sign(s)*s^2 and SteeringScale
         float yawRate = 0.0f;         // rad/s, UE sense (+ = turning right)
+        float tireForce = 0.0f;       // Driving: summed lateral tire force (N, body +Y) [diagnostics]
+        float rollControl = 0.0f;     // Driving: RollControl = left-stick X (StrafeRightLeft); no barrel roll (RollDuration 0)
     };
     VehicleState veh_;
     VehicleState& vehicleState() { return veh_; }

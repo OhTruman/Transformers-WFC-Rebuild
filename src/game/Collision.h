@@ -23,11 +23,27 @@ public:
 
     // Does the segment a->b hit any triangle? (used as a crude wall block). Returns nearest t in [0,1].
     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
-    // Same query, also returning the hit triangle's unit normal (orientation as authored).
+    // Same query, also returning the hit triangle's unit normal (orientation as authored). Also tests the
+    // moving collision sets below (the 3-argument query is static geometry only).
     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN) const;
+
+    // Moving collision (map movers, destructible pieces): triangle sets posed every tick by the World.
+    // Triangles are given relative to a pivot; pose = world transform of that pivot frame.
+    int addDynamicSet(const std::vector<core::Vec3>& triVerts, const core::Mat4& pose);
+    void setDynamicPose(int id, const core::Mat4& pose);
+    void setDynamicEnabled(int id, bool enabled);
+    size_t dynamicSetCount() const { return dyn_.size(); }
 
 private:
     struct Tri { core::Vec3 a, b, c, n; };
+    struct DynamicSet {
+        std::vector<core::Vec3> local;   // 3 vertices per triangle, pivot-relative
+        std::vector<Tri> world;          // posed copy
+        core::Vec3 bmin{0, 0, 0}, bmax{0, 0, 0};
+        bool enabled = true;
+    };
+    std::vector<DynamicSet> dyn_;
+    bool dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal) const;
 
     int cellOf(float x, float z) const;
     void cellRange(float x, float z, int& cx, int& cz) const;

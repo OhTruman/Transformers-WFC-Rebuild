@@ -188,6 +188,72 @@ void runVehicleTests() {
         LOG_INFO("VEHTEST boost jump: speed before %.2f, after: fwd %.2f vy %.2f, pitch rate %.2f rad/s",
                  v0, -s.c.velocity().z, s.c.velocity().y, -s.c.vehicleState().angVel.y);
     }
+    // 8) Boost (Driving) steering on the recovered wheel/tire model: yaw rate and slip from straight-line speed
+    //    u0 with post-deadzone right-stick X 'stick' (RE table: u0 30 m/s, stick 1: 48/101/137/108/98 deg/s at
+    //    0.1/0.25/0.5/1/3 s, slip 36 deg at 1 s; stick 0.5: 12/21/27/28/27, slip 6; u0 10, stick 1: 18/46/82/112/97, 20).
+    auto boostTurn = [&](float u0, float stick, bool nitro, const char* label) {
+        CollisionWorld w = makeWorld(0, 0, 0);
+        Sim s(&w, 1.3f);
+        MoveIntent b; b.wantBoost = true;
+        s.step(b, 60);                                            // drop onto the wheels
+        auto& vs = s.c.vehicleState();
+        s.c.velocity() = core::forwardFromYawPitch(s.c.yaw(), 0.0f) * u0;
+        if (nitro) { MoveIntent d = b; d.wantDash = true; s.step(d); }
+        MoveIntent st = b; st.steer = stick;
+        const float marks[5] = {0.1f, 0.25f, 0.5f, 1.0f, 3.0f};
+        float out[5] = {0, 0, 0, 0, 0}, slip1 = 0.0f, t = 0.0f; int mi = 0;
+        float speed3 = 0.0f;
+        while (mi < 5) {
+            s.step(st); t += s.dt;
+            if (t + 1e-4f >= marks[mi]) {
+                out[mi] = vs.yawRate * 57.2958f;
+                if (mi == 3) {
+                    core::Vec3 v = s.c.velocity(); core::Vec3 fw = core::forwardFromYawPitch(s.c.yaw(), 0.0f);
+                    core::Vec3 rt = core::normalize(core::cross(fw, core::Vec3{0, 1, 0}));
+                    slip1 = std::atan2(core::dot(v, rt), core::dot(v, fw)) * 57.2958f;
+                }
+                if (mi == 4) speed3 = hspeed(s.c);
+                ++mi;
+            }
+        }
+        LOG_INFO("VEHTEST boost steer %-14s u0 %4.1f stick %.2f%s: yaw rate %5.1f/%5.1f/%5.1f/%5.1f/%5.1f deg/s, slip@1s %5.1f deg, speed@3s %.1f",
+                 label, u0, stick, nitro ? " NITRO" : "", out[0], out[1], out[2], out[3], out[4], slip1, speed3);
+    };
+    boostTurn(30.0f, 1.0f, false, "full");
+    boostTurn(30.0f, 0.5f, false, "half");
+    boostTurn(30.0f, 0.25f, false, "quarter");
+    boostTurn(10.0f, 1.0f, false, "full slow");
+    boostTurn(30.0f, 1.0f, true, "full");
+    // Deadzone: raw right-stick X -> post-deadzone input -> Steering (s|s|).
+    for (float raw : {0.2f, 0.3f, 0.5f, 0.75f, 1.0f}) {
+        float m = raw, sIn = m > 0.25f ? (std::min(1.0f, m) - 0.25f) / 0.75f : 0.0f;
+        LOG_INFO("VEHTEST stick raw %.2f -> input %.3f -> steering %.3f (nitro %.3f)", raw, sIn, sIn * sIn, sIn * sIn * 0.3f);
+    }
+    // Release the stick while turning (yaw rate decays through damping 5 and tire aligning), left stick in
+    // boost (RollControl only), and releasing boost while turning (-> Hovering, drift 0.5 s, yaw = view yaw).
+    {
+        CollisionWorld w = makeWorld(0, 0, 0);
+        Sim s(&w, 1.3f);
+        MoveIntent b; b.wantBoost = true;
+        s.step(b, 60);
+        s.c.velocity() = core::forwardFromYawPitch(s.c.yaw(), 0.0f) * 30.0f;
+        MoveIntent st = b; st.steer = 1.0f;
+        s.step(st, 60);
+        float r0 = s.c.vehicleState().yawRate * 57.2958f;
+        s.step(b, 15); float r1 = s.c.vehicleState().yawRate * 57.2958f;
+        s.step(b, 45); float r2 = s.c.vehicleState().yawRate * 57.2958f;
+        LOG_INFO("VEHTEST boost stick release: yaw rate %.1f -> %.1f (0.25 s) -> %.1f deg/s (1 s)", r0, r1, r2);
+        float yawBefore = s.c.yaw();
+        MoveIntent lx = b; lx.moveRight = 1.0f;
+        s.step(lx, 60);
+        LOG_INFO("VEHTEST boost left-stick X only (RollControl): yaw change %.2f deg in 1 s, rollControl %.1f",
+                 (s.c.yaw() - yawBefore) * 57.2958f, s.c.vehicleState().rollControl);
+        MoveIntent hov; hov.faceYaw = s.c.yaw() + 0.5f;            // release boost, camera elsewhere
+        s.step(hov);
+        LOG_INFO("VEHTEST boost release while turning: driving %d, drift %.2f s, yaw now follows view (err %.3f rad)",
+                 (int)s.c.vehicleState().driving, s.c.vehicleState().driftRemain, std::remainder(s.c.yaw() - hov.faceYaw, 6.2831853f));
+    }
+
 }
 
 } // namespace game

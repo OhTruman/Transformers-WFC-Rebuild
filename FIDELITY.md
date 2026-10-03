@@ -1233,6 +1233,187 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 19 — MP_IAC_STREETS WORLD STATE + CORRECTED WORLD/COLLISION (AssetTools 8d8195e) (2026-10-03, gameplay agent)
+Data: AssetTools 8d8195e. StaticMeshCollectionActor transforms were corrected (S·R·T × CachedParentToWorld; 1,906/1,906
+validated, 0 stale collision matrices). world.glb, collision_pawn.glb, collision_weapon.glb, physics.json, props.json, map.json
+and render_index.json were regenerated together.
+
+Gameplay reads them at every start (collision is built from collision_pawn.glb and collision_weapon.glb at load; there is no
+cache). Every measurement below ran on the corrected files. RE: MILESTONE04_STREETS_RUNTIME_SEMANTICS (0ab03b2) and
+MILESTONE04_STREETS_PICKUP_OBJECTIVE_PRESENTATION (00dcb20). Tests: `WFC_MAPTRAVERSE=1`, `WFC_MODETEST=1`, `WFC_TRAVERSE=1`.
+
+### Match mode / rule set (CONFIRMED ORIGINAL)
+- A mode is its authored `TnOnlineGameSettings<tag>.Rules` list (authored.db). For example:
+  - DM = ScoreKillsDM, TrackKillsMP, ReportGameProgressTime/Kills;
+  - CTF adds SingleFlagCTF, ScoreFlags, ReportGameProgressTimeCTF;
+  - EXT adds ScoreBombingRun;
+  - DOM adds ScoreDomination + ReportGameProgressPoints;
+  - KOTH adds ScoreKingOfTheHill.
+- Every world-state gate is an exact rule-class match (`MapState::hasRule`). This covers the Kismet SeqCond_GameRuleActive UnHide of the 4 objective bases, the factories, capture/plant points, totems and KOTH zones. There is no combined or fake mode.
+- `World::setMatchMode` is applied before load. Application takes it from `WFC_GAMEMODE` until a front end exists; DM by default.
+
+### Presentation sync (Gameplay → renderer, every frame)
+- `setActiveGameRules` (the authored class paths), `setMapClock` (MapState clock), `setActorHidden` and `setMapEffectState`:
+  - **setActorHidden** covers the 4 bases, 3 totems, 5 KOTH zones and 3 objective factories.
+  - **setMapEffectState** covers the 24 pickup factories (custom effect / highlight beam) and the flag/bomb beam (Pickup = on; Disabled = hidden).
+- The three map-state hooks mirror the Rendering lane's interface verbatim.
+- `setMapClock` is new. Rendering currently animates movers from its own wall clock, so the drawn domes can drift from the moving collision Gameplay simulates.
+  - **HANDOFF:** evaluate movers, totems and KOTH at `setMapClock` time.
+
+### Movers
+- Domes: PHYS_Rotating at 2730 UU/s, unchanged (CONFIRMED).
+- **SkyBeam (corrected):**
+  - The track has `bUseQuatInterpolation`, so the rotation is SlerpQuat between the bracketing Euler keys with a linear alpha (UE3 GetKeyTransformAtTime). Pass 17 interpolated Euler angles on CurveAuto tangents.
+  - IMF_RelativeToInitial uses InitialTM = authored Rotation only. Pass 17 conjugated by the scaled authored matrix, which distorted the delta for the non-uniform DrawScale3D.
+  - Check: InitialRot reproduces the world.glb placement of all three actors (residual 0.00000).
+  - StaticInterpActor_5249: 0° → 11.35° (2.25 s) → 22.70° (4.5 s) → 0° (9 s).
+- Moving collision: domes 15810/7381/8114 and SkyBeam dome 5249 (the cones and bases carry none, as authored).
+
+### Objectives
+Same table as PASS 18, now rule-gated, plus:
+- **KOTH:** the Active zone rotates after the authored `ZoneActiveTime` 60 s (TnKingOfTheHillZoneBase CDO) [HIGH: authored constant and the ActiveTimeLeft field; the timer body is not traced].
+- **KOTH zone visual:** `ActiveMesh` (FX_Mesh_p pTorus1_STAT) is shown only while the zone is Active. Gameplay pushes hidden state; drawing the torus is a Rendering handoff.
+- **Objective cylinders** (totem, zones, factories) have no authored blocking flags, so no blockers are added. Hidden totems keep a non-blocking cylinder.
+
+### Player start
+- Start class follows the mode: TnFreeForAllGame (DM) → TnFreeForAllPlayerStart; TnVersusGame modes → TnTeamPlayerStart [HIGH].
+- The spawn yaw is the start's authored Rotation. The invented face-the-centroid heuristic is removed.
+- Which start TnSpawnPointManager picks (cluster scoring, InitialSpawns) is UNKNOWN: index 0 [PROV].
+
+### Collision sources audited
+- **TnForcedDirVolume ×4:** PhysicsVolume subclass whose CDO has bBlockActors and COLLIDE_BlockNonZeroExtent.
+  - Streets instances: bBlockPawns, ArrowDirection (0,0,−1), ExitSpeed 1500, at UE Z −64000 (about 80 m above the floor).
+  - These are sky caps, correctly included as pawn blockers. The push script is not traced.
+- **Objective bases:** absent from both collision GLBs (authored CollideActors false) — correct.
+- **"No pawn collision" props:** 260 visible props have pawn collision "none" because they author BlockNonZeroExtent = false (pawns pass, weapons blocked). Examples: 45 GS_SupportB columns, Building_ONE_Middle ×7, OmegaWall bases, the wrecked tank. This is authored; BlockingVolumes are the pawn blockers there.
+- **No test geometry in normal play:** DamageTarget only with WFC_TESTDUMMY. Debug boxes appear only with B / WFC_DEBUGCAM or the no-assets graybox fallback.
+
+### Traversal against authored data (WFC_MAPTRAVERSE, corrected data)
+| check | result |
+|---|---|
+| Nav points (123) on floor, inside bounds, above KillZ | 123/123 |
+| **ORACLE:** all 426 authored TnReachSpecs (R_WALK, path sizes 250–1210 UU), walked as robot + driven as hover truck | **852/852 arrived, 0 falls, 0 floor gaps** (0.5 m samples) |
+| TOUR through all 123 nav points (coverage, not an oracle; y −727 … −699 m, ~1.7–1.9 km per form) | robot 100/122, vehicle 103/122 legs; every blocked leg stops at visible geometry or an authored volume and is logged with actor names |
+| Boost + jump sweep, robot run + jump, 123 points × 4 headings | 984 runs, 0 below KillZ, 0 outside the collision bounds |
+| Transform robot → vehicle → robot after settling (984) | 960 normal; 24 height changes > 0.6 m (see KNOWN DIFFERENCES) |
+| Visible components crossed by the pawn | 49 authored no-pawn-collision; 49 crossings outside the component's authored hull (the visual mesh extends past the simple hull); **0 missing / displaced collision** |
+| Point-in-convex-hull re-check of the crossings (collision_pawn.glb triangles, per convex piece) | all outside their hull except one hover-truck edge graze (13 cm, Small1_Box2 StaticMeshCollectionActor_12707 at (137.9, −713.2, −630.3)) |
+| BSP | render and collision triangles identical (2460); one ramp face at (134.0, −717.7, −426.7) crossed by the chest segment 3× (movement edge case on a 27° ramp, not data) |
+
+### Visual vs physical disagreement (authored, reported)
+- **Interior room walls** (Wall_Base_Straight / Wall_Top_Straight / Corner2, ENV_IAC_Interior_1_p):
+  - The authored collision box matches the render bounds except a strip about 0.7 m deep on one face.
+  - The robot's chest reaches into that lip, and the 3rd-person camera (0.3 m in front of collision) can sit inside it.
+  - Same matrix for render and collision (8d8195e validation): authored BodySetup, not an export defect.
+- **Large props whose simple hull is smaller than the mesh** (crossing distance outside the hull):
+  - bld_2048x4096x4096_thru 19.6 m;
+  - Wall_Base_Corner2 11.0 m;
+  - PROP_IAC_SideSupp01 6.4 m;
+  - TrainCoach_Open 2.8 m;
+  - craterDebris 2.2 m;
+  - SpireBase / PillarBuilding / GiantPillar 0.1–1.4 m.
+- **Camera** (UNKNOWN original camera trace extent): over 308k frames, the camera segment crossed visible geometry on 72 components authored BlockCameras and 51 authored camera-transparent ones. The camera traces the pawn collision world [PROV].
+
+---
+
+## PASS 18 — BOOST STEERING + STREETS MODE STATE (RE a1666c2 / 0ab03b2) (2026-10-03, gameplay agent)
+Sources: `RE-Workspace/notes/MILESTONE03_VEHICLE_BOOST_STEERING.md` (RE a1666c2) and
+`MILESTONE04_STREETS_RUNTIME_SEMANTICS.md` (RE 0ab03b2). Measured with `WFC_VEHTEST=1` and `WFC_MODETEST=1`.
+
+### Boost steering — recovered control logic (CONFIRMED ORIGINAL)
+- **Steering source:** TnPlayerInput.GetNormalizedTurn = aTurn (XboxTypeS_RightX).
+  - HmPlayerInput radial deadzone 0.25 over (aTurn, aLookUp), rescaled (|v| − 0.25)/0.75; no temporal filter.
+  - Driving.UpdateSimulationInputs: Steering = sign(s)·s²; × SteeringScale (Nitro 0.3 for 3 s).
+- **Left stick X:** RollControl only. The truck cannot barrel roll (RollDuration 0); it drives UpdateLeveling (|RollControl| > 0.1).
+- **Camera:** in boost the camera yaw follows the truck's yaw (TnDrivingOrbitRotation), OrbitSmoother 0.25 s. The right stick does not rotate the camera.
+- **Wheel/tire laws:**
+  - front wheels steer up to 25°, rear 0;
+  - per wheel, F = clamp(−v_lateral(wheel frame) · 0.0015 · Load, ±2·(M/4)|g|), applied along body +Y at the wheel;
+  - yaw comes only from the torque (inertia 58.9e6);
+  - ground angular damping 5·(1−|s|)²;
+  - air control 12 rad/s² / 2600 unchanged.
+- **Removed:** the provisional fixed yaw rate (180°/s at full lock, instant) and the 8 s⁻¹ lateral grip.
+
+### HIGH CONFIDENCE
+- Static per-wheel Load = (M/4)·|g| (no load transfer). Wheel positions relative to the COM: axles ±130 UU, track ±126 front / ±137 rear.
+
+### PROVISIONAL
+- No load transfer and no wheel suspension: the contact point is treated at ground level.
+- Tire roll torque is not applied (the body settles on its wheels).
+- The PhysX damping integration form `ω *= max(0, 1 − c·dt)` is assumed (UNKNOWN in RE).
+- The root-vs-COM velocity offset is ignored.
+
+### PC input translation [PROV]
+| Xbox path | Original role in boost | PC |
+|---|---|---|
+| Right stick X (aTurn) | boost steering (camera yaw in hover) | **mouse X** (the PC camera-yaw axis): mouse rate / 1200 px/s = stick deflection, 0.05 s rate average, no deadzone |
+| Left stick X (aStrafe) | RollControl only (hover: strafe) | **A/D** (unchanged): no steering in boost |
+| LT | Boost | right mouse button |
+| RB | VehicleSpecialMove (hover dash / Nitro) | Shift |
+| Pad present | radial 0.25 deadzone on the right stick, no filter | — |
+
+### Measured (WFC_VEHTEST, from straight-line speed)
+| u0 (m/s) | input | yaw rate 0.1/0.25/0.5/1/3 s (°/s) | slip @1 s | RE model |
+|---|---|---|---|---|
+| 30 | 1.0 | 53.8/115.1/146.6/146.6/122.0 | 51° | 48/101/137/108/98, 36° |
+| 30 | 0.5 | 12.3/22.3/28.6/30.5/32.5 | 6.3° | 12/21/27/28/27, 6° |
+| 30 | 0.25 | 2.9/4.8/5.7/5.9/5.9 | 1.1° | — |
+| 10 | 1.0 | 20.6/51.5/95.5/140.4/121.5 | 26° | 18/46/82/112/97, 20° |
+| 30 | 1.0 Nitro | 15.3/29.2/40.3/47.1/49.4 | 9.7° | (0.3× steering) |
+
+- The RE table is MODELLED (a planar sim of the same laws), not recovered. The rebuild keeps boost acceleration and drag active during the turn, which raises the full-lock rates.
+- Raw stick → steering: 0.3 → 0.004, 0.5 → 0.111, 0.75 → 0.444, 1.0 → 1.0 (deadzone + square).
+- Stick release: 146.6 → 28.7 °/s in 0.25 s → 0.1 in 1 s (damping + aligning; no snap).
+- Left stick only: 0.01° in 1 s. Boost release → Hovering, drift 0.5 s, yaw back on the view.
+- Hover, jump, dash, suspension and boost speed are unchanged (same VEHTEST values as PASS 14).
+
+### Streets mode state (CONFIRMED ORIGINAL; RE 0ab03b2)
+| actor | CTF | EXT | DOM (Conquest) | KOTH | DM / TDM |
+|---|---|---|---|---|---|
+| 4 objective bases | shown | shown | hidden | hidden | hidden |
+| Flag factories ×2 | Active (+ "Flag" marker) | Disabled | Disabled | Disabled | Disabled |
+| Bomb factory | Disabled | Active (+ "Bomb") | Disabled | Disabled | Disabled |
+| FlagCapturePoint ×2 | Active (marker only while _Active) | inert | inert | inert | inert |
+| BombPlantPoint ×2 | inert | Active, marker added (display needs AttackingTeam) | inert | inert | inert |
+| Domination totems ×3 | hidden (collision kept, touch ignored) | hidden | **visible, Active, "Domination" marker** | hidden | hidden |
+| KOTH zones ×5 | hidden | hidden | hidden | 1 random Active (shown, "KingOfTheHill"), rest Inactive | hidden |
+
+- Disabled = SetHidden + SetCollision(false,false).
+- The totem idle animation (DeactivatedLoopAnim) runs in every mode (`animClock`).
+- Default mode is DM (WFC_GAMEMODE selects).
+- **UNKNOWN:** what triggers KOTH rotation (`activateNewKothZone()` API only), the FlagCapturePoint `_Active` driver, the flag/bomb factory marker add timing **[PROV]**, and the friendly/enemy/contested marker presentation (HUD movie side).
+
+### Objective marker handoff
+`MapState::objectives()` carries:
+- the hard-coded marker class and type string ("Domination", "KingOfTheHill", "BombPlantPoint", "FlagCapturePoint", plus factory "Flag" / "Bomb");
+- the authored MarkerString;
+- markerAdded (mode gate + state) and markerShouldDisplay (per-type rules).
+
+This feeds the future `_global.UpdateMarker(id, dist, sx, sy, sz, type, desc)` path. No HUD was built.
+
+---
+
+## PASS 17 — MILESTONE 04 STREETS WORLD STATE, AssetTools a23c675 (2026-10-03, gameplay agent)
+
+| Item | Authored evidence | Conf | Rebuild |
+|---|---|---|---|
+| Collision worlds | collision_pawn.glb (non-zero extent: BSP, 71 BlockingVolumes, 4 TnForcedDirVolumes, authored simple hulls) / collision_weapon.glb (zero extent: 34 weapon-blocking volumes) | CONFIRMED (flags/geometry), HIGH (UE3 rules) | **APPLIED**: movement 101k tris (was collision.glb render geometry, 1.85M), hitscan / line checks / visibility on the weapon world |
+| KillZ | BASE TnWorldInfo KillZ −75000 UU | CONFIRMED | −750 m (was collision bounds − 25 m) |
+| Truck hull | VH_Optimus_PHYSSYS box x −310..338, y ±154, z −35..185 UU | CONFIRMED | Replaces the PROV wall-probe radius (1.75 m → hull extent along the travel direction), minimum clearance (0.6 m → hull bottom −0.35 m) and top (2.44 m mesh bounds → 1.85 m) |
+| Rotating domes | StaticInterpActor_15810/7381/8114 PHYS_Rotating Yaw 2730 UU/s (15°/s), collide + block | CONFIRMED | `MapState` movers: world-space pose about the pivot; triangles split into moving collision sets (pawn + weapon) |
+| SkyBeam | GameplayStarted → "StartBeam" → SeqAct_Interp_3464 (loop 9.0022 s), EulerTrack CurveAuto, IMF_RelativeToInitial, on 5249 (collides) / 13497 / 10471 | CONFIRMED (data), HIGH (Euler vs quat interpolation, ≤20°) | Same clock as the domes. `worldDelta` per mover for Rendering. 5249 has moving collision. PosTrack (≤0.008 UU) not applied |
+| Objective bases | 4 InterpActors bHidden, UnHide via SeqCond_GameRuleActive CTF / EXT, non-colliding | CONFIRMED | `MapState::modeVisibleActors()`: hidden in DM (default) / TDM / KOTH / DOM, visible in CTF / EXT (WFC_GAMEMODE) |
+| Objectives / HUD signals | Flag/bomb factories, capture/plant points, domination points, KOTH zones; MarkerType / MarkerString / RequiredGameRule | CONFIRMED (future_hud_handoff) | `MapState::objectives()` with marker fields and activeInMode. No scoring |
+| Wall panel collision | Base (intact) / Chunk02 (destroyed, settled) pieces | CONFIRMED (meshes/states) / PROV (per-poly, hulls not extracted) | Moving sets switched by state. No authored reset (state 2 terminal) |
+| Player starts | 84 (60 team + 24 FFA), 12 clusters | CONFIRMED | WFC_START / WFC_START_ACTOR select a start; F6/F7 cycle them (test only, not a WFC binding) |
+| Test dummy | — (rebuild instrumentation) | — | Only with WFC_TESTDUMMY=1 |
+
+**Traversal (WFC_TRAVERSE=1, fixed 60 Hz):**
+- 20 starts (one per cluster plus a spread) × robot and vehicle × 4 headings: 160 runs, 0 falls below KillZ, 0 snags. Every short run was against a wall within 4.5 m.
+- 32 transforms at the run end points with no fall-through.
+
+---
+
 ## PASS 16 — RUNTIME SEMANTICS, RE d50e2a9 (2026-10-02, gameplay agent)
 Source: `RE-Workspace/notes/MILESTONE03_RUNTIME_SEMANTICS_ASSETTOOLS_7a69756.md` (RE commit d50e2a9). It corrects
 AssetTools §2: TnPickupFactory SetPickupVisible/Hidden, IsReadyToPickup, GiveTo, TakePickUp and GetRespawnTime have bytecode.

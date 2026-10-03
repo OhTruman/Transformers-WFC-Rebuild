@@ -29,6 +29,8 @@ int vkFor(Button b) {
         case Button::Debug:        return 'B';
         case Button::Quit:         return VK_ESCAPE;
         case Button::FineAim:      return VK_RBUTTON;
+        case Button::DebugNextStart: return VK_F6;  // test spawn cycling (not a WFC binding)
+        case Button::DebugPrevStart: return VK_F7;
         case Button::Dash:         return VK_SHIFT; // [CONF] Shift = "Ability0 | VehicleSpecialMove";
                                                     // PlayerInCarForm.StartVehicleSpecialMove -> set_DashingInput
         default:                   return 0;

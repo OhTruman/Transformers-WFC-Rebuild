@@ -85,6 +85,7 @@ bool CollisionWorld::groundHeight(float x, float z, float nearY, float stepUp,
         float y = l1 * t.a.y + l2 * t.b.y + l3 * t.c.y;
         if (y <= ceil && y > best) { best = y; outNormal = t.n; found = true; }
     }
+    if (dynamicGround(x, z, ceil, best, outNormal)) found = true;   // moving collision sets
     if (found) outY = best;
     return found;
 }
@@ -166,8 +167,32 @@ namespace game {
 // the nearest t, then picks the triangle intersected at that t among the triangles binned in the hit
 // point's cell (a triangle is binned into every cell its XZ bounds overlap, so it is there).
 bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN) const {
-    if (!segmentHit(a, b, outT)) return false;
     core::Vec3 d = b - a;
+    // Moving sets first (brute force over posed triangles, AABB-rejected).
+    float dynT = 1e30f; core::Vec3 dynN{0, 1, 0};
+    core::Vec3 smin{std::min(a.x, b.x), std::min(a.y, b.y), std::min(a.z, b.z)};
+    core::Vec3 smax{std::max(a.x, b.x), std::max(a.y, b.y), std::max(a.z, b.z)};
+    for (const DynamicSet& s : dyn_) {
+        if (!s.enabled || smax.x < s.bmin.x || smin.x > s.bmax.x || smax.y < s.bmin.y || smin.y > s.bmax.y ||
+            smax.z < s.bmin.z || smin.z > s.bmax.z) continue;
+        for (const Tri& t : s.world) {
+            core::Vec3 e1 = t.b - t.a, e2 = t.c - t.a, pv = core::cross(d, e2);
+            float det = core::dot(e1, pv);
+            if (std::fabs(det) < 1e-8f) continue;
+            float inv = 1.0f / det; core::Vec3 tv = a - t.a;
+            float u = core::dot(tv, pv) * inv; if (u < 0 || u > 1) continue;
+            core::Vec3 q = core::cross(tv, e1);
+            float v = core::dot(d, q) * inv; if (v < 0 || u + v > 1) continue;
+            float tt = core::dot(e2, q) * inv;
+            if (tt >= 0 && tt <= 1 && tt < dynT) { dynT = tt; dynN = t.n; }
+        }
+    }
+    if (!segmentHit(a, b, outT)) {
+        if (dynT > 1.0f) return false;
+        outT = dynT; outN = dynN;
+        return true;
+    }
+    if (dynT < outT) { outT = dynT; outN = dynN; return true; }
     core::Vec3 p = a + d * outT;
     int cx, cz;
     cellRange(p.x, p.z, cx, cz);
@@ -190,6 +215,59 @@ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float&
         if (std::fabs(tt - outT) < best) { best = std::fabs(tt - outT); outN = t.n; }
     }
     return true;
+}
+
+} // namespace game
+
+namespace game {
+
+int CollisionWorld::addDynamicSet(const std::vector<core::Vec3>& triVerts, const core::Mat4& pose) {
+    DynamicSet s;
+    s.local = triVerts;
+    dyn_.push_back(std::move(s));
+    setDynamicPose((int)dyn_.size() - 1, pose);
+    return (int)dyn_.size() - 1;
+}
+
+void CollisionWorld::setDynamicEnabled(int id, bool enabled) {
+    if (id >= 0 && (size_t)id < dyn_.size()) dyn_[(size_t)id].enabled = enabled;
+}
+
+void CollisionWorld::setDynamicPose(int id, const core::Mat4& pose) {
+    if (id < 0 || (size_t)id >= dyn_.size()) return;
+    DynamicSet& s = dyn_[(size_t)id];
+    s.world.resize(s.local.size() / 3);
+    for (size_t i = 0; i + 2 < s.local.size(); i += 3) {
+        Tri& t = s.world[i / 3];
+        t.a = core::transformPoint(pose, s.local[i]);
+        t.b = core::transformPoint(pose, s.local[i + 1]);
+        t.c = core::transformPoint(pose, s.local[i + 2]);
+        t.n = core::normalize(core::cross(t.b - t.a, t.c - t.a));
+        for (const core::Vec3* p : {&t.a, &t.b, &t.c}) {
+            if (i == 0 && p == &t.a) { s.bmin = s.bmax = *p; continue; }
+            s.bmin = {std::min(s.bmin.x, p->x), std::min(s.bmin.y, p->y), std::min(s.bmin.z, p->z)};
+            s.bmax = {std::max(s.bmax.x, p->x), std::max(s.bmax.y, p->y), std::max(s.bmax.z, p->z)};
+        }
+    }
+}
+
+bool CollisionWorld::dynamicGround(float x, float z, float ceil, float& best, core::Vec3& outNormal) const {
+    bool found = false;
+    for (const DynamicSet& s : dyn_) {
+        if (!s.enabled || x < s.bmin.x || x > s.bmax.x || z < s.bmin.z || z > s.bmax.z || s.bmin.y > ceil) continue;
+        for (const Tri& t : s.world) {
+            float x1 = t.a.x, z1 = t.a.z, x2 = t.b.x, z2 = t.b.z, x3 = t.c.x, z3 = t.c.z;
+            float det = (z2 - z3) * (x1 - x3) + (x3 - x2) * (z1 - z3);
+            if (std::fabs(det) < 1e-9f) continue;
+            float l1 = ((z2 - z3) * (x - x3) + (x3 - x2) * (z - z3)) / det;
+            float l2 = ((z3 - z1) * (x - x3) + (x1 - x3) * (z - z3)) / det;
+            float l3 = 1.0f - l1 - l2;
+            if (l1 < -0.001f || l2 < -0.001f || l3 < -0.001f) continue;
+            float y = l1 * t.a.y + l2 * t.b.y + l3 * t.c.y;
+            if (y <= ceil && y > best) { best = y; outNormal = t.n; found = true; }
+        }
+    }
+    return found;
 }
 
 } // namespace game

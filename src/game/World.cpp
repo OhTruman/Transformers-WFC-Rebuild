@@ -75,6 +75,9 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     const std::string root = assetRoot();
     render::MeshData mapMesh;
     renderer.loadMapRenderData("MP_IAC_Streets");   // original-data shader path (if generated)
+    // The match's authored rule classes gate rule-dependent presentation (objective bases, Conquest totems,
+    // objective-factory effects) exactly as GameInfo.HasRule gates the world state.
+    renderer.setActiveGameRules(gameRulesForMode(matchMode_));
 
     bool okMap = assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", mapMesh);
     bool okRobot = assets::loadSkinnedGlb(root + "/Characters/Optimus/robot.glb", robotModel_);
@@ -156,27 +159,86 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         LOG_INFO("weapon: Ion Blaster loaded, socket bone R_Arm03_Elbow_XB node=%d", bone);
     }
 
-    // Collision: load the dedicated collision mesh (solid BSP + BlockingVolume hulls).
-    render::MeshData colMesh;
-    if (assets::loadGlb(root + "/Maps/MP_IAC_Streets/collision.glb", colMesh)) {
-        collision_.build(colMesh);
+    // Collision: the authored per-trace worlds (AssetTools PHYSICS_STREETS): collision_pawn.glb blocks pawn and
+    // vehicle movement (BSP + 71 BlockingVolumes + 4 TnForcedDirVolumes + authored simple hulls), and
+    // collision_weapon.glb blocks hitscan / line checks (BSP + the 34 weapon-blocking volumes + hulls).
+    // collision.glb (render geometry of every blocking prop) is only a fallback. Movers' triangles are split
+    // out into moving collision sets (MapState).
+    const std::string mapDir = root + "/Maps/MP_IAC_Streets/";
+    mapState_.load(mapDir + "gameplay.json", matchMode_);
+    auto splitMovers = [](const render::MeshData& in, render::MeshData& out,
+                          std::vector<std::pair<std::string, std::vector<core::Vec3>>>& moverTris) {
+        std::vector<std::string> names = MapState::moverActorNames();
+        out.positions = in.positions;
+        for (const render::SubMesh& sm : in.subs) {
+            bool mover = std::find(names.begin(), names.end(), sm.nodeName) != names.end();
+            std::vector<core::Vec3>* dst = nullptr;
+            if (mover) { moverTris.push_back({sm.nodeName, {}}); dst = &moverTris.back().second; }
+            for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) {
+                if (!mover) { out.indices.push_back(in.indices[i]); continue; }
+                uint32_t v = in.indices[i];
+                dst->push_back({in.positions[v * 3], in.positions[v * 3 + 1], in.positions[v * 3 + 2]});
+            }
+        }
+    };
+    render::MeshData colMesh, pawnStatic, weaponColMesh, weaponStatic;
+    std::vector<std::pair<std::string, std::vector<core::Vec3>>> pawnMovers, weaponMovers;
+    bool authored = assets::loadGlb(mapDir + "collision_pawn.glb", colMesh);
+    if (!authored) assets::loadGlb(mapDir + "collision.glb", colMesh);
+    // Per-node bounds of the authored movement collision (for tracing contacts back to authored actors).
+    colActors_.clear();
+    for (const render::SubMesh& sm : colMesh.subs) {
+        if (sm.indexCount == 0) continue;
+        ColActor a;
+        a.name = sm.nodeName; a.mesh = sm.sourceMesh;
+        a.kind = a.name.rfind("BSPCollision", 0) == 0 ? "bsp" : a.name.rfind("BlockingVolume", 0) == 0 ? "BlockingVolume"
+               : a.name.rfind("TnForcedDirVolume", 0) == 0 ? "TnForcedDirVolume" : "prop";
+        uint32_t v0 = colMesh.indices[sm.indexOffset];
+        a.lo = a.hi = core::Vec3{colMesh.positions[v0 * 3], colMesh.positions[v0 * 3 + 1], colMesh.positions[v0 * 3 + 2]};
+        for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) {
+            uint32_t v = colMesh.indices[i];
+            core::Vec3 q{colMesh.positions[v * 3], colMesh.positions[v * 3 + 1], colMesh.positions[v * 3 + 2]};
+            a.lo = {std::min(a.lo.x, q.x), std::min(a.lo.y, q.y), std::min(a.lo.z, q.z)};
+            a.hi = {std::max(a.hi.x, q.x), std::max(a.hi.y, q.y), std::max(a.hi.z, q.z)};
+        }
+        colActors_.push_back(a);
+    }
+    if (!colMesh.empty()) {
+        splitMovers(colMesh, pawnStatic, pawnMovers);
+        collision_.build(pawnStatic);
+        if (assets::loadGlb(mapDir + "collision_weapon.glb", weaponColMesh)) {
+            splitMovers(weaponColMesh, weaponStatic, weaponMovers);
+            weaponCollision_.build(weaponStatic);
+        }
+        mapState_.registerCollision(collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr, pawnMovers, weaponMovers);
+        LOG_INFO("collision: movement %s, weapon %s", authored ? "collision_pawn.glb" : "collision.glb (fallback)",
+                 weaponCollision_.valid() ? "collision_weapon.glb" : "movement world");
         renderer.setVisibilityQuery([this](const core::Vec3& a, const core::Vec3& b) {
             // segmentHit walks only the grid cells the ray crosses and stops at the first hit, so
             // long light-visibility rays no longer need to be marched in 2 m pieces.
             float t;
-            return collision_.segmentHit(a, b, t);
+            // Zero-extent line checks use the weapon collision world (Gameplay Pass 17).
+            const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_;
+            return lineWorld.segmentHit(a, b, t);
         });
-        killZ_ = collision_.boundsMin().y - 25.0f;   // fell out of the world
+        killZ_ = -750.0f;   // BASE TnWorldInfo KillZ -75000 UU [CONF PHYSICS_STREETS]
     }
 
-    // Place the player at an authored free-for-all start, facing the play area.
+    // Place the player at an authored start of the match's class (FFA in DM, team starts otherwise), with the
+    // start's authored rotation.
     spawnPos_ = {0, 0, 0};
     spawnYaw_ = 0.0f;
     if (loadSpawn(root + "/Maps/MP_IAC_Streets/spawnpoints.json", spawnPos_, spawnYaw_)) {
-        LOG_INFO("World: spawn at %.1f, %.1f, %.1f facing yaw %.2f",
+        LOG_INFO("World: %s spawn at %.1f, %.1f, %.1f facing yaw %.2f", gameModeName(matchMode_),
                  spawnPos_.x, spawnPos_.y, spawnPos_.z, spawnYaw_);
     }
     respawnPlayer();
+    // Test spawn selection (not a menu): WFC_START=<0..83> picks one of the 84 authored player starts,
+    // WFC_START_ACTOR=<name> picks by actor name; F6 / F7 cycle starts at run time (debug).
+    loadStartPoints(mapDir + "gameplay.json");
+    if (const char* s = std::getenv("WFC_START")) teleportToStart(std::atoi(s));
+    if (const char* s = std::getenv("WFC_START_ACTOR"))
+        for (size_t i = 0; i < starts_.size(); ++i) if (starts_[i].actor == s) teleportToStart((int)i);
     LOG_INFO("vehicle mesh: actor %.2f m above origin, top %.2f m", player_.pawn().meshToActor(Form::Vehicle), player_.pawn().meshTopAboveOrigin());
     if (std::getenv("WFC_STARTVEHICLE")) {   // for vehicle tests: vehicle mesh hung off the same actor location
         Character& pc = player_.pawn();
@@ -189,7 +251,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     actors_.clear();
     loadPickupFactories(root + "/Maps/MP_IAC_Streets/gameplay.json");
     loadDestructibles(root + "/Maps/MP_IAC_Streets/physics.json", root + "/../content/");
-    {
+    // Weapon-test dummy (DamageTarget): test instrumentation, not WFC content — only with WFC_TESTDUMMY=1.
+    if (std::getenv("WFC_TESTDUMMY")) {
         core::Vec3 d = spawnPos_ + core::forwardFromYawPitch(spawnYaw_, 0.0f) * 10.0f;
         if (collision_.valid()) { float gy; core::Vec3 n; if (collision_.groundHeight(d.x, d.z, d.y + 0.5f, 1.5f, gy, n)) d.y = gy; }
         actors_.push_back(std::make_unique<DamageTarget>(d));
@@ -271,10 +334,69 @@ void World::loadDestructibles(const std::string& path, const std::string& conten
             bmin.y -= 1.6f; bmax.y -= 1.6f;                     // piece Transform Position Z -160 UU
         }
         auto a = std::make_unique<Destructible>(d["actor"].asString(), p, bmin, bmax, (int)destructibles_.size());
+        // Piece collision per state: Base (intact) and Chunk02 (destroyed / settled) at the piece transform.
+        auto meshTris = [&](const char* file) {
+            std::vector<core::Vec3> tris;
+            render::MeshData m;
+            if (!assets::loadGlb(contentRoot + file, m)) return tris;
+            for (uint32_t idx : m.indices)
+                tris.push_back({m.positions[idx * 3], m.positions[idx * 3 + 1] - 1.6f, m.positions[idx * 3 + 2]});
+            return tris;
+        };
+        std::vector<core::Vec3> baseTris = meshTris("DES_IAC_WallPanelSign_p/Meshes/WallPanelSign_Base_STAT.gltf");
+        std::vector<core::Vec3> stumpTris = meshTris("DES_IAC_WallPanelSign_p/Meshes/WallPanelSign_Chunk02_STAT.gltf");
+        for (CollisionWorld* w : {&collision_, &weaponCollision_}) {
+            if (!w->valid()) continue;
+            Destructible::CollisionSet cs;
+            cs.world = w;
+            cs.intact = baseTris.empty() ? -1 : w->addDynamicSet(baseTris, core::Mat4::translate(p));
+            cs.broken = stumpTris.empty() ? -1 : w->addDynamicSet(stumpTris, core::Mat4::translate(p));
+            a->addCollision(cs);
+        }
         LOG_INFO("destructible: %s at authored %.2f %.2f %.2f (state 0, health %.0f)", a->name().c_str(), p.x, p.y, p.z, a->health());
         destructibles_.push_back(a.get());
         actors_.push_back(std::move(a));
     }
+}
+
+void World::loadStartPoints(const std::string& path) {
+    starts_.clear();
+    std::string text;
+    assets::Json root;
+    if (!readTextFile(path, text) || !assets::Json::parse(text, root)) return;
+    const assets::Json& ps = root["player_starts"];
+    for (size_t i = 0; i < ps.size(); ++i) {
+        const assets::Json& L = ps[i]["location_gltf"];
+        if (L.size() < 3) continue;
+        StartPoint s;
+        s.actor = ps[i]["actor"].asString(); s.cls = ps[i]["class"].asString();
+        s.cluster = ps[i]["clusters"][0].asString();
+        s.pos = {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
+        // Same yaw convention as loadSpawn: UE yaw -> rebuild yaw (forward -Z at 0). UE +X = glTF +X.
+        float ueYaw = ps[i]["yaw_deg"].asFloat() * 0.01745329252f;
+        core::Vec3 f{std::cos(ueYaw), 0.0f, std::sin(ueYaw)};          // UE forward in glTF (x, z <- y)
+        s.yaw = std::atan2(-f.x, -f.z);
+        starts_.push_back(s);
+    }
+    LOG_INFO("starts: %zu player starts", starts_.size());
+}
+
+void World::teleportToStart(int index) {
+    if (starts_.empty()) return;
+    index = ((index % (int)starts_.size()) + (int)starts_.size()) % (int)starts_.size();
+    startCursor_ = index;
+    const StartPoint& s = starts_[(size_t)index];
+    core::Vec3 p = s.pos;
+    if (collision_.valid()) { float gy; core::Vec3 n; if (collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, n)) p.y = gy; }
+    Character& pc = player_.pawn();
+    if (pc.moveForm() == Form::Vehicle) p.y += pc.meshToActor(Form::Robot) - pc.meshToActor(Form::Vehicle);
+    pc.setPosition(p);
+    pc.setYaw(s.yaw);
+    pc.velocity() = {0, 0, 0};
+    pc.groundY = p.y;
+    player_.controller().setCameraYaw(s.yaw);
+    LOG_INFO("start %d/%zu: %s (%s, cluster %s) at %.1f %.1f %.1f", index, starts_.size(), s.actor.c_str(), s.cls.c_str(),
+             s.cluster.c_str(), p.x, p.y, p.z);
 }
 
 bool World::loadSpawn(const std::string& path, core::Vec3& outPos, float& outYaw) {
@@ -285,21 +407,8 @@ bool World::loadSpawn(const std::string& path, core::Vec3& outPos, float& outYaw
     const assets::Json& points = root["points"];
     if (!points.isArray()) return false;
 
-    // Centroid of all authored player starts == the middle of the playable area.
-    core::Vec3 centroid{0, 0, 0};
-    int nStarts = 0;
-    for (size_t i = 0; i < points.size(); ++i) {
-        const std::string& cls = points[i]["class"].asString();
-        if ((cls == "TnFreeForAllPlayerStart" || cls == "TnTeamPlayerStart") &&
-            points[i]["location_gltf"].size() >= 3) {
-            const assets::Json& L = points[i]["location_gltf"];
-            centroid += core::Vec3{L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
-            ++nStarts;
-        }
-    }
-    if (nStarts > 0) centroid = centroid * (1.0f / nStarts);
-
-    // WFC_SPAWN_INDEX picks the Nth matching start (for traversal/region screenshots).
+    // WFC_SPAWN_INDEX picks the Nth matching start (for traversal/region screenshots). Which start
+    // TnSpawnPointManager picks (cluster scoring, InitialSpawns) is not recovered: index 0 [PROV].
     int wantIdx = 0;
     if (const char* e = std::getenv("WFC_SPAWN_INDEX")) wantIdx = std::atoi(e);
     auto pick = [&](const char* cls) -> bool {
@@ -314,15 +423,16 @@ bool World::loadSpawn(const std::string& path, core::Vec3& outPos, float& outYaw
                 if (seen++ != target) continue;
                 const assets::Json& L = pt["location_gltf"];
                 outPos = {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
-                // Face from the spawn toward the play-area centroid (robust to yaw convention).
-                core::Vec3 d = centroid - outPos;
-                d.y = 0;
-                if (core::length(d) > 1.0f) outYaw = std::atan2(-d.x, -d.z);
+                // The pawn spawns with the start's authored Rotation yaw (UE yaw -> rebuild yaw, as loadStartPoints).
+                float ueYaw = pt["yaw_deg"].asFloat() * 0.01745329252f;
+                outYaw = std::atan2(-std::cos(ueYaw), -std::sin(ueYaw));
                 return true;
             }
         }
         return false;
     };
+    // TnFreeForAllGame (DM) spawns at TnFreeForAllPlayerStart; TnVersusGame modes at TnTeamPlayerStart [HIGH].
+    if (matchMode_ == MatchMode::DM ? pick("TnFreeForAllPlayerStart") : pick("TnTeamPlayerStart")) return true;
     if (pick("TnFreeForAllPlayerStart")) return true;
     if (pick("TnTeamPlayerStart")) return true;
     if (pick("TnSpawnCluster")) return true;
@@ -358,6 +468,8 @@ void World::buildGraybox() {
 
 void World::handleInput(const platform::InputFrame& in, float dt) {
     player_.controller().handleInput(in, dt);   // Dash (Shift) is latched by PlayerController
+    if (in.wasPressed(platform::Button::DebugNextStart)) teleportToStart(startCursor_ + 1);   // test spawn cycling
+    if (in.wasPressed(platform::Button::DebugPrevStart)) teleportToStart(startCursor_ - 1);
 }
 
 static bool rayAabb(const core::Vec3& o, const core::Vec3& d, float len,
@@ -402,8 +514,9 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     float bestDist = range;
     // World geometry.
     if (collision_.valid()) {
-        float t;
-        if (collision_.segmentHit(origin, end, t)) bestDist = range * t;
+        float t; core::Vec3 n;
+        const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_;
+        if (lineWorld.segmentHit(origin, end, t, n)) bestDist = range * t;
     }
     // Damageable targets (closest wins).
     DamageTarget* hitTarget = nullptr;
@@ -794,6 +907,7 @@ void World::tick(float dt) {
         last = now;
         if (++n > 1 && ms > 30.0) LOG_INFO("HITCH tick %d: %.1f ms since the previous tick", n, ms);
     }
+    if (collision_.valid()) mapState_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
     {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
         render::Camera cam;
         player_.controller().updateCamera(cam);
@@ -910,7 +1024,46 @@ void World::tick(float dt) {
     }
 }
 
+std::string World::collisionActorsAt(const core::Vec3& p, float pad, int maxNames) const {
+    std::string out;
+    int n = 0;
+    bool inBsp = false;
+    for (const ColActor& a : colActors_) {
+        if (p.x < a.lo.x - pad || p.x > a.hi.x + pad || p.y < a.lo.y - pad || p.y > a.hi.y + pad ||
+            p.z < a.lo.z - pad || p.z > a.hi.z + pad) continue;
+        if (a.kind == "bsp") { inBsp = true; continue; }
+        if (n++ >= maxNames) continue;
+        if (!out.empty()) out += ",";
+        out += a.name;
+    }
+    if (n > maxNames) out += ",+" + std::to_string(n - maxNames);
+    if (out.empty()) out = inBsp ? "BSP" : "-";
+    return out;
+}
+
+// Gameplay owns the runtime state of the authored map; the renderer only draws it. Pushed every frame:
+// the map clock (movers / totem idle animation), actor bHidden (Kismet UnHide of the objective bases, DOM-only
+// totems, the Active KOTH zone, Disabled objective factories) and the pickup factory presentation
+// (TnPickupFactory.SetPickupVisible / SetPickupHidden).
+void World::syncMapPresentation(render::IRenderer& r) const {
+    r.setMapClock(mapState_.clock());
+    for (const MapState::ActorVisibility& v : mapState_.actorVisibility()) r.setActorHidden(v.actor, v.hidden);
+    for (const PickupFactory* f : pickupFactories_) {
+        std::string a = f->name();
+        size_t dot = a.rfind('.');
+        if (dot != std::string::npos) a = a.substr(dot + 1);
+        r.setMapEffectState(a + "|custom", f->customEffectActive(), !f->meshVisible());
+        r.setMapEffectState(a + "|highlight", f->beamActive(), false);
+    }
+    // Flag / bomb factories: Pickup state (beam on, ShouldDisplayHighlightFx inherited from TnWeaponPickupFactory)
+    // in their mode; Disabled (hidden, no collision) otherwise [CONF RE MILESTONE04 pickup/objective presentation].
+    for (const ObjectiveObject& o : mapState_.objectives())
+        if (o.cls == "TnGameObjectivePickupFactoryFlag" || o.cls == "TnGameObjectivePickupFactoryBomb")
+            r.setMapEffectState(o.actor + "|highlight", o.visible, !o.visible);
+}
+
 void World::draw(render::IRenderer& r) const {
+    syncMapPresentation(r);
     if (mapMesh_ != render::kInvalidMesh) {
         r.drawMesh(mapMesh_, core::Mat4::identity(), mapColor_);
     } else {
