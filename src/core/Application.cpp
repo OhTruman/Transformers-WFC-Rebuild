@@ -19,8 +19,10 @@
 
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
+#include <vector>
 #include <fstream>
+#include <cstdlib>
+#include <cstring>
 #include <map>
 #include <sstream>
 
@@ -265,7 +267,42 @@ void Application::run() {
             } else if (dc[0] == 'f') {     // in front of the player at +Z, looking toward -Z
                 camera_.pos = pp + core::Vec3{0, 3, 12};
                 camera_.yaw = 0.0f; camera_.pitch = -0.1f;
+            } else if (std::strncmp(dc, "at:", 3) == 0) {   // at:x,y,z,tx,ty,tz (glTF metres): fixed look-at
+                float v[6] = {0, 0, 0, 0, 0, -1};
+                if (std::sscanf(dc + 3, "%f,%f,%f,%f,%f,%f", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 6) {
+                    camera_.pos = {v[0], v[1], v[2]};
+                    core::Vec3 f = core::normalize(core::Vec3{v[3] - v[0], v[4] - v[1], v[5] - v[2]});
+                    camera_.pitch = std::asin(std::max(-1.0f, std::min(1.0f, f.y)));
+                    camera_.yaw = std::atan2(-f.x, -f.z);
+                }
             }
+        }
+
+        // Diagnostic multi-shot: WFC_SHOTLIST=<file> with lines "<name> x,y,z,tx,ty,tz" (glTF metres); each camera
+        // is held for 8 frames and captured to WFC_SHOTDIR/<name>.bmp, then the run ends (one map load for many views).
+        static std::vector<std::pair<std::string, std::vector<float>>> shotList;
+        static bool shotListLoaded = false;
+        if (!shotListLoaded) {
+            shotListLoaded = true;
+            if (const char* sl = std::getenv("WFC_SHOTLIST")) {
+                std::ifstream in(sl);
+                std::string name, cam;
+                while (in >> name >> cam) {
+                    std::vector<float> v(6, 0.0f);
+                    if (std::sscanf(cam.c_str(), "%f,%f,%f,%f,%f,%f", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 6)
+                        shotList.push_back({name, v});
+                    std::string rest; std::getline(in, rest);
+                }
+            }
+        }
+        if (!shotList.empty()) {
+            size_t idx = (size_t)((frame - 1) / 8);
+            if (idx >= shotList.size()) break;
+            const std::vector<float>& v = shotList[idx].second;
+            camera_.pos = {v[0], v[1], v[2]};
+            core::Vec3 f = core::normalize(core::Vec3{v[3] - v[0], v[4] - v[1], v[5] - v[2]});
+            camera_.pitch = std::asin(std::max(-1.0f, std::min(1.0f, f.y)));
+            camera_.yaw = std::atan2(-f.x, -f.z);
         }
 
         if (std::getenv("WFC_FACELOG") && smokeFrames > 0 && frame % 10 == 0) {
@@ -283,8 +320,31 @@ void Application::run() {
         world_.draw(*renderer_);
         renderer_->endFrame();
 
+        if (const char* sa = std::getenv("WFC_SHOWACTOR"))       // diagnostic: Gameplay-style unhide (e.g. a KOTH zone)
+            renderer_->setActorHidden(sa, false);
+        if (const char* ds = std::getenv("WFC_DESTRUCTSTATE"))   // diagnostic: destructible presentation state
+            if (frame == 1) renderer_->setDestructibleState("TnStaticDestructibleActor_14465", std::atoi(ds));
+        // Diagnostic: WFC_PICKUPTEST=<factory actor>,<take frame>,<respawn frame> drives the pickup presentation
+        // (SetPickupHidden / SetPickupVisible) the way Gameplay's PickupEvents will.
+        if (const char* pt = std::getenv("WFC_PICKUPTEST")) {
+            char actor[128] = {0}; long take = -1, back = -1;
+            if (std::sscanf(pt, "%127[^,],%ld,%ld", actor, &take, &back) == 3) {
+                if (frame == take) {
+                    renderer_->setMapEffectState(std::string(actor) + "|custom", false, true);
+                    renderer_->setMapEffectState(std::string(actor) + "|highlight", false, false);
+                } else if (frame == back) {
+                    renderer_->setMapEffectState(std::string(actor) + "|custom", true, false);
+                    renderer_->setMapEffectState(std::string(actor) + "|highlight", true, false);
+                }
+            }
+        }
         if (smokeFrames > 0 && frame == smokeFrames)
             if (const char* shot = std::getenv("WFC_SHOT")) renderer_->captureScreenshot(shot);
+        if (!shotList.empty() && frame % 8 == 0 && (size_t)(frame / 8 - 1) < shotList.size()) {
+            const char* dir = std::getenv("WFC_SHOTDIR");
+            std::string out = std::string(dir ? dir : ".") + "/" + shotList[(size_t)(frame / 8 - 1)].first + ".bmp";
+            renderer_->captureScreenshot(out.c_str());
+        }
 
         window_->present();
         if (audio_) {

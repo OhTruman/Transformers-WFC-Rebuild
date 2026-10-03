@@ -76,7 +76,9 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     render::MeshData mapMesh;
     renderer.loadMapRenderData("MP_IAC_Streets");   // original-data shader path (if generated)
     // The match's authored rule classes gate rule-dependent presentation (objective bases, Conquest totems,
-    // objective-factory effects) exactly as GameInfo.HasRule gates the world state.
+    // objective-factory effects) exactly as GameInfo.HasRule gates the world state. [integration] Gameplay's
+    // match mode now supplies the rules Rendering's interim WFC_GAMERULES stood in for; select the mode with
+    // WFC_GAMEMODE.
     renderer.setActiveGameRules(gameRulesForMode(matchMode_));
 
     bool okMap = assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", mapMesh);
@@ -246,12 +248,18 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         pc.setPosition(pc.position() + core::Vec3{0, above, 0});
     }
 
-    // Authored Streets pickup factories and destructibles (AssetTools 7a69756), plus the weapon-test dummy.
+    // Authored Streets pickup factories and destructibles (AssetTools 7a69756). Their meshes, effects and beams are
+    // presented by the renderer from the map data; graybox scaffold pickups only with WFC_GRAYBOXPICKUPS.
     actors_.clear();
     loadPickupFactories(root + "/Maps/MP_IAC_Streets/gameplay.json");
     loadDestructibles(root + "/Maps/MP_IAC_Streets/physics.json", root + "/../content/");
-    // Weapon-test dummy (DamageTarget): test instrumentation, not WFC content — only with WFC_TESTDUMMY=1.
-    if (std::getenv("WFC_TESTDUMMY")) {
+    if (std::getenv("WFC_GRAYBOXPICKUPS")) {
+        actors_.push_back(std::make_unique<Pickup>(spawnPos_ + core::Vec3{3, 0, 0}, Pickup::Kind::Health));
+        actors_.push_back(std::make_unique<Pickup>(spawnPos_ + core::Vec3{-3, 0, 2}, Pickup::Kind::Ammo));
+    }
+    // Weapon-test dummy (DamageTarget): test instrumentation, not WFC content. Only with WFC_TESTDUMMY=1
+    // (Gameplay) or WFC_DAMAGETARGET=1 (Rendering's name for the same hook).
+    if (std::getenv("WFC_TESTDUMMY") || std::getenv("WFC_DAMAGETARGET")) {
         core::Vec3 d = spawnPos_ + core::forwardFromYawPitch(spawnYaw_, 0.0f) * 10.0f;
         if (collision_.valid()) { float gy; core::Vec3 n; if (collision_.groundHeight(d.x, d.z, d.y + 0.5f, 1.5f, gy, n)) d.y = gy; }
         actors_.push_back(std::make_unique<DamageTarget>(d));
@@ -1048,6 +1056,12 @@ void World::syncMapPresentation(render::IRenderer& r) const {
     for (const ObjectiveObject& o : mapState_.objectives())
         if (o.cls == "TnGameObjectivePickupFactoryFlag" || o.cls == "TnGameObjectivePickupFactoryBomb")
             r.setMapEffectState(o.actor + "|highlight", o.visible, !o.visible);
+    // [integration] Destructible presentation: Rendering draws the intact / Chunk02 stump mesh from the
+    // HmDestructionState Gameplay simulates (0 intact, 1 destroyed, 2 settled). WFC_DESTRUCTSTATE (Rendering's
+    // diagnostic) forces the state instead.
+    static const bool forcedDestruct = std::getenv("WFC_DESTRUCTSTATE") != nullptr;
+    if (!forcedDestruct)
+        for (const Destructible* d : destructibles_) r.setDestructibleState(d->name(), d->state());
 }
 
 void World::draw(render::IRenderer& r) const {

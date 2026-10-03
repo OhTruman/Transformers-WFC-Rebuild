@@ -130,6 +130,7 @@ uniform int uDecalClip;      // static decal: clip to the decal box (uv in [0,1]
 uniform int uBlend;          // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
 uniform vec2 uNearFar;       // metres
 uniform vec2 uViewport;      // pixels
+uniform vec4 uDynParam;      // particle DynamicParameter (map FX emitters; 1 otherwise)
 uniform sampler2D uSceneDepth;
 uniform int uHasSceneDepth;
 struct MatIn { vec2 uv0; vec2 uv1; vec4 vertexColor; vec3 worldPosUE; vec3 cameraVector; vec3 reflectionVector;
@@ -181,7 +182,7 @@ MatIn wfcBuildInput(out mat3 tbn) {
     m.time = uTime;
     m.pixelDepth = wfcLinearDepth(gl_FragCoord.z);
     m.sceneDepth = uHasSceneDepth != 0 ? wfcLinearDepth(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r) : 1e9;
-    m.dynParam = vec4(1.0);
+    m.dynParam = uDynParam;
     // UE3 ScreenPosition (bScreenAlign false) = clip-space position. UE3's infinite-far perspective
     // gives w = view Z and z = view Z - near (UE units).
     vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
@@ -475,6 +476,8 @@ bool Pipeline::load(const std::string& mapName) {
     dataDir_ = root + "/" + mapName;
     std::string mj = readText(dataDir_ + "/materials_glsl.json");
     std::string lj = readText(dataDir_ + "/lighting.json");
+    loadMovers(dataDir_ + "/movers.json");
+    loadMapFx(dataDir_ + "/map_fx_runtime.json");
     if (mj.empty() || lj.empty()) {
         LOG_WARN("wfc: render data not found in %s (run tools/render/*.py); legacy renderer", dataDir_.c_str());
         return false;
@@ -813,6 +816,7 @@ bool Pipeline::load(const std::string& mapName) {
     }
     LOG_INFO("wfc: shader path active: %zu materials, %zu lightmapped components, %zu lights, fog %s (%s)",
              mats_.size(), lightmaps_.size(), lights_.size(), fogOn_ ? "on" : "off", dataDir_.c_str());
+    loadMapProps("F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps/" + mapName + "/render_index.json");
     return true;
 }
 
@@ -1312,7 +1316,10 @@ int Pipeline::upload(const MeshData& m) {
         if (bspMesh_ >= 0 && s.component.rfind("bsp:", 0) == 0) { g.drawsBsp = true; continue; }
         std::string key = s.component;
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
-        if (hiddenComponents_.count(key) && !std::getenv("WFC_SHOWHIDDEN")) continue;   // authored bHidden
+        if (key.rfind("actor:", 0) == 0) d.actor = key.substr(6);
+        // authored bHidden: actor-placed nodes stay resident (Gameplay may unhide them, e.g. SeqAct_ToggleHidden
+        // by game rule); collection components without an actor identity are dropped as before
+        if (hiddenComponents_.count(key) && !std::getenv("WFC_SHOWHIDDEN") && d.actor.empty()) continue;
         d.noLights = noLightComponents_.count(key) > 0;
         if (key.rfind("actor:", 0) == 0) {
             auto ac = actorComponent_.find(key.substr(6));
@@ -1376,10 +1383,12 @@ int Pipeline::upload(const MeshData& m) {
                 const Program* P = d.prog >= 0 ? &progs_[(size_t)d.prog] : nullptr;
                 std::fprintf(f, "{\"mesh_id\":%zu,\"component\":\"%s\",\"source_mesh\":\"%s\",\"section\":%d,"
                              "\"material\":\"%s\",\"program\":\"%s\",\"blend\":%d,\"lit\":%d,\"lightmapped\":%d,"
-                             "\"scene_depth\":%d,\"tris\":%u}\n",
+                             "\"scene_depth\":%d,\"tris\":%u,\"authored_hidden\":%d,\"mover\":%d}\n",
                              meshes_.size(), s.component.c_str(), s.sourceMesh.c_str(), s.sourceSection, matName.c_str(),
                              !P ? "none" : P->original ? "original" : "gltf_fallback", P ? P->blend : -1, P && P->lit ? 1 : 0,
-                             lm ? 1 : 0, P && P->sceneDepth ? 1 : 0, d.count / 3);
+                             lm ? 1 : 0, P && P->sceneDepth ? 1 : 0, d.count / 3,
+                             !d.actor.empty() && authoredHiddenActors_.count(d.actor) ? 1 : 0,
+                             (int)std::count_if(movers_.begin(), movers_.end(), [&](const MoverRT& mv) { return mv.actor == d.actor; }));
                 std::fflush(f);
             }
         }
@@ -1415,6 +1424,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(GetUniformLocation(P.id, "uBlend"), P.blend);
     Uniform1i(GetUniformLocation(P.id, "uVertexLM"), 0);
     Uniform4f(GetUniformLocation(P.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+    Uniform4f(GetUniformLocation(P.id, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
     {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
         static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
         Uniform1f(GetUniformLocation(P.id, "uDSLS"), dsls);
@@ -1483,7 +1493,19 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
             const Program& P = progs_[(size_t)s.prog];
             bool trans = P.blend >= 2;
             if ((pass == 1) != trans) continue;
-            if (g.world) {   // frustum cull (world-space bounds)
+            core::Mat4 subModel = model;
+            bool moving = false;
+            if (!s.actor.empty()) {
+                if (actorHidden(s.actor)) continue;
+                auto mv = moverDelta_.find(s.actor);
+                if (mv != moverDelta_.end()) { subModel = mv->second * model; moving = true; }
+            }
+            // frustum cull on the sub's bounds: valid only for baked world geometry (identity model); placed
+            // meshes with authored components (map props) and movers keep their local / moving bounds
+            const bool bakedPlacement = model.m[0] == 1.0f && model.m[5] == 1.0f && model.m[10] == 1.0f &&
+                                        model.m[12] == 0.0f && model.m[13] == 0.0f && model.m[14] == 0.0f;
+            static const bool noFrustum = std::getenv("WFC_NOFRUSTUMCULL") != nullptr;   // diagnostics: culling regression test
+            if (g.world && !moving && bakedPlacement && !noFrustum) {
                 bool out = false;
                 for (int f = 0; f < 6 && !out; ++f) {
                     const float* pl = frustum_[f];
@@ -1493,7 +1515,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                 }
                 if (out) continue;
             }
-            bindCommon(P, model);
+            bindCommon(P, subModel);
             Uniform1i(GetUniformLocation(P.id, "uDecalClip"), g.decal ? 1 : 0);
             {
                 // TnCharacterApplier params: dynamic (character) draws only; all-zero RGB skips.
@@ -2032,6 +2054,10 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     znear_ = cam.znear; zfar_ = cam.zfar;
     viewProj_ = cam.proj() * cam.view();
     camProj_ = cam.proj();
+    camView_ = cam.view();
+    updateMovers();
+    if (lastFxTime_ >= 0.0f) tickMapFx(std::min(time_ - lastFxTime_, 0.25f));
+    lastFxTime_ = time_;
     shadowFrame_.clear();
     // frustum planes (Gribb/Hartmann, column-major m[col*4+row])
     const float* m = viewProj_.m;
@@ -2074,6 +2100,9 @@ void Pipeline::endFrame() {
                      statVisCalls_ / 120.0);
             LOG_INFO("wfc: ShadowMask per frame: %.2f projections, %.2f gated", statShadowProj_ / 120.0, statShadowGated_ / 120.0);
             statShadowProj_ = statShadowGated_ = 0;
+            LOG_INFO("wfc: map FX per frame: %.3f ms, %.1f sprites, %.1f mesh particles", statFxMs_ / 120.0,
+                     statFxSprites_ / 120.0, statFxMeshes_ / 120.0);
+            statFxMs_ = 0.0; statFxSprites_ = statFxMeshes_ = 0;
             statEnvCalls_ = statVisCalls_ = statLvvQueries_ = 0; statLvvMs_ = 0.0; statUpdateMs_ = 0.0;
             LOG_INFO("wfc: avg frame %.2f ms (%.0f fps); scene submit %.2f ms, gpu wait %.2f ms; per frame: %.1f draws, "
                      "%.1f light envs (%.2f ms), %.1f visibility traces",

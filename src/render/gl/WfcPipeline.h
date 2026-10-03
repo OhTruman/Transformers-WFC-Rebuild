@@ -9,6 +9,7 @@
 //  * UE3 per-vertex height fog, linear-light HDR target, DisplayGamma 2.2 resolve.
 #pragma once
 #include <map>
+#include <memory>
 #include <set>
 #include <unordered_map>
 #include <string>
@@ -18,6 +19,7 @@
 #include "render/Mesh.h"
 #include "render/Renderer.h"
 #include "render/LightVisibilityVolume.h"
+#include "assets/SkinnedModel.h"
 
 namespace render {
 namespace wfc {
@@ -153,6 +155,7 @@ private:
         core::Vec3 bmin, bmax;
         bool envReady = false;
         LightEnv env;
+        std::string actor;        // lower-case actor name of actor-placed world nodes (movers / hidden state)
     };
     struct GpuMesh {
         GLuint vao = 0, vbo = 0, ibo = 0;
@@ -326,6 +329,106 @@ private:
     bool renderShadowDepth(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, ShadowRequest& rq);
     void depthPrepass(GpuMesh& g, const core::Mat4& model);
     void runShadowMaskSelfTest();
+public:
+    void setActorHidden(const std::string& actor, bool hidden);   // Gameplay-authoritative visibility
+    void setMapEffectActive(const std::string& ownerOrComponent, bool active);
+    // key = owner actor, component path, or "<owner>|custom" / "<owner>|highlight"; hidden = SetHidden (no draw)
+    void setMapEffectState(const std::string& key, bool active, bool hidden);
+    void setActiveGameRules(const std::vector<std::string>& rules);   // Gameplay's active TnGameRules classes
+    void setMapClock(float t) { mapClock_ = t; hasMapClock_ = true; }  // Gameplay MapState clock
+    float mapTime() const { return hasMapClock_ ? mapClock_ : time_; }
+    void setDestructibleState(const std::string& actor, int state);
+    void drawMapPresentation();                                   // map FX + totems + destructible
+    // map FX data (WfcMapFx.cpp)
+    struct FxDist {
+        int kind = 0, comps = 1;      // 0 constant, 1 uniform, 2 constant curve, 3 uniform curve
+        std::vector<float> v;
+        void eval(float t, uint32_t& rng, float out[3]) const;
+    };
+    struct FxModule { std::string name; std::map<std::string, FxDist> dists; int flagA = 1, flagB = 1; };
+    struct FxBurst { int count, countLow; float time; };
+    struct FxLod {
+        std::string material, meshGltf;
+        bool overrideMaterial = false, localSpace = false, rectangle = false;
+        float duration = 1.0f; int loops = 0;
+        FxDist spawnRate;
+        std::vector<FxBurst> bursts;
+        std::vector<FxModule> modules;
+    };
+    struct FxEmitter { std::string name; int maxPeak = 1; bool renderable = true; std::vector<FxLod> lods; };
+    struct FxSystem { std::string name; std::vector<float> lodDistances; bool directSet = false; std::vector<FxEmitter> emitters; };
+private:
+    struct FxParticle {
+        float pos[3] = {0, 0, 0}, vel[3] = {0, 0, 0}, baseVel[3] = {0, 0, 0};
+        float size[3] = {0, 0, 0}, baseSize[3] = {0, 0, 0};
+        float color[4] = {1, 1, 1, 1}, baseColor[4] = {1, 1, 1, 1};
+        float rot = 0, rotRate = 0, relTime = 0, oneOverLife = 0;
+        float meshRot[3] = {0, 0, 0}, meshRotRate[3] = {0, 0, 0};
+    };
+    struct FxEmitterRT {
+        float time = 0, spawnFrac = 0; int loop = 0, lod = 0; bool done = false;
+        std::vector<bool> burstFired;
+        std::vector<FxParticle> parts;
+        float dynParam[4] = {1, 1, 1, 1}; bool hasDyn = false;
+    };
+    struct FxInstance {
+        std::string component, owner, ownerClass, system, role, requiredRule;
+        bool active = true, hidden = false, attached = true;
+        float R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T[3] = {0, 0, 0};   // UE rows / translation
+        uint32_t rng = 1;
+        std::vector<FxEmitterRT> emitters;
+    };
+    std::map<std::string, FxSystem> fxSystems_;
+    std::vector<FxInstance> fxInstances_;
+    std::map<std::string, int> fxMeshes_;
+    float dynParam_[4] = {1, 1, 1, 1};
+    double statFxMs_ = 0.0; int statFxSprites_ = 0, statFxMeshes_ = 0;
+    float lastFxTime_ = -1.0f;
+    core::Mat4 camView_;
+    bool loadMapFx(const std::string& path);
+    void tickMapFx(float dt);
+    int fxMeshFor(const FxLod& L);
+    struct MapProp {
+        std::string actor, actorLower; int kind = 0;   // 0 energon totem, 1 destructible
+        core::Mat4 model; int state = 0; int stateMesh[2] = {-1, -1};
+    };
+    std::vector<MapProp> mapProps_;
+    int kothMesh_ = -1;
+    // ammo-crate PickupFactoryMesh (TnAmmoCratePickup.MeshComponentA): PROP_NEU_AmmoPickup_STAT, CullDistance 8000,
+    // PickupRotationRate yaw 10000 while available
+    struct PickupMeshRT { std::string owner; float T[3] = {0, 0, 0}; };
+    std::vector<PickupMeshRT> pickupMeshes_;
+    std::set<std::string> pickupMeshHidden_;
+    int ammoMesh_ = -1;
+    float pickupYaw(const std::string& ownerLower) const;
+    float mapClock_ = 0.0f; bool hasMapClock_ = false;
+    std::unique_ptr<assets::SkinnedModel> totemModel_;
+    int totemClip_ = -1;
+    std::vector<core::Mat4> totemScratch_;
+    MeshData totemPose_;
+    void loadMapProps(const std::string& indexPath);
+    // authored movers (WfcMovers.cpp)
+    struct MoverRT {
+        std::string actor;
+        int kind = 0;                 // 0 PHYS_Rotating, 1 Matinee InterpTrackMove
+        float L[3] = {0, 0, 0}, rot0[3] = {0, 0, 0}, rate[3] = {0, 0, 0};
+        float length = 0.0f; bool looping = true;
+        struct RotKey { float t; float q[4]; };
+        struct PosKey { float t; float v[3], arrive[3], leave[3]; };
+        std::vector<RotKey> rotKeys;
+        std::vector<PosKey> posKeys;
+    };
+    std::vector<MoverRT> movers_;
+    std::unordered_map<std::string, core::Mat4> moverDelta_;
+    std::unordered_map<std::string, bool> actorHidden_;
+    std::set<std::string> authoredHiddenActors_;
+    bool loadMovers(const std::string& path);
+    core::Mat4 moverDelta(const MoverRT& m, float t) const;
+    void updateMovers();
+    bool actorHidden(const std::string& actorLower) const;
+    std::set<std::string> activeRules_;
+    std::map<std::string, std::vector<std::string>> ruleGatedActors_;   // actor -> rules that show it
+    bool ruleActive(const std::string& rule) const;
     bool depthDirty_ = true;
     void ensureSceneDepth();
     float fxColor_[4] = {1, 1, 1, 1};

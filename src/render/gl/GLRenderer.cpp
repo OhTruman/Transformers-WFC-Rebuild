@@ -112,7 +112,7 @@ public:
     }
 
     void endFrame() override {
-        if (wfc_.active()) wfc_.endFrame();
+        if (wfc_.active()) { wfc_.drawMapPresentation(); wfc_.endFrame(); }
         drawReticle();
         glFlush();
     }
@@ -199,6 +199,13 @@ public:
 
     void setVisibilityQuery(VisibilityQuery q) override { wfc_.setVisibility(std::move(q)); }
     void setCharacterColors(const CharacterColors& c) override { wfc_.setCharacterColors(c); }
+    void setActorHidden(const std::string& actor, bool hidden) override { wfc_.setActorHidden(actor, hidden); }
+    void setMapEffectActive(const std::string& what, bool active) override { wfc_.setMapEffectActive(what, active); }
+    void setMapEffectState(const std::string& k, bool a, bool h) override { wfc_.setMapEffectState(k, a, h); }
+    void setActiveGameRules(const std::vector<std::string>& r) override { wfc_.setActiveGameRules(r); }
+    bool drawsAuthoredMapFx() const override { return wfc_.active(); }
+    void setMapClock(float t) override { wfc_.setMapClock(t); }
+    void setDestructibleState(const std::string& a, int s) override { wfc_.setDestructibleState(a, s); }
 
     MeshHandle uploadMesh(const MeshData& mesh) override {
         if (mesh.empty()) return kInvalidMesh;

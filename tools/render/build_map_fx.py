@@ -1,0 +1,174 @@
+"""Authored map particle effects -> <out>/map_fx_runtime.json (renderer runtime input).
+
+Sources (read only):
+  ExtractedAssets/VerticalSlice/Maps/<Map>/map_fx.json   45 ParticleSystemComponents: template, owner, ue_matrix,
+                                                          bAutoActivate (AssetTools a23c675)
+  AssetTools/manifests/streets_pickup_fx.json             Pickup_FX / HealthPickup_FX / OvershieldPickup_FX, compiled
+                                                          module streams decoded (pstream, M03)
+  AssetTools/scripts/wfc/pstream.py                       the same decoder run here for FX_Level_Generic_p Steam_Sm_FX
+Class defaults (authored.db CDOs): ParticleModuleRequired EmitterDuration 1.0, EmitterLoops 0, SpawnRate const 0,
+SubImages 1x1, ScreenAlignment PSA_Square, bUseLocalSpace False; ParticleEmitter MaxPeakCount 1.
+Only distributions with confidence CONFIRMED are emitted as such; PARTIAL ones are flagged.
+Usage: python build_map_fx.py <Map> <out_dir>
+"""
+import json, os, sys
+
+MANI = r'F:/Transformers Rebuild/AssetTools/manifests'
+VS_MAPS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
+CONTENT = r'F:/Transformers Rebuild/ExtractedAssets/content'
+WFC = r'F:/Transformers Rebuild/AssetTools/scripts/wfc'
+
+TYPE_KIND = {1: 'float constant', 2: 'float constant curve', 3: 'float uniform', 4: 'float uniform curve'}
+
+
+def tagged_dist(d, default_values):
+    """Tagged FRawDistributionFloat (RequiredModule.SpawnRate) -> runtime distribution."""
+    d = d or {}
+    t = d.get('Type', 1)
+    vals = d.get('LookupTable')
+    if vals is None:
+        return {'kind': 'float constant', 'values': default_values}
+    return {'kind': TYPE_KIND.get(t, 'float constant'), 'values': vals}
+
+
+def mesh_gltf(mesh_path):
+    """'FX_Pickups_p.Mesh.LightBeam_WepPickup_STAT' -> content/FX_Pickups_p/Mesh/LightBeam_WepPickup_STAT.gltf"""
+    parts = mesh_path.split('.')
+    p = os.path.join(CONTENT, *parts) + '.gltf'
+    return p.replace('\\', '/') if os.path.exists(p) else None
+
+
+SPAWN_ONLY = {'PMI_Lifetime', 'PMI_Size', 'PMI_Color', 'PMI_Location', 'PMI_LocationPrimitiveSphere', 'PMI_Velocity',
+              'PMI_Rotation', 'PMI_MeshRotation', 'PMI_MeshRotationRate', 'PMI_ColorByParameter'}
+VISUAL_UPDATE = {'PMI_SizeMultiplyLife': ['LifeMultiplier'], 'PMI_ColorScaleOverLife': ['ColorScaleOverLife', 'AlphaScaleOverLife']}
+
+
+def curve_is_one(d, t_max):
+    """True when the distribution is exactly 1 for every relative time in [0, t_max]."""
+    k, v = d['kind'], d['values']
+    if 'curve' not in k:
+        return all(abs(x - 1.0) < 1e-6 for x in v)
+    comps = 3 if k.startswith('vector') else 1
+    stride = comps * (2 if 'uniform' in k else 1)
+    start, scale = v[2], v[3]
+    n = (len(v) - 4) // stride
+    for i in range(n):
+        t = start + i / scale if scale else start
+        if t > t_max + 1e-6 and i > 0:
+            break
+        if any(abs(x - 1.0) > 1e-6 for x in v[4 + i * stride:4 + (i + 1) * stride]):
+            return False
+    return True
+
+
+def flag_analysis(lod):
+    """The compiled per-module flag bytes (pstream flagA / flagB) are UNKNOWN. Two readings are plausible:
+    (A) flagA = enabled, (B) flagA / flagB = spawn / update. A flagA=0 module of a spawn-only class contributes
+    nothing under either reading (skipped). A flagA=0 size / colour / alpha over-life module contributes under (B)
+    only: the emitter's look is flag-invariant only if that curve is exactly 1 over the relative times reached
+    (immortal particles: t = 0 only)."""
+    immortal = any(m['module'] == 'PMI_Lifetime' and all(abs(x) < 1e-9 for x in m['dists'].get('Lifetime', {}).get('values', [1]))
+                   for m in lod['modules'])
+    t_max = 0.0 if immortal else 1.0
+    skipped, ambiguous, motion_unknown = [], [], []
+    for m in lod['modules']:
+        fa, fb = (m.get('raw_flags') or [1, 1])[:2]
+        if m['module'] in SPAWN_ONLY and fa == 0:
+            skipped.append(m['module'])
+        elif m['module'] in VISUAL_UPDATE and fa == 0:
+            if not all(curve_is_one(m['dists'][p], t_max) for p in VISUAL_UPDATE[m['module']] if p in m['dists']):
+                ambiguous.append(m['module'])
+        elif m['module'] == 'PMI_Gravity':
+            motion_unknown.append('PMI_Gravity (GravityMultiplier / acceleration native; [%d,%d])' % (fa, fb))
+    return {'skipped_spawn_modules': skipped, 'ambiguous_visual_modules': ambiguous,
+            'motion_unknown': motion_unknown, 'visual_invariant': not ambiguous}
+
+
+def system_runtime(name, s):
+    out = {'name': name, 'lod_distances': s['props'].get('LODDistances', [0.0]),
+           'lod_method': s['props'].get('LODMethod', 'PARTICLESYSTEMLODMETHOD_Automatic'), 'emitters': []}
+    for e in s['emitters']:
+        em = {'name': e['name'], 'max_peak_count': e['props'].get('MaxPeakCount', 1),
+              'render_mode': e['props'].get('SpriteEmitterRenderMode', 'SERM_Normal'), 'lods': []}
+        for L in e['lods']:
+            req = L['RequiredModule']['props']
+            td = (L.get('TypeDataModule') or {}).get('props') or {}
+            lod = {'level': L['level'], 'material': req.get('Material'),
+                   'required': {'emitter_duration': req.get('EmitterDuration', 1.0),
+                                'emitter_loops': req.get('EmitterLoops', 0),
+                                'spawn_rate': tagged_dist(req.get('SpawnRate'), [0.0]),
+                                'burst_list': req.get('BurstList', []),
+                                'use_local_space': bool(req.get('bUseLocalSpace', False)),
+                                'screen_alignment': req.get('ScreenAlignment', 'PSA_Square'),
+                                'subimages': [req.get('SubImages_Horizontal', 1), req.get('SubImages_Vertical', 1)]},
+                   'mesh': None, 'modules': [], 'assignment_complete': L.get('assignment_complete', False)}
+            if td.get('Mesh'):
+                lod['mesh'] = {'object': td['Mesh'], 'gltf': mesh_gltf(td['Mesh']),
+                               'override_material': bool(td.get('bOverrideMaterial', False))}
+            for m in L.get('compiled_modules', []):
+                mod = {'module': m['module'], 'dists': {}, 'partial': [], 'raw_flags': m.get('raw_flags', [1, 1])}
+                for i, dd in enumerate(m['distributions']):
+                    prop = dd['property'] or ('DynamicParams[%d].ParamValue' % i)
+                    mod['dists'][prop] = {'kind': dd['kind'], 'values': dd['values'], 'confidence': dd['confidence']}
+                    if dd['confidence'] != 'CONFIRMED':
+                        mod['partial'].append(prop)
+                lod['modules'].append(mod)
+            lod['flag_analysis'] = flag_analysis(lod)
+            # RE MILESTONE04 pickup/objective presentation §2 (HIGH): flagA == membership in the executed module
+            # list (bEnabled); flagA = 0 modules are disabled and not evaluated. flagB stays UNKNOWN (mesh-rotation
+            # modules only). With that reading every emitter's look is determined.
+            lod['disabled_modules'] = [m['module'] for m in lod['modules'] if (m.get('raw_flags') or [1, 1])[0] == 0]
+            em['lods'].append(lod)
+        em['renderable'] = True
+        em['flag_reading'] = 'flagA = bEnabled (RE HIGH)'
+        out['emitters'].append(em)
+    return out
+
+
+def main():
+    mapname, out = sys.argv[1], sys.argv[2]
+    fx = json.load(open(os.path.join(VS_MAPS, mapname, 'map_fx.json'), encoding='utf-8'))
+    pk = json.load(open(os.path.join(MANI, 'streets_pickup_fx.json'), encoding='utf-8'))['systems']
+    systems = {}
+    for name, s in pk.items():
+        systems[name] = system_runtime(name, s)
+    sys.path.insert(0, WFC)
+    import pstream  # AssetTools decoder (read only)
+    for comp in fx['particle_components']:
+        t = comp['props'].get('Template')
+        if t and t not in systems:
+            pkg = (fx['particle_systems'].get(t) or {}).get('package')
+            s = pstream.system(t, pkg)
+            systems[t] = system_runtime(t, s)
+    inst = []
+    for comp in fx['particle_components']:
+        oc, t = comp['owner_class'], comp['props'].get('Template')
+        highlight = t == 'FX_Pickups_p.FX.Pickup_FX' and oc != 'Emitter'
+        # PickupEffect (highlight) is attached / rendered only for factory classes that list it in Components
+        # (ammo crate, flag / bomb objectives: ShouldDisplayHighlightFx inherited True from TnWeaponPickupFactory,
+        # RE MILESTONE04 pickup/objective §1); health / overshield never attach it (decompiled script).
+        attached = not highlight or oc in ('TnAmmoCratePickupFactory', 'TnGameObjectivePickupFactoryFlag',
+                                           'TnGameObjectivePickupFactoryBomb')
+        # spawn state: PreBeginPlay -> InitializePickup -> SetPickupMesh -> SetPickupVisible activates the
+        # highlight where ShouldDisplayHighlightFx (ammo crates; RE d50c2a9 P2), overriding bAutoActivate false
+        active = bool(comp['props'].get('bAutoActivate', True)) or (highlight and attached)
+        rule = {'TnGameObjectivePickupFactoryFlag': 'TransGame.TnGameRules_SingleFlagCTF',
+                'TnGameObjectivePickupFactoryBomb': 'TransGame.TnGameRules_ScoreBombingRun'}.get(oc)
+        inst.append({'component': comp['component'], 'owner': comp['owner'].split('.')[-1],
+                     'owner_class': oc, 'template': t, 'role': 'highlight' if highlight else 'custom' if oc != 'Emitter' else 'level',
+                     'attached': attached, 'auto_activate': active, 'required_game_rule': rule,
+                     'ue_matrix': comp['ue_matrix']})
+    res = {'map': mapname, 'source': 'AssetTools a23c675 map_fx.json + streets_pickup_fx.json + pstream (Steam_Sm_FX)',
+           'instances': inst, 'systems': systems}
+    json.dump(res, open(os.path.join(out, 'map_fx_runtime.json'), 'w'), indent=1)
+    print('map fx: %d components (%d auto-active), %d systems' % (len(inst), sum(i['auto_activate'] for i in inst),
+                                                                    len(systems)))
+    for n, s in systems.items():
+        for e in s['emitters']:
+            L = e['lods'][0]
+            print('  %-22s %-24s renderable=%-5s %s' % (n.split('.')[-1], e['name'], e['renderable'],
+                                                       json.dumps(L['flag_analysis'])))
+
+
+if __name__ == '__main__':
+    main()

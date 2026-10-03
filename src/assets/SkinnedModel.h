@@ -97,7 +97,8 @@ struct SkinnedModel {
 };
 
 bool loadSkinnedGlb(const std::string& path, SkinnedModel& out);   // .glb or text .gltf + external buffer
-// Append the animations of a separate glTF whose nodes match the model's by name; returns the count.
+// Append the animations of a separate glTF (UE AnimSet export) whose nodes match the model's by name;
+// returns the clip count. One implementation serves Gameplay's Optimus arm and Rendering's totems.
 int loadAnimationsByName(const std::string& path, SkinnedModel& m);
 
 // Parent-relative bone transforms for every node: the blendable pose representation

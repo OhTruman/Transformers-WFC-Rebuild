@@ -28,4 +28,11 @@ $fx = Get-Content (Join-Path $PSScriptRoot "fx_materials.txt") | Where-Object { 
     TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST TR_Optimus_VEH_p.InteriorAlt_Energon_MAT_INST `
     WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
+
+
+# 4. Authored map presentation: movers / rule-gated visibility and the map particle components.
+& $py (Join-Path $PSScriptRoot "build_movers.py") $Map $out
+if ($LASTEXITCODE -ne 0) { throw "build_movers failed" }
+& $py (Join-Path $PSScriptRoot "build_map_fx.py") $Map $out
+if ($LASTEXITCODE -ne 0) { throw "build_map_fx failed" }
 Write-Host "render data -> $out"

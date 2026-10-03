@@ -1199,6 +1199,21 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 05 (2026-10-03, agents/rendering) — Streets normal-play completion
+- Consumes Gameplay d122ef4 state: setMapClock (movers / totem / pickup spin), setActiveGameRules, setActorHidden, setMapEffectState; KOTH active ring.
+- Content meshes placed P*A*P (corrects M04's sideways totems / destructible / FX meshes).
+- Pickups from AssetTools render_index: 14 ammo crate meshes + beams, 9 health + 1 overshield effects, available / taken / respawn; flag/bomb Disabled in TDM. Graybox pickups and the test dummy are no longer spawned in the slice (WFC_GRAYBOXPICKUPS / WFC_DAMAGETARGET).
+- Particle flags: flagA = bEnabled (RE 940aa79); all 45 particle components resolved (32 drawn, 13 intentionally invisible).
+- verify_permutations 216/216 (texture-expression block, 2-byte aligned scan). Audit 2399 correct / 23 intentionally invisible / 360 unknown (BSP without lightmaps; RE: 26 visible nodes).
+- Self-tests: shadows 32/32, DLE 20/20. Release perf: idle 4.4 ms, transform 4.5, vehicle 4.6, hover 4.3 (firing 10.1, simulation cost outside the renderer).
+- Diagnostics: WFC_SHOTLIST=<file>/WFC_SHOTDIR (many views per run), WFC_NOFRUSTUMCULL.
+
+## RENDERING MILESTONE 04 (2026-10-03, agents/rendering)
+- Streets regenerated from AssetTools 8d8195e (corrected SMCA transforms); normals by inverse-transpose; decals on corrected receivers; lightmap inventory 1795 texture / 28 vertex matches per component.
+- Living world: rotating domes, SkyBeam Matinee, rule-gated objective bases + Conquest totems, intact destructible, 8 steam emitters, flag-invariant pickup emitters with script pickup state (setMapEffectState / setActiveGameRules / setActorHidden / setDestructibleState).
+- Tools: build_movers.py, build_map_fx.py (in build_render_data.ps1); state-aware audit_map.py; verify_permutations 211/214.
+- Diagnostics: WFC_DEBUGCAM=at:x,y,z,tx,ty,tz, WFC_GAMERULES, WFC_PICKUPTEST, WFC_DESTRUCTSTATE, WFC_MAPFX_ALLACTIVE, WFC_NOMAPFX, WFC_NOMOVERS, WFC_FX_FLAGREADING (experimental).
+
 ## RENDERING MILESTONE 03 PASS 5 (2026-10-02, agents/rendering)
 - Character shadows in normal play (ReverseEngineering 7033f18): per light-environment synthetic projector copying the composite light, ModShadowColor = shadowFactor, FadeAlpha 1, native creation / relevance / DPG gates, native origin / push-back / W range / resolution, native 6-tap darkness-weighted blur.
 - WFC_SHADOWSELFTEST 32/32, WFC_DLETEST 20/20. Diagnostics: WFC_NOCHARSHADOWS, WFC_SHADOWTEST=<light>, WFC_SUBJECTRELEVANCE=<hex>, WFC_BLURTIE, WFC_MASKDUMP.

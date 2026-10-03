@@ -118,6 +118,9 @@ public:
     // looping SkyBeam Matinee), totem idle animation and KOTH state are evaluated at this time so that what is
     // drawn matches the moving collision Gameplay simulates. Optional.
     virtual void setMapClock(float secondsSinceGameplayStarted) { (void)secondsSinceGameplayStarted; }
+    // Authored destructible presentation state (HmDestructionState handle: 0 intact, 1 destroyed, 2 settled).
+    // Gameplay owns damage / triggers / timers.
+    virtual void setDestructibleState(const std::string& actor, int state) { (void)actor; (void)state; }
 
     // Textured particle quads (depth-tested, no depth write, unfogged for additive).
     virtual void drawParticles(const ParticleBatch& batch) = 0;

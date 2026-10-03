@@ -198,13 +198,26 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
 
             uint32_t base = (uint32_t)out.vertexCount();
             uint32_t indexStart = (uint32_t)out.indices.size();
+            // Normals transform by the inverse-transpose of the node's linear part (non-uniform and mirrored
+            // instance scale, e.g. StaticMeshCollectionActor components): cofactor matrix * sign(det).
+            const float* L = world.m;
+            float a00 = L[0], a10 = L[1], a20 = L[2], a01 = L[4], a11 = L[5], a21 = L[6], a02 = L[8], a12 = L[9], a22 = L[10];
+            float c00 = a11 * a22 - a12 * a21, c01 = -(a10 * a22 - a12 * a20), c02 = a10 * a21 - a11 * a20;
+            float c10 = -(a01 * a22 - a02 * a21), c11 = a00 * a22 - a02 * a20, c12 = -(a00 * a21 - a01 * a20);
+            float c20 = a01 * a12 - a02 * a11, c21 = -(a00 * a12 - a02 * a10), c22 = a00 * a11 - a01 * a10;
+            float detL = a00 * c00 + a01 * c01 + a02 * c02;
+            float sgn = detL < 0.0f ? -1.0f : 1.0f;
+            auto normalXf = [&](const core::Vec3& n) {   // (A^-1)^T n = cof(A) n / det
+                return core::normalize(core::Vec3{(c00 * n.x + c01 * n.y + c02 * n.z) * sgn,
+                                                  (c10 * n.x + c11 * n.y + c12 * n.z) * sgn,
+                                                  (c20 * n.x + c21 * n.y + c22 * n.z) * sgn});
+            };
             for (size_t i = 0; i < pos.size(); ++i) {
                 core::Vec3 wp = core::transformPoint(world, pos[i]);
                 out.positions.push_back(wp.x);
                 out.positions.push_back(wp.y);
                 out.positions.push_back(wp.z);
-                core::Vec3 wn = i < nrm.size() ? core::normalize(core::transformDir(world, nrm[i]))
-                                               : core::Vec3{0, 1, 0};
+                core::Vec3 wn = i < nrm.size() ? normalXf(nrm[i]) : core::Vec3{0, 1, 0};
                 out.normals.push_back(wn.x);
                 out.normals.push_back(wn.y);
                 out.normals.push_back(wn.z);

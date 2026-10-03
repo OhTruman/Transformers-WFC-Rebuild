@@ -23,7 +23,9 @@ def compiled_params(repo, path):
     p, t = repo.native_tail(path)
     ids = {i: KINDS[n] for i, n in enumerate(p.names) if n in KINDS}
     out = {'Scalar': set(), 'Vector': set(), 'Texture': set()}
-    for o in range(0, len(t) - 16, 4):
+    # the texture-expression block (u32 count, then {FName class, number, [param FName, number,] texture ref}) is
+    # not 4-byte aligned in the cooked resource (MonitorScreen_Parent_MAT: offset 2 mod 4; RE fc5672 §3) -> 2-byte scan
+    for o in range(0, len(t) - 16, 2):
         a, b = struct.unpack_from('>ii', t, o)
         if b == 0 and a in ids:
             ni, nn = struct.unpack_from('>ii', t, o + 8)
@@ -46,10 +48,28 @@ def main():
         src = (info.get('chain') or [None])[0] or info.get('master')
         try:
             comp = compiled_params(repo, src)
+            # a MaterialInstanceConstant without its own static permutation carries no compiled resource: its
+            # shader is the parent chain's (UE3 MIC without StaticParameters) -> verify against the master's
+            if not any(comp.values()) and info.get('master') and info.get('master') != src:
+                comp = compiled_params(repo, info['master'])
+                src = info['master'] + ' (instance without own static permutation)'
         except Exception as ex:
             report[name] = {'error': str(ex)}
             continue
         mine = {k: set(x) for k, x in info['params_read'].items()}
+        # a parameter expression authored without ParameterName compiles as a uniform named 'None'; the
+        # translator reads it under its (empty) name -> attributable when the master graph has one
+        master = info.get('master') or ''
+        pre = master.lower() + '.'
+        unnamed = {'Scalar': False, 'Vector': False, 'Texture': False}
+        for path in repo.index:
+            if not path.startswith(pre): continue
+            cls = repo.cls(path) or ''
+            kind = 'Scalar' if cls == 'MaterialExpressionScalarParameter' else 'Vector' if cls == 'MaterialExpressionVectorParameter' else None
+            if kind and not (repo.obj(path) or {}).get('ParameterName'):
+                unnamed[kind] = True
+        for k in ('Scalar', 'Vector'):
+            if unnamed[k] and 'None' in comp[k]: mine[k].add('None')
         diff = {}
         for k in ('Scalar', 'Vector', 'Texture'):
             c = comp[k] - ENGINE_ADDED
