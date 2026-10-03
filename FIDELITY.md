@@ -17,6 +17,1005 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 SYSTEMS PASS 7 — VEHICLE LOOP ENABLE CONFIRMED (2026-10-02, agents/systems)
+
+**Source:** `RE-Workspace/notes/MILESTONE03_RUNTIME_SEMANTICS_ASSETTOOLS_7a69756.md` §P1 and its VEHICLE LOOP
+HANDOFF (ReverseEngineering commit **d50c2a9**; the handoff cited "d50e2a9", but the repository HEAD is d50c2a9).
+This is a narrow correction of PASS 6 (757347c). Only provenance and comments change; runtime behaviour is unchanged.
+
+**CONFIRMED ORIGINAL:**
+* **Loop enable:** looping is enabled only by the wave node.
+  * `SoundNodeWaveEvent.bLooping` (node+0x34, bit 0x80000000) → `FMOD_LOOP_NORMAL` at channel create
+    (0x82768820).
+  * WFC sets no loop points and no loop count (infinite), so FMOD loops the FSB region 0…N−1, i.e. the whole
+    decoded sample, indefinitely.
+  * Neither the cue-root LoopStart / LoopEnd nor the FSB header loop flag is consulted.
+* **Rebuild loop enable:** already `VoiceParams::loop = EventDef::loop` (the wave event's bLooping). No code
+  derives looping from the cue root or the FSB header; `FsbLoop::headerLoopFlag` is informational only.
+* **Loop region:** the whole-sample FSB regions from AssetTools 7a69756 (`VehicleLoops.inc`) are kept. They equal
+  FMOD's default region, now CONFIRMED rather than PASS 6's "UNKNOWN loop enable".
+* **States and fades:**
+  * start, loop and stop are separate cues/components driven by the HmVehicleAudioComponent /
+    HmPlayerVehicleAudioComponentImpl states;
+  * entering a state fades in over 0.1 s; engine fade-out 0.2 s, boost fade-out 0.15 s;
+  * state changes overlap as crossfades;
+  * `FadeOut` fades linearly from the current playback position without waiting for a loop boundary; time 0 stops
+    immediately; then auto-destroy.
+
+  All of this is already implemented: VehicleAudio and `SoundCues::stop` / `fadeIn`.
+* **Removed:** no provisional loop-enable code existed, so nothing was removed. The PASS 6 "UNKNOWN: how FMOD loop
+  mode is enabled" entries are resolved.
+
+**UNKNOWN (FMOD internal, per the report):** the XMA decoder seam behaviour at the loop point.
+
+**Validation:**
+* **Suite:** 533 pass / 0 fail. New loop-runtime block:
+  * the loop flag is per wave event (DRIVE_ONLOAD all looping, BOOST_END none);
+  * a loop stopped at an arbitrary position (0.367 s) is at half level 0.1 s into a 0.2 s fade, then stops and
+    auto-destroys;
+  * a zero fade stops immediately;
+  * on the Win32 backend, a looping wave plays past its 2.0 s length, while a non-looping 0.43 s wave ends.
+* **Game runs:**
+  * hover / engine loop and repeated Boost: START → LOOP → END with 0.15 / 0.2 s fades and the BOOST_END duck;
+  * transform out of the vehicle: ONLOAD 0.2 s, squeal 0.5 s, no vehicle cue left.
+* **Regression:**
+  * audio-attach 238 pass / 0 FAIL / 13 KNOWN (all `PP_DECO_MECH_*` zone pools; 0 player-owned);
+  * wfc_fidelity 194/0/19; collision 0 mismatches; probe 31/0/1;
+  * sustained fire 6.5–14.1 ms (mean 10.0; PASS 6 6.5–13.1 / 9.7; no runtime change, run-to-run variation);
+  * cleanup clean.
+
+---
+
+## MILESTONE 03 SYSTEMS PASS 6 — ASSETTOOLS AUTHORED-DATA HANDOFF (2026-10-02, agents/systems)
+
+**Source:** AssetTools commit **7a69756**, manifests (read only):
+* `streets_surface_audio.json`
+* `vertical_slice_audio_concurrency.json`
+* `vehicle_audio_loops.json`
+* `streets_pickup_factories.json`
+* `streets_pickup_fx.json`
+
+The pickup activation flow also comes from decompiled script (RE-Workspace `work/script/decomp`, read only):
+* `Engine.PickupFactory`, `Engine.Inventory`;
+* `TransGame.TnPickupFactory`, `TnHealthPickupFactory`.
+
+No new asset recovery or native RE was done. Builds on Systems 35145f3 (PASS 5).
+**Confidence:** CONFIRMED ORIGINAL · HIGH · PROVISIONAL · UNKNOWN.
+
+### Footsteps / landing — CONFIRMED AUTHORED (no longer "fallback")
+* **One table for the whole map:** every Streets PhysicalMaterial resolves every footstep slot to the same
+  `SoundEvents_Footsteps.FS_DEFAULT_*` events.
+  * Materials: Metal (also `Engine.DefaultPhysMaterialName` and both BlockingVolume overrides), Rubber, Water,
+    ForceField, and surfaces with no property.
+  * Supporting data: `TnPawn.FootstepComp0` defaults, no PhysicalMaterialOverride, 0
+    SeqAct_SetFootstepMaterialOverride.
+* **Optimus mapping:** `SoundEvents.CHR_OPTIMUS` maps 8 events to `BL_FS_LRG_BOT.*`: WALK, RUN, SCUFF, JUMP,
+  JUMP_CHARGED, LAND, HARD_LAND, LAND_HIGH_FALL.
+  * JOG, CROUCH_* and DashLand are unmapped and therefore silent, which RobotFoley already does.
+* **Consequence:**
+  * the cues the rebuild plays **are** the authored Streets footstep and landing sounds;
+  * no surface trace is needed, and no surface variants exist (the suite checks that none are in the table);
+  * which surface the native trace samples is moot.
+
+Earlier "missing Streets surface table" requests (PASS 2, 3, 5) are resolved.
+
+### Cue concurrency — CONFIRMED AUTHORED
+* All 71 manifest cues the rebuild plays match authored MaxConcurrentPlayCount / InstanceLimiting exactly (or the
+  inherited Engine.Default__SoundCue 5 / kKillFarthest). This covers 44 table cues, the 3 new pickup cues and the
+  map bank, including EMIT_FLOOD_LIGHTS / EMIT_MONRAIL_IDLE_LP = 3.
+* No value changed.
+* The 7 authored kKillNewest cues (Soundwave / Trypticon impacts) are not played by the slice.
+* **Root `PlayMixerPreset = Default`** (137 cues): a no-op in the native mixer. Default is always active, so
+  Enable/Disable only bumps its ref-count. It is not applied.
+* **UNKNOWN (native; no field defines the runtime):**
+  * category `ChannelCountMixerPreset`. **SFX_WET_COMBAT_ROBOT_WPN_SHOOT** (the Ion Blaster SHOOT category)
+    authors `MECH_WPN_VOICE_THRESHOLD`, Threshold 8, Time 0. That preset (Priority 481, FadeIn 1.0, FadeOut 0.5)
+    ducks SFX_WET_AMB / SFX_DRY_AMB to 0.158 and SFX_WET_NAV to 0.501.
+  * How the voice count is measured, the compare, and when it is disabled are not recovered, so it is **not
+    implemented** (ReVa request). It can audibly duck ambience during sustained fire in the original.
+  * per-owner vs global limits; virtualization; priority stealing.
+
+### Vehicle loops — CONFIRMED AUTHORED regions (loop enable CONFIRMED in PASS 7)
+* **Census:** 1929 FSB4 samples, 0 with a custom loop range, 0 with a header LOOP flag.
+* **The 7 looping vehicle waves:** loop [0, total−1], the whole sample. All 39 vehicle waves' extracted .wav
+  files match their FSB headers exactly (rate, channels, sample count).
+  * Waves: ENGINE_MID / ENGINE_BOOST / IDLE (48 kHz stereo), SYNTH_ENERGY_MOD_PAN, TIRE_NOISE_02,
+    TIRE_SQUEAL_HEAVY (24 kHz), JET_TURBO_WHINE (36 kHz).
+* **`tools/systems/gen_loops.py` → `VehicleLoops.inc`:** asserts each wave against its FSB header;
+  `SoundCues::applyLoopPoints()` applies the regions at load. This replaces PASS 5's never-delivered
+  `fsb_loop_points.json`.
+* **Fix (Win32Audio):** the loop region is now [start, end+1), and the last frame interpolates into the loop start.
+  * PASS 5 wrapped at frames−1 without wrap interpolation, which was one frame short per period.
+  * Non-looping playback is unchanged.
+* **Unchanged:** start/loop/end cue presentation and the native fades (engine 0.2 s, boost 0.15 s).
+* **Loop enable (RESOLVED in PASS 7, RE d50c2a9):** the wave event's bLooping → FMOD_LOOP_NORMAL, with no
+  loop points or count.
+* **UNKNOWN (native):**
+  * whether the XMA seek/loop tables shift the start for gapless XMA looping.
+
+  Neither is inferred from waveform content.
+
+### Pickups — presentation (Systems), data CONFIRMED AUTHORED, flow CONFIRMED (script)
+* **Data:** `tools/systems/gen_pickups.py` → `PickupPresentation.inc`, the 27 factories:
+  * 14 ammo crates (RespawnTime 30), 9 health (60), 1 overshield (120), 2 flag + 1 bomb objectives;
+  * per factory: positions, PickupSound, CustomPickupEffect / PickupEffect templates, attachment,
+    ShouldDisplayHighlightFx, RequiredGameRuleClass.
+* **Pickup sounds:** the 3 PickupSound cues are added to the cue table: HEALTH_PU_AMMO (−16 dB root),
+  HEALTH_PU_ENERGON, OVERSHIELD_POWER_UP.
+* **`PickupPresentation`, transcribed from script:**
+  * **Spawn:** CustomPickupEffect (HealthPickup_FX / OvershieldPickup_FX) is active; the highlight PickupEffect
+    (Pickup_FX) is **inactive** (bAutoActivate false).
+  * **`SetPickupHidden`:** hides and deactivates the custom effect; deactivates the highlight when
+    ShouldDisplayHighlightFx.
+  * **`SetPickupVisible`:** the reverse. So the ammo-crate beam first lights up when the crate respawns.
+  * **Highlight rendering:** PickupEffect renders only for the ammo crate and objectives (it is in their
+    Components). Health and overshield have ShouldDisplayHighlightFx false and the component unattached.
+  * **`announcePickup`:** `Inventory.AnnouncePickup` → `Other.PlaySound(PickupSound)`, a sound attached to the
+    recipient pawn.
+* **Ownership:**
+  * The factory actors, touch, Sleeping/respawn timers and game-rule gating are Gameplay's state machine (not
+    built yet on any branch). PickupPresentation keeps no timers, so it can't duplicate that state machine.
+  * World exposes `pickupPresentation()`; Gameplay calls `announcePickup` + `setPickupHidden` on GiveTo and
+    `setPickupVisible` when Sleeping ends.
+  * The graybox scaffold pickups are untouched (Gameplay).
+* **Particle systems not drawn** (Rendering + Systems): the decoded Pickup_FX / HealthPickup_FX /
+  OvershieldPickup_FX streams report per-module flags (`flagA` / `flagB`, modules outside the record list) whose
+  semantics pstream does **not assert**.
+  * These decide whether modules run at spawn or update, or at all. One case: GlowADD has an infinite lifetime and
+    an alpha-over-life of 0 at t=0, so it is invisible unless its ColorScaleOverLife is inactive or on emitter
+    time.
+  * Drawing them now would invent visuals. They stay UNKNOWN until the flag semantics are recovered (AssetTools /
+    ReVa request).
+  * `effectState()` already exposes which components the original has active.
+  * Mesh note: the overshield emitter references `PROP_NEU_Pickups_p.OvershieldPickup.PROP_NEU_Overshield_STAT`,
+    but the extracted mesh is `PROP_NEU_OvershieldPickup_STAT` (AssetTools check).
+
+### Validation
+* **Native suite** (`tools/systems/audio_native_suite.cpp`): **523 pass / 0 fail**. New authored-data block:
+  * footstep events → table cues; no surface variants;
+  * concurrency for 71 cues;
+  * 7 FSB loop regions = whole sample;
+  * 27 factories: spawn / hidden / visible states, highlight and attachment flags, PickupSound cue present, and
+    the sound following the recipient.
+* **Regression:** wfc_fidelity 194/0/19; collision 0 mismatches; probe 31 PASS / 0 FAIL / 1 KNOWN (Rendering
+  `boost_fx_emitted`).
+* **Audio-attach:** 247 pass / 0 FAIL / 13 KNOWN. All 13 are `PP_DECO_MECH_*` zone pool one-shots, world-fixed
+  by design (count varies with random pool timing). **0 player-owned sounds left behind.**
+* **Game runs:** 13 scenarios, footsteps/landing log only `BL_FS_LRG_BOT` default cues (walk, run, jump, hard land);
+  repeated Boost start/loop/end and the BOOST_END duck unchanged; transform-out leaves no vehicle cue. Frame time (ms,
+  range / mean): idle 6.4–10.6 / 7.0, movement 4.6–10.5 / 5.5, firing 6.7–13.1 / 10.3, sustained 6.5–13.1 / 9.7
+  (PASS 5: 6.9–13.4), hover 3.7–7.7 / 4.4, Boost 3.6–8.0 / 4.6, Nitro 4.3–7.8 / 5.1. Particles/meshes → 0 after
+  vehicle runs; queued events bounded.
+
+### Dependencies
+* **AssetTools:**
+  * pstream module-flag semantics (or ReVa: ParticleModule spawn/update flags in the compiled stream);
+  * the overshield mesh name mismatch.
+* **ReVa:**
+  * ChannelCountMixerPreset runtime;
+  * XMA loop tables.
+* **Gameplay:** the pickup factory state machine (drives PickupPresentation); vehicle jump.
+* **Rendering:** drawing the 3 pickup particle systems through their materials once the module semantics are
+  known; the PASS 4 material handoff is unchanged.
+
+---
+
+## MILESTONE 03 SYSTEMS PASS 5 — NATIVE AUDIO RUNTIME SEMANTICS (2026-10-02, agents/systems)
+
+**Source:** `RE-Workspace/notes/MILESTONE03_AUDIO_NATIVE_FIDELITY.md`, follow-up sections A1–A8 (ReverseEngineering
+commit **7c4a2e0**, read only), plus `SoundConfig.SoundMixerProperties` and the Streets `audio.json` (read only).
+**Supersedes:** the provisional runtime-audio semantics of Systems checkpoint **7b42621** (PASS 4). Everything confirmed
+in PASS 4 is unchanged: PreferPlayer pan reference, native spatialization, concurrency, occlusion, attachment, and the
+vehicle-FX material/HDR handoff.
+**Confidence:** CONFIRMED ORIGINAL · HIGH · PROVISIONAL · UNKNOWN.
+
+### Mixer — `src/game/SoundMixer.{h,cpp}`, generated `SoundMixer.inc` (`tools/systems/gen_mixer.py`)
+**CONFIRMED ORIGINAL (A2–A4):**
+* **Runtime preset entry:** {Priority, FadeIn, FadeOut, Duration, RefCount, Elapsed}, plus the built-in **Default**
+  preset (Priority 0, fades 0.5, Duration −1) that mixer Init enables.
+* **Enable (0x82772778):**
+  * Elapsed = 0 on every Enable, including re-enabling an active preset.
+  * An inactive preset is inserted before the first lower-priority entry, so equal priority goes after existing
+    equals and the **earlier-enabled preset wins**.
+  * RefCount += 1.
+* **Disable(force) (0x827728E0):** force sets RefCount to 1; at RefCount 1 the preset is removed and categories
+  retarget; then RefCount = max(0, RefCount − 1).
+* **Tick (0x82756180):** for active presets, last → first: Elapsed += dt. A non-Default preset with Duration ≥ 0 and
+  Elapsed ≥ Duration gets a non-forced Disable.
+  * Duration < 0 is infinite.
+  * Duration 0 expires on the next tick.
+  * RefCount n expires over n ticks.
+* **Selecting each category's value (0x827661C8):** the first active preset, in priority order, that **defines** the
+  category wins outright. Otherwise selection falls through, ultimately to Default. There is no adding, multiplying or
+  averaging.
+* **Fades:** one linear ramp per parameter (0x827560A8 / 0x827560F8), in authored units.
+  * **Units:** Volume = **linear amplitude** (clamped to [0,1], never dB-converted); reverb levels in **mB**; times in
+    s; frequencies in Hz.
+  * **Fade time:** the new preset's FadeIn when its priority is ≥ the current one's, otherwise the outgoing preset's
+    FadeOut.
+  * **Interruption:** a new target restarts from the **current value** with the full new time, without snapping.
+* Replaces PASS 4's per-cue preset list (fade curve, overlap combining and Duration were UNKNOWN placeholders there).
+* **Applied categories:**
+  * SFX_WET_VEH_ENGINE Volume: VEHICLE_JUMP −18 dB = 0.1258925 and VEHICLE_BOOST_END −4 dB = 0.6309574.
+  * MASTER_WET Reverb + Echo: the 10 REVERB_TRANS_MP_STREETS_* presets.
+
+  The backend receives the ramped MASTER_WET values every tick; the mixer ramp is the only fade.
+
+**HIGH:** inside one tick, timers advance before ramps (vtable order AdvanceTimers +0x44 → UpdateCategories +0x48).
+
+**UNKNOWN:**
+* the IsPlayerPOV enable flag (device +0xC0 bit 0x08000000); no slice preset uses IsPlayerPOV;
+* the per-parameter FMOD clamp constants of non-reverb effects;
+* categories other than the two above keep Default. No slice preset defines them, so this has no audible effect.
+
+### Zones / reverb (A1) — CONFIRMED ORIGINAL
+* **`SoundMixer::activateReverb` = `SeqAct_Reverb.Activated` (0x82764858):**
+  * keeps one global current-reverb slot (0x8374FCCC);
+  * a different preset → Enable(new), then **explicitly** Disable(previous, force 0);
+  * the same preset → no-op (no Enable, no ref-count change, no timer reset);
+  * Flush (level change) resets the slot to None and leaves only Default active.
+* **`AmbientAudio` zone touch:**
+  * a Touch fires on the frame the local pawn starts overlapping a trigger volume;
+  * Zone.Enter (0x827892D8) changes the current zone only when it differs;
+  * the previous zone's scene ends (its pool stops), and the new zone's scene starts its pool and the reverb.
+* **No exit restoration:** none of the 9 Streets zones links UnTouched. Leaving every volume keeps the last reverb and
+  pool, and walking back from an inner volume into a still-overlapping outer one keeps the inner reverb. The PASS 4
+  "INFERRED" zone stack is removed.
+* **Default (dry):** before the first Touch and after a level load (`AmbientAudio::load` → mixer Flush).
+* **Zone geometry checks:** previously every 0.2 s, now every frame, with Touch edges.
+* **HIGH:** several Touches in the same frame are processed in zone order, so the last one wins.
+* **PROVISIONAL (unchanged):**
+  * the pawn is tested as a point 1 m above its origin, not as its collision cylinder;
+  * the I3DL2 reverb DSP internals; the preset parameters and the path into the DSP are CONFIRMED.
+
+### Channel modes (A5) — CONFIRMED ORIGINAL
+* **k2D:** non-positional, with no WFC distance attenuation, rear attenuation or occlusion.
+* **k3D:** positional, pan level 1.0, inverse rolloff, rear attenuation.
+* **kSmartPan / PreferPlayer:** positional; pan level = the 2D↔3D amount; distance attenuation and SmartPanGain
+  still apply.
+* The mode is per cue. No slice cue authors k2D; it is validated with synthetic cues.
+* PASS 4's resolveGains already implemented this; this pass only routes rear and SmartPan attenuation through the
+  native dB conversion.
+
+**UNKNOWN:**
+* FMOD's internal set3DPanLevel mixing law, approximated as equal-power pan × amount (the stereo source is mixed to
+  mono);
+* FMOD's own 3D rolloff for these channels.
+
+### dB → linear (A8) — CONFIRMED ORIGINAL
+* `dBToLinear(x)`: clamp to [−96, 0], with x ≤ −96 giving exactly 0. `SemitonesToRatio(s)`: clamp to ±36, then 2^(s/12).
+  Both use double-precision `pow` rounded to float.
+* **Used for:** wave-event Volume, random volume variation, rear attenuation, SmartPanAttenuation3D and occlusion
+  volume. **Not used for mixer volumes.**
+* **Authored positive path:** FOLEY.SHOOT_DRY_FIRE_ELECTRICITY's variation layer (−1…+1 dB) is now capped at
+  0 dB, so no boost.
+* **HIGH:** the variation is converted separately and multiplied with the event Volume, since the report lists them as
+  separate uses.
+* **UNKNOWN:** whether the clamp applies to root-level `Volume`, which is not separately re-checked in A8. That path
+  stays unclamped; all slice root volumes are ≤ 0 dB, so there is no audible difference.
+
+### Vehicle loops (A6)
+**CONFIRMED ORIGINAL, already implemented by PASS 3 VehicleAudio and re-validated:**
+* looping is per wave event (bLooping → loop);
+* intro, loop and outro are separate cues (BOOST_START → BOOST_LOOP → BOOST_END; DRIVE_ONLOAD / OFFLOAD);
+* cue-level LoopStart / LoopEnd are unused;
+* stop is an immediate linear fade (engine 0.2 s, boost 0.15 s; fade-in 0.1 s), with no loop-boundary wait;
+* a state switch crossfades;
+* replaying the same cue is a no-op.
+
+**New: loop-point plumbing.**
+* `IAudio::setLoopPoints(sound, startFrame, endFrame)`; Win32Audio stores a per-sample loop region (source frames
+  scaled to the output rate).
+* (Superseded by PASS 6: the regions come from AssetTools vehicle_audio_loops.json via VehicleLoops.inc;
+  `fsb_loop_points.json` was never produced and its loader is removed.)
+
+**UNKNOWN (AssetTools):**
+* the exact FSB loop start/end samples (RESOLVED in PASS 6: whole sample, from the FSB headers).
+* That fallback is FMOD's behaviour only when a sample has no header loop points, so it is **not** claimed as
+  correct for the vehicle loops.
+* The extracted .wav files carry no `smpl` chunk (0 of 400 `*_LP` files checked).
+
+**HIGH:** the AudioComponent FadeIn/FadeOut curve is stock UE3 linear (per the report; not re-verified natively).
+
+### Line / volume emitters (A7) — CONFIRMED ORIGINAL
+* The PASS 2 placement already matches the native formulas, recomputed every frame:
+  * **Line:** the closest point on origin ∓ X·LineLength/2 (X includes DrawScale3D), clamped to the ends.
+  * **Volume:** an oriented box, with the listener's local coordinates clamped to ±Radius per axis. Inside the box,
+    the source is at the listener.
+* The AudioComponent sits at that point, so pan, attenuation, SmartPan distance and occlusion all use it.
+* Promoted from PROVISIONAL.
+
+### Validation
+**Native-semantics suite** (`tools/systems/audio_native_suite.cpp`; recording backends plus the real Win32 backend):
+**173 pass / 0 fail**.
+* **Mixer** (real authored presets plus synthetic tables):
+  * higher, lower and equal priority activation; per-category fall-through;
+  * Duration 1 expiry with the outgoing FadeOut; Duration 0 on the next tick; Duration −1 infinite;
+  * re-enable resets the timer, and RefCount 2 expires over two ticks;
+  * interrupted fade continues from the current value; forced vs plain Disable; Flush;
+  * MASTER_WET ramps linearly in mB, seconds and Hz.
+* **Zones:**
+  * all 9 Streets zones entered in sequence; exactly one REVERB_* is active after each switch (the explicit-Disable
+    path), and each settled Room matches audio.json;
+  * re-entering the current zone does nothing (no Enable, no environment update);
+  * leaving all volumes keeps the reverb;
+  * DEC_ROOM_UPPER (223) → EXTERIOR (182) fades linearly over the outgoing 0.25 s;
+  * nested Touch: outer → inner → back to outer keeps the inner reverb (pair EXTERIOR / DEC_ROOM_UPPER);
+  * level reset returns to Default (dry).
+* **Emitters,** checked against an independent re-implementation of A7 in UE space:
+  * line: perpendicular, parallel travel and beyond either end; the source moves with the listener and is never at
+    the actor origin;
+  * volume boxes, axis-aligned and rotated: inside → at the listener; outside → a corner point, not on a sphere;
+  * occluding cues trace to the runtime point; cues authored `EnableOcclusionVolume=False` never trace.
+* **Gain:**
+  * −96 and −97 dB → silent, so no voice launches;
+  * −6 dB → 0.5011872; 0 dB → 1; +3 dB → 1;
+  * the authored ±1 dB variation never exceeds the 0 dB level.
+* **Channel modes on the Win32 backend:**
+  * k2D: atten 1 and pan 0 at 1000 m.
+  * k3D: rolloff 0.4, pan ±1, following a moving source.
+  * Cull: silent beyond DistanceMax, with no floor.
+  * Rear attenuation: −6 dB behind.
+  * SmartPan: pan level 0.5 with attenuation kept.
+  * PreferPlayer:
+    * within 14 m: pan 0, with volume from listener → true source;
+    * beyond 14 m: a linear 0.5 s transition to the listener reference;
+    * the source never moves.
+
+**Game runs** (`WFC_CUELOG`, `WFC_MIXERLOG`, `WFC_SYSPROF`, `WFC_RENDERSTATS`):
+* scenarios: idle, movement, Fine Aim with fire, firing, sustained firing, transform still and moving, jump, hover,
+  Boost, repeated Boost (`WFC_AUTOBOOST_CYCLE`, a new test-input hook), Nitro/Ram with Dash, and transform out of the
+  vehicle while its audio is active.
+* **Repeated Boost:**
+  * the BOOST_START, BOOST_LOOP and BOOST_END cues each play;
+  * VEHICLE_BOOST_END ducks SFX_WET_VEH_ENGINE over 0.2 s and restores over 3.0 s;
+  * loops stop with 0.15 s / 0.2 s fades.
+* **Transform out of the vehicle:** ONLOAD stops (0.2 s) and the squeal stops (0.5 s); no vehicle cue remains.
+* **Not exercised in game:** vehicle jump (DRIVE_JUMP_START / VEHICLE_JUMP). Gameplay movement has no vehicle jump;
+  the preset is covered by the suite.
+* **Frame time (ms, 120-frame averages):**
+
+  | Scenario | Range | Mean |
+  |---|---|---|
+  | idle | 6.1–10.6 | 6.7 |
+  | movement | 4.5–10.2 | 5.4 |
+  | Fine Aim | 6.9–13.0 | 9.4 |
+  | firing | 6.9–13.5 | 10.2 |
+  | sustained firing | 6.9–13.4 | 9.6 (PASS 4: 7.2–13.4) |
+  | hover | 3.8–7.8 | 4.5 |
+  | Boost | 3.7–8.0 | 4.6 |
+  | repeated Boost | 3.7–8.0 | 4.3 |
+  | Nitro | 4.3–8.0 | 5.0 |
+
+  Zone transition + emitter placement costs 0.005 ms/frame (suite, `-O2`).
+* **Cleanup:**
+  * after vehicle runs, particles and meshes → 0;
+  * queued events stay bounded (idle 1–13, sustained 4–17); orphaned events are dropped;
+  * live cues ≈ 25 = the ambient bed.
+* **Regression:**
+  * wfc_fidelity 194 / 0 / 19;
+  * collision seg 0 mismatches;
+  * runtime probe 31 PASS / 0 FAIL, 1 KNOWN (`boost_fx_emitted`, Rendering);
+  * Experimental audio-attach 240 pass / 0 FAIL / 10 KNOWN (world impacts and zone pools; 0 player-owned left
+    behind).
+
+### Dependencies
+* **AssetTools:**
+  * Vehicle FSB sample-header loop start/end (RESOLVED in PASS 6).
+  * Streets physical material → surface footstep and landing sounds (RESOLVED in PASS 6: no surface variation exists).
+  * Pending pickup effect mesh/emitter data.
+* **Rendering:** unchanged. The 4 material-only vehicle emitters and the HDR material path draw once 5e74895's
+  renderer is integrated.
+* **Gameplay:** vehicle jump (needed to exercise DRIVE_JUMP_START / VEHICLE_JUMP in game).
+* **ReVa:**
+  * the IsPlayerPOV flag;
+  * the root `Volume` dB clamp;
+  * FMOD set3DPanLevel law;
+  * FMOD channel rolloff settings.
+
+---
+
+## MILESTONE 03 SYSTEMS PASS 4 — NATIVE AUDIO FIDELITY + RENDERING FX HANDOFF (2026-10-02, agents/systems)
+
+Evidence: RE lane report `RE-Workspace/notes/MILESTONE03_AUDIO_NATIVE_FIDELITY.md` (commit 76bb0a, read-only),
+Engine/HM_Engine class defaults in authored.db, and Rendering checkpoint 5e74895 (interface only).
+Classification: **CONF** confirmed original · **HIGH** · **PROV** provisional · **UNK** unknown.
+This pass supersedes PASS 3 where they differ; in particular the listener-only SmartPan default is gone.
+
+### Spatialization — native `FmodAudioDevice::ComputeSourceSpatialization` (0x82759B08) [CONF]
+| Term | Implementation |
+|---|---|
+| Source position | the AudioComponent / socket's own world location; never moved to the pawn |
+| Volume | `Min / ((max(d,Min) - Min) * Rolloff + Min)`, d = listener → source |
+| Cull | `max(d,Min) > DistanceMax` → silent (previously held at the DistanceMax level) |
+| Rear | `× (1 - (1 - dB2lin(RearAttenuation)) * (-f))` when `f = Front · dir < 0` (previously dB-scaled) |
+| Spatialization enum | 0 **k3D (class default)**, 1 k2D, 2 kSmartPan, 3 kSmartPan_PreferPlayer. The 9 unauthored slice cues are k3D (fully 3D), not SmartPan as PASS 3 assumed |
+| SmartPan amount | `ds` = listener distance (kSmartPan) or **PreferPlayer reference distance** (type 3); equal 2D/3D distances → step; otherwise linear between them (reversed if 2D > 3D) |
+| SmartPanAttenuation3D | gain `1 - (1 - dB2lin(SPA3D)) * amount` — new; authored −3 on vehicle cues, −6 SHOOT_LOW_AMMO, −9 SHOOT_TAIL, 0 SHOOT |
+| Secondary category | by distance when EnableSecondaryCategory; no slice root enables it (class default false) → no effect here |
+| dB2lin | assumed 10^(x/20) [HIGH, per report] |
+
+### PreferPlayer pan reference (`UpdatePreferPlayerLocation` 0x8275F658) [CONF]
+* `pref = P + (L − P) · ramp`, with P = local pawn origin and L = listener. The ramp targets 0 while the camera
+  is within MaxPlayerSmartPanRadius 1400 UU of the pawn and 1 beyond.
+* `SetTarget` gives a linear rate that reaches the target in SmartPanPreferPlayerTransitionTime 0.5 s;
+  overshoot clamps.
+* Only the type-3 pan amount uses it; volume and cull keep listener → true source. Always on;
+  the PASS 3 `WFC_SMARTPAN_PREFERPLAYER` switch is removed.
+* **Measured:**
+  * Footsteps, jump, landing, transform and vehicle cues (type 3) now pan 0.00 with the camera at 8–10 m.
+  * Their sources stay at the pawn origin, the socket, or AUDIO_ROOT (0.2–1.5 m from the owner).
+  * k3D cues (Optimus idle foley, weapon idle notifies) keep full 3D pan −0.19…−0.29 and listener rolloff
+    (0.45–0.49).
+  * SHOOT stays at gain 1.0.
+* [HIGH] P is our pawn mesh origin, which is also where pawn-attached sources sit. UE3 uses Actor.Location for
+  both, so their relative distance is the same.
+
+### Concurrency (`USoundCue::RegisterInstanceLimiting` 0x82E767B8) [CONF]
+* `Engine.Default__SoundCue`: **MaxConcurrentPlayCount 5, InstanceLimiting kKillFarthest**.
+  * None of the slice's 73 cues authors InstanceLimiting, so all are KillFarthest.
+  * The 55 that author no count are limited to 5, not unlimited as before (e.g. 12 crater emitters → 5 sounding).
+* Policies:
+  * 0 = unlimited;
+  * kKillOldest stops the oldest registered;
+  * kKillNewest refuses the new sound;
+  * kKillFarthest walks newest → oldest, keeping the instance at least as far (squared distance to the
+    listener) as the new sound, ties → older. It stops that instance, or refuses the new sound when it is
+    itself the farthest.
+* Stops are immediate. Registration order = instance id. The guessed "steal oldest" is removed.
+* Attached cues at one point (SHOOT at the muzzle) tie → the oldest is stopped, matching the native tie rule.
+
+### Mixer presets (P13) — CONF parts only
+* **CONF:**
+  * the cue's PlayMixerPreset is enabled when its instance plays and disabled when it ends;
+  * presets are ref-counted per name, priority-ordered, and re-enabling resets the elapsed timer;
+  * data VEHICLE_JUMP (−18 dB) and VEHICLE_BOOST_END (−4 dB) on SFX_WET_VEH_ENGINE.
+* **UNK** (not filled by ear):
+  * the fade curve (linear over the authored FadeIn/FadeOut times is used as a placeholder);
+  * per-category combination of overlapping presets (highest priority is used);
+  * Duration > 0 expiry (not applied; the PASS 3 duration hold was removed).
+
+### Reverb / Streets zones (P14)
+* **CONF path:** FMOD I3DL2 reverb on MASTER_WET, selected by REVERB_* mixer presets. Ambient-zone Enter →
+  SeqAct_Reverb → EnableMixerPreset; fade in/out 0.25 s.
+* **CONF priorities:**
+  * EXTERIOR 182, NEU_BASE 183, AUTO_ROOM_01 216, DEC_ROOM_LOWER 217, NEU_HALL 218, TRAIN_DEPOT 219,
+    AUTO_ROOM_02 220, TRAIN_TUNNEL 221, NEU_STAIRWELL 222, DEC_ROOM_UPPER 223;
+  * the enabled zone presets resolve highest-first.
+* **Verified** with the real AmbientAudio and audio.json (`work/m3/zonetest`, recording backend), every switch
+  at fade 0.25 s:
+  * EXTERIOR −800 / 2.65 / −600;
+  * NEU_BASE −650 / 2.06;
+  * TRAIN_TUNNEL −900 / 4.32 / −800;
+  * DEC_ROOM_UPPER −936 / 3.14;
+  * AUTO_ROOM_02 −900 / 4.81 / −800.
+* **INFERRED (ReVa request):** entering a zone disables the previous zone's preset (the native
+  AmbientAudioZone exit path was not recovered).
+* **PROV:** the reverb DSP internals (FMOD's SFX-reverb algorithm) and the Echo stage; parameters are CONF.
+
+### Rendering handoff 5e74895 — vehicle FX
+* **Materials:** every VehicleFx emitter now carries its cooked ParticleModuleRequired.Material path.
+  * Sprite batches pass it as `ParticleBatch::material`.
+  * When `IRenderer::evaluatesFxMaterials()`, colours are the authored HDR values (colour × colorMul ×
+    colour-over-life × brightness × tint), unclamped, with colorScale 1 and no GL1 stand-ins (intensity 0.1,
+    fresnel).
+  * Otherwise the previous GL1 fallback runs unchanged.
+* **Renderer interface:** Rendering's `Renderer.h` hunk (material field, evaluatesFxMaterials, reticle
+  declarations) was applied verbatim so the merge is clean; this branch's renderer returns false until
+  integration.
+* **Four material-only emitters now spawn** (drawn only through their original graphs, no substitute visual):
+  * hover `base_glow_Dup_Dup` (Glow_Mod_MAT);
+  * hover `rays_Dup` (Trail_Distort_MAT);
+  * ram `dust` (Distortion_Cloud_01_MAT);
+  * ram `rays_Dup` (Trail_Distort_MAT, world space).
+
+  LOD-0 values are CONF, roles MED.
+* **Per-loop bursts:** EmitterLoops 0 emitters re-fire their BurstList every loop of EmitterDuration (Rings_Dup
+  0.2 s, boost loop glow 0.5 s, base_glow 0.5 s, dust U[0.1,0.2] s) [HIGH: UE3 emitter loop semantics].
+* **Bounded:** hover live parts ~250 (was ~110), all → 0 after leaving the vehicle.
+
+### Validation
+* **Scenarios:** stationary foley, movement, transform while moving, fine aim, jump/landing, hover, boost,
+  dash, nitro, firing, ambience, zone transitions (`WFC_SPATIALLOG`, `WFC_AMBLOG`, `WFC_CUELOG`).
+* **Attachment:** Experimental audio-attach (local spy build) — 0 player-owned left behind; 10 KNOWN =
+  world pools / impacts.
+* **Performance and harnesses:**
+  * sustained-fire windows 7.2–13.4 ms (unchanged); ~900 RPM unchanged;
+  * wfc_fidelity 194/0/19; probe 31/0/1; collision 0 mismatches.
+* **Cleanup:** queued events → 0, weapon particles / meshes → 0.
+
+### Requests
+* **ReVa:**
+  * AmbientAudioZone exit / previous-zone preset disable;
+  * mixer applier fade curve and overlap combine;
+  * Duration expiry;
+  * FMOD k2D / k3D channel mode;
+  * SoundNodeRoot LoopStart / LoopEnd;
+  * line / volume emitter placement;
+  * dB2lin exact formula.
+* **AssetTools (standing):** Streets HmPhysicalMaterialProperty FootstepSounds (RESOLVED PASS 6); pickup FX mesh data
+  (delivered 7a69756; see PASS 6).
+
+---
+
+## MILESTONE 03 SYSTEMS PASS 3 — SCRIPT-CONFIRMED VEHICLE AUDIO, LANDING RULES, SPATIALIZATION EVIDENCE, AUDIO THREAD (2026-10-02, agents/systems)
+
+New evidence used (read-only):
+* the RE lane's decompiled UnrealScript (`RE-Workspace/work/script/decomp`): HmVehicleAudioComponent,
+  HmPlayerVehicleAudioComponentImpl, TnCarForm, TnTruckForm, TnAcrobaticsManager, HmFootstepComponent,
+  HmPawn, SeqAct_PlayPlayerPositionalSound;
+* its notes (`TARGETED_PASS2`);
+* `Xe-TransEngine.ini [HM_Engine.FmodAudioDevice]`;
+* cooked SoundMixerProperties and MP_IAC_Streets_AUDIO_m.
+
+Classification: **CONF** = confirmed original, **HIGH** = high confidence, **PROV** = provisional, **UNK** = unknown.
+
+### Vehicle audio — now a port of the original script (`VehicleAudio`)
+| Behaviour | Original | Class |
+|---|---|---|
+| Boost start | `PlayBoostSound`: BoostSound (BOOST_START) as a looping component, FadeIn 0.1; **wheels loop only if `_IsOnGround`**, same fade | CONF |
+| Boost wheels | stopped (fade 0.15) once `BoostWheelsTimer >= 0.27` and not on ground | CONF |
+| Boost end | `StopBoostSound`: fade both 0.15, play BoostStopSound (BOOST_END) | CONF |
+| Engine states | Boosting > JumpReving (airborne >= JumpRevTime 0.25) > Forward/Reverse On/OffLoad from MovementDirection (speed > 1 mph, `Velocity . Rotation >= 0`) and `_EngineLoadState` | CONF |
+| Engine load | Hovering.UpdateSounds: 1 if stick forward > 0.01, 2 if back < -0.01, else 0 | CONF |
+| Engine fades | EngineFadeIn 0.1 / FadeOut 0.2, BoostFadeIn 0.1 / FadeOut 0.15; loops faded in (new `SoundCues::fadeIn`) | CONF |
+| Speed parameter | 15-sample moving average of `|Velocity| x 0.0223694` mph | CONF |
+| Land | on touchdown, the highest TimeInAirThreshold (0.15 / 2.0) reached; Boosting -> wheels table, else hover | CONF |
+| Hover dash | `TnTruckForm.Hovering.DoDash` -> `PlayBoosterSound` = VEH_OPTIMUS_RAM_BOOST_START (was unassigned) | CONF |
+| Nitro | `StartNitro` -> `PlayNitroSound` only | CONF |
+| Ram alert | no script calls `PlayCustomLoopingSound` -> **removed** (was played at nitro start) | CONF (absent from script) |
+| Ram impact | `ClientPlayRammingSound` -> `PlayRamSound` on the truck: **owner-attached** (was world at the hit point) | CONF path / HIGH attach |
+| Jump | `PlayAscendSound` on Hovering/Driving jumps | CONF |
+| Tire squeal | `_IsOnGround && avg mph >= 20` with `_WheelSlipRatio`: Hovering feeds 0, Driving feeds `CarSimulation.SlipAngle` (Gameplay). Not gated on boost | CONF; driving input pending Gameplay |
+| One-shot events | `HmPawn.PlaySoundEvent` -> `PlaySound(cue, bNotReplicated, , bStopWhenOwnerDestroyed=true)` without SoundLocation | CONF script / HIGH attach |
+
+### Mixer presets (PlayMixerPreset) — new
+`DRIVE_JUMP_START` → **VEHICLE_JUMP**: SFX_WET_VEH_ENGINE ×0.126 (−18 dB), fade in 0.3, duration 1.0, fade out 1.0, priority 270.
+`BOOST_END` → **VEHICLE_BOOST_END**: ×0.631 (−4 dB), 0.2 / 1.0 / 3.0, priority 264.
+Values CONF; envelope and priority resolution HIGH. Verified: boost end triggers the duck.
+
+### Robot landing / footsteps
+* **[CONF] Landing selection** (TnAcrobaticsManager):
+  * `FallDistance = _FallBaseHeight - Height`, where `_FallBaseHeight` is set by `Falling.BeginState` (the
+    ledge, or the jump apex: Jumping → FallingFromJump on descent) and on ground.
+  * `ForwardSpeed = |Velocity . Rotation|`.
+  * First `LandingAnims` match in array order; none while transforming / meleeing.
+  * Implemented exactly (the speed was previously horizontal magnitude).
+  * Standing and running jumps fall 514 UU → Nav_Land_02 → FS_LAND_HARD.
+* **[CONF] Footsteps** (HmFootstepComponent):
+  * FootstepType 0 → Walk, 4 → Run, 1 Scuff, 3 Land, 10 HardLand; no speed-based choice.
+  * The surface PhysicalMaterial's HmPhysicalMaterialProperty.FootstepSounds override the defaults.
+  * None are in authored.db (0 objects), so the component defaults apply. CONFIRMED AUTHORED in PASS 6: every
+    Streets surface resolves to these defaults.
+* **Landing loudness, proved from data:**
+  * The milestone-02 "soft/squishy" landing was the wrong cue (`RELOAD_AIR_RELEASE_THUMP` placeholder,
+    Experimental's spy log).
+  * The authored FS_LAND_HARD is −5 dB root (main layer), servo −4 (var −3) and groan −4 (var −6), category
+    SFX_WET_NAV (1.0), DistanceMin 15 m. Ion Blaster SHOOT is −9 dB root × its distance curve, same
+    category gain. A hard landing is therefore authored ~4–6 dB above a single shot.
+  * No class or attenuation error was found. Levels unchanged.
+
+### Player-owned spatialization (PRIORITY 1)
+* **Evidence:**
+  * 32 of the slice's 41 table cues are `kSmartPan_PreferPlayer`; 9 author none (class default enum UNK).
+  * `[HM_Engine.FmodAudioDevice] SmartPanPreferPlayerTransitionTime=0.5, MaxPlayerSmartPanRadius=1400.0`
+    (also `MaxChannels=96`, `OcclusionCheckInterval=0.25`).
+  * The names indicate PreferPlayer SmartPan is measured from the local player while the player is within
+    14 m of the listener, which would centre the player's own sounds. The native code is not decoded.
+* **Default kept: listener (camera) reference — PROV.**
+  * `WFC_SMARTPAN_PREFERPLAYER=1` enables the player-referenced model (ramp 0.5 s, 1400 UU radius) for A/B.
+    Verified: footsteps pan −0.29 → 0.00, weapon −0.13 → −0.06.
+* **`k2D` cues play non-positional and unoccluded [CONF]:** only `PP_OPEN_ROOMS` (AUTO_ROOM_02 pool).
+* **Instrumentation** `WFC_SPATIALLOG=1` (every 0.25 s per attached instance): cue, owner/socket, source,
+  owner position, source–owner distance, listener, distance, pan, attenuation, occlusion, channel gains —
+  read back from the mixer.
+* **Measured** (walk, transform, jump, boost, fire):
+  * Sources stay 0–0.3 m from the pawn origin; the weapon sits 2.7–3.9 m out (the muzzle/hand socket);
+    vehicle cues sit at AUDIO_ROOT 1.5 m.
+  * Camera listener 5–10 m away; own sounds pan −0.29 (Optimus left of centre), vehicle 0.00 (inside its
+    2–10 m SmartPan band).
+  * Footstep / transform / vehicle distance gain 1.0; weapon idle notifies 0.43 (DistanceMin 4 m).
+
+### Streets environment
+* **[CONF] Structure:** no ReverbVolume / AudioVolume actors in Streets; the environment is 9
+  SeqAct_AmbientAudioZone + 9 SeqAct_Reverb on 10 TriggerVolumes.
+* **[CONF] Zone pools** (SeqAct_PlayPlayerPositionalSound script):
+  * first delay `Rand(DelayMin, DelayMax)` on START, re-rolled per play, STOP ends scheduling;
+  * position: random yaw 0–359°, `Rand(DistanceMin, DistanceMax)` in the horizontal plane, world-fixed
+    component;
+  * reference = "Source Actor" variable, else `AudioDevice.Listeners[0].Location`. No variable is linked
+    [HIGH], so the reference is now the **listener** (was the pawn).
+* **PROV:** the reverb DSP topology is still my reconstruction from authored I3DL2/Echo parameters; FMOD Ex's
+  SFX reverb implementation is not recoverable from local data (ReVa request). Fade and wet/dry routing per
+  category are CONF.
+
+### Ambient emitters
+* **[CONF]** 40 AmbientSound AudioComponents: bAutoPlay, VolumeMultiplier 1, PitchMultiplier 1,
+  bAllowSpatialization, bUseOwnerLocation.
+* **[CONF] Concurrency:** MaxConcurrentPlayCount 3 on EMIT_FLOOD_LIGHTS (5 emitters) and EMIT_MONRAIL_IDLE_LP
+  (from the cooked cues; audio.json lacks it). The virtualizer keeps the 3 most audible.
+* **PROV:**
+  * shaped-emitter placement (GetLinePoints / GetExtents are native);
+  * the 24-voice budget and 0.5 s fades;
+  * always-on activation of the 30 shaped emitters (no component data).
+
+### SoundCue nodes (PRIORITY 4)
+* **[CONF] Nodes in use:** the slice cues use only SoundNodeRoot (41) → SoundNodeWaveEvent (134) →
+  SoundNodeWaveEx (262); Streets uses the same three classes.
+* **No other node types exist in the slice:** random, mixer, modulator, concatenator, delay, attenuation and
+  distance-crossfade nodes are absent. Their roles are fields of these classes and are implemented:
+  * random variant choice and ChanceToPlayNone;
+  * volume/pitch variation;
+  * event `Time` delays;
+  * bLooping;
+  * distance attenuation and SmartPan;
+  * VolumeCurve over SOUND_DISTANCE (distance crossfade);
+  * Envelope.
+* **Authored but not modelled:**
+  * LoopStart/LoopEnd (8/11 vehicle roots, semantics native: UNK, ReVa);
+  * SmartPanAttenuation3D (19), EnableDoppler (15), Priority / OverridePriority / PlayWhenSilent;
+  * NonLocalPlayerPitch (remote players only);
+  * SecondaryCategory (all None in the slice).
+
+### First-play audio cost (PRIORITY 5)
+* **Measured:** cue `play()` 0.05–0.2 ms, wave decode at load only, mixing 0.7–1.4 ms per 21 ms block.
+* **The cost was `waveOutWrite` blocking inside the driver on the game thread:** 17–19 ms at device start,
+  and **~170 ms** when the 4-block queue had drained during load (driver restart).
+* **Fixed:** mixing and submission run on a dedicated audio thread (2 ms pump; game-thread calls take a short
+  mutex; `waveOutWrite` outside the lock; wave storage made reference-stable).
+* **Game thread now:** no audio stall. The remaining first-frame hitch (~520 ms at tick 4) is Rendering's
+  first-use shader/texture builds.
+* **Prewarm:** the original loads the level's banks with the map, which is equivalent to our load-time decode;
+  no extra preloading.
+
+### Occlusion validation (PRIORITY 6)
+* **Rays:** 76–192 occlusion rays/s (4/s per live instance at the authored 0.25 s); Systems cue section
+  0.05–0.17 ms/frame.
+* **Player-owned:** body-referenced, 2 of ~300 standing shots and 0.8 % while walking into walls muffled.
+* **Map emitters:** about half the live instances are occluded at the indoor spawn.
+
+### Cleanup (PRIORITY 8)
+* **Suite:** idle, burst, sustained fire (full magazines + reloads), boost/nitro/transform back, transform
+  cycling, fire+move+turn.
+* **Results:**
+  * queued events return to 0;
+  * weapon particles / meshes → 0;
+  * vehicle parts → 0 after leaving the vehicle;
+  * cue instances settle at the ~25 ambient loops;
+  * level FX steady at ~30 particles.
+* No caps added.
+
+### Performance
+* Idle 6.1 ms (audio off the game thread).
+* Sustained-fire windows 7.7–13.6 ms.
+* Boost / nitro / back 5.2–8.4 ms; transform cycling 5.0–5.9 ms.
+* ~900 RPM unchanged.
+* wfc_fidelity 194/0/19; runtime probe 31/0/1; collision 0 mismatches.
+* Experimental audio-attach (local spy build): 0 player-owned left behind; 11 KNOWN = world pools/impacts.
+
+### Requests
+* **ReVa:**
+  1. `FmodAudioDevice` SmartPan PreferPlayer code (the reference point and radius use).
+  2. SoundNodeRoot LoopStart/LoopEnd playback (is a looping component looped over that region?).
+  3. `HmAmbientSoundLineEmitter.GetLinePoints` / `HmAmbientSoundVolumeEmitter.GetExtents` and emitter
+     activation.
+  4. FMOD SFX reverb / DSPEffectConfig bit map.
+  5. MaxConcurrentPlayCount resolution (steal vs reject).
+  6. SpatializationType enum order (class default).
+* **AssetTools:**
+  1. Streets PhysicalMaterial → HmPhysicalMaterialProperty.FootstepSounds (RESOLVED PASS 6).
+  2. Cue-level MaxConcurrentPlayCount in audio.json (RESOLVED PASS 6: values match).
+  3. (standing) pickup FX mesh data.
+
+---
+
+## MILESTONE 03 SYSTEMS PASS 2 — WORLD SOUND BED, ZONE REVERB, MIXER, LEVEL FX, ATTACHMENT AUDIT (2026-10-02, agents/systems)
+
+### Attached-audio model (reusable; nothing hard-coded per cue)
+`SoundCues::Emitter{pos, owner, offset, socket}` with a World resolver (`World::resolveCueOwner`):
+| Class | Original mechanism | Owner | Examples | Conf |
+|---|---|---|---|---|
+| A actor-attached | HmAnimNotify_Sound / HmAnimNotify_SoundEvent (no SocketName), HmPlayerVehicleAudioComponent | `kOwnPawn` (+ world offset, e.g. AUDIO_ROOT +147.25 UU) | transform, footsteps, landing, idle foley, vehicle boost / engine / jump / land / nitro / alert | CONF class / HI attach |
+| B socket-attached | notify SocketName / weapon sockets | `kOwnPawn` + bone, `kOwnWeapon` + socket | SHOOT / SHOOT_TAIL at MuzzleFlash, reload / idle notifies on the weapon mesh, fine aim | HI |
+| C persistent loops | vehicle audio component loops | attached as A | engine ONLOAD / OFFLOAD / JUMP_LOOP, boost loop, tire squeal | CONF |
+| D world one-shots / world loops | impacts at the hit, map AmbientSound / shaped emitters, Kismet PlayerPositionalSound pools | `kWorld` | IMPT_WORLD / IMPT_DMG / RAM_IMPACT, 70 map emitters, PP_* pools | CONF |
+| E non-positional | — (no slice cue needs it) | `kUI` | API only | — |
+
+Delayed wave events start at the owner's position at launch time. Voices of attached instances follow the owner
+every tick until the voice ends (`IAudio::isPlaying`; a backend that cannot report keeps updating to the
+10 s bound). A holstered weapon (mid-transform) resolves to the pawn carrying it.
+**Measured with Experimental's `audio-attach.ps1`** (their recording backend built locally against this
+branch, same six scenarios; not committed):
+* milestone-02: 20 KNOWN "left behind".
+* now: **0 player-owned left behind**. The 19 remaining KNOWN are world sounds that must stay put:
+  Ion Blaster `IMPT_WORLD` impact layers (MTL_BULLET_IMPT_SHEET_*, ELEC_SPARKBLAST_FLANGE_*) and the
+  `PP_CORRIDORS` zone pool (PP_DECO_MECH_*).
+* Experimental handoff: classify `IMPT_*` / `PP_*` voices as world.
+* `WFC_CUETRACK=1` logs the transform cue position vs the pawn: it tracks within one step (≤0.26 m at
+  14 m/s) in both directions.
+
+### SoundCue runtime
+* **Node types:** the slice uses only SoundNodeRoot → SoundNodeWaveEvent → SoundNodeWaveEx. That covers 41
+  table cues + 32 map cues: weapon, Optimus, vehicle, transform, Streets. No mixer / concat / modulator /
+  attenuation nodes exist in WFC cues; the root carries attenuation and the wave event carries randomization,
+  delay (Time), looping and curves.
+* **Supported now:** root volume/pitch + variation, DistanceMin/Max + RolloffFactor (FMOD inverse), SmartPan
+  2D/3D, **RearAttenuation**, Category (wet/dry routing), SoundParameter (distance / speed / tire slip);
+  event Time, volume/pitch + variation, ChanceToPlayNone, bLooping, random wave choice, Volume/PitchCurve,
+  Envelope; **5.1 pan matrix folded to stereo** (Default__SoundNodeWaveEvent: Center/BackL/BackR/LFE −96 dB;
+  rear-only layers −3 dB [MED]).
+* **Data-loaded cues:** cues load from the generated table and from a map's `audio.json`.
+* **Not used by any slice cue (not implemented):** root DelayMin/Max, LoopStart/LoopEnd (2 map cues carry the
+  class-default LoopEnd), Doppler, SecondaryCategory. Occlusion: see "Occlusion" below.
+
+### Attenuation / panning (audit)
+* **Source:** each instance's resolved 3D position (owner, socket or world).
+* **Listener:** the camera pose given to `IAudio::setListener` each frame (position, forward, right).
+* **Gain:** FMOD inverse rolloff `min/(min + rolloff·(d−min))`, flat inside DistanceMin, held past DistanceMax
+  (FMOD Ex inverse semantics).
+* **Pan:** equal-power `dot(dir, listenerRight)` (sin of the azimuth, gentler than FMOD's speaker-angle pan,
+  no exaggerated separation), blended to centre inside SmartPanDistance2D and full beyond SmartPanDistance3D.
+* **Rear:** RearAttenuation dB for sources behind the listener.
+* **Not world origin, not player-based.** [MED] kSmartPan_PreferPlayer may measure the local player's own
+  sounds from the pawn rather than the camera (that would make own sounds more centred); unresolved without
+  native RE.
+
+### Mixer / sound class (gain staging)
+* **Routing:** voices route to MASTER_WET (every `SFX_WET_*` category; all slice cues) or MASTER_DRY, as in
+  `SoundMixerProperties.SoundGroupCategoryMappings`.
+* **Category volumes:** all 1.0 on the slice's paths (see pass 1), so no relative category gain.
+* **Master compressor:** Master's Default preset, Threshold −6 dB, Attack 10 ms, Release 50 ms, GainMakeup 0.
+  Read from audio.json; applied as a hard-knee limiting compressor [MED: DSPEffectConfig bit 32 read as the
+  compressor; FMOD Ex compressor ratio not documented].
+  * Measured peaks: −19…−15 dBFS idle, −8 dBFS sustained fire, −7 dBFS fire + movement. It does **not**
+    engage in these scenarios, so the weapon mix is unchanged.
+* **Master level:** Master's own Default volume is 0.708 (−3 dB); the rebuild keeps master 0.5 [PROV] (the
+  original's FMOD output scaling is unknown), so the relative mix is what is reproduced.
+
+### Environment / reverb
+`AmbientAudio` loads ExtractedAssets/VerticalSlice/Maps/MP_IAC_Streets/audio.json at runtime.
+* **9 Kismet zones:**
+  * TriggerVolume polygons, a ray-parity point test on the pawn (camera ignored, as authored), checked every 0.2 s.
+  * Entering a zone applies its `REVERB_TRANS_MP_STREETS_*` MASTER_WET preset (Reverb + Echo) with the
+    preset's FadeInTime (0.25 s) and starts its PlayPlayerPositionalSound pools (looping random one-shots,
+    DelayMin–Max, 20 m from the player, world-fixed, [MED] random horizontal bearing).
+  * Leaving without entering another keeps the zone (INFERRED, no on_untouched ops).
+  * The default spawn is in DEC_ROOM_LOWER.
+* **Reverb DSP [MED structure, CONF parameters]:**
+  * send HF shelf at HFReference/RoomHF; 4 early-reflection taps from ReflectionsDelay at Room+Reflections mB;
+  * stereo 8-comb + 4-allpass late tank at Room+Reverb mB, comb feedback for the authored DecayTime (RT60),
+    DecayHFRatio as in-loop damping, Diffusion as allpass gain, pre-delay ReflectionsDelay+ReverbDelay;
+  * Echo: Delay / DecayRatio / WetMix / DryMix;
+  * parameters cross-fade over the preset fade.
+* **70 map emitters:**
+  * 40 point, 17 volume, 13 line, all looping map-bank cues at their authored volume/distances.
+  * Volume emitters sound from the nearest point of their box (Radius × actor scale) to the listener, and on
+    the listener when inside (the 7 AMB_* room-tone beds); line emitters from the nearest point of their segment [MED].
+  * [PROV] voice budget: the 24 most audible play, the rest are virtual; 0.5 s fades in/out.
+* **Cost:** mixer 0.7 ms per 21 ms block (1.1–1.4 ms with ~70 voices), about 0.2 ms per frame.
+* **Diagnostic:** `WFC_AMBLOG=1` logs zone, emitters, voices, peak, gain reduction and mix cost.
+
+### Occlusion [CONF parameters, MED trace geometry]
+* **Parameters:**
+  * Engine: `AudioDevice.bEnableOcclusion = true`, `OcclusionCheckInterval = 0.25 s` (Xe-TransEngine.ini).
+  * Per cue: `SoundNodeRoot.EnableOcclusionVolume` defaults to true; only the BL_TRANSFORM cues author it off.
+  * Per surface: `PhysicalMaterial.AudioOcclusionVolume = -6 dB`, `AudioOcclusionTransitionTime = 0.5 s`. That
+    is the class default, used by 61 of 63 materials (one sets the same values explicitly, one 0 / 0);
+    `AudioOcclusionPitch` is unset → no pitch change.
+* **Implemented:**
+  * Every occluding instance re-checks a listener → source line against the collision mesh every 0.25 s
+    (staggered), and fades to -6 dB over 0.5 s.
+  * New instances start at the current state.
+  * The collision mesh carries no physical materials, so the default applies everywhere.
+* **[MED] trace geometry:**
+  * Attached (player-owned) sounds are tested against the pawn body (mesh origin + 1.5 m) rather than the
+    socket. The gun / arm have no collision and the muzzle can poke into walls: testing the socket occluded
+    26 % of shots while walking into walls, the body test 0.8 %.
+  * The last 0.5 m at the source and 0.25 m at the listener are ignored (floor under the feet, an emitter's
+    mounting surface).
+* **Effect:**
+  * Sustained fire standing: 2 of ~300 shots occluded; the weapon mix is unchanged in normal play.
+  * About a third of the map emitter / pool instances are occluded behind walls at the spawn.
+
+### Human-validation aid
+With the debug overlay (B or `WFC_DEBUGDRAW=1`), every live sound source draws as a wire cube: green = pawn-attached,
+yellow = weapon-attached, blue = world, red = occluded. `WFC_CUELOG` lines now carry the occlusion level.
+
+### Pickup / objective FX — not implemented (request)
+`map_fx.json` has 37 more authored particle components on pickup factories:
+* `Pickup_FX` ×27 on ammo, health, flag, bomb and overshield factories;
+* `HealthPickup_FX` ×9;
+* `OvershieldPickup_FX` ×1.
+
+They are not instantiated, because:
+* the factories themselves are not in the rebuild (Gameplay owns pickups: placement, availability, respawn);
+* their emitters with no material are mesh emitters whose TypeDataMesh / mesh is not in map_fx.json;
+* several of their vector distributions are ambiguous between size and scale.
+
+**AssetTools request:** TypeDataMesh (Mesh, bOverrideMaterial) and the per-emitter module class list, if any
+survives, for FX_Pickups_p.FX.{Pickup_FX, HealthPickup_FX, OvershieldPickup_FX}.
+**Gameplay request:** pickup factory actors from spawnpoints.json, with an availability flag the FX can follow.
+
+### Robot movement / landing (pass-1 work kept; status)
+* The landing cue already follows the authored data: LandingAnims by fall height (and horizontal speed) →
+  FS_LAND_DEFAULT / FS_LAND_HARD / FS_LAND_HIGH_FALL + groan.
+* Gameplay still plays Nav_Land for every landing and exposes no landing-clip state, so Systems evaluates the
+  same authored table (handoff below).
+* Footstep notifies: only the Strafers master fires, MinWeight-gated, with no idle/walk flicker duplicates.
+* "Too loud / disconnected": the old placeholder thump (0.8 linear, linear rolloff) is gone. Footsteps now use
+  authored SmartPan 75/150 UU, sit in the zone reverb and pass through the master compressor; no level was
+  changed by ear.
+
+### Vehicle sound bed (state map)
+| State | Cues (authored) | Notes |
+|---|---|---|
+| Hover idle / movement | DRIVE_OFFLOAD (no throttle) / DRIVE_ONLOAD (throttle), speed-keyed pitch, 0.2 s EngineFadeOutTime | gear set MaxSpeed 20 / 110 share the cues |
+| Normal boost | BOOST_START, BOOST_LOOP (speed), BOOST_END, BOOST_WHEELS after 0.27 s on ground, 0.15 s fade | engine yields to the boost loop [MED] |
+| Hover dash | none authored (no dash clip / notify; BoosterSound trigger is native, undecoded) | not invented |
+| Ram / nitro | RAM_NITRO_START + VEH_TRUCK_RAM_ALERT (one-shot, cut at nitro end) | RAM_IMPACT via notifyRamHit (world) |
+| Jump / air | DRIVE_JUMP_START (AscendSound) + DRIVE_JUMP_LOOP (JumpRev) | |
+| Landing | HOVER_ / WHEELS_LAND_LIGHT (>=0.15 s air) / _HEAVY (>=2.0 s) | |
+| Transform | BL_TRANSFORM BOT2VEH / VEH2BOT attached; vehicle FX on at 1.8 s of the fold | |
+| Tire squeal | VEH_OPTIMUS_TIRE_SQUEAL, parameter = slip angle 0..pi/2 rad (Max 1.57), full volume at 0.425 rad, pitch −1 → +2 st, 0.5 s crossfade, speed >= 20 | **hook only** (below) |
+All vehicle loops are attached (AUDIO_ROOT) and move with the truck.
+
+**Tire squeal — prepared, not invented.** Gameplay exposes no slip scalar. Heading vs horizontal velocity measured
+in Systems reads 0.3–1.2 rad in straight-line Driving in the current model (velocity not aligned to yaw), so it is
+not a usable slip signal. The squeal plays only when Gameplay calls `World::setTireSlipAngle(rad)` each step
+(Driving, grounded, >= 20 mph). `WFC_TIRESLIP_DERIVED=1` enables the measured value for diagnostics only.
+
+### Level effects
+`LevelFx` reproduces the 8 authored Streets level emitters (`Emitter` actors with `FX_Level_Generic_p.FX.Steam_Sm_FX`,
+map_fx.json):
+* emitter "Smoke_Dup", Steam_Mat → SmokeBall_CLR translucent, emissive ×0.5;
+* LOD0 stream values CONF, roles by the established order MED: spawn U[2,3]/s, life U[1,2] s, size U[6,10] m
+  ×1→3, alpha 0→0.3→0, velocity ±(3,1,1) m/s, ±5 m along the emitter X, colour (0.9,0.9,1)→1;
+* UE location/yaw → glTF as the other map records.
+Verified in fixed-camera stills (`work/m3/steam_sheet.png`). Not reproduced (Rendering): the material's panned
+SmokeTile UV distortion and depth-biased (soft) alpha.
+
+### Vehicle FX event completeness
+OptimusTruckForm authors exactly BoostFx (BoostSocket_L/R), HoverFX (6 HoverBooster_*), JumpFX (JumpBoostSocket_C/R/L)
+and RamFX (RamSocket); TnCarForm / TnTruckForm / TnVehicleForm defaults add none (no dash or landing FX).
+* **Driven:** Hover while hovering and from 1.8 s of the to-vehicle fold; Boost while Driving; Jump on take-off,
+  killed when the vehicle form ends; Ram for the nitro.
+* **Cleanup:** after transforming back to robot all vehicle parts drain to 0.
+
+### Performance (final suite, RX 7900 XTX, WFC path)
+* Idle 6.4–6.5 ms (ambient bed, reverb and level FX included).
+* Short burst + reload 6.5 ms.
+* Sustained fire: firing windows **9.6–13.6 ms** (drawFx 2.4–5.9 ms = Rendering's per-shell light environments).
+* Boost / nitro / transform back 6.3–8.7 ms; transform cycling 5.5 ms; fire + move + turn 5.7–8.9 ms.
+* ~900 RPM cadence unchanged.
+* Leaks: cue instances settle at the ~25 ambient loops; pending events bounded; weapon particles → 0 after
+  firing; vehicle parts → 0 after leaving the vehicle; level FX steady at ~30 particles.
+* Collision: `work/segtest` 0 mismatches.
+* Harness: wfc_fidelity 194/0/19/119/1, runtime probe 31/0/1.
+
+---
+
+## MILESTONE 03 SYSTEMS — AUDIO OWNERSHIP, ROBOT MOVEMENT SOUND, TRANSFORM AUDIO, FIRING COST (2026-10-02, agents/systems)
+
+### Audio source ownership (systemic fix)
+Every SoundCue instance now has an **owner**. `SoundCues::Emitter{pos, owner, offset}` with a World resolver:
+`kWorld` (fixed position), `kOwnPawn` (pawn mesh origin + offset, e.g. the truck AUDIO_ROOT +147.25 UU),
+`kOwnWeapon` (Ion Blaster mesh), `kOwnMuzzle` (MuzzleFlash socket). Attached instances re-resolve their
+position **every tick for every voice**: one-shots, loops and *delayed wave events*, which now launch at the
+owner's current position. Before this, one-shot voices were frozen where they started. That was the
+"transform sound stays behind" defect, and it applied to every non-looping cue. One-shot instances now live
+exactly as long as their voices (`IAudio::isPlaying`, default false; Win32 implements it), so a long attached
+wave keeps following to its end.
+
+| Source | Original mechanism | Owner now | Conf |
+|---|---|---|---|
+| Ion Blaster SHOOT / LOW_AMMO / SHOOT_TAIL | TnWeapon WP_Fire / WP_LoopingTail on the weapon | muzzle (attached) | HI |
+| Reload / idle weapon notifies | HmAnimNotify_Sound on WEP_IonBlaster_ANIM (no socket) | weapon mesh | CONF class / HI attach |
+| IMPT_WORLD / IMPT_DMG, VEH_TRUCK_RAM_IMPACT | impact at hit location | world | CONF |
+| Transform BOT2VEH / VEH2BOT | HmAnimNotify_Sound on the Optimus transform clips (no SocketName, bStopWhenActorDestroyed) | pawn | CONF |
+| Footsteps / scuffs / jump / landing / idle + pivot foley | AnimNotify_Footstep, HmAnimNotify_SoundEvent, HmAnimNotify_Sound on the robot clips | pawn | CONF |
+| Fine aim START / END | TnWeaponIonBlaster WP_StartFineAim / WP_EndFineAim | weapon | CONF cue / HI attach |
+| Vehicle boost / engine / jump / land / nitro / alert | HmPlayerVehicleAudioComponent on OptimusTruckForm | pawn @ AUDIO_ROOT | CONF |
+
+**Per-cue SmartPan [CONF]:** `SoundNodeRoot.SmartPanDistance2D/3D` (class default 400/800 UU) is now read per
+cue. The player previously used 200/400 UU for every cue. Footsteps author 75/150 UU and FS_LAND_HIGH_FALL
+1000/1500, so close movement sounds are placed at the actor instead of mixed nearly centred. Vehicle cues are
+200/1000; transform and idle foley use the default 400/800. **The Ion Blaster fire cues author exactly
+200/400, so the weapon mix is unchanged.**
+
+**Mixer categories [CONF, `SoundConfig.SoundMixerProperties`]:** 47 categories with DSP presets. Each cue's
+`Category` is now emitted into the table (SFX_WET_COMBAT_ROBOT_WPN, SFX_WET_NAV, SFX_WET_COMBAT_TRANS,
+SFX_WET_VEH*). Every category on these cues' paths has a `Default` preset volume of **1.0**. The exceptions are
+**Master 0.708 (−3 dB)**, MUSIC_DRY 0.708 and SFX_SWORD_HUM 0.501, so the original mixer adds **no relative
+category gain** between weapon, movement, transform and vehicle sounds. Reverb lives on `MASTER_WET` zone
+presets (map Kismet zones): audited, **not implemented** (out of scope this pass). The rebuild's own master
+level 0.5 [PROV] is not the original −3 dB; it is left unchanged to keep the weapon mix.
+
+Still MED: `kSmartPan_PreferPlayer`. Pan and attenuation are measured from the camera listener; the original
+may measure the local player's own sounds from the pawn. EnableOcclusionVolume/Pitch (on by default, off on the
+transform cues) and Doppler are not modelled.
+
+### Transformation audio [CONF]
+* Robot→vehicle: `Transform_ToVehicle_ROBO` HmAnimNotify_Sound **BL_TRANSFORM.OPTIMUS_BOT2VEH @0.125 s of 2.0 s**.
+  The cue is −4 dB, 1500–15000 UU, category SFX_WET_COMBAT_TRANS, and layers six wave events:
+  servos 0.0, main 0.152, truck land thump (3 variants) 0.642, boost flare 1.440, air release 1.586, boost
+  finish 1.674 s.
+* Vehicle→robot: `Transform_ToRobot_ROBO` **BL_TRANSFORM.OPTIMUS_VEH2BOT @0.0** (MinWeight 0). The cue is −7 dB:
+  servos and a truck light impact (3 variants) at 0.0, main at 0.141.
+* Fired by fold progress (notify time / authored length), attached to the pawn. The generic
+  `EVENT_IACON_BRIDGE_TRANSFORM_GEARS.wav` placeholder and `World::playSfx` are removed.
+* Measured while moving: the delayed layers start at the pawn's current position (VEH2BOT main layer 0.15 s
+  later at 358.3,−345.0 vs 360.0,−344.0 at the start). Runtime probe `transform_cue_is_authored`: KNOWN → PASS.
+* Vehicle FX: `Transform_ToVehicle_VEH` TnAnimNotify_ToggleVehicleFx enables at **1.8 s** of the 2.0 s fold.
+  Hover FX now start there instead of at fold completion; `Transform_ToRobot_VEH` disables them at 0.0.
+
+### Robot movement sound [CONF data; MED where noted]
+Chain: AnimNotify on the playing clip → `HmFootstepComponent` default type→event → `Optimus_ROBODEF.SoundEventSet
+= SoundEvents.CHR_OPTIMUS` → `BL_FS_LRG_BOT.*` (large-robot footsteps).
+
+| Event | Clip notifies (authored s / length) | Cue | Root dB, distance, SmartPan |
+|---|---|---|---|
+| run step (kFootstepRun) | Nav_StrafeJog_F 0.091 / 0.513 of 0.767 (B 0.194/0.543, L 0.137/0.523, R 0.132/0.529) | FS_RUN_DEFAULT | −8 (var −3), 1500–15000 rolloff 2, 75/150 |
+| walk step (kFootstep) [MED: →WALK] | Nav_StrafeWalk_F 0.238 / 0.855 of 1.133 (B/L/R similar) | FS_WALK_DEFAULT | −12 (var −3) |
+| scuff + steps + servo groan | Nav_IdlePivot90_L/R | FS_SCUFF_DEFAULT, FOLEY_FS_GROAN_SERVO_01 (−19) | |
+| jump | Nav_TakeOff_01 FS_DEFAULT_JUMP @0 | FS_JUMP | −10 |
+| land | Nav_Land kLand @0 | FS_LAND_DEFAULT | −8 |
+| hard land | Nav_Land_02 kHardLand @0 | FS_LAND_HARD | −5 |
+| high fall | Nav_Land_03 FS_DEFAULT_LAND_HIGH_FALL + kHardLand @0, groan @0.432, Long_Fall_Landing_1_FX | FS_LAND_HIGH_FALL (0 dB, SmartPan 1000/1500) + FS_LAND_HARD | |
+| idle foley | Optimus NAV_Idle BL_FOLY_IDLES.OPTIMUS_IDLE @0 (15 events) | OPTIMUS_IDLE | −21, 650 UU |
+
+* **Heavier-landing threshold exists [CONF]:** `TR_Acrobatics_p.SharedAcrobatics.LandingAnims` (MinHeight /
+  MinSpeed UU) are {1200,1200} Nav_Land_03, {1000,1200} Nav_Land, {4500,0} Nav_Land_03, {500,0} Nav_Land_02
+  and {250,0} Nav_Land. A fall under 250 UU plays no landing anim and so no landing sound.
+  [MED] They are tested in array order on apex→touchdown height and horizontal speed. A standing jump
+  (514 UU) → Nav_Land_02 → **FS_LAND_HARD**.
+* **The old landing sound was not the original.** `WL_GUN_FOLEY/RELOAD_AIR_RELEASE_THUMP.wav` played at 0.8
+  linear for every robot landing, with a linear 5–50 m rolloff. That is the "soft/squishy, too loud" sound.
+  It is replaced by the authored cues above.
+* [MED] Only the Strafers sync master fires notifies (AnimNodeSynch bFireSlaveNotifies default false), gated
+  by the master weight vs MinWeight (default 0.25). Non-looping clip notifies are gated by the blend-in
+  reaching MinWeight (Idle↔Moving 0.2 s, pivot 0.1 s), so a one-step idle flicker does not fire them.
+* Runtime: jog 14 m/s gives two FS_RUN steps per 0.767 s cycle at phases 0.119 / 0.669.
+* `Character` gained read-only `locoPhase()` / `locoMasterWeight()` (Gameplay file, additive).
+
+### Vehicle sound bed
+The three mechanics stay distinct. **Normal boost** uses BOOST_START / LOOP (speed parameter) / END / WHEELS
+(0.27 s ground check). **Nitro** uses RAM_NITRO_START + VEH_TRUCK_RAM_ALERT. **Hover dash** has no authored cue:
+no dash clip and no dash notify exist in Optimus_VEH_ANIM, and `BoosterSound` (VEH_OPTIMUS_RAM_BOOST_START, a
+7 s cue with LoopStart 6.62 / LoopEnd 7.20) is not referenced in TransGame script, so its trigger is native and
+undecoded. It is not assigned to the dash. The engine (ONLOAD / OFFLOAD / JUMP_LOOP, speed-keyed pitch) and
+the land cues (hover vs wheels, 0.15 / 2.0 s) are unchanged; all vehicle cues are now attached at AUDIO_ROOT.
+Correction to the M02 note: **VEH_TRUCK_RAM_ALERT's wave event is authored non-looping**. It plays once per
+nitro and is cut if still sounding when the nitro ends; it never looped forever.
+
+### Vehicle FX
+Driven at the authored sockets as before (BoostSocket_L/R, 6 × HoverBooster_*, JumpBoostSocket_C/R/L,
+RamSocket) from decoded templates. The only change is the ToggleVehicleFx timing above.
+Not reconstructed (authored, but not reachable or not on Optimus):
+* Nav_Land_03 `FX_Navigation_p.Long_Fall_Landing_1_FX` @BoosterSocket_R (high falls only).
+* Robot dodge `DashPulse_1_FX` (dodge unreachable, Gameplay).
+* `Trails_Bumblebee_FX` (sockets not on the Optimus mesh).
+The "crude" look of the hover/boost rings is material/blend treatment → Rendering handoff.
+
+### Firing performance [measured, RX 7900 XTX, WFC path, sustained auto-fire]
+| | avg frame | Systems hitscan | controller (incl. Gameplay camera ray) | drawFx |
+|---|---|---|---|---|
+| before (milestone-02 head) | **65–70 ms** (peaks 70) | 21–26 ms | 32–52 ms | 3.5 ms |
+| after | **10–11 ms** (idle 6.4–7.1) | 0.02 ms | 0.02–0.06 ms | 3.5–4.9 ms |
+
+* Root cause: `CollisionWorld::segmentHit` tested **every grid cell of the segment's XZ bounding box**. The
+  300 m weapon trace and Gameplay's per-shot camera ray each scanned thousands of 2 m cells per call.
+* It now walks only the cells the ray crosses (2D DDA, clipped to the grid) and stops at the first cell whose
+  exit lies beyond the nearest hit. It is exact against a brute-force all-triangle reference: 20,000 random,
+  vertical and axis-aligned segments, 0 mismatches (`work/segtest`).
+* The renderer's light-visibility callback no longer marches 2 m pieces.
+* Cadence untouched: ~900 RPM, one-shot timer.
+* No leaks: particles, mesh parts, cue instances and pending events all drain to 0 after firing (4000-frame run).
+* Remaining firing cost is Rendering's: each shell/magazine mesh particle gets its own dynamic light
+  environment (computeEnv with visibility traces against 268 lights), ~0.25 ms per mesh part, 3–5 ms with 15
+  live. CPU skinning in drawPlayer is 3.2 ms.
+
+---
+
 ## PASS 9 — CHARACTER CUSTOMIZATION (2026-10-01, branch agents/rendering)
 | Item | Original (WFC) | Source | Conf | Rebuild |
 |---|---|---|---|---|
@@ -750,8 +1749,9 @@ isolated effort, not cut into this pass to avoid leaving the build broken.
   attenuation. **Fixed:** master level 0.5 [PROV], and a 3D path (distance attenuation +
   equal-power stereo pan vs the camera listener) via `IAudio::playAt`/`setListener`. Fire is
   positioned at the muzzle; land/transform/reload at the pawn.
-- Remaining: real SoundCue min/max radii + falloff curves, the ambient emitter bed, reverb,
-  interior/exterior treatment, concurrency/voice limits, pitch randomization.
+- Remaining: the ambient emitter bed, reverb (MASTER_WET zone presets), interior/exterior treatment,
+  occlusion. Cue radii/falloff/variation/concurrency, per-cue SmartPan and owner attachment are done
+  (see MILESTONE 03 SYSTEMS).
 
 ## NOT YET IMPLEMENTED
 - Normal/specular/emissive materials; lightmaps/baked lighting; HeightFog; post FX (bloom/DOF).

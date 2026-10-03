@@ -4,8 +4,11 @@
 //   HoverFX: HoverBooster_{L,R}{Front,Back,Back2} -> FX_Navigation_p.CarHover_A_01_FX
 //   JumpFX:  JumpBoostSocket_{C,R,L}             -> FX_Navigation_p.Jump_FX
 //   RamFX:   RamSocket                           -> FX_Navigation_p.FX.Truck_ram_FX (during the nitro)
-// Every emitter of these systems is bUseLocalSpace (particles ride their socket). Values are the
-// LOD-0 data decoded from the cooked ParticleSystems (see FIDELITY.md PASS 8/9).
+// Emitters are bUseLocalSpace (particles ride their socket) except Truck_ram_FX rays_Dup (world space).
+// Values are the LOD-0 data decoded from the cooked ParticleSystems (see FIDELITY.md PASS 8/9).
+// Each emitter carries its original material (ParticleModuleRequired.Material): when the renderer
+// evaluates FX material graphs (IRenderer::evaluatesFxMaterials) sprites/meshes are drawn through it
+// with the authored HDR particle colour; otherwise the GL1 fallback (clamped colour + overbright).
 #pragma once
 #include <string>
 #include <vector>
@@ -66,15 +69,27 @@ public:
         float rotRateMin, rotRateMax;   // rotation rate (turns/s)
         core::Vec3 velMin, velMax;      // local velocity (UU/s)
         float locX;                     // local offset along socket X (UU)
+        const char* material;           // ParticleModuleRequired.Material (object path)
+        float loopMin, loopMax;         // EmitterDuration(Low) of an endlessly looping emitter (EmitterLoops 0):
+                                        // the BurstList fires again at the start of every loop; 0 = no repeat
+        bool hasColorRange;             // initial colour U[color, colorMax]
+        core::Vec3 colorMax;
+        core::Vec3 locMin, locMax;      // extra spawn location range (UU, UE local axes)
+        bool worldSpace;                // bUseLocalSpace false: particles stay where they were emitted
+        bool materialOnly;              // no GL1 fallback (distortion / modulate graphs): drawn only by the
+                                        // original material path
     };
 
 private:
-    struct Inst { int id; System sys; int socket; float age; bool active; std::vector<float> acc, rate; };
+    struct Inst { int id; System sys; int socket; float age; bool active; std::vector<float> acc, rate, loopT, loopLen; };
     struct Part {
         const EmitterDef* def; int inst; int socket;
-        core::Vec3 pos, vel;            // socket-local, metres (pre socket scale)
+        core::Vec3 pos, vel;            // socket-local, metres (pre socket scale); world metres if world
         float age, life, rot, rotRate;
         core::Vec3 size;
+        core::Vec3 tint{1, 1, 1};       // initial colour factor (colour range)
+        bool world = false;
+        float sockScale = 1.0f;         // socket scale at emission (world-space particles)
     };
     void spawn(const EmitterDef& d, const Inst& in);
     const std::vector<const EmitterDef*>& emitters(System s) const;

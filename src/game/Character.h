@@ -186,6 +186,10 @@ public:
     float legYaw() const { return legYaw_; }
     bool turningInPlace() const { return turnClip_ >= 0; }
     bool recoiling() const { return recoilSpine_.active || recoilHand_.active; }
+    // Robot Moving-state blend (read-only, for AnimNotify dispatch): the "Strafers" sync group's
+    // normalized phase and the weight of its master clip (animName() while moving).
+    float locoPhase() const { return locoPhase_; }
+    float locoMasterWeight() const { return locoMasterW_; }
 
     // Vehicle mechanics state (TnCarForm Hovering/Driving, hover dash, truck nitro). Owned by the
     // movement code; read by animation and diagnostics.
@@ -312,6 +316,7 @@ private:
     float locoPhase_ = 0.0f;                  // shared normalized phase of the sync group
     float dirW_[4] = {1.0f, 0.0f, 0.0f, 0.0f};   // F, B, R, L
     float jogW_ = 0.0f;
+    float locoMasterW_ = 0.0f;
     void robotLocomotion(const assets::SkinnedModel& mdl, float dt);
     void updateTurnInPlace(const assets::SkinnedModel& mdl, float dt, bool standing);
     float pivotProgress(const assets::SkinnedModel& mdl, int clip, float t) const;

@@ -16,8 +16,13 @@
 #include "game/WeaponMesh.h"
 #include "game/WeaponFx.h"
 #include "game/SoundCues.h"
+#include "game/PickupPresentation.h"
 #include "game/VehicleFx.h"
 #include "game/VehicleNitro.h"
+#include "game/RobotFoley.h"
+#include "game/AmbientAudio.h"
+#include "game/LevelFx.h"
+#include "game/VehicleAudio.h"
 
 namespace render { class IRenderer; }
 
@@ -44,12 +49,17 @@ public:
     // spread, range and range-based damage falloff). Damages the nearest target.
     void fireHitscan(const core::Vec3& origin, const core::Vec3& dir);
 
-    // Audio: wired by the application; World loads cues and plays them on gameplay events.
-    enum class Sfx { Fire, Reload, Transform, Land };
+    // Audio: wired by the application; World loads the original SoundCues and plays them on
+    // gameplay / animation events, attached to their owner where the original attaches them.
     void setAudio(audio::IAudio* a);
-    void playSfx(Sfx s, const core::Vec3& pos);
 
     Player& player() { return player_; }
+
+    // Pickup presentation (Systems-owned: effect activation + PickupSound) of the 27 authored Streets
+    // factories. Gameplay's factory state machine (in World) drives it: announcePickup(i, cues_, atPawn(), d) +
+    // setPickupHidden(i) on GiveTo, setPickupVisible(i) when Sleeping ends (see PickupPresentation.h).
+    PickupPresentation& pickupPresentation() { return pickupFx_; }
+    SoundCues& cues() { return cues_; }
 
     // Truck nitro / ram state (Systems-owned, read-only for Gameplay: nitroActive(), ramActive(),
     // speedScale(), steeringScale() — Gameplay applies the movement effect).
@@ -72,6 +82,11 @@ public:
     const std::vector<DestructibleEvent>& destructibleEvents() const { return destructibleEvents_; }
     void raiseDestructibleEvent(const DestructibleEvent& e) { destructibleEvents_.push_back(e); }
     bool usingSlice() const { return usingSlice_; }
+    // Tire squeal (HmPlayerVehicleAudioComponent TireSquealSoundParameter Optimus_Prime_Tire_Squeal,
+    // Max 1.57 = pi/2): the wheels' slip angle in radians. Gameplay may supply its own value each step
+    // (>= 0) = TnCarForm.Driving.UpdateSounds' CarSimulation.SlipAngle; hovering feeds 0 [CONF]. Until
+    // Gameplay provides it the driving value is 0 (the squeal loop runs silent per its volume curve).
+    void setTireSlipAngle(float rad) { tireSlipOverride_ = rad; }
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).
     const CollisionWorld* collision() const { return collision_.valid() ? &collision_ : nullptr; }
@@ -119,13 +134,34 @@ private:
 
     // Original weapon effects (muzzle flash, tracer, impact squib) from the cooked FX data.
     WeaponFx fx_;
+    // Authored level particle emitters (map_fx.json: 8 x Steam_Sm_FX).
+    LevelFx levelFx_;
 
     audio::IAudio* audio_ = nullptr;
-    audio::Sound
-                 sndTransform_ = audio::kInvalidSound, sndLand_ = audio::kInvalidSound;
-    bool prevGrounded_ = true;
-    bool prevTransforming_ = false;
     SoundCues cues_;
+    PickupPresentation pickupFx_;
+    // Cue owners (SoundCues::Emitter::owner): attached AudioComponents follow these every tick.
+    // Owner ids: the player pawn (its mesh origin, or a bone/socket of the displayed skeleton) and
+    // the Ion Blaster (its mesh origin, or a WeaponMesh socket such as MuzzleFlash).
+    enum CueOwner { kOwnPawn = 0, kOwnWeapon = 1 };
+    bool resolveCueOwner(int owner, const std::string& socket, const core::Vec3& offset, core::Vec3& out) const;
+    SoundCues::Emitter atPawn(const core::Vec3& up = {0, 0, 0}, const char* socket = "") const;
+    SoundCues::Emitter atWeapon(const char* socket = "") const;
+    // Robot movement foley (footsteps / jump / landing / idle / pivots) from the authored notifies.
+    RobotFoley robotFoley_;
+    // Streets world sound bed: map emitters, Kismet reverb zones, one-shot pools (audio.json).
+    AmbientAudio ambient_;
+    std::vector<const char*> foleyCues_;
+    // Transformation cue (HmAnimNotify_Sound on the Optimus transform clips) for the current fold.
+    bool transformCuePlayed_ = false;
+    int transformCue_ = -1;
+    float trackT_ = 0.0f;
+    bool prevTransforming_ = false;
+    Form transformTarget_ = Form::Robot;
+    bool prevFineAim_ = false;
+    float tireSlipOverride_ = -1.0f;
+    float tireSlip_ = 0.0f;
+    void tickCharacterAudio(float dt);
 
     // Vehicle-form presentation (OptimusTruckForm BoostFx / HoverFX / JumpFX + boost sounds).
     VehicleFx vehicleFx_;
@@ -139,15 +175,12 @@ private:
     VehicleNitro nitro_;         // follows Gameplay's vehicleState().nitroRemain (presentation side)
     int ramInst_ = -1;
 
-    // Vehicle engine audio (HmPlayerVehicleAudioComponent DriveSounds / JumpRev / land sounds).
-    enum class EngineState { Off, OnLoad, OffLoad, JumpRev, Boost };
-    EngineState engineState_ = EngineState::Off;
-    int engineCue_ = -1;
-    float airTime_ = 0.0f;
-    void tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, bool tookOff, bool landed);
-    float boostAge_ = 0.0f;
-    bool boostWheelsChecked_ = false;
-    int boostLoopCue_ = -1;
+    // Vehicle audio component (boost, engine states, jump, land, booster, nitro, ram, tire squeal).
+    VehicleAudio vehicleAudio_;
+    int vehLoadState_ = 0;
+    bool prevDashing_ = false;
+    float lastAudioMs_ = 0.0f;
+    int occlusionRays_ = 0;
     void tickVehicleBoost(float dt);
     bool burstActive_ = false;
     float sinceShot_ = 0.0f;

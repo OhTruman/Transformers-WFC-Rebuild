@@ -15,3 +15,7 @@ SoundCues: `objtree.package('MP_IAC_Streets_BASE_m')` + `typed_props` on the exp
 `BL_WPN_GUN_ION_BLASTER.*` give SoundCue / SoundNodeRoot / SoundNodeWaveEvent props; the C++
 table in `src/game/SoundCues.cpp` was generated from that dump (class defaults from
 `HM_Engine.Default__SoundNodeRoot`).
+
+`gen_cues.py <out.inc>` regenerates `src/game/SoundCues.inc` from the cooked cues (weapon, vehicle,
+BL_FS_LRG_BOT movement, BL_TRANSFORM, BL_FOLY_IDLES, fine aim). It emits per-cue SmartPan distances and
+the mixer category as a comment.
