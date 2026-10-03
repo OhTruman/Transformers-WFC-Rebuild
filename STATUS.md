@@ -3,6 +3,25 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 06 (2026-10-03) — frontend / loading / level audio lifecycle
+- **Generic level manifests:**
+  - `gen_level_audio.py` → `LevelAudio.inc`, merged with the AssetTools map manifest; one path for every level;
+  - the UI levels' authored Kismet audio, including the frontend's Iacon / Kaon camera timeline;
+  - the lobbies' music, bed and pools;
+  - per-cue-asset limits for every level;
+  - `CookedCueLimits.inc` removed; the Master compressor is global data.
+- **Mixer:** all 47 categories (MUSIC_DRY 0.708 now applied); `CINE_MUTE_FOR_BINK` movie mute.
+- **Lifetime:** `LevelAudioHost` (the level's music player, Kismet sounds, bank, presets; unload releases
+  everything, including streamed music, at once); no frontend music under gameplay.
+- **Contract:**
+  - `FrontendAudioRuntime` mirrors the Frontend lane's `IFrontendAudio` seam 1:1 (standalone, no World);
+  - World exposes the same calls in a match; `setAudio(a, false)` skips the slice map.
+- **Validation:**
+  - suite 544 / 0 (30 + 12 real-device lifecycle cycles, 20 seam cycles, 6 orbit loops);
+  - game soaks 46 + 39 + 181 level transitions, 0 errors, no growth;
+  - wfc_fidelity 194 / 0 / 19.
+- **Handoff and classification:** FIDELITY.md MILESTONE 06.
+
 ## SYSTEMS MILESTONE 05 (2026-10-03) — runtime lifecycle for frontend → loading → match → return
 - **Map audio lifecycle:**
   - `World::loadMapAudio` / `unloadMapAudio` / `resetSystemsForMatch` / `tickAudioOnly`;

@@ -17,6 +17,225 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 06 SYSTEMS — FRONTEND / LOADING / LEVEL AUDIO LIFECYCLE (2026-10-03, agents/systems)
+
+**Goal:** Systems provides the original audio for boot → frontend → lobby → loading → match → match reset → leave →
+frontend / lobby → another map, from authored data, with one generic level path.
+
+**Sources (read only):**
+* RE-Workspace `notes/MILESTONE05_FRONTEND_MATCH_BOOTSTRAP.md` (frontend Kismet order, travel timeline,
+  MovieMixerPreset) and the decompiled script: `Engine.PlayerController.Kismet_ClientPlaySound /
+  Kismet_ClientStopSound`, `HM_Engine.SeqAct_PlayPlayerPositionalSound`, `HmMusicPlayer`,
+  `HmAudioCategoryEffectsManager`, `TnPlayerController.OnCampaignGameOver`.
+* AssetTools `frontend_audio.json`, `frontend_re_handoff.json`, and `authored.db`: the UI levels' Kismet, cues,
+  actors and SoundMixerProperties.
+* The Frontend lane's audio seam `frontend::IFrontendAudio` (agents/frontend 9e62074, read via git).
+
+### Level manifests (generic; no level-specific code)
+* **`tools/systems/gen_level_audio.py` → `src/game/LevelAudio.inc`:** one JSON manifest per level, compiled in.
+  * **UI levels (UI_FrontEnd_m, UI_PartyLobby_m, UI_Lobby_m, UI_CampaignLobby_m):** every Kismet audio op (SeqAct_PlaySound,
+    SeqAct_PlayPlayerPositionalSound, SeqAct_Reverb, SeqAct_PlayMusic / StopMusic, and SeqAct_Interp timelines whose event track drives audio)
+    with its authored fields and class defaults; the op's triggers (sub-sequence Start / Stop flattened);
+    Target / Source Actor positions; the cue trees; the reverb presets (SoundMixerProperties).
+  * **Every level:** the per-cue-asset concurrency limits (MaxConcurrentPlayCount / InstanceLimiting).
+* **`AmbientAudio::load` merges the two manifests:** the AssetTools map manifest (`<assets>/Maps/<level>/audio.json`: emitters, zones, pools,
+  presets, bank) and the Systems manifest. Either may be missing; both unload through the same path.
+  * UI_FrontEnd_m: 21 ops, 35 links, 18 cues, 1 reverb preset, 13 actors.
+  * Each lobby: 4 ops (music, bed, 2 pools).
+* **Removed compiled Streets data:** `CookedCueLimits.inc` / `gen_cue_limits.py` (the two Streets cue limits). Map cue limits now
+  come from the level manifest; verified identical (EMIT_FLOOD_LIGHTS 3, EMIT_MONRAIL_IDLE_LP 3, the other 30 = the
+  Engine default 5 / kKillFarthest).
+* **Master compressor:** now global data (SoundMixer.inc from SoundMixerProperties Master Default: −6 dB / 10 ms /
+  50 ms, unchanged values) instead of being read from the Streets manifest.
+* **Footsteps:** a query of all 8 797 cooked cues' packages finds no surface audio anywhere, so FS_DEFAULT_* (per-pawn
+  SoundEventSet) is the authored behaviour for every map, not a Streets assumption [CONF data, game-wide]:
+  * no PhysicalMaterialPropertyBase subclass instance;
+  * no SeqAct_SetFootstepMaterialOverride instance;
+  * every HmFootstepComponent keeps its class defaults.
+* **Only level name left in Systems code:** the slice default `setAudio(a, loadSliceMap = true)` → MP_IAC_Streets
+  (and the soak hook's fallback).
+
+### Level Kismet audio (`LevelAudioScript`)
+| op | semantics | class |
+|---|---|---|
+| SeqAct_PlaySound Play | `PC.Kismet_ClientPlaySound`: `SourceActor.CreateAudioComponent(cue, false, true)`, FadeIn(FadeInTime), bAutoDestroy; a NEW component every Play | CONF script |
+| SeqAct_PlaySound Stop | `PC.Kismet_ClientStopSound`: the first component on that actor playing the cue and not fading → FadeOut(FadeOutTime) | CONF script |
+| no Target | the local PlayerController (the authored no-target cues are 2D beds / the reveal) | HIGH (native Activated) |
+| SeqAct_PlayPlayerPositionalSound | Play → RandRange(DelayMin, DelayMax), IsPlaying; one-shot at a random yaw, RandRange(DistanceMin, Max) around the Source Actor (else the listener); Looping; Reset → IsPlaying false | CONF script |
+| SeqAct_Reverb | `SoundMixer::activateReverb` (REVERB_TRANS_FRONT_END: Priority 155, fades 0) | CONF native A1 + data |
+| SeqAct_PlayMusic / StopMusic | the level's MusicPlayer (HmMusicPlayer port) | CONF script |
+| SeqAct_Interp event track | Play from the current position; keys fire in [old, new); a loop wrap fires up to the end, then from 0 (a key at 0 refires every loop) | HIGH (stock UE3), times CONF |
+
+**UI_FrontEnd_m [FRONTEND START]** (either `FsCommand:enterFrontEnd` or `MovieStopped:FMV_intro`, the same 9 targets) [CONF]:
+* **Starts:** music FRONTEND_MX_ORBIT_01 (FadeIn 0.25), REVERB_TRANS_FRONT_END, FRONTEND_WHSH_REVEAL (authored with no
+  wave: silent), and the **Camera Orbiter** timeline (393.551 s, looping).
+* **Timeline events:**
+  * AUDIO_START @ 0: AMB_IACON Start / AMB_KAON Stop.
+  * AUDIO_KAON_AMB @ 240.575: IACON Stop / KAON Start.
+  * Seven FRONTEND_WHSH_DEBRIS_BY_* one-shots @ 2.1 … 389.3 s, on their InterpActors. The actors spin in place
+    (PHYS_Rotating, not moved by the matinee), so their positions are static.
+* **AMB_IACON:**
+  * bed FRONTEND_AMB_ORBIT_01_BED_LP (2D, FadeIn 2 / FadeOut 2);
+  * four EMIT_SURFACE_* loops on placed AmbientSounds (FadeIn 3 / FadeOut 6);
+  * PP_SPACE_IACON (4–8 s) and PP_SPACE_IACON_03 (6–12 s) pools around AmbientSound_13540.
+* **AMB_KAON:** bed ORBIT_02 and two PP_SPACE_KAON pools around AmbientSound_12790.
+* **The medley:** no root or wave loop, so it plays once (~380 s) [CONF data].
+
+**UI_PartyLobby_m / UI_Lobby_m / UI_CampaignLobby_m** (SeqEvent_GameplayStarted, at level start) [CONF]:
+* **Music:** MP_PARTY_LOBBY_MX (FadeIn 0, FadeOut 0) / MP_LOBBY_MX (FadeIn 0).
+* **Bed:** MP_PARTY_LOBBY_AMB_BED_CUST_MENU (FadeIn 3) / MP_LOBBY_AMB_BED.
+* **Two positional pools:** party MOAN_01 at 20–25 s and 12–18 s; lobby DECO_SYNTH / GROAN at 12–18 s, kKillNewest.
+
+### Mixer: every category, Master, MUSIC_DRY, movie mute
+* **Categories:** all 47 SoundMixerProperties categories carry their Default and preset volumes (previously only
+  SFX_WET_VEH_ENGINE + MASTER_WET). A cue's gain = its category's volume × masterScale [CONF values].
+* **Master:** masterScale = Master volume / Master Default 0.708. The rebuild's output level stands in for Master's
+  Default, so only Master changes are applied [HIGH: Master is the root (sound_group_category_mappings); the
+  parent chain between the other categories is native and not applied].
+* **MUSIC_DRY:** its Default volume of 0.708 (−3 dB) now applies to the music [CONF]. Weapon / movement / vehicle categories are all
+  1.0, so the slice's mix is unchanged.
+* **CINE_MUTE_FOR_BINK** [CONF config + data; enable/disable timing HIGH, native movie player]:
+  * Engine.MovieSettings MovieMixerPreset; Priority 546, Master volume 0, FadeIn 0, FadeOut 1.
+  * `setMoviePlaying(true/false)` enables / disables it.
+  * A level change (Flush) drops it [CONF Flush]; whether the native player re-enables it is UNKNOWN.
+* **Not applied (activator unknown):** FRONT_END (543: SFX_WET_VEH / SFX_WET_NAV volume 0); no script or authored
+  data enables it [UNKNOWN, native?].
+* **Out of scope:** OnCampaignGameOver's GameOverMixerPreset (campaign only); HmAudioCategoryEffectsManager radio
+  presets (dialog).
+
+### Ownership and lifetime (`LevelAudioHost`; World and `FrontendAudioRuntime` both use it)
+* **A level owns its audio:**
+  * its WorldInfo HmMusicPlayer;
+  * the Kismet components, beds, pools and timelines;
+  * its reverb presets, cue bank and decoded samples.
+* **unload() (a travel):**
+  * the music player stops at once [HIGH: WorldInfo-owned, bStopWhenOwnerDestroyed];
+  * every instance stops and every queued event is dropped;
+  * the level's cues, samples and presets are released;
+  * streamed music is released at once (new `SoundCues::releaseIdleStreams`; previously one tick later);
+  * the mixer flushes and the backend environment goes dry.
+* **No frontend music under gameplay:** loading the match level destroys the UI level's music player, and Streets authors no music
+  [CONF data]. Verified: 0 music instances and the player Stopped through every match stage.
+* **Loading:** the Bink movie mutes the game mix (CINE_MUTE). `prefetch(level)` decodes the next level's streamed music during
+  the loading screen.
+
+### Frontend contract
+**`game::FrontendAudioRuntime` (standalone, no World):** matches the Frontend lane's `frontend::IFrontendAudio` one to one
+(`playUiSound`, `stopUiSound`, `uiLevelStarted`, `levelChange`, `tick`):
+* **Extras:** `levelEvent(trigger)`, `setMoviePlaying(bool)`, `prefetchLevel(level)`, `setListener(pos)`, `state()`.
+* **`uiLevelStarted(level)`:**
+  * loads the level's manifests if that level is not loaded;
+  * fires the level's frontend-owned music-start trigger once (UI_FrontEnd_m: FsCommand:enterFrontEnd);
+  * the lobbies' GameplayStarted ops run on the next tick;
+  * repeated reports add nothing.
+* **`levelChange()`:** the travel unload.
+* **In a match:** `World` exposes the same contract (`loadMapAudio`, `unloadMapAudio`, `levelAudioEvent`, `playUiSound`,
+  `stopUiSound`, `setMoviePlaying`, `prefetchLevelAudio`, `setAudioListener`, `tickAudioOnly`, `audioState`) plus
+  `resetSystemsForMatch` / `playPickupSound`.
+* **Boot:** `setAudio(a, false)` skips the slice's Streets load.
+
+### Validation
+* **Suite** (`tools/systems/audio_native_suite.cpp`): **544 pass / 0 fail**. New blocks:
+  * **Frontend seam:** 20 × (frontend → party lobby → game lobby → match) through `FrontendAudioRuntime`, in the
+    Frontend lane's call order.
+    * Authored start each time; a repeated `uiLevelStarted` adds nothing.
+    * Baseline at every `levelChange`: 0 instances, 0 queued events, 0 level cues, built-in presets only,
+      `Default(1)`, no reverb, music Stopped, no script / pools / timelines.
+  * **Frontend timeline:** 6 Camera Orbiter loops (2 760 s) at 30 Hz.
+    * Kaon swap at 240.6 s (Iacon bed / emitters fade 2 / 6 s); loop-wrap refire.
+    * The medley plays once.
+    * Live instances at the same phase of every loop: 2 → 2.
+  * **Mixer:** 47 categories; MUSIC_DRY 0.708; CINE_MUTE (Master 0 at once, back over 1 s); Flush drops it.
+  * **Lobbies:** the GameplayStarted music, bed and two pools; pool one-shots over 60 s.
+  * **Lifecycle, recording backend:** 30 cycles × 7 levels (frontend → party lobby → lobby → Streets with
+    shooting / pickup / round reset → lobby → frontend → synthetic map).
+    * Baseline after all 210 unloads.
+    * Per-stage maxima flat (frontend 11 → 10 live, Streets 57 → 57, lobby 3 → 3).
+    * No music instance during any Streets stage.
+  * **Real Win32 backend:** 12 cycles × 7 levels; voices 0 and decoded PCM back to the 36.5 MB base after every
+    unload. Per-stage peaks identical from the first to the last cycle:
+
+    | level | peak voices | peak PCM |
+    |---|---|---|
+    | frontend | 9 | 240.8 MB (incl. the 140.8 MB medley) |
+    | party lobby | 5 | 99.7 MB |
+    | lobby | 5 | 183.5 MB |
+    | Streets | 71 | 97.2 MB |
+    | synthetic map | 6 | 37.6 MB |
+* **Game soaks** (Release; `WFC_LEVELAUDIO_CYCLE="<s>:<level>[@<trigger>],..."` walks frontend@enterFrontEnd →
+  party lobby → lobby → Streets → lobby → frontend@MovieStopped:FMV_intro → Streets while the pawn plays):
+
+  | run | load | transitions | errors / warnings | per-level maxima (1st → 2nd half) | PCM after each load | frame |
+  |---|---|---|---|---|---|---|
+  | robot 48 000 frames | firing, transforms, jumps, round reset every 7 s | 46 | 0 / 0 | not higher, e.g. Streets cues 68 → 57, frontend 20 → 12 | identical for each level every time (frontend 99.9, party 42.3, lobby 76.6, Streets 97.2 MB) | 6.4 → 6.1 ms |
+  | vehicle 36 000 frames | boost cycling | 39 | 0 / 0 | flat (Streets 56 → 56) | identical | 5.8–6.1 ms |
+  | fast 40 000 frames | a travel every 1.2 s, reset every 3 s | **181** (≈ 26 full cycles) | 0 / 0 | not higher (voices: Streets 96 → 69, lobby 29 → 11) | flat (PCM maxima per level identical) | 11.2–11.8 ms: the 1.2 s load hitches; flat |
+
+  * Fast run: 0 dropped voices.
+  * Particles / meshes 0 at the end.
+* **Level load cost** (synchronous bank decode, game thread): UI_FrontEnd_m 0.67–0.93 s, UI_PartyLobby_m
+  0.15–0.44 s, UI_Lobby_m 0.29–0.44 s, MP_IAC_Streets 0.48–0.83 s. These belong under the loading movie (PARTIAL).
+* **Regression:**
+  * Streets in game: 50 / 70 emitters, DEC_ROOM_LOWER reverb, 97.2 MB, 32 level cues + 10 presets.
+  * wfc_fidelity 194 / 0 / 19.
+
+### Classification
+* **CONFIRMED ORIGINAL:**
+  * UI levels' authored Kismet audio (ops, fields, links, timeline key times, actor positions);
+  * Kismet_ClientPlaySound / Kismet_ClientStopSound and PlayPlayerPositionalSound script;
+  * HmMusicPlayer rules; the authored level music;
+  * REVERB_TRANS_FRONT_END and CINE_MUTE_FOR_BINK data; MovieMixerPreset config;
+  * category Default volumes (MUSIC_DRY 0.708);
+  * per-cue-asset limits; no surface footstep audio anywhere;
+  * the medley plays once; no loading or match music.
+* **HIGH:**
+  * no-target PlaySound plays on the player;
+  * matinee event firing / loop-wrap semantics; the client-side timeline clock started by the same trigger;
+  * Master as the root category;
+  * the music player dies with its level; movie mute for the movie's lifetime.
+* **PARTIAL:**
+  * synchronous level-bank decode on load (UI_FrontEnd_m ~0.75 s, Streets ~0.75 s, lobbies 0.16–0.4 s; the
+    original streams during the loading movie);
+  * no streaming music decode (prefetch);
+  * VolumeMultiplier / PitchMultiplier / bSuppressSpatialization of SeqAct_PlaySound not applied (all authored at
+    the defaults: warned if not);
+  * the frontend listener (the orbiting camera) must be supplied by the frontend (`setListener`);
+  * category parent chain;
+  * IsUnpausable / pause; option sliders.
+* **UNKNOWN:**
+  * FRONT_END mixer preset activator;
+  * whether the frontend's audio runs during seamless travel through TransitionMap=UI_FrontEnd_m (muted by the
+    Bink anyway);
+  * exact crossfade points of the loading movie;
+  * native re-enable of the movie mute after a Flush;
+  * GetUISound native lookup.
+
+### Handoff
+* **Frontend (agents/frontend):** implement `IFrontendAudio` by forwarding to `game::FrontendAudioRuntime rt(audioDevice)`.
+  * Also call:
+    * `rt.setMoviePlaying(true/false)` around the logos, intro and loading Binks;
+    * `rt.levelEvent("MovieStopped:FMV_intro")` is equivalent to the enterFrontEnd path;
+    * `rt.prefetchLevel(nextUiLevel)` on the loading screen;
+    * `rt.setListener(cameraPos)` each frame.
+  * Before a match world is created, call `levelChange()` and destroy `rt` (or keep it for the return; it owns its
+    own cue table). The match World is created with `setAudio(a)`.
+* **Integration:**
+  * World::setAudio still auto-loads MP_IAC_Streets. With the frontend's `setMapName(runtimeDir)`, call
+    `setAudio(a, false)` + `loadMapAudio(<level>)`.
+  * The frontend recreates the audio device per match: fine (each owner releases everything).
+  * Merge preview: this branch onto integration/milestone-04 conflicts in `Application.cpp` (M05 hook, keep both) and
+    STATUS.md; onto agents/frontend, FIDELITY.md / STATUS.md only; onto agents/rendering, FIDELITY.md and
+    `VehicleFx.cpp` (M05 `clearParticles` vs Rendering's edits — keep both).
+* **AssetTools:** an AssetTools-side level manifest may carry a `kismet` section in the same schema, and it would be
+  used as-is. A map's audio.json bank entries may carry `MaxConcurrentPlayCount` / `InstanceLimiting`, which win over
+  the Systems cue_limits.
+* **Next map:**
+  * add it to `gen_level_audio.py` (limits; Kismet ops if it has non-zone audio);
+  * AssetTools exports `Maps/<map>/audio.json`;
+  * no runtime code.
+
+---
+
 ## MILESTONE 05 SYSTEMS — RUNTIME LIFECYCLE FOR THE FRONTEND TRANSITION (2026-10-03, agents/systems)
 
 **Goal:** make the non-visual runtime systems robust for frontend → map/mode selection → loading → gameplay →
