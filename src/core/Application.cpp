@@ -1197,6 +1197,17 @@ void Application::runChaosTest() {
     }
     int limit = std::atoi(std::getenv("WFC_CHAOS"));
     if (limit > 1 && (size_t)limit < nodes.size()) nodes.resize((size_t)limit);
+    game::CollisionWorld bspCol;   // level shell (BSP) of the pawn collision: under it = under the map
+    {
+        render::MeshData cm, bm;
+        assets::loadGlb(root + "/Maps/MP_IAC_Streets/collision_pawn.glb", cm);
+        bm.positions = cm.positions;
+        for (const render::SubMesh& sm : cm.subs)
+            if (sm.nodeName.rfind("BSPCollision", 0) == 0)
+                for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) bm.indices.push_back(cm.indices[i]);
+        bspCol.build(bm);
+    }
+    int propRuns = 0;
     unsigned rng = 0xC0FFEEu;
     auto rnd = [&]() { rng = rng * 1664525u + 1013904223u; return (float)((rng >> 8) & 0xFFFF) / 65535.0f; };
     long ticks = 0, transforms = 0, jumps = 0, boosts = 0;
@@ -1209,7 +1220,7 @@ void Application::runChaosTest() {
         pc.setPosition(p0); pc.velocity() = {0, 0, 0}; pc.groundY = p0.y;
         float yaw = rnd() * 6.2831853f, nextChange = 0.0f;
         bool fwd = true, back = false, left = false, right = false, boost = false;
-        int underFrames = 0; float worst = 0.0f; core::Vec3 worstAt;
+        int underFrames = 0, propFrames = 0; float worst = 0.0f; core::Vec3 worstAt;
         core::Vec3 stuckRef = pc.position(); float stuckT = 0.0f; bool reportedStuck = false;
         for (int k = 0; k < (int)(20.0f / dt); ++k) {
             float t = k * dt;
@@ -1237,7 +1248,11 @@ void Application::runChaosTest() {
             if (!pc.isTransforming()) {
                 bool robot = pc.moveForm() == game::Form::Robot;
                 float lo = 0.3f, hi = robot ? 3.0f : 1.5f;
-                if (col->groundHeight(p.x, p.z, p.y + hi, 0.0f, gy, gn) && gn.y > 0.7f && gy > p.y + lo) {
+                float by; core::Vec3 bn;
+                bool slab = col->groundHeight(p.x, p.z, p.y + hi, 0.0f, gy, gn) && gn.y > 0.7f && gy > p.y + lo;
+                bool bsp = slab && bspCol.groundHeight(p.x, p.z, p.y + hi, 0.0f, by, bn) && bn.y > 0.7f && by > p.y + lo;
+                if (slab && !bsp) ++propFrames;
+                if (bsp) {
                     ++underFrames;
                     if (gy - p.y > worst) { worst = gy - p.y; worstAt = p; }
                 }
@@ -1253,14 +1268,15 @@ void Application::runChaosTest() {
                 stuckRef = p; stuckT = 0.0f;
             }
         }
+        if (propFrames > 3) ++propRuns;
         if (underFrames > 3) {
             ++underRuns;
             LOG_INFO("CHAOS UNDER-FLOOR from %s: %d frames, worst %.2f m at (%.1f %.1f %.1f) blockers %s", nodes[ni].first.c_str(), underFrames, worst,
                      worstAt.x, worstAt.y, worstAt.z, world_.collisionActorsAt(worstAt + core::Vec3{0, worst, 0}, 0.5f).c_str());
         }
     }
-    LOG_INFO("CHAOS SUMMARY: %zu starts x 20 s (%ld ticks, %ld transform presses, %ld jumps, %ld boosts): %d runs under a floor, %d KillZ, %d stuck",
-             nodes.size(), ticks, transforms, jumps, boosts, underRuns, killz, stuck);
+    LOG_INFO("CHAOS SUMMARY: %zu starts x 20 s (%ld ticks, %ld transform presses, %ld jumps, %ld boosts): %d runs UNDER THE MAP (BSP floor above), %d KillZ, %d stuck; %d runs with the pawn inside / under a prop",
+             nodes.size(), ticks, transforms, jumps, boosts, underRuns, killz, stuck, propRuns);
 }
 
 // WFC_TDMTEST: a whole MP_IAC_Streets TDM session through World (the real pawn, hitscan, pickups, map state) with three

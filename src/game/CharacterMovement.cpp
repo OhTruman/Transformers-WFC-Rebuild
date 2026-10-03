@@ -494,10 +494,14 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     core::Vec3 p = oldPos + v * dt;
 
     // physWalking: after a blocked move the velocity is the actual displacement over the step. Probes: capsule centre
-    // (2 m) and head (3.6 m: the 4 m cylinder does not pass under overhangs lower than its top). No low probe: the
-    // centre-point ground model owns steps / stairs (MaxStepHeight 0.35 m). [PROV collision model: no capsule sweep]
+    // (2 m) and head (3.6 m: the 4 m cylinder does not pass under overhangs lower than its top); steps / stairs belong to
+    // the centre-point ground model (MaxStepHeight 0.35 m). [PROV collision model: no capsule sweep]
     bool robotBlocked = wallBlock(col, oldPos, p, v, core::config::kPawnRadius);
     robotBlocked |= wallBlock(col, oldPos, p, v, core::config::kPawnRadius, 2.0f * core::config::kPawnHalfHeight - 0.4f);
+    // Knee probe (0.55 m, above MaxStepHeight 0.35; short reach 0.7 m; walkable faces skipped): low props (crates, battery, supports 1-2 m tall)
+    // block the body instead of being walked through; the short reach keeps stairs to the centre-point ground model
+    // (a 35 deg stair 0.7 m ahead is ~0.49 m high). [PROV: the native cylinder sweep with step-up is not reproduced]
+    robotBlocked |= wallBlock(col, oldPos, p, v, 0.7f, 0.55f, true);
     if (robotBlocked) {
         v.x = (p.x - oldPos.x) / dt; v.z = (p.z - oldPos.z) / dt;
     }

@@ -3,6 +3,11 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 20c (2026-10-03) — adversarial movement hardening
+- WFC_CHAOS (60 starts x 20 s random play): 0 under the map, 0 KillZ, 1 stuck, 3 prop entries.
+- Robot knee probe 0.55 m / 0.7 m [PROV]; oracle 852/852; transform under-overhang cases 54 -> 15.
+- Open RE requests listed in FIDELITY.md PASS 20c.
+
 ## GAMEPLAY PASS 20b (2026-10-03) — Streets TDM session runtime
 - Launch contract: original StartLevel URL -> World::launchMatch (map check, mode world state, fresh-level reset).
 - Combat: team filter (AOE only), DamageHistory/assists, kill credit, segmented health, fresh-pawn respawn.

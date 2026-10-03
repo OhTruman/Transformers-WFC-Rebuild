@@ -75,6 +75,44 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 20c — ADVERSARIAL MOVEMENT HARDENING (2026-10-03, gameplay agent)
+- **WFC_CHAOS** (Phase 3): from 60 nav points, 20 s each of seeded random play through the real input path
+  (71,940 ticks, 355 transform presses, 312 jumps, 307 boosts). Checks:
+  - UNDER THE MAP: a walkable BSP (level-shell) floor 0.3–3 m above the pawn;
+  - inside / under a prop;
+  - KillZ;
+  - stuck (< 0.5 m in 5 s with move input).
+- **Robot knee probe [PROV].** 0.55 m height (above MaxStepHeight 0.35), 0.7 m reach, walkable faces skipped.
+  - It stops the robot body walking into raised BSP blocks, crates and supports 0.6–2 m tall (no probe covered 0.35–2 m).
+  - The short reach leaves stairs to the centre-point ground model: a 35° stair 0.7 m ahead is about 0.49 m high.
+  - The native cylinder sweep with step-up is not reproduced.
+
+| run | under the map | KillZ | stuck | inside / under a prop |
+|---|---|---|---|---|
+| before the knee probe | 8 (old detector) | 0 | 1 | — |
+| knee probe 0.9 m | 1 | 0 | 2 | 7 |
+| **knee probe 0.55 m** | **0** | **0** | **1** | **3** |
+
+- **Regression.**
+  - Authored ReachSpec oracle 852 / 852 (robot + vehicle).
+  - Visible components crossed where the hull is smaller than the mesh: 33 (was 43 at the start of Pass 20).
+  - TRAVERSE 160 runs, 0 falls.
+  - WFC_TDMTEST 30 / 30.
+  - VEHTEST unchanged; harness 179 / 2 known / 21.
+- **Remaining reported locations.**
+  - Robot wedged between BlockingVolume_6729 / _7015 and the TrainTrack at (221.6, −724.8, −441.3).
+  - Three prop-entry cases.
+  - Transform under a low overhang: 15 / 1520 stress cases (54 before the knee probe; RE question, PASS 20a). WFC_XFORMTEST: still 0 / 1520 under the map, 0 KillZ.
+
+### Open RE requests (narrow)
+1. `MoveToSafeTransformationLocation` / `FindSpotAwayFromPawns(target extent)`: does it resolve world geometry, and
+   when does `NotifyCantTransform` fire? (Transform under a 1.95–2 m overhang.)
+2. The native cylinder physWalking step-up / encroachment against simple hulls, to replace the robot probes.
+3. The TraceCamera exact flag word and the AABB sweep result when starting inside geometry (camera model, PASS 20a).
+4. Segmented-health regeneration rules; death animation / Death camera strategy timing.
+
+---
+
 ## PASS 20b — MP_IAC_STREETS TDM SESSION RUNTIME (2026-10-03, gameplay agent)
 RE: MILESTONE05_FRONTEND_MATCH_BOOTSTRAP §3, §5, §6 and MILESTONE05_GAMEPLAY_UNKNOWNS §3, §5, §6. Test:
 `WFC_TDMTEST` — **30 / 30 checks** through World (real pawn, hitscan, pickups, map state).
