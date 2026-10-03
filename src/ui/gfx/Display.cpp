@@ -427,6 +427,8 @@ void Player::placeObject(MovieClip* mc, const PlaceCmd& pc, int frame) {
     DisplayObject* d = instantiate(mc, mc->def, pc.charId, pc.depth, pc.hasName ? pc.name : keepName, false);
     if (!d) return;
     d->placeFrame = frame;
+    // Flash names unnamed timeline movie clips "instanceN" (targetPath / dot paths rely on it).
+    if (d->name.empty() && d->kind == DisplayObject::Kind::Clip) d->name = "instance" + std::to_string(++instanceCounter_);
     d->matrix = pc.hasMatrix ? pc.m : (pc.move ? keepM : Matrix{});
     d->cx = pc.hasCx ? pc.cx : (pc.move ? keepC : CXForm{});
     d->ratio = pc.ratio;

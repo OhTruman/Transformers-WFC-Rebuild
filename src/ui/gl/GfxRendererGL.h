@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "ui/gfx/Display.h"
+#include "ui/gl/GlCensus.h"
 
 namespace ui {
 
@@ -25,6 +26,7 @@ public:
     bool ok() const { return ok_; }
     size_t cachedShapes() const { return shapes_.size(); }
     size_t textures() const { return textures_.size(); }
+    void ownedNames(GlCensus::Owned& o) const;   // GL objects of the UI renderer (kept across level travel)
 
 private:
     struct Mesh { std::vector<float> fan; float bx0 = 0, by0 = 0, bx1 = 0, by1 = 0; int set = 0, style = 0; };

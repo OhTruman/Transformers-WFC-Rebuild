@@ -70,7 +70,8 @@ void GfxPresenter::fsCommand(GfxMovie& m, const std::string& cmd, const std::str
 }
 
 void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
-    const std::vector<std::string>& want = flow.openMovies();
+    // Copy: opening a movie runs its first frame, which may open / close movies through the flow (fscommands).
+    const std::vector<std::string> want = flow.openMovies();
     // Close movies the flow no longer has open.
     for (size_t i = movies_.size(); i-- > 0;) {
         if (std::find(want.begin(), want.end(), movies_[i].object) == want.end()) {
@@ -90,7 +91,7 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
         if (!loading_ || loadingUrl_ != L.url) {
             loading_ = std::make_unique<GfxMovie>();
             loadingUrl_ = L.url;
-            loadingFrames_ = 0;
+            loadingTime_ = 0.0f;
             bool ok = loading_->open(lib_, &rt_.catalog(), L.gfxMovie,
                                      [this](GfxMovie& mv, const std::string& fn, Args& a) { return bridge(mv, fn, a); },
                                      [this](GfxMovie& mv, const std::string& c, const std::string& a) { fsCommand(mv, c, a); });
@@ -123,7 +124,7 @@ void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
     syncMovies(flow);
     deliverKeys(in);
-    if (loading_) { loading_->advance(dt); ++loadingFrames_; }
+    if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
     std::vector<std::string> objs;
     for (const Open& o : movies_) objs.push_back(o.object);
@@ -132,7 +133,11 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     // Data-store change callbacks (HmWidget.updateDSValue(markup, value) by target path).
     for (const auto& c : rt_.dataStores().poll())
         for (Open& op : movies_)
-            if (op.object == c.movie) op.movie->invoke(c.callback, {Value(c.markup), Value(c.value)});
+            if (op.object == c.movie) {
+                Value r = op.movie->invoke(c.callback, {Value(c.markup), Value(c.value)});
+                frontend::FlowTrace::emit("gfx.dsCallback", {{"movie", c.movie}, {"markup", c.markup}, {"value", c.value}, {"callback", c.callback}});
+                (void)r;
+            }
 }
 
 void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {

@@ -63,6 +63,7 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             else if (c.rfind("ui=", 0) == 0) ok = uiStateName(flow.ui().state()) == c.substr(3);
             else if (c == "frontend") ok = flow.frontEndStarted();
             else if (c == "loading=0") ok = !flow.loading().active;
+            else if (c == "loading=1") ok = flow.loading().active;
             else if (c.rfind("movie=", 0) == 0) {
                 for (const std::string& m : flow.openMovies()) if (m.find(c.substr(6)) != std::string::npos) ok = true;
             } else if (c.rfind("t=", 0) == 0) {

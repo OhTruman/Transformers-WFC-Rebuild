@@ -26,7 +26,8 @@ public:
     std::vector<std::string> openMovieObjects() const;
     std::string dumpMovie(const std::string& object) const;
     bool hasLoadingMovie() const { return loading_ != nullptr; }
-    int loadingFrames() const { return loadingFrames_; }
+    float loadingSeconds() const { return loadingTime_; }
+    void ownedGl(GlCensus::Owned& o) const { gl_.ownedNames(o); }
 
 private:
     GfxMovie* openMovie(const std::string& object);
@@ -43,7 +44,7 @@ private:
     std::vector<Open> movies_;              // flow-open movies in open order (last = focus)
     std::unique_ptr<GfxMovie> loading_;     // the loading movie while a travel is in progress
     std::string loadingUrl_;
-    int loadingFrames_ = 0;
+    float loadingTime_ = 0.0f;
     uint32_t prevUi_ = 0;
     std::vector<gfx::Player::RenderItem> items_;
 };

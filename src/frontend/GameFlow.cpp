@@ -309,7 +309,11 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     auto argi = [&](size_t i) { return std::atoi(arg(i).c_str()); };
     std::string joined;
     for (const std::string& a : args) joined += (joined.empty() ? "" : ",") + a;
-    FlowTrace::emit("bridge", {{"fn", fn}, {"args", joined}, {"level", levelKindName(level_)}});
+    // Per-frame state polls of the movies are not traced (noise); every action call is.
+    static const char* const kPolls[] = {"Online.IsInPartyChatSession", "Online.IsHost", "Online.GetLoginStatus"};
+    bool poll = false;
+    for (const char* q : kPolls) poll |= fn == q;
+    if (!poll) FlowTrace::emit("bridge", {{"fn", fn}, {"args", joined}, {"level", levelKindName(level_)}});
 
     // ---- TnGameActionScriptBinding ----
     if (fn == "Game.HasWatchedIntroMovie") return watchedIntro_;

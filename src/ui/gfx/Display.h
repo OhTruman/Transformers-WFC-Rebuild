@@ -294,6 +294,7 @@ private:
     std::map<const MovieDef*, std::set<uint16_t>> initRun_;
     std::map<std::string, std::shared_ptr<MovieDef>> fontLib_;
     Matrix renderBase_;
+    int instanceCounter_ = 0;
     bool renderingMask_ = false;
 
     friend class avm1::VM;

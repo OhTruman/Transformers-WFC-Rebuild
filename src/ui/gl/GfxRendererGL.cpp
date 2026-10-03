@@ -129,6 +129,17 @@ bool GfxRendererGL::init() {
     return true;
 }
 
+void GfxRendererGL::ownedNames(GlCensus::Owned& o) const {
+    for (const auto& [k, t] : textures_) if (t.id) o.textures.insert(t.id);
+    for (const auto& [k, id] : gradients_) o.textures.insert(id);
+    if (resTex_) o.textures.insert(resTex_);
+    if (vbo_) o.buffers.insert(vbo_);
+    if (vao_) o.vertexArrays.insert(vao_);
+    for (unsigned f : {msFbo_, resFbo_}) if (f) o.framebuffers.insert(f);
+    for (unsigned r : {msColor_, msDepth_}) if (r) o.renderbuffers.insert(r);
+    for (unsigned pr : {prog_, compProg_}) if (pr) o.programs.insert(pr);
+}
+
 gfx::Matrix GfxRendererGL::stageMatrix(float stageW, float stageH, int width, int height) {
     float s = std::min(width / stageW, height / stageH);
     gfx::Matrix m;

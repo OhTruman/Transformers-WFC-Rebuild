@@ -11,13 +11,34 @@
 #include "render/Renderer.h"
 #include "ui/GfxPresenter.h"
 #include "ui/UiGL.h"
+#include "ui/gl/GlCensus.h"
 
 #include <cstdlib>
 #include <cstring>
 #include <new>
 #include <string>
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <psapi.h>
+#endif
+
 namespace core {
+
+namespace {
+// Process memory for the cycle soak (Experimental: leaks across frontend <-> match).
+ui::GlCensus g_census;   // GL objects created by a match (released on travel away; stopgap, see GlCensus.h)
+
+std::string processMemoryMB() {
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS_EX pmc{};
+    if (K32GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof pmc))
+        return frontend::FlowTrace::num(pmc.PrivateUsage / (1024.0 * 1024.0));
+#endif
+    return "0";
+}
+} // namespace
 
 Application::Application() = default;
 Application::~Application() = default;
@@ -77,8 +98,9 @@ void Application::runFrontend() {
             drawFrontendFrame();
             titleTimer += dt;
             if (titleTimer > 0.25) { titleTimer = 0.0; window_->setTitle(frontend_->titleText().c_str()); }
-            // The loading movie plays its intro ("spinIn", 34 frames) before the blocking world load starts.
-            if (flow.hasPendingMatch() && (!presenter_ || !presenter_->hasLoadingMovie() || presenter_->loadingFrames() >= 40)) break;
+            // The loading movie plays its intro (LoadScreen_GFX "spinIn" -> "loopStart": 34 frames at 30 fps) before the
+            // blocking world load starts (the load is not threaded yet: PARTIAL).
+            if (flow.hasPendingMatch() && (!presenter_ || !presenter_->hasLoadingMovie() || presenter_->loadingSeconds() >= 34.0f / 30.0f)) break;
             if (timeout > 0.0 && now - started > timeout) {
                 frontend::FlowTrace::emit("timeout", {{"seconds", frontend::FlowTrace::num(now - started)}});
                 flow.traceSnapshot("timeout");
@@ -125,12 +147,13 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     if (!modeOk) { LOG_WARN("FLOW match mode %s is not supported by Gameplay", m.modeTag.c_str()); return false; }
     LOG_INFO("FLOW loading match world: map dir %s, mode %s", m.map->runtimeDir.c_str(), m.modeTag.c_str());
     double t0 = nowSeconds();
+    g_census.begin();
     world_.load(*renderer_);
     if (!world_.usingSlice()) { LOG_WARN("FLOW match world failed to load (graybox fallback)"); return false; }
     world_.setAudio(audio_);
     gameMode_.begin(world_);
     frontend::FlowTrace::emit("match.loaded", {{"map", m.map->runtimeDir}, {"mode", m.modeTag},
-                                               {"seconds", frontend::FlowTrace::num(nowSeconds() - t0)}});
+                                               {"seconds", frontend::FlowTrace::num(nowSeconds() - t0)}, {"privateMB", processMemoryMB()}});
     return true;
 }
 
@@ -140,6 +163,9 @@ void Application::unloadMatch() {
     // freed (HANDOFF Rendering: unloadMapRenderData / resource release for level travel).
     world_.~World();
     new (&world_) game::World();
+    ui::GlCensus::Owned keep;
+    if (presenter_) presenter_->ownedGl(keep);
+    if (!std::getenv("WFC_NO_GL_RELEASE")) frontend::FlowTrace::emit("match.glRelease", {{"released", g_census.release(keep)}});
     gameMode_ = game::GameMode();
     delete audio_;
     audio_ = audio::createAudio();
@@ -150,7 +176,7 @@ void Application::unloadMatch() {
     escWasDown_ = false;
     window_->setMouseCaptured(false);
     mouseCaptured_ = false;
-    frontend::FlowTrace::emit("match.unloaded", {});
+    frontend::FlowTrace::emit("match.unloaded", {{"privateMB", processMemoryMB()}});
 }
 
 } // namespace core
