@@ -17,6 +17,52 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 07 — STREETS CLEANUP, FRONTEND / NEXT-MAP READINESS (2026-10-03)
+Evidence:
+- RE-Workspace M05 notes (read-only): `MILESTONE05_GAMEPLAY_UNKNOWNS.md` §5 (Canvas HUD markers) and §6 (pickup factory
+  mesh and spin), and `MILESTONE05_FRONTEND_MATCH_BOOTSTRAP.md`;
+- the agents/frontend a55a4e9 handoff (map unload);
+- the latest render_index (pickup_factory_visuals, including the objective rest meshes).
+
+The renderer contract for the other lanes is in `docs/RENDERER_CONTRACT.md`.
+
+| Item | Original (WFC) | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Pickup factory mesh placement | the template mesh is attached to the factory actor with zero offset; actor rotation and DrawScale apply | RE M05 §6 (script) | CONFIRMED (script) / HIGH (native attach) | mesh at the factory transform from render_index, authored rotation kept (was yaw from 0) |
+| Pickup spin | the factory actor is PHYS_Rotating at PickupRotationRate only while available; it freezes when taken and resumes from that yaw | RE M05 §6 | CONFIRMED | spin accumulated per factory while available, frozen while hidden (was continuous from map start); local-space FX follow it. VISUALLY VERIFIED available / taken / respawn |
+| Health / overshield | no PickupFactoryMesh, no spin | RE M05 §6 | HIGH | only their FX mesh particles draw; render_index "mesh particle" entries are not drawn twice |
+| Flag / bomb rest mesh | Code of Power / MP bomb skeletal mesh at rest pose, +150 Z, spinning, CTF / EXT only | render_index (supersedes UNKNOWN) | CONFIRMED data | drawn and gated by the factory's game rule; hidden in TDM. VISUALLY VERIFIED (TDM none / CTF shown). Weapon materials not in the compiled set (glTF fallback) [PARTIAL, CTF/EXT only] |
+| HUD markers | Canvas material tiles (`TnObjectiveMarkerTypeSprite.Draw`), materials in UI_HudMarkers_p, per-draw material params | RE M05 §5 | CONFIRMED | `IRenderer::drawMaterialTile`. All 15 marker materials compiled with runtime parameters and verified (231/231 permutations). VISUALLY VERIFIED: base marker friendly / enemy / off-screen arrow, enemy, death, health bar |
+| MarkerAlly_MAT | empty expression tree | cooked material | CONFIRMED | draws nothing (ally tags = label + health bar) |
+| Canvas gamma | — | canvas tile shader not decoded | PARTIAL | display gamma 1/2.2 applied as in the scene post |
+| 2D composition | GFx / Bink / loading presented over the scene | Frontend handoff | — | `drawScreenTriangles` (blend modes, scissor, clamp), `updateTexture`. VISUALLY VERIFIED (fade + panel) |
+| Level travel | — | Frontend handoff (renderer leaked the previous map) | — | `unloadMapRenderData` / `Pipeline::release`; in-process cycle VISUALLY VERIFIED (`WFC_RELOADTEST`) |
+| Map-agnostic data | — | audit | — | asset roots from WFC_ASSETS / WFC_CONTENT; props, pickups and destructibles from render_index; tools take the map name, AssetTools manifest prefix, inline lightmaps from the ART package. Movers and map FX outputs identical to before |
+| KOTH ring colour | `CaptureColor[team]` / `NeutralColor` vector params (MaterialParamNames) | RE M05 §3 | CONFIRMED (script) | not wired: needs a Gameplay hook; KOTH only [PARTIAL] |
+
+**Regression of the playtest categories** (same cameras as M06; VISUALLY VERIFIED unchanged):
+- glass: 9 views, 0 px different;
+- steam over time: 12 views, 0 px;
+- fog sheets: 138 views.
+
+In the fog-sheet views the only differences are:
+- the uncoloured steam emitter: the M06 scan predates ColorByParameter;
+- one flag mesh, a regression caught and fixed by the rule gate.
+
+Normal play (robot), vehicle form, transformation, firing, pickups and self-tests (shadows 32/32, DLE 20/20) were re-run.
+
+**Still open (original-engine unknowns, documented):**
+
+| Item | Mark |
+|---|---|
+| Translucent alpha output / blend state | PARTIAL |
+| Darkening (modulate) blend with Opacity | UNKNOWN; no map material depends on it |
+| HmParticleModuleGravity acceleration | UNKNOWN |
+| Steam LOD 1/2 | DirectSet, unused |
+| Totem and KOTH team colours | PARTIAL; need Gameplay ownership hooks |
+| Canvas gamma | PARTIAL |
+| Visible BSP without lightmaps | PARTIAL; RE orientation question open, not visible from gameplay viewpoints |
+
 ## MILESTONE 06 — HUMAN PLAYTEST: TRANSLUCENCY, SMOKE, GLASS (2026-10-03)
 The human playtest of integration milestone 04 drives this pass. Evidence comes from the shipped Xenon shader caches
 (`work/re/sc_streets_art.bin`, `sc_base.bin`, `sc_engine.bin`, disassembled with `tools/render/xenos_dis.py`), the

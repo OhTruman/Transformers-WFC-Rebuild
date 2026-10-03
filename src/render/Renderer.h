@@ -1,6 +1,7 @@
 // Clean-room reconstruction — rendering abstraction.
 // Gameplay/presentation code issues draw calls through this; no GL types leak out.
 #pragma once
+#include <cstdint>
 #include <utility>
 #include <array>
 #include <functional>
@@ -97,6 +98,26 @@ public:
     };
     virtual bool drawMaterialTile(const MaterialTile& t) { (void)t; return false; }
     virtual bool hasMaterial(const std::string& material) const { (void)material; return false; }
+
+    // ---- 2D composition (frontend / GFx movies / Bink frames / loading screens / fades) ----
+    // Screen-space triangles in pixels (top-left origin) with per-vertex RGBA and UV, optionally textured.
+    // Display-referred: colours and texels are written as given (no gamma conversion), as UI and video
+    // sources are authored. Inside a 3D frame the batches are composited after the scene, its post pass, the
+    // Canvas material tiles and the HUD reticle, in submission order; outside a frame they draw immediately.
+    enum class ScreenBlend { Alpha, Premultiplied, Additive, Multiply, Opaque };
+    struct ScreenVertex { float x, y, u, v; uint8_t r, g, b, a; };
+    struct ScreenBatch {
+        TextureHandle texture = kInvalidTexture;   // kInvalidTexture: untextured (vertex colour only)
+        ScreenBlend blend = ScreenBlend::Alpha;
+        bool clampUV = true, linearFilter = true;
+        bool scissor = false; int sx = 0, sy = 0, sw = 0, sh = 0;   // pixels, top-left origin
+        std::vector<ScreenVertex> verts;           // triangle list
+    };
+    virtual void drawScreenTriangles(const ScreenBatch& b) { (void)b; }
+    // Replace a texture's contents (same or new size): streamed video frames, dynamic UI bitmaps.
+    virtual bool updateTexture(TextureHandle h, const ImageData& image) { (void)h; (void)image; return false; }
+    virtual int viewportWidth() const { return 0; }
+    virtual int viewportHeight() const { return 0; }
 
     // Character customization for subsequent dynamic draws (see CharacterColors). Optional.
     virtual void setCharacterColors(const CharacterColors& c) { (void)c; }

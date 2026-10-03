@@ -229,6 +229,21 @@ void Application::run() {
         }
         renderer_->beginFrame(camera_, window_->width(), window_->height());
         world_.draw(*renderer_);
+        if (std::getenv("WFC_SCREENTEST")) {            // diagnostics: 2D composition path (fade + panel)
+            using RB = render::IRenderer;
+            const float W = (float)window_->width(), H = (float)window_->height();
+            RB::ScreenBatch fade; fade.blend = RB::ScreenBlend::Alpha;
+            auto quad = [](RB::ScreenBatch& b, float x0, float y0, float x1, float y1, uint8_t r, uint8_t g, uint8_t bb, uint8_t a) {
+                RB::ScreenVertex v[4] = {{x0, y0, 0, 0, r, g, bb, a}, {x1, y0, 1, 0, r, g, bb, a},
+                                         {x1, y1, 1, 1, r, g, bb, a}, {x0, y1, 0, 1, r, g, bb, a}};
+                for (int i : {0, 1, 2, 0, 2, 3}) b.verts.push_back(v[i]);
+            };
+            quad(fade, 0, 0, W, H, 0, 0, 0, 128);                    // 50 % black fade
+            renderer_->drawScreenTriangles(fade);
+            RB::ScreenBatch panel; panel.blend = RB::ScreenBlend::Additive;
+            quad(panel, W * 0.1f, H * 0.8f, W * 0.5f, H * 0.9f, 80, 181, 213, 255);   // friendly label colour
+            renderer_->drawScreenTriangles(panel);
+        }
         if (std::getenv("WFC_TILETEST")) {             // diagnostics: Canvas material tiles (HUD marker materials)
             const float W = (float)window_->width(), H = (float)window_->height(), S = std::min(W, H);
             auto tile = [&](const char* m, float cx, float cy, float size,

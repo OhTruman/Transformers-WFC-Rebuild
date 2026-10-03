@@ -98,6 +98,7 @@ public:
         const Camera& cam = camOv;
         if (wfc_.active()) wfc_.beginFrame(cam, vpW, vpH);
         vpW_ = vpW; vpH_ = vpH;
+        inFrame_ = true;
         glMatrixMode(GL_PROJECTION);
         core::Mat4 p = cam.proj();
         glLoadMatrixf(p.m);
@@ -114,7 +115,66 @@ public:
     void endFrame() override {
         if (wfc_.active()) { wfc_.drawMapPresentation(); wfc_.endFrame(); }
         drawReticle();
+        for (const ScreenBatch& b : screenQueue_) drawScreenNow(b);   // 2D composition on top, in order
+        screenQueue_.clear();
+        inFrame_ = false;
         glFlush();
+    }
+
+    void drawScreenTriangles(const ScreenBatch& b) override {
+        if (b.verts.empty()) return;
+        if (inFrame_) screenQueue_.push_back(b); else drawScreenNow(b);
+    }
+
+    bool updateTexture(TextureHandle h, const ImageData& img) override {
+        if (h < 0 || (size_t)h >= textures_.size() || !img.valid()) return false;
+        glBindTexture(GL_TEXTURE_2D, textures_[(size_t)h]);
+        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img.rgba.data());
+        glBindTexture(GL_TEXTURE_2D, 0);
+        return true;
+    }
+    int viewportWidth() const override { return vpW_; }
+    int viewportHeight() const override { return vpH_; }
+
+    void drawScreenNow(const ScreenBatch& b) {
+        GLint vp[4]; glGetIntegerv(GL_VIEWPORT, vp);
+        const int W = vp[2] > 0 ? vp[2] : vpW_, H = vp[3] > 0 ? vp[3] : vpH_;
+        glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity(); glOrtho(0, W, H, 0, -1, 1);
+        glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
+        glDisable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE); glDisable(GL_LIGHTING); glDisable(GL_FOG);
+        if (b.scissor) { glEnable(GL_SCISSOR_TEST); glScissor(b.sx, H - (b.sy + b.sh), b.sw, b.sh); }
+        switch (b.blend) {
+            case ScreenBlend::Opaque: glDisable(GL_BLEND); break;
+            case ScreenBlend::Alpha: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); break;
+            case ScreenBlend::Premultiplied: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE_MINUS_SRC_ALPHA); break;
+            case ScreenBlend::Additive: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE); break;
+            case ScreenBlend::Multiply: glEnable(GL_BLEND); glBlendFunc(GL_DST_COLOR, GL_ZERO); break;
+        }
+        const bool tex = b.texture >= 0 && (size_t)b.texture < textures_.size();
+        if (tex) {
+            glEnable(GL_TEXTURE_2D);
+            glBindTexture(GL_TEXTURE_2D, textures_[(size_t)b.texture]);
+            const GLint wrap = b.clampUV ? GL_CLAMP_TO_EDGE : GL_REPEAT, filt = b.linearFilter ? GL_LINEAR : GL_NEAREST;
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, wrap); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, wrap);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filt); glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filt);
+            glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+        } else {
+            glDisable(GL_TEXTURE_2D);
+        }
+        glBegin(GL_TRIANGLES);
+        for (const ScreenVertex& v : b.verts) {
+            glColor4ub(v.r, v.g, v.b, v.a);
+            glTexCoord2f(v.u, v.v);
+            glVertex2f(v.x, v.y);
+        }
+        glEnd();
+        glColor4ub(255, 255, 255, 255);
+        if (tex) { glBindTexture(GL_TEXTURE_2D, 0); glDisable(GL_TEXTURE_2D); }
+        if (b.scissor) glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_BLEND); glEnable(GL_DEPTH_TEST);
+        glMatrixMode(GL_PROJECTION); glPopMatrix();
+        glMatrixMode(GL_MODELVIEW); glPopMatrix();
     }
 
     void setReticle(const ReticleState& s) override { reticle_ = s; }
@@ -684,6 +744,8 @@ private:
     bool prongSet_ = false;
     wfc::Pipeline wfc_;
     std::vector<int> gpu_;
+    std::vector<ScreenBatch> screenQueue_;   // 2D batches submitted inside a 3D frame
+    bool inFrame_ = false;
     std::vector<MeshData> meshes_;
     std::vector<GLuint> textures_;
 };
