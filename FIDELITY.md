@@ -17,6 +17,187 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 05 SYSTEMS — RUNTIME LIFECYCLE FOR THE FRONTEND TRANSITION (2026-10-03, agents/systems)
+
+**Goal:** make the non-visual runtime systems robust for frontend → map/mode selection → loading → gameplay →
+return / reload. Systems checkpoints: a9ee467 (lifecycle + data-driven map audio), 4ec1506 (frontend audio), 2575207
+(map-event checks, soak hooks, integration glue compatibility), plus this documentation commit.
+
+**Sources (read only):**
+* AssetTools: `frontend_audio.json`, `frontend_flow.json`, `frontend_loading.json`, `frontend_maps.json`,
+  `streets_actor_inventory.json`, `streets_movers.json`, `streets_kismet.json`,
+  `vertical_slice_audio_concurrency.json`, `streets_pickup_factories.json`, `authored.db` (SeqAct_PlayMusic of the
+  UI levels; HmMusicPlayer defaults).
+* RE-Workspace decompiled script: HM_Engine `HmMusicPlayer` / `SeqAct_PlayMusic` / `SeqAct_StopMusic` /
+  `HmPlayerController.StopSound`; TransGame `TnSoundActionScriptBinding`; `SeqAct_AmbientAudioZone` /
+  `SeqAct_PlayPlayerPositionalSound` `Reset`.
+* No new asset recovery or native RE.
+
+**Confidence:** CONFIRMED ORIGINAL · HIGH · PARTIAL · UNKNOWN.
+**Audible result:** unchanged. The Streets bed still has 50 of 70 emitters sounding, the same zone / reverb / pool
+behaviour, and the same per-voice rules.
+
+### Phase 1 / 5 — map audio lifecycle and match reset
+* **World (Systems API):**
+  * `loadMapAudio(map)` — `<assets>/Maps/<map>/audio.json`; any loaded map is unloaded first.
+  * `unloadMapAudio()` — player-side reset, then a hard stop of everything, AmbientAudio unload (bed, zones, pools,
+    map cue bank + samples, map presets), mixer Flush, and the dry environment pushed at once.
+  * `resetSystemsForMatch()`, `playPickupSound(factoryClass, receiverPos)`, `tickAudioOnly(dt)`.
+* **SoundCues:**
+  * `stopAll` — hard stop: voices stopped and queued events dropped.
+  * `stopNonMapInstances` — the match reset.
+  * `unloadMapCues` — the map bank leaves the table; its samples not shared with the built-in table are released.
+* **IAudio:** `release` (Win32 frees the decoded PCM; a released handle refuses to play), `stopAllVoices`,
+  `activeVoices`, `residentBytes`.
+* **SoundMixer:** map presets are owned by the map. `removeMapPresets` = Flush + forget.
+* **AmbientAudio:** `unload`, and `resetMatch` with per-zone scene state.
+* **WeaponFx / VehicleFx:** `clearParticles`.
+* **Mixer Flush at a level change** [CONF, A1/A4]: only Default stays active and the reverb slot becomes None.
+* **Match reset** [HIGH: GameInfo.ResetLevel → Kismet Reset; the Reset bodies are CONF script]:
+  * SeqAct_AmbientAudioZone.Reset (IsEntered false, SceneIndexCurrent −1) stops the zone scenes and their pools.
+  * SeqAct_PlayPlayerPositionalSound.Reset sets IsPlaying false.
+  * The bed keeps playing (AmbientSound has no Reset). The mixer is not flushed, and PlayerController.AmbientAudioZone
+    is kept.
+  * The (re)spawned pawn's first Touch re-begins the zone scene (pools restart) without re-enabling its preset.
+  * Player-side Systems state restarts: VehicleAudio, RobotFoley, VehicleNitro, the vehicle FX instance ids,
+    transform / fine-aim / tire-slip / burst flags, and the weapon serials (resynced, so no phantom shot or reload
+    animation).
+* **Validated (suite):**
+  * 12 Streets ↔ synthetic-map load / play / unload cycles return exactly to the baseline: 0 instances, 0 queued
+    events, 0 map cues, preset count = built-ins, mixer `Default(1)` / None, 0 voices, no emitters / zones / pools.
+  * Loading over a loaded map keeps one bed.
+  * Match reset keeps the bed and reverb, stops player sounds and pools, and a re-touch re-begins the scene without
+    a duplicate preset enable.
+  * Real backend: voices 69 → 0 (Streets) and 11 → 0 (synthetic); decoded PCM 88.8 MB → back to the 28.1 MB base
+    every cycle.
+
+### Phase 2 — data-driven map audio
+* **Removed Streets-specific source:**
+  * The 10 REVERB_TRANS_MP_STREETS_* presets compiled into `SoundMixer.inc` now come from the map's audio.json
+    `reverb_presets` (mixer_preset + MASTER_WET DSP). Verified identical to the old compiled values (10 / 10, 0
+    mismatches).
+  * The two hard-coded Streets cue limits now come from the generic `CookedCueLimits.inc` (67 authored cue-asset
+    limits, AssetTools); a map entry's own field wins.
+  * The per-instance Streets pickup table is now per **factory class** (`PickupPresentation.inc`).
+  * The only map name left in Systems code is the slice default passed to `loadMapAudio("MP_IAC_Streets")` in
+    `World::setAudio`.
+* **Proof:** a synthetic second map (own cue names, point / line / volume emitters, one zone with its own preset and
+  pool, written by the suite) initializes, plays (zone reverb REVERB_FAKE_ROOM, pool, bed) and unloads through the
+  same code with no branch.
+
+### Phase 3 — frontend audio (Systems side only; no UI)
+* **MusicPlayer** [CONF script port of HmMusicPlayer]:
+  * PlayMusic → QueueMusicTrack: same cue → no restart; lower Priority → ignored; same priority + same queued cue →
+    ignored; IgnoreSpazTimer.
+  * SpazTime 5.0 [CONF class default]; Crossfading (outgoing FadeOut or override, incoming FadeIn); BoredomTime
+    restart.
+  * StopMusic (SpazTimer kept, per script); stingers (root-priority gate, 0.1 s fade).
+* **FrontendAudio:**
+  * `playUiSound(name)` = TnSoundActionScriptBinding.PlaySound → GetUISound → a 2D AudioComponent [script CONF;
+    name → cue lookup HIGH, native].
+  * `stopUiSound(name, fade)` = HmPlayerController.StopSound: the first matching component fades [CONF; "first" =
+    oldest instance, HIGH].
+  * `frontendTrack(uiLevel)` = the authored SeqAct_PlayMusic tracks [CONF authored]:
+
+    | UI level | Track | Fades |
+    |---|---|---|
+    | UI_FrontEnd_m | FRONTEND_MX_ORBIT_01 | FadeIn 0.25 |
+    | UI_Lobby_m / UI_CampaignLobby_m | MP_LOBBY_MX | FadeIn 0 |
+    | UI_PartyLobby_m | MP_PARTY_LOBBY_MX | FadeIn 0, FadeOut 0 |
+
+  * `onLevelChange()` [HIGH: the WorldInfo-owned player dies with the level; bStopWhenOwnerDestroyed].
+* **Cue table:**
+  * the 16 GFx UI cues (resident; PICKUP_DMG_MULTIPLIER_DECREASE is authored silent);
+  * the 3 music cues, **streamed** (decoded on first play or `prefetch()`, released when the last instance ends).
+* **Root bLooping timeline** [HIGH, RE A6 0x827881D8 pseudocode]: at LoopEnd the playback time wraps to
+  LoopStart and the wave events from LoopStart run again (MP_LOBBY_MX: waves at 0 / 173.6 / 291.4 s, wrap at
+  390.7 s). No slice cue uses it, so Streets is unaffected.
+* **Authored facts:**
+  * FRONTEND_MX_ORBIT_01 has neither a root nor a wave loop, so the frontend medley (≈380 s) plays once
+    [CONF data].
+  * No loading music is authored (the loading movie's audio is inside the Bink file).
+  * Streets authors no SeqAct_PlayMusic, so a match has no music [CONF data].
+* **Validated:** 16 / 16 GFx names, StopSound-first, queue / SpazTimer / crossfade, boredom, wrap, stinger,
+  level change.
+* **Real backend:** the frontend medley costs 91–362 ms of decode / 140.8 MB on first play, 0 ms after a prefetch,
+  and is released after stop.
+* **PARTIAL:**
+  * no streaming decode (whole-file decode; use `prefetch()` on a loading screen);
+  * MUSIC_DRY / SFX_DRY_HUD category volumes (options sliders) are not modelled;
+  * IsUnpausable (no pause system yet).
+* **UNKNOWN / external:**
+  * the UI levels' own Kismet audio (UI_FrontEnd_m: SeqAct_PlaySound ×14, PlayPlayerPositionalSound ×4,
+    SeqAct_Reverb) needs a UI-level audio manifest (AssetTools); it then loads through `loadMapAudio`;
+  * SeqAct_PlaySound → PC.Kismet_ClientPlaySound (native) is not implemented;
+  * the native GetUISound lookup.
+
+### Phase 4 — pickup / map-event audio (Systems = audio only)
+* **Pickups:** one PickupSound per Gameplay Taken event, on the receiving pawn; Respawned plays nothing (RespawnEffect
+  empty); the flag / bomb inventories author no PickupSound [CONF].
+* **Placed audio:** every placed AudioComponent belongs to the 40 AmbientSounds; none is on a mover or a mode-gated
+  actor. No Kismet audio op passes a game-rule condition. Movers carry no sound [CONF data].
+* **No overlap with Rendering:** Systems draws no map / pickup effect (LevelFx removed, M04); the effect-state is
+  Rendering's (setMapEffectState).
+* **Integration milestone 04 glue:** a03d7f7 calls `pickupFx_.onTaken(<actor name>, ...)`. `onTaken` /
+  `pickupSoundFor` accept a factory class OR a placed actor name (`<Class>_<N>`), and World keeps `pickupFx_`, so
+  that glue compiles unchanged after merging the class-keyed API.
+* **Verified on the merged int-04 + Systems build** (Gameplay WFC_PICKUPTEST with audio enabled in a scratch copy):
+  ammo ×2, health ×2 (including the CheckTouching re-take), overshield ×2, each sound once; respawns silent.
+
+### Phase 6 — long-run stability (game soak, Release)
+* **robot_soak** (24 000 frames):
+  * load: firing, walking, transform every 600 frames, jump every 240, map-audio unload/reload every 10 s
+    (15 loads), match reset every 7 s;
+  * cues mean by quarter 56 / 52 / 51 / 52; backend voices mean 70 / 66 / 64 / 64 (max 96, **0 dropped**,
+    28 steals); resident PCM **97.2 MB flat**; mix 1.4–1.8 ms per block;
+  * frame mean by quarter 7.3 / 6.1 / 6.2 / 6.0 ms (no drift); particles / meshes 0 at the end.
+* **vehicle_soak** (24 000 frames):
+  * load: boost every 150 frames, 11 map reloads, match reset every 9 s;
+  * cues 54 / 55 / 54 / 55; voices 69–70 every quarter; PCM 97.2 MB flat; 0 dropped;
+  * frame 5.1–5.5 ms.
+* **control_soak** (24 000 frames, no lifecycle cycling): bounded the same way; frame 5.9 → 5.4 ms.
+* **Integrated build** (merge of this branch onto integration/milestone-04): robot and vehicle 10 000-frame soaks
+  with reloads and resets — the second half is no higher than the first; PCM 97.2 MB flat; 0 errors.
+* **Queued-event peaks** (up to 65): these are BL_FOLY_IDLES.OPTIMUS_IDLE — 15 authored layers over 2.7 s,
+  retriggered while the pawn idles against a wall. Bounded by the cue's MaxConcurrentPlayCount (5 × 15); they drain
+  once the pawn moves. Not a leak.
+* **Handles:** instance ids grow monotonically; Win32 voice handles carry a 19-bit generation per slot, so a stale
+  handle can only alias after ≈524 k reuses of one slot.
+
+### Handoff — exact call sequence for the frontend / integration owner
+```
+boot:            audio = createAudio(); world.setAudio(audio)          // global cue table (setAudio currently also
+                                                                        // loads the slice map: replace with the selection)
+                 FrontendAudio fe(world.cues())                         // keep for the whole session
+frontend/lobby:  each frame: world.tickAudioOnly(dt); fe.tick(dt)
+                 on UI level load: MusicTrack t; if (FrontendAudio::frontendTrack(level, t)) fe.music().playMusic(t)
+                 GFx Sound.PlaySound(n) / StopSound(n, f): fe.playUiSound(n) / fe.stopUiSound(n, f)
+                 optional, while a loading screen shows: world.cues().prefetch(<next music cue>)
+loading a match: fe.onLevelChange()                                     // the UI level's music player goes away
+                 world.loadMapAudio(<map>)                              // unloads any previous map audio first
+match:           World::tick drives all match audio; Gameplay pickup Taken -> world.playPickupSound(class, receiverPos)
+                 (or the integration glue pickupFx_.onTaken(actorName, ...) - both resolve per factory class)
+round reset:     world.resetSystemsForMatch()
+return to menu:  world.unloadMapAudio(); fe.onLevelChange(); then the UI level's track as above
+next match:      world.loadMapAudio(<next map>)
+```
+**Guarantees after `unloadMapAudio()`:** no cue instance, queued event, map cue, map preset, map sample or voice
+remains; the mixer is at Default with no reverb; the backend environment is dry; the Systems FX particles are gone.
+
+**Merge note:** this branch onto integration/milestone-04 conflicts only in `src/core/Application.cpp` (Systems
+`WFC_PRESSTRANSFORM_EVERY` hook vs integration `WFC_RAMSELF`; keep both) and STATUS.md.
+
+### Open items
+* **AssetTools:** a UI-level audio manifest (UI_FrontEnd_m / lobbies: Kismet PlaySound, pools, reverb, ambience) in
+  the audio.json schema.
+* **ReVa / native:** the GetUISound lookup; Kismet_ClientPlaySound; whether a listener exists at the level-start
+  ambient registration; FMOD equal-priority stealing; whether GameInfo.ResetLevel resets
+  PlayerController.AmbientAudioZone.
+* **Frontend owner:** call sequence above; pause / IsUnpausable; option-slider volumes (MUSIC_DRY / SFX categories).
+* **Gameplay:** call `resetSystemsForMatch()` on round restarts and `loadMapAudio` / `unloadMapAudio` on map change.
+
+---
+
 ## MILESTONE 04 INTEGRATION PREVIEW — agents/systems 65daecd (2026-10-03)
 
 Read-only preview for the integration owner. `git merge-tree` computed the merges in memory (no refs, no worktree);

@@ -3,6 +3,24 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 05 (2026-10-03) — runtime lifecycle for frontend → loading → match → return
+- **Map audio lifecycle:**
+  - `World::loadMapAudio` / `unloadMapAudio` / `resetSystemsForMatch` / `tickAudioOnly`;
+  - unload leaves 0 instances / queued events / map cues / map presets / map samples / voices;
+  - verified over 12 Streets ↔ synthetic-map cycles (suite) and 15 in-game reloads (soak).
+- **Data-driven:** map reverb presets come from audio.json, cue limits from the generic cooked-cue table, pickup
+  sounds per factory class; no Streets branch remains in Systems code.
+- **Frontend audio:**
+  - `MusicPlayer` (HmMusicPlayer port);
+  - `FrontendAudio` (GFx UI sounds by name, the authored UI-level tracks, level change);
+  - the 16 UI cues plus 3 streamed music cues with prefetch.
+- **Map events:** one PickupSound per take on the receiving pawn; no mover or mode-gated audio; the integration-04
+  glue stays compatible.
+- **Soak:** robot / vehicle / control 24 000 frames — voices, cues and queues bounded; PCM 97.2 MB flat; 0 dropped
+  voices; no frame-time drift.
+- **Validation:** suite 505 / 0; wfc_fidelity 194 / 0 / 19.
+- **Handoff:** the exact frontend / integration call sequence is in FIDELITY.md (MILESTONE 05).
+
 ## SYSTEMS MILESTONE 04 INTEGRATION PREVIEW (2026-10-03)
 - **Merges:** clean into integration 356c352 (STATUS.md only) and experimental; Rendering's VehicleFx conflict is
   already resolved in integration.
