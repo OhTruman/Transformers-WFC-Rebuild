@@ -378,13 +378,17 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     else if (dist < range - 0.01f) cues_.play("IMPT_WORLD", hitPoint, core::length(hitPoint - listenerPos_));
 }
 
-void World::setAudio(audio::IAudio* a) {
+void World::setAudio(audio::IAudio* a, bool loadSliceMap) {
     audio_ = a;
     if (!a) return;
     const std::string base = assetRoot() + "/../content/";
     // All audio = the original SoundCues (weapon, vehicle, robot movement, transformation, fine aim).
     cues_.load(a, base);
-    loadMapAudio("MP_IAC_Streets");   // the slice's map; the frontend / map selection will call loadMapAudio itself
+    levelAudio_.attach(a, assetRoot());
+    // Master's Default DSP compressor (global SoundMixerProperties data) [CONF values; MED DSPEffectConfig bit].
+    float thr, att, rel, mk;
+    if (SoundMixer::masterCompressor(thr, att, rel, mk)) a->setMasterCompressor(thr, att, rel, mk);
+    if (loadSliceMap) loadMapAudio("MP_IAC_Streets");   // the hard-wired slice; a frontend boot loads its own level
     // Occlusion line check listener -> source against the world collision. Attached (player-owned)
     // sounds are tested against the pawn's body (mesh origin + 1.5 m), not the socket tip, which can
     // poke into walls (the arm / gun have no collision). The last 0.5 m at the source and 0.25 m at
@@ -409,12 +413,16 @@ void World::setAudio(audio::IAudio* a) {
     });
 }
 
-bool World::loadMapAudio(const std::string& mapName) {
-    if (!audio_) return false;
-    if (!audioMap_.empty()) unloadMapAudio();
-    const bool ok = ambient_.load(assetRoot() + "/Maps/" + mapName + "/audio.json", assetRoot() + "/../content/", cues_, audio_);
-    audioMap_ = ok ? mapName : std::string();
-    return ok;
+bool World::loadMapAudio(const std::string& level) {
+    if (!levelAudio_.level().empty()) unloadMapAudio();
+    return levelAudio_.load(level);
+}
+
+void World::tickAudioOnly(float dt) {
+    if (!audio_) return;
+    cues_.setListener(listenerPos_);
+    levelAudio_.tick(dt, listenerPos_, listenerPos_);   // no pawn outside a match: zones are tested at the listener
+    cues_.tick(dt);
 }
 
 int World::playPickupSound(const char* factoryClass, const core::Vec3& receiverPos) {
@@ -423,10 +431,7 @@ int World::playPickupSound(const char* factoryClass, const core::Vec3& receiverP
 
 void World::unloadMapAudio() {
     resetSystemsForMatch();                    // player-side sounds + Systems FX + queues
-    cues_.stopAll();                           // anything else (UI, impacts) - hard stop
-    ambient_.unload(cues_);                    // bed, zones, pools, map cues + samples, map presets; mixer Flush
-    if (audio_) audio_->setEnvironment(cues_.mixer().environment(), 0.0f);   // dry Default now, not on the next tick
-    audioMap_.clear();
+    levelAudio_.unload();                      // music player, every instance, level cues / samples / presets, Flush
 }
 
 void World::resetSystemsForMatch() {
@@ -449,7 +454,7 @@ void World::resetSystemsForMatch() {
     notifies_.clear();
     const Weapon& w = player_.pawn().weapon();   // resync: a reset must not replay a shot / reload animation
     weaponSeenShot_ = w.shotSerial; weaponSeenReload_ = w.reloadSerial;
-    ambient_.resetMatch();
+    levelAudio_.resetMatch();
 }
 
 // Current world position of an attached AudioComponent. Pawn: the skeletal mesh origin (the
@@ -801,27 +806,56 @@ void World::tick(float dt) {
         // Soak-test hooks: periodic map-audio unload/reload and match resets (lifecycle validation only).
         static const float mapCycle = std::getenv("WFC_MAPAUDIO_CYCLE") ? (float)std::atof(std::getenv("WFC_MAPAUDIO_CYCLE")) : 0.0f;
         static const float resetCycle = std::getenv("WFC_MATCHRESET_CYCLE") ? (float)std::atof(std::getenv("WFC_MATCHRESET_CYCLE")) : 0.0f;
-        if (mapCycle > 0.0f && (mapAudioCycleT_ += dt) >= mapCycle) {
+        // WFC_LEVELAUDIO_CYCLE="<seconds>:<level>[@<trigger>],<level>,..." walks the level list (the frontend lifecycle:
+        // each step = a travel: unload, load, the frontend-owned trigger), e.g.
+        // "20:UI_FrontEnd_m@FsCommand:enterFrontEnd,UI_PartyLobby_m,UI_Lobby_m,MP_IAC_Streets,UI_Lobby_m".
+        static std::vector<std::string> levelCycle;
+        static float levelCycleSecs = 0.0f;
+        static size_t levelCycleIdx = 0;
+        static bool levelCycleInit = false;
+        if (!levelCycleInit) {
+            levelCycleInit = true;
+            if (const char* e = std::getenv("WFC_LEVELAUDIO_CYCLE")) {
+                std::string v = e;
+                const size_t colon = v.find(':');
+                levelCycleSecs = (float)std::atof(v.substr(0, colon).c_str());
+                std::stringstream ss(v.substr(colon + 1));
+                for (std::string item; std::getline(ss, item, ',');) if (!item.empty()) levelCycle.push_back(item);
+            }
+        }
+        if (!levelCycle.empty() && levelCycleSecs > 0.0f && (mapAudioCycleT_ += dt) >= levelCycleSecs) {
             mapAudioCycleT_ = 0.0f;
-            const std::string m = audioMap_.empty() ? std::string("MP_IAC_Streets") : audioMap_;
+            const std::string& item = levelCycle[levelCycleIdx++ % levelCycle.size()];
+            const size_t at = item.find('@');
+            const auto t0 = std::chrono::steady_clock::now();
+            loadMapAudio(item.substr(0, at));
+            if (at != std::string::npos) levelAudioEvent(item.substr(at + 1));
+            const auto st = levelAudio_.state();
+            LOG_INFO("LEVELCYCLE %zu -> %s (%.1f ms): levelCues %d presets %d ops %d pcm %.1fMB voices %d live %d",
+                     levelCycleIdx, item.c_str(), std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(),
+                     st.levelCues, st.levelPresets, levelAudio_.ambient().script().opCount(), st.pcmMB, st.voices, st.instances);
+        } else if (mapCycle > 0.0f && (mapAudioCycleT_ += dt) >= mapCycle) {
+            mapAudioCycleT_ = 0.0f;
+            const std::string m = levelAudio_.level().empty() ? std::string("MP_IAC_Streets") : levelAudio_.level();
             unloadMapAudio();
             loadMapAudio(m);
         }
         if (resetCycle > 0.0f && (matchResetCycleT_ += dt) >= resetCycle) { matchResetCycleT_ = 0.0f; resetSystemsForMatch(); }
-        ambient_.tick(dt, listenerPos_, player_.pawn().position(), cues_);
+        levelAudio_.tick(dt, listenerPos_, player_.pawn().position());
         static const bool ambLog = std::getenv("WFC_AMBLOG") != nullptr;
         static float ambT = 0.0f;
         if (ambLog && (ambT += dt) >= 0.5f) {
             ambT = 0.0f;
             audio::MixStats ms;
             bool have = audio_ && audio_->mixStats(ms);
-            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d (max %d, dropped %d, stolen %d) wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block live=%zu backendVoices=%d pcm=%.1fMB map=%s",
-                     ambient_.zoneName(), ambient_.activeEmitters(), ambient_.emitterCount(), ambient_.oneShotsPlayed(),
+            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d (max %d, dropped %d, stolen %d) wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block live=%zu backendVoices=%d pcm=%.1fMB map=%s script=%d pools=%d music=%d/%d tl=%.1f",
+                     levelAudio_.ambient().zoneName(), levelAudio_.ambient().activeEmitters(), levelAudio_.ambient().emitterCount(), levelAudio_.ambient().oneShotsPlayed(),
                      cues_.liveInstances(), cues_.occludedInstances(), occlusionRays_ / 0.5f, cues_.pendingEvents(), have ? ms.voices : -1,
                      have ? ms.peakVoices : -1, have ? ms.droppedVoices : -1, have ? ms.stolenVoices : -1, have ? ms.wetVoices : -1,
                      have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f,
                      cues_.liveInstances(), audio_ ? audio_->activeVoices() : -1, audio_ ? audio_->residentBytes() / 1048576.0 : 0.0,
-                     audioMap_.c_str());
+                     levelAudio_.level().c_str(), levelAudio_.ambient().script().liveSounds(), levelAudio_.state().poolsPlaying,
+                     levelAudio_.state().musicState, levelAudio_.state().musicInstance, levelAudio_.state().timelinePos);
             if (cues_.pendingEvents() > 30) LOG_INFO("AMB pending: %s", cues_.pendingSummary().c_str());
             occlusionRays_ = 0;
         }

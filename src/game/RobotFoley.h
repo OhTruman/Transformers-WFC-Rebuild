@@ -22,6 +22,10 @@
 //       every slot to the same FS_DEFAULT_* events (TransGame.Default__TnPawn.FootstepComp0 defaults, no
 //       PhysicalMaterialOverride, no SeqAct_SetFootstepMaterialOverride). These cues ARE the authored sound,
 //       not a fallback, so no surface trace is needed. Which surface the native trace samples is moot.
+//       [CONF authored, game-wide, Systems M06 query of authored.db] No cooked package authors surface audio
+//       either: no PhysicalMaterialPropertyBase subclass instance, no SeqAct_SetFootstepMaterialOverride instance,
+//       and every HmFootstepComponent (pawn classes, level-placed ones) keeps the FS_DEFAULT_* class defaults - so
+//       the same events hold on any later map; only the pawn's SoundEventSet picks the sound.
 // [CONF TnAcrobaticsManager script] LandingAnims: first match in array order on FallDistance (height
 //       where the last fall began - ledge, or the jump apex - minus landing height) and ForwardSpeed
 //       |Velocity . facing|; below 250 UU (or landing higher) no landing anim, so no landing sound.

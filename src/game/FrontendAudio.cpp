@@ -1,4 +1,5 @@
 #include "game/FrontendAudio.h"
+#include "game/AmbientAudio.h"
 
 #include <cstring>
 
@@ -29,22 +30,9 @@ bool FrontendAudio::stopUiSound(const char* name, float fadeSeconds) {
     return true;
 }
 
-// AssetTools authored.db SeqAct_PlayMusic of the UI levels [CONF authored]; unset fields = MusicTrack defaults.
-bool FrontendAudio::frontendTrack(const char* uiLevel, MusicTrack& out) {
-    struct Row { const char* level; const char* cue; float fadeIn, fadeOut; };
-    static const Row kRows[] = {
-        {"UI_FrontEnd_m", "BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01", 0.25f, 1.0f},
-        {"UI_Lobby_m", "BL_LVL_HUD_INTERFACE.MP_LOBBY_MX", 0.0f, 1.0f},
-        {"UI_CampaignLobby_m", "BL_LVL_HUD_INTERFACE.MP_LOBBY_MX", 0.0f, 1.0f},
-        {"UI_PartyLobby_m", "BL_LVL_HUD_INTERFACE.MP_PARTY_LOBBY_MX", 0.0f, 0.0f},
-    };
-    for (const Row& r : kRows)
-        if (uiLevel && std::strcmp(uiLevel, r.level) == 0) {
-            out = MusicTrack{};
-            out.cue = r.cue; out.fadeIn = r.fadeIn; out.fadeOut = r.fadeOut;
-            return true;
-        }
-    return false;
+// The level manifest's SeqAct_PlayMusic (tools/systems/gen_level_audio.py from authored.db) [CONF authored].
+bool FrontendAudio::frontendTrack(const char* level, MusicTrack& out) {
+    return level && AmbientAudio::levelMusicTrack(level, out);
 }
 
 } // namespace game

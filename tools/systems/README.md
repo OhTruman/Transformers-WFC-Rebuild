@@ -19,3 +19,14 @@ table in `src/game/SoundCues.cpp` was generated from that dump (class defaults f
 `gen_cues.py <out.inc>` regenerates `src/game/SoundCues.inc` from the cooked cues (weapon, vehicle,
 BL_FS_LRG_BOT movement, BL_TRANSFORM, BL_FOLY_IDLES, fine aim). It emits per-cue SmartPan distances and
 the mixer category as a comment.
+
+`gen_level_audio.py <out.inc>` regenerates `src/game/LevelAudio.inc`: one Systems level-audio manifest (JSON) per
+level from the cooked level packages in `authored.db` — the UI levels' Kismet audio ops (SeqAct_PlaySound,
+SeqAct_PlayPlayerPositionalSound, SeqAct_Reverb, SeqAct_PlayMusic / StopMusic, event-track SeqAct_Interp timelines),
+their triggers (GameplayStarted, GFx fscommands, movie ends, timeline events; sub-sequence inputs flattened), the
+Target / Source Actor positions, cue trees, reverb presets, and every level's per-cue-asset concurrency limits
+(MP_IAC_Streets: limits only; the rest comes from the AssetTools audio.json). Add a level to `UI_LEVELS` (or a
+limits-only entry like Streets) to give it a manifest; no runtime code changes.
+
+`gen_mixer.py <out.inc>` regenerates `src/game/SoundMixer.inc`: the global presets (VEHICLE_JUMP, VEHICLE_BOOST_END,
+the MovieMixerPreset CINE_MUTE_FOR_BINK), every category's Default / preset DSP values, the Master compressor.

@@ -10,9 +10,8 @@ namespace game {
 namespace {
 using PresetDef = SoundMixer::PresetDef;
 using CategoryPreset = SoundMixer::CategoryPreset;
+using CategoryRow = SoundMixer::CategoryRow;
 #include "game/SoundMixer.inc"
-constexpr int kSfxWetVehEngineCount = (int)(sizeof(kSfxWetVehEngine) / sizeof(kSfxWetVehEngine[0]));
-constexpr int kMasterWetCount = (int)(sizeof(kMasterWet) / sizeof(kMasterWet[0]));
 enum { kVolume = 0 };
 bool logOn() { static const bool on = std::getenv("WFC_CUELOG") != nullptr || std::getenv("WFC_MIXERLOG") != nullptr; return on; }
 } // namespace
@@ -31,25 +30,36 @@ void SoundMixer::Ramp::update(float dt) {                       // 0x827560F8
     if (remaining <= 0.0f || passed) { value = target; active = false; }
 }
 
-SoundMixer::SoundMixer()
-    : SoundMixer(kPresetDefs, (int)(sizeof(kPresetDefs) / sizeof(kPresetDefs[0])), kSfxWetVehEngine,
-                 kSfxWetVehEngineCount, kMasterWet, kMasterWetCount) {}
+SoundMixer::SoundMixer() {
+    presets_.push_back(Preset{"Default", 0.0f, 0.5f, 0.5f, -1.0f});   // built-in (mixer Init 0x82782A18)
+    for (const PresetDef& p : kPresetDefs) presets_.push_back(Preset{p.name, p.priority, p.fadeIn, p.fadeOut, p.duration});
+    for (const CategoryRow& r : kCategoryRows) addRow(r.category, r.name, r.v);
+    flush();
+}
 
 SoundMixer::SoundMixer(const PresetDef* presets, int n, const CategoryPreset* cat0, int n0, const CategoryPreset* cat1, int n1) {
-    presets_.push_back(Preset{"Default", 0.0f, 0.5f, 0.5f, -1.0f});   // built-in (mixer Init 0x82782A18)
+    presets_.push_back(Preset{"Default", 0.0f, 0.5f, 0.5f, -1.0f});
     for (int i = 0; i < n; ++i)
         presets_.push_back(Preset{presets[i].name, presets[i].priority, presets[i].fadeIn, presets[i].fadeOut, presets[i].duration});
-    cats_[0].name = "SFX_WET_VEH_ENGINE";
-    cats_[1].name = "MASTER_WET";
-    const CategoryPreset* src[2] = {cat0, cat1};
-    const int cnt[2] = {n0, n1};
-    for (int c = 0; c < 2; ++c)
-        for (int i = 0; i < cnt[c]; ++i) {
-            Entry e; e.name = src[c][i].name;
-            std::copy(src[c][i].v, src[c][i].v + kParams, e.v);
-            cats_[c].table.push_back(e);
-        }
+    for (int i = 0; i < n0; ++i) addRow("SFX_WET_VEH_ENGINE", cat0[i].name, cat0[i].v);
+    for (int i = 0; i < n1; ++i) addRow("MASTER_WET", cat1[i].name, cat1[i].v);
     flush();
+}
+
+int SoundMixer::category(const std::string& name) const {
+    auto it = catIndex_.find(name);
+    return it == catIndex_.end() ? -1 : it->second;
+}
+
+void SoundMixer::addRow(const std::string& cat, const char* name, const float* v) {
+    int c = category(cat);
+    if (c < 0) { cats_.emplace_back(); cats_.back().name = cat; c = (int)cats_.size() - 1; catIndex_[cat] = c; }
+    Entry e; e.name = name;
+    std::copy(v, v + kParams, e.v);
+    cats_[(size_t)c].table.push_back(e);
+    masterWet_ = category("MASTER_WET");
+    master_ = category("Master");
+    if (c == master_ && e.name == "Default") masterDefault_ = v[kVolume];
 }
 
 bool SoundMixer::addMapPreset(const std::string& name, float priority, float fadeIn, float fadeOut, float duration,
@@ -58,9 +68,12 @@ bool SoundMixer::addMapPreset(const std::string& name, float priority, float fad
     Preset p{name, priority, fadeIn, fadeOut, duration};
     p.map = true;
     presets_.push_back(p);
+    if (masterWet_ < 0) {
+        cats_.emplace_back(); cats_.back().name = "MASTER_WET"; masterWet_ = (int)cats_.size() - 1; catIndex_["MASTER_WET"] = masterWet_;
+    }
     Entry e; e.name = name; e.map = true;
     std::copy(masterWet, masterWet + kParams, e.v);
-    cats_[1].table.push_back(e);
+    cats_[(size_t)masterWet_].table.push_back(e);
     return true;
 }
 
@@ -144,8 +157,8 @@ void SoundMixer::disable(const std::string& name, bool force) {
 }
 
 void SoundMixer::retarget() {
-    for (int ci = 0; ci < 2; ++ci) {
-        Category& c = cats_[ci];
+    for (int ci = 0; ci < (int)cats_.size(); ++ci) {
+        Category& c = cats_[(size_t)ci];
         int target = -1;
         const Entry* vals = nullptr;
         for (int p : active_) if ((vals = defines(c, p)) != nullptr) { target = p; break; }   // first match wins
@@ -154,9 +167,9 @@ void SoundMixer::retarget() {
         const Preset& cd = presets_[(size_t)c.current];
         float fade = nd.priority < cd.priority ? cd.fadeOut : nd.fadeIn;
         for (int k = 0; k < kParams; ++k) c.ramps[k].setTarget(vals->v[k], fade);
-        if (logOn()) LOG_INFO("MIXER %s: %s -> %s over %.2f s", c.name, cd.name.c_str(), nd.name.c_str(), fade);
+        if (logOn()) LOG_INFO("MIXER %s: %s -> %s over %.2f s", c.name.c_str(), cd.name.c_str(), nd.name.c_str(), fade);
         c.current = target;
-        if (ci == 1) envDirty_ = true;
+        if (ci == masterWet_) envDirty_ = true;
     }
 }
 
@@ -171,24 +184,34 @@ void SoundMixer::tick(float dt) {
             disable(name, false);
         }
     }
-    for (int ci = 0; ci < 2; ++ci)
-        for (Ramp& r : cats_[ci].ramps) {
+    for (int ci = 0; ci < (int)cats_.size(); ++ci)
+        for (Ramp& r : cats_[(size_t)ci].ramps) {
             bool was = r.active;
             r.update(dt);
-            if ((was || r.active) && ci == 1) envDirty_ = true;
+            if ((was || r.active) && ci == masterWet_) envDirty_ = true;
         }
 }
 
-float SoundMixer::categoryVolume(const std::string& category) const {
-    for (const Category& c : cats_)
-        if (category == c.name) return std::min(1.0f, std::max(0.0f, c.ramps[kVolume].value));   // clamp [0,1]
-    return 1.0f;
+float SoundMixer::categoryVolume(const std::string& name) const {
+    const int c = category(name);
+    return c < 0 ? 1.0f : std::min(1.0f, std::max(0.0f, cats_[(size_t)c].ramps[kVolume].value));   // clamp [0,1]
+}
+
+bool SoundMixer::masterCompressor(float& thr, float& att, float& rel, float& mk) {
+    thr = kMasterCompressor[1]; att = kMasterCompressor[2]; rel = kMasterCompressor[3]; mk = kMasterCompressor[4];
+    return ((int)kMasterCompressor[0] & 32) != 0;      // DSPEffectConfig compressor bit [MED]
+}
+
+float SoundMixer::masterScale() const {
+    if (master_ < 0 || masterDefault_ <= 0.0f) return 1.0f;
+    return std::min(1.0f, std::max(0.0f, cats_[(size_t)master_].ramps[kVolume].value)) / masterDefault_;
 }
 
 audio::Environment SoundMixer::environment() {
     envDirty_ = false;
-    const Ramp* r = cats_[1].ramps;
     audio::Environment e;
+    if (masterWet_ < 0) return e;
+    const Ramp* r = cats_[(size_t)masterWet_].ramps;
     e.room = r[1].value; e.roomHF = r[2].value; e.decayTime = r[4].value; e.decayHFRatio = r[5].value;
     e.reflections = r[6].value; e.reflectionsDelay = r[7].value; e.reverb = r[8].value; e.reverbDelay = r[9].value;
     e.diffusion = r[10].value; e.density = r[11].value; e.hfReference = r[12].value;
@@ -206,8 +229,9 @@ std::string SoundMixer::activeList() const {
     return s;
 }
 
-const char* SoundMixer::categoryTarget(int category) const {
-    return presets_[(size_t)cats_[category].current].name.c_str();
+const char* SoundMixer::categoryTarget(const char* name) const {
+    const int c = category(name);
+    return c < 0 ? "" : presets_[(size_t)cats_[(size_t)c].current].name.c_str();
 }
 
 } // namespace game

@@ -25,14 +25,6 @@ const CueDef kCues[] = {
 struct FsbLoop { const char* wav; int rate, channels; uint32_t totalSamples, loopStart, loopEnd; bool headerLoopFlag; };
 #include "game/VehicleLoops.inc"
 
-// Cooked SoundCue fields of cue assets that author MaxConcurrentPlayCount / InstanceLimiting (AssetTools
-// vertical_slice_audio_concurrency.json -> tools/systems/gen_cue_limits.py). Map-agnostic cue-asset data.
-struct CookedCueLimit { const char* cue; int maxConcurrent; Limit limit; };
-#include "game/CookedCueLimits.inc"
-const CookedCueLimit* cookedLimit(const std::string& cue) {
-    for (const CookedCueLimit& c : kCookedCueLimits) if (cue == c.cue) return &c;
-    return nullptr;
-}
 
 constexpr float UU = 0.01f;
 constexpr float kInstanceTail = 10.0f;  // upper bound on a one-shot instance's life after its last event
@@ -160,12 +152,10 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
         const assets::Json& rp = root["params"];
         CueDef d;
         d.name = kv.first;
-        const CookedCueLimit* cooked = cookedLimit(kv.first);
-        d.maxConcurrent = kv.second.has("MaxConcurrentPlayCount") ? kv.second["MaxConcurrentPlayCount"].asInt(5)
-                        : cooked ? cooked->maxConcurrent : 5;                // Engine.Default__SoundCue
+        // The level manifest's per-cue-asset fields (merged by AmbientAudio), else Engine.Default__SoundCue.
+        d.maxConcurrent = kv.second["MaxConcurrentPlayCount"].asInt(5);
         const std::string il = kv.second["InstanceLimiting"].asString();
-        d.limit = il == "kKillOldest" ? Limit::KillOldest : il == "kKillNewest" ? Limit::KillNewest
-                : il == "kKillFarthest" ? Limit::KillFarthest : cooked ? cooked->limit : Limit::KillFarthest;
+        d.limit = il == "kKillOldest" ? Limit::KillOldest : il == "kKillNewest" ? Limit::KillNewest : Limit::KillFarthest;
         d.mapBank = true;
         d.rootLoop = rp["bLooping"].asBool(false);
         d.loopStart = rp["LoopStart"].asFloat(0.0f);
@@ -639,14 +629,21 @@ void SoundCues::tick(float dt) {
         refresh(in);
         ++i;
     }
-    // Streamed cues (music): the decoded waves go once the last instance has ended.
+    releaseIdleStreams();
+}
+
+// Streamed cues (music): the decoded waves go once the last instance has ended (a prefetched, not yet played cue
+// stays pinned).
+int SoundCues::releaseIdleStreams() {
+    int n = 0;
     for (size_t c = 0; c < cues_.size(); ++c) {
         if (!cues_[c].streamed || c >= resident_.size() || !resident_[c]) continue;
         if (c < pinned_.size() && pinned_[c]) continue;                // prefetched, waiting for its first play
         bool used = false;
         for (const Instance& in : live_) if ((size_t)in.cue == c) { used = true; break; }
-        if (!used) releaseWaves(c);
+        if (!used) { releaseWaves(c); ++n; }
     }
+    return n;
 }
 
 } // namespace game

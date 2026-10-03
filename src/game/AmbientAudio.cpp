@@ -18,6 +18,34 @@ float frand() { return (float)std::rand() / (float)RAND_MAX; }
 
 core::Vec3 vec(const assets::Json& a) { return {a[0].asFloat(), a[1].asFloat(), a[2].asFloat()}; }
 
+struct LevelAudioManifest { const char* level; const char* json; };
+#include "game/LevelAudio.inc"
+const char* manifestFor(const std::string& level) {
+    for (const LevelAudioManifest& m : kLevelAudioManifests) if (level == m.level) return m.json;
+    return nullptr;
+}
+
+// A manifest's reverb presets (SoundMixerProperties MixerPresets + MASTER_WET DSPPresets of the names its
+// SeqAct_Reverb ops use), owned by the level for its lifetime.
+int addReverbPresets(const assets::Json& presets, SoundMixer& mixer) {
+    int np = 0;
+    for (const auto& kv : presets.obj) {
+        const assets::Json& mp = kv.second["mixer_preset"];
+        const assets::Json& d = kv.second["dsp_by_category"]["MASTER_WET"];
+        const assets::Json& r = d["Reverb"];
+        const assets::Json& e = d["Echo"];
+        const float v[SoundMixer::kParams] = {
+            d["Volume"]["Volume"].asFloat(1.0f), r["Room"].asFloat(-10000.0f), r["RoomHF"].asFloat(-10000.0f),
+            r["RoomRolloffFactor"].asFloat(0.0f), r["DecayTime"].asFloat(1.0f), r["DecayHFRatio"].asFloat(1.0f),
+            r["ReflectionsLevel"].asFloat(-10000.0f), r["ReflectionsDelay"].asFloat(0.0f), r["Level"].asFloat(-10000.0f),
+            r["Delay"].asFloat(0.0f), r["Diffusion"].asFloat(0.0f), r["Density"].asFloat(0.0f), r["HFReference"].asFloat(5000.0f),
+            e["Delay"].asFloat(500.0f), e["DecayRatio"].asFloat(0.5f), e["WetMix"].asFloat(0.0f), e["DryMix"].asFloat(1.0f)};
+        if (mixer.addMapPreset(kv.first, mp["Priority"].asFloat(0.0f), mp["FadeInTime"].asFloat(0.0f),
+                               mp["FadeOutTime"].asFloat(0.0f), mp["Duration"].asFloat(-1.0f), v)) ++np;
+    }
+    return np;
+}
+
 // Moller-Trumbore, ray (any t > 0).
 bool rayTri(const core::Vec3& o, const core::Vec3& d, const core::Vec3& a, const core::Vec3& b, const core::Vec3& c) {
     core::Vec3 e1 = b - a, e2 = c - a, p = core::cross(d, e2);
@@ -35,33 +63,56 @@ bool rayTri(const core::Vec3& o, const core::Vec3& d, const core::Vec3& a, const
 
 } // namespace
 
-bool AmbientAudio::load(const std::string& path, const std::string& contentRoot, SoundCues& cues, audio::IAudio* a) {
-    unload(cues);                                        // a previous map's bed, zones, pools, cues and presets
-    audio_ = a;
-    std::ifstream f(path, std::ios::binary);
-    if (!f) { LOG_WARN("ambient: %s not found", path.c_str()); return false; }
-    std::stringstream ss; ss << f.rdbuf();
-    assets::Json root;
-    if (!assets::Json::parse(ss.str(), root)) { LOG_WARN("ambient: bad json %s", path.c_str()); return false; }
-    // The map's sound bank (cue limits: the entry's field, else the cooked cue-asset table, else the class default).
-    int nc = cues.addCues(root["cues"], contentRoot);
-    // The map's reverb mixer presets (SoundMixerProperties MixerPresets + MASTER_WET DSPPresets of the names its
-    // SeqAct_Reverb ops use), owned by the map for its lifetime.
-    int np = 0;
-    for (const auto& kv : root["reverb_presets"].obj) {
-        const assets::Json& mp = kv.second["mixer_preset"];
-        const assets::Json& d = kv.second["dsp_by_category"]["MASTER_WET"];
-        const assets::Json& r = d["Reverb"];
-        const assets::Json& e = d["Echo"];
-        const float v[SoundMixer::kParams] = {
-            d["Volume"]["Volume"].asFloat(1.0f), r["Room"].asFloat(-10000.0f), r["RoomHF"].asFloat(-10000.0f),
-            r["RoomRolloffFactor"].asFloat(0.0f), r["DecayTime"].asFloat(1.0f), r["DecayHFRatio"].asFloat(1.0f),
-            r["ReflectionsLevel"].asFloat(-10000.0f), r["ReflectionsDelay"].asFloat(0.0f), r["Level"].asFloat(-10000.0f),
-            r["Delay"].asFloat(0.0f), r["Diffusion"].asFloat(0.0f), r["Density"].asFloat(0.0f), r["HFReference"].asFloat(5000.0f),
-            e["Delay"].asFloat(500.0f), e["DecayRatio"].asFloat(0.5f), e["WetMix"].asFloat(0.0f), e["DryMix"].asFloat(1.0f)};
-        if (cues.mixer().addMapPreset(kv.first, mp["Priority"].asFloat(0.0f), mp["FadeInTime"].asFloat(0.0f),
-                                      mp["FadeOutTime"].asFloat(0.0f), mp["Duration"].asFloat(-1.0f), v)) ++np;
+bool AmbientAudio::hasLevelManifest(const std::string& level) { return manifestFor(level) != nullptr; }
+int AmbientAudio::levelManifestCount() { return (int)(sizeof(kLevelAudioManifests) / sizeof(kLevelAudioManifests[0])); }
+const char* AmbientAudio::levelManifestName(int i) { return kLevelAudioManifests[i].level; }
+
+bool AmbientAudio::levelMusicTrack(const std::string& level, MusicTrack& out) {
+    const char* sj = manifestFor(level);
+    assets::Json sys;
+    if (!sj || !assets::Json::parse(std::string(sj), sys)) return false;
+    const assets::Json& ops = sys["kismet"]["ops"];
+    for (size_t i = 0; i < ops.size(); ++i) {
+        const assets::Json& j = ops[i];
+        if (j["type"].asString() != "play_music") continue;
+        out = MusicTrack{};
+        out.cue = j["cue"].asString();
+        out.fadeIn = j["fade_in"].asFloat(1.0f); out.fadeOut = j["fade_out"].asFloat(1.0f);
+        out.boredom = j["boredom"].asFloat(0.0f); out.priority = j["priority"].asInt(0);
+        return true;
     }
+    return false;
+}
+
+bool AmbientAudio::load(const std::string& path, const std::string& contentRoot, SoundCues& cues, audio::IAudio* a,
+                        const std::string& levelName) {
+    unload(cues);                                        // a previous level's bed, zones, pools, script, cues, presets
+    audio_ = a;
+    assets::Json root;                                   // the AssetTools map manifest (optional)
+    bool haveFile = false;
+    {
+        std::ifstream f(path, std::ios::binary);
+        if (f) {
+            std::stringstream ss; ss << f.rdbuf();
+            if (!assets::Json::parse(ss.str(), root)) { LOG_WARN("ambient: bad json %s", path.c_str()); return false; }
+            haveFile = true;
+        }
+    }
+    const std::string name = !levelName.empty() ? levelName : root["map"].asString();
+    assets::Json sys;                                    // the compiled-in Systems level manifest (optional)
+    const char* sj = manifestFor(name);
+    const bool haveSys = sj && assets::Json::parse(std::string(sj), sys);
+    if (!haveFile && !haveSys) { LOG_WARN("ambient: no audio manifest for %s (%s)", name.c_str(), path.c_str()); return false; }
+    // Sound banks. Concurrency: each cue asset's MaxConcurrentPlayCount / InstanceLimiting from the level's cue_limits
+    // (the AssetTools bank entries do not carry them), else Engine.Default__SoundCue.
+    assets::Json bank = root["cues"];
+    for (auto& kv : bank.obj) {
+        const assets::Json& lim = sys["cue_limits"][kv.first];
+        for (const char* k : {"MaxConcurrentPlayCount", "InstanceLimiting"})
+            if (!kv.second.has(k) && lim.has(k)) kv.second.obj[k] = lim[k];
+    }
+    int nc = cues.addCues(bank, contentRoot) + cues.addCues(sys["cues"], contentRoot);
+    int np = addReverbPresets(root["reverb_presets"], cues.mixer()) + addReverbPresets(sys["reverb_presets"], cues.mixer());
 
     // Emitters.
     const char* kinds[3] = {"point", "volume", "line"};
@@ -116,16 +167,14 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
         zones_.push_back(z);
     }
 
-    // Master category DSP (Default preset): the compressor [CONF values; MED DSPEffectConfig bit].
-    const assets::Json& master = root["categories"]["Master"];
-    const assets::Json& comp = master["Default_DSP"]["Compressor"];
-    if (a && (master["DSPEffectConfig"].asInt(0) & 32))
-        a->setMasterCompressor(comp["Threshold"].asFloat(0.0f), comp["Attack"].asFloat(50.0f),
-                               comp["Release"].asFloat(50.0f), comp["GainMakeup"].asFloat(0.0f));
+    // Kismet audio ops (Systems manifest; an AssetTools manifest may carry the same section).
+    const int ns = script_.load(root.has("kismet") ? root["kismet"] : sys["kismet"]);
     sceneActive_.assign(zones_.size(), 0);
     touching_.assign(zones_.size(), 0);
-    LOG_INFO("ambient: %s: %d map cues, %d reverb presets, %zu emitters, %zu zones, %d pools (master compressor %.1f dB)",
-             root["map"].asString().c_str(), nc, np, emitters_.size(), zones_.size(), poolCount(), comp["Threshold"].asFloat(0.0f));
+    level_ = name;
+    LOG_INFO("ambient: %s: %d level cues, %d reverb presets, %zu emitters, %zu zones, %d pools, %d Kismet audio ops / %d links "
+             "(manifests: %s%s)", name.c_str(), nc, np, emitters_.size(), zones_.size(), poolCount(), ns, script_.linkCount(),
+             haveFile ? "AssetTools " : "", haveSys ? "Systems" : "");
     loaded_ = true;
     return true;
 }
@@ -137,6 +186,8 @@ void AmbientAudio::unload(SoundCues& cues) {
     for (Emitter& e : emitters_) if (e.instance >= 0) cues.stop(e.instance, 0.0f);
     cues.unloadMapCues();                                // also stops pool one-shots still sounding
     cues.mixer().removeMapPresets();
+    script_.unload();
+    level_.clear();
     emitters_.clear();
     zones_.clear();
     touching_.clear();
@@ -157,9 +208,14 @@ void AmbientAudio::unload(SoundCues& cues) {
 // PlayerController.AmbientAudioZone. The (re)spawned pawn's first Touch re-enters a zone: a different zone
 // switches the reverb; the same zone only re-begins its scene (pools restart, the reverb slot is unchanged).
 void AmbientAudio::resetMatch() {
+    script_.resetMatch();
     sceneActive_.assign(zones_.size(), 0);
     touching_.assign(zones_.size(), 0);
     poolTimers_.clear();
+}
+
+int AmbientAudio::fireEvent(const std::string& trigger, SoundCues& cues, const core::Vec3& listener) {
+    return loaded_ ? script_.fire(trigger, cues, music_, listener) : 0;
 }
 
 bool AmbientAudio::inside(const Zone& z, const core::Vec3& p) const {
@@ -255,7 +311,9 @@ void AmbientAudio::tick(float dt, const core::Vec3& listener, const core::Vec3& 
             e.instance = cues.play(e.cue.c_str(), at, core::length(at - listener));
             if (e.instance < 0) ++refusedAtStart_;
         }
+        script_.fire("GameplayStarted", cues, music_, listener);    // SeqEvent_GameplayStarted
     }
+    script_.tick(dt, listener, cues, music_);
     active_ = 0;
     for (Emitter& e : emitters_) {
         core::Vec3 at = placeFor(e, listener);

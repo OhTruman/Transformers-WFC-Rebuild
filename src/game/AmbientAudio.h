@@ -1,5 +1,7 @@
-// Clean-room reconstruction — the Streets world sound bed (MP_IAC_Streets_AUDIO_m), from the recovered
-// ExtractedAssets/VerticalSlice/Maps/MP_IAC_Streets/audio.json (AssetTools vs_audio.py, authored.db).
+// Clean-room reconstruction — a level's world sound: placed emitters, Kismet audio zones / pools / reverb, Kismet
+// audio ops (LevelAudioScript), the level's cue bank and presets, all from the level manifests (no level-specific
+// code). The authored facts below are those of the first map, MP_IAC_Streets (MP_IAC_Streets_AUDIO_m, AssetTools
+// ExtractedAssets/VerticalSlice/Maps/MP_IAC_Streets/audio.json, vs_audio.py / authored.db); the rules are generic.
 //
 // [CONF] data: 40 AmbientSound (point), 17 HmAmbientSoundVolumeEmitter (Radius 500 x scale box), 13
 // HmAmbientSoundLineEmitter (LineLength 500 x scale), all auto-play looping cues of the map bank
@@ -32,27 +34,48 @@
 // [UNKNOWN, native] whether a listener exists at the native level-start registration; the rebuild registers on
 // the first tick with the spawn camera. FMOD's own virtual-voice handling (MaxChannels 96) is internal; the
 // rebuild mixes every playing voice (culled beyond DistanceMax by the per-voice native rule).
+// LEVEL MANIFESTS (generic, no level-specific code): a level's audio = the AssetTools map manifest
+// (<assets>/Maps/<level>/audio.json: emitters, zones, reverb presets, pools, cue bank) and / or the Systems level
+// manifest compiled in from tools/systems/gen_level_audio.py (LevelAudio.inc: the level's Kismet audio ops + cues +
+// reverb presets for the UI levels; per-cue-asset concurrency limits for every level). Either may be absent; both
+// load through load() and unload through unload().
 #pragma once
 #include <string>
 #include <vector>
 #include "audio/Audio.h"
 #include "core/Math.h"
+#include "game/LevelAudioScript.h"
 
 namespace game {
 
 class SoundCues;
+class MusicPlayer;
 
 class AmbientAudio {
 public:
-    // Loads a map's audio manifest (audio.json: emitters, zones, reverb presets, one-shot pools, map cue bank).
-    // Any previously loaded map is unloaded first. Returns false if the file is missing.
-    bool load(const std::string& audioJsonPath, const std::string& contentRoot, SoundCues& cues, audio::IAudio* a);
+    // Loads a level's audio: the manifest file `audioJsonPath` (may be missing) merged with the compiled-in Systems
+    // manifest of `level` (default: the file's "map"). Any previously loaded level is unloaded first. Returns false
+    // if neither exists.
+    bool load(const std::string& audioJsonPath, const std::string& contentRoot, SoundCues& cues, audio::IAudio* a,
+              const std::string& level = std::string());
     // Map unload: stops and forgets everything the map owns (bed, zones, pools, map cues + samples, presets).
     void unload(SoundCues& cues);
     // Round reset without a level change (Kismet Reset of the zone / pool ops); the bed keeps playing.
     void resetMatch();
     // `listener` = camera (attenuation / emitter placement); `pawn` = the touching actor for zones.
     void tick(float dt, const core::Vec3& listener, const core::Vec3& pawn, SoundCues& cues);
+    // The level's WorldInfo music player (SeqAct_PlayMusic / StopMusic ops); owned by the caller.
+    void setMusicPlayer(MusicPlayer* m) { music_ = m; }
+    // A frontend-owned Kismet trigger of the loaded level ("FsCommand:enterFrontEnd", "MovieStopped:FMV_intro").
+    int fireEvent(const std::string& trigger, SoundCues& cues, const core::Vec3& listener);
+    const LevelAudioScript& script() const { return script_; }
+    const std::string& levelName() const { return level_; }
+    // The compiled-in Systems level manifests.
+    static bool hasLevelManifest(const std::string& level);
+    static int levelManifestCount();
+    static const char* levelManifestName(int i);
+    // The first SeqAct_PlayMusic track a level's manifest authors (false: none).
+    static bool levelMusicTrack(const std::string& level, MusicTrack& out);
 
     bool loaded() const { return loaded_; }
     int activeEmitters() const { return active_; }
@@ -95,6 +118,9 @@ private:
     std::vector<char> sceneActive_;      // per zone: IsEntered with Scene 0 begun (its pools run)
 
     bool loaded_ = false;
+    std::string level_;
+    LevelAudioScript script_;
+    MusicPlayer* music_ = nullptr;
     audio::IAudio* audio_ = nullptr;
     std::vector<Emitter> emitters_;
     std::vector<Zone> zones_;
