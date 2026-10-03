@@ -46,10 +46,28 @@ def main():
         src = (info.get('chain') or [None])[0] or info.get('master')
         try:
             comp = compiled_params(repo, src)
+            # a MaterialInstanceConstant without its own static permutation carries no compiled resource: its
+            # shader is the parent chain's (UE3 MIC without StaticParameters) -> verify against the master's
+            if not any(comp.values()) and info.get('master') and info.get('master') != src:
+                comp = compiled_params(repo, info['master'])
+                src = info['master'] + ' (instance without own static permutation)'
         except Exception as ex:
             report[name] = {'error': str(ex)}
             continue
         mine = {k: set(x) for k, x in info['params_read'].items()}
+        # a parameter expression authored without ParameterName compiles as a uniform named 'None'; the
+        # translator reads it under its (empty) name -> attributable when the master graph has one
+        master = info.get('master') or ''
+        pre = master.lower() + '.'
+        unnamed = {'Scalar': False, 'Vector': False, 'Texture': False}
+        for path in repo.index:
+            if not path.startswith(pre): continue
+            cls = repo.cls(path) or ''
+            kind = 'Scalar' if cls == 'MaterialExpressionScalarParameter' else 'Vector' if cls == 'MaterialExpressionVectorParameter' else None
+            if kind and not (repo.obj(path) or {}).get('ParameterName'):
+                unnamed[kind] = True
+        for k in ('Scalar', 'Vector'):
+            if unnamed[k] and 'None' in comp[k]: mine[k].add('None')
         diff = {}
         for k in ('Scalar', 'Vector', 'Texture'):
             c = comp[k] - ENGINE_ADDED

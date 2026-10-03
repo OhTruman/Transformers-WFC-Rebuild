@@ -1,0 +1,5 @@
+# Materials whose VectorParameter ExpressionOutputIndex (1..4 = R, G, B, A) is applied by matc.py.
+# Proof per material: the full-vector reading violates UE3 material type rules (the shipped shader compiled),
+# the channel reading has none (matc type_violations; see FIDELITY.md M04). Other materials keep the
+# full-vector reading until proven (permutation checks cannot discriminate them).
+FX_Materials_p.Materials.ParticleBase_BW_MAT   # AppendVector(UVandOffset.B, UVandOffset.B): vec4+vec4 invalid; 2 violations -> 0

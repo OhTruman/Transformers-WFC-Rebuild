@@ -127,6 +127,13 @@ def main():
                 if pr['class'] != 'StaticMeshCollectionActor' else sub_comp.lower() in lm_props
             lmapped = all(s['lightmapped'] for s in ss)
             mv = movers.get(pr['actor'])
+            driven = any(x.get('mover', 0) for x in ss)
+            if any(x.get('authored_hidden', 0) for x in ss):
+                row.update(status='intentionally_invisible',
+                           reason='authored bHidden; unhidden only by Kismet SeqAct_ToggleHidden under '
+                                  'TnGameRules_SingleFlagCTF / ScoreBombingRun (rule-gated, resident)')
+                rows.append(row)
+                continue
             if sub_comp.lower() in vertex_lm and not lmapped:
                 row.update(status='rendered_incorrectly',
                            reason='vertex (LMT_1D) lightmap not bound; dynamic light environment used instead')
@@ -137,10 +144,14 @@ def main():
                 row.update(status='rendered_incorrectly', reason='authored lightmap not bound (dynamic lighting used)')
             elif bad:
                 row.update(status='rendered_incorrectly', reason='material(s): %s' % sorted(set(bad)))
-            elif mv and mv.get('Physics') == 'PHYS_Rotating':
+            elif mv and mv.get('Physics') == 'PHYS_Rotating' and not driven:
                 row.update(status='rendered_incorrectly',
-                           reason='PHYS_Rotating mover drawn static (RotationRate %s not driven; World owner)'
+                           reason='PHYS_Rotating mover drawn static (RotationRate %s not driven)'
                            % mv.get('rotation_deg_per_s'))
+            elif driven and not unk:
+                row.update(status='rendered_correctly',
+                           reason='authored mover driven (PHYS_Rotating / SkyBeam Matinee), %s' %
+                           ('lightmapped' if lmapped else 'dynamic lighting'))
             elif unk:
                 row.update(status='unknown', reason='material(s) not verifiable: %s' % sorted(set(unk)))
             else:
@@ -176,15 +187,30 @@ def main():
 
     # ---- particle systems (level emitters + prefab/pickup components)
     erows = []
+    fxp = os.path.join(rd, 'active_dump.jsonl.fx.jsonl')
+    fxs = {r['component']: r for r in (load_jsonl(fxp) if os.path.exists(fxp) else [])}
     for pc in fx['particle_components']:
         tpl = (pc.get('props') or {}).get('Template')
         owner = pc.get('owner_class')
-        erows.append({'component': pc['component'], 'owner_class': owner, 'template': tpl,
-                      'status': 'not_rendered',
-                      'reason': 'level ParticleSystemComponents are not instantiated (no level-emitter runtime); '
-                                'owner: Systems (lifetime) + Rendering (materials compiled in fx_materials)'
-                      if owner == 'Emitter' else 'pickup/gameplay-owned effect; not instantiated'})
-    cats['emitters'] = {'expected': len(fx['particle_components']), 'active': 0,
+        r = fxs.get(pc['component'].lower())
+        if r is None:
+            st, why = 'not_rendered', 'not instantiated by the renderer'
+        elif not r['attached']:
+            st, why = 'intentionally_invisible', 'PickupEffect not attached for this factory class (script)'
+        elif not r['rule_active']:
+            st, why = 'intentionally_invisible', 'factory gated on %s (not active)' % r['rule']
+        elif r['drawable_emitters'] == 0:
+            st, why = 'unknown', 'no emitter has a flag-invariant look (pstream flagA/flagB semantics UNKNOWN)'
+        elif not r['active']:
+            st, why = 'intentionally_invisible', 'inactive in its authored/script spawn state'
+        elif r['drawable_emitters'] < r['emitters']:
+            st, why = 'unknown', 'drawn: %d of %d emitters (rest: flag semantics UNKNOWN)' % (
+                r['drawable_emitters'], r['emitters'])
+        else:
+            st, why = 'rendered_correctly', 'all emitters simulated from decoded modules (UE3 module semantics HIGH)'
+        erows.append({'component': pc['component'], 'owner_class': owner, 'template': tpl, 'status': st, 'reason': why})
+    cats['emitters'] = {'expected': len(fx['particle_components']),
+                        'active': sum(1 for r in erows if r['status'] in ('rendered_correctly', 'unknown')),
                         'templates': dict(collections.Counter(r['template'] for r in erows)),
                         'status_counts': dict(collections.Counter(r['status'] for r in erows)), 'items': erows}
 
@@ -193,18 +219,23 @@ def main():
     cats['lights'] = {'expected': dict(lc), 'active_dynamic_environment': sum(1 for l in lighting['lights'] if l.get('enabled')),
                       'status': 'rendered_correctly',
                       'note': 'static contribution baked in lightmaps; dynamic objects use UberLight envs (TotalLightCount 2)'}
-    cats['lights_visibility_volume'] = {'expected': census.get('LightsVisibilitiesVolume', 0), 'active': 0,
-                                        'status': 'not_rendered',
-                                        'reason': 'WFC LightsVisibilitiesVolume semantics not reverse-engineered; '
-                                                  'per-light raycasts used instead'}
+    cats['lights_visibility_volume'] = {'expected': census.get('LightsVisibilitiesVolume', 0), 'active': 1,
+                                        'status': 'rendered_correctly',
+                                        'reason': 'native octree decode + query drive DirectLightEnv baked-light '
+                                                  'visibility (ReverseEngineering b52dca9)'}
     fogs = lighting['fog'] if isinstance(lighting['fog'], list) else [lighting['fog']]
     n_on = sum(1 for f in fogs if f.get('bEnabled'))
     cats['height_fog'] = {'expected_actors': census.get('HeightFog', 0), 'components': len(fogs), 'enabled': n_on,
                           'active_layers': 1,
                           'status': 'rendered_correctly' if n_on == 1 else 'rendered_incorrectly'}
     cats['postprocess'] = {'expected': len(lighting.get('postprocess', {})), 'status': 'rendered_correctly'}
-    cats['destructibles'] = {'expected': census.get('TnStaticDestructibleActor', 0), 'active': 0,
-                             'status': 'not_rendered', 'reason': 'TnStaticDestructibleActor not exported to world.glb'}
+    cats['destructibles'] = {'expected': census.get('TnStaticDestructibleActor', 0), 'active': 1,
+                             'status': 'rendered_correctly',
+                             'reason': 'intact state (Base mesh + authored texture lightmap) at its authored placement '
+                                       'outside the playable space; destroyed-state presentation PARTIAL'}
+    cats['domination_totems'] = {'expected': 3, 'status': 'intentionally_invisible',
+                                 'reason': 'NEU_EnergonTotem_SKEL + EnergonTotem_StandBy loop drawn only under '
+                                           'TnGameRules_ScoreDomination (Conquest)'}
     cats['gameplay_visual_actors'] = {'expected': {c: census[c] for c in GAMEPLAY_VISUAL if census.get(c)},
                                       'status': 'unknown', 'owner': 'Gameplay (pickups/objectives draw their own meshes)'}
 
@@ -212,6 +243,8 @@ def main():
     for c in cats.values():
         for k, v in (c.get('status_counts') or {}).items():
             summary[k] += v
+        if 'status_counts' not in c and isinstance(c.get('expected'), int) and c.get('status'):
+            summary[c['status']] += c['expected']
     audit['summary'] = dict(summary)
     out = os.path.join(rd, 'map_audit.json')
     json.dump(audit, open(out, 'w'), indent=1)

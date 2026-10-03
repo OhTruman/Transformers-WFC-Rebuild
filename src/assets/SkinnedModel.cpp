@@ -14,6 +14,7 @@ namespace {
 // ---- GLB container ----
 struct Glb {
     std::vector<uint8_t> file;
+    std::vector<uint8_t> ext;     // .gltf: external buffers[0]
     const uint8_t* json = nullptr; size_t jsonLen = 0;
     const uint8_t* bin = nullptr;  size_t binLen = 0;
 };
@@ -25,6 +26,20 @@ bool openGlb(const std::string& path, Glb& g) {
     std::streamoff n = f.tellg();
     if (n <= 12) return false;
     g.file.resize((size_t)n); f.seekg(0); f.read((char*)g.file.data(), n);
+    if (path.size() > 5 && path.compare(path.size() - 5, 5, ".gltf") == 0) {   // JSON text + external buffer
+        g.json = g.file.data(); g.jsonLen = g.file.size();
+        Json probe;
+        if (!Json::parse((const char*)g.json, g.jsonLen, probe)) return false;
+        std::string uri = probe["buffers"][0]["uri"].asString();
+        size_t s = path.find_last_of("/\\");
+        std::string dir = s == std::string::npos ? "." : path.substr(0, s);
+        std::ifstream b(dir + "/" + uri, std::ios::binary | std::ios::ate);
+        if (!b) return false;
+        std::streamoff bn = b.tellg();
+        g.ext.resize((size_t)bn); b.seekg(0); b.read((char*)g.ext.data(), bn);
+        g.bin = g.ext.data(); g.binLen = g.ext.size();
+        return true;
+    }
     const uint8_t* d = g.file.data();
     if (rd32(d) != 0x46546C67u) return false;
     size_t total = std::min<size_t>(rd32(d + 8), g.file.size()), off = 12;
@@ -258,6 +273,56 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
     LOG_INFO("skinned glb: %s -> %zu verts, %zu joints, %zu clips", path.c_str(),
              m.vertexCount(), m.skinJoints.size(), m.clips.size());
     return m.valid();
+}
+
+bool loadAnimationsByName(const std::string& path, SkinnedModel& m) {
+    Glb g;
+    if (!openGlb(path, g)) { LOG_ERROR("anim gltf: open failed %s", path.c_str()); return false; }
+    Json root;
+    if (!Json::parse((const char*)g.json, g.jsonLen, root)) return false;
+    Doc doc; doc.root = &root; doc.bin = g.bin; doc.binLen = g.binLen;
+    const Json& nodes = root["nodes"];
+    std::vector<int> remap(nodes.size(), -1);       // anim-file node -> model node (by bone name)
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        const std::string nm = nodes[i]["name"].asString();
+        for (size_t k = 0; k < m.nodeNames.size(); ++k)
+            if (m.nodeNames[k] == nm) { remap[i] = (int)k; break; }
+    }
+    const Json& anims = root["animations"];
+    size_t before = m.clips.size();
+    for (size_t ai = 0; ai < anims.size(); ++ai) {
+        const Json& a = anims[ai];
+        AnimClip clip;
+        clip.name = a["name"].asString();
+        const Json& samp = a["samplers"];
+        clip.samplers.resize(samp.size());
+        for (size_t si2 = 0; si2 < samp.size(); ++si2) {
+            AnimSampler& s = clip.samplers[si2];
+            s.times = doc.floats(samp[si2]["input"].asInt(-1));
+            int outAcc = samp[si2]["output"].asInt(-1);
+            s.values = doc.floats(outAcc);
+            int cc, comps, ct; size_t st; doc.accPtr(outAcc, cc, comps, ct, st);
+            s.comps = comps;
+            std::string in = samp[si2]["interpolation"].asString();
+            s.interp = in == "STEP" ? Interp::Step : (in == "CUBICSPLINE" ? Interp::CubicSpline : Interp::Linear);
+            if (!s.times.empty()) clip.duration = std::max(clip.duration, s.times.back());
+        }
+        const Json& chans = a["channels"];
+        for (size_t ci = 0; ci < chans.size(); ++ci) {
+            const Json& c = chans[ci];
+            int n = c["target"]["node"].asInt(-1);
+            if (n < 0 || (size_t)n >= remap.size() || remap[(size_t)n] < 0) continue;
+            AnimChannel ch;
+            ch.sampler = c["sampler"].asInt(-1);
+            ch.node = remap[(size_t)n];
+            const std::string& p = c["target"]["path"].asString();
+            ch.path = p == "rotation" ? AnimPath::Rotation : (p == "scale" ? AnimPath::Scale : AnimPath::Translation);
+            if (ch.sampler >= 0) clip.channels.push_back(ch);
+        }
+        m.clips.push_back(std::move(clip));
+    }
+    LOG_INFO("anim gltf: %s -> %zu clips", path.c_str(), m.clips.size() - before);
+    return m.clips.size() > before;
 }
 
 // ---------------- evaluation ----------------

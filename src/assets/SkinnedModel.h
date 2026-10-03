@@ -96,7 +96,9 @@ struct SkinnedModel {
     }
 };
 
-bool loadSkinnedGlb(const std::string& path, SkinnedModel& out);
+bool loadSkinnedGlb(const std::string& path, SkinnedModel& out);   // .glb, or .gltf with an external buffer
+// Append the clips of a separate animation file (UE AnimSet export), channels matched by bone name.
+bool loadAnimationsByName(const std::string& path, SkinnedModel& out);
 
 // Parent-relative bone transforms for every node: the blendable pose representation
 // (UE3 FBoneAtom space). Layering (crossfade, per-bone masks, additive overlays, aim offsets)

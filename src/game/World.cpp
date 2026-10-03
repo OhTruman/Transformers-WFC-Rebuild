@@ -48,6 +48,23 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     const std::string root = assetRoot();
     render::MeshData mapMesh;
     renderer.loadMapRenderData("MP_IAC_Streets");   // original-data shader path (if generated)
+    {   // Active game-rule classes for authored rule-gated presentation (objective bases, Conquest totems,
+        // objective-factory effects). Gameplay's GameMode carries no TnGameRules yet: WFC_GAMERULES
+        // ("SingleFlagCTF,ScoreDomination", ...) supplies them until it does; none = no rule-gated objects.
+        std::vector<std::string> rules;
+        if (const char* gr = std::getenv("WFC_GAMERULES")) {
+            std::string s = gr;
+            size_t a = 0;
+            while (a <= s.size()) {
+                size_t b = s.find(',', a);
+                std::string t = s.substr(a, b == std::string::npos ? std::string::npos : b - a);
+                if (!t.empty()) rules.push_back(t.rfind("TnGameRules_", 0) == 0 ? t : "TnGameRules_" + t);
+                if (b == std::string::npos) break;
+                a = b + 1;
+            }
+        }
+        renderer.setActiveGameRules(rules);
+    }
 
     bool okMap = assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", mapMesh);
     bool okRobot = assets::loadSkinnedGlb(root + "/Characters/Optimus/robot.glb", robotModel_);

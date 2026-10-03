@@ -16,6 +16,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ue3obj import Repo, struct_dict, tags_to_dict  # noqa: E402
 import hlslexpr  # noqa: E402
 
+_VCP = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'vector_channel_proven.txt')
+VECTOR_CHANNEL_PROVEN = {l.split('#')[0].strip() for l in open(_VCP, encoding='utf-8')} - {''} if os.path.exists(_VCP) else set()
+
 GLSL_T = {1: 'float', 2: 'vec2', 3: 'vec3', 4: 'vec4'}
 
 
@@ -162,6 +165,7 @@ class MatCompiler:
         t = max(a[1], b[1])
         if a[1] != b[1] and a[1] != 1 and b[1] != 1:
             t = min(a[1], b[1])          # UE3 errors here; be lenient (truncate)
+            self.type_violations = getattr(self, 'type_violations', 0) + 1
         return '(%s %s %s)' % (cast(a[0], a[1], t), op, cast(b[0], b[1], t)), t
 
     # ------------------------------------------------------------------ arithmetic
@@ -192,8 +196,14 @@ class MatCompiler:
             # Runtime applier override; when not set (all-zero = skip) every same-named expression
             # keeps its OWN authored value (MIC value, else that expression's default).
             self.rt_used[nm] = self.vectors.get(nm)
-            return '(uRTSet_%s != 0 ? uRT_%s : %s)' % (nm, nm, authored), 4
-        return authored, 4
+            code = '(uRTSet_%s != 0 ? uRT_%s : %s)' % (nm, nm, authored)
+        else:
+            code = authored
+        # VectorParameter outputs 1..4 = R, G, B, A. Applied only to materials proven by their compiled
+        # permutation (vector_channel_proven.txt), or to all with WFC_MATC_VECTOR_CHANNELS=1 (evaluation).
+        if 1 <= o <= 4 and (os.environ.get('WFC_MATC_VECTOR_CHANNELS') == '1' or self.inst in VECTOR_CHANNEL_PROVEN):
+            return '(%s).%s' % (code, 'xyzw'[o - 1]), 1
+        return code, 4
 
     def x_StaticSwitchParameter(self, c, n, p, o):
         nm = n.get('ParameterName')
@@ -217,6 +227,8 @@ class MatCompiler:
 
     def x_AppendVector(self, c, n, p, o):
         a = self.req(c, n, 'A', p); b = self.req(c, n, 'B', p)
+        if a[1] + b[1] > 4:              # UE3: "Cannot append" compile error
+            self.type_violations = getattr(self, 'type_violations', 0) + 1
         t = min(4, a[1] + b[1])
         return '%s(%s, %s)' % (GLSL_T[t], a[0], b[0]), t
 
@@ -603,6 +615,7 @@ class MatCompiler:
             'switches': self.switches, 'textures': self.tex_slots, 'notes': self.notes,
             'runtime_params': sorted(self.rt_used),
             'params_read': {k: sorted(x for x in v if x) for k, v in self.params_read.items()},
+            'type_violations': getattr(self, 'type_violations', 0),
         }
         return '\n'.join(self.lines), info
 

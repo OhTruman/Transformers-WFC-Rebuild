@@ -385,9 +385,16 @@ def decals(repo, out):
     pj = json.load(open(os.path.join(VS_MAPS, p.name.rsplit('_', 2)[0], 'props.json'), encoding='utf-8'))
     byact = {x['actor']: np.array(x['ue_matrix']) for x in pj['props'] if not x.get('component')}
 
+    # StaticMeshCollectionActor members: the component's own S(Scale*Scale3D) * R * T on top of the serialized
+    # CachedParentToWorld (RE SetTransformedToWorld 0x82DC3508); AssetTools 8d8195e props.json carries the corrected
+    # per-component matrix (validated 1906/1906), the native parent alone is only a fallback
+    bycomp = {x['component'].lower(): np.array(x['ue_matrix']) for x in pj['props'] if x.get('component')}
+
     def receiver_matrix(ci):
         cls = p.class_name(p.exports[ci - 1])
         if cls == 'ModelComponent': return np.eye(4)
+        m = bycomp.get(p.object_path(ci).lower())
+        if m is not None: return m
         m = smca.get(p.object_path(ci).lower())
         if m is not None: return m
         return byact.get(p.obj_name(p.exports[ci - 1]['outer']))
@@ -498,8 +505,16 @@ def light_visibility_volumes(repo, out):
 def main():
     mapname, out, umodel_dir = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(os.path.join(out, 'lightmaps'), exist_ok=True)
-    repo = Repo(['%s_ART_m.xxx' % mapname])
+    repo = Repo(['%s_ART_m.xxx' % mapname, '%s_BASE_m.xxx' % mapname])
     props, kinds = lm_records(repo, 0)
+    # persistent level: actor-placed StaticInterpActors / collections with their own lightmaps (atlases
+    # cooked inline in BASE; AssetTools a23c675 lightmaps.json covers every level package)
+    bprops, bkinds = lm_records(repo, 1)
+    props.update(bprops)
+    for k, v in bkinds.items():
+        if k == 'vertex_components': kinds[k] = kinds.get(k, []) + v
+        elif k == 'vertex_samples': kinds[k] = dict(kinds.get(k, {}), **v)
+        else: kinds[k] = kinds.get(k, 0) + v
     bsp_props = bsp_lighting(repo, out)
     props.update(bsp_props)
     L = lights(repo, 0)
@@ -512,6 +527,12 @@ def main():
         for fn in files:
             if fn.startswith('LightMapTexture2D_') and fn.endswith('.png'):
                 shutil.copyfile(os.path.join(root, fn), os.path.join(out, 'lightmaps', fn)); copied += 1
+    # atlases not exported by the umodel step (e.g. BASE inline): the AssetTools slice export
+    vs_lm = os.path.join(VS_MAPS, mapname, 'lightmaps')
+    for a_ in atl:
+        dst = os.path.join(out, 'lightmaps', a_ + '.png')
+        if not os.path.exists(dst) and os.path.exists(os.path.join(vs_lm, a_ + '.png')):
+            shutil.copyfile(os.path.join(vs_lm, a_ + '.png'), dst); copied += 1
     json.dump({'map': mapname,
                'note': 'Directional lightmaps: L = sum_i dot(N_t, B_i)^2 * tex_i.rgb(sRGB-decoded) * scales[i]; '
                        'B0=(0,sqrt(2/3),1/sqrt3) B1=(-1/sqrt2,-1/sqrt6,1/sqrt3) B2=(1/sqrt2,-1/sqrt6,1/sqrt3) '

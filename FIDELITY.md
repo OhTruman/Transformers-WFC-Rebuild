@@ -17,6 +17,34 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 04 — MP_IAC_STREETS LIVING-WORLD PRESENTATION + CORRECTED MAP (2026-10-03)
+Provenance: AssetTools **a23c675** (complete-map manifests: streets_rebuild_diff / movers / kismet / lighting_audit,
+render_index, map_fx) and **8d8195e** (StaticMeshCollectionActor component transforms S(Scale*Scale3D)*R*T*Parent,
+1906/1906 validated, 478 mirrored); Systems **8dcb861** (pickup script flow, RE d50c2a9 P2); ReverseEngineering
+earlier commits for lighting/shadows unchanged. Marks: CONFIRMED / HIGH / PARTIAL / UNKNOWN; VISUALLY VERIFIED =
+deterministic capture inspected (not a comparison with the original game).
+
+| Item | Original (WFC) | Source | Mark | Rebuild |
+|---|---|---|---|---|
+| Corrected map geometry | 1906 SMCA members with component scale / mirroring | AssetTools 8d8195e | CONFIRMED (data) | render data regenerated from the corrected world.glb; nothing compensated in Rendering; 24-start sweep + 5 targeted areas VISUALLY VERIFIED as coherent |
+| Mirrored / non-uniform instances | det < 0 winding, normals by inverse-transpose | engine convention | CONFIRMED | winding restored at bake (existing); normals now cof(M)*sign(det) (were M*n: wrong under non-uniform scale) |
+| Decal receivers on SMCA | receiver world matrix = component * parent | 8d8195e props.json | CONFIRMED | decal builder uses the corrected per-component matrix (was the native parent only) |
+| Lightmap inventory | 1795 texture (1794 bound + destructible), 28 vertex, 133 none | streets_lighting_audit | CONFIRMED | builder now also scans the BASE package (StaticInterpActor_5249 / 8037 texture, SkyBeam + SMCA_4920 vertex); 1795 / 28 match per component; BASE inline atlases copied from the slice export |
+| Lightmap attachment after the geometry fix | bindings unchanged (1755 SMCA) | 8d8195e validation | CONFIRMED | join keys unchanged; no misattachment found in the sweep; one hard-edged black vertex-lit patch (Arch_4096_STAT, SMCA_7201 / 2542_SMC, 22 of 522 authored samples black) left as authored [VISUALLY UNVERIFIED] |
+| Rotating domes (3) | PHYS_Rotating 2730 UU/s yaw (15 deg/s) | streets_movers.json | CONFIRMED | per-actor delta M(t) M0^-1 on the baked world (UE3 FRotationMatrix + UE->glTF map reproduce every world.glb node matrix exactly); VISUALLY VERIFIED |
+| SkyBeam Matinee (3 actors) | SeqAct_Interp 9.0022 s loop from GameplayStarted, IMF_RelativeToInitial, quat slerp, CurveAuto position | streets_movers.json | track CONFIRMED / UE3 evaluation HIGH | implemented; VISUALLY VERIFIED |
+| Objective bases (4) | bHidden; Kismet UnHide under TnGameRules_SingleFlagCTF / ScoreBombingRun | streets_kismet.json | CONFIRMED | resident, hidden unless Gameplay's active rules include either; VISUALLY VERIFIED (DM hidden / CTF shown) |
+| Domination totems (3) | NEU_EnergonTotem_SKEL, DeactivatedLoopAnim EnergonTotem_StandBy; Conquest only | render_index.json; mode rule per directive | CONFIRMED data / rule HIGH | drawn + animated only under TnGameRules_ScoreDomination; VISUALLY VERIFIED; lighting via generic dynamic env [PARTIAL] |
+| Destructible WallPanelSign | state 0 Base mesh + texture lightmap; 1/2 Chunk02 stump + chunks / debris / FX | streets_destructibles.json | CONFIRMED data | intact state drawn with its lightmap at the authored off-map location (VISUALLY VERIFIED); stump state draws but not yet visually confirmed; physics chunks / debris / destruction FX not presented [PARTIAL]; Gameplay drives setDestructibleState |
+| Steam_Sm_FX x8 | auto-activate, loop; Steam_Mat; decoded modules | map_fx.json + pstream | CONFIRMED data / UE3 module semantics HIGH | simulated from the decoded stream (Location x2, Lifetime, Size, SizeMultiplyLife, Rotation, Velocity + radial, ColorScaleOverLife, DynamicParameter); VISUALLY VERIFIED. Gravity (WFC HmParticleModuleGravity, native) PARTIAL (not applied); DynamicParameter slot order PARTIAL |
+| Pickup FX | Pickup_FX (highlight), HealthPickup_FX, OvershieldPickup_FX | streets_pickup_fx.json | CONFIRMED data | drawn only emitters whose look is invariant under both plausible readings of the unproven pstream flagA / flagB (build_map_fx.py flag_analysis): Health / Overshield GlowMut + the health energon-cube mesh. UNKNOWN (not drawn): ammo highlight beam (SizeMultiplyLife flag), GlowADD x2 (ColorScaleOverLife flag), overshield mesh (SizeMultiplyLife flag) |
+| Pickup state | spawn available (ammo highlight active, RE P2); SetPickupHidden: custom SetHidden+Deactivate, highlight Deactivate; highlight attached only for ammo crates / objectives | decompiled script via Systems 8dcb861 | CONFIRMED | setMapEffectState("<factory>|custom/highlight", active, hidden); VISUALLY VERIFIED take / respawn with WFC_PICKUPTEST |
+| MaxPeakCount | WFC emitter field, CDO 1 | authored + PeakActiveParticles | HIGH | active-particle cap; 1800-frame runs bounded (33-41 sprites, 9 meshes) |
+| Material permutations | — | verify_permutations.py | — | 211 / 214 match: MaterialInstanceConstants without their own static permutation are now verified against the master's compiled resource; unnamed parameter expressions attributed. PARTIAL: MonitorScreen family (3 materials, 11 components) |
+| VectorParameter output channel | outputs 1..4 = R/G/B/A | UE3 material types | HIGH | applied only where the full-vector reading violates UE3 type rules: ParticleBase_BW_MAT (2 violations -> 0); 21 other affected materials compile validly either way and keep the current reading [PARTIAL] |
+| DeadBodies_Mat_INST | static switch permutation | MIC native | CONFIRMED | verifies (fixed by the earlier numbered-FName switch decode); the AssetTools wrong-material flag predates that fix |
+| Map audit (state-aware) | — | audit_map.py | — | static meshes 1937 correct / 4 rule-hidden / 11 unknown; emitters 8 correct / 24 unknown / 13 intentionally invisible; LVV, destructible (intact), decals 25/25, fog, post correct |
+
 ## MILESTONE 03 PASS 5 — NORMAL-PLAY CHARACTER SHADOW RUNTIME (2026-10-02)
 Native provenance: RE-Workspace `notes/MILESTONE03_RENDERING_CHARACTER_SHADOW_RUNTIME.md`, ReverseEngineering commit
 **7033f18** (builds on 13c0953 / pass 4, Rendering checkpoint 566a87f). This pass supersedes the pass-4 rows "Projection
