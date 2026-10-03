@@ -15,6 +15,7 @@
 //     (TnMultiplayerGame.InProgress -> 3, MatchOver -> 9, ...). Until Gameplay implements PendingMatch/InProgress
 //     the application uses a PROVISIONAL adapter (see Application).
 #pragma once
+#include <map>
 #include <memory>
 #include <random>
 #include <string>
@@ -119,6 +120,11 @@ public:
     bool frontEndStarted() const { return frontEndStarted_; }
     bool hasWatchedIntroMovie() const { return watchedIntro_; }
     std::string stateSummary() const;
+    // SettingsDataStore (TnDataStore_GameSettings): the current settings object and its host-option values. Values
+    // persist per settings class for the session, as the data store's settings objects do [HIGH].
+    const GameSettings* currentSettings() const { return currentSettings_; }
+    int settingIndex(const GameSettings* gs, const std::string& field) const;
+    bool setSettingValue(const std::string& field, const std::string& valueName);
 
     // Diagnostics: emit a full state snapshot to the trace.
     void traceSnapshot(const char* why) const;
@@ -175,6 +181,7 @@ private:
     LobbyState lobby_;
     const GameSettings* currentSettings_ = nullptr;   // SettingsDataStore current (EditGameMode / PlayPrivateGame)
     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
+    std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;
     bool pendingMatch_ = false, unloadWorld_ = false, quit_ = false;
 

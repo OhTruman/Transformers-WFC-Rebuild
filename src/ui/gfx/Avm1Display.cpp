@@ -190,6 +190,16 @@ bool displaySetProp(VM& vm, gfx::DisplayObject* d, const std::string& key, const
         }
         if (k == "_alpha") { if (std::isfinite(n)) d->cx.ma = (float)(n / 100.0); return true; }
         if (k == "_visible") { d->visible = vm.toBool(v); return true; }
+        if ((k == "_width" || k == "_height") && d->kind == gfx::DisplayObject::Kind::Text) {
+            // TextField: _width / _height resize the field box (the text is not scaled).
+            if (!std::isfinite(n)) return true;
+            auto* tf = static_cast<gfx::TextField*>(d);
+            float sx = std::max(1e-4f, std::fabs(d->matrix.scaleX())), sy = std::max(1e-4f, std::fabs(d->matrix.scaleY()));
+            if (k == "_width") tf->bounds.xmax = tf->bounds.xmin + (float)(n * 20.0) / sx;
+            else tf->bounds.ymax = tf->bounds.ymin + (float)(n * 20.0) / sy;
+            tf->layoutDirty = true;
+            return true;
+        }
         if (k == "_width" || k == "_height") {
             if (!std::isfinite(n)) return true;
             gfx::Rect lb = d->localBounds();

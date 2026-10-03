@@ -72,6 +72,14 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:MessageOfTheDay>") return cat_.localize("TransGame", "TnGameReplicationInfo", "MessageOfTheDay");
     if (markup == "<OnlinePlayerData:ProfileData.HasAdjustedGamma>") return "1";   // rebuild: no brightness calibration screen pending
     if (markup == "<OnlinePlayerData:ProfileData.UseAllRegionMatchmaking>") return written_.count(markup) ? written_[markup] : "0";
+    if (markup.rfind("<TnGameSettings:", 0) == 0 && markup.size() > 17) {
+        std::string field = markup.substr(16, markup.size() - 17);
+        const GameSettings* cur = flow_.currentSettings();
+        if (const SettingField* f = cur ? cur->field(field) : nullptr) {
+            int i = flow_.settingIndex(cur, field);
+            return i >= 0 && i < (int)f->values.size() ? f->values[(size_t)i] : "";
+        }
+    }
     auto w = written_.find(markup);
     if (w != written_.end()) return w->second;
     if (known) *known = false;
@@ -96,25 +104,36 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         // Profile progression (levels / characters) is not modelled yet: those columns read empty [PARTIAL].
         c.columns = {"PlayerName", "TeamID", "TeamName", "Score", "Kills", "Deaths", "IsDead", "HeadsetState", "PlayerIconicCharacterName",
                      "_CurrentPower", "IsConnecting", "PrimeModeActive", "CurrentCharacterString", "SelectedCharacterString",
-                     "PlayerLevelLeader", "PlayerLevelScientist", "PlayerLevelScout", "PlayerLevelSoldier"};
+                     "PlayerLevelLeader", "PlayerLevelScientist", "PlayerLevelScout", "PlayerLevelSoldier", "PlayerLevel"};
         bool inMatch = flow_.level() == LevelKind::Match;
         int team = inMatch ? flow_.currentMatch().teamIndex : flow_.lobby().localTeam;
         std::string teamName = team == 0 ? cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName")
                              : team == 1 ? cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName") : "";
-        c.rows.push_back({playerName(), std::to_string(team), teamName, "0", "0", "0", "0", "0", "", "0", "0", "0", "", "", "", "", "", ""});
+        // A fresh profile is level 1 in every specialty (no XP / progression service yet) [PARTIAL].
+        c.rows.push_back({playerName(), std::to_string(team), teamName, "0", "0", "0", "0", "0", "", "0", "0", "0", "", "", "1", "1", "1", "1", "1"});
         c.enabled.push_back(true);
         return true;
     }
     if (markup == "<CurrentGame:Teams>") {
         // Team game: Teams[0] TnFactionTeamAutobots, Teams[1] TnFactionTeamDecepticons [RE 5.3].
-        c.columns = {"TeamName", "TeamID", "Score"};
+        c.columns = {"TeamName", "TeamID", "TeamIndex", "Score"};
         bool inMatch = flow_.level() == LevelKind::Match;
         int gts = inMatch ? flow_.currentMatch().gameTeamStatus : flow_.lobby().gameTeamStatus;
         if (gts == 3) {
-            c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName"), "0", "0"});
-            c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName"), "1", "0"});
+            c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName"), "0", "0", "0"});
+            c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName"), "1", "1", "0"});
             c.enabled = {true, true};
         }
+        return true;
+    }
+    if (markup.rfind("<TnGameSettings:", 0) == 0 && markup.size() > 17) {
+        std::string field = markup.substr(16, markup.size() - 17);
+        const GameSettings* cur = flow_.currentSettings();
+        const SettingField* f = cur ? cur->field(field) : nullptr;
+        if (!f) return false;
+        c.columns = {f->name};
+        c.headers = {f->header};
+        for (const std::string& v : f->values) { c.rows.push_back({v}); c.enabled.push_back(true); }
         return true;
     }
     if (markup == "<TnMenuItems:Playlists>") {
@@ -163,6 +182,8 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         if (!known) FlowTrace::emit("datastore.unhandled", {{"fn", fn}, {"markup", m}});
         return BridgeValue(v == "1" || v == "true" || v == "True");
     }
+    if (fn == "WriteValue" && m.rfind("<TnGameSettings:", 0) == 0 && m.size() > 17 &&
+        flow_.setSettingValue(m.substr(16, m.size() - 17), arg(1))) return {};
     if (fn == "WriteValue") { written_[m] = arg(1); FlowTrace::emit("datastore.write", {{"markup", m}, {"value", arg(1)}}); return {}; }
     if (fn == "RegisterValueChangedCallback" || fn == "RegisterPendingValueChangedCallback") {
         for (const Reg& r : regs_) if (r.movie == movie && r.markup == m && r.callback == arg(1)) return {};
@@ -188,6 +209,7 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
     }
     if (fn == "GetCollectionColumnTag" || fn == "GetCollectionColumnHeader") {
         size_t i = (size_t)std::atoi(arg(1).c_str());
+        if (fn == "GetCollectionColumnHeader" && !c.headers.empty()) return BridgeValue(i < c.headers.size() ? c.headers[i] : std::string());
         return BridgeValue(i < c.columns.size() ? c.columns[i] : std::string());
     }
     if (fn == "ReadCollectionValue" || fn == "ReadCollectionBoolValue") {
@@ -205,7 +227,13 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         size_t row = (size_t)std::atoi(arg(1).c_str());
         return BridgeValue(row < c.enabled.size() && c.enabled[row]);
     }
-    if (fn == "GetDataStoreFields") return BridgeValue(std::string());
+    if (fn == "GetDataStoreFields") {
+        // TnGameSettings: the current settings object's fields (the host-options menu shows those with a header).
+        std::string out;
+        if (m == "TnGameSettings" && flow_.currentSettings())
+            for (const SettingField& f : flow_.currentSettings()->fields) out += (out.empty() ? "" : ",") + f.name;
+        return BridgeValue(out);
+    }
     FlowTrace::emit("datastore.unhandled", {{"fn", fn}, {"markup", m}});
     return {};
 }

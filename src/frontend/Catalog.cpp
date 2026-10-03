@@ -198,6 +198,9 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
         settings_[cls] = gs;
     }
 
+    // ---- authored settings class defaults (tools/frontend/export_game_settings.py; future: an AssetTools manifest) ----
+    loadSettingsDefaults(manifestRoot);
+
     // ---- loading ----
     assets::Json lj;
     if (readJson(manifestRoot + "/frontend_loading.json", lj)) {
@@ -219,6 +222,64 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
         LOG_INFO("FRONTEND catalog map %d %-26s \"%s\" cooked=%d runtime=%s modes=%zu", m.mapId, m.mapFilename.c_str(), m.friendlyName.c_str(),
                  (int)m.cooked, m.hasRequiredAssets ? m.runtimeDir.c_str() : "-", m.compatibleGameTypes.size());
     return true;
+}
+
+void Catalog::loadSettingsDefaults(const std::string& manifestRoot) {
+    assets::Json j;
+    std::string used;
+    for (std::string path : {manifestRoot + "/frontend_game_settings.json", std::string(WFC_SOURCE_DIR) + "/data/frontend/game_settings.json"})
+        if (readJson(path, j)) { used = path; break; }
+    if (used.empty()) { LOG_WARN("FRONTEND catalog: no game_settings.json; host options unavailable, RE-table defaults used"); return; }
+    int n = 0;
+    for (auto& [cls, gs] : settings_) {
+        const assets::Json& c = j["classes"][cls];
+        if (!c.isObject()) continue;
+        ++n;
+        if (c.has("LobbyGameClass")) gs.lobbyGameClass = c["LobbyGameClass"].asString();
+        if (c.has("LobbyMapName")) gs.lobbyMapName = c["LobbyMapName"].asString();
+        if (c.has("NumRequiredPlayers")) gs.numRequiredPlayers = c["NumRequiredPlayers"].asInt();
+        if (c.has("NumPrivateConnections")) gs.numPrivateConnections = c["NumPrivateConnections"].asInt();
+        if (c.has("NumPublicConnections")) gs.numPublicConnections = c["NumPublicConnections"].asInt();
+        if (c.has("TeamType")) {
+            gs.teamType = c["TeamType"].asString();
+            gs.teamTypeValue = gs.teamType == "GTS_FreeForAllGame" ? 1 : gs.teamType == "GTS_SingleTeamGame" ? 2
+                             : gs.teamType == "GTS_TeamGame" ? 3 : gs.teamType == "GTS_CampaignGame" ? 4 : 0;
+        }
+        std::map<int, int> ctxDefault;
+        for (size_t i = 0; i < c["LocalizedSettings"].size(); ++i)
+            ctxDefault[c["LocalizedSettings"][i]["Id"].asInt()] = c["LocalizedSettings"][i]["ValueIndex"].asInt();
+        std::map<int, double> propDefault;
+        for (size_t i = 0; i < c["Properties"].size(); ++i)
+            propDefault[c["Properties"][i]["PropertyId"].asInt()] = c["Properties"][i]["Data"]["Value1"].asDouble();
+        gs.fields.clear();
+        for (size_t i = 0; i < c["LocalizedSettingsMappings"].size(); ++i) {
+            const assets::Json& m = c["LocalizedSettingsMappings"][i];
+            SettingField f;
+            f.name = m["Name"].asString(); f.header = m["ColumnHeaderText"].asString(); f.id = m["Id"].asInt();
+            for (size_t k = 0; k < m["ValueMappings"].size(); ++k) f.values.push_back(m["ValueMappings"][k]["Name"].asString());
+            int def = ctxDefault.count(f.id) ? ctxDefault[f.id] : 0;
+            // LocalizedSettings ValueIndex is the value Id; the mapping's position of that Id is the list index.
+            for (size_t k = 0; k < m["ValueMappings"].size(); ++k) if (m["ValueMappings"][k]["Id"].asInt() == def) f.defaultIndex = (int)k;
+            gs.fields.push_back(f);
+        }
+        for (size_t i = 0; i < c["PropertyMappings"].size(); ++i) {
+            const assets::Json& m = c["PropertyMappings"][i];
+            SettingField f;
+            f.name = m["Name"].asString(); f.header = m["ColumnHeaderText"].asString(); f.id = m["Id"].asInt(); f.property = true;
+            double def = propDefault.count(f.id) ? propDefault[f.id] : 0;
+            for (size_t k = 0; k < m["PredefinedValues"].size(); ++k) {
+                double v = m["PredefinedValues"][k]["Value1"].asDouble();
+                f.numeric.push_back(v);
+                f.values.push_back(std::to_string((long long)v));
+                if (v == def) f.defaultIndex = (int)k;
+            }
+            if (f.name == "PointsToWin" || f.name == "Rounds") { gs.pointsToWin = (int)def; gs.scoreOptionName = f.name; }
+            gs.fields.push_back(f);
+        }
+        if (const SettingField* t = gs.field("TimeLimit")) gs.timeLimitDefaultIndex = t->defaultIndex;
+        if (const SettingField* ms = gs.field("MapSelectionMethod")) gs.mapSelectionMethod = ms->defaultIndex;
+    }
+    LOG_INFO("FRONTEND catalog: authored settings defaults for %d classes (%s)", n, used.c_str());
 }
 
 const MapInfo* Catalog::mapById(int id) const {

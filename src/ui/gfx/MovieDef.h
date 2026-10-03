@@ -132,7 +132,22 @@ struct SpriteDef {
     std::string label(int frame) const;
 };
 
-enum class CharType { Shape, Sprite, EditText, StaticText, Font, Bitmap, Imported, Unknown };
+// DefineMorphShape: start / end edges and styles; instances draw the interpolation at their PlaceObject ratio.
+struct MorphRec {
+    enum Kind : uint8_t { Move, Style, Line, Curve } kind = Line;
+    float x = 0, y = 0, cx = 0, cy = 0;     // anchor / control (absolute)
+    int fill0 = 0, fill1 = 0, line = 0;     // Style (-1 = unchanged)
+};
+struct MorphDef {
+    Rect startBounds, endBounds;
+    std::vector<FillStyle> startFills, endFills;
+    std::vector<LineStyle> startLines, endLines;
+    std::vector<MorphRec> start, end;       // end: Move / Line / Curve only
+    mutable std::map<uint16_t, std::unique_ptr<ShapeDef>> cache;   // ratio -> interpolated shape
+    const ShapeDef* at(uint16_t ratio) const;
+};
+
+enum class CharType { Shape, Sprite, EditText, StaticText, Font, Bitmap, Imported, Morph, Unknown };
 struct CharDef {
     CharType type = CharType::Unknown;
     int index = -1;                               // into the per-type vector
@@ -161,6 +176,7 @@ public:
     std::vector<StaticTextDef> staticTexts;
     std::vector<FontDef> fonts;
     std::vector<BitmapDef> bitmaps;
+    std::vector<std::unique_ptr<MorphDef>> morphs;
     std::map<std::string, uint16_t> exports;                    // linkage name -> id
     std::map<uint16_t, std::string> exportNames;
     std::vector<ImportDef> imports;

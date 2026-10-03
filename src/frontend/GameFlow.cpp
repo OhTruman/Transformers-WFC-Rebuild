@@ -342,6 +342,7 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Online.IsHost") return true;   // the local player hosts the private match
     if (fn == "Online.GetLoginStatus") return 2;   // PARTIAL: LS_LoggedIn; no online service
     if (fn == "Online.IsInPartyChatSession") return false;
+    if (fn == "Online.CheckCampaignCompleteMessage") return {};   // no campaign-complete prompt (no campaign progress offline)
     if (fn == "Online.SetPartyLobbyType") { FlowTrace::emit("partylobby.type", {{"type", arg(0)}}); return {}; }
     if (fn == "Online.SubmitMapVeto") { FlowTrace::emit("lobby.veto", {}); return {}; }
     if (fn == "Online.SwitchTeam") {
@@ -447,7 +448,13 @@ std::string GameFlow::buildMatchUrl(const GameSettings& gs) const {
     Url u("");
     u.setOption("PlaylistId", std::to_string(lobby_.playlistId));
     u.setOption("GamerRegion", "0");
-    if (gs.pointsToWin >= 0) u.setOption(gs.scoreOptionName, std::to_string(gs.pointsToWin));
+    // Host options (TnGameSettings values) feed the natively appended properties / contexts [HIGH].
+    int score = gs.pointsToWin;
+    if (const SettingField* f = gs.field(gs.scoreOptionName)) {
+        int i = settingIndex(&gs, f->name);
+        if (i >= 0 && i < (int)f->numeric.size()) score = (int)f->numeric[(size_t)i];
+    }
+    if (score >= 0) u.setOption(gs.scoreOptionName, std::to_string(score));
     u.setOption("Game", gs.gameClass);
     u.setOption("GameModeTag", gs.tag);
     u.setOption("GameTeamStatus", std::to_string(gs.teamTypeValue));
@@ -457,7 +464,8 @@ std::string GameFlow::buildMatchUrl(const GameSettings& gs) const {
     u.setOption("LobbyGameClassName", gs.lobbyGameClass);
     u.setOption("IconicMode", "0");
     if (!gs.timeLimits.empty()) {
-        size_t idx = std::min((size_t)gs.timeLimitDefaultIndex, gs.timeLimits.size() - 1);
+        int ti = settingIndex(&gs, "TimeLimit");
+        size_t idx = std::min((size_t)(ti >= 0 ? ti : gs.timeLimitDefaultIndex), gs.timeLimits.size() - 1);
         char b[32]; std::snprintf(b, sizeof b, "%.2f", (double)gs.timeLimits[idx]);   // float -> string
         u.setOption("TimeLimit", b);
     }
@@ -501,12 +509,13 @@ void GameFlow::gameLobbyBegin() {
     lobby_.gameModeTag = tag;
     lobby_.gameTeamStatus = levelUrl_.intOption("GameTeamStatus", gs ? gs->teamTypeValue : 3);
     // InitGame: NumRequiredPlayers = settings.NumRequiredPlayers (TDM 4) [RE 2.4].
-    lobby_.numRequiredPlayers = 4;
+    lobby_.numRequiredPlayers = gs && gs->numRequiredPlayers > 0 ? gs->numRequiredPlayers : 4;
     // InitGameReplicationInfo: AutostartCountdown = !IsPrivateGame(); MapSelectionMethod = setting 0x40000014
     // (Public 0 Rotate / Private 1 Host's Choice); AllowMapVeto = (method == 0).
     bool isPrivate = gs && gs->isPrivate;
     lobby_.autostartCountdown = !isPrivate;
-    lobby_.mapSelectionMethod = gs ? gs->mapSelectionMethod : 1;
+    int msm = settingIndex(gs, "MapSelectionMethod");
+    lobby_.mapSelectionMethod = msm >= 0 ? msm : (gs ? gs->mapSelectionMethod : 1);
     lobby_.allowMapVeto = lobby_.mapSelectionMethod == 0;
     lobby_.countingDown = lobby_.countdownRubicon = lobby_.finalCountdown = false;
     lobby_.countdown = 0;
@@ -657,6 +666,28 @@ void GameFlow::showMenu() {
 }
 
 void GameFlow::uiClosedItself() { ui_.onCurrentUIClosed(); }
+
+int GameFlow::settingIndex(const GameSettings* gs, const std::string& field) const {
+    if (!gs) return -1;
+    const SettingField* f = gs->field(field);
+    if (!f) return -1;
+    auto c = settingValues_.find(gs->className);
+    if (c != settingValues_.end()) { auto v = c->second.find(field); if (v != c->second.end()) return v->second; }
+    return f->defaultIndex;
+}
+
+bool GameFlow::setSettingValue(const std::string& field, const std::string& valueName) {
+    if (!currentSettings_) return false;
+    const SettingField* f = currentSettings_->field(field);
+    if (!f) return false;
+    for (size_t i = 0; i < f->values.size(); ++i)
+        if (f->values[i] == valueName) {
+            settingValues_[currentSettings_->className][field] = (int)i;
+            FlowTrace::emit("settings.write", {{"settings", currentSettings_->className}, {"field", field}, {"value", valueName}});
+            return true;
+        }
+    return false;
+}
 
 std::string GameFlow::stateSummary() const {
     char b[512];

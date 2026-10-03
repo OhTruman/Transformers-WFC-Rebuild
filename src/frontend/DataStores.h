@@ -30,7 +30,7 @@ public:
     std::vector<Change> poll();
 
 private:
-    struct Collection { std::vector<std::string> columns; std::vector<std::vector<std::string>> rows; std::vector<bool> enabled; };
+    struct Collection { std::vector<std::string> columns, headers; std::vector<std::vector<std::string>> rows; std::vector<bool> enabled; };
     bool collection(const std::string& markup, Collection& out);
     std::string playerName() const;
 

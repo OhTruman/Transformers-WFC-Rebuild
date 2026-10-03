@@ -410,8 +410,13 @@ struct Interp {
             case 0x41: {
                 std::string n = vm.toString(pop(c));
                 Object* where = c.activation;
-                if (where) { if (!where->findOwn(n)) where->own(n).v = Value::undef(); }
-                else defineLocal(c, n, Value::undef());
+                // `var x;` declares without overwriting an existing variable (e.g. one set by an initObject).
+                if (!where) {
+                    for (auto it = c.scope.rbegin(); it != c.scope.rend(); ++it)
+                        if (*it && (*it)->kind == ObjKind::Clip) { where = *it; break; }
+                    if (!where) where = targetObj(c);
+                }
+                if (where && !vm.has(where, n)) vm.set(where, n, Value::undef());
                 break;
             }
             case 0x3A: {   // Delete
@@ -760,9 +765,12 @@ Value VM::call(const Value& fnV, const Value& self, Args& args, Object* superPro
     c.activation = act;
     c.scope.push_back(act);
     c.thisv = self.isNullish() ? Value::undef() : self;
+    // _parent / _root / unqualified timeline calls inside a function use the timeline the function was defined on
+    // (its scope), not `this`. Functions defined outside any timeline fall back to the receiving clip.
     c.target = fn->defTarget;
-    if (self.isObject() && self.o->display && self.o->display->kind == gfx::DisplayObject::Kind::Clip) c.target = self.o->display;
-    if (c.target && c.target->removed) c.target = fn->defTarget && !fn->defTarget->removed ? fn->defTarget : player_->root();
+    if ((!c.target || c.target->removed) && self.isObject() && self.o->display && self.o->display->kind == gfx::DisplayObject::Kind::Clip)
+        c.target = self.o->display;
+    if (c.target && c.target->removed) c.target = player_->root();
     c.origTarget = c.target;
     c.superProto = superProto;
     c.callee = fn;

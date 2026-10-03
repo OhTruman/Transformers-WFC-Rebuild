@@ -206,6 +206,23 @@ bool Player::resolveExport(const std::shared_ptr<const MovieDef>& def, const std
     if (it != def->exports.end()) return resolveCharacter(def, it->second, outDef, outId);
     for (const ImportDef& im : def->imports)
         if (im.name == name) return resolveCharacter(def, im.id, outDef, outId);
+    // GFx: attachMovie also finds the exports of the libraries this movie imports (e.g. SharedIcons, SharedComponents).
+    std::set<std::string> urls;
+    for (const ImportDef& im : def->imports) {
+        if (!urls.insert(im.url).second) continue;
+        std::string path = resolveMovieUrl ? resolveMovieUrl(im.url, def->dir()) : "";
+        std::shared_ptr<const MovieDef> lib = path.empty() ? nullptr : loadDef(path);
+        if (!lib) continue;
+        auto e = lib->exports.find(name);
+        if (e == lib->exports.end()) continue;
+        if (!initRun_.count(lib.get())) {
+            initRun_[lib.get()];
+            for (const Frame& f : lib->root.frames)
+                for (const auto& [sid, ab] : f.initActions)
+                    if (initRun_[lib.get()].insert(sid).second) vm_->runBlock(ab.code, 0, ab.code->size(), root_);
+        }
+        return resolveCharacter(lib, e->second, outDef, outId);
+    }
     return false;
 }
 
@@ -279,6 +296,12 @@ DisplayObject* Player::instantiate(MovieClip* parent, const std::shared_ptr<cons
     case CharType::Shape: {
         auto s = std::make_unique<ShapeInstance>(this);
         s->shape = &def->shapes[(size_t)cd->index];
+        obj = std::move(s);
+        break;
+    }
+    case CharType::Morph: {
+        auto s = std::make_unique<ShapeInstance>(this);
+        s->morph = def->morphs[(size_t)cd->index].get();
         obj = std::move(s);
         break;
     }
@@ -619,6 +642,16 @@ BitmapInstance* Player::attachBitmap(MovieClip* parent, Object* bitmapData, int 
     raw->scripted = true;
     raw->smoothing = smoothing;
     raw->path = vm_->toString(vm_->get(bitmapData, "__path"));
+    // Keep the bitmap definition: Self.SetExternalTextureWithPath remaps by its export name.
+    if (auto ref = std::static_pointer_cast<std::pair<std::shared_ptr<const MovieDef>, uint16_t>>(bitmapData->payload)) {
+        const CharDef* cd = ref->first ? ref->first->character(ref->second) : nullptr;
+        if (cd && cd->type == CharType::Bitmap) {
+            raw->bitmap = &ref->first->bitmaps[(size_t)cd->index];
+            raw->def = ref->first;
+            std::string ext = externalTexture ? externalTexture(raw->bitmap->exportName) : "";
+            if (!ext.empty()) raw->path = ext;
+        }
+    }
     raw->width = (int)vm_->toNumber(vm_->get(bitmapData, "width"));
     raw->height = (int)vm_->toNumber(vm_->get(bitmapData, "height"));
     // External textures replace the 32x32 placeholder of the movie: their natural size is used (GFx draws the
@@ -920,7 +953,7 @@ void Player::renderObject(const DisplayObject* d, const Matrix& m, const CXForm&
     }
     switch (d->kind) {
     case DisplayObject::Kind::Shape: {
-        RenderItem it; it.type = RenderItem::Shape; it.shape = static_cast<const ShapeInstance*>(d)->shape; it.m = wm; it.cx = wc; it.owner = d;
+        RenderItem it; it.type = RenderItem::Shape; it.shape = static_cast<const ShapeInstance*>(d)->current(); it.m = wm; it.cx = wc; it.owner = d;
         if (it.shape) out.push_back(it);
         break;
     }

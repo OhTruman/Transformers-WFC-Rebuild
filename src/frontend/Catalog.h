@@ -36,6 +36,18 @@ struct MapInfo {
     bool compatibleWith(const std::string& tag) const;
 };
 
+// One host-configurable setting of a TnOnlineGameSettings class: a LocalizedSettingsMapping (context with value
+// names) or a PVMT_PredefinedValues PropertyMapping (e.g. PointsToWin 20/30/40/50) [CONFIRMED authored].
+struct SettingField {
+    std::string name;                       // "TimeLimit", "PointsToWin", ...
+    std::string header;                     // ColumnHeaderText ("Time Limit"); empty = not shown in host options
+    int id = 0;
+    bool property = false;
+    std::vector<std::string> values;        // value names ("15 minutes") or predefined numbers as text ("40")
+    std::vector<double> numeric;            // property predefined values
+    int defaultIndex = 0;
+};
+
 // TnOnlineGameSettings<tag>{,Public,Private} (authored defaults).
 struct GameSettings {
     std::string className;                  // e.g. "TnOnlineGameSettingsTDMPrivate"
@@ -53,6 +65,12 @@ struct GameSettings {
     int numPublicConnections = 0, numPrivateConnections = 0;
     int mapSelectionMethod = 0;             // Public 0 Rotate, Private 1 Host's Choice   [RE note 2.4]
     bool isPrivate = false, isPublic = false;
+    int numRequiredPlayers = 0;
+    std::vector<SettingField> fields;       // host options, in mapping order (contexts, then properties)
+    const SettingField* field(const std::string& n) const {
+        for (const SettingField& f : fields) if (f.name == n) return &f;
+        return nullptr;
+    }
 };
 
 // TnDataProvider_OnlinePlaylist (TransPlaylists.ini).
@@ -106,6 +124,7 @@ public:
     std::string manifestRoot() const { return manifestRoot_; }
 
 private:
+    void loadSettingsDefaults(const std::string& manifestRoot);
     std::vector<MapInfo> maps_;
     std::vector<Playlist> playlists_;
     std::vector<GameModeInfo> modes_;

@@ -245,7 +245,114 @@ bool parseShapeBody(Reader& r, int shapeVer, ShapeDef& out, bool withStyles, boo
 
 std::string lower(std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; }
 
+// Shape records without flattening (morph shapes interpolate them first). Straight edges become curves with the
+// control point at the midpoint so start and end records pair up.
+void parseRawRecords(Reader& r, std::vector<MorphRec>& out) {
+    r.align();
+    int fillBits = (int)r.ub(4), lineBits = (int)r.ub(4);
+    float x = 0, y = 0;
+    for (;;) {
+        if (r.eof()) break;
+        if (!r.ub(1)) {
+            uint32_t flags = r.ub(5);
+            if (!flags) break;
+            if (flags & 0x01) { int n = (int)r.ub(5); x = (float)r.sb(n); y = (float)r.sb(n); MorphRec m; m.kind = MorphRec::Move; m.x = x; m.y = y; out.push_back(m); }
+            MorphRec st; st.kind = MorphRec::Style; st.fill0 = st.fill1 = st.line = -1;
+            bool any = false;
+            if (flags & 0x02) { st.fill0 = (int)r.ub(fillBits); any = true; }
+            if (flags & 0x04) { st.fill1 = (int)r.ub(fillBits); any = true; }
+            if (flags & 0x08) { st.line = (int)r.ub(lineBits); any = true; }
+            if (any) out.push_back(st);
+        } else {
+            bool straight = r.ub(1);
+            int n = (int)r.ub(4) + 2;
+            MorphRec e;
+            if (straight) {
+                float dx = 0, dy = 0;
+                if (r.ub(1)) { dx = (float)r.sb(n); dy = (float)r.sb(n); }
+                else if (r.ub(1)) dy = (float)r.sb(n);
+                else dx = (float)r.sb(n);
+                e.kind = MorphRec::Line;
+                e.cx = x + dx * 0.5f; e.cy = y + dy * 0.5f;
+                x += dx; y += dy;
+            } else {
+                e.kind = MorphRec::Curve;
+                e.cx = x + (float)r.sb(n); e.cy = y + (float)r.sb(n);
+                x = e.cx + (float)r.sb(n); y = e.cy + (float)r.sb(n);
+            }
+            e.x = x; e.y = y;
+            out.push_back(e);
+        }
+    }
+    r.align();
+}
+
+RGBA lerpC(const RGBA& a, const RGBA& b, float t) {
+    RGBA c;
+    c.r = (uint8_t)(a.r + (b.r - a.r) * t); c.g = (uint8_t)(a.g + (b.g - a.g) * t);
+    c.b = (uint8_t)(a.b + (b.b - a.b) * t); c.a = (uint8_t)(a.a + (b.a - a.a) * t);
+    return c;
+}
+Matrix lerpM(const Matrix& a, const Matrix& b, float t) {
+    return {a.a + (b.a - a.a) * t, a.b + (b.b - a.b) * t, a.c + (b.c - a.c) * t, a.d + (b.d - a.d) * t, a.tx + (b.tx - a.tx) * t, a.ty + (b.ty - a.ty) * t};
+}
+
 } // namespace
+
+const ShapeDef* MorphDef::at(uint16_t ratio) const {
+    auto it = cache.find(ratio);
+    if (it != cache.end()) return it->second.get();
+    float t = ratio / 65535.0f;
+    auto sh = std::make_unique<ShapeDef>();
+    sh->bounds = {startBounds.xmin + (endBounds.xmin - startBounds.xmin) * t, startBounds.ymin + (endBounds.ymin - startBounds.ymin) * t,
+                  startBounds.xmax + (endBounds.xmax - startBounds.xmax) * t, startBounds.ymax + (endBounds.ymax - startBounds.ymax) * t};
+    sh->fillSets.emplace_back();
+    sh->lineSets.emplace_back();
+    for (size_t i = 0; i < startFills.size() && i < endFills.size(); ++i) {
+        FillStyle f = startFills[i];
+        const FillStyle& e = endFills[i];
+        f.color = lerpC(f.color, e.color, t);
+        f.m = lerpM(f.m, e.m, t);
+        for (size_t g = 0; g < f.grad.size() && g < e.grad.size(); ++g) {
+            f.grad[g].color = lerpC(f.grad[g].color, e.grad[g].color, t);
+            f.grad[g].ratio = (uint8_t)(f.grad[g].ratio + (e.grad[g].ratio - f.grad[g].ratio) * t);
+        }
+        sh->fillSets[0].push_back(f);
+    }
+    for (size_t i = 0; i < startLines.size() && i < endLines.size(); ++i) {
+        LineStyle l = startLines[i];
+        l.width += (endLines[i].width - l.width) * t;
+        l.color = lerpC(l.color, endLines[i].color, t);
+        sh->lineSets[0].push_back(l);
+    }
+    size_t ei = 0;
+    int f0 = 0, f1 = 0, ln = 0;
+    float x = 0, y = 0;
+    ShapePath* cur = nullptr;
+    auto newPath = [&]() { sh->paths.emplace_back(); cur = &sh->paths.back(); cur->fill0 = f0; cur->fill1 = f1; cur->line = ln; cur->pts.push_back({x, y}); };
+    for (const MorphRec& a : start) {
+        if (a.kind == MorphRec::Style) {
+            if (a.fill0 >= 0) f0 = a.fill0;
+            if (a.fill1 >= 0) f1 = a.fill1;
+            if (a.line >= 0) ln = a.line;
+            newPath();
+            continue;
+        }
+        while (ei < end.size() && end[ei].kind == MorphRec::Style) ++ei;
+        const MorphRec* b = ei < end.size() ? &end[ei] : &a;
+        ++ei;
+        float nx = a.x + (b->x - a.x) * t, ny = a.y + (b->y - a.y) * t;
+        if (a.kind == MorphRec::Move) { x = nx; y = ny; newPath(); continue; }
+        if (!cur) newPath();
+        float cx = a.cx + (b->cx - a.cx) * t, cy = a.cy + (b->cy - a.cy) * t;
+        flattenQuad(cur->pts, {x, y}, {cx, cy}, {nx, ny}, 40.0f);
+        x = nx; y = ny;
+    }
+    sh->paths.erase(std::remove_if(sh->paths.begin(), sh->paths.end(), [](const ShapePath& q) { return q.pts.size() < 2; }), sh->paths.end());
+    const ShapeDef* raw = sh.get();
+    cache[ratio] = std::move(sh);
+    return raw;
+}
 
 bool parseShapeRecords(const uint8_t* data, size_t size, size_t& pos, int shapeVersion, ShapeDef& out, bool glyph) {
     Reader r(data, size);
@@ -520,6 +627,48 @@ struct Parser {
                     m.chars[im.id] = cd;
                     m.imports.push_back(im);
                 }
+                break;
+            }
+            case 46: {   // DefineMorphShape
+                uint16_t id = t.u16();
+                auto md = std::make_unique<MorphDef>();
+                md->startBounds = t.rect();
+                md->endBounds = t.rect();
+                uint32_t off = t.u32();
+                size_t endPos = t.pos() + off;
+                int n = t.u8();
+                if (n == 0xFF) n = t.u16();
+                bool ok = true;
+                for (int i = 0; i < n && ok; ++i) {
+                    FillStyle a, b;
+                    a.type = b.type = t.u8();
+                    if (a.type == FillStyle::Solid) { a.color = t.rgba(); b.color = t.rgba(); }
+                    else if (a.isGradient()) {
+                        a.m = t.matrix(); b.m = t.matrix();
+                        int g = t.u8() & 0x0F;
+                        for (int k = 0; k < g; ++k) {
+                            GradStop sa, sb;
+                            sa.ratio = t.u8(); sa.color = t.rgba(); sb.ratio = t.u8(); sb.color = t.rgba();
+                            a.grad.push_back(sa); b.grad.push_back(sb);
+                        }
+                    } else if (a.isBitmap()) { a.bitmapId = b.bitmapId = t.u16(); a.m = t.matrix(); b.m = t.matrix(); }
+                    else ok = false;
+                    md->startFills.push_back(a); md->endFills.push_back(b);
+                }
+                n = t.u8();
+                if (n == 0xFF) n = t.u16();
+                for (int i = 0; i < n && ok; ++i) {
+                    LineStyle a, b;
+                    a.width = t.u16(); b.width = t.u16(); a.color = t.rgba(); b.color = t.rgba();
+                    md->startLines.push_back(a); md->endLines.push_back(b);
+                }
+                if (ok) {
+                    parseRawRecords(t, md->start);
+                    t.seek(endPos);
+                    parseRawRecords(t, md->end);
+                }
+                m.morphs.push_back(std::move(md));
+                addChar(id, CharType::Morph, (int)m.morphs.size() - 1);
                 break;
             }
             case 1001: case 1009: {

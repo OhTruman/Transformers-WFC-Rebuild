@@ -183,6 +183,7 @@ void TextField::setHtmlText(const std::string& html) {
         }
         size_t e = html.find('<', i);
         std::string text = decodeEntities(html.substr(i, e == std::string::npos ? std::string::npos : e - i));
+        if (text.size() > 1 && text[0] == '$') text = player->translate(text);   // GFx translates text runs
         i = e == std::string::npos ? html.size() : e;
         if (text.empty()) continue;
         if (pendingParagraph) { pushChar('\r'); pendingParagraph = false; }

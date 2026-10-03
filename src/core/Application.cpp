@@ -361,6 +361,7 @@ Application::MatchExit Application::runMatch() {
         world_.draw(*renderer_);
         renderer_->endFrame();
         if (frontend_) frontend_->draw(window_->width(), window_->height());   // open movies (pause, end game)
+        if (frontend_ && !pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }
 
         if (const char* sa = std::getenv("WFC_SHOWACTOR"))       // diagnostic: Gameplay-style unhide (e.g. a KOTH zone)
             renderer_->setActorHidden(sa, false);

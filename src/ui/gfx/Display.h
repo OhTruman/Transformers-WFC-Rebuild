@@ -66,7 +66,9 @@ class ShapeInstance : public DisplayObject {
 public:
     explicit ShapeInstance(Player* p) : DisplayObject(Kind::Shape, p) {}
     const ShapeDef* shape = nullptr;
-    Rect localBounds() const override { return shape ? shape->bounds : Rect{}; }
+    const MorphDef* morph = nullptr;          // morph shape: drawn at the instance ratio
+    const ShapeDef* current() const { return morph ? morph->at(ratio) : shape; }
+    Rect localBounds() const override { const ShapeDef* s = current(); return s ? s->bounds : Rect{}; }
 };
 
 class BitmapInstance : public DisplayObject {

@@ -56,8 +56,14 @@ static void testCatalog(const Catalog& c) {
     check(c.localize("UIText", "LoadScreen", "LoadingMap") == "in `m", "catalog.loc_loadingmap");
     check(c.localizeKey("$UIText.MainMenu.PressStart").size() > 0, "catalog.loc_gfx_key", c.localizeKey("$UIText.MainMenu.PressStart"));
     check(c.engageTexts().size() == 26, "catalog.engage_texts_base", std::to_string(c.engageTexts().size()));
+    // Selectable = cooked + rebuild runtime data on disk (grows as AssetTools exports maps).
     auto tdmMaps = c.compatibleMaps("TDM", true);
-    check(tdmMaps.size() == 1 && tdmMaps[0]->mapId == 508, "catalog.tdm_selectable_maps_now", std::to_string(tdmMaps.size()));
+    size_t onDisk = 0;
+    for (const MapInfo& m : c.maps()) onDisk += m.cooked && m.compatibleWith("TDM") && std::ifstream(
+        (std::getenv("WFC_ASSETS") ? std::string(std::getenv("WFC_ASSETS")) : std::string(core::config::kAssetRootDefault)) + "/Maps/" + m.runtimeDir + "/world.glb").good();
+    bool hasStreets = false;
+    for (auto* m : tdmMaps) hasStreets |= m->mapId == 508;
+    check(hasStreets && tdmMaps.size() == onDisk, "catalog.tdm_selectable_maps_match_disk", std::to_string(tdmMaps.size()));
 }
 
 static void testUIController() {
