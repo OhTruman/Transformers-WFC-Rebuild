@@ -17,6 +17,7 @@
 #include "frontend/DataStores.h"
 #include "frontend/GameFlow.h"
 #include "platform/Input.h"
+#include "platform/Movie.h"
 
 namespace frontend {
 
@@ -43,6 +44,11 @@ public:
     virtual void draw(const GameFlow& flow, int w, int h) = 0;
     // Automation: a key press on the focused movie (Flash key code).
     virtual void injectKey(int code, bool down) { (void)code; (void)down; }
+    // This frame's full-screen movie frame (nullptr = none): over the GFx movies (SeqAct_MoviePlayer) or under them
+    // (the loading Bink under LoadScreen_GFX).
+    virtual void setVideoFrame(const uint8_t* rgba, int w, int h, uint64_t serial, bool over) {
+        (void)rgba; (void)w; (void)h; (void)serial; (void)over;
+    }
 };
 
 class ScriptDriver {
@@ -66,6 +72,8 @@ class FrontendRuntime {
 public:
     bool init();
     void setPresenter(std::unique_ptr<IMoviePresenter> p) { presenter_ = std::move(p); }
+    // Full-screen movie decoding (platform). Without one, each movie reports Stopped at once.
+    void setMoviePlayerFactory(std::function<platform::IMoviePlayer*()> f) { movieFactory_ = std::move(f); }
     // One frontend frame (frontend levels and the loading screen).
     void update(const platform::InputFrame& in, float dt);
     void draw(int w, int h);
@@ -86,18 +94,25 @@ public:
 
 private:
     void runNativeShims();
-    void updateMoviePlayer(float dt);
+    void updateMoviePlayer(float dt, const platform::InputFrame& in);
+    bool openVideo(const std::string& name, bool loop);
 
     Catalog catalog_;
     GameFlow flow_;
     ScriptDriver script_;
     std::unique_ptr<IMoviePresenter> presenter_;
     std::vector<std::string> shimmed_;
-    std::string playingMovie_;
-    float movieTime_ = 0.0f;
+    uint32_t prevUi_ = 0;
     IFrontendAudio* audio_ = nullptr;
     LevelKind lastAudioLevel_ = LevelKind::None;
     bool frontEndMusic_ = false;
+    std::function<platform::IMoviePlayer*()> movieFactory_;
+    std::unique_ptr<platform::IMoviePlayer> video_;   // SeqAct_MoviePlayer movie or the loading underlay
+    std::string videoName_;
+    std::string underlayFor_, underlay_;   // loading Bink name -> localized file
+    bool videoLoops_ = false;
+    bool videoFramed_ = false;
+    uint64_t videoGen_ = 0;
     bool moviePlaying_ = false;
     std::string prefetched_;
     size_t seenFs_ = 0;

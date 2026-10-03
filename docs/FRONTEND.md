@@ -15,14 +15,14 @@ menus run their own ActionScript. Nothing in the menu logic is re-implemented na
 | Stage | Movie (original) | What the player sees / does |
 |---|---|---|
 | Boot | `MovieLoader_GFX` | Its AS calls `Game.HasWatchedIntroMovie` and sends `enterMovieSequence` or `enterFrontEnd` |
-| Intro | Bink `Logo_*`, `FMV_intro` | **not decoded** (each reports Stopped at once; PARTIAL) |
+| Intro | Bink `Logo_Activision` / `Logo_Hasbro` / `Logo_HighMoon`, `FMV_intro` | the shipped movies (AssetTools .mkv) full screen, over the GFx layer; Stopped fires at the end; A / Start / B skips (PROVISIONAL); no movie audio (PARTIAL) |
 | Title | `FrontEnd_GFX` | localized TRANSFORMERS WFC logo (ExternalTextures), "Press START button" |
 | Main menu | `FrontEnd_GFX` `mc_menuMain360` | Campaign / Multiplayer / Escalation / Settings / Extras; footer hints with gamepad icons |
 | Multiplayer | `PartyLobby_GFX` | Find Match / Private Match / Create a Character / Teletran I / Matchmaking / Friends List, MOTD ticker, team panel |
 | Private Match | `mc_menuMultiplayerGameModes` | the 6 versus modes from `<TnMenuItems:GameModes>` |
 | Host Options | `mc_menuMultiplayerGameModeSettings` | Team Balancing / Map Selection / Time Limit / Points to Win (authored values) → Create Game |
 | Game lobby | `GameLobby_GFX` | mode title + rules ("Kill 40 enemies…"), map thumbnail + name, Start Game / Select Map, "Waiting for host to start game", "MATCH STARTS IN n" |
-| Loading | `LoadScreen_GFX` | spinner, "TEAM DEATHMATCH", "in Streets", 3 engage tips (Bink underlay not decoded) |
+| Loading | `LoadScreen_GFX` over the `TF_LoadingScreen` Bink (boot: `TF_InitialStartup`) | looped Bink underlay, "TEAM DEATHMATCH"; "in Streets" + 3 engage tips are set but animate in during the blocking load |
 | Match | Streets runtime | the Gameplay / Rendering / Systems match |
 | Pause | `PauseMenu_GFX` | "TEAM DEATHMATCH ON STREETS", Resume / Choose Character / Settings / Friends List / Quit Game |
 | Return | `Game.QuitToMainMenu` | travel to `UI_FrontEnd_m`; the frontend comes back (intro skipped: watched) |
@@ -83,7 +83,8 @@ ui::GfxPresenter ─ GfxHost (resource mapping) ─ gfx::Player (display list + 
   - frontend boot; `run()` → `runMatch()`;
   - in-match hooks: Esc = `|onrelease showmenu`, flow tick, return, input to the focused movie, overlay draw;
   - `shutdownFrontend()` at the start of `shutdown()`.
-- Platform: `UiKey` bitmask in `InputFrame` (keyboard + XInput buttons).
+- Platform: `UiKey` bitmask in `InputFrame` (keyboard + XInput buttons); `platform::IMoviePlayer`
+  (`Win32Movie.cpp`, Media Foundation; links mfplat / mfreadwrite / mfuuid / ole32).
 - CMake: globs `src/frontend`, `src/ui`; `WFC_SOURCE_DIR`; targets `wfc_frontend_tests` (ctest `frontend`) and
   `wfc_gfxdump`.
 
@@ -106,7 +107,8 @@ ui::GfxPresenter ─ GfxHost (resource mapping) ─ gfx::Player (display list + 
 | Lobby | host's choice, short countdown 10 s, PickTeam RandomInt(2), StartLevel URL | CONFIRMED / HIGH (RE 2.4) |
 | Match URL | equals RE 3.1, built from the chosen host options | CONFIRMED; native append HIGH; contexts omitted (PARTIAL) |
 | Loading text | SetLevelText(FriendlyName, "in <map>") + 3 tips | CONFIRMED |
-| Loading timing | the movie's spinIn intro (34 frames @30) plays, then the blocking world load | PARTIAL: no threaded load; the Bink underlay is not decoded |
+| Loading timing | the movie's spinIn intro (34 frames @30) plays, then the blocking world load | PARTIAL: no threaded load (the screen freezes on its last frame) |
+| Full-screen movies | Media Foundation decode of the AssetTools .mkv (H.264); SeqAct_MoviePlayer movies over the GFx, the loading Bink looped under LoadScreen_GFX; files `<name>_NA_INT` → `<name>_INT` → `<name>` | video CONFIRMED content; layering HIGH; skip rule PROVISIONAL; region variant PARTIAL; audio not played (PARTIAL: 10 mono tracks, layout unidentified) |
 | Player list | one local PRI; name "Player" (`WFC_PLAYERNAME`), level 1 everywhere | PARTIAL: no profile / XP service |
 | Provider column headers (`GetCollectionColumnHeaderByTag`) | empty | UNKNOWN: in no shipped .int |
 | Match start UI | WaitingOnGameStart → CustomTransformers → PreGameCountdown → InGame, immediately | state machine CONFIRMED; timing PROVISIONAL adapter (Gameplay has no PendingMatch) |
@@ -139,6 +141,7 @@ ui::GfxPresenter ─ GfxHost (resource mapping) ─ gfx::Player (display list + 
 | `WFC_FLOWLOG=path` | JSON-lines trace |
 | `WFC_PLAYERNAME=` | the local player name |
 | `WFC_NO_GL_RELEASE=1` | disable the GL census release (A/B) |
+| `WFC_NO_VIDEO=1` | no movie decoding (each movie reports Stopped at once, as in headless tests) |
 | `WFC_FRONTEND_MANIFESTS=dir` | AssetTools manifest directory |
 | `build\bin\wfc_gfxdump.exe <movie object> [frames] [frame:keycode,…]` | runs one movie headless and prints its display tree. `WFC_DUMP_PRESCRIPT="…"` drives the flow first |
 | `tools/frontend/export_game_settings.py` | regenerates `data/frontend/game_settings.json` from authored.db (read-only) |
@@ -154,6 +157,7 @@ ui::GfxPresenter ─ GfxHost (resource mapping) ─ gfx::Player (display list + 
   - lobby / settings: `lobby.publishGameInfo`, `settings.write`, `gamelobby.*`;
   - match: `match.launch`, `match.loaded` (seconds, privateMB), `match.glRelease`, `match.unloaded` (privateMB),
     `match.quit`;
+  - full-screen video: `movie.play` / `open` / `firstFrame` / `finished` (position, skipped) / `unavailable`;
   - movies: `gfx.movie` / `gfx.movieClosed` / `gfx.loadingMovie` / `gfx.key` / `gfx.dsCallback` / `gfx.externalTexture`;
   - audio: `ui.sound`, `audio.uiLevel` / `levelChange` / `levelEvent` / `moviePlaying` / `prefetch`;
   - data stores: `datastore.write` / `unhandled` / `unknownHeader`;
@@ -190,5 +194,8 @@ ui::GfxPresenter ─ GfxHost (resource mapping) ─ gfx::Player (display list + 
 - **Systems:** none blocking. The seam is consumed exactly as documented. Merge-preview resolutions:
   `Application.cpp` keeps both `WFC_RAMSELF` and `WFC_PRESSTRANSFORM_EVERY`; `World.cpp` `setAudio` takes Systems'
   version with `loadMapAudio(mapName_)`.
-- **Video (open in this lane):** Logo / FMV / TF_LoadingScreen are H.264 + multichannel FLAC in `.mkv` and are not
-  decoded yet.
+- **Video audio (Systems / AssetTools / RE):** the movies carry 10 mono FLAC tracks of unidentified layout
+  (AssetTools open item; tracks 0/1 are the loudest pair). `[Engine.MovieSettings] MoviesToAlwaysPlaySound` lists the
+  three logos. Playing them belongs on the Systems device (no second sound engine); the platform decoder can expose PCM
+  once the layout is known.
+- **Platform:** `platform::IMoviePlayer` has a Win32 Media Foundation implementation only.

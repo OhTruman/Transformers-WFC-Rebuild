@@ -143,8 +143,9 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
 void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     (void)flow;
     if (!glReady_) { glReady_ = gl_.init(); if (!glReady_) return; }
-    if (movies_.empty() && !loading_) return;
+    if (movies_.empty() && !loading_ && !video_) return;
     gl_.begin(w, h);
+    if (video_ && !videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     auto drawMovie = [&](GfxMovie& m) {
         items_.clear();
         gfx::Player& p = m.player();
@@ -153,6 +154,7 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     };
     if (loading_) drawMovie(*loading_);
     else for (Open& o : movies_) drawMovie(*o.movie);
+    if (video_ && videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     gl_.end();
 }
 

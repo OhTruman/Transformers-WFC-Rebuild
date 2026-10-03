@@ -44,7 +44,8 @@ Full tables: `docs/FRONTEND.md`. This pass supersedes the pass-1 PARTIAL "no GFx
 - Per-class persistence of setting values.
 
 **PARTIAL:**
-- Bink movies (logos, FMV, the TF_LoadingScreen underlay) are not decoded.
+- Bink movies: video plays (logos, FMV_intro, TF_InitialStartup / TF_LoadingScreen underlay, decoded from the
+  AssetTools .mkv); movie audio is not played (track layout unidentified); the skip rule is PROVISIONAL.
 - The world load blocks after the loading intro (34 frames).
 - Filters and blend modes are not drawn (pause backdrop).
 - Player data: no profile name or XP ("Player", level 1).

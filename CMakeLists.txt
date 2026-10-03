@@ -43,7 +43,7 @@ if(WIN32)
     # Static-link the C++/unwind/pthread runtimes so the exe is self-contained
     # (no llvm-mingw DLLs required beside it).
     target_link_options(wfc_rebuild PRIVATE -static)
-    target_link_libraries(wfc_rebuild PRIVATE opengl32 gdi32 gdiplus user32 xinput winmm)
+    target_link_libraries(wfc_rebuild PRIVATE opengl32 gdi32 gdiplus user32 xinput winmm mfplat mfreadwrite mfuuid ole32)
 endif()
 
 set_target_properties(wfc_rebuild PROPERTIES

@@ -2,6 +2,7 @@
 // clip masks). Fills use stencil winding (nonzero) + cover; masks nest through the stencil's high nibble.
 // The UI is drawn into a multisampled target and composited premultiplied, so it can sit over the 3D scene.
 #pragma once
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
@@ -23,6 +24,8 @@ public:
     void draw(const std::vector<gfx::Player::RenderItem>& items, float alpha = 1.0f);
     // Composites the UI onto the default framebuffer.
     void end();
+    // A full-screen movie frame (RGBA8, top row first), letterboxed into the window; serial skips re-uploads.
+    void drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial);
     bool ok() const { return ok_; }
     size_t cachedShapes() const { return shapes_.size(); }
     size_t textures() const { return textures_.size(); }
@@ -50,6 +53,8 @@ private:
     bool inMask_ = false;
     std::map<std::pair<const gfx::ShapeDef*, bool>, Cached> shapes_;
     struct Tex { unsigned id = 0; int w = 0, h = 0; };
+    Tex video_;
+    uint64_t videoSerial_ = 0;
     std::map<std::string, Tex> textures_;
     std::map<std::string, unsigned> gradients_;
     // Uniform locations.

@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <sstream>
 
 namespace frontend {
@@ -211,24 +212,76 @@ void FrontendRuntime::runNativeShims() {
     if (!loaderOpen) shimmed_.erase(std::remove(shimmed_.begin(), shimmed_.end(), loader), shimmed_.end());
 }
 
-void FrontendRuntime::updateMoviePlayer(float dt) {
-    // SeqAct_MoviePlayer: the Bink movies are extracted as H.264/FLAC .mkv (ExtractedAssets/movies). No decoder is
-    // integrated yet [PARTIAL]: each movie reports Stopped immediately, logged so validation sees the chain order.
-    const std::string& m = flow_.kismetMovie();
-    if (m.empty()) { playingMovie_.clear(); return; }
-    if (m != playingMovie_) {
-        playingMovie_ = m;
-        movieTime_ = 0.0f;
-        FlowTrace::emit("movie.unavailable", {{"movie", m}, {"file", "movies/" + m + ".mkv"}, {"why", "no video decoder integrated"}});
+bool FrontendRuntime::openVideo(const std::string& name, bool loop) {
+    video_.reset();
+    videoName_ = name;
+    videoLoops_ = loop;
+    std::string path = Catalog::defaultExtractedRoot() + "/movies/" + name + ".mkv";
+    std::unique_ptr<platform::IMoviePlayer> p(movieFactory_ && !std::getenv("WFC_NO_VIDEO") ? movieFactory_() : nullptr);
+    if (!p || !p->open(path)) {
+        FlowTrace::emit("movie.unavailable", {{"movie", name}, {"file", path}, {"decoder", FlowTrace::boolean(p != nullptr)}});
+        return false;
     }
-    movieTime_ += dt;
-    flow_.movieStopped(m);
+    FlowTrace::emit("movie.open", {{"movie", name}, {"seconds", std::to_string(p->duration())}, {"loop", FlowTrace::boolean(loop)}});
+    video_ = std::move(p);
+    videoFramed_ = false;
+    ++videoGen_;
+    return true;
+}
+
+void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in) {
+    // SeqAct_MoviePlayer (intro chain): the Bink movies, extracted by AssetTools as H.264/FLAC .mkv, decoded by the
+    // platform movie player. Stopped fires at the end of the movie. Movie audio is not played [PARTIAL: the track
+    // layout is unidentified and the audio belongs to the Systems device].
+    // The loading underlay: [LoadingMovie] InitialStartupFileName / DefaultFileName (Xe-TransGame.ini), looped under
+    // LoadScreen_GFX while a loading screen is up [HIGH]. The extracted files carry region / language suffixes; the
+    // rebuild picks <name>_NA_INT, then <name>_INT, then <name> [PARTIAL: region of the dump UNKNOWN, see GetRegionCode].
+    const std::string& m = flow_.kismetMovie();
+    std::string want = m;
+    if (want.empty() && flow_.loading().active && !flow_.loading().binkMovie.empty()) {
+        const std::string& b = flow_.loading().binkMovie;
+        if (b != underlayFor_) {
+            underlayFor_ = b;
+            underlay_ = b;
+            for (const std::string& c : {b + "_NA_INT", b + "_INT"})
+                if (std::ifstream(Catalog::defaultExtractedRoot() + "/movies/" + c + ".mkv").good()) { underlay_ = c; break; }
+        }
+        want = underlay_;
+    }
+    if (want != videoName_) {
+        if (want.empty()) { video_.reset(); videoName_.clear(); }
+        else if (!openVideo(want, m.empty()) && !m.empty()) { flow_.movieStopped(m); videoName_.clear(); }
+    }
+    if (!video_) return;
+    video_->advance(dt);
+    const uint8_t* px = nullptr;
+    int vw = 0, vh = 0;
+    uint64_t serial = 0;
+    if (!videoFramed_ && video_->frame(px, vw, vh, serial)) {
+        videoFramed_ = true;
+        FlowTrace::emit("movie.firstFrame", {{"movie", videoName_}, {"w", std::to_string(vw)}, {"h", std::to_string(vh)},
+                                             {"t", std::to_string(video_->position())}});
+    }
+    // Skip with A / Start / B on intro movies [PROVISIONAL: the original skip rule (UE3 bUserCanSkip) is UNKNOWN].
+    uint32_t pressed = in.uiDown & ~prevUi_;
+    prevUi_ = in.uiDown;
+    auto bit = [](platform::UiKey k) { return 1u << (int)k; };
+    bool skip = !m.empty() && (pressed & (bit(platform::UiKey::Accept) | bit(platform::UiKey::Start) | bit(platform::UiKey::Back)));
+    if (video_->finished() || skip) {
+        if (videoLoops_ && !skip) { video_->restart(); return; }
+        FlowTrace::emit("movie.finished", {{"movie", videoName_}, {"skipped", FlowTrace::boolean(skip)},
+                                           {"position", std::to_string(video_->position())}});
+        video_.reset();
+        std::string done = videoName_;
+        videoName_.clear();
+        if (!m.empty()) flow_.movieStopped(done);
+    }
 }
 
 void FrontendRuntime::update(const platform::InputFrame& in, float dt) {
     flow_.tick(dt);
     runNativeShims();
-    updateMoviePlayer(dt);
+    updateMoviePlayer(dt, in);
     if (presenter_) presenter_->update(flow_, in, dt);
     script_.update(flow_, dt);
     updateAudio(dt);
@@ -242,7 +295,15 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& in, float dt) {
 }
 
 void FrontendRuntime::draw(int w, int h) {
-    if (presenter_) presenter_->draw(flow_, w, h);
+    if (!presenter_) return;
+    const uint8_t* px = nullptr;
+    int vw = 0, vh = 0;
+    uint64_t serial = 0;
+    bool over = !flow_.kismetMovie().empty();
+    // The serial is unique across movies (the presenter re-uploads on change).
+    if (video_ && video_->frame(px, vw, vh, serial)) presenter_->setVideoFrame(px, vw, vh, (videoGen_ << 40) | serial, over);
+    else presenter_->setVideoFrame(nullptr, 0, 0, 0, false);
+    presenter_->draw(flow_, w, h);
 }
 
 std::string FrontendRuntime::titleText() const {

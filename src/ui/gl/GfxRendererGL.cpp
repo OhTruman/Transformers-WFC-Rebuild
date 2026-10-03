@@ -133,6 +133,7 @@ void GfxRendererGL::ownedNames(GlCensus::Owned& o) const {
     for (const auto& [k, t] : textures_) if (t.id) o.textures.insert(t.id);
     for (const auto& [k, id] : gradients_) o.textures.insert(id);
     if (resTex_) o.textures.insert(resTex_);
+    if (video_.id) o.textures.insert(video_.id);
     if (vbo_) o.buffers.insert(vbo_);
     if (vao_) o.vertexArrays.insert(vao_);
     for (unsigned f : {msFbo_, resFbo_}) if (f) o.framebuffers.insert(f);
@@ -391,6 +392,41 @@ void GfxRendererGL::cover(float x0, float y0, float x1, float y1, const gfx::Mat
         glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO);
     }
     drawTriangles(v, m);
+}
+
+void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial) {
+    if (!ok_ || !rgba || w <= 0 || h <= 0) return;
+    if (!video_.id || video_.w != w || video_.h != h) {
+        if (!video_.id) glGenTextures(1, &video_.id);
+        glBindTexture(GL_TEXTURE_2D, video_.id);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        video_.w = w; video_.h = h;
+        videoSerial_ = serial;
+    } else if (serial != videoSerial_) {
+        glBindTexture(GL_TEXTURE_2D, video_.id);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+        videoSerial_ = serial;
+    }
+    // Uniform scale, centred (the movies are 16:9 like the GFx stages).
+    float s = std::min((float)w_ / w, (float)h_ / h);
+    float dw = w * s, dh = h * s, ox = (w_ - dw) * 0.5f, oy = (h_ - dh) * 0.5f;
+    gfx::FillStyle fs;
+    fs.m.a = s; fs.m.d = s; fs.m.tx = ox; fs.m.ty = oy;
+    gfx::Matrix id;
+    id.a = id.d = 1;
+    setFill(fs, id, gfx::CXForm{}, 1.0f, 4);
+    glx::Uniform2f(uTexSize_, (float)w, (float)h);
+    glBindTexture(GL_TEXTURE_2D, video_.id);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glStencilFunc(GL_ALWAYS, 0, 0xFF);
+    glStencilMask(0x00);
+    float q[] = {ox, oy, ox + dw, oy, ox + dw, oy + dh, ox, oy, ox + dw, oy + dh, ox, oy + dh};
+    std::vector<float> v(q, q + 12);
+    drawTriangles(v, id);
 }
 
 void GfxRendererGL::fullscreen() {

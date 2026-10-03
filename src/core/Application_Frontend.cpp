@@ -7,6 +7,7 @@
 #include "frontend/FlowTrace.h"
 #include "frontend/FrontendRuntime.h"
 #include "game/MapState.h"
+#include "platform/Movie.h"
 #include "platform/Window.h"
 #include "render/Renderer.h"
 #include "ui/GfxPresenter.h"
@@ -82,6 +83,7 @@ void Application::attachPresenter() {
     if (!p->init()) { LOG_WARN("frontend: GFx movies unavailable (no frontend_gfx.json); flow only"); return; }
     presenter_ = p.get();
     frontend_->setPresenter(std::move(p));
+    frontend_->setMoviePlayerFactory([] { return platform::createMoviePlayer(); });
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
     if (audio_) { g_frontendAudio = std::make_unique<SystemsFrontendAudio>(audio_); frontend_->setAudio(g_frontendAudio.get()); }
 #endif

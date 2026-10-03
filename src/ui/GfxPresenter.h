@@ -22,6 +22,9 @@ public:
     void update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) override;
     void draw(const frontend::GameFlow& flow, int w, int h) override;
     void injectKey(int code, bool down) override;
+    void setVideoFrame(const uint8_t* rgba, int w, int h, uint64_t serial, bool over) override {
+        video_ = rgba; videoW_ = w; videoH_ = h; videoSerial_ = serial; videoOver_ = over;
+    }
     // Diagnostics.
     std::vector<std::string> openMovieObjects() const;
     std::string dumpMovie(const std::string& object) const;
@@ -42,6 +45,10 @@ private:
     bool glReady_ = false;
     struct Open { std::string object; std::unique_ptr<GfxMovie> movie; };
     std::vector<Open> movies_;              // flow-open movies in open order (last = focus)
+    const uint8_t* video_ = nullptr;
+    int videoW_ = 0, videoH_ = 0;
+    uint64_t videoSerial_ = 0;
+    bool videoOver_ = false;
     std::unique_ptr<GfxMovie> loading_;     // the loading movie while a travel is in progress
     std::string loadingUrl_;
     float loadingTime_ = 0.0f;

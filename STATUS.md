@@ -6,12 +6,13 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
 ## FRONTEND PASS 2 (2026-10-03, branch `agents/frontend`) — original Scaleform frontend, private match, return
 Details and handoffs: `docs/FRONTEND.md`.
 
-**The shipped menus are on screen and drive the flow.** A SWF 8 / AS2 runtime with a GL renderer runs the cooked GFx
+**Cold boot plays the intro chain** (Activision, Hasbro, High Moon logos, FMV_intro) **and then the shipped menus,
+which drive the flow.** A SWF 8 / AS2 runtime with a GL renderer runs the cooked GFx
 movies unmodified. Playable with keys or pad:
 1. title → Press START → main menu → Multiplayer;
 2. party lobby → Private Match → Team Deathmatch → Host Options (authored values) → Create Game;
 3. game lobby (Streets thumbnail, rules) → Start Game → "MATCH STARTS IN 10…0";
-4. loading screen ("TEAM DEATHMATCH", "in Streets", tips) → Streets TDM;
+4. loading screen (TF_LoadingScreen Bink under LoadScreen_GFX, "TEAM DEATHMATCH") → Streets TDM;
 5. Esc → original Pause menu → Quit Game → frontend.
 
 **Validation:**
@@ -22,7 +23,7 @@ movies unmodified. Playable with keys or pad:
   conflicts; resolutions in docs/FRONTEND.md).
 
 **Not yet:**
-- video decoding (logos, FMV, loading Bink);
+- movie audio (video of the logos, FMV_intro and the loading Binks plays; Media Foundation);
 - the UI_FrontEnd_m 3D backdrop (not exported);
 - a threaded level load;
 - GFx filters / blend modes;
