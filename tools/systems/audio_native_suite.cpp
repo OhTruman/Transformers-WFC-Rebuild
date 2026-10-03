@@ -54,6 +54,28 @@ struct Rec : IAudio {
 static void step(game::SoundMixer& m, float t) { m.tick(t); }
 static float vol(game::SoundMixer& m) { return m.categoryVolume("SFX_WET_VEH_ENGINE"); }
 
+static assets::Json loadJson(const std::string& p);
+static const std::string& streetsAudio();
+// A map's reverb presets from its audio.json (same field mapping as AmbientAudio::load).
+static int registerMapPresets(game::SoundMixer& m, const assets::Json& aj) {
+    int n = 0;
+    for (const auto& kv : aj["reverb_presets"].obj) {
+        const assets::Json& mp = kv.second["mixer_preset"];
+        const assets::Json& d = kv.second["dsp_by_category"]["MASTER_WET"];
+        const assets::Json& r = d["Reverb"];
+        const assets::Json& e = d["Echo"];
+        const float v[game::SoundMixer::kParams] = {
+            d["Volume"]["Volume"].asFloat(1.0f), r["Room"].asFloat(-10000.0f), r["RoomHF"].asFloat(-10000.0f),
+            r["RoomRolloffFactor"].asFloat(0.0f), r["DecayTime"].asFloat(1.0f), r["DecayHFRatio"].asFloat(1.0f),
+            r["ReflectionsLevel"].asFloat(-10000.0f), r["ReflectionsDelay"].asFloat(0.0f), r["Level"].asFloat(-10000.0f),
+            r["Delay"].asFloat(0.0f), r["Diffusion"].asFloat(0.0f), r["Density"].asFloat(0.0f), r["HFReference"].asFloat(5000.0f),
+            e["Delay"].asFloat(500.0f), e["DecayRatio"].asFloat(0.5f), e["WetMix"].asFloat(0.0f), e["DryMix"].asFloat(1.0f)};
+        n += m.addMapPreset(kv.first, mp["Priority"].asFloat(0.0f), mp["FadeInTime"].asFloat(0.0f), mp["FadeOutTime"].asFloat(0.0f),
+                            mp["Duration"].asFloat(-1.0f), v) ? 1 : 0;
+    }
+    return n;
+}
+
 static void testMixer() {
     std::printf("[mixer]\n");
     const float J = 0.1258925f, B = 0.6309574f;   // VEHICLE_JUMP -18 dB, VEHICLE_BOOST_END -4 dB (linear amplitude)
@@ -98,6 +120,7 @@ static void testMixer() {
       step(m, 0.5f); CHECK(m.activeList() == "VEHICLE_JUMP(1),Default(1)", "first expiry tick decrements: %s", m.activeList().c_str());
       step(m, 0.016f); CHECK(m.activeList() == "Default(1)", "second tick removes: %s", m.activeList().c_str()); }
     { game::SoundMixer m;   // per-category fall-through: JUMP (270) defines no MASTER_WET -> REVERB EXTERIOR (182)
+      CHECK(registerMapPresets(m, loadJson(streetsAudio())) == 10, "Streets map presets registered from audio.json");
       m.enable("REVERB_TRANS_MP_STREETS_EXTERIOR"); m.enable("VEHICLE_JUMP");
       CHECK(!std::strcmp(m.categoryTarget(0), "VEHICLE_JUMP"), "cat0 %s", m.categoryTarget(0));
       CHECK(!std::strcmp(m.categoryTarget(1), "REVERB_TRANS_MP_STREETS_EXTERIOR"), "cat1 falls through: %s", m.categoryTarget(1));
@@ -135,8 +158,21 @@ static void testMixer() {
       m.enable("A"); m.enable("A"); m.disable("A", false);
       CHECK(m.activeList() == "A(1),Default(1)", "plain disable decrements: %s", m.activeList().c_str()); }
     { game::SoundMixer m;   // Flush (level change)
+      registerMapPresets(m, loadJson(streetsAudio()));
       m.activateReverb("REVERB_TRANS_MP_STREETS_EXTERIOR"); m.enable("VEHICLE_JUMP"); m.flush();
       CHECK(m.activeList() == "Default(1)" && m.currentReverb().empty(), "flush: %s", m.activeList().c_str()); }
+    { game::SoundMixer m;   // map preset lifecycle: built-in presets only, + map, - map (Flush + forget), + again
+      const int base = m.presetCount();
+      CHECK(base == 3 && m.mapPresetCount() == 0 && !m.hasPreset("REVERB_TRANS_MP_STREETS_EXTERIOR"),
+            "no map preset compiled in (Default + 2 global; %d)", base);
+      registerMapPresets(m, loadJson(streetsAudio()));
+      m.activateReverb("REVERB_TRANS_MP_STREETS_TRAIN_TUNNEL"); m.enable("VEHICLE_JUMP"); step(m, 0.1f);
+      CHECK(m.removeMapPresets() == 10 && m.presetCount() == base && m.activeList() == "Default(1)" && m.currentReverb().empty(),
+            "removeMapPresets: Flush + forget (%s)", m.activeList().c_str());
+      Environment e = m.environment();
+      CHECK(e.room <= -9999.0f && e.reverb <= -9999.0f, "dry Default environment after map removal");
+      CHECK(registerMapPresets(m, loadJson(streetsAudio())) == 10 && registerMapPresets(m, loadJson(streetsAudio())) == 0,
+            "re-register after removal; a duplicate name is refused"); }
 }
 
 // ---------------------------------------------------------------- zones
@@ -161,6 +197,7 @@ static bool insideZ(const ZoneGeo& z, const Vec3& p) {
 }
 
 static const std::string kRoot = "F:/Transformers Rebuild/ExtractedAssets/VerticalSlice";
+static const std::string& streetsAudio() { static const std::string p = kRoot + "/Maps/MP_IAC_Streets/audio.json"; return p; }
 static assets::Json loadJson(const std::string& p) {
     std::ifstream f(p, std::ios::binary); std::stringstream ss; ss << f.rdbuf();
     assets::Json j; assets::Json::parse(ss.str(), j); return j;
@@ -541,28 +578,19 @@ static void testAuthored() {
               "%s loop [%u, %u] = whole sample (%d)", key.c_str(), l.start, l.end, w["total_samples"].asInt(-1));
     }
 
-    // Pickups: authored factories + script-confirmed effect activation and the PickupSound.
+    // Pickups: every factory placed in the map (gameplay.json) resolves its class's authored PickupSound.
     using PP = game::PickupPresentation;
-    int nAmmo = 0, nHealth = 0, nShield = 0, nObj = 0;
-    for (int i = 0; i < PP::count(); ++i) {
-        PP::Kind k = PP::def(i).kind;
-        if (k == PP::Kind::AmmoCrate) ++nAmmo; else if (k == PP::Kind::Health) ++nHealth;
-        else if (k == PP::Kind::OverShield) ++nShield; else ++nObj;
+    assets::Json gp = loadJson(kRoot + "/Maps/MP_IAC_Streets/gameplay.json");
+    std::map<std::string, int> placed;
+    for (size_t i = 0; i < gp["pickups"].size(); ++i) ++placed[gp["pickups"][i]["class"].asString()];
+    CHECK(placed["TnAmmoCratePickupFactory"] == 14 && placed["TnHealthPickupFactory"] == 9 && placed["TnOverShieldPickupFactory"] == 1,
+          "placed 14 ammo / 9 health / 1 overshield");
+    for (const auto& kv : placed) {
+        const char* snd = PP::pickupSoundFor(kv.first.c_str());
+        CHECK(snd && cues.hasCue(snd), "%s -> PickupSound %s in the cue table", kv.first.c_str(), snd ? snd : "-");
     }
-    CHECK(PP::count() == 27 && nAmmo == 14 && nHealth == 9 && nShield == 1 && nObj == 3, "27 factories 14/9/1/3");
-    PP pp;
-    for (int i = 0; i < PP::count(); ++i) {
-        const PP::FactoryDef& d = PP::def(i);
-        bool custom = d.kind == PP::Kind::Health || d.kind == PP::Kind::OverShield;
-        bool objective = d.kind == PP::Kind::ObjectiveFlag || d.kind == PP::Kind::ObjectiveBomb;
-        CHECK(!d.pickupSound || cues.hasCue(d.pickupSound), "%s PickupSound %s in table", d.actor, d.pickupSound ? d.pickupSound : "-");
-        CHECK(objective || d.pickupSound != nullptr, "%s has an authored PickupSound", d.actor);
-        CHECK(d.pickupEffectAttached == !custom, "%s PickupEffect attachment (authored data)", d.actor);
-        // RE 00dcb20: ShouldDisplayHighlightFx True on TnAmmoCrate and TnWeaponPickupFactory (flag / bomb inherit it).
-        CHECK(d.highlightFx == (d.kind == PP::Kind::AmmoCrate || objective), "%s ShouldDisplayHighlightFx", d.actor);
-        CHECK((d.requiredGameRule != nullptr) == objective, "%s RequiredGameRuleClass", d.actor);
-        CHECK(PP::find(d.actor) == i, "%s found by actor name", d.actor);
-    }
+    CHECK(PP::pickupSoundFor("TnGameObjectivePickupFactoryFlag") == nullptr && PP::pickupSoundFor("TnGameObjectivePickupFactoryBomb") == nullptr,
+          "objective inventories author no PickupSound");
     // PickupSound is attached to the recipient pawn: its voices follow the pawn.
     Vec3 pawn{10, 0, 0};
     cues.setResolver([&](int owner, const std::string&, const Vec3& off, Vec3& out) {
@@ -571,8 +599,8 @@ static void testAuthored() {
     });
     int first = rec.n;
     game::SoundCues::Emitter recipient{pawn, 0, {0, 0, 0}, ""};
-    int id = pp.onTaken(PP::def(0).actor, cues, recipient, 5.0f);
-    CHECK(pp.onTaken("NoSuchFactory", cues, recipient, 5.0f) == -1, "unknown factory ignored");
+    int id = PP::onTaken("TnAmmoCratePickupFactory", cues, recipient, 5.0f);
+    CHECK(PP::onTaken("NoSuchFactory", cues, recipient, 5.0f) == -1, "unknown factory class ignored");
     CHECK(id >= 0 && rec.n > first, "ammo pickup sound plays (%d voices)", rec.n - first);
     pawn = Vec3{14, 0, 3};
     for (int k = 0; k < 3; ++k) cues.tick(1.0f / 60.0f);
@@ -759,7 +787,165 @@ static void testChannelStealing() {
     delete a;
 }
 
+// ---------------------------------------------------------------- map audio lifecycle (M05 frontend transition)
+// A synthetic second map: own cue names, emitters of all three kinds, one zone (a 10 m cube at the origin) with
+// its own reverb preset and pool. Only existing waves are referenced. Proves the systems are manifest-driven.
+static std::string writeFakeMap() {
+    const std::string path = "fake_map_audio.json";
+    std::ofstream f(path, std::ios::binary);
+    auto face = [](float x0, float y0, float z0, float x1, float y1, float z1, int axis, float c) {
+        std::ostringstream o; o.setf(std::ios::fixed); o.precision(2);
+        float p[4][3];
+        if (axis == 0) { float q[4][3] = {{c, y0, z0}, {c, y1, z0}, {c, y1, z1}, {c, y0, z1}}; std::memcpy(p, q, sizeof q); }
+        else if (axis == 1) { float q[4][3] = {{x0, c, z0}, {x1, c, z0}, {x1, c, z1}, {x0, c, z1}}; std::memcpy(p, q, sizeof q); }
+        else { float q[4][3] = {{x0, y0, c}, {x1, y0, c}, {x1, y1, c}, {x0, y1, c}}; std::memcpy(p, q, sizeof q); }
+        o << "[";
+        for (int i = 0; i < 4; ++i) o << (i ? "," : "") << "[" << p[i][0] << "," << p[i][1] << "," << p[i][2] << "]";
+        o << "]";
+        return o.str();
+    };
+    const float h = 5.0f;
+    std::string polys = "[" + face(-h, -h, -h, h, h, h, 0, -h) + "," + face(-h, -h, -h, h, h, h, 0, h) + "," +
+                        face(-h, -h, -h, h, h, h, 1, -h) + "," + face(-h, -h, -h, h, h, h, 1, h) + "," +
+                        face(-h, -h, -h, h, h, h, 2, -h) + "," + face(-h, -h, -h, h, h, h, 2, h) + "]";
+    const char* hum = R"("BL_LVL_FAKE.EMIT_HUM": {"tree": {"class": "SoundNodeRoot", "params": {"Volume": -6.0, "DistanceMin": 200.0, "DistanceMax": 3000.0, "Category": "SFX_WET_AMB_3D"}, "children": [{"class": "SoundNodeWaveEvent", "params": {"bLooping": true}, "children": [{"wav": "content/WL_ELEC/ELEC_TRANS_TV_03.wav"}]}]}})";
+    const char* knock = R"("BL_LVL_FAKE.PP_KNOCK": {"tree": {"class": "SoundNodeRoot", "params": {"Volume": -6.0}, "children": [{"class": "SoundNodeWaveEvent", "params": {}, "children": [{"wav": "content/WL_TRUCK/SYNTH_AIR_RELEASE_04.wav"}]}]}})";
+    auto mat = [](float x, float y, float z) {
+        std::ostringstream o; o << "[1,0,0,0, 0,1,0,0, 0,0,1,0, " << x << "," << y << "," << z << ",1]"; return o.str();
+    };
+    f << "{\"map\": \"FAKE_TEST_MAP\", \"cues\": {" << hum << ", " << knock << "},\n"
+      << "\"emitters\": {\"point\": [{\"cue\": \"BL_LVL_FAKE.EMIT_HUM\", \"gltf_matrix\": " << mat(10, 0, 0) << "}],"
+      << " \"volume\": [{\"cue\": \"BL_LVL_FAKE.EMIT_HUM\", \"radius\": 500.0, \"gltf_matrix\": " << mat(0, 0, 10) << "}],"
+      << " \"line\": [{\"cue\": \"BL_LVL_FAKE.EMIT_HUM\", \"linelength\": 500.0, \"gltf_matrix\": " << mat(-10, 0, 0) << "}]},\n"
+      << "\"zones\": [{\"comment\": \"ENTER_FAKE_ROOM\", \"reverb_preset\": \"REVERB_FAKE_ROOM\", \"trigger_polygons_gltf\": " << polys
+      << ", \"one_shot_pool\": [{\"cue\": \"BL_LVL_FAKE.PP_KNOCK\", \"delay_min\": 1.0, \"delay_max\": 2.0, \"distance_min\": 2000.0, \"distance_max\": 2000.0, \"looping\": true}]}],\n"
+      << "\"reverb_presets\": {\"REVERB_FAKE_ROOM\": {\"mixer_preset\": {\"Priority\": 200.0, \"FadeInTime\": 0.25, \"FadeOutTime\": 0.25, \"Duration\": -1.0},"
+      << " \"dsp_by_category\": {\"MASTER_WET\": {\"Volume\": {\"Volume\": 1.0}, \"Reverb\": {\"Room\": -500.0, \"RoomHF\": -300.0, \"RoomRolloffFactor\": 0.0,"
+      << " \"DecayTime\": 1.5, \"DecayHFRatio\": 0.8, \"ReflectionsLevel\": -700.0, \"ReflectionsDelay\": 0.02, \"Level\": -600.0, \"Delay\": 0.03,"
+      << " \"Diffusion\": 50.0, \"Density\": 50.0, \"HFReference\": 5000.0}, \"Echo\": {\"Delay\": 500.0, \"DecayRatio\": 0.5, \"WetMix\": 0.0, \"DryMix\": 1.0}}}}},\n"
+      << "\"categories\": {\"Master\": {\"DSPEffectConfig\": 0}}}\n";
+    return path;
+}
+
+static int liveRecVoices(const Rec& r) { int n = 0; for (const auto& kv : r.v) n += kv.second.live ? 1 : 0; return n; }
+
+static void testLifecycle() {
+    std::printf("[map audio lifecycle]\n");
+    const std::string fake = writeFakeMap();
+    const std::string content = kRoot + "/../content/";
+    Rec rec; game::SoundCues cues; cues.load(&rec, content);
+    Vec3 pawn{0, 0, 0};
+    cues.setResolver([&](int owner, const std::string&, const Vec3& off, Vec3& out) { if (owner != 0) return false; out = pawn + off; return true; });
+    game::AmbientAudio amb;
+    const size_t baseCues = cues.cueCount();
+    const int basePresets = cues.mixer().presetCount();
+    const Vec3 streetsSpawn{363.5f, -724.5f, -341.8f};      // a Streets spawn (DEC_ROOM_LOWER)
+    struct MapCase { const char* name; std::string path; int cues, presets, emitters, zones, pools; Vec3 spot; const char* reverb; };
+    const MapCase maps[2] = {
+        {"MP_IAC_Streets", streetsAudio(), 32, 10, 70, 9, 11, streetsSpawn, "REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER"},
+        {"FAKE_TEST_MAP", fake, 2, 1, 3, 1, 1, Vec3{0, -1.0f, 0}, "REVERB_FAKE_ROOM"}};
+    bool allClean = true;
+    for (int cycle = 0; cycle < 6; ++cycle)
+        for (const MapCase& mc : maps) {
+            const bool ok = amb.load(mc.path, content, cues, &rec);
+            CHECK(ok && cues.mapCueCount() == mc.cues && cues.mixer().mapPresetCount() == mc.presets && amb.emitterCount() == mc.emitters &&
+                  amb.zoneCount() == mc.zones && amb.poolCount() == mc.pools,
+                  "cycle %d %s: %d cues / %d presets / %d emitters / %d zones / %d pools (%d/%d/%d/%d/%d)", cycle, mc.name,
+                  mc.cues, mc.presets, mc.emitters, mc.zones, mc.pools, cues.mapCueCount(), cues.mixer().mapPresetCount(),
+                  amb.emitterCount(), amb.zoneCount(), amb.poolCount());
+            pawn = mc.spot;
+            for (int k = 0; k < 240; ++k) {                       // 4 s: zone touch, bed start, pools, player sounds
+                Vec3 L = mc.spot + Vec3{std::sin(k * 0.05f) * 3.0f, 2.0f, std::cos(k * 0.05f) * 3.0f};
+                cues.setListener(L);
+                amb.tick(1.0f / 60.0f, L, mc.spot, cues);   // pawn: AmbientAudio probes pawn + 1 m
+                if (k % 30 == 0) cues.play("SHOOT", game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f);
+                if (k == 10) cues.play("VEH_OPTIMUS_DRIVE_ONLOAD", game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f, 30.0f);
+                cues.tick(1.0f / 60.0f);
+            }
+            CHECK(cues.mixer().currentReverb() == mc.reverb && amb.activeEmitters() > 0,
+                  "cycle %d %s: zone reverb %s, %d emitters playing", cycle, mc.name, cues.mixer().currentReverb().c_str(), amb.activeEmitters());
+            // unload (map change / return to frontend)
+            amb.unload(cues);
+            cues.stopAll();
+            const bool clean = cues.liveInstances() == 0 && cues.pendingEvents() == 0 && cues.mapCueCount() == 0 &&
+                               cues.cueCount() == baseCues && cues.mixer().presetCount() == basePresets &&
+                               cues.mixer().activeList() == "Default(1)" && cues.mixer().currentReverb().empty() &&
+                               liveRecVoices(rec) == 0 && amb.emitterCount() == 0 && amb.zoneCount() == 0 && amb.poolCount() == 0 &&
+                               !amb.loaded();
+            allClean = allClean && clean;
+            CHECK(clean, "cycle %d %s unload: live %zu pending %zu mapCues %d cues %zu presets %d [%s] voices %d", cycle, mc.name,
+                  cues.liveInstances(), cues.pendingEvents(), cues.mapCueCount(), cues.cueCount(), cues.mixer().presetCount(),
+                  cues.mixer().activeList().c_str(), liveRecVoices(rec));
+        }
+    CHECK(allClean, "12 load/play/unload cycles (Streets <-> synthetic map) all return to the baseline");
+
+    // Loading over a loaded map (no explicit unload) replaces it: no duplicate bed / presets / cues.
+    amb.load(streetsAudio(), content, cues, &rec);
+    cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f);
+    const size_t oneBed = cues.liveInstances();
+    amb.load(streetsAudio(), content, cues, &rec);
+    cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f);
+    CHECK(cues.liveInstances() == oneBed && cues.mapCueCount() == 32 && cues.mixer().mapPresetCount() == 10,
+          "reload without unload: one bed (%zu instances, was %zu), 32 map cues, 10 presets", cues.liveInstances(), oneBed);
+
+    // Match reset on the same map: player sounds stop, the bed keeps playing, the zone scene re-begins on re-touch
+    // (pools restart, the reverb slot and preset ref-counts are unchanged).
+    pawn = streetsSpawn;
+    for (int k = 0; k < 60; ++k) { cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f); }
+    cues.play("SHOOT", game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f);
+    cues.play("VEH_OPTIMUS_DRIVE_ONLOAD", game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f, 30.0f);
+    std::vector<int> bed;
+    for (int i = 0; i < amb.emitterCount(); ++i) bed.push_back(amb.emitterInstance(i));
+    const std::string listBefore = cues.mixer().activeList(), reverbBefore = cues.mixer().currentReverb();
+    CHECK(amb.poolsRunning(), "pools run before the reset");
+    int stopped = cues.stopNonMapInstances();
+    amb.resetMatch();
+    bool bedSame = true;
+    for (int i = 0; i < amb.emitterCount(); ++i) bedSame = bedSame && amb.emitterInstance(i) == bed[(size_t)i] && (bed[(size_t)i] < 0 || cues.playing(bed[(size_t)i]));
+    CHECK(stopped >= 2 && cues.activeInstances("SHOOT") == 0 && cues.activeInstances("VEH_OPTIMUS_DRIVE_ONLOAD") == 0,
+          "match reset stops the player sounds (%d)", stopped);
+    CHECK(bedSame && !amb.poolsRunning() && cues.mixer().activeList() == listBefore && cues.mixer().currentReverb() == reverbBefore,
+          "match reset keeps the bed and the reverb; pools stop");
+    for (int k = 0; k < 3; ++k) { cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f); }
+    CHECK(amb.poolsRunning() && cues.mixer().activeList() == listBefore, "re-touch after reset: scene re-begins, no duplicate preset enable [%s]",
+          cues.mixer().activeList().c_str());
+    amb.unload(cues); cues.stopAll();
+
+    // Real backend: voices and resident decoded PCM return to the baseline after each map unload.
+    IAudio* a = createAudio();
+    if (!a || !a->reportsVoices()) { std::printf("  SKIP backend: no audio device\n"); return; }
+    game::SoundCues rc; rc.load(a, content);
+    game::AmbientAudio ramb;
+    const size_t baseBytes = a->residentBytes();
+    size_t peakBytes = 0;
+    bool backendClean = true;
+    for (int cycle = 0; cycle < 4; ++cycle) {
+        const MapCase& mc = maps[cycle % 2];
+        ramb.load(mc.path, content, rc, a);
+        peakBytes = std::max(peakBytes, a->residentBytes());
+        for (int k = 0; k < 30; ++k) {
+            rc.setListener(mc.spot); ramb.tick(1.0f / 30.0f, mc.spot, mc.spot, rc);
+            if (k % 10 == 0) rc.play("SHOOT", mc.spot, 0.0f);
+            rc.tick(1.0f / 30.0f);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(60));
+        const int during = a->activeVoices();
+        ramb.unload(rc); rc.stopAll();
+        const int after = a->activeVoices();
+        const size_t bytes = a->residentBytes();
+        backendClean = backendClean && after == 0 && bytes == baseBytes;
+        std::printf("  backend cycle %d %-14s voices %d -> %d, PCM peak %.1f MB -> %.1f MB (base %.1f MB)\n", cycle, mc.name, during, after,
+                    peakBytes / 1048576.0, bytes / 1048576.0, baseBytes / 1048576.0);
+        CHECK(during > 0 && after == 0 && bytes == baseBytes, "backend cycle %d %s: %d voices -> %d after unload; PCM %zu -> %zu bytes (base %zu)",
+              cycle, mc.name, during, after, peakBytes, bytes, baseBytes);
+    }
+    CHECK(backendClean && peakBytes > baseBytes, "map samples are released at unload (peak %.1f MB over a %.1f MB base)",
+          (peakBytes - baseBytes) / 1048576.0, baseBytes / 1048576.0);
+    delete a;
+}
+
 int main() {
+    testLifecycle();
     testChannelStealing();
     testWorldBed();
     testLoopRuntime();

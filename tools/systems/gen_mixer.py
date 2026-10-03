@@ -1,14 +1,14 @@
 """Generate src/game/SoundMixer.inc from the cooked SoundConfig.SoundMixerProperties (via AssetTools
-authored.db, read-only): the mixer presets the slice uses and the per-category DSP values of the two
-categories Systems applies (SFX_WET_VEH_ENGINE volume, MASTER_WET reverb / echo / volume).
+authored.db, read-only): the global mixer presets the built-in cues play and the per-category DSP values of the
+two categories Systems applies (SFX_WET_VEH_ENGINE volume, MASTER_WET reverb / echo / volume Default).
 Run with AssetTools/bin/py/python.exe:  python tools/systems/gen_mixer.py <out.inc>
 """
 import io, json, sqlite3, sys
 
 DB = 'F:/Transformers Rebuild/AssetTools/manifests/authored.db'
-PRESETS = ['VEHICLE_JUMP', 'VEHICLE_BOOST_END'] + ['REVERB_TRANS_MP_STREETS_' + z for z in (
-    'EXTERIOR', 'NEU_BASE', 'AUTO_ROOM_01', 'DEC_ROOM_LOWER', 'NEU_HALL', 'TRAIN_DEPOT', 'AUTO_ROOM_02',
-    'TRAIN_TUNNEL', 'NEU_STAIRWELL', 'DEC_ROOM_UPPER')]
+# Global presets played by cues of the built-in cue table (PlayMixerPreset). Map reverb presets are NOT compiled
+# in: a map's audio.json reverb_presets register them at map load (SoundMixer::addMapPreset).
+PRESETS = ['VEHICLE_JUMP', 'VEHICLE_BOOST_END']
 CATS = ['SFX_WET_VEH_ENGINE', 'MASTER_WET']
 
 c = sqlite3.connect(DB)

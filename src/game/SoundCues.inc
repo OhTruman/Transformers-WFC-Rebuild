@@ -6,7 +6,7 @@
         {0.0f, 0.0f, -9.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_01.wav", "WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_02.wav", "WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_03.wav", "WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_04.wav"}, {{200.0f, 1.0f}, {2000.0f, 0.0f}}, {}, {}, {}, true, 195.0f},
         {0.0f, 0.0f, -3.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_GUN_HANDCANNON/GUN_HANDCANNON_SHOOT_LR_01.wav"}, {{200.0f, 0.0f}, {400.0f, 0.707946f}, {4000.0f, 0.707946f}, {8020.18f, 0.0f}}, {}, {}, {}, true, 170.0f},
         {0.473889f, -9.0f, -6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_01.wav", "WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_02.wav", "WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_03.wav", "WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_04.wav"}, {{690.617f, 1.0f}, {4138.7f, 0.0f}}, {}, {}, {}, true, 20.0f},
-    }, 200.0f},
+    }, 200.0f, false},
     // BL_WPN_GUN_ION_BLASTER.SHOOT_LOW_AMMO
     {"SHOOT_LOW_AMMO", 4, Limit::KillFarthest, -9.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 4000.0f, 35000.0f, 1.0f, 200.0f, 400.0f, -6.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN_SHOOT", "", true, Spatial::SmartPanPreferPlayer, Param::Distance, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.5f, -0.5f, 0, false, 1.0f, {"WL_GUN_ION_BLASTER/GUN_ION_BLASTER_HEAD.wav"}, {{100.0f, 1.0f}, {400.0f, 0.00787402f}, {10000.0f, 0.0f}}, {}, {}, {}, false, 0.0f},
@@ -14,17 +14,17 @@
         {0.0f, 0.0f, -9.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_01.wav", "WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_02.wav", "WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_03.wav", "WL_GUN_NEUTRON_RIFLE/MTL_SHELL_SLUG_DROP_CONCRT_04.wav"}, {{200.0f, 1.0f}, {2000.0f, 0.0f}}, {}, {}, {}, true, 20.0f},
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_GUN_HANDCANNON/GUN_HANDCANNON_SHOOT_LR_01.wav"}, {{200.0f, 0.0f}, {400.0f, 0.707946f}, {4000.0f, 0.707946f}, {8020.18f, 0.0f}}, {}, {}, {}, true, 170.0f},
         {0.0977431f, -6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/LOW_AMMO_WARNING_01.wav"}, {{745.594f, 1.0f}, {3973.69f, 0.00787402f}}, {}, {}, {}, false, 0.0f},
-    }, 200.0f},
+    }, 200.0f, false},
     // BL_WPN_GUN_ION_BLASTER.SHOOT_TAIL
     {"SHOOT_TAIL", 4, Limit::KillFarthest, -9.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 3000.0f, 12000.0f, 1.0f, 200.0f, 400.0f, -9.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN_SHOOT", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -0.5f, 0.5f, 0, false, 1.0f, {"WL_GUN_ION_BLASTER/GUN_ION_BLASTER_TAIL.wav"}, {{200.0f, 1.0f}, {4973.95f, 0.0f}}, {}, {}, {}, false, 0.0f},
-    }, 200.0f},
+    }, 200.0f, false},
     // BL_WPN_GUN_ION_BLASTER.ANIM_RELOAD_01
     {"ANIM_RELOAD_01", 5, Limit::KillFarthest, -9.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f, 6400.0f, 2.0f, 200.0f, 400.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN", "", true, Spatial::ThreeD, Param::None, {
         {0.0f, -3.0f, 0.0f, 0.0f, 6.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/RELOAD_SERVO_MECH_05.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.04125f, 0.0f, 0.0f, 0.0f, -3.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/GUN_DW2_REDEEM_RELOAD_START.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/RELOAD_AIR_RELEASE_THUMP.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 150.0f},
+    }, 150.0f, false},
     // BL_WPN_GUN_ION_BLASTER.ANIM_RELOAD_02
     {"ANIM_RELOAD_02", 5, Limit::KillFarthest, -9.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f, 6400.0f, 2.0f, 200.0f, 400.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN", "", true, Spatial::ThreeD, Param::None, {
         {0.74153f, -3.0f, 0.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_FOLY_BOT/SERVO_IDLE_FOLY_01.wav"}, {}, {}, {}, {{0.756725f, 0.0f}, {1.20195f, 3.0f}}, false, 0.0f},
@@ -39,29 +39,29 @@
         {0.0f, -6.0f, 0.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/RELOAD_SYNTH_BUBBLE.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.126603f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/RELOAD_MTL_SCRAPE_03.wav"}, {}, {}, {}, {}, false, 0.0f},
         {1.32775f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/RELOAD_BOLT_07.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 150.0f},
+    }, 150.0f, false},
     // BL_WPN_GUN_ION_BLASTER.IDLE_01
     {"IDLE_01", 5, Limit::KillFarthest, -21.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 400.0f, 6400.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN", "", true, Spatial::ThreeD, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, -7.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_ION_BLASTER/TRANS_ION_UNEQUIP_SERVOS.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/GUNf_MVMNT_03.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.995255f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/GUNf_MVMNT_01.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.883299f, 0.0f, 0.0f, 0.0f, 7.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_ION_BLASTER/TRANS_ION_EQUIP_SERVOS.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 0.0f},
+    }, 0.0f, false},
     // BL_WPN_GUN_ION_BLASTER.IDLE_02
     {"IDLE_02", 5, Limit::KillFarthest, -21.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 400.0f, 6400.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN", "", true, Spatial::ThreeD, Param::None, {
         {0.41236f, 0.0f, 0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_ION_BLASTER/TRANS_ION_UNEQUIP_SERVOS.wav"}, {}, {}, {{0.488216f, 0.0f}, {0.560986f, 0.966667f}}, {}, false, 0.0f},
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/GUN_RIFLE_BOLT_ACTION.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 0.0f},
+    }, 0.0f, false},
     // BL_WPN_GUN_ION_BLASTER.IMPT_WORLD
     {"IMPT_WORLD", 6, Limit::KillFarthest, -12.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 25000.0f, 1.0f, 200.0f, 400.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN", "", true, Spatial::ThreeD, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 9.0f, 0.0f, 3.0f, 0, false, 1.0f, {"WL_ELEC/ELEC_SPARKBLAST_FLANGE_01.wav", "WL_ELEC/ELEC_SPARKBLAST_FLANGE_02.wav", "WL_ELEC/ELEC_SPARKBLAST_FLANGE_03.wav", "WL_ELEC/ELEC_SPARKBLAST_FLANGE_04.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, -3.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_WPN_BULLET_IMPT/MTL_BULLET_IMPT_SHEET_01.wav", "WL_WPN_BULLET_IMPT/MTL_BULLET_IMPT_SHEET_02.wav", "WL_WPN_BULLET_IMPT/MTL_BULLET_IMPT_SHEET_03.wav", "WL_WPN_BULLET_IMPT/MTL_BULLET_IMPT_SHEET_04.wav", "WL_WPN_BULLET_IMPT/MTL_BULLET_IMPT_SHEET_05.wav", "WL_WPN_BULLET_IMPT/MTL_BULLET_IMPT_SHEET_06.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 75.0f},
+    }, 75.0f, false},
     // BL_WPN_GUN_ION_BLASTER.IMPT_DMG
     {"IMPT_DMG", 6, Limit::KillFarthest, -9.0f, 0.0f, 0.0f, 0.0f, 2.0f, -2.0f, 800.0f, 25000.0f, 2.0f, 200.0f, 400.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN", "", true, Spatial::ThreeD, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 6.0f, -2.0f, 0.0f, 0, false, 1.0f, {"WL_MTL_MELEE_IMPT/MTL_MELEE_IMPT_01.wav", "WL_MTL_MELEE_IMPT/MTL_MELEE_IMPT_02.wav", "WL_MTL_MELEE_IMPT/MTL_MELEE_IMPT_03.wav", "WL_MTL_MELEE_IMPT/MTL_MELEE_IMPT_04.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0503715f, 0.0f, 0.0f, 0.0f, -6.0f, -2.0f, 0.0f, 0, false, 1.0f, {"WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_01.wav", "WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_02.wav", "WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_03.wav", "WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_04.wav", "WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_05.wav", "WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_06.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 175.0f},
+    }, 175.0f, false},
     // BL_WPN_FOLEY.SHOOT_DRY_FIRE_ELECTRICITY
     {"FOLEY.SHOOT_DRY_FIRE_ELECTRICITY", 1, Limit::KillFarthest, -9.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 800.0f, 6400.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0296521f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/DRY_FIRE_ELECTRICITY.wav"}, {}, {}, {}, {}, false, 0.0f},
@@ -69,7 +69,7 @@
         {0.133493f, 0.0f, -1.0f, 1.0f, 6.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_ELEC/ELEC_EMP_INTERFERENCE_03.wav", "WL_ELEC/ELEC_EMP_INTERFERENCE_04.wav", "WL_ELEC/ELEC_EMP_INTERFERENCE_05.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/RELOAD_BOLT_07.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0248696f, -12.0f, 0.0f, 0.0f, -7.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/LOW_AMMO_WARNING_01.wav"}, {}, {}, {{0.21113f, 1.0f}}, {}, false, 0.0f},
-    }, 200.0f},
+    }, 200.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START
     {"VEH_OPTIMUS_BOOST_START", 5, Limit::KillFarthest, -8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.138055f, 0.0f, 0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/SYNTH_ENGINE_ACCEL.wav"}, {}, {}, {}, {}, false, 0.0f},
@@ -77,7 +77,7 @@
         {0.246925f, 0.0f, 0.0f, 0.0f, 6.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/SYNTH_AIR_RELEASE_04.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.388505f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/SYNTH_AIR_RELEASE_08.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -2.0f, 0.0f, 0.0f, 0.0f, -1.0f, 2.0f, 0, false, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_BOOST_START_LR.wav"}, {{0.0f, 0.501187f}, {110.0f, 1.0f}}, {{0.0f, -2.0f}, {60.0f, 0.0f}, {85.0f, 2.0f}, {110.0f, 2.64093f}}, {{2.09149f, 1.0f}, {3.35156f, 0.0f}}, {}, false, 0.0f},
-    }, 185.0f},
+    }, 185.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_LOOP
     {"VEH_OPTIMUS_BOOST_LOOP", 5, Limit::KillFarthest, -12.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_ENGINE", "", true, Spatial::SmartPanPreferPlayer, Param::Speed, {
         {0.437541f, -14.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/SYNTH_ENERGY_MOD_PAN_LP.wav"}, {{0.0f, 0.0f}, {10.0f, 0.151843f}, {33.0f, 0.464729f}, {190.0f, 1.0f}, {200.0f, 1.0f}}, {{0.0f, -3.0f}, {33.0f, 0.0f}, {120.0f, 12.4724f}}, {{3.0032f, 1.0f}, {10.0f, 0.501187f}}, {{3.0f, 0.0f}, {20.0f, 4.0f}}, false, 0.0f},
@@ -85,18 +85,18 @@
         {0.437541f, -8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_PLANE/JET_TURBO_WHINE_LP.wav"}, {{0.0f, 0.00228108f}, {20.0f, 0.0285637f}, {33.0f, 0.501187f}, {190.0f, 1.0f}, {200.0f, 1.0f}}, {{0.0f, -9.86873f}, {200.0f, 21.0f}}, {{3.0032f, 1.0f}, {10.0f, 0.501187f}}, {{3.0f, 0.0f}, {20.0f, 4.0f}}, false, 0.0f},
         {0.462312f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_ENGINE_BOOST_LR_LP.wav"}, {{4.03287f, 0.0f}, {27.8927f, 1.0f}, {85.0f, 1.0f}, {110.0f, 1.0f}}, {{0.0f, -4.0f}, {18.0784f, -2.0f}, {33.0f, 5.39f}, {120.0f, 10.2f}}, {{0.419181f, 0.0f}, {1.96861f, 1.0f}, {6.00171f, 1.0f}, {14.8221f, 0.6f}}, {{3.0f, 0.0f}, {20.0f, 4.0f}}, false, 0.0f},
         {0.462312f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav"}, {{4.03287f, 0.0f}, {27.8927f, 1.0f}, {85.0f, 1.0f}, {110.0f, 1.0f}}, {{0.0f, -4.0f}, {18.0784f, -2.0f}, {33.0f, 5.39f}, {120.0f, 10.2f}}, {{0.419181f, 0.0f}, {1.96861f, 1.0f}, {6.00171f, 1.0f}, {14.8221f, 0.6f}}, {{3.0f, 0.0f}, {20.0f, 4.0f}}, false, 0.0f},
-    }, 200.0f},
+    }, 200.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_END
     {"VEH_OPTIMUS_BOOST_END", 5, Limit::KillFarthest, -12.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "VEHICLE_BOOST_END", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_WHSH_JET/WHSH_BOOST_FINISH_01_LR.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -15.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 0.707107f, {"WL_WHSH_JET/WHSH_BOOST_FINISH_01_LSRS.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0217784f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/SYNTH_AIR_RELEASE_02.wav", "WL_TRUCK/SYNTH_AIR_RELEASE_07.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.043143f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_BOOST_END_LR.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 185.0f},
+    }, 185.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_WHEELS
     {"VEH_OPTIMUS_BOOST_WHEELS", 1, Limit::KillFarthest, -18.0f, -6.0f, 0.0f, 0.0f, -2.0f, 2.0f, 5000.0f, 35000.0f, 1.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.343593f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 50, false, 1.0f, {"WL_TRUCK/AUTO_BOOST_PEELOUT_TRUCK.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 185.0f},
+    }, 185.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_RAM_NITRO_START
     {"VEH_OPTIMUS_RAM_NITRO_START", 5, Limit::KillFarthest, -5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.140513f, -3.0f, 0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/SYNTH_ENGINE_ACCEL.wav"}, {}, {}, {}, {}, false, 0.0f},
@@ -106,7 +106,7 @@
         {0.0f, 0.0f, 0.0f, 0.0f, 2.0f, -1.0f, 2.0f, 0, false, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_BOOST_START_LR.wav"}, {{0.0f, 0.501187f}, {110.0f, 1.0f}}, {{0.0f, -2.0f}, {60.0f, 0.0f}, {85.0f, 2.0f}, {110.0f, 2.64093f}}, {}, {}, false, 0.0f},
         {0.371947f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/SYNTH_AIR_RELEASE_07.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0909203f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/MECH_TRANS_RAM_ACTIVATE.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 185.0f},
+    }, 185.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_RAM_BOOST_START
     {"VEH_OPTIMUS_RAM_BOOST_START", 5, Limit::KillFarthest, -8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_WHSH_JET/WHSH_BOOST_FLARE_LR_03.wav"}, {}, {}, {}, {}, false, 0.0f},
@@ -114,105 +114,105 @@
         {0.0f, 0.0f, 0.0f, 0.0f, 6.0f, -1.0f, 2.0f, 0, false, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_BOOST_START_LR.wav"}, {{0.0f, 0.501187f}, {110.0f, 1.0f}}, {{0.0f, -2.0f}, {60.0f, 0.0f}, {85.0f, 2.0f}, {110.0f, 2.64093f}}, {{0.657481f, 1.0f}, {1.12035f, 0.0f}}, {}, false, 0.0f},
         {0.0826548f, -6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/MECH_TRANS_RAM_ACTIVATE.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.34715f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_BOOST_END_LR.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 185.0f},
+    }, 185.0f, false},
     // BL_VEH_SOUNDWAVE.VEH_TRUCK_RAM_ALERT
     {"VEH_TRUCK_RAM_ALERT", 5, Limit::KillFarthest, -15.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 2.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, -4.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_MECH/MECH_ORB_ARM_04.wav"}, {}, {}, {}, {{0.0063388f, 0.0f}, {1.19944f, 6.0f}}, false, 0.0f},
-    }, 175.0f},
+    }, 175.0f, false},
     // BL_VEH_SOUNDWAVE.VEH_TRUCK_RAM_IMPACT
     {"VEH_TRUCK_RAM_IMPACT", 5, Limit::KillFarthest, -6.0f, 0.0f, 0.0f, 0.0f, -2.0f, 2.0f, 5000.0f, 35000.0f, 2.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/MECH_IMPT_VEHICLE_RAM_01.wav", "WL_TRUCK/MECH_IMPT_VEHICLE_RAM_02.wav", "WL_TRUCK/MECH_IMPT_VEHICLE_RAM_03.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 175.0f},
+    }, 175.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_DRIVE_ONLOAD
     {"VEH_OPTIMUS_DRIVE_ONLOAD", 5, Limit::KillFarthest, -12.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_ENGINE", "", true, Spatial::SmartPanPreferPlayer, Param::Speed, {
         {0.0119618f, -6.0f, 0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/SYNTH_ENERGY_MOD_PAN_LP.wav"}, {{0.0f, 0.354813f}, {9.96169f, 0.645669f}, {16.3985f, 0.649606f}, {33.0f, 0.336945f}, {120.0f, 0.0498511f}}, {{0.0f, -6.0f}, {33.0f, 1.41732f}, {110.0f, 7.0888f}}, {}, {}, false, 0.0f},
         {0.0f, -5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav"}, {{0.0f, 0.619621f}, {8.73563f, 1.0f}, {14.8659f, 1.0f}, {20.0766f, 1.0f}, {25.4406f, 1.0f}}, {{0.278129f, -4.0f}, {33.0f, 1.5f}, {120.0f, 9.07087f}}, {}, {}, false, 0.0f},
-    }, 200.0f},
+    }, 200.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_DRIVE_OFFLOAD
     {"VEH_OPTIMUS_DRIVE_OFFLOAD", 5, Limit::KillFarthest, -16.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_ENGINE", "", true, Spatial::SmartPanPreferPlayer, Param::Speed, {
         {0.0f, -7.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/SYNTH_ENERGY_MOD_PAN_LP.wav"}, {{0.0f, 0.464567f}, {16.3985f, 0.665354f}, {33.7165f, 0.401575f}, {85.0f, 0.0339026f}}, {{0.0f, -9.0f}, {33.7165f, -2.26772f}, {120.0f, 9.73469f}}, {}, {}, false, 0.0f},
         {0.0f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_IDLE_LR_LP.wav"}, {{0.0f, 1.0f}, {5.97701f, 1.0f}, {12.8736f, 1.0f}, {18.5441f, 1.0f}, {24.3678f, 1.0f}, {33.0f, 1.0f}}, {{0.0f, -0.566929f}, {5.51724f, 0.0f}, {33.41f, -0.566929f}, {120.0f, 9.07087f}}, {}, {}, false, 0.0f},
         {0.0f, -5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav"}, {{0.0f, 0.619621f}, {8.73563f, 1.0f}, {14.8659f, 1.0f}, {20.0766f, 1.0f}, {25.4406f, 1.0f}}, {{0.278129f, -4.0f}, {33.0f, 1.5f}, {120.0f, 9.07087f}}, {}, {}, false, 0.0f},
-    }, 200.0f},
+    }, 200.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_DRIVE_JUMP_START
     {"VEH_OPTIMUS_DRIVE_JUMP_START", 5, Limit::KillFarthest, -8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "VEHICLE_JUMP", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, -6.0f, 0.0f, 0.0f, -5.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/SYNTH_AIR_RELEASE_04.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TANK/TANK_JUMP_LR.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_JUMP_LR.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 185.0f},
+    }, 185.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_DRIVE_JUMP_LOOP
     {"VEH_OPTIMUS_DRIVE_JUMP_LOOP", 5, Limit::KillFarthest, -19.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 1.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_ENGINE", "", true, Spatial::SmartPanPreferPlayer, Param::Speed, {
         {0.0f, -7.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/SYNTH_ENERGY_MOD_PAN_LP.wav"}, {{0.0f, 0.477244f}, {9.04215f, 0.706023f}, {19.3103f, 1.0f}, {33.0f, 0.354813f}, {85.0f, 0.0339026f}}, {{0.0f, -9.0f}, {33.0f, 3.0f}, {120.0f, 13.0394f}}, {}, {}, false, 0.0f},
         {0.0f, -3.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/AUTO_OPTIMUS_IDLE_LR_LP.wav"}, {{0.0f, 1.0f}, {5.97701f, 1.0f}, {12.8736f, 1.0f}, {18.3908f, 1.0f}, {24.3678f, 1.0f}, {38.4674f, 1.0f}}, {{0.0f, -0.566929f}, {5.51724f, 0.0f}, {33.0f, 5.0f}, {120.0f, 9.07087f}}, {}, {}, false, 0.0f},
-    }, 200.0f},
+    }, 200.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_HOVER_LAND_LIGHT
     {"VEH_OPTIMUS_HOVER_LAND_LIGHT", 5, Limit::KillFarthest, -20.0f, 0.0f, 0.0f, 0.0f, -0.5f, 0.0f, 5000.0f, 35000.0f, 2.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TANK/MECH_TANK_LAND_LIGHT_01.wav", "WL_TANK/MECH_TANK_LAND_LIGHT_02.wav", "WL_TANK/MECH_TANK_LAND_LIGHT_03.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 185.0f},
+    }, 185.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_HOVER_LAND_HEAVY
     {"VEH_OPTIMUS_HOVER_LAND_HEAVY", 5, Limit::KillFarthest, -18.0f, 0.0f, 0.0f, 0.0f, -2.0f, 1.0f, 5000.0f, 35000.0f, 2.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TANK/MECH_TANK_LAND_HARD_01.wav", "WL_TANK/MECH_TANK_LAND_HARD_02.wav", "WL_TANK/MECH_TANK_LAND_HARD_03.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 185.0f},
+    }, 185.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_WHEELS_LAND_LIGHT
     {"VEH_OPTIMUS_WHEELS_LAND_LIGHT", 5, Limit::KillFarthest, -19.0f, 0.0f, 0.0f, 0.0f, -8.0f, 0.5f, 5000.0f, 35000.0f, 2.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/MECH_TRUCK_LAND_HEAVY_01.wav", "WL_TRUCK/MECH_TRUCK_LAND_HEAVY_02.wav", "WL_TRUCK/MECH_TRUCK_LAND_HEAVY_03.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0915257f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 30, false, 1.0f, {"WL_TRUCK/AIR_SEMI_RELEASE_09.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 185.0f},
+    }, 185.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_WHEELS_LAND_HEAVY
     {"VEH_OPTIMUS_WHEELS_LAND_HEAVY", 5, Limit::KillFarthest, -15.0f, 0.0f, 0.0f, 0.0f, -0.5f, 0.5f, 5000.0f, 35000.0f, 2.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/MECH_TRUCK_BOTTOM_OUT_01.wav", "WL_TRUCK/MECH_TRUCK_BOTTOM_OUT_02.wav", "WL_TRUCK/MECH_TRUCK_BOTTOM_OUT_03.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.090788f, -3.0f, 0.0f, 0.0f, -2.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_AUTO/AUTO_BOOST_PEELOUT_CAR.wav"}, {}, {}, {{0.0866371f, 0.0f}, {0.146512f, 1.0f}, {0.282894f, 1.0f}, {0.558983f, 0.333333f}, {1.028f, 0.0f}}, {}, false, 0.0f},
-    }, 185.0f},
+    }, 185.0f, false},
     // BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_TIRE_SQUEAL
     {"VEH_OPTIMUS_TIRE_SQUEAL", 5, Limit::KillFarthest, -14.0f, 0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 5000.0f, 35000.0f, 2.0f, 200.0f, 1000.0f, -3.0f, 0.0f, "SFX_WET_VEH_MANEUVER", "", true, Spatial::SmartPanPreferPlayer, Param::TireSqueal, {
         {0.0f, 0.0f, 0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0, true, 1.0f, {"WL_TRUCK/MECH_TIRE_SQUEAL_HEAVY_LP.wav"}, {{0.0f, 1.65538e-05f}, {0.09f, 0.251189f}, {0.2f, 0.501187f}, {0.425083f, 1.0f}}, {{0.0f, -1.0f}, {1.0f, 2.0f}}, {}, {}, false, 0.0f},
-    }, 150.0f},
+    }, 150.0f, false},
     // BL_FS_LRG_BOT.FS_WALK_DEFAULT
     {"BL_FS_LRG_BOT.FS_WALK_DEFAULT", 3, Limit::KillFarthest, -12.0f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 15000.0f, 2.0f, 75.0f, 150.0f, 0.0f, 0.0f, "SFX_WET_NAV", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, -5.0f, 0.0f, 0.0f, -2.0f, 2.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_04.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_05.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_06.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 25.0f},
+    }, 25.0f, false},
     // BL_FS_LRG_BOT.FS_RUN_DEFAULT
     {"BL_FS_LRG_BOT.FS_RUN_DEFAULT", 3, Limit::KillFarthest, -8.0f, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 15000.0f, 2.0f, 75.0f, 150.0f, 0.0f, 0.0f, "SFX_WET_NAV", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, -6.0f, 0.0f, 0.0f, -3.0f, 2.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_04.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_05.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_06.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -12.0f, -12.0f, 0.0f, -3.0f, -3.0f, 0.0f, 0, false, 1.0f, {"WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_01.wav", "WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_02.wav", "WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_03.wav", "WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_04.wav", "WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_05.wav", "WL_FS_BOT/SRVO_BOT_FOLY_FS_FILTSWEEP_06.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_04.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_05.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_06.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 25.0f},
+    }, 25.0f, false},
     // BL_FS_LRG_BOT.FS_SCUFF_DEFAULT
     {"BL_FS_LRG_BOT.FS_SCUFF_DEFAULT", 3, Limit::KillFarthest, -9.0f, -6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 15000.0f, 2.0f, 75.0f, 150.0f, 0.0f, 0.0f, "SFX_WET_NAV", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, -6.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_01.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_02.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_03.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_04.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 25.0f},
+    }, 25.0f, false},
     // BL_FS_LRG_BOT.FS_JUMP
     {"BL_FS_LRG_BOT.FS_JUMP", 3, Limit::KillFarthest, -10.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 15000.0f, 2.0f, 75.0f, 150.0f, 0.0f, 0.0f, "SFX_WET_NAV", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, -6.0f, 0.0f, -2.0f, -2.0f, 0.0f, 0, false, 1.0f, {"WL_FS_BOT/MTL_FOLEY_JUMP_MED_BOT_01.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -6.0f, 0.0f, 0.0f, 8.0f, -2.0f, 0.0f, 0, false, 1.0f, {"WL_WHSH_MELEE/WHSH_JET_BY_JUMPJETS.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_04.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 50.0f},
+    }, 50.0f, false},
     // BL_FS_LRG_BOT.FS_JUMP_CHARGED
     {"BL_FS_LRG_BOT.FS_JUMP_CHARGED", 3, Limit::KillFarthest, -5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 15000.0f, 2.0f, 75.0f, 150.0f, 0.0f, 0.0f, "SFX_WET_NAV", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_BOT_LARGE_JUMP_CHARGED_01.wav", "WL_FS_BOT/FS_BOT_LARGE_JUMP_CHARGED_02.wav", "WL_FS_BOT/FS_BOT_LARGE_JUMP_CHARGED_03.wav", "WL_FS_BOT/FS_BOT_LARGE_JUMP_CHARGED_04.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 75.0f},
+    }, 75.0f, false},
     // BL_FS_LRG_BOT.FS_LAND_DEFAULT
     {"BL_FS_LRG_BOT.FS_LAND_DEFAULT", 3, Limit::KillFarthest, -8.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 15000.0f, 2.0f, 75.0f, 150.0f, 0.0f, 0.0f, "SFX_WET_NAV", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 2.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_04.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -6.0f, -3.0f, 0.0f, -3.0f, 2.0f, -3.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_04.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_05.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_06.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0506759f, -6.0f, -6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_04.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_RATTLE_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_RATTLE_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_RATTLE_03.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 35.0f},
+    }, 35.0f, false},
     // BL_FS_LRG_BOT.FS_LAND_HARD
     {"BL_FS_LRG_BOT.FS_LAND_HARD", 3, Limit::KillFarthest, -5.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 15000.0f, 2.0f, 75.0f, 150.0f, 0.0f, 0.0f, "SFX_WET_NAV", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_LAND_04.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -4.0f, -3.0f, 0.0f, -3.0f, 2.0f, -3.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_04.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_05.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_06.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -4.0f, -6.0f, 0.0f, -3.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_04.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_RATTLE_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_RATTLE_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_RATTLE_03.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 35.0f},
+    }, 35.0f, false},
     // BL_FS_LRG_BOT.FS_LAND_HIGH_FALL
     {"BL_FS_LRG_BOT.FS_LAND_HIGH_FALL", 3, Limit::KillFarthest, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 15000.0f, 2.0f, 1000.0f, 1500.0f, 0.0f, 0.0f, "SFX_WET_NAV", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.00358904f, 0.0f, -3.0f, 0.0f, -6.0f, 2.0f, -3.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_04.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_05.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_06.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_GENERIC_HIGH_FALL_02_LR.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 75.0f},
+    }, 75.0f, false},
     // BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01
     {"BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01", 2, Limit::KillFarthest, -19.0f, -6.0f, 0.0f, 0.0f, -2.0f, 2.0f, 1500.0f, 15000.0f, 2.0f, 75.0f, 150.0f, 0.0f, 0.0f, "SFX_WET_NAV", "", true, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.0f, 0.0f, -3.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_RATTLE_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_RATTLE_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_RATTLE_03.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, -6.0f, 0.0f, -6.0f, -3.0f, 3.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_04.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_05.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_SERVO_06.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -6.0f, 0.0f, -3.0f, 0.0f, 0.0f, 1.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_01.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_02.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_03.wav", "WL_FS_BOT/FS_MTL_BOT_LARGE_GROAN_04.wav"}, {}, {}, {{0.142781f, 1.0f}, {1.13452f, 0.0f}}, {}, false, 0.0f},
-    }, 0.0f},
+    }, 0.0f, false},
     // BL_TRANSFORM.OPTIMUS_BOT2VEH
     {"BL_TRANSFORM.OPTIMUS_BOT2VEH", 5, Limit::KillFarthest, -4.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 15000.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_TRANS", "", false, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.152259f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRANS_OPTIMUS/TRANS_OPTIMUS_TO_VEH.wav"}, {}, {}, {}, {}, false, 0.0f},
@@ -221,13 +221,13 @@
         {1.58599f, -15.0f, 0.0f, 0.0f, 0.0f, -6.0f, 3.0f, 0, false, 1.0f, {"WL_TRUCK/AIR_SEMI_RELEASE_09.wav"}, {}, {}, {}, {}, false, 0.0f},
         {1.67405f, -12.0f, 0.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_WHSH_JET/WHSH_BOOST_FINISH_01_LR.wav"}, {}, {}, {}, {}, false, 0.0f},
         {1.44034f, -9.0f, 0.0f, 0.0f, 0.0f, 0.0f, 2.0f, 0, false, 1.0f, {"WL_WHSH_JET/WHSH_BOOST_FLARE_LR_03.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 200.0f},
+    }, 200.0f, false},
     // BL_TRANSFORM.OPTIMUS_VEH2BOT
     {"BL_TRANSFORM.OPTIMUS_VEH2BOT", 5, Limit::KillFarthest, -7.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 15000.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_TRANS", "", false, Spatial::SmartPanPreferPlayer, Param::None, {
         {0.140727f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRANS_OPTIMUS/TRANS_OPTIMUS_TO_BOT.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRANS_OPTIMUS/TRANS_OPTIMUS_TO_BOT_SERVOS.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, -6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRUCK/MECH_IMPT_TRUCK_LIGHT_01.wav", "WL_TRUCK/MECH_IMPT_TRUCK_LIGHT_02.wav", "WL_TRUCK/MECH_IMPT_TRUCK_LIGHT_03.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 200.0f},
+    }, 200.0f, false},
     // BL_FOLY_IDLES.OPTIMUS_IDLE
     {"BL_FOLY_IDLES.OPTIMUS_IDLE", 5, Limit::KillFarthest, -21.0f, -6.0f, 0.0f, 0.0f, -1.0f, 1.0f, 650.0f, 6400.0f, 2.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_NAV", "", true, Spatial::ThreeD, Param::None, {
         {0.0f, 0.0f, -6.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_FS_BOT/MTL_SYNTH_GROAN_FOLY_FS_MVMNT_01.wav", "WL_FS_BOT/MTL_SYNTH_GROAN_FOLY_FS_MVMNT_02.wav", "WL_FS_BOT/MTL_SYNTH_GROAN_FOLY_FS_MVMNT_03.wav", "WL_FS_BOT/MTL_SYNTH_GROAN_FOLY_FS_MVMNT_04.wav"}, {}, {}, {}, {}, false, 0.0f},
@@ -245,28 +245,28 @@
         {2.71835f, -3.0f, -6.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/GUN_HAMMER_RATCHET_COCK.wav"}, {}, {}, {}, {}, false, 0.0f},
         {2.49564f, -12.0f, -6.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_FOLY_BOT/AIR_IDLE_FOLY_02.wav"}, {}, {}, {}, {}, false, 0.0f},
         {2.31896f, 0.0f, -6.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_FS_BOT/FS_MTL_BOT_SMALL_AIR_04.wav", "WL_FS_BOT/FS_MTL_BOT_SMALL_AIR_05.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 0.0f},
+    }, 0.0f, false},
     // BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START
     {"BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START", 5, Limit::KillFarthest, -15.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f, 6400.0f, 2.0f, 200.0f, 400.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN", "", true, Spatial::ThreeD, Param::None, {
         {0.0f, 0.0f, -6.0f, 0.0f, -3.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/GUNf_MVMNT_01.wav", "WL_GUN_FOLEY/GUNf_MVMNT_02.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, -6.0f, 0.0f, 5.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_01.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_02.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_03.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_04.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 150.0f},
+    }, 150.0f, false},
     // BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END
     {"BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END", 5, Limit::KillFarthest, -18.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1000.0f, 6400.0f, 2.0f, 200.0f, 400.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_ROBOT_WPN", "", true, Spatial::ThreeD, Param::None, {
         {0.0f, 0.0f, -6.0f, 0.0f, 0.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/GUNf_MVMNT_03.wav", "WL_GUN_FOLEY/GUNf_MVMNT_04.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, -6.0f, 0.0f, 7.0f, -1.0f, 1.0f, 0, false, 1.0f, {"WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_01.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_02.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_03.wav", "WL_FS_BOT/MTL_FOLY_FS_BOT_MVMNT_04.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 150.0f},
+    }, 150.0f, false},
     // BL_HUD_INTERFACE.HEALTH_PU_AMMO
     {"BL_HUD_INTERFACE.HEALTH_PU_AMMO", 5, Limit::KillFarthest, -16.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 800.0f, 6400.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_INTERACT", "", true, Spatial::ThreeD, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, -3.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/RELOAD_BOLT_07.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.198694f, 0.0f, 0.0f, 0.0f, -6.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_FOLEY/RELOAD_BOLT_07.wav"}, {}, {}, {}, {}, false, 0.0f},
         {0.0f, 0.0f, 0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_GUN_NULLRAY/TRANS_NULLRAY_EQUIP_SLIDE.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 220.0f},
+    }, 220.0f, false},
     // BL_HUD_INTERFACE.HEALTH_PU_ENERGON
     {"BL_HUD_INTERFACE.HEALTH_PU_ENERGON", 5, Limit::KillFarthest, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1500.0f, 6400.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_INTERACT", "", true, Spatial::ThreeD, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_HUD_INTERFACE/SYNTH_ENERGON_POWERUP.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 220.0f},
+    }, 220.0f, false},
     // BL_HUD_INTERFACE.OVERSHIELD_POWER_UP
     {"BL_HUD_INTERFACE.OVERSHIELD_POWER_UP", 5, Limit::KillFarthest, -3.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 2500.0f, 10000.0f, 1.0f, 400.0f, 800.0f, 0.0f, 0.0f, "SFX_WET_COMBAT_AI_WPN", "", true, Spatial::ThreeD, Param::None, {
         {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, false, 1.0f, {"WL_TRANS_POWER/SYNTH_OVERSHIELD_AI_POWERUP.wav"}, {}, {}, {}, {}, false, 0.0f},
-    }, 0.0f},
+    }, 0.0f, false},

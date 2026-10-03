@@ -36,20 +36,32 @@ bool rayTri(const core::Vec3& o, const core::Vec3& d, const core::Vec3& a, const
 } // namespace
 
 bool AmbientAudio::load(const std::string& path, const std::string& contentRoot, SoundCues& cues, audio::IAudio* a) {
+    unload(cues);                                        // a previous map's bed, zones, pools, cues and presets
     audio_ = a;
-    // Level change: mixer Flush (0x8276AB60) - only Default active, current-reverb slot None.
-    cues.mixer().flush();
-    zone_ = -1;
     std::ifstream f(path, std::ios::binary);
     if (!f) { LOG_WARN("ambient: %s not found", path.c_str()); return false; }
     std::stringstream ss; ss << f.rdbuf();
     assets::Json root;
     if (!assets::Json::parse(ss.str(), root)) { LOG_WARN("ambient: bad json %s", path.c_str()); return false; }
+    // The map's sound bank (cue limits: the entry's field, else the cooked cue-asset table, else the class default).
     int nc = cues.addCues(root["cues"], contentRoot);
-    // [CONF] SoundCue.MaxConcurrentPlayCount of the map bank (MP_IAC_Streets_AUDIO_m; not in audio.json,
-    // read from the cooked cues): the only two non-zero entries.
-    cues.setMaxConcurrent("BL_LVL_MP_IAC_STREETS.EMIT_FLOOD_LIGHTS", 3);
-    cues.setMaxConcurrent("BL_LVL_MP_IAC_STREETS.EMIT_MONRAIL_IDLE_LP", 3);
+    // The map's reverb mixer presets (SoundMixerProperties MixerPresets + MASTER_WET DSPPresets of the names its
+    // SeqAct_Reverb ops use), owned by the map for its lifetime.
+    int np = 0;
+    for (const auto& kv : root["reverb_presets"].obj) {
+        const assets::Json& mp = kv.second["mixer_preset"];
+        const assets::Json& d = kv.second["dsp_by_category"]["MASTER_WET"];
+        const assets::Json& r = d["Reverb"];
+        const assets::Json& e = d["Echo"];
+        const float v[SoundMixer::kParams] = {
+            d["Volume"]["Volume"].asFloat(1.0f), r["Room"].asFloat(-10000.0f), r["RoomHF"].asFloat(-10000.0f),
+            r["RoomRolloffFactor"].asFloat(0.0f), r["DecayTime"].asFloat(1.0f), r["DecayHFRatio"].asFloat(1.0f),
+            r["ReflectionsLevel"].asFloat(-10000.0f), r["ReflectionsDelay"].asFloat(0.0f), r["Level"].asFloat(-10000.0f),
+            r["Delay"].asFloat(0.0f), r["Diffusion"].asFloat(0.0f), r["Density"].asFloat(0.0f), r["HFReference"].asFloat(5000.0f),
+            e["Delay"].asFloat(500.0f), e["DecayRatio"].asFloat(0.5f), e["WetMix"].asFloat(0.0f), e["DryMix"].asFloat(1.0f)};
+        if (cues.mixer().addMapPreset(kv.first, mp["Priority"].asFloat(0.0f), mp["FadeInTime"].asFloat(0.0f),
+                                      mp["FadeOutTime"].asFloat(0.0f), mp["Duration"].asFloat(-1.0f), v)) ++np;
+    }
 
     // Emitters.
     const char* kinds[3] = {"point", "volume", "line"};
@@ -110,10 +122,44 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
     if (a && (master["DSPEffectConfig"].asInt(0) & 32))
         a->setMasterCompressor(comp["Threshold"].asFloat(0.0f), comp["Attack"].asFloat(50.0f),
                                comp["Release"].asFloat(50.0f), comp["GainMakeup"].asFloat(0.0f));
-    LOG_INFO("ambient: %d map cues, %zu emitters, %zu zones (master compressor %.1f dB)", nc, emitters_.size(),
-             zones_.size(), comp["Threshold"].asFloat(0.0f));
+    sceneActive_.assign(zones_.size(), 0);
+    touching_.assign(zones_.size(), 0);
+    LOG_INFO("ambient: %s: %d map cues, %d reverb presets, %zu emitters, %zu zones, %d pools (master compressor %.1f dB)",
+             root["map"].asString().c_str(), nc, np, emitters_.size(), zones_.size(), poolCount(), comp["Threshold"].asFloat(0.0f));
     loaded_ = true;
     return true;
+}
+
+void AmbientAudio::unload(SoundCues& cues) {
+    // Map unload / level change: the map's AudioComponents go with its actors and Kismet; the mixer flushes
+    // (0x8276AB60: Default only, current-reverb slot None) and forgets the map's presets; the map bank leaves
+    // the cue table and its samples are released.
+    for (Emitter& e : emitters_) if (e.instance >= 0) cues.stop(e.instance, 0.0f);
+    cues.unloadMapCues();                                // also stops pool one-shots still sounding
+    cues.mixer().removeMapPresets();
+    emitters_.clear();
+    zones_.clear();
+    touching_.clear();
+    sceneActive_.clear();
+    poolTimers_.clear();
+    zone_ = -1;
+    active_ = 0;
+    started_ = false;
+    refusedAtStart_ = 0;
+    oneShots_ = 0;
+    loaded_ = false;
+}
+
+// Round / match reset without a level change (GameInfo.ResetLevel -> Kismet Reset) [HIGH: Kismet objects reset
+// through their Reset(); CONF bodies]: SeqAct_AmbientAudioZone.Reset IsEntered=false, SceneIndexCurrent=-1 (the
+// scenes end: pools stop); SeqAct_PlayPlayerPositionalSound.Reset IsPlaying=false. Not reset: the map's ambient
+// AudioComponents (AmbientSound has no Reset), the mixer (no Flush without a level change) and
+// PlayerController.AmbientAudioZone. The (re)spawned pawn's first Touch re-enters a zone: a different zone
+// switches the reverb; the same zone only re-begins its scene (pools restart, the reverb slot is unchanged).
+void AmbientAudio::resetMatch() {
+    sceneActive_.assign(zones_.size(), 0);
+    touching_.assign(zones_.size(), 0);
+    poolTimers_.clear();
 }
 
 bool AmbientAudio::inside(const Zone& z, const core::Vec3& p) const {
@@ -127,11 +173,16 @@ bool AmbientAudio::inside(const Zone& z, const core::Vec3& p) const {
     return (hits & 1) != 0;
 }
 
-// SeqAct_AmbientAudioZone.OnInput(Enter) (0x827892D8) -> "Scene 0 Begun" -> SeqAct_Reverb [CONF, RE A1].
+// SeqAct_AmbientAudioZone.OnInput(Enter) (0x827892D8) -> Update: "Scene 0 Begun" -> SeqAct_Reverb + START
+// [CONF, RE A1]. A zone whose scene already runs (IsEntered, SceneIndexCurrent 0) does nothing again.
 void AmbientAudio::enterZone(int z, SoundCues& cues) {
-    if (z == zone_) return;                              // already the PC's AmbientAudioZone: no-op
     const int prev = zone_;
-    zone_ = z;                                           // prev "Scene 0 Ended" (pool stops), new scene begins
+    if (z != zone_) {                                    // PC.AmbientAudioZone changes: prev IsEntered=false
+        if (prev >= 0) sceneActive_[(size_t)prev] = 0;   // -> "Scene 0 Ended" -> STOP (its pools stop)
+        zone_ = z;
+    }
+    if (sceneActive_[(size_t)z]) return;                 // scene already begun: no-op
+    sceneActive_[(size_t)z] = 1;
     cues.mixer().activateReverb(zones_[(size_t)z].preset);
     poolTimers_.clear();
     for (const Pool& p : zones_[(size_t)z].pools) poolTimers_.push_back(p.delayMin + frand() * (p.delayMax - p.delayMin));
@@ -173,7 +224,7 @@ void AmbientAudio::tick(float dt, const core::Vec3& listener, const core::Vec3& 
         touching_[(size_t)z] = in ? 1 : 0;
     }
     // Zone one-shot pools (SeqAct_PlayPlayerPositionalSound): world one-shots around the player.
-    if (zone_ >= 0) {
+    if (zone_ >= 0 && sceneActive_[(size_t)zone_]) {
         const Zone& z = zones_[(size_t)zone_];
         for (size_t i = 0; i < z.pools.size() && i < poolTimers_.size(); ++i) {
             poolTimers_[i] -= dt;

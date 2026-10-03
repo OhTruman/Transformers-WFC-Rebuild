@@ -384,7 +384,7 @@ void World::setAudio(audio::IAudio* a) {
     const std::string base = assetRoot() + "/../content/";
     // All audio = the original SoundCues (weapon, vehicle, robot movement, transformation, fine aim).
     cues_.load(a, base);
-    ambient_.load(assetRoot() + "/Maps/MP_IAC_Streets/audio.json", base, cues_, a);
+    loadMapAudio("MP_IAC_Streets");   // the slice's map; the frontend / map selection will call loadMapAudio itself
     // Occlusion line check listener -> source against the world collision. Attached (player-owned)
     // sounds are tested against the pawn's body (mesh origin + 1.5 m), not the socket tip, which can
     // poke into walls (the arm / gun have no collision). The last 0.5 m at the source and 0.25 m at
@@ -407,6 +407,49 @@ void World::setAudio(audio::IAudio* a) {
     cues_.setResolver([this](int owner, const std::string& socket, const core::Vec3& off, core::Vec3& out) {
         return resolveCueOwner(owner, socket, off, out);
     });
+}
+
+bool World::loadMapAudio(const std::string& mapName) {
+    if (!audio_) return false;
+    if (!audioMap_.empty()) unloadMapAudio();
+    const bool ok = ambient_.load(assetRoot() + "/Maps/" + mapName + "/audio.json", assetRoot() + "/../content/", cues_, audio_);
+    audioMap_ = ok ? mapName : std::string();
+    return ok;
+}
+
+int World::playPickupSound(const char* factoryClass, const core::Vec3& receiverPos) {
+    return PickupPresentation::onTaken(factoryClass, cues_, atPawn(), core::length(receiverPos - listenerPos_));
+}
+
+void World::unloadMapAudio() {
+    resetSystemsForMatch();                    // player-side sounds + Systems FX + queues
+    cues_.stopAll();                           // anything else (UI, impacts) - hard stop
+    ambient_.unload(cues_);                    // bed, zones, pools, map cues + samples, map presets; mixer Flush
+    if (audio_) audio_->setEnvironment(cues_.mixer().environment(), 0.0f);   // dry Default now, not on the next tick
+    audioMap_.clear();
+}
+
+void World::resetSystemsForMatch() {
+    cues_.stopNonMapInstances();               // weapon / vehicle / foley / transform / pickup sounds (immediate)
+    vehicleAudio_ = VehicleAudio{};
+    robotFoley_ = RobotFoley{};
+    nitro_ = VehicleNitro{};
+    fx_.clearParticles();
+    vehicleFx_.clearParticles();
+    for (int& i : boostInst_) i = -1;
+    for (int& i : hoverInst_) i = -1;
+    for (int& i : jumpInst_) i = -1;
+    ramInst_ = -1;
+    hoverActive_ = false; boostActive_ = false; vehiclePrevGrounded_ = true; jumpCount_ = 0;
+    vehLoadState_ = 0; prevDashing_ = false;
+    foleyCues_.clear();
+    transformCuePlayed_ = false; transformCue_ = -1; trackT_ = 0.0f; prevTransforming_ = false;
+    prevFineAim_ = false; tireSlipOverride_ = -1.0f; tireSlip_ = 0.0f;
+    burstActive_ = false; sinceShot_ = 0.0f;
+    notifies_.clear();
+    const Weapon& w = player_.pawn().weapon();   // resync: a reset must not replay a shot / reload animation
+    weaponSeenShot_ = w.shotSerial; weaponSeenReload_ = w.reloadSerial;
+    ambient_.resetMatch();
 }
 
 // Current world position of an attached AudioComponent. Pawn: the skeletal mesh origin (the
@@ -755,6 +798,16 @@ void World::tick(float dt) {
         cues_.setListener(listenerPos_);
         if (audio_)   // PreferPlayer pan reference: the local pawn's origin (same point pawn-attached sources use)
             audio_->setSmartPanPlayer(player_.pawn().position() + player_.pawn().meshOffset(), true);
+        // Soak-test hooks: periodic map-audio unload/reload and match resets (lifecycle validation only).
+        static const float mapCycle = std::getenv("WFC_MAPAUDIO_CYCLE") ? (float)std::atof(std::getenv("WFC_MAPAUDIO_CYCLE")) : 0.0f;
+        static const float resetCycle = std::getenv("WFC_MATCHRESET_CYCLE") ? (float)std::atof(std::getenv("WFC_MATCHRESET_CYCLE")) : 0.0f;
+        if (mapCycle > 0.0f && (mapAudioCycleT_ += dt) >= mapCycle) {
+            mapAudioCycleT_ = 0.0f;
+            const std::string m = audioMap_.empty() ? std::string("MP_IAC_Streets") : audioMap_;
+            unloadMapAudio();
+            loadMapAudio(m);
+        }
+        if (resetCycle > 0.0f && (matchResetCycleT_ += dt) >= resetCycle) { matchResetCycleT_ = 0.0f; resetSystemsForMatch(); }
         ambient_.tick(dt, listenerPos_, player_.pawn().position(), cues_);
         static const bool ambLog = std::getenv("WFC_AMBLOG") != nullptr;
         static float ambT = 0.0f;

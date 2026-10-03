@@ -50,11 +50,26 @@ public:
     // gameplay / animation events, attached to their owner where the original attaches them.
     void setAudio(audio::IAudio* a);
 
+    // ---- Systems map / match lifecycle (frontend -> loading -> match -> reset -> frontend -> next map) ----
+    // Load a map's audio from its manifest (<assets>/Maps/<map>/audio.json): bed, zones, reverb presets,
+    // pools, map cue bank. Data-driven; any previously loaded map audio is unloaded first.
+    bool loadMapAudio(const std::string& mapName);
+    // Unload the current map's audio and every transient Systems state (player sounds, Systems FX, queues);
+    // afterwards no voice, instance, queued event, map preset, map cue or map sample remains.
+    void unloadMapAudio();
+    // Round / match reset on the same map: player-side Systems audio + FX state restart, Kismet audio reset;
+    // the map's bed keeps playing (see AmbientAudio::resetMatch).
+    void resetSystemsForMatch();
+    const std::string& audioMapName() const { return audioMap_; }
+    const SoundCues& soundCues() const { return cues_; }
+    const AmbientAudio& ambientAudio() const { return ambient_; }
+
     Player& player() { return player_; }
 
-    // Pickup SOUND (Systems) of the 27 authored Streets factories: Gameplay's Taken events call
-    // onTaken(actor, cues_, atPawn(), d). Pickup effects and their state are Rendering's (WfcMapFx).
-    PickupPresentation& pickupPresentation() { return pickupFx_; }
+    // Pickup SOUND (Systems): a Gameplay PickupEvent Taken -> Inventory.AnnouncePickup, the factory class's
+    // PickupSound attached to the receiving (player) pawn. Respawn plays nothing. Pickup effects and their
+    // state are Rendering's (WfcMapFx). Returns the cue instance (-1 = none authored / unknown class).
+    int playPickupSound(const char* factoryClass, const core::Vec3& receiverPos);
     SoundCues& cues() { return cues_; }
 
     // Truck nitro / ram state (Systems-owned, read-only for Gameplay: nitroActive(), ramActive(),
@@ -115,7 +130,6 @@ private:
 
     audio::IAudio* audio_ = nullptr;
     SoundCues cues_;
-    PickupPresentation pickupFx_;
     // Cue owners (SoundCues::Emitter::owner): attached AudioComponents follow these every tick.
     // Owner ids: the player pawn (its mesh origin, or a bone/socket of the displayed skeleton) and
     // the Ion Blaster (its mesh origin, or a WeaponMesh socket such as MuzzleFlash).
@@ -161,6 +175,8 @@ private:
     bool burstActive_ = false;
     float sinceShot_ = 0.0f;
     core::Vec3 listenerPos_{0, 0, 0};
+    std::string audioMap_;                  // map whose audio is loaded ("" = none)
+    float mapAudioCycleT_ = 0.0f, matchResetCycleT_ = 0.0f;   // soak-test hooks (WFC_MAPAUDIO_CYCLE / WFC_MATCHRESET_CYCLE)
 };
 
 } // namespace game

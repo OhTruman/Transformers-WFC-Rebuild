@@ -348,7 +348,7 @@ public:
         return &voices_[(size_t)best];
     }
     Voice* start(Sound s, int& index, int priority = 128) {
-        if (!ok_ || s < 0 || (size_t)s >= sounds_.size()) return nullptr;
+        if (!ok_ || s < 0 || (size_t)s >= sounds_.size() || sounds_[(size_t)s].pcm.size() < 4) return nullptr;   // released / empty
         Voice* v = freeVoice(index, priority);
         if (!v) return nullptr;
         int gen = (v->gen + 1) & 0x7FFFF;
@@ -409,6 +409,31 @@ public:
         const Voice& v = voices_[(size_t)i];
         o.dist = v.dDist; o.pan = v.dPan; o.atten = v.dAtten; o.gainL = v.gL; o.gainR = v.gR;
         return true;
+    }
+    void release(Sound s) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        if (s < 0 || (size_t)s >= sounds_.size()) return;
+        Sample& smp = sounds_[(size_t)s];
+        for (Voice& v : voices_) if (v.active && v.sample == &smp) v.active = false;
+        for (auto it = loaded_.begin(); it != loaded_.end(); ++it) if (it->second == s) { loaded_.erase(it); break; }
+        std::vector<int16_t>().swap(smp.pcm);                    // the slot stays (handles of other samples keep their index)
+        smp.loopStart = 0.0; smp.loopEnd = -1.0;
+    }
+    void stopAllVoices() override {
+        std::lock_guard<std::mutex> lk(mx_);
+        for (Voice& v : voices_) v.active = false;
+    }
+    int activeVoices() const override {
+        std::lock_guard<std::mutex> lk(mx_);
+        int n = 0;
+        for (const Voice& v : voices_) n += v.active ? 1 : 0;
+        return n;
+    }
+    size_t residentBytes() const override {
+        std::lock_guard<std::mutex> lk(mx_);
+        size_t b = 0;
+        for (const Sample& smp : sounds_) b += smp.pcm.size() * sizeof(int16_t);
+        return b;
     }
     bool setLoopPoints(Sound s, uint32_t start, uint32_t end) override {
         std::lock_guard<std::mutex> lk(mx_);

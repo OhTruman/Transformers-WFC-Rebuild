@@ -102,7 +102,7 @@ for pkgname, cues in CUES:
         # Engine.Default__SoundCue: MaxConcurrentPlayCount 5, InstanceLimiting kKillFarthest.
         limit = {'kKillOldest': 'Limit::KillOldest', 'kKillNewest': 'Limit::KillNewest'}.get(
             cue.get('InstanceLimiting'), 'Limit::KillFarthest')
-        out.append(('    // %s\n    {"%s", %d, ' + limit + ', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "%s", "%s", %s, ' + spat + ', %s, {\n%s    }, %s},\n') % (
+        out.append(('    // %s\n    {"%s", %d, ' + limit + ', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "%s", "%s", %s, ' + spat + ', %s, {\n%s    }, %s, false},\n') % (
             c, short(c), cue.get('MaxConcurrentPlayCount', 5), f(R['Volume']), f(R['VolumeVariationMin']),
             f(R['VolumeVariationMax']), f(R['Pitch']), f(R['PitchVariationMin']), f(R['PitchVariationMax']),
             f(R['DistanceMin']), f(R['DistanceMax']), f(R['RolloffFactor']),

@@ -44,8 +44,13 @@ class SoundCues;
 
 class AmbientAudio {
 public:
-    // Loads audio.json (cues are added to `cues`). Returns false if the file is missing.
+    // Loads a map's audio manifest (audio.json: emitters, zones, reverb presets, one-shot pools, map cue bank).
+    // Any previously loaded map is unloaded first. Returns false if the file is missing.
     bool load(const std::string& audioJsonPath, const std::string& contentRoot, SoundCues& cues, audio::IAudio* a);
+    // Map unload: stops and forgets everything the map owns (bed, zones, pools, map cues + samples, presets).
+    void unload(SoundCues& cues);
+    // Round reset without a level change (Kismet Reset of the zone / pool ops); the bed keeps playing.
+    void resetMatch();
     // `listener` = camera (attenuation / emitter placement); `pawn` = the touching actor for zones.
     void tick(float dt, const core::Vec3& listener, const core::Vec3& pawn, SoundCues& cues);
 
@@ -58,6 +63,8 @@ public:
     const std::string& emitterCue(int i) const { return emitters_[(size_t)i].cue; }
     int emitterInstance(int i) const { return emitters_[(size_t)i].instance; }
     int zoneCount() const { return (int)zones_.size(); }
+    int currentZone() const { return zone_; }
+    bool poolsRunning() const { return zone_ >= 0 && sceneActive_[(size_t)zone_] && !poolTimers_.empty(); }
     int poolCount() const { int n = 0; for (const Zone& z : zones_) n += (int)z.pools.size(); return n; }
     const char* zoneName() const { return zone_ >= 0 ? zones_[(size_t)zone_].name.c_str() : "-"; }
     int oneShotsPlayed() const { return oneShots_; }
@@ -85,6 +92,7 @@ private:
     bool inside(const Zone& z, const core::Vec3& p) const;
     void enterZone(int z, SoundCues& cues);
     std::vector<char> touching_;         // per zone: the pawn overlapped it at the last check (Touch edge)
+    std::vector<char> sceneActive_;      // per zone: IsEntered with Scene 0 begun (its pools run)
 
     bool loaded_ = false;
     audio::IAudio* audio_ = nullptr;

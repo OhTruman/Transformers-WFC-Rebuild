@@ -47,6 +47,8 @@ public:
     void draw(render::IRenderer& r) const;
 
     size_t liveParticles() const { return parts_.size(); }
+    // Lifecycle (match reset / map unload): drop every live particle, mesh, smoke trail and stream.
+    void clearParticles() { parts_.clear(); meshParts_.clear(); smoke_.clear(); streams_.clear(); haveMuzzle_ = false; }
     int liveImpacts() const;
 
     // One authored emitter, LOD 0, values converted to metres / seconds.

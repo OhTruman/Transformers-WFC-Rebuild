@@ -79,6 +79,13 @@ public:
     // Backends that cannot loop a region return false.
     virtual bool setLoopPoints(Sound, uint32_t /*startFrame*/, uint32_t /*endFrame*/) { return false; }
     virtual bool reportsVoices() const { return false; }   // isPlaying() is meaningful
+    // Lifecycle (map unload / frontend transitions). release: forget a loaded sample (its voices stop; the
+    // handle becomes invalid; loading the same path again decodes anew). stopAllVoices: hard stop of every
+    // voice. activeVoices / residentBytes: diagnostics (voices sounding, decoded PCM held in memory).
+    virtual void release(Sound) {}
+    virtual void stopAllVoices() {}
+    virtual int activeVoices() const { return -1; }
+    virtual size_t residentBytes() const { return 0; }
     // MASTER_WET environment, cross-faded over `fadeSeconds` (mixer preset FadeInTime).
     virtual void setEnvironment(const Environment&, float /*fadeSeconds*/) {}
     // Master category DSP: compressor (dB threshold, ms attack/release, dB make-up).

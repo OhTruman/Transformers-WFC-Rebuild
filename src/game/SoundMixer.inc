@@ -2,16 +2,6 @@
 const PresetDef kPresetDefs[] = {
     {"VEHICLE_JUMP", 270.0f, 0.3f, 1.0f, 1.0f},
     {"VEHICLE_BOOST_END", 264.0f, 0.2f, 3.0f, 1.0f},
-    {"REVERB_TRANS_MP_STREETS_EXTERIOR", 182.0f, 0.25f, 0.25f, -1.0f},
-    {"REVERB_TRANS_MP_STREETS_NEU_BASE", 183.0f, 0.25f, 0.25f, -1.0f},
-    {"REVERB_TRANS_MP_STREETS_AUTO_ROOM_01", 216.0f, 0.25f, 0.25f, -1.0f},
-    {"REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER", 217.0f, 0.25f, 0.25f, -1.0f},
-    {"REVERB_TRANS_MP_STREETS_NEU_HALL", 218.0f, 0.25f, 0.25f, -1.0f},
-    {"REVERB_TRANS_MP_STREETS_TRAIN_DEPOT", 219.0f, 0.25f, 0.25f, -1.0f},
-    {"REVERB_TRANS_MP_STREETS_AUTO_ROOM_02", 220.0f, 0.25f, 0.25f, -1.0f},
-    {"REVERB_TRANS_MP_STREETS_TRAIN_TUNNEL", 221.0f, 0.25f, 0.25f, -1.0f},
-    {"REVERB_TRANS_MP_STREETS_NEU_STAIRWELL", 222.0f, 0.25f, 0.25f, -1.0f},
-    {"REVERB_TRANS_MP_STREETS_DEC_ROOM_UPPER", 223.0f, 0.25f, 0.25f, -1.0f},
 };
 // SFX_WET_VEH_ENGINE (DSPEffectConfig 0)
 const CategoryPreset kSfxWetVehEngine[] = {
@@ -22,14 +12,4 @@ const CategoryPreset kSfxWetVehEngine[] = {
 // MASTER_WET (DSPEffectConfig 280)
 const CategoryPreset kMasterWet[] = {
     {"Default", {1.0f, -10000.0f, -10000.0f, 0.0f, 1.0f, 1.0f, -10000.0f, 0.0f, -10000.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 500.0f, 0.5f, 0.0f, 1.0f}},
-    {"REVERB_TRANS_MP_STREETS_TRAIN_TUNNEL", {1.0f, -900.0f, -1400.0f, 3.89f, 4.32f, 0.32f, -1100.0f, 0.019f, -800.0f, 0.019f, 26.0f, 14.0f, 2185.0f, 108.0f, 0.05f, 0.08912509f, 1.0f}},
-    {"REVERB_TRANS_MP_STREETS_EXTERIOR", {1.0f, -800.0f, -985.0f, 7.04f, 2.65f, 0.73f, -900.0f, 0.06500001f, -600.0f, 0.052f, 33.0f, 65.0f, 6122.0f, 475.0f, 0.075f, 0.09999999f, 1.0f}},
-    {"REVERB_TRANS_MP_STREETS_NEU_BASE", {1.0f, -650.0f, -700.0f, 6.9f, 2.06f, 0.62f, -760.0f, 0.038f, -600.0f, 0.008f, 6.0f, 4.0f, 8288.0f, 500.0f, 0.5f, 0.0f, 1.0f}},
-    {"REVERB_TRANS_MP_STREETS_NEU_STAIRWELL", {1.0f, -650.0f, -800.0f, 2.71f, 3.33f, 1.0f, -750.0f, 0.022f, -650.0f, 0.006f, 4.0f, 2.0f, 7992.0f, 500.0f, 0.5f, 0.0f, 1.0f}},
-    {"REVERB_TRANS_MP_STREETS_NEU_HALL", {1.0f, -900.0f, -850.0f, 5.02f, 2.75f, 0.86f, -600.0f, 0.027f, -600.0f, 0.013f, 3.0f, 6.0f, 8386.0f, 108.0f, 0.06f, 0.1584893f, 1.0f}},
-    {"REVERB_TRANS_MP_STREETS_AUTO_ROOM_01", {1.0f, -850.0f, -700.0f, 3.55f, 2.35f, 0.57f, -650.0f, 0.061f, -600.0f, 0.013f, 4.0f, 46.0f, 6024.0f, 500.0f, 0.5f, 0.0f, 1.0f}},
-    {"REVERB_TRANS_MP_STREETS_AUTO_ROOM_02", {1.0f, -900.0f, -700.0f, 3.74f, 4.81f, 1.64f, -780.0f, 0.038f, -800.0f, 0.03f, 9.0f, 56.0f, 9173.0f, 207.0f, 0.09999999f, 0.1584893f, 1.0f}},
-    {"REVERB_TRANS_MP_STREETS_TRAIN_DEPOT", {1.0f, -700.0f, -900.0f, 2.61f, 2.65f, 0.69f, -800.0f, 0.114f, -600.0f, 0.013f, 49.0f, 31.0f, 6713.0f, 182.0f, 0.04f, 0.1584893f, 1.0f}},
-    {"REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER", {1.0f, -630.0f, -800.0f, 3.6f, 3.24f, 1.25f, -750.0f, 0.034f, -600.0f, 0.025f, 16.0f, 64.0f, 8977.0f, 500.0f, 0.5f, 0.0f, 1.0f}},
-    {"REVERB_TRANS_MP_STREETS_DEC_ROOM_UPPER", {1.0f, -936.0f, -887.0f, 3.5f, 3.14f, 0.81f, -600.0f, 0.157f, -600.0f, 0.046f, 59.0f, 39.0f, 7008.0f, 452.0f, 0.08f, 0.05623413f, 1.0f}},
 };

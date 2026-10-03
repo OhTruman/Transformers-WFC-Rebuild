@@ -61,6 +61,7 @@ struct CueDef {
     Param param;                         // SoundNodeRoot.SoundParameter
     std::vector<EventDef> events;
     float priority;                      // SoundNodeRoot.Priority (unset = 0)
+    bool mapBank;                        // added by a map's audio.json (removed at map unload)
 };
 } // namespace cuedata
 
@@ -101,8 +102,21 @@ public:
 
     // Load every wave the built-in cue table references (ExtractedAssets/content/<pkg>/<wave>.wav).
     void load(audio::IAudio* a, const std::string& contentRoot);
-    // Add the cue graphs of a map's audio.json "cues" object (BL_LVL_* map bank). Returns the count.
+    // Add the cue graphs of a map's audio.json "cues" object (the map's sound bank). Returns the count.
+    // MaxConcurrentPlayCount / InstanceLimiting: the entry's own field, else the cooked cue-asset table
+    // (CookedCueLimits.inc, AssetTools), else Engine.Default__SoundCue (5 / kKillFarthest).
     int addCues(const assets::Json& cues, const std::string& contentRoot);
+
+    // ---- lifecycle ----
+    // Hard stop of every instance (voices stopped at once, queued wave events dropped, cue mixer presets
+    // released). Used for map unload and frontend transitions.
+    void stopAll();
+    // Stop every instance of a non-map cue (player weapon / vehicle / foley / transform / UI): match reset.
+    int stopNonMapInstances();
+    // Map unload: stop the map bank's instances, remove its cues and release their samples. Returns cues removed.
+    int unloadMapCues();
+    int mapCueCount() const;
+    size_t cueCount() const { return cues_.size(); }
     bool hasCue(const char* name) const { return findCue(name) >= 0; }
     // The FmodAudioDevice mixer (presets, categories, MASTER_WET environment).
     SoundMixer& mixer() { return mixer_; }
