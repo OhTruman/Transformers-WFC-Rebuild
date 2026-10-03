@@ -27,6 +27,16 @@ public:
         boxSize_ = t.boxSize;
         color_ = t.color;
     }
+    // GameInfo.RestartPlayer spawns a fresh TnPlayerPawnMultiplayer: robot form, no transformation, default vehicle
+    // state, full HealthMax (no overshield), default inventory (Ion Blaster: full clip, InitialReserveAmmoCount), at rest.
+    void respawnReset() {
+        trans_ = Transition::None; transClip_ = -1; partnerVisible_ = false; partnerClip_ = -1;
+        veh_ = VehicleState{}; restoreTimer_ = -1.0f; lastDriving_ = false; shiftRemain_ = 0.0f;
+        velocity_ = {0, 0, 0}; onGround_ = true; rammedRemain_ = 0.0f;
+        health_ = Health{}; overShield_ = false;
+        weapon_ = Weapon{}; speedMult_ = 1.0f; fineAiming_ = false;
+        form_ = Form::Robot == form_ ? form_ : Form::Robot; setForm(Form::Robot); animTime_ = 0.0f; clip_ = -1;
+    }
     Form form() const { return form_; }      // displayed form (mesh handoff happens mid-fold)
     // Movement form: TnPawn.Transforming.BeginTransformation sets _CurrentForm = TargetForm and the
     // target form's movement capabilities at the START of a transformation [CONF bytecode], so

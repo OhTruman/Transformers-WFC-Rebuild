@@ -3,6 +3,17 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 20a (2026-10-03) — boost->robot fall-through fixed, wall probes, match core, camera (checkpoint)
+- Human bug fixed: boost -> robot no longer drops under Streets.
+  - Recovered cylinder-size lerp + swept falling floor check.
+  - WFC_XFORMTEST: 0/1520 under the map, 0 KillZ (was 656 / 186).
+- Truck hull wall probes (it passed through objects under 2 m); robot head probe (overhangs).
+  - Authored path oracle still 852/852.
+- Segmented health 550 + overshield 550; RE pickup acceptance; FastTrace touch rejection.
+- Local TDM/DM match core: World::startLocalMatch, WFC_MATCH; WFC_MATCHTEST.
+- RE camera obstruction implemented behind WFC_CAMRE (WFC_CAMTEST shows more visible clipping than the default; default kept).
+- Details: FIDELITY.md PASS 20a.
+
 ## GAMEPLAY PASS 19 (2026-10-03) — Streets world state + corrected world/collision (AssetTools 8d8195e)
 - Corrected 8d8195e world.glb, collision GLBs and physics.json, consumed fresh at load (no collision cache).
 - Authored traversal: 852/852 TnReachSpec runs (robot + hover truck), 0 falls, 0 floor gaps.

@@ -22,6 +22,10 @@ private:
     void runPickupTest();
     void runTraverseTest();
     void runMapTraverse();
+    void runTransformStress();
+    void runMatchTest();
+    void runCameraTest();
+    void runChaosTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

@@ -140,6 +140,11 @@ constexpr float kDriveMouseFullRate = 1200.0f;       // [PROV] PC: mouse X rate 
 constexpr float kCamFovXDeg    = 80.0f;    // horizontal FOV [CONF strategy instance; ini class default 75]
 constexpr float kCamFovSmooth  = 0.4f;     // DefaultFOV SmoothTime [CONF]
 constexpr float kMouseSens     = 0.0022f;  // radians per pixel [PROV]
+// Camera obstruction (RE MILESTONE04_CAMERA_COLLISION 990f3e7) [CONF script / authored]:
+constexpr float kCamCollQuickSpeed = 20.0f;   // _QuickMoveSpeed 2000 UU/s (toward the pawn / down / -Y)
+constexpr float kCamCollSlowSpeed  = 5.0f;    // _SlowMoveSpeed 500 UU/s (away / up / +Y)
+constexpr float kCamVehOriginFwd   = -2.0f;   // HoverTruck/Truck_Optimus _OriginOffset X -200 UU
+constexpr float kCamVehOriginUp    = 0.75f;   // _OriginOffset Z 75 UU
 constexpr float kCamDistance   = 8.0f;     // DefaultOrbitDistance 800 UU [CONF]
 constexpr float kCamHeight     = kPawnHalfHeight + 2.0f; // actor centre + anchor Offset Z 200 UU [CONF]
 constexpr float kPitchMin      = -1.309f;  // PitchRange -75 deg [CONF]

@@ -25,25 +25,29 @@ const char* PickupFactory::pickupSound(Kind k) {
     return nullptr;
 }
 
-// GiveTo / ValidTouch are native and were not recovered: the acceptance rules below are [PROV]
-// (standard UE3 pickup semantics: a pickup that would do nothing is not consumed).
+// PickupQuery -> InvManager.HandlePickupQuery -> ItemClass.PickupAllowed [CONF RE MILESTONE05_GAMEPLAY_UNKNOWNS §6]:
+// health only below HealthMax (SHT_AddAllSegments: full heal, AddedHealth ignored), overshield only while
+// NormalizedOverShieldHealth < 1 (SHT_AddOverShield: HealthMax + 550), ammo crate only when a primary / secondary /
+// vehicle weapon is not AmmoMaxed (FillReserveAmmo). No MP game rule overrides PickupQuery.
 bool PickupFactory::tryGive(Character& c) {
     if (c.health().isDead()) return false;
     switch (kind_) {
         case Kind::Health:
-            if (c.health().current >= c.health().max) return false;     // [PROV] nothing to heal
-            c.health().heal(kAddedHealth);                               // AddedHealth 50 [CONF]
+            if (c.health().current >= c.health().max) return false;
+            c.health().heal(Health::HealType::AddAllSegments, kAddedHealth);
             return true;
         case Kind::AmmoCrate: {
             // ValidWeaponTypes WT_Primary/WT_Secondary/WT_Vehicle [CONF]; amount native -> [PROV] refill the
             // reserve to MaxAmmoCount. The slice's only weapon is the Ion Blaster (primary).
             Weapon& w = c.weapon();
-            if (w.reserve >= w.reserveMax) return false;                 // [PROV]
+            if (w.reserve >= w.reserveMax) return false;                 // AmmoMaxed
             w.reserve = w.reserveMax;
             return true;
         }
         case Kind::OverShield:
-            c.grantOverShield();                                         // amount/duration native [PARTIAL]
+            if (c.health().normalizedOverShield() >= 1.0f) return false;
+            c.health().heal(Health::HealType::AddOverShield, 1.0f);
+            c.grantOverShield();
             return true;
     }
     return false;
@@ -90,7 +94,26 @@ void PickupFactory::tick(World& world, float dt) {
         return;
     }
     if (kind_ == Kind::AmmoCrate) yaw_ += 10000.0f / 65536.0f * 6.2831853f * dt;   // PHYS_Rotating in 'Pickup'
-    if (began && tryGive(c)) take(world, c);
+    // Pickup.ValidTouch: a touch through a wall (FastTrace pawn -> factory fails) is rejected and re-checked in 0.5 s.
+    if (began) traceRecheck_ = 0.0f;
+    if (!overlapNow) return;
+    if (traceRecheck_ > 0.0f) { traceRecheck_ -= dt; if (traceRecheck_ > 0.0f) return; }
+    else if (!began) return;
+    const CollisionWorld* lw = world.weaponCollision();
+    float th;
+    if (lw && lw->segmentHit(c.actorLocation(), pos_ + core::Vec3{0, 1.0f, 0}, th)) { traceRecheck_ = 0.5f; return; }
+    traceRecheck_ = 0.0f;
+    if (tryGive(c)) take(world, c);
+}
+
+void PickupFactory::resetToPickup(World& world) {
+    if (available_) return;
+    available_ = true;
+    respawnRemain_ = 0.0f;
+    PickupEvent e; e.factory = index_; e.kind = kind_; e.type = PickupEvent::Type::Respawned;
+    e.available = true; e.pos = pos_;
+    e.meshVisible = true; e.customEffectActive = customEffectActive(); e.beamActive = beamActive();
+    world.raisePickupEvent(e);
 }
 
 } // namespace game

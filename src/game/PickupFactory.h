@@ -52,6 +52,8 @@ public:
 
     // Per-step factory logic (World ticks actors): respawn timer while sleeping; touch test while available.
     void tick(World& world, float dt) override;
+    // PickupFactory.Reset (TnTeamGame.StartMatch): a sleeping factory returns to 'Pickup' at once [HIGH: stock UE3].
+    void resetToPickup(World& world);
 
     Kind kind() const { return kind_; }
     const std::string& name() const { return name_; }
@@ -79,6 +81,7 @@ private:
     float respawnTime_;
     int index_;
     bool available_ = true;
+    float traceRecheck_ = 0.0f;   // ValidTouch FastTrace failure: retry after 0.5 s while still touching
     float respawnRemain_ = 0.0f;
     bool overlapping_ = false;      // the player pawn's cylinder overlapped last step (Touch = overlap begin)
     bool overlaps(const Character& c) const;

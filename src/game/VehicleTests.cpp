@@ -254,6 +254,32 @@ void runVehicleTests() {
                  (int)s.c.vehicleState().driving, s.c.vehicleState().driftRemain, std::remainder(s.c.yaw() - hov.faceYaw, 6.2831853f));
     }
 
+    // Rapid reversal (full right 1 s -> full left 1 s) and grip: lateral slip decay after releasing a full-lock turn.
+    {
+        CollisionWorld w = makeWorld(0, 0, 0);
+        Sim s(&w, 1.3f);
+        MoveIntent b; b.wantBoost = true;
+        s.step(b, 60);
+        s.c.velocity() = core::forwardFromYawPitch(s.c.yaw(), 0.0f) * 30.0f;
+        MoveIntent r = b; r.steer = 1.0f; MoveIntent l = b; l.steer = -1.0f;
+        auto slip = [&]() {
+            core::Vec3 v = s.c.velocity(); core::Vec3 fw = core::forwardFromYawPitch(s.c.yaw(), 0.0f);
+            core::Vec3 rt = core::normalize(core::cross(fw, core::Vec3{0, 1, 0}));
+            return std::atan2(core::dot(v, rt), core::dot(v, fw)) * 57.2958f;
+        };
+        s.step(r, 60);
+        float rateR = s.c.vehicleState().yawRate * 57.2958f;
+        int zeroCross = -1;
+        for (int k = 0; k < 60; ++k) { s.step(l); if (zeroCross < 0 && s.c.vehicleState().yawRate * 57.2958f < 0.0f) zeroCross = k; }
+        float rateL = s.c.vehicleState().yawRate * 57.2958f;
+        LOG_INFO("VEHTEST boost reversal: +1 for 1 s -> %.1f deg/s; -1: yaw rate crosses zero after %.2f s, %.1f deg/s at 1 s, slip %.1f deg",
+                 rateR, zeroCross < 0 ? -1.0f : (zeroCross + 1) / 60.0f, rateL, slip());
+        float s0 = slip();
+        float s25 = 0, s100 = 0;
+        for (int k = 1; k <= 60; ++k) { s.step(b); if (k == 15) s25 = slip(); if (k == 60) s100 = slip(); }
+        LOG_INFO("VEHTEST boost grip: release at slip %.1f deg -> %.1f (0.25 s) -> %.1f deg (1 s), speed %.1f", s0, s25, s100, hspeed(s.c));
+    }
+
 }
 
 } // namespace game

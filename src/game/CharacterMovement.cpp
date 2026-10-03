@@ -71,10 +71,12 @@ core::Vec3 robotCalcVelocity(const Character& c, const core::Vec3& wish, const c
 // or third wall (corners), like physWalking's wall slide. (Zeroing all velocity and parking one probe
 // radius out made the next, slower step creep forward, flipping Idle/Moving for a frame or two when
 // stopping against a wall.) [PROV collision model: no capsule sweep]
-bool wallBlock(const CollisionWorld* col, const core::Vec3& oldPos, core::Vec3& p, core::Vec3& v, float probeR) {
+bool wallBlock(const CollisionWorld* col, const core::Vec3& oldPos, core::Vec3& p, core::Vec3& v, float probeR,
+               float probeY = core::config::kPawnHalfHeight, bool skipWalkable = false) {
     if (!col) return false;
-    const float torso = core::config::kPawnHalfHeight;   // probe at capsule centre (~2 m)
-    core::Vec3 start{oldPos.x, oldPos.y + torso, oldPos.z};
+    // probeY: probe height above oldPos (robot: capsule centre ~2 m). skipWalkable: hits on walkable faces
+    // (n.y > 0.7: floors, ramps) are passed through - the ground / suspension code owns those.
+    core::Vec3 start{oldPos.x, oldPos.y + probeY, oldPos.z};
     core::Vec3 move{p.x - oldPos.x, 0.0f, p.z - oldPos.z};
     const core::Vec3 move0 = move;
     bool blocked = false;
@@ -83,7 +85,14 @@ bool wallBlock(const CollisionWorld* col, const core::Vec3& oldPos, core::Vec3& 
         if (dist < 1e-4f) break;
         core::Vec3 dn = move * (1.0f / dist);
         float tHit; core::Vec3 n;
-        if (!col->segmentHit(start, start + dn * (dist + probeR), tHit, n)) { start = start + move; move = {0, 0, 0}; break; }
+        bool hit = col->segmentHit(start, start + dn * (dist + probeR), tHit, n);
+        for (int skip = 0; hit && skipWalkable && std::fabs(n.y) > 0.7f && skip < 4; ++skip) {
+            float len = dist + probeR, from = tHit * len + 0.02f;
+            float t2; core::Vec3 n2;
+            if (from >= len || !col->segmentHit(start + dn * from, start + dn * len, t2, n2)) { hit = false; break; }
+            tHit = (from + t2 * (len - from)) / len; n = n2;
+        }
+        if (!hit) { start = start + move; move = {0, 0, 0}; break; }
         blocked = true;
         float allowed = std::max(0.0f, std::min(dist, tHit * (dist + probeR) - probeR));
         start = start + dn * allowed;
@@ -377,7 +386,14 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     core::Vec3 hr = core::normalize(core::cross(hf, core::Vec3{0, 1, 0}));
     float along = core::dot(moveDir, hf);
     float hullReach = std::fabs(along) * (along >= 0.0f ? kHullFront : kHullBack) + std::fabs(core::dot(moveDir, hr)) * kHullHalfWidth;
-    if (wallBlock(col, oldPos, p, v, std::max(hullReach, kHullHalfWidth)) && vs.driving) {
+    // Hull against walls: probes across the PhysicalVehicleMesh hull's height (root -0.35 .. +1.85 m) instead of the
+    // robot torso height (2 m above the root, above the hull top: the truck drove through anything lower). The low
+    // probe sits above the wheel / spring clearance (driving: wheels down, root on the floor; hovering: hull bottom
+    // 0.35 m below the root) and ignores walkable faces. [PROV: probes approximate the rigid-body box contact]
+    const float probes[3] = {vs.driving ? 0.45f : kHullBottom + 0.15f, 0.5f * (kHullBottom + kHullTop), kHullTop - 0.1f};
+    bool hullBlocked = false;
+    for (float h : probes) hullBlocked |= wallBlock(col, oldPos, p, v, std::max(hullReach, kHullHalfWidth), h, true);
+    if (hullBlocked && vs.driving) {
         // Driving.OnRigidBodyCollision: a frontal hit (contact normal . forward > CosCollisionNormalThreshold
         // 0.866) drops back to Hovering (ram consumption during nitro not implemented). [PROV contact
         // normal approximated by the blocked travel direction.]
@@ -477,24 +493,44 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     core::Vec3 oldPos = c.position();
     core::Vec3 p = oldPos + v * dt;
 
-    // physWalking: after a blocked move the velocity is the actual displacement over the step.
-    if (wallBlock(col, oldPos, p, v, core::config::kPawnRadius)) {
+    // physWalking: after a blocked move the velocity is the actual displacement over the step. Probes: capsule centre
+    // (2 m) and head (3.6 m: the 4 m cylinder does not pass under overhangs lower than its top). No low probe: the
+    // centre-point ground model owns steps / stairs (MaxStepHeight 0.35 m). [PROV collision model: no capsule sweep]
+    bool robotBlocked = wallBlock(col, oldPos, p, v, core::config::kPawnRadius);
+    robotBlocked |= wallBlock(col, oldPos, p, v, core::config::kPawnRadius, 2.0f * core::config::kPawnHalfHeight - 0.4f);
+    if (robotBlocked) {
         v.x = (p.x - oldPos.x) / dt; v.z = (p.z - oldPos.z) / dt;
     }
 
     // --- Ground resolution ---
+    // Collision cylinder bottom relative to the robot mesh origin (position()). The actor location (cylinder
+    // centre) is shared by both forms and continuous through a transformation; the robot mesh hangs the robot
+    // CollisionHeight below it. During TransformingToRobot, TnPawn.UpdateCylinderSize lerps the cylinder
+    // radius / half-height from the vehicle's to the robot's by RemainingTimeAsFactor (1 -> 0) [CONF RE
+    // TARGETED_PASS 1e], so the cylinder bottom starts at the vehicle's bottom (on the floor when driving: wheels
+    // down, root at floor level) and grows downward; the floor then pushes the actor up as it grows. The vehicle
+    // cylinder half-height = TnVehicleForm.CalculateCylinderBounds of the mesh bounds [HIGH].
+    float lift = 0.0f;
+    if (c.isTransforming()) {
+        float remaining = 1.0f - c.transformProgress();
+        float hhVeh = c.meshToActor(Form::Vehicle), hhRobot = core::config::kPawnHalfHeight;
+        lift = hhRobot - (hhRobot * (1.0f - remaining) + hhVeh * remaining);
+    }
     bool grounded = false;
     if (col) {
         float gy; core::Vec3 n;
-        // Support search: highest surface at most MaxStepHeight above the body (groundHeight()
-        // returns the highest surface <= nearY + stepUp). A vehicle->robot fold starts falling from
-        // the shared actor location (TnPawn: PHYS_Falling at t=0) and lands normally.
-        float base = c.onGround() ? oldPos.y : p.y;
+        // Support search: highest surface at most MaxStepHeight above the cylinder bottom (groundHeight()
+        // returns the highest surface <= nearY + stepUp). Falling (PHYS_Falling) sweeps the whole step, so the
+        // search starts from the previous bottom: a floor crossed within one step is landed on, not skipped
+        // [HIGH: UE3 physFalling MoveActor sweep]. A vehicle->robot fold starts falling (TnRobotForm.OnActivate
+        // -> AcrobaticsManager.Fall) from the shared actor location and lands normally.
+        float bottomOld = oldPos.y + lift, bottom = p.y + lift;
+        float base = c.onGround() ? bottomOld : (v.y <= 0.0f ? std::max(bottomOld, bottom) : bottom);
         if (col->groundHeight(p.x, p.z, base, kStepUp, gy, n)) {
-            if (p.y <= gy + 0.001f) {           // at/below the floor -> settle on it (incl. step-up)
-                p.y = gy; if (v.y < 0) v.y = 0; grounded = true;
-            } else if (c.onGround() && (p.y - gy) <= kSnapDown) {
-                p.y = gy; if (v.y < 0) v.y = 0; grounded = true;   // follow slopes/stairs down
+            if (bottom <= gy + 0.001f) {        // at/below the floor -> settle on it (incl. step-up)
+                p.y = gy - lift; if (v.y < 0) v.y = 0; grounded = true;
+            } else if (c.onGround() && (bottom - gy) <= kSnapDown) {
+                p.y = gy - lift; if (v.y < 0) v.y = 0; grounded = true;   // follow slopes/stairs down
             }
         }
     } else {

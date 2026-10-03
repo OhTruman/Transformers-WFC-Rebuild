@@ -799,6 +799,7 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
 
 void World::tick(float dt) {
     pickupEvents_.clear();
+    matchEvents_.clear();
     destructibleEvents_.clear();
     if (collision_.valid()) mapState_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
     {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
@@ -806,7 +807,11 @@ void World::tick(float dt) {
         player_.controller().updateCamera(cam);
         listenerPos_ = cam.pos;
     }
-    player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
+    if (matchActive_) tickMatch(dt);
+    if (!localPlayerDead()) {                       // dead / not yet spawned (match): no pawn simulation
+        player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
+    }
+    player_.controller().tickCameraCollision(dt);   // obstruction behaviour after the pawn moved
     gameplayRamContacts();
     if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
         player_.pawn().setAimPitch((float)std::atof(ap));
@@ -864,15 +869,85 @@ void World::tick(float dt) {
         cues_.tick(dt);
     }
 
-    if (player_.pawn().position().y < killZ_) {
-        LOG_INFO("World: player fell out of world; respawning");
-        respawnPlayer();
+    if (player_.pawn().position().y < killZ_ && !localPlayerDead()) {
+        // Below KillZ: FellOutOfWorld -> Died with no killer (an environmental death in a match).
+        LOG_INFO("World: player fell out of world; %s", matchActive_ ? "killed (KillZ)" : "respawning");
+        if (matchActive_) killLocalPlayer(-1, false);
+        else respawnPlayer();
     }
     for (auto& a : actors_) if (a->alive()) a->tick(*this, dt);
     for (size_t i = 0; i < actors_.size();) {
         if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); }
         else ++i;
     }
+}
+
+// Local match host glue (TnMultiplayerGame / TnTeamGame on the authority): the Match decides spawns, deaths and the
+// end; World applies them to the local pawn and the map actors.
+void World::startLocalMatch(const MatchSettings& s) {
+    if (match_.starts().empty()) {
+        std::string root = assetRoot();
+        match_.loadSpawnData(root + "/Maps/MP_IAC_Streets/gameplay.json");
+    }
+    match_.begin(s);
+    if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");
+    matchActive_ = true;
+    localDead_ = true;            // PendingMatch: TrySpawnPlayer false -> nobody spawns before the start
+}
+
+void World::killLocalPlayer(int killer, bool suicide) {
+    if (!matchActive_ || localDead_) return;
+    match_.killed(killer, localPlayer_, suicide);
+    localDead_ = true;
+}
+
+void World::tickMatch(float dt) {
+    Character& pc = player_.pawn();
+    if (!localDead_) {
+        match_.setPlayerLocation(localPlayer_, pc.position());
+        if (pc.health().isDead()) killLocalPlayer(-1, false);   // damage without an instigator
+    }
+    match_.tick(dt);
+    bool returned = false;
+    for (const MatchEvent& e : match_.events()) {
+        switch (e.type) {
+            case MatchEvent::Type::MatchStarted:
+                // TnTeamGame.StartMatch: Reset() every pickup factory (sleeping factories return to 'Pickup').
+                for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
+                break;
+            case MatchEvent::Type::PlayerSpawned:
+                if (e.player == localPlayer_ && e.value >= 0) {
+                    // RestartPlayer: a fresh pawn (robot form, full health, default inventory) at the chosen start,
+                    // with its authored rotation.
+                    const Match::Start& st = match_.starts()[(size_t)e.value];
+                    pc.respawnReset();   // a fresh pawn: robot form, no fold, HealthMax, default inventory
+                    core::Vec3 p = st.pos;
+                    float gy; core::Vec3 gn;
+                    if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, gn)) p.y = gy;
+                    pc.setPosition(p); pc.setYaw(st.yaw); pc.velocity() = {0, 0, 0}; pc.groundY = p.y;
+                    player_.controller().setCameraYaw(st.yaw);
+                    localDead_ = false;
+                    LOG_INFO("match: local player spawned at %s (%s team %d)", st.actor.c_str(), st.cluster.c_str(),
+                             match_.players()[(size_t)localPlayer_].team);
+                }
+                break;
+            case MatchEvent::Type::PlayerKilled:
+                if (e.player == localPlayer_) localDead_ = true;
+                break;
+            case MatchEvent::Type::ReturnToLobby:
+                // TnGame.ReturnToGameLobby: the host (front end / Integration) decides what follows; the local
+                // runtime stops the match here and returns to free play.
+                LOG_INFO("match: return to lobby");
+                matchActive_ = false;
+                localDead_ = false;
+                returned = true;
+                break;
+            default: break;
+        }
+    }
+    (void)returned;
+    matchEvents_ = match_.events();
+    match_.clearEvents();                    // consumed by the host
 }
 
 std::string World::collisionActorsAt(const core::Vec3& p, float pad, int maxNames) const {
@@ -922,7 +997,7 @@ void World::draw(render::IRenderer& r) const {
         for (const auto& b : blocks_) r.drawBox(b.center, b.size, b.color);
     }
     for (const auto& a : actors_) if (a->alive()) a->draw(r);
-    player_.draw(r);
+    if (!localPlayerDead()) player_.draw(r);
 
     // Ion Blaster mesh held at the weapon socket (robot form only).
     if (weaponAnim_.valid() && player_.pawn().hasWeapon())

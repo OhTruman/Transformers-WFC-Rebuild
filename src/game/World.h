@@ -8,6 +8,7 @@
 #include "game/Pickup.h"
 #include "game/PickupFactory.h"
 #include "game/MapState.h"
+#include "game/Match.h"
 #include "game/Destructible.h"
 #include "game/SpawnPoint.h"
 #include "game/Collision.h"
@@ -90,6 +91,16 @@ public:
     struct StartPoint { std::string actor, cls, cluster; core::Vec3 pos; float yaw; };
     const std::vector<StartPoint>& startPoints() const { return starts_; }
     void teleportToStart(int index);   // test/debug spawn selection
+    // Local versus match (launch-independent; not started in ordinary free play). The local player joins as player 0:
+    // hidden and frozen in PendingMatch, spawned by the match at its chosen start, killed / respawned through it.
+    void startLocalMatch(const MatchSettings& s);
+    bool matchActive() const { return matchActive_; }
+    Match& match() { return match_; }
+    const Match& match() const { return match_; }
+    int localMatchPlayer() const { return localPlayer_; }
+    const std::vector<MatchEvent>& matchEvents() const { return matchEvents_; }   // consumed during the last tick
+    bool localPlayerDead() const { return matchActive_ && localDead_; }
+    void killLocalPlayer(int killer, bool suicide);     // death of the local pawn (harness / health / KillZ)
     // Authored collision actor(s) (collision_pawn.glb node: BlockingVolume_*, BSP, prop actor names) whose
     // bounds contain p (expanded by pad metres): for tracing blocked / incorrect areas back to authored objects.
     struct ColActor { std::string name, kind, mesh; core::Vec3 lo, hi; };
@@ -116,6 +127,11 @@ private:
     CollisionWorld weaponCollision_;
     MapState mapState_;
     MatchMode matchMode_ = MatchMode::DM;
+    Match match_;
+    std::vector<MatchEvent> matchEvents_;
+    bool matchActive_ = false, localDead_ = false;
+    int localPlayer_ = -1;
+    void tickMatch(float dt);
     std::vector<ColActor> colActors_;
     void syncMapPresentation(render::IRenderer& r) const;   // Gameplay world state -> renderer, each frame
     std::vector<StartPoint> starts_;
