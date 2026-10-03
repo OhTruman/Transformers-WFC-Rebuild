@@ -8,12 +8,14 @@
 //    diffuse sat(N.L*0.6778+0.3333)^2 and Phong specular pow(sat(R.L), SpecularPower)
 //  * UE3 per-vertex height fog, linear-light HDR target, DisplayGamma 2.2 resolve.
 #pragma once
+#include <array>
 #include <map>
 #include <memory>
 #include <set>
 #include <unordered_map>
 #include <string>
 #include <vector>
+#include <functional>
 #include "render/gl/GLExt.h"
 #include "render/Camera.h"
 #include "render/Mesh.h"
@@ -185,7 +187,17 @@ private:
     void writeFrameReport();
     core::Vec3 envBoundsCenter_, envBoundsExtent_;
     void bindCommon(const Program& P, const core::Mat4& model);
-    void drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject);
+    void drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject, int onlySub = -1);
+    // UE3 translucency pass: every translucent primitive is drawn after all opaque geometry, sorted back to front
+    // by the view-space depth of its bounds origin (FTranslucentPrimSet). Translucent subs of persistent meshes
+    // and sprite batches are queued during the frame and drawn by flushTranslucency().
+    struct TransItem { float key; std::function<void()> fn; };
+    std::vector<TransItem> transQueue_;
+    bool deferTrans_ = false, flushingTrans_ = false;
+    float viewDepth(const core::Vec3& p) const;
+public:
+    void flushTranslucency();
+private:
     void ensureTargets(int w, int h);
     static void buildVertices(const MeshData& m, std::vector<float>& v);
 
@@ -373,6 +385,7 @@ private:
     };
     struct FxInstance {
         std::string component, owner, ownerClass, system, role, requiredRule;
+        std::map<std::string, std::array<float, 4>> colorParams;   // InstanceParameters, FLinearColor(FColor)
         bool active = true, hidden = false, attached = true;
         float R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T[3] = {0, 0, 0};   // UE rows / translation
         uint32_t rng = 1;

@@ -185,6 +185,17 @@ bool Pipeline::loadMapFx(const std::string& path) {
         in.owner = lower(I[i]["owner"].asString());
         in.system = I[i]["template"].asString();
         in.role = I[i]["role"].asString();
+        {   // UE3 FLinearColor(const FColor&): RGB through the 1/255 ^ 2.2 table, alpha linear
+            const assets::Json& cp = I[i]["color_params"];
+            for (const auto& kv : cp.obj) {
+                std::array<float, 4> c{};
+                for (int ch = 0; ch < 4; ++ch) {
+                    float v = kv.second[(size_t)ch].asFloat() / 255.0f;
+                    c[(size_t)ch] = ch < 3 ? std::pow(v, 2.2f) : v;
+                }
+                in.colorParams[kv.first] = c;
+            }
+        }
         in.ownerClass = I[i]["owner_class"].asString();
         in.attached = I[i]["attached"].asBool(true);
         in.requiredRule = I[i]["required_game_rule"].asString();
@@ -404,6 +415,14 @@ void Pipeline::tickMapFx(float dt) {
                     } else if (m.name == "PMI_MeshRotationRate") {
                         m.dists.at("StartRotationRate").eval(efrac, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.meshRotRate[c] += v3[c] * 360.0f;
+                    } else if (m.name == "PMI_ColorByParameter") {
+                        // Color = BaseColor = the component's colour InstanceParameter (Steam_Sm_FX: 'SteamColor',
+                        // the FName in the compiled LOD stream), else DefaultColor (CDO white; the stream carries
+                        // FFFFFFFF). Single colour parameter per Streets instance.
+                        float c4[4] = {1, 1, 1, 1};
+                        auto it = in.colorParams.find("SteamColor");
+                        if (it != in.colorParams.end()) std::copy(it->second.begin(), it->second.end(), c4);
+                        std::copy(c4, c4 + 4, q.baseColor);
                     } else if (m.name == "PMI_DynamicParameter") {          // [PARTIAL] slot order
                         for (int k = 0; k < 4; ++k) {
                             auto it = m.dists.find("DynamicParams[" + std::to_string(k) + "].ParamValue");
@@ -560,7 +579,7 @@ float Pipeline::pickupYaw(const std::string& ownerLower) const {
 
 // ---- drawing (after the frame's opaque + character draws, before post) ----
 void Pipeline::drawMapPresentation() {
-    if (std::getenv("WFC_NOMAPFX")) return;
+    if (std::getenv("WFC_NOMAPFX")) { flushTranslucency(); return; }
     auto t0 = std::chrono::steady_clock::now();
     // props
     for (MapProp& p : mapProps_) {
@@ -660,6 +679,7 @@ void Pipeline::drawMapPresentation() {
         }
     }
     statFxSprites_ += sprites; statFxMeshes_ += meshes;
+    flushTranslucency();                               // all opaque drawn: the sorted translucency pass
     statFxMs_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 

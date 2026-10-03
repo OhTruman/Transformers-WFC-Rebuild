@@ -157,7 +157,12 @@ def main():
         inst.append({'component': comp['component'], 'owner': comp['owner'].split('.')[-1],
                      'owner_class': oc, 'template': t, 'role': 'highlight' if highlight else 'custom' if oc != 'Emitter' else 'level',
                      'attached': attached, 'auto_activate': active, 'required_game_rule': rule,
-                     'ue_matrix': comp['ue_matrix']})
+                     'ue_matrix': comp['ue_matrix'],
+                     # PSC InstanceParameters (colour): read by ParticleModuleColorByParameter (Steam_Sm_FX:
+                     # ColorParam 'SteamColor', FName in the compiled LOD stream)
+                     'color_params': {ip['Name']: [ip['Color'][c] for c in ('R', 'G', 'B', 'A')]
+                                      for ip in (comp['props'].get('InstanceParameters') or [])
+                                      if ip.get('Name') and isinstance(ip.get('Color'), dict)}})
     res = {'map': mapname, 'source': 'AssetTools a23c675 map_fx.json + streets_pickup_fx.json + pstream (Steam_Sm_FX)',
            'instances': inst, 'systems': systems}
     json.dump(res, open(os.path.join(out, 'map_fx_runtime.json'), 'w'), indent=1)

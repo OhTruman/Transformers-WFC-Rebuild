@@ -147,6 +147,15 @@ float wfcLinearDepth(float d) {
 float wfcDepthBiasedAlpha(MatIn m, float a, float bias, float scale) {
     return a * clamp((m.sceneDepth - m.pixelDepth) / max((1.0 - bias) * scale, 0.001), 0.0, 1.0);
 }
+// Shipped Xenon base-pass PS (FogSheet_Parent_MAT, MP_IAC_Streets ART shader cache): translucent / additive pixels with
+// Opacity < 1/255 are killed (kill_gt 0, Opacity - 0.00392), and additive output is Color * Opacity (oC0 = r4.xyz =
+// colour * opacity * SceneColorBiasFactor) -- an additive material's Opacity (e.g. DepthBiasedAlpha) attenuates it.
+uniform int uLegacyTrans;     // diagnostics (WFC_M05TRANS): the pre-M06 output (opacity ignored, no kill)
+void wfcTranslucentOut(inout vec3 c, float opacity) {
+    if (uLegacyTrans != 0) return;
+    if ((uBlend == 2 || uBlend == 3) && opacity - 0.00392157 < 0.0) discard;
+    if (uBlend == 3) c *= opacity;
+}
 // UE3 base-pass fog per blend mode: additive keeps no in-scatter, modulate fades toward 1.
 vec3 wfcFog(vec3 c) {
     if (uBlend == 3) return c * vFog.a;
@@ -239,6 +248,7 @@ void main() {
         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
         c += o.DiffuseColor * L;
     }
+    wfcTranslucentOut(c, o.Opacity);
     c = wfcFog(c);
     oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
 }
@@ -300,6 +310,7 @@ void main() {
         c += ambient * (1.0 - uDLAC * S);      // r3 = r5 * (1 - DLAC*S) + r3
         c += direct * (1.0 - S);               // r3 = r4 * (1 - S) + r3: one mask for the summed lights
     }
+    wfcTranslucentOut(c, o.Opacity);
     c = wfcFog(c);
     oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
 }
@@ -1436,6 +1447,8 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform2f(GetUniformLocation(P.id, "uNearFar"), znear_, zfar_);
     Uniform2f(GetUniformLocation(P.id, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
     Uniform1i(GetUniformLocation(P.id, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
+    static const int legacyTrans = std::getenv("WFC_M05TRANS") ? 1 : 0;
+    Uniform1i(GetUniformLocation(P.id, "uLegacyTrans"), legacyTrans);
     if (P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_); }
     VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
     static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
@@ -1450,7 +1463,23 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     }
 }
 
-void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject) {
+float Pipeline::viewDepth(const core::Vec3& p) const {
+    const float* v = camView_.m;
+    return -(v[2] * p.x + v[6] * p.y + v[10] * p.z + v[14]);
+}
+
+void Pipeline::flushTranslucency() {
+    if (transQueue_.empty()) return;
+    std::stable_sort(transQueue_.begin(), transQueue_.end(),
+                     [](const TransItem& a, const TransItem& b) { return a.key > b.key; });   // far -> near
+    flushingTrans_ = true;
+    std::vector<TransItem> q;
+    q.swap(transQueue_);
+    for (TransItem& t : q) t.fn();
+    flushingTrans_ = false;
+}
+
+void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject, int onlySub) {
     BindVertexArray(g.vao);
     core::Vec3 origin{model.m[12], model.m[13], model.m[14]};
     LightEnv dynEnv;
@@ -1471,8 +1500,14 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                             core::length(core::Vec3{model.m[8], model.m[9], model.m[10]})));
         smallDynamic = core::length(mx - mn) * 0.5f * sc < 0.5f && core::length(mx - mn) > 0.0f;
     }
-    for (int pass = 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
-        for (Sub& s : g.subs) {
+    // persistent mesh (index into meshes_): its translucent subs can be queued for the sorted translucency pass
+    const long meshIdx = (&g >= meshes_.data() && &g < meshes_.data() + meshes_.size()) ? (long)(&g - meshes_.data()) : -1;
+    static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;   // diagnostics: old order
+    const bool canDefer = deferTrans_ && !flushingTrans_ && !immediateTrans && meshIdx >= 0 && !g.decal;
+    for (int pass = onlySub >= 0 ? 1 : 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
+        for (size_t si = 0; si < g.subs.size(); ++si) {
+            if (onlySub >= 0 && (int)si != onlySub) continue;
+            Sub& s = g.subs[si];
             if (s.prog < 0) continue;
             static const char* skipMat = std::getenv("WFC_SKIPMAT");   // diagnostics: hide by material
             if (skipMat) {                    // ';'-separated substrings, "<none>" = no material identity
@@ -1493,6 +1528,25 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
             const Program& P = progs_[(size_t)s.prog];
             bool trans = P.blend >= 2;
             if ((pass == 1) != trans) continue;
+            if (trans && canDefer) {
+                core::Vec3 c = core::transformPoint(model, (s.bmin + s.bmax) * 0.5f);
+                float col[4], dyn[4];
+                std::copy(fxColor_, fxColor_ + 4, col);
+                std::copy(dynParam_, dynParam_ + 4, dyn);
+                const bool fx = frameFx_;
+                const core::Mat4 mdl = model;
+                const int sub = (int)si;
+                transQueue_.push_back({viewDepth(c), [this, meshIdx, mdl, dynamicObject, sub, col, dyn, fx]() {
+                    std::copy(col, col + 4, fxColor_);
+                    std::copy(dyn, dyn + 4, dynParam_);
+                    frameFx_ = fx;
+                    drawSubs(meshes_[(size_t)meshIdx], mdl, dynamicObject, sub);
+                    frameFx_ = false;
+                    std::fill(fxColor_, fxColor_ + 4, 1.0f);
+                    std::fill(dynParam_, dynParam_ + 4, 1.0f);
+                }});
+                continue;
+            }
             core::Mat4 subModel = model;
             bool moving = false;
             if (!s.actor.empty()) {
@@ -1900,6 +1954,23 @@ bool Pipeline::drawFx(int id, const core::Mat4& model, const float color[4]) {
 
 bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
     if (!material || !sp || n == 0) return false;
+    static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
+    if (deferTrans_ && !flushingTrans_ && !immediateTrans) {
+        if (spriteProg_.count(material) && spriteProg_[material] < 0) return false;   // known fallback material
+        core::Vec3 c{0, 0, 0};
+        for (size_t i = 0; i < n; ++i) c = c + (sp[i].c[0] + sp[i].c[2]) * 0.5f;
+        c = c * (1.0f / (float)n);
+        std::vector<Sprite> copy(sp, sp + n);
+        std::string mat = material;
+        float dyn[4];
+        std::copy(dynParam_, dynParam_ + 4, dyn);
+        transQueue_.push_back({viewDepth(c), [this, copy, mat, facing, dyn]() {
+            std::copy(dyn, dyn + 4, dynParam_);
+            drawSprites(mat.c_str(), copy.data(), copy.size(), facing);
+            std::fill(dynParam_, dynParam_ + 4, 1.0f);
+        }});
+        return true;
+    }
     auto it = spriteProg_.find(material);
     if (it == spriteProg_.end()) {
         std::string nm = resolveName(material);
@@ -2049,6 +2120,8 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     glClearColor(fogIn_.x, fogIn_.y, fogIn_.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     depthDirty_ = true;
+    transQueue_.clear();
+    deferTrans_ = true;
     distUsed_ = false;
     camPos_ = cam.pos;
     znear_ = cam.znear; zfar_ = cam.zfar;
@@ -2072,6 +2145,8 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
 }
 
 void Pipeline::endFrame() {
+    flushTranslucency();                               // nothing queued normally: drawMapPresentation flushed it
+    deferTrans_ = false;
     double thisRenderMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gFrameStart).count();
     gStats.renderMs += thisRenderMs;
     if (std::getenv("WFC_RENDERSTATS")) {             // hitch attribution: whole frame vs render span
