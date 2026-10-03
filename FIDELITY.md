@@ -75,6 +75,116 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 16 — RUNTIME SEMANTICS, RE d50e2a9 (2026-10-02, gameplay agent)
+Source: `RE-Workspace/notes/MILESTONE03_RUNTIME_SEMANTICS_ASSETTOOLS_7a69756.md` (RE commit d50e2a9). It corrects
+AssetTools §2: TnPickupFactory SetPickupVisible/Hidden, IsReadyToPickup, GiveTo, TakePickUp and GetRespawnTime have bytecode.
+Measured with `WFC_PICKUPTEST=1` (slice world, fixed 60 Hz), `WFC_HUDLOG=1` and the frame log.
+
+| Item | Native/script (d50e2a9) | Conf | Rebuild | Measured |
+|---|---|---|---|---|
+| Factory states | 'Pickup' (visible, ammo crate PHYS_Rotating Yaw 10000) → valid Touch → GiveTo → the same frame enters 'Sleeping' (SetPickupHidden); collision kept, touches ignored; exactly RespawnTime; → 'Pickup' (SetPickupVisible). Actor never destroyed. Availability = !bPickupHidden | CONFIRMED | **APPLIED** | Ammo 30.02 s, health 60.02 s, overshield 119.99 s. Overlap while sleeping ignored |
+| Touch semantics | Touch = overlap begin. TnHealthPickupFactory.SetPickupVisible → CheckTouching | CONFIRMED | **APPLIED** (was a per-tick overlap test) | Standing on the factory at respawn: health re-taken at once; ammo/overshield not re-taken until a new touch |
+| Sounds | PickupSound plays on the receiving pawn (AnnouncePickup); no respawn effect/sound (RespawnEffectTime 0) | CONFIRMED | Event `receiverPos` + sound on Taken only | — |
+| Highlight beam | PickupEffect.ActivateSystem in SetPickupVisible / DeactivateSystem in SetPickupHidden, only if ShouldDisplayHighlightFx (true only for TnAmmoCratePickupFactory) | CONFIRMED | `beamActive()` / event `beamActive` | Ammo beam 1 while available; health/overshield beam 0, custom FX 1 while available |
+| ValidTouch / PickupQuery | ValidTouch: !bHidden, controller, line of sight; TnGame.PickupQuery not traced | PARTIAL | "nothing to gain" rejection stays **[PROV]** | — |
+| HUD spread | NotifyWeaponSpreadChanged(raw), sent when it changes by > 0.002; raw = CurrentSpread × CurrentAirborneMultiplier × (fine aim ? 0.5 : 1) + Data.Spread (0) | CONFIRMED | `hudNotifies()` per HUD tick; `Character::effectiveSpread()` also drives the hitscan cone | Fine aim 0.080→0.040. Filter verified (WFC_HUDLOG) |
+| Weapon/aim notify | NotifyCurrentWeaponChanged(class) + NotifyFineAimChanged(0/1), sent together when either changes | CONFIRMED | **APPLIED** | — |
+| Spread model | IncrementSpread +0.005/shot; CooldownSpread every tick −(Max−Min)·dt/Cooldown (whole range in 2 s); Ion Blaster MP 0.08–0.18 | CONFIRMED | **APPLIED** (was "snap to Min after 2 s idle") | 10-shot burst 0.095 → back to 0.080 in ~0.3 s |
+| Airborne | TnWeaponSpreadModifier AirborneMultiplier 2.0, ramp up 0.25 s, land ramp down 0.5 s (hover 0.1 s n/a) | CONFIRMED values / HIGH linear ramp | **APPLIED** (robot form) | Jump: 0.080 → 0.160 in 0.25 s; back over 0.5 s after landing |
+
+**Harness note (Experimental):**
+- `weapon.spread_after_10` (expects 0.13) and `weapon.spread_cap` (expects 0.18 after 2.5 s of fire) encode the superseded no-recovery-while-firing model.
+- Under per-tick CooldownSpread at 15 shots/s the net bloom is +0.025/s: 0.10 after 10 shots, and the cap is reached after ~4 s.
+- The check expectations need updating to d50e2a9; Gameplay did not edit the harness.
+
+---
+
+## PASS 15 — AUTHORED-DATA HANDOFF, AssetTools 7a69756 (2026-10-02, gameplay agent)
+Sources: `AssetTools/manifests/fineaim_hud.json`, `streets_pickup_factories.json`, `streets_pickup_fx.json`,
+`streets_destructibles.json` (commit 7a69756). Placement data comes from the slice's existing `gameplay.json` and
+`physics.json` (no new extraction). Measurements come from `WFC_PICKUPTEST=1`, which runs the loaded slice world
+at the fixed 60 Hz step.
+
+| Item | Authored evidence | Conf | Rebuild |
+|---|---|---|---|
+| Ion Blaster fine-aim presentation | No special reticle or scope. HasFineAimScope unset (false); NotifyFineAimChanged shows scopes only for HeavyPistol/BurstRifle/SniperRifle; mc_crosshairIonBlaster stays in both aim states | CONFIRMED AUTHORED DATA | No scope/ADS asset is expected. `PlayerController::hudAimState()` exposes weaponClass (TnWeaponIonBlaster), EHudAimType (0/1), spread, crosshairVisible and TTFH_None |
+| Fine-aim visible change | Prongs move to spread × 300 px (eased 0.2 s); FineAimSpreadModifier 0.5; PerShotSpreadModifier 0.08–0.18, +0.005/shot, cooldown 2 | CONFIRMED (HUD/data) / HIGH (native spread combination) | hudAimState.spread = bloom × 0.5 in fine aim. Measured 0.105→0.150 while firing; 0.090 at the cap in fine aim |
+| Camera in fine aim | TnPCS_FineAim (no authored props) | — | Unchanged native camera (PASS 14): FOV 45, orbit-space offset |
+| Pickup factories | 14 TnAmmoCrate (RespawnTime 30), 9 TnHealth (60), 1 TnOverShield (120). Touch cylinder r200/h100, COLLIDE_TouchAll | CONFIRMED AUTHORED DATA | `PickupFactory` actors at the authored gameplay.json placements. The graybox near-spawn pickups are removed |
+| Objective factories | Flag ×2 / Bomb ×1, RequiredGameRuleClass CTF / BombingRun | CONFIRMED AUTHORED DATA | Not instanced: those modes are out of scope |
+| Payloads | Health AddedHealth 50; AmmoCrate ValidWeaponTypes Primary/Secondary/Vehicle; OverShield no authored amount | CONFIRMED (health, types) / native (amounts) | Health +50. Ammo refills the reserve to MaxAmmoCount **[PROV amount]**. Overshield sets a granted flag only **[PARTIAL]** |
+| Factory states | Pickup ↔ Sleeping; SeqEvent_PickupStatusChange; TakePickUp/GiveTo/ValidTouch native | CONFIRMED (states/events) / native (bodies) | One PickupEvent per transition (Taken/Respawned, available flag, authored PickupSound). A pawn with nothing to gain does not consume **[PROV ValidTouch]** |
+| Pickup FX/meshes | Health/OverShield CustomPickupEffect auto-active while available; ammo crate mesh + inactive Pickup_FX | CONFIRMED / HIGH | Not drawn by Gameplay. Rendering/Systems consume `pickupFactories()` / `pickupEvents()` |
+| Wall panel | TnStaticDestructibleActor_14465, WallPanelSign: state 0 health 20 → 1 (damage/touch/kismet) → 2 after 10 s. No damaged state. Initial state 0 | CONFIRMED AUTHORED DATA (initial state HIGH) | `Destructible` at its authored location (8.96, −3.52, 899.68 m) with the Base-piece damage/touch box. One DestructibleEvent per transition; meshes/FX/cues stay with Rendering/Systems |
+| Wall panel placement | ~1400 m from the player starts, only actor above Z −50000 | CONFIRMED (positions) | Kept authored. Its absence from the playable view is not a reconstruction failure |
+
+Measured with WFC_PICKUPTEST:
+- **Ammo crate:** taken once (reserve 10→250), respawned after 30.02 s.
+- **Health:** taken once (30→80), respawned after 60.02 s.
+- **Overshield:** taken once (grant 0→1), respawned after 119.99 s.
+- **Events:** exactly one Taken and one Respawned per cycle. Full health/ammo leaves the pickup available.
+- **Wall panel:** 15+15 damage → destroyed → settled 10.00 s later, position unchanged.
+
+**Superseded by 7a69756** (kept in older rows for history):
+- "missing Ion Blaster ADS scope/reticle" and the ADS/spread-visualization TODO: there is no ADS scope; the crosshair + spread is the presentation.
+- FIDELITY PASS 11 robot-camera "shoulder offset ... PROV semantics" row: resolved in PASS 13/14.
+- "missing static destructible / visible destructible geometry" (harness KNOWN `missing.static_destructibles`, PLAYTEST-01): the single placed instance is authored far outside the play space. Experimental should retire that KNOWN.
+- STATUS "Footsteps deferred (no clear footstep asset)": superseded. Streets surface audio is recovered (AssetTools 7a69756) and owned by Systems.
+- Graybox pickup scaffold ("pickups near spawn for visual life"): replaced by the authored factories.
+
+---
+
+## PASS 14 — NATIVE RE MILESTONE 03 RECONCILE (2026-10-02, gameplay agent)
+Source: `RE-Workspace/notes/MILESTONE03_VEHICLE_NATIVE_FIDELITY.md` (native RE 76bb0a). Measurements from
+`WFC_VEHTEST=1`, which runs the real 60 Hz vehicle step on generated geometry (src/game/VehicleTests.cpp).
+
+| Item | Native report | Rebuild | Measured |
+|---|---|---|---|
+| P1 suspension | 4 COM-relative probes ±130.8, body-down rays 250, implicit spring K/m, B/m, m=M/4, g = −dir.Z·GetGravityZ (RB −1940.4), push-only, cos-scaled, RB damping 0 | **APPLIED**; spring gravity corrected from world −2940 to RB −1940.4 | Rest COM 1.2872 m = native L_eq 128.7 UU (mass link M=2500 stays **PARTIAL** per report) |
+| P1 bumps / drop | — | springs only, no ride-height target | 0.25 m step @15 m/s: COM 1.075–1.575 m, pitch −1.8..4.0°; 0.5 m: 0.863–1.857 m, −3.0..8.1°; 10 m drop: impact 17.1 m/s, min COM 0.60 m (PROV hull clearance), settles 1.287 m |
+| P2 attitude | grounded pitch/roll = springs + UpdateRoll; yaw = camera each tick; upright 5%/tick only airborne/upside down | **APPLIED** (Pass 13) | — |
+| P2 visual lean | TnAccelerationAnimBlend: m = ClampLength(v,2000)/2000 × max(0,up.Z); child0 = 1−|m|, dirs max(0,±sign·m²/|m|) | **APPLIED** (was velocity/1500 per axis PROV); ADD_Nav_Hover_VEH additive kept | — |
+| P3 hover velocity | local X/Y toward stick×1500, one ClampLength 3000·(1−drift/0.5)²·up.Z²; no hover grip model | **APPLIED** | Coast-down 15→0 m/s in 0.500 s forward and sideways |
+| P3 boost tires | F = clamp(−v_lat·coeff·scale·Load, ±2(M/4)|g|) | cap **APPLIED**; coefficient **PROV** (not recovered) | — |
+| P3 drift turn | heading = camera; authority ramps | **APPLIED** | Camera +90° after boost release: yaw 90° at once, travel heading 0.2° @0.15 s → 11.9° @0.6 s |
+| P4 hover jump | +1200 world Z additive, local ω −1, 0.3 s ground cooldown | **APPLIED** | vy +12.00, apex +3.80 m over rest (ballistic 3.71 + spring push), horizontal kept |
+| P4 boost jump | local (600,0,1400), ω (0,−2,0) | **APPLIED** | +6.0 fwd, +14 up (13.68 after one tick of g), pitch rate 1.8 rad/s after air damping |
+| P5 dash | body-local (1,0,0); mask (1,1,1); 100000; exit snap fwd 1500; refuse/cancel unstable | **APPLIED** | Stick right ignored: tick 2 = 29.8 fwd / 0.08 lat (one 30 Hz tick = two 60 Hz ticks), 30.0 during, exit 15.0 fwd |
+| P6 camera offset | orbit-space translation, full camera rotation, X toward pawn, Y right, Z up; CurveAutoClamped cubic; C2 smoother (T/2) | **APPLIED**; curve now Hermite with flat end/extremum tangents | Fine aim at level pitch: camera 7.35 → 9.16 m from the actor (X +150 → −50), no lateral change |
+| P7 hand | HandSkelControl R_Arm04_Hand_XB scale 0.1, strength 0/1 instant; ShouldEquipHand rules | **APPLIED** | Shrunk with the gun drawn; full size during R→V and V→R before the restore; shrinks on the restore tick |
+| P8 ram | TnPawn victims only (mass ≤ 1000, other team); robot RammedReaction (falling, dir·5000+base for 0.5 s, then (0,0,baseZ)); vehicle AddVelocity ×0.5 | victim rule **APPLIED** (the DamageTarget dummy is not a TnPawn and is no longer rammed); robot reaction + vehicle AddVelocity implemented | WFC_RAMSELF: 50 m/s + base for 0.5 s, horizontal 0 after. The slice has no pawn victims; masses **PARTIAL** |
+| P9/P10 visibility | notifies 0.8796 / 0.3958 / 0.0984 / 0.6634 s, ÷ Rate (4 downed), final state at BeginState | **APPLIED** (exact times, Rate constant 1; no downed state) | Vehicle hidden from 0.6634 s; clip geometry untouched |
+
+---
+
+## PASS 13 — VEHICLE BODY, VEHICLE CAMERA, TRANSFORM HANDOFF (2026-10-02, gameplay agent)
+
+| Behaviour | Original (WFC) | Source | Conf | Rebuild status |
+|---|---|---|---|---|
+| Hover support | 4 TnSuspension rays from COM + Normal(1,1,0)×185 at 90° steps, along body −Z, length 250; TnSpring implicit (K=10000/m, B=4000/m, m=Mass/4); force along body up × Dot(up,N) | TnHoverCarSimulation.UpdateSuspension/CalculateSuspensionLocation/InitializeSuspension, TnSpring.Update/CalculateSpringVelocity/Reset, HoverTruck_Suspension | CONF | **APPLIED**; COM 1.36 m (was a fixed 1.85 m ride height = misread SuspensionRadius) |
+| Body mass/COM/inertia | 2500; (−47,0,20)−(0,0,15); 2.27e7/4.64e7/5.89e7 | TnCarSimulation.InitializeFromBlueprint, Truck_Physics, OptimusTruckForm.ChassisOffset | CONF | **APPLIED** |
+| Roll/pitch | UpdateRoll: local angular accel X = RightLeft − ωz; uprighting 0.05/tick only with no contact or upside down; damping 0 | UpdateRoll/UpdateTurn/Activate | CONF (sign HIGH; per-tick factor at 30 Hz PROV) | **APPLIED** |
+| Vehicle jump | Hovering: on ground (N.Z>0.707), interval 0.3 s, +1200 Z, ω(0,−1,0). Driving: local (600,0,1400), ω(0,−2,0), air control 2600/12, pitch-forward −25°/3 | Hovering/Driving.UpdateJumping, TnHoverCarSimulation/TnCarSimulation.Jump, UpdateAirControl | CONF | **APPLIED** |
+| Hover dash | Truck: forward only; refused if unstable; local all-axis strafe to 3000 then one-tick decel to 1500 | TnTruckForm.Hovering.DoDash, UpdateDash | CONF | **APPLIED** (Pass 12 dominant-axis superseded) |
+| Boost acceleration | Lerp(2500, Drag(Max), v/Max) + ExtraBoost (8×, to 0.5·Max, ≤5000) × BoostScale; Drag = v²·g_RB/6000² | UpdateBoost/CalculateExtraBoostAcceleration/CalculateDragAcceleration | CONF | **APPLIED** (tire steering PROV) |
+| Driving exit on impact | Frontal contact (N·fwd > 0.866) → Hovering | Driving.OnRigidBodyCollision | CONF | **APPLIED** (normal approximated by blocked travel) |
+| Driving steering | Steering = sign(s)·s² of GetNormalizedTurn (look X) | PlayerInCarForm.SetLocalInputs, Driving.UpdateSimulationInputs | CONF input / PROV yaw rate | **APPLIED** |
+| Vehicle camera | HoverTruck: anchor 185, orbit 950, FOV 80, pitch −20..30, orbit smoother 0.1, offset Z (45,0,120) over ±25°. Truck: 215/1050/85, nitro 100 & 650, yaw = pawn, pitch chase 3/s, smoother 0.25 | CAM_Driving_Strategies_p, TnDrivingOrbitRotationCameraBehavior, HmOrbitSmootherCameraBehavior | CONF | **APPLIED** |
+| Hover yaw source | Controller rotation = camera rotation (after smoothing) | PlayerInVehicleForm.PlayerMove | CONF | **APPLIED** |
+| Camera smoothing | HmC2Smoother: ω = 4/SmoothTime, Padé exp | HM_Engine bytecode | CONF | **APPLIED** (FOV, offsets, rotation) |
+| Robot camera offset | Offsets[3] vectors: (150,300,150) (150,300,−35) (150,300,150); FineAim (−50,300,80)/(−50,300,−35)/(−50,300,80) | raw property data (static array) | CONF values / interpolation PROV | **APPLIED** (Pass 11 lateral-only reading superseded) |
+| Strategy blend | TransitionTime of the new strategy: OTS 1.5, Hover 1.5, Truck 1.0 | strategy objects | CONF / blend curve PROV | **APPLIED** |
+| Transform visibility | ToVeh: robot hide 0.880, vehicle unhide 0.396; ToRobot: robot unhide 0.098, vehicle hide 0.663 | AssetTools notifies (EVIDENCE_TARGETED_PASS 5a–5d) | CONF | **APPLIED**, both meshes on the shared clip time |
+| Shared actor location | RB placed at pawn Location + vehicle mesh translation (−bounds centre) | TnVehicleForm.OnActivate/CalculateCylinderBounds | CONF | **APPLIED** (vertical only) |
+| Weapon on V→R | Restore at 25%, usable +0.2 s; drawn on the robot mesh | TARGETED_PASS2 §7 | CONF | **APPLIED** + firing requires the drawn gun |
+| Arm mesh | CP_OptimusArm_SKEL when no weapon (R→V fold, V→R before 25%), ARM_Equip / ARM_Unequip, WeaponSocket_Secondary | TARGETED_PASS2 §9, character.json | CONF | **APPLIED** (13b); HandSkelControl PROV/not applied |
+| Fine-aim offset | Lateral Y 300 in all rows; fine aim changes orbit X (+150 → −50) and Z ends (150 → 80) | raw OffsetCurvesByPCS + TnLocationOffset/HmOrbitUpdateLocationRotation bytecode | CONF | **APPLIED** (no lateral change by design) |
+| Landing clip | SharedAcrobatics.LandingAnims {1200,1200}_03, {1000,1200}Land, {4500,0}_03, {500,0}_02, {250,0}Land | authored data (Systems handoff) | CONF data / MED semantics | **APPLIED** (13b) |
+| Wall contact | physWalking slide: velocity into the wall removed, displacement velocity | stock UE3 | HIGH | **APPLIED** (13b, single-ray probe PROV) |
+| Ram | AttemptToRam during nitro: once per target, 300 to AI robots | TnTruckForm bytecode + OptimusTruckForm | CONF | **APPLIED** vs damage targets (13b); knock-back n/a |
+
+---
+
 ## PASS 12 — RECONCILED WITH NATIVE RE (2026-10-01, gameplay agent)
 
 | Behaviour | Original (WFC) | Source | Conf | Rebuild status |

@@ -16,7 +16,7 @@ constexpr double kSimHz = 60.0;
 // World gravity. [CONF] WorldInfo.DefaultGravityZ = -2940 UU/s^2 -> -29.4 m/s^2
 // (Xe-TransGame.ini [Engine.WorldInfo]). Vehicles additionally scale RB gravity by 0.66.
 constexpr float kGravity          = 29.4f;   // m/s^2 (pawn)
-constexpr float kVehicleGravity   = 19.4f;   // m/s^2 (-2940 * 0.66 / 100) [CONF]
+constexpr float kVehicleGravity   = 19.404f; // m/s^2 (-2940 * 0.66 / 100) [CONF]
 constexpr float kGroundY = 0.0f;
 
 // Robot movement. [CONF] TnPawn.ApplyTransformer copies the character definition
@@ -75,7 +75,10 @@ constexpr float kNitroCooldown    = 8.0f;    // TimeBetweenNitros (measured from
 // Hover steering authority after entering Hovering (TnCarForm.Hovering.BeginState -> Drift):
 // accel scale = (1 - DriftTimeRemaining/DriftDuration)^2 [CONF bytecode, DriftDuration class default 0.5].
 constexpr float kHoverDriftDuration = 0.5f;
-constexpr float kVehicleHoverH    = 1.85f;   // SuspensionRadius 185 UU (class default 200) [CONF]
+// SUPERSEDED (Pass 13): SuspensionRadius is the horizontal radius of the four hover suspension
+// mounts (TnHoverCarSimulation.CalculateSuspensionLocation), not a ride height; the ride height comes
+// from the spring model below. Kept for the fidelity harness, unused by movement.
+constexpr float kVehicleHoverH    = 1.85f;
 // TnVehicleForm.OnActivate: Velocity = ClampLength(pawn Velocity, 3500) is handed to the rigid body
 // with the pawn rotation when the vehicle form activates (start of robot->vehicle) [CONF].
 constexpr float kMaxTransformSpeed = 35.0f;  // TnVehicleForm.kMaxTransformSpeed 3500 UU/s
@@ -83,6 +86,50 @@ constexpr float kVehicleJumpSpeed = 12.0f;   // JumpLinearSpeed 1200 UU/s       
 // [PROV] player steering rate not recovered. (Pass 7's source, AiMaxAngularSpeed, is an AI-only
 // field and is 20 rad/s for the Optimus truck.)
 constexpr float kVehicleTurnRate  = 3.1416f;
+
+// Hover rigid body (Pass 13) [CONF bytecode + authored data unless marked]:
+//  TnCarSimulation.InitializeFromBlueprint: RB Mass, LocalCenterOfMass = CenterOfMass - (0,0,ChassisOffset),
+//  LocalInertiaTensor from VEH_SHARED_p.Truck_Physics (2500; (-47,0,20); 2.27e7/4.64e7/5.89e7 kg UU^2) and
+//  TR_Optimus_VEHDEF_p.OptimusTruckForm ChassisOffset 15.
+//  TnHoverCarSimulation.UpdateSuspension: 4 TnSuspension rays from COM + Normal(1,1,0)*SuspensionRadius
+//  rotated by 90 deg steps, along body -Z, length RestingLength (WheelRadius 0); TnSpring implicit update
+//  (K = Stiffness/m, B = Damping/m, m = Mass/4) with the world gravity; force applied along body up at the
+//  mount, scaled by Dot(up, contact normal). HoverTruck_Suspension RestingLength 250, Damping 4000;
+//  Stiffness = class default 10000. Activate(): linear and angular damping 0.
+constexpr float kVehMass         = 2500.0f;     // kg
+constexpr float kVehInertiaX     = 2270.0f;     // kg m^2 (roll axis)
+constexpr float kVehInertiaY     = 4640.0f;     // kg m^2 (pitch axis)
+constexpr float kVehComFwd       = -0.47f;      // m, body-local COM forward of the mesh root
+constexpr float kVehComUp        = 0.05f;       // m, body-local COM above the mesh root
+constexpr float kSuspMountRadius = 1.85f;       // m
+constexpr float kSuspRestLength  = 2.5f;        // m
+constexpr float kSuspStiffness   = 10000.0f;    // TnSpring units: K = Stiffness / (Mass/4)
+constexpr float kSuspDamping     = 4000.0f;
+constexpr float kHoverCosGroundAngle = 0.707f;  // get_CosGroundAngle: IsOnTheGround = ContactNormal.Z > 0.707
+constexpr float kHoverStabilityDeg = 30.0f;     // get_StabilityThreshold: |pitch| or |roll| > 30 = unstable
+constexpr float kHoverTerminalVel  = 35.0f;     // get_TerminalVelocity 3500
+constexpr float kHoverUprightPerTick = 0.05f;   // UpdateTurn TurnRate (0.05,0.05,1) per tick, only when no
+                                                // contact or upside down [per-tick factor; 30 Hz tick PROV]
+constexpr float kHoverJumpAngSpeed = 1.0f;      // JumpAngularSpeed (class default 1): local -Y = nose up
+constexpr float kVehJumpInterval   = 0.3f;      // TnCarForm.get_TimeBetweenJumps
+constexpr float kHoverMinClearance = 0.6f;      // [PROV] chassis-vs-ground contact (PhysicalVehicleMesh hull not recovered)
+// Driving (TnCarSimulation + Truck_Physics / class defaults) [CONF bytecode unless marked]:
+constexpr float kDriveLowSpeedBoostScale = 8.0f;     // ExtraBoost = MaxAccel*8 at 0 speed ...
+constexpr float kDriveLowSpeedBoostThreshold = 0.5f; // ... falling quadratically to 0 at MaxSpeed*0.5
+constexpr float kDriveMaxExtraAccel = 50.0f;         // MaxExtraAcceleration 5000
+constexpr float kPawnTerminalVel    = 60.0f;         // drag reference: Owner.GetTerminalVelocity() 6000
+constexpr float kDriveJumpFwd = 6.0f, kDriveJumpUp = 14.0f;   // Truck_Physics JumpLinearVelocity (600,0,1400), local
+constexpr float kDriveJumpAngVel   = 2.0f;           // JumpAngularVelocity class default 2 (nose up)
+constexpr float kDriveJumpBoostTime = 0.7f;          // get_JumpBoostDuration
+constexpr float kDriveAirTurnAccel = 12.0f;          // AirControlTurnAcceleration (rad/s^2 x steering)
+constexpr float kDriveAirStrafeAccel = 26.0f;        // AirControlStrafeAcceleration 2600
+constexpr float kDrivePitchFwdLimit = -0.43633f;     // -25 deg
+constexpr float kDrivePitchFwdAccel = 3.0f;          // rad/s^2 nose-down while airborne above the limit
+constexpr float kDriveAngularDamping = 5.0f;         // AngularDamping class default; x (1-|steer|)^2 on wheels
+constexpr float kDriveTerminalVel = 35.0f, kDriveLandingVel = 20.0f, kDriveLandingTrace = 10.0f;
+constexpr float kDriveTurnRate = 3.1416f;            // [PROV] wheel/tire steering not recovered: yaw rate at full steer
+constexpr float kDriveLateralGrip = 8.0f;            // [PROV] lateral velocity decay on wheels (1/s)
+constexpr float kDriveMouseSteer = 0.012f;           // [PROV] PC mouse delta -> GetNormalizedTurn
 
 // Camera. Robot strategy [CONF] CAM_Strategies_p.OverTheShoulder_STRATEGY (FOV is HORIZONTAL,
 // UE3 convention; converted to vertical per aspect in render::Camera):
@@ -103,11 +150,37 @@ constexpr float kFineAimFovXDeg    = 45.0f; // TnPCS_FineAim FOV [CONF]
 constexpr float kFineAimFovSmooth  = 0.1f;  // TnPCS_FineAim SmoothTime [CONF]
 constexpr float kFineAimLookScale  = 0.5f;  // FineAim look speed 25/12.5 vs default 50/25 [CONF ratio]
 constexpr float kFineAimSpreadMult = 0.5f;  // IonBlaster WEPDATA FineAimSpreadModifier [CONF]
-// TnScreenSpaceOffsetByPitchCameraBehavior DefaultOffsetCurve [150,300,150] UU over pitch -75/0/75,
-// SmoothTime 0.3 [CONF values]; interpreted as a rightward camera offset [PROV semantics].
-constexpr float kShoulderOffsetMid    = 3.0f;
-constexpr float kShoulderOffsetEnd    = 1.5f;
+// TnScreenSpaceOffsetByPitchCameraBehavior: Offsets is a static array of THREE vectors (orbit space:
+// X toward the anchor, Y right, Z up) evaluated at pitch fraction 0 / 0.5 / 1 of PitchRange and added to
+// the orbit offset (-OrbitDistance, 0, 0) before the orbit rotation [CONF bytecode + raw property data].
+// Pass 11 read the first vector only. OverTheShoulder: (150,300,150) (150,300,-35) (150,300,150), 0.3 s;
+// [TnPCS_FineAim]: (-50,300,80) (-50,300,-35) (-50,300,80), 0.1 s.
+constexpr float kShoulderX = 1.5f, kShoulderY = 3.0f, kShoulderZEnd = 1.5f, kShoulderZMid = -0.35f;
+constexpr float kFineAimShoulderX = -0.5f, kFineAimShoulderZEnd = 0.8f;
 constexpr float kShoulderOffsetSmooth = 0.3f;
+constexpr float kFineAimOffsetSmooth  = 0.1f;
+// Strategy blend when the active camera strategy changes (HmCameraStrategy.TransitionTime of the NEW
+// strategy): OverTheShoulder 1.5, HoverTruck_Optimus 1.5, Truck_Optimus 1.0 s [CONF]. Remap curve PROV.
+constexpr float kCamTransRobot = 1.5f, kCamTransHover = 1.5f, kCamTransDrive = 1.0f;
+// Vehicle camera strategies [CONF CAM_Driving_Strategies_p]:
+//  HoverTruck_Optimus_STRATEGY: anchor Offset Z 185 over the actor; FOV 80 / 0.4; orbit 950; look 50/25,
+//   PitchRange -20..30; HmOrbitSmoother SmoothTime 0.1 (rotation); screen offset (0,0,45) (0,0,0)
+//   (0,0,120) over pitch -25..25, 0.5 s; Wiggler3 rotation 0.06 deg @ 12 Hz (full at 100 UU/s).
+//  Truck_Optimus_STRATEGY (Driving): anchor 215; FOV 85 / 0.4, TnPCS_Boosting (nitro) 100 / 0.5; orbit
+//   1050, Boosting 650 (in 0.5 s, out 2.0 s); TnDrivingOrbitRotation: yaw = pawn yaw, pitch chases
+//   Lerp(pawn pitch, velocity pitch, |v|/3000) at MatchRotationSpeed 3, PitchRange -25..25; HmOrbitSmoother
+//   0.25; screen offset (0,0,45) (0,0,0) (0,0,120), 1.0 s; Wiggler3 0.15 deg.
+constexpr float kHoverCamAnchor = 1.85f, kHoverCamDist = 9.5f, kHoverCamFov = 80.0f;
+constexpr float kHoverCamPitchMin = -0.34907f, kHoverCamPitchMax = 0.52360f;   // -20 / +30 deg
+constexpr float kHoverCamRotSmooth = 0.1f, kHoverCamOffsetSmooth = 0.5f, kHoverCamWiggleDeg = 0.06f;
+constexpr float kDriveCamAnchor = 2.15f, kDriveCamDist = 10.5f, kDriveCamFov = 85.0f;
+constexpr float kNitroCamDist = 6.5f, kNitroCamFov = 100.0f, kNitroCamFovSmooth = 0.5f;
+constexpr float kNitroCamDistIn = 0.5f, kNitroCamDistOut = 2.0f;
+constexpr float kDriveCamPitchMin = -0.43633f, kDriveCamPitchMax = 0.43633f;    // -25 / +25 deg
+constexpr float kDriveCamRotSmooth = 0.25f, kDriveCamOffsetSmooth = 1.0f, kDriveCamWiggleDeg = 0.15f;
+constexpr float kDriveCamMatchRate = 3.0f;
+constexpr float kVehCamOffsetZLow = 0.45f, kVehCamOffsetZHigh = 1.2f;
+constexpr float kVehCamOffsetPitch = 0.43633f;   // offset curve PitchRange +-25 deg
 
 // Mesh facing offset. [CONF] extracted meshes keep UE's +X-forward convention (v_gltf maps
 // UE +X -> gltf +X), while our yaw/camera use -Z-forward; a +90 deg model rotation aligns them.
@@ -131,7 +204,16 @@ constexpr float kTransformBlendOut = 0.25f;  // s [CONF]
 // the SAME normalized time, so the fold is continuous instead of two sequential animations.
 // [PROV] exact cross-fade/visibility handoff point not yet recovered; midpoint minimises the
 // unavoidable cross-mesh pop (different vertex counts can't be vertex-blended).
-constexpr float kTransformHandoffFrac = 0.5f; // [PROV]
+constexpr float kTransformHandoffFrac = 0.5f; // SUPERSEDED (Pass 13) by the authored visibility notifies
+// Authored ToggleHidden notifies [CONF AssetTools EVIDENCE_TARGETED_PASS 5a-5d], clip time in seconds:
+//   Transform_ToVehicle_ROBO Hide @0.880; Transform_ToVehicle_VEH Unhide @0.396;
+//   Transform_ToRobot_ROBO Unhide @0.098; Transform_ToRobot_VEH Hide @0.663.
+// Both clips of a pair start together and have identical lengths, so both meshes are drawn in the
+// overlap (0.396-0.880 s to vehicle, 0.098-0.663 s to robot) on the shared clip time.
+constexpr float kToVehRobotHide = 0.8796f, kToVehVehicleShow = 0.3958f;   // [CONF native M03 P10]
+constexpr float kToRobotRobotShow = 0.0984f, kToRobotVehicleHide = 0.6634f;
+// Transformation Rate: notify times are divided by it (4 when downed; the slice has no downed state).
+constexpr float kTransformRate = 1.0f;
 constexpr float kLocomotionBlend   = 0.15f;  // s [PROV] crossfade between locomotion clips
 // Robot Moving state [CONF Robot_ANIMTREE]: TnVelocityAnimBlend MinSpeed 450 / MaxSpeed 1200 UU/s
 // (walk -> jog; the clips' authored ground speeds are ~3.5 / ~12.1 m/s), TnStraferAnimBlend
@@ -143,7 +225,7 @@ constexpr float kIdleMoveBlend     = 0.2f;   // s [CONF]
 // Animation layers. Upper-body slot (reload) / aim-offset / hover-additive weight ease time, and
 // the minimum airborne time before Nav_Land plays on touchdown (filters curb step-offs).
 constexpr float kSlotBlend         = 0.15f;  // s [PROV]
-constexpr float kLandMinAirTime    = 0.3f;   // s [PROV]
+constexpr float kLandMinAirTime    = 0.3f;   // s SUPERSEDED (Pass 13): SharedAcrobatics.LandingAnims table in Character
 // Turn in place. [CONF] TransGame.Default__TnAnimTurnInPlace: TransitionThresholdAngle 4096 UU,
 // TransitionBlendTime 0.1, PercentageToAllowAbort 0.5. Aim offset InterpSpeed [CONF]
 // Default__TnAnimNodeAimOffset 12.

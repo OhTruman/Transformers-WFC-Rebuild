@@ -23,6 +23,8 @@ public:
 
     // Does the segment a->b hit any triangle? (used as a crude wall block). Returns nearest t in [0,1].
     bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const;
+    // Same query, also returning the hit triangle's unit normal (orientation as authored).
+    bool segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN) const;
 
 private:
     struct Tri { core::Vec3 a, b, c, n; };

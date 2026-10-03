@@ -3,6 +3,139 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 16 (2026-10-02) — RE d50e2a9 runtime semantics (narrow)
+- Pickups:
+  - touch is an overlap begin; health re-checks overlapping pawns on respawn (CheckTouching);
+  - sleeping keeps collision but ignores touches;
+  - the highlight beam is only for ammo crates; the ammo crate rotates while available;
+  - events carry the visual state and the receiving pawn's position for the pickup sound.
+- Weapon spread:
+  - linear per-tick recovery (whole range in 2 s);
+  - airborne ×2 ramp (0.25 s up / 0.5 s down);
+  - fine aim ×0.5;
+  - the same effective spread drives the hitscan cone.
+- HUD: TnHUD notify calls (spread > 0.002 filter; weapon class + fine aim together) via `PlayerController::hudNotifies()`.
+- Harness: `weapon.spread_after_10` / `spread_cap` now fail against their superseded expectations (see FIDELITY PASS 16); Experimental should update them.
+
+## GAMEPLAY PASS 15 (2026-10-02) — AssetTools 7a69756 authored-data handoff
+- Fine aim:
+  - the Ion Blaster keeps its authored crosshair (no scope or ADS);
+  - Gameplay exposes `PlayerController::hudAimState()` (weapon class, standard/fine aim type, spread, crosshair visibility, target type);
+  - the native camera is unchanged.
+- Pickups:
+  - 24 authored Streets factories (14 ammo crate / 9 health / 1 overshield) from gameplay.json;
+  - authored respawn times, touch cylinder, health +50;
+  - one event per state transition via `World::pickupEvents()`;
+  - objective factories not instanced (CTF/Bombing modes).
+- Wall panel: authored destructible state machine (20 health → destroyed → settled after 10 s) at its authored, out-of-play location.
+- Graybox near-spawn pickups removed.
+- Test modes:
+  - `WFC_PICKUPTEST=1` (pickup respawn and destructible validation);
+  - HUD fields added to the frame log.
+- Details and superseded assumptions: FIDELITY.md PASS 15.
+
+## GAMEPLAY PASS 14 (2026-10-02) — native RE Milestone 03 vehicle reconcile
+Implements only what MILESTONE03_VEHICLE_NATIVE_FIDELITY.md confirms; provenance and measurements are in FIDELITY.md
+PASS 14. Changes:
+- spring gravity is the rigid-body GetGravityZ (−1940.4), giving rest COM 1.287 m = native L_eq;
+- TnAccelerationAnimBlend hover pose weights;
+- CurveAutoClamped camera offset curve;
+- HandSkelControl hand shrink (0.1, instant);
+- ram victims restricted to TnPawns, with robot RammedReaction and vehicle AddVelocity ×0.5 implemented;
+- exact notify times with transform Rate.
+WFC_VEHTEST=1 runs the deterministic handling measurements (rest, coast-down, 0.25/0.5 m bumps, 10 m drop,
+hover/boost jump, dash, drift turn).
+Still PARTIAL/PROV:
+- hover RB mass link (M=2500);
+- boost tire coefficient;
+- hull contact (min clearance, ceiling probe);
+- ram victim masses (no pawn victims in the slice).
+
+## GAMEPLAY PASS 13b (2026-10-02) — Milestone 03 handoffs (Experimental + Systems)
+- Experimental's "weapon usable before a visible gun" and "vehicle jump missing" were measured on milestone-02, before
+  049f614. With Pass 13 the gun is drawn at 0.28 s and first usable at 0.50 s. Firing requires the drawn gun. The
+  vehicle jump exists (hover + driving).
+- Fine-aim offset semantics (raw OffsetCurvesByPCS): Y (lateral) = 300 UU in every row, so there is no lateral
+  shift between default and fine aim (Experimental's ~0.05 m is expected). The 2 m difference is orbit-space X
+  (+150 → −50: the camera moves 2 m back along the view; TnLocationOffset writes X = −OrbitDistance) [CONF].
+- Arm: CP_OptimusArm_SKEL + OptimusArm_ROBO_ANIM loaded (text glTF + name-matched anims), attached at
+  WeaponSocket_Secondary (R_Arm03_Elbow_XB, pitch 180), TnArmAttachment rules:
+  - shown whenever the robot mesh is displayed with no drawn weapon (all of R→V, V→R before the restore);
+  - ARM_Unequip (0.8 s) once the gun is drawn, then detached.
+  HandSkelControl not applied (PROV).
+- Landing: SharedAcrobatics.LandingAnims table picks Nav_Land / Nav_Land_02 / Nav_Land_03 by fall height and speed.
+  None below 250 UU; a standing jump gives Nav_Land_02.
+- Stop flicker (idle/walk for 1–2 frames): caused by the wall block zeroing velocity and parking one probe radius
+  out, so the next, slower step crept forward. The wall block now advances to the gap, removes only the velocity
+  into the wall and slides the rest of the step along it (re-probed for corners, no back-slide), with physWalking's
+  displacement velocity. The harness wall-slide checks now pass (181/0/21).
+- Ram: World::gameplayRamContacts → notifyRamHit during nitro (once per target per nitro), 300 damage (AI robot).
+- CollisionWorld::segmentHit is Systems' validated grid walk verbatim. Gameplay only adds a normal-returning
+  overload (suspension contact normals).
+
+## GAMEPLAY PASS 13 / MILESTONE 03 (2026-10-02) — vehicle body, vehicle camera, transform handoff, firing cost
+Branch agents/gameplay, fast-forwarded to integration/milestone-02 (e8036f6) first; clean build OK.
+Driven by the Milestone 02 human playtest. Evidence: TransGame/HM_Engine bytecode (work/pass13/vehdis.txt,
+camdis.txt, pcdis.txt via work/pass11/ue3dis.py) and authored data (VEH_SHARED_p, CAM_Driving_Strategies_p).
+
+- **Hover = rigid body on four springs** (TnHoverCarSimulation.UpdateSuspension + TnSuspension/TnSpring):
+  - mounts at SuspensionRadius 185 around the COM (Pass 7–12 wrongly used 185 as a ride height);
+  - rays along body −Z, RestingLength 250;
+  - implicit spring with Stiffness 10000 / Damping 4000 and per-spring mass Mass/4;
+  - Truck_Physics mass 2500, COM (−47,0,5), inertia 2.27e7/4.64e7/5.89e7;
+  - world gravity in the spring and RB gravity ×0.66 on the body;
+  - result: the COM settles at 1.36 m.
+  Pitch and roll now come from the springs and terrain, plus UpdateRoll (strafe input − yaw rate):
+  - about 7° transient (2° held) when strafing;
+  - about 4° banking into turns;
+  - curbs and ledges tilt the body.
+  Uprighting applies only with no contact. Yaw tracks the smoothed camera (PlayerInVehicleForm.PlayerMove).
+- **Vehicle jump** (Hovering.UpdateJumping):
+  - requires the ground (contact normal Z > 0.707), with a 0.3 s interval;
+  - +1200 UU/s vertical, nose up 1 rad/s;
+  - verified about 4.2 m rise, spring landing and rebound.
+  Driving jump: local (600,0,1400) plus nose up 2 rad/s, air control, pitch-forward limit −25°.
+- **Hover dash is forward only** (TnTruckForm.Hovering.DoDash overrides the car's dominant-axis dash):
+  - refused while unstable (>30°);
+  - local Z velocity is cancelled during the dash;
+  - it ends with an immediate 100000 UU/s² decel to 1500.
+- **Normal boost** = TnCarSimulation.UpdateBoost/Drag:
+  - Lerp(MaxAccel, Drag(MaxSpeed), v/MaxSpeed) + ExtraBoost, so 30 m/s is the emergent limit;
+  - the truck drops onto its wheels;
+  - a frontal wall hit returns to Hovering (OnRigidBodyCollision 0.866).
+  Steering = look-X input (GetNormalizedTurn), sign·s². Tire model PROV.
+- **Nitro** unchanged in rules (×1.5 speed, ×0.3 steering, 3 s / 8 s). Ram collision is still not implemented.
+- **Vehicle camera strategies** (HoverTruck_Optimus / Truck_Optimus; OverTheShoulder for the robot):
+  - anchor, orbit, FOV and pitch-range per strategy;
+  - HmC2Smoother (decoded) for FOV, offsets and orbit rotation;
+  - strategy blends of 1.5 / 1.5 / 1.0 s;
+  - nitro FOV 100 and orbit 650 (in 0.5 s, out 2.0 s);
+  - Driving yaw locked to the truck, pitch chase at rate 3;
+  - Wiggler3.
+- **Robot camera offset corrected:** TnScreenSpaceOffsetByPitch Offsets is a static array of three vectors.
+  - Default: (150,300,{150,−35,150}).
+  - Fine aim: (−50,300,{80,−35,80}).
+  Pass 11 read only the first vector.
+- **Transform handoff:** the authored ToggleHidden notifies replace the 50% mesh swap.
+  - Both meshes are drawn on the shared clip time: to vehicle 0.396–0.880 s, to robot 0.098–0.663 s.
+  - Both meshes hang off the shared actor location: robot cylinder centre / vehicle bounds centre
+    (TnVehicleForm.CalculateCylinderBounds).
+  - The robot→vehicle "flattened robot freezes then the truck appears" came from the robot clip reaching its
+    folded pose at 0.88 s while the truck was only shown from 1.0 s.
+- **Weapon on vehicle→robot:**
+  - the gun is attached to the robot mesh, drawn from 0.098 s;
+  - restored at 25% of the fold (0.28 s), usable at +0.2 s (0.48 s);
+  - firing also requires the gun to be drawn that step, so no gunless shot is possible.
+- **Firing performance:** the gameplay traces were 23–34 ms/frame during sustained fire (AABB cell scan of two
+  300 m rays per shot). The grid-walk traversal gives identical hits (0/3000 mismatches vs brute force) and
+  about 0.1 ms. WFC_PERFLOG=N logs it.
+- **Fine aim state** for presentation: `PlayerController::fineAimState()` (wanted, active, FOV blend, FOV).
+- **Not done:**
+  - CP_OptimusArm_SKEL attachment (raw umodel glTF, not loaded by the runtime);
+  - the vehicle hull is approximated (min clearance, ceiling probe, wall probe);
+  - ram collision;
+  - wheel/tire steering.
+
 ## INTEGRATION MILESTONE 02 (2026-10-02) — branch `integration/milestone-02`
 Integration and stabilisation only, no new features. Branched from milestone-01 (e62250e).
 Each branch was merged with `--no-ff`, one at a time, then built and checked with the harness.

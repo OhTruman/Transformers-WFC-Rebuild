@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace game {
 
@@ -25,6 +26,20 @@ void Character::beginTransform() {
     std::string cat = (form_ == Form::Robot) ? "transform_to_vehicle" : "vehicle_transform_to_robot";
     int c = mdl ? mdl->firstClipOfCategory(cat) : -1;
     if (c < 0) { toggleForm(); return; }   // no transform clip: just swap instantly
+    // Partner clip on the other mesh, paired by name (Transform_ToVehicle_ROBO <-> Transform_ToVehicle_VEH):
+    // first-of-category would pick Transform_ToVehicle_SuperBoost_Veh (0.8 s), which does not pair.
+    partnerClip_ = -1;
+    if (const assets::SkinnedModel* pm = modelOf(partnerForm())) {
+        std::string partner = mdl->clips[(size_t)c].name;
+        size_t us = partner.find_last_of('_');
+        if (us != std::string::npos) partner = partner.substr(0, us) + (form_ == Form::Robot ? "_VEH" : "_ROBO");
+        partnerClip_ = pm->clipByName(partner);
+        if (partnerClip_ < 0) partnerClip_ = pm->firstClipOfCategory(form_ == Form::Robot ? "vehicle_transform_to_vehicle" : "transform_to_robot");
+    }
+    partnerVisible_ = false;
+    // The actor location is shared by both forms (TnVehicleForm.OnActivate: SetRBPosition(pawn Location
+    // + mesh Translation)); position() is the mesh origin of the movement form, so re-express it.
+    float actorAbove = meshToActor(form_);
     trans_ = Transition::Outgoing;
     transClip_ = c;
     animTime_ = 0.0f;
@@ -34,11 +49,13 @@ void Character::beginTransform() {
     // touches velocity. The target form becomes the movement form now (see moveForm()).
     transTarget_ = (form_ == Form::Robot) ? Form::Vehicle : Form::Robot;
     transStartYaw_ = yaw_;
+    pos_.y += actorAbove - meshToActor(transTarget_);
     if (transTarget_ == Form::Vehicle) {
-        // Vehicle form activates hovering: Hovering.BeginState -> Drift() (authority ramp 0.5 s).
+        // Vehicle form activates hovering: rigid body at the pawn rotation (yaw only), springs at rest
+        // length, TnCarForm.OnActivate _TimeBeforeNextJump = 0, Hovering.BeginState -> Drift() (0.5 s ramp).
         veh_ = VehicleState{};
-        veh_.rideHeight = core::config::kVehicleHoverH;
         veh_.driftRemain = core::config::kHoverDriftDuration;
+        onGround_ = false;
     } else {
         // Vehicle->robot: the local player keeps full velocity and enters falling [CONF RE].
         onGround_ = false;
@@ -68,8 +85,11 @@ void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
     if (R.idleClip < 0) R.idleClip = mdl.clipByName("Nav_Idle_Base");
     if (R.idleClip < 0) R.idleClip = mdl.firstClipOfCategory("idle");
     R.landClip = mdl.clipByName("Nav_Land");
+    R.land2Clip = mdl.clipByName("Nav_Land_02");
+    R.land3Clip = mdl.clipByName("Nav_Land_03");
 
     R.rootRef = mdl.nodeByName("C_Root_Reference_XR");
+    handBone_ = mdl.nodeByName("R_Arm04_Hand_XB");          // HandSkelControl bone (Robot_ANIMTREE)
     R.spine = mdl.nodeByName("C_Spine02_Lumbar02_XB");      // SpineRecoil bone (Robot_ANIMTREE)
     R.rightArm = mdl.nodeByName("R_Arm02_Shoulder_XB");     // RightHandRecoil bone (Robot_ANIMTREE)
     // Turn-in-place transitions [CONF Robot_ANIMTREE TnWeaponAnimChooser, WS_ONE_HANDED]:
@@ -295,18 +315,26 @@ void Character::playClip(const assets::SkinnedModel& mdl, int clip, bool loop, f
     finishBaseBlend(dt);
 }
 
-// Vehicle base layer: blend the authored single-frame hover poses by the travel direction
-// relative to the vehicle's facing (F/B/L/R), toward Nav_Hover_Pose_VEH at rest.
-// [PROV] weight mapping: local velocity / MaxLinearSpeed per axis.
+// Vehicle base layer: VEH_Car_ANIMTREE TnAccelerationAnimBlend [CONF native M03 P2] — velocity-driven
+// despite the name: m = ClampLength(Velocity, 2000) in local space / 2000 x max(0, up.Z);
+// child 0 (Nav_Hover_Pose_VEH) = 1 - |m|, directional children = max(0, +-sign * m^2 / |m|).
 void Character::vehicleHoverBlend() {
     const VehicleRig& V = vehicleRig_;
     core::Vec3 fwd = core::forwardFromYawPitch(yaw_, 0.0f);
     core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
-    float inv = 1.0f / core::config::kVehicleMoveSpeed;
-    float f = core::clampf((velocity_.x * fwd.x + velocity_.z * fwd.z) * inv, -1.0f, 1.0f);
-    float r = core::clampf((velocity_.x * right.x + velocity_.z * right.z) * inv, -1.0f, 1.0f);
-    float wF = std::max(0.0f, f), wB = std::max(0.0f, -f), wR = std::max(0.0f, r), wL = std::max(0.0f, -r);
-    float total = std::max(0.0f, 1.0f - (wF + wB + wR + wL));
+    const float maxV = 20.0f;                                   // MaxVelocity 2000 UU/s
+    float upZ = std::max(0.0f, std::cos(veh_.pitch) * std::cos(veh_.roll));
+    float f = (velocity_.x * fwd.x + velocity_.z * fwd.z), r = (velocity_.x * right.x + velocity_.z * right.z);
+    float len = std::sqrt(f * f + r * r);
+    float k = (len > maxV ? maxV / len : 1.0f) / maxV * upZ;
+    f *= k; r *= k;
+    float m = std::sqrt(f * f + r * r);
+    float wF = 0.0f, wB = 0.0f, wR = 0.0f, wL = 0.0f;
+    if (m > 1e-6f) {
+        wF = std::max(0.0f, f * std::fabs(f) / m); wB = std::max(0.0f, -f * std::fabs(f) / m);
+        wR = std::max(0.0f, r * std::fabs(r) / m); wL = std::max(0.0f, -r * std::fabs(r) / m);
+    }
+    float total = std::max(0.0f, 1.0f - m);
     basePose_ = V.idle;
     auto add = [&](const assets::LocalPose& p, float w) {
         if (w <= 0.0f) return;
@@ -419,6 +447,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
         assets::addPose(finalPose_, layerPose_, hoverW_);
     }
 
+    if (&mdl == robotModel_) applyHandControl(mdl, finalPose_);
     assets::skinPose(mdl, finalPose_, animScratch_, poseBuf_);
     updateWeaponSocket();
 }
@@ -430,7 +459,9 @@ void Character::updateAnimation(float dt) {
     if (robotModel_ && !robotRig_.built && robotModel_->valid()) buildRobotRig(*robotModel_);
     if (vehicleModel_ && !vehicleRig_.built && vehicleModel_->valid()) buildVehicleRig(*vehicleModel_);
 
-    animTime_ += dt;   // advance the active clip's time (reset to 0 by beginBase on a change)
+    // Advance the active clip's time (reset to 0 by beginBase on a change). A transformation plays at its
+    // Rate (1; 4 when downed), so the authored notify times are reached at t/Rate [CONF native M03 P10].
+    animTime_ += dt * (trans_ != Transition::None ? core::config::kTransformRate : 1.0f);
     if (shiftRemain_ > 0.0f) shiftRemain_ = std::max(0.0f, shiftRemain_ - dt);
     // Weapon restore clock during vehicle->robot: starts when 25% of the fold has elapsed (the
     // restore point is measured on the fold even before the robot mesh is displayed).
@@ -442,45 +473,41 @@ void Character::updateAnimation(float dt) {
     // --- transformation timeline (overrides locomotion; plays once, no loop) ---
     if (trans_ != Transition::None) {
         float dur = mdl->clips[(size_t)transClip_].duration;
-        if (trans_ == Transition::Outgoing && animTime_ >= dur * core::config::kTransformHandoffFrac) {
-            // Mid-fold handoff. The outgoing and incoming clips are the same physical fold authored
-            // on each mesh, so we switch meshes and RESUME the partner clip at the same normalized
-            // time rather than restarting it: one continuous transformation, not two.
-            float frac = (dur > 0.0f) ? (animTime_ / dur) : 1.0f;
-            setForm(form_ == Form::Robot ? Form::Vehicle : Form::Robot);
-            const assets::SkinnedModel* nm = currentModel();
-            std::string inCat = (form_ == Form::Vehicle) ? "vehicle_transform_to_vehicle"
-                                                         : "transform_to_robot";
-            // Partner clip by name (Transform_ToVehicle_ROBO <-> Transform_ToVehicle_VEH): first-of-
-            // category would pick Transform_ToVehicle_SuperBoost_Veh (0.8 s), which does not pair.
-            int ic = -1;
-            if (nm) {
-                std::string partner = mdl->clips[(size_t)transClip_].name;
-                size_t us = partner.find_last_of('_');
-                if (us != std::string::npos)
-                    partner = partner.substr(0, us) + (form_ == Form::Vehicle ? "_VEH" : "_ROBO");
-                ic = nm->clipByName(partner);
-                if (ic < 0) ic = nm->firstClipOfCategory(inCat);
-            }
-            if (ic >= 0) {
-                trans_ = Transition::Incoming; transClip_ = ic; mdl = nm;
-                beginBase(*mdl, ic, core::config::kTransformBlendIn);  // model change: hard cut
-                animTime_ = nm->clips[(size_t)ic].duration * frac;      // resume at matching time
+        // The source mesh plays its clip until its authored Hide notify; the target mesh is drawn from
+        // its Unhide notify on, posed from the paired clip at the SAME clip time (identical lengths).
+        // At the source's hide time the target becomes the primary mesh and simply continues.
+        if (trans_ == Transition::Outgoing && !meshVisible(form_, animTime_)) {
+            float t = animTime_;
+            const assets::SkinnedModel* nm = modelOf(partnerForm());
+            int ic = partnerClip_;
+            if (nm && ic >= 0) {
+                struct ArmTick { Character* c; float dt; ~ArmTick() { c->updateArm(dt); } } armTick{this, dt};
+                int oldClip = transClip_;
+                setForm(partnerForm());
+                trans_ = Transition::Incoming; transClip_ = ic; partnerClip_ = oldClip; mdl = nm;
+                beginBase(*mdl, ic, 0.0f);                              // model change: no bone blend
+                animTime_ = std::min(t, nm->clips[(size_t)ic].duration);
                 animName_ = nm->clips[(size_t)ic].name;
                 assets::samplePose(*mdl, ic, animTime_, false, basePose_);
                 finalizePose(*mdl, dt);
+                updatePartner(animTime_);
                 return;
             }
             trans_ = Transition::None; justExitedTransform_ = true;
         } else if (trans_ == Transition::Incoming && animTime_ >= dur) {
             trans_ = Transition::None; justExitedTransform_ = true;      // incoming finished
+            partnerVisible_ = false;
         }
         if (trans_ != Transition::None) {
             playClip(*mdl, transClip_, /*loop*/ false, dt, core::config::kTransformBlendIn);
             finalizePose(*mdl, dt);
+            updatePartner(animTime_);
+            updateArm(dt);
             return;
         }
     }
+    partnerVisible_ = false;
+    struct ArmTick { Character* c; float dt; ~ArmTick() { c->updateArm(dt); } } armTick{this, dt};   // after the pose
 
     float speed = std::sqrt(velocity_.x * velocity_.x + velocity_.z * velocity_.z);
     // Leaving a transform blends out over 0.25 s; ordinary locomotion changes use a short blend.
@@ -524,10 +551,26 @@ void Character::updateAnimation(float dt) {
     // Robot. Grounded and moving -> the tree's Moving state (walk/jog strafer blend); otherwise
     // Idle (with turn in place), jump/fall or land.
     if (onGround_) {
-        if (airTime_ > core::config::kLandMinAirTime && robotRig_.landClip >= 0)
-            landT_ = mdl->clips[(size_t)robotRig_.landClip].duration;
+        // TR_Acrobatics_p.SharedAcrobatics.LandingAnims [CONF data; Systems handoff], tested in array
+        // order on the apex->touchdown height and the horizontal speed (UU): {1200,1200} Nav_Land_03,
+        // {1000,1200} Nav_Land, {4500,0} Nav_Land_03, {500,0} Nav_Land_02, {250,0} Nav_Land. Below 250 UU
+        // no landing anim plays. [MED order/measure semantics; replaces the PROV 0.3 s air-time rule]
+        if (airTime_ > 0.0f) {
+            float h = (airApexY_ - pos_.y) * 100.0f;
+            float sp = std::sqrt(velocity_.x * velocity_.x + velocity_.z * velocity_.z) * 100.0f;
+            struct LandingAnim { float minH, minSpeed; int clip; };
+            const LandingAnim table[] = {{1200, 1200, robotRig_.land3Clip}, {1000, 1200, robotRig_.landClip},
+                                         {4500, 0, robotRig_.land3Clip}, {500, 0, robotRig_.land2Clip},
+                                         {250, 0, robotRig_.landClip}};
+            landClipSel_ = -1;
+            for (const LandingAnim& la : table)
+                if (h >= la.minH && sp >= la.minSpeed) { landClipSel_ = la.clip; break; }
+            if (landClipSel_ >= 0) landT_ = mdl->clips[(size_t)landClipSel_].duration;
+        }
         airTime_ = 0.0f;
     } else {
+        if (airTime_ == 0.0f) airApexY_ = pos_.y;
+        airApexY_ = std::max(airApexY_, pos_.y);
         airTime_ += dt;
         landT_ = 0.0f;
     }
@@ -560,7 +603,7 @@ void Character::updateAnimation(float dt) {
     bool loop = true;
     if (cat == "move") clip = mdl->clipOfCategoryNamed("run", "_F");      // no strafe set: fallback
     else if (cat == "idle") clip = robotRig_.idleClip;
-    else if (cat == "land") { clip = robotRig_.landClip; loop = false; }
+    else if (cat == "land") { clip = landClipSel_; loop = false; }
     else if (cat == "turn") { clip = turnClip_; loop = false; blend = core::config::kTurnTransitionBlend; }
     else { clip = mdl->firstClipOfCategory(cat); loop = (cat != "jump"); }  // take-off plays once
     if (clip < 0) clip = mdl->firstClipOfCategory("idle");
@@ -580,35 +623,126 @@ void Character::updateAnimation(float dt) {
 
 bool Character::weaponRestored() const {
     if (trans_ == Transition::None) return form_ == Form::Robot;
-    // Restored once 25% of a vehicle->robot fold has elapsed; needs the robot skeleton displayed.
-    return transTarget_ == Form::Robot && form_ == Form::Robot &&
+    // Restored once 25% of a vehicle->robot fold has elapsed (the robot mesh is displayed from 0.098 s,
+    // before the restore point, so the weapon is attached to a visible robot).
+    return transTarget_ == Form::Robot && meshVisible(Form::Robot, animTime_) &&
            transformProgress() >= core::config::kRestoreWeaponElapsed;
+}
+
+// Authored ToggleHidden windows (Config kToVeh*/kToRobot*), on the shared clip time.
+bool Character::meshVisible(Form f, float t) const {
+    namespace cfg = core::config;
+    if (trans_ == Transition::None) return f == form_;
+    if (transTarget_ == Form::Vehicle)
+        return f == Form::Robot ? t < cfg::kToVehRobotHide : t >= cfg::kToVehVehicleShow;
+    return f == Form::Robot ? t >= cfg::kToRobotRobotShow : t < cfg::kToRobotVehicleHide;
+}
+
+// Pose and skin the second mesh of a transformation at the shared clip time.
+void Character::updatePartner(float t) {
+    partnerVisible_ = false;
+    const assets::SkinnedModel* pm = modelOf(partnerForm());
+    if (trans_ == Transition::None || !pm || !pm->valid() || partnerClip_ < 0) return;
+    if (!meshVisible(partnerForm(), t)) return;
+    assets::samplePose(*pm, partnerClip_, t, false, partnerPose_);
+    if (pm == robotModel_) applyHandControl(*pm, partnerPose_);
+    assets::skinPose(*pm, partnerPose_, partnerScratch_, partnerBuf_);
+    partnerVisible_ = true;
+    updateWeaponSocket();     // the robot may be this partner mesh (vehicle->robot before the vehicle hides)
+}
+
+// TnArmAttachment (TARGETED_PASS2 §9) [CONF rules]: the arm is needed while no robot weapon is drawn
+// (ShouldAlwaysEquip: no active weapon / not attached) — the whole robot->vehicle fold (weapon stored at
+// t = 0) and vehicle->robot until the 25% restore. Becoming needed plays ARM_Equip (attached to
+// WeaponSocket_Secondary); no longer needed plays ARM_Unequip, then detaches. Detached whenever the
+// robot mesh is hidden. [PROV] HandSkelControl (hand bone scale 0.1 with a weapon) not applied: the
+// rebuild's body mesh is RB_Optimus_A_SKELMESH.
+void Character::updateArm(float dt) {
+    armVisible_ = false;
+    static const bool noArm = std::getenv("WFC_NOARM") != nullptr;   // A/B diagnostic
+    if (noArm || !armModel_ || !armModel_->valid() || weaponBone_ < 0) return;
+    const std::vector<core::Mat4>* robotScratch = nullptr;
+    if (form_ == Form::Robot && lastModel_ == robotModel_) robotScratch = &animScratch_;
+    else if (trans_ != Transition::None && partnerVisible_ && partnerForm() == Form::Robot) robotScratch = &partnerScratch_;
+    if (!robotScratch || (size_t)weaponBone_ >= robotScratch->size()) { armState_ = ArmState::Hidden; return; }
+    bool needed = !weaponValid_;
+    if (needed && armState_ != ArmState::Equipping) { armState_ = ArmState::Equipping; armT_ = 0.0f; }
+    else if (!needed && armState_ == ArmState::Equipping) { armState_ = ArmState::Unequipping; armT_ = 0.0f; }
+    else armT_ += dt;
+    int clip = armState_ == ArmState::Equipping ? armEquipClip_ : armUnequipClip_;
+    if (armState_ == ArmState::Hidden) return;
+    if (armState_ == ArmState::Unequipping && (clip < 0 || armT_ >= armModel_->clips[(size_t)clip].duration)) {
+        armState_ = ArmState::Hidden;
+        return;
+    }
+    if (clip >= 0) assets::samplePose(*armModel_, clip, armT_, false, armPose_);   // holds the last frame
+    else assets::samplePose(*armModel_, 0, 0.0f, false, armPose_);
+    assets::skinPose(*armModel_, armPose_, armScratch_, armBuf_);
+    // WeaponSocket_Secondary: bone R_Arm03_Elbow_XB, relative rotation pitch 32768 (180 deg about UE Y =
+    // glTF Z), no offset [CONF character.json].
+    armWorld_ = meshMatrix(Form::Robot) * (*robotScratch)[(size_t)weaponBone_] * core::Mat4::rotateZ(3.1415927f);
+    armVisible_ = true;
+}
+
+// TnArmAttachment.UpdateHand [CONF native M03 P7]: HandSkelControl (SkelControlSingleBone on R_Arm04_Hand_XB,
+// BoneScale 0.1) strength = ShouldEquipHand ? 0 : 1, blend time 0 (binary, every tick).
+// ShouldEquipHand = ShouldAlwaysEquip || weapon.IsHandRequired (Ion Blaster: false); ShouldAlwaysEquip = no
+// weapon || not attached || (holstered && !equipping). The robot weapon is attached and drawn when not
+// transforming, and from the 25% restore of vehicle->robot (it starts equipping then); stored on robot->vehicle.
+void Character::applyHandControl(const assets::SkinnedModel& mdl, assets::LocalPose& pose) {
+    handShrunk_ = weaponBone_ >= 0 && (trans_ == Transition::None ? form_ == Form::Robot
+                                                                 : (transTarget_ == Form::Robot &&
+                                                                    transformProgress() >= core::config::kRestoreWeaponElapsed));
+    if (!handShrunk_ || handBone_ < 0 || (size_t)handBone_ >= pose.s.size() || &mdl != robotModel_) return;
+    pose.s[(size_t)handBone_] = pose.s[(size_t)handBone_] * 0.1f;
+}
+
+void Character::rammedAsRobot(const core::Vec3& dir) {
+    rammedBaseY_ = velocity_.y;
+    velocity_ = dir * 50.0f + velocity_;      // RammedSpeed 5000 UU/s + base velocity
+    rammedRemain_ = 0.5f;
+    onGround_ = false;                        // Physics = PHYS_Falling
+}
+
+core::Mat4 Character::meshMatrix(Form f) const {
+    core::Mat4 m = core::Mat4::translate(meshOrigin(f)) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
+    // Vehicle rigid-body attitude (both meshes hang off the body while the movement form is the vehicle).
+    // Mesh space: +X forward, +Y up, +Z right; pitch + = nose up, roll + = right side down.
+    if (moveForm() == Form::Vehicle && (veh_.pitch != 0.0f || veh_.roll != 0.0f))
+        m = m * core::Mat4::rotateZ(veh_.pitch) * core::Mat4::rotateX(veh_.roll);
+    return m;
 }
 
 bool Character::weaponUsable() const {
     if (moveForm() != Form::Robot) return false;
     if (trans_ == Transition::None) return true;
-    return restoreTimer_ >= core::config::kWeaponEquipTime;   // restored + EquipTime 0.2 s
+    // Restored + EquipTime 0.2 s, and the gun is actually drawn on a displayed robot mesh this step:
+    // no shot can originate from an invisible weapon.
+    return restoreTimer_ >= core::config::kWeaponEquipTime && weaponValid_;
 }
 
 float Character::meshYawOffset() { return core::config::kMeshYawOffset; }
 
 void Character::updateWeaponSocket() {
     weaponValid_ = false;
-    // The Ion Blaster is holstered through the whole transform: no floating gun during the fold.
+    // Robot->vehicle stores the weapon at fold start; vehicle->robot restores it at 25% of the fold,
+    // attached to the robot mesh (drawn from 0.098 s, as the partner mesh until the vehicle hides).
     if (trans_ != Transition::None && !weaponRestored()) return;
-    if (form_ != Form::Robot || weaponBone_ < 0) return;
-    if ((size_t)weaponBone_ >= animScratch_.size()) return;
-    core::Mat4 model = core::Mat4::translate(pos_ + meshOffset()) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
-    weaponWorld_ = model * animScratch_[(size_t)weaponBone_] * weaponOffset_;
+    if (weaponBone_ < 0) return;
+    const std::vector<core::Mat4>* scratch = nullptr;
+    if (form_ == Form::Robot) scratch = &animScratch_;
+    else if (trans_ != Transition::None && partnerVisible_ && partnerForm() == Form::Robot) scratch = &partnerScratch_;
+    if (!scratch || (size_t)weaponBone_ >= scratch->size()) return;
+    weaponWorld_ = meshMatrix(Form::Robot) * (*scratch)[(size_t)weaponBone_] * weaponOffset_;
     weaponValid_ = true;
 }
 
 void Character::draw(render::IRenderer& r) const {
     const assets::SkinnedModel* mdl = currentModel();
     if (mdl && mdl->valid() && !poseBuf_.empty()) {
-        core::Mat4 model = core::Mat4::translate(pos_ + meshOffset()) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
-        r.drawDynamicMesh(poseBuf_, model, color_);
+        r.drawDynamicMesh(poseBuf_, meshMatrix(form_), color_);
+        if (partnerVisible_ && !partnerBuf_.empty()) r.drawDynamicMesh(partnerBuf_, meshMatrix(partnerForm()), color_);
+        if (armVisible_ && !armBuf_.empty()) r.drawDynamicMesh(armBuf_, armWorld_, color_);
         return;
     }
     // Fallback graybox.

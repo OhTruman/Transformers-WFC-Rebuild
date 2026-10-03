@@ -46,7 +46,10 @@ struct Weapon {
     void tick(float dt) {
         if (sinceShot < 999.0f) sinceShot += dt;
         sinceFire += dt;
-        if (sinceFire > spreadCooldown) spread = spreadMin;   // decay bloom after a pause
+        // TnWeapon.CooldownSpread every tick [CONF native M03 runtime, RE d50e2a9]: linear recovery across
+        // the whole Min..Max range in Cooldown (2 s); IncrementSpread +0.005 per shot (onFired).
+        spread -= (spreadMax - spreadMin) * dt / spreadCooldown;
+        if (spread < spreadMin) spread = spreadMin;
         if (reloadTimer > 0) {
             reloadTimer -= dt;
             if (reloadTimer <= 0) finishReload();

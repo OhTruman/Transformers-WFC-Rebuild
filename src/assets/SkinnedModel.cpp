@@ -14,12 +14,35 @@ namespace {
 // ---- GLB container ----
 struct Glb {
     std::vector<uint8_t> file;
+    std::vector<uint8_t> ext;      // .gltf: external buffers[0].uri
     const uint8_t* json = nullptr; size_t jsonLen = 0;
     const uint8_t* bin = nullptr;  size_t binLen = 0;
 };
 uint32_t rd32(const uint8_t* p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
 
+bool readAll(const std::string& path, std::vector<uint8_t>& out) {
+    std::ifstream f(path, std::ios::binary | std::ios::ate);
+    if (!f) return false;
+    std::streamoff n = f.tellg();
+    if (n <= 0) return false;
+    out.resize((size_t)n); f.seekg(0); f.read((char*)out.data(), n);
+    return true;
+}
+
 bool openGlb(const std::string& path, Glb& g) {
+    // Text .gltf (umodel exports, e.g. CP_OptimusArm_SKEL): JSON + external buffer.
+    if (path.size() > 5 && path.compare(path.size() - 5, 5, ".gltf") == 0) {
+        if (!readAll(path, g.file)) return false;
+        g.json = g.file.data(); g.jsonLen = g.file.size();
+        Json probe;
+        if (Json::parse((const char*)g.json, g.jsonLen, probe) && probe["buffers"].size() > 0) {
+            std::string uri = probe["buffers"][0]["uri"].asString();
+            size_t s = path.find_last_of("/\\");
+            std::string dir = (s == std::string::npos) ? "." : path.substr(0, s);
+            if (!uri.empty() && readAll(dir + "/" + uri, g.ext)) { g.bin = g.ext.data(); g.binLen = g.ext.size(); }
+        }
+        return true;
+    }
     std::ifstream f(path, std::ios::binary | std::ios::ate);
     if (!f) return false;
     std::streamoff n = f.tellg();
@@ -120,6 +143,7 @@ struct Doc {
     }
 };
 
+void parseClips(const Json& root, const Doc& doc, SkinnedModel& m, const std::vector<int>* remap);
 } // namespace
 
 bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
@@ -221,9 +245,33 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
         for (size_t i = 0; i < jmats.size(); ++i) parseGltfMaterial(root, i, dir, m.mats[i]);
     }
 
-    // ---- animations ----
+    parseClips(root, doc, m, nullptr);
+
+    LOG_INFO("skinned glb: %s -> %zu verts, %zu joints, %zu clips", path.c_str(),
+             m.vertexCount(), m.skinJoints.size(), m.clips.size());
+    return m.valid();
+}
+
+// Animations from a separate glTF (umodel AnimSet export) whose nodes match the model's by name.
+int loadAnimationsByName(const std::string& path, SkinnedModel& m) {
+    Glb g;
+    if (!openGlb(path, g)) { LOG_ERROR("anim gltf: open failed %s", path.c_str()); return 0; }
+    Json root;
+    if (!Json::parse((const char*)g.json, g.jsonLen, root)) return 0;
+    Doc doc; doc.root = &root; doc.bin = g.bin; doc.binLen = g.binLen;
+    const Json& nodes = root["nodes"];
+    std::vector<int> remap(nodes.size(), -1);
+    for (size_t i = 0; i < nodes.size(); ++i) remap[i] = m.nodeByName(nodes[i]["name"].asString());
+    size_t before = m.clips.size();
+    parseClips(root, doc, m, &remap);
+    LOG_INFO("anim gltf: %s -> %zu clips", path.c_str(), m.clips.size() - before);
+    return (int)(m.clips.size() - before);
+}
+
+namespace {
+void parseClips(const Json& root, const Doc& doc, SkinnedModel& m, const std::vector<int>* remap) {
     const Json& anims = root["animations"];
-    m.clips.reserve(anims.size());
+    m.clips.reserve(m.clips.size() + anims.size());
     for (size_t ai = 0; ai < anims.size(); ++ai) {
         const Json& a = anims[ai];
         AnimClip clip;
@@ -248,17 +296,15 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
             AnimChannel ch;
             ch.sampler = c["sampler"].asInt(-1);
             ch.node = c["target"]["node"].asInt(-1);
+            if (remap) ch.node = (ch.node >= 0 && ch.node < (int)remap->size()) ? (*remap)[(size_t)ch.node] : -1;
             const std::string& p = c["target"]["path"].asString();
             ch.path = p == "rotation" ? AnimPath::Rotation : (p == "scale" ? AnimPath::Scale : AnimPath::Translation);
             if (ch.node >= 0 && ch.sampler >= 0) clip.channels.push_back(ch);
         }
         m.clips.push_back(std::move(clip));
     }
-
-    LOG_INFO("skinned glb: %s -> %zu verts, %zu joints, %zu clips", path.c_str(),
-             m.vertexCount(), m.skinJoints.size(), m.clips.size());
-    return m.valid();
 }
+} // namespace
 
 // ---------------- evaluation ----------------
 namespace {

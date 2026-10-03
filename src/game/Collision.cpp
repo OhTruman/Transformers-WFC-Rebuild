@@ -90,13 +90,18 @@ bool CollisionWorld::groundHeight(float x, float z, float nearY, float stepUp,
 }
 
 bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT) const {
-    // Möller–Trumbore over triangles in the cells the segment's endpoints touch (coarse).
+    // Moller-Trumbore against the triangles of the grid cells the segment's XZ projection passes
+    // through, walked front to back with a 2D DDA (Amanatides-Woo) and stopped as soon as the
+    // nearest hit lies before the current cell's exit. Exact: a triangle is binned into every cell
+    // its XZ bounds overlap, so the cell containing any intersection point is always visited.
+    // (Previously every cell of the segment's XZ bounding box was tested: a long diagonal ray —
+    // e.g. the 300 m weapon trace — scanned thousands of cells per call.)
+    if (grid_.empty()) return false;
     core::Vec3 d = b - a;
     float bestT = 1e30f;
     bool hit = false;
 
     auto testCell = [&](int cx, int cz) {
-        if (cx < 0 || cz < 0 || cx >= gx_ || cz >= gz_) return;
         for (int ti : grid_[(size_t)cz * gx_ + cx]) {
             const Tri& t = tris_[(size_t)ti];
             core::Vec3 e1 = t.b - t.a, e2 = t.c - t.a;
@@ -115,15 +120,76 @@ bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float&
         }
     };
 
-    int cx0, cz0, cx1, cz1;
-    cellRange(std::min(a.x, b.x), std::min(a.z, b.z), cx0, cz0);
-    cellRange(std::max(a.x, b.x), std::max(a.z, b.z), cx1, cz1);
-    for (int cz = cz0; cz <= cz1; ++cz)
-        for (int cx = cx0; cx <= cx1; ++cx)
-            testCell(cx, cz);
+    // Clip the segment's XZ projection to the grid rectangle (slab test).
+    const float gxMax = bmin_.x + gx_ * cell_, gzMax = bmin_.z + gz_ * cell_;
+    float t0 = 0.0f, t1 = 1.0f;
+    const float o[2] = {a.x, a.z}, dd[2] = {d.x, d.z}, lo[2] = {bmin_.x, bmin_.z}, hi[2] = {gxMax, gzMax};
+    for (int k = 0; k < 2; ++k) {
+        if (std::fabs(dd[k]) < 1e-12f) {
+            if (o[k] < lo[k] || o[k] > hi[k]) return false;
+        } else {
+            float ta = (lo[k] - o[k]) / dd[k], tb = (hi[k] - o[k]) / dd[k];
+            if (ta > tb) std::swap(ta, tb);
+            t0 = std::max(t0, ta); t1 = std::min(t1, tb);
+            if (t0 > t1) return false;
+        }
+    }
+
+    // DDA over cells from t0 to t1.
+    float sx = a.x + d.x * t0, sz = a.z + d.z * t0;
+    int cx, cz;
+    cellRange(sx, sz, cx, cz);
+    const int stepX = d.x > 0 ? 1 : (d.x < 0 ? -1 : 0), stepZ = d.z > 0 ? 1 : (d.z < 0 ? -1 : 0);
+    const float inf = 1e30f;
+    float tDeltaX = stepX ? cell_ / std::fabs(d.x) : inf, tDeltaZ = stepZ ? cell_ / std::fabs(d.z) : inf;
+    float nextX = stepX > 0 ? bmin_.x + (cx + 1) * cell_ : bmin_.x + cx * cell_;
+    float nextZ = stepZ > 0 ? bmin_.z + (cz + 1) * cell_ : bmin_.z + cz * cell_;
+    float tMaxX = stepX ? (nextX - a.x) / d.x : inf, tMaxZ = stepZ ? (nextZ - a.z) / d.z : inf;
+    for (int guard = 0; guard < gx_ + gz_ + 4; ++guard) {
+        testCell(cx, cz);
+        float tExit = std::min(std::min(tMaxX, tMaxZ), t1);
+        if (hit && bestT <= tExit) break;          // nothing in later cells can be nearer
+        if (tExit >= t1) break;                    // segment ends inside this cell
+        if (tMaxX < tMaxZ) { cx += stepX; tMaxX += tDeltaX; } else { cz += stepZ; tMaxZ += tDeltaZ; }
+        if (cx < 0 || cz < 0 || cx >= gx_ || cz >= gz_) break;
+    }
 
     if (hit) outT = bestT;
     return hit;
+}
+
+} // namespace game
+
+namespace game {
+
+// Hit triangle normal for a segment query (hover suspension contact normals). Uses segmentHit() for
+// the nearest t, then picks the triangle intersected at that t among the triangles binned in the hit
+// point's cell (a triangle is binned into every cell its XZ bounds overlap, so it is there).
+bool CollisionWorld::segmentHit(const core::Vec3& a, const core::Vec3& b, float& outT, core::Vec3& outN) const {
+    if (!segmentHit(a, b, outT)) return false;
+    core::Vec3 d = b - a;
+    core::Vec3 p = a + d * outT;
+    int cx, cz;
+    cellRange(p.x, p.z, cx, cz);
+    float best = 1e30f;
+    outN = core::Vec3{0, 1, 0};
+    for (int ti : grid_[(size_t)cz * gx_ + cx]) {
+        const Tri& t = tris_[(size_t)ti];
+        core::Vec3 e1 = t.b - t.a, e2 = t.c - t.a;
+        core::Vec3 pv = core::cross(d, e2);
+        float det = core::dot(e1, pv);
+        if (std::fabs(det) < 1e-8f) continue;
+        float inv = 1.0f / det;
+        core::Vec3 tv = a - t.a;
+        float u = core::dot(tv, pv) * inv;
+        if (u < 0 || u > 1) continue;
+        core::Vec3 q = core::cross(tv, e1);
+        float v = core::dot(d, q) * inv;
+        if (v < 0 || u + v > 1) continue;
+        float tt = core::dot(e2, q) * inv;
+        if (std::fabs(tt - outT) < best) { best = std::fabs(tt - outT); outN = t.n; }
+    }
+    return true;
 }
 
 } // namespace game
