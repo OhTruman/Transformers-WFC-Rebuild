@@ -3,6 +3,18 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 17 (2026-10-03) — Milestone 04 Streets world state (AssetTools a23c675)
+- Collision: movement uses the authored collision_pawn.glb; hitscan and visibility use collision_weapon.glb; KillZ −750 m.
+- Truck hull extents now drive wall probe, clearance and ceiling.
+- MapState (single clock from GameplayStarted):
+  - rotating domes and the SkyBeam Matinee, with moving collision;
+  - mode-dependent objective bases (WFC_GAMEMODE, default DM);
+  - objective objects with marker data for the future HUD.
+- Wall panel collision switches with its state.
+- Test spawns: WFC_START / WFC_START_ACTOR, F6/F7 cycle the 84 authored starts.
+- The test dummy only appears with WFC_TESTDUMMY=1.
+- WFC_TRAVERSE=1 traversal test: 160 runs, 0 falls, 0 snags.
+
 ## GAMEPLAY PASS 16 (2026-10-02) — RE d50e2a9 runtime semantics (narrow)
 - Pickups:
   - touch is an overlap begin; health re-checks overlapping pawns on respawn (CheckTouching);

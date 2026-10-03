@@ -33,6 +33,7 @@ bool Application::init() {
 
     world_.load(*renderer_);
     if (std::getenv("WFC_PICKUPTEST")) { runPickupTest(); return false; }   // measurements only
+    if (std::getenv("WFC_TRAVERSE")) { runTraverseTest(); return false; }   // measurements only
     world_.setAudio(audio_);
     gameMode_.begin(world_);
 
@@ -330,6 +331,90 @@ void Application::runPickupTest() {
                  t1, t - t1, d->position().x, d->position().y, d->position().z);
     }
     LOG_INFO("PICKUPTEST factories loaded: %zu", fac.size());
+}
+
+// WFC_TRAVERSE: deterministic traversal of the authored map at the fixed 60 Hz step. For one player start per
+// spawn cluster: robot and vehicle runs in four headings (4 s each, forward input), then robot->vehicle and
+// vehicle->robot at the end point. Logs distance, height range, KillZ falls and stuck runs. Then a moving-
+// collision check through rotating dome StaticInterpActor_15810 and the mode-visibility state.
+void Application::runTraverseTest() {
+    const float dt = (float)clock_.stepSeconds();
+    auto& pc = world_.player().pawn();
+    auto& ctl = world_.player().controller();
+    const auto& starts = world_.startPoints();
+    std::vector<int> picks;
+    std::vector<std::string> seen;
+    for (size_t i = 0; i < starts.size(); ++i)
+        if (std::find(seen.begin(), seen.end(), starts[i].cluster) == seen.end()) { seen.push_back(starts[i].cluster); picks.push_back((int)i); }
+    for (size_t i = 0; i < starts.size(); i += 12) picks.push_back((int)i);   // FFA/team spread
+    int falls = 0, stuck = 0, runs = 0;
+    for (int form = 0; form < 2; ++form) {
+        for (int si : picks) {
+            for (int dir = 0; dir < 4; ++dir) {
+                if (form == 1 && pc.moveForm() != game::Form::Vehicle) { pc.setForm(game::Form::Vehicle); }
+                if (form == 0 && pc.moveForm() != game::Form::Robot) { pc.setForm(game::Form::Robot); }
+                world_.teleportToStart(si);
+                float yaw = starts[(size_t)si].yaw + dir * 1.5707963f;
+                core::Vec3 p0 = pc.position();
+                float ymin = p0.y, ymax = p0.y;
+                // Nearest pawn-blocking surface along the heading at body height (wall check).
+                float wallT = 1.0f; core::Vec3 wn;
+                core::Vec3 fwd = core::forwardFromYawPitch(yaw, 0.0f);
+                core::Vec3 ta = pc.actorLocation(), tb = ta + fwd * 20.0f;
+                bool wallHit = world_.collision()->segmentHit(ta, tb, wallT, wn);
+                float wallDist = wallHit ? wallT * 20.0f : 99.0f;
+                bool fell = false;
+                platform::InputFrame in;
+                in.down[(int)platform::Button::Forward] = true;
+                for (int k = 0; k < (int)(4.0f / dt); ++k) {
+                    ctl.setCameraYaw(yaw);
+                    world_.handleInput(in, dt);
+                    world_.tick(dt);
+                    ymin = std::min(ymin, pc.position().y); ymax = std::max(ymax, pc.position().y);
+                    if (pc.position().y < -749.0f || !std::isfinite(pc.position().y)) { fell = true; break; }
+                }
+                core::Vec3 p1 = pc.position();
+                float dist = std::sqrt((p1.x - p0.x) * (p1.x - p0.x) + (p1.z - p0.z) * (p1.z - p0.z));
+                ++runs; falls += fell;
+                bool snag = dist < 2.0f && wallDist > 4.5f;     // blocked although no wall ahead within reach
+                LOG_INFO("TRAVERSE %s start %2d %-26s dir %d: dist %6.1f m  y %.1f..%.1f wallAhead %.1f m%s%s", form ? "vehicle" : "robot  ",
+                         si, starts[(size_t)si].actor.c_str(), dir, dist, ymin, ymax, wallDist, fell ? "  FELL" : "",
+                         snag ? "  SNAG" : (dist < 2.0f ? "  (wall)" : ""));
+                stuck += snag;
+            }
+            // Transform at the end point (both directions), no fall-through.
+            float y0 = pc.position().y;
+            platform::InputFrame none;
+            pc.beginTransform();
+            for (int k = 0; k < (int)(3.0f / dt); ++k) { world_.handleInput(none, dt); world_.tick(dt); }
+            pc.beginTransform();
+            for (int k = 0; k < (int)(3.0f / dt); ++k) { world_.handleInput(none, dt); world_.tick(dt); }
+            LOG_INFO("TRAVERSE transform x2 at start %d: y %.2f -> %.2f form %s", si, y0, pc.position().y, game::formName(pc.form()));
+            if (pc.position().y < -749.0f) ++falls;
+        }
+    }
+    LOG_INFO("TRAVERSE summary: %d runs, %d falls below KillZ, %d snags (<2 m in 4 s with no wall within 4.5 m)", runs, falls, stuck);
+
+    // Moving collision: a horizontal segment through dome StaticInterpActor_15810 at several clock times.
+    const auto& ms = world_.mapState();
+    for (const auto& m : ms.movers()) {
+        if (m.actor != "StaticInterpActor_15810") continue;
+        for (int k = 0; k < 4; ++k) {
+            core::Vec3 a = m.pivot + core::Vec3{-8.0f, 0.5f, 0.3f}, b = m.pivot + core::Vec3{8.0f, 0.5f, 0.3f};
+            float t = -1.0f; core::Vec3 n;
+            bool hit = world_.collision()->segmentHit(a, b, t, n);
+            LOG_INFO("TRAVERSE dome %s clock %.2f s: segment hit %d at x=%.2f normal (%.2f,%.2f,%.2f)", m.actor.c_str(), ms.clock(),
+                     (int)hit, hit ? a.x + 16.0f * t - m.pivot.x : 0.0f, n.x, n.y, n.z);
+            for (int s = 0; s < (int)(2.0f / dt); ++s) world_.tick(dt);   // 30 deg of rotation
+        }
+    }
+    for (const auto& m : ms.movers())
+        LOG_INFO("TRAVERSE mover %s %s delta.x=(%.3f,%.3f,%.3f)", m.actor.c_str(), m.kind == game::MapMover::Kind::Rotating ? "rotating" : "matinee",
+                 m.worldDelta.m[0], m.worldDelta.m[1], m.worldDelta.m[2]);
+    for (const auto& v : ms.modeVisibleActors())
+        LOG_INFO("TRAVERSE mode %s: %s visible=%d", game::gameModeName(ms.mode()), v.actor.c_str(), (int)v.visible);
+    int active = 0; for (const auto& o : ms.objectives()) active += o.activeInMode;
+    LOG_INFO("TRAVERSE objectives: %zu (active in %s: %d)", ms.objectives().size(), game::gameModeName(ms.mode()), active);
 }
 
 void Application::shutdown() {

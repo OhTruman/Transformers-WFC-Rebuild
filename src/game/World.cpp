@@ -128,10 +128,46 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         LOG_INFO("weapon: Ion Blaster loaded, socket bone R_Arm03_Elbow_XB node=%d", bone);
     }
 
-    // Collision: load the dedicated collision mesh (solid BSP + BlockingVolume hulls).
-    render::MeshData colMesh;
-    if (assets::loadGlb(root + "/Maps/MP_IAC_Streets/collision.glb", colMesh)) {
-        collision_.build(colMesh);
+    // Collision: the authored per-trace worlds (AssetTools PHYSICS_STREETS): collision_pawn.glb blocks pawn and
+    // vehicle movement (BSP + 71 BlockingVolumes + 4 TnForcedDirVolumes + authored simple hulls), and
+    // collision_weapon.glb blocks hitscan / line checks (BSP + the 34 weapon-blocking volumes + hulls).
+    // collision.glb (render geometry of every blocking prop) is only a fallback. Movers' triangles are split
+    // out into moving collision sets (MapState).
+    const std::string mapDir = root + "/Maps/MP_IAC_Streets/";
+    const char* gm = std::getenv("WFC_GAMEMODE");
+    MatchMode mode = MatchMode::DM;
+    if (gm) for (MatchMode m : {MatchMode::DM, MatchMode::TDM, MatchMode::CTF, MatchMode::KOTH, MatchMode::EXT, MatchMode::DOM})
+        if (std::string(gm) == gameModeName(m)) mode = m;
+    mapState_.load(mapDir + "gameplay.json", mode);
+    auto splitMovers = [](const render::MeshData& in, render::MeshData& out,
+                          std::vector<std::pair<std::string, std::vector<core::Vec3>>>& moverTris) {
+        std::vector<std::string> names = MapState::moverActorNames();
+        out.positions = in.positions;
+        for (const render::SubMesh& sm : in.subs) {
+            bool mover = std::find(names.begin(), names.end(), sm.nodeName) != names.end();
+            std::vector<core::Vec3>* dst = nullptr;
+            if (mover) { moverTris.push_back({sm.nodeName, {}}); dst = &moverTris.back().second; }
+            for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) {
+                if (!mover) { out.indices.push_back(in.indices[i]); continue; }
+                uint32_t v = in.indices[i];
+                dst->push_back({in.positions[v * 3], in.positions[v * 3 + 1], in.positions[v * 3 + 2]});
+            }
+        }
+    };
+    render::MeshData colMesh, pawnStatic, weaponColMesh, weaponStatic;
+    std::vector<std::pair<std::string, std::vector<core::Vec3>>> pawnMovers, weaponMovers;
+    bool authored = assets::loadGlb(mapDir + "collision_pawn.glb", colMesh);
+    if (!authored) assets::loadGlb(mapDir + "collision.glb", colMesh);
+    if (!colMesh.empty()) {
+        splitMovers(colMesh, pawnStatic, pawnMovers);
+        collision_.build(pawnStatic);
+        if (assets::loadGlb(mapDir + "collision_weapon.glb", weaponColMesh)) {
+            splitMovers(weaponColMesh, weaponStatic, weaponMovers);
+            weaponCollision_.build(weaponStatic);
+        }
+        mapState_.registerCollision(collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr, pawnMovers, weaponMovers);
+        LOG_INFO("collision: movement %s, weapon %s", authored ? "collision_pawn.glb" : "collision.glb (fallback)",
+                 weaponCollision_.valid() ? "collision_weapon.glb" : "movement world");
         renderer.setVisibilityQuery([this](const core::Vec3& a, const core::Vec3& b) {
             // March in short pieces: segmentHit scans every grid cell in the segment's AABB,
             // which is prohibitive for long light-visibility rays.
@@ -139,11 +175,12 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
             float len = core::length(d);
             int n = std::max(1, (int)std::ceil(len / 2.0f));
             float t;
+            const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_;   // zero-extent line checks
             for (int i = 0; i < n; ++i)
-                if (collision_.segmentHit(a + d * ((float)i / n), a + d * ((float)(i + 1) / n), t)) return true;
+                if (lineWorld.segmentHit(a + d * ((float)i / n), a + d * ((float)(i + 1) / n), t)) return true;
             return false;
         });
-        killZ_ = collision_.boundsMin().y - 25.0f;   // fell out of the world
+        killZ_ = -750.0f;   // BASE TnWorldInfo KillZ -75000 UU [CONF PHYSICS_STREETS]
     }
 
     // Place the player at an authored free-for-all start, facing the play area.
@@ -154,6 +191,12 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
                  spawnPos_.x, spawnPos_.y, spawnPos_.z, spawnYaw_);
     }
     respawnPlayer();
+    // Test spawn selection (not a menu): WFC_START=<0..83> picks one of the 84 authored player starts,
+    // WFC_START_ACTOR=<name> picks by actor name; F6 / F7 cycle starts at run time (debug).
+    loadStartPoints(mapDir + "gameplay.json");
+    if (const char* s = std::getenv("WFC_START")) teleportToStart(std::atoi(s));
+    if (const char* s = std::getenv("WFC_START_ACTOR"))
+        for (size_t i = 0; i < starts_.size(); ++i) if (starts_[i].actor == s) teleportToStart((int)i);
     LOG_INFO("vehicle mesh: actor %.2f m above origin, top %.2f m", player_.pawn().meshToActor(Form::Vehicle), player_.pawn().meshTopAboveOrigin());
     if (std::getenv("WFC_STARTVEHICLE")) {   // for vehicle tests: vehicle mesh hung off the same actor location
         Character& pc = player_.pawn();
@@ -166,7 +209,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     actors_.clear();
     loadPickupFactories(root + "/Maps/MP_IAC_Streets/gameplay.json");
     loadDestructibles(root + "/Maps/MP_IAC_Streets/physics.json", root + "/../content/");
-    {
+    // Weapon-test dummy (DamageTarget): test instrumentation, not WFC content — only with WFC_TESTDUMMY=1.
+    if (std::getenv("WFC_TESTDUMMY")) {
         core::Vec3 d = spawnPos_ + core::forwardFromYawPitch(spawnYaw_, 0.0f) * 10.0f;
         if (collision_.valid()) { float gy; core::Vec3 n; if (collision_.groundHeight(d.x, d.z, d.y + 0.5f, 1.5f, gy, n)) d.y = gy; }
         actors_.push_back(std::make_unique<DamageTarget>(d));
@@ -248,10 +292,69 @@ void World::loadDestructibles(const std::string& path, const std::string& conten
             bmin.y -= 1.6f; bmax.y -= 1.6f;                     // piece Transform Position Z -160 UU
         }
         auto a = std::make_unique<Destructible>(d["actor"].asString(), p, bmin, bmax, (int)destructibles_.size());
+        // Piece collision per state: Base (intact) and Chunk02 (destroyed / settled) at the piece transform.
+        auto meshTris = [&](const char* file) {
+            std::vector<core::Vec3> tris;
+            render::MeshData m;
+            if (!assets::loadGlb(contentRoot + file, m)) return tris;
+            for (uint32_t idx : m.indices)
+                tris.push_back({m.positions[idx * 3], m.positions[idx * 3 + 1] - 1.6f, m.positions[idx * 3 + 2]});
+            return tris;
+        };
+        std::vector<core::Vec3> baseTris = meshTris("DES_IAC_WallPanelSign_p/Meshes/WallPanelSign_Base_STAT.gltf");
+        std::vector<core::Vec3> stumpTris = meshTris("DES_IAC_WallPanelSign_p/Meshes/WallPanelSign_Chunk02_STAT.gltf");
+        for (CollisionWorld* w : {&collision_, &weaponCollision_}) {
+            if (!w->valid()) continue;
+            Destructible::CollisionSet cs;
+            cs.world = w;
+            cs.intact = baseTris.empty() ? -1 : w->addDynamicSet(baseTris, core::Mat4::translate(p));
+            cs.broken = stumpTris.empty() ? -1 : w->addDynamicSet(stumpTris, core::Mat4::translate(p));
+            a->addCollision(cs);
+        }
         LOG_INFO("destructible: %s at authored %.2f %.2f %.2f (state 0, health %.0f)", a->name().c_str(), p.x, p.y, p.z, a->health());
         destructibles_.push_back(a.get());
         actors_.push_back(std::move(a));
     }
+}
+
+void World::loadStartPoints(const std::string& path) {
+    starts_.clear();
+    std::string text;
+    assets::Json root;
+    if (!readTextFile(path, text) || !assets::Json::parse(text, root)) return;
+    const assets::Json& ps = root["player_starts"];
+    for (size_t i = 0; i < ps.size(); ++i) {
+        const assets::Json& L = ps[i]["location_gltf"];
+        if (L.size() < 3) continue;
+        StartPoint s;
+        s.actor = ps[i]["actor"].asString(); s.cls = ps[i]["class"].asString();
+        s.cluster = ps[i]["clusters"][0].asString();
+        s.pos = {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
+        // Same yaw convention as loadSpawn: UE yaw -> rebuild yaw (forward -Z at 0). UE +X = glTF +X.
+        float ueYaw = ps[i]["yaw_deg"].asFloat() * 0.01745329252f;
+        core::Vec3 f{std::cos(ueYaw), 0.0f, std::sin(ueYaw)};          // UE forward in glTF (x, z <- y)
+        s.yaw = std::atan2(-f.x, -f.z);
+        starts_.push_back(s);
+    }
+    LOG_INFO("starts: %zu player starts", starts_.size());
+}
+
+void World::teleportToStart(int index) {
+    if (starts_.empty()) return;
+    index = ((index % (int)starts_.size()) + (int)starts_.size()) % (int)starts_.size();
+    startCursor_ = index;
+    const StartPoint& s = starts_[(size_t)index];
+    core::Vec3 p = s.pos;
+    if (collision_.valid()) { float gy; core::Vec3 n; if (collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, n)) p.y = gy; }
+    Character& pc = player_.pawn();
+    if (pc.moveForm() == Form::Vehicle) p.y += pc.meshToActor(Form::Robot) - pc.meshToActor(Form::Vehicle);
+    pc.setPosition(p);
+    pc.setYaw(s.yaw);
+    pc.velocity() = {0, 0, 0};
+    pc.groundY = p.y;
+    player_.controller().setCameraYaw(s.yaw);
+    LOG_INFO("start %d/%zu: %s (%s, cluster %s) at %.1f %.1f %.1f", index, starts_.size(), s.actor.c_str(), s.cls.c_str(),
+             s.cluster.c_str(), p.x, p.y, p.z);
 }
 
 bool World::loadSpawn(const std::string& path, core::Vec3& outPos, float& outYaw) {
@@ -335,6 +438,8 @@ void World::buildGraybox() {
 
 void World::handleInput(const platform::InputFrame& in, float dt) {
     player_.controller().handleInput(in, dt);   // Dash (Shift) is latched by PlayerController
+    if (in.wasPressed(platform::Button::DebugNextStart)) teleportToStart(startCursor_ + 1);   // test spawn cycling
+    if (in.wasPressed(platform::Button::DebugPrevStart)) teleportToStart(startCursor_ - 1);
 }
 
 static bool rayAabb(const core::Vec3& o, const core::Vec3& d, float len,
@@ -377,8 +482,9 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     float bestDist = range;
     // World geometry.
     if (collision_.valid()) {
-        float t;
-        if (collision_.segmentHit(origin, end, t)) bestDist = range * t;
+        float t; core::Vec3 n;
+        const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_;
+        if (lineWorld.segmentHit(origin, end, t, n)) bestDist = range * t;
     }
     // Damageable targets (closest wins).
     DamageTarget* hitTarget = nullptr;
@@ -688,6 +794,7 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
 void World::tick(float dt) {
     pickupEvents_.clear();
     destructibleEvents_.clear();
+    if (collision_.valid()) mapState_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
     {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
         render::Camera cam;
         player_.controller().updateCamera(cam);

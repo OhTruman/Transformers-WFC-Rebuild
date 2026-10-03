@@ -16,8 +16,11 @@
 #include "core/Math.h"
 
 #include <string>
+#include <vector>
 
 namespace game {
+
+class CollisionWorld;
 
 struct DestructibleEvent {
     int actor = -1;
@@ -37,6 +40,11 @@ public:
     // HmGenericDamageDestructionTrigger: damage in state 0 depletes InitialHealth; 0 -> 1 when it reaches 0.
     void applyDamage(World& world, float amount);
     int state() const { return state_; }
+    // Piece collision per state (Base mesh while intact; Chunk02 stump once destroyed/settled), registered by
+    // the World as moving-collision sets in the pawn and weapon worlds [PROV: per-poly from the render meshes;
+    // the pieces' simple hulls were not extracted].
+    struct CollisionSet { CollisionWorld* world = nullptr; int intact = -1, broken = -1; };
+    void addCollision(const CollisionSet& s) { collision_.push_back(s); applyCollision(); }
     float health() const { return health_; }
     const std::string& name() const { return name_; }
     // World-space damage box (Base mesh bounds at the piece transform) for weapon traces / touch.
@@ -51,6 +59,8 @@ private:
     float health_ = kInitialHealth;
     float stateTime_ = 0.0f;
     void transition(World& world, int to);
+    std::vector<CollisionSet> collision_;
+    void applyCollision();
 };
 
 } // namespace game

@@ -75,6 +75,27 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 17 — MILESTONE 04 STREETS WORLD STATE, AssetTools a23c675 (2026-10-03, gameplay agent)
+
+| Item | Authored evidence | Conf | Rebuild |
+|---|---|---|---|
+| Collision worlds | collision_pawn.glb (non-zero extent: BSP, 71 BlockingVolumes, 4 TnForcedDirVolumes, authored simple hulls) / collision_weapon.glb (zero extent: 34 weapon-blocking volumes) | CONFIRMED (flags/geometry), HIGH (UE3 rules) | **APPLIED**: movement 101k tris (was collision.glb render geometry, 1.85M), hitscan / line checks / visibility on the weapon world |
+| KillZ | BASE TnWorldInfo KillZ −75000 UU | CONFIRMED | −750 m (was collision bounds − 25 m) |
+| Truck hull | VH_Optimus_PHYSSYS box x −310..338, y ±154, z −35..185 UU | CONFIRMED | Replaces the PROV wall-probe radius (1.75 m → hull extent along the travel direction), minimum clearance (0.6 m → hull bottom −0.35 m) and top (2.44 m mesh bounds → 1.85 m) |
+| Rotating domes | StaticInterpActor_15810/7381/8114 PHYS_Rotating Yaw 2730 UU/s (15°/s), collide + block | CONFIRMED | `MapState` movers: world-space pose about the pivot; triangles split into moving collision sets (pawn + weapon) |
+| SkyBeam | GameplayStarted → "StartBeam" → SeqAct_Interp_3464 (loop 9.0022 s), EulerTrack CurveAuto, IMF_RelativeToInitial, on 5249 (collides) / 13497 / 10471 | CONFIRMED (data), HIGH (Euler vs quat interpolation, ≤20°) | Same clock as the domes. `worldDelta` per mover for Rendering. 5249 has moving collision. PosTrack (≤0.008 UU) not applied |
+| Objective bases | 4 InterpActors bHidden, UnHide via SeqCond_GameRuleActive CTF / EXT, non-colliding | CONFIRMED | `MapState::modeVisibleActors()`: hidden in DM (default) / TDM / KOTH / DOM, visible in CTF / EXT (WFC_GAMEMODE) |
+| Objectives / HUD signals | Flag/bomb factories, capture/plant points, domination points, KOTH zones; MarkerType / MarkerString / RequiredGameRule | CONFIRMED (future_hud_handoff) | `MapState::objectives()` with marker fields and activeInMode. No scoring |
+| Wall panel collision | Base (intact) / Chunk02 (destroyed, settled) pieces | CONFIRMED (meshes/states) / PROV (per-poly, hulls not extracted) | Moving sets switched by state. No authored reset (state 2 terminal) |
+| Player starts | 84 (60 team + 24 FFA), 12 clusters | CONFIRMED | WFC_START / WFC_START_ACTOR select a start; F6/F7 cycle them (test only, not a WFC binding) |
+| Test dummy | — (rebuild instrumentation) | — | Only with WFC_TESTDUMMY=1 |
+
+**Traversal (WFC_TRAVERSE=1, fixed 60 Hz):**
+- 20 starts (one per cluster plus a spread) × robot and vehicle × 4 headings: 160 runs, 0 falls below KillZ, 0 snags. Every short run was against a wall within 4.5 m.
+- 32 transforms at the run end points with no fall-through.
+
+---
+
 ## PASS 16 — RUNTIME SEMANTICS, RE d50e2a9 (2026-10-02, gameplay agent)
 Source: `RE-Workspace/notes/MILESTONE03_RUNTIME_SEMANTICS_ASSETTOOLS_7a69756.md` (RE commit d50e2a9). It corrects
 AssetTools §2: TnPickupFactory SetPickupVisible/Hidden, IsReadyToPickup, GiveTo, TakePickUp and GetRespawnTime have bytecode.

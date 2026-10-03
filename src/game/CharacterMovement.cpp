@@ -14,7 +14,10 @@ static constexpr float kStepUpConf = 0.35f; // [CONF] TnRobotForm._MovementCapab
 // WFC_STEPUP=m overrides it for A/B diagnostics only.
 static const float kStepUp = std::getenv("WFC_STEPUP") ? (float)std::atof(std::getenv("WFC_STEPUP")) : kStepUpConf;
 static constexpr float kSnapDown = 1.0f;    // follow downward slopes/stairs while grounded
-static constexpr float kVehicleProbeRadius = 1.75f;   // [PROV] vehicle cylinder not recovered
+// Optimus truck rigid-body hull: VH_Optimus_PHYSSYS body on C_Reference_XR, convex hull box
+// x -310..338, y +-154, z -35..185 UU around the mesh root [CONF AssetTools PHYSICS_STREETS].
+static constexpr float kHullFront = 3.38f, kHullBack = 3.10f, kHullHalfWidth = 1.54f;
+static constexpr float kHullBottom = -0.35f, kHullTop = 1.85f;
 
 namespace {
 
@@ -343,7 +346,12 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     p = p + v * dt;
 
     core::Vec3 moveDir = core::normalize(core::Vec3{p.x - oldPos.x, 0.0f, p.z - oldPos.z});
-    if (wallBlock(col, oldPos, p, v, kVehicleProbeRadius) && vs.driving) {
+    // Wall probe reach = the hull's extent along the travel direction (box support distance from the root).
+    core::Vec3 hf = core::forwardFromYawPitch(c.yaw(), 0.0f);
+    core::Vec3 hr = core::normalize(core::cross(hf, core::Vec3{0, 1, 0}));
+    float along = core::dot(moveDir, hf);
+    float hullReach = std::fabs(along) * (along >= 0.0f ? kHullFront : kHullBack) + std::fabs(core::dot(moveDir, hr)) * kHullHalfWidth;
+    if (wallBlock(col, oldPos, p, v, std::max(hullReach, kHullHalfWidth)) && vs.driving) {
         // Driving.OnRigidBodyCollision: a frontal hit (contact normal . forward > CosCollisionNormalThreshold
         // 0.866) drops back to Hovering (ram consumption during nitro not implemented). [PROV contact
         // normal approximated by the blocked travel direction.]
@@ -360,7 +368,7 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     // through awnings/decks (otherwise a suspension ray starting just above a thin surface reports a
     // near-zero length and the spring damper term spikes).
     if (col && v.y > 0.0f) {
-        float top = c.meshTopAboveOrigin();
+        float top = kHullTop;                     // hull top above the root
         core::Vec3 a{p.x, oldPos.y + cfg::kVehComUp, p.z};
         core::Vec3 b = core::Vec3{p.x, p.y + top, p.z};
         float t; core::Vec3 n;
@@ -383,8 +391,8 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             // [PROV] the PhysicalVehicleMesh hull keeps the chassis off the ground when the springs bottom out.
             core::Vec3 com = p + B.x * cfg::kVehComFwd + B.z * cfg::kVehComUp;
             if (col->groundHeight(com.x, com.z, std::max(oldPos.y, p.y) + cfg::kVehComUp, 0.6f, gy, n) &&
-                com.y - gy < cfg::kHoverMinClearance) {
-                p.y += cfg::kHoverMinClearance - (com.y - gy);
+                com.y - gy < cfg::kVehComUp - kHullBottom) {          // hull bottom 0.35 m below the root
+                p.y += (cfg::kVehComUp - kHullBottom) - (com.y - gy);
                 if (v.y < 0.0f) v.y = 0.0f;
             }
         }

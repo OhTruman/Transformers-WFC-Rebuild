@@ -112,7 +112,7 @@ constexpr float kHoverUprightPerTick = 0.05f;   // UpdateTurn TurnRate (0.05,0.0
                                                 // contact or upside down [per-tick factor; 30 Hz tick PROV]
 constexpr float kHoverJumpAngSpeed = 1.0f;      // JumpAngularSpeed (class default 1): local -Y = nose up
 constexpr float kVehJumpInterval   = 0.3f;      // TnCarForm.get_TimeBetweenJumps
-constexpr float kHoverMinClearance = 0.6f;      // [PROV] chassis-vs-ground contact (PhysicalVehicleMesh hull not recovered)
+constexpr float kHoverMinClearance = 0.6f;      // SUPERSEDED (Pass 17): authored hull bottom (CharacterMovement kHullBottom)
 // Driving (TnCarSimulation + Truck_Physics / class defaults) [CONF bytecode unless marked]:
 constexpr float kDriveLowSpeedBoostScale = 8.0f;     // ExtraBoost = MaxAccel*8 at 0 speed ...
 constexpr float kDriveLowSpeedBoostThreshold = 0.5f; // ... falling quadratically to 0 at MaxSpeed*0.5

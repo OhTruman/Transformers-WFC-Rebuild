@@ -1,16 +1,26 @@
 #include "game/Destructible.h"
 #include "game/Character.h"
 #include "game/World.h"
+#include "game/Collision.h"
 
 #include <algorithm>
 
 namespace game {
+
+void Destructible::applyCollision() {
+    for (const CollisionSet& s : collision_) {
+        if (!s.world) continue;
+        s.world->setDynamicEnabled(s.intact, state_ == 0);
+        s.world->setDynamicEnabled(s.broken, state_ != 0);
+    }
+}
 
 void Destructible::transition(World& world, int to) {
     DestructibleEvent e;
     e.actor = index_; e.fromState = state_; e.toState = to; e.pos = pos_;
     state_ = to;
     stateTime_ = 0.0f;
+    applyCollision();
     world.raiseDestructibleEvent(e);
 }
 

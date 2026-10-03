@@ -7,6 +7,7 @@
 #include "game/Player.h"
 #include "game/Pickup.h"
 #include "game/PickupFactory.h"
+#include "game/MapState.h"
 #include "game/Destructible.h"
 #include "game/SpawnPoint.h"
 #include "game/Collision.h"
@@ -75,6 +76,16 @@ public:
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).
     const CollisionWorld* collision() const { return collision_.valid() ? &collision_ : nullptr; }
+    // Zero-extent (weapon / line-check) collision world; falls back to the movement world.
+    const CollisionWorld* weaponCollision() const {
+        return weaponCollision_.valid() ? &weaponCollision_ : collision();
+    }
+    // MP_IAC_Streets runtime map state: movers (poses for Rendering), mode visibility, objective objects.
+    const MapState& mapState() const { return mapState_; }
+    // Player starts (gameplay.json, 84 = 60 team + 24 FFA) and spawn clusters, for deterministic test spawns.
+    struct StartPoint { std::string actor, cls, cluster; core::Vec3 pos; float yaw; };
+    const std::vector<StartPoint>& startPoints() const { return starts_; }
+    void teleportToStart(int index);   // test/debug spawn selection
 
 private:
     bool loadVerticalSlice(render::IRenderer& renderer);
@@ -93,6 +104,11 @@ private:
     void loadDestructibles(const std::string& physicsJson, const std::string& contentRoot);
     std::vector<SpawnPoint> spawns_;
     CollisionWorld collision_;
+    CollisionWorld weaponCollision_;
+    MapState mapState_;
+    std::vector<StartPoint> starts_;
+    int startCursor_ = 0;
+    void loadStartPoints(const std::string& gameplayJson);
 
     core::Vec3 spawnPos_{0, 0, 0};
     float spawnYaw_ = 0.0f;

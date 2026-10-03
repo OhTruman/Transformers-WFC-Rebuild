@@ -26,6 +26,7 @@ struct SubMesh {
     std::string lightmapName;         // _LM atlas object name; resolved to a handle at load
     std::string component;            // source UE3 component object path (lightmap/data join key)
     std::string sourceMesh;           // source StaticMesh object path (glTF node extras.mesh)
+    std::string nodeName;             // glTF node name (placed actor, e.g. StaticInterpActor_15810)
     int sourceSection = -1;           // primitive index within that mesh
     TextureHandle lightmapTex = kInvalidTexture;
     float lmScale[2] = {1, 1};

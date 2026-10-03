@@ -231,6 +231,7 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
             sm.indexOffset = indexStart;
             sm.indexCount = (uint32_t)idx.size();
             sm.material = prim.has("material") ? prim["material"].asInt(-1) : -1;
+            sm.nodeName = node["name"].asString();
             if (node.has("extras")) {
                 sm.component = node["extras"]["component"].asString();
                 sm.sourceMesh = node["extras"]["mesh"].asString();
