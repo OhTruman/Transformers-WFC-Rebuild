@@ -263,6 +263,7 @@ struct Voice {
     bool wet = false;             // MASTER_WET bus (environment) vs dry
     int spatial = 0;              // 0 k3D, 1 k2D, 2 kSmartPan, 3 kSmartPan_PreferPlayer
     float panAtten3DDb = 0.0f;    // SmartPanAttenuation3D
+    int priority = 128;           // FMOD channel priority (0 most important)
     float gL = 1.0f, gR = 1.0f;   // per-block resolved channel gains
     float dDist = 0.0f, dPan = 0.0f, dAtten = 1.0f;   // diagnostics of the last resolve
     bool active = false;
@@ -321,18 +322,34 @@ public:
     }
 
     // Fixed voice pool so handles stay valid; handle = index | generation << 12.
+    // [CONF] Xe-TransEngine.ini [HM_Engine.FmodAudioDevice] MaxChannels=96. When every channel is busy a new
+    // sound takes the channel of the least important playing voice by FMOD channel priority (larger number =
+    // less important; cue voices 255 - Priority [CONF RE d50c2a9]); a newcomer less important than every
+    // playing voice does not play. [HIGH, FMOD Ex internal] equal priorities: the quietest voice is taken.
     static constexpr int kMaxVoices = 96;
-    Voice* freeVoice(int& index) {
+    Voice* freeVoice(int& index, int priority) {
         for (int i = 0; i < (int)voices_.size(); ++i)
             if (!voices_[(size_t)i].active) { index = i; return &voices_[(size_t)i]; }
         if ((int)voices_.size() < kMaxVoices) {
             voices_.push_back(Voice{}); index = (int)voices_.size() - 1; return &voices_.back();
         }
-        return nullptr;   // pool exhausted: drop the request
+        int best = -1;
+        for (int i = 0; i < (int)voices_.size(); ++i) {
+            const Voice& v = voices_[(size_t)i];
+            if (v.priority < priority) continue;                       // more important than the newcomer
+            if (best < 0 || v.priority > voices_[(size_t)best].priority ||
+                (v.priority == voices_[(size_t)best].priority && v.gL + v.gR < voices_[(size_t)best].gL + voices_[(size_t)best].gR))
+                best = i;
+        }
+        if (best < 0) { ++stats_.droppedVoices; return nullptr; }
+        ++stats_.stolenVoices;
+        voices_[(size_t)best].active = false;
+        index = best;
+        return &voices_[(size_t)best];
     }
-    Voice* start(Sound s, int& index) {
+    Voice* start(Sound s, int& index, int priority = 128) {
         if (!ok_ || s < 0 || (size_t)s >= sounds_.size()) return nullptr;
-        Voice* v = freeVoice(index);
+        Voice* v = freeVoice(index, priority);
         if (!v) return nullptr;
         int gen = (v->gen + 1) & 0x7FFFF;
         *v = Voice{}; v->gen = gen; v->data = &sounds_[(size_t)s].pcm; v->sample = &sounds_[(size_t)s]; v->active = true;
@@ -354,7 +371,7 @@ public:
 
     audio::Voice playVoice(Sound s, const VoiceParams& p) override {
         std::lock_guard<std::mutex> lk(mx_);
-        int i; Voice* v = start(s, i);
+        int i; Voice* v = start(s, i, p.priority);
         if (!v) return kInvalidVoice;
         v->vol = p.volume; v->rate = p.pitch > 0.05f ? p.pitch : 0.05f;
         v->positional = p.positional; v->inverse = true; v->wpos = p.pos;
@@ -362,6 +379,7 @@ public:
         v->pan2D = p.pan2D; v->pan3D = p.pan3D;
         v->rearAttenDb = p.rearAttenDb; v->wet = p.wet; v->spatial = p.spatial; v->panAtten3DDb = p.panAtten3DDb;
         v->loop = p.loop;
+        v->priority = p.priority;
         return i | (v->gen << 12);
     }
 
@@ -574,7 +592,7 @@ private:
         comp_.process(dry_.data(), kBlockFrames, peak, minGain);
         stats_.peakDb = peak > 1e-6f ? 20.0f * std::log10(peak) : -96.0f;
         stats_.gainReductionDb = std::min(stats_.gainReductionDb * 0.9f, 20.0f * std::log10(minGain));
-        stats_.voices = nv; stats_.wetVoices = nw;
+        stats_.voices = nv; stats_.wetVoices = nw; stats_.peakVoices = std::max(stats_.peakVoices, nv);
         for (int i = 0; i < kBlockSamples; ++i) {
             float x = dry_[i] * 32768.0f;
             dst[i] = (int16_t)(x > 32767.0f ? 32767.0f : (x < -32768.0f ? -32768.0f : x));

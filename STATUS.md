@@ -416,6 +416,42 @@ camdis.txt, pcdis.txt via work/pass11/ue3dis.py) and authored data (VEH_SHARED_p
   - ram collision;
   - wheel/tire steering.
 
+## SYSTEMS MILESTONE 04 INTEGRATION PREVIEW (2026-10-03)
+- **Merges:** clean into integration 356c352 (STATUS.md only) and experimental; Rendering's VehicleFx conflict is
+  already resolved in integration.
+- **Gameplay d122ef4:** 5 additive conflict hunks, resolved and built in `work/m4/merge_preview`.
+  - The pickup-sound glue plays each PickupSound once per take (Gameplay PICKUPTEST with audio).
+  - Resolutions are in FIDELITY.md.
+- **Harness:** 2 stale HUD-spread expectations, retired by Experimental 28e093f.
+
+## SYSTEMS MILESTONE 04 ADDENDUM (2026-10-03) — map FX runtime yielded to Rendering
+- **LevelFx removed:** Rendering 411c970 (WfcMapFx) simulates and draws the 8 steam emitters and pickup effects.
+- **PickupPresentation:** now the pickup sound only (`onTaken`); effect state is Rendering's `setMapEffectState`.
+  The integration glue is in FIDELITY.md.
+- **Objective beam:** confirmed for flag/bomb (RE 00dcb20); the conflict is resolved.
+- **Validation:**
+  - suite 557/0; audio-attach 325/0/11 (0 player-owned);
+  - wfc_fidelity 194/0/19; probe 31/0/1;
+  - sustained 5.3–14.3 ms.
+
+## SYSTEMS MILESTONE 04 (2026-10-03) — MP_IAC_Streets world systems (AssetTools a23c675)
+- **Ambient bed:** all 70 emitters play natively (auto-play once at level start, per-cue kKillFarthest
+  registration, line/volume re-play). 50 of 70 sound, because 4 point cues have more emitters than their limit.
+  The PROVISIONAL 24-voice budget, audibility gate and fades are removed.
+- **96 channels:** priority stealing from authored Priority (255 − Priority). Sustained fire no longer drops
+  weapon voices; only Priority-0 cues are refused when full.
+- **Zones / pools:** 9 zones, 10 presets, 11 pools re-validated against the complete manifest and the
+  decompiled SeqAct_PlayPlayerPositionalSound.
+- **Steam FX:** LevelFx hands Steam_Mat and the authored colour to Rendering's material path.
+- **Pickups:**
+  - ammo beam active at map start (RE P2 correction);
+  - `onTaken` / `onRespawned` adapters for Gameplay's PickupEvents; the integration glue is in FIDELITY.md.
+- **Movers:** no authored mover sounds, none added.
+- **Validation:**
+  - suite 586/0; audio-attach 316/0/14 (0 player-owned);
+  - wfc_fidelity 194/0/19; probe 31/0/1;
+  - sustained 4.8–14.2 ms; dense region 6.5–13.0 ms; no leaks.
+
 ## SYSTEMS MILESTONE 03 PASS 7 (2026-10-02) — vehicle loop enable confirmed (RE d50c2a9)
 - **Loop enable:** `SoundNodeWaveEvent.bLooping` → FMOD_LOOP_NORMAL, with no loop points or count, so the whole
   FSB sample loops (CONFIRMED). The rebuild already behaved this way; only comments and provenance change.

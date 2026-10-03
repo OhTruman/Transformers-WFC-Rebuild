@@ -160,6 +160,7 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
         d.category = rp["Category"].asString();
         d.mixerPreset.clear();                                   // map bank cues author none
         d.occlusion = rp["EnableOcclusionVolume"].asBool(true);
+        d.priority = rp["Priority"].asFloat(0.0f);                  // unset in object and class default -> 0
         const std::string sp = rp["SpatializationType"].asString();
         d.spatial = sp == "k2D" ? Spatial::TwoD : sp == "kSmartPan" ? Spatial::SmartPan
                   : sp == "kSmartPan_PreferPlayer" ? Spatial::SmartPanPreferPlayer : Spatial::ThreeD;
@@ -177,6 +178,8 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
             e.pitchVarMin = p["PitchVariationMin"].asFloat(0.0f); e.pitchVarMax = p["PitchVariationMax"].asFloat(0.0f);
             e.chanceNone = p["ChanceToPlayNone"].asInt(0);
             e.loop = p["bLooping"].asBool(false);
+            e.overridePriority = p["OverridePriority"].asBool(false);
+            e.priority = p["Priority"].asFloat(0.0f);
             e.stereoGain = stereoGain(p);
             e.volCurve = jsonCurve(p["VolumeCurve"]); e.pitchCurve = jsonCurve(p["PitchCurve"]);
             const assets::Json& waves = ev["children"];
@@ -311,6 +314,9 @@ void SoundCues::launch(Instance& in, int e) {
     p.rearAttenDb = cd.rearAttenDb;
     p.wet = isWet(cd.category);
     p.loop = ed.loop;
+    // [CONF native, RE d50c2a9 P1] wave.Priority = OverridePriority ? node.Priority : root.Priority; the FMOD
+    // channel priority is int(255 - clamp(Priority, -1, 255)) (0 = most important).
+    p.priority = (int)(255.0f - std::min(255.0f, std::max(-1.0f, ed.overridePriority ? ed.priority : cd.priority)));
     ref.v = audio_->playVoice(s, p);
     if (ref.v != audio::kInvalidVoice) in.voices.push_back(ref);
     static const bool log = std::getenv("WFC_CUELOG") != nullptr;

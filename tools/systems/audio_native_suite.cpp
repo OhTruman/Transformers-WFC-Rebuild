@@ -555,18 +555,13 @@ static void testAuthored() {
         const PP::FactoryDef& d = PP::def(i);
         bool custom = d.kind == PP::Kind::Health || d.kind == PP::Kind::OverShield;
         bool objective = d.kind == PP::Kind::ObjectiveFlag || d.kind == PP::Kind::ObjectiveBomb;
-        CHECK(pp.effectState(i).customActive == custom && !pp.effectState(i).highlightActive,
-              "%s spawn: custom %d, highlight off (bAutoActivate false)", d.actor, (int)pp.effectState(i).customActive);
         CHECK(!d.pickupSound || cues.hasCue(d.pickupSound), "%s PickupSound %s in table", d.actor, d.pickupSound ? d.pickupSound : "-");
-        CHECK(d.pickupEffectAttached == !custom, "%s PickupEffect attachment", d.actor);
+        CHECK(objective || d.pickupSound != nullptr, "%s has an authored PickupSound", d.actor);
+        CHECK(d.pickupEffectAttached == !custom, "%s PickupEffect attachment (authored data)", d.actor);
+        // RE 00dcb20: ShouldDisplayHighlightFx True on TnAmmoCrate and TnWeaponPickupFactory (flag / bomb inherit it).
         CHECK(d.highlightFx == (d.kind == PP::Kind::AmmoCrate || objective), "%s ShouldDisplayHighlightFx", d.actor);
         CHECK((d.requiredGameRule != nullptr) == objective, "%s RequiredGameRuleClass", d.actor);
-        pp.setPickupHidden(i);
-        CHECK(!pp.effectState(i).customActive && !pp.effectState(i).highlightActive && pp.effectState(i).customHidden == custom,
-              "%s SetPickupHidden", d.actor);
-        pp.setPickupVisible(i);
-        CHECK(pp.effectState(i).customActive == custom && pp.effectState(i).highlightActive == d.highlightFx,
-              "%s SetPickupVisible: highlight %d", d.actor, (int)d.highlightFx);
+        CHECK(PP::find(d.actor) == i, "%s found by actor name", d.actor);
     }
     // PickupSound is attached to the recipient pawn: its voices follow the pawn.
     Vec3 pawn{10, 0, 0};
@@ -576,7 +571,8 @@ static void testAuthored() {
     });
     int first = rec.n;
     game::SoundCues::Emitter recipient{pawn, 0, {0, 0, 0}, ""};
-    int id = pp.announcePickup(0, cues, recipient, 5.0f);
+    int id = pp.onTaken(PP::def(0).actor, cues, recipient, 5.0f);
+    CHECK(pp.onTaken("NoSuchFactory", cues, recipient, 5.0f) == -1, "unknown factory ignored");
     CHECK(id >= 0 && rec.n > first, "ammo pickup sound plays (%d voices)", rec.n - first);
     pawn = Vec3{14, 0, 3};
     for (int k = 0; k < 3; ++k) cues.tick(1.0f / 60.0f);
@@ -637,7 +633,135 @@ static void testLoopRuntime() {
     delete a;
 }
 
+// ---------------------------------------------------------------- M04 Streets world bed (AssetTools a23c675)
+static void testWorldBed() {
+    std::printf("[M04 world bed]\n");
+    assets::Json man = loadJson(kMan + "mp_iac_streets_complete.json");
+    const assets::Json& ac = man["counts"]["audio"];
+    assets::Json aj = loadJson(kRoot + "/Maps/MP_IAC_Streets/audio.json");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    game::AmbientAudio amb;
+    amb.load(kRoot + "/Maps/MP_IAC_Streets/audio.json", kRoot + "/../content/", cues, &rec);
+    int kinds[3] = {0, 0, 0};
+    for (int i = 0; i < amb.emitterCount(); ++i) ++kinds[amb.emitterKind(i)];
+    CHECK(amb.emitterCount() == 70 && kinds[0] == ac["point"].asInt(-1) && kinds[2] == ac["line"].asInt(-1) && kinds[1] == ac["volume"].asInt(-1),
+          "70 emitters = manifest point %d / line %d / volume %d (%d / %d / %d)", ac["point"].asInt(-1), ac["line"].asInt(-1),
+          ac["volume"].asInt(-1), kinds[0], kinds[2], kinds[1]);
+    CHECK(amb.zoneCount() == ac["zones"].asInt(-1) && amb.zoneCount() == 9, "9 zones (%d)", amb.zoneCount());
+    CHECK(aj["reverb_presets"].size() == (size_t)ac["reverb_presets"].asInt(-1) && ac["reverb_presets"].asInt(-1) == 10, "10 reverb presets");
+    int presetsKnown = 0;
+    for (const auto& kv : aj["reverb_presets"].obj) presetsKnown += cues.mixer().hasPreset(kv.first) ? 1 : 0;
+    CHECK(presetsKnown == 10, "all 10 presets in the mixer (%d)", presetsKnown);
+    CHECK(amb.poolCount() == 11, "11 one-shot pools (%d)", amb.poolCount());
+
+    // Level start: every emitter auto-plays once through the native per-cue registration (kKillFarthest).
+    Vec3 L{150.0f, -720.0f, -450.0f};             // spawn-area camera (glTF metres)
+    cues.setListener(L);
+    amb.tick(1.0f / 60.0f, L, Vec3{0, 5000, 0}, cues); cues.tick(1.0f / 60.0f);
+    std::map<std::string, std::vector<int>> byCue;
+    for (int i = 0; i < amb.emitterCount(); ++i) byCue[amb.emitterCue(i)].push_back(i);
+    int playing = 0;
+    for (auto& kv : byCue) {
+        const game::cuedata::CueDef* d = cues.cueDef(kv.first.c_str());
+        int lim = d && d->maxConcurrent > 0 ? d->maxConcurrent : 1 << 30;
+        int want = std::min((int)kv.second.size(), lim), have = 0;
+        for (int i : kv.second) have += amb.emitterInstance(i) >= 0 ? 1 : 0;
+        playing += have;
+        CHECK(have == want && cues.activeInstances(kv.first.c_str()) == want, "%s: %d of %d play (limit %d)", kv.first.c_str() + 22, have,
+              (int)kv.second.size(), lim);
+    }
+    CHECK(playing == 50 && amb.activeEmitters() == 50, "50 of 70 play at start (4 point cues over their limit) (%d)", playing);
+    // kKillFarthest keeps the instances nearest the level-start listener (positions = the emitters' play positions).
+    {
+        const char* cue = "BL_LVL_MP_IAC_STREETS.EMIT_FLOURESCENT_LIGHTS";
+        std::vector<std::pair<float, bool>> dl;
+        for (int i : byCue[cue]) {
+            int inst = amb.emitterInstance(i);
+            Vec3 pos{}; bool play = inst >= 0 && cues.instancePos(inst, pos);
+            const assets::Json* ej = nullptr; (void)ej;
+            dl.push_back({0.0f, play});
+        }
+        // recompute distances from audio.json (point emitters: location_gltf)
+        size_t k = 0;
+        for (size_t j = 0; j < aj["emitters"]["point"].size(); ++j) {
+            const assets::Json& e = aj["emitters"]["point"][j];
+            if (e["cue"].asString() != cue) continue;
+            Vec3 g{e["location_gltf"][0].asFloat(), e["location_gltf"][1].asFloat(), e["location_gltf"][2].asFloat()};
+            if (k < dl.size()) dl[k++].first = core::length(g - L);
+        }
+        float maxPlay = 0, minSilent = 1e9f;
+        for (auto& x : dl) { if (x.second) maxPlay = std::max(maxPlay, x.first); else minSilent = std::min(minSilent, x.first); }
+        CHECK(maxPlay <= minSilent, "fluorescent lights: playing ones are the nearest (max playing %.1f m <= min silent %.1f m)", maxPlay, minSilent);
+    }
+    // Line / volume re-Play when not playing (A7 tick); a point AmbientSound does not restart.
+    int lineI = -1, pointI = -1;
+    for (int i = 0; i < amb.emitterCount(); ++i) {
+        if (lineI < 0 && amb.emitterKind(i) == 2 && amb.emitterInstance(i) >= 0) lineI = i;
+        if (pointI < 0 && amb.emitterKind(i) == 0 && amb.emitterInstance(i) >= 0 &&
+            amb.emitterCue(i) == "BL_LVL_MP_IAC_STREETS.EMIT_ENERGON_GENERATOR") pointI = i;
+    }
+    cues.stop(amb.emitterInstance(lineI), 0.0f);
+    cues.stop(amb.emitterInstance(pointI), 0.0f);
+    amb.tick(1.0f / 60.0f, L, Vec3{0, 5000, 0}, cues); cues.tick(1.0f / 60.0f);
+    CHECK(amb.emitterInstance(lineI) >= 0, "line emitter re-plays after a stop");
+    CHECK(amb.emitterInstance(pointI) < 0, "point AmbientSound does not restart");
+    // All world-owned, all looping.
+    bool allWorld = true;
+    for (int i = 0; i < amb.emitterCount(); ++i) {
+        const game::cuedata::CueDef* d = cues.cueDef(amb.emitterCue(i).c_str());
+        bool loops = false; for (const auto& e : d->events) loops = loops || e.loop;
+        allWorld = allWorld && loops;
+    }
+    CHECK(allWorld, "every emitter cue is a looping authored map cue");
+
+    // Pools: authored values; fire only while their zone is current, every U[DelayMin, DelayMax] s, 20 m out.
+    int pools = 0;
+    for (size_t z = 0; z < aj["zones"].size(); ++z)
+        for (size_t q = 0; q < aj["zones"][z]["one_shot_pool"].size(); ++q) {
+            const assets::Json& P = aj["zones"][z]["one_shot_pool"][q];
+            ++pools;
+            CHECK(cues.hasCue(P["cue"].asString().c_str()) && P["distance_min"].asFloat() == 2000.0f && P["distance_max"].asFloat() == 2000.0f &&
+                  P["looping"].asBool(false) && P["delay_min"].asFloat() >= 3.0f && P["delay_max"].asFloat() <= 10.0f,
+                  "pool %s: authored cue / 2000 UU / looping / delay %.0f-%.0f", P["comment"].asString().c_str(),
+                  P["delay_min"].asFloat(), P["delay_max"].asFloat());
+        }
+    CHECK(pools == 11, "11 pools in audio.json (%d)", pools);
+}
+
+// ---------------------------------------------------------------- 96-channel priority stealing (Win32 backend)
+static void testChannelStealing() {
+    std::printf("[channel stealing]\n");
+    // Cue priorities reach the voice: Ion Blaster SHOOT root 200 (-> 55), its overridden layers, map emitters 15 (-> 240).
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    int f0 = rec.n; cues.play("SHOOT", Vec3{0, 0, 0}, 0.0f);
+    bool p55 = false, p60 = false;
+    for (int v = f0; v < rec.n; ++v) { p55 = p55 || rec.v[v].p.priority == 55; p60 = p60 || rec.v[v].p.priority == 60; }
+    CHECK(p55 && p60, "SHOOT voices carry 255 - Priority (root 200 -> 55, override 195 -> 60)");
+    IAudio* a = createAudio();
+    if (!a || !a->reportsVoices()) { std::printf("  SKIP: no audio device\n"); return; }
+    Sound s = a->load(kRoot + "/../content/WL_TRUCK/MECH_TIRE_SQUEAL_HEAVY_LP.wav");
+    VoiceParams amb; amb.volume = 0.001f; amb.loop = true; amb.priority = 240;
+    std::vector<Voice> vs;
+    for (int i = 0; i < 96; ++i) vs.push_back(a->playVoice(s, amb));
+    MixStats m0; a->mixStats(m0);
+    VoiceParams shot = amb; shot.priority = 55; shot.loop = false;
+    Voice vShot = a->playVoice(s, shot);
+    VoiceParams low = amb; low.priority = 250;
+    Voice vLow = a->playVoice(s, low);
+    MixStats m1; a->mixStats(m1);
+    CHECK(vShot != kInvalidVoice && a->isPlaying(vShot) && m1.stolenVoices == m0.stolenVoices + 1,
+          "full 96 channels: a priority-55 sound takes a priority-240 channel (stolen %d)", m1.stolenVoices - m0.stolenVoices);
+    CHECK(vLow == kInvalidVoice && m1.droppedVoices == m0.droppedVoices + 1, "a less important newcomer (250) does not play");
+    int alive = 0; for (Voice v : vs) alive += a->isPlaying(v) ? 1 : 0;
+    CHECK(alive == 95, "exactly one ambient channel taken (%d alive)", alive);
+    for (Voice v : vs) a->stopVoice(v);
+    a->stopVoice(vShot);
+    delete a;
+}
+
 int main() {
+    testChannelStealing();
+    testWorldBed();
     testLoopRuntime();
     testAuthored();
     testMixer();

@@ -1,23 +1,14 @@
-// Clean-room reconstruction — the presentation side (effect activation + pickup sound) of the 27 placed
-// MP_IAC_Streets pickup factories. Data: AssetTools 7a69756 streets_pickup_factories.json (gen_pickups.py ->
-// PickupPresentation.inc) [CONF authored]. Behaviour: decompiled script (RE-Workspace, read-only) [CONF]:
-//   * Spawn: components activate per bAutoActivate - CustomPickupEffect (HealthPickup_FX / OvershieldPickup_FX,
-//     ParticleSystemComponent default true) is active; PickupEffect (Pickup_FX highlight beam, TnPickupFactory
-//     archetype bAutoActivate=false) is NOT. PickupEffect is attached (rendered) only for classes that list it
-//     in Components (ammo crate, objectives), never for health / overshield.
-//   * TnPickupFactory.SetPickupHidden: CustomPickupEffect.SetHidden(true) + DeactivateSystem(); if
-//     ShouldDisplayHighlightFx: PickupEffect.DeactivateSystem().
-//   * TnPickupFactory.SetPickupVisible: CustomPickupEffect.SetHidden(false) + ActivateSystem(); if
-//     ShouldDisplayHighlightFx: PickupEffect.ActivateSystem(). So the ammo-crate beam first lights up when the
-//     crate respawns, not at map start.
-//   * Engine.PickupFactory: GiveTo -> SpawnCopyFor (Inventory.AnnouncePickup: Other.PlaySound(PickupSound),
-//     a sound attached to the recipient pawn) -> PickedUpBy -> SetRespawn -> Sleeping (BeginState:
-//     SetPickupHidden; EndState after RespawnTime: SetPickupVisible).
-// OWNERSHIP: the factory actors, touch validation, Sleeping/respawn timing and game-rule gating are Gameplay's
-// state machine; this class keeps no timers. Gameplay calls announcePickup / setPickupHidden /
-// setPickupVisible at the script points above. Drawing the decoded particle systems is not done here: the
-// compiled-module flag semantics (pstream flagA / flagB, modules outside the record list) are UNKNOWN, so the
-// emitters cannot be reproduced without guessing; effectState() exposes what the original has active.
+// Clean-room reconstruction — the pickup SOUND of the 27 placed MP_IAC_Streets pickup factories (Systems).
+// Data: AssetTools 7a69756 streets_pickup_factories.json (gen_pickups.py -> PickupPresentation.inc)
+// [CONF authored]. Behaviour [CONF script]: Engine.PickupFactory GiveTo -> SpawnCopyFor ->
+// Inventory.AnnouncePickup: Other.PlaySound(PickupSound), a sound attached to the RECEIVING pawn; a respawn
+// plays nothing (RespawnEffect empty, RE d50c2a9 P2).
+// OWNERSHIP:
+//   * Gameplay owns the factory state machine (agents/gameplay PickupFactory, World::pickupEvents()).
+//   * Rendering owns the pickup effects AND their runtime state (agents/rendering 411c970 WfcMapFx,
+//     setMapEffectState: CustomPickupEffect / PickupEffect highlight per SetPickupVisible / SetPickupHidden).
+//   * Systems only plays the PickupSound on each Gameplay Taken event (onTaken, keyed by actor name). The
+//     FactoryDef effect fields are kept as authored data, not driven here.
 #pragma once
 #include "core/Math.h"
 #include "game/SoundCues.h"
@@ -40,27 +31,21 @@ public:
         bool highlightFx;                // ShouldDisplayHighlightFx
         const char* requiredGameRule;    // objective factories: only under this game rules class
     };
-    struct EffectState {
-        bool customActive = false, customHidden = false;   // CustomPickupEffect
-        bool highlightActive = false;                       // PickupEffect (meaningful only when attached)
-    };
-
-    PickupPresentation();
     static int count();
     static const FactoryDef& def(int i);
 
-    void reset();                        // map start: bAutoActivate states
-    void setPickupHidden(int i);         // TnPickupFactory.SetPickupHidden
-    void setPickupVisible(int i);        // TnPickupFactory.SetPickupVisible
+    static int find(const char* actor);  // factory index by actor name (e.g. "TnAmmoCratePickupFactory_10561")
+    // Gameplay PickupEvent Taken: Inventory.AnnouncePickup (PickupSound on the receiving pawn). Returns the
+    // sound's cue instance (-1 = none / unknown factory).
+    int onTaken(const char* actor, SoundCues& cues, const SoundCues::Emitter& receiver, float listenerDist) {
+        int i = find(actor);
+        return i < 0 ? -1 : announcePickup(i, cues, receiver, listenerDist);
+    }
     // Inventory.AnnouncePickup: PlaySound(PickupSound) on the recipient. Returns the cue instance (-1 = none).
     int announcePickup(int i, SoundCues& cues, const SoundCues::Emitter& recipient, float listenerDist) {
         const char* cue = def(i).pickupSound;
         return cue ? cues.play(cue, recipient, listenerDist) : -1;
     }
-    const EffectState& effectState(int i) const { return state_[(size_t)i]; }
-
-private:
-    std::vector<EffectState> state_;
 };
 
 } // namespace game

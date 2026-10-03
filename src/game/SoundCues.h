@@ -42,6 +42,8 @@ struct EventDef {
     std::vector<CurvePt> pitchCurve;     // over the root SoundParameter (semitones)
     std::vector<CurvePt> envVol;         // Envelope over playback time (s, linear gain)
     std::vector<CurvePt> envPitch;       // Envelope over playback time (s, semitones)
+    bool overridePriority;               // OverridePriority: use `priority` instead of the root's
+    float priority;                      // SoundNodeWaveEvent.Priority
 };
 struct CueDef {
     std::string name;
@@ -58,6 +60,7 @@ struct CueDef {
     Spatial spatial;                     // k2D plays non-positional [CONF]
     Param param;                         // SoundNodeRoot.SoundParameter
     std::vector<EventDef> events;
+    float priority;                      // SoundNodeRoot.Priority (unset = 0)
 };
 } // namespace cuedata
 

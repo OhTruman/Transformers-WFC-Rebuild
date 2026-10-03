@@ -19,8 +19,19 @@
 // 0x82760278) = listener in actor-local space clamped to +/-Radius per axis (an oriented box, scaled by
 // DrawScale3D; inside -> the listener itself). The AudioComponent sits at that point, so pan, attenuation,
 // SmartPan distance and occlusion all use it.
-// [PROVISIONAL] voice budget: the most audible kMaxActive emitters play; the rest are virtual. The original
-// device has MaxChannels=96 (Xe-TransEngine.ini [HM_Engine.FmodAudioDevice]); its virtual-voice policy is native.
+// [CONF authored, AssetTools a23c675 mp_iac_streets_complete.json] 70 emitters (40 point, 13 line, 17
+// volume), all looping auto-play cues; no Kismet op toggles them (streets_kismet.json).
+// [CONF] Playback: each AudioComponent auto-plays once at level start (bAutoPlay) and is registered with the
+// native per-cue instance limiting (RegisterInstanceLimiting: global per cue asset, kKillFarthest against the
+// listener, the newcomer refused when it is the farthest). Line / volume emitters re-Play every tick when
+// not playing (A7 tick); no line / volume cue has more emitters than its limit, so they all play. Four point
+// cues do (EMIT_FLOURESCENT_LIGHTS 13 / 5, EMIT_ENERGON_LIQUID_CRATERS 12 / 5, EMIT_LAMP_POSTS 8 / 5,
+// EMIT_FLOOD_LIGHTS 5 / 3): the instances nearest the level-start listener play.
+// [HIGH] A point AmbientSound refused or killed at start never restarts (Engine AmbientSound has no script
+// or tick that replays its AudioComponent; WFC's AmbientSound class is script-less).
+// [UNKNOWN, native] whether a listener exists at the native level-start registration; the rebuild registers on
+// the first tick with the spawn camera. FMOD's own virtual-voice handling (MaxChannels 96) is internal; the
+// rebuild mixes every playing voice (culled beyond DistanceMax by the per-voice native rule).
 #pragma once
 #include <string>
 #include <vector>
@@ -40,7 +51,14 @@ public:
 
     bool loaded() const { return loaded_; }
     int activeEmitters() const { return active_; }
+    int refusedAtStart() const { return refusedAtStart_; }   // point emitters refused by instance limiting
     int emitterCount() const { return (int)emitters_.size(); }
+    // Diagnostics: emitter kind (0 point, 1 volume, 2 line), cue, current cue instance (-1 = not playing).
+    int emitterKind(int i) const { return (int)emitters_[(size_t)i].kind; }
+    const std::string& emitterCue(int i) const { return emitters_[(size_t)i].cue; }
+    int emitterInstance(int i) const { return emitters_[(size_t)i].instance; }
+    int zoneCount() const { return (int)zones_.size(); }
+    int poolCount() const { int n = 0; for (const Zone& z : zones_) n += (int)z.pools.size(); return n; }
     const char* zoneName() const { return zone_ >= 0 ? zones_[(size_t)zone_].name.c_str() : "-"; }
     int oneShotsPlayed() const { return oneShots_; }
 
@@ -51,12 +69,7 @@ private:
         core::Vec3 origin{0, 0, 0};
         core::Vec3 axis[3];          // actor axes scaled by the actor scale (glTF, metres per unit)
         float half = 0.0f;           // box half extent (Radius, m) / half line length (m), in axis units
-        float volDb = 0.0f, minM = 4.0f, maxM = 64.0f, rolloff = 1.0f;
-        int instance = -1;
-        float level = 0.0f;          // current fade level (0..1)
-        bool want = false;
-        bool loops = true;           // auto-play cue with a looping event; a one-shot cue plays once
-        bool done = false;
+        int instance = -1;           // its AudioComponent (cue instance), -1 = not playing
     };
     struct Pool { std::string cue; float delayMin, delayMax, distMinM, distMaxM; bool looping; };
     struct Zone {
@@ -80,6 +93,8 @@ private:
     int zone_ = -1;                      // PlayerController.AmbientAudioZone (-1 = None)
     std::vector<float> poolTimers_;
     int active_ = 0;
+    bool started_ = false;
+    int refusedAtStart_ = 0;
     int oneShots_ = 0;
 };
 

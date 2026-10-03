@@ -22,7 +22,6 @@
 #include "game/VehicleNitro.h"
 #include "game/RobotFoley.h"
 #include "game/AmbientAudio.h"
-#include "game/LevelFx.h"
 #include "game/VehicleAudio.h"
 
 namespace render { class IRenderer; }
@@ -60,9 +59,8 @@ public:
 
     Player& player() { return player_; }
 
-    // Pickup presentation (Systems-owned: effect activation + PickupSound) of the 27 authored Streets
-    // factories. Gameplay's factory state machine (in World) drives it: announcePickup(i, cues_, atPawn(), d) +
-    // setPickupHidden(i) on GiveTo, setPickupVisible(i) when Sleeping ends (see PickupPresentation.h).
+    // Pickup SOUND (Systems) of the 27 authored Streets factories: Gameplay's Taken events call
+    // onTaken(actor, cues_, atPawn(), d). Pickup effects and their state are Rendering's (WfcMapFx).
     PickupPresentation& pickupPresentation() { return pickupFx_; }
     SoundCues& cues() { return cues_; }
 
@@ -163,7 +161,6 @@ private:
     // Original weapon effects (muzzle flash, tracer, impact squib) from the cooked FX data.
     WeaponFx fx_;
     // Authored level particle emitters (map_fx.json: 8 x Steam_Sm_FX).
-    LevelFx levelFx_;
 
     audio::IAudio* audio_ = nullptr;
     SoundCues cues_;

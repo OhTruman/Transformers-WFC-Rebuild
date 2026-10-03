@@ -26,6 +26,7 @@ struct VoiceParams {
     bool wet = true;                   // routed through the MASTER_WET bus (environment reverb / echo)
     int spatial = 0;                   // SoundNodeRoot.Spatialization: 0 k3D, 1 k2D, 2 kSmartPan, 3 kSmartPan_PreferPlayer
     float panAtten3DDb = 0.0f;         // SmartPanAttenuation3D
+    int priority = 128;                // FMOD channel priority 0 (most important) .. 256 (cue: 255 - Priority)
 };
 
 // MASTER_WET environment (SoundMixerProperties DSP preset of a Kismet SeqAct_Reverb zone): FMOD Ex SFX
@@ -45,6 +46,8 @@ struct VoiceInfo { float dist = 0.0f, pan = 0.0f, atten = 1.0f, gainL = 0.0f, ga
 
 // Read-back of the mixer (diagnostics).
 struct MixStats { float peakDb = -96.0f; float gainReductionDb = 0.0f; int voices = 0; int wetVoices = 0;
+                  int peakVoices = 0; int droppedVoices = 0;   // since start: most voices at once, refused starts
+                  int stolenVoices = 0;                         // since start: channels taken by a more important sound
                   float mixMsPerBlock = 0.0f;      // CPU cost of one 1024-frame block (~21 ms of audio)
                   float lastUpdateMs = 0.0f, lastMixMs = 0.0f; int lastUpdateBlocks = 0; int maxUpdateBlocks = 0; };
 

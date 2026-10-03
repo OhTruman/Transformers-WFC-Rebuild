@@ -130,7 +130,6 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     mapMesh_ = renderer.uploadMesh(mapMesh);
     fx_.load(renderer, root + "/../content/");
     fx_.loadMeshes(renderer, root + "/../content/");
-    levelFx_.load(renderer, root + "/Maps/MP_IAC_Streets/map_fx.json", root + "/../content/");
     vehicleFx_.load(renderer, root + "/../content/");
     player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
@@ -948,7 +947,6 @@ void World::tick(float dt) {
         core::Mat4 ms;
         bool have = weaponSocketWorld("MuzzleFlash", ms);
         sysprof::Scope sp(sysprof::FxTick);
-        levelFx_.tick(dt);
         fx_.tick(dt, have ? &ms : nullptr, collision_.valid() ? &collision_ : nullptr);
     }
     // Event-driven audio via edge detection on pawn state.
@@ -985,11 +983,11 @@ void World::tick(float dt) {
             ambT = 0.0f;
             audio::MixStats ms;
             bool have = audio_ && audio_->mixStats(ms);
-            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block levelfx=%zu",
+            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d (max %d, dropped %d, stolen %d) wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block",
                      ambient_.zoneName(), ambient_.activeEmitters(), ambient_.emitterCount(), ambient_.oneShotsPlayed(),
-                     cues_.liveInstances(), cues_.occludedInstances(), occlusionRays_ / 0.5f, cues_.pendingEvents(), have ? ms.voices : -1, have ? ms.wetVoices : -1,
-                     have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f,
-                     levelFx_.liveParticles());
+                     cues_.liveInstances(), cues_.occludedInstances(), occlusionRays_ / 0.5f, cues_.pendingEvents(), have ? ms.voices : -1,
+                     have ? ms.peakVoices : -1, have ? ms.droppedVoices : -1, have ? ms.stolenVoices : -1, have ? ms.wetVoices : -1,
+                     have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f);
             occlusionRays_ = 0;
         }
         cues_.tick(dt);
@@ -1000,24 +998,14 @@ void World::tick(float dt) {
         respawnPlayer();
     }
     for (auto& a : actors_) if (a->alive()) a->tick(*this, dt);
-    // [integration/milestone-03] Gameplay's PickupFactory state machine raises one PickupEvent per
-    // transition; Systems' PickupPresentation holds the effect state and plays the PickupSound at the
-    // script points (Taken: SetPickupHidden + AnnouncePickup on the recipient pawn; Respawned:
-    // SetPickupVisible). Both tables come from the same AssetTools manifest: joined by actor name.
-    for (const PickupEvent& e : pickupEvents_) {
-        if (e.factory < 0 || (size_t)e.factory >= pickupFactories_.size()) continue;
-        const std::string& actor = pickupFactories_[(size_t)e.factory]->name();
-        int j = -1;
-        for (int i = 0; i < PickupPresentation::count() && j < 0; ++i)
-            if (actor == PickupPresentation::def(i).actor) j = i;
-        if (j < 0) continue;
-        if (e.type == PickupEvent::Type::Taken) {
-            pickupFx_.setPickupHidden(j);
-            pickupFx_.announcePickup(j, cues_, atPawn(), 0.0f);
-        } else {
-            pickupFx_.setPickupVisible(j);
-        }
-    }
+    // Pickup glue (Systems M04 integration preview): Gameplay's PickupFactory raises one PickupEvent per
+    // transition. Taken -> Inventory.AnnouncePickup: Systems plays the PickupSound once, attached to the
+    // receiving pawn. Respawned plays nothing (RespawnEffect empty). Effect/mesh visibility is
+    // Rendering's (setMapEffectState, driven by Gameplay). Joined by authored actor name.
+    for (const PickupEvent& e : pickupEvents_)
+        if (e.type == PickupEvent::Type::Taken && e.factory >= 0 && (size_t)e.factory < pickupFactories_.size())
+            pickupFx_.onTaken(pickupFactories_[(size_t)e.factory]->name().c_str(), cues_, atPawn(),
+                              core::length(e.receiverPos - listenerPos_));
     for (size_t i = 0; i < actors_.size();) {
         if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); }
         else ++i;
@@ -1082,7 +1070,7 @@ void World::draw(render::IRenderer& r) const {
             r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
     }
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene).
-    { sysprof::Scope sp(sysprof::DrawFx); levelFx_.draw(r); fx_.draw(r); }
+    { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
     { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
     sysprof::cueInst = cues_.liveInstances(); sysprof::cuePending = cues_.pendingEvents();
     sysprof::frame(fx_.liveParticles(), fx_.liveMeshes());
