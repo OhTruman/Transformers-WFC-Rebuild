@@ -1,0 +1,303 @@
+[info ] FRONTEND catalog: 13 map providers (2 with rebuild runtime data), 9 playlists, 31 settings classes, 1475 loc strings, 26 engage texts
+[info ] FRONTEND catalog map 501 MP_IAC_Seed_Base_m         "Seed Of Corruption" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 502 MP_IAC_Berth_Base_m        "Berth" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 503 MP_UND_Complex_BASE_m      "Complex" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 504 MP_IAC_Rust_BASE_m         "Rust" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 505 MP_ESC_BrokenHope_BASE_m   "Broken Hope" cooked=1 runtime=- modes=1
+[info ] FRONTEND catalog map 506 MP_ESC_Remnant_BASE_m      "Remnant" cooked=1 runtime=- modes=1
+[info ] FRONTEND catalog map 507 MP_ORB_Debris_BASE_m       "Orbital Debris" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 508 MP_IAC_Streets_Base_m      "Streets" cooked=1 runtime=MP_IAC_Streets modes=6
+[info ] FRONTEND catalog map 509 MP_KON_Molten_Base_m       "Molten" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 510 MP_UND_Gorge_BASE_m        "Gorge" cooked=1 runtime=MP_UND_Gorge modes=6
+[info ] FRONTEND catalog map 512 MP_KON_Fortress_BASE_m     "Fortress" cooked=0 runtime=- modes=6
+[info ] FRONTEND catalog map 511 MP_ORB_Havoc_BASE_m        "Havoc" cooked=0 runtime=- modes=6
+[info ] FRONTEND catalog map 513 MP_ESC_Tranquillity_BASE_m "Forsaken" cooked=0 runtime=- modes=1
+PASS catalog.load
+PASS url.map
+PASS url.option_case_insensitive
+PASS url.intOption
+PASS url.flag
+PASS url.roundtrip
+PASS url.intOption_default
+PASS catalog.map_providers  13
+PASS catalog.map_order_ini
+PASS catalog.streets_508
+PASS catalog.streets_runtime_data
+PASS catalog.streets_modes
+PASS catalog.streets_thumbnail
+PASS catalog.dlc_fortress_disabled
+PASS catalog.playlist_order  TDM DM DOM CTF EXT KOTH SV CP CCP 
+PASS catalog.default_quickmatch_playlist
+PASS catalog.tdm_private_settings
+PASS catalog.tdm_rules_head
+PASS catalog.tdm_score_time
+PASS catalog.mode_names
+PASS catalog.loc_loadingmap
+PASS catalog.loc_gfx_key  Press START button
+PASS catalog.engage_texts_base  26
+FAIL catalog.tdm_selectable_maps_now  2
+[info ] FLOW uicontroller Initialize TnUIControllerFrontEnd
+PASS ui.frontend_starting_state
+[info ] FLOW uievent 0 OnFrontEnd in NotInGame
+[info ] FLOW uistate NotInGame -> FrontEnd (TnUIControllerFrontEnd)
+[info ] FLOW ui OpenUI UI_GFxFrontEnd_p.FrontEnd_GFX_1
+PASS ui.event0_frontend
+[info ] FLOW uicontroller Initialize TnUIControllerGameLobby
+[info ] FLOW uistate NotInGame -> InLobby (TnUIControllerGameLobby)
+[info ] FLOW ui OpenUI UI_GFxLobbies_p.GameLobby_GFX_1
+PASS ui.gamelobby_inlobby
+[info ] FLOW uicontroller Initialize TnUIControllerMultiplayer
+[info ] FLOW uistate NotInGame -> WaitingOnGameStart (TnUIControllerMultiplayer)
+PASS ui.mp_waiting_without_gri
+[info ] FLOW ui OpenUI UI_GFxCustomize_p.CustomTransformers_GFX_1
+PASS ui.mp_ingamelobbyui
+[info ] FLOW ui CloseUI UI_GFxCustomize_p.CustomTransformers_GFX_1
+[info ] FLOW ui OpenUI UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1
+PASS ui.mp_gamestartui
+[info ] FLOW uievent 3 OnBeginGame in WaitingOnGameStart
+[info ] FLOW uistate WaitingOnGameStart -> InGame (TnUIControllerMultiplayer)
+[info ] FLOW ui CloseUI UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1
+PASS ui.event3_ingame_hud
+[info ] FLOW uievent 6 OnPause in InGame
+[info ] FLOW uistate InGame -> Paused (TnUIControllerMultiplayer)
+[info ] FLOW ui SetPause(true)
+[info ] FLOW ui OpenUI UI_GFxPause_p.PauseMenu_GFX_1
+PASS ui.event6_pause
+[info ] FLOW ui SetPause(false)
+[info ] FLOW uistate Paused -> InGame (TnUIControllerMultiplayer)
+PASS ui.pause_closed_resumes
+[info ] FLOW uievent 4 OnSpectating in InGame
+[info ] FLOW uistate InGame -> Spectating (TnUIControllerMultiplayer)
+[info ] FLOW ui OpenUI UI_GFxRespawn_p.MultiplayerRespawn_GFX_1
+PASS ui.event4_spectating
+[info ] FLOW uievent 5 OnRespawn in Spectating
+[info ] FLOW uistate Spectating -> InGame (TnUIControllerMultiplayer)
+[info ] FLOW ui CloseUI UI_GFxRespawn_p.MultiplayerRespawn_GFX_1
+[info ] FLOW uievent 9 OnEndGame in InGame
+[info ] FLOW uistate InGame -> GameEnded (TnUIControllerMultiplayer)
+[info ] FLOW ui OpenUI UI_GFxEndGameStats_p.EndGameStats_GFX_1
+PASS ui.event9_gameended
+[info ] FLOW uievent 10 OnPlayAgain in GameEnded
+[info ] FLOW uistate GameEnded -> WaitingOnGameStart (TnUIControllerMultiplayer)
+[info ] FLOW ui CloseUI UI_GFxEndGameStats_p.EndGameStats_GFX_1
+[info ] FLOW ui OpenUI UI_GFxCustomize_p.CustomTransformers_GFX_1
+PASS ui.event10_playagain
+[info ] FLOW uievent 3 OnBeginGame in WaitingOnGameStart
+[info ] FLOW uistate WaitingOnGameStart -> InGame (TnUIControllerMultiplayer)
+[info ] FLOW ui CloseUI UI_GFxCustomize_p.CustomTransformers_GFX_1
+[info ] FLOW uievent 6 OnPause in InGame
+[info ] FLOW uistate InGame -> Paused (TnUIControllerMultiplayer)
+[info ] FLOW ui SetPause(true)
+[info ] FLOW ui OpenUI UI_GFxPause_p.PauseMenu_GFX_1
+[info ] FLOW uievent 11 OnGotoMainMenu in Paused
+[info ] FLOW ui SetPause(false)
+[info ] FLOW uistate Paused -> NotInGame (TnUIControllerMultiplayer)
+[info ] FLOW ui CloseUI UI_GFxPause_p.PauseMenu_GFX_1
+PASS ui.event11_gotomainmenu
+[info ] FRONTEND catalog: 13 map providers (2 with rebuild runtime data), 9 playlists, 31 settings classes, 1475 loc strings, 26 engage texts
+[info ] FRONTEND catalog map 501 MP_IAC_Seed_Base_m         "Seed Of Corruption" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 502 MP_IAC_Berth_Base_m        "Berth" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 503 MP_UND_Complex_BASE_m      "Complex" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 504 MP_IAC_Rust_BASE_m         "Rust" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 505 MP_ESC_BrokenHope_BASE_m   "Broken Hope" cooked=1 runtime=- modes=1
+[info ] FRONTEND catalog map 506 MP_ESC_Remnant_BASE_m      "Remnant" cooked=1 runtime=- modes=1
+[info ] FRONTEND catalog map 507 MP_ORB_Debris_BASE_m       "Orbital Debris" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 508 MP_IAC_Streets_Base_m      "Streets" cooked=1 runtime=MP_IAC_Streets modes=6
+[info ] FRONTEND catalog map 509 MP_KON_Molten_Base_m       "Molten" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 510 MP_UND_Gorge_BASE_m        "Gorge" cooked=1 runtime=MP_UND_Gorge modes=6
+[info ] FRONTEND catalog map 512 MP_KON_Fortress_BASE_m     "Fortress" cooked=0 runtime=- modes=6
+[info ] FRONTEND catalog map 511 MP_ORB_Havoc_BASE_m        "Havoc" cooked=0 runtime=- modes=6
+[info ] FRONTEND catalog map 513 MP_ESC_Tranquillity_BASE_m "Forsaken" cooked=0 runtime=- modes=1
+[info ] FRONTEND script: 17 steps
+[info ] FLOW boot map=UI_FrontEnd_m watchedIntro=false seed=11
+[info ] FLOW travel url=UI_FrontEnd_m server=false from=None
+[info ] FLOW loading.start kind=Generic title= message= bink=TF_LoadingScreen gfx=UI_GFxLoading_p.LoadScreen_GFX tips=0
+PASS flow.init
+[info ] FLOW level.begin level=FrontEnd map=UI_FrontEnd_m url=UI_FrontEnd_m
+[info ] FLOW uicontroller Initialize TnUIControllerFrontEnd
+[info ] FLOW frontend.game state=WaitingForController
+[info ] FLOW frontend.game state=None controllerAssigned=true
+[info ] FLOW loading.close kind=InitialStartup level=FrontEnd
+[info ] FLOW gfx.open movie=UI_GFxFrontEnd_p.MovieLoader_GFX_1
+[info ] FLOW shim movie=UI_GFxFrontEnd_p.MovieLoader_GFX_1 what=HasWatchedIntroMovie branch provenance=HIGH (RE 1.2)
+[info ] FLOW bridge fn=Game.HasWatchedIntroMovie args= level=FrontEnd
+[info ] FLOW fscommand movie=UI_GFxFrontEnd_p.MovieLoader_GFX_1 cmd=enterMovieSequence arg=
+[info ] FLOW gfx.close movie=UI_GFxFrontEnd_p.MovieLoader_GFX_1
+[info ] FLOW movie.play movie=Logo_Activision
+[info ] FLOW movie.unavailable movie=Logo_Activision file=movies/Logo_Activision.mkv why=no video decoder integrated
+[info ] FLOW movie.stopped movie=Logo_Activision
+[info ] FLOW movie.play movie=Logo_Hasbro
+[info ] FLOW movie.unavailable movie=Logo_Hasbro file=movies/Logo_Hasbro.mkv why=no video decoder integrated
+[info ] FLOW movie.stopped movie=Logo_Hasbro
+[info ] FLOW movie.play movie=Logo_HighMoon
+[info ] FLOW movie.unavailable movie=Logo_HighMoon file=movies/Logo_HighMoon.mkv why=no video decoder integrated
+[info ] FLOW movie.stopped movie=Logo_HighMoon
+[info ] FLOW movie.play movie=FMV_intro
+[info ] FLOW movie.unavailable movie=FMV_intro file=movies/FMV_intro.mkv why=no video decoder integrated
+[info ] FLOW movie.stopped movie=FMV_intro
+[info ] FLOW frontend.kismet action=Interp Fade In / Primary Camera / Camera Orbiter, RemoteEvent StartFireworks, Reverb REVERB_TRANS_FRONT_END, PlayMusic FRONTEND_MX_ORBIT_01, PlaySound FRONTEND_WHSH_REVEAL
+[info ] FLOW frontend.kismet action=SetLoadingMovieFilename UI_GFxLoading_p.LoadScreen_GFX
+[info ] FLOW uievent 0 OnFrontEnd in NotInGame
+[info ] FLOW uistate NotInGame -> FrontEnd (TnUIControllerFrontEnd)
+[info ] FLOW ui OpenUI UI_GFxFrontEnd_p.FrontEnd_GFX_1
+[info ] FLOW ui.open movie=UI_GFxFrontEnd_p.FrontEnd_GFX_1 state=FrontEnd
+[info ] FLOW ui.state from=NotInGame to=FrontEnd controller=TnUIControllerFrontEnd level=FrontEnd
+[info ] FLOW profile HasWatchedIntroMovie=true
+[info ] FLOW script.wait cond=frontend
+[info ] FLOW script.wait cond=ui=FrontEnd
+[info ] FLOW snapshot why=mainmenu level=FrontEnd map=UI_FrontEnd_m uiController=TnUIControllerFrontEnd uiState=FrontEnd openMovie=UI_GFxFrontEnd_p.FrontEnd_GFX_1 loading=false mode= mapId=-1 countdown=0 team=-1 hud=false
+[info ] FLOW bridge fn=Online.OpenPartyLobby args=GTS_TeamGame level=FrontEnd
+[info ] FLOW online.ConfirmOpenPartyLobby gameTeamStatus=3
+[info ] FLOW travel url=UI_PartyLobby_m?game=TransContent.TnPartyLobbyGame?listen server=false from=FrontEnd
+[info ] FLOW loading.start kind=PartyLobby title= message= bink=TF_LoadingScreen gfx=UI_GFxLoading_p.LoadScreen_GFX tips=3
+[info ] FLOW loading.engageText text=Cancel certain Abilities like Barrier and Cloaking by pressing the Ability button after activation.
+[info ] FLOW loading.engageText text=The Thermo Rocket Launcher can only lock-on to vehicles.
+[info ] FLOW loading.engageText text=The Whirlwind Ability is a devastating melee attack capable of hitting multiple targets.
+[info ] FLOW audio.levelChange from=FrontEnd
+PASS flow.frontend_started
+PASS flow.frontend_ui
+[info ] FLOW level.begin level=PartyLobby map=UI_PartyLobby_m url=UI_PartyLobby_m?game=TransContent.TnPartyLobbyGame?listen
+[info ] FLOW partylobby.game state=Ready gameTeamStatus=3 playlists=9
+[info ] FLOW uicontroller Initialize TnUIControllerPartyLobby
+[info ] FLOW uistate NotInGame -> InLobby (TnUIControllerPartyLobby)
+[info ] FLOW ui OpenUI UI_GFxLobbies_p.PartyLobby_GFX_1
+[info ] FLOW ui.open movie=UI_GFxLobbies_p.PartyLobby_GFX_1 state=InLobby
+[info ] FLOW ui.state from=NotInGame to=InLobby controller=TnUIControllerPartyLobby level=PartyLobby
+[info ] FLOW loading.close kind=PartyLobby level=PartyLobby
+[info ] FLOW script.wait cond=level=PartyLobby
+[info ] FLOW script.wait cond=ui=InLobby
+[info ] FLOW snapshot why=partylobby level=PartyLobby map=UI_PartyLobby_m uiController=TnUIControllerPartyLobby uiState=InLobby openMovie=UI_GFxLobbies_p.PartyLobby_GFX_1 loading=false mode= mapId=-1 countdown=0 team=-1 hud=false
+[info ] FLOW bridge fn=Online.EditGameMode args=TDM level=PartyLobby
+[info ] FLOW lobby.publishGameInfo tag=TDM settings=TnOnlineGameSettingsTDMPrivate friendlyName=Team Deathmatch
+[info ] FLOW audio.uiLevel level=UI_PartyLobby_m
+[info ] FLOW bridge fn=Online.PlayPrivateGame args=TDM level=PartyLobby
+[info ] FLOW online.HostOnlineGame settings=TnOnlineGameSettingsTDMPrivate lobbyUrl=UI_Lobby_m?Game=TransContent.TnGameLobbyGameTeam?GameModeTag=TDM?GameTeamStatus=3?MaxPlayers=10?IconicMode=0?listen
+[info ] FLOW travel url=UI_Lobby_m?Game=TransContent.TnGameLobbyGameTeam?GameModeTag=TDM?GameTeamStatus=3?MaxPlayers=10?IconicMode=0?listen server=true from=PartyLobby
+[info ] FLOW loading.start kind=GameLobby title= message= bink=TF_LoadingScreen gfx=UI_GFxLoading_p.LoadScreen_GFX tips=3
+[info ] FLOW loading.engageText text=If an enemy gets too close for comfort, bash them with a melee attack.
+[info ] FLOW loading.engageText text=Energon Grenades create a healing aura when they explode.
+[info ] FLOW loading.engageText text=The Scatter Blaster is most effective at close range.
+[info ] FLOW audio.levelChange from=PartyLobby
+[info ] FLOW level.begin level=GameLobby map=UI_Lobby_m url=UI_Lobby_m?Game=TransContent.TnGameLobbyGameTeam?GameModeTag=TDM?GameTeamStatus=3?MaxPlayers=10?IconicMode=0?listen
+[info ] FLOW gamelobby.game gameClass=TransContent.TnGameLobbyGameTeam tag=TDM settings=TnOnlineGameSettingsTDMPrivate private=true mapSelectionMethod=1
+[info ] FLOW gamelobby.map mapId=510 map=MP_UND_Gorge_BASE_m name=Gorge hasRequiredAssets=true
+[info ] FLOW gamelobby.status lobbyStatus=3 text=Waiting for host to start game
+[info ] FLOW uicontroller Initialize TnUIControllerGameLobby
+[info ] FLOW uistate NotInGame -> InLobby (TnUIControllerGameLobby)
+[info ] FLOW ui OpenUI UI_GFxLobbies_p.GameLobby_GFX_1
+[info ] FLOW ui.open movie=UI_GFxLobbies_p.GameLobby_GFX_1 state=InLobby
+[info ] FLOW ui.state from=NotInGame to=InLobby controller=TnUIControllerGameLobby level=GameLobby
+[info ] FLOW loading.close kind=GameLobby level=GameLobby
+[info ] FLOW script.wait cond=level=GameLobby
+[info ] FLOW script.wait cond=ui=InLobby
+[info ] FLOW bridge fn=Online.SetSelectedMapID args=508 level=GameLobby
+[info ] FLOW gamelobby.map mapId=508 map=MP_IAC_Streets_Base_m name=Streets hasRequiredAssets=true
+[info ] FLOW audio.uiLevel level=UI_Lobby_m
+PASS flow.reached_gamelobby
+PASS flow.gamelobby_private_tdm
+[info ] FLOW snapshot why=gamelobby level=GameLobby map=UI_Lobby_m uiController=TnUIControllerGameLobby uiState=InLobby openMovie=UI_GFxLobbies_p.GameLobby_GFX_1 loading=false mode=TDM mapId=508 countdown=0 team=-1 hud=false
+[info ] FLOW bridge fn=Online.BeginLobbyExitCountdown args= level=GameLobby
+[info ] FLOW gamelobby.countdown seconds=10 kind=BeginShortCountdown
+[info ] FLOW gamelobby.countdownTick value=9
+[info ] FLOW gamelobby.countdownTick value=8
+[info ] FLOW gamelobby.countdownTick value=7
+[info ] FLOW gamelobby.countdownTick value=6
+[info ] FLOW gamelobby.countdownTick value=5
+[info ] FLOW gamelobby.countdownTick value=4
+[info ] FLOW gamelobby.countdownTick value=3
+[info ] FLOW gamelobby.countdownTick value=2
+[info ] FLOW gamelobby.countdownTick value=1
+[info ] FLOW gamelobby.countdownTick value=0
+[info ] FLOW gamelobby.finalCountdown team=1 teamName=Decepticons
+[info ] FLOW gamelobby.startLevel url=MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508
+[info ] FLOW travel url=MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508 server=true from=GameLobby
+[info ] FLOW loading.start kind=Map title=Team Deathmatch message=in Streets bink=TF_LoadingScreen gfx=UI_GFxLoading_p.LoadScreen_GFX tips=3
+[info ] FLOW loading.engageText text=Don't get fooled. Decoy Traps can be destroyed by shooting them.
+[info ] FLOW loading.engageText text=Don't get fooled. Decoy Traps can be destroyed by shooting them.
+[info ] FLOW loading.engageText text=Don't get fooled. Decoy Traps can be destroyed by shooting them.
+[info ] FLOW audio.levelChange from=GameLobby
+[info ] FLOW match.launch url=MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508 map=MP_IAC_Streets_Base_m runtimeDir=MP_IAC_Streets mode=TDM goalScore=40 timeLimit=900 team=1
+PASS flow.match_launch_after_countdown
+PASS flow.match_url_equals_RE_3.1  MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508
+PASS flow.match_url_readback
+PASS flow.match_runtime_dir
+PASS flow.match_team_assigned
+PASS flow.loading_map_text  Team Deathmatch / in Streets
+PASS flow.loading_three_engage_texts
+[info ] FLOW level.begin level=Match map=MP_IAC_Streets_Base_m url=MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508
+[info ] FLOW uicontroller Initialize TnUIControllerMultiplayer
+[info ] FLOW uistate NotInGame -> WaitingOnGameStart (TnUIControllerMultiplayer)
+[info ] FLOW ui.state from=NotInGame to=WaitingOnGameStart controller=TnUIControllerMultiplayer level=Match
+[info ] FLOW ui OpenUI UI_GFxCustomize_p.CustomTransformers_GFX_1
+[info ] FLOW ui.open movie=UI_GFxCustomize_p.CustomTransformers_GFX_1 state=WaitingOnGameStart
+[info ] FLOW loading.close kind=Map level=Match
+PASS flow.match_level
+[info ] FLOW ui CloseUI UI_GFxCustomize_p.CustomTransformers_GFX_1
+[info ] FLOW ui.close movie=UI_GFxCustomize_p.CustomTransformers_GFX_1
+[info ] FLOW ui OpenUI UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1
+[info ] FLOW ui.open movie=UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1 state=WaitingOnGameStart
+[info ] FLOW uievent 3 OnBeginGame in WaitingOnGameStart
+[info ] FLOW uistate WaitingOnGameStart -> InGame (TnUIControllerMultiplayer)
+[info ] FLOW ui CloseUI UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1
+[info ] FLOW ui.close movie=UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1
+[info ] FLOW ui.hud visible=true
+[info ] FLOW ui.state from=WaitingOnGameStart to=InGame controller=TnUIControllerMultiplayer level=Match
+PASS flow.match_ingame
+[info ] FLOW uievent 6 OnPause in InGame
+[info ] FLOW uistate InGame -> Paused (TnUIControllerMultiplayer)
+[info ] FLOW ui SetPause(true)
+[info ] FLOW ui OpenUI UI_GFxPause_p.PauseMenu_GFX_1
+[info ] FLOW ui.open movie=UI_GFxPause_p.PauseMenu_GFX_1 state=Paused
+[info ] FLOW ui.state from=InGame to=Paused controller=TnUIControllerMultiplayer level=Match
+PASS flow.showmenu_pause
+[info ] FLOW bridge fn=Game.QuitToMainMenu args= level=Match
+[info ] FLOW uievent 11 OnGotoMainMenu in Paused
+[info ] FLOW ui SetPause(false)
+[info ] FLOW uistate Paused -> NotInGame (TnUIControllerMultiplayer)
+[info ] FLOW ui CloseUI UI_GFxPause_p.PauseMenu_GFX_1
+[info ] FLOW ui.close movie=UI_GFxPause_p.PauseMenu_GFX_1
+[info ] FLOW ui.state from=Paused to=NotInGame controller=TnUIControllerMultiplayer level=Match
+[info ] FLOW match.quit reason=QuitToMainMenu
+[info ] FLOW travel url=UI_FrontEnd_m server=false from=Match
+[info ] FLOW loading.start kind=Generic title= message= bink=TF_LoadingScreen gfx=UI_GFxLoading_p.LoadScreen_GFX tips=0
+PASS flow.quit_unloads_world
+[info ] FLOW level.begin level=FrontEnd map=UI_FrontEnd_m url=UI_FrontEnd_m
+[info ] FLOW uicontroller Initialize TnUIControllerFrontEnd
+[info ] FLOW frontend.game state=WaitingForController
+[info ] FLOW frontend.game state=None controllerAssigned=true
+[info ] FLOW loading.close kind=Generic level=FrontEnd
+[info ] FLOW gfx.open movie=UI_GFxFrontEnd_p.MovieLoader_GFX_1
+[info ] FLOW shim movie=UI_GFxFrontEnd_p.MovieLoader_GFX_1 what=HasWatchedIntroMovie branch provenance=HIGH (RE 1.2)
+[info ] FLOW bridge fn=Game.HasWatchedIntroMovie args= level=FrontEnd
+[info ] FLOW fscommand movie=UI_GFxFrontEnd_p.MovieLoader_GFX_1 cmd=enterFrontEnd arg=
+[info ] FLOW frontend.kismet action=Interp Fade In / Primary Camera / Camera Orbiter, RemoteEvent StartFireworks, Reverb REVERB_TRANS_FRONT_END, PlayMusic FRONTEND_MX_ORBIT_01, PlaySound FRONTEND_WHSH_REVEAL
+[info ] FLOW frontend.kismet action=SetLoadingMovieFilename UI_GFxLoading_p.LoadScreen_GFX
+[info ] FLOW uievent 0 OnFrontEnd in NotInGame
+[info ] FLOW uistate NotInGame -> FrontEnd (TnUIControllerFrontEnd)
+[info ] FLOW ui OpenUI UI_GFxFrontEnd_p.FrontEnd_GFX_1
+[info ] FLOW ui.open movie=UI_GFxFrontEnd_p.FrontEnd_GFX_1 state=FrontEnd
+[info ] FLOW ui.state from=NotInGame to=FrontEnd controller=TnUIControllerFrontEnd level=FrontEnd
+[info ] FLOW profile HasWatchedIntroMovie=true
+[info ] FLOW gfx.close movie=UI_GFxFrontEnd_p.MovieLoader_GFX_1
+[info ] FLOW audio.uiLevel level=UI_FrontEnd_m
+PASS flow.returned_to_frontend
+PASS flow.intro_marked_watched
+[info ] FRONTEND catalog: 13 map providers (2 with rebuild runtime data), 9 playlists, 31 settings classes, 1475 loc strings, 26 engage texts
+[info ] FRONTEND catalog map 501 MP_IAC_Seed_Base_m         "Seed Of Corruption" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 502 MP_IAC_Berth_Base_m        "Berth" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 503 MP_UND_Complex_BASE_m      "Complex" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 504 MP_IAC_Rust_BASE_m         "Rust" cooked=1 runtime=MP_IAC_Rust modes=6
+[info ] FRONTEND catalog map 505 MP_ESC_BrokenHope_BASE_m   "Broken Hope" cooked=1 runtime=- modes=1
+[info ] FRONTEND catalog map 506 MP_ESC_Remnant_BASE_m      "Remnant" cooked=1 runtime=- modes=1
+[info ] FRONTEND catalog map 507 MP_ORB_Debris_BASE_m       "Orbital Debris" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 508 MP_IAC_Streets_Base_m      "Streets" cooked=1 runtime=MP_IAC_Streets modes=6
+[info ] FRONTEND catalog map 509 MP_KON_Molten_Base_m       "Molten" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 510 MP_UND_Gorge_BASE_m        "Gorge" cooked=1 runtime=- modes=6
+[info ] FRONTEND catalog map 512 MP_KON_Fortress_BASE_m     "Fortress" cooked=0 runtime=- modes=6
+[info ] FRONTEND catalog map 511 MP_ORB_Havoc_BASE_m        "Havoc" cooked=0 runtime=- modes=6
+[info ] FRONTEND catalog map 513 MP_ESC_Tranquillity_BASE_m "Forsaken" cooked=0 runtime=- modes=1
+PASS extensibility.load
+PASS extensibility.rust_enabled
+PASS extensibility.tdm_maps_in_ini_order  2
+PASS extensibility.sv_no_runtime_maps
+frontend tests: 58 pass, 1 fail

@@ -1,0 +1,90 @@
+{
+  "_about": "Milestone 05 end-to-end gate expectations. Every value carries its source and confidence; the gate judges PASS/FAIL only against CONFIRMED/HIGH entries, PARTIAL/UNKNOWN entries are reported as INFO/KNOWN. Sources: RE-Workspace notes/MILESTONE05_FRONTEND_MATCH_BOOTSTRAP.md (RE f1ca8a5..bea63b4, cited 'RE n.n'), AssetTools manifests/frontend_*.json (AssetTools cc9773e..12308aa), Systems FIDELITY.md MILESTONE 05 (agents/systems da125b6).",
+  "boot": {
+    "map": {"value": "UI_FrontEnd_m", "src": "RE 1.1 / frontend_flow.json [URL]", "conf": "CONFIRMED"},
+    "initial_loading_movie": {"value": "TF_InitialStartup", "src": "RE 1.1 [LoadingMovie] InitialStartupFileName", "conf": "CONFIRMED"},
+    "first_launch_movies": {"value": ["Logo_Activision", "Logo_Hasbro", "Logo_HighMoon", "FMV_intro"], "src": "RE 1.2 Kismet chain (each on the previous Stopped)", "conf": "CONFIRMED"},
+    "second_launch_skips_logos": {"value": true, "src": "RE 1.2: logos only until the intro has been watched once (SetHasWatchedIntroMovie); MovieLoader branch HIGH", "conf": "HIGH"},
+    "frontend_movie": {"value": "UI_GFxFrontEnd_p.FrontEnd_GFX_1", "src": "RE 1.4 TnUIControllerFrontEnd", "conf": "CONFIRMED"},
+    "movie_loader": {"value": "UI_GFxFrontEnd_p.MovieLoader_GFX_1", "src": "RE 1.2", "conf": "CONFIRMED"}
+  },
+  "ui_controller": {
+    "events": {"0": "OnFrontEnd", "1": "OnResetFrontEnd", "2": "OnEnterLobby", "3": "OnBeginGame", "4": "OnSpectating", "5": "OnRespawn", "6": "OnPause", "7": "OnClearPause", "8": "OnRoundEnd", "9": "OnEndGame", "10": "OnPlayAgain", "11": "OnGotoMainMenu", "12": "OnShowHud(false)", "13": "OnShowHud(true)", "15": "OnGRIAvailable"},
+    "transitions": [
+      ["NotInGame", "FrontEnd"], ["FrontEnd", "FrontEnd"], ["FrontEnd", "InLobby"],
+      ["WaitingOnGameStart", "InGame"], ["WaitingOnGameStart", "Spectating"], ["WaitingOnGameStart", "FrontEnd"],
+      ["InGame", "Paused"], ["InGame", "WaitingOnNextRound"], ["InGame", "GameEnded"], ["InGame", "Spectating"], ["InGame", "FrontEnd"],
+      ["Spectating", "InGame"], ["Spectating", "GameEnded"], ["Spectating", "PausedSpectating"],
+      ["Paused", "InGame"], ["Paused", "NotInGame"], ["PausedSpectating", "Spectating"], ["PausedSpectating", "NotInGame"],
+      ["WaitingOnNextRound", "InGame"], ["GameEnded", "WaitingOnGameStart"]
+    ],
+    "transitions_src": "RE 1.4 state table (a new controller is created per level/PC: a state at level begin is its StartingState)",
+    "starting_state": {"FrontEnd": "NotInGame", "PartyLobby": "InLobby", "GameLobby": "InLobby", "Match": "WaitingOnGameStart"},
+    "movie_for_state": {
+      "FrontEnd": "UI_GFxFrontEnd_p.FrontEnd_GFX_1",
+      "InLobby@PartyLobby": "UI_GFxLobbies_p.PartyLobby_GFX_1",
+      "InLobby@GameLobby": "UI_GFxLobbies_p.GameLobby_GFX_1",
+      "WaitingOnGameStart": "UI_GFxCustomize_p.CustomTransformers_GFX_1",
+      "GameStart": "UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1",
+      "Paused": "UI_GFxPause_p.PauseMenu_GFX_1",
+      "Spectating": "UI_GFxRespawn_p.MultiplayerRespawn_GFX_1",
+      "GameEnded": "UI_GFxEndGameStats_p.EndGameStats_GFX_1"
+    },
+    "hud": {"InGame": true, "Spectating": true, "GameEnded": false, "src": "RE 1.4 / 6", "conf": "CONFIRMED"},
+    "conf": "CONFIRMED"
+  },
+  "travel": {
+    "party_lobby_url": {"value": "UI_PartyLobby_m?game=TransContent.TnPartyLobbyGame?listen", "src": "RE 1.5 ConfirmOpenPartyLobby", "conf": "CONFIRMED"},
+    "multiplayer_gts": {"value": "GTS_TeamGame", "src": "RE 1.5 multiplayerBtn_mc", "conf": "CONFIRMED"},
+    "game_lobby_url_keys": {"value": {"Game": "TransContent.TnGameLobbyGameTeam", "GameModeTag": "TDM", "GameTeamStatus": "3", "MaxPlayers": "10", "IconicMode": "0"}, "src": "RE 7 timeline (UI_Lobby_m?...)", "conf": "CONFIRMED"},
+    "match_url": {"value": "MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508", "src": "RE 3.1 (native-appended part HIGH)", "conf": "CONFIRMED"},
+    "match_url_keys": {"value": {"PointsToWin": "40", "Game": "TransContent.TnVersusGame", "GameModeTag": "TDM", "GameTeamStatus": "3", "MapId": "508", "TimeLimit": "900.00"}, "src": "RE 3.1 / 5.1", "conf": "CONFIRMED"},
+    "lobby_countdown_s": {"value": 10, "src": "RE 2.4 short countdown 10 s, 1 s ticks (Frontend doc)", "conf": "CONFIRMED"},
+    "return_after_match": {"value": "UI_Lobby_m", "src": "RE 5.7 MatchOver 15 s -> ReturnToGameLobby (?MapId kept, host's choice preselects the same map)", "conf": "CONFIRMED"},
+    "quit_to_main_menu": {"value": "UI_FrontEnd_m", "src": "RE 5.7 Game.QuitToMainMenu -> ClientTravelToMap", "conf": "CONFIRMED"}
+  },
+  "loading": {
+    "match_title": {"value": "Team Deathmatch", "src": "RE 3.3 SetLevelText(FriendlyName) + frontend_modes TnTeamGame FriendlyName", "conf": "CONFIRMED"},
+    "match_message": {"value": "in Streets", "src": "RE 3.3 'in <Map>' + frontend_maps Streets FriendlyName", "conf": "CONFIRMED"},
+    "match_tips": {"value": 3, "src": "RE 3.3 3 x AddEngageText", "conf": "CONFIRMED"},
+    "loading_gfx": {"value": "UI_GFxLoading_p.LoadScreen_GFX", "src": "RE 1.2 SeqAct_SetLoadingMovieFilename", "conf": "CONFIRMED"},
+    "loading_bink": {"value": "TF_LoadingScreen", "src": "RE 1.1 DefaultFileName", "conf": "CONFIRMED"},
+    "composite_and_close_timing": {"value": null, "src": "RE STILL OPEN", "conf": "PARTIAL"}
+  },
+  "match_tdm": {
+    "game_class": {"value": "TransContent.TnVersusGame", "src": "RE 5", "conf": "CONFIRMED"},
+    "goal_score": {"value": 40, "src": "RE 5.1 PointsToWin from the URL", "conf": "CONFIRMED"},
+    "time_limit_s": {"value": 900, "src": "RE 5.1 TimeLimit (seconds)", "conf": "CONFIRMED"},
+    "pending_countdown_s": {"value": 10, "src": "RE 5.2 MatchAutoStartCountdown", "conf": "CONFIRMED"},
+    "no_spawn_before_start": {"value": true, "src": "RE 5.2 TrySpawnPlayer false in PendingMatch", "conf": "CONFIRMED"},
+    "teams": {"value": {"0": "Autobots", "1": "Decepticons"}, "src": "RE 5.3", "conf": "CONFIRMED"},
+    "pick_team": {"value": "keep <2 else smaller team, tie RandomInt(2)", "src": "RE 5.3 PickTeam", "conf": "HIGH"},
+    "spawn_class": {"value": "TnTeamPlayerStart", "src": "RE 5.3 RatePlayerStart", "conf": "CONFIRMED"},
+    "initial_clusters": {"value": {"Decepticons": "TnSpawnCluster_4159", "Autobots": "TnSpawnCluster_7810"}, "src": "RE 5.3 Streets TDM data", "conf": "CONFIRMED"},
+    "initial_spawn_lock_s": {"value": 15, "src": "RE 5.3 InitialSpawnTime", "conf": "CONFIRMED"},
+    "cluster_reevaluate_s": {"value": 10, "src": "RE 5.3 derived", "conf": "HIGH"},
+    "kill_score": {"value": {"player": 1, "team": 1}, "src": "RE 5.5 ScoreKillsTDM", "conf": "CONFIRMED"},
+    "suicide_score": {"value": {"player": 0, "team": 0, "death": 1}, "src": "RE 5.5", "conf": "CONFIRMED"},
+    "environment_death_score": {"value": {"player": 0, "team": 0, "death": 1}, "src": "RE 5.5", "conf": "CONFIRMED"},
+    "teammate_damage": {"value": "discarded except TnDamageTypeAOE", "src": "RE 5.5 TnPlayerPawn.TakeDamage", "conf": "CONFIRMED"},
+    "respawn_delay_s": {"value": 5.0, "src": "RE 5.6 WaveRespawnTime (0 if ShouldInstantRespawn)", "conf": "CONFIRMED"},
+    "player_restart_delay_s": {"value": 6.0, "src": "RE 5.6 config; usage not traced", "conf": "PARTIAL"},
+    "end_on_score": {"value": "team score >= 40 -> EndGame(PRI,'Score')", "src": "RE 5.5 CheckScore", "conf": "CONFIRMED"},
+    "end_on_time": {"value": "RemainingTime <= 0 -> EndGame(none,'')", "src": "RE 5.4", "conf": "CONFIRMED"},
+    "tie": {"value": "equal scores -> Winner none; no overtime", "src": "RE 5.7", "conf": "CONFIRMED"},
+    "match_over_countdown_s": {"value": 15, "src": "RE 5.7 MatchOverCountdown", "conf": "CONFIRMED"},
+    "ui_events": {"value": {"begin": 3, "spectating": 4, "respawn": 5, "end": 9}, "src": "RE 1.4 / 5", "conf": "CONFIRMED"},
+    "announcements_time_s": {"value": [120, 60, 30], "src": "RE 5.4 ReportGameProgressTime", "conf": "CONFIRMED"},
+    "announcements_kills_left": {"value": [5, 3, 1], "src": "RE 5.5 ReportGameProgressKills", "conf": "CONFIRMED"},
+    "hud_clock_format": {"value": "MM:SS", "src": "RE 6 Hud_GFX secondsToMinutesSeconds", "conf": "CONFIRMED"}
+  },
+  "audio_ownership": {
+    "frontend_music": {"value": "FRONTEND_MX_ORBIT_01", "src": "Systems M05 frontendTrack (authored SeqAct_PlayMusic)", "conf": "CONFIRMED"},
+    "party_lobby_music": {"value": "MP_PARTY_LOBBY_MX", "src": "Systems M05", "conf": "CONFIRMED"},
+    "game_lobby_music": {"value": "MP_LOBBY_MX", "src": "Systems M05", "conf": "CONFIRMED"},
+    "match_music": {"value": null, "src": "Systems M05: Streets authors no SeqAct_PlayMusic", "conf": "CONFIRMED"},
+    "frontend_medley_loops": {"value": false, "src": "Systems M05: FRONTEND_MX_ORBIT_01 plays once (~380 s)", "conf": "CONFIRMED"},
+    "after_unload": {"value": "0 cue instances, 0 queued, 0 map cues, mixer Default, no reverb, PCM back to base", "src": "Systems M05 unloadMapAudio guarantees", "conf": "HIGH"},
+    "ui_level_kismet_audio": {"value": null, "src": "Systems M05 UNKNOWN/external (needs a UI-level audio manifest)", "conf": "UNKNOWN"}
+  }
+}

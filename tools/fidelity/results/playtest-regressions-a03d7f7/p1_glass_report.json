@@ -1,0 +1,60 @@
+﻿{
+    "summary":  {
+                    "pass":  0,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  8
+                },
+    "results":  [
+                    {
+                        "id":  "playtest.glass.IAC_Glass2_light_0",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 0%, above 0%, grazing 0%, below 59%. Worst view IAC_Glass2_light_0_aboveclose_a2: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass2_light_0_aboveclose_a2.jpg (red = glass contribution, blue = surface without it). Seen from one side only (above vs below differ by \u003e= 50 points); material two_sided=false. StaticMeshCollectionActor_621 modPlatform_Straight_2048_STAT (26 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass2_light_1",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 0%, above 0%, grazing 0%, below 80%. Worst view IAC_Glass2_light_1_aboveclose_a2: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass2_light_1_aboveclose_a2.jpg (red = glass contribution, blue = surface without it). Seen from one side only (above vs below differ by \u003e= 50 points); material two_sided=false. StaticMeshCollectionActor_4168 modPlatform_Straight_2048_STAT (26 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass_0",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 0%, above 19%, grazing 41%, below 72%. Worst view IAC_Glass_0_aboveclose_a1: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass_0_aboveclose_a1.jpg (red = glass contribution, blue = surface without it). Seen from one side only (above vs below differ by \u003e= 50 points); material two_sided=false. StaticMeshCollectionActor_12089 modPlatform_Straight_2048_STAT (3 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass_1",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 0%, above 0%, grazing 0%, below 71%. Worst view IAC_Glass_1_aboveclose_a2: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass_1_aboveclose_a2.jpg (red = glass contribution, blue = surface without it). Seen from one side only (above vs below differ by \u003e= 50 points); material two_sided=false. StaticMeshCollectionActor_2413 modPlatform_CTR_2048_STAT (3 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Decagon_GlassPan2_0",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 24%, above 12%, grazing 28%, below 0%. Worst view IAC_Decagon_GlassPan2_0_grazing_a1: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Decagon_GlassPan2_0_grazing_a1.jpg (red = glass contribution, blue = surface without it). StaticMeshCollectionActor_16246 ENV_CORE_CanyonFloor_B_STAT (18 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Decagon_GlassPan2_1",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 0%, above 0%, grazing 0%, below 23%. Worst view IAC_Decagon_GlassPan2_1_aboveclose_a2: 100% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Decagon_GlassPan2_1_aboveclose_a2.jpg (red = glass contribution, blue = surface without it). StaticMeshCollectionActor_16246 ENV_CORE_CanyonFloor_B_STAT (18 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass2_dense_Dark_0",
+                        "status":  "HUMAN",
+                        "measured":  0.712,
+                        "note":  "14 views. Glass contributes over its own surface (mean): aboveclose 67%, above 72%, grazing 63%, below 43%. Worst view IAC_Glass2_dense_Dark_0_below_a2: 71% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass2_dense_Dark_0_below_a2.jpg (red = glass contribution, blue = surface without it). StaticMeshCollectionActor_4284 CoolantSurfaceHole_STAT (4 placements)"
+                    },
+                    {
+                        "id":  "playtest.glass.IAC_Glass2_dense_Dark_1",
+                        "status":  "HUMAN",
+                        "measured":  0.972,
+                        "note":  "16 views. Glass contributes over its own surface (mean): aboveclose 35%, above 48%, grazing 49%, below 31%. Worst view IAC_Glass2_dense_Dark_1_below_a1: 97% of the surface shows no glass (occluded, drawn over, or the glass not drawn from that side) - overlay_IAC_Glass2_dense_Dark_1_below_a1.jpg (red = glass contribution, blue = surface without it). StaticMeshCollectionActor_4284 CoolantSurfaceHole_STAT (4 placements)"
+                    }
+                ]
+}
