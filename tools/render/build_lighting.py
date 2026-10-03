@@ -175,6 +175,9 @@ def lights(repo, pkg_index):
                 'cast_composite_shadow': bool(c.get('bCastCompositeShadow', False)),
                 'mod_shadow_color': list(c.get('ModShadowColor') or [0.0, 0.0, 0.0, 1.0]),
                 'shadow_falloff_exponent': c.get('ShadowFalloffExponent', 2.0),
+                # copied into the DirectLightEnv shadow record (+0x70 / +0x74; 0 -> SystemSettings 128 / 1024)
+                'min_shadow_resolution': int(c.get('MinShadowResolution') or 0),
+                'max_shadow_resolution': int(c.get('MaxShadowResolution') or 0),
                 'ue_matrix': M.tolist(),
             })
     return res

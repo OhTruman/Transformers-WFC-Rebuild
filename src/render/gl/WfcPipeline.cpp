@@ -655,6 +655,8 @@ bool Pipeline::load(const std::string& mapName) {
         }
         for (int k = 0; k < 4; ++k) l.modShadowColor[k] = e["mod_shadow_color"][(size_t)k].asFloat(k == 3 ? 1.0f : 0.0f);
         l.shadowFalloffExponent = e["shadow_falloff_exponent"].asFloat(2.0f);
+        l.minShadowResolution = (int)e["min_shadow_resolution"].asDouble(0);
+        l.maxShadowResolution = (int)e["max_shadow_resolution"].asDouble(0);
         l.chStatic = e["channels"]["Static"].asBool(true);
         l.chDynamic = e["channels"]["Dynamic"].asBool(true) || e["channels"]["CompositeDynamic"].asBool(true);
         l.castShadows = e["cast_shadows"].asBool(true);
@@ -1712,9 +1714,9 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
         g.subs.push_back(d);
     }
-    if (envSamples_ && !weapon) {                     // composite shadow into the ShadowMask (opt-in, see WfcShadows.cpp)
-        int li = shadowLightFor();
-        if (li >= 0) castCharacterShadow(g, model, li);
+    if (envSamples_ && !weapon && !std::getenv("WFC_NOCHARSHADOWS")) {   // the environment's projector -> ShadowMask
+        ShadowProjector scratch;
+        if (const ShadowProjector* p = projectorFor(envForm_, scratch)) castCharacterShadow(g, model, *p);
     }
     dynamicMaskDraw_ = envSamples_ != nullptr;
     drawSubs(g, model, true);
@@ -1780,6 +1782,12 @@ void Pipeline::writeFrameReport() {
                      st.shadowCandidates);
         std::fprintf(f, "  DirectLightAmbientContribution (%.4f %.4f %.4f), ShadowMask %s this frame\n", st.env.dlac[0],
                      st.env.dlac[1], st.env.dlac[2], maskDrawnFrame_ == frameNo_ ? "projected" : "clear (1,1,1,1)");
+        const ShadowProjector& pj = st.projector;
+        static const char* kPT[] = {"-", "directional", "point", "spot"};
+        std::fprintf(f, "  shadow projector: %s, type %s, source %s, ModShadowColor (%.3f %.3f %.3f %.3f), updates %d, "
+                        "source changes %d\n", pj.on ? "ON" : "off", kPT[std::min(std::max(pj.type, 0), 3)],
+                     pj.source >= 0 ? lights_[(size_t)pj.source].name.c_str() : "-", pj.modShadowColor[0],
+                     pj.modShadowColor[1], pj.modShadowColor[2], pj.modShadowColor[3], pj.updates, pj.sourceChanges);
         if (st.shadowTop >= 0)
             std::fprintf(f, "  composite top %s (%s): lum %.4f, smoothed vis %.3f, runner-up lum %.4f\n",
                          lights_[(size_t)st.shadowTop].name.c_str(), lvv_.isBaked(st.shadowTop) ? "baked" : "unbaked",
@@ -1788,7 +1796,7 @@ void Pipeline::writeFrameReport() {
     if (const char* md = std::getenv("WFC_MASKDUMP")) {     // ShadowMask R channel as PGM (top row first)
         if (maskDrawnFrame_ == frameNo_ && maskFbo_) {
             std::vector<unsigned char> px((size_t)maskW_ * maskH_ * 4);
-            BindFramebuffer(GL_READ_FRAMEBUFFER, maskFbo_);
+            BindFramebuffer(GL_READ_FRAMEBUFFER, maskBlurFbo_);   // what the character pass reads
             glReadPixels(0, 0, maskW_, maskH_, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
             BindFramebuffer(GL_FRAMEBUFFER, fbo_);
             if (FILE* pf = std::fopen(md, "wb")) {
@@ -1800,6 +1808,10 @@ void Pipeline::writeFrameReport() {
         }
         std::fprintf(f, "ShadowMask %dx%d, projected this frame: %s\n", maskW_, maskH_, maskDrawnFrame_ == frameNo_ ? "yes" : "no");
     }
+    for (const ShadowFrameInfo& si : shadowFrame_)
+        std::fprintf(f, "projected shadow: %s subject, projector type %d from %s, resolution %d, ShadowModulateColor %.3f\n",
+                     si.form == 0 ? "robot" : "vehicle", si.type, si.source >= 0 ? lights_[(size_t)si.source].name.c_str() : "-",
+                     si.res, si.factor);
     std::fprintf(f, "dynamic light environments (UberLight, TotalLightCount 2):\n");
     for (const std::string& e : frameEnvs_) std::fprintf(f, "  %s\n", e.c_str());
     std::fclose(f);
@@ -1810,10 +1822,10 @@ void Pipeline::writeFrameReport() {
 // texture. Test hook WFC_SHADOWMASKTEST=<v> binds a uniform mask value to character draws.
 GLuint Pipeline::shadowMaskTexFor(bool character) {
     maskTexelOffset_[0] = maskTexelOffset_[1] = 0.0f;
-    if (character && maskDrawnFrame_ == frameNo_ && maskTex_) {
+    if (character && maskDrawnFrame_ == frameNo_ && maskBlurTex_) {
         maskTexelOffset_[0] = 0.5f / (float)maskW_;
         maskTexelOffset_[1] = 0.5f / (float)maskH_;
-        return maskTex_;
+        return maskBlurTex_;                      // resolved + blurred mask
     }
     auto make = [](float v) {
         GLuint t = 0;
@@ -2019,6 +2031,8 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     camPos_ = cam.pos;
     znear_ = cam.znear; zfar_ = cam.zfar;
     viewProj_ = cam.proj() * cam.view();
+    camProj_ = cam.proj();
+    shadowFrame_.clear();
     // frustum planes (Gribb/Hartmann, column-major m[col*4+row])
     const float* m = viewProj_.m;
     auto row = [&](int r, int c) { return m[c * 4 + r]; };

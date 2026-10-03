@@ -308,6 +308,10 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
         if (std::fabs(factor - 1.0f) > 0.05f) { st.shadowLight = S.light; st.shadowStrength = fade; }
         st.shadowCandidates = (int)shadow.size() + (int)shadowOverflow.size();
     }
+    // proxy build (0x82CCE0A8) + render-side ApplyShadowRecords (0x82DE6598): one record per surviving
+    // composite light; the environment's single synthetic slot copies it, or is switched off
+    updateShadowProjector(st.projector, st.shadowLight >= 0 ? &lights_[(size_t)st.shadowLight] : nullptr, st.shadowLight,
+                          1.0f - st.shadowStrength);
     statUpdateMs_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tUpd).count();
 }
 
@@ -317,6 +321,34 @@ void directLightAmbientContribution(const core::Vec3 total[6], const core::Vec3 
     out[0] = sl.x / (st.x + 0.001f);
     out[1] = sl.y / (st.y + 0.001f);
     out[2] = sl.z / (st.z + 0.001f);
+}
+
+void updateShadowProjector(ShadowProjector& p, const Light* l, int lightIndex, float factor) {
+    // record only if any component differs from white by >= 1e-4 (0x820A1AE0); shadowFactor = (f, f, f, 1)
+    if (!l || !(std::fabs(factor - 1.0f) >= 1e-4f)) {
+        p.on = false;                             // slot flags &= ~0xA0000000, Scene.Lights flags &= ~0x60000000
+        return;
+    }
+    if (p.source != lightIndex) ++p.sourceChanges;   // overwritten in place: no second projector, no crossfade
+    p.source = lightIndex;
+    p.type = l->type == 2 ? 1 : l->type == 0 ? 2 : 3;
+    p.pos = l->pos;
+    p.dir = l->dir;
+    if (p.type == 1) {                            // UpdateShadowLight_Directional: Radius 327680 UU, falloff 2.0
+        p.radius = 3276.8f;
+        p.falloff = 2.0f;
+        p.cosOuter = 0.0f; p.invConeRange = 1.0f;
+    } else {
+        p.radius = l->radius;
+        p.falloff = l->shadowFalloffExponent;     // record +0x64 = ShadowFalloffExponent
+        p.cosOuter = l->cosOuter; p.invConeRange = l->invConeRange;
+    }
+    p.minRes = l->minShadowResolution;
+    p.maxRes = l->maxShadowResolution;
+    p.modShadowColor[0] = p.modShadowColor[1] = p.modShadowColor[2] = factor;
+    p.modShadowColor[3] = 1.0f;
+    p.on = true;
+    ++p.updates;
 }
 
 } // namespace wfc

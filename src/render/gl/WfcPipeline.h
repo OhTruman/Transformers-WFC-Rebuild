@@ -43,11 +43,38 @@ struct Light {
     LightVisibilityVolume::Guid guid;
     float modShadowColor[4] = {0, 0, 0, 1};   // FLinearColor (ModShadowColor)
     float shadowFalloffExponent = 2.0f;
-    // Light render flags tested by FProjectedShadowInfo::RenderProjection (0x8304EF70): bit 0x4 and the
-    // depth-priority-group bit (bit 5 + DPG). Which lights carry them is UNKNOWN (source not traced): all
-    // lights are given both; WFC_LIGHTRENDERFLAGS=<hex> overrides for gate tests.
-    uint32_t renderFlags = 0x4u | 0x20u;
+    int minShadowResolution = 0, maxShadowResolution = 0;   // LightComponent +0x134 / +0x138 (0 = system)
 };
+
+// The light environment's synthetic shadow light (one slot per DirectLightEnv, ReverseEngineering 7033f18):
+// rewritten from the composite shadow record on every proxy build (0x82DE6598 ->
+// UpdateShadowLight_{Directional,Point,Spot} 0x82DDD128 / 0x82DDD240 / 0x82DDD368); flags cleared when
+// there is no record. It is never the scene light itself.
+struct ShadowProjector {
+    bool on = false;              // LSI+0xF8 0x80000000|0x20000000 and Scene.Lights +0x20 0x60000000
+    int type = 0;                 // 1 directional, 2 point, 3 spot
+    int source = -1;              // index into lights_ of the composite light it copies
+    core::Vec3 pos{0, 0, 0}, dir{0, -1, 0};   // LightToWorld (glTF metres; dir = light forward)
+    float radius = 0.0f;          // metres (+0x174; directional 327680 UU)
+    float falloff = 2.0f;         // ShadowFalloffExponent (+0x178; directional 2.0)
+    float cosOuter = 0.0f, invConeRange = 1.0f;
+    int minRes = 0, maxRes = 0;   // +0x100 / +0x104
+    float modShadowColor[4] = {1, 1, 1, 1};   // +0x10C = shadowFactor
+    int updates = 0, sourceChanges = 0;
+};
+// Build the record from the composite light and its shadowFactor and apply it to the slot (or clear it).
+void updateShadowProjector(ShadowProjector& p, const Light* composite, int lightIndex, float shadowFactor);
+
+// FPrimitiveViewRelevance bits used by shadow creation / projection (0x82DD8D58, 0x82C8BCF0).
+struct ShadowSubject {
+    bool castShadow = true, castDynamicShadow = true, castHiddenShadow = false;   // PrimitiveComponent +0xF0
+    bool hidden = false, hasShadowParent = false;
+    int dpg = 0;                  // DepthPriorityGroup (SDPG_World 0)
+    bool useViewOwnerDPG = false; int viewOwnerDPG = 0; bool viewIsOwner = false;
+    float maxDrawDistance = 0.0f; // 0 = unlimited
+    float distSq = 0.0f;          // |bounds origin - view origin|^2 (LODDistanceFactor 1)
+};
+uint32_t shadowViewRelevance(const ShadowSubject& s);   // bit 0x4 = IsShadowCast(View), bit (5 + DPG)
 
 // Native shadow constants (ReverseEngineering 13c0953): GetShadowDepthResolution 0x830101E0 and the
 // BranchingPCF projection SetParameters 0x82CFB598. Shipped Xe-TransEngine.ini values.
@@ -56,7 +83,8 @@ constexpr float kMaskedShadowsDepthBias = 0.2f;
 constexpr float kShadowFilterRadius = 6.0f;
 int shadowDepthResolution(int maxShadowResolution);                       // clamp(Max, 1, 2048)
 float shadowDepthBiasParabolic(int res, float maskedShadowsDepthBias, float shadowFilterRadius);
-bool shadowProjectionAllowed(uint32_t lightRenderFlags, int dpg);
+bool shadowProjectionAllowed(uint32_t subjectViewRelevance, int dpg);
+int shadowResolution(float screenRadius, int lightMin, int lightMax);   // CreateProjectedShadow 0x83056A20
 extern const float kEdgeSampleOffsets[8];       // 4 x float2 (0x83711DFC)
 extern const float kRefiningSampleOffsets[24];  // 12 x float2 (0x83711EC0)
 // DirectLightAmbientContribution (FDirectLightEnv::BuildSceneProxyData 0x82CCE0A8):
@@ -210,6 +238,7 @@ private:
         float crossfade = 1.0f, shadowStrength = 0.0f;
         int shadowTop = -1;                       // top composite candidate (before the 0.05 drop)
         float shadowTopScore = 0, shadowTopVis = 0, shadowNextScore = -1;
+        ShadowProjector projector;                // the environment's synthetic shadow light
     };
     std::map<int, DirectLightEnvState> dle_;
     int envForm_ = -1;                 // form of the dynamic mesh being drawn (-1 none)
@@ -273,7 +302,7 @@ private:
     const char* mainOverride_ = nullptr;
     void applyDistortion();
     // Modulated projected shadows (WfcShadows.cpp): non-native stages from the cooked shaders.
-    struct ShadowRequest { int light = -1; int res = 0; core::Mat4 viewProj; float zRow[4] = {0, 0, 0, 0};
+    struct ShadowRequest { int light = -1; int res = 0; core::Vec3 origin{0, 0, 0}; core::Mat4 viewProj; float zRow[4] = {0, 0, 0, 0};
                            float invMaxSubjectDepth = 1, depthBias = 0; float modColor[4] = {1, 1, 1, 1}; };
     GLuint shadowFbo_ = 0, shadowDepthTex_ = 0, shadowProjProg_ = 0, randomAnglesTex_ = 0;
     GLuint maskDepthProg_ = 0, constProg_ = 0, volVao_ = 0, volVbo_ = 0;
@@ -282,14 +311,19 @@ private:
     float maskTexelOffset_[2] = {0, 0};
     int randomAnglesSize_ = 0;
     int statShadowProj_ = 0, statShadowGated_ = 0;
-    int shadowLightFor() const;
+    GLuint maskBlurProg_ = 0, maskTmpFbo_ = 0, maskTmpTex_ = 0, maskBlurFbo_ = 0, maskBlurTex_ = 0;
+    core::Mat4 camProj_;
+    struct ShadowFrameInfo { int form = -1; int source = -1; int type = 0; int res = 0; float factor = 1.0f; };
+    std::vector<ShadowFrameInfo> shadowFrame_;
+    void blurShadowMask();
+    const ShadowProjector* projectorFor(int form, ShadowProjector& scratch) const;
     bool ensureShadowPrograms();
     void ensureShadowMask();
     void beginShadowMask();
     void fillMaskDepth();
     void drawShadowVolume(const core::Vec3 corners[8], const core::Mat4& vp, GLuint prog);
-    void castCharacterShadow(GpuMesh& g, const core::Mat4& model, int light);
-    bool renderShadowDepth(GpuMesh& g, const core::Mat4& model, int light, ShadowRequest& rq);
+    void castCharacterShadow(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p);
+    bool renderShadowDepth(GpuMesh& g, const core::Mat4& model, const ShadowProjector& p, ShadowRequest& rq);
     void depthPrepass(GpuMesh& g, const core::Mat4& model);
     void runShadowMaskSelfTest();
     bool depthDirty_ = true;

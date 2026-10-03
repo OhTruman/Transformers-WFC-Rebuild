@@ -602,6 +602,11 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 03 PASS 5 (2026-10-02, agents/rendering)
+- Character shadows in normal play (ReverseEngineering 7033f18): per light-environment synthetic projector copying the composite light, ModShadowColor = shadowFactor, FadeAlpha 1, native creation / relevance / DPG gates, native origin / push-back / W range / resolution, native 6-tap darkness-weighted blur.
+- WFC_SHADOWSELFTEST 32/32, WFC_DLETEST 20/20. Diagnostics: WFC_NOCHARSHADOWS, WFC_SHADOWTEST=<light>, WFC_SUBJECTRELEVANCE=<hex>, WFC_BLURTIE, WFC_MASKDUMP.
+- Still PARTIAL / UNKNOWN: synthetic-light registration, frustum fit + ScreenToShadowMatrix, directional / point projection-shader variants, blur tie branch, preshadows, weapon ShadowParent.
+
 ## RENDERING MILESTONE 03 PASS 4 (2026-10-02, agents/rendering)
 - Native ShadowMask (ReverseEngineering 13c0953): RGBA8 at scene/2 (SizeX > 960), cleared to 1, z-fail stencil frustum, multiplicative DestColor x Src (alpha untouched), read as .r + half texel by the character pass.
 - DirectLightAmbientContribution from the light environment (CubeSum ratio); BranchingPCF native tables; ShadowDepthBias 1165.08; projection gates (flag 0x4 + DPG bit).

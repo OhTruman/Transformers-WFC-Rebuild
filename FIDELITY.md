@@ -17,6 +17,36 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 03 PASS 5 — NORMAL-PLAY CHARACTER SHADOW RUNTIME (2026-10-02)
+Native provenance: RE-Workspace `notes/MILESTONE03_RENDERING_CHARACTER_SHADOW_RUNTIME.md`, ReverseEngineering commit
+**7033f18** (builds on 13c0953 / pass 4, Rendering checkpoint 566a87f). This pass supersedes the pass-4 rows "Projection
+gates" (bit 0x4 is the SUBJECT's view relevance, not a light flag), "shadowFactor -> projection strength" and "Resolve /
+blur". Character shadows now run in normal play without any opt-in.
+
+| Item | Original (WFC) | Source | Mark | Rebuild |
+|---|---|---|---|---|
+| Synthetic projector | one synthetic shadow light per light environment; never the scene light | 0x82DE6598, vtable 0x822DD770 | **CONFIRMED** | `ShadowProjector` per DirectLightEnv (robot, vehicle) |
+| Projector update | every proxy build (full and incremental updates): type (1 dir / 2 point / 3 spot), LightToWorld, Radius, ShadowFalloffExponent, cones, Min/MaxShadowResolution, ModShadowColor = shadowFactor; overwritten in place (no crossfade, no second projector) | 0x82CCE0A8, 0x82DDD128 / 0x82DDD240 / 0x82DDD368 | **CONFIRMED** | **APPLIED** (`updateShadowProjector`) |
+| Directional projector values | Radius 327680 UU, ShadowFalloffExponent 2.0, cones (0, −1, −1, 0) | 0x82DDD128 | **CONFIRMED** | **APPLIED** (no Streets directional light casts a composite shadow: diagnostic only) |
+| No record | shadowFactor within 1e-4 of white (and the earlier 0.05 drop) -> slot flags cleared, no shadow | 0x820A1AE0, 0x82DE6598 | **CONFIRMED** | **APPLIED** |
+| Slot creation / registration / interaction linking | how the synthetic light is allocated, added to the scene and linked to the environment's primitives | — | **PARTIAL / UNKNOWN** | structural stand-in: the projector lives in the environment state and is cast for that environment's drawn form |
+| Strength | FadeAlpha = 1.0 always; ShadowModulateColor = lerp(1, ModShadowColor, 1) = shadowFactor; all fading inside shadowFactor (0.2 luminance gap x smoothed visibility); no distance / resolution fade | 0x83056A20, 0x82D077F8 | **CONFIRMED** | **APPLIED**; the pass-4 authored-ModShadowColor opt-in substitute and WFC_SHADOWFADEALPHA are removed |
+| Mod projection combine | out = lerp(lerp(1, SMC, atten), 1, PCF), atten = spot² (1 − saturate(|d/R|²)^ShadowFalloffExponent) | spot variant microcode | **PARTIAL** (directional / point variants not decoded) | decoded form for every type; directional uses the projector origin as the light position |
+| Creation: light side | projector on, ModShadowColor not white (1e-4), light in at least one view | 0x83057028 | **CONFIRMED** | **APPLIED** (point / spot: light sphere vs view frustum; directional: always) |
+| Creation: subject side | interaction PROJECTED for CastShadow ∧ bCastDynamicShadow; no ShadowParent; relevant ((relevance & 7) != 0) or visible; initializer type 1/2/3 | 0x82DBFA80, 0x83056A20 | **CONFIRMED** | **APPLIED**; Optimus robot / vehicle mesh components: CastShadow True (MeshComponent), bCastDynamicShadow True, bCastHiddenShadow False (authored.db) |
+| IsShadowCast (relevance 0x4) | CastShadow required; hidden / owner-see cases -> bCastHiddenShadow; else within MaxDrawDistance (LODDistanceFactor) | 0x82DD8D58 | **CONFIRMED** | **APPLIED** (`shadowViewRelevance`); CachedCullDistance 0 -> unlimited; hidden forms are not drawn -> no shadow |
+| DPG relevance | bit 5 + DPG from the proxy: DepthPriorityGroup, or ViewOwnerDepthPriorityGroup when bUseViewOwnerDPG and the view's owner matches | 0x82C8BCF0 | **CONFIRMED** | **APPLIED**; Optimus meshes: SDPG_World, no view-owner DPG (authored) -> World pass |
+| Occlusion / preshadow | per-view shadow occlusion query; a preshadow when the subject is visible (static receivers from the light's static list) | 0x82DEA630, 0x83056A20 | CONFIRMED (existence) / PARTIAL (synthetic light's static list unknown) | not reproduced (no occlusion queries; preshadow casters unknown) |
+| Shadow children | ShadowParent children folded into the parent's single shadow | 0x83056958 | **CONFIRMED** (mechanism) | the Ion Blaster mesh has its own LightEnvironment and CastShadow True; whether script sets its ShadowParent is UNKNOWN -> weapon not a caster (unchanged) |
+| Skeletal proxy early-out | proxy 0x82C9E5C0 returns 0x8242 (foreground DPG, no shadow bit) under unverified conditions | — | **PARTIAL** | not reproduced |
+| Shadow space | perspective for every type; origin = light position (point / spot) or B.Origin − (2R + 300 UU)·axis (directional); pulled back to √2·R; MinLightW 0.1 UU; MaxLightW = Radius or 2(2R + 300); DynamicShadowDepthBias input (0 on both forms) | 0x82E22A38, 0x82DBF678, 0x82DBF728 | **CONFIRMED** | **APPLIED** |
+| Frustum fit / ScreenToShadowMatrix | VMX128 bounding fit of the projected corners; texel / half-texel terms | 0x8301CD08, 0x82CFB598 | **PARTIAL / UNKNOWN** | sphere-tangent perspective, depth clamped to [MinLightW, MaxLightW] [PROV] |
+| Shadow resolution | clamp((int)(1.0·ScreenRadius), min(Min, Buf − 10), min(Max − 10, Buf − 10)); ScreenRadius = max(0.5·SizeX·P00, 0.5·SizeY·P11)·R / max(clipW, 1 UU); light 0 -> 128 / 1024; Buf 1024; 5-texel border | 0x83056A20 | **CONFIRMED** | **APPLIED** (Streets lights author no Min/MaxShadowResolution) |
+| Blur | only if a shadow was drawn; H then V; 6 bilinear clamped taps at ±0.5 / ±1.5 / ±2.5 texels; weights {4, 2, 1}·(4 − s), normalised; horizontal output squared | 0x82DDB070, 0x82E0C8A0, Engine ShaderCache_10303 | **CONFIRMED** | **APPLIED**; GPU == closed form (max error 0 / 255) |
+| Blur tie branch | (s(−B) == s(−A)) ∧ (s(+B) > s(−B)) alternative result | decoded swizzle uncertain | **PARTIAL** | off by default; WFC_BLURTIE=1 enables the decoded form |
+| Transform | each environment owns its projector; only the drawn form casts | 13c0953 §4, 7033f18 §5 | CONFIRMED mechanism / environment survival across transform UNKNOWN | one projected shadow per frame through r2v / v2r; the hidden form's projector is stale but casts nothing |
+| Normal-play result | — | — | — | spawn 18 robot (baked PointLight_4177_LC, ShadowModulateColor 0.098), spawn 21 robot (PointLight_14841_LC, 0.825), vehicle at 18 (0.105); spawns without a composite light: projector off, mask 1 |
+
 ## MILESTONE 03 PASS 4 — NATIVE CHARACTER SHADOW MASK, DLAC, BIAS / PCF (2026-10-02)
 Native provenance: RE-Workspace `notes/MILESTONE03_RENDERING_CHARACTER_SHADOW_PATH.md`, ReverseEngineering commit
 **13c0953** (supersedes the pass-3 UNKNOWN rows for the shadow-mask write path and the DLAC formula). Authored data:
