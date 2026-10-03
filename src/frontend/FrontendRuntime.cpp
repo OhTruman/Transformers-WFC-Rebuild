@@ -182,8 +182,9 @@ void FrontendRuntime::updateAudio(float dt) {
     }
     // Prefetch the destination level's streamed audio while its loading screen is up.
     if (flow_.loading().active) {
-        std::string dest = flow_.hasPendingMatch() && flow_.pendingMatch().map ? flow_.pendingMatch().map->runtimeDir
-                                                                               : Url::parse(flow_.loading().url).map();
+        // Match maps are known by their runtime directory (MP_IAC_Streets_Base_m -> MP_IAC_Streets); UI levels by name.
+        std::string dest = Url::parse(flow_.loading().url).map();
+        if (const MapInfo* mi = catalog_.mapByFilename(dest)) dest = mi->runtimeDir;
         if (!dest.empty() && dest != prefetched_) {
             prefetched_ = dest;
             if (audio_) audio_->prefetchLevel(dest);

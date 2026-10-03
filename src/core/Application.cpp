@@ -952,6 +952,7 @@ void Application::runMapTraverse() {
 }
 
 void Application::shutdown() {
+    shutdownFrontend();   // the frontend (movies, Systems audio seam) goes before the devices it uses
     delete audio_; audio_ = nullptr;
     delete renderer_; renderer_ = nullptr;
     delete window_; window_ = nullptr;

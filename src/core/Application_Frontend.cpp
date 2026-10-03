@@ -93,6 +93,13 @@ void Application::attachPresenter() {
     };
 }
 
+void Application::shutdownFrontend() {
+    if (frontend_) frontend_->setAudio(nullptr);
+    g_frontendAudio.reset();
+    presenter_ = nullptr;
+    frontend_.reset();
+}
+
 void Application::drawFrontendFrame() {
     ui::beginScreenFrame(window_->width(), window_->height());
     frontend_->draw(window_->width(), window_->height());

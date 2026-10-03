@@ -3,6 +3,32 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## FRONTEND PASS 2 (2026-10-03, branch `agents/frontend`) — original Scaleform frontend, private match, return
+Details and handoffs: `docs/FRONTEND.md`.
+
+**The shipped menus are on screen and drive the flow.** A SWF 8 / AS2 runtime with a GL renderer runs the cooked GFx
+movies unmodified. Playable with keys or pad:
+1. title → Press START → main menu → Multiplayer;
+2. party lobby → Private Match → Team Deathmatch → Host Options (authored values) → Create Game;
+3. game lobby (Streets thumbnail, rules) → Start Game → "MATCH STARTS IN 10…0";
+4. loading screen ("TEAM DEATHMATCH", "in Streets", tips) → Streets TDM;
+5. Esc → original Pause menu → Quit Game → frontend.
+
+**Validation:**
+- `wfc_frontend_tests` 59/0.
+- Four-cycle soak: the frontend works after every return.
+- Memory is flat after the GL release (~3.0 GB loaded / ~2.5 GB after unload; previously +1.6 GB per cycle).
+- Merge preview with agents/systems builds and plays the authored frontend / lobby music and UI cues (two mechanical
+  conflicts; resolutions in docs/FRONTEND.md).
+
+**Not yet:**
+- video decoding (logos, FMV, loading Bink);
+- the UI_FrontEnd_m 3D backdrop (not exported);
+- a threaded level load;
+- GFx filters / blend modes;
+- Gameplay match lifecycle (a PROVISIONAL adapter starts the match at once);
+- HUD movie ownership.
+
 ## FRONTEND PASS 1 (2026-10-03, branch `agents/frontend`) — boot → frontend → lobbies → match → return
 Base: integration/milestone-04 (a03d7f7). Details, provenance and handoffs: `docs/FRONTEND.md`.
 
@@ -20,7 +46,7 @@ Base: integration/milestone-04 (a03d7f7). Details, provenance and handoffs: `doc
   enables it with no code change; this is tested.
 
 **Not yet:**
-- **No GFx presentation.** Frontend screens are black; the state shows in the window title. The menu flow is driven
+- **(Superseded by pass 2.)** No GFx presentation: frontend screens were black. The menu flow was driven
   by the original bridge calls via `WFC_FRONTEND_AUTOPLAY=TDM,508` or `WFC_FRONTEND_SCRIPT`.
 - **No video decoding.**
 - **No Gameplay match lifecycle.** A PROVISIONAL adapter starts InGame immediately.

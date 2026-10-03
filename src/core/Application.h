@@ -33,6 +33,7 @@ private:
     void unloadMatch();
     void drawFrontendFrame();
     void attachPresenter();
+    void shutdownFrontend();
     std::unique_ptr<frontend::FrontendRuntime> frontend_;
     bool escWasDown_ = false;
     ui::GfxPresenter* presenter_ = nullptr;   // owned by frontend_

@@ -17,6 +17,52 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## FRONTEND PASS 2 — THE SHIPPED SCALEFORM MOVIES RUN THE FLOW (2026-10-03, agents/frontend)
+Full tables: `docs/FRONTEND.md`. This pass supersedes the pass-1 PARTIAL "no GFx presentation".
+
+**CONFIRMED ORIGINAL — content and behaviour from the cooked movies, which run their own AS2:**
+- Movies: MovieLoader, FrontEnd (title, Press START, mc_menuMain360), PartyLobby (menus, Private Match game modes,
+  Host Options), GameLobby (map thumbnail, Start Game, countdown), LoadScreen, PauseMenu.
+- Shared libraries: SharedComponents, SharedIcons, ButtonIcons, PlayerList.
+- Fonts: Fonts_EFIGS outlines through the `GFxUI.int [Fonts]` aliases.
+- Text: `$UIText` / TransGame localization.
+- Logo: ExternalTextures `UI_TransformersWFCLogo_p`.
+- Map thumbnail: `UI_LevelThumbnails_p.MP_Streets` through `Self.SetExternalTextureWithPath`.
+- Host options: `TnOnlineGameSettings*` LocalizedSettingsMappings / PropertyMappings with their authored defaults
+  (authored.db; e.g. TDM 15 minutes / 40 points / Host's Choice / Autobalanced). The chosen values feed the match URL.
+- Key codes: the movies' KeyListener contract (13 / 27 / 112–117 / 33–36 / arrows); `$version` "XBOX360".
+- Return path: PauseMenu "Quit Game" → `Game.QuitToMainMenu` → `UI_FrontEnd_m`.
+
+**HIGH:**
+- The AS2 / GFx runtime is clean-room. Where Flash semantics were ambiguous, the choices were:
+  - a plain call's `this` is the calling timeline;
+  - a function's `_parent` is its defining timeline;
+  - `var x;` keeps an existing value;
+  - unnamed clips are named `instanceN`;
+  - attachMovie resolves through imported libraries.
+- Gamepad → key-code mapping.
+- Per-class persistence of setting values.
+
+**PARTIAL:**
+- Bink movies (logos, FMV, the TF_LoadingScreen underlay) are not decoded.
+- The world load blocks after the loading intro (34 frames).
+- Filters and blend modes are not drawn (pause backdrop).
+- Player data: no profile name or XP ("Player", level 1).
+- GetDataStoreFields order.
+- The GL release on travel is a census stopgap (Rendering handoff).
+
+**PROVISIONAL:** match-start UI events fire at once (no Gameplay PendingMatch).
+
+**UNKNOWN:**
+- the UI_FrontEnd_m 3D scene (not exported; menus sit on black);
+- provider column header strings;
+- region / `$version` digits;
+- the observed TDM tips (authored 26 × the same tip).
+
+**Audio:** Systems' FrontendAudioRuntime drives UI cues, the UI levels' Kismet music / beds (FRONTEND_MX_ORBIT_01,
+MP_PARTY_LOBBY_MX, MP_LOBBY_MX), CINE_MUTE_FOR_BINK and prefetch through the IFrontendAudio seam. This was verified in a
+read-only merge preview with agents/systems de19ced; on this branch alone the audio calls are traced only.
+
 ## FRONTEND PASS 1 — APPLICATION FLOW: BOOT → FRONTEND → LOBBIES → MATCH → RETURN (2026-10-03, agents/frontend)
 Sources: RE MILESTONE05_FRONTEND_MATCH_BOOTSTRAP.md (f1ca8a5), RE binding decomp (TnOnlineActionScriptBinding),
 AssetTools FRONTEND.md + manifests/frontend_*.json (cc9773e). Full table: `docs/FRONTEND.md`.
@@ -48,7 +94,7 @@ AssetTools FRONTEND.md + manifests/frontend_*.json (cc9773e). Full table: `docs/
 
 **PARTIAL:**
 - Bink movies are not decoded: each logo / FMV reports Stopped at once.
-- **Presentation:** no GFx movie is drawn yet (the screen is black, with the state in the window title).
+- **Presentation (superseded by pass 2):** no GFx movie was drawn yet.
 - **Mapping:** the EditGameMode / PlayPrivateGame argument → settings class (GameSettingsCfgList not manifested).
 - **Not shown:** online warning prompts.
 - **Match URL:** AppendContextsToURL is omitted.
