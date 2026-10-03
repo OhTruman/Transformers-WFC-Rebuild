@@ -22,6 +22,7 @@
 
 #include "frontend/Catalog.h"
 #include "frontend/UIController.h"
+#include "frontend/Bridge.h"
 #include "frontend/Url.h"
 
 namespace frontend {
@@ -86,7 +87,7 @@ public:
 
     // ---- presenter -> flow (original AS2 bridge + fscommand surface) ----
     // ExternalInterface.call("<Interface>.<Method>", args...). Returns the binding's result ("" when void).
-    std::string call(const std::string& fn, const std::vector<std::string>& args = {});
+    BridgeValue call(const std::string& fn, const std::vector<std::string>& args = {});
     void fsCommand(const std::string& movie, const std::string& cmd, const std::string& arg = "");
     void movieStopped(const std::string& movie);    // SeqAct_MoviePlayer "Stopped" output
     void uiClosedItself();                          // the open movie closed (e.g. pause "Resume")

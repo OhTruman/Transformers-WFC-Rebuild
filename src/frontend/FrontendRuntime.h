@@ -13,10 +13,22 @@
 #include <vector>
 
 #include "frontend/Catalog.h"
+#include "frontend/DataStores.h"
 #include "frontend/GameFlow.h"
 #include "platform/Input.h"
 
 namespace frontend {
+
+// Systems audio seam (game::FrontendAudio on agents/systems): the frontend requests, Systems plays.
+class IFrontendAudio {
+public:
+    virtual ~IFrontendAudio() = default;
+    virtual int playUiSound(const std::string& name) = 0;                     // GFx Sound.PlaySound
+    virtual bool stopUiSound(const std::string& name, float fade) = 0;         // GFx Sound.StopSound
+    virtual void uiLevelStarted(const std::string& uiLevel) = 0;              // the level's SeqAct_PlayMusic track
+    virtual void levelChange() = 0;                                           // the level's music player goes away
+    virtual void tick(float dt) = 0;
+};
 
 class IMoviePresenter {
 public:
@@ -51,7 +63,13 @@ public:
     void updateInMatch(const platform::InputFrame& in, float dt);
 
     GameFlow& flow() { return flow_; }
+    void setAudio(IFrontendAudio* a) { audio_ = a; }
+    IFrontendAudio* audio() const { return audio_; }
+    // ExternalInterface.call routing for every open movie: Game / Online -> GameFlow, DataStores -> data stores,
+    // Sound -> Systems audio, Self / Debug -> movie host. movie = the calling GFx movie object.
+    BridgeValue bridge(const std::string& movie, const std::string& fn, const std::vector<std::string>& args);
     const Catalog& catalog() const { return catalog_; }
+    DataStores& dataStores() { return *stores_; }
     std::string titleText() const;
     bool scriptFinished() const { return script_.finished(); }
 
@@ -66,6 +84,11 @@ private:
     std::vector<std::string> shimmed_;
     std::string playingMovie_;
     float movieTime_ = 0.0f;
+    IFrontendAudio* audio_ = nullptr;
+    LevelKind lastAudioLevel_ = LevelKind::None;
+    bool frontEndMusic_ = false;
+    std::unique_ptr<DataStores> stores_;
+    void updateAudio(float dt);
 };
 
 } // namespace frontend

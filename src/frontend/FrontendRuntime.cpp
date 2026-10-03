@@ -106,7 +106,56 @@ bool FrontendRuntime::init() {
     if (const char* s = std::getenv("WFC_FLOWSEED")) o.seed = (unsigned)std::strtoul(s, nullptr, 10);
     if (const char* s = std::getenv("WFC_FRONTEND_SCRIPT")) script_.load(s);
     else if (const char* a = std::getenv("WFC_FRONTEND_AUTOPLAY")) script_.load(ScriptDriver::autoplayScript(a));
+    stores_ = std::make_unique<DataStores>(flow_, catalog_);
     return flow_.init(catalog_, o);
+}
+
+BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string& fn, const std::vector<std::string>& args) {
+    auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
+    if (fn.rfind("DataStores.", 0) == 0) return stores_->call(fn.substr(11), args, movie);
+    if (fn == "Sound.PlaySound") {
+        FlowTrace::emit("ui.sound", {{"name", arg(0)}, {"movie", movie}, {"audio", audio_ ? "systems" : "none"}});
+        if (audio_) return BridgeValue(audio_->playUiSound(arg(0)) >= 0);
+        return {};
+    }
+    if (fn == "Sound.StopSound") {
+        if (audio_) audio_->stopUiSound(arg(0), args.size() > 1 ? (float)std::atof(arg(1).c_str()) : 0.5f);
+        return {};
+    }
+    // TnGameActionScriptBinding: language / region drive the localized logo (FrontEnd_GFX logo clip). The rebuild
+    // runs the INT data; the region code of the dumped build is UNKNOWN - "NA" selects the TM logo variant [PARTIAL].
+    if (fn == "Game.GetLanguageCode") return BridgeValue("INT");
+    if (fn == "Game.GetRegionCode") return BridgeValue("NA");
+    if (fn == "Game.SetHasWatchedIntroMovie") { FlowTrace::emit("profile", {{"SetHasWatchedIntroMovie", "movie"}}); return {}; }
+    if (fn == "Debug.ShouldDisplayBuildInfo") return BridgeValue(false);
+    if (fn == "Debug.GetBuildInfo") return BridgeValue(std::string());
+    if (fn == "Customize.IsPrimeModeAvailable") return BridgeValue(false);
+    if (fn == "Console.SaveProfileSettings" || fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
+    return flow_.call(fn, args);
+}
+
+void FrontendRuntime::updateAudio(float dt) {
+    // Music follows the UI levels' Kismet (Systems FrontendAudio plays it): UI_FrontEnd_m starts its track at
+    // [FRONTEND START]; the lobby maps at level start; any travel replaces the level's music player.
+    LevelKind lv = flow_.loading().active ? LevelKind::None : flow_.level();
+    if (lv != lastAudioLevel_) {
+        if (lastAudioLevel_ != LevelKind::None || flow_.loading().active) {
+            if (audio_) audio_->levelChange();
+            FlowTrace::emit("audio.levelChange", {{"from", levelKindName(lastAudioLevel_)}});
+        }
+        frontEndMusic_ = false;
+        if (lv == LevelKind::PartyLobby || lv == LevelKind::GameLobby) {
+            if (audio_) audio_->uiLevelStarted(flow_.levelMap());
+            FlowTrace::emit("audio.uiLevel", {{"level", flow_.levelMap()}});
+        }
+        lastAudioLevel_ = lv;
+    }
+    if (lv == LevelKind::FrontEnd && flow_.frontEndStarted() && !frontEndMusic_) {
+        frontEndMusic_ = true;
+        if (audio_) audio_->uiLevelStarted("UI_FrontEnd_m");
+        FlowTrace::emit("audio.uiLevel", {{"level", "UI_FrontEnd_m"}});
+    }
+    if (audio_) audio_->tick(dt);
 }
 
 void FrontendRuntime::runNativeShims() {
@@ -120,7 +169,7 @@ void FrontendRuntime::runNativeShims() {
         std::find(shimmed_.begin(), shimmed_.end(), loader) == shimmed_.end()) {
         shimmed_.push_back(loader);
         FlowTrace::emit("shim", {{"movie", loader}, {"what", "HasWatchedIntroMovie branch"}, {"provenance", "HIGH (RE 1.2)"}});
-        bool watched = flow_.call("Game.HasWatchedIntroMovie") == "true";
+        bool watched = flow_.call("Game.HasWatchedIntroMovie").truthy();
         flow_.fsCommand(loader, watched ? "enterFrontEnd" : "enterMovieSequence");
     }
     if (!loaderOpen) shimmed_.erase(std::remove(shimmed_.begin(), shimmed_.end(), loader), shimmed_.end());
@@ -146,6 +195,7 @@ void FrontendRuntime::update(const platform::InputFrame& in, float dt) {
     updateMoviePlayer(dt);
     if (presenter_) presenter_->update(flow_, in, dt);
     script_.update(flow_, dt);
+    updateAudio(dt);
 }
 
 void FrontendRuntime::updateInMatch(const platform::InputFrame& in, float dt) {

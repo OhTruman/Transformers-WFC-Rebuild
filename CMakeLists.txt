@@ -67,3 +67,14 @@ if(WFC_BUILD_FIDELITY)
     enable_testing()
     add_subdirectory(tools/fidelity)
 endif()
+
+# GFx runtime headless dump (tools/frontend/GfxDump.cpp).
+file(GLOB GFX_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/ui/gfx/*.cpp")
+add_executable(wfc_gfxdump ${CMAKE_SOURCE_DIR}/tools/frontend/GfxDump.cpp ${GFX_SOURCES} ${FRONTEND_SOURCES}
+    ${CMAKE_SOURCE_DIR}/src/ui/GfxHost.cpp ${CMAKE_SOURCE_DIR}/src/core/Log.cpp)
+target_include_directories(wfc_gfxdump PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_compile_options(wfc_gfxdump PRIVATE -Wall -Wextra -Wno-unused-parameter)
+if(WIN32)
+    target_link_options(wfc_gfxdump PRIVATE -static)
+endif()
+set_target_properties(wfc_gfxdump PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

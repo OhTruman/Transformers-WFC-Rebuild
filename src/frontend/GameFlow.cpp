@@ -304,7 +304,7 @@ void GameFlow::frontEndStart() {
 // ---------------------------------------------------------------------------------------------------------------
 // Bridge (ExternalInterface.call)
 
-std::string GameFlow::call(const std::string& fn, const std::vector<std::string>& args) {
+BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>& args) {
     auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
     auto argi = [&](size_t i) { return std::atoi(arg(i).c_str()); };
     std::string joined;
@@ -312,45 +312,45 @@ std::string GameFlow::call(const std::string& fn, const std::vector<std::string>
     FlowTrace::emit("bridge", {{"fn", fn}, {"args", joined}, {"level", levelKindName(level_)}});
 
     // ---- TnGameActionScriptBinding ----
-    if (fn == "Game.HasWatchedIntroMovie") return watchedIntro_ ? "true" : "false";
-    if (fn == "Game.QuitToMainMenu") { quitToMainMenu(); return ""; }
-    if (fn == "Game.ExitGame") { quit_ = true; FlowTrace::emit("exit", {}); return ""; }
+    if (fn == "Game.HasWatchedIntroMovie") return watchedIntro_;
+    if (fn == "Game.QuitToMainMenu") { quitToMainMenu(); return {}; }
+    if (fn == "Game.ExitGame") { quit_ = true; FlowTrace::emit("exit", {}); return {}; }
 
     // ---- TnOnlineActionScriptBinding ----
-    if (fn == "Online.CheckCanPlayOnlineModes" || fn == "Online.CanPlayOnlineModes") return "true";   // no profile gate offline
-    if (fn == "Online.CheckIsProfileReady" || fn == "Online.IsProfileReady") return "true";
-    if (fn == "Online.ShouldShowStartScreen") return "true";   // PARTIAL: native profile/sign-in check
-    if (fn == "Online.ShowDeviceSelectionUI") return "";        // [online - bypassed] storage device UI (360)
+    if (fn == "Online.CheckCanPlayOnlineModes" || fn == "Online.CanPlayOnlineModes") return true;   // no profile gate offline
+    if (fn == "Online.CheckIsProfileReady" || fn == "Online.IsProfileReady") return true;
+    if (fn == "Online.ShouldShowStartScreen") return true;   // PARTIAL: native profile/sign-in check
+    if (fn == "Online.ShowDeviceSelectionUI") return {};        // [online - bypassed] storage device UI (360)
     if (fn == "Online.OpenPartyLobby") {
         // StringToGameTeamStatus: FFA 1, SingleTeam 2, Team 3, Campaign 4, default 3 [CONFIRMED script].
         std::string s = arg(0);
         int gts = s == "GTS_FreeForAllGame" ? 1 : s == "GTS_SingleTeamGame" ? 2 : s == "GTS_TeamGame" ? 3 : s == "GTS_CampaignGame" ? 4 : 3;
         openPartyLobby(gts);
-        return "";
+        return {};
     }
-    if (fn == "Online.EditGameMode") { editGameMode(arg(0)); return ""; }
-    if (fn == "Online.EditPlaylist") { editPlaylist(argi(0)); return ""; }
-    if (fn == "Online.PlayPrivateGame") { playPrivateGame(arg(0)); return ""; }
-    if (fn == "Online.PlayPlaylist") { playPlaylist(argi(0), arg(1) == "true" || arg(1) == "1"); return ""; }
+    if (fn == "Online.EditGameMode") { editGameMode(arg(0)); return {}; }
+    if (fn == "Online.EditPlaylist") { editPlaylist(argi(0)); return {}; }
+    if (fn == "Online.PlayPrivateGame") { playPrivateGame(arg(0)); return {}; }
+    if (fn == "Online.PlayPlaylist") { playPlaylist(argi(0), arg(1) == "true" || arg(1) == "1"); return {}; }
     if (fn == "Online.SetSelectedMapID") {
         // -> TnGameLobbyGame.HostRequestMapID -> GRI.HostRequestMapID (ignored unless MapSelectionMethod 1).
         if (level_ == LevelKind::GameLobby && lobby_.mapSelectionMethod == 1) setMapId(argi(0));
         else FlowTrace::emit("lobby.mapRequestIgnored", {{"mapId", arg(0)}, {"method", std::to_string(lobby_.mapSelectionMethod)}});
-        return "";
+        return {};
     }
-    if (fn == "Online.BeginLobbyExitCountdown") { hostRequestsGameStart(); return ""; }
-    if (fn == "Online.IsHost") return "true";   // the local player hosts the private match
-    if (fn == "Online.GetLoginStatus") return "2";   // PARTIAL: LS_LoggedIn; no online service
-    if (fn == "Online.IsInPartyChatSession") return "false";
-    if (fn == "Online.SetPartyLobbyType") { FlowTrace::emit("partylobby.type", {{"type", arg(0)}}); return ""; }
-    if (fn == "Online.SubmitMapVeto") { FlowTrace::emit("lobby.veto", {}); return ""; }
+    if (fn == "Online.BeginLobbyExitCountdown") { hostRequestsGameStart(); return {}; }
+    if (fn == "Online.IsHost") return true;   // the local player hosts the private match
+    if (fn == "Online.GetLoginStatus") return 2;   // PARTIAL: LS_LoggedIn; no online service
+    if (fn == "Online.IsInPartyChatSession") return false;
+    if (fn == "Online.SetPartyLobbyType") { FlowTrace::emit("partylobby.type", {{"type", arg(0)}}); return {}; }
+    if (fn == "Online.SubmitMapVeto") { FlowTrace::emit("lobby.veto", {}); return {}; }
     if (fn == "Online.SwitchTeam") {
         if (level_ == LevelKind::GameLobby && lobby_.localTeam >= 0) lobby_.localTeam = 1 - lobby_.localTeam;
         FlowTrace::emit("lobby.team", {{"team", std::to_string(lobby_.localTeam)}});
-        return "";
+        return {};
     }
     FlowTrace::emit("bridge.unhandled", {{"fn", fn}});
-    return "";
+    return {};
 }
 
 void GameFlow::openPartyLobby(int gts) {
@@ -678,4 +678,15 @@ void GameFlow::traceSnapshot(const char* why) const {
                                  {"hud", FlowTrace::boolean(ui_.hudVisible())}});
 }
 
+} // namespace frontend
+
+namespace frontend {
+std::string BridgeValue::str() const {
+    switch (kind) {
+    case Kind::Bool: return b ? "true" : "false";
+    case Kind::Number: { char buf[32]; std::snprintf(buf, sizeof buf, "%g", n); return buf; }
+    case Kind::String: return s;
+    default: return "";
+    }
+}
 } // namespace frontend
