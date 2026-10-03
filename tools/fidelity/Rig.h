@@ -23,6 +23,10 @@ namespace fid {
 // Optional Character accessors, detected at compile time so one harness builds against every
 // branch (ab.ps1). Each returns -1 when the Character under test lacks the accessor.
 namespace layer {
+// Same pattern, kept defined for accessors declared further down (after the helper templates).
+#define FID_OPTIONAL_ACCESSOR_LATE(name)                                                         \
+    template <class C> auto name(const C& c, int) -> decltype((float)c.name()) { return (float)c.name(); } \
+    template <class C> float name(const C&, long) { return -1.0f; }
 #define FID_OPTIONAL_ACCESSOR(name)                                                              \
     template <class C> auto name(const C& c, int) -> decltype((float)c.name()) { return (float)c.name(); } \
     template <class C> float name(const C&, long) { return -1.0f; }
@@ -97,6 +101,8 @@ template <class C> auto actorLocationOf(const C& c, int) -> decltype(c.actorLoca
 template <class C> core::Vec3 actorLocationOf(const C& c, long) { return c.position() + meshOffsetOf(c, 0); }
 template <class C> auto upperAnimName(const C& c, int) -> decltype(std::string(c.upperAnimName())) { return c.upperAnimName(); }
 template <class C> std::string upperAnimName(const C&, long) { return ""; }
+FID_OPTIONAL_ACCESSOR_LATE(effectiveSpread)          // gameplay Pass 16: bloom x airborne x fine aim
+FID_OPTIONAL_ACCESSOR_LATE(airborneSpreadMultiplier) // gameplay Pass 16: TnWeaponSpreadModifier
 
 // Reload-slot weight under either layering API (Gameplay reloadWeight / Systems UpperBodyCustom).
 template <class C> float reloadSlotWeight(const C& c) {
@@ -240,3 +246,14 @@ struct BoxScene {
 };
 
 } // namespace fid
+
+namespace fid::layer {
+// HUD spread notifications (gameplay Pass 16 PlayerController::hudNotifies()): the WeaponSpread values sent
+// this step; empty/false on builds without it.
+template <class P> auto hudSpreadNotifies(const P& pc, std::vector<float>& out, int) -> decltype(pc.hudNotifies(), bool()) {
+    for (const auto& n : pc.hudNotifies())
+        if ((int)n.type == 0) out.push_back(n.spread);   // HudNotify::Type::WeaponSpread
+    return true;
+}
+template <class P> bool hudSpreadNotifies(const P&, std::vector<float>&, long) { return false; }
+}

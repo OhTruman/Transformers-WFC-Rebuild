@@ -89,7 +89,10 @@ public:
         log("U %.4f %d %.3f %.3f %.3f %.3f %.3f\n", now(), v, p.x, p.y, p.z, volume, pitch);
     }
     // Not marked override: builds whose IAudio predates isPlaying() simply get an extra method.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Winconsistent-missing-override"
     bool isPlaying(Voice v) const { return live_.count(v) != 0; }
+#pragma clang diagnostic pop
     void setListener(const core::Vec3& p, const core::Vec3& f, const core::Vec3& r) override {
         log("H %.4f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f\n", now(), p.x, p.y, p.z, f.x, f.y, f.z, r.x, r.y, r.z);
     }

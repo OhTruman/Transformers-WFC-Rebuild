@@ -338,7 +338,8 @@ template <class B> static void fineAimImpl(Report& r) {
         // Camera offset: shoulder X 150 -> -50 UU (screen-space semantics PROV): lateral camera shift.
         core::Vec3 rightAxis = core::normalize(core::cross(core::forwardFromYawPitch(c0.yaw, 0), {0, 1, 0}));
         r.info("camera_lateral_shift", core::dot(c1.pos - c0.pos, rightAxis), "m",
-               "authored shoulder offset X 150 -> -50 UU (values CONFIRMED, axis semantics PROV)", -2.0);
+               "native M03 P6: X is the orbit-space axis toward the pawn (fine aim moves the camera BACK 2 m), Y 300 unchanged -> "
+               "no lateral shift (asserted in native_robot.fine_aim.*)", 0.0);
         platform::InputFrame w = held;
         w.down[(int)Button::Forward] = true;
         aim.hold(w, 1.5);
@@ -694,26 +695,42 @@ void checkMapContent(Report& r) {
     // (a) authored but never extracted / composed — original content missing from the slice.
     const assets::Json& un = mj["unhandled_actor_classes"];
     auto cnt = [&](const char* k) { return un[k].asInt(); };
-    r.known("missing.prefab_instances", 0, cnt("PrefabInstance"), 0, "actors",
-            "map.json unhandled PrefabInstance (modular set dressing)", kAssetTools,
-            "not composed into world.glb: original content absent (extraction gap, not a rendering bug)");
-    r.known("missing.static_destructibles", 0, cnt("TnStaticDestructibleActor"), 0, "actors",
-            "map.json unhandled TnStaticDestructibleActor", kAssetTools, "not composed (extraction gap)");
-    // (b) extracted counts the runtime has no path for.
-    {   // Rendering (milestone-02) recovers the static decals into render data decals.glb (one node each).
-        assets::Json dg;
-        int decals = loadGlbJson(renderDataDir() + "/decals.glb", dg) ? (int)dg["nodes"].size() : 0;
-        r.known("decals_in_render_data", decals, mj["decals"].asDouble(), 0, "decals",
-                "map.json decals vs render data decals.glb nodes (drawn by the WFC path's decal pass)", kRendering,
-                decals ? "count mismatch" : "decals.glb absent in " + renderDataDir() + " (decals not drawn)");
+    // Retired (superseded by newer evidence; M03 integration): "missing" prefabs / destructible / level
+    // emitters / ambient actors. PrefabInstances are containers whose members are exported and placed
+    // (measured below); the destructible, level FX and the ambient bed are RUNTIME objects (Gameplay
+    // Pass 15, Systems) that the windowless harness cannot see - judged by map-audit.ps1 / audio-attach.ps1
+    // on the real exe.
+    {
+        assets::Json pa;
+        int members = 0, placed = 0;
+        std::set<std::string> propActors;
+        for (const assets::Json& p : props["props"].arr) propActors.insert(p["actor"].asString());
+        if (loadJsonFile(mdir + "props_authored.json", pa))
+            for (const assets::Json& p : pa["props"].arr)
+                if (p["prefab"].isObject()) { ++members; placed += propActors.count(p["actor"].asString()) ? 1 : 0; }
+        if (members > 0)
+            r.near("prefab_members_placed", placed, members, 0, "props",
+                   "props_authored.json prefab-tagged StaticMeshActors present in props.json/world.glb (PrefabInstance = container)");
+        else
+            r.info("prefab_members_placed", -1, "props", "props_authored.json unavailable or without prefab tags");
+        r.info("prefab_instances_authored", cnt("PrefabInstance"), "actors", "containers; their members are placed (prefab_members_placed)");
     }
-    r.known("unrendered.level_emitters", 0, mj["emitters"].asDouble(), 0, "emitters", "map.json emitters (level ParticleSystems)",
-            kSystems, "WeaponFx handles weapon emitters only; level Emitter actors are not spawned");
+    r.info("static_destructible_authored", cnt("TnStaticDestructibleActor"), "actors",
+           "placed at runtime by Gameplay (Pass 15, authored outside the play space) - judged by map-audit.ps1 on the exe log");
+    {   // Rendering (milestone-02+) recovers the static decals into render data decals.glb (one node each).
+        assets::Json dg;
+        if (!loadGlbJson(renderDataDir() + "/decals.glb", dg))
+            r.skip("decals_in_render_data", "no render data at " + renderDataDir() + " (set WFC_RENDER_DATA)");
+        else
+            r.near("decals_in_render_data", (double)dg["nodes"].size(), mj["decals"].asDouble(), 0, "decals",
+                   "map.json decals vs render data decals.glb nodes (drawn by the WFC path's decal pass)");
+    }
+    r.info("level_emitters_authored", mj["emitters"].asDouble(), "emitters",
+           "spawned at runtime by Systems LevelFx - judged by map-audit.ps1 ('level fx: N emitters')");
     r.info("heightfog_actor", cnt("HeightFog"), "actors", "listed unhandled in map.json but recovered separately (FIDELITY: HeightFog CONF, applied)");
     int ambient = cnt("AmbientSound") + cnt("HmAmbientSoundLineEmitter") + cnt("HmAmbientSoundVolumeEmitter");
-    r.known("unplayed.ambient_sound_actors", 0, ambient, 0, "actors",
-            "map.json AmbientSound 40 + HmAmbientSoundLineEmitter 13 + HmAmbientSoundVolumeEmitter 17 (the Streets ambient bed)",
-            kSystems, "no ambient-sound actor is instantiated by the runtime (no ambient code in src/game)");
+    r.info("ambient_sound_actors_authored", ambient, "actors",
+           "the Streets ambient bed is a runtime system (Systems) - judged by audio-attach.ps1 / map-audit.ps1 on the exe");
     // (c) intentional / non-visual.
     std::string nonvis;
     for (const char* k : {"BRUSH (builder brushes; geometry lives in level BSP)", "Model", "Sequence", "TnWorldInfo",

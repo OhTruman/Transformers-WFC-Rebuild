@@ -119,7 +119,16 @@ NOINSTR void init() {
 extern "C" {
 
 NOINSTR void __cyg_profile_func_enter(void* fn, void*) {
-    if (!C) init();
+    // init() allocates; if anything on that path is instrumented (an instrumented operator new or
+    // static constructor in the counted TUs) the hook would re-enter before C is set -> unbounded
+    // recursion (stack overflow 0xC00000FD on the merged M03 tree). Ignore calls made during init.
+    static bool initializing = false;
+    if (!C) {
+        if (initializing) return;
+        initializing = true;
+        init();
+        initializing = false;
+    }
     if (!C->on || GetCurrentThreadId() != C->mainThread) return;
     Slot* s = slotFor((uintptr_t)fn);
     if (s->depth++ == 0) s->start = ticks();

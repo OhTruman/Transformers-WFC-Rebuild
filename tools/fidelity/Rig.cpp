@@ -9,8 +9,8 @@
 // Body-local vehicle COM offset (gameplay Pass 13+ Config kVehComUp / kVehComFwd), 0 on builds without
 // it: unqualified lookup inside core::config finds the product constant first, the fallback otherwise.
 namespace fid_cfg_fallback {
-constexpr float kVehComUp = 0.0f;
-constexpr float kVehComFwd = 0.0f;
+[[maybe_unused]] constexpr float kVehComUp = 0.0f;
+[[maybe_unused]] constexpr float kVehComFwd = 0.0f;
 }
 namespace core::config {
 inline float fidComUp() { using namespace ::fid_cfg_fallback; return kVehComUp; }

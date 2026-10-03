@@ -1,0 +1,149 @@
+﻿{
+    "summary":  {
+                    "pass":  2,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  18,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "perf_counters.idle.visibility_rays",
+                        "status":  "INFO",
+                        "measured":  7.9714285714285715,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+)"
+                    },
+                    {
+                        "id":  "perf_counters.idle.segment_hits",
+                        "status":  "INFO",
+                        "measured":  13.228571428571428,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+)"
+                    },
+                    {
+                        "id":  "perf_counters.idle.light_envs",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+)"
+                    },
+                    {
+                        "id":  "perf_counters.idle.skin_calls",
+                        "status":  "INFO",
+                        "measured":  1.9928571428571429,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+)"
+                    },
+                    {
+                        "id":  "perf_counters.idle.dynamic_draws",
+                        "status":  "INFO",
+                        "measured":  1.9928571428571429,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+)"
+                    },
+                    {
+                        "id":  "perf_counters.idle.vertex_builds",
+                        "status":  "INFO",
+                        "measured":  1.9928571428571429,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+)"
+                    },
+                    {
+                        "id":  "perf_counters.idle.mesh_draws",
+                        "status":  "INFO",
+                        "measured":  0.99642857142857144,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+)"
+                    },
+                    {
+                        "id":  "perf_counters.idle.fx_draws",
+                        "status":  "INFO",
+                        "measured":  0.99642857142857144,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+)"
+                    },
+                    {
+                        "id":  "perf_counters.idle.hitscans",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+)"
+                    },
+                    {
+                        "id":  "perf_counters.idle.ran",
+                        "status":  "PASS",
+                        "measured":  300,
+                        "note":  "counted frames (exit 0)"
+                    },
+                    {
+                        "id":  "perf_counters.held_fire.visibility_rays",
+                        "status":  "INFO",
+                        "measured":  8.06,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+); firing frames 8"
+                    },
+                    {
+                        "id":  "perf_counters.held_fire.segment_hits",
+                        "status":  "INFO",
+                        "measured":  14.8,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+); firing frames 17.96"
+                    },
+                    {
+                        "id":  "perf_counters.held_fire.light_envs",
+                        "status":  "INFO",
+                        "measured":  0.1,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+); firing frames 0.12"
+                    },
+                    {
+                        "id":  "perf_counters.held_fire.skin_calls",
+                        "status":  "INFO",
+                        "measured":  1.98,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+); firing frames 2"
+                    },
+                    {
+                        "id":  "perf_counters.held_fire.dynamic_draws",
+                        "status":  "INFO",
+                        "measured":  1.98,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+); firing frames 2"
+                    },
+                    {
+                        "id":  "perf_counters.held_fire.vertex_builds",
+                        "status":  "INFO",
+                        "measured":  1.98,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+); firing frames 2"
+                    },
+                    {
+                        "id":  "perf_counters.held_fire.mesh_draws",
+                        "status":  "INFO",
+                        "measured":  14.04,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+); firing frames 14.2"
+                    },
+                    {
+                        "id":  "perf_counters.held_fire.fx_draws",
+                        "status":  "INFO",
+                        "measured":  0.99,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+); firing frames 1"
+                    },
+                    {
+                        "id":  "perf_counters.held_fire.hitscans",
+                        "status":  "INFO",
+                        "measured":  0.25,
+                        "unit":  "calls",
+                        "note":  "mean calls per frame (frames 21+); firing frames 1"
+                    },
+                    {
+                        "id":  "perf_counters.held_fire.ran",
+                        "status":  "PASS",
+                        "measured":  120,
+                        "note":  "counted frames (exit 0)"
+                    }
+                ]
+}

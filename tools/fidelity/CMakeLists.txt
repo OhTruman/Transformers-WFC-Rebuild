@@ -18,6 +18,14 @@ add_executable(wfc_fidelity
     ${CMAKE_SOURCE_DIR}/src/assets/Gltf.cpp
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp
 )
+# Product sources some trees add to the harness link (Systems pass 5/6: the controller and character
+# reference the mixer and pickup presentation). Added only when the tree has them, so one harness
+# builds against every branch.
+foreach(_opt src/game/SoundMixer.cpp src/game/PickupPresentation.cpp)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/${_opt}")
+        target_sources(wfc_fidelity PRIVATE "${CMAKE_SOURCE_DIR}/${_opt}")
+    endif()
+endforeach()
 target_include_directories(wfc_fidelity PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(wfc_fidelity PRIVATE -Wall -Wextra -Wno-unused-parameter)
 if(WIN32)

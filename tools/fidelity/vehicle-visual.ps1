@@ -140,13 +140,13 @@ foreach ($name in $Scenarios) {
             $tiles += Shot $dir "direct_vehicle" @{ WFC_STARTVEHICLE = "1"; WFC_RENDERCAM = $cam } 200
         }
         { $_ -eq "dark_area" -or $_ -eq "bright_area" } {
-            if (-not $Probe) { $script:probe = @(@{ k = $DarkSpawn; luma = 0 }, @{ k = $BrightSpawn; luma = 1 }) }   # pinned
-            if (-not $script:probe) {
-                $script:probe = @()
+            if (-not $Probe) { $script:areaProbe = @(@{ k = $DarkSpawn; luma = 0 }, @{ k = $BrightSpawn; luma = 1 }) }   # pinned
+            if (-not $script:areaProbe) {
+                $script:areaProbe = @()
                 $pd = Join-Path $OutDir "_spawn_probe"; New-Item -ItemType Directory -Force $pd | Out-Null
-                foreach ($k in $ProbeSpawns) { $t = Shot $pd "spawn$k" @{ WFC_STARTVEHICLE = "1"; WFC_SPAWN_INDEX = "$k" } 60; $t.k = $k; $script:probe += $t }
+                foreach ($k in $ProbeSpawns) { $t = Shot $pd "spawn$k" @{ WFC_STARTVEHICLE = "1"; WFC_SPAWN_INDEX = "$k" } 60; $t.k = $k; $script:areaProbe += $t }
             }
-            $pick = if ($name -eq "dark_area") { $script:probe | Sort-Object { $_.luma } | Select-Object -First 1 } else { $script:probe | Sort-Object { $_.luma } -Descending | Select-Object -First 1 }
+            $pick = if ($name -eq "dark_area") { $script:areaProbe | Sort-Object { $_.luma } | Select-Object -First 1 } else { $script:areaProbe | Sort-Object { $_.luma } -Descending | Select-Object -First 1 }
             $t = Shot $dir "wfc" @{ WFC_STARTVEHICLE = "1"; WFC_SPAWN_INDEX = "$($pick.k)" } 90
             $t.label += (" spawn={0} luma={1:F1}" -f $pick.k, $t.luma)
             $tiles += $t

@@ -17,7 +17,7 @@
 # Presence checks: footsteps, transform cue, landing, fine-aim start/end, vehicle loops.
 # Output: <scenario>/instances.csv, report.json (wfc_fidelity schema), offending_cues.txt.
 param([string[]]$Scenarios = @("stationary_transform", "moving_transform", "robot_footsteps", "jump_land", "hover_move", "boost",
-                               "dash", "nitro", "vehicle_jump", "firing_moving", "fine_aim"),
+                               "dash", "nitro", "vehicle_jump", "firing_moving", "fine_aim", "sustained_fire", "vehicle_exit_loops"),
       [string]$Exe = "", [string]$OutDir = "", [string]$SourceRoot = "", [switch]$AnalyzeOnly)
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
@@ -38,6 +38,10 @@ $defs = [ordered]@{
     vehicle_jump         = @{ frames = 300; env = @{ WFC_STARTVEHICLE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOJUMP = "1" } }
     firing_moving        = @{ frames = 360; env = @{ WFC_AUTOWALK = "1"; WFC_AUTOFIRE = "1"; WFC_AUTOTURN = "0.6" } }
     fine_aim             = @{ frames = 260; env = @{ WFC_FINEAIM_ON = "60"; WFC_FINEAIM_OFF = "180" } }
+    # 30 s of held fire (several magazines + auto-reloads): voice lifetime / accumulation.
+    sustained_fire       = @{ frames = 1800; env = @{ WFC_AUTOFIRE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.3" } }
+    # Boosting vehicle transforms to robot at frame 240 (4 s), then 4 s on foot: vehicle loops must end.
+    vehicle_exit_loops   = @{ frames = 480; press = 240; env = @{ WFC_STARTVEHICLE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOBOOST = "1"; WFC_PRESSTRANSFORM = "240" } }
 }
 # ---- wave -> cue names from the tree under test ----
 $cueOf = @{}
@@ -162,6 +166,44 @@ foreach ($name in $Scenarios) {
         }
     }
     "{0}: {1} instances, {2} pawn-owned, {3} stop following" -f $name, $rows.Count, @($rows | Where-Object owner -eq "pawn").Count, @($rows | Where-Object stops_following -eq 1).Count
+}
+# ---- voice lifetime (every scenario): live voices per frame from the spy (V start, S stop, E end of wave) ----
+foreach ($name in $Scenarios) {
+    $spy = Join-Path (Join-Path $OutDir $name) "audiospy.txt"
+    if (-not (Test-Path $spy)) { continue }
+    $live = @{}; $perFrame = New-Object System.Collections.Generic.List[int]; $loopStart = @{}; $paths = @{}
+    foreach ($ln in [IO.File]::ReadLines($spy)) {
+        $q = $ln.Split(" ")
+        switch ($q[0]) {
+            "L" { $paths[[int]$q[2]] = ($q[4..($q.Length - 1)] -join " ") }
+            "V" { $live[[int]$q[2]] = @{ loop = ($q[5] -eq "1"); t = [double]$q[1]; snd = [int]$q[3]; pos = (V3 $q[6] $q[7] $q[8]) } }
+            "U" { $v = $live[[int]$q[2]]; if ($v) { $v.pos = (V3 $q[3] $q[4] $q[5]) } }
+            "S" { $live.Remove([int]$q[2]) }
+            "E" { $live.Remove([int]$q[2]) }
+            "F" { $perFrame.Add($live.Count) }
+        }
+    }
+    $n = $perFrame.Count; if ($n -lt 30) { continue }
+    $a = $perFrame.GetRange(0, [int]($n / 3)); $b = $perFrame.GetRange($n - [int]($n / 3), [int]($n / 3))
+    $meanA = ($a | Measure-Object -Average).Average; $meanB = ($b | Measure-Object -Average).Average
+    $maxAll = ($perFrame | Measure-Object -Maximum).Maximum
+    $endLoops = @($live.Values | Where-Object { $_.loop })
+    $id = "audio_life.$name"
+    # Accumulation = the last third of the run holds clearly more live voices than the first third.
+    $grow = $meanB -gt 2 * $meanA + 4
+    Add-WfcResult $all "$id.no_voice_accumulation" $(if ($grow) { "FAIL" } else { "PASS" }) $meanB ("mean live voices first third {0:F1}, last third {1:F1}, max {2} over {3} frames" -f $meanA, $meanB, $maxAll, $n)
+    Add-WfcResult $all "$id.loops_live_at_end" "INFO" $endLoops.Count (($endLoops | ForEach-Object { ($paths[$_.snd] -split "[/\\]")[-1] + "@" + $_.t }) -join ", ")
+    if ($defs[$name].press) {
+        $tp = ($defs[$name].press - 1) / 60.0
+        # Player-owned = the voice sits on the pawn at the end (within 5 m); level ambient emitters are fixed in
+        # the world and keep playing by design.
+        $fr = @(Read-WfcFrames (Join-Path (Join-Path $OutDir $name) "wfc.log")); $last = $fr[$fr.Count - 1]
+        $pp = V3 $last.x $last.y $last.z
+        $stale = @($endLoops | Where-Object { $_.t -lt $tp -and (Dist $_.pos $pp) -lt 5.0 })
+        Add-WfcResult $all "$id.vehicle_loops_end_after_exit" $(if ($stale.Count -eq 0) { "PASS" } else { "FAIL" }) $stale.Count ("player-owned looping voices (within 5 m of the pawn) started before the V->R press and still live {0:F1} s later: {1}" -f ($n / 60.0 - $tp), $(if ($stale.Count) { (($stale | ForEach-Object { ($paths[$_.snd] -split "[/\\]")[-1] }) -join ", ") } else { "none" }))
+        $owned = @($endLoops | Where-Object { (Dist $_.pos $pp) -lt 5.0 })
+        Add-WfcResult $all "$id.player_loops_live_at_end" "INFO" $owned.Count (($owned | ForEach-Object { ($paths[$_.snd] -split "[/\\]")[-1] }) -join ", ")
+    }
 }
 # ---- presence checks (authored cue played in the scenario) ----
 function Heard($scen, $pattern) { if (-not $played[$scen]) { return $null }; return @($played[$scen].Keys | Where-Object { $_ -like $pattern }).Count -gt 0 }

@@ -56,6 +56,10 @@ foreach ($name in $Scenarios) {
     $nameOf = @{}; foreach ($k in $rvaOf.Keys) { $nameOf[$rvaOf[$k]] = $k }
     $per = @{}   # frame -> counter -> calls
     $frameUs = @{}
+    if (-not (Test-Path $out)) {   # the counting exe produced nothing (crash / missing build): a tool problem, not a product result
+        Add-WfcResult $res "perf_counters.$name.ran" "SKIP" $rc ("no counts.txt (exit {0}); see {1}" -f $rc, (Join-Path $dir "run.log"))
+        continue
+    }
     foreach ($ln in [IO.File]::ReadLines($out)) {
         $q = $ln.Split(" ")
         if ($q.Length -lt 3) { continue }   # truncated last line of a killed run

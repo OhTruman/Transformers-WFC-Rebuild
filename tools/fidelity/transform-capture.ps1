@@ -50,7 +50,8 @@ foreach ($name in $Cases) {
     $d = $defs[$name]; $dir = Join-Path $OutDir $name
     if (Test-Path $dir) { Get-ChildItem $dir -File | Remove-Item }
     New-Item -ItemType Directory -Force $dir | Out-Null
-    $w0 = if ($d.r2v) { 0.396 } else { 0.098 }; $w1 = if ($d.r2v) { 0.880 } else { 0.663 }
+    # Native notify times (M03 native RE: R->V 0.3958 / 0.8796, V->R 0.0984 / 0.6634 s).
+    $w0 = if ($d.r2v) { 0.3958 } else { 0.0984 }; $w1 = if ($d.r2v) { 0.8796 } else { 0.6634 }
     $envs = @{ WFC_SMOKE_FRAMES = "$($d.frames)"; WFC_LOGEVERY = "1"; WFC_PRESSTRANSFORM = "$press"; WFC_NOMOUSE = "1"
                WFC_GRAB = "$($press - 4):$($d.frames - 1):$Stride"; WFC_GRAB_DIR = $dir; WFC_AUDIOSPY = (Join-Path $dir "audiospy.txt")
                WFC_DEBUGSTATE = (Join-Path $dir "debugstate.txt") } + $d.env
@@ -83,13 +84,13 @@ foreach ($name in $Cases) {
             weapon_usable = $L.wpn; root_x = $L.x; root_y = $L.y; root_z = $L.z; yaw = $L.yaw; hspeed = $L.hspeed
             cam_x = $(if ($c) { $c[0] } else { "" }); cam_y = $(if ($c) { $c[1] } else { "" }); cam_z = $(if ($c) { $c[2] } else { "" })
             debug_overlay = [int][bool]$dbg[$fr]; img_diff = [Math]::Round($diff[0], 3); img_changed = [Math]::Round($diff[1], 4)
-            cam_jump_per_frame = [Math]::Round($camJump, 4); flags = ""; png = ""; camRel = $camRel })
+            cam_jump_per_frame = [Math]::Round($camJump, 4); cam_dist = $L.camD; flags = ""; png = ""; camRel = $camRel })
         $prevLuma = $luma; $prev = $rows[$rows.Count - 1]
     }
     # ---- flags ----
     $fold = @($rows | Where-Object { $_.elapsed -gt 0 -and $_.clip -like "Transform_*" })
     $med = if ($fold.Count) { ($fold.img_diff | Sort-Object)[[int]($fold.Count / 2)] } else { 0 }
-    $switch = $null; $pops = @(); $freeze = 0; $dbgFrames = 0; $camPops = 0
+    $switch = $null; $pops = @(); $freeze = 0; $dbgFrames = 0; $camPops = 0; $colPops = 0; $prevD = $null
     for ($i = 0; $i -lt $rows.Count; $i++) {
         $r = $rows[$i]; $fl = @()
         if ($i -gt 0 -and $r.form -ne $rows[$i - 1].form -and -not $switch) { $switch = $r; $fl += "mesh_switch" }
@@ -98,7 +99,14 @@ foreach ($name in $Cases) {
             if ($name -like "*_side" -and $r.img_diff -lt 0.05) { $freeze++; $fl += "no_visible_change" }
         }
         if ($r.debug_overlay) { $dbgFrames++; $fl += "debug_geometry" }
-        if ($r.cam_jump_per_frame -gt 1.0) { $camPops++; $fl += "camera_pop" }
+        # A jump the product's own collided orbit distance (camD = |cameraPos - actor|) accounts for is the
+        # third-person camera-collision pull-in / release (PlayerController::cameraPos segmentHit, [PROV]):
+        # it also happens without any transformation (camera-trace.ps1 controls) - KNOWN, not a pop.
+        if ($r.cam_jump_per_frame -gt 1.0) {
+            $dd = if ($null -ne $prevD -and "$($r.cam_dist)" -ne "") { [Math]::Abs([double]$r.cam_dist - [double]$prevD) } else { 0 }
+            if ($dd -gt 0.8 * $r.cam_jump_per_frame) { $colPops++; $fl += "camera_collision_pull" } else { $camPops++; $fl += "camera_pop" }
+        }
+        if ("$($r.cam_dist)" -ne "") { $prevD = $r.cam_dist }
         if ($r.weapon_usable -eq 1 -and $r.form -ne "ROBOT") { $fl += "usable_while_vehicle_mesh" }
         $r.flags = $fl -join ";"
     }
@@ -118,10 +126,14 @@ foreach ($name in $Cases) {
     $id = "transform_capture.$name"
     Add-WfcResult $all "$id.ran" $(if ($rc -eq 0 -and $rows.Count -gt 10) { "PASS" } else { "FAIL" }) $rows.Count "grabbed frames (exit $rc)"
     Add-WfcResult $all "$id.no_debug_geometry" $(if ($dbgFrames -eq 0) { "PASS" } else { "FAIL" }) $dbgFrames "frames drawn with the debug overlay / beacon (exact DebugFlags record)"
-    Add-WfcResult $all "$id.no_camera_pop" $(if ($camPops -eq 0) { "PASS" } else { "FAIL" }) $camPops "frames where the camera jumps > 1 m relative to the pawn root in one frame"
+    Add-WfcResult $all "$id.no_camera_pop" $(if ($camPops -eq 0) { "PASS" } else { "FAIL" }) $camPops "frames where the camera jumps > 1 m relative to the pawn root in one frame, NOT explained by camera collision"
+    Add-WfcResult $all "$id.camera_collision_snaps" $(if ($colPops -eq 0) { "PASS" } else { "KNOWN" }) $colPops "frames where the collided orbit distance snaps > 1 m in one frame (camera-collision pull-in/release; unsmoothed in the rebuild, original TnThirdPersoncollisionCameraBehavior / TnAvoidClippingCameraBehavior response not recovered - [PROV]). Location-dependent; also occurs without a transform (camera-trace controls)" "Gameplay"
     if ($switch) {
-        $st = if ($switch.elapsed -ge $w0 - 0.02 -and $switch.elapsed -le $w1 + 0.02) { "INFO" } else { "KNOWN" }
-        Add-WfcResult $all "$id.mesh_switch_time" $st $switch.elapsed ("single-mesh switch at {0:F3} s (authored: both meshes visible {1}-{2} s; the rebuild never shows both)" -f $switch.elapsed, $w0, $w1) "Gameplay" $null "s"
+        # Grabs are every -Stride frames: the switch is only located to within Stride/60 s (+1.5 steps as in
+        # transform_analyzer). The frame-exact check is the harness's transform_analyzer / transform_timeline.
+        $tol = ($Stride + 1.5) / 60.0
+        $st = if ($switch.elapsed -ge $w0 - $tol -and $switch.elapsed -le $w1 + $tol) { "INFO" } else { "KNOWN" }
+        Add-WfcResult $all "$id.mesh_switch_time" $st $switch.elapsed ("logical form switch at {0:F3} s (native overlap window {1}-{2} s, sampling tolerance {3:F3} s; mesh overlap itself is judged frame-exactly by transform_timeline.*.both_meshes_visible_in_fold)" -f $switch.elapsed, $w0, $w1, $tol) "Gameplay" $null "s"
         $sw = $rows | Where-Object frame -eq $switch.frame
         Add-WfcResult $all "$id.switch_visual_change" "INFO" $sw.img_diff ("image change at the switch frame vs fold median {0:F2} (ratio {1:F1}x)" -f $med, $(if ($med -gt 0) { $sw.img_diff / $med } else { 0 }))
     }

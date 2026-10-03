@@ -20,7 +20,8 @@
 #        map        a category's NOT INSTANTIATED / WRONG count grew = REGRESSED
 #        visual     a still whose image differs from the baseline still = CHANGED (human review;
 #                   expected when visual fixes land)
-#   5. write M03-GATE.md (concise) + summary.json; exit 1 when any FAIL exists, else 0.
+#   5. write M03-GATE.md (concise) + summary.json; exit 1 when any product FAIL exists, 2 when only
+#      tool errors (a suite that did not complete), else 0. Tool errors are never counted as FAILs.
 # Machine PASS does not resolve the HUMAN CHECK list (HUMAN-CHECK.md); the gate prints it.
 param([switch]$Quick, [switch]$SkipBuild, [switch]$WriteBaseline, [switch]$ReportOnly, [int]$CounterTimeoutSec = 1800, [int]$Jobs = 2, [string]$Baseline = "", [string]$OutDir = "", [string]$Map = "MP_IAC_Streets")
 $ErrorActionPreference = "Stop"
@@ -38,6 +39,9 @@ function RunStep($name, [scriptblock]$body) {
     if ($ReportOnly) { $steps[$name] = "reused (report only)"; return }
     Step "== $name"
     $sw = [Diagnostics.Stopwatch]::StartNew()
+    # Native tools (cmake, compilers, python) write warnings to stderr; under "Stop" PowerShell turns those
+    # into terminating errors. Steps judge native tools by $LASTEXITCODE and throw explicitly instead.
+    $ErrorActionPreference = "Continue"
     try { & $body *>&1 | ForEach-Object { Add-Content $log "    $_" }; $steps[$name] = "ok ({0:F0} s)" -f $sw.Elapsed.TotalSeconds }
     catch { $steps[$name] = "ERROR: " + $_.Exception.Message; Step "   $name failed: $($_.Exception.Message)" }
 }
@@ -46,9 +50,13 @@ $git = (git rev-parse --short HEAD 2>$null); $branch = (git rev-parse --abbrev-r
 # ---- 1. build ----
 $cmake = Join-Path $root ".toolchain\cmake-4.4.3-windows-x86_64\bin\cmake.exe"
 if (-not $SkipBuild) {
-    RunStep "build" { & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "build.ps1") -Jobs $Jobs }
+    RunStep "build" {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "build.ps1") -Jobs $Jobs
+        if ($LASTEXITCODE -ne 0) { throw "build.ps1 failed ($LASTEXITCODE)" }
+    }
     RunStep "build_measure" {
-        & $cmake -S $root -B (Join-Path $root "build") -DWFC_BUILD_MEASURE=ON | Out-Null
+        & $cmake -S $root -B (Join-Path $root "build") -DWFC_BUILD_MEASURE=ON 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "cmake configure failed ($LASTEXITCODE)" }
         $t = @("wfc_rebuild_prof", "wfc_rebuild_observe"); if (-not $Quick) { $t += "wfc_rebuild_count" }
         & $cmake --build (Join-Path $root "build") --target $t -j $Jobs
         if ($LASTEXITCODE -ne 0) { throw "measurement build failed" }
@@ -90,6 +98,20 @@ RunStep "map_audit" {
     }
 }
 $Reports.map = Join-Path $OutDir "map\report.json"
+# Real exe, scripted scenarios: every scenario runs under WFC_LOCKSTEP (frames = simulated 1/60 s).
+RunStep "runtime_probe" {
+    & (Join-Path $PSScriptRoot "runtime-probe.ps1") -Exe (Join-Path $root "build\bin\wfc_rebuild.exe") -RenderData (Split-Path $rd) -Name "gate"
+    Copy-Item (Join-Path $root "work\fidelity\probe\gate\report.json") (Join-Path $OutDir "probe_report.json") -Force
+}
+$Reports.probe = Join-Path $OutDir "probe_report.json"
+RunStep "render_selftests" { & (Join-Path $PSScriptRoot "render-selftests.ps1") -RenderData (Split-Path $rd) -OutDir (Join-Path $OutDir "selftests") }
+$Reports.selftests = Join-Path $OutDir "selftests\report.json"
+# Release frame cost (INFO; regression reference). Only when a Release build exists next to build\.
+$relExe = Join-Path $root "build-release\bin\wfc_rebuild.exe"
+if (-not $Quick -and (Test-Path $relExe)) {
+    RunStep "perf_release" { & (Join-Path $PSScriptRoot "perf-release.ps1") -Exe $relExe -RenderData (Split-Path $rd) -OutDir (Join-Path $OutDir "perf_release") }
+    $Reports.perf_release = Join-Path $OutDir "perf_release\report.json"
+}
 RunStep "perf_profile" {
     $sc = if ($Quick) { @("idle", "held_fire") } else { @("idle", "walk", "fineaim", "burst", "held_fire") }
     & (Join-Path $PSScriptRoot "perf-profile.ps1") -Scenarios $sc -OutDir (Join-Path $OutDir "perf")
@@ -111,7 +133,9 @@ $sectionOf = {
         '^vehicle_visual\.|^vehicle_materials\.|^material_consistency\.' { "VISUAL"; break }
         '^audio_attach\.' { "AUDIO ATTACHMENT"; break }
         '^(map_audit|map_content|map)\.' { "MAP COMPLETENESS"; break }
-        '^(trace_cost|perf_counters|performance)\.' { "PERFORMANCE"; break }
+        '^(trace_cost|perf_counters|performance|perf_release)\.' { "PERFORMANCE"; break }
+        '^(render_selftest|rendering|known_translator_error)\.' { "RENDERING"; break }
+        '^(weapon|weapon_presentation|input_edges)\.' { "WEAPON"; break }
         '^fine_aim' { "FINE AIM"; break }
         default { "OTHER" }
     }
@@ -119,12 +143,14 @@ $sectionOf = {
 $all = New-Object System.Collections.Generic.List[object]
 $counts = [ordered]@{ pass = 0; fail = 0; known = 0; info = 0; skip = 0 }
 $reg = [ordered]@{}; $imp = [ordered]@{}
-foreach ($s in "PERFORMANCE", "VISUAL", "AUDIO ATTACHMENT", "TRANSFORMATION", "VEHICLE", "MAP COMPLETENESS", "FINE AIM", "OTHER") { $reg[$s] = New-Object System.Collections.Generic.List[string]; $imp[$s] = New-Object System.Collections.Generic.List[string] }
+foreach ($s in "PERFORMANCE", "VISUAL", "RENDERING", "WEAPON", "AUDIO ATTACHMENT", "TRANSFORMATION", "VEHICLE", "MAP COMPLETENESS", "FINE AIM", "OTHER") { $reg[$s] = New-Object System.Collections.Generic.List[string]; $imp[$s] = New-Object System.Collections.Generic.List[string] }
 $fails = New-Object System.Collections.Generic.List[string]
-$baseFile = @{ harness = "harness.json"; transform = "transform.json"; audio = "audio.json"; vehicle_visual = "vehicle_visual.json"; map = "map.json"; counters = "counters_report.json" }
+$toolErrors = New-Object System.Collections.Generic.List[string]   # gate/suite tool problems: never product FAILs
+$stepOf = @{ harness = "harness"; transform = "transform_capture"; audio = "audio_attach"; vehicle_visual = "vehicle_visual"; map = "map_audit"; counters = "perf_counters"; probe = "runtime_probe"; selftests = "render_selftests"; perf_release = "perf_release" }
+$baseFile = @{ harness = "harness.json"; transform = "transform.json"; audio = "audio.json"; vehicle_visual = "vehicle_visual.json"; map = "map.json"; counters = "counters_report.json"; probe = "probe.json"; selftests = "selftests.json"; perf_release = "perf_release.json" }
 foreach ($k in $Reports.Keys) {
     $new = LoadReport $Reports[$k]
-    if (-not $new) { $fails.Add("$k : report missing ($($steps[$k]))"); $counts.fail++; continue }
+    if (-not $new) { $toolErrors.Add("$k : report missing - the suite did not complete ($($steps[$k] + $steps[$stepOf[$k]]))"); continue }   # tooling, not product
     foreach ($s in "pass", "fail", "known", "info", "skip") { $counts[$s] += [int]$new.summary.$s }
     $old = LoadReport (Join-Path $Baseline $baseFile[$k])
     $oldById = @{}; if ($old) { foreach ($r in $old.results) { $oldById[$r.id] = $r } }
@@ -214,19 +240,20 @@ $md.Add("")
 $md.Add(("**PASS {0} / FAIL {1} / KNOWN {2} / INFO {3} / SKIP {4}**  (baseline: {5})" -f $counts.pass, $counts.fail, $counts.known, $counts.info, $counts.skip, (Split-Path $Baseline -Leaf)))
 $md.Add("")
 $md.Add("Steps: " + (($steps.Keys | ForEach-Object { "$_ $($steps[$_])" }) -join "; "))
-foreach ($s in "PERFORMANCE", "VISUAL", "AUDIO ATTACHMENT", "TRANSFORMATION", "VEHICLE", "MAP COMPLETENESS", "FINE AIM", "OTHER") {
+foreach ($s in "PERFORMANCE", "VISUAL", "RENDERING", "WEAPON", "AUDIO ATTACHMENT", "TRANSFORMATION", "VEHICLE", "MAP COMPLETENESS", "FINE AIM", "OTHER") {
     $md.Add(""); $md.Add("## $s REGRESSIONS ($($reg[$s].Count))")
     if ($reg[$s].Count) { foreach ($x in ($reg[$s] | Select-Object -First 40)) { $md.Add("- $x") } } else { $md.Add("- none") }
     if ($imp[$s].Count) { $md.Add("Improved ($($imp[$s].Count)): " + (($imp[$s] | Select-Object -First 12) -join "; ") + $(if ($imp[$s].Count -gt 12) { " ..." } else { "" })) }
 }
 if ($perfRows.Count) { $md.Add(""); $md.Add("## Performance phases (baseline -> now)"); $md.Add('```'); foreach ($p in $perfRows) { $md.Add($p) }; $md.Add('```') }
+$md.Add(""); $md.Add("## TOOL ERRORS ($($toolErrors.Count)) - gate/suite problems, not product results"); if ($toolErrors.Count) { foreach ($x in $toolErrors) { $md.Add("- $x") } } else { $md.Add("- none") }
 $md.Add(""); $md.Add("## FAIL ($($fails.Count))"); if ($fails.Count) { foreach ($f in ($fails | Select-Object -First 40)) { $md.Add("- $f") } } else { $md.Add("- none") }
 $md.Add(""); $md.Add("## HUMAN CHECK (machine PASS does not resolve these)")
 $hc = Join-Path $PSScriptRoot "HUMAN-CHECK.md"
 if (Test-Path $hc) { foreach ($l in (Get-Content $hc | Where-Object { $_ -match '^\s*- \[' })) { $md.Add($l) } }
 $md.Add(""); $md.Add("Artifacts: $OutDir (harness.json, transform\*\sheet.png, audio\offending_cues.txt, vehicle_visual\sheet.png, map\inventory.csv, perf\attribution.csv)")
 $md | Set-Content -Encoding UTF8 (Join-Path $OutDir "M03-GATE.md")
-[ordered]@{ branch = $branch; commit = $git; counts = $counts; regressions = $reg; improvements = $imp; fails = $fails; steps = $steps } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 (Join-Path $OutDir "summary.json")
+[ordered]@{ branch = $branch; commit = $git; counts = $counts; regressions = $reg; improvements = $imp; fails = $fails; tool_errors = $toolErrors; steps = $steps } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 (Join-Path $OutDir "summary.json")
 Remove-Item Env:WFC_RENDER_DATA -ErrorAction SilentlyContinue
 Get-Content (Join-Path $OutDir "M03-GATE.md")
-if ($counts.fail -gt 0) { exit 1 } else { exit 0 }
+if ($counts.fail -gt 0) { exit 1 } elseif ($toolErrors.Count -gt 0) { exit 2 } else { exit 0 }

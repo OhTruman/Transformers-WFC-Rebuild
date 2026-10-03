@@ -106,21 +106,53 @@ $declared = if ($map["unhandled_actor_classes"]["PrefabInstance"]) { $map["unhan
 if ($ra -and $ra["categories"]["decals"]) { foreach ($it in $ra["categories"]["decals"]["items"]) { Item "decals" $it["component"].Split(".")[-2] $raMap[$it["status"]] ("Rendering map_audit; material " + $it["material"]) } }
 else { foreach ($d in $props["decals"]) { Item "decals" $d["actor"] $(if (Test-Path "$RenderData\decals.glb") { "PRESENT + RENDERED" } else { "NOT INSTANTIATED" }) "decals.glb in render data" } }
 # ---- emitters (level + pickup-factory particle components) ----
+$pk = $startup | Where-Object { $_ -match "pickups: (\d+) factories \(ammo crate (\d+), health (\d+), overshield (\d+)\)" } | Select-Object -First 1
+# Runtime evidence first (merged M03: Systems LevelFx logs "level fx: N <template> emitters"); Rendering's
+# audit per component when present; otherwise not instantiated (older trees).
+$levelFx = $startup | Where-Object { $_ -match "level fx: (\d+) " } | Select-Object -First 1
+$levelFxN = if ($levelFx -and $levelFx -match "level fx: (\d+) ") { [int]$Matches[1] } else { -1 }
 $raEm = @{}; if ($ra -and $ra["categories"]["emitters"]) { foreach ($it in $ra["categories"]["emitters"]["items"]) { $raEm[$it["component"]] = $it } }
+$nLevel = @($fx["particle_components"] | Where-Object { $_["owner_class"] -eq "Emitter" }).Count
 foreach ($c in $fx["particle_components"]) {
-    $st = if ($raEm[$c["component"]]) { $raMap[$raEm[$c["component"]]["status"]] } else { "NOT INSTANTIATED" }
+    $isLevel = $c["owner_class"] -eq "Emitter"
     $tpl = if ($c["template"]) { $c["template"] } else { "" }
-    Item $(if ($c["owner_class"] -eq "Emitter") { "level_emitters" } else { "pickup_fx" }) $c["owner"].Split(".")[-1] $st ("{0} {1}; {2}" -f $c["owner_class"], $tpl, $(if ($raEm[$c["component"]]) { "Rendering map_audit" } else { "no level/pickup particle spawning in the runtime" })) "Systems"
+    if ($isLevel -and $levelFxN -ge 0) {
+        $st = if ($levelFxN -ge $nLevel) { "PRESENT + RENDERED" } else { "PRESENT + NOT RENDERED" }
+        $why = "runtime log: level fx $levelFxN/$nLevel emitters spawned (Systems LevelFx)"
+    } elseif ($raEm[$c["component"]]) {
+        $st = $raMap[$raEm[$c["component"]]["status"]]; $why = "Rendering map_audit"
+    } else {
+        $st = "NOT INSTANTIATED"
+        $why = if (-not $isLevel -and $pk) { "pickup factories are placed (runtime log) but their particle systems are deliberately not drawn: PickupPresentation exposes the authored effect state only (emitters not reproducible without guessing) - PROVISIONAL" } else { "no runtime evidence of this particle system being spawned" }
+    }
+    Item $(if ($isLevel) { "level_emitters" } else { "pickup_fx" }) $c["owner"].Split(".")[-1] $st ("{0} {1}; {2}" -f $c["owner_class"], $tpl, $why) "Systems"
 }
-# ---- pickup factories (gameplay visuals) ----
+# ---- pickup factories: runtime "pickups: N factories (ammo crate a, health h, overshield o)" (Gameplay Pass 15/16) ----
+$pkCount = @{}
+if ($pk -and $pk -match "pickups: (\d+) factories \(ammo crate (\d+), health (\d+), overshield (\d+)\)") {
+    $pkCount = @{ TnAmmoCratePickupFactory = [int]$Matches[2]; TnHealthPickupFactory = [int]$Matches[3]; TnOverShieldPickupFactory = [int]$Matches[4] }
+}
 foreach ($k in "TnAmmoCratePickupFactory", "TnHealthPickupFactory", "TnOverShieldPickupFactory", "TnGameObjectivePickupFactoryBomb", "TnGameObjectivePickupFactoryFlag") {
     $n = $map["spawn_and_gameplay_points"][$k]
-    if ($n) { Item "pickups" "$k x$n" "NOT INSTANTIATED" "World spawns graybox placeholder pickups near the spawn instead of the authored factories (meshes + Pickup_FX)" "Gameplay" }
+    if (-not $n) { continue }
+    if ($pkCount.ContainsKey($k)) {
+        $st = if ($pkCount[$k] -eq $n) { "PRESENT + RENDERED" } else { "PRESENT + NOT RENDERED" }
+        Item "pickups" "$k x$n" $st ("runtime log: {0} authored factories instantiated (gameplay.json, AssetTools 7a69756)" -f $pkCount[$k]) "Gameplay"
+    } elseif ($k -like "*Objective*") {
+        Item "pickups" "$k x$n" "PRESENT + INVISIBLE BY DESIGN" "game-mode objective (bomb/flag modes); not part of the FFA slice" ""
+    } else {
+        Item "pickups" "$k x$n" "NOT INSTANTIATED" "no 'pickups: N factories' line in the runtime log (tree without authored pickup factories)" "Gameplay"
+    }
 }
-# ---- destructible ----
+# ---- destructible: runtime "destructible: <name> at authored x y z" (Gameplay Pass 15) ----
+$dl = $startup | Where-Object { $_ -match "destructible: (\S+) at authored" } | Select-Object -First 1
 foreach ($d in $phys["destructibles"]) {
     $bp = $d["components"][0]["props"]["Blueprint"]
-    Item "destructibles" $d["actor"].Split(".")[-1] "NOT INSTANTIATED" ("HmDestructibleComponent blueprint {0} (1 piece); meshes exist in content/DES_IAC_WallPanelSign_p but the DSYS blueprint (piece->mesh, transform, state materials) is not exported" -f $bp) "AssetTools/RE"
+    if ($dl) {
+        Item "destructibles" $d["actor"].Split(".")[-1] "PRESENT + RENDERED" ("runtime log: {0} (blueprint {1}; authored outside the normal play space - Gameplay Pass 15)" -f ($dl -replace '^.*destructible: ', ''), $bp) ""
+    } else {
+        Item "destructibles" $d["actor"].Split(".")[-1] "NOT INSTANTIATED" ("no runtime placement logged; blueprint {0}" -f $bp) "Gameplay"
+    }
 }
 # ---- lights / lightmaps / fog / post / reflections ----
 $shader = $startup | Where-Object { $_ -match "shader path active: (\d+) materials, (\d+) lightmapped components, (\d+) lights, fog (\w+)" } | Select-Object -First 1
