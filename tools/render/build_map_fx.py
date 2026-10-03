@@ -114,8 +114,13 @@ def system_runtime(name, s):
                         mod['partial'].append(prop)
                 lod['modules'].append(mod)
             lod['flag_analysis'] = flag_analysis(lod)
+            # RE MILESTONE04 pickup/objective presentation §2 (HIGH): flagA == membership in the executed module
+            # list (bEnabled); flagA = 0 modules are disabled and not evaluated. flagB stays UNKNOWN (mesh-rotation
+            # modules only). With that reading every emitter's look is determined.
+            lod['disabled_modules'] = [m['module'] for m in lod['modules'] if (m.get('raw_flags') or [1, 1])[0] == 0]
             em['lods'].append(lod)
-        em['renderable'] = all(l['flag_analysis']['visual_invariant'] for l in em['lods'])
+        em['renderable'] = True
+        em['flag_reading'] = 'flagA = bEnabled (RE HIGH)'
         out['emitters'].append(em)
     return out
 
@@ -140,12 +145,13 @@ def main():
         oc, t = comp['owner_class'], comp['props'].get('Template')
         highlight = t == 'FX_Pickups_p.FX.Pickup_FX' and oc != 'Emitter'
         # PickupEffect (highlight) is attached / rendered only for factory classes that list it in Components
-        # (ammo crate, objectives); health / overshield never attach it (decompiled script, Systems 8dcb861).
+        # (ammo crate, flag / bomb objectives: ShouldDisplayHighlightFx inherited True from TnWeaponPickupFactory,
+        # RE MILESTONE04 pickup/objective §1); health / overshield never attach it (decompiled script).
         attached = not highlight or oc in ('TnAmmoCratePickupFactory', 'TnGameObjectivePickupFactoryFlag',
                                            'TnGameObjectivePickupFactoryBomb')
         # spawn state: PreBeginPlay -> InitializePickup -> SetPickupMesh -> SetPickupVisible activates the
         # highlight where ShouldDisplayHighlightFx (ammo crates; RE d50c2a9 P2), overriding bAutoActivate false
-        active = bool(comp['props'].get('bAutoActivate', True)) or (highlight and oc == 'TnAmmoCratePickupFactory')
+        active = bool(comp['props'].get('bAutoActivate', True)) or (highlight and attached)
         rule = {'TnGameObjectivePickupFactoryFlag': 'TransGame.TnGameRules_SingleFlagCTF',
                 'TnGameObjectivePickupFactoryBomb': 'TransGame.TnGameRules_ScoreBombingRun'}.get(oc)
         inst.append({'component': comp['component'], 'owner': comp['owner'].split('.')[-1],

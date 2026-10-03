@@ -114,6 +114,10 @@ public:
     virtual void setActiveGameRules(const std::vector<std::string>& rules) { (void)rules; }
     // True when the renderer draws the authored map particle components itself (Systems must not draw them too).
     virtual bool drawsAuthoredMapFx() const { return false; }
+    // Gameplay's map clock: seconds since SeqEvent_GameplayStarted (MapState). Movers (PHYS_Rotating domes, the
+    // looping SkyBeam Matinee), totem idle animation and KOTH state are evaluated at this time so that what is
+    // drawn matches the moving collision Gameplay simulates. Optional.
+    virtual void setMapClock(float secondsSinceGameplayStarted) { (void)secondsSinceGameplayStarted; }
     // Authored destructible presentation state (HmDestructionState handle: 0 intact, 1 destroyed, 2 settled).
     // Gameplay owns damage / triggers / timers.
     virtual void setDestructibleState(const std::string& actor, int state) { (void)actor; (void)state; }

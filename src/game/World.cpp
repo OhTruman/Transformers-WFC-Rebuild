@@ -165,11 +165,15 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     respawnPlayer();
     if (std::getenv("WFC_STARTVEHICLE")) player_.pawn().setForm(Form::Vehicle);  // for vehicle tests
 
-    // A couple of pickups near spawn for visual life, plus a weapon-test dummy.
+    // Graybox pickups near spawn (scaffold) are retired on the slice: the authored pickup factories are presented by
+    // the renderer (crate mesh, effects, beams) from the map data. WFC_GRAYBOXPICKUPS keeps them for Gameplay tests.
     actors_.clear();
-    actors_.push_back(std::make_unique<Pickup>(spawnPos_ + core::Vec3{3, 0, 0}, Pickup::Kind::Health));
-    actors_.push_back(std::make_unique<Pickup>(spawnPos_ + core::Vec3{-3, 0, 2}, Pickup::Kind::Ammo));
-    {
+    if (std::getenv("WFC_GRAYBOXPICKUPS")) {
+        actors_.push_back(std::make_unique<Pickup>(spawnPos_ + core::Vec3{3, 0, 0}, Pickup::Kind::Health));
+        actors_.push_back(std::make_unique<Pickup>(spawnPos_ + core::Vec3{-3, 0, 2}, Pickup::Kind::Ammo));
+    }
+    // The weapon-test dummy (graybox, not authored map content) is likewise kept only for tests: WFC_DAMAGETARGET.
+    if (std::getenv("WFC_DAMAGETARGET")) {
         core::Vec3 d = spawnPos_ + core::forwardFromYawPitch(spawnYaw_, 0.0f) * 10.0f;
         if (collision_.valid()) { float gy; core::Vec3 n; if (collision_.groundHeight(d.x, d.z, d.y + 0.5f, 1.5f, gy, n)) d.y = gy; }
         actors_.push_back(std::make_unique<DamageTarget>(d));

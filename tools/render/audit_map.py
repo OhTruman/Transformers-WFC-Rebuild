@@ -236,8 +236,31 @@ def main():
     cats['domination_totems'] = {'expected': 3, 'status': 'intentionally_invisible',
                                  'reason': 'NEU_EnergonTotem_SKEL + EnergonTotem_StandBy loop drawn only under '
                                            'TnGameRules_ScoreDomination (Conquest)'}
+    # pickup / objective factories (render_index.json pickup_factory_visuals + pickup_fx_components): the renderer
+    # draws the ammo-crate mesh and every factory's effects; Gameplay drives state through setMapEffectState
+    by_owner = collections.defaultdict(list)
+    for r in erows:
+        by_owner[r['component'].rsplit('.', 1)[0].lower()].append(r['status'])
+    prow = []
+    for pc in fx['particle_components']:
+        owner = pc['component'].rsplit('.', 1)[0]
+        cls = pc.get('owner_class')
+        if cls not in GAMEPLAY_VISUAL or any(x['actor'] == owner for x in prow):
+            continue
+        sts = by_owner.get(owner.lower(), [])
+        if 'rendered_correctly' in sts:
+            st = 'rendered_correctly'
+            why = ('PROP_NEU_AmmoPickup_STAT mesh (yaw 10000/s, CullDistance 8000) + Pickup_FX beam; mesh attach offset '
+                   'UNKNOWN (factory origin, PARTIAL)') if cls == 'TnAmmoCratePickupFactory' else 'custom pickup effect drawn'
+        elif sts and all(x == 'intentionally_invisible' for x in sts):
+            st, why = 'intentionally_invisible', 'objective factory Disabled outside its game rule (hidden, no collision)'
+        else:
+            st, why = 'unknown', 'no presentation instantiated'
+        prow.append({'actor': owner, 'class': cls, 'status': st, 'reason': why})
     cats['gameplay_visual_actors'] = {'expected': {c: census[c] for c in GAMEPLAY_VISUAL if census.get(c)},
-                                      'status': 'unknown', 'owner': 'Gameplay (pickups/objectives draw their own meshes)'}
+                                      'status_counts': dict(collections.Counter(r['status'] for r in prow)),
+                                      'note': 'flag / bomb factory at-rest visual UNKNOWN (AssetTools); state from Gameplay',
+                                      'items': prow}
 
     summary = collections.Counter()
     for c in cats.values():

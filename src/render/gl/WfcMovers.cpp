@@ -223,11 +223,11 @@ void Pipeline::updateMovers() {
     static const bool frozen = std::getenv("WFC_NOMOVERS") != nullptr;
     moverDelta_.clear();
     if (frozen) return;
-    for (const MoverRT& m : movers_) moverDelta_[m.actor] = moverDelta(m, time_);
+    for (const MoverRT& m : movers_) moverDelta_[m.actor] = moverDelta(m, mapTime());   // Gameplay's map clock
 }
 
 void Pipeline::setActorHidden(const std::string& actor, bool hidden) {
-    std::string a = actor;
+    std::string a = actor.substr(actor.rfind('.') == std::string::npos ? 0 : actor.rfind('.') + 1);   // full path or name
     std::transform(a.begin(), a.end(), a.begin(), ::tolower);
     actorHidden_[a] = hidden;
 }

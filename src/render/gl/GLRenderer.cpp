@@ -204,6 +204,7 @@ public:
     void setMapEffectState(const std::string& k, bool a, bool h) override { wfc_.setMapEffectState(k, a, h); }
     void setActiveGameRules(const std::vector<std::string>& r) override { wfc_.setActiveGameRules(r); }
     bool drawsAuthoredMapFx() const override { return wfc_.active(); }
+    void setMapClock(float t) override { wfc_.setMapClock(t); }
     void setDestructibleState(const std::string& a, int s) override { wfc_.setDestructibleState(a, s); }
 
     MeshHandle uploadMesh(const MeshData& mesh) override {

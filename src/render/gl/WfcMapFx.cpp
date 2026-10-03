@@ -52,12 +52,14 @@ int kindOf(const std::string& k) {
 core::Vec3 ueToGltf(const float p[3]) { return {p[0] * 0.01f, p[2] * 0.01f, p[1] * 0.01f}; }
 
 // UE row-vector transform (rows = local axes, row 3 = translation, UE units) -> glTF column matrix for a
-// mesh whose vertices are content-glTF metres in UE axes.
+// content-glTF mesh. Content glTFs are metres in the same Y-up local frame as world.glb's meshes (identical vertex
+// data; local y = UE local Z, local z = UE local Y): M = P * A_ue * P with P the y<->z swap, so a proper UE rotation
+// stays a proper rotation (no winding change).
 core::Mat4 ueRowsToGltf(const float R[3][3], const float T[3]) {
     core::Mat4 M = core::Mat4::identity();
     auto sw = [](int i) { return i == 0 ? 0 : (i == 1 ? 2 : 1); };
-    for (int c = 0; c < 3; ++c)                  // column c = image of local axis c (UE), swapped to glTF
-        for (int r = 0; r < 3; ++r) M.m[c * 4 + r] = R[c][sw(r)];
+    for (int c = 0; c < 3; ++c)                  // column c = image of local glTF axis c = swapped UE local axis sw(c)
+        for (int r = 0; r < 3; ++r) M.m[c * 4 + r] = R[sw(c)][sw(r)];
     M.m[12] = T[0] * 0.01f; M.m[13] = T[2] * 0.01f; M.m[14] = T[1] * 0.01f;
     return M;
 }
@@ -183,6 +185,7 @@ bool Pipeline::loadMapFx(const std::string& path) {
         in.owner = lower(I[i]["owner"].asString());
         in.system = I[i]["template"].asString();
         in.role = I[i]["role"].asString();
+        in.ownerClass = I[i]["owner_class"].asString();
         in.attached = I[i]["attached"].asBool(true);
         in.requiredRule = I[i]["required_game_rule"].asString();
         in.active = allActive || I[i]["auto_activate"].asBool(true);
@@ -191,6 +194,12 @@ bool Pipeline::loadMapFx(const std::string& path) {
             for (int c = 0; c < 3; ++c) in.R[r][c] = M[(size_t)r][(size_t)c].asFloat();
         for (int c = 0; c < 3; ++c) in.T[c] = M[3][(size_t)c].asFloat();
         in.rng = 0x9E3779B9u * (uint32_t)(i + 1);
+        if (in.ownerClass == "TnAmmoCratePickupFactory" && in.role == "highlight") {
+            PickupMeshRT pm;
+            pm.owner = in.owner;
+            std::copy(in.T, in.T + 3, pm.T);
+            pickupMeshes_.push_back(pm);
+        }
         auto it = fxSystems_.find(in.system);
         if (it == fxSystems_.end()) continue;
         in.emitters.resize(it->second.emitters.size());
@@ -225,8 +234,12 @@ void Pipeline::setMapEffectState(const std::string& key, bool active, bool hidde
     std::transform(w.begin(), w.end(), w.begin(), ::tolower);
     size_t bar = w.find('|');
     if (bar != std::string::npos) { role = w.substr(bar + 1); w = w.substr(0, bar); }
+    std::string shortName = w.substr(w.rfind('.') == std::string::npos ? 0 : w.rfind('.') + 1);   // full path or name
+    if (role.empty() || role == "custom") {          // SetPickupHidden / SetPickupVisible also toggle the pickup mesh
+        if (hidden) pickupMeshHidden_.insert(shortName); else pickupMeshHidden_.erase(shortName);
+    }
     for (FxInstance& in : fxInstances_) {
-        if (in.owner != w && in.component != w) continue;
+        if (in.owner != w && in.owner != shortName && in.component != w) continue;
         if (!role.empty() && in.role != role) continue;
         if (active && !in.active)
             for (FxEmitterRT& e : in.emitters) { e.time = 0; e.spawnFrac = 0; e.loop = 0; e.burstFired.clear(); e.done = false; }
@@ -253,7 +266,6 @@ int Pipeline::fxMeshFor(const FxLod& L) {
     MeshData md;
     int id = -1;
     if (assets::loadGlb(L.meshGltf, md)) {
-        for (size_t t = 0; t + 2 < md.indices.size(); t += 3) std::swap(md.indices[t + 1], md.indices[t + 2]);
         // TypeDataMesh: the mesh's own section materials unless bOverrideMaterial with a RequiredModule material
         for (render::Material& m : md.mats)
             m.wfcName = (L.overrideMaterial && !L.material.empty()) ? resolveName(L.material) : resolveName(m.sourceName);
@@ -291,7 +303,7 @@ void Pipeline::tickMapFx(float dt) {
                 for (int c = 0; c < 3; ++c) q.vel[c] = q.baseVel[c], q.size[c] = q.baseSize[c];
                 for (int c = 0; c < 4; ++c) q.color[c] = q.baseColor[c];
                 for (const FxModule& m : L.modules) {
-                    if (m.flagA == 0 && !(std::getenv("WFC_FX_FLAGREADING") && std::getenv("WFC_FX_FLAGREADING")[0] == 'B')) continue;
+                    if (m.flagA == 0) continue;               // disabled module (RE: flagA = bEnabled, HIGH)
                     if (m.name == "PMI_SizeMultiplyLife") {
                         float s[3]; m.dists.at("LifeMultiplier").eval(q.relTime, in.rng, s);
                         for (int c = 0; c < 3; ++c) q.size[c] *= s[c];
@@ -410,7 +422,7 @@ void Pipeline::tickMapFx(float dt) {
                 for (int c = 0; c < 4; ++c) q.color[c] = q.baseColor[c];
                 // spawn-time over-life values at RelativeTime 0
                 for (const FxModule& m : L.modules) {
-                    if (m.flagA == 0 && !(reading && reading[0] == 'B')) continue;
+                    if (m.flagA == 0) continue;
                     if (m.name == "PMI_SizeMultiplyLife") {
                         float s3[3]; m.dists.at("LifeMultiplier").eval(0.0f, in.rng, s3);
                         for (int c = 0; c < 3; ++c) q.size[c] *= s3[c];
@@ -454,8 +466,6 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
                 std::string an = std::string(kContent) + e["anim"].asString().substr(8);
                 if (!assets::loadSkinnedGlb(gl, *totemModel_)) { totemModel_.reset(); continue; }
                 assets::loadAnimationsByName(an, *totemModel_);
-                for (size_t t = 0; t + 2 < totemModel_->indices.size(); t += 3)   // UE axes -> glTF (det -1)
-                    std::swap(totemModel_->indices[t + 1], totemModel_->indices[t + 2]);
                 for (render::Material& m : totemModel_->mats)
                     m.wfcName = resolveName("PROP_NEU_Pickups_p.EnergonTotem." + m.sourceName);
                 totemClip_ = totemModel_->clipByName(e["idle_anim (DeactivatedLoopAnim)"].asString());
@@ -464,6 +474,29 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
             p.actor = actor; p.kind = 0;
             p.actorLower = actor; std::transform(p.actorLower.begin(), p.actorLower.end(), p.actorLower.begin(), ::tolower);
             p.model = ueRowsToGltf(R3, loc);
+            mapProps_.push_back(p);
+        } else if (kind.find("KOTH") != std::string::npos) {
+            // TnKingOfTheHillZone ActiveMeshComponent0 (class template, pTorus1_STAT, CaptureZone_Reverse_MAT_INST):
+            // shown only for the zone Gameplay activates (default bHidden; KOTH Inactive zones hidden)
+            const assets::Json& U = e["ue_matrix"];
+            float R4[3][3], T4[3];
+            for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) R4[r][c] = U[(size_t)r][(size_t)c].asFloat();
+            for (int c = 0; c < 3; ++c) T4[c] = U[3][(size_t)c].asFloat();
+            MapProp p;
+            p.actor = actor; p.kind = 2;
+            p.actorLower = actor; std::transform(p.actorLower.begin(), p.actorLower.end(), p.actorLower.begin(), ::tolower);
+            authoredHiddenActors_.insert(p.actorLower);
+            p.model = ueRowsToGltf(R4, T4);
+            if (kothMesh_ < 0) {
+                MeshData md;
+                std::string gl = std::string(kContent) + e["gltf"].asString().substr(8);
+                if (assets::loadGlb(gl, md)) {
+                    std::string mat = e["section_materials"][0].asString();
+                    for (render::Material& m : md.mats) m.wfcName = resolveName(mat.empty() ? m.sourceName : mat);
+                    kothMesh_ = upload(md);
+                }
+            }
+            p.stateMesh[0] = kothMesh_;
             mapProps_.push_back(p);
         } else if (kind.find("destructible") != std::string::npos) {
             const assets::Json& ct = e["component_translation_ue"];
@@ -485,7 +518,6 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
             for (int k = 0; k < 2; ++k) {
                 MeshData md;
                 if (!assets::loadGlb(std::string(kContent) + meshes[k], md)) { p.stateMesh[k] = -1; continue; }
-                for (size_t t = 0; t + 2 < md.indices.size(); t += 3) std::swap(md.indices[t + 1], md.indices[t + 2]);
                 for (SubMesh& sm : md.subs) sm.component = comps[k];
                 for (render::Material& m : md.mats) m.wfcName = resolveName("DES_IAC_WallPanelSign_p.Materials." + m.sourceName);
                 p.stateMesh[k] = upload(md);
@@ -518,6 +550,14 @@ void Pipeline::setDestructibleState(const std::string& actor, int state) {
         if (p.kind == 1 && (p.actor == a || ("MP_IAC_Streets_ART_m.TheWorld.PersistentLevel." + p.actor) == a)) p.state = state;
 }
 
+// Ammo-crate factory yaw while available: PickupRotationRate Yaw 10000 UU/s (TnAmmoCratePickup, authored) from the
+// map clock; the factory's local-space effects and its mesh follow it (RE MILESTONE04 pickup §2, HIGH). The phase of
+// the spin and its reset on respawn are native [PROVISIONAL: continuous from map start].
+float Pipeline::pickupYaw(const std::string& ownerLower) const {
+    (void)ownerLower;
+    return 10000.0f * mapTime();
+}
+
 // ---- drawing (after the frame's opaque + character draws, before post) ----
 void Pipeline::drawMapPresentation() {
     if (std::getenv("WFC_NOMAPFX")) return;
@@ -526,11 +566,33 @@ void Pipeline::drawMapPresentation() {
     for (MapProp& p : mapProps_) {
         if (actorHidden(p.actorLower)) continue;
         if (p.kind == 0 && totemModel_) {
-            assets::evaluatePose(*totemModel_, totemClip_, time_, totemScratch_, totemPose_, true);
+            assets::evaluatePose(*totemModel_, totemClip_, mapTime(), totemScratch_, totemPose_, true);
             drawDynamic(totemPose_, p.model);
         } else if (p.kind == 1) {
             int k = p.state == 0 ? 0 : 1;
             if (p.stateMesh[k] >= 0) draw(p.stateMesh[k], p.model);
+        } else if (p.kind == 2 && p.stateMesh[0] >= 0) {   // active KOTH zone ring
+            draw(p.stateMesh[0], p.model);
+        }
+    }
+    // ammo-crate pickup meshes
+    if (ammoMesh_ < 0 && !pickupMeshes_.empty()) {
+        MeshData md;
+        ammoMesh_ = -2;
+        if (assets::loadGlb(std::string(kContent) + "PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf", md)) {
+            for (render::Material& m : md.mats) m.wfcName = resolveName("PROP_NEU_Pickups_p.AmmoPickup." + m.sourceName);
+            ammoMesh_ = upload(md);
+        }
+    }
+    if (ammoMesh_ >= 0) {
+        float camUE[3] = {camPos_.x * 100.0f, camPos_.z * 100.0f, camPos_.y * 100.0f};
+        for (const PickupMeshRT& pm : pickupMeshes_) {
+            if (pickupMeshHidden_.count(pm.owner)) continue;
+            float dx = pm.T[0] - camUE[0], dy = pm.T[1] - camUE[1], dz = pm.T[2] - camUE[2];
+            if (dx * dx + dy * dy + dz * dz > 8000.0f * 8000.0f) continue;   // MeshComponentA CullDistance 8000
+            float rows[3][3];
+            rotRows(0.0f, pickupYaw(pm.owner), 0.0f, rows);
+            draw(ammoMesh_, ueRowsToGltf(rows, pm.T));
         }
     }
     // particles
@@ -545,9 +607,12 @@ void Pipeline::drawMapPresentation() {
             FxEmitterRT& rt = in.emitters[e];
             if (rt.parts.empty()) continue;
             const FxLod& L = sys.emitters[e].lods[(size_t)rt.lod];
+            float IR[3][3];                                    // instance rows (ammo factory: spinning yaw)
+            std::memcpy(IR, in.R, sizeof(IR));
+            if (in.ownerClass == "TnAmmoCratePickupFactory") rotRows(0.0f, pickupYaw(in.owner), 0.0f, IR);
             auto worldPos = [&](const float p[3], float o[3]) {
                 if (!L.localSpace) { std::copy(p, p + 3, o); return; }
-                for (int c = 0; c < 3; ++c) o[c] = in.T[c] + p[0] * in.R[0][c] + p[1] * in.R[1][c] + p[2] * in.R[2][c];
+                for (int c = 0; c < 3; ++c) o[c] = in.T[c] + p[0] * IR[0][c] + p[1] * IR[1][c] + p[2] * IR[2][c];
             };
             if (!L.meshGltf.empty()) {                       // mesh emitter (TypeDataMesh)
                 int meshId = fxMeshFor(L);
@@ -561,7 +626,7 @@ void Pipeline::drawMapPresentation() {
                         for (int c = 0; c < 3; ++c) {
                             float s = q.size[r];
                             Rm[r][c] = L.localSpace
-                                ? s * (rows[r][0] * in.R[0][c] + rows[r][1] * in.R[1][c] + rows[r][2] * in.R[2][c])
+                                ? s * (rows[r][0] * IR[0][c] + rows[r][1] * IR[1][c] + rows[r][2] * IR[2][c])
                                 : s * rows[r][c];
                         }
                     float wp[3]; worldPos(q.pos, wp);

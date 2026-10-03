@@ -23,7 +23,9 @@ def compiled_params(repo, path):
     p, t = repo.native_tail(path)
     ids = {i: KINDS[n] for i, n in enumerate(p.names) if n in KINDS}
     out = {'Scalar': set(), 'Vector': set(), 'Texture': set()}
-    for o in range(0, len(t) - 16, 4):
+    # the texture-expression block (u32 count, then {FName class, number, [param FName, number,] texture ref}) is
+    # not 4-byte aligned in the cooked resource (MonitorScreen_Parent_MAT: offset 2 mod 4; RE fc5672 §3) -> 2-byte scan
+    for o in range(0, len(t) - 16, 2):
         a, b = struct.unpack_from('>ii', t, o)
         if b == 0 and a in ids:
             ni, nn = struct.unpack_from('>ii', t, o + 8)

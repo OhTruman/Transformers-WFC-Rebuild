@@ -335,6 +335,8 @@ public:
     // key = owner actor, component path, or "<owner>|custom" / "<owner>|highlight"; hidden = SetHidden (no draw)
     void setMapEffectState(const std::string& key, bool active, bool hidden);
     void setActiveGameRules(const std::vector<std::string>& rules);   // Gameplay's active TnGameRules classes
+    void setMapClock(float t) { mapClock_ = t; hasMapClock_ = true; }  // Gameplay MapState clock
+    float mapTime() const { return hasMapClock_ ? mapClock_ : time_; }
     void setDestructibleState(const std::string& actor, int state);
     void drawMapPresentation();                                   // map FX + totems + destructible
     // map FX data (WfcMapFx.cpp)
@@ -370,7 +372,7 @@ private:
         float dynParam[4] = {1, 1, 1, 1}; bool hasDyn = false;
     };
     struct FxInstance {
-        std::string component, owner, system, role, requiredRule;
+        std::string component, owner, ownerClass, system, role, requiredRule;
         bool active = true, hidden = false, attached = true;
         float R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T[3] = {0, 0, 0};   // UE rows / translation
         uint32_t rng = 1;
@@ -391,6 +393,15 @@ private:
         core::Mat4 model; int state = 0; int stateMesh[2] = {-1, -1};
     };
     std::vector<MapProp> mapProps_;
+    int kothMesh_ = -1;
+    // ammo-crate PickupFactoryMesh (TnAmmoCratePickup.MeshComponentA): PROP_NEU_AmmoPickup_STAT, CullDistance 8000,
+    // PickupRotationRate yaw 10000 while available
+    struct PickupMeshRT { std::string owner; float T[3] = {0, 0, 0}; };
+    std::vector<PickupMeshRT> pickupMeshes_;
+    std::set<std::string> pickupMeshHidden_;
+    int ammoMesh_ = -1;
+    float pickupYaw(const std::string& ownerLower) const;
+    float mapClock_ = 0.0f; bool hasMapClock_ = false;
     std::unique_ptr<assets::SkinnedModel> totemModel_;
     int totemClip_ = -1;
     std::vector<core::Mat4> totemScratch_;

@@ -38,3 +38,5 @@ DES_IAC_Omega_Cover_p.Material.innerCyberParts_MATINST
 FX_Materials_p.Materials.Steam_Mat
 PROP_NEU_Pickups_p.EnergonTotem.Conquest_Ring_MATINST
 PROP_NEU_Pickups_p.EnergonTotem.PROP_NEU_EnergonTotem_MATINST
+FX_Materials_p.MatInst.CaptureZone_Reverse_MAT_INST
+PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_MATINST

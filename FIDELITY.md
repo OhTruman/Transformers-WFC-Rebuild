@@ -17,6 +17,45 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 05 — MP_IAC_STREETS NORMAL-PLAY MAP COMPLETION (2026-10-03)
+Provenance: AssetTools **883b94b..da67634** (render_index.json: mode_visual_state, tdm_render_state, pickup_factory_visuals,
+pickup_fx_components; STREETS_NATIVE_FIDELITY_M05), ReverseEngineering **940aa79** (flagA = bEnabled) and **fc05672**
+(MILESTONE04_STREETS_FIDELITY_REMAINING), Gameplay **d122ef4** (map clock / mode / per-actor / pickup state API).
+Marks: CONFIRMED / HIGH / PARTIAL / PROVISIONAL / UNKNOWN; VISUALLY VERIFIED = deterministic runtime capture inspected
+(not a comparison with the original game). Slice mode is TDM: with no Gameplay rules set, every rule-gated actor is hidden.
+
+**Correction to MILESTONE 04:** content glTFs (FX meshes, totem, KOTH ring, destructible states, ammo crate) carry the same
+Y-up local vertex layout as world.glb meshes. Their placement is P*A_ue*P (P = y<->z swap) without a winding flip. M04 drew them
+on their side, so the M04 destructible and totem captures were not valid. They are re-verified below.
+
+| Item | Original (WFC) | Source | Mark | Rebuild |
+|---|---|---|---|---|
+| Content-mesh placement | UE matrix in UE axes; glTF content Y-up | AssetTools glTF convention; world.glb cross-check | CONFIRMED | `ueRowsToGltf` = P*A*P, no winding flip. Totems, KOTH ring, destructible, crate and FX meshes are upright (VISUALLY VERIFIED) |
+| Map clock | Gameplay MapState seconds since GameplayStarted | Gameplay d122ef4 `setMapClock` | CONFIRMED API | movers, totem idle animation and pickup spin are evaluated at `mapTime()` (renderer clock only as fallback) |
+| Domes x3 / SkyBeam x3 | 15 deg/s yaw; 9.0022 s Matinee sway (keys 0 / 4.5 / 9 s) | streets_movers.json | CONFIRMED | moving geometry VISUALLY VERIFIED (dome_t1/t2, sky_t0/t45) |
+| Mode visibility (TDM) | 19 actors hidden: 4 bases (collide), 3 totems, 5 KOTH zones, 2 flag + 1 bomb factories (Disabled), 4 capture/plant points (no mesh) | render_index tdm_render_state | CONFIRMED | rule-gated plus `setActorHidden`. Audit: 4 bases / 3 totems intentionally invisible; flag/bomb effects intentionally invisible; nothing reported missing |
+| KOTH active-zone ring | template ActiveMeshComponent0 pTorus1_STAT, zone DrawScale3D (1,1,2), CaptureZone_Reverse_MAT_INST | render_index | CONFIRMED | drawn only for the zone Gameplay unhides (VISUALLY VERIFIED koth_dm / koth_active) |
+| Domination totems | NEU_EnergonTotem_SKEL + Conquest_Ring_MATINST (additive unlit, EnergonColor (1,1,1), intensities 5 / 2); StandBy idle animation | render_index; MIC | CONFIRMED | DOM only; upright and animating (VISUALLY VERIFIED). The saturated white ring is the authored neutral colour. Capture recolour (EnergonColor = CaptureColor[team], RE runtime semantics) needs a Gameplay DOM-ownership hook: not wired [PARTIAL, DOM only] |
+| Pickup FX (45 particle components) | 8 Steam_Sm_FX + 37 pickup PSCs; 27 drawn while available, 24 in TDM; 10 Pickup_FX copies on health/overshield never attached | render_index pickup_fx_components; RE 940aa79 | CONFIRMED data / module semantics HIGH | flagA = bEnabled (RE HIGH) makes every emitter determinate, so all are simulated. Audit: emitters 32 drawn / 13 intentionally invisible / 0 unknown, matching AssetTools' 24 + 8 / 10 + 3 |
+| Pickup beam | SetPickupVisible -> ActivateSystem, SetPickupHidden -> Deactivate | decompiled script | CONFIRMED | `setMapEffectState("<factory>|custom/highlight")`; ammo light-volume beam measured (pixel diff with FX on vs off) and VISUALLY VERIFIED available -> taken -> respawn |
+| Ammo crate mesh | TnAmmoCratePickup.MeshComponentA PROP_NEU_AmmoPickup_STAT, CullDistance 8000, yaw 10000 UU/s, CastShadow false | render_index pickup_factory_visuals | CONFIRMED mesh / attach offset UNKNOWN | drawn at the factory origin and hidden with the custom effect; spin phase continuous from map start [PROVISIONAL]; native attach offset [UNKNOWN, AssetTools] |
+| Health / overshield | HealthPickup_FX / OvershieldPickup_FX mesh emitters | decoded systems | CONFIRMED data | energon cube / shield mesh emitters drawn with the mesh material (bOverrideMaterial without a material: fallback rule UNKNOWN, mesh material used) |
+| Flag / bomb factories | at-rest visual | — | UNKNOWN (AssetTools) | not drawn (Disabled in TDM anyway) |
+| Placeholder content | — | — | — | graybox pickups (WFC_GRAYBOXPICKUPS) and the weapon-test dummy box (WFC_DAMAGETARGET) are no longer spawned in the slice |
+| DefaultMaterial BSP | 62 surfaces / 87 nodes explicitly reference EngineMaterials.DefaultMaterial | AssetTools M05 §1; RE fc05672 §1 | CONFIRMED data | drawn as authored. The partly visible ceiling (BRUSH_11694) contributes 255-812 px at luminance 4-7 in its views; the BRUSH_9457 wall is mesh-enclosed from the tested cameras. The DefaultMaterial texture is null in the cooked material [PARTIAL]; no substitute |
+| Arch black vertex-lit patch | 30/522 samples zero in all three coefficients; sibling 15855_SMC zero at 28 of the same | RE fc05672 §2 | CONFIRMED authentic | left as authored |
+| MonitorScreen family | two panned ScreenText layers, Time-only, Screen_Color, Edge_Burn; no render target / movie / Kismet | RE fc05672 §3 | CONFIRMED | translation unchanged. Verifier fixed: the compiled texture-expression block is at offset 2 mod 4 and is now scanned. Materials 216 / 216 match (was 213). Active and Purple screens scroll (VISUALLY VERIFIED) |
+| BSP without lightmaps | 616 nodes LightMapType 0; RE: 26 nodes (~3,694 m2) visible, west perimeter x = -3840 facing -X plus 2 +Y faces at Y = -26624 | RE fc05672 §6 | PARTIAL | runtime: the gameplay viewpoints nearest to them (west team starts x = 19.9 m, north pickups z = -284 m) see placed meshes there, not BSP. Viewed from their front side, the faces render near-black. Question for RE below |
+| Culling | no cull distance / LOD / volumes / streaming | AssetTools M05 §2, §6 | CONFIRMED | baked-placement frustum cull vs WFC_NOFRUSTUMCULL: 60 nav views, 0 px different. Back-face (WFC_NOCULL) diffs are only back sides of single-sided light planes / sky dome seen from inside geometry. Winding vs normals agree 99.95% on all 1,952 instances (mirrored min 0.948) |
+| Dark spawn wall (FFA start 15650) | VentWall_7168 lightmap scale 0.05 on all coefficients | world.glb extras + lighting.json | CONFIRMED authentic | authored dark lighting, not a defect |
+
+**Questions for RE / AssetTools (exact):**
+1. Unlit BSP (fc05672 §6): the 26 "visible" west-perimeter nodes have a front normal of -X in glTF and render only from x < -38.4 m. Every nav/start viewpoint is at x >= 19.9 m. Which viewpoint sees their front side? Is the orientation in glbray's visibility test front-facing?
+2. TnPickupFactory.SetPickupMesh native attach offset for the ammo crate (render_index placement PARTIAL).
+3. Pickup spin phase: does the factory yaw reset on respawn, or run continuously?
+4. Flag / bomb factory at-rest visual (only needed for CTF / EXT).
+5. Mesh-emitter bOverrideMaterial with no material set: does it use the mesh material?
+
 ## MILESTONE 04 — MP_IAC_STREETS LIVING-WORLD PRESENTATION + CORRECTED MAP (2026-10-03)
 Provenance: AssetTools **a23c675** (complete-map manifests: streets_rebuild_diff / movers / kismet / lighting_audit,
 render_index, map_fx) and **8d8195e** (StaticMeshCollectionActor component transforms S(Scale*Scale3D)*R*T*Parent,
