@@ -3,6 +3,16 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 04 ADDENDUM (2026-10-03) — map FX runtime yielded to Rendering
+- **LevelFx removed:** Rendering 411c970 (WfcMapFx) simulates and draws the 8 steam emitters and pickup effects.
+- **PickupPresentation:** now the pickup sound only (`onTaken`); effect state is Rendering's `setMapEffectState`.
+  The integration glue is in FIDELITY.md.
+- **Objective beam:** confirmed for flag/bomb (RE 00dcb20); the conflict is resolved.
+- **Validation:**
+  - suite 557/0; audio-attach 325/0/11 (0 player-owned);
+  - wfc_fidelity 194/0/19; probe 31/0/1;
+  - sustained 5.3–14.3 ms.
+
 ## SYSTEMS MILESTONE 04 (2026-10-03) — MP_IAC_Streets world systems (AssetTools a23c675)
 - **Ambient bed:** all 70 emitters play natively (auto-play once at level start, per-cue kKillFarthest
   registration, line/volume re-play). 50 of 70 sound, because 4 point cues have more emitters than their limit.

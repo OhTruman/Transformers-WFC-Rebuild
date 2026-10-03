@@ -555,19 +555,13 @@ static void testAuthored() {
         const PP::FactoryDef& d = PP::def(i);
         bool custom = d.kind == PP::Kind::Health || d.kind == PP::Kind::OverShield;
         bool objective = d.kind == PP::Kind::ObjectiveFlag || d.kind == PP::Kind::ObjectiveBomb;
-        CHECK(pp.effectState(i).customActive == custom && pp.effectState(i).highlightActive == d.highlightFx,
-              "%s spawn (PreBeginPlay SetPickupVisible): custom %d, highlight %d", d.actor,
-              (int)pp.effectState(i).customActive, (int)pp.effectState(i).highlightActive);
         CHECK(!d.pickupSound || cues.hasCue(d.pickupSound), "%s PickupSound %s in table", d.actor, d.pickupSound ? d.pickupSound : "-");
-        CHECK(d.pickupEffectAttached == !custom, "%s PickupEffect attachment", d.actor);
+        CHECK(objective || d.pickupSound != nullptr, "%s has an authored PickupSound", d.actor);
+        CHECK(d.pickupEffectAttached == !custom, "%s PickupEffect attachment (authored data)", d.actor);
+        // RE 00dcb20: ShouldDisplayHighlightFx True on TnAmmoCrate and TnWeaponPickupFactory (flag / bomb inherit it).
         CHECK(d.highlightFx == (d.kind == PP::Kind::AmmoCrate || objective), "%s ShouldDisplayHighlightFx", d.actor);
         CHECK((d.requiredGameRule != nullptr) == objective, "%s RequiredGameRuleClass", d.actor);
-        pp.setPickupHidden(i);
-        CHECK(!pp.effectState(i).customActive && !pp.effectState(i).highlightActive && pp.effectState(i).customHidden == custom,
-              "%s SetPickupHidden", d.actor);
-        pp.setPickupVisible(i);
-        CHECK(pp.effectState(i).customActive == custom && pp.effectState(i).highlightActive == d.highlightFx,
-              "%s SetPickupVisible: highlight %d", d.actor, (int)d.highlightFx);
+        CHECK(PP::find(d.actor) == i, "%s found by actor name", d.actor);
     }
     // PickupSound is attached to the recipient pawn: its voices follow the pawn.
     Vec3 pawn{10, 0, 0};
@@ -578,9 +572,7 @@ static void testAuthored() {
     int first = rec.n;
     game::SoundCues::Emitter recipient{pawn, 0, {0, 0, 0}, ""};
     int id = pp.onTaken(PP::def(0).actor, cues, recipient, 5.0f);
-    CHECK(pp.effectState(0).highlightActive == false && PP::find("TnAmmoCratePickupFactory_10561") == 0, "onTaken hides by actor name");
-    CHECK(pp.onRespawned(PP::def(0).actor) && pp.effectState(0).highlightActive, "onRespawned re-activates the beam");
-    CHECK(!pp.onRespawned("NoSuchFactory") && pp.onTaken("NoSuchFactory", cues, recipient, 5.0f) == -1, "unknown factory ignored");
+    CHECK(pp.onTaken("NoSuchFactory", cues, recipient, 5.0f) == -1, "unknown factory ignored");
     CHECK(id >= 0 && rec.n > first, "ammo pickup sound plays (%d voices)", rec.n - first);
     pawn = Vec3{14, 0, 3};
     for (int k = 0; k < 3; ++k) cues.tick(1.0f / 60.0f);

@@ -17,6 +17,53 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 04 SYSTEMS ADDENDUM — MAP FX OWNERSHIP TO RENDERING; OBJECTIVE BEAM (2026-10-03, agents/systems)
+
+**Sources:**
+* Rendering `agents/rendering` 411c970 (read-only): WfcMapFx simulates the 8 Steam_Sm_FX level emitters and
+  the pickup effects from the decoded module streams, and owns their script state through `setMapEffectState`.
+* RE `00dcb20` `notes/MILESTONE04_STREETS_PICKUP_OBJECTIVE_PRESENTATION.md`.
+
+**Ownership decision (user):** Systems yields the map FX runtime to Rendering.
+* **Removed:** `src/game/LevelFx.{h,cpp}` (the Systems Steam_Sm_FX simulation, the M04 Steam_Mat handoff) and
+  its World calls. On this branch alone the steam is therefore not drawn until Rendering 411c970 is integrated;
+  that is intended, to avoid double steam.
+* **PickupPresentation is now the pickup SOUND only:**
+  * the authored factory table (gen_pickups.py) plus `onTaken(actor, cues, receiverEmitter, dist)` →
+    Inventory.AnnouncePickup PlaySound on the receiving pawn;
+  * the effect state (reset / SetPickupHidden / SetPickupVisible / onRespawned / effectState) is removed:
+    Rendering's `setMapEffectState` owns it;
+  * Respawned events need nothing from Systems (no respawn sound).
+* **Integration glue** (World::tick, Gameplay pickup events):
+  ```
+  for (const PickupEvent& e : pickupEvents_)
+      if (e.type == PickupEvent::Type::Taken)
+          pickupFx_.onTaken(pickupFactories_[(size_t)e.factory]->name().c_str(), cues_, atPawn(),
+                            core::length(e.receiverPos - listenerPos_));
+  ```
+  Exactly one lane plays the PickupSound: Systems, from its authored table. Gameplay's
+  `PickupEvent::pickupSound` must not be played as well.
+
+**Objective highlight beam [CONF, RE 00dcb20]:**
+* `ShouldDisplayHighlightFx = True` is authored on `TnWeaponPickupFactory`, and the flag and bomb objective
+  factories inherit it. The AssetTools value (already in PickupPresentation.inc) is right; RE's earlier "False"
+  was wrong.
+* The M04 "authored-data conflict" entry is resolved. Objectives only exist in CTF / EXT (Disabled in other
+  modes). This doesn't affect Systems: objective pickups play no beam-related sound.
+
+**Still UNKNOWN (RE 00dcb20 §3 did not reach them):**
+* equal-priority FMOD voice stealing;
+* whether a listener exists at the native level-start ambient registration.
+
+**Validation:**
+* suite 557 pass / 0 fail (the effect-state checks were removed with the code; the authored-data and sound checks
+  remain);
+* audio-attach 325 / 0 FAIL / 11 KNOWN (all `PP_DECO_MECH_*` zone pools; 0 player-owned);
+* wfc_fidelity 194/0/19; collision 0 mismatches; probe 31/0/1;
+* sustained fire 5.3–14.3 ms (mean 8.7), no errors.
+
+---
+
 ## MILESTONE 04 SYSTEMS — MP_IAC_STREETS WORLD SYSTEMS (2026-10-03, agents/systems)
 
 **Sources:** AssetTools **a23c675** `manifests/mp_iac_streets_complete.json` (counts, presentation-vs-mode
@@ -99,7 +146,7 @@ ExtractedAssets `audio.json` / `map_fx.json` / `gameplay.json` / `spawnpoints.js
   overrides only DelayMax 8.
 * The existing implementation already matched; nothing changed.
 
-### 4. Map FX state / lifetime
+### 4. Map FX state / lifetime (SUPERSEDED by the M04 addendum: Rendering owns the map FX runtime)
 * **The 8 Steam_Sm_FX level emitters [CONF]:** bAutoActivate true, CullDistance 300000 UU (never reached), no
   Kismet state changes, and they loop forever. They are simulated by LevelFx as before.
 * **Rendering handoff:** on Rendering's material path, LevelFx now passes `FX_Materials_p.Materials.Steam_Mat`
@@ -127,9 +174,8 @@ ExtractedAssets `audio.json` / `map_fx.json` / `gameplay.json` / `spawnpoints.js
   ```
   * Gameplay's `PickupEvent::pickupSound` duplicates the authored cue. Systems plays from its own table, so the
     sound must not also be played by Gameplay.
-* **Authored-data conflict (not slice-relevant):** AssetTools reports the flag/bomb objective factories inherit
-  ShouldDisplayHighlightFx **true**, while RE P2 says they inherit **false**. Objectives are not instantiated in
-  the slice's mode.
+* **Objective beam:** RESOLVED by RE 00dcb20. Flag and bomb inherit ShouldDisplayHighlightFx **true** from
+  TnWeaponPickupFactory, so the AssetTools value is right.
 
 ### 6. Moving world sources
 * `streets_movers.json` references no sound. No mover sound exists in the code: none for the domes, SkyBeam or
@@ -181,7 +227,7 @@ ExtractedAssets `audio.json` / `map_fx.json` / `gameplay.json` / `spawnpoints.js
   * the native particle mesh-material fallback.
 * **Gameplay:** merge the pickup-event glue above; vehicle jump.
 * **Rendering:** Steam_Mat and pickup FX through the material path.
-* **AssetTools / RE:** the objective ShouldDisplayHighlightFx conflict.
+* **AssetTools / RE:** the objective ShouldDisplayHighlightFx conflict (RESOLVED, RE 00dcb20).
 
 ---
 

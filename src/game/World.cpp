@@ -119,7 +119,6 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     mapMesh_ = renderer.uploadMesh(mapMesh);
     fx_.load(renderer, root + "/../content/");
     fx_.loadMeshes(renderer, root + "/../content/");
-    levelFx_.load(renderer, root + "/Maps/MP_IAC_Streets/map_fx.json", root + "/../content/");
     vehicleFx_.load(renderer, root + "/../content/");
     player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
@@ -727,7 +726,6 @@ void World::tick(float dt) {
         core::Mat4 ms;
         bool have = weaponSocketWorld("MuzzleFlash", ms);
         sysprof::Scope sp(sysprof::FxTick);
-        levelFx_.tick(dt);
         fx_.tick(dt, have ? &ms : nullptr, collision_.valid() ? &collision_ : nullptr);
     }
     // Event-driven audio via edge detection on pawn state.
@@ -764,12 +762,11 @@ void World::tick(float dt) {
             ambT = 0.0f;
             audio::MixStats ms;
             bool have = audio_ && audio_->mixStats(ms);
-            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d (max %d, dropped %d, stolen %d) wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block levelfx=%zu",
+            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d (max %d, dropped %d, stolen %d) wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block",
                      ambient_.zoneName(), ambient_.activeEmitters(), ambient_.emitterCount(), ambient_.oneShotsPlayed(),
                      cues_.liveInstances(), cues_.occludedInstances(), occlusionRays_ / 0.5f, cues_.pendingEvents(), have ? ms.voices : -1,
                      have ? ms.peakVoices : -1, have ? ms.droppedVoices : -1, have ? ms.stolenVoices : -1, have ? ms.wetVoices : -1,
-                     have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f,
-                     levelFx_.liveParticles());
+                     have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f);
             occlusionRays_ = 0;
         }
         cues_.tick(dt);
@@ -805,7 +802,7 @@ void World::draw(render::IRenderer& r) const {
             r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
     }
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene).
-    { sysprof::Scope sp(sysprof::DrawFx); levelFx_.draw(r); fx_.draw(r); }
+    { sysprof::Scope sp(sysprof::DrawFx); fx_.draw(r); }
     { sysprof::Scope sp(sysprof::DrawVfx); vehicleFx_.draw(r); }
     sysprof::cueInst = cues_.liveInstances(); sysprof::cuePending = cues_.pendingEvents();
     sysprof::frame(fx_.liveParticles(), fx_.liveMeshes());
