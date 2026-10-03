@@ -147,7 +147,7 @@ std::vector<std::string> MapState::moverActorNames() {
 
 bool MapState::load(const std::string& path, MatchMode mode) {
     mode_ = mode;
-    movers_.clear(); objectives_.clear(); modeActors_.clear(); euler_.clear();
+    movers_.clear(); objectives_.clear(); modeActors_.clear(); euler_.clear(); mdv_.clear();
     // Rotating domes (ART level) [CONF streets_movers.json]: RotationRate Yaw 2730 UU/s.
     struct Dome { const char* actor; float x, y, z; };
     const Dome domes[] = {{"StaticInterpActor_15810", 12027.0f, -51121.1015625f, -70664.140625f},
@@ -203,6 +203,7 @@ bool MapState::load(const std::string& path, MatchMode mode) {
             o.pos = {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
             o.yawDeg = list[i]["yaw_deg"].asFloat();
             o.markerClass = oc.markerClass; o.markerTypeString = oc.typeStr; o.markerString = oc.str; o.requiredRule = oc.rule;
+            o.gateRule = oc.gate;
             o.activeInMode = hasRule(oc.gate);
             objectives_.push_back(o);
         }
@@ -212,9 +213,9 @@ bool MapState::load(const std::string& path, MatchMode mode) {
     // Mode-dependent visibility (BASE Kismet SeqCond_GameRuleActive -> SeqAct_ToggleHidden UnHide).
     const assets::Json& mdv = g["mode_dependent_visibility"];
     for (size_t r = 0; r < mdv.size(); ++r) {
-        const std::string& rule = mdv[r]["rule"].asString();
-        bool active = hasRule(rule);   // SeqCond_GameRuleActive: exact rule class
-        bool unhide = mdv[r]["action"].asString() == "UnHide";
+        MdvRule rr;
+        rr.rule = mdv[r]["rule"].asString();
+        rr.unhide = mdv[r]["action"].asString() == "UnHide";
         const assets::Json& t = mdv[r]["targets"];
         for (size_t i = 0; i < t.size(); ++i) {
             const std::string& a = t[i]["actor"].asString();
@@ -225,13 +226,15 @@ bool MapState::load(const std::string& path, MatchMode mode) {
                 n.actor = a; n.mesh = t[i]["mesh"].asString();
                 const assets::Json& L = t[i]["location_gltf"];
                 n.pos = {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
-                n.visible = !t[i]["initially_hidden"].asBool(true);
+                n.visible = n.initialVisible = !t[i]["initially_hidden"].asBool(true);
                 modeActors_.push_back(n);
                 va = &modeActors_.back();
             }
-            if (active) va->visible = unhide;
+            rr.actors.push_back(a);
         }
+        mdv_.push_back(rr);
     }
+    applyModeVisibility();
     int vis = 0; for (auto& a : modeActors_) vis += a.visible;
     LOG_INFO("mapstate: mode %s, %zu movers, %zu objectives, %zu mode-dependent actors (%d visible), Matinee %.4f s",
              gameModeName(mode_), movers_.size(), objectives_.size(), modeActors_.size(), vis, matineeLength_);
@@ -281,22 +284,56 @@ void MapState::applyObjectiveStates() {
     }
     kothActive_ = -1;
     if (!koth.empty()) {
-        kothRng_ = kothRng_ * 1664525u + 1013904223u;                  // MatchStarting: random initial zone
+        // MatchStarting: the first zone picks RandRange(-1, len(AllOtherZones)): itself or one of the others [CONF; the
+        // integer distribution of RandRange is approximated as uniform over all zones].
+        kothRng_ = kothRng_ * 1664525u + 1013904223u;
         int pick = koth[(kothRng_ >> 8) % koth.size()];
         ObjectiveObject& z = objectives_[(size_t)pick];
         z.state = ObjectiveObject::State::Active; z.visible = true; z.touchable = true;
         z.markerAdded = true; z.markerShouldDisplay = true;            // KOTH: displayed while Active
+        z.kothVisited = true;                                          // Active entry: HasBeenActive
         kothActive_ = pick;
         kothTimeLeft_ = kothZoneActiveTime_;
     }
 }
 
+void MapState::applyModeVisibility() {
+    for (ModeVisibleActor& a : modeActors_) a.visible = a.initialVisible;
+    for (const MdvRule& r : mdv_)
+        if (hasRule(r.rule))                                   // SeqCond_GameRuleActive: exact rule class
+            for (const std::string& n : r.actors)
+                for (ModeVisibleActor& a : modeActors_) if (a.actor == n) a.visible = r.unhide;
+}
+
+void MapState::setMode(MatchMode mode) {
+    mode_ = mode;
+    for (ObjectiveObject& o : objectives_) o.activeInMode = hasRule(o.gateRule);
+    applyObjectiveStates();
+    applyModeVisibility();
+    LOG_INFO("mapstate: mode -> %s", gameModeName(mode_));
+}
+
+void MapState::resetForNewMatch() {
+    clock_ = 0.0f;
+    for (ObjectiveObject& o : objectives_) { o.animClock = 0.0f; o.kothVisited = false; }
+    applyObjectiveStates();
+    applyModeVisibility();
+    pose();
+}
+
 void MapState::activateNewKothZone() {
     if (kothActive_ < 0) return;
-    std::vector<int> others;
+    // ActivateNewZone [CONF RE MILESTONE05 §3]: candidates = other zones not HasBeenActive; if none, clear HasBeenActive
+    // on every zone and pick a random other zone. Every zone is visited once per cycle; no back-to-back repeat.
+    std::vector<int> others, fresh;
     for (size_t i = 0; i < objectives_.size(); ++i)
-        if (objectives_[i].cls == "TnKingOfTheHillZone" && (int)i != kothActive_) others.push_back((int)i);
+        if (objectives_[i].cls == "TnKingOfTheHillZone" && (int)i != kothActive_) {
+            others.push_back((int)i);
+            if (!objectives_[i].kothVisited) fresh.push_back((int)i);
+        }
     if (others.empty()) return;
+    if (fresh.empty()) { for (ObjectiveObject& o : objectives_) if (o.cls == "TnKingOfTheHillZone") o.kothVisited = false; fresh = others; }
+    others = fresh;
     ObjectiveObject& old = objectives_[(size_t)kothActive_];
     old.state = ObjectiveObject::State::KothInactive; old.visible = false; old.touchable = false;
     old.markerAdded = false; old.markerShouldDisplay = false;      // Inactive.BeginState removes the marker
@@ -305,6 +342,7 @@ void MapState::activateNewKothZone() {
     ObjectiveObject& z = objectives_[(size_t)kothActive_];
     z.state = ObjectiveObject::State::Active; z.visible = true; z.touchable = true;
     z.markerAdded = true; z.markerShouldDisplay = true;            // Active.BeginState adds the marker
+    z.kothVisited = true;
     kothTimeLeft_ = kothZoneActiveTime_;
 }
 

@@ -75,6 +75,82 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 20b — MP_IAC_STREETS TDM SESSION RUNTIME (2026-10-03, gameplay agent)
+RE: MILESTONE05_FRONTEND_MATCH_BOOTSTRAP §3, §5, §6 and MILESTONE05_GAMEPLAY_UNKNOWNS §3, §5, §6. Test:
+`WFC_TDMTEST` — **30 / 30 checks** through World (real pawn, hitscan, pickups, map state).
+
+### Launch contract (Frontend / Integration -> Gameplay)
+- `MatchLaunch::fromURL` takes the original StartLevel URL, e.g.
+  `MP_IAC_Streets_Base_m?…?GameModeTag=TDM?PointsToWin=40?TimeLimit=900.00…`. Missing keys keep the TnOnlineGameSettings
+  defaults.
+- `World::launchMatch(MatchLaunch)`:
+  - validates the map: only MP_IAC_Streets is loaded, anything else is rejected;
+  - applies the mode's authored world state (`MapState::setMode`, exact HasRule gates, Kismet UnHide);
+  - resets the map as a fresh level load (map clock 0, objectives and KOTH re-initialised, destructibles to state 0,
+    pickups back to Pickup);
+  - starts the match.
+- Runtime: `WFC_MATCH_URL=<url>` or `WFC_MATCH=TDM|DM`.
+- Other modes set map state only; their match rules are not implemented (by design for this pass).
+- **CONFIRMED.** A new match = MatchOver -> ReturnToGameLobby -> ServerTravel, i.e. a fresh level.
+
+### Combat foundation
+- **CONFIRMED.**
+  - TnPlayerPawn.TakeDamage discards teammate damage except TnDamageTypeAOE.
+  - Damage reaching the pawn enters its DamageHistory, used for ScoreAssists (first other damager, damage / HealthMax).
+  - Lethal damage -> Game.Killed(instigator).
+  - Segmented health 550 + overshield 550; the overshield part is consumed first.
+  - Ion Blaster InstantHitDamage 15 with range falloff, unchanged.
+- **Death / respawn (CONFIRMED / HIGH).**
+  - The dead pawn is removed from simulation and drawing until RestartPlayer.
+  - RestartPlayer = a fresh TnPlayerPawnMultiplayer: robot form, any fold cancelled, default vehicle state, HealthMax, no
+    overshield, Ion Blaster 50 / 150 (InitialReserveAmmoCount), at the chosen start with its authored yaw, after the 5 s
+    wave delay.
+  - Death does not reset pickup timers; only StartMatch Resets factories.
+- **UNKNOWN / PARTIAL.**
+  - Segment regeneration.
+  - Death animation / ragdoll and the Death camera strategy (the pawn is simply hidden).
+  - PlayerRestartDelay (no script reader).
+  - The downed state (TnSkillCanBeDowned) is not modelled.
+
+### Test participants (separated from shipped behaviour)
+- `MatchOpponent`: a static synthetic participant with a Match slot, the robot cylinder and segmented health. It
+  spawns / dies through Match.
+- It exists only under `WFC_TDMTEST` / `WFC_MATCHTEST` or the explicit diagnostic `WFC_MATCH_OPPONENTS=N` (drawn as
+  boxes). No AI.
+
+### HUD state output (no drawing)
+- `World::hudState()` -> `HudGameState`, named after the original bindings:
+  - health / HealthMax / overshield / active segment;
+  - clip / reserve ammo;
+  - form / transforming;
+  - TimeToRespawn;
+  - match state / GRI game status (2 / 3 / 5), pre-match countdown, RemainingTime / ElapsedTime;
+  - GoalScore, team scores, TeamID, personal score / kills / deaths / assists;
+  - Winner and the result text ("Your team won" / "Your team lost" / "Tie game").
+- **TDM player tags** (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled; enemy
+  markers disabled without the reveal buffs [CONF RE §5].
+- Match events (`World::matchEvents()`): countdown, start, spawn, kill, progress announcements (switches 0–2, 5–7),
+  nearly complete, end, return.
+
+### Map / mode state
+- TDM:
+  - totems, KOTH zones, flag / bomb factories and objective bases are hidden (the actors remain);
+  - the 24 ordinary pickups (no rule gate authored) stay active;
+  - TnTeamPlayerStart for the player's team;
+  - ScoreKillsTDM present.
+- KOTH rotation now follows RE §3 [CONF]: 60 s; candidates are zones not yet active this cycle; the cycle resets when all
+  have been active; no back-to-back repeat.
+
+### Validation (all on the corrected Streets data)
+- WFC_TDMTEST 30 / 30.
+- WFC_MATCHTEST: TDM to 40, clock tie at 125 s with announcements 120 / 60 / 30, DM to 20.
+- WFC_MODETEST: KOTH visited cycle.
+- Harness 179 / 2 known / 21.
+- VEHTEST, TRAVERSE (160 runs, 0 falls), PICKUPTEST (30.02 / 60.02 / 119.99 s) unchanged.
+- Firing sim 3.1 ms.
+
+---
+
 ## PASS 20a — BOOST->ROBOT FALL-THROUGH, VEHICLE/ROBOT WALL PROBES, MATCH CORE, CAMERA (checkpoint) (2026-10-03, gameplay agent)
 RE: TARGETED_PASS 1e, MILESTONE05_GAMEPLAY_UNKNOWNS (§1, §2, §6), MILESTONE05_FRONTEND_MATCH_BOOTSTRAP §5, MILESTONE04_CAMERA_COLLISION (990f3e7).
 

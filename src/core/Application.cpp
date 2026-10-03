@@ -92,9 +92,19 @@ bool Application::init() {
     if (std::getenv("WFC_MATCHTEST")) { runMatchTest(); return false; }        // measurements only
     if (std::getenv("WFC_CAMTEST")) { runCameraTest(); return false; }         // measurements only
     if (std::getenv("WFC_CHAOS")) { runChaosTest(); return false; }            // measurements only
+    if (std::getenv("WFC_TDMTEST")) { runTdmSessionTest(); return false; }     // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
-    if (const char* mm = std::getenv("WFC_MATCH")) world_.startLocalMatch(game::MatchSettings::forMode(mm));
+    // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
+    {
+        game::MatchLaunch launch;
+        bool want = false;
+        if (const char* u = std::getenv("WFC_MATCH_URL")) want = game::MatchLaunch::fromURL(u, launch);
+        else if (const char* mm = std::getenv("WFC_MATCH")) { want = game::MatchLaunch::fromURL(std::string("MP_IAC_Streets?GameModeTag=") + mm, launch); }
+        if (want && world_.launchMatch(launch))
+            if (const char* n = std::getenv("WFC_MATCH_OPPONENTS"))   // diagnostic only: static synthetic participants (drawn boxes)
+                for (int i = 0; i < std::atoi(n); ++i) world_.addMatchOpponent("Opponent" + std::to_string(i), true);
+    }
     gameMode_.begin(world_);
 
     window_->setMouseCaptured(true);
@@ -1251,6 +1261,145 @@ void Application::runChaosTest() {
     }
     LOG_INFO("CHAOS SUMMARY: %zu starts x 20 s (%ld ticks, %ld transform presses, %ld jumps, %ld boosts): %d runs under a floor, %d KillZ, %d stuck",
              nodes.size(), ticks, transforms, jumps, boosts, underRuns, killz, stuck);
+}
+
+// WFC_TDMTEST: a whole MP_IAC_Streets TDM session through World (the real pawn, hitscan, pickups, map state) with three
+// synthetic participants (test-only MatchOpponent). Checks: launch contract (URL), TDM map state, spawn / teams / starts,
+// friendly-fire filter, damage + overshield, a real Ion Blaster hitscan kill, assists, death mid-transform in vehicle form,
+// respawn state, pickup timers across death, score-limit end + HUD result, return, a second match without restarting
+// (scores reset, map reset), and the HUD state contract.
+void Application::runTdmSessionTest() {
+    const float dt = (float)clock_.stepSeconds();
+    auto& pc = world_.player().pawn();
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const char* what) { ++checks; if (!ok) ++fails; LOG_INFO("TDMTEST %s %s", ok ? "PASS" : "FAIL", what); };
+    auto run = [&](float secs) { for (int k = 0; k < (int)(secs / dt); ++k) { platform::InputFrame none; world_.handleInput(none, dt); world_.tick(dt); } };
+    // 1. Launch from the original URL form (PointsToWin override for test speed).
+    game::MatchLaunch L;
+    check(game::MatchLaunch::fromURL("MP_IAC_Streets_Base_m?PlaylistId=-1?PointsToWin=5?Game=TransContent.TnVersusGame?GameModeTag=TDM?TimeLimit=900.00?listen?MapId=508", L)
+          && L.map == "MP_IAC_Streets" && L.modeTag == "TDM" && L.settings.goalScore == 5 && L.settings.timeLimit == 900, "URL parsed: MP_IAC_Streets TDM goal 5 time 900");
+    game::MatchLaunch bad;
+    game::MatchLaunch::fromURL("MP_ESC_BrokenHope_Base_m?GameModeTag=TDM", bad);
+    check(!world_.launchMatch(bad), "unloaded map rejected");
+    check(world_.launchMatch(L), "launchMatch(TDM)");
+    // 2. TDM map state.
+    {
+        int visibleObjective = 0, visibleBases = 0;
+        for (const auto& o : world_.mapState().objectives()) visibleObjective += o.visible;
+        for (const auto& b : world_.mapState().modeVisibleActors()) visibleBases += b.visible;
+        int rules = 0; for (const auto& r : world_.mapState().gameRules()) rules += r == "TransGame.TnGameRules_ScoreKillsTDM";
+        check(visibleObjective == 0 && visibleBases == 0 && rules == 1, "TDM map state: totems / KOTH / flag / bomb / bases hidden, ScoreKillsTDM rule");
+        check(world_.pickupFactories().size() == 24, "24 ordinary pickup factories present");
+    }
+    // 3. Participants and spawn.
+    game::Match& m = world_.match();
+    int me = world_.localMatchPlayer();
+    auto* oA = world_.addMatchOpponent("Ally", false);
+    auto* oB = world_.addMatchOpponent("EnemyB", false);
+    auto* oC = world_.addMatchOpponent("EnemyC", false);
+    game::MatchOpponent* ally = nullptr; std::vector<game::MatchOpponent*> enemies;
+    int myTeam = m.players()[(size_t)me].team;
+    for (auto* o : {oA, oB, oC}) { if (m.players()[(size_t)o->matchPlayer()].team == myTeam && !ally) ally = o; else enemies.push_back(o); }
+    check(ally && enemies.size() == 2, "teams: 2 v 2 by PickTeam");
+    run(10.5f);
+    check(m.state() == game::Match::State::InProgress && !world_.localPlayerDead() && oB->spawned() && oC->spawned(), "match started after the 10 s countdown; all spawned");
+    {
+        int st = m.lastSpawnStart(me);
+        bool teamStart = st >= 0 && !m.starts()[(size_t)st].ffa && m.starts()[(size_t)st].team == myTeam;
+        check(teamStart, "local pawn at a TnTeamPlayerStart of its own team (initial cluster)");
+        float gy; core::Vec3 gn;
+        check(world_.collision()->groundHeight(pc.position().x, pc.position().z, pc.position().y + 0.5f, 1.0f, gy, gn) && std::fabs(gy - pc.position().y) < 0.05f, "spawned on the floor");
+        check(std::fabs(std::remainder(pc.yaw() - m.starts()[(size_t)st].yaw, 6.2831853f)) < 0.01f, "spawn yaw = authored start rotation");
+    }
+    // 4. Friendly fire filtered; enemy damage applies; overshield first.
+    float h0 = pc.health().current;
+    world_.applyMatchDamage(me, ally->matchPlayer(), 100.0f, false);
+    check(pc.health().current == h0, "teammate instant-hit damage discarded (TnPlayerPawn.TakeDamage)");
+    world_.applyMatchDamage(me, ally->matchPlayer(), 50.0f, true);
+    check(pc.health().current == h0 - 50.0f, "teammate AOE damage applies");
+    pc.health().heal(game::Health::HealType::AddOverShield, 1.0f);
+    check(pc.health().current == 1100.0f && pc.health().activeSegment() == 4, "overshield: HealthMax + 550, top segment");
+    world_.applyMatchDamage(me, enemies[0]->matchPlayer(), 300.0f, false);
+    check(pc.health().current == 800.0f && pc.health().overshield() == 250.0f, "enemy damage comes off the overshield first");
+    // 5. Real hitscan kill: enemy 12 m in front of the local pawn, fire the Ion Blaster through World::fireHitscan.
+    {
+        game::MatchOpponent* e = enemies[0];
+        core::Vec3 fwd = core::forwardFromYawPitch(pc.yaw(), 0.0f);
+        e->setPosition(pc.position() + fwd * 12.0f);
+        world_.applyMatchDamage(e->matchPlayer(), ally->matchPlayer(), 100.0f, true);   // ally AOE first (assist)
+        int shots = 0; int scoreBefore = m.players()[(size_t)me].score;
+        while (e->spawned() && shots < 200) {
+            core::Vec3 eye = pc.actorLocation() + core::Vec3{0, 0.5f, 0};
+            core::Vec3 tgt = e->position() + core::Vec3{0, 2.0f, 0};
+            world_.fireHitscan(eye, core::normalize(tgt - eye));
+            ++shots;
+        }
+        LOG_INFO("TDMTEST hitscan kill after %d Ion Blaster hits (InstantHitDamage 15, HealthMax 550)", shots);
+        check(!e->spawned() && m.players()[(size_t)me].score == scoreBefore + 1 && m.teamScore(myTeam) == 1 && m.players()[(size_t)me].kills == 1,
+              "Ion Blaster kill credited: +1 score, +1 team, +1 kill");
+        check(std::fabs(m.players()[(size_t)ally->matchPlayer()].assists - 100.0f / 550.0f) < 1e-3f, "assist = first other damager, 100 / HealthMax");
+    }
+    // 6. Pickup across death, then death mid-transform in vehicle form.
+    {
+        game::PickupFactory* hf = nullptr;
+        for (auto* f : world_.pickupFactories()) if (f->kind() == game::PickupFactory::Kind::Health) { hf = f; break; }
+        pc.health().current = 100.0f;
+        pc.setPosition(hf->position()); pc.velocity() = {0, 0, 0};
+        run(0.1f);
+        bool taken = !hf->available() && pc.health().current == 550.0f;
+        check(taken, "health pickup: full heal to HealthMax (SHT_AddAllSegments)");
+        pc.setForm(game::Form::Vehicle);
+        pc.beginTransform();                       // vehicle -> robot fold in progress
+        run(0.2f);
+        bool folding = pc.isTransforming();
+        int enemyScore = m.players()[(size_t)enemies[1]->matchPlayer()].score;
+        world_.applyMatchDamage(me, enemies[1]->matchPlayer(), 2000.0f, false);
+        check(folding && world_.localPlayerDead() && m.players()[(size_t)me].deaths == 1 &&
+              m.players()[(size_t)enemies[1]->matchPlayer()].score == enemyScore + 1, "death mid-transform: killer credited, local dead");
+        game::HudGameState hd = world_.hudState();
+        check(!hd.alive && hd.timeToRespawn > 4.0f && hd.timeToRespawn <= 5.0f, "HUD: dead, TimeToRespawn ~5 s");
+        run(5.3f);
+        check(!world_.localPlayerDead() && pc.form() == game::Form::Robot && !pc.isTransforming() && pc.health().current == 550.0f &&
+              pc.weapon().ammo == pc.weapon().magSize && pc.weapon().reserve == 150, "respawn: fresh robot pawn, 550 health, 50 / 150 ammo, no fold");
+        check(!hf->available(), "pickup factory still sleeping after the respawn (timers are not reset by death)");
+    }
+    // 7. Score limit (goal 5): local kills the remaining enemy repeatedly.
+    {
+        game::MatchOpponent* e = enemies[1];
+        int guard = 0;
+        while (m.state() == game::Match::State::InProgress && guard++ < 200) {
+            if (e->spawned()) world_.applyMatchDamage(e->matchPlayer(), me, 600.0f, false);
+            run(0.25f);
+        }
+        game::HudGameState hd = world_.hudState();
+        LOG_INFO("TDMTEST end: team %d-%d, me score %d kills %d deaths %d assists %.3f, result \"%s\"", hd.teamScore[0], hd.teamScore[1], hd.score,
+                 hd.kills, hd.deaths, hd.assists, hd.result.c_str());
+        check(m.state() == game::Match::State::MatchOver && m.teamScore(myTeam) == 5 && hd.result == "Your team won" && hd.gameStatus == 5,
+              "score limit 5 -> EndGame(Score), MatchOver, 'Your team won'");
+        run(15.2f);
+        check(!world_.matchActive(), "MatchOver 15 s -> ReturnToGameLobby handoff");
+    }
+    // 8. Second match without restarting: default TDM settings (40 / 900); scores reset, map reset.
+    {
+        world_.mapState();   // (map clock advanced during match 1)
+        float clockBefore = world_.mapState().clock();
+        game::MatchLaunch L2;
+        game::MatchLaunch::fromURL("MP_IAC_Streets_Base_m?GameModeTag=TDM", L2);
+        check(world_.launchMatch(L2), "second launch");
+        bool reset = m.teamScore(0) == 0 && m.teamScore(1) == 0 && m.players()[(size_t)me].score == 0 && m.players()[(size_t)me].deaths == 0;
+        check(reset && m.settings().goalScore == 40 && m.remainingTime() == 900, "second match: scores reset, goal 40, time 900");
+        bool pickupsBack = true; for (auto* f : world_.pickupFactories()) pickupsBack &= f->available();
+        check(pickupsBack && world_.mapState().clock() < 0.1f && clockBefore > 10.0f, "fresh level state: pickups available, map clock restarted");
+        bool desOk = true; for (auto* d : world_.destructibles()) desOk &= d->state() == 0;
+        check(desOk, "destructible back to state 0");
+        run(10.5f);
+        check(m.state() == game::Match::State::InProgress && !world_.localPlayerDead(), "second match starts and spawns");
+        game::HudGameState hd = world_.hudState();
+        check(hd.matchActive && hd.goalScore == 40 && hd.myTeam == myTeam && hd.healthMax == 550.0f && hd.clipAmmo == 50, "HUD state contract populated");
+        int allyTags = 0; for (const auto& t : hd.tags) allyTags += t.ally && t.drawn;
+        check(allyTags == 1, "player tags: one ally tag drawn, enemy markers disabled");
+    }
+    LOG_INFO("TDMTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 void Application::shutdown() {

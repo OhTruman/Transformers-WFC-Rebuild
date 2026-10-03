@@ -3,6 +3,13 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 20b (2026-10-03) — Streets TDM session runtime
+- Launch contract: original StartLevel URL -> World::launchMatch (map check, mode world state, fresh-level reset).
+- Combat: team filter (AOE only), DamageHistory/assists, kill credit, segmented health, fresh-pawn respawn.
+- HUD state (World::hudState) incl. player tags; KOTH rotation per RE §3.
+- Test-only MatchOpponent participants; WFC_TDMTEST 30/30 (incl. second match in-process).
+- Details: FIDELITY.md PASS 20b.
+
 ## GAMEPLAY PASS 20a (2026-10-03) — boost->robot fall-through fixed, wall probes, match core, camera (checkpoint)
 - Human bug fixed: boost -> robot no longer drops under Streets.
   - Recovered cylinder-size lerp + swept falling floor check.

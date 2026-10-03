@@ -26,6 +26,7 @@ private:
     void runMatchTest();
     void runCameraTest();
     void runChaosTest();
+    void runTdmSessionTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

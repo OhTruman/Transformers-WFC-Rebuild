@@ -86,6 +86,7 @@ void Match::begin(const MatchSettings& s) {
     for (bool& a : announced_) a = false;
     for (bool& a : killsAnnounced_) a = false;
     // TnSpawnPointManager.Initialize: InitialSpawn clusters become each faction's first active cluster.
+    for (Cluster& c : clusters_) c.iterator = 0;   // fresh level: SpawnIterator 0
     active_[0] = active_[1] = -1;
     for (size_t i = 0; i < clusters_.size(); ++i)
         if (clusters_[i].initialSpawn && (clusters_[i].faction == 0 || clusters_[i].faction == 1)) active_[clusters_[i].faction] = (int)i;
