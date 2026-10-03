@@ -15,6 +15,8 @@ file(GLOB_RECURSE COMMON_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/render/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/game/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/assets/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/frontend/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/ui/*.cpp"
 )
 
 # Platform layer is selected per target OS.
@@ -45,6 +47,19 @@ endif()
 
 set_target_properties(wfc_rebuild PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+# Headless frontend / game-flow tests (docs/FRONTEND.md): catalog, URLs, UI controller, boot -> match -> return.
+file(GLOB FRONTEND_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/frontend/*.cpp")
+add_executable(wfc_frontend_tests ${CMAKE_SOURCE_DIR}/tests/FrontendTests.cpp ${FRONTEND_SOURCES}
+    ${CMAKE_SOURCE_DIR}/src/core/Log.cpp)
+target_include_directories(wfc_frontend_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
+target_compile_options(wfc_frontend_tests PRIVATE -Wall -Wextra -Wno-unused-parameter)
+if(WIN32)
+    target_link_options(wfc_frontend_tests PRIVATE -static)
+endif()
+set_target_properties(wfc_frontend_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+enable_testing()
+add_test(NAME frontend COMMAND wfc_frontend_tests WORKING_DIRECTORY "${CMAKE_BINARY_DIR}")
 
 # Fidelity regression/measurement harness (tools/fidelity/README.md).
 option(WFC_BUILD_FIDELITY "Build the wfc_fidelity harness" ON)

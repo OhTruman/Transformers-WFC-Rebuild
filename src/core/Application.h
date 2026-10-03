@@ -5,19 +5,35 @@
 #include "game/World.h"
 #include "game/GameMode.h"
 #include "audio/Audio.h"
+#include <memory>
 
 namespace platform { class IWindow; }
 namespace render { class IRenderer; }
+namespace frontend { class FrontendRuntime; struct MatchLaunch; }
 
 namespace core {
 
 class Application {
 public:
+    Application();
+    ~Application();
     bool init();
     void run();
     void shutdown();
 
 private:
+    // Frontend boot (docs/FRONTEND.md): boot -> UI_FrontEnd_m -> lobbies -> match -> return. Legacy direct-to-match
+    // boot is kept for automation (WFC_BOOT=match, or any of the existing test variables).
+    static bool wantsFrontendBoot();
+    void runFrontend();
+    enum class MatchExit { Quit, ReturnToFrontend };
+    MatchExit runMatch();
+    bool loadMatch(const frontend::MatchLaunch& m);
+    void unloadMatch();
+    void drawFrontendFrame();
+    std::unique_ptr<frontend::FrontendRuntime> frontend_;
+    bool escWasDown_ = false;
+
     void updateTitleHud(double realDt);
     void runPickupTest();
     void runTraverseTest();

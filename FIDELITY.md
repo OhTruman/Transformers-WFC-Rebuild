@@ -17,6 +17,53 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## FRONTEND PASS 1 — APPLICATION FLOW: BOOT → FRONTEND → LOBBIES → MATCH → RETURN (2026-10-03, agents/frontend)
+Sources: RE MILESTONE05_FRONTEND_MATCH_BOOTSTRAP.md (f1ca8a5), RE binding decomp (TnOnlineActionScriptBinding),
+AssetTools FRONTEND.md + manifests/frontend_*.json (cc9773e). Full table: `docs/FRONTEND.md`.
+
+**CONFIRMED ORIGINAL (script / config / authored data):**
+- **Boot:** `[URL] Map=UI_FrontEnd_m`.
+- **Frontend Kismet order:** Black-Out (0.00105 s) → MovieLoader_GFX → `enterMovieSequence` (Logo_Activision →
+  Logo_Hasbro → Logo_HighMoon → FMV_intro) or `enterFrontEnd` → [FRONTEND START] → SetLoadingMovieFilename →
+  OnUIEvent(0) → `FrontEnd_GFX_1`.
+- **TnUIController:** states, OnUIEvent dispatch and per-subclass movies.
+- **Bridge names and bodies:** OpenPartyLobby, StringToGameTeamStatus (1/2/3/4, default 3), EditGameMode,
+  PlayPrivateGame, SetSelectedMapID, BeginLobbyExitCountdown → HostRequestsGameStart, QuitToMainMenu.
+- **URLs:**
+  - party lobby URL;
+  - BuildLobbyURL;
+  - match URL. It equals RE 3.1 character for character; the native-appended properties are HIGH.
+- **Game lobby:** private = host's choice; SelectRandomMap over compatible, enabled providers; short countdown 10 s.
+- **Loading text:** StartLoadingMovie kinds; SetLevelText(FriendlyName, "in <map>"); 3 × EngageText.
+- **Pause:** Escape / Start = `|onrelease showmenu` → OnUIEvent(6).
+- **Catalog:** map / playlist / settings catalog read at runtime from the manifests. 13 providers in ini order,
+  9 playlists in manager order.
+
+**HIGH:**
+- the MovieLoader branch (a native shim until the AS2 runtime runs the movie);
+- menu order = ini order;
+- PickTeam with no reservation = RandomInt(2);
+- map directory = MapFilename without `_Base_m`;
+- bPauseable false: the MP world keeps running while paused.
+
+**PARTIAL:**
+- Bink movies are not decoded: each logo / FMV reports Stopped at once.
+- **Presentation:** no GFx movie is drawn yet (the screen is black, with the state in the window title).
+- **Mapping:** the EditGameMode / PlayPrivateGame argument → settings class (GameSettingsCfgList not manifested).
+- **Not shown:** online warning prompts.
+- **Match URL:** AppendContextsToURL is omitted.
+- **Return path:** the match world is released by recreating renderer / audio; the old GL objects leak (Rendering
+  handoff).
+
+**PROVISIONAL:**
+- Match-start UI events (OnCharacterSelected → OnUIEvent(3)) fire immediately after load. Gameplay has no
+  PendingMatch, character select or countdown yet (handoff).
+
+**UNKNOWN:**
+- the UI_FrontEnd_m 3D scene (not exported);
+- the observed TDM loading tips: the shipped TransGame.int authors the same tip 26 times;
+- the Bink / GFx loading composite and close timing.
+
 ## MILESTONE 04 INTEGRATION PREVIEW — agents/systems 65daecd (2026-10-03)
 
 Read-only preview for the integration owner. `git merge-tree` computed the merges in memory (no refs, no worktree);

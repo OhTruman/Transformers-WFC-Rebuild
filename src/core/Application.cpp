@@ -5,6 +5,7 @@
 #include "platform/Window.h"
 #include "render/Renderer.h"
 #include "game/VehicleTests.h"
+#include "frontend/FrontendRuntime.h"
 #include "game/MapState.h"
 #include "game/Collision.h"
 #include "game/PickupFactory.h"
@@ -78,6 +79,21 @@ bool Application::init() {
     audio_ = audio::createAudio();
     if (std::getenv("WFC_DEBUGDRAW")) core::DebugFlags::get().enabled = true;
 
+    // Frontend boot: the match world is loaded later, from the frontend's match launch (Application_Frontend.cpp).
+    if (wantsFrontendBoot()) {
+        frontend_ = std::make_unique<frontend::FrontendRuntime>();
+        if (frontend_->init()) {
+            window_->setMouseCaptured(false);
+            mouseCaptured_ = false;
+            LOG_INFO("Init complete (frontend boot).");
+            return true;
+        }
+        LOG_WARN("frontend data unavailable; booting straight into the match");
+        frontend_.reset();
+    }
+    // Direct boot: WFC_MAP=<runtime map dir> selects the map (MP_IAC_Streets by default).
+    if (const char* mp = std::getenv("WFC_MAP")) world_.setMapName(mp);
+
     // Match mode (authored rule set; Deathmatch by default). WFC_GAMEMODE=DM|TDM|CTF|KOTH|EXT|DOM selects it until a
     // front end exists; the World applies the matching authored world state at load.
     if (const char* gm = std::getenv("WFC_GAMEMODE"))
@@ -103,8 +119,14 @@ bool Application::init() {
 }
 
 void Application::run() {
+    if (frontend_) { runFrontend(); return; }
+    runMatch();
+}
+
+Application::MatchExit Application::runMatch() {
     double last = nowSeconds();
     platform::InputFrame input;
+    platform::InputFrame pumped;   // frontend boot: raw platform frame (input may be cleared while a movie has focus)
 
     // Headless smoke test: WFC_SMOKE_FRAMES=N runs N frames then exits (for automated checks).
     long smokeFrames = 0;
@@ -128,8 +150,23 @@ void Application::run() {
         static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
         if (lockstep) realDt = 1.0 / 60.0;
 
-        if (!window_->pump(input)) break;
-        if (input.wasPressed(platform::Button::Quit)) break;
+        if (!window_->pump(frontend_ ? pumped : input)) break;
+        if (frontend_) input = pumped;
+        if (frontend_) {
+            // Frontend boot: Escape / Start is "|onrelease showmenu" (Xe-TransInput.ini) -> pause UI, not quit.
+            bool escDown = input.isDown(platform::Button::Quit);
+            if (escWasDown_ && !escDown) frontend_->flow().showMenu();
+            escWasDown_ = escDown;
+            frontend_->updateInMatch(input, (float)realDt);
+            if (frontend_->flow().quitRequested()) break;
+            if (frontend_->flow().wantsWorldUnload()) return MatchExit::ReturnToFrontend;
+            // A movie with focus (pause, end game) takes the input; the MP world keeps running (bPauseable false).
+            if (frontend_->flow().ui().state() != frontend::UIState::InGame) {
+                platform::InputFrame none;
+                input = none;
+                if (mouseCaptured_) { mouseCaptured_ = false; window_->setMouseCaptured(false); }
+            }
+        } else if (input.wasPressed(platform::Button::Quit)) break;
 
         if (autoWalk) input.down[(int)platform::Button::Forward] = true;  // scripted move for tests
         static const bool lockstepInput = std::getenv("WFC_LOCKSTEP") != nullptr;
@@ -322,6 +359,7 @@ void Application::run() {
         renderer_->beginFrame(camera_, window_->width(), window_->height());
         world_.draw(*renderer_);
         renderer_->endFrame();
+        if (frontend_) frontend_->draw(window_->width(), window_->height());   // open movies (pause, end game)
 
         if (const char* sa = std::getenv("WFC_SHOWACTOR"))       // diagnostic: Gameplay-style unhide (e.g. a KOTH zone)
             renderer_->setActorHidden(sa, false);
@@ -361,6 +399,7 @@ void Application::run() {
 
         updateTitleHud(realDt);
     }
+    return MatchExit::Quit;
 }
 
 void Application::updateTitleHud(double realDt) {
