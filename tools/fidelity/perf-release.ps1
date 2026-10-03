@@ -8,6 +8,7 @@
 # baseline's upper bound by > 25% + 0.5 ms (M03 integration record, RX 7900 XTX).
 param([Parameter(Mandatory)][string]$Exe, [string]$RenderData = "", [string]$OutDir = "", [string[]]$Scenarios = @())
 $ErrorActionPreference = "Stop"
+$Scenarios = @($Scenarios | ForEach-Object { $_ -split "," } | Where-Object { $_ })   # -File passes "a,b" as one string
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
 if (-not $OutDir) { $OutDir = Join-Path (Get-WfcRoot) "work\fidelity\perf_release" }
 New-Item -ItemType Directory -Force $OutDir | Out-Null
@@ -29,6 +30,10 @@ $defs = [ordered]@{
     transform_r2v_turning = @{ f = 840;  env = @{ WFC_AUTOWALK = "1"; WFC_AUTOTURN = "1.5"; WFC_PRESSTRANSFORM = "60" }; base = @(0.9, 1.7) }
     boost_turning         = @{ f = 1200; env = @{ WFC_STARTVEHICLE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "1.5"; WFC_AUTOBOOST = "1" }; base = @(1.2, 1.7) }
     nitro_turning         = @{ f = 1200; env = @{ WFC_STARTVEHICLE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "1.5"; WFC_AUTOBOOST = "1"; WFC_AUTODASH = "240" }; base = @(1.2, 1.8) }
+    # Milestone 04 locations: FFA 0 has 3 level steam emitters within 25 m (camera sweeps across them);
+    # FFA 18's vehicle route had the most audible ambient emitters (m04-ambient.ps1). Baseline = M03 numbers.
+    heavy_fx       = @{ f = 840;  env = @{ WFC_SPAWN_INDEX = "0"; WFC_AUTOTURN = "0.5" }; base = @(1.0, 4.1) }
+    ambient_active = @{ f = 1200; env = @{ WFC_SPAWN_INDEX = "18"; WFC_STARTVEHICLE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOBOOST = "1"; WFC_AUTOTURN = "0.25" }; base = @(1.2, 1.8) }
     transform_v2r_turning = @{ f = 840;  env = @{ WFC_STARTVEHICLE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "1.5"; WFC_PRESSTRANSFORM = "60" }; base = @(1.1, 2.1) }
 }
 if (-not $Scenarios.Count) { $Scenarios = @($defs.Keys) }

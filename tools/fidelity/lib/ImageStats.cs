@@ -35,6 +35,29 @@ public static class WfcImage {
         for (int i = 2; i < n; i++) { float d = Math.Abs(a[i] - b[i]); s += d; if (d > thr) changed++; }
         return new double[] { s / (n - 2), (double)changed / (n - 2) };
     }
+    // Diff restricted to a sub-rectangle given in fractions of the grid (fx0,fy0)-(fx1,fy1): same outputs as Diff.
+    public static double[] RegionDiff(float[] a, float[] b, double fx0, double fy0, double fx1, double fy1, float thr) {
+        int w = (int)a[0], h = (int)a[1];
+        int x0 = (int)(fx0 * w), x1 = Math.Max(x0 + 1, (int)(fx1 * w)), y0 = (int)(fy0 * h), y1 = Math.Max(y0 + 1, (int)(fy1 * h));
+        double s = 0; int changed = 0, n = 0;
+        for (int y = y0; y < y1 && y < h; y++)
+            for (int x = x0; x < x1 && x < w; x++) {
+                float d = Math.Abs(a[2 + y * w + x] - b[2 + y * w + x]); s += d; n++; if (d > thr) changed++;
+            }
+        return new double[] { n > 0 ? s / n : 0, n > 0 ? (double)changed / n : 0 };
+    }
+    // Frame statistics: mean luma, fraction of near-black cells (< blackThr), fraction of flat cells
+    // (|cell - right neighbour| < 0.5 and |cell - lower neighbour| < 0.5 and not black: untextured surfaces).
+    public static double[] Stats(float[] a, float blackThr) {
+        int w = (int)a[0], h = (int)a[1], n = w * h, black = 0, flat = 0; double s = 0;
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) {
+                float v = a[2 + y * w + x]; s += v;
+                if (v < blackThr) { black++; continue; }
+                if (x + 1 < w && y + 1 < h && Math.Abs(v - a[2 + y * w + x + 1]) < 0.5f && Math.Abs(v - a[2 + (y + 1) * w + x]) < 0.5f) flat++;
+            }
+        return new double[] { s / n, (double)black / n, (double)flat / n };
+    }
     // Count pixels that match a saturated debug-overlay colour (unlit GL_LINES: pure green / cyan /
     // yellow / magenta as drawn by World::draw's debug overlay) - tolerance tol per channel.
     public static int DebugPixels(string path, int tol) {

@@ -1,0 +1,118 @@
+MODETEST DM   TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_3951 Disabled     vis=0 col=0 touch=0 marker=Flag added=0 show=0
+MODETEST DM   TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_9703 Disabled     vis=0 col=0 touch=0 marker=Flag added=0 show=0
+MODETEST DM   TnFlagCapturePoint                 TnFlagCapturePoint_10016             Inert        vis=0 col=1 touch=0 marker=FlagCapturePoint added=0 show=0
+MODETEST DM   TnFlagCapturePoint                 TnFlagCapturePoint_5353              Inert        vis=0 col=1 touch=0 marker=FlagCapturePoint added=0 show=0
+MODETEST DM   TnGameObjectivePickupFactoryBomb   TnGameObjectivePickupFactoryBomb_7067 Disabled     vis=0 col=0 touch=0 marker=Bomb added=0 show=0
+MODETEST DM   TnBombPlantPoint                   TnBombPlantPoint_15814               Inert        vis=0 col=1 touch=0 marker=BombPlantPoint added=0 show=0
+MODETEST DM   TnBombPlantPoint                   TnBombPlantPoint_4337                Inert        vis=0 col=1 touch=0 marker=BombPlantPoint added=0 show=0
+MODETEST DM   TnDominationPoint                  TnDominationPoint_15247              Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST DM   TnDominationPoint                  TnDominationPoint_6703               Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST DM   TnDominationPoint                  TnDominationPoint_678                Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST DM   TnKingOfTheHillZone                TnKingOfTheHillZone_11438            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST DM   TnKingOfTheHillZone                TnKingOfTheHillZone_12369            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST DM   TnKingOfTheHillZone                TnKingOfTheHillZone_14223            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST DM   TnKingOfTheHillZone                TnKingOfTheHillZone_14647            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST DM   TnKingOfTheHillZone                TnKingOfTheHillZone_15196            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST DM   objective base InterpActor_6165     visible=0
+MODETEST DM   objective base InterpActor_15874    visible=0
+MODETEST DM   objective base InterpActor_3855     visible=0
+MODETEST DM   objective base InterpActor_7378     visible=0
+MODETEST TDM  TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_3951 Disabled     vis=0 col=0 touch=0 marker=Flag added=0 show=0
+MODETEST TDM  TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_9703 Disabled     vis=0 col=0 touch=0 marker=Flag added=0 show=0
+MODETEST TDM  TnFlagCapturePoint                 TnFlagCapturePoint_10016             Inert        vis=0 col=1 touch=0 marker=FlagCapturePoint added=0 show=0
+MODETEST TDM  TnFlagCapturePoint                 TnFlagCapturePoint_5353              Inert        vis=0 col=1 touch=0 marker=FlagCapturePoint added=0 show=0
+MODETEST TDM  TnGameObjectivePickupFactoryBomb   TnGameObjectivePickupFactoryBomb_7067 Disabled     vis=0 col=0 touch=0 marker=Bomb added=0 show=0
+MODETEST TDM  TnBombPlantPoint                   TnBombPlantPoint_15814               Inert        vis=0 col=1 touch=0 marker=BombPlantPoint added=0 show=0
+MODETEST TDM  TnBombPlantPoint                   TnBombPlantPoint_4337                Inert        vis=0 col=1 touch=0 marker=BombPlantPoint added=0 show=0
+MODETEST TDM  TnDominationPoint                  TnDominationPoint_15247              Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST TDM  TnDominationPoint                  TnDominationPoint_6703               Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST TDM  TnDominationPoint                  TnDominationPoint_678                Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST TDM  TnKingOfTheHillZone                TnKingOfTheHillZone_11438            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST TDM  TnKingOfTheHillZone                TnKingOfTheHillZone_12369            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST TDM  TnKingOfTheHillZone                TnKingOfTheHillZone_14223            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST TDM  TnKingOfTheHillZone                TnKingOfTheHillZone_14647            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST TDM  TnKingOfTheHillZone                TnKingOfTheHillZone_15196            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST TDM  objective base InterpActor_6165     visible=0
+MODETEST TDM  objective base InterpActor_15874    visible=0
+MODETEST TDM  objective base InterpActor_3855     visible=0
+MODETEST TDM  objective base InterpActor_7378     visible=0
+MODETEST CTF  TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_3951 Active       vis=1 col=1 touch=1 marker=Flag added=1 show=1
+MODETEST CTF  TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_9703 Active       vis=1 col=1 touch=1 marker=Flag added=1 show=1
+MODETEST CTF  TnFlagCapturePoint                 TnFlagCapturePoint_10016             Active       vis=0 col=1 touch=1 marker=FlagCapturePoint added=0 show=0
+MODETEST CTF  TnFlagCapturePoint                 TnFlagCapturePoint_5353              Active       vis=0 col=1 touch=1 marker=FlagCapturePoint added=0 show=0
+MODETEST CTF  TnGameObjectivePickupFactoryBomb   TnGameObjectivePickupFactoryBomb_7067 Disabled     vis=0 col=0 touch=0 marker=Bomb added=0 show=0
+MODETEST CTF  TnBombPlantPoint                   TnBombPlantPoint_15814               Inert        vis=0 col=1 touch=0 marker=BombPlantPoint added=0 show=0
+MODETEST CTF  TnBombPlantPoint                   TnBombPlantPoint_4337                Inert        vis=0 col=1 touch=0 marker=BombPlantPoint added=0 show=0
+MODETEST CTF  TnDominationPoint                  TnDominationPoint_15247              Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST CTF  TnDominationPoint                  TnDominationPoint_6703               Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST CTF  TnDominationPoint                  TnDominationPoint_678                Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST CTF  TnKingOfTheHillZone                TnKingOfTheHillZone_11438            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST CTF  TnKingOfTheHillZone                TnKingOfTheHillZone_12369            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST CTF  TnKingOfTheHillZone                TnKingOfTheHillZone_14223            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST CTF  TnKingOfTheHillZone                TnKingOfTheHillZone_14647            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST CTF  TnKingOfTheHillZone                TnKingOfTheHillZone_15196            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST CTF  objective base InterpActor_6165     visible=1
+MODETEST CTF  objective base InterpActor_15874    visible=1
+MODETEST CTF  objective base InterpActor_3855     visible=1
+MODETEST CTF  objective base InterpActor_7378     visible=1
+MODETEST EXT  TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_3951 Disabled     vis=0 col=0 touch=0 marker=Flag added=0 show=0
+MODETEST EXT  TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_9703 Disabled     vis=0 col=0 touch=0 marker=Flag added=0 show=0
+MODETEST EXT  TnFlagCapturePoint                 TnFlagCapturePoint_10016             Inert        vis=0 col=1 touch=0 marker=FlagCapturePoint added=0 show=0
+MODETEST EXT  TnFlagCapturePoint                 TnFlagCapturePoint_5353              Inert        vis=0 col=1 touch=0 marker=FlagCapturePoint added=0 show=0
+MODETEST EXT  TnGameObjectivePickupFactoryBomb   TnGameObjectivePickupFactoryBomb_7067 Active       vis=1 col=1 touch=1 marker=Bomb added=1 show=1
+MODETEST EXT  TnBombPlantPoint                   TnBombPlantPoint_15814               Active       vis=0 col=1 touch=1 marker=BombPlantPoint added=1 show=0
+MODETEST EXT  TnBombPlantPoint                   TnBombPlantPoint_4337                Active       vis=0 col=1 touch=1 marker=BombPlantPoint added=1 show=0
+MODETEST EXT  TnDominationPoint                  TnDominationPoint_15247              Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST EXT  TnDominationPoint                  TnDominationPoint_6703               Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST EXT  TnDominationPoint                  TnDominationPoint_678                Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST EXT  TnKingOfTheHillZone                TnKingOfTheHillZone_11438            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST EXT  TnKingOfTheHillZone                TnKingOfTheHillZone_12369            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST EXT  TnKingOfTheHillZone                TnKingOfTheHillZone_14223            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST EXT  TnKingOfTheHillZone                TnKingOfTheHillZone_14647            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST EXT  TnKingOfTheHillZone                TnKingOfTheHillZone_15196            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST EXT  objective base InterpActor_6165     visible=1
+MODETEST EXT  objective base InterpActor_15874    visible=1
+MODETEST EXT  objective base InterpActor_3855     visible=1
+MODETEST EXT  objective base InterpActor_7378     visible=1
+MODETEST DOM  TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_3951 Disabled     vis=0 col=0 touch=0 marker=Flag added=0 show=0
+MODETEST DOM  TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_9703 Disabled     vis=0 col=0 touch=0 marker=Flag added=0 show=0
+MODETEST DOM  TnFlagCapturePoint                 TnFlagCapturePoint_10016             Inert        vis=0 col=1 touch=0 marker=FlagCapturePoint added=0 show=0
+MODETEST DOM  TnFlagCapturePoint                 TnFlagCapturePoint_5353              Inert        vis=0 col=1 touch=0 marker=FlagCapturePoint added=0 show=0
+MODETEST DOM  TnGameObjectivePickupFactoryBomb   TnGameObjectivePickupFactoryBomb_7067 Disabled     vis=0 col=0 touch=0 marker=Bomb added=0 show=0
+MODETEST DOM  TnBombPlantPoint                   TnBombPlantPoint_15814               Inert        vis=0 col=1 touch=0 marker=BombPlantPoint added=0 show=0
+MODETEST DOM  TnBombPlantPoint                   TnBombPlantPoint_4337                Inert        vis=0 col=1 touch=0 marker=BombPlantPoint added=0 show=0
+MODETEST DOM  TnDominationPoint                  TnDominationPoint_15247              Active       vis=1 col=1 touch=1 marker=Domination added=1 show=1
+MODETEST DOM  TnDominationPoint                  TnDominationPoint_6703               Active       vis=1 col=1 touch=1 marker=Domination added=1 show=1
+MODETEST DOM  TnDominationPoint                  TnDominationPoint_678                Active       vis=1 col=1 touch=1 marker=Domination added=1 show=1
+MODETEST DOM  TnKingOfTheHillZone                TnKingOfTheHillZone_11438            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST DOM  TnKingOfTheHillZone                TnKingOfTheHillZone_12369            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST DOM  TnKingOfTheHillZone                TnKingOfTheHillZone_14223            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST DOM  TnKingOfTheHillZone                TnKingOfTheHillZone_14647            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST DOM  TnKingOfTheHillZone                TnKingOfTheHillZone_15196            Hidden       vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST DOM  objective base InterpActor_6165     visible=0
+MODETEST DOM  objective base InterpActor_15874    visible=0
+MODETEST DOM  objective base InterpActor_3855     visible=0
+MODETEST DOM  objective base InterpActor_7378     visible=0
+MODETEST KOTH TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_3951 Disabled     vis=0 col=0 touch=0 marker=Flag added=0 show=0
+MODETEST KOTH TnGameObjectivePickupFactoryFlag   TnGameObjectivePickupFactoryFlag_9703 Disabled     vis=0 col=0 touch=0 marker=Flag added=0 show=0
+MODETEST KOTH TnFlagCapturePoint                 TnFlagCapturePoint_10016             Inert        vis=0 col=1 touch=0 marker=FlagCapturePoint added=0 show=0
+MODETEST KOTH TnFlagCapturePoint                 TnFlagCapturePoint_5353              Inert        vis=0 col=1 touch=0 marker=FlagCapturePoint added=0 show=0
+MODETEST KOTH TnGameObjectivePickupFactoryBomb   TnGameObjectivePickupFactoryBomb_7067 Disabled     vis=0 col=0 touch=0 marker=Bomb added=0 show=0
+MODETEST KOTH TnBombPlantPoint                   TnBombPlantPoint_15814               Inert        vis=0 col=1 touch=0 marker=BombPlantPoint added=0 show=0
+MODETEST KOTH TnBombPlantPoint                   TnBombPlantPoint_4337                Inert        vis=0 col=1 touch=0 marker=BombPlantPoint added=0 show=0
+MODETEST KOTH TnDominationPoint                  TnDominationPoint_15247              Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST KOTH TnDominationPoint                  TnDominationPoint_6703               Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST KOTH TnDominationPoint                  TnDominationPoint_678                Hidden       vis=0 col=1 touch=0 marker=Domination added=0 show=0
+MODETEST KOTH TnKingOfTheHillZone                TnKingOfTheHillZone_11438            KothInactive vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST KOTH TnKingOfTheHillZone                TnKingOfTheHillZone_12369            Active       vis=1 col=1 touch=1 marker=KingOfTheHill added=1 show=1
+MODETEST KOTH TnKingOfTheHillZone                TnKingOfTheHillZone_14223            KothInactive vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST KOTH TnKingOfTheHillZone                TnKingOfTheHillZone_14647            KothInactive vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST KOTH TnKingOfTheHillZone                TnKingOfTheHillZone_15196            KothInactive vis=0 col=1 touch=0 marker=KingOfTheHill added=0 show=0
+MODETEST KOTH objective base InterpActor_6165     visible=0
+MODETEST KOTH objective base InterpActor_15874    visible=0
+MODETEST KOTH objective base InterpActor_3855     visible=0
+MODETEST KOTH objective base InterpActor_7378     visible=0
+MODETEST KOTH active zone: TnKingOfTheHillZone_12369
+MODETEST KOTH active zone: TnKingOfTheHillZone_14223
+MODETEST KOTH active zone: TnKingOfTheHillZone_15196
+MODETEST KOTH active zone: TnKingOfTheHillZone_14223
