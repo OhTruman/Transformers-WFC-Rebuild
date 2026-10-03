@@ -489,6 +489,16 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
                 for (SubMesh& sm : md.subs) sm.component = comps[k];
                 for (render::Material& m : md.mats) m.wfcName = resolveName("DES_IAC_WallPanelSign_p.Materials." + m.sourceName);
                 p.stateMesh[k] = upload(md);
+                if (std::getenv("WFC_PROPLOG")) {         // diagnostics: world-space bounds of each state mesh
+                    core::Vec3 mn{1e30f, 1e30f, 1e30f}, mx{-1e30f, -1e30f, -1e30f};
+                    for (size_t v = 0; v + 2 < md.positions.size(); v += 3) {
+                        core::Vec3 w = core::transformPoint(p.model, core::Vec3{md.positions[v], md.positions[v + 1], md.positions[v + 2]});
+                        mn = {std::min(mn.x, w.x), std::min(mn.y, w.y), std::min(mn.z, w.z)};
+                        mx = {std::max(mx.x, w.x), std::max(mx.y, w.y), std::max(mx.z, w.z)};
+                    }
+                    LOG_INFO("map prop %s state mesh %d: id %d, world bounds (%.2f %.2f %.2f)-(%.2f %.2f %.2f)", actor.c_str(), k,
+                             p.stateMesh[k], mn.x, mn.y, mn.z, mx.x, mx.y, mx.z);
+                }
             }
             mapProps_.push_back(p);
         }

@@ -1500,7 +1500,11 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                 auto mv = moverDelta_.find(s.actor);
                 if (mv != moverDelta_.end()) { subModel = mv->second * model; moving = true; }
             }
-            if (g.world && !moving) {   // frustum cull (world-space bounds; movers: bounds change)
+            // frustum cull on the sub's bounds: valid only for baked world geometry (identity model); placed
+            // meshes with authored components (map props) and movers keep their local / moving bounds
+            const bool bakedPlacement = model.m[0] == 1.0f && model.m[5] == 1.0f && model.m[10] == 1.0f &&
+                                        model.m[12] == 0.0f && model.m[13] == 0.0f && model.m[14] == 0.0f;
+            if (g.world && !moving && bakedPlacement) {
                 bool out = false;
                 for (int f = 0; f < 6 && !out; ++f) {
                     const float* pl = frustum_[f];
