@@ -3,6 +3,189 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 04 (2026-10-03) — branch `integration/milestone-04` — first full-map Streets playtest build
+Purpose: one playable Release build containing all current MP_IAC_Streets work on the corrected world.
+Integration only: no new features, no RE, no tuning. Base: integration/milestone-03 (356c352).
+
+**Human playtest executable:** `F:\Transformers Rebuild\Rebuild\build\release\bin\wfc_rebuild.exe`.
+- Release build, configured from this tree; render data in `work\render`.
+- Default mode is DM; `WFC_GAMEMODE=TDM|CTF|KOTH|EXT|DOM` selects the others.
+- A Debug build is at `build\bin\wfc_rebuild.exe`.
+
+### Merged owner heads (`--no-ff`, in this order)
+
+| Order | Branch | Head | Merge commit | Conflicts |
+|---|---|---|---|---|
+| 1 | agents/gameplay | d122ef4 | 73147fc | `World.cpp` (2 hunks), `STATUS.md` |
+| 2 | agents/systems | 9dbe3ba | 6fd53f3 | `STATUS.md` (code merged cleanly; one interface adapted, below) |
+| 3 | agents/rendering | 7aadc3c | abedbc0 | `Renderer.h`, `World.cpp` (2), `SkinnedModel.h/.cpp`, `Application.cpp`, `FIDELITY.md` |
+
+- Follow-up integration commit `4af1ad4`: shared `WFC_PICKUPTEST` name.
+- agents/experimental (5120c6f) was **not** merged. Its tools were run read-only from an isolated copy
+  (`work/m4gate`).
+
+### Conflict and interface resolutions (owner semantics)
+- **Light-visibility query (`World.cpp`):** Gameplay's choice of the weapon collision world for
+  zero-extent line checks, combined with milestone-03's single exact DDA `segmentHit` (Systems
+  firing-cost fix). The 2 m march is no longer needed.
+- **`World::tick` start:** Systems' `WFC_HITCHLOG`, then Gameplay's `mapState_.tick()`.
+- **Pickups (Gameplay → Systems, adapted):** Systems reduced `PickupPresentation` to the sound only
+  (`onTaken`); effect state is now Rendering's `setMapEffectState`. The milestone-03 bridge
+  (`setPickupHidden/Visible`) was replaced by Systems' documented glue: Taken plays the PickupSound once
+  on the receiving pawn; Respawned plays nothing. Systems' `LevelFx` is gone, so steam and pickup FX are
+  simulated only by Rendering.
+- **`Renderer.h`:** both branches carried the identical map-state interface; Rendering's
+  `setDestructibleState` was added.
+- **Game rules:** Gameplay's match mode supplies the authored rule set (`gameRulesForMode`).
+  Rendering's interim `WFC_GAMERULES` (documented "until Gameplay does") was retired.
+- **Placeholders:** Gameplay's authored factory/destructible loading. Both owners' opt-in hooks are
+  kept: `WFC_GRAYBOXPICKUPS`, and the test dummy via `WFC_TESTDUMMY` or `WFC_DAMAGETARGET`. Nothing
+  placeholder spawns in normal play.
+- **`loadAnimationsByName`:** both branches added it. One implementation is kept (Gameplay's, using the
+  shared `parseClips`; it returns the clip count) and serves Gameplay's Optimus arm and Rendering's
+  totems. Rendering's duplicate and its unreachable `.gltf` branch were removed.
+- **Destructible presentation (Gameplay → Rendering, adapted):** Rendering draws intact/stump from
+  Gameplay's HmDestructionState, but nothing called `setDestructibleState`.
+  `World::syncMapPresentation` now pushes it every frame, except while Rendering's `WFC_DESTRUCTSTATE`
+  diagnostic forces a state.
+- **`WFC_PICKUPTEST` (4af1ad4):** Gameplay's `=1` measurement mode exited `init` before Rendering's
+  `=<factory>,<take>,<respawn>` diagnostic could run. Gameplay's mode now runs only for a value
+  without a comma.
+- **Kept:** Rendering's evidence-scoped translator channel reading. `vector_channel_proven.txt` lists
+  `ParticleBase_BW_MAT` only, proven by UE3 type rules; the other ~22 world materials keep the
+  full-vector reading.
+
+### Data: the runtime consumes the corrected current Streets data
+- Map data is read directly, every launch, from
+  `F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps/MP_IAC_Streets`:
+  `world.glb`, `collision_pawn.glb` (movement), `collision_weapon.glb` (traces and light visibility),
+  `physics.json`, `gameplay.json`, `spawnpoints.json`, `navigation.json`, `audio.json`, `render_index.json`.
+  There is no copied world and no collision cache.
+- That data is the corrected AssetTools 8d8195e export (`Scale*Scale3D*R*T × CachedParentToWorld`).
+  Checked on disk: all 1906 collection members use the corrected transform source; 479 are mirrored and
+  907 non-uniformly scaled. `render_index.json` is AssetTools da67634.
+- Render data was regenerated from scratch (the old copy was kept as `work/render_m03_old`):
+  216/216 materials, 25 decals, 1975 lightmapped components, 6 movers, 45 map-FX components.
+  It is identical to agents/rendering's own generation: GLSL for all 216 materials, plus byte-identical
+  BSP, decals, CLUT, LVV, movers and map FX.
+
+### Builds
+- Clean Debug (`.\build.ps1 -Jobs 2 -Clean`) and clean Release (`build\release`): 0 errors.
+- One warning, pre-existing and identical on agents/rendering: unused variable `reading` in `WfcMapFx.cpp`.
+
+### Automated results (merged tree)
+
+| Suite | Result |
+|---|---|
+| `wfc_fidelity` (Debug and Release, this tree) | 190 / **2 FAIL** / 21 known; identical to milestone-03, no check changed |
+| Experimental 5120c6f harness on the merged tree | **337 pass / 0 FAIL / 9 known** (stale spread checks retired upstream) |
+| Collision (`--only collision --map`) | 9 / 0 / 2 known |
+| `WFC_MAPTRAVERSE` | ORACLE 852/852 authored ReachSpec runs (robot + vehicle), 0 falls, 0 floor gaps |
+| `WFC_MAPTRAVERSE` tour | robot 100/122, vehicle 103/122 legs, 0 falls (= Gameplay Pass 19) |
+| `WFC_MAPTRAVERSE` sweeps / coherence | 984 boost/jump sweeps, 0 KillZ; **0 missing/displaced collision** |
+| `WFC_TRAVERSE` | 160 runs, 0 falls, 1 snag (identical on agents/gameplay alone) |
+| `WFC_VEHTEST` | rest COM 1.287 m (native), stops 0.5 s, dash 30 m/s, jumps as Gameplay Pass 14 |
+| `WFC_PICKUPTEST` | respawn 30.02 / 60.02 / 119.99 s (authored 30/60/120); destructible settles 10 s |
+| `WFC_MODETEST` | per-mode objective/totem/KOTH state, authored rule sets |
+| Shadow self-test | 32/32 |
+| DLE | 20/20 |
+| LVV | C++ vs Python 400 points, 0 mismatches |
+| `verify_permutations` | **216/216** |
+| Map audit | 2399 correct / 23 intentionally invisible / 360 unknown (BSP without authored lightmaps); 1948 meshes, 25/25 decals, 32 emitters drawn + 13 intentionally invisible, LVV and destructible active (= Rendering M05) |
+| Audio native suite | **557 / 0** |
+| Runtime probe | 31 / 0 / 3 known |
+| Experimental M03 gate (5120c6f) | **702 pass / 0 FAIL / 13 known / 543 info** |
+
+Gate detail: 0 regressions in audio attachment, transformation, vehicle, map completeness, fine aim and
+other. Map-completeness improvements:
+- movers wrong-effect 12 → 0;
+- props wrong-material 124 → 0;
+- level emitters, pickup FX, pickups and destructibles not-instantiated → 0.
+
+Experimental `m04-world-audio` and `m04-captures` ran. `m04-ambient` crashed inside its own script
+(PowerShell null array), so it has no result.
+
+### Normal-play smoke test (Release, DM, chase camera unless noted)
+Scripted input; stills, logs and A/B sheets are in `work/m4/smoke/`.
+- **Coverage:**
+  - 10 traversal routes from spread authored starts: 6 robot, 3 vehicle, 1 robot→vehicle.
+  - 30 s of game time each; 0 falls; architecture, interiors, ramps, stairs and platforms crossed.
+- **Reverb/zones:** 8 different zones entered with reverb switches (exterior, Decepticon room
+  upper/lower, train tunnel, auto rooms 01/02, neutral hall, stairwell).
+- **Ambient bed:** 70 emitters, 50 sounding (authored per-cue limits).
+- **Voices:** vary 65–96; they reach the 96-channel budget, where priority stealing applies
+  (≤4 refusals per run). Not a leak: counts fall back.
+- **53 fixed views** (domes, SkyBeam area, steam, pickups, 10 map areas × 4 directions): corrected
+  large-scale and mirrored architecture, interiors, skyline, decals, baked lighting, fog, CLUT.
+- **Merged vs agents/rendering alone,** same views: mean pixel difference 0.00–1.81/255 (only animated
+  content differs).
+- **Animation over 4.5 s (lockstep):**
+  - the dome visibly rotates (the difference is confined to the dome);
+  - steam spawns and plumes;
+  - the SkyBeam region changes (motion detected; the beam shaft itself is not isolated in these views).
+- **Mode visibility:** the CTF objective base is hidden in DM and TDM and shown in CTF.
+- **Pickup in play:** ammo crate visible → walked over (PickupSound attached to the pawn) → gone →
+  back after 30 s.
+- **Firing and vehicle FX visible:** muzzle, tracer, impact, steam, hover distortion rings,
+  afterburners, boost plumes.
+- **Character shadows are default-on:** on/off A/B shows darkening on Optimus at some locations; it is
+  absent where the native light-environment gates don't create a shadow.
+- **No placeholder or diagnostic content in normal play.** The magenta/green locator only appears with
+  `WFC_DEBUGCAM`; the debug overlay only with `WFC_DEBUGDRAW` or the **B** key.
+
+### Performance (Release, RX 7900 XTX)
+- **Spawn-view medians:**
+  - idle 3.25 ms; firing 3.30; sustained fire 3.30; fine aim 2.40;
+  - hover 3.56; boost 3.43; vehicle move 1.41; both transforms 1.35–1.43 (moving).
+- **Traversal routes:** robot 2.72 median (max 3.26), robot firing 2.02 (max 4.21), vehicle boost 2.80
+  (max 3.42).
+- **Compared with milestone-03:** equal or faster everywhere.
+- **Particles and audio:** particles drain to 0 after fire; cues return to the ~52 bed. No leaks.
+- **Hitches:** one startup hitch (~350 ms, tick 2–3); otherwise ≤ 1 per 40 s route.
+- Experimental's `perf-release` first flagged boost at 12–14 ms during its first ~5 s, outside the
+  renderer. It did not reproduce: a rerun of the same tool gave a 3.43 ms median with 0 spikes. The
+  original run followed directly after a 40-minute capture job. Its remaining "check" flags compare the
+  spawn view with milestone-03's open-view numbers.
+
+### Stale or provisional test expectations (not product regressions)
+- **This tree's (older) harness:**
+  - `weapon.spread_after_10` and `spread_cap`: retired upstream (Experimental 28e093f).
+  - Vehicle hover-height (1.85 m), boost-top-speed and jump-apex expectations predate the native hover
+    rigid body.
+  - `missing.prefab_instances`, `missing.static_destructibles`, `unrendered.decals`,
+    `unrendered.level_emitters`, `boost_presentation_emitted`: contradicted by current presentation.
+  - The 9 KNOWNs in Experimental's own harness are its current list.
+- **Runtime probe:** `boost_fx_emitted` reads the weapon-FX counter only.
+- **Experimental tooling:** `m04-ambient.ps1` crashes (null array).
+
+### Genuine product regressions
+- **None found against milestone-03** in any suite, A/B or route.
+- The `WFC_TRAVERSE` snag at `TnTeamPlayerStart_10894` (vehicle, dir 1) and the coherence hull notes
+  reproduce on agents/gameplay alone (Gameplay behaviour on the corrected world, not a merge effect).
+
+### Remaining player-visible Streets discrepancies
+- **Chase camera sinks into or passes through geometry** at several spots (provisional camera
+  collision). MAPTRAVERSE: 72 components with authored BlockCameras were viewed through.
+- **Authored collision hulls smaller than visuals:** the pawn passes into 49 visible props, by
+  authored data. A further 49 have no pawn collision at all.
+- **Unlit BSP:** 360 BSP elements have no authored baked lighting. Some areas are very dark, and some
+  west-perimeter DefaultMaterial BSP faces are PARTIAL.
+- **One rotating dome renders almost black from the north-east,** the same on agents/rendering
+  (Rendering to check).
+- **Character shadows are subtle** and location-dependent: the frustum fit and screen-to-shadow terms
+  are still PARTIAL.
+- **SkyBeam:** motion is present, but the beam's own visibility needs the human eye.
+- **Pickups:**
+  - ammo-crate attachment offset is native UNKNOWN;
+  - crate spin phase is PROVISIONAL (continuous from map start);
+  - some particle semantics are PARTIAL.
+- **Audio:**
+  - 20 of 70 ambient emitters are silent by authored per-cue limits;
+  - under heavy fire plus ambience the 96-voice cap steals voices.
+- **Provisional vehicle behaviour:** hull clearance and the boost tire coefficient.
+- **Gameplay KNOWNs:** a vehicle-start snag (1 of 160 runs), robot jump apex 5.14 vs 5.0 m, step-up
+  0.35 vs 0.37 m.
+
 ## INTEGRATION MILESTONE 03 (2026-10-02) — branch `integration/milestone-03`
 End-of-milestone integration only: no new features, no new RE, no tuning. Base: integration/milestone-02
 (e8036f6). Evidence sources used by the branches (not merged): AssetTools 7a69756, ReverseEngineering 7033f18.
