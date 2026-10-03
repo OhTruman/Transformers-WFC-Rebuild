@@ -24,9 +24,31 @@
 #include <psapi.h>
 #endif
 
+// Systems audio seam (agents/systems game::FrontendAudioRuntime + the World level-audio contract). Compiled in once
+// the Systems lifecycle is integrated; without it the frontend runs silent (calls are traced only).
+#if __has_include("game/FrontendAudioRuntime.h")
+#include "game/FrontendAudioRuntime.h"
+#define WFC_SYSTEMS_FRONTEND_AUDIO 1
+namespace {
+struct SystemsFrontendAudio final : frontend::IFrontendAudio {
+    game::FrontendAudioRuntime rt;
+    explicit SystemsFrontendAudio(audio::IAudio* a) : rt(a) {}
+    int playUiSound(const std::string& n) override { return rt.playUiSound(n); }
+    bool stopUiSound(const std::string& n, float f) override { return rt.stopUiSound(n, f); }
+    void uiLevelStarted(const std::string& l) override { rt.uiLevelStarted(l); }
+    void levelChange() override { rt.levelChange(); }
+    void tick(float dt) override { rt.tick(dt); }
+    void levelEvent(const std::string& t) override { rt.levelEvent(t); }
+    void setMoviePlaying(bool p) override { rt.setMoviePlaying(p); }
+    void prefetchLevel(const std::string& l) override { rt.prefetchLevel(l); }
+};
+} // namespace
+#endif
+
 namespace core {
 
 namespace {
+std::unique_ptr<frontend::IFrontendAudio> g_frontendAudio;
 // Process memory for the cycle soak (Experimental: leaks across frontend <-> match).
 ui::GlCensus g_census;   // GL objects created by a match (released on travel away; stopgap, see GlCensus.h)
 
@@ -60,6 +82,9 @@ void Application::attachPresenter() {
     if (!p->init()) { LOG_WARN("frontend: GFx movies unavailable (no frontend_gfx.json); flow only"); return; }
     presenter_ = p.get();
     frontend_->setPresenter(std::move(p));
+#ifdef WFC_SYSTEMS_FRONTEND_AUDIO
+    if (audio_) { g_frontendAudio = std::make_unique<SystemsFrontendAudio>(audio_); frontend_->setAudio(g_frontendAudio.get()); }
+#endif
     frontend_->script().keyHook = [this](int code, bool down) { if (presenter_) presenter_->injectKey(code, down); };
     frontend_->script().shotHook = [this](const std::string& f) { pendingShot_ = f; };
     frontend_->script().dumpHook = [this](const std::string& m) {
@@ -150,7 +175,13 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     g_census.begin();
     world_.load(*renderer_);
     if (!world_.usingSlice()) { LOG_WARN("FLOW match world failed to load (graybox fallback)"); return false; }
+#ifdef WFC_SYSTEMS_FRONTEND_AUDIO
+    // Systems level-audio contract: no hard-wired slice audio; the selected map's audio.
+    world_.setAudio(audio_, false);
+    world_.loadMapAudio(m.map->runtimeDir);
+#else
     world_.setAudio(audio_);
+#endif
     gameMode_.begin(world_);
     frontend::FlowTrace::emit("match.loaded", {{"map", m.map->runtimeDir}, {"mode", m.modeTag},
                                                {"seconds", frontend::FlowTrace::num(nowSeconds() - t0)}, {"privateMB", processMemoryMB()}});
@@ -161,14 +192,20 @@ void Application::unloadMatch() {
     // Travel replaces the world. The match world, its audio voices and the renderer's map data are released by
     // recreating them. PARTIAL: IRenderer has no map-unload entry point, so GL objects of the previous map are not
     // freed (HANDOFF Rendering: unloadMapRenderData / resource release for level travel).
+#ifdef WFC_SYSTEMS_FRONTEND_AUDIO
+    world_.unloadMapAudio();   // no voice / instance / map cue / sample remains (Systems guarantee)
+#endif
     world_.~World();
     new (&world_) game::World();
     ui::GlCensus::Owned keep;
     if (presenter_) presenter_->ownedGl(keep);
     if (!std::getenv("WFC_NO_GL_RELEASE")) frontend::FlowTrace::emit("match.glRelease", {{"released", g_census.release(keep)}});
     gameMode_ = game::GameMode();
+#ifndef WFC_SYSTEMS_FRONTEND_AUDIO
+    // Without the Systems lifecycle the device is recreated to drop the match's voices.
     delete audio_;
     audio_ = audio::createAudio();
+#endif
     delete renderer_;
     renderer_ = render::createGLRenderer();
     camera_ = render::Camera();

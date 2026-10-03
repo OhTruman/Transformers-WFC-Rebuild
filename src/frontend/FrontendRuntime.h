@@ -29,6 +29,9 @@ public:
     virtual void uiLevelStarted(const std::string& uiLevel) = 0;              // the level's SeqAct_PlayMusic track
     virtual void levelChange() = 0;                                           // the level's music player goes away
     virtual void tick(float dt) = 0;
+    virtual void levelEvent(const std::string& trigger) { (void)trigger; }     // "FsCommand:<cmd>", "MovieStopped:<movie>"
+    virtual void setMoviePlaying(bool playing) { (void)playing; }             // CINE_MUTE_FOR_BINK while a Bink is up
+    virtual void prefetchLevel(const std::string& level) { (void)level; }     // during a loading screen
 };
 
 class IMoviePresenter {
@@ -95,6 +98,9 @@ private:
     IFrontendAudio* audio_ = nullptr;
     LevelKind lastAudioLevel_ = LevelKind::None;
     bool frontEndMusic_ = false;
+    bool moviePlaying_ = false;
+    std::string prefetched_;
+    size_t seenFs_ = 0;
     std::unique_ptr<DataStores> stores_;
     void updateAudio(float dt);
 };

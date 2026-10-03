@@ -118,6 +118,8 @@ public:
     const std::string& kismetMovie() const { return kismetMovie_; }        // SeqAct_MoviePlayer currently playing
     const std::vector<std::string>& openMovies() const { return openMovies_; }   // GFxAction_OpenMovie / OpenUI
     bool frontEndStarted() const { return frontEndStarted_; }
+    // Level Kismet triggers the frontend owns, in order ("FsCommand:<cmd>", "MovieStopped:<movie>").
+    const std::vector<std::string>& kismetTriggers() const { return kismetTriggers_; }
     bool hasWatchedIntroMovie() const { return watchedIntro_; }
     std::string stateSummary() const;
     // SettingsDataStore (TnDataStore_GameSettings): the current settings object and its host-option values. Values
@@ -187,6 +189,7 @@ private:
 
     // Frontend Kismet state.
     std::vector<std::string> movieQueue_;
+    std::vector<std::string> kismetTriggers_;
     std::string kismetMovie_;
     std::vector<std::string> openMovies_;
     bool frontEndStarted_ = false, watchedIntro_ = false, pendingWatchedWrite_ = false;

@@ -166,6 +166,30 @@ void FrontendRuntime::updateAudio(float dt) {
         if (audio_) audio_->uiLevelStarted("UI_FrontEnd_m");
         FlowTrace::emit("audio.uiLevel", {{"level", "UI_FrontEnd_m"}});
     }
+    // Frontend-owned Kismet triggers for the level audio (fscommands other than the [FRONTEND START] one, which
+    // uiLevelStarted fires; movie Stopped outputs).
+    const auto& ev = flow_.kismetTriggers();
+    for (; seenFs_ < ev.size(); ++seenFs_) {
+        if (audio_) audio_->levelEvent(ev[seenFs_]);
+        FlowTrace::emit("audio.levelEvent", {{"trigger", ev[seenFs_]}});
+    }
+    // A Bink movie is "up" for the intro chain and while a loading movie shows (TF_LoadingScreen under the GFx).
+    bool movie = !flow_.kismetMovie().empty() || flow_.loading().active;
+    if (movie != moviePlaying_) {
+        moviePlaying_ = movie;
+        if (audio_) audio_->setMoviePlaying(movie);
+        FlowTrace::emit("audio.moviePlaying", {{"playing", FlowTrace::boolean(movie)}});
+    }
+    // Prefetch the destination level's streamed audio while its loading screen is up.
+    if (flow_.loading().active) {
+        std::string dest = flow_.hasPendingMatch() && flow_.pendingMatch().map ? flow_.pendingMatch().map->runtimeDir
+                                                                               : Url::parse(flow_.loading().url).map();
+        if (!dest.empty() && dest != prefetched_) {
+            prefetched_ = dest;
+            if (audio_) audio_->prefetchLevel(dest);
+            FlowTrace::emit("audio.prefetch", {{"level", dest}});
+        }
+    } else prefetched_.clear();
     if (audio_) audio_->tick(dt);
 }
 
@@ -213,6 +237,7 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& in, float dt) {
     flow_.tick(dt);
     if (presenter_) presenter_->update(flow_, in, dt);
     script_.update(flow_, dt);
+    if (audio_) audio_->tick(dt);   // UI sounds of in-match movies (pause menu); match audio is the World's
 }
 
 void FrontendRuntime::draw(int w, int h) {
