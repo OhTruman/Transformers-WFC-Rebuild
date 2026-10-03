@@ -86,6 +86,9 @@ public:
     FineAimState fineAimState() const;
     HudAimState hudAimState() const;
     const std::vector<HudNotify>& hudNotifies() const { return hudNotifies_; }
+    // Last value sent through NotifyWeaponSpreadChanged (moves only by > 0.002), i.e. what the HUD
+    // movie currently holds. Read-only, for the renderer's crosshair.
+    float hudSpread() const { return hudSpreadSent_; }
     // Active camera strategy (diagnostics): 0 = OverTheShoulder, 1 = HoverTruck, 2 = Truck (Driving).
     int cameraStrategy() const { return strategy_; }
     float viewYaw() const { return viewYaw_; }

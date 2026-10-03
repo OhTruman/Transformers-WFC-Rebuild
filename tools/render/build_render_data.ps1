@@ -20,10 +20,12 @@ $inline = @("LightMapTexture2D_882","LightMapTexture2D_3739","LightMapTexture2D_
 & $py (Join-Path $PSScriptRoot "build_lighting.py") $Map $out $um
 if ($LASTEXITCODE -ne 0) { throw "build_lighting failed" }
 
-# 3. Materials: original graphs -> GLSL (world + BSP + Optimus robot/vehicle + Ion Blaster).
+# 3. Materials: original graphs -> GLSL (world + BSP + decals + Optimus robot/vehicle + Ion Blaster
+#    + the original vehicle/weapon FX materials listed in fx_materials.txt).
+$fx = Get-Content (Join-Path $PSScriptRoot "fx_materials.txt") | Where-Object { $_ -match '\S' }
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
     TR_Optimus_ROBO_p.RB_OptimusPrime_Cust_Mat_INST_B TR_Optimus_ROBO_p.InteriorAlt_Energon_MAT_INST `
     TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST TR_Optimus_VEH_p.InteriorAlt_Energon_MAT_INST `
-    WEP_IonBlaster_p.WEP_IonBlaster_MATINST
+    WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 Write-Host "render data -> $out"

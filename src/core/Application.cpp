@@ -66,12 +66,16 @@ void Application::run() {
         double realDt = now - last;
         last = now;
         if (realDt > 0.25) realDt = 0.25;
+        // Deterministic captures (render A/B): one 60 Hz step per frame regardless of wall time.
+        static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
+        if (lockstep) realDt = 1.0 / 60.0;
 
         if (!window_->pump(input)) break;
         if (input.wasPressed(platform::Button::Quit)) break;
 
         if (autoWalk) input.down[(int)platform::Button::Forward] = true;  // scripted move for tests
-        if (std::getenv("WFC_NOMOUSE")) { input.mouseDX = 0; input.mouseDY = 0; }   // deterministic tests
+        static const bool lockstepInput = std::getenv("WFC_LOCKSTEP") != nullptr;
+        if (std::getenv("WFC_NOMOUSE") || lockstepInput) { input.mouseDX = 0; input.mouseDY = 0; }   // deterministic tests
         if (std::getenv("WFC_AUTOSTRAFE")) input.down[(int)platform::Button::Right] = true;
         if (std::getenv("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
         if (std::getenv("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
@@ -110,7 +114,9 @@ void Application::run() {
             mouseCaptured_ = !mouseCaptured_;
             window_->setMouseCaptured(mouseCaptured_);
         }
-        if (input.wasPressed(platform::Button::Debug))
+        // Scripted smoke runs ignore the interactive toggle (a stray 'B' typed while a capture runs
+        // drew the debug capsule box + aim ray into screenshots); use WFC_DEBUGDRAW there.
+        if (smokeFrames <= 0 && input.wasPressed(platform::Button::Debug))
             core::DebugFlags::get().enabled = !core::DebugFlags::get().enabled;
 
         if (const char* fy = std::getenv("WFC_FIXYAW"))   // diagnostic: pin the camera yaw

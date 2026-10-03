@@ -934,6 +934,18 @@ void World::draw(render::IRenderer& r) const {
     sysprof::cueInst = cues_.liveInstances(); sysprof::cuePending = cues_.pendingEvents();
     sysprof::frame(fx_.liveParticles(), fx_.liveMeshes());
 
+    // HUD crosshair state (presentation only; drawn by the renderer from the original HUD movie).
+    // [integration/milestone-03] The values come from Gameplay's TnHUD observers (PlayerController
+    // hudAimState / NotifyWeaponSpreadChanged): raw effective spread = bloom x airborne multiplier x
+    // fine aim 0.5, re-sent only when it moves by > 0.002 [CONF RE d50e2a9]. No scope / replacement
+    // reticle for the Ion Blaster (AssetTools 7a69756 fineaim_hud.json).
+    render::IRenderer::ReticleState reticle;
+    const HudAimState hud = player_.controller().hudAimState();
+    reticle.visible = hud.crosshairVisible;
+    reticle.weaponSpread = player_.controller().hudSpread();
+    reticle.targetType = hud.targetType;
+    r.setReticle(reticle);
+
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {
         auto wireBox = [&](core::Vec3 c, core::Vec3 half, core::Vec3 col) {

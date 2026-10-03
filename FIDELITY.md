@@ -1016,6 +1016,165 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
 
 ---
 
+## MILESTONE 03 PASS 5 — NORMAL-PLAY CHARACTER SHADOW RUNTIME (2026-10-02)
+Native provenance: RE-Workspace `notes/MILESTONE03_RENDERING_CHARACTER_SHADOW_RUNTIME.md`, ReverseEngineering commit
+**7033f18** (builds on 13c0953 / pass 4, Rendering checkpoint 566a87f). This pass supersedes the pass-4 rows "Projection
+gates" (bit 0x4 is the SUBJECT's view relevance, not a light flag), "shadowFactor -> projection strength" and "Resolve /
+blur". Character shadows now run in normal play without any opt-in.
+
+| Item | Original (WFC) | Source | Mark | Rebuild |
+|---|---|---|---|---|
+| Synthetic projector | one synthetic shadow light per light environment; never the scene light | 0x82DE6598, vtable 0x822DD770 | **CONFIRMED** | `ShadowProjector` per DirectLightEnv (robot, vehicle) |
+| Projector update | every proxy build (full and incremental updates): type (1 dir / 2 point / 3 spot), LightToWorld, Radius, ShadowFalloffExponent, cones, Min/MaxShadowResolution, ModShadowColor = shadowFactor; overwritten in place (no crossfade, no second projector) | 0x82CCE0A8, 0x82DDD128 / 0x82DDD240 / 0x82DDD368 | **CONFIRMED** | **APPLIED** (`updateShadowProjector`) |
+| Directional projector values | Radius 327680 UU, ShadowFalloffExponent 2.0, cones (0, −1, −1, 0) | 0x82DDD128 | **CONFIRMED** | **APPLIED** (no Streets directional light casts a composite shadow: diagnostic only) |
+| No record | shadowFactor within 1e-4 of white (and the earlier 0.05 drop) -> slot flags cleared, no shadow | 0x820A1AE0, 0x82DE6598 | **CONFIRMED** | **APPLIED** |
+| Slot creation / registration / interaction linking | how the synthetic light is allocated, added to the scene and linked to the environment's primitives | — | **PARTIAL / UNKNOWN** | structural stand-in: the projector lives in the environment state and is cast for that environment's drawn form |
+| Strength | FadeAlpha = 1.0 always; ShadowModulateColor = lerp(1, ModShadowColor, 1) = shadowFactor; all fading inside shadowFactor (0.2 luminance gap x smoothed visibility); no distance / resolution fade | 0x83056A20, 0x82D077F8 | **CONFIRMED** | **APPLIED**; the pass-4 authored-ModShadowColor opt-in substitute and WFC_SHADOWFADEALPHA are removed |
+| Mod projection combine | out = lerp(lerp(1, SMC, atten), 1, PCF), atten = spot² (1 − saturate(|d/R|²)^ShadowFalloffExponent) | spot variant microcode | **PARTIAL** (directional / point variants not decoded) | decoded form for every type; directional uses the projector origin as the light position |
+| Creation: light side | projector on, ModShadowColor not white (1e-4), light in at least one view | 0x83057028 | **CONFIRMED** | **APPLIED** (point / spot: light sphere vs view frustum; directional: always) |
+| Creation: subject side | interaction PROJECTED for CastShadow ∧ bCastDynamicShadow; no ShadowParent; relevant ((relevance & 7) != 0) or visible; initializer type 1/2/3 | 0x82DBFA80, 0x83056A20 | **CONFIRMED** | **APPLIED**; Optimus robot / vehicle mesh components: CastShadow True (MeshComponent), bCastDynamicShadow True, bCastHiddenShadow False (authored.db) |
+| IsShadowCast (relevance 0x4) | CastShadow required; hidden / owner-see cases -> bCastHiddenShadow; else within MaxDrawDistance (LODDistanceFactor) | 0x82DD8D58 | **CONFIRMED** | **APPLIED** (`shadowViewRelevance`); CachedCullDistance 0 -> unlimited; hidden forms are not drawn -> no shadow |
+| DPG relevance | bit 5 + DPG from the proxy: DepthPriorityGroup, or ViewOwnerDepthPriorityGroup when bUseViewOwnerDPG and the view's owner matches | 0x82C8BCF0 | **CONFIRMED** | **APPLIED**; Optimus meshes: SDPG_World, no view-owner DPG (authored) -> World pass |
+| Occlusion / preshadow | per-view shadow occlusion query; a preshadow when the subject is visible (static receivers from the light's static list) | 0x82DEA630, 0x83056A20 | CONFIRMED (existence) / PARTIAL (synthetic light's static list unknown) | not reproduced (no occlusion queries; preshadow casters unknown) |
+| Shadow children | ShadowParent children folded into the parent's single shadow | 0x83056958 | **CONFIRMED** (mechanism) | the Ion Blaster mesh has its own LightEnvironment and CastShadow True; whether script sets its ShadowParent is UNKNOWN -> weapon not a caster (unchanged) |
+| Skeletal proxy early-out | proxy 0x82C9E5C0 returns 0x8242 (foreground DPG, no shadow bit) under unverified conditions | — | **PARTIAL** | not reproduced |
+| Shadow space | perspective for every type; origin = light position (point / spot) or B.Origin − (2R + 300 UU)·axis (directional); pulled back to √2·R; MinLightW 0.1 UU; MaxLightW = Radius or 2(2R + 300); DynamicShadowDepthBias input (0 on both forms) | 0x82E22A38, 0x82DBF678, 0x82DBF728 | **CONFIRMED** | **APPLIED** |
+| Frustum fit / ScreenToShadowMatrix | VMX128 bounding fit of the projected corners; texel / half-texel terms | 0x8301CD08, 0x82CFB598 | **PARTIAL / UNKNOWN** | sphere-tangent perspective, depth clamped to [MinLightW, MaxLightW] [PROV] |
+| Shadow resolution | clamp((int)(1.0·ScreenRadius), min(Min, Buf − 10), min(Max − 10, Buf − 10)); ScreenRadius = max(0.5·SizeX·P00, 0.5·SizeY·P11)·R / max(clipW, 1 UU); light 0 -> 128 / 1024; Buf 1024; 5-texel border | 0x83056A20 | **CONFIRMED** | **APPLIED** (Streets lights author no Min/MaxShadowResolution) |
+| Blur | only if a shadow was drawn; H then V; 6 bilinear clamped taps at ±0.5 / ±1.5 / ±2.5 texels; weights {4, 2, 1}·(4 − s), normalised; horizontal output squared | 0x82DDB070, 0x82E0C8A0, Engine ShaderCache_10303 | **CONFIRMED** | **APPLIED**; GPU == closed form (max error 0 / 255) |
+| Blur tie branch | (s(−B) == s(−A)) ∧ (s(+B) > s(−B)) alternative result | decoded swizzle uncertain | **PARTIAL** | off by default; WFC_BLURTIE=1 enables the decoded form |
+| Transform | each environment owns its projector; only the drawn form casts | 13c0953 §4, 7033f18 §5 | CONFIRMED mechanism / environment survival across transform UNKNOWN | one projected shadow per frame through r2v / v2r; the hidden form's projector is stale but casts nothing |
+| Normal-play result | — | — | — | spawn 18 robot (baked PointLight_4177_LC, ShadowModulateColor 0.098), spawn 21 robot (PointLight_14841_LC, 0.825), vehicle at 18 (0.105); spawns without a composite light: projector off, mask 1 |
+
+## MILESTONE 03 PASS 4 — NATIVE CHARACTER SHADOW MASK, DLAC, BIAS / PCF (2026-10-02)
+Native provenance: RE-Workspace `notes/MILESTONE03_RENDERING_CHARACTER_SHADOW_PATH.md`, ReverseEngineering commit
+**13c0953** (supersedes the pass-3 UNKNOWN rows for the shadow-mask write path and the DLAC formula). Authored data:
+AssetTools commit **7a69756** (`manifests/fineaim_hud.json`, `streets_pickup_fx.json`, `streets_destructibles.json`).
+
+| Item | Original (WFC) | Source | Mark | Rebuild |
+|---|---|---|---|---|
+| ShadowMask target | A8R8G8B8 at the scene buffer size SizeX/f x SizeY/f, f = (SizeX > 960) ? 2 : 1 (640x360 at 720p) | 0x83037390, 0x8302AE28 (factor read from the image this pass) | **CONFIRMED ORIGINAL** | **APPLIED** (RGBA8 + D24S8 stencil buffer) |
+| Mask clear / convention | cleared once per build to (1,1,1,1); stores visibility (1 = lit) | 0x83010218 (`*0x8370AE88`) | **CONFIRMED ORIGINAL** | **APPLIED**; no projection -> mask stays 1 (neutral texture) |
+| Projection region | z-fail stencil volume of the 8 frustum corners (front zfail Inc, back zfail Dec, Always), then the box drawn where stencil != 0; stencil cleared after each light | 0x8304EF70 | **CONFIRMED ORIGINAL** | **APPLIED** (GL_INCR_WRAP / DECR_WRAP, depth clamp, back faces once per pixel) |
+| Mask combination | blend Src = DestColor, Dst = Zero (rgb), alpha Src = Zero, Dst = One: mask.rgb *= projection.rgb, alpha untouched; every shadow multiplies into one mask | 0x82CF8048 | **CONFIRMED ORIGINAL** | **APPLIED** (BlendFuncSeparate) |
+| Resolve / blur | resolve, then BlurShadowMask (horizontal, vertical) only if something was drawn | 0x82DEC190, 0x82DDB070 | placement **CONFIRMED ORIGINAL** / kernel **UNKNOWN** | resolve implicit; blur NOT run (no invented kernel) |
+| Character read | ShadowMaskTexture .r at screen UV + ShadowMaskTexelOffset (0.5 / mask size) | 0x82DDAEF0 + uber-shader microcode | **CONFIRMED ORIGINAL** | **APPLIED** (point sampled; GL pixel-centre screen UV) |
+| DirectLightAmbientContribution | rgb = CubeSum(LightsSH) / (CubeSum(AmbientSH + LightsSH) + 0.001), w = 0; LightsSH = overflow lights + (1 − f) of the crossfaded light; per environment, every update | 0x82CCE0A8, 0x82CED7F8, 0x82CED980, 0x82E2EDA8 | **CONFIRMED ORIGINAL** (copy to +0x1D0 HIGH) | **APPLIED** from the env's ambient cube (Streets: no SH probes; cube vs SH basis PARTIAL as before); measured 0 … 0.95 across spawns |
+| ShadowDepthBias | (Res · MaskedShadowsDepthBias / ShadowFilterRadius)² = (1024 · 0.2 / 6)² = 1165.08, parabolic; no slope-scaled / receiver bias; DepthBias (0) unused | 0x82CFB598 | **CONFIRMED ORIGINAL** (CPU) | **APPLIED** in the decoded projection bias term |
+| Shipped shadow constants | MaxShadowResolution 1024 (Res clamp [1, 2048]), MaskedShadowsDepthBias 0.2, ShadowFilterRadius 6, DepthBias 0, ShadowFilterQuality 0, bEnableBranchingPCFShadows True | Xe-TransEngine.ini, 0x830101E0 | **CONFIRMED ORIGINAL** | **APPLIED**; shadow buffer Res x Res, per-shadow viewport |
+| BranchingPCF | 4 edge taps rotated by RandomAngleTexture, then 12 refining taps when lit is fractional; offsets = native tables x 6 / Res | 0x83711DFC, 0x83711EC0, 0x82CF1A00 | **CONFIRMED ORIGINAL** | **APPLIED** (exact tables) |
+| Projection gates | light render flags bit 0x4 and the DPG bit (bit 5 + DPG) | 0x8304EF70 | **CONFIRMED ORIGINAL** (which lights set the bits UNKNOWN) | **APPLIED**; all lights carry both bits; WFC_LIGHTRENDERFLAGS test override |
+| Composite light eligibility | baked lights can be the composite light; robot and vehicle identical path | 13c0953 §4 | **CONFIRMED ORIGINAL** | baked PointLight_4177_LC selected at spawn 18 (robot, vehicle, transform, walk) |
+| shadowFactor -> projection strength | ShadowModulateColor = lerp(1, ModShadowColor, FadeAlpha) confirmed; the link from the composite record's shadowFactor to that light / FadeAlpha not proven | 0x82D077F8, §1.6 | **PARTIAL / UNKNOWN** | not wired; opt-in path uses the light's ModShadowColor, FadeAlpha 1 (WFC_SHADOWFADEALPHA) |
+| Projection shader bias / offset use | in-shader use of ShadowDepthBias / offsets (decoded here earlier from engine microcode; 13c0953 leaves it PARTIAL) | — | **PARTIAL** | decoded microcode form |
+| ScreenToShadowMatrix | VMX construction not decoded | 0x82CFB598 | **UNKNOWN** | inverse view-projection + subject-fit matrix [PROV] |
+| Projected-shadow creation gates | distance / resolution / cast-flag cuts not traced | — | **UNKNOWN** | none added |
+| Downsampled depth for the mask stencil | which depth the mask-sized stencil test uses | 0x83010218 binds SceneDepth | **PARTIAL** | point-sampled scene depth |
+| Normal-play status | — | — | — | character projection stays opt-in (WFC_CHARSHADOWS=1) until shadowFactor, the shadow matrix and creation gates are recovered; the default mask is the native "nothing drawn" (1,1,1,1) |
+| Ion Blaster fine-aim HUD | no scope / ADS overlay; mc_crosshairIonBlaster in both states; prongs move by spread x 300 stage px, 0.2 s easeout, first value instant; controller at (0.2, 0.2) px; FineAimSpreadModifier 0.5 | AssetTools 7a69756 fineaim_hud.json | CONFIRMED AUTHORED DATA (spread combination HIGH) | first value instant, +0.2 px anchor, HUD spread uses the fine-aim modifier |
+| Pickup FX materials | LightVolume_WepPickup_MAT, Glow_Mod_Depth_MAT, ParticleBase_BW_MAT, Basic_Particle_Add_MAT, EnergonCube_Circuits_MATINST, Overshield_MATINST, WEP_Crates_MAT (cooked in TransGame) | streets_pickup_fx.json | CONFIRMED AUTHORED DATA | compiled from TransGame.xxx (fallback package); all match their shipped permutations; emitters are Systems-owned |
+| Wall-panel destructible | TnStaticDestructibleActor_14465 at (896, 89968, −352), ~139k UU from the play space; WallPanelSign_MATINST / _EMISSOFF_MATINST states | streets_destructibles.json | CONFIRMED AUTHORED DATA | state materials compiled; actor not moved / not drawn (outside the playable area) |
+| TR_AllShader_p.Textures.bubbles | not cooked in the Streets packages; TransGame copy: Texture2D DXT1, SRGB False | TransGame.xxx | CONFIRMED | ENV_EngergonGlass_MAT_INST now uses the real flags (was defaulted SRGB True) |
+
+## MILESTONE 03 PASS 3 — NATIVE LIGHT VISIBILITY, CHARACTER LIGHTING, SHADOW STRENGTH, COLOUR (2026-10-02)
+Native provenance: RE-Workspace `notes/MILESTONE03_RENDERING_LIGHTVIS_SHADOW.md`, ReverseEngineering commits
+**b52dca9** (LightsVisibilitiesVolume + DirectLightEnv), **c95dadd** (gather, spot intensity, update queue,
+transitions), **31f9a9b** (DynamicShadowLuminanceScale shader consumption). Marks: CONFIRMED ORIGINAL / HIGH /
+PARTIAL / UNKNOWN.
+
+| Item | Original (WFC) | Source | Mark | Rebuild |
+|---|---|---|---|---|
+| LightsVisibilitiesVolume layout | u8 bHasOctree; recursive node {8 x i32 corner (low 16 bits), i32 hasData, u8 hasChildren, 8 children}; centre, root half, u32 +0x18, finest half; GUID table; u16 corner remap; per-sample count bytes; u32 pair pool | 0x82DF5748 / 0x82DF5590 | CONFIRMED | **APPLIED** (render/LightVisibilityVolume.*) |
+| Streets blob | 18153 nodes, centre (19072, −43008, −72448), root half 26729.2, finest half 512, 268 GUIDs (256 bound to level lights by LightGuid), 17487 corners, 3096 samples, 7679 pairs, indices strictly ascending, bit 7 never set | lvv_decode.py / runtime self-check | CONFIRMED (data) | validated at load |
+| Count-byte halving | archive flag halves count bytes on load; Streets pool only matches with halved counts | blob arithmetic | CONFIRMED for Streets / PARTIAL flag identity | applied when the halved counts match the pool |
+| Octree +0x18 | 0x45800000 (4096.0 as a float); not read by the query | blob | UNKNOWN meaning | ignored (as the query) |
+| Count bit 7 | honoured as "invalid" on the face path only | 0x82DDDA08 | PARTIAL meaning | reproduced literally |
+| Query | strict root test; child (x>c)<<2|(y>c)<<1|(z>c); corner bit0 X; remap; plain trilinear (0-pair corners renormalized away) or T-junction face blend (6 faces x 4 corners, weight 1/3, finer neighbours); 16-bit fixed-point merge with truncation; renormalize 1/(1−emptyW); outside / empty leaf -> no data | 0x82DDE200 / 0x82DDDA08 / 0x82DDD798 / 0x82E03238 | CONFIRMED | **APPLIED**; C++ == independent Python port at 400 points (163 outside, 130 empty leaves, 77 trilinear, 30 face-blend) |
+| Baked vs unbaked | baked lights (bound in the table): volume visibility at the bounds origin, no rays, 0 outside / empty; unbaked: N = clamp(round(15·√lum(colour·Imax) + 0.5), 1, samples) sample rays, 0.03 / 0.01 thresholds, stagger mod 5, ray gate CastShadows && CastStaticShadows, ray ends 15 UU short | 0x82CE1918 / 0x82CC2700 | CONFIRMED | **APPLIED** (no rays for baked lights) |
+| Gather | LightAffectsEnv: enabled; light function only with composite shadow; CompositeDynamic -> Dynamic; shared channel; special channels ⊆ env; point/spot RadiusOfInfluence + bounds radius; spot sphere-vs-cone (clamped outer) | 0x82DF5068 / 0x82CC2608 / 0x82DD3EF0 / 0x82E2CDF8 | CONFIRMED (cone test arithmetic HIGH) | **APPLIED**; env channels robot Dynamic+PlayerOnly, vehicle Dynamic (HIGH) |
+| IntensityAt | point B·max(0, 1 − (d/R)²)^F; spot point · cone², cones clamped (inner [0, 89]°, outer [inner + 0.001, 1.5543429] rad); directional B | 0x82DC1F60 / 0x82E2CFE0 / 0x82DBEAC0 | CONFIRMED | **APPLIED** |
+| Ranking | direct: lum(LightColor/255 · I) · vis (0.3/0.59/0.11), cap TotalLightCount 2, boundary crossfade into ambient; composite: lum without visibility, cap 1, 0.2 runner-up fade, × smoothed visibility, factor 1 − fade, drop within 0.05 | 0x82CDDE70 / 0x82CCB110 / 0x82CD4540 | CONFIRMED | **APPLIED** |
+| Updates | mode 1 when the bounds origin moves > DetailScale[DetailMode 2]=3 × 30 UU (×100 squared after 0.1 s unrendered) or settles; mode 2 incremental every tick; full updates through the global queue (deadline frame + 2, FIFO 2 ms budget); first update after attach immediate | 0x82DD17C8 / 0x82CD2538 / 0x82CDD438 / 0x82DBEF90 | CONFIRMED (budget availability PARTIAL) | **APPLIED** |
+| Transitions | visibility moves linearly at clamp(|v|·0.002, 0.2, 1)/0.5 per second inside updates only; no between-update interpolation for WFC pawns | 0x82CDDE70 / 0x82CD3840 | CONFIRMED | **APPLIED** |
+| DirectLightEnv self-test | 20 checks (RoI boundary, channels, spot cones, queue deadline, first update, transition) | WFC_DLETEST | — | 20/20 PASS |
+| DynamicShadowLuminanceScale shader use | mask = ShadowMaskTexture.x; S = (1 − mask)(1 − DSLS); character uber pass: ambient·(1 − DLAC·S) + direct·(1 − S), one mask for the summed lights; per-light pass light·material·(1 − S); before SceneColorBiasFactor, linear, no clamp | Xenos microcode (31f9a9b) | **CONFIRMED ORIGINAL** | **APPLIED** in the uber pass |
+| DSLS shipped value | 0 (BSS; no config sets it) -> full native dynamic-shadow strength | 0x8382DDF4 | CONFIRMED | 0 (WFC_DSLS test override, clamped [0, 1]) |
+| DirectLightAmbientContribution CPU calculation | SH ratio in proxy build 0x82CCE0A8 (HIGH), formula not recovered | 31f9a9b | **PARTIAL / UNKNOWN** | 0 (inert while the mask is 1); WFC_DLAC test override |
+| Shadow-mask write generation | how the composite shadowFactor reaches ShadowMaskTexture | — | **PARTIAL / UNKNOWN** | neutral mask 1.0 (= the unshadowed original); WFC_SHADOWMASKTEST test hook |
+| DSLS validation | DSLS 1 bit-identical to the unmasked render; world pixels untouched; DSLS 0 < 0.5 < 1 on characters; default render bit-identical to the previous checkpoint | lockstep matrix (robot/vehicle bright+dark, transform, walk) | — | PASS |
+| Projected shadow stages | caster depth VS, branching-PCF projection PS, RandomAngles texture, frustum-bounded projection | engine/BASE microcode | CONFIRMED | implemented; opt-in WFC_CHARSHADOWS (native DepthBias / ShadowDepthBias / PCF offset tables UNKNOWN) |
+| Texture gamma | UE3 SRGB textures use Xenos gamma formats: PWL degamma (64/96/192 segments, trunc correction, /1023) | xenia (Source X360GammaToLinear + D3D9 disassembly) | HIGH | **APPLIED** (RGBA16 linear upload; WFC_SRGBCURVE A/B) |
+| Lightmap textures | LightMapTexture2D inherits Default__Texture SRGB=True -> PWL | Engine defaults | CONFIRMED | PWL |
+| Vertex lightmaps | exp2(log2(max(|c|, 1e-4))·2.2)·LightMapScale[k] per vertex | vertex-lightmap VS microcode | CONFIRMED | **APPLIED** |
+| CPU colours | FColor -> FLinearColor through pow(i/255, 2.2) table (light colours, ModShadowColor) | PowOneOver255Table 0x82251110 | CONFIRMED | pow 2.2 |
+| HUD textures | UI_GFxHud_p textures SRGB False, composited raw | cooked flags | CONFIRMED | raw |
+| Weapon muzzle light | TnWeaponMesh.MuzzleFlashLight = IonBlaster PointLightComponent (Radius 3000, FalloffExponent 75, RadiusOfInfluence 504.7, Brightness 10, colour 255/143/140, bCastCompositeShadow, ModShadowColor (3, 0.05, 0.04)), all light channels | WEP_IonBlaster_p archetype | CONFIRMED data | not driven (Systems/Gameplay owner) |
+| DeadBodies_Mat_INST | static switch array with a numbered FName and a stale entry | MIC native tail | CONFIRMED | decoded; permutation now matches (189/203) |
+
+## MILESTONE 03 PASS 2 — RENDERING (2026-10-02, branch agents/rendering)
+Marks: **CONFIRMED ORIGINAL** (cooked data / Xenon microcode / shipped ini) · **HIGH** (standard UE3 semantics on
+confirmed data) · **PROV** · **UNKNOWN**. Deterministic captures: `WFC_LOCKSTEP=1`; audit set
+`bash tools/render/capture_audit.sh` (frame reports in docs/rendering/audit/).
+
+| Item | Original (WFC) | Source | Mark | Rebuild |
+|---|---|---|---|---|
+| Distortion accumulate | s = 4·Distortion.xy; kill if dot(s,s) − 0.1 < 0; clamp ±255; ×1/255; RG = max(s,0), BA = abs(min(s,0)) | Xenon PS of Ring_Distort_Add_MAT (BASE shader cache; literals 1.25 / −0.15 / 0.1 identify it) | CONFIRMED | **APPLIED** per-material variant, additive, scene-depth tested |
+| Distortion apply | uv + (acc.rg − acc.ba)·(0.25, −0.25) (D3D v-down), SceneColor fetch | engine PS (AccumulatedDistortionTexture / SceneColorTexture) | CONFIRMED | **APPLIED** before post |
+| Distortion RT | 8-bit UNORM implied by the ±255 / 255 encode | microcode encode | HIGH | RGBA8 |
+| Distortion order | after translucency, before post | UE3 frame order | HIGH | applied in endFrame |
+| Hover / ram emitter materials | base_glow → Glow_Mod_MAT (modulate), rays_Dup → Trail_Distort_MAT (distortion), ram dust → Distortion_Cloud_01_MAT | ParticleModuleRequired.Material | CONFIRMED | all compiled with distortion / modulate paths; **emitters not spawned (Systems)** |
+| Vehicle slots | slot 0 RB_OptimusPrime_Cust2_Mat_INST (9728 tris), slot 1 InteriorAlt_Energon_MAT_INST (1923) | cooked slot table (umodel) | CONFIRMED | matches; full audit docs/rendering/vehicle_material_audit.md |
+| Vehicle normal map | VH_Optimus_NORM DXT5; graph reads .a (X) and .g (Y); unpack −1; UseReconstructedNormal = True | texture + graph + MIC switch | CONFIRMED | matches |
+| Energon colour | compiled permutations of both Optimus MICs embed only the red EnergonColor default (1.25, 0.05, 0.05) | FMaterialResource | CONFIRMED | red |
+| BSP polygon winding | cooked vertex order consistent with the surface normal (Newell: 0 of 889 polygons need flipping) | cooked FModelVertexBuffer + surface normals | CONFIRMED | **FIXED**: 44 polygons had been flipped by a degenerate first-triangle test and culled from above, showing the fog-coloured clear (flat pink / lavender floors) |
+| Hidden actors | bHidden InterpActors (RepairNodeB ×2, Base_D, Base_A) | props_authored.json (effective values) | CONFIRMED | not drawn (WFC_SHOWHIDDEN to inspect) |
+| No-light components | bAcceptsLights False / empty LightingChannels: 123 unlit FX meshes + AutobotSign ×2, CityBackdrop ×2, SpaceDome | props_authored.json; UE3 channel overlap | CONFIRMED data / HIGH semantics | zero light environment (emissive only) |
+| Unlit props without baked lighting | 124 MLM_Unlit FX meshes (light planes, beams, glow spheres, stains) | materials | CONFIRMED | intentionally none |
+| Dark spire wall (spawn 10) | baked lightmap at map percentile 42 (dark blue) | lightmap texels | CONFIRMED | authored appearance |
+| Character light visibility | LightEnvironmentComponent NormalizedSampleOffsets: robot (0,0,.9) (0,0,−.7) (.7,.7,.7) (−.7,−.7,.7) (.7,−.7,−.7) (−.7,.7,−.7); vehicle (0,0,.7) (±.8,±.8,0); TotalLightCount 2; UpdateDistanceThreshold 30 UU | TransGame Default__TnRobotForm / TnVehicleForm | CONFIRMED data | **APPLIED**: visibility = fraction of samples at bounds origin + offset·extent with a clear path (HIGH semantics); form chosen by material package (_ROBO_p / WEP_ → robot, _VEH_p → vehicle) |
+| Lighting channels | robot mesh adds PlayerOnly; Streets lights: 266 all-channel, 2 dynamic-only, none PlayerOnly | TransGame + level lights | CONFIRMED | no change needed |
+| Character shadows | modulated projected shadows: SceneColor ×= lerp(lerp(1, ModShadowColor, atten), 1, lit²); 4-tap PCF, receiver depth clamp 0.999; atten = spot² · (1 − sat(abs(d/R)²)^ShadowFalloffExponent); ini ShadowFilterQuality 0, Min/MaxShadowResolution 128/1024, ShadowTexelsPerPixel 1, ModShadowFadeDistanceExponent 0.2, LightEnvironmentShadows True; ~35 lights bCastCompositeShadow | engine PS microcode + Xe-TransEngine.ini + light props | CONFIRMED (projection / filter) / UNKNOWN (shadow light selection) | **NOT IMPLEMENTED**: the WFC LightEnvironmentComponent shadow-light (composite) selection is in default.xex (ReVa request) |
+| Light visibility volume | LightsVisibilitiesVolume_2224 (Location (19072, −43008, −72448), DrawScale3D 26729): 744772-byte native blob = octree head (714056 B: BE int32 child indices, 32-byte light bitmasks per node) + 7679 (u16 light index 0..267, u16 visibility in 1/20 steps) pairs, preceded by per-cell even byte counts | cooked native data | CONFIRMED fragments / UNKNOWN cell → pair mapping | **NOT USED**: node record layout + light index order need default.xex (ReVa request); runtime traces kept |
+| First-shot hitch | no renderer resource is created during combat on this branch (first-use log empty; render span 6.2 ms on shot frames); the M02 hitch (programFor → texture → decodeImage) is now prewarmed at load | WFC_RENDERSTATS first-use / spike log | CONFIRMED (measurement) | prewarm of all unused compiled materials after frame 1 |
+| Build configuration | M03 perf numbers were Debug builds; Release: skinned vertex rebuild 3.13 → 0.24 ms, idle submit 5.75 → 1.93 ms | measurement | CONFIRMED | measure with Release (build/release) |
+
+## MILESTONE 03 — RENDERING FIDELITY (2026-10-02, branch agents/rendering)
+Verification tooling: `tools/render/verify_permutations.py` diffs every translated graph's parameter reads against
+the parameter list of the material's COMPILED FMaterialResource (uniform expressions in the cooked native tail):
+30 → **187 / 202 materials match** (remaining: 10 unknown = unnamed "None" parameters or textures the original
+compiler eliminated; 1 differs = DeadBodies_Mat_INST, static switches not decoded). `tools/render/audit_map.py`
+writes `work/render/<Map>/map_audit.json` (EXPECTED from cooked levels + AssetTools exports vs ACTIVE from the
+renderer's upload dump `WFC_AUDIT_DUMP`).
+
+| Item | Original (WFC) | Source | Conf | Rebuild |
+|---|---|---|---|---|
+| CameraVector / ReflectionVector space | `CoordinateSpace = CS_World` on 11/9 nodes (vehicle, robot, world reflections) | expression props | CONF | **FIXED**: world-space vectors (were tangent) |
+| Cube reflection LOD | WFC `TextureSampleParameterCube.LODBias` input (Reflection_LOD_Scale) | expression props | CONF | **FIXED**: texture(…, bias) |
+| Fresnel exponent input | WFC `Fresnel.Exp` input overrides Exponent | expression props | CONF | **FIXED** |
+| Static switch decode | MIC native tail arrays validated against real StaticSwitchParameter names | cooked MICs | CONF | **FIXED** (bogus `_DialogEventManager` records rejected) |
+| Lazy function inputs | unused material-function inputs emit no code (switch-dependent reads) | compiled permutations | CONF | **FIXED** |
+| DepthBiasedAlpha | Alpha·saturate((SceneDepth−PixelDepth)/max((1−Bias)·BiasScale,.001)); WFC BiasScaleInput | UE3 semantics + props | MED | **APPLIED**: scene-depth copy (blit when opaque drawn), view-Z depths |
+| PixelDepth | view-space Z (UE units) | UE3 semantics | MED | **FIXED** (was eye distance) |
+| ScreenPosition (bScreenAlign false, all 16 nodes) | clip-space position; UE3 infinite-far: w = view Z, z = view Z − near | UE3 semantics | MED | **FIXED** (was fragcoord, z = 0 ⇒ Boostermaterial_02 near-fade made the flame black; light-volume materials affected too) |
+| Blend-mode fog | additive: c·fog.a; modulate: lerp(1,c,fog.a); others c·fog.a+inscatter | UE3 base pass | MED | **APPLIED** (additive surfaces no longer gain fog colour) |
+| Vehicle / weapon FX materials | emitter materials (ParticleModuleRequired.Material) of bumble_boost_small1_FX, CarHover_A_01_FX, Truck_ram_FX, weapon FX: 27 graphs | cooked ParticleSystems | CONF | **COMPILED** (`tools/render/fx_materials.txt`); mesh emitters + sprites shaded by them (`ParticleBatch.material`, drawMeshFx) |
+| MeshEmitterVertexColor | compiled as VectorParameter "MeshEmitterVertexColor" = particle colour | compiled permutations | CONF | particle colour → vertex colour |
+| Ram_model_MAT rim | WFC ShaderCode `saturate(pow(saturate(abs(dot(CameraVector(CS_World), Normal))*1.5),2))` | expression props | CONF graph / PROV semantics | reproduced literally (Normal node = tangent normal, as for all other users); brightness depends on view elevation — confirm with microcode |
+| Actor-placed props | StaticMeshActor / StaticInterpActor nodes carry only `actor` in world.glb | world.glb, lighting records | CONF | **FIXED**: actor → its single StaticMeshComponent ⇒ 38 submeshes now use their baked lightmaps |
+| Vertex lightmaps (LMT_1D) | 24 components (Arch_4096, Core_RoutingWallA, PowerTubeCircle, CoolantSurfaceHole, declogo): bulk FQuantizedDirectionalLightSample (3 × FColor A,R,G,B; per-channel normalized to 255) + ScaleVectors[3] | cooked StaticMeshComponent native tail | CONF layout / PROV gamma | **APPLIED**: decoded pow(b/255, 2.2)·scale through the 3-coefficient directional formula (vertex count matches LOD0 for all 24) |
+| BSP elements without lightmaps | 360/540 elements: LightMapType 0, no IrrelevantLights / ShadowMaps / light GUIDs | cooked FModelComponent | CONF data / PROV runtime | dynamic light environment (assumed UE3 uncached interactions) — audit status `unknown` |
+| HUD crosshair (Ion Blaster) | Hud_GFX.gfx `mc_crosshairIonBlaster`: 3 × bitmap 400 (32×16, fill-stretched to 30×12) at 0/120/240°, anchor stage (560,360) of 1120×720; prong `_y` eases (0.2 s) to −300·WeaponSpread; tint by target type 0x50B5D5 / 0xFF3333 / white | GFx tags + AVM1 (sprite 404, 621) | CONF | **APPLIED** (`IRenderer::setReticle`); scale mode + easeout curve PROV |
+| Fine aim presentation | `NotifyFineAimChanged`: scope only for HeavyPistol/BurstRifle/SniperRifle; Ion Blaster → `hideScope` (crosshair unchanged; prongs follow WeaponSpread) | AVM1 sprite 621 | CONF | matches: no scope for the Ion Blaster |
+| Transformed-vehicle / robot materials (mottled grey-pink vehicle, wrong energon after transform) | each form's own MICs | renderer bug | CONF | **FIXED**: dynamic-mesh program cache was keyed by Material* address; the character pose buffer reuses storage across forms, so the vehicle got the robot's programs (robot textures on vehicle UVs). Now keyed by material content |
+| FX GL1 stand-ins | Systems' per-mesh intensity (LightCylinder 0.1 = DustPower) double-applied once the real graph runs | — | CONF | `IRenderer::evaluatesFxMaterials()`; VehicleFx drops the stand-in when true (hover light cones visible again) |
+| Missing TexCoord channels | UE3 FLocalVertexFactory binds the last available texcoord for missing channels; Light_Cylinder_STAT is cooked with NumTexCoords = 1 | cooked vertex buffer | CONF | **FIXED**: loader duplicates UV0 into UV1; material TexCoord[1] now reads the raw channel (was the lightmap-transformed UV). Hover light-cone plumes (LightVolume graph samples TexCoord1) now render as depth-faded downward plumes |
+| Energon colour (Optimus) | UseAutobotEnergonColor = True → A branch EnergonColor (1.25,0.05,0.05) red; blue (0.2,0.1,1.5) is the False branch | MIC static switches + compiled permutations of both Optimus MICs embed the red default only | CONF | red is correct with the all-zero runtime colour set; no Gameplay call site exists (setCharacterColors never called) |
+| Debug box in transform stills | World debug overlay (capsule wireBox + aim ray) toggled by an interactive 'B' press during a scripted run | Application input | CONF | interactive toggle ignored in WFC_SMOKE_FRAMES runs (WFC_DEBUGDRAW opt-in) |
+| Mesh-particle light environment | UE3 mesh emitters share the particle system's light environment | UE3 design | MED | small dynamic meshes (< 0.5 m) share a per-1 m-cell env, refreshed every 60 frames |
+| Light-env visibility traces | per-light traces from the object (static lights/world) | UE3 light env | CONF | memoized per (light, 0.25 m cell); unlit (FX) programs skip the env entirely |
+
+---
+
 ## PASS 9 — CHARACTER CUSTOMIZATION (2026-10-01, branch agents/rendering)
 | Item | Original (WFC) | Source | Conf | Rebuild |
 |---|---|---|---|---|

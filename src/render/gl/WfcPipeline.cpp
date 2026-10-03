@@ -50,14 +50,22 @@ layout(location=1) in vec3 aNrm;
 layout(location=2) in vec4 aTan;
 layout(location=3) in vec2 aUV0;
 layout(location=4) in vec2 aUV1;
+layout(location=5) in vec4 aColor;   // particle colour (FX draws); constant white otherwise
 uniform mat4 uViewProj;
 uniform mat4 uModel;
+uniform vec4 uShadowDepth;   // shadow caster pass: x on, y InvMaxSubjectDepth, z DepthBias
+uniform vec4 uShadowZ;       // world -> shadow-space z row
 uniform vec3 uCamPos;
 uniform vec4 uLMCoord;
 uniform int uFogOn;
 uniform float uFogMaxH, uFogScale, uFogStart, uFogExt;
 uniform vec3 uFogIn;
+uniform int uVertexLM;       // LMT_1D vertex lightmap: coefficients per vertex from uVLM (rows 0..2)
+uniform int uVLMBase;
+uniform sampler2D uVLM;
 out vec3 vPos; out vec3 vNrm; out vec4 vTan; out vec2 vUV0; out vec2 vUV1; out vec4 vFog; out vec4 vColor;
+out vec3 vVLM0; out vec3 vVLM1; out vec3 vVLM2;
+out vec2 vUV1Mat;            // raw second UV channel (material TexCoord[1]); vUV1 is the lightmap UV
 
 // UE3 vertex height fog (THeightFogVertexShader / CalcHeightFog), single authored layer, UE units.
 // Layer spans [-HALF_WORLD_MAX, FogMaxHeight]; scattering = exp2(FogDistanceScale *
@@ -88,14 +96,28 @@ void main() {
     vTan = vec4(nm * aTan.xyz, aTan.w);
     vUV0 = aUV0;
     vUV1 = aUV1 * uLMCoord.xy + uLMCoord.zw;
-    vColor = vec4(1.0);
+    vUV1Mat = aUV1;
+    vColor = aColor;
+    if (uVertexLM != 0) {
+        int vi = gl_VertexID - uVLMBase;
+        vVLM0 = texelFetch(uVLM, ivec2(vi, 0), 0).rgb;
+        vVLM1 = texelFetch(uVLM, ivec2(vi, 1), 0).rgb;
+        vVLM2 = texelFetch(uVLM, ivec2(vi, 2), 0).rgb;
+    } else {
+        vVLM0 = vVLM1 = vVLM2 = vec3(0.0);
+    }
     vFog = heightFog(wp.xyz);
     gl_Position = uViewProj * wp;
+    if (uShadowDepth.x > 0.5) {   // shadow depth VS: z = saturate(shadowZ * InvMaxSubjectDepth + DepthBias) * w
+        float d = clamp(dot(uShadowZ, vec4(wp.xyz, 1.0)) * uShadowDepth.y + uShadowDepth.z, 0.0, 1.0);
+        gl_Position.z = (d * 2.0 - 1.0) * gl_Position.w;
+    }
 }
 )";
 
 const char* kFSHead = R"(#version 330 compatibility
 in vec3 vPos; in vec3 vNrm; in vec4 vTan; in vec2 vUV0; in vec2 vUV1; in vec4 vFog; in vec4 vColor;
+in vec2 vUV1Mat;
 layout(location=0) out vec4 oColor;
 uniform vec3 uCamPos;
 uniform float uTime;
@@ -105,10 +127,31 @@ uniform float uClip;
 uniform int uLit;
 uniform int uDebug;          // 1 = lighting only (diffuse 0.5 grey, no emissive)
 uniform int uDecalClip;      // static decal: clip to the decal box (uv in [0,1])
+uniform int uBlend;          // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
+uniform vec2 uNearFar;       // metres
+uniform vec2 uViewport;      // pixels
+uniform sampler2D uSceneDepth;
+uniform int uHasSceneDepth;
 struct MatIn { vec2 uv0; vec2 uv1; vec4 vertexColor; vec3 worldPosUE; vec3 cameraVector; vec3 reflectionVector;
-               vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; };
-struct MatOut { vec3 DiffuseColor; vec3 SpecularColor; float SpecularPower; vec3 Normal; vec3 EmissiveColor;
-                float Opacity; float OpacityMask; vec3 CustomLighting; };
+               vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; float sceneDepth;
+               vec4 dynParam; };
+struct MatOut { vec3 Distortion; vec3 DiffuseColor; vec3 SpecularColor; float SpecularPower; vec3 Normal;
+                vec3 EmissiveColor; float Opacity; float OpacityMask; vec3 CustomLighting; };
+// window depth -> view-space Z in UE units (UE3 PixelDepth / SceneDepth are view Z)
+float wfcLinearDepth(float d) {
+    float z = d * 2.0 - 1.0, n = uNearFar.x, f = uNearFar.y;
+    return 2.0 * n * f / (f + n - z * (f - n)) * 100.0;
+}
+// UE3 DepthBiasedAlpha: Alpha * saturate((SceneDepth - PixelDepth) / max((1 - Bias) * BiasScale, 0.001))
+float wfcDepthBiasedAlpha(MatIn m, float a, float bias, float scale) {
+    return a * clamp((m.sceneDepth - m.pixelDepth) / max((1.0 - bias) * scale, 0.001), 0.0, 1.0);
+}
+// UE3 base-pass fog per blend mode: additive keeps no in-scatter, modulate fades toward 1.
+vec3 wfcFog(vec3 c) {
+    if (uBlend == 3) return c * vFog.a;
+    if (uBlend == 4) return mix(vec3(1.0), c, vFog.a);
+    return c * vFog.a + vFog.rgb;
+}
 // UE3: ReflectionVector = -CameraVector + Normal * dot(Normal, CameraVector) * 2 (tangent space)
 void wfcSetNormal(inout MatIn m, vec3 n) {
     m.normal = normalize(n);
@@ -128,7 +171,7 @@ MatIn wfcBuildInput(out mat3 tbn) {
     vec3 B = cross(N, T) * (vTan.w < 0.0 ? -1.0 : 1.0);
     tbn = mat3(T, B, N);
     MatIn m;
-    m.uv0 = vUV0; m.uv1 = vUV1; m.vertexColor = vColor;
+    m.uv0 = vUV0; m.uv1 = vUV1Mat; m.vertexColor = vColor;
     m.worldPosUE = vPos.xzy * 100.0;                     // glTF metres -> UE units/axes
     vec3 V = normalize(uCamPos - vPos);
     m.cameraVector = vec3(dot(V, T), dot(V, B), dot(V, N));
@@ -136,16 +179,45 @@ MatIn wfcBuildInput(out mat3 tbn) {
     m.reflectionVector = -m.cameraVector + vec3(0.0, 0.0, 2.0 * m.cameraVector.z);
     m.tbnUE = mat3(T.xzy, B.xzy, N.xzy);
     m.time = uTime;
-    m.pixelDepth = length(uCamPos - vPos) * 100.0;
-    m.screenPos = vec4(gl_FragCoord.xy, 0.0, 1.0);
+    m.pixelDepth = wfcLinearDepth(gl_FragCoord.z);
+    m.sceneDepth = uHasSceneDepth != 0 ? wfcLinearDepth(texelFetch(uSceneDepth, ivec2(gl_FragCoord.xy), 0).r) : 1e9;
+    m.dynParam = vec4(1.0);
+    // UE3 ScreenPosition (bScreenAlign false) = clip-space position. UE3's infinite-far perspective
+    // gives w = view Z and z = view Z - near (UE units).
+    vec2 ndc = gl_FragCoord.xy / uViewport * 2.0 - 1.0;
+    m.screenPos = vec4(ndc * m.pixelDepth, m.pixelDepth - uNearFar.x * 100.0, m.pixelDepth);
     return m;
 }
 )";
 
 // FDirectionalTextureLightMapPolicy base pass (decoded from the original microcode).
+// Distortion accumulate (Xenon microcode of the material's distortion PS, e.g. Ring_Distort_Add_MAT):
+// s = Distortion.xy * 4; kill if dot(s,s) - 0.1 < 0; s = clamp(s, -255, 255) / 255;
+// out = (max(s,0), |min(s,0)|) into an 8-bit target with additive blending.
+const char* kFSMainDistort = R"(
+void main() {
+    mat3 tbn; MatIn m = wfcBuildInput(tbn);
+    MatOut o; wfcMaterial(m, o);
+    vec2 s = o.Distortion.xy * 4.0;
+    if (dot(s, s) - 0.1 < 0.0) discard;
+    s = clamp(s, -255.0, 255.0) / 255.0;
+    oColor = vec4(max(s, 0.0), abs(min(s, 0.0)));
+}
+)";
+// Shadow depth: opaque materials write depth only; masked materials clip on OpacityMaskClipValue.
+const char* kFSMainShadow = R"(
+void main() {
+    mat3 tbn; MatIn m = wfcBuildInput(tbn);
+    MatOut o; wfcMaterial(m, o);
+    if (uMasked != 0 && o.OpacityMask - uClip < 0.0) discard;
+    oColor = vec4(0.0);
+}
+)";
 const char* kFSMainLM = R"(
 uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;
 uniform vec3 uLMScale[3];
+uniform int uVertexLM;
+in vec3 vVLM0; in vec3 vVLM1; in vec3 vVLM2;
 const vec3 LMB0 = vec3(0.0, 0.81649658, 0.57735027);
 const vec3 LMB1 = vec3(-0.70710678, -0.40824829, 0.57735027);
 const vec3 LMB2 = vec3(0.70710678, -0.40824829, 0.57735027);
@@ -160,12 +232,13 @@ void main() {
     if (uLit != 0) {
         vec3 n = normalize(o.Normal);
         float w0 = dot(n, LMB0), w1 = dot(n, LMB1), w2 = dot(n, LMB2);
-        vec3 L = w0 * w0 * texture(uLM0, vUV1).rgb * uLMScale[0]
-               + w1 * w1 * texture(uLM1, vUV1).rgb * uLMScale[1]
-               + w2 * w2 * texture(uLM2, vUV1).rgb * uLMScale[2];
+        vec3 l0 = uVertexLM != 0 ? vVLM0 : texture(uLM0, vUV1).rgb;
+        vec3 l1 = uVertexLM != 0 ? vVLM1 : texture(uLM1, vUV1).rgb;
+        vec3 l2 = uVertexLM != 0 ? vVLM2 : texture(uLM2, vUV1).rgb;
+        vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
         c += o.DiffuseColor * L;
     }
-    c = c * vFog.a + vFog.rgb;
+    c = wfcFog(c);
     oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
 }
 )";
@@ -178,6 +251,13 @@ uniform vec4 uLPos[3];   // xyz position (m), w = 1/radius (0 = directional)
 uniform vec4 uLDir[3];   // xyz: directional -> towards light; spot -> spot axis (forward); w = isSpot
 uniform vec4 uLCol[3];   // rgb linear colour * brightness, w = falloff exponent
 uniform vec4 uLSpot[3];  // x cos(outer), y 1/(cos(inner)-cos(outer)), w = visibility (shadow) term
+// FShadowMaskPolicy (TLightPixelShader<One/Two/ThreeLightUberLightPolicy,FShadowMaskPolicy>, Xenos microcode,
+// ReverseEngineering 31f9a9b): mask = ShadowMaskTexture(screenUV).x; S = (1 - mask)(1 - DSLS);
+// colour = ambient * (1 - DirectLightAmbientContribution * S) + direct * (1 - S) (+ other material terms).
+uniform sampler2D uShadowMask;
+uniform float uDSLS;     // DynamicShadowLuminanceScale (c6.x), shipped 0, CPU-clamped to [0,1]
+uniform vec3 uDLAC;      // DirectLightAmbientContribution (c38.rgb), per light environment (0x82CCE0A8)
+uniform vec2 uShadowMaskTexelOffset;   // ShadowMaskTexelOffset (0.5 / mask size) (0x82DDAEF0)
 void main() {
     mat3 tbn; MatIn m = wfcBuildInput(tbn);
     if (uDecalClip != 0 && (any(lessThan(vUV0, vec2(0.0))) || any(greaterThan(vUV0, vec2(1.0))))) discard;
@@ -191,7 +271,10 @@ void main() {
         vec3 n2 = Nw * Nw;
         vec3 amb = n2.x * (Nw.x >= 0.0 ? uAmb[0] : uAmb[1]) + n2.y * (Nw.y >= 0.0 ? uAmb[2] : uAmb[3])
                  + n2.z * (Nw.z >= 0.0 ? uAmb[4] : uAmb[5]);
-        c += o.DiffuseColor * amb;
+        float mask = texture(uShadowMask, gl_FragCoord.xy / uViewport + uShadowMaskTexelOffset).x;
+        float S = (1.0 - mask) * (1.0 - uDSLS);
+        vec3 ambient = o.DiffuseColor * amb;
+        vec3 direct = vec3(0.0);
         vec3 V = normalize(uCamPos - vPos);
         vec3 R = reflect(-V, Nw);
         for (int i = 0; i < 3; ++i) {
@@ -211,10 +294,12 @@ void main() {
             }
             float wr = clamp(dot(Nw, L) * 0.6778 + 0.3333, 0.0, 1.0);
             float sp = pow(max(clamp(dot(R, L), 0.0, 1.0), 0.0001), max(o.SpecularPower, 0.0001));
-            c += (o.DiffuseColor * (wr * wr) + o.SpecularColor * sp) * uLCol[i].rgb * att * uLSpot[i].w;
+            direct += (o.DiffuseColor * (wr * wr) + o.SpecularColor * sp) * uLCol[i].rgb * att * uLSpot[i].w;
         }
+        c += ambient * (1.0 - uDLAC * S);      // r3 = r5 * (1 - DLAC*S) + r3
+        c += direct * (1.0 - S);               // r3 = r4 * (1 - S) + r3: one mask for the summed lights
     }
-    c = c * vFog.a + vFog.rgb;
+    c = wfcFog(c);
     oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
 }
 )";
@@ -378,6 +463,9 @@ GLuint makeTex1x1(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
 
 } // namespace
 
+GLuint compileShader(GLenum type, const std::string& src, const std::string& tag) { return compile(type, src, tag); }
+GLuint linkProgram(GLuint vs, GLuint fs, const std::string& tag) { return link(vs, fs, tag); }
+
 // ------------------------------------------------------------------------- loading
 bool Pipeline::load(const std::string& mapName) {
     if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
@@ -446,6 +534,60 @@ bool Pipeline::load(const std::string& mapName) {
         std::string key = kv.first;
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
         lightmaps_[key] = r;
+        // <level>.TheWorld.PersistentLevel.<Actor>.<Component>: index single-component actors
+        size_t a = key.find(".persistentlevel.");
+        if (a != std::string::npos) {
+            std::string rest = key.substr(a + 17);
+            size_t d = rest.find('.');
+            if (d != std::string::npos) {
+                std::string actor = rest.substr(0, d);
+                auto ins = actorComponent_.emplace(actor, key);
+                if (!ins.second) ins.first->second.clear();   // several components: ambiguous
+            }
+        }
+    }
+
+    // LMT_1D vertex lightmaps: A,R,G,B bytes per coefficient, per-channel normalized. Decode from the
+    // Xenon vertex-lightmap VS (BASE shader cache, LightMapScale[3]): exp2(log2(max(|c|, 0.0001)) * 2.2)
+    // * LightMapScale[k], per vertex [CONFIRMED microcode].
+    const assets::Json& jv = L["vertex_lightmaps"];
+    for (const auto& kv : jv.obj) {
+        VertexLM v;
+        v.count = kv.second["count"].asInt(0);
+        const std::string hex = kv.second["samples_hex"].asString();
+        if (v.count <= 0 || hex.size() != (size_t)v.count * 24) continue;
+        for (int k = 0; k < 3; ++k)
+            for (int c = 0; c < 3; ++c) v.scale[k][c] = kv.second["scales"][(size_t)k][(size_t)c].asFloat(1.0f);
+        auto byteAt = [&](size_t i) { return (float)std::stoi(hex.substr(i * 2, 2), nullptr, 16); };
+        v.rgb.resize((size_t)v.count * 9);   // row-major: coefficient k, vertex i, channel c
+        for (int i = 0; i < v.count; ++i)
+            for (int k = 0; k < 3; ++k)
+                for (int c = 0; c < 3; ++c)
+                    v.rgb[((size_t)k * v.count + i) * 3 + c] =
+                        std::pow(std::max(byteAt(((size_t)i * 3 + k) * 4 + 1 + c) / 255.0f, 0.0001f), 2.2f);
+        std::string key = kv.first;
+        std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        vertexLMs_[key] = std::move(v);
+    }
+
+    {   // LightsVisibilitiesVolume: load + structural self-check; used once decode() lands (ReVa layout)
+        const assets::Json& jv2 = L["light_visibility_volumes"];
+        if (jv2.size() > 0) {
+            const assets::Json& v = jv2[0];
+            if (lvv_.load(dataDir_ + "/" + v["file"].asString())) {
+                std::string why;
+                bool ok = lvv_.selfCheck(why);
+                LOG_INFO("wfc: LightsVisibilitiesVolume %s: %s", ok ? "decoded" : "FAILED", why.c_str());
+            }
+        }
+    }
+
+    const assets::Json& jf = L["component_flags"];
+    for (const auto& kv : jf.obj) {
+        std::string key = kv.first;
+        std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        if (kv.second["hidden"].asBool(false)) hiddenComponents_.insert(key);
+        if (kv.second["no_lights"].asBool(false)) noLightComponents_.insert(key);
     }
 
     const assets::Json& jl = L["lights"];
@@ -475,6 +617,46 @@ bool Pipeline::load(const std::string& mapName) {
         l.cosOuter = std::cos(outer);
         float cin = std::cos(std::min(inner, outer));
         l.invConeRange = 1.0f / std::max(cin - l.cosOuter, 0.001f);
+        l.name = e["name"].asString();
+        l.castDynamicShadows = e["cast_dynamic_shadows"].asBool(true);
+        l.castCompositeShadow = e["cast_composite_shadow"].asBool(false);
+        l.castStaticShadows = e["cast_static_shadows"].asBool(true);
+        l.radiusOfInfluence = e["radius_of_influence_m"].asFloat(-0.01f);
+        {   // LightingChannels -> bits (MSB-first); an absent struct keeps the LightComponent default
+            static const std::pair<const char*, uint32_t> kBits[] = {
+                {"bInitialized", 0x80000000u}, {"BSP", 0x40000000u}, {"Static", 0x20000000u}, {"Dynamic", 0x10000000u},
+                {"CompositeDynamic", 0x08000000u}, {"Skybox", 0x04000000u}, {"Unnamed_1", 0x02000000u},
+                {"Unnamed_2", 0x01000000u}, {"Unnamed_3", 0x00800000u}, {"Unnamed_4", 0x00400000u},
+                {"Unnamed_5", 0x00200000u}, {"Unnamed_6", 0x00100000u}, {"Cinematic_1", 0x00080000u},
+                {"Cinematic_2", 0x00040000u}, {"Cinematic_3", 0x00020000u}, {"Cinematic_4", 0x00010000u},
+                {"Cinematic_5", 0x00008000u}, {"Cinematic_6", 0x00004000u}, {"Gameplay_1", 0x00002000u},
+                {"Gameplay_2", 0x00001000u}, {"Gameplay_3", 0x00000800u}, {"Gameplay_4", 0x00000400u},
+                {"Crowd", 0x00000200u}, {"PlayerOnly", 0x00000100u}, {"NPCOnly", 0x00000080u}};
+            const assets::Json& ch = e["channels"];
+            uint32_t m = 0;
+            bool any = false;
+            for (const auto& kb : kBits)
+                if (ch.has(kb.first)) { any = true; if (ch[kb.first].asBool(false)) m |= kb.second; }
+            l.chMask = any ? m : 0xF8000000u;     // Default__LightComponent: bInitialized BSP Static Dynamic CompositeDynamic
+        }
+        {   // spot IntensityAt cones (0x82E2CFE0): inner clamp [0, 89] deg; outer clamp [inner + 0.001, 1.5543429] rad
+            float inner = std::min(std::max(e["inner_cone_deg"].asFloat(0.0f), 0.0f), 89.0f) * 0.017453292f;
+            float outer = std::min(std::max(e["outer_cone_deg"].asFloat(44.0f) * 0.017453292f, inner + 0.001f), 1.5543429f);
+            l.spotCosI = std::cos(inner); l.spotCosO = std::cos(outer); l.spotOuterRad = outer;
+        }
+        l.hasLightFunction = e["has_light_function"].asBool(false);
+        l.brightness = e["brightness"].asFloat(1.0f);
+        l.colorByte = {e["color_srgb8"][0].asFloat(255) / 255.0f, e["color_srgb8"][1].asFloat(255) / 255.0f,
+                       e["color_srgb8"][2].asFloat(255) / 255.0f};
+        {
+            const assets::Json& g = e["light_guid"];
+            l.guid.a = (uint32_t)g[0].asDouble(0); l.guid.b = (uint32_t)g[1].asDouble(0);
+            l.guid.c = (uint32_t)g[2].asDouble(0); l.guid.d = (uint32_t)g[3].asDouble(0);
+        }
+        for (int k = 0; k < 4; ++k) l.modShadowColor[k] = e["mod_shadow_color"][(size_t)k].asFloat(k == 3 ? 1.0f : 0.0f);
+        l.shadowFalloffExponent = e["shadow_falloff_exponent"].asFloat(2.0f);
+        l.minShadowResolution = (int)e["min_shadow_resolution"].asDouble(0);
+        l.maxShadowResolution = (int)e["max_shadow_resolution"].asDouble(0);
         l.chStatic = e["channels"]["Static"].asBool(true);
         l.chDynamic = e["channels"]["Dynamic"].asBool(true) || e["channels"]["CompositeDynamic"].asBool(true);
         l.castShadows = e["cast_shadows"].asBool(true);
@@ -486,6 +668,32 @@ bool Pipeline::load(const std::string& mapName) {
     if (F.isObject() && F["bEnabled"].asBool(true)) {
         fogOn_ = !std::getenv("WFC_NOFOG");
         fogMaxH_ = F["Height"].asFloat(0.0f);
+    if (lvv_.valid()) {                  // bind the octree light table by LightComponent.LightGuid
+        std::vector<LightVisibilityVolume::Guid> g;
+        for (const Light& l : lights_) g.push_back(l.guid);
+        lvv_.bind(g);
+        int bound = 0;
+        for (size_t i = 0; i < lights_.size(); ++i) bound += lvv_.isBaked((int)i) ? 1 : 0;
+        LOG_INFO("wfc: LightsVisibilitiesVolume: %d of %zu level lights bound by LightGuid (%zu table entries)", bound,
+                 lights_.size(), lvv_.lightGuids().size());
+        if (std::getenv("WFC_DLETEST")) runDirectLightEnvSelfTest();
+        if (const char* dump = std::getenv("WFC_LVVDUMP")) {   // cross-check vs tools/render/lvv_decode.py
+            FILE* df = std::fopen(dump, "w");
+            uint32_t s = 2024u;
+            auto rnd = [&]() { s = s * 1664525u + 1013904223u; return (float)(s >> 8) / 16777216.0f; };
+            for (int i = 0; i < 400 && df; ++i) {
+                // 360 points around the playable area + 40 outside the root cube
+                core::Vec3 p = i < 360 ? core::Vec3{-20000.0f + rnd() * 80000.0f, -70000.0f + rnd() * 50000.0f, -74000.0f + rnd() * 8000.0f}
+                                       : core::Vec3{60000.0f + rnd() * 10000.0f, 0.0f, -72000.0f};
+                std::vector<int> ls; std::vector<float> vs;
+                bool hit = lvv_.query(p, ls, vs);
+                std::fprintf(df, "%.3f %.3f %.3f %d", p.x, p.y, p.z, hit ? 1 : 0);
+                for (size_t k = 0; k < ls.size(); ++k) std::fprintf(df, " %s:%d", lights_[(size_t)ls[k]].name.c_str(), (int)std::lround(vs[k] * 65535.0f));
+                std::fprintf(df, "\n");
+            }
+            if (df) std::fclose(df);
+        }
+    }
         // [MED] UE3 FHeightFogSceneInfo: FogDistanceScale = -Density / ln(2) (exp2 in shader),
         // FogInScattering = FLinearColor(LightColor) * LightBrightness.
         fogScale_ = -F["Density"].asFloat(5e-5f) / std::log(2.0f);
@@ -608,18 +816,78 @@ bool Pipeline::load(const std::string& mapName) {
     return true;
 }
 
+// First-use accounting (WFC_RENDERSTATS): resources created after the first frame are logged with
+// their cost, to find mid-game hitches (e.g. the first shot).
+struct FirstUseTimer {
+    const char* kind; std::string name; int frame;
+    std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
+    ~FirstUseTimer() {
+        static const bool on = std::getenv("WFC_RENDERSTATS") != nullptr;
+        if (!on || frame <= 2) return;
+        double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        LOG_INFO("wfc first-use: frame %d %s %s %.2f ms", frame, kind, name.c_str(), ms);
+    }
+};
+
+// Xenos gamma texture fetch (UE3 SRGB textures use the D3D gamma formats): piecewise-linear degamma
+// to 10-bit linear, as reconstructed by xenia from Source Engine X360GammaToLinear + D3D9 code in
+// Xbox 360 executables [HIGH: hardware behaviour]. Four segments at 64/96/192 of 255 with slopes
+// 1/2/4/8 (in 1/1024 units) plus a truncated correction term, then /1023. Not the sRGB curve (GL
+// sRGB textures) and not pow 2.2 (that is the CPU FColor table PowOneOver255Table at 0x82251110).
+static float pwlGammaToLinear(float gamma) {
+    gamma = std::min(std::max(gamma, 0.0f), 1.0f);
+    float scale, offset;
+    if (gamma >= 96.0f / 255.0f) {
+        if (gamma >= 192.0f / 255.0f) { scale = 8.0f / 1024.0f; offset = -1024.0f; }
+        else { scale = 4.0f / 1024.0f; offset = -256.0f; }
+    } else {
+        if (gamma >= 64.0f / 255.0f) { scale = 2.0f / 1024.0f; offset = -64.0f; }
+        else { scale = 1.0f / 1024.0f; offset = 0.0f; }
+    }
+    float linear = gamma * ((255.0f * 1024.0f) * scale) + offset;
+    linear += std::trunc(linear * scale);
+    return linear * (1.0f / 1023.0f);
+}
+
+// RGBA8 (gamma-encoded RGB) -> RGBA16 linear through the PWL table; alpha is not gamma-converted.
+static std::vector<uint16_t> pwlToLinear16(const ImageData& img) {
+    static uint16_t lut[256];
+    static bool init = false;
+    if (!init) {
+        for (int i = 0; i < 256; ++i) lut[i] = (uint16_t)std::lround(pwlGammaToLinear(i / 255.0f) * 65535.0f);
+        init = true;
+    }
+    std::vector<uint16_t> out(img.rgba.size());
+    for (size_t i = 0; i < img.rgba.size(); i += 4) {
+        out[i] = lut[img.rgba[i]]; out[i + 1] = lut[img.rgba[i + 1]]; out[i + 2] = lut[img.rgba[i + 2]];
+        out[i + 3] = (uint16_t)(img.rgba[i + 3] * 257);
+    }
+    return out;
+}
+
+static void uploadTex(GLenum target, const ImageData& img, bool srgb) {
+    static const bool srgbCurve = std::getenv("WFC_SRGBCURVE") != nullptr;   // A/B: GL sRGB curve
+    if (srgb && !srgbCurve) {
+        std::vector<uint16_t> lin = pwlToLinear16(img);
+        glTexImage2D(target, 0, GL_RGBA16, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_SHORT, lin.data());
+    } else {
+        glTexImage2D(target, 0, srgb ? GL_SRGB8_ALPHA8 : GL_RGBA, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                     img.rgba.data());
+    }
+}
+
 GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool clampV) {
     std::string key = file + (srgb ? "|s" : "|l") + (clampU ? "c" : "w") + (clampV ? "c" : "w");
     auto it = texCache_.find(key);
     if (it != texCache_.end()) return it->second;
+    FirstUseTimer fu{"texture", file, frameNo_};
     ImageData img;
     GLuint id = 0;
     if (!file.empty() && platform::decodeImage(file, img) && img.valid()) {
         glGenTextures(1, &id);
         glBindTexture(GL_TEXTURE_2D, id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, srgb ? GL_SRGB8_ALPHA8 : GL_RGBA, img.w, img.h, 0, GL_RGBA,
-                     GL_UNSIGNED_BYTE, img.rgba.data());
+        uploadTex(GL_TEXTURE_2D, img, srgb);
         GenerateMipmap(GL_TEXTURE_2D);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -648,8 +916,7 @@ GLuint Pipeline::cubeTexture(const std::vector<std::string>& faces, bool srgb) {
     for (int f = 0; f < 6 && ok; ++f) {
         ImageData img;
         ok = platform::decodeImage(faces[(size_t)f], img) && img.valid();
-        if (ok) glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + f, 0, srgb ? GL_SRGB8_ALPHA8 : GL_RGBA, img.w, img.h, 0,
-                             GL_RGBA, GL_UNSIGNED_BYTE, img.rgba.data());
+        if (ok) uploadTex(GL_TEXTURE_CUBE_MAP_POSITIVE_X + (GLenum)f, img, srgb);
     }
     if (!ok) { LOG_WARN("wfc: cubemap decode failed: %s", faces[0].c_str()); glDeleteTextures(1, &id); id = 0; }
     else {
@@ -679,6 +946,9 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
             // UE world direction -> cube lookup (faces in UE/D3D order, see cubeTexture)
             fs += "vec4 wfcSC_" + n + "(vec3 d) { return texture(uTex" + n + ", d); }\n";
             replaceAll(code, "wfcSampleCube(" + n + ", ", "wfcSC_" + n + "(");
+            // WFC LODBias input (e.g. Reflection_LOD_Scale): mip bias in levels, as tex2Dbias/texCUBEbias
+            fs += "vec4 wfcSCB_" + n + "(vec3 d, float b) { return texture(uTex" + n + ", d, b); }\n";
+            replaceAll(code, "wfcSampleCubeBias(" + n + ", ", "wfcSCB_" + n + "(");
         } else {
             fs += "uniform sampler2D uTex" + n + "; uniform vec4 uUnpackMin" + n + "; uniform vec4 uUnpackScale" + n + ";\n";
             fs += "vec4 wfcS2D_" + n + "(vec2 uv) { return texture(uTex" + n + ", uv) * uUnpackScale" + n +
@@ -688,7 +958,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
     fs += "void wfcMaterial(in MatIn m, out MatOut o) {\n" + code + "\n}\n";
     fs += kFSPrologue;
-    fs += lightmapped ? kFSMainLM : kFSMainUber;
+    fs += mainOverride_ ? mainOverride_ : (lightmapped ? kFSMainLM : kFSMainUber);
 
     static GLuint vsShared = 0;
     if (!vsShared) vsShared = compile(GL_VERTEX_SHADER, kVS, "world.vs");
@@ -713,6 +983,8 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
     P.slots = slots;
     P.blend = blend; P.twoSided = twoSided; P.lit = lit; P.clip = clip;
+    P.sceneDepth = code.find("m.sceneDepth") != std::string::npos || code.find("wfcDepthBiasedAlpha(") != std::string::npos;
+    if (slots.size() > 12) LOG_WARN("wfc: %s uses %zu texture slots (unit 12 is scene depth)", key.c_str(), slots.size());
     UseProgram(id);
     for (size_t k = 0; k < slots.size(); ++k) {
         std::string n = std::to_string(k);
@@ -725,6 +997,9 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         P.slots[k].unit = (int)k;
     }
     Uniform1i(U("uLM0"), 13); Uniform1i(U("uLM1"), 14); Uniform1i(U("uLM2"), 15);
+    Uniform1i(U("uSceneDepth"), 12);
+    Uniform1i(U("uVLM"), 11);
+    Uniform1i(U("uShadowMask"), 10);
     UseProgram(0);
     progs_.push_back(P);
     progIndex_[key] = (int)progs_.size() - 1;
@@ -745,6 +1020,15 @@ std::string Pipeline::resolveBySourceName(const Material* m) const {
     return std::string();
 }
 
+static std::string materialKey(const Material* m) {
+    if (!m) return "<none>";
+    char buf[96];
+    std::snprintf(buf, sizeof buf, "|%d|%d|%.4f,%.4f,%.4f", (int)m->tex, (int)m->emissiveTexHandle, m->color.x, m->color.y,
+                  m->color.z);
+    return m->wfcName + "|" + m->sourceName + "|" + m->baseColorUri + "|" + m->emissiveUri + "|" + m->normalUri + "|" +
+           m->specularUri + buf;
+}
+
 int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool lightmapped) {
     std::string matName = matNameIn;
     if (matName.empty()) matName = resolveBySourceName(gm);
@@ -754,11 +1038,11 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
     if (mit == mats_.end() && gm) {
         // No compiled original graph: build from the glTF material (character/weapon textures
         // baked by AssetTools from the original customization shader).
-        char buf[64]; std::snprintf(buf, sizeof buf, "|%p", (const void*)gm);
-        key += buf;
+        key += "|" + materialKey(gm);
     }
     auto pit = progIndex_.find(key);
     if (pit != progIndex_.end()) return pit->second;
+    FirstUseTimer fu{"program", key, frameNo_};
 
     if (mit != mats_.end()) {
         const MatSrc& s = mit->second;
@@ -778,7 +1062,23 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             slots.push_back(sl);
         }
         int r = buildProgram(key, s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
-        if (r >= 0) return r;
+        if (r >= 0) {
+            progs_[(size_t)r].original = true;
+            if (!lightmapped && s.glsl.find("o.Distortion = vec3(0.0);") == std::string::npos &&
+                s.glsl.find("o.Distortion =") != std::string::npos) {
+                mainOverride_ = kFSMainDistort;
+                int d = buildProgram(key + "|DIST", s.glsl, slots, s.cube, 3, s.twoSided, false, s.clip, false, s.rtParams);
+                mainOverride_ = nullptr;
+                if (d >= 0) { progs_[(size_t)d].original = true; progs_[(size_t)r].distProg = d; }
+            }
+            if (!lightmapped && s.blend <= 1) {          // caster variant for projected shadows
+                mainOverride_ = kFSMainShadow;
+                int sh = buildProgram(key + "|SHADOW", s.glsl, slots, s.cube, s.blend, s.twoSided, false, s.clip, false, s.rtParams);
+                mainOverride_ = nullptr;
+                if (sh >= 0) { progs_[(size_t)sh].original = true; progs_[(size_t)r].shadowProg = sh; }
+            }
+            return r;
+        }
         LOG_WARN("wfc: material %s failed to build; using glTF fallback", matName.c_str());
     }
     // glTF fallback material
@@ -824,7 +1124,16 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
 }
 
 // ------------------------------------------------------------------------- light environment
+namespace {
+struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0, dynBuildMs = 0, dynUploadMs = 0; } gStats;
+std::chrono::steady_clock::time_point gFrameStart;
+}
+
 void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env) const {
+    auto tEnv = std::chrono::steady_clock::now();
+    struct EnvTimer { std::chrono::steady_clock::time_point t; ~EnvTimer() {
+        gStats.envMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); } } envTimer{tEnv};
+    ++gStats.envCalls;
     for (auto& c : env.cube) c = {0, 0, 0};
     // [CONF] TnRobotForm/TnVehicleForm LightEnvironmentComponent TotalLightCount = 2 (TransGame.xxx):
     // the brightest 2 lights stay direct, everything else is folded into the ambient cube.
@@ -868,15 +1177,40 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
     for (const Cand& c : cands) {
         // Visibility trace (UE3 light environments trace each light to the primitive).
         float vis = 1.0f;
-        if (vis_ && c.l->castShadows) {
+        if (false) {                          // (superseded: characters use WfcDirectLightEnv.cpp)
+            // TnRobotForm / TnVehicleForm LightEnvironmentComponent NormalizedSampleOffsets [CONF data]:
+            // visibility = fraction of samples (bounds origin + offset * extent) with a clear path to
+            // the light [HIGH: UE3 light-environment sampling].
+            int clear = 0;
+            for (const core::Vec3& o : *envSamples_) {
+                core::Vec3 from = envBoundsCenter_ + core::Vec3{o.x * envBoundsExtent_.x, o.y * envBoundsExtent_.y,
+                                                                o.z * envBoundsExtent_.z};
+                core::Vec3 to = c.l->type == 2 ? from + c.L * 300.0f : c.l->pos;
+                auto q = [](float v) { return (uint64_t)(uint32_t)(int32_t)std::floor(v * 4.0f) & 0xFFFFull; };
+                uint64_t key = ((uint64_t)(c.l - lights_.data()) << 48) | (q(from.x) << 32) | (q(from.y) << 16) | q(from.z);
+                auto hit = visMemo_.find(key);
+                bool occluded;
+                if (hit != visMemo_.end()) occluded = hit->second;
+                else { ++gStats.visCalls; occluded = vis_(from, to); visMemo_.emplace(key, occluded); }
+                if (!occluded) ++clear;
+            }
+            vis = (float)clear / (float)envSamples_->size();
+        } else if (vis_ && c.l->castShadows) {
             core::Vec3 from = p + core::Vec3{0, 0.05f, 0};
             core::Vec3 to = c.l->type == 2 ? from + c.L * 300.0f : c.l->pos;
-            if (vis_(from, to)) vis = 0.0f;
+            auto q = [](float v) { return (uint64_t)(uint32_t)(int32_t)std::floor(v * 4.0f) & 0xFFFFull; };
+            uint64_t key = ((uint64_t)(c.l - lights_.data()) << 48) | (q(from.x) << 32) | (q(from.y) << 16) | q(from.z);
+            auto hit = visMemo_.find(key);
+            bool occluded;
+            if (hit != visMemo_.end()) occluded = hit->second;
+            else { ++gStats.visCalls; occluded = vis_(from, to); visMemo_.emplace(key, occluded); }
+            if (occluded) vis = 0.0f;
         }
         if (vis <= 0.0f) continue;
         if (env.n < maxDirect) {
             int i = env.n++;
             const Light& l = *c.l;
+            env.light[i] = (int)(c.l - lights_.data());
             env.pos[i][0] = l.pos.x; env.pos[i][1] = l.pos.y; env.pos[i][2] = l.pos.z;
             env.pos[i][3] = l.type == 2 ? 0.0f : 1.0f / l.radius;
             core::Vec3 d = l.type == 2 ? c.L : l.dir;
@@ -937,7 +1271,9 @@ void Pipeline::buildVertices(const MeshData& m, std::vector<float>& v) {
         T = core::normalize(T);
         o[6] = T.x; o[7] = T.y; o[8] = T.z; o[9] = w;
         o[10] = uv ? m.uv[i * 2] : 0.0f; o[11] = uv ? m.uv[i * 2 + 1] : 0.0f;
-        o[12] = hasUV1 ? m.uv1[i * 2] : 0.0f; o[13] = hasUV1 ? m.uv1[i * 2 + 1] : 0.0f;
+        // UE3 FLocalVertexFactory binds the last available texcoord channel for missing ones, so
+        // TexCoord[1] on a single-UV mesh (e.g. Light_Cylinder_STAT) reads UV0.
+        o[12] = hasUV1 ? m.uv1[i * 2] : o[10]; o[13] = hasUV1 ? m.uv1[i * 2 + 1] : o[11];
     }
 }
 
@@ -952,6 +1288,7 @@ static void setupAttribs() {
 
 int Pipeline::upload(const MeshData& m) {
     if (!active_ || m.empty()) return -1;
+    FirstUseTimer fu{"mesh", std::to_string(m.vertexCount()) + " verts", frameNo_};
     GpuMesh g;
     std::vector<float> v;
     buildVertices(m, v);
@@ -975,9 +1312,40 @@ int Pipeline::upload(const MeshData& m) {
         if (bspMesh_ >= 0 && s.component.rfind("bsp:", 0) == 0) { g.drawsBsp = true; continue; }
         std::string key = s.component;
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        if (hiddenComponents_.count(key) && !std::getenv("WFC_SHOWHIDDEN")) continue;   // authored bHidden
+        d.noLights = noLightComponents_.count(key) > 0;
+        if (key.rfind("actor:", 0) == 0) {
+            auto ac = actorComponent_.find(key.substr(6));
+            if (ac != actorComponent_.end() && !ac->second.empty()) key = ac->second;
+        }
         auto lit = lightmaps_.find(key);
         bool lm = lit != lightmaps_.end() && m.hasUV1() && !std::getenv("WFC_NOLIGHTMAP");
-        if (lm) {
+        auto vit = vertexLMs_.find(key);
+        if (!lm && vit != vertexLMs_.end() && !std::getenv("WFC_NOLIGHTMAP") && !std::getenv("WFC_NOVERTEXLM") &&
+            s.indexCount > 0) {
+            uint32_t lo = UINT32_MAX, hi = 0;
+            for (uint32_t k = 0; k < s.indexCount; ++k) {
+                uint32_t vi = m.indices[s.indexOffset + k];
+                lo = std::min(lo, vi); hi = std::max(hi, vi);
+            }
+            const VertexLM& v = vit->second;
+            if ((int)(hi - lo + 1) == v.count) {
+                glGenTextures(1, &d.vlmTex);
+                glBindTexture(GL_TEXTURE_2D, d.vlmTex);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, v.count, 3, 0, GL_RGB, GL_FLOAT, v.rgb.data());
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                glBindTexture(GL_TEXTURE_2D, 0);
+                d.vlmBase = (int)lo;
+                for (int k = 0; k < 3; ++k)
+                    for (int c = 0; c < 3; ++c) d.lmScale[k][c] = v.scale[k][c];
+                lm = true;
+                ++nLM;
+            } else {
+                LOG_WARN("wfc: vertex lightmap %s: %d samples vs %u vertices; not bound", key.c_str(), v.count, hi - lo + 1);
+            }
+        }
+        if (lm && !d.vlmTex) {
             const LMRec& r = lit->second;
             for (int i = 0; i < 3; ++i) {
                 auto li = lmIndex_.find(r.coeff[i]);
@@ -1000,7 +1368,21 @@ int Pipeline::upload(const MeshData& m) {
         if (matName.empty()) matName = resolveBySourceName(mat);
         d.prog = programFor(matName, mat, lm);
         d.matName = matName;
+        d.comp = s.component;
         if (d.prog >= 0) ++nProg;
+        if (const char* dump = std::getenv("WFC_AUDIT_DUMP")) {   // ACTIVE side of tools/render/audit_map.py
+            static FILE* f = std::fopen(dump, "w");
+            if (f) {
+                const Program* P = d.prog >= 0 ? &progs_[(size_t)d.prog] : nullptr;
+                std::fprintf(f, "{\"mesh_id\":%zu,\"component\":\"%s\",\"source_mesh\":\"%s\",\"section\":%d,"
+                             "\"material\":\"%s\",\"program\":\"%s\",\"blend\":%d,\"lit\":%d,\"lightmapped\":%d,"
+                             "\"scene_depth\":%d,\"tris\":%u}\n",
+                             meshes_.size(), s.component.c_str(), s.sourceMesh.c_str(), s.sourceSection, matName.c_str(),
+                             !P ? "none" : P->original ? "original" : "gltf_fallback", P ? P->blend : -1, P && P->lit ? 1 : 0,
+                             lm ? 1 : 0, P && P->sceneDepth ? 1 : 0, d.count / 3);
+                std::fflush(f);
+            }
+        }
         // bounds
         bool init = false;
         for (uint32_t k = 0; k < d.count; ++k) {
@@ -1030,6 +1412,22 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(P.uMasked, P.blend == 1 ? 1 : 0);
     Uniform1f(P.uClip, P.clip);
     Uniform1i(P.uLit, P.lit ? 1 : 0);
+    Uniform1i(GetUniformLocation(P.id, "uBlend"), P.blend);
+    Uniform1i(GetUniformLocation(P.id, "uVertexLM"), 0);
+    Uniform4f(GetUniformLocation(P.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+    {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
+        static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
+        Uniform1f(GetUniformLocation(P.id, "uDSLS"), dsls);
+        Uniform3f(GetUniformLocation(P.id, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
+        ActiveTexture(GL_TEXTURE0 + 10);
+        glBindTexture(GL_TEXTURE_2D, shadowMaskTexFor(dynamicMaskDraw_));
+        Uniform2f(GetUniformLocation(P.id, "uShadowMaskTexelOffset"), maskTexelOffset_[0], maskTexelOffset_[1]);
+    }
+    Uniform2f(GetUniformLocation(P.id, "uNearFar"), znear_, zfar_);
+    Uniform2f(GetUniformLocation(P.id, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
+    Uniform1i(GetUniformLocation(P.id, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
+    if (P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_); }
+    VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
     static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
     Uniform1i(GetUniformLocation(P.id, "uDebug"), dbg);
     Uniform1i(P.uFogOn, fogOn_ ? 1 : 0);
@@ -1047,6 +1445,22 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
     core::Vec3 origin{model.m[12], model.m[13], model.m[14]};
     LightEnv dynEnv;
     bool dynEnvReady = false;
+    static const long reportAt = std::getenv("WFC_FRAMEREPORT") && std::getenv("WFC_SMOKE_FRAMES")
+                                     ? std::atol(std::getenv("WFC_SMOKE_FRAMES")) : -1;
+    const bool reportFrame = reportAt > 0 && frameNo_ == (int)reportAt;
+    // small dynamic object (world-space bounding radius < 0.5 m): shares a per-cell environment
+    bool smallDynamic = false;
+    if (dynamicObject && !g.subs.empty()) {
+        core::Vec3 mn = g.subs[0].bmin, mx = g.subs[0].bmax;
+        for (const Sub& s : g.subs) {
+            mn = {std::min(mn.x, s.bmin.x), std::min(mn.y, s.bmin.y), std::min(mn.z, s.bmin.z)};
+            mx = {std::max(mx.x, s.bmax.x), std::max(mx.y, s.bmax.y), std::max(mx.z, s.bmax.z)};
+        }
+        float sc = std::max(core::length(core::Vec3{model.m[0], model.m[1], model.m[2]}),
+                   std::max(core::length(core::Vec3{model.m[4], model.m[5], model.m[6]}),
+                            core::length(core::Vec3{model.m[8], model.m[9], model.m[10]})));
+        smallDynamic = core::length(mx - mn) * 0.5f * sc < 0.5f && core::length(mx - mn) > 0.0f;
+    }
     for (int pass = 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
         for (Sub& s : g.subs) {
             if (s.prog < 0) continue;
@@ -1058,7 +1472,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                 while (a <= list.size() && !hide) {
                     size_t b = list.find(';', a);
                     std::string tok = list.substr(a, b == std::string::npos ? std::string::npos : b - a);
-                    if (tok == "<none>" ? s.matName.empty() : (!tok.empty() && s.matName.find(tok) != std::string::npos))
+                    if (tok.rfind("comp:", 0) == 0) { if (s.comp.find(tok.substr(5)) != std::string::npos) hide = true; }
+                    else if (tok == "<none>" ? s.matName.empty() : (!tok.empty() && s.matName.find(tok) != std::string::npos))
                         hide = true;
                     if (b == std::string::npos) break;
                     a = b + 1;
@@ -1090,23 +1505,52 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                     if (set) Uniform4f(P.uRT[i], src[i][0], src[i][1], src[i][2], src[i][3]);
                 }
             }
-            if (P.twoSided) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+            static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;   // diagnostics: winding check
+            if (P.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
             switch (P.blend) {
                 case 2: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE); break;
                 case 3: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE); glDepthMask(GL_FALSE); break;
                 case 4: glEnable(GL_BLEND); glBlendFunc(GL_DST_COLOR, GL_ZERO); glDepthMask(GL_FALSE); break;
                 default: glDisable(GL_BLEND); glDepthMask(GL_TRUE); break;
             }
-            if (s.lmTex[0] >= 0) {
+            if (s.vlmTex) {
+                Uniform4f(P.uLMCoord, 1, 1, 0, 0);
+                Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
+                Uniform1i(GetUniformLocation(P.id, "uVertexLM"), 1);
+                Uniform1i(GetUniformLocation(P.id, "uVLMBase"), s.vlmBase);
+                ActiveTexture(GL_TEXTURE0 + 11);
+                glBindTexture(GL_TEXTURE_2D, s.vlmTex);
+            } else if (s.lmTex[0] >= 0) {
                 Uniform4f(P.uLMCoord, s.lmCoord[0], s.lmCoord[1], s.lmCoord[2], s.lmCoord[3]);
                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
                 for (int i = 0; i < 3; ++i) {
                     ActiveTexture(GL_TEXTURE0 + 13 + i);
                     glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)s.lmTex[i]] ? lmTextures_[(size_t)s.lmTex[i]] : blackTex_);
                 }
+            } else if (!P.lit) {
+                Uniform4f(P.uLMCoord, 1, 1, 0, 0);
             } else {
                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
                 const LightEnv* env;
+                if (dynamicObject && !dynEnvReady && smallDynamic) {
+                    core::Vec3 p = origin;
+                    auto q = [](float v) { return (uint64_t)(uint32_t)(int32_t)std::floor(v) & 0x1FFFFFull; };
+                    uint64_t key = (q(p.x) << 42) | (q(p.y) << 21) | q(p.z);
+                    CellEnv& ce = cellEnv_[key];
+                    constexpr int kCellEnvFrames = 60;
+                    if (frameNo_ - ce.frame > kCellEnvFrames) {
+                        core::Vec3 c{std::floor(p.x) + 0.5f, std::floor(p.y) + 0.5f, std::floor(p.z) + 0.5f};
+                        computeEnv(c, true, ce.env);
+                        ce.frame = frameNo_;
+                    }
+                    dynEnv = ce.env;
+                    dynEnvReady = true;
+                }
+                if (dynamicObject && !dynEnvReady && envForm_ >= 0 && dle_.count(envForm_) &&
+                    dle_[envForm_].initialized && !std::getenv("WFC_OLDCHARENV")) {
+                    dynEnv = dle_[envForm_].env;
+                    dynEnvReady = true;
+                }
                 if (dynamicObject) {
                     if (!dynEnvReady) {
                         core::Vec3 p = origin + core::Vec3{0, 2.0f, 0};
@@ -1128,8 +1572,27 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                     }
                     env = &dynEnv;
                 } else {
-                    if (!s.envReady) { computeEnv((s.bmin + s.bmax) * 0.5f, false, s.env); s.envReady = true; }
+                    if (!s.envReady) {
+                        if (s.noLights) s.env = LightEnv{};    // no overlapping lighting channel: emissive only
+                        else computeEnv((s.bmin + s.bmax) * 0.5f, false, s.env);
+                        s.envReady = true;
+                    }
                     env = &s.env;
+                }
+                if (reportFrame && dynamicObject && !frameFx_) {
+                    char buf[512];
+                    std::string ls;
+                    for (int i = 0; i < env->n; ++i) {
+                        int li = env->light[i];
+                        std::snprintf(buf, sizeof buf, "%s%s(vis %.2f)", i ? ", " : "",
+                                      li >= 0 ? lights_[(size_t)li].name.c_str() : "?", env->spot[i][3]);
+                        ls += buf;
+                    }
+                    std::snprintf(buf, sizeof buf, "%s: %d direct [%s]; ambient cube +Y (%.3f %.3f %.3f) -Y (%.3f %.3f %.3f); samples %s",
+                                  s.matName.c_str(), env->n, ls.c_str(), env->cube[2].x, env->cube[2].y, env->cube[2].z,
+                                  env->cube[3].x, env->cube[3].y, env->cube[3].z,
+                                  envSamples_ ? (envSamples_->size() == 6 ? "robot(6)" : "vehicle(5)") : "centre(1)");
+                    frameEnvs_.push_back(buf);
                 }
                 Uniform3fv(P.uAmb, 6, &env->cube[0].x);
                 Uniform1i(P.uNumLights, env->n);
@@ -1137,8 +1600,29 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                 Uniform4fv(P.uLDir, 3, &env->dir[0][0]);
                 Uniform4fv(P.uLCol, 3, &env->col[0][0]);
                 Uniform4fv(P.uLSpot, 3, &env->spot[0][0]);
+                static const char* dlacOverride = std::getenv("WFC_DLAC");   // test override only
+                if (dlacOverride) { float v = (float)std::atof(dlacOverride); Uniform3f(GetUniformLocation(P.id, "uDLAC"), v, v, v); }
+                else Uniform3f(GetUniformLocation(P.id, "uDLAC"), env->dlac[0], env->dlac[1], env->dlac[2]);
             }
             glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+            ++gStats.draws;
+            if (reportFrame) {
+                FrameDraw& fd = frameDraws_[s.matName.empty() ? std::string("<gltf>") : s.matName];
+                ++fd.draws; fd.blend = P.blend; fd.lit = P.lit; fd.lightmapped |= s.lmTex[0] >= 0;
+                fd.vertexLM |= s.vlmTex != 0; fd.distortion |= P.distProg >= 0; fd.dynamic |= dynamicObject;
+                fd.fx |= frameFx_;
+            }
+            if (!trans) depthDirty_ = true;
+            if (P.distProg >= 0 && distFbo_ && !std::getenv("WFC_NODISTORTION")) {
+                const Program& D = progs_[(size_t)P.distProg];
+                BindFramebuffer(GL_FRAMEBUFFER, distFbo_);
+                if (!distUsed_) { glClearColor(0, 0, 0, 0); glClear(GL_COLOR_BUFFER_BIT); distUsed_ = true; }
+                bindCommon(D, model);
+                glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE); glDepthMask(GL_FALSE);
+                glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+                BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+                bindCommon(P, model);   // restore the colour program's state for the next sub
+            }
         }
     }
     glDisable(GL_BLEND);
@@ -1167,14 +1651,53 @@ void Pipeline::draw(int id, const core::Mat4& model) {
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     if (m.empty()) return;
     std::vector<float> v;
+    auto tb0 = std::chrono::steady_clock::now();
     buildVertices(m, v);
+    auto tb1 = std::chrono::steady_clock::now();
     BindVertexArray(dynVao_);
     BindBuffer(GL_ARRAY_BUFFER, dynVbo_);
     BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STREAM_DRAW);
     BindBuffer(GL_ELEMENT_ARRAY_BUFFER, dynIbo_);
     BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(m.indices.size() * 4), m.indices.data(), GL_STREAM_DRAW);
+    gStats.dynBuildMs += std::chrono::duration<double, std::milli>(tb1 - tb0).count();
+    gStats.dynUploadMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tb1).count();
     setupAttribs();
     BindVertexArray(0);
+    // Which LightEnvironmentComponent draws this mesh: the Optimus robot (and its weapon, which uses the
+    // owner's environment) or vehicle form, identified by the cooked packages of its materials.
+    static const std::vector<core::Vec3> kRobotSamples = [] {   // UE (x,y,z) -> glTF (x,z,y)
+        const float u[6][3] = {{0, 0, 0.9f}, {0, 0, -0.7f}, {0.7f, 0.7f, 0.7f}, {-0.7f, -0.7f, 0.7f},
+                               {0.7f, -0.7f, -0.7f}, {-0.7f, 0.7f, -0.7f}};
+        std::vector<core::Vec3> v; for (auto& o : u) v.push_back({o[0], o[2], o[1]}); return v; }();
+    static const std::vector<core::Vec3> kVehicleSamples = [] {
+        const float u[5][3] = {{0, 0, 0.7f}, {0.8f, 0.8f, 0}, {0.8f, -0.8f, 0}, {-0.8f, 0.8f, 0}, {-0.8f, -0.8f, 0}};
+        std::vector<core::Vec3> v; for (auto& o : u) v.push_back({o[0], o[2], o[1]}); return v; }();
+    envSamples_ = nullptr;
+    envForm_ = -1;
+    bool weapon = false;
+    for (const Material& mt : m.mats) {
+        if (mt.wfcName.find("_VEH_p.") != std::string::npos) { envSamples_ = &kVehicleSamples; envForm_ = 1; break; }
+        if (mt.wfcName.find("_ROBO_p.") != std::string::npos) { envSamples_ = &kRobotSamples; envForm_ = 0; break; }
+        if (mt.wfcName.rfind("WEP_", 0) == 0) { envSamples_ = &kRobotSamples; envForm_ = 0; weapon = true; break; }
+    }
+    if (envSamples_ && m.vertexCount() > 0) {          // world-space bounds of the posed mesh
+        core::Vec3 mn{1e30f, 1e30f, 1e30f}, mx{-1e30f, -1e30f, -1e30f};
+        for (size_t i = 0; i < m.vertexCount(); ++i) {
+            core::Vec3 p{m.positions[i * 3], m.positions[i * 3 + 1], m.positions[i * 3 + 2]};
+            mn = {std::min(mn.x, p.x), std::min(mn.y, p.y), std::min(mn.z, p.z)};
+            mx = {std::max(mx.x, p.x), std::max(mx.y, p.y), std::max(mx.z, p.z)};
+        }
+        core::Vec3 c = core::transformPoint(model, (mn + mx) * 0.5f), e = (mx - mn) * 0.5f;
+        envBoundsCenter_ = c;
+        envBoundsExtent_ = {e.x, e.y, e.z};   // model scale is 1 for characters; yaw-only: axis-aligned extent kept
+        // the weapon is lit by its owner's environment (no update from the weapon's own bounds)
+        if (dleRobotSamples_.empty()) { dleRobotSamples_ = kRobotSamples; dleVehicleSamples_ = kVehicleSamples; }
+        DirectLightEnvState& st = dle_[envForm_];
+        if (!weapon && st.lastFrame != frameNo_ && !std::getenv("WFC_OLDCHARENV")) {
+            st.lastFrame = frameNo_;
+            tickDirectLightEnv(envForm_, c, envBoundsExtent_, core::Vec3{model.m[12], model.m[13], model.m[14]});
+        }
+    }
     GpuMesh g;
     g.vao = dynVao_;
     std::vector<SubMesh> subs = m.subs;
@@ -1183,13 +1706,229 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
         Sub d;
         d.first = s.indexOffset; d.count = s.indexCount;
-        auto it = dynProgCache_.find(mat);
+        std::string mk = materialKey(mat);
+        auto it = dynProgCache_.find(mk);
         if (it == dynProgCache_.end())
-            it = dynProgCache_.emplace(mat, programFor(mat ? mat->wfcName : std::string(), mat, false)).first;
+            it = dynProgCache_.emplace(mk, programFor(mat ? mat->wfcName : std::string(), mat, false)).first;
         d.prog = it->second;
+        d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
         g.subs.push_back(d);
     }
+    if (envSamples_ && !weapon && !std::getenv("WFC_NOCHARSHADOWS")) {   // the environment's projector -> ShadowMask
+        ShadowProjector scratch;
+        if (const ShadowProjector* p = projectorFor(envForm_, scratch)) castCharacterShadow(g, model, *p);
+    }
+    dynamicMaskDraw_ = envSamples_ != nullptr;
     drawSubs(g, model, true);
+    dynamicMaskDraw_ = false;
+    envSamples_ = nullptr;
+    envForm_ = -1;
+}
+
+// ------------------------------------------------------------------------- effects
+// Scene depth as seen by translucency: copied from the HDR target whenever opaque geometry was drawn
+// since the last copy (UE3 resolves scene depth before the translucent pass).
+// Distortion apply (Xenon microcode, engine shader with AccumulatedDistortionTexture/SceneColorTexture):
+// uv' = uv + (acc.rg - acc.ba) * (0.25, -0.25) in D3D texture space (y down) -> +0.25 in GL; out =
+// SceneColor(uv'). Applied full-screen (zero offset elsewhere reproduces the scene unchanged).
+void Pipeline::applyDistortion() {
+    if (!distApplyProg_) {
+        const char* vs = "#version 330 core\nout vec2 vUV;\nvoid main(){ vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);"
+                         " vUV = p; gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0); }\n";
+        const char* fs = "#version 330 core\nin vec2 vUV; out vec4 oColor; uniform sampler2D uScene; uniform sampler2D uAcc;\n"
+                         "void main(){ vec4 a = texture(uAcc, vUV); vec2 uv = vUV + (a.rg - a.ba) * vec2(0.25, 0.25);"
+                         " oColor = texture(uScene, uv); }\n";
+        GLuint v = compile(GL_VERTEX_SHADER, vs, "distort.vs"), f = compile(GL_FRAGMENT_SHADER, fs, "distort.fs");
+        if (v && f) distApplyProg_ = link(v, f, "distort");
+        if (!distApplyProg_) { distUsed_ = false; return; }
+    }
+    BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+    BindFramebuffer(GL_DRAW_FRAMEBUFFER, sceneCopyFbo_);
+    BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    glDisable(GL_DEPTH_TEST); glDisable(GL_BLEND); glDisable(GL_CULL_FACE); glDepthMask(GL_FALSE);
+    UseProgram(distApplyProg_);
+    ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, distTex_);
+    ActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_);
+    Uniform1i(GetUniformLocation(distApplyProg_, "uScene"), 0);
+    Uniform1i(GetUniformLocation(distApplyProg_, "uAcc"), 1);
+    BindVertexArray(postVao_);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    BindVertexArray(0);
+    UseProgram(0);
+    glDepthMask(GL_TRUE); glEnable(GL_DEPTH_TEST);
+}
+
+void Pipeline::writeFrameReport() {
+    FILE* f = std::fopen(std::getenv("WFC_FRAMEREPORT"), "w");
+    if (!f) return;
+    static const char* kBlend[] = {"opaque", "masked", "translucent", "additive", "modulate"};
+    std::fprintf(f, "frame %d camera (%.2f %.2f %.2f) fog %s post bloom=%d dof=%d clut=%d distortion_pass=%d\n", frameNo_,
+                 camPos_.x, camPos_.y, camPos_.z, fogOn_ ? "on" : "off", post_.bloom ? 1 : 0, post_.dof ? 1 : 0,
+                 clutTex_ ? 1 : 0, distUsed_ ? 1 : 0);
+    std::fprintf(f, "materials drawn (draws, blend, lit, lightmap, dynamic, fx, distortion):\n");
+    for (const auto& kv : frameDraws_) {
+        const FrameDraw& d = kv.second;
+        std::fprintf(f, "  %-70s %4d %-11s %s %s %s %s %s\n", kv.first.c_str(), d.draws, kBlend[std::min(std::max(d.blend, 0), 4)],
+                     d.lit ? "lit" : "unlit", d.vertexLM ? "vertexLM" : d.lightmapped ? "lightmap" : "-",
+                     d.dynamic ? "dynamic" : "static", d.fx ? "fx" : "-", d.distortion ? "distortion" : "-");
+    }
+    for (const auto& kv : dle_) {
+        const DirectLightEnvState& st = kv.second;
+        std::fprintf(f, "DirectLightEnv %s: full updates %d (queued %d, last at frame %d), known %zu, direct %d (crossfade %.3f),"
+                        " composite shadow %s (strength %.3f, %d candidates)\n", kv.first == 0 ? "robot" : "vehicle",
+                     st.fullUpdates, st.queuedFull, st.lastFullFrame, st.known.size(), st.directCount, st.crossfade,
+                     st.shadowLight >= 0 ? lights_[(size_t)st.shadowLight].name.c_str() : "none", st.shadowStrength,
+                     st.shadowCandidates);
+        std::fprintf(f, "  DirectLightAmbientContribution (%.4f %.4f %.4f), ShadowMask %s this frame\n", st.env.dlac[0],
+                     st.env.dlac[1], st.env.dlac[2], maskDrawnFrame_ == frameNo_ ? "projected" : "clear (1,1,1,1)");
+        const ShadowProjector& pj = st.projector;
+        static const char* kPT[] = {"-", "directional", "point", "spot"};
+        std::fprintf(f, "  shadow projector: %s, type %s, source %s, ModShadowColor (%.3f %.3f %.3f %.3f), updates %d, "
+                        "source changes %d\n", pj.on ? "ON" : "off", kPT[std::min(std::max(pj.type, 0), 3)],
+                     pj.source >= 0 ? lights_[(size_t)pj.source].name.c_str() : "-", pj.modShadowColor[0],
+                     pj.modShadowColor[1], pj.modShadowColor[2], pj.modShadowColor[3], pj.updates, pj.sourceChanges);
+        if (st.shadowTop >= 0)
+            std::fprintf(f, "  composite top %s (%s): lum %.4f, smoothed vis %.3f, runner-up lum %.4f\n",
+                         lights_[(size_t)st.shadowTop].name.c_str(), lvv_.isBaked(st.shadowTop) ? "baked" : "unbaked",
+                         st.shadowTopScore, st.shadowTopVis, st.shadowNextScore);
+    }
+    if (const char* md = std::getenv("WFC_MASKDUMP")) {     // ShadowMask R channel as PGM (top row first)
+        if (maskDrawnFrame_ == frameNo_ && maskFbo_) {
+            std::vector<unsigned char> px((size_t)maskW_ * maskH_ * 4);
+            BindFramebuffer(GL_READ_FRAMEBUFFER, maskBlurFbo_);   // what the character pass reads
+            glReadPixels(0, 0, maskW_, maskH_, GL_RGBA, GL_UNSIGNED_BYTE, px.data());
+            BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+            if (FILE* pf = std::fopen(md, "wb")) {
+                std::fprintf(pf, "P5\n%d %d\n255\n", maskW_, maskH_);
+                for (int y = maskH_ - 1; y >= 0; --y)
+                    for (int x = 0; x < maskW_; ++x) std::fputc(px[((size_t)y * maskW_ + x) * 4], pf);
+                std::fclose(pf);
+            }
+        }
+        std::fprintf(f, "ShadowMask %dx%d, projected this frame: %s\n", maskW_, maskH_, maskDrawnFrame_ == frameNo_ ? "yes" : "no");
+    }
+    for (const ShadowFrameInfo& si : shadowFrame_)
+        std::fprintf(f, "projected shadow: %s subject, projector type %d from %s, resolution %d, ShadowModulateColor %.3f\n",
+                     si.form == 0 ? "robot" : "vehicle", si.type, si.source >= 0 ? lights_[(size_t)si.source].name.c_str() : "-",
+                     si.res, si.factor);
+    std::fprintf(f, "dynamic light environments (UberLight, TotalLightCount 2):\n");
+    for (const std::string& e : frameEnvs_) std::fprintf(f, "  %s\n", e.c_str());
+    std::fclose(f);
+}
+
+// ShadowMaskTexture for a draw: the frame's mask once a shadow was projected into it; otherwise the mask
+// is all (1,1,1,1) (cleared, nothing drawn, blur skipped - 0x82DEC190), represented by a neutral 1x1
+// texture. Test hook WFC_SHADOWMASKTEST=<v> binds a uniform mask value to character draws.
+GLuint Pipeline::shadowMaskTexFor(bool character) {
+    maskTexelOffset_[0] = maskTexelOffset_[1] = 0.0f;
+    if (character && maskDrawnFrame_ == frameNo_ && maskBlurTex_) {
+        maskTexelOffset_[0] = 0.5f / (float)maskW_;
+        maskTexelOffset_[1] = 0.5f / (float)maskH_;
+        return maskBlurTex_;                      // resolved + blurred mask
+    }
+    auto make = [](float v) {
+        GLuint t = 0;
+        glGenTextures(1, &t);
+        glBindTexture(GL_TEXTURE_2D, t);
+        unsigned char px[4] = {(unsigned char)std::lround(std::min(std::max(v, 0.0f), 1.0f) * 255.0f), 0, 0, 255};
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, px);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        return t;
+    };
+    if (!neutralMaskTex_) neutralMaskTex_ = make(1.0f);
+    static const char* test = std::getenv("WFC_SHADOWMASKTEST");
+    if (character && test) {
+        if (!testMaskTex_) testMaskTex_ = make((float)std::atof(test));
+        return testMaskTex_;
+    }
+    return neutralMaskTex_;
+}
+
+void Pipeline::ensureSceneDepth() {
+    if (!depthDirty_ || !depthCopyFbo_) return;
+    BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+    BindFramebuffer(GL_DRAW_FRAMEBUFFER, depthCopyFbo_);
+    BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    depthDirty_ = false;
+}
+
+std::string Pipeline::resolveName(const std::string& name) const {
+    if (mats_.count(name)) return name;
+    Material tmp;
+    tmp.sourceName = name.substr(name.rfind('.') == std::string::npos ? 0 : name.rfind('.') + 1);
+    return resolveBySourceName(&tmp);
+}
+
+bool Pipeline::drawFx(int id, const core::Mat4& model, const float color[4]) {
+    if (id < 0 || (size_t)id >= meshes_.size()) return false;
+    GpuMesh& g = meshes_[(size_t)id];
+    for (const Sub& s : g.subs)
+        if (s.prog < 0 || !progs_[(size_t)s.prog].original) return false;
+    std::copy(color, color + 4, fxColor_);
+    frameFx_ = true;
+    drawSubs(g, model, true);
+    frameFx_ = false;
+    std::fill(fxColor_, fxColor_ + 4, 1.0f);
+    VertexAttrib4f(5, 1, 1, 1, 1);
+    return true;
+}
+
+bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
+    if (!material || !sp || n == 0) return false;
+    auto it = spriteProg_.find(material);
+    if (it == spriteProg_.end()) {
+        std::string nm = resolveName(material);
+        int prog = nm.empty() ? -1 : programFor(nm, nullptr, false);
+        if (prog >= 0 && !progs_[(size_t)prog].original) prog = -1;
+        if (prog < 0) LOG_WARN("wfc: particle material %s not compiled; textured fallback", material);
+        it = spriteProg_.emplace(material, prog).first;
+    }
+    if (it->second < 0) return false;
+    if (!spriteVao_) {
+        GenVertexArrays(1, &spriteVao_);
+        GenBuffers(1, &spriteVbo_); GenBuffers(1, &spriteCbo_); GenBuffers(1, &spriteIbo_);
+    }
+    std::vector<float> v(n * 4 * 14), col(n * 4 * 4);
+    std::vector<uint32_t> idx(n * 6);
+    core::Vec3 N = core::normalize(facing);
+    for (size_t i = 0; i < n; ++i) {
+        const Sprite& s = sp[i];
+        core::Vec3 T = core::normalize(s.c[1] - s.c[0]);   // +U across the quad
+        for (int k = 0; k < 4; ++k) {
+            float* o = &v[(i * 4 + (size_t)k) * 14];
+            o[0] = s.c[k].x; o[1] = s.c[k].y; o[2] = s.c[k].z;
+            o[3] = N.x; o[4] = N.y; o[5] = N.z;
+            o[6] = T.x; o[7] = T.y; o[8] = T.z; o[9] = 1.0f;
+            o[10] = s.uv[k][0]; o[11] = s.uv[k][1]; o[12] = 0; o[13] = 0;
+            std::copy(s.color, s.color + 4, &col[(i * 4 + (size_t)k) * 4]);
+        }
+        uint32_t b = (uint32_t)(i * 4);
+        uint32_t q[6] = {b, b + 1, b + 2, b, b + 2, b + 3};
+        std::copy(q, q + 6, &idx[i * 6]);
+    }
+    BindVertexArray(spriteVao_);
+    BindBuffer(GL_ARRAY_BUFFER, spriteVbo_);
+    BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STREAM_DRAW);
+    setupAttribs();
+    BindBuffer(GL_ARRAY_BUFFER, spriteCbo_);
+    BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(col.size() * sizeof(float)), col.data(), GL_STREAM_DRAW);
+    EnableVertexAttribArray(5); VertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 0, (void*)0);
+    BindBuffer(GL_ELEMENT_ARRAY_BUFFER, spriteIbo_);
+    BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(idx.size() * 4), idx.data(), GL_STREAM_DRAW);
+    BindVertexArray(0);
+    GpuMesh g;
+    g.vao = spriteVao_;
+    Sub d;
+    d.first = 0; d.count = (uint32_t)idx.size(); d.prog = it->second;
+    d.matName = material;                                  // diagnostics (WFC_SKIPMAT)
+    g.subs.push_back(d);
+    frameFx_ = true;
+    drawSubs(g, core::Mat4::identity(), true);
+    frameFx_ = false;
+    return true;
 }
 
 // ------------------------------------------------------------------------- frame
@@ -1214,6 +1953,34 @@ void Pipeline::ensureTargets(int w, int h) {
     FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorTex_, 0);
     FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTex_, 0);
     if (CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) LOG_ERROR("wfc: HDR framebuffer incomplete");
+    // distortion accumulation (RGBA8) sharing the scene depth buffer, and a scene-colour copy
+    if (!distFbo_) { GenFramebuffers(1, &distFbo_); glGenTextures(1, &distTex_); GenFramebuffers(1, &sceneCopyFbo_); glGenTextures(1, &sceneCopyTex_); }
+    glBindTexture(GL_TEXTURE_2D, distTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, sceneCopyTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_HALF_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    BindFramebuffer(GL_FRAMEBUFFER, distFbo_);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, distTex_, 0);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTex_, 0);
+    if (CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) LOG_ERROR("wfc: distortion framebuffer incomplete");
+    BindFramebuffer(GL_FRAMEBUFFER, sceneCopyFbo_);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, sceneCopyTex_, 0);
+    if (!depthCopyFbo_) { GenFramebuffers(1, &depthCopyFbo_); glGenTextures(1, &depthCopyTex_); }
+    glBindTexture(GL_TEXTURE_2D, depthCopyTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_INT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    BindFramebuffer(GL_FRAMEBUFFER, depthCopyFbo_);
+    FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthCopyTex_, 0);
+    glDrawBuffer(GL_NONE); glReadBuffer(GL_NONE);
     // quarter-res bloom ping-pong targets
     int bw = std::max(w / 4, 1), bh = std::max(h / 4, 1);
     for (int i = 0; i < 2; ++i) {
@@ -1235,8 +2002,23 @@ void Pipeline::ensureTargets(int w, int h) {
 
 void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     ++frameNo_;
+    if (frameNo_ == 2) {
+        // Prewarm: build every compiled original material not yet used (effect, weapon, character
+        // materials) and decode its textures now, as the original had them resident from the map's
+        // cooked packages before combat -- instead of on first draw (the first-shot hitch).
+        auto t0 = std::chrono::steady_clock::now();
+        int built = 0;
+        for (const auto& kv : mats_) {
+            if (progIndex_.count(kv.first + "|UBER") || progIndex_.count(kv.first + "|LM")) continue;
+            if (programFor(kv.first, nullptr, false) >= 0) ++built;
+        }
+        LOG_INFO("wfc: prewarmed %d material programs in %.0f ms", built,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+    }
+    gFrameStart = std::chrono::steady_clock::now();
     static auto t0 = std::chrono::steady_clock::now();
-    time_ = std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
+    static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures
+    time_ = lockstep ? (float)frameNo_ / 60.0f : std::chrono::duration<float>(std::chrono::steady_clock::now() - t0).count();
     vpW_ = w; vpH_ = h;
     ensureTargets(std::max(w, 1), std::max(h, 1));
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
@@ -1244,9 +2026,13 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     // Clear to the fog in-scatter colour: what an infinitely distant ray converges to.
     glClearColor(fogIn_.x, fogIn_.y, fogIn_.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    depthDirty_ = true;
+    distUsed_ = false;
     camPos_ = cam.pos;
     znear_ = cam.znear; zfar_ = cam.zfar;
     viewProj_ = cam.proj() * cam.view();
+    camProj_ = cam.proj();
+    shadowFrame_.clear();
     // frustum planes (Gribb/Hartmann, column-major m[col*4+row])
     const float* m = viewProj_.m;
     auto row = [&](int r, int c) { return m[c * 4 + r]; };
@@ -1260,13 +2046,47 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
 }
 
 void Pipeline::endFrame() {
+    double thisRenderMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gFrameStart).count();
+    gStats.renderMs += thisRenderMs;
+    if (std::getenv("WFC_RENDERSTATS")) {             // hitch attribution: whole frame vs render span
+        static auto lastEnd = std::chrono::steady_clock::now();
+        auto nowT = std::chrono::steady_clock::now();
+        double frameMs = std::chrono::duration<double, std::milli>(nowT - lastEnd).count();
+        lastEnd = nowT;
+        if (frameMs > 50.0 && frameNo_ > 3)
+            LOG_INFO("wfc spike: frame %d total %.1f ms, render span %.1f ms", frameNo_, frameMs, thisRenderMs);
+    }
     if (std::getenv("WFC_RENDERSTATS")) {          // CPU frame-to-frame time, logged every 120 frames
+        auto g0 = std::chrono::steady_clock::now();   // diagnostics only: wait for the GPU on the scene
+        glFinish();
+        double gms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - g0).count();
+        gStats.gpuMs += gms;
+        if (gms > 20.0 && frameNo_ > 3) LOG_INFO("wfc spike: frame %d gpu/driver wait %.1f ms", frameNo_, gms);
         static auto last = std::chrono::steady_clock::now();
         static int frames = 0; static double acc = 0;
         auto now = std::chrono::steady_clock::now();
         acc += std::chrono::duration<double, std::milli>(now - last).count(); last = now;
-        if (++frames == 120) { LOG_INFO("wfc: avg frame %.2f ms (%.0f fps)", acc / frames, 1000.0 * frames / acc); frames = 0; acc = 0; }
+        if (++frames == 120) {
+            LOG_INFO("wfc: dynamic meshes: vertex build %.2f ms, upload %.2f ms per frame", gStats.dynBuildMs / 120.0,
+                     gStats.dynUploadMs / 120.0);
+            LOG_INFO("wfc: DirectLightEnv per frame: %.2f updates (%.4f ms), %.2f volume queries (%.4f ms), %.2f shadow rays",
+                     statEnvCalls_ / 120.0, statUpdateMs_ / 120.0, statLvvQueries_ / 120.0, statLvvMs_ / 120.0,
+                     statVisCalls_ / 120.0);
+            LOG_INFO("wfc: ShadowMask per frame: %.2f projections, %.2f gated", statShadowProj_ / 120.0, statShadowGated_ / 120.0);
+            statShadowProj_ = statShadowGated_ = 0;
+            statEnvCalls_ = statVisCalls_ = statLvvQueries_ = 0; statLvvMs_ = 0.0; statUpdateMs_ = 0.0;
+            LOG_INFO("wfc: avg frame %.2f ms (%.0f fps); scene submit %.2f ms, gpu wait %.2f ms; per frame: %.1f draws, "
+                     "%.1f light envs (%.2f ms), %.1f visibility traces",
+                     acc / frames, 1000.0 * frames / acc, gStats.renderMs / 120.0, gStats.gpuMs / 120.0, gStats.draws / 120.0, gStats.envCalls / 120.0, gStats.envMs / 120.0,
+                     gStats.visCalls / 120.0);
+            frames = 0; acc = 0; gStats = RenderStats{};
+        }
     }
+    if (std::getenv("WFC_SHADOWSELFTEST") && frameNo_ == 3) runShadowMaskSelfTest();
+    if (distUsed_) applyDistortion();
+    if (std::getenv("WFC_FRAMEREPORT") && std::getenv("WFC_SMOKE_FRAMES") &&
+        frameNo_ == (int)std::atol(std::getenv("WFC_SMOKE_FRAMES")))
+        writeFrameReport();
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glDisable(GL_BLEND);

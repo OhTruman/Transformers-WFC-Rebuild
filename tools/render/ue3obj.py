@@ -37,15 +37,19 @@ def struct_dict(v):
 
 
 class Repo:
-    def __init__(self, packages):
-        self.pkgs = [ue3pkg.Package(os.path.join(COOKED, p)) for p in packages]
+    def __init__(self, packages, fallback=()):
+        # fallback packages only supply objects absent from `packages`
+        self.pkgs = [ue3pkg.Package(os.path.join(COOKED, p)) for p in list(packages) + list(fallback)]
         self.readers = [propsmod.PropReader(p) for p in self.pkgs]
         self.index = {}
+        nprimary = len(packages)
         for k, p in enumerate(self.pkgs):
             for i in range(len(p.exports)):
                 path = p.object_path(i + 1).lower()
                 e = p.exports[i]
                 prev = self.index.get(path)
+                if k >= nprimary and prev is not None and prev[0] < nprimary:
+                    continue
                 # prefer the copy with the largest serialized body (full cooked copy)
                 if prev is None or e['serial_size'] > self.pkgs[prev[0]].exports[prev[1] - 1]['serial_size']:
                     self.index[path] = (k, i + 1)
@@ -84,6 +88,18 @@ class Repo:
         return p, p.data[e['serial_offset'] + used:e['serial_offset'] + e['serial_size']]
 
     # ------------------------------------------------------------------ MIC static params
+    def switch_names(self):
+        """ParameterName of every StaticSwitchParameter expression in the loaded packages."""
+        if getattr(self, '_switch_names', None) is None:
+            out = set()
+            for k, (pi, ix) in self.index.items():
+                pk = self.pkgs[pi]
+                if pk.class_name(pk.exports[ix - 1]) == 'MaterialExpressionStaticSwitchParameter':
+                    nm = (self.obj(pk.object_path(ix)) or {}).get('ParameterName')
+                    if nm: out.add(nm)
+            self._switch_names = out
+        return self._switch_names
+
     def mic_static_params(self, path):
         """Decode the static parameter set that follows the compiled static-permutation resource
         in a MaterialInstanceConstant's native tail. Returns ({switch: bool}, {mask: (r,g,b,a)}).
@@ -94,19 +110,26 @@ class Repo:
         where such an array parses cleanly and names are StaticSwitchParameter names."""
         p, t = self.native_tail(path)
         names = p.names
+        valid = self.switch_names()
         best = None
         for o in range(0, len(t) - 4, 4):
             n = struct.unpack_from('>i', t, o)[0]
             if not (1 <= n <= 64) or o + 4 + n * 32 > len(t): continue
             ok = True
             sw = {}
+            known = 0
             for k in range(n):
                 b = o + 4 + 32 * k
                 ni, nn, val, ovr = struct.unpack_from('>iiII', t, b)
-                if not (0 <= ni < len(names)) or nn != 0 or val > 1 or ovr > 1:
+                if not (0 < ni < len(names)) or not (0 <= nn < 1000) or val > 1 or ovr > 1:
                     ok = False; break
-                sw[names[ni]] = (bool(val), bool(ovr))
-            if not ok: continue
+                nm = names[ni] if nn == 0 else '%s_%d' % (names[ni], nn - 1)   # FName instance number
+                known += nm in valid
+                sw[nm] = (bool(val), bool(ovr))
+            # Names must be (almost all) real StaticSwitchParameter names: rejects coincidental arrays,
+            # tolerates stale entries a MIC keeps for switches no longer in its parent graph
+            # (e.g. DeadBodies_Mat_INST: 36 of 37 known, Use_Lerp_UVindex stale).
+            if not ok or known < max(1, int(0.8 * n + 0.999)): continue
             # following component-mask array
             m = o + 4 + 32 * n
             masks = {}

@@ -43,6 +43,8 @@ def lm_records(repo, pkg_index):
     shared = None
     out = {}
     kinds = {}
+    vertex_lm = []
+    vertex_samples = {}
 
     def lm_name(idx):
         if idx > 0 and idx - 1 < len(p.exports) and p.class_name(p.exports[idx - 1]) == 'LightMapTexture2D':
@@ -57,6 +59,10 @@ def lm_records(repo, pkg_index):
         if len(nat) <= 40: continue
         ltype = struct.unpack_from('<i', nat, 16)[0]
         if ltype in (0, 1, 2): kinds[ltype] = kinds.get(ltype, 0) + 1
+        if ltype == 1:   # LMT_1D: per-vertex lightmap samples
+            vertex_lm.append(p.object_path(i + 1))
+            v = parse_lightmap_1d(nat)
+            if v: vertex_samples[p.object_path(i + 1)] = v
         if shared is None and ltype == 2: shared = nat[21:37]
         if shared is None or ltype != 2: continue
         g = nat.find(shared)
@@ -71,7 +77,54 @@ def lm_records(repo, pkg_index):
         out[p.object_path(i + 1)] = {'coeffs': [c[0] for c in co], 'scales': [c[1] for c in co],
                                      'coordScale': list(struct.unpack_from('>2f', nat, o)),
                                      'coordBias': list(struct.unpack_from('>2f', nat, o + 8))}
+    kinds['vertex_components'] = vertex_lm
+    kinds['vertex_samples'] = vertex_samples
     return out, kinds
+
+
+def component_flags(mapname):
+    """Authored per-component render flags (AssetTools props_authored.json, effective values merged over the
+    archetype chain): hidden actors (bHidden, not drawn in game) and components that receive no light
+    (bAcceptsLights False or an empty LightingChannels set: UE3 lights only affect overlapping channels).
+    Keyed by component path and by 'actor:<Actor>' (world.glb tags actor-placed nodes that way)."""
+    p = os.path.join('F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps', mapname, 'props_authored.json')
+    if not os.path.exists(p):
+        return {}
+    out = {}
+    for pr in json.load(open(p))['props']:
+        r = pr.get('render') or {}
+        f = {}
+        if (pr.get('movement') or {}).get('bHidden'):
+            f['hidden'] = True
+        if r.get('bAcceptsLights') is False or pr.get('lighting_channels_on') == []:
+            f['no_lights'] = True
+        if f:
+            out[pr['component']] = f
+            if pr.get('container_class') != 'StaticMeshCollectionActor':
+                out['actor:' + pr['actor']] = f
+    return out
+
+
+def parse_lightmap_1d(nat):
+    """FLightMap1D (StaticMeshComponent LODData[0].LightMap, LightMapType 1), big-endian ints at offset 1:
+    [13] type=1, [17] LightGuids.Num, GUIDs, Owner(4), DirectionalSamples bulk data
+    (Flags, ElementCount, SizeOnDisk, OffsetInFile, ElementCount x FQuantizedDirectionalLightSample =
+    3 x FColor, 4 bytes each, alpha byte last), then ScaleVectors[3] (FVector). Returns raw sample bytes
+    (hex) + scales; vertex order = the mesh's LOD0 vertex buffer."""
+    if len(nat) < 40 or struct.unpack_from('>i', nat, 13)[0] != 1:
+        return None
+    ng = struct.unpack_from('>i', nat, 17)[0]
+    o = 21 + 16 * ng + 4                       # GUIDs, Owner
+    _flags, count, size = struct.unpack_from('>iii', nat, o); o += 20   # bulk header: 5 ints on this build
+    if count <= 0 or size != count * 12 or o + size + 36 > len(nat):
+        return None
+    data = nat[o:o + size]; o += size
+    scales = [list(struct.unpack_from('>3f', nat, o + 12 * k)) for k in range(3)]
+    # FColor serialized as a byte-swapped DWColor: A,R,G,B. A is 255/254; each R/G/B channel of each
+    # coefficient is normalized to 255 (max over the vertices), i.e. ScaleVectors = per-channel maxima.
+    if any(data[k * 4] < 250 for k in range(min(count * 3, 64))):
+        return None
+    return {'count': count, 'samples_hex': data.hex(), 'scales': scales}
 
 
 def lights(repo, pkg_index):
@@ -109,6 +162,22 @@ def lights(repo, pkg_index):
                 'channels': ch, 'affects_classification': c.get('LightAffectsClassification'),
                 'lower_color_srgb8': (c.get('LowerColor') or [255, 255, 255, 0])[:3],
                 'lower_brightness': c.get('LowerBrightness', 0.0),
+                # modulated (projected) shadow inputs; defaults from Engine Default__LightComponent /
+                # Default__PointLightComponent (CastDynamicShadows True, ModShadowColor (0,0,0,1),
+                # ShadowFalloffExponent 2.0). ModShadowColor is an FLinearColor (no conversion).
+                'light_guid': [int(x) & 0xFFFFFFFF for x in (c.get('LightGuid') or [0, 0, 0, 0])],
+                # DirectLightEnv relevance (native 0x82DD3EF0): RadiusOfInfluence, class default -1 (UE units)
+                'radius_of_influence_m': (c.get('RadiusOfInfluence') if c.get('RadiusOfInfluence') is not None else -1.0) * 0.01,
+                'use_volumes': bool(c.get('bUseVolumes', False)),
+                'only_same_levels': bool(c.get('bOnlyAffectSameAndSpecifiedLevels', False)),
+                'has_light_function': c.get('Function') is not None,
+                'cast_dynamic_shadows': bool(c.get('CastDynamicShadows', True)),
+                'cast_composite_shadow': bool(c.get('bCastCompositeShadow', False)),
+                'mod_shadow_color': list(c.get('ModShadowColor') or [0.0, 0.0, 0.0, 1.0]),
+                'shadow_falloff_exponent': c.get('ShadowFalloffExponent', 2.0),
+                # copied into the DirectLightEnv shadow record (+0x70 / +0x74; 0 -> SystemSettings 128 / 1024)
+                'min_shadow_resolution': int(c.get('MinShadowResolution') or 0),
+                'max_shadow_resolution': int(c.get('MaxShadowResolution') or 0),
                 'ue_matrix': M.tolist(),
             })
     return res
@@ -228,8 +297,14 @@ def bsp_lighting(repo, out):
             nrm = M['vectors'][int(s['vNormal'])]
             gn = np.array([nrm[0], nrm[2], nrm[1]], 'f8'); gn /= (np.linalg.norm(gn) or 1)
             tris = [(0, j, j + 1) for j in range(1, k - 1)]
-            c = np.cross(gp[1] - gp[0], gp[2] - gp[0])
-            if np.dot(c, gn) < 0: tris = [(a, cc, b) for a, b, cc in tris]
+            # Winding from the whole polygon (Newell normal): BSP polygons often start with collinear
+            # vertices, where the first triangle's normal is degenerate and its sign arbitrary.
+            nw = np.zeros(3)
+            for i in range(k):
+                pa, pb = gp[i], gp[(i + 1) % k]
+                nw += np.array([(pa[1] - pb[1]) * (pa[2] + pb[2]), (pa[2] - pb[2]) * (pa[0] + pb[0]),
+                                (pa[0] - pb[0]) * (pa[1] + pb[1])])
+            if np.dot(nw, gn) < 0: tris = [(a, cc, b) for a, b, cc in tris]
             base = len(P)
             for j in range(k):
                 P.append(gp[j]); N.append(gn); UV.append(v['uv'][j]); SUV.append(v['suv'][j])
@@ -398,6 +473,28 @@ def postprocess(mapname, out):
     return res
 
 
+def light_visibility_volumes(repo, out):
+    """WFC LightsVisibilitiesVolume: export the cooked native blob verbatim (lvv_<n>.bin) + its actor
+    transform. The layout is being recovered natively (ReVa); facts confirmed so far (see
+    test_light_visibility.py): octree head with big-endian int32 child indices and 32-byte light bitmasks,
+    then (u16 light index, u16 visibility) pairs with visibility in 1/20 steps."""
+    p = repo.pkgs[0]; pr = repo.readers[0]
+    vols = []
+    for i, e in enumerate(p.exports):
+        if p.class_name(e) != 'LightsVisibilitiesVolume':
+            continue
+        props, used = pr.read_object(i + 1)
+        o = {t['name']: t['value'] for t in props}
+        nat = p.data[e['serial_offset'] + used:e['serial_offset'] + e['serial_size']]
+        fn = 'lvv_%d.bin' % len(vols)
+        open(os.path.join(out, fn), 'wb').write(nat)
+        vols.append({'name': p.object_path(i + 1), 'file': fn, 'bytes': len(nat),
+                     'location_ue': list(o.get('Location') or [0, 0, 0]),
+                     'draw_scale3d': list(o.get('DrawScale3D') or [1, 1, 1]),
+                     'draw_scale': o.get('DrawScale', 1.0)})
+    return vols
+
+
 def main():
     mapname, out, umodel_dir = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(os.path.join(out, 'lightmaps'), exist_ok=True)
@@ -419,7 +516,10 @@ def main():
                'note': 'Directional lightmaps: L = sum_i dot(N_t, B_i)^2 * tex_i.rgb(sRGB-decoded) * scales[i]; '
                        'B0=(0,sqrt(2/3),1/sqrt3) B1=(-1/sqrt2,-1/sqrt6,1/sqrt3) B2=(1/sqrt2,-1/sqrt6,1/sqrt3) '
                        '(decoded from the original Xenon base-pass shader microcode).',
-               'lightmap_type_counts': kinds,
+               'lightmap_type_counts': {k: v for k, v in kinds.items() if k != 'vertex_samples'},
+               'vertex_lightmaps': kinds.get('vertex_samples', {}),
+               'component_flags': component_flags(mapname),
+               'light_visibility_volumes': light_visibility_volumes(repo, out),
                'lightmaps': {'props': props, 'atlases': atl},
                'lights': L, 'fog': F, 'postprocess': PP},
               open(os.path.join(out, 'lighting.json'), 'w'), indent=0)

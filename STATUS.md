@@ -883,6 +883,46 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 03 PASS 5 (2026-10-02, agents/rendering)
+- Character shadows in normal play (ReverseEngineering 7033f18): per light-environment synthetic projector copying the composite light, ModShadowColor = shadowFactor, FadeAlpha 1, native creation / relevance / DPG gates, native origin / push-back / W range / resolution, native 6-tap darkness-weighted blur.
+- WFC_SHADOWSELFTEST 32/32, WFC_DLETEST 20/20. Diagnostics: WFC_NOCHARSHADOWS, WFC_SHADOWTEST=<light>, WFC_SUBJECTRELEVANCE=<hex>, WFC_BLURTIE, WFC_MASKDUMP.
+- Still PARTIAL / UNKNOWN: synthetic-light registration, frustum fit + ScreenToShadowMatrix, directional / point projection-shader variants, blur tie branch, preshadows, weapon ShadowParent.
+
+## RENDERING MILESTONE 03 PASS 4 (2026-10-02, agents/rendering)
+- Native ShadowMask (ReverseEngineering 13c0953): RGBA8 at scene/2 (SizeX > 960), cleared to 1, z-fail stencil frustum, multiplicative DestColor x Src (alpha untouched), read as .r + half texel by the character pass.
+- DirectLightAmbientContribution from the light environment (CubeSum ratio); BranchingPCF native tables; ShadowDepthBias 1165.08; projection gates (flag 0x4 + DPG bit).
+- WFC_SHADOWSELFTEST 18/18, WFC_DLETEST 20/20. Character projection still opt-in (WFC_CHARSHADOWS) — shadowFactor link, shadow matrix, blur kernel, creation gates UNKNOWN.
+- AssetTools 7a69756: Ion Blaster fine-aim HUD (no scope; instant first spread, fine-aim spread), pickup FX + wall-panel materials compiled (TransGame fallback package).
+
+## RENDERING MILESTONE 03 PASS 3 (2026-10-02, agents/rendering)
+- Native LightsVisibilitiesVolume decoder + query (ReverseEngineering b52dca9); Streets blob validated, C++ == Python port.
+- Native DirectLightEnv for robot / vehicle (b52dca9 + c95dadd): gather, baked/unbaked visibility, ranking, composite shadow, update queue. WFC_DLETEST 20/20.
+- DynamicShadowLuminanceScale consumption in the character uber shader (31f9a9b); shipped DSLS 0; mask production and DLAC CPU formula UNKNOWN (neutral mask).
+- Xenos PWL degamma for SRGB textures; vertex-lightmap decode from microcode.
+- Character shadows: all non-native stages implemented, opt-in WFC_CHARSHADOWS pending native bias/offsets.
+- Tools: lvv_decode.py, lvv_query_check.py, perf_suite.sh; env WFC_DSLS / WFC_DLAC / WFC_SHADOWMASKTEST / WFC_LVVDUMP.
+
+## RENDERING MILESTONE 03 PASS 2 (2026-10-02, agents/rendering)
+- Distortion pass from Xenon microcode; hover rings refract; Trail_Distort / Distortion_Cloud / Glow_Mod ready for Systems' emitters.
+- Vehicle material audit: docs/rendering/vehicle_material_audit.md. Render audit captures: tools/render/capture_audit.sh (docs/rendering/audit/).
+- Flat pink/lavender floors = 44 mis-wound BSP polygons (fixed). Hidden actors not drawn; no-light components emissive-only.
+- Character light visibility uses the authored robot/vehicle sample offsets (fractional visibility).
+- Prewarm removes first-use builds; perf must be measured in Release (Debug inflates CPU costs ~10x).
+- Diagnostics: WFC_LOCKSTEP, WFC_FRAMEREPORT, WFC_NODISTORTION, WFC_NOCULL, WFC_SHOWHIDDEN, WFC_SKIPMAT comp:, tools/render/pick_material.py.
+
+## RENDERING MILESTONE 03 (2026-10-02, agents/rendering)
+- Material translation verified against compiled permutations: 187/202 match (`tools/render/verify_permutations.py`).
+- Vehicle/robot: CS_World camera/reflection vectors, cube LOD bias, Fresnel Exp; vehicle + robot MICs match their compiled permutations.
+- Boost/hover/ram FX shaded by their original emitter materials (27 FX graphs compiled; soft depth fade, panners, blend-mode fog).
+- Streets audit: `python tools/render/audit_map.py MP_IAC_Streets work/render/MP_IAC_Streets` (needs a `WFC_AUDIT_DUMP` run) → map_audit.json.
+- Fixed: actor-placed props lightmaps (38 submeshes), vertex lightmaps (24 components), ScreenPosition, PixelDepth.
+- Fixed: mottled grey/pink vehicle after transform (program cache keyed by Material* reused across robot/vehicle pose buffers).
+- Fixed: hover light-cone plumes (TexCoord1 = UV0 on single-UV meshes); debug overlay toggle ignored in scripted runs; shell/mesh-particle light envs shared per 1 m cell.
+- Energon red on Optimus confirmed from compiled permutations (blue is the False branch).
+- HUD Ion Blaster crosshair from Hud_GFX.gfx (spread-driven prongs); no scope in fine aim (per HUD script).
+- Renderer cost of shooting: light-env visibility memo + no env for unlit FX (env 3.5 ms → 0.4 ms/frame); the remaining ~55 ms/frame while firing is outside the renderer (simulation).
+- Captures: `bash tools/render/capture.sh <outdir>`; env: `WFC_RENDERSTATS`, `WFC_AUDIT_DUMP=<file>`, `WFC_NOVERTEXLM`.
+
 ## FIDELITY PASS 1 (2026-10-01) — recover original WFC behaviour from authored data
 Evidence root: cooked UE3 config `ExtractedAssets/config/Coalesced_ini/.../Cooked/*.ini`,
 map metadata `ExtractedAssets/maps/*.json`, asset metadata `VerticalSlice/**/*.json`.
