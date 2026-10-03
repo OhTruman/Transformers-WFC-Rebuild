@@ -62,6 +62,12 @@ struct CueDef {
     std::vector<EventDef> events;
     float priority;                      // SoundNodeRoot.Priority (unset = 0)
     bool mapBank;                        // added by a map's audio.json (removed at map unload)
+    // SoundNodeRoot bLooping + LoopStart / LoopEnd: the root playback time wraps at LoopEnd back to LoopStart and
+    // the wave events re-run on the cue's timeline [RE A6 0x827881D8 pseudocode; HIGH for the re-run].
+    bool rootLoop;
+    float loopStart, loopEnd;
+    // Streamed: waves decoded when the cue first plays and released when no instance is left (music).
+    bool streamed;
 };
 } // namespace cuedata
 
@@ -116,6 +122,11 @@ public:
     // Map unload: stop the map bank's instances, remove its cues and release their samples. Returns cues removed.
     int unloadMapCues();
     int mapCueCount() const;
+    // Decode a streamed cue's waves ahead of its first play (e.g. on a loading screen); they stay resident until
+    // the cue has played and its last instance ended. Returns false for an unknown cue.
+    bool prefetch(const char* cue);
+    // Diagnostics: a streamed cue's waves are resident (decoded) right now.
+    bool wavesResident(const char* cue) const;
     size_t cueCount() const { return cues_.size(); }
     bool hasCue(const char* name) const { return findCue(name) >= 0; }
     // The FmodAudioDevice mixer (presets, categories, MASTER_WET environment).
@@ -146,6 +157,9 @@ public:
     void tick(float dt);
 
     int activeInstances(const char* cue) const;
+    // The cue definition an instance plays (null if gone); the oldest live instance of a cue (-1 if none).
+    const cuedata::CueDef* instanceCue(int instance) const;
+    int oldestInstance(const char* cue) const;
     size_t liveInstances() const { return live_.size(); }
     size_t pendingEvents() const { return pending_.size(); }
     // Diagnostics: current resolved position of an instance.
@@ -186,6 +200,9 @@ private:
     core::Vec3 listener_{0, 0, 0};
     std::vector<cuedata::CueDef> cues_;
     std::vector<std::vector<std::vector<audio::Sound>>> waves_;   // [cue][event][wave]
+    std::vector<char> resident_;                                   // [cue] waves decoded (streamed cues: on demand)
+    std::vector<char> pinned_;                                     // [cue] prefetched, not yet played
+    void releaseWaves(size_t cue);
     std::vector<Instance> live_;
     std::vector<Pending> pending_;
     int nextId_ = 0;

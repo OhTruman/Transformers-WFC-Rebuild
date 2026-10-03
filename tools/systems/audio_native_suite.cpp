@@ -8,6 +8,7 @@
 #include "game/SoundCues.h"
 #include "game/SoundMixer.h"
 #include "game/PickupPresentation.h"
+#include "game/FrontendAudio.h"
 #include "assets/Json.h"
 #include <chrono>
 #include <cmath>
@@ -944,7 +945,125 @@ static void testLifecycle() {
     delete a;
 }
 
+// ---------------------------------------------------------------- frontend audio (M05)
+static void testFrontend() {
+    std::printf("[frontend audio]\n");
+    const std::string content = kRoot + "/../content/";
+    Rec rec; game::SoundCues cues; cues.load(&rec, content);
+    game::FrontendAudio fe(cues);
+    auto tick = [&](float secs) { for (float t = 0; t < secs - 1e-4f; t += 1.0f / 30.0f) { fe.tick(1.0f / 30.0f); cues.tick(1.0f / 30.0f); } };
+    // UI sounds by GFx name (frontend_audio.json gfx_ui_sounds)
+    assets::Json fa = loadJson(kMan + "frontend_audio.json");
+    const assets::Json& g = fa["gfx_ui_sounds (names passed to Sound.PlaySound in AS, matched to cue names)"];
+    int named = 0;
+    for (const auto& kv : g.obj) {
+        ++named;
+        CHECK(fe.uiCueFor(kv.first.c_str()) == kv.second["cue"].asString(), "GFx sound %s -> %s", kv.first.c_str(), kv.second["cue"].asString().c_str());
+    }
+    CHECK(named == 16, "16 GFx sound names (%d)", named);
+    int f0 = rec.n;
+    int b1 = fe.playUiSound("BUTTON_ACCEPT");
+    CHECK(b1 >= 0 && rec.n > f0 && !rec.v[f0].p.positional, "BUTTON_ACCEPT plays 2D (%d voices)", rec.n - f0);
+    int b2 = fe.playUiSound("BUTTON_ACCEPT");
+    CHECK(fe.stopUiSound("BUTTON_ACCEPT", 0.0f) && !cues.playing(b1) && cues.playing(b2), "StopSound stops the first (oldest) instance only");
+    CHECK(fe.playUiSound("NOT_A_SOUND") == -1, "unknown UI sound name -> nothing");
+    int silent = fe.playUiSound("PICKUP_DMG_MULTIPLIER_DECREASE");
+    CHECK(silent >= 0 && cues.cueDef("BL_HUD_INTERFACE.PICKUP_DMG_MULTIPLIER_DECREASE")->events.empty(), "authored-silent cue plays nothing");
+
+    // Music: SeqAct_PlayMusic tracks of the UI levels
+    game::MusicTrack fr, lobby, party;
+    CHECK(game::FrontendAudio::frontendTrack("UI_FrontEnd_m", fr) && fr.cue == "BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01" && fr.fadeIn == 0.25f &&
+          game::FrontendAudio::frontendTrack("UI_Lobby_m", lobby) && game::FrontendAudio::frontendTrack("UI_PartyLobby_m", party) &&
+          party.fadeOut == 0.0f, "authored UI-level tracks");
+    { game::MusicTrack none; CHECK(!game::FrontendAudio::frontendTrack("MP_IAC_Streets", none), "a match map authors no frontend track"); }
+    game::FrontendAudio::frontendTrack("UI_FrontEnd_m", fr);
+    game::MusicPlayer& mp = fe.music();
+    CHECK(!cues.wavesResident(fr.cue.c_str()), "streamed track not decoded before it plays");
+    mp.playMusic(fr);
+    CHECK(mp.state() == game::MusicPlayer::State::Queued, "PlayMusic queues");
+    tick(1.0f / 30.0f);
+    const int m1 = mp.musicInstance();
+    CHECK(mp.state() == game::MusicPlayer::State::Playing && m1 >= 0 && cues.wavesResident(fr.cue.c_str()),
+          "first track starts at once (SpazTimer 0), decoded on demand");
+    mp.playMusic(fr);
+    CHECK(mp.musicInstance() == m1 && mp.state() == game::MusicPlayer::State::Playing, "same cue again: no restart");
+    game::MusicTrack low = lobby; low.priority = -1;
+    mp.playMusic(low);
+    CHECK(mp.state() == game::MusicPlayer::State::Playing && mp.queued().cue == fr.cue, "lower priority track ignored");
+    mp.playMusic(lobby);
+    CHECK(mp.state() == game::MusicPlayer::State::Queued, "new track queued behind the 5 s SpazTimer");
+    tick(4.5f);
+    CHECK(mp.musicInstance() == m1, "still the old track at 4.5 s");
+    tick(0.6f);
+    const int m2 = mp.musicInstance();
+    CHECK(m2 >= 0 && m2 != m1 && cues.playing(m1), "crossfade at the SpazTimer (old track fading over its FadeOut 1.0)");
+    tick(1.1f);
+    tick(1.0f / 30.0f);
+    CHECK(!cues.playing(m1) && !cues.wavesResident(fr.cue.c_str()) && cues.wavesResident(lobby.cue.c_str()),
+          "old track ended; its streamed waves released");
+    // root-loop timeline: MP_LOBBY_MX events at 0 / 173.6 / 291.4 s, wrap at 390.7 s
+    int launches = 0;
+    const int before = rec.n;
+    tick(392.0f);
+    launches = rec.n - before;
+    CHECK(launches == 3, "lobby timeline: waves 2 and 3 at 173.6 / 291.4 s, wave 1 again after the 390.7 s wrap (%d new voices)", launches);
+    CHECK(cues.playing(m2), "root-looping music instance never retires");
+    // boredom restart
+    game::MusicTrack bored = party; bored.boredom = 2.0f;
+    mp.playMusic(bored, true);        // IgnoreSpazTimer
+    tick(1.0f / 30.0f);
+    const int m3 = mp.musicInstance();
+    tick(2.1f);
+    CHECK(m3 >= 0 && mp.musicInstance() != m3 && mp.current().cue == bored.cue, "BoredomTime re-crossfades the same track");
+    mp.stopMusic(0.5f);
+    CHECK(mp.state() == game::MusicPlayer::State::Stopped && mp.musicInstance() < 0, "StopMusic -> Stopped");
+    tick(0.7f);
+    CHECK(cues.activeInstances(bored.cue.c_str()) == 0 && !cues.wavesResident(bored.cue.c_str()), "stopped track faded out and released");
+    // stinger priority
+    const char* st = "BL_HUD_INTERFACE.STNG_ESCALATION_WAVE_OVER";   // root Priority 0
+    CHECK(mp.playStinger(st) && !mp.playStinger(st), "a stinger of equal priority does not interrupt the playing one");
+    // level change
+    mp.playMusic(fr); tick(0.1f);
+    fe.onLevelChange();
+    tick(1.0f / 30.0f);
+    CHECK(mp.state() == game::MusicPlayer::State::Stopped && cues.activeInstances(fr.cue.c_str()) == 0 && cues.activeInstances(st) == 0,
+          "level change: music and stinger stop at once");
+
+    // Real backend: streamed decode cost and release
+    IAudio* a = createAudio();
+    if (!a || !a->reportsVoices()) { std::printf("  SKIP backend: no audio device\n"); return; }
+    game::SoundCues rc; rc.load(a, content);
+    game::FrontendAudio rfe(rc);
+    const size_t base = a->residentBytes();
+    {   // prefetch during a "loading screen": the decode happens there, the first play is then free
+        auto p0 = std::chrono::steady_clock::now();
+        CHECK(rc.prefetch(lobby.cue.c_str()), "prefetch decodes a streamed track");
+        const double pms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - p0).count();
+        rc.tick(1.0f / 30.0f);
+        CHECK(rc.wavesResident(lobby.cue.c_str()), "prefetched waves stay pinned until played");
+        auto q0 = std::chrono::steady_clock::now();
+        rfe.music().playMusic(lobby); rfe.tick(1.0f / 30.0f);
+        const double qms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - q0).count();
+        std::printf("  MP_LOBBY_MX prefetch %.0f ms, then first play %.1f ms\n", pms, qms);
+        CHECK(qms < 20.0, "first play after prefetch has no decode stall (%.1f ms)", qms);
+        rfe.music().stopMusic(0.0f); rc.tick(1.0f / 30.0f);
+        CHECK(!rc.wavesResident(lobby.cue.c_str()) && a->residentBytes() == base, "released after stop");
+    }
+    auto t0 = std::chrono::steady_clock::now();
+    rfe.music().playMusic(fr, true);   // IgnoreSpazTimer: the lobby play above left SpazTimer at 5 s (StopMusic keeps it)
+    rfe.tick(1.0f / 30.0f);
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    const size_t during = a->residentBytes();
+    rfe.music().stopMusic(0.0f);
+    rc.tick(1.0f / 30.0f);
+    std::printf("  FRONTEND_MX_ORBIT_01 first play: %.0f ms decode, +%.1f MB resident, after stop %+.1f MB\n", ms,
+                (during - base) / 1048576.0, ((double)a->residentBytes() - (double)base) / 1048576.0);
+    CHECK(during > base && a->residentBytes() == base, "streamed music decoded on play, released after stop");
+    delete a;
+}
+
 int main() {
+    testFrontend();
     testLifecycle();
     testChannelStealing();
     testWorldBed();

@@ -108,7 +108,9 @@ const CueDef* SoundCues::cueDef(const char* name) const {
 
 void SoundCues::loadWaves(size_t c, const std::string& contentRoot) {
     if (waves_.size() <= c) waves_.resize(c + 1);
+    if (resident_.size() <= c) resident_.resize(c + 1, 0);
     waves_[c].clear();
+    resident_[c] = 1;
     for (const EventDef& e : cues_[c].events) {
         std::vector<audio::Sound> w;
         for (const std::string& f : e.waves) {
@@ -126,7 +128,10 @@ void SoundCues::load(audio::IAudio* a, const std::string& contentRoot) {
     waves_.clear();
     if (!a) return;
     int ok = 0, total = 0;
+    resident_.assign(cues_.size(), 0);
+    waves_.assign(cues_.size(), {});
     for (size_t c = 0; c < cues_.size(); ++c) {
+        if (cues_[c].streamed) { waves_[c].assign(cues_[c].events.size(), {}); continue; }   // decoded on first play
         loadWaves(c, contentRoot);
         for (size_t e = 0; e < cues_[c].events.size(); ++e) { ok += (int)waves_[c][e].size(); total += (int)cues_[c].events[e].waves.size(); }
     }
@@ -162,6 +167,10 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
         d.limit = il == "kKillOldest" ? Limit::KillOldest : il == "kKillNewest" ? Limit::KillNewest
                 : il == "kKillFarthest" ? Limit::KillFarthest : cooked ? cooked->limit : Limit::KillFarthest;
         d.mapBank = true;
+        d.rootLoop = rp["bLooping"].asBool(false);
+        d.loopStart = rp["LoopStart"].asFloat(0.0f);
+        d.loopEnd = rp["LoopEnd"].asFloat(0.0f);
+        d.streamed = false;
         d.panAtten3DDb = rp["SmartPanAttenuation3D"].asFloat(0.0f);
         d.volDb = rp["Volume"].asFloat(-6.0f);                     // HM_Engine.Default__SoundNodeRoot
         d.volVarMin = rp["VolumeVariationMin"].asFloat(0.0f); d.volVarMax = rp["VolumeVariationMax"].asFloat(0.0f);
@@ -234,6 +243,30 @@ int SoundCues::stopNonMapInstances() {
     return n;
 }
 
+bool SoundCues::prefetch(const char* cue) {
+    int c = findCue(cue);
+    if (c < 0) return false;
+    if (pinned_.size() <= (size_t)c) pinned_.resize((size_t)c + 1, 0);
+    if (!cues_[(size_t)c].streamed) return true;                   // always resident
+    if ((size_t)c >= resident_.size() || !resident_[(size_t)c]) loadWaves((size_t)c, contentRoot_);
+    pinned_[(size_t)c] = 1;
+    return true;
+}
+
+bool SoundCues::wavesResident(const char* cue) const {
+    int c = findCue(cue);
+    return c >= 0 && (size_t)c < resident_.size() && resident_[(size_t)c];
+}
+
+void SoundCues::releaseWaves(size_t c) {
+    if (c >= waves_.size()) return;
+    for (auto& ev : waves_[c]) {
+        for (audio::Sound w : ev) if (audio_) audio_->release(w);
+        ev.clear();
+    }
+    if (c < resident_.size()) resident_[c] = 0;
+}
+
 int SoundCues::mapCueCount() const {
     int n = 0;
     for (const cuedata::CueDef& c : cues_) n += c.mapBank ? 1 : 0;
@@ -272,6 +305,8 @@ int SoundCues::unloadMapCues() {
     }
     cues_.resize(first);
     if (waves_.size() > first) waves_.resize(first);
+    if (resident_.size() > first) resident_.resize(first);
+    if (pinned_.size() > first) pinned_.resize(first);
     return removed;
 }
 
@@ -284,6 +319,17 @@ int SoundCues::activeInstances(const char* cue) const {
     int c = findCue(cue), n = 0;
     for (const Instance& in : live_) if (in.cue == c) ++n;
     return n;
+}
+
+const cuedata::CueDef* SoundCues::instanceCue(int id) const {
+    for (const Instance& x : live_) if (x.id == id) return &cues_[(size_t)x.cue];
+    return nullptr;
+}
+
+int SoundCues::oldestInstance(const char* cue) const {
+    int c = findCue(cue), best = -1;
+    for (const Instance& x : live_) if (x.cue == c && (best < 0 || x.id < best)) best = x.id;
+    return best;
 }
 
 bool SoundCues::playing(int id) const {
@@ -316,6 +362,12 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     struct Done { bool on; LARGE_INTEGER_T t0; const char* n; ~Done() { if (on) { double ms = ticksToMs(nowTicks() - t0); if (ms > 0.05) LOG_INFO("AUDIOTIME play %s %.3f ms", n, ms); } } } done{timeLog, t0, name};
     int c = findCue(name);
     if (c < 0) { LOG_WARN("sound cue %s not in table", name); return -1; }
+    if (cues_[(size_t)c].streamed && ((size_t)c >= resident_.size() || !resident_[(size_t)c])) {
+        LARGE_INTEGER_T s0 = nowTicks();
+        loadWaves((size_t)c, contentRoot_);
+        LOG_INFO("sound cues: streamed %s decoded in %.1f ms", name, ticksToMs(nowTicks() - s0));
+    }
+    if ((size_t)c < pinned_.size()) pinned_[(size_t)c] = 0;     // played: normal release rule from now on
     const CueDef& cd = cues_[(size_t)c];
     Instance in;
     in.cue = c; in.id = nextId_++; in.age = 0.0f; in.distM = distM; in.param = param;
@@ -353,6 +405,7 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
         in.occlCheck = kOcclCheck * (float)(in.id % 8) / 8.0f;
     }
     for (const EventDef& e : cd.events) if (e.loop) in.looping = true;
+    if (cd.rootLoop && cd.loopEnd > cd.loopStart) in.looping = true;   // the timeline wraps forever
     live_.push_back(in);
     int id = in.id;
     for (int e = 0; e < (int)cd.events.size(); ++e) {
@@ -510,7 +563,20 @@ void SoundCues::tick(float dt) {
     // (the mixer ramp is the only fade).
     mixer_.tick(dt);
     if (mixer_.environmentChanged()) audio_->setEnvironment(mixer_.environment(), 0.0f);
-    for (Instance& in : live_) in.age += dt;
+    for (Instance& in : live_) {
+        in.age += dt;
+        const CueDef& cd = cues_[(size_t)in.cue];
+        if (cd.rootLoop && cd.loopEnd > cd.loopStart && in.age >= cd.loopEnd && in.fade < 0.0f) {
+            // Root playback-time wrap (RE A6): t = fmod(t - LoopStart, LoopEnd - LoopStart) + LoopStart; the wave
+            // events from LoopStart on run again on the cue's timeline. Finished voices are dropped from the list.
+            in.age = cd.loopStart + std::fmod(in.age - cd.loopEnd, cd.loopEnd - cd.loopStart);
+            if (audio_->reportsVoices())
+                in.voices.erase(std::remove_if(in.voices.begin(), in.voices.end(),
+                                               [&](const VoiceRef& r) { return !audio_->isPlaying(r.v); }), in.voices.end());
+            for (int e = 0; e < (int)cd.events.size(); ++e)
+                if (cd.events[(size_t)e].time >= cd.loopStart) pending_.push_back({in.id, cd.events[(size_t)e].time, e});
+        }
+    }
     for (size_t i = 0; i < pending_.size();) {
         Pending& p = pending_[i];
         Instance* in = find(p.inst);
@@ -557,6 +623,14 @@ void SoundCues::tick(float dt) {
         }
         refresh(in);
         ++i;
+    }
+    // Streamed cues (music): the decoded waves go once the last instance has ended.
+    for (size_t c = 0; c < cues_.size(); ++c) {
+        if (!cues_[c].streamed || c >= resident_.size() || !resident_[c]) continue;
+        if (c < pinned_.size() && pinned_[c]) continue;                // prefetched, waiting for its first play
+        bool used = false;
+        for (const Instance& in : live_) if ((size_t)in.cue == c) { used = true; break; }
+        if (!used) releaseWaves(c);
     }
 }
 

@@ -61,6 +61,9 @@ public:
     // the map's bed keeps playing (see AmbientAudio::resetMatch).
     void resetSystemsForMatch();
     const std::string& audioMapName() const { return audioMap_; }
+    // Frontend / loading states (no match ticking): advance only the audio (cue instances, queued events, mixer
+    // fades, voice updates). The frontend owner ticks its FrontendAudio (music player) alongside.
+    void tickAudioOnly(float dt) { if (audio_) cues_.tick(dt); }
     const SoundCues& soundCues() const { return cues_; }
     const AmbientAudio& ambientAudio() const { return ambient_; }
 

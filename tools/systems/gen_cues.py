@@ -39,6 +39,18 @@ CUES = [
     # streets_pickup_factories.json: TnAmmoCratePickup / TnHealthPickup / TnOverShieldPickup).
     ('A1_IAC_Base_m', ['BL_HUD_INTERFACE.HEALTH_PU_AMMO', 'BL_HUD_INTERFACE.HEALTH_PU_ENERGON',
                        'BL_HUD_INTERFACE.OVERSHIELD_POWER_UP']),
+    # UI sounds the GFx movies request by name (Sound.PlaySound -> TnSoundActionScriptBinding.PlaySound ->
+    # PlayerController.GetUISound(name)): AssetTools frontend_audio.json gfx_ui_sounds (16 names).
+    ('*', ['BL_HUD_INTERFACE.' + n for n in (
+        'BUTTON_ACCEPT', 'BUTTON_BACK', 'BUTTON_DOWN', 'BUTTON_INVITE', 'BUTTON_MULTIPLAYER_READY', 'BUTTON_START',
+        'BUTTON_UP', 'DX_SLIDER_VOLUME', 'HUD_OBJECTIVE_ADDED', 'HUD_POSITIVE_HIT_INDICATOR', 'MP_LEVEL_UP_MX_STNG',
+        'MP_REWARD_DIALOG_BOX', 'MX_SLIDER_VOLUME', 'PICKUP_DMG_MULTIPLIER', 'PICKUP_DMG_MULTIPLIER_DECREASE',
+        'STNG_ESCALATION_WAVE_OVER')]),
+    # Frontend music (SeqAct_PlayMusic in the UI levels, frontend_audio.json): STREAMED = the waves are decoded
+    # when the cue first plays and released when no instance is left (minutes-long tracks).
+    ('UI_FrontEnd_m', ['BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01'], True),
+    ('UI_Lobby_m', ['BL_LVL_HUD_INTERFACE.MP_LOBBY_MX'], True),
+    ('UI_PartyLobby_m', ['BL_LVL_HUD_INTERFACE.MP_PARTY_LOBBY_MX'], True),
 ]
 ROOTDEF = {'Volume': -6.0, 'DistanceMin': 400.0, 'DistanceMax': 6400.0, 'RolloffFactor': 1.0, 'Pitch': 0.0,
            'SmartPanDistance2D': 400.0, 'SmartPanDistance3D': 800.0, 'SmartPanAttenuation3D': 0.0, 'RearAttenuation': 0.0,
@@ -63,22 +75,31 @@ def curve(c):
 
 def short(c):
     pkg, name = c.split('.', 1)
-    if pkg in ('BL_FS_LRG_BOT', 'BL_TRANSFORM', 'BL_FOLY_IDLES', 'BL_WPN_GUN_PULSE_RIFLE', 'BL_HUD_INTERFACE'): return c
+    if pkg in ('BL_FS_LRG_BOT', 'BL_TRANSFORM', 'BL_FOLY_IDLES', 'BL_WPN_GUN_PULSE_RIFLE', 'BL_HUD_INTERFACE',
+               'BL_LVL_HUD_INTERFACE'): return c
     return {'BL_WPN_GUN_ION_BLASTER': '', 'BL_WPN_FOLEY': 'FOLEY.', 'BL_VEH_OPTIMUS_PRIME': '', 'BL_VEH_SOUNDWAVE': ''}[pkg] + name
 
 out, missing = [], []
-for pkgname, cues in CUES:
-    p = objtree.package(pkgname)
-    def rd(path):
-        return tp.simplify(p._tr.read_dict(p._idx[path.lower()]))
+import sqlite3
+_db = sqlite3.connect('F:/Transformers Rebuild/AssetTools/manifests/authored.db')
+def package_of(cue):   # '*' groups: the first cooked package that holds the cue (A1_IAC_Base_m preferred)
+    pk = [r[0] for r in _db.execute('select package from objects where opath=?', (cue,))]
+    return 'A1_IAC_Base_m' if 'A1_IAC_Base_m' in pk else sorted(pk)[0]
+
+for group in CUES:
+    pkgname, cues = group[0], group[1]
+    streamed = len(group) > 2 and group[2]
     for c in cues:
+        p = objtree.package(package_of(c) if pkgname == '*' else pkgname)
+        def rd(path, p=p):
+            return tp.simplify(p._tr.read_dict(p._idx[path.lower()]))
         cue = rd(c); root = rd(cue['FirstNode'])
         R = dict(ROOTDEF); R.update({k: v for k, v in root.items() if k in ROOTDEF})
         param = PARAM[root.get('SoundParameter')]
         cat = rd(root['Category']).get('CategoryName', '-') if root.get('Category') else '-'
         preset = rd(root['PlayMixerPreset']).get('PresetName', '') if root.get('PlayMixerPreset') else ''
         rows = []
-        for en in root['ChildNodes']:
+        for en in root.get('ChildNodes', []):   # a cue authored with no wave plays nothing
             e = rd(en)
             waves = []
             for w in e.get('ChildNodes', []):
@@ -102,12 +123,15 @@ for pkgname, cues in CUES:
         # Engine.Default__SoundCue: MaxConcurrentPlayCount 5, InstanceLimiting kKillFarthest.
         limit = {'kKillOldest': 'Limit::KillOldest', 'kKillNewest': 'Limit::KillNewest'}.get(
             cue.get('InstanceLimiting'), 'Limit::KillFarthest')
-        out.append(('    // %s\n    {"%s", %d, ' + limit + ', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "%s", "%s", %s, ' + spat + ', %s, {\n%s    }, %s, false},\n') % (
+        out.append(('    // %s\n    {"%s", %d, ' + limit + ', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, "%s", "%s", %s, ' + spat + ', %s, {\n%s    }, %s, false, %s, %s, %s, %s},\n') % (
             c, short(c), cue.get('MaxConcurrentPlayCount', 5), f(R['Volume']), f(R['VolumeVariationMin']),
             f(R['VolumeVariationMax']), f(R['Pitch']), f(R['PitchVariationMin']), f(R['PitchVariationMax']),
             f(R['DistanceMin']), f(R['DistanceMax']), f(R['RolloffFactor']),
             f(R['SmartPanDistance2D']), f(R['SmartPanDistance3D']), f(R['SmartPanAttenuation3D']), f(R['RearAttenuation']),
-            cat, preset, occl, param, ''.join(rows), f(root.get('Priority', 0.0))))
+            cat, preset, occl, param, ''.join(rows), f(root.get('Priority', 0.0)),
+            # root bLooping + LoopStart / LoopEnd (the root playback-time wrap, RE A6), streamed waves
+            'true' if root.get('bLooping') else 'false', f(root.get('LoopStart', 0.0)), f(root.get('LoopEnd', 0.0)),
+            'true' if streamed else 'false'))
 io.open(sys.argv[1], 'w', encoding='utf-8').write(
     '// Generated by tools/systems/gen_cues.py from the cooked cues - do not edit by hand.\n' + ''.join(out))
-print('cues:', sum(len(c) for _, c in CUES), 'missing waves:', missing)
+print('cues:', sum(len(g[1]) for g in CUES), 'missing waves:', missing)
