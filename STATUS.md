@@ -3,6 +3,14 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 04 INTEGRATION PREVIEW (2026-10-03)
+- **Merges:** clean into integration 356c352 (STATUS.md only) and experimental; Rendering's VehicleFx conflict is
+  already resolved in integration.
+- **Gameplay d122ef4:** 5 additive conflict hunks, resolved and built in `work/m4/merge_preview`.
+  - The pickup-sound glue plays each PickupSound once per take (Gameplay PICKUPTEST with audio).
+  - Resolutions are in FIDELITY.md.
+- **Harness:** 2 stale HUD-spread expectations, retired by Experimental 28e093f.
+
 ## SYSTEMS MILESTONE 04 ADDENDUM (2026-10-03) — map FX runtime yielded to Rendering
 - **LevelFx removed:** Rendering 411c970 (WfcMapFx) simulates and draws the 8 steam emitters and pickup effects.
 - **PickupPresentation:** now the pickup sound only (`onTaken`); effect state is Rendering's `setMapEffectState`.

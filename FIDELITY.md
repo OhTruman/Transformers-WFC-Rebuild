@@ -17,6 +17,59 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 04 INTEGRATION PREVIEW — agents/systems 65daecd (2026-10-03)
+
+Read-only preview for the integration owner. `git merge-tree` computed the merges in memory (no refs, no worktree);
+the gameplay merge tree was archived into `work/m4/merge_preview`, resolved, built and run there. Nothing outside
+this worktree was touched.
+
+**Merge results** (`git merge-tree --write-tree HEAD origin/<branch>`):
+
+| Merge | Conflicts |
+|---|---|
+| × integration/milestone-03 356c352 | **STATUS.md only** (documentation). Systems 35145f3 / 757347c / d6932dc are already in it; 8dcb861 and 65daecd are not. |
+| × agents/experimental 5120c6f | **clean** |
+| × agents/rendering 9035fb3 | FIDELITY.md, `src/game/VehicleFx.cpp`: Rendering's old bb94e40 edit, **already resolved inside integration 356c352** (the Systems material-path version kept), so it does not recur when merging through integration. |
+| × agents/gameplay d122ef4 | STATUS.md, `src/core/Application.cpp`, `src/game/PlayerController.h`, `src/game/World.cpp` (3 hunks). All additive. |
+
+**Gameplay resolutions** (verified by building and running):
+1. **Application.cpp:** keep Gameplay's frame-gated `WFC_AUTOBOOST` line **and** Systems' `WFC_AUTOBOOST_CYCLE` /
+   `WFC_AUTOJUMP_EVERY` test hooks.
+2. **PlayerController.h:** keep Systems' `moveForwardInput()` (vehicle EngineLoadState audio) **and** Gameplay's
+   `setCameraYaw / setCameraPitch` (they also set viewYaw_/viewPitch_).
+3. **World.cpp renderer light-visibility query:** neither side compiles alone (HEAD dropped the `d` / `n`
+   segment-march variables that Gameplay's side uses). Use Gameplay's line world with one grid query:
+   `const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_; return
+   lineWorld.segmentHit(a, b, t);`. Rendering/Gameplay should confirm that collision world for light visibility.
+4. **World.cpp tick start:** keep both: Systems' `WFC_HITCHLOG` block, then Gameplay's `pickupEvents_.clear();
+   destructibleEvents_.clear(); mapState_.tick(...)`.
+5. **World.cpp controller:** `{ sysprof::Scope sp(sysprof::Ctrl); player_.controller().applyToPawn(*this, dt); }`
+   followed by Gameplay's `gameplayRamContacts();`.
+6. **Pickup glue,** right after `for (auto& a : actors_) if (a->alive()) a->tick(*this, dt);`:
+   ```
+   for (const PickupEvent& e : pickupEvents_)
+       if (e.type == PickupEvent::Type::Taken && e.factory >= 0 && (size_t)e.factory < pickupFactories_.size())
+           pickupFx_.onTaken(pickupFactories_[(size_t)e.factory]->name().c_str(), cues_, atPawn(),
+                             core::length(e.receiverPos - listenerPos_));
+   ```
+
+**Preview validation** (merged tree, Release build, `WFC_RENDER_DATA` = this worktree's work/render):
+* **Builds clean.**
+* **Pickup sound via the glue:** Gameplay's `WFC_PICKUPTEST`, with audio enabled in the scratch copy only (the
+  test returns before `setAudio`, `Application.cpp:86`; a suggestion for Gameplay), plays every authored
+  PickupSound **once per take**, attached to the pawn (owner 0):
+  * ammo: 2 takes; health: 2 takes, including the CheckTouching re-take at respawn; overshield: 2 takes;
+  * the ammo cue's 0.2 s layer follows the pawn to the next position;
+  * respawns play nothing.
+* **Harness:** wfc_fidelity 190 / **2 FAIL** / 21. The FAILs are `spread_after_10` / `spread_cap`: stale
+  expectations against Gameplay pass 16's RE HUD spread, already retired by Experimental 28e093f. This is not
+  merge or Systems breakage.
+* **Scripted walk / fire routes from all 24 FFA starts never reached a takeable pickup.** Gameplay `tryGive`
+  refuses a pickup that does nothing, and the routes don't cross the factories, so the pickup sound is validated by
+  the deterministic test above.
+
+---
+
 ## MILESTONE 04 SYSTEMS ADDENDUM — MAP FX OWNERSHIP TO RENDERING; OBJECTIVE BEAM (2026-10-03, agents/systems)
 
 **Sources:**
