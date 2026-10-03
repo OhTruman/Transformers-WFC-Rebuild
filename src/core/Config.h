@@ -127,9 +127,9 @@ constexpr float kDrivePitchFwdLimit = -0.43633f;     // -25 deg
 constexpr float kDrivePitchFwdAccel = 3.0f;          // rad/s^2 nose-down while airborne above the limit
 constexpr float kDriveAngularDamping = 5.0f;         // AngularDamping class default; x (1-|steer|)^2 on wheels
 constexpr float kDriveTerminalVel = 35.0f, kDriveLandingVel = 20.0f, kDriveLandingTrace = 10.0f;
-constexpr float kDriveTurnRate = 3.1416f;            // [PROV] wheel/tire steering not recovered: yaw rate at full steer
-constexpr float kDriveLateralGrip = 8.0f;            // [PROV] lateral velocity decay on wheels (1/s)
-constexpr float kDriveMouseSteer = 0.012f;           // [PROV] PC mouse delta -> GetNormalizedTurn
+// (Pass 18) kDriveTurnRate removed: boost yaw comes from the recovered wheel/tire model (CharacterMovement).
+// (Pass 18) kDriveLateralGrip removed: lateral behaviour comes only from the tire forces.
+constexpr float kDriveMouseFullRate = 1200.0f;       // [PROV] PC: mouse X rate (px/s) that equals full right-stick X
 
 // Camera. Robot strategy [CONF] CAM_Strategies_p.OverTheShoulder_STRATEGY (FOV is HORIZONTAL,
 // UE3 convention; converted to vertical per aspect in render::Camera):

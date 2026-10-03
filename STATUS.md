@@ -3,6 +3,25 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 18 (2026-10-03) — boost steering + Streets mode state (RE a1666c2 / 0ab03b2)
+- Boost steering now uses the recovered input path:
+  - right-stick X (PC: mouse X), radial 0.25 deadzone, s·|s|, Nitro 0.3;
+  - 25° front wheels and the tire lateral-force law, with yaw from torque and damping 5·(1−|s|)²;
+  - the fixed yaw rate and lateral grip are removed;
+  - the left stick is RollControl only.
+- Streets mode table:
+  - objective bases shown in CTF/EXT;
+  - flag/bomb factories Disabled outside CTF/EXT;
+  - capture/plant points inert outside their mode;
+  - totems visible only in Conquest;
+  - one Active KOTH zone.
+- Markers: type strings for the future HUD.
+- Tests:
+  - WFC_VEHTEST boost-steering table;
+  - WFC_MODETEST per-mode state;
+  - WFC_STEERSTICK test hook.
+- Details: FIDELITY.md PASS 18.
+
 ## GAMEPLAY PASS 17 (2026-10-03) — Milestone 04 Streets world state (AssetTools a23c675)
 - Collision: movement uses the authored collision_pawn.glb; hitscan and visibility use collision_weapon.glb; KillZ −750 m.
 - Truck hull extents now drive wall probe, clearance and ceiling.

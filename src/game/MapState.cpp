@@ -59,15 +59,18 @@ core::Vec3 ueToGltf(float x, float y, float z) { return {x * 0.01f, z * 0.01f, y
 
 core::Vec3 jv3(const assets::Json& j) { return {j["X"].asFloat(), j["Y"].asFloat(), j["Z"].asFloat()}; }
 
-// Objective classes: future HUD marker data [CONF future_hud_handoff.json, a23c675] and the mode that uses them.
-struct ObjClass { const char* cls; const char* marker; const char* str; const char* rule; MatchMode mode; };
+// Objective classes [CONF RE MILESTONE04_STREETS_RUNTIME_SEMANTICS + future_hud_handoff.json]: the hard-coded
+// marker class (type string = class name minus "TnObjectiveMarkerType"), authored MarkerString /
+// RequiredGameRuleClass, and the exact rule the class gates on (CTF SingleFlagCTF, EXT ScoreBombingRun,
+// DOM ScoreDomination, KOTH ScoreKingOfTheHill).
+struct ObjClass { const char* cls; const char* markerClass; const char* typeStr; const char* str; const char* rule; MatchMode mode; };
 const ObjClass kObjClasses[] = {
-    {"TnGameObjectivePickupFactoryFlag", "TransGame.TnObjectiveMarkerTypeFlag", "Code Of Power", "TransGame.TnGameRules_SingleFlagCTF", MatchMode::CTF},
-    {"TnFlagCapturePoint", "", "", "", MatchMode::CTF},
-    {"TnGameObjectivePickupFactoryBomb", "TransGame.TnObjectiveMarkerTypeBomb", "Bomb", "TransGame.TnGameRules_ScoreBombingRun", MatchMode::EXT},
-    {"TnBombPlantPoint", "", "", "", MatchMode::EXT},
-    {"TnDominationPoint", "", "", "", MatchMode::DOM},
-    {"TnKingOfTheHillZone", "", "Active Node", "", MatchMode::KOTH},
+    {"TnGameObjectivePickupFactoryFlag", "TransGame.TnObjectiveMarkerTypeFlag", "Flag", "Code Of Power", "TransGame.TnGameRules_SingleFlagCTF", MatchMode::CTF},
+    {"TnFlagCapturePoint", "TransGame.TnObjectiveMarkerTypeFlagCapturePoint", "FlagCapturePoint", "", "", MatchMode::CTF},
+    {"TnGameObjectivePickupFactoryBomb", "TransGame.TnObjectiveMarkerTypeBomb", "Bomb", "Bomb", "TransGame.TnGameRules_ScoreBombingRun", MatchMode::EXT},
+    {"TnBombPlantPoint", "TransGame.TnObjectiveMarkerTypeBombPlantPoint", "BombPlantPoint", "", "", MatchMode::EXT},
+    {"TnDominationPoint", "TransGame.TnObjectiveMarkerTypeDomination", "Domination", "", "", MatchMode::DOM},
+    {"TnKingOfTheHillZone", "TransGame.TnObjectiveMarkerTypeKingOfTheHill", "KingOfTheHill", "Active Node", "", MatchMode::KOTH},
 };
 
 } // namespace
@@ -129,11 +132,12 @@ bool MapState::load(const std::string& path, MatchMode mode) {
             const assets::Json& L = list[i]["location_gltf"];
             o.pos = {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
             o.yawDeg = list[i]["yaw_deg"].asFloat();
-            o.markerType = oc.marker; o.markerString = oc.str; o.requiredRule = oc.rule;
+            o.markerClass = oc.markerClass; o.markerTypeString = oc.typeStr; o.markerString = oc.str; o.requiredRule = oc.rule;
             o.activeInMode = oc.mode == mode_;
             objectives_.push_back(o);
         }
     }
+    applyObjectiveStates();
 
     // Mode-dependent visibility (BASE Kismet SeqCond_GameRuleActive -> SeqAct_ToggleHidden UnHide).
     const assets::Json& mdv = g["mode_dependent_visibility"];
@@ -164,6 +168,73 @@ bool MapState::load(const std::string& path, MatchMode mode) {
              gameModeName(mode_), movers_.size(), objectives_.size(), modeActors_.size(), vis, matineeLength_);
     pose();
     return true;
+}
+
+// Per-mode state table [CONF RE MILESTONE04_STREETS_RUNTIME_SEMANTICS §3-4].
+void MapState::applyObjectiveStates() {
+    using S = ObjectiveObject::State;
+    std::vector<int> koth;
+    for (size_t i = 0; i < objectives_.size(); ++i) {
+        ObjectiveObject& o = objectives_[i];
+        const bool on = o.activeInMode;
+        o.markerAdded = false; o.markerShouldDisplay = false;
+        if (o.cls == "TnDominationPoint") {
+            // PostBeginPlay: StopAnim + PlayAnim(DeactivatedLoopAnim, loop) in every mode; !HasRule(ScoreDomination)
+            // -> 'Inactive' (SetHidden(true); Touch/UnTouch ignored; collision cylinder kept). DOM: marker added.
+            o.state = on ? S::Active : S::Hidden;
+            o.visible = on; o.collision = true; o.touchable = on;
+            o.markerAdded = on; o.markerShouldDisplay = on;              // Domination: always displayed
+        } else if (o.cls == "TnGameObjectivePickupFactoryFlag" || o.cls == "TnGameObjectivePickupFactoryBomb") {
+            // TnGameObjectiveWeaponPickupFactory.PostBeginPlay: !HasRule(RequiredGameRuleClass) -> 'Disabled'
+            // (SetHidden + SetCollision(false,false)).
+            o.state = on ? S::Active : S::Disabled;
+            o.visible = on; o.collision = on; o.touchable = on;
+            o.markerAdded = on;                                          // authored MarkerType [PROV add timing]
+            o.markerShouldDisplay = on;                                  // [UNKNOWN: carrier/team rules not traced]
+        } else if (o.cls == "TnFlagCapturePoint") {
+            // PostBeginPlay returns unless SingleFlagCTF; the marker exists only while _Active, and displays only
+            // to a pawn holding a flag. _Active's driver is not recovered: starts inactive.
+            o.state = on ? S::Active : S::Inert;
+            o.visible = false; o.collision = true; o.touchable = on;
+            o.markerAdded = false; o.markerShouldDisplay = false;
+        } else if (o.cls == "TnBombPlantPoint") {
+            // PostBeginPlay gated on ScoreBombingRun -> marker added. ShouldDisplayMarker: false while
+            // GRI.AttackingTeam is 255/-1 (no rounds in the slice), else the defended point / planted bomb.
+            o.state = on ? S::Active : S::Inert;
+            o.visible = false; o.collision = true; o.touchable = on;
+            o.markerAdded = on; o.markerShouldDisplay = false;
+        } else if (o.cls == "TnKingOfTheHillZone") {
+            // Default bHidden; KOTH: 'Inactive' (hidden) except the Active zone (shown + marker), other modes hidden.
+            o.state = on ? S::KothInactive : S::Hidden;
+            o.visible = false; o.collision = true; o.touchable = false;
+            if (on) koth.push_back((int)i);
+        }
+    }
+    kothActive_ = -1;
+    if (!koth.empty()) {
+        kothRng_ = kothRng_ * 1664525u + 1013904223u;                  // MatchStarting: random initial zone
+        int pick = koth[(kothRng_ >> 8) % koth.size()];
+        ObjectiveObject& z = objectives_[(size_t)pick];
+        z.state = ObjectiveObject::State::Active; z.visible = true; z.touchable = true;
+        z.markerAdded = true; z.markerShouldDisplay = true;            // KOTH: displayed while Active
+        kothActive_ = pick;
+    }
+}
+
+void MapState::activateNewKothZone() {
+    if (kothActive_ < 0) return;
+    std::vector<int> others;
+    for (size_t i = 0; i < objectives_.size(); ++i)
+        if (objectives_[i].cls == "TnKingOfTheHillZone" && (int)i != kothActive_) others.push_back((int)i);
+    if (others.empty()) return;
+    ObjectiveObject& old = objectives_[(size_t)kothActive_];
+    old.state = ObjectiveObject::State::KothInactive; old.visible = false; old.touchable = false;
+    old.markerAdded = false; old.markerShouldDisplay = false;      // Inactive.BeginState removes the marker
+    kothRng_ = kothRng_ * 1664525u + 1013904223u;
+    kothActive_ = others[(kothRng_ >> 8) % others.size()];
+    ObjectiveObject& z = objectives_[(size_t)kothActive_];
+    z.state = ObjectiveObject::State::Active; z.visible = true; z.touchable = true;
+    z.markerAdded = true; z.markerShouldDisplay = true;            // Active.BeginState adds the marker
 }
 
 void MapState::registerCollision(CollisionWorld& pawn, CollisionWorld* weapon,
@@ -226,6 +297,7 @@ void MapState::pose() {
 
 void MapState::tick(float dt, CollisionWorld& pawn, CollisionWorld* weapon) {
     clock_ += dt;
+    for (ObjectiveObject& o : objectives_) if (o.cls == "TnDominationPoint") o.animClock += dt;   // idle loop (hidden or not)
     pose();
     for (const MapMover& m : movers_) {
         core::Mat4 colPose = m.worldDelta * core::Mat4::translate(m.pivot);   // pivot-relative verts

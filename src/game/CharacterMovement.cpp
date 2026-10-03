@@ -282,6 +282,12 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         // UpdateSimulationInputs: Accelerator 1, Steering = Sign(s)*s^2 (x SteeringScale: nitro 0.3).
         float s = core::clampf(in.steer, -1.0f, 1.0f);
         vs.steer = (s < 0.0f ? -s * s : s * s) * (nitro ? cfg::kNitroSteerScale : 1.0f);
+        // RollControl = StrafeRightLeft (left-stick X / A-D): the truck cannot barrel roll (RollDuration 0); it only
+        // drives UpdateLeveling: when |RollControl| > 0.1 and (sign differs from the roll or |roll| < 45 deg),
+        // roll acceleration sign(Roll) * RollCorrectionAngularAcceleration 50 * 0.5 * (1 - Up.Z) [CONF].
+        vs.rollControl = core::clampf(in.moveRight, -1.0f, 1.0f);
+        if (std::fabs(vs.rollControl) > 0.1f && ((vs.rollControl > 0.0f) != (vs.roll > 0.0f) || std::fabs(vs.roll) < 0.7853982f))
+            angAx += (vs.roll > 0.0f ? 1.0f : -1.0f) * 50.0f * 0.5f * (1.0f - B.z.y);
         float gy = 0.0f; core::Vec3 gn{0, 1, 0};
         bool support = col ? col->groundHeight(p.x, p.z, p.y, 0.6f, gy, gn) : (gy = c.groundY, true);
         float above = support ? p.y - gy : 1e9f;
@@ -295,7 +301,7 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         }
         // UpdateAngularDamping: AngularDamping x (1-|Steering|)^2 with a wheel down, else x 1.
         float damp = cfg::kDriveAngularDamping * (wheels ? (1.0f - std::fabs(vs.steer)) * (1.0f - std::fabs(vs.steer)) : 1.0f);
-        vs.angVel = vs.angVel * (1.0f / (1.0f + damp * dt));
+        vs.angVel = vs.angVel * std::max(0.0f, 1.0f - damp * dt);   // PhysX damping form [UNKNOWN: assumed]
         core::Vec3 F = core::forwardFromYawPitch(c.yaw(), 0.0f);
         core::Vec3 R = core::normalize(core::cross(F, core::Vec3{0, 1, 0}));
         if (!wheels) {
@@ -317,14 +323,34 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             float boostScale = 1.0f - (core::clampf(B.x.y, 0.5f, 0.866f) - 0.5f) / (0.866f - 0.5f);
             float acc = cfg::kTruckDriveAccel + (dragMax - cfg::kTruckDriveAccel) * (fwd / maxS) + extra;
             accel = accel + B.x * (acc * boostScale);
-            // Tires (Driving only) [native M03 P3: F = clamp(-v_lat * coeff * scale * Load, +-2 (M/4)|g|) per
-            // wheel]: the cap is CONF (summed over 4 wheels: 2|g| of lateral acceleration); the coefficient
-            // and load are not recovered, so the decay rate stays [PROV] under the confirmed cap.
-            float vlat = core::dot(v, R);
-            float alat = core::clampf(-vlat * cfg::kDriveLateralGrip, -2.0f * gRB, 2.0f * gRB);
-            if (std::fabs(alat * dt) > std::fabs(vlat)) alat = -vlat / dt;
-            v = v + R * (alat * dt);
-            vs.angVel.z = vs.steer * cfg::kDriveTurnRate;
+            // TnWheelAssembly / TnTire (RE MILESTONE03_VEHICLE_BOOST_STEERING) [CONF laws + constants]: every wheel
+            // gets the same Steering; front MaxSteeringAngle 25 deg, rear 0. v_w = point velocity of the wheel in
+            // the steered wheel frame; F = clamp(-v_w.lateral * TireFrictionCoefficient 0.0015 * Load,
+            // +-2 (M/4)|g|), applied along BODY +Y (ApplyLocalForce((0,F,0)) in body space, reproduced literally)
+            // at the contact point. Load = static (M/4)|g| [HIGH; no load transfer]. Heading comes only from the
+            // resulting yaw torque (inertia 58.9e6 kg UU^2); nothing sets the yaw rate.
+            struct Wheel { float x, y, maxSteerDeg; };
+            // Body-local positions relative to the COM (UU): axles at +-130 (a = b), track +-126 front / +-137 rear.
+            const Wheel wheels4[4] = {{130.0f, -126.0f, 25.0f}, {130.0f, 126.0f, 25.0f}, {-130.0f, -137.0f, 0.0f}, {-130.0f, 137.0f, 0.0f}};
+            const float load = cfg::kVehMass * 0.25f * gRB;          // N (kg m/s^2), static per-wheel load
+            const float coef = 0.0015f * 100.0f;                      // 0.0015 per UU/s -> per m/s (F in N)
+            const float fMax = 2.0f * load;
+            float vx = core::dot(v, F), vy = core::dot(v, R);
+            float wz = vs.angVel.z;                                   // UE yaw rate (+ = right)
+            float fSum = 0.0f, tz = 0.0f;
+            for (const Wheel& w : wheels4) {
+                float rx = w.x * 0.01f, ry = w.y * 0.01f;
+                float px = vx - wz * ry, py = vy + wz * rx;            // v + w x r (planar, body frame)
+                float d = vs.steer * w.maxSteerDeg * 0.0174533f;      // steering angle (+ = right)
+                float vlat = -std::sin(d) * px + std::cos(d) * py;     // wheel-frame lateral velocity
+                float f = core::clampf(-vlat * coef * load, -fMax, fMax);
+                fSum += f;
+                tz += rx * f;                                          // r x (0, F, 0): yaw torque = r.x * F
+            }
+            const float izz = 5890.0f;                                // kg m^2 (58.9e6 kg UU^2)
+            v = v + R * (fSum / cfg::kVehMass * dt);
+            vs.angVel.z += tz / izz * dt;
+            vs.tireForce = fSum;
             vs.angVel.x = 0.0f;
             if (vs.angVel.y > 0.0f) vs.angVel.y = 0.0f;       // keep a jump's nose-up rate, else level
             float k = 1.0f - std::exp(-10.0f * dt);           // [PROV] settle on the wheels

@@ -40,15 +40,27 @@ struct MapMover {
     int pawnSet = -1, weaponSet = -1;      // moving collision sets (-1 = no collision)
 };
 
+// Objective actors and their per-mode runtime state [CONF RE MILESTONE04_STREETS_RUNTIME_SEMANTICS: every check
+// is GameInfo.HasRule(<exact rule class>) on the mode's TnOnlineGameSettings Rules].
 struct ObjectiveObject {
+    enum class State { Active, Inert, Disabled, Hidden, KothInactive };
     std::string actor, cls;                // e.g. TnDominationPoint_15247 / "TnDominationPoint"
     core::Vec3 pos{0, 0, 0};
     float yawDeg = 0.0f;
-    // future HUD (TnObjectiveMarkerType*, MarkerString, RequiredGameRuleClass) [CONF future_hud_handoff]
-    const char* markerType = "";
-    const char* markerString = "";
-    const char* requiredRule = "";
+    State state = State::Inert;
+    bool visible = false;                  // rendered (bHidden false)
+    bool collision = true;                 // collision kept (Disabled factories: SetCollision(false,false))
+    bool touchable = false;                // Touch/UnTouch handled (Inactive states ignore touches)
     bool activeInMode = false;             // the current game mode uses this objective
+    // Objective marker (TnObjectiveManager / TnHUD.UpdateObjectiveMarker): class-hard-coded type; the HUD gets
+    // _global.UpdateMarker(id, dist, sx, sy, sz, markerTypeString, description).
+    const char* markerClass = "";          // e.g. "TransGame.TnObjectiveMarkerTypeDomination"
+    const char* markerTypeString = "";     // class name minus "TnObjectiveMarkerType": "Domination", ...
+    const char* markerString = "";         // authored MarkerString (factories / KOTH)
+    const char* requiredRule = "";         // factories' RequiredGameRuleClass
+    bool markerAdded = false;              // AddObjectiveMarker done (mode gate + state)
+    bool markerShouldDisplay = false;      // MarkerType.ShouldDisplayMarker for the local observer
+    float animClock = 0.0f;                // totems: DeactivatedLoopAnim always starts (seconds playing)
 };
 
 struct ModeVisibleActor {
@@ -71,8 +83,12 @@ public:
     const std::vector<MapMover>& movers() const { return movers_; }
     const std::vector<ObjectiveObject>& objectives() const { return objectives_; }
     const std::vector<ModeVisibleActor>& modeVisibleActors() const { return modeActors_; }
-    // Domination totems = the TnDominationPoint entries of objectives() (placed in every mode).
+    // Domination totems = the TnDominationPoint entries of objectives() (visible only in DOM).
     static std::vector<std::string> moverActorNames();
+    // KOTH: TnKingOfTheHillZoneBase.ActivateNewZone — exactly one zone Active (shown + marker), the rest Inactive.
+    // MatchStarting picks a random initial zone; what triggers later rotations is not recovered (API only).
+    int activeKothZone() const { return kothActive_; }
+    void activateNewKothZone();
 
 private:
     MatchMode mode_ = MatchMode::DM;
@@ -80,6 +96,9 @@ private:
     std::vector<MapMover> movers_;
     std::vector<ObjectiveObject> objectives_;
     std::vector<ModeVisibleActor> modeActors_;
+    int kothActive_ = -1;
+    unsigned kothRng_ = 0x5EED1234u;
+    void applyObjectiveStates();
     // SkyBeam InterpTrackMove EulerTrack (degrees X roll / Y pitch / Z yaw), CIM_CurveAuto keys.
     struct Key { float in; core::Vec3 out, arrive, leave; };
     std::vector<Key> euler_;

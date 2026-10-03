@@ -75,6 +75,83 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 18 — BOOST STEERING + STREETS MODE STATE (RE a1666c2 / 0ab03b2) (2026-10-03, gameplay agent)
+Sources: `RE-Workspace/notes/MILESTONE03_VEHICLE_BOOST_STEERING.md` (RE a1666c2) and
+`MILESTONE04_STREETS_RUNTIME_SEMANTICS.md` (RE 0ab03b2). Measured with `WFC_VEHTEST=1` and `WFC_MODETEST=1`.
+
+### Boost steering — recovered control logic (CONFIRMED ORIGINAL)
+- **Steering source:** TnPlayerInput.GetNormalizedTurn = aTurn (XboxTypeS_RightX).
+  - HmPlayerInput radial deadzone 0.25 over (aTurn, aLookUp), rescaled (|v| − 0.25)/0.75; no temporal filter.
+  - Driving.UpdateSimulationInputs: Steering = sign(s)·s²; × SteeringScale (Nitro 0.3 for 3 s).
+- **Left stick X:** RollControl only. The truck cannot barrel roll (RollDuration 0); it drives UpdateLeveling (|RollControl| > 0.1).
+- **Camera:** in boost the camera yaw follows the truck's yaw (TnDrivingOrbitRotation), OrbitSmoother 0.25 s. The right stick does not rotate the camera.
+- **Wheel/tire laws:**
+  - front wheels steer up to 25°, rear 0;
+  - per wheel, F = clamp(−v_lateral(wheel frame) · 0.0015 · Load, ±2·(M/4)|g|), applied along body +Y at the wheel;
+  - yaw comes only from the torque (inertia 58.9e6);
+  - ground angular damping 5·(1−|s|)²;
+  - air control 12 rad/s² / 2600 unchanged.
+- **Removed:** the provisional fixed yaw rate (180°/s at full lock, instant) and the 8 s⁻¹ lateral grip.
+
+### HIGH CONFIDENCE
+- Static per-wheel Load = (M/4)·|g| (no load transfer). Wheel positions relative to the COM: axles ±130 UU, track ±126 front / ±137 rear.
+
+### PROVISIONAL
+- No load transfer and no wheel suspension: the contact point is treated at ground level.
+- Tire roll torque is not applied (the body settles on its wheels).
+- The PhysX damping integration form `ω *= max(0, 1 − c·dt)` is assumed (UNKNOWN in RE).
+- The root-vs-COM velocity offset is ignored.
+
+### PC input translation [PROV]
+| Xbox path | Original role in boost | PC |
+|---|---|---|
+| Right stick X (aTurn) | boost steering (camera yaw in hover) | **mouse X** (the PC camera-yaw axis): mouse rate / 1200 px/s = stick deflection, 0.05 s rate average, no deadzone |
+| Left stick X (aStrafe) | RollControl only (hover: strafe) | **A/D** (unchanged): no steering in boost |
+| LT | Boost | right mouse button |
+| RB | VehicleSpecialMove (hover dash / Nitro) | Shift |
+| Pad present | radial 0.25 deadzone on the right stick, no filter | — |
+
+### Measured (WFC_VEHTEST, from straight-line speed)
+| u0 (m/s) | input | yaw rate 0.1/0.25/0.5/1/3 s (°/s) | slip @1 s | RE model |
+|---|---|---|---|---|
+| 30 | 1.0 | 53.8/115.1/146.6/146.6/122.0 | 51° | 48/101/137/108/98, 36° |
+| 30 | 0.5 | 12.3/22.3/28.6/30.5/32.5 | 6.3° | 12/21/27/28/27, 6° |
+| 30 | 0.25 | 2.9/4.8/5.7/5.9/5.9 | 1.1° | — |
+| 10 | 1.0 | 20.6/51.5/95.5/140.4/121.5 | 26° | 18/46/82/112/97, 20° |
+| 30 | 1.0 Nitro | 15.3/29.2/40.3/47.1/49.4 | 9.7° | (0.3× steering) |
+
+- The RE table is MODELLED (a planar sim of the same laws), not recovered. The rebuild keeps boost acceleration and drag active during the turn, which raises the full-lock rates.
+- Raw stick → steering: 0.3 → 0.004, 0.5 → 0.111, 0.75 → 0.444, 1.0 → 1.0 (deadzone + square).
+- Stick release: 146.6 → 28.7 °/s in 0.25 s → 0.1 in 1 s (damping + aligning; no snap).
+- Left stick only: 0.01° in 1 s. Boost release → Hovering, drift 0.5 s, yaw back on the view.
+- Hover, jump, dash, suspension and boost speed are unchanged (same VEHTEST values as PASS 14).
+
+### Streets mode state (CONFIRMED ORIGINAL; RE 0ab03b2)
+| actor | CTF | EXT | DOM (Conquest) | KOTH | DM / TDM |
+|---|---|---|---|---|---|
+| 4 objective bases | shown | shown | hidden | hidden | hidden |
+| Flag factories ×2 | Active (+ "Flag" marker) | Disabled | Disabled | Disabled | Disabled |
+| Bomb factory | Disabled | Active (+ "Bomb") | Disabled | Disabled | Disabled |
+| FlagCapturePoint ×2 | Active (marker only while _Active) | inert | inert | inert | inert |
+| BombPlantPoint ×2 | inert | Active, marker added (display needs AttackingTeam) | inert | inert | inert |
+| Domination totems ×3 | hidden (collision kept, touch ignored) | hidden | **visible, Active, "Domination" marker** | hidden | hidden |
+| KOTH zones ×5 | hidden | hidden | hidden | 1 random Active (shown, "KingOfTheHill"), rest Inactive | hidden |
+
+- Disabled = SetHidden + SetCollision(false,false).
+- The totem idle animation (DeactivatedLoopAnim) runs in every mode (`animClock`).
+- Default mode is DM (WFC_GAMEMODE selects).
+- **UNKNOWN:** what triggers KOTH rotation (`activateNewKothZone()` API only), the FlagCapturePoint `_Active` driver, the flag/bomb factory marker add timing **[PROV]**, and the friendly/enemy/contested marker presentation (HUD movie side).
+
+### Objective marker handoff
+`MapState::objectives()` carries:
+- the hard-coded marker class and type string ("Domination", "KingOfTheHill", "BombPlantPoint", "FlagCapturePoint", plus factory "Flag" / "Bomb");
+- the authored MarkerString;
+- markerAdded (mode gate + state) and markerShouldDisplay (per-type rules).
+
+This feeds the future `_global.UpdateMarker(id, dist, sx, sy, sz, type, desc)` path. No HUD was built.
+
+---
+
 ## PASS 17 — MILESTONE 04 STREETS WORLD STATE, AssetTools a23c675 (2026-10-03, gameplay agent)
 
 | Item | Authored evidence | Conf | Rebuild |

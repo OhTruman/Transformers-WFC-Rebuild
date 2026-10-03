@@ -70,10 +70,23 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
         pMax = driving ? cfg::kDriveCamPitchMax : cfg::kHoverCamPitchMax;
     }
     camPitch_ = core::clampf(camPitch_, pMin, pMax);
-    // [PROV] PC mouse -> GetNormalizedTurn scale; lightly filtered so per-frame mouse deltas steer smoothly.
-    float steerIn = core::clampf(in.mouseDX * cfg::kDriveMouseSteer + (in.padConnected ? in.padRX : 0.0f), -1.0f, 1.0f);
-    steerSmoothed_ += (steerIn - steerSmoothed_) * (1.0f - std::exp(-dt / 0.08f));
-    intent_.steer = driving ? steerSmoothed_ : 0.0f;
+    // Boost steering input = TnPlayerInput.GetNormalizedTurn() = aTurn (XboxTypeS_RightX) after HmPlayerInput's
+    // RADIAL 0.25 deadzone over (aTurn, aLookUp): v' = n * (min(1,|v|) - 0.25) / 0.75; no temporal filter
+    // [CONF RE MILESTONE03_VEHICLE_BOOST_STEERING]. The left stick X is RollControl, not steering.
+    float steerIn = 0.0f;
+    if (in.padConnected) {
+        float rx = in.padRX, ry = in.padRY, mag = std::sqrt(rx * rx + ry * ry);
+        if (mag > 0.25f) steerIn = core::clampf(rx * ((std::min(1.0f, mag) - 0.25f) / 0.75f) / mag, -1.0f, 1.0f);
+    }
+    // PC translation [PROV]: the mouse X axis is the camera-yaw axis, i.e. the right stick X, so it supplies
+    // aTurn: mouse rate / kDriveMouseFullRate = stick deflection (a short 0.05 s average turns per-frame
+    // mouse deltas into a rate). A/D stay left-stick X (strafe in hover, RollControl in boost).
+    float mouseRate = dt > 0.0f ? in.mouseDX / dt : 0.0f;
+    float mouseStick = core::clampf(mouseRate / cfg::kDriveMouseFullRate, -1.0f, 1.0f);
+    steerSmoothed_ += (mouseStick - steerSmoothed_) * (1.0f - std::exp(-dt / 0.05f));
+    if (std::fabs(steerIn) < 1e-4f) steerIn = steerSmoothed_;
+    if (const char* s = std::getenv("WFC_STEERSTICK")) steerIn = (float)std::atof(s);   // test: right-stick X after deadzone
+    intent_.steer = driving ? steerIn : 0.0f;
 
     // Movement axes from keys or left stick.
     float fwd = 0.0f, rgt = 0.0f;

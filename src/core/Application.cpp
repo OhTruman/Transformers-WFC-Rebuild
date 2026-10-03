@@ -5,6 +5,7 @@
 #include "platform/Window.h"
 #include "render/Renderer.h"
 #include "game/VehicleTests.h"
+#include "game/MapState.h"
 #include "game/PickupFactory.h"
 #include "game/Destructible.h"
 
@@ -22,6 +23,29 @@ namespace core {
 bool Application::init() {
     LOG_INFO("WFC Rebuild starting (clean-room skeleton)");
     if (std::getenv("WFC_VEHTEST")) { game::runVehicleTests(); return false; }   // measurements only
+    if (std::getenv("WFC_MODETEST")) {   // Streets per-mode objective state (no rendering)
+        const char* root = std::getenv("WFC_ASSET_ROOT");
+        std::string gp = std::string(root ? root : "F:/Transformers Rebuild/ExtractedAssets/VerticalSlice") + "/Maps/MP_IAC_Streets/gameplay.json";
+        const char* st[] = {"Active", "Inert", "Disabled", "Hidden", "KothInactive"};
+        for (game::MatchMode m : {game::MatchMode::DM, game::MatchMode::TDM, game::MatchMode::CTF, game::MatchMode::EXT,
+                                  game::MatchMode::DOM, game::MatchMode::KOTH}) {
+            game::MapState ms;
+            ms.load(gp, m);
+            for (const auto& o : ms.objectives())
+                LOG_INFO("MODETEST %-4s %-34s %-36s %-12s vis=%d col=%d touch=%d marker=%s added=%d show=%d", game::gameModeName(m),
+                         o.cls.c_str(), o.actor.c_str(), st[(int)o.state], (int)o.visible, (int)o.collision, (int)o.touchable,
+                         o.markerTypeString, (int)o.markerAdded, (int)o.markerShouldDisplay);
+            for (const auto& v : ms.modeVisibleActors())
+                LOG_INFO("MODETEST %-4s objective base %-20s visible=%d", game::gameModeName(m), v.actor.c_str(), (int)v.visible);
+            if (m == game::MatchMode::KOTH) {
+                for (int k = 0; k < 4; ++k) {
+                    LOG_INFO("MODETEST KOTH active zone: %s", ms.objectives()[(size_t)ms.activeKothZone()].actor.c_str());
+                    ms.activateNewKothZone();
+                }
+            }
+        }
+        return false;
+    }
     window_ = platform::createWindow(config::kWindowWidth, config::kWindowHeight, config::kWindowTitle);
     if (!window_) { LOG_ERROR("window creation failed"); return false; }
 
