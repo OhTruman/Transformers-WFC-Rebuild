@@ -3,6 +3,243 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 03 (2026-10-02) — branch `integration/milestone-03`
+End-of-milestone integration only: no new features, no new RE, no tuning. Base: integration/milestone-02
+(e8036f6). Evidence sources used by the branches (not merged): AssetTools 7a69756, ReverseEngineering 7033f18.
+
+### MERGED COMMITS
+Merged with `--no-ff` in this order:
+
+| Order | Branch | Head | Merge commit |
+|---|---|---|---|
+| 1 | agents/gameplay | 0762f01 | 5826fd9 |
+| 2 | agents/systems | d6932dc | 300561b |
+| 3 | agents/rendering | 19cd213 | 752a46f |
+
+agents/experimental (425eb1a) was **not** merged; its tools were only run read-only from an
+isolated overlay (see AUTOMATED RESULTS).
+
+### CONFLICTS
+- **Gameplay:** none.
+- **Systems:** `PlayerController.h`, `Application.cpp`, `World.cpp` (2 hunks), `STATUS.md`.
+- **Rendering:** `VehicleFx.cpp` (2 hunks), `FIDELITY.md`.
+- `Collision.cpp`: both Gameplay and Systems carried the same DDA segment walk (4965ec4). It merged
+  once, with no conflict.
+
+### OWNER RESOLUTIONS
+- `PlayerController.h`: Gameplay's camera setters (now also setting `viewYaw_`/`viewPitch_`) plus
+  Systems' read-only `moveForwardInput()` (engine-load audio).
+- `Application.cpp`: Gameplay's `WFC_AUTOBOOST=N` (from frame N; `=1` keeps the old behaviour) plus
+  Systems' `WFC_AUTOBOOST_CYCLE` / `WFC_AUTOJUMP_EVERY` test hooks.
+- `World::tick`: Gameplay's pickup/destructible event clears plus Systems' hitch log. Systems' profiler
+  scope wraps Gameplay's `applyToPawn`; Gameplay's `gameplayRamContacts()` is kept.
+- `VehicleFx.cpp` (Systems owns emitter state/lifetime, Rendering owns shading): Systems' implementation
+  of Rendering's own FX-material handoff (5e74895) is kept. It passes per-emitter `ParticleModuleRequired`
+  material paths, unclamped HDR colour when `evaluatesFxMaterials()`, and spawns the material-only
+  distortion/modulate emitters. Rendering's earlier per-texture `kTexMaterials` table is superseded by
+  it and dropped. The renderer interface (`ParticleBatch::material`, `evaluatesFxMaterials`, name
+  resolution for full paths or short names) is unchanged.
+- `STATUS.md` / `FIDELITY.md`: every owner section is kept; nothing was deleted.
+
+**Interfaces adapted so that one owner's behaviour reaches another owner's code:**
+1. **Pickups (Gameplay → Systems).** Gameplay's `PickupFactory` state machine raises `PickupEvent`s.
+   Systems' `PickupPresentation` expects `SetPickupHidden` / `SetPickupVisible` / `AnnouncePickup` calls.
+   Neither side called the other, so pickup sounds and effect state were silently lost after a clean
+   merge. `World::tick` now forwards each event to Systems' API after the actors tick:
+   - Taken → hidden + PickupSound on the recipient pawn;
+   - Respawned → visible.
+   The two tables are joined by authored actor name (both come from AssetTools 7a69756). Neither
+   owner's logic changed.
+2. **HUD crosshair (Gameplay → Rendering).** Rendering's `setReticle` computed its own spread
+   (bloom × fine aim). Gameplay owns the recovered TnHUD observers: raw effective spread = bloom ×
+   airborne multiplier × fine aim 0.5, re-notified only when it moves by more than 0.002.
+   `World::draw` now feeds the reticle from `PlayerController::hudAimState()` plus the last notified
+   spread (new read-only `hudSpread()`). Rendering still draws the authored `mc_crosshairIonBlaster`,
+   with no scope.
+
+The **material-translator R/G/B/A vector-output fix is not included.** It was never committed on
+19cd213, and all 211 generated shaders are identical to Rendering's own output.
+
+### BUILD
+- Clean Debug: `.\build.ps1 -Jobs 2 -Clean` → `build\bin`.
+- Clean Release: CMake `-DCMAKE_BUILD_TYPE=Release` → `build\release\bin`.
+- Both builds: 0 warnings / 0 errors, producing `wfc_rebuild.exe` and `wfc_fidelity.exe`.
+- Both CMake caches point at `F:/Transformers Rebuild/Rebuild` on integration/milestone-03, not at
+  any agent worktree.
+- Render data was regenerated (`tools\render\build_render_data.ps1`): 211/211 materials, BSP, 25 decals,
+  CLUT and `lvv_0.bin`. Output is equivalent to agents/rendering's own: identical GLSL for all 211;
+  `bsp.glb` / `decals.glb` / `clut.png` are byte-identical; the JSON differs only in path spelling.
+
+### AUTOMATED RESULTS
+Merged tree (Release unless noted):
+
+| Suite | Result |
+|---|---|
+| `wfc_fidelity` (Debug and Release) | 190 pass / **2 FAIL** / 21 known / 119 info / 1 skip |
+| `wfc_fidelity --map` | 192 / 2 / 21 / 135 / 0 |
+| `wfc_fidelity --no-assets` | 133 / 2 / 20 / 37 / 18 |
+| Collision (`--only collision --map`) | 9 / 0 / 2 known |
+| Audio native suite (`tools/systems/audio_native_suite.cpp`) | **533 pass / 0 fail** |
+| Shadow self-test (`WFC_SHADOWSELFTEST`) | 32/32 |
+| DLE test (`WFC_DLETEST`) | 20/20 |
+| LVV C++ vs Python query (`lvv_query_check.py`) | 400 points, 0 mismatches; blob structure OK |
+| Material permutations (`verify_permutations.py`) | 197/211 match the compiled permutations; 14 differ (FX/monitor parameter sets) |
+| Map audit (`audit_map.py`) | 2282 correct / 3 incorrect / 49 not rendered / 403 unknown; 25/25 decals; active dump byte-identical to agents/rendering's |
+| Vehicle tests (`WFC_VEHTEST`, measurements) | rest COM 1.287 m (native 1.287), stop 0.500 s (native 0.5), dash 30 m/s, hover jump +3.80 m, boost jump 6/14 |
+| Pickup tests (`WFC_PICKUPTEST`, measurements) | respawn 30.02 / 60.02 / 119.99 s (authored 30/60/120); touch vs CheckTouching per RE; destructible settles 10 s |
+| Runtime probe (merged tree's version) | 26 pass / 4 FAIL / 4 known (see notes) |
+
+Harness notes:
+- The harness is **identical, check by check, to the agents/gameplay 0762f01 head**. Every change since
+  milestone-02 is Gameplay's recovered behaviour against older expectations:
+  - 2 FAILs;
+  - wall slide and weapon restore 25%: KNOWN → PASS;
+  - 6 vehicle checks: PASS → KNOWN.
+- `WFC_VEHTEST` / `WFC_PICKUPTEST` exit 1 by design (measurement modes stop `Application::init`).
+- The audio suite's header build line lacks `src/game/PickupPresentation.cpp` (added in Systems Pass 6).
+  It was built with it added.
+
+Runtime probe notes:
+- The 3 reload-presentation FAILs come from a frame-count test design. The Release exe runs at 700–830 fps
+  facing a wall, so 1500 frames is ~2 s and the magazine never empties. With the Debug exe the reload
+  section passes 5/0.
+- `rendering.no_gl_errors`: `ParticleBase_BW_MAT` fails to compile (`vec4 t7 = vec4(t6, t6)`). That is
+  the deliberately reverted translator vector-output issue; the material uses its glTF fallback.
+
+**Experimental M03 gate** (`m03-gate.ps1`) ran from Experimental 425eb1a's `tools/fidelity` against this
+merged tree, in an isolated copy (`work/m3gate`, not committed). Result: **468 pass / 5 FAIL / 26 known /
+501 info**.
+- The 5 FAILs:
+  - the 2 stale spread checks;
+  - `vehicle_visual` and `perf_counters` reports missing (tool errors: PowerShell parameter type /
+    missing `counts.txt`);
+  - `r2v_chase_moving.no_camera_pop` (2 frames with a > 1 m camera jump).
+- The same camera pop and mesh-switch timing reproduce on the agents/gameplay 0762f01 head, so they are
+  Gameplay-owned and not a merge effect.
+- Gate improvements: 0 audio-attachment regressions (39 improved), 0 vehicle regressions,
+  0 fine-aim regressions, sustained-fire perf improved.
+- The gate's build step fails on CMake's harmless "unused-cli" stderr under `ErrorActionPreference Stop`.
+  It was rebuilt manually and run with `-SkipBuild`.
+- Experimental's `tools/fidelity/CMakeLists.txt` needs `SoundMixer.cpp` + `PickupPresentation.cpp`
+  (Systems added them to the harness).
+
+### PERFORMANCE
+Release, RX 7900 XTX, WFC path, steady-state windows of 120 frames:
+
+| Scenario | ms/frame |
+|---|---|
+| Idle | 3.8–4.1 |
+| Movement (jog/strafe) | 1.0–1.5 |
+| Firing | 4.0–4.1 |
+| Sustained firing (4 magazines + reloads, 6000 frames) | 3.75–4.6 |
+| Fine Aim + fire | 3.1–4.2 |
+| Robot → vehicle (moving) | 0.9–1.7 |
+| Hover | 4.3–4.5 |
+| Boost | 1.2–1.7 |
+| Vehicle movement | 1.2–1.8 |
+| Vehicle → robot (moving) | 1.1–2.1 |
+
+- Movement and vehicle runs face away from the dense spawn view, which accounts for the lower costs.
+- **Shooting-FPS regression resolved:** Debug sustained fire is 8.5–9.0 ms against 62–68 ms at milestone-02.
+  The fixes came from the branches: the DDA segment walk, light environments shared by mesh particles,
+  and Systems' firing-cost fix.
+- **Shadow cost:** included in all figures above (default-on).
+- **Particles:** 120–260 live while firing; back to 0 after firing stops.
+- **Audio:** no leaks. Cue instances return to the 25–27 ambient bed in every run. Gate audio-attach
+  (attachment suite, 12 scenarios): 120 pass / 0 FAIL / 123 info; no offending cues.
+- **Hitches:** one ~350 ms startup gap at tick 2–3 in every run. Sustained fire has 4 sporadic 31–92 ms
+  game-thread gaps, 3 of them after ammo was exhausted. **No transform spikes** (0 hitches in both
+  transform runs).
+- The gate's Debug-profiler `idle.steady 6.06 → 10.61 ms` flag uses an instrumented Debug variant, not
+  this measurement.
+
+### KNOWN STALE EXPERIMENTAL ASSERTIONS
+Product code was **not** changed to satisfy any of these.
+- `weapon.spread_after_10` (expects 0.13) and `weapon.spread_cap` (expects 0.18). They encode the
+  superseded no-recovery-while-firing model. Native per-tick CooldownSpread gives 0.10 after 10 shots and
+  reaches the cap at ~4 s (Gameplay Pass 16, RE d50e2a9).
+- `movement.vehicle_hover_height` / `original_vs_rebuild.movement.vehicle_hover_height` (expects 1.85 m).
+  Native hover support is springs only, with no ride-height target; rest COM is 1.287 m (Gameplay
+  Pass 13/14).
+- `movement.vehicle_boost_top_speed`, `boost.physics_boost_speed` (expect a flat 30 m/s). Native boost =
+  Lerp(2500, Drag) with drag v²·g/6000², and the tire coefficient is still PROV. Experimental to
+  re-baseline.
+- `movement.vehicle_jump_apex` (3.71 m ballistic). Native hover jump adds the spring push: +3.80 m over
+  rest in VEHTEST.
+- `orientation.vehicle_heading_follows_camera_turn` (0°, measured 2°). Hover yaw follows the smoothed
+  controller rotation; Experimental to re-check against the native smoother.
+- `missing.static_destructibles`. The single authored WallPanelSign is placed, but authored far outside
+  the play space (Gameplay Pass 15).
+- `unrendered.decals`. 25/25 decals render (Rendering Pass 8; map audit).
+- `unrendered.level_emitters` / `boost_presentation_emitted` / probe `boost_fx_emitted`. Systems spawns
+  level FX and vehicle boost/hover/ram FX; the probe reads the weapon-FX counter only.
+- `missing.prefab_instances`. Prefabs are composed (Rendering Pass 8).
+- Missing Ion Blaster scope/ADS, missing shoulder offset, missing footstep surface asset, graybox pickups:
+  all contradicted by authored data (no scope for the Ion Blaster; shoulder offset recovered; Streets
+  surface audio recovered by Systems; authored pickup factories).
+- Runtime-probe reload checks: they should be time-based, or run under `WFC_LOCKSTEP`, not frame-count
+  based.
+
+### CONFIRMED ORIGINAL BEHAVIOR PRESERVED
+- **Gameplay 0762f01:**
+  - native hover rigid body, suspension, jumps, drift, dash and nitro;
+  - authored transform visibility windows and weapon restore at 25% (now PASS); hand shrink;
+  - ram response and contacts;
+  - pickup state machines with 30/60/120 s respawn, ammo-crate highlight beam gate, health
+    CheckTouching;
+  - raw effective spread × airborne × fine aim 0.5, and the 0.002 HUD gate (now also driving the
+    renderer's crosshair);
+  - no ADS/scope.
+- **Systems d6932dc:**
+  - native SmartPan/PreferPlayer, attachment, Streets reverb zones, mixer presets, line/volume emitters,
+    cue gain;
+  - concurrency;
+  - vehicle start/loop/end with `bLooping` as the loop source;
+  - whole-sample FSB loop regions (7/7);
+  - no loop-boundary wait on stop;
+  - 0 leaks.
+- **Rendering 19cd213:**
+  - default-on character shadows (no `WFC_CHARSHADOWS`): LightEnvironment synthetic projector, native
+    composite light, gates and two-pass blur (self-test 32/32);
+  - DLE (20/20) and LVV;
+  - vehicle material fixes;
+  - hover/boost/distortion FX through their original graphs;
+  - authored Ion Blaster crosshair;
+  - pickup/wall-panel materials;
+  - BSP winding, vertex lightmaps and decals.
+- **Robot / vehicle transform shadow:** the renderer tags character draws by material package. Gameplay's
+  arm mesh and both meshes in the fold go through the shared robot/vehicle shadow path.
+
+### PARTIAL / PROVISIONAL / UNKNOWN
+Left as the owners labelled them:
+- **Rendering:**
+  - shadow frustum fit, the remaining ScreenToShadow texel terms, synthetic-light allocation internals,
+    the blur tie case (`WFC_BLURTIE`, off);
+  - particle mesh material fallback;
+  - 4 InterpActors not rendered (2 repair nodes, 2 objective-pickup bases), the same on agents/rendering;
+  - 14 permutation mismatches.
+- **Gameplay:**
+  - overshield amount/duration and ammo pickup amount where not authored;
+  - vehicle hull clearance, the boost tire coefficient, ram victim masses;
+  - the robot→vehicle-moving camera pop (2 frames);
+  - v2r single-mesh switch at 0.683 s against the authored 0.098–0.663 s both-visible window
+    (transform capture KNOWN).
+- **Systems:** FMOD decoder seam internals, mixer fade curves/Duration, pickup particle systems not drawn
+  (module flags UNKNOWN), 13 `PP_DECO_MECH_*` zone-pool KNOWNs.
+
+### POST-PLAYTEST ITEMS
+- **Rendering:** the material-translator R/G/B/A vector-output fix (~22 world materials change).
+  `ParticleBase_BW_MAT` compile failure (`vec4(t6, t6)`) is a known instance.
+- **Experimental:**
+  - retire or update the stale assertions above;
+  - fix `vehicle-visual.ps1` (switch parameter) and the `perf-counters` `counts.txt` path;
+  - make `m03-gate.ps1` tolerate CMake stderr warnings;
+  - add the two Systems sources to the harness CMake list;
+  - make the runtime-probe reload scenarios time-based.
+- **Gameplay:** the r2v-moving camera pop (2 frames) for review against the native camera strategy switch.
+- **Systems:** add `PickupPresentation.cpp` to the audio suite's documented build line.
+- **Systems/Gameplay:** nobody calls `notifyRamHit` yet (no pawn victims in the slice).
+
 ## GAMEPLAY PASS 16 (2026-10-02) — RE d50e2a9 runtime semantics (narrow)
 - Pickups:
   - touch is an overlap begin; health re-checks overlapping pawns on respawn (CheckTouching);
