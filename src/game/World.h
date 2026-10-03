@@ -36,6 +36,10 @@ public:
     // Uploads meshes via the renderer. Tries the extracted vertical slice first; if any
     // required asset is missing, falls back to the procedural graybox arena.
     void load(render::IRenderer& renderer);
+    // Match mode (authored TnOnlineGameSettings rule set) applied at load: objective / Kismet world state and the
+    // player-start class follow it. Set before load(); the default is DM (Deathmatch, TnFreeForAllGame).
+    void setMatchMode(MatchMode m) { matchMode_ = m; }
+    MatchMode matchMode() const { return matchMode_; }
 
     void tick(float dt);                       // one fixed step
     void handleInput(const platform::InputFrame& in, float dt);
@@ -86,6 +90,11 @@ public:
     struct StartPoint { std::string actor, cls, cluster; core::Vec3 pos; float yaw; };
     const std::vector<StartPoint>& startPoints() const { return starts_; }
     void teleportToStart(int index);   // test/debug spawn selection
+    // Authored collision actor(s) (collision_pawn.glb node: BlockingVolume_*, BSP, prop actor names) whose
+    // bounds contain p (expanded by pad metres): for tracing blocked / incorrect areas back to authored objects.
+    struct ColActor { std::string name, kind, mesh; core::Vec3 lo, hi; };
+    const std::vector<ColActor>& collisionActors() const { return colActors_; }
+    std::string collisionActorsAt(const core::Vec3& p, float pad, int maxNames = 4) const;
 
 private:
     bool loadVerticalSlice(render::IRenderer& renderer);
@@ -106,6 +115,9 @@ private:
     CollisionWorld collision_;
     CollisionWorld weaponCollision_;
     MapState mapState_;
+    MatchMode matchMode_ = MatchMode::DM;
+    std::vector<ColActor> colActors_;
+    void syncMapPresentation(render::IRenderer& r) const;   // Gameplay world state -> renderer, each frame
     std::vector<StartPoint> starts_;
     int startCursor_ = 0;
     void loadStartPoints(const std::string& gameplayJson);

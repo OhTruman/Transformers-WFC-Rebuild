@@ -3,6 +3,7 @@
 #include "assets/Json.h"
 #include "core/Log.h"
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -15,6 +16,32 @@ const char* gameModeName(MatchMode m) {
         case MatchMode::KOTH: return "KOTH"; case MatchMode::EXT: return "EXT"; case MatchMode::DOM: return "DOM";
     }
     return "?";
+}
+
+// TnOnlineGameSettings<tag>.Rules [CONF authored.db TransGame.Default__TnOnlineGameSettings{DM,TDM,CTF,KOTH,EXT,DOM}].
+const std::vector<std::string>& gameRulesForMode(MatchMode m) {
+    static const std::vector<std::string> dm = {"TransGame.TnGameRules_ScoreKillsDM", "TransGame.TnGameRules_TrackKillsMP",
+        "TransGame.TnGameRules_ReportGameProgressTime", "TransGame.TnGameRules_ReportGameProgressKills"};
+    static const std::vector<std::string> tdm = {"TransGame.TnGameRules_ScoreKillsTDM", "TransGame.TnGameRules_TrackKillsMP",
+        "TransGame.TnGameRules_ReportGameProgressTime", "TransGame.TnGameRules_ReportGameProgressKills"};
+    static const std::vector<std::string> ctf = {"TransGame.TnGameRules_ScoreKillsMP", "TransGame.TnGameRules_SingleFlagCTF",
+        "TransGame.TnGameRules_ScoreFlags", "TransGame.TnGameRules_TrackKillsMP", "TransGame.TnGameRules_ReportGameProgressTimeCTF"};
+    static const std::vector<std::string> koth = {"TransGame.TnGameRules_ScoreKillsMP", "TransGame.TnGameRules_ScoreKingOfTheHill",
+        "TransGame.TnGameRules_TrackKillsMP", "TransGame.TnGameRules_ReportGameProgressTime", "TransGame.TnGameRules_ReportGameProgressPoints"};
+    static const std::vector<std::string> ext = {"TransGame.TnGameRules_ScoreKillsMP", "TransGame.TnGameRules_ScoreBombingRun",
+        "TransGame.TnGameRules_TrackKillsMP", "TransGame.TnGameRules_ReportGameProgressTime"};
+    static const std::vector<std::string> dom = {"TransGame.TnGameRules_ScoreKillsMP", "TransGame.TnGameRules_ScoreDomination",
+        "TransGame.TnGameRules_TrackKillsMP", "TransGame.TnGameRules_ReportGameProgressTime", "TransGame.TnGameRules_ReportGameProgressPoints"};
+    switch (m) {
+        case MatchMode::DM: return dm; case MatchMode::TDM: return tdm; case MatchMode::CTF: return ctf;
+        case MatchMode::KOTH: return koth; case MatchMode::EXT: return ext; case MatchMode::DOM: return dom;
+    }
+    return dm;
+}
+
+bool MapState::hasRule(const std::string& cls) const {
+    for (const std::string& r : gameRules()) if (r == cls) return true;
+    return false;
 }
 
 // glTF = 0.01 * (X, Z, Y)_UE (a reflection P swapping Y/Z). A UE rotation R_ue (FRotationMatrix rows = the
@@ -42,35 +69,73 @@ namespace {
 
 core::Mat4 linearPart(const core::Mat4& a) { core::Mat4 r = a; r.m[12] = r.m[13] = r.m[14] = 0.0f; return r; }
 
-core::Mat4 inverse3(const core::Mat4& a) {
-    const float* m = a.m;   // column-major 3x3 in m[0..2], m[4..6], m[8..10]
-    float a00 = m[0], a10 = m[1], a20 = m[2], a01 = m[4], a11 = m[5], a21 = m[6], a02 = m[8], a12 = m[9], a22 = m[10];
-    float det = a00 * (a11 * a22 - a12 * a21) - a01 * (a10 * a22 - a12 * a20) + a02 * (a10 * a21 - a11 * a20);
-    core::Mat4 r;
-    if (std::fabs(det) < 1e-12f) return r;
-    float id = 1.0f / det;
-    r.m[0] = (a11 * a22 - a12 * a21) * id; r.m[4] = (a02 * a21 - a01 * a22) * id; r.m[8] = (a01 * a12 - a02 * a11) * id;
-    r.m[1] = (a12 * a20 - a10 * a22) * id; r.m[5] = (a00 * a22 - a02 * a20) * id; r.m[9] = (a02 * a10 - a00 * a12) * id;
-    r.m[2] = (a10 * a21 - a11 * a20) * id; r.m[6] = (a01 * a20 - a00 * a21) * id; r.m[10] = (a00 * a11 - a01 * a10) * id;
-    return r;
-}
-
 core::Vec3 ueToGltf(float x, float y, float z) { return {x * 0.01f, z * 0.01f, y * 0.01f}; }
 
 core::Vec3 jv3(const assets::Json& j) { return {j["X"].asFloat(), j["Y"].asFloat(), j["Z"].asFloat()}; }
+
+core::Mat4 transpose3(const core::Mat4& a) {
+    core::Mat4 r;
+    for (int c = 0; c < 3; ++c) for (int k = 0; k < 3; ++k) r.m[c * 4 + k] = a.m[k * 4 + c];
+    return r;
+}
+
+// Rotation matrix <-> unit quaternion (x, y, z, w), column-major 3x3 in m[0..10].
+struct Quat { float x, y, z, w; };
+Quat quatFromMat(const core::Mat4& a) {
+    const float* m = a.m;
+    float tr = m[0] + m[5] + m[10];
+    Quat q;
+    if (tr > 0.0f) {
+        float s = std::sqrt(tr + 1.0f) * 2.0f;
+        q = {(m[6] - m[9]) / s, (m[8] - m[2]) / s, (m[1] - m[4]) / s, 0.25f * s};
+    } else if (m[0] > m[5] && m[0] > m[10]) {
+        float s = std::sqrt(1.0f + m[0] - m[5] - m[10]) * 2.0f;
+        q = {0.25f * s, (m[4] + m[1]) / s, (m[8] + m[2]) / s, (m[6] - m[9]) / s};
+    } else if (m[5] > m[10]) {
+        float s = std::sqrt(1.0f + m[5] - m[0] - m[10]) * 2.0f;
+        q = {(m[4] + m[1]) / s, 0.25f * s, (m[9] + m[6]) / s, (m[8] - m[2]) / s};
+    } else {
+        float s = std::sqrt(1.0f + m[10] - m[0] - m[5]) * 2.0f;
+        q = {(m[8] + m[2]) / s, (m[9] + m[6]) / s, 0.25f * s, (m[1] - m[4]) / s};
+    }
+    return q;
+}
+core::Mat4 matFromQuat(const Quat& q) {
+    core::Mat4 r;
+    float x = q.x, y = q.y, z = q.z, w = q.w;
+    r.m[0] = 1 - 2 * (y * y + z * z); r.m[4] = 2 * (x * y - z * w);     r.m[8] = 2 * (x * z + y * w);
+    r.m[1] = 2 * (x * y + z * w);     r.m[5] = 1 - 2 * (x * x + z * z); r.m[9] = 2 * (y * z - x * w);
+    r.m[2] = 2 * (x * z - y * w);     r.m[6] = 2 * (y * z + x * w);     r.m[10] = 1 - 2 * (x * x + y * y);
+    return r;
+}
+// UE3 SlerpQuat: shortest arc; near-parallel keys fall back to a linear blend.
+Quat slerpQuat(Quat a, const Quat& b, float t) {
+    float c = a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+    float s1 = 1.0f;
+    if (c < 0.0f) { c = -c; s1 = -1.0f; }
+    float s0, sb;
+    if (c < 0.9999f) {
+        float om = std::acos(c), si = 1.0f / std::sin(om);
+        s0 = std::sin((1.0f - t) * om) * si; sb = std::sin(t * om) * si;
+    } else { s0 = 1.0f - t; sb = t; }
+    sb *= s1;
+    Quat r{s0 * a.x + sb * b.x, s0 * a.y + sb * b.y, s0 * a.z + sb * b.z, s0 * a.w + sb * b.w};
+    float n = std::sqrt(r.x * r.x + r.y * r.y + r.z * r.z + r.w * r.w);
+    return {r.x / n, r.y / n, r.z / n, r.w / n};
+}
 
 // Objective classes [CONF RE MILESTONE04_STREETS_RUNTIME_SEMANTICS + future_hud_handoff.json]: the hard-coded
 // marker class (type string = class name minus "TnObjectiveMarkerType"), authored MarkerString /
 // RequiredGameRuleClass, and the exact rule the class gates on (CTF SingleFlagCTF, EXT ScoreBombingRun,
 // DOM ScoreDomination, KOTH ScoreKingOfTheHill).
-struct ObjClass { const char* cls; const char* markerClass; const char* typeStr; const char* str; const char* rule; MatchMode mode; };
+struct ObjClass { const char* cls; const char* markerClass; const char* typeStr; const char* str; const char* rule; const char* gate; };
 const ObjClass kObjClasses[] = {
-    {"TnGameObjectivePickupFactoryFlag", "TransGame.TnObjectiveMarkerTypeFlag", "Flag", "Code Of Power", "TransGame.TnGameRules_SingleFlagCTF", MatchMode::CTF},
-    {"TnFlagCapturePoint", "TransGame.TnObjectiveMarkerTypeFlagCapturePoint", "FlagCapturePoint", "", "", MatchMode::CTF},
-    {"TnGameObjectivePickupFactoryBomb", "TransGame.TnObjectiveMarkerTypeBomb", "Bomb", "Bomb", "TransGame.TnGameRules_ScoreBombingRun", MatchMode::EXT},
-    {"TnBombPlantPoint", "TransGame.TnObjectiveMarkerTypeBombPlantPoint", "BombPlantPoint", "", "", MatchMode::EXT},
-    {"TnDominationPoint", "TransGame.TnObjectiveMarkerTypeDomination", "Domination", "", "", MatchMode::DOM},
-    {"TnKingOfTheHillZone", "TransGame.TnObjectiveMarkerTypeKingOfTheHill", "KingOfTheHill", "Active Node", "", MatchMode::KOTH},
+    {"TnGameObjectivePickupFactoryFlag", "TransGame.TnObjectiveMarkerTypeFlag", "Flag", "Code Of Power", "TransGame.TnGameRules_SingleFlagCTF", "TransGame.TnGameRules_SingleFlagCTF"},
+    {"TnFlagCapturePoint", "TransGame.TnObjectiveMarkerTypeFlagCapturePoint", "FlagCapturePoint", "", "", "TransGame.TnGameRules_SingleFlagCTF"},
+    {"TnGameObjectivePickupFactoryBomb", "TransGame.TnObjectiveMarkerTypeBomb", "Bomb", "Bomb", "TransGame.TnGameRules_ScoreBombingRun", "TransGame.TnGameRules_ScoreBombingRun"},
+    {"TnBombPlantPoint", "TransGame.TnObjectiveMarkerTypeBombPlantPoint", "BombPlantPoint", "", "", "TransGame.TnGameRules_ScoreBombingRun"},
+    {"TnDominationPoint", "TransGame.TnObjectiveMarkerTypeDomination", "Domination", "", "", "TransGame.TnGameRules_ScoreDomination"},
+    {"TnKingOfTheHillZone", "TransGame.TnObjectiveMarkerTypeKingOfTheHill", "KingOfTheHill", "Active Node", "", "TransGame.TnGameRules_ScoreKingOfTheHill"},
 };
 
 } // namespace
@@ -119,6 +184,11 @@ bool MapState::load(const std::string& path, MatchMode mode) {
         float a[16];
         for (int k = 0; k < 16; ++k) a[k] = acts[i]["gltf_matrix"][(size_t)k].asFloat(k % 5 == 0 ? 1.0f : 0.0f);
         m.authored = core::mat4FromArray(a);
+        // UE3 InterpTrackMove IMF_RelativeToInitial: InitialTM = FRotationTranslationMatrix(InitialRotation,
+        // InitialLocation): the authored Rotation only (DrawScale / DrawScale3D are not part of it).
+        const assets::Json& R = acts[i]["rotation_ue"];
+        const float u2d = 360.0f / 65536.0f;
+        m.initialRot = ueRotationToGltf(R[0].asFloat() * u2d, R[1].asFloat() * u2d, R[2].asFloat() * u2d);
         movers_.push_back(m);
     }
 
@@ -133,7 +203,7 @@ bool MapState::load(const std::string& path, MatchMode mode) {
             o.pos = {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
             o.yawDeg = list[i]["yaw_deg"].asFloat();
             o.markerClass = oc.markerClass; o.markerTypeString = oc.typeStr; o.markerString = oc.str; o.requiredRule = oc.rule;
-            o.activeInMode = oc.mode == mode_;
+            o.activeInMode = hasRule(oc.gate);
             objectives_.push_back(o);
         }
     }
@@ -143,8 +213,7 @@ bool MapState::load(const std::string& path, MatchMode mode) {
     const assets::Json& mdv = g["mode_dependent_visibility"];
     for (size_t r = 0; r < mdv.size(); ++r) {
         const std::string& rule = mdv[r]["rule"].asString();
-        bool active = (rule == "TransGame.TnGameRules_ScoreBombingRun" && mode_ == MatchMode::EXT) ||
-                      (rule == "TransGame.TnGameRules_SingleFlagCTF" && mode_ == MatchMode::CTF);
+        bool active = hasRule(rule);   // SeqCond_GameRuleActive: exact rule class
         bool unhide = mdv[r]["action"].asString() == "UnHide";
         const assets::Json& t = mdv[r]["targets"];
         for (size_t i = 0; i < t.size(); ++i) {
@@ -218,6 +287,7 @@ void MapState::applyObjectiveStates() {
         z.state = ObjectiveObject::State::Active; z.visible = true; z.touchable = true;
         z.markerAdded = true; z.markerShouldDisplay = true;            // KOTH: displayed while Active
         kothActive_ = pick;
+        kothTimeLeft_ = kothZoneActiveTime_;
     }
 }
 
@@ -235,6 +305,28 @@ void MapState::activateNewKothZone() {
     ObjectiveObject& z = objectives_[(size_t)kothActive_];
     z.state = ObjectiveObject::State::Active; z.visible = true; z.touchable = true;
     z.markerAdded = true; z.markerShouldDisplay = true;            // Active.BeginState adds the marker
+    kothTimeLeft_ = kothZoneActiveTime_;
+}
+
+std::vector<MapState::ActorVisibility> MapState::actorVisibility() const {
+    std::vector<ActorVisibility> v;
+    for (const ModeVisibleActor& a : modeActors_) v.push_back({a.actor, !a.visible});
+    for (const ObjectiveObject& o : objectives_)
+        if (o.cls == "TnDominationPoint" || o.cls == "TnKingOfTheHillZone" || o.cls == "TnGameObjectivePickupFactoryFlag" ||
+            o.cls == "TnGameObjectivePickupFactoryBomb")
+            v.push_back({o.actor, !o.visible});
+    return v;
+}
+
+float MapState::initialRotationResidual(const MapMover& m) const {
+    core::Mat4 d = transpose3(m.initialRot) * linearPart(m.authored);
+    float diag = 0.0f, off = 0.0f;
+    for (int c = 0; c < 3; ++c)
+        for (int k = 0; k < 3; ++k) {
+            float x = std::fabs(d.m[c * 4 + k]);
+            if (c == k) diag = std::max(diag, x); else off = std::max(off, x);
+        }
+    return diag > 0.0f ? off / diag : 1.0f;
 }
 
 void MapState::registerCollision(CollisionWorld& pawn, CollisionWorld* weapon,
@@ -260,19 +352,21 @@ void MapState::registerCollision(CollisionWorld& pawn, CollisionWorld* weapon,
 
 // UE3 FInterpCurve::Eval for CIM_CurveAuto keys: CubicInterp(P0, T0*Diff, P1, T1*Diff, Alpha) between keys,
 // clamped to the first/last key outside the range.
-core::Vec3 MapState::evalEuler(float t) const {
-    if (euler_.empty()) return {0, 0, 0};
-    if (t <= euler_.front().in) return euler_.front().out;
-    if (t >= euler_.back().in) return euler_.back().out;
+// UE3 UInterpTrackMove::GetKeyTransformAtTime with bUseQuatInterpolation: before the first / after the last key
+// use that key; else the first i with t < Key[i+1].InVal, Alpha = clamp((t - In_i) / (In_i+1 - In_i)),
+// SlerpQuat(Quat(MakeFromEuler(Out_i)), Quat(MakeFromEuler(Out_i+1)), Alpha). Euler X/Y/Z = roll/pitch/yaw.
+core::Mat4 MapState::evalRelativeRotation(float t) const {
+    auto rot = [](const core::Vec3& e) { return ueRotationToGltf(e.y, e.z, e.x); };
+    if (euler_.empty()) return core::Mat4::identity();
+    if (euler_.size() == 1 || t < euler_.front().in) return rot(euler_.front().out);
+    if (t > euler_.back().in) return rot(euler_.back().out);
     for (size_t i = 0; i + 1 < euler_.size(); ++i) {
-        const Key& k0 = euler_[i]; const Key& k1 = euler_[i + 1];
-        float diff = k1.in - k0.in;
-        if (t < k0.in || t > k1.in || diff <= 0.0f) continue;
-        float u = (t - k0.in) / diff, u2 = u * u, u3 = u2 * u;
-        float h00 = 2 * u3 - 3 * u2 + 1, h10 = u3 - 2 * u2 + u, h01 = -2 * u3 + 3 * u2, h11 = u3 - u2;
-        return k0.out * h00 + k0.leave * (h10 * diff) + k1.out * h01 + k1.arrive * (h11 * diff);
+        if (t >= euler_[i + 1].in) continue;
+        float dtk = euler_[i + 1].in - euler_[i].in;
+        float a = dtk > 0.0f ? std::min(1.0f, std::max(0.0f, (t - euler_[i].in) / dtk)) : 0.0f;
+        return matFromQuat(slerpQuat(quatFromMat(rot(euler_[i].out)), quatFromMat(rot(euler_[i + 1].out)), a));
     }
-    return euler_.back().out;
+    return rot(euler_.back().out);
 }
 
 void MapState::pose() {
@@ -282,14 +376,11 @@ void MapState::pose() {
             // PHYS_Rotating: Rotation += RotationRate * dt (world yaw about the actor location).
             r = ueRotationToGltf(0.0f, m.yawRateRad * clock_ * 57.2957795f, 0.0f);
         } else {
-            // IMF_RelativeToInitial: world = Initial * Relative (offset in the actor frame) -> world delta
-            // = Initial * R_rel * Initial^-1. EulerTrack X/Y/Z = roll/pitch/yaw (degrees). The PosTrack offset
-            // (<= 0.008 UU) is negligible and not applied. Interpolated in Euler space [HIGH: the track uses
-            // bUseQuatInterpolation; the angles are <= 20 deg].
-            core::Vec3 e = evalEuler(std::fmod(clock_, matineeLength_));
-            core::Mat4 rel = ueRotationToGltf(e.y, e.z, e.x);
-            core::Mat4 init = linearPart(m.authored);
-            r = init * rel * inverse3(init);
+            // IMF_RelativeToInitial: ResultTM = RelativeTM * InitialTM (row vectors), i.e. the relative rotation
+            // in the actor's frame -> world delta = R0 * R_rel * R0^T with R0 the authored rotation (no scale).
+            // The PosTrack offset (<= 0.008 UU) is not applied.
+            core::Mat4 rel = evalRelativeRotation(std::fmod(clock_, matineeLength_));
+            r = m.initialRot * rel * transpose3(m.initialRot);
         }
         m.worldDelta = core::Mat4::translate(m.pivot) * r * core::Mat4::translate(m.pivot * -1.0f);
     }
@@ -298,6 +389,12 @@ void MapState::pose() {
 void MapState::tick(float dt, CollisionWorld& pawn, CollisionWorld* weapon) {
     clock_ += dt;
     for (ObjectiveObject& o : objectives_) if (o.cls == "TnDominationPoint") o.animClock += dt;   // idle loop (hidden or not)
+    // KOTH: the Active zone stays ZoneActiveTime (60 s, authored) then ActivateNewZone [HIGH: authored
+    // ZoneActiveTime / ActiveTimeLeft fields; the timer body is not traced in the RE note].
+    if (kothActive_ >= 0) {
+        kothTimeLeft_ -= dt;
+        if (kothTimeLeft_ <= 0.0f) activateNewKothZone();
+    }
     pose();
     for (const MapMover& m : movers_) {
         core::Mat4 colPose = m.worldDelta * core::Mat4::translate(m.pivot);   // pivot-relative verts

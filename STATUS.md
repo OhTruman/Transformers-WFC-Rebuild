@@ -3,6 +3,18 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 19 (2026-10-03) — Streets world state + corrected world/collision (AssetTools 8d8195e)
+- Corrected 8d8195e world.glb, collision GLBs and physics.json, consumed fresh at load (no collision cache).
+- Authored traversal: 852/852 TnReachSpec runs (robot + hover truck), 0 falls, 0 floor gaps.
+- 984 boost/jump sweeps: 0 KillZ falls, 0 bound exits.
+- Coherence audit: 0 missing/displaced collision; authored hull-smaller-than-mesh cases listed in FIDELITY.md.
+- Match mode = authored TnOnlineGameSettings rule set (exact HasRule gating). World::setMatchMode.
+- Spawn class per mode, authored start yaw.
+- Gameplay pushes rules, actor hidden state, pickup FX state and the map clock to the renderer (setMapClock is new: Rendering handoff).
+- SkyBeam: quat slerp + rotation-only InitialTM (validated). KOTH 60 s ZoneActiveTime rotation [HIGH].
+- Tests: WFC_MAPTRAVERSE (oracle + tour + sweeps + coherence + camera). WFC_MODETEST adds rules + SkyBeam checks.
+- Details: FIDELITY.md PASS 19.
+
 ## GAMEPLAY PASS 18 (2026-10-03) — boost steering + Streets mode state (RE a1666c2 / 0ab03b2)
 - Boost steering now uses the recovered input path:
   - right-stick X (PC: mouse X), radial 0.25 deadzone, s·|s|, Nitro 0.3;

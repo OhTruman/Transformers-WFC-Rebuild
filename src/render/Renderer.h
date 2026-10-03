@@ -3,6 +3,7 @@
 #pragma once
 #include <functional>
 #include <string>
+#include <vector>
 #include "core/Math.h"
 #include "render/Camera.h"
 #include "render/Mesh.h"
@@ -81,6 +82,25 @@ public:
     // like UE3's light-environment visibility traces. Optional.
     using VisibilityQuery = std::function<bool(const core::Vec3& from, const core::Vec3& to)>;
     virtual void setVisibilityQuery(VisibilityQuery q) { (void)q; }
+
+    // Gameplay-authoritative visibility of an authored map actor (world.glb actor name, e.g. "InterpActor_6165").
+    // Authored bHidden actors start hidden; Kismet-driven state (SeqAct_ToggleHidden by game rule) is pushed here.
+    virtual void setActorHidden(const std::string& actor, bool hidden) { (void)actor; (void)hidden; }
+    // Activate / deactivate an authored map particle component (owner actor name or component path). Components
+    // start in their authored bAutoActivate state (pickup factories toggle their effects at runtime).
+    virtual void setMapEffectActive(const std::string& ownerOrComponent, bool active) { (void)ownerOrComponent; (void)active; }
+    // Pickup presentation (TnPickupFactory.SetPickupHidden / SetPickupVisible): key "<factory actor>|custom" or
+    // "|highlight"; hidden = SetHidden (nothing drawn). Gameplay / Systems own the factory state.
+    virtual void setMapEffectState(const std::string& key, bool active, bool hidden) { (void)key; (void)active; (void)hidden; }
+    // Gameplay's active game-rule classes (e.g. "TnGameRules_SingleFlagCTF"): presentation gates authored on rules
+    // (Kismet UnHide of the objective bases, Conquest totems, objective-factory effects).
+    virtual void setActiveGameRules(const std::vector<std::string>& rules) { (void)rules; }
+    // True when the renderer draws the authored map particle components itself (Systems must not draw them too).
+    virtual bool drawsAuthoredMapFx() const { return false; }
+    // Gameplay's map clock: seconds since SeqEvent_GameplayStarted (MapState). Movers (PHYS_Rotating domes, the
+    // looping SkyBeam Matinee), totem idle animation and KOTH state are evaluated at this time so that what is
+    // drawn matches the moving collision Gameplay simulates. Optional.
+    virtual void setMapClock(float secondsSinceGameplayStarted) { (void)secondsSinceGameplayStarted; }
 
     // Textured particle quads (depth-tested, no depth write, unfogged for additive).
     virtual void drawParticles(const ParticleBatch& batch) = 0;

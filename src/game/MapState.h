@@ -23,9 +23,12 @@ namespace game {
 
 class CollisionWorld;
 
-// gameplay.json modes (playlists); the slice runs DM (TnFreeForAllGame) unless WFC_GAMEMODE selects another.
+// gameplay.json modes (playlists); the slice runs DM unless WFC_GAMEMODE selects another. A mode is defined by its
+// authored TnOnlineGameSettings<tag>.Rules (exact TnGameRules classes); every world-state gate is
+// GameInfo.HasRule(<exact class>) [CONF RE MILESTONE04_STREETS_RUNTIME_SEMANTICS + authored.db defaults].
 enum class MatchMode { DM, TDM, CTF, KOTH, EXT, DOM };
 const char* gameModeName(MatchMode m);
+const std::vector<std::string>& gameRulesForMode(MatchMode m);
 
 struct MapMover {
     enum class Kind { Rotating, Matinee };
@@ -33,6 +36,7 @@ struct MapMover {
     Kind kind = Kind::Rotating;
     core::Vec3 pivot{0, 0, 0};             // actor location (glTF metres)
     core::Mat4 authored = core::Mat4::identity();   // authored world matrix (Matinee actors; identity if unknown)
+    core::Mat4 initialRot = core::Mat4::identity(); // InitialTM rotation (authored Rotation only, no DrawScale)
     float yawRateRad = 0.0f;               // PHYS_Rotating
     // Current pose for Rendering: world matrix delta to pre-multiply the authored placement
     // (world_now = worldDelta * world_authored).
@@ -80,6 +84,11 @@ public:
 
     float clock() const { return clock_; }  // seconds since GameplayStarted (Matinee / rotation / totems)
     MatchMode mode() const { return mode_; }
+    const std::vector<std::string>& gameRules() const { return gameRulesForMode(mode_); }
+    bool hasRule(const std::string& cls) const;      // exact class, e.g. "TransGame.TnGameRules_SingleFlagCTF"
+    // Authored map actors whose rendered state Gameplay owns this frame (world.glb / class actor name, hidden).
+    struct ActorVisibility { std::string actor; bool hidden; };
+    std::vector<ActorVisibility> actorVisibility() const;
     const std::vector<MapMover>& movers() const { return movers_; }
     const std::vector<ObjectiveObject>& objectives() const { return objectives_; }
     const std::vector<ModeVisibleActor>& modeVisibleActors() const { return modeActors_; }
@@ -89,6 +98,10 @@ public:
     // MatchStarting picks a random initial zone; what triggers later rotations is not recovered (API only).
     int activeKothZone() const { return kothActive_; }
     void activateNewKothZone();
+    float kothActiveTimeLeft() const { return kothTimeLeft_; }
+    // Diagnostics: max |off-diagonal| of InitialRot^T * authored linear part, normalised (0 = the recovered
+    // rotation reproduces the authored placement up to its DrawScale3D).
+    float initialRotationResidual(const MapMover& m) const;
 
 private:
     MatchMode mode_ = MatchMode::DM;
@@ -97,13 +110,16 @@ private:
     std::vector<ObjectiveObject> objectives_;
     std::vector<ModeVisibleActor> modeActors_;
     int kothActive_ = -1;
+    float kothZoneActiveTime_ = 60.0f;     // TnKingOfTheHillZoneBase ZoneActiveTime (authored CDO)
+    float kothTimeLeft_ = 0.0f;
     unsigned kothRng_ = 0x5EED1234u;
     void applyObjectiveStates();
-    // SkyBeam InterpTrackMove EulerTrack (degrees X roll / Y pitch / Z yaw), CIM_CurveAuto keys.
+    // SkyBeam InterpTrackMove EulerTrack (degrees X roll / Y pitch / Z yaw). bUseQuatInterpolation: the rotation
+    // is SlerpQuat between the bracketing keys with a linear alpha (the tangents are unused).
     struct Key { float in; core::Vec3 out, arrive, leave; };
     std::vector<Key> euler_;
     float matineeLength_ = 9.0022f;
-    core::Vec3 evalEuler(float t) const;
+    core::Mat4 evalRelativeRotation(float t) const;
     void pose();
 };
 
