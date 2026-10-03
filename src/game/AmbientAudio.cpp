@@ -13,20 +13,10 @@ namespace game {
 namespace {
 
 constexpr float UU = 0.01f;
-constexpr int kMaxActive = 24;          // [PROV] simultaneously playing map emitters
-constexpr float kAudibleDb = -48.0f;    // [PROV] below this estimated level an emitter goes virtual
-constexpr float kEmitterFade = 0.5f;    // [PROV] virtual <-> real fade (s)
 
 float frand() { return (float)std::rand() / (float)RAND_MAX; }
 
 core::Vec3 vec(const assets::Json& a) { return {a[0].asFloat(), a[1].asFloat(), a[2].asFloat()}; }
-
-// FMOD inverse rolloff as the mixer applies it (Win32Audio::resolveGains).
-float inverseGain(float d, float minM, float maxM, float rolloff) {
-    float dd = std::min(d, maxM);
-    return dd <= minM ? 1.0f : minM / (minM + rolloff * (dd - minM));
-}
-
 
 // Moller-Trumbore, ray (any t > 0).
 bool rayTri(const core::Vec3& o, const core::Vec3& d, const core::Vec3& a, const core::Vec3& b, const core::Vec3& c) {
@@ -77,9 +67,6 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
             if (k == Emitter::Line) e.half = j["linelength"].asFloat(500.0f) * UU * 0.5f;
             const cuedata::CueDef* cd = cues.cueDef(e.cue.c_str());
             if (!cd) continue;
-            e.volDb = cd->volDb; e.minM = cd->distMinUU * UU; e.maxM = cd->distMaxUU * UU; e.rolloff = cd->rolloff;
-            e.loops = false;
-            for (const cuedata::EventDef& ev : cd->events) e.loops = e.loops || ev.loop;
             emitters_.push_back(e);
         }
     }
@@ -205,47 +192,27 @@ void AmbientAudio::tick(float dt, const core::Vec3& listener, const core::Vec3& 
         }
     }
 
-    // Emitters: estimate each one's level at the listener and keep the most audible ones real.
-    std::vector<std::pair<float, int>> rank;
-    rank.reserve(emitters_.size());
-    for (int i = 0; i < (int)emitters_.size(); ++i) {
-        Emitter& e = emitters_[(size_t)i];
-        float db = e.volDb + 20.0f * std::log10(std::max(1e-6f, inverseGain(core::length(placeFor(e, listener) - listener),
-                                                                            e.minM, e.maxM, e.rolloff)));
-        e.want = false;
-        if (db > kAudibleDb) rank.push_back({db, i});
+    // Emitters [CONF native, see AmbientAudio.h]: every authored emitter's AudioComponent auto-plays once, in
+    // authored order, at level start (the first tick, once the listener exists); SoundCues::play applies the
+    // native per-cue registration (global per cue, kKillFarthest against this listener, refused = -1).
+    // Line / volume emitters re-Play every tick while not playing (A7); point AmbientSounds never restart.
+    // Volume, cull, pan, SmartPan and occlusion are the per-voice native rules; there is no budget or fade.
+    if (!started_) {
+        started_ = true;
+        for (Emitter& e : emitters_) {
+            core::Vec3 at = placeFor(e, listener);
+            e.instance = cues.play(e.cue.c_str(), at, core::length(at - listener));
+            if (e.instance < 0) ++refusedAtStart_;
+        }
     }
-    std::sort(rank.begin(), rank.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-    // Most audible first, at most MaxConcurrentPlayCount instances per cue (the cue's own limit), within
-    // the voice budget.
-    std::vector<std::pair<std::string, int>> perCue;
-    int taken = 0;
-    for (size_t r = 0; r < rank.size() && taken < kMaxActive; ++r) {
-        Emitter& e = emitters_[(size_t)rank[r].second];
-        const cuedata::CueDef* cd = cues.cueDef(e.cue.c_str());
-        int* count = nullptr;
-        for (auto& pc : perCue) if (pc.first == e.cue) count = &pc.second;
-        if (!count) { perCue.push_back({e.cue, 0}); count = &perCue.back().second; }
-        if (cd && cd->maxConcurrent > 0 && *count >= cd->maxConcurrent) continue;
-        ++*count; ++taken;
-        e.want = true;
-    }
-
     active_ = 0;
     for (Emitter& e : emitters_) {
-        float target = e.want ? 1.0f : 0.0f;
-        e.level += core::clampf(target - e.level, -dt / kEmitterFade, dt / kEmitterFade);
         core::Vec3 at = placeFor(e, listener);
-        if (e.level > 0.0f && e.instance < 0 && !e.done) e.instance = cues.play(e.cue.c_str(), at, core::length(at - listener));
+        if (e.instance >= 0 && !cues.playing(e.instance)) e.instance = -1;      // killed by instance limiting
+        if (e.instance < 0 && e.kind != Emitter::Point)
+            e.instance = cues.play(e.cue.c_str(), at, core::length(at - listener));
         if (e.instance >= 0) {
-            if (e.level <= 0.0f || !cues.playing(e.instance)) {
-                if (!e.loops && !cues.playing(e.instance)) e.done = true;
-                cues.stop(e.instance, 0.0f);
-                e.instance = -1;
-                continue;
-            }
             cues.update(e.instance, at, 0.0f);
-            cues.setVolume(e.instance, e.level);
             ++active_;
         }
     }

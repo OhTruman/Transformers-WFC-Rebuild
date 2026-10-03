@@ -13,6 +13,7 @@ namespace {
 
 constexpr float UU = 0.01f;
 constexpr const char* kTemplate = "FX_Level_Generic_p.FX.Steam_Sm_FX";
+constexpr const char* kMaterial = "FX_Materials_p.Materials.Steam_Mat";    // ParticleModuleRequired.Material
 
 float frand() { return (float)std::rand() / (float)RAND_MAX; }
 float urand(float a, float b) { return a + (b - a) * frand(); }
@@ -100,7 +101,11 @@ void LevelFx::tick(float dt) {
 }
 
 void LevelFx::draw(render::IRenderer& r) const {
-    if (parts_.empty() || tex_ < 0) return;
+    if (parts_.empty()) return;
+    // Rendering's material path: the authored particle colour (ColorOverLife, AlphaOverLife) goes to the
+    // Steam_Mat graph, which owns the emissive / opacity / depth-bias; Systems adds no material terms.
+    const bool viaMaterial = r.evaluatesFxMaterials();
+    if (!viaMaterial && tex_ < 0) return;
     batch_.clear();
     for (const Part& p : parts_) {
         float t = p.age / p.life;
@@ -109,11 +114,14 @@ void LevelFx::draw(render::IRenderer& r) const {
         o.w = o.h = p.size * sample21(kSize, t);
         o.rot = p.rot;
         float c = 0.9f + 0.1f * t;                                       // ColorOverLife (0.9,0.9,1) -> 1
-        o.r = c * 0.5f; o.g = c * 0.5f; o.b = 0.5f;                      // Steam_Mat emissive x 0.5 [MED]
+        if (viaMaterial) { o.r = c; o.g = c; o.b = 1.0f; }
+        else { o.r = c * 0.5f; o.g = c * 0.5f; o.b = 0.5f; }             // GL1 fallback: Steam_Mat emissive x 0.5 [MED]
         o.a = sample21(kAlpha, t);
         batch_.push_back(o);
     }
-    r.drawParticles({tex_, render::ParticleBlend::Translucent, 1.0f, batch_.data(), batch_.size()});
+    render::ParticleBatch b{tex_, render::ParticleBlend::Translucent, 1.0f, batch_.data(), batch_.size()};
+    if (viaMaterial) b.material = kMaterial;
+    r.drawParticles(b);
 }
 
 } // namespace game

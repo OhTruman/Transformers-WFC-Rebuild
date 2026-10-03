@@ -17,6 +17,174 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 04 SYSTEMS — MP_IAC_STREETS WORLD SYSTEMS (2026-10-03, agents/systems)
+
+**Sources:** AssetTools **a23c675** `manifests/mp_iac_streets_complete.json` (counts, presentation-vs-mode
+split), `streets_kismet.json`, `streets_movers.json`, `vertical_slice_audio_concurrency.json`, plus
+ExtractedAssets `audio.json` / `map_fx.json` / `gameplay.json` / `spawnpoints.json`.
+* Read-only RE: `RE-Workspace/notes/MILESTONE03_RUNTIME_SEMANTICS_ASSETTOOLS_7a69756.md` (d50c2a9: P2 pickups,
+  P4 concurrency) and the decompiled script for SeqAct_PlayPlayerPositionalSound, PickupFactory and
+  TnPickupFactory.
+* Read-only coordination: Gameplay `agents/gameplay` 0762f01 `PickupFactory` / `PickupEvent`.
+
+**Confidence:** CONFIRMED ORIGINAL · HIGH · PROVISIONAL · UNKNOWN.
+
+### 1. 70 ambient emitters — native playback (replaces the PROVISIONAL virtualizer)
+* **Accounted for:** 70 = 40 point + 13 line + 17 volume (manifest counts). All are looping auto-play cues of
+  BL_LVL_MP_IAC_STREETS, and no Kismet op toggles them [CONF].
+* **Native model [CONF]:**
+  * Each AudioComponent auto-plays once at level start (bAutoPlay), in authored order.
+  * Registration uses RegisterInstanceLimiting: global per cue asset, kKillFarthest against the listener, and
+    the newcomer is refused when it is the farthest (RE P4).
+  * Line and volume emitters re-Play every tick while not playing (A7).
+  * Placement (closest point on the segment or oriented box), cull, rolloff, SmartPan, occlusion, mixer
+    category and zone reverb are the existing confirmed per-voice rules.
+* **Removed (all invented):** the PROVISIONAL global budget (24 voices), the −48 dB audibility gate and the 0.5 s
+  virtual↔real fades.
+* **Result:** no line/volume cue has more emitters than its limit, so all of those play. Four point cues do, and
+  the instances nearest the level-start listener play:
+
+  | Cue | Emitters | Limit |
+  |---|---|---|
+  | EMIT_FLOURESCENT_LIGHTS | 13 | 5 |
+  | EMIT_ENERGON_LIQUID_CRATERS | 12 | 5 |
+  | EMIT_LAMP_POSTS | 8 | 5 |
+  | EMIT_FLOOD_LIGHTS | 5 | 3 |
+
+  That gives **50 of 70 sounding** throughout (suite and every game run).
+* **HIGH:** a point AmbientSound refused or killed at start never restarts. Engine AmbientSound has no
+  script or tick that replays its AudioComponent, and WFC's AmbientSound class is script-less.
+* **UNKNOWN (native):** whether a listener exists at the native level-start registration; the rebuild registers
+  on the first tick with the spawn camera.
+
+### 96-channel priority stealing (new, needed by the always-on bed)
+* **Measured problem:** with 50 emitters (~61 voices) always on, sustained fire hit the backend's 96-voice
+  ceiling, and new voices were **dropped** (23 in one run), including weapon layers.
+* **Fix:**
+  * cue tables now carry SoundNodeRoot.Priority and the wave-event OverridePriority / Priority
+    (`gen_cues.py`; the table is otherwise byte-identical; map cues are read from audio.json);
+  * each voice gets FMOD channel priority `255 − clamp(Priority, −1, 255)` [CONF RE d50c2a9];
+  * with all **96 channels** busy (Xe-TransEngine.ini MaxChannels [CONF]), a new sound takes the channel of the
+    least important voice. A newcomer less important than every playing voice does not play.
+* **Authored priorities:**
+
+  | Cues | Priority |
+  |---|---|
+  | weapon, vehicle, transform | 200 |
+  | footsteps | 25 |
+  | map emitters | 15 / 80 / 10 |
+  | pools, weapon idle, Optimus idle foley | 0 |
+
+* **HIGH (FMOD Ex internal):** equal priorities give up the quietest voice.
+* **Measured:**
+  * sustained fire takes 12–13 ambient channels;
+  * the only refused starts (3 in one firing run) are Priority-0 cues, as authored;
+  * shots, vehicle, transform and footsteps are never refused.
+
+### 2. Zones / reverb — unchanged, re-validated
+* **Accounted for:** 9 zones and 10 presets (all known to the mixer; one preset, TRAIN_DEPOT, has no zone, as
+  authored). This matches the complete manifest.
+* **Behaviour:** local-player Touch edges, last touch wins, no Exit restoration, explicit previous-preset
+  Disable, 0.25 s linear fades, and the priority/fade rules. All existing suite checks pass.
+
+### 3. Timed one-shot pools — CONFIRMED (script + Kismet links)
+* **11 pools** (audio.json = streets_kismet.json).
+* **Wiring:** zone "Scene 0 Begun" → sub-sequence START → pool Play; "Scene 0 Ended" → STOP → pool Stop.
+* **SeqAct_PlayPlayerPositionalSound (decompiled):**
+  * Play arms DelayRemaining = RandRange(DelayMin, DelayMax);
+  * on expiry it plays at RandRange(0, 359)° yaw and RandRange(DistanceMin, DistanceMax) from the listener
+    (no Source Actor linked);
+  * it uses a WorldInfo AudioComponent at a fixed location, and re-arms while Looping.
+* **Class defaults** (verified in authored.db): Looping true, DelayMin 3, DelayMax 5, Distance 2000. Exterior
+  overrides only DelayMax 8.
+* The existing implementation already matched; nothing changed.
+
+### 4. Map FX state / lifetime
+* **The 8 Steam_Sm_FX level emitters [CONF]:** bAutoActivate true, CullDistance 300000 UU (never reached), no
+  Kismet state changes, and they loop forever. They are simulated by LevelFx as before.
+* **Rendering handoff:** on Rendering's material path, LevelFx now passes `FX_Materials_p.Materials.Steam_Mat`
+  and the authored particle colour (ColorOverLife / AlphaOverLife). It no longer bakes the Steam_Mat emissive
+  itself, so the material logic isn't duplicated; the GL1 fallback is unchanged.
+* **Not reproduced:** SecondsBeforeInactive 1.0 (the update pause while unseen, which has no visible effect).
+* **Pickup particle systems:** still not simulated; the module-flag semantics stay UNKNOWN (PASS 6).
+
+### 5. Pickup presentation ↔ Gameplay
+* **Correction (RE d50c2a9 P2):** PreBeginPlay → InitializePickup → SetPickupMesh → SetPickupVisible, so
+  ammo-crate highlight beams are **active from map start**. PASS 6's "inactive until the first respawn" (from
+  bAutoActivate=false) was wrong. `reset()` is now the available state.
+* **New adapters:** `PickupPresentation::onTaken(actor, cues, receiverEmitter, dist)` (AnnouncePickup + SetPickupHidden)
+  and `onRespawned(actor)` (SetPickupVisible), keyed by the gameplay.json actor name.
+  * They consume Gameplay's `World::pickupEvents()` (Taken / Respawned).
+  * No timers, so the game rules aren't implemented twice.
+* **Integration glue** (World::tick, after Gameplay's factories tick; the integration owner adds it when merging
+  0762f01):
+  ```
+  for (const PickupEvent& e : pickupEvents_) {
+      const char* a = pickupFactories_[(size_t)e.factory]->name().c_str();
+      if (e.type == PickupEvent::Type::Taken) pickupFx_.onTaken(a, cues_, atPawn(), core::length(e.receiverPos - listenerPos_));
+      else pickupFx_.onRespawned(a);
+  }
+  ```
+  * Gameplay's `PickupEvent::pickupSound` duplicates the authored cue. Systems plays from its own table, so the
+    sound must not also be played by Gameplay.
+* **Authored-data conflict (not slice-relevant):** AssetTools reports the flag/bomb objective factories inherit
+  ShouldDisplayHighlightFx **true**, while RE P2 says they inherit **false**. Objectives are not instantiated in
+  the slice's mode.
+
+### 6. Moving world sources
+* `streets_movers.json` references no sound. No mover sound exists in the code: none for the domes, SkyBeam or
+  totems.
+
+### 7. Cohesion / attachment
+* **Audio-attach (Experimental spy):** 316 pass / 0 FAIL / 14 KNOWN.
+  * All 14 are `PP_DECO_MECH_*` zone pool one-shots, world-fixed by design.
+  * **0 player-owned sounds left behind.** Player sounds (footsteps, landing, transform, weapon, vehicle,
+    boost) follow their owner; map emitters and pools stay world-owned.
+* **Occlusion:** 43–47 of the bed's instances are occluded behind geometry at the spawn (the per-instance line
+  check, −6 dB), as designed.
+
+### Validation
+* **Suite:** `tools/systems/audio_native_suite.cpp` **586 pass / 0 fail**. New checks:
+  * world bed: 70 / 40 / 13 / 17 emitters, 9 zones, 10 presets in the mixer, 11 authored pools;
+  * per-cue start limiting (min(n, limit) per cue; the fluorescent lights playing nearest); 50 of 70 at start;
+  * line re-play vs point no-restart;
+  * channel priority (SHOOT 55 / 60) and stealing on the real backend (priority 55 takes a 240 channel, 250 is
+    refused);
+  * pickup spawn = available with the beam on, plus the name-keyed adapters.
+* **Regression:** wfc_fidelity 194/0/19; collision 0 mismatches; probe 31/0/1 (1 KNOWN Rendering).
+* **Frame time** (ms, 120-frame windows: range / mean):
+
+  | Scenario | Range | Mean |
+  |---|---|---|
+  | idle | 6.1–11.4 | 7.0 |
+  | traversal | 4.6–11.5 | 5.7 |
+  | firing | 5.4–15.3 | 10.4 |
+  | sustained | 4.8–14.2 | 9.2 (PASS 7 6.5–14.1 / 10.0) |
+  | transform | 3.8–10.5 | 4.8 |
+  | jump | 4.7–10.5 | 6.0 |
+  | vehicle | 3.8–8.6 | 4.7 |
+  | Boost cycle | 3.9–9.7 | 5.0 |
+  | Nitro | 4.4–7.3 | 5.1 |
+  | dense region (start 16) idle | 6.5–11.8 | 7.7 |
+  | dense sustained | 6.9–13.0 | 8.6 |
+  | dense walk | 5.0–11.6 | 6.0 |
+
+  Audio mix 1.3–1.6 ms per 21 ms block (audio thread).
+* **Cleanup:** particles/meshes → 0 after every non-firing run; queued events bounded; cues ≈ 51–54 at rest =
+  the bed + idle foley. No leaks.
+
+### Remaining
+* **UNKNOWN:**
+  * whether a native level-start listener exists;
+  * FMOD equal-priority / virtual-voice internals;
+  * pickup particle module flags;
+  * the native particle mesh-material fallback.
+* **Gameplay:** merge the pickup-event glue above; vehicle jump.
+* **Rendering:** Steam_Mat and pickup FX through the material path.
+* **AssetTools / RE:** the objective ShouldDisplayHighlightFx conflict.
+
+---
+
 ## MILESTONE 03 SYSTEMS PASS 7 — VEHICLE LOOP ENABLE CONFIRMED (2026-10-02, agents/systems)
 
 **Source:** `RE-Workspace/notes/MILESTONE03_RUNTIME_SEMANTICS_ASSETTOOLS_7a69756.md` §P1 and its VEHICLE LOOP

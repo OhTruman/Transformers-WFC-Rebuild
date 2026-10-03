@@ -1,5 +1,7 @@
 #include "game/PickupPresentation.h"
 
+#include <cstring>
+
 namespace game {
 namespace {
 using FactoryDef = PickupPresentation::FactoryDef;
@@ -15,9 +17,12 @@ const PickupPresentation::FactoryDef& PickupPresentation::def(int i) { return kF
 
 void PickupPresentation::reset() {
     state_.assign((size_t)kCount, EffectState{});
-    for (int i = 0; i < kCount; ++i)
-        state_[(size_t)i].customActive = kFactories[i].customEffect != nullptr;   // bAutoActivate default true
-    // PickupEffect: archetype bAutoActivate=false -> inactive until the first SetPickupVisible.
+    for (int i = 0; i < kCount; ++i) setPickupVisible(i);     // the PreBeginPlay state (see header)
+}
+
+int PickupPresentation::find(const char* actor) {
+    for (int i = 0; i < kCount; ++i) if (std::strcmp(kFactories[i].actor, actor) == 0) return i;
+    return -1;
 }
 
 void PickupPresentation::setPickupHidden(int i) {
