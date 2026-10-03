@@ -815,11 +815,14 @@ void World::tick(float dt) {
             ambT = 0.0f;
             audio::MixStats ms;
             bool have = audio_ && audio_->mixStats(ms);
-            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d (max %d, dropped %d, stolen %d) wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block",
+            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d (max %d, dropped %d, stolen %d) wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block live=%zu backendVoices=%d pcm=%.1fMB map=%s",
                      ambient_.zoneName(), ambient_.activeEmitters(), ambient_.emitterCount(), ambient_.oneShotsPlayed(),
                      cues_.liveInstances(), cues_.occludedInstances(), occlusionRays_ / 0.5f, cues_.pendingEvents(), have ? ms.voices : -1,
                      have ? ms.peakVoices : -1, have ? ms.droppedVoices : -1, have ? ms.stolenVoices : -1, have ? ms.wetVoices : -1,
-                     have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f);
+                     have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f,
+                     cues_.liveInstances(), audio_ ? audio_->activeVoices() : -1, audio_ ? audio_->residentBytes() / 1048576.0 : 0.0,
+                     audioMap_.c_str());
+            if (cues_.pendingEvents() > 30) LOG_INFO("AMB pending: %s", cues_.pendingSummary().c_str());
             occlusionRays_ = 0;
         }
         cues_.tick(dt);

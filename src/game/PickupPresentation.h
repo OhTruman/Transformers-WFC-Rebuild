@@ -19,13 +19,15 @@ public:
     struct PickupClassSound { const char* factoryClass; const char* inventoryClass; const char* pickupSound; };
     static int classCount();
     static const PickupClassSound& classDef(int i);
-    // PickupSound (SoundCues table name) of a factory class, null if none authored / unknown class.
-    static const char* pickupSoundFor(const char* factoryClass);
+    // PickupSound (SoundCues table name) of a factory class - or of a placed factory's actor name
+    // ("<Class>_<N>", e.g. "TnAmmoCratePickupFactory_10561": the class is the name without its numeric suffix) -
+    // null if none authored / unknown class.
+    static const char* pickupSoundFor(const char* factoryClassOrActor);
 
-    // Gameplay PickupEvent Taken: Inventory.AnnouncePickup (PickupSound on the receiving pawn). Returns the
-    // sound's cue instance (-1 = no PickupSound / unknown class).
-    static int onTaken(const char* factoryClass, SoundCues& cues, const SoundCues::Emitter& receiver, float listenerDist) {
-        const char* cue = pickupSoundFor(factoryClass);
+    // Gameplay PickupEvent Taken: Inventory.AnnouncePickup (PickupSound on the receiving pawn). Accepts a factory
+    // class or actor name. Returns the sound's cue instance (-1 = no PickupSound / unknown class).
+    static int onTaken(const char* factoryClassOrActor, SoundCues& cues, const SoundCues::Emitter& receiver, float listenerDist) {
+        const char* cue = pickupSoundFor(factoryClassOrActor);
         return cue ? cues.play(cue, receiver, listenerDist) : -1;
     }
 };

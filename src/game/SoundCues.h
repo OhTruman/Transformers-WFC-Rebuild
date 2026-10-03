@@ -162,6 +162,8 @@ public:
     int oldestInstance(const char* cue) const;
     size_t liveInstances() const { return live_.size(); }
     size_t pendingEvents() const { return pending_.size(); }
+    // Diagnostics: "cue x count" for queued wave events, most first.
+    std::string pendingSummary() const;
     // Diagnostics: current resolved position of an instance.
     bool instancePos(int instance, core::Vec3& out) const;
 

@@ -243,6 +243,21 @@ int SoundCues::stopNonMapInstances() {
     return n;
 }
 
+std::string SoundCues::pendingSummary() const {
+    std::vector<std::pair<int, int>> n;                       // (count, cue)
+    for (const Pending& p : pending_) {
+        int c = -1;
+        for (const Instance& x : live_) if (x.id == p.inst) { c = x.cue; break; }
+        bool found = false;
+        for (auto& e : n) if (e.second == c) { ++e.first; found = true; break; }
+        if (!found) n.push_back({1, c});
+    }
+    std::sort(n.begin(), n.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    std::string s;
+    for (const auto& e : n) s += (e.second >= 0 ? cues_[(size_t)e.second].name : std::string("<orphan>")) + " x" + std::to_string(e.first) + " ";
+    return s;
+}
+
 bool SoundCues::prefetch(const char* cue) {
     int c = findCue(cue);
     if (c < 0) return false;

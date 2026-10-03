@@ -73,6 +73,8 @@ public:
     // PickupSound attached to the receiving (player) pawn. Respawn plays nothing. Pickup effects and their
     // state are Rendering's (WfcMapFx). Returns the cue instance (-1 = none authored / unknown class).
     int playPickupSound(const char* factoryClass, const core::Vec3& receiverPos);
+    // (integration/milestone-04 glue calls pickupFx_.onTaken(actorName, ...); kept for that call site)
+    PickupPresentation& pickupPresentation() { return pickupFx_; }
     SoundCues& cues() { return cues_; }
 
     // Truck nitro / ram state (Systems-owned, read-only for Gameplay: nitroActive(), ramActive(),
@@ -133,6 +135,7 @@ private:
 
     audio::IAudio* audio_ = nullptr;
     SoundCues cues_;
+    PickupPresentation pickupFx_;           // stateless: onTaken resolves a factory class or actor name
     // Cue owners (SoundCues::Emitter::owner): attached AudioComponents follow these every tick.
     // Owner ids: the player pawn (its mesh origin, or a bone/socket of the displayed skeleton) and
     // the Ion Blaster (its mesh origin, or a WeaponMesh socket such as MuzzleFlash).

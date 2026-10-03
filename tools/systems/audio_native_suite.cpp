@@ -602,6 +602,9 @@ static void testAuthored() {
     game::SoundCues::Emitter recipient{pawn, 0, {0, 0, 0}, ""};
     int id = PP::onTaken("TnAmmoCratePickupFactory", cues, recipient, 5.0f);
     CHECK(PP::onTaken("NoSuchFactory", cues, recipient, 5.0f) == -1, "unknown factory class ignored");
+    CHECK(PP::pickupSoundFor("TnHealthPickupFactory_13806") && !std::strcmp(PP::pickupSoundFor("TnHealthPickupFactory_13806"), "BL_HUD_INTERFACE.HEALTH_PU_ENERGON") &&
+          !PP::pickupSoundFor("TnHealthPickupFactoryX") && !PP::pickupSoundFor("TnHealthPickupFactory_") && !PP::pickupSoundFor("TnHealthPickupFactory_12a"),
+          "placed actor names resolve to their class (<Class>_<N>); other suffixes do not");
     CHECK(id >= 0 && rec.n > first, "ammo pickup sound plays (%d voices)", rec.n - first);
     pawn = Vec3{14, 0, 3};
     for (int k = 0; k < 3; ++k) cues.tick(1.0f / 60.0f);
@@ -1062,7 +1065,79 @@ static void testFrontend() {
     delete a;
 }
 
+// ---------------------------------------------------------------- pickup / map-event audio ownership (M05 phase 4)
+static void testMapEventAudio() {
+    std::printf("[pickup / map-event audio]\n");
+    assets::Json inv = loadJson(kMan + "streets_actor_inventory.json");
+    assets::Json mv = loadJson(kMan + "streets_movers.json");
+    assets::Json ks = loadJson(kMan + "streets_kismet.json");
+    assets::Json aj = loadJson(streetsAudio());
+    // Every placed AudioComponent belongs to an AmbientSound (the 40 point emitters the bed plays); none to a mover
+    // or a mode-gated actor.
+    std::set<std::string> movers;
+    for (size_t i = 0; i < mv["movers"].size(); ++i) movers.insert(mv["movers"][i]["actor"].asString());
+    int ambientAc = 0, otherAc = 0, moverAc = 0;
+    for (size_t i = 0; i < inv["actors"].size(); ++i) {
+        const assets::Json& act = inv["actors"][i];
+        for (size_t c = 0; c < act["components"].size(); ++c)
+            if (act["components"][c]["class"].asString() == "AudioComponent") {
+                if (act["class"].asString() == "AmbientSound") ++ambientAc; else ++otherAc;
+                if (movers.count(act["actor"].asString())) ++moverAc;
+            }
+    }
+    CHECK(ambientAc == 40 && (int)aj["emitters"]["point"].size() == 40 && otherAc == 0 && moverAc == 0,
+          "placed AudioComponents: %d on AmbientSound (= 40 point emitters), %d elsewhere, %d on movers", ambientAc, otherAc, moverAc);
+    // No emitter actor of the bed is a mover; movers reference no sound.
+    int emitterOnMover = 0;
+    for (const char* k : {"point", "line", "volume"})
+        for (size_t i = 0; i < aj["emitters"][k].size(); ++i) {
+            std::string a2 = aj["emitters"][k][i]["actor"].asString();
+            for (const auto& m : movers) if (!a2.empty() && m.size() >= a2.size() && m.compare(m.size() - a2.size(), a2.size(), a2) == 0) ++emitterOnMover;
+        }
+    std::ifstream mf(kMan + "streets_movers.json"); std::stringstream mss; mss << mf.rdbuf();
+    const std::string mtxt = mss.str();
+    CHECK(emitterOnMover == 0 && mtxt.find("SoundCue") == std::string::npos && mtxt.find("AudioComponent") == std::string::npos,
+          "movers carry no authored sound (%d bed emitters on movers)", emitterOnMover);
+    // Audio Kismet is not mode-gated: no audio op's trigger chain passes a SeqCond (the only GameRuleActive ops
+    // gate the objective-base ToggleHidden in BASE).
+    int gated = 0;
+    for (size_t i = 0; i < ks["audio_ops"].size(); ++i) {
+        const assets::Json& op = ks["audio_ops"][i];
+        for (size_t c = 0; c < op["trigger_chains"].size(); ++c)
+            for (size_t k = 0; k < op["trigger_chains"][c].size(); ++k) {
+                const std::string o = op["trigger_chains"][c][k]["op"].asString() + op["trigger_chains"][c][k]["event"].asString();
+                if (o.find("SeqCond") != std::string::npos) ++gated;
+            }
+    }
+    CHECK(ks["audio_ops"].size() == 29 && gated == 0, "29 Kismet audio ops, none behind a game-rule condition (%d)", gated);
+
+    // Pickup event stream (Gameplay PickupEvent order: Taken ... Respawned ... Taken): one PickupSound per Taken,
+    // on the receiving pawn; Respawned plays nothing (Systems is not called for it).
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    Vec3 pawn{5, 0, 5};
+    cues.setResolver([&](int owner, const std::string&, const Vec3& off, Vec3& out) { if (owner != 0) return false; out = pawn + off; return true; });
+    struct Ev { const char* cls; bool taken; };
+    const Ev evs[] = {{"TnAmmoCratePickupFactory", true}, {"TnAmmoCratePickupFactory", false}, {"TnHealthPickupFactory", true},
+                      {"TnHealthPickupFactory", false}, {"TnHealthPickupFactory", true}, {"TnOverShieldPickupFactory", true},
+                      {"TnOverShieldPickupFactory", false}, {"TnGameObjectivePickupFactoryFlag", true}};
+    int plays = 0, expected = 0;
+    for (const Ev& e : evs) {
+        if (!e.taken) continue;                                   // Respawned: nothing to play
+        const char* snd = game::PickupPresentation::pickupSoundFor(e.cls);
+        if (snd) ++expected;
+        const int before = cues.activeInstances(snd ? snd : "");
+        const int id = game::PickupPresentation::onTaken(e.cls, cues, game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f);
+        if (id >= 0) ++plays;
+        if (snd) CHECK(cues.activeInstances(snd) == before + 1, "%s Taken: exactly one %s instance", e.cls, snd);
+        for (int k = 0; k < 10; ++k) cues.tick(1.0f / 30.0f);
+    }
+    CHECK(plays == expected && expected == 4, "4 sounding takes (the flag inventory authors no PickupSound) (%d)", plays);
+    for (int k = 0; k < 300; ++k) cues.tick(1.0f / 30.0f);
+    CHECK(cues.liveInstances() == 0 && cues.pendingEvents() == 0, "pickup sounds retire (no leak)");
+}
+
 int main() {
+    testMapEventAudio();
     testFrontend();
     testLifecycle();
     testChannelStealing();

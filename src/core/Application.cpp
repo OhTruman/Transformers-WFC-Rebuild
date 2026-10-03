@@ -91,6 +91,8 @@ void Application::run() {
         }
         if (autoTransform > 0 && frame == autoTransform) world_.player().pawn().beginTransform();
         if (const char* s = std::getenv("WFC_PRESSTRANSFORM")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Transform] = true;
+        if (const char* s = std::getenv("WFC_PRESSTRANSFORM_EVERY"))    // soak: transform every N frames
+            if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0) input.pressed[(int)platform::Button::Transform] = true;
 
         if (input.wasPressed(platform::Button::CameraToggle)) {
             mouseCaptured_ = !mouseCaptured_;
