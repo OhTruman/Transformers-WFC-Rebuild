@@ -1,0 +1,13 @@
+[info ] SYNTHETIC VALIDATOR SELF-TEST INPUT - not product output
+[info ] start 5/84: TnTeamPlayerStart_12584 (TnTeamPlayerStart, cluster TnSpawnCluster_7810) at 98.6 -716.8 -652.8
+[info ] MATCH init mode=TDM rules=TransGame.TnGameRules_ScoreKillsTDM,TransGame.TnGameRules_TrackKillsMP,TransGame.TnGameRules_ReportGameProgressTime,TransGame.TnGameRules_ReportGameProgressKills teams=2 time_limit_s=600 score_limit=none
+[info ] MATCH spawn player=0 team=0 start=TnTeamPlayerStart_12584 pos=98.6,-716.8,-652.8
+[info ] MATCH timer remaining_s=600
+[info ] MATCH timer remaining_s=599
+[info ] MATCH kill killer=0 victim=1 killer_team=0 victim_team=1 weapon=IonBlaster
+[info ] MATCH score team=0 score=1
+[info ] MATCH death player=1 pos=0,0,0
+[info ] MATCH respawn player=1 start=TnTeamPlayerStart_12584 delay_s=5.0
+[info ] MATCH timer remaining_s=0
+[info ] MATCH end reason=time_limit winner=0 t=600.2
+[info ] MATCH cleanup

@@ -19,7 +19,9 @@ $slice = "F:\Transformers Rebuild\ExtractedAssets\VerticalSlice\Maps\MP_IAC_Stre
 $au = Get-Content -Raw "$slice\audio.json" | ConvertFrom-Json
 $gp = Get-Content -Raw "$slice\gameplay.json" | ConvertFrom-Json
 $zoneOf = @{}; foreach ($s in $au.player_start_zones.starts_detail) { $zoneOf[$s.actor] = @($s.zones) }
-$ffa = @($gp.player_starts | Where-Object { $_.class -eq "TnFreeForAllPlayerStart" })
+# WFC_SPAWN_INDEX = k picks the k-th TnFreeForAllPlayerStart in spawnpoints.json order (World::loadSpawn, DM).
+$sp = Get-Content -Raw "$slice\spawnpoints.json" | ConvertFrom-Json
+$ffa = @($sp.points | Where-Object { $_.class -eq "TnFreeForAllPlayerStart" -and @($_.location_gltf).Count -ge 3 })
 $res = New-WfcResults
 function Run($name, $envs, $frames) {
     $dir = Join-Path $OutDir $name
@@ -31,7 +33,7 @@ function Run($name, $envs, $frames) {
 function Parse($lines) {
     $o = @{ zones = @(); presets = @(); maxActive = 0; total = -1; oneShots = 0; levelfx = 0; spawn = $null; inst = $null }
     foreach ($l in $lines) {
-        if ($l -match "World: spawn at (-?[\d.]+), (-?[\d.]+), (-?[\d.]+)") { $o.spawn = @([double]$Matches[1], [double]$Matches[2], [double]$Matches[3]) }
+        if ($l -match "World: spawn at (-?[\d.]+), (-?[\d.]+), (-?[\d.]+)" -or $l -match "start \d+/\d+: \S+ \(\S+, cluster \S*\) at (-?[\d.]+) (-?[\d.]+) (-?[\d.]+)") { $o.spawn = @([double]$Matches[1], [double]$Matches[2], [double]$Matches[3]) }
         elseif ($l -match "ambient: (\d+) map cues, (\d+) emitters, (\d+) zones") { $o.inst = @([int]$Matches[1], [int]$Matches[2], [int]$Matches[3]) }
         elseif ($l -match "ambient: entered zone (\S+) \(from [^;]*; preset (\S+?),") { $o.zones += $Matches[1]; $o.presets += $Matches[2] }
         elseif ($l -match "AMB zone=\S* emitters=(\d+)/(\d+) oneShots=(\d+) .* levelfx=(\d+)") {
@@ -48,8 +50,8 @@ for ($k = 0; $k -lt $ffa.Count; $k++) {
     if ($p.inst) { $inst = $p.inst }
     if (-not $p.inst) { Add-WfcResult $res "m04_ambient.start_$k" "SKIP" $null "no ambient runtime line (exit $($r.rc))"; continue }
     # nearest authored FFA start to the logged spawn (the spawn is lifted onto the floor: compare XZ)
-    $best = $null; $bd = 1e9
-    foreach ($s in $ffa) { $L = $s.location_gltf; $d = [Math]::Sqrt([Math]::Pow($L[0] - $p.spawn[0], 2) + [Math]::Pow($L[2] - $p.spawn[2], 2)); if ($d -lt $bd) { $bd = $d; $best = $s } }
+    $best = $ffa[$k % $ffa.Count]; $bd = 0.0
+    if ($p.spawn) { $L = $best.location_gltf; $bd = [Math]::Sqrt([Math]::Pow($L[0] - $p.spawn[0], 2) + [Math]::Pow($L[2] - $p.spawn[2], 2)) }   # cross-check when the tree logs its spawn
     $want = @($zoneOf[$best.actor]); $got = if ($p.zones.Count) { $p.zones[0] } else { "NONE" }
     $ok = if ($want.Count) { $want -contains $got } else { $got -eq "NONE" }
     $rows += [pscustomobject][ordered]@{ index = $k; start = $best.actor; match_m = [Math]::Round($bd, 2); authored_zone = $(if ($want.Count) { $want -join "|" } else { "NONE" }); product_zone = $got; preset = $(if ($p.presets.Count) { $p.presets[0] } else { "" }); ok = $ok }

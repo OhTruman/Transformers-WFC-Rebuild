@@ -83,7 +83,8 @@ function Add-WfcResult($List, [string]$Id, [string]$Status, $Measured = $null, [
 }
 function Write-WfcReport($List, [string]$Path) {
     $sum = [ordered]@{}
-    foreach ($s in "PASS", "FAIL", "KNOWN", "INFO", "SKIP") { $sum[$s.ToLower()] = @($List.ToArray() | Where-Object status -eq $s).Count }
+    # HUMAN = HUMAN CHECK REQUIRED: a measured anomaly candidate whose correctness only a person can judge.
+    foreach ($s in "PASS", "FAIL", "KNOWN", "INFO", "SKIP", "HUMAN") { $sum[$s.ToLower()] = @($List.ToArray() | Where-Object status -eq $s).Count }
     [ordered]@{ summary = $sum; results = $List.ToArray() } | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 $Path
     return $sum
 }
