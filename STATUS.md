@@ -602,6 +602,21 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 06 (2026-10-03, agents/rendering) — human playtest translucency / smoke / glass
+- UE3 translucency pass: every translucent primitive is drawn after all opaque geometry, back to front. This fixes glass
+  and fog sheets being overdrawn by BSP, dark cards showing through ramps, and soft fades computed against incomplete depth.
+- Shipped Xenon PS semantics:
+  - additive colour x Opacity;
+  - Opacity < 1/255 killed;
+  - DepthBiasedAlpha default Bias 0.5;
+  - BiasScaleInput only when uniform.
+- The distance-dependent blue / purple / red FogSheet curtains are gone.
+- Particles:
+  - DynamicParameter output index fixed;
+  - steam uses its authored 'SteamColor' (ColorByParameter);
+  - steam has soft intersections and visibly animates.
+- Diagnostics: WFC_M05TRANS (pre-M06 behaviour for A/B), WFC_IMMEDIATETRANS. Self-tests: shadows 32/32, DLE 20/20.
+
 ## RENDERING MILESTONE 05 (2026-10-03, agents/rendering) — Streets normal-play completion
 - Consumes Gameplay d122ef4 state: setMapClock (movers / totem / pickup spin), setActiveGameRules, setActorHidden, setMapEffectState; KOTH active ring.
 - Content meshes placed P*A*P (corrects M04's sideways totems / destructible / FX meshes).
