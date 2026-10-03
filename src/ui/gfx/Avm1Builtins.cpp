@@ -821,8 +821,7 @@ void VM::installBuiltins() {
         std::shared_ptr<const MovieDef> def;
         uint16_t id = 0;
         Player* p = vm.player();
-        std::shared_ptr<const MovieDef> root = p->loadDef(p->rootDef() ? p->rootDef()->path() : "");
-        if (!root || !p->resolveExport(root, linkage, def, id)) return Value::undef();
+        if (!p->findExportedBitmap(linkage, def, id)) return Value::undef();
         const CharDef* cd = def->character(id);
         if (!cd || cd->type != CharType::Bitmap) return Value::undef();
         Object* o = vm.newObject(bdProto);

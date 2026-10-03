@@ -209,6 +209,25 @@ bool Player::resolveExport(const std::shared_ptr<const MovieDef>& def, const std
     return false;
 }
 
+bool Player::findExportedBitmap(const std::string& linkage, std::shared_ptr<const MovieDef>& outDef, uint16_t& outId) {
+    auto isBitmap = [](const std::shared_ptr<const MovieDef>& d, uint16_t id) {
+        const CharDef* c = d ? d->character(id) : nullptr;
+        return c && c->type == CharType::Bitmap;
+    };
+    if (resolveExport(rootDef_, linkage, outDef, outId) && isBitmap(outDef, outId)) return true;
+    std::vector<std::shared_ptr<const MovieDef>> loaded;
+    for (auto& [k, d] : defs_) if (d) loaded.push_back(d);
+    for (auto& d : loaded) if (resolveExport(d, linkage, outDef, outId) && isBitmap(outDef, outId)) return true;
+    // Libraries imported by the loaded movies (e.g. ButtonIcons.swf through SharedComponents).
+    for (auto& d : loaded)
+        for (const ImportDef& im : d->imports) {
+            std::string path = resolveMovieUrl ? resolveMovieUrl(im.url, d->dir()) : "";
+            std::shared_ptr<const MovieDef> lib = path.empty() ? nullptr : loadDef(path);
+            if (lib && resolveExport(lib, linkage, outDef, outId) && isBitmap(outDef, outId)) return true;
+        }
+    return false;
+}
+
 const FontDef* Player::resolveFont(const std::string& nameIn, bool bold, bool italic, const MovieDef* def) {
     std::string name = nameIn;
     auto fm = fontMap.find(name);
@@ -943,6 +962,12 @@ void Player::renderObject(const DisplayObject* d, const Matrix& m, const CXForm&
             out.push_back(it);
         }
         for (const GlyphRun& g : tf->glyphs) {
+            if (!g.image.empty()) {
+                RenderItem it; it.type = RenderItem::Image; it.imagePath = g.image; it.imgW = g.imgW; it.imgH = g.imgH;
+                it.m = wm * Matrix{1, 0, 0, 1, g.x, g.y}; it.cx = wc; it.owner = d;
+                out.push_back(it);
+                continue;
+            }
             if (!g.font || g.glyph < 0 || g.glyph >= (int)g.font->glyphs.size()) continue;
             float s = g.size / g.font->emSize();
             RenderItem it; it.type = RenderItem::Glyph; it.shape = &g.font->glyphs[(size_t)g.glyph];

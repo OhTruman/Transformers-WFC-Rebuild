@@ -543,6 +543,33 @@ void VM::installDisplayBuiltins() {
         if (tf && arg(a, 0).isObject()) applyFormatObject(vm, a[0].o, tf->newFormat);
         return Value::undef();
     });
+    // GFx extension: TextField.setImageSubstitutions([{subString, image: BitmapData, width, height, baseLineY}, ...]).
+    method(vm, T, "setImageSubstitutions", [](VM& vm, const Value& self, Args& a) -> Value {
+        gfx::TextField* tf = textOf(self);
+        if (!tf) return Value::undef();
+        tf->imageSubs.clear();
+        Value list = arg(a, 0);
+        std::vector<Value> items;
+        if (list.isObject() && list.o->kind == ObjKind::Array) items = list.o->elems;
+        else if (list.isObject()) items.push_back(list);
+        for (const Value& it : items) {
+            if (!it.isObject()) continue;
+            gfx::TextField::ImageSub sub;
+            std::string key = vm.toString(vm.get(it.o, "subString"));
+            for (unsigned char ch : key) sub.key.push_back((char16_t)ch);
+            Value img = vm.get(it.o, "image");
+            if (!img.isObject()) continue;
+            sub.path = vm.toString(vm.get(img.o, "__path"));
+            sub.natH = (float)vm.toNumber(vm.get(img.o, "height"));
+            Value w = vm.get(it.o, "width"), h = vm.get(it.o, "height"), b = vm.get(it.o, "baseLineY");
+            sub.w = w.isUndef() ? (float)vm.toNumber(vm.get(img.o, "width")) : (float)vm.toNumber(w);
+            sub.h = h.isUndef() ? sub.natH : (float)vm.toNumber(h);
+            sub.baseLineY = b.isUndef() ? sub.natH : (float)vm.toNumber(b);
+            tf->imageSubs.push_back(sub);
+        }
+        tf->layoutDirty = true;
+        return Value::undef();
+    });
     method(vm, T, "getNewTextFormat", [](VM& vm, const Value& self, Args&) -> Value {
         gfx::TextField* tf = textOf(self);
         return tf ? Value(formatToObject(vm, tf->newFormat)) : Value::undef();

@@ -10,6 +10,7 @@
 namespace platform { class IWindow; }
 namespace render { class IRenderer; }
 namespace frontend { class FrontendRuntime; struct MatchLaunch; }
+namespace ui { class GfxPresenter; }
 
 namespace core {
 
@@ -31,8 +32,11 @@ private:
     bool loadMatch(const frontend::MatchLaunch& m);
     void unloadMatch();
     void drawFrontendFrame();
+    void attachPresenter();
     std::unique_ptr<frontend::FrontendRuntime> frontend_;
     bool escWasDown_ = false;
+    ui::GfxPresenter* presenter_ = nullptr;   // owned by frontend_
+    std::string pendingShot_;
 
     void updateTitleHud(double realDt);
     void runPickupTest();

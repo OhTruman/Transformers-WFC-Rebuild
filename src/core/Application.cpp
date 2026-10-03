@@ -83,6 +83,7 @@ bool Application::init() {
     if (wantsFrontendBoot()) {
         frontend_ = std::make_unique<frontend::FrontendRuntime>();
         if (frontend_->init()) {
+            attachPresenter();
             window_->setMouseCaptured(false);
             mouseCaptured_ = false;
             LOG_INFO("Init complete (frontend boot).");

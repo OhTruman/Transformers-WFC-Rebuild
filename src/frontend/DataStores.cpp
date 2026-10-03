@@ -64,6 +64,12 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:CurrentRound>") return "1";
     if (markup == "<CurrentGame:ProgressStatusTitle>" || markup == "<CurrentGame:ProgressStatusMessage>") return "";
     if (markup == "<PlayerOwner:PrimeModeActive>") return "0";
+    // No profile / gamertag service: the local player's name is the rebuild profile name [PARTIAL].
+    if (markup == "<PlayerOwner:PlayerName>") return playerName();
+    if (markup == "<PlayerOwner:TeamID>") return std::to_string(inMatch ? flow_.currentMatch().teamIndex : L.localTeam);
+    if (markup == "<PlayerOwner:Score>") return "0";
+    // TnGameReplicationInfo.MessageOfTheDay is authored in TransGame.int [CONFIRMED data].
+    if (markup == "<CurrentGame:MessageOfTheDay>") return cat_.localize("TransGame", "TnGameReplicationInfo", "MessageOfTheDay");
     if (markup == "<OnlinePlayerData:ProfileData.HasAdjustedGamma>") return "1";   // rebuild: no brightness calibration screen pending
     if (markup == "<OnlinePlayerData:ProfileData.UseAllRegionMatchmaking>") return written_.count(markup) ? written_[markup] : "0";
     auto w = written_.find(markup);
@@ -82,6 +88,32 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
             c.rows.push_back({std::to_string(m.mapId), m.mapFilename, m.friendlyName, m.imagePath, types, std::to_string(m.faction),
                               std::to_string(m.presenceId)});
             c.enabled.push_back(m.hasRequiredAssets);
+        }
+        return true;
+    }
+    if (markup == "<CurrentGame:Players>") {
+        // The local player is the only PRI (no online party / session) [offline reduction].
+        // Profile progression (levels / characters) is not modelled yet: those columns read empty [PARTIAL].
+        c.columns = {"PlayerName", "TeamID", "TeamName", "Score", "Kills", "Deaths", "IsDead", "HeadsetState", "PlayerIconicCharacterName",
+                     "_CurrentPower", "IsConnecting", "PrimeModeActive", "CurrentCharacterString", "SelectedCharacterString",
+                     "PlayerLevelLeader", "PlayerLevelScientist", "PlayerLevelScout", "PlayerLevelSoldier"};
+        bool inMatch = flow_.level() == LevelKind::Match;
+        int team = inMatch ? flow_.currentMatch().teamIndex : flow_.lobby().localTeam;
+        std::string teamName = team == 0 ? cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName")
+                             : team == 1 ? cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName") : "";
+        c.rows.push_back({playerName(), std::to_string(team), teamName, "0", "0", "0", "0", "0", "", "0", "0", "0", "", "", "", "", "", ""});
+        c.enabled.push_back(true);
+        return true;
+    }
+    if (markup == "<CurrentGame:Teams>") {
+        // Team game: Teams[0] TnFactionTeamAutobots, Teams[1] TnFactionTeamDecepticons [RE 5.3].
+        c.columns = {"TeamName", "TeamID", "Score"};
+        bool inMatch = flow_.level() == LevelKind::Match;
+        int gts = inMatch ? flow_.currentMatch().gameTeamStatus : flow_.lobby().gameTeamStatus;
+        if (gts == 3) {
+            c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName"), "0", "0"});
+            c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName"), "1", "0"});
+            c.enabled = {true, true};
         }
         return true;
     }
@@ -109,6 +141,11 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
 
 void DataStores::forgetMovie(const std::string& movie) {
     for (size_t i = regs_.size(); i-- > 0;) if (regs_[i].movie == movie) regs_.erase(regs_.begin() + (long)i);
+}
+
+std::string DataStores::playerName() const {
+    const char* n = std::getenv("WFC_PLAYERNAME");
+    return n ? n : "Player";
 }
 
 BridgeValue DataStores::call(const std::string& fn, const std::vector<std::string>& args, const std::string& movie) {
@@ -144,6 +181,11 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         return BridgeValue((double)c.rows.size());
     }
     if (fn == "GetCollectionColumnCount") return BridgeValue((double)c.columns.size());
+    if (fn == "GetCollectionColumnHeaderByTag") {
+        // The providers' localized column headers are not in any shipped .int file [UNKNOWN]: empty.
+        FlowTrace::emit("datastore.unknownHeader", {{"markup", m}, {"tag", arg(1)}});
+        return BridgeValue(std::string());
+    }
     if (fn == "GetCollectionColumnTag" || fn == "GetCollectionColumnHeader") {
         size_t i = (size_t)std::atoi(arg(1).c_str());
         return BridgeValue(i < c.columns.size() ? c.columns[i] : std::string());

@@ -9,6 +9,7 @@
 #include "game/MapState.h"
 #include "platform/Window.h"
 #include "render/Renderer.h"
+#include "ui/GfxPresenter.h"
 #include "ui/UiGL.h"
 
 #include <cstdlib>
@@ -31,9 +32,25 @@ bool Application::wantsFrontendBoot() {
     return true;
 }
 
+void Application::attachPresenter() {
+    // The shipped GFx movies (WFC_FRONTEND_NOGFX=1: flow only, no presentation).
+    if (std::getenv("WFC_FRONTEND_NOGFX")) return;
+    auto p = std::make_unique<ui::GfxPresenter>(*frontend_);
+    if (!p->init()) { LOG_WARN("frontend: GFx movies unavailable (no frontend_gfx.json); flow only"); return; }
+    presenter_ = p.get();
+    frontend_->setPresenter(std::move(p));
+    frontend_->script().keyHook = [this](int code, bool down) { if (presenter_) presenter_->injectKey(code, down); };
+    frontend_->script().shotHook = [this](const std::string& f) { pendingShot_ = f; };
+    frontend_->script().dumpHook = [this](const std::string& m) {
+        for (const std::string& o : presenter_->openMovieObjects())
+            if (o.find(m) != std::string::npos) LOG_INFO("GFX DUMP %s\n%s", o.c_str(), presenter_->dumpMovie(o).c_str());
+    };
+}
+
 void Application::drawFrontendFrame() {
     ui::beginScreenFrame(window_->width(), window_->height());
     frontend_->draw(window_->width(), window_->height());
+    if (!pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }
     window_->present();
 }
 
@@ -60,7 +77,8 @@ void Application::runFrontend() {
             drawFrontendFrame();
             titleTimer += dt;
             if (titleTimer > 0.25) { titleTimer = 0.0; window_->setTitle(frontend_->titleText().c_str()); }
-            if (flow.hasPendingMatch()) break;
+            // The loading movie plays its intro ("spinIn", 34 frames) before the blocking world load starts.
+            if (flow.hasPendingMatch() && (!presenter_ || !presenter_->hasLoadingMovie() || presenter_->loadingFrames() >= 40)) break;
             if (timeout > 0.0 && now - started > timeout) {
                 frontend::FlowTrace::emit("timeout", {{"seconds", frontend::FlowTrace::num(now - started)}});
                 flow.traceSnapshot("timeout");

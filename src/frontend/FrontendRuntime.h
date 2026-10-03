@@ -8,6 +8,7 @@
 //   * Native shims     - stand in for ActionScript that the presenter does not execute yet, each logged with its
 //                        provenance (e.g. MovieLoader's HasWatchedIntroMovie branch, HIGH per RE 1.2).
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -37,6 +38,8 @@ public:
     virtual bool runsMovie(const std::string& movie) const = 0;
     virtual void update(GameFlow& flow, const platform::InputFrame& in, float dt) = 0;
     virtual void draw(const GameFlow& flow, int w, int h) = 0;
+    // Automation: a key press on the focused movie (Flash key code).
+    virtual void injectKey(int code, bool down) { (void)code; (void)down; }
 };
 
 class ScriptDriver {
@@ -45,11 +48,15 @@ public:
     bool active() const { return pos_ < steps_.size(); }
     bool finished() const { return !steps_.empty() && pos_ >= steps_.size(); }
     void update(GameFlow& flow, float dt);
+    std::function<void(int code, bool down)> keyHook;          // key:<code>
+    std::function<void(const std::string& file)> shotHook;     // shot:<file>
+    std::function<void(const std::string& movie)> dumpHook;    // dump:<movie substring>
     static std::string autoplayScript(const std::string& tagAndMap);   // "TDM,508"
 private:
     std::vector<std::string> steps_;
     size_t pos_ = 0;
     float waitTimer_ = 0.0f;
+    int keyUp_ = -1;
 };
 
 class FrontendRuntime {
@@ -71,6 +78,7 @@ public:
     const Catalog& catalog() const { return catalog_; }
     DataStores& dataStores() { return *stores_; }
     std::string titleText() const;
+    ScriptDriver& script() { return script_; }
     bool scriptFinished() const { return script_.finished(); }
 
 private:

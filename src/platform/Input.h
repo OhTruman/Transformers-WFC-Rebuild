@@ -1,6 +1,7 @@
 // Clean-room reconstruction — platform-neutral input.
 // Gameplay code depends ONLY on this, never on Win32/XInput/etc.
 #pragma once
+#include <cstdint>
 
 namespace platform {
 
@@ -14,7 +15,11 @@ enum class Button {
     Count
 };
 
+// Menu / UI keys (frontend movies): keyboard keys and gamepad buttons, platform-neutral.
+enum class UiKey { Up, Down, Left, Right, Accept, Back, X, Y, Start, Select, LB, RB, LT, RT, LThumb, RThumb, Count };
+
 struct InputFrame {
+    uint32_t uiDown = 0;          // bit (1 << UiKey) held (keyboard or pad)
     bool  down[(int)Button::Count]    = {};   // currently held
     bool  pressed[(int)Button::Count] = {};   // rising edge this frame
     float mouseDX = 0.0f;
@@ -27,6 +32,7 @@ struct InputFrame {
 
     bool isDown(Button b) const { return down[(int)b]; }
     bool wasPressed(Button b) const { return pressed[(int)b]; }
+    bool uiIsDown(UiKey k) const { return (uiDown >> (int)k) & 1u; }
 };
 
 } // namespace platform

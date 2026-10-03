@@ -32,6 +32,7 @@ public:
 private:
     struct Collection { std::vector<std::string> columns; std::vector<std::vector<std::string>> rows; std::vector<bool> enabled; };
     bool collection(const std::string& markup, Collection& out);
+    std::string playerName() const;
 
     GameFlow& flow_;
     const Catalog& cat_;

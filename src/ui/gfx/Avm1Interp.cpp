@@ -369,7 +369,9 @@ struct Interp {
                 Args args = popArgs(c);
                 Value f = getVariable(c, name);
                 if (f.isObject() && f.o->kind == ObjKind::Function) {
-                    Value self = Value::undef();
+                    // A plain call's `this` is the calling timeline (AS1/AS2: foo() on _root sees this == _level0).
+                    Object* t = targetObj(c);
+                    Value self = t ? Value(t) : Value::undef();
                     push(c, vm.call(f, self, args));
                 } else {
                     push(c, Value::undef());

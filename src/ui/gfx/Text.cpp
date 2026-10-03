@@ -243,7 +243,7 @@ void TextField::layout() {
     layoutDirty = false;
     glyphs.clear();
     const float gutter = 2.0f * 20.0f;
-    struct Item { char16_t c; int fmt; const FontDef* font; int glyph; float adv; float size; };
+    struct Item { char16_t c; int fmt; const FontDef* font; int glyph; float adv; float size; int sub = -1; };
     std::vector<Item> items;
     items.reserve(chars.size());
     float shrink = 1.0f;
@@ -253,6 +253,18 @@ void TextField::layout() {
             const TextFormatSpan& f = formats[(size_t)std::max(0, std::min((int)formats.size() - 1, charFormat[i]))];
             const FontDef* font = player->resolveFont(f.font, f.bold, f.italic, def.get());
             float size = f.size * 20.0f * shrink;
+            // GFx image substitution: the substring becomes one inline image item.
+            int subHit = -1;
+            for (size_t k = 0; k < imageSubs.size(); ++k) {
+                const std::u16string& key = imageSubs[k].key;
+                if (!key.empty() && chars.compare(i, key.size(), key) == 0) { subHit = (int)k; break; }
+            }
+            if (subHit >= 0) {
+                Item im{0xFFFC, charFormat[i], font, -1, imageSubs[(size_t)subHit].w * 20.0f * shrink, size, subHit};
+                items.push_back(im);
+                i += imageSubs[(size_t)subHit].key.size() - 1;
+                continue;
+            }
             Item it{chars[i], charFormat[i], font, -1, 0, size};
             char16_t c = chars[i] == 0xA0 ? ' ' : chars[i];
             if (font) {
@@ -344,7 +356,15 @@ void TextField::layout() {
             else if (L.align == 2) x += (inner - L.width) * 0.5f;
             for (size_t k = L.b; k < L.e; ++k) {
                 const Item& it = items[k];
-                if (it.glyph >= 0 && it.font) {
+                if (it.sub >= 0) {
+                    // Image baseline (baseLineY in the image's own pixels) sits on the text baseline.
+                    const ImageSub& is = imageSubs[(size_t)it.sub];
+                    GlyphRun g;
+                    float scaleY = is.natH > 0 ? is.h / is.natH : 1.0f;
+                    g.image = is.path; g.imgW = is.w * shrink; g.imgH = is.h * shrink;
+                    g.x = boxMin + x; g.y = bounds.ymin + y - is.baseLineY * scaleY * 20.0f * shrink;
+                    out.push_back(g);
+                } else if (it.glyph >= 0 && it.font) {
                     GlyphRun g;
                     g.font = it.font; g.glyph = it.glyph; g.x = boxMin + x; g.y = bounds.ymin + y; g.size = it.size;
                     g.color = formats[(size_t)it.fmt].color;

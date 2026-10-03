@@ -85,7 +85,10 @@ bool GfxMovie::open(const GfxLibrary& lib, const frontend::Catalog* catalog, con
     player_ = std::make_unique<gfx::Player>();
     gfx::Player& p = *player_;
     p.resolveMovieUrl = [&lib](const std::string& url, const std::string&) { return lib.resolveUrl(url); };
-    p.externalTexture = [&lib](const std::string& r) { return lib.externalTexture(r); };
+    p.externalTexture = [this, &lib](const std::string& r) {
+        auto o = textureOverrides.find(r);
+        return o != textureOverrides.end() ? o->second : lib.externalTexture(r);
+    };
     p.fontLibPath = lib.fontLib();
     p.fontMap = lib.fontMap();
     if (catalog) p.translator = [catalog](const std::string& k) { return catalog->localizeKey(k); };
@@ -108,6 +111,19 @@ void GfxMovie::advance(float dt) {
     int n = 0;
     while (accum_ >= step && n < 4) { accum_ -= step; player_->advance(step); ++n; }
     if (n == 4) accum_ = 0;
+}
+
+void GfxMovie::setExternalTexture(const std::string& resource, const std::string& png) {
+    textureOverrides[resource] = png;
+    std::function<void(gfx::DisplayObject*)> rec = [&](gfx::DisplayObject* d) {
+        if (d->kind == gfx::DisplayObject::Kind::Bitmap) {
+            auto* b = static_cast<gfx::BitmapInstance*>(d);
+            if (b->bitmap && b->bitmap->exportName == resource) b->path = png;
+        }
+        if (d->kind == gfx::DisplayObject::Kind::Clip)
+            for (auto& [k, ch] : static_cast<gfx::MovieClip*>(d)->children) rec(ch.get());
+    };
+    if (player_ && player_->root()) rec(player_->root());
 }
 
 void GfxMovie::key(int code, bool down) { if (player_) player_->keyEvent(code, down); }

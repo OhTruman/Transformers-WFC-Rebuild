@@ -32,6 +32,13 @@ int main(int argc, char** argv) {
     }
     frontend::FrontendRuntime rt;
     if (!rt.init()) return 2;
+    if (const char* pre = std::getenv("WFC_DUMP_PRESCRIPT")) {
+        // Drive the flow (bridge calls) first, e.g. "call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby".
+        rt.script().load(pre);
+        platform::InputFrame none;
+        for (int i = 0; i < 6000 && !rt.scriptFinished(); ++i) rt.update(none, 1.0f / 60.0f);
+        std::printf("PRESCRIPT done: %s\n", rt.flow().stateSummary().c_str());
+    }
     ui::GfxLibrary lib;
     if (!lib.load(frontend::Catalog::defaultManifestRoot(), frontend::Catalog::defaultExtractedRoot())) return 3;
     ui::GfxMovie movie;

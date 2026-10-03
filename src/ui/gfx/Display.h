@@ -93,6 +93,9 @@ struct GlyphRun {
     float x = 0, y = 0;                       // baseline origin
     float size = 0;                           // em size in twips
     RGBA color;
+    // Inline image (GFx setImageSubstitutions): drawn instead of a glyph.
+    std::string image;
+    float imgW = 0, imgH = 0;
 };
 
 struct TextFormatSpan {
@@ -133,6 +136,8 @@ public:
     float shadowAlpha = 0, shadowDistance = 0, shadowAngle = 45, shadowBlurX = 0, shadowBlurY = 0, shadowStrength = 1;
     uint32_t shadowColor = 0;
     std::shared_ptr<ShapeDef> boxShape;       // border / background (built on demand)
+    struct ImageSub { std::u16string key; std::string path; float w = 0, h = 0, baseLineY = 0, natH = 0; };
+    std::vector<ImageSub> imageSubs;          // GFx TextField.setImageSubstitutions
 
     void setPlainText(const std::string& utf8);
     void setHtmlText(const std::string& html);
@@ -228,6 +233,8 @@ public:
                        std::shared_ptr<const MovieDef>& outDef, uint16_t& outId);
     bool resolveCharacter(const std::shared_ptr<const MovieDef>& def, uint16_t id, std::shared_ptr<const MovieDef>& outDef,
                           uint16_t& outId, int depthGuard = 0);
+    // flash.display.BitmapData.loadBitmap: an exported bitmap in any loaded library (and the libraries they import).
+    bool findExportedBitmap(const std::string& linkage, std::shared_ptr<const MovieDef>& def, uint16_t& id);
     const FontDef* resolveFont(const std::string& name, bool bold, bool italic, const MovieDef* def);
     std::string translate(const std::string& text) const;   // GFx translator ($File.Section.Key)
 
@@ -246,7 +253,9 @@ public:
 
     // Rendering traversal.
     struct RenderItem {
-        enum Type { Shape, Glyph, Bitmap, MaskBegin, MaskEnd, MaskPop } type = Shape;
+        enum Type { Shape, Glyph, Bitmap, Image, MaskBegin, MaskEnd, MaskPop } type = Shape;
+        std::string imagePath;                // Image: inline text image (stage pixels imgW x imgH)
+        float imgW = 0, imgH = 0;
         const ShapeDef* shape = nullptr;      // Shape / Glyph (glyph outline) / mask shapes
         const BitmapInstance* bitmap = nullptr;
         Matrix m;

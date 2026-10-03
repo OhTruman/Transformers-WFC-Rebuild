@@ -53,6 +53,7 @@ bool ScriptDriver::load(const std::string& script) {
 }
 
 void ScriptDriver::update(GameFlow& flow, float dt) {
+    if (keyUp_ >= 0) { if (keyHook) keyHook(keyUp_, false); keyUp_ = -1; return; }
     while (pos_ < steps_.size()) {
         const std::string& st = steps_[pos_];
         if (st.rfind("wait:", 0) == 0) {
@@ -89,6 +90,15 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             return;
         }
         if (st == "showmenu") { flow.showMenu(); return; }
+        if (st.rfind("key:", 0) == 0) {
+            int code = std::atoi(st.c_str() + 4);
+            FlowTrace::emit("script.key", {{"code", std::to_string(code)}});
+            if (keyHook) keyHook(code, true);
+            keyUp_ = code;
+            return;
+        }
+        if (st.rfind("dump:", 0) == 0) { if (dumpHook) dumpHook(st.substr(5)); continue; }
+        if (st.rfind("shot:", 0) == 0) { if (shotHook) shotHook(st.substr(5)); return; }
         if (st.rfind("uievent:", 0) == 0) { flow.onUIEvent(std::atoi(st.c_str() + 8)); return; }
         if (st.rfind("snapshot:", 0) == 0) { flow.traceSnapshot(st.c_str() + 9); continue; }
         if (st == "quit") { flow.call("Game.ExitGame"); return; }

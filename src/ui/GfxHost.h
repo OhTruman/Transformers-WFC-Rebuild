@@ -49,7 +49,10 @@ public:
     void key(int flashKeyCode, bool down);
     gfx::avm1::Value invoke(const std::string& path, gfx::avm1::Args args);   // engine -> AS (_global.SetLevelText ...)
     std::string dumpTree() const;
+    // Self.SetExternalTextureWithPath(resource, "Package.Texture"): replaces an external image at runtime.
+    void setExternalTexture(const std::string& resource, const std::string& pngPath);
     bool closeRequested = false;
+    std::map<std::string, std::string> textureOverrides;
 
 private:
     std::unique_ptr<gfx::Player> player_;
