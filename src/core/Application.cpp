@@ -85,7 +85,10 @@ bool Application::init() {
                                   game::MatchMode::EXT, game::MatchMode::DOM})
             if (std::string(gm) == game::gameModeName(m)) world_.setMatchMode(m);
     world_.load(*renderer_);
-    if (std::getenv("WFC_PICKUPTEST")) { runPickupTest(); return false; }   // measurements only
+    // Gameplay's measurement mode is WFC_PICKUPTEST=1. [integration] Rendering's presentation diagnostic shares the
+    // name with a comma form (<factory>,<take>,<respawn>; see run()), so that form must not exit here.
+    if (const char* pt = std::getenv("WFC_PICKUPTEST"))
+        if (!std::strchr(pt, ',')) { runPickupTest(); return false; }   // measurements only
     if (std::getenv("WFC_TRAVERSE")) { runTraverseTest(); return false; }   // measurements only
     if (std::getenv("WFC_MAPTRAVERSE")) { runMapTraverse(); return false; }   // measurements only
     world_.setAudio(audio_);
@@ -325,7 +328,9 @@ void Application::run() {
         if (const char* ds = std::getenv("WFC_DESTRUCTSTATE"))   // diagnostic: destructible presentation state
             if (frame == 1) renderer_->setDestructibleState("TnStaticDestructibleActor_14465", std::atoi(ds));
         // Diagnostic: WFC_PICKUPTEST=<factory actor>,<take frame>,<respawn frame> drives the pickup presentation
-        // (SetPickupHidden / SetPickupVisible) the way Gameplay's PickupEvents will.
+        // (SetPickupHidden / SetPickupVisible) the way Gameplay's PickupEvents will. [integration] Gameplay's
+        // syncMapPresentation now pushes the real factory state every frame, so this forced state only lasts one
+        // frame; take a pickup in play instead.
         if (const char* pt = std::getenv("WFC_PICKUPTEST")) {
             char actor[128] = {0}; long take = -1, back = -1;
             if (std::sscanf(pt, "%127[^,],%ld,%ld", actor, &take, &back) == 3) {
