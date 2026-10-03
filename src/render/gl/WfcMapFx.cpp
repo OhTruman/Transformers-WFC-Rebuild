@@ -39,7 +39,6 @@ std::string readFile(const std::string& p) {
     std::stringstream ss; ss << f.rdbuf();
     return ss.str();
 }
-const char* kContent = "F:/Transformers Rebuild/ExtractedAssets/content/";
 
 int kindOf(const std::string& k) {
     if (k.find("uniform curve") != std::string::npos) return 3;
@@ -205,12 +204,6 @@ bool Pipeline::loadMapFx(const std::string& path) {
             for (int c = 0; c < 3; ++c) in.R[r][c] = M[(size_t)r][(size_t)c].asFloat();
         for (int c = 0; c < 3; ++c) in.T[c] = M[3][(size_t)c].asFloat();
         in.rng = 0x9E3779B9u * (uint32_t)(i + 1);
-        if (in.ownerClass == "TnAmmoCratePickupFactory" && in.role == "highlight") {
-            PickupMeshRT pm;
-            pm.owner = in.owner;
-            std::copy(in.T, in.T + 3, pm.T);
-            pickupMeshes_.push_back(pm);
-        }
         auto it = fxSystems_.find(in.system);
         if (it == fxSystems_.end()) continue;
         in.emitters.resize(it->second.emitters.size());
@@ -291,6 +284,9 @@ void Pipeline::tickMapFx(float dt) {
     if (dt <= 0.0f || std::getenv("WFC_NOMAPFX")) return;
     auto t0 = std::chrono::steady_clock::now();
     float camUE[3] = {camPos_.x * 100.0f, camPos_.z * 100.0f, camPos_.y * 100.0f};
+    for (const PickupMeshRT& pm : pickupMeshes_)          // PHYS_Rotating only while available (Pickup state)
+        if (pm.yawRate != 0.0f && !pickupMeshHidden_.count(pm.owner))
+            pickupSpin_[pm.owner] = std::fmod(pickupSpin_[pm.owner] + pm.yawRate * dt, 65536.0f);
     for (FxInstance& in : fxInstances_) {
         const FxSystem& sys = fxSystems_[in.system];
         if (!in.requiredRule.empty() && !ruleActive(in.requiredRule)) continue;   // factory not in this mode
@@ -464,6 +460,42 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
     std::string txt = readFile(indexPath);
     assets::Json J;
     if (txt.empty() || !assets::Json::parse(txt, J)) return;
+    const assets::Json& PV = J["pickup_factory_visuals"];
+    for (size_t i = 0; i < PV.size(); ++i) {
+        const assets::Json& e = PV[i];
+        std::string gl = e["gltf"].asString();
+        if (gl.rfind("content/", 0) != 0 || e["ue_matrix"].size() < 4) continue;
+        if (e["kind"].asString().find("mesh particle") != std::string::npos) continue;   // drawn by its FX emitter
+        PickupMeshRT pm;
+        std::string a = e["actor"].asString();
+        pm.owner = a.substr(a.rfind('.') + 1);
+        std::transform(pm.owner.begin(), pm.owner.end(), pm.owner.begin(), ::tolower);
+        pm.gltf = gl.substr(8);
+        pm.mesh = e["mesh"].asString();
+        const assets::Json& U = e["ue_matrix"];
+        for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) pm.R[r][c] = U[(size_t)r][(size_t)c].asFloat();
+        for (int c = 0; c < 3; ++c) pm.T[c] = U[3][(size_t)c].asFloat();
+        const assets::Json& ct = e["component_transform"]["Translation"];       // pickup mesh offset (actor space)
+        if (ct.isObject()) {
+            float o[3] = {ct["X"].asFloat(), ct["Y"].asFloat(), ct["Z"].asFloat()};
+            for (int c = 0; c < 3; ++c) pm.off[c] = o[c];
+        }
+        pm.yawRate = e["rotation_rate"]["Yaw"].asFloat(0.0f);
+        pm.cullDistance = e["CullDistance"].asFloat(0.0f);
+        pickupMeshes_.push_back(pm);
+    }
+    // destructible state mesh -> authored StaticMeshComponent (cooked HmStaticMeshDestructionEffect.MeshComponents,
+    // written by build_map_fx.py): the lightmap join key of each state mesh
+    std::map<std::string, std::vector<std::string>> destructComps;
+    {
+        assets::Json D;
+        std::string t = readFile(dataDir_ + "/map_fx_runtime.json");
+        if (!t.empty() && assets::Json::parse(t, D))
+            for (const auto& kv : D["destructible_mesh_components"].obj)
+                for (const auto& mv : kv.second.obj)
+                    for (size_t k = 0; k < mv.second.size(); ++k)
+                        destructComps[kv.first + "|" + mv.first].push_back(mv.second[k].asString());
+    }
     const assets::Json& R = J["not_in_world_glb (authored renderables)"];
     for (size_t i = 0; i < R.size(); ++i) {
         const assets::Json& e = R[i];
@@ -481,8 +513,8 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
         if (kind.find("totem") != std::string::npos) {
             if (!totemModel_) {
                 totemModel_ = std::make_unique<assets::SkinnedModel>();
-                std::string gl = std::string(kContent) + e["gltf"].asString().substr(8);   // strip "content/"
-                std::string an = std::string(kContent) + e["anim"].asString().substr(8);
+                std::string gl = contentRoot() + e["gltf"].asString().substr(8);   // strip "content/"
+                std::string an = contentRoot() + e["anim"].asString().substr(8);
                 if (!assets::loadSkinnedGlb(gl, *totemModel_)) { totemModel_.reset(); continue; }
                 assets::loadAnimationsByName(an, *totemModel_);
                 for (render::Material& m : totemModel_->mats)
@@ -508,7 +540,7 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
             p.model = ueRowsToGltf(R4, T4);
             if (kothMesh_ < 0) {
                 MeshData md;
-                std::string gl = std::string(kContent) + e["gltf"].asString().substr(8);
+                std::string gl = contentRoot() + e["gltf"].asString().substr(8);
                 if (assets::loadGlb(gl, md)) {
                     std::string mat = e["section_materials"][0].asString();
                     for (render::Material& m : md.mats) m.wfcName = resolveName(mat.empty() ? m.sourceName : mat);
@@ -526,19 +558,29 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
             p.actor = actor; p.kind = 1;
             p.actorLower = actor; std::transform(p.actorLower.begin(), p.actorLower.end(), p.actorLower.begin(), ::tolower);
             p.model = ueRowsToGltf(R3, wl);
-            // state meshes + their authored StaticMeshComponents (lightmap join keys)
-            const char* meshes[2] = {"DES_IAC_WallPanelSign_p/Meshes/WallPanelSign_Base_STAT.gltf",
-                                     "DES_IAC_WallPanelSign_p/Meshes/WallPanelSign_Chunk02_STAT.gltf"};
-            const char* comps[2] = {
-                "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.TnStaticDestructibleActor_14465.HmDestructibleComponent_15287."
-                "HmDestructiblePiece_11226.HmStaticMeshDestructionEffect_13076.StaticMeshComponent_6988",
-                "MP_IAC_Streets_ART_m.TheWorld.PersistentLevel.TnStaticDestructibleActor_14465.HmDestructibleComponent_15287."
-                "HmDestructiblePiece_11226.HmStaticMeshDestructionEffect_11617.StaticMeshComponent_2458"};
-            for (int k = 0; k < 2; ++k) {
+            // state meshes (render_index states[]: handle 0 intact, the next state's static mesh = destroyed) and
+            // their authored StaticMeshComponents (lightmap join keys; the candidate that carries a lightmap)
+            const std::string actorFull = e["actor"].asString();
+            const assets::Json& ST = e["states"];
+            for (int k = 0; k < 2 && (size_t)k < ST.size(); ++k) {
+                const assets::Json& sm0 = ST[(size_t)k]["static_meshes"][0];
+                std::string gl = sm0["gltf"].asString(), meshObj = sm0["mesh"].asString();
                 MeshData md;
-                if (!assets::loadGlb(std::string(kContent) + meshes[k], md)) { p.stateMesh[k] = -1; continue; }
-                for (SubMesh& sm : md.subs) sm.component = comps[k];
-                for (render::Material& m : md.mats) m.wfcName = resolveName("DES_IAC_WallPanelSign_p.Materials." + m.sourceName);
+                if (gl.rfind("content/", 0) != 0 || !assets::loadGlb(contentRoot() + gl.substr(8), md)) {
+                    p.stateMesh[k] = -1; continue;
+                }
+                std::string comp;
+                for (const std::string& c : destructComps[actorFull + "|" + meshObj]) {
+                    std::string lc = c; std::transform(lc.begin(), lc.end(), lc.begin(), ::tolower);
+                    if (comp.empty() || lightmaps_.count(c) || lightmaps_.count(lc)) comp = c;
+                    if (lightmaps_.count(c) || lightmaps_.count(lc)) break;
+                }
+                for (SubMesh& sm : md.subs) sm.component = comp;
+                const std::string pkg = meshObj.substr(0, meshObj.find('.'));
+                for (render::Material& m : md.mats) {
+                    std::string full = pkg + ".Materials." + m.sourceName;
+                    m.wfcName = resolveName(mats_.count(full) ? full : m.sourceName);
+                }
                 p.stateMesh[k] = upload(md);
                 if (std::getenv("WFC_PROPLOG")) {         // diagnostics: world-space bounds of each state mesh
                     core::Vec3 mn{1e30f, 1e30f, 1e30f}, mx{-1e30f, -1e30f, -1e30f};
@@ -566,15 +608,22 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
 void Pipeline::setDestructibleState(const std::string& actor, int state) {
     std::string a = actor;
     for (MapProp& p : mapProps_)
-        if (p.kind == 1 && (p.actor == a || ("MP_IAC_Streets_ART_m.TheWorld.PersistentLevel." + p.actor) == a)) p.state = state;
+        if (p.kind == 1 && (p.actor == a || a.substr(a.rfind('.') == std::string::npos ? 0 : a.rfind('.') + 1) == p.actor))
+            p.state = state;
 }
 
 // Ammo-crate factory yaw while available: PickupRotationRate Yaw 10000 UU/s (TnAmmoCratePickup, authored) from the
 // map clock; the factory's local-space effects and its mesh follow it (RE MILESTONE04 pickup §2, HIGH). The phase of
 // the spin and its reset on respawn are native [PROVISIONAL: continuous from map start].
+bool Pipeline::pickupRuleBlocked(const std::string& ownerLower) const {
+    for (const FxInstance& in : fxInstances_)
+        if (in.owner == ownerLower && !in.requiredRule.empty() && !ruleActive(in.requiredRule)) return true;
+    return false;
+}
+
 float Pipeline::pickupYaw(const std::string& ownerLower) const {
-    (void)ownerLower;
-    return 10000.0f * mapTime();
+    auto it = pickupSpin_.find(ownerLower);
+    return it == pickupSpin_.end() ? 0.0f : it->second;
 }
 
 // ---- drawing (after the frame's opaque + character draws, before post) ----
@@ -594,24 +643,35 @@ void Pipeline::drawMapPresentation() {
             draw(p.stateMesh[0], p.model);
         }
     }
-    // ammo-crate pickup meshes
-    if (ammoMesh_ < 0 && !pickupMeshes_.empty()) {
-        MeshData md;
-        ammoMesh_ = -2;
-        if (assets::loadGlb(std::string(kContent) + "PROP_NEU_Pickups_p/AmmoPickup/PROP_NEU_AmmoPickup_STAT.gltf", md)) {
-            for (render::Material& m : md.mats) m.wfcName = resolveName("PROP_NEU_Pickups_p.AmmoPickup." + m.sourceName);
-            ammoMesh_ = upload(md);
-        }
-    }
-    if (ammoMesh_ >= 0) {
+    // pickup factory meshes (render_index pickup_factory_visuals)
+    {
         float camUE[3] = {camPos_.x * 100.0f, camPos_.z * 100.0f, camPos_.y * 100.0f};
-        for (const PickupMeshRT& pm : pickupMeshes_) {
+        for (PickupMeshRT& pm : pickupMeshes_) {
             if (pickupMeshHidden_.count(pm.owner)) continue;
+            if (pm.meshId == -1) {                        // lazy, shared per glTF
+                pm.meshId = -2;
+                for (const PickupMeshRT& o : pickupMeshes_) if (o.gltf == pm.gltf && o.meshId >= 0) pm.meshId = o.meshId;
+                MeshData md;
+                if (pm.meshId < 0 && assets::loadGlb(contentRoot() + pm.gltf, md)) {
+                    const std::string pkg = pm.mesh.substr(0, pm.mesh.rfind('.'));
+                    for (render::Material& m : md.mats) {
+                        std::string full = pkg + "." + m.sourceName;
+                        m.wfcName = resolveName(mats_.count(full) ? full : m.sourceName);
+                    }
+                    pm.meshId = upload(md);
+                }
+            }
+            if (pm.meshId < 0) continue;
+            if (pickupRuleBlocked(pm.owner)) continue;    // factory Disabled outside its game rule (flag / bomb)
             float dx = pm.T[0] - camUE[0], dy = pm.T[1] - camUE[1], dz = pm.T[2] - camUE[2];
-            if (dx * dx + dy * dy + dz * dz > 8000.0f * 8000.0f) continue;   // MeshComponentA CullDistance 8000
-            float rows[3][3];
-            rotRows(0.0f, pickupYaw(pm.owner), 0.0f, rows);
-            draw(ammoMesh_, ueRowsToGltf(rows, pm.T));
+            if (pm.cullDistance > 0.0f && dx * dx + dy * dy + dz * dz > pm.cullDistance * pm.cullDistance) continue;
+            float spin[3][3], rows[3][3];
+            rotRows(0.0f, pickupYaw(pm.owner), 0.0f, spin);
+            for (int r = 0; r < 3; ++r)                   // FRotationMatrix(P, Y + d, R) = base rows x Yaw(d)
+                for (int c = 0; c < 3; ++c) rows[r][c] = pm.R[r][0] * spin[0][c] + pm.R[r][1] * spin[1][c] + pm.R[r][2] * spin[2][c];
+            float wt[3];                                  // component offset rotates with the actor
+            for (int c = 0; c < 3; ++c) wt[c] = pm.T[c] + pm.off[0] * rows[0][c] + pm.off[1] * rows[1][c] + pm.off[2] * rows[2][c];
+            draw(pm.meshId, ueRowsToGltf(rows, wt));
         }
     }
     // particles
@@ -628,7 +688,13 @@ void Pipeline::drawMapPresentation() {
             const FxLod& L = sys.emitters[e].lods[(size_t)rt.lod];
             float IR[3][3];                                    // instance rows (ammo factory: spinning yaw)
             std::memcpy(IR, in.R, sizeof(IR));
-            if (in.ownerClass == "TnAmmoCratePickupFactory") rotRows(0.0f, pickupYaw(in.owner), 0.0f, IR);
+            if (pickupSpin_.count(in.owner)) {               // the factory actor's spin carries its components
+                float spin[3][3];
+                rotRows(0.0f, pickupYaw(in.owner), 0.0f, spin);
+                for (int r = 0; r < 3; ++r)
+                    for (int c = 0; c < 3; ++c)
+                        IR[r][c] = in.R[r][0] * spin[0][c] + in.R[r][1] * spin[1][c] + in.R[r][2] * spin[2][c];
+            }
             auto worldPos = [&](const float p[3], float o[3]) {
                 if (!L.localSpace) { std::copy(p, p + 3, o); return; }
                 for (int c = 0; c < 3; ++c) o[c] = in.T[c] + p[0] * IR[0][c] + p[1] * IR[1][c] + p[2] * IR[2][c];

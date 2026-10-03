@@ -192,6 +192,8 @@ def main():
             try:
                 # TnCharacterApplier targets character meshes and their weapon only
                 rt = mp in extra and mp.split('.')[0].upper().startswith(('TR_', 'WEP_'))
+                if mp in extra and mp.split('.')[0].upper().startswith('UI_'):
+                    rt = 'all'                 # Canvas materials: parameters set per draw (MaterialInstanceDynamic)
                 mc = matc.MatCompiler(repo, mp, tr, runtime_params=rt)
                 glsl, info = mc.build()
                 res[mp] = {'glsl': glsl, 'info': info, 'error': None}

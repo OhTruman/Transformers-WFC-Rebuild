@@ -503,6 +503,12 @@ def light_visibility_volumes(repo, out):
 
 
 def main():
+    if len(sys.argv) > 2 and sys.argv[1] == '--list-inline':
+        # LightMapTexture2D referenced by <map>_ART_m: umodel -obj list for the atlases cooked inline in ART
+        r = Repo(['%s_ART_m.xxx' % sys.argv[2]])
+        # (indexed under the _LM outer; umodel exports the ones whose data the ART file carries, skips the rest)
+        print(' '.join(sorted({p.split('.')[-1] for p in r.index if (r.cls(p) or '') == 'LightMapTexture2D'})))
+        return
     mapname, out, umodel_dir = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(os.path.join(out, 'lightmaps'), exist_ok=True)
     repo = Repo(['%s_ART_m.xxx' % mapname, '%s_BASE_m.xxx' % mapname])

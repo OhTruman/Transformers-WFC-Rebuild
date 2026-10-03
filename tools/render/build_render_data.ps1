@@ -13,8 +13,9 @@ New-Item -ItemType Directory -Force $out, $um | Out-Null
 
 # 1. Lightmap atlases (all LightMapTexture2D of the _LM package + the small ones cooked inline in ART).
 & $umodel -export "-path=$cooked" -game=trans "-out=$um" -png "${Map}_ART_m_LM.xxx" | Out-Null
-$inline = @("LightMapTexture2D_882","LightMapTexture2D_3739","LightMapTexture2D_14030","LightMapTexture2D_5049","LightMapTexture2D_5112","LightMapTexture2D_12118")
-& $umodel -export "-path=$cooked" -game=trans "-out=$um" -png "${Map}_ART_m.xxx" ($inline | ForEach-Object { "-obj=$_" }) | Out-Null
+$env:PYTHONDONTWRITEBYTECODE = "1"
+$inline = @((& $py (Join-Path $PSScriptRoot "build_lighting.py") --list-inline $Map) -split ' ' | Where-Object { $_ })
+if ($inline.Count -gt 0) { & $umodel -export "-path=$cooked" -game=trans "-out=$um" -png "${Map}_ART_m.xxx" ($inline | ForEach-Object { "-obj=$_" }) | Out-Null }
 
 # 2. Lightmap bindings (3 coefficients), BSP rebuilt from the cooked vertex buffer, lights, fog.
 & $py (Join-Path $PSScriptRoot "build_lighting.py") $Map $out $um
@@ -23,10 +24,12 @@ if ($LASTEXITCODE -ne 0) { throw "build_lighting failed" }
 # 3. Materials: original graphs -> GLSL (world + BSP + decals + Optimus robot/vehicle + Ion Blaster
 #    + the original vehicle/weapon FX materials listed in fx_materials.txt).
 $fx = Get-Content (Join-Path $PSScriptRoot "fx_materials.txt") | Where-Object { $_ -match '\S' }
+# Canvas (HUD marker) materials: compiled with per-draw runtime parameters
+$ui = Get-Content (Join-Path $PSScriptRoot "ui_materials.txt") | Where-Object { $_ -match '\S' }
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
     TR_Optimus_ROBO_p.RB_OptimusPrime_Cust_Mat_INST_B TR_Optimus_ROBO_p.InteriorAlt_Energon_MAT_INST `
     TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST TR_Optimus_VEH_p.InteriorAlt_Energon_MAT_INST `
-    WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx
+    WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx @ui
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 
 

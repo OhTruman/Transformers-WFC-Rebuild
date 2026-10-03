@@ -22,6 +22,11 @@ VECTOR_CHANNEL_PROVEN = {l.split('#')[0].strip() for l in open(_VCP, encoding='u
 GLSL_T = {1: 'float', 2: 'vec2', 3: 'vec3', 4: 'vec4'}
 
 
+
+def rt_ident(name):
+    """Runtime parameter uniform suffix (a GLSL identifier) for a material parameter name."""
+    return re.sub(r'[^A-Za-z0-9_]', '_', name)
+
 class CompileError(Exception):
     pass
 
@@ -185,6 +190,11 @@ class MatCompiler:
         nm = n.get('ParameterName')
         self.params_read['Scalar'].add(nm)
         v = self.scalars.get(nm, n.get('DefaultValue', 0.0))
+        if self.runtime_params == 'all' and nm:
+            # Canvas / MID: every parameter settable per draw (unset = the authored value)
+            u = rt_ident(nm)
+            self.rt_used[u] = None
+            return '(uRTSet_%s != 0 ? uRT_%s.x : %s)' % (u, u, glf(v)), 1
         return glf(v), 1
 
     def x_VectorParameter(self, c, n, p, o):
@@ -192,7 +202,11 @@ class MatCompiler:
         self.params_read['Vector'].add(nm)
         v = self.vectors.get(nm, n.get('DefaultValue') or [0, 0, 0, 1])
         authored = 'vec4(%s)' % ', '.join(glf(x) for x in v)
-        if self.runtime_params and nm in self.RUNTIME_PARAMS:
+        if self.runtime_params == 'all' and nm:
+            u = rt_ident(nm)
+            self.rt_used[u] = None
+            code = '(uRTSet_%s != 0 ? uRT_%s : %s)' % (u, u, authored)
+        elif self.runtime_params and nm in self.RUNTIME_PARAMS:
             # Runtime applier override; when not set (all-zero = skip) every same-named expression
             # keeps its OWN authored value (MIC value, else that expression's default).
             self.rt_used[nm] = self.vectors.get(nm)

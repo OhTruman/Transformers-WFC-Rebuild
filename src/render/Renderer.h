@@ -1,6 +1,8 @@
 // Clean-room reconstruction — rendering abstraction.
 // Gameplay/presentation code issues draw calls through this; no GL types leak out.
 #pragma once
+#include <utility>
+#include <array>
 #include <functional>
 #include <string>
 #include <vector>
@@ -78,6 +80,23 @@ public:
     // directional lightmaps, static lights and height fog produced by tools/render/*.py.
     // Returns false when unavailable; the renderer then keeps its legacy fixed-function path.
     virtual bool loadMapRenderData(const std::string& mapName) { (void)mapName; return false; }
+    // Level travel: release every GPU resource of the loaded map render data (meshes, textures, programs, targets).
+    // The renderer stays usable; a later loadMapRenderData() rebuilds everything for the next map.
+    virtual void unloadMapRenderData() {}
+
+    // Canvas material tile (UE3 FCanvas::DrawMaterialTile / UCanvas.DrawMaterialTile): a screen quad shaded by a
+    // compiled original material (e.g. UI_HudMarkers_p) with per-draw parameter values (MaterialInstanceDynamic
+    // SetScalarParameterValue / SetVectorParameterValue). Pixels, top-left origin; drawn after the scene's post
+    // processing in submission order. Returns false if the material is not available (caller may fall back).
+    struct MaterialTile {
+        std::string material;                                   // full object path
+        float x = 0, y = 0, w = 0, h = 0;                       // pixels
+        float u0 = 0, v0 = 0, u1 = 1, v1 = 1;
+        float rotation = 0;                                     // radians, about the tile centre
+        std::vector<std::pair<std::string, std::array<float, 4>>> params;   // scalar -> x
+    };
+    virtual bool drawMaterialTile(const MaterialTile& t) { (void)t; return false; }
+    virtual bool hasMaterial(const std::string& material) const { (void)material; return false; }
 
     // Character customization for subsequent dynamic draws (see CharacterColors). Optional.
     virtual void setCharacterColors(const CharacterColors& c) { (void)c; }

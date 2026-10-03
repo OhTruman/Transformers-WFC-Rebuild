@@ -191,6 +191,20 @@ public:
         glMatrixMode(GL_MODELVIEW); glPopMatrix();
     }
 
+    // Handles uploaded before the unload stay in range but become empty (no GPU mesh, CPU copy dropped): stale
+    // handles draw nothing; owners re-upload for the next level.
+    bool drawMaterialTile(const MaterialTile& t) override {
+        if (!wfc_.active() || !wfc_.hasMaterial(t.material)) return false;
+        wfc_.drawMaterialTile(t);
+        return true;
+    }
+    bool hasMaterial(const std::string& m) const override { return wfc_.active() && wfc_.hasMaterial(m); }
+
+    void unloadMapRenderData() override {
+        wfc_.release();
+        for (size_t i = 0; i < meshes_.size(); ++i) { meshes_[i] = MeshData{}; gpu_[i] = -1; }
+    }
+
     bool loadMapRenderData(const std::string& mapName) override {
         bool ok = wfc_.load(mapName);
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
