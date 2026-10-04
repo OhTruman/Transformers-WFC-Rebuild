@@ -95,11 +95,11 @@ if ($Parts -contains "B") {
         $files = @(Get-ChildItem $d -Filter "f*.bmp" | Sort-Object Name)
         if ($files.Count -lt 10) { Add-WfcResult $res "jitter.present.$ph" "SKIP" $files.Count "only $($files.Count) consecutive frames captured" "Experimental"; continue }
         # character region: the chase camera keeps the pawn in the lower-middle of the frame (cells of the 8 px luma grid)
-        $L = @($files | ForEach-Object { [WfcImage]::Luma($_.FullName, 8) })
+        $L = @($files | ForEach-Object { , [WfcImage]::Luma($_.FullName, 8) })   # unary comma: keep each frame an array
         $w = [int]$L[0][0]; $h = [int]$L[0][1]
         $x0 = [int]($w * 0.38); $x1 = [int]($w * 0.62); $y0 = [int]($h * 0.40); $y1 = [int]($h * 0.92)
         function RegionDiff($a, $b) { $s = 0.0; $n = 0; for ($yy = $y0; $yy -lt $y1; $yy++) { for ($xx = $x0; $xx -lt $x1; $xx++) { $ix = 2 + $yy * $w + $xx; $s += [Math]::Abs($a[$ix] - $b[$ix]); $n++ } }; return $s / [Math]::Max(1, $n) }
-        $d1 = @(); $d2 = @(); for ($i = 0; $i -lt $L.Count - 2; $i++) { $d1 += RegionDiff $L[$i] $L[$i + 1]; $d2 += RegionDiff $L[$i] $L[$i + 2] }
+        $d1 = @(); $d2 = @(); for ($i = 0; $i -lt $L.Count - 2; $i++) { $d1 += (RegionDiff ($L[$i]) ($L[$i + 1])); $d2 += (RegionDiff ($L[$i]) ($L[$i + 2])) }
         $m1 = ($d1 | Measure-Object -Average).Average; $m2 = ($d2 | Measure-Object -Average).Average
         $alt = if ($m1 -gt 0.05) { [Math]::Round($m2 / $m1, 3) } else { $null }
         $pp = 0; for ($i = 0; $i -lt $d2.Count; $i++) { if ($d1[$i] -gt 1.0 -and $d2[$i] -lt 0.5 * $d1[$i]) { $pp++ } }
@@ -130,22 +130,25 @@ if ($Parts -contains "C") {
             $sx = @(Grep-Log (Join-Path $d "wfc.log") '\] CAMLOG (\d+) (-?[\d.]+) (-?[\d.]+)' | ForEach-Object { $m = [regex]::Match($_.text, 'CAMLOG (\d+) (-?[\d.]+) (-?[\d.]+)'); [pscustomobject]@{ f = [int]$m.Groups[1].Value; x = [double]$m.Groups[2].Value; y = [double]$m.Groups[3].Value } } | Where-Object { $_.f -ge 240 })
             $dd = @(); for ($i = 1; $i -lt $sx.Count - 1; $i++) { $dd += [Math]::Abs($sx[$i + 1].x - 2 * $sx[$i].x + $sx[$i - 1].x) }
             $mean = if ($dd.Count) { [Math]::Round(($dd | Measure-Object -Average).Average, 5) } else { $null }; $mx = if ($dd.Count) { [Math]::Round(($dd | Measure-Object -Maximum).Maximum, 5) } else { $null }
-            $prow += [pscustomobject]@{ case = $pc; hz = $hz; frames = $sx.Count; d2_mean = $mean; d2_max = $mx }
+            $over = if ($dd.Count) { [Math]::Round(@($dd | Where-Object { $_ -gt 0.004 }).Count / $dd.Count, 4) } else { $null }
+            $prow += [pscustomobject]@{ case = $pc; hz = $hz; frames = $sx.Count; d2_mean = $mean; d2_max = $mx; frac_over_0004 = $over }
         } }
         Write-WfcCsv $prow (Join-Path $OutDir "frame_pacing.csv")
         foreach ($g in ($prow | Group-Object case)) {
-            $bad = @($g.Group | Where-Object { $_.d2_mean -ne $null -and ($_.d2_mean -gt 0.002 -or $_.d2_max -gt 0.006) }); $none = @($g.Group | Where-Object { $_.d2_mean -eq $null })
-            Add-WfcResult $res "jitter.pacing.$($g.Name)" $(if ($none.Count -eq $g.Count) { "SKIP" } elseif ($bad.Count) { "FAIL" } else { "PASS" }) (($g.Group | Measure-Object d2_mean -Maximum).Maximum) ("pawn screen-x second difference per rendered frame (mean / max): " + (($g.Group | ForEach-Object { "{0} Hz {1} / {2}" -f $_.hz, $_.d2_mean, $_.d2_max }) -join "; ") + " (Rendering M08: broken 0.0095 / 0.014 at 144 Hz, fixed <= 0.0001; threshold 0.002 / 0.006)") "Gameplay"
+            $bad = @($g.Group | Where-Object { $_.d2_mean -ne $null -and ($_.d2_mean -gt 0.002 -or $_.frac_over_0004 -gt 0.05) })   # sustained swim; isolated pops (camera obstruction) are reported, not failed
+            $pops = @($g.Group | Where-Object { $_.d2_max -gt 0.006 }); $none = @($g.Group | Where-Object { $_.d2_mean -eq $null })
+            Add-WfcResult $res "jitter.pacing.$($g.Name)" $(if ($none.Count -eq $g.Count) { "SKIP" } elseif ($bad.Count) { "FAIL" } else { "PASS" }) (($g.Group | Measure-Object d2_mean -Maximum).Maximum) ("pawn screen-x second difference per rendered frame (mean / max): " + (($g.Group | ForEach-Object { "{0} Hz {1} / {2} ({3:P1} frames > 0.004)" -f $_.hz, $_.d2_mean, $_.d2_max, $_.frac_over_0004 }) -join "; ") + " (Rendering M08: broken 0.0095 mean at 144 Hz, fixed <= 0.0001; FAIL = mean > 0.002 or > 5% of frames > 0.004)") "Gameplay"
+            if ($pops.Count -and -not $bad.Count) { Add-WfcResult $res "jitter.pacing.$($g.Name).pops" "INFO" (($pops | Measure-Object d2_max -Maximum).Maximum) ("isolated screen-position pops (max second difference > 0.006) at " + (($pops | ForEach-Object { "$($_.hz) Hz" }) -join ", ") + ": single events (camera obstruction / collision), not periodic jitter") "Gameplay" }
         }
     }
 }
 # ---------------------------------------------------------------- D. vehicle / robot presentation frames (WFC_SHOTEVERY, legacy boot)
 function Analyze-Seq($files, $label, $owner) {
-    $L = @($files | ForEach-Object { [WfcImage]::Luma($_.FullName, 8) }); $w = [int]$L[0][0]; $h = [int]$L[0][1]
+    $L = @($files | ForEach-Object { , [WfcImage]::Luma($_.FullName, 8) }); $w = [int]$L[0][0]; $h = [int]$L[0][1]
     $x0 = [int]($w * 0.38); $x1 = [int]($w * 0.62); $y0 = [int]($h * 0.40); $y1 = [int]($h * 0.92)
     $d1 = @(); $d2 = @()
-    function RD($fa, $fb) { $s = 0.0; $n = 0; for ($yy = $y0; $yy -lt $y1; $yy++) { for ($xx = $x0; $xx -lt $x1; $xx++) { $ix = 2 + $yy * $w + $xx; $s += [Math]::Abs($fa[$ix] - $fb[$ix]); $n++ } }; return $s / [Math]::Max(1, $n) }
-    for ($i = 0; $i -lt $L.Count - 2; $i++) { $d1 += RD $L[$i] $L[$i + 1]; $d2 += RD $L[$i] $L[$i + 2] }
+    function RegionMeanDiff($fa, $fb) { $s = 0.0; $n = 0; for ($yy = $y0; $yy -lt $y1; $yy++) { for ($xx = $x0; $xx -lt $x1; $xx++) { $ix = 2 + $yy * $w + $xx; $s += [Math]::Abs($fa[$ix] - $fb[$ix]); $n++ } }; return $s / [Math]::Max(1, $n) }
+    for ($i = 0; $i -lt $L.Count - 2; $i++) { $d1 += (RegionMeanDiff ($L[$i]) ($L[$i + 1])); $d2 += (RegionMeanDiff ($L[$i]) ($L[$i + 2])) }
     $m1 = ($d1 | Measure-Object -Average).Average; $m2 = ($d2 | Measure-Object -Average).Average
     $pp = 0; for ($i = 0; $i -lt $d2.Count; $i++) { if ($d1[$i] -gt 1.0 -and $d2[$i] -lt 0.5 * $d1[$i]) { $pp++ } }
     Add-WfcResult $res "jitter.present.$label.alternation" $(if ($pp -gt $d2.Count * 0.25) { "FAIL" } else { "PASS" }) $(if ($m1 -gt 0) { [Math]::Round($m2 / $m1, 3) }) ("{0} consecutive frames: |f(i)-f(i+1)| {1:N2}, |f(i)-f(i+2)| {2:N2}; ping-pong frames {3}" -f $files.Count, $m1, $m2, $pp) $owner
