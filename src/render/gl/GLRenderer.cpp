@@ -467,6 +467,7 @@ public:
 
     void setVisibilityQuery(VisibilityQuery q) override { wfc_.setVisibility(std::move(q)); }
     void setCharacterColors(const CharacterColors& c) override { wfc_.setCharacterColors(c); }
+    void setDrawOwner(int o) override { wfc_.setDrawOwner(o); }
     void setActorHidden(const std::string& actor, bool hidden) override { wfc_.setActorHidden(actor, hidden); }
     void setMapEffectActive(const std::string& what, bool active) override { wfc_.setMapEffectActive(what, active); }
     void setMapEffectState(const std::string& k, bool a, bool h) override { wfc_.setMapEffectState(k, a, h); }

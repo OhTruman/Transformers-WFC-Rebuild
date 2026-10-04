@@ -17,6 +17,28 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 09 — FRONTEND SCENES, LOADING, ROSTER READINESS, RE OVERNIGHT HUD (2026-10-04)
+Inputs:
+- RE `OVERNIGHT_2026-10-04_HUD_VEHICLE_FRONTEND_ROSTER_AI.md` (A HUD, D frontend backgrounds, E roster);
+- RE `MILESTONE05_PLAYTEST_RE.md` §6 (loading);
+- AssetTools `ui_scenes.json`, the UI level exports, and `mp_content/mp_characters.json`;
+- Frontend lane requests (scene entry point, render data for the UI families).
+
+| Item | Original | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Minimap / radar / compass | none in shipped MP | RE A9 (UnrealScript, every GFx pool, authored.db, xex strings) | CONFIRMED (absence) | none drawn; any future minimap is a labelled modern extension |
+| Title / main-menu background | live level UI_FrontEnd_m + streamed UI_FrontEnd_capture_VIG_m, Matinee camera (CameraActor_6585, FOV 45) | RE D, AssetTools ui_scenes | CONFIRMED | `loadFrontendScene` / `drawFrontendScene`: Cybertron orbit scene with energon rings, debris, station, nebula. VISUALLY VERIFIED from the authored camera. Matinee actors, Kismet-activated emitters and lens flares are PARTIAL (need the Frontend's sequence state) |
+| Lobby / customization background | UI_PartyLobby_m / UI_Lobby_m stream UI_CharacterCustomization_m | RE D | CONFIRMED | the customization room is loaded and drawn (space dome from the default camera). The class cameras (15 Matinees), the preview pawn and the CybertronCard Kismet are Frontend-driven [PARTIAL] |
+| Campaign lobby | UI_CampaignLobby_m SpaceDome | RE D | CONFIRMED / look UNKNOWN (AssetTools) | drawn |
+| Multi-level composition | persistent + streamed levels together | RE D | — | one render-data map at a time (the family with the most scenery) [PARTIAL] |
+| Loading movie during blocking loads | Bink on the rendering thread; closes on `CanCloseLoadingMovie` | RE PLAYTEST §6 | CONFIRMED (names) / HIGH (semantics) | `setLoadYield`: a cooperative present between bounded steps (longest 70 ms on UI_FrontEnd). Not a separate render thread [PARTIAL] |
+| TextureSample output 0 | RGB float3 (mask R, G, B) | UE3 node outputs; `Append(TexSample, TexSample.A)` in EnergonRing compiles only so | CONFIRMED | matc fixed (EnergonRing materials failed). Streets 231/231 (now 325/325 with the roster) permutations match; sweep median 0 px |
+| Character roster readiness | 33 chassis; 4 default classes | RE E, AssetTools mp_characters | CONFIRMED data | character materials from the roster (98, all verified); per-owner light environment / applier colours (`setDrawOwner`); the Optimus path is unchanged (idle robot / vehicle 0 px vs M08) |
+| Map-generic render data | — | — | — | packages from map.json sublevels, LM per sublevel, no-BSP / no-fog maps; Streets output unchanged |
+| Per-draw uniform cost | — | — | — | uniform locations cached per program: scene submit 4.9 → 3.9 ms (shared, loaded machine) |
+| HUD (Hud_GFX) | layout, kill feed, announcements, popups, scoreboard, end message | RE A0–A8 | CONFIRMED | Frontend runs the movie (`docs/handoffs/FRONTEND_INMATCH_HUD.md` updated with the exact values); the Canvas markers are Rendering's |
+| Character jitter (M05) | — | M08 measurement | — | handed off to Gameplay (unchanged on agents/rendering; the patch is in `docs/handoffs`) |
+
 ## MILESTONE 08 — PLAYTEST REGRESSIONS, IN-MATCH HUD OWNERSHIP, CANVAS LAYER (2026-10-04)
 Inputs:
 - the human playtest of integration milestone 05;

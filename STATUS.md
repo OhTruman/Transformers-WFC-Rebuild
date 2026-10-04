@@ -602,6 +602,24 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 09 (2026-10-04, agents/rendering) — frontend scenes, loading, roster readiness
+- The menus' live 3D levels render through `loadFrontendScene` / `drawFrontendScene`:
+  - the title Cybertron scene is VISUALLY VERIFIED from the authored camera;
+  - render data builds for all 5 UI families.
+- `setLoadYield` keeps the loading movie presenting during map loads (longest blocking step 70 ms).
+- The previous map is always released before a new load.
+- Minimap: none, CONFIRMED absent in the original.
+- HUD handoff updated with RE's exact Hud_GFX layout and kill-feed timing.
+- Roster:
+  - character materials come from the AssetTools roster (98, verified);
+  - `setDrawOwner` gives per-character light environments;
+  - roster materials are excluded from the prewarm (8.8 s → 0.18 s).
+- Fixes:
+  - TextureSample RGB output (matc);
+  - missing FX distributions no longer abort;
+  - the legacy path unbinds buffers;
+  - per-draw uniform locations are cached.
+
 ## RENDERING MILESTONE 08 (2026-10-04, agents/rendering) — playtest regressions, HUD ownership, Canvas layer
 - **Character jitter (M05):** caused by Gameplay's camera frame pacing, measured. Fix patch handed off:
   `docs/handoffs/GAMEPLAY_CAMERA_FRAME_PACING.md`.

@@ -69,6 +69,31 @@ After `unloadMapRenderData()`:
 
 Gameplay passes the markers its rules show. Ownership of the in-match HUD layers: `docs/handoffs/FRONTEND_INMATCH_HUD.md`.
 
+## 2c. Frontend 3D scenes, loading yields, characters (M09)
+
+| Call | Behaviour |
+|---|---|
+| `loadFrontendScene(levels)` / `drawFrontendScene(camPosUE, camRotUEdeg, fovDeg, w, h, timeSec)` / `unloadFrontendScene()` | The live UI levels behind the menus (RE OVERNIGHT §D). |
+| `setLoadYield(callback)` | Called between bounded load steps with no GL binding held, so the loading movie keeps presenting (RE PLAYTEST §6). |
+| `setDrawOwner(id)` | Per-character light environment and applier colours for the following dynamic draws. |
+
+**Frontend scenes:**
+- `loadFrontendScene` loads the exported family with the most scenery; `drawFrontendScene` draws a complete frame;
+  the GFx layer is composited after it.
+- The camera comes from the Frontend's CameraActor / Matinee evaluation.
+- Render data: `build_render_data.ps1 -Map UI_FrontEnd | UI_CharacterCustomization | UI_PartyLobby | UI_Lobby |
+  UI_CampaignLobby`.
+
+**Loading yields:**
+- On UI_FrontEnd: 193 yields, longest step 70 ms. The remaining long steps are single large texture decodes.
+- `loadMapRenderData` always releases the previous map first.
+
+**Draw owner:**
+- Robot / vehicle / weapon roles come from material packages, never from character names.
+- Character materials come from the AssetTools roster (`tools/render/character_materials.py`: 98 materials over the
+  MP chassis, all verified against their shipped permutations). They compile on the character's first draw, not in
+  the prewarm.
+
 ## 3. 2D composition (GFx movies, Bink frames, loading screens, fades)
 
 | Call | Behaviour |

@@ -84,6 +84,12 @@ public:
     // Level travel: release every GPU resource of the loaded map render data (meshes, textures, programs, targets).
     // The renderer stays usable; a later loadMapRenderData() rebuilds everything for the next map.
     virtual void unloadMapRenderData() {}
+    // Character instance for the following dynamic-mesh draws (drawDynamicMesh: robot / vehicle / weapon of one pawn):
+    // keys the per-character light environment (DirectLightEnv state, update queue) and the TnCharacterApplier colours
+    // (setCharacterColors applies to the current owner). 0 = the local player (default; PlayerOnly light channel).
+    // Any chassis works: the robot / vehicle / weapon role comes from the mesh's material packages (*_ROBO_p,
+    // *_VEH_p, WEP_*), never from character names.
+    virtual void setDrawOwner(int ownerId) { (void)ownerId; }
     // Loading presentation (RE MILESTONE05_PLAYTEST §6: the original loading Bink plays on the rendering thread while the
     // game thread blocks): during loadMapRenderData / loadFrontendScene the renderer calls this between bounded steps
     // (each mesh submesh with its material program and textures, each map prop, each load phase) with no GL objects

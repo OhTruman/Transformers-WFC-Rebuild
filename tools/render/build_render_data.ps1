@@ -27,12 +27,13 @@ if ($LASTEXITCODE -ne 0) { throw "build_lighting failed" }
 # 3. Materials: original graphs -> GLSL (world + BSP + decals + Optimus robot/vehicle + Ion Blaster
 #    + the original vehicle/weapon FX materials listed in fx_materials.txt).
 $fx = Get-Content (Join-Path $PSScriptRoot "fx_materials.txt") | Where-Object { $_ -match '\S' }
+# Character materials: every MP chassis (robot + vehicle) from the AssetTools roster (character_materials.py),
+# not an Optimus-specific list; only materials cooked into this map compile.
+$chars = @((& $py (Join-Path $PSScriptRoot "character_materials.py")) | Where-Object { $_ -match '\S' })
 # Canvas (HUD marker) materials: compiled with per-draw runtime parameters
 $ui = Get-Content (Join-Path $PSScriptRoot "ui_materials.txt") | Where-Object { $_ -match '\S' }
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
-    TR_Optimus_ROBO_p.RB_OptimusPrime_Cust_Mat_INST_B TR_Optimus_ROBO_p.InteriorAlt_Energon_MAT_INST `
-    TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST TR_Optimus_VEH_p.InteriorAlt_Energon_MAT_INST `
-    WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx @ui
+    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx @ui
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 
 

@@ -113,6 +113,8 @@ struct Program {
     struct Slot { int unit; GLuint tex; bool cube; float umin[4]; float uscale[4]; };
     GLint uRT[3] = {-1, -1, -1}, uRTSet[3] = {-1, -1, -1};   // applier params (Cust_Color_A/B, EnergonColor)
     std::map<std::string, std::pair<GLint, GLint>> rtLoc;      // every runtime parameter: (uRT_, uRTSet_)
+    // per-draw uniform locations by literal name (looked up once per program; key = the literal's address)
+    mutable std::vector<std::pair<const char*, GLint>> locCache;
     std::vector<Slot> slots;
     int blend = 0;                // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
     bool twoSided = false, lit = true;
@@ -139,7 +141,8 @@ public:
     bool hasMaterial(const std::string& m) const { return mats_.count(m) > 0; }
     bool active() const { return active_; }
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
-    void setCharacterColors(const CharacterColors& c) { charColors_ = c; }
+    void setCharacterColors(const CharacterColors& c) { charColorsBy_[drawOwner_] = c; }
+    void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
 
     void beginFrame(const Camera& cam, int w, int h);
     void endFrame();
@@ -231,7 +234,8 @@ private:
     GLuint clutTex_ = 0;
     int clutSize_ = 32;
     float znear_ = 0.1f, zfar_ = 20000.0f;
-    CharacterColors charColors_;   // default all-zero -> every override skipped (authored values)
+    std::map<int, CharacterColors> charColorsBy_;   // per draw owner; default all-zero -> overrides skipped
+    int drawOwner_ = 0;                              // character instance of the current dynamic draws
     int testMesh_ = -1;           // WFC_TESTMESH render verification hook
     core::Mat4 testModel_;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
