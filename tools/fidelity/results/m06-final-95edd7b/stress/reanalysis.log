@@ -1,0 +1,22 @@
+﻿MP_IAC_Streets
+  T: TRANSFORM STRESS: 168 runs; PASS 138, INFO large_drop 30
+  V: VEHICLE COLLISION: 132 runs; PASS 91, FAIL passed_through 6, INFO stuck 35; actors: StaticMeshCollectionActor_13239 x3, StaticMeshCollectionActor_2614 x1, StaticMeshCollectionActor_11477 x1, StaticMeshCollectionActor_4707 x1
+MP_UND_Gorge
+  T: TRANSFORM STRESS: 168 runs; INFO large_drop 62, PASS 106
+  V: VEHICLE COLLISION: 132 runs; PASS 96, FAIL ramp_hard_stop 8, INFO stuck 25, INFO no_exported_floor 2, FAIL passed_through 1; actors: StaticMeshCollectionActor_12888 x1
+MP_KON_Molten
+  T: TRANSFORM STRESS: 168 runs; PASS 156, INFO large_drop 12
+  V: VEHICLE COLLISION: 132 runs; PASS 72, INFO stuck 48, FAIL ramp_hard_stop 7, FAIL passed_through 5; actors: StaticMeshCollectionActor_11993 x4, StaticMeshCollectionActor_13801 x1
+MP_IAC_Rust
+  T: TRANSFORM STRESS: 168 runs; PASS 137, INFO large_drop 31
+  V: VEHICLE COLLISION: 132 runs; PASS 102, FAIL ramp_hard_stop 6, INFO stuck 22, FAIL passed_through 2; actors: StaticMeshCollectionActor_11061 x1, StaticMeshCollectionActor_5939 x1
+MP_IAC_Seed
+  T: TRANSFORM STRESS: 168 runs; PASS 145, INFO large_drop 23
+  V: VEHICLE COLLISION: 132 runs; PASS 99, INFO stuck 31, FAIL passed_through 2; actors: StaticMeshCollectionActor_9651 x1, StaticMeshCollectionActor_13553 x1
+MP_IAC_Berth
+  T: TRANSFORM STRESS: 168 runs; INFO large_drop 57, PASS 110, FAIL fell_through 1
+  V: VEHICLE COLLISION: 132 runs; PASS 92, INFO stuck 39, FAIL passed_through 1; actors: StaticMeshCollectionActor_4425 x1
+MP_ORB_Debris
+  T: TRANSFORM STRESS: 168 runs; PASS 146, INFO large_drop 18, INFO no_exported_floor 4
+  V: (analysed above)
+REANALYSIS DONE

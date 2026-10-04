@@ -12,7 +12,7 @@
 #   FAIL out_of_bounds  - below KillZ or no authored floor under the end point
 #   INFO stuck          - moving input but < 0.5 m travelled in the last 3 s (wedged; Gameplay CHAOS reports these too)
 param([Parameter(Mandatory)][string]$Exe, [string]$RenderData = "", [Parameter(Mandatory)][string]$OutDir,
-      [string[]]$Starts = @(), [string[]]$Scenarios = @(), [switch]$AnalyzeOnly, [string]$Map = "MP_IAC_Streets", [int]$StartSample = 0, [double[]]$Heights = @(0.8, 1.2, 1.6))
+      [string[]]$Starts = @(), [string[]]$Scenarios = @(), [switch]$AnalyzeOnly, [string]$Map = "MP_IAC_Streets", [int]$StartSample = 0, [switch]$NoVisible, [double[]]$Heights = @(0.8, 1.2, 1.6))
 $ErrorActionPreference = "Stop"
 $Scenarios = @($Scenarios | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 $Starts = @($Starts | ForEach-Object { $_ -split "," } | Where-Object { $_ } | ForEach-Object { [int]$_ })
@@ -94,10 +94,10 @@ $pf = Join-Path $OutDir "paths.json"; $po = Join-Path $OutDir "sweep_out.json"; 
 [IO.File]::WriteAllText($pf, ($paths | ConvertTo-Json -Compress -Depth 5)); [IO.File]::WriteAllText($qf, ($queries | ConvertTo-Json -Compress -Depth 3))
 Push-Location $PSScriptRoot
 $pv = Join-Path $OutDir "visible_out.json"
-try { & $py "collision_sweep.py" $colGlb $pf $po | Out-Host; & $py "collision_query.py" $colGlb $qf $qo | Out-Host; & $py "collision_sweep.py" $visGlb $pf $pv | Out-Host } finally { Pop-Location }
+try { & $py "collision_sweep.py" $colGlb $pf $po | Out-Host; & $py "collision_query.py" $colGlb $qf $qo | Out-Host; if (-not $NoVisible) { & $py "collision_sweep.py" $visGlb $pf $pv | Out-Host } } finally { Pop-Location }   # -NoVisible: skip the visible-geometry look-here sweep (hours on the densest maps)
 # authored per-actor flags: block = False meshes are meant to be passable (collision.json prop_collision_flags)
 $flags = @{}; foreach ($f in (Get-Content -Raw $flagsJson | ConvertFrom-Json).prop_collision_flags) { $flags[$f.actor] = [bool]$f.block }
-$visCross = @{}; foreach ($c in (Get-Content -Raw $pv | ConvertFrom-Json).crossings) { if ($c.id -like "probe|*") { continue }; if (-not $visCross.ContainsKey($c.id)) { $visCross[$c.id] = @() }; $visCross[$c.id] += $c }
+$visCross = @{}; foreach ($c in $(if (Test-Path $pv) { (Get-Content -Raw $pv | ConvertFrom-Json).crossings } else { @() })) { if ($c.id -like "probe|*") { continue }; if (-not $visCross.ContainsKey($c.id)) { $visCross[$c.id] = @() }; $visCross[$c.id] += $c }
 $S = Get-Content -Raw $po | ConvertFrom-Json; $Q = @{}; foreach ($o in (Get-Content -Raw $qo | ConvertFrom-Json)) { $Q[$o.id] = $o }
 $X = @{}; foreach ($c in $S.crossings) { if (-not $X.ContainsKey($c.id)) { $X[$c.id] = @() }; $X[$c.id] += $c }
 # ---- classification ----
