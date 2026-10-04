@@ -41,7 +41,16 @@ struct SystemsFrontendAudio final : frontend::IFrontendAudio {
     // Movie audio: the movie's own Bink tracks, decoded and streamed by Systems (FrontendAudioRuntime, M07), outside
     // the categories CINE_MUTE_FOR_BINK ducks [integration M06: replaces the frontend WAV cache].
     bool startMovieAudio(const std::string& p) override { return rt.startMovieAudio(p); }
-    void stopMovieAudio() override { rt.stopMovieAudio(); }
+    void stopMovieAudio() override {
+        // Soak / sync evidence: the movie sound's clock when it is stopped (compare with movie.finished position) and
+        // the Systems state right after (no movie stream may remain).
+        const double clock = rt.movieAudioClock();
+        rt.stopMovieAudio();
+        const auto st = rt.state();
+        frontend::FlowTrace::emit("movie.audioStop", {{"audioClock", frontend::FlowTrace::num(clock)},
+                                                      {"movieStreamAfter", frontend::FlowTrace::boolean(st.movieAudio)},
+                                                      {"voices", std::to_string(st.voices)}});
+    }
     int playUiSound(const std::string& n) override { return rt.playUiSound(n); }
     bool stopUiSound(const std::string& n, float f) override { return rt.stopUiSound(n, f); }
     void uiLevelStarted(const std::string& l) override { rt.uiLevelStarted(l); }
