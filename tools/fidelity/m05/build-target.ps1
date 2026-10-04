@@ -9,7 +9,8 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot "..\..\..")).Path
 $sha = (& git -C $root rev-parse --verify "$Ref^{commit}").Trim()
 Write-Host "M05 build target: $Ref = $sha -> work\ab\$Name"
 & (Join-Path $root "tools\fidelity\ab.ps1") -Ref $sha -Name $Name -Exe -Jobs $Jobs
-if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "ab.ps1 failed" }
+$abExit = $LASTEXITCODE   # ab.ps1 also runs the fidelity harness: its exit code counts harness failures, not build errors
+if (-not (Test-Path (Join-Path $root "work\ab\$Name\build\bin\wfc_rebuild.exe"))) { throw "ab.ps1 did not produce build\bin\wfc_rebuild.exe (exit $abExit)" }
 $dest = Join-Path $root "work\ab\$Name"
 $tc = Join-Path $root ".toolchain"
 $clangDir = Join-Path $tc "llvm-mingw-20260922-ucrt-x86_64\bin"; $cmakeExe = Join-Path $tc "cmake-4.4.3-windows-x86_64\bin\cmake.exe"; $ninjaExe = Join-Path $tc "ninja\ninja.exe"
