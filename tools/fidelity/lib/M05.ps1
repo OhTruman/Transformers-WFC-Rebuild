@@ -98,3 +98,19 @@ function Find-DoubledCues([string]$WfcLog) {
 }
 # Maximum of a numeric property over objects, ignoring nulls; $null when none.
 function MaxOf($rows, [string]$prop) { $v = @($rows | ForEach-Object { $_.$prop } | Where-Object { $_ -ne $null }); if (-not $v.Count) { return $null }; return ($v | Measure-Object -Maximum).Maximum }
+
+# Fraction of the frame covered by flat, untextured mid-grey: 8 px cells with low chroma and mid luminance whose 4
+# neighbours have (nearly) the same colour. Large values = placeholder / missing-material geometry on screen.
+function FlatGreyFraction([string]$bmp) {
+    if (-not (Test-Path $bmp)) { return $null }
+    $c = [WfcImage]::Rgb((Resolve-Path $bmp).Path, 8); $w = [int]$c[0]; $h = [int]$c[1]
+    function px($x, $y) { $i = 2 + 3 * ($y * $w + $x); return @($c[$i], $c[$i + 1], $c[$i + 2]) }
+    $n = 0; $flat = 0
+    for ($y = 1; $y -lt $h - 1; $y++) { for ($x = 1; $x -lt $w - 1; $x++) {
+        $n++; $p = px $x $y; $l = ($p[0] + $p[1] + $p[2]) / 3
+        if ($l -lt 70 -or $l -gt 215 -or ([Math]::Max([Math]::Max($p[0], $p[1]), $p[2]) - [Math]::Min([Math]::Min($p[0], $p[1]), $p[2])) -gt 14) { continue }
+        $same = $true; foreach ($q in @((px ($x - 1) $y), (px ($x + 1) $y), (px $x ($y - 1)), (px $x ($y + 1)))) { if ([Math]::Abs($q[0] - $p[0]) + [Math]::Abs($q[1] - $p[1]) + [Math]::Abs($q[2] - $p[2]) -gt 9) { $same = $false; break } }
+        if ($same) { $flat++ }
+    } }
+    return [Math]::Round($flat / [Math]::Max(1, $n), 3)
+}
