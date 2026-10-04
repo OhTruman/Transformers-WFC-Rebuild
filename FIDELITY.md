@@ -75,6 +75,65 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 21d — BOOST-STATE FLICKER, VEHICLE CONTACT, HIGH-REFRESH GUARD (2026-10-04, gameplay agent)
+Inputs:
+- Rendering M08 handoffs `GAMEPLAY_BOOST_FX_FLICKER.md` and `GAMEPLAY_CAMERA_FRAME_PACING.md`;
+- RE MILESTONE05_PLAYTEST_RE §1–2 and the OVERNIGHT_2026-10-04 note §B.
+
+### Boost exhaust open / close (human-reported; diagnosed by Rendering) — FIXED at the source
+- **Cause (mine, Pass 20).**
+  - The frontal-collision drop (Driving.OnRigidBodyCollision: contact normal · forward > 0.866 -> Hovering, CONF) was
+    judged by the travel direction, not the contact normal.
+  - Any block of the low hull probe while moving forward (including grazing contacts) ended boost. That was followed by
+    the 0.5 s drift and a re-boost, so the BoostFx restarted about every 0.6 s.
+  - Rendering logged 15–31 drops per 14 s on open floor at M05.
+- **Fix.** The drop needs the blocking face's normal (into the obstacle) within 30° of forward. The exhaust FX stays bound
+  to the real Driving state; nothing is smoothed.
+- **Re-run of Rendering's repro** (starts 1 / 4 / 7 / 18 / 21, boost held 14 s, `WFC_VEHDROPLOG=1`): 2 / 1 / 3 / 0 / 22
+  drops.
+  - **Every** remaining drop is a near-vertical face (|n.y| ≤ 0.34) of a real obstacle: crates and batteries near
+    (139, −622); a wall at start 21, where the truck sits pressed against it at 0 m/s and re-boosts after each drift.
+  - These are authentic frontal impacts.
+- **Regression guard (VEHTEST).** Boost across 0.05 / 0.1 / 0.2 / 0.3 m steps: **0 drops**. A 0.5 m riser reaches the
+  0.45 m hull probe, so it is a frontal hit (RE §2.2: boost lips contact the hull, C).
+
+### Vehicle contact (ramps / angle changes)
+- **Hover** already matches RE §2.1 (CONFIRMED ORIGINAL): 4 diagonal 250 UU rays, a normal-weighted implicit spring, the
+  45° ground test, yaw-only orientation on contact, upright only when airborne or upside down, (up.Z)² strafe.
+- **The stops were my Pass 20 hull probes:** faces of 45–60° were treated as walls. Now faces with |n.y| > 0.5 (under 60°)
+  don't stop the hull; a rigid-body box meeting a sloped face is pushed up it, which the chassis / spring code reproduces
+  [PROV]. Near-vertical faces still block.
+- **Boost (Driving).** The body settles onto the support slope instead of level, so the recovered BoostScale (fades to 0
+  between forward.Z 0.5 and 0.866, CONF) sees climbs, and gravity acts along the slope [PROV]. The per-wheel
+  TnWheelAssembly suspension (K 120000, D 8000, rest 30 + radius 45 UU, CONF) is **not** modelled: the wheel mount
+  heights relative to the mesh origin are unknown (RE / AT request).
+- **VEHTEST ramp sweep** (3 m ramps; hover 15 m/s, boost 25 m/s):
+  - hover 20 / 35 / 50° climb, 65° stops;
+  - boost 20–50° climb with the body pitching 19–31°; 65° is a frontal hit -> Hovering.
+  - **OPEN:** hover at 35° launches about 6 m and tilts 69° (the same before this pass). It comes from the recovered spring
+    response to fast compression on a steep face. I did not tune it; the RB hull contact the rebuild approximates is the
+    likely difference.
+- **Regressions.**
+  - WFC_XFORMTEST 0 / 1520 under the map; the overhang cases are unchanged (15).
+  - Map oracle 852 / 852; vehicle tour 98 / 122 (was 97).
+  - WFC_CHAOS: 0 under the map, 0 KillZ, 0 stuck, 4 prop entries.
+  - VEHTEST hover / steering / nitro unchanged.
+
+### High-refresh pawn / camera separation — regression guard
+- The fix is PASS 21a (camera per render frame); Rendering's independent diagnosis and patch agree.
+- **WFC_CAMSYNC** (on-screen character offset jitter per frame):
+
+| scenario | 60 Hz | 144 Hz | 240 Hz |
+|---|---|---|---|
+| robot run + turn | 0.0003° | 0.0003° | 0.0002° |
+| hover drive + turn | 0.055° | 0.011° | 0.004° |
+| boost | 0.106° | 0.023° | 0.009° |
+
+- The per-tick cache (M05) gave 1.28° at 144 Hz.
+- The vehicle residual falls with the refresh rate: it is the truck's own motion, not pacing.
+
+---
+
 ## PASS 21c — CONQUEST (DOM) AND POWER STRUGGLE (KOTH) ON THE SHARED MATCH FRAMEWORK (2026-10-04, gameplay agent)
 Sources:
 - RE MILESTONE05_PLAYTEST_RE (28debca) §3;

@@ -72,10 +72,11 @@ core::Vec3 robotCalcVelocity(const Character& c, const core::Vec3& wish, const c
 // radius out made the next, slower step creep forward, flipping Idle/Moving for a frame or two when
 // stopping against a wall.) [PROV collision model: no capsule sweep]
 bool wallBlock(const CollisionWorld* col, const core::Vec3& oldPos, core::Vec3& p, core::Vec3& v, float probeR,
-               float probeY = core::config::kPawnHalfHeight, bool skipWalkable = false) {
+               float probeY = core::config::kPawnHalfHeight, float skipNy = 2.0f, core::Vec3* firstHitN = nullptr) {
     if (!col) return false;
-    // probeY: probe height above oldPos (robot: capsule centre ~2 m). skipWalkable: hits on walkable faces
-    // (n.y > 0.7: floors, ramps) are passed through - the ground / suspension code owns those.
+    // probeY: probe height above oldPos (robot: capsule centre ~2 m). skipNy: hits on faces with |n.y| > skipNy
+    // (floors, ramps) are passed through - the ground / suspension code owns those. firstHitN: the first blocking
+    // face normal (oriented against the motion).
     core::Vec3 start{oldPos.x, oldPos.y + probeY, oldPos.z};
     core::Vec3 move{p.x - oldPos.x, 0.0f, p.z - oldPos.z};
     const core::Vec3 move0 = move;
@@ -86,13 +87,14 @@ bool wallBlock(const CollisionWorld* col, const core::Vec3& oldPos, core::Vec3& 
         core::Vec3 dn = move * (1.0f / dist);
         float tHit; core::Vec3 n;
         bool hit = col->segmentHit(start, start + dn * (dist + probeR), tHit, n);
-        for (int skip = 0; hit && skipWalkable && std::fabs(n.y) > 0.7f && skip < 4; ++skip) {
+        for (int skip = 0; hit && std::fabs(n.y) > skipNy && skip < 4; ++skip) {
             float len = dist + probeR, from = tHit * len + 0.02f;
             float t2; core::Vec3 n2;
             if (from >= len || !col->segmentHit(start + dn * from, start + dn * len, t2, n2)) { hit = false; break; }
             tHit = (from + t2 * (len - from)) / len; n = n2;
         }
         if (!hit) { start = start + move; move = {0, 0, 0}; break; }
+        if (!blocked && firstHitN) *firstHitN = core::dot(n, dn) > 0.0f ? n * -1.0f : n;
         blocked = true;
         float allowed = std::max(0.0f, std::min(dist, tHit * (dist + probeR) - probeR));
         start = start + dn * allowed;
@@ -362,8 +364,16 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             vs.tireForce = fSum;
             vs.angVel.x = 0.0f;
             if (vs.angVel.y > 0.0f) vs.angVel.y = 0.0f;       // keep a jump's nose-up rate, else level
-            float k = 1.0f - std::exp(-10.0f * dt);           // [PROV] settle on the wheels
-            vs.pitch -= vs.pitch * k; vs.roll -= vs.roll * k;
+            // [PROV] settle on the wheels, onto the support slope under the truck (single support normal at the root):
+            // the body pitches with the ground so UpdateBoost's BoostScale (fades to 0 between forward.Z 0.5 and 0.866,
+            // CONF) sees real climbs, and gravity acts along the slope (the wheel snap otherwise removes it). The per-wheel
+            // TnWheelAssembly suspension (K 120000, D 8000, rest 30 + radius 45 UU) is not modelled: mount heights unknown.
+            core::Vec3 gnn = core::normalize(gn); if (gnn.y < 0.0f) gnn = gnn * -1.0f;
+            core::Vec3 fp = core::normalize(F - gnn * core::dot(F, gnn)), rp = core::normalize(R - gnn * core::dot(R, gnn));
+            float slopePitch = std::asin(core::clampf(fp.y, -1.0f, 1.0f)), slopeRoll = std::asin(core::clampf(-rp.y, -1.0f, 1.0f));
+            float k = 1.0f - std::exp(-10.0f * dt);
+            vs.pitch += (slopePitch - vs.pitch) * k; vs.roll += (slopeRoll - vs.roll) * k;
+            v = v + F * (-gRB * std::sin(slopePitch) * std::cos(slopePitch) * dt);   // gravity along the slope (horizontal part)
         }
         c.setYaw(c.yaw() - vs.angVel.z * dt);                  // UE +z (turn right) = rebuild yaw decreasing
         vs.yawRate = vs.angVel.z;
@@ -389,16 +399,28 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     // Hull against walls: probes across the PhysicalVehicleMesh hull's height (root -0.35 .. +1.85 m) instead of the
     // robot torso height (2 m above the root, above the hull top: the truck drove through anything lower). The low
     // probe sits above the wheel / spring clearance (driving: wheels down, root on the floor; hovering: hull bottom
-    // 0.35 m below the root) and ignores walkable faces. [PROV: probes approximate the rigid-body box contact]
+    // 0.35 m below the root). Faces with |n.y| > 0.5 (slopes under 60 deg) do not stop the hull: a rigid-body box meeting
+    // a sloped face is pushed up it, which the chassis-ground / spring code reproduces; near-vertical faces block.
+    // (Pass 20 skipped only n.y > 0.7, so 45-60 deg ramp faces stopped the truck dead.) [PROV: probes approximate the
+    // RB box contact]
     const float probes[3] = {vs.driving ? 0.45f : kHullBottom + 0.15f, 0.5f * (kHullBottom + kHullTop), kHullTop - 0.1f};
     bool hullBlocked = false;
-    for (float h : probes) hullBlocked |= wallBlock(col, oldPos, p, v, std::max(hullReach, kHullHalfWidth), h, true);
+    core::Vec3 hitN{0, 0, 0};
+    float hitH = 0.0f;
+    for (float h : probes) {
+        core::Vec3 n{0, 0, 0};
+        if (wallBlock(col, oldPos, p, v, std::max(hullReach, kHullHalfWidth), h, 0.5f, &n)) { if (!hullBlocked) { hitN = n; hitH = h; } hullBlocked = true; }
+    }
     if (hullBlocked && vs.driving) {
-        // Driving.OnRigidBodyCollision: a frontal hit (contact normal . forward > CosCollisionNormalThreshold
-        // 0.866) drops back to Hovering (ram consumption during nitro not implemented). [PROV contact
-        // normal approximated by the blocked travel direction.]
+        // Driving.OnRigidBodyCollision: a frontal hit drops back to Hovering when the contact normal . forward >
+        // CosCollisionNormalThreshold 0.866 [CONF] (ram consumption during nitro not implemented). The normal is the
+        // blocking face's (into the obstacle): sliding along a wall no longer counts as frontal.
         core::Vec3 fwdFlat = core::forwardFromYawPitch(c.yaw(), 0.0f);
-        if (core::dot(moveDir, fwdFlat) > 0.866f) {
+        core::Vec3 into{-hitN.x, 0.0f, -hitN.z};
+        float il = core::length(into);
+        if (il > 1e-4f && core::dot(into * (1.0f / il), fwdFlat) > 0.866f) {
+            static const bool dropLog = std::getenv("WFC_VEHDROPLOG") != nullptr;
+            if (dropLog) LOG_INFO("VEHDROP frontal hull block -> Hovering: probe %.2f m, normal (%.2f %.2f %.2f), speed %.1f, at (%.2f %.2f %.2f)", hitH, hitN.x, hitN.y, hitN.z, core::length(core::Vec3{v.x, 0, v.z}), p.x, p.y, p.z);
             vs.driving = false;
             vs.nitroRemain = 0.0f; vs.dashRemain = 0.0f;
             vs.driftRemain = cfg::kHoverDriftDuration;
@@ -501,7 +523,7 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     // Knee probe (0.55 m, above MaxStepHeight 0.35; short reach 0.7 m; walkable faces skipped): low props (crates, battery, supports 1-2 m tall)
     // block the body instead of being walked through; the short reach keeps stairs to the centre-point ground model
     // (a 35 deg stair 0.7 m ahead is ~0.49 m high). [PROV: the native cylinder sweep with step-up is not reproduced]
-    robotBlocked |= wallBlock(col, oldPos, p, v, 0.7f, 0.55f, true);
+    robotBlocked |= wallBlock(col, oldPos, p, v, 0.7f, 0.55f, 0.7f);
     if (robotBlocked) {
         v.x = (p.x - oldPos.x) / dt; v.z = (p.z - oldPos.z) / dt;
     }

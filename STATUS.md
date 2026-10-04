@@ -3,6 +3,11 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 21d (2026-10-04) — boost-state flicker fixed, vehicle contact, high-refresh guard
+- Boost exhaust open/close: the frontal drop now uses the contact normal. Repro drops are real obstacles only; VEHTEST guard shows 0 drops on steps <= 0.3 m.
+- Hull probes no longer stop the truck on 45-60 deg faces; boost body follows the slope (BoostScale engages).
+- WFC_CAMSYNC 60/144/240 Hz guard; XFORM, oracle, chaos green. Details: FIDELITY.md PASS 21d.
+
 ## GAMEPLAY PASS 21c (2026-10-04) — Conquest and Power Struggle playable (shared match framework)
 - DOM: 20 s capture per attacker, defender holds, +2 capture, +1 team / 3 s per node (bytecode).
 - KOTH: zone from MatchStarting, +1 personal & team per pawn per second uncontested, 60 s rotation, end deactivation.
