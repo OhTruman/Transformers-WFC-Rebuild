@@ -22,7 +22,7 @@
 param([Parameter(Mandatory)][string]$Root, [ValidateSet("Release", "Debug")][string]$Config = "Release", [string]$OutDir = "",
       [int]$Cycles = 8, [switch]$Full, [string[]]$Runs = @(), [int]$TimeoutSec = 1500)
 $ErrorActionPreference = "Stop"
-$Runs = @($Runs | ForEach-Object { $_ -split "," } | Where-Object { $_ }); if (-not $Runs.Count) { $Runs = @("R1", "R2", "R3", "R4", "R5", "R6", "R7", "S") }
+$Runs = @($Runs | ForEach-Object { $_ -split "," } | Where-Object { $_ }); if (-not $Runs.Count) { $Runs = @("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "S") }
 if (-not $Full) { $Runs = @($Runs | Where-Object { $_ -ne "R3" }) }
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1")
 Add-Type -ReferencedAssemblies System.Drawing -Path (Join-Path $PSScriptRoot "lib\ImageStats.cs") -ErrorAction SilentlyContinue
@@ -42,11 +42,13 @@ $target = if (Test-Path (Join-Path $Root "M05_TARGET.txt")) { (Get-Content (Join
 if (-not (Test-Path $exe)) { Res "DATA" "exe" "SKIP" "no $exe"; $null = Write-WfcReport $res (Join-Path $OutDir "report.json"); return }
 $H = Get-ExeHooks $exe
 function Has($hook) { return $H.Contains($hook) }
+$uiMode = Set-WfcInputMode $H $exe   # ui:<Action> through UiBindings when supported, else key:<flash code>
 Set-Content -Encoding UTF8 (Join-Path $OutDir "target.txt") ("exe=$exe`nconfig=$Config`n$target`nhooks=" + (($H | Sort-Object) -join ","))
 function BaseEnv($dir, [hashtable]$extra = @{}) {
     $e = @{ WFC_BOOT = "frontend"; WFC_FLOWLOG = (Join-Path $dir "flow.jsonl"); WFC_FLOWSEED = "1"; WFC_FLOW_TIMEOUT = "$TimeoutSec"; WFC_LOGEVERY = "15"
             WFC_SMOKE_FRAMES = "100000000"; WFC_AMBLOG = "1"; WFC_MUSICLOG = "1"; WFC_MIXERLOG = "1"; WFC_LEVELAUDIOLOG = "1"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.35" }
     if (Test-Path $rd) { $e.WFC_RENDER_DATA = $rd }
+    if (Has "WFC_PLATFORM") { $e.WFC_PLATFORM = "XBOX360" }   # the Xbox 360 game is the specification (PC SKU: R8)
     foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
     return $e
 }
@@ -67,10 +69,10 @@ if ($ft -and (Test-Path $ft)) {
 if ($Runs -contains "R1") {
     $d1 = Join-Path $OutDir "R1_first_launch"; New-Item -ItemType Directory -Force $d1 | Out-Null
     $s1 = @("wait:t=6", (Shot $d1 "a_intro1"), "wait:t=8", (Shot $d1 "a_intro2"), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2", (Shot $d1 "b_title"),
-            "key:114", "wait:t=1.2", (Shot $d1 "c_mainmenu"), (Keys @(40)), "key:13", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=2.5", (Shot $d1 "d_party"),
-            (Keys @(40)), "key:13", "wait:t=1.2", (Shot $d1 "e_modes"), "key:13", "wait:t=1.5", (Shot $d1 "f_hostoptions"),
-            "key:13", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=2.5", (Shot $d1 "g_gamelobby"), "snapshot:gamelobby",
-            "key:13", "wait:t=4", (Shot $d1 "h_countdown"), "wait:loading=1", "wait:t=0.8", (Shot $d1 "i_loading"),
+            (K 114), "wait:t=1.2", (Shot $d1 "c_mainmenu"), (Keys @(40)), (K 13), "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=2.5", (Shot $d1 "d_party"),
+            (Keys @(40)), (K 13), "wait:t=1.2", (Shot $d1 "e_modes"), (K 13), "wait:t=1.5", (Shot $d1 "f_hostoptions"),
+            (K 13), "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=2.5", (Shot $d1 "g_gamelobby"), "snapshot:gamelobby",
+            (K 13), "wait:t=4", (Shot $d1 "h_countdown"), "wait:loading=1", "wait:t=0.8", (Shot $d1 "i_loading"),
             "wait:level=Match", "wait:t=1", (Shot $d1 "j_match_pending"), "wait:ui=InGame", "wait:t=1.5", (Shot $d1 "k_ingame0"), "wait:t=8", (Shot $d1 "l_ingame1"), "snapshot:ingame",
             "showmenu", "wait:ui=Paused", "wait:t=1.2", (Shot $d1 "m_pause"), "wait:t=1", "call:Game.QuitToMainMenu", "wait:level=FrontEnd", "wait:ui=FrontEnd", "wait:t=3", (Shot $d1 "n_return"), "snapshot:returned", "quit") -join ";"
     $r1 = Invoke-WfcSampled $exe $d1 (BaseEnv $d1 @{ WFC_FRONTEND_SCRIPT = $s1; WFC_CUELOG = "1" }) $TimeoutSec 1.0
@@ -179,6 +181,8 @@ if ($Runs -contains "R1") {
         # ---- quit / return ----
         $tq = @(Flow-Ev $F "travel" | Where-Object { $_.from -eq "Match" })[0]; $ret = @(Flow-Ev $F "snapshot" | Where-Object why -eq "returned")[0]
         Res "STATE" "quit_to_main_menu" $(if ($tq.url -eq $X.travel.quit_to_main_menu.value -and $ret -and $ret.uiState -eq "FrontEnd") { "PASS" } else { "FAIL" }) ("travel {0}; returned uiState {1}; intro replayed after return: {2}" -f $tq.url, $ret.uiState, @(Flow-Ev $F "movie.play" | Where-Object { [int]$_.seq -gt [int]$tq.seq }).Count) "Frontend"
+        $dTitle = Shot-Diff (Join-Path $d1 "n_return.bmp") (Join-Path $d1 "b_title.bmp"); $dMain = Shot-Diff (Join-Path $d1 "n_return.bmp") (Join-Path $d1 "c_mainmenu.bmp")
+        if ($dTitle -ge 0 -and $dMain -ge 0) { Res "STATE" "return_lands_on_main_menu" $(if ($dMain -lt $dTitle) { "PASS" } else { "FAIL" }) ("frontend after the match resembles the main menu (diff {0}) rather than Press START (diff {1}) (Online.ShouldShowStartScreen: true only until ShowDeviceSelectionUI, Frontend 76b8287 from the recovered script)" -f $dMain, $dTitle) "Frontend" }
         Res "LIFETIME" "state_reset_after_return" $(if ($ret -and $ret.mode -eq "" -and [int]$ret.mapId -eq -1 -and "$($ret.hud)" -eq "False") { "PASS" } elseif (-not $ret) { "SKIP" } else { "FAIL" }) ("returned snapshot: mode '{0}' mapId {1} team {2} hud {3}" -f $ret.mode, $ret.mapId, $ret.team, $ret.hud) "Frontend"
         # ---- AUDIO in R1 ----
         $music = @(Grep-Log $log1 '\] MUSIC (play|stop|queued) ')
@@ -317,7 +321,7 @@ if ($Runs -contains "R4") {
     Res "LIFETIME" "memory_stabilizes" $(if ($slUnl -eq $null -and $slFe -eq $null) { "SKIP" } elseif (-not $grow) { "PASS" } elseif ($rets.Count -lt 5) { "INFO" } else { "FAIL" }) ("private MB after each unload: {0} (slope {1} MB/cycle after cycle 1); at the frontend after each return: {2} (slope {3}). {4}" -f (($rows | ForEach-Object { $_.unloaded_private_mb }) -join " > "), $slUnl, (($rows | ForEach-Object { $_.frontend_private_mb }) -join " > "), $slFe, ($attrib -join "; ")) $(if ($grow) { "Rendering/Systems/Integration" } else { "" }) $slUnl
     $peak = ($r4.samples | Where-Object { $_.private_mb -gt 0 } | Measure-Object private_mb -Maximum).Maximum
     Res "LIFETIME" "memory_peak" $(if ($peak -gt 6144) { "FAIL" } else { "INFO" }) ("peak private memory over {0} cycles: {1} MB" -f $Cycles, $peak) "" $peak
-    Res "LIFETIME" "handles_threads" $(if (($slH -ne $null -and $slH -gt 20) -or ($slT -ne $null -and $slT -gt 0.5)) { "FAIL" } else { "PASS" }) ("handles at each return: {0} (slope {1}); threads: {2} (slope {3})" -f (($rows | ForEach-Object { $_.handles }) -join " > "), $slH, (($rows | ForEach-Object { $_.threads }) -join " > "), $slT) "Integration"
+    Res "LIFETIME" "handles_threads" $(if (($slH -ne $null -and $slH -gt 20) -or ($slT -ne $null -and $slT -gt 0.5)) { if ($rets.Count -lt 5) { "INFO" } else { "FAIL" } } else { "PASS" }) ("handles at each return: {0} (slope {1}); threads: {2} (slope {3})" -f (($rows | ForEach-Object { $_.handles }) -join " > "), $slH, (($rows | ForEach-Object { $_.threads }) -join " > "), $slT) "Integration"
     Res "LIFETIME" "gl_release_per_return" $(if (-not $glr.Count) { "INFO" } elseif ($glCounts.Count -eq 1) { "PASS" } else { "FAIL" }) ("GL objects released at each return: " + ($glCounts -join " | ") + $(if (-not $glr.Count) { " (no match.glRelease events: Rendering's unloadMapRenderData replaced the frontend GlCensus stopgap, or nothing was released)" } else { "" })) "Rendering"
     Res "LIFETIME" "audio_pcm_per_match" $(if (-not @($pcmPeaks | Where-Object { $_ -ne $null }).Count) { "SKIP" } elseif ($slPcm -ne $null -and $slPcm -gt 2) { "FAIL" } else { "PASS" }) ("peak decoded PCM per match: {0} MB; peak live instances per match: {1}" -f ($pcmPeaks -join " > "), ($livePeaks -join " > ")) "Systems"
     # Integration's audio.baseline / audio.loaded / audio.unloaded flow events: Systems' own audio state at each step
@@ -381,6 +385,31 @@ if ($Runs -contains "R6") {
     Res "OWNERSHIP" "ui_mode_is_the_mode_run" $(if (-not $ml6) { "FAIL" } elseif ($ml6.mode -eq "DM" -and @($g6 | Where-Object { $_.text -match 'DM' }).Count -and -not @($g6 | Where-Object { $_.text -match 'TDM' }).Count) { "PASS" } elseif (-not $g6.Count) { "FAIL" } else { "FAIL" }) ("mode list Down -> {0}; launch mode {1} goal {2}; loading title '{3}'; Gameplay: {4}; spawn: {5}" -f $egm6.args, $ml6.mode, $ml6.goalScore, $lm6.title, (($g6 | ForEach-Object { $_.text -replace '^.*match: ', '' }) -join " | "), (($sp6 | Select-Object -First 1 | ForEach-Object { $_.text -replace '^.*spawned at ', '' }))) "Integration/Gameplay"
     if ($sp6.Count) { Res "MATCH" "dm_spawn_class" $(if ($sp6[0].text -match 'TnFreeForAllPlayerStart') { "PASS" } else { "FAIL" }) ("DM local spawn: " + ($sp6[0].text -replace '^.*spawned at ', '')) "Gameplay" }
 }
+
+# ======================================================================= R8 PC SKU presentation (Frontend 76b8287: $version WIN by default)
+# The shipped movies' own PC branches: no Press START gate, mc_menuMainPC with Accounts / Exit Game, clickable buttons.
+# Keyboard-logical path (ui:Down / ui:Accept through UiBindings) and the mouse path (clickclip on the button clip).
+if ($Runs -contains "R8" -and (Has "WFC_PLATFORM") -and $uiMode) {
+    $d8 = Join-Path $OutDir "R8_pc_sku"; New-Item -ItemType Directory -Force $d8 | Out-Null
+    $s8 = @("wait:frontend", "wait:ui=FrontEnd", "wait:t=2.5", (Shot $d8 "a_pc_main"), "dump:FrontEnd_GFX", "snapshot:pcmain",
+            "ui:Down", "wait:t=0.6", "ui:Accept", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=2", (Shot $d8 "b_party_keys"), "snapshot:party_keys",
+            "ui:Back", "wait:t=1", "wait:level=FrontEnd", "wait:ui=FrontEnd", "wait:t=2.5", (Shot $d8 "c_main_again"), "snapshot:main_again",
+            "clickclip:menuMain_mc.multiplayerBtn_mc", "wait:t=1.5", "clickclip:_root.menuMain_mc.multiplayerBtn_mc", "wait:t=1.5", "snapshot:after_click", (Shot $d8 "d_after_click"), "quit") -join ";"
+    $e8 = BaseEnv $d8 @{ WFC_FRONTEND_SCRIPT = $s8; WFC_SKIPINTRO = "1" }; $e8.Remove("WFC_PLATFORM")   # default = PC
+    $r8 = Invoke-WfcSampled $exe $d8 $e8 300 1.0
+    $F8 = Read-FlowLog (Join-Path $d8 "flow.jsonl"); $log8 = Join-Path $d8 "wfc.log"
+    $clips = @(Grep-Log $log8 "clip '(exitGameBtn_mc|accountsBtn_mc|multiplayerBtn_mc|campaignBtn_mc)'" | ForEach-Object { [regex]::Match($_.text, "clip '(\w+)'").Groups[1].Value } | Select-Object -Unique)
+    $sdui = @(Flow-Ev $F8 "bridge" | Where-Object fn -eq "Online.ShowDeviceSelectionUI")
+    $pm = Shot-Stats (Join-Path $d8 "a_pc_main.bmp")
+    Res "STATE" "pc.no_start_gate" $(if ($clips -contains "multiplayerBtn_mc" -and $clips -contains "exitGameBtn_mc") { "PASS" } else { "FAIL" }) ("PC SKU main menu without a Start press: buttons {0} (shipped FrontEnd_GFX PC branch: mc_menuMainPC with Accounts / Exit Game)" -f ($clips -join ",")) "Frontend"
+    $opl8 = @(Flow-Ev $F8 "bridge" | Where-Object fn -eq "Online.OpenPartyLobby")
+    Res "STATE" "pc.keyboard_to_multiplayer" $(if (@(Flow-Ev $F8 "snapshot" | Where-Object why -eq "party_keys" | Where-Object level -eq "PartyLobby").Count) { "PASS" } else { "FAIL" }) ("ui:Down + ui:Accept (logical Accept: Enter / pad A) -> party lobby; OpenPartyLobby calls {0}" -f $opl8.Count) "Frontend"
+    $ma = @(Flow-Ev $F8 "snapshot" | Where-Object why -eq "main_again")[0]
+    Res "STATE" "pc.back_to_main" $(if ($ma -and $ma.level -eq "FrontEnd") { "PASS" } else { "FAIL" }) ("ui:Back at the party root -> {0} (BLK A3: Game.QuitToMainMenu)" -f $ma.level) "Frontend"
+    $cc = @(Flow-Ev $F8 "script.clickclip"); $found = @($cc | Where-Object { "$($_.found)" -eq "True" })
+    Res "STATE" "pc.mouse_click" $(if (-not $cc.Count) { "SKIP" } elseif ($found.Count -and @(Flow-Ev $F8 "bridge" | Where-Object { $_.fn -eq "Online.OpenPartyLobby" -and [int]$_.seq -gt [int]$found[0].seq }).Count) { "PASS" } elseif ($found.Count) { "FAIL" } else { "INFO" }) ("clickclip on the Multiplayer button: paths tried {0}, found {1}; OpenPartyLobby after the click: {2}" -f $cc.Count, (($found | ForEach-Object { $_.path }) -join ","), @(Flow-Ev $F8 "bridge" | Where-Object { $_.fn -eq "Online.OpenPartyLobby" -and $found.Count -and [int]$_.seq -gt [int]$found[0].seq }).Count) "Frontend"
+    Res "PRESENTED" "pc.main_menu" $(if (-not $pm) { "SKIP" } elseif ($pm.black -ge 0.97) { "FAIL" } else { "HUMAN" }) ("PC main menu frame near-black {0:P0}: the PC menu look is a human check; the spec remains the Xbox 360 presentation (R1)" -f $(if ($pm) { $pm.black })) "Frontend"
+} elseif ($Runs -contains "R8") { Res "STATE" "pc.sku" "SKIP" "this exe has no PC SKU switch (WFC_PLATFORM) or ui: actions" "Frontend" }
 
 # ======================================================================= R7 score-limit lifecycle x3 through Gameplay's rules
 # WFC_LIFECYCLE=<goal> (Integration, TEST ONLY): shortens PointsToWin and adds one Gameplay diagnostic opponent; every

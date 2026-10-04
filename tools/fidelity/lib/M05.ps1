@@ -16,21 +16,27 @@ function Get-ExeHooks([string]$Exe) {
 # (Find Match focused) -> Down -> Private Match -> mode list (TDM focused, EditGameMode on focus) -> host options
 # (focus on Create Game; rows Team Balancing / Map Selection / Time Limit / Points to Win; Down from Create Game
 # wraps to the first row) -> Create Game -> game lobby (Start Game focused, Select Map below).
-function Keys([int[]]$codes, [double]$gap = 0.5) { return (($codes | ForEach-Object { "key:$_;wait:t=$gap" }) -join ";") }
+# When the exe supports the "ui:<Action>" script step (Frontend 76b8287: logical UI commands through platform::UiBindings,
+# the same path as the physical keyboard / pad), the menu paths use it; otherwise "key:<flash code>" into the movies.
+$script:WfcUseUiActions = $false
+function Set-WfcInputMode($Hooks, [string]$Exe) { $script:WfcUseUiActions = $false; try { $txt = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($Exe)); $script:WfcUseUiActions = $txt.Contains("script.ui") } catch { }; return $script:WfcUseUiActions }
+$script:FlashToUi = @{ 13 = "Accept"; 27 = "Back"; 114 = "Start"; 37 = "Left"; 38 = "Up"; 39 = "Right"; 40 = "Down"; 112 = "X"; 113 = "Y"; 115 = "Select" }
+function Keys([int[]]$codes, [double]$gap = 0.5) { return (($codes | ForEach-Object { if ($script:WfcUseUiActions -and $script:FlashToUi.ContainsKey($_)) { "ui:$($script:FlashToUi[$_]);wait:t=$gap" } else { "key:$_;wait:t=$gap" } }) -join ";") }
+function K([int]$code) { if ($script:WfcUseUiActions -and $script:FlashToUi.ContainsKey($code)) { return "ui:$($script:FlashToUi[$code])" } else { return "key:$code" } }
 function Path-ToHostOptions([int]$modeIndex = 0) {
-    $s = "wait:frontend;wait:ui=FrontEnd;wait:t=1.5;key:114;wait:t=1.2;" + (Keys @(40)) + ";key:13;wait:level=PartyLobby;wait:ui=InLobby;wait:t=2;" + (Keys @(40)) + ";key:13;wait:t=1.2"
+    $s = "wait:frontend;wait:ui=FrontEnd;wait:t=1.5;" + (K 114) + ";wait:t=1.2;" + (Keys @(40)) + ";" + (K 13) + ";wait:level=PartyLobby;wait:ui=InLobby;wait:t=2;" + (Keys @(40)) + ";" + (K 13) + ";wait:t=1.2"
     for ($i = 0; $i -lt $modeIndex; $i++) { $s += ";" + (Keys @(40) 0.6) }
-    return $s + ";key:13;wait:t=1.5"
+    return $s + ";" + (K 13) + ";wait:t=1.5"
 }
 # From the host options (focus on Create Game): optionally Time Limit one step left (15 -> 10 minutes), then Create Game.
 function Path-CreateGame([switch]$TenMinutes) {
     $s = ""
     if ($TenMinutes) { $s = (Keys @(40, 40, 40) 0.4) + ";" + (Keys @(37) 0.6) + ";" + (Keys @(40, 40) 0.4) + ";" }
-    return $s + "key:13;wait:level=GameLobby;wait:ui=InLobby;wait:t=2.5"
+    return $s + (K 13) + ";wait:level=GameLobby;wait:ui=InLobby;wait:t=2.5"
 }
 # Game lobby: step the map selector n times right (wraps), back up to Start Game, start.
 function Path-SelectMap([int]$steps) { if ($steps -le 0) { return "" }; return (Keys @(40) 0.6) + ";" + (Keys (@(39) * $steps) 0.9) + ";" + (Keys @(38) 0.6) }
-function Path-StartGame { return "key:13;wait:t=1" }
+function Path-StartGame { return (K 13) + ";wait:t=1" }
 
 # Shot step (product-side capture of the composed frame: 3D + GFx + Bink; BMP).
 function Shot([string]$dir, [string]$name) { return "shot:" + (Join-Path $dir "$name.bmp") }

@@ -28,24 +28,25 @@ New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path 
 $exe = Join-Path $Root $(if ($Config -eq "Release") { "build-release\bin\wfc_rebuild.exe" } else { "build\bin\wfc_rebuild.exe" })
 $rd = Join-Path $Root "work\render"
 $H = Get-ExeHooks $exe
+$uiMode = Set-WfcInputMode $H $exe
 $res = New-WfcResults
 function Res($id, $status, $note, $owner = "", $m = $null) { Add-WfcResult $res "accept.$id" $status $m $note $owner }
-function Env0($dir, [hashtable]$x = @{}) { $e = @{ WFC_BOOT = "frontend"; WFC_FLOWLOG = (Join-Path $dir "flow.jsonl"); WFC_FLOWSEED = "1"; WFC_FLOW_TIMEOUT = "900"; WFC_MUSICLOG = "1"; WFC_AMBLOG = "1" }; if (Test-Path $rd) { $e.WFC_RENDER_DATA = $rd }; foreach ($k in $x.Keys) { $e[$k] = $x[$k] }; return $e }
+function Env0($dir, [hashtable]$x = @{}) { $e = @{ WFC_BOOT = "frontend"; WFC_FLOWLOG = (Join-Path $dir "flow.jsonl"); WFC_FLOWSEED = "1"; WFC_FLOW_TIMEOUT = "900"; WFC_MUSICLOG = "1"; WFC_AMBLOG = "1" }; if (Test-Path $rd) { $e.WFC_RENDER_DATA = $rd }; if ($H.Contains("WFC_PLATFORM")) { $e.WFC_PLATFORM = "XBOX360" }; foreach ($k in $x.Keys) { $e[$k] = $x[$k] }; return $e }
 function DiffOf($a, $b) { return Shot-Diff $a $b }
 
 # ============================================================== A1 boot / title / navigation
 if ($Runs -contains "A1") {
     $d = Join-Path $OutDir "A1_boot_nav"; New-Item -ItemType Directory -Force $d | Out-Null
     $s = @("wait:t=5", (Shot $d "a_intro"), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2.5", (Shot $d "b_title"), "snapshot:title",
-           "key:13", "wait:t=1.5", (Shot $d "c_title_after_enter"), "snapshot:after_enter",
-           "key:114", "wait:t=1.5", (Shot $d "d_mainmenu"), "snapshot:after_start",
-           (Keys @(40)), "key:13", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=2.5", (Shot $d "e_party_root"),
-           (Keys @(40)), "key:13", "wait:t=1.5", (Shot $d "f_modes"), "snapshot:modes",
-           "key:27", "wait:t=1.5", (Shot $d "g_party_after_back"), "snapshot:back1",
-           "key:13", "wait:t=1.5", (Shot $d "h_modes_again"), "key:13", "wait:t=1.5", (Shot $d "i_hostoptions"),
-           "key:27", "wait:t=1.5", (Shot $d "j_modes_after_back"), "snapshot:back2",
-           "key:27", "wait:t=1.5", (Shot $d "k_party_after_back2"), "snapshot:back3",
-           "key:27", "wait:t=1", "wait:level=FrontEnd", "wait:ui=FrontEnd", "wait:t=2.5", (Shot $d "l_frontend_after_back"), "snapshot:back4", "quit") -join ";"
+           (K 13), "wait:t=1.5", (Shot $d "c_title_after_enter"), "snapshot:after_enter",
+           (K 114), "wait:t=1.5", (Shot $d "d_mainmenu"), "snapshot:after_start",
+           (Keys @(40)), (K 13), "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=2.5", (Shot $d "e_party_root"),
+           (Keys @(40)), (K 13), "wait:t=1.5", (Shot $d "f_modes"), "snapshot:modes",
+           (K 27), "wait:t=1.5", (Shot $d "g_party_after_back"), "snapshot:back1",
+           (K 13), "wait:t=1.5", (Shot $d "h_modes_again"), (K 13), "wait:t=1.5", (Shot $d "i_hostoptions"),
+           (K 27), "wait:t=1.5", (Shot $d "j_modes_after_back"), "snapshot:back2",
+           (K 27), "wait:t=1.5", (Shot $d "k_party_after_back2"), "snapshot:back3",
+           (K 27), "wait:t=1", "wait:level=FrontEnd", "wait:ui=FrontEnd", "wait:t=2.5", (Shot $d "l_frontend_after_back"), "snapshot:back4", "quit") -join ";"
     $r = Invoke-WfcSampled $exe $d (Env0 $d @{ WFC_FRONTEND_SCRIPT = $s }) 900 1.0
     $F = Read-FlowLog (Join-Path $d "flow.jsonl")
     $stopAt = (@(Flow-Ev $F "script.wait") | Select-Object -Last 1).cond
