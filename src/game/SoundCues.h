@@ -14,6 +14,7 @@
 //   SoundParameters.Optimus_Prime_Tire_Squeal (Max 1.57 = pi/2): tire slip angle in radians [HI]
 #pragma once
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 #include "audio/Audio.h"
@@ -150,6 +151,9 @@ public:
     // feeds the cue's own SoundParameter (vehicle speed in mph, tire slip angle in rad).
     int play(const char* cue, const core::Vec3& pos, float distM, float param = 0.0f);
     int play(const char* cue, const Emitter& em, float distM, float param = 0.0f);
+    // A dialogue cue on an HmDialogComponent whose DialogCharacter is `dialogCharacter` (e.g. DialogCharacters.OPRIME):
+    // only the wave events of that character (and those with none) play.
+    int playDialog(const char* cue, const Emitter& em, const std::string& dialogCharacter);
     // Live parameters for a playing (e.g. looping) instance; `pos` is ignored for attached instances.
     void update(int instance, const core::Vec3& pos, float param);
     void setVolume(int instance, float linear);      // AudioComponent VolumeMultiplier / fades
@@ -183,6 +187,7 @@ private:
         std::vector<VoiceRef> voices;
         float fade = -1.0f, fadeLeft = 0.0f;   // fade-out duration / remaining (fade < 0 = none)
         bool looping = false;
+        std::string dialogChar;                                   // playDialog: the component's DialogCharacter
     };
 
     int findCue(const char* name) const;
@@ -199,6 +204,8 @@ private:
     }
     SoundMixer mixer_;
     std::string contentRoot_;
+    std::map<size_t, std::vector<std::string>> dialogChars_;    // cue -> per-event DialogCharacter (level cues)
+    std::string nextDialogChar_;
     Instance* find(int id);
 
     audio::IAudio* audio_ = nullptr;

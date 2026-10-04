@@ -39,8 +39,10 @@ public:
     virtual void prefetchLevel(const std::string& level) { (void)level; }     // during a loading screen
     // A full-screen movie's own audio (stereo WAV folded from its Bink tracks), 2D, outside the mixer categories
     // that CINE_MUTE_FOR_BINK ducks. Returns a handle (< 0: not played).
-    virtual int playMovieAudio(const std::string& wavPath) { (void)wavPath; return -1; }
-    virtual void stopMovieAudio(int handle) { (void)handle; }
+    // [integration M06] The movie's own sound (its Bink audio tracks, decoded and played by Systems beside the muted
+    // game mix): start with the first video frame, stop at its end / skip. False: the movie has no audio (loading Binks).
+    virtual bool startMovieAudio(const std::string& moviePath) { (void)moviePath; return false; }
+    virtual void stopMovieAudio() {}
 };
 
 class IMoviePresenter {
@@ -143,10 +145,7 @@ private:
     void runNativeShims();
     void updateMoviePlayer(float dt, const platform::InputFrame& in);
     bool openVideo(const std::string& name, bool loop);
-    std::string prepareMovieAudio(const std::string& name, platform::IMoviePlayer& p);   // cached WAV path or ""
     void stopMovieAudio();
-    static bool buildMovieAudio(platform::IMoviePlayer& p, const std::string& wav, std::string& log);   // thread-safe
-    std::future<void> audioPrefetch_;   // queued intro movies' audio, decoded while the current one plays
 
     Catalog catalog_;
     std::string platform_ = "WIN";
@@ -178,8 +177,9 @@ private:
     std::string underlayFor_, underlay_;   // loading Bink name -> localized file
     bool videoLoops_ = false;
     bool videoFramed_ = false;
-    std::string movieAudioWav_;       // the open movie's audio (cache), started with its first frame
-    int movieAudioHandle_ = -1;
+    std::string videoPath_;           // the open movie file (Systems movie audio)
+    bool movieAudioWanted_ = false;   // a SeqAct_MoviePlayer movie (the loading underlays author no sound)
+    bool movieAudioPlaying_ = false;  // Systems is playing its sound
     uint64_t videoGen_ = 0;
     bool moviePlaying_ = false;
     std::string prefetched_;

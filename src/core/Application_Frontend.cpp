@@ -37,22 +37,11 @@
 namespace {
 struct SystemsFrontendAudio final : frontend::IFrontendAudio {
     game::FrontendAudioRuntime rt;
-    audio::IAudio* device;
-    audio::Sound movieSound = audio::kInvalidSound;
-    explicit SystemsFrontendAudio(audio::IAudio* a) : rt(a), device(a) {}
-    // Movie audio on the Systems device: one 2D, dry voice of the folded movie track (not a cue: the native movie
-    // player owns Bink audio; CINE_MUTE_FOR_BINK ducks the game categories around it).
-    int playMovieAudio(const std::string& wav) override {
-        movieSound = device->load(wav);
-        if (movieSound == audio::kInvalidSound) return -1;
-        audio::VoiceParams p;
-        p.volume = 1.0f; p.spatial = 1; p.wet = false; p.priority = 0;
-        return device->playVoice(movieSound, p);
-    }
-    void stopMovieAudio(int v) override {
-        device->stopVoice(v);
-        if (movieSound != audio::kInvalidSound) { device->release(movieSound); movieSound = audio::kInvalidSound; }
-    }
+    explicit SystemsFrontendAudio(audio::IAudio* a) : rt(a) {}
+    // Movie audio: the movie's own Bink tracks, decoded and streamed by Systems (FrontendAudioRuntime, M07), outside
+    // the categories CINE_MUTE_FOR_BINK ducks [integration M06: replaces the frontend WAV cache].
+    bool startMovieAudio(const std::string& p) override { return rt.startMovieAudio(p); }
+    void stopMovieAudio() override { rt.stopMovieAudio(); }
     int playUiSound(const std::string& n) override { return rt.playUiSound(n); }
     bool stopUiSound(const std::string& n, float f) override { return rt.stopUiSound(n, f); }
     void uiLevelStarted(const std::string& l) override { rt.uiLevelStarted(l); }

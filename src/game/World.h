@@ -155,6 +155,13 @@ public:
     // A Bink movie (logos, intro, loading screen) starts / stops: Engine.MovieSettings MovieMixerPreset
     // CINE_MUTE_FOR_BINK (Master volume 0, fade-in 0 s, fade-out 1 s) is enabled / disabled.
     void setMoviePlaying(bool playing) { levelAudio_.setMoviePlaying(playing); }
+    // The movie's own Bink sound (see LevelAudioHost::startMovieAudio); a match world plays no movie today.
+    bool startMovieAudio(const std::string& moviePath) { return levelAudio_.startMovieAudio(moviePath); }
+    void stopMovieAudio() { levelAudio_.stopMovieAudio(); }
+    // Match messages Gameplay broadcasts (the sound side; see MatchAudio.h for the original rules):
+    //   TnGameRules HandleStartGame / HandleGameNearlyComplete / HandleEndGame -> gameTypeMessage(class, 0 / 1 / 2, ...);
+    //   TnGameRules_ReportGameProgress* -> progressAnnouncement(switch); any TnAnnouncer.PlayEvent -> announcerEvent.
+    MatchAudio& matchAudio() { return levelAudio_.match(); }
     // During a loading screen: decode the next level's streamed music now (avoids the first-play decode stall).
     bool prefetchLevelAudio(const std::string& level) { return levelAudio_.prefetch(level); }
     // The listener (frontend camera) for audio-only ticking; World::tick sets it from the game camera itself.

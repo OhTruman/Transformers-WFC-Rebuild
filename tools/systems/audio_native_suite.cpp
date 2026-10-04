@@ -1,6 +1,6 @@
 // Systems M03 pass 5 native-audio validation suite (not part of the CMake build). Build from the repo root:
 //   .toolchain/llvm-mingw-*/bin/clang++.exe -std=c++17 -O2 -Isrc tools/systems/audio_native_suite.cpp src/game/SoundCues.cpp \
-//     src/game/SoundMixer.cpp src/game/AmbientAudio.cpp src/game/LevelAudioScript.cpp src/game/LevelAudioHost.cpp src/game/FrontendAudioRuntime.cpp src/game/MusicPlayer.cpp \n//     src/game/FrontendAudio.cpp src/game/PickupPresentation.cpp src/core/Log.cpp src/platform/win32/Win32Audio.cpp -lwinmm -static -o suite.exe
+//     src/game/SoundMixer.cpp src/game/AmbientAudio.cpp src/game/LevelAudioScript.cpp src/game/LevelAudioHost.cpp src/game/MatchAudio.cpp src/game/FrontendAudioRuntime.cpp src/game/MusicPlayer.cpp src/platform/win32/Win32MovieAudio.cpp \n//     src/game/FrontendAudio.cpp src/game/PickupPresentation.cpp src/core/Log.cpp src/platform/win32/Win32Audio.cpp -lwinmm -static -o suite.exe
 // Reads ExtractedAssets (read only). Channel-mode checks need an audio device (skipped otherwise).
 // Systems M03 native-audio validation suite (RE 7c4a2e0): mixer, zones, emitter geometry, dB, channel modes.
 // Deterministic: recording backends for SoundCues / AmbientAudio; the real Win32 backend for channel modes.
@@ -31,7 +31,7 @@ static bool near(float a, float b, float eps = 1e-3f) { return std::fabs(a - b) 
 
 // ---- recording backend
 struct Rec : IAudio {
-    struct V { VoiceParams p; Vec3 pos; bool live = true; float vol = 1.0f; };
+    struct V { VoiceParams p; Vec3 pos; bool live = true; float vol = 1.0f; int sndId = -1; };
     std::map<int, V> v;
     std::vector<Environment> envs;
     std::map<std::string, int> paths;
@@ -46,7 +46,7 @@ struct Rec : IAudio {
     bool setLoopPoints(Sound s, uint32_t a, uint32_t b) override { loops.push_back({s, a, b}); return true; }
     void play(Sound, float) override {}
     void playAt(Sound, const Vec3&, float, float, float) override {}
-    Voice playVoice(Sound, const VoiceParams& p) override { v[n] = {p, p.pos, true, p.volume}; return n++; }
+    Voice playVoice(Sound snd, const VoiceParams& p) override { v[n] = {p, p.pos, true, p.volume, snd}; return n++; }
     void stopVoice(Voice h) override { if (v.count(h)) v[h].live = false; }
     void updateVoice(Voice h, float vol, float, const Vec3& pos) override { if (v.count(h)) { v[h].pos = pos; v[h].vol = vol; } }
     void setListener(const Vec3&, const Vec3&, const Vec3&) override {}
@@ -849,7 +849,7 @@ static void testLifecycle() {
     const Vec3 streetsSpawn{363.5f, -724.5f, -341.8f};      // a Streets spawn (DEC_ROOM_LOWER)
     struct MapCase { const char* name; std::string path; int cues, presets, emitters, zones, pools; Vec3 spot; const char* reverb; };
     const MapCase maps[2] = {
-        {"MP_IAC_Streets", streetsAudio(), 32, 10, 70, 9, 11, streetsSpawn, "REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER"},
+        {"MP_IAC_Streets", streetsAudio(), 32 + 157, 10, 70, 9, 11, streetsSpawn, "REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER"},
         {"FAKE_TEST_MAP", fake, 2, 1, 3, 1, 1, Vec3{0, -1.0f, 0}, "REVERB_FAKE_ROOM"}};
     bool allClean = true;
     for (int cycle = 0; cycle < 6; ++cycle)
@@ -892,8 +892,8 @@ static void testLifecycle() {
     const size_t oneBed = cues.liveInstances();
     amb.load(streetsAudio(), content, cues, &rec);
     cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f);
-    CHECK(cues.liveInstances() == oneBed && cues.mapCueCount() == 32 && cues.mixer().mapPresetCount() == 10,
-          "reload without unload: one bed (%zu instances, was %zu), 32 map cues, 10 presets", cues.liveInstances(), oneBed);
+    CHECK(cues.liveInstances() == oneBed && cues.mapCueCount() == 32 + 157 && cues.mixer().mapPresetCount() == 10,
+          "reload without unload: one bed (%zu instances, was %zu), 32 bank + 157 streamed match cues, 10 presets", cues.liveInstances(), oneBed);
 
     // Match reset on the same map: player sounds stop, the bed keeps playing, the zone scene re-begins on re-touch
     // (pools restart, the reverb slot and preset ref-counts are unchanged).
@@ -1183,10 +1183,11 @@ static void testLevelLifecycle() {
     auto musicInstances = [&](game::SoundCues& c) { int n = 0; for (const char* m : kMusic) n += c.activeInstances(m); return n; };
 
     // Manifest inventory.
-    CHECK(game::AmbientAudio::levelManifestCount() == 5 && game::AmbientAudio::hasLevelManifest("UI_FrontEnd_m") &&
+    CHECK(game::AmbientAudio::levelManifestCount() == 7 && game::AmbientAudio::hasLevelManifest("UI_FrontEnd_m") &&
+          game::AmbientAudio::hasLevelManifest("MP_UND_Gorge") && game::AmbientAudio::manifestJson("__match_messages__") &&
           game::AmbientAudio::hasLevelManifest("UI_PartyLobby_m") && game::AmbientAudio::hasLevelManifest("UI_Lobby_m") &&
           game::AmbientAudio::hasLevelManifest("UI_CampaignLobby_m") && game::AmbientAudio::hasLevelManifest("MP_IAC_Streets"),
-          "5 Systems level manifests (4 UI levels + Streets cue limits)");
+          "7 Systems manifests (4 UI levels, Streets + Gorge limits / announcer, match messages)");
     { game::MusicTrack fr, lob, party, none;
       CHECK(game::FrontendAudio::frontendTrack("UI_FrontEnd_m", fr) && fr.cue == kMusic[0] && fr.fadeIn == 0.25f && fr.fadeOut == 1.0f &&
             game::FrontendAudio::frontendTrack("UI_Lobby_m", lob) && lob.cue == kMusic[1] && lob.fadeIn == 0.0f &&
@@ -1199,6 +1200,10 @@ static void testLevelLifecycle() {
             near(m.masterScale(), 1.0f) && near(m.categoryVolume("SFX_DRY_HUD"), 1.0f), "47 categories, MUSIC_DRY 0.708, master scale 1 (%d)", m.categoryCount());
       m.enable("CINE_MUTE_FOR_BINK");
       CHECK(near(m.masterScale(), 0.0f) && !std::strcmp(m.categoryTarget("Master"), "CINE_MUTE_FOR_BINK"), "CINE_MUTE_FOR_BINK: Master 0 at once (FadeIn 0)");
+      m.flush();                                       // a level change during the movie
+      CHECK(near(m.masterScale(), 0.0f) && m.activeList() == "CINE_MUTE_FOR_BINK(1),Default(1)" && game::SoundMixer::unflushable("CINE_MUTE_FOR_BINK") &&
+            !std::strcmp(game::SoundMixer::movieMixerPreset(), "CINE_MUTE_FOR_BINK"),
+            "UnflushableMixerPresets: CINE_MUTE_FOR_BINK survives a Flush [%s]", m.activeList().c_str());
       m.disable("CINE_MUTE_FOR_BINK", false); step(m, 0.5f);
       CHECK(m.masterScale() > 0.4f && m.masterScale() < 0.6f, "movie end: Master returns over FadeOut 1 s (%.2f at 0.5 s)", m.masterScale());
       step(m, 0.6f);
@@ -1268,7 +1273,7 @@ static void testLevelLifecycle() {
     std::string why;
     host.unload();
     CHECK(atBaseline(host, cues, baseCues, basePresets, why), "leave frontend: baseline (%s)", why.c_str());
-    CHECK(near(cues.mixer().masterScale(), 1.0f), "unload Flush drops a movie mute too");
+    CHECK(near(cues.mixer().masterScale(), 1.0f), "movie ended before the unload: the game mix is back");
 
     // ---- Lobbies: GameplayStarted -> music, bed, 2 pools.
     for (const char* lv : {"UI_PartyLobby_m", "UI_Lobby_m", "UI_CampaignLobby_m"}) {
@@ -1433,7 +1438,114 @@ static void testFrontendSeam() {
     CHECK(ok, "20 x (frontend -> party lobby -> game lobby -> match): authored start, no duplicate on repeated reports, baseline at every travel");
 }
 
+// M07: match / announcer audio (TnAnnouncer, TnGameTypeMessage, TnGameProgressAnnouncementMessage) and the second
+// map (MP_UND_Gorge, AssetTools manifest + Systems manifest) through the generic level path.
+static std::string recSoundPath(const Rec& r, int snd) {
+    for (const auto& kv : r.paths) if (kv.second == snd) return kv.first;
+    return std::string();
+}
+static void testMatchAudio() {
+    std::printf("[match / announcer audio + second map]\n");
+    const std::string content = kRoot + "/../content/";
+    Rec rec; game::SoundCues cues; cues.load(&rec, content);
+    game::LevelAudioHost host(cues);
+    host.attach(&rec, kRoot);
+    const size_t baseCues = cues.cueCount();
+    const int basePresets = cues.mixer().presetCount();
+    const float dt = 1.0f / 30.0f;
+    StageMax mx;
+    const Vec3 L{363.5f, -724.5f, -341.8f};
+    auto run = [&](float secs) { for (int k = 0; k < (int)(secs * 30.0f); ++k) stageTick(host, cues, L, L, dt, mx); };
+    std::string why;
+    CHECK(host.load("MP_IAC_Streets") && host.ambient().announcerEvents().size() == 140 && cues.mapCueCount() == 32 + 157,
+          "Streets: 140 announcer events, 32 bank + 157 streamed match cues (%zu / %d)", host.ambient().announcerEvents().size(), cues.mapCueCount());
+    const size_t residentBefore = rec.paths.size();
+    game::MatchAudio& m = host.match();
+    CHECK(game::MatchAudio::hasMessageClass("TnGameTypeMessageTDM") && m.dialogCharacter() == "DialogCharacters.OPRIME",
+          "TDM message class known; announcer starts as Team0 (OPRIME)");
+    // Match start: GameTypeDialog now, GameDescriptionDialog queued, DM_START music.
+    const int v0 = rec.n;
+    CHECK(m.gameTypeMessage("TnGameTypeMessageTDM", 0), "TnGameTypeMessageTDM switch 0");
+    run(0.1f);
+    std::string first;
+    int voicesFirst = 0;
+    for (int i = v0; i < rec.n; ++i) {
+        const std::string p = recSoundPath(rec, rec.v[i].sndId);
+        if (p.find("WL_DX_") != std::string::npos) { ++voicesFirst; first = p; }
+    }
+    CHECK(m.currentCue() == "BL_DX_SWITCHBOARD.SC002657" && voicesFirst == 1 && first.find("DX_OPRIME_LK002657") != std::string::npos &&
+          m.queuedCue() == host.ambient().announcerEvents().at("SoundEvents_Dialog.Announcer.MP_GameDescriptionTeamDeathMatchDialog"),
+          "game type line SC002657 in the Autobot announcer's voice only (%d dialogue voice, %s), description queued (%s)",
+          voicesFirst, first.c_str(), m.queuedCue().c_str());
+    CHECK(host.music().current().cue == "BL_LVL_MP_MX.DM_START" && host.music().state() == game::MusicPlayer::State::Playing &&
+          host.music().current().priority == 0 && host.music().current().fadeIn == 0.0f, "DM_START music (fades 0, priority 0)");
+    CHECK(rec.paths.size() > residentBefore, "streamed dialogue / music decoded on first play only (%zu -> %zu waves)", residentBefore, rec.paths.size());
+    run(12.0f);                                       // the queued description plays after the first line (Rec voices: tail)
+    CHECK(m.linesPlayed() == 2 && m.queuedCue().empty(), "queued line played once the first ended (%d lines)", m.linesPlayed());
+    // Same cue while speaking: the queue is cleared; a lower-priority cue does not replace the queued one.
+    // Progress + team switch: MGTRON voice.
+    for (int k = 0; k < 30 * 30 && (m.speaking() || !m.queuedCue().empty()); ++k) stageTick(host, cues, L, L, dt, mx);
+    m.setLocalTeam(1);
+    const int v1 = rec.n;
+    CHECK(m.progressAnnouncement(1) && m.dialogCharacter() == "DialogCharacters.MGTRON", "1 minute left, Decepticon announcer");
+    run(0.1f);
+    int mg = 0, op = 0;
+    for (int i = v1; i < rec.n; ++i) {
+        const std::string p = recSoundPath(rec, rec.v[i].sndId);
+        if (p.find("WL_DX_MGTRON") != std::string::npos) ++mg;
+        if (p.find("WL_DX_OPRIME") != std::string::npos) ++op;
+    }
+    CHECK(mg == 1 && op == 0, "MP_1MinuteLeftDialog plays the Megatron wave only (%d / %d)", mg, op);
+    m.gameTypeMessage("TnGameTypeMessageTDM", 1); run(0.2f);
+    CHECK(host.music().current().cue == "BL_LVL_MP_MX.DM_FINALSTRETCH_LP", "nearly complete: DM_FINALSTRETCH_LP");
+    m.gameTypeMessage("TnGameTypeMessageTDM", 2, 1); run(0.2f);
+    CHECK(host.music().queued().cue == "BL_LVL_MP_MX.DM_END_DECEPTICONS_WIN" && host.music().queued().priority == 1 &&
+          host.music().current().cue == "BL_LVL_MP_MX.DM_FINALSTRETCH_LP", "end, Decepticons win: DM_END_DECEPTICONS_WIN queued (priority 1) behind SpazTime");
+    run(5.0f);
+    CHECK(host.music().current().cue == "BL_LVL_MP_MX.DM_END_DECEPTICONS_WIN", "... and crossfaded in after the 5 s SpazTime");
+    CHECK(m.versusGameOver(1) || m.queuedCue() != "", "game over: the winning team's line");
+    { game::MusicPlayer probe(cues); (void)probe; }
+    CHECK(!m.gameTypeMessage("TnGameTypeMessageNOPE", 0) && !m.progressAnnouncement(9) && !m.announcerEvent("SoundEvents_Dialog.Announcer.NotAnEvent"),
+          "unknown message / switch / event: nothing invented");
+    CHECK(game::MatchAudio::messageClassForMode("TDM") == "TnGameTypeMessageTDM" && game::MatchAudio::messageClassForMode("DM") == "TnGameTypeMessageDM" &&
+          game::MatchAudio::messageClassForMode("CTF") == "TnGameTypeMessageCTF" && game::MatchAudio::messageClassForMode("KOTH") == "TnGameTypeMessageKOTH" &&
+          game::MatchAudio::messageClassForMode("DOM") == "TnGameTypeMessageDOM" && game::MatchAudio::messageClassForMode("EXT") == "TnGameTypeMessageEXT",
+          "mode tag -> game-type message class (TnOnlineGameSettings<tag>.Rules)");
+    host.unload();
+    CHECK(atBaseline(host, cues, baseCues, basePresets, why) && m.currentCue().empty() && host.ambient().announcerEvents().empty(),
+          "leave Streets: announcer + match cues gone (%s)", why.c_str());
+    CHECK(!m.announcerEvent("SoundEvents_Dialog.Announcer.MP_1MinuteLeftDialog"), "no announcer outside a match level");
+
+    // MP_UND_Gorge: the AssetTools manifest + Systems manifest through the same path (not play-ready; audio only).
+    CHECK(host.load("MP_UND_Gorge") && host.ambient().emitterCount() == 15 && host.ambient().zoneCount() == 23 &&
+          cues.mixer().mapPresetCount() == 6 && cues.mapCueCount() == 13 + 157 && host.ambient().announcerEvents().size() == 140,
+          "Gorge: 15 emitters, 23 zones, 6 reverb presets, 13 + 157 cues, announcer (%d / %d / %d / %d)", host.ambient().emitterCount(),
+          host.ambient().zoneCount(), cues.mixer().mapPresetCount(), cues.mapCueCount());
+    run(3.0f);
+    CHECK(host.ambient().activeEmitters() > 0, "Gorge bed plays (%d emitters)", host.ambient().activeEmitters());
+    host.unload();
+    CHECK(atBaseline(host, cues, baseCues, basePresets, why), "leave Gorge: baseline (%s)", why.c_str());
+    // Streets <-> Gorge <-> frontend, repeated: baseline at every boundary.
+    bool ok = true;
+    for (int c = 0; c < 10; ++c)
+        for (const char* lv : {"MP_IAC_Streets", "MP_UND_Gorge", "UI_FrontEnd_m"}) {
+            host.load(lv);
+            if (!std::strcmp(lv, "UI_FrontEnd_m")) host.event("FsCommand:enterFrontEnd", L);
+            else {
+                host.match().onMatchStarted(c % 2 ? "DM" : "TDM", c % 2);
+                host.match().onProgressAnnouncement(c % 8);
+                host.match().onGameNearlyComplete();
+                host.match().onMatchEnded(c % 3 - 1, c % 2 == 0);
+            }
+            run(2.0f);
+            host.unload();
+            ok = ok && atBaseline(host, cues, baseCues, basePresets, why);
+        }
+    CHECK(ok, "10 x (Streets -> Gorge -> frontend) with match messages: baseline at every unload (%s)", why.c_str());
+}
+
 int main() {
+    testMatchAudio();
     testFrontendSeam();
     testLevelLifecycle();
     testMapEventAudio();

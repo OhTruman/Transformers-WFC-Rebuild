@@ -3,13 +3,19 @@ authored.db, read-only): the global mixer presets Systems enables and, for EVERY
 its Default preset and of those presets (Volume + MASTER_WET reverb / echo; the other DSP stages are not applied).
 Run with AssetTools/bin/py/python.exe:  python tools/systems/gen_mixer.py <out.inc>
 """
-import io, json, sqlite3, sys
+import io, json, re, sqlite3, sys
 
 DB = 'F:/Transformers Rebuild/AssetTools/manifests/authored.db'
 # Global presets: the ones the built-in cues play (PlayMixerPreset) and Engine.MovieSettings MovieMixerPreset
 # (Xe-TransEngine.ini MovieMixerPreset=CINE_MUTE_FOR_BINK, enabled while a Bink movie plays). Map reverb presets are
 # NOT compiled in: a level's manifest reverb_presets register them at load (SoundMixer::addMapPreset).
 PRESETS = ['VEHICLE_JUMP', 'VEHICLE_BOOST_END', 'CINE_MUTE_FOR_BINK']
+
+INI = 'F:/Transformers Rebuild/ExtractedAssets/config/Coalesced_ini/TransGame/Config/Xenon/Cooked/Xe-TransEngine.ini'
+ini = io.open(INI, encoding='utf-8', errors='replace').read()
+UNFLUSHABLE = re.findall(r'^UnflushableMixerPresets=(\S+)', ini, re.M)       # [HM_Engine.SoundMixerProperties]
+MOVIE = re.findall(r'^MovieMixerPreset=(\S+)', ini, re.M)                   # [HM_Engine.FmodAudioDevice]
+assert MOVIE and MOVIE[0] in PRESETS, MOVIE
 
 c = sqlite3.connect(DB)
 d = json.loads(c.execute("select props from objects where opath='SoundConfig.SoundMixerProperties'").fetchone()[0])
@@ -41,6 +47,9 @@ for cat in d['SoundCategories']:
         out.append('    {"%s", "%s", {%s}},\n' % (cat['Name'], p['Name'], ', '.join(f(v) for v in vals)))
         if p['Name'] == 'Default' and abs(vals[0] - 1.0) > 1e-6: nondef.append((cat['Name'], round(vals[0], 4)))
 out.append('};\n')
+# Xe-TransEngine.ini: presets a mixer Flush (level change) keeps, and the movie preset.
+out.append('const char* const kUnflushablePresets[] = {%s};\n' % ', '.join('"%s"' % n for n in UNFLUSHABLE))
+out.append('const char* const kMovieMixerPresetName = "%s";\n' % MOVIE[0])
 # Master's Default DSP compressor (global; DSPEffectConfig bit 32 = compressor stage [MED]).
 m = [k for k in d['SoundCategories'] if k['Name'] == 'Master'][0]
 mc = [p for p in m['DSPPresets'] if p['Name'] == 'Default'][0]['Compressor']

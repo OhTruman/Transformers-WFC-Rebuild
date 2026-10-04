@@ -1,6 +1,8 @@
 #include "game/LevelAudioHost.h"
 #include "core/Log.h"
 
+#include <cstdlib>
+
 namespace game {
 
 bool LevelAudioHost::load(const std::string& level, const std::string& manifestPath) {
@@ -9,27 +11,45 @@ bool LevelAudioHost::load(const std::string& level, const std::string& manifestP
     const std::string path = manifestPath.empty() ? root_ + "/Maps/" + level + "/audio.json" : manifestPath;
     const bool ok = ambient_.load(path, root_ + "/../content/", cues_, audio_, level);
     level_ = ok ? level : std::string();
+    match_.setAnnouncerEvents(ambient_.announcerEvents());
     return ok;
 }
 
 void LevelAudioHost::unload() {
     music_.onOwnerDestroyed();                 // the level's WorldInfo music player goes with the level
+    match_.setAnnouncerEvents({});             // ... and its announcer
     cues_.stopAll();                           // every instance (UI, Kismet, impacts...) - hard stop, queues dropped
     ambient_.unload(cues_);                    // bed, zones, pools, script, level cues + samples, presets; mixer Flush
     cues_.releaseIdleStreams();                // the level's music (streamed) is released now, not on the next tick
     if (audio_) audio_->setEnvironment(cues_.mixer().environment(), 0.0f);   // dry Default now, not on the next tick
-    movie_ = false;                            // the Flush dropped the movie preset too [CONF Flush]
+    // The movie preset survives the Flush (UnflushableMixerPresets) [CONF config]: movie_ stays as it was.
     level_.clear();
 }
 
-// Enabled for the movie's lifetime [HIGH: native movie player]. A level change (mixer Flush) during a movie drops it
-// like any preset [CONF Flush]; whether the native player re-enables it afterwards is UNKNOWN.
+// [HM_Engine.FmodAudioDevice] MovieMixerPreset=CINE_MUTE_FOR_BINK, enabled for the movie's lifetime [CONF config;
+// HIGH: the native movie player's enable / disable points]; UnflushableMixerPresets keeps it through a level change.
 void LevelAudioHost::setMoviePlaying(bool playing) {
     if (playing == movie_) return;
     movie_ = playing;
-    if (playing) cues_.mixer().enable(kMovieMixerPreset);
-    else cues_.mixer().disable(kMovieMixerPreset, false);
+    if (playing) cues_.mixer().enable(SoundMixer::movieMixerPreset());
+    else cues_.mixer().disable(SoundMixer::movieMixerPreset(), false);
 }
+
+bool LevelAudioHost::startMovieAudio(const std::string& path, int languageSlot) {
+    stopMovieAudio();
+    if (!audio_) return false;
+    setMoviePlaying(true);
+    if (languageSlot < 0) languageSlot = std::getenv("WFC_MOVIE_LANGSLOT") ? std::atoi(std::getenv("WFC_MOVIE_LANGSLOT")) : 0;
+    std::unique_ptr<audio::MovieAudioPlayer> p(audio::createMovieAudioPlayer());
+    if (!p->open(audio_, path, languageSlot)) {
+        LOG_INFO("movie audio: %s has no audio tracks (silent by design)", path.c_str());
+        return false;
+    }
+    p->start();
+    movieAudio_ = std::move(p);
+    return true;
+}
+
 
 bool LevelAudioHost::prefetch(const std::string& level) {
     MusicTrack t;
@@ -57,6 +77,9 @@ LevelAudioHost::State LevelAudioHost::state() const {
     s.timelinePos = ambient_.script().timelinePosition();
     s.masterScale = cues_.mixer().masterScale();
     s.movie = movie_;
+    s.movieAudio = movieAudio_ != nullptr;
+    s.movieClock = movieAudioClock();
+    s.streams = audio_ ? audio_->openStreams() : 0;
     return s;
 }
 

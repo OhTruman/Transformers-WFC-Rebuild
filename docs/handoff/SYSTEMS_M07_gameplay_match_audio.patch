@@ -1,0 +1,27 @@
+--- a/src/game/World.cpp
++++ b/src/game/World.cpp
+@@ -1277,9 +1277,23 @@
+     bool returned = false;
+     for (const MatchEvent& e : match_.events()) {
+         switch (e.type) {
+-            case MatchEvent::Type::MatchStarted:
++            case MatchEvent::Type::MatchStarted: {
+                 // TnTeamGame.StartMatch: Reset() every pickup factory (sleeping factories return to 'Pickup').
+                 for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
++                // Systems: TnGameRules.HandleStartGame -> the mode's game-type message (announcer + start music).
++                const int team = match_.players()[(size_t)localPlayer_].team;
++                matchAudio().onMatchStarted(match_.settings().modeTag, team == 1 ? 1 : 0);
++                break;
++            }
++            case MatchEvent::Type::GameNearlyComplete:
++                matchAudio().onGameNearlyComplete();       // Systems: final-stretch music
++                break;
++            case MatchEvent::Type::TimeAnnouncement:
++            case MatchEvent::Type::KillsLeftAnnouncement:
++                matchAudio().onProgressAnnouncement(e.value);   // Systems: TnGameProgressAnnouncementMessage
++                break;
++            case MatchEvent::Type::MatchEnded:
++                matchAudio().onMatchEnded(e.value, e.player == localPlayer_);   // Systems: end music + win line
+                 break;
+             case MatchEvent::Type::PlayerSpawned:
+                 if (e.player == localPlayer_ && e.value >= 0) {

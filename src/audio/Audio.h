@@ -1,6 +1,8 @@
 // Clean-room reconstruction — audio abstraction.
 // Gameplay depends ONLY on this interface, never on the Windows audio implementation.
 #pragma once
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include "core/Math.h"
 
@@ -49,7 +51,9 @@ struct MixStats { float peakDb = -96.0f; float gainReductionDb = 0.0f; int voice
                   int peakVoices = 0; int droppedVoices = 0;   // since start: most voices at once, refused starts
                   int stolenVoices = 0;                         // since start: channels taken by a more important sound
                   float mixMsPerBlock = 0.0f;      // CPU cost of one 1024-frame block (~21 ms of audio)
-                  float lastUpdateMs = 0.0f, lastMixMs = 0.0f; int lastUpdateBlocks = 0; int maxUpdateBlocks = 0; };
+                  float lastUpdateMs = 0.0f, lastMixMs = 0.0f; int lastUpdateBlocks = 0; int maxUpdateBlocks = 0;
+                  float streamPeakDb = -96.0f; int streams = 0;   // PCM streams (movie audio): last block's peak, count
+                  long long streamUnderrunFrames = 0; };
 
 class IAudio {
 public:
@@ -92,6 +96,18 @@ public:
     virtual void setMasterCompressor(float /*thresholdDb*/, float /*attackMs*/, float /*releaseMs*/, float /*makeupDb*/) {}
     virtual bool mixStats(MixStats&) const { return false; }
     virtual bool voiceInfo(Voice, VoiceInfo&) const { return false; }
+    // Streamed PCM (full-screen movie audio, game::MovieAudio): the producer pushes interleaved STEREO float frames at
+    // `sampleRate`; the backend plays them in order on its own mixer thread, OUTSIDE the SoundCue mix: no category /
+    // Master scale (so CINE_MUTE_FOR_BINK, which mutes the game mix while a movie plays, does not mute the movie),
+    // no environment, no compressor. pushStream returns the frames accepted (the queue holds at most ~2 s);
+    // streamPlayed is the stream's clock in source frames (a movie player can slave its video to it).
+    virtual int openStream(int /*sampleRate*/) { return -1; }
+    virtual size_t pushStream(int /*stream*/, const float* /*lr*/, size_t /*frames*/) { return 0; }
+    virtual size_t streamQueued(int /*stream*/) const { return 0; }
+    virtual uint64_t streamPlayed(int /*stream*/) const { return 0; }
+    virtual void setStreamPaused(int /*stream*/, bool /*paused*/) {}
+    virtual void closeStream(int /*stream*/) {}
+    virtual int openStreams() const { return 0; }
     // Local player pawn origin (Actor.Location) for kSmartPan_PreferPlayer voices; valid = a local pawn exists.
     virtual void setSmartPanPlayer(const core::Vec3& /*pos*/, bool /*valid*/) {}
 

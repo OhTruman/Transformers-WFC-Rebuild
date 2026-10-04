@@ -57,5 +57,7 @@ const CategoryRow kCategoryRows[] = {
     {"DX_WET_LOPASS", "Default", {1.0f, -10000.0f, -10000.0f, 0.0f, 1.0f, 1.0f, -10000.0f, 0.0f, -10000.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 500.0f, 0.5f, 0.0f, 1.0f}},
     {"DX_DRY_SOUNDWAVE_RADIO", "Default", {1.0f, -10000.0f, -10000.0f, 0.0f, 1.0f, 1.0f, -10000.0f, 0.0f, -10000.0f, 0.0f, 0.0f, 0.0f, 5000.0f, 500.0f, 0.5f, 0.0f, 1.0f}},
 };
+const char* const kUnflushablePresets[] = {"CINE_MUTE_FOR_BINK"};
+const char* const kMovieMixerPresetName = "CINE_MUTE_FOR_BINK";
 // Master Default compressor {DSPEffectConfig, Threshold dB, Attack ms, Release ms, GainMakeup dB}
 const float kMasterCompressor[5] = {32.0f, -6.0f, 10.0f, 50.0f, 0.0f};

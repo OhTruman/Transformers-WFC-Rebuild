@@ -1360,11 +1360,27 @@ void World::tickMatch(float dt) {
         switch (e.type) {
             case MatchEvent::Type::MatchEnded:
                 mapState_.matchEnded();                // ScoreKingOfTheHill.CheckEndGame: every zone deactivates
+                // [integration M06, Systems M07 patch] HandleEndGame(Winner) -> game-type message switch 2 (end music)
+                // + the versus game-over line; winner team -1 = tie.
+                matchAudio().onMatchEnded(e.value, e.player == localPlayer_);
                 break;
-            case MatchEvent::Type::MatchStarted:
+            case MatchEvent::Type::MatchStarted: {
                 mapState_.matchStarting();             // KOTH initial zone (MatchStarting)
                 // TnTeamGame.StartMatch: Reset() every pickup factory (sleeping factories return to 'Pickup').
                 for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
+                // [integration M06, Systems M07 patch] TnGameRules.HandleStartGame -> the mode's game-type message
+                // (announcer GameTypeDialog + GameDescriptionDialog, GameTypeMusic). Gameplay decides when; Systems plays.
+                const int team = localPlayer_ >= 0 ? match_.players()[(size_t)localPlayer_].team : 0;
+                matchAudio().onMatchStarted(match_.settings().modeTag, team == 1 ? 1 : 0);
+                break;
+            }
+            case MatchEvent::Type::GameNearlyComplete:
+                matchAudio().onGameNearlyComplete();           // Systems: GameNearlyCompleteMusic (final stretch)
+                break;
+            case MatchEvent::Type::TimeAnnouncement:           // TnGameProgressAnnouncementMessage switch 0..2
+            case MatchEvent::Type::KillsLeftAnnouncement:      // switch 5..7
+            case MatchEvent::Type::PointsLeftAnnouncement:     // switch 3 / 4 (DOM / KOTH)
+                matchAudio().onProgressAnnouncement(e.value);
                 break;
             case MatchEvent::Type::PlayerSpawned:
                 if (e.player == localPlayer_ && e.value >= 0) {
