@@ -198,7 +198,13 @@ if ($Runs -contains "R1") {
                 $wrong = @($p | Where-Object { $_.cue -ne $exp[$lv] -and $_.cue -notlike "*.$($exp[$lv])" })
                 Res "AUDIO" "music.$lv" $(if ($p.Count -eq $visits -and -not $wrong.Count) { "PASS" } else { "FAIL" }) ("{0} visits, music plays: {1} (expected {2} once per visit; package prefix accepted)" -f $visits, (($p | ForEach-Object { $_.cue }) -join ","), $exp[$lv]) "Systems" }
             $mm = @($mPlays | Where-Object level -eq "Match")
-            Res "AUDIO" "no_music_in_match" $(if (-not $mm.Count) { "PASS" } else { "FAIL" }) ("music plays during the Streets match: {0} (Streets authors no SeqAct_PlayMusic)" -f (($mm | ForEach-Object { $_.cue }) -join ",")) "Systems"
+            # OV A5 (CONFIRMED): versus matches play game-type music (DM_START at the start, DM_FINALSTRETCH_LP when nearly
+            # complete, DM_END_<winner> at the end) from TnGameTypeMessage; frontend / lobby music must never play in a match.
+            $menuCues = @($X.audio_ownership.frontend_music.value, $X.audio_ownership.party_lobby_music.value, $X.audio_ownership.game_lobby_music.value)
+            $mmMenu = @($mm | Where-Object { $c = $_.cue; @($menuCues | Where-Object { $c -eq $_ -or $c -like "*.$_" }).Count })
+            Res "AUDIO" "no_menu_music_in_match" $(if (-not $mmMenu.Count) { "PASS" } else { "FAIL" }) ("frontend / lobby music started during the match: {0}" -f (($mmMenu | ForEach-Object { $_.cue }) -join ",")) "Systems"
+            $start = @($mm | Where-Object { $_.cue -match "DM_START" })
+            Res "AUDIO" "match_start_music" $(if ($start.Count) { "PASS" } else { "FAIL" }) ("match music during the match: {0}; expected BL_LVL_MP_MX.DM_START at the match start (OV A5 TnGameTypeMessage GameTypeMusic, CONFIRMED)" -f $(if ($mm.Count) { ($mm | ForEach-Object { $_.cue }) -join "," } else { "none" })) "Systems/Gameplay"
         }
         $us = @(Flow-Ev $F "ui.sound")
         if ($us.Count) {
@@ -340,8 +346,8 @@ if ($Runs -contains "R4") {
     elseif (-not $aUnl.Count) { Res "AUDIO" "map_audio_released_on_return" "SKIP" "no AMB samples outside the match (the frontend runtime does not log AMB); see Systems' own soak in SELFTEST" "Systems" }
     $fePlays = @(Grep-Log $log4 ("\] MUSIC play (\S+\.)?" + $X.audio_ownership.frontend_music.value + " "))
     Res "AUDIO" "menu_music_resumes" $(if (-not (@(Grep-Log $log4 '\] MUSIC ')).Count) { "SKIP" } elseif ($fePlays.Count -ge $rets.Count) { "PASS" } else { "FAIL" }) ("frontend music starts: {0} for {1} returns (+ boot)" -f $fePlays.Count, $rets.Count) "Systems/Frontend"
-    $mInMatch = 0; for ($c = 0; $c -lt $unl.Count; $c++) { $iL = Flow-LogIndex $L4 "match.loaded" $c; $iU = Flow-LogIndex $L4 "match.unloaded" $c; $mInMatch += @(Grep-Log $log4 '\] MUSIC play ' | Where-Object { $_.i -gt $iL -and $_.i -lt $iU }).Count }
-    Res "AUDIO" "no_menu_music_in_matches" $(if (-not (@(Grep-Log $log4 '\] MUSIC ')).Count) { "SKIP" } elseif (-not $mInMatch) { "PASS" } else { "FAIL" }) ("music starts inside {0} matches: {1}" -f $unl.Count, $mInMatch) "Systems"
+    $mInMatch = 0; for ($c = 0; $c -lt $unl.Count; $c++) { $iL = Flow-LogIndex $L4 "match.loaded" $c; $iU = Flow-LogIndex $L4 "match.unloaded" $c; $mInMatch += @(Grep-Log $log4 '\] MUSIC play ' | Where-Object { $_.i -gt $iL -and $_.i -lt $iU -and $_.text -notmatch 'DM_(START|FINALSTRETCH|END)' }).Count }   # game-type music (OV A5) is expected
+    Res "AUDIO" "no_menu_music_in_matches" $(if (-not (@(Grep-Log $log4 '\] MUSIC ')).Count) { "SKIP" } elseif (-not $mInMatch) { "PASS" } else { "FAIL" }) ("frontend / lobby music starts inside {0} matches: {1} (game-type DM_* music excluded: it belongs to the match, OV A5)" -f $unl.Count, $mInMatch) "Systems"
     $rev = @(Grep-Log $log4 '\] MIXER reverb')
     if ($rev.Count) { $stale = 0; for ($c = 0; $c -lt $unl.Count; $c++) { $iU = Flow-LogIndex $L4 "match.unloaded" $c; $nxt = @($rev | Where-Object { $_.i -gt $iU } | Select-Object -First 1)[0]; if ($nxt -and $nxt.text -match 'MIXER reverb (\S*MP_\S*) ->') { $stale++ } }; Res "AUDIO" "no_stale_reverb" $(if (-not $stale) { "PASS" } else { "FAIL" }) ("after {0} returns, the next reverb change still starts from a map preset (stale map reverb): {1}" -f $unl.Count, $stale) "Systems" }
     $dc4 = @(Find-DoubledCues $log4)

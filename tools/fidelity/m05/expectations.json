@@ -600,8 +600,8 @@
                                                      "conf":  "CONFIRMED"
                                                  },
                             "match_music":  {
-                                                "value":  null,
-                                                "src":  "Systems M05: Streets authors no SeqAct_PlayMusic",
+                                                "value":  "no FRONTEND / lobby music in a match; match music is the game-type music (playtest.match_music)",
+                                                "src":  "OV A5 supersedes \u0027Streets authors no SeqAct_PlayMusic\u0027 (true for Kismet, but TnGameTypeMessage plays GameTypeMusic)",
                                                 "conf":  "CONFIRMED"
                                             },
                             "frontend_medley_loops":  {
@@ -678,10 +678,20 @@
                                                         "was":  "only Streets selectable",
                                                         "why":  "Frontend doc: selectable = cooked + runtime data; Gorge appeared via AssetTools (next-map pipeline)",
                                                         "retired":  "2026-10-03"
-                                                    }
+                                                    },
+                    "audio_ownership.match_music_none":  {
+                                                             "was":  "no music at all during the Streets match",
+                                                             "why":  "OV A5: DM_START / DM_FINALSTRETCH_LP / DM_END_* game-type music plays in versus matches (not Kismet-authored); only frontend / lobby music must be absent",
+                                                             "retired":  "2026-10-04"
+                                                         },
+                    "playtest.minimap_unknown":  {
+                                                     "was":  "UNKNOWN pending RE",
+                                                     "why":  "OV A9: CONFIRMED absent; test now asserts none is presented as original",
+                                                     "retired":  "2026-10-04"
+                                                 }
                 },
     "playtest":  {
-                     "_src":  "RE-Workspace notes/MILESTONE05_PLAYTEST_RE.md (28debca), cited \u0027PT x\u0027; Gameplay PASS 21 (391b7f0) for rebuild-side numbers",
+                     "_src":  "RE-Workspace notes/MILESTONE05_PLAYTEST_RE.md (28debca), cited \u0027PT x\u0027; Gameplay PASS 21 (391b7f0) for rebuild-side numbers; RE notes/OVERNIGHT_2026-10-04_HUD_VEHICLE_FRONTEND_ROSTER_AI.md (1ca9c28), cited OV",
                      "frontend_background":  {
                                                  "value":  "live 3D level UI_FrontEnd_m (Cybertron orbit, nebulae, debris, FX, matinee cameras) under the Scaleform menus",
                                                  "src":  "PT 5",
@@ -739,8 +749,22 @@
                                         "conf":  "CONFIRMED"
                                     },
                      "kill_feed":  {
-                                       "value":  "TnDeathMessage LocalMessage: DeathMessage(killer, victim) or SuicideMessage(victim), killer / victim names coloured friendly / enemy, lifetime 3.0 s",
-                                       "src":  "Gameplay PASS 21b from TnDeathMessage decompile (CONFIRMED) + stock BroadcastDeathMessage (HIGH)",
+                                       "value":  {
+                                                     "delivery":  "_global.GameMessage(html) in Hud_GFX sprite 591, anchor bottomLeft (84, 626)",
+                                                     "rows":  5,
+                                                     "row_lifetime_s":  5,
+                                                     "fade_s":  1,
+                                                     "row_step_px":  22,
+                                                     "colours":  {
+                                                                     "local":  "255,255,255",
+                                                                     "teammate":  "80,181,213",
+                                                                     "enemy":  "240,60,60",
+                                                                     "neutral":  "255,147,51"
+                                                                 },
+                                                     "text":  "DamageType DeathString with weapon icon tokens, e.g. \u0027k [IonBlast] o\u0027",
+                                                     "spectating_offset_px":  160
+                                                 },
+                                       "src":  "OV A2 (Hud_GFX AS + TnDeathMessage + TnMessageTextColors). Gameplay PASS 21b\u0027s 3.0 s is Engine.LocalMessage.Lifetime, not the Hud feed row lifetime",
                                        "conf":  "CONFIRMED"
                                    },
                      "point_event":  {
@@ -749,14 +773,63 @@
                                          "conf":  "CONFIRMED authored"
                                      },
                      "minimap":  {
-                                     "value":  null,
-                                     "src":  "AssetTools future_hud_handoff: no radar / minimap objects in authored.db; RE: not addressed",
-                                     "conf":  "UNKNOWN"
+                                     "value":  "none: no minimap, radar or compass; the only spatial cues are damage-direction arrows, missile-lock warnings, Canvas objective markers with off-screen arrows and ally name tags",
+                                     "src":  "OV A9 (exhaustive absence: decompiled script, every GFx pool / export, authored.db, default.xex strings) + AssetTools 43f2679 negative search",
+                                     "conf":  "CONFIRMED"
                                  },
                      "pre_match_view":  {
                                             "value":  "no pawn before the start; the controller spectates from the login start (team start of the initial cluster)",
                                             "src":  "RE bootstrap 2 / 5.2 (CONFIRMED), stock GameInfo.Login (HIGH)",
                                             "conf":  "CONFIRMED"
-                                        }
+                                        },
+                     "match_music":  {
+                                         "value":  {
+                                                       "start":  "BL_LVL_MP_MX.DM_START (TnGameTypeMessage switch 0, with GameTypeDialog + GameDescriptionDialog announcer)",
+                                                       "nearly_complete":  "DM_FINALSTRETCH_LP",
+                                                       "end":  "DM_END_AUTOBOTS_WIN / DM_END_DECEPTICONS_WIN / DM_END_TIE by winner"
+                                                   },
+                                         "src":  "OV A5",
+                                         "conf":  "CONFIRMED"
+                                     },
+                     "game_over_message":  {
+                                               "value":  "GRI.SetGameOverMessage: \u0027Your team won\u0027 / \u0027Your team lost\u0027 / \u0027Tie game\u0027 / \u0027Enemy team forfeits\u0027 shown by EndGameStats_GFX (\u003cCurrentGame:GameOverMessage\u003e); DM empty",
+                                               "src":  "OV A5",
+                                               "conf":  "CONFIRMED"
+                                           },
+                     "start_announcement":  {
+                                                "value":  "GameAnnouncement \u0027Team Deathmatch\u0027 (500% -\u003e 100% over 0.4 s, hold 4.5 s)",
+                                                "src":  "OV A4 / A5",
+                                                "conf":  "CONFIRMED"
+                                            },
+                     "backgrounds":  {
+                                         "value":  {
+                                                       "title_main":  "UI_FrontEnd_m + streamed UI_FrontEnd_capture_VIG_m",
+                                                       "party_lobby":  "UI_PartyLobby_m streaming UI_CharacterCustomization_m",
+                                                       "game_lobby":  "UI_Lobby_m streaming UI_CharacterCustomization_m",
+                                                       "loading":  "TF_LoadingScreen Bink on the render thread + LoadScreen GFx",
+                                                       "post_match":  "EndGameStats over the frozen match world"
+                                                   },
+                                         "src":  "OV D",
+                                         "conf":  "CONFIRMED"
+                                     },
+                     "hud_layout":  {
+                                        "value":  {
+                                                      "score_widget":  "mc_scoreTeam topCenter (560, 59)",
+                                                      "clock":  "countdown_mc (560, 104), MM:SS, red flash \u003c= 10 s",
+                                                      "ammo":  "topRight (1016, 64), clip bar 0xFFA033, low \u003c= 25%",
+                                                      "crosshair":  "midCenter (560, 360)",
+                                                      "kill_feed":  "(84, 626)",
+                                                      "announcements":  "(560, 166)",
+                                                      "popups":  "(560, 229)",
+                                                      "stage":  "1120x720"
+                                                  },
+                                        "src":  "OV A1",
+                                        "conf":  "CONFIRMED"
+                                    },
+                     "transform_under_overhang":  {
+                                                      "value":  "no safe spot -\u003e NotifyCantTransform + TransformFailedSound, no transform; stuck after transform -\u003e forced back to vehicle",
+                                                      "src":  "OV B3",
+                                                      "conf":  "CONFIRMED (native FindSpotAwayFromPawns world test PARTIAL)"
+                                                  }
                  }
 }
