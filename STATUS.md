@@ -3,6 +3,167 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 05 (2026-10-04) — branch `integration/milestone-05` — one exe: frontend → TDM Streets → return → again
+
+**Exe for Experimental's final gate and the human playtest:**
+`F:\Transformers Rebuild\Rebuild\build\release\bin\wfc_rebuild.exe` (Release). Debug: `build\bin\wfc_rebuild.exe`.
+A plain launch boots the original intro and frontend; no internal commands are needed. The direct-to-match boot stays
+an explicit debug option (`WFC_BOOT=match`, or the existing harness variables).
+
+### Lane heads (fetched 2026-10-04; all pushed heads merged, none newer)
+| lane | head | merged | conflicts | resolution |
+|---|---|---|---|---|
+| agents/frontend | 08ef880 | yes (first) | none | Scaleform frontend, intro movies, lobbies, loading, match launch / return |
+| agents/gameplay | d541c78 | yes | World.cpp, World.h, STATUS.md | Gameplay's match tick, dead-player gating and camera collision kept with the M04 sysprof scopes; Frontend's `mapName_` kept beside Gameplay's Match members |
+| agents/systems | 3d295ec | yes | Application.cpp, World.cpp, FIDELITY, STATUS | both diagnostic hooks kept; Systems' `setAudio(a, loadSliceMap)` with `loadMapAudio(mapName_)` instead of the hard-wired Streets |
+| agents/rendering | 187e6e9 | yes | FIDELITY.md | VehicleFx auto-merged (Systems `clearParticles` + Rendering edits both present); no renderer file conflicted, so no old renderer behaviour could be restored |
+| agents/experimental | 6447fc1 | **no** (validation only) | — | its M05 gate and visual tools were run from `git archive` exports under `work/m5/exp*` |
+| AssetTools | runtime data under ExtractedAssets (Streets 8d8195e / render_index da67634; Gorge world + collision + gameplay + audio, no render export) | consumed | — | render data regenerated with the merged tools |
+| RE | `MILESTONE05_FRONTEND_GAMEPLAY_BLOCKERS.md` (85e340c) | consumed | — | see the table below |
+
+### Integration glue (connecting owners; documented in each commit)
+- **Frontend → Gameplay:**
+  - `Application::loadMatch` launches Gameplay's match from the frontend's StartLevel URL (`World::launchMatch`):
+    mode, PointsToWin and TimeLimit come from the URL (RE D1–D3); the map is the catalog selection's runtime directory;
+    teams come from Gameplay's `PickTeam` (RE E4 offline).
+  - Frontend's PROVISIONAL immediate-BeginGame adapter is removed.
+- **Gameplay → Frontend UI events** (`routeMatchToFrontend`, per tick):
+  - load → default character selected → PreGameCountdown during PendingMatch (RE D5; 10.13–10.22 s measured);
+  - MatchStarted → UI event 3;
+  - local death + 3.0 s → 4 (RE E7);
+  - wave respawn → 5 (4.98 s measured; RE 5.0 s);
+  - MatchEnded → 9;
+  - ReturnToLobby (+15 s) → new `GameFlow::returnToGameLobby` (`UI_Lobby_m?...?MapId=<id>?listen`, RE F4 / F6).
+- **Match values for the movies:** `frontend::MatchValues` carries Gameplay's `hudState` into the data stores:
+  `<CurrentGame:IsCountingDown / CurrentCountdown / GoalScore / Teams / Players>` and
+  `<PlayerOwner:Score / TeamID / TimeToRespawn>`. Previously these returned lobby values or "0" in a match. Assists are
+  not shown (RE F2).
+- **Systems:**
+  - the frontend drives `FrontendAudioRuntime` (music, UI sounds, movie mute);
+  - a match load calls `setAudio(a, false)` + `loadMapAudio(<selected map>)`;
+  - an unload calls `unloadMapAudio()`.
+- **Rendering:**
+  - `unloadMatch` calls `IRenderer::unloadMapRenderData()` (RENDERER_CONTRACT.md);
+  - Frontend's GlCensus stays as a fallback; it releases 72 textures per cycle that sit outside the map data.
+- **Frontend fix: the loading underlay is released in the match.** `updateMoviePlayer` ran only in the frontend
+  loop, so the last frame of `TF_LoadingScreen` (black with a "LOADING..." spinner) was composited over the 3D world for
+  the whole match. Experimental saw the same on agents/frontend 08ef880. Verified fixed with product-side shots:
+  countdown, in game, spectating, end game, lobby return.
+- **Generalization:**
+  - no Streets literals remain on the launch path: `startLocalMatch` gameplay.json, `fromURL` `_Base_m` strip,
+    `launchMatch` map check, `setAudio`, `WFC_MATCH`;
+  - a map is selectable when it is cooked AND has the runtime world AND the AssetTools render export
+    (`render_index.json`);
+  - **Gorge stays in the catalog but is listed disabled**: no render export, not validated by Gameplay or Rendering.
+    It becomes selectable automatically when AssetTools exports its render data. No Gorge work was done.
+- **Harness boot routing:** WFC_XFORMTEST / MATCHTEST / CAMTEST / CHAOS / TDMTEST / MATCH / MATCH_URL / RELOADTEST
+  imply the direct boot again. After the frontend became the default, they would have booted the menu.
+- **Validation-only hooks (opt-in, not normal behaviour):**
+  - `WFC_LIFECYCLE=<goal>`: one Gameplay diagnostic opponent; kills and deaths go through `applyMatchDamage`, so
+    Gameplay's own rules run;
+  - Experimental RUNTIME-EVENTS `MATCH` lines;
+  - FlowTrace `audio.baseline / loaded / unloaded`.
+- **Stale tests retired:**
+  - frontend selectable-maps test and fixture now include the render export;
+  - harness `spread_cap` uses Experimental's RE d50e2a9 check;
+  - `spread_after_10` is a known deviation owned by Experimental.
+
+### RE M05 corrections consumed
+| RE | behaviour | where |
+|---|---|---|
+| B2 / B3 / B4 | mode order TDM, DM, DOM, CTF, EXT, KOTH; rows clamp; TDM Autobalanced / 15 min / 40 | authored frontend data (frontend tests) |
+| C1–C4, C7 | enabled + compatible maps in TransLevels order; `loopNavigation`; index 0; reset after return | lobby movie + catalog (Experimental verified the keys on 08ef880) |
+| C8 / D4 / D5 | 10 s countdown; PendingMatch → InProgress; PreGameCountdown during pending | Gameplay + glue (measured 10.14 s) |
+| D1–D3 | match URL and rule list | frontend URL → `MatchLaunch::fromURL`; `MATCH init` rules = RE |
+| E3 / E4 | `PickTeam(255)` offline before StartMatch | Gameplay |
+| E7 / E8 | death → 3.0 s → event 4; 5.0 s wave → event 5; PlayerRestartDelay dead | Gameplay + glue (4.98 s) |
+| F1–F4, F6 | kill +1 player and team, no suicide score; no assists on the board; tie; MatchOver 15 s → ReturnToGameLobby; reload per match | Gameplay + glue |
+| G | HUD data from data stores / pushes | `MatchValues` |
+| I1 / I2 / I5 / I6 | health full heal, overshield +550, respawn 30 / 60 / 120 s, factories reset at StartMatch | Gameplay (TDMTEST, PICKUPTEST) |
+| **I3** | **regen after 2.0 s, 20 HP/s, segment-limited** | **NOT consumed**: Gameplay marks it UNKNOWN; not added at integration |
+
+### Builds
+- Clean Debug (`build.ps1 -Jobs 2 -Clean`) and clean Release (`build\release`): **0 errors**.
+- Both were rebuilt incrementally after the final glue. The one warning is Rendering's unused `reading` (WfcMapFx.cpp).
+
+### Validation (final binaries)
+| area | result |
+|---|---|
+| frontend unit (Debug, Release) | 59 / 0 |
+| **Experimental M05 e2e gate** (4b03c2b tools, 3 cycles, final exe) | **52 pass / 1 FAIL / 2 known / 20 skip / 6 human**. Window capture worked: the in-game capture is drawn. `pending_countdown` 10.14 s, `hud_visible_in_game`, memory_per_cycle +7.0 MB, handles stable all PASS. The FAIL is a gate regex issue (below). |
+| TDM rules (WFC_TDMTEST) | 30 / 30, including a second in-process match |
+| WFC_MATCHTEST | TDM to 40; clock tie at 125 s with 120 / 60 / 30 announcements; DM to 20 |
+| **transform stress (WFC_XFORMTEST)** | **0 / 1520 under the map, 0 KillZ** |
+| **WFC_CHAOS** (60 × 20 s: 355 transforms, 307 boosts, 312 jumps) | **0 under the map, 0 KillZ**, 1 stuck, 3 prop entries (the Gameplay baseline) |
+| traversal / map sweep | 160 runs 0 falls; 984 boost/jump runs + 984 transforms 0 below KillZ |
+| boost cycle + transform every 70 frames (6000 lockstep frames) | 170 transforms, min y −725.0, 0 fell out |
+| vehicle / pickups / modes (VEHTEST, PICKUPTEST, MODETEST) | complete; 24 factories, destructible cycle |
+| wfc_fidelity (Debug, Release, map) | 191 / **0 FAIL** / 22 known (was 190 / 2 / 21); collision 9 / 0 / 2 |
+| Rendering: shadow self-test, DLE, LVV query, light visibility, verify_permutations, audit_map, WFC_RELOADTEST | all exit 0 |
+| **smoke / steam / glass / ramps** (Experimental `playtest-regressions.ps1` on the merged exe vs its Rendering-lane 187e6e9 reference) | **107 / 107 measurements within 5% of the Rendering lane**: the playtest fixes are preserved. Steam is the soft blue-purple from the M06 fix |
+| render data | regenerated with the merged tools: 231 / 231 materials, 45 map-fx components, movers 0 error |
+| Systems audio_native_suite (documented build line, repo root) | **544 / 0** |
+| runtime probe (Debug) | 31 / 0 / 3 known (M04: 26 / 4) |
+| Experimental match-validator on the lifecycle log | 9 / 3. All three are validator issues (below) |
+
+### Lifecycle and soak (one process, scripted through the shipped menus, `WFC_LIFECYCLE=3`)
+Each cycle runs:
+1. cold boot through the intro chain (4/4 movies played);
+2. main menu → Multiplayer → party lobby → TDM → game lobby → Streets;
+3. loading screen ("Team Deathmatch in Streets") → 10 s countdown → spawn;
+4. kills and team score → death → spectating at 3.0 s → respawn at 5.0 s;
+5. score-limit end → EndGameStats → game lobby with MapId=508 after 15 s → next match.
+
+Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 0 warnings, 0 errors, clean exit.
+
+| resource (final exe, 6 cycles) | per cycle | verdict |
+|---|---|---|
+| private memory after unload | 2809, 2813, 2786, 2848, 2839, 2854 MB | flat. The previous +1.58 GB per return is gone |
+| private memory with the match loaded | 3422 → 3441 MB | flat (±10 MB) |
+| peak private | 3.49 GB (gate: 3.33 GB) | bounded |
+| audio after unload | voices 0, instances 0, level cues 0, PCM 177.3 MB = the pre-load baseline, every cycle | returns to baseline |
+| map audio loaded | 32 level cues, PCM 238.0 MB, every cycle | constant |
+| GL objects after the renderer unload | textures 72, buffers / programs / FBOs 0, every cycle | constant |
+| match load | 4.7 s cold, then 3.0 s | constant |
+| player state at each match start | ammo 50 / 150, robot form (gate) | fresh |
+| frontend state after return | no stale mode / map / HUD (gate) | fresh |
+
+### Known PARTIAL / UNKNOWN (owners)
+- **Gameplay:**
+  - health regeneration (RE I3) is UNKNOWN to Gameplay and not implemented;
+  - `launchMatch` accepts only TDM and DM (other modes run map state only);
+  - the frontend's team index is not passed (offline PickTeam, RE E4);
+  - no character-select screen: the default character is selected at load.
+- **Frontend:**
+  - EndGameStats' experience panel shows "undefined / +NaN" (no profile / XP service; the `Customize.*` bridge calls
+    are unhandled, PARTIAL);
+  - the Scaleform HUD movie (Hud_GFX: clock and score) is not drawn in play, only the renderer reticle. Ownership is an
+    open Frontend / Rendering handoff;
+  - the UI_FrontEnd_m 3D scene behind the menus is black (not exported).
+- **Rendering / Gameplay:**
+  - 72 textures per cycle are released by GlCensus rather than their owner (constant, no leak);
+  - the PendingMatch camera views the world before the pawn spawns: framing is a human check.
+- **Memory retention:** after the first match the lobby keeps about 2.8 GB private (first boot 0.65 GB). It does not
+  grow per cycle; likely allocator / driver retention.
+- **Experimental tool issues (reported, not product defects):**
+  - gate `menu_music` expects `MUSIC play FRONTEND_MX_ORBIT_01`, but the product logs the package-qualified
+    `BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01`. The sequence frontend → party → game lobby → frontend is correct;
+  - match-validator `init_first` matches "Death**match message**" case-insensitively in a FLOW line;
+  - `score_monotonic` counts each team's reset against one restart;
+  - `restart_resets` expects `score=0` lines.
+- **Experimental R5 (UI selects Gorge):** Gorge is disabled in the list by design for this milestone (above).
+
+### Human visual judgement
+1. Intro, menus and lobbies: look, sound and navigation, including map-selector wrap.
+2. The countdown overlay over the PendingMatch camera.
+3. In play: robot and vehicle feel, boost, boost → robot, firing, pickups, the HUD gap, death → Spectating timer,
+   EndGameStats, return to the lobby, then a second match without restarting.
+4. Pause: hold W and press Esc. The robot stops while the world runs (gate HUMAN).
+5. Smoke, fog sheets, steam, glass and ramps at the reported viewpoints. The numbers match the Rendering lane; the look
+   is a human judgement.
+6. Gorge is shown disabled.
+7. A long session: private memory should plateau (about 2.8 GB in the lobby, 3.5 GB in a match).
+
 ## FRONTEND PASS 2 (2026-10-03, branch `agents/frontend`) — original Scaleform frontend, private match, return
 Details and handoffs: `docs/FRONTEND.md`.
 

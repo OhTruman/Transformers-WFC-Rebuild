@@ -17,6 +17,26 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## INTEGRATION MILESTONE 05 — PROVENANCE OF THE INTEGRATION GLUE (2026-10-04)
+Full report: STATUS.md (INTEGRATION MILESTONE 05). Only glue added at integration is listed here; each lane's own
+provenance stays in its section.
+
+| Item | Original | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Match launch from the frontend | StartLevel URL → TnVersusGame InitGame (GameModeTag / PointsToWin / TimeLimit) | RE M05 blockers D1–D3 | CONFIRMED | `World::launchMatch(MatchLaunch::fromURL(url))`; map = catalog runtime directory |
+| PendingMatch UI | WaitingOnGameStart → character select → PreGameCountdown → event 3 at InProgress | RE D5 | CONFIRMED order; character select absent | default character selected at load; countdown 10.14 s measured |
+| Death / respawn UI | MinRespawnDelay 3.0 s → event 4; wave 5.0 s → RestartPlayer → event 5 | RE E7 | CONFIRMED | glue timer 3.0 s; Gameplay wave (4.98 s measured) |
+| Match end / return | MatchOver → event 9; +15 s → ReturnToGameLobby → UI_Lobby_m?...?MapId= | RE F4 / F6 | CONFIRMED | `GameFlow::returnToGameLobby` |
+| In-match data-store values | GRI / PRI pushed to <CurrentGame:*> / <PlayerOwner:*> | RE G | HIGH | `frontend::MatchValues` from `World::hudState` |
+| Teams | offline PickTeam(255) before StartMatch | RE E4 → rebuild | HIGH | Gameplay PickTeam; frontend team index not passed |
+| Map selectability | HasRequiredAssets | RE 3.2 | CONFIRMED (concept) | rebuild: cooked + world.glb + render_index.json (Gorge disabled) — PARTIAL (rebuild-specific asset rule) |
+| Loading underlay lifetime | Bink loading movie ends with the loading screen | TnMoviePlayer | HIGH | released in the match loop too (was left composited over the world) |
+| Health regeneration | after 2.0 s, 20 HP/s, segment-limited | RE I3 | CONFIRMED (RE) | NOT IMPLEMENTED (Gameplay: UNKNOWN) |
+| EndGameStats experience | profile XP | — | UNKNOWN to the rebuild | "undefined / NaN" (no XP service) — PARTIAL |
+| Hud_GFX | GFx HUD movie | shipped movie | CONFIRMED (data) | not drawn; reticle only — PARTIAL (Frontend / Rendering handoff) |
+
+---
+
 ## FRONTEND PASS 2 — THE SHIPPED SCALEFORM MOVIES RUN THE FLOW (2026-10-03, agents/frontend)
 Full tables: `docs/FRONTEND.md`. This pass supersedes the pass-1 PARTIAL "no GFx presentation".
 
