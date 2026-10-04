@@ -3,6 +3,8 @@
 #include "frontend/FlowTrace.h"
 #include "frontend/GameFlow.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
 
 namespace frontend {
@@ -26,6 +28,16 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     const GameSettings* gs = inMatch ? flow_.currentMatch().settings : L.settings;
     std::string tag = inMatch ? flow_.currentMatch().modeTag : L.gameModeTag;
     auto b = [](bool v) { return std::string(v ? "1" : "0"); };
+    // [integration] In a match, Gameplay's state (GameFlow::matchValues, from World::hudState) answers the match fields.
+    const MatchValues& mv = flow_.matchValues();
+    if (inMatch && mv.valid) {
+        if (markup == "<CurrentGame:IsCountingDown>") return b(mv.countingDown);
+        if (markup == "<CurrentGame:CurrentCountdown>") return std::to_string(mv.countdown);
+        if (markup == "<CurrentGame:GoalScore>") return std::to_string(mv.goalScore);
+        if (markup == "<PlayerOwner:Score>") return std::to_string(mv.score);
+        if (markup == "<PlayerOwner:TeamID>") return std::to_string(mv.myTeam);
+        if (markup == "<PlayerOwner:TimeToRespawn>") return std::to_string((int)std::ceil(std::max(0.0f, mv.timeToRespawn)));
+    }
     if (markup == "<CurrentGame:GameModeTag>" || markup == "<CurrentGame:MapCompatibilityTag>") return tag;
     if (markup == "<CurrentGame:GameModeFriendlyName>") return tag.empty() ? "" : cat_.modeFriendlyName(tag);
     if (markup == "<CurrentGame:GameModeFriendlyDescription>") return tag.empty() ? "" : cat_.localize("TransGame", "TnOnlineGameSettings" + tag, "Description");
@@ -106,11 +118,15 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
                      "_CurrentPower", "IsConnecting", "PrimeModeActive", "CurrentCharacterString", "SelectedCharacterString",
                      "PlayerLevelLeader", "PlayerLevelScientist", "PlayerLevelScout", "PlayerLevelSoldier", "PlayerLevel"};
         bool inMatch = flow_.level() == LevelKind::Match;
-        int team = inMatch ? flow_.currentMatch().teamIndex : flow_.lobby().localTeam;
+        const MatchValues& mv = flow_.matchValues();
+        const bool live = inMatch && mv.valid;   // [integration] Gameplay's PRI values in a match
+        int team = live ? mv.myTeam : inMatch ? flow_.currentMatch().teamIndex : flow_.lobby().localTeam;
         std::string teamName = team == 0 ? cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName")
                              : team == 1 ? cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName") : "";
         // A fresh profile is level 1 in every specialty (no XP / progression service yet) [PARTIAL].
-        c.rows.push_back({playerName(), std::to_string(team), teamName, "0", "0", "0", "0", "0", "", "0", "0", "0", "", "", "1", "1", "1", "1", "1"});
+        c.rows.push_back({playerName(), std::to_string(team), teamName, std::to_string(live ? mv.score : 0),
+                          std::to_string(live ? mv.kills : 0), std::to_string(live ? mv.deaths : 0), live && mv.dead ? "1" : "0",
+                          "0", "", "0", "0", "0", "", "", "1", "1", "1", "1", "1"});
         c.enabled.push_back(true);
         return true;
     }
@@ -120,8 +136,10 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         bool inMatch = flow_.level() == LevelKind::Match;
         int gts = inMatch ? flow_.currentMatch().gameTeamStatus : flow_.lobby().gameTeamStatus;
         if (gts == 3) {
-            c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName"), "0", "0", "0"});
-            c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName"), "1", "1", "0"});
+            const MatchValues& mv = flow_.matchValues();
+            const bool live = inMatch && mv.valid;   // [integration] Gameplay's TeamInfo.Score in a match
+            c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName"), "0", "0", std::to_string(live ? mv.teamScore[0] : 0)});
+            c.rows.push_back({cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName"), "1", "1", std::to_string(live ? mv.teamScore[1] : 0)});
             c.enabled = {true, true};
         }
         return true;

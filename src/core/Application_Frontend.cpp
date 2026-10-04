@@ -152,14 +152,11 @@ void Application::runFrontend() {
             continue;
         }
         flow.matchLoaded();
-        // PROVISIONAL adapter (handoff to Gameplay): the rebuild has no TnMultiplayerGame PendingMatch / InProgress yet,
-        // no character select (CustomTransformers) and no PreGameCountdown data. The original order of UI events is
-        // reproduced without their delays: OnCharacterSelected (default character) -> GameStartUI, then
-        // InProgress.BeginState -> SendUIEventToControllers(3). Gameplay replaces this with its own lifecycle.
-        frontend::FlowTrace::emit("adapter", {{"what", "character selected + match begun (no PendingMatch in Gameplay)"},
-                                              {"provenance", "PROVISIONAL"}});
-        flow.characterSelected();
-        flow.onUIEvent((int)frontend::UIEvent::BeginGame);
+        // [integration] Frontend's PROVISIONAL adapter (immediate BeginGame) is replaced by Gameplay's match lifecycle:
+        // World::launchMatch put the match in PendingMatch (10 s); routeMatchToFrontend() sends the character-selected
+        // notification and UI event 3 when Gameplay's MatchStarted arrives (RE M05 blockers D4 / D5).
+        localDeadForUi_ = spectatingUi_ = false;
+        localDeadTime_ = 0.0f;
         window_->setMouseCaptured(true);
         mouseCaptured_ = true;
 
@@ -191,10 +188,75 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
 #else
     world_.setAudio(audio_);
 #endif
+    // [integration] Gameplay owns the match: the frontend's StartLevel URL is the launch contract (Gameplay PASS 20b,
+    // RE M05 blockers D1-D3: GameModeTag / PointsToWin / TimeLimit passed explicitly). The map is the catalog
+    // selection's runtime directory (World loaded it above); teams are Gameplay's PickTeam (RE E4, offline).
+    game::MatchLaunch gl;
+    game::MatchLaunch::fromURL(m.url.toString(), gl);
+    gl.map = m.map->runtimeDir;
+    if (!world_.launchMatch(gl)) { LOG_WARN("FLOW Gameplay refused the match (%s %s)", gl.map.c_str(), gl.modeTag.c_str()); return false; }
+    frontend::FlowTrace::emit("match.gameplay", {{"map", gl.map}, {"mode", gl.modeTag}, {"goalScore", std::to_string(gl.settings.goalScore)},
+                                                 {"timeLimit", std::to_string(gl.settings.timeLimit)}});
     gameMode_.begin(world_);
     frontend::FlowTrace::emit("match.loaded", {{"map", m.map->runtimeDir}, {"mode", m.modeTag},
                                                {"seconds", frontend::FlowTrace::num(nowSeconds() - t0)}, {"privateMB", processMemoryMB()}});
     return true;
+}
+
+void Application::routeMatchToFrontend(float dt) {
+    frontend::GameFlow& flow = frontend_->flow();
+    const int me = world_.localMatchPlayer();
+    for (const game::MatchEvent& e : world_.matchEvents()) {
+        switch (e.type) {
+        case game::MatchEvent::Type::MatchStarted:
+            // TnUIControllerMultiplayer: OnCharacterSelected (default character; no character select yet) then
+            // InProgress.BeginState -> SendUIEventToControllers(3).
+            flow.characterSelected();
+            flow.onUIEvent((int)frontend::UIEvent::BeginGame);
+            frontend::FlowTrace::emit("match.started", {});
+            break;
+        case game::MatchEvent::Type::PlayerKilled:
+            frontend::FlowTrace::emit("match.kill", {{"victim", std::to_string(e.player)}, {"killer", std::to_string(e.other)}, {"how", e.text}});
+            if (e.player == me) { localDeadForUi_ = true; spectatingUi_ = false; localDeadTime_ = 0.0f; }
+            break;
+        case game::MatchEvent::Type::PlayerSpawned:
+            frontend::FlowTrace::emit("match.spawn", {{"player", std::to_string(e.player)}, {"start", e.text}});
+            if (e.player == me && localDeadForUi_) {
+                // RestartPlayer leaves spectating -> UI event 5 (RE E7.4).
+                flow.onUIEvent((int)frontend::UIEvent::Respawn);
+                localDeadForUi_ = spectatingUi_ = false;
+            }
+            break;
+        case game::MatchEvent::Type::MatchEnded:
+            frontend::FlowTrace::emit("match.ended", {{"winner", std::to_string(e.value)}, {"reason", e.text}});
+            flow.onUIEvent((int)frontend::UIEvent::EndGame);   // MatchOver: HUD hidden, EndGameStats (RE F4)
+            break;
+        case game::MatchEvent::Type::ReturnToLobby:
+            frontend::FlowTrace::emit("match.return", {});
+            flow.returnToGameLobby();                           // MatchOver + 15 s -> ReturnToGameLobby (RE F4 / F6)
+            break;
+        default: break;
+        }
+    }
+    // Dead: after MinRespawnDelay 3.0 s the controller enters PlayerSpectating -> UI event 4 (RE E7.3, CONFIRMED).
+    if (localDeadForUi_ && !spectatingUi_) {
+        localDeadTime_ += dt;
+        if (localDeadTime_ >= 3.0f) { flow.onUIEvent((int)frontend::UIEvent::Spectating); spectatingUi_ = true; }
+    }
+    // <CurrentGame:*> / <PlayerOwner:*> match values for the in-match movies (Gameplay authoritative).
+    const game::HudGameState h = world_.hudState();
+    frontend::MatchValues v;
+    v.valid = h.matchActive;
+    v.pending = h.matchState == (int)game::Match::State::PendingMatch;
+    v.countingDown = v.pending || (h.matchState == (int)game::Match::State::InProgress && h.remainingTime > 0);
+    v.countdown = v.pending ? h.countdown : h.remainingTime;
+    v.goalScore = h.goalScore;
+    v.teamScore[0] = h.teamScore[0]; v.teamScore[1] = h.teamScore[1];
+    v.myTeam = h.myTeam;
+    v.score = h.score; v.kills = h.kills; v.deaths = h.deaths;
+    v.dead = !h.alive;
+    v.timeToRespawn = h.timeToRespawn;
+    flow.setMatchValues(v);
 }
 
 void Application::unloadMatch() {
@@ -206,6 +268,7 @@ void Application::unloadMatch() {
 #endif
     world_.~World();
     new (&world_) game::World();
+    frontend_->flow().setMatchValues(frontend::MatchValues{});   // no stale match values in the lobby / frontend
     ui::GlCensus::Owned keep;
     if (presenter_) presenter_->ownedGl(keep);
     if (!std::getenv("WFC_NO_GL_RELEASE")) frontend::FlowTrace::emit("match.glRelease", {{"released", g_census.release(keep)}});

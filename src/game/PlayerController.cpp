@@ -269,7 +269,7 @@ HudAimState PlayerController::hudAimState() const {
     return s;
 }
 
-core::Vec3 PlayerController::cameraPos() const {
+core::Vec3 PlayerController::desiredCameraPos() const {
     // HmOrbitUpdateLocationRotation: Location = anchor + (OrbitLocationOffset rotated by the orbit
     // rotation). Anchor = actor location (shared by both forms during a transformation) + the
     // strategy's HmOffsetAnchorPointRelativeToActor Z offset.
@@ -277,20 +277,154 @@ core::Vec3 PlayerController::cameraPos() const {
     core::Vec3 dir = core::forwardFromYawPitch(viewYaw_, viewPitch_);
     core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(viewYaw_, 0.0f), core::Vec3{0, 1, 0}));
     core::Vec3 up = core::cross(right, dir);
-    core::Vec3 want = focus + dir * (offset_.x - distCur_) + right * offset_.y + up * offset_.z;
-    // Third-person camera collision (OverTheShoulder TnThirdPersoncollisionCameraBehavior; vehicle
-    // strategies TnAvoidClippingCameraBehavior): keep the camera on the anchor's side of world
-    // geometry. [PROV] behaviour details not recovered; pulled 0.3 m in front of the hit.
-    if (col_) {
-        float t;
-        core::Vec3 d = want - focus;
+    return focus + dir * (offset_.x - distCur_) + right * offset_.y + up * offset_.z;
+}
+
+core::Vec3 PlayerController::cameraPos() const {
+    return camLocValid_ ? camLoc_ : desiredCameraPos();
+}
+
+namespace {
+// Camera traces: Actor.TraceCamera with bTraceActors false = world geometry only (BSP, static meshes,
+// BlockingVolumes), BlockCameras-gated; the 252 + 8 Streets BlockCameras=False props are also non-colliding and
+// absent from the collision worlds. Movers are actors: the static (mover-free) segmentHit is used.
+// Box sweeps / overlaps (non-zero extent) are approximated by rays from the box's 15 sample points (corners, face
+// centres, centre) [PROV: no exact AABB sweep in the collision code].
+struct CamTrace {
+    const CollisionWorld* box = nullptr;   // non-zero-extent world
+    const CollisionWorld* ray = nullptr;   // zero-extent world
+    core::Vec3 ext{0, 0, 0};
+    bool rayHit(const core::Vec3& a, const core::Vec3& b) const {
+        float t; return ray && ray->segmentHit(a, b, t);
+    }
+    // Distance travelled along a -> b before the box hits (full length if clear).
+    float sweep(const core::Vec3& a, const core::Vec3& b) const {
+        core::Vec3 d = b - a;
         float len = core::length(d);
-        if (len > 1e-3f && col_->segmentHit(focus, want, t)) {
-            float keep = std::max(0.0f, t * len - 0.3f);
-            want = focus + d * (keep / len);
+        if (!box || len < 1e-4f) return len;
+        float best = 1.0f;
+        for (int i = 0; i < 15; ++i) {
+            core::Vec3 o{0, 0, 0};
+            if (i < 8) o = {(i & 1) ? ext.x : -ext.x, (i & 2) ? ext.y : -ext.y, (i & 4) ? ext.z : -ext.z};
+            else if (i < 14) { int ax = (i - 8) / 2; float s = ((i - 8) & 1) ? 1.0f : -1.0f;
+                o = {ax == 0 ? s * ext.x : 0.0f, ax == 1 ? s * ext.y : 0.0f, ax == 2 ? s * ext.z : 0.0f}; }
+            float t;
+            if (box->segmentHit(a + o, b + o, t)) best = std::min(best, t);
+        }
+        return best * len;
+    }
+    // Box overlap at c: any box edge / diagonal crosses geometry.
+    bool overlap(const core::Vec3& c) const {
+        if (!box) return false;
+        auto corner = [&](int i) { return c + core::Vec3{(i & 1) ? ext.x : -ext.x, (i & 2) ? ext.y : -ext.y, (i & 4) ? ext.z : -ext.z}; };
+        static const int e[16][2] = {{0,1},{2,3},{4,5},{6,7},{0,2},{1,3},{4,6},{5,7},{0,4},{1,5},{2,6},{3,7},{0,7},{1,6},{2,5},{3,4}};
+        float t;
+        for (const auto& ed : e) if (box->segmentHit(corner(ed[0]), corner(ed[1]), t)) return true;
+        return false;
+    }
+};
+float stepToward(float cur, float d, float rate, float dt) {   // Old += sign(D) * min(|D|, rate*dt)
+    float m = std::min(std::fabs(d), rate * dt);
+    return cur + (d < 0.0f ? -m : m);
+}
+} // namespace
+
+void PlayerController::tickCameraCollision(float dt) {
+    namespace cfg = core::config;
+    if (!pawn_) return;
+    const core::Vec3 desiredCam = desiredCameraPos();
+    // Strategy change (transformation): each behaviour's Activate clears the smoothing state.
+    if (strategy_ != camCollStrategy_) { camCollStrategy_ = strategy_; camOldValid_ = false; camSmoothRemain_ = 0.0f; }
+    if (!col_) { camLoc_ = desiredCam; camLocValid_ = true; camObstructed_ = false; return; }
+    // Default: the provisional pull-in (validated feel). WFC_CAMRE=1: the RE obstruction behaviours below, whose
+    // native box sweeps are approximated by rays (PARTIAL; WFC_CAMTEST shows more visible clipping than the default).
+    static const bool oldModel = std::getenv("WFC_CAMRE") == nullptr;
+    if (oldModel) {
+        core::Vec3 focus = pawn_->actorLocation() + core::Vec3{0, anchorCur_, 0};
+        core::Vec3 d = desiredCam - focus;
+        float len = core::length(d), t;
+        camLoc_ = desiredCam;
+        camObstructed_ = len > 1e-3f && col_->segmentHit(focus, desiredCam, t);
+        if (camObstructed_) camLoc_ = focus + d * (std::max(0.0f, t * len - 0.3f) / len);
+        camLocValid_ = true;
+        return;
+    }
+    // Camera frame (UE X forward, Y right, Z up).
+    const core::Vec3 F = core::forwardFromYawPitch(viewYaw_, viewPitch_);
+    const core::Vec3 R = core::normalize(core::cross(core::forwardFromYawPitch(viewYaw_, 0.0f), core::Vec3{0, 1, 0}));
+    const core::Vec3 U = core::cross(R, F);
+    const float nearD = 1.0f;                                  // near-clip-plane centre 100 UU ahead
+    // Near-plane box: local half extent (0.01, tan(FOV/2)*100, tan(FOV/2)*100 / max(1, aspect)) UU, world AABB of
+    // the rotated corners.
+    float th = std::tan(fovCur_ * 0.5f * 0.0174533f);
+    core::Vec3 le{0.0001f, th * nearD, th * nearD / std::max(1.0f, aspect_)};
+    CamTrace tr;
+    tr.box = col_; tr.ray = colRay_ ? colRay_ : col_;
+    tr.ext = {std::fabs(F.x) * le.x + std::fabs(R.x) * le.y + std::fabs(U.x) * le.z,
+              std::fabs(F.y) * le.x + std::fabs(R.y) * le.y + std::fabs(U.y) * le.z,
+              std::fabs(F.z) * le.x + std::fabs(R.z) * le.y + std::fabs(U.z) * le.z};
+    const core::Vec3 desired = desiredCam + F * nearD;
+    const bool vehicle = strategy_ != 0;
+    // Origin: robot = pawn location (cylinder centre); vehicles = location + _OriginOffset (-200, 0, 75) rotated by
+    // the vehicle rotation (yaw + body pitch; roll not applied [PROV]).
+    core::Vec3 origin = pawn_->actorLocation();
+    if (vehicle) {
+        const auto& vs = pawn_->vehicleState();
+        core::Vec3 vf = core::forwardFromYawPitch(pawn_->yaw(), vs.pitch);
+        core::Vec3 vr = core::normalize(core::cross(core::forwardFromYawPitch(pawn_->yaw(), 0.0f), core::Vec3{0, 1, 0}));
+        core::Vec3 vu = core::cross(vr, vf);
+        origin = origin + vf * cfg::kCamVehOriginFwd + vu * cfg::kCamVehOriginUp;
+    }
+    core::Vec3 clip = desired;
+    camObstructed_ = tr.rayHit(origin, desired) || tr.overlap(desired);
+    if (camObstructed_) {
+        camSmoothRemain_ = 1.0f;
+        core::Vec3 off = desired - origin;
+        float ox = core::dot(off, F), oy = core::dot(off, R), oz = core::dot(off, U);
+        auto upThenHoriz = [&](core::Vec3 horiz) {                 // rise along camera up, then sweep horiz
+            core::Vec3 upMove = U * oz;
+            float lu = core::length(upMove);
+            float dUp = tr.sweep(origin, origin + upMove);
+            core::Vec3 P = lu > 1e-4f ? origin + upMove * (dUp / lu) : origin;
+            float lh = core::length(horiz);
+            float dH = tr.sweep(P, P + horiz);
+            return lh > 1e-4f ? P + horiz * (dH / lh) : P;
+        };
+        if (!vehicle) {
+            clip = upThenHoriz(F * ox + R * oy);
+        } else {
+            // Candidate 0: diagonal (X, Y, 0.5 Z); candidate 1: up, then straight back by -OffCS.X.
+            core::Vec3 dd = F * ox + R * oy + U * (0.5f * oz);
+            float ld = core::length(dd);
+            core::Vec3 c0 = ld > 1e-4f ? origin + dd * (tr.sweep(origin, origin + dd) / ld) : origin;
+            core::Vec3 c1 = upThenHoriz(F * (-1.0f) * (-ox));
+            auto weight = [&](const core::Vec3& c) {
+                return (1.0f - std::min(1.0f, core::length(c - desired) * 0.2f)) + std::min(1.0f, core::length(c - origin) * 0.2f);
+            };
+            clip = weight(c1) > weight(c0) ? c1 : c0;              // tie keeps index 0
         }
     }
-    return want;
+    core::Vec3 cam = clip - F * nearD;
+    // Smoothing in target space T = (camera rotation, target location).
+    const core::Vec3 L = pawn_->actorLocation();
+    core::Vec3 O{core::dot(cam - L, F), core::dot(cam - L, R), core::dot(cam - L, U)};
+    const float quick = cfg::kCamCollQuickSpeed, slow = cfg::kCamCollSlowSpeed;
+    if (!vehicle) {
+        camSmoothRemain_ = std::max(0.0f, camSmoothRemain_ - dt);
+        if (!camOldValid_ || camSmoothRemain_ == 0.0f) { camOld_ = O; camOldValid_ = true; }
+        core::Vec3 D = O - camOld_;
+        camOld_.x = stepToward(camOld_.x, D.x, D.x < 0.0f ? slow : quick, dt);
+        camOld_.y = stepToward(camOld_.y, D.y, D.y > 0.0f ? slow : quick, dt);
+        camOld_.z = stepToward(camOld_.z, D.z, D.z > 0.0f ? slow : quick, dt);
+    } else {
+        if (!camOldValid_) { camOld_ = O; camOldValid_ = true; }      // always smoothed
+        core::Vec3 D = O - camOld_;
+        camOld_.x = stepToward(camOld_.x, D.x, D.x < 0.0f ? slow : quick, dt);
+        camOld_.y = stepToward(camOld_.y, D.y, slow, dt);
+        camOld_.z = stepToward(camOld_.z, D.z, D.z > 0.0f ? slow : quick, dt);
+    }
+    camLoc_ = L + F * camOld_.x + R * camOld_.y + U * camOld_.z;
+    camLocValid_ = true;
 }
 
 // TnPlayerController.PlayerWalking.CanFineAim [CONF bytecode]: not while meleeing, reloading or
@@ -320,6 +454,7 @@ void PlayerController::tickFineAim() {
 void PlayerController::applyToPawn(World& world, float dt) {
     if (!pawn_) return;
     col_ = world.collision();
+    colRay_ = world.weaponCollision();
     tickFineAim();
     MoveIntent step = intent_;
     step.wantJump = wantJumpLatched_;

@@ -7,6 +7,7 @@
 #include "game/VehicleTests.h"
 #include "frontend/FrontendRuntime.h"
 #include "game/MapState.h"
+#include "game/Match.h"
 #include "game/Collision.h"
 #include "game/PickupFactory.h"
 #include "game/Destructible.h"
@@ -14,6 +15,7 @@
 #include "assets/Json.h"
 
 #include <algorithm>
+#include <array>
 #include <string>
 
 #include <chrono>
@@ -108,7 +110,23 @@ bool Application::init() {
         if (!std::strchr(pt, ',')) { runPickupTest(); return false; }   // measurements only
     if (std::getenv("WFC_TRAVERSE")) { runTraverseTest(); return false; }   // measurements only
     if (std::getenv("WFC_MAPTRAVERSE")) { runMapTraverse(); return false; }   // measurements only
+    if (std::getenv("WFC_XFORMTEST")) { runTransformStress(); return false; }  // measurements only
+    if (std::getenv("WFC_MATCHTEST")) { runMatchTest(); return false; }        // measurements only
+    if (std::getenv("WFC_CAMTEST")) { runCameraTest(); return false; }         // measurements only
+    if (std::getenv("WFC_CHAOS")) { runChaosTest(); return false; }            // measurements only
+    if (std::getenv("WFC_TDMTEST")) { runTdmSessionTest(); return false; }     // measurements only
     world_.setAudio(audio_);
+    // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
+    // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
+    {
+        game::MatchLaunch launch;
+        bool want = false;
+        if (const char* u = std::getenv("WFC_MATCH_URL")) want = game::MatchLaunch::fromURL(u, launch);
+        else if (const char* mm = std::getenv("WFC_MATCH")) { want = game::MatchLaunch::fromURL(std::string("MP_IAC_Streets?GameModeTag=") + mm, launch); }
+        if (want && world_.launchMatch(launch))
+            if (const char* n = std::getenv("WFC_MATCH_OPPONENTS"))   // diagnostic only: static synthetic participants (drawn boxes)
+                for (int i = 0; i < std::atoi(n); ++i) world_.addMatchOpponent("Opponent" + std::to_string(i), true);
+    }
     gameMode_.begin(world_);
 
     window_->setMouseCaptured(true);
@@ -234,6 +252,7 @@ Application::MatchExit Application::runMatch() {
         for (int i = 0; i < steps; ++i) {
             world_.tick(step);
             gameMode_.tick(world_, step);
+            if (frontend_) routeMatchToFrontend(step);   // Gameplay match events -> frontend flow (per tick)
         }
         if (perfEvery > 0) {
             // Gameplay-side cost (WFC_PERFLOG=N): simulation time (movement, camera, aim, hitscan)
@@ -298,6 +317,7 @@ Application::MatchExit Application::runMatch() {
         // Camera + render.
         world_.player().controller().updateCamera(camera_);
         camera_.aspect = (float)window_->width() / (float)(window_->height() > 0 ? window_->height() : 1);
+        world_.player().controller().setViewAspect(camera_.aspect);
 
         // Debug camera overrides (for diagnosis / screenshots): WFC_DEBUGCAM=top|front
         if (const char* dc = std::getenv("WFC_DEBUGCAM")) {
@@ -949,6 +969,570 @@ void Application::runMapTraverse() {
     }
     LOG_INFO("MAPTRAVERSE COHERENCE: visible components crossed: %d authored no-pawn-collision, %d where the authored simple hull is smaller than the mesh, %d with missing/displaced collision",
              authoredPass, hullPass, defectPass);
+}
+
+// WFC_XFORMTEST: vehicle -> robot transform stress on MP_IAC_Streets (corrected collision), fixed 60 Hz.
+// From every authored nav point x 4 headings, each case drives the truck through the real input path
+// (PlayerController -> MoveIntent), presses Transform, keeps holding forward for 3 s and checks every tick:
+//   UNDER-FLOOR: a walkable surface (n.y > 0.7) between 0.3 m and 3.0 m above the robot's feet at its xz (the robot
+//                is 4 m tall: no legit place has a floor slab through its body); KILLZ: below -749 m.
+// Cases: stationary, hover forward 1.5 s, hover max speed 4 s, boost 2.5 s, boost + nitro, boosted turn,
+// airborne (boost jump, transform near the apex), and a transform-time sweep during boost (0.6..2.8 s).
+// Optional WFC_XFORMTEST=<n>: only the first n nav points.
+void Application::runTransformStress() {
+    const float dt = (float)clock_.stepSeconds();
+    auto& pc = world_.player().pawn();
+    auto& ctl = world_.player().controller();
+    const game::CollisionWorld* col = world_.collision();
+    if (!col) return;
+    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::stringstream ss; ss << f.rdbuf();
+    assets::Json nav;
+    if (!assets::Json::parse(ss.str(), nav)) return;
+    struct Node { std::string name; core::Vec3 p; };
+    std::vector<Node> nodes;
+    for (size_t i = 0; i < nav["nodes"].size(); ++i) {
+        const assets::Json& L = nav["nodes"][i]["location_gltf"];
+        nodes.push_back({nav["nodes"][i]["node"].asString(), {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()}});
+    }
+    // Level shell: the BSP part of the authored pawn collision. A walkable BSP surface above the robot = under the map.
+    game::CollisionWorld bspCol;
+    {
+        render::MeshData cm, bm;
+        assets::loadGlb(root + "/Maps/MP_IAC_Streets/collision_pawn.glb", cm);
+        bm.positions = cm.positions;
+        for (const render::SubMesh& sm : cm.subs)
+            if (sm.nodeName.rfind("BSPCollision", 0) == 0)
+                for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) bm.indices.push_back(cm.indices[i]);
+        bspCol.build(bm);
+    }
+    int limit = std::atoi(std::getenv("WFC_XFORMTEST"));
+    if (limit > 0 && (size_t)limit < nodes.size()) nodes.resize((size_t)limit);
+
+    auto placeVehicle = [&](const core::Vec3& at, float yaw) {
+        if (pc.moveForm() != game::Form::Vehicle || pc.isTransforming()) {
+            while (pc.isTransforming()) { platform::InputFrame none; world_.handleInput(none, dt); world_.tick(dt); }
+            if (pc.form() != game::Form::Vehicle) pc.setForm(game::Form::Vehicle);
+        }
+        core::Vec3 p = at;
+        float gy; core::Vec3 gn;
+        if (col->groundHeight(p.x, p.z, p.y + 1.5f, 3.0f, gy, gn)) p.y = gy;
+        p.y += pc.meshToActor(game::Form::Robot) - pc.meshToActor(game::Form::Vehicle);
+        pc.setPosition(p); pc.velocity() = {0, 0, 0}; pc.groundY = p.y; pc.setYaw(yaw);
+        ctl.setCameraYaw(yaw);
+        // settle on the springs
+        for (int k = 0; k < 30; ++k) { platform::InputFrame none; world_.handleInput(none, dt); world_.tick(dt); }
+    };
+    struct Case { const char* name; float drive; bool boost, nitro, turn, jump; float hold; };
+    std::vector<Case> cases = {
+        {"stationary", 0.0f, false, false, false, false, 1.0f},
+        {"hover", 1.5f, false, false, false, false, 0.0f},
+        {"hover-max", 4.0f, false, false, false, false, 0.0f},
+        {"boost", 2.5f, true, false, false, false, 0.0f},
+        {"boost+nitro", 2.0f, true, true, false, false, 0.0f},
+        {"boost-turn", 2.0f, true, false, true, false, 0.0f},
+        {"boost-air", 1.6f, true, false, false, true, 0.0f},
+    };
+    for (float tt = 0.6f; tt <= 2.81f; tt += 0.2f) cases.push_back({"boost-sweep", tt, true, false, false, false, 0.0f});
+    std::map<std::string, std::array<int, 4>> stats;   // runs, under-floor runs, killz, max speed at transform x10
+    float worstUnder = 0.0f; int overhangRuns = 0;
+    int total = 0, bad = 0;
+    for (const Node& n : nodes) {
+        for (int dir = 0; dir < 4; ++dir) {
+            float yaw = dir * 1.5707963f;
+            for (const Case& cs : cases) {
+                placeVehicle(n.p, yaw);
+                // Drive.
+                int steps = (int)(std::max(cs.drive, cs.hold) / dt);
+                bool jumped = false;
+                for (int k = 0; k < steps; ++k) {
+                    platform::InputFrame in;
+                    in.down[(int)platform::Button::Forward] = cs.drive > 0.0f;
+                    if (cs.boost) { in.down[(int)platform::Button::FineAim] = true; in.pressed[(int)platform::Button::FineAim] = k == 0; }
+                    if (cs.nitro && k == steps - 30) { in.down[(int)platform::Button::Dash] = in.pressed[(int)platform::Button::Dash] = true; }
+                    if (cs.turn) { in.padConnected = true; in.padRX = 1.0f; }
+                    if (cs.jump && k == steps - 18) { in.down[(int)platform::Button::Jump] = in.pressed[(int)platform::Button::Jump] = true; jumped = true; }
+                    ctl.setCameraYaw(cs.turn ? ctl.viewYaw() : yaw);
+                    world_.handleInput(in, dt);
+                    world_.tick(dt);
+                }
+                (void)jumped;
+                core::Vec3 p0 = pc.position(), v0 = pc.velocity();
+                bool driving0 = pc.vehicleState().driving;
+                float speed0 = core::length(core::Vec3{v0.x, 0, v0.z});
+                // Transform (keep the inputs a player would still hold: forward + boost).
+                platform::InputFrame tin;
+                tin.down[(int)platform::Button::Transform] = tin.pressed[(int)platform::Button::Transform] = true;
+                tin.down[(int)platform::Button::Forward] = cs.drive > 0.0f;
+                tin.down[(int)platform::Button::FineAim] = cs.boost;
+                world_.handleInput(tin, dt); world_.tick(dt);
+                float under = 0.0f, ymin = pc.position().y; bool killz = false; int underFrames = 0, overhangFrames = 0;
+                core::Vec3 underAt;
+                for (int k = 0; k < (int)(3.0f / dt); ++k) {
+                    platform::InputFrame in;
+                    in.down[(int)platform::Button::Forward] = cs.drive > 0.0f;
+                    world_.handleInput(in, dt); world_.tick(dt);
+                    core::Vec3 p = pc.position();
+                    ymin = std::min(ymin, p.y);
+                    if (p.y < -749.0f) { killz = true; break; }
+                    if (pc.moveForm() == game::Form::Robot && !pc.isTransforming()) {   // full robot cylinder (after the fold)
+                        float gy; core::Vec3 gn;
+                        // Under the map = a walkable LEVEL (BSP) floor above the feet; a prop / volume above = low overhang.
+                        bool slabAbove = col->groundHeight(p.x, p.z, p.y + 3.0f, 0.0f, gy, gn) && gn.y > 0.7f && gy > p.y + 0.3f;
+                        float by; core::Vec3 bn;
+                        bool bspAbove = bspCol.groundHeight(p.x, p.z, p.y + 3.0f, 0.0f, by, bn) && bn.y > 0.7f && by > p.y + 0.3f;
+                        if (slabAbove && !bspAbove) ++overhangFrames;
+                        else if (bspAbove) { gy = by;
+                            ++underFrames;
+                            if (gy - p.y > under) { under = gy - p.y; underAt = p; }
+                        }
+                    }
+                }
+                bool fail = killz || underFrames > 3;
+                if (overhangFrames > 3) ++overhangRuns;
+                auto& st = stats[cs.name];
+                st[0]++; st[1] += underFrames > 3; st[2] += killz; st[3] = std::max(st[3], (int)(speed0 * 10.0f));
+                ++total; bad += fail;
+                if (fail) {
+                    worstUnder = std::max(worstUnder, under);
+                    LOG_INFO("XFORM FAIL %-11s %.1fs %s dir %d: at transform pos (%.2f %.2f %.2f) v (%.1f %.1f %.1f) driving=%d -> %s%d frames under a floor (max %.2f m at %.1f %.1f %.1f), ymin %.2f",
+                             cs.name, cs.drive, n.name.c_str(), dir, p0.x, p0.y, p0.z, v0.x, v0.y, v0.z, (int)driving0, killz ? "KILLZ " : "",
+                             underFrames, under, underAt.x, underAt.y, underAt.z, ymin);
+                }
+            }
+        }
+    }
+    for (const auto& [name, st] : stats)
+        LOG_INFO("XFORM %-11s runs %4d  under-floor %4d  killz %3d  max speed at transform %.1f m/s", name.c_str(), st[0], st[1], st[2], st[3] / 10.0f);
+    LOG_INFO("XFORM SUMMARY: %d/%d transforms ended UNDER THE MAP (no floor under the robot, a walkable surface above) or KillZ (worst %.2f m); %d ended on a real floor under a low overhang", bad, total, worstUnder, overhangRuns);
+}
+
+// WFC_MATCHTEST: the local TDM / DM match state machine (Match + World host glue) with controlled events, fixed 60 Hz.
+//  A. TDM to the score limit: local player + 3 harness players (teams by PickTeam); scripted kills incl. a suicide and an
+//     environmental death; checks pre-match (no spawn for 10 s), score, deaths, 5 s respawn, EndGame("Score"),
+//     MatchOver 15 s, ReturnToLobby; the local pawn's spawn start / team / cluster.
+//  B. TDM to the time limit with equal scores (tie, no overtime) using a short TimeLimit override (harness only).
+//  C. DM (FFA) score limit 20 with FFA starts.
+void Application::runMatchTest() {
+    const float dt = (float)clock_.stepSeconds();
+    auto logEvents = [&](const game::Match& m, const std::vector<game::MatchEvent>& evs, float t) {
+        for (const auto& e : evs) {
+            const char* n[] = {"CountdownTick", "MatchStarted", "PlayerSpawned", "PlayerKilled", "GameNearlyComplete",
+                               "TimeAnnouncement", "KillsLeftAnnouncement", "MatchEnded", "ReturnToLobby"};
+            if (e.type == game::MatchEvent::Type::CountdownTick && e.value != 10 && e.value != 0) continue;
+            LOG_INFO("MATCHTEST t=%7.2f %-22s player %d other %d value %d %s | state %s status %d score %d-%d remaining %d",
+                     t, n[(int)e.type], e.player, e.other, e.value, e.text.c_str(), game::matchStateName(m.state()), m.gameStatus(),
+                     m.teamScore(0), m.teamScore(1), m.remainingTime());
+        }
+    };
+    // A: through World (local pawn) + harness players.
+    {
+        world_.startLocalMatch(game::MatchSettings::forMode("TDM"));
+        game::Match& m = world_.match();
+        int me = world_.localMatchPlayer();
+        int a = m.addPlayer("HarnessA"), b = m.addPlayer("HarnessB"), c = m.addPlayer("HarnessC");
+        for (const auto& p : m.players()) LOG_INFO("MATCHTEST A team %s -> %d", p.name.c_str(), p.team);
+        float t = 0.0f;
+        auto run = [&](float secs) { for (int k = 0; k < (int)(secs / dt); ++k) { platform::InputFrame none; world_.handleInput(none, dt); world_.tick(dt); t += dt; logEvents(m, world_.matchEvents(), t); } };
+        run(5.0f);
+        LOG_INFO("MATCHTEST A t=5 pending: state %s local dead/unspawned %d countdown %d", game::matchStateName(m.state()), (int)world_.localPlayerDead(), m.countdown());
+        run(5.5f);
+        LOG_INFO("MATCHTEST A t=10.5: state %s local spawned %d at start %d pawn (%.1f %.1f %.1f)", game::matchStateName(m.state()),
+                 (int)!world_.localPlayerDead(), m.lastSpawnStart(me), world_.player().pawn().position().x, world_.player().pawn().position().y,
+                 world_.player().pawn().position().z);
+        // Find an enemy and a teammate of the local player.
+        int myTeam = m.players()[(size_t)me].team, enemy = -1, mate = -1;
+        for (int i : {a, b, c}) { if (m.players()[(size_t)i].team != myTeam) { if (enemy < 0) enemy = i; } else if (mate < 0) mate = i; }
+        // Suicide by the local player (no score), environmental death of the enemy (no score), then a kill exchange.
+        world_.killLocalPlayer(me, true); run(0.1f);
+        LOG_INFO("MATCHTEST A after local suicide: score me %d deaths %d team %d-%d, respawn in %.2f", m.players()[(size_t)me].score,
+                 m.players()[(size_t)me].deaths, m.teamScore(0), m.teamScore(1), m.players()[(size_t)me].timeToRespawn);
+        float tDeath = t; run(5.2f);
+        LOG_INFO("MATCHTEST A local respawned %d after %.2f s (WaveRespawnTime 5)", (int)!world_.localPlayerDead(), t - tDeath);
+        m.killed(-1, enemy, false); run(0.1f);
+        LOG_INFO("MATCHTEST A environmental death of %d: deaths %d, team %d-%d", enemy, m.players()[(size_t)enemy].deaths, m.teamScore(0), m.teamScore(1));
+        // Kills by the local player until the goal (40): enemy respawns 5 s after each death.
+        int kills = 0;
+        while (m.state() == game::Match::State::InProgress && kills < 60) {
+            if (!m.players()[(size_t)enemy].alive) { run(0.5f); continue; }
+            m.killed(me, enemy, false); ++kills; run(0.05f);
+        }
+        LOG_INFO("MATCHTEST A after %d kills: state %s winner team %d (my team %d) me score %d kills %d", kills, game::matchStateName(m.state()),
+                 m.winnerTeam(), myTeam, m.players()[(size_t)me].score, m.players()[(size_t)me].kills);
+        m.killed(me, enemy, false);   // MatchOver: ScoreKill no-op
+        LOG_INFO("MATCHTEST A kill in MatchOver ignored: me score %d", m.players()[(size_t)me].score);
+        float tOver = t; run(15.5f);
+        LOG_INFO("MATCHTEST A MatchOver -> %s after %.1f s; World match active %d", game::matchStateName(m.state()), t - tOver, (int)world_.matchActive());
+        (void)mate;
+    }
+    // B: time limit tie (harness override of TimeLimit to 125 s; authored 900).
+    {
+        game::Match m;
+        std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+        m.loadSpawnData(root + "/Maps/MP_IAC_Streets/gameplay.json");
+        game::MatchSettings s = game::MatchSettings::forMode("TDM");
+        s.timeLimit = 125;
+        m.begin(s);
+        int p0 = m.addPlayer("P0"), p1 = m.addPlayer("P1");
+        float t = 0.0f;
+        for (int k = 0; k < (int)(140.0f / dt); ++k) {
+            m.tick(dt); t += dt; logEvents(m, m.events(), t); m.clearEvents();
+            if (k == (int)(15.0f / dt)) { int a = m.players()[(size_t)p0].team == 0 ? p0 : p1, b = a == p0 ? p1 : p0; m.killed(a, b); m.killed(b, a); }
+        }
+        LOG_INFO("MATCHTEST B time limit: state %s, score %d-%d, winner team %d (tie = -1), elapsed %d", game::matchStateName(m.state()),
+                 m.teamScore(0), m.teamScore(1), m.winnerTeam(), m.elapsedTime());
+    }
+    // C: DM.
+    {
+        game::Match m;
+        std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+        m.loadSpawnData(root + "/Maps/MP_IAC_Streets/gameplay.json");
+        m.begin(game::MatchSettings::forMode("DM"));
+        int p0 = m.addPlayer("P0"), p1 = m.addPlayer("P1");
+        float t = 0.0f; (void)t;
+        for (int k = 0; k < (int)(11.0f / dt); ++k) { m.tick(dt); t += dt; }
+        LOG_INFO("MATCHTEST C DM spawn starts %s / %s", m.starts()[(size_t)m.lastSpawnStart(p0)].actor.c_str(), m.starts()[(size_t)m.lastSpawnStart(p1)].actor.c_str());
+        int kills = 0;
+        while (m.state() == game::Match::State::InProgress && kills < 40) {
+            if (m.players()[(size_t)p1].alive) { m.killed(p0, p1); ++kills; }
+            m.tick(dt); t += dt; m.clearEvents();
+        }
+        LOG_INFO("MATCHTEST C DM: %d kills -> state %s, p0 score %d (goal %d), winner team %d", kills, game::matchStateName(m.state()),
+                 m.players()[(size_t)p0].score, m.settings().goalScore, m.winnerTeam());
+    }
+}
+
+// WFC_CAMTEST: third-person camera obstruction on Streets (the camera actually used for the view, after the
+// obstruction behaviour). From every nav point x 8 headings: (a) robot backing up 2 s with the camera behind,
+// (b) robot standing while the camera yaw sweeps 360 deg in 2 s, (c) hover truck backing up, (d) boost forward 2 s,
+// (e) robot -> vehicle -> robot transform. Per frame, against the RENDERED map (world.glb, what the player sees):
+//   HIDDEN  - visible geometry between the pawn's anchor and the camera (the view is blocked by a wall)
+//   UNDER   - a walkable surface between 0.05 and 2 m above the camera at its xz (camera sunk under a floor)
+//   NEAR    - rendered geometry within 0.1 m of the camera in any axis direction (near-plane clipping)
+//   JUMP    - camera moved > 1.5 m in one step more than the pawn did (snap / pop)
+// Default = provisional pull-in; WFC_CAMRE=1 = the RE obstruction behaviours.
+void Application::runCameraTest() {
+    const float dt = (float)clock_.stepSeconds();
+    auto& pc = world_.player().pawn();
+    auto& ctl = world_.player().controller();
+    const game::CollisionWorld* col = world_.collision();
+    if (!col) return;
+    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    game::CollisionWorld renderCol;
+    {
+        render::MeshData rm, rs;
+        assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", rm);
+        std::vector<std::string> skip = game::MapState::moverActorNames();
+        for (const auto& v : world_.mapState().modeVisibleActors()) if (!v.visible) skip.push_back(v.actor);
+        rs.positions = rm.positions;
+        for (const render::SubMesh& sm : rm.subs) {
+            if (std::find(skip.begin(), skip.end(), sm.nodeName) != skip.end()) continue;
+            for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) rs.indices.push_back(rm.indices[i]);
+        }
+        renderCol.build(rs);
+    }
+    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::stringstream ss; ss << f.rdbuf();
+    assets::Json nav;
+    if (!assets::Json::parse(ss.str(), nav)) return;
+    std::vector<core::Vec3> nodes;
+    for (size_t i = 0; i < nav["nodes"].size(); ++i) {
+        const assets::Json& L = nav["nodes"][i]["location_gltf"];
+        nodes.push_back({L[0].asFloat(), L[1].asFloat(), L[2].asFloat()});
+    }
+    int limit = std::atoi(std::getenv("WFC_CAMTEST"));
+    if (limit > 1 && (size_t)limit < nodes.size()) nodes.resize((size_t)limit);
+    const char* sc[5] = {"robot-back", "robot-spin", "hover-back", "boost", "transform"};
+    long frames[5] = {0}, hidden[5] = {0}, under[5] = {0}, nearc[5] = {0}, jump[5] = {0}, obstructed[5] = {0};
+    auto settle = [&](const core::Vec3& at, game::Form form, float yaw) {
+        while (pc.isTransforming()) { platform::InputFrame none; world_.handleInput(none, dt); world_.tick(dt); }
+        if (pc.form() != form) pc.setForm(form);
+        core::Vec3 p = at; float gy; core::Vec3 gn;
+        if (col->groundHeight(p.x, p.z, p.y + 1.5f, 3.0f, gy, gn)) p.y = gy;
+        if (form == game::Form::Vehicle) p.y += pc.meshToActor(game::Form::Robot) - pc.meshToActor(game::Form::Vehicle);
+        pc.setPosition(p); pc.velocity() = {0, 0, 0}; pc.groundY = p.y; pc.setYaw(yaw); ctl.setCameraYaw(yaw);
+        for (int k = 0; k < 90; ++k) { platform::InputFrame none; world_.handleInput(none, dt); world_.tick(dt); }   // camera settles
+    };
+    for (size_t ni = 0; ni < nodes.size(); ++ni) {
+        for (int dir = 0; dir < 8; ++dir) {
+            float yaw = dir * 0.7853982f;
+            for (int s = 0; s < 5; ++s) {
+                settle(nodes[ni], (s == 2 || s == 3) ? game::Form::Vehicle : game::Form::Robot, yaw);
+                core::Vec3 prevCam = ctl.cameraPos(), prevPawn = pc.actorLocation();
+                int n = (int)((s == 4 ? 3.0f : 2.0f) / dt);
+                for (int k = 0; k < n; ++k) {
+                    platform::InputFrame in;
+                    if (s == 0 || s == 2) in.down[(int)platform::Button::Back] = true;
+                    if (s == 3) { in.down[(int)platform::Button::Forward] = true; in.down[(int)platform::Button::FineAim] = true; in.pressed[(int)platform::Button::FineAim] = k == 0; }
+                    if (s == 4 && (k == 0 || k == 90)) in.down[(int)platform::Button::Transform] = in.pressed[(int)platform::Button::Transform] = true;
+                    if (s == 1) ctl.setCameraYaw(yaw + 6.2831853f * (float)k / n); else if (s != 3) ctl.setCameraYaw(yaw);
+                    world_.handleInput(in, dt);
+                    world_.tick(dt);
+                    core::Vec3 cam = ctl.cameraPos(), anchor = pc.actorLocation();
+                    ++frames[s];
+                    obstructed[s] += ctl.cameraObstructed();
+                    float t;
+                    if (renderCol.segmentHit(anchor, cam, t)) ++hidden[s];
+                    float gy; core::Vec3 gn;
+                    if (col->groundHeight(cam.x, cam.z, cam.y + 2.0f, 0.0f, gy, gn) && gn.y > 0.7f && gy > cam.y + 0.05f) ++under[s];
+                    const core::Vec3 ax[6] = {{0.1f, 0, 0}, {-0.1f, 0, 0}, {0, 0.1f, 0}, {0, -0.1f, 0}, {0, 0, 0.1f}, {0, 0, -0.1f}};
+                    for (const auto& a : ax) if (renderCol.segmentHit(cam, cam + a, t)) { ++nearc[s]; break; }
+                    if (core::length(cam - prevCam) - core::length(anchor - prevPawn) > 1.5f) ++jump[s];
+                    prevCam = cam; prevPawn = anchor;
+                }
+            }
+        }
+    }
+    const char* model = std::getenv("WFC_CAMRE") ? "RE TnThirdPersoncollision / TnAvoidClipping" : "default provisional pull-in";
+    for (int s = 0; s < 5; ++s)
+        LOG_INFO("CAMTEST %-11s [%s] frames %6ld obstructed %5.1f%%  HIDDEN %5.2f%%  UNDER %5.2f%%  NEAR %5.2f%%  JUMP %ld", sc[s], model, frames[s],
+                 100.0 * obstructed[s] / std::max(1L, frames[s]), 100.0 * hidden[s] / std::max(1L, frames[s]),
+                 100.0 * under[s] / std::max(1L, frames[s]), 100.0 * nearc[s] / std::max(1L, frames[s]), jump[s]);
+}
+
+// WFC_CHAOS: adversarial movement on Streets. From every nav point, 20 s of seeded random play through the real
+// input path: move direction changes, jumps, transforms (both ways, at any speed), boost, nitro, camera spins.
+// Checks every tick: UNDER-FLOOR (walkable surface 0.3..3 m above the robot's feet after a fold / 0.3..1.5 m above
+// the vehicle root), KILLZ, STUCK (< 0.5 m net motion over 5 s while moving input is held).
+// Failures log position + authored collision actors. WFC_CHAOS=<n>: first n nav points; seed fixed.
+void Application::runChaosTest() {
+    const float dt = (float)clock_.stepSeconds();
+    auto& pc = world_.player().pawn();
+    auto& ctl = world_.player().controller();
+    const game::CollisionWorld* col = world_.collision();
+    if (!col) return;
+    std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::stringstream ss; ss << f.rdbuf();
+    assets::Json nav;
+    if (!assets::Json::parse(ss.str(), nav)) return;
+    std::vector<std::pair<std::string, core::Vec3>> nodes;
+    for (size_t i = 0; i < nav["nodes"].size(); ++i) {
+        const assets::Json& L = nav["nodes"][i]["location_gltf"];
+        nodes.push_back({nav["nodes"][i]["node"].asString(), {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()}});
+    }
+    int limit = std::atoi(std::getenv("WFC_CHAOS"));
+    if (limit > 1 && (size_t)limit < nodes.size()) nodes.resize((size_t)limit);
+    game::CollisionWorld bspCol;   // level shell (BSP) of the pawn collision: under it = under the map
+    {
+        render::MeshData cm, bm;
+        assets::loadGlb(root + "/Maps/MP_IAC_Streets/collision_pawn.glb", cm);
+        bm.positions = cm.positions;
+        for (const render::SubMesh& sm : cm.subs)
+            if (sm.nodeName.rfind("BSPCollision", 0) == 0)
+                for (uint32_t i = sm.indexOffset; i < sm.indexOffset + sm.indexCount; ++i) bm.indices.push_back(cm.indices[i]);
+        bspCol.build(bm);
+    }
+    int propRuns = 0;
+    unsigned rng = 0xC0FFEEu;
+    auto rnd = [&]() { rng = rng * 1664525u + 1013904223u; return (float)((rng >> 8) & 0xFFFF) / 65535.0f; };
+    long ticks = 0, transforms = 0, jumps = 0, boosts = 0;
+    int underRuns = 0, killz = 0, stuck = 0;
+    for (size_t ni = 0; ni < nodes.size(); ++ni) {
+        while (pc.isTransforming()) { platform::InputFrame none; world_.handleInput(none, dt); world_.tick(dt); }
+        if (pc.form() != game::Form::Robot) pc.setForm(game::Form::Robot);
+        core::Vec3 p0 = nodes[ni].second; float gy; core::Vec3 gn;
+        if (col->groundHeight(p0.x, p0.z, p0.y + 1.5f, 3.0f, gy, gn)) p0.y = gy;
+        pc.setPosition(p0); pc.velocity() = {0, 0, 0}; pc.groundY = p0.y;
+        float yaw = rnd() * 6.2831853f, nextChange = 0.0f;
+        bool fwd = true, back = false, left = false, right = false, boost = false;
+        int underFrames = 0, propFrames = 0; float worst = 0.0f; core::Vec3 worstAt;
+        core::Vec3 stuckRef = pc.position(); float stuckT = 0.0f; bool reportedStuck = false;
+        for (int k = 0; k < (int)(20.0f / dt); ++k) {
+            float t = k * dt;
+            platform::InputFrame in;
+            if (t >= nextChange) {
+                nextChange = t + 0.4f + rnd() * 1.6f;
+                yaw += (rnd() - 0.5f) * 3.0f;
+                fwd = rnd() < 0.75f; back = !fwd && rnd() < 0.5f; left = rnd() < 0.2f; right = !left && rnd() < 0.2f;
+                boost = pc.moveForm() == game::Form::Vehicle && rnd() < 0.6f;
+                if (rnd() < 0.35f) { in.down[(int)platform::Button::Transform] = in.pressed[(int)platform::Button::Transform] = true; ++transforms; }
+                if (rnd() < 0.3f) { in.down[(int)platform::Button::Jump] = in.pressed[(int)platform::Button::Jump] = true; ++jumps; }
+                if (boost && rnd() < 0.3f) { in.down[(int)platform::Button::Dash] = in.pressed[(int)platform::Button::Dash] = true; }
+                if (boost) { in.pressed[(int)platform::Button::FineAim] = true; ++boosts; }
+            }
+            in.down[(int)platform::Button::Forward] = fwd; in.down[(int)platform::Button::Back] = back;
+            in.down[(int)platform::Button::Left] = left; in.down[(int)platform::Button::Right] = right;
+            in.down[(int)platform::Button::FineAim] = boost;
+            if (boost) { in.padConnected = true; in.padRX = std::sin(t * 1.7f); }
+            ctl.setCameraYaw(boost ? ctl.viewYaw() : yaw);
+            world_.handleInput(in, dt);
+            world_.tick(dt);
+            ++ticks;
+            core::Vec3 p = pc.position();
+            if (p.y < -749.0f) { ++killz; LOG_INFO("CHAOS KILLZ from %s at t=%.2f", nodes[ni].first.c_str(), t); break; }
+            if (!pc.isTransforming()) {
+                bool robot = pc.moveForm() == game::Form::Robot;
+                float lo = 0.3f, hi = robot ? 3.0f : 1.5f;
+                float by; core::Vec3 bn;
+                bool slab = col->groundHeight(p.x, p.z, p.y + hi, 0.0f, gy, gn) && gn.y > 0.7f && gy > p.y + lo;
+                bool bsp = slab && bspCol.groundHeight(p.x, p.z, p.y + hi, 0.0f, by, bn) && bn.y > 0.7f && by > p.y + lo;
+                if (slab && !bsp) ++propFrames;
+                if (bsp) {
+                    ++underFrames;
+                    if (gy - p.y > worst) { worst = gy - p.y; worstAt = p; }
+                }
+            }
+            stuckT += dt;
+            if (stuckT >= 5.0f) {
+                bool moving = fwd || back || left || right;
+                if (moving && core::length(core::Vec3{p.x - stuckRef.x, 0, p.z - stuckRef.z}) < 0.5f && !reportedStuck) {
+                    ++stuck; reportedStuck = true;
+                    LOG_INFO("CHAOS STUCK from %s at (%.1f %.1f %.1f) form %s blockers %s", nodes[ni].first.c_str(), p.x, p.y, p.z,
+                             game::formName(pc.moveForm()), world_.collisionActorsAt(p + core::Vec3{0, 1.0f, 0}, 1.5f).c_str());
+                }
+                stuckRef = p; stuckT = 0.0f;
+            }
+        }
+        if (propFrames > 3) ++propRuns;
+        if (underFrames > 3) {
+            ++underRuns;
+            LOG_INFO("CHAOS UNDER-FLOOR from %s: %d frames, worst %.2f m at (%.1f %.1f %.1f) blockers %s", nodes[ni].first.c_str(), underFrames, worst,
+                     worstAt.x, worstAt.y, worstAt.z, world_.collisionActorsAt(worstAt + core::Vec3{0, worst, 0}, 0.5f).c_str());
+        }
+    }
+    LOG_INFO("CHAOS SUMMARY: %zu starts x 20 s (%ld ticks, %ld transform presses, %ld jumps, %ld boosts): %d runs UNDER THE MAP (BSP floor above), %d KillZ, %d stuck; %d runs with the pawn inside / under a prop",
+             nodes.size(), ticks, transforms, jumps, boosts, underRuns, killz, stuck, propRuns);
+}
+
+// WFC_TDMTEST: a whole MP_IAC_Streets TDM session through World (the real pawn, hitscan, pickups, map state) with three
+// synthetic participants (test-only MatchOpponent). Checks: launch contract (URL), TDM map state, spawn / teams / starts,
+// friendly-fire filter, damage + overshield, a real Ion Blaster hitscan kill, assists, death mid-transform in vehicle form,
+// respawn state, pickup timers across death, score-limit end + HUD result, return, a second match without restarting
+// (scores reset, map reset), and the HUD state contract.
+void Application::runTdmSessionTest() {
+    const float dt = (float)clock_.stepSeconds();
+    auto& pc = world_.player().pawn();
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const char* what) { ++checks; if (!ok) ++fails; LOG_INFO("TDMTEST %s %s", ok ? "PASS" : "FAIL", what); };
+    auto run = [&](float secs) { for (int k = 0; k < (int)(secs / dt); ++k) { platform::InputFrame none; world_.handleInput(none, dt); world_.tick(dt); } };
+    // 1. Launch from the original URL form (PointsToWin override for test speed).
+    game::MatchLaunch L;
+    check(game::MatchLaunch::fromURL("MP_IAC_Streets_Base_m?PlaylistId=-1?PointsToWin=5?Game=TransContent.TnVersusGame?GameModeTag=TDM?TimeLimit=900.00?listen?MapId=508", L)
+          && L.map == "MP_IAC_Streets" && L.modeTag == "TDM" && L.settings.goalScore == 5 && L.settings.timeLimit == 900, "URL parsed: MP_IAC_Streets TDM goal 5 time 900");
+    game::MatchLaunch bad;
+    game::MatchLaunch::fromURL("MP_ESC_BrokenHope_Base_m?GameModeTag=TDM", bad);
+    check(!world_.launchMatch(bad), "unloaded map rejected");
+    check(world_.launchMatch(L), "launchMatch(TDM)");
+    // 2. TDM map state.
+    {
+        int visibleObjective = 0, visibleBases = 0;
+        for (const auto& o : world_.mapState().objectives()) visibleObjective += o.visible;
+        for (const auto& b : world_.mapState().modeVisibleActors()) visibleBases += b.visible;
+        int rules = 0; for (const auto& r : world_.mapState().gameRules()) rules += r == "TransGame.TnGameRules_ScoreKillsTDM";
+        check(visibleObjective == 0 && visibleBases == 0 && rules == 1, "TDM map state: totems / KOTH / flag / bomb / bases hidden, ScoreKillsTDM rule");
+        check(world_.pickupFactories().size() == 24, "24 ordinary pickup factories present");
+    }
+    // 3. Participants and spawn.
+    game::Match& m = world_.match();
+    int me = world_.localMatchPlayer();
+    auto* oA = world_.addMatchOpponent("Ally", false);
+    auto* oB = world_.addMatchOpponent("EnemyB", false);
+    auto* oC = world_.addMatchOpponent("EnemyC", false);
+    game::MatchOpponent* ally = nullptr; std::vector<game::MatchOpponent*> enemies;
+    int myTeam = m.players()[(size_t)me].team;
+    for (auto* o : {oA, oB, oC}) { if (m.players()[(size_t)o->matchPlayer()].team == myTeam && !ally) ally = o; else enemies.push_back(o); }
+    check(ally && enemies.size() == 2, "teams: 2 v 2 by PickTeam");
+    run(10.5f);
+    check(m.state() == game::Match::State::InProgress && !world_.localPlayerDead() && oB->spawned() && oC->spawned(), "match started after the 10 s countdown; all spawned");
+    {
+        int st = m.lastSpawnStart(me);
+        bool teamStart = st >= 0 && !m.starts()[(size_t)st].ffa && m.starts()[(size_t)st].team == myTeam;
+        check(teamStart, "local pawn at a TnTeamPlayerStart of its own team (initial cluster)");
+        float gy; core::Vec3 gn;
+        check(world_.collision()->groundHeight(pc.position().x, pc.position().z, pc.position().y + 0.5f, 1.0f, gy, gn) && std::fabs(gy - pc.position().y) < 0.05f, "spawned on the floor");
+        check(std::fabs(std::remainder(pc.yaw() - m.starts()[(size_t)st].yaw, 6.2831853f)) < 0.01f, "spawn yaw = authored start rotation");
+    }
+    // 4. Friendly fire filtered; enemy damage applies; overshield first.
+    float h0 = pc.health().current;
+    world_.applyMatchDamage(me, ally->matchPlayer(), 100.0f, false);
+    check(pc.health().current == h0, "teammate instant-hit damage discarded (TnPlayerPawn.TakeDamage)");
+    world_.applyMatchDamage(me, ally->matchPlayer(), 50.0f, true);
+    check(pc.health().current == h0 - 50.0f, "teammate AOE damage applies");
+    pc.health().heal(game::Health::HealType::AddOverShield, 1.0f);
+    check(pc.health().current == 1100.0f && pc.health().activeSegment() == 4, "overshield: HealthMax + 550, top segment");
+    world_.applyMatchDamage(me, enemies[0]->matchPlayer(), 300.0f, false);
+    check(pc.health().current == 800.0f && pc.health().overshield() == 250.0f, "enemy damage comes off the overshield first");
+    // 5. Real hitscan kill: enemy 12 m in front of the local pawn, fire the Ion Blaster through World::fireHitscan.
+    {
+        game::MatchOpponent* e = enemies[0];
+        core::Vec3 fwd = core::forwardFromYawPitch(pc.yaw(), 0.0f);
+        e->setPosition(pc.position() + fwd * 12.0f);
+        world_.applyMatchDamage(e->matchPlayer(), ally->matchPlayer(), 100.0f, true);   // ally AOE first (assist)
+        int shots = 0; int scoreBefore = m.players()[(size_t)me].score;
+        while (e->spawned() && shots < 200) {
+            core::Vec3 eye = pc.actorLocation() + core::Vec3{0, 0.5f, 0};
+            core::Vec3 tgt = e->position() + core::Vec3{0, 2.0f, 0};
+            world_.fireHitscan(eye, core::normalize(tgt - eye));
+            ++shots;
+        }
+        LOG_INFO("TDMTEST hitscan kill after %d Ion Blaster hits (InstantHitDamage 15, HealthMax 550)", shots);
+        check(!e->spawned() && m.players()[(size_t)me].score == scoreBefore + 1 && m.teamScore(myTeam) == 1 && m.players()[(size_t)me].kills == 1,
+              "Ion Blaster kill credited: +1 score, +1 team, +1 kill");
+        check(std::fabs(m.players()[(size_t)ally->matchPlayer()].assists - 100.0f / 550.0f) < 1e-3f, "assist = first other damager, 100 / HealthMax");
+    }
+    // 6. Pickup across death, then death mid-transform in vehicle form.
+    {
+        game::PickupFactory* hf = nullptr;
+        for (auto* f : world_.pickupFactories()) if (f->kind() == game::PickupFactory::Kind::Health) { hf = f; break; }
+        pc.health().current = 100.0f;
+        pc.setPosition(hf->position()); pc.velocity() = {0, 0, 0};
+        run(0.1f);
+        bool taken = !hf->available() && pc.health().current == 550.0f;
+        check(taken, "health pickup: full heal to HealthMax (SHT_AddAllSegments)");
+        pc.setForm(game::Form::Vehicle);
+        pc.beginTransform();                       // vehicle -> robot fold in progress
+        run(0.2f);
+        bool folding = pc.isTransforming();
+        int enemyScore = m.players()[(size_t)enemies[1]->matchPlayer()].score;
+        world_.applyMatchDamage(me, enemies[1]->matchPlayer(), 2000.0f, false);
+        check(folding && world_.localPlayerDead() && m.players()[(size_t)me].deaths == 1 &&
+              m.players()[(size_t)enemies[1]->matchPlayer()].score == enemyScore + 1, "death mid-transform: killer credited, local dead");
+        game::HudGameState hd = world_.hudState();
+        check(!hd.alive && hd.timeToRespawn > 4.0f && hd.timeToRespawn <= 5.0f, "HUD: dead, TimeToRespawn ~5 s");
+        run(5.3f);
+        check(!world_.localPlayerDead() && pc.form() == game::Form::Robot && !pc.isTransforming() && pc.health().current == 550.0f &&
+              pc.weapon().ammo == pc.weapon().magSize && pc.weapon().reserve == 150, "respawn: fresh robot pawn, 550 health, 50 / 150 ammo, no fold");
+        check(!hf->available(), "pickup factory still sleeping after the respawn (timers are not reset by death)");
+    }
+    // 7. Score limit (goal 5): local kills the remaining enemy repeatedly.
+    {
+        game::MatchOpponent* e = enemies[1];
+        int guard = 0;
+        while (m.state() == game::Match::State::InProgress && guard++ < 200) {
+            if (e->spawned()) world_.applyMatchDamage(e->matchPlayer(), me, 600.0f, false);
+            run(0.25f);
+        }
+        game::HudGameState hd = world_.hudState();
+        LOG_INFO("TDMTEST end: team %d-%d, me score %d kills %d deaths %d assists %.3f, result \"%s\"", hd.teamScore[0], hd.teamScore[1], hd.score,
+                 hd.kills, hd.deaths, hd.assists, hd.result.c_str());
+        check(m.state() == game::Match::State::MatchOver && m.teamScore(myTeam) == 5 && hd.result == "Your team won" && hd.gameStatus == 5,
+              "score limit 5 -> EndGame(Score), MatchOver, 'Your team won'");
+        run(15.2f);
+        check(!world_.matchActive(), "MatchOver 15 s -> ReturnToGameLobby handoff");
+    }
+    // 8. Second match without restarting: default TDM settings (40 / 900); scores reset, map reset.
+    {
+        world_.mapState();   // (map clock advanced during match 1)
+        float clockBefore = world_.mapState().clock();
+        game::MatchLaunch L2;
+        game::MatchLaunch::fromURL("MP_IAC_Streets_Base_m?GameModeTag=TDM", L2);
+        check(world_.launchMatch(L2), "second launch");
+        bool reset = m.teamScore(0) == 0 && m.teamScore(1) == 0 && m.players()[(size_t)me].score == 0 && m.players()[(size_t)me].deaths == 0;
+        check(reset && m.settings().goalScore == 40 && m.remainingTime() == 900, "second match: scores reset, goal 40, time 900");
+        bool pickupsBack = true; for (auto* f : world_.pickupFactories()) pickupsBack &= f->available();
+        check(pickupsBack && world_.mapState().clock() < 0.1f && clockBefore > 10.0f, "fresh level state: pickups available, map clock restarted");
+        bool desOk = true; for (auto* d : world_.destructibles()) desOk &= d->state() == 0;
+        check(desOk, "destructible back to state 0");
+        run(10.5f);
+        check(m.state() == game::Match::State::InProgress && !world_.localPlayerDead(), "second match starts and spawns");
+        game::HudGameState hd = world_.hudState();
+        check(hd.matchActive && hd.goalScore == 40 && hd.myTeam == myTeam && hd.healthMax == 550.0f && hd.clipAmmo == 50, "HUD state contract populated");
+        int allyTags = 0; for (const auto& t : hd.tags) allyTags += t.ally && t.drawn;
+        check(allyTags == 1, "player tags: one ally tag drawn, enemy markers disabled");
+    }
+    LOG_INFO("TDMTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 void Application::shutdown() {

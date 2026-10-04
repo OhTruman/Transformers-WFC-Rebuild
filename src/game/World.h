@@ -8,6 +8,8 @@
 #include "game/Pickup.h"
 #include "game/PickupFactory.h"
 #include "game/MapState.h"
+#include "game/Match.h"
+#include "game/MatchOpponent.h"
 #include "game/Destructible.h"
 #include "game/SpawnPoint.h"
 #include "game/Collision.h"
@@ -27,6 +29,46 @@
 namespace render { class IRenderer; }
 
 namespace game {
+
+// Launch contract (Frontend / Integration -> Gameplay): the original StartLevel URL form
+// "MP_IAC_Streets_Base_m?Game=TransContent.TnVersusGame?GameModeTag=TDM?PointsToWin=40?TimeLimit=900.00..."
+// [CONF RE MILESTONE05_FRONTEND_MATCH_BOOTSTRAP §3.1 / §5.1]. Missing keys keep the TnOnlineGameSettings defaults.
+struct MatchLaunch {
+    std::string map = "MP_IAC_Streets";
+    std::string modeTag = "TDM";
+    MatchSettings settings = MatchSettings::forMode("TDM");
+    static bool fromURL(const std::string& url, MatchLaunch& out);
+};
+
+// Authoritative state for the HUD / frontend layer (no drawing here). Field names follow the HUD bindings in RE
+// bootstrap §6 (NotifySegmentedHealthChanged, NotifyOverShieldChanged, ammo notifies, <CurrentGame:...>, <PlayerOwner:...>).
+struct HudGameState {
+    // Pawn
+    bool alive = true;
+    float health = 0, healthMax = 0, overshield = 0, normalizedOverShield = 0;
+    int activeSegment = 0, segmentCount = 4;
+    int clipAmmo = 0, reserveAmmo = 0;
+    bool vehicleForm = false, transforming = false;
+    float timeToRespawn = -1.0f;                 // <PlayerOwner:TimeToRespawn> (MultiplayerRespawn_GFX)
+    // Match
+    bool matchActive = false;
+    std::string modeTag;
+    int matchState = 0;                          // Match::State
+    int gameStatus = 0;                          // GRI.SetGameStatus 2 / 3 / 5
+    int countdown = 0;                           // <CurrentGame:CurrentCountdown> (pre-match)
+    int remainingTime = 0, elapsedTime = 0;      // GRI.RemainingTime (HUD clock = CurrentCountdown in progress)
+    int goalScore = 0;                           // <CurrentGame:GoalScore>
+    int teamScore[2] = {0, 0};                   // <CurrentGame:Teams>
+    int myTeam = 255;                            // <PlayerOwner:TeamID>
+    int score = 0, kills = 0, deaths = 0;        // <PlayerOwner:Score>, PRI kills / deaths
+    float assists = 0.0f;
+    int winnerTeam = -1;                         // GRI.Winner (-1 tie / none)
+    std::string result;                          // TnVersusGameOverMessage: "Your team won" / "Your team lost" / "Tie game"
+    // TDM player tags (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled,
+    // enemy markers disabled by default (no TnBuffSeeEnemyObjectiveMarkers / HardLocked / Revenge buffs here).
+    struct Tag { int player; std::string name; int team; bool ally; bool drawn; core::Vec3 pos; };
+    std::vector<Tag> tags;
+};
 
 // A static graybox block (fallback level + future collision volume).
 struct Block {
@@ -107,6 +149,26 @@ public:
     struct StartPoint { std::string actor, cls, cluster; core::Vec3 pos; float yaw; };
     const std::vector<StartPoint>& startPoints() const { return starts_; }
     void teleportToStart(int index);   // test/debug spawn selection
+    // Local versus match (launch-independent; not started in ordinary free play). The local player joins as player 0:
+    // hidden and frozen in PendingMatch, spawned by the match at its chosen start, killed / respawned through it.
+    void startLocalMatch(const MatchSettings& s);
+    bool matchActive() const { return matchActive_; }
+    Match& match() { return match_; }
+    const Match& match() const { return match_; }
+    int localMatchPlayer() const { return localPlayer_; }
+    const std::vector<MatchEvent>& matchEvents() const { return matchEvents_; }   // consumed during the last tick
+    bool localPlayerDead() const { return matchActive_ && localDead_; }
+    void killLocalPlayer(int killer, bool suicide);     // death of the local pawn (harness / health / KillZ)
+    // Front-end entry: map + mode + settings. Applies the mode's authored world state, resets the map as a fresh level
+    // load, and starts the match. False (and nothing changes) for a map that is not loaded or an unsupported mode.
+    bool launchMatch(const MatchLaunch& l);
+    // TnPlayerPawn.TakeDamage for a match player (local or opponent): teammate damage is discarded except
+    // TnDamageTypeAOE; damage reaching the pawn enters its DamageHistory; lethal damage -> Game.Killed(instigator).
+    bool applyMatchDamage(int victimPlayer, int instigatorPlayer, float amount, bool aoe);
+    // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
+    MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
+    const std::vector<MatchOpponent*>& matchOpponents() const { return opponents_; }
+    HudGameState hudState() const;
     // Authored collision actor(s) (collision_pawn.glb node: BlockingVolume_*, BSP, prop actor names) whose
     // bounds contain p (expanded by pad metres): for tracing blocked / incorrect areas back to authored objects.
     struct ColActor { std::string name, kind, mesh; core::Vec3 lo, hi; };
@@ -133,7 +195,15 @@ private:
     CollisionWorld weaponCollision_;
     MapState mapState_;
     MatchMode matchMode_ = MatchMode::DM;
-    std::string mapName_ = "MP_IAC_Streets";
+    std::string mapName_ = "MP_IAC_Streets";   // runtime directory of the loaded map (Frontend: setMapName)
+    Match match_;
+    std::vector<MatchOpponent*> opponents_;   // owned by actors_
+    mutable int pushedRulesMode_ = -1;
+    void resetForNewLevel();
+    std::vector<MatchEvent> matchEvents_;
+    bool matchActive_ = false, localDead_ = false;
+    int localPlayer_ = -1;
+    void tickMatch(float dt);
     std::vector<ColActor> colActors_;
     void syncMapPresentation(render::IRenderer& r) const;   // Gameplay world state -> renderer, each frame
     std::vector<StartPoint> starts_;

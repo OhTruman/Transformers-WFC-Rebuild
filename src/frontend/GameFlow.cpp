@@ -480,6 +480,18 @@ std::string GameFlow::buildMatchUrl(const GameSettings& gs) const {
     return s;   // "?PlaylistId=..." (the map filename is prefixed by LobbyGRI.ModifyURL)
 }
 
+void GameFlow::returnToGameLobby() {
+    // TnGame.ReturnToGameLobby [RE M05 blockers F4 / F6, CONFIRMED]: after MatchOver's 15 s the host ServerTravels to
+    // the game lobby with the match's MapId. The rebuilt lobby movie re-sends map index 0 (C7, HIGH).
+    const GameSettings* gs = currentSettings_ ? currentSettings_ : (match_.settings ? match_.settings : nullptr);
+    if (!gs) { FlowTrace::emit("match.returnToLobby", {{"error", "no lobby settings"}}); travel(kFrontEndMap, false); return; }
+    Url u = Url::parse(buildLobbyUrl(*gs));
+    if (match_.mapId >= 0) u.setOption("MapId", std::to_string(match_.mapId));
+    u.addFlag("listen");
+    FlowTrace::emit("match.returnToLobby", {{"url", u.toString()}});
+    travel(u.toString(), true);
+}
+
 void GameFlow::quitToMainMenu() {
     // Game.QuitToMainMenu -> TnGameActionScriptBinding -> TnGame: ClientTravelToMap("UI_FrontEnd_m").
     if (level_ == LevelKind::Match) {

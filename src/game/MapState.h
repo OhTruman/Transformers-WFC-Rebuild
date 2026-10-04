@@ -56,6 +56,8 @@ struct ObjectiveObject {
     bool collision = true;                 // collision kept (Disabled factories: SetCollision(false,false))
     bool touchable = false;                // Touch/UnTouch handled (Inactive states ignore touches)
     bool activeInMode = false;             // the current game mode uses this objective
+    std::string gateRule;                  // exact rule class the class gates on
+    bool kothVisited = false;              // TnKingOfTheHillZoneBase.HasBeenActive
     // Objective marker (TnObjectiveManager / TnHUD.UpdateObjectiveMarker): class-hard-coded type; the HUD gets
     // _global.UpdateMarker(id, dist, sx, sy, sz, markerTypeString, description).
     const char* markerClass = "";          // e.g. "TransGame.TnObjectiveMarkerTypeDomination"
@@ -71,11 +73,17 @@ struct ModeVisibleActor {
     std::string actor, mesh;
     core::Vec3 pos{0, 0, 0};
     bool visible = false;                  // bHidden false after the GameplayStarted Kismet
+    bool initialVisible = false;           // authored bHidden at load
 };
 
 class MapState {
 public:
     bool load(const std::string& gameplayJson, MatchMode mode);
+    // Apply another match mode to the loaded map (rule-gated objectives + the GameplayStarted Kismet UnHide).
+    void setMode(MatchMode mode);
+    // A new match = a fresh level load in the original (ReturnToGameLobby -> ServerTravel): map clock back to 0
+    // (GameplayStarted again), objectives / KOTH (MatchStarting) re-initialised for the current mode.
+    void resetForNewMatch();
     // Split the movers' triangles out of the static collision meshes into moving sets.
     void registerCollision(CollisionWorld& pawn, CollisionWorld* weapon,
                            const std::vector<std::pair<std::string, std::vector<core::Vec3>>>& pawnTris,
@@ -114,6 +122,9 @@ private:
     float kothTimeLeft_ = 0.0f;
     unsigned kothRng_ = 0x5EED1234u;
     void applyObjectiveStates();
+    void applyModeVisibility();
+    struct MdvRule { std::string rule; bool unhide = true; std::vector<std::string> actors; };
+    std::vector<MdvRule> mdv_;
     // SkyBeam InterpTrackMove EulerTrack (degrees X roll / Y pitch / Z yaw). bUseQuatInterpolation: the rotation
     // is SlerpQuat between the bracketing keys with a linear alpha (the tangents are unused).
     struct Key { float in; core::Vec3 out, arrive, leave; };

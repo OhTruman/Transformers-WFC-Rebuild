@@ -46,6 +46,8 @@ public:
     struct CollisionSet { CollisionWorld* world = nullptr; int intact = -1, broken = -1; };
     void addCollision(const CollisionSet& s) { collision_.push_back(s); applyCollision(); }
     float health() const { return health_; }
+    // Fresh level load (new match): back to state 0 with InitialHealth and the intact collision.
+    void resetForNewMatch() { state_ = 0; health_ = kInitialHealth; stateTime_ = 0.0f; applyCollision(); }
     const std::string& name() const { return name_; }
     // World-space damage box (Base mesh bounds at the piece transform) for weapon traces / touch.
     core::Vec3 boxMin() const { return pos_ + boxMin_; }

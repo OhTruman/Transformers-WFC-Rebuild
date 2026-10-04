@@ -1663,6 +1663,216 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 20c — ADVERSARIAL MOVEMENT HARDENING (2026-10-03, gameplay agent)
+- **WFC_CHAOS** (Phase 3): from 60 nav points, 20 s each of seeded random play through the real input path
+  (71,940 ticks, 355 transform presses, 312 jumps, 307 boosts). Checks:
+  - UNDER THE MAP: a walkable BSP (level-shell) floor 0.3–3 m above the pawn;
+  - inside / under a prop;
+  - KillZ;
+  - stuck (< 0.5 m in 5 s with move input).
+- **Robot knee probe [PROV].** 0.55 m height (above MaxStepHeight 0.35), 0.7 m reach, walkable faces skipped.
+  - It stops the robot body walking into raised BSP blocks, crates and supports 0.6–2 m tall (no probe covered 0.35–2 m).
+  - The short reach leaves stairs to the centre-point ground model: a 35° stair 0.7 m ahead is about 0.49 m high.
+  - The native cylinder sweep with step-up is not reproduced.
+
+| run | under the map | KillZ | stuck | inside / under a prop |
+|---|---|---|---|---|
+| before the knee probe | 8 (old detector) | 0 | 1 | — |
+| knee probe 0.9 m | 1 | 0 | 2 | 7 |
+| **knee probe 0.55 m** | **0** | **0** | **1** | **3** |
+
+- **Regression.**
+  - Authored ReachSpec oracle 852 / 852 (robot + vehicle).
+  - Visible components crossed where the hull is smaller than the mesh: 33 (was 43 at the start of Pass 20).
+  - TRAVERSE 160 runs, 0 falls.
+  - WFC_TDMTEST 30 / 30.
+  - VEHTEST unchanged; harness 179 / 2 known / 21.
+- **Remaining reported locations.**
+  - Robot wedged between BlockingVolume_6729 / _7015 and the TrainTrack at (221.6, −724.8, −441.3).
+  - Three prop-entry cases.
+  - Transform under a low overhang: 15 / 1520 stress cases (54 before the knee probe; RE question, PASS 20a). WFC_XFORMTEST: still 0 / 1520 under the map, 0 KillZ.
+
+### Open RE requests (narrow)
+1. `MoveToSafeTransformationLocation` / `FindSpotAwayFromPawns(target extent)`: does it resolve world geometry, and
+   when does `NotifyCantTransform` fire? (Transform under a 1.95–2 m overhang.)
+2. The native cylinder physWalking step-up / encroachment against simple hulls, to replace the robot probes.
+3. The TraceCamera exact flag word and the AABB sweep result when starting inside geometry (camera model, PASS 20a).
+4. Segmented-health regeneration rules; death animation / Death camera strategy timing.
+
+---
+
+## PASS 20b — MP_IAC_STREETS TDM SESSION RUNTIME (2026-10-03, gameplay agent)
+RE: MILESTONE05_FRONTEND_MATCH_BOOTSTRAP §3, §5, §6 and MILESTONE05_GAMEPLAY_UNKNOWNS §3, §5, §6. Test:
+`WFC_TDMTEST` — **30 / 30 checks** through World (real pawn, hitscan, pickups, map state).
+
+### Launch contract (Frontend / Integration -> Gameplay)
+- `MatchLaunch::fromURL` takes the original StartLevel URL, e.g.
+  `MP_IAC_Streets_Base_m?…?GameModeTag=TDM?PointsToWin=40?TimeLimit=900.00…`. Missing keys keep the TnOnlineGameSettings
+  defaults.
+- `World::launchMatch(MatchLaunch)`:
+  - validates the map: only MP_IAC_Streets is loaded, anything else is rejected;
+  - applies the mode's authored world state (`MapState::setMode`, exact HasRule gates, Kismet UnHide);
+  - resets the map as a fresh level load (map clock 0, objectives and KOTH re-initialised, destructibles to state 0,
+    pickups back to Pickup);
+  - starts the match.
+- Runtime: `WFC_MATCH_URL=<url>` or `WFC_MATCH=TDM|DM`.
+- Other modes set map state only; their match rules are not implemented (by design for this pass).
+- **CONFIRMED.** A new match = MatchOver -> ReturnToGameLobby -> ServerTravel, i.e. a fresh level.
+
+### Combat foundation
+- **CONFIRMED.**
+  - TnPlayerPawn.TakeDamage discards teammate damage except TnDamageTypeAOE.
+  - Damage reaching the pawn enters its DamageHistory, used for ScoreAssists (first other damager, damage / HealthMax).
+  - Lethal damage -> Game.Killed(instigator).
+  - Segmented health 550 + overshield 550; the overshield part is consumed first.
+  - Ion Blaster InstantHitDamage 15 with range falloff, unchanged.
+- **Death / respawn (CONFIRMED / HIGH).**
+  - The dead pawn is removed from simulation and drawing until RestartPlayer.
+  - RestartPlayer = a fresh TnPlayerPawnMultiplayer: robot form, any fold cancelled, default vehicle state, HealthMax, no
+    overshield, Ion Blaster 50 / 150 (InitialReserveAmmoCount), at the chosen start with its authored yaw, after the 5 s
+    wave delay.
+  - Death does not reset pickup timers; only StartMatch Resets factories.
+- **UNKNOWN / PARTIAL.**
+  - Segment regeneration.
+  - Death animation / ragdoll and the Death camera strategy (the pawn is simply hidden).
+  - PlayerRestartDelay (no script reader).
+  - The downed state (TnSkillCanBeDowned) is not modelled.
+
+### Test participants (separated from shipped behaviour)
+- `MatchOpponent`: a static synthetic participant with a Match slot, the robot cylinder and segmented health. It
+  spawns / dies through Match.
+- It exists only under `WFC_TDMTEST` / `WFC_MATCHTEST` or the explicit diagnostic `WFC_MATCH_OPPONENTS=N` (drawn as
+  boxes). No AI.
+
+### HUD state output (no drawing)
+- `World::hudState()` -> `HudGameState`, named after the original bindings:
+  - health / HealthMax / overshield / active segment;
+  - clip / reserve ammo;
+  - form / transforming;
+  - TimeToRespawn;
+  - match state / GRI game status (2 / 3 / 5), pre-match countdown, RemainingTime / ElapsedTime;
+  - GoalScore, team scores, TeamID, personal score / kills / deaths / assists;
+  - Winner and the result text ("Your team won" / "Your team lost" / "Tie game").
+- **TDM player tags** (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled; enemy
+  markers disabled without the reveal buffs [CONF RE §5].
+- Match events (`World::matchEvents()`): countdown, start, spawn, kill, progress announcements (switches 0–2, 5–7),
+  nearly complete, end, return.
+
+### Map / mode state
+- TDM:
+  - totems, KOTH zones, flag / bomb factories and objective bases are hidden (the actors remain);
+  - the 24 ordinary pickups (no rule gate authored) stay active;
+  - TnTeamPlayerStart for the player's team;
+  - ScoreKillsTDM present.
+- KOTH rotation now follows RE §3 [CONF]: 60 s; candidates are zones not yet active this cycle; the cycle resets when all
+  have been active; no back-to-back repeat.
+
+### Validation (all on the corrected Streets data)
+- WFC_TDMTEST 30 / 30.
+- WFC_MATCHTEST: TDM to 40, clock tie at 125 s with announcements 120 / 60 / 30, DM to 20.
+- WFC_MODETEST: KOTH visited cycle.
+- Harness 179 / 2 known / 21.
+- VEHTEST, TRAVERSE (160 runs, 0 falls), PICKUPTEST (30.02 / 60.02 / 119.99 s) unchanged.
+- Firing sim 3.1 ms.
+
+---
+
+## PASS 20a — BOOST->ROBOT FALL-THROUGH, VEHICLE/ROBOT WALL PROBES, MATCH CORE, CAMERA (checkpoint) (2026-10-03, gameplay agent)
+RE: TARGETED_PASS 1e, MILESTONE05_GAMEPLAY_UNKNOWNS (§1, §2, §6), MILESTONE05_FRONTEND_MATCH_BOOTSTRAP §5, MILESTONE04_CAMERA_COLLISION (990f3e7).
+
+### Boost -> robot under-map (human-reported) — FIXED
+- **Cause.**
+  - The robot was given its full collision cylinder (half-height 2.0 m) on frame 0 of the vehicle->robot fold, from the
+    shared actor location.
+  - While boosting, the truck's wheels are down and its root is at floor level. The vehicle actor is only 1.22 m above
+    the floor, so the robot's feet started 0.78 m inside the floor.
+  - The airborne floor search only looked 0.35 m (MaxStepHeight) above the feet, so it missed that floor and the robot
+    fell through.
+  - In hover (root 1.24 m up) the feet start 0.46 m above the floor, which is why normal transforms worked.
+- **Fix (CONFIRMED ORIGINAL semantics).**
+  - TransformingToRobot.UpdateCylinderSize lerps the half-height from the vehicle's to the robot's by
+    RemainingTimeAsFactor (1 -> 0).
+  - The floor is resolved against that growing cylinder's bottom, so the floor pushes the actor up as the cylinder
+    grows.
+  - Visuals stay on the continuous actor location (the robot mesh hangs CollisionHeight below it), and the smooth
+    transform is unchanged.
+  - The vehicle cylinder half-height = the mesh bounds half-height, 1.22 m [HIGH].
+- **Falling sweep [HIGH: UE3 physFalling MoveActor sweep].** While falling, the floor search starts from the previous
+  step's bottom, so a floor crossed within one step is landed on.
+- **Stress (WFC_XFORMTEST, 20 nav points x 4 headings x 19 cases).**
+  - Cases: stationary, hover, max hover, boost, boost + nitro, boosted turn, boost jump, and a transform-time sweep
+    during boost.
+  - Before: 656 / 1520 under a floor, 186 below KillZ.
+  - After: **0 / 1520 under the map, 0 KillZ**.
+  - 54 end on a real floor under a low overhang (see the next item and UNKNOWN).
+
+### Vehicle wall probe — FIXED (found by the stress test)
+- The vehicle reused the robot wall probe at 2.0 m above its root. That is above the truck hull top (1.85 m), so the
+  truck drove through obstacles lower than about 2 m: train-coach BlockingVolume_11128, Small1_Box2 crates.
+- **Now:** three probes across the hull height (root −0.35 .. +1.85 m). The low probe sits above the wheel or spring
+  clearance and ignores walkable faces, so ramps and floors don't block [PROV approximation of the RB box contact].
+- **Robot head probe (3.6 m):** the 4 m cylinder no longer walks under overhangs lower than its top (for example an
+  ArchTop01 hull 1.95 m above the floor). There is still no low probe: the centre-point ground model owns steps and
+  stairs.
+- **Results.**
+  - Authored ReachSpec oracle: still **852 / 852** (robot + vehicle).
+  - Visible components crossed where the hull is smaller than the mesh: 43 -> 36.
+  - VEHTEST unchanged: rest 1.287 m, 0.5 m bumps at 15 m/s, jump +3.80 m, dash 30 -> 15.
+
+### Segmented health and pickup acceptance (CONFIRMED ORIGINAL, RE §6)
+- Health = TnSegmentedHealth (TR_Health_p.SharedHealth): segments [175, 125, 125, 125], so HealthMax 550; Overshield 550.
+- Health pickup only below HealthMax (SHT_AddAllSegments, full heal). Overshield only while normalized overshield < 1
+  (Health = HealthMax + 550). Ammo crate only when not AmmoMaxed.
+- Pickup.ValidTouch rejects a touch through a wall (FastTrace) and re-checks after 0.5 s.
+- Segment regeneration: **UNKNOWN** (not read; none applied).
+
+### Local match core (src/game/Match.*, World::startLocalMatch) — RE bootstrap §5
+- Launch-independent: `World::startLocalMatch(MatchSettings)`, opt-in with `WFC_MATCH=TDM|DM`. Free play is unchanged.
+- **CONFIRMED.**
+  - InitGame: GoalScore = PointsToWin (TDM 40, DM 20); TimeLimit 900 s (TimeLimits[1]).
+  - PendingMatch: a 10 s countdown with no spawns, then StartMatch.
+  - Factories Reset() at StartMatch.
+  - InProgress: a 1 s GRI timer; time announcements at 120 / 60 / 30 s (60 -> GameNearlyComplete).
+  - ScoreKills: +1 to the killer and +1 to the team. No score for a suicide (DmgType_Suicided or self) or an environmental
+    death; deaths always count.
+  - TrackKillsMP kills; ScoreAssists = first other damager, damage / HealthMax.
+  - ReportGameProgressKills at 5 / 3 / 1 left.
+  - CheckScore -> EndGame("Score"); the clock -> EndGame(""); a tie means no winner, with no overtime.
+  - MatchOver for 15 s, ScoreKill a no-op, then ReturnToGameLobby (host handoff).
+  - TnRespawnHelperWave: 5 s respawn, initial spawn immediate.
+  - PickTeam: the smaller team; a tie is random.
+- **Spawning (CONFIRMED).**
+  - Initial clusters 4159 (Decepticon) and 7810 (Autobot); round-robin, up to 4 picks.
+  - Initial lock 15 s, then re-scoring every 0.1 s; switch on a delta of 5 or 10 s uptime.
+  - Modifiers: friend +1/d, enemy −3/d, tombstone −5/d within 5000 UU.
+  - The cluster faction is the team of its first spawn point; authored _CenterPoint.
+- **PARTIAL.** IsSafeSpawnLocation (native) is approximated as no live player within 4 m. The DM FFA start choice is the
+  first safe FFA start. Objective / KOTH / DOM spawn modifiers are not registered in TDM. Tombstone lifetime.
+- Tests: `WFC_MATCHTEST` (TDM to 40, TDM clock tie, DM to 20, local pawn spawn / suicide / 5 s respawn / return).
+
+### Camera obstruction (RE 990f3e7) — implemented, opt-in
+- TnThirdPersoncollision (robot: rise-then-horizontal fallback, 1 s smoothing window, 2000 / 500 UU/s) and
+  TnAvoidClipping (vehicle: origin offset (−200, 0, 75), two ranked candidates, always smoothed).
+  - The ray uses the zero-extent world, the box tests use the non-zero-extent world; movers are ignored.
+  - The near-plane box sweeps are **approximated by rays [PARTIAL]**.
+- **WFC_CAMTEST (15 nav points x 8 headings x 5 scenarios; % of frames).**
+
+| model | camera behind visible geometry (robot / hover backing) | camera under a floor | near-plane contact | one-frame pops (robot) |
+|---|---|---|---|---|
+| default (provisional pull-in) | 9.6 / 11.0 % | 0.2–1.2 % | 0.8–2.5 % | 22 |
+| RE algorithm | 16.8 / 24.5 % | 1.9–3.0 % | 2–6 % | 0 |
+
+- The default stays the provisional pull-in, which the human likes. The RE model runs with `WFC_CAMRE=1` until the box
+  sweep is exact.
+
+### UNKNOWN / RE requests
+- **Transform under a low overhang (54 stress cases).** The truck (hull top 1.85 m) fits under a 1.95–2.0 m slab, and the
+  4 m robot then stands under it. RE §1 names `MoveToSafeTransformationLocation` -> `FindSpotAwayFromPawns(target
+  extent)`. Whether that resolves world geometry, or the original refuses the transform (HUD `NotifyCantTransform`
+  exists), needs a narrow RE trace.
+
+---
+
 ## PASS 19 — MP_IAC_STREETS WORLD STATE + CORRECTED WORLD/COLLISION (AssetTools 8d8195e) (2026-10-03, gameplay agent)
 Data: AssetTools 8d8195e. StaticMeshCollectionActor transforms were corrected (S·R·T × CachedParentToWorld; 1,906/1,906
 validated, 0 stale collision matrices). world.glb, collision_pawn.glb, collision_weapon.glb, physics.json, props.json, map.json

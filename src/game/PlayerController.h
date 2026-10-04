@@ -73,6 +73,14 @@ public:
     // Camera eye position (anchor + orbit + screen-space offset), shared by the renderer camera and
     // the crosshair trace.
     core::Vec3 cameraPos() const;
+    // Camera obstruction (RE MILESTONE04_CAMERA_COLLISION, 990f3e7): the last strategy behaviour, run once per
+    // fixed step after the pawn moved. Robot TnThirdPersoncollisionCameraBehavior / vehicle
+    // TnAvoidClippingCameraBehavior.
+    void tickCameraCollision(float dt);
+    void setViewAspect(float a) { aspect_ = a > 0.0f ? a : aspect_; }
+    // Diagnostics: last step's obstruction state.
+    bool cameraObstructed() const { return camObstructed_; }
+    core::Vec3 desiredCameraPos() const;      // orbit + offset result before the obstruction behaviour
 
     float camYaw() const { return camYaw_; }
     float camPitch() const { return camPitch_; }
@@ -120,7 +128,15 @@ private:
     float nitroDist_ = 0.0f;      // TnLocationOffsetCameraBehavior TnPCS_Boosting transition 0..1
     float wiggleT_ = 0.0f;
     float steerSmoothed_ = 0.0f;
-    const CollisionWorld* col_ = nullptr;        // for the third-person camera collision
+    const CollisionWorld* col_ = nullptr;        // non-zero-extent world (camera box sweeps / overlap)
+    const CollisionWorld* colRay_ = nullptr;     // zero-extent world (camera ray)
+    float aspect_ = 16.0f / 9.0f;
+    core::Vec3 camLoc_{0, 0, 0};
+    bool camLocValid_ = false, camObstructed_ = false;
+    core::Vec3 camOld_{0, 0, 0};                 // smoothed camera offset in target space (UE X fwd, Y right, Z up)
+    bool camOldValid_ = false;
+    float camSmoothRemain_ = 0.0f;
+    int camCollStrategy_ = -1;
     std::vector<HudNotify> hudNotifies_;
     float hudSpreadSent_ = 0.0f;
     std::string hudWeaponSent_;

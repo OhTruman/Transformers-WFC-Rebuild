@@ -38,11 +38,22 @@ private:
     bool escWasDown_ = false;
     ui::GfxPresenter* presenter_ = nullptr;   // owned by frontend_
     std::string pendingShot_;
+    // [integration] Gameplay's match lifecycle -> the frontend flow (replaces Frontend's PROVISIONAL adapter):
+    // MatchStarted -> character selected + UI event 3; local death + MinRespawnDelay 3.0 s -> 4; respawn -> 5;
+    // MatchEnded -> 9; ReturnToLobby -> GameFlow::returnToGameLobby. Also pushes the <CurrentGame:*> values.
+    void routeMatchToFrontend(float dt);
+    bool localDeadForUi_ = false, spectatingUi_ = false;
+    float localDeadTime_ = 0.0f;
 
     void updateTitleHud(double realDt);
     void runPickupTest();
     void runTraverseTest();
     void runMapTraverse();
+    void runTransformStress();
+    void runMatchTest();
+    void runCameraTest();
+    void runChaosTest();
+    void runTdmSessionTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

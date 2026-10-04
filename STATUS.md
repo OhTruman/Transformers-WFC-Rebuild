@@ -477,6 +477,29 @@ Left as the owners labelled them:
 - **Systems:** add `PickupPresentation.cpp` to the audio suite's documented build line.
 - **Systems/Gameplay:** nobody calls `notifyRamHit` yet (no pawn victims in the slice).
 
+## GAMEPLAY PASS 20c (2026-10-03) — adversarial movement hardening
+- WFC_CHAOS (60 starts x 20 s random play): 0 under the map, 0 KillZ, 1 stuck, 3 prop entries.
+- Robot knee probe 0.55 m / 0.7 m [PROV]; oracle 852/852; transform under-overhang cases 54 -> 15.
+- Open RE requests listed in FIDELITY.md PASS 20c.
+
+## GAMEPLAY PASS 20b (2026-10-03) — Streets TDM session runtime
+- Launch contract: original StartLevel URL -> World::launchMatch (map check, mode world state, fresh-level reset).
+- Combat: team filter (AOE only), DamageHistory/assists, kill credit, segmented health, fresh-pawn respawn.
+- HUD state (World::hudState) incl. player tags; KOTH rotation per RE §3.
+- Test-only MatchOpponent participants; WFC_TDMTEST 30/30 (incl. second match in-process).
+- Details: FIDELITY.md PASS 20b.
+
+## GAMEPLAY PASS 20a (2026-10-03) — boost->robot fall-through fixed, wall probes, match core, camera (checkpoint)
+- Human bug fixed: boost -> robot no longer drops under Streets.
+  - Recovered cylinder-size lerp + swept falling floor check.
+  - WFC_XFORMTEST: 0/1520 under the map, 0 KillZ (was 656 / 186).
+- Truck hull wall probes (it passed through objects under 2 m); robot head probe (overhangs).
+  - Authored path oracle still 852/852.
+- Segmented health 550 + overshield 550; RE pickup acceptance; FastTrace touch rejection.
+- Local TDM/DM match core: World::startLocalMatch, WFC_MATCH; WFC_MATCHTEST.
+- RE camera obstruction implemented behind WFC_CAMRE (WFC_CAMTEST shows more visible clipping than the default; default kept).
+- Details: FIDELITY.md PASS 20a.
+
 ## GAMEPLAY PASS 19 (2026-10-03) — Streets world state + corrected world/collision (AssetTools 8d8195e)
 - Corrected 8d8195e world.glb, collision GLBs and physics.json, consumed fresh at load (no collision cache).
 - Authored traversal: 852/852 TnReachSpec runs (robot + hover truck), 0 falls, 0 floor gaps.

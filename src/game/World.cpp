@@ -536,15 +536,22 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
         float th;
         if (rayAabb(origin, dir, range, bmin, bmax, th) && th < targetDist) { targetDist = th; hitTarget = tgt; }
     }
+    // Match opponents (test / diagnostic participants): robot cylinder.
+    MatchOpponent* hitOpp = nullptr;
+    for (MatchOpponent* o : opponents_) {
+        float th;
+        if (o->rayHit(origin, dir, range, th) && th < targetDist) { targetDist = th; hitOpp = o; hitTarget = nullptr; }
+    }
     // Authored destructibles (HmGenericDamageDestructionTrigger) in front of any closer hit.
     Destructible* hitDes = nullptr;
     for (Destructible* d : destructibles_) {
         float th;
         if (d->state() == 0 && rayAabb(origin, dir, range, d->boxMin(), d->boxMax(), th) && th < targetDist) {
-            targetDist = th; hitDes = d; hitTarget = nullptr;
+            targetDist = th; hitDes = d; hitTarget = nullptr; hitOpp = nullptr;
         }
     }
-    float dist = (hitTarget || hitDes) ? targetDist : bestDist;
+    float dist = (hitTarget || hitDes || hitOpp) ? targetDist : bestDist;
+    if (hitOpp) applyMatchDamage(hitOpp->matchPlayer(), localPlayer_, w.damageAt(dist), false);   // InstantHitDamage, falloff
     core::Vec3 hitPoint = origin + dir * dist;
     if (hitTarget) hitTarget->applyDamage(w.damageAt(dist));   // [CONF] range-based falloff
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
@@ -904,6 +911,7 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
 
 void World::tick(float dt) {
     pickupEvents_.clear();
+    matchEvents_.clear();
     destructibleEvents_.clear();
     static const bool hitchLog = std::getenv("WFC_HITCHLOG") != nullptr;   // game-thread gaps between ticks
     if (hitchLog) {
@@ -920,7 +928,12 @@ void World::tick(float dt) {
         player_.controller().updateCamera(cam);
         listenerPos_ = cam.pos;
     }
-    { sysprof::Scope sp(sysprof::Ctrl); player_.controller().applyToPawn(*this, dt); }   // also feeds the aim pitch to the pawn
+    if (matchActive_) tickMatch(dt);
+    if (!localPlayerDead()) {                       // dead / not yet spawned (match): no pawn simulation
+        sysprof::Scope sp(sysprof::Ctrl);
+        player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
+    }
+    player_.controller().tickCameraCollision(dt);   // obstruction behaviour after the pawn moved
     gameplayRamContacts();
     if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
         player_.pawn().setAimPitch((float)std::atof(ap));
@@ -1001,9 +1014,11 @@ void World::tick(float dt) {
         cues_.tick(dt);
     }
 
-    if (player_.pawn().position().y < killZ_) {
-        LOG_INFO("World: player fell out of world; respawning");
-        respawnPlayer();
+    if (player_.pawn().position().y < killZ_ && !localPlayerDead()) {
+        // Below KillZ: FellOutOfWorld -> Died with no killer (an environmental death in a match).
+        LOG_INFO("World: player fell out of world; %s", matchActive_ ? "killed (KillZ)" : "respawning");
+        if (matchActive_) killLocalPlayer(-1, false);
+        else respawnPlayer();
     }
     for (auto& a : actors_) if (a->alive()) a->tick(*this, dt);
     // Pickup glue (Systems M04 integration preview): Gameplay's PickupFactory raises one PickupEvent per
@@ -1018,6 +1033,203 @@ void World::tick(float dt) {
         if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); }
         else ++i;
     }
+}
+
+// Local match host glue (TnMultiplayerGame / TnTeamGame on the authority): the Match decides spawns, deaths and the
+// end; World applies them to the local pawn and the map actors.
+void World::startLocalMatch(const MatchSettings& s) {
+    if (match_.starts().empty()) {
+        std::string root = assetRoot();
+        match_.loadSpawnData(root + "/Maps/" + mapName_ + "/gameplay.json");   // the loaded map's authored starts
+    }
+    match_.begin(s);
+    if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");
+    matchActive_ = true;
+    localDead_ = true;            // PendingMatch: TrySpawnPlayer false -> nobody spawns before the start
+}
+
+bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
+    // "<Map>?Key=Value?Key=Value..." (ServerTravel / StartLevel URL).
+    size_t q = url.find('?');
+    std::string map = url.substr(0, q);
+    std::string lower = map;
+    std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+    // [integration] The level package name carries a sublevel suffix (MP_IAC_Streets_Base_m); the runtime map
+    // directory is the name without it, for any map (was a Streets-only special case).
+    const std::string suffix = "_base_m";
+    if (lower.size() > suffix.size() && lower.compare(lower.size() - suffix.size(), suffix.size(), suffix) == 0)
+        out.map = map.substr(0, map.size() - suffix.size());
+    else out.map = map;
+    std::map<std::string, std::string> opt;
+    while (q != std::string::npos) {
+        size_t next = url.find('?', q + 1);
+        std::string kv = url.substr(q + 1, next == std::string::npos ? std::string::npos : next - q - 1);
+        size_t eq = kv.find('=');
+        if (eq != std::string::npos) opt[kv.substr(0, eq)] = kv.substr(eq + 1);
+        q = next;
+    }
+    out.modeTag = opt.count("GameModeTag") ? opt["GameModeTag"] : "TDM";
+    out.settings = MatchSettings::forMode(out.modeTag);
+    out.settings.modeTag = out.modeTag;
+    // TnMultiplayerGame.InitGame: GoalScore = max(0, PointsToWin); GameInfo.InitGame: TimeLimit = max(0, TimeLimit) s.
+    if (opt.count("PointsToWin")) out.settings.goalScore = std::max(0, std::atoi(opt["PointsToWin"].c_str()));
+    if (opt.count("TimeLimit")) out.settings.timeLimit = std::max(0, (int)std::atof(opt["TimeLimit"].c_str()));
+    return !out.map.empty();
+}
+
+void World::resetForNewLevel() {
+    // A new match is a fresh load of the map in the original (MatchOver -> ReturnToGameLobby -> ServerTravel).
+    mapState_.resetForNewMatch();
+    if (collision_.valid()) mapState_.tick(0.0f, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+    for (Destructible* d : destructibles_) d->resetForNewMatch();
+    for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
+}
+
+bool World::launchMatch(const MatchLaunch& l) {
+    // [integration] The match runs on the map World loaded (Frontend selection -> setMapName -> load); any map whose
+    // runtime data loaded is accepted (was: MP_IAC_Streets only).
+    if (l.map != mapName_ || !usingSlice_) { LOG_WARN("match: map %s is not the loaded map %s", l.map.c_str(), mapName_.c_str()); return false; }
+    MatchMode mode = MatchMode::DM;
+    bool known = false;
+    for (MatchMode m : {MatchMode::DM, MatchMode::TDM, MatchMode::CTF, MatchMode::KOTH, MatchMode::EXT, MatchMode::DOM})
+        if (l.modeTag == gameModeName(m)) { mode = m; known = true; }
+    if (!known) { LOG_WARN("match: unknown mode %s", l.modeTag.c_str()); return false; }
+    if (mode != MatchMode::TDM && mode != MatchMode::DM) {
+        LOG_WARN("match: %s match rules are not implemented (map state only)", l.modeTag.c_str());
+        return false;
+    }
+    matchMode_ = mode;
+    mapState_.setMode(mode);
+    resetForNewLevel();
+    startLocalMatch(l.settings);
+    LOG_INFO("match: launched %s %s (goal %d, time %d s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore, l.settings.timeLimit);
+    return true;
+}
+
+bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe) {
+    if (!matchActive_ || match_.state() != Match::State::InProgress || victim < 0 || (size_t)victim >= match_.players().size()) return false;
+    if (!match_.players()[(size_t)victim].alive) return false;
+    // TnPlayerPawn.TakeDamage: teammates' damage is discarded except TnDamageTypeAOE (NotifyHitByFriendlyFire).
+    if (instigator != victim && match_.sameTeam(instigator, victim) && !aoe) return false;
+    Health* h = nullptr;
+    MatchOpponent* opp = nullptr;
+    if (victim == localPlayer_) h = &player_.pawn().health();
+    else for (MatchOpponent* o : opponents_) if (o->matchPlayer() == victim) { opp = o; h = &o->health(); }
+    if (!h) return false;
+    float applied = h->applyDamage(amount);
+    match_.recordDamage(victim, instigator, applied);
+    if (h->isDead()) {
+        if (victim == localPlayer_) killLocalPlayer(instigator, false);
+        else { match_.killed(instigator, victim, false); if (opp) opp->despawn(); }
+    }
+    return true;
+}
+
+MatchOpponent* World::addMatchOpponent(const std::string& name, bool drawn) {
+    int p = match_.addPlayer(name);
+    auto o = std::make_unique<MatchOpponent>(p, match_.players()[(size_t)p].team, drawn);
+    MatchOpponent* raw = o.get();
+    opponents_.push_back(raw);
+    actors_.push_back(std::move(o));
+    return raw;
+}
+
+HudGameState World::hudState() const {
+    HudGameState h;
+    const Character& pc = player_.pawn();
+    h.alive = !localPlayerDead();
+    h.health = pc.health().current; h.healthMax = pc.health().max;
+    h.overshield = pc.health().overshield(); h.normalizedOverShield = pc.health().normalizedOverShield();
+    h.activeSegment = pc.health().activeSegment(); h.segmentCount = Health::kSegmentCount;
+    h.clipAmmo = pc.weapon().ammo; h.reserveAmmo = pc.weapon().reserve;
+    h.vehicleForm = pc.moveForm() == Form::Vehicle; h.transforming = pc.isTransforming();
+    h.matchActive = matchActive_;
+    if (!matchActive_ || localPlayer_ < 0) return h;
+    const MatchPlayer& me = match_.players()[(size_t)localPlayer_];
+    h.timeToRespawn = me.timeToRespawn;
+    h.modeTag = match_.settings().modeTag;
+    h.matchState = (int)match_.state(); h.gameStatus = match_.gameStatus();
+    h.countdown = match_.countdown(); h.remainingTime = match_.remainingTime(); h.elapsedTime = match_.elapsedTime();
+    h.goalScore = match_.settings().goalScore;
+    h.teamScore[0] = match_.teamScore(0); h.teamScore[1] = match_.teamScore(1);
+    h.myTeam = me.team; h.score = me.score; h.kills = me.kills; h.deaths = me.deaths; h.assists = me.assists;
+    h.winnerTeam = match_.winnerTeam();
+    if (match_.state() == Match::State::MatchOver || match_.state() == Match::State::Returned)
+        h.result = match_.winnerTeam() < 0 ? "Tie game" : (match_.winnerTeam() == me.team ? "Your team won" : "Your team lost");
+    for (size_t i = 0; i < match_.players().size(); ++i) {
+        if ((int)i == localPlayer_ || !match_.players()[i].alive) continue;   // hidden for yourself and dead pawns
+        HudGameState::Tag t;
+        t.player = (int)i; t.name = match_.players()[i].name; t.team = match_.players()[i].team;
+        t.ally = match_.settings().teamGame && t.team == me.team;
+        t.drawn = t.ally;                                                       // enemy marker disabled by default
+        for (MatchOpponent* o : opponents_) if (o->matchPlayer() == (int)i) t.pos = o->position();
+        h.tags.push_back(t);
+    }
+    return h;
+}
+
+void World::killLocalPlayer(int killer, bool suicide) {
+    if (!matchActive_ || localDead_) return;
+    match_.killed(killer, localPlayer_, suicide);
+    localDead_ = true;
+}
+
+void World::tickMatch(float dt) {
+    Character& pc = player_.pawn();
+    if (!localDead_) {
+        match_.setPlayerLocation(localPlayer_, pc.position());
+        if (pc.health().isDead()) killLocalPlayer(-1, false);   // damage without an instigator
+    }
+    for (MatchOpponent* o : opponents_) if (o->spawned()) match_.setPlayerLocation(o->matchPlayer(), o->position());
+    match_.tick(dt);
+    bool returned = false;
+    for (const MatchEvent& e : match_.events()) {
+        switch (e.type) {
+            case MatchEvent::Type::MatchStarted:
+                // TnTeamGame.StartMatch: Reset() every pickup factory (sleeping factories return to 'Pickup').
+                for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
+                break;
+            case MatchEvent::Type::PlayerSpawned:
+                if (e.player == localPlayer_ && e.value >= 0) {
+                    // RestartPlayer: a fresh pawn (robot form, full health, default inventory) at the chosen start,
+                    // with its authored rotation.
+                    const Match::Start& st = match_.starts()[(size_t)e.value];
+                    pc.respawnReset();   // a fresh pawn: robot form, no fold, HealthMax, default inventory
+                    core::Vec3 p = st.pos;
+                    float gy; core::Vec3 gn;
+                    if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, gn)) p.y = gy;
+                    pc.setPosition(p); pc.setYaw(st.yaw); pc.velocity() = {0, 0, 0}; pc.groundY = p.y;
+                    player_.controller().setCameraYaw(st.yaw);
+                    localDead_ = false;
+                    LOG_INFO("match: local player spawned at %s (%s team %d)", st.actor.c_str(), st.cluster.c_str(),
+                             match_.players()[(size_t)localPlayer_].team);
+                }
+                for (MatchOpponent* o : opponents_)
+                    if (o->matchPlayer() == e.player && e.value >= 0) {
+                        core::Vec3 p = match_.starts()[(size_t)e.value].pos;
+                        float gy; core::Vec3 gn;
+                        if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, gn)) p.y = gy;
+                        o->spawnAt(p);
+                    }
+                break;
+            case MatchEvent::Type::PlayerKilled:
+                if (e.player == localPlayer_) localDead_ = true;
+                for (MatchOpponent* o : opponents_) if (o->matchPlayer() == e.player) o->despawn();
+                break;
+            case MatchEvent::Type::ReturnToLobby:
+                // TnGame.ReturnToGameLobby: the host (front end / Integration) decides what follows; the local
+                // runtime stops the match here and returns to free play.
+                LOG_INFO("match: return to lobby");
+                matchActive_ = false;
+                localDead_ = false;
+                returned = true;
+                break;
+            default: break;
+        }
+    }
+    (void)returned;
+    matchEvents_ = match_.events();
+    match_.clearEvents();                    // consumed by the host
 }
 
 std::string World::collisionActorsAt(const core::Vec3& p, float pad, int maxNames) const {
@@ -1042,6 +1254,7 @@ std::string World::collisionActorsAt(const core::Vec3& p, float pad, int maxName
 // totems, the Active KOTH zone, Disabled objective factories) and the pickup factory presentation
 // (TnPickupFactory.SetPickupVisible / SetPickupHidden).
 void World::syncMapPresentation(render::IRenderer& r) const {
+    if (pushedRulesMode_ != (int)mapState_.mode()) { r.setActiveGameRules(mapState_.gameRules()); pushedRulesMode_ = (int)mapState_.mode(); }
     r.setMapClock(mapState_.clock());
     for (const MapState::ActorVisibility& v : mapState_.actorVisibility()) r.setActorHidden(v.actor, v.hidden);
     for (const PickupFactory* f : pickupFactories_) {
@@ -1073,7 +1286,7 @@ void World::draw(render::IRenderer& r) const {
         for (const auto& b : blocks_) r.drawBox(b.center, b.size, b.color);
     }
     for (const auto& a : actors_) if (a->alive()) a->draw(r);
-    { sysprof::Scope sp(sysprof::DrawPlayer); player_.draw(r); }
+    if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawPlayer); player_.draw(r); }
 
     // Ion Blaster mesh held at the weapon socket (robot form only).
     {

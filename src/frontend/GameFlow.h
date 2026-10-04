@@ -43,6 +43,21 @@ struct LoadingScreen {
 };
 
 // A match the application must load (ServerTravelToMap(match URL)).
+// [integration] Match values the in-match movies read (<CurrentGame:*> / <PlayerOwner:*>), pushed every frame from
+// Gameplay's authoritative state (World::hudState). Gameplay owns the values; the data stores only serve them.
+struct MatchValues {
+    bool valid = false;
+    bool pending = false;          // PendingMatch (pre-game countdown)
+    bool countingDown = false;     // <CurrentGame:IsCountingDown>
+    int countdown = 0;             // <CurrentGame:CurrentCountdown>: pre-match countdown, then GRI.RemainingTime
+    int goalScore = 0;             // <CurrentGame:GoalScore>
+    int teamScore[2] = {0, 0};     // <CurrentGame:Teams> Score
+    int myTeam = -1;               // <PlayerOwner:TeamID>
+    int score = 0, kills = 0, deaths = 0;
+    bool dead = false;
+    float timeToRespawn = -1.0f;   // <PlayerOwner:TimeToRespawn>
+};
+
 struct MatchLaunch {
     Url url;
     const MapInfo* map = nullptr;
@@ -101,6 +116,11 @@ public:
     void onUIEvent(int code) { ui_.onUIEvent(code); }
     void characterSelected() { ui_.onCharacterSelected(false); }   // TnUIControllerMultiplayer.OnCharacterSelected
     void showMenu();                                // TnPlayerController.ShowMenu (Escape / Start release)
+    // [integration] Gameplay MatchOver -> 15 s -> TnGame.ReturnToGameLobby: ServerTravel to the game lobby
+    // (UI_Lobby_m?...?MapId=<map>) [RE M05 blockers F4 / F6].
+    void returnToGameLobby();
+    void setMatchValues(const MatchValues& v) { matchValues_ = v; }
+    const MatchValues& matchValues() const { return matchValues_; }
     bool quitRequested() const { return quit_; }
     bool wantsWorldUnload() const { return unloadWorld_; }   // travel away from a match map
     void worldUnloaded() { unloadWorld_ = false; }
@@ -182,6 +202,7 @@ private:
     UIController ui_;
     LobbyState lobby_;
     const GameSettings* currentSettings_ = nullptr;   // SettingsDataStore current (EditGameMode / PlayPrivateGame)
+    MatchValues matchValues_;
     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;
