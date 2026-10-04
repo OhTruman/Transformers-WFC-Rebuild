@@ -30,3 +30,7 @@ wfc.log
 # Python bytecode
 __pycache__/
 *.pyc
+
+# Frontend runtime state in the working directory: decoded movie audio cache, local profile, input overrides
+wfc_cache/
+wfc_profile.ini

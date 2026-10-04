@@ -28,6 +28,9 @@ public:
     void drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial);
     bool ok() const { return ok_; }
     size_t cachedShapes() const { return shapes_.size(); }
+    // The tessellation cache is keyed by ShapeDef address: when a movie (and its definitions) is destroyed, a later
+    // allocation can reuse an address, so the cache is dropped (stale glyphs / an opaque vignette otherwise).
+    void forgetShapes() { shapes_.clear(); }
     size_t textures() const { return textures_.size(); }
     void ownedNames(GlCensus::Owned& o) const;   // GL objects of the UI renderer (kept across level travel)
 
@@ -48,6 +51,13 @@ private:
     int w_ = 0, h_ = 0, fbw_ = 0, fbh_ = 0;
     unsigned prog_ = 0, compProg_ = 0, vbo_ = 0, vao_ = 0;
     unsigned msFbo_ = 0, msColor_ = 0, msDepth_ = 0, resFbo_ = 0, resTex_ = 0;
+    // The default framebuffer's content (3D scene, match, video) copied in at begin(): movies blend against it
+    // (SWF blend modes: multiply backdrops, additive glows), and end() writes the finished frame back opaque.
+    unsigned backdropTex_ = 0;
+    int backdropW_ = 0, backdropH_ = 0;
+    int curBlend_ = -1;
+    void applyBlend(int mode);
+    static int effectiveBlend(const gfx::DisplayObject* d);
     int samples_ = 8;
     int level_ = 0;          // mask nesting level
     bool inMask_ = false;

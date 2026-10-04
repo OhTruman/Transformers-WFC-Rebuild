@@ -1,11 +1,15 @@
 #include "frontend/FrontendRuntime.h"
 #include "frontend/FlowTrace.h"
+#include "frontend/MovieAudio.h"
 #include "core/Config.h"
 #include "core/Log.h"
+#include "platform/UiBindings.h"
 
 #include <algorithm>
 #include <cstdlib>
+#include <chrono>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
@@ -53,7 +57,31 @@ bool ScriptDriver::load(const std::string& script) {
     return !steps_.empty();
 }
 
+void ScriptDriver::queuePress(uint32_t uiBit) {
+    Synth s = synth_;
+    s.uiDown = uiBit;
+    synthQueue_.push_back(s);   // held one frame
+    s.uiDown = 0;
+    synthQueue_.push_back(s);   // released
+}
+
+void ScriptDriver::queueClick(int x, int y) {
+    Synth s = synth_;
+    s.pointer = true; s.mouseX = x; s.mouseY = y; s.mouseLeft = false;
+    synthQueue_.push_back(s);   // move (roll over)
+    s.mouseLeft = true;
+    synthQueue_.push_back(s);   // press
+    s.mouseLeft = false;
+    synthQueue_.push_back(s);   // release
+}
+
+void ScriptDriver::applySynthetic(platform::InputFrame& in) const {
+    in.uiDown |= synth_.uiDown;
+    if (synth_.pointer) { in.mouseX = synth_.mouseX; in.mouseY = synth_.mouseY; in.mouseLeft = synth_.mouseLeft; }
+}
+
 void ScriptDriver::update(GameFlow& flow, float dt) {
+    if (!synthQueue_.empty()) { synth_ = synthQueue_.front(); synthQueue_.erase(synthQueue_.begin()); return; }
     if (keyUp_ >= 0) { if (keyHook) keyHook(keyUp_, false); keyUp_ = -1; return; }
     while (pos_ < steps_.size()) {
         const std::string& st = steps_[pos_];
@@ -99,6 +127,33 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             keyUp_ = code;
             return;
         }
+        if (st.rfind("ui:", 0) == 0) {   // a logical UI command (UiBindings action name), pressed for one frame
+            for (int k = 0; k < (int)platform::UiKey::Count; ++k)
+                if (st.substr(3) == platform::UiBindings::actionName((platform::UiKey)k)) {
+                    FlowTrace::emit("script.ui", {{"action", st.substr(3)}});
+                    queuePress(1u << k);
+                    synth_ = synthQueue_.front(); synthQueue_.erase(synthQueue_.begin());
+                    return;
+                }
+            LOG_WARN("FRONTEND script: unknown UI action '%s'", st.c_str());
+            continue;
+        }
+        if (st.rfind("mouse:", 0) == 0 || st.rfind("click:", 0) == 0) {
+            std::vector<std::string> p = split(st.substr(6), ',');
+            int x = p.size() > 0 ? std::atoi(p[0].c_str()) : 0, y = p.size() > 1 ? std::atoi(p[1].c_str()) : 0;
+            FlowTrace::emit(st[0] == 'm' ? "script.mouse" : "script.click", {{"x", std::to_string(x)}, {"y", std::to_string(y)}});
+            if (st[0] == 'm') { synth_.pointer = true; synth_.mouseX = x; synth_.mouseY = y; synth_.mouseLeft = false; }
+            else queueClick(x, y);
+            return;
+        }
+        if (st.rfind("clickclip:", 0) == 0) {
+            int x = 0, y = 0;
+            bool ok = clipHook && clipHook(st.substr(10), x, y);
+            FlowTrace::emit("script.clickclip", {{"path", st.substr(10)}, {"found", FlowTrace::boolean(ok)},
+                                                 {"x", std::to_string(x)}, {"y", std::to_string(y)}});
+            if (ok) queueClick(x, y);
+            return;
+        }
         if (st.rfind("dump:", 0) == 0) { if (dumpHook) dumpHook(st.substr(5)); continue; }
         if (st.rfind("shot:", 0) == 0) { if (shotHook) shotHook(st.substr(5)); return; }
         if (st.rfind("uievent:", 0) == 0) { flow.onUIEvent(std::atoi(st.c_str() + 8)); return; }
@@ -111,6 +166,9 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
 // ---------------------------------------------------------------------------------------------------------------
 
 bool FrontendRuntime::init() {
+    if (const char* p = std::getenv("WFC_PLATFORM")) platform_ = p;
+    if (platform_ != "WIN" && platform_ != "XBOX360" && platform_ != "PS3") platform_ = "WIN";
+    FlowTrace::emit("platform", {{"sku", platform_}});
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     if (!catalog_.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps")) return false;
     GameFlow::Options o;
@@ -119,6 +177,8 @@ bool FrontendRuntime::init() {
     if (const char* s = std::getenv("WFC_FRONTEND_SCRIPT")) script_.load(s);
     else if (const char* a = std::getenv("WFC_FRONTEND_AUTOPLAY")) script_.load(ScriptDriver::autoplayScript(a));
     stores_ = std::make_unique<DataStores>(flow_, catalog_);
+    roster_.load(Catalog::defaultManifestRoot() + "/mp_content/roster_package.json");
+    if (!scene_.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/scenes.json")) LOG_WARN("frontend: data/frontend/scenes.json missing (no scene cameras)");
     return flow_.init(catalog_, o);
 }
 
@@ -141,9 +201,122 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     if (fn == "Game.SetHasWatchedIntroMovie") { FlowTrace::emit("profile", {{"SetHasWatchedIntroMovie", "movie"}}); return {}; }
     if (fn == "Debug.ShouldDisplayBuildInfo") return BridgeValue(false);
     if (fn == "Debug.GetBuildInfo") return BridgeValue(std::string());
+    if (fn.rfind("PCSettings.", 0) == 0) return pcSettings(fn, args);
+    // TnAccountActionScriptBinding (PC SKU Accounts menu): Demonware online accounts. No online service in the
+    // offline reconstruction: no accounts are listed or created [SERVICE DEPENDENT]; the local display name is the
+    // profile identity (LocalProfile::playerName).
+    if (fn == "Account.GetAccountNames" || fn == "Account.GetLoggedInAccount") return BridgeValue(std::string());
+    // Stats (online stats archive): challenge progress and leaderboards. Offline there is no archive: progress 0,
+    // level 0 (a fresh profile), leaderboard reads report nothing [SERVICE DEPENDENT; values as the original offline].
+    if (fn == "Stats.GetChallengeValue" || fn == "Stats.GetChallengeLevel") return BridgeValue(0);
+    if (fn.rfind("Stats.", 0) == 0) { FlowTrace::emit("service.unavailable", {{"fn", fn}, {"service", "online stats"}}); return {}; }
+    if (fn.rfind("Account.", 0) == 0) { FlowTrace::emit("service.unavailable", {{"fn", fn}, {"service", "Demonware accounts"}}); return {}; }
     if (fn == "Customize.IsPrimeModeAvailable") return BridgeValue(false);
-    if (fn == "Console.SaveProfileSettings" || fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
+    if (fn.rfind("Customize.", 0) == 0) { BridgeValue r = customize(fn, args); if (r.kind != BridgeValue::Kind::Void || fn == "Customize.SelectCharacter" || fn == "Customize.CheckCustomCharacterDataLoaded") return r; }
+    // TnXpManager (via TnCharacterScriptBinding): XP lives in the online stats archive; without a stats interface the
+    // original returns 0 earned [CONFIRMED script]. Levels from Default__TnXpManager.LevelTable [CONFIRMED authored].
+    // No XP transactions are produced in the rebuild yet, so "last match" is 0 as well [PARTIAL].
+    {
+        static const double kLevelTable[] = {500, 1500, 3000, 5000, 7500, 11000, 15500, 21000, 27500, 35000, 44000, 54500, 66500,
+                                             80000, 95000, 112000, 131000, 152000, 175000, 200000, 227000, 256000, 287000, 320000, 355000};
+        const int n = (int)(sizeof kLevelTable / sizeof kLevelTable[0]);
+        if (fn == "Customize.GetXpEarnedForSpecialty" || fn == "Customize.GetXpEarnedForSpecialtyLastMatch") return BridgeValue(0);
+        if (fn == "Customize.GetLevelForSpecialty") {
+            double xp = 0;
+            for (int i = 0; i < n; ++i) if (xp < kLevelTable[i]) return BridgeValue(i);
+            return BridgeValue(n);
+        }
+        if (fn == "Customize.GetXpNeededForLevel") {
+            int level = std::atoi(arg(0).c_str());
+            if (level > n) return BridgeValue(-1);   // kLevelTooHigh
+            return BridgeValue(level == 0 ? 0.0 : kLevelTable[level - 1]);
+        }
+    }
+    if (fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
     return flow_.call(fn, args);
+}
+
+BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<std::string>& args) {
+    // TnCharacterScriptBinding ("Customize.*") over the local characters (CharacterRoster: roster package presets).
+    // Custom mode (iconic mode = GameTeamStatus 2 / 4 or OnlyAllowIconicCharacters is not wired yet: PARTIAL).
+    auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
+    auto join = [](const std::vector<std::string>& v) { std::string o; for (const auto& s : v) o += (o.empty() ? "" : ",") + s; return o; };
+    const CharacterPreset* c = roster_.find(arg(0));
+    if (fn == "Customize.CheckCustomCharacterDataLoaded") return {};   // loaded (no TnLoadCustomCharactersStatusMessageBox)
+    if (fn == "Customize.GetCustomCharacters" || fn == "Customize.GetPlayableCharacters") {
+        std::vector<std::string> names;
+        for (const CharacterPreset& p : roster_.customCharacters()) names.push_back(p.name);
+        return BridgeValue(join(names));
+    }
+    if (fn == "Customize.GetCurrentCharacter") return BridgeValue(flow_.selectedCharacter().name);
+    // Default__TnCharacterCustomizationData.UnlockCharacterSlotLevels [5, 10] in the binding's "5,10," format.
+    if (fn == "Customize.GetCharacterSlotUnlockLevels") return BridgeValue(std::string("5,10,"));
+    // No XP progression offline (TnXpManager returns 0): nothing newly unlocked.
+    if (fn == "Customize.GetNewlyUnlockedSkills" || fn == "Customize.GetNewlyUnlockedAbilities") return BridgeValue(std::string());
+    if (fn == "Customize.IsChassisUnlocked") { const ChassisInfo* ci = roster_.chassis(arg(0)); return BridgeValue(ci && !ci->lockedChassis); }
+    if (fn == "Customize.SelectCharacter") {
+        GameFlow::SelectedCharacter s;
+        s.name = arg(0);
+        s.type = 0;
+        if (c) { s.chassis[0] = c->chassis[0]; s.chassis[1] = c->chassis[1]; s.specialty = c->specialty; }
+        flow_.selectCharacter(s);
+        return {};
+    }
+    if (!c) return {};
+    if (fn == "Customize.GetCharacterSpecialty") return BridgeValue(c->specialty);
+    if (fn == "Customize.GetCharacterFriendlyName") return BridgeValue(c->name);
+    if (fn == "Customize.GetCharacterChassis") return BridgeValue(c->chassis[0] + "," + c->chassis[1]);
+    if (fn == "Customize.GetCharacterWeaponTypes") return BridgeValue(join(c->weapons));
+    if (fn == "Customize.GetCharacterAbilities") return BridgeValue(join(c->abilities));
+    if (fn == "Customize.GetCharacterVehicleWeapon") return BridgeValue(c->vehicleWeapons.empty() ? std::string() : c->vehicleWeapons.front());
+    if (fn == "Customize.GetCharacterSkills") return BridgeValue(std::string());   // presets carry no skills
+    // The *_PCD_MP presets author black colours on palette 0 for both factions [CONFIRMED authored].
+    if (fn == "Customize.GetCharacterPrimaryColor" || fn == "Customize.GetCharacterSecondaryColor") return BridgeValue(0);
+    if (fn == "Customize.GetCharacterDecal") return BridgeValue(std::string());
+    return {};
+}
+
+BridgeValue FrontendRuntime::pcSettings(const std::string& fn, const std::vector<std::string>& args) {
+    // HmInterfacePCSettings (SettingsMenu_GFX WIN branch) [call names CONFIRMED AS2; native bodies not in the dump:
+    // semantics HIGH from the movie's use]. Graphics -> Commit Changes calls SetResolution(w, h, fullscreen),
+    // SetTextureQualityLevel(0..2), SetVSyncState(bool); the menu reads the current values back.
+    auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
+    auto truthy = [](const std::string& s) { return s == "true" || s == "True" || s == "1"; };
+    LocalProfile& p = flow_.profile();
+    FlowTrace::emit("bridge", {{"fn", fn}, {"args", arg(0) + (args.size() > 1 ? "," + arg(1) : "") + (args.size() > 2 ? "," + arg(2) : "")}});
+    if (fn == "PCSettings.GetResolutions") {
+        std::string out;
+        std::vector<std::pair<int, int>> modes = display_.modes ? display_.modes() : std::vector<std::pair<int, int>>{};
+        if (modes.empty()) modes.push_back({p.display.width, p.display.height});
+        for (const auto& m : modes) out += (out.empty() ? "" : ",") + std::to_string(m.first) + "x" + std::to_string(m.second);
+        return BridgeValue(out);
+    }
+    if (fn == "PCSettings.GetResolution") return BridgeValue(std::to_string(p.display.width) + "x" + std::to_string(p.display.height));
+    if (fn == "PCSettings.IsFullScreen") return BridgeValue(p.display.fullscreen);
+    if (fn == "PCSettings.GetTextureQualityLevel") return BridgeValue(p.display.textureQuality);
+    if (fn == "PCSettings.GetVSyncState") return BridgeValue(p.display.vsync);
+    if (fn == "PCSettings.SetResolution") {
+        int w = std::atoi(arg(0).c_str()), h = std::atoi(arg(1).c_str());
+        if (w > 0 && h > 0) { p.display.width = w; p.display.height = h; }
+        p.display.fullscreen = truthy(arg(2));
+        if (display_.apply) display_.apply(p.display.width, p.display.height, p.display.fullscreen);
+        p.save();
+        return {};
+    }
+    if (fn == "PCSettings.SetTextureQualityLevel") {
+        p.display.textureQuality = std::atoi(arg(0).c_str());
+        p.save();
+        FlowTrace::emit("settings.owner", {{"setting", "TextureQuality"}, {"owner", "none (Rendering has no texture quality control yet)"}});
+        return {};
+    }
+    if (fn == "PCSettings.SetVSyncState") {
+        p.display.vsync = truthy(arg(0));
+        if (display_.vsync) display_.vsync(p.display.vsync);
+        p.save();
+        return {};
+    }
+    FlowTrace::emit("bridge.unhandled", {{"fn", fn}});
+    return {};
 }
 
 void FrontendRuntime::updateAudio(float dt) {
@@ -171,6 +344,7 @@ void FrontendRuntime::updateAudio(float dt) {
     // uiLevelStarted fires; movie Stopped outputs).
     const auto& ev = flow_.kismetTriggers();
     for (; seenFs_ < ev.size(); ++seenFs_) {
+        if (ev[seenFs_] == "FsCommand:enterFrontEnd") continue;   // the [FRONTEND START] trigger: uiLevelStarted above
         if (audio_) audio_->levelEvent(ev[seenFs_]);
         FlowTrace::emit("audio.levelEvent", {{"trigger", ev[seenFs_]}});
     }
@@ -212,7 +386,70 @@ void FrontendRuntime::runNativeShims() {
     if (!loaderOpen) shimmed_.erase(std::remove(shimmed_.begin(), shimmed_.end(), loader), shimmed_.end());
 }
 
+namespace {
+std::string movieAudioCacheDir() { return std::getenv("WFC_CACHE") ? std::getenv("WFC_CACHE") : "wfc_cache"; }
+}
+
+bool FrontendRuntime::buildMovieAudio(platform::IMoviePlayer& p, const std::string& wav, std::string& log) {
+    auto t0 = std::chrono::steady_clock::now();
+    std::vector<std::vector<int16_t>> tracks;
+    int rate = 0;
+    if (!p.decodeAudio(tracks, rate)) { log = "no audio"; return false; }
+    std::vector<int16_t> stereo;
+    MovieAudioLayout L = downmixMovieAudio(tracks, 0, stereo);
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(wav).parent_path(), ec);
+    // Written under a temporary name, then renamed: a reader never sees a partial file.
+    std::string tmp = wav + ".part";
+    bool ok = !stereo.empty() && writeWav16Stereo(tmp, stereo, rate);
+    if (ok) { std::filesystem::rename(tmp, wav, ec); ok = !ec; }
+    double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    log = std::to_string(L.tracks) + " tracks, " + L.description + ", " + std::to_string(rate) + " Hz, " +
+          std::to_string((int)ms) + " ms";
+    return ok;
+}
+
+std::string FrontendRuntime::prepareMovieAudio(const std::string& name, platform::IMoviePlayer& p) {
+    // Decoded and folded to stereo once, then cached (WFC_CACHE, default ./wfc_cache) so later boots start at once.
+    std::string wav = movieAudioCacheDir() + "/movies/" + name + ".wav";
+    if (!std::ifstream(wav).good() && audioPrefetch_.valid()) audioPrefetch_.wait();   // being decoded in the background
+    if (std::ifstream(wav).good()) {
+        FlowTrace::emit("movie.audio", {{"movie", name}, {"cached", "true"}});
+    } else {
+        std::string log;
+        bool ok = buildMovieAudio(p, wav, log);
+        FlowTrace::emit("movie.audio", {{"movie", name}, {"decoded", log}, {"cached", FlowTrace::boolean(ok)}});
+        if (!ok) return "";
+    }
+    // The rest of the chain decodes in the background while this movie plays.
+    if (!audioPrefetch_.valid() || audioPrefetch_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        std::vector<std::string> todo;
+        for (const std::string& q : flow_.queuedMovies())
+            if (!std::ifstream(movieAudioCacheDir() + "/movies/" + q + ".wav").good()) todo.push_back(q);
+        if (!todo.empty() && movieFactory_) {
+            auto factory = movieFactory_;
+            FlowTrace::emit("movie.audioPrefetch", {{"movies", std::to_string(todo.size())}});
+            audioPrefetch_ = std::async(std::launch::async, [todo, factory] {
+                for (const std::string& q : todo) {
+                    std::unique_ptr<platform::IMoviePlayer> mp(factory());
+                    std::string log;
+                    if (mp && mp->open(Catalog::defaultExtractedRoot() + "/movies/" + q + ".mkv"))
+                        buildMovieAudio(*mp, movieAudioCacheDir() + "/movies/" + q + ".wav", log);
+                }
+            });
+        }
+    }
+    return wav;
+}
+
+void FrontendRuntime::stopMovieAudio() {
+    if (movieAudioHandle_ >= 0 && audio_) audio_->stopMovieAudio(movieAudioHandle_);
+    movieAudioHandle_ = -1;
+    movieAudioWav_.clear();
+}
+
 bool FrontendRuntime::openVideo(const std::string& name, bool loop) {
+    stopMovieAudio();
     video_.reset();
     videoName_ = name;
     videoLoops_ = loop;
@@ -223,6 +460,8 @@ bool FrontendRuntime::openVideo(const std::string& name, bool loop) {
         return false;
     }
     FlowTrace::emit("movie.open", {{"movie", name}, {"seconds", std::to_string(p->duration())}, {"loop", FlowTrace::boolean(loop)}});
+    // SeqAct_MoviePlayer movies carry their audio; the loading underlays have none (AssetTools video_audio probe).
+    if (!loop && audio_) movieAudioWav_ = prepareMovieAudio(name, *p);
     video_ = std::move(p);
     videoFramed_ = false;
     ++videoGen_;
@@ -231,8 +470,8 @@ bool FrontendRuntime::openVideo(const std::string& name, bool loop) {
 
 void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in) {
     // SeqAct_MoviePlayer (intro chain): the Bink movies, extracted by AssetTools as H.264/FLAC .mkv, decoded by the
-    // platform movie player. Stopped fires at the end of the movie. Movie audio is not played [PARTIAL: the track
-    // layout is unidentified and the audio belongs to the Systems device].
+    // platform movie player. Stopped fires at the end of the movie. The movie's audio (frontend/MovieAudio: Bink tracks
+    // folded to stereo) plays on the Systems device from the first frame and stops with the movie.
     // The loading underlay: [LoadingMovie] InitialStartupFileName / DefaultFileName (Xe-TransGame.ini), looped under
     // LoadScreen_GFX while a loading screen is up [HIGH]. The extracted files carry region / language suffixes; the
     // rebuild picks <name>_NA_INT, then <name>_INT, then <name> [PARTIAL: region of the dump UNKNOWN, see GetRegionCode].
@@ -249,7 +488,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         want = underlay_;
     }
     if (want != videoName_) {
-        if (want.empty()) { video_.reset(); videoName_.clear(); }
+        if (want.empty()) { stopMovieAudio(); video_.reset(); videoName_.clear(); }
         else if (!openVideo(want, m.empty()) && !m.empty()) { flow_.movieStopped(m); videoName_.clear(); }
     }
     if (!video_) return;
@@ -261,6 +500,10 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         videoFramed_ = true;
         FlowTrace::emit("movie.firstFrame", {{"movie", videoName_}, {"w", std::to_string(vw)}, {"h", std::to_string(vh)},
                                              {"t", std::to_string(video_->position())}});
+        if (!movieAudioWav_.empty() && audio_) {   // audio starts with the picture
+            movieAudioHandle_ = audio_->playMovieAudio(movieAudioWav_);
+            FlowTrace::emit("movie.audioStart", {{"movie", videoName_}, {"handle", std::to_string(movieAudioHandle_)}});
+        }
     }
     // Skip with A / Start / B on intro movies [PROVISIONAL: the original skip rule (UE3 bUserCanSkip) is UNKNOWN].
     uint32_t pressed = in.uiDown & ~prevUi_;
@@ -271,6 +514,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         if (videoLoops_ && !skip) { video_->restart(); return; }
         FlowTrace::emit("movie.finished", {{"movie", videoName_}, {"skipped", FlowTrace::boolean(skip)},
                                            {"position", std::to_string(video_->position())}});
+        stopMovieAudio();
         video_.reset();
         std::string done = videoName_;
         videoName_.clear();
@@ -278,16 +522,59 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
     }
 }
 
-void FrontendRuntime::update(const platform::InputFrame& in, float dt) {
+void FrontendRuntime::updateScene(float dt) {
+    // The live level under the menus (FrontendScene): its levels follow the current UI level; the menu movies'
+    // fscommands and the intro's Stopped output start its matinees; the camera is evaluated every frame.
+    LevelKind lv = flow_.loading().active ? LevelKind::None : flow_.level();
+    std::string map = (lv == LevelKind::None || lv == LevelKind::Match) ? std::string() : flow_.levelMap();
+    const auto& ev = flow_.kismetTriggers();
+    if (map != sceneLevel_) {
+        if (sceneRenderer_ && sceneDrawable_) sceneRenderer_->unload();
+        scene_.leave();
+        sceneDrawable_ = false;
+        if (map.empty()) sceneSeen_ = ev.size();   // triggers raised from here on (during the travel) belong to the next level
+        sceneLevel_ = map;
+        if (!map.empty()) {
+            scene_.enterLevel(map);
+            sceneDrawable_ = sceneRenderer_ && !scene_.levels().empty() && sceneRenderer_->load(scene_.levels());
+            std::string lvls;
+            for (const std::string& l : scene_.levels()) lvls += (lvls.empty() ? "" : "+") + l;
+            FlowTrace::emit("scene.levels", {{"uiLevel", map}, {"levels", lvls}, {"drawn", FlowTrace::boolean(sceneDrawable_)},
+                                             {"why", sceneDrawable_ ? "" : sceneRenderer_ ? "renderer: levels not exported / not drawable"
+                                                                                           : "no scene renderer (Rendering handoff)"}});
+        }
+    }
+    if (map.empty()) return;
+    for (; sceneSeen_ < ev.size(); ++sceneSeen_) scene_.trigger(ev[sceneSeen_]);
+    scene_.tick(dt);
+    if ((sceneTraceTimer_ += dt) >= 2.0f) {
+        sceneTraceTimer_ = 0.0f;
+        SceneView v = scene_.view();
+        std::string playing;
+        for (const std::string& p : scene_.playing()) playing += (playing.empty() ? "" : ",") + p;
+        if (v.valid)
+            FlowTrace::emit("scene.view", {{"camera", v.camera}, {"matinee", v.matinee}, {"playing", playing},
+                                           {"pos", FlowTrace::num(v.pos[0]) + "," + FlowTrace::num(v.pos[1]) + "," + FlowTrace::num(v.pos[2])},
+                                           {"rot", FlowTrace::num(v.rot[0]) + "," + FlowTrace::num(v.rot[1]) + "," + FlowTrace::num(v.rot[2])},
+                                           {"fov", FlowTrace::num(v.fov)}, {"drawn", FlowTrace::boolean(sceneDrawable_)}});
+    }
+}
+
+void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
+    platform::InputFrame in = input;
+    script_.applySynthetic(in);
     flow_.tick(dt);
     runNativeShims();
     updateMoviePlayer(dt, in);
     if (presenter_) presenter_->update(flow_, in, dt);
     script_.update(flow_, dt);
     updateAudio(dt);
+    updateScene(dt);
 }
 
-void FrontendRuntime::updateInMatch(const platform::InputFrame& in, float dt) {
+void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt) {
+    platform::InputFrame in = input;
+    script_.applySynthetic(in);
     flow_.tick(dt);
     // [integration M05] The movie player runs in the match too: the loading underlay (TF_LoadingScreen Bink) is
     // released once the loading screen closes. Without this its last frame (black + "LOADING..." spinner) stayed
@@ -296,9 +583,42 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& in, float dt) {
     if (presenter_) presenter_->update(flow_, in, dt);
     script_.update(flow_, dt);
     if (audio_) audio_->tick(dt);   // UI sounds of in-match movies (pause menu); match audio is the World's
+    // TnHUD: the HUD movie exists for the match; visible in UI states InGame / Spectating only (RE A8).
+    bool inMatch = flow_.level() == LevelKind::Match && !flow_.loading().active;
+    UIState st = flow_.ui().state();
+    bool hudShown = inMatch && (st == UIState::InGame || st == UIState::Spectating);
+    hud_.update(presenter_.get(), catalog_, inMatch, hudShown);
+    // ShowScores (Back / Tab): TnHUD.SetShowScores(!bShowScores) toggles InGameStats_GFX with input focus; it is
+    // force-closed when the HUD is hidden [RE OVERNIGHT A7 / playtest section 9, CONFIRMED].
+    uint32_t pressed = in.uiDown & ~prevMatchUi_;
+    prevMatchUi_ = in.uiDown;
+    bool want = scoreboard_;
+    if (hudShown && (pressed & (1u << (int)platform::UiKey::Select))) want = !scoreboard_;
+    if (!hudShown) want = false;
+    if (want != scoreboard_) {
+        scoreboard_ = want;
+        if (presenter_) presenter_->setScoreboard(want);
+        FlowTrace::emit("hud.scoreboard", {{"open", FlowTrace::boolean(want)}});
+    }
+}
+
+void FrontendRuntime::updateLoading(float dt) {
+    platform::InputFrame none;
+    updateMoviePlayer(dt, none);
+    if (presenter_) presenter_->advanceLoading(dt);
 }
 
 void FrontendRuntime::draw(int w, int h) {
+    if (sceneRenderer_ && sceneDrawable_) {
+        for (const SceneChange& c : scene_.takeChanges()) {
+            if (c.kind == SceneChange::Effect) sceneRenderer_->setEffectActive(c.actor, c.value);
+            else sceneRenderer_->setActorHidden(c.actor, c.value);
+        }
+        SceneView v = scene_.view();
+        if (v.valid) sceneRenderer_->draw(v, w, h);
+    }
+    static const bool sceneOnly = std::getenv("WFC_SCENE_ONLY") != nullptr;   // diagnostics: the 3D layer alone
+    if (sceneOnly) return;
     if (!presenter_) return;
     const uint8_t* px = nullptr;
     int vw = 0, vh = 0;

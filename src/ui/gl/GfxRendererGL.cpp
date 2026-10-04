@@ -22,6 +22,9 @@ namespace ui {
 namespace {
 typedef void(APIENTRY* PFN_RenderbufferStorageMultisample)(GLenum, GLsizei, GLenum, GLsizei, GLsizei);
 PFN_RenderbufferStorageMultisample glRbMs = nullptr;
+typedef void(APIENTRY* PFN_BlendEquation)(GLenum);
+PFN_BlendEquation glBlendEq = nullptr;
+constexpr GLenum kFuncAdd = 0x8006, kFuncReverseSubtract = 0x800B, kMin = 0x8007, kMax = 0x8008;
 
 const char* kVS = R"(#version 120
 attribute vec2 aPos;
@@ -106,6 +109,7 @@ bool GfxRendererGL::init() {
     if (!glx::CreateShader && !glx::load()) { LOG_ERROR("GFX renderer: GL entry points unavailable"); return false; }
     if (!glx::CreateShader) glx::load();
     glRbMs = (PFN_RenderbufferStorageMultisample)wglGetProcAddress("glRenderbufferStorageMultisample");
+    glBlendEq = (PFN_BlendEquation)wglGetProcAddress("glBlendEquation");
     prog_ = link(kVS, kFS);
     compProg_ = link(kCompVS, kCompFS);
     if (!prog_ || !compProg_) return false;
@@ -134,6 +138,7 @@ void GfxRendererGL::ownedNames(GlCensus::Owned& o) const {
     for (const auto& [k, id] : gradients_) o.textures.insert(id);
     if (resTex_) o.textures.insert(resTex_);
     if (video_.id) o.textures.insert(video_.id);
+    if (backdropTex_) o.textures.insert(backdropTex_);
     if (vbo_) o.buffers.insert(vbo_);
     if (vao_) o.vertexArrays.insert(vao_);
     for (unsigned f : {msFbo_, resFbo_}) if (f) o.framebuffers.insert(f);
@@ -179,6 +184,18 @@ void GfxRendererGL::begin(int width, int height) {
         glx::FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, resTex_, 0);
         fbw_ = width; fbh_ = height;
     }
+    // Backdrop: whatever is in the default framebuffer now (frontend scene / match / full-screen video / black).
+    glx::BindFramebuffer(GL_FRAMEBUFFER, 0);
+    if (!backdropTex_ || backdropW_ != width || backdropH_ != height) {
+        if (!backdropTex_) glGenTextures(1, &backdropTex_);
+        glBindTexture(GL_TEXTURE_2D, backdropTex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        backdropW_ = width; backdropH_ = height;
+    }
+    glBindTexture(GL_TEXTURE_2D, backdropTex_);
+    glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, width, height);
     glx::BindFramebuffer(GL_FRAMEBUFFER, msFbo_);
     glViewport(0, 0, width, height);
     glClearColor(0, 0, 0, 0);
@@ -204,6 +221,47 @@ void GfxRendererGL::begin(int width, int height) {
     glx::Uniform1i(uTex_, 0);
     glx::ActiveTexture(GL_TEXTURE0);
     level_ = 0;
+    // The backdrop first, opaque (the composite program draws a texture over the whole target).
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_BLEND);
+    glx::UseProgram(compProg_);
+    glx::Uniform1i(glx::GetUniformLocation(compProg_, "uTex"), 0);
+    glBindTexture(GL_TEXTURE_2D, backdropTex_);
+    {
+        float q[] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
+        glx::BufferData(GL_ARRAY_BUFFER, sizeof q, q, GL_STREAM_DRAW);
+        glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    }
+    glx::UseProgram(prog_);
+    glEnable(GL_STENCIL_TEST);
+    glEnable(GL_BLEND);
+    curBlend_ = -1;
+    applyBlend(0);
+}
+
+int GfxRendererGL::effectiveBlend(const gfx::DisplayObject* d) {
+    for (; d; d = d->parent) if (d->blend > 1) return d->blend;
+    return 0;
+}
+
+// SWF blend modes on premultiplied colour (per item; Flash composites a blended clip as a group - PARTIAL):
+// 3 multiply, 4 screen, 5 lighten, 6 darken, 8 add, 9 subtract; others (layer, difference, invert, alpha, erase,
+// overlay, hardlight) draw as normal.
+void GfxRendererGL::applyBlend(int mode) {
+    if (mode == curBlend_) return;
+    curBlend_ = mode;
+    GLenum eq = kFuncAdd;
+    switch (mode) {
+    case 3: glx::BlendFuncSeparate(GL_DST_COLOR, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE); break;
+    case 4: glx::BlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_COLOR, GL_ZERO, GL_ONE); break;
+    case 5: glx::BlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE); eq = kMax; break;
+    case 6: glx::BlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE); eq = kMin; break;
+    case 8: glx::BlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE); break;
+    case 9: glx::BlendFuncSeparate(GL_ONE, GL_ONE, GL_ZERO, GL_ONE); eq = kFuncReverseSubtract; break;
+    default: glx::BlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA); break;
+    }
+    if (glBlendEq) glBlendEq(eq);
 }
 
 void GfxRendererGL::end() {
@@ -217,8 +275,8 @@ void GfxRendererGL::end() {
     glx::UseProgram(compProg_);
     glx::Uniform1i(glx::GetUniformLocation(compProg_, "uTex"), 0);
     glBindTexture(GL_TEXTURE_2D, resTex_);
-    glEnable(GL_BLEND);
-    glx::BlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    if (glBlendEq) glBlendEq(kFuncAdd);
+    glDisable(GL_BLEND);   // the target holds the finished frame (backdrop included)
     float q[] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
     glx::BindBuffer(GL_ARRAY_BUFFER, vbo_);
     glx::BufferData(GL_ARRAY_BUFFER, sizeof q, q, GL_STREAM_DRAW);
@@ -227,6 +285,11 @@ void GfxRendererGL::end() {
     glx::UseProgram(0);
     glDisable(GL_BLEND);
     glx::BindVertexArray(0);
+    // Leave neutral bindings for whatever draws next frame: the renderer's legacy path uses client-side vertex arrays,
+    // which a bound GL_ARRAY_BUFFER would turn into offsets into this VBO (the frontend scene drew nothing).
+    glx::DisableVertexAttribArray(0);
+    glx::BindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 const GfxRendererGL::Cached& GfxRendererGL::cache(const gfx::ShapeDef* s, bool glyph) {
@@ -443,6 +506,8 @@ void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, floa
     if (!ok_) return;
     using RI = gfx::Player::RenderItem;
     for (const RI& it : items) {
+        if (it.owner && !inMask_) applyBlend(effectiveBlend(it.owner));
+        else if (inMask_) applyBlend(0);
         switch (it.type) {
         case RI::MaskBegin: inMask_ = true; continue;
         case RI::MaskEnd: inMask_ = false; if (level_ < 15) ++level_; continue;

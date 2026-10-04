@@ -10,6 +10,10 @@
 #include "platform/Window.h"
 #include "core/Log.h"
 
+#include <algorithm>
+#include <string>
+#include <vector>
+
 namespace platform {
 namespace {
 
@@ -66,6 +70,7 @@ public:
         hdc_ = GetDC(hwnd_);
         if (!initGL()) return false;
 
+        setUiBindings(UiBindings::defaults(false));
         ShowWindow(hwnd_, SW_SHOW);
         SetForegroundWindow(hwnd_);
         SetFocus(hwnd_);
@@ -108,17 +113,91 @@ public:
         }
 
         pollGamepad(input);
-        // UI keys: keyboard (the GFx key codes the movies expect: arrows, Enter, Escape, F1-F4, PgUp/PgDn/Home/End)
-        // plus gamepad buttons.
-        static const int uiVk[(int)UiKey::Count] = {VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_RETURN, VK_ESCAPE, VK_F1, VK_F2, VK_F3,
-                                                     VK_F4, VK_PRIOR, VK_NEXT, VK_HOME, VK_END, VK_F5, VK_F6};
+        // Logical UI commands from the bindings (keyboard keys and pad buttons).
         uint32_t ui = 0;
         if (focused_)
-            for (int i = 0; i < (int)UiKey::Count; ++i)
-                if (GetAsyncKeyState(uiVk[i]) & 0x8000) ui |= 1u << i;
-        input.uiDown = ui | padUi_;
+            for (int i = 0; i < (int)UiKey::Count; ++i) {
+                for (int vk : uiVk_[i]) if (GetAsyncKeyState(vk) & 0x8000) ui |= 1u << i;
+                for (uint32_t m : uiPad_[i]) if (padBits_ & m) ui |= 1u << i;
+            }
+        input.uiDown = ui;
+        // Absolute pointer for the UI.
+        input.mouseX = input.mouseY = -1;
+        input.mouseLeft = focused_ && (GetAsyncKeyState(VK_LBUTTON) & 0x8000);
+        input.mouseRight = focused_ && (GetAsyncKeyState(VK_RBUTTON) & 0x8000);
+        if (!mouseCaptured_ && focused_) {
+            POINT p;
+            GetCursorPos(&p);
+            ScreenToClient(hwnd_, &p);
+            if (p.x >= 0 && p.y >= 0 && p.x < width_ && p.y < height_) { input.mouseX = p.x; input.mouseY = p.y; }
+        }
+        input.mouseWheel = wheel_ / (float)WHEEL_DELTA;
+        wheel_ = 0;
         return true;
     }
+
+    void setUiBindings(const UiBindings& b) override {
+        for (int i = 0; i < (int)UiKey::Count; ++i) {
+            uiVk_[i].clear();
+            uiPad_[i].clear();
+            for (const std::string& n : b.keys[i]) {
+                if (int vk = vkByName(n)) uiVk_[i].push_back(vk);
+                else LOG_WARN("input: unknown key '%s' (UI.%s)", n.c_str(), UiBindings::actionName((UiKey)i));
+            }
+            for (const std::string& n : b.pad[i]) {
+                if (uint32_t m = padByName(n)) uiPad_[i].push_back(m);
+                else LOG_WARN("input: unknown pad button '%s' (UI.%s)", n.c_str(), UiBindings::actionName((UiKey)i));
+            }
+        }
+    }
+
+    void setOsCursorHidden(bool hidden) override { cursorHidden_ = hidden; }
+
+    std::vector<Mode> displayModes() const override {
+        std::vector<Mode> out;
+        DEVMODEW dm{};
+        dm.dmSize = sizeof(dm);
+        for (DWORD i = 0; EnumDisplaySettingsW(nullptr, i, &dm); ++i) {
+            if (dm.dmBitsPerPel < 32 || dm.dmPelsWidth < 800 || dm.dmPelsHeight < 600) continue;
+            bool have = false;
+            for (const Mode& m : out) have |= m.width == (int)dm.dmPelsWidth && m.height == (int)dm.dmPelsHeight;
+            if (!have) out.push_back({(int)dm.dmPelsWidth, (int)dm.dmPelsHeight});
+        }
+        std::sort(out.begin(), out.end(), [](const Mode& a, const Mode& b) { return a.width != b.width ? a.width < b.width : a.height < b.height; });
+        return out;
+    }
+
+    void setDisplayMode(int w, int h, bool full) override {
+        // Windowed: a client area of w x h. Fullscreen: a borderless window over the monitor (no display mode change;
+        // the swap chain renders at the monitor size) [PC adaptation; the shipped PC SKU's exact mode handling is native].
+        if (full) {
+            if (!fullscreen_) { GetWindowRect(hwnd_, &windowedRect_); }
+            MONITORINFO mi{};
+            mi.cbSize = sizeof(mi);
+            GetMonitorInfoW(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY), &mi);
+            SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+            SetWindowPos(hwnd_, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
+                         mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            fullscreen_ = true;
+            return;
+        }
+        SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+        RECT r = {0, 0, w, h};
+        AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+        int x = fullscreen_ ? windowedRect_.left : CW_USEDEFAULT, y = fullscreen_ ? windowedRect_.top : CW_USEDEFAULT;
+        if (x == CW_USEDEFAULT) { RECT cur; GetWindowRect(hwnd_, &cur); x = cur.left; y = cur.top; }
+        SetWindowPos(hwnd_, HWND_NOTOPMOST, x, y, r.right - r.left, r.bottom - r.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        fullscreen_ = false;
+    }
+    bool fullscreen() const override { return fullscreen_; }
+
+    void setVSync(bool on) override {
+        typedef BOOL(WINAPI * PFN_SwapInterval)(int);
+        static PFN_SwapInterval swap = (PFN_SwapInterval)wglGetProcAddress("wglSwapIntervalEXT");
+        if (swap) swap(on ? 1 : 0);
+        vsync_ = on;
+    }
+    bool vsync() const override { return vsync_; }
 
     void present() override { SwapBuffers(hdc_); }
     int width() const override { return width_; }
@@ -156,7 +235,41 @@ private:
         return true;
     }
 
-    uint32_t padUi_ = 0;
+    static constexpr uint32_t kPadLT = 1u << 16, kPadRT = 1u << 17, kPadLStickUp = 1u << 18, kPadLStickDown = 1u << 19,
+                              kPadLStickLeft = 1u << 20, kPadLStickRight = 1u << 21;
+    uint32_t padBits_ = 0;
+    std::vector<int> uiVk_[(int)UiKey::Count];
+    std::vector<uint32_t> uiPad_[(int)UiKey::Count];
+    int wheel_ = 0;
+    bool cursorHidden_ = false;
+    bool fullscreen_ = false, vsync_ = false;
+    RECT windowedRect_{};
+
+    static int vkByName(const std::string& n) {
+        static const struct { const char* name; int vk; } t[] = {
+            {"Enter", VK_RETURN}, {"Escape", VK_ESCAPE}, {"Space", VK_SPACE}, {"Tab", VK_TAB}, {"Backspace", VK_BACK},
+            {"Up", VK_UP}, {"Down", VK_DOWN}, {"Left", VK_LEFT}, {"Right", VK_RIGHT}, {"PageUp", VK_PRIOR},
+            {"PageDown", VK_NEXT}, {"Home", VK_HOME}, {"End", VK_END}, {"Insert", VK_INSERT}, {"Delete", VK_DELETE},
+            {"Shift", VK_SHIFT}, {"Control", VK_CONTROL}, {"Alt", VK_MENU}, {"F1", VK_F1}, {"F2", VK_F2}, {"F3", VK_F3},
+            {"F4", VK_F4}, {"F5", VK_F5}, {"F6", VK_F6}, {"F7", VK_F7}, {"F8", VK_F8}, {"F9", VK_F9}, {"F10", VK_F10},
+            {"F11", VK_F11}, {"F12", VK_F12}};
+        for (const auto& e : t) if (n == e.name) return e.vk;
+        if (n.size() == 1 && ((n[0] >= 'A' && n[0] <= 'Z') || (n[0] >= '0' && n[0] <= '9'))) return n[0];
+        return 0;
+    }
+    static uint32_t padByName(const std::string& n) {
+        static const struct { const char* name; uint32_t m; } t[] = {
+            {"DPadUp", XINPUT_GAMEPAD_DPAD_UP}, {"DPadDown", XINPUT_GAMEPAD_DPAD_DOWN},
+            {"DPadLeft", XINPUT_GAMEPAD_DPAD_LEFT}, {"DPadRight", XINPUT_GAMEPAD_DPAD_RIGHT},
+            {"Start", XINPUT_GAMEPAD_START}, {"Back", XINPUT_GAMEPAD_BACK}, {"LThumb", XINPUT_GAMEPAD_LEFT_THUMB},
+            {"RThumb", XINPUT_GAMEPAD_RIGHT_THUMB}, {"LB", XINPUT_GAMEPAD_LEFT_SHOULDER},
+            {"RB", XINPUT_GAMEPAD_RIGHT_SHOULDER}, {"A", XINPUT_GAMEPAD_A}, {"B", XINPUT_GAMEPAD_B},
+            {"X", XINPUT_GAMEPAD_X}, {"Y", XINPUT_GAMEPAD_Y}, {"LT", kPadLT}, {"RT", kPadRT},
+            {"LStickUp", kPadLStickUp}, {"LStickDown", kPadLStickDown}, {"LStickLeft", kPadLStickLeft},
+            {"LStickRight", kPadLStickRight}};
+        for (const auto& e : t) if (n == e.name) return e.m;
+        return 0;
+    }
 
     POINT centerScreen() const {
         RECT rc; GetClientRect(hwnd_, &rc);
@@ -179,27 +292,16 @@ private:
             input.padRX = axis(st.Gamepad.sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
             input.padRY = axis(st.Gamepad.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
             input.padLT = st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ? st.Gamepad.bLeftTrigger / 255.0f : 0.0f;
-            WORD b = st.Gamepad.wButtons;
-            auto bit = [](UiKey k) { return 1u << (int)k; };
-            padUi_ = 0;
-            if (b & XINPUT_GAMEPAD_DPAD_UP) padUi_ |= bit(UiKey::Up);
-            if (b & XINPUT_GAMEPAD_DPAD_DOWN) padUi_ |= bit(UiKey::Down);
-            if (b & XINPUT_GAMEPAD_DPAD_LEFT) padUi_ |= bit(UiKey::Left);
-            if (b & XINPUT_GAMEPAD_DPAD_RIGHT) padUi_ |= bit(UiKey::Right);
-            if (b & XINPUT_GAMEPAD_A) padUi_ |= bit(UiKey::Accept);
-            if (b & XINPUT_GAMEPAD_B) padUi_ |= bit(UiKey::Back);
-            if (b & XINPUT_GAMEPAD_X) padUi_ |= bit(UiKey::X);
-            if (b & XINPUT_GAMEPAD_Y) padUi_ |= bit(UiKey::Y);
-            if (b & XINPUT_GAMEPAD_START) padUi_ |= bit(UiKey::Start);
-            if (b & XINPUT_GAMEPAD_BACK) padUi_ |= bit(UiKey::Select);
-            if (b & XINPUT_GAMEPAD_LEFT_SHOULDER) padUi_ |= bit(UiKey::LB);
-            if (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) padUi_ |= bit(UiKey::RB);
-            if (st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) padUi_ |= bit(UiKey::LT);
-            if (st.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) padUi_ |= bit(UiKey::RT);
-            if (b & XINPUT_GAMEPAD_LEFT_THUMB) padUi_ |= bit(UiKey::LThumb);
-            if (b & XINPUT_GAMEPAD_RIGHT_THUMB) padUi_ |= bit(UiKey::RThumb);
+            // Raw buttons plus synthetic bits for the triggers and the left stick's directions (bound by name).
+            padBits_ = st.Gamepad.wButtons;
+            if (st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) padBits_ |= kPadLT;
+            if (st.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) padBits_ |= kPadRT;
+            if (input.padLY > 0.5f) padBits_ |= kPadLStickUp;
+            if (input.padLY < -0.5f) padBits_ |= kPadLStickDown;
+            if (input.padLX < -0.5f) padBits_ |= kPadLStickLeft;
+            if (input.padLX > 0.5f) padBits_ |= kPadLStickRight;
         } else {
-            padUi_ = 0;
+            padBits_ = 0;
             input.padConnected = false;
             input.padLX = input.padLY = input.padRX = input.padRY = 0.0f;
             input.padLT = 0.0f;
@@ -229,6 +331,10 @@ private:
                 if (height_ < 1) height_ = 1;
                 return 0;
             case WM_SETFOCUS: focused_ = true; return 0;
+            case WM_MOUSEWHEEL: wheel_ += GET_WHEEL_DELTA_WPARAM(wp); return 0;
+            case WM_SETCURSOR:
+                if (LOWORD(lp) == HTCLIENT && (cursorHidden_ || mouseCaptured_)) { SetCursor(nullptr); return TRUE; }
+                break;
             case WM_KILLFOCUS: focused_ = false; return 0;
         }
         return DefWindowProcW(hwnd, msg, wp, lp);

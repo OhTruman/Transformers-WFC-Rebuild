@@ -15,9 +15,45 @@ using avm1::Value;
 
 namespace {
 enum ClipEvent : uint32_t {
-    EvLoad = 1u << 0, EvEnterFrame = 1u << 1, EvUnload = 1u << 2, EvKeyDown = 1u << 6, EvKeyUp = 1u << 7,
-    EvInitialize = 1u << 9, EvConstruct = 1u << 18,
+    EvLoad = 1u << 0, EvEnterFrame = 1u << 1, EvUnload = 1u << 2, EvMouseMove = 1u << 3, EvMouseDown = 1u << 4,
+    EvMouseUp = 1u << 5, EvKeyDown = 1u << 6, EvKeyUp = 1u << 7, EvInitialize = 1u << 9, EvConstruct = 1u << 18,
 };
+
+// Nonzero winding of the shape's fill edges at p (local twips), per fill style; strokes by distance to the segment.
+bool pointInShape(const ShapeDef* s, const Point& p) {
+    if (!s) return false;
+    const Rect& b = s->bounds;
+    const float slop = 40.0f;   // strokes extend past the edge bounds by up to half their width
+    if (p.x < b.xmin - slop || p.x > b.xmax + slop || p.y < b.ymin - slop || p.y > b.ymax + slop) return false;
+    std::map<std::pair<int, int>, int> wind;
+    auto isLeft = [](const Point& a, const Point& c, const Point& q) { return (c.x - a.x) * (q.y - a.y) - (q.x - a.x) * (c.y - a.y); };
+    auto cross = [&](const Point& a, const Point& c) -> int {
+        if (a.y <= p.y) { if (c.y > p.y && isLeft(a, c, p) > 0) return 1; }
+        else if (c.y <= p.y && isLeft(a, c, p) < 0) return -1;
+        return 0;
+    };
+    for (const ShapePath& path : s->paths) {
+        for (size_t i = 1; i < path.pts.size(); ++i) {
+            const Point& a = path.pts[i - 1];
+            const Point& c = path.pts[i];
+            if (path.fill1) wind[{path.styleSet, path.fill1}] += cross(a, c);
+            if (path.fill0) wind[{path.styleSet, path.fill0}] += cross(c, a);
+            if (path.line > 0) {
+                float hw = 10.0f;
+                if ((size_t)path.styleSet < s->lineSets.size() && (size_t)(path.line - 1) < s->lineSets[(size_t)path.styleSet].size())
+                    hw = std::max(10.0f, s->lineSets[(size_t)path.styleSet][(size_t)(path.line - 1)].width * 0.5f);
+                float dx = c.x - a.x, dy = c.y - a.y, l2 = dx * dx + dy * dy;
+                float t = l2 > 0 ? std::max(0.0f, std::min(1.0f, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2)) : 0.0f;
+                float ex = a.x + t * dx - p.x, ey = a.y + t * dy - p.y;
+                if (ex * ex + ey * ey <= hw * hw) return true;
+            }
+        }
+    }
+    for (const auto& [k, w] : wind) if (w != 0) return true;
+    return false;
+}
+
+bool pointInRect(const Rect& r, const Point& p) { return p.x >= r.xmin && p.x <= r.xmax && p.y >= r.ymin && p.y <= r.ymax; }
 
 Rect transformRect(const Rect& r, const Matrix& m) {
     Point p[4] = {m.apply({r.xmin, r.ymin}), m.apply({r.xmax, r.ymin}), m.apply({r.xmin, r.ymax}), m.apply({r.xmax, r.ymax})};
@@ -455,6 +491,15 @@ void Player::applyFrameTags(MovieClip* mc, int frame, bool runActions) {
         auto& done = initRun_[mc->def.get()];
         if (done.insert(sid).second) vm_->runBlock(ab.code, 0, ab.code->size(), mc);
     }
+    // The frame's DoActions are queued before the children it places queue theirs: the parent's frame script runs
+    // first (with its new children already instantiated), then the children's first frames - Flash 8 order (e.g.
+    // EndGameStats_GFX: each XP panel's script sets SpecialtyFriendlyName that its title child reads via _parent).
+    if (runActions) {
+        for (const ActionBlock& ab : fr.actions) {
+            auto code = ab.code;
+            queueAction([this, mc, code]() { if (!mc->removed) vm_->runBlock(code, 0, code->size(), mc); });
+        }
+    }
     for (const ControlTag& ct : fr.tags) {
         if (ct.kind == ControlTag::Place) placeObject(mc, ct.place, frame);
         else {
@@ -464,12 +509,6 @@ void Player::applyFrameTags(MovieClip* mc, int frame, bool runActions) {
                 graveyard.push_back(std::move(it->second));
                 mc->children.erase(it);
             }
-        }
-    }
-    if (runActions) {
-        for (const ActionBlock& ab : fr.actions) {
-            auto code = ab.code;
-            queueAction([this, mc, code]() { if (!mc->removed) vm_->runBlock(code, 0, code->size(), mc); });
         }
     }
 }
@@ -838,6 +877,200 @@ void Player::keyEvent(int keyCode, bool down) {
     }
 }
 
+// ---------------------------------------------------------------------------------------------------------------
+// Mouse
+
+bool Player::hitGeometry(const DisplayObject* d, const Point& world, bool ignoreVisible) const {
+    if (!d || d->removed) return false;
+    if (!ignoreVisible && !d->visible) return false;
+    if (d->maskedBy && !d->maskedBy->removed && !hitGeometry(d->maskedBy, world, true)) return false;
+    Point p = d->worldMatrix().inverse().apply(world);
+    switch (d->kind) {
+    case DisplayObject::Kind::Shape: return pointInShape(static_cast<const ShapeInstance*>(d)->current(), p);
+    case DisplayObject::Kind::Text:
+    case DisplayObject::Kind::StaticText:
+    case DisplayObject::Kind::Bitmap: return pointInRect(d->localBounds(), p);
+    case DisplayObject::Kind::Clip: {
+        const auto* mc = static_cast<const MovieClip*>(d);
+        if (mc->drawing && pointInShape(mc->drawing.get(), p)) return true;
+        // Timeline masks (clipDepth): a child masked by a layer is hit only inside the mask.
+        std::vector<const DisplayObject*> masks;
+        for (const auto& [depth, ch] : mc->children) {
+            if (ch->removed) continue;
+            if (ch->clipDepth > 0) { masks.push_back(ch.get()); continue; }
+            if (ch->usedAsMask) continue;
+            bool clipped = false;
+            for (const DisplayObject* m : masks)
+                if (depth > m->depth && depth <= m->clipDepth && !hitGeometry(m, world, true)) { clipped = true; break; }
+            if (!clipped && hitGeometry(ch.get(), world, ignoreVisible)) return true;
+        }
+        return false;
+    }
+    }
+    return false;
+}
+
+bool Player::hitTestPoint(const DisplayObject* d, float stageX, float stageY, bool shapeFlag) const {
+    Point w{stageX * 20.0f, stageY * 20.0f};
+    if (shapeFlag) return hitGeometry(d, w, true);
+    return pointInRect(d->boundsIn(d->worldMatrix()), w);
+}
+
+bool Player::isButtonClip(MovieClip* mc) {
+    if (!mc->script) return false;
+    static const char* kHandlers[] = {"onPress", "onRelease", "onReleaseOutside", "onRollOver", "onRollOut", "onDragOver", "onDragOut"};
+    for (const char* h : kHandlers) {
+        Value f = vm_->get(mc->script, h);
+        if (f.isObject() && f.o->kind == avm1::ObjKind::Function) return true;
+    }
+    return false;
+}
+
+MovieClip* Player::findButton(MovieClip* mc, const Point& world) {
+    // Topmost first: children in reverse depth order; a button clip captures its subtree (Flash 8).
+    std::vector<const DisplayObject*> masks;
+    for (const auto& [depth, ch] : mc->children) if (!ch->removed && ch->clipDepth > 0) masks.push_back(ch.get());
+    for (auto it = mc->children.rbegin(); it != mc->children.rend(); ++it) {
+        DisplayObject* ch = it->second.get();
+        if (ch->removed || !ch->visible || ch->usedAsMask || ch->clipDepth > 0 || ch->kind != DisplayObject::Kind::Clip) continue;
+        bool clipped = false;
+        for (const DisplayObject* m : masks)
+            if (it->first > m->depth && it->first <= m->clipDepth && !hitGeometry(m, world, true)) { clipped = true; break; }
+        if (clipped) continue;
+        if (ch->maskedBy && !ch->maskedBy->removed && !hitGeometry(ch->maskedBy, world, true)) continue;
+        auto* c = static_cast<MovieClip*>(ch);
+        if (isButtonClip(c)) {
+            if (!c->enabled) continue;
+            Value ha = vm_->get(c->script, "hitArea");
+            bool hit = ha.isObject() && ha.o->display ? hitGeometry(ha.o->display, world, true) : hitGeometry(c, world, false);
+            if (hit) return c;
+            continue;
+        }
+        if (MovieClip* b = findButton(c, world)) return b;
+    }
+    return nullptr;
+}
+
+void Player::callHandler(MovieClip* mc, const char* name) {
+    if (!mc || mc->removed || !mc->script) return;
+    Value f = vm_->get(mc->script, name);
+    if (!f.isObject() || f.o->kind != avm1::ObjKind::Function) return;
+    try {
+        Args none;
+        vm_->call(f, Value(mc->script), none);
+    } catch (const avm1::ScriptThrow& t) {
+        LOG_WARN("GFX %s threw: %s", name, vm_->toString(t.v).c_str());
+    }
+    drainActions();
+}
+
+void Player::broadcastMouse(const char* method, uint32_t flag, const Args& args) {
+    std::vector<Object*> ls = mouseListeners;
+    for (Object* l : ls) {
+        try {
+            vm_->callMethod(Value(l), method, args);
+        } catch (const avm1::ScriptThrow& t) {
+            LOG_WARN("GFX mouse listener threw: %s", vm_->toString(t.v).c_str());
+        }
+        drainActions();
+    }
+    if (!flag || !root_) return;
+    std::vector<MovieClip*> clips;
+    collectEnterFrame(root_, clips);
+    for (MovieClip* mc : clips) {
+        if (mc->removed) continue;
+        dispatchClipEvent(mc, method, flag);
+        drainActions();
+    }
+}
+
+void Player::updateHover() {
+    if (!root_) return;
+    MovieClip* now = mouseInside_ ? findButton(root_, {mouseX * 20.0f, mouseY * 20.0f}) : nullptr;
+    if (pressed_) {
+        // While pressed only the pressed button tracks the pointer (onDragOut / onDragOver).
+        bool over = now == pressed_;
+        if (over != pressedOver_) {
+            pressedOver_ = over;
+            callHandler(pressed_, over ? "onDragOver" : "onDragOut");
+        }
+        return;
+    }
+    if (now == hover_) return;
+    MovieClip* old = hover_;
+    hover_ = now;
+    if (old && !old->removed) callHandler(old, "onRollOut");
+    if (now) callHandler(now, "onRollOver");
+}
+
+void Player::mouseMove(float x, float y) {
+    bool moved = !mouseInside_ || x != mouseX || y != mouseY;
+    mouseX = x; mouseY = y;
+    mouseInside_ = true;
+    if (moved) broadcastMouse("onMouseMove", EvMouseMove, {});
+    updateHover();
+}
+
+void Player::mouseLeave() {
+    if (!mouseInside_) return;
+    mouseInside_ = false;
+    updateHover();
+}
+
+void Player::mouseButton(bool down) {
+    if (down == mouseDown_) return;
+    mouseDown_ = down;
+    if (down) {
+        broadcastMouse("onMouseDown", EvMouseDown, {});
+        updateHover();
+        if (hover_ && !hover_->removed) {
+            pressed_ = hover_;
+            pressedOver_ = true;
+            callHandler(pressed_, "onPress");
+        }
+        return;
+    }
+    broadcastMouse("onMouseUp", EvMouseUp, {});
+    if (pressed_) {
+        MovieClip* p = pressed_;
+        bool over = pressedOver_;
+        pressed_ = nullptr;
+        callHandler(p, over ? "onRelease" : "onReleaseOutside");
+        hover_ = over ? p : nullptr;   // recomputed below (rolls over whatever is under the pointer now)
+    }
+    updateHover();
+}
+
+void Player::mouseWheel(int delta) {
+    if (delta) broadcastMouse("onMouseWheel", 0, {Value(delta)});
+}
+
+// TextField.variable: the field shows the bound variable (path relative to the field's parent timeline, e.g.
+// "_parent.Score" from a PlayerList cell) - Flash updates it every frame.
+void Player::syncVariableText(MovieClip* mc) {
+    for (auto& [depth, ch] : mc->children) {
+        if (ch->removed) continue;
+        if (ch->kind == DisplayObject::Kind::Clip) { syncVariableText(static_cast<MovieClip*>(ch.get())); continue; }
+        if (ch->kind != DisplayObject::Kind::Text) continue;
+        auto* tf = static_cast<TextField*>(ch.get());
+        if (tf->variable.empty()) continue;
+        std::string path = tf->variable, name = path;
+        DisplayObject* target = mc;
+        size_t dot = path.find_last_of(".:/");
+        if (dot != std::string::npos) {
+            name = path.substr(dot + 1);
+            target = resolveTarget(path.substr(0, dot), mc);
+        }
+        if (!target) continue;
+        Value v = vm_->get(scriptObject(target), name);
+        if (v.isUndef()) continue;
+        std::string s = vm_->toString(v);
+        if (s == tf->variableShown) continue;
+        tf->variableShown = s;
+        if (tf->html) tf->setHtmlText(s); else tf->setPlainText(s);
+    }
+}
+
 void Player::collectEnterFrame(MovieClip* mc, std::vector<MovieClip*>& out) {
     out.push_back(mc);
     std::vector<DisplayObject*> kids;
@@ -872,6 +1105,7 @@ void Player::advance(float dt) {
     }
     advanceClip(root_);
     drainActions();
+    syncVariableText(root_);
     tickIntervals();
     processLoads();
     drainActions();

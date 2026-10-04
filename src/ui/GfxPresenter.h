@@ -31,8 +31,20 @@ public:
     bool hasLoadingMovie() const { return loading_ != nullptr; }
     float loadingSeconds() const { return loadingTime_; }
     void ownedGl(GlCensus::Owned& o) const { gl_.ownedNames(o); }
+    bool drawsCursor() const override { return cursor_ != nullptr; }
+    void setHud(bool open, bool visible) override;
+    void setScoreboard(bool open) override;
+    void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
+    void advanceLoading(float dt) override {
+        if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
+        if (cursor_) cursor_->advance(dt);
+    }
+    // Automation (clickclip:): the window position of a clip's centre in the focused movie.
+    bool clipWindowCenter(const std::string& path, int& x, int& y);
 
 private:
+    void deliverMouse(const platform::InputFrame& in);
+    gfx::Player* focusPlayer();
     GfxMovie* openMovie(const std::string& object);
     gfx::avm1::Value bridge(GfxMovie& m, const std::string& fn, gfx::avm1::Args& a);
     void fsCommand(GfxMovie& m, const std::string& cmd, const std::string& arg);
@@ -53,6 +65,23 @@ private:
     std::string loadingUrl_;
     float loadingTime_ = 0.0f;
     uint32_t prevUi_ = 0;
+    // TnUIController.MouseCursorUI (Cursor_GFX, Depth 1000000): started by Initialize, always on top [CONFIRMED].
+    std::unique_ptr<GfxMovie> cursor_;
+    std::unique_ptr<GfxMovie> hud_;           // TnHUD.HudMovie (Hud_GFX), under the UIController movies
+    bool hudVisible_ = false;
+    std::unique_ptr<GfxMovie> scoreboard_;
+    // Movies a movie opens itself (Self.OpenMovieWithPath(path, CaptureInput, CaptureFocus), e.g. Brightness_GFX ->
+    // CalibrationImage_GFX): drawn above their opener; with CaptureFocus they take the keys.
+    struct Extra { std::string object; std::unique_ptr<GfxMovie> movie; bool focus = false; };
+    std::vector<Extra> extras_;
+    std::vector<std::string> deferredErase_;    // TnHUD.ScoreboardMovie (InGameStats_GFX), above the HUD, with focus
+    bool shapesStale_ = false;                // a movie was destroyed since the last draw
+    // Engine -> AS invokes made after the AS call that caused them returns (UnrealScript OwnerMovie.Invoke).
+    struct Deferred { std::string movie, fn; gfx::avm1::Args args; };
+    std::vector<Deferred> deferred_;
+    int viewW_ = 1280, viewH_ = 720;          // last drawn window size (pointer -> stage mapping)
+    bool prevMouseLeft_ = false;
+    gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
     std::vector<gfx::Player::RenderItem> items_;
 };
 

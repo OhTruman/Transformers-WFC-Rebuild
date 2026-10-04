@@ -39,6 +39,12 @@ std::string DataStores::read(const std::string& markup, bool* known) {
         if (markup == "<PlayerOwner:TimeToRespawn>") return std::to_string((int)std::ceil(std::max(0.0f, mv.timeToRespawn)));
     }
     if (markup == "<CurrentGame:GameModeTag>" || markup == "<CurrentGame:MapCompatibilityTag>") return tag;
+    // TnVersusGameOverMessage -> GRI.SetGameOverMessage, read by EndGameStats_GFX [RE A5, CONFIRMED]; Gameplay's result.
+    if (markup == "<CurrentGame:GameOverMessage>") return flow_.matchValues().gameOverMessage;
+    if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
+        std::string field = markup.substr(30, markup.size() - 31);
+        if (LocalProfile::isOriginalField(field)) return flow_.profile().get(field);
+    }
     if (markup == "<CurrentGame:GameModeFriendlyName>") return tag.empty() ? "" : cat_.modeFriendlyName(tag);
     if (markup == "<CurrentGame:GameModeFriendlyDescription>") return tag.empty() ? "" : cat_.localize("TransGame", "TnOnlineGameSettings" + tag, "Description");
     if (markup == "<CurrentGame:GameModeFriendlyRules>") {
@@ -124,6 +130,20 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         std::string teamName = team == 0 ? cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName")
                              : team == 1 ? cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName") : "";
         // A fresh profile is level 1 in every specialty (no XP / progression service yet) [PARTIAL].
+        auto teamNameOf = [&](int t) {
+            return t == 0 ? cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName")
+                 : t == 1 ? cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName") : std::string();
+        };
+        if (live && !mv.players.empty()) {
+            // Gameplay's match roster (local player first as in GRI order of joining).
+            for (const MatchValues::Player& p : mv.players) {
+                c.rows.push_back({p.local ? playerName() : p.name, std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score),
+                                  std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0",
+                                  "0", "", "0", "0", "0", "", "", "1", "1", "1", "1", "1"});
+                c.enabled.push_back(true);
+            }
+            return true;
+        }
         c.rows.push_back({playerName(), std::to_string(team), teamName, std::to_string(live ? mv.score : 0),
                           std::to_string(live ? mv.kills : 0), std::to_string(live ? mv.deaths : 0), live && mv.dead ? "1" : "0",
                           "0", "", "0", "0", "0", "", "", "1", "1", "1", "1", "1"});
@@ -155,10 +175,42 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         return true;
     }
     if (markup == "<TnMenuItems:Playlists>") {
-        c.columns = {"PlaylistId", "FriendlyName", "GameModeTag", "OnlinePlayers"};
+        // DisplayName: what PartyLobby_GFX's playlist list reads (same localized playlist name).
+        c.columns = {"PlaylistId", "FriendlyName", "GameModeTag", "OnlinePlayers", "DisplayName"};
         for (const Playlist& p : cat_.playlists()) {
             if (!p.visibleInMenu) continue;
-            c.rows.push_back({std::to_string(p.id), p.displayName, p.tag, "0"});
+            c.rows.push_back({std::to_string(p.id), p.displayName, p.tag, "0", p.displayName});
+            c.enabled.push_back(true);
+        }
+        return true;
+    }
+    // TnMenuItems provider collections from the authored TnDataProvider objects (Catalog::providers), columns = every
+    // authored / localized field.
+    {
+        static const std::map<std::string, std::string> kKinds = {{"<TnMenuItems:Weapons>", "Weapon"}, {"<TnMenuItems:Abilities>", "Ability"},
+                                                                 {"<TnMenuItems:Skills>", "Skill"}, {"<TnMenuItems:Chassis>", "Chassis"},
+                                                                 {"<TnMenuItems:Killstreaks>", "Killstreak"},
+                                                                 {"<TnMenuItems:Challenges>", "Challenge"}};   // TransChallenges.ini (local content; progress needs the stats service)
+        auto k = kKinds.find(markup);
+        if (k != kKinds.end()) {
+            const auto& list = cat_.providers(k->second);
+            for (const auto& p : list)
+                for (const auto& f : p.fields)
+                    if (std::find(c.columns.begin(), c.columns.end(), f.first) == c.columns.end()) c.columns.push_back(f.first);
+            for (const auto& p : list) {
+                std::vector<std::string> row;
+                for (const std::string& col : c.columns) row.push_back(p.get(col));
+                c.rows.push_back(row);
+                c.enabled.push_back(true);
+            }
+            return true;
+        }
+    }
+    if (markup == "<TnMenuItems:Specialties>") {
+        // TnDataProvider_Specialty providers, TransCustomization.ini order; names from TransGame.int [CONFIRMED].
+        c.columns = {"UniqueId", "FriendlyName"};
+        for (const char* id : {"Soldier", "Leader", "Scientist", "Scout"}) {
+            c.rows.push_back({id, cat_.localize("TransGame", std::string(id) + " TnDataProvider_Specialty", "FriendlyName")});
             c.enabled.push_back(true);
         }
         return true;
@@ -180,10 +232,7 @@ void DataStores::forgetMovie(const std::string& movie) {
     for (size_t i = regs_.size(); i-- > 0;) if (regs_[i].movie == movie) regs_.erase(regs_.begin() + (long)i);
 }
 
-std::string DataStores::playerName() const {
-    const char* n = std::getenv("WFC_PLAYERNAME");
-    return n ? n : "Player";
-}
+std::string DataStores::playerName() const { return flow_.profile().playerName(); }   // LocalProfile identity
 
 BridgeValue DataStores::call(const std::string& fn, const std::vector<std::string>& args, const std::string& movie) {
     auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
@@ -199,6 +248,11 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         std::string v = read(m, &known);
         if (!known) FlowTrace::emit("datastore.unhandled", {{"fn", fn}, {"markup", m}});
         return BridgeValue(v == "1" || v == "true" || v == "True");
+    }
+    // <OnlinePlayerData:ProfileData.Field>: the local profile (LocalProfile; original fields and defaults).
+    if (fn == "WriteValue" && m.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && m.size() > 31) {
+        flow_.profile().set(m.substr(30, m.size() - 31), arg(1));
+        return {};
     }
     if (fn == "WriteValue" && m.rfind("<TnGameSettings:", 0) == 0 && m.size() > 17 &&
         flow_.setSettingValue(m.substr(16, m.size() - 17), arg(1))) return {};

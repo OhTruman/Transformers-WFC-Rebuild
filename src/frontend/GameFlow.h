@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "frontend/Catalog.h"
+#include "frontend/Profile.h"
 #include "frontend/UIController.h"
 #include "frontend/Bridge.h"
 #include "frontend/Url.h"
@@ -56,6 +57,10 @@ struct MatchValues {
     int score = 0, kills = 0, deaths = 0;
     bool dead = false;
     float timeToRespawn = -1.0f;   // <PlayerOwner:TimeToRespawn>
+    std::string gameOverMessage;   // <CurrentGame:GameOverMessage> ("Your team won" / "Your team lost" / "Tie game")
+    // Every PRI of the match (GRI.PRIArray): <CurrentGame:Players> rows for the scoreboard / player lists.
+    struct Player { std::string name; int team = -1; int score = 0, kills = 0, deaths = 0; bool dead = false, local = false; };
+    std::vector<Player> players;
 };
 
 struct MatchLaunch {
@@ -115,6 +120,11 @@ public:
     void matchLoadFailed(const std::string& why);
     void onUIEvent(int code) { ui_.onUIEvent(code); }
     void characterSelected() { ui_.onCharacterSelected(false); }   // TnUIControllerMultiplayer.OnCharacterSelected
+    // TnPlayerController.SelectCharacter(name, type 0 custom / 1 iconic) -> PRI._SelectedCharacter; Gameplay spawns the
+    // chassis of the player's team from it (GetResolvedCharacterFaction = TeamNum).
+    struct SelectedCharacter { std::string name; int type = 0; std::string chassis[2]; std::string specialty; bool valid = false; };
+    void selectCharacter(const SelectedCharacter& c);
+    const SelectedCharacter& selectedCharacter() const { return selected_; }
     void showMenu();                                // TnPlayerController.ShowMenu (Escape / Start release)
     // [integration] Gameplay MatchOver -> 15 s -> TnGame.ReturnToGameLobby: ServerTravel to the game lobby
     // (UI_Lobby_m?...?MapId=<map>) [RE M05 blockers F4 / F6].
@@ -136,11 +146,14 @@ public:
     const MatchLaunch& currentMatch() const { return match_; }
     // Kismet-driven frontend presentation (UI_FrontEnd_m Main_Sequence).
     const std::string& kismetMovie() const { return kismetMovie_; }        // SeqAct_MoviePlayer currently playing
+    const std::vector<std::string>& queuedMovies() const { return movieQueue_; }   // the chain still to play
     const std::vector<std::string>& openMovies() const { return openMovies_; }   // GFxAction_OpenMovie / OpenUI
     bool frontEndStarted() const { return frontEndStarted_; }
     // Level Kismet triggers the frontend owns, in order ("FsCommand:<cmd>", "MovieStopped:<movie>").
     const std::vector<std::string>& kismetTriggers() const { return kismetTriggers_; }
     bool hasWatchedIntroMovie() const { return watchedIntro_; }
+    LocalProfile& profile() { return profile_; }
+    const LocalProfile& profile() const { return profile_; }
     std::string stateSummary() const;
     // SettingsDataStore (TnDataStore_GameSettings): the current settings object and its host-option values. Values
     // persist per settings class for the session, as the data store's settings objects do [HIGH].
@@ -203,6 +216,8 @@ private:
     LobbyState lobby_;
     const GameSettings* currentSettings_ = nullptr;   // SettingsDataStore current (EditGameMode / PlayPrivateGame)
     MatchValues matchValues_;
+    LocalProfile profile_;
+    SelectedCharacter selected_;
     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;
@@ -214,6 +229,7 @@ private:
     std::string kismetMovie_;
     std::vector<std::string> openMovies_;
     bool frontEndStarted_ = false, watchedIntro_ = false, pendingWatchedWrite_ = false;
+    bool startScreenPassed_ = false;   // controller / profile / storage assigned (ShowDeviceSelectionUI)
     float blackOutTimer_ = -1.0f;
 };
 

@@ -211,7 +211,10 @@ public:
     std::map<std::string, Object*> registeredClasses;
 
     int swfVersion = 8;
-    std::string versionString = "XBOX360 8,0,0,0";   // $version (HmUtility.Platform reads the prefix)
+    // $version: HmUtility.Platform reads the prefix (XBOX360 / PS3 / WIN) and the movies branch on it. Set by the
+    // host before players are created (defaultVersionString).
+    static std::string defaultVersionString;
+    std::string versionString = defaultVersionString;
     bool traceEnabled = true;
     long long instructions = 0;
 

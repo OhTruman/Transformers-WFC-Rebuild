@@ -22,6 +22,8 @@ bool Object::removeOwn(const std::string& k) {
     return true;
 }
 
+std::string VM::defaultVersionString = "XBOX360 8,0,0,0";
+
 VM::VM(gfx::Player* player) : player_(player) {
     installBuiltins();
     installDisplayBuiltins();

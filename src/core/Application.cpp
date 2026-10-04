@@ -6,6 +6,7 @@
 #include "render/Renderer.h"
 #include "game/VehicleTests.h"
 #include "frontend/FrontendRuntime.h"
+#include "ui/GfxPresenter.h"
 #include "game/MapState.h"
 #include "game/Match.h"
 #include "game/Collision.h"
@@ -182,11 +183,17 @@ Application::MatchExit Application::runMatch() {
             if (frontend_->flow().quitRequested()) break;
             if (frontend_->flow().wantsWorldUnload()) return MatchExit::ReturnToFrontend;
             // A movie with focus (pause, end game) takes the input; the MP world keeps running (bPauseable false).
-            if (frontend_->flow().ui().state() != frontend::UIState::InGame) {
+            if (frontend_->flow().ui().state() != frontend::UIState::InGame || frontend_->scoreboardOpen()) {
                 platform::InputFrame none;
                 input = none;
                 if (mouseCaptured_) { mouseCaptured_ = false; window_->setMouseCaptured(false); }
+                uiReleasedMouse_ = true;
+            } else if (uiReleasedMouse_) {
+                // The menu closed (Resume / respawn): mouse-look again.
+                uiReleasedMouse_ = false;
+                if (!mouseCaptured_) { mouseCaptured_ = true; window_->setMouseCaptured(true); }
             }
+            window_->setOsCursorHidden(presenter_ && presenter_->drawsCursor());
         } else if (input.wasPressed(platform::Button::Quit)) break;
 
         if (autoWalk) input.down[(int)platform::Button::Forward] = true;  // scripted move for tests

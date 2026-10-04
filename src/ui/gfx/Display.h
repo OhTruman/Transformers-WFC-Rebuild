@@ -123,6 +123,7 @@ public:
     std::string textAutoSize = "none";        // GFx extension (shrink / fit)
     RGBA borderColor{0, 0, 0, 255}, backgroundColor{255, 255, 255, 255};
     std::string variable;
+    std::string variableShown;                // last value displayed from the variable binding
     int maxChars = 0;
     // Content: plain characters with a per-character format.
     std::u16string chars;
@@ -197,6 +198,17 @@ public:
     void advance(float dt);
     // Key events (Flash key codes) to Key listeners / Key.isDown.
     void keyEvent(int keyCode, bool down);
+    // Mouse (stage pixels). Flash 8 button semantics: the topmost visible, enabled clip with a button handler
+    // (onPress / onRelease / onReleaseOutside / onRollOver / onRollOut / onDragOver / onDragOut, own or inherited)
+    // whose geometry (or hitArea) contains the pointer receives the button events; Mouse listeners and clip
+    // onMouseMove / onMouseDown / onMouseUp handlers receive every event.
+    void mouseMove(float x, float y);
+    void mouseButton(bool down);
+    void mouseWheel(int delta);
+    void mouseLeave();                        // pointer left the stage (no hover)
+    float mouseX = 0, mouseY = 0;             // stage pixels; AS _xmouse / _ymouse are derived per clip
+    MovieClip* hoverButton() const { return hover_; }
+    bool hitTestPoint(const DisplayObject* d, float stageX, float stageY, bool shapeFlag) const;   // stage pixels
     double timeMs() const { return timeMs_; }
 
     // Character instantiation.
@@ -277,6 +289,18 @@ private:
     void tickIntervals();
     void processLoads();
     void unloadClip(DisplayObject* d);
+
+    bool hitGeometry(const DisplayObject* d, const Point& world, bool ignoreVisible) const;   // world = stage twips
+    MovieClip* findButton(MovieClip* mc, const Point& world);
+    bool isButtonClip(MovieClip* mc);
+    void callHandler(MovieClip* mc, const char* name);
+    void broadcastMouse(const char* method, uint32_t clipEventFlag, const avm1::Args& args);
+    void updateHover();
+    void syncVariableText(MovieClip* mc);
+    MovieClip* hover_ = nullptr;              // button under the pointer (not pressed)
+    MovieClip* pressed_ = nullptr;            // button that received onPress
+    bool pressedOver_ = false;
+    bool mouseDown_ = false, mouseInside_ = false;
 
     std::unique_ptr<avm1::VM> vm_;
     std::map<std::string, std::shared_ptr<MovieDef>> defs_;

@@ -22,20 +22,6 @@ const char* const kIntroMovies[] = {"Logo_Activision", "Logo_Hasbro", "Logo_High
 constexpr int kShortCountdown = 10;          // BeginShortCountdown (private, host started)
 constexpr int kLobbyIntermissionTime = 45;   // BeginIntermissionCountdown (public autostart)
 
-// Persisted profile flag (Game.SetHasWatchedIntroMovie). The original stores it in the player profile.
-constexpr const char* kProfileFile = "wfc_profile.ini";
-
-bool readWatchedIntro() {
-    std::ifstream f(kProfileFile);
-    std::string line;
-    while (std::getline(f, line)) if (line == "HasWatchedIntroMovie=1") return true;
-    return false;
-}
-void writeWatchedIntro() {
-    std::ofstream f(kProfileFile);
-    f << "HasWatchedIntroMovie=1\n";
-}
-
 std::string lowerStr(std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; }
 
 LevelKind levelForUrl(const Url& u) {
@@ -63,7 +49,8 @@ bool GameFlow::init(const Catalog& catalog, const Options& opt) {
     cat_ = &catalog;
     opt_ = opt;
     rng_.seed(opt.seed ? opt.seed : (unsigned)std::chrono::steady_clock::now().time_since_epoch().count());
-    watchedIntro_ = opt.skipIntroMovies || readWatchedIntro();
+    profile_.load();
+    watchedIntro_ = opt.skipIntroMovies || profile_.watchedIntro;
     FlowTrace::emit("boot", {{"map", kFrontEndMap}, {"watchedIntro", FlowTrace::boolean(watchedIntro_)},
                              {"seed", std::to_string(opt.seed)}});
     // Engine boot: [URL] Map=UI_FrontEnd_m. The initial startup movie ([LoadingMovie] InitialStartupFileName
@@ -250,7 +237,7 @@ void GameFlow::closeMovie(const std::string& movie) {
 
 void GameFlow::fsCommand(const std::string& movie, const std::string& cmd, const std::string& arg) {
     FlowTrace::emit("fscommand", {{"movie", movie}, {"cmd", cmd}, {"arg", arg}});
-    if (cmd != "enterFrontEnd") kismetTriggers_.push_back("FsCommand:" + cmd);
+    kismetTriggers_.push_back("FsCommand:" + cmd);
     if (cmd == "enterMovieSequence") {
         // -> RemoteEvent closeMovieLoader (GFxAction_CloseMovie), then Logo_Activision -> Logo_Hasbro -> Logo_HighMoon
         // -> FMV_intro, each started by the previous one's Stopped output -> [FRONTEND START].
@@ -298,7 +285,8 @@ void GameFlow::frontEndStart() {
     // SeqAct_InstallGame (Finished) -> 3 x SetMatInstScalarParam (Energon DownScaleUVs 12, ring Opacity).
     if (pendingWatchedWrite_) {
         pendingWatchedWrite_ = false;
-        if (!watchedIntro_) { watchedIntro_ = true; writeWatchedIntro(); }
+        // Game.SetHasWatchedIntroMovie: stored in the player profile (LocalProfile).
+        if (!profile_.watchedIntro) { watchedIntro_ = true; profile_.watchedIntro = true; profile_.save(); }
         FlowTrace::emit("profile", {{"HasWatchedIntroMovie", "true"}});
     }
 }
@@ -319,14 +307,21 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
 
     // ---- TnGameActionScriptBinding ----
     if (fn == "Game.HasWatchedIntroMovie") return watchedIntro_;
+    // Settings: the movie wrote the <OnlinePlayerData:ProfileData.*> fields; apply / save pushes them to their owners
+    // and persists the profile (TnProfileSettings) [CONFIRMED call names].
+    if (fn == "Game.ApplyProfileSettings" || fn == "Console.SaveProfileSettings") { profile_.apply(); return true; }
     if (fn == "Game.QuitToMainMenu") { quitToMainMenu(); return {}; }
     if (fn == "Game.ExitGame") { quit_ = true; FlowTrace::emit("exit", {}); return {}; }
 
     // ---- TnOnlineActionScriptBinding ----
     if (fn == "Online.CheckCanPlayOnlineModes" || fn == "Online.CanPlayOnlineModes") return true;   // no profile gate offline
     if (fn == "Online.CheckIsProfileReady" || fn == "Online.IsProfileReady") return true;
-    if (fn == "Online.ShouldShowStartScreen") return true;   // PARTIAL: native profile/sign-in check
-    if (fn == "Online.ShowDeviceSelectionUI") return {};        // [online - bypassed] storage device UI (360)
+    // TnOnlineActionScriptBinding.ShouldShowStartScreen [CONFIRMED script]: true while the player is not signed in, has
+    // no assigned controller or no storage device. Press START (mc_menuPressStart) calls ShowDeviceSelectionUI, which
+    // assigns all three; afterwards every return to UI_FrontEnd_m goes straight to the main menu. The offline rebuild
+    // has one local profile, so "signed in" = Press START passed once this session [HIGH].
+    if (fn == "Online.ShouldShowStartScreen") return !startScreenPassed_;
+    if (fn == "Online.ShowDeviceSelectionUI") { startScreenPassed_ = true; return {}; }   // device / profile UI (360): bypassed
     if (fn == "Online.OpenPartyLobby") {
         // StringToGameTeamStatus: FFA 1, SingleTeam 2, Team 3, Campaign 4, default 3 [CONFIRMED script].
         std::string s = arg(0);
@@ -490,6 +485,15 @@ void GameFlow::returnToGameLobby() {
     u.addFlag("listen");
     FlowTrace::emit("match.returnToLobby", {{"url", u.toString()}});
     travel(u.toString(), true);
+}
+
+void GameFlow::selectCharacter(const SelectedCharacter& c) {
+    selected_ = c;
+    selected_.valid = true;
+    FlowTrace::emit("character.selected", {{"name", c.name}, {"type", std::to_string(c.type)}, {"specialty", c.specialty},
+                                           {"autobot", c.chassis[0]}, {"decepticon", c.chassis[1]}});
+    // In the match, the pre-game screen follows (OnCharacterSelected -> GameStartUI); spawn waits for the selection.
+    if (level_ == LevelKind::Match) characterSelected();
 }
 
 void GameFlow::quitToMainMenu() {

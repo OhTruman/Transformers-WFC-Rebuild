@@ -2,6 +2,8 @@
 // The flow itself (levels, lobbies, URLs, UI controller) is src/frontend/GameFlow; this file only owns the
 // process loop: frontend frames, loading the match world the flow launches, and releasing it on return.
 #include "core/Application.h"
+#include "core/FrontendSceneGL.h"
+#include "core/LoadYield.h"
 #include "core/Log.h"
 #include "core/Time.h"
 #include "frontend/FlowTrace.h"
@@ -35,7 +37,22 @@
 namespace {
 struct SystemsFrontendAudio final : frontend::IFrontendAudio {
     game::FrontendAudioRuntime rt;
-    explicit SystemsFrontendAudio(audio::IAudio* a) : rt(a) {}
+    audio::IAudio* device;
+    audio::Sound movieSound = audio::kInvalidSound;
+    explicit SystemsFrontendAudio(audio::IAudio* a) : rt(a), device(a) {}
+    // Movie audio on the Systems device: one 2D, dry voice of the folded movie track (not a cue: the native movie
+    // player owns Bink audio; CINE_MUTE_FOR_BINK ducks the game categories around it).
+    int playMovieAudio(const std::string& wav) override {
+        movieSound = device->load(wav);
+        if (movieSound == audio::kInvalidSound) return -1;
+        audio::VoiceParams p;
+        p.volume = 1.0f; p.spatial = 1; p.wet = false; p.priority = 0;
+        return device->playVoice(movieSound, p);
+    }
+    void stopMovieAudio(int v) override {
+        device->stopVoice(v);
+        if (movieSound != audio::kInvalidSound) { device->release(movieSound); movieSound = audio::kInvalidSound; }
+    }
     int playUiSound(const std::string& n) override { return rt.playUiSound(n); }
     bool stopUiSound(const std::string& n, float f) override { return rt.stopUiSound(n, f); }
     void uiLevelStarted(const std::string& l) override { rt.uiLevelStarted(l); }
@@ -52,6 +69,28 @@ namespace core {
 
 namespace {
 std::unique_ptr<frontend::IFrontendAudio> g_frontendAudio;
+std::unique_ptr<FrontendSceneGL> g_scene;   // the live level under the menus (interim IRenderer presentation)
+
+// The original Brightness setting -> DisplayGamma: HmProfileSettings.GetGammaSetting [CONFIRMED decompile, via Rendering]
+// DisplayGamma = 2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting / 100, 0, 1)) (1.25 .. 3.15, default 50 -> 2.2), published
+// to the renderer's IRenderer::setDisplayGamma (agents/rendering 0653bb6) when this tree has it.
+template <class R> void applyGamma(R* r, int gammaSetting) {
+    float g = std::max(0.0f, std::min(1.0f, gammaSetting / 100.0f));
+    float display = 2.2f + (-0.95f + 1.9f * g);
+    if constexpr (HasDisplayGamma<R>::value) r->setDisplayGamma(display);
+    else (void)r;
+    frontend::FlowTrace::emit("settings.gamma", {{"GammaSetting", std::to_string(gammaSetting)}, {"DisplayGamma", frontend::FlowTrace::num(display)},
+                                                 {"owner", HasDisplayGamma<R>::value ? "IRenderer::setDisplayGamma" : "none in this tree"}});
+}
+
+// Rendering's own bounded load-step callback (agents/rendering IRenderer::setLoadYield) when this tree's IRenderer has
+// it: the loading frames then also come from inside loadMapRenderData's steps.
+template <class R> void setRendererYield(R* r, bool on) {
+    if constexpr (HasLoadYield<R>::value) {
+        if (on) r->setLoadYield([] { core::loadYield("Render: load step"); });
+        else r->setLoadYield(std::function<void()>());
+    } else { (void)r; (void)on; }
+}
 // Process memory for the cycle soak (Experimental: leaks across frontend <-> match).
 ui::GlCensus g_census;   // GL objects created by a match (released on travel away; stopgap, see GlCensus.h)
 
@@ -89,11 +128,49 @@ void Application::attachPresenter() {
     presenter_ = p.get();
     frontend_->setPresenter(std::move(p));
     frontend_->setMoviePlayerFactory([] { return platform::createMoviePlayer(); });
+    // PCSettings -> the platform window; the saved display settings apply at boot.
+    frontend::FrontendRuntime::DisplayHooks dh;
+    dh.modes = [this] {
+        std::vector<std::pair<int, int>> v;
+        for (const auto& m : window_->displayModes()) v.push_back({m.width, m.height});
+        return v;
+    };
+    dh.apply = [this](int w, int h, bool fs) { window_->setDisplayMode(w, h, fs); };
+    dh.vsync = [this](bool on) { window_->setVSync(on); };
+    frontend_->setDisplayHooks(dh);
+    {
+        const auto& d = frontend_->flow().profile().display;
+        if (d.fullscreen || d.width != window_->width() || d.height != window_->height()) window_->setDisplayMode(d.width, d.height, d.fullscreen);
+        window_->setVSync(d.vsync);
+    }
+    // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
+    // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
+    // and reported here so the owners can consume LocalProfile when they add the entry points.
+    applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
+    frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
+        applyGamma(renderer_, p.getInt("GammaSetting"));
+        frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},
+                                                    {"MusicVolume", p.get("Music Volume")}, {"CameraSensitivity", p.get("CameraSensitivity")},
+                                                    {"InvertY_Robot", p.get("InvertY_Robot")}, {"Vibration", p.get("Controller Vibration")},
+                                                    {"owners", "pending: Systems volumes, Gameplay camera; gamma -> renderer"}});
+    };
+    if (!std::getenv("WFC_NO_FRONTEND_SCENE")) {
+        g_scene = std::make_unique<FrontendSceneGL>(renderer_);
+        frontend_->setSceneRenderer(g_scene.get());
+    }
+    // Logical UI bindings: defaults (the console presentation also binds Space to Start) + wfc_input.ini overrides.
+    platform::UiBindings b = platform::UiBindings::defaults(!frontend_->isPC());
+    bool ini = b.loadIni("wfc_input.ini");
+    window_->setUiBindings(b);
+    frontend::FlowTrace::emit("input.bindings", {{"sku", frontend_->platform()}, {"ini", frontend::FlowTrace::boolean(ini)}});
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
     if (audio_) { g_frontendAudio = std::make_unique<SystemsFrontendAudio>(audio_); frontend_->setAudio(g_frontendAudio.get()); }
 #endif
     frontend_->script().keyHook = [this](int code, bool down) { if (presenter_) presenter_->injectKey(code, down); };
     frontend_->script().shotHook = [this](const std::string& f) { pendingShot_ = f; };
+    frontend_->script().clipHook = [this](const std::string& path, int& x, int& y) {
+        return presenter_ && presenter_->clipWindowCenter(path, x, y);
+    };
     frontend_->script().dumpHook = [this](const std::string& m) {
         for (const std::string& o : presenter_->openMovieObjects())
             if (o.find(m) != std::string::npos) LOG_INFO("GFX DUMP %s\n%s", o.c_str(), presenter_->dumpMovie(o).c_str());
@@ -101,13 +178,15 @@ void Application::attachPresenter() {
 }
 
 void Application::shutdownFrontend() {
-    if (frontend_) frontend_->setAudio(nullptr);
+    if (frontend_) { frontend_->setAudio(nullptr); frontend_->setSceneRenderer(nullptr); }
+    g_scene.reset();
     g_frontendAudio.reset();
     presenter_ = nullptr;
     frontend_.reset();
 }
 
 void Application::drawFrontendFrame() {
+    window_->setOsCursorHidden(presenter_ && presenter_->drawsCursor());
     ui::beginScreenFrame(window_->width(), window_->height());
     frontend_->draw(window_->width(), window_->height());
     if (!pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }
@@ -162,7 +241,18 @@ void Application::runFrontend() {
         // character select -> PreGameCountdown during PendingMatch -> UI event 3 at InProgress. No character select screen
         // exists yet, so the default character is selected now (OnCharacterSelected, bMatchHasBegun false -> GameStartUI);
         // routeMatchToFrontend() sends UI event 3 when Gameplay's MatchStarted arrives.
-        flow.characterSelected();
+        // WaitingOnGameStart opens CustomTransformers_GFX ("Choose Character"); the player's Customize.SelectCharacter
+        // continues to the pre-game screen [RE MILESTONE05_PLAYTEST_RE section 7, CONFIRMED]. Automation (scripted
+        // frontend runs, the lifecycle driver) selects the first default character instead unless WFC_CHARSELECT=1.
+        bool automated = std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_FRONTEND_AUTOPLAY") || std::getenv("WFC_LIFECYCLE");
+        if (automated && !std::getenv("WFC_CHARSELECT")) {
+            frontend::GameFlow::SelectedCharacter sc;
+            if (!frontend_->roster().customCharacters().empty()) {
+                const auto& p = frontend_->roster().customCharacters().front();
+                sc.name = p.name; sc.specialty = p.specialty; sc.chassis[0] = p.chassis[0]; sc.chassis[1] = p.chassis[1];
+            }
+            flow.selectCharacter(sc);
+        }
         localDeadForUi_ = spectatingUi_ = false;
         localDeadTime_ = 0.0f;
         window_->setMouseCaptured(true);
@@ -186,8 +276,32 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     if (!modeOk) { LOG_WARN("FLOW match mode %s is not supported by Gameplay", m.modeTag.c_str()); return false; }
     LOG_INFO("FLOW loading match world: map dir %s, mode %s", m.map->runtimeDir.c_str(), m.modeTag.c_str());
     double t0 = nowSeconds();
+    if (g_scene) {   // the frontend scene's render data and GL objects go before the match map loads
+        ui::GlCensus::Owned keep;
+        if (presenter_) presenter_->ownedGl(keep);
+        frontend::FlowTrace::emit("scene.release", {{"released", g_scene->release(keep)}});
+    }
     g_census.begin();
+    // The loading screen keeps presenting during the synchronous load (core::loadYield): window messages, the
+    // LoadScreen_GFX animation and the TF_LoadingScreen underlay, one frame per yield.
+    core::resetLoadYieldStats();
+    core::setLoadYield([this](double dt) {
+        platform::InputFrame in;
+        window_->pump(in);   // a close request stays pending and ends the frontend loop after the load
+        frontend_->updateLoading((float)std::min(dt, 0.1));
+        // Validation: WFC_LOADSHOTS=<prefix> captures loading frames 10 / 60 / 120 from inside the load.
+        static const char* shots = std::getenv("WFC_LOADSHOTS");
+        static int n = 0;
+        if (shots && (++n == 10 || n == 60 || n == 120)) pendingShot_ = std::string(shots) + std::to_string(n) + ".bmp";
+        drawFrontendFrame();
+    });
+    struct YieldGuard {
+        render::IRenderer* r;
+        ~YieldGuard() { core::setLoadYield(nullptr); setRendererYield(r, false); }
+    } yieldGuard{renderer_};   // also on the failure returns
+    setRendererYield(renderer_, true);
     world_.load(*renderer_);
+    core::loadYield("Application.loadMatch: world loaded");
     if (!world_.usingSlice()) { LOG_WARN("FLOW match world failed to load (graybox fallback)"); return false; }
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
     // Systems level-audio contract: no hard-wired slice audio; the selected map's audio.
@@ -198,6 +312,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
                                                       {"levelCues", std::to_string(as.levelCues)}, {"pcmMB", frontend::FlowTrace::num(as.pcmMB)}});
     }
     world_.loadMapAudio(m.map->runtimeDir);
+    core::loadYield("Application.loadMatch: map audio loaded");
     {   // [integration] soak evidence: Systems audio state with the selected map loaded
         const auto as = world_.audioState();
         frontend::FlowTrace::emit("audio.loaded", {{"level", as.level}, {"instances", std::to_string(as.instances)}, {"voices", std::to_string(as.voices)},
@@ -235,8 +350,12 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
         matchClock_ = 0.0f; lastLoggedRemaining_ = -1; deathAt_.clear();
     }
     gameMode_.begin(world_);
+    core::setLoadYield(nullptr);
+    const core::LoadYieldStats ys = core::loadYieldStats();
     frontend::FlowTrace::emit("match.loaded", {{"map", m.map->runtimeDir}, {"mode", m.modeTag},
-                                               {"seconds", frontend::FlowTrace::num(nowSeconds() - t0)}, {"privateMB", processMemoryMB()}});
+                                               {"seconds", frontend::FlowTrace::num(nowSeconds() - t0)}, {"privateMB", processMemoryMB()},
+                                               {"loadingFrames", std::to_string(ys.frames)},
+                                               {"maxFrameGapMs", frontend::FlowTrace::num(ys.maxGapMs)}, {"maxGapAt", ys.maxGapAt}});
     return true;
 }
 
@@ -256,6 +375,8 @@ void Application::routeMatchToFrontend(float dt) {
         case game::MatchEvent::Type::MatchStarted:
             // InProgress.BeginState -> SendUIEventToControllers(3) (the character was selected at load, in PendingMatch).
             flow.onUIEvent((int)frontend::UIEvent::BeginGame);
+            // TnGameTypeMessage switch 0: HUD GameAnnouncement with the mode name [RE A5, CONFIRMED].
+            frontend_->hud().announce(frontend_->catalog().modeFriendlyName(match.settings().modeTag));
             frontend::FlowTrace::emit("match.started", {});
             break;
         case game::MatchEvent::Type::PlayerKilled:
@@ -270,6 +391,20 @@ void Application::routeMatchToFrontend(float dt) {
                 }
                 LOG_INFO("MATCH death player=%d pos=%.1f,%.1f,%.1f", e.player, dp.x, dp.y, dp.z);
                 deathAt_[e.player] = matchClock_;
+            }
+            {   // HUD kill feed (TnDeathMessage -> _global.GameMessage). The damage type is not in Gameplay's event yet:
+                // the base [TnDamageType] template is used [PARTIAL, Gameplay handoff].
+                frontend::HudKill k;
+                auto nameOf = [&](int p) {
+                    if (p == me) return frontend_->flow().profile().playerName();   // the local identity
+                    return p >= 0 && (size_t)p < match.players().size() ? match.players()[(size_t)p].name : std::string();
+                };
+                k.victim = nameOf(e.player); k.killer = nameOf(e.other);
+                k.victimTeam = teamOf(e.player); k.killerTeam = teamOf(e.other);
+                k.victimLocal = e.player == me; k.killerLocal = e.other == me;
+                k.suicide = e.text == "suicide" || e.other == e.player || e.other < 0;
+                k.environment = e.text == "environment";
+                frontend_->hud().addKill(k, teamOf(me));
             }
             if (e.player == me) { localDeadForUi_ = true; spectatingUi_ = false; localDeadTime_ = 0.0f; }
             break;
@@ -326,7 +461,34 @@ void Application::routeMatchToFrontend(float dt) {
     v.score = h.score; v.kills = h.kills; v.deaths = h.deaths;
     v.dead = !h.alive;
     v.timeToRespawn = h.timeToRespawn;
+    v.gameOverMessage = h.result;
+    for (size_t i = 0; i < match.players().size(); ++i) {
+        const auto& mp = match.players()[i];
+        frontend::MatchValues::Player p;
+        p.name = mp.name; p.team = mp.team == 255 ? -1 : mp.team; p.score = mp.score; p.kills = mp.kills; p.deaths = mp.deaths;
+        p.dead = !mp.alive; p.local = (int)i == me;
+        v.players.push_back(p);
+    }
     flow.setMatchValues(v);
+    // HUD movie values (TnHUD data observers), Gameplay authoritative.
+    frontend::HudFrame hf;
+    hf.valid = h.matchActive;
+    hf.alive = h.alive;
+    hf.totalSegments = h.segmentCount;
+    if (h.activeSegment >= h.segmentCount) { hf.fullSegments = h.segmentCount; hf.currentSegment = 1.0; }
+    else {
+        const auto& hp = world_.player().pawn().health();
+        float bottom = h.activeSegment > 0 ? hp.segmentTop(h.activeSegment - 1) : 0.0f, top = hp.segmentTop(h.activeSegment);
+        hf.fullSegments = h.activeSegment;
+        hf.currentSegment = top > bottom ? std::max(0.0f, std::min(1.0f, (h.health - bottom) / (top - bottom))) : 0.0;
+    }
+    hf.overshield = h.normalizedOverShield;
+    const auto& wpn = world_.player().pawn().weapon();
+    hf.clip = h.clipAmmo; hf.clipCapacity = wpn.magSize; hf.reserve = h.reserveAmmo; hf.reserveCapacity = wpn.reserveMax;
+    hf.weapon = "IonBlaster";   // the rebuild's only player weapon (Gameplay) - TnWeaponIonBlaster icon / crosshair
+    hf.vehicleForm = h.vehicleForm;
+    hf.spectating = spectatingUi_;
+    frontend_->hud().setFrame(hf);
 }
 
 void Application::driveLifecycleTest(float dt) {
@@ -374,6 +536,8 @@ void Application::unloadMatch() {
 #endif
     delete renderer_;
     renderer_ = render::createGLRenderer();
+    if (g_scene) g_scene->setRenderer(renderer_);
+    applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));   // the new renderer starts at its default
     camera_ = render::Camera();
     clock_ = FixedStepClock(60.0);
     escWasDown_ = false;

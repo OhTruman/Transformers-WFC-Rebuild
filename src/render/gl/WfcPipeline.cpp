@@ -1,4 +1,5 @@
 #include "render/gl/WfcPipeline.h"
+#include "core/LoadYield.h"
 #include "core/Config.h"
 #include "assets/Gltf.h"
 #include "assets/Json.h"
@@ -1469,6 +1470,7 @@ int Pipeline::upload(const MeshData& m) {
             }
         }
         g.subs.push_back(d);
+        core::loadYield("Render: map submesh");   // [frontend] loading screen frame between whole submeshes (no binding held)
     }
     meshes_.push_back(std::move(g));
     LOG_INFO("wfc: uploaded mesh %zu: %zu verts, %zu submeshes (%d lightmapped, %d programs, %zu total)",
