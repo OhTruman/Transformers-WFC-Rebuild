@@ -466,6 +466,54 @@ public:
     // The audio thread does the work; the game thread's per-frame pump has nothing to do.
     void update() override {}
 
+    // ---- PCM streams (movie audio): mixed after the Master compressor, at the rebuild's output scaling ----
+    int openStream(int sampleRate) override {
+        if (sampleRate <= 0) return -1;
+        std::lock_guard<std::mutex> lk(mx_);
+        const int id = ++streamSerial_;
+        Stream& s = streams_[id];
+        s.step = (double)sampleRate / kRate;
+        s.cap = (size_t)sampleRate * 2;               // ~2 s queued at most
+        return id;
+    }
+    size_t pushStream(int id, const float* lr, size_t frames) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        auto it = streams_.find(id);
+        if (it == streams_.end() || !lr) return 0;
+        Stream& s = it->second;
+        if (s.read > 0 && s.read * 2 >= s.buf.size()) {   // compact the consumed head
+            s.buf.erase(s.buf.begin(), s.buf.begin() + (long)(s.read * 2));
+            s.read = 0;
+        }
+        const size_t queued = s.buf.size() / 2 - s.read;
+        const size_t n = queued >= s.cap ? 0 : std::min(frames, s.cap - queued);
+        s.buf.insert(s.buf.end(), lr, lr + n * 2);
+        return n;
+    }
+    size_t streamQueued(int id) const override {
+        std::lock_guard<std::mutex> lk(mx_);
+        auto it = streams_.find(id);
+        return it == streams_.end() ? 0 : it->second.buf.size() / 2 - it->second.read;
+    }
+    uint64_t streamPlayed(int id) const override {
+        std::lock_guard<std::mutex> lk(mx_);
+        auto it = streams_.find(id);
+        return it == streams_.end() ? 0 : it->second.played;
+    }
+    void setStreamPaused(int id, bool paused) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        auto it = streams_.find(id);
+        if (it != streams_.end()) it->second.paused = paused;
+    }
+    void closeStream(int id) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        streams_.erase(id);
+    }
+    int openStreams() const override {
+        std::lock_guard<std::mutex> lk(mx_);
+        return (int)streams_.size();
+    }
+
     ~Win32Audio() override {
         run_ = false;
         if (thread_.joinable()) thread_.join();
@@ -618,6 +666,32 @@ private:
         stats_.peakDb = peak > 1e-6f ? 20.0f * std::log10(peak) : -96.0f;
         stats_.gainReductionDb = std::min(stats_.gainReductionDb * 0.9f, 20.0f * std::log10(minGain));
         stats_.voices = nv; stats_.wetVoices = nw; stats_.peakVoices = std::max(stats_.peakVoices, nv);
+        // Movie streams: their own output, after the game mix's Master chain [HIGH: the Bink player outputs
+        // beside FMOD; MovieMixerPreset mutes the game mix, not the movie]. Level: full scale maps to the
+        // rebuild's Master Default calibration (master_ stands for Master 0.708) [PROV].
+        const float sg = master_ / 0.7079458f;
+        float speak = 0.0f;
+        for (auto& kv : streams_) {
+            Stream& s = kv.second;
+            if (s.paused) continue;
+            const size_t avail = s.buf.size() / 2;
+            for (int f = 0; f < kBlockFrames; ++f) {
+                const size_t i0 = s.read;
+                if (i0 + 1 >= avail) { if (s.started) stats_.streamUnderrunFrames += kBlockFrames - f; break; }   // underrun
+                s.started = true;
+                speak = std::max(speak, std::max(std::fabs(s.buf[i0 * 2]), std::fabs(s.buf[i0 * 2 + 1])) * sg);
+                const float u = (float)s.frac;
+                dry_[f * 2]     += (s.buf[i0 * 2] + (s.buf[i0 * 2 + 2] - s.buf[i0 * 2]) * u) * sg;
+                dry_[f * 2 + 1] += (s.buf[i0 * 2 + 1] + (s.buf[i0 * 2 + 3] - s.buf[i0 * 2 + 1]) * u) * sg;
+                s.frac += s.step;
+                const size_t adv = (size_t)s.frac;
+                s.frac -= (double)adv;
+                s.read += adv;
+                s.played += adv;
+            }
+        }
+        stats_.streamPeakDb = speak > 1e-6f ? 20.0f * std::log10(speak) : -96.0f;
+        stats_.streams = (int)streams_.size();
         for (int i = 0; i < kBlockSamples; ++i) {
             float x = dry_[i] * 32768.0f;
             dst[i] = (int16_t)(x > 32767.0f ? 32767.0f : (x < -32768.0f ? -32768.0f : x));
@@ -649,6 +723,15 @@ private:
     std::vector<Voice> voices_;
     std::vector<int16_t> blocks_[kNumBlocks];
     WAVEHDR hdr_[kNumBlocks];
+    struct Stream {
+        std::vector<float> buf;        // interleaved stereo, [read*2 ..) not yet played
+        size_t read = 0, cap = 0;
+        double step = 1.0, frac = 0.0;
+        uint64_t played = 0;
+        bool paused = false, started = false;   // started: first frame played (later empty blocks = underrun)
+    };
+    std::map<int, Stream> streams_;
+    int streamSerial_ = 0;
 };
 
 // Silent fallback when there is no audio device.

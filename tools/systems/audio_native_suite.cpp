@@ -1,6 +1,6 @@
 // Systems M03 pass 5 native-audio validation suite (not part of the CMake build). Build from the repo root:
 //   .toolchain/llvm-mingw-*/bin/clang++.exe -std=c++17 -O2 -Isrc tools/systems/audio_native_suite.cpp src/game/SoundCues.cpp \
-//     src/game/SoundMixer.cpp src/game/AmbientAudio.cpp src/game/LevelAudioScript.cpp src/game/LevelAudioHost.cpp src/game/FrontendAudioRuntime.cpp src/game/MusicPlayer.cpp \n//     src/game/FrontendAudio.cpp src/game/PickupPresentation.cpp src/core/Log.cpp src/platform/win32/Win32Audio.cpp -lwinmm -static -o suite.exe
+//     src/game/SoundMixer.cpp src/game/AmbientAudio.cpp src/game/LevelAudioScript.cpp src/game/LevelAudioHost.cpp src/game/FrontendAudioRuntime.cpp src/game/MusicPlayer.cpp src/platform/win32/Win32MovieAudio.cpp \n//     src/game/FrontendAudio.cpp src/game/PickupPresentation.cpp src/core/Log.cpp src/platform/win32/Win32Audio.cpp -lwinmm -static -o suite.exe
 // Reads ExtractedAssets (read only). Channel-mode checks need an audio device (skipped otherwise).
 // Systems M03 native-audio validation suite (RE 7c4a2e0): mixer, zones, emitter geometry, dB, channel modes.
 // Deterministic: recording backends for SoundCues / AmbientAudio; the real Win32 backend for channel modes.
@@ -1199,6 +1199,10 @@ static void testLevelLifecycle() {
             near(m.masterScale(), 1.0f) && near(m.categoryVolume("SFX_DRY_HUD"), 1.0f), "47 categories, MUSIC_DRY 0.708, master scale 1 (%d)", m.categoryCount());
       m.enable("CINE_MUTE_FOR_BINK");
       CHECK(near(m.masterScale(), 0.0f) && !std::strcmp(m.categoryTarget("Master"), "CINE_MUTE_FOR_BINK"), "CINE_MUTE_FOR_BINK: Master 0 at once (FadeIn 0)");
+      m.flush();                                       // a level change during the movie
+      CHECK(near(m.masterScale(), 0.0f) && m.activeList() == "CINE_MUTE_FOR_BINK(1),Default(1)" && game::SoundMixer::unflushable("CINE_MUTE_FOR_BINK") &&
+            !std::strcmp(game::SoundMixer::movieMixerPreset(), "CINE_MUTE_FOR_BINK"),
+            "UnflushableMixerPresets: CINE_MUTE_FOR_BINK survives a Flush [%s]", m.activeList().c_str());
       m.disable("CINE_MUTE_FOR_BINK", false); step(m, 0.5f);
       CHECK(m.masterScale() > 0.4f && m.masterScale() < 0.6f, "movie end: Master returns over FadeOut 1 s (%.2f at 0.5 s)", m.masterScale());
       step(m, 0.6f);
@@ -1268,7 +1272,7 @@ static void testLevelLifecycle() {
     std::string why;
     host.unload();
     CHECK(atBaseline(host, cues, baseCues, basePresets, why), "leave frontend: baseline (%s)", why.c_str());
-    CHECK(near(cues.mixer().masterScale(), 1.0f), "unload Flush drops a movie mute too");
+    CHECK(near(cues.mixer().masterScale(), 1.0f), "movie ended before the unload: the game mix is back");
 
     // ---- Lobbies: GameplayStarted -> music, bed, 2 pools.
     for (const char* lv : {"UI_PartyLobby_m", "UI_Lobby_m", "UI_CampaignLobby_m"}) {

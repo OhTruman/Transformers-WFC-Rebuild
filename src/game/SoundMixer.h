@@ -54,7 +54,12 @@ public:
 
     bool enable(const std::string& name);                 // EnableMixerPreset (false = unknown preset)
     void disable(const std::string& name, bool force);    // DisableMixerPreset
-    void flush();                                         // level change: only Default remains, reverb slot None
+    // Level change: only Default remains, reverb slot None - except the UnflushableMixerPresets
+    // (Xe-TransEngine.ini [HM_Engine.SoundMixerProperties]: CINE_MUTE_FOR_BINK), which stay active with their ref
+    // counts [CONF config; the native Flush honouring the list is HIGH].
+    void flush();
+    static bool unflushable(const std::string& name);
+    static const char* movieMixerPreset();               // [HM_Engine.FmodAudioDevice] MovieMixerPreset [CONF config]
     // SeqAct_Reverb.Activated (0x82764858) [CONF]: if `preset` differs from the global current-reverb slot
     // (0x8374FCCC): Enable(preset); on success explicitly Disable(previous, force=0) and store `preset`.
     // The same preset again is a no-op (no Enable, no ref-count change, no timer reset).

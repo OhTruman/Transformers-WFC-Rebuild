@@ -18,7 +18,9 @@
 //                          level cues / samples), see LevelAudioHost::unload.
 //   playUiSound / stopUiSound  GFx Sound.PlaySound / StopSound (FrontendAudio).
 //   levelEvent(trigger)    any other frontend-owned Kismet trigger ("MovieStopped:FMV_intro", "FsCommand:<cmd>").
-//   setMoviePlaying(b)     a Bink movie is up (MovieMixerPreset CINE_MUTE_FOR_BINK).
+//   setMoviePlaying(b)     a Bink movie is up (MovieMixerPreset CINE_MUTE_FOR_BINK on the game mix).
+//   startMovieAudio(path)  the movie's own Bink sound, started with its video (Systems M07); stopMovieAudio() at its
+//                          end or on skip. movieAudioClock() is the sound's clock (the video may slave to it).
 //   tick(dt)               audio-only frame (level audio, music player, mixer, cue instances, voices).
 #pragma once
 #include <memory>
@@ -43,6 +45,11 @@ public:
     void levelChange() { host_->unload(); started_ = false; }
     int levelEvent(const std::string& trigger) { return host_->event(trigger, listener_); }
     void setMoviePlaying(bool playing) { host_->setMoviePlaying(playing); }
+    bool startMovieAudio(const std::string& moviePath, int languageSlot = -1) { return host_->startMovieAudio(moviePath, languageSlot); }
+    void stopMovieAudio() { host_->stopMovieAudio(); }
+    void setMovieAudioPaused(bool paused) { host_->setMovieAudioPaused(paused); }
+    double movieAudioClock() const { return host_->movieAudioClock(); }
+    bool movieAudioFinished() const { return host_->movieAudioFinished(); }
     bool prefetchLevel(const std::string& level) { return host_->prefetch(level); }
     void setListener(const core::Vec3& p) { listener_ = p; }
     void tick(float dt);

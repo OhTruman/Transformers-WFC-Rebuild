@@ -19,7 +19,7 @@ FrontendAudioRuntime::FrontendAudioRuntime(audio::IAudio* a, const std::string& 
 }
 
 FrontendAudioRuntime::~FrontendAudioRuntime() {
-    if (host_) host_->unload();
+    if (host_) { host_->stopMovieAudio(); host_->unload(); }
     if (cues_) cues_->stopAll();
 }
 

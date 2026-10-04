@@ -107,7 +107,16 @@ const SoundMixer::Entry* SoundMixer::defines(const Category& c, int p) const {
     return nullptr;
 }
 
+bool SoundMixer::unflushable(const std::string& name) {
+    for (const char* n : kUnflushablePresets) if (name == n) return true;
+    return false;
+}
+
+const char* SoundMixer::movieMixerPreset() { return kMovieMixerPresetName; }
+
 void SoundMixer::flush() {
+    std::vector<std::pair<int, int>> keep;                // active unflushable presets (index, refs)
+    for (int p : active_) if (unflushable(presets_[(size_t)p].name)) keep.push_back({p, presets_[(size_t)p].refs});
     active_.clear();
     for (Preset& p : presets_) { p.refs = 0; p.elapsed = 0.0f; }
     for (Category& c : cats_) {
@@ -116,6 +125,16 @@ void SoundMixer::flush() {
         for (int k = 0; k < kParams; ++k) { c.ramps[k] = Ramp{}; c.ramps[k].value = c.ramps[k].target = d ? d->v[k] : 0.0f; }
     }
     enable("Default");
+    for (const auto& kp : keep) {                         // back in, at their priority, values in place at once
+        auto it = active_.begin();
+        while (it != active_.end() && presets_[(size_t)*it].priority >= presets_[(size_t)kp.first].priority) ++it;
+        active_.insert(it, kp.first);
+        presets_[(size_t)kp.first].refs = kp.second;
+    }
+    if (!keep.empty()) {
+        retarget();
+        for (Category& c : cats_) for (Ramp& r : c.ramps) { r.value = r.target; r.active = false; }
+    }
     currentReverb_.clear();
     envDirty_ = true;
 }
