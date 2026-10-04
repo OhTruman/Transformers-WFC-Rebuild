@@ -75,13 +75,15 @@ foreach ($r in $todo) {
     if ($press -le 0) { $press = [int]$t[0].frame + 1 }   # rapid scenarios: tags from the start point
     $pre = $t | Where-Object { [int]$_.frame -eq $press - 1 } | Select-Object -First 1; if (-not $pre) { $pre = $t[[Math]::Max(0, [Math]::Min($press - 2, $t.Count - 1))] }
     # General detector candidates: per grounded episode, the first frame more than 1 m below the last grounded height.
-    $cands = @(); $lastG = $null; $armed = $false
+    # Reference = the AUTHORED floor under the last grounded position (gpos query), not the actor height: the vehicle actor
+    # rides higher above the floor than the robot, so a form change alone moves the actor by most of a metre.
+    $cands = @(); $lastG = $null; $lastGp = $null; $armed = $false
     foreach ($f in $t) {
         $y = [double]$f.y
-        if ($f.grounded -eq "1") { $lastG = $y; $armed = $true; continue }
-        if ($armed -and $null -ne $lastG -and $y -lt $lastG - 1.0) { $cands += [pscustomobject]@{ frame = [int]$f.frame; x = [double]$f.x; y = $y; z = [double]$f.z; lastG = $lastG }; $armed = $false }
+        if ($f.grounded -eq "1") { $lastG = $y; $lastGp = $f; $armed = $true; continue }
+        if ($armed -and $null -ne $lastG -and $y -lt $lastG - 1.0) { $cands += [pscustomobject]@{ frame = [int]$f.frame; x = [double]$f.x; y = $y; z = [double]$f.z; lastG = $lastG; gx = [double]$lastGp.x; gz = [double]$lastGp.z }; $armed = $false }
     }
-    foreach ($c in $cands) { $queries.Add(@{ id = "$name|g|$($c.frame)"; x = $c.x; y = $c.lastG; z = $c.z }) }
+    foreach ($c in $cands) { $queries.Add(@{ id = "$name|g|$($c.frame)"; x = $c.x; y = $c.lastG; z = $c.z }); $queries.Add(@{ id = "$name|gpos|$($c.frame)"; x = $c.gx; y = $c.lastG; z = $c.gz }) }
     $transforms = 0; $prevForm = $t[0].form; foreach ($f in $t) { if ($f.form -ne $prevForm) { $transforms++; $prevForm = $f.form } }
     $runs[$name] = @{ r = $r; t = $t; pre = $pre; cands = $cands; transforms = $transforms; press = $press }
     $queries.Add(@{ id = "$name|press"; x = [double]$pre.x; y = [double]$pre.y; z = [double]$pre.z })
@@ -106,7 +108,14 @@ foreach ($name in ($runs.Keys | Sort-Object)) {
     $post = @($t | Where-Object { [int]$_.frame -ge $R.press })
     # general detector: a candidate crossing where the floor the pawn last stood on (within 0.6 m) is right there
     $gThrough = $null
-    foreach ($c in $R.cands) { $g = $Q["$name|g|$($c.frame)"]; if ($g -and $null -ne $g.floor_below -and [Math]::Abs($g.floor_below - $c.lastG) -le 0.6) { $gThrough = $c; break } }
+    foreach ($c in $R.cands) {
+        $g = $Q["$name|g|$($c.frame)"]; $gp = $Q["$name|gpos|$($c.frame)"]
+        if (-not $gp -or $null -eq $gp.floor_below) { continue }
+        $floorRef = $gp.floor_below
+        # under = the floor at the CROSSING xz (at the old level) is more than 1 m above the pawn; on a slope / step down
+        # the pawn stands on that surface and is not under anything
+        if ($g -and $null -ne $g.floor_below -and ($g.floor_below - $c.y) -gt 1.0 -and [Math]::Abs($g.floor_below - $floorRef) -le 0.6) { $gThrough = $c; $gThrough | Add-Member -Force -NotePropertyName floorRef -NotePropertyValue $g.floor_below; break }
+    }
     $lowCeil = $pq -and $null -ne $pq.above_any -and ($pq.above_any - [double]$pre.y) -lt 4.2
     $minY = [double]::MaxValue; foreach ($f in $post) { $minY = [Math]::Min($minY, [double]$f.y) }
     # Judged at the CROSSING only: the first sampled frame where the pawn is > 1 m below the press floor. If the
@@ -120,26 +129,35 @@ foreach ($name in ($runs.Keys | Sort-Object)) {
         }
         if ($cross) {
             $lvl = $Q["$name|lvl|$($cross.frame)"]
-            if ($null -ne $lvl.floor_below -and [Math]::Abs($lvl.floor_below - $pf) -le 0.6) { $through = $cross; $pen = $lvl.floor_below - $minY }
+            if ($null -ne $lvl.floor_below -and [Math]::Abs($lvl.floor_below - $pf) -le 0.6 -and ($lvl.floor_below - [double]$cross.y) -gt 1.0) { $through = $cross; $pen = $lvl.floor_below - $minY; $through | Add-Member -Force -NotePropertyName floorHere -NotePropertyValue $lvl.floor_below }
         }
     }
     $eq = $Q["$name|now|$($end.frame)"]
     $oob = $minY -lt -749 -or ($eq -and $null -eq $eq.floor_below)
     $drop = if ($null -ne $pf -and $eq -and $null -ne $eq.floor_below) { $pf - $eq.floor_below } else { 0 }
     $formOk = $d.to -eq "ANY" -or $end.form -eq $d.to -or $end.anim -like "Transform_*"
-    if (-not $through -and $gThrough) { $through = [pscustomobject]@{ frame = $gThrough.frame }; $pen = $gThrough.lastG - $minY }
+    if ($d.press -le 0) { $through = $null; $pen = 0.0 }   # rapid scenarios: no single press floor; the general detector judges them
+    if (-not $through -and $gThrough) { $through = [pscustomobject]@{ frame = $gThrough.frame }; $pen = $gThrough.floorRef - $minY }
     $noHook = $d.to -eq "ANY" -and $R.transforms -lt 2
     $thin = $pq -and $null -ne $pq.thickness -and $pq.thickness -lt 0.5
     $back = @($t | Where-Object { [int]$_.frame -ge $R.press - 30 -and [int]$_.frame -lt $R.press })
     $incline = if ($back.Count -ge 2) { ([double]$back[-1].y - [double]$back[0].y) } else { 0 }
     $wall = ([double]$pre.hspeed -gt 4) -and (@($post | Select-Object -First 30 | Where-Object { [double]$_.hspeed -lt 0.5 }).Count -gt 0)
-    $verdict = if ($noHook) { "SKIP no_transform_hook" } elseif ($through) { "FAIL fell_through" } elseif ($oob) { "FAIL out_of_bounds" } elseif (-not $formOk) { "FAIL wrong_form" } elseif ($drop -gt 3) { "INFO large_drop" } else { "PASS" }
+    # A crossing where the pawn is grounded again on the SAME floor within 3 frames is a transient sink (a visible pop, not
+    # a fall under the map); landing on a lower level (or not landing) after crossing the floor it stood on is a fall-through.
+    $sinkOnly = $false; $landY = $null
+    if ($through) {
+        $ref = if ($gThrough -and $through.frame -eq $gThrough.frame) { $gThrough.floorRef } elseif ($through.PSObject.Properties.Name -contains "floorHere") { $through.floorHere } else { $pf }
+        $land = @($t | Where-Object { [int]$_.frame -gt [int]$through.frame -and $_.grounded -eq "1" } | Select-Object -First 1)[0]
+        if ($land) { $landY = [double]$land.y; if ($null -ne $ref -and [Math]::Abs($landY - $ref) -le 0.6 -and ([int]$land.frame - [int]$through.frame) -le 3) { $sinkOnly = $true } }
+    }
+    $verdict = if ($noHook) { "SKIP no_transform_hook" } elseif ($through -and $sinkOnly) { "INFO transient_sink" } elseif ($through) { "FAIL fell_through" } elseif ($oob) { "FAIL out_of_bounds" } elseif (-not $formOk) { "FAIL wrong_form" } elseif ($drop -gt 3) { "INFO large_drop" } else { "PASS" }
     $table.Add([pscustomobject][ordered]@{ run = $name; scenario = $sc; start = $R.r.s; verdict = $verdict
         pre_x = $pre.x; pre_y = $pre.y; pre_z = $pre.z; pre_hspeed = $pre.hspeed; pre_vy = $pre.vy; pre_grounded = $pre.grounded; pre_form = $pre.form
         press_floor = $(if ($null -ne $pf) { [Math]::Round($pf, 2) } else { "" }); press_floor_thickness = $(if ($pq.thickness) { [Math]::Round($pq.thickness, 2) } else { "" })
         end_x = $end.x; end_y = $end.y; end_z = $end.z; end_hspeed = $end.hspeed; end_vy = $end.vy; end_grounded = $end.grounded; end_form = $end.form; end_moveForm = $end.moveForm; end_camD = $end.camD
         end_floor = $(if ($eq -and $null -ne $eq.floor_below) { [Math]::Round($eq.floor_below, 2) } else { "" }); min_y = [Math]::Round($minY, 2); drop = [Math]::Round($drop, 2)
-        penetration = [Math]::Round($pen, 2); through_frame = $(if ($through) { $through.frame } else { "" }); incline_0_5s = [Math]::Round($incline, 2); wall = [int]$wall; thin_floor = [int]$thin; low_ceiling = [int][bool]$lowCeil; transforms = $R.transforms; general_cross_frame = $(if ($gThrough) { $gThrough.frame } else { "" }) })
+        penetration = [Math]::Round($pen, 2); through_frame = $(if ($through) { $through.frame } else { "" }); incline_0_5s = [Math]::Round($incline, 2); wall = [int]$wall; thin_floor = [int]$thin; low_ceiling = [int][bool]$lowCeil; transforms = $R.transforms; general_cross_frame = $(if ($gThrough) { $gThrough.frame } else { "" }); landed_y = $(if ($null -ne $landY) { [Math]::Round($landY, 2) } else { "" }) })
 }
 Write-WfcCsv $table (Join-Path $OutDir "stress.csv")
 foreach ($sc in $Scenarios) {
