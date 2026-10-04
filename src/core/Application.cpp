@@ -65,6 +65,9 @@ void Application::run() {
         // Deterministic captures (render A/B): one 60 Hz step per frame regardless of wall time.
         static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
         if (lockstep) realDt = 1.0 / 60.0;
+        // Diagnostics: deterministic display rate other than the 60 Hz simulation (WFC_RENDERHZ=144 -> 0 or 1 steps
+        // per frame), to reproduce frame-pacing artefacts in captures.
+        if (const char* hz = std::getenv("WFC_RENDERHZ")) realDt = 1.0 / std::max(1.0, std::atof(hz));
 
         if (!window_->pump(input)) break;
         if (input.wasPressed(platform::Button::Quit)) break;
@@ -158,6 +161,16 @@ void Application::run() {
 
         // Camera + render.
         world_.player().controller().updateCamera(camera_);
+        if (std::getenv("WFC_CAMLOG")) {   // diagnostics: pawn screen position per rendered frame (frame pacing)
+            core::Vec3 pp = world_.player().pawn().position() + core::Vec3{0, 2.0f, 0};
+            core::Vec3 f = core::forwardFromYawPitch(camera_.yaw, camera_.pitch);
+            core::Vec3 r = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
+            core::Vec3 u = core::cross(r, f);
+            core::Vec3 d = pp - camera_.pos;
+            float z = core::dot(d, f);
+            LOG_INFO("CAMLOG %ld %.5f %.5f %.4f", (long)frame, core::dot(d, r) / std::max(z, 0.01f),
+                     core::dot(d, u) / std::max(z, 0.01f), z);
+        }
         camera_.aspect = (float)window_->width() / (float)(window_->height() > 0 ? window_->height() : 1);
 
         // Debug camera overrides (for diagnosis / screenshots): WFC_DEBUGCAM=top|front
@@ -286,6 +299,13 @@ void Application::run() {
         }
         if (smokeFrames > 0 && frame == smokeFrames)
             if (const char* shot = std::getenv("WFC_SHOT")) renderer_->captureScreenshot(shot);
+        if (const char* se = std::getenv("WFC_SHOTEVERY")) {   // diagnostics: <dir>,<from>,<to> every frame
+            char dir[260] = {0}; long f0 = 0, f1 = 0;
+            if (std::sscanf(se, "%259[^,],%ld,%ld", dir, &f0, &f1) == 3 && frame >= f0 && frame <= f1) {
+                char path[300]; std::snprintf(path, sizeof path, "%s/f%04ld.bmp", dir, frame);
+                renderer_->captureScreenshot(path);
+            }
+        }
         if (!shotList.empty() && frame % 8 == 0 && (size_t)(frame / 8 - 1) < shotList.size()) {
             const char* dir = std::getenv("WFC_SHOTDIR");
             std::string out = std::string(dir ? dir : ".") + "/" + shotList[(size_t)(frame / 8 - 1)].first + ".bmp";
