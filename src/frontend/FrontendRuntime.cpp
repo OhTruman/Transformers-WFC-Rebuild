@@ -202,6 +202,15 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     if (fn == "Debug.ShouldDisplayBuildInfo") return BridgeValue(false);
     if (fn == "Debug.GetBuildInfo") return BridgeValue(std::string());
     if (fn.rfind("PCSettings.", 0) == 0) return pcSettings(fn, args);
+    // TnAccountActionScriptBinding (PC SKU Accounts menu): Demonware online accounts. No online service in the
+    // offline reconstruction: no accounts are listed or created [SERVICE DEPENDENT]; the local display name is the
+    // profile identity (LocalProfile::playerName).
+    if (fn == "Account.GetAccountNames" || fn == "Account.GetLoggedInAccount") return BridgeValue(std::string());
+    // Stats (online stats archive): challenge progress and leaderboards. Offline there is no archive: progress 0,
+    // level 0 (a fresh profile), leaderboard reads report nothing [SERVICE DEPENDENT; values as the original offline].
+    if (fn == "Stats.GetChallengeValue" || fn == "Stats.GetChallengeLevel") return BridgeValue(0);
+    if (fn.rfind("Stats.", 0) == 0) { FlowTrace::emit("service.unavailable", {{"fn", fn}, {"service", "online stats"}}); return {}; }
+    if (fn.rfind("Account.", 0) == 0) { FlowTrace::emit("service.unavailable", {{"fn", fn}, {"service", "Demonware accounts"}}); return {}; }
     if (fn == "Customize.IsPrimeModeAvailable") return BridgeValue(false);
     if (fn.rfind("Customize.", 0) == 0) { BridgeValue r = customize(fn, args); if (r.kind != BridgeValue::Kind::Void || fn == "Customize.SelectCharacter" || fn == "Customize.CheckCustomCharacterDataLoaded") return r; }
     // TnXpManager (via TnCharacterScriptBinding): XP lives in the online stats archive; without a stats interface the

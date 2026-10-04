@@ -69,7 +69,12 @@ private:
     std::unique_ptr<GfxMovie> cursor_;
     std::unique_ptr<GfxMovie> hud_;           // TnHUD.HudMovie (Hud_GFX), under the UIController movies
     bool hudVisible_ = false;
-    std::unique_ptr<GfxMovie> scoreboard_;    // TnHUD.ScoreboardMovie (InGameStats_GFX), above the HUD, with focus
+    std::unique_ptr<GfxMovie> scoreboard_;
+    // Movies a movie opens itself (Self.OpenMovieWithPath(path, CaptureInput, CaptureFocus), e.g. Brightness_GFX ->
+    // CalibrationImage_GFX): drawn above their opener; with CaptureFocus they take the keys.
+    struct Extra { std::string object; std::unique_ptr<GfxMovie> movie; bool focus = false; };
+    std::vector<Extra> extras_;
+    std::vector<std::string> deferredErase_;    // TnHUD.ScoreboardMovie (InGameStats_GFX), above the HUD, with focus
     bool shapesStale_ = false;                // a movie was destroyed since the last draw
     // Engine -> AS invokes made after the AS call that caused them returns (UnrealScript OwnerMovie.Invoke).
     struct Deferred { std::string movie, fn; gfx::avm1::Args args; };

@@ -153,6 +153,24 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
         return Value();
     }
     if (fn.rfind("Self.", 0) == 0) { frontend::FlowTrace::emit("bridge.unhandled", {{"fn", fn}, {"movie", m.object()}}); return Value(); }
+    if (fn == "Self.OpenMovieWithPath" && !sa.empty()) {
+        for (const Extra& e : extras_) if (e.object == sa[0]) return Value();
+        Extra e;
+        e.object = sa[0];
+        e.focus = sa.size() > 2 && (sa[2] == "true" || sa[2] == "1");
+        e.movie = std::make_unique<GfxMovie>();
+        bool ok = e.movie->open(lib_, &rt_.catalog(), sa[0],
+                                [this](GfxMovie& mv, const std::string& f, Args& aa) { return bridge(mv, f, aa); },
+                                [this](GfxMovie& mv, const std::string& c, const std::string& aa) { fsCommand(mv, c, aa); });
+        frontend::FlowTrace::emit("gfx.movie", {{"movie", sa[0]}, {"opened", frontend::FlowTrace::boolean(ok)}, {"by", m.object()}});
+        if (ok) extras_.push_back(std::move(e));
+        return Value();
+    }
+    if (fn == "Self.CloseMovieWithPath" && !sa.empty()) {
+        for (size_t i = extras_.size(); i-- > 0;)
+            if (extras_[i].object == sa[0]) { rt_.dataStores().forgetMovie(sa[0]); deferredErase_.push_back(sa[0]); }
+        return Value();
+    }
     if (fn == "Online.CheckIsProfileReady") {
         // TnOnlineActionScriptBinding.CheckIsProfileReady [CONFIRMED script]: a ready profile -> OwnerMovie.Invoke(
         // ProfileIsReadyCallback = "ProfileIsReady", CheckId); otherwise the TnLoadProfileStatusMessageBox popup. The
@@ -215,6 +233,7 @@ void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
     prevUi_ = now;
     if (!changed || loading_ || (movies_.empty() && !scoreboard_)) return;
     GfxMovie* focus = scoreboard_ ? scoreboard_.get() : movies_.back().movie.get();
+    for (Extra& e : extras_) if (e.focus) focus = e.movie.get();
     for (int k = 0; k < (int)platform::UiKey::Count; ++k) {
         if (!(changed & (1u << k))) continue;
         bool down = now & (1u << k);
@@ -245,6 +264,11 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     for (const Open& o : movies_) objs.push_back(o.object);
     for (const std::string& o : objs)
         for (Open& op : movies_) if (op.object == o) { op.movie->advance(dt); break; }
+    // Movie-opened movies: closes requested during their own script run are applied here; advance the rest.
+    for (const std::string& o : deferredErase_)
+        for (size_t i = extras_.size(); i-- > 0;) if (extras_[i].object == o) { extras_.erase(extras_.begin() + (long)i); shapesStale_ = true; }
+    deferredErase_.clear();
+    for (Extra& e : extras_) e.movie->advance(dt);
     // Deferred engine -> AS invokes.
     std::vector<Deferred> due;
     due.swap(deferred_);
@@ -286,6 +310,7 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
         if (hud_ && hudVisible_) drawMovie(*hud_);
         if (scoreboard_) drawMovie(*scoreboard_);
         for (Open& o : movies_) drawMovie(*o.movie);
+        for (Extra& e : extras_) drawMovie(*e.movie);
     }
     if (video_ && videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     if (cursor_ && !videoOver_) drawMovie(*cursor_);

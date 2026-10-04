@@ -357,7 +357,7 @@ const std::vector<Catalog::Provider>& Catalog::providers(const std::string& kind
 void Catalog::loadProviders(const std::string& extractedRoot) {
     providers_.clear();
     const std::string cfg = extractedRoot + "/config/Coalesced_ini/TransGame/Config/Xenon/Cooked/";
-    for (const char* file : {"TransCustomization.ini", "TransWeapons.ini"}) {
+    for (const char* file : {"TransCustomization.ini", "TransWeapons.ini", "TransChallenges.ini"}) {
         std::ifstream f(cfg + file);
         std::string line;
         Provider* cur = nullptr;
@@ -371,7 +371,7 @@ void Catalog::loadProviders(const std::string& extractedRoot) {
                     curKind = line.substr(sp + 16, end - sp - 16);
                     providers_[curKind].push_back(Provider{line.substr(1, sp - 1), {}});
                     cur = &providers_[curKind].back();
-                    for (const char* lk : {"FriendlyName", "Description", "FriendlyIconicName"}) {   // localized fields
+                    for (const char* lk : {"FriendlyName", "Description", "FriendlyIconicName", "ChallengeName"}) {   // localized fields
                         std::string v = localize("TransGame", cur->name + " TnDataProvider_" + curKind, lk);
                         if (!v.empty()) cur->fields.push_back({lk, v});
                     }

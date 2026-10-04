@@ -175,10 +175,11 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         return true;
     }
     if (markup == "<TnMenuItems:Playlists>") {
-        c.columns = {"PlaylistId", "FriendlyName", "GameModeTag", "OnlinePlayers"};
+        // DisplayName: what PartyLobby_GFX's playlist list reads (same localized playlist name).
+        c.columns = {"PlaylistId", "FriendlyName", "GameModeTag", "OnlinePlayers", "DisplayName"};
         for (const Playlist& p : cat_.playlists()) {
             if (!p.visibleInMenu) continue;
-            c.rows.push_back({std::to_string(p.id), p.displayName, p.tag, "0"});
+            c.rows.push_back({std::to_string(p.id), p.displayName, p.tag, "0", p.displayName});
             c.enabled.push_back(true);
         }
         return true;
@@ -188,7 +189,8 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
     {
         static const std::map<std::string, std::string> kKinds = {{"<TnMenuItems:Weapons>", "Weapon"}, {"<TnMenuItems:Abilities>", "Ability"},
                                                                  {"<TnMenuItems:Skills>", "Skill"}, {"<TnMenuItems:Chassis>", "Chassis"},
-                                                                 {"<TnMenuItems:Killstreaks>", "Killstreak"}};
+                                                                 {"<TnMenuItems:Killstreaks>", "Killstreak"},
+                                                                 {"<TnMenuItems:Challenges>", "Challenge"}};   // TransChallenges.ini (local content; progress needs the stats service)
         auto k = kKinds.find(markup);
         if (k != kKinds.end()) {
             const auto& list = cat_.providers(k->second);
