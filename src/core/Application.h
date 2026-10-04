@@ -53,6 +53,7 @@ private:
     int matchesLaunched_ = 0, lastLoggedRemaining_ = -1;
     float matchClock_ = 0.0f;
     std::map<int, float> deathAt_;
+    bool selectionSent_ = false;   // the frontend's character selection reached Gameplay this match
 
     void updateTitleHud(double realDt);
     void runPickupTest();

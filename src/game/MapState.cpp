@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -140,26 +141,70 @@ const ObjClass kObjClasses[] = {
 
 } // namespace
 
-std::vector<std::string> MapState::moverActorNames() {
-    return {"StaticInterpActor_15810", "StaticInterpActor_7381", "StaticInterpActor_8114",
-            "StaticInterpActor_5249", "StaticInterpActor_13497", "StaticInterpActor_10471"};
+std::vector<std::string> MapState::moverActorNames() const {
+    // [integration M06] The movers this map's data loaded (was the six Streets actors, for every map).
+    std::vector<std::string> v;
+    for (const MapMover& m : movers_) v.push_back(m.actor);
+    return v;
 }
+
+namespace {
+// AssetTools manifests (read-only): the per-map movers manifest. Streets keeps its canonical name
+// (streets_movers.json); every other map is manifests/next_map/<MAP>_movers.json (AssetTools MAP_PIPELINE.md).
+std::string manifestsRoot() {
+    if (const char* e = std::getenv("WFC_ASSETTOOLS_MANIFESTS")) return e;
+    if (const char* e = std::getenv("WFC_FRONTEND_MANIFESTS")) return e;
+    return "F:/Transformers Rebuild/AssetTools/manifests";
+}
+bool readMoversManifest(const std::string& map, assets::Json& out) {
+    std::string last = map.substr(map.rfind('_') + 1);
+    std::transform(last.begin(), last.end(), last.begin(), ::tolower);
+    for (const std::string& p : {manifestsRoot() + "/next_map/" + map + "_movers.json", manifestsRoot() + "/" + last + "_movers.json"}) {
+        std::ifstream f(p, std::ios::binary);
+        if (!f) continue;
+        std::stringstream ss; ss << f.rdbuf();
+        if (assets::Json::parse(ss.str(), out) && out["map"].asString().find(map) != std::string::npos) return true;
+        if (out["movers"].size() > 0 && out["movers"][0]["actor"].asString().rfind(map, 0) == 0) return true;
+    }
+    return false;
+}
+} // namespace
 
 bool MapState::load(const std::string& path, MatchMode mode) {
     mode_ = mode;
     movers_.clear(); objectives_.clear(); modeActors_.clear(); euler_.clear(); mdv_.clear();
-    // Rotating domes (ART level) [CONF streets_movers.json]: RotationRate Yaw 2730 UU/s.
-    struct Dome { const char* actor; float x, y, z; };
-    const Dome domes[] = {{"StaticInterpActor_15810", 12027.0f, -51121.1015625f, -70664.140625f},
-                          {"StaticInterpActor_7381", 12027.0f, -49089.1015625f, -69880.140625f},
-                          {"StaticInterpActor_8114", 12031.0f, -47345.1015625f, -69312.140625f}};
-    for (const Dome& d : domes) {
-        MapMover m;
-        m.actor = d.actor; m.mesh = "ENV_IAC_Deco_1_p.StaticMesh.DecoSphereHalf01_STAT";
-        m.kind = MapMover::Kind::Rotating;
-        m.pivot = ueToGltf(d.x, d.y, d.z);
-        m.yawRateRad = 2730.0f / 65536.0f * 6.2831853f;
-        movers_.push_back(m);
+    // PHYS_Rotating movers [CONF AssetTools <map>_movers.json]. [integration M06] Read from the map's own manifest
+    // (was a hard-coded table of the three Streets domes: StaticInterpActor_15810 / 7381 / 8114, Yaw 2730 UU/s, which
+    // the Streets manifest reproduces exactly). Gameplay simulates yaw-only rotation (MapMover::yawRateRad); movers
+    // rotating about another axis (Gorge's vent fans: Roll) stay static collision here [PARTIAL] and are animated by
+    // Rendering's movers.json.
+    {
+        std::string dir = path.substr(0, path.find_last_of("/\\"));
+        std::string map = dir.substr(dir.find_last_of("/\\") + 1);
+        assets::Json mj;
+        int skipped = 0;
+        if (readMoversManifest(map, mj)) {
+            const assets::Json& mv = mj["movers"];
+            for (size_t i = 0; i < mv.size(); ++i) {
+                const assets::Json& e = mv[i];
+                if (e["physics"].asString() != "PHYS_Rotating") continue;
+                const assets::Json& rr = e["RotationRate"];
+                if (rr["Pitch"].asFloat() != 0.0f || rr["Roll"].asFloat() != 0.0f) { ++skipped; continue; }
+                const assets::Json& L = e["transform"]["Location"];
+                MapMover m;
+                std::string a = e["actor"].asString();
+                m.actor = a.substr(a.rfind('.') + 1);
+                m.mesh = e["mesh"].asString();
+                m.kind = MapMover::Kind::Rotating;
+                m.pivot = ueToGltf(L["X"].asFloat(), L["Y"].asFloat(), L["Z"].asFloat());
+                m.yawRateRad = rr["Yaw"].asFloat() / 65536.0f * 6.2831853f;
+                movers_.push_back(m);
+            }
+            LOG_INFO("mapstate: %s rotating movers %zu (yaw), %d rotating about another axis (render only)", map.c_str(),
+                     movers_.size(), skipped);
+        } else {
+            LOG_WARN("mapstate: no AssetTools movers manifest for %s (no rotating movers)", map.c_str());
+        }
     }
 
     std::ifstream f(path, std::ios::binary);
@@ -168,7 +213,9 @@ bool MapState::load(const std::string& path, MatchMode mode) {
     assets::Json g;
     if (!assets::Json::parse(ss.str(), g)) return false;
 
-    // SkyBeam Matinee (gameplay.json "matinee", same data as streets_movers.json).
+    // Matinee movers (gameplay.json "matinee": Streets' SkyBeam, same data as streets_movers.json). [integration M06]
+    // A map without a Matinee (Gorge) has none: nothing below runs.
+    if (g["matinee"].size() > 0) {
     const assets::Json& mat = g["matinee"][0];
     matineeLength_ = mat["length_s"].asFloat(9.0022f);
     const assets::Json& pts = mat["groups"][0]["tracks"][0]["props"]["EulerTrack"]["Points"];
@@ -191,6 +238,7 @@ bool MapState::load(const std::string& path, MatchMode mode) {
         m.initialRot = ueRotationToGltf(R[0].asFloat() * u2d, R[1].asFloat() * u2d, R[2].asFloat() * u2d);
         movers_.push_back(m);
     }
+    }   // matinee
 
     // Objectives (all modes' objects are placed; activeInMode marks the ones the current mode uses).
     const assets::Json& objs = g["objectives"];

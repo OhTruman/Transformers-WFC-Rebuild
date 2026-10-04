@@ -207,8 +207,21 @@ docs = [level(p) for p in UI_LEVELS]
 # Multiplayer maps: per-cue-asset limits of the map bank (AssetTools audio.json cues; the cue objects of the audio
 # sublevel) and the map's announcer (TnWorldInfo.AnnouncerSoundEventSet -> HmSoundEventSet event -> dialogue cue) with
 # the cues of every announcer event and of every game-type message's music, all streamed (decoded on first play).
-MP_MAPS = [('MP_IAC_Streets', 'MP_IAC_Streets_AUDIO_m', 'MP_IAC_Streets_BASE_m'),
-           ('MP_UND_Gorge', 'MP_UND_Gorge_AUDIO_m', 'MP_UND_Gorge_BASE_m')]
+# [integration M06] Every multiplayer map with runtime audio data (AssetTools VerticalSlice Maps/<map>/audio.json), its
+# levels from the map's physics.json world table: the persistent *_BASE_m (TnWorldInfo: the announcer set) and the
+# map's own audio sublevel (*_AUDIO_m; shared ones such as GLB_Audio_m / MP_ORB_Audio_m when the map has no own).
+# Was a hand-written list of Streets and Gorge.
+VS_MAPS = 'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
+MP_MAPS = []
+for _m in sorted(os.listdir(VS_MAPS)):
+    if not _m.startswith('MP_') or not os.path.exists('%s/%s/audio.json' % (VS_MAPS, _m)):
+        continue
+    _w = json.load(io.open('%s/%s/physics.json' % (VS_MAPS, _m), encoding='utf-8')).get('world', {})
+    _base = next((k for k in _w if k.lower().endswith('_base_m')), _m + '_BASE_m')
+    _aud = [k for k in _w if 'audio' in k.lower()]
+    _own = [k for k in _aud if k.lower().startswith(_m.lower())]
+    MP_MAPS.append((_m, (_own or _aud or [_m + '_AUDIO_m'])[0], _base))
+print('MP maps:', [m[0] for m in MP_MAPS])
 GT_FIELDS = ('GameTypeDialog', 'GameDescriptionDialog', 'GameTypeMusic', 'GameNearlyCompleteMusic', 'AutobotsWinMusic',
              'DecepticonsWinMusic', 'TieMusic')
 gametypes = {}

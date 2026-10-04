@@ -61,7 +61,8 @@ static void testCatalog(const Catalog& c) {
     size_t onDisk = 0;
     const std::string mapsRoot = (std::getenv("WFC_ASSETS") ? std::string(std::getenv("WFC_ASSETS")) : std::string(core::config::kAssetRootDefault)) + "/Maps/";
     for (const MapInfo& m : c.maps()) onDisk += m.cooked && m.compatibleWith("TDM") && std::ifstream(mapsRoot + m.runtimeDir + "/world.glb").good()
-                                                && std::ifstream(mapsRoot + m.runtimeDir + "/render_index.json").good();
+                                                && (std::ifstream(mapsRoot + m.runtimeDir + "/render_index.json").good()
+                                                    || std::ifstream(Catalog::defaultManifestRoot() + "/maps/" + m.runtimeDir + "/render_index_generic.json").good());
     bool hasStreets = false;
     for (auto* m : tdmMaps) hasStreets |= m->mapId == 508;
     check(hasStreets && tdmMaps.size() == onDisk, "catalog.tdm_selectable_maps_match_disk", std::to_string(tdmMaps.size()));

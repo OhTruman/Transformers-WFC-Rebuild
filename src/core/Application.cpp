@@ -868,7 +868,7 @@ void Application::runMapTraverse() {
     {
         render::MeshData rm, rs;
         assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", rm);
-        std::vector<std::string> skip = game::MapState::moverActorNames();
+        std::vector<std::string> skip = world_.mapState().moverActorNames();
         for (const auto& v : world_.mapState().modeVisibleActors()) if (!v.visible) skip.push_back(v.actor);
         rs.positions = rm.positions;
         for (const render::SubMesh& sm : rm.subs) {
@@ -1420,7 +1420,7 @@ void Application::runCameraTest() {
     {
         render::MeshData rm, rs;
         assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", rm);
-        std::vector<std::string> skip = game::MapState::moverActorNames();
+        std::vector<std::string> skip = world_.mapState().moverActorNames();
         for (const auto& v : world_.mapState().modeVisibleActors()) if (!v.visible) skip.push_back(v.actor);
         rs.positions = rm.positions;
         for (const render::SubMesh& sm : rm.subs) {

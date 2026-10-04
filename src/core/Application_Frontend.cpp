@@ -327,6 +327,10 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     }
     if (!world_.launchMatch(gl)) { LOG_WARN("FLOW Gameplay refused the match (%s %s)", gl.map.c_str(), gl.modeTag.c_str()); return false; }
     if (lifecycleGoal_ > 0) world_.addMatchOpponent("LifecycleOpponent", true);
+    // [integration M06] Character selection -> Gameplay (GAMEPLAY_FRONTEND_HUD_CONTRACT.md 3): the local player's body
+    // comes from the frontend's CustomTransformers selection; CheckReadySpawn waits for it [CONF].
+    world_.match().requireCharacterSelection(world_.localMatchPlayer());
+    selectionSent_ = false;
     lifecycleT_ = 0.0f; lifecycleStep_ = 0;
     frontend::FlowTrace::emit("match.gameplay", {{"map", gl.map}, {"mode", gl.modeTag}, {"goalScore", std::to_string(gl.settings.goalScore)},
                                                  {"timeLimit", std::to_string(gl.settings.timeLimit)}});
@@ -351,6 +355,23 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
 void Application::routeMatchToFrontend(float dt) {
     frontend::GameFlow& flow = frontend_->flow();
     const int me = world_.localMatchPlayer();
+    // [integration M06] Customize.SelectCharacter -> TnPlayerController.SelectCharacter -> PRI._SelectedCharacter:
+    // the frontend's selection becomes Gameplay's CharacterSelection (type, specialty, iconic chassis UniqueId).
+    if (!selectionSent_ && flow.selectedCharacter().valid && me >= 0) {
+        const frontend::GameFlow::SelectedCharacter& fc = flow.selectedCharacter();
+        game::CharacterSelection cs;
+        cs.type = fc.type;
+        const std::string sp = fc.specialty;
+        cs.specialty = sp == "Scientist" ? game::Specialty::Scientist : sp == "Scout" ? game::Specialty::Scout
+                     : sp == "Soldier" ? game::Specialty::Soldier : game::Specialty::Leader;
+        const int team = world_.match().players()[(size_t)me].team;
+        cs.chassisId = fc.chassis[team == 1 ? 1 : 0].empty() ? fc.chassis[0] : fc.chassis[team == 1 ? 1 : 0];
+        cs.customSlot = fc.name;
+        world_.match().selectCharacter(me, cs);
+        selectionSent_ = true;
+        frontend::FlowTrace::emit("match.characterSelected", {{"name", fc.name}, {"type", std::to_string(cs.type)}, {"specialty", sp},
+                                                            {"chassis", game::resolveChassis(cs, team == 1 ? 1 : 0)}});
+    }
     const game::Match& match = world_.match();
     matchClock_ += dt;
     auto teamOf = [&](int p) { return (p >= 0 && (size_t)p < match.players().size()) ? (match.players()[(size_t)p].team == 255 ? -1 : match.players()[(size_t)p].team) : -1; };
@@ -401,7 +422,8 @@ void Application::routeMatchToFrontend(float dt) {
             frontend::FlowTrace::emit("match.spawn", {{"player", std::to_string(e.player)}, {"start", e.text}});
             {   // RUNTIME-EVENTS: spawn (start = the PlayerStart Gameplay chose), respawn with the delay since death
                 const core::Vec3 sp = (e.value >= 0 && (size_t)e.value < match.starts().size()) ? match.starts()[(size_t)e.value].pos : posOf(e.player);
-                LOG_INFO("MATCH spawn player=%d team=%d start=%s pos=%.1f,%.1f,%.1f", e.player, teamOf(e.player), e.text.c_str(), sp.x, sp.y, sp.z);
+                LOG_INFO("MATCH spawn player=%d team=%d start=%s pos=%.1f,%.1f,%.1f chassis=%s", e.player, teamOf(e.player), e.text.c_str(),
+                         sp.x, sp.y, sp.z, match.players()[(size_t)e.player].chassis.c_str());
                 auto d = deathAt_.find(e.player);
                 if (d != deathAt_.end()) { LOG_INFO("MATCH respawn player=%d start=%s delay_s=%.2f", e.player, e.text.c_str(), matchClock_ - d->second); deathAt_.erase(d); }
             }

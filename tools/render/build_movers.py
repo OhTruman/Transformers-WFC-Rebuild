@@ -24,6 +24,10 @@ def manifest(mapname, kind):
     last name token in lower case, or WFC_MANIFEST_PREFIX. Returns None when the map has no such manifest."""
     pre = os.environ.get('WFC_MANIFEST_PREFIX') or mapname.split('_')[-1].lower()
     p = os.path.join(MANI, '%s_%s.json' % (pre, kind))
+    if not os.path.exists(p):
+        # [integration M06] the generic map pipeline writes manifests/next_map/<MAP>_<kind>.json (AssetTools
+        # MAP_PIPELINE.md); Streets keeps its canonical streets_<kind>.json
+        p = os.path.join(MANI, 'next_map', '%s_%s.json' % (mapname, kind))
     return json.load(open(p, encoding='utf-8')) if os.path.exists(p) else None
 
 def rot_matrix(pitch, yaw, roll):

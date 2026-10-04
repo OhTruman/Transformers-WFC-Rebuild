@@ -891,7 +891,13 @@ bool Pipeline::load(const std::string& mapName) {
     }
     LOG_INFO("wfc: shader path active: %zu materials, %zu lightmapped components, %zu lights, fog %s (%s)",
              mats_.size(), lightmaps_.size(), lights_.size(), fogOn_ ? "on" : "off", dataDir_.c_str());
-    loadMapProps(assetRoot() + "/Maps/" + mapName + "/render_index.json");
+    // [integration M06] Maps without a shipped runtime index (every map but Streets) get one converted from the AssetTools
+    // generic index into the render data (tools/render/build_render_index.py); the shipped index wins when present.
+    {
+        const std::string shipped = assetRoot() + "/Maps/" + mapName + "/render_index.json";
+        const std::string converted = dataDir_ + "/render_index.json";
+        loadMapProps(std::ifstream(shipped).good() ? shipped : converted);
+    }
     return true;
 }
 

@@ -130,7 +130,7 @@ public:
     const std::vector<ObjectiveObject>& objectives() const { return objectives_; }
     const std::vector<ModeVisibleActor>& modeVisibleActors() const { return modeActors_; }
     // Domination totems = the TnDominationPoint entries of objectives() (visible only in DOM).
-    static std::vector<std::string> moverActorNames();
+    std::vector<std::string> moverActorNames() const;   // the movers this map loaded (collision split)
     // KOTH: TnKingOfTheHillZoneBase.ActivateNewZone — exactly one zone Active (shown + marker), the rest Inactive.
     // MatchStarting picks a random initial zone; what triggers later rotations is not recovered (API only).
     int activeKothZone() const { return kothActive_; }

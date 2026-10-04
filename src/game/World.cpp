@@ -176,9 +176,9 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     const std::string mapDir = root + "/Maps/" + mapName_ + "/";
     mapState_.load(mapDir + "gameplay.json", matchMode_);
     mapState_.loadObjectiveVolumes(mapDir + "physics.json");
-    auto splitMovers = [](const render::MeshData& in, render::MeshData& out,
+    auto splitMovers = [this](const render::MeshData& in, render::MeshData& out,
                           std::vector<std::pair<std::string, std::vector<core::Vec3>>>& moverTris) {
-        std::vector<std::string> names = MapState::moverActorNames();
+        std::vector<std::string> names = mapState_.moverActorNames();
         out.positions = in.positions;
         for (const render::SubMesh& sm : in.subs) {
             bool mover = std::find(names.begin(), names.end(), sm.nodeName) != names.end();
@@ -233,7 +233,23 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
             const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_;
             return lineWorld.segmentHit(a, b, t);
         });
-        killZ_ = -750.0f;   // BASE TnWorldInfo KillZ -75000 UU [CONF PHYSICS_STREETS]
+        // KillZ: the persistent level's TnWorldInfo (<map>_BASE_m in physics.json "world") [CONF AssetTools physics].
+        // [integration M06] Read per map (was Streets' -75000 UU for every map; Gorge authors -7500, Seed -1500).
+        killZ_ = -2621.43f;   // UE3 WorldInfo default -262143 UU if the map authors none
+        {
+            std::ifstream pf(mapDir + "physics.json", std::ios::binary);
+            std::stringstream ps; ps << pf.rdbuf();
+            assets::Json pj;
+            if (pf && assets::Json::parse(ps.str(), pj)) {
+                for (const auto& kv : pj["world"].obj) {
+                    std::string lv = kv.first;
+                    std::transform(lv.begin(), lv.end(), lv.begin(), ::tolower);
+                    if (lv.size() >= 7 && lv.compare(lv.size() - 7, 7, "_base_m") == 0 && kv.second.has("KillZ"))
+                        killZ_ = kv.second["KillZ"].asFloat() * 0.01f;
+                }
+            }
+            LOG_INFO("World: KillZ %.1f m (%s)", killZ_, mapName_.c_str());
+        }
     }
 
     // Place the player at an authored start of the match's class (FFA in DM, team starts otherwise), with the
