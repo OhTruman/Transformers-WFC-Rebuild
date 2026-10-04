@@ -33,7 +33,8 @@ Inputs:
 | Radar / minimap | no radar or minimap object in the authored data | UNKNOWN (RE verifying) | nothing drawn |
 | Player / objective markers | Canvas `TnObjectiveMarkerTypeSprite.Draw` | CONFIRMED (RE) | **Rendering**: `render::HudMarkers` from the authored setups (`_ui/hud_markers.json`, 40 types; Versus ally 0.08 / 0.04, enemy 0.03125, focus 0.02734 × width, 1.0 s hysteresis, 3000 UU auto-focus, label colours). VISUALLY VERIFIED (`WFC_MARKERTEST`). Gameplay supplies the rule-visible markers |
 | Canvas text | UE3 UFont: FFontCharacter table + CharRemap (cooked) | CONFIRMED data | `drawCanvasText`: MarkerFont 371 glyphs (USize advance, VerticalOffset, alpha coverage). Label centring PROVISIONAL |
-| Collision report tooling | — | — | `WFC_PICK=1`: authored component / StaticMesh / material / distance / normal of the surface under the crosshair (`IRenderer::pickWorld`, diagnostic only) |
+| Collision report tooling | — | — | `WFC_PICK=1`: authored component / StaticMesh / material / distance / normal of the surface under the crosshair (`IRenderer::pickWorld`, diagnostic only), plus the movement collision world's hit on the same ray ("collision ok" / "differs" / "NONE") |
+| Canvas simple elements (text, texture tiles) | engine PS: `oC0.rgb = exp(log(tex × ColorScale + ColorBias) × InverseGamma × 2.2)` (saturated), `oC0.a = tex.a × ColorScale.a + ColorBias.a` | CONFIRMED shader (sc_engine) / runtime `InverseGamma` value UNKNOWN | text drawn display-referred (= InverseGamma 1/2.2); HUD gamma stays PARTIAL until the Canvas gamma value is known |
 | Menu background | the UI_FrontEnd_m 3D scene (orbit cameras, energon rings) | CONFIRMED source / not exported | the renderer loads it through `loadMapRenderData` once AssetTools exports it; no substitute |
 | Regression | glass (9 views) and steam over time (12) identical to M07; validation captures (idle, walk, jump, fire, vehicle idle / move / boost, both transforms) | VISUALLY VERIFIED | — |
 

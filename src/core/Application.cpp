@@ -247,9 +247,17 @@ void Application::run() {
             static render::IRenderer::PickHit last;
             static bool lastOk = false;
             static long pickFrame = -100;
+            static float pickCol = -1.0f;
             if (frame - pickFrame >= 10) {             // CPU ray over the world mesh: every 10 frames
                 pickFrame = frame;
                 lastOk = renderer_->pickWorld(camera_.pos, core::forwardFromYawPitch(camera_.yaw, camera_.pitch), 500.0f, last);
+                // the movement collision world along the same ray: "rendered but no pawn collision" reports
+                pickCol = -1.0f;
+                if (const game::CollisionWorld* cw = world_.collision()) {
+                    core::Vec3 dir = core::forwardFromYawPitch(camera_.yaw, camera_.pitch);
+                    float t;
+                    if (cw->segmentHit(camera_.pos, camera_.pos + dir * 500.0f, t)) pickCol = t * 500.0f;
+                }
                 if (lastOk) LOG_INFO("PICK %s | %s | %s | %.2f m | n=(%.2f %.2f %.2f) at (%.2f %.2f %.2f)", last.component.c_str(),
                                      last.mesh.c_str(), last.material.c_str(), last.distance, last.normal.x, last.normal.y,
                                      last.normal.z, last.point.x, last.point.y, last.point.z);
@@ -259,9 +267,13 @@ void Application::run() {
                                                                     ? 0 : last.component.find("PersistentLevel.") + 16)
                                        : std::string("(no static mesh: BSP / sky / none)");
             std::string line2 = lastOk ? last.mesh + "  " + last.material : std::string();
-            char d[64]; std::snprintf(d, sizeof d, "  %.1f m", lastOk ? last.distance : 0.0f);
+            char d[128];
+            if (pickCol < 0.0f) std::snprintf(d, sizeof d, "  %.1f m  | collision: NONE on this ray", lastOk ? last.distance : 0.0f);
+            else if (lastOk && std::fabs(pickCol - last.distance) > 0.25f)
+                std::snprintf(d, sizeof d, "  %.1f m  | collision at %.1f m (differs)", last.distance, pickCol);
+            else std::snprintf(d, sizeof d, "  %.1f m  | collision ok", lastOk ? last.distance : pickCol);
             const float y = (float)window_->height() * 0.86f;
-            renderer_->drawCanvasText("MarkerFont", line1 + (lastOk ? d : ""), 20.0f, y, col);
+            renderer_->drawCanvasText("MarkerFont", line1 + d, 20.0f, y, col);
             if (!line2.empty()) renderer_->drawCanvasText("MarkerFont", line2, 20.0f, y + 22.0f, col);
         }
         if (std::getenv("WFC_MARKERTEST")) {           // diagnostics: TDM player tags (ally + enemy) ahead of the player
