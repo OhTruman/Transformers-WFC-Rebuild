@@ -31,7 +31,13 @@ $defs = [ordered]@{
     boost_cycle  = @{ frames = 900; env = $V + @{ WFC_AUTOBOOST_CYCLE = "45"; WFC_AUTOTURN = "0.2" } }
     reverse      = @{ frames = 480; env = @{ WFC_STARTVEHICLE = "1"; WFC_AUTOBACK = "1"; WFC_AUTOTURN = "0.3" } }
     strafe_boost = @{ frames = 600; env = $V + @{ WFC_AUTOBOOST = "1"; WFC_AUTOSTRAFE = "1" } }
+    # robot scenarios (playtest #13: visible blocking geometry has collision where authored)
+    robot_walk   = @{ frames = 600; env = @{ WFC_AUTOWALK = "1" } }
+    robot_turn   = @{ frames = 600; env = @{ WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.4" } }
+    robot_jump   = @{ frames = 600; env = @{ WFC_AUTOWALK = "1"; WFC_AUTOJUMP_EVERY = "50"; WFC_AUTOTURN = "-0.3" } }
 }
+$visGlb = "F:\Transformers Rebuild\ExtractedAssets\VerticalSlice\Maps\MP_IAC_Streets\world.glb"
+$flagsJson = "F:\Transformers Rebuild\ExtractedAssets\VerticalSlice\Maps\MP_IAC_Streets\collision.json"
 if (-not $Scenarios.Count) { $Scenarios = @($defs.Keys) }
 $runsDir = Join-Path $OutDir "runs"; New-Item -ItemType Directory -Force $runsDir | Out-Null
 $todo = @(); foreach ($sc in $Scenarios) { foreach ($s in $Starts) { $todo += @{ sc = $sc; s = $s } } }
@@ -54,7 +60,7 @@ foreach ($r in $todo) {
     $name = "{0}_s{1:D2}" -f $r.sc, $r.s; $tr = Join-Path (Join-Path $runsDir $name) "trace.csv"
     if (-not (Test-Path $tr)) { continue }
     $t = @(Import-Csv $tr); if ($t.Count -lt 10) { $runs[$name] = @{ broken = $true; r = $r }; continue }
-    $veh = @($t | Where-Object form -eq "VEHICLE")
+    $veh = if ($R0 = $r.sc -like "robot_*") { @($t | Where-Object form -eq "ROBOT") } else { @($t | Where-Object form -eq "VEHICLE") }
     $pts = New-Object System.Collections.Generic.List[object]; $lastKey = ""
     foreach ($f in $veh) { $k = "$($f.x),$($f.y),$($f.z)"; if ($k -ne $lastKey) { $pts.Add(@([int]$f.frame, [double]$f.x, [double]$f.y, [double]$f.z)); $lastKey = $k } }
     $paths.Add(@{ id = $name; heights = $Heights; pts = $pts.ToArray() })
@@ -81,7 +87,11 @@ foreach ($r in $todo) {
 $pf = Join-Path $OutDir "paths.json"; $po = Join-Path $OutDir "sweep_out.json"; $qf = Join-Path $OutDir "queries.json"; $qo = Join-Path $OutDir "queries_out.json"
 [IO.File]::WriteAllText($pf, ($paths | ConvertTo-Json -Compress -Depth 5)); [IO.File]::WriteAllText($qf, ($queries | ConvertTo-Json -Compress -Depth 3))
 Push-Location $PSScriptRoot
-try { & $py "collision_sweep.py" $colGlb $pf $po | Out-Host; & $py "collision_query.py" $colGlb $qf $qo | Out-Host } finally { Pop-Location }
+$pv = Join-Path $OutDir "visible_out.json"
+try { & $py "collision_sweep.py" $colGlb $pf $po | Out-Host; & $py "collision_query.py" $colGlb $qf $qo | Out-Host; & $py "collision_sweep.py" $visGlb $pf $pv | Out-Host } finally { Pop-Location }
+# authored per-actor flags: block = False meshes are meant to be passable (collision.json prop_collision_flags)
+$flags = @{}; foreach ($f in (Get-Content -Raw $flagsJson | ConvertFrom-Json).prop_collision_flags) { $flags[$f.actor] = [bool]$f.block }
+$visCross = @{}; foreach ($c in (Get-Content -Raw $pv | ConvertFrom-Json).crossings) { if ($c.id -like "probe|*") { continue }; if (-not $visCross.ContainsKey($c.id)) { $visCross[$c.id] = @() }; $visCross[$c.id] += $c }
 $S = Get-Content -Raw $po | ConvertFrom-Json; $Q = @{}; foreach ($o in (Get-Content -Raw $qo | ConvertFrom-Json)) { $Q[$o.id] = $o }
 $X = @{}; foreach ($c in $S.crossings) { if (-not $X.ContainsKey($c.id)) { $X[$c.id] = @() }; $X[$c.id] += $c }
 # ---- classification ----
@@ -91,6 +101,9 @@ foreach ($name in ($runs.Keys | Sort-Object)) {
     if ($R.broken) { $table.Add([pscustomobject][ordered]@{ run = $name; scenario = $sc; start = $R.r.s; verdict = "TOOL" }); continue }
     $t = $R.t; $end = $t[-1]; $eq = $Q["$name|end"]
     $cr = @($X[$name] | Where-Object { $_ })
+    $vis = @($visCross[$name] | Where-Object { $_ }); $actorOf = { param($n) $n -replace '\.\d+$', '' }   # world.glb nodes are Actor.componentIndex; flags are per actor
+    $visBlock = @($vis | Where-Object { $a = & $actorOf $_.node; $flags.ContainsKey($a) -and $flags[$a] }); $visPass = @($vis | Where-Object { $a = & $actorOf $_.node; $flags.ContainsKey($a) -and -not $flags[$a] })
+    $visBsp = @($vis | Where-Object { $_.node -like "BSP_*" })
     $rampStops = @(); $wallStops = 0; $otherStops = @()
     foreach ($st in $R.stops) {
         $wall = @($X["probe|$name|$($st.frame)"] | Where-Object { $_ }).Count
@@ -110,7 +123,7 @@ foreach ($name in ($runs.Keys | Sort-Object)) {
     $first = if ($cr.Count) { $cr[0] } else { $null }
     $table.Add([pscustomobject][ordered]@{ run = $name; scenario = $sc; start = $R.r.s; verdict = $verdict; distance_m = [Math]::Round($dist, 1); max_speed = $maxSp
         crossings = $cr.Count; first_frame = $(if ($first) { $first.frame }); first_h = $(if ($first) { $first.h }); actor = $(if ($first) { $first.node }); at = $(if ($first) { "{0},{1},{2}" -f $first.x, $first.y, $first.z })
-        actors = (($cr | ForEach-Object { $_.node } | Select-Object -Unique) -join ";"); end_x = $end.x; end_y = $end.y; end_z = $end.z; min_y = [Math]::Round($minY, 2); last3s_m = [Math]::Round($travel, 2); hard_stops = @($R.stops).Count; wall_stops = $wallStops; ramp_stops = ($rampStops -join " | "); open_stops = ($otherStops -join " | ") })
+        actors = (($cr | ForEach-Object { $_.node } | Select-Object -Unique) -join ";"); end_x = $end.x; end_y = $end.y; end_z = $end.z; min_y = [Math]::Round($minY, 2); last3s_m = [Math]::Round($travel, 2); hard_stops = @($R.stops).Count; wall_stops = $wallStops; ramp_stops = ($rampStops -join " | "); open_stops = ($otherStops -join " | "); visible_blocking = ((@($visBlock) + @($visBsp) | ForEach-Object { $_.node } | Select-Object -Unique) -join ";"); visible_passable = (($visPass | ForEach-Object { $_.node } | Select-Object -Unique) -join ";") })
 }
 Write-WfcCsv $table (Join-Path $OutDir "vehicle_collision.csv")
 foreach ($sc in $Scenarios) {
@@ -119,6 +132,9 @@ foreach ($sc in $Scenarios) {
     $km = [Math]::Round((($rows | Measure-Object distance_m -Sum).Sum) / 1000, 2)
     Add-WfcResult $res "vehicle_collision.$sc" $(if ($f.Count) { "FAIL" } else { "PASS" }) $f.Count ("{0} runs, {1} km driven: {2}.{3}" -f $rows.Count, $km, (($rows | Group-Object verdict | ForEach-Object { "$($_.Name) $($_.Count)" }) -join ", "), $(if ($f.Count) { " Failing: " + (($f | Select-Object -First 8 | ForEach-Object { "{0} through {1} at ({2}) h {3} m @f{4}" -f $_.run, $_.actor, $_.at, $_.first_h, $_.first_frame }) -join "; ") } else { "" })) "Gameplay"
 }
+$vb = @($table | Where-Object { $_.visible_blocking }); $vp = @($table | Where-Object { $_.visible_passable })
+Add-WfcResult $res "vehicle_collision.visible_blocking_geometry" $(if ($vb.Count) { "HUMAN" } else { "PASS" }) $vb.Count ("runs whose pawn crossed VISIBLE triangles of meshes authored blocking (collision.json block=True) without crossing the exported collision: {0} (simple collision bodies are not exported, so this is a look-here list, not proof: visible-but-passable vs a simplified body). Passing through exported collision is the FAIL above. {1}" -f $vb.Count, (($vb | Select-Object -First 6 | ForEach-Object { "$($_.run): $($_.visible_blocking)" }) -join "; ")) "Gameplay/AssetTools"
+Add-WfcResult $res "vehicle_collision.visible_passable_by_authoring" "INFO" $vp.Count ("runs passing through visible meshes authored block=False (legitimately passable): {0}; actors {1}" -f $vp.Count, ((@($vp | ForEach-Object { $_.visible_passable -split ";" }) | Select-Object -Unique | Select-Object -First 10) -join ", ")) ""
 $rs = @($table | Where-Object { $_.ramp_stops }); $os = @($table | Where-Object { $_.open_stops })
 Add-WfcResult $res "vehicle_collision.ramp_hard_stops" $(if ($rs.Count) { "FAIL" } else { "PASS" }) $rs.Count ("hard stops (> 8 m/s to < 35% in 0.2 s) with no authored wall / step ahead on a rising walkable floor: {0} runs. {1}" -f $rs.Count, (($rs | Select-Object -First 6 | ForEach-Object { $_.ramp_stops }) -join "; ")) "Gameplay"
 Add-WfcResult $res "vehicle_collision.open_floor_stops" $(if ($os.Count) { "HUMAN" } else { "PASS" }) $os.Count ("hard stops with no authored wall / step ahead on a level floor: {0} runs (a prop / volume the probe misses, or an inappropriate stop: look at the location). {1}" -f $os.Count, (($os | Select-Object -First 6 | ForEach-Object { $_.open_stops }) -join "; ")) "Gameplay"
