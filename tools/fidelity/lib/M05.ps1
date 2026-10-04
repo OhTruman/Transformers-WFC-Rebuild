@@ -82,10 +82,10 @@ function Flow-LogIndex($runLog, [string]$ev, [int]$nth = 0) { $hits = @($runLog 
 function Find-DoubledCues([string]$WfcLog) {
     $prev = $null; $dups = New-Object System.Collections.Generic.List[object]
     foreach ($c in (Grep-Log $WfcLog '\] CUE \S+ ev\d+ t=0\.000')) {
-        $m = [regex]::Match($c.text, '\] CUE (\S+) ev\d+ t=0\.000 wave=(\d+).*owner=(-?\d+).*pos=(\S+)')
+        $m = [regex]::Match($c.text, '\] CUE (\S+) ev(\d+) t=0\.000 wave=(\d+).*owner=(-?\d+).*pos=(\S+)')
         if (-not $m.Success) { continue }
-        $key = "$($m.Groups[1].Value)|$($m.Groups[2].Value)|$($m.Groups[3].Value)|$($m.Groups[4].Value)"
-        if ($prev -and $prev.key -eq $key -and $c.i -eq $prev.i + 1) { $dups.Add([pscustomobject]@{ i = $c.i; cue = $m.Groups[1].Value; owner = $m.Groups[3].Value; pos = $m.Groups[4].Value }) }
+        $key = "$($m.Groups[1].Value)|$($m.Groups[2].Value)|$($m.Groups[3].Value)|$($m.Groups[4].Value)|$($m.Groups[5].Value)"   # cue|event|wave|owner|pos: two events of one instance are layering, not a double
+        if ($prev -and $prev.key -eq $key -and $c.i -eq $prev.i + 1) { $dups.Add([pscustomobject]@{ i = $c.i; cue = $m.Groups[1].Value; owner = $m.Groups[4].Value; pos = $m.Groups[5].Value }) }
         $prev = @{ key = $key; i = $c.i }
     }
     return $dups.ToArray()

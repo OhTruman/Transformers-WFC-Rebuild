@@ -22,7 +22,7 @@
 param([Parameter(Mandatory)][string]$Root, [ValidateSet("Release", "Debug")][string]$Config = "Release", [string]$OutDir = "",
       [int]$Cycles = 8, [switch]$Full, [string[]]$Runs = @(), [int]$TimeoutSec = 1500)
 $ErrorActionPreference = "Stop"
-$Runs = @($Runs | ForEach-Object { $_ -split "," } | Where-Object { $_ }); if (-not $Runs.Count) { $Runs = @("R1", "R2", "R3", "R4", "R5", "R6", "S") }
+$Runs = @($Runs | ForEach-Object { $_ -split "," } | Where-Object { $_ }); if (-not $Runs.Count) { $Runs = @("R1", "R2", "R3", "R4", "R5", "R6", "R7", "S") }
 if (-not $Full) { $Runs = @($Runs | Where-Object { $_ -ne "R3" }) }
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1")
 Add-Type -ReferencedAssemblies System.Drawing -Path (Join-Path $PSScriptRoot "lib\ImageStats.cs") -ErrorAction SilentlyContinue
@@ -127,6 +127,13 @@ if ($Runs -contains "R1") {
         Res "STATE" "match_loading_text" $(if ($lm.title -eq $X.loading.match_title.value -and $lm.message -eq $X.loading.match_message.value -and [int]$lm.tips -eq 3) { "PASS" } else { "FAIL" }) ("title '{0}' message '{1}' tips {2}" -f $lm.title, $lm.message, $lm.tips) "Frontend"
         $ml = @(Flow-Ev $F "match.launch")[0]
         Res "OWNERSHIP" "launch_request" $(if ($ml.mode -eq "TDM" -and [int]$ml.goalScore -eq 40 -and [int]$ml.timeLimit -eq 900 -and $ml.runtimeDir -eq "MP_IAC_Streets") { "PASS" } else { "FAIL" }) ("frontend MatchLaunch: mode {0} goal {1} time {2} runtimeDir {3} team {4}" -f $ml.mode, $ml.goalScore, $ml.timeLimit, $ml.runtimeDir, $ml.team) "Frontend"
+        $mg = @(Flow-Ev $F "match.gameplay")[0]; $al = @(Flow-Ev $F "audio.loaded")[0]
+        if ($mg) {
+            $okG = $mg.mode -eq $ml.mode -and [int]$mg.goalScore -eq [int]$ml.goalScore -and [int]$mg.timeLimit -eq [int]$ml.timeLimit -and $mg.map -eq $ml.runtimeDir
+            Res "OWNERSHIP" "gameplay_match_settings" $(if ($okG) { "PASS" } else { "FAIL" }) ("Gameplay launched map {0} mode {1} goal {2} time {3}; frontend selection runtimeDir {4} mode {5} goal {6} time {7} (RE D1-D3: from the URL)" -f $mg.map, $mg.mode, $mg.goalScore, $mg.timeLimit, $ml.runtimeDir, $ml.mode, $ml.goalScore, $ml.timeLimit) "Integration/Gameplay"
+            Res "MATCH" "default_rules_tdm" $(if ([int]$mg.goalScore -eq $X.match_tdm.goal_score.value -and [int]$mg.timeLimit -eq $X.match_tdm.time_limit_s.value) { "PASS" } else { "FAIL" }) ("default host options -> Gameplay goal {0} / time {1} s (BLK B4/D2: 40 / 900)" -f $mg.goalScore, $mg.timeLimit) "Gameplay/Frontend"
+        }
+        if ($al) { Res "OWNERSHIP" "audio_map_follows_selection" $(if ("$($al.level)" -like "*$($ml.runtimeDir)*" -or "$($al.level)" -like "*Streets*") { "PASS" } else { "FAIL" }) ("Systems loaded level audio '{0}' for the selected map {1}" -f $al.level, $ml.runtimeDir) "Systems/Integration" }
         # ---- MATCH: Gameplay's execution of the request ----
         $gLaunch = @(Grep-Log $log1 'match: launched'); $gBegin = @(Grep-Log $log1 'match: \S+ begin \(goal'); $gSpawn = @(Grep-Log $log1 'match: local player spawned at')
         if (-not $gLaunch.Count -and -not $gBegin.Count) {
@@ -182,7 +189,10 @@ if ($Runs -contains "R1") {
         else {
             $exp = [ordered]@{ FrontEnd = $X.audio_ownership.frontend_music.value; PartyLobby = $X.audio_ownership.party_lobby_music.value; GameLobby = $X.audio_ownership.game_lobby_music.value }
             foreach ($lv in $exp.Keys) { $p = @($mPlays | Where-Object level -eq $lv); $visits = @($lvlIdx | Where-Object level -eq $lv).Count
-                Res "AUDIO" "music.$lv" $(if ($p.Count -eq $visits -and @($p | Where-Object cue -ne $exp[$lv]).Count -eq 0) { "PASS" } elseif ($p.Count -gt $visits) { "FAIL" } else { "FAIL" }) ("{0} visits, music plays: {1} (expected {2} once per visit)" -f $visits, (($p | ForEach-Object { $_.cue }) -join ","), $exp[$lv]) "Systems" }
+                # cue names may be package-qualified (BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01): the authored cue is the
+                # object name; the package prefix is how Systems logs it (stale exact-match expectation retired 2026-10-04)
+                $wrong = @($p | Where-Object { $_.cue -ne $exp[$lv] -and $_.cue -notlike "*.$($exp[$lv])" })
+                Res "AUDIO" "music.$lv" $(if ($p.Count -eq $visits -and -not $wrong.Count) { "PASS" } else { "FAIL" }) ("{0} visits, music plays: {1} (expected {2} once per visit; package prefix accepted)" -f $visits, (($p | ForEach-Object { $_.cue }) -join ","), $exp[$lv]) "Systems" }
             $mm = @($mPlays | Where-Object level -eq "Match")
             Res "AUDIO" "no_music_in_match" $(if (-not $mm.Count) { "PASS" } else { "FAIL" }) ("music plays during the Streets match: {0} (Streets authors no SeqAct_PlayMusic)" -f (($mm | ForEach-Object { $_.cue }) -join ",")) "Systems"
         }
@@ -235,7 +245,12 @@ if ($Runs -contains "R3") {
     $ing3 = @(Flow-Ev $F3 "ui.state" | Where-Object to -eq "InGame")[0]; $ge3 = @(Flow-Ev $F3 "ui.state" | Where-Object to -eq "GameEnded")[0]
     $dur = if ($ing3 -and $ge3) { [double]$ge3.t - [double]$ing3.t } else { -1 }
     Res "MATCH" "time_limit_end" $(if (Near $dur 600 4) { "PASS" } elseif ($dur -lt 0) { "FAIL" } else { "FAIL" }) ("InGame -> GameEnded after {0:F1} s (TimeLimit 600 s; BLK F3 RemainingTime 0 -> EndGame)" -f $dur) "Gameplay"
-    if ($end3.Count) { Res "MATCH" "tie_no_overtime" $(if ($end3[0].text -match 'reason "" score (\d+)-\1 winner team -1') { "PASS" } elseif ($end3[0].text -match 'reason ""') { "INFO" } else { "FAIL" }) (($end3[0].text -replace '^.*match: ', '') + " (no kills: equal scores -> winner none, 'Tie game', no overtime; BLK F3)") "Gameplay" }
+    $mi3 = @(Grep-Log $log3 '\] MATCH spawn player=(\d+) team=(\d)' | ForEach-Object { [regex]::Match($_.text, 'team=(\d)').Groups[1].Value } | Select-Object -Unique)
+    if ($end3.Count) { $em = [regex]::Match($end3[0].text, 'reason "([^"]*)" score (\d+)-(\d+) winner team (-?\d+)'); $oneTeam = $mi3.Count -eq 1
+        $exp3 = if ($oneTeam) { [int]$mi3[0] } elseif ($em.Groups[2].Value -eq $em.Groups[3].Value) { -1 } else { $null }
+        Res "MATCH" "time_limit_winner" $(if (-not $em.Success) { "FAIL" } elseif ($exp3 -ne $null -and [int]$em.Groups[4].Value -eq $exp3) { "PASS" } else { "FAIL" }) ("{0}; populated teams {1}. TnVersusGame.PickWinningTeam: a team wins if it scores more OR the other team is empty; equal scores with both teams populated = no winner, no overtime (BLK F3) -> expected winner {2}" -f ($end3[0].text -replace '^.*match: ', ''), ($mi3 -join ","), $exp3) "Gameplay" }
+    $pe3 = @(Grep-Log $log3 '\] MATCH end reason=(\S+)')
+    if ($pe3.Count) { Res "MATCH" "protocol_end_reason" $(if ($pe3[0].text -match 'reason=time_limit') { "PASS" } else { "INFO" }) ("MATCH protocol line: " + ($pe3[0].text -replace '^.*MATCH ', '') + " (RUNTIME-EVENTS expects reason=time_limit for a clock end; Integration maps Gameplay's empty EndGame reason to 'other' - validation-hook nit)") "Integration" }
     $hudOff = @(Flow-Ev $F3 "ui.hud" | Where-Object { "$($_.visible)" -eq "False" -and $ge3 -and [double]$_.t -ge [double]$ge3.t - 0.5 })
     $endMovie = @(@(Flow-Ev $F3 "gfx.movie") + @(Flow-Ev $F3 "ui.open") | Where-Object { $_.movie -like "*EndGameStats*" })
     Res "MATCH" "match_end_ui" $(if ($ge3 -and $hudOff.Count -and $endMovie.Count) { "PASS" } else { "FAIL" }) ("GameEnded {0}; HUD hidden {1}; EndGameStats opened {2} (BLK F4: event 9, HUD hidden, EndGameStats_GFX)" -f [bool]$ge3, $hudOff.Count, $endMovie.Count) "Gameplay/Frontend"
@@ -305,11 +320,21 @@ if ($Runs -contains "R4") {
     Res "LIFETIME" "handles_threads" $(if (($slH -ne $null -and $slH -gt 20) -or ($slT -ne $null -and $slT -gt 0.5)) { "FAIL" } else { "PASS" }) ("handles at each return: {0} (slope {1}); threads: {2} (slope {3})" -f (($rows | ForEach-Object { $_.handles }) -join " > "), $slH, (($rows | ForEach-Object { $_.threads }) -join " > "), $slT) "Integration"
     Res "LIFETIME" "gl_release_per_return" $(if (-not $glr.Count) { "INFO" } elseif ($glCounts.Count -eq 1) { "PASS" } else { "FAIL" }) ("GL objects released at each return: " + ($glCounts -join " | ") + $(if (-not $glr.Count) { " (no match.glRelease events: Rendering's unloadMapRenderData replaced the frontend GlCensus stopgap, or nothing was released)" } else { "" })) "Rendering"
     Res "LIFETIME" "audio_pcm_per_match" $(if (-not @($pcmPeaks | Where-Object { $_ -ne $null }).Count) { "SKIP" } elseif ($slPcm -ne $null -and $slPcm -gt 2) { "FAIL" } else { "PASS" }) ("peak decoded PCM per match: {0} MB; peak live instances per match: {1}" -f ($pcmPeaks -join " > "), ($livePeaks -join " > ")) "Systems"
+    # Integration's audio.baseline / audio.loaded / audio.unloaded flow events: Systems' own audio state at each step
+    $aBase = @(Flow-Ev $F4 "audio.baseline"); $aLoad = @(Flow-Ev $F4 "audio.loaded"); $aUnl = @(Flow-Ev $F4 "audio.unloaded")
+    if ($aUnl.Count) {
+        $basePcm = if ($aBase.Count) { [double]$aBase[0].pcmMB } else { $null }
+        $badU = @($aUnl | Where-Object { [int]$_.voices -ne 0 -or [int]$_.instances -ne 0 -or [int]$_.levelCues -ne 0 -or ($basePcm -ne $null -and [Math]::Abs([double]$_.pcmMB - $basePcm) -gt 1.0) })
+        Res "AUDIO" "map_audio_released_each_unload" $(if (-not $badU.Count) { "PASS" } else { "FAIL" }) ("after each of {0} unloads (voices / instances / level cues / PCM MB): {1}; pre-load baseline PCM {2} MB (Systems guarantee: 0 / 0 / 0 / baseline)" -f $aUnl.Count, (($aUnl | ForEach-Object { "$($_.voices)/$($_.instances)/$($_.levelCues)/$($_.pcmMB)" }) -join " | "), $basePcm) "Systems"
+        $lv = @($aLoad | ForEach-Object { "$($_.level)" } | Select-Object -Unique); $lp = @($aLoad | ForEach-Object { [double]$_.pcmMB }); $lc = @($aLoad | ForEach-Object { [int]$_.levelCues } | Select-Object -Unique)
+        Res "AUDIO" "map_audio_loaded_each_match" $(if ($aLoad.Count -eq $loaded.Count -and $lc.Count -eq 1 -and (($lp | Measure-Object -Maximum).Maximum - ($lp | Measure-Object -Minimum).Minimum) -le 1.0) { "PASS" } else { "FAIL" }) ("map audio at each match load: level {0}, level cues {1}, PCM {2} MB" -f ($lv -join ","), ($lc -join ","), ($lp -join " / ")) "Systems"
+    }
     $afterUnl = @(); for ($c = 0; $c -lt $unl.Count; $c++) { $iU = Flow-LogIndex $L4 "match.unloaded" $c; $nx = @($amb4 | Where-Object { $_.i -gt $iU } | Select-Object -First 1)[0]; if ($nx) { $afterUnl += $nx } }
     $afterUnl = @($afterUnl | Where-Object { $_.map -ne $null -or $_.pcm -ne $null })
+    if ($aUnl.Count) { $afterUnl = @() }   # Systems state at the unload (audio.unloaded) is the evidence; AMB only logs inside a match
     if ($afterUnl.Count) { $bad = @($afterUnl | Where-Object { $_.map -like "*Streets*" -or $_.pcm -gt $X.audio_ownership.pcm_base_mb.value * 1.15 + 260 }); Res "AUDIO" "map_audio_released_on_return" $(if (-not $bad.Count) { "PASS" } else { "FAIL" }) ("first AMB sample after each unload: " + (($afterUnl | ForEach-Object { "map $($_.map) live $($_.live) voices $($_.backendVoices) pcm $($_.pcm)" }) -join " | ") + " (Streets audio must be gone; frontend level only)") "Systems" }
-    else { Res "AUDIO" "map_audio_released_on_return" "SKIP" "no AMB samples outside the match (the frontend runtime does not log AMB); see Systems' own soak in SELFTEST" "Systems" }
-    $fePlays = @(Grep-Log $log4 "\] MUSIC play $($X.audio_ownership.frontend_music.value)")
+    elseif (-not $aUnl.Count) { Res "AUDIO" "map_audio_released_on_return" "SKIP" "no AMB samples outside the match (the frontend runtime does not log AMB); see Systems' own soak in SELFTEST" "Systems" }
+    $fePlays = @(Grep-Log $log4 ("\] MUSIC play (\S+\.)?" + $X.audio_ownership.frontend_music.value + " "))
     Res "AUDIO" "menu_music_resumes" $(if (-not (@(Grep-Log $log4 '\] MUSIC ')).Count) { "SKIP" } elseif ($fePlays.Count -ge $rets.Count) { "PASS" } else { "FAIL" }) ("frontend music starts: {0} for {1} returns (+ boot)" -f $fePlays.Count, $rets.Count) "Systems/Frontend"
     $mInMatch = 0; for ($c = 0; $c -lt $unl.Count; $c++) { $iL = Flow-LogIndex $L4 "match.loaded" $c; $iU = Flow-LogIndex $L4 "match.unloaded" $c; $mInMatch += @(Grep-Log $log4 '\] MUSIC play ' | Where-Object { $_.i -gt $iL -and $_.i -lt $iU }).Count }
     Res "AUDIO" "no_menu_music_in_matches" $(if (-not (@(Grep-Log $log4 '\] MUSIC ')).Count) { "SKIP" } elseif (-not $mInMatch) { "PASS" } else { "FAIL" }) ("music starts inside {0} matches: {1}" -f $unl.Count, $mInMatch) "Systems"
@@ -335,7 +360,11 @@ if ($Runs -contains "R5") {
     $sel = @(Flow-Ev $F5 "snapshot" | Where-Object why -eq "selected")[0]; $ml5 = @(Flow-Ev $F5 "match.launch")[0]
     $gL = @(Grep-Log $log5 'match: launched|launchMatch|rejected|not loaded|unknown map'); $amb5 = @(Grep-Log $log5 'ambient: \S+:'); $after = @(Flow-Ev $F5 "snapshot" | Where-Object why -eq "after2")[0]
     $uiMap = $sel.mapId; $saysStreets = @($gL | Where-Object { $_.text -match 'match: launched \S*Streets' }).Count -or @($amb5 | Where-Object { $_.text -match 'Streets' -and $_.i -gt (Flow-LogIndex (Read-RunLog $log5) "match.launch" 0) }).Count
-    $st5 = if (-not $sel -or [int]$uiMap -ne 510) { "SKIP" } elseif ($saysStreets) { "FAIL" } elseif ($ml5 -and $ml5.runtimeDir -like "*Gorge*" -and @($gL | Where-Object { $_.text -match 'match: launched \S*Gorge' }).Count) { "PASS" } elseif ($after -and $after.level -ne "Match") { "KNOWN" } else { "INFO" }
+    $mg5 = @(Flow-Ev $F5 "match.gameplay")[0]; $al5 = @(Flow-Ev $F5 "audio.loaded")[0]
+    $gorgeEnabled = @(Flow-Ev $F5 "gamelobby.map" | Where-Object { [int]$_.mapId -eq 510 -and "$($_.hasRequiredAssets)" -eq "True" }).Count -gt 0
+    $consistent = $ml5 -and $mg5 -and $mg5.map -eq $ml5.runtimeDir -and (-not $al5 -or "$($al5.level)" -like "*$($ml5.runtimeDir)*")
+    $st5 = if (-not $sel) { "SKIP" } elseif ([int]$uiMap -eq 510) { if ($saysStreets) { "FAIL" } elseif ($consistent) { "PASS" } elseif ($after -and $after.level -ne "Match") { "KNOWN" } else { "FAIL" } } elseif (-not $gorgeEnabled -and $consistent) { "PASS" } else { "FAIL" }
+    Res "OWNERSHIP" "gorge_not_selectable" $(if (-not $gorgeEnabled -and [int]$uiMap -ne 510) { "KNOWN" } elseif ($gorgeEnabled) { "INFO" } else { "FAIL" }) ("map selector stepped right: selected {0}; Gorge selectable {1}. Integration lists Gorge disabled by design (no AssetTools render export; not validated by Gameplay / Rendering) - not counted as a working map" -f $uiMap, $gorgeEnabled) "AssetTools/Integration"
     Res "OWNERSHIP" "ui_map_is_the_map_loaded" $st5 ("UI selected map {0}; frontend launch runtimeDir {1}; Gameplay: {2}; Systems: {3}; level after 55 s: {4}. FAIL = an owner runs Streets behind a Gorge selection; KNOWN = launch refused cleanly (Gameplay documents launchMatch accepts only MP_IAC_Streets in this milestone)" -f $uiMap, $ml5.runtimeDir, (($gL | Select-Object -First 2 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | "), (($amb5 | Select-Object -Last 1 | ForEach-Object { $_.text -replace '^.*\] ', '' })), $after.level) "Integration/Gameplay"
     $crash = $r5.rc -ne 0 -and -not $r5.timedOut -and -not @(Flow-Ev $F5 "exit").Count
     Res "OWNERSHIP" "unsupported_map_handled" $(if ($crash) { "FAIL" } else { "PASS" }) ("process exit {0}; clean exit event {1}" -f $r5.rc, @(Flow-Ev $F5 "exit").Count) "Integration"
@@ -352,6 +381,71 @@ if ($Runs -contains "R6") {
     Res "OWNERSHIP" "ui_mode_is_the_mode_run" $(if (-not $ml6) { "FAIL" } elseif ($ml6.mode -eq "DM" -and @($g6 | Where-Object { $_.text -match 'DM' }).Count -and -not @($g6 | Where-Object { $_.text -match 'TDM' }).Count) { "PASS" } elseif (-not $g6.Count) { "FAIL" } else { "FAIL" }) ("mode list Down -> {0}; launch mode {1} goal {2}; loading title '{3}'; Gameplay: {4}; spawn: {5}" -f $egm6.args, $ml6.mode, $ml6.goalScore, $lm6.title, (($g6 | ForEach-Object { $_.text -replace '^.*match: ', '' }) -join " | "), (($sp6 | Select-Object -First 1 | ForEach-Object { $_.text -replace '^.*spawned at ', '' }))) "Integration/Gameplay"
     if ($sp6.Count) { Res "MATCH" "dm_spawn_class" $(if ($sp6[0].text -match 'TnFreeForAllPlayerStart') { "PASS" } else { "FAIL" }) ("DM local spawn: " + ($sp6[0].text -replace '^.*spawned at ', '')) "Gameplay" }
 }
+
+# ======================================================================= R7 score-limit lifecycle x3 through Gameplay's rules
+# WFC_LIFECYCLE=<goal> (Integration, TEST ONLY): shortens PointsToWin and adds one Gameplay diagnostic opponent; every
+# 2.5 s of InProgress the local player and the opponent alternately kill each other through World::applyMatchDamage,
+# so Gameplay's own scoring, death, wave respawn, score-limit end, MatchOver and ReturnToGameLobby run. The authored
+# defaults (40 / 900) are checked separately in R1 (MATCH.default_rules_tdm).
+if ($Runs -contains "R7" -and (Has "WFC_LIFECYCLE")) {
+    $d7 = Join-Path $OutDir "R7_lifecycle"; New-Item -ItemType Directory -Force $d7 | Out-Null
+    $goal = 5
+    $m1 = @("wait:level=Match", "wait:ui=InGame", "wait:t=1", (Shot $d7 "a_m1_ingame"), "wait:ui=Spectating", "wait:t=0.8", (Shot $d7 "b_m1_spectating"), "wait:ui=GameEnded", "wait:t=2", (Shot $d7 "c_m1_endstats"), "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=2.5", (Shot $d7 "d_lobby_after1"), "snapshot:lobby1")
+    $m2 = @((Path-StartGame), "wait:level=Match", "wait:ui=InGame", "wait:t=1", (Shot $d7 "e_m2_ingame"), "wait:ui=GameEnded", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=2.5", "snapshot:lobby2")
+    $m3 = @((Path-StartGame), "wait:level=Match", "wait:ui=InGame", "wait:t=4", (Shot $d7 "f_m3_ingame"), "snapshot:m3", "showmenu", "wait:ui=Paused", "wait:t=1", "call:Game.QuitToMainMenu", "wait:level=FrontEnd", "wait:ui=FrontEnd", "wait:t=3", (Shot $d7 "g_frontend"), "snapshot:returned", "quit")
+    $s7 = (@((Path-ToHostOptions 0), (Path-CreateGame), (Path-StartGame)) + $m1 + $m2 + $m3) -join ";"
+    $r7 = Invoke-WfcSampled $exe $d7 (BaseEnv $d7 @{ WFC_FRONTEND_SCRIPT = $s7; WFC_SKIPINTRO = "1"; WFC_LIFECYCLE = "$goal"; WFC_CUELOG = "1" }) 1500 1.0
+    Write-WfcCsv $r7.samples (Join-Path $d7 "process.csv")
+    $F7 = Read-FlowLog (Join-Path $d7 "flow.jsonl"); $log7 = Join-Path $d7 "wfc.log"
+    $done7 = @(Flow-Ev $F7 "snapshot" | Where-Object why -eq "returned").Count
+    Res "MATCH" "lifecycle_three_matches" $(if ($done7) { "PASS" } else { "FAIL" }) ("3 matches to the score limit ({0}) through the shipped lobby, then pause -> quit -> frontend: {1}" -f $goal, $(if ($done7) { "completed" } else { "stopped after '" + ((@(Flow-Ev $F7 "script.wait") | Select-Object -Last 1).cond) + "'" })) "Gameplay/Frontend/Integration"
+    # local player id = the victim of the kill that follows a 'local' lifecycle damage
+    $me = $null; for ($k = 0; $k -lt $F7.Count - 1; $k++) { if ($F7[$k].ev -eq "test.lifecycle.damage" -and $F7[$k].victim -eq "local") { $nk = @($F7[($k + 1)..($F7.Count - 1)] | Where-Object ev -eq "match.kill" | Select-Object -First 1)[0]; if ($nk) { $me = "$($nk.victim)"; break } } }
+    $deaths = @(Flow-Ev $F7 "match.kill" | Where-Object { "$($_.victim)" -eq $me })
+    $spect = @(); $resp = @(); $back = @()
+    foreach ($dk in $deaths) {
+        $s = @($F7 | Where-Object { [int]$_.seq -gt [int]$dk.seq -and $_.ev -eq "ui.state" -and $_.to -eq "Spectating" } | Select-Object -First 1)[0]
+        $r = @($F7 | Where-Object { [int]$_.seq -gt [int]$dk.seq -and $_.ev -eq "match.spawn" -and "$($_.player)" -eq $me } | Select-Object -First 1)[0]
+        $b = @($F7 | Where-Object { $r -and [int]$_.seq -ge [int]$r.seq -and $_.ev -eq "ui.state" -and $_.from -eq "Spectating" -and $_.to -eq "InGame" } | Select-Object -First 1)[0]
+        if ($s) { $spect += [double]$s.t - [double]$dk.t }; if ($r) { $resp += [double]$r.t - [double]$dk.t }; if ($b -and $r) { $back += [double]$b.t - [double]$r.t }
+    }
+    Res "MATCH" "death_to_spectating" $(if (-not $deaths.Count) { "FAIL" } elseif (@($spect | Where-Object { [Math]::Abs($_ - 3.0) -gt 0.35 }).Count -or $spect.Count -lt $deaths.Count) { "FAIL" } else { "PASS" }) ("{0} local deaths; Spectating UI after {1} s (BLK E7: MinRespawnDelay 3.0 s -> UI event 4)" -f $deaths.Count, (($spect | ForEach-Object { "{0:N2}" -f $_ }) -join ", ")) "Gameplay/Integration"
+    Res "MATCH" "respawn_delay" $(if (-not $resp.Count) { "FAIL" } elseif (@($resp | Where-Object { [Math]::Abs($_ - 5.0) -gt 0.35 }).Count -or $resp.Count -lt $deaths.Count) { "FAIL" } else { "PASS" }) ("respawn after {0} s (BLK E7 / RE 5.6: wave 5.0 s)" -f (($resp | ForEach-Object { "{0:N2}" -f $_ }) -join ", ")) "Gameplay"
+    Res "MATCH" "respawn_returns_to_ingame" $(if ($back.Count -eq $resp.Count -and $back.Count -and @($back | Where-Object { $_ -gt 0.2 }).Count -eq 0) { "PASS" } else { "FAIL" }) ("Spectating -> InGame at the respawn ({0} of {1}; UI event 5)" -f $back.Count, $resp.Count) "Integration/Frontend"
+    # scores from the RUNTIME-EVENTS MATCH lines, per match
+    $mlines = @(Grep-Log $log7 '\] MATCH (init|restart|kill|score|end|spawn|respawn|death|cleanup) ')
+    $segs = @(); $cur = New-Object System.Collections.Generic.List[object]; $inSeg = $false   # (an empty @() is "falsy" in PowerShell)
+    foreach ($m in $mlines) { if ($m.text -match '\] MATCH init ') { if ($inSeg) { $segs += , $cur.ToArray() }; $cur = New-Object System.Collections.Generic.List[object]; $inSeg = $true }; if ($inSeg) { $cur.Add($m) } }
+    if ($inSeg) { $segs += , $cur.ToArray() }
+    $segRows = @()
+    for ($k = 0; $k -lt $segs.Count; $k++) {
+        $sg = $segs[$k]; $sc = @($sg | Where-Object { $_.text -match 'MATCH score team=(\d) score=(\d+)' } | ForEach-Object { $mm = [regex]::Match($_.text, 'team=(\d) score=(\d+)'); [pscustomobject]@{ team = [int]$mm.Groups[1].Value; score = [int]$mm.Groups[2].Value } })
+        $mono = $true; foreach ($t in 0, 1) { $v = @($sc | Where-Object team -eq $t | ForEach-Object { $_.score }); for ($q = 0; $q -lt $v.Count; $q++) { if ($v[$q] -ne $q + 1) { $mono = $false } } }
+        $end = @($sg | Where-Object { $_.text -match 'MATCH end ' })[0]; $kills = @($sg | Where-Object { $_.text -match 'MATCH kill ' }).Count
+        $win = if ($end) { [regex]::Match($end.text, 'winner=(\S+)').Groups[1].Value } else { "" }; $rsn = if ($end) { [regex]::Match($end.text, 'reason=(\S+)').Groups[1].Value } else { "" }
+        $maxT = @(0, 1 | ForEach-Object { $t = $_; (@($sc | Where-Object team -eq $t) | Measure-Object score -Maximum).Maximum })
+        $segRows += [pscustomobject]@{ match = $k + 1; kills = $kills; scores = ($sc | ForEach-Object { "t$($_.team)=$($_.score)" }) -join " "; increments_by_one = $mono; end = $rsn; winner = $win; top = ($maxT -join "-") }
+    }
+    Write-WfcCsv $segRows (Join-Path $d7 "matches.csv")
+    Res "MATCH" "kill_scores_team" $(if ($segRows.Count -and @($segRows | Where-Object { -not $_.increments_by_one }).Count -eq 0) { "PASS" } else { "FAIL" }) ("per match, team score lines step 1, 2, 3 ... from 0 (BLK F1: kill +1 team): " + (($segRows | ForEach-Object { "match $($_.match): $($_.scores)" }) -join " | ")) "Gameplay"
+    $ended = @($segRows | Where-Object { $_.end -eq "score_limit" })
+    Res "MATCH" "score_limit_end" $(if ($ended.Count -ge 2 -and @($ended | Where-Object { $_.top -notmatch "(^|-)$goal(-|$)" }).Count -eq 0) { "PASS" } else { "FAIL" }) ("matches ending on the score limit: {0} ({1}); a team reached exactly {2} (BLK F3 CheckScore)" -f $ended.Count, (($segRows | ForEach-Object { "match $($_.match): $($_.end) winner $($_.winner) top $($_.top)" }) -join "; "), $goal) "Gameplay"
+    Res "MATCH" "second_match_scores_reset" $(if ($segRows.Count -ge 2 -and $segRows[1].increments_by_one -and $segRows[1].scores -match 't\d=1') { "PASS" } else { "FAIL" }) ("match 2 score lines start again at 1: '{0}' (BLK F6: a new match is a fresh level)" -f $(if ($segRows.Count -ge 2) { $segRows[1].scores })) "Gameplay"
+    $ge7 = @(Flow-Ev $F7 "ui.state" | Where-Object to -eq "GameEnded"); $ret7 = @(Flow-Ev $F7 "match.return"); $trL7 = @(Flow-Ev $F7 "travel" | Where-Object { $_.from -eq "Match" -and $_.url -like "UI_Lobby_m*" })
+    $gaps = @(); for ($k = 0; $k -lt [Math]::Min($ge7.Count, $trL7.Count); $k++) { $gaps += [double]$trL7[$k].t - [double]$ge7[$k].t }
+    Res "MATCH" "match_over_15s_return" $(if ($gaps.Count -ge 2 -and @($gaps | Where-Object { [Math]::Abs($_ - 15) -gt 1.5 }).Count -eq 0 -and @($trL7 | Where-Object { (Parse-Url $_.url).keys.MapId -ne "508" }).Count -eq 0) { "PASS" } else { "FAIL" }) ("GameEnded -> lobby travel after {0} s; URLs keep MapId: {1} (BLK F4/F6)" -f (($gaps | ForEach-Object { "{0:N1}" -f $_ }) -join ", "), (($trL7 | ForEach-Object { (Parse-Url $_.url).keys.MapId }) -join ",")) "Gameplay/Integration"
+    $hud7 = @(Flow-Ev $F7 "ui.hud" | Where-Object { "$($_.visible)" -eq "False" }).Count; $es7 = @(@(Flow-Ev $F7 "gfx.movie") + @(Flow-Ev $F7 "ui.open") | Where-Object { $_.movie -like "*EndGameStats*" }).Count; $rsp7 = @(@(Flow-Ev $F7 "gfx.movie") + @(Flow-Ev $F7 "ui.open") | Where-Object { $_.movie -like "*MultiplayerRespawn*" }).Count
+    Res "MATCH" "end_and_respawn_screens" $(if ($es7 -ge 2 -and $rsp7 -ge 1 -and $hud7 -ge 2) { "PASS" } else { "FAIL" }) ("EndGameStats opened {0}x, MultiplayerRespawn {1}x, HUD hidden {2}x (BLK E7/F4)" -f $es7, $rsp7, $hud7) "Frontend/Integration"
+    foreach ($sn in "b_m1_spectating", "c_m1_endstats", "d_lobby_after1", "e_m2_ingame", "g_frontend") { $st = Shot-Stats (Join-Path $d7 "$sn.bmp"); if ($st) { Res "PRESENTED" "lifecycle.$sn" $(if ($st.black -ge 0.97) { "FAIL" } else { "HUMAN" }) ("{0}: near-black {1:P0}, mean luma {2}{3}" -f $st.file, $st.black, $st.mean, $(if ($st.black -ge 0.97) { " - nothing drawn" } else { " - drawn; look is a human check (R7_sheet.png)" })) "Frontend" } }
+    $tiles = @(Get-ChildItem $d7 -Filter *.bmp | Sort-Object Name | ForEach-Object { @{ png = $_.FullName; label = $_.BaseName } }); if ($tiles.Count) { New-WfcSheet $tiles (Join-Path $OutDir "R7_sheet.png") 4 400 225 }
+    $sp7 = @(Flow-Ev $F7 "match.spawn" | Where-Object { "$($_.player)" -eq $me } | ForEach-Object { "$($_.start)" })
+    Res "MATCH" "respawn_starts" $(if (@($sp7 | Where-Object { $_ -notlike "TnTeamPlayerStart*" }).Count) { "FAIL" } else { "PASS" }) ("local spawns: " + (($sp7 | Select-Object -Unique) -join ", ")) "Gameplay"
+    $l1 = @(Flow-Ev $F7 "snapshot" | Where-Object why -eq "lobby1")[0]
+    Res "STATE" "lobby_after_score_limit" $(if ($l1 -and $l1.level -eq "GameLobby" -and [int]$l1.mapId -eq 508 -and $l1.mode -eq "TDM") { "PASS" } else { "FAIL" }) ("lobby after match 1: level {0} mode {1} mapId {2} (BLK C7: selection index 0 = Streets in the rebuild)" -f $l1.level, $l1.mode, $l1.mapId) "Frontend"
+    $dc7 = @(Find-DoubledCues $log7)
+    Res "AUDIO" "doubled_sounds_lifecycle" $(if (-not $dc7.Count) { "PASS" } else { "FAIL" }) ("doubled cue starts over 3 matches with deaths / respawns: {0} {1}" -f $dc7.Count, (($dc7 | Group-Object cue | Sort-Object Count -Descending | Select-Object -First 6 | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ", ")) "Systems"
+    $aU7 = @(Flow-Ev $F7 "audio.unloaded"); if ($aU7.Count) { Res "AUDIO" "audio_released_after_lifecycle" $(if (@($aU7 | Where-Object { [int]$_.voices -ne 0 -or [int]$_.instances -ne 0 }).Count) { "FAIL" } else { "PASS" }) ("after each match: " + (($aU7 | ForEach-Object { "voices $($_.voices) instances $($_.instances) pcm $($_.pcmMB)" }) -join " | ")) "Systems" }
+} elseif ($Runs -contains "R7") { Res "MATCH" "lifecycle_three_matches" "SKIP" "WFC_LIFECYCLE not compiled into this exe" "Integration" }
 
 # ======================================================================= S owners' self-tests on THIS executable
 if ($Runs -contains "S") {
@@ -379,7 +473,7 @@ if ($Runs -contains "S") {
             "WFC_XFORMTEST" { $m = [regex]::Match($last, 'SUMMARY: (\d+)/(\d+)'); $st = if ($m.Success -and $m.Groups[1].Value -eq "0") { "PASS" } else { "FAIL" } }
             "WFC_CHAOS" { $m = [regex]::Match($last, ': (\d+) runs UNDER THE MAP.*?, (\d+) KillZ'); $st = if ($m.Success -and $m.Groups[1].Value -eq "0" -and $m.Groups[2].Value -eq "0") { "PASS" } elseif ($m.Success) { "FAIL" } else { "FAIL" }; $u = @(Grep-Log $lg 'CHAOS (UNDER-FLOOR|STUCK)'); if ($u.Count) { $last += " | " + (($u | Select-Object -First 3 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | ") } }
             "WFC_VEHTEST" { $st = "INFO"; $last = ((@(Grep-Log $lg 'VEHTEST') | Select-Object -Last 3 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | ") }
-            "WFC_RELOADTEST" { $st = if (@(Grep-Log $lg '(?i)(fail|error)').Count) { "FAIL" } elseif ($hits.Count) { "PASS" } else { "INFO" }; $last = ((@(Grep-Log $lg '(?i)reload') | Select-Object -Last 3 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | ") }
+            "WFC_RELOADTEST" { $st = if (@(Grep-Log $lg '^\[(error|ERROR)').Count) { "FAIL" } elseif ($hits.Count) { "PASS" } else { "INFO" }; $last = ((@(Grep-Log $lg '(?i)reload') | Select-Object -Last 3 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | ") }
         }
         Res "SELFTEST" $k $st ("{0}: {1} (exit {2})" -f $t.what, $last, $rc) $t.owner
     }

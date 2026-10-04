@@ -102,3 +102,25 @@ function Invoke-WfcObserved([string]$Exe, [string]$Dir, [hashtable]$Env, [int]$T
     $p.WaitForExit(5000) | Out-Null
     return @{ rc = $(if ($p.HasExited) { $p.ExitCode } else { -1 }); timedOut = $timedOut; samples = $samples.ToArray(); captures = $caps.ToArray() }
 }
+
+# Periodic window capture from outside the process (works while the product's main loop is blocked, e.g. during a
+# blocking map load, when no product-side shot can run). Every $Every s from $FromSec: cap_<n>.png + a row with the
+# elapsed time and the flow-trace line count at that moment (to place each capture between flow events).
+function Invoke-WfcPeriodic([string]$Exe, [string]$Dir, [hashtable]$Env, [int]$TimeoutSec = 600, [double]$Every = 0.25, [double]$FromSec = 0, [double]$ToSec = 1e9) {
+    $p = Start-WfcProcess $Exe $Dir $Env
+    $flowPath = $Env.WFC_FLOWLOG
+    $t0 = Get-Date; $caps = New-Object System.Collections.Generic.List[object]; $n = 0; $timedOut = $false
+    while (-not $p.HasExited) {
+        Start-Sleep -Milliseconds ([int]($Every * 1000))
+        $el = ((Get-Date) - $t0).TotalSeconds
+        if ($el -gt $TimeoutSec) { $timedOut = $true; try { Stop-Process -Id $p.Id -Force } catch { }; break }
+        if ($el -lt $FromSec -or $el -gt $ToSec) { continue }
+        try { $p.Refresh() } catch { }
+        $fl = 0; if ($flowPath -and (Test-Path $flowPath)) { try { $fs = [IO.File]::Open($flowPath, 'Open', 'Read', 'ReadWrite'); $sr = New-Object IO.StreamReader($fs); while ($null -ne $sr.ReadLine()) { $fl++ }; $sr.Close() } catch { } }
+        $n++; $name = "pcap_{0:D4}.png" -f $n; $ok = $false
+        try { $ok = [WfcWin]::Capture($p.MainWindowHandle, (Join-Path $Dir $name)) } catch { }
+        $caps.Add([pscustomobject]@{ n = $n; t = [Math]::Round($el, 2); flow_lines = $fl; file = $(if ($ok) { $name } else { "" }) })
+    }
+    $p.WaitForExit(5000) | Out-Null
+    return @{ rc = $(if ($p.HasExited) { $p.ExitCode } else { -1 }); timedOut = $timedOut; captures = $caps.ToArray() }
+}

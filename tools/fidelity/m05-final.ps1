@@ -21,7 +21,7 @@ $sha = (& git -C $root rev-parse --verify "$Ref^{commit}").Trim()
 $tgt = Join-Path $root "work\ab\$Name"
 if ($Build -or -not (Test-Path (Join-Path $tgt "build-release\bin\wfc_rebuild.exe"))) { & (Join-Path $PSScriptRoot "m05\build-target.ps1") -Ref $sha -Name $Name }
 $built = if (Test-Path (Join-Path $tgt "M05_TARGET.txt")) { (Get-Content (Join-Path $tgt "M05_TARGET.txt") | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '' } else { "" }
-if ($built -and $built -ne $sha) { throw "work\ab\$Name was built from $built, not $sha: rebuild with -Build" }
+if ($built -and $built -ne $sha) { throw "work\ab\$Name was built from $built, not ${sha}: rebuild with -Build" }
 if (-not $OutDir) { $OutDir = Join-Path $root ("work\fidelity\m05final\" + $sha.Substring(0, 7) + "-" + (Get-Date -Format "yyyyMMdd-HHmm")) }
 New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 $rel = Join-Path $tgt "build-release\bin\wfc_rebuild.exe"; $dbg = Join-Path $tgt "build\bin\wfc_rebuild.exe"; $rd = Join-Path $tgt "work\render"

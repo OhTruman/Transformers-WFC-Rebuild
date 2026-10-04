@@ -36,7 +36,7 @@ if (-not $Log) {
     $Log = Join-Path $OutDir "run\wfc.log"
 }
 $L = @(Get-Content $Log)
-function Ev($kind) { return , @($L | Where-Object { $_ -match "MATCH $kind\b" } | ForEach-Object { $h = @{ line = $_ }; foreach ($m in [regex]::Matches($_, '(\w+)=(\S+)')) { $h[$m.Groups[1].Value] = $m.Groups[2].Value }; $h }) }   # ", @(...)": keep a one-event result an array
+function Ev($kind) { return , @($L | Where-Object { $_ -cmatch "\] MATCH $kind\b" } | ForEach-Object { $h = @{ line = $_ }; foreach ($m in [regex]::Matches($_, '(\w+)=(\S+)')) { $h[$m.Groups[1].Value] = $m.Groups[2].Value }; $h }) }   # ", @(...)": keep a one-event result an array
 $res = New-WfcResults
 # ---- available now: spawn class follows the mode (product start line) ----
 $wantCls = if ($Mode -eq "DM") { "TnFreeForAllPlayerStart" } else { "TnTeamPlayerStart" }
@@ -66,7 +66,7 @@ if (-not $init.Count) {
     Add-WfcResult $res "match.$Mode.score_limit" "INFO" $(if ($i0.score_limit -match '^\d') { [double]$i0.score_limit }) "score_limit=$($i0.score_limit) (UNKNOWN: not recovered)"
     Add-WfcResult $res "match.$Mode.teams" "INFO" $(if ($i0.teams -match '^\d') { [double]$i0.teams }) "teams=$($i0.teams)"
     # ordering: init first
-    $firstMatch = ($L | Select-String "MATCH (\w+)" | Select-Object -First 1).Matches[0].Groups[1].Value
+    $firstMatch = ($L | Select-String -CaseSensitive "\] MATCH (\w+)" | Select-Object -First 1).Matches[0].Groups[1].Value   # case-sensitive log prefix: "Deathmatch message" in a FLOW line is not an event
     Add-WfcResult $res "match.$Mode.init_first" $(if ($firstMatch -eq "init") { "PASS" } else { "FAIL" }) $null "first MATCH event: $firstMatch"
     # spawns at authored starts of the right class
     $sps = Ev "spawn"; $badSp = @($sps | Where-Object { $startsByActor[$_.start] -ne $wantCls })
@@ -77,14 +77,14 @@ if (-not $init.Count) {
     # kills -> score; deaths -> respawn
     $kills = Ev "kill"; $scores = Ev "score"; $deaths = Ev "death"; $resp = Ev "respawn"; $ends = Ev "end"
     Add-WfcResult $res "match.$Mode.kill_scored" $(if (-not $kills.Count) { "SKIP" } elseif ($scores.Count -ge $kills.Count) { "PASS" } else { "FAIL" }) $kills.Count ("{0} kills, {1} score events (points per kill UNKNOWN)" -f $kills.Count, $scores.Count)
-    $dec = 0; $last = @{}; foreach ($s in $scores) { $t = $s.team; if ($last.ContainsKey($t) -and [double]$s.score -lt $last[$t]) { $dec++ }; $last[$t] = [double]$s.score }
-    Add-WfcResult $res "match.$Mode.score_monotonic" $(if (-not $scores.Count) { "SKIP" } elseif ($dec -le (Ev "restart").Count) { "PASS" } else { "FAIL" }) $dec "team score decreases (allowed: restarts)"
+    $dec = 0; $last = @{}; foreach ($ln in ($L | Where-Object { $_ -cmatch "\] MATCH (score|restart)\b" })) { if ($ln -cmatch "\] MATCH restart") { $last = @{}; continue }; $mm = [regex]::Match($ln, "team=(-?\d+).*score=(-?\d+)"); if (-not $mm.Success) { continue }; $tk = $mm.Groups[1].Value; $sv = [double]$mm.Groups[2].Value; if ($last.ContainsKey($tk) -and $sv -lt $last[$tk]) { $dec++ }; $last[$tk] = $sv }   # per match: scores restart with each MATCH restart
+    Add-WfcResult $res "match.$Mode.score_monotonic" $(if (-not $scores.Count) { "SKIP" } elseif ($dec -eq 0) { "PASS" } else { "FAIL" }) $dec "team score decreases within a match"
     $delays = @($resp | Where-Object { $_.delay_s } | ForEach-Object { [double]$_.delay_s })
     Add-WfcResult $res "match.$Mode.death_respawn" $(if (-not $deaths.Count) { "SKIP" } elseif ($resp.Count + $ends.Count -ge $deaths.Count) { "PASS" } else { "FAIL" }) $deaths.Count ("{0} deaths, {1} respawns; respawn delay {2} (UNKNOWN expectation)" -f $deaths.Count, $resp.Count, $(if ($delays.Count) { "{0:F2}-{1:F2} s" -f ($delays | Measure-Object -Minimum).Minimum, ($delays | Measure-Object -Maximum).Maximum } else { "n/a" }))
     Add-WfcResult $res "match.$Mode.end" $(if (-not $ends.Count) { "SKIP" } elseif ($ends.Count -eq 1 + (Ev "restart").Count) { "PASS" } else { "FAIL" }) $ends.Count ("end events: " + (($ends | ForEach-Object { "reason=$($_.reason) winner=$($_.winner) t=$($_.t)" }) -join "; "))
     if ($ends.Count -and $tl -match '^\d') { $te = $ends | Where-Object reason -eq "time_limit" | Select-Object -First 1; if ($te) { Add-WfcResult $res "match.$Mode.end_at_time_limit" $(if ([Math]::Abs([double]$te.t - [double]$tl) -le 1.5) { "PASS" } else { "FAIL" }) ([double]$te.t) "time-limit end at t=$($te.t) s for time_limit_s=$tl (match start at t=0)" } }
     $rst = Ev "restart"
-    if ($rst.Count) { $afterIdx = [Array]::IndexOf($L, $rst[0].line); $after = @($L[($afterIdx + 1)..($L.Count - 1)] | Where-Object { $_ -match "MATCH score" } | Select-Object -First 2); Add-WfcResult $res "match.$Mode.restart_resets" $(if (-not $after.Count -or @($after | Where-Object { $_ -match "score=0\b" }).Count) { "PASS" } else { "FAIL" }) $null "first score events after restart: $($after -join ' | ')" }
+    if ($rst.Count) { $afterIdx = [Array]::IndexOf($L, $rst[0].line); $after = @($L[($afterIdx + 1)..($L.Count - 1)] | Where-Object { $_ -cmatch "\] MATCH score" } | Select-Object -First 2); Add-WfcResult $res "match.$Mode.restart_resets" $(if (-not $after.Count -or @($after | Where-Object { $_ -match "score=([01])\b" }).Count -eq $after.Count) { "PASS" } else { "FAIL" }) $null "first score events after restart: $($after -join ' | ')" }
     else { Add-WfcResult $res "match.$Mode.restart_resets" "SKIP" $null "no restart in this run" }
     Add-WfcResult $res "match.$Mode.cleanup" $(if ((Ev "cleanup").Count) { "PASS" } else { "SKIP" }) (Ev "cleanup").Count "MATCH cleanup events"
 }

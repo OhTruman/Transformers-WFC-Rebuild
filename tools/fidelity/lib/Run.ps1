@@ -84,7 +84,8 @@ function Add-WfcResult($List, [string]$Id, [string]$Status, $Measured = $null, [
 function Write-WfcReport($List, [string]$Path) {
     $sum = [ordered]@{}
     # HUMAN = HUMAN CHECK REQUIRED: a measured anomaly candidate whose correctness only a person can judge.
-    foreach ($s in "PASS", "FAIL", "KNOWN", "INFO", "SKIP", "HUMAN") { $sum[$s.ToLower()] = @($List.ToArray() | Where-Object status -eq $s).Count }
+    # UNKNOWN = original behaviour not established (evidence pending); WAITING = hook / presentation not landed yet; PARTIAL = partly present
+    foreach ($s in "PASS", "FAIL", "KNOWN", "INFO", "SKIP", "HUMAN", "UNKNOWN", "WAITING", "PARTIAL") { $sum[$s.ToLower()] = @($List.ToArray() | Where-Object status -eq $s).Count }
     [ordered]@{ summary = $sum; results = $List.ToArray() } | ConvertTo-Json -Depth 6 | Set-Content -Encoding UTF8 $Path
     return $sum
 }
