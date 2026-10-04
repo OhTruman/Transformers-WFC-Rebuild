@@ -56,11 +56,12 @@ static void testCatalog(const Catalog& c) {
     check(c.localize("UIText", "LoadScreen", "LoadingMap") == "in `m", "catalog.loc_loadingmap");
     check(c.localizeKey("$UIText.MainMenu.PressStart").size() > 0, "catalog.loc_gfx_key", c.localizeKey("$UIText.MainMenu.PressStart"));
     check(c.engageTexts().size() == 26, "catalog.engage_texts_base", std::to_string(c.engageTexts().size()));
-    // Selectable = cooked + rebuild runtime data on disk (grows as AssetTools exports maps).
+    // Selectable = cooked + rebuild runtime world + render export on disk (grows as AssetTools exports maps).
     auto tdmMaps = c.compatibleMaps("TDM", true);
     size_t onDisk = 0;
-    for (const MapInfo& m : c.maps()) onDisk += m.cooked && m.compatibleWith("TDM") && std::ifstream(
-        (std::getenv("WFC_ASSETS") ? std::string(std::getenv("WFC_ASSETS")) : std::string(core::config::kAssetRootDefault)) + "/Maps/" + m.runtimeDir + "/world.glb").good();
+    const std::string mapsRoot = (std::getenv("WFC_ASSETS") ? std::string(std::getenv("WFC_ASSETS")) : std::string(core::config::kAssetRootDefault)) + "/Maps/";
+    for (const MapInfo& m : c.maps()) onDisk += m.cooked && m.compatibleWith("TDM") && std::ifstream(mapsRoot + m.runtimeDir + "/world.glb").good()
+                                                && std::ifstream(mapsRoot + m.runtimeDir + "/render_index.json").good();
     bool hasStreets = false;
     for (auto* m : tdmMaps) hasStreets |= m->mapId == 508;
     check(hasStreets && tdmMaps.size() == onDisk, "catalog.tdm_selectable_maps_match_disk", std::to_string(tdmMaps.size()));
@@ -163,6 +164,9 @@ static void testCatalogExtensibility(const std::string& manifests, const std::st
     fs::create_directories(tmp / "MP_IAC_Rust");
     std::ofstream(tmp / "MP_IAC_Streets" / "world.glb") << "x";
     std::ofstream(tmp / "MP_IAC_Rust" / "world.glb") << "x";
+    // A selectable map also has the AssetTools render export (integration M05 selectability gate).
+    std::ofstream(tmp / "MP_IAC_Streets" / "render_index.json") << "{}";
+    std::ofstream(tmp / "MP_IAC_Rust" / "render_index.json") << "{}";
     Catalog c;
     check(c.load(manifests, extracted, tmp.string()), "extensibility.load");
     const MapInfo* r = c.mapById(504);

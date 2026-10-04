@@ -113,7 +113,11 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
         std::string dir = mi.mapFilename;
         if (iendsWith(dir, "_Base_m")) dir = dir.substr(0, dir.size() - 7);
         mi.runtimeDir = dir;
-        mi.hasRequiredAssets = mi.cooked && fileExists(runtimeMapRoot + "/" + dir + "/world.glb");
+        // [integration M05] Selectable = cooked + the runtime world AND AssetTools' render export (render_index.json,
+        // read by the renderer): a map whose presentation has not been exported is listed disabled, as a map without
+        // HasRequiredAssets is. Data-driven: a map becomes selectable when AssetTools exports it (no map names here).
+        mi.hasRequiredAssets = mi.cooked && fileExists(runtimeMapRoot + "/" + dir + "/world.glb")
+                               && fileExists(runtimeMapRoot + "/" + dir + "/render_index.json");
         maps_.push_back(mi);
     }
     std::stable_sort(maps_.begin(), maps_.end(), [](const MapInfo& a, const MapInfo& b) { return a.iniOrder < b.iniOrder; });
