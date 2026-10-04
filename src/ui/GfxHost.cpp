@@ -148,6 +148,7 @@ std::string GfxMovie::dumpTree() const {
         }
         if (d->kind == gfx::DisplayObject::Kind::Text) extra = " \"" + static_cast<const gfx::TextField*>(d)->plainText() + "\"";
         if (d->kind == gfx::DisplayObject::Kind::Bitmap) extra = " " + static_cast<const gfx::BitmapInstance*>(d)->path;
+        if (d->blend > 1) extra += " BLEND=" + std::to_string(d->blend);
         std::snprintf(b, sizeof b, "%*s%s '%s' depth %d char %u (%s) x=%.1f y=%.1f sx=%.2f sy=%.2f a=%.2f%s%s%s\n", ind * 2, "", k,
                       d->name.c_str(), d->depth - gfx::kDepthOffset, d->charId, d->def ? d->def->baseName().c_str() : "-",
                       d->matrix.tx / 20, d->matrix.ty / 20, d->matrix.a, d->matrix.d, d->cx.ma, d->visible ? "" : " HIDDEN",

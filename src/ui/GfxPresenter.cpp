@@ -137,6 +137,15 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
         return Value();
     }
     if (fn.rfind("Self.", 0) == 0) { frontend::FlowTrace::emit("bridge.unhandled", {{"fn", fn}, {"movie", m.object()}}); return Value(); }
+    if (fn == "Online.CheckIsProfileReady") {
+        // TnOnlineActionScriptBinding.CheckIsProfileReady [CONFIRMED script]: a ready profile -> OwnerMovie.Invoke(
+        // ProfileIsReadyCallback = "ProfileIsReady", CheckId); otherwise the TnLoadProfileStatusMessageBox popup. The
+        // offline rebuild's local profile is always ready. The menu opens Campaign (1) / Escalation (2) / Settings (3)
+        // from that callback.
+        rt_.bridge(m.object(), fn, sa);
+        deferred_.push_back({m.object(), "_global.ProfileIsReady", {Value(sa.empty() ? 0.0 : std::atof(sa[0].c_str()))}});
+        return Value();
+    }
     return toValue(rt_.bridge(m.object(), fn, sa));
 }
 
@@ -219,6 +228,13 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     for (const Open& o : movies_) objs.push_back(o.object);
     for (const std::string& o : objs)
         for (Open& op : movies_) if (op.object == o) { op.movie->advance(dt); break; }
+    // Deferred engine -> AS invokes.
+    std::vector<Deferred> due;
+    due.swap(deferred_);
+    for (Deferred& d : due) {
+        for (Open& op : movies_)
+            if (op.object == d.movie) { op.movie->invoke(d.fn, d.args); frontend::FlowTrace::emit("gfx.invoke", {{"movie", d.movie}, {"fn", d.fn}}); }
+    }
     // Data-store change callbacks (HmWidget.updateDSValue(markup, value) by target path).
     for (const auto& c : rt_.dataStores().poll()) {
         if (hud_ && hud_->object() == c.movie) { hud_->invoke(c.callback, {Value(c.markup), Value(c.value)}); continue; }

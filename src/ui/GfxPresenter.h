@@ -69,6 +69,9 @@ private:
     std::unique_ptr<GfxMovie> hud_;           // TnHUD.HudMovie (Hud_GFX), under the UIController movies
     bool hudVisible_ = false;
     bool shapesStale_ = false;                // a movie was destroyed since the last draw
+    // Engine -> AS invokes made after the AS call that caused them returns (UnrealScript OwnerMovie.Invoke).
+    struct Deferred { std::string movie, fn; gfx::avm1::Args args; };
+    std::vector<Deferred> deferred_;
     int viewW_ = 1280, viewH_ = 720;          // last drawn window size (pointer -> stage mapping)
     bool prevMouseLeft_ = false;
     gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
