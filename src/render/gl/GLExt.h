@@ -110,7 +110,10 @@ namespace glx {
     X(void, VertexAttrib4f, (GLuint, GLfloat, GLfloat, GLfloat, GLfloat)) \
     X(void, BlendFuncSeparate, (GLenum, GLenum, GLenum, GLenum)) \
     X(void, StencilOpSeparate, (GLenum, GLenum, GLenum, GLenum)) \
-    X(void, TexImage3D, (GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*))     X(void, BlitFramebuffer, (GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum))
+    X(void, TexImage3D, (GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum, const void*))     X(void, BlitFramebuffer, (GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum)) \
+    X(void, DeleteBuffers, (GLsizei, const GLuint*)) \
+    X(void, DeleteVertexArrays, (GLsizei, const GLuint*)) \
+    X(void, DeleteProgram, (GLuint))
 
 #define WFC_GL_DECL(ret, name, args) typedef ret(APIENTRY* PFN_##name) args; extern PFN_##name name;
 WFC_GL_FUNCS(WFC_GL_DECL)

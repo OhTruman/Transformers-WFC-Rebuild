@@ -22,6 +22,8 @@
 
 #include <cmath>
 #include <cstdio>
+#include <utility>
+#include <array>
 #include <vector>
 #include <fstream>
 #include <cstdlib>
@@ -341,6 +343,15 @@ Application::MatchExit Application::runMatch() {
             }
         }
 
+        // Diagnostic: level-travel render-data cycle (WFC_RELOADTEST=<frame>): release everything, reload the map,
+        // re-load the world's meshes (as a travel back into the match does).
+        if (const char* rt = std::getenv("WFC_RELOADTEST")) {
+            if (frame == std::atoi(rt)) {
+                renderer_->unloadMapRenderData();
+                world_.load(*renderer_);
+            }
+        }
+
         // Diagnostic multi-shot: WFC_SHOTLIST=<file> with lines "<name> x,y,z,tx,ty,tz" (glTF metres); each camera
         // is held for 8 frames and captured to WFC_SHOTDIR/<name>.bmp, then the run ends (one map load for many views).
         static std::vector<std::pair<std::string, std::vector<float>>> shotList;
@@ -381,6 +392,41 @@ Application::MatchExit Application::runMatch() {
         }
         renderer_->beginFrame(camera_, window_->width(), window_->height());
         world_.draw(*renderer_);
+        if (std::getenv("WFC_SCREENTEST")) {            // diagnostics: 2D composition path (fade + panel)
+            using RB = render::IRenderer;
+            const float W = (float)window_->width(), H = (float)window_->height();
+            RB::ScreenBatch fade; fade.blend = RB::ScreenBlend::Alpha;
+            auto quad = [](RB::ScreenBatch& b, float x0, float y0, float x1, float y1, uint8_t r, uint8_t g, uint8_t bb, uint8_t a) {
+                RB::ScreenVertex v[4] = {{x0, y0, 0, 0, r, g, bb, a}, {x1, y0, 1, 0, r, g, bb, a},
+                                         {x1, y1, 1, 1, r, g, bb, a}, {x0, y1, 0, 1, r, g, bb, a}};
+                for (int i : {0, 1, 2, 0, 2, 3}) b.verts.push_back(v[i]);
+            };
+            quad(fade, 0, 0, W, H, 0, 0, 0, 128);                    // 50 % black fade
+            renderer_->drawScreenTriangles(fade);
+            RB::ScreenBatch panel; panel.blend = RB::ScreenBlend::Additive;
+            quad(panel, W * 0.1f, H * 0.8f, W * 0.5f, H * 0.9f, 80, 181, 213, 255);   // friendly label colour
+            renderer_->drawScreenTriangles(panel);
+        }
+        if (std::getenv("WFC_TILETEST")) {             // diagnostics: Canvas material tiles (HUD marker materials)
+            const float W = (float)window_->width(), H = (float)window_->height(), S = std::min(W, H);
+            auto tile = [&](const char* m, float cx, float cy, float size,
+                            std::vector<std::pair<std::string, std::array<float, 4>>> params, float rot = 0.0f) {
+                render::IRenderer::MaterialTile t;
+                t.material = m; t.w = t.h = size * S; t.x = cx * W - t.w * 0.5f; t.y = cy * H - t.h * 0.5f;
+                t.rotation = rot; t.params = std::move(params);
+                renderer_->drawMaterialTile(t);
+            };
+            tile("UI_HudMarkers_p.MPMarkerBase_MAT", 0.30f, 0.30f, 0.05f, {{"OnScreen", {1, 0, 0, 0}}, {"Neutral", {1, 0, 0, 0}}});
+            tile("UI_HudMarkers_p.MPMarkerBase_MAT", 0.45f, 0.30f, 0.05f, {{"OnScreen", {1, 0, 0, 0}}, {"Neutral", {0, 0, 0, 0}}});
+            tile("UI_HudMarkers_p.MPMarkerBase_MAT", 0.60f, 0.30f, 0.0625f, {{"OnScreen", {0, 0, 0, 0}}, {"ArrowAngle", {90, 0, 0, 0}}});
+            tile("UI_HudMarkers_p.MarkerAlly_MAT", 0.30f, 0.55f, 0.05f, {});
+            tile("UI_HudMarkers_p.MarkerEnemy_MAT", 0.45f, 0.55f, 0.03125f, {});
+            tile("UI_HudMarkers_p.DeathIndicator_MAT", 0.60f, 0.55f, 0.03125f, {{"Alpha", {1, 0, 0, 0}}});
+            render::IRenderer::MaterialTile hb;
+            hb.material = "UI_HudMarkers_p.TargetHealthBar_MAT"; hb.w = 0.12f * S; hb.h = 0.02f * S;
+            hb.x = 0.30f * W; hb.y = 0.72f * H; hb.params = {{"Health", {0.6f, 0, 0, 0}}, {"Neutral", {1, 0, 0, 0}}};
+            renderer_->drawMaterialTile(hb);
+        }
         renderer_->endFrame();
         if (frontend_) frontend_->draw(window_->width(), window_->height());   // open movies (pause, end game)
         if (frontend_ && !pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }

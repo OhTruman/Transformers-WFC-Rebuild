@@ -1,4 +1,5 @@
 #include "render/gl/WfcPipeline.h"
+#include "core/Config.h"
 #include "assets/Gltf.h"
 #include "assets/Json.h"
 #include "core/Log.h"
@@ -147,6 +148,17 @@ float wfcLinearDepth(float d) {
 float wfcDepthBiasedAlpha(MatIn m, float a, float bias, float scale) {
     return a * clamp((m.sceneDepth - m.pixelDepth) / max((1.0 - bias) * scale, 0.001), 0.0, 1.0);
 }
+// Shipped Xenon base-pass PS (FogSheet_Parent_MAT, MP_IAC_Streets ART shader cache): translucent / additive pixels with
+// Opacity < 1/255 are killed (kill_gt 0, Opacity - 0.00392), and additive output is Color * Opacity (oC0 = r4.xyz =
+// colour * opacity * SceneColorBiasFactor) -- an additive material's Opacity (e.g. DepthBiasedAlpha) attenuates it.
+uniform float uCanvasInvGamma;   // Canvas tiles: display gamma applied as the scene post does (PARTIAL)
+uniform int uLegacyTrans;     // diagnostics (WFC_M05TRANS): the pre-M06 output (opacity ignored, no kill)
+void wfcTranslucentOut(inout vec3 c, float opacity) {
+    if (uLegacyTrans != 0) return;
+    if ((uBlend == 2 || uBlend == 3) && opacity - 0.00392157 < 0.0) discard;
+    if (uBlend == 3) c *= opacity;
+}
+vec3 wfcCanvasOut(vec3 c) { return uCanvasInvGamma > 0.0 ? pow(max(c, vec3(0.0)), vec3(uCanvasInvGamma)) : c; }
 // UE3 base-pass fog per blend mode: additive keeps no in-scatter, modulate fades toward 1.
 vec3 wfcFog(vec3 c) {
     if (uBlend == 3) return c * vFog.a;
@@ -239,7 +251,8 @@ void main() {
         vec3 L = w0 * w0 * l0 * uLMScale[0] + w1 * w1 * l1 * uLMScale[1] + w2 * w2 * l2 * uLMScale[2];
         c += o.DiffuseColor * L;
     }
-    c = wfcFog(c);
+    wfcTranslucentOut(c, o.Opacity);
+    c = wfcCanvasOut(wfcFog(c));
     oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
 }
 )";
@@ -300,7 +313,8 @@ void main() {
         c += ambient * (1.0 - uDLAC * S);      // r3 = r5 * (1 - DLAC*S) + r3
         c += direct * (1.0 - S);               // r3 = r4 * (1 - S) + r3: one mask for the summed lights
     }
-    c = wfcFog(c);
+    wfcTranslucentOut(c, o.Opacity);
+    c = wfcCanvasOut(wfcFog(c));
     oColor = vec4(c, clamp(o.Opacity, 0.0, 1.0));
 }
 )";
@@ -466,6 +480,54 @@ GLuint makeTex1x1(uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
 
 GLuint compileShader(GLenum type, const std::string& src, const std::string& tag) { return compile(type, src, tag); }
 GLuint linkProgram(GLuint vs, GLuint fs, const std::string& tag) { return link(vs, fs, tag); }
+
+std::string Pipeline::assetRoot() {
+    if (const char* e = std::getenv("WFC_ASSETS")) return e;
+    return core::config::kAssetRootDefault;
+}
+
+std::string Pipeline::contentRoot() {
+    if (const char* e = std::getenv("WFC_CONTENT")) return std::string(e) + "/";
+    std::string a = assetRoot();
+    size_t s = a.find_last_of("/\\");
+    return (s == std::string::npos ? std::string(".") : a.substr(0, s)) + "/content/";
+}
+
+// ------------------------------------------------------------------------- unloading (level travel)
+void Pipeline::release() {
+    if (!active_ && meshes_.empty() && !fbo_) return;
+    auto tex = [](GLuint& t) { if (t) { glDeleteTextures(1, &t); t = 0; } };
+    auto fbo = [](GLuint& f) { if (f) { DeleteFramebuffers(1, &f); f = 0; } };
+    auto buf = [](GLuint& b) { if (b) { DeleteBuffers(1, &b); b = 0; } };
+    auto vao = [](GLuint& v) { if (v) { DeleteVertexArrays(1, &v); v = 0; } };
+    auto prog = [](GLuint& p) { if (p) { DeleteProgram(p); p = 0; } };
+    for (GpuMesh& g : meshes_) {
+        vao(g.vao); buf(g.vbo); buf(g.ibo);
+        for (Sub& s : g.subs) tex(s.vlmTex);
+    }
+    std::set<GLuint> progIds;
+    for (const Program& p : progs_) if (p.id) progIds.insert(p.id);
+    for (GLuint id : progIds) { GLuint p = id; prog(p); }
+    for (auto& kv : texCache_) tex(kv.second);
+    for (GLuint& t : lmTextures_) tex(t);
+    for (GLuint* t : {&clutTex_, &neutralMaskTex_, &testMaskTex_, &whiteTex_, &blackTex_, &flatNormalTex_, &blackCube_,
+                      &colorTex_, &depthTex_, &depthCopyTex_, &distTex_, &sceneCopyTex_, &shadowDepthTex_,
+                      &randomAnglesTex_, &maskTex_, &maskTmpTex_, &maskBlurTex_, &bloomTex_[0], &bloomTex_[1]})
+        tex(*t);
+    for (GLuint* f : {&fbo_, &depthCopyFbo_, &distFbo_, &sceneCopyFbo_, &shadowFbo_, &maskFbo_, &maskTmpFbo_,
+                      &maskBlurFbo_, &bloomFbo_[0], &bloomFbo_[1]})
+        fbo(*f);
+    if (maskDepthRb_) { DeleteRenderbuffers(1, &maskDepthRb_); maskDepthRb_ = 0; }
+    for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_}) vao(*v);
+    for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_}) buf(*b);
+    for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
+                      &constProg_, &maskBlurProg_})
+        prog(*p);
+    BindFramebuffer(GL_FRAMEBUFFER, 0);
+    LOG_INFO("wfc: released map render data (%zu meshes, %zu programs, %zu textures)", meshes_.size(), progIds.size(),
+             texCache_.size() + lmTextures_.size());
+    *this = Pipeline();
+}
 
 // ------------------------------------------------------------------------- loading
 bool Pipeline::load(const std::string& mapName) {
@@ -816,7 +878,7 @@ bool Pipeline::load(const std::string& mapName) {
     }
     LOG_INFO("wfc: shader path active: %zu materials, %zu lightmapped components, %zu lights, fog %s (%s)",
              mats_.size(), lightmaps_.size(), lights_.size(), fogOn_ ? "on" : "off", dataDir_.c_str());
-    loadMapProps("F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps/" + mapName + "/render_index.json");
+    loadMapProps(assetRoot() + "/Maps/" + mapName + "/render_index.json");
     return true;
 }
 
@@ -983,8 +1045,11 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     static const char* kRT[3] = {"Cust_Color_A", "Cust_COLOR_B", "EnergonColor"};
     for (int i = 0; i < 3; ++i) {
         P.uRT[i] = U((std::string("uRT_") + kRT[i]).c_str());
+        (void)0;
         P.uRTSet[i] = U((std::string("uRTSet_") + kRT[i]).c_str());
     }
+    for (const std::string& n : rtParams)
+        P.rtLoc[n] = {U(("uRT_" + n).c_str()), U(("uRTSet_" + n).c_str())};
     P.slots = slots;
     P.blend = blend; P.twoSided = twoSided; P.lit = lit; P.clip = clip;
     P.sceneDepth = code.find("m.sceneDepth") != std::string::npos || code.find("wfcDepthBiasedAlpha(") != std::string::npos;
@@ -1436,6 +1501,16 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform2f(GetUniformLocation(P.id, "uNearFar"), znear_, zfar_);
     Uniform2f(GetUniformLocation(P.id, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
     Uniform1i(GetUniformLocation(P.id, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
+    Uniform1f(GetUniformLocation(P.id, "uCanvasInvGamma"), canvasInvGamma_);
+    for (const auto& kv : P.rtLoc) {                   // per-draw runtime parameters (Canvas / MID); unset = authored
+        const std::array<float, 4>* v = nullptr;
+        if (drawParams_)
+            for (const auto& pv : *drawParams_) if (pv.first == kv.first) v = &pv.second;
+        if (kv.second.second >= 0) Uniform1i(kv.second.second, v ? 1 : 0);
+        if (v && kv.second.first >= 0) Uniform4f(kv.second.first, (*v)[0], (*v)[1], (*v)[2], (*v)[3]);
+    }
+    static const int legacyTrans = std::getenv("WFC_M05TRANS") ? 1 : 0;
+    Uniform1i(GetUniformLocation(P.id, "uLegacyTrans"), legacyTrans);
     if (P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_); }
     VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
     static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
@@ -1450,7 +1525,23 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     }
 }
 
-void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject) {
+float Pipeline::viewDepth(const core::Vec3& p) const {
+    const float* v = camView_.m;
+    return -(v[2] * p.x + v[6] * p.y + v[10] * p.z + v[14]);
+}
+
+void Pipeline::flushTranslucency() {
+    if (transQueue_.empty()) return;
+    std::stable_sort(transQueue_.begin(), transQueue_.end(),
+                     [](const TransItem& a, const TransItem& b) { return a.key > b.key; });   // far -> near
+    flushingTrans_ = true;
+    std::vector<TransItem> q;
+    q.swap(transQueue_);
+    for (TransItem& t : q) t.fn();
+    flushingTrans_ = false;
+}
+
+void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject, int onlySub) {
     BindVertexArray(g.vao);
     core::Vec3 origin{model.m[12], model.m[13], model.m[14]};
     LightEnv dynEnv;
@@ -1471,8 +1562,14 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
                             core::length(core::Vec3{model.m[8], model.m[9], model.m[10]})));
         smallDynamic = core::length(mx - mn) * 0.5f * sc < 0.5f && core::length(mx - mn) > 0.0f;
     }
-    for (int pass = 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
-        for (Sub& s : g.subs) {
+    // persistent mesh (index into meshes_): its translucent subs can be queued for the sorted translucency pass
+    const long meshIdx = (&g >= meshes_.data() && &g < meshes_.data() + meshes_.size()) ? (long)(&g - meshes_.data()) : -1;
+    static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;   // diagnostics: old order
+    const bool canDefer = deferTrans_ && !flushingTrans_ && !immediateTrans && meshIdx >= 0 && !g.decal;
+    for (int pass = onlySub >= 0 ? 1 : 0; pass < 2; ++pass) {          // 0: opaque + masked, 1: translucent
+        for (size_t si = 0; si < g.subs.size(); ++si) {
+            if (onlySub >= 0 && (int)si != onlySub) continue;
+            Sub& s = g.subs[si];
             if (s.prog < 0) continue;
             static const char* skipMat = std::getenv("WFC_SKIPMAT");   // diagnostics: hide by material
             if (skipMat) {                    // ';'-separated substrings, "<none>" = no material identity
@@ -1493,6 +1590,25 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject)
             const Program& P = progs_[(size_t)s.prog];
             bool trans = P.blend >= 2;
             if ((pass == 1) != trans) continue;
+            if (trans && canDefer) {
+                core::Vec3 c = core::transformPoint(model, (s.bmin + s.bmax) * 0.5f);
+                float col[4], dyn[4];
+                std::copy(fxColor_, fxColor_ + 4, col);
+                std::copy(dynParam_, dynParam_ + 4, dyn);
+                const bool fx = frameFx_;
+                const core::Mat4 mdl = model;
+                const int sub = (int)si;
+                transQueue_.push_back({viewDepth(c), [this, meshIdx, mdl, dynamicObject, sub, col, dyn, fx]() {
+                    std::copy(col, col + 4, fxColor_);
+                    std::copy(dyn, dyn + 4, dynParam_);
+                    frameFx_ = fx;
+                    drawSubs(meshes_[(size_t)meshIdx], mdl, dynamicObject, sub);
+                    frameFx_ = false;
+                    std::fill(fxColor_, fxColor_ + 4, 1.0f);
+                    std::fill(dynParam_, dynParam_ + 4, 1.0f);
+                }});
+                continue;
+            }
             core::Mat4 subModel = model;
             bool moving = false;
             if (!s.actor.empty()) {
@@ -1900,6 +2016,23 @@ bool Pipeline::drawFx(int id, const core::Mat4& model, const float color[4]) {
 
 bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
     if (!material || !sp || n == 0) return false;
+    static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
+    if (deferTrans_ && !flushingTrans_ && !immediateTrans) {
+        if (spriteProg_.count(material) && spriteProg_[material] < 0) return false;   // known fallback material
+        core::Vec3 c{0, 0, 0};
+        for (size_t i = 0; i < n; ++i) c = c + (sp[i].c[0] + sp[i].c[2]) * 0.5f;
+        c = c * (1.0f / (float)n);
+        std::vector<Sprite> copy(sp, sp + n);
+        std::string mat = material;
+        float dyn[4];
+        std::copy(dynParam_, dynParam_ + 4, dyn);
+        transQueue_.push_back({viewDepth(c), [this, copy, mat, facing, dyn]() {
+            std::copy(dyn, dyn + 4, dynParam_);
+            drawSprites(mat.c_str(), copy.data(), copy.size(), facing);
+            std::fill(dynParam_, dynParam_ + 4, 1.0f);
+        }});
+        return true;
+    }
     auto it = spriteProg_.find(material);
     if (it == spriteProg_.end()) {
         std::string nm = resolveName(material);
@@ -2049,6 +2182,8 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     glClearColor(fogIn_.x, fogIn_.y, fogIn_.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     depthDirty_ = true;
+    transQueue_.clear();
+    deferTrans_ = true;
     distUsed_ = false;
     camPos_ = cam.pos;
     znear_ = cam.znear; zfar_ = cam.zfar;
@@ -2071,7 +2206,51 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     }
 }
 
+// Canvas material tiles: screen quads in pixels (top-left origin) shaded by their compiled material, no depth,
+// after the post pass, in submission order. Material params arrive per tile (runtime uniforms).
+void Pipeline::drawCanvasTiles() {
+    if (uiTiles_.empty()) return;
+    std::vector<IRenderer::MaterialTile> tiles;
+    tiles.swap(uiTiles_);
+    const core::Mat4 saveVP = viewProj_;
+    const bool saveFog = fogOn_;
+    float W = (float)std::max(vpW_, 1), Hh = (float)std::max(vpH_, 1);
+    core::Mat4 ortho = core::Mat4::identity();         // pixels -> NDC, y down
+    ortho.m[0] = 2.0f / W; ortho.m[5] = -2.0f / Hh; ortho.m[10] = -1.0f; ortho.m[12] = -1.0f; ortho.m[13] = 1.0f;
+    viewProj_ = ortho;
+    fogOn_ = false;
+    canvasInvGamma_ = 1.0f / 2.2f;
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+    glViewport(0, 0, (GLsizei)W, (GLsizei)Hh);
+    for (const IRenderer::MaterialTile& t : tiles) {
+        float cx = t.x + t.w * 0.5f, cy = t.y + t.h * 0.5f, c = std::cos(t.rotation), sn = std::sin(t.rotation);
+        Sprite s;
+        const float cr[4][2] = {{-0.5f, 0.5f}, {0.5f, 0.5f}, {0.5f, -0.5f}, {-0.5f, -0.5f}};   // CCW after the y-down ortho
+        for (int k = 0; k < 4; ++k) {
+            float px = cr[k][0] * t.w, py = cr[k][1] * t.h;
+            s.c[k] = core::Vec3{cx + px * c - py * sn, cy + px * sn + py * c, 0.0f};
+            s.uv[k][0] = cr[k][0] < 0 ? t.u0 : t.u1;
+            s.uv[k][1] = cr[k][1] < 0 ? t.v0 : t.v1;
+            s.color[k == 0 ? 0 : 0] = 1.0f;
+        }
+        std::fill(s.color, s.color + 4, 1.0f);
+        drawParams_ = &t.params;
+        bool ok = drawSprites(t.material.c_str(), &s, 1, core::Vec3{0, 0, 1});
+        static int logged = 0;
+        if (std::getenv("WFC_TILELOG") && logged++ < 8) LOG_INFO("canvas tile %s -> %d", t.material.c_str(), ok ? 1 : 0);
+        drawParams_ = nullptr;
+    }
+    canvasInvGamma_ = 0.0f;
+    fogOn_ = saveFog;
+    viewProj_ = saveVP;
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+}
+
 void Pipeline::endFrame() {
+    flushTranslucency();                               // nothing queued normally: drawMapPresentation flushed it
+    deferTrans_ = false;
     double thisRenderMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gFrameStart).count();
     gStats.renderMs += thisRenderMs;
     if (std::getenv("WFC_RENDERSTATS")) {             // hitch attribution: whole frame vs render span
@@ -2183,6 +2362,7 @@ void Pipeline::endFrame() {
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
     UseProgram(0);
+    drawCanvasTiles();
     ActiveTexture(GL_TEXTURE0 + 3); glBindTexture(GL_TEXTURE_3D, 0);
     ActiveTexture(GL_TEXTURE0 + 2); glBindTexture(GL_TEXTURE_2D, 0);
     ActiveTexture(GL_TEXTURE0 + 1); glBindTexture(GL_TEXTURE_2D, 0);

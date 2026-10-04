@@ -260,15 +260,17 @@ void Application::routeMatchToFrontend(float dt) {
 }
 
 void Application::unloadMatch() {
-    // Travel replaces the world. The match world, its audio voices and the renderer's map data are released by
-    // recreating them. PARTIAL: IRenderer has no map-unload entry point, so GL objects of the previous map are not
-    // freed (HANDOFF Rendering: unloadMapRenderData / resource release for level travel).
+    // Travel replaces the world. The match world and its audio voices are released by recreating them; the map's
+    // render resources by Rendering's IRenderer::unloadMapRenderData (docs/RENDERER_CONTRACT.md) [integration].
+    // GlCensus then releases what remains outside the map data (World uploadMesh meshes, effect textures); names the
+    // renderer already freed are ignored by glDelete* and nothing is created in between.
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
     world_.unloadMapAudio();   // no voice / instance / map cue / sample remains (Systems guarantee)
 #endif
     world_.~World();
     new (&world_) game::World();
     frontend_->flow().setMatchValues(frontend::MatchValues{});   // no stale match values in the lobby / frontend
+    renderer_->unloadMapRenderData();
     ui::GlCensus::Owned keep;
     if (presenter_) presenter_->ownedGl(keep);
     if (!std::getenv("WFC_NO_GL_RELEASE")) frontend::FlowTrace::emit("match.glRelease", {{"released", g_census.release(keep)}});

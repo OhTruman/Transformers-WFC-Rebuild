@@ -22,6 +22,11 @@ VECTOR_CHANNEL_PROVEN = {l.split('#')[0].strip() for l in open(_VCP, encoding='u
 GLSL_T = {1: 'float', 2: 'vec2', 3: 'vec3', 4: 'vec4'}
 
 
+
+def rt_ident(name):
+    """Runtime parameter uniform suffix (a GLSL identifier) for a material parameter name."""
+    return re.sub(r'[^A-Za-z0-9_]', '_', name)
+
 class CompileError(Exception):
     pass
 
@@ -185,6 +190,11 @@ class MatCompiler:
         nm = n.get('ParameterName')
         self.params_read['Scalar'].add(nm)
         v = self.scalars.get(nm, n.get('DefaultValue', 0.0))
+        if self.runtime_params == 'all' and nm:
+            # Canvas / MID: every parameter settable per draw (unset = the authored value)
+            u = rt_ident(nm)
+            self.rt_used[u] = None
+            return '(uRTSet_%s != 0 ? uRT_%s.x : %s)' % (u, u, glf(v)), 1
         return glf(v), 1
 
     def x_VectorParameter(self, c, n, p, o):
@@ -192,7 +202,11 @@ class MatCompiler:
         self.params_read['Vector'].add(nm)
         v = self.vectors.get(nm, n.get('DefaultValue') or [0, 0, 0, 1])
         authored = 'vec4(%s)' % ', '.join(glf(x) for x in v)
-        if self.runtime_params and nm in self.RUNTIME_PARAMS:
+        if self.runtime_params == 'all' and nm:
+            u = rt_ident(nm)
+            self.rt_used[u] = None
+            code = '(uRTSet_%s != 0 ? uRT_%s : %s)' % (u, u, authored)
+        elif self.runtime_params and nm in self.RUNTIME_PARAMS:
             # Runtime applier override; when not set (all-zero = skip) every same-named expression
             # keeps its OWN authored value (MIC value, else that expression's default).
             self.rt_used[nm] = self.vectors.get(nm)
@@ -408,12 +422,35 @@ class MatCompiler:
         exc = cast(ex[0], ex[1], 1) if ex else glf(n.get('Exponent', 3.0))
         return 'pow(max(1.0 - max(dot(%s, m.cameraVector), 0.0), 0.0), %s)' % (cast(nrm[0], nrm[1], 3), exc), 1
 
+    VARYING = {'DynamicParameter', 'VertexColor', 'TextureSample', 'TextureSampleParameter2D', 'TextureCoordinate',
+               'ScreenPosition', 'PixelDepth', 'SceneDepth', 'DestDepth', 'CameraVector', 'ReflectionVector',
+               'LightVector', 'WorldPosition', 'ParticleSubUV', 'TextureSampleParameterCube',
+               'TextureSampleParameterMovie', 'TextureSampleParameterSubUV', 'FlipBookSample', 'MeshSubUV'}
+
+    def _varying(self, path, seen=None):
+        """True when an expression subgraph depends on per-vertex / per-pixel data (not a uniform)."""
+        seen = seen if seen is not None else set()
+        if path in seen: return False
+        seen.add(path)
+        cls = (self.R.cls(path) or '').replace('MaterialExpression', '')
+        if cls in self.VARYING: return True
+        node = self.R.obj(path) or {}
+        for v in node.values():
+            r = self.expr_ref(v)
+            if r and self._varying(r[0], seen): return True
+        return False
+
     def x_DepthBiasedAlpha(self, c, n, p, o):
         # UE3 DepthBiasedAlpha: Alpha * saturate((SceneDepth - PixelDepth) / max((1 - Bias) * BiasScale, 0.001)),
-        # depths in UE units. WFC adds BiasScaleInput (expression overriding the BiasScale constant).
+        # depths in UE units. Shipped Xenon PS (MP_IAC_Streets shader caches):
+        #  * unconnected Bias compiles to the literal 0.5 (FogSheet_Parent_MAT: UniformScalar_3 * 0.5);
+        #  * WFC BiasScaleInput replaces BiasScale when it is a uniform expression (FogSheet: the 'BiasScale'
+        #    ScalarParameter is the scale uniform), but a per-vertex input (Steam_Mat: DynamicParameter) is not
+        #    compiled and the BiasScale constant applies ((1 - SmokeBall.b) * 200 in the shader).
         a = self.input(c, n, 'Alpha', ('1.0', 1))
-        b = self.input(c, n, 'Bias', ('0.0', 1))
-        sc = self.input(c, n, 'BiasScaleInput')
+        b = self.input(c, n, 'Bias', ('0.5', 1))
+        r = self.expr_ref(n.get('BiasScaleInput'))
+        sc = self.input(c, n, 'BiasScaleInput') if r and not self._varying(r[0]) else None
         scale = cast(sc[0], sc[1], 1) if sc else glf(n.get('BiasScale', 1.0))
         self.uses.add('scenedepth')
         return 'wfcDepthBiasedAlpha(m, %s, %s, %s)' % (cast(a[0], a[1], 1), cast(b[0], b[1], 1), scale), 1
@@ -425,9 +462,9 @@ class MatCompiler:
         self.uses.add('scenedepth'); return 'm.sceneDepth', 1
 
     def x_DynamicParameter(self, c, n, p, o):
-        # particle DynamicParameter (Param1..4); emitters do not drive it here -> authored default 1
-        return ['m.dynParam', 'm.dynParam.x', 'm.dynParam.y', 'm.dynParam.z', 'm.dynParam.w'][min(o, 4)], \
-            (4 if o == 0 else 1)
+        # particle DynamicParameter: four scalar outputs, output k = Param(k+1) (all 50 cooked nodes use outputs
+        # 0..3 only, and ParamNames match: output 1 always 'DepthBiasScale', output 0 'Desat1')
+        return ['m.dynParam.x', 'm.dynParam.y', 'm.dynParam.z', 'm.dynParam.w'][min(o, 3)], 1
 
     def x_ParticleSubUV(self, c, n, p, o):
         tex = (n.get('Texture') or {}).get('ref')

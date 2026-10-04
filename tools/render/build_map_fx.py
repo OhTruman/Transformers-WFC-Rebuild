@@ -12,6 +12,8 @@ Only distributions with confidence CONFIRMED are emitted as such; PARTIAL ones a
 Usage: python build_map_fx.py <Map> <out_dir>
 """
 import json, os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from ue3obj import Repo  # noqa: E402
 
 MANI = r'F:/Transformers Rebuild/AssetTools/manifests'
 VS_MAPS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
@@ -20,6 +22,14 @@ WFC = r'F:/Transformers Rebuild/AssetTools/scripts/wfc'
 
 TYPE_KIND = {1: 'float constant', 2: 'float constant curve', 3: 'float uniform', 4: 'float uniform curve'}
 
+
+
+def manifest(mapname, kind):
+    """AssetTools per-map manifest <prefix>_<kind>.json (Streets: streets_movers.json ...). The prefix is the map's
+    last name token in lower case, or WFC_MANIFEST_PREFIX. Returns None when the map has no such manifest."""
+    pre = os.environ.get('WFC_MANIFEST_PREFIX') or mapname.split('_')[-1].lower()
+    p = os.path.join(MANI, '%s_%s.json' % (pre, kind))
+    return json.load(open(p, encoding='utf-8')) if os.path.exists(p) else None
 
 def tagged_dist(d, default_values):
     """Tagged FRawDistributionFloat (RequiredModule.SpawnRate) -> runtime distribution."""
@@ -128,7 +138,7 @@ def system_runtime(name, s):
 def main():
     mapname, out = sys.argv[1], sys.argv[2]
     fx = json.load(open(os.path.join(VS_MAPS, mapname, 'map_fx.json'), encoding='utf-8'))
-    pk = json.load(open(os.path.join(MANI, 'streets_pickup_fx.json'), encoding='utf-8'))['systems']
+    pk = (manifest(mapname, 'pickup_fx') or {}).get('systems', {})
     systems = {}
     for name, s in pk.items():
         systems[name] = system_runtime(name, s)
@@ -157,8 +167,29 @@ def main():
         inst.append({'component': comp['component'], 'owner': comp['owner'].split('.')[-1],
                      'owner_class': oc, 'template': t, 'role': 'highlight' if highlight else 'custom' if oc != 'Emitter' else 'level',
                      'attached': attached, 'auto_activate': active, 'required_game_rule': rule,
-                     'ue_matrix': comp['ue_matrix']})
-    res = {'map': mapname, 'source': 'AssetTools a23c675 map_fx.json + streets_pickup_fx.json + pstream (Steam_Sm_FX)',
+                     'ue_matrix': comp['ue_matrix'],
+                     # PSC InstanceParameters (colour): read by ParticleModuleColorByParameter (Steam_Sm_FX:
+                     # ColorParam 'SteamColor', FName in the compiled LOD stream)
+                     'color_params': {ip['Name']: [ip['Color'][c] for c in ('R', 'G', 'B', 'A')]
+                                      for ip in (comp['props'].get('InstanceParameters') or [])
+                                      if ip.get('Name') and isinstance(ip.get('Color'), dict)}})
+    # destructible state meshes -> authored StaticMeshComponents (cooked HmStaticMeshDestructionEffect.MeshComponents);
+    # the renderer joins the state mesh to its lightmap through these
+    dcomp = {}
+    try:
+        drepo = Repo(['%s_ART_m.xxx' % mapname, '%s_BASE_m.xxx' % mapname])
+        for path in drepo.index:
+            if (drepo.cls(path) or '') != 'HmStaticMeshDestructionEffect': continue
+            for mc in (drepo.obj(path) or {}).get('MeshComponents') or []:
+                cref = mc.get('ref') if isinstance(mc, dict) else mc
+                sm = (drepo.obj(cref) or {}).get('StaticMesh') or {}
+                mref = sm.get('ref') if isinstance(sm, dict) else sm
+                if not cref or not mref: continue
+                actor = cref.split('.HmDestructibleComponent')[0]
+                dcomp.setdefault(actor, {}).setdefault(mref, []).append(cref)
+    except Exception as ex:
+        print('destructible components: %s' % ex)
+    res = {'map': mapname, 'destructible_mesh_components': dcomp, 'source': 'AssetTools a23c675 map_fx.json + streets_pickup_fx.json + pstream (Steam_Sm_FX)',
            'instances': inst, 'systems': systems}
     json.dump(res, open(os.path.join(out, 'map_fx_runtime.json'), 'w'), indent=1)
     print('map fx: %d components (%d auto-active), %d systems' % (len(inst), sum(i['auto_activate'] for i in inst),

@@ -1779,6 +1779,105 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
 
 ---
 
+## MILESTONE 07 — STREETS CLEANUP, FRONTEND / NEXT-MAP READINESS (2026-10-03)
+Evidence:
+- RE-Workspace M05 notes (read-only): `MILESTONE05_GAMEPLAY_UNKNOWNS.md` §5 (Canvas HUD markers) and §6 (pickup factory
+  mesh and spin), and `MILESTONE05_FRONTEND_MATCH_BOOTSTRAP.md`;
+- the agents/frontend a55a4e9 handoff (map unload);
+- the latest render_index (pickup_factory_visuals, including the objective rest meshes).
+
+The renderer contract for the other lanes is in `docs/RENDERER_CONTRACT.md`.
+
+| Item | Original (WFC) | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Pickup factory mesh placement | the template mesh is attached to the factory actor with zero offset; actor rotation and DrawScale apply | RE M05 §6 (script) | CONFIRMED (script) / HIGH (native attach) | mesh at the factory transform from render_index, authored rotation kept (was yaw from 0) |
+| Pickup spin | the factory actor is PHYS_Rotating at PickupRotationRate only while available; it freezes when taken and resumes from that yaw | RE M05 §6 | CONFIRMED | spin accumulated per factory while available, frozen while hidden (was continuous from map start); local-space FX follow it. VISUALLY VERIFIED available / taken / respawn |
+| Health / overshield | no PickupFactoryMesh, no spin | RE M05 §6 | HIGH | only their FX mesh particles draw; render_index "mesh particle" entries are not drawn twice |
+| Flag / bomb rest mesh | Code of Power / MP bomb skeletal mesh at rest pose, +150 Z, spinning, CTF / EXT only | render_index (supersedes UNKNOWN) | CONFIRMED data | drawn and gated by the factory's game rule; hidden in TDM. VISUALLY VERIFIED (TDM none / CTF shown). Weapon materials not in the compiled set (glTF fallback) [PARTIAL, CTF/EXT only] |
+| HUD markers | Canvas material tiles (`TnObjectiveMarkerTypeSprite.Draw`), materials in UI_HudMarkers_p, per-draw material params | RE M05 §5 | CONFIRMED | `IRenderer::drawMaterialTile`. All 15 marker materials compiled with runtime parameters and verified (231/231 permutations). VISUALLY VERIFIED: base marker friendly / enemy / off-screen arrow, enemy, death, health bar |
+| MarkerAlly_MAT | empty expression tree | cooked material | CONFIRMED | draws nothing (ally tags = label + health bar) |
+| Canvas gamma | — | canvas tile shader not decoded | PARTIAL | display gamma 1/2.2 applied as in the scene post |
+| 2D composition | GFx / Bink / loading presented over the scene | Frontend handoff | — | `drawScreenTriangles` (blend modes, scissor, clamp), `updateTexture`. VISUALLY VERIFIED (fade + panel) |
+| Level travel | — | Frontend handoff (renderer leaked the previous map) | — | `unloadMapRenderData` / `Pipeline::release`; in-process cycle VISUALLY VERIFIED (`WFC_RELOADTEST`) |
+| Map-agnostic data | — | audit | — | asset roots from WFC_ASSETS / WFC_CONTENT; props, pickups and destructibles from render_index; tools take the map name, AssetTools manifest prefix, inline lightmaps from the ART package. Movers and map FX outputs identical to before |
+| KOTH ring colour | `CaptureColor[team]` / `NeutralColor` vector params (MaterialParamNames) | RE M05 §3 | CONFIRMED (script) | not wired: needs a Gameplay hook; KOTH only [PARTIAL] |
+
+**Regression of the playtest categories** (same cameras as M06; VISUALLY VERIFIED unchanged):
+- glass: 9 views, 0 px different;
+- steam over time: 12 views, 0 px;
+- fog sheets: 138 views.
+
+In the fog-sheet views the only differences are:
+- the uncoloured steam emitter: the M06 scan predates ColorByParameter;
+- one flag mesh, a regression caught and fixed by the rule gate.
+
+Normal play (robot), vehicle form, transformation, firing, pickups and self-tests (shadows 32/32, DLE 20/20) were re-run.
+
+**Still open (original-engine unknowns, documented):**
+
+| Item | Mark |
+|---|---|
+| Translucent alpha output / blend state | PARTIAL |
+| Darkening (modulate) blend with Opacity | UNKNOWN; no map material depends on it |
+| HmParticleModuleGravity acceleration | UNKNOWN |
+| Steam LOD 1/2 | DirectSet, unused |
+| Totem and KOTH team colours | PARTIAL; need Gameplay ownership hooks |
+| Canvas gamma | PARTIAL |
+| Visible BSP without lightmaps | PARTIAL; RE orientation question open, not visible from gameplay viewpoints |
+
+## MILESTONE 06 — HUMAN PLAYTEST: TRANSLUCENCY, SMOKE, GLASS (2026-10-03)
+The human playtest of integration milestone 04 drives this pass. Evidence comes from the shipped Xenon shader caches
+(`work/re/sc_streets_art.bin`, `sc_base.bin`, `sc_engine.bin`, disassembled with `tools/render/xenos_dis.py`), the
+cooked material graphs and particle streams, and A/B runtime captures. Each A/B pair is pre-M06 behaviour
+(`WFC_M05TRANS=1` + the pre-M06 material file) against the new behaviour, from the same camera.
+
+Marks: CONFIRMED ORIGINAL (shipped shader / cooked data) / HIGH (stock UE3) / VISUALLY VERIFIED (A/B capture
+inspected) / PARTIAL / UNKNOWN.
+
+**Root causes of the reported defects**
+1. **Translucency drawn mid-frame.** World translucent subs were drawn right after the world mesh's opaque subs, before
+   the BSP, decals and characters. BSP floors and ramps behind glass or fog sheets then painted over them, so geometry
+   under transparent panels appeared in front of them, and dark translucent cards showed through foreground structure.
+   The scene-depth copy for DepthBiasedAlpha was also taken before the BSP existed, so soft fades saw no wall behind them.
+2. **Additive opacity ignored.** WFC's additive base pass multiplies colour by Opacity, but the rebuild output colour
+   unattenuated. The 46 FogSheet_DepthBiased cards (Blue / RED / Purple) draw their opacity from a 25-50 m
+   depth-biased fade. Without it they drew at full strength over walls: the distance-dependent curtains.
+3. **Particle soft fade collapsed.** The translator read DynamicParameter output 1 as `.x` (Desat1 = 0) and fed it to
+   BiasScale. Steam therefore cut hard against geometry: the "static" slab of steam under the fallen panels.
+4. **Steam colour missing.** ParticleModuleColorByParameter ('SteamColor') was not implemented, so the steam rendered
+   grey-white instead of the authored blue-purple.
+
+| Item | Original (WFC) | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Translucency pass | all opaque first; translucent primitives back to front by view depth of the bounds origin | stock UE3 FTranslucentPrimSet | HIGH | translucent subs of persistent meshes (world, BSP, props, FX meshes) and sprite batches are queued and drawn after every opaque draw, back to front; scene depth for soft fades is then complete. Decals stay in the opaque phase. VISUALLY VERIFIED (fog / glass / nav A/B) |
+| Additive output | oC0.rgb = Color * fog * **Opacity** * SceneColorBiasFactor | Xenon PS of FogSheet_Parent_MAT (ART cache, line 28) and of ENV_ForceField glass (ART cache, lines 57-58) | CONFIRMED ORIGINAL | `wfcTranslucentOut`: additive colour *= Opacity |
+| Translucent / additive kill | discard when Opacity < 1/255 | `kill_gt` against 0.00392 in both shaders | CONFIRMED ORIGINAL | applied for translucent and additive |
+| DepthBiasedAlpha, unconnected Bias | 0.5 | FogSheet PS: `UniformScalar_3 * 0.5` | CONFIRMED ORIGINAL | matc default 0.5 (was 0) |
+| DepthBiasedAlpha BiasScaleInput | uniform input replaces BiasScale; a per-vertex input is not compiled | FogSheet: ScalarParameter 'BiasScale' is the scale uniform; Steam_Mat: `(1 - SmokeBall.b) * 200`, the DynamicParameter is unused | CONFIRMED for both materials / general rule PARTIAL | matc: varying subgraph (DynamicParameter, VertexColor, textures, ...) -> BiasScale constant |
+| DynamicParameter outputs | four scalars, output k = Param k+1 | 50 cooked nodes use outputs 0-3 only; ParamNames match (1 = 'DepthBiasScale' everywhere) | HIGH | matc fixed (was a 5-output reading shifted by one). 9 materials recompiled (FogSheets, Steam, Glow_Mod, Tracer_Smoke, muzzle FX) |
+| Particle sprite size | corner = (TexCoord - 0.5) * Size: Size is the full width | sprite vertex factory VS (engine cache), lines 18-19 | CONFIRMED ORIGINAL | unchanged (already full width) |
+| ColorByParameter | Color = BaseColor = PSC InstanceParameter 'SteamColor' (else DefaultColor white) | FName 'SteamColor' in the compiled Steam LOD stream (offset 298); 7 of 8 Emitters author it; CDO DefaultColor white | CONFIRMED data / FLinearColor(FColor) gamma-2.2 conversion HIGH | implemented; steam is the authored blue-purple, soft-edged and evolving (VISUALLY VERIFIED over 1.6 s) |
+| FogSheet distance / angle behaviour | emissive * saturate(PixelDepth * 0.0005 / FadeDistance) * pow(saturate(CameraVector . N), DensityFalloff) | graph + PS | CONFIRMED ORIGINAL | authored: sheets fade out near the camera and when viewed edge-on. Not a defect, and left as is |
+| FogSheet / BckSillouhetteSmoke animation | no Time / Panner in FogSheet_Parent_MAT; BckSillouhetteSmoke pans | graphs | CONFIRMED ORIGINAL | FogSheets are intentionally static art; the smoke cards animate through material Time |
+| Glass bridge / floor panels | ENV_ForceField_ALL_MAT additive: fresnel + scanline + fence mask; Opacity = clamp(pow(1 - DBA, 4) * 5 + 0.2) | graph + PS | CONFIRMED ORIGINAL | faint 0.2 film with an intersection glow, composited after all opaque geometry, so nothing below can draw over it. VISUALLY VERIFIED |
+| Translucent (alpha) output | PS writes oC0.w = SceneColorBiasFactor.y, colour premultiplied-like (Steam_Mat) | Steam_Mat PS | PARTIAL (blend state not in the PS) | unchanged: SrcAlpha / InvSrcAlpha |
+| Modulate with Opacity | — | not decoded | UNKNOWN | unchanged (only weapon Glow_Mod uses it; map stains have Opacity 1) |
+| HmParticleModuleGravity on steam | enabled (flagA 1); GravityMultiplier CDO 1.0; acceleration native | stream | UNKNOWN | not applied |
+| DepthPriorityGroup / sort priority | all 1,952 components SDPG_World; no TranslucencySortPriority | props_authored | CONFIRMED | single world translucency list |
+
+**Before / after (VISUALLY VERIFIED):** `work/m06/fog_ab.png`, `fogscan_top.png` (46 sheets x 3 distances; the worst
+cases fs02 / fs40 / fs41 / fs04 show the flat blue veil before, and fs29 shows black polygons through a wall before),
+`glass_ab.png` / `glass_crop.png`, `steam_t.png` (grey hard-cut slab -> purple soft steam, frame-to-frame motion),
+`nav_ab.png`, `beam_ab.png` (light-ray cones and glow spheres change little), `play.png` / `play_vehicle.png`
+(normal play, robot and vehicle).
+
+**Diagnostic false positives (not defects):**
+- Nav-node cameras placed on pickup factories sit inside the pickup beam and cube meshes.
+- `WFC_ALBEDO` shows unlit additive glass as black (DiffuseColor 0).
+- The dark VentWall near FFA start 15650 is authored lighting (lightmap scale 0.05).
+
+---
+
 ## MILESTONE 05 — MP_IAC_STREETS NORMAL-PLAY MAP COMPLETION (2026-10-03)
 Provenance: AssetTools **883b94b..da67634** (render_index.json: mode_visual_state, tdm_render_state, pickup_factory_visuals,
 pickup_fx_components; STREETS_NATIVE_FIDELITY_M05), ReverseEngineering **940aa79** (flagA = bEnabled) and **fc05672**

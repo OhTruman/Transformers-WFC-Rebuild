@@ -1496,6 +1496,36 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 07 (2026-10-03, agents/rendering) — Streets cleanup, frontend / next-map readiness
+- Contract for the other lanes: `docs/RENDERER_CONTRACT.md`.
+- Level travel: `IRenderer::unloadMapRenderData()` releases every GPU object. `WFC_RELOADTEST=<frame>` runs an in-process
+  cycle.
+- HUD: `IRenderer::drawMaterialTile()` (UE3 Canvas material tiles with per-draw params). The 15 UI_HudMarkers_p materials
+  are compiled and verified (231/231). `WFC_TILETEST=1`.
+- 2D: `drawScreenTriangles()` (alpha / premultiplied / additive / multiply / opaque, scissor) and `updateTexture()`, for
+  GFx, Bink, loading and fades. `WFC_SCREENTEST=1`.
+- Pickups (RE M05 §6):
+  - factory meshes at the factory transform;
+  - spin only while available (frozen when taken);
+  - flag / bomb rest meshes gated to CTF / EXT.
+- Map-agnostic: no absolute paths or Streets names in `src/render`. Props, pickups and destructibles come from
+  render_index. The tools take the map name.
+
+## RENDERING MILESTONE 06 (2026-10-03, agents/rendering) — human playtest translucency / smoke / glass
+- UE3 translucency pass: every translucent primitive is drawn after all opaque geometry, back to front. This fixes glass
+  and fog sheets being overdrawn by BSP, dark cards showing through ramps, and soft fades computed against incomplete depth.
+- Shipped Xenon PS semantics:
+  - additive colour x Opacity;
+  - Opacity < 1/255 killed;
+  - DepthBiasedAlpha default Bias 0.5;
+  - BiasScaleInput only when uniform.
+- The distance-dependent blue / purple / red FogSheet curtains are gone.
+- Particles:
+  - DynamicParameter output index fixed;
+  - steam uses its authored 'SteamColor' (ColorByParameter);
+  - steam has soft intersections and visibly animates.
+- Diagnostics: WFC_M05TRANS (pre-M06 behaviour for A/B), WFC_IMMEDIATETRANS. Self-tests: shadows 32/32, DLE 20/20.
+
 ## RENDERING MILESTONE 05 (2026-10-03, agents/rendering) — Streets normal-play completion
 - Consumes Gameplay d122ef4 state: setMapClock (movers / totem / pickup spin), setActiveGameRules, setActorHidden, setMapEffectState; KOTH active ring.
 - Content meshes placed P*A*P (corrects M04's sideways totems / destructible / FX meshes).

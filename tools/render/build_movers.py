@@ -18,6 +18,14 @@ VS_MAPS = r'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
 U2D = 360.0 / 65536.0
 
 
+
+def manifest(mapname, kind):
+    """AssetTools per-map manifest <prefix>_<kind>.json (Streets: streets_movers.json ...). The prefix is the map's
+    last name token in lower case, or WFC_MANIFEST_PREFIX. Returns None when the map has no such manifest."""
+    pre = os.environ.get('WFC_MANIFEST_PREFIX') or mapname.split('_')[-1].lower()
+    p = os.path.join(MANI, '%s_%s.json' % (pre, kind))
+    return json.load(open(p, encoding='utf-8')) if os.path.exists(p) else None
+
 def rot_matrix(pitch, yaw, roll):
     """UE3 FRotationMatrix (row vectors = local X, Y, Z axes in world), angles in UE units. Returns 3x3 rows."""
     p, y, r = (math.radians(a * U2D) for a in (pitch, yaw, roll))
@@ -37,10 +45,10 @@ def glb_nodes(path):
 
 def main():
     mapname, out = sys.argv[1], sys.argv[2]
-    mv = json.load(open(os.path.join(MANI, 'streets_movers.json'), encoding='utf-8'))
+    mv = manifest(mapname, 'movers') or {'movers': []}
     nodes = glb_nodes(os.path.join(VS_MAPS, mapname, 'world.glb'))
-    kis = json.load(open(os.path.join(MANI, 'streets_kismet.json'), encoding='utf-8'))
-    res = {'map': mapname, 'source': 'AssetTools a23c675 streets_movers.json / streets_kismet.json', 'rotating': [],
+    kis = manifest(mapname, 'kismet') or {}
+    res = {'map': mapname, 'source': 'AssetTools <map>_movers.json / <map>_kismet.json', 'rotating': [],
            'matinee': [], 'hidden': [], 'validation': []}
     for m in mv['movers']:
         actor = m['actor'].split('.')[-1]

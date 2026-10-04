@@ -8,12 +8,14 @@
 //    diffuse sat(N.L*0.6778+0.3333)^2 and Phong specular pow(sat(R.L), SpecularPower)
 //  * UE3 per-vertex height fog, linear-light HDR target, DisplayGamma 2.2 resolve.
 #pragma once
+#include <array>
 #include <map>
 #include <memory>
 #include <set>
 #include <unordered_map>
 #include <string>
 #include <vector>
+#include <functional>
 #include "render/gl/GLExt.h"
 #include "render/Camera.h"
 #include "render/Mesh.h"
@@ -110,6 +112,7 @@ struct Program {
           uFogIn = -1;
     struct Slot { int unit; GLuint tex; bool cube; float umin[4]; float uscale[4]; };
     GLint uRT[3] = {-1, -1, -1}, uRTSet[3] = {-1, -1, -1};   // applier params (Cust_Color_A/B, EnergonColor)
+    std::map<std::string, std::pair<GLint, GLint>> rtLoc;      // every runtime parameter: (uRT_, uRTSet_)
     std::vector<Slot> slots;
     int blend = 0;                // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
     bool twoSided = false, lit = true;
@@ -123,6 +126,14 @@ struct Program {
 class Pipeline {
 public:
     bool load(const std::string& mapName);
+    // Shared read-only asset roots: WFC_ASSETS (default core::config::kAssetRootDefault, the VerticalSlice export)
+    // and the content directory beside it (WFC_CONTENT overrides). Map render data stays in WFC_RENDER_DATA.
+    static std::string assetRoot();
+    static std::string contentRoot();
+    void release();                                   // delete every GL object, reset to the unloaded state
+    // Canvas material tile (UE3 FCanvas::DrawMaterialTile): queued, drawn after post onto the back buffer.
+    void drawMaterialTile(const IRenderer::MaterialTile& t) { uiTiles_.push_back(t); }
+    bool hasMaterial(const std::string& m) const { return mats_.count(m) > 0; }
     bool active() const { return active_; }
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
     void setCharacterColors(const CharacterColors& c) { charColors_ = c; }
@@ -185,7 +196,21 @@ private:
     void writeFrameReport();
     core::Vec3 envBoundsCenter_, envBoundsExtent_;
     void bindCommon(const Program& P, const core::Mat4& model);
-    void drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject);
+    void drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject, int onlySub = -1);
+    // UE3 translucency pass: every translucent primitive is drawn after all opaque geometry, sorted back to front
+    // by the view-space depth of its bounds origin (FTranslucentPrimSet). Translucent subs of persistent meshes
+    // and sprite batches are queued during the frame and drawn by flushTranslucency().
+    struct TransItem { float key; std::function<void()> fn; };
+    std::vector<TransItem> transQueue_;
+    std::vector<IRenderer::MaterialTile> uiTiles_;
+    void drawCanvasTiles();
+    float canvasInvGamma_ = 0.0f;                      // > 0 while drawing Canvas tiles
+    const std::vector<std::pair<std::string, std::array<float, 4>>>* drawParams_ = nullptr;   // per-draw runtime params
+    bool deferTrans_ = false, flushingTrans_ = false;
+    float viewDepth(const core::Vec3& p) const;
+public:
+    void flushTranslucency();
+private:
     void ensureTargets(int w, int h);
     static void buildVertices(const MeshData& m, std::vector<float>& v);
 
@@ -373,6 +398,7 @@ private:
     };
     struct FxInstance {
         std::string component, owner, ownerClass, system, role, requiredRule;
+        std::map<std::string, std::array<float, 4>> colorParams;   // InstanceParameters, FLinearColor(FColor)
         bool active = true, hidden = false, attached = true;
         float R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T[3] = {0, 0, 0};   // UE rows / translation
         uint32_t rng = 1;
@@ -396,11 +422,19 @@ private:
     int kothMesh_ = -1;
     // ammo-crate PickupFactoryMesh (TnAmmoCratePickup.MeshComponentA): PROP_NEU_AmmoPickup_STAT, CullDistance 8000,
     // PickupRotationRate yaw 10000 while available
-    struct PickupMeshRT { std::string owner; float T[3] = {0, 0, 0}; };
+    // PickupFactoryMesh (render_index pickup_factory_visuals): the template mesh attached to the factory actor at zero
+    // offset; while the pickup is available the whole factory actor is PHYS_Rotating at the inventory's
+    // PickupRotationRate, frozen at its current yaw when taken and resumed from it on respawn (RE M05 GAMEPLAY §6).
+    struct PickupMeshRT {
+        std::string owner, gltf, mesh; float R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T[3] = {0, 0, 0};
+        float off[3] = {0, 0, 0};                     // component Translation (flag / bomb rest mesh +150 Z)
+        float yawRate = 0.0f, cullDistance = 0.0f; int meshId = -1;
+    };
+    std::map<std::string, float> pickupSpin_;         // factory (lower) -> accumulated yaw (UU) while available
     std::vector<PickupMeshRT> pickupMeshes_;
     std::set<std::string> pickupMeshHidden_;
-    int ammoMesh_ = -1;
     float pickupYaw(const std::string& ownerLower) const;
+    bool pickupRuleBlocked(const std::string& ownerLower) const;
     float mapClock_ = 0.0f; bool hasMapClock_ = false;
     std::unique_ptr<assets::SkinnedModel> totemModel_;
     int totemClip_ = -1;

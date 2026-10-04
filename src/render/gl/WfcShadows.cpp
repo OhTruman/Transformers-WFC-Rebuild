@@ -250,7 +250,7 @@ bool Pipeline::ensureShadowPrograms() {
     shadowProjProg_ = linkProgram(vv, pf, "shadowproj");
     if (!shadowProjProg_ || !maskDepthProg_ || !constProg_ || !maskBlurProg_) { shadowProjProg_ = 0; return false; }
     ImageData img;
-    std::string path = std::string("F:/Transformers Rebuild/ExtractedAssets/content/EngineMaterials/RandomAngles.png");
+    std::string path = contentRoot() + "EngineMaterials/RandomAngles.png";
     if (platform::decodeImage(path, img)) {
         glGenTextures(1, &randomAnglesTex_);
         glBindTexture(GL_TEXTURE_2D, randomAnglesTex_);
