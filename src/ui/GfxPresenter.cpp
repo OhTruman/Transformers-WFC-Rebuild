@@ -3,6 +3,7 @@
 #include "frontend/FlowTrace.h"
 
 #include <algorithm>
+#include <cstdlib>
 
 namespace ui {
 
@@ -214,7 +215,9 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
         p.buildRenderList(GfxRendererGL::stageMatrix(p.stageWidth, p.stageHeight, w, h), items_);
         gl_.draw(items_);
     };
-    if (loading_) drawMovie(*loading_);
+    static const bool emptyLayer = std::getenv("WFC_GFX_EMPTY") != nullptr;   // diagnostics: composite only
+    if (emptyLayer) {}
+    else if (loading_) drawMovie(*loading_);
     else for (Open& o : movies_) drawMovie(*o.movie);
     if (video_ && videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     if (cursor_ && !videoOver_) drawMovie(*cursor_);

@@ -60,5 +60,23 @@ int main(int argc, char** argv) {
         movie.advance(1.0f / movie.frameRate());
     }
     std::printf("%s", movie.dumpTree().c_str());
+    // WFC_DUMP_SHAPE=<id>: the fill / line styles of one shape of the root movie.
+    if (const char* sid = std::getenv("WFC_DUMP_SHAPE")) {
+        const gfx::MovieDef* def = movie.player().rootDef();
+        const gfx::CharDef* c = def ? def->character((uint16_t)std::atoi(sid)) : nullptr;
+        if (c && c->type == gfx::CharType::Shape) {
+            const gfx::ShapeDef& s = def->shapes[(size_t)c->index];
+            std::printf("SHAPE %s bounds (%.0f %.0f)..(%.0f %.0f) twips, %zu paths\n", sid, s.bounds.xmin, s.bounds.ymin, s.bounds.xmax,
+                        s.bounds.ymax, s.paths.size());
+            for (size_t set = 0; set < s.fillSets.size(); ++set)
+                for (size_t i = 0; i < s.fillSets[set].size(); ++i) {
+                    const gfx::FillStyle& f = s.fillSets[set][i];
+                    std::printf("  fill %zu.%zu type 0x%02x color %d,%d,%d,%d bitmap %d stops", set, i + 1, f.type, f.color.r, f.color.g,
+                                f.color.b, f.color.a, f.bitmapId == 0xFFFF ? -1 : (int)f.bitmapId);
+                    for (const gfx::GradStop& g : f.grad) std::printf(" [%d %d,%d,%d,%d]", g.ratio, g.color.r, g.color.g, g.color.b, g.color.a);
+                    std::printf("\n");
+                }
+        } else std::printf("SHAPE %s: not a shape of the root movie\n", sid);
+    }
     return 0;
 }

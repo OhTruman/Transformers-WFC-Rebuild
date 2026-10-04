@@ -482,6 +482,8 @@ void FrontendRuntime::draw(int w, int h) {
         SceneView v = scene_.view();
         if (v.valid) sceneRenderer_->draw(v, w, h);
     }
+    static const bool sceneOnly = std::getenv("WFC_SCENE_ONLY") != nullptr;   // diagnostics: the 3D layer alone
+    if (sceneOnly) return;
     if (!presenter_) return;
     const uint8_t* px = nullptr;
     int vw = 0, vh = 0;

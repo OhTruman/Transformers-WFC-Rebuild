@@ -2,6 +2,7 @@
 // The flow itself (levels, lobbies, URLs, UI controller) is src/frontend/GameFlow; this file only owns the
 // process loop: frontend frames, loading the match world the flow launches, and releasing it on return.
 #include "core/Application.h"
+#include "core/FrontendSceneGL.h"
 #include "core/LoadYield.h"
 #include "core/Log.h"
 #include "core/Time.h"
@@ -68,6 +69,7 @@ namespace core {
 
 namespace {
 std::unique_ptr<frontend::IFrontendAudio> g_frontendAudio;
+std::unique_ptr<FrontendSceneGL> g_scene;   // the live level under the menus (interim IRenderer presentation)
 // Process memory for the cycle soak (Experimental: leaks across frontend <-> match).
 ui::GlCensus g_census;   // GL objects created by a match (released on travel away; stopgap, see GlCensus.h)
 
@@ -105,6 +107,10 @@ void Application::attachPresenter() {
     presenter_ = p.get();
     frontend_->setPresenter(std::move(p));
     frontend_->setMoviePlayerFactory([] { return platform::createMoviePlayer(); });
+    if (!std::getenv("WFC_NO_FRONTEND_SCENE")) {
+        g_scene = std::make_unique<FrontendSceneGL>(renderer_);
+        frontend_->setSceneRenderer(g_scene.get());
+    }
     // Logical UI bindings: defaults (the console presentation also binds Space to Start) + wfc_input.ini overrides.
     platform::UiBindings b = platform::UiBindings::defaults(!frontend_->isPC());
     bool ini = b.loadIni("wfc_input.ini");
@@ -125,7 +131,8 @@ void Application::attachPresenter() {
 }
 
 void Application::shutdownFrontend() {
-    if (frontend_) frontend_->setAudio(nullptr);
+    if (frontend_) { frontend_->setAudio(nullptr); frontend_->setSceneRenderer(nullptr); }
+    g_scene.reset();
     g_frontendAudio.reset();
     presenter_ = nullptr;
     frontend_.reset();
@@ -211,6 +218,11 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     if (!modeOk) { LOG_WARN("FLOW match mode %s is not supported by Gameplay", m.modeTag.c_str()); return false; }
     LOG_INFO("FLOW loading match world: map dir %s, mode %s", m.map->runtimeDir.c_str(), m.modeTag.c_str());
     double t0 = nowSeconds();
+    if (g_scene) {   // the frontend scene's render data and GL objects go before the match map loads
+        ui::GlCensus::Owned keep;
+        if (presenter_) presenter_->ownedGl(keep);
+        frontend::FlowTrace::emit("scene.release", {{"released", g_scene->release(keep)}});
+    }
     g_census.begin();
     // The loading screen keeps presenting during the synchronous load (core::loadYield): window messages, the
     // LoadScreen_GFX animation and the TF_LoadingScreen underlay, one frame per yield.
@@ -419,6 +431,7 @@ void Application::unloadMatch() {
 #endif
     delete renderer_;
     renderer_ = render::createGLRenderer();
+    if (g_scene) g_scene->setRenderer(renderer_);
     camera_ = render::Camera();
     clock_ = FixedStepClock(60.0);
     escWasDown_ = false;

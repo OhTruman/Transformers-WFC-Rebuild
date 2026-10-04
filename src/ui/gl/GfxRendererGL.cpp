@@ -227,6 +227,11 @@ void GfxRendererGL::end() {
     glx::UseProgram(0);
     glDisable(GL_BLEND);
     glx::BindVertexArray(0);
+    // Leave neutral bindings for whatever draws next frame: the renderer's legacy path uses client-side vertex arrays,
+    // which a bound GL_ARRAY_BUFFER would turn into offsets into this VBO (the frontend scene drew nothing).
+    glx::DisableVertexAttribArray(0);
+    glx::BindBuffer(GL_ARRAY_BUFFER, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 const GfxRendererGL::Cached& GfxRendererGL::cache(const gfx::ShapeDef* s, bool glyph) {
