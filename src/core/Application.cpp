@@ -256,7 +256,7 @@ Application::MatchExit Application::runMatch() {
         for (int i = 0; i < steps; ++i) {
             world_.tick(step);
             gameMode_.tick(world_, step);
-            if (frontend_) routeMatchToFrontend(step);   // Gameplay match events -> frontend flow (per tick)
+            if (frontend_) { driveLifecycleTest(step); routeMatchToFrontend(step); }   // Gameplay match events -> frontend flow (per tick)
         }
         if (perfEvery > 0) {
             // Gameplay-side cost (WFC_PERFLOG=N): simulation time (movement, camera, aim, hitscan)

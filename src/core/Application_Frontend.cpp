@@ -7,6 +7,7 @@
 #include "frontend/FlowTrace.h"
 #include "frontend/FrontendRuntime.h"
 #include "game/MapState.h"
+#include "game/MatchOpponent.h"
 #include "platform/Movie.h"
 #include "platform/Window.h"
 #include "render/Renderer.h"
@@ -14,6 +15,7 @@
 #include "ui/UiGL.h"
 #include "ui/gl/GlCensus.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <new>
@@ -71,7 +73,10 @@ bool Application::wantsFrontendBoot() {
     if (std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_FRONTEND_AUTOPLAY")) return true;
     // Existing automation and playtest variables keep the direct-to-match boot they were written for.
     for (const char* v : {"WFC_SMOKE_FRAMES", "WFC_SHOTLIST", "WFC_GAMEMODE", "WFC_MAP", "WFC_PICKUPTEST", "WFC_TRAVERSE",
-                          "WFC_MAPTRAVERSE", "WFC_LOCKSTEP", "WFC_DEBUGCAM", "WFC_STARTVEHICLE"})
+                          "WFC_MAPTRAVERSE", "WFC_LOCKSTEP", "WFC_DEBUGCAM", "WFC_STARTVEHICLE",
+                          // [integration M05] Gameplay / Rendering harnesses written against the direct boot
+                          "WFC_XFORMTEST", "WFC_MATCHTEST", "WFC_CAMTEST", "WFC_CHAOS", "WFC_TDMTEST", "WFC_MATCH",
+                          "WFC_MATCH_URL", "WFC_RELOADTEST"})
         if (std::getenv(v)) return false;
     return true;
 }
@@ -184,7 +189,17 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
     // Systems level-audio contract: no hard-wired slice audio; the selected map's audio.
     world_.setAudio(audio_, false);
+    {   // [integration] soak evidence: the frontend audio baseline before the map audio loads
+        const auto as = world_.audioState();
+        frontend::FlowTrace::emit("audio.baseline", {{"instances", std::to_string(as.instances)}, {"voices", std::to_string(as.voices)},
+                                                      {"levelCues", std::to_string(as.levelCues)}, {"pcmMB", frontend::FlowTrace::num(as.pcmMB)}});
+    }
     world_.loadMapAudio(m.map->runtimeDir);
+    {   // [integration] soak evidence: Systems audio state with the selected map loaded
+        const auto as = world_.audioState();
+        frontend::FlowTrace::emit("audio.loaded", {{"level", as.level}, {"instances", std::to_string(as.instances)}, {"voices", std::to_string(as.voices)},
+                                                    {"levelCues", std::to_string(as.levelCues)}, {"pcmMB", frontend::FlowTrace::num(as.pcmMB)}});
+    }
 #else
     world_.setAudio(audio_);
 #endif
@@ -194,7 +209,18 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     game::MatchLaunch gl;
     game::MatchLaunch::fromURL(m.url.toString(), gl);
     gl.map = m.map->runtimeDir;
+    // TEST / VALIDATION ONLY (explicit opt-in): WFC_LIFECYCLE=<goal score> shortens the match to that score and adds
+    // one Gameplay diagnostic opponent (MatchOpponent); driveLifecycleTest() then produces kills and deaths through
+    // World::applyMatchDamage, so the real rules run scoring, death, respawn wave, score-limit end and the return.
+    lifecycleGoal_ = 0;
+    if (const char* lc = std::getenv("WFC_LIFECYCLE")) {
+        lifecycleGoal_ = std::max(1, std::atoi(lc));
+        gl.settings.goalScore = lifecycleGoal_;
+        frontend::FlowTrace::emit("test.lifecycle", {{"goalScore", std::to_string(lifecycleGoal_)}, {"provenance", "TEST ONLY"}});
+    }
     if (!world_.launchMatch(gl)) { LOG_WARN("FLOW Gameplay refused the match (%s %s)", gl.map.c_str(), gl.modeTag.c_str()); return false; }
+    if (lifecycleGoal_ > 0) world_.addMatchOpponent("LifecycleOpponent", true);
+    lifecycleT_ = 0.0f; lifecycleStep_ = 0;
     frontend::FlowTrace::emit("match.gameplay", {{"map", gl.map}, {"mode", gl.modeTag}, {"goalScore", std::to_string(gl.settings.goalScore)},
                                                  {"timeLimit", std::to_string(gl.settings.timeLimit)}});
     gameMode_.begin(world_);
@@ -259,6 +285,22 @@ void Application::routeMatchToFrontend(float dt) {
     flow.setMatchValues(v);
 }
 
+void Application::driveLifecycleTest(float dt) {
+    // TEST ONLY (WFC_LIFECYCLE): every 2.5 s of InProgress, alternately the local player kills the opponent (+1 player
+    // and team score) and the opponent kills the local player (death -> spectating -> 5 s wave respawn). Waits while
+    // either side is dead. Uses only Gameplay's match API; no rule is reimplemented here.
+    if (lifecycleGoal_ <= 0 || world_.match().state() != game::Match::State::InProgress || world_.matchOpponents().empty()) return;
+    if ((lifecycleT_ += dt) < 2.5f) return;
+    game::MatchOpponent* opp = world_.matchOpponents()[0];
+    const int me = world_.localMatchPlayer();
+    if (world_.localPlayerDead() || !opp->spawned()) return;
+    lifecycleT_ = 0.0f;
+    const bool killOpponent = (lifecycleStep_++ % 2) == 0;
+    if (killOpponent) world_.applyMatchDamage(opp->matchPlayer(), me, 100000.0f, false);
+    else world_.applyMatchDamage(me, opp->matchPlayer(), 100000.0f, false);
+    frontend::FlowTrace::emit("test.lifecycle.damage", {{"victim", killOpponent ? "opponent" : "local"}});
+}
+
 void Application::unloadMatch() {
     // Travel replaces the world. The match world and its audio voices are released by recreating them; the map's
     // render resources by Rendering's IRenderer::unloadMapRenderData (docs/RENDERER_CONTRACT.md) [integration].
@@ -266,6 +308,11 @@ void Application::unloadMatch() {
     // renderer already freed are ignored by glDelete* and nothing is created in between.
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
     world_.unloadMapAudio();   // no voice / instance / map cue / sample remains (Systems guarantee)
+    {   // [integration] soak evidence: Systems audio state after the map audio is released (expect the frontend baseline)
+        const auto as = world_.audioState();
+        frontend::FlowTrace::emit("audio.unloaded", {{"level", as.level}, {"instances", std::to_string(as.instances)}, {"voices", std::to_string(as.voices)},
+                                                      {"levelCues", std::to_string(as.levelCues)}, {"pcmMB", frontend::FlowTrace::num(as.pcmMB)}});
+    }
 #endif
     world_.~World();
     new (&world_) game::World();

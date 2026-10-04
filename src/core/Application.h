@@ -44,6 +44,9 @@ private:
     void routeMatchToFrontend(float dt);
     bool localDeadForUi_ = false, spectatingUi_ = false;
     float localDeadTime_ = 0.0f;
+    void driveLifecycleTest(float dt);   // TEST ONLY: WFC_LIFECYCLE=<goal score> (see Application_Frontend.cpp)
+    int lifecycleGoal_ = 0, lifecycleStep_ = 0;
+    float lifecycleT_ = 0.0f;
 
     void updateTitleHud(double realDt);
     void runPickupTest();
