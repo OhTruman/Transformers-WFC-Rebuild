@@ -237,18 +237,24 @@ def bsp_lighting(repo, out):
     """Rebuild the level BSP from the COOKED FModelVertexBuffer (TexCoord + ShadowTexCoord,
     indexed by FBspNode.iVertexIndex) split per ModelComponent element, with its lightmap."""
     import bsp as bspmod
-    p = repo.pkgs[0]; pr = repo.readers[0]
-    lmset = {i + 1 for i, e in enumerate(p.exports) if p.class_name(e) == 'LightMapTexture2D'}
-    level = next(i + 1 for i, e in enumerate(p.exports) if p.class_name(e) == 'Level')
-    models = [i + 1 for i, e in enumerate(p.exports) if p.class_name(e) == 'Model' and e['outer'] == level]
+    # the level package with the largest level BSP (Streets: ART; UI levels may have none)
     best = None
-    for mi in models:
-        try:
-            M = bspmod.read_model(p, mi)
-            if best is None or len(M['nodes']) > len(best[1]['nodes']): best = (mi, M)
-        except Exception:
-            pass
-    mi, M = best
+    for pk in range(len(repo.pkgs)):
+        p = repo.pkgs[pk]
+        level = next((i + 1 for i, e in enumerate(p.exports) if p.class_name(e) == 'Level'), None)
+        if level is None: continue
+        for mi in [i + 1 for i, e in enumerate(p.exports) if p.class_name(e) == 'Model' and e['outer'] == level]:
+            try:
+                M = bspmod.read_model(p, mi)
+                if M['nodes'] and (best is None or len(M['nodes']) > len(best[2]['nodes'])): best = (pk, mi, M)
+            except Exception:
+                pass
+    if best is None:
+        print('bsp: no level BSP nodes in %s' % [x.path if hasattr(x, 'path') else '' for x in repo.pkgs])
+        return {}
+    pk, mi, M = best
+    p = repo.pkgs[pk]; pr = repo.readers[pk]
+    lmset = {i + 1 for i, e in enumerate(p.exports) if p.class_name(e) == 'LightMapTexture2D'}
     e = p.exports[mi - 1]
     t = p.data[e['serial_offset'] + M['end_offset']:e['serial_offset'] + e['serial_size']]
     vbo = None
@@ -257,7 +263,9 @@ def bsp_lighting(repo, out):
         es, n = struct.unpack_from('>ii', t, o)
         if es == 36 and o + 8 + 36 * n == len(t):
             vbo = o + 8; break
-    if vbo is None: raise RuntimeError('FModelVertexBuffer not found')
+    if vbo is None:
+        print('bsp: FModelVertexBuffer not found; no BSP render data')
+        return {}
     vb = np.frombuffer(t[vbo:], dtype=np.dtype([('pos', '>f4', 3), ('tx', '>u4'), ('tz', '>u4'),
                                                 ('uv', '>f4', 2), ('suv', '>f4', 2)]))
     elements = []
@@ -361,7 +369,7 @@ def write_glb(path, prims, kind='bsp_element'):
         f.write(struct.pack('<II', len(bin_), 0x004E4942)); f.write(bytes(bin_))
 
 
-def decals(repo, out):
+def decals(repo, out, mapname=None):
     """Static decals from their COOKED receiver geometry (DecalComponent native tail, licensee 144):
     [NumReceivers] x ([ReceiverComponent][VertexStride=28][NumVerts] verts{pos(3f, receiver-local),
     TangentX, TangentZ (packed), ShadowTexCoord(2f)} [IndexStride=2][NumIndices] u16 indices
@@ -370,7 +378,10 @@ def decals(repo, out):
     UV per the original decal vertex shader: 0.5 - (DecalWorldToTexCoordMatrix * (P - DecalWorldLocation)).xy
     + DecalOffset, with matrix rows HitTangent*TileX/Width, HitBinormal*TileY/Height (validated:
     clipped BSP receivers project to exactly [-0.5, 0.5])."""
-    p = repo.pkgs[0]; pr = repo.readers[0]
+    # the level package that holds the decals (Streets: ART)
+    pk = max(range(len(repo.pkgs)),
+             key=lambda k: sum(1 for e in repo.pkgs[k].exports if repo.pkgs[k].class_name(e) == 'DecalActor'))
+    p = repo.pkgs[pk]; pr = repo.readers[pk]
     smca = {}
     for i, e in enumerate(p.exports):
         if p.class_name(e) == 'StaticMeshCollectionActor':
@@ -382,7 +393,7 @@ def decals(repo, out):
                 mats = np.frombuffer(raw[:64 * len(comps)], '>f4').reshape(-1, 4, 4).astype('f8')
                 for k, c in enumerate(comps):
                     if c: smca[c.lower()] = mats[k]
-    pj = json.load(open(os.path.join(VS_MAPS, p.name.rsplit('_', 2)[0], 'props.json'), encoding='utf-8'))
+    pj = json.load(open(os.path.join(VS_MAPS, mapname or p.name.rsplit('_', 2)[0], 'props.json'), encoding='utf-8'))
     byact = {x['actor']: np.array(x['ue_matrix']) for x in pj['props'] if not x.get('component')}
 
     # StaticMeshCollectionActor members: the component's own S(Scale*Scale3D) * R * T on top of the serialized
@@ -447,7 +458,8 @@ def postprocess(mapname, out):
     from PIL import Image
     import xbox_texture
     eng = Repo(['Engine.xxx'])
-    base = Repo(['%s_BASE_m.xxx' % mapname])
+    from ue3obj import map_packages
+    base = Repo([map_packages(mapname)[1]])
 
     def settings(tags):
         d = {}
@@ -485,9 +497,10 @@ def light_visibility_volumes(repo, out):
     transform. The layout is being recovered natively (ReVa); facts confirmed so far (see
     test_light_visibility.py): octree head with big-endian int32 child indices and 32-byte light bitmasks,
     then (u16 light index, u16 visibility) pairs with visibility in 1/20 steps."""
-    p = repo.pkgs[0]; pr = repo.readers[0]
     vols = []
-    for i, e in enumerate(p.exports):
+    for pk in range(len(repo.pkgs)):
+      p = repo.pkgs[pk]; pr = repo.readers[pk]
+      for i, e in enumerate(p.exports):
         if p.class_name(e) != 'LightsVisibilitiesVolume':
             continue
         props, used = pr.read_object(i + 1)
@@ -505,28 +518,35 @@ def light_visibility_volumes(repo, out):
 def main():
     if len(sys.argv) > 2 and sys.argv[1] == '--list-inline':
         # LightMapTexture2D referenced by <map>_ART_m: umodel -obj list for the atlases cooked inline in ART
-        r = Repo(['%s_ART_m.xxx' % sys.argv[2]])
+        from ue3obj import map_packages
+        r = Repo(map_packages(sys.argv[2])[0])
         # (indexed under the _LM outer; umodel exports the ones whose data the ART file carries, skips the rest)
         print(' '.join(sorted({p.split('.')[-1] for p in r.index if (r.cls(p) or '') == 'LightMapTexture2D'})))
         return
     mapname, out, umodel_dir = sys.argv[1], sys.argv[2], sys.argv[3]
     os.makedirs(os.path.join(out, 'lightmaps'), exist_ok=True)
-    repo = Repo(['%s_ART_m.xxx' % mapname, '%s_BASE_m.xxx' % mapname])
+    from ue3obj import map_packages
+    pkgs, _persistent = map_packages(mapname)
+    repo = Repo(pkgs)
     props, kinds = lm_records(repo, 0)
-    # persistent level: actor-placed StaticInterpActors / collections with their own lightmaps (atlases
-    # cooked inline in BASE; AssetTools a23c675 lightmaps.json covers every level package)
-    bprops, bkinds = lm_records(repo, 1)
-    props.update(bprops)
-    for k, v in bkinds.items():
-        if k == 'vertex_components': kinds[k] = kinds.get(k, []) + v
-        elif k == 'vertex_samples': kinds[k] = dict(kinds.get(k, {}), **v)
-        else: kinds[k] = kinds.get(k, 0) + v
+    # every other level package of the map (Streets: the persistent BASE level, actor-placed StaticInterpActors /
+    # collections with atlases cooked inline; UI levels: the streamed sublevels)
+    for pi in range(1, len(pkgs)):
+        bprops, bkinds = lm_records(repo, pi)
+        props.update(bprops)
+        for k, v in bkinds.items():
+            if k == 'vertex_components': kinds[k] = kinds.get(k, []) + v
+            elif k == 'vertex_samples': kinds[k] = dict(kinds.get(k, {}), **v)
+            else: kinds[k] = kinds.get(k, 0) + v
     bsp_props = bsp_lighting(repo, out)
     props.update(bsp_props)
-    L = lights(repo, 0)
-    F = fog(repo, 0)
+    L = []
+    F = None
+    for pi in range(len(pkgs)):
+        L += lights(repo, pi)
+        F = F or fog(repo, pi)
     PP = postprocess(mapname, out)
-    decals(repo, out)
+    decals(repo, out, mapname)
     atl = sorted({a for r in props.values() for a in r['coeffs']})
     copied = 0
     for root, _, files in os.walk(umodel_dir):
@@ -554,7 +574,7 @@ def main():
     print('lightmapped components: %d (types %s); atlases %d; copied %d PNGs' % (len(props), kinds, len(atl), copied))
     print('lights:', Counter(l['class'] for l in L))
     print('postprocess:', {k: v for k, v in PP['settings'].items() if 'Bloom' in k or 'DOF' in k or 'Scene' in k or 'Color' in k})
-    print('fog:', {k: F[k] for k in ('Height', 'Density', 'LightColor', 'LightBrightness', 'StartDistance', 'ExtinctionDistance')})
+    print('fog:', {k: F[k] for k in ('Height', 'Density', 'LightColor', 'LightBrightness', 'StartDistance', 'ExtinctionDistance')} if F else None)
 
 
 if __name__ == '__main__':

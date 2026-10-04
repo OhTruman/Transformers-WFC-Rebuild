@@ -17,6 +17,7 @@
 #include <vector>
 #include <functional>
 #include "render/gl/GLExt.h"
+#include "assets/Json.h"
 #include "render/Camera.h"
 #include "render/Mesh.h"
 #include "render/Renderer.h"
@@ -113,6 +114,8 @@ struct Program {
     struct Slot { int unit; GLuint tex; bool cube; float umin[4]; float uscale[4]; };
     GLint uRT[3] = {-1, -1, -1}, uRTSet[3] = {-1, -1, -1};   // applier params (Cust_Color_A/B, EnergonColor)
     std::map<std::string, std::pair<GLint, GLint>> rtLoc;      // every runtime parameter: (uRT_, uRTSet_)
+    // per-draw uniform locations by literal name (looked up once per program; key = the literal's address)
+    mutable std::vector<std::pair<const char*, GLint>> locCache;
     std::vector<Slot> slots;
     int blend = 0;                // 0 opaque, 1 masked, 2 translucent, 3 additive, 4 modulate
     bool twoSided = false, lit = true;
@@ -129,14 +132,21 @@ public:
     // Shared read-only asset roots: WFC_ASSETS (default core::config::kAssetRootDefault, the VerticalSlice export)
     // and the content directory beside it (WFC_CONTENT overrides). Map render data stays in WFC_RENDER_DATA.
     static std::string assetRoot();
+    static std::string renderDataRoot();              // WFC_RENDER_DATA, default <exe>/../../work/render
     static std::string contentRoot();
     void release();                                   // delete every GL object, reset to the unloaded state
+    void setLoadYield(std::function<void()> y) { loadYield_ = std::move(y); }
+    void yieldLoad() { if (loadYield_ && !inLoadYield_) { inLoadYield_ = true; loadYield_(); inLoadYield_ = false; } }
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile): queued, drawn after post onto the back buffer.
     void drawMaterialTile(const IRenderer::MaterialTile& t) { uiTiles_.push_back(t); }
     bool hasMaterial(const std::string& m) const { return mats_.count(m) > 0; }
     bool active() const { return active_; }
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
-    void setCharacterColors(const CharacterColors& c) { charColors_ = c; }
+    void setCharacterColors(const CharacterColors& c) { charColorsBy_[drawOwner_] = c; }
+    void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
+    void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
+    void setActorPose(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg);
+    void loadSceneActors(const assets::Json& actorsByLevel);   // render_index actors_by_level (UI families)
 
     void beginFrame(const Camera& cam, int w, int h);
     void endFrame();
@@ -202,8 +212,11 @@ private:
     // and sprite batches are queued during the frame and drawn by flushTranslucency().
     struct TransItem { float key; std::function<void()> fn; };
     std::vector<TransItem> transQueue_;
+    std::function<void()> loadYield_;
+    bool inLoadYield_ = false;
     std::vector<IRenderer::MaterialTile> uiTiles_;
     void drawCanvasTiles();
+    float displayGamma_ = 2.2f;                        // Xe-TransEngine.ini DisplayGamma / profile Brightness
     float canvasInvGamma_ = 0.0f;                      // > 0 while drawing Canvas tiles
     const std::vector<std::pair<std::string, std::array<float, 4>>>* drawParams_ = nullptr;   // per-draw runtime params
     bool deferTrans_ = false, flushingTrans_ = false;
@@ -226,7 +239,8 @@ private:
     GLuint clutTex_ = 0;
     int clutSize_ = 32;
     float znear_ = 0.1f, zfar_ = 20000.0f;
-    CharacterColors charColors_;   // default all-zero -> every override skipped (authored values)
+    std::map<int, CharacterColors> charColorsBy_;   // per draw owner; default all-zero -> overrides skipped
+    int drawOwner_ = 0;                              // character instance of the current dynamic draws
     int testMesh_ = -1;           // WFC_TESTMESH render verification hook
     core::Mat4 testModel_;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
@@ -419,6 +433,8 @@ private:
         core::Mat4 model; int state = 0; int stateMesh[2] = {-1, -1};
     };
     std::vector<MapProp> mapProps_;
+    struct ActorPose0 { float L[3]; float rot[3]; };
+    std::map<std::string, ActorPose0> actorPose0_;     // authored pose (lower-case actor) for absolute poses
     int kothMesh_ = -1;
     // ammo-crate PickupFactoryMesh (TnAmmoCratePickup.MeshComponentA): PROP_NEU_AmmoPickup_STAT, CullDistance 8000,
     // PickupRotationRate yaw 10000 while available
@@ -444,7 +460,8 @@ private:
     // authored movers (WfcMovers.cpp)
     struct MoverRT {
         std::string actor;
-        int kind = 0;                 // 0 PHYS_Rotating, 1 Matinee InterpTrackMove
+        int kind = 0;                 // 0 PHYS_Rotating, 1 Matinee InterpTrackMove, 2 absolute pose (frontend)
+        float L1[3] = {0, 0, 0}, rot1[3] = {0, 0, 0};   // kind 2: target location / rotator (UE units)
         float L[3] = {0, 0, 0}, rot0[3] = {0, 0, 0}, rate[3] = {0, 0, 0};
         float length = 0.0f; bool looping = true;
         struct RotKey { float t; float q[4]; };
@@ -453,6 +470,7 @@ private:
         std::vector<PosKey> posKeys;
     };
     std::vector<MoverRT> movers_;
+    std::map<std::string, MoverRT> actorPoses_;        // frontend-driven absolute poses (kind 2)
     std::unordered_map<std::string, core::Mat4> moverDelta_;
     std::unordered_map<std::string, bool> actorHidden_;
     std::set<std::string> authoredHiddenActors_;

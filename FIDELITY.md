@@ -1995,6 +1995,50 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
 
 ---
 
+## MILESTONE 09 — FRONTEND SCENES, LOADING, ROSTER READINESS, RE OVERNIGHT HUD (2026-10-04)
+Inputs:
+- RE `OVERNIGHT_2026-10-04_HUD_VEHICLE_FRONTEND_ROSTER_AI.md` (A HUD, D frontend backgrounds, E roster);
+- RE `MILESTONE05_PLAYTEST_RE.md` §6 (loading);
+- AssetTools `ui_scenes.json`, the UI level exports, and `mp_content/mp_characters.json`;
+- Frontend lane requests (scene entry point, render data for the UI families).
+
+| Item | Original | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Minimap / radar / compass | none in shipped MP | RE A9 (UnrealScript, every GFx pool, authored.db, xex strings) | CONFIRMED (absence) | none drawn; any future minimap is a labelled modern extension |
+| Title / main-menu background | live level UI_FrontEnd_m + streamed UI_FrontEnd_capture_VIG_m, Matinee camera (CameraActor_6585, FOV 45) | RE D, AssetTools ui_scenes | CONFIRMED | `loadFrontendScene` / `drawFrontendScene`: Cybertron orbit scene with energon rings, debris, station, nebula. VISUALLY VERIFIED from the authored camera. Matinee actors, Kismet-activated emitters and lens flares are PARTIAL (need the Frontend's sequence state) |
+| Lobby / customization background | UI_PartyLobby_m / UI_Lobby_m stream UI_CharacterCustomization_m | RE D | CONFIRMED | the customization room is loaded and drawn (space dome from the default camera). The class cameras (15 Matinees), the preview pawn and the CybertronCard Kismet are Frontend-driven [PARTIAL] |
+| Campaign lobby | UI_CampaignLobby_m SpaceDome | RE D | CONFIRMED / look UNKNOWN (AssetTools) | drawn |
+| Multi-level composition | persistent + streamed levels together | RE D | — | one render-data map at a time (the family with the most scenery) [PARTIAL] |
+| Loading movie during blocking loads | Bink on the rendering thread; closes on `CanCloseLoadingMovie` | RE PLAYTEST §6 | CONFIRMED (names) / HIGH (semantics) | `setLoadYield`: a cooperative present between bounded steps (longest 70 ms on UI_FrontEnd). Not a separate render thread [PARTIAL] |
+| TextureSample output 0 | RGB float3 (mask R, G, B) | UE3 node outputs; `Append(TexSample, TexSample.A)` in EnergonRing compiles only so | CONFIRMED | matc fixed (EnergonRing materials failed). Streets 231/231 (now 325/325 with the roster) permutations match; sweep median 0 px |
+| Character roster readiness | 33 chassis; 4 default classes | RE E, AssetTools mp_characters | CONFIRMED data | character materials from the roster (98, all verified); per-owner light environment / applier colours (`setDrawOwner`); the Optimus path is unchanged (idle robot / vehicle 0 px vs M08) |
+| Map-generic render data | — | — | — | packages from map.json sublevels, LM per sublevel, no-BSP / no-fog maps; Streets output unchanged |
+| Per-draw uniform cost | — | — | — | uniform locations cached per program: scene submit 4.9 → 3.9 ms (shared, loaded machine) |
+| HUD (Hud_GFX) | layout, kill feed, announcements, popups, scoreboard, end message | RE A0–A8 | CONFIRMED | Frontend runs the movie (`docs/handoffs/FRONTEND_INMATCH_HUD.md` updated with the exact values); the Canvas markers are Rendering's |
+| Brightness (profile GammaSetting) | DisplayGamma = 2.2 + Lerp(-0.95, 0.95, GammaSetting/100); default 50 → 2.2 | decompiled HmProfileSettings.GetGammaSetting, HmPlayerController → DisplayDataStore "Gamma" | CONFIRMED (mapping) | `setDisplayGamma` drives the scene resolve and Canvas tiles; default unchanged (0 px). Whether GFx / Bink / Canvas simple elements also follow DisplayGamma is UNKNOWN (the decoded Canvas simple-element shader has an InverseGamma×2.2 exponent, not yet applied) [PARTIAL] |
+| Character jitter (M05) | — | M08 measurement | — | handed off to Gameplay (unchanged on agents/rendering; the patch is in `docs/handoffs`) |
+
+## MILESTONE 08 — PLAYTEST REGRESSIONS, IN-MATCH HUD OWNERSHIP, CANVAS LAYER (2026-10-04)
+Inputs:
+- the human playtest of integration milestone 05;
+- RE `MILESTONE05_FRONTEND_GAMEPLAY_BLOCKERS.md` §G / §H and `MILESTONE05_GAMEPLAY_UNKNOWNS.md` §5;
+- AssetTools `frontend_hud.json` / `future_hud_handoff.json` / `frontend_loading.json`;
+- a `git archive` export of integration/milestone-05, built in `work/m08/int05` for measurements. No merge.
+
+| Item | Finding | Mark | Owner / action |
+|---|---|---|---|
+| Character "interlacing" (robot + vehicle) | Gameplay's obstruction camera (pass 20) stores a world camera position at the 60 Hz tick while the view rotation changes every rendered frame. Above 60 Hz the pawn swims on screen: 0.0095 screen units / frame at 144 Hz, 0 at 60 Hz (which is why lockstep tests passed). Not the renderer: skinning, frame loop, weapon attach and vsync are unchanged | VISUALLY VERIFIED (measured) | **Gameplay**: `docs/handoffs/GAMEPLAY_CAMERA_FRAME_PACING.md` + verified patch (0.00001 at 60 / 144 / 240 Hz, both camera models) |
+| Vehicle rear propulsion "open / close" | the boost FX follows the Driving state, as authored (BoostFx). On M05, Driving drops to Hovering 15–31 times per 14 s with boost held; every drop is a PROVISIONAL hull probe's frontal block at floor level, then a 0.5 s drift and a re-boost (≈ 0.6 s cycle) | VISUALLY VERIFIED (logged) | **Gameplay**: `docs/handoffs/GAMEPLAY_BOOST_FX_FLICKER.md`. No renderer smoothing added |
+| In-match HUD (clock, team / player score, health, ammo, crosshair, kill / score messages) | Scaleform Hud_GFX (`GameMessage`, `PointEvent`, `RewardAnnouncement`, `GameAnnouncement`; data stores + pushes). Spectate / respawn = MultiplayerRespawn_GFX, end = EndGameStats_GFX: already opened by the Frontend runtime in M05. Hud_GFX itself is not instantiated | CONFIRMED (RE / AssetTools) | **Frontend** GfxHost: `docs/handoffs/FRONTEND_INMATCH_HUD.md`. The renderer reticle stands down (`ReticleState.visible = false`) when Hud_GFX draws its crosshair |
+| Kill feed layout / rows / lifetime / fade | Hud_GFX timeline + AS2 behaviour | CONFIRMED owner / details by running the movie | Frontend |
+| Radar / minimap | no radar or minimap object in the authored data | UNKNOWN (RE verifying) | nothing drawn |
+| Player / objective markers | Canvas `TnObjectiveMarkerTypeSprite.Draw` | CONFIRMED (RE) | **Rendering**: `render::HudMarkers` from the authored setups (`_ui/hud_markers.json`, 40 types; Versus ally 0.08 / 0.04, enemy 0.03125, focus 0.02734 × width, 1.0 s hysteresis, 3000 UU auto-focus, label colours). VISUALLY VERIFIED (`WFC_MARKERTEST`). Gameplay supplies the rule-visible markers |
+| Canvas text | UE3 UFont: FFontCharacter table + CharRemap (cooked) | CONFIRMED data | `drawCanvasText`: MarkerFont 371 glyphs (USize advance, VerticalOffset, alpha coverage). Label centring PROVISIONAL |
+| Collision report tooling | — | — | `WFC_PICK=1`: authored component / StaticMesh / material / distance / normal of the surface under the crosshair (`IRenderer::pickWorld`, diagnostic only), plus the movement collision world's hit on the same ray ("collision ok" / "differs" / "NONE") |
+| Canvas simple elements (text, texture tiles) | engine PS: `oC0.rgb = exp(log(tex × ColorScale + ColorBias) × InverseGamma × 2.2)` (saturated), `oC0.a = tex.a × ColorScale.a + ColorBias.a` | CONFIRMED shader (sc_engine) / runtime `InverseGamma` value UNKNOWN | text drawn display-referred (= InverseGamma 1/2.2); HUD gamma stays PARTIAL until the Canvas gamma value is known |
+| Menu background | the UI_FrontEnd_m 3D scene (orbit cameras, energon rings) | CONFIRMED source / not exported | the renderer loads it through `loadMapRenderData` once AssetTools exports it; no substitute |
+| Regression | glass (9 views) and steam over time (12) identical to M07; validation captures (idle, walk, jump, fire, vehicle idle / move / boost, both transforms) | VISUALLY VERIFIED | — |
+
 ## MILESTONE 07 — STREETS CLEANUP, FRONTEND / NEXT-MAP READINESS (2026-10-03)
 Evidence:
 - RE-Workspace M05 notes (read-only): `MILESTONE05_GAMEPLAY_UNKNOWNS.md` §5 (Canvas HUD markers) and §6 (pickup factory

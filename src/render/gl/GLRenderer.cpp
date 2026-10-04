@@ -2,6 +2,12 @@
 // Deliberately GL 1.1 immediate mode: no extension loading needed to get pixels on screen.
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
+#include "assets/Gltf.h"
+#include "assets/Json.h"
+#include <sstream>
+#include <map>
+#include <fstream>
+#include <array>
 #include <windows.h>
 #endif
 #include <GL/gl.h>
@@ -124,6 +130,129 @@ public:
     void drawScreenTriangles(const ScreenBatch& b) override {
         if (b.verts.empty()) return;
         if (inFrame_) screenQueue_.push_back(b); else drawScreenNow(b);
+    }
+
+    // ---- Canvas fonts (UE3 UFont from render data) ----
+    struct CanvasFont {
+        bool ok = false;
+        std::vector<std::array<int, 6>> chars;        // StartU, StartV, USize, VSize, TextureIndex, VerticalOffset
+        std::map<uint32_t, int> remap;
+        std::vector<TextureHandle> pages; std::vector<std::pair<int, int>> pageSize;
+        float lineHeight = 0;
+    };
+    std::map<std::string, CanvasFont> fonts_;
+    CanvasFont& font(const std::string& name) {
+        auto it = fonts_.find(name);
+        if (it != fonts_.end()) return it->second;
+        CanvasFont& f = fonts_[name];
+        std::string dir = wfc::Pipeline::renderDataRoot() + "/_ui/fonts/";
+        std::ifstream in(dir + name + ".json", std::ios::binary);
+        if (!in) return f;
+        std::stringstream ss; ss << in.rdbuf();
+        assets::Json J;
+        if (!assets::Json::parse(ss.str(), J)) return f;
+        for (size_t i = 0; i < J["characters"].size(); ++i) {
+            const assets::Json& c = J["characters"][i];
+            std::array<int, 6> a{};
+            for (int k = 0; k < 6; ++k) a[(size_t)k] = (int)c[(size_t)k].asFloat();
+            f.chars.push_back(a);
+            f.lineHeight = std::max(f.lineHeight, (float)a[3]);
+        }
+        for (const auto& kv : J["remap"].obj) f.remap[(uint32_t)std::stoul(kv.first)] = (int)kv.second.asFloat();
+        for (size_t i = 0; i < J["pages"].size(); ++i) {
+            ImageData img;
+            if (!platform::decodeImage(dir + J["pages"][i].asString(), img)) continue;
+            f.pageSize.push_back({img.w, img.h});
+            f.pages.push_back(uploadTexture(img));
+        }
+        f.ok = !f.chars.empty() && !f.pages.empty();
+        return f;
+    }
+    static std::vector<uint32_t> utf8Decode(const std::string& s) {
+        std::vector<uint32_t> out;
+        for (size_t i = 0; i < s.size();) {
+            unsigned char c = (unsigned char)s[i];
+            uint32_t cp = c; int n = 0;
+            if (c >= 0xF0) { cp = c & 0x07; n = 3; } else if (c >= 0xE0) { cp = c & 0x0F; n = 2; } else if (c >= 0xC0) { cp = c & 0x1F; n = 1; }
+            ++i;
+            for (int k = 0; k < n && i < s.size(); ++k, ++i) cp = (cp << 6) | ((unsigned char)s[i] & 0x3F);
+            out.push_back(cp);
+        }
+        return out;
+    }
+    const std::array<int, 6>* glyph(const CanvasFont& f, uint32_t cp) const {
+        auto it = f.remap.find(cp);
+        int idx = it != f.remap.end() ? it->second : (f.remap.count('?') ? f.remap.at('?') : -1);
+        return idx >= 0 && (size_t)idx < f.chars.size() ? &f.chars[(size_t)idx] : nullptr;
+    }
+    bool canvasTextSize(const std::string& name, const std::string& utf8, float& w, float& h, float scale) override {
+        CanvasFont& f = font(name);
+        w = h = 0;
+        if (!f.ok) return false;
+        for (uint32_t cp : utf8Decode(utf8)) if (const auto* g = glyph(f, cp)) w += (*g)[2] * scale;
+        h = f.lineHeight * scale;
+        return true;
+    }
+    bool drawCanvasText(const std::string& name, const std::string& utf8, float x, float y, const uint8_t rgba[4],
+                        float scale) override {
+        CanvasFont& f = font(name);
+        if (!f.ok) return false;
+        std::map<int, ScreenBatch> perPage;
+        float cx = x;
+        for (uint32_t cp : utf8Decode(utf8)) {
+            const auto* g = glyph(f, cp);
+            if (!g) continue;
+            const auto& c = *g;
+            int page = c[4] < (int)f.pages.size() ? c[4] : 0;
+            float tw = (float)f.pageSize[(size_t)page].first, th = (float)f.pageSize[(size_t)page].second;
+            float w = c[2] * scale, h = c[3] * scale, top = y + c[5] * scale;
+            if (w > 0 && h > 0) {
+                float u0 = c[0] / tw, v0 = c[1] / th, u1 = (c[0] + c[2]) / tw, v1 = (c[1] + c[3]) / th;
+                ScreenBatch& b = perPage[page];
+                b.texture = f.pages[(size_t)page]; b.blend = ScreenBlend::Alpha; b.clampUV = true;
+                ScreenVertex q[4] = {{cx, top, u0, v0, rgba[0], rgba[1], rgba[2], rgba[3]},
+                                     {cx + w, top, u1, v0, rgba[0], rgba[1], rgba[2], rgba[3]},
+                                     {cx + w, top + h, u1, v1, rgba[0], rgba[1], rgba[2], rgba[3]},
+                                     {cx, top + h, u0, v1, rgba[0], rgba[1], rgba[2], rgba[3]}};
+                for (int k : {0, 1, 2, 0, 2, 3}) b.verts.push_back(q[k]);
+            }
+            cx += c[2] * scale;
+        }
+        for (auto& kv : perPage) drawScreenTriangles(kv.second);
+        return true;
+    }
+
+    bool pickWorld(const core::Vec3& o, const core::Vec3& d, float maxDist, PickHit& out) override {
+        float best = maxDist;
+        bool hit = false;
+        for (const MeshData& m : meshes_) {
+            if (m.subs.empty() || m.subs[0].component.empty()) continue;      // authored world meshes only
+            for (const SubMesh& sm : m.subs) {
+                for (uint32_t k = sm.indexOffset; k + 2 < sm.indexOffset + sm.indexCount; k += 3) {
+                    const float* a = &m.positions[(size_t)m.indices[k] * 3];
+                    const float* b = &m.positions[(size_t)m.indices[k + 1] * 3];
+                    const float* c = &m.positions[(size_t)m.indices[k + 2] * 3];
+                    core::Vec3 A{a[0], a[1], a[2]}, B{b[0], b[1], b[2]}, C{c[0], c[1], c[2]};
+                    core::Vec3 e1 = B - A, e2 = C - A, pv = core::cross(d, e2);
+                    float det = core::dot(e1, pv);
+                    if (std::fabs(det) < 1e-9f) continue;
+                    float inv = 1.0f / det;
+                    core::Vec3 tv = o - A;
+                    float u = core::dot(tv, pv) * inv;
+                    if (u < 0 || u > 1) continue;
+                    core::Vec3 qv = core::cross(tv, e1);
+                    float v = core::dot(d, qv) * inv;
+                    if (v < 0 || u + v > 1) continue;
+                    float t = core::dot(e2, qv) * inv;
+                    if (t <= 1e-3f || t >= best) continue;
+                    best = t; hit = true;
+                    out.component = sm.component; out.mesh = sm.sourceMesh;
+                    out.material = sm.material >= 0 && (size_t)sm.material < m.mats.size() ? m.mats[(size_t)sm.material].sourceName : "";
+                    out.distance = t; out.point = o + d * t; out.normal = core::normalize(core::cross(e1, e2));
+                }
+            }
+        }
+        return hit;
     }
 
     bool updateTexture(TextureHandle h, const ImageData& img) override {
@@ -260,12 +389,77 @@ public:
     }
     bool hasMaterial(const std::string& m) const override { return wfc_.active() && wfc_.hasMaterial(m); }
 
+    // ---- frontend scenes ----
+    MeshHandle sceneMesh_ = kInvalidMesh;
+    std::string sceneDir_;
+    bool loadFrontendScene(const std::vector<std::string>& levels) override {
+        unloadFrontendScene();
+        const std::string data = wfc::Pipeline::renderDataRoot(), assets = wfc::Pipeline::assetRoot();
+        // One render-data map at a time: the requested level with the most placed scenery (a lobby's persistent level is
+        // nearly empty and streams UI_CharacterCustomization_m) [PARTIAL: no multi-level composition yet].
+        std::string dir;
+        size_t bestSize = 0;
+        for (const std::string& l : levels) {
+            std::string d = l.size() > 2 && l.compare(l.size() - 2, 2, "_m") == 0 ? l.substr(0, l.size() - 2) : l;
+            std::ifstream probe(data + "/" + d + "/materials_glsl.json");
+            std::ifstream glb(assets + "/Maps/" + d + "/world.glb", std::ios::binary | std::ios::ate);
+            if (!probe || !glb) continue;
+            size_t sz = (size_t)glb.tellg();
+            if (dir.empty() || sz > bestSize) { dir = d; bestSize = sz; }
+        }
+        if (dir.empty()) { LOG_WARN("frontend scene: no render data for any of %zu levels", levels.size()); return false; }
+        MeshData world;
+        auto tw = std::chrono::steady_clock::now();
+        bool okWorld = assets::loadGlb(assets + "/Maps/" + dir + "/world.glb", world);
+        LOG_INFO("frontend scene %s: world.glb read %.0f ms", dir.c_str(),
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tw).count());
+        wfc_.yieldLoad();
+        if (!okWorld) {
+            LOG_WARN("frontend scene %s: world.glb missing", dir.c_str());
+            return false;
+        }
+        if (!loadMapRenderData(dir)) return false;
+        sceneMesh_ = uploadMesh(world);
+        sceneDir_ = dir;
+        LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
+        return sceneMesh_ != kInvalidMesh;
+    }
+    void drawFrontendScene(const core::Vec3& p, const core::Vec3& r, float fovDeg, int w, int h, double t) override {
+        if (sceneMesh_ == kInvalidMesh) return;
+        Camera cam;
+        cam.pos = core::Vec3{p.x * 0.01f, p.z * 0.01f, p.y * 0.01f};       // UE (x, y, z) UU -> glTF (x, z, y) m
+        const float pr = r.x * 0.0174533f, yr = r.y * 0.0174533f;
+        core::Vec3 fUE{std::cos(pr) * std::cos(yr), std::cos(pr) * std::sin(yr), std::sin(pr)};
+        core::Vec3 f{fUE.x, fUE.z, fUE.y};
+        cam.pitch = std::asin(std::max(-1.0f, std::min(1.0f, f.y)));
+        cam.yaw = std::atan2(-f.x, -f.z);
+        cam.fovXDeg = fovDeg;                                                 // UE FOVAngle is horizontal
+        cam.aspect = (float)w / (float)std::max(h, 1);
+        setMapClock((float)t);
+        beginFrame(cam, w, h);
+        drawMesh(sceneMesh_, core::Mat4::identity(), core::Vec3{1, 1, 1});
+        endFrame();
+    }
+    void unloadFrontendScene() override {
+        if (sceneMesh_ == kInvalidMesh && sceneDir_.empty()) return;
+        unloadMapRenderData();
+        sceneMesh_ = kInvalidMesh;
+        sceneDir_.clear();
+    }
+
+    void setLoadYield(std::function<void()> y) override { wfc_.setLoadYield(std::move(y)); }
+
     void unloadMapRenderData() override {
         wfc_.release();
         for (size_t i = 0; i < meshes_.size(); ++i) { meshes_[i] = MeshData{}; gpu_[i] = -1; }
     }
 
     bool loadMapRenderData(const std::string& mapName) override {
+        // one map's render data at a time: a new load releases the previous map (level travel, frontend scenes)
+        if (wfc_.active() || sceneMesh_ != kInvalidMesh) {
+            unloadMapRenderData();
+            sceneMesh_ = kInvalidMesh; sceneDir_.clear();
+        }
         bool ok = wfc_.load(mapName);
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
         return ok;
@@ -273,6 +467,11 @@ public:
 
     void setVisibilityQuery(VisibilityQuery q) override { wfc_.setVisibility(std::move(q)); }
     void setCharacterColors(const CharacterColors& c) override { wfc_.setCharacterColors(c); }
+    void setDrawOwner(int o) override { wfc_.setDrawOwner(o); }
+    void setDisplayGamma(float g) override { wfc_.setDisplayGamma(g); }
+    void setFrontendActorTransform(const std::string& a, const core::Vec3& p, const core::Vec3& r) override {
+        wfc_.setActorPose(a, p, r);
+    }
     void setActorHidden(const std::string& actor, bool hidden) override { wfc_.setActorHidden(actor, hidden); }
     void setMapEffectActive(const std::string& what, bool active) override { wfc_.setMapEffectActive(what, active); }
     void setMapEffectState(const std::string& k, bool a, bool h) override { wfc_.setMapEffectState(k, a, h); }
@@ -579,6 +778,10 @@ public:
 
 private:
     void drawMeshArrays(const MeshData& m, const core::Mat4& model, const core::Vec3& color) {
+        // client-side vertex arrays: no buffer object may be bound (another renderer / UI pass may leave one)
+        glx::BindBuffer(GL_ARRAY_BUFFER, 0);
+        glx::BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glx::BindVertexArray(0);
         core::Mat4 mv = view_ * model;
         glLoadMatrixf(mv.m);
         glEnable(GL_LIGHTING);
@@ -759,3 +962,7 @@ IRenderer* createGLRenderer() {
 }
 
 } // namespace render
+
+namespace render {
+std::string wfcRenderDataRoot() { return wfc::Pipeline::renderDataRoot(); }
+}

@@ -40,6 +40,17 @@ std::string readFile(const std::string& p) {
     return ss.str();
 }
 
+// A module distribution decoded from the compiled stream; a module whose stream did not carry it evaluates to 0
+// (logged once per module / property) instead of aborting.
+void evalDist(const Pipeline::FxModule& m, const char* name, float t, uint32_t& rng, float* out) {
+    auto it = m.dists.find(name);
+    if (it != m.dists.end()) { it->second.eval(t, rng, out); return; }
+    out[0] = out[1] = out[2] = 0.0f;
+    static std::set<std::string> logged;
+    std::string key = m.name + "." + name;
+    if (logged.insert(key).second) LOG_WARN("map fx: %s has no decoded %s (0 used)", m.name.c_str(), name);
+}
+
 int kindOf(const std::string& k) {
     if (k.find("uniform curve") != std::string::npos) return 3;
     if (k.find("constant curve") != std::string::npos) return 2;
@@ -273,7 +284,7 @@ int Pipeline::fxMeshFor(const FxLod& L) {
         // TypeDataMesh: the mesh's own section materials unless bOverrideMaterial with a RequiredModule material
         for (render::Material& m : md.mats)
             m.wfcName = (L.overrideMaterial && !L.material.empty()) ? resolveName(L.material) : resolveName(m.sourceName);
-        id = upload(md);
+        id = upload(md); yieldLoad();
     }
     fxMeshes_[L.meshGltf] = id;
     return id;
@@ -312,7 +323,7 @@ void Pipeline::tickMapFx(float dt) {
                 for (const FxModule& m : L.modules) {
                     if (m.flagA == 0) continue;               // disabled module (RE: flagA = bEnabled, HIGH)
                     if (m.name == "PMI_SizeMultiplyLife") {
-                        float s[3]; m.dists.at("LifeMultiplier").eval(q.relTime, in.rng, s);
+                        float s[3]; evalDist(m, "LifeMultiplier", q.relTime, in.rng, s);
                         for (int c = 0; c < 3; ++c) q.size[c] *= s[c];
                     } else if (m.name == "PMI_ColorScaleOverLife") {
                         float cs[3], as[1];
@@ -366,25 +377,25 @@ void Pipeline::tickMapFx(float dt) {
                     // flagA = 0: a spawn-class module contributes nothing under either flag reading
                     if (m.flagA == 0) continue;
                     if (m.name == "PMI_Lifetime") {
-                        m.dists.at("Lifetime").eval(efrac, in.rng, v1);
+                        evalDist(m, "Lifetime", efrac, in.rng, v1);
                         q.oneOverLife = v1[0] > 0.0f ? 1.0f / v1[0] : 0.0f;   // 0 = lives until killed
                     } else if (m.name == "PMI_Size") {
-                        m.dists.at("StartSize").eval(efrac, in.rng, v3);
+                        evalDist(m, "StartSize", efrac, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.baseSize[c] += v3[c];
                     } else if (m.name == "PMI_Color") {
-                        m.dists.at("StartColor").eval(efrac, in.rng, v3);
-                        m.dists.at("StartAlpha").eval(efrac, in.rng, v1);
+                        evalDist(m, "StartColor", efrac, in.rng, v3);
+                        evalDist(m, "StartAlpha", efrac, in.rng, v1);
                         for (int c = 0; c < 3; ++c) q.baseColor[c] = v3[c];
                         q.baseColor[3] = v1[0];
                     } else if (m.name == "PMI_Location") {
-                        m.dists.at("StartLocation").eval(efrac, in.rng, v3);
+                        evalDist(m, "StartLocation", efrac, in.rng, v3);
                         toWorldDir(v3, w3);
                         for (int c = 0; c < 3; ++c) q.pos[c] += w3[c];
                     } else if (m.name == "PMI_LocationPrimitiveSphere") {   // [PARTIAL] sampling rule
                         float rad[1], vs[1], off[3], d[3];
-                        m.dists.at("StartRadius").eval(efrac, in.rng, rad);
-                        m.dists.at("VelocityScale").eval(efrac, in.rng, vs);
-                        m.dists.at("StartLocation").eval(efrac, in.rng, off);
+                        evalDist(m, "StartRadius", efrac, in.rng, rad);
+                        evalDist(m, "VelocityScale", efrac, in.rng, vs);
+                        evalDist(m, "StartLocation", efrac, in.rng, off);
                         float n2 = 0;
                         do {
                             for (int c = 0; c < 3; ++c) { in.rng = in.rng * 1664525u + 1013904223u; d[c] = (float)(in.rng >> 8) / 8388608.0f - 1.0f; }
@@ -397,19 +408,19 @@ void Pipeline::tickMapFx(float dt) {
                         toWorldDir(d, w3);
                         for (int c = 0; c < 3; ++c) q.baseVel[c] += w3[c] * vs[0];
                     } else if (m.name == "PMI_Velocity") {
-                        m.dists.at("StartVelocity").eval(efrac, in.rng, v3);
+                        evalDist(m, "StartVelocity", efrac, in.rng, v3);
                         toWorldDir(v3, w3);
                         for (int c = 0; c < 3; ++c) q.baseVel[c] += w3[c];
-                        m.dists.at("StartVelocityRadial").eval(efrac, in.rng, v1);
+                        evalDist(m, "StartVelocityRadial", efrac, in.rng, v1);
                         radial += v1[0];
                     } else if (m.name == "PMI_Rotation") {
-                        m.dists.at("StartRotation").eval(efrac, in.rng, v1);
+                        evalDist(m, "StartRotation", efrac, in.rng, v1);
                         q.rot += v1[0] * 6.2831853f;                     // turns -> radians
                     } else if (m.name == "PMI_MeshRotation") {
-                        m.dists.at("StartRotation").eval(efrac, in.rng, v3);
+                        evalDist(m, "StartRotation", efrac, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.meshRot[c] += v3[c] * 360.0f;   // turns -> degrees
                     } else if (m.name == "PMI_MeshRotationRate") {
-                        m.dists.at("StartRotationRate").eval(efrac, in.rng, v3);
+                        evalDist(m, "StartRotationRate", efrac, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.meshRotRate[c] += v3[c] * 360.0f;
                     } else if (m.name == "PMI_ColorByParameter") {
                         // Color = BaseColor = the component's colour InstanceParameter (Steam_Sm_FX: 'SteamColor',
@@ -439,7 +450,7 @@ void Pipeline::tickMapFx(float dt) {
                 for (const FxModule& m : L.modules) {
                     if (m.flagA == 0) continue;
                     if (m.name == "PMI_SizeMultiplyLife") {
-                        float s3[3]; m.dists.at("LifeMultiplier").eval(0.0f, in.rng, s3);
+                        float s3[3]; evalDist(m, "LifeMultiplier", 0.0f, in.rng, s3);
                         for (int c = 0; c < 3; ++c) q.size[c] *= s3[c];
                     } else if (m.name == "PMI_ColorScaleOverLife") {
                         float cs[3], as[1];
@@ -496,6 +507,43 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
                     for (size_t k = 0; k < mv.second.size(); ++k)
                         destructComps[kv.first + "|" + mv.first].push_back(mv.second[k].asString());
     }
+    {   // UI families: actor table (poses, bHidden, PHYS_Rotating) + skeletal actors not in world.glb
+        const assets::Json& AL = J["actors_by_level (names = Matinee / Kismet targets; world_glb_node = node name in world.glb)"];
+        if (AL.isObject()) {
+            loadSceneActors(AL);
+            std::map<std::string, int> meshByGltf;
+            for (const auto& lv : AL.obj)
+                for (size_t i = 0; i < lv.second.size(); ++i) {
+                    const assets::Json& e = lv.second[i];
+                    if (e["class"].asString() != "HmSkeletalMeshActor") continue;
+                    std::string gl = e["gltf"].asString();
+                    if (gl.rfind("content/", 0) != 0 || e["gltf_matrix"].size() < 16) continue;
+                    int id;
+                    auto mi = meshByGltf.find(gl);
+                    if (mi != meshByGltf.end()) id = mi->second;
+                    else {
+                        MeshData md;
+                        id = -1;
+                        if (assets::loadGlb(contentRoot() + gl.substr(8), md)) {   // bind pose
+                            const std::string mesh = e["mesh"].asString(), pkg = mesh.substr(0, mesh.rfind('.'));
+                            for (render::Material& m : md.mats) {
+                                std::string full = pkg + "." + m.sourceName;
+                                m.wfcName = resolveName(mats_.count(full) ? full : m.sourceName);
+                            }
+                            id = upload(md); yieldLoad();
+                        }
+                        meshByGltf[gl] = id;
+                    }
+                    if (id < 0) continue;
+                    MapProp p;
+                    p.actor = e["actor"].asString(); p.kind = 3;
+                    p.actorLower = p.actor; std::transform(p.actorLower.begin(), p.actorLower.end(), p.actorLower.begin(), ::tolower);
+                    for (int k = 0; k < 16; ++k) p.model.m[k] = e["gltf_matrix"][(size_t)k].asFloat();
+                    p.stateMesh[0] = id;
+                    mapProps_.push_back(p);
+                }
+        }
+    }
     const assets::Json& R = J["not_in_world_glb (authored renderables)"];
     for (size_t i = 0; i < R.size(); ++i) {
         const assets::Json& e = R[i];
@@ -544,7 +592,7 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
                 if (assets::loadGlb(gl, md)) {
                     std::string mat = e["section_materials"][0].asString();
                     for (render::Material& m : md.mats) m.wfcName = resolveName(mat.empty() ? m.sourceName : mat);
-                    kothMesh_ = upload(md);
+                    kothMesh_ = upload(md); yieldLoad();
                 }
             }
             p.stateMesh[0] = kothMesh_;
@@ -581,7 +629,7 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
                     std::string full = pkg + ".Materials." + m.sourceName;
                     m.wfcName = resolveName(mats_.count(full) ? full : m.sourceName);
                 }
-                p.stateMesh[k] = upload(md);
+                p.stateMesh[k] = upload(md); yieldLoad();
                 if (std::getenv("WFC_PROPLOG")) {         // diagnostics: world-space bounds of each state mesh
                     core::Vec3 mn{1e30f, 1e30f, 1e30f}, mx{-1e30f, -1e30f, -1e30f};
                     for (size_t v = 0; v + 2 < md.positions.size(); v += 3) {
@@ -641,6 +689,9 @@ void Pipeline::drawMapPresentation() {
             if (p.stateMesh[k] >= 0) draw(p.stateMesh[k], p.model);
         } else if (p.kind == 2 && p.stateMesh[0] >= 0) {   // active KOTH zone ring
             draw(p.stateMesh[0], p.model);
+        } else if (p.kind == 3 && p.stateMesh[0] >= 0) {   // scene skeletal actor (bind pose) + its matinee / mover delta
+            auto mv = moverDelta_.find(p.actorLower);
+            draw(p.stateMesh[0], mv != moverDelta_.end() ? mv->second * p.model : p.model);
         }
     }
     // pickup factory meshes (render_index pickup_factory_visuals)
@@ -658,7 +709,7 @@ void Pipeline::drawMapPresentation() {
                         std::string full = pkg + "." + m.sourceName;
                         m.wfcName = resolveName(mats_.count(full) ? full : m.sourceName);
                     }
-                    pm.meshId = upload(md);
+                    pm.meshId = upload(md); yieldLoad();
                 }
             }
             if (pm.meshId < 0) continue;

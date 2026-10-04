@@ -136,7 +136,7 @@ void Pipeline::tickDirectLightEnv(int form, const core::Vec3& boundsCenter, cons
 void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
     auto tUpd = std::chrono::steady_clock::now();
     DirectLightEnvState& st = dle_[form];
-    const std::vector<core::Vec3>& offsets = form == 1 ? dleVehicleSamples_ : dleRobotSamples_;
+    const std::vector<core::Vec3>& offsets = form % 16 == 1 ? dleVehicleSamples_ : dleRobotSamples_;   // key = form + 16 * owner
     const float kTransition = 0.5f;          // EnvironmentTransitionTime
     const int kTotalLightCount = 2;
     float dt = st.pendingDt;

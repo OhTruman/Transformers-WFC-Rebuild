@@ -84,6 +84,43 @@ public:
     // Level travel: release every GPU resource of the loaded map render data (meshes, textures, programs, targets).
     // The renderer stays usable; a later loadMapRenderData() rebuilds everything for the next map.
     virtual void unloadMapRenderData() {}
+    // Character instance for the following dynamic-mesh draws (drawDynamicMesh: robot / vehicle / weapon of one pawn):
+    // keys the per-character light environment (DirectLightEnv state, update queue) and the TnCharacterApplier colours
+    // (setCharacterColors applies to the current owner). 0 = the local player (default; PlayerOnly light channel).
+    // Any chassis works: the robot / vehicle / weapon role comes from the mesh's material packages (*_ROBO_p,
+    // *_VEH_p, WEP_*), never from character names.
+    virtual void setDrawOwner(int ownerId) { (void)ownerId; }
+    // UE3 Client DisplayGamma (default 2.2): the scene resolve and Canvas material tiles apply pow(1 / DisplayGamma).
+    // The profile Brightness maps to it in HmProfileSettings.GetGammaSetting (decompiled script, CONFIRMED):
+    //   DisplayGamma = 2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting / 100, 0, 1))   (0..100, default 50 -> 2.2)
+    // That mapping is profile logic (caller's); the renderer takes the DisplayGamma value. GFx / video / Canvas text
+    // batches stay display-referred.
+    virtual void setDisplayGamma(float displayGamma) { (void)displayGamma; }
+    // Loading presentation (RE MILESTONE05_PLAYTEST §6: the original loading Bink plays on the rendering thread while the
+    // game thread blocks): during loadMapRenderData / loadFrontendScene the renderer calls this between bounded steps
+    // (each mesh submesh with its material program and textures, each map prop, each load phase) with no GL objects
+    // bound, so the caller can present a loading frame (movie + overlay). The callback throttles itself; it must not
+    // load or unload map render data. Pass an empty function to clear.
+    virtual void setLoadYield(std::function<void()> yield) { (void)yield; }
+
+    // Frontend 3D scenes (RE OVERNIGHT 2026-10-04 §D: the title / main menu render over the live level UI_FrontEnd_m +
+    // streamed UI_FrontEnd_capture_VIG_m, the lobbies over UI_CharacterCustomization_m). No match World exists.
+    //   loadFrontendScene: the UE level package names (e.g. {"UI_FrontEnd_m", "UI_FrontEnd_capture_VIG_m"}); the export
+    //     directory is the first level whose name without "_m" has render data. false = not exported / no render data.
+    //   drawFrontendScene: one complete frame (scene + post) into the back buffer, for the GFx overlay composited
+    //     after it. Camera in UE units: location (UU), rotation (pitch, yaw, roll in degrees), horizontal FOV (deg).
+    //     timeSec drives the level's map FX / movers clock.
+    //   unloadFrontendScene: releases it (as unloadMapRenderData).
+    virtual bool loadFrontendScene(const std::vector<std::string>& levels) { (void)levels; return false; }
+    virtual void drawFrontendScene(const core::Vec3& camPosUE, const core::Vec3& camRotUEdeg, float fovDeg, int w, int h,
+                                   double timeSec) { (void)camPosUE; (void)camRotUEdeg; (void)fovDeg; (void)w; (void)h; (void)timeSec; }
+    virtual void unloadFrontendScene() {}
+    // Matinee-driven actor pose in the loaded scene (Frontend's matinee evaluator): absolute world location (UU) and
+    // rotation (pitch, yaw, roll in degrees), including RelativeToInitial / attachment. Actors not sent keep their
+    // authored pose (and PHYS_Rotating). Visibility stays with setActorHidden (authored bHidden applies until then).
+    virtual void setFrontendActorTransform(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg) {
+        (void)actor; (void)posUE; (void)rotUEdeg;
+    }
 
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile / UCanvas.DrawMaterialTile): a screen quad shaded by a
     // compiled original material (e.g. UI_HudMarkers_p) with per-draw parameter values (MaterialInstanceDynamic
@@ -116,6 +153,20 @@ public:
     virtual void drawScreenTriangles(const ScreenBatch& b) { (void)b; }
     // Replace a texture's contents (same or new size): streamed video frames, dynamic UI bitmaps.
     virtual bool updateTexture(TextureHandle h, const ImageData& image) { (void)h; (void)image; return false; }
+    // Canvas text in an original UE3 font (render data _ui/fonts/<font>.json, tools/render/build_hud.py): UE3 Canvas
+    // layout (glyph USize advance, VerticalOffset, no kerning), glyph coverage in alpha x colour, display-referred,
+    // composited like drawScreenTriangles. font = short name, e.g. "MarkerFont". Returns false if unavailable.
+    virtual bool drawCanvasText(const std::string& font, const std::string& utf8, float x, float y, const uint8_t rgba[4],
+                                float scale = 1.0f) { (void)font; (void)utf8; (void)x; (void)y; (void)rgba; (void)scale; return false; }
+    virtual bool canvasTextSize(const std::string& font, const std::string& utf8, float& w, float& h, float scale = 1.0f) {
+        (void)font; (void)utf8; (void)scale; w = h = 0; return false;
+    }
+    // Diagnostics (collision / fidelity reports): the rendered static-mesh triangle hit first by a ray, with its
+    // authored source (component object path, StaticMesh, material). BSP is not included. Not for gameplay use.
+    struct PickHit { std::string component, mesh, material; float distance = 0; core::Vec3 point{0, 0, 0}, normal{0, 0, 0}; };
+    virtual bool pickWorld(const core::Vec3& origin, const core::Vec3& dir, float maxDist, PickHit& out) {
+        (void)origin; (void)dir; (void)maxDist; (void)out; return false;
+    }
     virtual int viewportWidth() const { return 0; }
     virtual int viewportHeight() const { return 0; }
 
@@ -179,5 +230,8 @@ public:
 
 // Factory (fixed-function GL implementation for the first milestone).
 IRenderer* createGLRenderer();
+
+// Render-data root (WFC_RENDER_DATA, default <exe>/../../work/render): map data in <root>/<map>, UI data in <root>/_ui.
+std::string wfcRenderDataRoot();
 
 } // namespace render

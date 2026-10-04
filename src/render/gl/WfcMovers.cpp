@@ -165,6 +165,11 @@ core::Mat4 Pipeline::moverDelta(const MoverRT& m, float t) const {
         float At[9];
         rotColumns(m.rot0[0] + m.rate[0] * t, m.rot0[1] + m.rate[1] * t, m.rot0[2] + m.rate[2] * t, At);
         mul3(At, A0t, B);
+    } else if (m.kind == 2) {                          // absolute pose: B = A1 A0^T, o = L1 - L0
+        float A1[9];
+        rotColumns(m.rot1[0], m.rot1[1], m.rot1[2], A1);
+        mul3(A1, A0t, B);
+        for (int c = 0; c < 3; ++c) o[c] = m.L1[c] - m.L[c];
     } else {
         float tau = m.looping && m.length > 0 ? std::fmod(t, m.length) : std::min(t, m.length);
         // rotation: slerp between the bracketing Euler keys (UE3 bUseQuatInterpolation)
@@ -224,6 +229,7 @@ void Pipeline::updateMovers() {
     moverDelta_.clear();
     if (frozen) return;
     for (const MoverRT& m : movers_) moverDelta_[m.actor] = moverDelta(m, mapTime());   // Gameplay's map clock
+    for (const auto& kv : actorPoses_) moverDelta_[kv.first] = moverDelta(kv.second, 0.0f);   // frontend matinee poses
 }
 
 void Pipeline::setActorHidden(const std::string& actor, bool hidden) {
@@ -243,6 +249,75 @@ bool Pipeline::actorHidden(const std::string& actorLower) const {
         return true;
     }
     return authoredHiddenActors_.count(actorLower) > 0;
+}
+
+// Frontend matinee pose (absolute, UE units, degrees) -> mover kind 2 against the authored pose.
+void Pipeline::setActorPose(const std::string& actor, const core::Vec3& p, const core::Vec3& r) {
+    std::string a = actor.substr(actor.rfind('.') == std::string::npos ? 0 : actor.rfind('.') + 1);
+    std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+    auto it = actorPose0_.find(a);
+    if (it == actorPose0_.end()) return;
+    MoverRT m;
+    m.actor = a; m.kind = 2;
+    std::copy(it->second.L, it->second.L + 3, m.L);
+    std::copy(it->second.rot, it->second.rot + 3, m.rot0);
+    const float d2u = 65536.0f / 360.0f;
+    m.L1[0] = p.x; m.L1[1] = p.y; m.L1[2] = p.z;
+    m.rot1[0] = r.x * d2u; m.rot1[1] = r.y * d2u; m.rot1[2] = r.z * d2u;
+    actorPoses_[a] = m;
+}
+
+// render_index actors_by_level: authored pose (from gltf_matrix), authored bHidden, PHYS_Rotating (UE3 physRotating:
+// Rotation += RotationRate * dt) for the actor-placed meshes in world.glb; skeletal actors are loaded by
+// loadMapProps. The rotator is recovered from the matrix (UE FMatrix::Rotator on the unit axes).
+void Pipeline::loadSceneActors(const assets::Json& L) {
+    int rot = 0, hid = 0, poses = 0;
+    for (const auto& lv : L.obj) {
+        for (size_t i = 0; i < lv.second.size(); ++i) {
+            const assets::Json& e = lv.second[i];
+            const std::string cls = e["class"].asString();
+            if (cls != "InterpActor" && cls != "HmSkeletalMeshActor" && cls != "StaticMeshActor") continue;
+            const assets::Json& G = e["gltf_matrix"];
+            if (G.size() < 16) continue;
+            std::string a = e["actor"].asString();
+            std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+            float g[16];
+            for (int k = 0; k < 16; ++k) g[k] = G[(size_t)k].asFloat();
+            // glTF column c (local glTF axis) = UE local axis sw(c); component r -> UE component sw(r)
+            auto sw = [](int i) { return i == 0 ? 0 : (i == 1 ? 2 : 1); };
+            float R[3][3];
+            for (int c = 0; c < 3; ++c)
+                for (int r = 0; r < 3; ++r) R[sw(c)][sw(r)] = g[c * 4 + r];
+            for (int k = 0; k < 3; ++k) {
+                float n = std::sqrt(R[k][0] * R[k][0] + R[k][1] * R[k][1] + R[k][2] * R[k][2]);
+                if (n > 1e-8f) for (int c = 0; c < 3; ++c) R[k][c] /= n;
+            }
+            ActorPose0 p0;
+            p0.L[0] = g[12] * 100.0f; p0.L[1] = g[14] * 100.0f; p0.L[2] = g[13] * 100.0f;
+            const float k2u = 32768.0f / 3.14159265358979f;
+            float pitch = std::atan2(R[0][2], std::sqrt(R[0][0] * R[0][0] + R[0][1] * R[0][1]));
+            float yaw = std::atan2(R[0][1], R[0][0]);
+            float rows[9];
+            rotColumns(pitch * k2u, yaw * k2u, 0.0f, rows);               // roll from the Y axis vs SYAxis
+            const float* SY = &rows[3], *SZ = &rows[6];
+            float roll = std::atan2(R[2][0] * SY[0] + R[2][1] * SY[1] + R[2][2] * SY[2],
+                                    R[1][0] * SY[0] + R[1][1] * SY[1] + R[1][2] * SY[2]);
+            (void)SZ;
+            p0.rot[0] = pitch * k2u; p0.rot[1] = yaw * k2u; p0.rot[2] = roll * k2u;
+            actorPose0_[a] = p0; ++poses;
+            if (e["hidden"].asBool(false)) { authoredHiddenActors_.insert(a); ++hid; }
+            const assets::Json& rr = e["rotation_rate"];
+            if (e["physics"].asString() == "PHYS_Rotating" && rr.isObject()) {
+                MoverRT m;
+                m.actor = a; m.kind = 0;
+                std::copy(p0.L, p0.L + 3, m.L);
+                std::copy(p0.rot, p0.rot + 3, m.rot0);
+                m.rate[0] = rr["Pitch"].asFloat(); m.rate[1] = rr["Yaw"].asFloat(); m.rate[2] = rr["Roll"].asFloat();
+                movers_.push_back(m); ++rot;
+            }
+        }
+    }
+    LOG_INFO("wfc: scene actors: %d poses, %d PHYS_Rotating, %d authored-hidden", poses, rot, hid);
 }
 
 } // namespace wfc

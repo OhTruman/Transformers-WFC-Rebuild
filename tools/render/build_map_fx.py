@@ -177,7 +177,8 @@ def main():
     # the renderer joins the state mesh to its lightmap through these
     dcomp = {}
     try:
-        drepo = Repo(['%s_ART_m.xxx' % mapname, '%s_BASE_m.xxx' % mapname])
+        from ue3obj import map_packages
+        drepo = Repo(map_packages(mapname)[0])
         for path in drepo.index:
             if (drepo.cls(path) or '') != 'HmStaticMeshDestructionEffect': continue
             for mc in (drepo.obj(path) or {}).get('MeshComponents') or []:

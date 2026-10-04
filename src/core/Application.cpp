@@ -1,3 +1,5 @@
+#include <chrono>
+#include "render/HudMarkers.h"
 #include "core/Application.h"
 #include "core/Config.h"
 #include "core/Debug.h"
@@ -144,6 +146,67 @@ bool Application::init() {
 }
 
 void Application::run() {
+    // Diagnostics: a frontend 3D scene through the renderer contract, without the frontend runtime.
+    // WFC_FRONTENDSCENE=<level>[,<level>...]; WFC_SCENECAM=x,y,z,pitch,yaw,roll,fov (UE units / degrees; default the
+    // UI_FrontEnd_m title camera CameraActor_6585); WFC_SMOKE_FRAMES / WFC_SHOT as usual.
+    if (const char* fs = std::getenv("WFC_FRONTENDSCENE")) {
+        std::vector<std::string> levels;
+        std::string s = fs;
+        for (size_t a = 0; a <= s.size();) {
+            size_t b = s.find(',', a);
+            levels.push_back(s.substr(a, b == std::string::npos ? std::string::npos : b - a));
+            if (b == std::string::npos) break;
+            a = b + 1;
+        }
+        float c[7] = {-6701.84f, -15212.47f, 237.44f, -111.0f * 360.0f / 65536.0f, 13184.0f * 360.0f / 65536.0f,
+                      62.0f * 360.0f / 65536.0f, 45.0f};
+        if (const char* sc = std::getenv("WFC_SCENECAM"))
+            std::sscanf(sc, "%f,%f,%f,%f,%f,%f,%f", &c[0], &c[1], &c[2], &c[3], &c[4], &c[5], &c[6]);
+        static int yields = 0;
+        static auto lastYield = std::chrono::steady_clock::now();
+        static double maxGapMs = 0.0;
+        renderer_->setLoadYield([&] {
+            auto now = std::chrono::steady_clock::now();
+            double gap = std::chrono::duration<double, std::milli>(now - lastYield).count();
+            if (gap > 40.0) LOG_INFO("load yield %d after a %.0f ms step", yields, gap);
+            maxGapMs = std::max(maxGapMs, gap);
+            lastYield = now;
+            ++yields;
+        });
+        auto loadT0 = std::chrono::steady_clock::now();
+        lastYield = loadT0;
+        bool ok = renderer_->loadFrontendScene(levels);
+        renderer_->setLoadYield({});
+        LOG_INFO("frontend scene load: %.0f ms, %d yields, longest gap %.1f ms",
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadT0).count(), yields, maxGapMs);
+        LOG_INFO("frontend scene test: load %s", ok ? "ok" : "FAILED");
+        const long frames = std::getenv("WFC_SMOKE_FRAMES") ? std::atol(std::getenv("WFC_SMOKE_FRAMES")) : 120;
+        platform::InputFrame sceneInput;
+        if (const char* uh = std::getenv("WFC_SCENEUNHIDE")) {   // diagnostics: actor names to unhide (a,b,...)
+            std::string u = uh;
+            for (size_t x = 0; x <= u.size();) {
+                size_t y = u.find(',', x);
+                renderer_->setActorHidden(u.substr(x, y == std::string::npos ? std::string::npos : y - x), false);
+                if (y == std::string::npos) break;
+                x = y + 1;
+            }
+        }
+        if (const char* gs = std::getenv("WFC_GAMMASETTING"))   // diagnostics: profile Brightness 0..100
+            renderer_->setDisplayGamma(2.2f + (-0.95f + 1.9f * std::min(std::max((float)std::atof(gs) / 100.0f, 0.0f), 1.0f)));
+        if (const char* sp = std::getenv("WFC_SCENEPOSE")) {     // diagnostics: actor,x,y,z,pitch,yaw,roll (UE, deg)
+            char name[128] = {0}; float v[6] = {0};
+            if (std::sscanf(sp, "%127[^,],%f,%f,%f,%f,%f,%f", name, &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 7)
+                renderer_->setFrontendActorTransform(name, core::Vec3{v[0], v[1], v[2]}, core::Vec3{v[3], v[4], v[5]});
+        }
+        for (long f = 1; f <= frames && window_->pump(sceneInput); ++f) {
+            renderer_->drawFrontendScene(core::Vec3{c[0], c[1], c[2]}, core::Vec3{c[3], c[4], c[5]}, c[6],
+                                         window_->width(), window_->height(), f / 60.0);
+            if (f == frames) if (const char* shot = std::getenv("WFC_SHOT")) renderer_->captureScreenshot(shot);
+            window_->present();
+        }
+        renderer_->unloadFrontendScene();
+        return;
+    }
     if (frontend_) { runFrontend(); return; }
     runMatch();
 }
@@ -174,6 +237,9 @@ Application::MatchExit Application::runMatch() {
         // Deterministic captures (render A/B): one 60 Hz step per frame regardless of wall time.
         static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;
         if (lockstep) realDt = 1.0 / 60.0;
+        // Diagnostics: deterministic display rate other than the 60 Hz simulation (WFC_RENDERHZ=144 -> 0 or 1 steps
+        // per frame), to reproduce frame-pacing artefacts in captures.
+        if (const char* hz = std::getenv("WFC_RENDERHZ")) realDt = 1.0 / std::max(1.0, std::atof(hz));
 
         if (!window_->pump(frontend_ ? pumped : input)) break;
         if (frontend_) input = pumped;
@@ -330,6 +396,16 @@ Application::MatchExit Application::runMatch() {
 
         // Camera + render.
         world_.player().controller().updateCamera(camera_);
+        if (std::getenv("WFC_CAMLOG")) {   // diagnostics: pawn screen position per rendered frame (frame pacing)
+            core::Vec3 pp = world_.player().pawn().position() + core::Vec3{0, 2.0f, 0};
+            core::Vec3 f = core::forwardFromYawPitch(camera_.yaw, camera_.pitch);
+            core::Vec3 r = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
+            core::Vec3 u = core::cross(r, f);
+            core::Vec3 d = pp - camera_.pos;
+            float z = core::dot(d, f);
+            LOG_INFO("CAMLOG %ld %.5f %.5f %.4f", (long)frame, core::dot(d, r) / std::max(z, 0.01f),
+                     core::dot(d, u) / std::max(z, 0.01f), z);
+        }
         camera_.aspect = (float)window_->width() / (float)(window_->height() > 0 ? window_->height() : 1);
         world_.player().controller().setViewAspect(camera_.aspect);
 
@@ -402,6 +478,58 @@ Application::MatchExit Application::runMatch() {
         }
         renderer_->beginFrame(camera_, window_->width(), window_->height());
         world_.draw(*renderer_);
+        if (std::getenv("WFC_PICK")) {                 // diagnostics: authored source of the surface under the crosshair
+            static render::IRenderer::PickHit last;
+            static bool lastOk = false;
+            static long pickFrame = -100;
+            static float pickCol = -1.0f;
+            if (frame - pickFrame >= 10) {             // CPU ray over the world mesh: every 10 frames
+                pickFrame = frame;
+                lastOk = renderer_->pickWorld(camera_.pos, core::forwardFromYawPitch(camera_.yaw, camera_.pitch), 500.0f, last);
+                // the movement collision world along the same ray: "rendered but no pawn collision" reports
+                pickCol = -1.0f;
+                if (const game::CollisionWorld* cw = world_.collision()) {
+                    core::Vec3 dir = core::forwardFromYawPitch(camera_.yaw, camera_.pitch);
+                    float t;
+                    if (cw->segmentHit(camera_.pos, camera_.pos + dir * 500.0f, t)) pickCol = t * 500.0f;
+                }
+                if (lastOk) LOG_INFO("PICK %s | %s | %s | %.2f m | n=(%.2f %.2f %.2f) at (%.2f %.2f %.2f)", last.component.c_str(),
+                                     last.mesh.c_str(), last.material.c_str(), last.distance, last.normal.x, last.normal.y,
+                                     last.normal.z, last.point.x, last.point.y, last.point.z);
+            }
+            const uint8_t col[4] = {255, 230, 120, 255};
+            std::string line1 = lastOk ? last.component.substr(last.component.find("PersistentLevel.") == std::string::npos
+                                                                    ? 0 : last.component.find("PersistentLevel.") + 16)
+                                       : std::string("(no static mesh: BSP / sky / none)");
+            std::string line2 = lastOk ? last.mesh + "  " + last.material : std::string();
+            char d[128];
+            if (pickCol < 0.0f) std::snprintf(d, sizeof d, "  %.1f m  | collision: NONE on this ray", lastOk ? last.distance : 0.0f);
+            else if (lastOk && std::fabs(pickCol - last.distance) > 0.25f)
+                std::snprintf(d, sizeof d, "  %.1f m  | collision at %.1f m (differs)", last.distance, pickCol);
+            else std::snprintf(d, sizeof d, "  %.1f m  | collision ok", lastOk ? last.distance : pickCol);
+            const float y = (float)window_->height() * 0.86f;
+            renderer_->drawCanvasText("MarkerFont", line1 + d, 20.0f, y, col);
+            if (!line2.empty()) renderer_->drawCanvasText("MarkerFont", line2, 20.0f, y + 22.0f, col);
+        }
+        if (std::getenv("WFC_MARKERTEST")) {           // diagnostics: TDM player tags (ally + enemy) ahead of the player
+            static render::HudMarkers hm;
+            static bool hmLoaded = hm.load(render::wfcRenderDataRoot());
+            if (hmLoaded) {
+                core::Vec3 p = world_.player().pawn().position();
+                core::Vec3 f = core::forwardFromYawPitch(camera_.yaw, 0.0f);
+                core::Vec3 rt = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
+                std::vector<render::MarkerRequest> ms;
+                render::MarkerRequest a;
+                a.key = "ally"; a.type = "TnObjectiveMarkerTypeTransformerVersus"; a.setup = "AllyMarkerSetup";
+                a.base = p + f * 14.0f + rt * 3.0f + core::Vec3{0, 4.2f, 0}; a.labelZ = 0.0f; a.label = "Bumblebee";
+                a.drawHealthBar = true; a.health = 0.6f;
+                render::MarkerRequest e = a;
+                e.key = "enemy"; e.setup = "EnemyMarkerSetup"; e.base = p + f * 25.0f - rt * 4.0f + core::Vec3{0, 4.2f, 0};
+                e.label = "Megatron"; e.drawHealthBar = false;
+                ms.push_back(a); ms.push_back(e);
+                hm.draw(*renderer_, camera_, window_->width(), window_->height(), ms, 1.0f / 60.0f);
+            }
+        }
         if (std::getenv("WFC_SCREENTEST")) {            // diagnostics: 2D composition path (fade + panel)
             using RB = render::IRenderer;
             const float W = (float)window_->width(), H = (float)window_->height();
@@ -463,6 +591,13 @@ Application::MatchExit Application::runMatch() {
         }
         if (smokeFrames > 0 && frame == smokeFrames)
             if (const char* shot = std::getenv("WFC_SHOT")) renderer_->captureScreenshot(shot);
+        if (const char* se = std::getenv("WFC_SHOTEVERY")) {   // diagnostics: <dir>,<from>,<to> every frame
+            char dir[260] = {0}; long f0 = 0, f1 = 0;
+            if (std::sscanf(se, "%259[^,],%ld,%ld", dir, &f0, &f1) == 3 && frame >= f0 && frame <= f1) {
+                char path[300]; std::snprintf(path, sizeof path, "%s/f%04ld.bmp", dir, frame);
+                renderer_->captureScreenshot(path);
+            }
+        }
         if (!shotList.empty() && frame % 8 == 0 && (size_t)(frame / 8 - 1) < shotList.size()) {
             const char* dir = std::getenv("WFC_SHOTDIR");
             std::string out = std::string(dir ? dir : ".") + "/" + shotList[(size_t)(frame / 8 - 1)].first + ".bmp";

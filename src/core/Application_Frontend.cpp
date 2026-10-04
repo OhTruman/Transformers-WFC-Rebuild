@@ -104,7 +104,7 @@ bool Application::wantsFrontendBoot() {
                           "WFC_MAPTRAVERSE", "WFC_LOCKSTEP", "WFC_DEBUGCAM", "WFC_STARTVEHICLE",
                           // [integration M05] Gameplay / Rendering harnesses written against the direct boot
                           "WFC_XFORMTEST", "WFC_MATCHTEST", "WFC_CAMTEST", "WFC_CHAOS", "WFC_TDMTEST", "WFC_MATCH",
-                          "WFC_MATCH_URL", "WFC_RELOADTEST"})
+                          "WFC_MATCH_URL", "WFC_RELOADTEST", "WFC_CAMSYNC", "WFC_MODEPLAYTEST", "WFC_FRONTENDSCENE"})
         if (std::getenv(v)) return false;
     return true;
 }

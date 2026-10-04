@@ -487,6 +487,11 @@ std::string Pipeline::assetRoot() {
     return core::config::kAssetRootDefault;
 }
 
+std::string Pipeline::renderDataRoot() {
+    if (const char* e = std::getenv("WFC_RENDER_DATA")) return e;
+    return exeDir() + "/../../work/render";
+}
+
 std::string Pipeline::contentRoot() {
     if (const char* e = std::getenv("WFC_CONTENT")) return std::string(e) + "/";
     std::string a = assetRoot();
@@ -527,20 +532,26 @@ void Pipeline::release() {
     BindFramebuffer(GL_FRAMEBUFFER, 0);
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs, %zu textures)", meshes_.size(), progIds.size(),
              texCache_.size() + lmTextures_.size());
+    std::function<void()> keepYield = std::move(loadYield_);
+    const float keepGamma = displayGamma_;              // caller settings survive a map change
     *this = Pipeline();
+    loadYield_ = std::move(keepYield);
+    displayGamma_ = keepGamma;
 }
 
 // ------------------------------------------------------------------------- loading
 bool Pipeline::load(const std::string& mapName) {
     if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
-    std::string root;
-    if (const char* e = std::getenv("WFC_RENDER_DATA")) root = e;
-    else root = exeDir() + "/../../work/render";
+    std::string root = renderDataRoot();
     dataDir_ = root + "/" + mapName;
     std::string mj = readText(dataDir_ + "/materials_glsl.json");
+    yieldLoad();
     std::string lj = readText(dataDir_ + "/lighting.json");
+    yieldLoad();
     loadMovers(dataDir_ + "/movers.json");
+    yieldLoad();
     loadMapFx(dataDir_ + "/map_fx_runtime.json");
+    yieldLoad();
     if (mj.empty() || lj.empty()) {
         LOG_WARN("wfc: render data not found in %s (run tools/render/*.py); legacy renderer", dataDir_.c_str());
         return false;
@@ -863,7 +874,8 @@ bool Pipeline::load(const std::string& mapName) {
     if (const char* cc = std::getenv("WFC_CHARCOLORS")) {   // verification: "pr,pg,pb;sr,sg,sb;er,eg,eb"
         float v[9] = {};
         std::sscanf(cc, "%f,%f,%f;%f,%f,%f;%f,%f,%f", &v[0], &v[1], &v[2], &v[3], &v[4], &v[5], &v[6], &v[7], &v[8]);
-        for (int i = 0; i < 3; ++i) { charColors_.primary[i] = v[i]; charColors_.secondary[i] = v[3 + i]; charColors_.energon[i] = v[6 + i]; }
+        CharacterColors& cc0 = charColorsBy_[0];
+        for (int i = 0; i < 3; ++i) { cc0.primary[i] = v[i]; cc0.secondary[i] = v[3 + i]; cc0.energon[i] = v[6 + i]; }
     }
     if (const char* tm = std::getenv("WFC_TESTMESH")) {   // "file.glb|x,y,z|yawRad" (verification)
         std::string spec = tm;
@@ -965,6 +977,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
         LOG_WARN("wfc: texture decode failed: %s", file.c_str());
     }
     texCache_[key] = id;
+    yieldLoad();                                       // after each texture decode / upload
     return id;
 }
 
@@ -1470,12 +1483,20 @@ int Pipeline::upload(const MeshData& m) {
             }
         }
         g.subs.push_back(d);
-        core::loadYield("Render: map submesh");   // [frontend] loading screen frame between whole submeshes (no binding held)
+        yieldLoad();                                   // loading presentation: no GL binding held here
     }
     meshes_.push_back(std::move(g));
     LOG_INFO("wfc: uploaded mesh %zu: %zu verts, %zu submeshes (%d lightmapped, %d programs, %zu total)",
              meshes_.size() - 1, m.vertexCount(), subs.size(), nLM, nProg, progs_.size());
     return (int)meshes_.size() - 1;
+}
+
+// Cached per-program uniform location for a string literal (per-draw state: ~2200 draws a frame).
+static GLint uloc(const Program& P, const char* name) {
+    for (const auto& e : P.locCache) if (e.first == name) return e.second;
+    GLint l = GetUniformLocation(P.id, name);
+    P.locCache.emplace_back(name, l);
+    return l;
 }
 
 void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
@@ -1488,22 +1509,22 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform1i(P.uMasked, P.blend == 1 ? 1 : 0);
     Uniform1f(P.uClip, P.clip);
     Uniform1i(P.uLit, P.lit ? 1 : 0);
-    Uniform1i(GetUniformLocation(P.id, "uBlend"), P.blend);
-    Uniform1i(GetUniformLocation(P.id, "uVertexLM"), 0);
-    Uniform4f(GetUniformLocation(P.id, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
-    Uniform4f(GetUniformLocation(P.id, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
+    Uniform1i(uloc(P, "uBlend"), P.blend);
+    Uniform1i(uloc(P, "uVertexLM"), 0);
+    Uniform4f(uloc(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
+    Uniform4f(uloc(P, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
     {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
         static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
-        Uniform1f(GetUniformLocation(P.id, "uDSLS"), dsls);
-        Uniform3f(GetUniformLocation(P.id, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
+        Uniform1f(uloc(P, "uDSLS"), dsls);
+        Uniform3f(uloc(P, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
         ActiveTexture(GL_TEXTURE0 + 10);
         glBindTexture(GL_TEXTURE_2D, shadowMaskTexFor(dynamicMaskDraw_));
-        Uniform2f(GetUniformLocation(P.id, "uShadowMaskTexelOffset"), maskTexelOffset_[0], maskTexelOffset_[1]);
+        Uniform2f(uloc(P, "uShadowMaskTexelOffset"), maskTexelOffset_[0], maskTexelOffset_[1]);
     }
-    Uniform2f(GetUniformLocation(P.id, "uNearFar"), znear_, zfar_);
-    Uniform2f(GetUniformLocation(P.id, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
-    Uniform1i(GetUniformLocation(P.id, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
-    Uniform1f(GetUniformLocation(P.id, "uCanvasInvGamma"), canvasInvGamma_);
+    Uniform2f(uloc(P, "uNearFar"), znear_, zfar_);
+    Uniform2f(uloc(P, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
+    Uniform1i(uloc(P, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
+    Uniform1f(uloc(P, "uCanvasInvGamma"), canvasInvGamma_);
     for (const auto& kv : P.rtLoc) {                   // per-draw runtime parameters (Canvas / MID); unset = authored
         const std::array<float, 4>* v = nullptr;
         if (drawParams_)
@@ -1512,11 +1533,11 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         if (v && kv.second.first >= 0) Uniform4f(kv.second.first, (*v)[0], (*v)[1], (*v)[2], (*v)[3]);
     }
     static const int legacyTrans = std::getenv("WFC_M05TRANS") ? 1 : 0;
-    Uniform1i(GetUniformLocation(P.id, "uLegacyTrans"), legacyTrans);
+    Uniform1i(uloc(P, "uLegacyTrans"), legacyTrans);
     if (P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_); }
     VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
     static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
-    Uniform1i(GetUniformLocation(P.id, "uDebug"), dbg);
+    Uniform1i(uloc(P, "uDebug"), dbg);
     Uniform1i(P.uFogOn, fogOn_ ? 1 : 0);
     Uniform1f(P.uFogMaxH, fogMaxH_); Uniform1f(P.uFogScale, fogScale_);
     Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
@@ -1634,10 +1655,11 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 if (out) continue;
             }
             bindCommon(P, subModel);
-            Uniform1i(GetUniformLocation(P.id, "uDecalClip"), g.decal ? 1 : 0);
+            Uniform1i(uloc(P, "uDecalClip"), g.decal ? 1 : 0);
             {
                 // TnCharacterApplier params: dynamic (character) draws only; all-zero RGB skips.
-                const float* src[3] = {charColors_.primary, charColors_.secondary, charColors_.energon};
+                const CharacterColors& cc = charColorsBy_[drawOwner_];
+                const float* src[3] = {cc.primary, cc.secondary, cc.energon};
                 for (int i = 0; i < 3; ++i) {
                     if (P.uRTSet[i] < 0) continue;
                     bool set = dynamicObject && (src[i][0] != 0.0f || src[i][1] != 0.0f || src[i][2] != 0.0f);
@@ -1656,8 +1678,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             if (s.vlmTex) {
                 Uniform4f(P.uLMCoord, 1, 1, 0, 0);
                 Uniform3fv(P.uLMScale, 3, &s.lmScale[0][0]);
-                Uniform1i(GetUniformLocation(P.id, "uVertexLM"), 1);
-                Uniform1i(GetUniformLocation(P.id, "uVLMBase"), s.vlmBase);
+                Uniform1i(uloc(P, "uVertexLM"), 1);
+                Uniform1i(uloc(P, "uVLMBase"), s.vlmBase);
                 ActiveTexture(GL_TEXTURE0 + 11);
                 glBindTexture(GL_TEXTURE_2D, s.vlmTex);
             } else if (s.lmTex[0] >= 0) {
@@ -1741,8 +1763,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 Uniform4fv(P.uLCol, 3, &env->col[0][0]);
                 Uniform4fv(P.uLSpot, 3, &env->spot[0][0]);
                 static const char* dlacOverride = std::getenv("WFC_DLAC");   // test override only
-                if (dlacOverride) { float v = (float)std::atof(dlacOverride); Uniform3f(GetUniformLocation(P.id, "uDLAC"), v, v, v); }
-                else Uniform3f(GetUniformLocation(P.id, "uDLAC"), env->dlac[0], env->dlac[1], env->dlac[2]);
+                if (dlacOverride) { float v = (float)std::atof(dlacOverride); Uniform3f(uloc(P, "uDLAC"), v, v, v); }
+                else Uniform3f(uloc(P, "uDLAC"), env->dlac[0], env->dlac[1], env->dlac[2]);
             }
             glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
             ++gStats.draws;
@@ -1820,6 +1842,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         if (mt.wfcName.find("_ROBO_p.") != std::string::npos) { envSamples_ = &kRobotSamples; envForm_ = 0; break; }
         if (mt.wfcName.rfind("WEP_", 0) == 0) { envSamples_ = &kRobotSamples; envForm_ = 0; weapon = true; break; }
     }
+    if (envForm_ >= 0) envForm_ += 16 * drawOwner_;   // per character instance (owner 0: keys 0 / 1)
     if (envSamples_ && m.vertexCount() > 0) {          // world-space bounds of the posed mesh
         core::Vec3 mn{1e30f, 1e30f, 1e30f}, mx{-1e30f, -1e30f, -1e30f};
         for (size_t i = 0; i < m.vertexCount(); ++i) {
@@ -2167,6 +2190,9 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
         int built = 0;
         for (const auto& kv : mats_) {
             if (progIndex_.count(kv.first + "|UBER") || progIndex_.count(kv.first + "|LM")) continue;
+            // roster character materials (TR_ packages) compile when their character is first drawn: the render data
+            // carries every MP chassis, only the ones in the match are needed
+            if (kv.first.rfind("TR_", 0) == 0) continue;
             if (programFor(kv.first, nullptr, false) >= 0) ++built;
         }
         LOG_INFO("wfc: prewarmed %d material programs in %.0f ms", built,
@@ -2221,7 +2247,7 @@ void Pipeline::drawCanvasTiles() {
     ortho.m[0] = 2.0f / W; ortho.m[5] = -2.0f / Hh; ortho.m[10] = -1.0f; ortho.m[12] = -1.0f; ortho.m[13] = 1.0f;
     viewProj_ = ortho;
     fogOn_ = false;
-    canvasInvGamma_ = 1.0f / 2.2f;
+    canvasInvGamma_ = 1.0f / displayGamma_;
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glViewport(0, 0, (GLsizei)W, (GLsizei)Hh);
@@ -2360,7 +2386,7 @@ void Pipeline::endFrame() {
               1.0f / std::max(post_.highlights.z, 1e-4f));
     Uniform3f(U("uMidTones"), post_.midtones.x, post_.midtones.y, post_.midtones.z);
     Uniform1f(U("uDesat"), post_.desat);
-    Uniform1f(U("uInvGamma"), 1.0f / 2.2f);              // Xe-TransEngine.ini DisplayGamma=2.2
+    Uniform1f(U("uInvGamma"), 1.0f / displayGamma_);     // Xe-TransEngine.ini DisplayGamma=2.2; profile Brightness
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
     UseProgram(0);

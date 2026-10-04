@@ -1,0 +1,63 @@
+--- a/src/game/PlayerController.h	2026-10-04 01:03:40.932013500 -0500
++++ b/src/game/PlayerController.h	2026-10-04 01:03:40.983691100 -0500
+@@ -133,6 +133,10 @@
+     float aspect_ = 16.0f / 9.0f;
+     core::Vec3 camLoc_{0, 0, 0};
+     bool camLocValid_ = false, camObstructed_ = false;
++    // Frame pacing: the obstruction result is stored relative to the camera frame at the simulation tick and applied
++    // to the per-frame orbit in cameraPos() (the view rotation changes every rendered frame).
++    int camLocMode_ = 0;                          // 0 desired orbit, 1 pulled in along focus->desired, 2 target space
++    float camPull_ = 1.0f;                        // mode 1: fraction of the focus -> desired distance kept
+     core::Vec3 camOld_{0, 0, 0};                 // smoothed camera offset in target space (UE X fwd, Y right, Z up)
+     bool camOldValid_ = false;
+     float camSmoothRemain_ = 0.0f;
+--- a/src/game/PlayerController.cpp	2026-10-04 01:03:40.931010000 -0500
++++ b/src/game/PlayerController.cpp	2026-10-04 01:03:40.984694500 -0500
+@@ -281,7 +281,18 @@
+ }
+ 
+ core::Vec3 PlayerController::cameraPos() const {
+-    return camLocValid_ ? camLoc_ : desiredCameraPos();
++    if (!camLocValid_ || !pawn_) return desiredCameraPos();
++    if (camLocMode_ == 1) {
++        core::Vec3 focus = pawn_->actorLocation() + core::Vec3{0, anchorCur_, 0};
++        return focus + (desiredCameraPos() - focus) * camPull_;
++    }
++    if (camLocMode_ == 2) {                       // target space (camera rotation, target location) of this frame
++        const core::Vec3 F = core::forwardFromYawPitch(viewYaw_, viewPitch_);
++        const core::Vec3 R = core::normalize(core::cross(core::forwardFromYawPitch(viewYaw_, 0.0f), core::Vec3{0, 1, 0}));
++        const core::Vec3 U = core::cross(R, F);
++        return pawn_->actorLocation() + F * camOld_.x + R * camOld_.y + U * camOld_.z;
++    }
++    return desiredCameraPos();
+ }
+ 
+ namespace {
+@@ -335,7 +346,7 @@
+     const core::Vec3 desiredCam = desiredCameraPos();
+     // Strategy change (transformation): each behaviour's Activate clears the smoothing state.
+     if (strategy_ != camCollStrategy_) { camCollStrategy_ = strategy_; camOldValid_ = false; camSmoothRemain_ = 0.0f; }
+-    if (!col_) { camLoc_ = desiredCam; camLocValid_ = true; camObstructed_ = false; return; }
++    if (!col_) { camLoc_ = desiredCam; camLocValid_ = true; camObstructed_ = false; camLocMode_ = 0; return; }
+     // Default: the provisional pull-in (validated feel). WFC_CAMRE=1: the RE obstruction behaviours below, whose
+     // native box sweeps are approximated by rays (PARTIAL; WFC_CAMTEST shows more visible clipping than the default).
+     static const bool oldModel = std::getenv("WFC_CAMRE") == nullptr;
+@@ -345,7 +356,9 @@
+         float len = core::length(d), t;
+         camLoc_ = desiredCam;
+         camObstructed_ = len > 1e-3f && col_->segmentHit(focus, desiredCam, t);
+-        if (camObstructed_) camLoc_ = focus + d * (std::max(0.0f, t * len - 0.3f) / len);
++        camPull_ = camObstructed_ ? std::max(0.0f, t * len - 0.3f) / len : 1.0f;
++        if (camObstructed_) camLoc_ = focus + d * camPull_;
++        camLocMode_ = camObstructed_ ? 1 : 0;
+         camLocValid_ = true;
+         return;
+     }
+@@ -424,6 +437,7 @@
+         camOld_.z = stepToward(camOld_.z, D.z, D.z > 0.0f ? slow : quick, dt);
+     }
+     camLoc_ = L + F * camOld_.x + R * camOld_.y + U * camOld_.z;
++    camLocMode_ = 2;
+     camLocValid_ = true;
+ }
+ 

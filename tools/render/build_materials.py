@@ -10,7 +10,7 @@ into <out>/tex/ (never into the shared extraction tree).
 """
 import json, os, struct, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ue3obj import Repo, CONTENT, COOKED  # noqa: E402
+from ue3obj import Repo, map_packages, CONTENT, COOKED  # noqa: E402
 import matc  # noqa: E402
 import xbox_texture  # noqa: E402
 
@@ -171,7 +171,7 @@ def main():
     os.makedirs(out, exist_ok=True)
     # TransGame.xxx (startup package) cooks the pickup FX and their materials (AssetTools 7a69756
     # streets_pickup_fx.json: package TransGame); map copies win when both exist (largest export).
-    repo = Repo(['%s_BASE_m.xxx' % mapname, '%s_ART_m.xxx' % mapname], fallback=['TransGame.xxx'])
+    repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx'])
     j = glb_json(os.path.join(VS, 'Maps', mapname, 'world.glb'))
     names = {m.get('extras', {}).get('wfc_material') for m in j['materials']}
     for extra_glb in ('bsp.glb', 'decals.glb'):  # rebuilt by build_lighting.py (run it first)

@@ -47,6 +47,61 @@ After `unloadMapRenderData()`:
 | `MarkerAlly_MAT` | Authored empty (no expressions), so it draws nothing. Ally tags are the label plus `TargetHealthBar_MAT` (CONFIRMED data). |
 | Verification | `WFC_TILETEST=1` draws sample markers. |
 
+## 2b. Canvas text and HUD markers (M08)
+
+| Call | Behaviour |
+|---|---|
+| `drawCanvasText(font, utf8, x, y, rgba, scale)` / `canvasTextSize(...)` | Original UE3 fonts from render data `_ui/fonts/<font>.json` (`tools/render/build_hud.py`: cooked FFontCharacter table + CharRemap + glyph pages). |
+| `render::HudMarkers` (`src/render/HudMarkers.h`) | TnObjectiveMarkerTypeSprite.Draw from the authored marker-type setups (`_ui/hud_markers.json`, 40 types). |
+
+**Text:**
+- UE3 Canvas layout: USize advance, VerticalOffset, no kerning.
+- Glyph alpha × colour, display-referred.
+- Composited like `drawScreenTriangles`.
+- Fonts available: MarkerFont. SubtitleFont is not cooked in the loaded packages.
+
+**Markers:**
+- projection;
+- focus (threshold, auto-focus range, hysteresis);
+- on- and off-screen tiles (`Over`, `OnScreen`, `ArrowAngle`);
+- MarkerFont labels in the setup colour;
+- health bar.
+
+Gameplay passes the markers its rules show. Ownership of the in-match HUD layers: `docs/handoffs/FRONTEND_INMATCH_HUD.md`.
+
+## 2c. Frontend 3D scenes, loading yields, characters (M09)
+
+| Call | Behaviour |
+|---|---|
+| `loadFrontendScene(levels)` / `drawFrontendScene(camPosUE, camRotUEdeg, fovDeg, w, h, timeSec)` / `unloadFrontendScene()` | The live UI levels behind the menus (RE OVERNIGHT §D). |
+| `setLoadYield(callback)` | Called between bounded load steps with no GL binding held, so the loading movie keeps presenting (RE PLAYTEST §6). |
+| `setFrontendActorTransform(actor, posUE, rotUEdeg)` | Absolute matinee pose (UE units, degrees, attachment already applied) for a scene actor; applied as a delta against its authored pose. Actors not sent keep their authored pose and PHYS_Rotating. |
+| `setMapEffectActive(key, on)` | Key = Emitter actor name (short or full path) or its ParticleSystemComponent name. Scene emitters start in their authored bAutoActivate state. |
+| `setDisplayGamma(g)` | UE3 DisplayGamma for the scene resolve and Canvas material tiles (default 2.2). Profile Brightness → g is `HmProfileSettings.GetGammaSetting`: `2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting/100, 0, 1))` (CONFIRMED script), computed by the caller. GFx / video / Canvas text stay display-referred. |
+| `setDrawOwner(id)` | Per-character light environment and applier colours for the following dynamic draws. |
+
+**Frontend scenes:**
+- `loadFrontendScene` loads the exported family with the most scenery; `drawFrontendScene` draws a complete frame;
+  the GFx layer is composited after it.
+- The camera comes from the Frontend's CameraActor / Matinee evaluation.
+- Render data: `build_render_data.ps1 -Map UI_FrontEnd | UI_CharacterCustomization | UI_PartyLobby | UI_Lobby |
+  UI_CampaignLobby`.
+
+**Scene actors (render_index actors_by_level):**
+- authored poses, authored bHidden (`setActorHidden` overrides) and PHYS_Rotating for the actors in world.glb;
+- skeletal actors (the 17 vignette ships) are loaded from their glTF in bind pose, materials via
+  `tools/render/scene_materials.py`. Their skeletal animation is not played [PARTIAL].
+
+**Loading yields:**
+- On UI_FrontEnd: 193 yields, longest step 70 ms. The remaining long steps are single large texture decodes.
+- `loadMapRenderData` always releases the previous map first.
+
+**Draw owner:**
+- Robot / vehicle / weapon roles come from material packages, never from character names.
+- Character materials come from the AssetTools roster (`tools/render/character_materials.py`: 98 materials over the
+  MP chassis, all verified against their shipped permutations). They compile on the character's first draw, not in
+  the prewarm.
+
 ## 3. 2D composition (GFx movies, Bink frames, loading screens, fades)
 
 | Call | Behaviour |

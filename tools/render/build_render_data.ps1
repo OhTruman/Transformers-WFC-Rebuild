@@ -12,10 +12,13 @@ $um = Join-Path $root "work\render\umodel_out"
 New-Item -ItemType Directory -Force $out, $um | Out-Null
 
 # 1. Lightmap atlases (all LightMapTexture2D of the _LM package + the small ones cooked inline in ART).
-& $umodel -export "-path=$cooked" -game=trans "-out=$um" -png "${Map}_ART_m_LM.xxx" | Out-Null
+$env:PYTHONDONTWRITEBYTECODE = "1"
+$lmPkgs = @((& $py -c "import sys; sys.path.insert(0, r'$PSScriptRoot'); from ue3obj import map_lm_packages; print(' '.join(map_lm_packages('$Map')))") -split ' ' | Where-Object { $_ })
+foreach ($lp in $lmPkgs) { & $umodel -export "-path=$cooked" -game=trans "-out=$um" -png $lp | Out-Null }
+$levelPkgs = @((& $py -c "import sys; sys.path.insert(0, r'$PSScriptRoot'); from ue3obj import map_packages; print(' '.join(map_packages('$Map')[0]))") -split ' ' | Where-Object { $_ })
 $env:PYTHONDONTWRITEBYTECODE = "1"
 $inline = @((& $py (Join-Path $PSScriptRoot "build_lighting.py") --list-inline $Map) -split ' ' | Where-Object { $_ })
-if ($inline.Count -gt 0) { & $umodel -export "-path=$cooked" -game=trans "-out=$um" -png "${Map}_ART_m.xxx" ($inline | ForEach-Object { "-obj=$_" }) | Out-Null }
+if ($inline.Count -gt 0) { foreach ($pk in $levelPkgs) { & $umodel -export "-path=$cooked" -game=trans "-out=$um" -png $pk ($inline | ForEach-Object { "-obj=$_" }) | Out-Null } }
 
 # 2. Lightmap bindings (3 coefficients), BSP rebuilt from the cooked vertex buffer, lights, fog.
 & $py (Join-Path $PSScriptRoot "build_lighting.py") $Map $out $um
@@ -24,12 +27,15 @@ if ($LASTEXITCODE -ne 0) { throw "build_lighting failed" }
 # 3. Materials: original graphs -> GLSL (world + BSP + decals + Optimus robot/vehicle + Ion Blaster
 #    + the original vehicle/weapon FX materials listed in fx_materials.txt).
 $fx = Get-Content (Join-Path $PSScriptRoot "fx_materials.txt") | Where-Object { $_ -match '\S' }
+# Character materials: every MP chassis (robot + vehicle) from the AssetTools roster (character_materials.py),
+# not an Optimus-specific list; only materials cooked into this map compile.
+$chars = @((& $py (Join-Path $PSScriptRoot "character_materials.py")) | Where-Object { $_ -match '\S' })
+# Scene actors not in world.glb (render_index skeletal actors, e.g. the frontend vignette ships)
+$scene = @((& $py (Join-Path $PSScriptRoot "scene_materials.py") $Map) | Where-Object { $_ -match '\S' })
 # Canvas (HUD marker) materials: compiled with per-draw runtime parameters
 $ui = Get-Content (Join-Path $PSScriptRoot "ui_materials.txt") | Where-Object { $_ -match '\S' }
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
-    TR_Optimus_ROBO_p.RB_OptimusPrime_Cust_Mat_INST_B TR_Optimus_ROBO_p.InteriorAlt_Energon_MAT_INST `
-    TR_Optimus_VEH_p.RB_OptimusPrime_Cust2_Mat_INST TR_Optimus_VEH_p.InteriorAlt_Energon_MAT_INST `
-    WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx @ui
+    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx @ui @scene
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 
 
@@ -38,4 +44,7 @@ if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 if ($LASTEXITCODE -ne 0) { throw "build_movers failed" }
 & $py (Join-Path $PSScriptRoot "build_map_fx.py") $Map $out
 if ($LASTEXITCODE -ne 0) { throw "build_map_fx failed" }
+# 5. Map-independent HUD data: Canvas fonts + objective-marker setups -> <render root>\_ui
+& $py (Join-Path $PSScriptRoot "build_hud.py") (Split-Path -Parent $out)
+if ($LASTEXITCODE -ne 0) { throw "build_hud failed" }
 Write-Host "render data -> $out"
