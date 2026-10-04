@@ -195,8 +195,9 @@ the user's approval).
 - Soak: 3 full cycles (frontend scene → lobbies → private TDM → loading → Choose Character → HUD, scoreboard, kills → results → lobby → frontend), no errors. Memory loaded 2,443 / 2,393 / 2,412 MB, after return 2,320 / 2,296 / 2,285 MB (flat). Loading presented 171–175 frames per load; the longest frozen step is 1.76 s.
 
 **Not yet (handoffs in docs/FRONTEND.md §12):**
-- Gameplay spawning the selected chassis; owners for the volume / camera / gamma settings;
-- matinee visibility and emitter toggles for the scenes; the lobby preview pawn;
+- Gameplay spawning the selected chassis; owners for the volume / camera settings (gamma: wired to Rendering's
+  setDisplayGamma on merge);
+- the lobby preview pawn; skeletal animation of the vignette ships (Rendering);
 - XP / point events; kill-feed weapon icons (damage type);
 - persistence of character customization.
 

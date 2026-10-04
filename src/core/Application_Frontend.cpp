@@ -71,6 +71,18 @@ namespace {
 std::unique_ptr<frontend::IFrontendAudio> g_frontendAudio;
 std::unique_ptr<FrontendSceneGL> g_scene;   // the live level under the menus (interim IRenderer presentation)
 
+// The original Brightness setting -> DisplayGamma: HmProfileSettings.GetGammaSetting [CONFIRMED decompile, via Rendering]
+// DisplayGamma = 2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting / 100, 0, 1)) (1.25 .. 3.15, default 50 -> 2.2), published
+// to the renderer's IRenderer::setDisplayGamma (agents/rendering 0653bb6) when this tree has it.
+template <class R> void applyGamma(R* r, int gammaSetting) {
+    float g = std::max(0.0f, std::min(1.0f, gammaSetting / 100.0f));
+    float display = 2.2f + (-0.95f + 1.9f * g);
+    if constexpr (HasDisplayGamma<R>::value) r->setDisplayGamma(display);
+    else (void)r;
+    frontend::FlowTrace::emit("settings.gamma", {{"GammaSetting", std::to_string(gammaSetting)}, {"DisplayGamma", frontend::FlowTrace::num(display)},
+                                                 {"owner", HasDisplayGamma<R>::value ? "IRenderer::setDisplayGamma" : "none in this tree"}});
+}
+
 // Rendering's own bounded load-step callback (agents/rendering IRenderer::setLoadYield) when this tree's IRenderer has
 // it: the loading frames then also come from inside loadMapRenderData's steps.
 template <class R> void setRendererYield(R* r, bool on) {
@@ -134,11 +146,13 @@ void Application::attachPresenter() {
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
     // and reported here so the owners can consume LocalProfile when they add the entry points.
-    frontend_->flow().profile().onApplied = [](const frontend::LocalProfile& p) {
+    applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
+    frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
+        applyGamma(renderer_, p.getInt("GammaSetting"));
         frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},
                                                     {"MusicVolume", p.get("Music Volume")}, {"CameraSensitivity", p.get("CameraSensitivity")},
                                                     {"InvertY_Robot", p.get("InvertY_Robot")}, {"Vibration", p.get("Controller Vibration")},
-                                                    {"owners", "pending: Systems volumes, Gameplay camera, Rendering gamma"}});
+                                                    {"owners", "pending: Systems volumes, Gameplay camera; gamma -> renderer"}});
     };
     if (!std::getenv("WFC_NO_FRONTEND_SCENE")) {
         g_scene = std::make_unique<FrontendSceneGL>(renderer_);
@@ -523,6 +537,7 @@ void Application::unloadMatch() {
     delete renderer_;
     renderer_ = render::createGLRenderer();
     if (g_scene) g_scene->setRenderer(renderer_);
+    applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));   // the new renderer starts at its default
     camera_ = render::Camera();
     clock_ = FixedStepClock(60.0);
     escWasDown_ = false;
