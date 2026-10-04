@@ -61,6 +61,7 @@ bool Application::init() {
                 }
             }
             if (m == game::MatchMode::KOTH) {
+                ms.matchStarting();                                     // zones are Inactive until MatchStarting
                 for (int k = 0; k < 4; ++k) {
                     LOG_INFO("MODETEST KOTH active zone: %s", ms.objectives()[(size_t)ms.activeKothZone()].actor.c_str());
                     ms.activateNewKothZone();
@@ -94,6 +95,7 @@ bool Application::init() {
     if (std::getenv("WFC_CHAOS")) { runChaosTest(); return false; }            // measurements only
     if (std::getenv("WFC_TDMTEST")) { runTdmSessionTest(); return false; }     // measurements only
     if (std::getenv("WFC_CAMSYNC")) { runCameraSyncTest(); return false; }     // measurements only
+    if (std::getenv("WFC_MODEPLAYTEST")) { runModePlayTest(); return false; }  // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -1003,7 +1005,7 @@ void Application::runMatchTest() {
     auto logEvents = [&](const game::Match& m, const std::vector<game::MatchEvent>& evs, float t) {
         for (const auto& e : evs) {
             const char* n[] = {"CountdownTick", "MatchStarted", "PlayerSpawned", "PlayerKilled", "GameNearlyComplete",
-                               "TimeAnnouncement", "KillsLeftAnnouncement", "MatchEnded", "ReturnToLobby"};
+                               "TimeAnnouncement", "KillsLeftAnnouncement", "PointsLeftAnnouncement", "MatchEnded", "ReturnToLobby"};
             if (e.type == game::MatchEvent::Type::CountdownTick && e.value != 10 && e.value != 0) continue;
             LOG_INFO("MATCHTEST t=%7.2f %-22s player %d other %d value %d %s | state %s status %d score %d-%d remaining %d",
                      t, n[(int)e.type], e.player, e.other, e.value, e.text.c_str(), game::matchStateName(m.state()), m.gameStatus(),
@@ -1495,6 +1497,126 @@ void Application::runCameraSyncTest() {
         LOG_INFO("CAMSYNC %-16s @%3.0f Hz render / 60 Hz sim: character screen-offset jitter per-frame camera %.4f deg (max %.3f) | per-tick cached camera %.4f deg (max %.3f)",
                  names[sc], hz, j.first, j.second, js.first, js.second);
     }
+}
+
+// WFC_MODEPLAYTEST: Conquest (DOM) and Power Struggle (KOTH) through World::launchMatch with test participants placed in the
+// authored objective volumes. Checks the recovered rules (TnDominationPointBase / TnKingOfTheHillZoneBase bytecode, authored
+// defaults): capture 20 s per attacker, defender holds, +1 team / 3 s per owned node, capture +2 personal, kills personal only;
+// KOTH zone only after MatchStarting, +1 personal & team per living pawn per second when uncontested, contested = no score,
+// rotation after 60 s to an unvisited zone, zones deactivate at the end; score-limit end.
+void Application::runModePlayTest() {
+    const float dt = (float)clock_.stepSeconds();
+    auto& pc = world_.player().pawn();
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const char* what) { ++checks; if (!ok) ++fails; LOG_INFO("MODEPLAY %s %s", ok ? "PASS" : "FAIL", what); };
+    auto run = [&](float secs) { for (int k = 0; k < (int)(secs / dt); ++k) { platform::InputFrame none; world_.handleInput(none, dt); world_.tick(dt); } };
+    auto floorAt = [&](core::Vec3 p) { float gy; core::Vec3 gn; if (world_.collision()->groundHeight(p.x, p.z, p.y + 1.0f, 3.0f, gy, gn)) p.y = gy; return p; };
+    auto putLocal = [&](const core::Vec3& p) { pc.setPosition(floorAt(p)); pc.velocity() = {0, 0, 0}; };
+    const game::ObjectiveObject* objOf = nullptr;
+    auto findObj = [&](const char* cls, int nth) -> const game::ObjectiveObject* {
+        int k = 0; for (const auto& o : world_.mapState().objectives()) if (o.cls == cls && k++ == nth) return &o; return nullptr; };
+    (void)objOf;
+    // ---------------- DOM ----------------
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL("MP_IAC_Streets_Base_m?GameModeTag=DOM?PointsToWin=12?TimeLimit=900", L);
+        check(world_.launchMatch(L), "launch Conquest (DOM)");
+        game::Match& m = world_.match();
+        int me = world_.localMatchPlayer();
+        game::MatchOpponent* other[3] = {world_.addMatchOpponent("P1", false), world_.addMatchOpponent("P2", false), world_.addMatchOpponent("P3", false)};
+        run(10.5f);
+        int myTeam = m.players()[(size_t)me].team;
+        game::MatchOpponent* ally = nullptr; game::MatchOpponent* enemy = nullptr;
+        for (auto* o : other) { if (m.players()[(size_t)o->matchPlayer()].team == myTeam) { if (!ally) ally = o; } else if (!enemy) enemy = o; }
+        int vis = 0; for (const auto& o : world_.mapState().objectives()) if (o.cls == "TnDominationPoint") vis += o.visible;
+        check(m.state() == game::Match::State::InProgress && vis == 3 && m.settings().goalScore == 12, "DOM in progress, 3 totems visible, goal from URL");
+        // Park everyone far from the nodes.
+        core::Vec3 park = floorAt(m.starts()[0].pos);
+        for (auto* o : other) o->setPosition(park);
+        const game::ObjectiveObject* n0 = findObj("TnDominationPoint", 0);
+        const game::ObjectiveObject* n1 = findObj("TnDominationPoint", 1);
+        check(n0 && !n0->volume.empty() && n0->contains(floorAt(n0->pos) + core::Vec3{0, 2.0f, 0}), "node volume loaded and contains the node");
+        // Kill: personal +1, no team score (ScoreKillsMP TeamScoreAmount 0).
+        world_.applyMatchDamage(enemy->matchPlayer(), me, 2000.0f, false, "TransGame.TnDamageTypeIonBlaster");
+        check(m.players()[(size_t)me].score == 1 && m.teamScore(myTeam) == 0, "DOM kill: +1 personal, 0 team");
+        run(5.2f); enemy->setPosition(park);
+        // Solo capture of node 0: 20 s.
+        putLocal(n0->pos);
+        run(19.5f);
+        check(n0->defenderTeam == 255 && n0->captureTime > 19.0f, "solo capture still pending at 19.5 s");
+        run(0.6f);
+        check(n0->defenderTeam == myTeam && m.players()[(size_t)me].score == 3, "captured at 20 s, +2 personal (PersonalScoreAmount)");
+        int t0 = m.teamScore(myTeam);
+        run(3.05f);
+        check(m.teamScore(myTeam) == t0 + 1, "owned node: +1 team after ScoreInterval 3 s");
+        // Enemy contests node 0 while I stand there: progress holds at 0 (defender present).
+        enemy->setPosition(floorAt(n0->pos));
+        run(5.0f);
+        check(n0->defenderTeam == myTeam && n0->captureTime == 0.0f, "attacker with a defender present: no capture progress");
+        // I leave: the enemy captures in 20 s.
+        putLocal(park);
+        run(20.2f);
+        check(n0->defenderTeam != myTeam && n0->defenderTeam != 255, "enemy alone captures the node in 20 s");
+        enemy->setPosition(park);
+        // Two attackers (me + ally) on neutral node 1: 10 s.
+        putLocal(n1->pos); ally->setPosition(floorAt(n1->pos));
+        run(10.1f);
+        check(n1->defenderTeam == myTeam, "two attackers capture in 10 s (dt x attackers)");
+        // Score-limit end (goal 12): wait for the owned node to tick the team to the goal.
+        int guard = 0;
+        while (m.state() == game::Match::State::InProgress && guard++ < 200) run(1.0f);
+        game::HudGameState h = world_.hudState();
+        check(m.state() == game::Match::State::MatchOver && h.endReason == "Score" && (m.teamScore(0) >= 12 || m.teamScore(1) >= 12), "DOM ends at the score limit");
+        check(h.objectives.size() == 3, "HUD: 3 Domination objectives");
+        run(15.3f);
+    }
+    // ---------------- KOTH ----------------
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL("MP_IAC_Streets_Base_m?GameModeTag=KOTH?PointsToWin=70?TimeLimit=900", L);
+        check(world_.launchMatch(L), "launch Power Struggle (KOTH)");
+        game::Match& m = world_.match();
+        int me = world_.localMatchPlayer();
+        int active = 0; for (const auto& o : world_.mapState().objectives()) active += o.cls == "TnKingOfTheHillZone" && o.visible;
+        check(active == 0, "no KOTH zone before MatchStarting");
+        run(10.5f);
+        active = 0; for (const auto& o : world_.mapState().objectives()) active += o.cls == "TnKingOfTheHillZone" && o.visible;
+        check(m.state() == game::Match::State::InProgress && active == 1, "one Active zone after MatchStarting");
+        int myTeam = m.players()[(size_t)me].team;
+        game::MatchOpponent* enemy = nullptr;
+        for (auto* o : world_.matchOpponents()) if (m.players()[(size_t)o->matchPlayer()].team != myTeam) { enemy = o; break; }
+        core::Vec3 park = floorAt(m.starts()[0].pos);
+        for (auto* o : world_.matchOpponents()) o->setPosition(park);
+        const game::ObjectiveObject& z = world_.mapState().objectives()[(size_t)world_.mapState().activeKothZone()];
+        std::string firstZone = z.actor;
+        putLocal(z.pos);
+        int s0 = m.players()[(size_t)me].score, ts0 = m.teamScore(myTeam);
+        run(5.02f);
+        int ds = m.players()[(size_t)me].score - s0, dts = m.teamScore(myTeam) - ts0;
+        LOG_INFO("MODEPLAY KOTH 5 s alone in the zone: personal +%d team +%d", ds, dts);
+        check(ds >= 4 && ds <= 5 && dts == ds, "uncontested zone: +1 personal and +1 team per second");
+        enemy->setPosition(floorAt(z.pos));
+        int s1 = m.players()[(size_t)me].score;
+        run(3.0f);
+        check(z.defenderTeam == 254 && m.players()[(size_t)me].score == s1, "contested zone (both teams): no score");
+        enemy->setPosition(park);
+        run(60.0f);
+        int nowZone = world_.mapState().activeKothZone();
+        check(nowZone >= 0 && world_.mapState().objectives()[(size_t)nowZone].actor != firstZone, "zone rotated after 60 s to another zone");
+        // Go to the new zone until the score limit.
+        putLocal(world_.mapState().objectives()[(size_t)nowZone].pos);
+        int guard = 0;
+        while (m.state() == game::Match::State::InProgress && guard++ < 200) run(1.0f);
+        int stillActive = 0; for (const auto& o : world_.mapState().objectives()) stillActive += o.cls == "TnKingOfTheHillZone" && o.visible;
+        check(m.state() == game::Match::State::MatchOver && m.teamScore(myTeam) >= 70 && stillActive == 0, "KOTH ends at the score limit; zones deactivate (CheckEndGame)");
+        run(15.3f);
+    }
+    // TDM still runs after the other modes (no state leaks).
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL("MP_IAC_Streets_Base_m?GameModeTag=TDM", L);
+        check(world_.launchMatch(L), "TDM after DOM / KOTH");
+        int vis = 0; for (const auto& o : world_.mapState().objectives()) vis += o.visible;
+        check(vis == 0 && world_.match().settings().teamScoreAmount == 1 && world_.match().settings().goalScore == 40, "TDM map state and rules restored");
+    }
+    LOG_INFO("MODEPLAY SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 void Application::shutdown() {

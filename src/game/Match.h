@@ -22,7 +22,11 @@ struct MatchSettings {
     bool teamGame = true;
     int goalScore = 40;                // ?PointsToWin (TDM default 40 of 20/30/40/50; DM 20 of 10/20/30)
     int timeLimit = 900;               // ?TimeLimit seconds (TimeLimits[1] of 600/900/1200)
-    int teamScoreAmount = 1;           // TnGameRules_ScoreKills(TDM|DM).TeamScoreAmount
+    int teamScoreAmount = 1;           // ScoreKills.TeamScoreAmount: TDM / DM 1; ScoreKillsMP (DOM, KOTH, CTF, EXT) unset = 0
+    std::string gameType = "TNGT_TDM"; // ETnGameType: cluster ActiveGameTypes filter
+    bool reportKills = true;           // ReportGameProgressKills (TDM / DM)
+    bool reportPoints = false;         // ReportGameProgressPoints (DOM / KOTH): 50 / 25 left on ScoreObjective
+    int objectiveIndividualScore = 0;  // ScoreObjectives.IndividualScore (KOTH 1; CTF / EXT 10)
     float matchAutoStartCountdown = 10.0f;   // TnMultiplayerGame.MatchAutoStartCountdown
     float matchOverCountdown = 15.0f;        // TnMultiplayerGame.MatchOverCountdown
     float waveRespawnTime = 5.0f;            // TnRespawnHelperWave.WaveRespawnTime
@@ -39,6 +43,7 @@ struct MatchEvent {
         GameNearlyComplete,   // NotifyGameNearlyComplete (60 s left or 5 kills left)
         TimeAnnouncement,     // TnGameProgressAnnouncementMessage switch 0/1/2 (30/60/120 s left)
         KillsLeftAnnouncement,// switch 5/6/7 (1/3/5 scores left)
+        PointsLeftAnnouncement,// ReportGameProgressPoints switch 4 / 3 (50 / 25 left; DOM / KOTH)
         MatchEnded,           // EndGame -> MatchOver: winner (team index / player index / -1 tie), reason
         ReturnToLobby,        // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (host handoff)
     };
@@ -77,6 +82,8 @@ public:
     struct Start { std::string actor, cluster; int team = 255; bool ffa = false; core::Vec3 pos; float yaw = 0.0f; };
     struct Cluster {
         std::string actor; core::Vec3 center; bool initialSpawn = false; int faction = 255;
+        std::vector<std::string> activeGameTypes;   // empty = every game type
+        bool registered = true;                     // TnSpawnPointManager.Initialize for the current game type
         std::vector<int> spawnPoints;  // indices into starts
         int iterator = 0;              // round-robin SpawnIterator
     };
@@ -103,6 +110,15 @@ public:
     static constexpr float kMinRespawnDelay = 3.0f;
     // Damage that reached the victim (after team filtering): the victim's DamageHistory, used for TrackKillsMP.ScoreAssists.
     void recordDamage(int victim, int instigator, float amount);
+    // Objective scoring (rules chain): Game.ScoreObjective(PRI, score) -> ScoreObjectives AddScore(IndividualScore, score) +
+    // ReportGameProgressPoints; TnGame.ScoreTeamObjective(team, amount) (DOM); PRI.AddScore(amount) without team. Each
+    // reaches the score check.
+    void scoreObjective(int player, int score);
+    void scoreTeamObjective(int team, int amount);
+    void addPersonalScore(int player, int amount);
+    // Spawn modifiers owned by objectives (TnSpawnModifierComponent): factor, cutoff (UU, <0 none), team rule.
+    struct SpawnModifier { core::Vec3 pos; float factor; float cutoffUU; int rule; int team; };   // rule 0 All, 1 Friend, 2 Enemy
+    void setObjectiveSpawnModifiers(const std::vector<SpawnModifier>& m) { objMods_ = m; }
     bool sameTeam(int a, int b) const {
         return s_.teamGame && a >= 0 && b >= 0 && (size_t)a < players_.size() && (size_t)b < players_.size() &&
                players_[(size_t)a].team == players_[(size_t)b].team && players_[(size_t)a].team < 2;
@@ -149,6 +165,9 @@ private:
     bool usingInitialSpawn_ = true;
     std::vector<std::vector<std::pair<int, float>>> damageHistory_;
     std::vector<KillFeedEntry> killHistory_;
+    std::vector<SpawnModifier> objMods_;
+    void checkScore(int player, int team);
+    void reportPoints(int player);
     std::vector<float> deathTime_;
     float matchTime_ = 0.0f;
     std::string endReason_;

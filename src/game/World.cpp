@@ -138,6 +138,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     // out into moving collision sets (MapState).
     const std::string mapDir = root + "/Maps/MP_IAC_Streets/";
     mapState_.load(mapDir + "gameplay.json", matchMode_);
+    mapState_.loadObjectiveVolumes(mapDir + "physics.json");
     auto splitMovers = [](const render::MeshData& in, render::MeshData& out,
                           std::vector<std::pair<std::string, std::vector<core::Vec3>>>& moverTris) {
         std::vector<std::string> names = MapState::moverActorNames();
@@ -957,7 +958,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     for (MatchMode m : {MatchMode::DM, MatchMode::TDM, MatchMode::CTF, MatchMode::KOTH, MatchMode::EXT, MatchMode::DOM})
         if (l.modeTag == gameModeName(m)) { mode = m; known = true; }
     if (!known) { LOG_WARN("match: unknown mode %s", l.modeTag.c_str()); return false; }
-    if (mode != MatchMode::TDM && mode != MatchMode::DM) {
+    if (mode != MatchMode::TDM && mode != MatchMode::DM && mode != MatchMode::DOM && mode != MatchMode::KOTH) {
         LOG_WARN("match: %s match rules are not implemented (map state only)", l.modeTag.c_str());
         return false;
     }
@@ -1032,6 +1033,15 @@ HudGameState World::hudState() const {
         h.result = !match_.settings().teamGame
                        ? (match_.winnerPlayer() < 0 ? "Draw" : (match_.winnerPlayer() == localPlayer_ ? "You won" : "You lost"))   // [PROV text: TnFreeForAllGameOverMessage strings not read]
                        : (match_.winnerTeam() < 0 ? "Tie game" : (match_.winnerTeam() == me.team ? "Your team won" : "Your team lost"));
+    for (const ObjectiveObject& o : mapState_.objectives()) {
+        if (!o.activeInMode || (o.cls != "TnDominationPoint" && o.cls != "TnKingOfTheHillZone")) continue;
+        HudGameState::Objective ob;
+        ob.actor = o.actor; ob.markerType = o.markerTypeString; ob.pointNumber = o.pointNumber; ob.ownerTeam = o.defenderTeam;
+        ob.active = o.cls == "TnDominationPoint" || o.state == ObjectiveObject::State::Active;
+        ob.captureProgress = o.captureTime / 20.0f; ob.beingCaptured = o.captureTime > 0.0f;
+        ob.timeLeft = o.activeTimeLeft; ob.pos = o.pos;
+        h.objectives.push_back(ob);
+    }
     for (size_t i = 0; i < match_.players().size(); ++i) {
         if ((int)i == localPlayer_ || !match_.players()[i].alive) continue;   // hidden for yourself and dead pawns
         HudGameState::Tag t;
@@ -1058,10 +1068,34 @@ void World::tickMatch(float dt) {
     }
     for (MatchOpponent* o : opponents_) if (o->spawned()) match_.setPlayerLocation(o->matchPlayer(), o->position());
     match_.tick(dt);
+    // Live objective rules (DOM nodes, KOTH zone) while InProgress: pawns -> captures / scores -> the match rules.
+    if (match_.state() == Match::State::InProgress) {
+        std::vector<MapState::ObjPawn> pawns;
+        if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true});
+        for (MatchOpponent* o : opponents_)
+            if (o->spawned()) pawns.push_back({o->matchPlayer(), o->team(), o->position() + core::Vec3{0, core::config::kPawnHalfHeight, 0}, true});
+        MapState::ObjectiveScoring sc;
+        mapState_.tickObjectives(dt, pawns, sc);
+        for (auto& p : sc.personalScores) match_.addPersonalScore(p.first, p.second);
+        for (auto& p : sc.objectiveScores) match_.scoreObjective(p.first, p.second);
+        for (auto& t : sc.teamScores) match_.scoreTeamObjective(t.first, t.second);
+        for (auto& msg : sc.messages) LOG_INFO("match: %s switch %d", msg.first.c_str(), msg.second);
+        std::vector<Match::SpawnModifier> mods;
+        for (const ObjectiveObject& o : mapState_.objectives()) {
+            if (!o.activeInMode) continue;
+            if (o.cls == "TnKingOfTheHillZone" && o.state == ObjectiveObject::State::Active) mods.push_back({o.pos, -50.0f, 5000.0f, 0, 255});
+            if (o.cls == "TnDominationPoint" && (o.defenderTeam == 0 || o.defenderTeam == 1)) mods.push_back({o.pos, 1.0f, -1.0f, 1, o.defenderTeam});
+        }
+        match_.setObjectiveSpawnModifiers(mods);
+    }
     bool returned = false;
     for (const MatchEvent& e : match_.events()) {
         switch (e.type) {
+            case MatchEvent::Type::MatchEnded:
+                mapState_.matchEnded();                // ScoreKingOfTheHill.CheckEndGame: every zone deactivates
+                break;
             case MatchEvent::Type::MatchStarted:
+                mapState_.matchStarting();             // KOTH initial zone (MatchStarting)
                 // TnTeamGame.StartMatch: Reset() every pickup factory (sleeping factories return to 'Pickup').
                 for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
                 break;

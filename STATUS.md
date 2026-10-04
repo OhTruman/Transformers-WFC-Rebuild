@@ -3,6 +3,12 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 21c (2026-10-04) — Conquest and Power Struggle playable (shared match framework)
+- DOM: 20 s capture per attacker, defender holds, +2 capture, +1 team / 3 s per node (bytecode).
+- KOTH: zone from MatchStarting, +1 personal & team per pawn per second uncontested, 60 s rotation, end deactivation.
+- Kills in objective modes: personal +1, team 0 (ScoreKillsMP). ActiveGameTypes cluster filter; objective spawn modifiers.
+- CTF / EXT not implemented (need carried-objective weapons). WFC_MODEPLAYTEST 21/21, TDMTEST 39/39.
+
 ## GAMEPLAY PASS 21b (2026-10-04) — match HUD state, kill feed, match end, regen
 - Kill feed events in TnDeathMessage form (switch, killer, victim, teams, damage type, 3 s lifetime).
 - HUD state: spectating at 3 s, time limit, faction, end reason, MatchOver countdown, scoreboard rows.

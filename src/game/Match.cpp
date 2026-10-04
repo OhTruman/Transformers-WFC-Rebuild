@@ -23,8 +23,12 @@ const char* matchStateName(Match::State s) {
 MatchSettings MatchSettings::forMode(const std::string& tag) {
     MatchSettings s;
     s.modeTag = tag;
-    if (tag == "DM") { s.teamGame = false; s.goalScore = 20; s.timeLimit = 900; }
-    else { s.modeTag = "TDM"; s.teamGame = true; s.goalScore = 40; s.timeLimit = 900; }
+    // DOM (Conquest) / KOTH (Power Struggle): PointsToWin 400, TimeLimit 900; rules ScoreKillsMP (no team score per kill),
+    // ReportGameProgressTime + Points [CONF authored TnOnlineGameSettings + RE PLAYTEST section 3].
+    if (tag == "DM") { s.teamGame = false; s.goalScore = 20; s.timeLimit = 900; s.gameType = "TNGT_DM"; }
+    else if (tag == "DOM") { s.teamGame = true; s.goalScore = 400; s.timeLimit = 900; s.gameType = "TNGT_DOM"; s.teamScoreAmount = 0; s.reportKills = false; s.reportPoints = true; }
+    else if (tag == "KOTH") { s.teamGame = true; s.goalScore = 400; s.timeLimit = 900; s.gameType = "TNGT_KOTH"; s.teamScoreAmount = 0; s.reportKills = false; s.reportPoints = true; s.objectiveIndividualScore = 1; }
+    else { s.modeTag = "TDM"; s.teamGame = true; s.goalScore = 40; s.timeLimit = 900; s.gameType = "TNGT_TDM"; }
     return s;
 }
 
@@ -61,6 +65,7 @@ bool Match::loadSpawnData(const std::string& path) {
         const assets::Json& cp = a["_CenterPoint"];
         c.center = {cp["X"].asFloat() * 0.01f, cp["Z"].asFloat() * 0.01f, cp["Y"].asFloat() * 0.01f};
         c.initialSpawn = a["InitialSpawn"].asBool(false);
+        for (size_t k = 0; k < a["ActiveGameTypes"].size(); ++k) c.activeGameTypes.push_back(a["ActiveGameTypes"][k].asString());
         for (size_t k = 0; k < a["SpawnPoints"].size(); ++k) {
             std::string sp = shortName(a["SpawnPoints"][k].asString());
             for (size_t j = 0; j < starts_.size(); ++j) if (starts_[j].actor == sp) c.spawnPoints.push_back((int)j);
@@ -91,10 +96,14 @@ void Match::begin(const MatchSettings& s) {
     for (bool& a : announced_) a = false;
     for (bool& a : killsAnnounced_) a = false;
     // TnSpawnPointManager.Initialize: InitialSpawn clusters become each faction's first active cluster.
-    for (Cluster& c : clusters_) c.iterator = 0;   // fresh level: SpawnIterator 0
+    for (Cluster& c : clusters_) {
+        c.iterator = 0;   // fresh level: SpawnIterator 0
+        c.registered = c.activeGameTypes.empty() || std::find(c.activeGameTypes.begin(), c.activeGameTypes.end(), s_.gameType) != c.activeGameTypes.end();
+    }
+    objMods_.clear();
     active_[0] = active_[1] = -1;
     for (size_t i = 0; i < clusters_.size(); ++i)
-        if (clusters_[i].initialSpawn && (clusters_[i].faction == 0 || clusters_[i].faction == 1)) active_[clusters_[i].faction] = (int)i;
+        if (clusters_[i].registered && clusters_[i].initialSpawn && (clusters_[i].faction == 0 || clusters_[i].faction == 1)) active_[clusters_[i].faction] = (int)i;
     uptime_[0] = uptime_[1] = 0.0f; clusterClock_ = 0.0f; sinceUpdate_ = 0.0f; usingInitialSpawn_ = true;
     // PendingMatch.BeginState: bWaitingToStartMatch, GRI.SetGameStatus(2), GRI.ResetCountdown(true, 10).
     state_ = State::PendingMatch;
@@ -216,7 +225,7 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
         deathTime_[(size_t)victim] = matchTime_;
     }
     emit(MatchEvent::Type::PlayerKilled, victim, 0, suicide ? "suicide" : (killer < 0 ? "environment" : ""), killer);
-    if (killer >= 0 && !suicide && !killedSelf) {
+    if (s_.reportKills && killer >= 0 && !suicide && !killedSelf) {
         // ReportGameProgressKills.HandleProgress: NumScoresLeft = GoalScore - TeamScore (1/3/5 -> switch 5/6/7).
         const MatchPlayer& K = players_[(size_t)killer];
         int score = s_.teamGame ? teamScore(K.team) : K.score;
@@ -244,6 +253,41 @@ std::vector<KillFeedEntry> Match::killFeed() const {
 bool Match::spectating(int p) const {
     if (p < 0 || (size_t)p >= players_.size() || players_[(size_t)p].alive || deathTime_[(size_t)p] < 0.0f) return false;
     return matchTime_ - deathTime_[(size_t)p] >= kMinRespawnDelay;
+}
+
+void Match::checkScore(int player, int team) {
+    if (state_ != State::InProgress) return;
+    int score = s_.teamGame ? teamScore(team) : (player >= 0 ? players_[(size_t)player].score : 0);
+    if (s_.goalScore > 0 && score >= s_.goalScore) endGame(player, "Score");
+}
+
+void Match::reportPoints(int player) {
+    // ReportGameProgressPoints.HandleProgress (on ScoreObjective): NumScoresLeft = GoalScore - team score;
+    // 50 -> switch 4, 25 -> switch 3 + NotifyGameNearlyComplete [CONF authored Sounds + bytecode].
+    if (!s_.reportPoints || player < 0) return;
+    int left = s_.goalScore - (s_.teamGame ? teamScore(players_[(size_t)player].team) : players_[(size_t)player].score);
+    if (left == 50) emit(MatchEvent::Type::PointsLeftAnnouncement, player, 4);
+    if (left == 25) { emit(MatchEvent::Type::PointsLeftAnnouncement, player, 3); emit(MatchEvent::Type::GameNearlyComplete); }
+}
+
+void Match::scoreObjective(int player, int score) {
+    if (state_ != State::InProgress || player < 0 || (size_t)player >= players_.size()) return;
+    MatchPlayer& P = players_[(size_t)player];
+    P.score += s_.objectiveIndividualScore;                 // Scorer.AddScore(IndividualScore, Score)
+    if (s_.teamGame && score > 0 && (P.team == 0 || P.team == 1)) teamScore_[P.team] += score;
+    reportPoints(player);
+    checkScore(player, P.team);
+}
+
+void Match::scoreTeamObjective(int team, int amount) {
+    if (state_ != State::InProgress || (team != 0 && team != 1)) return;
+    teamScore_[team] += amount;   // [HIGH: the TnTeamGame override is not in the decompiled set; RE section 3 C: +1 team / 3 s]
+    if (s_.goalScore > 0 && teamScore_[team] >= s_.goalScore) endGame(-1, "Score");
+}
+
+void Match::addPersonalScore(int player, int amount) {
+    if (state_ != State::InProgress || player < 0 || (size_t)player >= players_.size()) return;
+    players_[(size_t)player].score += amount;
 }
 
 void Match::recordDamage(int victim, int instigator, float amount) {
@@ -339,6 +383,7 @@ void Match::updateClusters(float dt) {
     for (int f = 0; f < 2; ++f) {
         int top = -1; float topScore = -1e30f;
         for (size_t i = 0; i < clusters_.size(); ++i) {
+            if (!clusters_[i].registered) continue;
             float sc = scoreCluster(clusters_[i], f);
             if (sc > topScore) { topScore = sc; top = (int)i; }
         }
@@ -363,6 +408,13 @@ float Match::scoreCluster(const Cluster& c, int faction) const {
     }
     for (const Tombstone& t : tombstones_)
         if (core::length(c.center - t.pos) * 100.0f <= 5000.0f) s += -5.0f * inv(t.pos);
+    // Objective modifiers: KOTH active zone All -50 within 5000; DOM point Friend +1 (owner team) [CONF authored].
+    for (const SpawnModifier& m : objMods_) {
+        if (m.cutoffUU >= 0.0f && core::length(c.center - m.pos) * 100.0f > m.cutoffUU) continue;
+        if (m.rule == 1 && m.team != faction) continue;
+        if (m.rule == 2 && (m.team == faction || m.team > 1)) continue;
+        s += m.factor * inv(m.pos);
+    }
     return s;
 }
 

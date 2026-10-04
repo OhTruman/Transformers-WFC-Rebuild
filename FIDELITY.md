@@ -75,6 +75,85 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 21c — CONQUEST (DOM) AND POWER STRUGGLE (KOTH) ON THE SHARED MATCH FRAMEWORK (2026-10-04, gameplay agent)
+Sources:
+- RE MILESTONE05_PLAYTEST_RE (28debca) §3;
+- RE's decompiled TnDominationPointBase, TnKingOfTheHillZoneBase, TnGameRules_ScoreKills / ScoreObjectives /
+  ScoreKingOfTheHill / ScoreDomination / ReportGameProgressBase / Points, TnGameObjective;
+- authored defaults (authored.db).
+
+Test: `WFC_MODEPLAYTEST` **21 / 21** (DOM + KOTH + TDM afterwards); `WFC_TDMTEST` 39 / 39.
+
+### Shared framework (one Match, not one engine per mode)
+- **Launch.** `World::launchMatch` accepts TDM, DM, DOM and KOTH. CTF and EXT are refused because their rules are not
+  implemented.
+- **Per-mode settings** (`MatchSettings::forMode`, CONFIRMED authored):
+  - DOM / KOTH: PointsToWin 400, TimeLimit 900;
+  - `TeamScoreAmount` 0: ScoreKillsMP authors none, so in DOM / KOTH a kill is +1 personal and 0 team
+    (`AddScore(1, TeamScoreAmount)`, CONFIRMED bytecode);
+  - ReportGameProgressPoints instead of Kills.
+- **Spawn clusters.** `ActiveGameTypes` filter (TNGT): the 6 TDM-only clusters don't register in DOM / KOTH.
+- **Objective spawn modifiers.** Active KOTH zone All −50 / d within 5000; owned DOM node Friend +1 / d [CONF authored].
+- **Objective scoring entry points.**
+  - `Match::scoreObjective` (ScoreObjectives: `AddScore(IndividualScore, Score)`, then ReportGameProgressPoints at
+    50 / 25 left).
+  - `scoreTeamObjective` (DOM) [HIGH: the TnTeamGame override is not in the decompiled set; RE §3 states +1 team / 3 s].
+  - `addPersonalScore` (DOM capture).
+  - Each reaches the same score-limit end.
+- **Objective membership.** The pawn inside the objective's authored ObjectiveVolume brush (physics.json TriggerVolume
+  planes). TnGameObjective.PostBeginPlay -> `ObjectiveVolume.SetAssociatedActor` [CONF]; the volume forwards touches
+  [HIGH stock UE3]; the cylinder-vs-brush overlap is approximated by the pawn location [PROV].
+
+### Conquest (DOM) — CONFIRMED bytecode
+- **TnDominationPointBase.Tick / UpdateOccupiers / UpdateScoring:**
+  - with no occupants -> capture 0;
+  - attackers = living occupants not on the defending team;
+  - a neutral node is claimed as if owned by the other team;
+  - with no defender present, capture += dt × attackers (restarted when the claiming team changes);
+  - at **CaptureTime 20 s** -> SetTeam, **PersonalScoreAmount +2** for each capturer, timers reset,
+    TnDominationMessage (switch + 10 × PointNumber);
+  - an owned node -> **+1 team every 3 s** (ScoreInterval 3, ScoreAmount 1).
+- **Verified:**
+  - a solo capture is pending at 19.5 s and done at 20 s, +2 personal;
+  - +1 team after 3 s;
+  - a defender present holds progress;
+  - an enemy alone recaptures in 20 s;
+  - two attackers capture in 10 s;
+  - the score-limit end;
+  - 3 totems visible (DOM state from Pass 19).
+- **PARTIAL.** No points announcements for DOM (it scores through ScoreTeamObjective, not ScoreObjective). The capturing
+  announcement throttle (15 s) is not emitted.
+
+### Power Struggle (KOTH) — CONFIRMED bytecode
+- **Zones.** Inactive until **MatchStarting**, which picks the initial zone.
+- **Active.Tick:**
+  - UpdateClaim: one team, contested 254, or none 255;
+  - every ScoreInterval 1 s, if uncontested and owned, each living pawn in the zone -> Game.ScoreObjective(PRI, 1),
+    i.e. **+1 personal (IndividualScore 1) and +1 team**;
+  - ActiveTimeLeft 60 s -> ActivateNewZone (unvisited cycle).
+- **CheckEndGame.** Every zone deactivates at the end.
+- **Verified:**
+  - no zone before the start, one after it;
+  - +5 / +5 over 5 s alone;
+  - contested gives no score;
+  - rotation to another zone after 60 s;
+  - the end at the limit with zones deactivated.
+- **PARTIAL.** The KOTH hill dialog / message switches are logged, not presented (Systems / Rendering).
+
+### HUD
+- `HudGameState::objectives`: marker type ("Domination" / "KingOfTheHill"), NodeID, owner (255 / 254), active, capture
+  progress (NormalizedCaptureTime), BeingCaptured, KOTH time left, position.
+- Match events add `PointsLeftAnnouncement` (switches 4 / 3).
+
+### Not implemented (evidence present, mechanics missing in the rebuild)
+- **CTF (Code of Power).** Rounds (TnGameRules_RoundsBase), the flag as a carried weapon, capture-point activation per
+  attacking team, the mercy rule.
+- **EXT (Countdown to Extinction).** The bomb as a carried weapon, plant / 15 s fuse / 5 s defuse, HurtRadius 9999.
+- Both need a carried-objective weapon / inventory system first. Their map state (Pass 19) and the RE specs
+  (RE PLAYTEST §3, GAMEPLAY_UNKNOWNS §4) are ready.
+
+---
+
 ## PASS 21b — MATCH HUD STATE, KILL FEED, MATCH END, REGEN (2026-10-04, gameplay agent)
 RE: MILESTONE05_PLAYTEST_RE (28debca) §3 / §9; TnDeathMessage decompile; authored LocalMessage / damage types.
 Test: `WFC_TDMTEST` **39 / 39**.

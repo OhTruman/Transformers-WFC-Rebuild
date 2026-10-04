@@ -75,6 +75,18 @@ struct HudGameState {
     // enemy markers disabled by default (no TnBuffSeeEnemyObjectiveMarkers / HardLocked / Revenge buffs here).
     struct Tag { int player; std::string name; int team; bool ally; bool drawn; core::Vec3 pos; };
     std::vector<Tag> tags;
+    // Objectives of the current mode (DOM nodes, KOTH zones): HUD markers + capture state.
+    struct Objective {
+        std::string actor, markerType;           // "Domination" / "KingOfTheHill"
+        int pointNumber = 0;                     // DOM NodeID
+        int ownerTeam = 255;                     // DefenderTeamIndex (255 neutral, 254 contested)
+        bool active = false;                     // KOTH: the Active zone
+        float captureProgress = 0.0f;            // DOM NormalizedCaptureTime (CurrentCaptureTime / CaptureTime)
+        bool beingCaptured = false;              // DOM BeingCaptured (Flashing)
+        float timeLeft = 0.0f;                   // KOTH ActiveTimeLeft
+        core::Vec3 pos;
+    };
+    std::vector<Objective> objectives;
 };
 
 // A static graybox block (fallback level + future collision volume).
