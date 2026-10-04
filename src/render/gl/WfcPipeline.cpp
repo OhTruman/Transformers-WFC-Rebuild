@@ -532,8 +532,10 @@ void Pipeline::release() {
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs, %zu textures)", meshes_.size(), progIds.size(),
              texCache_.size() + lmTextures_.size());
     std::function<void()> keepYield = std::move(loadYield_);
+    const float keepGamma = displayGamma_;              // caller settings survive a map change
     *this = Pipeline();
     loadYield_ = std::move(keepYield);
+    displayGamma_ = keepGamma;
 }
 
 // ------------------------------------------------------------------------- loading
