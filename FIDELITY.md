@@ -37,6 +37,79 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND PASS 3: PC SKU, LIVE SCENES, LOADING, MOVIE AUDIO, HUD, SETTINGS, CHARACTER SELECTION (2026-10-04, agents/frontend)
+Full detail: `docs/FRONTEND.md`. This pass supersedes the pass-2 entries on Bink audio, black backgrounds, the frozen
+loading screen and the opaque pause backdrop.
+
+**CONFIRMED ORIGINAL — authored data, movies and script, running unmodified:**
+- **PC SKU behaviour** (the movies' `WIN` branches):
+  - no Press START gate; `mc_menuMainPC` with Accounts and Exit Game;
+  - clickable footer buttons; the authored mouse cursor (`TnUIController.MouseCursorUI`);
+  - PC graphics settings (resolution / fullscreen / texture quality / VSync).
+- **Menu key map** = `GFxUI.KeyMap` (A Enter, B Escape, Start F3, Back F4, LB/RB PgUp/PgDn, LT/RT Home/End).
+- **Start screen:** `ShouldShowStartScreen` is true only until Press START (`ShowDeviceSelectionUI`).
+- **`ProfileIsReady` callback** gates Campaign / Escalation / Settings.
+- **Frontend scenes:**
+  - which levels sit under each screen (UI_FrontEnd_m + capture_VIG, UI_CharacterCustomization_m);
+  - their matinees, remote events (`StartFireworks`) and cameras (CameraActor_6585 FOV 45, Orbiter 393.55 s;
+    CameraActor_2082 FOV 70).
+- **Profile settings:** fields and defaults (FX / Dialogue / Music 80, Subtitles off, Vibration on, Scheme A, Invert ×4
+  off, Sensitivity 30, Gamma 50).
+- **XP:** the `LevelTable` (500 … 355000) and the offline XP = 0 behaviour.
+- **Characters:**
+  - specialty providers;
+  - the four `*_PCD_MP` presets as the fresh profile's characters; slot unlocks at 5 / 10;
+  - the selection flow (WaitingOnGameStart → Choose Character → SelectCharacter → pre-game).
+- **HUD (Hud_GFX):**
+  - TnHUD ownership and A8 visibility;
+  - TnDeathMessage templates and colours;
+  - ShowScores scoreboard with focus;
+  - EndGameStats data bindings.
+- **Challenges:** 121 authored providers.
+- **Movie audio:** the intro movies' own soundtracks.
+
+**HIGH:**
+- the matinee evaluation (UE3 interp curves, RelativeToInitial, hard attachment);
+- the Flash 8 runtime additions:
+  - mouse button semantics, `TextField.variable`;
+  - parent-before-children frame-script order;
+  - blend modes over the backdrop;
+- the movie track layout (front bed / surrounds / LFE / five language centres);
+- the loading-screen behaviour (presents through the load, closes when the world is loaded).
+
+**PC ADAPTATION:**
+- the default `WIN` identity (`WFC_PLATFORM=XBOX360` for the console presentation);
+- Space as Start on the console presentation; Tab as ShowScores;
+- borderless fullscreen;
+- `wfc_input.ini` binding overrides;
+- the local identity fallback (`[Identity]` / `WFC_PLAYERNAME` / "Player").
+
+**PARTIAL:**
+- **Scene presentation in this tree:** interim legacy shading. Rendering's full path is integrated via detection
+  (merge preview verified).
+- **Movie audio:** language track 5 = INT.
+- **Blend modes:** per item, not group-composited.
+- **Settings without runtime owners:** volumes, camera, gamma, texture quality.
+- **Character customization edits:** not persisted.
+- **Campaign / Escalation:** the menus work; the content is out of scope; ESC maps are not exported.
+- **Loading:** one 1.9–2.1 s step (the world.glb parse) still blocks presentation.
+
+**PROVISIONAL:**
+- `SetWeaponCrosshair(2)` for the IonBlaster;
+- intro skip on A / Start / B.
+
+**SERVICE DEPENDENT (empty, never fabricated):** Accounts (Demonware), Leaderboards / challenge progress (stats
+archive), Friends, Find Match.
+
+**UNKNOWN:**
+- the Bink language-track selection;
+- the native crosshair mapping;
+- the provider column header strings;
+- the region / `$version` digits.
+
+**PC EXTENSION / FUTURE:** FOV, refresh rate, rebinding UI, mouse sensitivity, quality presets. None of them are in the
+original menus, and none have been added to them.
+
 ## FRONTEND PASS 2 — THE SHIPPED SCALEFORM MOVIES RUN THE FLOW (2026-10-03, agents/frontend)
 Full tables: `docs/FRONTEND.md`. This pass supersedes the pass-1 PARTIAL "no GFx presentation".
 

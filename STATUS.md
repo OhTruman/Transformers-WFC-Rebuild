@@ -164,6 +164,42 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 6. Gorge is shown disabled.
 7. A long session: private memory should plateau (about 2.8 GB in the lobby, 3.5 GB in a match).
 
+## FRONTEND PASS 3 (2026-10-04, branch `agents/frontend`): PC build presentation, live scenes, HUD, settings, selection
+Details, screen classification and handoffs: `docs/FRONTEND.md`. Based on integration/milestone-05 (fast-forwarded with
+the user's approval).
+
+**Playtest issues addressed:**
+- **Movie audio:** the intro movies play with sound.
+- **Keyboard / mouse:**
+  - Enter / Escape / arrows drive every menu, and the mouse clicks the original buttons;
+  - the PC SKU has no Press START gate, and the console presentation accepts Space as Start;
+  - controller unchanged.
+- **Back:** the "Back returns to Press START" bug is fixed (recovered `ShouldShowStartScreen` rule).
+- **Dead buttons:** Settings, Escalation and Campaign open (`ProfileIsReady` callback).
+- **Black backgrounds:**
+  - the title renders over the UI_FrontEnd_m scene with the authored camera loop, and the lobbies over the
+    customization room;
+  - the full Rendering presentation is ready on merge (verified in a merge preview);
+  - Settings / pause backdrops now tint the scene (blend modes) instead of covering it in cyan.
+- **Loading:** animates through the whole load (worst frozen step 23.4 s → ~2 s), then the match.
+- **Player name:** shown in the lobbies (variable-bound text), from a local identity.
+- **Settings:** functional; the original values persist; resolution / fullscreen / VSync apply.
+- **Character selection:** "Choose Character" with the four class presets from the roster package; the selection
+  reaches the flow.
+- **HUD:** the original Hud_GFX in matches (health, ammo, crosshair, score, clock, kill feed, announcements), plus the
+  scoreboard (Tab / Back) and the results screen with real data.
+
+**Validation:**
+- `wfc_frontend_tests` 59/0.
+- Keyboard and mouse paths, and a screen audit of every main-menu and lobby destination, with screenshots.
+- Soak: 3 full cycles (frontend scene → lobbies → private TDM → loading → Choose Character → HUD, scoreboard, kills → results → lobby → frontend), no errors. Memory loaded 2,443 / 2,393 / 2,412 MB, after return 2,320 / 2,296 / 2,285 MB (flat). Loading presented 171–175 frames per load; the longest frozen step is 1.76 s.
+
+**Not yet (handoffs in docs/FRONTEND.md §12):**
+- Gameplay spawning the selected chassis; owners for the volume / camera / gamma settings;
+- matinee visibility and emitter toggles for the scenes; the lobby preview pawn;
+- XP / point events; kill-feed weapon icons (damage type);
+- persistence of character customization.
+
 ## FRONTEND PASS 2 (2026-10-03, branch `agents/frontend`) — original Scaleform frontend, private match, return
 Details and handoffs: `docs/FRONTEND.md`.
 
