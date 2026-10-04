@@ -430,6 +430,12 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
     if (audio_) audio_->tick(dt);   // UI sounds of in-match movies (pause menu); match audio is the World's
 }
 
+void FrontendRuntime::updateLoading(float dt) {
+    platform::InputFrame none;
+    updateMoviePlayer(dt, none);
+    if (presenter_) presenter_->advanceLoading(dt);
+}
+
 void FrontendRuntime::draw(int w, int h) {
     if (!presenter_) return;
     const uint8_t* px = nullptr;

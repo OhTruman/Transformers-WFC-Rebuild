@@ -1,4 +1,5 @@
 #include "game/World.h"
+#include "core/LoadYield.h"
 #include "game/DamageTarget.h"
 #include "render/Renderer.h"
 #include "render/Camera.h"
@@ -75,6 +76,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     const std::string root = assetRoot();
     render::MeshData mapMesh;
     renderer.loadMapRenderData(mapName_);   // original-data shader path (if generated)
+    core::loadYield("World: map render data");   // [frontend] the loading screen presents between load steps
     // The match's authored rule classes gate rule-dependent presentation (objective bases, Conquest totems,
     // objective-factory effects) exactly as GameInfo.HasRule gates the world state. [integration] Gameplay's
     // match mode now supplies the rules Rendering's interim WFC_GAMERULES stood in for; select the mode with
@@ -82,8 +84,10 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     renderer.setActiveGameRules(gameRulesForMode(matchMode_));
 
     bool okMap = assets::loadGlb(root + "/Maps/" + mapName_ + "/world.glb", mapMesh);
+    core::loadYield("World: world.glb");
     bool okRobot = assets::loadSkinnedGlb(root + "/Characters/Optimus/robot.glb", robotModel_);
     bool okVeh = assets::loadSkinnedGlb(root + "/Characters/Optimus/vehicle.glb", vehicleModel_);
+    core::loadYield("World: character models");
     if (!okMap || !okRobot || !okVeh) return false;
 
     // Resolve base-colour textures (decode PNG -> upload GL texture), cached by URI.
@@ -98,6 +102,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         if (platform::decodeImage(uri, img)) { th = renderer.uploadTexture(img); ++loaded; }
         else ++failed;
         texCache[uri] = th;
+        core::loadYield("World: texture");
         return th;
     };
     auto resolveTextures = [&](std::vector<render::Material>& mats) {
@@ -130,9 +135,12 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     LOG_INFO("lightmaps: %d/%zu submeshes bound to atlases", lmBound, mapMesh.subs.size());
 
     mapMesh_ = renderer.uploadMesh(mapMesh);
+    core::loadYield("World: map mesh upload");
     fx_.load(renderer, root + "/../content/");
+    core::loadYield("World: effects");
     fx_.loadMeshes(renderer, root + "/../content/");
     vehicleFx_.load(renderer, root + "/../content/");
+    core::loadYield("World: effect meshes");
     player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
     // Ion Blaster: animated skeletal mesh held at the robot's primary weapon socket (falls back
@@ -204,9 +212,11 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         }
         colActors_.push_back(a);
     }
+    core::loadYield("World: collision meshes");
     if (!colMesh.empty()) {
         splitMovers(colMesh, pawnStatic, pawnMovers);
         collision_.build(pawnStatic);
+        core::loadYield("World: movement collision");
         if (assets::loadGlb(mapDir + "collision_weapon.glb", weaponColMesh)) {
             splitMovers(weaponColMesh, weaponStatic, weaponMovers);
             weaponCollision_.build(weaponStatic);
@@ -250,6 +260,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
 
     // Authored Streets pickup factories and destructibles (AssetTools 7a69756). Their meshes, effects and beams are
     // presented by the renderer from the map data; graybox scaffold pickups only with WFC_GRAYBOXPICKUPS.
+    core::loadYield("World: spawns");
     actors_.clear();
     loadPickupFactories(root + "/Maps/" + mapName_ + "/gameplay.json");
     loadDestructibles(root + "/Maps/" + mapName_ + "/physics.json", root + "/../content/");

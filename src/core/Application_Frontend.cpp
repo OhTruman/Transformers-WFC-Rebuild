@@ -2,6 +2,7 @@
 // The flow itself (levels, lobbies, URLs, UI controller) is src/frontend/GameFlow; this file only owns the
 // process loop: frontend frames, loading the match world the flow launches, and releasing it on return.
 #include "core/Application.h"
+#include "core/LoadYield.h"
 #include "core/Log.h"
 #include "core/Time.h"
 #include "frontend/FlowTrace.h"
@@ -211,7 +212,22 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     LOG_INFO("FLOW loading match world: map dir %s, mode %s", m.map->runtimeDir.c_str(), m.modeTag.c_str());
     double t0 = nowSeconds();
     g_census.begin();
+    // The loading screen keeps presenting during the synchronous load (core::loadYield): window messages, the
+    // LoadScreen_GFX animation and the TF_LoadingScreen underlay, one frame per yield.
+    core::resetLoadYieldStats();
+    core::setLoadYield([this](double dt) {
+        platform::InputFrame in;
+        window_->pump(in);   // a close request stays pending and ends the frontend loop after the load
+        frontend_->updateLoading((float)std::min(dt, 0.1));
+        // Validation: WFC_LOADSHOTS=<prefix> captures loading frames 10 / 60 / 120 from inside the load.
+        static const char* shots = std::getenv("WFC_LOADSHOTS");
+        static int n = 0;
+        if (shots && (++n == 10 || n == 60 || n == 120)) pendingShot_ = std::string(shots) + std::to_string(n) + ".bmp";
+        drawFrontendFrame();
+    });
+    struct YieldGuard { ~YieldGuard() { core::setLoadYield(nullptr); } } yieldGuard;   // also on the failure returns
     world_.load(*renderer_);
+    core::loadYield("Application.loadMatch: world loaded");
     if (!world_.usingSlice()) { LOG_WARN("FLOW match world failed to load (graybox fallback)"); return false; }
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
     // Systems level-audio contract: no hard-wired slice audio; the selected map's audio.
@@ -222,6 +238,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
                                                       {"levelCues", std::to_string(as.levelCues)}, {"pcmMB", frontend::FlowTrace::num(as.pcmMB)}});
     }
     world_.loadMapAudio(m.map->runtimeDir);
+    core::loadYield("Application.loadMatch: map audio loaded");
     {   // [integration] soak evidence: Systems audio state with the selected map loaded
         const auto as = world_.audioState();
         frontend::FlowTrace::emit("audio.loaded", {{"level", as.level}, {"instances", std::to_string(as.instances)}, {"voices", std::to_string(as.voices)},
@@ -259,8 +276,12 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
         matchClock_ = 0.0f; lastLoggedRemaining_ = -1; deathAt_.clear();
     }
     gameMode_.begin(world_);
+    core::setLoadYield(nullptr);
+    const core::LoadYieldStats ys = core::loadYieldStats();
     frontend::FlowTrace::emit("match.loaded", {{"map", m.map->runtimeDir}, {"mode", m.modeTag},
-                                               {"seconds", frontend::FlowTrace::num(nowSeconds() - t0)}, {"privateMB", processMemoryMB()}});
+                                               {"seconds", frontend::FlowTrace::num(nowSeconds() - t0)}, {"privateMB", processMemoryMB()},
+                                               {"loadingFrames", std::to_string(ys.frames)},
+                                               {"maxFrameGapMs", frontend::FlowTrace::num(ys.maxGapMs)}, {"maxGapAt", ys.maxGapAt}});
     return true;
 }
 

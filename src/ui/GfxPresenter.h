@@ -32,6 +32,10 @@ public:
     float loadingSeconds() const { return loadingTime_; }
     void ownedGl(GlCensus::Owned& o) const { gl_.ownedNames(o); }
     bool drawsCursor() const override { return cursor_ != nullptr; }
+    void advanceLoading(float dt) override {
+        if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
+        if (cursor_) cursor_->advance(dt);
+    }
     // Automation (clickclip:): the window position of a clip's centre in the focused movie.
     bool clipWindowCenter(const std::string& path, int& x, int& y);
 

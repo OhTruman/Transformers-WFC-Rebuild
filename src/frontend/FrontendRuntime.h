@@ -51,6 +51,8 @@ public:
     virtual void injectKey(int code, bool down) { (void)code; (void)down; }
     // The UI draws its own pointer (Cursor_GFX); the OS cursor is hidden over the window.
     virtual bool drawsCursor() const { return false; }
+    // During a synchronous map load (core::loadYield): only the loading movie animates.
+    virtual void advanceLoading(float dt) { (void)dt; }
     // This frame's full-screen movie frame (nullptr = none): over the GFx movies (SeqAct_MoviePlayer) or under them
     // (the loading Bink under LoadScreen_GFX).
     virtual void setVideoFrame(const uint8_t* rgba, int w, int h, uint64_t serial, bool over) {
@@ -96,6 +98,9 @@ public:
     void draw(int w, int h);
     // In-match per-frame hook (pause / end-game movies, script driver, UI events).
     void updateInMatch(const platform::InputFrame& in, float dt);
+    // Inside a synchronous map load (core::loadYield): the loading movie and its Bink underlay keep animating; the
+    // flow, the script driver and input are not processed.
+    void updateLoading(float dt);
 
     GameFlow& flow() { return flow_; }
     void setAudio(IFrontendAudio* a) { audio_ = a; }
