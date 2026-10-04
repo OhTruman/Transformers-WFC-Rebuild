@@ -56,6 +56,7 @@ struct MatchValues {
     int score = 0, kills = 0, deaths = 0;
     bool dead = false;
     float timeToRespawn = -1.0f;   // <PlayerOwner:TimeToRespawn>
+    std::string gameOverMessage;   // <CurrentGame:GameOverMessage> ("Your team won" / "Your team lost" / "Tie game")
 };
 
 struct MatchLaunch {

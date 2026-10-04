@@ -17,6 +17,7 @@
 #include "frontend/Catalog.h"
 #include "frontend/DataStores.h"
 #include "frontend/FrontendScene.h"
+#include "frontend/Hud.h"
 #include "frontend/GameFlow.h"
 #include "platform/Input.h"
 #include "platform/Movie.h"
@@ -54,6 +55,9 @@ public:
     virtual bool drawsCursor() const { return false; }
     // During a synchronous map load (core::loadYield): only the loading movie animates.
     virtual void advanceLoading(float dt) { (void)dt; }
+    // The in-match HUD movie (TnHUD.HudMovie): open for the match, shown per UI state; never takes key focus.
+    virtual void setHud(bool open, bool visible) { (void)open; (void)visible; }
+    virtual void hudCall(const std::string& fn, const std::vector<BridgeValue>& args) { (void)fn; (void)args; }
     // This frame's full-screen movie frame (nullptr = none): over the GFx movies (SeqAct_MoviePlayer) or under them
     // (the loading Bink under LoadScreen_GFX).
     virtual void setVideoFrame(const uint8_t* rgba, int w, int h, uint64_t serial, bool over) {
@@ -95,6 +99,7 @@ public:
     // The live level under the menus (Rendering draws it; without a renderer the menus sit on black).
     void setSceneRenderer(IFrontendSceneRenderer* r) { sceneRenderer_ = r; }
     const FrontendScene& scene() const { return scene_; }
+    HudController& hud() { return hud_; }
     // Full-screen movie decoding (platform). Without one, each movie reports Stopped at once.
     void setMoviePlayerFactory(std::function<platform::IMoviePlayer*()> f) { movieFactory_ = std::move(f); }
     // One frontend frame (frontend levels and the loading screen).
@@ -140,6 +145,7 @@ private:
     uint32_t prevUi_ = 0;
     void updateScene(float dt);
     FrontendScene scene_;
+    HudController hud_;
     IFrontendSceneRenderer* sceneRenderer_ = nullptr;
     bool sceneDrawable_ = false;
     std::string sceneLevel_;

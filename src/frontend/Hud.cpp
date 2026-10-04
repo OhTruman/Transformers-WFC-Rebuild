@@ -1,0 +1,127 @@
+#include "frontend/Hud.h"
+#include "frontend/Catalog.h"
+#include "frontend/FlowTrace.h"
+#include "frontend/FrontendRuntime.h"
+
+#include <cmath>
+
+namespace frontend {
+
+namespace {
+// TnMessageTextColors [RE A2, CONFIRMED].
+const char* kLocal = "#FFFFFF";
+const char* kTeammate = "#50B5D5";
+const char* kEnemy = "#F03C3C";
+const char* kNeutral = "#FF9333";
+
+std::string font(const char* color, const std::string& text) {
+    if (text.empty()) return "";
+    return std::string("<font color='") + color + "'>" + text + "</font>";
+}
+
+std::string escape(const std::string& s) {
+    std::string o;
+    for (char c : s) o += c == '<' ? "&lt;" : c == '>' ? "&gt;" : c == '&' ? "&amp;" : std::string(1, c);
+    return o;
+}
+} // namespace
+
+void HudController::reset() {
+    sentValid_ = false;
+    wasOpen_ = wasVisible_ = wasSpectating_ = false;
+    kills_.clear();
+    announcements_.clear();
+    rewards_.clear();
+}
+
+std::string HudController::killMessage(const Catalog& cat, const HudKill& k, int localTeam) {
+    // TnDeathMessage.GetColoredString: the damage type's DeathString (Suicide for suicides), `k = killer, `o = victim;
+    // names coloured local / teammate / enemy, the remaining words neutral; bracket tokens stay for the movie's image
+    // substitutions. Unknown damage type -> the base [TnDamageType] template.
+    std::string section = k.damageType.empty() ? "TnDamageType" : k.damageType;
+    std::string tmpl = cat.localize("TransGame", section, k.suicide ? "Suicide" : "DeathString");
+    if (tmpl.empty()) tmpl = cat.localize("TransGame", "TnDamageType", k.suicide ? "Suicide" : "DeathString");
+    auto colorOf = [&](bool local, int team) {
+        if (local) return kLocal;
+        return (team >= 0 && team == localTeam) ? kTeammate : kEnemy;
+    };
+    std::string out, words;
+    auto flushWords = [&]() { out += font(kNeutral, escape(words)); words.clear(); };
+    for (size_t i = 0; i < tmpl.size(); ++i) {
+        if (tmpl[i] == '`' && i + 1 < tmpl.size() && (tmpl[i + 1] == 'k' || tmpl[i + 1] == 'o')) {
+            flushWords();
+            bool killer = tmpl[i + 1] == 'k';
+            out += killer ? font(colorOf(k.killerLocal, k.killerTeam), escape(k.killer))
+                          : font(colorOf(k.victimLocal, k.victimTeam), escape(k.victim));
+            ++i;
+            continue;
+        }
+        if (tmpl[i] == '[') {   // image token: outside the font runs
+            flushWords();
+            size_t e = tmpl.find(']', i);
+            if (e == std::string::npos) e = tmpl.size() - 1;
+            out += tmpl.substr(i, e - i + 1);
+            i = e;
+            continue;
+        }
+        words += tmpl[i];
+    }
+    flushWords();
+    return out;
+}
+
+void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bool visible) {
+    if (!p) return;
+    if (open != wasOpen_) {
+        p->setHud(open, open && visible);
+        wasOpen_ = open;
+        wasVisible_ = open && visible;
+        sentValid_ = false;
+        FlowTrace::emit("hud.open", {{"open", FlowTrace::boolean(open)}});
+        if (!open) { kills_.clear(); announcements_.clear(); rewards_.clear(); return; }
+    }
+    if (!open) return;
+    if ((open && visible) != wasVisible_) {
+        p->setHud(true, visible);
+        wasVisible_ = visible;
+        FlowTrace::emit("hud.visible", {{"visible", FlowTrace::boolean(visible)}});
+    }
+    auto call = [&](const char* fn, std::vector<BridgeValue> args) { p->hudCall(std::string("_global.") + fn, args); };
+    const HudFrame& f = frame_;
+    if (f.valid) {
+        if (!sentValid_) {
+            // A fresh movie: crosshair and the form's widgets. SetWeaponCrosshair's type per weapon is native and
+            // UNKNOWN; IonBlaster -> 2 follows the crosshair symbol names [PROVISIONAL].
+            call("ShowCrosshair", {true});
+            call("SetWeaponCrosshair", {f.weapon == "IonBlaster" ? 2 : 0});
+        }
+        if (!sentValid_ || f.fullSegments != sent_.fullSegments || std::fabs(f.currentSegment - sent_.currentSegment) > 1e-3 ||
+            f.totalSegments != sent_.totalSegments)
+            call("NotifySegmentedHealthChanged", {f.fullSegments, f.currentSegment, f.totalSegments});
+        if (!sentValid_ || std::fabs(f.overshield - sent_.overshield) > 1e-3) call("NotifyOverShieldChanged", {f.overshield});
+        if (!sentValid_ || f.weapon != sent_.weapon) call("NotifyCurrentWeaponChanged", {f.weapon});
+        if (!sentValid_ || f.clip != sent_.clip || f.clipCapacity != sent_.clipCapacity)
+            call("NotifyWeaponClipAmmoChanged", {f.clip, f.clipCapacity});
+        if (!sentValid_ || f.reserve != sent_.reserve || f.reserveCapacity != sent_.reserveCapacity)
+            call("NotifyWeaponReserveAmmoChanged", {f.reserve, f.reserveCapacity});
+        if (!sentValid_ || f.vehicleForm != sent_.vehicleForm) call("NotifyCurrentFormChanged", {f.vehicleForm ? 1 : 0});
+        if (!sentValid_ || f.spectating != sent_.spectating) {
+            call("NotifySpectating", {f.spectating});
+            call("GameMessageSpectatorMode", {f.spectating});   // the kill feed moves up 160 px while spectating
+        }
+        sent_ = f;
+        sentValid_ = true;
+    }
+    for (const PendingKill& k : kills_) {
+        std::string html = killMessage(cat, k.k, k.localTeam);
+        call("GameMessage", {html});
+        FlowTrace::emit("hud.killFeed", {{"html", html}});
+    }
+    kills_.clear();
+    for (const std::string& a : announcements_) { call("GameAnnouncement", {a}); FlowTrace::emit("hud.announcement", {{"text", a}}); }
+    announcements_.clear();
+    for (const std::string& r : rewards_) { call("RewardAnnouncement", {r}); FlowTrace::emit("hud.reward", {{"text", r}}); }
+    rewards_.clear();
+}
+
+} // namespace frontend

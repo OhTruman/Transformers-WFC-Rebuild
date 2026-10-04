@@ -201,6 +201,25 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     if (fn == "Debug.ShouldDisplayBuildInfo") return BridgeValue(false);
     if (fn == "Debug.GetBuildInfo") return BridgeValue(std::string());
     if (fn == "Customize.IsPrimeModeAvailable") return BridgeValue(false);
+    // TnXpManager (via TnCharacterScriptBinding): XP lives in the online stats archive; without a stats interface the
+    // original returns 0 earned [CONFIRMED script]. Levels from Default__TnXpManager.LevelTable [CONFIRMED authored].
+    // No XP transactions are produced in the rebuild yet, so "last match" is 0 as well [PARTIAL].
+    {
+        static const double kLevelTable[] = {500, 1500, 3000, 5000, 7500, 11000, 15500, 21000, 27500, 35000, 44000, 54500, 66500,
+                                             80000, 95000, 112000, 131000, 152000, 175000, 200000, 227000, 256000, 287000, 320000, 355000};
+        const int n = (int)(sizeof kLevelTable / sizeof kLevelTable[0]);
+        if (fn == "Customize.GetXpEarnedForSpecialty" || fn == "Customize.GetXpEarnedForSpecialtyLastMatch") return BridgeValue(0);
+        if (fn == "Customize.GetLevelForSpecialty") {
+            double xp = 0;
+            for (int i = 0; i < n; ++i) if (xp < kLevelTable[i]) return BridgeValue(i);
+            return BridgeValue(n);
+        }
+        if (fn == "Customize.GetXpNeededForLevel") {
+            int level = std::atoi(arg(0).c_str());
+            if (level > n) return BridgeValue(-1);   // kLevelTooHigh
+            return BridgeValue(level == 0 ? 0.0 : kLevelTable[level - 1]);
+        }
+    }
     if (fn == "Console.SaveProfileSettings" || fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
     return flow_.call(fn, args);
 }
@@ -469,6 +488,10 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
     if (presenter_) presenter_->update(flow_, in, dt);
     script_.update(flow_, dt);
     if (audio_) audio_->tick(dt);   // UI sounds of in-match movies (pause menu); match audio is the World's
+    // TnHUD: the HUD movie exists for the match; visible in UI states InGame / Spectating only (RE A8).
+    bool inMatch = flow_.level() == LevelKind::Match && !flow_.loading().active;
+    UIState st = flow_.ui().state();
+    hud_.update(presenter_.get(), catalog_, inMatch, st == UIState::InGame || st == UIState::Spectating);
 }
 
 void FrontendRuntime::updateLoading(float dt) {

@@ -38,6 +38,29 @@ gfx::Player* GfxPresenter::focusPlayer() {
     return movies_.empty() ? nullptr : &movies_.back().movie->player();
 }
 
+void GfxPresenter::setHud(bool open, bool visible) {
+    if (!open) {
+        if (hud_) { rt_.dataStores().forgetMovie(hud_->object()); shapesStale_ = true; }
+        hud_.reset(); hudVisible_ = false; return;
+    }
+    if (!hud_) {
+        hud_ = std::make_unique<GfxMovie>();
+        bool ok = hud_->open(lib_, &rt_.catalog(), frontend::HudController::kMovie,
+                             [this](GfxMovie& mv, const std::string& fn, Args& a) { return bridge(mv, fn, a); },
+                             [this](GfxMovie& mv, const std::string& c, const std::string& a) { fsCommand(mv, c, a); });
+        frontend::FlowTrace::emit("gfx.movie", {{"movie", frontend::HudController::kMovie}, {"opened", frontend::FlowTrace::boolean(ok)}});
+        if (!ok) { hud_.reset(); return; }
+    }
+    hudVisible_ = visible;
+}
+
+void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
+    if (!hud_) return;
+    Args a;
+    for (const frontend::BridgeValue& b : args) a.push_back(toValue(b));
+    hud_->invoke(fn, a);
+}
+
 bool GfxPresenter::clipWindowCenter(const std::string& path, int& x, int& y) {
     gfx::Player* p = focusPlayer();
     if (!p) return false;
@@ -130,6 +153,7 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
             rt_.dataStores().forgetMovie(movies_[i].object);
             frontend::FlowTrace::emit("gfx.movieClosed", {{"movie", movies_[i].object}});
             movies_.erase(movies_.begin() + (long)i);
+            shapesStale_ = true;
         }
     }
     for (const std::string& o : want) {
@@ -141,6 +165,7 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
     const frontend::LoadingScreen& L = flow.loading();
     if (L.active && !L.gfxMovie.empty()) {
         if (!loading_ || loadingUrl_ != L.url) {
+            if (loading_) shapesStale_ = true;
             loading_ = std::make_unique<GfxMovie>();
             loadingUrl_ = L.url;
             loadingTime_ = 0.0f;
@@ -155,6 +180,7 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
         }
     } else if (loading_) {
         loading_.reset();
+        shapesStale_ = true;
         loadingUrl_.clear();
     }
 }
@@ -186,6 +212,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     deliverKeys(in);
     deliverMouse(in);
     if (cursor_) cursor_->advance(dt);
+    if (hud_) hud_->advance(dt);
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
     std::vector<std::string> objs;
@@ -193,20 +220,23 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     for (const std::string& o : objs)
         for (Open& op : movies_) if (op.object == o) { op.movie->advance(dt); break; }
     // Data-store change callbacks (HmWidget.updateDSValue(markup, value) by target path).
-    for (const auto& c : rt_.dataStores().poll())
+    for (const auto& c : rt_.dataStores().poll()) {
+        if (hud_ && hud_->object() == c.movie) { hud_->invoke(c.callback, {Value(c.markup), Value(c.value)}); continue; }
         for (Open& op : movies_)
             if (op.object == c.movie) {
                 Value r = op.movie->invoke(c.callback, {Value(c.markup), Value(c.value)});
                 frontend::FlowTrace::emit("gfx.dsCallback", {{"movie", c.movie}, {"markup", c.markup}, {"value", c.value}, {"callback", c.callback}});
                 (void)r;
             }
+    }
 }
 
 void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     (void)flow;
     if (!glReady_) { glReady_ = gl_.init(); if (!glReady_) return; }
     viewW_ = w; viewH_ = h;
-    if (movies_.empty() && !loading_ && !video_) return;
+    if (shapesStale_) { gl_.forgetShapes(); shapesStale_ = false; }
+    if (movies_.empty() && !loading_ && !video_ && !(hud_ && hudVisible_)) return;
     gl_.begin(w, h);
     if (video_ && !videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     auto drawMovie = [&](GfxMovie& m) {
@@ -218,7 +248,10 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     static const bool emptyLayer = std::getenv("WFC_GFX_EMPTY") != nullptr;   // diagnostics: composite only
     if (emptyLayer) {}
     else if (loading_) drawMovie(*loading_);
-    else for (Open& o : movies_) drawMovie(*o.movie);
+    else {
+        if (hud_ && hudVisible_) drawMovie(*hud_);
+        for (Open& o : movies_) drawMovie(*o.movie);
+    }
     if (video_ && videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     if (cursor_ && !videoOver_) drawMovie(*cursor_);
     gl_.end();

@@ -87,6 +87,22 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
     } else {
         LOG_WARN("FRONTEND catalog: no frontend_localization.json under %s", manifestRoot.c_str());
     }
+    // The shipped INT localization files themselves fill what the manifest does not carry (e.g. the HUD's
+    // TnDamageType* DeathString templates, TnMessageTextColors-coloured kill feed, game-type messages).
+    for (const char* file : {"TransGame", "UIText"}) {
+        std::ifstream f(extractedRoot + "/config/Coalesced_int/TransGame/Localization/INT/" + file + ".int");
+        std::string line, section;
+        while (std::getline(f, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.empty() || line[0] == ';') continue;
+            if (line[0] == '[') { section = line.substr(1, line.find(']') - 1); continue; }
+            size_t eq = line.find('=');
+            if (eq == std::string::npos || section.empty()) continue;
+            std::string v = line.substr(eq + 1);
+            if (v.size() >= 2 && v.front() == '"' && v.back() == '"') v = v.substr(1, v.size() - 2);
+            loc_.emplace(std::string(file) + "." + section + "." + line.substr(0, eq), v);   // manifest entries win
+        }
+    }
 
     // ---- maps ----
     assets::Json mj;

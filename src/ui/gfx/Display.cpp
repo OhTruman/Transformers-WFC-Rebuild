@@ -491,6 +491,15 @@ void Player::applyFrameTags(MovieClip* mc, int frame, bool runActions) {
         auto& done = initRun_[mc->def.get()];
         if (done.insert(sid).second) vm_->runBlock(ab.code, 0, ab.code->size(), mc);
     }
+    // The frame's DoActions are queued before the children it places queue theirs: the parent's frame script runs
+    // first (with its new children already instantiated), then the children's first frames - Flash 8 order (e.g.
+    // EndGameStats_GFX: each XP panel's script sets SpecialtyFriendlyName that its title child reads via _parent).
+    if (runActions) {
+        for (const ActionBlock& ab : fr.actions) {
+            auto code = ab.code;
+            queueAction([this, mc, code]() { if (!mc->removed) vm_->runBlock(code, 0, code->size(), mc); });
+        }
+    }
     for (const ControlTag& ct : fr.tags) {
         if (ct.kind == ControlTag::Place) placeObject(mc, ct.place, frame);
         else {
@@ -500,12 +509,6 @@ void Player::applyFrameTags(MovieClip* mc, int frame, bool runActions) {
                 graveyard.push_back(std::move(it->second));
                 mc->children.erase(it);
             }
-        }
-    }
-    if (runActions) {
-        for (const ActionBlock& ab : fr.actions) {
-            auto code = ab.code;
-            queueAction([this, mc, code]() { if (!mc->removed) vm_->runBlock(code, 0, code->size(), mc); });
         }
     }
 }

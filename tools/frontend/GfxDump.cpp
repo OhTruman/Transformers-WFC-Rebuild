@@ -47,7 +47,9 @@ int main(int argc, char** argv) {
             std::vector<std::string> sa;
             for (auto& v : a) sa.push_back(m.player().vm().toString(v));
             frontend::BridgeValue r = rt.bridge(m.object(), fn, sa);
-            std::printf("BRIDGE %s(%zu args) -> %s\n", fn.c_str(), sa.size(), r.str().c_str());
+            std::string as;
+            for (const std::string& x : sa) as += (as.empty() ? "" : ", ") + x;
+            std::printf("BRIDGE %s(%s) -> %s\n", fn.c_str(), as.c_str(), r.str().c_str());
             return toValue(r);
         },
         [](ui::GfxMovie&, const std::string& c, const std::string& a) { std::printf("FSCOMMAND %s %s\n", c.c_str(), a.c_str()); });

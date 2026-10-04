@@ -313,6 +313,8 @@ void Application::routeMatchToFrontend(float dt) {
         case game::MatchEvent::Type::MatchStarted:
             // InProgress.BeginState -> SendUIEventToControllers(3) (the character was selected at load, in PendingMatch).
             flow.onUIEvent((int)frontend::UIEvent::BeginGame);
+            // TnGameTypeMessage switch 0: HUD GameAnnouncement with the mode name [RE A5, CONFIRMED].
+            frontend_->hud().announce(frontend_->catalog().modeFriendlyName(match.settings().modeTag));
             frontend::FlowTrace::emit("match.started", {});
             break;
         case game::MatchEvent::Type::PlayerKilled:
@@ -327,6 +329,17 @@ void Application::routeMatchToFrontend(float dt) {
                 }
                 LOG_INFO("MATCH death player=%d pos=%.1f,%.1f,%.1f", e.player, dp.x, dp.y, dp.z);
                 deathAt_[e.player] = matchClock_;
+            }
+            {   // HUD kill feed (TnDeathMessage -> _global.GameMessage). The damage type is not in Gameplay's event yet:
+                // the base [TnDamageType] template is used [PARTIAL, Gameplay handoff].
+                frontend::HudKill k;
+                auto nameOf = [&](int p) { return p >= 0 && (size_t)p < match.players().size() ? match.players()[(size_t)p].name : std::string(); };
+                k.victim = nameOf(e.player); k.killer = nameOf(e.other);
+                k.victimTeam = teamOf(e.player); k.killerTeam = teamOf(e.other);
+                k.victimLocal = e.player == me; k.killerLocal = e.other == me;
+                k.suicide = e.text == "suicide" || e.other == e.player || e.other < 0;
+                k.environment = e.text == "environment";
+                frontend_->hud().addKill(k, teamOf(me));
             }
             if (e.player == me) { localDeadForUi_ = true; spectatingUi_ = false; localDeadTime_ = 0.0f; }
             break;
@@ -383,7 +396,27 @@ void Application::routeMatchToFrontend(float dt) {
     v.score = h.score; v.kills = h.kills; v.deaths = h.deaths;
     v.dead = !h.alive;
     v.timeToRespawn = h.timeToRespawn;
+    v.gameOverMessage = h.result;
     flow.setMatchValues(v);
+    // HUD movie values (TnHUD data observers), Gameplay authoritative.
+    frontend::HudFrame hf;
+    hf.valid = h.matchActive;
+    hf.alive = h.alive;
+    hf.totalSegments = h.segmentCount;
+    if (h.activeSegment >= h.segmentCount) { hf.fullSegments = h.segmentCount; hf.currentSegment = 1.0; }
+    else {
+        const auto& hp = world_.player().pawn().health();
+        float bottom = h.activeSegment > 0 ? hp.segmentTop(h.activeSegment - 1) : 0.0f, top = hp.segmentTop(h.activeSegment);
+        hf.fullSegments = h.activeSegment;
+        hf.currentSegment = top > bottom ? std::max(0.0f, std::min(1.0f, (h.health - bottom) / (top - bottom))) : 0.0;
+    }
+    hf.overshield = h.normalizedOverShield;
+    const auto& wpn = world_.player().pawn().weapon();
+    hf.clip = h.clipAmmo; hf.clipCapacity = wpn.magSize; hf.reserve = h.reserveAmmo; hf.reserveCapacity = wpn.reserveMax;
+    hf.weapon = "IonBlaster";   // the rebuild's only player weapon (Gameplay) - TnWeaponIonBlaster icon / crosshair
+    hf.vehicleForm = h.vehicleForm;
+    hf.spectating = spectatingUi_;
+    frontend_->hud().setFrame(hf);
 }
 
 void Application::driveLifecycleTest(float dt) {

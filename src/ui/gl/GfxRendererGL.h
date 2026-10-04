@@ -28,6 +28,9 @@ public:
     void drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial);
     bool ok() const { return ok_; }
     size_t cachedShapes() const { return shapes_.size(); }
+    // The tessellation cache is keyed by ShapeDef address: when a movie (and its definitions) is destroyed, a later
+    // allocation can reuse an address, so the cache is dropped (stale glyphs / an opaque vignette otherwise).
+    void forgetShapes() { shapes_.clear(); }
     size_t textures() const { return textures_.size(); }
     void ownedNames(GlCensus::Owned& o) const;   // GL objects of the UI renderer (kept across level travel)
 

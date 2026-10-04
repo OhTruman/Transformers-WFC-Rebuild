@@ -39,6 +39,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
         if (markup == "<PlayerOwner:TimeToRespawn>") return std::to_string((int)std::ceil(std::max(0.0f, mv.timeToRespawn)));
     }
     if (markup == "<CurrentGame:GameModeTag>" || markup == "<CurrentGame:MapCompatibilityTag>") return tag;
+    // TnVersusGameOverMessage -> GRI.SetGameOverMessage, read by EndGameStats_GFX [RE A5, CONFIRMED]; Gameplay's result.
+    if (markup == "<CurrentGame:GameOverMessage>") return flow_.matchValues().gameOverMessage;
     if (markup == "<CurrentGame:GameModeFriendlyName>") return tag.empty() ? "" : cat_.modeFriendlyName(tag);
     if (markup == "<CurrentGame:GameModeFriendlyDescription>") return tag.empty() ? "" : cat_.localize("TransGame", "TnOnlineGameSettings" + tag, "Description");
     if (markup == "<CurrentGame:GameModeFriendlyRules>") {
@@ -159,6 +161,15 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         for (const Playlist& p : cat_.playlists()) {
             if (!p.visibleInMenu) continue;
             c.rows.push_back({std::to_string(p.id), p.displayName, p.tag, "0"});
+            c.enabled.push_back(true);
+        }
+        return true;
+    }
+    if (markup == "<TnMenuItems:Specialties>") {
+        // TnDataProvider_Specialty providers, TransCustomization.ini order; names from TransGame.int [CONFIRMED].
+        c.columns = {"UniqueId", "FriendlyName"};
+        for (const char* id : {"Soldier", "Leader", "Scientist", "Scout"}) {
+            c.rows.push_back({id, cat_.localize("TransGame", std::string(id) + " TnDataProvider_Specialty", "FriendlyName")});
             c.enabled.push_back(true);
         }
         return true;

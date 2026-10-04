@@ -32,6 +32,8 @@ public:
     float loadingSeconds() const { return loadingTime_; }
     void ownedGl(GlCensus::Owned& o) const { gl_.ownedNames(o); }
     bool drawsCursor() const override { return cursor_ != nullptr; }
+    void setHud(bool open, bool visible) override;
+    void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
     void advanceLoading(float dt) override {
         if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
         if (cursor_) cursor_->advance(dt);
@@ -64,6 +66,9 @@ private:
     uint32_t prevUi_ = 0;
     // TnUIController.MouseCursorUI (Cursor_GFX, Depth 1000000): started by Initialize, always on top [CONFIRMED].
     std::unique_ptr<GfxMovie> cursor_;
+    std::unique_ptr<GfxMovie> hud_;           // TnHUD.HudMovie (Hud_GFX), under the UIController movies
+    bool hudVisible_ = false;
+    bool shapesStale_ = false;                // a movie was destroyed since the last draw
     int viewW_ = 1280, viewH_ = 720;          // last drawn window size (pointer -> stage mapping)
     bool prevMouseLeft_ = false;
     gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
