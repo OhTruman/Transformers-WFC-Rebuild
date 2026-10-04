@@ -16,6 +16,7 @@
 
 #include "frontend/Catalog.h"
 #include "frontend/DataStores.h"
+#include "frontend/Characters.h"
 #include "frontend/FrontendScene.h"
 #include "frontend/Hud.h"
 #include "frontend/GameFlow.h"
@@ -107,6 +108,7 @@ public:
     void setSceneRenderer(IFrontendSceneRenderer* r) { sceneRenderer_ = r; }
     const FrontendScene& scene() const { return scene_; }
     HudController& hud() { return hud_; }
+    const CharacterRoster& roster() const { return roster_; }
     // Full-screen movie decoding (platform). Without one, each movie reports Stopped at once.
     void setMoviePlayerFactory(std::function<platform::IMoviePlayer*()> f) { movieFactory_ = std::move(f); }
     // One frontend frame (frontend levels and the loading screen).
@@ -152,6 +154,8 @@ private:
     uint32_t prevUi_ = 0;
     void updateScene(float dt);
     FrontendScene scene_;
+    CharacterRoster roster_;
+    BridgeValue customize(const std::string& fn, const std::vector<std::string>& args);
     DisplayHooks display_;
     BridgeValue pcSettings(const std::string& fn, const std::vector<std::string>& args);
     HudController hud_;

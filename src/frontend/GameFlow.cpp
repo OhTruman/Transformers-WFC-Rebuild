@@ -487,6 +487,15 @@ void GameFlow::returnToGameLobby() {
     travel(u.toString(), true);
 }
 
+void GameFlow::selectCharacter(const SelectedCharacter& c) {
+    selected_ = c;
+    selected_.valid = true;
+    FlowTrace::emit("character.selected", {{"name", c.name}, {"type", std::to_string(c.type)}, {"specialty", c.specialty},
+                                           {"autobot", c.chassis[0]}, {"decepticon", c.chassis[1]}});
+    // In the match, the pre-game screen follows (OnCharacterSelected -> GameStartUI); spawn waits for the selection.
+    if (level_ == LevelKind::Match) characterSelected();
+}
+
 void GameFlow::quitToMainMenu() {
     // Game.QuitToMainMenu -> TnGameActionScriptBinding -> TnGame: ClientTravelToMap("UI_FrontEnd_m").
     if (level_ == LevelKind::Match) {

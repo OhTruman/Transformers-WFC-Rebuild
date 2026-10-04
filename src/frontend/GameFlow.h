@@ -117,6 +117,11 @@ public:
     void matchLoadFailed(const std::string& why);
     void onUIEvent(int code) { ui_.onUIEvent(code); }
     void characterSelected() { ui_.onCharacterSelected(false); }   // TnUIControllerMultiplayer.OnCharacterSelected
+    // TnPlayerController.SelectCharacter(name, type 0 custom / 1 iconic) -> PRI._SelectedCharacter; Gameplay spawns the
+    // chassis of the player's team from it (GetResolvedCharacterFaction = TeamNum).
+    struct SelectedCharacter { std::string name; int type = 0; std::string chassis[2]; std::string specialty; bool valid = false; };
+    void selectCharacter(const SelectedCharacter& c);
+    const SelectedCharacter& selectedCharacter() const { return selected_; }
     void showMenu();                                // TnPlayerController.ShowMenu (Escape / Start release)
     // [integration] Gameplay MatchOver -> 15 s -> TnGame.ReturnToGameLobby: ServerTravel to the game lobby
     // (UI_Lobby_m?...?MapId=<map>) [RE M05 blockers F4 / F6].
@@ -209,6 +214,7 @@ private:
     const GameSettings* currentSettings_ = nullptr;   // SettingsDataStore current (EditGameMode / PlayPrivateGame)
     MatchValues matchValues_;
     LocalProfile profile_;
+    SelectedCharacter selected_;
     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;

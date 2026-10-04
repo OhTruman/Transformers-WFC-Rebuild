@@ -169,6 +169,27 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         }
         return true;
     }
+    // TnMenuItems provider collections from the authored TnDataProvider objects (Catalog::providers), columns = every
+    // authored / localized field.
+    {
+        static const std::map<std::string, std::string> kKinds = {{"<TnMenuItems:Weapons>", "Weapon"}, {"<TnMenuItems:Abilities>", "Ability"},
+                                                                 {"<TnMenuItems:Skills>", "Skill"}, {"<TnMenuItems:Chassis>", "Chassis"},
+                                                                 {"<TnMenuItems:Killstreaks>", "Killstreak"}};
+        auto k = kKinds.find(markup);
+        if (k != kKinds.end()) {
+            const auto& list = cat_.providers(k->second);
+            for (const auto& p : list)
+                for (const auto& f : p.fields)
+                    if (std::find(c.columns.begin(), c.columns.end(), f.first) == c.columns.end()) c.columns.push_back(f.first);
+            for (const auto& p : list) {
+                std::vector<std::string> row;
+                for (const std::string& col : c.columns) row.push_back(p.get(col));
+                c.rows.push_back(row);
+                c.enabled.push_back(true);
+            }
+            return true;
+        }
+    }
     if (markup == "<TnMenuItems:Specialties>") {
         // TnDataProvider_Specialty providers, TransCustomization.ini order; names from TransGame.int [CONFIRMED].
         c.columns = {"UniqueId", "FriendlyName"};

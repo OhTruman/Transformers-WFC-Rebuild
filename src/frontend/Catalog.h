@@ -97,6 +97,11 @@ public:
 
     const std::vector<MapInfo>& maps() const { return maps_; }           // ini section order
     const std::vector<Playlist>& playlists() const { return playlists_; } // TnOnlinePlaylistManager.Playlists order
+    // TnDataProvider_<Kind> objects authored in the shipped config (TransCustomization.ini / TransWeapons.ini, file
+    // order) with their localized fields (TransGame.int, same section names): Weapon, Ability, Skill, Chassis,
+    // Specialty, Killstreak... Fields as authored (repeated keys joined with ',').
+    struct Provider { std::string name; std::vector<std::pair<std::string, std::string>> fields; std::string get(const std::string& k) const; };
+    const std::vector<Provider>& providers(const std::string& kind) const;
     const std::vector<GameModeInfo>& gameModes() const { return modes_; }
     const MapInfo* mapById(int id) const;
     const MapInfo* mapByFilename(const std::string& f) const;            // case-insensitive
@@ -124,6 +129,8 @@ public:
     std::string manifestRoot() const { return manifestRoot_; }
 
 private:
+    std::map<std::string, std::vector<Provider>> providers_;
+    void loadProviders(const std::string& extractedRoot);
     void loadSettingsDefaults(const std::string& manifestRoot);
     std::vector<MapInfo> maps_;
     std::vector<Playlist> playlists_;

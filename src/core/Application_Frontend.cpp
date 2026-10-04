@@ -227,7 +227,18 @@ void Application::runFrontend() {
         // character select -> PreGameCountdown during PendingMatch -> UI event 3 at InProgress. No character select screen
         // exists yet, so the default character is selected now (OnCharacterSelected, bMatchHasBegun false -> GameStartUI);
         // routeMatchToFrontend() sends UI event 3 when Gameplay's MatchStarted arrives.
-        flow.characterSelected();
+        // WaitingOnGameStart opens CustomTransformers_GFX ("Choose Character"); the player's Customize.SelectCharacter
+        // continues to the pre-game screen [RE MILESTONE05_PLAYTEST_RE section 7, CONFIRMED]. Automation (scripted
+        // frontend runs, the lifecycle driver) selects the first default character instead unless WFC_CHARSELECT=1.
+        bool automated = std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_FRONTEND_AUTOPLAY") || std::getenv("WFC_LIFECYCLE");
+        if (automated && !std::getenv("WFC_CHARSELECT")) {
+            frontend::GameFlow::SelectedCharacter sc;
+            if (!frontend_->roster().customCharacters().empty()) {
+                const auto& p = frontend_->roster().customCharacters().front();
+                sc.name = p.name; sc.specialty = p.specialty; sc.chassis[0] = p.chassis[0]; sc.chassis[1] = p.chassis[1];
+            }
+            flow.selectCharacter(sc);
+        }
         localDeadForUi_ = spectatingUi_ = false;
         localDeadTime_ = 0.0f;
         window_->setMouseCaptured(true);

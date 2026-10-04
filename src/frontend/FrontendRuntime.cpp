@@ -177,6 +177,7 @@ bool FrontendRuntime::init() {
     if (const char* s = std::getenv("WFC_FRONTEND_SCRIPT")) script_.load(s);
     else if (const char* a = std::getenv("WFC_FRONTEND_AUTOPLAY")) script_.load(ScriptDriver::autoplayScript(a));
     stores_ = std::make_unique<DataStores>(flow_, catalog_);
+    roster_.load(Catalog::defaultManifestRoot() + "/mp_content/roster_package.json");
     if (!scene_.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/scenes.json")) LOG_WARN("frontend: data/frontend/scenes.json missing (no scene cameras)");
     return flow_.init(catalog_, o);
 }
@@ -202,6 +203,7 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     if (fn == "Debug.GetBuildInfo") return BridgeValue(std::string());
     if (fn.rfind("PCSettings.", 0) == 0) return pcSettings(fn, args);
     if (fn == "Customize.IsPrimeModeAvailable") return BridgeValue(false);
+    if (fn.rfind("Customize.", 0) == 0) { BridgeValue r = customize(fn, args); if (r.kind != BridgeValue::Kind::Void || fn == "Customize.SelectCharacter" || fn == "Customize.CheckCustomCharacterDataLoaded") return r; }
     // TnXpManager (via TnCharacterScriptBinding): XP lives in the online stats archive; without a stats interface the
     // original returns 0 earned [CONFIRMED script]. Levels from Default__TnXpManager.LevelTable [CONFIRMED authored].
     // No XP transactions are produced in the rebuild yet, so "last match" is 0 as well [PARTIAL].
@@ -223,6 +225,46 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     }
     if (fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
     return flow_.call(fn, args);
+}
+
+BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<std::string>& args) {
+    // TnCharacterScriptBinding ("Customize.*") over the local characters (CharacterRoster: roster package presets).
+    // Custom mode (iconic mode = GameTeamStatus 2 / 4 or OnlyAllowIconicCharacters is not wired yet: PARTIAL).
+    auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
+    auto join = [](const std::vector<std::string>& v) { std::string o; for (const auto& s : v) o += (o.empty() ? "" : ",") + s; return o; };
+    const CharacterPreset* c = roster_.find(arg(0));
+    if (fn == "Customize.CheckCustomCharacterDataLoaded") return {};   // loaded (no TnLoadCustomCharactersStatusMessageBox)
+    if (fn == "Customize.GetCustomCharacters" || fn == "Customize.GetPlayableCharacters") {
+        std::vector<std::string> names;
+        for (const CharacterPreset& p : roster_.customCharacters()) names.push_back(p.name);
+        return BridgeValue(join(names));
+    }
+    if (fn == "Customize.GetCurrentCharacter") return BridgeValue(flow_.selectedCharacter().name);
+    // Default__TnCharacterCustomizationData.UnlockCharacterSlotLevels [5, 10] in the binding's "5,10," format.
+    if (fn == "Customize.GetCharacterSlotUnlockLevels") return BridgeValue(std::string("5,10,"));
+    // No XP progression offline (TnXpManager returns 0): nothing newly unlocked.
+    if (fn == "Customize.GetNewlyUnlockedSkills" || fn == "Customize.GetNewlyUnlockedAbilities") return BridgeValue(std::string());
+    if (fn == "Customize.IsChassisUnlocked") { const ChassisInfo* ci = roster_.chassis(arg(0)); return BridgeValue(ci && !ci->lockedChassis); }
+    if (fn == "Customize.SelectCharacter") {
+        GameFlow::SelectedCharacter s;
+        s.name = arg(0);
+        s.type = 0;
+        if (c) { s.chassis[0] = c->chassis[0]; s.chassis[1] = c->chassis[1]; s.specialty = c->specialty; }
+        flow_.selectCharacter(s);
+        return {};
+    }
+    if (!c) return {};
+    if (fn == "Customize.GetCharacterSpecialty") return BridgeValue(c->specialty);
+    if (fn == "Customize.GetCharacterFriendlyName") return BridgeValue(c->name);
+    if (fn == "Customize.GetCharacterChassis") return BridgeValue(c->chassis[0] + "," + c->chassis[1]);
+    if (fn == "Customize.GetCharacterWeaponTypes") return BridgeValue(join(c->weapons));
+    if (fn == "Customize.GetCharacterAbilities") return BridgeValue(join(c->abilities));
+    if (fn == "Customize.GetCharacterVehicleWeapon") return BridgeValue(c->vehicleWeapons.empty() ? std::string() : c->vehicleWeapons.front());
+    if (fn == "Customize.GetCharacterSkills") return BridgeValue(std::string());   // presets carry no skills
+    // The *_PCD_MP presets author black colours on palette 0 for both factions [CONFIRMED authored].
+    if (fn == "Customize.GetCharacterPrimaryColor" || fn == "Customize.GetCharacterSecondaryColor") return BridgeValue(0);
+    if (fn == "Customize.GetCharacterDecal") return BridgeValue(std::string());
+    return {};
 }
 
 BridgeValue FrontendRuntime::pcSettings(const std::string& fn, const std::vector<std::string>& args) {
