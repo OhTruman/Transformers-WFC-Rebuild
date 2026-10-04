@@ -813,7 +813,7 @@ void Application::runMapTraverse() {
     const game::CollisionWorld* col = world_.collision();
     if (!col) { LOG_WARN("MAPTRAVERSE: no collision"); return; }
     std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::ifstream f(root + "/Maps/" + world_.mapName() + "/navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) { LOG_WARN("MAPTRAVERSE: cannot read navigation.json"); return; }
@@ -852,7 +852,7 @@ void Application::runMapTraverse() {
     std::map<std::string, std::pair<std::string, std::string>> compRep;   // component -> (pawn rep, mesh)
     std::map<std::string, bool> compBlockCam;                             // component -> authored BlockCameras
     {
-        std::ifstream pf(root + "/Maps/MP_IAC_Streets/physics.json", std::ios::binary);
+        std::ifstream pf(root + "/Maps/" + world_.mapName() + "/physics.json", std::ios::binary);
         std::stringstream ps; ps << pf.rdbuf();
         assets::Json ph;
         if (assets::Json::parse(ps.str(), ph))
@@ -867,7 +867,7 @@ void Application::runMapTraverse() {
     game::CollisionWorld renderCol;
     {
         render::MeshData rm, rs;
-        assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", rm);
+        assets::loadGlb(root + "/Maps/" + world_.mapName() + "/world.glb", rm);
         std::vector<std::string> skip = world_.mapState().moverActorNames();
         for (const auto& v : world_.mapState().modeVisibleActors()) if (!v.visible) skip.push_back(v.actor);
         rs.positions = rm.positions;
@@ -1179,7 +1179,7 @@ void Application::runTransformStress() {
     const game::CollisionWorld* col = world_.collision();
     if (!col) return;
     std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::ifstream f(root + "/Maps/" + world_.mapName() + "/navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) return;
@@ -1193,7 +1193,7 @@ void Application::runTransformStress() {
     game::CollisionWorld bspCol;
     {
         render::MeshData cm, bm;
-        assets::loadGlb(root + "/Maps/MP_IAC_Streets/collision_pawn.glb", cm);
+        assets::loadGlb(root + "/Maps/" + world_.mapName() + "/collision_pawn.glb", cm);
         bm.positions = cm.positions;
         for (const render::SubMesh& sm : cm.subs)
             if (sm.nodeName.rfind("BSPCollision", 0) == 0)
@@ -1367,7 +1367,7 @@ void Application::runMatchTest() {
     {
         game::Match m;
         std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-        m.loadSpawnData(root + "/Maps/MP_IAC_Streets/gameplay.json");
+        m.loadSpawnData(root + "/Maps/" + world_.mapName() + "/gameplay.json");
         game::MatchSettings s = game::MatchSettings::forMode("TDM");
         s.timeLimit = 125;
         m.begin(s);
@@ -1384,7 +1384,7 @@ void Application::runMatchTest() {
     {
         game::Match m;
         std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-        m.loadSpawnData(root + "/Maps/MP_IAC_Streets/gameplay.json");
+        m.loadSpawnData(root + "/Maps/" + world_.mapName() + "/gameplay.json");
         m.begin(game::MatchSettings::forMode("DM"));
         int p0 = m.addPlayer("P0"), p1 = m.addPlayer("P1");
         float t = 0.0f; (void)t;
@@ -1419,7 +1419,7 @@ void Application::runCameraTest() {
     game::CollisionWorld renderCol;
     {
         render::MeshData rm, rs;
-        assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", rm);
+        assets::loadGlb(root + "/Maps/" + world_.mapName() + "/world.glb", rm);
         std::vector<std::string> skip = world_.mapState().moverActorNames();
         for (const auto& v : world_.mapState().modeVisibleActors()) if (!v.visible) skip.push_back(v.actor);
         rs.positions = rm.positions;
@@ -1429,7 +1429,7 @@ void Application::runCameraTest() {
         }
         renderCol.build(rs);
     }
-    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::ifstream f(root + "/Maps/" + world_.mapName() + "/navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) return;
@@ -1500,7 +1500,7 @@ void Application::runChaosTest() {
     const game::CollisionWorld* col = world_.collision();
     if (!col) return;
     std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::ifstream f(root + "/Maps/" + world_.mapName() + "/navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) return;
@@ -1514,7 +1514,7 @@ void Application::runChaosTest() {
     game::CollisionWorld bspCol;   // level shell (BSP) of the pawn collision: under it = under the map
     {
         render::MeshData cm, bm;
-        assets::loadGlb(root + "/Maps/MP_IAC_Streets/collision_pawn.glb", cm);
+        assets::loadGlb(root + "/Maps/" + world_.mapName() + "/collision_pawn.glb", cm);
         bm.positions = cm.positions;
         for (const render::SubMesh& sm : cm.subs)
             if (sm.nodeName.rfind("BSPCollision", 0) == 0)
