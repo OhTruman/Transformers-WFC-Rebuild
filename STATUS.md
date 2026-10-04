@@ -3,6 +3,210 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 06 (2026-10-04) — branch `integration/milestone-06` — first multi-map, audio-complete build
+
+**Executables:**
+- Release: `F:\Transformers Rebuild\Rebuild\build\release\bin\wfc_rebuild.exe`
+- Debug: `F:\Transformers Rebuild\Rebuild\build\bin\wfc_rebuild.exe`
+
+A plain launch cold-boots through the intro movies (with their own audio) into the shipped PC frontend. Direct boot
+(`WFC_BOOT=match`, `WFC_MAP=<map>`) and every harness are explicit debug options. Render data is per worktree:
+`tools\render\build_render_data.ps1 -Map <map>` for each map in `work\render` (all 10 cooked MP maps and the 5 UI
+levels were generated for this build).
+
+### Lane heads merged (fetched 2026-10-04; integration/milestone-05 1e14900 was the base)
+| lane | head | conflicts | resolution |
+|---|---|---|---|
+| agents/frontend | 9e67bf8 | none (based on M05) | PC frontend, 3D menu scenes, settings, character selection, Hud_GFX / scoreboard / results, load yields |
+| agents/gameplay | e258179 | World.cpp (draw), STATUS | Gameplay's dead / pre-spawn gating of weapon and vehicle FX inside the M04 sysprof scopes; the reticle push (M03 glue) kept, hidden while dead |
+| agents/systems | 0f293c7 | FIDELITY, STATUS | both kept; both M07 handoff patches applied (below) |
+| agents/rendering | 4215359 | WfcPipeline.cpp, Application.cpp, FIDELITY | Rendering's `yieldLoad()`; its `WFC_FRONTENDSCENE` diagnostic in `run()` before the frontend / `runMatch` split (Frontend's integrator notes) |
+| agents/experimental | bf53035 | — | validation only, not merged; its tools run from `git archive` exports in `work/` |
+| AssetTools | assettools/checkpoint 5dd9e62 (production map pipeline, 10 cooked maps) | consumed | read only |
+| RE | MILESTONE05 blockers, OVERNIGHT 2026-10-04 (HUD, no minimap) | consumed through the lanes | — |
+
+### Ownership resolutions
+- **Movie audio (two implementations):** Frontend 8b6466e decoded Bink audio in the frontend (Media Foundation →
+  WAV cache → one device voice); Systems M07 decodes and streams it (`MovieAudioPlayer`).
+  - By ownership Systems decodes and plays; the frontend only says when (first video frame / end / skip /
+    underlay release) through `IFrontendAudio::startMovieAudio / stopMovieAudio`.
+  - Removed: `frontend/MovieAudio.*`, the WAV cache, the prefetch thread and `IMoviePlayer::decodeAudio`. There is one
+    decoder.
+  - Kept: Frontend's per-thread COM / MF start-up and its `movie.audioStart` event (Experimental's gate).
+- **Match audio:** the Systems patch is applied in Gameplay's own event loop (`World::tickMatch`).
+  - MatchStarted → mode announcement, description and music (local team chooses the Optimus / Megatron voice);
+    GameNearlyComplete → final-stretch music; Time / Kills / Points-left → announcer switches 0–7; MatchEnded → end
+    music and the winning-team line.
+  - No second timer, score or state machine.
+- **In-match HUD:** Frontend runs Hud_GFX fed by `World::hudState` (health segments, overshield, ammo, team scores, clock,
+  kill feed, spectate / respawn, results); Rendering owns the Canvas markers. No minimap (RE: none shipped, CONFIRMED).
+- **Character selection → Gameplay:** in a frontend-launched match the local player starts unselected
+  (`Match::requireCharacterSelection`), so Gameplay's CheckReadySpawn waits for the CustomTransformers selection, which
+  reaches `Match::selectCharacter` (type, specialty, iconic chassis). Gameplay resolves the body (e.g. Scout / Autobots →
+  `Car2` Sideswipe; logged on `MATCH spawn ... chassis=`). **The drawn pawn is still Optimus**: only Optimus' pawn
+  resources load (Gameplay RECONSTRUCTION FALLBACK, needs ROBODEF / VEHDEF exports and per-chassis animation / vehicle
+  work).
+
+### Multi-map path (one generic path, no per-map code)
+| piece | was | now | check |
+|---|---|---|---|
+| Frontend selectability | runtime `render_index.json` (Streets only) | + AssetTools production index `manifests/maps/<map>/render_index_generic.json` | 8 TDM maps selectable; Escalation SV-only; Fortress / Havoc / Tranquillity disabled (not cooked) |
+| Gameplay KillZ | Streets' -75000 UU for all | the map's BASE TnWorldInfo (physics.json) | Streets -750 m unchanged; Gorge -75, Seed -15, Rust -5.1 m … |
+| Gameplay rotating movers | three hard-coded Streets domes | the map's AssetTools movers manifest | Streets reproduces the three domes exactly |
+| Renderer render index | runtime index (Streets) | + `tools/render/build_render_index.py` (generic → runtime pickup visuals) | `--check`: 14 / 14 Streets ammo crates equal the hand-validated index |
+| Render tools manifests | `<last token>_<kind>.json` | + `next_map/<MAP>_<kind>.json` | movers / pickup FX for the generic maps |
+| Systems map audio | manifests for Streets + Gorge | every MP map with `audio.json` (generator list from data) | UI / match / Streets / Gorge manifests byte-identical; 8 maps added |
+| Render data tooling | — | lit BSP fixed for every map (numpy truth value; Level of the BSP package), decals without serialized placement skipped | Streets `bsp.glb` byte-identical to M05; every map's BSP triangle count = AssetTools audit |
+
+### Multiplayer map readiness (registry: 13 maps; 10 cooked in the dump)
+Columns: LOADS, STRUCTURALLY PLAYABLE (WFC_CHAOS 20 starts × 20 s, WFC_XFORMTEST 760 transforms), VISUALLY PLAYABLE (lit
+WFC path, materials compiled), MODE READY (TDM: frontend-launched match to the score limit with spawn / kills / respawn /
+end / return), then what is PARTIAL / BLOCKED.
+
+| map | LOADS | STRUCT. PLAYABLE | VISUALLY PLAYABLE | MODE READY (TDM) | PARTIAL | BLOCKED |
+|---|---|---|---|---|---|---|
+| MP_IAC_Streets (reference) | yes | yes: chaos 0 under / 0 KillZ / 0 stuck; xform 0 / 1520 | yes: 325 / 325 materials, 107 / 107 smoke / glass / ramp measurements = Rendering lane | yes (human-verified reference) | — | — |
+| MP_UND_Gorge | yes | yes, 1 chaos run under a BSP floor (1.43 m), xform 0 / 760 | yes: 295 / 298, BSP 1824 tris, 9 fans animate | yes (×4 in the soak) | fans rotate in render only (Roll axis); DOM totems / KOTH rings not converted; 3 DES_IAC materials | — |
+| MP_IAC_Seed | yes | yes: 0 / 0 / 0; xform 0 / 760 | yes: 353 / 355 | yes | 1 of 8 movers render-only | — |
+| MP_IAC_Berth | yes | yes: 0 / 0 / 0 | yes: 305 / 307 (looks washed out: human check) | yes | 1 decal without placement skipped | — |
+| MP_UND_Complex | yes | yes: 0 / 0 / 0 | yes: 291 / 293 | yes | — | — |
+| MP_IAC_Rust | yes | yes, 1 stuck | yes: 389 / 391 | yes | 1 decal skipped | — |
+| MP_ORB_Debris | yes | yes, 2 stuck | mostly: 303 / 306, 1 material shader compile error (Megatron_com_Mat) | yes | 24 Matinee movers render | — |
+| MP_KON_Molten | yes | partial: xform 1 / 760 ended under the map (2.85 m) | partial: 328 / 333, floor materials use the unsupported MaterialExpressionTextureSetSample | yes | floor material, 1 transform fall-through | — |
+| MP_ESC_BrokenHope (Escalation) | yes | yes, 1 stuck | partial: 288 / 341 (character / wreck materials) | n/a | — | Survival (SV) mode not implemented (Gameplay) |
+| MP_ESC_Remnant (Escalation) | yes | yes, 2 stuck (KillZ authored 0) | partial: 302 / 355 | n/a | — | SV not implemented |
+| MP_KON_Fortress / MP_ORB_Havoc / MP_ESC_Tranquillity | — | — | — | — | — | **not cooked in the dump** (source data absent) |
+
+DOM / KOTH on non-Streets maps: Gameplay's objective logic is generic, but the totem / ring visuals are not converted from
+the generic index (PARTIAL). CTF / EXT: not implemented (Gameplay). All TDM maps were also launched from the frontend in
+one process (Berth → Complex → Rust → Debris → Molten), each to the score limit and back.
+
+### Builds
+- Clean Debug (`build.ps1 -Jobs 2 -Clean`, 43 s) and clean Release (`build\release`, 56 s): 0 errors. The one warning
+  is Rendering's pre-existing unused `reading` (WfcMapFx.cpp).
+- The final validation below ran on these clean binaries.
+
+### Validation (clean binaries)
+| area | result |
+|---|---|
+| frontend unit (Debug / Release) | 59 / 0 |
+| wfc_fidelity (Debug / Release / map) | 191 / 0 FAIL / 22 known; map 193 / 0; collision 9 / 0 |
+| TDM rules (WFC_TDMTEST) | 41 / 41 |
+| WFC_MATCHTEST | TDM to 40, clock tie, DM to 20 |
+| WFC_MODEPLAYTEST (DOM / KOTH) | 21 / 21 |
+| **boost → robot / transform stress (WFC_XFORMTEST)** | **0 / 1520 under the map, 0 KillZ** (Streets); 0 / 760 on 9 of 10 maps; Molten 1 / 760 |
+| **WFC_CHAOS** (Streets, 60 × 20 s; 327 boosts, 340 transforms) | **0 under the map, 0 KillZ, 0 stuck** |
+| map sweep / traverse (Streets) | 984 boost / jump runs + 984 transforms 0 below KillZ; 160 runs 0 falls |
+| **high-refresh character (WFC_CAMSYNC)** | robot: 0.0003° at 60 / 144 Hz, 0.0002° at 240 Hz (the M05 per-tick camera measures 1.28° at 144 Hz); hover 0.011° / boost 0.023° at 144 Hz |
+| Streets smoke / fog cards / steam / glass / ramps (Experimental playtest-regressions vs the Rendering-lane reference) | **107 / 107 measurements within 5 %** |
+| Rendering self-tests (shadow, DLE, LVV 400 / 0, light visibility, verify_permutations 325 / 325, audit_map, reload test) | pass |
+| Systems audio_native_suite | 566 / 0 |
+| Systems movie_audio_probe (real device) | every intro movie plays its own sound with the game mix at -96 dB under it; skip and end stop it; no frontend music during the chain; repeated chains end with 0 streams / 0 voices |
+| runtime probe | 30 / 1 FAIL → fixed (legacy-renderer crash, below) |
+| legacy renderer (`WFC_LEGACYRENDER`, vehicle) | runs (was an access violation) |
+
+### Cold boot and audio (product traces)
+- **Chain:** Activision → Hasbro → High Moon → FMV_intro, each with `movie.audioStart` (Systems stream; "10 tracks @ 48 kHz,
+  centre track 5") and `movie.audioStop` (no stream left, 0 voices).
+- **Mute:** `CINE_MUTE_FOR_BINK` mutes the game mix while a movie plays.
+- **Title music:** `FRONTEND_MX_ORBIT_01` starts only after FMV_intro. The looping startup / loading Binks stay silent
+  (no authored audio).
+- **Sync:** the audio clock at the movie's end trails the video position by 0.35 / 0.10 / 0.12 / 0.13 s (Activision /
+  Hasbro / High Moon / 128.7 s FMV). The offset is constant, with no drift; it is a start offset. Lip sync is a human check.
+- **Skip:** `ui:Accept` during Hasbro stopped its sound in the same frame (clock 9.07 s vs video 9.15 s; 0 streams after);
+  the next movie started with its own sound.
+- **Language track:** centre track 5 is used for English [**PROVISIONAL**, not CONFIRMED ORIGINAL: the native selection
+  `HmPlayerController.MovieAudioSetup` / BinkSetSoundTrack is UNKNOWN; `WFC_MOVIE_LANGSLOT` overrides].
+- **Match audio** (every map tested):
+  - start: the TDM announcement and description as Optimus (`DialogCharacters.OPRIME`, Autobot team) and
+    `BL_LVL_MP_MX.DM_START`;
+  - kills-left lines;
+  - end: `DM_END_AUTOBOTS_WIN` + the win line.
+  - Lobby music on return: `MP_LOBBY_MX`.
+
+### Lifecycle / soak (one process each)
+- **8 matches, cold boot with intro, Streets / Gorge alternating** (`WFC_LIFECYCLE=3`, scripted through the shipped
+  menus):
+  - private MB after unload: Streets 2648 → 2747 / 2740 / 2740, Gorge 2732 / 2758 / 2759 / 2755. The first match settles,
+    then flat;
+  - peak 2.99 GB (M05: 3.5 GB);
+  - audio after every unload: 0 voices, 0 instances, 0 level cues, PCM 36.5 MB (identical each cycle);
+  - GL left after Rendering's unload: textures 72 (Streets) / 60 (Gorge) each cycle, released by the census;
+  - handles at each return 720 → 740 (+3 per match, see failures).
+- **Final clean-build soak (4 matches, same order):** identical picture, peak 2.98 GB.
+- **Five more maps in one process:** Berth → Complex → Rust → Debris → Molten, each to the score limit and back to the
+  lobby. Memory after unload follows the largest map loaded so far (Rust 3.15 GB, then Debris 2.83 GB): no per-match
+  growth.
+- **Gameplay state each match:** spawn at authored team starts, the selected character resolved, kills / deaths / respawn
+  (4.98 s), score limit, end, 15 s return to the lobby, second match. HUD values (health segments, team score bars,
+  ammo, clock, respawn timer) are pushed from `World::hudState`.
+
+### Input / settings
+- **Logical UI bindings** [PC ADAPTATION of the console controls]: Enter = A, Escape = B, arrows = D-pad, F3 = Start,
+  Tab = Select / scoreboard; pad buttons as authored.
+- **Scripted runs through the shipped movies' own ActionScript:**
+  - Down + Enter on the main menu → Multiplayer → `Online.OpenPartyLobby`;
+  - Escape in the party lobby → `Game.QuitToMainMenu`;
+  - a mouse click on `multiplayerBtn_mc` → the same call.
+  - Physical keyboard / pad input on a shared desktop is a human check.
+- **Brightness:** profile `GammaSetting=85` → DisplayGamma 2.865 (decompiled mapping), applied at boot, kept through the
+  Streets map load (Rendering 4215359) and re-applied to the renderer recreated after each match (Gorge loaded with it).
+  The look is a human check.
+- **Display settings:** `[PCSettings]` (1280×720, windowed, VSync) are Frontend's.
+
+### Failures and open items (by kind)
+**Real product failures (owner):**
+- **Frontend:** kill-feed rows overlap. Two Hud_GFX `GameMessage` rows are drawn at the same position instead of
+  stacking; the data is Gameplay's and correct.
+- **Gameplay:**
+  - Gorge: 1 chaos run 1.43 m under a BSP floor;
+  - Molten: 1 / 760 transforms under the map (2.85 m);
+  - stuck runs: Rust 1, Debris 2, Remnant 2, BrokenHope 1.
+- **Gameplay / AssetTools:** only the Optimus pawn loads, so the selected character's body is not drawn (the resolved
+  chassis is).
+- **Rendering:**
+  - Molten floor materials (MaterialExpressionTextureSetSample unsupported);
+  - Debris `Megatron_com_Mat` shader compile error;
+  - Escalation character / wreck materials (53 per map);
+  - DOM totems / KOTH rings / destructible meshes on generic maps (index conversion PARTIAL);
+  - 72 / 60 textures per match left to the frontend's GL census.
+- **Frontend / Rendering:** handles +3 per match (720 → 740 over 8 matches; memory flat). Owner to be found.
+- **Fixed at integration** (lane defects found by the merged-build runs):
+  - lit BSP missing on every map (Rendering tool);
+  - legacy-renderer crash (Rendering M09);
+  - in-match loading underlay (M05).
+
+**Stale tests (retired / updated):**
+- audio_native_suite manifest count (7 → derived from data);
+- frontend selectability test (now includes the AssetTools generic index);
+- Experimental `menu_music` / match-validator regexes (reported in M05).
+
+**Test-harness issues:**
+- the script set the lobby map before the lobby movie's own initialization (fixed in the runner; the product follows RE
+  C4 / C7);
+- `audio.baseline` is not emitted on the Frontend pass-3 load path (the post-unload state is used instead).
+
+**Source-data absences:** Fortress, Havoc and Tranquillity are not cooked in the dump.
+
+**Service dependent:** online play / matchmaking / accounts / leaderboards / challenges / XP progression (results show
+offline "LEVEL 0 / 500 to next level").
+
+**Not implemented (lane scope):** Survival (Escalation) mode; CTF / EXT; bots; per-chassis pawns.
+
+### Human checks
+1. Cold boot: intro movies sound right and in sync (constant 0.1–0.35 s start offset measured); title music after FMV.
+2. PC navigation with the real keyboard, mouse and an Xbox controller; pause (hold W, press Esc: the robot stops while
+   the world runs); Tab scoreboard.
+3. Character select: choose a non-default character; the resolved chassis is logged, but the drawn body is Optimus.
+4. Streets: smoke, fog, steam, glass and ramps (numbers match the Rendering lane); boost → robot against walls / ramps;
+   vehicle hover and ramp contact.
+5. High-refresh play at 144 / 240 Hz: robot and vehicle coherence (measured 0.0003°).
+6. Gorge and the other maps: look (Berth looks washed out; Molten floor), lighting, fan / orrery movers, pickups.
+7. HUD: score / time / ammo / health / overshield update; kill feed (overlap defect); match-start / respawn / results
+   screens.
+8. Brightness slider in Settings across a map change.
+9. Long session: memory plateaus around 2.7–3.2 GB after unload, depending on the largest map played.
+
 ## INTEGRATION MILESTONE 05 (2026-10-04) — branch `integration/milestone-05` — one exe: frontend → TDM Streets → return → again
 
 **Exe for Experimental's final gate and the human playtest:**

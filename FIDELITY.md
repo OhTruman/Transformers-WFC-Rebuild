@@ -17,6 +17,28 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## INTEGRATION MILESTONE 06 — PROVENANCE OF INTEGRATION DECISIONS (2026-10-04)
+Full report: STATUS.md (INTEGRATION MILESTONE 06). Lane provenance stays in each lane's section.
+
+| Item | Original | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Boot-movie sound | the Bink's own audio tracks (no SoundCue); MoviesToAlwaysPlaySound lists the logos; CINE_MUTE_FOR_BINK mutes the game mix | Systems M07 (bink_tracks.py on the dump; config) | CONFIRMED (data / config) | Systems MovieAudioPlayer streams the tracks; Frontend reports start / stop. One decoder (Frontend's WAV-cache path removed) |
+| Movie language track | native `HmPlayerController.MovieAudioSetup` / BinkSetSoundTrack | not recovered | **UNKNOWN** | centre track 5 for English, **PROVISIONAL** (logos: all centre tracks identical); `WFC_MOVIE_LANGSLOT` override |
+| Movie A/V start offset | Bink plays audio and video from one clock | — | UNKNOWN (native) | measured 0.1–0.35 s constant start offset (audio after video), no drift over 128.7 s. Video not slaved to the audio clock [PARTIAL] |
+| Match announcer / music | TnGameTypeMessage 0 / 1 / 2, TnGameProgressAnnouncementMessage 0–7, TnAnnouncer OPRIME / MGTRON | Systems M07 (decompiled script) | CONFIRMED (script) | Gameplay's MatchEvents → World::matchAudio() (no second timer / state machine) |
+| Versus game-over line | TnVersusGameOverMessage | TransContent not decompiled | PARTIAL | winning-team announcer event |
+| In-match HUD | Hud_GFX + data stores; no minimap | RE OVERNIGHT A0–A9 | CONFIRMED | Frontend runs Hud_GFX from World::hudState; no minimap |
+| Kill-feed presentation | 5 rows, 5 s + 1 s fade | RE A2 | CONFIRMED | rows overlap in the rebuild [PRODUCT FAIL, Frontend] |
+| Character → pawn | selection → PRI._SelectedCharacter → ResolveReplicatedCharacterData; spawn waits for it | RE / Gameplay CharacterRoster.h | CONFIRMED (rules) | selection reaches Gameplay and the chassis is resolved; drawn body Optimus [RECONSTRUCTION FALLBACK] |
+| Map KillZ | persistent level TnWorldInfo.KillZ | AssetTools physics.json (BASE) | CONFIRMED (data) | per map (Streets -750 m unchanged; Remnant authors 0) |
+| Rotating movers | PHYS_Rotating RotationRate | AssetTools <map>_movers.json | CONFIRMED (data) | Gameplay: yaw-only in collision; other axes render-only [PARTIAL] |
+| Generic render index | AssetTools map_complete.py (render_index_generic) | AssetTools MAP_PIPELINE | CONFIRMED (data) | pickup visuals converted (Streets 14 / 14 exact; the rotation conversion is only exercised with identity rotations: HIGH); totems / KOTH rings / destructibles not converted [PARTIAL] |
+| Map selectability | HasRequiredAssets | RE 3.2 | CONFIRMED (concept) | cooked + world + (runtime or generic render index) [REBUILD RULE] |
+| PC UI bindings | console pad (A / B / Start / D-pad) | shipped movies | CONFIRMED (console) | Enter / Escape / arrows / F3 / Tab + mouse [PC ADAPTATION] |
+| Brightness | DisplayGamma = 2.2 + Lerp(-0.95, 0.95, GammaSetting / 100) | decompiled GetGammaSetting | CONFIRMED (mapping) | profile → IRenderer::setDisplayGamma at boot and after each renderer recreation; persists through map loads |
+
+---
+
 ## INTEGRATION MILESTONE 05 — PROVENANCE OF THE INTEGRATION GLUE (2026-10-04)
 Full report: STATUS.md (INTEGRATION MILESTONE 05). Only glue added at integration is listed here; each lane's own
 provenance stays in its section.
