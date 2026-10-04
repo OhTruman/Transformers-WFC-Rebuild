@@ -37,7 +37,13 @@ public:
     virtual bool load(const std::vector<std::string>& levels) = 0;   // false: not exported / not drawable
     virtual void draw(const SceneView& view, int width, int height) = 0;
     virtual void unload() = 0;
+    // Kismet / matinee driven state of the scene's actors: emitter activation (InterpTrackToggle) and visibility
+    // (SeqAct_ToggleHidden fired by matinee event keys).
+    virtual void setEffectActive(const std::string& actor, bool on) { (void)actor; (void)on; }
+    virtual void setActorHidden(const std::string& actor, bool hidden) { (void)actor; (void)hidden; }
 };
+
+struct SceneChange { enum Kind { Effect, Hidden } kind; std::string actor; bool value; };
 
 class FrontendScene {
 public:
@@ -52,6 +58,8 @@ public:
     SceneView view() const;
     const std::vector<std::string>& levels() const { return levels_; }
     std::vector<std::string> playing() const;
+    // Effect / visibility changes since the last call (matinee toggle and event keys crossed by tick()).
+    std::vector<SceneChange> takeChanges() { std::vector<SceneChange> c; c.swap(changes_); return c; }
 
     // Evaluation helpers (exposed for the headless tests).
     struct Key { double t = 0; double v[3] = {0, 0, 0}, ai[3] = {0, 0, 0}, lo[3] = {0, 0, 0}; int mode = 0; };   // 0 linear 1 constant 2 curve
@@ -60,10 +68,14 @@ public:
 private:
     struct MoveTrack { bool relativeToInitial = false; std::vector<Key> pos, euler; };
     struct Group { std::string name; bool director = false; std::vector<std::string> actors; std::vector<MoveTrack> moves;
-                   std::vector<std::pair<double, std::string>> cuts; };
+                   std::vector<std::pair<double, std::string>> cuts;
+                   std::vector<std::pair<double, int>> toggles;              // 0 off, 1 on, 2 toggle
+                   std::vector<std::pair<double, std::string>> events; };
+    struct EventAction { std::string event; int action = 2; std::vector<std::string> targets; };   // 0 hide 1 unhide 2 toggle
     struct Matinee { std::string name, comment; bool looping = false; double length = 0; std::vector<Group> groups;
                      std::vector<std::string> fscommands; bool onMovieStopped = false;
-                     std::vector<std::string> remoteEvents; };   // SeqEvent_RemoteEvent names that play it
+                     std::vector<std::string> remoteEvents;   // SeqEvent_RemoteEvent names that play it
+                     std::vector<EventAction> eventActions; };
     struct RemoteActivator { std::string event; std::vector<std::string> fscommands; bool onMovieStopped = false; };
     struct Actor { std::string name, cls; double loc[3] = {0, 0, 0}, rot[3] = {0, 0, 0}; std::string base;
                    double relLoc[3] = {0, 0, 0}, relRot[3] = {0, 0, 0}; double fov = 0; bool camera = false; };
@@ -81,6 +93,9 @@ private:
     std::map<std::string, Level> data_;
     std::vector<std::string> levels_;
     std::vector<Playing> playing_;
+    std::vector<SceneChange> changes_;
+    std::map<std::string, bool> effectOn_, hidden_;
+    void crossKeys(const Matinee& m, double from, double to);
     int order_ = 0;
     double time_ = 0.0;
 };

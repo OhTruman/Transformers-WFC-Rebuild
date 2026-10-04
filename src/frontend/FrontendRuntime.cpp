@@ -610,6 +610,10 @@ void FrontendRuntime::updateLoading(float dt) {
 
 void FrontendRuntime::draw(int w, int h) {
     if (sceneRenderer_ && sceneDrawable_) {
+        for (const SceneChange& c : scene_.takeChanges()) {
+            if (c.kind == SceneChange::Effect) sceneRenderer_->setEffectActive(c.actor, c.value);
+            else sceneRenderer_->setActorHidden(c.actor, c.value);
+        }
         SceneView v = scene_.view();
         if (v.valid) sceneRenderer_->draw(v, w, h);
     }

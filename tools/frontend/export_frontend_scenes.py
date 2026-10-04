@@ -108,6 +108,12 @@ def export_level(level):
                     entry['tracks'].append({'class': tc, 'frame': tp.get('MoveFrame', 'IMF_World'),
                                             'pos': track((tp.get('PosTrack') or {}).get('Points')),
                                             'euler': track((tp.get('EulerTrack') or {}).get('Points'))})
+                elif tc == 'InterpTrackToggle':   # emitter activation keys (ETTA_On / Off / Toggle)
+                    entry['tracks'].append({'class': tc, 'toggles': [{'t': k.get('Time', 0.0), 'action': k.get('ToggleAction', 'ETTA_On')}
+                                                                     for k in tp.get('ToggleTrack') or []]})
+                elif tc == 'InterpTrackEvent':    # named keys -> the matinee's output links of that name
+                    entry['tracks'].append({'class': tc, 'events': [{'t': k.get('Time', 0.0), 'name': k.get('EventName')}
+                                                                    for k in tp.get('EventTrack') or []]})
                 elif tc == 'InterpTrackDirector':
                     entry['tracks'].append({'class': tc, 'cuts': [{'t': x.get('Time', 0.0), 'group': x.get('TargetCamGroup'),
                                                                    'blend': x.get('TransitionTime', 0.0)}
@@ -121,8 +127,27 @@ def export_level(level):
             starts.append({'from': src.rsplit('.', 1)[-1], 'class': sc, 'output': desc,
                            'input': ['Play', 'Reverse', 'Stop', 'Pause', 'Change Dir'][idx] if 0 <= idx < 5 else idx,
                            'fscommand': sp.get('FsCommand'), 'event': sp.get('EventName'), 'comment': sp.get('ObjComment')})
+        # Event-track outputs wired to SeqAct_ToggleHidden (inputs Hide / UnHide / Toggle) with their target actors.
+        actions = []
+        for out in p.get('OutputLinks') or []:
+            for l in out.get('Links') or []:
+                tgt = l.get('LinkedOp')
+                tc_, tp_ = by_path.get(tgt, (None, {}))
+                if tc_ != 'SeqAct_ToggleHidden':
+                    continue
+                names = []
+                for vl in tp_.get('VariableLinks') or []:
+                    if vl.get('LinkDesc') != 'Target':
+                        continue
+                    for v in vl.get('LinkedVariables') or []:
+                        vp = (by_path.get(v) or (None, {}))[1]
+                        if vp.get('ObjValue'):
+                            names.append(vp['ObjValue'].rsplit('.', 1)[-1])
+                idx = l.get('InputLinkIdx', 0)
+                actions.append({'event': out.get('LinkDesc'), 'action': ['hide', 'unhide', 'toggle'][idx] if 0 <= idx < 3 else 'toggle',
+                                'targets': names})
         matinees.append({'name': op.rsplit('.', 1)[-1], 'comment': p.get('ObjComment'), 'looping': bool(p.get('bLooping')),
-                         'length': dp.get('InterpLength', 0.0), 'groups': groups, 'startedBy': starts})
+                         'length': dp.get('InterpLength', 0.0), 'groups': groups, 'startedBy': starts, 'eventActions': actions})
     # SeqAct_ActivateRemoteEvent: the remote events this level raises and what fires them (e.g. UI_FrontEnd_m
     # enterFrontEnd -> StartFireworks, which plays the streamed battle vignette's matinees).
     remotes = []

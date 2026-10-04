@@ -44,6 +44,8 @@ public:
     bool load(const std::vector<std::string>& levels) override;
     void draw(const frontend::SceneView& view, int width, int height) override;
     void unload() override {}   // the family stays loaded while UI levels travel within it; released by release()
+    void setEffectActive(const std::string& actor, bool on) override { if (r_ && native_) r_->setMapEffectActive(actor, on); }
+    void setActorHidden(const std::string& actor, bool hidden) override { if (r_ && native_) r_->setActorHidden(actor, hidden); }
     // Before a match loads: the scene's render data and GL objects go (keep = the UI renderer's own objects).
     std::string release(const ui::GlCensus::Owned& keep);
     static std::string familyFor(const std::string& uiLevel);

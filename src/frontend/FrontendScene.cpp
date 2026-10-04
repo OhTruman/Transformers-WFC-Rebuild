@@ -135,12 +135,29 @@ bool FrontendScene::load(const std::string& path) {
                         mt.pos = keys(T["pos"]);
                         mt.euler = keys(T["euler"]);
                         gr.moves.push_back(mt);
+                    } else if (T["class"].asString() == "InterpTrackToggle") {
+                        for (size_t k = 0; k < T["toggles"].size(); ++k) {
+                            const std::string& a = T["toggles"][k]["action"].asString();
+                            gr.toggles.push_back({T["toggles"][k]["t"].asDouble(), a == "ETTA_Off" ? 0 : a == "ETTA_Toggle" ? 2 : 1});
+                        }
+                    } else if (T["class"].asString() == "InterpTrackEvent") {
+                        for (size_t k = 0; k < T["events"].size(); ++k)
+                            gr.events.push_back({T["events"][k]["t"].asDouble(), T["events"][k]["name"].asString()});
                     } else if (T["class"].asString() == "InterpTrackDirector") {
                         for (size_t c = 0; c < T["cuts"].size(); ++c)
                             gr.cuts.push_back({T["cuts"][c]["t"].asDouble(), T["cuts"][c]["group"].asString()});
                     }
                 }
                 M.groups.push_back(gr);
+            }
+            for (size_t e = 0; e < m["eventActions"].size(); ++e) {
+                const assets::Json& E = m["eventActions"][e];
+                EventAction ea;
+                ea.event = E["event"].asString();
+                const std::string& a = E["action"].asString();
+                ea.action = a == "hide" ? 0 : a == "unhide" ? 1 : 2;
+                for (size_t t = 0; t < E["targets"].size(); ++t) ea.targets.push_back(E["targets"][t].asString());
+                M.eventActions.push_back(ea);
             }
             for (size_t s = 0; s < m["startedBy"].size(); ++s) {
                 const assets::Json& S = m["startedBy"][s];
@@ -178,6 +195,9 @@ void FrontendScene::enterLevel(const std::string& uiLevel) {
 void FrontendScene::leave() {
     playing_.clear();
     levels_.clear();
+    changes_.clear();
+    effectOn_.clear();
+    hidden_.clear();
 }
 
 void FrontendScene::start(const Matinee& m) {
@@ -216,11 +236,46 @@ void FrontendScene::remoteEvent(const std::string& name) {
     }
 }
 
+void FrontendScene::crossKeys(const Matinee& m, double from, double to) {
+    // Keys in (from, to]: emitter toggles on the group's actors; event keys fire the outputs wired to ToggleHidden.
+    auto in = [&](double t) { return t > from && t <= to; };
+    for (const Group& g : m.groups) {
+        for (const auto& k : g.toggles) {
+            if (!in(k.first)) continue;
+            for (const std::string& a : g.actors) {
+                bool on = k.second == 2 ? !effectOn_[a] : k.second == 1;
+                effectOn_[a] = on;
+                changes_.push_back({SceneChange::Effect, a, on});
+            }
+        }
+        for (const auto& k : g.events) {
+            if (!in(k.first)) continue;
+            for (const EventAction& ea : m.eventActions) {
+                if (ea.event != k.second) continue;
+                for (const std::string& a : ea.targets) {
+                    auto st = hidden_.find(a);
+                    bool cur = st == hidden_.end() ? true : st->second;   // authored hidden until shown
+                    bool h = ea.action == 0 ? true : ea.action == 1 ? false : !cur;
+                    hidden_[a] = h;
+                    changes_.push_back({SceneChange::Hidden, a, h});
+                }
+            }
+        }
+    }
+}
+
 void FrontendScene::tick(double dt) {
     time_ += dt;
     for (Playing& p : playing_) {
+        double from = p.t <= 0.0 ? -1e-6 : p.t;   // keys at 0 fire on the first tick
         p.t += dt;
-        if (p.m->looping && p.m->length > 0) p.t = std::fmod(p.t, p.m->length);
+        if (p.m->looping && p.m->length > 0 && p.t >= p.m->length) {
+            crossKeys(*p.m, from, p.m->length);
+            p.t = std::fmod(p.t, p.m->length);
+            crossKeys(*p.m, -1e-6, p.t);
+        } else {
+            crossKeys(*p.m, from, p.t);
+        }
     }
 }
 
