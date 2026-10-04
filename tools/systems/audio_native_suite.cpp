@@ -1183,11 +1183,17 @@ static void testLevelLifecycle() {
     auto musicInstances = [&](game::SoundCues& c) { int n = 0; for (const char* m : kMusic) n += c.activeInstances(m); return n; };
 
     // Manifest inventory.
-    CHECK(game::AmbientAudio::levelManifestCount() == 7 && game::AmbientAudio::hasLevelManifest("UI_FrontEnd_m") &&
+    // [integration M06] gen_level_audio.py now emits every multiplayer map with runtime audio data (was Streets +
+    // Gorge): 4 UI levels + the match messages + one per Maps/MP_*/audio.json.
+    int mpMaps = 0;
+    for (const char* m : {"MP_ESC_BrokenHope", "MP_ESC_Remnant", "MP_IAC_Berth", "MP_IAC_Rust", "MP_IAC_Seed", "MP_IAC_Streets",
+                          "MP_KON_Molten", "MP_ORB_Debris", "MP_UND_Complex", "MP_UND_Gorge"})
+        mpMaps += std::ifstream(kRoot + "/Maps/" + m + "/audio.json").good() && game::AmbientAudio::hasLevelManifest(m);
+    CHECK(game::AmbientAudio::levelManifestCount() == 5 + mpMaps && game::AmbientAudio::hasLevelManifest("UI_FrontEnd_m") &&
           game::AmbientAudio::hasLevelManifest("MP_UND_Gorge") && game::AmbientAudio::manifestJson("__match_messages__") &&
           game::AmbientAudio::hasLevelManifest("UI_PartyLobby_m") && game::AmbientAudio::hasLevelManifest("UI_Lobby_m") &&
           game::AmbientAudio::hasLevelManifest("UI_CampaignLobby_m") && game::AmbientAudio::hasLevelManifest("MP_IAC_Streets"),
-          "7 Systems manifests (4 UI levels, Streets + Gorge limits / announcer, match messages)");
+          "Systems manifests: 4 UI levels, match messages, every MP map with audio.json (limits / announcer)");
     { game::MusicTrack fr, lob, party, none;
       CHECK(game::FrontendAudio::frontendTrack("UI_FrontEnd_m", fr) && fr.cue == kMusic[0] && fr.fadeIn == 0.25f && fr.fadeOut == 1.0f &&
             game::FrontendAudio::frontendTrack("UI_Lobby_m", lob) && lob.cue == kMusic[1] && lob.fadeIn == 0.0f &&

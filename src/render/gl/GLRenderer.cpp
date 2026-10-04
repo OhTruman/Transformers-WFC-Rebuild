@@ -779,9 +779,11 @@ public:
 private:
     void drawMeshArrays(const MeshData& m, const core::Mat4& model, const core::Vec3& color) {
         // client-side vertex arrays: no buffer object may be bound (another renderer / UI pass may leave one)
-        glx::BindBuffer(GL_ARRAY_BUFFER, 0);
-        glx::BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-        glx::BindVertexArray(0);
+        // [integration M06] the extension entry points are loaded with the WFC pipeline; on the legacy path
+        // (WFC_LEGACYRENDER, no render data) they are null and nothing else binds buffers (was a crash: probe
+        // still_vehicle_legacy, exit 0xC0000005)
+        if (glx::BindBuffer) { glx::BindBuffer(GL_ARRAY_BUFFER, 0); glx::BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0); }
+        if (glx::BindVertexArray) glx::BindVertexArray(0);
         core::Mat4 mv = view_ * model;
         glLoadMatrixf(mv.m);
         glEnable(GL_LIGHTING);
