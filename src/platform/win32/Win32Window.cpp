@@ -10,6 +10,7 @@
 #include "platform/Window.h"
 #include "core/Log.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -152,6 +153,52 @@ public:
 
     void setOsCursorHidden(bool hidden) override { cursorHidden_ = hidden; }
 
+    std::vector<Mode> displayModes() const override {
+        std::vector<Mode> out;
+        DEVMODEW dm{};
+        dm.dmSize = sizeof(dm);
+        for (DWORD i = 0; EnumDisplaySettingsW(nullptr, i, &dm); ++i) {
+            if (dm.dmBitsPerPel < 32 || dm.dmPelsWidth < 800 || dm.dmPelsHeight < 600) continue;
+            bool have = false;
+            for (const Mode& m : out) have |= m.width == (int)dm.dmPelsWidth && m.height == (int)dm.dmPelsHeight;
+            if (!have) out.push_back({(int)dm.dmPelsWidth, (int)dm.dmPelsHeight});
+        }
+        std::sort(out.begin(), out.end(), [](const Mode& a, const Mode& b) { return a.width != b.width ? a.width < b.width : a.height < b.height; });
+        return out;
+    }
+
+    void setDisplayMode(int w, int h, bool full) override {
+        // Windowed: a client area of w x h. Fullscreen: a borderless window over the monitor (no display mode change;
+        // the swap chain renders at the monitor size) [PC adaptation; the shipped PC SKU's exact mode handling is native].
+        if (full) {
+            if (!fullscreen_) { GetWindowRect(hwnd_, &windowedRect_); }
+            MONITORINFO mi{};
+            mi.cbSize = sizeof(mi);
+            GetMonitorInfoW(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY), &mi);
+            SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+            SetWindowPos(hwnd_, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
+                         mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            fullscreen_ = true;
+            return;
+        }
+        SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
+        RECT r = {0, 0, w, h};
+        AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
+        int x = fullscreen_ ? windowedRect_.left : CW_USEDEFAULT, y = fullscreen_ ? windowedRect_.top : CW_USEDEFAULT;
+        if (x == CW_USEDEFAULT) { RECT cur; GetWindowRect(hwnd_, &cur); x = cur.left; y = cur.top; }
+        SetWindowPos(hwnd_, HWND_NOTOPMOST, x, y, r.right - r.left, r.bottom - r.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        fullscreen_ = false;
+    }
+    bool fullscreen() const override { return fullscreen_; }
+
+    void setVSync(bool on) override {
+        typedef BOOL(WINAPI * PFN_SwapInterval)(int);
+        static PFN_SwapInterval swap = (PFN_SwapInterval)wglGetProcAddress("wglSwapIntervalEXT");
+        if (swap) swap(on ? 1 : 0);
+        vsync_ = on;
+    }
+    bool vsync() const override { return vsync_; }
+
     void present() override { SwapBuffers(hdc_); }
     int width() const override { return width_; }
     int height() const override { return height_; }
@@ -195,6 +242,8 @@ private:
     std::vector<uint32_t> uiPad_[(int)UiKey::Count];
     int wheel_ = 0;
     bool cursorHidden_ = false;
+    bool fullscreen_ = false, vsync_ = false;
+    RECT windowedRect_{};
 
     static int vkByName(const std::string& n) {
         static const struct { const char* name; int vk; } t[] = {

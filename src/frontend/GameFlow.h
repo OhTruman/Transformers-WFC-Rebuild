@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "frontend/Catalog.h"
+#include "frontend/Profile.h"
 #include "frontend/UIController.h"
 #include "frontend/Bridge.h"
 #include "frontend/Url.h"
@@ -143,6 +144,8 @@ public:
     // Level Kismet triggers the frontend owns, in order ("FsCommand:<cmd>", "MovieStopped:<movie>").
     const std::vector<std::string>& kismetTriggers() const { return kismetTriggers_; }
     bool hasWatchedIntroMovie() const { return watchedIntro_; }
+    LocalProfile& profile() { return profile_; }
+    const LocalProfile& profile() const { return profile_; }
     std::string stateSummary() const;
     // SettingsDataStore (TnDataStore_GameSettings): the current settings object and its host-option values. Values
     // persist per settings class for the session, as the data store's settings objects do [HIGH].
@@ -205,6 +208,7 @@ private:
     LobbyState lobby_;
     const GameSettings* currentSettings_ = nullptr;   // SettingsDataStore current (EditGameMode / PlayPrivateGame)
     MatchValues matchValues_;
+    LocalProfile profile_;
     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;

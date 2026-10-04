@@ -96,6 +96,13 @@ class FrontendRuntime {
 public:
     bool init();
     void setPresenter(std::unique_ptr<IMoviePresenter> p) { presenter_ = std::move(p); }
+    // The PC SKU's display settings (PCSettings.*): the platform window applies them.
+    struct DisplayHooks {
+        std::function<std::vector<std::pair<int, int>>()> modes;
+        std::function<void(int, int, bool)> apply;   // width, height, fullscreen
+        std::function<void(bool)> vsync;
+    };
+    void setDisplayHooks(DisplayHooks h) { display_ = std::move(h); }
     // The live level under the menus (Rendering draws it; without a renderer the menus sit on black).
     void setSceneRenderer(IFrontendSceneRenderer* r) { sceneRenderer_ = r; }
     const FrontendScene& scene() const { return scene_; }
@@ -145,6 +152,8 @@ private:
     uint32_t prevUi_ = 0;
     void updateScene(float dt);
     FrontendScene scene_;
+    DisplayHooks display_;
+    BridgeValue pcSettings(const std::string& fn, const std::vector<std::string>& args);
     HudController hud_;
     IFrontendSceneRenderer* sceneRenderer_ = nullptr;
     bool sceneDrawable_ = false;

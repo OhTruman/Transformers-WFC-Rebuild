@@ -41,6 +41,10 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:GameModeTag>" || markup == "<CurrentGame:MapCompatibilityTag>") return tag;
     // TnVersusGameOverMessage -> GRI.SetGameOverMessage, read by EndGameStats_GFX [RE A5, CONFIRMED]; Gameplay's result.
     if (markup == "<CurrentGame:GameOverMessage>") return flow_.matchValues().gameOverMessage;
+    if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
+        std::string field = markup.substr(30, markup.size() - 31);
+        if (LocalProfile::isOriginalField(field)) return flow_.profile().get(field);
+    }
     if (markup == "<CurrentGame:GameModeFriendlyName>") return tag.empty() ? "" : cat_.modeFriendlyName(tag);
     if (markup == "<CurrentGame:GameModeFriendlyDescription>") return tag.empty() ? "" : cat_.localize("TransGame", "TnOnlineGameSettings" + tag, "Description");
     if (markup == "<CurrentGame:GameModeFriendlyRules>") {
@@ -210,6 +214,11 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         std::string v = read(m, &known);
         if (!known) FlowTrace::emit("datastore.unhandled", {{"fn", fn}, {"markup", m}});
         return BridgeValue(v == "1" || v == "true" || v == "True");
+    }
+    // <OnlinePlayerData:ProfileData.Field>: the local profile (LocalProfile; original fields and defaults).
+    if (fn == "WriteValue" && m.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && m.size() > 31) {
+        flow_.profile().set(m.substr(30, m.size() - 31), arg(1));
+        return {};
     }
     if (fn == "WriteValue" && m.rfind("<TnGameSettings:", 0) == 0 && m.size() > 17 &&
         flow_.setSettingValue(m.substr(16, m.size() - 17), arg(1))) return {};

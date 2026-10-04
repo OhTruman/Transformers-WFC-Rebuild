@@ -116,6 +116,30 @@ void Application::attachPresenter() {
     presenter_ = p.get();
     frontend_->setPresenter(std::move(p));
     frontend_->setMoviePlayerFactory([] { return platform::createMoviePlayer(); });
+    // PCSettings -> the platform window; the saved display settings apply at boot.
+    frontend::FrontendRuntime::DisplayHooks dh;
+    dh.modes = [this] {
+        std::vector<std::pair<int, int>> v;
+        for (const auto& m : window_->displayModes()) v.push_back({m.width, m.height});
+        return v;
+    };
+    dh.apply = [this](int w, int h, bool fs) { window_->setDisplayMode(w, h, fs); };
+    dh.vsync = [this](bool on) { window_->setVSync(on); };
+    frontend_->setDisplayHooks(dh);
+    {
+        const auto& d = frontend_->flow().profile().display;
+        if (d.fullscreen || d.width != window_->width() || d.height != window_->height()) window_->setDisplayMode(d.width, d.height, d.fullscreen);
+        window_->setVSync(d.vsync);
+    }
+    // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
+    // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
+    // and reported here so the owners can consume LocalProfile when they add the entry points.
+    frontend_->flow().profile().onApplied = [](const frontend::LocalProfile& p) {
+        frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},
+                                                    {"MusicVolume", p.get("Music Volume")}, {"CameraSensitivity", p.get("CameraSensitivity")},
+                                                    {"InvertY_Robot", p.get("InvertY_Robot")}, {"Vibration", p.get("Controller Vibration")},
+                                                    {"owners", "pending: Systems volumes, Gameplay camera, Rendering gamma"}});
+    };
     if (!std::getenv("WFC_NO_FRONTEND_SCENE")) {
         g_scene = std::make_unique<FrontendSceneGL>(renderer_);
         frontend_->setSceneRenderer(g_scene.get());

@@ -200,6 +200,7 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     if (fn == "Game.SetHasWatchedIntroMovie") { FlowTrace::emit("profile", {{"SetHasWatchedIntroMovie", "movie"}}); return {}; }
     if (fn == "Debug.ShouldDisplayBuildInfo") return BridgeValue(false);
     if (fn == "Debug.GetBuildInfo") return BridgeValue(std::string());
+    if (fn.rfind("PCSettings.", 0) == 0) return pcSettings(fn, args);
     if (fn == "Customize.IsPrimeModeAvailable") return BridgeValue(false);
     // TnXpManager (via TnCharacterScriptBinding): XP lives in the online stats archive; without a stats interface the
     // original returns 0 earned [CONFIRMED script]. Levels from Default__TnXpManager.LevelTable [CONFIRMED authored].
@@ -220,8 +221,51 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
             return BridgeValue(level == 0 ? 0.0 : kLevelTable[level - 1]);
         }
     }
-    if (fn == "Console.SaveProfileSettings" || fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
+    if (fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
     return flow_.call(fn, args);
+}
+
+BridgeValue FrontendRuntime::pcSettings(const std::string& fn, const std::vector<std::string>& args) {
+    // HmInterfacePCSettings (SettingsMenu_GFX WIN branch) [call names CONFIRMED AS2; native bodies not in the dump:
+    // semantics HIGH from the movie's use]. Graphics -> Commit Changes calls SetResolution(w, h, fullscreen),
+    // SetTextureQualityLevel(0..2), SetVSyncState(bool); the menu reads the current values back.
+    auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
+    auto truthy = [](const std::string& s) { return s == "true" || s == "True" || s == "1"; };
+    LocalProfile& p = flow_.profile();
+    FlowTrace::emit("bridge", {{"fn", fn}, {"args", arg(0) + (args.size() > 1 ? "," + arg(1) : "") + (args.size() > 2 ? "," + arg(2) : "")}});
+    if (fn == "PCSettings.GetResolutions") {
+        std::string out;
+        std::vector<std::pair<int, int>> modes = display_.modes ? display_.modes() : std::vector<std::pair<int, int>>{};
+        if (modes.empty()) modes.push_back({p.display.width, p.display.height});
+        for (const auto& m : modes) out += (out.empty() ? "" : ",") + std::to_string(m.first) + "x" + std::to_string(m.second);
+        return BridgeValue(out);
+    }
+    if (fn == "PCSettings.GetResolution") return BridgeValue(std::to_string(p.display.width) + "x" + std::to_string(p.display.height));
+    if (fn == "PCSettings.IsFullScreen") return BridgeValue(p.display.fullscreen);
+    if (fn == "PCSettings.GetTextureQualityLevel") return BridgeValue(p.display.textureQuality);
+    if (fn == "PCSettings.GetVSyncState") return BridgeValue(p.display.vsync);
+    if (fn == "PCSettings.SetResolution") {
+        int w = std::atoi(arg(0).c_str()), h = std::atoi(arg(1).c_str());
+        if (w > 0 && h > 0) { p.display.width = w; p.display.height = h; }
+        p.display.fullscreen = truthy(arg(2));
+        if (display_.apply) display_.apply(p.display.width, p.display.height, p.display.fullscreen);
+        p.save();
+        return {};
+    }
+    if (fn == "PCSettings.SetTextureQualityLevel") {
+        p.display.textureQuality = std::atoi(arg(0).c_str());
+        p.save();
+        FlowTrace::emit("settings.owner", {{"setting", "TextureQuality"}, {"owner", "none (Rendering has no texture quality control yet)"}});
+        return {};
+    }
+    if (fn == "PCSettings.SetVSyncState") {
+        p.display.vsync = truthy(arg(0));
+        if (display_.vsync) display_.vsync(p.display.vsync);
+        p.save();
+        return {};
+    }
+    FlowTrace::emit("bridge.unhandled", {{"fn", fn}});
+    return {};
 }
 
 void FrontendRuntime::updateAudio(float dt) {

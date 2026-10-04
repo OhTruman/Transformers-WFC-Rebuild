@@ -22,20 +22,6 @@ const char* const kIntroMovies[] = {"Logo_Activision", "Logo_Hasbro", "Logo_High
 constexpr int kShortCountdown = 10;          // BeginShortCountdown (private, host started)
 constexpr int kLobbyIntermissionTime = 45;   // BeginIntermissionCountdown (public autostart)
 
-// Persisted profile flag (Game.SetHasWatchedIntroMovie). The original stores it in the player profile.
-constexpr const char* kProfileFile = "wfc_profile.ini";
-
-bool readWatchedIntro() {
-    std::ifstream f(kProfileFile);
-    std::string line;
-    while (std::getline(f, line)) if (line == "HasWatchedIntroMovie=1") return true;
-    return false;
-}
-void writeWatchedIntro() {
-    std::ofstream f(kProfileFile);
-    f << "HasWatchedIntroMovie=1\n";
-}
-
 std::string lowerStr(std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; }
 
 LevelKind levelForUrl(const Url& u) {
@@ -63,7 +49,8 @@ bool GameFlow::init(const Catalog& catalog, const Options& opt) {
     cat_ = &catalog;
     opt_ = opt;
     rng_.seed(opt.seed ? opt.seed : (unsigned)std::chrono::steady_clock::now().time_since_epoch().count());
-    watchedIntro_ = opt.skipIntroMovies || readWatchedIntro();
+    profile_.load();
+    watchedIntro_ = opt.skipIntroMovies || profile_.watchedIntro;
     FlowTrace::emit("boot", {{"map", kFrontEndMap}, {"watchedIntro", FlowTrace::boolean(watchedIntro_)},
                              {"seed", std::to_string(opt.seed)}});
     // Engine boot: [URL] Map=UI_FrontEnd_m. The initial startup movie ([LoadingMovie] InitialStartupFileName
@@ -298,7 +285,8 @@ void GameFlow::frontEndStart() {
     // SeqAct_InstallGame (Finished) -> 3 x SetMatInstScalarParam (Energon DownScaleUVs 12, ring Opacity).
     if (pendingWatchedWrite_) {
         pendingWatchedWrite_ = false;
-        if (!watchedIntro_) { watchedIntro_ = true; writeWatchedIntro(); }
+        // Game.SetHasWatchedIntroMovie: stored in the player profile (LocalProfile).
+        if (!profile_.watchedIntro) { watchedIntro_ = true; profile_.watchedIntro = true; profile_.save(); }
         FlowTrace::emit("profile", {{"HasWatchedIntroMovie", "true"}});
     }
 }
@@ -319,6 +307,9 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
 
     // ---- TnGameActionScriptBinding ----
     if (fn == "Game.HasWatchedIntroMovie") return watchedIntro_;
+    // Settings: the movie wrote the <OnlinePlayerData:ProfileData.*> fields; apply / save pushes them to their owners
+    // and persists the profile (TnProfileSettings) [CONFIRMED call names].
+    if (fn == "Game.ApplyProfileSettings" || fn == "Console.SaveProfileSettings") { profile_.apply(); return true; }
     if (fn == "Game.QuitToMainMenu") { quitToMainMenu(); return {}; }
     if (fn == "Game.ExitGame") { quit_ = true; FlowTrace::emit("exit", {}); return {}; }
 
