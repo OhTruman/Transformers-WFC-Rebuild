@@ -3,7 +3,7 @@
 
 # JSON-lines trace -> array of objects (ev, t, seq, fields...). Missing / empty file -> empty array.
 function Read-FlowLog([string]$Path) {
-    if (-not (Test-Path $Path)) { return , @() }
+    if (-not (Test-Path $Path)) { return , @() }; $Path = (Resolve-Path $Path).Path
     $out = New-Object System.Collections.Generic.List[object]
     foreach ($ln in [IO.File]::ReadLines($Path)) { if ($ln.Trim()) { try { $out.Add(($ln | ConvertFrom-Json)) } catch { } } }
     return , $out.ToArray()
@@ -18,7 +18,7 @@ function Parse-Url([string]$url) {
 # wfc.log lines in order, tagged: @{ i; kind = flow|frame|amb|music|other; text; ev; f (frame fields) }
 function Read-RunLog([string]$WfcLog) {
     $out = New-Object System.Collections.Generic.List[object]; $i = 0
-    if (-not (Test-Path $WfcLog)) { return , @() }
+    if (-not (Test-Path $WfcLog)) { return , @() }; $WfcLog = (Resolve-Path $WfcLog).Path
     foreach ($ln in [IO.File]::ReadLines($WfcLog)) {
         $i++
         if ($ln -match '\] FLOW (\S+)') { $out.Add([pscustomobject]@{ i = $i; kind = "flow"; ev = $Matches[1]; text = $ln }) }

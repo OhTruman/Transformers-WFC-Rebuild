@@ -1,253 +1,403 @@
-# Milestone 05 end-to-end gate: boot -> frontend -> multiplayer -> mode/map -> Streets TDM -> loading -> spawn ->
-# gameplay -> death -> respawn -> score -> match end -> return -> second launch, plus repeated loops.
+# Milestone 05 end-to-end lifecycle gate (v2):
+#   cold boot -> logos / intro -> frontend -> Multiplayer -> lobby -> TDM -> Streets -> loading -> countdown -> spawn ->
+#   gameplay -> death / kill / score -> respawn -> match end -> return to lobby -> second match -> return to frontend,
+#   plus repeated frontend <-> Streets cycles, map / mode ownership, and every owner's self-test on the same exe.
 #
-#   .\tools\fidelity\m05-e2e-gate.ps1 -Root <merged tree> [-OutDir <dir>] [-Cycles 3] [-MatchSeconds 6]
+#   .\tools\fidelity\m05-e2e-gate.ps1 -Root <work\ab\<target>> [-Config Release|Debug] [-OutDir <dir>] [-Cycles 8]
+#                                     [-Full] [-Runs R1,R2,R3,R4,R5,R6,S]
 #
-# Every check has a LAYER, so "data exists" is never confused with "the user experiences it":
-#   DATA       authored data / catalog / unit tests exist and pass
+# Layers keep "data exists" apart from "the user experiences it":
+#   DATA       authored data / catalogs / unit tests
 #   STATE      the product's own trace (WFC_FLOWLOG, wfc.log) reaches the state with the expected values
-#   PRESENTED  the user can actually see / hear it: window pixels captured from OUTSIDE the process
-#              (PrintWindow), movies played for real, audio voices sounding, pawn input actually withheld
-#   LIFETIME   resources / state across repeated loops (process memory, handles, audio PCM, stale state)
-#   MATCH      TDM lifecycle (Gameplay): spawn, team, damage, death, respawn, scores, limits, end, reset
-# and a STATUS: PASS / FAIL (the product contradicts CONFIRMED/HIGH evidence) / KNOWN (documented gap or
-# provisional adapter, with owner) / INFO / SKIP (not implemented yet: the check is ready) / HUMAN (needs a person).
-# Expectations: tools\fidelity\m05\expectations.json (RE / AssetTools / Systems, each with confidence).
-param([Parameter(Mandatory)][string]$Root, [string]$OutDir = "", [int]$Cycles = 3, [double]$MatchSeconds = 6, [int]$TimeoutSec = 900)
+#   PRESENTED  what the player sees: product-side frame captures (shot:, the composed frame) judged in pixels
+#   MATCH      the TDM rules as executed by Gameplay, observed through the frontend-launched match
+#   AUDIO      one audio lifecycle: music / beds / UI sounds per level, no doubles, no leftovers
+#   OWNERSHIP  the map / mode the UI selected is the one every owner runs
+#   LIFETIME   memory / handles / GL objects / audio PCM / voices / UI state across repeated cycles
+#   SELFTEST   the owners' own self-tests run on THIS executable (their claims, re-measured on the merge)
+# Status: PASS / FAIL (contradicts CONFIRMED/HIGH evidence) / KNOWN (documented gap, owner) / INFO / SKIP (hook or
+# feature absent in this build; the check is ready) / HUMAN (HUMAN-CHECK-M05.md).
+# Every product input goes through the real path: key presses into the shipped movies (Start, arrows, A); bridge
+# calls only where the original movie would make the same call and a key path is not needed (Quit from pause).
+param([Parameter(Mandatory)][string]$Root, [ValidateSet("Release", "Debug")][string]$Config = "Release", [string]$OutDir = "",
+      [int]$Cycles = 8, [switch]$Full, [string[]]$Runs = @(), [int]$TimeoutSec = 1500)
 $ErrorActionPreference = "Stop"
-. (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1")
+$Runs = @($Runs | ForEach-Object { $_ -split "," } | Where-Object { $_ }); if (-not $Runs.Count) { $Runs = @("R1", "R2", "R3", "R4", "R5", "R6", "S") }
+if (-not $Full) { $Runs = @($Runs | Where-Object { $_ -ne "R3" }) }
+. (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1")
 Add-Type -ReferencedAssemblies System.Drawing -Path (Join-Path $PSScriptRoot "lib\ImageStats.cs") -ErrorAction SilentlyContinue
 $Root = (Resolve-Path $Root).Path
-if (-not $OutDir) { $OutDir = Join-Path (Get-WfcRoot) ("work\fidelity\m05gate\" + (Get-Date -Format "yyyyMMdd-HHmmss")) }
+if (-not $OutDir) { $OutDir = Join-Path (Get-WfcRoot) ("work\fidelity\m05gate\" + (Get-Date -Format "yyyyMMdd-HHmmss") + "-$Config") }
 New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 $X = Get-Content -Raw (Join-Path $PSScriptRoot "m05\expectations.json") | ConvertFrom-Json
-$exe = @("build-release\bin\wfc_rebuild.exe", "build\release\bin\wfc_rebuild.exe", "build\bin\wfc_rebuild.exe") | ForEach-Object { Join-Path $Root $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
-$tests = @("build\bin\wfc_frontend_tests.exe", "build-release\bin\wfc_frontend_tests.exe") | ForEach-Object { Join-Path $Root $_ } | Where-Object { Test-Path $_ } | Select-Object -First 1
+$binDir = if ($Config -eq "Release") { Join-Path $Root "build-release\bin" } else { Join-Path $Root "build\bin" }
+$exe = Join-Path $binDir "wfc_rebuild.exe"
 $rd = Join-Path $Root "work\render"
 $AT = "F:\Transformers Rebuild\AssetTools\manifests"
 $res = New-WfcResults
 function Res($layer, $id, $status, $note, $owner = "", $measured = $null) { Add-WfcResult $res ("e2e.{0}.{1}" -f $layer, $id) $status $measured $note $owner }
-function Conf($node) { if ($node.conf -in "CONFIRMED", "HIGH") { "FAIL" } else { "KNOWN" } }   # status for a mismatch against an expectation
-$fullScript = { param($matchWait)
-    "wait:frontend;wait:ui=FrontEnd;wait:t=2;snapshot:mainmenu;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=2;" +
-    "call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=2;snapshot:gamelobby;" +
-    "call:Online.SetSelectedMapID,508;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=$matchWait;snapshot:ingame;" +
-    "showmenu;wait:ui=Paused;wait:t=2;snapshot:paused;call:Game.QuitToMainMenu;wait:level=FrontEnd;wait:ui=FrontEnd;wait:t=2;snapshot:returned" }
-function BaseEnv($dir) {
-    $e = @{ WFC_BOOT = "frontend"; WFC_FLOWLOG = (Join-Path $dir "flow.jsonl"); WFC_FLOWSEED = "1"; WFC_FLOW_TIMEOUT = "$TimeoutSec"; WFC_AUTOWALK = "1"; WFC_LOGEVERY = "10"; WFC_AMBLOG = "1"; WFC_MUSICLOG = "1"; WFC_RENDERSTATS = "1"; WFC_SMOKE_FRAMES = "100000000" }   # SMOKE_FRAMES: never reached, enables the per-frame pawn log (WFC_BOOT=frontend keeps the frontend boot)
+function Conf($node) { if ($node.conf -in "CONFIRMED", "HIGH") { "FAIL" } else { "KNOWN" } }
+function Near($a, $b, $tol) { return ($a -ne $null) -and ([Math]::Abs([double]$a - [double]$b) -le $tol) }
+$target = if (Test-Path (Join-Path $Root "M05_TARGET.txt")) { (Get-Content (Join-Path $Root "M05_TARGET.txt")) -join "; " } else { "(no M05_TARGET.txt)" }
+if (-not (Test-Path $exe)) { Res "DATA" "exe" "SKIP" "no $exe"; $null = Write-WfcReport $res (Join-Path $OutDir "report.json"); return }
+$H = Get-ExeHooks $exe
+function Has($hook) { return $H.Contains($hook) }
+Set-Content -Encoding UTF8 (Join-Path $OutDir "target.txt") ("exe=$exe`nconfig=$Config`n$target`nhooks=" + (($H | Sort-Object) -join ","))
+function BaseEnv($dir, [hashtable]$extra = @{}) {
+    $e = @{ WFC_BOOT = "frontend"; WFC_FLOWLOG = (Join-Path $dir "flow.jsonl"); WFC_FLOWSEED = "1"; WFC_FLOW_TIMEOUT = "$TimeoutSec"; WFC_LOGEVERY = "15"
+            WFC_SMOKE_FRAMES = "100000000"; WFC_AMBLOG = "1"; WFC_MUSICLOG = "1"; WFC_MIXERLOG = "1"; WFC_LEVELAUDIOLOG = "1"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.35" }
     if (Test-Path $rd) { $e.WFC_RENDER_DATA = $rd }
+    foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
     return $e
 }
-if (-not $exe) { Res "DATA" "exe" "SKIP" "no wfc_rebuild.exe under $Root"; $null = Write-WfcReport $res (Join-Path $OutDir "report.json"); return }
+$teamCluster = @{ "0" = $X.match_tdm.initial_clusters.value.Autobots; "1" = $X.match_tdm.initial_clusters.value.Decepticons }
 
-# ================= DATA =================
-foreach ($m in "frontend_flow", "frontend_gfx", "frontend_modes", "frontend_maps", "frontend_loading", "frontend_audio", "frontend_localization") { $p = Join-Path $AT "$m.json"; Res "DATA" "manifest.$m" $(if (Test-Path $p) { "PASS" } else { "FAIL" }) "AssetTools manifests\$m.json present" "AssetTools" }
-$flowM = Get-Content -Raw (Join-Path $AT "frontend_flow.json") | ConvertFrom-Json
-$movRoot = "F:\Transformers Rebuild\ExtractedAssets"
-$missingMov = @($X.boot.first_launch_movies.value | Where-Object { $f = $flowM.movie_files."$_.mkv"; -not ($f -and (Test-Path (Join-Path $movRoot $f))) })
-Res "DATA" "intro_movie_files" $(if (-not $missingMov.Count) { "PASS" } else { "FAIL" }) ("authored intro movies on disk (ExtractedAssets\movies): missing " + ($missingMov -join ","))
-if ($tests) {
-    $to = Join-Path $OutDir "frontend_tests.txt"; $p = Start-Process -FilePath $tests -WorkingDirectory (Split-Path $tests) -PassThru -Wait -NoNewWindow -RedirectStandardOutput $to -RedirectStandardError "$to.err"
-    $txt = Get-Content $to -Raw; $nPass = ([regex]::Matches($txt, '(?im)^\s*(\[?PASS\]?|ok)\b')).Count
-    Res "DATA" "frontend_unit_tests" $(if ($p.ExitCode -eq 0) { "PASS" } else { "FAIL" }) ("wfc_frontend_tests exit {0} (exit = failures); failing: {1}; output frontend_tests.txt" -f $p.ExitCode, ((@([regex]::Matches($txt, '(?m)^FAIL (.*)$') | ForEach-Object { $_.Groups[1].Value.Trim() })) -join "; ")) "Frontend" $p.ExitCode
-} else { Res "DATA" "frontend_unit_tests" "SKIP" "wfc_frontend_tests.exe not built in this tree" "Frontend" }
+# ======================================================================= DATA
+foreach ($m in "frontend_flow", "frontend_gfx", "frontend_modes", "frontend_maps", "frontend_loading", "frontend_audio", "frontend_localization", "mp_map_catalog") { $p = Join-Path $AT "$m.json"; Res "DATA" "manifest.$m" $(if (Test-Path $p) { "PASS" } else { "FAIL" }) "AssetTools manifests\$m.json" "AssetTools" }
+$ft = Join-Path $binDir "wfc_frontend_tests.exe"; if (-not (Test-Path $ft)) { $ft = @(Get-ChildItem (Join-Path $Root "build*\bin") -Filter wfc_frontend_tests.exe -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName)[0] }
+if ($ft -and (Test-Path $ft)) {
+    $to = Join-Path $OutDir "frontend_tests.txt"; $p = Start-Process -FilePath $ft -WorkingDirectory (Split-Path $ft) -PassThru -Wait -NoNewWindow -RedirectStandardOutput $to -RedirectStandardError "$to.err"
+    $txt = Get-Content $to -Raw; $fails = @([regex]::Matches($txt, '(?m)^FAIL (.*)$') | ForEach-Object { $_.Groups[1].Value.Trim() })
+    $stale = @($fails | Where-Object { $_ -like "catalog.tdm_selectable_maps_now*" })
+    $st = if ($p.ExitCode -eq 0) { "PASS" } elseif ($fails.Count -eq $stale.Count -and $stale.Count) { "KNOWN" } else { "FAIL" }
+    Res "DATA" "frontend_unit_tests" $st ("wfc_frontend_tests exit {0}; failing: {1}{2}" -f $p.ExitCode, ($fails -join "; "), $(if ($stale.Count) { " (catalog.tdm_selectable_maps_now expects Streets only; selectable = runtime data present, and AssetTools' next-map pipeline added Gorge: STALE TEST EXPECTATION, owner Frontend)" } else { "" })) "Frontend" $p.ExitCode
+} else { Res "DATA" "frontend_unit_tests" "SKIP" "wfc_frontend_tests.exe not built" "Frontend" }
 
-# ================= RUN 1: first launch (fresh profile) =================
-$d1 = Join-Path $OutDir "run1_first_launch"; New-Item -ItemType Directory -Force $d1 | Out-Null
-$e1 = (BaseEnv $d1) + @{ WFC_FRONTEND_SCRIPT = ((& $fullScript $MatchSeconds) + ";quit") }
-$r1 = Invoke-WfcObserved $exe $d1 $e1 $TimeoutSec 0.25
-$F = Read-FlowLog (Join-Path $d1 "flow.jsonl"); $L1 = Read-RunLog (Join-Path $d1 "wfc.log")
-if (-not $F.Count) { Res "STATE" "flow_trace" "SKIP" "no WFC_FLOWLOG trace: this tree has no frontend boot (agents/frontend not merged?)" "Frontend" }
-else {
-    Res "STATE" "flow_trace" $(if (@(Flow-Ev $F "timeout").Count) { "FAIL" } else { "PASS" }) ("{0} flow events, run exit {1}, timeout events {2}" -f $F.Count, $r1.rc, @(Flow-Ev $F "timeout").Count) "Frontend"
-    # ---- boot ----
-    $b = @(Flow-Ev $F "boot")[0]
-    Res "STATE" "boot_map" $(if ($b.map -eq $X.boot.map.value) { "PASS" } else { Conf $X.boot.map }) ("boot map {0} (expected {1}, {2})" -f $b.map, $X.boot.map.value, $X.boot.map.src) "Frontend"
-    Res "STATE" "first_launch_profile" $(if ("$($b.watchedIntro)" -eq "False") { "PASS" } else { "FAIL" }) "fresh run directory: watchedIntro=$($b.watchedIntro)" "Frontend"
-    $ls0 = @(Flow-Ev $F "loading.start")[0]; $lc0 = @(Flow-Ev $F "loading.close")[0]
-    # The effective boot loading state is what loading.close reports; GameFlow::init switches to InitialStartup after
-    # travel() has already emitted a generic loading.start, so a stale start event alone is a trace detail, not a defect.
-    Res "STATE" "boot_loading_movie" $(if ($lc0.kind -eq "InitialStartup") { "PASS" } else { Conf $X.boot.initial_loading_movie }) ("first loading screen closes as kind={0} (expected InitialStartup = {1}, {2})" -f $lc0.kind, $X.boot.initial_loading_movie.value, $X.boot.initial_loading_movie.src) "Frontend"
-    if ($ls0.kind -ne $lc0.kind) { Res "STATE" "boot_loading_trace" "INFO" ("trace detail for the frontend lane: the first loading.start says kind={0} bink={1} but the screen closes as kind={2}; no event records the switch to {3}" -f $ls0.kind, $ls0.bink, $lc0.kind, $X.boot.initial_loading_movie.value) "Frontend" }
-    $plays = @(Flow-Ev $F "movie.play" | ForEach-Object { $_.movie })
-    $want = @($X.boot.first_launch_movies.value)
-    Res "STATE" "intro_chain_order" $(if ((@($plays | Select-Object -First $want.Count) -join ",") -eq ($want -join ",")) { "PASS" } else { Conf $X.boot.first_launch_movies }) ("movie.play order: {0}; expected {1} ({2})" -f ($plays -join ","), ($want -join ","), $X.boot.first_launch_movies.src) "Frontend"
-    # ---- UI controller transitions (RE 1.4 table; a new controller per level starts from NotInGame / its StartingState) ----
-    $legal = @{}; foreach ($t in $X.ui_controller.transitions) { $legal["$($t[0])>$($t[1])"] = $true }
-    $bad = @(); foreach ($u in (Flow-Ev $F "ui.state")) { $k = "$($u.from)>$($u.to)"; $start = $X.ui_controller.starting_state."$($u.level)"; if (-not $legal[$k] -and -not ($u.from -eq "NotInGame" -and ($u.to -eq $start -or $u.to -eq "FrontEnd"))) { $bad += "$k@$($u.level)" } }
-    Res "STATE" "ui_transitions_legal" $(if (-not $bad.Count) { "PASS" } else { "FAIL" }) ("{0} UI state changes; not in the TnUIController table: {1}" -f @(Flow-Ev $F "ui.state").Count, ($bad -join ", ")) "Frontend"
-    # ---- movie per state ----
-    $opens = @(Flow-Ev $F "ui.open")
-    foreach ($st in "FrontEnd", "InLobby@PartyLobby", "InLobby@GameLobby", "WaitingOnGameStart", "Paused") {
-        $want = $X.ui_controller.movie_for_state.$st; $s0 = $st.Split('@')[0]; $lvl = if ($st -like "*@*") { $st.Split('@')[1] } else { $null }
-        $reached = @(Flow-Ev $F "ui.state" | Where-Object { $_.to -eq $s0 -and (-not $lvl -or $_.level -eq $lvl) })
-        if (-not $reached.Count) { Res "STATE" "movie_for.$st" "SKIP" "state $st not reached"; continue }
-        $hit = @($opens | Where-Object { $_.movie -eq $want })
-        Res "STATE" "movie_for.$st" $(if ($hit.Count) { "PASS" } else { "FAIL" }) ("state {0}: expected {1} opened (RE 1.4); opened: {2}" -f $st, $want, (($opens | ForEach-Object { $_.movie }) -join ",")) "Frontend"
+# ======================================================================= R1 first launch, real menu input, first match
+if ($Runs -contains "R1") {
+    $d1 = Join-Path $OutDir "R1_first_launch"; New-Item -ItemType Directory -Force $d1 | Out-Null
+    $s1 = @("wait:t=6", (Shot $d1 "a_intro1"), "wait:t=8", (Shot $d1 "a_intro2"), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2", (Shot $d1 "b_title"),
+            "key:114", "wait:t=1.2", (Shot $d1 "c_mainmenu"), (Keys @(40)), "key:13", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=2.5", (Shot $d1 "d_party"),
+            (Keys @(40)), "key:13", "wait:t=1.2", (Shot $d1 "e_modes"), "key:13", "wait:t=1.5", (Shot $d1 "f_hostoptions"),
+            "key:13", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=2.5", (Shot $d1 "g_gamelobby"), "snapshot:gamelobby",
+            "key:13", "wait:t=4", (Shot $d1 "h_countdown"), "wait:loading=1", "wait:t=0.8", (Shot $d1 "i_loading"),
+            "wait:level=Match", "wait:t=1", (Shot $d1 "j_match_pending"), "wait:ui=InGame", "wait:t=1.5", (Shot $d1 "k_ingame0"), "wait:t=8", (Shot $d1 "l_ingame1"), "snapshot:ingame",
+            "showmenu", "wait:ui=Paused", "wait:t=1.2", (Shot $d1 "m_pause"), "wait:t=1", "call:Game.QuitToMainMenu", "wait:level=FrontEnd", "wait:ui=FrontEnd", "wait:t=3", (Shot $d1 "n_return"), "snapshot:returned", "quit") -join ";"
+    $r1 = Invoke-WfcSampled $exe $d1 (BaseEnv $d1 @{ WFC_FRONTEND_SCRIPT = $s1; WFC_CUELOG = "1" }) $TimeoutSec 1.0
+    Write-WfcCsv $r1.samples (Join-Path $d1 "process.csv")
+    $F = Read-FlowLog (Join-Path $d1 "flow.jsonl"); $L1 = Read-RunLog (Join-Path $d1 "wfc.log"); $log1 = Join-Path $d1 "wfc.log"
+    if (-not $F.Count) { Res "STATE" "flow_trace" "FAIL" "no WFC_FLOWLOG trace from a frontend boot" "Frontend/Integration" }
+    else {
+        $to1 = @(Flow-Ev $F "timeout")
+        Res "STATE" "flow_trace" $(if ($to1.Count -or $r1.timedOut) { "FAIL" } else { "PASS" }) ("{0} events, exit {1}; script timeout {2}{3}" -f $F.Count, $r1.rc, $to1.Count, $(if ($to1.Count) { " (stuck at: " + ((@(Flow-Ev $F "script.wait") | Select-Object -Last 1).cond) + ")" } else { "" })) "Frontend"
+        # ---- boot / intro ----
+        $b = @(Flow-Ev $F "boot")[0]
+        Res "STATE" "boot_map" $(if ($b.map -eq $X.boot.map.value) { "PASS" } else { Conf $X.boot.map }) ("boot map {0}; watchedIntro {1} (fresh profile expects False)" -f $b.map, $b.watchedIntro) "Frontend"
+        $lc0 = @(Flow-Ev $F "loading.close")[0]
+        Res "STATE" "boot_loading_kind" $(if ($lc0.kind -eq "InitialStartup") { "PASS" } else { Conf $X.boot.initial_loading_movie }) ("first loading screen closes as {0} ({1})" -f $lc0.kind, $X.boot.initial_loading_movie.src) "Frontend"
+        $plays = @(Flow-Ev $F "movie.play" | ForEach-Object { $_.movie }); $want = @($X.boot.first_launch_movies.value)
+        Res "STATE" "intro_chain_order" $(if ((@($plays | Select-Object -First 4) -join ",") -eq ($want -join ",")) { "PASS" } else { Conf $X.boot.first_launch_movies }) ("movie.play: {0} (expected {1})" -f ($plays -join ","), ($want -join ",")) "Frontend"
+        $un = @(Flow-Ev $F "movie.unavailable"); $ff = @(Flow-Ev $F "movie.firstFrame"); $fin = @(Flow-Ev $F "movie.finished")
+        $introFF = @($want | Where-Object { $m = $_; @($ff | Where-Object { $_.movie -like "$m*" }).Count })
+        Res "PRESENTED" "intro_movies_decoded" $(if ($un.Count) { "FAIL" } elseif ($introFF.Count -eq $want.Count) { "PASS" } else { "FAIL" }) ("intro movies with a decoded first frame: {0}/{1}; finished events {2}; unavailable {3} {4}" -f $introFF.Count, $want.Count, $fin.Count, $un.Count, (($un | ForEach-Object { "$($_.movie): $($_.why)" }) -join "; ")) "Frontend"
+        $skipped = @($fin | Where-Object { "$($_.skipped)" -eq "True" })
+        Res "STATE" "intro_played_to_end" $(if ($fin.Count -ge 4 -and -not $skipped.Count) { "PASS" } elseif (-not $fin.Count) { "SKIP" } else { "INFO" }) ("movie.finished: " + (($fin | ForEach-Object { "$($_.movie) pos $($_.position) skipped $($_.skipped)" }) -join "; ")) "Frontend"
+        $sa = Shot-Stats (Join-Path $d1 "a_intro1.bmp"); $sb = Shot-Stats (Join-Path $d1 "a_intro2.bmp"); $dIntro = Shot-Diff (Join-Path $d1 "a_intro1.bmp") (Join-Path $d1 "a_intro2.bmp")
+        Res "PRESENTED" "intro_on_screen" $(if (-not $sa) { "SKIP" } elseif ($sa.black -lt 0.97 -or $sb.black -lt 0.97) { "HUMAN" } else { "FAIL" }) ("frames at 6 s / 14 s after boot: near-black {0:P0} / {1:P0}, mean luma {2} / {3}, change {4}. Drawn: whether it is the shipped intro presentation (logos, FMV, no audio PARTIAL) is a human check" -f $sa.black, $sb.black, $sa.mean, $sb.mean, $dIntro) "Frontend"
+        $mute = @(Flow-Ev $F "audio.moviePlaying")
+        Res "AUDIO" "movie_mute" $(if (-not $mute.Count) { "SKIP" } elseif (@($mute | Where-Object { "$($_.playing)" -eq "True" -or "$($_.value)" -eq "True" -or "$($_.on)" -eq "True" }).Count -and @($mute | Where-Object { "$($_.playing)" -eq "False" -or "$($_.value)" -eq "False" -or "$($_.on)" -eq "False" }).Count) { "PASS" } else { "INFO" }) ("audio.moviePlaying events {0}: {1} (CINE_MUTE_FOR_BINK while a Bink plays: {2})" -f $mute.Count, (($mute | Select-Object -First 6 | ForEach-Object { ($_.PSObject.Properties | Where-Object { $_.Name -notin 't', 'seq', 'ev' } | ForEach-Object { "$($_.Name)=$($_.Value)" }) -join " " }) -join " | "), $X.audio_ownership.movie_mute_preset.src) "Systems/Frontend"
+        # ---- UI controller ----
+        $legal = @{}; foreach ($t in $X.ui_controller.transitions) { $legal["$($t[0])>$($t[1])"] = $true }
+        $bad = @(); foreach ($u in (Flow-Ev $F "ui.state")) { $k = "$($u.from)>$($u.to)"; if (-not $legal[$k] -and -not ($u.from -eq "NotInGame")) { $bad += "$k@$($u.level)" } }
+        Res "STATE" "ui_transitions_legal" $(if (-not $bad.Count) { "PASS" } else { "FAIL" }) ("{0} UI state changes; outside the TnUIController table: {1}" -f @(Flow-Ev $F "ui.state").Count, ($bad -join ", ")) "Frontend"
+        $opened = @(@(Flow-Ev $F "ui.open") + @(Flow-Ev $F "gfx.movie" | Where-Object { "$($_.opened)" -eq "True" }) | ForEach-Object { $_.movie } | Select-Object -Unique)
+        foreach ($st in "FrontEnd", "InLobby@PartyLobby", "InLobby@GameLobby", "Paused") { $w = $X.ui_controller.movie_for_state.$st; Res "STATE" "movie_for.$st" $(if ($opened -contains $w) { "PASS" } else { "FAIL" }) "expected $w opened (RE 1.4)" "Frontend" }
+        $dupOpen = @(); $open = @{}
+        foreach ($e in $F) { if ($e.ev -eq "gfx.movie" -and "$($e.opened)" -eq "True") { if ($open[$e.movie]) { $dupOpen += $e.movie }; $open[$e.movie] = $true } elseif ($e.ev -eq "gfx.movieClosed") { $open.Remove($e.movie) } }
+        Res "STATE" "no_duplicate_screens" $(if (-not $dupOpen.Count) { "PASS" } else { "FAIL" }) ("GFx movies opened again while open: " + ($dupOpen -join ", ")) "Frontend"
+        # ---- real-input navigation (keys -> the movies' own ActionScript -> bridge) ----
+        $br = @(Flow-Ev $F "bridge")
+        $opl = @($br | Where-Object fn -eq "Online.OpenPartyLobby")[0]
+        Res "STATE" "key_multiplayer" $(if ($opl.args -eq $X.travel.multiplayer_gts.value) { "PASS" } else { "FAIL" }) ("Start, Down, A on the main menu -> Online.OpenPartyLobby({0}) (BLK A2: GTS_TeamGame)" -f $opl.args) "Frontend"
+        $egm = @($br | Where-Object fn -eq "Online.EditGameMode")
+        Res "STATE" "key_mode_focus_tdm" $(if ($egm.Count -and $egm[0].args -eq "TDM") { "PASS" } else { Conf $X.travel.mode_list_initial_focus }) ("first EditGameMode on entering the mode list: {0} (BLK B2: initial focus TDM, EditGameMode on focus)" -f $(if ($egm.Count) { $egm[0].args } else { "none" })) "Frontend"
+        $sw = @(Flow-Ev $F "settings.write"); $def = $X.travel.host_option_defaults.value
+        $got = @{}; foreach ($w in $sw) { $got[$w.field] = "$($w.value)" }
+        $okDef = ($got.AutobalanceTeams -eq $def.TeamBalancing) -and ($got.MapSelectionMethod -eq $def.MapSelection) -and ($got.TimeLimit -like "$($def.TimeLimit)*") -and ($got.PointsToWin -eq $def.PointsToWin)
+        Res "STATE" "host_option_defaults" $(if (-not $sw.Count) { "SKIP" } elseif ($okDef) { "PASS" } else { "FAIL" }) ("Create Game with untouched rows wrote: " + (($sw | ForEach-Object { "$($_.field)=$($_.value)" }) -join ", ") + " (BLK B4: Autobalanced / Host's Choice / 15 minutes / 40)") "Frontend"
+        $gm = @(Flow-Ev $F "gamelobby.map"); $firstSel = @($br | Where-Object fn -eq "Online.SetSelectedMapID")[0]
+        $selectable = @($X.travel.tdm_map_order.value | Where-Object { $id = $_; @($gm | Where-Object { [int]$_.mapId -eq $id -and "$($_.hasRequiredAssets)" -eq "True" }).Count -or $id -eq 508 })
+        Res "STATE" "lobby_default_map" $(if ($firstSel -and [int]$firstSel.args -eq [int]$selectable[0]) { "PASS" } elseif (-not $firstSel) { "FAIL" } else { "FAIL" }) ("game lobby opened: server pick {0}, then the lobby movie pushed SetSelectedMapID({1}); expected the first selectable map in TransLevels order (BLK C4: index 0; rebuild-selectable maps {2} -> {3}). Original dump: Seed of Corruption 501 is index 0; the rebuild only lists maps with runtime data" -f $(if ($gm.Count) { $gm[0].mapId } else { "-" }), $firstSel.args, (($X.travel.tdm_map_order.value) -join ","), $selectable[0]) "Frontend"
+        $cd = @(Flow-Ev $F "gamelobby.countdown")[0]; $fc = @(Flow-Ev $F "gamelobby.finalCountdown")[0]; $span = if ($cd -and $fc) { [double]$fc.t - [double]$cd.t } else { -1 }
+        Res "STATE" "lobby_countdown" $(if ([int]$cd.seconds -eq 10 -and (Near $span 10 1.0)) { "PASS" } else { "FAIL" }) ("A on Start Game -> countdown {0} s, final countdown after {1:F2} s (BLK C8: 10 s)" -f $cd.seconds, $span) "Frontend"
+        $mu = (@(Flow-Ev $F "gamelobby.startLevel")[0]).url; $pu = Parse-Url $mu
+        $badK = @($X.travel.match_url_keys.value.PSObject.Properties | Where-Object { $pu.keys[$_.Name] -ne $_.Value } | ForEach-Object { "$($_.Name)=$($pu.keys[$_.Name])" })
+        Res "STATE" "match_url" $(if ($mu -eq $X.travel.match_url.value) { "PASS" } elseif (-not $badK.Count) { "KNOWN" } else { "FAIL" }) ("{0}; mismatched keys: {1} (RE 3.1 / BLK D1)" -f $mu, ($badK -join ", ")) "Frontend"
+        $lm = @(Flow-Ev $F "loading.start" | Where-Object kind -eq "Map")[0]
+        Res "STATE" "match_loading_text" $(if ($lm.title -eq $X.loading.match_title.value -and $lm.message -eq $X.loading.match_message.value -and [int]$lm.tips -eq 3) { "PASS" } else { "FAIL" }) ("title '{0}' message '{1}' tips {2}" -f $lm.title, $lm.message, $lm.tips) "Frontend"
+        $ml = @(Flow-Ev $F "match.launch")[0]
+        Res "OWNERSHIP" "launch_request" $(if ($ml.mode -eq "TDM" -and [int]$ml.goalScore -eq 40 -and [int]$ml.timeLimit -eq 900 -and $ml.runtimeDir -eq "MP_IAC_Streets") { "PASS" } else { "FAIL" }) ("frontend MatchLaunch: mode {0} goal {1} time {2} runtimeDir {3} team {4}" -f $ml.mode, $ml.goalScore, $ml.timeLimit, $ml.runtimeDir, $ml.team) "Frontend"
+        # ---- MATCH: Gameplay's execution of the request ----
+        $gLaunch = @(Grep-Log $log1 'match: launched'); $gBegin = @(Grep-Log $log1 'match: \S+ begin \(goal'); $gSpawn = @(Grep-Log $log1 'match: local player spawned at')
+        if (-not $gLaunch.Count -and -not $gBegin.Count) {
+            Res "OWNERSHIP" "gameplay_runs_request" $(if (@(Flow-Ev $F "adapter").Count) { "FAIL" } else { "FAIL" }) ("no Gameplay match launch in the frontend-launched match (no 'match: launched' / 'match: <mode> begin'). {0}" -f $(if (@(Flow-Ev $F "adapter").Count) { "The frontend still uses the PROVISIONAL adapter (no PendingMatch): the TDM rules are not running behind the UI" } else { "" })) "Integration/Gameplay"
+        } else {
+            $gl = [regex]::Match($gLaunch[0].text, 'match: launched (\S+) (\S+) \(goal (\d+), time (\d+) s\)')
+            $okL = $gl.Success -and $gl.Groups[2].Value -eq $ml.mode -and [int]$gl.Groups[3].Value -eq [int]$ml.goalScore -and [int]$gl.Groups[4].Value -eq [int]$ml.timeLimit
+            Res "OWNERSHIP" "gameplay_runs_request" $(if ($okL) { "PASS" } else { "FAIL" }) ("Gameplay: '{0}' vs frontend request mode {1} goal {2} time {3}" -f ($gLaunch[0].text -replace '^.*match: ', ''), $ml.mode, $ml.goalScore, $ml.timeLimit) "Integration/Gameplay"
+        }
+        $pre = @(Flow-Ev $F "ui.open" | Where-Object { $_.movie -like "*PreGameCountdown*" }) + @(Flow-Ev $F "gfx.movie" | Where-Object { $_.movie -like "*PreGameCountdown*" -and "$($_.opened)" -eq "True" })
+        $lvlM = @(Flow-Ev $F "level.begin" | Where-Object level -eq "Match")[0]; $ing = @(Flow-Ev $F "ui.state" | Where-Object to -eq "InGame")[0]
+        $pend = if ($lvlM -and $ing) { [double]$ing.t - [double]$lvlM.t } else { -1 }
+        $ad = @(Flow-Ev $F "adapter")
+        Res "MATCH" "pending_countdown" $(if (Near $pend 10 1.5) { "PASS" } elseif ($ad.Count) { "FAIL" } else { "FAIL" }) ("match level -> InGame after {0:F2} s (BLK D4 / RE 5.2: PendingMatch 10 s, PreGameCountdown shown {1}){2}" -f $pend, $(if ($pre.Count) { "yes" } else { "no" }), $(if ($ad.Count) { "; PROVISIONAL adapter still in the path: " + $ad[0].what } else { "" })) "Gameplay/Frontend"
+        if ($gSpawn.Count) {
+            $sp = [regex]::Match($gSpawn[0].text, 'spawned at (\S+) \((\S+) team (\d+)\)'); $iIn = Flow-LogIndex $L1 "ui.state" 0
+            $inGameIdx = @($L1 | Where-Object { $_.kind -eq "flow" -and $_.text -match "to=InGame" } | Select-Object -First 1).i
+            $before = $inGameIdx -and $gSpawn[0].i -lt (@($L1 | Where-Object { $_.kind -eq "flow" -and $_.text -match "FLOW level\.begin.*level=Match" } | Select-Object -First 1).i)
+            Res "MATCH" "no_spawn_before_start" $(if (-not $before) { "PASS" } else { "FAIL" }) ("first spawn log line {0} vs match level begin / InGame (BLK E5: no spawns in PendingMatch)" -f $gSpawn[0].i) "Gameplay"
+            $team = $sp.Groups[3].Value; $clu = $sp.Groups[2].Value
+            Res "MATCH" "spawn_team_cluster" $(if ($sp.Success -and $team -in "0", "1" -and $clu -eq $teamCluster[$team]) { "PASS" } elseif ($sp.Success) { "FAIL" } else { "INFO" }) ("spawned at {0} in {1}, team {2} (RE 5.3 / BLK E6: initial clusters Autobots 7810, Decepticons 4159, locked 15 s)" -f $sp.Groups[1].Value, $clu, $team) "Gameplay"
+            Res "MATCH" "spawn_class" $(if ($sp.Groups[1].Value -like "TnTeamPlayerStart*") { "PASS" } else { "FAIL" }) ("start actor {0} (TnTeamPlayerStart in TDM)" -f $sp.Groups[1].Value) "Gameplay"
+            Res "OWNERSHIP" "team_consistent" $(if ("$($ml.team)" -eq $team) { "PASS" } else { "INFO" }) ("frontend launch team {0}, Gameplay spawn team {1} (BLK E2/E4: offline the lobby assigns no team; the match PickTeam decides)" -f $ml.team, $team) "Integration"
+        } else { Res "MATCH" "spawn_team_cluster" $(if ($gBegin.Count) { "FAIL" } else { "SKIP" }) "no 'match: local player spawned' line" "Gameplay" }
+        # ---- PRESENTED: what the player saw at each stage ----
+        $stages = [ordered]@{ b_title = "title"; c_mainmenu = "main menu"; d_party = "party lobby"; e_modes = "mode list"; f_hostoptions = "host options"; g_gamelobby = "game lobby"; h_countdown = "lobby countdown"; i_loading = "loading screen"; j_match_pending = "match pre-game"; k_ingame0 = "in game"; l_ingame1 = "in game +8 s"; m_pause = "pause menu"; n_return = "returned frontend" }
+        $rows = @(); foreach ($k in $stages.Keys) { $s = Shot-Stats (Join-Path $d1 "$k.bmp"); if ($s) { $rows += [pscustomobject]@{ stage = $stages[$k]; file = $s.file; mean = $s.mean; black = $s.black; flat = $s.flat } } }
+        Write-WfcCsv $rows (Join-Path $d1 "shots.csv")
+        if ($rows.Count) { $tiles = @(Get-ChildItem $d1 -Filter *.bmp | Sort-Object Name | ForEach-Object { @{ png = $_.FullName; label = $_.BaseName } }); New-WfcSheet $tiles (Join-Path $OutDir "R1_sheet.png") 4 400 225 }
+        foreach ($row in $rows) {
+            if ($row.stage -like "in game*") { continue }
+            Res "PRESENTED" ("screen." + ($row.stage -replace '\W', '_')) $(if ($row.black -ge 0.97) { "FAIL" } else { "HUMAN" }) ("{0}: near-black {1:P0}, mean luma {2}{3}" -f $row.file, $row.black, $row.mean, $(if ($row.black -ge 0.97) { " - nothing on screen" } else { " - drawn; whether it looks like WFC is a human check (R1_sheet.png)" })) $(if ($row.black -ge 0.97) { "Frontend" } else { "" })
+        }
+        $g0 = Shot-Stats (Join-Path $d1 "k_ingame0.bmp"); $g1 = Shot-Stats (Join-Path $d1 "l_ingame1.bmp"); $gd = Shot-Diff (Join-Path $d1 "k_ingame0.bmp") (Join-Path $d1 "l_ingame1.bmp")
+        if ($g0) {
+            $worldOk = $g0.black -lt 0.85 -and $g1.black -lt 0.85
+            Res "PRESENTED" "in_game_world_visible" $(if ($worldOk) { "PASS" } else { "FAIL" }) ("in-game frames (trace: InGame, HUD on): near-black {0:P0} / {1:P0}, mean luma {2} / {3}{4}" -f $g0.black, $g1.black, $g0.mean, $g1.mean, $(if (-not $worldOk) { " - the player sees no world although the trace says InGame (k_ingame0.bmp)" } else { "" })) "Integration/Rendering/Frontend"
+            Res "PRESENTED" "in_game_live" $(if ($gd -gt 2) { "PASS" } else { "FAIL" }) ("frames 8 s apart with walk + turn input differ by {0} luma (frozen view if ~0)" -f $gd) "Integration"
+            $pz = Shot-Diff (Join-Path $d1 "l_ingame1.bmp") (Join-Path $d1 "m_pause.bmp")
+            Res "PRESENTED" "pause_menu_drawn" $(if ($pz -gt 4) { "HUMAN" } else { "FAIL" }) ("pause frame differs from the game frame by {0} luma (menu over the running match; backdrop blend PARTIAL per Frontend)" -f $pz) "Frontend"
+        }
+        Res "PRESENTED" "pause_input_focus" "HUMAN" "hold W, press Esc: the robot must stop while the pause menu is up, and the world keeps running (scripted WFC_AUTO* input is injected after the focus gate; real keys cannot be sent safely on a shared desktop)" "Frontend"
+        # ---- quit / return ----
+        $tq = @(Flow-Ev $F "travel" | Where-Object { $_.from -eq "Match" })[0]; $ret = @(Flow-Ev $F "snapshot" | Where-Object why -eq "returned")[0]
+        Res "STATE" "quit_to_main_menu" $(if ($tq.url -eq $X.travel.quit_to_main_menu.value -and $ret -and $ret.uiState -eq "FrontEnd") { "PASS" } else { "FAIL" }) ("travel {0}; returned uiState {1}; intro replayed after return: {2}" -f $tq.url, $ret.uiState, @(Flow-Ev $F "movie.play" | Where-Object { [int]$_.seq -gt [int]$tq.seq }).Count) "Frontend"
+        Res "LIFETIME" "state_reset_after_return" $(if ($ret -and $ret.mode -eq "" -and [int]$ret.mapId -eq -1 -and "$($ret.hud)" -eq "False") { "PASS" } elseif (-not $ret) { "SKIP" } else { "FAIL" }) ("returned snapshot: mode '{0}' mapId {1} team {2} hud {3}" -f $ret.mode, $ret.mapId, $ret.team, $ret.hud) "Frontend"
+        # ---- AUDIO in R1 ----
+        $music = @(Grep-Log $log1 '\] MUSIC (play|stop|queued) ')
+        $lvlIdx = @($L1 | Where-Object { $_.kind -eq "flow" -and $_.ev -eq "level.begin" } | ForEach-Object { [pscustomobject]@{ i = $_.i; level = [regex]::Match($_.text, 'level=(\S+)').Groups[1].Value } })
+        function LevelAt($i) { $l = "Boot"; foreach ($x in $lvlIdx) { if ($x.i -lt $i) { $l = $x.level } }; return $l }
+        $mPlays = @($music | Where-Object { $_.text -match 'MUSIC play (\S+)' } | ForEach-Object { [pscustomobject]@{ level = (LevelAt $_.i); cue = [regex]::Match($_.text, 'MUSIC play (\S+)').Groups[1].Value } })
+        if (-not $music.Count) { Res "AUDIO" "level_music" "SKIP" "no MUSIC log lines (WFC_MUSICLOG): Systems music not wired into the frontend path" "Systems/Frontend" }
+        else {
+            $exp = [ordered]@{ FrontEnd = $X.audio_ownership.frontend_music.value; PartyLobby = $X.audio_ownership.party_lobby_music.value; GameLobby = $X.audio_ownership.game_lobby_music.value }
+            foreach ($lv in $exp.Keys) { $p = @($mPlays | Where-Object level -eq $lv); $visits = @($lvlIdx | Where-Object level -eq $lv).Count
+                Res "AUDIO" "music.$lv" $(if ($p.Count -eq $visits -and @($p | Where-Object cue -ne $exp[$lv]).Count -eq 0) { "PASS" } elseif ($p.Count -gt $visits) { "FAIL" } else { "FAIL" }) ("{0} visits, music plays: {1} (expected {2} once per visit)" -f $visits, (($p | ForEach-Object { $_.cue }) -join ","), $exp[$lv]) "Systems" }
+            $mm = @($mPlays | Where-Object level -eq "Match")
+            Res "AUDIO" "no_music_in_match" $(if (-not $mm.Count) { "PASS" } else { "FAIL" }) ("music plays during the Streets match: {0} (Streets authors no SeqAct_PlayMusic)" -f (($mm | ForEach-Object { $_.cue }) -join ",")) "Systems"
+        }
+        $us = @(Flow-Ev $F "ui.sound")
+        if ($us.Count) {
+            $silent = @($us | Where-Object { $_.audio -eq "none" }); $names = @($us | ForEach-Object { $_.name } | Select-Object -Unique)
+            $bad = @($names | Where-Object { $_ -notin $X.travel.menu_sounds.value -and $_ -ne "BUTTON_START" })
+            Res "AUDIO" "ui_sounds_played" $(if (-not $silent.Count) { "PASS" } else { "FAIL" }) ("{0} UI sounds requested by the movies ({1}); without an audio owner (audio=none): {2}" -f $us.Count, ($names -join ","), $silent.Count) "Systems/Frontend"
+            $dbl = 0; for ($k = 1; $k -lt $us.Count; $k++) { if ($us[$k].name -eq $us[$k - 1].name -and [Math]::Abs([double]$us[$k].t - [double]$us[$k - 1].t) -lt 0.02) { $dbl++ } }
+            Res "AUDIO" "ui_sounds_single" $(if (-not $dbl) { "PASS" } else { "FAIL" }) ("same UI sound requested twice within 20 ms: {0}" -f $dbl) "Frontend"
+        }
+        $amb1 = @(Read-Amb $log1)
+        $dc = @(Find-DoubledCues $log1)
+        Res "AUDIO" "doubled_sounds_R1" $(if (-not (Has "WFC_CUELOG")) { "SKIP" } elseif (-not $dc.Count) { "PASS" } else { "FAIL" }) ("cue instances started twice at the same place and moment: {0} {1}" -f $dc.Count, (($dc | Group-Object cue | Sort-Object Count -Descending | Select-Object -First 6 | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ", ")) "Systems"
+        $mA = @($amb1 | Where-Object { $_.map })
+        if ($mA.Count) { Res "OWNERSHIP" "audio_level" $(if (@($mA | Where-Object { $_.map -like "*Streets*" }).Count) { "PASS" } else { "FAIL" }) ("Systems AMB level during the match: " + (($mA | ForEach-Object { $_.map } | Select-Object -Unique) -join ",")) "Systems/Integration" }
+        $rl = @(Grep-Log $log1 'render data|loadMapRenderData|Maps[\\/]MP_')
+        Res "OWNERSHIP" "render_map" $(if (@($rl | Where-Object { $_.text -match 'MP_IAC_Streets' }).Count) { "PASS" } else { "INFO" }) ("render log lines naming the map: " + (($rl | Select-Object -First 2 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | ")) "Rendering"
     }
-    # ---- duplicate / stale screens ----
-    $open = @{}; $dups = @(); $stale = @()
-    foreach ($e in $F) {
-        if ($e.ev -in "ui.open", "gfx.open") { if ($open[$e.movie]) { $dups += $e.movie }; $open[$e.movie] = $true }
-        elseif ($e.ev -in "ui.close", "gfx.close") { $open.Remove($e.movie) }
-        elseif ($e.ev -eq "level.begin") { $leftover = @($open.Keys | Where-Object { $_ -notlike "*MovieLoader*" }); if ($leftover.Count -gt 1) { $stale += ("{0}: {1}" -f $e.level, ($leftover -join ",")) }; $open = @{} }
-    }
-    Res "STATE" "no_duplicate_screens" $(if (-not $dups.Count) { "PASS" } else { "FAIL" }) ("movies opened again without being closed: " + ($dups -join ", ")) "Frontend"
-    Res "STATE" "no_stale_screens_across_travel" $(if (-not $stale.Count) { "PASS" } else { "HUMAN" }) ("more than one movie still open when a new level began (travel replaces the UI): " + ($stale -join "; ")) "Frontend"
-    # ---- travel / selection ----
-    $tr = @(Flow-Ev $F "travel")
-    $party = @($tr | Where-Object { $_.url -like "UI_PartyLobby_m*" })[0]
-    Res "STATE" "party_lobby_url" $(if ($party.url -eq $X.travel.party_lobby_url.value) { "PASS" } else { Conf $X.travel.party_lobby_url }) ("{0} (expected {1})" -f $party.url, $X.travel.party_lobby_url.value) "Frontend"
-    $br = @(Flow-Ev $F "bridge"); $opl = @($br | Where-Object fn -eq "Online.OpenPartyLobby")[0]
-    Res "STATE" "multiplayer_call" $(if ($opl.args -eq $X.travel.multiplayer_gts.value) { "PASS" } else { "FAIL" }) ("Online.OpenPartyLobby({0}) (RE 1.5: {1})" -f $opl.args, $X.travel.multiplayer_gts.value) "Frontend"
-    $pub = @(Flow-Ev $F "lobby.publishGameInfo")[0]
-    Res "STATE" "mode_selection" $(if ($pub.tag -eq "TDM" -and $pub.friendlyName -eq $X.loading.match_title.value) { "PASS" } else { "FAIL" }) ("publishGameInfo tag={0} settings={1} friendlyName={2}" -f $pub.tag, $pub.settings, $pub.friendlyName) "Frontend"
-    $gl = @($tr | Where-Object { $_.url -like "UI_Lobby_m*" })[0]; $glu = Parse-Url $gl.url; $badK = @($X.travel.game_lobby_url_keys.value.PSObject.Properties | Where-Object { $glu.keys[$_.Name] -ne $_.Value } | ForEach-Object { "$($_.Name)=$($glu.keys[$_.Name]) (want $($_.Value))" })
-    Res "STATE" "game_lobby_url" $(if ($gl -and -not $badK.Count) { "PASS" } else { "FAIL" }) ("{0}; mismatched keys: {1}" -f $gl.url, ($badK -join ", ")) "Frontend"
-    $maps = @(Flow-Ev $F "gamelobby.map"); $sel = $maps | Select-Object -Last 1
-    Res "STATE" "map_selection" $(if ($sel.mapId -eq 508 -and $sel.map -eq "MP_IAC_Streets_Base_m" -and "$($sel.hasRequiredAssets)" -eq "True") { "PASS" } else { "FAIL" }) ("selected mapId={0} map={1} name={2} hasRequiredAssets={3}; preselected before the call: {4}" -f $sel.mapId, $sel.map, $sel.name, $sel.hasRequiredAssets, $(if ($maps.Count -gt 1) { $maps[0].mapId } else { "n/a" })) "Frontend"
-    $cd = @(Flow-Ev $F "gamelobby.countdown")[0]; $ticks = @(Flow-Ev $F "gamelobby.countdownTick"); $fc = @(Flow-Ev $F "gamelobby.finalCountdown")[0]
-    $span = if ($cd -and $fc) { [double]$fc.t - [double]$cd.t } else { -1 }
-    Res "STATE" "lobby_countdown" $(if ($cd.seconds -eq $X.travel.lobby_countdown_s.value -and [Math]::Abs($span - $X.travel.lobby_countdown_s.value) -le 1.0) { "PASS" } else { "FAIL" }) ("countdown {0} s, {1} ticks, final countdown after {2:F2} s (expected {3} s, 1 s ticks)" -f $cd.seconds, $ticks.Count, $span, $X.travel.lobby_countdown_s.value) "Frontend"
-    $teamName = @{ "0" = "Autobots"; "1" = "Decepticons" }
-    Res "STATE" "team_pick" $(if ($fc.team -in 0, 1 -and $fc.teamName -eq $teamName["$($fc.team)"]) { "PASS" } else { "FAIL" }) ("finalCountdown team={0} {1} (RE 5.3: 0 Autobots, 1 Decepticons; PickTeam tie -> RandomInt(2) HIGH)" -f $fc.team, $fc.teamName) "Frontend"
-    $mu = (@(Flow-Ev $F "gamelobby.startLevel")[0]).url
-    Res "STATE" "match_url" $(if ($mu -eq $X.travel.match_url.value) { "PASS" } else { $p = Parse-Url $mu; if (@($X.travel.match_url_keys.value.PSObject.Properties | Where-Object { $p.keys[$_.Name] -ne $_.Value }).Count) { "FAIL" } else { "KNOWN" } }) ("{0}`n expected (RE 3.1): {1}" -f $mu, $X.travel.match_url.value) "Frontend"
-    $lm = @(Flow-Ev $F "loading.start" | Where-Object kind -eq "Map")[0]
-    Res "STATE" "match_loading_text" $(if ($lm.title -eq $X.loading.match_title.value -and $lm.message -eq $X.loading.match_message.value -and [int]$lm.tips -eq $X.loading.match_tips.value) { "PASS" } else { "FAIL" }) ("title '{0}' message '{1}' tips {2} gfx {3} bink {4}" -f $lm.title, $lm.message, $lm.tips, $lm.gfx, $lm.bink) "Frontend"
-    $ml = @(Flow-Ev $F "match.launch")[0]
-    Res "STATE" "match_launch" $(if ([int]$ml.goalScore -eq $X.match_tdm.goal_score.value -and [int]$ml.timeLimit -eq $X.match_tdm.time_limit_s.value -and $ml.mode -eq "TDM" -and "$($ml.team)" -eq "$($fc.team)") { "PASS" } else { "FAIL" }) ("mode {0} goalScore {1} timeLimit {2} team {3} runtimeDir {4} (RE 5.1: 40 / 900; team = lobby pick {5})" -f $ml.mode, $ml.goalScore, $ml.timeLimit, $ml.team, $ml.runtimeDir, $fc.team) "Frontend"
-    $mld = @(Flow-Ev $F "match.loaded")[0]; Res "STATE" "match_load_time" "INFO" ("blocking match load {0} s" -f $mld.seconds) "" ([double]$mld.seconds)
-    # ---- match UI sequence (Gameplay PendingMatch / InProgress drive it; until then a PROVISIONAL adapter) ----
-    $ad = @(Flow-Ev $F "adapter")
-    $pre = @(Flow-Ev $F "ui.open" | Where-Object { $_.movie -like "*PreGameCountdown*" })[0]; $ing = @(Flow-Ev $F "ui.state" | Where-Object to -eq "InGame")[0]
-    $pendSpan = if ($pre -and $ing) { [double]$ing.t - [double]$pre.t } else { -1 }
-    Res "MATCH" "pending_countdown" $(if ([Math]::Abs($pendSpan - $X.match_tdm.pending_countdown_s.value) -le 1.5) { "PASS" } elseif ($ad.Count) { "KNOWN" } else { "FAIL" }) ("PreGameCountdown -> InGame after {0:F2} s (RE 5.2: {1} s). {2}" -f $pendSpan, $X.match_tdm.pending_countdown_s.value, $(if ($ad.Count) { "PROVISIONAL adapter: " + $ad[0].what } else { "" })) "Gameplay"
-    $hud = @(Flow-Ev $F "ui.hud" | Where-Object { "$($_.visible)" -eq "True" })
-    Res "STATE" "hud_visible_in_game" $(if ($hud.Count) { "PASS" } else { "FAIL" }) "ui.hud visible=True on entering InGame (RE 1.4)" "Frontend"
-    # ---- pause, input focus, world keeps running (bPauseable false HIGH) ----
-    $iP = ($L1 | Where-Object { $_.kind -eq "flow" -and $_.text -match "ui\.state .*to=Paused" } | Select-Object -First 1).i
-    $iQ = ($L1 | Where-Object { $_.kind -eq "flow" -and $_.text -match "match\.quit" } | Select-Object -First 1).i
-    if ($iP -and $iQ) {
-        $before = @($L1 | Where-Object { $_.kind -eq "frame" -and $_.i -lt $iP } | Select-Object -Last 3)
-        $during = @($L1 | Where-Object { $_.kind -eq "frame" -and $_.i -gt $iP -and $_.i -lt $iQ })
-        $mvB = ($before | Measure-Object hspeed -Maximum).Maximum; $mvD = if ($during.Count) { ($during | Measure-Object hspeed -Maximum).Maximum } else { -1 }
-        $disp = if ($during.Count -ge 2) { [Math]::Sqrt([Math]::Pow($during[-1].x - $during[0].x, 2) + [Math]::Pow($during[-1].z - $during[0].z, 2)) } else { -1 }
-        # The WFC_AUTO* hooks are injected AFTER the frontend's focus gate (Application.cpp), and the platform polls
-        # GetAsyncKeyState (real input to the focused window only). Real keys cannot be sent from the gate without
-        # typing into whatever window is foreground on a shared machine, so the focus behaviour is a human check
-        # until the product offers a pre-gate input hook. The measured scripted-walk numbers are kept as INFO.
-        Res "PRESENTED" "pause_input_focus" "HUMAN" ("hold W, press Esc in a match: the robot must stop while the pause menu is up and the world keeps running. Not automatable: scripted input (WFC_AUTOWALK) enters after the focus gate and the window reads GetAsyncKeyState. Proposed hook for the frontend lane: a scripted-input variant applied before the focus gate. Scripted walk for reference: before pause max {0:F1} m/s, during pause max {1:F1} m/s, displacement {2:F2} m over {3} samples" -f $mvB, $mvD, $disp, $during.Count) "Frontend"
-        Res "STATE" "world_runs_while_paused" $(if ($during.Count -ge 2 -and $during[-1].frame -gt $during[0].frame) { "PASS" } elseif ($during.Count -lt 2) { "SKIP" } else { "FAIL" }) ("match frames advance during pause: {0} -> {1} (RE 6: bPauseable false, HIGH)" -f $(if ($during.Count) { $during[0].frame }), $(if ($during.Count) { $during[-1].frame })) "Frontend"
-    } else { Res "PRESENTED" "pause_input_focus" "SKIP" "pause or quit not reached" "Frontend" }
-    # ---- quit -> main menu ----
-    $q = @(Flow-Ev $F "match.quit")[0]; $tq = @($tr | Where-Object { $_.from -eq "Match" })[0]; $un = @(Flow-Ev $F "match.unloaded"); $fe2 = @(Flow-Ev $F "level.begin" | Where-Object level -eq "FrontEnd")
-    Res "STATE" "quit_to_main_menu" $(if ($q -and $tq.url -eq $X.travel.quit_to_main_menu.value -and $un.Count -and $fe2.Count -ge 2) { "PASS" } else { "FAIL" }) ("match.quit reason={0}; travel {1}; match.unloaded {2}; FrontEnd level entered {3} times (RE 5.7)" -f $q.reason, $tq.url, $un.Count, $fe2.Count) "Frontend"
-    $retFs = @(Flow-Ev $F "fscommand" | Where-Object { $_.cmd -in "enterFrontEnd", "enterMovieSequence" }) | Select-Object -Last 1
-    $playsAfter = @(Flow-Ev $F "movie.play" | Where-Object { [int]$_.seq -gt [int]$tq.seq })
-    Res "STATE" "return_skips_intro" $(if ($retFs.cmd -eq "enterFrontEnd" -and -not $playsAfter.Count) { "PASS" } else { Conf $X.boot.second_launch_skips_logos }) ("MovieLoader after return: {0}; intro movies after return {1}" -f $retFs.cmd, $playsAfter.Count) "Frontend"
-    $snaps = @(Flow-Ev $F "snapshot"); $ret = @($snaps | Where-Object why -eq "returned")[0]
-    Res "LIFETIME" "state_reset_after_return" $(if ($ret -and $ret.mode -eq "" -and [int]$ret.mapId -eq -1 -and [int]$ret.team -eq -1 -and "$($ret.hud)" -eq "False") { "PASS" } elseif (-not $ret) { "SKIP" } else { "FAIL" }) ("returned frontend snapshot: mode='{0}' mapId={1} team={2} hud={3} countdown={4}" -f $ret.mode, $ret.mapId, $ret.team, $ret.hud, $ret.countdown) "Frontend"
-    Res "STATE" "return_to_game_lobby_after_match_end" "SKIP" ("needs the TDM match end (Gameplay MatchOver {0} s -> ReturnToGameLobby UI_Lobby_m with MapId kept; RE 5.7)" -f $X.match_tdm.match_over_countdown_s.value) "Gameplay"
-    # ---- PRESENTED: movies, screens, audio ----
-    $un = @(Flow-Ev $F "movie.unavailable")
-    Res "PRESENTED" "intro_movies_played" $(if (-not $un.Count -and $plays.Count) { "PASS" } elseif ($un.Count) { "KNOWN" } else { "SKIP" }) ("movie.unavailable {0}: {1} - the files exist (DATA) but the user sees no movie" -f $un.Count, (($un | ForEach-Object { "$($_.movie) ($($_.why))" }) -join "; ")) "Frontend"
-    $capRows = @(); foreach ($c in $r1.captures) { if (-not $c.file) { continue }; $l = [WfcImage]::Luma((Join-Path $d1 $c.file), 8); $s = [WfcImage]::Stats($l, 6.0); $capRows += [pscustomobject]@{ seq = $c.seq; ev = $c.ev; detail = $c.detail; file = $c.file; mean = [Math]::Round($s[0], 1); black = [Math]::Round($s[1], 3); flat = [Math]::Round($s[2], 3) } }
-    Write-WfcCsv $capRows (Join-Path $d1 "captures.csv")
-    # Control: the in-game frame is drawn by the 3D renderer in every tree. If it captures as a uniform image, PrintWindow
-    # failed for this run (GL window not composited: occluded / minimised / locked desktop) and no capture is judged.
-    $ctl = @($capRows | Where-Object { $_.detail -match "to=InGame" })[0]
-    $capValid = $ctl -and $ctl.flat -lt 0.9 -and $ctl.black -lt 0.97
-    Res "PRESENTED" "capture_control" $(if ($capValid) { "PASS" } else { "SKIP" }) ("in-game control capture {0}: flat {1:P0}, near-black {2:P0}. {3}" -f $ctl.file, $ctl.flat, $ctl.black, $(if ($capValid) { "window capture works this run" } else { "window capture unavailable this run (uniform control frame): screen checks below are SKIP. Re-run with the product window visible on an unlocked desktop" })) ""
-    if (-not $capValid) { $capRows = @() }
-    foreach ($grp in @(@{ id = "frontend_screen"; m = "level=FrontEnd" }, @{ id = "party_lobby_screen"; m = "level=PartyLobby" }, @{ id = "game_lobby_screen"; m = "level=GameLobby" }, @{ id = "loading_screen_match"; m = "kind=Map" }, @{ id = "in_game"; m = "to=InGame" }, @{ id = "pause_menu"; m = "to=Paused" })) {
-        $c = @($capRows | Where-Object { $_.detail -match $grp.m }) | Select-Object -First 1
-        if (-not $c) { Res "PRESENTED" $grp.id "SKIP" "no window capture for this state (state not reached or window not capturable)"; continue }
-        $blank = $c.black -ge 0.97
-        $st = if ($blank) { if ($grp.id -in "in_game") { "FAIL" } else { "KNOWN" } } else { "HUMAN" }
-        Res "PRESENTED" $grp.id $st ("window capture {0}: mean luma {1}, near-black {2:P0}, flat {3:P0}. {4}" -f $c.file, $c.mean, $c.black, $c.flat, $(if ($blank) { "Nothing is drawn: the trace says the screen is open, the user sees a black window (no GFx movie presenter / loading presentation yet)." } else { "Something is drawn: whether it looks like WFC is a human judgement." })) $(if ($blank) { "Frontend" } else { "" })
-    }
-    if ($capRows.Count) { $tiles = @($capRows | ForEach-Object { @{ png = (Join-Path $d1 $_.file); label = "#$($_.seq) $($_.ev) $($_.detail) black $([Math]::Round($_.black*100))%"; flag = ($_.black -ge 0.97) } }); New-WfcSheet $tiles (Join-Path $OutDir "sheet_first_launch.png") 4 400 225 }
-    $pauseCap = @($capRows | Where-Object { $_.detail -match "to=Paused" })[0]; $gameCap = @($capRows | Where-Object { $_.detail -match "to=InGame" })[0]
-    if ($pauseCap -and $gameCap) { Res "PRESENTED" "pause_menu_drawn" "HUMAN" ("pause capture vs in-game capture: does a pause menu appear? (no presenter installed means the paused frame is the game view; see sheet_first_launch.png)") "Frontend" }
-    $music = @($L1 | Where-Object kind -eq "music")
-    Res "PRESENTED" "menu_music" $(if (-not $music.Count) { "SKIP" } elseif (@($music | Where-Object { $_.text -match "MUSIC play $($X.audio_ownership.frontend_music.value)" }).Count) { "PASS" } else { "FAIL" }) ("MUSIC log lines {0} (WFC_MUSICLOG; needs Systems FrontendAudio wired by the frontend owner): {1}" -f $music.Count, (($music | Select-Object -First 4 | ForEach-Object { $_.text -replace '^.*MUSIC ', '' }) -join " | ")) "Systems/Frontend"
-    $ambM = @($L1 | Where-Object { $_.kind -eq "amb" -and $_.text -match "backendVoices=(\d+)" } | ForEach-Object { [int]([regex]::Match($_.text, "backendVoices=(\d+)").Groups[1].Value) })
-    $ambAny = @($L1 | Where-Object kind -eq "amb")
-    Res "PRESENTED" "match_audio_sounding" $(if (-not $ambAny.Count) { "SKIP" } elseif (($ambM | Measure-Object -Maximum).Maximum -gt 0 -or @($ambAny | Where-Object { $_.text -match "voices=([1-9]\d*)" }).Count) { "PASS" } else { "FAIL" }) ("AMB samples {0}; backend voices max {1} (Systems field; absent before the Systems merge)" -f $ambAny.Count, $(if ($ambM.Count) { ($ambM | Measure-Object -Maximum).Maximum } else { "n/a" })) "Systems"
-    Res "PRESENTED" "ui_audio_ownership" "SKIP" "UI sounds (FrontendAudio.playUiSound) and per-level music handover need the Systems FrontendAudio wiring (call sequence in Systems FIDELITY M05) - expectations in m05\expectations.json audio_ownership" "Systems/Frontend"
 }
 
-# ================= RUN 2: second launch (same profile) =================
-$d2 = Join-Path $OutDir "run2_second_launch"; New-Item -ItemType Directory -Force $d2 | Out-Null
-if (Test-Path (Join-Path $d1 "wfc_profile.ini")) { Copy-Item (Join-Path $d1 "wfc_profile.ini") $d2 }   # the profile the first launch wrote
-$e2 = BaseEnv $d2; $e2.WFC_FRONTEND_SCRIPT = "wait:frontend;wait:ui=FrontEnd;wait:t=2;snapshot:mainmenu;quit"
-$r2 = Invoke-WfcObserved $exe $d2 $e2 300 0.25
-$F2 = Read-FlowLog (Join-Path $d2 "flow.jsonl")
-if ($F2.Count) {
-    $b2 = @(Flow-Ev $F2 "boot")[0]; $p2 = @(Flow-Ev $F2 "movie.play")
-    Res "STATE" "second_launch_profile" $(if ("$($b2.watchedIntro)" -eq "True") { "PASS" } else { "FAIL" }) "second launch in the same directory: watchedIntro=$($b2.watchedIntro) (profile persisted; medium rebuild-only)" "Frontend"
-    Res "STATE" "second_launch_skips_logos" $(if (-not $p2.Count) { "PASS" } else { Conf $X.boot.second_launch_skips_logos }) ("intro movies played on the second launch: {0} ({1})" -f $p2.Count, $X.boot.second_launch_skips_logos.src) "Frontend"
-    Res "STATE" "second_launch_reaches_menu" $(if (@(Flow-Ev $F2 "ui.state" | Where-Object to -eq "FrontEnd").Count) { "PASS" } else { "FAIL" }) "main menu reached on the second launch" "Frontend"
-} else { Res "STATE" "second_launch" "SKIP" "no trace" }
-
-# ================= RUN 3: repeated loops in one process =================
-$d3 = Join-Path $OutDir "run3_loops"; New-Item -ItemType Directory -Force $d3 | Out-Null
-$loop = (1..$Cycles | ForEach-Object { & $fullScript ([Math]::Max(3, $MatchSeconds)) }) -join ";"
-$e3 = (BaseEnv $d3) + @{ WFC_FRONTEND_SCRIPT = "$loop;wait:t=3;quit"; WFC_SKIPINTRO = "1" }
-$r3 = Invoke-WfcSampled $exe $d3 $e3 ($TimeoutSec * 2) 1.0
-$F3 = Read-FlowLog (Join-Path $d3 "flow.jsonl"); $L3 = Read-RunLog (Join-Path $d3 "wfc.log")
-Write-WfcCsv $r3.samples (Join-Path $d3 "process.csv")
-if ($F3.Count) {
-    $rets = @(Flow-Ev $F3 "snapshot" | Where-Object why -eq "returned"); $mls = @(Flow-Ev $F3 "match.loaded"); $launch = @(Flow-Ev $F3 "match.launch")
-    Res "LIFETIME" "cycles_completed" $(if ($rets.Count -eq $Cycles) { "PASS" } else { "FAIL" }) ("{0}/{1} frontend -> TDM -> pause -> quit -> frontend cycles completed (exit {2})" -f $rets.Count, $Cycles, $r3.rc) "Frontend"
-    # memory at each return: the sample whose flow_lines first reaches the 'returned' snapshot's line
-    $lines = @(Get-Content (Join-Path $d3 "flow.jsonl")); $mem = @()
-    foreach ($s in $rets) { $ln = [Array]::FindIndex($lines, [Predicate[string]] { param($fl) $fl -match ('"seq":' + $s.seq + ',') }) + 1; $smp = @($r3.samples | Where-Object { $_.flow_lines -ge $ln -and $_.private_mb -gt 0 } | Select-Object -First 1); if ($smp) { $mem += $smp } }
-    if ($mem.Count -ge 2) {
-        $dMb = ($mem[-1].private_mb - $mem[0].private_mb) / ($mem.Count - 1); $dH = ($mem[-1].handles - $mem[0].handles) / ($mem.Count - 1)
-        $grow = $dMb -gt 30
-        Res "LIFETIME" "memory_per_cycle" $(if (-not $grow) { "PASS" } else { "KNOWN" }) ("private MB at each return to the frontend: {0} (+{1:F1} MB per cycle). The frontend lane documents that the renderer is recreated on return and the previous map's GL objects leak (handoff Rendering: map unload)" -f (($mem | ForEach-Object { $_.private_mb }) -join " -> "), $dMb) $(if ($grow) { "Rendering" } else { "" }) $dMb
-        $peak = ($r3.samples | Where-Object { $_.private_mb -gt 0 } | Measure-Object private_mb -Maximum).Maximum
-        Res "LIFETIME" "memory_peak" $(if ($peak -gt 6144) { "FAIL" } else { "INFO" }) ("peak private memory over {0} cycles: {1} MB (process.csv). FAIL above 6 GB: at that size a user's ordinary session of a few matches exhausts a typical 8-16 GB machine" -f $Cycles, $peak) $(if ($peak -gt 6144) { "Rendering/Frontend" } else { "" }) $peak
-        Res "LIFETIME" "handles_per_cycle" $(if ($dH -gt 50) { "FAIL" } else { "PASS" }) ("handles at each return: {0} ({1:+0.0;-0.0} per cycle)" -f (($mem | ForEach-Object { $_.handles }) -join " -> "), $dH) "" $dH
-    } else { Res "LIFETIME" "memory_per_cycle" "SKIP" "fewer than 2 returns sampled" }
-    $loads = @(Select-String -Path (Join-Path $d3 "wfc.log") -Pattern "uploaded mesh 0:" -SimpleMatch)
-    Res "LIFETIME" "one_world_load_per_match" $(if ($mls.Count -and $loads.Count -eq $mls.Count) { "PASS" } elseif (-not $loads.Count) { "INFO" } else { "FAIL" }) ("match.loaded {0}, world loads logged {1}" -f $mls.Count, $loads.Count) "Gameplay/Frontend"
-    Res "LIFETIME" "load_time_per_cycle" "INFO" ("match load seconds per cycle: " + (($mls | ForEach-Object { $_.seconds }) -join ", ")) ""
-    $same = @($launch | ForEach-Object { "{0}|{1}|{2}" -f $_.mode, $_.goalScore, $_.timeLimit } | Select-Object -Unique)
-    Res "LIFETIME" "match_parameters_stable" $(if ($same.Count -eq 1) { "PASS" } else { "FAIL" }) ("match.launch mode|goal|time per cycle: " + (($launch | ForEach-Object { "{0}|{1}|{2}|team {3}" -f $_.mode, $_.goalScore, $_.timeLimit, $_.team }) -join "; ")) "Frontend"
-    $badRet = @($rets | Where-Object { $_.mode -ne "" -or [int]$_.mapId -ne -1 -or [int]$_.team -ne -1 -or "$($_.hud)" -ne "False" })
-    Res "LIFETIME" "no_stale_flow_state" $(if (-not $badRet.Count) { "PASS" } else { "FAIL" }) ("frontend snapshots after each return with leftover match/lobby state: {0}" -f $badRet.Count) "Frontend"
-    $opensPer = @(); $cur = 0; foreach ($e in $F3) { if ($e.ev -eq "ui.open") { $cur++ }; if ($e.ev -eq "snapshot" -and $e.why -eq "returned") { $opensPer += $cur; $cur = 0 } }; $opensPer = @($opensPer | Select-Object -Skip 1)   # cycle 1 also holds the boot screens
-    Res "LIFETIME" "ui_events_per_cycle_constant" $(if (@($opensPer | Select-Object -Unique).Count -le 1) { "PASS" } else { "FAIL" }) ("ui.open events per cycle: " + ($opensPer -join ", ") + " (growth = screens accumulating)") "Frontend"
-    # first match frame per cycle: player state must start fresh
-    $starts = @(); $inMatch = $false; foreach ($lx in $L3) { if ($lx.kind -eq "flow" -and $lx.text -match "FLOW match\.loaded") { $inMatch = $true }; if ($inMatch -and $lx.kind -eq "frame") { $starts += $lx; $inMatch = $false } }
-    $ammo = @($starts | ForEach-Object { [regex]::Match($_.text, "ammo=(\d+/\d+)").Groups[1].Value } | Select-Object -Unique)
-    $forms = @($starts | ForEach-Object { [regex]::Match($_.text, "form=(\w+)").Groups[1].Value } | Select-Object -Unique)
-    Res "LIFETIME" "player_state_fresh_each_match" $(if ($starts.Count -lt 2) { "SKIP" } elseif ($ammo.Count -eq 1 -and $forms.Count -eq 1) { "PASS" } else { "FAIL" }) ("first frame of each match: ammo {0}; form {1} ({2} matches)" -f ($ammo -join ","), ($forms -join ","), $starts.Count) "Gameplay"
-    $pcm = @($L3 | Where-Object { $_.kind -eq "amb" -and $_.text -match "pcm=([\d.]+)MB map=(\S+)" } | ForEach-Object { $m = [regex]::Match($_.text, "pcm=([\d.]+)MB map=(\S+)"); [pscustomobject]@{ pcm = [double]$m.Groups[1].Value; map = $m.Groups[2].Value } })
-    Res "LIFETIME" "audio_pcm_returns_to_base" $(if (-not $pcm.Count) { "SKIP" } else { "INFO" }) ("decoded PCM per AMB sample (needs Systems): first {0} MB, last {1} MB, max {2} MB; Systems guarantee: back to base after unloadMapAudio" -f $(if ($pcm.Count) { $pcm[0].pcm }), $(if ($pcm.Count) { $pcm[-1].pcm }), $(if ($pcm.Count) { ($pcm | Measure-Object pcm -Maximum).Maximum })) "Systems"
-    foreach ($k in "map_collision", "render_assets", "frontend_movies", "event_queues", "timers") { Res "LIFETIME" "$k" "SKIP" ("no product counter yet for $k across travel; proposal: one 'LIFETIME <name>=<count/bytes>' log line per level.begin (protocols\RUNTIME-EVENTS.md)") "Frontend/Rendering/Systems" }
-} else { Res "LIFETIME" "loops" "SKIP" "no trace" }
-
-# ================= MATCH (Gameplay TDM) =================
-$matchEv = @($L1 | Where-Object { $_.text -match "\] MATCH " })
-foreach ($k in "spawn_after_pending", "team_assignment", "damage", "death", "respawn_delay", "team_score", "player_score", "score_limit_end", "time_limit_end", "tie", "match_end_ui", "reset", "second_match") {
-    $exp = switch ($k) { "respawn_delay" { "$($X.match_tdm.respawn_delay_s.value) s" } "team_score" { "kill +$($X.match_tdm.kill_score.value.team)" } "score_limit_end" { "$($X.match_tdm.goal_score.value)" } "time_limit_end" { "$($X.match_tdm.time_limit_s.value) s" } "match_end_ui" { "UI event 9 -> EndGameStats_GFX, HUD hidden" } default { "RE 5" } }
-    Res "MATCH" $k $(if ($matchEv.Count) { "INFO" } else { "SKIP" }) ("expected {0} ({1}). {2}" -f $exp, "m05\expectations.json match_tdm", $(if ($matchEv.Count) { "MATCH events present: run match-validator.ps1 -Log on run1" } else { "not implemented: no Gameplay TDM lifecycle events yet (MATCH protocol / UI events 4, 5, 9)" })) "Gameplay"
+# ======================================================================= R2 second launch
+if ($Runs -contains "R2" -and (Test-Path (Join-Path $OutDir "R1_first_launch\wfc_profile.ini"))) {
+    $d2 = Join-Path $OutDir "R2_second_launch"; New-Item -ItemType Directory -Force $d2 | Out-Null
+    Copy-Item (Join-Path $OutDir "R1_first_launch\wfc_profile.ini") $d2
+    $r2 = Invoke-WfcSampled $exe $d2 (BaseEnv $d2 @{ WFC_FRONTEND_SCRIPT = ("wait:frontend;wait:ui=FrontEnd;wait:t=2;" + (Shot $d2 "title") + ";snapshot:menu;quit") }) 300 1.0
+    $F2 = Read-FlowLog (Join-Path $d2 "flow.jsonl")
+    $b2 = @(Flow-Ev $F2 "boot")[0]; $p2 = @(Flow-Ev $F2 "movie.play" | Where-Object { $_.movie -in $X.boot.first_launch_movies.value })
+    Res "STATE" "second_launch_profile" $(if ("$($b2.watchedIntro)" -eq "True") { "PASS" } else { "FAIL" }) "watchedIntro=$($b2.watchedIntro) with the first launch's profile" "Frontend"
+    Res "STATE" "second_launch_skips_intro" $(if (-not $p2.Count -and @(Flow-Ev $F2 "ui.state" | Where-Object to -eq "FrontEnd").Count) { "PASS" } else { Conf $X.boot.second_launch_skips_logos }) ("intro movies on the second launch: {0}; title reached" -f $p2.Count) "Frontend"
 }
 
-# ================= report =================
+# ======================================================================= R3 full TDM lifecycle (time limit -> end -> lobby -> 2nd match -> frontend)
+if ($Runs -contains "R3") {
+    $d3 = Join-Path $OutDir "R3_full_match"; New-Item -ItemType Directory -Force $d3 | Out-Null
+    $s3 = @((Path-ToHostOptions 0), (Path-CreateGame -TenMinutes), (Shot $d3 "a_lobby"), (Path-StartGame), "wait:level=Match", "wait:ui=InGame", "wait:t=5", (Shot $d3 "b_ingame"),
+            "wait:t=280", (Shot $d3 "c_midmatch"), "wait:ui=GameEnded", "wait:t=2", (Shot $d3 "d_endstats"), "snapshot:ended",
+            "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=2.5", (Shot $d3 "e_lobby_after"), "snapshot:lobby2",
+            (Path-StartGame), "wait:level=Match", "wait:ui=InGame", "wait:t=8", (Shot $d3 "f_match2"), "snapshot:match2",
+            "showmenu", "wait:ui=Paused", "wait:t=1", "call:Game.QuitToMainMenu", "wait:level=FrontEnd", "wait:ui=FrontEnd", "wait:t=3", (Shot $d3 "g_return"), "snapshot:returned", "quit") -join ";"
+    $r3 = Invoke-WfcSampled $exe $d3 (BaseEnv $d3 @{ WFC_FRONTEND_SCRIPT = $s3; WFC_SKIPINTRO = "1"; WFC_AUTOFIRE = "1" }) 1800 2.0
+    Write-WfcCsv $r3.samples (Join-Path $d3 "process.csv")
+    $F3 = Read-FlowLog (Join-Path $d3 "flow.jsonl"); $log3 = Join-Path $d3 "wfc.log"
+    $to3 = @(Flow-Ev $F3 "timeout"); $lastWait = (@(Flow-Ev $F3 "script.wait") | Select-Object -Last 1).cond
+    Res "MATCH" "full_lifecycle_completed" $(if (@(Flow-Ev $F3 "snapshot" | Where-Object why -eq "returned").Count) { "PASS" } else { "FAIL" }) ("match to the time limit -> end -> lobby -> second match -> frontend; {0}" -f $(if ($to3.Count -or $r3.timedOut) { "stopped after '$lastWait'" } else { "completed" })) "Gameplay/Frontend/Integration"
+    $tlw = @(Flow-Ev $F3 "settings.write" | Where-Object field -eq "TimeLimit")[0]; $ml3 = @(Flow-Ev $F3 "match.launch")
+    Res "OWNERSHIP" "host_option_to_rules" $(if ($ml3.Count -and [int]$ml3[0].timeLimit -eq 600) { "PASS" } else { "FAIL" }) ("Time Limit row set to '{0}' with the keys; match.launch timeLimit {1}; URL TimeLimit {2}" -f $tlw.value, $(if ($ml3.Count) { $ml3[0].timeLimit }), $(if ($ml3.Count) { (Parse-Url $ml3[0].url).keys.TimeLimit })) "Frontend"
+    $gl3 = @(Grep-Log $log3 'match: launched'); $end3 = @(Grep-Log $log3 'match: EndGame')
+    if ($gl3.Count) { Res "MATCH" "time_limit_passed_to_rules" $(if ($gl3[0].text -match 'time 600 s') { "PASS" } else { "FAIL" }) ($gl3[0].text -replace '^.*match: ', '') "Gameplay/Integration" }
+    $ing3 = @(Flow-Ev $F3 "ui.state" | Where-Object to -eq "InGame")[0]; $ge3 = @(Flow-Ev $F3 "ui.state" | Where-Object to -eq "GameEnded")[0]
+    $dur = if ($ing3 -and $ge3) { [double]$ge3.t - [double]$ing3.t } else { -1 }
+    Res "MATCH" "time_limit_end" $(if (Near $dur 600 4) { "PASS" } elseif ($dur -lt 0) { "FAIL" } else { "FAIL" }) ("InGame -> GameEnded after {0:F1} s (TimeLimit 600 s; BLK F3 RemainingTime 0 -> EndGame)" -f $dur) "Gameplay"
+    if ($end3.Count) { Res "MATCH" "tie_no_overtime" $(if ($end3[0].text -match 'reason "" score (\d+)-\1 winner team -1') { "PASS" } elseif ($end3[0].text -match 'reason ""') { "INFO" } else { "FAIL" }) (($end3[0].text -replace '^.*match: ', '') + " (no kills: equal scores -> winner none, 'Tie game', no overtime; BLK F3)") "Gameplay" }
+    $hudOff = @(Flow-Ev $F3 "ui.hud" | Where-Object { "$($_.visible)" -eq "False" -and $ge3 -and [double]$_.t -ge [double]$ge3.t - 0.5 })
+    $endMovie = @(@(Flow-Ev $F3 "gfx.movie") + @(Flow-Ev $F3 "ui.open") | Where-Object { $_.movie -like "*EndGameStats*" })
+    Res "MATCH" "match_end_ui" $(if ($ge3 -and $hudOff.Count -and $endMovie.Count) { "PASS" } else { "FAIL" }) ("GameEnded {0}; HUD hidden {1}; EndGameStats opened {2} (BLK F4: event 9, HUD hidden, EndGameStats_GFX)" -f [bool]$ge3, $hudOff.Count, $endMovie.Count) "Gameplay/Frontend"
+    $trL = @(Flow-Ev $F3 "travel" | Where-Object { $_.from -eq "Match" -and $_.url -like "UI_Lobby_m*" })[0]
+    $over = if ($ge3 -and $trL) { [double]$trL.t - [double]$ge3.t } else { -1 }
+    Res "MATCH" "match_over_return_to_lobby" $(if ($trL -and (Near $over 15 2) -and (Parse-Url $trL.url).keys.MapId -eq "508") { "PASS" } else { "FAIL" }) ("travel {0} after {1:F1} s (BLK F4/F6: MatchOver 15 s -> ReturnToGameLobby UI_Lobby_m?...?MapId=)" -f $trL.url, $over) "Gameplay/Frontend"
+    $sh = Shot-Stats (Join-Path $d3 "d_endstats.bmp")
+    if ($sh) { Res "PRESENTED" "end_stats_screen" $(if ($sh.black -ge 0.97) { "FAIL" } else { "HUMAN" }) ("end-of-match screen: near-black {0:P0} - results layout (columns Level / Name / Score / Kills / Deaths, BLK F5) is a human check" -f $sh.black) "Frontend" }
+    $l2 = @(Flow-Ev $F3 "snapshot" | Where-Object why -eq "lobby2")[0]
+    Res "STATE" "lobby_after_match" $(if ($l2 -and $l2.level -eq "GameLobby") { if ([int]$l2.mapId -eq 508) { "PASS" } else { "INFO" } } else { "FAIL" }) ("back in the game lobby; selected map {0} (BLK C7 HIGH: the lobby movie re-sends selector index 0 = first selectable = Streets in the rebuild)" -f $l2.mapId) "Frontend"
+    Res "MATCH" "second_match" $(if ($ml3.Count -ge 2 -and [int]$ml3[1].timeLimit -eq 600 -and @(Flow-Ev $F3 "snapshot" | Where-Object why -eq "match2").Count) { "PASS" } else { "FAIL" }) ("second launch: {0} (host options persist for the session, HIGH: TimeLimit 600 expected)" -f $(if ($ml3.Count -ge 2) { "mode $($ml3[1].mode) goal $($ml3[1].goalScore) time $($ml3[1].timeLimit)" } else { "not reached" })) "Frontend/Gameplay"
+    $b2 = @(Grep-Log $log3 'match: \S+ begin'); $sp3 = @(Grep-Log $log3 'match: local player spawned')
+    Res "MATCH" "second_match_fresh" $(if ($b2.Count -ge 2 -and $sp3.Count -ge 2) { "PASS" } elseif ($b2.Count -lt 2) { "FAIL" } else { "FAIL" }) ("match begins {0}, local spawns {1} (BLK F6: a new match is a fresh level load)" -f $b2.Count, $sp3.Count) "Gameplay"
+    $ann = @(Grep-Log $log3 '(?i)announce|GameProgress|TimeAnnouncement')
+    Res "MATCH" "time_announcements" $(if ($ann.Count -ge 3) { "INFO" } else { "SKIP" }) ("announcement lines: {0} (RE: at 120 / 60 / 30 s remaining; audible check in HUMAN-CHECK)" -f $ann.Count) "Gameplay/Systems"
+    $dc3 = @(Find-DoubledCues $log3)
+    Res "AUDIO" "doubled_sounds_full_match" $(if (-not (Has "WFC_CUELOG")) { "SKIP" } elseif (-not $dc3.Count) { "PASS" } else { "FAIL" }) ("doubled cue starts over a 10-minute match with constant fire: {0} {1}" -f $dc3.Count, (($dc3 | Group-Object cue | Sort-Object Count -Descending | Select-Object -First 6 | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ", ")) "Systems"
+    $amb3 = @(Read-Amb $log3 | Where-Object { $_.live -ne $null })
+    if ($amb3.Count -gt 20) {
+        $q1 = $amb3[[int]($amb3.Count * 0.25)]; $q4 = $amb3[[int]($amb3.Count * 0.9)]
+        Res "AUDIO" "voices_stable_in_match" $(if ($q4.live -le $q1.live * 1.5 + 10) { "PASS" } else { "FAIL" }) ("live cue instances 25% / 90% through the match: {0} / {1}; backend voices {2} / {3}; PCM {4} / {5} MB" -f $q1.live, $q4.live, $q1.backendVoices, $q4.backendVoices, $q1.pcm, $q4.pcm) "Systems"
+    }
+}
+
+# ======================================================================= R4 repeated frontend <-> Streets cycles (lifetime)
+if ($Runs -contains "R4") {
+    $d4 = Join-Path $OutDir "R4_cycles"; New-Item -ItemType Directory -Force $d4 | Out-Null
+    $one = "wait:frontend;wait:ui=FrontEnd;wait:t=2;snapshot:frontend;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1.5;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=1.5;call:Online.SetSelectedMapID,508;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=15;snapshot:inmatch;showmenu;wait:ui=Paused;wait:t=0.5;call:Game.QuitToMainMenu;wait:level=FrontEnd;wait:ui=FrontEnd;wait:t=4;snapshot:returned"
+    $e4 = BaseEnv $d4 @{ WFC_FRONTEND_SCRIPT = (((1..$Cycles) | ForEach-Object { $one }) -join ";") + ";wait:t=3;quit"; WFC_SKIPINTRO = "1"; WFC_AUTOFIRE = "1"; WFC_AUTOBOOST_CYCLE = "90"; WFC_CUELOG = "1" }
+    $r4 = Invoke-WfcSampled $exe $d4 $e4 ($TimeoutSec + 120 * $Cycles) 1.0
+    Write-WfcCsv $r4.samples (Join-Path $d4 "process.csv")
+    $F4 = Read-FlowLog (Join-Path $d4 "flow.jsonl"); $log4 = Join-Path $d4 "wfc.log"; $L4 = Read-RunLog $log4
+    $rets = @(Flow-Ev $F4 "snapshot" | Where-Object why -eq "returned")
+    Res "LIFETIME" "cycles_completed" $(if ($rets.Count -eq $Cycles) { "PASS" } else { "FAIL" }) ("{0}/{1} frontend -> Streets TDM (15 s of walking, turning, firing, boosting) -> frontend cycles; exit {2}" -f $rets.Count, $Cycles, $r4.rc) "Integration"
+    $loaded = @(Flow-Ev $F4 "match.loaded"); $unl = @(Flow-Ev $F4 "match.unloaded"); $glr = @(Flow-Ev $F4 "match.glRelease")
+    $flowLines = @(Get-Content (Join-Path $d4 "flow.jsonl"))
+    function SampleAtSeq($seq) { $ln = [Array]::FindIndex($flowLines, [Predicate[string]] { param($q) $q -match ('"seq":' + $seq + ',') }) + 1; return @($r4.samples | Where-Object { $_.flow_lines -ge $ln -and $_.private_mb -gt 0 } | Select-Object -First 1)[0] }
+    $rows = @(); for ($c = 0; $c -lt $rets.Count; $c++) {
+        $smp = SampleAtSeq $rets[$c].seq
+        $rows += [pscustomobject][ordered]@{ cycle = $c + 1; loaded_private_mb = $(if ($c -lt $loaded.Count) { [double]$loaded[$c].privateMB }); unloaded_private_mb = $(if ($c -lt $unl.Count) { [double]$unl[$c].privateMB })
+            frontend_private_mb = $(if ($smp) { $smp.private_mb }); frontend_ws_mb = $(if ($smp) { $smp.ws_mb }); handles = $(if ($smp) { $smp.handles }); threads = $(if ($smp) { $smp.threads })
+            gl_released = $(if ($c -lt $glr.Count) { "$($glr[$c].released)" }); load_s = $(if ($c -lt $loaded.Count) { $loaded[$c].seconds }) }
+    }
+    Write-WfcCsv $rows (Join-Path $d4 "cycles.csv")
+    function Slope($vals) { $v = @($vals | Where-Object { $_ -ne $null -and "$_" -ne "" } | ForEach-Object { [double]$_ }); if ($v.Count -lt 3) { return $null }; $v = @($v | Select-Object -Skip 1); $n = $v.Count; $mx = ($n - 1) / 2.0; $my = ($v | Measure-Object -Average).Average; $num = 0.0; $den = 0.0; for ($k = 0; $k -lt $n; $k++) { $num += ($k - $mx) * ($v[$k] - $my); $den += ($k - $mx) * ($k - $mx) }; return [Math]::Round($num / [Math]::Max($den, 1e-9), 1) }
+    $slUnl = Slope ($rows | ForEach-Object { $_.unloaded_private_mb }); $slFe = Slope ($rows | ForEach-Object { $_.frontend_private_mb }); $slH = Slope ($rows | ForEach-Object { $_.handles }); $slT = Slope ($rows | ForEach-Object { $_.threads })
+    $grow = ($slUnl -ne $null -and $slUnl -gt 25) -or ($slFe -ne $null -and $slFe -gt 25)
+    # owner attribution: GL objects released per cycle (Rendering), decoded PCM / voices after the match (Systems), UI screens (Frontend)
+    $glCounts = @($glr | ForEach-Object { "$($_.released)" } | Select-Object -Unique)
+    $amb4 = @(Read-Amb $log4)
+    $pcmPeaks = @(); $livePeaks = @(); $lo = 0
+    for ($c = 0; $c -lt $unl.Count; $c++) {
+        $iL = Flow-LogIndex $L4 "match.loaded" $c; $iU = Flow-LogIndex $L4 "match.unloaded" $c
+        $seg = @($amb4 | Where-Object { $_.i -gt $iL -and $_.i -lt $iU })
+        $pcmPeaks += (MaxOf $seg "pcm"); $livePeaks += (MaxOf $seg "live")
+    }
+    $slPcm = Slope $pcmPeaks
+    $attrib = @()
+    if ($grow) {
+        if ($glCounts.Count -gt 1) { $attrib += "GL objects released per return change across cycles ($($glCounts -join ' / ')): Rendering map unload" }
+        if ($slPcm -ne $null -and $slPcm -gt 2) { $attrib += "decoded audio PCM peak grows $slPcm MB/cycle: Systems" }
+        if (-not $attrib.Count) { $attrib += "neither GL release counts nor audio PCM explain it: run with WFC_NO_GL_RELEASE A/B and Systems WFC_LEVELAUDIO_CYCLE to split; unattributed growth -> Integration" }
+    }
+    Res "LIFETIME" "memory_stabilizes" $(if ($slUnl -eq $null -and $slFe -eq $null) { "SKIP" } elseif (-not $grow) { "PASS" } elseif ($rets.Count -lt 5) { "INFO" } else { "FAIL" }) ("private MB after each unload: {0} (slope {1} MB/cycle after cycle 1); at the frontend after each return: {2} (slope {3}). {4}" -f (($rows | ForEach-Object { $_.unloaded_private_mb }) -join " > "), $slUnl, (($rows | ForEach-Object { $_.frontend_private_mb }) -join " > "), $slFe, ($attrib -join "; ")) $(if ($grow) { "Rendering/Systems/Integration" } else { "" }) $slUnl
+    $peak = ($r4.samples | Where-Object { $_.private_mb -gt 0 } | Measure-Object private_mb -Maximum).Maximum
+    Res "LIFETIME" "memory_peak" $(if ($peak -gt 6144) { "FAIL" } else { "INFO" }) ("peak private memory over {0} cycles: {1} MB" -f $Cycles, $peak) "" $peak
+    Res "LIFETIME" "handles_threads" $(if (($slH -ne $null -and $slH -gt 20) -or ($slT -ne $null -and $slT -gt 0.5)) { "FAIL" } else { "PASS" }) ("handles at each return: {0} (slope {1}); threads: {2} (slope {3})" -f (($rows | ForEach-Object { $_.handles }) -join " > "), $slH, (($rows | ForEach-Object { $_.threads }) -join " > "), $slT) "Integration"
+    Res "LIFETIME" "gl_release_per_return" $(if (-not $glr.Count) { "INFO" } elseif ($glCounts.Count -eq 1) { "PASS" } else { "FAIL" }) ("GL objects released at each return: " + ($glCounts -join " | ") + $(if (-not $glr.Count) { " (no match.glRelease events: Rendering's unloadMapRenderData replaced the frontend GlCensus stopgap, or nothing was released)" } else { "" })) "Rendering"
+    Res "LIFETIME" "audio_pcm_per_match" $(if (-not @($pcmPeaks | Where-Object { $_ -ne $null }).Count) { "SKIP" } elseif ($slPcm -ne $null -and $slPcm -gt 2) { "FAIL" } else { "PASS" }) ("peak decoded PCM per match: {0} MB; peak live instances per match: {1}" -f ($pcmPeaks -join " > "), ($livePeaks -join " > ")) "Systems"
+    $afterUnl = @(); for ($c = 0; $c -lt $unl.Count; $c++) { $iU = Flow-LogIndex $L4 "match.unloaded" $c; $nx = @($amb4 | Where-Object { $_.i -gt $iU } | Select-Object -First 1)[0]; if ($nx) { $afterUnl += $nx } }
+    $afterUnl = @($afterUnl | Where-Object { $_.map -ne $null -or $_.pcm -ne $null })
+    if ($afterUnl.Count) { $bad = @($afterUnl | Where-Object { $_.map -like "*Streets*" -or $_.pcm -gt $X.audio_ownership.pcm_base_mb.value * 1.15 + 260 }); Res "AUDIO" "map_audio_released_on_return" $(if (-not $bad.Count) { "PASS" } else { "FAIL" }) ("first AMB sample after each unload: " + (($afterUnl | ForEach-Object { "map $($_.map) live $($_.live) voices $($_.backendVoices) pcm $($_.pcm)" }) -join " | ") + " (Streets audio must be gone; frontend level only)") "Systems" }
+    else { Res "AUDIO" "map_audio_released_on_return" "SKIP" "no AMB samples outside the match (the frontend runtime does not log AMB); see Systems' own soak in SELFTEST" "Systems" }
+    $fePlays = @(Grep-Log $log4 "\] MUSIC play $($X.audio_ownership.frontend_music.value)")
+    Res "AUDIO" "menu_music_resumes" $(if (-not (@(Grep-Log $log4 '\] MUSIC ')).Count) { "SKIP" } elseif ($fePlays.Count -ge $rets.Count) { "PASS" } else { "FAIL" }) ("frontend music starts: {0} for {1} returns (+ boot)" -f $fePlays.Count, $rets.Count) "Systems/Frontend"
+    $mInMatch = 0; for ($c = 0; $c -lt $unl.Count; $c++) { $iL = Flow-LogIndex $L4 "match.loaded" $c; $iU = Flow-LogIndex $L4 "match.unloaded" $c; $mInMatch += @(Grep-Log $log4 '\] MUSIC play ' | Where-Object { $_.i -gt $iL -and $_.i -lt $iU }).Count }
+    Res "AUDIO" "no_menu_music_in_matches" $(if (-not (@(Grep-Log $log4 '\] MUSIC ')).Count) { "SKIP" } elseif (-not $mInMatch) { "PASS" } else { "FAIL" }) ("music starts inside {0} matches: {1}" -f $unl.Count, $mInMatch) "Systems"
+    $rev = @(Grep-Log $log4 '\] MIXER reverb')
+    if ($rev.Count) { $stale = 0; for ($c = 0; $c -lt $unl.Count; $c++) { $iU = Flow-LogIndex $L4 "match.unloaded" $c; $nxt = @($rev | Where-Object { $_.i -gt $iU } | Select-Object -First 1)[0]; if ($nxt -and $nxt.text -match 'MIXER reverb (\S*MP_\S*) ->') { $stale++ } }; Res "AUDIO" "no_stale_reverb" $(if (-not $stale) { "PASS" } else { "FAIL" }) ("after {0} returns, the next reverb change still starts from a map preset (stale map reverb): {1}" -f $unl.Count, $stale) "Systems" }
+    $dc4 = @(Find-DoubledCues $log4)
+    Res "AUDIO" "doubled_sounds_cycles" $(if (-not (Has "WFC_CUELOG")) { "SKIP" } elseif (-not $dc4.Count) { "PASS" } else { "FAIL" }) ("doubled cue starts over {0} matches: {1} {2}" -f $Cycles, $dc4.Count, (($dc4 | Group-Object cue | Sort-Object Count -Descending | Select-Object -First 6 | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ", ")) "Systems"
+    $opensPer = @(); $cur = 0; foreach ($e in $F4) { if ($e.ev -eq "gfx.movie" -and "$($e.opened)" -eq "True") { $cur++ }; if ($e.ev -eq "snapshot" -and $e.why -eq "returned") { $opensPer += $cur; $cur = 0 } }
+    $opensPer = @($opensPer | Select-Object -Skip 1)
+    Res "LIFETIME" "ui_movies_per_cycle" $(if (@($opensPer | Select-Object -Unique).Count -le 1) { "PASS" } else { "FAIL" }) ("GFx movies opened per cycle (after the first): " + ($opensPer -join ", ")) "Frontend"
+    $badRet = @($rets | Where-Object { $_.mode -ne "" -or [int]$_.mapId -ne -1 -or "$($_.hud)" -ne "False" })
+    Res "LIFETIME" "no_stale_flow_state" $(if (-not $badRet.Count) { "PASS" } else { "FAIL" }) ("returned snapshots with leftover match / lobby state: {0}" -f $badRet.Count) "Frontend"
+    $loads = @(Grep-Log $log4 'match: launched'); Res "LIFETIME" "one_launch_per_cycle" $(if (-not $loads.Count) { "SKIP" } elseif ($loads.Count -eq $loaded.Count) { "PASS" } else { "FAIL" }) ("Gameplay launches {0}, frontend match loads {1}" -f $loads.Count, $loaded.Count) "Gameplay/Integration"
+    foreach ($k in "map_collision", "map_objects", "particles", "event_queues", "timers") { Res "LIFETIME" "counter.$k" "SKIP" "no product counter for $k across travel (proposal: one 'LIFETIME <name>=<count>' line per level.begin, protocols\RUNTIME-EVENTS.md); covered indirectly by process memory / handles" "Integration" }
+}
+
+# ======================================================================= R5 map ownership (select Gorge in the UI)
+if ($Runs -contains "R5") {
+    $d5 = Join-Path $OutDir "R5_map_gorge"; New-Item -ItemType Directory -Force $d5 | Out-Null
+    $s5 = @((Path-ToHostOptions 0), (Path-CreateGame), (Path-SelectMap 1), "wait:t=1", (Shot $d5 "a_lobby_gorge"), "snapshot:selected", (Path-StartGame), "wait:t=25", (Shot $d5 "b_after"), "snapshot:after", "wait:t=30", "snapshot:after2", (Shot $d5 "c_after2"), "quit") -join ";"
+    $r5 = Invoke-WfcSampled $exe $d5 (BaseEnv $d5 @{ WFC_FRONTEND_SCRIPT = $s5; WFC_SKIPINTRO = "1" }) 600 1.0
+    $F5 = Read-FlowLog (Join-Path $d5 "flow.jsonl"); $log5 = Join-Path $d5 "wfc.log"
+    $sel = @(Flow-Ev $F5 "snapshot" | Where-Object why -eq "selected")[0]; $ml5 = @(Flow-Ev $F5 "match.launch")[0]
+    $gL = @(Grep-Log $log5 'match: launched|launchMatch|rejected|not loaded|unknown map'); $amb5 = @(Grep-Log $log5 'ambient: \S+:'); $after = @(Flow-Ev $F5 "snapshot" | Where-Object why -eq "after2")[0]
+    $uiMap = $sel.mapId; $saysStreets = @($gL | Where-Object { $_.text -match 'match: launched \S*Streets' }).Count -or @($amb5 | Where-Object { $_.text -match 'Streets' -and $_.i -gt (Flow-LogIndex (Read-RunLog $log5) "match.launch" 0) }).Count
+    $st5 = if (-not $sel -or [int]$uiMap -ne 510) { "SKIP" } elseif ($saysStreets) { "FAIL" } elseif ($ml5 -and $ml5.runtimeDir -like "*Gorge*" -and @($gL | Where-Object { $_.text -match 'match: launched \S*Gorge' }).Count) { "PASS" } elseif ($after -and $after.level -ne "Match") { "KNOWN" } else { "INFO" }
+    Res "OWNERSHIP" "ui_map_is_the_map_loaded" $st5 ("UI selected map {0}; frontend launch runtimeDir {1}; Gameplay: {2}; Systems: {3}; level after 55 s: {4}. FAIL = an owner runs Streets behind a Gorge selection; KNOWN = launch refused cleanly (Gameplay documents launchMatch accepts only MP_IAC_Streets in this milestone)" -f $uiMap, $ml5.runtimeDir, (($gL | Select-Object -First 2 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | "), (($amb5 | Select-Object -Last 1 | ForEach-Object { $_.text -replace '^.*\] ', '' })), $after.level) "Integration/Gameplay"
+    $crash = $r5.rc -ne 0 -and -not $r5.timedOut -and -not @(Flow-Ev $F5 "exit").Count
+    Res "OWNERSHIP" "unsupported_map_handled" $(if ($crash) { "FAIL" } else { "PASS" }) ("process exit {0}; clean exit event {1}" -f $r5.rc, @(Flow-Ev $F5 "exit").Count) "Integration"
+}
+
+# ======================================================================= R6 mode ownership (DM through the mode list)
+if ($Runs -contains "R6") {
+    $d6 = Join-Path $OutDir "R6_mode_dm"; New-Item -ItemType Directory -Force $d6 | Out-Null
+    $s6 = @((Path-ToHostOptions 1), (Path-CreateGame), "snapshot:lobby", "wait:t=1", (Path-StartGame), "wait:level=Match", "wait:t=13", (Shot $d6 "a_dm"), "snapshot:dm", "showmenu", "wait:ui=Paused", "call:Game.QuitToMainMenu", "wait:level=FrontEnd", "quit") -join ";"
+    $r6 = Invoke-WfcSampled $exe $d6 (BaseEnv $d6 @{ WFC_FRONTEND_SCRIPT = $s6; WFC_SKIPINTRO = "1" }) 600 1.0
+    $F6 = Read-FlowLog (Join-Path $d6 "flow.jsonl"); $log6 = Join-Path $d6 "wfc.log"
+    $egm6 = @(Flow-Ev $F6 "bridge" | Where-Object fn -eq "Online.PlayPrivateGame")[0]; $ml6 = @(Flow-Ev $F6 "match.launch")[0]; $lm6 = @(Flow-Ev $F6 "loading.start" | Where-Object kind -eq "Map")[0]
+    $g6 = @(Grep-Log $log6 'match: launched|match: \S+ begin'); $sp6 = @(Grep-Log $log6 'match: local player spawned')
+    Res "OWNERSHIP" "ui_mode_is_the_mode_run" $(if (-not $ml6) { "FAIL" } elseif ($ml6.mode -eq "DM" -and @($g6 | Where-Object { $_.text -match 'DM' }).Count -and -not @($g6 | Where-Object { $_.text -match 'TDM' }).Count) { "PASS" } elseif (-not $g6.Count) { "FAIL" } else { "FAIL" }) ("mode list Down -> {0}; launch mode {1} goal {2}; loading title '{3}'; Gameplay: {4}; spawn: {5}" -f $egm6.args, $ml6.mode, $ml6.goalScore, $lm6.title, (($g6 | ForEach-Object { $_.text -replace '^.*match: ', '' }) -join " | "), (($sp6 | Select-Object -First 1 | ForEach-Object { $_.text -replace '^.*spawned at ', '' }))) "Integration/Gameplay"
+    if ($sp6.Count) { Res "MATCH" "dm_spawn_class" $(if ($sp6[0].text -match 'TnFreeForAllPlayerStart') { "PASS" } else { "FAIL" }) ("DM local spawn: " + ($sp6[0].text -replace '^.*spawned at ', '')) "Gameplay" }
+}
+
+# ======================================================================= S owners' self-tests on THIS executable
+if ($Runs -contains "S") {
+    $dS = Join-Path $OutDir "S_selftests"; New-Item -ItemType Directory -Force $dS | Out-Null
+    $tests = [ordered]@{
+        WFC_TDMTEST   = @{ owner = "Gameplay"; pat = 'TDMTEST SUMMARY: (\d+)/(\d+)'; what = "TDM session: hitscan kill, scoring, teammate damage, death mid-transform, 5 s respawn, score limit, MatchOver 15 s, second match reset, HUD state" }
+        WFC_MATCHTEST = @{ owner = "Gameplay"; pat = 'MATCHTEST B time limit: state MatchOver.*winner team -1'; what = "match core: TDM to 40, clock tie with 120/60/30 announcements, DM to 20, suicide / environmental death, respawn" }
+        WFC_XFORMTEST = @{ owner = "Gameplay"; pat = 'XFORM SUMMARY: (\d+)/(\d+) transforms ended UNDER THE MAP'; what = "boost -> robot under-map stress (Gameplay's own)" }
+        WFC_CHAOS     = @{ owner = "Gameplay"; pat = 'CHAOS SUMMARY: .*: (\d+) runs UNDER THE MAP.*?, (\d+) KillZ'; what = "seeded random play from nav points: under the map / KillZ / stuck / inside props" }
+        WFC_VEHTEST   = @{ owner = "Gameplay"; pat = 'VEHTEST'; what = "vehicle handling measurements" }
+        WFC_RELOADTEST = @{ owner = "Rendering"; pat = '(?i)reload'; what = "in-process map render unload / reload" }
+    }
+    foreach ($k in $tests.Keys) {
+        $t = $tests[$k]
+        if (-not (Has $k)) { Res "SELFTEST" $k "SKIP" "$k not compiled into this exe" $t.owner; continue }
+        $dd = Join-Path $dS $k; New-Item -ItemType Directory -Force $dd | Out-Null
+        $env0 = @{ $k = "1"; WFC_BOOT = "match" }; if ($k -eq "WFC_RELOADTEST") { $env0 = @{ WFC_RELOADTEST = "120"; WFC_SMOKE_FRAMES = "400"; WFC_BOOT = "match" } }; if (Test-Path $rd) { $env0.WFC_RENDER_DATA = $rd }
+        $rc = Invoke-WfcExe $exe $dd $env0 "run.log" 1200
+        $lg = Join-Path $dd "wfc.log"; $hits = @(Grep-Log $lg $t.pat)
+        $last = if ($hits.Count) { $hits[-1].text -replace '^.*\] ', '' } else { "" }
+        $st = "INFO"
+        switch ($k) {
+            "WFC_TDMTEST" { $m = [regex]::Match($last, '(\d+)/(\d+)'); $st = if ($m.Success -and $m.Groups[1].Value -eq $m.Groups[2].Value) { "PASS" } elseif ($m.Success) { "FAIL" } else { "FAIL" } }
+            "WFC_MATCHTEST" { $st = if ($hits.Count) { "PASS" } else { "FAIL" }; $last = ((@(Grep-Log $lg 'MATCHTEST [ABC] ') | Select-Object -Last 6 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | ") }
+            "WFC_XFORMTEST" { $m = [regex]::Match($last, 'SUMMARY: (\d+)/(\d+)'); $st = if ($m.Success -and $m.Groups[1].Value -eq "0") { "PASS" } else { "FAIL" } }
+            "WFC_CHAOS" { $m = [regex]::Match($last, ': (\d+) runs UNDER THE MAP.*?, (\d+) KillZ'); $st = if ($m.Success -and $m.Groups[1].Value -eq "0" -and $m.Groups[2].Value -eq "0") { "PASS" } elseif ($m.Success) { "FAIL" } else { "FAIL" }; $u = @(Grep-Log $lg 'CHAOS (UNDER-FLOOR|STUCK)'); if ($u.Count) { $last += " | " + (($u | Select-Object -First 3 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | ") } }
+            "WFC_VEHTEST" { $st = "INFO"; $last = ((@(Grep-Log $lg 'VEHTEST') | Select-Object -Last 3 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | ") }
+            "WFC_RELOADTEST" { $st = if (@(Grep-Log $lg '(?i)(fail|error)').Count) { "FAIL" } elseif ($hits.Count) { "PASS" } else { "INFO" }; $last = ((@(Grep-Log $lg '(?i)reload') | Select-Object -Last 3 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | ") }
+        }
+        Res "SELFTEST" $k $st ("{0}: {1} (exit {2})" -f $t.what, $last, $rc) $t.owner
+    }
+    $audioSuite = @(Get-ChildItem $binDir -Filter "*audio*suite*.exe" -ErrorAction SilentlyContinue)[0]
+    if ($audioSuite) { $to = Join-Path $dS "audio_suite.txt"; $p = Start-Process -FilePath $audioSuite.FullName -WorkingDirectory $binDir -PassThru -Wait -NoNewWindow -RedirectStandardOutput $to -RedirectStandardError "$to.err"; $tail = (Get-Content $to -Tail 3) -join " | "; Res "SELFTEST" "systems_audio_suite" $(if ($p.ExitCode -eq 0) { "PASS" } else { "FAIL" }) ("$($audioSuite.Name) exit $($p.ExitCode): $tail") "Systems" }
+    else { Res "SELFTEST" "systems_audio_suite" "SKIP" "no *audio*suite* executable built in this tree (Systems' 544-check suite is a tools/systems target)" "Systems" }
+}
+
+# ======================================================================= report
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
 $md = New-Object System.Collections.Generic.List[string]
-$md.Add("# Milestone 05 end-to-end gate - $Root ($(Get-Date -Format 'yyyy-MM-dd HH:mm'))"); $md.Add("")
+$md.Add("# Milestone 05 end-to-end gate ($Config)"); $md.Add(""); $md.Add("- target: $target"); $md.Add("- exe: ``$exe``"); $md.Add("- runs: $($Runs -join ', '); cycles $Cycles; $(Get-Date -Format 'yyyy-MM-dd HH:mm')"); $md.Add("")
 $md.Add(("**PASS {0} / FAIL {1} / KNOWN {2} / INFO {3} / SKIP {4} / HUMAN-CHECK {5}**" -f $sum.pass, $sum.fail, $sum.known, $sum.info, $sum.skip, $sum.human)); $md.Add("")
-foreach ($layer in "DATA", "STATE", "PRESENTED", "MATCH", "LIFETIME") {
+foreach ($layer in "DATA", "STATE", "PRESENTED", "MATCH", "AUDIO", "OWNERSHIP", "LIFETIME", "SELFTEST") {
+    $rowsL = @($res | Where-Object { $_.id -like "e2e.$layer.*" }); if (-not $rowsL.Count) { continue }
     $md.Add("## $layer"); $md.Add(""); $md.Add("| status | check | owner | evidence |"); $md.Add("|---|---|---|---|")
-    foreach ($rx in ($res | Where-Object { $_.id -like "e2e.$layer.*" })) { $md.Add(("| {0} | {1} | {2} | {3} |" -f $rx.status, ($rx.id -replace "^e2e\.$layer\.", ""), $rx.owner, (($rx.note -replace '\|', '/') -replace "`n", ' '))) }
+    foreach ($rx in $rowsL) { $md.Add(("| {0} | {1} | {2} | {3} |" -f $rx.status, ($rx.id -replace "^e2e\.$layer\.", ""), $rx.owner, (($rx.note -replace '\|', '/') -replace "`n", ' '))) }
     $md.Add("")
 }
-$md.Add("Evidence: run1_first_launch\ (flow.jsonl, wfc.log, captures + captures.csv), sheet_first_launch.png, run3_loops\process.csv. HUMAN checks: tools\fidelity\HUMAN-CHECK-M05.md.")
 $md | Set-Content -Encoding UTF8 (Join-Path $OutDir "M05-GATE.md")
-"M05 E2E GATE: " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ") + " -> $OutDir"
+"M05 E2E GATE ($Config): " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ") + " -> $OutDir"

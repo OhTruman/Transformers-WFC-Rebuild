@@ -1,78 +1,93 @@
 # HUMAN CHECK: Milestone 05 (frontend → Streets TDM → return)
 
-Only things a person can judge. Everything measurable runs in `tools/fidelity/m05-e2e-gate.ps1`. Run it first and
-keep its `M05-GATE.md` open. Each item names the gate check that frames it. These are observations for the owners,
-**not permission to tune by feel**. Report each finding with a screenshot (F12), the step, and what you expected.
+Only things that need eyes, ears or a controller. Everything measurable already ran in `m05-final.ps1`. Keep its
+`M05-FINAL.md` open: each item names the check that framed it, and the gate's `R1_sheet.png` shows what every
+screen looked like on the build you're testing. These are observations for the owners, **not permission to tune
+by feel**. Report each finding with a screenshot (F12), the step, and what you expected.
 
-Play the merged Release build: launch normally (no `WFC_*` variables) from a fresh folder, so the profile is new.
+**Setup.** Use the Release exe named in `M05-FINAL.md`, launched from an **empty folder** (no `wfc_profile.ini`) with no
+`WFC_*` variables. Use a controller if you have one, and play a full match to the end at least once.
 
-## Boot and frontend
-- [ ] **First launch.** Logos (Activision → Hasbro → High Moon), then the intro, then the main menu.
-  - The gate proves the chain runs in order (`STATE.intro_chain_order`).
-  - Without a video decoder the movies end instantly (`PRESENTED.intro_movies_played` KNOWN).
-  - Judge: does the pause between them feel like loading, or like a broken boot?
-- [ ] **Second launch.** No logos; straight to the menu (`STATE.second_launch_skips_logos`). Does it feel right?
-- [ ] **Does the frontend look like WFC?**
-  - The orbiting Cybertron camera, the fireworks, the menu layout and the fonts.
-  - The gate only measures whether anything is drawn (`PRESENTED.frontend_screen`). A black window there is KNOWN
-    until the GFx presenter lands.
-- [ ] **Menu transitions.** Main menu → Multiplayer → party lobby → private game → game lobby.
-  - Are the transitions and the loading screens between levels smooth?
-  - Do button presses always land on the screen you are looking at (input focus)?
-- [ ] **Selection persistence.** Choose TDM and Streets, back out, re-enter.
-  - Is the choice remembered where the original remembers it?
-  - After a match, does the lobby preselect Streets?
+## 1. Boot and frontend
+- [ ] **Logos and intro.**
+  - Activision → Hasbro → High Moon → intro film, full screen. The gate proves they decode and play to the end
+    (`intro_movies_decoded`, `intro_played_to_end`).
+  - Judge: do they look and feel like the shipped boot (pacing, black between them, skip with A / Start)?
+  - The movies are silent by design for now (movie audio PARTIAL: track layout unknown).
+- [ ] **Second launch.** No logos; straight to "Press START" (`second_launch_skips_intro`).
+- [ ] **Does the frontend look like WFC?** Title logo, main menu, Multiplayer party lobby, mode list, host options, game
+  lobby. The shipped Scaleform movies run their own code here.
+  - Look for wrong fonts, missing icons, misplaced panels, and colours.
+  - The 3D scene behind the menus is black, because UI_FrontEnd_m is not exported (KNOWN). Judge the menus,
+    not the backdrop.
+- [ ] **Menu feel.** Up/down movement, wrap-around (mode list wraps; host-option rows stop at their ends), back (B),
+  button sounds, transition speed. Does each press land exactly once?
 - [ ] **Menu music and UI sounds.**
-  - Frontend music (FRONTEND_MX_ORBIT_01), party lobby music, game lobby music.
-  - Does each level switch music cleanly: no doubling, no silence gaps, no music continuing into the match?
-  - Streets has no match music.
-  - Do button sounds play exactly once?
+  - Frontend medley (FRONTEND_MX_ORBIT_01), party-lobby music, game-lobby music.
+  - Each should start cleanly when its screen opens, never double up, never continue into the match.
+  - Menu clicks should be audible once per press (`AUDIO.music.*`, `ui_sounds_*`).
+- [ ] **Map selection.**
+  - The lobby opens on the first selectable map. In the rebuild that's Streets, because only maps with runtime
+    data are listed.
+  - Left/right steps and wraps between Streets and Gorge.
+  - The map panel's name and thumbnail follow the selection.
 
-## Loading
-- [ ] **Match loading screen.** It should read "Team Deathmatch", "in Streets", with rotating tips.
-  - The gate checks the text (`STATE.match_loading_text`); you judge the presentation.
-  - Does the screen stay up until the map is ready, with no flash of an unfinished world?
+## 2. Loading
+- [ ] **Loading screen.**
+  - "TEAM DEATHMATCH / in Streets" with three tips over the looping loading film.
+  - The three tips are the same sentence, which is authored that way (KNOWN).
+  - Does the screen hold until the map is ready, without a flash of an unfinished world?
+  - The text animating in during a blocking load is PARTIAL.
 
-## Match (Streets TDM)
-- [ ] **Pre-game.** The original holds everyone for a 10 s countdown before anyone spawns.
-  - Until Gameplay implements PendingMatch, the rebuild starts at once (`MATCH.pending_countdown` KNOWN).
-  - Does the start feel abrupt?
-- [ ] **Spawn feel.** Do you spawn on your team's side, facing play, and never in sight of an enemy spawn kill?
-- [ ] **Player feel.** Walking, aiming and firing as Optimus. Does it feel like the shipped game?
-- [ ] **Boost steering.** Does steering while boosting still feel locked?
+## 3. Match (Streets TDM)
+- [ ] **Countdown.** Nobody moves for ~10 s before the match starts (`MATCH.pending_countdown`). Does the countdown read
+  and feel right?
+- [ ] **Spawn feel.** On your team's side (Autobots 7810 / Decepticons 4159 clusters), facing play.
+- [ ] **HUD readability.** Health segments and overshield, ammo, clock counting down from 15:00 (or 10:00), team
+  score bars in team colours. Readable in bright and dark areas?
+- [ ] **Player feel.** Walking, aiming and firing as Optimus.
+- [ ] **Boost steering.** Steering while boosting.
 - [ ] **Transform continuity.**
-  - Robot ↔ vehicle at a standstill, driving, boosting and airborne. No pop, camera snap or lost momentum.
-  - The stress test makes the pawn **fall through the floor after a vehicle→robot transform at speed in 17% of
-    cases** (`transform_stress`: 127/756, boost and nitro only).
-  - Does it happen to you in normal play, and where?
-- [ ] **Smoke, glass, transparency.** Steam veils at distance, glass floors from above and below, and black
-  geometry behind ramps (see HUMAN-CHECK.md for the measured cases).
-- [ ] **HUD readability.**
-  - Team scores, your score and the MM:SS clock: readable at a glance in bright and dark areas?
-  - Does the clock count down from 15:00?
-- [ ] **Death and respawn.**
-  - Death camera, then the respawn screen, then a respawn after about 5 s.
-  - Does it feel like the original, and does the respawn put you somewhere sensible?
-- [ ] **Score updates and announcements.**
-  - Kills add to your score and your team's score; suicides do not.
-  - Announcer calls at 5 / 3 / 1 kills left and at 2 min / 1 min / 30 s.
-- [ ] **Match pacing.** Over a full match to 40 (or 15:00): does the flow of fights, respawns and score feel right?
-- [ ] **Sound field in the match.**
-  - Ambient beds, weapon and transform sounds, pickups.
-  - Does the soundscape change naturally between rooms, tunnels and the exterior?
-  - Does anything keep playing that should have stopped?
+  - Robot ↔ vehicle at a standstill, while driving, boosting, nitro-boosting, turning, and in the air.
+  - The stress tests check for falling under the map (`transform_stress`, `XFORMTEST`, `CHAOS`). You judge: pop,
+    camera snap, lost momentum, and how long the fold takes.
+  - Also transform under a low overhang (a known open RE question).
+- [ ] **Vehicle against low geometry.**
+  - Drive and boost into crates, low blocks, train coaches, railings and narrow gaps.
+  - The truck should stop or deflect, never pass through (`vehicle_collision`).
+- [ ] **Smoke, steam, glass.**
+  - Distant fog cards and silhouette smoke: do they still veil the geometry?
+  - Steam up close: soft and moving, purple where authored?
+  - Glass bridges from above, along and below: does anything behind or below the glass appear in front?
+  - Ramps and walls seen through transparent surfaces; black geometry showing through.
+  - The gate measures whether Rendering's fixes are present in this build (`visual.*.merge`). Whether they now look
+    like WFC is your call.
+- [ ] **Damage, death, respawn.**
+  - Get killed, if a second player or a test opponent is available.
+  - Death camera, the respawn screen after ~3 s, back in at ~5 s, robot form with full health and 50/150 ammo.
+  - Does it feel like the original?
+- [ ] **Score and announcements.**
+  - Kills add to your score and your team's score; suicides don't.
+  - Announcer at 5 / 3 / 1 kills left and at 2 min / 1 min / 30 s remaining (`time_announcements`).
+- [ ] **Match pacing.** Over a whole match: fights, respawns, score.
+- [ ] **Sound field.**
+  - Streets ambience by area, weapon / transform / pickup sounds.
+  - Is anything doubled, missing or left playing (`doubled_sounds_*`)? Is there any frontend music in the match?
 
-## Pause and leaving
-- [ ] **Pause input focus.** Hold W and press Esc. The robot must stop while the pause menu is up, and the world keeps
-  running, because multiplayer does not pause (`PRESENTED.pause_input_focus` HUMAN: real key input cannot be
-  automated safely).
-- [ ] **Match end.** At 40 or at 0:00: end-game stats, the HUD hidden, then a return to the game lobby after about 15 s
-  with Streets preselected.
-- [ ] **Quit to the main menu** from pause. Is the frontend exactly as it was: music, camera, no leftovers?
-- [ ] **Second match** in the same session. Same spawn behaviour, scores reset, nothing left over from match one.
-- [ ] **Long session.** Play 4–5 matches without restarting.
-  - Does it get slower, stutter on loading, or run out of memory?
-  - The gate measures about +1.5 GB per return to the frontend (`LIFETIME.memory_per_cycle`).
+## 4. End and leaving
+- [ ] **Match end.**
+  - At the score or time limit: HUD gone, end-of-match results (Level / Name / Score / Kills / Deaths).
+  - About 15 s later you're back in the game lobby (`match_end_ui`, `match_over_return_to_lobby`).
+  - Does the result screen look and read right ("Your team won" / "Tie game")?
+- [ ] **Second match.** Start again from the lobby.
+  - Fresh scores and clock, pickups back, no leftover sounds, effects or HUD state from match one.
+- [ ] **Pause and quit.**
+  - Esc / Start opens the pause menu, and the world keeps running behind it (multiplayer doesn't pause).
+  - **Hold W while pausing: the robot must stop** (`pause_input_focus`).
+  - Quit Game → main menu; the music resumes; nothing from Streets is still audible.
+- [ ] **Long session.** 4–5 matches without restarting.
+  - Does loading get slower, does it stutter, does memory climb (Task Manager)?
+  - The soak measures this too (`LIFETIME.memory_stabilizes`).
 
 ## Overall
 - [ ] **"This feels like the shipped game."** One honest paragraph: what breaks the illusion first?
