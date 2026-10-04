@@ -11,11 +11,13 @@ bool LevelAudioHost::load(const std::string& level, const std::string& manifestP
     const std::string path = manifestPath.empty() ? root_ + "/Maps/" + level + "/audio.json" : manifestPath;
     const bool ok = ambient_.load(path, root_ + "/../content/", cues_, audio_, level);
     level_ = ok ? level : std::string();
+    match_.setAnnouncerEvents(ambient_.announcerEvents());
     return ok;
 }
 
 void LevelAudioHost::unload() {
     music_.onOwnerDestroyed();                 // the level's WorldInfo music player goes with the level
+    match_.setAnnouncerEvents({});             // ... and its announcer
     cues_.stopAll();                           // every instance (UI, Kismet, impacts...) - hard stop, queues dropped
     ambient_.unload(cues_);                    // bed, zones, pools, script, level cues + samples, presets; mixer Flush
     cues_.releaseIdleStreams();                // the level's music (streamed) is released now, not on the next tick

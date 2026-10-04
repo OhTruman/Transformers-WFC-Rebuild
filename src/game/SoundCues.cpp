@@ -76,7 +76,10 @@ float stereoGain(const assets::Json& p) {
     auto lin = [](float db) { return db > -96.0f ? dbToGain(db) : 0.0f; };
     float front = (lin(p["PanFrontLeft"].asFloat(0.0f)) + lin(p["PanFrontRight"].asFloat(0.0f))) * 0.5f;
     float back = (lin(p["PanBackLeft"].asFloat(-96.0f)) + lin(p["PanBackRight"].asFloat(-96.0f))) * 0.5f;
-    float g = front + 0.70710678f * back;
+    // Centre (dialogue: the announcer cues pan to PanCenter 0 with the fronts at -96) folds to both sides at -3 dB
+    // [HIGH: standard 5.1 -> stereo fold-down; no compiled or map-bed cue sets PanCenter].
+    float centre = lin(p["PanCenter"].asFloat(-96.0f));
+    float g = front + 0.70710678f * back + 0.70710678f * centre;
     return g > 1.0f ? 1.0f : g;
 }
 
@@ -160,7 +163,7 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
         d.rootLoop = rp["bLooping"].asBool(false);
         d.loopStart = rp["LoopStart"].asFloat(0.0f);
         d.loopEnd = rp["LoopEnd"].asFloat(0.0f);
-        d.streamed = false;
+        d.streamed = kv.second["streamed"].asBool(false);   // decoded on first play, released after (dialogue, music)
         d.panAtten3DDb = rp["SmartPanAttenuation3D"].asFloat(0.0f);
         d.volDb = rp["Volume"].asFloat(-6.0f);                     // HM_Engine.Default__SoundNodeRoot
         d.volVarMin = rp["VolumeVariationMin"].asFloat(0.0f); d.volVarMax = rp["VolumeVariationMax"].asFloat(0.0f);
@@ -178,6 +181,7 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
         d.spatial = sp == "k2D" ? Spatial::TwoD : sp == "kSmartPan" ? Spatial::SmartPan
                   : sp == "kSmartPan_PreferPlayer" ? Spatial::SmartPanPreferPlayer : Spatial::ThreeD;
         d.param = Param::None;
+        std::vector<std::string> dialogChars;                      // per wave event
         const assets::Json& kids = root["children"];
         for (size_t i = 0; i < kids.size(); ++i) {
             const assets::Json& ev = kids[i];
@@ -195,6 +199,7 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
             e.priority = p["Priority"].asFloat(0.0f);
             e.stereoGain = stereoGain(p);
             e.volCurve = jsonCurve(p["VolumeCurve"]); e.pitchCurve = jsonCurve(p["PitchCurve"]);
+            dialogChars.push_back(p["DialogCharacter"].asString());   // HmSoundNodeWaveEvent.DialogCharacter
             const assets::Json& waves = ev["children"];
             for (size_t w = 0; w < waves.size(); ++w) {
                 std::string f = waves[w]["wav"].asString();
@@ -204,7 +209,14 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
             d.events.push_back(e);
         }
         cues_.push_back(d);
-        loadWaves(cues_.size() - 1, contentRoot);
+        bool anyChar = false;
+        for (const std::string& ch : dialogChars) anyChar = anyChar || !ch.empty();
+        if (anyChar) dialogChars_[cues_.size() - 1] = dialogChars;
+        if (d.streamed) {
+            if (waves_.size() < cues_.size()) waves_.resize(cues_.size());
+            if (resident_.size() < cues_.size()) resident_.resize(cues_.size(), 0);
+            waves_.back().assign(d.events.size(), {});
+        } else loadWaves(cues_.size() - 1, contentRoot);
         ++added;
     }
     return added;
@@ -309,6 +321,7 @@ int SoundCues::unloadMapCues() {
                     }
     }
     cues_.resize(first);
+    for (auto it = dialogChars_.begin(); it != dialogChars_.end();) it = it->first >= first ? dialogChars_.erase(it) : std::next(it);
     if (waves_.size() > first) waves_.resize(first);
     if (resident_.size() > first) resident_.resize(first);
     if (pinned_.size() > first) pinned_.resize(first);
@@ -356,6 +369,13 @@ float SoundCues::paramFor(const Instance& in) const {
     return core::clampf(in.param, 0.0f, kSpeedParamMax);
 }
 
+int SoundCues::playDialog(const char* name, const Emitter& em, const std::string& dialogCharacter) {
+    nextDialogChar_ = dialogCharacter;
+    const int id = play(name, em, 0.0f);
+    nextDialogChar_.clear();
+    return id;
+}
+
 int SoundCues::play(const char* name, const core::Vec3& pos, float distM, float param) {
     return play(name, Emitter{pos, kWorld, {0, 0, 0}, {}}, distM, param);
 }
@@ -377,6 +397,8 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     Instance in;
     in.cue = c; in.id = nextId_++; in.age = 0.0f; in.distM = distM; in.param = param;
     in.owner = em.owner; in.offset = em.offset; in.socket = em.socket; in.pos = em.pos;
+    in.dialogChar = nextDialogChar_;
+    nextDialogChar_.clear();
     resolve(in);
     // USoundCue::RegisterInstanceLimiting [CONF native 0x82E767B8]: 0 = unlimited; at the limit,
     // kKillOldest stops the oldest registered instance, kKillNewest refuses the new sound, kKillFarthest
@@ -423,6 +445,14 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
 void SoundCues::launch(Instance& in, int e) {
     const CueDef& cd = cues_[(size_t)in.cue];
     const EventDef& ed = cd.events[(size_t)e];
+    // HmDialogComponent [HIGH]: a dialogue cue holds one wave event per DialogCharacter; the component plays the events
+    // of its own character (events with no character always play). Non-dialogue plays (no character) play every event.
+    if (!in.dialogChar.empty()) {
+        auto dc = dialogChars_.find((size_t)in.cue);
+        if (dc != dialogChars_.end() && (size_t)e < dc->second.size() && !dc->second[(size_t)e].empty() &&
+            dc->second[(size_t)e] != in.dialogChar)
+            return;
+    }
     const std::vector<audio::Sound>& w = waves_[(size_t)in.cue][(size_t)e];
     if (w.empty()) return;
     if (ed.chanceNone > 0 && frand() * 100.0f < (float)ed.chanceNone) return;

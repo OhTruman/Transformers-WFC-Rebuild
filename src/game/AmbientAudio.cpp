@@ -66,6 +66,7 @@ bool rayTri(const core::Vec3& o, const core::Vec3& d, const core::Vec3& a, const
 bool AmbientAudio::hasLevelManifest(const std::string& level) { return manifestFor(level) != nullptr; }
 int AmbientAudio::levelManifestCount() { return (int)(sizeof(kLevelAudioManifests) / sizeof(kLevelAudioManifests[0])); }
 const char* AmbientAudio::levelManifestName(int i) { return kLevelAudioManifests[i].level; }
+const char* AmbientAudio::manifestJson(const std::string& name) { return manifestFor(name); }
 
 bool AmbientAudio::levelMusicTrack(const std::string& level, MusicTrack& out) {
     const char* sj = manifestFor(level);
@@ -169,6 +170,9 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
 
     // Kismet audio ops (Systems manifest; an AssetTools manifest may carry the same section).
     const int ns = script_.load(root.has("kismet") ? root["kismet"] : sys["kismet"]);
+    // The map announcer (TnWorldInfo.AnnouncerSoundEventSet), its cues streamed in the bank above.
+    const assets::Json& an = root.has("announcer") ? root["announcer"] : sys["announcer"];
+    for (const auto& kv : an["events"].obj) announcer_[kv.first] = kv.second.asString();
     sceneActive_.assign(zones_.size(), 0);
     touching_.assign(zones_.size(), 0);
     level_ = name;
@@ -188,6 +192,7 @@ void AmbientAudio::unload(SoundCues& cues) {
     cues.mixer().removeMapPresets();
     script_.unload();
     level_.clear();
+    announcer_.clear();
     emitters_.clear();
     zones_.clear();
     touching_.clear();

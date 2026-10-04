@@ -40,6 +40,7 @@
 // reverb presets for the UI levels; per-cue-asset concurrency limits for every level). Either may be absent; both
 // load through load() and unload through unload().
 #pragma once
+#include <map>
 #include <string>
 #include <vector>
 #include "audio/Audio.h"
@@ -74,6 +75,9 @@ public:
     static bool hasLevelManifest(const std::string& level);
     static int levelManifestCount();
     static const char* levelManifestName(int i);
+    static const char* manifestJson(const std::string& name);   // a compiled-in manifest document (nullptr: none)
+    // The loaded level's announcer set (TnWorldInfo.AnnouncerSoundEventSet: event -> dialogue cue); empty if none.
+    const std::map<std::string, std::string>& announcerEvents() const { return announcer_; }
     // The first SeqAct_PlayMusic track a level's manifest authors (false: none).
     static bool levelMusicTrack(const std::string& level, MusicTrack& out);
 
@@ -119,6 +123,7 @@ private:
 
     bool loaded_ = false;
     std::string level_;
+    std::map<std::string, std::string> announcer_;
     LevelAudioScript script_;
     MusicPlayer* music_ = nullptr;
     audio::IAudio* audio_ = nullptr;

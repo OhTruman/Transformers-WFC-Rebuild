@@ -1,0 +1,80 @@
+--- a/src/core/Application_Frontend.cpp
++++ b/src/core/Application_Frontend.cpp
+@@ -44,6 +44,8 @@
+     void levelEvent(const std::string& t) override { rt.levelEvent(t); }
+     void setMoviePlaying(bool p) override { rt.setMoviePlaying(p); }
+     void prefetchLevel(const std::string& l) override { rt.prefetchLevel(l); }
++    bool startMovieAudio(const std::string& p) override { return rt.startMovieAudio(p); }
++    void stopMovieAudio() override { rt.stopMovieAudio(); }
+ };
+ } // namespace
+ #endif
+--- a/src/frontend/FrontendRuntime.cpp
++++ b/src/frontend/FrontendRuntime.cpp
+@@ -224,6 +224,11 @@
+     }
+     FlowTrace::emit("movie.open", {{"movie", name}, {"seconds", std::to_string(p->duration())}, {"loop", FlowTrace::boolean(loop)}});
+     video_ = std::move(p);
++    videoPath_ = path;
++    if (audio_) {                                   // the movie's own Bink sound (Systems), started with its video
++        const bool sound = audio_->startMovieAudio(path);
++        FlowTrace::emit("movie.audio", {{"movie", name}, {"playing", FlowTrace::boolean(sound)}});
++    }
+     videoFramed_ = false;
+     ++videoGen_;
+     return true;
+@@ -231,8 +236,8 @@
+ 
+ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in) {
+     // SeqAct_MoviePlayer (intro chain): the Bink movies, extracted by AssetTools as H.264/FLAC .mkv, decoded by the
+-    // platform movie player. Stopped fires at the end of the movie. Movie audio is not played [PARTIAL: the track
+-    // layout is unidentified and the audio belongs to the Systems device].
++    // platform movie player. Stopped fires at the end of the movie. The movie's sound is its Bink audio tracks, played
++    // by Systems (IFrontendAudio::startMovieAudio / stopMovieAudio) [Systems M07].
+     // The loading underlay: [LoadingMovie] InitialStartupFileName / DefaultFileName (Xe-TransGame.ini), looped under
+     // LoadScreen_GFX while a loading screen is up [HIGH]. The extracted files carry region / language suffixes; the
+     // rebuild picks <name>_NA_INT, then <name>_INT, then <name> [PARTIAL: region of the dump UNKNOWN, see GetRegionCode].
+@@ -249,7 +254,7 @@
+         want = underlay_;
+     }
+     if (want != videoName_) {
+-        if (want.empty()) { video_.reset(); videoName_.clear(); }
++        if (want.empty()) { if (audio_) audio_->stopMovieAudio(); video_.reset(); videoName_.clear(); }
+         else if (!openVideo(want, m.empty()) && !m.empty()) { flow_.movieStopped(m); videoName_.clear(); }
+     }
+     if (!video_) return;
+@@ -268,7 +273,12 @@
+     auto bit = [](platform::UiKey k) { return 1u << (int)k; };
+     bool skip = !m.empty() && (pressed & (bit(platform::UiKey::Accept) | bit(platform::UiKey::Start) | bit(platform::UiKey::Back)));
+     if (video_->finished() || skip) {
+-        if (videoLoops_ && !skip) { video_->restart(); return; }
++        if (videoLoops_ && !skip) {
++            video_->restart();
++            if (audio_) audio_->startMovieAudio(videoPath_);   // a looping movie with sound restarts it too
++            return;
++        }
++        if (audio_) audio_->stopMovieAudio();             // end or skip: the movie's sound stops with it
+         FlowTrace::emit("movie.finished", {{"movie", videoName_}, {"skipped", FlowTrace::boolean(skip)},
+                                            {"position", std::to_string(video_->position())}});
+         video_.reset();
+--- a/src/frontend/FrontendRuntime.h
++++ b/src/frontend/FrontendRuntime.h
+@@ -33,6 +33,10 @@
+     virtual void levelEvent(const std::string& trigger) { (void)trigger; }     // "FsCommand:<cmd>", "MovieStopped:<movie>"
+     virtual void setMoviePlaying(bool playing) { (void)playing; }             // CINE_MUTE_FOR_BINK while a Bink is up
+     virtual void prefetchLevel(const std::string& level) { (void)level; }     // during a loading screen
++    // The movie's own sound (its Bink audio tracks, played by Systems beside the muted game mix): start with the
++    // video, stop at its end / skip. False: the movie has no audio (the loading Binks).
++    virtual bool startMovieAudio(const std::string& moviePath) { (void)moviePath; return false; }
++    virtual void stopMovieAudio() {}
+ };
+ 
+ class IMoviePresenter {
+@@ -109,6 +113,7 @@
+     std::function<platform::IMoviePlayer*()> movieFactory_;
+     std::unique_ptr<platform::IMoviePlayer> video_;   // SeqAct_MoviePlayer movie or the loading underlay
+     std::string videoName_;
++    std::string videoPath_;          // the open movie file (movie audio)
+     std::string underlayFor_, underlay_;   // loading Bink name -> localized file
+     bool videoLoops_ = false;
+     bool videoFramed_ = false;

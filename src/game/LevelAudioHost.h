@@ -20,6 +20,7 @@
 #include "core/Math.h"
 #include "game/AmbientAudio.h"
 #include "game/FrontendAudio.h"
+#include "game/MatchAudio.h"
 #include "game/MusicPlayer.h"
 #include "game/SoundCues.h"
 
@@ -29,7 +30,7 @@ class LevelAudioHost {
 public:
     // Engine.MovieSettings MovieMixerPreset (Xe-TransEngine.ini) [CONF].
 
-    explicit LevelAudioHost(SoundCues& cues) : cues_(cues), music_(cues), frontend_(cues, music_) {
+    explicit LevelAudioHost(SoundCues& cues) : cues_(cues), music_(cues), frontend_(cues, music_), match_(cues, music_) {
         ambient_.setMusicPlayer(&music_);
     }
     ~LevelAudioHost() { stopMovieAudio(); }
@@ -67,6 +68,7 @@ public:
     void tick(float dt, const core::Vec3& listener, const core::Vec3& pawn) {
         if (!audio_) return;
         ambient_.tick(dt, listener, pawn, cues_);
+        match_.tick(dt);
         music_.tick(dt);
     }
 
@@ -86,11 +88,13 @@ public:
     const AmbientAudio& ambient() const { return ambient_; }
     MusicPlayer& music() { return music_; }
     FrontendAudio& frontend() { return frontend_; }
+    MatchAudio& match() { return match_; }            // the level's announcer + match messages (MP maps)
 
 private:
     SoundCues& cues_;
     MusicPlayer music_;
     FrontendAudio frontend_;
+    MatchAudio match_;
     AmbientAudio ambient_;
     audio::IAudio* audio_ = nullptr;
     std::string root_, level_;
