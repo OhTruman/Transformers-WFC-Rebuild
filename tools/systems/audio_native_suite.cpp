@@ -1507,6 +1507,10 @@ static void testMatchAudio() {
     { game::MusicPlayer probe(cues); (void)probe; }
     CHECK(!m.gameTypeMessage("TnGameTypeMessageNOPE", 0) && !m.progressAnnouncement(9) && !m.announcerEvent("SoundEvents_Dialog.Announcer.NotAnEvent"),
           "unknown message / switch / event: nothing invented");
+    CHECK(game::MatchAudio::messageClassForMode("TDM") == "TnGameTypeMessageTDM" && game::MatchAudio::messageClassForMode("DM") == "TnGameTypeMessageDM" &&
+          game::MatchAudio::messageClassForMode("CTF") == "TnGameTypeMessageCTF" && game::MatchAudio::messageClassForMode("KOTH") == "TnGameTypeMessageKOTH" &&
+          game::MatchAudio::messageClassForMode("DOM") == "TnGameTypeMessageDOM" && game::MatchAudio::messageClassForMode("EXT") == "TnGameTypeMessageEXT",
+          "mode tag -> game-type message class (TnOnlineGameSettings<tag>.Rules)");
     host.unload();
     CHECK(atBaseline(host, cues, baseCues, basePresets, why) && m.currentCue().empty() && host.ambient().announcerEvents().empty(),
           "leave Streets: announcer + match cues gone (%s)", why.c_str());
@@ -1527,7 +1531,12 @@ static void testMatchAudio() {
         for (const char* lv : {"MP_IAC_Streets", "MP_UND_Gorge", "UI_FrontEnd_m"}) {
             host.load(lv);
             if (!std::strcmp(lv, "UI_FrontEnd_m")) host.event("FsCommand:enterFrontEnd", L);
-            else { host.match().gameTypeMessage("TnGameTypeMessageTDM", 0); host.match().progressAnnouncement(c % 8); }
+            else {
+                host.match().onMatchStarted(c % 2 ? "DM" : "TDM", c % 2);
+                host.match().onProgressAnnouncement(c % 8);
+                host.match().onGameNearlyComplete();
+                host.match().onMatchEnded(c % 3 - 1, c % 2 == 0);
+            }
             run(2.0f);
             host.unload();
             ok = ok && atBaseline(host, cues, baseCues, basePresets, why);

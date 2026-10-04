@@ -32,6 +32,7 @@ std::string teamCharacter(int team) {
 bool MatchAudio::hasMessageClass(const std::string& c) { return messages()["game_type_messages"].has(c); }
 
 void MatchAudio::reset() {
+    modeClass_.clear();
     current_.clear();
     queued_.clear();
     instance_ = -1;
@@ -123,6 +124,25 @@ bool MatchAudio::versusGameOver(int winnerTeam) {
     if (winnerTeam == 0) return announcerEvent(g["AutobotWinSound"].asString());
     if (winnerTeam == 1) return announcerEvent(g["DecepticonWinSound"].asString());
     return false;                                      // a tie: no win line
+}
+
+std::string MatchAudio::messageClassForMode(const std::string& tag) {
+    return messages()["mode_messages"][tag].asString();
+}
+
+bool MatchAudio::onMatchStarted(const std::string& modeTag, int localTeam) {
+    modeClass_ = messageClassForMode(modeTag);
+    setLocalTeam(localTeam);
+    return !modeClass_.empty() && gameTypeMessage(modeClass_, 0);
+}
+
+bool MatchAudio::onGameNearlyComplete() { return !modeClass_.empty() && gameTypeMessage(modeClass_, 1); }
+
+bool MatchAudio::onMatchEnded(int winnerTeam, bool localPlayerWon) {
+    if (modeClass_.empty()) return false;
+    gameTypeMessage(modeClass_, 2, winnerTeam, localPlayerWon);
+    if (modeClass_ != "TnGameTypeMessageDM") versusGameOver(winnerTeam);   // TnVersusGame only (team games)
+    return true;
 }
 
 } // namespace game

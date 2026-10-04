@@ -223,12 +223,30 @@ for o, pr in c.execute("select opath, props from objects where opath like 'Trans
     d = json.loads(pr)
     if d.get('Sounds'): rules[o.split('Default__')[1]] = d['Sounds']
 match_music = sorted({v for g in gametypes.values() for k, v in g.items() if k.endswith('Music')})
+# Mode tag -> the game-type message class its rules broadcast (TnOnlineGameSettings<mode>.Rules: the rule with a
+# Team / FFA GameMessageClass; TnGameRules.BroadcastGameTypeMessage picks by WorldInfo.Game.bTeamGame; DM's game class
+# is TnFreeForAllGame (FFA), SV is cooperative - both message classes are the same there).
+rule_msgs = {}
+for o, pr in c.execute("select opath, props from objects where opath like 'TransGame.Default__TnGameRules%'"):
+    d = json.loads(pr)
+    if d.get('TeamGameMessageClass') or d.get('FFAGameMessageClass'):
+        rule_msgs['TransGame.' + o.split('Default__')[1]] = (d.get('TeamGameMessageClass'), d.get('FFAGameMessageClass'))
+mode_messages = {}
+for o, pr in c.execute("select opath, props from objects where opath like 'TransGame.Default__TnOnlineGameSettings%'"):
+    tag = o.split('Default__TnOnlineGameSettings')[1]
+    rl = json.loads(pr).get('Rules') or []
+    for r in rl:
+        if r in rule_msgs:
+            team, ffa = rule_msgs[r]
+            cls = ffa if tag == 'DM' else team
+            if cls: mode_messages[tag] = cls.split('.')[-1]
+print('mode messages', mode_messages)
 docs.append({'map': '__match_messages__',
              'source': 'Systems gen_level_audio.py: TransGame / TransContent message class defaults (authored.db)',
              'game_type_messages': gametypes, 'progress_announcement_sounds': progress,
              'versus_game_over': {k: gameover[k] for k in ('AutobotWinSound', 'DecepticonWinSound') if k in gameover},
              'announcer': {'team0_dialog_character': annc.get('Team0DialogCharacter'), 'team1_dialog_character': annc.get('Team1DialogCharacter')},
-             'progress_rules': rules})
+             'progress_rules': rules, 'mode_messages': mode_messages})
 print('match messages: %d game types, %d progress sounds, %d music cues' % (len(gametypes), len(progress), len(match_music)))
 
 for level, audio_pkg, base_pkg in MP_MAPS:

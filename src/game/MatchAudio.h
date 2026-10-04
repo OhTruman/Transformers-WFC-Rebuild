@@ -55,6 +55,17 @@ public:
     bool versusGameOver(int winnerTeam);             // [PARTIAL] the winning team's announcer line
     void tick(float dt);
 
+    // ---- Gameplay match events (agents/gameplay game::Match::events()) -> the original broadcasts ----
+    // MatchStarted: TnGameRules.HandleStartGame -> the mode's game-type message, switch 0. `modeTag` = GameModeTag
+    // (TDM / DM / CTF / KOTH / DOM / EXT: TnOnlineGameSettings<tag>.Rules -> Team / FFA GameMessageClass);
+    // `localTeam` sets the announcer voice (TnAnnouncer.SetTeam).
+    bool onMatchStarted(const std::string& modeTag, int localTeam);
+    bool onGameNearlyComplete();                     // GameNearlyComplete -> switch 1
+    bool onProgressAnnouncement(int sw) { return progressAnnouncement(sw); }   // Time / KillsLeft announcement value
+    // MatchEnded: HandleEndGame(Winner) -> switch 2; team games also TnVersusGameOverMessage [PARTIAL].
+    bool onMatchEnded(int winnerTeam, bool localPlayerWon);
+    static std::string messageClassForMode(const std::string& modeTag);
+
     // Diagnostics.
     const std::string& currentCue() const { return current_; }
     const std::string& queuedCue() const { return queued_; }
@@ -71,6 +82,7 @@ private:
     std::map<std::string, std::string> events_;
     std::string current_, queued_, dialogChar_;
     int instance_ = -1, lines_ = 0;
+    std::string modeClass_;
 };
 
 } // namespace game
