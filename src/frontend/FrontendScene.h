@@ -24,6 +24,10 @@ struct SceneView {
     std::string camera;                 // CameraActor name
     std::string matinee;                // the matinee that cuts to / moves the camera ("" = authored pose)
     double time = 0.0;                  // seconds since the scene started (effects / emitters)
+    // Actors moved by the playing matinees (InterpActors, skeletal ships, emblems): absolute world pose, UE units /
+    // degrees, RelativeToInitial and hard attachment applied. Actors not listed keep their authored pose.
+    struct ActorPose { std::string actor; double pos[3]; double rot[3]; };
+    std::vector<ActorPose> actors;
 };
 
 // Implemented by Rendering: draws the scene levels with the frontend's camera before the GFx overlay.
@@ -58,10 +62,13 @@ private:
     struct Group { std::string name; bool director = false; std::vector<std::string> actors; std::vector<MoveTrack> moves;
                    std::vector<std::pair<double, std::string>> cuts; };
     struct Matinee { std::string name, comment; bool looping = false; double length = 0; std::vector<Group> groups;
-                     std::vector<std::string> fscommands; bool onMovieStopped = false; };
+                     std::vector<std::string> fscommands; bool onMovieStopped = false;
+                     std::vector<std::string> remoteEvents; };   // SeqEvent_RemoteEvent names that play it
+    struct RemoteActivator { std::string event; std::vector<std::string> fscommands; bool onMovieStopped = false; };
     struct Actor { std::string name, cls; double loc[3] = {0, 0, 0}, rot[3] = {0, 0, 0}; std::string base;
                    double relLoc[3] = {0, 0, 0}, relRot[3] = {0, 0, 0}; double fov = 0; bool camera = false; };
-    struct Level { std::vector<Matinee> matinees; std::map<std::string, Actor> actors; };
+    struct Level { std::vector<Matinee> matinees; std::map<std::string, Actor> actors; std::vector<RemoteActivator> remotes; };
+    void remoteEvent(const std::string& name);
     struct Playing { const Matinee* m; double t; int order; };
 
     void start(const Matinee& m);

@@ -147,8 +147,20 @@ bool FrontendScene::load(const std::string& path) {
                 if (S["input"].asString() != "Play") continue;
                 if (S["class"].asString() == "GFxEvent_FsCommand" && S["fscommand"].isString()) M.fscommands.push_back(S["fscommand"].asString());
                 if (S["class"].asString() == "SeqAct_MoviePlayer" && S["output"].asString() == "Stopped") M.onMovieStopped = true;
+                if (S["class"].asString() == "SeqEvent_RemoteEvent" && S["event"].isString()) M.remoteEvents.push_back(S["event"].asString());
             }
             lv.matinees.push_back(M);
+        }
+        const assets::Json& rs = L["remoteEvents"];
+        for (size_t i = 0; i < rs.size(); ++i) {
+            RemoteActivator R;
+            R.event = rs[i]["event"].asString();
+            for (size_t s = 0; s < rs[i]["startedBy"].size(); ++s) {
+                const assets::Json& S = rs[i]["startedBy"][s];
+                if (S["class"].asString() == "GFxEvent_FsCommand" && S["fscommand"].isString()) R.fscommands.push_back(S["fscommand"].asString());
+                if (S["class"].asString() == "SeqAct_MoviePlayer" && S["output"].asString() == "Stopped") R.onMovieStopped = true;
+            }
+            lv.remotes.push_back(R);
         }
     }
     loaded_ = !data_.empty();
@@ -178,6 +190,7 @@ void FrontendScene::start(const Matinee& m) {
 void FrontendScene::trigger(const std::string& trig) {
     bool fs = trig.rfind("FsCommand:", 0) == 0, movie = trig.rfind("MovieStopped:", 0) == 0;
     std::string cmd = fs ? trig.substr(10) : std::string();
+    std::vector<std::string> remotes;
     for (const std::string& l : levels_) {
         auto it = data_.find(l);
         if (it == data_.end()) continue;
@@ -185,6 +198,21 @@ void FrontendScene::trigger(const std::string& trig) {
             bool go = (fs && std::find(m.fscommands.begin(), m.fscommands.end(), cmd) != m.fscommands.end()) || (movie && m.onMovieStopped);
             if (go) start(m);
         }
+        for (const RemoteActivator& r : it->second.remotes)
+            if ((fs && std::find(r.fscommands.begin(), r.fscommands.end(), cmd) != r.fscommands.end()) || (movie && r.onMovieStopped))
+                remotes.push_back(r.event);
+    }
+    for (const std::string& r : remotes) remoteEvent(r);
+}
+
+void FrontendScene::remoteEvent(const std::string& name) {
+    // SeqAct_ActivateRemoteEvent -> every SeqEvent_RemoteEvent of that name in the loaded (and streamed) levels.
+    FlowTrace::emit("scene.remoteEvent", {{"event", name}});
+    for (const std::string& l : levels_) {
+        auto it = data_.find(l);
+        if (it == data_.end()) continue;
+        for (const Matinee& m : it->second.matinees)
+            if (std::find(m.remoteEvents.begin(), m.remoteEvents.end(), name) != m.remoteEvents.end()) start(m);
     }
 }
 
@@ -294,6 +322,19 @@ SceneView FrontendScene::view() const {
     v.camera = cam;
     v.matinee = from;
     v.valid = true;
+    for (const Playing& p : playing_)
+        for (const Group& g : p.m->groups) {
+            if (g.moves.empty() || g.director) continue;
+            for (const std::string& name : g.actors) {
+                if (name == cam || !findActor(name)) continue;
+                SceneView::ActorPose ap;
+                ap.actor = name;
+                double am[9];
+                actorWorld(name, ap.pos, am);
+                matrixRotator(am, ap.rot);
+                v.actors.push_back(ap);
+            }
+        }
     return v;
 }
 

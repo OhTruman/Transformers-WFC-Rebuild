@@ -29,6 +29,10 @@ template <class R, class = void> struct HasFrontendScene : std::false_type {};
 template <class R>
 struct HasFrontendScene<R, std::void_t<decltype(std::declval<R&>().loadFrontendScene(std::declval<const std::vector<std::string>&>()))>>
     : std::true_type {};
+template <class R, class = void> struct HasActorTransform : std::false_type {};
+template <class R>
+struct HasActorTransform<R, std::void_t<decltype(std::declval<R&>().setFrontendActorTransform(
+    std::declval<const std::string&>(), std::declval<const Vec3&>(), std::declval<const Vec3&>()))>> : std::true_type {};
 template <class R, class = void> struct HasLoadYield : std::false_type {};
 template <class R>
 struct HasLoadYield<R, std::void_t<decltype(std::declval<R&>().setLoadYield(std::declval<std::function<void()>>()))>> : std::true_type {};

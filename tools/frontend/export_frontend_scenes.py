@@ -123,6 +123,17 @@ def export_level(level):
                            'fscommand': sp.get('FsCommand'), 'event': sp.get('EventName'), 'comment': sp.get('ObjComment')})
         matinees.append({'name': op.rsplit('.', 1)[-1], 'comment': p.get('ObjComment'), 'looping': bool(p.get('bLooping')),
                          'length': dp.get('InterpLength', 0.0), 'groups': groups, 'startedBy': starts})
+    # SeqAct_ActivateRemoteEvent: the remote events this level raises and what fires them (e.g. UI_FrontEnd_m
+    # enterFrontEnd -> StartFireworks, which plays the streamed battle vignette's matinees).
+    remotes = []
+    for op, (c, p) in by_path.items():
+        if c != 'SeqAct_ActivateRemoteEvent':
+            continue
+        trig = []
+        for src, desc, idx in incoming.get(op, []):
+            sc, sp = by_path.get(src, (None, {}))
+            trig.append({'class': sc, 'output': desc, 'fscommand': sp.get('FsCommand'), 'event': sp.get('EventName')})
+        remotes.append({'name': op.rsplit('.', 1)[-1], 'event': p.get('EventName'), 'startedBy': trig})
     # cameras of the level (default view when no matinee drives one) and the bases of attached actors
     mjson = os.path.join(ROOT, 'ExtractedAssets', 'maps', level + '.json')
     if os.path.exists(mjson):
@@ -138,7 +149,8 @@ def export_level(level):
                 break
             actors[bop] = actor(bop)
             b = actors[bop].get('base')
-    return {'actors': sorted(actors.values(), key=lambda a: a['name']), 'matinees': sorted(matinees, key=lambda m: m['name'])}
+    return {'actors': sorted(actors.values(), key=lambda a: a['name']), 'matinees': sorted(matinees, key=lambda m: m['name']),
+            'remoteEvents': sorted(remotes, key=lambda r: r['name'])}
 
 
 def main():

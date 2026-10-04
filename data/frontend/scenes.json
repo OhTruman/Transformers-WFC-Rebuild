@@ -116,7 +116,8 @@
       }
      ]
     }
-   ]
+   ],
+   "remoteEvents": []
   },
   "UI_CharacterCustomization_m": {
    "actors": [
@@ -1647,6 +1648,20 @@
        "fscommand": null,
        "event": null,
        "comment": "Decepticon_IN"
+      }
+     ]
+    }
+   ],
+   "remoteEvents": [
+    {
+     "name": "SeqAct_ActivateRemoteEvent_4897",
+     "event": "UNHIDE_CHARS_MIXER",
+     "startedBy": [
+      {
+       "class": "SeqEvent_SequenceActivated",
+       "output": "Out",
+       "fscommand": null,
+       "event": null
       }
      ]
     }
@@ -17936,7 +17951,8 @@
       }
      ]
     }
-   ]
+   ],
+   "remoteEvents": []
   },
   "UI_FrontEnd_m": {
    "actors": [
@@ -20156,6 +20172,50 @@
       }
      ]
     }
+   ],
+   "remoteEvents": [
+    {
+     "name": "SeqAct_ActivateRemoteEvent_11609",
+     "event": "closeMovieLoader",
+     "startedBy": [
+      {
+       "class": "GFxEvent_FsCommand",
+       "output": "Out",
+       "fscommand": "enterMovieSequence",
+       "event": null
+      }
+     ]
+    },
+    {
+     "name": "SeqAct_ActivateRemoteEvent_11727",
+     "event": "StartFireworks",
+     "startedBy": [
+      {
+       "class": "GFxEvent_FsCommand",
+       "output": "Out",
+       "fscommand": "enterFrontEnd",
+       "event": null
+      },
+      {
+       "class": "SeqAct_MoviePlayer",
+       "output": "Stopped",
+       "fscommand": null,
+       "event": null
+      }
+     ]
+    },
+    {
+     "name": "SeqAct_ActivateRemoteEvent_4458",
+     "event": "closeMovieLoader",
+     "startedBy": [
+      {
+       "class": "GFxEvent_FsCommand",
+       "output": "Out",
+       "fscommand": "enterFrontEnd",
+       "event": null
+      }
+     ]
+    }
    ]
   },
   "UI_Lobby_m": {
@@ -20250,7 +20310,8 @@
       }
      ]
     }
-   ]
+   ],
+   "remoteEvents": []
   },
   "UI_PartyLobby_m": {
    "actors": [
@@ -20344,7 +20405,8 @@
       }
      ]
     }
-   ]
+   ],
+   "remoteEvents": []
   }
  }
 }
