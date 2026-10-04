@@ -2257,6 +2257,320 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 21e — TRANSFORM CLEARANCE, ROSTER CONTRACT, HUD STATE COMPLETION, REGRESSION GUARDS (2026-10-04, gameplay agent)
+Inputs:
+- RE OVERNIGHT_2026-10-04 §A2, A5, B3, E, F;
+- Rendering M08 (HUD ownership: Hud_GFX presents, Gameplay supplies state).
+
+Handoffs:
+- `docs/handoffs/GAMEPLAY_FRONTEND_HUD_CONTRACT.md`: HUD state / events, character selection, settings and input;
+- `docs/handoffs/GAMEPLAY_BOT_READINESS.md`.
+
+### Transform clearance — CONFIRMED ORIGINAL behaviour, PROVISIONAL geometry test
+- **Before vehicle -> robot**, `PlayerController::tryBeginTransform` (TnPawn.Transform -> MoveToSafeTransformationLocation
+  -> FindSpotAwayFromPawns with the target extent):
+  - the robot cylinder must fit at the floor under the vehicle, or at one of 16 nearby spots (1 m / 2 m rings, floor
+    needed, no wall in between);
+  - **no spot -> refused**: `cantTransformCount` pulse = HUD NotifyCantTransform (`mc_cantTransform`) +
+    TransformFailedSound (`BL_TRANS_POWER.TRANSFORM_DISABLED`, TnPlayerController default, CONF);
+  - **a displaced spot** moves the collision at once; the meshes slide back over 0.5 s (OffsetMeshes).
+- **After the fold**, InRobotForm.BeginState: MoveToSafeLocation; still stuck -> **ForceIntoForm(vehicle)** [CONF].
+- **Fit test** [PROV; whether the native search tests world geometry or only pawns is PARTIAL in RE]: five vertical
+  columns (the centre from above MaxStepHeight, four at 0.7 r from 1.8 m) clear up to 4 m. An earlier variant that tested
+  the offset columns from 0.4 m refused 69 / 1520 stress transforms on ordinary slopes and stairs, so it was rejected.
+- **Validation:**
+  - VEHTEST clearance: refused deep under a 3 m ceiling, fits on open floor, displaced to z 3.0 when 0.5 m inside the
+    ceiling edge;
+  - WFC_XFORMTEST 0 / 1520 under the map, 0 refused, 2 forced back to vehicle;
+  - **OPEN:** the 16 "low overhang" cases happen after the fold, while the stress test keeps driving the robot forward
+    under props. That is robot walking, not the transform.
+
+### Character roster contract (`src/game/CharacterRoster.h`) — CONF data
+- `Match::selectCharacter` stores a `CharacterSelection`:
+  - custom or iconic;
+  - one of four specialties;
+  - a stable chassis UniqueId.
+- At spawn, `resolveChassis(selection, team faction)` picks the body:
+  - custom -> the specialty default per faction (Ironhide / Soundwave, Air Raid / Starscream, Sideswipe / Barricade,
+    Warpath / Brawl);
+  - DM forces Decepticon.
+- Spawning waits for `hasSelectedCharacter` (CheckReadySpawn). The local player is pre-selected as iconic Optimus
+  (`Truck`) [RECONSTRUCTION DEFAULT until the frontend selection screen]. Only the Optimus pawn resources load; the other
+  32 chassis need AssetTools ROBODEF / VEHDEF exports.
+
+### HUD runtime state — completed against the HUD list
+- Added:
+  - `weaponName`;
+  - damage direction: `damageTakenCount` pulse, instigator location `lastDamageFrom`, view-relative
+    `lastDamageBearing` [PARTIAL: the Hud_GFX indicator call is not traced];
+  - `cantTransformCount`.
+- Kill feed rows now live **5 s + 1 s fade** (Hud_GFX, RE A2) instead of LocalMessage.Lifetime 3 s.
+- FFA result text is empty (TnFreeForAllGameOverMessage, A5).
+- WFC_TDMTEST 41 / 41: feed expiry at 6 s, HUD damage event and weapon identity.
+
+### Vehicle input — verified against RE (no change needed)
+- RMB / LT: fine aim in robot form only; Boost (held) in vehicle form.
+- Shift: Dash while hovering, Nitro while Driving (steer × 0.3).
+- Driving has Accelerator fixed at 1 (no throttle).
+
+### Boost-continuity status (after 21d)
+- Rendering repro (`WFC_VEHDROPLOG`, 840 frames): starts 1 / 4 / 7 / 18 / 21 -> 4 / 2 / 1 / 0 / 35–38 drops. Counts
+  vary slightly run to run (real frame time).
+- **Every** drop is a near-vertical face (|n.y| ≤ 0.4).
+- Start 21 is the truck held against a wall below 2 m/s, re-boosting into it after each 0.5 s drift. Whether the original's
+  RB contact report re-fires at that speed is **UNKNOWN** (PARTIAL). It was not tuned.
+- Floor seams and steps up to 0.3 m: 0 drops (VEHTEST guard).
+
+### Modes (six recovered)
+| Mode | State |
+|---|---|
+| TDM | complete loop, CONF rules (WFC_TDMTEST 41 / 41) |
+| DM | FFA rules (Decepticon bodies, draw on tie, empty result text) |
+| Conquest (DOM) | CONF bytecode rules (WFC_MODEPLAYTEST) |
+| Power Struggle (KOTH) | CONF bytecode rules (WFC_MODEPLAYTEST 21 / 21) |
+| Code of Power (CTF) | PARTIAL: map state only; needs the carried-objective weapon system (flag return 30 s / 10 s defender drain, rounds) |
+| Countdown to Extinction | PARTIAL: map state only; same dependency (fuse 15 s, defuse 5 s, dropped bomb 30 s) |
+
+### Regression guards (protecting the human-reported bugs)
+| Bug | Guard |
+|---|---|
+| High-refresh pawn / camera separation | WFC_CAMSYNC 60 / 144 / 240 Hz (robot 0.0003° at all rates; the M05 bug gave 1.28°) |
+| Transform under the map | WFC_XFORMTEST 0 / 1520; WFC_CHAOS 0 / 60 |
+| Single-frame boost drop | VEHTEST boost continuity, 0 drops on steps ≤ 0.3 m; `WFC_VEHDROPLOG` repro |
+| Ramp snagging | VEHTEST ramp sweep (hover and boost climb 20–50°) |
+| Transform clearance | VEHTEST clearance (refuse / fit / displace) |
+
+Wide Streets traversal: oracle 852 / 852, robot tour 100 / 122, vehicle tour 98 / 122, 0 falls; sweep 984 runs, 0
+KillZ; coherence 0 missing collision.
+
+---
+
+## PASS 21d — BOOST-STATE FLICKER, VEHICLE CONTACT, HIGH-REFRESH GUARD (2026-10-04, gameplay agent)
+Inputs:
+- Rendering M08 handoffs `GAMEPLAY_BOOST_FX_FLICKER.md` and `GAMEPLAY_CAMERA_FRAME_PACING.md`;
+- RE MILESTONE05_PLAYTEST_RE §1–2 and the OVERNIGHT_2026-10-04 note §B.
+
+### Boost exhaust open / close (human-reported; diagnosed by Rendering) — FIXED at the source
+- **Cause (mine, Pass 20).**
+  - The frontal-collision drop (Driving.OnRigidBodyCollision: contact normal · forward > 0.866 -> Hovering, CONF) was
+    judged by the travel direction, not the contact normal.
+  - Any block of the low hull probe while moving forward (including grazing contacts) ended boost. That was followed by
+    the 0.5 s drift and a re-boost, so the BoostFx restarted about every 0.6 s.
+  - Rendering logged 15–31 drops per 14 s on open floor at M05.
+- **Fix.** The drop needs the blocking face's normal (into the obstacle) within 30° of forward. The exhaust FX stays bound
+  to the real Driving state; nothing is smoothed.
+- **Re-run of Rendering's repro** (starts 1 / 4 / 7 / 18 / 21, boost held 14 s, `WFC_VEHDROPLOG=1`): 2 / 1 / 3 / 0 / 22
+  drops.
+  - **Every** remaining drop is a near-vertical face (|n.y| ≤ 0.34) of a real obstacle: crates and batteries near
+    (139, −622); a wall at start 21, where the truck sits pressed against it at 0 m/s and re-boosts after each drift.
+  - These are authentic frontal impacts.
+- **Regression guard (VEHTEST).** Boost across 0.05 / 0.1 / 0.2 / 0.3 m steps: **0 drops**. A 0.5 m riser reaches the
+  0.45 m hull probe, so it is a frontal hit (RE §2.2: boost lips contact the hull, C).
+
+### Vehicle contact (ramps / angle changes)
+- **Hover** already matches RE §2.1 (CONFIRMED ORIGINAL): 4 diagonal 250 UU rays, a normal-weighted implicit spring, the
+  45° ground test, yaw-only orientation on contact, upright only when airborne or upside down, (up.Z)² strafe.
+- **The stops were my Pass 20 hull probes:** faces of 45–60° were treated as walls. Now faces with |n.y| > 0.5 (under 60°)
+  don't stop the hull; a rigid-body box meeting a sloped face is pushed up it, which the chassis / spring code reproduces
+  [PROV]. Near-vertical faces still block.
+- **Boost (Driving).** The body settles onto the support slope instead of level, so the recovered BoostScale (fades to 0
+  between forward.Z 0.5 and 0.866, CONF) sees climbs, and gravity acts along the slope [PROV]. The per-wheel
+  TnWheelAssembly suspension (K 120000, D 8000, rest 30 + radius 45 UU, CONF) is **not** modelled: the wheel mount
+  heights relative to the mesh origin are unknown (RE / AT request).
+- **VEHTEST ramp sweep** (3 m ramps; hover 15 m/s, boost 25 m/s):
+  - hover 20 / 35 / 50° climb, 65° stops;
+  - boost 20–50° climb with the body pitching 19–31°; 65° is a frontal hit -> Hovering.
+  - **OPEN:** hover at 35° launches about 6 m and tilts 69° (the same before this pass). It comes from the recovered spring
+    response to fast compression on a steep face. I did not tune it; the RB hull contact the rebuild approximates is the
+    likely difference.
+- **Regressions.**
+  - WFC_XFORMTEST 0 / 1520 under the map; the overhang cases are unchanged (15).
+  - Map oracle 852 / 852; vehicle tour 98 / 122 (was 97).
+  - WFC_CHAOS: 0 under the map, 0 KillZ, 0 stuck, 4 prop entries.
+  - VEHTEST hover / steering / nitro unchanged.
+
+### High-refresh pawn / camera separation — regression guard
+- The fix is PASS 21a (camera per render frame); Rendering's independent diagnosis and patch agree.
+- **WFC_CAMSYNC** (on-screen character offset jitter per frame):
+
+| scenario | 60 Hz | 144 Hz | 240 Hz |
+|---|---|---|---|
+| robot run + turn | 0.0003° | 0.0003° | 0.0002° |
+| hover drive + turn | 0.055° | 0.011° | 0.004° |
+| boost | 0.106° | 0.023° | 0.009° |
+
+- The per-tick cache (M05) gave 1.28° at 144 Hz.
+- The vehicle residual falls with the refresh rate: it is the truck's own motion, not pacing.
+
+---
+
+## PASS 21c — CONQUEST (DOM) AND POWER STRUGGLE (KOTH) ON THE SHARED MATCH FRAMEWORK (2026-10-04, gameplay agent)
+Sources:
+- RE MILESTONE05_PLAYTEST_RE (28debca) §3;
+- RE's decompiled TnDominationPointBase, TnKingOfTheHillZoneBase, TnGameRules_ScoreKills / ScoreObjectives /
+  ScoreKingOfTheHill / ScoreDomination / ReportGameProgressBase / Points, TnGameObjective;
+- authored defaults (authored.db).
+
+Test: `WFC_MODEPLAYTEST` **21 / 21** (DOM + KOTH + TDM afterwards); `WFC_TDMTEST` 39 / 39.
+
+### Shared framework (one Match, not one engine per mode)
+- **Launch.** `World::launchMatch` accepts TDM, DM, DOM and KOTH. CTF and EXT are refused because their rules are not
+  implemented.
+- **Per-mode settings** (`MatchSettings::forMode`, CONFIRMED authored):
+  - DOM / KOTH: PointsToWin 400, TimeLimit 900;
+  - `TeamScoreAmount` 0: ScoreKillsMP authors none, so in DOM / KOTH a kill is +1 personal and 0 team
+    (`AddScore(1, TeamScoreAmount)`, CONFIRMED bytecode);
+  - ReportGameProgressPoints instead of Kills.
+- **Spawn clusters.** `ActiveGameTypes` filter (TNGT): the 6 TDM-only clusters don't register in DOM / KOTH.
+- **Objective spawn modifiers.** Active KOTH zone All −50 / d within 5000; owned DOM node Friend +1 / d [CONF authored].
+- **Objective scoring entry points.**
+  - `Match::scoreObjective` (ScoreObjectives: `AddScore(IndividualScore, Score)`, then ReportGameProgressPoints at
+    50 / 25 left).
+  - `scoreTeamObjective` (DOM) [HIGH: the TnTeamGame override is not in the decompiled set; RE §3 states +1 team / 3 s].
+  - `addPersonalScore` (DOM capture).
+  - Each reaches the same score-limit end.
+- **Objective membership.** The pawn inside the objective's authored ObjectiveVolume brush (physics.json TriggerVolume
+  planes). TnGameObjective.PostBeginPlay -> `ObjectiveVolume.SetAssociatedActor` [CONF]; the volume forwards touches
+  [HIGH stock UE3]; the cylinder-vs-brush overlap is approximated by the pawn location [PROV].
+
+### Conquest (DOM) — CONFIRMED bytecode
+- **TnDominationPointBase.Tick / UpdateOccupiers / UpdateScoring:**
+  - with no occupants -> capture 0;
+  - attackers = living occupants not on the defending team;
+  - a neutral node is claimed as if owned by the other team;
+  - with no defender present, capture += dt × attackers (restarted when the claiming team changes);
+  - at **CaptureTime 20 s** -> SetTeam, **PersonalScoreAmount +2** for each capturer, timers reset,
+    TnDominationMessage (switch + 10 × PointNumber);
+  - an owned node -> **+1 team every 3 s** (ScoreInterval 3, ScoreAmount 1).
+- **Verified:**
+  - a solo capture is pending at 19.5 s and done at 20 s, +2 personal;
+  - +1 team after 3 s;
+  - a defender present holds progress;
+  - an enemy alone recaptures in 20 s;
+  - two attackers capture in 10 s;
+  - the score-limit end;
+  - 3 totems visible (DOM state from Pass 19).
+- **PARTIAL.** No points announcements for DOM (it scores through ScoreTeamObjective, not ScoreObjective). The capturing
+  announcement throttle (15 s) is not emitted.
+
+### Power Struggle (KOTH) — CONFIRMED bytecode
+- **Zones.** Inactive until **MatchStarting**, which picks the initial zone.
+- **Active.Tick:**
+  - UpdateClaim: one team, contested 254, or none 255;
+  - every ScoreInterval 1 s, if uncontested and owned, each living pawn in the zone -> Game.ScoreObjective(PRI, 1),
+    i.e. **+1 personal (IndividualScore 1) and +1 team**;
+  - ActiveTimeLeft 60 s -> ActivateNewZone (unvisited cycle).
+- **CheckEndGame.** Every zone deactivates at the end.
+- **Verified:**
+  - no zone before the start, one after it;
+  - +5 / +5 over 5 s alone;
+  - contested gives no score;
+  - rotation to another zone after 60 s;
+  - the end at the limit with zones deactivated.
+- **PARTIAL.** The KOTH hill dialog / message switches are logged, not presented (Systems / Rendering).
+
+### HUD
+- `HudGameState::objectives`: marker type ("Domination" / "KingOfTheHill"), NodeID, owner (255 / 254), active, capture
+  progress (NormalizedCaptureTime), BeingCaptured, KOTH time left, position.
+- Match events add `PointsLeftAnnouncement` (switches 4 / 3).
+
+### Not implemented (evidence present, mechanics missing in the rebuild)
+- **CTF (Code of Power).** Rounds (TnGameRules_RoundsBase), the flag as a carried weapon, capture-point activation per
+  attacking team, the mercy rule.
+- **EXT (Countdown to Extinction).** The bomb as a carried weapon, plant / 15 s fuse / 5 s defuse, HurtRadius 9999.
+- Both need a carried-objective weapon / inventory system first. Their map state (Pass 19) and the RE specs
+  (RE PLAYTEST §3, GAMEPLAY_UNKNOWNS §4) are ready.
+
+---
+
+## PASS 21b — MATCH HUD STATE, KILL FEED, MATCH END, REGEN (2026-10-04, gameplay agent)
+RE: MILESTONE05_PLAYTEST_RE (28debca) §3 / §9; TnDeathMessage decompile; authored LocalMessage / damage types.
+Test: `WFC_TDMTEST` **39 / 39**.
+
+### Kill feed (Gameplay owns the events; presentation owns text and colour)
+- **CONFIRMED (TnDeathMessage.GetColoredString).**
+  - Switch 1 -> `DamageType.SuicideMessage(victim)`, otherwise `DamageType.DeathMessage(killer, victim)`.
+  - `\`k` / `\`o` take the killer / victim names, each coloured friendly / enemy for the viewer
+    (TnMessageHelpers.GetColorForPRI).
+- **HIGH (stock GameInfo.BroadcastDeathMessage).** Switch 1 when the killer is none or the victim itself.
+- **Lifetime.** Engine.LocalMessage.Lifetime is 3.0 s; TnDeathMessage authors no override.
+- **`KillFeedEntry`.** time, messageSwitch, killer / victim player, both teams, DamageType class:
+  - `TransGame.TnDamageTypeIonBlaster` for Ion Blaster kills;
+  - `Engine.DmgType_Suicided` for suicides;
+  - `Engine.DmgType_Fell` for KillZ [HIGH: stock WorldInfo.KillZDamageType].
+- `Match::killFeed()` returns the live entries, `killHistory()` the whole match; `HudGameState::killFeed`.
+
+### HUD / match state (`World::hudState()`, no drawing)
+- Added:
+  - `spectating` (dead >= MinRespawnDelay 3.0 s, CONF RE E7);
+  - `timeLimit`, `faction` (DM resolves every player to the Decepticon faction, CONF RE §3 / §7);
+  - `endReason` ("Score" / "" / "Forfeit"), FFA `winnerPlayer` (an equal top score is a draw, CONF);
+  - `matchOverTimeLeft` (15 s);
+  - the kill feed;
+  - scoreboard rows (name, team, score, kills, deaths, assists, alive, local).
+- Existing fields are unchanged: health / segments / ammo / clock / countdown / scores / tags / result.
+- **Verified.**
+  - The clock does not run in PendingMatch.
+  - The clock and score are frozen in MatchOver.
+  - The second match starts from zero.
+- **PARTIAL.** The FFA result text ("You won" / "You lost" / "Draw"): TnFreeForAllGameOverMessage strings were not read.
+
+### Health regeneration — CONFIRMED (RE §9)
+- 20 HP/s after 2.0 s without damage, up to the top of the current segment.
+- The robot blueprint's parameters apply in both forms; the truck blueprint's 12 HP/s / 7 s is authored but unread.
+- Applied to every live pawn.
+- Test: 400 -> nothing for 2 s -> 425 (segment top), not 550.
+
+---
+
+## PASS 21a — M05 "INTERLACED" CHARACTER REGRESSION + PRE-MATCH PRESENTATION (2026-10-04, gameplay agent)
+
+### Character / vehicle "interlacing" (human-reported M05 regression) — FIXED (owner: Gameplay)
+- **Cause (mine, Pass 20).**
+  - The third-person camera position was moved into the fixed 60 Hz simulation step and cached (`camLoc_`), while the
+    camera rotation still updates per render frame (`handleInput`).
+  - The integrated build renders at about 130 fps on the playtest machine (no swap interval is set), so most frames run
+    0 simulation steps. Each of those frames paired a stale camera position with a fresh rotation.
+  - The view swung around the pawn every frame, so the character and the truck appeared to separate and jitter.
+  - The animation, the assets and the renderer were not involved: Character / SkinnedModel are unchanged since M04
+    except `respawnReset`; dynamic meshes are drawn immediately, not through the new translucency queue.
+- **Fix.**
+  - The camera position is again evaluated per render frame from the current rotation and pawn location, exactly as
+    before Pass 20.
+  - The RE obstruction model (`WFC_CAMRE`) keeps its per-step smoothing state as a camera-space offset applied with the
+    current frame's rotation.
+- **WFC_CAMSYNC (render N Hz against the 60 Hz simulation, turning and moving).** Jitter of the character's on-screen
+  offset per frame (mean |second difference|):
+
+| scenario | 144 Hz per-tick cache (M05) | 144 Hz per-frame (fixed) | 75 Hz M05 / fixed |
+|---|---|---|---|
+| robot run + turn | 1.276° (max 1.91°) | **0.0003°** | 0.972° / 0.0002° |
+| hover truck + turn | 1.189° (max 1.92°) | **0.011°** | 0.923° / 0.038° |
+| boost | 0.649° (max 4.14°) | **0.023°** | 0.375° / 0.080° |
+
+- VISUALLY VERIFIED: pending a human on the integrated build. The numeric cause and fix are confirmed.
+- **Integration note.** No swap interval is set anywhere, so the frame rate is uncapped. Gameplay is correct at any
+  rate now; frame pacing belongs to Frontend / Rendering.
+
+### Pre-match presentation (human-reported) — FIXED
+- **Integrated M05 capture** (countdown): no Optimus, but the Ion Blaster drawn floating at the world-load DM spawn,
+  with the hidden pawn frozen mid-fall.
+- **Original [CONF RE bootstrap §2 / §5.2].** `ShouldSpectateOnLogin`: there is no pawn before the start, and
+  PendingMatch spawns nobody.
+- **HIGH (stock UE3).** GameInfo.Login creates the controller at FindPlayerStart and it spectates from there.
+- **Now.**
+  - `World::startLocalMatch` takes the login start from the spawn manager (team start of the initial cluster; the
+    SpawnIterator is consumed like the original).
+  - The controller views from it at the start's rotation (`PlayerController::setSpectatorView`).
+  - The pawn is parked at rest there, and neither the pawn, the weapon nor the vehicle FX are drawn while there is no
+    pawn.
+  - On the spawn the view returns to the third-person camera, and Optimus appears at his team start
+    (TnTeamPlayerStart_*, initial cluster 7810 / 4159).
+- **PARTIAL.** The death / spectate camera (Death strategy, MinRespawnDelay 3.0 s spectating) is not reproduced: the
+  camera stays at the death location.
+
+---
+
 ## PASS 20c — ADVERSARIAL MOVEMENT HARDENING (2026-10-03, gameplay agent)
 - **WFC_CHAOS** (Phase 3): from 60 nav points, 20 s each of seeded random play through the real input path
   (71,940 ticks, 355 transform presses, 312 jumps, 307 boosts). Checks:

@@ -63,6 +63,8 @@ private:
     void runCameraTest();
     void runChaosTest();
     void runTdmSessionTest();
+    void runCameraSyncTest();
+    void runModePlayTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

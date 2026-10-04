@@ -58,6 +58,22 @@ struct ObjectiveObject {
     bool activeInMode = false;             // the current game mode uses this objective
     std::string gateRule;                  // exact rule class the class gates on
     bool kothVisited = false;              // TnKingOfTheHillZoneBase.HasBeenActive
+    // Objective runtime (TnGameObjective / TnDominationPointBase / TnKingOfTheHillZoneBase).
+    struct Plane { core::Vec3 n; float d; };
+    std::vector<Plane> volume;             // ObjectiveVolume brush (TriggerVolume, outward planes): its touches go to
+                                           // the objective (Volume.AssociatedActor) [HIGH stock UE3]
+    std::string volumeActor;
+    int pointNumber = 0;                   // TnDominationPoint.PointNumber (HUD NodeID)
+    int defenderTeam = 255;                // DefenderTeamIndex: 255 none, 254 contested (KOTH)
+    int claimingTeam = 255;                // DOM ClaimingTeam
+    float captureTime = 0.0f;              // DOM CurrentCaptureTime (s; CaptureTime 20)
+    float scoreTime = 0.0f;                // DOM CurrentScoreTime (ScoreInterval 3)
+    float activeTimeLeft = 0.0f, periodTimeLeft = 0.0f;   // KOTH ActiveTimeLeft (ZoneActiveTime 60) / PeriodTimeLeft
+    bool contains(const core::Vec3& p) const {
+        if (volume.empty()) return false;
+        for (const Plane& pl : volume) if (core::dot(pl.n, p) - pl.d > 0.0f) return false;
+        return true;
+    }
     // Objective marker (TnObjectiveManager / TnHUD.UpdateObjectiveMarker): class-hard-coded type; the HUD gets
     // _global.UpdateMarker(id, dist, sx, sy, sz, markerTypeString, description).
     const char* markerClass = "";          // e.g. "TransGame.TnObjectiveMarkerTypeDomination"
@@ -84,6 +100,19 @@ public:
     // A new match = a fresh level load in the original (ReturnToGameLobby -> ServerTravel): map clock back to 0
     // (GameplayStarted again), objectives / KOTH (MatchStarting) re-initialised for the current mode.
     void resetForNewMatch();
+    // Objective volumes from physics.json (ObjectiveVolume -> TriggerVolume brush polygons).
+    void loadObjectiveVolumes(const std::string& physicsJson);
+    // Live objective rules, ticked only while the match is InProgress.
+    struct ObjPawn { int player; int team; core::Vec3 pos; bool alive; };
+    struct ObjectiveScoring {
+        std::vector<std::pair<int, int>> objectiveScores;   // Game.ScoreObjective(PRI, score)
+        std::vector<std::pair<int, int>> teamScores;        // TnGame.ScoreTeamObjective(team, amount)
+        std::vector<std::pair<int, int>> personalScores;    // PRI.AddScore(amount) without team (DOM capture +2)
+        std::vector<std::pair<std::string, int>> messages;  // (message class, switch) broadcasts
+    };
+    void matchStarting();                                   // MatchStarting: KOTH initial zone
+    void matchEnded();                                      // ScoreKingOfTheHill.CheckEndGame: every zone Deactivate
+    void tickObjectives(float dt, const std::vector<ObjPawn>& pawns, ObjectiveScoring& out);
     // Split the movers' triangles out of the static collision meshes into moving sets.
     void registerCollision(CollisionWorld& pawn, CollisionWorld* weapon,
                            const std::vector<std::pair<std::string, std::vector<core::Vec3>>>& pawnTris,
@@ -122,6 +151,8 @@ private:
     float kothTimeLeft_ = 0.0f;
     unsigned kothRng_ = 0x5EED1234u;
     void applyObjectiveStates();
+    void activateKothZone(int idx);
+    void kothUpdateClaim(ObjectiveObject& z, const std::vector<ObjPawn>& pawns, ObjectiveScoring& out);
     void applyModeVisibility();
     struct MdvRule { std::string rule; bool unhide = true; std::vector<std::string> actors; };
     std::vector<MdvRule> mdv_;

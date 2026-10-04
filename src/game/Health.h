@@ -2,7 +2,8 @@
 // segments [175, 125, 125, 125] -> HealthMax 550; Overshield 550 (Health may reach HealthMax + 550).
 // AdjustDamage: while overshield health > 0 the damage comes off Health directly (the overshield part first);
 // otherwise normal segmented damage. HealDamage dispatches on the heal type (SHT_*).
-// Segment regeneration rules were not read [UNKNOWN]: no regeneration is applied.
+// Regeneration [CONF RE MILESTONE05_PLAYTEST_RE §9]: 20 HP/s after 2.0 s without damage, up to the top of the current
+// segment; the robot blueprint's HealthRegenParameters apply in both forms (the truck's 12 / 7 s are unread).
 #pragma once
 
 namespace game {
@@ -14,6 +15,8 @@ struct Health {
 
     float current = 550.0f;
     float max = 550.0f;            // HealthMax = sum of segments
+    float sinceDamage = 1e9f;      // seconds since the last damage taken
+    static constexpr float kRegenDelay = 2.0f, kRegenRate = 20.0f;
 
     bool isDead() const { return current <= 0.0f; }
     float overshield() const { return current > max ? current - max : 0.0f; }
@@ -30,6 +33,7 @@ struct Health {
     float applyDamage(float amount) {
         if (amount <= 0.0f || current <= 0.0f) return 0.0f;
         float before = current;
+        sinceDamage = 0.0f;
         current -= amount;
         if (current < 0.0f) current = 0.0f;
         return before - current;
@@ -44,7 +48,13 @@ struct Health {
             case HealType::AddOverShield: current = max + kOvershield; break;
         }
     }
-    void reset() { current = max; }
+    void tickRegen(float dt) {
+        sinceDamage += dt;
+        if (current <= 0.0f || current >= max || sinceDamage < kRegenDelay) return;
+        float top = segmentTop(activeSegment());
+        if (current < top) current = current + kRegenRate * dt > top ? top : current + kRegenRate * dt;
+    }
+    void reset() { current = max; sinceDamage = 1e9f; }
 };
 
 } // namespace game

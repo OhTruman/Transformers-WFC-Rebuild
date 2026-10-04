@@ -49,8 +49,16 @@ struct HudGameState {
     float health = 0, healthMax = 0, overshield = 0, normalizedOverShield = 0;
     int activeSegment = 0, segmentCount = 4;
     int clipAmmo = 0, reserveAmmo = 0;
+    std::string weaponName;                      // current weapon (only the Ion Blaster exists in the rebuild)
+    // Damage taken (TakeDamage -> HUD damage direction): increments per damaging hit; the instigator location at that hit
+    // (world) and its bearing relative to the view (radians, 0 = ahead, + = right). Presentation belongs to Hud_GFX.
+    int damageTakenCount = 0;
+    core::Vec3 lastDamageFrom{0, 0, 0};
+    float lastDamageBearing = 0.0f;
     bool vehicleForm = false, transforming = false;
+    int cantTransformCount = 0;                  // increments per refused transform (HUD NotifyCantTransform + TransformFailedSound)
     float timeToRespawn = -1.0f;                 // <PlayerOwner:TimeToRespawn> (MultiplayerRespawn_GFX)
+    bool spectating = false;                     // dead >= MinRespawnDelay 3.0 s: PlayerSpectating (UI event 4)
     // Match
     bool matchActive = false;
     std::string modeTag;
@@ -59,16 +67,38 @@ struct HudGameState {
     int countdown = 0;                           // <CurrentGame:CurrentCountdown> (pre-match)
     int remainingTime = 0, elapsedTime = 0;      // GRI.RemainingTime (HUD clock = CurrentCountdown in progress)
     int goalScore = 0;                           // <CurrentGame:GoalScore>
+    int timeLimit = 0;                           // InitGame TimeLimit (s)
+    int faction = 255;                           // resolved character faction (0 Autobot, 1 Decepticon; DM = 1)
     int teamScore[2] = {0, 0};                   // <CurrentGame:Teams>
     int myTeam = 255;                            // <PlayerOwner:TeamID>
     int score = 0, kills = 0, deaths = 0;        // <PlayerOwner:Score>, PRI kills / deaths
     float assists = 0.0f;
     int winnerTeam = -1;                         // GRI.Winner (-1 tie / none)
     std::string result;                          // TnVersusGameOverMessage: "Your team won" / "Your team lost" / "Tie game"
+    std::string endReason;                       // EndGame reason: "Score", "" (time), "Forfeit"
+    int winnerPlayer = -1;                       // FFA winner (GetWinningPRI; -1 draw)
+    float matchOverTimeLeft = 0.0f;              // MatchOver -> ReturnToGameLobby (15 s)
+    // Kill feed (TnDeathMessage broadcasts; Hud_GFX rows live 5 s + 1 s fade, max 5 shown), oldest first.
+    std::vector<KillFeedEntry> killFeed;
+    // Scoreboard rows (InGameStats / EndGameStats PlayerList: PRI name, team, score, kills, deaths).
+    struct Row { int player; std::string name; int team; int score, kills, deaths; float assists; bool alive, local; };
+    std::vector<Row> scoreboard;
     // TDM player tags (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled,
     // enemy markers disabled by default (no TnBuffSeeEnemyObjectiveMarkers / HardLocked / Revenge buffs here).
     struct Tag { int player; std::string name; int team; bool ally; bool drawn; core::Vec3 pos; };
     std::vector<Tag> tags;
+    // Objectives of the current mode (DOM nodes, KOTH zones): HUD markers + capture state.
+    struct Objective {
+        std::string actor, markerType;           // "Domination" / "KingOfTheHill"
+        int pointNumber = 0;                     // DOM NodeID
+        int ownerTeam = 255;                     // DefenderTeamIndex (255 neutral, 254 contested)
+        bool active = false;                     // KOTH: the Active zone
+        float captureProgress = 0.0f;            // DOM NormalizedCaptureTime (CurrentCaptureTime / CaptureTime)
+        bool beingCaptured = false;              // DOM BeingCaptured (Flashing)
+        float timeLeft = 0.0f;                   // KOTH ActiveTimeLeft
+        core::Vec3 pos;
+    };
+    std::vector<Objective> objectives;
 };
 
 // A static graybox block (fallback level + future collision volume).
@@ -200,13 +230,15 @@ public:
     int localMatchPlayer() const { return localPlayer_; }
     const std::vector<MatchEvent>& matchEvents() const { return matchEvents_; }   // consumed during the last tick
     bool localPlayerDead() const { return matchActive_ && localDead_; }
-    void killLocalPlayer(int killer, bool suicide);     // death of the local pawn (harness / health / KillZ)
+    void killLocalPlayer(int killer, bool suicide, const std::string& damageType = std::string());   // death of the local pawn
     // Front-end entry: map + mode + settings. Applies the mode's authored world state, resets the map as a fresh level
     // load, and starts the match. False (and nothing changes) for a map that is not loaded or an unsupported mode.
     bool launchMatch(const MatchLaunch& l);
     // TnPlayerPawn.TakeDamage for a match player (local or opponent): teammate damage is discarded except
     // TnDamageTypeAOE; damage reaching the pawn enters its DamageHistory; lethal damage -> Game.Killed(instigator).
-    bool applyMatchDamage(int victimPlayer, int instigatorPlayer, float amount, bool aoe);
+    bool applyMatchDamage(int victimPlayer, int instigatorPlayer, float amount, bool aoe, const std::string& damageType = std::string());
+    int damageTakenCount_ = 0;
+    core::Vec3 lastDamageFrom_{0, 0, 0};
     // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
     MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
     const std::vector<MatchOpponent*>& matchOpponents() const { return opponents_; }

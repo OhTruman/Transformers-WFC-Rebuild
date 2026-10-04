@@ -124,7 +124,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // Transforming to the vehicle ends fine aim [CONF RE] (the wish is dropped, not just paused).
     if (!transforming && in.wasPressed(Button::Transform) && pawn_) {
         if (pawn_->moveForm() == Form::Robot) fineAimWanted_ = false;
-        pawn_->beginTransform();
+        tryBeginTransform();
     }
 
     // Fire: held flag persists across frames (consumed per simulation step while held) [CONF RE].
@@ -280,8 +280,30 @@ core::Vec3 PlayerController::desiredCameraPos() const {
     return focus + dir * (offset_.x - distCur_) + right * offset_.y + up * offset_.z;
 }
 
+// Evaluated per RENDER frame from the current orbit rotation and pawn location, like the strategy's other behaviours
+// (camera rotation is updated per frame in handleInput). Caching the position per fixed step (Pass 20) paired a stale
+// position with a fresh rotation on every frame that ran 0 or 2 simulation steps: the view swung around the pawn each
+// frame (the M05 "interlaced" character / vehicle).
 core::Vec3 PlayerController::cameraPos() const {
-    return camLocValid_ ? camLoc_ : desiredCameraPos();
+    if (spectating_) return specPos_;
+    const core::Vec3 desiredCam = desiredCameraPos();
+    if (!pawn_ || !col_) return desiredCam;
+    static const bool reModel = std::getenv("WFC_CAMRE") != nullptr;
+    if (!reModel) {
+        // Default: provisional pull-in toward the anchor in front of the first hit.
+        core::Vec3 focus = pawn_->actorLocation() + core::Vec3{0, anchorCur_, 0};
+        core::Vec3 d = desiredCam - focus;
+        float len = core::length(d), t;
+        if (len > 1e-3f && col_->segmentHit(focus, desiredCam, t)) return focus + d * (std::max(0.0f, t * len - 0.3f) / len);
+        return desiredCam;
+    }
+    if (!camOldValid_) return desiredCam;
+    // RE model: the smoothed offset lives in target space (camera rotation, target location) - apply it with the
+    // current frame's rotation and location.
+    const core::Vec3 F = core::forwardFromYawPitch(viewYaw_, viewPitch_);
+    const core::Vec3 R = core::normalize(core::cross(core::forwardFromYawPitch(viewYaw_, 0.0f), core::Vec3{0, 1, 0}));
+    const core::Vec3 U = core::cross(R, F);
+    return pawn_->actorLocation() + F * camOld_.x + R * camOld_.y + U * camOld_.z;
 }
 
 namespace {
@@ -339,14 +361,11 @@ void PlayerController::tickCameraCollision(float dt) {
     // Default: the provisional pull-in (validated feel). WFC_CAMRE=1: the RE obstruction behaviours below, whose
     // native box sweeps are approximated by rays (PARTIAL; WFC_CAMTEST shows more visible clipping than the default).
     static const bool oldModel = std::getenv("WFC_CAMRE") == nullptr;
-    if (oldModel) {
+    if (oldModel) {                          // stateless: cameraPos() evaluates it per render frame
         core::Vec3 focus = pawn_->actorLocation() + core::Vec3{0, anchorCur_, 0};
         core::Vec3 d = desiredCam - focus;
         float len = core::length(d), t;
-        camLoc_ = desiredCam;
         camObstructed_ = len > 1e-3f && col_->segmentHit(focus, desiredCam, t);
-        if (camObstructed_) camLoc_ = focus + d * (std::max(0.0f, t * len - 0.3f) / len);
-        camLocValid_ = true;
         return;
     }
     // Camera frame (UE X forward, Y right, Z up).
@@ -451,6 +470,65 @@ void PlayerController::tickFineAim() {
     pawn_->setFineAiming(fineAiming_);
 }
 
+// Robot cylinder (radius 200, height 400 UU) standing on the floor at feet: five vertical columns (centre + 4 at 0.7 r)
+// from above MaxStepHeight to the cylinder top must be clear of the movement collision. [PROV: whether the native
+// FindSpotAwayFromPawns tests world geometry as well as pawns is PARTIAL in RE; the refusal itself is CONF]
+bool PlayerController::robotFitsAt(const CollisionWorld* col_, const core::Vec3& feet) {
+    if (!col_) return true;
+    const float r = core::config::kPawnRadius * 0.7f, top = 2.0f * core::config::kPawnHalfHeight;
+    const core::Vec3 off[5] = {{0, 0, 0}, {r, 0, 0}, {-r, 0, 0}, {0, 0, r}, {0, 0, -r}};
+    float t;
+    // Centre column from above MaxStepHeight; offset columns from 1.8 m (0.4 + r x tan 45 deg): walkable slopes and stairs
+    // under the cylinder's edge are not obstructions (the floor supports the cylinder at its centre).
+    for (int i = 0; i < 5; ++i) {
+        const core::Vec3& o = off[i];
+        float from = i == 0 ? 0.4f : 0.4f + r;
+        if (col_->segmentHit(feet + o + core::Vec3{0, from, 0}, feet + o + core::Vec3{0, top, 0}, t)) return false;
+    }
+    return true;
+}
+
+bool PlayerController::findRobotSpot(const CollisionWorld* col_, const core::Vec3& feet, core::Vec3& out) {
+    if (robotFitsAt(col_, feet)) { out = feet; return true; }
+    if (!col_) return false;
+    float t;
+    for (float d : {1.0f, 2.0f})
+        for (int k = 0; k < 8; ++k) {
+            float a = k * 0.7853982f;
+            core::Vec3 c = feet + core::Vec3{std::cos(a) * d, 0.0f, std::sin(a) * d};
+            float gy; core::Vec3 gn;
+            if (!col_->groundHeight(c.x, c.z, feet.y + 0.5f, 1.0f, gy, gn)) continue;          // needs floor
+            c.y = gy;
+            if (col_->segmentHit(feet + core::Vec3{0, 1.0f, 0}, c + core::Vec3{0, 1.0f, 0}, t)) continue;   // no wall between
+            if (robotFitsAt(col_, c)) { out = c; return true; }
+        }
+    return false;
+}
+
+bool PlayerController::tryBeginTransform() {
+    if (!pawn_) return false;
+    if (pawn_->moveForm() == Form::Vehicle && col_) {
+        // Target = robot: its 4 m cylinder must fit (vehicle actor -> floor below).
+        core::Vec3 a = pawn_->actorLocation();
+        float gy; core::Vec3 gn;
+        core::Vec3 feet = a;
+        if (col_->groundHeight(a.x, a.z, a.y, 4.0f, gy, gn)) feet.y = gy; else feet.y = a.y - pawn_->meshToActor(Form::Vehicle);
+        core::Vec3 spot;
+        if (!findRobotSpot(col_, feet, spot)) {
+            ++cantTransformCount_;                       // NotifyCantTransform + TransformFailedSound; no transform
+            return false;
+        }
+        core::Vec3 shift{spot.x - feet.x, 0.0f, spot.z - feet.z};
+        if (core::length(shift) > 1e-3f) {
+            // SetLocation(Safe): the collision jumps; OffsetMeshes(Old - Safe) decays over 0.5 s (robot target).
+            pawn_->setPosition(pawn_->position() + shift);
+            pawn_->addTransformShift(shift * -1.0f);
+        }
+    }
+    pawn_->beginTransform();
+    return true;
+}
+
 void PlayerController::applyToPawn(World& world, float dt) {
     if (!pawn_) return;
     col_ = world.collision();
@@ -461,6 +539,19 @@ void PlayerController::applyToPawn(World& world, float dt) {
     step.wantDash = wantDashLatched_;
     wantDashLatched_ = false;   // consumed by this step
     CharacterMovement::update(*pawn_, step, dt, world.collision());
+    // InRobotForm.BeginState (authority): MoveToSafeLocation; still stuck -> ForceIntoForm(vehicle) [CONF B3].
+    if (wasTransforming_ && !pawn_->isTransforming() && pawn_->form() == Form::Robot && col_) {
+        core::Vec3 feet = pawn_->position(), spot;
+        if (!findRobotSpot(col_, feet, spot)) {
+            float above = pawn_->meshToActor(Form::Robot) - pawn_->meshToActor(Form::Vehicle);
+            pawn_->setForm(Form::Vehicle);
+            pawn_->setPosition(pawn_->position() + core::Vec3{0, above, 0});
+            ++forcedVehicleCount_;
+        } else if (core::length(spot - feet) > 1e-3f) {
+            pawn_->setPosition(spot);
+        }
+    }
+    wasTransforming_ = pawn_->isTransforming();
     pawn_->setAimPitch(camPitch_);   // drives the upper-body aim offset
     pawn_->tickSpreadModifier(dt);   // TnWeaponSpreadModifier airborne ramp
     wantJumpLatched_ = false;
@@ -502,6 +593,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
 void PlayerController::updateCamera(render::Camera& cam) const {
     if (!pawn_) return;
     namespace cfg = core::config;
+    if (spectating_) { cam.pos = specPos_; cam.yaw = specYaw_; cam.pitch = 0.0f; cam.fovXDeg = fovCur_; return; }
     cam.pos = cameraPos();
     cam.yaw = viewYaw_;
     cam.pitch = viewPitch_;

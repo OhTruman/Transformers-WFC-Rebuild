@@ -5,6 +5,7 @@
 #include "game/VehicleTests.h"
 #include "game/Character.h"
 #include "game/CharacterMovement.h"
+#include "game/PlayerController.h"
 #include "game/Collision.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -32,6 +33,24 @@ CollisionWorld makeWorld(float h, float zA, float zB) {
         quad({-X, h, zB}, {X, h, zB}, {X, 0, zB}, {-X, 0, zB});           // drop-off
         quad({-X, 0, zB}, {X, 0, zB}, {X, 0, Z1}, {-X, 0, Z1});           // after
     }
+    CollisionWorld w;
+    w.build(m);
+    return w;
+}
+
+// Ground plane with a ramp starting at z = zA rising at angleDeg to height h, then a flat top (forward is -Z).
+CollisionWorld makeRamp(float angleDeg, float h, float zA) {
+    render::MeshData m;
+    auto quad = [&](core::Vec3 a, core::Vec3 b, core::Vec3 c, core::Vec3 d) {
+        uint32_t base = (uint32_t)(m.positions.size() / 3);
+        for (const core::Vec3& p : {a, b, c, d}) { m.positions.push_back(p.x); m.positions.push_back(p.y); m.positions.push_back(p.z); }
+        for (uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
+    };
+    const float X = 40.0f, Z0 = 60.0f, Z1 = -200.0f;
+    float run = h / std::tan(angleDeg * 0.0174533f), zB = zA - run;
+    quad({-X, 0, Z0}, {X, 0, Z0}, {X, 0, zA}, {-X, 0, zA});
+    quad({-X, 0, zA}, {X, 0, zA}, {X, h, zB}, {-X, h, zB});
+    quad({-X, h, zB}, {X, h, zB}, {X, h, Z1}, {-X, h, Z1});
     CollisionWorld w;
     w.build(m);
     return w;
@@ -278,6 +297,60 @@ void runVehicleTests() {
         float s25 = 0, s100 = 0;
         for (int k = 1; k <= 60; ++k) { s.step(b); if (k == 15) s25 = slip(); if (k == 60) s100 = slip(); }
         LOG_INFO("VEHTEST boost grip: release at slip %.1f deg -> %.1f (0.25 s) -> %.1f deg (1 s), speed %.1f", s0, s25, s100, hspeed(s.c));
+    }
+
+    // Ramps (hover 15 m/s, boost from 25 m/s): climb / stop / flip against 20-65 deg faces 3 m high.
+    for (int mode = 0; mode < 2; ++mode)
+        for (float ang : {20.0f, 35.0f, 50.0f, 65.0f}) {
+            CollisionWorld w = makeRamp(ang, 3.0f, -15.0f);
+            Sim s(&w, 1.3f);
+            MoveIntent in; in.moveForward = 1.0f; in.wantBoost = mode == 1;
+            s.step(MoveIntent{}, 30);
+            s.c.velocity() = core::forwardFromYawPitch(0.0f, 0.0f) * (mode ? 25.0f : 15.0f);
+            float ymax = s.c.position().y, minSpeed = 1e9f, maxTilt = 0.0f; bool exitedBoost = false;
+            for (int k = 0; k < 240; ++k) {
+                s.step(in);
+                ymax = std::max(ymax, s.c.position().y);
+                if (k > 20) minSpeed = std::min(minSpeed, hspeed(s.c));
+                const auto& vs = s.c.vehicleState();
+                maxTilt = std::max(maxTilt, std::max(std::fabs(vs.pitch), std::fabs(vs.roll)) * 57.2958f);
+                if (mode == 1 && !vs.driving) exitedBoost = true;
+            }
+            LOG_INFO("VEHTEST ramp %-5s %2.0f deg: root peak %.2f m (ramp top 3.0; hover root rides ~1.24 above), end z %.1f, min speed %.1f m/s, max tilt %.0f deg%s", mode ? "boost" : "hover", ang,
+                     ymax, s.c.position().z, minSpeed, maxTilt, exitedBoost ? ", frontal hit -> Hovering" : "");
+        }
+
+    // Boost-state continuity guard (human-reported exhaust open/close): boost held across a 1.5 m-long raised slab of
+    // height h. Driving must not drop for floor seams / small steps; only a real frontal face may end it.
+    for (float hstep : {0.05f, 0.1f, 0.2f, 0.3f, 0.5f}) {
+        CollisionWorld w = makeWorld(hstep, -20.0f, -21.5f);
+        Sim s(&w, 1.3f);
+        MoveIntent b; b.wantBoost = true;
+        s.step(MoveIntent{}, 30);
+        s.c.velocity() = core::forwardFromYawPitch(0.0f, 0.0f) * 25.0f;
+        int drops = 0; bool was = false;
+        for (int k = 0; k < 120; ++k) { s.step(b); bool d = s.c.vehicleState().driving; if (was && !d) ++drops; was = d; }
+        LOG_INFO("VEHTEST boost continuity over a %.2f m step: %d Driving drops (0 expected up to 0.3 m; a 0.5 m riser reaches the 0.45 m hull probe = frontal hit, authentic)", hstep, drops);
+    }
+
+    // Transform clearance [CONF B3]: under a 3 m ceiling the 4 m robot cannot fit -> refused; open floor fits; a ceiling
+    // edge 0.5 m away displaces the robot to the clear side.
+    {
+        render::MeshData m;
+        auto quad = [&](core::Vec3 a, core::Vec3 b, core::Vec3 c, core::Vec3 d) {
+            uint32_t base = (uint32_t)(m.positions.size() / 3);
+            for (const core::Vec3& p : {a, b, c, d}) { m.positions.push_back(p.x); m.positions.push_back(p.y); m.positions.push_back(p.z); }
+            for (uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
+        };
+        quad({-40, 0, 40}, {40, 0, 40}, {40, 0, -40}, {-40, 0, -40});
+        quad({-40, 3, 1.5f}, {40, 3, 1.5f}, {40, 3, -40}, {-40, 3, -40});   // ceiling over z < 1.5
+        CollisionWorld w; w.build(m);
+        core::Vec3 spot;
+        bool deep = PlayerController::findRobotSpot(&w, {0, 0, -10}, spot);
+        bool open = PlayerController::robotFitsAt(&w, {0, 0, 10});
+        bool edge = PlayerController::findRobotSpot(&w, {0, 0, 1.0f}, spot);
+        LOG_INFO("VEHTEST transform clearance: deep under 3 m ceiling %s, open floor %s, 0.5 m inside the ceiling edge %s (spot z %.1f)",
+                 deep ? "FITS (FAIL)" : "refused (ok)", open ? "fits (ok)" : "REFUSED (FAIL)", edge ? "displaced (ok)" : "refused", spot.z);
     }
 
 }

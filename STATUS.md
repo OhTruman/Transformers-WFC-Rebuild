@@ -675,6 +675,36 @@ Left as the owners labelled them:
 - **Systems:** add `PickupPresentation.cpp` to the audio suite's documented build line.
 - **Systems/Gameplay:** nobody calls `notifyRamHit` yet (no pawn victims in the slice).
 
+## GAMEPLAY PASS 21e (2026-10-04) — transform clearance, roster contract, HUD state completion
+- Vehicle->robot refused with NotifyCantTransform + TransformFailedSound when the robot cannot fit; displaced spot; post-fold ForceIntoForm(vehicle).
+- CharacterRoster.h: selection before spawn, team faction, specialty default bodies, stable chassis IDs (Optimus default).
+- HUD: weapon, damage direction, cant-transform pulse; kill feed rows 5 s + 1 s fade; FFA result empty.
+- Handoffs: docs/handoffs/GAMEPLAY_FRONTEND_HUD_CONTRACT.md, GAMEPLAY_BOT_READINESS.md (bots = RECONSTRUCTION EXTENSION, not implemented).
+- Open: CTF / EXT need a carried-objective weapon system; wall-pressed boost re-drop UNKNOWN; per-wheel suspension needs mount heights.
+
+## GAMEPLAY PASS 21d (2026-10-04) — boost-state flicker fixed, vehicle contact, high-refresh guard
+- Boost exhaust open/close: the frontal drop now uses the contact normal. Repro drops are real obstacles only; VEHTEST guard shows 0 drops on steps <= 0.3 m.
+- Hull probes no longer stop the truck on 45-60 deg faces; boost body follows the slope (BoostScale engages).
+- WFC_CAMSYNC 60/144/240 Hz guard; XFORM, oracle, chaos green. Details: FIDELITY.md PASS 21d.
+
+## GAMEPLAY PASS 21c (2026-10-04) — Conquest and Power Struggle playable (shared match framework)
+- DOM: 20 s capture per attacker, defender holds, +2 capture, +1 team / 3 s per node (bytecode).
+- KOTH: zone from MatchStarting, +1 personal & team per pawn per second uncontested, 60 s rotation, end deactivation.
+- Kills in objective modes: personal +1, team 0 (ScoreKillsMP). ActiveGameTypes cluster filter; objective spawn modifiers.
+- CTF / EXT not implemented (need carried-objective weapons). WFC_MODEPLAYTEST 21/21, TDMTEST 39/39.
+
+## GAMEPLAY PASS 21b (2026-10-04) — match HUD state, kill feed, match end, regen
+- Kill feed events in TnDeathMessage form (switch, killer, victim, teams, damage type, 3 s lifetime).
+- HUD state: spectating at 3 s, time limit, faction, end reason, MatchOver countdown, scoreboard rows.
+- Regeneration 20 HP/s after 2 s (segment-limited), RE confirmed.
+- WFC_TDMTEST 39/39. Details: FIDELITY.md PASS 21b.
+
+## GAMEPLAY PASS 21a (2026-10-04) — M05 interlacing regression fixed; pre-match presentation
+- Cause of the "interlaced" Optimus / truck: Pass 20 cached the camera position per 60 Hz step while the rotation is per render frame (~130 fps). Camera evaluated per frame again.
+  - WFC_CAMSYNC: 1.28 deg -> 0.0003 deg on-screen jitter at 144 Hz.
+- Countdown: no pawn / weapon drawn; the controller spectates from its login start (team start); spawn at the team start.
+- Details: FIDELITY.md PASS 21a.
+
 ## GAMEPLAY PASS 20c (2026-10-03) — adversarial movement hardening
 - WFC_CHAOS (60 starts x 20 s random play): 0 under the map, 0 KillZ, 1 stuck, 3 prop entries.
 - Robot knee probe 0.55 m / 0.7 m [PROV]; oracle 852/852; transform under-overhang cases 54 -> 15.

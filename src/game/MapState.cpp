@@ -202,6 +202,13 @@ bool MapState::load(const std::string& path, MatchMode mode) {
             const assets::Json& L = list[i]["location_gltf"];
             o.pos = {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
             o.yawDeg = list[i]["yaw_deg"].asFloat();
+            o.pointNumber = list[i]["authored"]["PointNumber"].asInt(0);
+            {
+                std::string v = list[i]["authored"]["ObjectiveVolume"].asString();
+                if (v.empty()) v = list[i]["effective"]["ObjectiveVolume"].asString();
+                size_t dot = v.rfind('.');
+                o.volumeActor = dot == std::string::npos ? v : v.substr(dot + 1);
+            }
             o.markerClass = oc.markerClass; o.markerTypeString = oc.typeStr; o.markerString = oc.str; o.requiredRule = oc.rule;
             o.gateRule = oc.gate;
             o.activeInMode = hasRule(oc.gate);
@@ -282,18 +289,158 @@ void MapState::applyObjectiveStates() {
             if (on) koth.push_back((int)i);
         }
     }
+    // KOTH zones stay Inactive until MatchStarting picks the first Active zone (matchStarting()).
     kothActive_ = -1;
-    if (!koth.empty()) {
-        // MatchStarting: the first zone picks RandRange(-1, len(AllOtherZones)): itself or one of the others [CONF; the
-        // integer distribution of RandRange is approximated as uniform over all zones].
-        kothRng_ = kothRng_ * 1664525u + 1013904223u;
-        int pick = koth[(kothRng_ >> 8) % koth.size()];
-        ObjectiveObject& z = objectives_[(size_t)pick];
-        z.state = ObjectiveObject::State::Active; z.visible = true; z.touchable = true;
-        z.markerAdded = true; z.markerShouldDisplay = true;            // KOTH: displayed while Active
-        z.kothVisited = true;                                          // Active entry: HasBeenActive
-        kothActive_ = pick;
-        kothTimeLeft_ = kothZoneActiveTime_;
+    (void)koth;
+}
+
+void MapState::activateKothZone(int idx) {
+    // Active.BeginState: ZoneActive, HasBeenActive, SetHidden(false), marker "Active Node", UpdateClaim(true).
+    ObjectiveObject& z = objectives_[(size_t)idx];
+    z.state = ObjectiveObject::State::Active; z.visible = true; z.touchable = true;
+    z.markerAdded = true; z.markerShouldDisplay = true;
+    z.kothVisited = true;
+    z.defenderTeam = 255;
+    z.activeTimeLeft = kothZoneActiveTime_;
+    z.periodTimeLeft = 1.0f;                                       // ScoreInterval 1
+    kothActive_ = idx;
+    kothTimeLeft_ = kothZoneActiveTime_;
+}
+
+void MapState::matchStarting() {
+    // TnKingOfTheHillZoneBase.MatchStarting: the first zone to receive it picks InitialZoneIndex = RandRange(-1,
+    // len(AllOtherZones)) - itself or one of the others [CONF; RandRange's integer distribution approximated as uniform].
+    std::vector<int> koth;
+    for (size_t i = 0; i < objectives_.size(); ++i)
+        if (objectives_[i].cls == "TnKingOfTheHillZone" && objectives_[i].activeInMode) koth.push_back((int)i);
+    if (koth.empty()) return;
+    for (int i : koth) { ObjectiveObject& z = objectives_[(size_t)i]; z.kothVisited = false; z.visible = false; z.state = ObjectiveObject::State::KothInactive; }
+    kothRng_ = kothRng_ * 1664525u + 1013904223u;
+    activateKothZone(koth[(kothRng_ >> 8) % koth.size()]);
+}
+
+void MapState::matchEnded() {
+    for (ObjectiveObject& o : objectives_)
+        if (o.cls == "TnKingOfTheHillZone" && o.activeInMode) {
+            o.state = ObjectiveObject::State::KothInactive; o.visible = false; o.touchable = false;
+            o.markerAdded = false; o.markerShouldDisplay = false;
+        }
+    kothActive_ = -1;
+}
+
+void MapState::loadObjectiveVolumes(const std::string& path) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return;
+    std::stringstream ss; ss << f.rdbuf();
+    assets::Json ph;
+    if (!assets::Json::parse(ss.str(), ph)) return;
+    int n = 0;
+    for (ObjectiveObject& o : objectives_) {
+        o.volume.clear();
+        for (size_t v = 0; v < ph["volumes"].size(); ++v) {
+            const assets::Json& vol = ph["volumes"][v];
+            if (vol["actor"].asString() != o.volumeActor) continue;
+            // Brush polygons -> planes oriented away from the brush centroid.
+            std::vector<std::vector<core::Vec3>> polys;
+            core::Vec3 c{0, 0, 0}; int cn = 0;
+            for (size_t p = 0; p < vol["polygons_gltf"].size(); ++p) {
+                std::vector<core::Vec3> poly;
+                for (size_t k = 0; k < vol["polygons_gltf"][p].size(); ++k) {
+                    const assets::Json& q = vol["polygons_gltf"][p][k];
+                    poly.push_back({q[0].asFloat(), q[1].asFloat(), q[2].asFloat()});
+                    c = c + poly.back(); ++cn;
+                }
+                polys.push_back(poly);
+            }
+            if (cn) c = c * (1.0f / cn);
+            for (const auto& poly : polys) {
+                if (poly.size() < 3) continue;
+                core::Vec3 nrm = core::cross(poly[1] - poly[0], poly[2] - poly[0]);
+                float l = core::length(nrm);
+                if (l < 1e-6f) continue;
+                nrm = nrm * (1.0f / l);
+                if (core::dot(nrm, c - poly[0]) > 0.0f) nrm = nrm * -1.0f;
+                o.volume.push_back({nrm, core::dot(nrm, poly[0])});
+            }
+            ++n;
+            break;
+        }
+    }
+    LOG_INFO("mapstate: %d objective volumes", n);
+}
+
+// Live objective rules (InProgress only). Pawn membership = the pawn's location inside the ObjectiveVolume brush
+// [HIGH: Volume.AssociatedActor forwards Touch / UnTouch; the cylinder-vs-brush overlap is approximated by the location].
+void MapState::tickObjectives(float dt, const std::vector<ObjPawn>& pawns, ObjectiveScoring& out) {
+    for (size_t idx = 0; idx < objectives_.size(); ++idx) {
+        ObjectiveObject& o = objectives_[idx];
+        if (!o.activeInMode) continue;
+        if (o.cls == "TnDominationPoint") {
+            // TnDominationPointBase.Tick / UpdateOccupiers / UpdateScoring [CONF bytecode]; CaptureTime 20, ScoreInterval 3,
+            // ScoreAmount 1, PersonalScoreAmount 2 (authored TnDominationPointBase defaults).
+            std::vector<const ObjPawn*> occ;
+            for (const ObjPawn& p : pawns) if (p.alive && o.contains(p.pos)) occ.push_back(&p);
+            if (occ.empty()) o.captureTime = 0.0f;
+            else {
+                auto attackersOf = [&](int def) { std::vector<const ObjPawn*> a; for (auto* p : occ) if (p->team != def) a.push_back(p); return a; };
+                std::vector<const ObjPawn*> att = attackersOf(o.defenderTeam);
+                if (att.empty()) { o.claimingTeam = 255; o.captureTime = 0.0f; }
+                else {
+                    bool noDefender = false;
+                    if (o.defenderTeam == 255) {             // neutral: treated as owned by the other team for this claim
+                        noDefender = true;
+                        o.defenderTeam = att[0]->team == 0 ? 1 : 0;
+                        att = attackersOf(o.defenderTeam);
+                    }
+                    int defenders = 0;
+                    for (auto* p : occ) defenders += p->team == o.defenderTeam;
+                    if (defenders == 0) {
+                        if (o.claimingTeam != o.defenderTeam) { o.captureTime = dt * att.size(); o.claimingTeam = o.defenderTeam; }
+                        else o.captureTime += dt * att.size();
+                    }
+                    if (o.captureTime >= 20.0f) {
+                        int newTeam = att[0]->team;
+                        o.defenderTeam = newTeam;                // SetTeam -> DefendingTeamChanged
+                        o.captureTime = 0.0f; o.scoreTime = 0.0f;
+                        for (auto* p : att) out.personalScores.push_back({p->player, 2});   // AddDominationPointCapture + AddScore(2)
+                        out.messages.push_back({"TnDominationMessage", (newTeam == 0 ? 0 : 1) + 10 * o.pointNumber});
+                    } else if (noDefender) {
+                        o.defenderTeam = 255;
+                    }
+                }
+            }
+            if (o.defenderTeam != 255) {
+                o.scoreTime += dt;
+                if (o.scoreTime >= 3.0f) { out.teamScores.push_back({o.defenderTeam, 1}); o.scoreTime = 0.0f; }
+            }
+        } else if (o.cls == "TnKingOfTheHillZone" && (int)idx == kothActive_) {
+            // Active.Tick [CONF bytecode]: ActiveTimeLeft / PeriodTimeLeft, UpdateClaim, ScoreZone every ScoreInterval 1 s
+            // (each eligible pawn: Game.ScoreObjective(PRI, PointsPerInterval 1)), ActivateNewZone at 0.
+            o.activeTimeLeft -= dt;
+            o.periodTimeLeft -= dt;
+            kothUpdateClaim(o, pawns, out);
+            if (o.periodTimeLeft <= 0.0f) {
+                o.periodTimeLeft = 1.0f;
+                if (o.defenderTeam != 255 && o.defenderTeam != 254)
+                    for (const ObjPawn& p : pawns) if (p.alive && o.contains(p.pos)) out.objectiveScores.push_back({p.player, 1});
+            }
+            kothTimeLeft_ = o.activeTimeLeft;
+            if (o.activeTimeLeft <= 0.0f) { activateNewKothZone(); break; }
+        }
+    }
+}
+
+void MapState::kothUpdateClaim(ObjectiveObject& z, const std::vector<ObjPawn>& pawns, ObjectiveScoring& out) {
+    int claim = 255;
+    for (const ObjPawn& p : pawns) {
+        if (!p.alive || !z.contains(p.pos)) continue;               // IsEligibleForScoring: not dead
+        if (claim == 255) claim = p.team;
+        else if (claim != p.team) { claim = 254; break; }          // contested
+    }
+    if (claim != z.defenderTeam) {
+        z.defenderTeam = claim;                                    // SetTeam -> DefendingTeamChanged
+        // TnKingOfTheHillMessage: Autobot 0 / Decepticon 1 / contested 2 (neutral: dialog only).
+        if (claim == 0 || claim == 1 || claim == 254) out.messages.push_back({"TnKingOfTheHillMessage", claim == 254 ? 2 : claim});
     }
 }
 
@@ -315,7 +462,10 @@ void MapState::setMode(MatchMode mode) {
 
 void MapState::resetForNewMatch() {
     clock_ = 0.0f;
-    for (ObjectiveObject& o : objectives_) { o.animClock = 0.0f; o.kothVisited = false; }
+    for (ObjectiveObject& o : objectives_) {
+        o.animClock = 0.0f; o.kothVisited = false;
+        o.defenderTeam = 255; o.claimingTeam = 255; o.captureTime = 0.0f; o.scoreTime = 0.0f;
+    }
     applyObjectiveStates();
     applyModeVisibility();
     pose();
@@ -339,11 +489,7 @@ void MapState::activateNewKothZone() {
     old.markerAdded = false; old.markerShouldDisplay = false;      // Inactive.BeginState removes the marker
     kothRng_ = kothRng_ * 1664525u + 1013904223u;
     kothActive_ = others[(kothRng_ >> 8) % others.size()];
-    ObjectiveObject& z = objectives_[(size_t)kothActive_];
-    z.state = ObjectiveObject::State::Active; z.visible = true; z.touchable = true;
-    z.markerAdded = true; z.markerShouldDisplay = true;            // Active.BeginState adds the marker
-    z.kothVisited = true;
-    kothTimeLeft_ = kothZoneActiveTime_;
+    activateKothZone(kothActive_);                                 // Active.BeginState adds the marker
 }
 
 std::vector<MapState::ActorVisibility> MapState::actorVisibility() const {
@@ -427,12 +573,7 @@ void MapState::pose() {
 void MapState::tick(float dt, CollisionWorld& pawn, CollisionWorld* weapon) {
     clock_ += dt;
     for (ObjectiveObject& o : objectives_) if (o.cls == "TnDominationPoint") o.animClock += dt;   // idle loop (hidden or not)
-    // KOTH: the Active zone stays ZoneActiveTime (60 s, authored) then ActivateNewZone [HIGH: authored
-    // ZoneActiveTime / ActiveTimeLeft fields; the timer body is not traced in the RE note].
-    if (kothActive_ >= 0) {
-        kothTimeLeft_ -= dt;
-        if (kothTimeLeft_ <= 0.0f) activateNewKothZone();
-    }
+    // (KOTH zone time and scoring run in tickObjectives while the match is InProgress.)
     pose();
     for (const MapMover& m : movers_) {
         core::Mat4 colPose = m.worldDelta * core::Mat4::translate(m.pivot);   // pivot-relative verts
