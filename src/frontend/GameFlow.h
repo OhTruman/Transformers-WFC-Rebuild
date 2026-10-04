@@ -214,6 +214,7 @@ private:
     std::string kismetMovie_;
     std::vector<std::string> openMovies_;
     bool frontEndStarted_ = false, watchedIntro_ = false, pendingWatchedWrite_ = false;
+    bool startScreenPassed_ = false;   // controller / profile / storage assigned (ShowDeviceSelectionUI)
     float blackOutTimer_ = -1.0f;
 };
 

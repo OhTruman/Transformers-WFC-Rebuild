@@ -44,6 +44,8 @@ public:
     virtual void draw(const GameFlow& flow, int w, int h) = 0;
     // Automation: a key press on the focused movie (Flash key code).
     virtual void injectKey(int code, bool down) { (void)code; (void)down; }
+    // The UI draws its own pointer (Cursor_GFX); the OS cursor is hidden over the window.
+    virtual bool drawsCursor() const { return false; }
     // This frame's full-screen movie frame (nullptr = none): over the GFx movies (SeqAct_MoviePlayer) or under them
     // (the loading Bink under LoadScreen_GFX).
     virtual void setVideoFrame(const uint8_t* rgba, int w, int h, uint64_t serial, bool over) {
@@ -60,8 +62,18 @@ public:
     std::function<void(int code, bool down)> keyHook;          // key:<code>
     std::function<void(const std::string& file)> shotHook;     // shot:<file>
     std::function<void(const std::string& movie)> dumpHook;    // dump:<movie substring>
+    // clickclip:<clip target path>: window position of a clip's centre in the focused movie (false = not found).
+    std::function<bool(const std::string& path, int& x, int& y)> clipHook;
     static std::string autoplayScript(const std::string& tagAndMap);   // "TDM,508"
+    // Synthetic device input (ui:<Action>, mouse:x,y, click:x,y, clickclip:<path>) merged into the frame's input,
+    // so automation exercises the same logical-action and pointer paths as a player.
+    void applySynthetic(platform::InputFrame& in) const;
 private:
+    struct Synth { uint32_t uiDown = 0; int mouseX = -1, mouseY = -1; bool mouseLeft = false; bool pointer = false; };
+    Synth synth_;
+    std::vector<Synth> synthQueue_;   // one entry per frame
+    void queuePress(uint32_t uiBit);
+    void queueClick(int x, int y);
     std::vector<std::string> steps_;
     size_t pos_ = 0;
     float waitTimer_ = 0.0f;
@@ -87,6 +99,10 @@ public:
     // Sound -> Systems audio, Self / Debug -> movie host. movie = the calling GFx movie object.
     BridgeValue bridge(const std::string& movie, const std::string& fn, const std::vector<std::string>& args);
     const Catalog& catalog() const { return catalog_; }
+    // The SKU the shipped movies present (HmUtility.Platform, from $version): "WIN" = the PC SKU's authored branches
+    // (default; WFC shipped on PC) or "XBOX360" (WFC_PLATFORM=XBOX360, the console presentation of the dump).
+    const std::string& platform() const { return platform_; }
+    bool isPC() const { return platform_ == "WIN"; }
     DataStores& dataStores() { return *stores_; }
     std::string titleText() const;
     ScriptDriver& script() { return script_; }
@@ -98,6 +114,7 @@ private:
     bool openVideo(const std::string& name, bool loop);
 
     Catalog catalog_;
+    std::string platform_ = "WIN";
     GameFlow flow_;
     ScriptDriver script_;
     std::unique_ptr<IMoviePresenter> presenter_;

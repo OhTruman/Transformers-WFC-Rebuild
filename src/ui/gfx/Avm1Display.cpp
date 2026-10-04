@@ -131,7 +131,12 @@ bool displayGetProp(VM& vm, gfx::DisplayObject* d, const std::string& key, Value
         if (k == "_quality") { out = Value("HIGH"); return true; }
         if (k == "_highquality") { out = Value(1); return true; }
         if (k == "_soundbuftime") { out = Value(5); return true; }
-        if (k == "_xmouse" || k == "_ymouse") { out = Value(0); return true; }
+        if (k == "_xmouse" || k == "_ymouse") {
+            // The pointer in this object's local space (stage pixels -> twips -> inverse world -> pixels).
+            gfx::Point p = d->worldMatrix().inverse().apply({d->player->mouseX * 20.0f, d->player->mouseY * 20.0f});
+            out = Value((k == "_xmouse" ? p.x : p.y) / 20.0);
+            return true;
+        }
         if (k == "_lockroot") { out = Value(false); return true; }
         return false;
     }
@@ -406,10 +411,8 @@ void VM::installDisplayBuiltins() {
         if (!self.isObject() || !self.o->display) return Value(false);
         gfx::DisplayObject* d = self.o->display;
         gfx::Rect b = d->boundsIn(d->worldMatrix());
-        if (a.size() >= 2) {
-            float x = (float)vm.toNumber(a[0]) * 20, y = (float)vm.toNumber(a[1]) * 20;
-            return Value(x >= b.xmin && x <= b.xmax && y >= b.ymin && y <= b.ymax);
-        }
+        if (a.size() >= 2)   // hitTest(x, y, shapeFlag): stage coordinates
+            return Value(d->player->hitTestPoint(d, (float)vm.toNumber(a[0]), (float)vm.toNumber(a[1]), a.size() > 2 && vm.toBool(a[2])));
         Value t = arg(a, 0);
         if (!t.isObject() || !t.o->display) return Value(false);
         gfx::Rect o = t.o->display->boundsIn(t.o->display->worldMatrix());

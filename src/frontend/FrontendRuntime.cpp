@@ -2,6 +2,7 @@
 #include "frontend/FlowTrace.h"
 #include "core/Config.h"
 #include "core/Log.h"
+#include "platform/UiBindings.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -53,7 +54,31 @@ bool ScriptDriver::load(const std::string& script) {
     return !steps_.empty();
 }
 
+void ScriptDriver::queuePress(uint32_t uiBit) {
+    Synth s = synth_;
+    s.uiDown = uiBit;
+    synthQueue_.push_back(s);   // held one frame
+    s.uiDown = 0;
+    synthQueue_.push_back(s);   // released
+}
+
+void ScriptDriver::queueClick(int x, int y) {
+    Synth s = synth_;
+    s.pointer = true; s.mouseX = x; s.mouseY = y; s.mouseLeft = false;
+    synthQueue_.push_back(s);   // move (roll over)
+    s.mouseLeft = true;
+    synthQueue_.push_back(s);   // press
+    s.mouseLeft = false;
+    synthQueue_.push_back(s);   // release
+}
+
+void ScriptDriver::applySynthetic(platform::InputFrame& in) const {
+    in.uiDown |= synth_.uiDown;
+    if (synth_.pointer) { in.mouseX = synth_.mouseX; in.mouseY = synth_.mouseY; in.mouseLeft = synth_.mouseLeft; }
+}
+
 void ScriptDriver::update(GameFlow& flow, float dt) {
+    if (!synthQueue_.empty()) { synth_ = synthQueue_.front(); synthQueue_.erase(synthQueue_.begin()); return; }
     if (keyUp_ >= 0) { if (keyHook) keyHook(keyUp_, false); keyUp_ = -1; return; }
     while (pos_ < steps_.size()) {
         const std::string& st = steps_[pos_];
@@ -99,6 +124,33 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             keyUp_ = code;
             return;
         }
+        if (st.rfind("ui:", 0) == 0) {   // a logical UI command (UiBindings action name), pressed for one frame
+            for (int k = 0; k < (int)platform::UiKey::Count; ++k)
+                if (st.substr(3) == platform::UiBindings::actionName((platform::UiKey)k)) {
+                    FlowTrace::emit("script.ui", {{"action", st.substr(3)}});
+                    queuePress(1u << k);
+                    synth_ = synthQueue_.front(); synthQueue_.erase(synthQueue_.begin());
+                    return;
+                }
+            LOG_WARN("FRONTEND script: unknown UI action '%s'", st.c_str());
+            continue;
+        }
+        if (st.rfind("mouse:", 0) == 0 || st.rfind("click:", 0) == 0) {
+            std::vector<std::string> p = split(st.substr(6), ',');
+            int x = p.size() > 0 ? std::atoi(p[0].c_str()) : 0, y = p.size() > 1 ? std::atoi(p[1].c_str()) : 0;
+            FlowTrace::emit(st[0] == 'm' ? "script.mouse" : "script.click", {{"x", std::to_string(x)}, {"y", std::to_string(y)}});
+            if (st[0] == 'm') { synth_.pointer = true; synth_.mouseX = x; synth_.mouseY = y; synth_.mouseLeft = false; }
+            else queueClick(x, y);
+            return;
+        }
+        if (st.rfind("clickclip:", 0) == 0) {
+            int x = 0, y = 0;
+            bool ok = clipHook && clipHook(st.substr(10), x, y);
+            FlowTrace::emit("script.clickclip", {{"path", st.substr(10)}, {"found", FlowTrace::boolean(ok)},
+                                                 {"x", std::to_string(x)}, {"y", std::to_string(y)}});
+            if (ok) queueClick(x, y);
+            return;
+        }
         if (st.rfind("dump:", 0) == 0) { if (dumpHook) dumpHook(st.substr(5)); continue; }
         if (st.rfind("shot:", 0) == 0) { if (shotHook) shotHook(st.substr(5)); return; }
         if (st.rfind("uievent:", 0) == 0) { flow.onUIEvent(std::atoi(st.c_str() + 8)); return; }
@@ -111,6 +163,9 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
 // ---------------------------------------------------------------------------------------------------------------
 
 bool FrontendRuntime::init() {
+    if (const char* p = std::getenv("WFC_PLATFORM")) platform_ = p;
+    if (platform_ != "WIN" && platform_ != "XBOX360" && platform_ != "PS3") platform_ = "WIN";
+    FlowTrace::emit("platform", {{"sku", platform_}});
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     if (!catalog_.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps")) return false;
     GameFlow::Options o;
@@ -278,7 +333,9 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
     }
 }
 
-void FrontendRuntime::update(const platform::InputFrame& in, float dt) {
+void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
+    platform::InputFrame in = input;
+    script_.applySynthetic(in);
     flow_.tick(dt);
     runNativeShims();
     updateMoviePlayer(dt, in);
@@ -287,7 +344,9 @@ void FrontendRuntime::update(const platform::InputFrame& in, float dt) {
     updateAudio(dt);
 }
 
-void FrontendRuntime::updateInMatch(const platform::InputFrame& in, float dt) {
+void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt) {
+    platform::InputFrame in = input;
+    script_.applySynthetic(in);
     flow_.tick(dt);
     // [integration M05] The movie player runs in the match too: the loading underlay (TF_LoadingScreen Bink) is
     // released once the loading screen closes. Without this its last frame (black + "LOADING..." spinner) stayed

@@ -89,11 +89,19 @@ void Application::attachPresenter() {
     presenter_ = p.get();
     frontend_->setPresenter(std::move(p));
     frontend_->setMoviePlayerFactory([] { return platform::createMoviePlayer(); });
+    // Logical UI bindings: defaults (the console presentation also binds Space to Start) + wfc_input.ini overrides.
+    platform::UiBindings b = platform::UiBindings::defaults(!frontend_->isPC());
+    bool ini = b.loadIni("wfc_input.ini");
+    window_->setUiBindings(b);
+    frontend::FlowTrace::emit("input.bindings", {{"sku", frontend_->platform()}, {"ini", frontend::FlowTrace::boolean(ini)}});
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
     if (audio_) { g_frontendAudio = std::make_unique<SystemsFrontendAudio>(audio_); frontend_->setAudio(g_frontendAudio.get()); }
 #endif
     frontend_->script().keyHook = [this](int code, bool down) { if (presenter_) presenter_->injectKey(code, down); };
     frontend_->script().shotHook = [this](const std::string& f) { pendingShot_ = f; };
+    frontend_->script().clipHook = [this](const std::string& path, int& x, int& y) {
+        return presenter_ && presenter_->clipWindowCenter(path, x, y);
+    };
     frontend_->script().dumpHook = [this](const std::string& m) {
         for (const std::string& o : presenter_->openMovieObjects())
             if (o.find(m) != std::string::npos) LOG_INFO("GFX DUMP %s\n%s", o.c_str(), presenter_->dumpMovie(o).c_str());
@@ -108,6 +116,7 @@ void Application::shutdownFrontend() {
 }
 
 void Application::drawFrontendFrame() {
+    window_->setOsCursorHidden(presenter_ && presenter_->drawsCursor());
     ui::beginScreenFrame(window_->width(), window_->height());
     frontend_->draw(window_->width(), window_->height());
     if (!pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }

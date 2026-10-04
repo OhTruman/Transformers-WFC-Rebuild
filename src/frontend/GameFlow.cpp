@@ -325,8 +325,12 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     // ---- TnOnlineActionScriptBinding ----
     if (fn == "Online.CheckCanPlayOnlineModes" || fn == "Online.CanPlayOnlineModes") return true;   // no profile gate offline
     if (fn == "Online.CheckIsProfileReady" || fn == "Online.IsProfileReady") return true;
-    if (fn == "Online.ShouldShowStartScreen") return true;   // PARTIAL: native profile/sign-in check
-    if (fn == "Online.ShowDeviceSelectionUI") return {};        // [online - bypassed] storage device UI (360)
+    // TnOnlineActionScriptBinding.ShouldShowStartScreen [CONFIRMED script]: true while the player is not signed in, has
+    // no assigned controller or no storage device. Press START (mc_menuPressStart) calls ShowDeviceSelectionUI, which
+    // assigns all three; afterwards every return to UI_FrontEnd_m goes straight to the main menu. The offline rebuild
+    // has one local profile, so "signed in" = Press START passed once this session [HIGH].
+    if (fn == "Online.ShouldShowStartScreen") return !startScreenPassed_;
+    if (fn == "Online.ShowDeviceSelectionUI") { startScreenPassed_ = true; return {}; }   // device / profile UI (360): bypassed
     if (fn == "Online.OpenPartyLobby") {
         // StringToGameTeamStatus: FFA 1, SingleTeam 2, Team 3, Campaign 4, default 3 [CONFIRMED script].
         std::string s = arg(0);

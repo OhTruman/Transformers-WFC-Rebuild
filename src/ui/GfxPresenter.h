@@ -31,8 +31,13 @@ public:
     bool hasLoadingMovie() const { return loading_ != nullptr; }
     float loadingSeconds() const { return loadingTime_; }
     void ownedGl(GlCensus::Owned& o) const { gl_.ownedNames(o); }
+    bool drawsCursor() const override { return cursor_ != nullptr; }
+    // Automation (clickclip:): the window position of a clip's centre in the focused movie.
+    bool clipWindowCenter(const std::string& path, int& x, int& y);
 
 private:
+    void deliverMouse(const platform::InputFrame& in);
+    gfx::Player* focusPlayer();
     GfxMovie* openMovie(const std::string& object);
     gfx::avm1::Value bridge(GfxMovie& m, const std::string& fn, gfx::avm1::Args& a);
     void fsCommand(GfxMovie& m, const std::string& cmd, const std::string& arg);
@@ -53,6 +58,11 @@ private:
     std::string loadingUrl_;
     float loadingTime_ = 0.0f;
     uint32_t prevUi_ = 0;
+    // TnUIController.MouseCursorUI (Cursor_GFX, Depth 1000000): started by Initialize, always on top [CONFIRMED].
+    std::unique_ptr<GfxMovie> cursor_;
+    int viewW_ = 1280, viewH_ = 720;          // last drawn window size (pointer -> stage mapping)
+    bool prevMouseLeft_ = false;
+    gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
     std::vector<gfx::Player::RenderItem> items_;
 };
 

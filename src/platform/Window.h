@@ -1,6 +1,7 @@
 // Clean-room reconstruction — window/platform surface interface.
 #pragma once
 #include "platform/Input.h"
+#include "platform/UiBindings.h"
 
 namespace platform {
 
@@ -23,6 +24,11 @@ public:
 
     // Capture/hide the cursor for mouse-look.
     virtual void setMouseCaptured(bool captured) = 0;
+
+    // Logical UI command bindings (InputFrame::uiDown). Unknown names are ignored with a warning.
+    virtual void setUiBindings(const UiBindings& b) = 0;
+    // Hide the OS cursor over the client area (the UI draws its own: Cursor_GFX).
+    virtual void setOsCursorHidden(bool hidden) = 0;
 };
 
 // Factory — implemented per platform. Returns nullptr on failure.

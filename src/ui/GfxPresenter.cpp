@@ -27,7 +27,58 @@ const int kFlashCode[(int)platform::UiKey::Count] = {38, 40, 37, 39, 13, 27, 112
 
 bool GfxPresenter::init() {
     if (!lib_.load(frontend::Catalog::defaultManifestRoot(), frontend::Catalog::defaultExtractedRoot())) return false;
+    // $version prefix = the SKU the movies branch on (HmUtility.Platform). The version digits are UNKNOWN.
+    gfx::avm1::VM::defaultVersionString = rt_.platform() + " 8,0,0,0";
     return true;
+}
+
+gfx::Player* GfxPresenter::focusPlayer() {
+    if (loading_) return &loading_->player();
+    return movies_.empty() ? nullptr : &movies_.back().movie->player();
+}
+
+bool GfxPresenter::clipWindowCenter(const std::string& path, int& x, int& y) {
+    gfx::Player* p = focusPlayer();
+    if (!p) return false;
+    gfx::DisplayObject* d = p->resolveTarget(path, p->root());
+    if (!d || d->removed) return false;
+    gfx::Rect b = d->boundsIn(d->worldMatrix());   // stage twips
+    gfx::Point c = GfxRendererGL::stageMatrix(p->stageWidth, p->stageHeight, viewW_, viewH_)
+                       .apply({(b.xmin + b.xmax) * 0.5f, (b.ymin + b.ymax) * 0.5f});
+    x = (int)c.x; y = (int)c.y;
+    return true;
+}
+
+void GfxPresenter::deliverMouse(const platform::InputFrame& in) {
+    // Window pixels -> each movie's stage pixels (the inverse of the draw mapping; stages differ per movie).
+    auto toStage = [&](gfx::Player& p, float& sx, float& sy) {
+        gfx::Matrix inv = GfxRendererGL::stageMatrix(p.stageWidth, p.stageHeight, viewW_, viewH_).inverse();
+        gfx::Point s = inv.apply({(float)in.mouseX, (float)in.mouseY});
+        sx = s.x / 20.0f; sy = s.y / 20.0f;
+    };
+    bool inside = in.mouseX >= 0 && in.mouseY >= 0;
+    gfx::Player* target = focusPlayer();
+    if (mouseTarget_ && mouseTarget_ != target) {
+        // Focus moved to another movie: the old one loses the pointer (roll-outs), never a stray release.
+        for (Open& o : movies_) if (&o.movie->player() == mouseTarget_) o.movie->player().mouseLeave();
+        mouseTarget_ = nullptr;
+    }
+    if (cursor_ && inside) { float x, y; toStage(cursor_->player(), x, y); cursor_->player().mouseMove(x, y); }
+    if (!target) return;
+    if (!inside) { target->mouseLeave(); prevMouseLeft_ = in.mouseLeft; return; }
+    float x, y;
+    toStage(*target, x, y);
+    target->mouseMove(x, y);
+    mouseTarget_ = target;
+    if (in.mouseLeft != prevMouseLeft_) {
+        gfx::MovieClip* b = target->hoverButton();
+        frontend::FlowTrace::emit("gfx.mouse", {{"down", frontend::FlowTrace::boolean(in.mouseLeft)},
+                                               {"x", frontend::FlowTrace::num(x)}, {"y", frontend::FlowTrace::num(y)},
+                                               {"button", b ? b->targetPath() : std::string()}});
+        target->mouseButton(in.mouseLeft);
+    }
+    prevMouseLeft_ = in.mouseLeft;
+    if (in.mouseWheel != 0.0f) target->mouseWheel((int)(in.mouseWheel * 3.0f));
 }
 
 bool GfxPresenter::runsMovie(const std::string& movie) const { return !lib_.movieFileForObject(movie).empty(); }
@@ -123,7 +174,17 @@ void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
 
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
     syncMovies(flow);
+    if (!cursor_) {
+        cursor_ = std::make_unique<GfxMovie>();
+        bool ok = cursor_->open(lib_, &rt_.catalog(), "UI_GFxMouseCursor_p.Cursor_GFX_1",
+                                [this](GfxMovie& mv, const std::string& fn, Args& a) { return bridge(mv, fn, a); },
+                                [this](GfxMovie& mv, const std::string& c, const std::string& a) { fsCommand(mv, c, a); });
+        frontend::FlowTrace::emit("gfx.cursor", {{"opened", frontend::FlowTrace::boolean(ok)}});
+        if (!ok) cursor_.reset();
+    }
     deliverKeys(in);
+    deliverMouse(in);
+    if (cursor_) cursor_->advance(dt);
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
     std::vector<std::string> objs;
@@ -143,6 +204,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
 void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     (void)flow;
     if (!glReady_) { glReady_ = gl_.init(); if (!glReady_) return; }
+    viewW_ = w; viewH_ = h;
     if (movies_.empty() && !loading_ && !video_) return;
     gl_.begin(w, h);
     if (video_ && !videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
@@ -155,6 +217,7 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     if (loading_) drawMovie(*loading_);
     else for (Open& o : movies_) drawMovie(*o.movie);
     if (video_ && videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
+    if (cursor_ && !videoOver_) drawMovie(*cursor_);
     gl_.end();
 }
 

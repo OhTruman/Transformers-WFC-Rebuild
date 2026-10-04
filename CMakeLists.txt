@@ -20,6 +20,10 @@ file(GLOB_RECURSE COMMON_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_SOURCE_DIR}/src/ui/*.cpp"
 )
 
+# Platform-neutral platform helpers (src/platform/*.cpp, not the per-OS subfolders).
+file(GLOB PLATFORM_COMMON_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/platform/*.cpp")
+list(APPEND COMMON_SOURCES ${PLATFORM_COMMON_SOURCES})
+
 # Platform layer is selected per target OS.
 if(WIN32)
     file(GLOB_RECURSE PLATFORM_SOURCES CONFIGURE_DEPENDS
@@ -51,7 +55,7 @@ set_target_properties(wfc_rebuild PROPERTIES
 
 # Headless frontend / game-flow tests (docs/FRONTEND.md): catalog, URLs, UI controller, boot -> match -> return.
 file(GLOB FRONTEND_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/frontend/*.cpp")
-add_executable(wfc_frontend_tests ${CMAKE_SOURCE_DIR}/tests/FrontendTests.cpp ${FRONTEND_SOURCES}
+add_executable(wfc_frontend_tests ${CMAKE_SOURCE_DIR}/tests/FrontendTests.cpp ${FRONTEND_SOURCES} ${PLATFORM_COMMON_SOURCES}
     ${CMAKE_SOURCE_DIR}/src/core/Log.cpp)
 target_include_directories(wfc_frontend_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(wfc_frontend_tests PRIVATE -Wall -Wextra -Wno-unused-parameter)
@@ -71,7 +75,7 @@ endif()
 
 # GFx runtime headless dump (tools/frontend/GfxDump.cpp).
 file(GLOB GFX_SOURCES CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/ui/gfx/*.cpp")
-add_executable(wfc_gfxdump ${CMAKE_SOURCE_DIR}/tools/frontend/GfxDump.cpp ${GFX_SOURCES} ${FRONTEND_SOURCES}
+add_executable(wfc_gfxdump ${CMAKE_SOURCE_DIR}/tools/frontend/GfxDump.cpp ${GFX_SOURCES} ${FRONTEND_SOURCES} ${PLATFORM_COMMON_SOURCES}
     ${CMAKE_SOURCE_DIR}/src/ui/GfxHost.cpp ${CMAKE_SOURCE_DIR}/src/core/Log.cpp)
 target_include_directories(wfc_gfxdump PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_options(wfc_gfxdump PRIVATE -Wall -Wextra -Wno-unused-parameter)

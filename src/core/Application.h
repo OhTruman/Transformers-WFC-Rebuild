@@ -37,6 +37,7 @@ private:
     void shutdownFrontend();
     std::unique_ptr<frontend::FrontendRuntime> frontend_;
     bool escWasDown_ = false;
+    bool uiReleasedMouse_ = false;   // a focused movie (pause, end game) released mouse-look
     ui::GfxPresenter* presenter_ = nullptr;   // owned by frontend_
     std::string pendingShot_;
     // [integration] Gameplay's match lifecycle -> the frontend flow (replaces Frontend's PROVISIONAL adapter):
