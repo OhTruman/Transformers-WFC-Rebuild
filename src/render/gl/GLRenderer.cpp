@@ -2,6 +2,7 @@
 // Deliberately GL 1.1 immediate mode: no extension loading needed to get pixels on screen.
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
+#include "assets/Gltf.h"
 #include "assets/Json.h"
 #include <sstream>
 #include <map>
@@ -388,12 +389,77 @@ public:
     }
     bool hasMaterial(const std::string& m) const override { return wfc_.active() && wfc_.hasMaterial(m); }
 
+    // ---- frontend scenes ----
+    MeshHandle sceneMesh_ = kInvalidMesh;
+    std::string sceneDir_;
+    bool loadFrontendScene(const std::vector<std::string>& levels) override {
+        unloadFrontendScene();
+        const std::string data = wfc::Pipeline::renderDataRoot(), assets = wfc::Pipeline::assetRoot();
+        // One render-data map at a time: the requested level with the most placed scenery (a lobby's persistent level is
+        // nearly empty and streams UI_CharacterCustomization_m) [PARTIAL: no multi-level composition yet].
+        std::string dir;
+        size_t bestSize = 0;
+        for (const std::string& l : levels) {
+            std::string d = l.size() > 2 && l.compare(l.size() - 2, 2, "_m") == 0 ? l.substr(0, l.size() - 2) : l;
+            std::ifstream probe(data + "/" + d + "/materials_glsl.json");
+            std::ifstream glb(assets + "/Maps/" + d + "/world.glb", std::ios::binary | std::ios::ate);
+            if (!probe || !glb) continue;
+            size_t sz = (size_t)glb.tellg();
+            if (dir.empty() || sz > bestSize) { dir = d; bestSize = sz; }
+        }
+        if (dir.empty()) { LOG_WARN("frontend scene: no render data for any of %zu levels", levels.size()); return false; }
+        MeshData world;
+        auto tw = std::chrono::steady_clock::now();
+        bool okWorld = assets::loadGlb(assets + "/Maps/" + dir + "/world.glb", world);
+        LOG_INFO("frontend scene %s: world.glb read %.0f ms", dir.c_str(),
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tw).count());
+        wfc_.yieldLoad();
+        if (!okWorld) {
+            LOG_WARN("frontend scene %s: world.glb missing", dir.c_str());
+            return false;
+        }
+        if (!loadMapRenderData(dir)) return false;
+        sceneMesh_ = uploadMesh(world);
+        sceneDir_ = dir;
+        LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
+        return sceneMesh_ != kInvalidMesh;
+    }
+    void drawFrontendScene(const core::Vec3& p, const core::Vec3& r, float fovDeg, int w, int h, double t) override {
+        if (sceneMesh_ == kInvalidMesh) return;
+        Camera cam;
+        cam.pos = core::Vec3{p.x * 0.01f, p.z * 0.01f, p.y * 0.01f};       // UE (x, y, z) UU -> glTF (x, z, y) m
+        const float pr = r.x * 0.0174533f, yr = r.y * 0.0174533f;
+        core::Vec3 fUE{std::cos(pr) * std::cos(yr), std::cos(pr) * std::sin(yr), std::sin(pr)};
+        core::Vec3 f{fUE.x, fUE.z, fUE.y};
+        cam.pitch = std::asin(std::max(-1.0f, std::min(1.0f, f.y)));
+        cam.yaw = std::atan2(-f.x, -f.z);
+        cam.fovXDeg = fovDeg;                                                 // UE FOVAngle is horizontal
+        cam.aspect = (float)w / (float)std::max(h, 1);
+        setMapClock((float)t);
+        beginFrame(cam, w, h);
+        drawMesh(sceneMesh_, core::Mat4::identity(), core::Vec3{1, 1, 1});
+        endFrame();
+    }
+    void unloadFrontendScene() override {
+        if (sceneMesh_ == kInvalidMesh && sceneDir_.empty()) return;
+        unloadMapRenderData();
+        sceneMesh_ = kInvalidMesh;
+        sceneDir_.clear();
+    }
+
+    void setLoadYield(std::function<void()> y) override { wfc_.setLoadYield(std::move(y)); }
+
     void unloadMapRenderData() override {
         wfc_.release();
         for (size_t i = 0; i < meshes_.size(); ++i) { meshes_[i] = MeshData{}; gpu_[i] = -1; }
     }
 
     bool loadMapRenderData(const std::string& mapName) override {
+        // one map's render data at a time: a new load releases the previous map (level travel, frontend scenes)
+        if (wfc_.active() || sceneMesh_ != kInvalidMesh) {
+            unloadMapRenderData();
+            sceneMesh_ = kInvalidMesh; sceneDir_.clear();
+        }
         bool ok = wfc_.load(mapName);
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
         return ok;
@@ -707,6 +773,10 @@ public:
 
 private:
     void drawMeshArrays(const MeshData& m, const core::Mat4& model, const core::Vec3& color) {
+        // client-side vertex arrays: no buffer object may be bound (another renderer / UI pass may leave one)
+        glx::BindBuffer(GL_ARRAY_BUFFER, 0);
+        glx::BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glx::BindVertexArray(0);
         core::Mat4 mv = view_ * model;
         glLoadMatrixf(mv.m);
         glEnable(GL_LIGHTING);

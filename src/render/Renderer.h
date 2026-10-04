@@ -84,6 +84,25 @@ public:
     // Level travel: release every GPU resource of the loaded map render data (meshes, textures, programs, targets).
     // The renderer stays usable; a later loadMapRenderData() rebuilds everything for the next map.
     virtual void unloadMapRenderData() {}
+    // Loading presentation (RE MILESTONE05_PLAYTEST §6: the original loading Bink plays on the rendering thread while the
+    // game thread blocks): during loadMapRenderData / loadFrontendScene the renderer calls this between bounded steps
+    // (each mesh submesh with its material program and textures, each map prop, each load phase) with no GL objects
+    // bound, so the caller can present a loading frame (movie + overlay). The callback throttles itself; it must not
+    // load or unload map render data. Pass an empty function to clear.
+    virtual void setLoadYield(std::function<void()> yield) { (void)yield; }
+
+    // Frontend 3D scenes (RE OVERNIGHT 2026-10-04 §D: the title / main menu render over the live level UI_FrontEnd_m +
+    // streamed UI_FrontEnd_capture_VIG_m, the lobbies over UI_CharacterCustomization_m). No match World exists.
+    //   loadFrontendScene: the UE level package names (e.g. {"UI_FrontEnd_m", "UI_FrontEnd_capture_VIG_m"}); the export
+    //     directory is the first level whose name without "_m" has render data. false = not exported / no render data.
+    //   drawFrontendScene: one complete frame (scene + post) into the back buffer, for the GFx overlay composited
+    //     after it. Camera in UE units: location (UU), rotation (pitch, yaw, roll in degrees), horizontal FOV (deg).
+    //     timeSec drives the level's map FX / movers clock.
+    //   unloadFrontendScene: releases it (as unloadMapRenderData).
+    virtual bool loadFrontendScene(const std::vector<std::string>& levels) { (void)levels; return false; }
+    virtual void drawFrontendScene(const core::Vec3& camPosUE, const core::Vec3& camRotUEdeg, float fovDeg, int w, int h,
+                                   double timeSec) { (void)camPosUE; (void)camRotUEdeg; (void)fovDeg; (void)w; (void)h; (void)timeSec; }
+    virtual void unloadFrontendScene() {}
 
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile / UCanvas.DrawMaterialTile): a screen quad shaded by a
     // compiled original material (e.g. UI_HudMarkers_p) with per-draw parameter values (MaterialInstanceDynamic

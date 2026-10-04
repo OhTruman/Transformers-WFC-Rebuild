@@ -531,7 +531,9 @@ void Pipeline::release() {
     BindFramebuffer(GL_FRAMEBUFFER, 0);
     LOG_INFO("wfc: released map render data (%zu meshes, %zu programs, %zu textures)", meshes_.size(), progIds.size(),
              texCache_.size() + lmTextures_.size());
+    std::function<void()> keepYield = std::move(loadYield_);
     *this = Pipeline();
+    loadYield_ = std::move(keepYield);
 }
 
 // ------------------------------------------------------------------------- loading
@@ -540,9 +542,13 @@ bool Pipeline::load(const std::string& mapName) {
     std::string root = renderDataRoot();
     dataDir_ = root + "/" + mapName;
     std::string mj = readText(dataDir_ + "/materials_glsl.json");
+    yieldLoad();
     std::string lj = readText(dataDir_ + "/lighting.json");
+    yieldLoad();
     loadMovers(dataDir_ + "/movers.json");
+    yieldLoad();
     loadMapFx(dataDir_ + "/map_fx_runtime.json");
+    yieldLoad();
     if (mj.empty() || lj.empty()) {
         LOG_WARN("wfc: render data not found in %s (run tools/render/*.py); legacy renderer", dataDir_.c_str());
         return false;
@@ -967,6 +973,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
         LOG_WARN("wfc: texture decode failed: %s", file.c_str());
     }
     texCache_[key] = id;
+    yieldLoad();                                       // after each texture decode / upload
     return id;
 }
 
@@ -1472,6 +1479,7 @@ int Pipeline::upload(const MeshData& m) {
             }
         }
         g.subs.push_back(d);
+        yieldLoad();                                   // loading presentation: no GL binding held here
     }
     meshes_.push_back(std::move(g));
     LOG_INFO("wfc: uploaded mesh %zu: %zu verts, %zu submeshes (%d lightmapped, %d programs, %zu total)",

@@ -12,10 +12,13 @@ $um = Join-Path $root "work\render\umodel_out"
 New-Item -ItemType Directory -Force $out, $um | Out-Null
 
 # 1. Lightmap atlases (all LightMapTexture2D of the _LM package + the small ones cooked inline in ART).
-& $umodel -export "-path=$cooked" -game=trans "-out=$um" -png "${Map}_ART_m_LM.xxx" | Out-Null
+$env:PYTHONDONTWRITEBYTECODE = "1"
+$lmPkgs = @((& $py -c "import sys; sys.path.insert(0, r'$PSScriptRoot'); from ue3obj import map_lm_packages; print(' '.join(map_lm_packages('$Map')))") -split ' ' | Where-Object { $_ })
+foreach ($lp in $lmPkgs) { & $umodel -export "-path=$cooked" -game=trans "-out=$um" -png $lp | Out-Null }
+$levelPkgs = @((& $py -c "import sys; sys.path.insert(0, r'$PSScriptRoot'); from ue3obj import map_packages; print(' '.join(map_packages('$Map')[0]))") -split ' ' | Where-Object { $_ })
 $env:PYTHONDONTWRITEBYTECODE = "1"
 $inline = @((& $py (Join-Path $PSScriptRoot "build_lighting.py") --list-inline $Map) -split ' ' | Where-Object { $_ })
-if ($inline.Count -gt 0) { & $umodel -export "-path=$cooked" -game=trans "-out=$um" -png "${Map}_ART_m.xxx" ($inline | ForEach-Object { "-obj=$_" }) | Out-Null }
+if ($inline.Count -gt 0) { foreach ($pk in $levelPkgs) { & $umodel -export "-path=$cooked" -game=trans "-out=$um" -png $pk ($inline | ForEach-Object { "-obj=$_" }) | Out-Null } }
 
 # 2. Lightmap bindings (3 coefficients), BSP rebuilt from the cooked vertex buffer, lights, fog.
 & $py (Join-Path $PSScriptRoot "build_lighting.py") $Map $out $um

@@ -4,7 +4,7 @@ Wraps AssetTools' ue3pkg/props readers (read-only reference) with a path index o
 packages and a few native-tail decoders recovered for WFC (licensee 144):
   - MaterialInstanceConstant static parameter set (static switches / component masks)
 """
-import os, struct, sys
+import json, os, struct, sys
 
 ASSETTOOLS = r'F:/Transformers Rebuild/AssetTools/scripts/wfc'
 COOKED = r'F:/Transformers Rebuild/Game Dump/TransGame/CookedXenon'
@@ -149,3 +149,31 @@ class Repo:
 def linear_from_srgb_byte(c):
     """UE3 FLinearColor(FColor): sRGB byte -> linear (pow 2.2 table)."""
     return (c / 255.0) ** 2.2
+
+
+VS_MAPS = 'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Maps'
+
+
+def map_packages(mapname):
+    """Cooked level packages of an exported map (AssetTools map.json 'sublevels' that exist in CookedXenon,
+    AUDIO excluded) and its persistent level package. Streets: [ART, BASE], persistent BASE; UI levels:
+    e.g. UI_FrontEnd -> [UI_FrontEnd_capture_VIG_m, UI_FrontEnd_m], persistent UI_FrontEnd_m."""
+    subs = []
+    mj = os.path.join(VS_MAPS, mapname, 'map.json')
+    if os.path.exists(mj):
+        subs = json.load(open(mj, encoding='utf-8')).get('sublevels') or []
+    if not subs:
+        subs = ['%s_ART_m' % mapname, '%s_BASE_m' % mapname]
+    cooked = {f.lower(): f for f in os.listdir(COOKED)}
+    pkgs = [cooked[(sl + '.xxx').lower()] for sl in subs
+            if 'AUDIO' not in sl.upper() and (sl + '.xxx').lower() in cooked]
+    persistent = next((p for p in pkgs if p.lower().endswith('_base_m.xxx')), None) \
+        or next((p for p in pkgs if p.lower() == (mapname + '_m.xxx').lower()), None) or (pkgs[-1] if pkgs else None)
+    return pkgs, persistent
+
+
+def map_lm_packages(mapname):
+    """<sublevel>_LM.xxx lightmap packages present for the map (case-insensitive)."""
+    pkgs, _ = map_packages(mapname)
+    cooked = {f.lower(): f for f in os.listdir(COOKED)}
+    return [cooked[p.lower().replace('.xxx', '_lm.xxx')] for p in pkgs if p.lower().replace('.xxx', '_lm.xxx') in cooked]

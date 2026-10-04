@@ -132,6 +132,8 @@ public:
     static std::string renderDataRoot();              // WFC_RENDER_DATA, default <exe>/../../work/render
     static std::string contentRoot();
     void release();                                   // delete every GL object, reset to the unloaded state
+    void setLoadYield(std::function<void()> y) { loadYield_ = std::move(y); }
+    void yieldLoad() { if (loadYield_ && !inLoadYield_) { inLoadYield_ = true; loadYield_(); inLoadYield_ = false; } }
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile): queued, drawn after post onto the back buffer.
     void drawMaterialTile(const IRenderer::MaterialTile& t) { uiTiles_.push_back(t); }
     bool hasMaterial(const std::string& m) const { return mats_.count(m) > 0; }
@@ -203,6 +205,8 @@ private:
     // and sprite batches are queued during the frame and drawn by flushTranslucency().
     struct TransItem { float key; std::function<void()> fn; };
     std::vector<TransItem> transQueue_;
+    std::function<void()> loadYield_;
+    bool inLoadYield_ = false;
     std::vector<IRenderer::MaterialTile> uiTiles_;
     void drawCanvasTiles();
     float canvasInvGamma_ = 0.0f;                      // > 0 while drawing Canvas tiles

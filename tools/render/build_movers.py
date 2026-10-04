@@ -50,7 +50,7 @@ def main():
     kis = manifest(mapname, 'kismet') or {}
     res = {'map': mapname, 'source': 'AssetTools <map>_movers.json / <map>_kismet.json', 'rotating': [],
            'matinee': [], 'hidden': [], 'validation': []}
-    for m in mv['movers']:
+    for m in mv.get('movers', []):
         actor = m['actor'].split('.')[-1]
         t = m['transform']
         L = [t['Location'][k] for k in 'XYZ']
@@ -68,7 +68,7 @@ def main():
                                     'confidence': 'CONFIRMED AUTHORED DATA (PHYS_Rotating)'})
         if m.get('bHidden'):
             res['hidden'].append({'actor': actor, 'confidence': 'CONFIRMED AUTHORED DATA (bHidden)'})
-    for mt in mv['matinee']:
+    for mt in mv.get('matinee', []):
         for g in mt['groups']:
             for tr in g['tracks']:
                 if tr['class'] != 'InterpTrackMove': continue

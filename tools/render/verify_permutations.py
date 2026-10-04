@@ -10,7 +10,7 @@ Writes <render_data_dir>/permutation_check.json and prints mismatches.
 """
 import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ue3obj import Repo  # noqa: E402
+from ue3obj import Repo, map_packages  # noqa: E402
 
 KINDS = {'FMaterialUniformExpressionScalarParameter': 'Scalar',
          'FMaterialUniformExpressionVectorParameter': 'Vector',
@@ -37,7 +37,7 @@ def compiled_params(repo, path):
 def main():
     data = sys.argv[1]
     mapname = sys.argv[2] if len(sys.argv) > 2 else 'MP_IAC_Streets'
-    repo = Repo(['%s_BASE_m.xxx' % mapname, '%s_ART_m.xxx' % mapname], fallback=['TransGame.xxx'])
+    repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx'])
     mats = json.load(open(os.path.join(data, 'materials_glsl.json')))
     report = {}
     bad = 0

@@ -412,7 +412,8 @@ class MatCompiler:
         info = self._tex_info(tex) or {'file': None, 'object': tex}
         slot = self.tex_slot(('2d', tex), '2d', info)
         s = self.tmp(4, 'wfcSample2D(%d, %s)' % (slot, uvf))
-        if o == 0: return s, 4
+        # UE3 TextureSample (and subclasses) outputs: 0 = RGB (mask R,G,B: float3), 1..4 = R, G, B, A
+        if o == 0: return '%s.rgb' % s, 3
         return '%s.%s' % (s, 'rgba'[min(o, 4) - 1]), 1
 
     def x_Fresnel(self, c, n, p, o):
@@ -497,7 +498,8 @@ class MatCompiler:
         slot = self.tex_slot(('2d', tex_path), '2d', info)
         uv = self.input(c, n, 'Coordinates', ('m.uv0', 2))
         s = self.tmp(4, 'wfcSample2D(%d, %s)' % (slot, cast(uv[0], uv[1], 2)))
-        if o == 0: return s, 4
+        # UE3 TextureSample (and subclasses) outputs: 0 = RGB (mask R,G,B: float3), 1..4 = R, G, B, A
+        if o == 0: return '%s.rgb' % s, 3
         return '%s.%s' % (s, 'rgba'[min(o, 4) - 1]), 1
 
     def x_TextureSample(self, c, n, p, o):
@@ -524,7 +526,8 @@ class MatCompiler:
             s = self.tmp(4, 'wfcSampleCubeBias(%d, %s, %s)' % (slot, cast(uv[0], uv[1], 3), cast(bias[0], bias[1], 1)))
         else:
             s = self.tmp(4, 'wfcSampleCube(%d, %s)' % (slot, cast(uv[0], uv[1], 3)))
-        if o == 0: return s, 4
+        # UE3 TextureSample (and subclasses) outputs: 0 = RGB (mask R,G,B: float3), 1..4 = R, G, B, A
+        if o == 0: return '%s.rgb' % s, 3
         return '%s.%s' % (s, 'rgba'[min(o, 4) - 1]), 1
 
     def x_TextureSampleParameterCube(self, c, n, p, o):

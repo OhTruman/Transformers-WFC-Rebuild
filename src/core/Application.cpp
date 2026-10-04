@@ -1,3 +1,4 @@
+#include <chrono>
 #include "render/HudMarkers.h"
 #include "core/Application.h"
 #include "core/Config.h"
@@ -42,6 +43,51 @@ bool Application::init() {
 }
 
 void Application::run() {
+    // Diagnostics: a frontend 3D scene through the renderer contract, without the frontend runtime.
+    // WFC_FRONTENDSCENE=<level>[,<level>...]; WFC_SCENECAM=x,y,z,pitch,yaw,roll,fov (UE units / degrees; default the
+    // UI_FrontEnd_m title camera CameraActor_6585); WFC_SMOKE_FRAMES / WFC_SHOT as usual.
+    if (const char* fs = std::getenv("WFC_FRONTENDSCENE")) {
+        std::vector<std::string> levels;
+        std::string s = fs;
+        for (size_t a = 0; a <= s.size();) {
+            size_t b = s.find(',', a);
+            levels.push_back(s.substr(a, b == std::string::npos ? std::string::npos : b - a));
+            if (b == std::string::npos) break;
+            a = b + 1;
+        }
+        float c[7] = {-6701.84f, -15212.47f, 237.44f, -111.0f * 360.0f / 65536.0f, 13184.0f * 360.0f / 65536.0f,
+                      62.0f * 360.0f / 65536.0f, 45.0f};
+        if (const char* sc = std::getenv("WFC_SCENECAM"))
+            std::sscanf(sc, "%f,%f,%f,%f,%f,%f,%f", &c[0], &c[1], &c[2], &c[3], &c[4], &c[5], &c[6]);
+        static int yields = 0;
+        static auto lastYield = std::chrono::steady_clock::now();
+        static double maxGapMs = 0.0;
+        renderer_->setLoadYield([&] {
+            auto now = std::chrono::steady_clock::now();
+            double gap = std::chrono::duration<double, std::milli>(now - lastYield).count();
+            if (gap > 40.0) LOG_INFO("load yield %d after a %.0f ms step", yields, gap);
+            maxGapMs = std::max(maxGapMs, gap);
+            lastYield = now;
+            ++yields;
+        });
+        auto loadT0 = std::chrono::steady_clock::now();
+        lastYield = loadT0;
+        bool ok = renderer_->loadFrontendScene(levels);
+        renderer_->setLoadYield({});
+        LOG_INFO("frontend scene load: %.0f ms, %d yields, longest gap %.1f ms",
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadT0).count(), yields, maxGapMs);
+        LOG_INFO("frontend scene test: load %s", ok ? "ok" : "FAILED");
+        const long frames = std::getenv("WFC_SMOKE_FRAMES") ? std::atol(std::getenv("WFC_SMOKE_FRAMES")) : 120;
+        platform::InputFrame sceneInput;
+        for (long f = 1; f <= frames && window_->pump(sceneInput); ++f) {
+            renderer_->drawFrontendScene(core::Vec3{c[0], c[1], c[2]}, core::Vec3{c[3], c[4], c[5]}, c[6],
+                                         window_->width(), window_->height(), f / 60.0);
+            if (f == frames) if (const char* shot = std::getenv("WFC_SHOT")) renderer_->captureScreenshot(shot);
+            window_->present();
+        }
+        renderer_->unloadFrontendScene();
+        return;
+    }
     double last = nowSeconds();
     platform::InputFrame input;
 
