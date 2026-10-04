@@ -177,6 +177,7 @@ bool FrontendRuntime::init() {
     if (const char* s = std::getenv("WFC_FRONTEND_SCRIPT")) script_.load(s);
     else if (const char* a = std::getenv("WFC_FRONTEND_AUTOPLAY")) script_.load(ScriptDriver::autoplayScript(a));
     stores_ = std::make_unique<DataStores>(flow_, catalog_);
+    if (!scene_.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/scenes.json")) LOG_WARN("frontend: data/frontend/scenes.json missing (no scene cameras)");
     return flow_.init(catalog_, o);
 }
 
@@ -229,6 +230,7 @@ void FrontendRuntime::updateAudio(float dt) {
     // uiLevelStarted fires; movie Stopped outputs).
     const auto& ev = flow_.kismetTriggers();
     for (; seenFs_ < ev.size(); ++seenFs_) {
+        if (ev[seenFs_] == "FsCommand:enterFrontEnd") continue;   // the [FRONTEND START] trigger: uiLevelStarted above
         if (audio_) audio_->levelEvent(ev[seenFs_]);
         FlowTrace::emit("audio.levelEvent", {{"trigger", ev[seenFs_]}});
     }
@@ -406,6 +408,44 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
     }
 }
 
+void FrontendRuntime::updateScene(float dt) {
+    // The live level under the menus (FrontendScene): its levels follow the current UI level; the menu movies'
+    // fscommands and the intro's Stopped output start its matinees; the camera is evaluated every frame.
+    LevelKind lv = flow_.loading().active ? LevelKind::None : flow_.level();
+    std::string map = (lv == LevelKind::None || lv == LevelKind::Match) ? std::string() : flow_.levelMap();
+    const auto& ev = flow_.kismetTriggers();
+    if (map != sceneLevel_) {
+        if (sceneRenderer_ && sceneDrawable_) sceneRenderer_->unload();
+        scene_.leave();
+        sceneDrawable_ = false;
+        if (map.empty()) sceneSeen_ = ev.size();   // triggers raised from here on (during the travel) belong to the next level
+        sceneLevel_ = map;
+        if (!map.empty()) {
+            scene_.enterLevel(map);
+            sceneDrawable_ = sceneRenderer_ && !scene_.levels().empty() && sceneRenderer_->load(scene_.levels());
+            std::string lvls;
+            for (const std::string& l : scene_.levels()) lvls += (lvls.empty() ? "" : "+") + l;
+            FlowTrace::emit("scene.levels", {{"uiLevel", map}, {"levels", lvls}, {"drawn", FlowTrace::boolean(sceneDrawable_)},
+                                             {"why", sceneDrawable_ ? "" : sceneRenderer_ ? "renderer: levels not exported / not drawable"
+                                                                                           : "no scene renderer (Rendering handoff)"}});
+        }
+    }
+    if (map.empty()) return;
+    for (; sceneSeen_ < ev.size(); ++sceneSeen_) scene_.trigger(ev[sceneSeen_]);
+    scene_.tick(dt);
+    if ((sceneTraceTimer_ += dt) >= 2.0f) {
+        sceneTraceTimer_ = 0.0f;
+        SceneView v = scene_.view();
+        std::string playing;
+        for (const std::string& p : scene_.playing()) playing += (playing.empty() ? "" : ",") + p;
+        if (v.valid)
+            FlowTrace::emit("scene.view", {{"camera", v.camera}, {"matinee", v.matinee}, {"playing", playing},
+                                           {"pos", FlowTrace::num(v.pos[0]) + "," + FlowTrace::num(v.pos[1]) + "," + FlowTrace::num(v.pos[2])},
+                                           {"rot", FlowTrace::num(v.rot[0]) + "," + FlowTrace::num(v.rot[1]) + "," + FlowTrace::num(v.rot[2])},
+                                           {"fov", FlowTrace::num(v.fov)}, {"drawn", FlowTrace::boolean(sceneDrawable_)}});
+    }
+}
+
 void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     platform::InputFrame in = input;
     script_.applySynthetic(in);
@@ -415,6 +455,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     if (presenter_) presenter_->update(flow_, in, dt);
     script_.update(flow_, dt);
     updateAudio(dt);
+    updateScene(dt);
 }
 
 void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt) {
@@ -437,6 +478,10 @@ void FrontendRuntime::updateLoading(float dt) {
 }
 
 void FrontendRuntime::draw(int w, int h) {
+    if (sceneRenderer_ && sceneDrawable_) {
+        SceneView v = scene_.view();
+        if (v.valid) sceneRenderer_->draw(v, w, h);
+    }
     if (!presenter_) return;
     const uint8_t* px = nullptr;
     int vw = 0, vh = 0;

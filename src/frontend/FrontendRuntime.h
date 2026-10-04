@@ -16,6 +16,7 @@
 
 #include "frontend/Catalog.h"
 #include "frontend/DataStores.h"
+#include "frontend/FrontendScene.h"
 #include "frontend/GameFlow.h"
 #include "platform/Input.h"
 #include "platform/Movie.h"
@@ -91,6 +92,9 @@ class FrontendRuntime {
 public:
     bool init();
     void setPresenter(std::unique_ptr<IMoviePresenter> p) { presenter_ = std::move(p); }
+    // The live level under the menus (Rendering draws it; without a renderer the menus sit on black).
+    void setSceneRenderer(IFrontendSceneRenderer* r) { sceneRenderer_ = r; }
+    const FrontendScene& scene() const { return scene_; }
     // Full-screen movie decoding (platform). Without one, each movie reports Stopped at once.
     void setMoviePlayerFactory(std::function<platform::IMoviePlayer*()> f) { movieFactory_ = std::move(f); }
     // One frontend frame (frontend levels and the loading screen).
@@ -134,6 +138,13 @@ private:
     std::unique_ptr<IMoviePresenter> presenter_;
     std::vector<std::string> shimmed_;
     uint32_t prevUi_ = 0;
+    void updateScene(float dt);
+    FrontendScene scene_;
+    IFrontendSceneRenderer* sceneRenderer_ = nullptr;
+    bool sceneDrawable_ = false;
+    std::string sceneLevel_;
+    size_t sceneSeen_ = 0;
+    float sceneTraceTimer_ = 0.0f;
     IFrontendAudio* audio_ = nullptr;
     LevelKind lastAudioLevel_ = LevelKind::None;
     bool frontEndMusic_ = false;

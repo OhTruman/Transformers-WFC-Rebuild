@@ -250,7 +250,7 @@ void GameFlow::closeMovie(const std::string& movie) {
 
 void GameFlow::fsCommand(const std::string& movie, const std::string& cmd, const std::string& arg) {
     FlowTrace::emit("fscommand", {{"movie", movie}, {"cmd", cmd}, {"arg", arg}});
-    if (cmd != "enterFrontEnd") kismetTriggers_.push_back("FsCommand:" + cmd);
+    kismetTriggers_.push_back("FsCommand:" + cmd);
     if (cmd == "enterMovieSequence") {
         // -> RemoteEvent closeMovieLoader (GFxAction_CloseMovie), then Logo_Activision -> Logo_Hasbro -> Logo_HighMoon
         // -> FMV_intro, each started by the previous one's Stopped output -> [FRONTEND START].
