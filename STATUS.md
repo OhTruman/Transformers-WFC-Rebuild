@@ -602,6 +602,25 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 08 (2026-10-04, agents/rendering) — playtest regressions, HUD ownership, Canvas layer
+- **Character jitter (M05):** caused by Gameplay's camera frame pacing, measured. Fix patch handed off:
+  `docs/handoffs/GAMEPLAY_CAMERA_FRAME_PACING.md`.
+- **Boost exhaust open / close:** Driving state flicker from Gameplay's provisional hull probes, measured. Handoff:
+  `docs/handoffs/GAMEPLAY_BOOST_FX_FLICKER.md`.
+- **HUD ownership:**
+  - Hud_GFX (clock, scores, health, ammo, crosshair, kill / score messages) is Frontend's GfxHost;
+  - the Canvas markers are Rendering's (`render::HudMarkers`, `drawCanvasText` with the original MarkerFont);
+  - radar is UNKNOWN (no asset);
+  - `docs/handoffs/FRONTEND_INMATCH_HUD.md`.
+- **Diagnostics:**
+  - `WFC_RENDERHZ` (deterministic display rate);
+  - `WFC_SHOTEVERY=<dir>,<from>,<to>`;
+  - `WFC_CAMLOG`;
+  - `WFC_MARKERTEST`;
+  - `WFC_PICK` (authored surface under the crosshair, for collision reports).
+- **Render data:** `tools/render/build_hud.py` → `<render root>/_ui` (fonts, marker setups); part of
+  `build_render_data.ps1`.
+
 ## RENDERING MILESTONE 07 (2026-10-03, agents/rendering) — Streets cleanup, frontend / next-map readiness
 - Contract for the other lanes: `docs/RENDERER_CONTRACT.md`.
 - Level travel: `IRenderer::unloadMapRenderData()` releases every GPU object. `WFC_RELOADTEST=<frame>` runs an in-process

@@ -17,6 +17,26 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 08 — PLAYTEST REGRESSIONS, IN-MATCH HUD OWNERSHIP, CANVAS LAYER (2026-10-04)
+Inputs:
+- the human playtest of integration milestone 05;
+- RE `MILESTONE05_FRONTEND_GAMEPLAY_BLOCKERS.md` §G / §H and `MILESTONE05_GAMEPLAY_UNKNOWNS.md` §5;
+- AssetTools `frontend_hud.json` / `future_hud_handoff.json` / `frontend_loading.json`;
+- a `git archive` export of integration/milestone-05, built in `work/m08/int05` for measurements. No merge.
+
+| Item | Finding | Mark | Owner / action |
+|---|---|---|---|
+| Character "interlacing" (robot + vehicle) | Gameplay's obstruction camera (pass 20) stores a world camera position at the 60 Hz tick while the view rotation changes every rendered frame. Above 60 Hz the pawn swims on screen: 0.0095 screen units / frame at 144 Hz, 0 at 60 Hz (which is why lockstep tests passed). Not the renderer: skinning, frame loop, weapon attach and vsync are unchanged | VISUALLY VERIFIED (measured) | **Gameplay**: `docs/handoffs/GAMEPLAY_CAMERA_FRAME_PACING.md` + verified patch (0.00001 at 60 / 144 / 240 Hz, both camera models) |
+| Vehicle rear propulsion "open / close" | the boost FX follows the Driving state, as authored (BoostFx). On M05, Driving drops to Hovering 15–31 times per 14 s with boost held; every drop is a PROVISIONAL hull probe's frontal block at floor level, then a 0.5 s drift and a re-boost (≈ 0.6 s cycle) | VISUALLY VERIFIED (logged) | **Gameplay**: `docs/handoffs/GAMEPLAY_BOOST_FX_FLICKER.md`. No renderer smoothing added |
+| In-match HUD (clock, team / player score, health, ammo, crosshair, kill / score messages) | Scaleform Hud_GFX (`GameMessage`, `PointEvent`, `RewardAnnouncement`, `GameAnnouncement`; data stores + pushes). Spectate / respawn = MultiplayerRespawn_GFX, end = EndGameStats_GFX: already opened by the Frontend runtime in M05. Hud_GFX itself is not instantiated | CONFIRMED (RE / AssetTools) | **Frontend** GfxHost: `docs/handoffs/FRONTEND_INMATCH_HUD.md`. The renderer reticle stands down (`ReticleState.visible = false`) when Hud_GFX draws its crosshair |
+| Kill feed layout / rows / lifetime / fade | Hud_GFX timeline + AS2 behaviour | CONFIRMED owner / details by running the movie | Frontend |
+| Radar / minimap | no radar or minimap object in the authored data | UNKNOWN (RE verifying) | nothing drawn |
+| Player / objective markers | Canvas `TnObjectiveMarkerTypeSprite.Draw` | CONFIRMED (RE) | **Rendering**: `render::HudMarkers` from the authored setups (`_ui/hud_markers.json`, 40 types; Versus ally 0.08 / 0.04, enemy 0.03125, focus 0.02734 × width, 1.0 s hysteresis, 3000 UU auto-focus, label colours). VISUALLY VERIFIED (`WFC_MARKERTEST`). Gameplay supplies the rule-visible markers |
+| Canvas text | UE3 UFont: FFontCharacter table + CharRemap (cooked) | CONFIRMED data | `drawCanvasText`: MarkerFont 371 glyphs (USize advance, VerticalOffset, alpha coverage). Label centring PROVISIONAL |
+| Collision report tooling | — | — | `WFC_PICK=1`: authored component / StaticMesh / material / distance / normal of the surface under the crosshair (`IRenderer::pickWorld`, diagnostic only) |
+| Menu background | the UI_FrontEnd_m 3D scene (orbit cameras, energon rings) | CONFIRMED source / not exported | the renderer loads it through `loadMapRenderData` once AssetTools exports it; no substitute |
+| Regression | glass (9 views) and steam over time (12) identical to M07; validation captures (idle, walk, jump, fire, vehicle idle / move / boost, both transforms) | VISUALLY VERIFIED | — |
+
 ## MILESTONE 07 — STREETS CLEANUP, FRONTEND / NEXT-MAP READINESS (2026-10-03)
 Evidence:
 - RE-Workspace M05 notes (read-only): `MILESTONE05_GAMEPLAY_UNKNOWNS.md` §5 (Canvas HUD markers) and §6 (pickup factory
