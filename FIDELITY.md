@@ -17,6 +17,131 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 07 SYSTEMS — MOVIE AUDIO, MATCH / ANNOUNCER AUDIO, LIFECYCLE RE-VALIDATION (2026-10-04, agents/systems)
+
+**Trigger:** human playtest — the boot movies (logos, FMV_intro) show, but no sound plays.
+**Handoff for Frontend / Gameplay / Integration:** `docs/handoff/SYSTEMS_M07_AUDIO_HANDOFF.md` plus two patches against
+integration/milestone-05: `SYSTEMS_M07_frontend_movie_audio.patch` (~25 lines) and
+`SYSTEMS_M07_gameplay_match_audio.patch` (~20 lines). Both were verified on a merge preview of this branch onto
+integration/milestone-05.
+
+### Boot-movie audio
+* **Cause:**
+  * The Frontend movie player (Win32Movie.cpp) selects only the video stream.
+  * The frontend correctly enables the MovieMixerPreset (CINE_MUTE_FOR_BINK) on the game mix while a Bink is up.
+  * Nothing played the movie's own sound.
+* **What the sound is:**
+  * **The Bink audio tracks** [CONF data] (`tools/systems/bink_tracks.py` on the original `.bik` headers):
+    * logos / FMV_intro / campaign FMVs: 10 mono 48 kHz DCT tracks, IDs 0–9;
+    * chapter text movies: 6 tracks; credits: 2;
+    * the loading / startup Binks: none.
+  * **No cue** [CONF data]: no SoundCue exists for the boot movies. The UI_FrontEnd_m Kismet links the movie ops
+    only to the next movie and [FRONTEND START].
+* **Layout:**
+  * **Track 4 = LFE** [CONF data]: 87–100 % of its energy is below 120 Hz.
+  * **Tracks 0/1 a front pair, 2/3 the surround pair** [HIGH]: standard order assumed.
+  * **Tracks 5–9 = per-language centre channels** [CONF data]: identical in the dialogue-free logos, mutually
+    uncorrelated (r ≈ 0) in the dialogue movies. The 6-track text movies have the same 0–4 plus one centre.
+* **Which centre is INT: UNKNOWN.**
+  * The subtitle-timing and voice-spectrum tests are inconclusive (`movie_lang_*.py`).
+  * The native `HmPlayerController.MovieAudioSetup` and the Bink library calls are not traced; the native-table
+    entries are filled at run time.
+  * Track 5 is used [PROVISIONAL]; the logos are exact. `WFC_MOVIE_LANGSLOT` overrides it.
+* **Implemented (Systems):**
+  * **`audio::MovieAudioPlayer` (Win32MovieAudio.cpp):**
+    * Media Foundation is loaded at run time (no link dependency); every audio stream is decoded on its own thread
+      (~0.5 s ahead).
+    * Stereo fold-down: L = FL + 0.707 C + 0.707 SL, R likewise, LFE dropped [PROVISIONAL platform matrix].
+  * **`IAudio` PCM streams:** mixed after the game mix's Master chain, so CINE_MUTE does not mute the movie
+    [HIGH: the Bink player outputs beside FMOD; the preset mutes the game mix]. Level = full scale at the rebuild's
+    Master calibration [PROV].
+  * **Controls:** `startMovieAudio` / `stopMovieAudio` / `movieAudioClock` on LevelAudioHost, FrontendAudioRuntime
+    and World.
+* **Mixer:** `[HM_Engine.SoundMixerProperties] UnflushableMixerPresets=CINE_MUTE_FOR_BINK` [CONF config]. A level
+  change no longer drops the movie mute; M06 had assumed it did, and this is corrected.
+* **`MoviesToAlwaysPlaySound`** (the three logos) [CONF config]: every movie plays its sound; the list concerns the
+  console's own music overriding movie sound, which is not modelled.
+* **Validation:**
+  * **`tools/systems/movie_audio_probe.cpp`** (real device, the full seam):
+    * each logo's sound plays (−9 … −13 dB) with the game mix at −96 dB under it;
+    * the audio clock is within 70 ms of wall time over 13 s;
+    * a skip stops the sound at once;
+    * after the chain the game mix and the title music return;
+    * the lobbies change music with no overlap;
+    * the loading Bink is silent;
+    * the movie preset survives a level change;
+    * repeated chains leave 0 streams, 0 voices and PCM at its base.
+  * **Real executable** (merge preview + patch, cold boot, WFC_FRONTEND_SCRIPT):
+    * `movie.audio playing:true` for Logo_Activision, Logo_Hasbro, Logo_HighMoon and FMV_intro;
+    * the title music starts at [FRONTEND START] after FMV_intro;
+    * no warnings.
+
+### Match / announcer audio (MatchAudio)
+* **Recovered** [CONF script: TnAnnouncer, TnGameTypeMessage, TnGameTypeMessageDM.GetEndGameMusic,
+  TnGameProgressAnnouncementMessage, TnGameRules.Handle*, TnGameRules_ReportGameProgress*; CONF data: class
+  defaults, TnOnlineGameSettings<mode>.Rules, TnWorldInfo.AnnouncerSoundEventSet]:
+  * **Start** (switch 0): GameTypeDialog, then GameDescriptionDialog (announcer queue) and GameTypeMusic.
+  * **Nearly complete** (switch 1): GameNearlyCompleteMusic.
+  * **End** (switch 2): end music at priority 1, by winning team (DM: local winner → AutobotsWin; no winner →
+    Tie).
+  * **Progress lines:** 30 s / 1 min / 2 min, 25 / 50 points, 1 / 3 / 5 kills.
+  * **Announcer:** Team0 OPRIME / Team1 MGTRON voice; one-slot priority queue.
+  * **Mode → message class:** TDM / DM / CTF / KOTH / DOM / EXT.
+* **TnVersusGameOverMessage** win lines (MP_GameAutobotWin / MP_GameDecepticonWin): PARTIAL (TransContent script
+  not decompiled).
+* **Data:**
+  * The map's announcer set (CHR_ANNOUNCER_DIALOG, 140 events) and the 157 dialogue / mode-music cues are in the
+    Streets and Gorge Systems manifests, all streamed (decoded on first play): Streets' resident PCM is unchanged.
+  * The announcer cues pan to PanCenter. The stereo fold-down now includes the centre at −3 dB [HIGH]; no compiled or
+    map-bed cue sets PanCenter, so nothing else changes.
+* **Not authored, not added:** kill feed, kill-streak / score text, kill awards. The HUD movie's own Sound.PlaySound
+  names go to `World::playUiSound`.
+* **Validation:**
+  * **Suite:** announcer voice selection (only the OPRIME / MGTRON wave), queue, music priority and SpazTime, unknown
+    events ignored, every mode's message class, 10 × (Streets → Gorge → frontend) with match messages back to the
+    baseline.
+  * **Real executable** (6 frontend → lobby → Streets TDM → quit cycles): every match plays the TDM line
+    (Optimus) → the queued description and DM_START. Every unload is back to 0 instances / 0 voices / 36.5 MB;
+    every load is 189 level cues / 97.2 MB.
+
+### Second map
+* MP_UND_Gorge (AssetTools audio.json + the Systems manifest) loads through the generic path: 15 emitters, 23 zones,
+  6 reverb presets, 13 bank cues + announcer. Its bed plays, and it unloads to the baseline. No Streets branch was
+  added.
+
+### Loading "frozen"
+* World loading blocks the game thread (~4.8 s). Audio does not need it:
+  * the mixer and the movie decoders have their own threads;
+  * the loading Binks author no sound;
+  * the game mix is muted by CINE_MUTE during the loading movie.
+* The frozen picture is presentation (Frontend / Integration); see the handoff for the audio requirements.
+
+### Classification
+* **CONFIRMED ORIGINAL:**
+  * the movie sound is the Bink audio tracks (10 / 6 / 2 / 0 per movie); LFE track 4;
+  * MovieMixerPreset and UnflushableMixerPresets; MoviesToAlwaysPlaySound;
+  * the TnAnnouncer / TnGameTypeMessage / progress message script and data;
+  * the announcer set; the mode → message map.
+* **HIGH:**
+  * the surround pair order; per-language centres;
+  * the movie stream outside the game mix;
+  * the DialogCharacter event filter; the centre fold-down.
+* **PARTIAL:**
+  * which centre is INT (track 5);
+  * the stereo fold-down matrix and the movie level;
+  * the TnVersusGameOverMessage win line;
+  * synchronous level-bank decode on load.
+* **UNKNOWN:**
+  * `MovieAudioSetup` / `MovieAudioShutdown` natives (Bink track selection, possible movie volume);
+  * the FRONT_END mixer preset activator.
+
+### Test totals
+* Suite **566 / 0**.
+* wfc_fidelity 194 / 0 / 19.
+* Streets in game unchanged (50 / 70 emitters, DEC_ROOM_LOWER, 97.2 MB).
+
+---
+
 ## MILESTONE 06 SYSTEMS — FRONTEND / LOADING / LEVEL AUDIO LIFECYCLE (2026-10-03, agents/systems)
 
 **Goal:** Systems provides the original audio for boot → frontend → lobby → loading → match → match reset → leave →

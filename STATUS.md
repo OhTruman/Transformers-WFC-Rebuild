@@ -3,6 +3,21 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS MILESTONE 07 (2026-10-04) — boot-movie audio, match / announcer audio
+- **Silent boot movies, fixed in Systems** (+ a ~25-line Frontend patch):
+  - the movies' sound is their Bink audio tracks (10 mono: 5.1 with per-language centres);
+  - `audio::MovieAudioPlayer` decodes and streams them beside the game mix, which CINE_MUTE mutes;
+  - the movie preset is now unflushable (config);
+  - verified on the real executable: all four boot movies play their sound.
+- **Match audio:** `MatchAudio` ports TnAnnouncer + TnGameTypeMessage + progress announcements. Covered: the start
+  dialogue and music, final stretch, end music by winner, 30 s / 1 min / 2 min and kills / points remaining.
+  - Gameplay hookup patch ~20 lines.
+  - The announcer voice follows the local team (Optimus / Megatron).
+- **Second map:** MP_UND_Gorge loads through the generic path.
+- **Lifecycle:** 6 real-executable match cycles, back to 0 voices / 36.5 MB every time.
+- **Validation:** suite 566 / 0; wfc_fidelity 194 / 0 / 19.
+- **Handoff:** `docs/handoff/SYSTEMS_M07_AUDIO_HANDOFF.md` + the two patches; FIDELITY.md MILESTONE 07.
+
 ## SYSTEMS MILESTONE 06 (2026-10-03) — frontend / loading / level audio lifecycle
 - **Generic level manifests:**
   - `gen_level_audio.py` → `LevelAudio.inc`, merged with the AssetTools map manifest; one path for every level;
