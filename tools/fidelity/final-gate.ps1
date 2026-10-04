@@ -18,7 +18,7 @@
 # Report FINAL.md: PRODUCT FAIL (owner lane) / TEST-HARNESS FAIL (owner Experimental) / KNOWN / UNKNOWN + WAITING /
 # HUMAN CHECK, per area, with the exact commit and exe paths. A Debug and a Release build of the same sha are required.
 param([Parameter(Mandatory)][string]$Ref, [string]$Name = "", [switch]$Build, [switch]$Quick, [string]$OutDir = "",
-      [string]$LaneRendering = "", [string]$BaselineVisual = "", [int]$SoakCycles = 20, [string[]]$Only = @())
+      [string]$LaneRendering = "", [string]$BaselineVisual = "", [int]$SoakCycles = 20, [string[]]$Only = @(), [switch]$ReportOnly)   # -ReportOnly: compose FINAL.md from existing suite folders in -OutDir
 $ErrorActionPreference = "Stop"
 $Only = @($Only | ForEach-Object { $_ -split "," } | Where-Object { $_ }); function Want($k) { return -not $Only.Count -or $Only -contains $k }
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
@@ -26,7 +26,7 @@ $root = Get-WfcRoot
 $sha = (& git -C $root rev-parse --verify "$Ref^{commit}").Trim()
 if (-not $Name) { $Name = "int_" + $sha.Substring(0, 7) }
 $tgt = Join-Path $root "work\ab\$Name"
-if ($Build -or -not (Test-Path (Join-Path $tgt "build-release\bin\wfc_rebuild.exe"))) { & (Join-Path $PSScriptRoot "m05\build-target.ps1") -Ref $sha -Name $Name }
+if (-not $ReportOnly -and ($Build -or -not (Test-Path (Join-Path $tgt "build-release\bin\wfc_rebuild.exe")))) { & (Join-Path $PSScriptRoot "m05\build-target.ps1") -Ref $sha -Name $Name }
 $built = if (Test-Path (Join-Path $tgt "M05_TARGET.txt")) { (Get-Content (Join-Path $tgt "M05_TARGET.txt") | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '' } else { "" }
 if ($built -ne $sha) { throw "work\ab\$Name holds ${built}, not ${sha}: rerun with -Build (never mix product revisions)" }
 $rel = Join-Path $tgt "build-release\bin\wfc_rebuild.exe"; $dbg = Join-Path $tgt "build\bin\wfc_rebuild.exe"; $rd = Join-Path $tgt "work\render"
@@ -37,7 +37,8 @@ function Note($s) { Add-Content -Encoding UTF8 $log $s; Write-Host $s }
 function Step($name, [scriptblock]$sb) { $t0 = Get-Date; Note ("[{0}] {1} ..." -f (Get-Date -Format HH:mm:ss), $name); try { & $sb 2>&1 | Select-Object -Last 3 | ForEach-Object { Note "  $_" } } catch { Note "  ERROR: $_" }; Note ("  ({0:N0} min)" -f ((Get-Date) - $t0).TotalMinutes) }
 $starts = if ($Quick) { "0,5,12,20,33,41,47,60,71,77" } else { "" }
 $cyc = if ($Quick) { 4 } else { 8 }
-Note "FINAL GATE $Ref = $sha; Release $rel; Debug $dbg"
+Note "FINAL GATE $Ref = $sha; Release $rel; Debug $dbg$(if ($ReportOnly) { ' (report only)' })"
+if ($ReportOnly) { $Only = @("none") }
 if (Want "gate")    { Step "gate Release" { & (Join-Path $PSScriptRoot "m05-e2e-gate.ps1") -Root $tgt -Config Release -Full -Cycles $cyc -OutDir (Join-Path $OutDir "gate_release") } }
 if (Want "accept")  { Step "playtest acceptance" { & (Join-Path $PSScriptRoot "playtest-acceptance.ps1") -Root $tgt -OutDir (Join-Path $OutDir "acceptance") } }
 if (Want "jitter")  { Step "motion jitter" { & (Join-Path $PSScriptRoot "motion-jitter.ps1") -Exe $rel -RenderData $rd -OutDir (Join-Path $OutDir "jitter") } }

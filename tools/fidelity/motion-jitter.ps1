@@ -96,8 +96,8 @@ if ($Parts -contains "B") {
         if ($files.Count -lt 10) { Add-WfcResult $res "jitter.present.$ph" "SKIP" $files.Count "only $($files.Count) consecutive frames captured" "Experimental"; continue }
         # character region: the chase camera keeps the pawn in the lower-middle of the frame (cells of the 8 px luma grid)
         $L = @($files | ForEach-Object { , [WfcImage]::Luma($_.FullName, 8) })   # unary comma: keep each frame an array
-        $w = [int]$L[0][0]; $h = [int]$L[0][1]
-        $x0 = [int]($w * 0.38); $x1 = [int]($w * 0.62); $y0 = [int]($h * 0.40); $y1 = [int]($h * 0.92)
+        $w = [int]$L[0][0]; $fh = [int]$L[0][1]
+        $x0 = [int]($w * 0.38); $x1 = [int]($w * 0.62); $y0 = [int]($fh * 0.40); $y1 = [int]($fh * 0.92)
         function RegionDiff($a, $b) { $s = 0.0; $n = 0; for ($yy = $y0; $yy -lt $y1; $yy++) { for ($xx = $x0; $xx -lt $x1; $xx++) { $ix = 2 + $yy * $w + $xx; $s += [Math]::Abs($a[$ix] - $b[$ix]); $n++ } }; return $s / [Math]::Max(1, $n) }
         $d1 = @(); $d2 = @(); for ($i = 0; $i -lt $L.Count - 2; $i++) { $d1 += (RegionDiff ($L[$i]) ($L[$i + 1])); $d2 += (RegionDiff ($L[$i]) ($L[$i + 2])) }
         $m1 = ($d1 | Measure-Object -Average).Average; $m2 = ($d2 | Measure-Object -Average).Average
