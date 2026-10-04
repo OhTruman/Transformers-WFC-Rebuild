@@ -2,6 +2,11 @@
 // Deliberately GL 1.1 immediate mode: no extension loading needed to get pixels on screen.
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
+#include "assets/Json.h"
+#include <sstream>
+#include <map>
+#include <fstream>
+#include <array>
 #include <windows.h>
 #endif
 #include <GL/gl.h>
@@ -124,6 +129,96 @@ public:
     void drawScreenTriangles(const ScreenBatch& b) override {
         if (b.verts.empty()) return;
         if (inFrame_) screenQueue_.push_back(b); else drawScreenNow(b);
+    }
+
+    // ---- Canvas fonts (UE3 UFont from render data) ----
+    struct CanvasFont {
+        bool ok = false;
+        std::vector<std::array<int, 6>> chars;        // StartU, StartV, USize, VSize, TextureIndex, VerticalOffset
+        std::map<uint32_t, int> remap;
+        std::vector<TextureHandle> pages; std::vector<std::pair<int, int>> pageSize;
+        float lineHeight = 0;
+    };
+    std::map<std::string, CanvasFont> fonts_;
+    CanvasFont& font(const std::string& name) {
+        auto it = fonts_.find(name);
+        if (it != fonts_.end()) return it->second;
+        CanvasFont& f = fonts_[name];
+        std::string dir = wfc::Pipeline::renderDataRoot() + "/_ui/fonts/";
+        std::ifstream in(dir + name + ".json", std::ios::binary);
+        if (!in) return f;
+        std::stringstream ss; ss << in.rdbuf();
+        assets::Json J;
+        if (!assets::Json::parse(ss.str(), J)) return f;
+        for (size_t i = 0; i < J["characters"].size(); ++i) {
+            const assets::Json& c = J["characters"][i];
+            std::array<int, 6> a{};
+            for (int k = 0; k < 6; ++k) a[(size_t)k] = (int)c[(size_t)k].asFloat();
+            f.chars.push_back(a);
+            f.lineHeight = std::max(f.lineHeight, (float)a[3]);
+        }
+        for (const auto& kv : J["remap"].obj) f.remap[(uint32_t)std::stoul(kv.first)] = (int)kv.second.asFloat();
+        for (size_t i = 0; i < J["pages"].size(); ++i) {
+            ImageData img;
+            if (!platform::decodeImage(dir + J["pages"][i].asString(), img)) continue;
+            f.pageSize.push_back({img.w, img.h});
+            f.pages.push_back(uploadTexture(img));
+        }
+        f.ok = !f.chars.empty() && !f.pages.empty();
+        return f;
+    }
+    static std::vector<uint32_t> utf8Decode(const std::string& s) {
+        std::vector<uint32_t> out;
+        for (size_t i = 0; i < s.size();) {
+            unsigned char c = (unsigned char)s[i];
+            uint32_t cp = c; int n = 0;
+            if (c >= 0xF0) { cp = c & 0x07; n = 3; } else if (c >= 0xE0) { cp = c & 0x0F; n = 2; } else if (c >= 0xC0) { cp = c & 0x1F; n = 1; }
+            ++i;
+            for (int k = 0; k < n && i < s.size(); ++k, ++i) cp = (cp << 6) | ((unsigned char)s[i] & 0x3F);
+            out.push_back(cp);
+        }
+        return out;
+    }
+    const std::array<int, 6>* glyph(const CanvasFont& f, uint32_t cp) const {
+        auto it = f.remap.find(cp);
+        int idx = it != f.remap.end() ? it->second : (f.remap.count('?') ? f.remap.at('?') : -1);
+        return idx >= 0 && (size_t)idx < f.chars.size() ? &f.chars[(size_t)idx] : nullptr;
+    }
+    bool canvasTextSize(const std::string& name, const std::string& utf8, float& w, float& h, float scale) override {
+        CanvasFont& f = font(name);
+        w = h = 0;
+        if (!f.ok) return false;
+        for (uint32_t cp : utf8Decode(utf8)) if (const auto* g = glyph(f, cp)) w += (*g)[2] * scale;
+        h = f.lineHeight * scale;
+        return true;
+    }
+    bool drawCanvasText(const std::string& name, const std::string& utf8, float x, float y, const uint8_t rgba[4],
+                        float scale) override {
+        CanvasFont& f = font(name);
+        if (!f.ok) return false;
+        std::map<int, ScreenBatch> perPage;
+        float cx = x;
+        for (uint32_t cp : utf8Decode(utf8)) {
+            const auto* g = glyph(f, cp);
+            if (!g) continue;
+            const auto& c = *g;
+            int page = c[4] < (int)f.pages.size() ? c[4] : 0;
+            float tw = (float)f.pageSize[(size_t)page].first, th = (float)f.pageSize[(size_t)page].second;
+            float w = c[2] * scale, h = c[3] * scale, top = y + c[5] * scale;
+            if (w > 0 && h > 0) {
+                float u0 = c[0] / tw, v0 = c[1] / th, u1 = (c[0] + c[2]) / tw, v1 = (c[1] + c[3]) / th;
+                ScreenBatch& b = perPage[page];
+                b.texture = f.pages[(size_t)page]; b.blend = ScreenBlend::Alpha; b.clampUV = true;
+                ScreenVertex q[4] = {{cx, top, u0, v0, rgba[0], rgba[1], rgba[2], rgba[3]},
+                                     {cx + w, top, u1, v0, rgba[0], rgba[1], rgba[2], rgba[3]},
+                                     {cx + w, top + h, u1, v1, rgba[0], rgba[1], rgba[2], rgba[3]},
+                                     {cx, top + h, u0, v1, rgba[0], rgba[1], rgba[2], rgba[3]}};
+                for (int k : {0, 1, 2, 0, 2, 3}) b.verts.push_back(q[k]);
+            }
+            cx += c[2] * scale;
+        }
+        for (auto& kv : perPage) drawScreenTriangles(kv.second);
+        return true;
     }
 
     bool updateTexture(TextureHandle h, const ImageData& img) override {
@@ -759,3 +854,7 @@ IRenderer* createGLRenderer() {
 }
 
 } // namespace render
+
+namespace render {
+std::string wfcRenderDataRoot() { return wfc::Pipeline::renderDataRoot(); }
+}

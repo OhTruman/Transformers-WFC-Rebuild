@@ -47,6 +47,28 @@ After `unloadMapRenderData()`:
 | `MarkerAlly_MAT` | Authored empty (no expressions), so it draws nothing. Ally tags are the label plus `TargetHealthBar_MAT` (CONFIRMED data). |
 | Verification | `WFC_TILETEST=1` draws sample markers. |
 
+## 2b. Canvas text and HUD markers (M08)
+
+| Call | Behaviour |
+|---|---|
+| `drawCanvasText(font, utf8, x, y, rgba, scale)` / `canvasTextSize(...)` | Original UE3 fonts from render data `_ui/fonts/<font>.json` (`tools/render/build_hud.py`: cooked FFontCharacter table + CharRemap + glyph pages). |
+| `render::HudMarkers` (`src/render/HudMarkers.h`) | TnObjectiveMarkerTypeSprite.Draw from the authored marker-type setups (`_ui/hud_markers.json`, 40 types). |
+
+**Text:**
+- UE3 Canvas layout: USize advance, VerticalOffset, no kerning.
+- Glyph alpha × colour, display-referred.
+- Composited like `drawScreenTriangles`.
+- Fonts available: MarkerFont. SubtitleFont is not cooked in the loaded packages.
+
+**Markers:**
+- projection;
+- focus (threshold, auto-focus range, hysteresis);
+- on- and off-screen tiles (`Over`, `OnScreen`, `ArrowAngle`);
+- MarkerFont labels in the setup colour;
+- health bar.
+
+Gameplay passes the markers its rules show. Ownership of the in-match HUD layers: `docs/handoffs/FRONTEND_INMATCH_HUD.md`.
+
 ## 3. 2D composition (GFx movies, Bink frames, loading screens, fades)
 
 | Call | Behaviour |

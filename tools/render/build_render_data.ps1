@@ -38,4 +38,7 @@ if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 if ($LASTEXITCODE -ne 0) { throw "build_movers failed" }
 & $py (Join-Path $PSScriptRoot "build_map_fx.py") $Map $out
 if ($LASTEXITCODE -ne 0) { throw "build_map_fx failed" }
+# 5. Map-independent HUD data: Canvas fonts + objective-marker setups -> <render root>\_ui
+& $py (Join-Path $PSScriptRoot "build_hud.py") (Split-Path -Parent $out)
+if ($LASTEXITCODE -ne 0) { throw "build_hud failed" }
 Write-Host "render data -> $out"

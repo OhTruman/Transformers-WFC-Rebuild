@@ -129,6 +129,7 @@ public:
     // Shared read-only asset roots: WFC_ASSETS (default core::config::kAssetRootDefault, the VerticalSlice export)
     // and the content directory beside it (WFC_CONTENT overrides). Map render data stays in WFC_RENDER_DATA.
     static std::string assetRoot();
+    static std::string renderDataRoot();              // WFC_RENDER_DATA, default <exe>/../../work/render
     static std::string contentRoot();
     void release();                                   // delete every GL object, reset to the unloaded state
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile): queued, drawn after post onto the back buffer.

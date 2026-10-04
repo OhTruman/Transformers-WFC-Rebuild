@@ -116,6 +116,14 @@ public:
     virtual void drawScreenTriangles(const ScreenBatch& b) { (void)b; }
     // Replace a texture's contents (same or new size): streamed video frames, dynamic UI bitmaps.
     virtual bool updateTexture(TextureHandle h, const ImageData& image) { (void)h; (void)image; return false; }
+    // Canvas text in an original UE3 font (render data _ui/fonts/<font>.json, tools/render/build_hud.py): UE3 Canvas
+    // layout (glyph USize advance, VerticalOffset, no kerning), glyph coverage in alpha x colour, display-referred,
+    // composited like drawScreenTriangles. font = short name, e.g. "MarkerFont". Returns false if unavailable.
+    virtual bool drawCanvasText(const std::string& font, const std::string& utf8, float x, float y, const uint8_t rgba[4],
+                                float scale = 1.0f) { (void)font; (void)utf8; (void)x; (void)y; (void)rgba; (void)scale; return false; }
+    virtual bool canvasTextSize(const std::string& font, const std::string& utf8, float& w, float& h, float scale = 1.0f) {
+        (void)font; (void)utf8; (void)scale; w = h = 0; return false;
+    }
     virtual int viewportWidth() const { return 0; }
     virtual int viewportHeight() const { return 0; }
 
@@ -179,5 +187,8 @@ public:
 
 // Factory (fixed-function GL implementation for the first milestone).
 IRenderer* createGLRenderer();
+
+// Render-data root (WFC_RENDER_DATA, default <exe>/../../work/render): map data in <root>/<map>, UI data in <root>/_ui.
+std::string wfcRenderDataRoot();
 
 } // namespace render

@@ -1,3 +1,4 @@
+#include "render/HudMarkers.h"
 #include "core/Application.h"
 #include "core/Config.h"
 #include "core/Debug.h"
@@ -242,6 +243,25 @@ void Application::run() {
         }
         renderer_->beginFrame(camera_, window_->width(), window_->height());
         world_.draw(*renderer_);
+        if (std::getenv("WFC_MARKERTEST")) {           // diagnostics: TDM player tags (ally + enemy) ahead of the player
+            static render::HudMarkers hm;
+            static bool hmLoaded = hm.load(render::wfcRenderDataRoot());
+            if (hmLoaded) {
+                core::Vec3 p = world_.player().pawn().position();
+                core::Vec3 f = core::forwardFromYawPitch(camera_.yaw, 0.0f);
+                core::Vec3 rt = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
+                std::vector<render::MarkerRequest> ms;
+                render::MarkerRequest a;
+                a.key = "ally"; a.type = "TnObjectiveMarkerTypeTransformerVersus"; a.setup = "AllyMarkerSetup";
+                a.base = p + f * 14.0f + rt * 3.0f + core::Vec3{0, 4.2f, 0}; a.labelZ = 0.0f; a.label = "Bumblebee";
+                a.drawHealthBar = true; a.health = 0.6f;
+                render::MarkerRequest e = a;
+                e.key = "enemy"; e.setup = "EnemyMarkerSetup"; e.base = p + f * 25.0f - rt * 4.0f + core::Vec3{0, 4.2f, 0};
+                e.label = "Megatron"; e.drawHealthBar = false;
+                ms.push_back(a); ms.push_back(e);
+                hm.draw(*renderer_, camera_, window_->width(), window_->height(), ms, 1.0f / 60.0f);
+            }
+        }
         if (std::getenv("WFC_SCREENTEST")) {            // diagnostics: 2D composition path (fade + panel)
             using RB = render::IRenderer;
             const float W = (float)window_->width(), H = (float)window_->height();

@@ -486,6 +486,11 @@ std::string Pipeline::assetRoot() {
     return core::config::kAssetRootDefault;
 }
 
+std::string Pipeline::renderDataRoot() {
+    if (const char* e = std::getenv("WFC_RENDER_DATA")) return e;
+    return exeDir() + "/../../work/render";
+}
+
 std::string Pipeline::contentRoot() {
     if (const char* e = std::getenv("WFC_CONTENT")) return std::string(e) + "/";
     std::string a = assetRoot();
@@ -532,9 +537,7 @@ void Pipeline::release() {
 // ------------------------------------------------------------------------- loading
 bool Pipeline::load(const std::string& mapName) {
     if (std::getenv("WFC_LEGACYRENDER")) { LOG_INFO("wfc: WFC_LEGACYRENDER set; shader path disabled"); return false; }
-    std::string root;
-    if (const char* e = std::getenv("WFC_RENDER_DATA")) root = e;
-    else root = exeDir() + "/../../work/render";
+    std::string root = renderDataRoot();
     dataDir_ = root + "/" + mapName;
     std::string mj = readText(dataDir_ + "/materials_glsl.json");
     std::string lj = readText(dataDir_ + "/lighting.json");
