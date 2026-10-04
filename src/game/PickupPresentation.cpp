@@ -4,18 +4,25 @@
 
 namespace game {
 namespace {
-using FactoryDef = PickupPresentation::FactoryDef;
-using Kind = PickupPresentation::Kind;
+using PickupClassSound = PickupPresentation::PickupClassSound;
 #include "game/PickupPresentation.inc"
-constexpr int kCount = (int)(sizeof(kFactories) / sizeof(kFactories[0]));
+constexpr int kCount = (int)(sizeof(kPickupClassSounds) / sizeof(kPickupClassSounds[0]));
 } // namespace
 
-int PickupPresentation::count() { return kCount; }
-const PickupPresentation::FactoryDef& PickupPresentation::def(int i) { return kFactories[i]; }
+int PickupPresentation::classCount() { return kCount; }
+const PickupPresentation::PickupClassSound& PickupPresentation::classDef(int i) { return kPickupClassSounds[i]; }
 
-int PickupPresentation::find(const char* actor) {
-    for (int i = 0; i < kCount; ++i) if (std::strcmp(kFactories[i].actor, actor) == 0) return i;
-    return -1;
+const char* PickupPresentation::pickupSoundFor(const char* name) {
+    if (!name) return nullptr;
+    for (const PickupClassSound& c : kPickupClassSounds) {
+        const size_t n = std::strlen(c.factoryClass);
+        if (std::strncmp(c.factoryClass, name, n) != 0) continue;
+        const char* rest = name + n;                          // "" (class) or "_<digits>" (placed actor)
+        bool actorSuffix = rest[0] == '_' && rest[1] != 0;
+        for (const char* p = rest + 1; actorSuffix && *p; ++p) actorSuffix = *p >= '0' && *p <= '9';
+        if (rest[0] == 0 || actorSuffix) return c.pickupSound;
+    }
+    return nullptr;
 }
 
 } // namespace game

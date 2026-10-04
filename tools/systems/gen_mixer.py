@@ -1,20 +1,19 @@
 """Generate src/game/SoundMixer.inc from the cooked SoundConfig.SoundMixerProperties (via AssetTools
-authored.db, read-only): the mixer presets the slice uses and the per-category DSP values of the two
-categories Systems applies (SFX_WET_VEH_ENGINE volume, MASTER_WET reverb / echo / volume).
+authored.db, read-only): the global mixer presets Systems enables and, for EVERY sound category, the DSP values of
+its Default preset and of those presets (Volume + MASTER_WET reverb / echo; the other DSP stages are not applied).
 Run with AssetTools/bin/py/python.exe:  python tools/systems/gen_mixer.py <out.inc>
 """
 import io, json, sqlite3, sys
 
 DB = 'F:/Transformers Rebuild/AssetTools/manifests/authored.db'
-PRESETS = ['VEHICLE_JUMP', 'VEHICLE_BOOST_END'] + ['REVERB_TRANS_MP_STREETS_' + z for z in (
-    'EXTERIOR', 'NEU_BASE', 'AUTO_ROOM_01', 'DEC_ROOM_LOWER', 'NEU_HALL', 'TRAIN_DEPOT', 'AUTO_ROOM_02',
-    'TRAIN_TUNNEL', 'NEU_STAIRWELL', 'DEC_ROOM_UPPER')]
-CATS = ['SFX_WET_VEH_ENGINE', 'MASTER_WET']
+# Global presets: the ones the built-in cues play (PlayMixerPreset) and Engine.MovieSettings MovieMixerPreset
+# (Xe-TransEngine.ini MovieMixerPreset=CINE_MUTE_FOR_BINK, enabled while a Bink movie plays). Map reverb presets are
+# NOT compiled in: a level's manifest reverb_presets register them at load (SoundMixer::addMapPreset).
+PRESETS = ['VEHICLE_JUMP', 'VEHICLE_BOOST_END', 'CINE_MUTE_FOR_BINK']
 
 c = sqlite3.connect(DB)
 d = json.loads(c.execute("select props from objects where opath='SoundConfig.SoundMixerProperties'").fetchone()[0])
 mp = {p['Name']: p for p in d['MixerPresets']}
-cats = {k['Name']: k for k in d['SoundCategories']}
 
 def f(x):
     s = '%.7g' % x
@@ -27,11 +26,11 @@ for n in PRESETS:
     p = mp[n]
     out.append('    {"%s", %s, %s, %s, %s},\n' % (n, f(p['Priority']), f(p['FadeInTime']), f(p['FadeOutTime']), f(p['Duration'])))
 out.append('};\n')
-# Per category: every DSP preset the category defines (name -> values), incl. "Default".
-for cn in CATS:
-    cat = cats[cn]
-    out.append('// %s (DSPEffectConfig %d)\n' % (cn, cat.get('DSPEffectConfig', 0)))
-    out.append('const CategoryPreset k%s[] = {\n' % ''.join(w.capitalize() for w in cn.split('_')))
+# Per category (authored order): the DSP presets it defines among Default + PRESETS.
+out.append('// {category, preset, Volume, Reverb (12), Echo (4)}\n')
+out.append('const CategoryRow kCategoryRows[] = {\n')
+nondef = []
+for cat in d['SoundCategories']:
     for p in cat['DSPPresets']:
         if p['Name'] != 'Default' and p['Name'] not in PRESETS:
             continue
@@ -39,7 +38,14 @@ for cn in CATS:
         vals = [p['Volume']['Volume'], r['Room'], r['RoomHF'], r['RoomRolloffFactor'], r['DecayTime'], r['DecayHFRatio'],
                 r['ReflectionsLevel'], r['ReflectionsDelay'], r['Level'], r['Delay'], r['Diffusion'], r['Density'],
                 r['HFReference'], e['Delay'], e['DecayRatio'], e['WetMix'], e['DryMix']]
-        out.append('    {"%s", {%s}},\n' % (p['Name'], ', '.join(f(v) for v in vals)))
-    out.append('};\n')
-io.open(sys.argv[1], 'w', encoding='utf-8').write(''.join(out))
-print('presets', len(PRESETS))
+        out.append('    {"%s", "%s", {%s}},\n' % (cat['Name'], p['Name'], ', '.join(f(v) for v in vals)))
+        if p['Name'] == 'Default' and abs(vals[0] - 1.0) > 1e-6: nondef.append((cat['Name'], round(vals[0], 4)))
+out.append('};\n')
+# Master's Default DSP compressor (global; DSPEffectConfig bit 32 = compressor stage [MED]).
+m = [k for k in d['SoundCategories'] if k['Name'] == 'Master'][0]
+mc = [p for p in m['DSPPresets'] if p['Name'] == 'Default'][0]['Compressor']
+out.append('// Master Default compressor {DSPEffectConfig, Threshold dB, Attack ms, Release ms, GainMakeup dB}\n')
+out.append('const float kMasterCompressor[5] = {%s, %s, %s, %s, %s};\n' % (
+    f(m['DSPEffectConfig']), f(mc['Threshold']), f(mc['Attack']), f(mc['Release']), f(mc['GainMakeup'])))
+io.open(sys.argv[1], 'w', encoding='utf-8', newline='\n').write(''.join(out))
+print('presets', len(PRESETS), 'categories', len(d['SoundCategories']), 'Default volume != 1:', nondef)

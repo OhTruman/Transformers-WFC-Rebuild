@@ -1,6 +1,6 @@
 // Systems M03 pass 5 native-audio validation suite (not part of the CMake build). Build from the repo root:
 //   .toolchain/llvm-mingw-*/bin/clang++.exe -std=c++17 -O2 -Isrc tools/systems/audio_native_suite.cpp src/game/SoundCues.cpp \
-//     src/game/SoundMixer.cpp src/game/AmbientAudio.cpp src/core/Log.cpp src/platform/win32/Win32Audio.cpp -lwinmm -static -o suite.exe
+//     src/game/SoundMixer.cpp src/game/AmbientAudio.cpp src/game/LevelAudioScript.cpp src/game/LevelAudioHost.cpp src/game/FrontendAudioRuntime.cpp src/game/MusicPlayer.cpp \n//     src/game/FrontendAudio.cpp src/game/PickupPresentation.cpp src/core/Log.cpp src/platform/win32/Win32Audio.cpp -lwinmm -static -o suite.exe
 // Reads ExtractedAssets (read only). Channel-mode checks need an audio device (skipped otherwise).
 // Systems M03 native-audio validation suite (RE 7c4a2e0): mixer, zones, emitter geometry, dB, channel modes.
 // Deterministic: recording backends for SoundCues / AmbientAudio; the real Win32 backend for channel modes.
@@ -8,6 +8,10 @@
 #include "game/SoundCues.h"
 #include "game/SoundMixer.h"
 #include "game/PickupPresentation.h"
+#include "game/FrontendAudio.h"
+#include "game/LevelAudioHost.h"
+#include "game/FrontendAudioRuntime.h"
+#include <algorithm>
 #include "assets/Json.h"
 #include <chrono>
 #include <cmath>
@@ -54,6 +58,28 @@ struct Rec : IAudio {
 static void step(game::SoundMixer& m, float t) { m.tick(t); }
 static float vol(game::SoundMixer& m) { return m.categoryVolume("SFX_WET_VEH_ENGINE"); }
 
+static assets::Json loadJson(const std::string& p);
+static const std::string& streetsAudio();
+// A map's reverb presets from its audio.json (same field mapping as AmbientAudio::load).
+static int registerMapPresets(game::SoundMixer& m, const assets::Json& aj) {
+    int n = 0;
+    for (const auto& kv : aj["reverb_presets"].obj) {
+        const assets::Json& mp = kv.second["mixer_preset"];
+        const assets::Json& d = kv.second["dsp_by_category"]["MASTER_WET"];
+        const assets::Json& r = d["Reverb"];
+        const assets::Json& e = d["Echo"];
+        const float v[game::SoundMixer::kParams] = {
+            d["Volume"]["Volume"].asFloat(1.0f), r["Room"].asFloat(-10000.0f), r["RoomHF"].asFloat(-10000.0f),
+            r["RoomRolloffFactor"].asFloat(0.0f), r["DecayTime"].asFloat(1.0f), r["DecayHFRatio"].asFloat(1.0f),
+            r["ReflectionsLevel"].asFloat(-10000.0f), r["ReflectionsDelay"].asFloat(0.0f), r["Level"].asFloat(-10000.0f),
+            r["Delay"].asFloat(0.0f), r["Diffusion"].asFloat(0.0f), r["Density"].asFloat(0.0f), r["HFReference"].asFloat(5000.0f),
+            e["Delay"].asFloat(500.0f), e["DecayRatio"].asFloat(0.5f), e["WetMix"].asFloat(0.0f), e["DryMix"].asFloat(1.0f)};
+        n += m.addMapPreset(kv.first, mp["Priority"].asFloat(0.0f), mp["FadeInTime"].asFloat(0.0f), mp["FadeOutTime"].asFloat(0.0f),
+                            mp["Duration"].asFloat(-1.0f), v) ? 1 : 0;
+    }
+    return n;
+}
+
 static void testMixer() {
     std::printf("[mixer]\n");
     const float J = 0.1258925f, B = 0.6309574f;   // VEHICLE_JUMP -18 dB, VEHICLE_BOOST_END -4 dB (linear amplitude)
@@ -65,18 +91,18 @@ static void testMixer() {
       CHECK(near(vol(m), 1.0f + (B - 1.0f) * 0.5f), "boost_end mid fade %.4f", vol(m));
       step(m, 0.1f); CHECK(near(vol(m), B), "boost_end end %.4f", vol(m));
       m.enable("VEHICLE_JUMP");
-      CHECK(!std::strcmp(m.categoryTarget(0), "VEHICLE_JUMP"), "higher wins: %s", m.categoryTarget(0));
+      CHECK(!std::strcmp(m.categoryTarget("SFX_WET_VEH_ENGINE"), "VEHICLE_JUMP"), "higher wins: %s", m.categoryTarget("SFX_WET_VEH_ENGINE"));
       step(m, 0.15f); CHECK(near(vol(m), B + (J - B) * 0.5f), "jump mid (from current) %.4f", vol(m));
       step(m, 0.15f); CHECK(near(vol(m), J), "jump end %.4f", vol(m));
       CHECK(near(J, 0.1258925f, 1e-6f), "volume stays linear amplitude (not re-converted)"); }
     { game::SoundMixer m;   // lower-priority activation: no retarget
       m.enable("VEHICLE_JUMP"); step(m, 0.3f);
       m.enable("VEHICLE_BOOST_END");
-      CHECK(!std::strcmp(m.categoryTarget(0), "VEHICLE_JUMP"), "lower does not take over: %s", m.categoryTarget(0));
+      CHECK(!std::strcmp(m.categoryTarget("SFX_WET_VEH_ENGINE"), "VEHICLE_JUMP"), "lower does not take over: %s", m.categoryTarget("SFX_WET_VEH_ENGINE"));
       step(m, 0.1f); CHECK(near(vol(m), J), "unchanged %.4f", vol(m));
       // step down on removal: outgoing FadeOut (JUMP 1.0)
       m.disable("VEHICLE_JUMP", false);
-      CHECK(!std::strcmp(m.categoryTarget(0), "VEHICLE_BOOST_END"), "falls to boost_end");
+      CHECK(!std::strcmp(m.categoryTarget("SFX_WET_VEH_ENGINE"), "VEHICLE_BOOST_END"), "falls to boost_end");
       step(m, 0.5f); CHECK(near(vol(m), J + (B - J) * 0.5f), "step-down uses outgoing FadeOut 1.0: %.4f", vol(m)); }
     { game::SoundMixer m;   // interrupted fade restarts from the current value with the full new time
       m.enable("VEHICLE_JUMP"); step(m, 0.15f);
@@ -98,9 +124,10 @@ static void testMixer() {
       step(m, 0.5f); CHECK(m.activeList() == "VEHICLE_JUMP(1),Default(1)", "first expiry tick decrements: %s", m.activeList().c_str());
       step(m, 0.016f); CHECK(m.activeList() == "Default(1)", "second tick removes: %s", m.activeList().c_str()); }
     { game::SoundMixer m;   // per-category fall-through: JUMP (270) defines no MASTER_WET -> REVERB EXTERIOR (182)
+      CHECK(registerMapPresets(m, loadJson(streetsAudio())) == 10, "Streets map presets registered from audio.json");
       m.enable("REVERB_TRANS_MP_STREETS_EXTERIOR"); m.enable("VEHICLE_JUMP");
-      CHECK(!std::strcmp(m.categoryTarget(0), "VEHICLE_JUMP"), "cat0 %s", m.categoryTarget(0));
-      CHECK(!std::strcmp(m.categoryTarget(1), "REVERB_TRANS_MP_STREETS_EXTERIOR"), "cat1 falls through: %s", m.categoryTarget(1));
+      CHECK(!std::strcmp(m.categoryTarget("SFX_WET_VEH_ENGINE"), "VEHICLE_JUMP"), "cat0 %s", m.categoryTarget("SFX_WET_VEH_ENGINE"));
+      CHECK(!std::strcmp(m.categoryTarget("MASTER_WET"), "REVERB_TRANS_MP_STREETS_EXTERIOR"), "cat1 falls through: %s", m.categoryTarget("MASTER_WET"));
       // reverb parameters ramp linearly in mB: Default Room -10000 -> -800 over FadeIn 0.25
       step(m, 0.125f); Environment e = m.environment();
       CHECK(near(e.room, -5400.0f, 1.0f), "room mid-fade linear in mB %.1f", e.room);
@@ -116,16 +143,16 @@ static void testMixer() {
     static const game::SoundMixer::CategoryPreset C1[] = {{"Default", {1}}, {"C", {0.3f}}};
     { game::SoundMixer m(P, 4, C0, 4, C1, 2);
       m.enable("A"); m.enable("B");
-      CHECK(!std::strcmp(m.categoryTarget(0), "A"), "equal priority: earlier wins (%s)", m.categoryTarget(0));
+      CHECK(!std::strcmp(m.categoryTarget("SFX_WET_VEH_ENGINE"), "A"), "equal priority: earlier wins (%s)", m.categoryTarget("SFX_WET_VEH_ENGINE"));
       CHECK(m.activeList() == "A(1),B(1),Default(1)", "%s", m.activeList().c_str());
       step(m, 0.4f); CHECK(near(vol(m), 0.5f), "A value %.3f", vol(m));
       m.disable("A", false);   // B equal priority -> incoming FadeIn 0.2
       step(m, 0.1f); CHECK(near(vol(m), 0.375f), "equal step uses incoming FadeIn %.3f", vol(m));
-      m.enable("C"); CHECK(!std::strcmp(m.categoryTarget(0), "B"), "C defines no cat0 -> B (%s)", m.categoryTarget(0));
-      CHECK(!std::strcmp(m.categoryTarget(1), "C"), "cat1 C"); }
+      m.enable("C"); CHECK(!std::strcmp(m.categoryTarget("SFX_WET_VEH_ENGINE"), "B"), "C defines no cat0 -> B (%s)", m.categoryTarget("SFX_WET_VEH_ENGINE"));
+      CHECK(!std::strcmp(m.categoryTarget("MASTER_WET"), "C"), "cat1 C"); }
     { game::SoundMixer m(P, 4, C0, 4, C1, 2);
       m.enable("B"); m.enable("A");
-      CHECK(!std::strcmp(m.categoryTarget(0), "B"), "equal priority reversed: earlier B wins (%s)", m.categoryTarget(0)); }
+      CHECK(!std::strcmp(m.categoryTarget("SFX_WET_VEH_ENGINE"), "B"), "equal priority reversed: earlier B wins (%s)", m.categoryTarget("SFX_WET_VEH_ENGINE")); }
     { game::SoundMixer m(P, 4, C0, 4, C1, 2);
       m.enable("Z"); CHECK(m.activeList() == "Z(1),Default(1)", "%s", m.activeList().c_str());
       step(m, 0.016f); CHECK(m.activeList() == "Default(1)", "Duration 0 expires next tick: %s", m.activeList().c_str()); }
@@ -135,8 +162,21 @@ static void testMixer() {
       m.enable("A"); m.enable("A"); m.disable("A", false);
       CHECK(m.activeList() == "A(1),Default(1)", "plain disable decrements: %s", m.activeList().c_str()); }
     { game::SoundMixer m;   // Flush (level change)
+      registerMapPresets(m, loadJson(streetsAudio()));
       m.activateReverb("REVERB_TRANS_MP_STREETS_EXTERIOR"); m.enable("VEHICLE_JUMP"); m.flush();
       CHECK(m.activeList() == "Default(1)" && m.currentReverb().empty(), "flush: %s", m.activeList().c_str()); }
+    { game::SoundMixer m;   // map preset lifecycle: built-in presets only, + map, - map (Flush + forget), + again
+      const int base = m.presetCount();
+      CHECK(base == 4 && m.mapPresetCount() == 0 && !m.hasPreset("REVERB_TRANS_MP_STREETS_EXTERIOR"),
+            "no map preset compiled in (Default + 3 global; %d)", base);
+      registerMapPresets(m, loadJson(streetsAudio()));
+      m.activateReverb("REVERB_TRANS_MP_STREETS_TRAIN_TUNNEL"); m.enable("VEHICLE_JUMP"); step(m, 0.1f);
+      CHECK(m.removeMapPresets() == 10 && m.presetCount() == base && m.activeList() == "Default(1)" && m.currentReverb().empty(),
+            "removeMapPresets: Flush + forget (%s)", m.activeList().c_str());
+      Environment e = m.environment();
+      CHECK(e.room <= -9999.0f && e.reverb <= -9999.0f, "dry Default environment after map removal");
+      CHECK(registerMapPresets(m, loadJson(streetsAudio())) == 10 && registerMapPresets(m, loadJson(streetsAudio())) == 0,
+            "re-register after removal; a duplicate name is refused"); }
 }
 
 // ---------------------------------------------------------------- zones
@@ -161,6 +201,7 @@ static bool insideZ(const ZoneGeo& z, const Vec3& p) {
 }
 
 static const std::string kRoot = "F:/Transformers Rebuild/ExtractedAssets/VerticalSlice";
+static const std::string& streetsAudio() { static const std::string p = kRoot + "/Maps/MP_IAC_Streets/audio.json"; return p; }
 static assets::Json loadJson(const std::string& p) {
     std::ifstream f(p, std::ios::binary); std::stringstream ss; ss << f.rdbuf();
     assets::Json j; assets::Json::parse(ss.str(), j); return j;
@@ -229,7 +270,7 @@ static void testZones() {
         CHECK(m.currentReverb() == zs[(size_t)z].preset, "current reverb %s", m.currentReverb().c_str());
         std::string want = zs[(size_t)z].preset + "(1),Default(1)";
         CHECK(m.activeList() == want, "previous preset explicitly disabled: [%s]", m.activeList().c_str());
-        CHECK(!std::strcmp(m.categoryTarget(1), zs[(size_t)z].preset.c_str()), "MASTER_WET target %s", m.categoryTarget(1));
+        CHECK(!std::strcmp(m.categoryTarget("MASTER_WET"), zs[(size_t)z].preset.c_str()), "MASTER_WET target %s", m.categoryTarget("MASTER_WET"));
         settle(excl[(size_t)z], 0.3f);
         CHECK(near(rec.envs.back().room, zs[(size_t)z].room, 0.5f), "%s room %.0f (audio.json %.0f)", zs[(size_t)z].name.c_str(), rec.envs.back().room, zs[(size_t)z].room);
         prevZ = z;
@@ -541,28 +582,19 @@ static void testAuthored() {
               "%s loop [%u, %u] = whole sample (%d)", key.c_str(), l.start, l.end, w["total_samples"].asInt(-1));
     }
 
-    // Pickups: authored factories + script-confirmed effect activation and the PickupSound.
+    // Pickups: every factory placed in the map (gameplay.json) resolves its class's authored PickupSound.
     using PP = game::PickupPresentation;
-    int nAmmo = 0, nHealth = 0, nShield = 0, nObj = 0;
-    for (int i = 0; i < PP::count(); ++i) {
-        PP::Kind k = PP::def(i).kind;
-        if (k == PP::Kind::AmmoCrate) ++nAmmo; else if (k == PP::Kind::Health) ++nHealth;
-        else if (k == PP::Kind::OverShield) ++nShield; else ++nObj;
+    assets::Json gp = loadJson(kRoot + "/Maps/MP_IAC_Streets/gameplay.json");
+    std::map<std::string, int> placed;
+    for (size_t i = 0; i < gp["pickups"].size(); ++i) ++placed[gp["pickups"][i]["class"].asString()];
+    CHECK(placed["TnAmmoCratePickupFactory"] == 14 && placed["TnHealthPickupFactory"] == 9 && placed["TnOverShieldPickupFactory"] == 1,
+          "placed 14 ammo / 9 health / 1 overshield");
+    for (const auto& kv : placed) {
+        const char* snd = PP::pickupSoundFor(kv.first.c_str());
+        CHECK(snd && cues.hasCue(snd), "%s -> PickupSound %s in the cue table", kv.first.c_str(), snd ? snd : "-");
     }
-    CHECK(PP::count() == 27 && nAmmo == 14 && nHealth == 9 && nShield == 1 && nObj == 3, "27 factories 14/9/1/3");
-    PP pp;
-    for (int i = 0; i < PP::count(); ++i) {
-        const PP::FactoryDef& d = PP::def(i);
-        bool custom = d.kind == PP::Kind::Health || d.kind == PP::Kind::OverShield;
-        bool objective = d.kind == PP::Kind::ObjectiveFlag || d.kind == PP::Kind::ObjectiveBomb;
-        CHECK(!d.pickupSound || cues.hasCue(d.pickupSound), "%s PickupSound %s in table", d.actor, d.pickupSound ? d.pickupSound : "-");
-        CHECK(objective || d.pickupSound != nullptr, "%s has an authored PickupSound", d.actor);
-        CHECK(d.pickupEffectAttached == !custom, "%s PickupEffect attachment (authored data)", d.actor);
-        // RE 00dcb20: ShouldDisplayHighlightFx True on TnAmmoCrate and TnWeaponPickupFactory (flag / bomb inherit it).
-        CHECK(d.highlightFx == (d.kind == PP::Kind::AmmoCrate || objective), "%s ShouldDisplayHighlightFx", d.actor);
-        CHECK((d.requiredGameRule != nullptr) == objective, "%s RequiredGameRuleClass", d.actor);
-        CHECK(PP::find(d.actor) == i, "%s found by actor name", d.actor);
-    }
+    CHECK(PP::pickupSoundFor("TnGameObjectivePickupFactoryFlag") == nullptr && PP::pickupSoundFor("TnGameObjectivePickupFactoryBomb") == nullptr,
+          "objective inventories author no PickupSound");
     // PickupSound is attached to the recipient pawn: its voices follow the pawn.
     Vec3 pawn{10, 0, 0};
     cues.setResolver([&](int owner, const std::string&, const Vec3& off, Vec3& out) {
@@ -571,8 +603,11 @@ static void testAuthored() {
     });
     int first = rec.n;
     game::SoundCues::Emitter recipient{pawn, 0, {0, 0, 0}, ""};
-    int id = pp.onTaken(PP::def(0).actor, cues, recipient, 5.0f);
-    CHECK(pp.onTaken("NoSuchFactory", cues, recipient, 5.0f) == -1, "unknown factory ignored");
+    int id = PP::onTaken("TnAmmoCratePickupFactory", cues, recipient, 5.0f);
+    CHECK(PP::onTaken("NoSuchFactory", cues, recipient, 5.0f) == -1, "unknown factory class ignored");
+    CHECK(PP::pickupSoundFor("TnHealthPickupFactory_13806") && !std::strcmp(PP::pickupSoundFor("TnHealthPickupFactory_13806"), "BL_HUD_INTERFACE.HEALTH_PU_ENERGON") &&
+          !PP::pickupSoundFor("TnHealthPickupFactoryX") && !PP::pickupSoundFor("TnHealthPickupFactory_") && !PP::pickupSoundFor("TnHealthPickupFactory_12a"),
+          "placed actor names resolve to their class (<Class>_<N>); other suffixes do not");
     CHECK(id >= 0 && rec.n > first, "ammo pickup sound plays (%d voices)", rec.n - first);
     pawn = Vec3{14, 0, 3};
     for (int k = 0; k < 3; ++k) cues.tick(1.0f / 60.0f);
@@ -759,7 +794,651 @@ static void testChannelStealing() {
     delete a;
 }
 
+// ---------------------------------------------------------------- map audio lifecycle (M05 frontend transition)
+// A synthetic second map: own cue names, emitters of all three kinds, one zone (a 10 m cube at the origin) with
+// its own reverb preset and pool. Only existing waves are referenced. Proves the systems are manifest-driven.
+static std::string writeFakeMap() {
+    const std::string path = "work/fake_map_audio.json";   // work/ is the worktree scratch area
+    std::ofstream f(path, std::ios::binary);
+    auto face = [](float x0, float y0, float z0, float x1, float y1, float z1, int axis, float c) {
+        std::ostringstream o; o.setf(std::ios::fixed); o.precision(2);
+        float p[4][3];
+        if (axis == 0) { float q[4][3] = {{c, y0, z0}, {c, y1, z0}, {c, y1, z1}, {c, y0, z1}}; std::memcpy(p, q, sizeof q); }
+        else if (axis == 1) { float q[4][3] = {{x0, c, z0}, {x1, c, z0}, {x1, c, z1}, {x0, c, z1}}; std::memcpy(p, q, sizeof q); }
+        else { float q[4][3] = {{x0, y0, c}, {x1, y0, c}, {x1, y1, c}, {x0, y1, c}}; std::memcpy(p, q, sizeof q); }
+        o << "[";
+        for (int i = 0; i < 4; ++i) o << (i ? "," : "") << "[" << p[i][0] << "," << p[i][1] << "," << p[i][2] << "]";
+        o << "]";
+        return o.str();
+    };
+    const float h = 5.0f;
+    std::string polys = "[" + face(-h, -h, -h, h, h, h, 0, -h) + "," + face(-h, -h, -h, h, h, h, 0, h) + "," +
+                        face(-h, -h, -h, h, h, h, 1, -h) + "," + face(-h, -h, -h, h, h, h, 1, h) + "," +
+                        face(-h, -h, -h, h, h, h, 2, -h) + "," + face(-h, -h, -h, h, h, h, 2, h) + "]";
+    const char* hum = R"("BL_LVL_FAKE.EMIT_HUM": {"tree": {"class": "SoundNodeRoot", "params": {"Volume": -6.0, "DistanceMin": 200.0, "DistanceMax": 3000.0, "Category": "SFX_WET_AMB_3D"}, "children": [{"class": "SoundNodeWaveEvent", "params": {"bLooping": true}, "children": [{"wav": "content/WL_ELEC/ELEC_TRANS_TV_03.wav"}]}]}})";
+    const char* knock = R"("BL_LVL_FAKE.PP_KNOCK": {"tree": {"class": "SoundNodeRoot", "params": {"Volume": -6.0}, "children": [{"class": "SoundNodeWaveEvent", "params": {}, "children": [{"wav": "content/WL_TRUCK/SYNTH_AIR_RELEASE_04.wav"}]}]}})";
+    auto mat = [](float x, float y, float z) {
+        std::ostringstream o; o << "[1,0,0,0, 0,1,0,0, 0,0,1,0, " << x << "," << y << "," << z << ",1]"; return o.str();
+    };
+    f << "{\"map\": \"FAKE_TEST_MAP\", \"cues\": {" << hum << ", " << knock << "},\n"
+      << "\"emitters\": {\"point\": [{\"cue\": \"BL_LVL_FAKE.EMIT_HUM\", \"gltf_matrix\": " << mat(10, 0, 0) << "}],"
+      << " \"volume\": [{\"cue\": \"BL_LVL_FAKE.EMIT_HUM\", \"radius\": 500.0, \"gltf_matrix\": " << mat(0, 0, 10) << "}],"
+      << " \"line\": [{\"cue\": \"BL_LVL_FAKE.EMIT_HUM\", \"linelength\": 500.0, \"gltf_matrix\": " << mat(-10, 0, 0) << "}]},\n"
+      << "\"zones\": [{\"comment\": \"ENTER_FAKE_ROOM\", \"reverb_preset\": \"REVERB_FAKE_ROOM\", \"trigger_polygons_gltf\": " << polys
+      << ", \"one_shot_pool\": [{\"cue\": \"BL_LVL_FAKE.PP_KNOCK\", \"delay_min\": 1.0, \"delay_max\": 2.0, \"distance_min\": 2000.0, \"distance_max\": 2000.0, \"looping\": true}]}],\n"
+      << "\"reverb_presets\": {\"REVERB_FAKE_ROOM\": {\"mixer_preset\": {\"Priority\": 200.0, \"FadeInTime\": 0.25, \"FadeOutTime\": 0.25, \"Duration\": -1.0},"
+      << " \"dsp_by_category\": {\"MASTER_WET\": {\"Volume\": {\"Volume\": 1.0}, \"Reverb\": {\"Room\": -500.0, \"RoomHF\": -300.0, \"RoomRolloffFactor\": 0.0,"
+      << " \"DecayTime\": 1.5, \"DecayHFRatio\": 0.8, \"ReflectionsLevel\": -700.0, \"ReflectionsDelay\": 0.02, \"Level\": -600.0, \"Delay\": 0.03,"
+      << " \"Diffusion\": 50.0, \"Density\": 50.0, \"HFReference\": 5000.0}, \"Echo\": {\"Delay\": 500.0, \"DecayRatio\": 0.5, \"WetMix\": 0.0, \"DryMix\": 1.0}}}}},\n"
+      << "\"categories\": {\"Master\": {\"DSPEffectConfig\": 0}}}\n";
+    return path;
+}
+
+static int liveRecVoices(const Rec& r) { int n = 0; for (const auto& kv : r.v) n += kv.second.live ? 1 : 0; return n; }
+
+static void testLifecycle() {
+    std::printf("[map audio lifecycle]\n");
+    const std::string fake = writeFakeMap();
+    const std::string content = kRoot + "/../content/";
+    Rec rec; game::SoundCues cues; cues.load(&rec, content);
+    Vec3 pawn{0, 0, 0};
+    cues.setResolver([&](int owner, const std::string&, const Vec3& off, Vec3& out) { if (owner != 0) return false; out = pawn + off; return true; });
+    game::AmbientAudio amb;
+    const size_t baseCues = cues.cueCount();
+    const int basePresets = cues.mixer().presetCount();
+    const Vec3 streetsSpawn{363.5f, -724.5f, -341.8f};      // a Streets spawn (DEC_ROOM_LOWER)
+    struct MapCase { const char* name; std::string path; int cues, presets, emitters, zones, pools; Vec3 spot; const char* reverb; };
+    const MapCase maps[2] = {
+        {"MP_IAC_Streets", streetsAudio(), 32, 10, 70, 9, 11, streetsSpawn, "REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER"},
+        {"FAKE_TEST_MAP", fake, 2, 1, 3, 1, 1, Vec3{0, -1.0f, 0}, "REVERB_FAKE_ROOM"}};
+    bool allClean = true;
+    for (int cycle = 0; cycle < 6; ++cycle)
+        for (const MapCase& mc : maps) {
+            const bool ok = amb.load(mc.path, content, cues, &rec);
+            CHECK(ok && cues.mapCueCount() == mc.cues && cues.mixer().mapPresetCount() == mc.presets && amb.emitterCount() == mc.emitters &&
+                  amb.zoneCount() == mc.zones && amb.poolCount() == mc.pools,
+                  "cycle %d %s: %d cues / %d presets / %d emitters / %d zones / %d pools (%d/%d/%d/%d/%d)", cycle, mc.name,
+                  mc.cues, mc.presets, mc.emitters, mc.zones, mc.pools, cues.mapCueCount(), cues.mixer().mapPresetCount(),
+                  amb.emitterCount(), amb.zoneCount(), amb.poolCount());
+            pawn = mc.spot;
+            for (int k = 0; k < 240; ++k) {                       // 4 s: zone touch, bed start, pools, player sounds
+                Vec3 L = mc.spot + Vec3{std::sin(k * 0.05f) * 3.0f, 2.0f, std::cos(k * 0.05f) * 3.0f};
+                cues.setListener(L);
+                amb.tick(1.0f / 60.0f, L, mc.spot, cues);   // pawn: AmbientAudio probes pawn + 1 m
+                if (k % 30 == 0) cues.play("SHOOT", game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f);
+                if (k == 10) cues.play("VEH_OPTIMUS_DRIVE_ONLOAD", game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f, 30.0f);
+                cues.tick(1.0f / 60.0f);
+            }
+            CHECK(cues.mixer().currentReverb() == mc.reverb && amb.activeEmitters() > 0,
+                  "cycle %d %s: zone reverb %s, %d emitters playing", cycle, mc.name, cues.mixer().currentReverb().c_str(), amb.activeEmitters());
+            // unload (map change / return to frontend)
+            amb.unload(cues);
+            cues.stopAll();
+            const bool clean = cues.liveInstances() == 0 && cues.pendingEvents() == 0 && cues.mapCueCount() == 0 &&
+                               cues.cueCount() == baseCues && cues.mixer().presetCount() == basePresets &&
+                               cues.mixer().activeList() == "Default(1)" && cues.mixer().currentReverb().empty() &&
+                               liveRecVoices(rec) == 0 && amb.emitterCount() == 0 && amb.zoneCount() == 0 && amb.poolCount() == 0 &&
+                               !amb.loaded();
+            allClean = allClean && clean;
+            CHECK(clean, "cycle %d %s unload: live %zu pending %zu mapCues %d cues %zu presets %d [%s] voices %d", cycle, mc.name,
+                  cues.liveInstances(), cues.pendingEvents(), cues.mapCueCount(), cues.cueCount(), cues.mixer().presetCount(),
+                  cues.mixer().activeList().c_str(), liveRecVoices(rec));
+        }
+    CHECK(allClean, "12 load/play/unload cycles (Streets <-> synthetic map) all return to the baseline");
+
+    // Loading over a loaded map (no explicit unload) replaces it: no duplicate bed / presets / cues.
+    amb.load(streetsAudio(), content, cues, &rec);
+    cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f);
+    const size_t oneBed = cues.liveInstances();
+    amb.load(streetsAudio(), content, cues, &rec);
+    cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f);
+    CHECK(cues.liveInstances() == oneBed && cues.mapCueCount() == 32 && cues.mixer().mapPresetCount() == 10,
+          "reload without unload: one bed (%zu instances, was %zu), 32 map cues, 10 presets", cues.liveInstances(), oneBed);
+
+    // Match reset on the same map: player sounds stop, the bed keeps playing, the zone scene re-begins on re-touch
+    // (pools restart, the reverb slot and preset ref-counts are unchanged).
+    pawn = streetsSpawn;
+    for (int k = 0; k < 60; ++k) { cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f); }
+    cues.play("SHOOT", game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f);
+    cues.play("VEH_OPTIMUS_DRIVE_ONLOAD", game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f, 30.0f);
+    std::vector<int> bed;
+    for (int i = 0; i < amb.emitterCount(); ++i) bed.push_back(amb.emitterInstance(i));
+    const std::string listBefore = cues.mixer().activeList(), reverbBefore = cues.mixer().currentReverb();
+    CHECK(amb.poolsRunning(), "pools run before the reset");
+    int stopped = cues.stopNonMapInstances();
+    amb.resetMatch();
+    bool bedSame = true;
+    for (int i = 0; i < amb.emitterCount(); ++i) bedSame = bedSame && amb.emitterInstance(i) == bed[(size_t)i] && (bed[(size_t)i] < 0 || cues.playing(bed[(size_t)i]));
+    CHECK(stopped >= 2 && cues.activeInstances("SHOOT") == 0 && cues.activeInstances("VEH_OPTIMUS_DRIVE_ONLOAD") == 0,
+          "match reset stops the player sounds (%d)", stopped);
+    CHECK(bedSame && !amb.poolsRunning() && cues.mixer().activeList() == listBefore && cues.mixer().currentReverb() == reverbBefore,
+          "match reset keeps the bed and the reverb; pools stop");
+    for (int k = 0; k < 3; ++k) { cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f); }
+    CHECK(amb.poolsRunning() && cues.mixer().activeList() == listBefore, "re-touch after reset: scene re-begins, no duplicate preset enable [%s]",
+          cues.mixer().activeList().c_str());
+    amb.unload(cues); cues.stopAll();
+
+    // Real backend: voices and resident decoded PCM return to the baseline after each map unload.
+    IAudio* a = createAudio();
+    if (!a || !a->reportsVoices()) { std::printf("  SKIP backend: no audio device\n"); return; }
+    game::SoundCues rc; rc.load(a, content);
+    game::AmbientAudio ramb;
+    const size_t baseBytes = a->residentBytes();
+    size_t peakBytes = 0;
+    bool backendClean = true;
+    for (int cycle = 0; cycle < 4; ++cycle) {
+        const MapCase& mc = maps[cycle % 2];
+        ramb.load(mc.path, content, rc, a);
+        peakBytes = std::max(peakBytes, a->residentBytes());
+        for (int k = 0; k < 30; ++k) {
+            rc.setListener(mc.spot); ramb.tick(1.0f / 30.0f, mc.spot, mc.spot, rc);
+            if (k % 10 == 0) rc.play("SHOOT", mc.spot, 0.0f);
+            rc.tick(1.0f / 30.0f);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(60));
+        const int during = a->activeVoices();
+        ramb.unload(rc); rc.stopAll();
+        const int after = a->activeVoices();
+        const size_t bytes = a->residentBytes();
+        backendClean = backendClean && after == 0 && bytes == baseBytes;
+        std::printf("  backend cycle %d %-14s voices %d -> %d, PCM peak %.1f MB -> %.1f MB (base %.1f MB)\n", cycle, mc.name, during, after,
+                    peakBytes / 1048576.0, bytes / 1048576.0, baseBytes / 1048576.0);
+        CHECK(during > 0 && after == 0 && bytes == baseBytes, "backend cycle %d %s: %d voices -> %d after unload; PCM %zu -> %zu bytes (base %zu)",
+              cycle, mc.name, during, after, peakBytes, bytes, baseBytes);
+    }
+    CHECK(backendClean && peakBytes > baseBytes, "map samples are released at unload (peak %.1f MB over a %.1f MB base)",
+          (peakBytes - baseBytes) / 1048576.0, baseBytes / 1048576.0);
+    delete a;
+}
+
+// ---------------------------------------------------------------- frontend audio (M05)
+static void testFrontend() {
+    std::printf("[frontend audio]\n");
+    const std::string content = kRoot + "/../content/";
+    Rec rec; game::SoundCues cues; cues.load(&rec, content);
+    game::FrontendAudio fe(cues);
+    auto tick = [&](float secs) { for (float t = 0; t < secs - 1e-4f; t += 1.0f / 30.0f) { fe.tick(1.0f / 30.0f); cues.tick(1.0f / 30.0f); } };
+    // UI sounds by GFx name (frontend_audio.json gfx_ui_sounds)
+    assets::Json fa = loadJson(kMan + "frontend_audio.json");
+    const assets::Json& g = fa["gfx_ui_sounds (names passed to Sound.PlaySound in AS, matched to cue names)"];
+    int named = 0;
+    for (const auto& kv : g.obj) {
+        ++named;
+        CHECK(fe.uiCueFor(kv.first.c_str()) == kv.second["cue"].asString(), "GFx sound %s -> %s", kv.first.c_str(), kv.second["cue"].asString().c_str());
+    }
+    CHECK(named == 16, "16 GFx sound names (%d)", named);
+    int f0 = rec.n;
+    int b1 = fe.playUiSound("BUTTON_ACCEPT");
+    CHECK(b1 >= 0 && rec.n > f0 && !rec.v[f0].p.positional, "BUTTON_ACCEPT plays 2D (%d voices)", rec.n - f0);
+    int b2 = fe.playUiSound("BUTTON_ACCEPT");
+    CHECK(fe.stopUiSound("BUTTON_ACCEPT", 0.0f) && !cues.playing(b1) && cues.playing(b2), "StopSound stops the first (oldest) instance only");
+    CHECK(fe.playUiSound("NOT_A_SOUND") == -1, "unknown UI sound name -> nothing");
+    int silent = fe.playUiSound("PICKUP_DMG_MULTIPLIER_DECREASE");
+    CHECK(silent >= 0 && cues.cueDef("BL_HUD_INTERFACE.PICKUP_DMG_MULTIPLIER_DECREASE")->events.empty(), "authored-silent cue plays nothing");
+
+    // Music: SeqAct_PlayMusic tracks of the UI levels
+    game::MusicTrack fr, lobby, party;
+    CHECK(game::FrontendAudio::frontendTrack("UI_FrontEnd_m", fr) && fr.cue == "BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01" && fr.fadeIn == 0.25f &&
+          game::FrontendAudio::frontendTrack("UI_Lobby_m", lobby) && game::FrontendAudio::frontendTrack("UI_PartyLobby_m", party) &&
+          party.fadeOut == 0.0f, "authored UI-level tracks");
+    { game::MusicTrack none; CHECK(!game::FrontendAudio::frontendTrack("MP_IAC_Streets", none), "a match map authors no frontend track"); }
+    game::FrontendAudio::frontendTrack("UI_FrontEnd_m", fr);
+    game::MusicPlayer& mp = fe.music();
+    CHECK(!cues.wavesResident(fr.cue.c_str()), "streamed track not decoded before it plays");
+    mp.playMusic(fr);
+    CHECK(mp.state() == game::MusicPlayer::State::Queued, "PlayMusic queues");
+    tick(1.0f / 30.0f);
+    const int m1 = mp.musicInstance();
+    CHECK(mp.state() == game::MusicPlayer::State::Playing && m1 >= 0 && cues.wavesResident(fr.cue.c_str()),
+          "first track starts at once (SpazTimer 0), decoded on demand");
+    mp.playMusic(fr);
+    CHECK(mp.musicInstance() == m1 && mp.state() == game::MusicPlayer::State::Playing, "same cue again: no restart");
+    game::MusicTrack low = lobby; low.priority = -1;
+    mp.playMusic(low);
+    CHECK(mp.state() == game::MusicPlayer::State::Playing && mp.queued().cue == fr.cue, "lower priority track ignored");
+    mp.playMusic(lobby);
+    CHECK(mp.state() == game::MusicPlayer::State::Queued, "new track queued behind the 5 s SpazTimer");
+    tick(4.5f);
+    CHECK(mp.musicInstance() == m1, "still the old track at 4.5 s");
+    tick(0.6f);
+    const int m2 = mp.musicInstance();
+    CHECK(m2 >= 0 && m2 != m1 && cues.playing(m1), "crossfade at the SpazTimer (old track fading over its FadeOut 1.0)");
+    tick(1.1f);
+    tick(1.0f / 30.0f);
+    CHECK(!cues.playing(m1) && !cues.wavesResident(fr.cue.c_str()) && cues.wavesResident(lobby.cue.c_str()),
+          "old track ended; its streamed waves released");
+    // root-loop timeline: MP_LOBBY_MX events at 0 / 173.6 / 291.4 s, wrap at 390.7 s
+    int launches = 0;
+    const int before = rec.n;
+    tick(392.0f);
+    launches = rec.n - before;
+    CHECK(launches == 3, "lobby timeline: waves 2 and 3 at 173.6 / 291.4 s, wave 1 again after the 390.7 s wrap (%d new voices)", launches);
+    CHECK(cues.playing(m2), "root-looping music instance never retires");
+    // boredom restart
+    game::MusicTrack bored = party; bored.boredom = 2.0f;
+    mp.playMusic(bored, true);        // IgnoreSpazTimer
+    tick(1.0f / 30.0f);
+    const int m3 = mp.musicInstance();
+    tick(2.1f);
+    CHECK(m3 >= 0 && mp.musicInstance() != m3 && mp.current().cue == bored.cue, "BoredomTime re-crossfades the same track");
+    mp.stopMusic(0.5f);
+    CHECK(mp.state() == game::MusicPlayer::State::Stopped && mp.musicInstance() < 0, "StopMusic -> Stopped");
+    tick(0.7f);
+    CHECK(cues.activeInstances(bored.cue.c_str()) == 0 && !cues.wavesResident(bored.cue.c_str()), "stopped track faded out and released");
+    // stinger priority
+    const char* st = "BL_HUD_INTERFACE.STNG_ESCALATION_WAVE_OVER";   // root Priority 0
+    CHECK(mp.playStinger(st) && !mp.playStinger(st), "a stinger of equal priority does not interrupt the playing one");
+    // level change
+    mp.playMusic(fr); tick(0.1f);
+    fe.onLevelChange();
+    tick(1.0f / 30.0f);
+    CHECK(mp.state() == game::MusicPlayer::State::Stopped && cues.activeInstances(fr.cue.c_str()) == 0 && cues.activeInstances(st) == 0,
+          "level change: music and stinger stop at once");
+
+    // Real backend: streamed decode cost and release
+    IAudio* a = createAudio();
+    if (!a || !a->reportsVoices()) { std::printf("  SKIP backend: no audio device\n"); return; }
+    game::SoundCues rc; rc.load(a, content);
+    game::FrontendAudio rfe(rc);
+    const size_t base = a->residentBytes();
+    {   // prefetch during a "loading screen": the decode happens there, the first play is then free
+        auto p0 = std::chrono::steady_clock::now();
+        CHECK(rc.prefetch(lobby.cue.c_str()), "prefetch decodes a streamed track");
+        const double pms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - p0).count();
+        rc.tick(1.0f / 30.0f);
+        CHECK(rc.wavesResident(lobby.cue.c_str()), "prefetched waves stay pinned until played");
+        auto q0 = std::chrono::steady_clock::now();
+        rfe.music().playMusic(lobby); rfe.tick(1.0f / 30.0f);
+        const double qms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - q0).count();
+        std::printf("  MP_LOBBY_MX prefetch %.0f ms, then first play %.1f ms\n", pms, qms);
+        CHECK(qms < 20.0, "first play after prefetch has no decode stall (%.1f ms)", qms);
+        rfe.music().stopMusic(0.0f); rc.tick(1.0f / 30.0f);
+        CHECK(!rc.wavesResident(lobby.cue.c_str()) && a->residentBytes() == base, "released after stop");
+    }
+    auto t0 = std::chrono::steady_clock::now();
+    rfe.music().playMusic(fr, true);   // IgnoreSpazTimer: the lobby play above left SpazTimer at 5 s (StopMusic keeps it)
+    rfe.tick(1.0f / 30.0f);
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    const size_t during = a->residentBytes();
+    rfe.music().stopMusic(0.0f);
+    rc.tick(1.0f / 30.0f);
+    std::printf("  FRONTEND_MX_ORBIT_01 first play: %.0f ms decode, +%.1f MB resident, after stop %+.1f MB\n", ms,
+                (during - base) / 1048576.0, ((double)a->residentBytes() - (double)base) / 1048576.0);
+    CHECK(during > base && a->residentBytes() == base, "streamed music decoded on play, released after stop");
+    delete a;
+}
+
+// ---------------------------------------------------------------- pickup / map-event audio ownership (M05 phase 4)
+static void testMapEventAudio() {
+    std::printf("[pickup / map-event audio]\n");
+    assets::Json inv = loadJson(kMan + "streets_actor_inventory.json");
+    assets::Json mv = loadJson(kMan + "streets_movers.json");
+    assets::Json ks = loadJson(kMan + "streets_kismet.json");
+    assets::Json aj = loadJson(streetsAudio());
+    // Every placed AudioComponent belongs to an AmbientSound (the 40 point emitters the bed plays); none to a mover
+    // or a mode-gated actor.
+    std::set<std::string> movers;
+    for (size_t i = 0; i < mv["movers"].size(); ++i) movers.insert(mv["movers"][i]["actor"].asString());
+    int ambientAc = 0, otherAc = 0, moverAc = 0;
+    for (size_t i = 0; i < inv["actors"].size(); ++i) {
+        const assets::Json& act = inv["actors"][i];
+        for (size_t c = 0; c < act["components"].size(); ++c)
+            if (act["components"][c]["class"].asString() == "AudioComponent") {
+                if (act["class"].asString() == "AmbientSound") ++ambientAc; else ++otherAc;
+                if (movers.count(act["actor"].asString())) ++moverAc;
+            }
+    }
+    CHECK(ambientAc == 40 && (int)aj["emitters"]["point"].size() == 40 && otherAc == 0 && moverAc == 0,
+          "placed AudioComponents: %d on AmbientSound (= 40 point emitters), %d elsewhere, %d on movers", ambientAc, otherAc, moverAc);
+    // No emitter actor of the bed is a mover; movers reference no sound.
+    int emitterOnMover = 0;
+    for (const char* k : {"point", "line", "volume"})
+        for (size_t i = 0; i < aj["emitters"][k].size(); ++i) {
+            std::string a2 = aj["emitters"][k][i]["actor"].asString();
+            for (const auto& m : movers) if (!a2.empty() && m.size() >= a2.size() && m.compare(m.size() - a2.size(), a2.size(), a2) == 0) ++emitterOnMover;
+        }
+    std::ifstream mf(kMan + "streets_movers.json"); std::stringstream mss; mss << mf.rdbuf();
+    const std::string mtxt = mss.str();
+    CHECK(emitterOnMover == 0 && mtxt.find("SoundCue") == std::string::npos && mtxt.find("AudioComponent") == std::string::npos,
+          "movers carry no authored sound (%d bed emitters on movers)", emitterOnMover);
+    // Audio Kismet is not mode-gated: no audio op's trigger chain passes a SeqCond (the only GameRuleActive ops
+    // gate the objective-base ToggleHidden in BASE).
+    int gated = 0;
+    for (size_t i = 0; i < ks["audio_ops"].size(); ++i) {
+        const assets::Json& op = ks["audio_ops"][i];
+        for (size_t c = 0; c < op["trigger_chains"].size(); ++c)
+            for (size_t k = 0; k < op["trigger_chains"][c].size(); ++k) {
+                const std::string o = op["trigger_chains"][c][k]["op"].asString() + op["trigger_chains"][c][k]["event"].asString();
+                if (o.find("SeqCond") != std::string::npos) ++gated;
+            }
+    }
+    CHECK(ks["audio_ops"].size() == 29 && gated == 0, "29 Kismet audio ops, none behind a game-rule condition (%d)", gated);
+
+    // Pickup event stream (Gameplay PickupEvent order: Taken ... Respawned ... Taken): one PickupSound per Taken,
+    // on the receiving pawn; Respawned plays nothing (Systems is not called for it).
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    Vec3 pawn{5, 0, 5};
+    cues.setResolver([&](int owner, const std::string&, const Vec3& off, Vec3& out) { if (owner != 0) return false; out = pawn + off; return true; });
+    struct Ev { const char* cls; bool taken; };
+    const Ev evs[] = {{"TnAmmoCratePickupFactory", true}, {"TnAmmoCratePickupFactory", false}, {"TnHealthPickupFactory", true},
+                      {"TnHealthPickupFactory", false}, {"TnHealthPickupFactory", true}, {"TnOverShieldPickupFactory", true},
+                      {"TnOverShieldPickupFactory", false}, {"TnGameObjectivePickupFactoryFlag", true}};
+    int plays = 0, expected = 0;
+    for (const Ev& e : evs) {
+        if (!e.taken) continue;                                   // Respawned: nothing to play
+        const char* snd = game::PickupPresentation::pickupSoundFor(e.cls);
+        if (snd) ++expected;
+        const int before = cues.activeInstances(snd ? snd : "");
+        const int id = game::PickupPresentation::onTaken(e.cls, cues, game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f);
+        if (id >= 0) ++plays;
+        if (snd) CHECK(cues.activeInstances(snd) == before + 1, "%s Taken: exactly one %s instance", e.cls, snd);
+        for (int k = 0; k < 10; ++k) cues.tick(1.0f / 30.0f);
+    }
+    CHECK(plays == expected && expected == 4, "4 sounding takes (the flag inventory authors no PickupSound) (%d)", plays);
+    for (int k = 0; k < 300; ++k) cues.tick(1.0f / 30.0f);
+    CHECK(cues.liveInstances() == 0 && cues.pendingEvents() == 0, "pickup sounds retire (no leak)");
+}
+
+// ---------------------------------------------------------------- M06: level manifests + frontend lifecycle
+// The level-scoped host World uses (LevelAudioHost): UI levels from the compiled-in Systems manifests, Streets from
+// the AssetTools manifest + Systems cue limits, a synthetic map from a file; the boot -> frontend -> lobby -> match
+// -> lobby -> frontend lifecycle repeated, checking the baseline after every unload and the per-stage maxima.
+struct StageMax { size_t live = 0, pending = 0; int voices = 0, scriptSounds = 0, pools = 0; double pcm = 0; };
+static void stageTick(game::LevelAudioHost& host, game::SoundCues& cues, const Vec3& L, const Vec3& pawn, float dt, StageMax& m,
+                      IAudio* a = nullptr) {
+    cues.setListener(L);
+    host.tick(dt, L, pawn);
+    cues.tick(dt);
+    const auto s = host.state();
+    m.live = std::max(m.live, cues.liveInstances());
+    m.pending = std::max(m.pending, cues.pendingEvents());
+    m.scriptSounds = std::max(m.scriptSounds, s.scriptSounds);
+    m.pools = std::max(m.pools, s.poolsPlaying);
+    if (a) { m.voices = std::max(m.voices, a->activeVoices()); m.pcm = std::max(m.pcm, a->residentBytes() / 1048576.0); }
+}
+static bool atBaseline(const game::LevelAudioHost& host, const game::SoundCues& cues, size_t baseCues, int basePresets, std::string& why) {
+    const auto s = host.state();
+    char b[512];
+    std::snprintf(b, sizeof b, "live %zu pending %zu levelCues %d cues %zu presets %d [%s] reverb '%s' music %d/%d script %d pools %d timelines %d",
+                  cues.liveInstances(), cues.pendingEvents(), cues.mapCueCount(), cues.cueCount(), cues.mixer().presetCount(),
+                  cues.mixer().activeList().c_str(), s.reverb.c_str(), s.musicState, s.musicInstance, host.ambient().script().opCount(),
+                  s.poolsPlaying, s.timelines);
+    why = b;
+    return cues.liveInstances() == 0 && cues.pendingEvents() == 0 && cues.mapCueCount() == 0 && cues.cueCount() == baseCues &&
+           cues.mixer().presetCount() == basePresets && cues.mixer().activeList() == "Default(1)" && s.reverb.empty() &&
+           s.musicState == 0 && s.musicInstance < 0 && host.ambient().script().opCount() == 0 && s.poolsPlaying == 0 &&
+           s.timelines == 0 && s.level.empty() && !host.ambient().loaded();
+}
+
+static std::string liveRecCues(const Rec& r) {
+    std::string s;
+    for (const auto& kv : r.v) if (kv.second.live) s += std::to_string(kv.first) + " ";
+    return s;
+}
+static void testLevelLifecycle() {
+    std::printf("[level manifests + frontend lifecycle]\n");
+    const std::string content = kRoot + "/../content/";
+    const std::string fake = writeFakeMap();
+    const char* kMusic[3] = {"BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01", "BL_LVL_HUD_INTERFACE.MP_LOBBY_MX", "BL_LVL_HUD_INTERFACE.MP_PARTY_LOBBY_MX"};
+    auto musicInstances = [&](game::SoundCues& c) { int n = 0; for (const char* m : kMusic) n += c.activeInstances(m); return n; };
+
+    // Manifest inventory.
+    CHECK(game::AmbientAudio::levelManifestCount() == 5 && game::AmbientAudio::hasLevelManifest("UI_FrontEnd_m") &&
+          game::AmbientAudio::hasLevelManifest("UI_PartyLobby_m") && game::AmbientAudio::hasLevelManifest("UI_Lobby_m") &&
+          game::AmbientAudio::hasLevelManifest("UI_CampaignLobby_m") && game::AmbientAudio::hasLevelManifest("MP_IAC_Streets"),
+          "5 Systems level manifests (4 UI levels + Streets cue limits)");
+    { game::MusicTrack fr, lob, party, none;
+      CHECK(game::FrontendAudio::frontendTrack("UI_FrontEnd_m", fr) && fr.cue == kMusic[0] && fr.fadeIn == 0.25f && fr.fadeOut == 1.0f &&
+            game::FrontendAudio::frontendTrack("UI_Lobby_m", lob) && lob.cue == kMusic[1] && lob.fadeIn == 0.0f &&
+            game::FrontendAudio::frontendTrack("UI_PartyLobby_m", party) && party.cue == kMusic[2] && party.fadeOut == 0.0f &&
+            !game::FrontendAudio::frontendTrack("MP_IAC_Streets", none), "authored level music read from the manifests"); }
+
+    // Mixer: every category's volume; MUSIC_DRY 0.708 [CONF]; Master changes only through masterScale (CINE_MUTE).
+    { game::SoundMixer m;
+      CHECK(m.categoryCount() == 47 && near(m.categoryVolume("MUSIC_DRY"), 0.7079f) && near(m.categoryVolume("Master"), 0.7079f) &&
+            near(m.masterScale(), 1.0f) && near(m.categoryVolume("SFX_DRY_HUD"), 1.0f), "47 categories, MUSIC_DRY 0.708, master scale 1 (%d)", m.categoryCount());
+      m.enable("CINE_MUTE_FOR_BINK");
+      CHECK(near(m.masterScale(), 0.0f) && !std::strcmp(m.categoryTarget("Master"), "CINE_MUTE_FOR_BINK"), "CINE_MUTE_FOR_BINK: Master 0 at once (FadeIn 0)");
+      m.disable("CINE_MUTE_FOR_BINK", false); step(m, 0.5f);
+      CHECK(m.masterScale() > 0.4f && m.masterScale() < 0.6f, "movie end: Master returns over FadeOut 1 s (%.2f at 0.5 s)", m.masterScale());
+      step(m, 0.6f);
+      CHECK(near(m.masterScale(), 1.0f), "... and is back at 1 after 1 s");
+      float thr, att, rel, mk;
+      CHECK(game::SoundMixer::masterCompressor(thr, att, rel, mk) && thr == -6.0f && att == 10.0f && rel == 50.0f && mk == 0.0f,
+            "Master compressor is global data (-6 dB / 10 ms / 50 ms)"); }
+
+    Rec rec; game::SoundCues cues; cues.load(&rec, content);
+    Vec3 pawn{0, 0, 0};
+    cues.setResolver([&](int owner, const std::string&, const Vec3& off, Vec3& out) { if (owner != 0) return false; out = pawn + off; return true; });
+    game::LevelAudioHost host(cues);
+    host.attach(&rec, kRoot);
+    const size_t baseCues = cues.cueCount();
+    const int basePresets = cues.mixer().presetCount();
+    const float dt = 1.0f / 30.0f;
+    StageMax mx;
+    const Vec3 feL{-67.0f, 2.4f, -152.1f};   // CameraActor_6585 (the frontend camera's authored spot)
+
+    // ---- UI_FrontEnd_m: no AssetTools manifest; Systems manifest only.
+    CHECK(host.load("UI_FrontEnd_m") && host.ambient().script().opCount() == 21 && host.ambient().script().linkCount() == 35 &&
+          cues.mapCueCount() == 18 && cues.mixer().mapPresetCount() == 1 && host.ambient().emitterCount() == 0,
+          "UI_FrontEnd_m: 21 ops / 35 links / 18 cues / 1 reverb preset (%d/%d/%d/%d)", host.ambient().script().opCount(),
+          host.ambient().script().linkCount(), cues.mapCueCount(), cues.mixer().mapPresetCount());
+    for (int k = 0; k < 30; ++k) stageTick(host, cues, feL, feL, dt, mx);
+    CHECK(cues.liveInstances() == 0 && host.state().musicState == 0 && host.state().timelines == 0,
+          "frontend: nothing before [FRONTEND START] (no GameplayStarted audio; the movie loader decides)");
+    CHECK(host.event("FsCommand:enterFrontEnd", feL) == 4 && host.event("FsCommand:notAuthored", feL) == 0,
+          "enterFrontEnd reaches music, reveal, reverb, Camera Orbiter");
+    stageTick(host, cues, feL, feL, dt, mx);
+    auto st = host.state();
+    CHECK(st.reverb == "REVERB_TRANS_FRONT_END" && st.music == kMusic[0] && st.musicState == 2 && st.timelines == 1 &&
+          cues.activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_AMB_ORBIT_01_BED_LP") == 1 && st.scriptSounds == 6 && st.poolsPlaying == 2 &&
+          cues.activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_AMB_ORBIT_02_BED_LP") == 0,
+          "FRONTEND START: reverb %s, music %s (state %d), timeline, Iacon bed + 4 surface emitters + the (authored silent) reveal (%d), 2 pools (%d)",
+          st.reverb.c_str(), st.music.c_str(), st.musicState, st.scriptSounds, st.poolsPlaying);
+    // Timeline: Kaon at 240.575 s, loop wrap at 393.551 s.
+    float t = dt;
+    auto runTo = [&](float until) { while (t < until) { stageTick(host, cues, feL, feL, dt, mx); t += dt; } };
+    runTo(240.0f);
+    const int debris = host.ambient().script().fired();
+    runTo(250.0f);
+    st = host.state();
+    CHECK(cues.activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_AMB_ORBIT_02_BED_LP") == 1 &&
+          cues.activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_AMB_ORBIT_01_BED_LP") == 0 &&
+          cues.activeInstances("BL_LVL_HUD_INTERFACE.EMIT_SURFACE_REACTOR") == 0 && st.poolsPlaying == 2,
+          "AUDIO_KAON_AMB: Iacon bed + emitters faded out (2 s / 6 s), Kaon bed on, Kaon pools (%d)", st.poolsPlaying);
+    runTo(400.0f);
+    CHECK(cues.activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_AMB_ORBIT_01_BED_LP") == 1 &&
+          cues.activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_AMB_ORBIT_02_BED_LP") == 0 && host.state().timelinePos < 7.0f,
+          "loop wrap: AUDIO_START refires (Iacon back, Kaon stopped); timeline at %.1f s", host.state().timelinePos);
+    CHECK(musicInstances(cues) == 0 && host.state().musicState == 2, "FRONTEND_MX_ORBIT_01 (379.6 s, no loop) played once and ended; not restarted");
+    // Five more loops: the per-loop state is the same at the same phase (no growth).
+    std::vector<size_t> livePerLoop;
+    for (int loop = 0; loop < 5; ++loop) {
+        runTo(400.0f + 393.551f * (loop + 1));
+        livePerLoop.push_back(cues.liveInstances());
+    }
+    CHECK(*std::max_element(livePerLoop.begin(), livePerLoop.end()) <= livePerLoop.front() + 2 && mx.live < 40 && mx.pending < 40,
+          "6 orbit loops: live instances per loop %zu..%zu, max live %zu, max queued %zu", livePerLoop.front(), livePerLoop.back(), mx.live, mx.pending);
+    CHECK(host.ambient().script().fired() > debris, "timeline events keep firing (%d)", host.ambient().script().fired());
+    // UI sounds + movie mute on top of the level.
+    CHECK(host.playUiSound("BUTTON_ACCEPT") >= 0 && host.playUiSound("BUTTON_BACK") >= 0, "UI navigation sounds play over the frontend");
+    host.setMoviePlaying(true); stageTick(host, cues, feL, feL, dt, mx);
+    CHECK(host.state().masterScale == 0.0f && host.state().movie, "a Bink movie mutes the game mix (CINE_MUTE_FOR_BINK)");
+    host.setMoviePlaying(false);
+    std::string why;
+    host.unload();
+    CHECK(atBaseline(host, cues, baseCues, basePresets, why), "leave frontend: baseline (%s)", why.c_str());
+    CHECK(near(cues.mixer().masterScale(), 1.0f), "unload Flush drops a movie mute too");
+
+    // ---- Lobbies: GameplayStarted -> music, bed, 2 pools.
+    for (const char* lv : {"UI_PartyLobby_m", "UI_Lobby_m", "UI_CampaignLobby_m"}) {
+        CHECK(host.load(lv), "%s loads", lv);
+        stageTick(host, cues, Vec3{0, 0, 0}, Vec3{0, 0, 0}, dt, mx);
+        stageTick(host, cues, Vec3{0, 0, 0}, Vec3{0, 0, 0}, dt, mx);
+        st = host.state();
+        game::MusicTrack tr; game::FrontendAudio::frontendTrack(lv, tr);
+        CHECK(st.music == tr.cue && st.musicState == 2 && st.musicInstance >= 0 && st.scriptSounds == 1 && st.poolsPlaying == 2 && st.reverb.empty(),
+              "%s: GameplayStarted -> music %s, bed (%d), 2 pools (%d), no reverb", lv, st.music.c_str(), st.scriptSounds, st.poolsPlaying);
+        for (int k = 0; k < 30 * 60; ++k) stageTick(host, cues, Vec3{0, 0, 0}, Vec3{0, 0, 0}, dt, mx);
+        CHECK(host.ambient().script().oneShots() >= 4, "%s: pool one-shots over 60 s (%d)", lv, host.ambient().script().oneShots());
+        host.unload();
+        CHECK(atBaseline(host, cues, baseCues, basePresets, why), "%s unload: baseline (%s)", lv, why.c_str());
+    }
+
+    // ---- The full lifecycle, repeated: boot -> frontend -> party lobby -> lobby -> Streets (+ resets) -> lobby ->
+    //      frontend -> synthetic map -> ... Baseline after every unload; per-stage maxima must not grow.
+    const Vec3 streetsSpawn{363.5f, -724.5f, -341.8f};
+    struct Stage { const char* level; const char* path; const char* trigger; float secs; Vec3 L; };
+    const Stage stages[] = {
+        {"UI_FrontEnd_m", "", "FsCommand:enterFrontEnd", 20.0f, feL},
+        {"UI_PartyLobby_m", "", nullptr, 8.0f, {0, 0, 0}},
+        {"UI_Lobby_m", "", nullptr, 8.0f, {0, 0, 0}},
+        {"MP_IAC_Streets", "", nullptr, 12.0f, streetsSpawn},
+        {"UI_Lobby_m", "", nullptr, 5.0f, {0, 0, 0}},
+        {"UI_FrontEnd_m", "", "MovieStopped:FMV_intro", 10.0f, feL},
+        {"FAKE_TEST_MAP", "fake", nullptr, 6.0f, {0, -1.0f, 0}},
+    };
+    const int kStages = (int)(sizeof(stages) / sizeof(stages[0]));
+    const int kCycles = 30;
+    std::vector<StageMax> first(kStages), last(kStages);
+    bool allBase = true, noMusicInMatch = true;
+    for (int cycle = 0; cycle < kCycles; ++cycle)
+        for (int si = 0; si < kStages; ++si) {
+            const Stage& sg = stages[si];
+            StageMax m;
+            const bool ok = host.load(sg.level, std::string(sg.path) == "fake" ? fake : std::string());
+            if (!ok) { CHECK(false, "cycle %d %s load", cycle, sg.level); continue; }
+            if (sg.trigger) host.event(sg.trigger, sg.L);
+            pawn = sg.L;
+            const int n = (int)(sg.secs * 30.0f);
+            for (int k = 0; k < n; ++k) {
+                stageTick(host, cues, sg.L, sg.L, dt, m);
+                if (!std::strcmp(sg.level, "MP_IAC_Streets")) {
+                    if (k % 15 == 0) cues.play("SHOOT", game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f);
+                    if (k == 60) game::PickupPresentation::onTaken("TnHealthPickupFactory", cues, game::SoundCues::Emitter{pawn, 0, {0, 0, 0}, ""}, 0.0f);
+                    if (k == 180) { cues.stopNonMapInstances(); host.resetMatch(); }      // round reset
+                    if (k % 30 == 0) noMusicInMatch = noMusicInMatch && musicInstances(cues) == 0 && host.state().musicState == 0;
+                }
+                if (k == 20) host.playUiSound("BUTTON_UP");
+            }
+            host.unload();
+            const bool base = atBaseline(host, cues, baseCues, basePresets, why);
+            allBase = allBase && base;
+            if (!base) CHECK(false, "cycle %d %s unload: %s voices %d [%s]", cycle, sg.level, why.c_str(), liveRecVoices(rec), liveRecCues(rec).c_str());
+            if (cycle == 0) first[(size_t)si] = m;
+            if (cycle == kCycles - 1) last[(size_t)si] = m;
+        }
+    CHECK(allBase, "%d lifecycle cycles x %d levels: every unload returns to the baseline", kCycles, kStages);
+    CHECK(noMusicInMatch, "no frontend / lobby music underneath the match");
+    bool flat = true;
+    for (int si = 0; si < kStages; ++si) {
+        std::printf("  stage %-16s live max %zu -> %zu, queued max %zu -> %zu, script sounds %d -> %d, pools %d -> %d\n", stages[si].level,
+                    first[(size_t)si].live, last[(size_t)si].live, first[(size_t)si].pending, last[(size_t)si].pending,
+                    first[(size_t)si].scriptSounds, last[(size_t)si].scriptSounds, first[(size_t)si].pools, last[(size_t)si].pools);
+        flat = flat && last[(size_t)si].live <= first[(size_t)si].live + 3 && last[(size_t)si].scriptSounds <= first[(size_t)si].scriptSounds &&
+               last[(size_t)si].pools <= first[(size_t)si].pools;
+    }
+    CHECK(flat, "per-stage maxima do not grow from cycle 1 to cycle %d", kCycles);
+
+    // ---- Real backend: voices, decoded PCM (incl. streamed music) back to the base after every level.
+    IAudio* a = createAudio();
+    if (!a || !a->reportsVoices()) { std::printf("  SKIP backend: no audio device\n"); return; }
+    {
+        game::SoundCues rc; rc.load(a, content);
+        game::LevelAudioHost rh(rc);
+        rh.attach(a, kRoot);
+        const size_t baseBytes = a->residentBytes();
+        bool clean = true;
+        std::vector<StageMax> f2(kStages), l2(kStages);
+        const int kRealCycles = 12;
+        for (int cycle = 0; cycle < kRealCycles; ++cycle)
+            for (int si = 0; si < kStages; ++si) {
+                const Stage& sg = stages[si];
+                StageMax m;
+                if (si == 2) rh.prefetch("UI_Lobby_m");     // loading screen into the lobby: decode its music early
+                rh.load(sg.level, std::string(sg.path) == "fake" ? fake : std::string());
+                if (sg.trigger) rh.event(sg.trigger, sg.L);
+                for (int k = 0; k < 45; ++k) {
+                    stageTick(rh, rc, sg.L, sg.L, dt, m, a);
+                    if (!std::strcmp(sg.level, "MP_IAC_Streets") && k % 15 == 0) rc.play("SHOOT", sg.L, 0.0f);
+                    if (k == 5) rh.playUiSound("BUTTON_ACCEPT");
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(30));
+                const int during = a->activeVoices();
+                rh.unload();
+                const int after = a->activeVoices();
+                const size_t bytes = a->residentBytes();
+                const bool ok = after == 0 && bytes == baseBytes && rc.liveInstances() == 0 && rc.mapCueCount() == 0;
+                clean = clean && ok;
+                if (!ok || cycle == 0)
+                    std::printf("  backend cycle %d %-16s voices %d (max %d) -> %d, PCM max %.1f MB -> %.1f MB (base %.1f)\n", cycle, sg.level,
+                                during, m.voices, after, m.pcm, bytes / 1048576.0, baseBytes / 1048576.0);
+                if (cycle == 0) f2[(size_t)si] = m;
+                if (cycle == kRealCycles - 1) l2[(size_t)si] = m;
+            }
+        CHECK(clean, "backend: %d cycles x %d levels, voices 0 and PCM back to %.1f MB after every unload", kRealCycles, kStages,
+              baseBytes / 1048576.0);
+        bool flatB = true;
+        for (int si = 0; si < kStages; ++si) {
+            std::printf("  backend stage %-16s voices max %d -> %d, PCM max %.1f -> %.1f MB\n", stages[si].level, f2[(size_t)si].voices,
+                        l2[(size_t)si].voices, f2[(size_t)si].pcm, l2[(size_t)si].pcm);
+            flatB = flatB && l2[(size_t)si].voices <= f2[(size_t)si].voices + 4 && l2[(size_t)si].pcm <= f2[(size_t)si].pcm + 0.01;
+        }
+        CHECK(flatB, "backend per-stage voice / PCM maxima do not grow over %d cycles", kRealCycles);
+    }
+    delete a;
+}
+
+// The frontend seam (agents/frontend IFrontendAudio) driven exactly as FrontendRuntime::updateAudio does:
+// levelChange() on every travel, uiLevelStarted(level) at a lobby's arrival / at the frontend's [FRONTEND START].
+static void testFrontendSeam() {
+    std::printf("[frontend seam (FrontendAudioRuntime)]\n");
+    Rec rec;
+    game::FrontendAudioRuntime rt(&rec, kRoot);
+    const size_t baseCues = rt.cues().cueCount();
+    const int basePresets = rt.cues().mixer().presetCount();
+    const float dt = 1.0f / 30.0f;
+    auto run = [&](float secs) { for (int k = 0; k < (int)(secs * 30.0f); ++k) rt.tick(dt); };
+    std::string why;
+    // Boot: logos / intro (movies) -> nothing loaded yet; the movie mutes the game mix.
+    rt.setMoviePlaying(true); run(1.0f);
+    CHECK(rt.state().level.empty() && rt.cues().liveInstances() == 0 && rt.state().masterScale == 0.0f, "boot: movies, no level audio, mix muted");
+    rt.setMoviePlaying(false);
+    bool ok = true;
+    for (int cycle = 0; cycle < 20; ++cycle) {
+        rt.uiLevelStarted("UI_FrontEnd_m"); run(0.1f);
+        auto s = rt.state();
+        const bool fe = s.reverb == "REVERB_TRANS_FRONT_END" && s.music == "BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01" && s.timelines == 1 &&
+                        rt.cues().activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_AMB_ORBIT_01_BED_LP") == 1;
+        rt.uiLevelStarted("UI_FrontEnd_m"); run(0.1f);      // repeated report: nothing new
+        const bool once = rt.cues().activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_AMB_ORBIT_01_BED_LP") == 1 && rt.state().musicInstance == s.musicInstance;
+        rt.playUiSound("BUTTON_START"); rt.playUiSound("BUTTON_ACCEPT"); run(3.0f);
+        rt.levelChange();                                          // -> party lobby (loading)
+        const bool b1 = atBaseline(rt.host(), rt.cues(), baseCues, basePresets, why);
+        rt.uiLevelStarted("UI_PartyLobby_m"); run(0.1f);
+        const bool party = rt.state().music == "BL_LVL_HUD_INTERFACE.MP_PARTY_LOBBY_MX" && rt.state().poolsPlaying == 2;
+        rt.playUiSound("BUTTON_DOWN"); run(2.0f);
+        rt.levelChange();
+        const bool b2 = atBaseline(rt.host(), rt.cues(), baseCues, basePresets, why);
+        rt.prefetchLevel("UI_Lobby_m");                            // loading screen into the game lobby
+        rt.uiLevelStarted("UI_Lobby_m"); run(0.1f);
+        const bool lobby = rt.state().music == "BL_LVL_HUD_INTERFACE.MP_LOBBY_MX" && rt.state().poolsPlaying == 2;
+        run(2.0f);
+        rt.levelChange();                                          // -> the match (its own World / audio)
+        const bool b3 = atBaseline(rt.host(), rt.cues(), baseCues, basePresets, why);
+        if (!(fe && once && b1 && party && b2 && lobby && b3))
+            std::printf("  cycle %d: fe %d once %d b1 %d party %d b2 %d lobby %d b3 %d (%s)\n", cycle, fe, once, b1, party, b2, lobby, b3, why.c_str());
+        ok = ok && fe && once && b1 && party && b2 && lobby && b3;
+    }
+    CHECK(ok, "20 x (frontend -> party lobby -> game lobby -> match): authored start, no duplicate on repeated reports, baseline at every travel");
+}
+
 int main() {
+    testFrontendSeam();
+    testLevelLifecycle();
+    testMapEventAudio();
+    testFrontend();
+    testLifecycle();
     testChannelStealing();
     testWorldBed();
     testLoopRuntime();

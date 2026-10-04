@@ -676,6 +676,43 @@ camdis.txt, pcdis.txt via work/pass11/ue3dis.py) and authored data (VEH_SHARED_p
   - ram collision;
   - wheel/tire steering.
 
+## SYSTEMS MILESTONE 06 (2026-10-03) — frontend / loading / level audio lifecycle
+- **Generic level manifests:**
+  - `gen_level_audio.py` → `LevelAudio.inc`, merged with the AssetTools map manifest; one path for every level;
+  - the UI levels' authored Kismet audio, including the frontend's Iacon / Kaon camera timeline;
+  - the lobbies' music, bed and pools;
+  - per-cue-asset limits for every level;
+  - `CookedCueLimits.inc` removed; the Master compressor is global data.
+- **Mixer:** all 47 categories (MUSIC_DRY 0.708 now applied); `CINE_MUTE_FOR_BINK` movie mute.
+- **Lifetime:** `LevelAudioHost` (the level's music player, Kismet sounds, bank, presets; unload releases
+  everything, including streamed music, at once); no frontend music under gameplay.
+- **Contract:**
+  - `FrontendAudioRuntime` mirrors the Frontend lane's `IFrontendAudio` seam 1:1 (standalone, no World);
+  - World exposes the same calls in a match; `setAudio(a, false)` skips the slice map.
+- **Validation:**
+  - suite 544 / 0 (30 + 12 real-device lifecycle cycles, 20 seam cycles, 6 orbit loops);
+  - game soaks 46 + 39 + 181 level transitions, 0 errors, no growth;
+  - wfc_fidelity 194 / 0 / 19.
+- **Handoff and classification:** FIDELITY.md MILESTONE 06.
+
+## SYSTEMS MILESTONE 05 (2026-10-03) — runtime lifecycle for frontend → loading → match → return
+- **Map audio lifecycle:**
+  - `World::loadMapAudio` / `unloadMapAudio` / `resetSystemsForMatch` / `tickAudioOnly`;
+  - unload leaves 0 instances / queued events / map cues / map presets / map samples / voices;
+  - verified over 12 Streets ↔ synthetic-map cycles (suite) and 15 in-game reloads (soak).
+- **Data-driven:** map reverb presets come from audio.json, cue limits from the generic cooked-cue table, pickup
+  sounds per factory class; no Streets branch remains in Systems code.
+- **Frontend audio:**
+  - `MusicPlayer` (HmMusicPlayer port);
+  - `FrontendAudio` (GFx UI sounds by name, the authored UI-level tracks, level change);
+  - the 16 UI cues plus 3 streamed music cues with prefetch.
+- **Map events:** one PickupSound per take on the receiving pawn; no mover or mode-gated audio; the integration-04
+  glue stays compatible.
+- **Soak:** robot / vehicle / control 24 000 frames — voices, cues and queues bounded; PCM 97.2 MB flat; 0 dropped
+  voices; no frame-time drift.
+- **Validation:** suite 505 / 0; wfc_fidelity 194 / 0 / 19.
+- **Handoff:** the exact frontend / integration call sequence is in FIDELITY.md (MILESTONE 05).
+
 ## SYSTEMS MILESTONE 04 INTEGRATION PREVIEW (2026-10-03)
 - **Merges:** clean into integration 356c352 (STATUS.md only) and experimental; Rendering's VehicleFx conflict is
   already resolved in integration.

@@ -122,7 +122,7 @@ bool Application::init() {
         game::MatchLaunch launch;
         bool want = false;
         if (const char* u = std::getenv("WFC_MATCH_URL")) want = game::MatchLaunch::fromURL(u, launch);
-        else if (const char* mm = std::getenv("WFC_MATCH")) { want = game::MatchLaunch::fromURL(std::string("MP_IAC_Streets?GameModeTag=") + mm, launch); }
+        else if (const char* mm = std::getenv("WFC_MATCH")) { want = game::MatchLaunch::fromURL(world_.mapName() + "?GameModeTag=" + mm, launch); }   // the loaded map (WFC_MAP)
         if (want && world_.launchMatch(launch))
             if (const char* n = std::getenv("WFC_MATCH_OPPONENTS"))   // diagnostic only: static synthetic participants (drawn boxes)
                 for (int i = 0; i < std::atoi(n); ++i) world_.addMatchOpponent("Opponent" + std::to_string(i), true);
@@ -223,6 +223,8 @@ Application::MatchExit Application::runMatch() {
             auto& pw = world_.player().pawn();
             pw.rammedAsRobot(core::forwardFromYawPitch(pw.yaw(), 0.0f) * -1.0f);
         }
+        if (const char* s = std::getenv("WFC_PRESSTRANSFORM_EVERY"))    // soak: transform every N frames
+            if (long n = std::atol(s); n > 0 && frame > 0 && frame % n == 0) input.pressed[(int)platform::Button::Transform] = true;
 
         if (input.wasPressed(platform::Button::CameraToggle)) {
             mouseCaptured_ = !mouseCaptured_;

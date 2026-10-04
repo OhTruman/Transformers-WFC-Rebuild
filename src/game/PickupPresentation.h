@@ -1,50 +1,34 @@
-// Clean-room reconstruction — the pickup SOUND of the 27 placed MP_IAC_Streets pickup factories (Systems).
-// Data: AssetTools 7a69756 streets_pickup_factories.json (gen_pickups.py -> PickupPresentation.inc)
-// [CONF authored]. Behaviour [CONF script]: Engine.PickupFactory GiveTo -> SpawnCopyFor ->
-// Inventory.AnnouncePickup: Other.PlaySound(PickupSound), a sound attached to the RECEIVING pawn; a respawn
-// plays nothing (RespawnEffect empty, RE d50c2a9 P2).
+// Clean-room reconstruction — the pickup SOUND of WFC pickup factories (Systems).
+// Data: AssetTools streets_pickup_factories.json factory classes (gen_pickups.py -> PickupPresentation.inc)
+// [CONF authored]: per factory class, its InventoryType and that inventory's PickupSound. Class data, not
+// placement, so any map's factories of these classes resolve the same way.
+// Behaviour [CONF script]: Engine.PickupFactory GiveTo -> SpawnCopyFor -> Inventory.AnnouncePickup:
+// Other.PlaySound(PickupSound), a sound attached to the RECEIVING pawn; a respawn plays nothing (RespawnEffect
+// empty, RE d50c2a9 P2). Flag / bomb objective inventories author no PickupSound.
 // OWNERSHIP:
 //   * Gameplay owns the factory state machine (agents/gameplay PickupFactory, World::pickupEvents()).
-//   * Rendering owns the pickup effects AND their runtime state (agents/rendering 411c970 WfcMapFx,
-//     setMapEffectState: CustomPickupEffect / PickupEffect highlight per SetPickupVisible / SetPickupHidden).
-//   * Systems only plays the PickupSound on each Gameplay Taken event (onTaken, keyed by actor name). The
-//     FactoryDef effect fields are kept as authored data, not driven here.
+//   * Rendering owns the pickup effects AND their runtime state (WfcMapFx setMapEffectState).
+//   * Systems only plays the PickupSound on each Gameplay Taken event (onTaken, keyed by factory class).
 #pragma once
-#include "core/Math.h"
 #include "game/SoundCues.h"
 
 namespace game {
 
 class PickupPresentation {
 public:
-    enum class Kind { AmmoCrate, Health, OverShield, ObjectiveFlag, ObjectiveBomb };
-    struct FactoryDef {
-        const char* actor;
-        Kind kind;
-        core::Vec3 ueLocation;           // UU
-        core::Vec3 position;             // glTF metres
-        float respawnTime;               // authored per instance (Gameplay's Sleeping duration)
-        const char* pickupSound;         // inventory PickupSound cue (SoundCues table name), may be null
-        const char* customEffect;        // CustomPickupEffect template, null = none
-        const char* pickupEffect;        // PickupEffect (highlight) template
-        bool pickupEffectAttached;       // listed in the factory class Components (rendered when active)
-        bool highlightFx;                // ShouldDisplayHighlightFx
-        const char* requiredGameRule;    // objective factories: only under this game rules class
-    };
-    static int count();
-    static const FactoryDef& def(int i);
+    struct PickupClassSound { const char* factoryClass; const char* inventoryClass; const char* pickupSound; };
+    static int classCount();
+    static const PickupClassSound& classDef(int i);
+    // PickupSound (SoundCues table name) of a factory class - or of a placed factory's actor name
+    // ("<Class>_<N>", e.g. "TnAmmoCratePickupFactory_10561": the class is the name without its numeric suffix) -
+    // null if none authored / unknown class.
+    static const char* pickupSoundFor(const char* factoryClassOrActor);
 
-    static int find(const char* actor);  // factory index by actor name (e.g. "TnAmmoCratePickupFactory_10561")
-    // Gameplay PickupEvent Taken: Inventory.AnnouncePickup (PickupSound on the receiving pawn). Returns the
-    // sound's cue instance (-1 = none / unknown factory).
-    int onTaken(const char* actor, SoundCues& cues, const SoundCues::Emitter& receiver, float listenerDist) {
-        int i = find(actor);
-        return i < 0 ? -1 : announcePickup(i, cues, receiver, listenerDist);
-    }
-    // Inventory.AnnouncePickup: PlaySound(PickupSound) on the recipient. Returns the cue instance (-1 = none).
-    int announcePickup(int i, SoundCues& cues, const SoundCues::Emitter& recipient, float listenerDist) {
-        const char* cue = def(i).pickupSound;
-        return cue ? cues.play(cue, recipient, listenerDist) : -1;
+    // Gameplay PickupEvent Taken: Inventory.AnnouncePickup (PickupSound on the receiving pawn). Accepts a factory
+    // class or actor name. Returns the sound's cue instance (-1 = no PickupSound / unknown class).
+    static int onTaken(const char* factoryClassOrActor, SoundCues& cues, const SoundCues::Emitter& receiver, float listenerDist) {
+        const char* cue = pickupSoundFor(factoryClassOrActor);
+        return cue ? cues.play(cue, receiver, listenerDist) : -1;
     }
 };
 

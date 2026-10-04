@@ -42,6 +42,8 @@ public:
     void tick(float dt);
     void draw(render::IRenderer& r) const;
     size_t liveParticles() const { return parts_.size(); }
+    // Lifecycle (match reset / map unload): drop every system instance and live particle.
+    void clearParticles() { insts_.clear(); parts_.clear(); }
 
     // ---- data model ----
     struct Curve3 { std::vector<core::Vec3> v; core::Vec3 eval(float t) const; };   // uniform over life
