@@ -44,6 +44,10 @@ public:
     // player-start class follow it. Set before load(); the default is DM (Deathmatch, TnFreeForAllGame).
     void setMatchMode(MatchMode m) { matchMode_ = m; }
     MatchMode matchMode() const { return matchMode_; }
+    // Runtime map directory under <asset root>/Maps (Frontend: from the selected TnDataProvider_MapInfo, e.g.
+    // MP_IAC_Streets_Base_m -> "MP_IAC_Streets"). Set before load(); MP_IAC_Streets by default.
+    void setMapName(const std::string& dir) { mapName_ = dir; }
+    const std::string& mapName() const { return mapName_; }
 
     void tick(float dt);                       // one fixed step
     void handleInput(const platform::InputFrame& in, float dt);
@@ -129,6 +133,7 @@ private:
     CollisionWorld weaponCollision_;
     MapState mapState_;
     MatchMode matchMode_ = MatchMode::DM;
+    std::string mapName_ = "MP_IAC_Streets";
     std::vector<ColActor> colActors_;
     void syncMapPresentation(render::IRenderer& r) const;   // Gameplay world state -> renderer, each frame
     std::vector<StartPoint> starts_;

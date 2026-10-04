@@ -1,0 +1,729 @@
+#include "frontend/GameFlow.h"
+#include "frontend/FlowTrace.h"
+#include "core/Log.h"
+
+#include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
+#include <fstream>
+
+namespace frontend {
+
+namespace {
+
+// Xe-TransEngine.ini [URL] Map / LocalMap / TransitionMap [CONFIRMED].
+constexpr const char* kFrontEndMap = "UI_FrontEnd_m";
+// TnPlayerController.GetPartyMapName + PartyLobbyGameType -> BuildPartyLobbyURL [CONFIRMED script].
+constexpr const char* kPartyLobbyUrl = "UI_PartyLobby_m?game=TransContent.TnPartyLobbyGame?listen";
+// UI_FrontEnd_m Kismet movie chain (SeqAct_MoviePlayer, each on the previous one's Stopped) [CONFIRMED].
+const char* const kIntroMovies[] = {"Logo_Activision", "Logo_Hasbro", "Logo_HighMoon", "FMV_intro"};
+// GameLobby timings [CONFIRMED Xe-TransGame.ini / authored defaults, RE 2.4].
+constexpr int kShortCountdown = 10;          // BeginShortCountdown (private, host started)
+constexpr int kLobbyIntermissionTime = 45;   // BeginIntermissionCountdown (public autostart)
+
+// Persisted profile flag (Game.SetHasWatchedIntroMovie). The original stores it in the player profile.
+constexpr const char* kProfileFile = "wfc_profile.ini";
+
+bool readWatchedIntro() {
+    std::ifstream f(kProfileFile);
+    std::string line;
+    while (std::getline(f, line)) if (line == "HasWatchedIntroMovie=1") return true;
+    return false;
+}
+void writeWatchedIntro() {
+    std::ofstream f(kProfileFile);
+    f << "HasWatchedIntroMovie=1\n";
+}
+
+std::string lowerStr(std::string s) { for (char& c : s) c = (char)std::tolower((unsigned char)c); return s; }
+
+LevelKind levelForUrl(const Url& u) {
+    std::string m = lowerStr(u.map());
+    if (m == "ui_frontend_m") return LevelKind::FrontEnd;
+    if (m == "ui_partylobby_m") return LevelKind::PartyLobby;
+    if (m == "ui_lobby_m" || m == "ui_campaignlobby_m") return LevelKind::GameLobby;
+    return LevelKind::Match;
+}
+
+} // namespace
+
+const char* levelKindName(LevelKind k) {
+    switch (k) {
+    case LevelKind::None: return "None";
+    case LevelKind::FrontEnd: return "FrontEnd";
+    case LevelKind::PartyLobby: return "PartyLobby";
+    case LevelKind::GameLobby: return "GameLobby";
+    case LevelKind::Match: return "Match";
+    }
+    return "?";
+}
+
+bool GameFlow::init(const Catalog& catalog, const Options& opt) {
+    cat_ = &catalog;
+    opt_ = opt;
+    rng_.seed(opt.seed ? opt.seed : (unsigned)std::chrono::steady_clock::now().time_since_epoch().count());
+    watchedIntro_ = opt.skipIntroMovies || readWatchedIntro();
+    FlowTrace::emit("boot", {{"map", kFrontEndMap}, {"watchedIntro", FlowTrace::boolean(watchedIntro_)},
+                             {"seed", std::to_string(opt.seed)}});
+    // Engine boot: [URL] Map=UI_FrontEnd_m. The initial startup movie ([LoadingMovie] InitialStartupFileName
+    // TF_InitialStartup) is the native boot loading movie.
+    travel(kFrontEndMap, false);
+    loading_.kind = "InitialStartup";
+    loading_.binkMovie = cat_->loadingMovieInitial();
+    loading_.gfxMovie.clear();
+    return true;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Travel / loading
+
+void GameFlow::travel(const std::string& urlText, bool server) {
+    Url url = Url::parse(urlText);
+    FlowTrace::emit("travel", {{"url", url.toString()}, {"server", FlowTrace::boolean(server)},
+                               {"from", levelKindName(level_)}});
+    if (level_ == LevelKind::Match) unloadWorld_ = true;   // the match world is replaced
+    // Every travel replaces the world and its PlayerController; the UI controller goes with it.
+    openMovies_.clear();
+    kismetMovie_.clear();
+    movieQueue_.clear();
+    pendingUrl_ = url;
+    pendingLevel_ = levelForUrl(url);
+    travelPending_ = true;
+    travelDelayFrames_ = 2;    // the loading movie is presented before the level load runs
+    startLoadingMovie(url);
+}
+
+void GameFlow::startLoadingMovie(const Url& url) {
+    // TnMoviePlayer.StartLoadingMovie(URL) [CONFIRMED script, RE 3.3].
+    loading_ = LoadingScreen{};
+    loading_.active = true;
+    loading_.url = url.toString();
+    loading_.binkMovie = cat_->loadingMovieDefault();     // TF_LoadingScreen (native Bink)
+    loading_.gfxMovie = loadingMovieName_;                 // UI_GFxLoading_p.LoadScreen_GFX overlay
+    std::string game = url.option("Game", url.option("game"));
+    int mapId = url.intOption("MapId", -1);
+    auto threeTips = [&](const std::string& tag) {
+        // 3 x AddEngageText(EngageText[RandomInt(len)]), repeats possible. The mode's EngageText list:
+        // TnOnlineGameSettings<tag> inherits TnOnlineGameSettingsBase's 26 strings.
+        std::vector<std::string> tips;
+        std::string own = cat_->localize("TransGame", "TnOnlineGameSettings" + tag, "EngageText[0]");
+        if (!own.empty()) {
+            for (int i = 0; i < 64; ++i) {
+                std::string t = cat_->localize("TransGame", "TnOnlineGameSettings" + tag, "EngageText[" + std::to_string(i) + "]");
+                if (t.empty()) break;
+                tips.push_back(t);
+            }
+        } else tips = cat_->engageTexts();
+        for (int i = 0; i < 3 && !tips.empty(); ++i)
+            loading_.engageTexts.push_back(tips[std::uniform_int_distribution<size_t>(0, tips.size() - 1)(rng_)]);
+    };
+    if (game.find("TnPartyLobbyGame") != std::string::npos) {
+        loading_.kind = "PartyLobby";   // EnqueuePartyLobbyLoadingMovie: empty title/message + 3 base engage texts
+        threeTips("Base");
+    } else if (game.find("TnGameLobbyGame") != std::string::npos) {
+        loading_.kind = "GameLobby";
+        threeTips("Base");
+    } else if (mapId != -1) {
+        // EnqueueLoadingMapMovie(MapId, tag): title = settings FriendlyName, message = Repl(LoadingMap, "`m", map).
+        loading_.kind = "Map";
+        std::string tag = url.option("GameModeTag");
+        loading_.title = cat_->modeFriendlyName(tag);
+        const MapInfo* mi = cat_->mapById(mapId);
+        std::string msg = cat_->localize("UIText", "LoadScreen", "LoadingMap");
+        size_t p = msg.find("`m");
+        if (p != std::string::npos) msg.replace(p, 2, mi ? mi->friendlyName : "");
+        loading_.message = msg;
+        threeTips(tag);
+    } else {
+        loading_.kind = "Generic";
+    }
+    FlowTrace::emit("loading.start", {{"kind", loading_.kind}, {"title", loading_.title}, {"message", loading_.message},
+                                      {"bink", loading_.binkMovie}, {"gfx", loading_.gfxMovie},
+                                      {"tips", std::to_string(loading_.engageTexts.size())}});
+    for (const std::string& t : loading_.engageTexts) FlowTrace::emit("loading.engageText", {{"text", t}});
+}
+
+void GameFlow::closeLoadingMovie() {
+    if (!loading_.active) return;
+    loading_.active = false;
+    FlowTrace::emit("loading.close", {{"kind", loading_.kind}, {"level", levelKindName(level_)}});
+}
+
+void GameFlow::beginLevel() {
+    travelPending_ = false;
+    level_ = pendingLevel_;
+    levelUrl_ = pendingUrl_;
+    FlowTrace::emit("level.begin", {{"level", levelKindName(level_)}, {"map", levelUrl_.map()}, {"url", levelUrl_.toString()}});
+    switch (level_) {
+    case LevelKind::FrontEnd: frontEndBegin(); break;
+    case LevelKind::PartyLobby: partyLobbyBegin(); break;
+    case LevelKind::GameLobby: gameLobbyBegin(); break;
+    default: break;
+    }
+}
+
+void GameFlow::tick(float dt) {
+    clock_ += dt;
+    FlowTrace::setClock(clock_);
+    if (travelPending_) {
+        if (travelDelayFrames_ > 0) { --travelDelayFrames_; return; }
+        if (pendingLevel_ == LevelKind::Match) {
+            if (!pendingMatch_ && !unloadWorld_) {
+                // The application loads the world (blocking); the loading movie stays up until matchLoaded().
+                pendingMatch_ = true;
+                FlowTrace::emit("match.launch", {{"url", match_.url.toString()}, {"map", match_.map ? match_.map->mapFilename : "?"},
+                                                 {"runtimeDir", match_.map ? match_.map->runtimeDir : "?"},
+                                                 {"mode", match_.modeTag}, {"goalScore", std::to_string(match_.goalScore)},
+                                                 {"timeLimit", std::to_string(match_.timeLimit)},
+                                                 {"team", std::to_string(match_.teamIndex)}});
+            }
+            return;
+        }
+        if (unloadWorld_) return;   // wait for the application to release the match world
+        beginLevel();
+        // CanCloseLoadingMovie: the UI level is fully loaded (seamless travel through TransitionMap) [HIGH].
+        closeLoadingMovie();
+        return;
+    }
+    if (blackOutTimer_ >= 0.0f) {
+        blackOutTimer_ -= dt;
+        if (blackOutTimer_ < 0.0f) {
+            // Black-Out (Completed|Aborted) -> GFxAction_OpenMovie UI_GFxFrontEnd_p.MovieLoader_GFX_1.
+            openMovie("UI_GFxFrontEnd_p.MovieLoader_GFX_1");
+        }
+    }
+    if (level_ == LevelKind::GameLobby) gameLobbyTick(dt);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// UI_FrontEnd_m (TnFrontEndGame + Main_Sequence Kismet)
+
+void GameFlow::setUIController(UIControllerClass cls) {
+    ui_.initialize(cls,
+        [this](const std::string& m) {
+            openMovies_.push_back(m);
+            FlowTrace::emit("ui.open", {{"movie", m}, {"state", uiStateName(ui_.state())}});
+        },
+        [this]() {
+            std::string m = openMovies_.empty() ? std::string() : openMovies_.back();
+            if (!openMovies_.empty()) openMovies_.pop_back();
+            FlowTrace::emit("ui.close", {{"movie", m}});
+        },
+        [](bool v) { FlowTrace::emit("ui.hud", {{"visible", FlowTrace::boolean(v)}}); },
+        [this](UIState from, UIState to) {
+            FlowTrace::emit("ui.state", {{"from", uiStateName(from)}, {"to", uiStateName(to)},
+                                         {"controller", uiControllerClassName(ui_.cls())}, {"level", levelKindName(level_)}});
+        });
+}
+
+void GameFlow::frontEndBegin() {
+    frontEndStarted_ = false;
+    lobby_ = LobbyState{};          // the lobby GRI went with the previous world
+    currentSettings_ = nullptr;
+    // PlayerController -> TnPlayerController.UpdateUiController: TnFrontEndGame inherits TnUIController; the
+    // FrontEnd subclass carries FrontEndUI (TnUIControllerFrontEnd). StartingState NotInGame.
+    setUIController(UIControllerClass::FrontEnd);
+    // TnFrontEndGame: InitGame (CheckForAutomatedTestingStart timer), PostLogin -> WaitingForController (no pawn,
+    // ShouldSpectateOnLogin). WaitingForController.Tick assigns the first connected controller; the PC has no online
+    // login to wait for in the rebuild [online - bypassed]: WaitingForBaseOnlineService / WaitingForNetwork /
+    // ReadingAccountNames / LoggingIn* are skipped.
+    FlowTrace::emit("frontend.game", {{"state", "WaitingForController"}});
+    // Controller assigned -> SetHasWatchedIntroMovie() -> state None. The flag is persisted (profile file) and
+    // takes effect on the next boot: MovieLoader's decision this boot reads the value loaded at startup [HIGH].
+    FlowTrace::emit("frontend.game", {{"state", "None"}, {"controllerAssigned", "true"}});
+    pendingWatchedWrite_ = true;
+    // Kismet: SeqEvent_GameplayStarted -> Interp "Black-Out" (InterpLength 0.00105 s, client-side) -> OpenMovie.
+    blackOutTimer_ = 0.00105f;
+}
+
+void GameFlow::openMovie(const std::string& movie) {
+    openMovies_.push_back(movie);
+    FlowTrace::emit("gfx.open", {{"movie", movie}});
+}
+
+void GameFlow::closeMovie(const std::string& movie) {
+    auto it = std::find(openMovies_.begin(), openMovies_.end(), movie);
+    if (it != openMovies_.end()) openMovies_.erase(it);
+    FlowTrace::emit("gfx.close", {{"movie", movie}});
+}
+
+void GameFlow::fsCommand(const std::string& movie, const std::string& cmd, const std::string& arg) {
+    FlowTrace::emit("fscommand", {{"movie", movie}, {"cmd", cmd}, {"arg", arg}});
+    if (cmd != "enterFrontEnd") kismetTriggers_.push_back("FsCommand:" + cmd);
+    if (cmd == "enterMovieSequence") {
+        // -> RemoteEvent closeMovieLoader (GFxAction_CloseMovie), then Logo_Activision -> Logo_Hasbro -> Logo_HighMoon
+        // -> FMV_intro, each started by the previous one's Stopped output -> [FRONTEND START].
+        closeMovie("UI_GFxFrontEnd_p.MovieLoader_GFX_1");
+        movieQueue_.assign(std::begin(kIntroMovies), std::end(kIntroMovies));
+        kismetMovie_ = movieQueue_.front();
+        movieQueue_.erase(movieQueue_.begin());
+        FlowTrace::emit("movie.play", {{"movie", kismetMovie_}});
+    } else if (cmd == "enterFrontEnd") {
+        // -> [FRONTEND START] + RemoteEvent closeMovieLoader.
+        frontEndStart();
+        closeMovie("UI_GFxFrontEnd_p.MovieLoader_GFX_1");
+    } else if (cmd == "startMainMenuCamera") {
+        // FrontEnd_GFX -> SeqAct_Interp_9395 (energon ring / circuit materials + meshes). Rendering of the
+        // UI_FrontEnd_m scene is not available yet (no exported frontend level) - logged only.
+        FlowTrace::emit("frontend.kismet", {{"action", "SeqAct_Interp_9395 startMainMenuCamera"}});
+    }
+}
+
+void GameFlow::movieStopped(const std::string& movie) {
+    if (movie != kismetMovie_) return;
+    FlowTrace::emit("movie.stopped", {{"movie", movie}});
+    kismetTriggers_.push_back("MovieStopped:" + movie);
+    if (!movieQueue_.empty()) {
+        kismetMovie_ = movieQueue_.front();
+        movieQueue_.erase(movieQueue_.begin());
+        FlowTrace::emit("movie.play", {{"movie", kismetMovie_}});
+    } else {
+        kismetMovie_.clear();
+        frontEndStart();
+    }
+}
+
+void GameFlow::frontEndStart() {
+    if (frontEndStarted_) return;
+    frontEndStarted_ = true;
+    // [FRONTEND START] - the same targets from both MovieLoader paths (RE 1.2).
+    FlowTrace::emit("frontend.kismet", {{"action", "Interp Fade In / Primary Camera / Camera Orbiter, RemoteEvent StartFireworks, "
+                                                   "Reverb REVERB_TRANS_FRONT_END, PlayMusic FRONTEND_MX_ORBIT_01, PlaySound FRONTEND_WHSH_REVEAL"}});
+    loadingMovieName_ = "UI_GFxLoading_p.LoadScreen_GFX";   // SeqAct_SetLoadingMovieFilename
+    FlowTrace::emit("frontend.kismet", {{"action", "SetLoadingMovieFilename UI_GFxLoading_p.LoadScreen_GFX"}});
+    // SeqAct_ToggleHUD -> ToggleHidden(Player) -> TnSeqAct_OpenFrontEnd -> TnPlayerController.OnOpenFrontEnd ->
+    // UIController.OnUIEvent(0) -> FrontEnd -> OpenUI(FrontEnd_GFX_1).
+    ui_.onUIEvent((int)UIEvent::FrontEnd);
+    // SeqAct_InstallGame (Finished) -> 3 x SetMatInstScalarParam (Energon DownScaleUVs 12, ring Opacity).
+    if (pendingWatchedWrite_) {
+        pendingWatchedWrite_ = false;
+        if (!watchedIntro_) { watchedIntro_ = true; writeWatchedIntro(); }
+        FlowTrace::emit("profile", {{"HasWatchedIntroMovie", "true"}});
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Bridge (ExternalInterface.call)
+
+BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>& args) {
+    auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
+    auto argi = [&](size_t i) { return std::atoi(arg(i).c_str()); };
+    std::string joined;
+    for (const std::string& a : args) joined += (joined.empty() ? "" : ",") + a;
+    // Per-frame state polls of the movies are not traced (noise); every action call is.
+    static const char* const kPolls[] = {"Online.IsInPartyChatSession", "Online.IsHost", "Online.GetLoginStatus"};
+    bool poll = false;
+    for (const char* q : kPolls) poll |= fn == q;
+    if (!poll) FlowTrace::emit("bridge", {{"fn", fn}, {"args", joined}, {"level", levelKindName(level_)}});
+
+    // ---- TnGameActionScriptBinding ----
+    if (fn == "Game.HasWatchedIntroMovie") return watchedIntro_;
+    if (fn == "Game.QuitToMainMenu") { quitToMainMenu(); return {}; }
+    if (fn == "Game.ExitGame") { quit_ = true; FlowTrace::emit("exit", {}); return {}; }
+
+    // ---- TnOnlineActionScriptBinding ----
+    if (fn == "Online.CheckCanPlayOnlineModes" || fn == "Online.CanPlayOnlineModes") return true;   // no profile gate offline
+    if (fn == "Online.CheckIsProfileReady" || fn == "Online.IsProfileReady") return true;
+    if (fn == "Online.ShouldShowStartScreen") return true;   // PARTIAL: native profile/sign-in check
+    if (fn == "Online.ShowDeviceSelectionUI") return {};        // [online - bypassed] storage device UI (360)
+    if (fn == "Online.OpenPartyLobby") {
+        // StringToGameTeamStatus: FFA 1, SingleTeam 2, Team 3, Campaign 4, default 3 [CONFIRMED script].
+        std::string s = arg(0);
+        int gts = s == "GTS_FreeForAllGame" ? 1 : s == "GTS_SingleTeamGame" ? 2 : s == "GTS_TeamGame" ? 3 : s == "GTS_CampaignGame" ? 4 : 3;
+        openPartyLobby(gts);
+        return {};
+    }
+    if (fn == "Online.EditGameMode") { editGameMode(arg(0)); return {}; }
+    if (fn == "Online.EditPlaylist") { editPlaylist(argi(0)); return {}; }
+    if (fn == "Online.PlayPrivateGame") { playPrivateGame(arg(0)); return {}; }
+    if (fn == "Online.PlayPlaylist") { playPlaylist(argi(0), arg(1) == "true" || arg(1) == "1"); return {}; }
+    if (fn == "Online.SetSelectedMapID") {
+        // -> TnGameLobbyGame.HostRequestMapID -> GRI.HostRequestMapID (ignored unless MapSelectionMethod 1).
+        if (level_ == LevelKind::GameLobby && lobby_.mapSelectionMethod == 1) setMapId(argi(0));
+        else FlowTrace::emit("lobby.mapRequestIgnored", {{"mapId", arg(0)}, {"method", std::to_string(lobby_.mapSelectionMethod)}});
+        return {};
+    }
+    if (fn == "Online.BeginLobbyExitCountdown") { hostRequestsGameStart(); return {}; }
+    if (fn == "Online.IsHost") return true;   // the local player hosts the private match
+    if (fn == "Online.GetLoginStatus") return 2;   // PARTIAL: LS_LoggedIn; no online service
+    if (fn == "Online.IsInPartyChatSession") return false;
+    if (fn == "Online.CheckCampaignCompleteMessage") return {};   // no campaign-complete prompt (no campaign progress offline)
+    if (fn == "Online.SetPartyLobbyType") { FlowTrace::emit("partylobby.type", {{"type", arg(0)}}); return {}; }
+    if (fn == "Online.SubmitMapVeto") { FlowTrace::emit("lobby.veto", {}); return {}; }
+    if (fn == "Online.SwitchTeam") {
+        if (level_ == LevelKind::GameLobby && lobby_.localTeam >= 0) lobby_.localTeam = 1 - lobby_.localTeam;
+        FlowTrace::emit("lobby.team", {{"team", std::to_string(lobby_.localTeam)}});
+        return {};
+    }
+    FlowTrace::emit("bridge.unhandled", {{"fn", fn}});
+    return {};
+}
+
+void GameFlow::openPartyLobby(int gts) {
+    // CheckOnlineWarningPart0..2 (profile / CanCommunicate / RecommendPlayingCampaignFirst message boxes) are online
+    // and first-time prompts: PARTIAL (not shown). -> ConfirmOpenPartyLobby: GRI.SetGameTeamStatus(GTS),
+    // URL = BuildPartyLobbyURL(), TnGame.ClientTravelToMap(URL).
+    gameTeamStatus_ = gts;
+    FlowTrace::emit("online.ConfirmOpenPartyLobby", {{"gameTeamStatus", std::to_string(gts)}});
+    travel(kPartyLobbyUrl, false);
+}
+
+const GameSettings* GameFlow::settingsByConfigName(const std::string& name, bool privateMatch) const {
+    // SettingsDataStore.SetCurrentByName(ConfigurationName). PARTIAL: the GameSettingsCfgList names are an authored
+    // CDO list not in the manifests yet; the AS passes the mode's SettingsConfigName ("TDM") or a class name.
+    if (const GameSettings* s = cat_->settings(name)) return s;
+    if (const GameSettings* s = cat_->settings("TnOnlineGameSettings" + name)) {
+        if (const GameSettings* v = cat_->settingsForTag(s->tag, privateMatch)) return v;
+        return s;
+    }
+    return cat_->settingsForTag(name, privateMatch);
+}
+
+void GameFlow::editGameMode(const std::string& configName) {
+    const GameSettings* gs = settingsByConfigName(configName, true);
+    if (!gs) { LOG_WARN("FLOW ERROR: Failed to find settings for %s", configName.c_str()); return; }
+    currentSettings_ = gs;
+    // GRI.PublishGameInfo(GameSettings.GetGameModeTag(), GameSettings) -> <CurrentGame:GameModeFriendlyName/Rules/Tag>.
+    lobby_.settings = gs;
+    lobby_.gameModeTag = gs->tag;
+    FlowTrace::emit("lobby.publishGameInfo", {{"tag", gs->tag}, {"settings", gs->className},
+                                              {"friendlyName", cat_->modeFriendlyName(gs->tag)}});
+}
+
+void GameFlow::editPlaylist(int playlistId) {
+    const Playlist* p = cat_->playlistById(playlistId);
+    const GameSettings* gs = p ? cat_->settings(p->settingsClass) : nullptr;
+    if (!gs) { LOG_WARN("FLOW ERROR: Failed to get game settings for playlist (%d)", playlistId); return; }
+    lobby_.settings = gs;
+    lobby_.gameModeTag = gs->tag;
+    lobby_.playlistId = playlistId;
+    FlowTrace::emit("lobby.publishGameInfo", {{"tag", gs->tag}, {"settings", gs->className}, {"playlist", std::to_string(playlistId)}});
+}
+
+void GameFlow::playPrivateGame(const std::string& settingsName) {
+    // SettingsDataStore.SetCurrentByName(SettingsName); GetGame().HostOnlineGame(current settings).
+    if (const GameSettings* gs = settingsByConfigName(settingsName, true)) currentSettings_ = gs;
+    if (!currentSettings_) { LOG_WARN("FLOW PlayPrivateGame: no settings for %s", settingsName.c_str()); return; }
+    lobby_.playlistId = -1;
+    hostOnlineGame(currentSettings_);
+}
+
+void GameFlow::playPlaylist(int playlistId, bool forceHost) {
+    // PlayPlaylistInternal: settings = PlaylistManager.GetGameSettings(PlaylistId, 0); HostType 1 -> host, otherwise a
+    // VERSUS search -> FindingGames -> join or ReservingSpace.HostPlaylist. No online search exists offline: the
+    // rebuild hosts the playlist game (the search's no-result path) [PARTIAL].
+    const Playlist* p = cat_->playlistById(playlistId);
+    const GameSettings* gs = p ? cat_->settings(p->settingsClass) : nullptr;
+    if (!gs) { LOG_WARN("FLOW PlayPlaylist: unknown playlist %d", playlistId); return; }
+    FlowTrace::emit("online.PlayPlaylist", {{"playlist", std::to_string(playlistId)}, {"settings", gs->className},
+                                            {"forceHost", FlowTrace::boolean(forceHost)}, {"search", "bypassed"}});
+    lobby_.playlistId = playlistId;
+    hostOnlineGame(gs);
+}
+
+void GameFlow::hostOnlineGame(const GameSettings* gs) {
+    // TnPartyLobbyGame.HostOnlineGameInternal: CheckCanPlayGameType (party size 1 <= allowed);
+    // StartOnlineGame('Party'); HostingGame: presence session, CreateReservationHost, CreateOnlineGame
+    // [online - bypassed]; OnCreateOnlineGameComplete: GameSettings.BuildLobbyURL(URL) $ "?listen";
+    // TnGame.ServerTravelToMap(URL, true, false).
+    currentSettings_ = gs;
+    std::string url = buildLobbyUrl(*gs) + "?listen";
+    FlowTrace::emit("online.HostOnlineGame", {{"settings", gs->className}, {"lobbyUrl", url}});
+    travel(url, true);
+}
+
+std::string GameFlow::buildLobbyUrl(const GameSettings& gs) const {
+    // TnOnlineGameSettingsBase.BuildLobbyURL: LobbyMapName ?Game=LobbyGameClass ?GameModeTag=<tag>
+    // ?GameTeamStatus=<TeamType> ?MaxPlayers=<Public+Private> ?IconicMode=<0|1> [CONFIRMED script].
+    Url u(gs.lobbyMapName);
+    u.setOption("Game", gs.lobbyGameClass);
+    u.setOption("GameModeTag", gs.tag);
+    u.setOption("GameTeamStatus", std::to_string(gs.teamTypeValue));
+    u.setOption("MaxPlayers", std::to_string(gs.numPublicConnections + gs.numPrivateConnections));
+    u.setOption("IconicMode", "0");
+    return u.toString();
+}
+
+std::string GameFlow::buildMatchUrl(const GameSettings& gs) const {
+    // TnOnlineGameSettingsBase.BuildURL [CONFIRMED script; the natively appended properties are HIGH]:
+    //   AppendPropertiesToURL -> ?PlaylistId=-1?GamerRegion=0?PointsToWin=40 (score setting)
+    //   AppendContextsToURL   -> localized contexts (exact text PARTIAL; not emitted)
+    //   ?Game ?GameModeTag ?GameTeamStatus ?GameRules=(empty) ?MaxPlayers ?StatsWriters ?LobbyGameClassName ?IconicMode
+    //   [?TimeLimit=<TimeLimits[idx]>] [?listen]
+    Url u("");
+    u.setOption("PlaylistId", std::to_string(lobby_.playlistId));
+    u.setOption("GamerRegion", "0");
+    // Host options (TnGameSettings values) feed the natively appended properties / contexts [HIGH].
+    int score = gs.pointsToWin;
+    if (const SettingField* f = gs.field(gs.scoreOptionName)) {
+        int i = settingIndex(&gs, f->name);
+        if (i >= 0 && i < (int)f->numeric.size()) score = (int)f->numeric[(size_t)i];
+    }
+    if (score >= 0) u.setOption(gs.scoreOptionName, std::to_string(score));
+    u.setOption("Game", gs.gameClass);
+    u.setOption("GameModeTag", gs.tag);
+    u.setOption("GameTeamStatus", std::to_string(gs.teamTypeValue));
+    u.setOption("GameRules", "");
+    u.setOption("MaxPlayers", std::to_string(gs.numPublicConnections + gs.numPrivateConnections));
+    u.setOption("StatsWriters", "");
+    u.setOption("LobbyGameClassName", gs.lobbyGameClass);
+    u.setOption("IconicMode", "0");
+    if (!gs.timeLimits.empty()) {
+        int ti = settingIndex(&gs, "TimeLimit");
+        size_t idx = std::min((size_t)(ti >= 0 ? ti : gs.timeLimitDefaultIndex), gs.timeLimits.size() - 1);
+        char b[32]; std::snprintf(b, sizeof b, "%.2f", (double)gs.timeLimits[idx]);   // float -> string
+        u.setOption("TimeLimit", b);
+    }
+    if (gs.numPublicConnections + gs.numPrivateConnections > 0) u.addFlag("listen");
+    std::string s = u.toString();
+    return s;   // "?PlaylistId=..." (the map filename is prefixed by LobbyGRI.ModifyURL)
+}
+
+void GameFlow::quitToMainMenu() {
+    // Game.QuitToMainMenu -> TnGameActionScriptBinding -> TnGame: ClientTravelToMap("UI_FrontEnd_m").
+    if (level_ == LevelKind::Match) {
+        // TnUIController OnGotoMainMenu (11) from the pause state; OnQuitGame -> RecordSessionComplete("Quit").
+        ui_.onUIEvent((int)UIEvent::GotoMainMenu);
+        FlowTrace::emit("match.quit", {{"reason", "QuitToMainMenu"}});
+    }
+    travel(kFrontEndMap, false);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// UI_PartyLobby_m (TnPartyLobbyGame)
+
+void GameFlow::partyLobbyBegin() {
+    // InitGame: PlaylistManager.DownloadPlaylist(). PostLogin (local) -> WaitingForTasksToIdle -> CreatingPartySessions
+    // [online - bypassed] -> Ready.
+    FlowTrace::emit("partylobby.game", {{"state", "Ready"}, {"gameTeamStatus", std::to_string(gameTeamStatus_)},
+                                        {"playlists", std::to_string(cat_->playlists().size())}});
+    lobby_ = LobbyState{};
+    lobby_.gameTeamStatus = gameTeamStatus_;
+    // TnUIControllerPartyLobby: StartingState InLobby -> OpenUI(PartyLobby_GFX_1).
+    setUIController(UIControllerClass::PartyLobby);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// UI_Lobby_m (TnGameLobbyGame -> TnGameLobbyGameTeamBase -> TnGameLobbyGameTeam)
+
+void GameFlow::gameLobbyBegin() {
+    const GameSettings* gs = currentSettings_;
+    std::string tag = levelUrl_.option("GameModeTag");
+    if (!gs || gs->tag != tag) gs = cat_->settingsForTag(tag, true);
+    lobby_.settings = gs;
+    lobby_.gameModeTag = tag;
+    lobby_.gameTeamStatus = levelUrl_.intOption("GameTeamStatus", gs ? gs->teamTypeValue : 3);
+    // InitGame: NumRequiredPlayers = settings.NumRequiredPlayers (TDM 4) [RE 2.4].
+    lobby_.numRequiredPlayers = gs && gs->numRequiredPlayers > 0 ? gs->numRequiredPlayers : 4;
+    // InitGameReplicationInfo: AutostartCountdown = !IsPrivateGame(); MapSelectionMethod = setting 0x40000014
+    // (Public 0 Rotate / Private 1 Host's Choice); AllowMapVeto = (method == 0).
+    bool isPrivate = gs && gs->isPrivate;
+    lobby_.autostartCountdown = !isPrivate;
+    int msm = settingIndex(gs, "MapSelectionMethod");
+    lobby_.mapSelectionMethod = msm >= 0 ? msm : (gs ? gs->mapSelectionMethod : 1);
+    lobby_.allowMapVeto = lobby_.mapSelectionMethod == 0;
+    lobby_.countingDown = lobby_.countdownRubicon = lobby_.finalCountdown = false;
+    lobby_.countdown = 0;
+    lobby_.localTeam = -1;
+    FlowTrace::emit("gamelobby.game", {{"gameClass", levelUrl_.option("Game")}, {"tag", tag}, {"settings", gs ? gs->className : "?"},
+                                       {"private", FlowTrace::boolean(isPrivate)}, {"mapSelectionMethod", std::to_string(lobby_.mapSelectionMethod)}});
+    // GRI.OnEnterLobbyFromMap(GRI.GetMapID()): MapId == -1 or Rotate or campaign -> ChooseNextMap, else SetMapId.
+    int prev = levelUrl_.intOption("MapId", -1);
+    if (prev == -1 || lobby_.mapSelectionMethod == 0) chooseNextMap(prev);
+    else setMapId(prev);
+    // Private: LobbyStatus 3 ("Waiting for host to start game"); public: 1 ("Finding `p more players").
+    lobby_.lobbyStatus = isPrivate ? 3 : 1;
+    if (!isPrivate) FlowTrace::emit("gamelobby.autostart", {{"requiredPlayers", std::to_string(lobby_.numRequiredPlayers)},
+                                                            {"intermission", std::to_string(kLobbyIntermissionTime)}});
+    FlowTrace::emit("gamelobby.status", {{"lobbyStatus", std::to_string(lobby_.lobbyStatus)},
+                                         {"text", cat_->localize("TransGame", "TnGameReplicationInfoGameLobby",
+                                                                 isPrivate ? "WaitingForHostToStartStatus" : "WaitingForPlayersStatus")}});
+    // TnUIControllerGameLobby: StartingState InLobby -> OpenUI(GameLobby_GFX_1).
+    setUIController(UIControllerClass::GameLobby);
+}
+
+void GameFlow::chooseNextMap(int prevMapId) {
+    // SelectRandomMap(prev): GetCompatibleMaps() (CompatibleGameTypes contains GRI.GameModeTag, skipping
+    // IsProviderDisabled = !HasRequiredAssets); RandomMap(cur, n): cur == -1 -> RandRange(0, n), else
+    // (cur + RandRange(1, n)) % n - a uniformly random DIFFERENT compatible map [CONFIRMED script].
+    std::vector<const MapInfo*> maps = cat_->compatibleMaps(lobby_.gameModeTag, true);
+    if (maps.empty()) {
+        FlowTrace::emit("gamelobby.map", {{"mapId", "-1"}, {"why", "no compatible map with rebuild runtime data"}});
+        lobby_.mapId = -1;
+        return;
+    }
+    int n = (int)maps.size(), cur = -1;
+    for (int i = 0; i < n; ++i) if (maps[(size_t)i]->mapId == prevMapId) cur = i;
+    // RandRange(0, n) on an int: 0..n-1 [HIGH: UE3 RandRange is a float range truncated to the int index].
+    int pick = cur == -1 ? std::uniform_int_distribution<int>(0, n - 1)(rng_)
+                         : (n > 1 ? (cur + std::uniform_int_distribution<int>(1, n - 1)(rng_)) % n : cur);
+    setMapId(maps[(size_t)pick]->mapId);
+}
+
+void GameFlow::setMapId(int id) {
+    const MapInfo* mi = cat_->mapById(id);
+    lobby_.mapId = id;
+    // UpdatePrestreaming(): GameEngine.UpdateMapPrestreaming(ConvertMapIdToMapFilename(id)), bHighPriorityLoading.
+    lobby_.prestreamMap = mi ? mi->mapFilename : "";
+    FlowTrace::emit("gamelobby.map", {{"mapId", std::to_string(id)}, {"map", mi ? mi->mapFilename : "?"},
+                                      {"name", mi ? mi->friendlyName : "?"},
+                                      {"hasRequiredAssets", FlowTrace::boolean(mi && mi->hasRequiredAssets)}});
+    // TnPlayerControllerGameLobby: !HasRequiredMapAssets(MapId) -> ShowContentMissingMessageBox.
+    if (mi && !mi->hasRequiredAssets) FlowTrace::emit("gamelobby.contentMissing", {{"mapId", std::to_string(id)}});
+}
+
+void GameFlow::hostRequestsGameStart() {
+    if (level_ != LevelKind::GameLobby || lobby_.countdownRubicon) return;
+    const MapInfo* mi = cat_->mapById(lobby_.mapId);
+    if (!mi || !mi->hasRequiredAssets) {
+        FlowTrace::emit("gamelobby.startRefused", {{"mapId", std::to_string(lobby_.mapId)}, {"why", "map has no rebuild runtime data"}});
+        return;
+    }
+    // HostRequestsGameStart -> CountdownRubicon = true, BeginShortCountdown = 10 s -> FinalCountdown.
+    lobby_.countdownRubicon = true;
+    lobby_.countingDown = true;
+    lobby_.countdown = kShortCountdown;
+    lobby_.countdownTimer = 0.0f;
+    FlowTrace::emit("gamelobby.countdown", {{"seconds", std::to_string(kShortCountdown)}, {"kind", "BeginShortCountdown"}});
+}
+
+int GameFlow::pickTeam() {
+    // TnTeamHandlerTwoTeams.PickTeam: keep a current team < 2; else the smaller team; on a tie RandomInt(2).
+    // The local host is the only player: both teams are empty -> RandomInt(2) [HIGH as the offline reduction].
+    return std::uniform_int_distribution<int>(0, 1)(rng_);
+}
+
+void GameFlow::gameLobbyTick(float dt) {
+    if (!lobby_.countingDown) return;
+    // GRI.ResetCountdown: a 1 s repeating DecrementCountdown timer.
+    lobby_.countdownTimer += dt;
+    while (lobby_.countdownTimer >= 1.0f && lobby_.countdown > 0) {
+        lobby_.countdownTimer -= 1.0f;
+        --lobby_.countdown;
+        FlowTrace::emit("gamelobby.countdownTick", {{"value", std::to_string(lobby_.countdown)}});
+        if (lobby_.countdown <= 0 && !lobby_.finalCountdown) {
+            // FinalCountdown.BeginState: AutobalanceTeams -> TeamHandler.AssignTeams() (from the online reservation,
+            // none offline) else ForceToTeam() -> PickTeam(255) for every human without a team.
+            lobby_.finalCountdown = true;
+            // Teams exist only for GTS_TeamGame lobbies (TnTeamHandlerTwoTeams); FFA has none.
+            if (lobby_.localTeam < 0 && lobby_.gameTeamStatus == 3) lobby_.localTeam = pickTeam();
+            FlowTrace::emit("gamelobby.finalCountdown", {{"team", std::to_string(lobby_.localTeam)},
+                                                         {"teamName", lobby_.localTeam == 0 ? "Autobots" : lobby_.localTeam == 1 ? "Decepticons" : "none (FFA)"}});
+        }
+    }
+    // ShouldStartGame = HasCountdownExpired() && !PC.IsJoiningASession() -> StartLevel().
+    if (lobby_.finalCountdown && lobby_.countdown <= 0) {
+        lobby_.countingDown = false;
+        startLevel();
+    }
+}
+
+void GameFlow::startLevel() {
+    const GameSettings* gs = lobby_.settings;
+    const MapInfo* mi = cat_->mapById(lobby_.mapId);
+    if (!gs || !mi) { LOG_WARN("FLOW StartLevel: no settings/map"); return; }
+    // GameSettings.BuildURL(MapURL); LobbyGRI.ModifyURL(MapURL): GetMapFilename() $ MapURL $ "?MapId=" $ GetMapID().
+    std::string url = mi->mapFilename + buildMatchUrl(*gs) + "?MapId=" + std::to_string(mi->mapId);
+    match_ = MatchLaunch{};
+    match_.url = Url::parse(url);
+    match_.map = mi;
+    match_.settings = gs;
+    match_.modeTag = gs->tag;
+    match_.mapId = mi->mapId;
+    // What the match reads back from the URL (TnMultiplayerGame.InitGame / GameInfo.InitGame).
+    match_.goalScore = std::max(0, match_.url.intOption("PointsToWin", 0));
+    match_.rounds = std::max(0, match_.url.intOption("Rounds", 0));
+    match_.timeLimit = std::max(0, match_.url.intOption("TimeLimit", 0));
+    match_.gameTeamStatus = match_.url.intOption("GameTeamStatus", 0);
+    match_.teamIndex = lobby_.localTeam;
+    FlowTrace::emit("gamelobby.startLevel", {{"url", url}});
+    travel(url, true);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Match map
+
+void GameFlow::matchLoaded() {
+    pendingMatch_ = false;
+    travelPending_ = false;
+    level_ = LevelKind::Match;
+    levelUrl_ = match_.url;
+    FlowTrace::emit("level.begin", {{"level", "Match"}, {"map", levelUrl_.map()}, {"url", levelUrl_.toString()}});
+    // GRI.PostBeginPlay -> OnUIEvent(15); UpdateUiController selects GRI.GameClass.default.UIControllerClass:
+    // TnVersusGame / TnMultiplayerGame -> TnUIControllerMultiplayer (StartingState WaitingOnGameStart).
+    setUIController(UIControllerClass::Multiplayer);
+    ui_.setGRIAvailable(true);
+    // PlayerController.CanCloseLoadingMovie: the world is fully loaded before gameplay [HIGH].
+    closeLoadingMovie();
+}
+
+void GameFlow::matchLoadFailed(const std::string& why) {
+    pendingMatch_ = false;
+    FlowTrace::emit("match.loadFailed", {{"why", why}});
+    travel(kFrontEndMap, false);
+}
+
+void GameFlow::showMenu() {
+    // Xe-TransInput.ini: Escape / XboxTypeS_Start = "|onrelease showmenu" -> TnPlayerController.ShowMenu ->
+    // UIController.OnUIEvent(6) [CONFIRMED].
+    if (level_ != LevelKind::Match) return;
+    ui_.onUIEvent((int)UIEvent::Pause);
+}
+
+void GameFlow::uiClosedItself() { ui_.onCurrentUIClosed(); }
+
+int GameFlow::settingIndex(const GameSettings* gs, const std::string& field) const {
+    if (!gs) return -1;
+    const SettingField* f = gs->field(field);
+    if (!f) return -1;
+    auto c = settingValues_.find(gs->className);
+    if (c != settingValues_.end()) { auto v = c->second.find(field); if (v != c->second.end()) return v->second; }
+    return f->defaultIndex;
+}
+
+bool GameFlow::setSettingValue(const std::string& field, const std::string& valueName) {
+    if (!currentSettings_) return false;
+    const SettingField* f = currentSettings_->field(field);
+    if (!f) return false;
+    for (size_t i = 0; i < f->values.size(); ++i)
+        if (f->values[i] == valueName) {
+            settingValues_[currentSettings_->className][field] = (int)i;
+            FlowTrace::emit("settings.write", {{"settings", currentSettings_->className}, {"field", field}, {"value", valueName}});
+            return true;
+        }
+    return false;
+}
+
+std::string GameFlow::stateSummary() const {
+    char b[512];
+    const MapInfo* mi = cat_ ? cat_->mapById(lobby_.mapId) : nullptr;
+    std::snprintf(b, sizeof b, "level=%s ui=%s/%s movie=%s loading=%s mode=%s map=%s countdown=%d",
+                  levelKindName(level_), uiControllerClassName(ui_.cls()), uiStateName(ui_.state()),
+                  ui_.openMovie().empty() ? (openMovies_.empty() ? "-" : openMovies_.back().c_str()) : ui_.openMovie().c_str(),
+                  loading_.active ? loading_.kind.c_str() : "no", lobby_.gameModeTag.empty() ? "-" : lobby_.gameModeTag.c_str(),
+                  mi ? mi->friendlyName.c_str() : "-", lobby_.countdown);
+    return b;
+}
+
+void GameFlow::traceSnapshot(const char* why) const {
+    FlowTrace::emit("snapshot", {{"why", why}, {"level", levelKindName(level_)}, {"map", levelUrl_.map()},
+                                 {"uiController", uiControllerClassName(ui_.cls())}, {"uiState", uiStateName(ui_.state())},
+                                 {"openMovie", ui_.openMovie()}, {"loading", FlowTrace::boolean(loading_.active)},
+                                 {"mode", lobby_.gameModeTag}, {"mapId", std::to_string(lobby_.mapId)},
+                                 {"countdown", std::to_string(lobby_.countdown)}, {"team", std::to_string(lobby_.localTeam)},
+                                 {"hud", FlowTrace::boolean(ui_.hudVisible())}});
+}
+
+} // namespace frontend
+
+namespace frontend {
+std::string BridgeValue::str() const {
+    switch (kind) {
+    case Kind::Bool: return b ? "true" : "false";
+    case Kind::Number: { char buf[32]; std::snprintf(buf, sizeof buf, "%g", n); return buf; }
+    case Kind::String: return s;
+    default: return "";
+    }
+}
+} // namespace frontend

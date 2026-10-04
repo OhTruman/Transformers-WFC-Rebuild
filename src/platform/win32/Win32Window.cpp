@@ -108,6 +108,15 @@ public:
         }
 
         pollGamepad(input);
+        // UI keys: keyboard (the GFx key codes the movies expect: arrows, Enter, Escape, F1-F4, PgUp/PgDn/Home/End)
+        // plus gamepad buttons.
+        static const int uiVk[(int)UiKey::Count] = {VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_RETURN, VK_ESCAPE, VK_F1, VK_F2, VK_F3,
+                                                     VK_F4, VK_PRIOR, VK_NEXT, VK_HOME, VK_END, VK_F5, VK_F6};
+        uint32_t ui = 0;
+        if (focused_)
+            for (int i = 0; i < (int)UiKey::Count; ++i)
+                if (GetAsyncKeyState(uiVk[i]) & 0x8000) ui |= 1u << i;
+        input.uiDown = ui | padUi_;
         return true;
     }
 
@@ -147,6 +156,8 @@ private:
         return true;
     }
 
+    uint32_t padUi_ = 0;
+
     POINT centerScreen() const {
         RECT rc; GetClientRect(hwnd_, &rc);
         POINT c{(rc.right - rc.left) / 2, (rc.bottom - rc.top) / 2};
@@ -168,7 +179,27 @@ private:
             input.padRX = axis(st.Gamepad.sThumbRX, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
             input.padRY = axis(st.Gamepad.sThumbRY, XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE);
             input.padLT = st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD ? st.Gamepad.bLeftTrigger / 255.0f : 0.0f;
+            WORD b = st.Gamepad.wButtons;
+            auto bit = [](UiKey k) { return 1u << (int)k; };
+            padUi_ = 0;
+            if (b & XINPUT_GAMEPAD_DPAD_UP) padUi_ |= bit(UiKey::Up);
+            if (b & XINPUT_GAMEPAD_DPAD_DOWN) padUi_ |= bit(UiKey::Down);
+            if (b & XINPUT_GAMEPAD_DPAD_LEFT) padUi_ |= bit(UiKey::Left);
+            if (b & XINPUT_GAMEPAD_DPAD_RIGHT) padUi_ |= bit(UiKey::Right);
+            if (b & XINPUT_GAMEPAD_A) padUi_ |= bit(UiKey::Accept);
+            if (b & XINPUT_GAMEPAD_B) padUi_ |= bit(UiKey::Back);
+            if (b & XINPUT_GAMEPAD_X) padUi_ |= bit(UiKey::X);
+            if (b & XINPUT_GAMEPAD_Y) padUi_ |= bit(UiKey::Y);
+            if (b & XINPUT_GAMEPAD_START) padUi_ |= bit(UiKey::Start);
+            if (b & XINPUT_GAMEPAD_BACK) padUi_ |= bit(UiKey::Select);
+            if (b & XINPUT_GAMEPAD_LEFT_SHOULDER) padUi_ |= bit(UiKey::LB);
+            if (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) padUi_ |= bit(UiKey::RB);
+            if (st.Gamepad.bLeftTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) padUi_ |= bit(UiKey::LT);
+            if (st.Gamepad.bRightTrigger > XINPUT_GAMEPAD_TRIGGER_THRESHOLD) padUi_ |= bit(UiKey::RT);
+            if (b & XINPUT_GAMEPAD_LEFT_THUMB) padUi_ |= bit(UiKey::LThumb);
+            if (b & XINPUT_GAMEPAD_RIGHT_THUMB) padUi_ |= bit(UiKey::RThumb);
         } else {
+            padUi_ = 0;
             input.padConnected = false;
             input.padLX = input.padLY = input.padRX = input.padRY = 0.0f;
             input.padLT = 0.0f;

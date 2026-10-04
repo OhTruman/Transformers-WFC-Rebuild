@@ -74,14 +74,14 @@ void World::load(render::IRenderer& renderer) {
 bool World::loadVerticalSlice(render::IRenderer& renderer) {
     const std::string root = assetRoot();
     render::MeshData mapMesh;
-    renderer.loadMapRenderData("MP_IAC_Streets");   // original-data shader path (if generated)
+    renderer.loadMapRenderData(mapName_);   // original-data shader path (if generated)
     // The match's authored rule classes gate rule-dependent presentation (objective bases, Conquest totems,
     // objective-factory effects) exactly as GameInfo.HasRule gates the world state. [integration] Gameplay's
     // match mode now supplies the rules Rendering's interim WFC_GAMERULES stood in for; select the mode with
     // WFC_GAMEMODE.
     renderer.setActiveGameRules(gameRulesForMode(matchMode_));
 
-    bool okMap = assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", mapMesh);
+    bool okMap = assets::loadGlb(root + "/Maps/" + mapName_ + "/world.glb", mapMesh);
     bool okRobot = assets::loadSkinnedGlb(root + "/Characters/Optimus/robot.glb", robotModel_);
     bool okVeh = assets::loadSkinnedGlb(root + "/Characters/Optimus/vehicle.glb", vehicleModel_);
     if (!okMap || !okRobot || !okVeh) return false;
@@ -120,7 +120,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     LOG_INFO("textures: %d loaded, %d failed, %zu unique", loaded, failed, texCache.size());
 
     // Baked lightmap atlases: resolve each submesh's _LM atlas name to a GL texture.
-    const std::string lmDir = root + "/Maps/MP_IAC_Streets/lightmaps/";
+    const std::string lmDir = root + "/Maps/" + mapName_ + "/lightmaps/";
     int lmBound = 0;
     for (render::SubMesh& sm : mapMesh.subs) {
         if (sm.lightmapName.empty()) continue;
@@ -165,7 +165,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     // collision_weapon.glb blocks hitscan / line checks (BSP + the 34 weapon-blocking volumes + hulls).
     // collision.glb (render geometry of every blocking prop) is only a fallback. Movers' triangles are split
     // out into moving collision sets (MapState).
-    const std::string mapDir = root + "/Maps/MP_IAC_Streets/";
+    const std::string mapDir = root + "/Maps/" + mapName_ + "/";
     mapState_.load(mapDir + "gameplay.json", matchMode_);
     auto splitMovers = [](const render::MeshData& in, render::MeshData& out,
                           std::vector<std::pair<std::string, std::vector<core::Vec3>>>& moverTris) {
@@ -229,7 +229,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     // start's authored rotation.
     spawnPos_ = {0, 0, 0};
     spawnYaw_ = 0.0f;
-    if (loadSpawn(root + "/Maps/MP_IAC_Streets/spawnpoints.json", spawnPos_, spawnYaw_)) {
+    if (loadSpawn(root + "/Maps/" + mapName_ + "/spawnpoints.json", spawnPos_, spawnYaw_)) {
         LOG_INFO("World: %s spawn at %.1f, %.1f, %.1f facing yaw %.2f", gameModeName(matchMode_),
                  spawnPos_.x, spawnPos_.y, spawnPos_.z, spawnYaw_);
     }
@@ -251,8 +251,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     // Authored Streets pickup factories and destructibles (AssetTools 7a69756). Their meshes, effects and beams are
     // presented by the renderer from the map data; graybox scaffold pickups only with WFC_GRAYBOXPICKUPS.
     actors_.clear();
-    loadPickupFactories(root + "/Maps/MP_IAC_Streets/gameplay.json");
-    loadDestructibles(root + "/Maps/MP_IAC_Streets/physics.json", root + "/../content/");
+    loadPickupFactories(root + "/Maps/" + mapName_ + "/gameplay.json");
+    loadDestructibles(root + "/Maps/" + mapName_ + "/physics.json", root + "/../content/");
     if (std::getenv("WFC_GRAYBOXPICKUPS")) {
         actors_.push_back(std::make_unique<Pickup>(spawnPos_ + core::Vec3{3, 0, 0}, Pickup::Kind::Health));
         actors_.push_back(std::make_unique<Pickup>(spawnPos_ + core::Vec3{-3, 0, 2}, Pickup::Kind::Ammo));
@@ -592,7 +592,7 @@ void World::setAudio(audio::IAudio* a) {
     const std::string base = assetRoot() + "/../content/";
     // All audio = the original SoundCues (weapon, vehicle, robot movement, transformation, fine aim).
     cues_.load(a, base);
-    ambient_.load(assetRoot() + "/Maps/MP_IAC_Streets/audio.json", base, cues_, a);
+    ambient_.load(assetRoot() + "/Maps/" + mapName_ + "/audio.json", base, cues_, a);
     // Occlusion line check listener -> source against the world collision. Attached (player-owned)
     // sounds are tested against the pawn's body (mesh origin + 1.5 m), not the socket tip, which can
     // poke into walls (the arm / gun have no collision). The last 0.5 m at the source and 0.25 m at

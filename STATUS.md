@@ -3,6 +3,60 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## FRONTEND PASS 2 (2026-10-03, branch `agents/frontend`) — original Scaleform frontend, private match, return
+Details and handoffs: `docs/FRONTEND.md`.
+
+**Cold boot plays the intro chain** (Activision, Hasbro, High Moon logos, FMV_intro) **and then the shipped menus,
+which drive the flow.** A SWF 8 / AS2 runtime with a GL renderer runs the cooked GFx
+movies unmodified. Playable with keys or pad:
+1. title → Press START → main menu → Multiplayer;
+2. party lobby → Private Match → Team Deathmatch → Host Options (authored values) → Create Game;
+3. game lobby (Streets thumbnail, rules) → Start Game → "MATCH STARTS IN 10…0";
+4. loading screen (TF_LoadingScreen Bink under LoadScreen_GFX, "TEAM DEATHMATCH") → Streets TDM;
+5. Esc → original Pause menu → Quit Game → frontend.
+
+**Validation:**
+- `wfc_frontend_tests` 59/0.
+- Four-cycle soak: the frontend works after every return.
+- Memory is flat after the GL release (~3.0 GB loaded / ~2.5 GB after unload; previously +1.6 GB per cycle).
+- Merge preview with agents/systems builds and plays the authored frontend / lobby music and UI cues (two mechanical
+  conflicts; resolutions in docs/FRONTEND.md).
+
+**Not yet:**
+- movie audio (video of the logos, FMV_intro and the loading Binks plays; Media Foundation);
+- the UI_FrontEnd_m 3D backdrop (not exported);
+- a threaded level load;
+- GFx filters / blend modes;
+- Gameplay match lifecycle (a PROVISIONAL adapter starts the match at once);
+- HUD movie ownership.
+
+## FRONTEND PASS 1 (2026-10-03, branch `agents/frontend`) — boot → frontend → lobbies → match → return
+Base: integration/milestone-04 (a03d7f7). Details, provenance and handoffs: `docs/FRONTEND.md`.
+
+**Default boot is now the frontend.**
+- The executable boots `UI_FrontEnd_m`, then runs the authored chain: MovieLoader → intro chain → FrontEnd UI.
+- **Multiplayer:** `Online.OpenPartyLobby(GTS_TeamGame)` → party lobby → `EditGameMode` / `PlayPrivateGame(TDM)` →
+  game lobby (host's choice) → `SetSelectedMapID(508)` → `BeginLobbyExitCountdown` → 10 s countdown → team pick →
+  match URL → loading ("Team Deathmatch" / "in Streets" + 3 tips) → the existing Streets runtime in TDM.
+- **Return:** Escape = ShowMenu → Paused (PauseMenu_GFX_1) → `Game.QuitToMainMenu` → back to the frontend. Launching
+  again works; tested TDM then DM in one process.
+- **Legacy direct boot is unchanged:** `WFC_BOOT=match`, or any existing automation variable
+  (`WFC_SMOKE_FRAMES`, `WFC_GAMEMODE`, …).
+- **Catalog:** maps / modes / playlists / localization are read from the AssetTools manifests. Streets is the only
+  provider with rebuild runtime data; the other 12 are disabled (HasRequiredAssets). A new map's runtime directory
+  enables it with no code change; this is tested.
+
+**Not yet:**
+- **(Superseded by pass 2.)** No GFx presentation: frontend screens were black. The menu flow was driven
+  by the original bridge calls via `WFC_FRONTEND_AUTOPLAY=TDM,508` or `WFC_FRONTEND_SCRIPT`.
+- **No video decoding.**
+- **No Gameplay match lifecycle.** A PROVISIONAL adapter starts InGame immediately.
+
+**Validation:**
+- `wfc_frontend_tests` 59/59;
+- scripted runs: boot → TDM Streets (240 match frames); TDM → pause → quit → DM relaunch → exit;
+- clean Debug build (existing warning in WfcMapFx.cpp only).
+
 ## INTEGRATION MILESTONE 04 (2026-10-03) — branch `integration/milestone-04` — first full-map Streets playtest build
 Purpose: one playable Release build containing all current MP_IAC_Streets work on the corrected world.
 Integration only: no new features, no RE, no tuning. Base: integration/milestone-03 (356c352).

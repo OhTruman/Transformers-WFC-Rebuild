@@ -1,0 +1,4681 @@
+{
+ "generated_by": "tools/frontend/export_game_settings.py",
+ "source": "AssetTools/manifests/authored.db TransGame.Default__TnOnlineGameSettings* (CONFIRMED authored defaults), merged over parents",
+ "classes": {
+  "TnOnlineGameSettingsBase": {
+   "LobbyGameClass": "TransGame.TnGameLobbyGame",
+   "LobbyMapName": "UI_Lobby_m"
+  },
+  "TnOnlineGameSettingsCCP": {
+   "GameClass": "TransContent.TnCoopGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameCoop",
+   "LobbyMapName": "UI_CampaignLobby_m",
+   "GameModeTag": "CCP",
+   "NumRequiredPlayers": 2,
+   "TeamType": "GTS_CampaignGame",
+   "Rules": [
+    "TransGame.TnGameRules_TrackKills",
+    "TransGame.TnGameRules_CompetitiveScoring"
+   ],
+   "FriendlyName": "Campaign",
+   "Description": "Cooperative Adventure where you compete for points",
+   "RulesFormat": "Competitive Cooperative Adventure",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsCCPPrivate": {
+   "GameClass": "TransContent.TnCoopGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameCoop",
+   "LobbyMapName": "UI_CampaignLobby_m",
+   "GameModeTag": "CCP",
+   "NumRequiredPlayers": 2,
+   "TeamType": "GTS_CampaignGame",
+   "NumPrivateConnections": 3,
+   "bUsesStats": false,
+   "Rules": [
+    "TransGame.TnGameRules_TrackKills",
+    "TransGame.TnGameRules_CompetitiveScoring"
+   ],
+   "FriendlyName": "Campaign",
+   "Description": "Cooperative Adventure where you compete for points",
+   "RulesFormat": "Competitive Cooperative Adventure",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsCCPPublic": {
+   "GameClass": "TransContent.TnCoopGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameCoop",
+   "LobbyMapName": "UI_CampaignLobby_m",
+   "GameModeTag": "CCP",
+   "NumRequiredPlayers": 2,
+   "TeamType": "GTS_CampaignGame",
+   "NumPublicConnections": 3,
+   "Rules": [
+    "TransGame.TnGameRules_TrackKills",
+    "TransGame.TnGameRules_CompetitiveScoring"
+   ],
+   "FriendlyName": "Campaign",
+   "Description": "Cooperative Adventure where you compete for points",
+   "RulesFormat": "Competitive Cooperative Adventure",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsCP": {
+   "GameClass": "TransContent.TnCoopGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameCoop",
+   "LobbyMapName": "UI_CampaignLobby_m",
+   "GameModeTag": "CP",
+   "NumRequiredPlayers": 2,
+   "TeamType": "GTS_CampaignGame",
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKills",
+    "TransGame.TnGameRules_TrackKills"
+   ],
+   "FriendlyName": "Campaign",
+   "Description": "Cooperative Adventure",
+   "RulesFormat": "Cooperative Adventure",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsCPPrivate": {
+   "GameClass": "TransContent.TnCoopGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameCoop",
+   "LobbyMapName": "UI_CampaignLobby_m",
+   "GameModeTag": "CP",
+   "NumRequiredPlayers": 2,
+   "TeamType": "GTS_CampaignGame",
+   "NumPrivateConnections": 3,
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKills",
+    "TransGame.TnGameRules_TrackKills"
+   ],
+   "FriendlyName": "Campaign",
+   "Description": "Cooperative Adventure",
+   "RulesFormat": "Cooperative Adventure",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsCPPublic": {
+   "GameClass": "TransContent.TnCoopGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameCoop",
+   "LobbyMapName": "UI_CampaignLobby_m",
+   "GameModeTag": "CP",
+   "NumRequiredPlayers": 2,
+   "TeamType": "GTS_CampaignGame",
+   "NumPublicConnections": 3,
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKills",
+    "TransGame.TnGameRules_TrackKills"
+   ],
+   "FriendlyName": "Campaign",
+   "Description": "Cooperative Adventure",
+   "RulesFormat": "Cooperative Adventure",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsCPSolo": {
+   "GameClass": "TransContent.TnCampaignGameSolo",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameSolo",
+   "LobbyMapName": "UI_CampaignLobby_m",
+   "GameModeTag": "SOLO",
+   "NumRequiredPlayers": 1,
+   "TeamType": "GTS_CampaignGame",
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKills",
+    "TransGame.TnGameRules_TrackKills"
+   ],
+   "FriendlyName": "Campaign",
+   "Description": "Solo Adventure",
+   "RulesFormat": "Solo Adventure",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741828,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsCTF": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "CTF",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "TimeLimits": [
+    240.0,
+    300.0,
+    360.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_SingleFlagCTF",
+    "TransGame.TnGameRules_ScoreFlags",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTimeCTF"
+   ],
+   "FriendlyName": "Code of Power",
+   "Description": "Capture the Code of Power. Teams switch between offense and defense.",
+   "RulesFormat": "Capture and plant the Code of Power. Team with the highest score after `r rounds wins.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 4,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741830,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 2,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Round Length",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "4 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "5 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "6 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741830,
+     "Name": "Rounds",
+     "ColumnHeaderText": "Rounds",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 2,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 4,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 6,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsCTFPrivate": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "CTF",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "NumPrivateConnections": 10,
+   "bUsesStats": false,
+   "TimeLimits": [
+    240.0,
+    300.0,
+    360.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_SingleFlagCTF",
+    "TransGame.TnGameRules_ScoreFlags",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTimeCTF"
+   ],
+   "FriendlyName": "Code of Power",
+   "Description": "Capture the Code of Power. Teams switch between offense and defense.",
+   "RulesFormat": "Capture and plant the Code of Power. Team with the highest score after `r rounds wins.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 4,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741830,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 2,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Round Length",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "4 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "5 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "6 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741830,
+     "Name": "Rounds",
+     "ColumnHeaderText": "Rounds",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 2,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 4,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 6,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsCTFPublic": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "CTF",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "NumPublicConnections": 10,
+   "TimeLimits": [
+    240.0,
+    300.0,
+    360.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_SingleFlagCTF",
+    "TransGame.TnGameRules_ScoreFlags",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTimeCTF"
+   ],
+   "FriendlyName": "Code of Power",
+   "Description": "Capture the Code of Power. Teams switch between offense and defense.",
+   "RulesFormat": "Capture and plant the Code of Power. Team with the highest score after `r rounds wins.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 4,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741830,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 2,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Round Length",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "4 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "5 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "6 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741830,
+     "Name": "Rounds",
+     "ColumnHeaderText": "Rounds",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 2,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 4,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 6,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsDM": {
+   "GameClass": "TransContent.TnFreeForAllGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameFreeForAll",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "DM",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_FreeForAllGame",
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsDM",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressKills"
+   ],
+   "FriendlyName": "Deathmatch",
+   "Description": "Free-for-all deathmatch.",
+   "RulesFormat": "Kill `p enemies to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 2,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 20,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 10,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 20,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 30,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsDMPrivate": {
+   "GameClass": "TransContent.TnFreeForAllGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameFreeForAll",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "DM",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_FreeForAllGame",
+   "NumPrivateConnections": 10,
+   "bUsesStats": false,
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsDM",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressKills"
+   ],
+   "FriendlyName": "Deathmatch",
+   "Description": "Free-for-all deathmatch.",
+   "RulesFormat": "Kill `p enemies to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 2,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 20,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 10,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 20,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 30,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsDMPublic": {
+   "GameClass": "TransContent.TnFreeForAllGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameFreeForAll",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "DM",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_FreeForAllGame",
+   "NumPublicConnections": 10,
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsDM",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressKills"
+   ],
+   "FriendlyName": "Deathmatch",
+   "Description": "Free-for-all deathmatch.",
+   "RulesFormat": "Kill `p enemies to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 2,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 20,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 10,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 20,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 30,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsDOM": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "DOM",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreDomination",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressPoints"
+   ],
+   "FriendlyName": "Conquest",
+   "Description": "Maintain control over multiple power nodes.",
+   "RulesFormat": "Control multiple nodes and accumulate `p points to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 9,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 400,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "PropertyId": 1073741831,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 900,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 0,
+     "Name": "None",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 0,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 0,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 150,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 200,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 250,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 300,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 400,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 500,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 600,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 900,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 1200,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsDOMPrivate": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "DOM",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "NumPrivateConnections": 10,
+   "bUsesStats": false,
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreDomination",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressPoints"
+   ],
+   "FriendlyName": "Conquest",
+   "Description": "Maintain control over multiple power nodes.",
+   "RulesFormat": "Control multiple nodes and accumulate `p points to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 9,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 400,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "PropertyId": 1073741831,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 900,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 0,
+     "Name": "None",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 0,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 0,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 150,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 200,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 250,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 300,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 400,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 500,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 600,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 900,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 1200,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsDOMPublic": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "DOM",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "NumPublicConnections": 10,
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreDomination",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressPoints"
+   ],
+   "FriendlyName": "Conquest",
+   "Description": "Maintain control over multiple power nodes.",
+   "RulesFormat": "Control multiple nodes and accumulate `p points to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 9,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 400,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "PropertyId": 1073741831,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 900,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 0,
+     "Name": "None",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 0,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 0,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 150,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 200,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 250,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 300,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 400,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 500,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 600,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 900,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 1200,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsEXT": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "EXT",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreBombingRun",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime"
+   ],
+   "FriendlyName": "Countdown to Extinction",
+   "Description": "Use the neutral bomb to destroy the enemy team's base.",
+   "RulesFormat": "Plant the bomb in the enemy's base `p times to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 7,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 3,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 1,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 3,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 5,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsEXTPrivate": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "EXT",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "NumPrivateConnections": 10,
+   "bUsesStats": false,
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreBombingRun",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime"
+   ],
+   "FriendlyName": "Countdown to Extinction",
+   "Description": "Use the neutral bomb to destroy the enemy team's base.",
+   "RulesFormat": "Plant the bomb in the enemy's base `p times to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 7,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 3,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 1,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 3,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 5,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsEXTPublic": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "EXT",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "NumPublicConnections": 10,
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreBombingRun",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime"
+   ],
+   "FriendlyName": "Countdown to Extinction",
+   "Description": "Use the neutral bomb to destroy the enemy team's base.",
+   "RulesFormat": "Plant the bomb in the enemy's base `p times to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 7,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 3,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 1,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 3,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 5,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsKOTH": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "KOTH",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreKingOfTheHill",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressPoints"
+   ],
+   "FriendlyName": "Power Struggle",
+   "Description": "Gain control of the active power node.",
+   "RulesFormat": "Control the active power node and accumulate `p points to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 5,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 400,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 150,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 200,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 250,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 300,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 400,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 500,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsKOTHPrivate": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "KOTH",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "NumPrivateConnections": 10,
+   "bUsesStats": false,
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreKingOfTheHill",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressPoints"
+   ],
+   "FriendlyName": "Power Struggle",
+   "Description": "Gain control of the active power node.",
+   "RulesFormat": "Control the active power node and accumulate `p points to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 5,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 400,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 150,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 200,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 250,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 300,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 400,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 500,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsKOTHPublic": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "KOTH",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "NumPublicConnections": 10,
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreKingOfTheHill",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressPoints"
+   ],
+   "FriendlyName": "Power Struggle",
+   "Description": "Gain control of the active power node.",
+   "RulesFormat": "Control the active power node and accumulate `p points to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 5,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 400,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 150,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 200,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 250,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 300,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 400,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 500,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsPartyPersistent": {
+   "LobbyGameClass": "TransGame.TnGameLobbyGame",
+   "LobbyMapName": "UI_Lobby_m",
+   "NumPublicConnections": 10,
+   "bUsesStats": false,
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 8,
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsPartyPresence": {
+   "LobbyGameClass": "TransGame.TnGameLobbyGame",
+   "LobbyMapName": "UI_Lobby_m",
+   "NumPublicConnections": 10,
+   "bUsesStats": false,
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 8,
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsSV": {
+   "GameClass": "TransContent.TnSurvivalGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameSurvival",
+   "LobbyMapName": "UI_CampaignLobby_m",
+   "GameModeTag": "SV",
+   "NumRequiredPlayers": 2,
+   "TeamType": "GTS_SingleTeamGame",
+   "Rules": [
+    "TransGame.TnGameRules_CompetitiveScoring",
+    "TransGame.TnGameRules_TrackKills"
+   ],
+   "FriendlyName": "Escalation",
+   "Description": "Survive waves of attacks",
+   "RulesFormat": "Survive waves of attacks",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 6,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsSVPrivate": {
+   "GameClass": "TransContent.TnSurvivalGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameSurvival",
+   "LobbyMapName": "UI_CampaignLobby_m",
+   "GameModeTag": "SV",
+   "NumRequiredPlayers": 2,
+   "TeamType": "GTS_SingleTeamGame",
+   "NumPrivateConnections": 4,
+   "Rules": [
+    "TransGame.TnGameRules_CompetitiveScoring",
+    "TransGame.TnGameRules_TrackKills"
+   ],
+   "FriendlyName": "Escalation",
+   "Description": "Survive waves of attacks",
+   "RulesFormat": "Survive waves of attacks",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 6,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsSVPublic": {
+   "GameClass": "TransContent.TnSurvivalGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameSurvival",
+   "LobbyMapName": "UI_CampaignLobby_m",
+   "GameModeTag": "SV",
+   "NumRequiredPlayers": 2,
+   "TeamType": "GTS_SingleTeamGame",
+   "NumPublicConnections": 4,
+   "Rules": [
+    "TransGame.TnGameRules_CompetitiveScoring",
+    "TransGame.TnGameRules_TrackKills"
+   ],
+   "FriendlyName": "Escalation",
+   "Description": "Survive waves of attacks",
+   "RulesFormat": "Survive waves of attacks",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 6,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsTDM": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "TDM",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsTDM",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressKills"
+   ],
+   "FriendlyName": "Team Deathmatch",
+   "Description": "Eliminate the enemy team.",
+   "RulesFormat": "Kill `p enemies from the other team to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 3,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 40,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 20,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 30,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 40,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 50,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsTDMPrivate": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "TDM",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "NumPrivateConnections": 10,
+   "bUsesStats": false,
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsTDM",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressKills"
+   ],
+   "FriendlyName": "Team Deathmatch",
+   "Description": "Eliminate the enemy team.",
+   "RulesFormat": "Kill `p enemies from the other team to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 3,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 40,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 20,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 30,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 40,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 50,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  },
+  "TnOnlineGameSettingsTDMPublic": {
+   "GameClass": "TransContent.TnVersusGame",
+   "LobbyGameClass": "TransContent.TnGameLobbyGameTeam",
+   "LobbyMapName": "UI_Lobby_m",
+   "GameModeTag": "TDM",
+   "NumRequiredPlayers": 4,
+   "TeamType": "GTS_TeamGame",
+   "NumPublicConnections": 10,
+   "TimeLimits": [
+    600.0,
+    900.0,
+    1200.0
+   ],
+   "Rules": [
+    "TransGame.TnGameRules_ScoreKillsTDM",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressKills"
+   ],
+   "FriendlyName": "Team Deathmatch",
+   "Description": "Eliminate the enemy team.",
+   "RulesFormat": "Kill `p enemies from the other team to win.",
+   "LocalizedSettings": [
+    {
+     "Id": 32779,
+     "ValueIndex": 3,
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "Id": 1073741842,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741844,
+     "ValueIndex": 0,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    },
+    {
+     "Id": 1073741831,
+     "ValueIndex": 1,
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "Properties": [
+    {
+     "PropertyId": 268435491,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": -1,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 268435526,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 0,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_OnlineService"
+    },
+    {
+     "PropertyId": 1073741832,
+     "Data": {
+      "Type": "SDT_Int32",
+      "Value1": 40,
+      "ValueStr": ""
+     },
+     "AdvertisementType": "ODAT_DontAdvertise"
+    }
+   ],
+   "LocalizedSettingsMappings": [
+    {
+     "Id": 32779,
+     "Name": "GameMode",
+     "ColumnHeaderText": "",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "None",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741842,
+     "Name": "AutobalanceTeams",
+     "ColumnHeaderText": "Team Balancing",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Manual",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Autobalanced",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741844,
+     "Name": "MapSelectionMethod",
+     "ColumnHeaderText": "Map Selection",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "Rotate",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "Host's Choice",
+       "bIsWildcard": false
+      }
+     ]
+    },
+    {
+     "Id": 1073741831,
+     "Name": "TimeLimit",
+     "ColumnHeaderText": "Time Limit",
+     "ValueMappings": [
+      {
+       "Id": 0,
+       "Name": "10 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 1,
+       "Name": "15 minutes",
+       "bIsWildcard": false
+      },
+      {
+       "Id": 2,
+       "Name": "20 minutes",
+       "bIsWildcard": false
+      }
+     ]
+    }
+   ],
+   "PropertyMappings": [
+    {
+     "Id": 268435491,
+     "Name": "PlaylistId",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 268435526,
+     "Name": "GamerRegion",
+     "ColumnHeaderText": "",
+     "MappingType": "PVMT_RawValue",
+     "ValueMappings": [],
+     "PredefinedValues": [],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    },
+    {
+     "Id": 1073741832,
+     "Name": "PointsToWin",
+     "ColumnHeaderText": "Points to Win",
+     "MappingType": "PVMT_PredefinedValues",
+     "ValueMappings": [],
+     "PredefinedValues": [
+      {
+       "Type": "SDT_Int32",
+       "Value1": 20,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 30,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 40,
+       "ValueStr": ""
+      },
+      {
+       "Type": "SDT_Int32",
+       "Value1": 50,
+       "ValueStr": ""
+      }
+     ],
+     "MinVal": 0.0,
+     "MaxVal": 0.0,
+     "RangeIncrement": 0.0
+    }
+   ]
+  }
+ }
+}
