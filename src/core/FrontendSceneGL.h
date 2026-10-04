@@ -11,13 +11,27 @@
 // recreated after every match.
 #pragma once
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
+
+#include <functional>
 
 #include "frontend/FrontendScene.h"
 #include "render/Renderer.h"
 #include "ui/gl/GlCensus.h"
 
 namespace core {
+
+// Rendering's frontend-scene entry points (agents/rendering 004327c: IRenderer::loadFrontendScene / drawFrontendScene /
+// unloadFrontendScene, setLoadYield) are used when the IRenderer in this tree has them; otherwise the interim path.
+template <class R, class = void> struct HasFrontendScene : std::false_type {};
+template <class R>
+struct HasFrontendScene<R, std::void_t<decltype(std::declval<R&>().loadFrontendScene(std::declval<const std::vector<std::string>&>()))>>
+    : std::true_type {};
+template <class R, class = void> struct HasLoadYield : std::false_type {};
+template <class R>
+struct HasLoadYield<R, std::void_t<decltype(std::declval<R&>().setLoadYield(std::declval<std::function<void()>>()))>> : std::true_type {};
 
 class FrontendSceneGL final : public frontend::IFrontendSceneRenderer {
 public:
@@ -36,6 +50,7 @@ private:
     render::MeshHandle mesh_ = render::kInvalidMesh;
     ui::GlCensus census_;
     bool censusActive_ = false;
+    bool native_ = false;                         // Rendering's loadFrontendScene owns the family
 };
 
 } // namespace core

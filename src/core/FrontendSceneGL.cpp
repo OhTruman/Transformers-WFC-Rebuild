@@ -14,6 +14,21 @@
 namespace core {
 
 namespace {
+template <class R> bool nativeLoad(R* r, const std::vector<std::string>& levels) {
+    if constexpr (HasFrontendScene<R>::value) return r->loadFrontendScene(levels);
+    else { (void)r; (void)levels; return false; }
+}
+template <class R> void nativeDraw(R* r, const frontend::SceneView& v, int w, int h) {
+    if constexpr (HasFrontendScene<R>::value)
+        r->drawFrontendScene(Vec3{(float)v.pos[0], (float)v.pos[1], (float)v.pos[2]}, Vec3{(float)v.rot[0], (float)v.rot[1], (float)v.rot[2]},
+                             (float)v.fov, w, h, v.time);
+    else { (void)r; (void)v; (void)w; (void)h; }
+}
+template <class R> void nativeUnload(R* r) {
+    if constexpr (HasFrontendScene<R>::value) r->unloadFrontendScene();
+    else (void)r;
+}
+
 std::string assetRoot() {
     if (const char* e = std::getenv("WFC_ASSETS")) return e;
     return config::kAssetRootDefault;
@@ -34,6 +49,14 @@ bool FrontendSceneGL::load(const std::vector<std::string>& levels) {
         ui::GlCensus::Owned none;
         release(none);
     }
+    // Rendering's own frontend-scene presentation (render data, map FX, post) when available.
+    if (nativeLoad(r_, levels)) {
+        family_ = family;
+        native_ = true;
+        LOG_INFO("frontend scene: %s presented by the renderer (loadFrontendScene)", family.c_str());
+        return true;
+    }
+    native_ = false;
     const std::string mapDir = assetRoot() + "/Maps/" + family + "/";
     if (!std::ifstream(mapDir + "world.glb").good()) { family_ = family; mesh_ = render::kInvalidMesh; return false; }
     if (!censusActive_) { census_.begin(); censusActive_ = true; }
@@ -64,6 +87,7 @@ bool FrontendSceneGL::load(const std::vector<std::string>& levels) {
 
 std::string FrontendSceneGL::release(const ui::GlCensus::Owned& keep) {
     if (!r_ || family_.empty()) return "";
+    if (native_) { nativeUnload(r_); native_ = false; family_.clear(); return "renderer unloadFrontendScene"; }
     r_->unloadMapRenderData();
     std::string s = censusActive_ ? census_.release(keep) : std::string();
     censusActive_ = false;
@@ -73,7 +97,9 @@ std::string FrontendSceneGL::release(const ui::GlCensus::Owned& keep) {
 }
 
 void FrontendSceneGL::draw(const frontend::SceneView& v, int width, int height) {
-    if (!r_ || mesh_ == render::kInvalidMesh || width <= 0 || height <= 0) return;
+    if (!r_ || width <= 0 || height <= 0) return;
+    if (native_) { nativeDraw(r_, v, width, height); return; }
+    if (mesh_ == render::kInvalidMesh) return;
     // UE (X fwd, Y right, Z up; units) -> the exports' glTF space: 0.01 * (x, z, y).
     const double kPi = 3.14159265358979323846;
     double P = v.rot[0] * kPi / 180, Y = v.rot[1] * kPi / 180;

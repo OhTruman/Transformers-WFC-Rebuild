@@ -70,6 +70,15 @@ namespace core {
 namespace {
 std::unique_ptr<frontend::IFrontendAudio> g_frontendAudio;
 std::unique_ptr<FrontendSceneGL> g_scene;   // the live level under the menus (interim IRenderer presentation)
+
+// Rendering's own bounded load-step callback (agents/rendering IRenderer::setLoadYield) when this tree's IRenderer has
+// it: the loading frames then also come from inside loadMapRenderData's steps.
+template <class R> void setRendererYield(R* r, bool on) {
+    if constexpr (HasLoadYield<R>::value) {
+        if (on) r->setLoadYield([] { core::loadYield("Render: load step"); });
+        else r->setLoadYield(std::function<void()>());
+    } else { (void)r; (void)on; }
+}
 // Process memory for the cycle soak (Experimental: leaks across frontend <-> match).
 ui::GlCensus g_census;   // GL objects created by a match (released on travel away; stopgap, see GlCensus.h)
 
@@ -237,7 +246,11 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
         if (shots && (++n == 10 || n == 60 || n == 120)) pendingShot_ = std::string(shots) + std::to_string(n) + ".bmp";
         drawFrontendFrame();
     });
-    struct YieldGuard { ~YieldGuard() { core::setLoadYield(nullptr); } } yieldGuard;   // also on the failure returns
+    struct YieldGuard {
+        render::IRenderer* r;
+        ~YieldGuard() { core::setLoadYield(nullptr); setRendererYield(r, false); }
+    } yieldGuard{renderer_};   // also on the failure returns
+    setRendererYield(renderer_, true);
     world_.load(*renderer_);
     core::loadYield("Application.loadMatch: world loaded");
     if (!world_.usingSlice()) { LOG_WARN("FLOW match world failed to load (graybox fallback)"); return false; }
