@@ -10,6 +10,7 @@
 #include "core/Log.h"
 
 #include <cstring>
+#include <mutex>
 #include <vector>
 
 namespace platform {
@@ -32,11 +33,12 @@ public:
     ~MFMoviePlayer() override { release(pending_); release(reader_); }
 
     bool open(const std::string& path) override {
-        if (!g_mfStarted) {
-            CoInitializeEx(nullptr, COINIT_MULTITHREADED);
-            g_mfStarted = SUCCEEDED(MFStartup(MF_VERSION));
-            if (!g_mfStarted) return false;
-        }
+        // COM per thread (movie audio is also decoded on a worker thread); Media Foundation once per process.
+        thread_local bool comReady = SUCCEEDED(CoInitializeEx(nullptr, COINIT_MULTITHREADED));
+        (void)comReady;
+        static std::once_flag once;
+        std::call_once(once, [] { g_mfStarted = SUCCEEDED(MFStartup(MF_VERSION)); });
+        if (!g_mfStarted) return false;
         path_ = path;
         return openVideo();
     }
@@ -87,6 +89,70 @@ public:
     bool frame(const uint8_t*& rgba, int& w, int& h, uint64_t& serial) const override {
         if (rgba_.empty()) return false;
         rgba = rgba_.data(); w = w_; h = h_; serial = serial_;
+        return true;
+    }
+
+    bool decodeAudio(std::vector<std::vector<int16_t>>& tracks, int& rate) override {
+        // A second reader over the audio streams only (the video reader keeps its position). Every track is
+        // converted to 16-bit mono PCM by the Source Reader (FLAC decoder) and read to the end.
+        IMFSourceReader* r = nullptr;
+        if (FAILED(MFCreateSourceReaderFromURL(widen(path_).c_str(), nullptr, &r))) return false;
+        std::vector<DWORD> streams;
+        for (DWORD i = 0;; ++i) {
+            IMFMediaType* t = nullptr;
+            if (FAILED(r->GetNativeMediaType(i, 0, &t))) break;
+            GUID major{};
+            t->GetGUID(MF_MT_MAJOR_TYPE, &major);
+            t->Release();
+            r->SetStreamSelection(i, major == MFMediaType_Audio);
+            if (major != MFMediaType_Audio) continue;
+            IMFMediaType* pcm = nullptr;
+            MFCreateMediaType(&pcm);
+            pcm->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
+            pcm->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
+            pcm->SetUINT32(MF_MT_AUDIO_BITS_PER_SAMPLE, 16);
+            pcm->SetUINT32(MF_MT_AUDIO_NUM_CHANNELS, 1);
+            if (SUCCEEDED(r->SetCurrentMediaType(i, nullptr, pcm))) streams.push_back(i);
+            pcm->Release();
+        }
+        if (streams.empty()) { r->Release(); return false; }
+        rate = 48000;
+        IMFMediaType* cur = nullptr;
+        if (SUCCEEDED(r->GetCurrentMediaType(streams[0], &cur))) {
+            UINT32 sr = 0;
+            if (SUCCEEDED(cur->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &sr)) && sr) rate = (int)sr;
+            cur->Release();
+        }
+        tracks.assign(streams.size(), {});
+        std::vector<bool> eos(streams.size(), false);
+        size_t ended = 0;
+        while (ended < streams.size()) {
+            DWORD idx = 0, flags = 0;
+            LONGLONG ts = 0;
+            IMFSample* s = nullptr;
+            if (FAILED(r->ReadSample((DWORD)MF_SOURCE_READER_ANY_STREAM, 0, &idx, &flags, &ts, &s))) break;
+            size_t k = 0;
+            while (k < streams.size() && streams[k] != idx) ++k;
+            if (flags & MF_SOURCE_READERF_ENDOFSTREAM) {
+                if (k < eos.size() && !eos[k]) { eos[k] = true; ++ended; }
+                release(s);
+                continue;
+            }
+            if (!s || k >= tracks.size()) { release(s); continue; }
+            IMFMediaBuffer* b = nullptr;
+            if (SUCCEEDED(s->ConvertToContiguousBuffer(&b))) {
+                BYTE* p = nullptr;
+                DWORD len = 0;
+                if (SUCCEEDED(b->Lock(&p, nullptr, &len))) {
+                    const int16_t* q = reinterpret_cast<const int16_t*>(p);
+                    tracks[k].insert(tracks[k].end(), q, q + len / 2);
+                    b->Unlock();
+                }
+                b->Release();
+            }
+            s->Release();
+        }
+        r->Release();
         return true;
     }
 

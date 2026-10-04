@@ -1,12 +1,15 @@
 #include "frontend/FrontendRuntime.h"
 #include "frontend/FlowTrace.h"
+#include "frontend/MovieAudio.h"
 #include "core/Config.h"
 #include "core/Log.h"
 #include "platform/UiBindings.h"
 
 #include <algorithm>
 #include <cstdlib>
+#include <chrono>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <sstream>
 
@@ -267,7 +270,70 @@ void FrontendRuntime::runNativeShims() {
     if (!loaderOpen) shimmed_.erase(std::remove(shimmed_.begin(), shimmed_.end(), loader), shimmed_.end());
 }
 
+namespace {
+std::string movieAudioCacheDir() { return std::getenv("WFC_CACHE") ? std::getenv("WFC_CACHE") : "wfc_cache"; }
+}
+
+bool FrontendRuntime::buildMovieAudio(platform::IMoviePlayer& p, const std::string& wav, std::string& log) {
+    auto t0 = std::chrono::steady_clock::now();
+    std::vector<std::vector<int16_t>> tracks;
+    int rate = 0;
+    if (!p.decodeAudio(tracks, rate)) { log = "no audio"; return false; }
+    std::vector<int16_t> stereo;
+    MovieAudioLayout L = downmixMovieAudio(tracks, 0, stereo);
+    std::error_code ec;
+    std::filesystem::create_directories(std::filesystem::path(wav).parent_path(), ec);
+    // Written under a temporary name, then renamed: a reader never sees a partial file.
+    std::string tmp = wav + ".part";
+    bool ok = !stereo.empty() && writeWav16Stereo(tmp, stereo, rate);
+    if (ok) { std::filesystem::rename(tmp, wav, ec); ok = !ec; }
+    double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    log = std::to_string(L.tracks) + " tracks, " + L.description + ", " + std::to_string(rate) + " Hz, " +
+          std::to_string((int)ms) + " ms";
+    return ok;
+}
+
+std::string FrontendRuntime::prepareMovieAudio(const std::string& name, platform::IMoviePlayer& p) {
+    // Decoded and folded to stereo once, then cached (WFC_CACHE, default ./wfc_cache) so later boots start at once.
+    std::string wav = movieAudioCacheDir() + "/movies/" + name + ".wav";
+    if (!std::ifstream(wav).good() && audioPrefetch_.valid()) audioPrefetch_.wait();   // being decoded in the background
+    if (std::ifstream(wav).good()) {
+        FlowTrace::emit("movie.audio", {{"movie", name}, {"cached", "true"}});
+    } else {
+        std::string log;
+        bool ok = buildMovieAudio(p, wav, log);
+        FlowTrace::emit("movie.audio", {{"movie", name}, {"decoded", log}, {"cached", FlowTrace::boolean(ok)}});
+        if (!ok) return "";
+    }
+    // The rest of the chain decodes in the background while this movie plays.
+    if (!audioPrefetch_.valid() || audioPrefetch_.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        std::vector<std::string> todo;
+        for (const std::string& q : flow_.queuedMovies())
+            if (!std::ifstream(movieAudioCacheDir() + "/movies/" + q + ".wav").good()) todo.push_back(q);
+        if (!todo.empty() && movieFactory_) {
+            auto factory = movieFactory_;
+            FlowTrace::emit("movie.audioPrefetch", {{"movies", std::to_string(todo.size())}});
+            audioPrefetch_ = std::async(std::launch::async, [todo, factory] {
+                for (const std::string& q : todo) {
+                    std::unique_ptr<platform::IMoviePlayer> mp(factory());
+                    std::string log;
+                    if (mp && mp->open(Catalog::defaultExtractedRoot() + "/movies/" + q + ".mkv"))
+                        buildMovieAudio(*mp, movieAudioCacheDir() + "/movies/" + q + ".wav", log);
+                }
+            });
+        }
+    }
+    return wav;
+}
+
+void FrontendRuntime::stopMovieAudio() {
+    if (movieAudioHandle_ >= 0 && audio_) audio_->stopMovieAudio(movieAudioHandle_);
+    movieAudioHandle_ = -1;
+    movieAudioWav_.clear();
+}
+
 bool FrontendRuntime::openVideo(const std::string& name, bool loop) {
+    stopMovieAudio();
     video_.reset();
     videoName_ = name;
     videoLoops_ = loop;
@@ -278,6 +344,8 @@ bool FrontendRuntime::openVideo(const std::string& name, bool loop) {
         return false;
     }
     FlowTrace::emit("movie.open", {{"movie", name}, {"seconds", std::to_string(p->duration())}, {"loop", FlowTrace::boolean(loop)}});
+    // SeqAct_MoviePlayer movies carry their audio; the loading underlays have none (AssetTools video_audio probe).
+    if (!loop && audio_) movieAudioWav_ = prepareMovieAudio(name, *p);
     video_ = std::move(p);
     videoFramed_ = false;
     ++videoGen_;
@@ -286,8 +354,8 @@ bool FrontendRuntime::openVideo(const std::string& name, bool loop) {
 
 void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in) {
     // SeqAct_MoviePlayer (intro chain): the Bink movies, extracted by AssetTools as H.264/FLAC .mkv, decoded by the
-    // platform movie player. Stopped fires at the end of the movie. Movie audio is not played [PARTIAL: the track
-    // layout is unidentified and the audio belongs to the Systems device].
+    // platform movie player. Stopped fires at the end of the movie. The movie's audio (frontend/MovieAudio: Bink tracks
+    // folded to stereo) plays on the Systems device from the first frame and stops with the movie.
     // The loading underlay: [LoadingMovie] InitialStartupFileName / DefaultFileName (Xe-TransGame.ini), looped under
     // LoadScreen_GFX while a loading screen is up [HIGH]. The extracted files carry region / language suffixes; the
     // rebuild picks <name>_NA_INT, then <name>_INT, then <name> [PARTIAL: region of the dump UNKNOWN, see GetRegionCode].
@@ -304,7 +372,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         want = underlay_;
     }
     if (want != videoName_) {
-        if (want.empty()) { video_.reset(); videoName_.clear(); }
+        if (want.empty()) { stopMovieAudio(); video_.reset(); videoName_.clear(); }
         else if (!openVideo(want, m.empty()) && !m.empty()) { flow_.movieStopped(m); videoName_.clear(); }
     }
     if (!video_) return;
@@ -316,6 +384,10 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         videoFramed_ = true;
         FlowTrace::emit("movie.firstFrame", {{"movie", videoName_}, {"w", std::to_string(vw)}, {"h", std::to_string(vh)},
                                              {"t", std::to_string(video_->position())}});
+        if (!movieAudioWav_.empty() && audio_) {   // audio starts with the picture
+            movieAudioHandle_ = audio_->playMovieAudio(movieAudioWav_);
+            FlowTrace::emit("movie.audioStart", {{"movie", videoName_}, {"handle", std::to_string(movieAudioHandle_)}});
+        }
     }
     // Skip with A / Start / B on intro movies [PROVISIONAL: the original skip rule (UE3 bUserCanSkip) is UNKNOWN].
     uint32_t pressed = in.uiDown & ~prevUi_;
@@ -326,6 +398,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         if (videoLoops_ && !skip) { video_->restart(); return; }
         FlowTrace::emit("movie.finished", {{"movie", videoName_}, {"skipped", FlowTrace::boolean(skip)},
                                            {"position", std::to_string(video_->position())}});
+        stopMovieAudio();
         video_.reset();
         std::string done = videoName_;
         videoName_.clear();

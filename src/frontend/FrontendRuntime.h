@@ -9,6 +9,7 @@
 //                        provenance (e.g. MovieLoader's HasWatchedIntroMovie branch, HIGH per RE 1.2).
 #pragma once
 #include <functional>
+#include <future>
 #include <memory>
 #include <string>
 #include <vector>
@@ -33,6 +34,10 @@ public:
     virtual void levelEvent(const std::string& trigger) { (void)trigger; }     // "FsCommand:<cmd>", "MovieStopped:<movie>"
     virtual void setMoviePlaying(bool playing) { (void)playing; }             // CINE_MUTE_FOR_BINK while a Bink is up
     virtual void prefetchLevel(const std::string& level) { (void)level; }     // during a loading screen
+    // A full-screen movie's own audio (stereo WAV folded from its Bink tracks), 2D, outside the mixer categories
+    // that CINE_MUTE_FOR_BINK ducks. Returns a handle (< 0: not played).
+    virtual int playMovieAudio(const std::string& wavPath) { (void)wavPath; return -1; }
+    virtual void stopMovieAudio(int handle) { (void)handle; }
 };
 
 class IMoviePresenter {
@@ -112,6 +117,10 @@ private:
     void runNativeShims();
     void updateMoviePlayer(float dt, const platform::InputFrame& in);
     bool openVideo(const std::string& name, bool loop);
+    std::string prepareMovieAudio(const std::string& name, platform::IMoviePlayer& p);   // cached WAV path or ""
+    void stopMovieAudio();
+    static bool buildMovieAudio(platform::IMoviePlayer& p, const std::string& wav, std::string& log);   // thread-safe
+    std::future<void> audioPrefetch_;   // queued intro movies' audio, decoded while the current one plays
 
     Catalog catalog_;
     std::string platform_ = "WIN";
@@ -129,6 +138,8 @@ private:
     std::string underlayFor_, underlay_;   // loading Bink name -> localized file
     bool videoLoops_ = false;
     bool videoFramed_ = false;
+    std::string movieAudioWav_;       // the open movie's audio (cache), started with its first frame
+    int movieAudioHandle_ = -1;
     uint64_t videoGen_ = 0;
     bool moviePlaying_ = false;
     std::string prefetched_;

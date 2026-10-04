@@ -136,6 +136,7 @@ public:
     const MatchLaunch& currentMatch() const { return match_; }
     // Kismet-driven frontend presentation (UI_FrontEnd_m Main_Sequence).
     const std::string& kismetMovie() const { return kismetMovie_; }        // SeqAct_MoviePlayer currently playing
+    const std::vector<std::string>& queuedMovies() const { return movieQueue_; }   // the chain still to play
     const std::vector<std::string>& openMovies() const { return openMovies_; }   // GFxAction_OpenMovie / OpenUI
     bool frontEndStarted() const { return frontEndStarted_; }
     // Level Kismet triggers the frontend owns, in order ("FsCommand:<cmd>", "MovieStopped:<movie>").
