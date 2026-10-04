@@ -77,6 +77,16 @@ public:
     // fixed step after the pawn moved. Robot TnThirdPersoncollisionCameraBehavior / vehicle
     // TnAvoidClippingCameraBehavior.
     void tickCameraCollision(float dt);
+    // Transform clearance [CONF RE OVERNIGHT 2026-10-04 B3]: TnPawn.Transform -> MoveToSafeTransformationLocation ->
+    // FindSpotAwayFromPawns(target extent). No spot: HUD NotifyCantTransform (mc_cantTransform) + TransformFailedSound
+    // (TnPlayerController default BL_TRANS_POWER.TRANSFORM_DISABLED) and no transform. A displaced spot moves the
+    // collision at once and slides the robot meshes back over 0.5 s. After a vehicle->robot transform,
+    // InRobotForm.BeginState MoveToSafeLocation; failing that, ForceIntoForm(vehicle).
+    int cantTransformCount() const { return cantTransformCount_; }      // pulses for the HUD / Systems
+    int forcedVehicleCount() const { return forcedVehicleCount_; }
+    bool tryBeginTransform();
+    static bool robotFitsAt(const CollisionWorld* col, const core::Vec3& feet);
+    static bool findRobotSpot(const CollisionWorld* col, const core::Vec3& feet, core::Vec3& out);
     // No pawn (PendingMatch: ShouldSpectateOnLogin): the controller views from its own location / rotation, which
     // GameInfo.Login took from FindPlayerStart [HIGH: stock UE3 Login + PlayerWaitingSpectating].
     void setSpectatorView(const core::Vec3& pos, float yaw) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; }
@@ -137,6 +147,9 @@ private:
     core::Vec3 camOld_{0, 0, 0};                 // smoothed camera offset in target space (UE X fwd, Y right, Z up)
     bool camOldValid_ = false;
     bool spectating_ = false;
+    int cantTransformCount_ = 0, forcedVehicleCount_ = 0;
+    bool wasTransforming_ = false;
+
     core::Vec3 specPos_{0, 0, 0};
     float specYaw_ = 0.0f;
     float camSmoothRemain_ = 0.0f;

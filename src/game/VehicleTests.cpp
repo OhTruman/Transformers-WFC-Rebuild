@@ -5,6 +5,7 @@
 #include "game/VehicleTests.h"
 #include "game/Character.h"
 #include "game/CharacterMovement.h"
+#include "game/PlayerController.h"
 #include "game/Collision.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -330,6 +331,26 @@ void runVehicleTests() {
         int drops = 0; bool was = false;
         for (int k = 0; k < 120; ++k) { s.step(b); bool d = s.c.vehicleState().driving; if (was && !d) ++drops; was = d; }
         LOG_INFO("VEHTEST boost continuity over a %.2f m step: %d Driving drops (0 expected up to 0.3 m; a 0.5 m riser reaches the 0.45 m hull probe = frontal hit, authentic)", hstep, drops);
+    }
+
+    // Transform clearance [CONF B3]: under a 3 m ceiling the 4 m robot cannot fit -> refused; open floor fits; a ceiling
+    // edge 0.5 m away displaces the robot to the clear side.
+    {
+        render::MeshData m;
+        auto quad = [&](core::Vec3 a, core::Vec3 b, core::Vec3 c, core::Vec3 d) {
+            uint32_t base = (uint32_t)(m.positions.size() / 3);
+            for (const core::Vec3& p : {a, b, c, d}) { m.positions.push_back(p.x); m.positions.push_back(p.y); m.positions.push_back(p.z); }
+            for (uint32_t i : {0u, 1u, 2u, 0u, 2u, 3u}) m.indices.push_back(base + i);
+        };
+        quad({-40, 0, 40}, {40, 0, 40}, {40, 0, -40}, {-40, 0, -40});
+        quad({-40, 3, 1.5f}, {40, 3, 1.5f}, {40, 3, -40}, {-40, 3, -40});   // ceiling over z < 1.5
+        CollisionWorld w; w.build(m);
+        core::Vec3 spot;
+        bool deep = PlayerController::findRobotSpot(&w, {0, 0, -10}, spot);
+        bool open = PlayerController::robotFitsAt(&w, {0, 0, 10});
+        bool edge = PlayerController::findRobotSpot(&w, {0, 0, 1.0f}, spot);
+        LOG_INFO("VEHTEST transform clearance: deep under 3 m ceiling %s, open floor %s, 0.5 m inside the ceiling edge %s (spot z %.1f)",
+                 deep ? "FITS (FAIL)" : "refused (ok)", open ? "fits (ok)" : "REFUSED (FAIL)", edge ? "displaced (ok)" : "refused", spot.z);
     }
 
 }

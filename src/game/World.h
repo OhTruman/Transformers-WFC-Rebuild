@@ -44,7 +44,14 @@ struct HudGameState {
     float health = 0, healthMax = 0, overshield = 0, normalizedOverShield = 0;
     int activeSegment = 0, segmentCount = 4;
     int clipAmmo = 0, reserveAmmo = 0;
+    std::string weaponName;                      // current weapon (only the Ion Blaster exists in the rebuild)
+    // Damage taken (TakeDamage -> HUD damage direction): increments per damaging hit; the instigator location at that hit
+    // (world) and its bearing relative to the view (radians, 0 = ahead, + = right). Presentation belongs to Hud_GFX.
+    int damageTakenCount = 0;
+    core::Vec3 lastDamageFrom{0, 0, 0};
+    float lastDamageBearing = 0.0f;
     bool vehicleForm = false, transforming = false;
+    int cantTransformCount = 0;                  // increments per refused transform (HUD NotifyCantTransform + TransformFailedSound)
     float timeToRespawn = -1.0f;                 // <PlayerOwner:TimeToRespawn> (MultiplayerRespawn_GFX)
     bool spectating = false;                     // dead >= MinRespawnDelay 3.0 s: PlayerSpectating (UI event 4)
     // Match
@@ -66,7 +73,7 @@ struct HudGameState {
     std::string endReason;                       // EndGame reason: "Score", "" (time), "Forfeit"
     int winnerPlayer = -1;                       // FFA winner (GetWinningPRI; -1 draw)
     float matchOverTimeLeft = 0.0f;              // MatchOver -> ReturnToGameLobby (15 s)
-    // Kill feed (TnDeathMessage broadcasts still within LocalMessage.Lifetime 3.0 s), oldest first.
+    // Kill feed (TnDeathMessage broadcasts; Hud_GFX rows live 5 s + 1 s fade, max 5 shown), oldest first.
     std::vector<KillFeedEntry> killFeed;
     // Scoreboard rows (InGameStats / EndGameStats PlayerList: PRI name, team, score, kills, deaths).
     struct Row { int player; std::string name; int team; int score, kills, deaths; float assists; bool alive, local; };
@@ -171,6 +178,8 @@ public:
     // TnPlayerPawn.TakeDamage for a match player (local or opponent): teammate damage is discarded except
     // TnDamageTypeAOE; damage reaching the pawn enters its DamageHistory; lethal damage -> Game.Killed(instigator).
     bool applyMatchDamage(int victimPlayer, int instigatorPlayer, float amount, bool aoe, const std::string& damageType = std::string());
+    int damageTakenCount_ = 0;
+    core::Vec3 lastDamageFrom_{0, 0, 0};
     // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
     MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
     const std::vector<MatchOpponent*>& matchOpponents() const { return opponents_; }

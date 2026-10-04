@@ -982,6 +982,7 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
     if (!h) return false;
     float applied = h->applyDamage(amount);
     match_.recordDamage(victim, instigator, applied);
+    if (victim == localPlayer_ && applied > 0.0f && instigator != victim) { ++damageTakenCount_; lastDamageFrom_ = match_.playerLocation(instigator); }
     if (h->isDead()) {
         if (victim == localPlayer_) killLocalPlayer(instigator, false, damageType);
         else { match_.killed(instigator, victim, false, damageType); if (opp) opp->despawn(); }
@@ -1006,7 +1007,17 @@ HudGameState World::hudState() const {
     h.overshield = pc.health().overshield(); h.normalizedOverShield = pc.health().normalizedOverShield();
     h.activeSegment = pc.health().activeSegment(); h.segmentCount = Health::kSegmentCount;
     h.clipAmmo = pc.weapon().ammo; h.reserveAmmo = pc.weapon().reserve;
+    h.weaponName = pc.weapon().name;
+    h.damageTakenCount = damageTakenCount_;
+    h.lastDamageFrom = lastDamageFrom_;
+    if (damageTakenCount_ > 0) {
+        core::Vec3 d = lastDamageFrom_ - pc.position();
+        core::Vec3 f = core::forwardFromYawPitch(player_.controller().viewYaw(), 0.0f);
+        core::Vec3 r{-f.z, 0.0f, f.x};
+        h.lastDamageBearing = std::atan2(core::dot(d, r), core::dot(d, f));
+    }
     h.vehicleForm = pc.moveForm() == Form::Vehicle; h.transforming = pc.isTransforming();
+    h.cantTransformCount = player_.controller().cantTransformCount();
     h.matchActive = matchActive_;
     if (!matchActive_ || localPlayer_ < 0) return h;
     const MatchPlayer& me = match_.players()[(size_t)localPlayer_];
@@ -1031,7 +1042,7 @@ HudGameState World::hudState() const {
     h.winnerTeam = match_.winnerTeam();
     if (match_.state() == Match::State::MatchOver || match_.state() == Match::State::Returned)
         h.result = !match_.settings().teamGame
-                       ? (match_.winnerPlayer() < 0 ? "Draw" : (match_.winnerPlayer() == localPlayer_ ? "You won" : "You lost"))   // [PROV text: TnFreeForAllGameOverMessage strings not read]
+                       ? std::string()   // TnFreeForAllGameOverMessage sets an empty GameOverMessage [CONF RE OVERNIGHT A5]
                        : (match_.winnerTeam() < 0 ? "Tie game" : (match_.winnerTeam() == me.team ? "Your team won" : "Your team lost"));
     for (const ObjectiveObject& o : mapState_.objectives()) {
         if (!o.activeInMode || (o.cls != "TnDominationPoint" && o.cls != "TnKingOfTheHillZone")) continue;

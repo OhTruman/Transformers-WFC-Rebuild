@@ -10,6 +10,7 @@
 // drive deaths through killed()). Presentation (HUD movies, announcer) consumes events().
 #pragma once
 #include "core/Math.h"
+#include "game/CharacterRoster.h"
 
 #include <algorithm>
 #include <string>
@@ -63,7 +64,8 @@ struct KillFeedEntry {
     int killer = -1, victim = -1;      // player indices (-1 none)
     int killerTeam = 255, victimTeam = 255;
     std::string damageType;            // DamageType class, e.g. "TransGame.TnDamageTypeIonBlaster"
-    static constexpr float kLifetime = 3.0f;   // Engine.LocalMessage.Lifetime (TnDeathMessage inherits)
+    // Hud_GFX feed rows: live 5.0 s, then fade over 1.0 s; newest at slot 0, at most 5 rows [CONF RE OVERNIGHT A2].
+    static constexpr float kLifetime = 5.0f, kFade = 1.0f;
 };
 
 struct MatchPlayer {
@@ -73,6 +75,9 @@ struct MatchPlayer {
     float assists = 0.0f;
     bool alive = false;
     float timeToRespawn = -1.0f;       // >= 0 while queued in the respawn helper (PRI.TimeToRespawn)
+    bool hasSelectedCharacter = false; // PRI.HasSelectedCharacter: spawning waits for it [CONF]
+    CharacterSelection selection;
+    std::string chassis;               // body resolved at the last spawn (faction from the team)
 };
 
 class Match {
@@ -92,6 +97,8 @@ public:
     bool loadSpawnData(const std::string& gameplayJson);
     void begin(const MatchSettings& s);          // InitGame + InitGameReplicationInfo + PendingMatch.BeginState
     int addPlayer(const std::string& name);      // PostLogin: team via TnTeamHandlerTwoTeams.PickTeam (team games)
+    // TnPlayerController.SelectCharacter -> ReplicateCharacterData -> PRI._SelectedCharacter (applies at the next spawn).
+    void selectCharacter(int p, const CharacterSelection& s) { if (p >= 0 && (size_t)p < players_.size()) { players_[(size_t)p].selection = s; players_[(size_t)p].hasSelectedCharacter = true; } }
     void tick(float dt);
     // GameInfo.Killed. killer < 0: environmental. suicide: DmgType_Suicided or killer == victim.
     void killed(int killer, int victim, bool suicide = false, const std::string& damageType = std::string());
@@ -126,6 +133,7 @@ public:
     static constexpr float kHealthMax = 550.0f;   // TR_Health_p.SharedHealth (assist = damage / HealthMax)
     // TnSpawnModifierComponent owners other than player pawns (positions in metres).
     void setPlayerLocation(int p, const core::Vec3& pos) { if (p >= 0 && (size_t)p < players_.size()) locs_[(size_t)p] = pos; }
+    core::Vec3 playerLocation(int p) const { return (p >= 0 && (size_t)p < locs_.size()) ? locs_[(size_t)p] : core::Vec3{0, 0, 0}; }
 
     State state() const { return state_; }
     const MatchSettings& settings() const { return s_; }

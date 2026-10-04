@@ -3,6 +3,13 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 21e (2026-10-04) — transform clearance, roster contract, HUD state completion
+- Vehicle->robot refused with NotifyCantTransform + TransformFailedSound when the robot cannot fit; displaced spot; post-fold ForceIntoForm(vehicle).
+- CharacterRoster.h: selection before spawn, team faction, specialty default bodies, stable chassis IDs (Optimus default).
+- HUD: weapon, damage direction, cant-transform pulse; kill feed rows 5 s + 1 s fade; FFA result empty.
+- Handoffs: docs/handoffs/GAMEPLAY_FRONTEND_HUD_CONTRACT.md, GAMEPLAY_BOT_READINESS.md (bots = RECONSTRUCTION EXTENSION, not implemented).
+- Open: CTF / EXT need a carried-objective weapon system; wall-pressed boost re-drop UNKNOWN; per-wheel suspension needs mount heights.
+
 ## GAMEPLAY PASS 21d (2026-10-04) — boost-state flicker fixed, vehicle contact, high-refresh guard
 - Boost exhaust open/close: the frontal drop now uses the contact normal. Repro drops are real obstacles only; VEHTEST guard shows 0 drops on steps <= 0.3 m.
 - Hull probes no longer stop the truck on 45-60 deg faces; boost body follows the slope (BoostScale engages).

@@ -922,7 +922,7 @@ void Application::runTransformStress() {
     };
     for (float tt = 0.6f; tt <= 2.81f; tt += 0.2f) cases.push_back({"boost-sweep", tt, true, false, false, false, 0.0f});
     std::map<std::string, std::array<int, 4>> stats;   // runs, under-floor runs, killz, max speed at transform x10
-    float worstUnder = 0.0f; int overhangRuns = 0;
+    float worstUnder = 0.0f; int overhangRuns = 0, refusedRuns = 0, forcedRuns = 0;
     int total = 0, bad = 0;
     for (const Node& n : nodes) {
         for (int dir = 0; dir < 4; ++dir) {
@@ -952,7 +952,10 @@ void Application::runTransformStress() {
                 tin.down[(int)platform::Button::Transform] = tin.pressed[(int)platform::Button::Transform] = true;
                 tin.down[(int)platform::Button::Forward] = cs.drive > 0.0f;
                 tin.down[(int)platform::Button::FineAim] = cs.boost;
+                int refusedBefore = ctl.cantTransformCount(), forcedBefore = ctl.forcedVehicleCount();
                 world_.handleInput(tin, dt); world_.tick(dt);
+                bool refused = ctl.cantTransformCount() > refusedBefore;
+                refusedRuns += refused;
                 float under = 0.0f, ymin = pc.position().y; bool killz = false; int underFrames = 0, overhangFrames = 0;
                 core::Vec3 underAt;
                 for (int k = 0; k < (int)(3.0f / dt); ++k) {
@@ -975,6 +978,7 @@ void Application::runTransformStress() {
                         }
                     }
                 }
+                forcedRuns += ctl.forcedVehicleCount() > forcedBefore;
                 bool fail = killz || underFrames > 3;
                 if (overhangFrames > 3) ++overhangRuns;
                 auto& st = stats[cs.name];
@@ -991,7 +995,7 @@ void Application::runTransformStress() {
     }
     for (const auto& [name, st] : stats)
         LOG_INFO("XFORM %-11s runs %4d  under-floor %4d  killz %3d  max speed at transform %.1f m/s", name.c_str(), st[0], st[1], st[2], st[3] / 10.0f);
-    LOG_INFO("XFORM SUMMARY: %d/%d transforms ended UNDER THE MAP (no floor under the robot, a walkable surface above) or KillZ (worst %.2f m); %d ended on a real floor under a low overhang", bad, total, worstUnder, overhangRuns);
+    LOG_INFO("XFORM SUMMARY: %d/%d transforms ended UNDER THE MAP (no floor under the robot, a walkable surface above) or KillZ (worst %.2f m); %d ended on a real floor under a low overhang; %d refused (NotifyCantTransform); %d forced back to vehicle", bad, total, worstUnder, overhangRuns, refusedRuns, forcedRuns);
 }
 
 // WFC_MATCHTEST: the local TDM / DM match state machine (Match + World host glue) with controlled events, fixed 60 Hz.
@@ -1340,7 +1344,9 @@ void Application::runTdmSessionTest() {
     check(pc.health().current == h0 - 50.0f, "teammate AOE damage applies");
     {   // Regeneration: 20 HP/s after 2.0 s, up to the current segment top (here 425 -> segment 2 top 425 .. damage to 400).
         pc.health().reset();
+        int dmgBefore = world_.hudState().damageTakenCount;
         world_.applyMatchDamage(me, enemies[0]->matchPlayer(), 150.0f, false);   // 550 -> 400 (segment 2: 300..425)
+        check(world_.hudState().damageTakenCount == dmgBefore + 1 && !world_.hudState().weaponName.empty(), "HUD damage event + weapon identity exposed");
         run(1.9f);
         float before = pc.health().current;
         run(1.0f);
@@ -1375,8 +1381,10 @@ void Application::runTdmSessionTest() {
                       hk.killFeed.back().victim == e->matchPlayer() && hk.killFeed.back().damageType == "TransGame.TnDamageTypeIonBlaster" &&
                       hk.killFeed.back().killerTeam == myTeam && hk.killFeed.back().victimTeam != myTeam;
         check(feedOk, "kill feed: TnDeathMessage switch 0, killer / victim / teams, TnDamageTypeIonBlaster");
-        run(3.1f);
-        check(world_.hudState().killFeed.empty(), "kill feed entry expires after LocalMessage.Lifetime 3.0 s");
+        run(4.0f);
+        check(!world_.hudState().killFeed.empty(), "kill feed row still present at 4 s (rows live 5 s)");
+        run(2.1f);
+        check(world_.hudState().killFeed.empty(), "kill feed row gone after 5 s + 1 s fade");
         check(!m.killHistory().empty(), "kill history retained for the match");
     }
     // 6. Pickup across death, then death mid-transform in vehicle form.

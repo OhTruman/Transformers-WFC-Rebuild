@@ -123,6 +123,7 @@ int Match::addPlayer(const std::string& name) {
         for (const MatchPlayer& q : players_) { n0 += q.team == 0; n1 += q.team == 1; }
         p.team = n0 < n1 ? 0 : (n1 < n0 ? 1 : randomInt(2));
     }
+    p.hasSelectedCharacter = true;   // local default until the frontend selection screen exists (Optimus, iconic "Truck")
     players_.push_back(p);
     locs_.push_back({0, 0, 0});
     spawnAt_.push_back(-1);
@@ -246,7 +247,7 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
 
 std::vector<KillFeedEntry> Match::killFeed() const {
     std::vector<KillFeedEntry> v;
-    for (const KillFeedEntry& k : killHistory_) if (matchTime_ - k.time < KillFeedEntry::kLifetime) v.push_back(k);
+    for (const KillFeedEntry& k : killHistory_) if (matchTime_ - k.time < KillFeedEntry::kLifetime + KillFeedEntry::kFade) v.push_back(k);
     return v;
 }
 
@@ -328,6 +329,8 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
 
 void Match::restartPlayer(int p) {
     MatchPlayer& P = players_[(size_t)p];
+    if (!P.hasSelectedCharacter) { P.timeToRespawn = 0.1f; return; }   // CheckReadySpawn: no selection, no spawn (retry)
+    P.chassis = resolveChassis(P.selection, faction(p));
     int st = findPlayerStart(p);
     spawnAt_[(size_t)p] = st;
     P.alive = true;

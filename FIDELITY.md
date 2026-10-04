@@ -75,6 +75,94 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 21e — TRANSFORM CLEARANCE, ROSTER CONTRACT, HUD STATE COMPLETION, REGRESSION GUARDS (2026-10-04, gameplay agent)
+Inputs:
+- RE OVERNIGHT_2026-10-04 §A2, A5, B3, E, F;
+- Rendering M08 (HUD ownership: Hud_GFX presents, Gameplay supplies state).
+
+Handoffs:
+- `docs/handoffs/GAMEPLAY_FRONTEND_HUD_CONTRACT.md`: HUD state / events, character selection, settings and input;
+- `docs/handoffs/GAMEPLAY_BOT_READINESS.md`.
+
+### Transform clearance — CONFIRMED ORIGINAL behaviour, PROVISIONAL geometry test
+- **Before vehicle -> robot**, `PlayerController::tryBeginTransform` (TnPawn.Transform -> MoveToSafeTransformationLocation
+  -> FindSpotAwayFromPawns with the target extent):
+  - the robot cylinder must fit at the floor under the vehicle, or at one of 16 nearby spots (1 m / 2 m rings, floor
+    needed, no wall in between);
+  - **no spot -> refused**: `cantTransformCount` pulse = HUD NotifyCantTransform (`mc_cantTransform`) +
+    TransformFailedSound (`BL_TRANS_POWER.TRANSFORM_DISABLED`, TnPlayerController default, CONF);
+  - **a displaced spot** moves the collision at once; the meshes slide back over 0.5 s (OffsetMeshes).
+- **After the fold**, InRobotForm.BeginState: MoveToSafeLocation; still stuck -> **ForceIntoForm(vehicle)** [CONF].
+- **Fit test** [PROV; whether the native search tests world geometry or only pawns is PARTIAL in RE]: five vertical
+  columns (the centre from above MaxStepHeight, four at 0.7 r from 1.8 m) clear up to 4 m. An earlier variant that tested
+  the offset columns from 0.4 m refused 69 / 1520 stress transforms on ordinary slopes and stairs, so it was rejected.
+- **Validation:**
+  - VEHTEST clearance: refused deep under a 3 m ceiling, fits on open floor, displaced to z 3.0 when 0.5 m inside the
+    ceiling edge;
+  - WFC_XFORMTEST 0 / 1520 under the map, 0 refused, 2 forced back to vehicle;
+  - **OPEN:** the 16 "low overhang" cases happen after the fold, while the stress test keeps driving the robot forward
+    under props. That is robot walking, not the transform.
+
+### Character roster contract (`src/game/CharacterRoster.h`) — CONF data
+- `Match::selectCharacter` stores a `CharacterSelection`:
+  - custom or iconic;
+  - one of four specialties;
+  - a stable chassis UniqueId.
+- At spawn, `resolveChassis(selection, team faction)` picks the body:
+  - custom -> the specialty default per faction (Ironhide / Soundwave, Air Raid / Starscream, Sideswipe / Barricade,
+    Warpath / Brawl);
+  - DM forces Decepticon.
+- Spawning waits for `hasSelectedCharacter` (CheckReadySpawn). The local player is pre-selected as iconic Optimus
+  (`Truck`) [RECONSTRUCTION DEFAULT until the frontend selection screen]. Only the Optimus pawn resources load; the other
+  32 chassis need AssetTools ROBODEF / VEHDEF exports.
+
+### HUD runtime state — completed against the HUD list
+- Added:
+  - `weaponName`;
+  - damage direction: `damageTakenCount` pulse, instigator location `lastDamageFrom`, view-relative
+    `lastDamageBearing` [PARTIAL: the Hud_GFX indicator call is not traced];
+  - `cantTransformCount`.
+- Kill feed rows now live **5 s + 1 s fade** (Hud_GFX, RE A2) instead of LocalMessage.Lifetime 3 s.
+- FFA result text is empty (TnFreeForAllGameOverMessage, A5).
+- WFC_TDMTEST 41 / 41: feed expiry at 6 s, HUD damage event and weapon identity.
+
+### Vehicle input — verified against RE (no change needed)
+- RMB / LT: fine aim in robot form only; Boost (held) in vehicle form.
+- Shift: Dash while hovering, Nitro while Driving (steer × 0.3).
+- Driving has Accelerator fixed at 1 (no throttle).
+
+### Boost-continuity status (after 21d)
+- Rendering repro (`WFC_VEHDROPLOG`, 840 frames): starts 1 / 4 / 7 / 18 / 21 -> 4 / 2 / 1 / 0 / 35–38 drops. Counts
+  vary slightly run to run (real frame time).
+- **Every** drop is a near-vertical face (|n.y| ≤ 0.4).
+- Start 21 is the truck held against a wall below 2 m/s, re-boosting into it after each 0.5 s drift. Whether the original's
+  RB contact report re-fires at that speed is **UNKNOWN** (PARTIAL). It was not tuned.
+- Floor seams and steps up to 0.3 m: 0 drops (VEHTEST guard).
+
+### Modes (six recovered)
+| Mode | State |
+|---|---|
+| TDM | complete loop, CONF rules (WFC_TDMTEST 41 / 41) |
+| DM | FFA rules (Decepticon bodies, draw on tie, empty result text) |
+| Conquest (DOM) | CONF bytecode rules (WFC_MODEPLAYTEST) |
+| Power Struggle (KOTH) | CONF bytecode rules (WFC_MODEPLAYTEST 21 / 21) |
+| Code of Power (CTF) | PARTIAL: map state only; needs the carried-objective weapon system (flag return 30 s / 10 s defender drain, rounds) |
+| Countdown to Extinction | PARTIAL: map state only; same dependency (fuse 15 s, defuse 5 s, dropped bomb 30 s) |
+
+### Regression guards (protecting the human-reported bugs)
+| Bug | Guard |
+|---|---|
+| High-refresh pawn / camera separation | WFC_CAMSYNC 60 / 144 / 240 Hz (robot 0.0003° at all rates; the M05 bug gave 1.28°) |
+| Transform under the map | WFC_XFORMTEST 0 / 1520; WFC_CHAOS 0 / 60 |
+| Single-frame boost drop | VEHTEST boost continuity, 0 drops on steps ≤ 0.3 m; `WFC_VEHDROPLOG` repro |
+| Ramp snagging | VEHTEST ramp sweep (hover and boost climb 20–50°) |
+| Transform clearance | VEHTEST clearance (refuse / fit / displace) |
+
+Wide Streets traversal: oracle 852 / 852, robot tour 100 / 122, vehicle tour 98 / 122, 0 falls; sweep 984 runs, 0
+KillZ; coherence 0 missing collision.
+
+---
+
 ## PASS 21d — BOOST-STATE FLICKER, VEHICLE CONTACT, HIGH-REFRESH GUARD (2026-10-04, gameplay agent)
 Inputs:
 - Rendering M08 handoffs `GAMEPLAY_BOOST_FX_FLICKER.md` and `GAMEPLAY_CAMERA_FRAME_PACING.md`;
