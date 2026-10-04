@@ -109,6 +109,12 @@ public:
     virtual void drawFrontendScene(const core::Vec3& camPosUE, const core::Vec3& camRotUEdeg, float fovDeg, int w, int h,
                                    double timeSec) { (void)camPosUE; (void)camRotUEdeg; (void)fovDeg; (void)w; (void)h; (void)timeSec; }
     virtual void unloadFrontendScene() {}
+    // Matinee-driven actor pose in the loaded scene (Frontend's matinee evaluator): absolute world location (UU) and
+    // rotation (pitch, yaw, roll in degrees), including RelativeToInitial / attachment. Actors not sent keep their
+    // authored pose (and PHYS_Rotating). Visibility stays with setActorHidden (authored bHidden applies until then).
+    virtual void setFrontendActorTransform(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg) {
+        (void)actor; (void)posUE; (void)rotUEdeg;
+    }
 
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile / UCanvas.DrawMaterialTile): a screen quad shaded by a
     // compiled original material (e.g. UI_HudMarkers_p) with per-draw parameter values (MaterialInstanceDynamic

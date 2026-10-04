@@ -17,6 +17,7 @@
 #include <vector>
 #include <functional>
 #include "render/gl/GLExt.h"
+#include "assets/Json.h"
 #include "render/Camera.h"
 #include "render/Mesh.h"
 #include "render/Renderer.h"
@@ -143,6 +144,8 @@ public:
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
     void setCharacterColors(const CharacterColors& c) { charColorsBy_[drawOwner_] = c; }
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
+    void setActorPose(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg);
+    void loadSceneActors(const assets::Json& actorsByLevel);   // render_index actors_by_level (UI families)
 
     void beginFrame(const Camera& cam, int w, int h);
     void endFrame();
@@ -428,6 +431,8 @@ private:
         core::Mat4 model; int state = 0; int stateMesh[2] = {-1, -1};
     };
     std::vector<MapProp> mapProps_;
+    struct ActorPose0 { float L[3]; float rot[3]; };
+    std::map<std::string, ActorPose0> actorPose0_;     // authored pose (lower-case actor) for absolute poses
     int kothMesh_ = -1;
     // ammo-crate PickupFactoryMesh (TnAmmoCratePickup.MeshComponentA): PROP_NEU_AmmoPickup_STAT, CullDistance 8000,
     // PickupRotationRate yaw 10000 while available
@@ -453,7 +458,8 @@ private:
     // authored movers (WfcMovers.cpp)
     struct MoverRT {
         std::string actor;
-        int kind = 0;                 // 0 PHYS_Rotating, 1 Matinee InterpTrackMove
+        int kind = 0;                 // 0 PHYS_Rotating, 1 Matinee InterpTrackMove, 2 absolute pose (frontend)
+        float L1[3] = {0, 0, 0}, rot1[3] = {0, 0, 0};   // kind 2: target location / rotator (UE units)
         float L[3] = {0, 0, 0}, rot0[3] = {0, 0, 0}, rate[3] = {0, 0, 0};
         float length = 0.0f; bool looping = true;
         struct RotKey { float t; float q[4]; };
@@ -462,6 +468,7 @@ private:
         std::vector<PosKey> posKeys;
     };
     std::vector<MoverRT> movers_;
+    std::map<std::string, MoverRT> actorPoses_;        // frontend-driven absolute poses (kind 2)
     std::unordered_map<std::string, core::Mat4> moverDelta_;
     std::unordered_map<std::string, bool> actorHidden_;
     std::set<std::string> authoredHiddenActors_;

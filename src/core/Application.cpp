@@ -79,6 +79,20 @@ void Application::run() {
         LOG_INFO("frontend scene test: load %s", ok ? "ok" : "FAILED");
         const long frames = std::getenv("WFC_SMOKE_FRAMES") ? std::atol(std::getenv("WFC_SMOKE_FRAMES")) : 120;
         platform::InputFrame sceneInput;
+        if (const char* uh = std::getenv("WFC_SCENEUNHIDE")) {   // diagnostics: actor names to unhide (a,b,...)
+            std::string u = uh;
+            for (size_t x = 0; x <= u.size();) {
+                size_t y = u.find(',', x);
+                renderer_->setActorHidden(u.substr(x, y == std::string::npos ? std::string::npos : y - x), false);
+                if (y == std::string::npos) break;
+                x = y + 1;
+            }
+        }
+        if (const char* sp = std::getenv("WFC_SCENEPOSE")) {     // diagnostics: actor,x,y,z,pitch,yaw,roll (UE, deg)
+            char name[128] = {0}; float v[6] = {0};
+            if (std::sscanf(sp, "%127[^,],%f,%f,%f,%f,%f,%f", name, &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 7)
+                renderer_->setFrontendActorTransform(name, core::Vec3{v[0], v[1], v[2]}, core::Vec3{v[3], v[4], v[5]});
+        }
         for (long f = 1; f <= frames && window_->pump(sceneInput); ++f) {
             renderer_->drawFrontendScene(core::Vec3{c[0], c[1], c[2]}, core::Vec3{c[3], c[4], c[5]}, c[6],
                                          window_->width(), window_->height(), f / 60.0);

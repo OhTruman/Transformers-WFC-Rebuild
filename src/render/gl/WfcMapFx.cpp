@@ -507,6 +507,43 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
                     for (size_t k = 0; k < mv.second.size(); ++k)
                         destructComps[kv.first + "|" + mv.first].push_back(mv.second[k].asString());
     }
+    {   // UI families: actor table (poses, bHidden, PHYS_Rotating) + skeletal actors not in world.glb
+        const assets::Json& AL = J["actors_by_level (names = Matinee / Kismet targets; world_glb_node = node name in world.glb)"];
+        if (AL.isObject()) {
+            loadSceneActors(AL);
+            std::map<std::string, int> meshByGltf;
+            for (const auto& lv : AL.obj)
+                for (size_t i = 0; i < lv.second.size(); ++i) {
+                    const assets::Json& e = lv.second[i];
+                    if (e["class"].asString() != "HmSkeletalMeshActor") continue;
+                    std::string gl = e["gltf"].asString();
+                    if (gl.rfind("content/", 0) != 0 || e["gltf_matrix"].size() < 16) continue;
+                    int id;
+                    auto mi = meshByGltf.find(gl);
+                    if (mi != meshByGltf.end()) id = mi->second;
+                    else {
+                        MeshData md;
+                        id = -1;
+                        if (assets::loadGlb(contentRoot() + gl.substr(8), md)) {   // bind pose
+                            const std::string mesh = e["mesh"].asString(), pkg = mesh.substr(0, mesh.rfind('.'));
+                            for (render::Material& m : md.mats) {
+                                std::string full = pkg + "." + m.sourceName;
+                                m.wfcName = resolveName(mats_.count(full) ? full : m.sourceName);
+                            }
+                            id = upload(md); yieldLoad();
+                        }
+                        meshByGltf[gl] = id;
+                    }
+                    if (id < 0) continue;
+                    MapProp p;
+                    p.actor = e["actor"].asString(); p.kind = 3;
+                    p.actorLower = p.actor; std::transform(p.actorLower.begin(), p.actorLower.end(), p.actorLower.begin(), ::tolower);
+                    for (int k = 0; k < 16; ++k) p.model.m[k] = e["gltf_matrix"][(size_t)k].asFloat();
+                    p.stateMesh[0] = id;
+                    mapProps_.push_back(p);
+                }
+        }
+    }
     const assets::Json& R = J["not_in_world_glb (authored renderables)"];
     for (size_t i = 0; i < R.size(); ++i) {
         const assets::Json& e = R[i];
@@ -652,6 +689,9 @@ void Pipeline::drawMapPresentation() {
             if (p.stateMesh[k] >= 0) draw(p.stateMesh[k], p.model);
         } else if (p.kind == 2 && p.stateMesh[0] >= 0) {   // active KOTH zone ring
             draw(p.stateMesh[0], p.model);
+        } else if (p.kind == 3 && p.stateMesh[0] >= 0) {   // scene skeletal actor (bind pose) + its matinee / mover delta
+            auto mv = moverDelta_.find(p.actorLower);
+            draw(p.stateMesh[0], mv != moverDelta_.end() ? mv->second * p.model : p.model);
         }
     }
     // pickup factory meshes (render_index pickup_factory_visuals)

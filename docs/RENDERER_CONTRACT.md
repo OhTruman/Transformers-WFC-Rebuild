@@ -75,6 +75,8 @@ Gameplay passes the markers its rules show. Ownership of the in-match HUD layers
 |---|---|
 | `loadFrontendScene(levels)` / `drawFrontendScene(camPosUE, camRotUEdeg, fovDeg, w, h, timeSec)` / `unloadFrontendScene()` | The live UI levels behind the menus (RE OVERNIGHT §D). |
 | `setLoadYield(callback)` | Called between bounded load steps with no GL binding held, so the loading movie keeps presenting (RE PLAYTEST §6). |
+| `setFrontendActorTransform(actor, posUE, rotUEdeg)` | Absolute matinee pose (UE units, degrees, attachment already applied) for a scene actor; applied as a delta against its authored pose. Actors not sent keep their authored pose and PHYS_Rotating. |
+| `setMapEffectActive(key, on)` | Key = Emitter actor name (short or full path) or its ParticleSystemComponent name. Scene emitters start in their authored bAutoActivate state. |
 | `setDrawOwner(id)` | Per-character light environment and applier colours for the following dynamic draws. |
 
 **Frontend scenes:**
@@ -83,6 +85,11 @@ Gameplay passes the markers its rules show. Ownership of the in-match HUD layers
 - The camera comes from the Frontend's CameraActor / Matinee evaluation.
 - Render data: `build_render_data.ps1 -Map UI_FrontEnd | UI_CharacterCustomization | UI_PartyLobby | UI_Lobby |
   UI_CampaignLobby`.
+
+**Scene actors (render_index actors_by_level):**
+- authored poses, authored bHidden (`setActorHidden` overrides) and PHYS_Rotating for the actors in world.glb;
+- skeletal actors (the 17 vignette ships) are loaded from their glTF in bind pose, materials via
+  `tools/render/scene_materials.py`. Their skeletal animation is not played [PARTIAL].
 
 **Loading yields:**
 - On UI_FrontEnd: 193 yields, longest step 70 ms. The remaining long steps are single large texture decodes.

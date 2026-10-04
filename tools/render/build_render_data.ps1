@@ -30,10 +30,12 @@ $fx = Get-Content (Join-Path $PSScriptRoot "fx_materials.txt") | Where-Object { 
 # Character materials: every MP chassis (robot + vehicle) from the AssetTools roster (character_materials.py),
 # not an Optimus-specific list; only materials cooked into this map compile.
 $chars = @((& $py (Join-Path $PSScriptRoot "character_materials.py")) | Where-Object { $_ -match '\S' })
+# Scene actors not in world.glb (render_index skeletal actors, e.g. the frontend vignette ships)
+$scene = @((& $py (Join-Path $PSScriptRoot "scene_materials.py") $Map) | Where-Object { $_ -match '\S' })
 # Canvas (HUD marker) materials: compiled with per-draw runtime parameters
 $ui = Get-Content (Join-Path $PSScriptRoot "ui_materials.txt") | Where-Object { $_ -match '\S' }
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
-    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx @ui
+    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx @ui @scene
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 
 
