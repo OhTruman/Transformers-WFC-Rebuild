@@ -157,9 +157,12 @@ void Application::runFrontend() {
             continue;
         }
         flow.matchLoaded();
-        // [integration] Frontend's PROVISIONAL adapter (immediate BeginGame) is replaced by Gameplay's match lifecycle:
-        // World::launchMatch put the match in PendingMatch (10 s); routeMatchToFrontend() sends the character-selected
-        // notification and UI event 3 when Gameplay's MatchStarted arrives (RE M05 blockers D4 / D5).
+        // [integration] Frontend's PROVISIONAL adapter (immediate BeginGame) is replaced by Gameplay's match lifecycle.
+        // World::launchMatch put the match in PendingMatch (10 s). Client order (RE M05 blockers D5): WaitingOnGameStart ->
+        // character select -> PreGameCountdown during PendingMatch -> UI event 3 at InProgress. No character select screen
+        // exists yet, so the default character is selected now (OnCharacterSelected, bMatchHasBegun false -> GameStartUI);
+        // routeMatchToFrontend() sends UI event 3 when Gameplay's MatchStarted arrives.
+        flow.characterSelected();
         localDeadForUi_ = spectatingUi_ = false;
         localDeadTime_ = 0.0f;
         window_->setMouseCaptured(true);
@@ -223,6 +226,14 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     lifecycleT_ = 0.0f; lifecycleStep_ = 0;
     frontend::FlowTrace::emit("match.gameplay", {{"map", gl.map}, {"mode", gl.modeTag}, {"goalScore", std::to_string(gl.settings.goalScore)},
                                                  {"timeLimit", std::to_string(gl.settings.timeLimit)}});
+    {   // Experimental RUNTIME-EVENTS protocol (MATCH lines), from Gameplay's launch settings and the authored rule list
+        std::string rules;
+        if (m.settings) for (const std::string& r : m.settings->rules) rules += (rules.empty() ? "" : ",") + r;
+        if (matchesLaunched_++ > 0) LOG_INFO("MATCH restart");
+        LOG_INFO("MATCH init mode=%s rules=%s teams=%d time_limit_s=%d score_limit=%d", gl.modeTag.c_str(), rules.c_str(),
+                 gl.settings.teamGame ? 2 : 0, gl.settings.timeLimit, gl.settings.goalScore);
+        matchClock_ = 0.0f; lastLoggedRemaining_ = -1; deathAt_.clear();
+    }
     gameMode_.begin(world_);
     frontend::FlowTrace::emit("match.loaded", {{"map", m.map->runtimeDir}, {"mode", m.modeTag},
                                                {"seconds", frontend::FlowTrace::num(nowSeconds() - t0)}, {"privateMB", processMemoryMB()}});
@@ -232,21 +243,44 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
 void Application::routeMatchToFrontend(float dt) {
     frontend::GameFlow& flow = frontend_->flow();
     const int me = world_.localMatchPlayer();
+    const game::Match& match = world_.match();
+    matchClock_ += dt;
+    auto teamOf = [&](int p) { return (p >= 0 && (size_t)p < match.players().size()) ? (match.players()[(size_t)p].team == 255 ? -1 : match.players()[(size_t)p].team) : -1; };
+    auto posOf = [&](int p) {
+        if (p == me) return world_.player().pawn().position();
+        for (const game::MatchOpponent* o : world_.matchOpponents()) if (o->matchPlayer() == p) return o->position();
+        return core::Vec3{0, 0, 0};
+    };
     for (const game::MatchEvent& e : world_.matchEvents()) {
         switch (e.type) {
         case game::MatchEvent::Type::MatchStarted:
-            // TnUIControllerMultiplayer: OnCharacterSelected (default character; no character select yet) then
-            // InProgress.BeginState -> SendUIEventToControllers(3).
-            flow.characterSelected();
+            // InProgress.BeginState -> SendUIEventToControllers(3) (the character was selected at load, in PendingMatch).
             flow.onUIEvent((int)frontend::UIEvent::BeginGame);
             frontend::FlowTrace::emit("match.started", {});
             break;
         case game::MatchEvent::Type::PlayerKilled:
             frontend::FlowTrace::emit("match.kill", {{"victim", std::to_string(e.player)}, {"killer", std::to_string(e.other)}, {"how", e.text}});
+            {   // RUNTIME-EVENTS: kill (score already applied by Gameplay), team / player score, death
+                const core::Vec3 dp = posOf(e.player);
+                LOG_INFO("MATCH kill killer=%d victim=%d killer_team=%d victim_team=%d weapon=%s", e.other, e.player, teamOf(e.other),
+                         teamOf(e.player), e.text.empty() ? "unknown" : e.text.c_str());
+                if (e.other >= 0 && e.other != e.player) {
+                    if (teamOf(e.other) >= 0) LOG_INFO("MATCH score team=%d score=%d", teamOf(e.other), match.teamScore(teamOf(e.other)));
+                    else LOG_INFO("MATCH score team=-1 player=%d score=%d", e.other, match.players()[(size_t)e.other].score);
+                }
+                LOG_INFO("MATCH death player=%d pos=%.1f,%.1f,%.1f", e.player, dp.x, dp.y, dp.z);
+                deathAt_[e.player] = matchClock_;
+            }
             if (e.player == me) { localDeadForUi_ = true; spectatingUi_ = false; localDeadTime_ = 0.0f; }
             break;
         case game::MatchEvent::Type::PlayerSpawned:
             frontend::FlowTrace::emit("match.spawn", {{"player", std::to_string(e.player)}, {"start", e.text}});
+            {   // RUNTIME-EVENTS: spawn (start = the PlayerStart Gameplay chose), respawn with the delay since death
+                const core::Vec3 sp = (e.value >= 0 && (size_t)e.value < match.starts().size()) ? match.starts()[(size_t)e.value].pos : posOf(e.player);
+                LOG_INFO("MATCH spawn player=%d team=%d start=%s pos=%.1f,%.1f,%.1f", e.player, teamOf(e.player), e.text.c_str(), sp.x, sp.y, sp.z);
+                auto d = deathAt_.find(e.player);
+                if (d != deathAt_.end()) { LOG_INFO("MATCH respawn player=%d start=%s delay_s=%.2f", e.player, e.text.c_str(), matchClock_ - d->second); deathAt_.erase(d); }
+            }
             if (e.player == me && localDeadForUi_) {
                 // RestartPlayer leaves spectating -> UI event 5 (RE E7.4).
                 flow.onUIEvent((int)frontend::UIEvent::Respawn);
@@ -255,6 +289,11 @@ void Application::routeMatchToFrontend(float dt) {
             break;
         case game::MatchEvent::Type::MatchEnded:
             frontend::FlowTrace::emit("match.ended", {{"winner", std::to_string(e.value)}, {"reason", e.text}});
+            {   // RUNTIME-EVENTS: end (Gameplay's EndGame reason / winner; -1 = tie)
+                const char* reason = e.text == "Score" ? "score_limit" : (e.text.find("ime") != std::string::npos ? "time_limit" : "other");
+                const std::string winner = e.value >= 0 ? std::to_string(e.value) : std::string("draw");
+                LOG_INFO("MATCH end reason=%s winner=%s t=%d (gameplay reason %s)", reason, winner.c_str(), match.elapsedTime(), e.text.c_str());
+            }
             flow.onUIEvent((int)frontend::UIEvent::EndGame);   // MatchOver: HUD hidden, EndGameStats (RE F4)
             break;
         case game::MatchEvent::Type::ReturnToLobby:
@@ -263,6 +302,11 @@ void Application::routeMatchToFrontend(float dt) {
             break;
         default: break;
         }
+    }
+    // RUNTIME-EVENTS: timer, once per change of GRI.RemainingTime while the match runs
+    if (match.state() == game::Match::State::InProgress && match.remainingTime() != lastLoggedRemaining_) {
+        lastLoggedRemaining_ = match.remainingTime();
+        LOG_INFO("MATCH timer remaining_s=%d", lastLoggedRemaining_);
     }
     // Dead: after MinRespawnDelay 3.0 s the controller enters PlayerSpectating -> UI event 4 (RE E7.3, CONFIRMED).
     if (localDeadForUi_ && !spectatingUi_) {
@@ -317,6 +361,7 @@ void Application::unloadMatch() {
     world_.~World();
     new (&world_) game::World();
     frontend_->flow().setMatchValues(frontend::MatchValues{});   // no stale match values in the lobby / frontend
+    LOG_INFO("MATCH cleanup");                                   // RUNTIME-EVENTS: the match world is gone
     renderer_->unloadMapRenderData();
     ui::GlCensus::Owned keep;
     if (presenter_) presenter_->ownedGl(keep);

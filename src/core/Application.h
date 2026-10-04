@@ -5,6 +5,7 @@
 #include "game/World.h"
 #include "game/GameMode.h"
 #include "audio/Audio.h"
+#include <map>
 #include <memory>
 
 namespace platform { class IWindow; }
@@ -39,7 +40,7 @@ private:
     ui::GfxPresenter* presenter_ = nullptr;   // owned by frontend_
     std::string pendingShot_;
     // [integration] Gameplay's match lifecycle -> the frontend flow (replaces Frontend's PROVISIONAL adapter):
-    // MatchStarted -> character selected + UI event 3; local death + MinRespawnDelay 3.0 s -> 4; respawn -> 5;
+    // load (PendingMatch) -> default character selected; MatchStarted -> UI event 3; local death + MinRespawnDelay 3.0 s -> 4; respawn -> 5;
     // MatchEnded -> 9; ReturnToLobby -> GameFlow::returnToGameLobby. Also pushes the <CurrentGame:*> values.
     void routeMatchToFrontend(float dt);
     bool localDeadForUi_ = false, spectatingUi_ = false;
@@ -47,6 +48,10 @@ private:
     void driveLifecycleTest(float dt);   // TEST ONLY: WFC_LIFECYCLE=<goal score> (see Application_Frontend.cpp)
     int lifecycleGoal_ = 0, lifecycleStep_ = 0;
     float lifecycleT_ = 0.0f;
+    // Experimental RUNTIME-EVENTS MATCH protocol state (Application_Frontend.cpp)
+    int matchesLaunched_ = 0, lastLoggedRemaining_ = -1;
+    float matchClock_ = 0.0f;
+    std::map<int, float> deathAt_;
 
     void updateTitleHud(double realDt);
     void runPickupTest();
