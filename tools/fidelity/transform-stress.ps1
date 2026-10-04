@@ -17,15 +17,21 @@
 #   INFO large_drop    - ended > 3 m lower on another authored floor (drove/fell off an edge; legal).
 #   FAIL wrong_form    - the run ends in neither the requested form nor a transform in progress.
 param([Parameter(Mandatory)][string]$Exe, [string]$RenderData = "", [Parameter(Mandatory)][string]$OutDir,
-      [string[]]$Starts = @(), [string[]]$Scenarios = @(), [switch]$AnalyzeOnly)
+      [string[]]$Starts = @(), [string[]]$Scenarios = @(), [switch]$AnalyzeOnly, [string]$Map = "MP_IAC_Streets", [int]$StartSample = 0)
 $ErrorActionPreference = "Stop"
 $Scenarios = @($Scenarios | ForEach-Object { $_ -split "," } | Where-Object { $_ })   # -File passes "a,b" as one string
-$Starts = @($Starts | ForEach-Object { $_ -split "," } | Where-Object { $_ } | ForEach-Object { [int]$_ }); if (-not $Starts.Count) { $Starts = @(0..83) }
+$Starts = @($Starts | ForEach-Object { $_ -split "," } | Where-Object { $_ } | ForEach-Object { [int]$_ })
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $OutDir = (Resolve-Path $OutDir).Path; $Exe = (Resolve-Path $Exe).Path
 $py = "F:\Transformers Rebuild\AssetTools\bin\py\python.exe"
-$colGlb = "F:\Transformers Rebuild\ExtractedAssets\VerticalSlice\Maps\MP_IAC_Streets\collision_pawn.glb"
+$MapDir = "F:\Transformers Rebuild\ExtractedAssets\VerticalSlice\Maps\$Map"
+if (-not (Test-Path $MapDir)) { throw "no runtime data for map $Map" }
+# player starts = the map's gameplay.json player_starts with a location (what WFC_START indexes)
+$nStarts = @((Get-Content -Raw (Join-Path $MapDir "gameplay.json") | ConvertFrom-Json).player_starts | Where-Object { @($_.location_gltf).Count -ge 3 }).Count
+if (-not $Starts.Count) { $Starts = if ($StartSample -gt 0 -and $StartSample -lt $nStarts) { @(0..($StartSample - 1) | ForEach-Object { [int][Math]::Floor($_ * $nStarts / $StartSample) }) } else { @(0..($nStarts - 1)) } }# KillZ: the persistent level's TnWorldInfo (<map>_BASE_m in physics.json), m; UE3 default -262143 UU when unauthored
+$killZ = -2621.43; $pw = (Get-Content -Raw (Join-Path $MapDir "physics.json") | ConvertFrom-Json).world; foreach ($q in $pw.PSObject.Properties) { if ($q.Name -like "*_BASE_m" -and $q.Value.KillZ -ne $null) { $killZ = [double]$q.Value.KillZ * 0.01 } }
+$colGlb = Join-Path $MapDir "collision_pawn.glb"
 $defs = [ordered]@{
     r2v_stationary = @{ to = "VEHICLE"; press = 60;  frames = 240; env = @{} }
     r2v_walk       = @{ to = "VEHICLE"; press = 90;  frames = 270; env = @{ WFC_AUTOWALK = "1" } }
@@ -55,7 +61,7 @@ foreach ($r in $todo) {
     $n++; $name = "{0}_s{1:D2}" -f $r.sc, $r.s; $dir = Join-Path $runsDir $name; $tr = Join-Path $dir "trace.csv"
     if ($AnalyzeOnly -or (Test-Path $tr)) { continue }
     $d = $defs[$r.sc]
-    $e = @{ WFC_SMOKE_FRAMES = "$($d.frames)"; WFC_LOCKSTEP = "1"; WFC_NOMOUSE = "1"; WFC_LOGEVERY = "1"; WFC_START = "$($r.s)" } + $d.env
+    $e = @{ WFC_SMOKE_FRAMES = "$($d.frames)"; WFC_LOCKSTEP = "1"; WFC_NOMOUSE = "1"; WFC_LOGEVERY = "1"; WFC_START = "$($r.s)"; WFC_MAP = $Map } + $d.env
     if ($d.press -gt 0) { $e.WFC_PRESSTRANSFORM = "$($d.press)" }
     if ($RenderData) { $e.WFC_RENDER_DATA = $RenderData }
     $rc = Invoke-WfcExe $Exe $dir $e "run.log" 600
@@ -133,7 +139,7 @@ foreach ($name in ($runs.Keys | Sort-Object)) {
         }
     }
     $eq = $Q["$name|now|$($end.frame)"]
-    $oob = $minY -lt -749 -or ($eq -and $null -eq $eq.floor_below)
+    $oob = $minY -lt $killZ; $noFloor = -not $oob -and $eq -and $null -eq $eq.floor_below   # no EXPORTED floor under the end point while above KillZ: the runtime stands on something the export lacks -> INFO, look here
     $drop = if ($null -ne $pf -and $eq -and $null -ne $eq.floor_below) { $pf - $eq.floor_below } else { 0 }
     $formOk = $d.to -eq "ANY" -or $end.form -eq $d.to -or $end.anim -like "Transform_*"
     if ($d.press -le 0) { $through = $null; $pen = 0.0 }   # rapid scenarios: no single press floor; the general detector judges them
@@ -151,7 +157,7 @@ foreach ($name in ($runs.Keys | Sort-Object)) {
         $land = @($t | Where-Object { [int]$_.frame -gt [int]$through.frame -and $_.grounded -eq "1" } | Select-Object -First 1)[0]
         if ($land) { $landY = [double]$land.y; if ($null -ne $ref -and [Math]::Abs($landY - $ref) -le 0.6 -and ([int]$land.frame - [int]$through.frame) -le 3) { $sinkOnly = $true } }
     }
-    $verdict = if ($noHook) { "SKIP no_transform_hook" } elseif ($through -and $sinkOnly) { "INFO transient_sink" } elseif ($through) { "FAIL fell_through" } elseif ($oob) { "FAIL out_of_bounds" } elseif (-not $formOk) { "FAIL wrong_form" } elseif ($drop -gt 3) { "INFO large_drop" } else { "PASS" }
+    $verdict = if ($noHook) { "SKIP no_transform_hook" } elseif ($through -and $sinkOnly) { "INFO transient_sink" } elseif ($through) { "FAIL fell_through" } elseif ($oob) { "FAIL out_of_bounds" } elseif ($noFloor) { "INFO no_exported_floor" } elseif (-not $formOk) { "FAIL wrong_form" } elseif ($drop -gt 3) { "INFO large_drop" } else { "PASS" }
     $table.Add([pscustomobject][ordered]@{ run = $name; scenario = $sc; start = $R.r.s; verdict = $verdict
         pre_x = $pre.x; pre_y = $pre.y; pre_z = $pre.z; pre_hspeed = $pre.hspeed; pre_vy = $pre.vy; pre_grounded = $pre.grounded; pre_form = $pre.form
         press_floor = $(if ($null -ne $pf) { [Math]::Round($pf, 2) } else { "" }); press_floor_thickness = $(if ($pq.thickness) { [Math]::Round($pq.thickness, 2) } else { "" })

@@ -79,7 +79,7 @@ if ($Runs -contains "A1") {
     Res "controller" "HUMAN" "XInput is mapped (Win32Window: A/B/X/Y/Start/Back/D-pad/shoulders/triggers/thumbs -> UiKey) but pad input cannot be injected safely; play the whole route with a controller" "Frontend"
     # ---- #5 back navigation (HmMenu.closeMenu: show the parent, give it input, BUTTON_BACK; party root B = Game.QuitToMainMenu)
     $backs = @(Flow-Ev $F "ui.sound" | Where-Object { $_.name -eq "BUTTON_BACK" })
-    $dP = DiffOf (Join-Path $d "e_party_root.bmp") (Join-Path $d "g_party_after_back.bmp"); $dM = DiffOf (Join-Path $d "f_modes.bmp") (Join-Path $d "j_modes_after_back.bmp"); $dP2 = DiffOf (Join-Path $d "e_party_root.bmp") (Join-Path $d "k_party_after_back2.bmp")
+    $dP = DiffOf (Join-Path $d "e_party_root.bmp") (Join-Path $d "g_party_after_back.bmp"); $dM = DiffOf (Join-Path $d "f_modes.bmp") (Join-Path $d "j_modes_after_back.bmp"); $dP2 = DiffOf (Join-Path $d "g_party_after_back.bmp") (Join-Path $d "k_party_after_back2.bmp")   # same focus (Private Match, the item the user came back from); the first visit focuses Find Match
     $quitTravel = @(Flow-Ev $F "travel" | Where-Object { $_.from -eq "PartyLobby" -and $_.url -like "UI_FrontEnd_m*" })
     $qtm = @(Flow-Ev $F "bridge" | Where-Object fn -eq "Game.QuitToMainMenu")
     Res "nav.back_mode_list" $(if ($dP -ge 0 -and $dP -lt 6) { "PASS" } elseif ($dP -lt 0) { "SKIP" } else { "FAIL" }) ("B in the mode list returns to the party lobby root: frame difference to the root {0} luma (focus highlight may differ)" -f $dP) "Frontend"

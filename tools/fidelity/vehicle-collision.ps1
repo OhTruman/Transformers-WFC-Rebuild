@@ -12,15 +12,21 @@
 #   FAIL out_of_bounds  - below KillZ or no authored floor under the end point
 #   INFO stuck          - moving input but < 0.5 m travelled in the last 3 s (wedged; Gameplay CHAOS reports these too)
 param([Parameter(Mandatory)][string]$Exe, [string]$RenderData = "", [Parameter(Mandatory)][string]$OutDir,
-      [string[]]$Starts = @(), [string[]]$Scenarios = @(), [switch]$AnalyzeOnly, [double[]]$Heights = @(0.8, 1.2, 1.6))
+      [string[]]$Starts = @(), [string[]]$Scenarios = @(), [switch]$AnalyzeOnly, [string]$Map = "MP_IAC_Streets", [int]$StartSample = 0, [double[]]$Heights = @(0.8, 1.2, 1.6))
 $ErrorActionPreference = "Stop"
 $Scenarios = @($Scenarios | ForEach-Object { $_ -split "," } | Where-Object { $_ })
-$Starts = @($Starts | ForEach-Object { $_ -split "," } | Where-Object { $_ } | ForEach-Object { [int]$_ }); if (-not $Starts.Count) { $Starts = @(0..83) }
+$Starts = @($Starts | ForEach-Object { $_ -split "," } | Where-Object { $_ } | ForEach-Object { [int]$_ })
 . (Join-Path $PSScriptRoot "lib\Run.ps1")
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $OutDir = (Resolve-Path $OutDir).Path; $Exe = (Resolve-Path $Exe).Path
 $py = "F:\Transformers Rebuild\AssetTools\bin\py\python.exe"
-$colGlb = "F:\Transformers Rebuild\ExtractedAssets\VerticalSlice\Maps\MP_IAC_Streets\collision_pawn.glb"
+$MapDir = "F:\Transformers Rebuild\ExtractedAssets\VerticalSlice\Maps\$Map"
+if (-not (Test-Path $MapDir)) { throw "no runtime data for map $Map" }
+# player starts = the map's gameplay.json player_starts with a location (what WFC_START indexes)
+$nStarts = @((Get-Content -Raw (Join-Path $MapDir "gameplay.json") | ConvertFrom-Json).player_starts | Where-Object { @($_.location_gltf).Count -ge 3 }).Count
+if (-not $Starts.Count) { $Starts = if ($StartSample -gt 0 -and $StartSample -lt $nStarts) { @(0..($StartSample - 1) | ForEach-Object { [int][Math]::Floor($_ * $nStarts / $StartSample) }) } else { @(0..($nStarts - 1)) } }# KillZ: the persistent level's TnWorldInfo (<map>_BASE_m in physics.json), m; UE3 default -262143 UU when unauthored
+$killZ = -2621.43; $pw = (Get-Content -Raw (Join-Path $MapDir "physics.json") | ConvertFrom-Json).world; foreach ($q in $pw.PSObject.Properties) { if ($q.Name -like "*_BASE_m" -and $q.Value.KillZ -ne $null) { $killZ = [double]$q.Value.KillZ * 0.01 } }
+$colGlb = Join-Path $MapDir "collision_pawn.glb"
 $V = @{ WFC_STARTVEHICLE = "1"; WFC_AUTOWALK = "1" }
 $defs = [ordered]@{
     drive        = @{ frames = 600; env = $V }
@@ -36,8 +42,8 @@ $defs = [ordered]@{
     robot_turn   = @{ frames = 600; env = @{ WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.4" } }
     robot_jump   = @{ frames = 600; env = @{ WFC_AUTOWALK = "1"; WFC_AUTOJUMP_EVERY = "50"; WFC_AUTOTURN = "-0.3" } }
 }
-$visGlb = "F:\Transformers Rebuild\ExtractedAssets\VerticalSlice\Maps\MP_IAC_Streets\world.glb"
-$flagsJson = "F:\Transformers Rebuild\ExtractedAssets\VerticalSlice\Maps\MP_IAC_Streets\collision.json"
+$visGlb = Join-Path $MapDir "world.glb"
+$flagsJson = Join-Path $MapDir "collision.json"
 if (-not $Scenarios.Count) { $Scenarios = @($defs.Keys) }
 $runsDir = Join-Path $OutDir "runs"; New-Item -ItemType Directory -Force $runsDir | Out-Null
 $todo = @(); foreach ($sc in $Scenarios) { foreach ($s in $Starts) { $todo += @{ sc = $sc; s = $s } } }
@@ -46,7 +52,7 @@ foreach ($r in $todo) {
     $n++; $name = "{0}_s{1:D2}" -f $r.sc, $r.s; $dir = Join-Path $runsDir $name; $tr = Join-Path $dir "trace.csv"
     if ($AnalyzeOnly -or (Test-Path $tr)) { continue }
     $d = $defs[$r.sc]
-    $e = @{ WFC_SMOKE_FRAMES = "$($d.frames)"; WFC_LOCKSTEP = "1"; WFC_NOMOUSE = "1"; WFC_LOGEVERY = "1"; WFC_START = "$($r.s)" } + $d.env
+    $e = @{ WFC_SMOKE_FRAMES = "$($d.frames)"; WFC_LOCKSTEP = "1"; WFC_NOMOUSE = "1"; WFC_LOGEVERY = "1"; WFC_START = "$($r.s)"; WFC_MAP = $Map } + $d.env
     if ($RenderData) { $e.WFC_RENDER_DATA = $RenderData }
     $rc = Invoke-WfcExe $Exe $dir $e "run.log" 600
     $rows = foreach ($f in (Read-WfcFrames (Join-Path $dir "wfc.log"))) { [pscustomobject][ordered]@{ frame = $f.frame; x = $f.x; y = $f.y; z = $f.z; grounded = $f.grounded; form = $f.form; hspeed = $f.hspeed } }
@@ -114,12 +120,12 @@ foreach ($name in ($runs.Keys | Sort-Object)) {
         if ($walkable -and ($st.rise -gt 0.2 -or ($f2.floor_below - $st.y) -gt 0.15)) { $rampStops += $tag } elseif ($walkable) { $otherStops += $tag }
     }
     $minY = ($t | ForEach-Object { [double]$_.y } | Measure-Object -Minimum).Minimum
-    $oob = $minY -lt -749 -or ($eq -and $null -eq $eq.floor_below)
+    $oob = $minY -lt $killZ; $noFloor = -not $oob -and $eq -and $null -eq $eq.floor_below   # no EXPORTED floor under the end point while above KillZ: the runtime stands on something the export lacks -> INFO, look here
     $tail = @($t | Where-Object { [int]$_.frame -gt [int]$end.frame - 180 })
     $travel = if ($tail.Count -ge 2) { [Math]::Sqrt([Math]::Pow([double]$tail[-1].x - [double]$tail[0].x, 2) + [Math]::Pow([double]$tail[-1].z - [double]$tail[0].z, 2)) } else { 0 }
     $dist = 0.0; for ($k = 1; $k -lt $t.Count; $k++) { $dist += [Math]::Sqrt([Math]::Pow([double]$t[$k].x - [double]$t[$k - 1].x, 2) + [Math]::Pow([double]$t[$k].z - [double]$t[$k - 1].z, 2)) }
     $maxSp = ($t | ForEach-Object { [double]$_.hspeed } | Measure-Object -Maximum).Maximum
-    $verdict = if ($cr.Count) { "FAIL passed_through" } elseif ($rampStops.Count) { "FAIL ramp_hard_stop" } elseif ($oob) { "FAIL out_of_bounds" } elseif ($travel -lt 0.5) { "INFO stuck" } else { "PASS" }
+    $verdict = if ($cr.Count) { "FAIL passed_through" } elseif ($rampStops.Count) { "FAIL ramp_hard_stop" } elseif ($oob) { "FAIL out_of_bounds" } elseif ($noFloor) { "INFO no_exported_floor" } elseif ($travel -lt 0.5) { "INFO stuck" } else { "PASS" }
     $first = if ($cr.Count) { $cr[0] } else { $null }
     $table.Add([pscustomobject][ordered]@{ run = $name; scenario = $sc; start = $R.r.s; verdict = $verdict; distance_m = [Math]::Round($dist, 1); max_speed = $maxSp
         crossings = $cr.Count; first_frame = $(if ($first) { $first.frame }); first_h = $(if ($first) { $first.h }); actor = $(if ($first) { $first.node }); at = $(if ($first) { "{0},{1},{2}" -f $first.x, $first.y, $first.z })
