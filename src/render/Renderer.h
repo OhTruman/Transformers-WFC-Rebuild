@@ -124,6 +124,12 @@ public:
     virtual bool canvasTextSize(const std::string& font, const std::string& utf8, float& w, float& h, float scale = 1.0f) {
         (void)font; (void)utf8; (void)scale; w = h = 0; return false;
     }
+    // Diagnostics (collision / fidelity reports): the rendered static-mesh triangle hit first by a ray, with its
+    // authored source (component object path, StaticMesh, material). BSP is not included. Not for gameplay use.
+    struct PickHit { std::string component, mesh, material; float distance = 0; core::Vec3 point{0, 0, 0}, normal{0, 0, 0}; };
+    virtual bool pickWorld(const core::Vec3& origin, const core::Vec3& dir, float maxDist, PickHit& out) {
+        (void)origin; (void)dir; (void)maxDist; (void)out; return false;
+    }
     virtual int viewportWidth() const { return 0; }
     virtual int viewportHeight() const { return 0; }
 

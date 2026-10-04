@@ -221,6 +221,39 @@ public:
         return true;
     }
 
+    bool pickWorld(const core::Vec3& o, const core::Vec3& d, float maxDist, PickHit& out) override {
+        float best = maxDist;
+        bool hit = false;
+        for (const MeshData& m : meshes_) {
+            if (m.subs.empty() || m.subs[0].component.empty()) continue;      // authored world meshes only
+            for (const SubMesh& sm : m.subs) {
+                for (uint32_t k = sm.indexOffset; k + 2 < sm.indexOffset + sm.indexCount; k += 3) {
+                    const float* a = &m.positions[(size_t)m.indices[k] * 3];
+                    const float* b = &m.positions[(size_t)m.indices[k + 1] * 3];
+                    const float* c = &m.positions[(size_t)m.indices[k + 2] * 3];
+                    core::Vec3 A{a[0], a[1], a[2]}, B{b[0], b[1], b[2]}, C{c[0], c[1], c[2]};
+                    core::Vec3 e1 = B - A, e2 = C - A, pv = core::cross(d, e2);
+                    float det = core::dot(e1, pv);
+                    if (std::fabs(det) < 1e-9f) continue;
+                    float inv = 1.0f / det;
+                    core::Vec3 tv = o - A;
+                    float u = core::dot(tv, pv) * inv;
+                    if (u < 0 || u > 1) continue;
+                    core::Vec3 qv = core::cross(tv, e1);
+                    float v = core::dot(d, qv) * inv;
+                    if (v < 0 || u + v > 1) continue;
+                    float t = core::dot(e2, qv) * inv;
+                    if (t <= 1e-3f || t >= best) continue;
+                    best = t; hit = true;
+                    out.component = sm.component; out.mesh = sm.sourceMesh;
+                    out.material = sm.material >= 0 && (size_t)sm.material < m.mats.size() ? m.mats[(size_t)sm.material].sourceName : "";
+                    out.distance = t; out.point = o + d * t; out.normal = core::normalize(core::cross(e1, e2));
+                }
+            }
+        }
+        return hit;
+    }
+
     bool updateTexture(TextureHandle h, const ImageData& img) override {
         if (h < 0 || (size_t)h >= textures_.size() || !img.valid()) return false;
         glBindTexture(GL_TEXTURE_2D, textures_[(size_t)h]);

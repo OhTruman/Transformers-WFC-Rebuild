@@ -243,6 +243,27 @@ void Application::run() {
         }
         renderer_->beginFrame(camera_, window_->width(), window_->height());
         world_.draw(*renderer_);
+        if (std::getenv("WFC_PICK")) {                 // diagnostics: authored source of the surface under the crosshair
+            static render::IRenderer::PickHit last;
+            static bool lastOk = false;
+            static long pickFrame = -100;
+            if (frame - pickFrame >= 10) {             // CPU ray over the world mesh: every 10 frames
+                pickFrame = frame;
+                lastOk = renderer_->pickWorld(camera_.pos, core::forwardFromYawPitch(camera_.yaw, camera_.pitch), 500.0f, last);
+                if (lastOk) LOG_INFO("PICK %s | %s | %s | %.2f m | n=(%.2f %.2f %.2f) at (%.2f %.2f %.2f)", last.component.c_str(),
+                                     last.mesh.c_str(), last.material.c_str(), last.distance, last.normal.x, last.normal.y,
+                                     last.normal.z, last.point.x, last.point.y, last.point.z);
+            }
+            const uint8_t col[4] = {255, 230, 120, 255};
+            std::string line1 = lastOk ? last.component.substr(last.component.find("PersistentLevel.") == std::string::npos
+                                                                    ? 0 : last.component.find("PersistentLevel.") + 16)
+                                       : std::string("(no static mesh: BSP / sky / none)");
+            std::string line2 = lastOk ? last.mesh + "  " + last.material : std::string();
+            char d[64]; std::snprintf(d, sizeof d, "  %.1f m", lastOk ? last.distance : 0.0f);
+            const float y = (float)window_->height() * 0.86f;
+            renderer_->drawCanvasText("MarkerFont", line1 + (lastOk ? d : ""), 20.0f, y, col);
+            if (!line2.empty()) renderer_->drawCanvasText("MarkerFont", line2, 20.0f, y + 22.0f, col);
+        }
         if (std::getenv("WFC_MARKERTEST")) {           // diagnostics: TDM player tags (ally + enemy) ahead of the player
             static render::HudMarkers hm;
             static bool hmLoaded = hm.load(render::wfcRenderDataRoot());
