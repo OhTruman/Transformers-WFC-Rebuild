@@ -75,6 +75,54 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 21a — M05 "INTERLACED" CHARACTER REGRESSION + PRE-MATCH PRESENTATION (2026-10-04, gameplay agent)
+
+### Character / vehicle "interlacing" (human-reported M05 regression) — FIXED (owner: Gameplay)
+- **Cause (mine, Pass 20).**
+  - The third-person camera position was moved into the fixed 60 Hz simulation step and cached (`camLoc_`), while the
+    camera rotation still updates per render frame (`handleInput`).
+  - The integrated build renders at about 130 fps on the playtest machine (no swap interval is set), so most frames run
+    0 simulation steps. Each of those frames paired a stale camera position with a fresh rotation.
+  - The view swung around the pawn every frame, so the character and the truck appeared to separate and jitter.
+  - The animation, the assets and the renderer were not involved: Character / SkinnedModel are unchanged since M04
+    except `respawnReset`; dynamic meshes are drawn immediately, not through the new translucency queue.
+- **Fix.**
+  - The camera position is again evaluated per render frame from the current rotation and pawn location, exactly as
+    before Pass 20.
+  - The RE obstruction model (`WFC_CAMRE`) keeps its per-step smoothing state as a camera-space offset applied with the
+    current frame's rotation.
+- **WFC_CAMSYNC (render N Hz against the 60 Hz simulation, turning and moving).** Jitter of the character's on-screen
+  offset per frame (mean |second difference|):
+
+| scenario | 144 Hz per-tick cache (M05) | 144 Hz per-frame (fixed) | 75 Hz M05 / fixed |
+|---|---|---|---|
+| robot run + turn | 1.276° (max 1.91°) | **0.0003°** | 0.972° / 0.0002° |
+| hover truck + turn | 1.189° (max 1.92°) | **0.011°** | 0.923° / 0.038° |
+| boost | 0.649° (max 4.14°) | **0.023°** | 0.375° / 0.080° |
+
+- VISUALLY VERIFIED: pending a human on the integrated build. The numeric cause and fix are confirmed.
+- **Integration note.** No swap interval is set anywhere, so the frame rate is uncapped. Gameplay is correct at any
+  rate now; frame pacing belongs to Frontend / Rendering.
+
+### Pre-match presentation (human-reported) — FIXED
+- **Integrated M05 capture** (countdown): no Optimus, but the Ion Blaster drawn floating at the world-load DM spawn,
+  with the hidden pawn frozen mid-fall.
+- **Original [CONF RE bootstrap §2 / §5.2].** `ShouldSpectateOnLogin`: there is no pawn before the start, and
+  PendingMatch spawns nobody.
+- **HIGH (stock UE3).** GameInfo.Login creates the controller at FindPlayerStart and it spectates from there.
+- **Now.**
+  - `World::startLocalMatch` takes the login start from the spawn manager (team start of the initial cluster; the
+    SpawnIterator is consumed like the original).
+  - The controller views from it at the start's rotation (`PlayerController::setSpectatorView`).
+  - The pawn is parked at rest there, and neither the pawn, the weapon nor the vehicle FX are drawn while there is no
+    pawn.
+  - On the spawn the view returns to the third-person camera, and Optimus appears at his team start
+    (TnTeamPlayerStart_*, initial cluster 7810 / 4159).
+- **PARTIAL.** The death / spectate camera (Death strategy, MinRespawnDelay 3.0 s spectating) is not reproduced: the
+  camera stays at the death location.
+
+---
+
 ## PASS 20c — ADVERSARIAL MOVEMENT HARDENING (2026-10-03, gameplay agent)
 - **WFC_CHAOS** (Phase 3): from 60 nav points, 20 s each of seeded random play through the real input path
   (71,940 ticks, 355 transform presses, 312 jumps, 307 boosts). Checks:

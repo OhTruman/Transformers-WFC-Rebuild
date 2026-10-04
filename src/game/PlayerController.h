@@ -77,6 +77,11 @@ public:
     // fixed step after the pawn moved. Robot TnThirdPersoncollisionCameraBehavior / vehicle
     // TnAvoidClippingCameraBehavior.
     void tickCameraCollision(float dt);
+    // No pawn (PendingMatch: ShouldSpectateOnLogin): the controller views from its own location / rotation, which
+    // GameInfo.Login took from FindPlayerStart [HIGH: stock UE3 Login + PlayerWaitingSpectating].
+    void setSpectatorView(const core::Vec3& pos, float yaw) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; }
+    void clearSpectatorView() { spectating_ = false; }
+    bool spectating() const { return spectating_; }
     void setViewAspect(float a) { aspect_ = a > 0.0f ? a : aspect_; }
     // Diagnostics: last step's obstruction state.
     bool cameraObstructed() const { return camObstructed_; }
@@ -131,6 +136,9 @@ private:
     bool camLocValid_ = false, camObstructed_ = false;
     core::Vec3 camOld_{0, 0, 0};                 // smoothed camera offset in target space (UE X fwd, Y right, Z up)
     bool camOldValid_ = false;
+    bool spectating_ = false;
+    core::Vec3 specPos_{0, 0, 0};
+    float specYaw_ = 0.0f;
     float camSmoothRemain_ = 0.0f;
     int camCollStrategy_ = -1;
     std::vector<HudNotify> hudNotifies_;

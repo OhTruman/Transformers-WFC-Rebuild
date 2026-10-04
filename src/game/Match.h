@@ -96,6 +96,8 @@ public:
     const std::vector<MatchEvent>& events() const { return events_; }   // pending until the host consumes them (clearEvents)
     void clearEvents() { events_.clear(); }
     // Spawn choice for player p (FindPlayerStart): start index or -1. Exposed for the host to place the pawn.
+    // GameInfo.Login -> FindPlayerStart for a joining controller (consumes the cluster SpawnIterator like the original).
+    int loginStart(int p) { return (p >= 0 && (size_t)p < players_.size()) ? findPlayerStart(p) : -1; }
     int lastSpawnStart(int p) const { return (p >= 0 && (size_t)p < spawnAt_.size()) ? spawnAt_[(size_t)p] : -1; }
     const std::vector<Start>& starts() const { return starts_; }
     const std::vector<Cluster>& clusters() const { return clusters_; }

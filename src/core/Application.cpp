@@ -93,6 +93,7 @@ bool Application::init() {
     if (std::getenv("WFC_CAMTEST")) { runCameraTest(); return false; }         // measurements only
     if (std::getenv("WFC_CHAOS")) { runChaosTest(); return false; }            // measurements only
     if (std::getenv("WFC_TDMTEST")) { runTdmSessionTest(); return false; }     // measurements only
+    if (std::getenv("WFC_CAMSYNC")) { runCameraSyncTest(); return false; }     // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -1416,6 +1417,55 @@ void Application::runTdmSessionTest() {
         check(allyTags == 1, "player tags: one ally tag drawn, enemy markers disabled");
     }
     LOG_INFO("TDMTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_CAMSYNC: render-rate vs fixed-step coherence of the presented character. Renders at WFC_CAMSYNC Hz (default 144)
+// against the 60 Hz simulation while turning and moving (robot run, hover truck, boost). Per render frame: the pawn's
+// angular offset from the view axis (what the player sees of the character's placement on screen); the jitter is the
+// mean |second difference| of that offset. "per-frame" = the shipped camera (cameraPos() per render frame);
+// "per-tick cache" = the Pass 20 behaviour (camera position stored at the last simulation step, rotation per frame).
+void Application::runCameraSyncTest() {
+    float hz = (float)std::atof(std::getenv("WFC_CAMSYNC"));
+    if (hz < 30.0f) hz = 144.0f;
+    const float rdt = 1.0f / hz;
+    auto& pc = world_.player().pawn();
+    auto& ctl = world_.player().controller();
+    const char* names[3] = {"robot run+turn", "hover drive+turn", "boost"};
+    for (int sc = 0; sc < 3; ++sc) {
+        world_.teleportToStart(20);
+        if (sc > 0 && pc.form() != game::Form::Vehicle) { pc.setForm(game::Form::Vehicle); pc.setPosition(pc.position() + core::Vec3{0, pc.meshToActor(game::Form::Robot) - pc.meshToActor(game::Form::Vehicle), 0}); }
+        if (sc == 0 && pc.form() != game::Form::Robot) pc.setForm(game::Form::Robot);
+        float yaw = pc.yaw();
+        std::vector<float> ax, axStale;
+        core::Vec3 stale = ctl.cameraPos();
+        clock_ = core::FixedStepClock(60.0);
+        for (int f = 0; f < (int)(hz * 4.0f); ++f) {
+            platform::InputFrame in;
+            in.down[(int)platform::Button::Forward] = true;
+            if (sc == 2) { in.down[(int)platform::Button::FineAim] = true; in.pressed[(int)platform::Button::FineAim] = f == 0; in.padConnected = true; in.padRX = 0.6f; }
+            else { yaw += 1.6f * rdt; ctl.setCameraYaw(yaw); }        // mouse-like turn, applied per render frame
+            world_.handleInput(in, rdt);
+            int steps = clock_.tick(rdt);
+            for (int i = 0; i < steps; ++i) world_.tick(clock_.stepSeconds());
+            if (steps > 0) stale = ctl.cameraPos();                    // Pass 20: position cached at the step
+            render::Camera cam;
+            ctl.updateCamera(cam);
+            core::Vec3 fwd = core::forwardFromYawPitch(cam.yaw, 0.0f);
+            core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
+            core::Vec3 target = pc.actorLocation();
+            auto offset = [&](const core::Vec3& eye) { core::Vec3 d = target - eye; return std::atan2(core::dot(d, right), core::dot(d, fwd)) * 57.2958f; };
+            ax.push_back(offset(cam.pos));
+            axStale.push_back(offset(stale));
+        }
+        auto jitter = [](const std::vector<float>& a) {
+            double s = 0; float mx = 0; int n = 0;
+            for (size_t i = 2; i < a.size(); ++i) { float d2 = std::fabs(a[i] - 2 * a[i - 1] + a[i - 2]); s += d2; mx = std::max(mx, d2); ++n; }
+            return std::make_pair(n ? (float)(s / n) : 0.0f, mx);
+        };
+        auto j = jitter(ax), js = jitter(axStale);
+        LOG_INFO("CAMSYNC %-16s @%3.0f Hz render / 60 Hz sim: character screen-offset jitter per-frame camera %.4f deg (max %.3f) | per-tick cached camera %.4f deg (max %.3f)",
+                 names[sc], hz, j.first, j.second, js.first, js.second);
+    }
 }
 
 void Application::shutdown() {

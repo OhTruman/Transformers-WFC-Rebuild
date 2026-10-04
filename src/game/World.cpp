@@ -900,6 +900,19 @@ void World::startLocalMatch(const MatchSettings& s) {
     if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");
     matchActive_ = true;
     localDead_ = true;            // PendingMatch: TrySpawnPlayer false -> nobody spawns before the start
+    // GameInfo.Login: the controller is created at FindPlayerStart (team start of the initial cluster) and spectates
+    // from there until the match spawns its pawn [HIGH]. The (not yet existing) pawn is parked at rest at that start.
+    int ls = match_.loginStart(localPlayer_);
+    if (ls >= 0) {
+        const Match::Start& st = match_.starts()[(size_t)ls];
+        Character& pc = player_.pawn();
+        pc.respawnReset();
+        core::Vec3 p = st.pos; float gy; core::Vec3 gn;
+        if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, gn)) p.y = gy;
+        pc.setPosition(p); pc.setYaw(st.yaw); pc.groundY = p.y;
+        player_.controller().setCameraYaw(st.yaw);
+        player_.controller().setSpectatorView(st.pos + core::Vec3{0, core::config::kPawnHalfHeight, 0}, st.yaw);
+    }
 }
 
 bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
@@ -1048,6 +1061,7 @@ void World::tickMatch(float dt) {
                     pc.setPosition(p); pc.setYaw(st.yaw); pc.velocity() = {0, 0, 0}; pc.groundY = p.y;
                     player_.controller().setCameraYaw(st.yaw);
                     localDead_ = false;
+                    player_.controller().clearSpectatorView();
                     LOG_INFO("match: local player spawned at %s (%s team %d)", st.actor.c_str(), st.cluster.c_str(),
                              match_.players()[(size_t)localPlayer_].team);
                 }
@@ -1067,6 +1081,7 @@ void World::tickMatch(float dt) {
                 // TnGame.ReturnToGameLobby: the host (front end / Integration) decides what follows; the local
                 // runtime stops the match here and returns to free play.
                 LOG_INFO("match: return to lobby");
+                player_.controller().clearSpectatorView();
                 matchActive_ = false;
                 localDead_ = false;
                 returned = true;
@@ -1130,14 +1145,15 @@ void World::draw(render::IRenderer& r) const {
     if (!localPlayerDead()) player_.draw(r);
 
     // Ion Blaster mesh held at the weapon socket (robot form only).
-    if (weaponAnim_.valid() && player_.pawn().hasWeapon())
+    if (localPlayerDead()) { /* no pawn: no weapon / pawn effects (PendingMatch, dead) */ }
+    else if (weaponAnim_.valid() && player_.pawn().hasWeapon())
         r.drawDynamicMesh(weaponAnim_.pose(), player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
     else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
         r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
 
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene).
     fx_.draw(r);
-    vehicleFx_.draw(r);
+    if (!localPlayerDead()) vehicleFx_.draw(r);
 
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {

@@ -3,6 +3,12 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 21a (2026-10-04) — M05 interlacing regression fixed; pre-match presentation
+- Cause of the "interlaced" Optimus / truck: Pass 20 cached the camera position per 60 Hz step while the rotation is per render frame (~130 fps). Camera evaluated per frame again.
+  - WFC_CAMSYNC: 1.28 deg -> 0.0003 deg on-screen jitter at 144 Hz.
+- Countdown: no pawn / weapon drawn; the controller spectates from its login start (team start); spawn at the team start.
+- Details: FIDELITY.md PASS 21a.
+
 ## GAMEPLAY PASS 20c (2026-10-03) — adversarial movement hardening
 - WFC_CHAOS (60 starts x 20 s random play): 0 under the map, 0 KillZ, 1 stuck, 3 prop entries.
 - Robot knee probe 0.55 m / 0.7 m [PROV]; oracle 852/852; transform under-overhang cases 54 -> 15.

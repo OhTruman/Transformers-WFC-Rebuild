@@ -280,8 +280,30 @@ core::Vec3 PlayerController::desiredCameraPos() const {
     return focus + dir * (offset_.x - distCur_) + right * offset_.y + up * offset_.z;
 }
 
+// Evaluated per RENDER frame from the current orbit rotation and pawn location, like the strategy's other behaviours
+// (camera rotation is updated per frame in handleInput). Caching the position per fixed step (Pass 20) paired a stale
+// position with a fresh rotation on every frame that ran 0 or 2 simulation steps: the view swung around the pawn each
+// frame (the M05 "interlaced" character / vehicle).
 core::Vec3 PlayerController::cameraPos() const {
-    return camLocValid_ ? camLoc_ : desiredCameraPos();
+    if (spectating_) return specPos_;
+    const core::Vec3 desiredCam = desiredCameraPos();
+    if (!pawn_ || !col_) return desiredCam;
+    static const bool reModel = std::getenv("WFC_CAMRE") != nullptr;
+    if (!reModel) {
+        // Default: provisional pull-in toward the anchor in front of the first hit.
+        core::Vec3 focus = pawn_->actorLocation() + core::Vec3{0, anchorCur_, 0};
+        core::Vec3 d = desiredCam - focus;
+        float len = core::length(d), t;
+        if (len > 1e-3f && col_->segmentHit(focus, desiredCam, t)) return focus + d * (std::max(0.0f, t * len - 0.3f) / len);
+        return desiredCam;
+    }
+    if (!camOldValid_) return desiredCam;
+    // RE model: the smoothed offset lives in target space (camera rotation, target location) - apply it with the
+    // current frame's rotation and location.
+    const core::Vec3 F = core::forwardFromYawPitch(viewYaw_, viewPitch_);
+    const core::Vec3 R = core::normalize(core::cross(core::forwardFromYawPitch(viewYaw_, 0.0f), core::Vec3{0, 1, 0}));
+    const core::Vec3 U = core::cross(R, F);
+    return pawn_->actorLocation() + F * camOld_.x + R * camOld_.y + U * camOld_.z;
 }
 
 namespace {
@@ -339,14 +361,11 @@ void PlayerController::tickCameraCollision(float dt) {
     // Default: the provisional pull-in (validated feel). WFC_CAMRE=1: the RE obstruction behaviours below, whose
     // native box sweeps are approximated by rays (PARTIAL; WFC_CAMTEST shows more visible clipping than the default).
     static const bool oldModel = std::getenv("WFC_CAMRE") == nullptr;
-    if (oldModel) {
+    if (oldModel) {                          // stateless: cameraPos() evaluates it per render frame
         core::Vec3 focus = pawn_->actorLocation() + core::Vec3{0, anchorCur_, 0};
         core::Vec3 d = desiredCam - focus;
         float len = core::length(d), t;
-        camLoc_ = desiredCam;
         camObstructed_ = len > 1e-3f && col_->segmentHit(focus, desiredCam, t);
-        if (camObstructed_) camLoc_ = focus + d * (std::max(0.0f, t * len - 0.3f) / len);
-        camLocValid_ = true;
         return;
     }
     // Camera frame (UE X forward, Y right, Z up).
@@ -502,6 +521,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
 void PlayerController::updateCamera(render::Camera& cam) const {
     if (!pawn_) return;
     namespace cfg = core::config;
+    if (spectating_) { cam.pos = specPos_; cam.yaw = specYaw_; cam.pitch = 0.0f; cam.fovXDeg = fovCur_; return; }
     cam.pos = cameraPos();
     cam.yaw = viewYaw_;
     cam.pitch = viewPitch_;
