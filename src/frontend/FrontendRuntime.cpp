@@ -289,6 +289,10 @@ void FrontendRuntime::update(const platform::InputFrame& in, float dt) {
 
 void FrontendRuntime::updateInMatch(const platform::InputFrame& in, float dt) {
     flow_.tick(dt);
+    // [integration M05] The movie player runs in the match too: the loading underlay (TF_LoadingScreen Bink) is
+    // released once the loading screen closes. Without this its last frame (black + "LOADING..." spinner) stayed
+    // composited over the 3D world for the whole match (also seen by Experimental on agents/frontend 08ef880).
+    updateMoviePlayer(dt, in);
     if (presenter_) presenter_->update(flow_, in, dt);
     script_.update(flow_, dt);
     if (audio_) audio_->tick(dt);   // UI sounds of in-match movies (pause menu); match audio is the World's
