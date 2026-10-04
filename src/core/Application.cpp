@@ -88,6 +88,8 @@ void Application::run() {
                 x = y + 1;
             }
         }
+        if (const char* gs = std::getenv("WFC_GAMMASETTING"))   // diagnostics: profile Brightness 0..100
+            renderer_->setDisplayGamma(2.2f + (-0.95f + 1.9f * std::min(std::max((float)std::atof(gs) / 100.0f, 0.0f), 1.0f)));
         if (const char* sp = std::getenv("WFC_SCENEPOSE")) {     // diagnostics: actor,x,y,z,pitch,yaw,roll (UE, deg)
             char name[128] = {0}; float v[6] = {0};
             if (std::sscanf(sp, "%127[^,],%f,%f,%f,%f,%f,%f", name, &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 7)

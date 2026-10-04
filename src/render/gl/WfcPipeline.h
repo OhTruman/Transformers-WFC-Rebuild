@@ -144,6 +144,7 @@ public:
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
     void setCharacterColors(const CharacterColors& c) { charColorsBy_[drawOwner_] = c; }
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
+    void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
     void setActorPose(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg);
     void loadSceneActors(const assets::Json& actorsByLevel);   // render_index actors_by_level (UI families)
 
@@ -215,6 +216,7 @@ private:
     bool inLoadYield_ = false;
     std::vector<IRenderer::MaterialTile> uiTiles_;
     void drawCanvasTiles();
+    float displayGamma_ = 2.2f;                        // Xe-TransEngine.ini DisplayGamma / profile Brightness
     float canvasInvGamma_ = 0.0f;                      // > 0 while drawing Canvas tiles
     const std::vector<std::pair<std::string, std::array<float, 4>>>* drawParams_ = nullptr;   // per-draw runtime params
     bool deferTrans_ = false, flushingTrans_ = false;

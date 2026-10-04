@@ -90,6 +90,12 @@ public:
     // Any chassis works: the robot / vehicle / weapon role comes from the mesh's material packages (*_ROBO_p,
     // *_VEH_p, WEP_*), never from character names.
     virtual void setDrawOwner(int ownerId) { (void)ownerId; }
+    // UE3 Client DisplayGamma (default 2.2): the scene resolve and Canvas material tiles apply pow(1 / DisplayGamma).
+    // The profile Brightness maps to it in HmProfileSettings.GetGammaSetting (decompiled script, CONFIRMED):
+    //   DisplayGamma = 2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting / 100, 0, 1))   (0..100, default 50 -> 2.2)
+    // That mapping is profile logic (caller's); the renderer takes the DisplayGamma value. GFx / video / Canvas text
+    // batches stay display-referred.
+    virtual void setDisplayGamma(float displayGamma) { (void)displayGamma; }
     // Loading presentation (RE MILESTONE05_PLAYTEST §6: the original loading Bink plays on the rendering thread while the
     // game thread blocks): during loadMapRenderData / loadFrontendScene the renderer calls this between bounded steps
     // (each mesh submesh with its material program and textures, each map prop, each load phase) with no GL objects

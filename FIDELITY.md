@@ -37,6 +37,7 @@ Inputs:
 | Map-generic render data | — | — | — | packages from map.json sublevels, LM per sublevel, no-BSP / no-fog maps; Streets output unchanged |
 | Per-draw uniform cost | — | — | — | uniform locations cached per program: scene submit 4.9 → 3.9 ms (shared, loaded machine) |
 | HUD (Hud_GFX) | layout, kill feed, announcements, popups, scoreboard, end message | RE A0–A8 | CONFIRMED | Frontend runs the movie (`docs/handoffs/FRONTEND_INMATCH_HUD.md` updated with the exact values); the Canvas markers are Rendering's |
+| Brightness (profile GammaSetting) | DisplayGamma = 2.2 + Lerp(-0.95, 0.95, GammaSetting/100); default 50 → 2.2 | decompiled HmProfileSettings.GetGammaSetting, HmPlayerController → DisplayDataStore "Gamma" | CONFIRMED (mapping) | `setDisplayGamma` drives the scene resolve and Canvas tiles; default unchanged (0 px). Whether GFx / Bink / Canvas simple elements also follow DisplayGamma is UNKNOWN (the decoded Canvas simple-element shader has an InverseGamma×2.2 exponent, not yet applied) [PARTIAL] |
 | Character jitter (M05) | — | M08 measurement | — | handed off to Gameplay (unchanged on agents/rendering; the patch is in `docs/handoffs`) |
 
 ## MILESTONE 08 — PLAYTEST REGRESSIONS, IN-MATCH HUD OWNERSHIP, CANVAS LAYER (2026-10-04)

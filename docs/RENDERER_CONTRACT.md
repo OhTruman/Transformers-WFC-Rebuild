@@ -77,6 +77,7 @@ Gameplay passes the markers its rules show. Ownership of the in-match HUD layers
 | `setLoadYield(callback)` | Called between bounded load steps with no GL binding held, so the loading movie keeps presenting (RE PLAYTEST §6). |
 | `setFrontendActorTransform(actor, posUE, rotUEdeg)` | Absolute matinee pose (UE units, degrees, attachment already applied) for a scene actor; applied as a delta against its authored pose. Actors not sent keep their authored pose and PHYS_Rotating. |
 | `setMapEffectActive(key, on)` | Key = Emitter actor name (short or full path) or its ParticleSystemComponent name. Scene emitters start in their authored bAutoActivate state. |
+| `setDisplayGamma(g)` | UE3 DisplayGamma for the scene resolve and Canvas material tiles (default 2.2). Profile Brightness → g is `HmProfileSettings.GetGammaSetting`: `2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting/100, 0, 1))` (CONFIRMED script), computed by the caller. GFx / video / Canvas text stay display-referred. |
 | `setDrawOwner(id)` | Per-character light environment and applier colours for the following dynamic draws. |
 
 **Frontend scenes:**

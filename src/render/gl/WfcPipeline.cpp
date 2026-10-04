@@ -2244,7 +2244,7 @@ void Pipeline::drawCanvasTiles() {
     ortho.m[0] = 2.0f / W; ortho.m[5] = -2.0f / Hh; ortho.m[10] = -1.0f; ortho.m[12] = -1.0f; ortho.m[13] = 1.0f;
     viewProj_ = ortho;
     fogOn_ = false;
-    canvasInvGamma_ = 1.0f / 2.2f;
+    canvasInvGamma_ = 1.0f / displayGamma_;
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
     glViewport(0, 0, (GLsizei)W, (GLsizei)Hh);
@@ -2383,7 +2383,7 @@ void Pipeline::endFrame() {
               1.0f / std::max(post_.highlights.z, 1e-4f));
     Uniform3f(U("uMidTones"), post_.midtones.x, post_.midtones.y, post_.midtones.z);
     Uniform1f(U("uDesat"), post_.desat);
-    Uniform1f(U("uInvGamma"), 1.0f / 2.2f);              // Xe-TransEngine.ini DisplayGamma=2.2
+    Uniform1f(U("uInvGamma"), 1.0f / displayGamma_);     // Xe-TransEngine.ini DisplayGamma=2.2; profile Brightness
     glDrawArrays(GL_TRIANGLES, 0, 3);
     BindVertexArray(0);
     UseProgram(0);

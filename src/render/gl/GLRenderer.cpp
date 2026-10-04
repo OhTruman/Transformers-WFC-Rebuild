@@ -468,6 +468,7 @@ public:
     void setVisibilityQuery(VisibilityQuery q) override { wfc_.setVisibility(std::move(q)); }
     void setCharacterColors(const CharacterColors& c) override { wfc_.setCharacterColors(c); }
     void setDrawOwner(int o) override { wfc_.setDrawOwner(o); }
+    void setDisplayGamma(float g) override { wfc_.setDisplayGamma(g); }
     void setFrontendActorTransform(const std::string& a, const core::Vec3& p, const core::Vec3& r) override {
         wfc_.setActorPose(a, p, r);
     }
