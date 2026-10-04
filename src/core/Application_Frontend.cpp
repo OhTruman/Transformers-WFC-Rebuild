@@ -381,7 +381,10 @@ void Application::routeMatchToFrontend(float dt) {
             {   // HUD kill feed (TnDeathMessage -> _global.GameMessage). The damage type is not in Gameplay's event yet:
                 // the base [TnDamageType] template is used [PARTIAL, Gameplay handoff].
                 frontend::HudKill k;
-                auto nameOf = [&](int p) { return p >= 0 && (size_t)p < match.players().size() ? match.players()[(size_t)p].name : std::string(); };
+                auto nameOf = [&](int p) {
+                    if (p == me) return frontend_->flow().profile().playerName();   // the local identity
+                    return p >= 0 && (size_t)p < match.players().size() ? match.players()[(size_t)p].name : std::string();
+                };
                 k.victim = nameOf(e.player); k.killer = nameOf(e.other);
                 k.victimTeam = teamOf(e.player); k.killerTeam = teamOf(e.other);
                 k.victimLocal = e.player == me; k.killerLocal = e.other == me;
@@ -445,6 +448,13 @@ void Application::routeMatchToFrontend(float dt) {
     v.dead = !h.alive;
     v.timeToRespawn = h.timeToRespawn;
     v.gameOverMessage = h.result;
+    for (size_t i = 0; i < match.players().size(); ++i) {
+        const auto& mp = match.players()[i];
+        frontend::MatchValues::Player p;
+        p.name = mp.name; p.team = mp.team == 255 ? -1 : mp.team; p.score = mp.score; p.kills = mp.kills; p.deaths = mp.deaths;
+        p.dead = !mp.alive; p.local = (int)i == me;
+        v.players.push_back(p);
+    }
     flow.setMatchValues(v);
     // HUD movie values (TnHUD data observers), Gameplay authoritative.
     frontend::HudFrame hf;

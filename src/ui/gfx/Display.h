@@ -123,6 +123,7 @@ public:
     std::string textAutoSize = "none";        // GFx extension (shrink / fit)
     RGBA borderColor{0, 0, 0, 255}, backgroundColor{255, 255, 255, 255};
     std::string variable;
+    std::string variableShown;                // last value displayed from the variable binding
     int maxChars = 0;
     // Content: plain characters with a per-character format.
     std::u16string chars;
@@ -295,6 +296,7 @@ private:
     void callHandler(MovieClip* mc, const char* name);
     void broadcastMouse(const char* method, uint32_t clipEventFlag, const avm1::Args& args);
     void updateHover();
+    void syncVariableText(MovieClip* mc);
     MovieClip* hover_ = nullptr;              // button under the pointer (not pressed)
     MovieClip* pressed_ = nullptr;            // button that received onPress
     bool pressedOver_ = false;

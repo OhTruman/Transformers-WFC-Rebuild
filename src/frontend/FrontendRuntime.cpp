@@ -577,7 +577,20 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
     // TnHUD: the HUD movie exists for the match; visible in UI states InGame / Spectating only (RE A8).
     bool inMatch = flow_.level() == LevelKind::Match && !flow_.loading().active;
     UIState st = flow_.ui().state();
-    hud_.update(presenter_.get(), catalog_, inMatch, st == UIState::InGame || st == UIState::Spectating);
+    bool hudShown = inMatch && (st == UIState::InGame || st == UIState::Spectating);
+    hud_.update(presenter_.get(), catalog_, inMatch, hudShown);
+    // ShowScores (Back / Tab): TnHUD.SetShowScores(!bShowScores) toggles InGameStats_GFX with input focus; it is
+    // force-closed when the HUD is hidden [RE OVERNIGHT A7 / playtest section 9, CONFIRMED].
+    uint32_t pressed = in.uiDown & ~prevMatchUi_;
+    prevMatchUi_ = in.uiDown;
+    bool want = scoreboard_;
+    if (hudShown && (pressed & (1u << (int)platform::UiKey::Select))) want = !scoreboard_;
+    if (!hudShown) want = false;
+    if (want != scoreboard_) {
+        scoreboard_ = want;
+        if (presenter_) presenter_->setScoreboard(want);
+        FlowTrace::emit("hud.scoreboard", {{"open", FlowTrace::boolean(want)}});
+    }
 }
 
 void FrontendRuntime::updateLoading(float dt) {

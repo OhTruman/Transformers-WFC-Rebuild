@@ -59,6 +59,8 @@ public:
     // The in-match HUD movie (TnHUD.HudMovie): open for the match, shown per UI state; never takes key focus.
     virtual void setHud(bool open, bool visible) { (void)open; (void)visible; }
     virtual void hudCall(const std::string& fn, const std::vector<BridgeValue>& args) { (void)fn; (void)args; }
+    // TnHUD.ScoreboardMovie (InGameStats_GFX): open = shown with input focus.
+    virtual void setScoreboard(bool open) { (void)open; }
     // This frame's full-screen movie frame (nullptr = none): over the GFx movies (SeqAct_MoviePlayer) or under them
     // (the loading Bink under LoadScreen_GFX).
     virtual void setVideoFrame(const uint8_t* rgba, int w, int h, uint64_t serial, bool over) {
@@ -116,6 +118,7 @@ public:
     void draw(int w, int h);
     // In-match per-frame hook (pause / end-game movies, script driver, UI events).
     void updateInMatch(const platform::InputFrame& in, float dt);
+    bool scoreboardOpen() const { return scoreboard_; }
     // Inside a synchronous map load (core::loadYield): the loading movie and its Bink underlay keep animating; the
     // flow, the script driver and input are not processed.
     void updateLoading(float dt);
@@ -159,6 +162,8 @@ private:
     DisplayHooks display_;
     BridgeValue pcSettings(const std::string& fn, const std::vector<std::string>& args);
     HudController hud_;
+    bool scoreboard_ = false;
+    uint32_t prevMatchUi_ = 0;
     IFrontendSceneRenderer* sceneRenderer_ = nullptr;
     bool sceneDrawable_ = false;
     std::string sceneLevel_;

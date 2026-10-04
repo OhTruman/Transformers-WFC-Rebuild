@@ -183,7 +183,7 @@ Application::MatchExit Application::runMatch() {
             if (frontend_->flow().quitRequested()) break;
             if (frontend_->flow().wantsWorldUnload()) return MatchExit::ReturnToFrontend;
             // A movie with focus (pause, end game) takes the input; the MP world keeps running (bPauseable false).
-            if (frontend_->flow().ui().state() != frontend::UIState::InGame) {
+            if (frontend_->flow().ui().state() != frontend::UIState::InGame || frontend_->scoreboardOpen()) {
                 platform::InputFrame none;
                 input = none;
                 if (mouseCaptured_) { mouseCaptured_ = false; window_->setMouseCaptured(false); }

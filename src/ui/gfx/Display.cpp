@@ -1045,6 +1045,32 @@ void Player::mouseWheel(int delta) {
     if (delta) broadcastMouse("onMouseWheel", 0, {Value(delta)});
 }
 
+// TextField.variable: the field shows the bound variable (path relative to the field's parent timeline, e.g.
+// "_parent.Score" from a PlayerList cell) - Flash updates it every frame.
+void Player::syncVariableText(MovieClip* mc) {
+    for (auto& [depth, ch] : mc->children) {
+        if (ch->removed) continue;
+        if (ch->kind == DisplayObject::Kind::Clip) { syncVariableText(static_cast<MovieClip*>(ch.get())); continue; }
+        if (ch->kind != DisplayObject::Kind::Text) continue;
+        auto* tf = static_cast<TextField*>(ch.get());
+        if (tf->variable.empty()) continue;
+        std::string path = tf->variable, name = path;
+        DisplayObject* target = mc;
+        size_t dot = path.find_last_of(".:/");
+        if (dot != std::string::npos) {
+            name = path.substr(dot + 1);
+            target = resolveTarget(path.substr(0, dot), mc);
+        }
+        if (!target) continue;
+        Value v = vm_->get(scriptObject(target), name);
+        if (v.isUndef()) continue;
+        std::string s = vm_->toString(v);
+        if (s == tf->variableShown) continue;
+        tf->variableShown = s;
+        if (tf->html) tf->setHtmlText(s); else tf->setPlainText(s);
+    }
+}
+
 void Player::collectEnterFrame(MovieClip* mc, std::vector<MovieClip*>& out) {
     out.push_back(mc);
     std::vector<DisplayObject*> kids;
@@ -1079,6 +1105,7 @@ void Player::advance(float dt) {
     }
     advanceClip(root_);
     drainActions();
+    syncVariableText(root_);
     tickIntervals();
     processLoads();
     drainActions();

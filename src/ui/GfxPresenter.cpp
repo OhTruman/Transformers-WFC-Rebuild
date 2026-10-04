@@ -35,6 +35,7 @@ bool GfxPresenter::init() {
 
 gfx::Player* GfxPresenter::focusPlayer() {
     if (loading_) return &loading_->player();
+    if (scoreboard_) return &scoreboard_->player();
     return movies_.empty() ? nullptr : &movies_.back().movie->player();
 }
 
@@ -52,6 +53,21 @@ void GfxPresenter::setHud(bool open, bool visible) {
         if (!ok) { hud_.reset(); return; }
     }
     hudVisible_ = visible;
+}
+
+void GfxPresenter::setScoreboard(bool open) {
+    if (!open) {
+        if (scoreboard_) { rt_.dataStores().forgetMovie(scoreboard_->object()); shapesStale_ = true; }
+        scoreboard_.reset();
+        return;
+    }
+    if (scoreboard_) return;
+    scoreboard_ = std::make_unique<GfxMovie>();
+    bool ok = scoreboard_->open(lib_, &rt_.catalog(), "UI_GFxInGameStats_p.InGameStats_GFX_1",
+                                [this](GfxMovie& mv, const std::string& fn, Args& a) { return bridge(mv, fn, a); },
+                                [this](GfxMovie& mv, const std::string& c, const std::string& a) { fsCommand(mv, c, a); });
+    frontend::FlowTrace::emit("gfx.movie", {{"movie", "UI_GFxInGameStats_p.InGameStats_GFX_1"}, {"opened", frontend::FlowTrace::boolean(ok)}});
+    if (!ok) scoreboard_.reset();
 }
 
 void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
@@ -197,8 +213,8 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
 void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
     uint32_t now = in.uiDown, changed = now ^ prevUi_;
     prevUi_ = now;
-    if (!changed || loading_ || movies_.empty()) return;
-    GfxMovie* focus = movies_.back().movie.get();
+    if (!changed || loading_ || (movies_.empty() && !scoreboard_)) return;
+    GfxMovie* focus = scoreboard_ ? scoreboard_.get() : movies_.back().movie.get();
     for (int k = 0; k < (int)platform::UiKey::Count; ++k) {
         if (!(changed & (1u << k))) continue;
         bool down = now & (1u << k);
@@ -222,6 +238,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     deliverMouse(in);
     if (cursor_) cursor_->advance(dt);
     if (hud_) hud_->advance(dt);
+    if (scoreboard_) scoreboard_->advance(dt);
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
     std::vector<std::string> objs;
@@ -238,6 +255,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     // Data-store change callbacks (HmWidget.updateDSValue(markup, value) by target path).
     for (const auto& c : rt_.dataStores().poll()) {
         if (hud_ && hud_->object() == c.movie) { hud_->invoke(c.callback, {Value(c.markup), Value(c.value)}); continue; }
+        if (scoreboard_ && scoreboard_->object() == c.movie) { scoreboard_->invoke(c.callback, {Value(c.markup), Value(c.value)}); continue; }
         for (Open& op : movies_)
             if (op.object == c.movie) {
                 Value r = op.movie->invoke(c.callback, {Value(c.markup), Value(c.value)});
@@ -252,7 +270,7 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     if (!glReady_) { glReady_ = gl_.init(); if (!glReady_) return; }
     viewW_ = w; viewH_ = h;
     if (shapesStale_) { gl_.forgetShapes(); shapesStale_ = false; }
-    if (movies_.empty() && !loading_ && !video_ && !(hud_ && hudVisible_)) return;
+    if (movies_.empty() && !loading_ && !video_ && !(hud_ && hudVisible_) && !scoreboard_) return;
     gl_.begin(w, h);
     if (video_ && !videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);
     auto drawMovie = [&](GfxMovie& m) {
@@ -266,6 +284,7 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     else if (loading_) drawMovie(*loading_);
     else {
         if (hud_ && hudVisible_) drawMovie(*hud_);
+        if (scoreboard_) drawMovie(*scoreboard_);
         for (Open& o : movies_) drawMovie(*o.movie);
     }
     if (video_ && videoOver_) gl_.drawVideo(video_, videoW_, videoH_, videoSerial_);

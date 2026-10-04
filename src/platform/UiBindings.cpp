@@ -33,7 +33,8 @@ UiBindings UiBindings::defaults(bool consoleStart) {
     set(UiKey::X, {"F1"}, {"X"});
     set(UiKey::Y, {"F2"}, {"Y"});
     set(UiKey::Start, consoleStart ? std::vector<std::string>{"Space", "F3"} : std::vector<std::string>{"F3"}, {"Start"});
-    set(UiKey::Select, {"F4"}, {"Back"});
+    // Select = pad Back (GFxUI.KeyMap F4) and, in a match, ShowScores (Back / Tab) [RE OVERNIGHT A7].
+    set(UiKey::Select, {"F4", "Tab"}, {"Back"});
     set(UiKey::LB, {"PageUp"}, {"LB"});
     set(UiKey::RB, {"PageDown"}, {"RB"});
     set(UiKey::LT, {"Home"}, {"LT"});

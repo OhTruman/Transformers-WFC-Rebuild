@@ -130,6 +130,20 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
         std::string teamName = team == 0 ? cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName")
                              : team == 1 ? cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName") : "";
         // A fresh profile is level 1 in every specialty (no XP / progression service yet) [PARTIAL].
+        auto teamNameOf = [&](int t) {
+            return t == 0 ? cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName")
+                 : t == 1 ? cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName") : std::string();
+        };
+        if (live && !mv.players.empty()) {
+            // Gameplay's match roster (local player first as in GRI order of joining).
+            for (const MatchValues::Player& p : mv.players) {
+                c.rows.push_back({p.local ? playerName() : p.name, std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score),
+                                  std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0",
+                                  "0", "", "0", "0", "0", "", "", "1", "1", "1", "1", "1"});
+                c.enabled.push_back(true);
+            }
+            return true;
+        }
         c.rows.push_back({playerName(), std::to_string(team), teamName, std::to_string(live ? mv.score : 0),
                           std::to_string(live ? mv.kills : 0), std::to_string(live ? mv.deaths : 0), live && mv.dead ? "1" : "0",
                           "0", "", "0", "0", "0", "", "", "1", "1", "1", "1", "1"});
@@ -216,10 +230,7 @@ void DataStores::forgetMovie(const std::string& movie) {
     for (size_t i = regs_.size(); i-- > 0;) if (regs_[i].movie == movie) regs_.erase(regs_.begin() + (long)i);
 }
 
-std::string DataStores::playerName() const {
-    const char* n = std::getenv("WFC_PLAYERNAME");
-    return n ? n : "Player";
-}
+std::string DataStores::playerName() const { return flow_.profile().playerName(); }   // LocalProfile identity
 
 BridgeValue DataStores::call(const std::string& fn, const std::vector<std::string>& args, const std::string& movie) {
     auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };

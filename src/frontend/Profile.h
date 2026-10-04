@@ -33,6 +33,11 @@ public:
     struct Display { int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; };
     Display display;
     bool watchedIntro = false;
+    // The local player's display name (GetPlayerAlias / PRI.PlayerName). The original took it from the signed-in
+    // Xbox Live gamertag; the offline PC reconstruction has no such service: [Identity] Name in the profile file,
+    // else WFC_PLAYERNAME, else "Player" [PC RECONSTRUCTION FALLBACK].
+    std::string playerName() const;
+    std::string identityName;
 
     // Called after the movie applies / saves the profile (Game.ApplyProfileSettings, Console.SaveProfileSettings) and
     // after PCSettings commits: the application pushes the values to their runtime owners.

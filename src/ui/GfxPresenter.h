@@ -33,6 +33,7 @@ public:
     void ownedGl(GlCensus::Owned& o) const { gl_.ownedNames(o); }
     bool drawsCursor() const override { return cursor_ != nullptr; }
     void setHud(bool open, bool visible) override;
+    void setScoreboard(bool open) override;
     void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
     void advanceLoading(float dt) override {
         if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
@@ -68,6 +69,7 @@ private:
     std::unique_ptr<GfxMovie> cursor_;
     std::unique_ptr<GfxMovie> hud_;           // TnHUD.HudMovie (Hud_GFX), under the UIController movies
     bool hudVisible_ = false;
+    std::unique_ptr<GfxMovie> scoreboard_;    // TnHUD.ScoreboardMovie (InGameStats_GFX), above the HUD, with focus
     bool shapesStale_ = false;                // a movie was destroyed since the last draw
     // Engine -> AS invokes made after the AS call that caused them returns (UnrealScript OwnerMovie.Invoke).
     struct Deferred { std::string movie, fn; gfx::avm1::Args args; };
