@@ -75,6 +75,46 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 21b — MATCH HUD STATE, KILL FEED, MATCH END, REGEN (2026-10-04, gameplay agent)
+RE: MILESTONE05_PLAYTEST_RE (28debca) §3 / §9; TnDeathMessage decompile; authored LocalMessage / damage types.
+Test: `WFC_TDMTEST` **39 / 39**.
+
+### Kill feed (Gameplay owns the events; presentation owns text and colour)
+- **CONFIRMED (TnDeathMessage.GetColoredString).**
+  - Switch 1 -> `DamageType.SuicideMessage(victim)`, otherwise `DamageType.DeathMessage(killer, victim)`.
+  - `\`k` / `\`o` take the killer / victim names, each coloured friendly / enemy for the viewer
+    (TnMessageHelpers.GetColorForPRI).
+- **HIGH (stock GameInfo.BroadcastDeathMessage).** Switch 1 when the killer is none or the victim itself.
+- **Lifetime.** Engine.LocalMessage.Lifetime is 3.0 s; TnDeathMessage authors no override.
+- **`KillFeedEntry`.** time, messageSwitch, killer / victim player, both teams, DamageType class:
+  - `TransGame.TnDamageTypeIonBlaster` for Ion Blaster kills;
+  - `Engine.DmgType_Suicided` for suicides;
+  - `Engine.DmgType_Fell` for KillZ [HIGH: stock WorldInfo.KillZDamageType].
+- `Match::killFeed()` returns the live entries, `killHistory()` the whole match; `HudGameState::killFeed`.
+
+### HUD / match state (`World::hudState()`, no drawing)
+- Added:
+  - `spectating` (dead >= MinRespawnDelay 3.0 s, CONF RE E7);
+  - `timeLimit`, `faction` (DM resolves every player to the Decepticon faction, CONF RE §3 / §7);
+  - `endReason` ("Score" / "" / "Forfeit"), FFA `winnerPlayer` (an equal top score is a draw, CONF);
+  - `matchOverTimeLeft` (15 s);
+  - the kill feed;
+  - scoreboard rows (name, team, score, kills, deaths, assists, alive, local).
+- Existing fields are unchanged: health / segments / ammo / clock / countdown / scores / tags / result.
+- **Verified.**
+  - The clock does not run in PendingMatch.
+  - The clock and score are frozen in MatchOver.
+  - The second match starts from zero.
+- **PARTIAL.** The FFA result text ("You won" / "You lost" / "Draw"): TnFreeForAllGameOverMessage strings were not read.
+
+### Health regeneration — CONFIRMED (RE §9)
+- 20 HP/s after 2.0 s without damage, up to the top of the current segment.
+- The robot blueprint's parameters apply in both forms; the truck blueprint's 12 HP/s / 7 s is authored but unread.
+- Applied to every live pawn.
+- Test: 400 -> nothing for 2 s -> 425 (segment top), not 550.
+
+---
+
 ## PASS 21a — M05 "INTERLACED" CHARACTER REGRESSION + PRE-MATCH PRESENTATION (2026-10-04, gameplay agent)
 
 ### Character / vehicle "interlacing" (human-reported M05 regression) — FIXED (owner: Gameplay)

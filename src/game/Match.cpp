@@ -79,6 +79,11 @@ void Match::begin(const MatchSettings& s) {
     for (MatchPlayer& p : players_) { p.score = p.kills = p.deaths = 0; p.assists = 0.0f; p.alive = false; p.timeToRespawn = -1.0f; }
     tombstones_.clear();
     for (auto& h : damageHistory_) h.clear();
+    killHistory_.clear();
+    for (float& d : deathTime_) d = -1.0f;
+    matchTime_ = 0.0f;
+    endReason_.clear();
+    winnerPlayer_ = -1;
     // InitGame: GoalScore = PointsToWin, TimeLimit (s); InitGameReplicationInfo: GRI.GoalScore, RemainingTime.
     remainingTime_ = std::max(0, s_.timeLimit);
     elapsedTime_ = 0;
@@ -113,12 +118,14 @@ int Match::addPlayer(const std::string& name) {
     locs_.push_back({0, 0, 0});
     spawnAt_.push_back(-1);
     damageHistory_.emplace_back();
+    deathTime_.push_back(-1.0f);
     return (int)players_.size() - 1;
 }
 
 void Match::tick(float dt) {
     if (state_ == State::None || state_ == State::Returned) return;
     stateTime_ += dt;
+    matchTime_ += dt;
     // GameReplicationInfo.Timer / GRI.DecrementCountdown: 1 s repeating timers.
     secondAccum_ += dt;
     while (secondAccum_ >= 1.0f) { secondAccum_ -= 1.0f; secondTimer(); }
@@ -172,7 +179,7 @@ void Match::startMatch() {
     for (size_t i = 0; i < players_.size(); ++i) restartPlayer((int)i);
 }
 
-void Match::killed(int killer, int victim, bool suicide) {
+void Match::killed(int killer, int victim, bool suicide, const std::string& damageType) {
     if (state_ != State::InProgress || victim < 0 || (size_t)victim >= players_.size()) return;   // MatchOver: no-ops
     if (killer >= (int)players_.size()) killer = -1;
     MatchPlayer& V = players_[(size_t)victim];
@@ -196,6 +203,18 @@ void Match::killed(int killer, int victim, bool suicide) {
     damageHistory_[(size_t)victim].clear();
     V.deaths += 1;                                                // PRI.AddDeaths(1)
     V.alive = false;
+    {
+        KillFeedEntry k;
+        k.time = matchTime_;
+        k.messageSwitch = (killer < 0 || killer == victim || suicide) ? 1 : 0;
+        k.killer = k.messageSwitch == 0 ? killer : -1;
+        k.victim = victim;
+        k.killerTeam = killer >= 0 ? players_[(size_t)killer].team : 255;
+        k.victimTeam = V.team;
+        k.damageType = suicide ? "Engine.DmgType_Suicided" : (damageType.empty() ? (killer < 0 ? "Engine.DmgType_Fell" : "") : damageType);
+        killHistory_.push_back(k);
+        deathTime_[(size_t)victim] = matchTime_;
+    }
     emit(MatchEvent::Type::PlayerKilled, victim, 0, suicide ? "suicide" : (killer < 0 ? "environment" : ""), killer);
     if (killer >= 0 && !suicide && !killedSelf) {
         // ReportGameProgressKills.HandleProgress: NumScoresLeft = GoalScore - TeamScore (1/3/5 -> switch 5/6/7).
@@ -216,6 +235,17 @@ void Match::killed(int killer, int victim, bool suicide) {
     if (state_ == State::InProgress) V.timeToRespawn = s_.waveRespawnTime;
 }
 
+std::vector<KillFeedEntry> Match::killFeed() const {
+    std::vector<KillFeedEntry> v;
+    for (const KillFeedEntry& k : killHistory_) if (matchTime_ - k.time < KillFeedEntry::kLifetime) v.push_back(k);
+    return v;
+}
+
+bool Match::spectating(int p) const {
+    if (p < 0 || (size_t)p >= players_.size() || players_[(size_t)p].alive || deathTime_[(size_t)p] < 0.0f) return false;
+    return matchTime_ - deathTime_[(size_t)p] >= kMinRespawnDelay;
+}
+
 void Match::recordDamage(int victim, int instigator, float amount) {
     if (victim < 0 || (size_t)victim >= players_.size() || amount <= 0.0f) return;
     auto& h = damageHistory_[(size_t)victim];
@@ -234,11 +264,17 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
         else if (teamScore_[1] > teamScore_[0] || n0 == 0) winner = 1;
     } else if (winnerPlayer < 0) {
         // GetWinningPRI: highest score [HIGH: stock first-highest; tie handling PARTIAL].
-        int best = -1;
-        for (size_t i = 0; i < players_.size(); ++i) if (best < 0 || players_[i].score > players_[(size_t)best].score) best = (int)i;
-        winnerPlayer = best;
+        // GetWinningPRI: the top score; an equal top score is a draw (completion type 2) [CONF RE PLAYTEST §3].
+        int best = -1; bool tie = false;
+        for (size_t i = 0; i < players_.size(); ++i) {
+            if (best < 0 || players_[i].score > players_[(size_t)best].score) { best = (int)i; tie = false; }
+            else if (players_[i].score == players_[(size_t)best].score) tie = true;
+        }
+        winnerPlayer = tie ? -1 : best;
     }
     winnerTeam_ = winner;
+    winnerPlayer_ = s_.teamGame ? -1 : winnerPlayer;
+    endReason_ = reason;
     state_ = State::MatchOver;                                    // GotoState('MatchOver'): status 5, UI event 9
     gameStatus_ = 5;
     stateTime_ = 0.0f;

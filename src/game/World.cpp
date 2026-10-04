@@ -518,7 +518,7 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
         }
     }
     float dist = (hitTarget || hitDes || hitOpp) ? targetDist : bestDist;
-    if (hitOpp) applyMatchDamage(hitOpp->matchPlayer(), localPlayer_, w.damageAt(dist), false);   // InstantHitDamage, falloff
+    if (hitOpp) applyMatchDamage(hitOpp->matchPlayer(), localPlayer_, w.damageAt(dist), false, "TransGame.TnDamageTypeIonBlaster");   // InstantHitDamage, falloff
     core::Vec3 hitPoint = origin + dir * dist;
     if (hitTarget) hitTarget->applyDamage(w.damageAt(dist));   // [CONF] range-based falloff
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
@@ -814,6 +814,9 @@ void World::tick(float dt) {
         player_.controller().updateCamera(cam);
         listenerPos_ = cam.pos;
     }
+    // Health regeneration (robot blueprint HealthRegenParameters, both forms) for every live pawn.
+    if (!localPlayerDead()) player_.pawn().health().tickRegen(dt);
+    for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
     if (matchActive_) tickMatch(dt);
     if (!localPlayerDead()) {                       // dead / not yet spawned (match): no pawn simulation
         player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
@@ -879,7 +882,7 @@ void World::tick(float dt) {
     if (player_.pawn().position().y < killZ_ && !localPlayerDead()) {
         // Below KillZ: FellOutOfWorld -> Died with no killer (an environmental death in a match).
         LOG_INFO("World: player fell out of world; %s", matchActive_ ? "killed (KillZ)" : "respawning");
-        if (matchActive_) killLocalPlayer(-1, false);
+        if (matchActive_) killLocalPlayer(-1, false, "Engine.DmgType_Fell");   // WorldInfo.KillZDamageType [HIGH: stock default]
         else respawnPlayer();
     }
     for (auto& a : actors_) if (a->alive()) a->tick(*this, dt);
@@ -966,7 +969,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     return true;
 }
 
-bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe) {
+bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe, const std::string& damageType) {
     if (!matchActive_ || match_.state() != Match::State::InProgress || victim < 0 || (size_t)victim >= match_.players().size()) return false;
     if (!match_.players()[(size_t)victim].alive) return false;
     // TnPlayerPawn.TakeDamage: teammates' damage is discarded except TnDamageTypeAOE (NotifyHitByFriendlyFire).
@@ -979,8 +982,8 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe)
     float applied = h->applyDamage(amount);
     match_.recordDamage(victim, instigator, applied);
     if (h->isDead()) {
-        if (victim == localPlayer_) killLocalPlayer(instigator, false);
-        else { match_.killed(instigator, victim, false); if (opp) opp->despawn(); }
+        if (victim == localPlayer_) killLocalPlayer(instigator, false, damageType);
+        else { match_.killed(instigator, victim, false, damageType); if (opp) opp->despawn(); }
     }
     return true;
 }
@@ -1007,6 +1010,17 @@ HudGameState World::hudState() const {
     if (!matchActive_ || localPlayer_ < 0) return h;
     const MatchPlayer& me = match_.players()[(size_t)localPlayer_];
     h.timeToRespawn = me.timeToRespawn;
+    h.spectating = match_.spectating(localPlayer_);
+    h.timeLimit = match_.settings().timeLimit;
+    h.faction = match_.faction(localPlayer_);
+    h.endReason = match_.endReason();
+    h.winnerPlayer = match_.winnerPlayer();
+    h.matchOverTimeLeft = match_.matchOverTimeLeft();
+    h.killFeed = match_.killFeed();
+    for (size_t i = 0; i < match_.players().size(); ++i) {
+        const MatchPlayer& p = match_.players()[i];
+        h.scoreboard.push_back({(int)i, p.name, p.team, p.score, p.kills, p.deaths, p.assists, p.alive, (int)i == localPlayer_});
+    }
     h.modeTag = match_.settings().modeTag;
     h.matchState = (int)match_.state(); h.gameStatus = match_.gameStatus();
     h.countdown = match_.countdown(); h.remainingTime = match_.remainingTime(); h.elapsedTime = match_.elapsedTime();
@@ -1015,7 +1029,9 @@ HudGameState World::hudState() const {
     h.myTeam = me.team; h.score = me.score; h.kills = me.kills; h.deaths = me.deaths; h.assists = me.assists;
     h.winnerTeam = match_.winnerTeam();
     if (match_.state() == Match::State::MatchOver || match_.state() == Match::State::Returned)
-        h.result = match_.winnerTeam() < 0 ? "Tie game" : (match_.winnerTeam() == me.team ? "Your team won" : "Your team lost");
+        h.result = !match_.settings().teamGame
+                       ? (match_.winnerPlayer() < 0 ? "Draw" : (match_.winnerPlayer() == localPlayer_ ? "You won" : "You lost"))   // [PROV text: TnFreeForAllGameOverMessage strings not read]
+                       : (match_.winnerTeam() < 0 ? "Tie game" : (match_.winnerTeam() == me.team ? "Your team won" : "Your team lost"));
     for (size_t i = 0; i < match_.players().size(); ++i) {
         if ((int)i == localPlayer_ || !match_.players()[i].alive) continue;   // hidden for yourself and dead pawns
         HudGameState::Tag t;
@@ -1028,9 +1044,9 @@ HudGameState World::hudState() const {
     return h;
 }
 
-void World::killLocalPlayer(int killer, bool suicide) {
+void World::killLocalPlayer(int killer, bool suicide, const std::string& damageType) {
     if (!matchActive_ || localDead_) return;
-    match_.killed(killer, localPlayer_, suicide);
+    match_.killed(killer, localPlayer_, suicide, damageType);
     localDead_ = true;
 }
 

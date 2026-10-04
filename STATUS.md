@@ -3,6 +3,12 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 21b (2026-10-04) — match HUD state, kill feed, match end, regen
+- Kill feed events in TnDeathMessage form (switch, killer, victim, teams, damage type, 3 s lifetime).
+- HUD state: spectating at 3 s, time limit, faction, end reason, MatchOver countdown, scoreboard rows.
+- Regeneration 20 HP/s after 2 s (segment-limited), RE confirmed.
+- WFC_TDMTEST 39/39. Details: FIDELITY.md PASS 21b.
+
 ## GAMEPLAY PASS 21a (2026-10-04) — M05 interlacing regression fixed; pre-match presentation
 - Cause of the "interlaced" Optimus / truck: Pass 20 cached the camera position per 60 Hz step while the rotation is per render frame (~130 fps). Camera evaluated per frame again.
   - WFC_CAMSYNC: 1.28 deg -> 0.0003 deg on-screen jitter at 144 Hz.

@@ -1318,7 +1318,9 @@ void Application::runTdmSessionTest() {
     int myTeam = m.players()[(size_t)me].team;
     for (auto* o : {oA, oB, oC}) { if (m.players()[(size_t)o->matchPlayer()].team == myTeam && !ally) ally = o; else enemies.push_back(o); }
     check(ally && enemies.size() == 2, "teams: 2 v 2 by PickTeam");
-    run(10.5f);
+    run(5.0f);
+    check(m.remainingTime() == 900 && m.state() == game::Match::State::PendingMatch, "clock does not run during PendingMatch (900 s)");
+    run(5.5f);
     check(m.state() == game::Match::State::InProgress && !world_.localPlayerDead() && oB->spawned() && oC->spawned(), "match started after the 10 s countdown; all spawned");
     {
         int st = m.lastSpawnStart(me);
@@ -1334,6 +1336,17 @@ void Application::runTdmSessionTest() {
     check(pc.health().current == h0, "teammate instant-hit damage discarded (TnPlayerPawn.TakeDamage)");
     world_.applyMatchDamage(me, ally->matchPlayer(), 50.0f, true);
     check(pc.health().current == h0 - 50.0f, "teammate AOE damage applies");
+    {   // Regeneration: 20 HP/s after 2.0 s, up to the current segment top (here 425 -> segment 2 top 425 .. damage to 400).
+        pc.health().reset();
+        world_.applyMatchDamage(me, enemies[0]->matchPlayer(), 150.0f, false);   // 550 -> 400 (segment 2: 300..425)
+        run(1.9f);
+        float before = pc.health().current;
+        run(1.0f);
+        float after = pc.health().current;
+        run(2.0f);
+        check(before == 400.0f && after > 400.0f && after < 425.0f && pc.health().current == 425.0f,
+              "regen: none for 2.0 s, then 20 HP/s up to the current segment top (425), not to HealthMax");
+    }
     pc.health().heal(game::Health::HealType::AddOverShield, 1.0f);
     check(pc.health().current == 1100.0f && pc.health().activeSegment() == 4, "overshield: HealthMax + 550, top segment");
     world_.applyMatchDamage(me, enemies[0]->matchPlayer(), 300.0f, false);
@@ -1355,6 +1368,14 @@ void Application::runTdmSessionTest() {
         check(!e->spawned() && m.players()[(size_t)me].score == scoreBefore + 1 && m.teamScore(myTeam) == 1 && m.players()[(size_t)me].kills == 1,
               "Ion Blaster kill credited: +1 score, +1 team, +1 kill");
         check(std::fabs(m.players()[(size_t)ally->matchPlayer()].assists - 100.0f / 550.0f) < 1e-3f, "assist = first other damager, 100 / HealthMax");
+        game::HudGameState hk = world_.hudState();
+        bool feedOk = !hk.killFeed.empty() && hk.killFeed.back().messageSwitch == 0 && hk.killFeed.back().killer == me &&
+                      hk.killFeed.back().victim == e->matchPlayer() && hk.killFeed.back().damageType == "TransGame.TnDamageTypeIonBlaster" &&
+                      hk.killFeed.back().killerTeam == myTeam && hk.killFeed.back().victimTeam != myTeam;
+        check(feedOk, "kill feed: TnDeathMessage switch 0, killer / victim / teams, TnDamageTypeIonBlaster");
+        run(3.1f);
+        check(world_.hudState().killFeed.empty(), "kill feed entry expires after LocalMessage.Lifetime 3.0 s");
+        check(!m.killHistory().empty(), "kill history retained for the match");
     }
     // 6. Pickup across death, then death mid-transform in vehicle form.
     {
@@ -1374,8 +1395,11 @@ void Application::runTdmSessionTest() {
         check(folding && world_.localPlayerDead() && m.players()[(size_t)me].deaths == 1 &&
               m.players()[(size_t)enemies[1]->matchPlayer()].score == enemyScore + 1, "death mid-transform: killer credited, local dead");
         game::HudGameState hd = world_.hudState();
-        check(!hd.alive && hd.timeToRespawn > 4.0f && hd.timeToRespawn <= 5.0f, "HUD: dead, TimeToRespawn ~5 s");
-        run(5.3f);
+        check(!hd.alive && hd.timeToRespawn > 4.0f && hd.timeToRespawn <= 5.0f && !hd.spectating, "HUD: dead, TimeToRespawn ~5 s, not yet spectating");
+        { const auto& kf = world_.hudState().killFeed; check(!kf.empty() && kf.back().victim == me && kf.back().killer == enemies[1]->matchPlayer() && kf.back().messageSwitch == 0, "kill feed: local death by the enemy"); }
+        run(3.05f);
+        check(world_.hudState().spectating, "spectating after MinRespawnDelay 3.0 s");
+        run(2.25f);
         check(!world_.localPlayerDead() && pc.form() == game::Form::Robot && !pc.isTransforming() && pc.health().current == 550.0f &&
               pc.weapon().ammo == pc.weapon().magSize && pc.weapon().reserve == 150, "respawn: fresh robot pawn, 550 health, 50 / 150 ammo, no fold");
         check(!hf->available(), "pickup factory still sleeping after the respawn (timers are not reset by death)");
@@ -1393,7 +1417,12 @@ void Application::runTdmSessionTest() {
                  hd.kills, hd.deaths, hd.assists, hd.result.c_str());
         check(m.state() == game::Match::State::MatchOver && m.teamScore(myTeam) == 5 && hd.result == "Your team won" && hd.gameStatus == 5,
               "score limit 5 -> EndGame(Score), MatchOver, 'Your team won'");
-        run(15.2f);
+        check(hd.endReason == "Score" && hd.matchOverTimeLeft > 14.0f && hd.scoreboard.size() == 4, "end reason Score, MatchOver countdown, 4 scoreboard rows");
+        int remainingAtEnd = m.remainingTime(), scoreAtEnd = m.teamScore(myTeam);
+        world_.applyMatchDamage(e->matchPlayer(), me, 600.0f, false);
+        run(5.0f);
+        check(m.remainingTime() == remainingAtEnd && m.teamScore(myTeam) == scoreAtEnd, "clock and score frozen in MatchOver");
+        run(10.3f);
         check(!world_.matchActive(), "MatchOver 15 s -> ReturnToGameLobby handoff");
     }
     // 8. Second match without restarting: default TDM settings (40 / 900); scores reset, map reset.
