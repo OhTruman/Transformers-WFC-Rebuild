@@ -619,6 +619,7 @@ bool Pipeline::load(const std::string& mapName) {
         LOG_ERROR("wfc: GL 3.3 entry points unavailable: LEGACY RENDERER");
         return false;
     }
+    glx::installDebugOutput();
     lastLoadError().clear();
 
     assets::Json M, L;
@@ -1455,6 +1456,23 @@ static void setupAttribs() {
     EnableVertexAttribArray(4); VertexAttribPointer(4, 2, GL_FLOAT, GL_FALSE, st, (void*)(12 * sizeof(float)));
 }
 
+// M43 (AMD stability): a draw whose index range leaves the index buffer, or whose indices reach past the vertex buffer,
+// makes the GPU fetch out of bounds; an AMD driver may page-fault and reset on it. Such sub-meshes are never submitted.
+static bool subInBounds(const MeshData& m, uint32_t off, uint32_t cnt, const char* where) {
+    const size_t nv = m.vertexCount();
+    bool ok = (size_t)off + cnt <= m.indices.size();
+    if (ok)
+        for (uint32_t k = 0; k < cnt; ++k)
+            if (m.indices[off + k] >= nv) { ok = false; break; }
+    if (!ok) {
+        static int logged = 0;
+        if (logged++ < 20)
+            LOG_ERROR("wfc: %s: sub-mesh [%u, +%u) out of bounds (%zu indices, %zu vertices); not drawn", where, off, cnt,
+                      m.indices.size(), nv);
+    }
+    return ok;
+}
+
 int Pipeline::upload(const MeshData& m) {
     if (!active_ || m.empty()) return -1;
     FirstUseTimer fu{"mesh", std::to_string(m.vertexCount()) + " verts", frameNo_};
@@ -1501,6 +1519,7 @@ int Pipeline::upload(const MeshData& m) {
         }
     for (const SubMesh& s : subs) {
         Sub d;
+        if (!subInBounds(m, s.indexOffset, s.indexCount, "upload")) continue;
         d.first = s.indexOffset; d.count = s.indexCount;
         const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
         if (!s.component.empty()) g.world = true;
@@ -1541,6 +1560,12 @@ int Pipeline::upload(const MeshData& m) {
                 if ((int)(hi - lo + 1) == v.count) cum = 0;          // single-section (or self-contained) component
                 else if (total != v.count) cum = -1;                // layout not reproducible: not bound
             }
+            static GLint maxTex = 0;
+            if (!maxTex) glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTex);
+            if (cum >= 0 && v.count > maxTex) {      // M43: a (count x 3) texture wider than the driver allows is invalid
+                LOG_WARN("wfc: vertex lightmap %s: %d samples exceed GL_MAX_TEXTURE_SIZE %d; not bound", key.c_str(), v.count, maxTex);
+                cum = -2;
+            }
             if (cum >= 0) {
                 glGenTextures(1, &d.vlmTex);
                 glBindTexture(GL_TEXTURE_2D, d.vlmTex);
@@ -1553,7 +1578,7 @@ int Pipeline::upload(const MeshData& m) {
                     for (int c = 0; c < 3; ++c) d.lmScale[k][c] = v.scale[k][c];
                 lm = true;
                 ++nLM;
-            } else {
+            } else if (cum == -1) {
                 LOG_WARN("wfc: vertex lightmap %s: %d samples vs %u vertices (sections total %d); not bound", key.c_str(),
                          v.count, hi - lo + 1, total);
             }
@@ -2021,6 +2046,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     std::vector<SubMesh> subs = m.subs;
     if (subs.empty()) { SubMesh s; s.indexOffset = 0; s.indexCount = (uint32_t)m.indices.size(); subs.push_back(s); }
     for (const SubMesh& s : subs) {
+        if (!subInBounds(m, s.indexOffset, s.indexCount, "dynamic")) continue;
         const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
         Sub d;
         d.first = s.indexOffset; d.count = s.indexCount;

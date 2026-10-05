@@ -423,6 +423,7 @@ public:
     bool setMaterialParam(const std::string& actor, const std::string& param, const float v[4]);
     bool setFxTransform(int id, const float R[3][3], const float T[3]);
     void stopFx(int id);
+    bool setFxParam(int id, const std::string& name, const float v[4]);
     int liveFx() const;
     void drawMapPresentation();                                   // map FX + totems + destructible
     // map FX data (WfcMapFx.cpp)
@@ -436,7 +437,8 @@ public:
     struct FxLod {
         std::string material, meshGltf;
         bool overrideMaterial = false, localSpace = false, rectangle = false;
-        int typeData = 0;                 // 0 sprite, 1 mesh, 2 Trail2, 3 Beam2 (2 / 3 not drawn yet)
+        int typeData = 0;                 // 0 sprite, 1 mesh, 2 Trail2, 3 Beam2
+        int maxBeams = 0;                 // Beam2 MaxBeamCount (0 = no cap)
         bool velocityAligned = false;     // PSA_Velocity
         int subH = 1, subV = 1, subMethod = 0;   // SubUV: 0 none, 1 linear, 2 random
         bool hasDefaultColor = false; float defaultColor[4] = {1, 1, 1, 1};   // ColorByParameter DefaultColor (linear)
@@ -462,6 +464,8 @@ private:
         std::vector<bool> burstFired;
         std::vector<FxParticle> parts;
         float dynParam[4] = {1, 1, 1, 1}; bool hasDyn = false;
+        std::vector<std::array<float, 4>> trail;   // Trail2: recent source positions (UE) + age (s), newest last
+        int forceSpawn = 0;                        // Trail2: particles owed by source movement (spawn per unit)
     };
     struct FxInstance {
         std::string component, owner, ownerClass, system, role, requiredRule;

@@ -119,11 +119,41 @@ namespace glx {
     X(void, DeleteVertexArrays, (GLsizei, const GLuint*)) \
     X(void, DeleteProgram, (GLuint))
 
+// Optional entry points (diagnostics: KHR_debug / GL 4.3 debug output, GL 4.5 / ARB_robustness reset status).
+// Missing ones stay null and never fail load().
+typedef void(APIENTRY* GLDEBUGPROCWFC)(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length,
+                                       const GLchar* message, const void* userParam);
+#define WFC_GL_OPT_FUNCS(X) \
+    X(void, DebugMessageCallback, (GLDEBUGPROCWFC, const void*)) \
+    X(void, DebugMessageControl, (GLenum, GLenum, GLenum, GLsizei, const GLuint*, GLboolean)) \
+    X(GLenum, GetGraphicsResetStatus, (void)) \
+    X(void, GenQueries, (GLsizei, GLuint*)) \
+    X(void, DeleteQueries, (GLsizei, const GLuint*)) \
+    X(void, BeginQuery, (GLenum, GLuint)) \
+    X(void, EndQuery, (GLenum)) \
+    X(void, GetQueryObjectiv, (GLuint, GLenum, GLint*)) \
+    X(void, GetQueryObjectui64v, (GLuint, GLenum, unsigned long long*))
+
 #define WFC_GL_DECL(ret, name, args) typedef ret(APIENTRY* PFN_##name) args; extern PFN_##name name;
 WFC_GL_FUNCS(WFC_GL_DECL)
+WFC_GL_OPT_FUNCS(WFC_GL_DECL)
 #undef WFC_GL_DECL
 
 // Load all entry points (requires a current context). Returns false if any is missing.
 bool load();
+
+// M43 stability diagnostics (always on): driver debug output (errors / undefined behaviour / high severity, rate
+// limited, WFC_GLDEBUG=all for every message, WFC_GLDEBUG=sync for synchronous call stacks) and the context reset
+// status. Counters are read by the renderer's diagnostics.
+void installDebugOutput();
+struct DebugCounts { unsigned errors = 0, undefined = 0, high = 0, medium = 0, other = 0; };
+const DebugCounts& debugCounts();
+// GL_NO_ERROR, or the reset status once the driver reports a lost context (logged once).
+GLenum pollResetStatus();
+// GPU frame time (GL_TIME_ELAPSED ring of 3, read two frames late: never stalls). frameBegin / frameEnd bracket the
+// whole frame; a frame whose GPU time exceeds 250 ms is logged (Windows resets the driver on ~2 s of GPU work).
+void gpuTimerBegin();
+void gpuTimerEnd();
+double lastGpuFrameMs();
 
 } // namespace glx

@@ -427,10 +427,25 @@ void Application::run() {
                 core::Vec3 right = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
                 for (size_t i = 0; i < tpls.size(); ++i) {
                     core::Vec3 p = camera_.pos + f * 4.0f + right * (((float)i - 0.5f * (float)(tpls.size() - 1)) * 1.5f);
-                    int h = renderer_->spawnParticleEffect(tpls[i], p, right, core::Vec3{0, 1, 0});   // authored colours
+                    // prefixes: '>' = segment (tracer / beam) 10 m to the right; '~' = source circling (trail), one spawn
+                    std::string t = tpls[i];
+                    int h = -1;
+                    if (!t.empty() && t[0] == '>') h = renderer_->spawnParticleEffectSegment(t.substr(1), p - right * 5.0f + f * 2.0f, p + right * 5.0f + f * 2.0f);
+                    else if (!t.empty() && t[0] == '~') { if (frame == 1) { h = renderer_->spawnParticleEffect(t.substr(1), p, right, core::Vec3{0, 1, 0}); orbit_.push_back({h, p}); } }
+                    else h = renderer_->spawnParticleEffect(t, p, right, core::Vec3{0, 1, 0});   // authored colours
+                    if (const char* zs = std::getenv("WFC_FXTEST_SIZE")) {   // PSC 'Size' parameter on every spawn
+                        float z = (float)std::atof(zs); const float v[4] = {z, z, z, 1.0f};
+                        if (h >= 0) renderer_->setParticleEffectParam(h, "Size", v);
+                    }
                     if (frame == 1) LOG_INFO("FXTEST %s -> handle %d", tpls[i].c_str(), h);
                 }
                 LOG_INFO("FXTEST frame %ld live effects %d", frame, renderer_->liveParticleEffects());
+            }
+            for (const auto& o : orbit_) {                 // '~' sources: a 2 m circle, 1 turn / 2 s
+                float a = (float)frame / 60.0f * 3.14159f, r = 2.0f;
+                core::Vec3 c{o.second.x + std::cos(a) * r, o.second.y, o.second.z + std::sin(a) * r};
+                core::Vec3 tang{-std::sin(a), 0, std::cos(a)};
+                renderer_->setParticleEffectTransform(o.first, c, tang, core::Vec3{0, 1, 0});
             }
         }
         // "<frame>[,<period>]": with a period the cycle repeats (M28 texture-lifetime soak: live textures must plateau).

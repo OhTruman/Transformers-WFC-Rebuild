@@ -171,6 +171,7 @@ bool Pipeline::loadMapFx(const std::string& path) {
                 {
                     const std::string td = L["type_data"].asString();
                     lod.typeData = td == "mesh" ? 1 : td == "trail2" ? 2 : td == "beam2" ? 3 : 0;
+                    if (lod.typeData == 3) lod.maxBeams = std::max(0, L["beam_trail"]["MaxBeamCount"].asInt(1));
                     lod.subH = std::max(1, rq["subimages"][(size_t)0].asInt(1));
                     lod.subV = std::max(1, rq["subimages"][(size_t)1].asInt(1));
                     const assets::Json& dc = L["default_color"];         // FColor (R, G, B, A) -> FLinearColor
@@ -351,13 +352,24 @@ void Pipeline::tickMapFx(float dt) {
             if (!em.renderable || !in.attached) continue;
             const FxLod& L = em.lods[(size_t)std::min<int>(lodIdx, (int)em.lods.size() - 1)];
             rt.lod = std::min<int>(lodIdx, (int)em.lods.size() - 1);
-            if (L.typeData >= 2) {                      // Trail2 / Beam2: not implemented [PARTIAL]
-                static std::set<std::string> logged;
-                if (logged.insert(in.system + "/" + em.name).second)
-                    LOG_WARN("map fx: %s emitter %s is %s; not drawn yet", in.system.c_str(), em.name.c_str(),
-                             L.typeData == 2 ? "Trail2" : "Beam2");
-                rt.done = true;
-                continue;
+            if (L.typeData == 2) {
+                // M44 Trail2 [PARTIAL]: the ribbon follows the source's recent path (UE3 links the trail particles
+                // spawned at the moving source); points live for the longest particle lifetime (min 0.25 s)
+                float life = 0.25f;
+                for (const FxParticle& q : rt.parts) if (q.oneOverLife > 0.0f) life = std::max(life, 1.0f / q.oneOverLife);
+                for (auto& t : rt.trail) t[3] += dt;
+                while (!rt.trail.empty() && rt.trail.front()[3] > life) rt.trail.erase(rt.trail.begin());
+                if (in.active && in.hasTarget && rt.parts.empty() && rt.loop == 0 && rt.time == 0.0f)
+                    rt.forceSpawn = 1;                   // a trail spawned along a segment (tracer): one ribbon
+                if (in.active && !in.hasTarget) {
+                    const auto& last = rt.trail.empty() ? std::array<float, 4>{1e30f, 0, 0, 0} : rt.trail.back();
+                    float dx = in.T[0] - last[0], dy = in.T[1] - last[1], dz = in.T[2] - last[2];
+                    if (dx * dx + dy * dy + dz * dz > 25.0f || rt.trail.empty()) {
+                        rt.trail.push_back({in.T[0], in.T[1], in.T[2], 0.0f});
+                        ++rt.forceSpawn;                 // UE3 trails spawn per distance travelled (not by rate)
+                    }
+                    if (rt.trail.size() > 96) rt.trail.erase(rt.trail.begin());
+                }
             }
             // update / kill
             for (size_t p = 0; p < rt.parts.size();) {
@@ -415,6 +427,8 @@ void Pipeline::tickMapFx(float dt) {
             rt.spawnFrac += std::max(rate[0], 0.0f) * dt;
             spawn += (int)std::floor(rt.spawnFrac);
             rt.spawnFrac -= std::floor(rt.spawnFrac);
+            spawn += rt.forceSpawn;
+            rt.forceSpawn = 0;
             rt.burstFired.resize(L.bursts.size(), false);
             for (size_t b = 0; b < L.bursts.size(); ++b) {
                 if (rt.burstFired[b] || efrac < L.bursts[b].time) continue;
@@ -423,7 +437,8 @@ void Pipeline::tickMapFx(float dt) {
                 if (lo > 0 && hi > lo) { in.rng = in.rng * 1664525u + 1013904223u; spawn += lo + (int)((in.rng >> 8) % (uint32_t)(hi - lo + 1)); }
                 else spawn += hi;
             }
-            for (int s = 0; s < spawn && (int)rt.parts.size() < em.maxPeak; ++s) {
+            const int peak = L.maxBeams > 0 ? std::min(em.maxPeak, L.maxBeams) : em.maxPeak;   // Beam2: MaxBeamCount
+            for (int s = 0; s < spawn && (int)rt.parts.size() < peak; ++s) {
                 FxParticle q;
                 float origin[3] = {0, 0, 0};
                 if (!L.localSpace) std::copy(in.T, in.T + 3, origin);
@@ -507,6 +522,7 @@ void Pipeline::tickMapFx(float dt) {
                         // order: the component's InstanceParameter, the spawnFx caller's colour, the module's decoded
                         // DefaultColor (M34), white
                         auto it = in.colorParams.find("SteamColor");
+                        if (it == in.colorParams.end()) it = in.colorParams.find("Color");   // PSC 'Color' parameter
                         if (it == in.colorParams.end()) it = in.colorParams.find("*");   // spawnFx colour
                         if (it != in.colorParams.end()) std::copy(it->second.begin(), it->second.end(), c4);
                         else if (L.hasDefaultColor) std::copy(L.defaultColor, L.defaultColor + 4, c4);
@@ -587,6 +603,12 @@ bool Pipeline::setFxTransform(int id, const float R[3][3], const float T[3]) {
             std::copy(T, T + 3, in.T);
             return true;
         }
+    return false;
+}
+
+bool Pipeline::setFxParam(int id, const std::string& name, const float v[4]) {
+    for (FxInstance& in : fxInstances_)
+        if (in.transient && in.id == id) { in.colorParams[name] = {v[0], v[1], v[2], v[3]}; return true; }
     return false;
 }
 
@@ -910,10 +932,88 @@ void Pipeline::drawMapPresentation() {
                     for (int c = 0; c < 3; ++c)
                         IR[r][c] = in.R[r][0] * spin[0][c] + in.R[r][1] * spin[1][c] + in.R[r][2] * spin[2][c];
             }
+            float sizeParam[3] = {1, 1, 1};                  // PSC 'Size' vector parameter [PARTIAL]
+            {
+                auto sz = in.colorParams.find("Size");
+                if (sz != in.colorParams.end())
+                    for (int r = 0; r < 3; ++r) { sizeParam[r] = std::max(sz->second[(size_t)r], 0.0f); sizeScale[r] *= sizeParam[r]; }
+            }
             auto worldPos = [&](const float p[3], float o[3]) {
                 if (!L.localSpace) { std::copy(p, p + 3, o); return; }
                 for (int c = 0; c < 3; ++c) o[c] = in.T[c] + p[0] * IR[0][c] + p[1] * IR[1][c] + p[2] * IR[2][c];
             };
+            if (L.typeData >= 2) {
+                // M44 Trail2 / Beam2 [PARTIAL: taper, tiling distance and noise not applied]. A beam, or a trail spawned
+                // along a segment (tracer), draws each live particle as a camera-facing ribbon from the source to the
+                // target with that particle's width / colour; a trail on a moving source draws one ribbon through its
+                // recent path, fading with age, at the newest particle's width / colour.
+                std::vector<Sprite> sp;
+                auto quad = [&](const core::Vec3& a, const core::Vec3& b, float w0, float w1, const float* col0,
+                                const float* col1, float u0, float u1) {
+                    core::Vec3 d = b - a;
+                    float l = core::length(d);
+                    if (l < 1e-4f) return;
+                    core::Vec3 mid = (a + b) * 0.5f;
+                    // sprite corner order: x (u) along the ribbon, y (v) across it, facing the camera
+                    core::Vec3 side = core::cross(core::normalize(camPos_ - mid), d * (1.0f / l));
+                    float sl = core::length(side);
+                    if (sl < 1e-4f) return;
+                    side = side * (1.0f / sl);
+                    Sprite s;
+                    s.c[0] = a - side * (w0 * 0.5f); s.c[1] = b - side * (w1 * 0.5f);
+                    s.c[2] = b + side * (w1 * 0.5f); s.c[3] = a + side * (w0 * 0.5f);
+                    const float uv[4][2] = {{u0, 1}, {u1, 1}, {u1, 0}, {u0, 0}};
+                    std::memcpy(s.uv, uv, sizeof(uv));
+                    for (int k = 0; k < 4; ++k) s.color[k] = 0.5f * (col0[k] + col1[k]);
+                    sp.push_back(s);
+                };
+                if (in.hasTarget) {
+                    const float src[3] = {in.T[0], in.T[1], in.T[2]};   // beam / tracer source = the component
+                    core::Vec3 a = ueToGltf(src), b = ueToGltf(in.target);
+                    for (const FxParticle& q : rt.parts) {
+                        float w = q.size[0] * sizeScale[0] * 0.01f;
+                        static const bool lg = std::getenv("WFC_FXTEST") != nullptr;
+                        static int n = 0;
+                        if (lg && n++ % 60 == 0)
+                            LOG_INFO("FXTEST beam %s w %.3f m size (%.1f %.1f %.1f) col (%.2f %.2f %.2f %.2f) len %.2f m", in.system.c_str(), w,
+                                     q.size[0], q.size[1], q.size[2], q.color[0], q.color[1], q.color[2], q.color[3], core::length(b - a));
+                        quad(a, b, w, w, q.color, q.color, 0.0f, 1.0f);
+                    }
+                } else if (L.typeData == 2 && rt.trail.size() >= 2 && !rt.parts.empty()) {
+                    const FxParticle& q = rt.parts.back();
+                    float w = q.size[0] * sizeScale[0] * 0.01f;
+                    float life = 0.25f;
+                    for (const FxParticle& p : rt.parts) if (p.oneOverLife > 0.0f) life = std::max(life, 1.0f / p.oneOverLife);
+                    const size_t n = rt.trail.size();
+                    for (size_t k = 0; k + 1 < n; ++k) {
+                        const auto& t0 = rt.trail[k];
+                        const auto& t1 = rt.trail[k + 1];
+                        float f0 = 1.0f - std::min(t0[3] / life, 1.0f), f1 = 1.0f - std::min(t1[3] / life, 1.0f);
+                        float c0[4] = {q.color[0], q.color[1], q.color[2], q.color[3] * f0};
+                        float c1[4] = {q.color[0], q.color[1], q.color[2], q.color[3] * f1};
+                        float p0[3] = {t0[0], t0[1], t0[2]}, p1[3] = {t1[0], t1[1], t1[2]};
+                        quad(ueToGltf(p0), ueToGltf(p1), w * f0, w * f1, c0, c1, (float)k / (float)(n - 1),
+                             (float)(k + 1) / (float)(n - 1));
+                    }
+                }
+                static const bool ribbonLog = std::getenv("WFC_FXTEST") != nullptr;
+                if (ribbonLog) {
+                    static std::map<std::string, int> seen;
+                    int& c = seen[in.system + "/" + sys.emitters[e].name];
+                    if (c++ % 30 == 0)
+                        LOG_INFO("FXTEST ribbon %s/%s type %d parts %zu trail %zu target %d quads %zu mat %s", in.system.c_str(),
+                                 sys.emitters[e].name.c_str(), L.typeData, rt.parts.size(), rt.trail.size(), in.hasTarget ? 1 : 0, sp.size(),
+                                 L.material.c_str());
+                }
+                if (!sp.empty()) {
+                    if (rt.hasDyn) { std::copy(rt.dynParam, rt.dynParam + 4, dynParam_); }
+                    if (!drawSprites(L.material.c_str(), sp.data(), sp.size(), camF * -1.0f) && ribbonLog)
+                        LOG_INFO("FXTEST ribbon %s: drawSprites refused material %s", in.system.c_str(), L.material.c_str());
+                    std::fill(dynParam_, dynParam_ + 4, 1.0f);
+                    sprites += (int)sp.size();
+                }
+                continue;
+            }
             if (!L.meshGltf.empty()) {                       // mesh emitter (TypeDataMesh)
                 int meshId = fxMeshFor(L);
                 if (meshId < 0) continue;
@@ -924,7 +1024,7 @@ void Pipeline::drawMapPresentation() {
                     float Rm[3][3];
                     for (int r = 0; r < 3; ++r)
                         for (int c = 0; c < 3; ++c) {
-                            float s = q.size[r] * (L.localSpace ? 1.0f : sizeScale[r]);   // local space: IR carries it
+                            float s = q.size[r] * (L.localSpace ? sizeParam[r] : sizeScale[r]);   // local space: IR carries it
                             Rm[r][c] = L.localSpace
                                 ? s * (rows[r][0] * IR[0][c] + rows[r][1] * IR[1][c] + rows[r][2] * IR[2][c])
                                 : s * rows[r][c];

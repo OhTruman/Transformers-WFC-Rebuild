@@ -17,6 +17,24 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 44 — TRAIL2 / BEAM2 RIBBONS, PSC PARAMETERS (vehicle / tracer / beam effects from data) (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Beam2 | each live particle draws a camera-facing ribbon source -> target (width = particle size, colour / alpha over life, the emitter's material); live beams capped by the type data's MaxBeamCount (authored 1 on Tracer_RepairBeam_FX: 98 stacked beams before the cap) | pstream TypeDataModule props | HIGH (taper curve / InterpolationPoints / noise not applied: PARTIAL) | WFC_FXTEST ">FX_RepairBeam_p.FX.Tracer_RepairBeam_FX": one electric HealBeam_MAT beam + its source rings |
+| Trail2 | trails spawn per distance travelled (UE3 SpawnPerUnit; required-module rate is 0): one particle per 5 UU of source movement, the ribbon follows the source's recent path fading over the particle lifetime; a trail spawned along a segment (tracer) draws one ribbon start -> end | Tracer_AssaultRifle / Tracer_SniperRifle / Trails_Jet_A modules | PARTIAL (tessellation, tiling distance, bConnectToSource) | Assault Rifle / Sniper tracer smoke ribbons render from their own materials (Trail_Smoke_10_MAT_INST / Tracer_Smoke_MAT) |
+| PSC parameters | IRenderer::setParticleEffectParam(handle, name, rgba): "Color" -> ColorByParameter (priority over the decoded DefaultColor), "Size" -> effect-wide per-axis particle size scale (local-space meshes included) | RE pass 4 (HoverFX 'Size' = min(1, thrust) x socket scale; BoostFx 'Color' = lerp(EnergonColor, Yellow), alpha 100..255) | CONFIRMED rules (RE) / PARTIAL ('Size' consumer module undecoded) | hover_plane / CarHover / hover_tank render and scale with Size; Systems wires per socket |
+| Vehicle FX ownership | every chassis' authored HoverFX / BoostFx / JumpFX templates and sockets are in the AssetTools roster (e.g. Jet4: hover_plane_FX x5 Hover_* sockets, Afterburner_A_FX, Trails_Jet_A_FX); all FX_Navigation_p templates are in each map's template library (23) | mp_characters.json vehicle.fx | CONFIRMED data | Systems drives them through spawnParticleEffect / setParticleEffectTransform / setParticleEffectParam (only the Optimus hand reconstruction exists today) |
+
+## MILESTONE 43 — AMD STABILITY AUDIT AND DIAGNOSTICS (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Driver errors | always-on GL debug output (KHR_debug callback, non-debug context: errors still reported, verified by a WFC_GLDEBUG=selftest invalid enum) + context reset status poll (ARB_robustness / GL 4.5) + GPU frame timer (GL_TIME_ELAPSED ring, never stalls; > 250 ms logged). VISUALCHECK lines carry gpu=ms and glDebug; driver errors fail the verdict | this machine runs the same AMD driver family (26.6.x) | — | 9-match frontend map chain (Streets, Seed, Berth, Gorge, Complex, Rust, Debris, Molten, Streets; persistent renderer): 0 GL debug errors, 0 context resets, 0 out-of-bounds draws, 0 incomplete framebuffers, 0 shader failures; Streets GPU frame 1.5-3 ms |
+| Out-of-bounds vertex fetch | no draw validated its index range (sub-mesh past the index buffer / indices past the vertex buffer): a GPU out-of-bounds fetch can page-fault an AMD GPU and reset the driver | code audit | CONFIRMED gap (no occurrence observed) | static and dynamic sub-meshes validated before submission (out-of-bounds ones dropped, logged) |
+| Vertex lightmap texture width | (count x 3) RGB32F texture; > GL_MAX_TEXTURE_SIZE would be invalid | max count 6351 (Debris) | guard | not bound above the limit |
+| Own bug caught by the new diagnostics | the first GPU timer version could EndQuery without a begun query (GL_INVALID_OPERATION); reported at once by the callback, fixed before commit | gputime.log | — | — |
+| GL objects across matches | renderer-owned objects constant (1 buffer / 2 FBOs / 2 RBOs / 1 VAO / 2 programs); live textures +1 per match, all in uiTextures (GFx side) | match.glCensus | CONFIRMED | Frontend handoff |
+| Not reproduced | no reset / GL error on this AMD GPU in the chain; the human's resets are UNKNOWN cause. Recommended platform change (not renderer-owned): create the context with WGL_ARB_create_context(_robustness) (robust access + reset notification; a debug context under an env switch) so a reset is reported and recoverable instead of fatal | — | UNKNOWN | — |
+
 ## MILESTONE 42 — EVERY MP WEAPON'S AUTHORED MATERIAL (untextured Sniper, grey Scientist) (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

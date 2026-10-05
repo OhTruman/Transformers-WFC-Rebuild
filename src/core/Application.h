@@ -18,6 +18,7 @@ public:
     void shutdown();
 
 private:
+    std::vector<std::pair<int, core::Vec3>> orbit_;   // WFC_FXTEST "~" sources (handle, centre)
     void updateTitleHud(double realDt);
 
     platform::IWindow* window_ = nullptr;
