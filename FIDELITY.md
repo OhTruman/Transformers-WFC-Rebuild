@@ -343,6 +343,12 @@ Classification:
   - Shots aim through the crosshair. Their life after a miss (3 s) is PROV.
   - Cooldowns 60 s.
   - Test (PARTICIPANT 18/18).
+- **Camera obstruction uses simple collision only** [CONF RE MILESTONE04_CAMERA_COLLISION addendum, f150a6a]:
+  - execTraceCamera → SingleLineCheck with flags World | 0x0A000000 (0x02000000 = BlockCameras). No complex / per-poly bit.
+  - Static meshes are traced through their simple collision (UseSimpleLineCollision / UseSimpleBoxCollision default true),
+    which is what collision_pawn.glb holds.
+  - Example: in Streets' Ceiling_Arch_STAT (StaticMeshCollectionActor_2508) the curved render underside below the simple
+    slab has no collision. A camera can enter it, in the original too (M08 soak frame 20_TDM_508e): authentic, left as is.
 - **Class preset grenades** [CONF authored TR_MPPlayerCharacterData_p.<Class>_PCD_MP]: Scout FlashBangs, Scientist HealGrenades,
   Soldier FlakGrenades and Leader KamikazeMines are equipped on the class's chassis. The exported per-chassis on-foot list
   omits them there, so a grenade bag is accepted when it is the selection class's preset grenade; other classes' grenades
