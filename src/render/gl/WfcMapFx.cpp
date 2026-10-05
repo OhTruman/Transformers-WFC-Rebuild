@@ -172,6 +172,10 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     const std::string td = L["type_data"].asString();
                     lod.typeData = td == "mesh" ? 1 : td == "trail2" ? 2 : td == "beam2" ? 3 : 0;
                     if (lod.typeData == 3) lod.maxBeams = std::max(0, L["beam_trail"]["MaxBeamCount"].asInt(1));
+                    if (L["size_param"].isObject()) {
+                        lod.sizeParam = L["size_param"]["name"].asString();
+                        for (int c = 0; c < 3; ++c) lod.sizeParamConst[c] = L["size_param"]["constant"][(size_t)c].asFloat(1.0f);
+                    }
                     lod.subH = std::max(1, rq["subimages"][(size_t)0].asInt(1));
                     lod.subV = std::max(1, rq["subimages"][(size_t)1].asInt(1));
                     const assets::Json& dc = L["default_color"];         // FColor (R, G, B, A) -> FLinearColor
@@ -932,11 +936,15 @@ void Pipeline::drawMapPresentation() {
                     for (int c = 0; c < 3; ++c)
                         IR[r][c] = in.R[r][0] * spin[0][c] + in.R[r][1] * spin[1][c] + in.R[r][2] * spin[2][c];
             }
-            float sizeParam[3] = {1, 1, 1};                  // PSC 'Size' vector parameter [PARTIAL]
-            {
-                auto sz = in.colorParams.find("Size");
-                if (sz != in.colorParams.end())
-                    for (int r = 0; r < 3; ++r) { sizeParam[r] = std::max(sz->second[(size_t)r], 0.0f); sizeScale[r] *= sizeParam[r]; }
+            // ParticleModuleSizeMultiplyLife by instance parameter (RE pass 4, CONFIRMED data): Size *= the PSC's vector
+            // parameter (identity mapping), else the distribution's Constant; only emitters that carry the module
+            float sizeParam[3] = {1, 1, 1};
+            if (!L.sizeParam.empty()) {
+                auto sz = in.colorParams.find(L.sizeParam);
+                for (int r = 0; r < 3; ++r) {
+                    sizeParam[r] = sz != in.colorParams.end() ? std::max(sz->second[(size_t)r], 0.0f) : L.sizeParamConst[r];
+                    sizeScale[r] *= sizeParam[r];
+                }
             }
             auto worldPos = [&](const float p[3], float o[3]) {
                 if (!L.localSpace) { std::copy(p, p + 3, o); return; }

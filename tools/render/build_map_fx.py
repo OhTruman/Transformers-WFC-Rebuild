@@ -122,7 +122,7 @@ def system_runtime(name, s):
                                 'screen_alignment': req.get('ScreenAlignment', 'PSA_Square'),
                                 'subimages': [req.get('SubImages_Horizontal', 1), req.get('SubImages_Vertical', 1)]},
                    'mesh': None, 'modules': [], 'assignment_complete': L.get('assignment_complete', False),
-                   'default_color': L.get('default_color')}
+                   'default_color': L.get('default_color'), 'size_param': L.get('size_param')}
             if td.get('Mesh'):
                 lod['mesh'] = {'object': td['Mesh'], 'gltf': mesh_gltf(td['Mesh']),
                                'override_material': bool(td.get('bOverrideMaterial', False))}
@@ -198,6 +198,19 @@ def library(mapname):
             if s.get('missing_in'): continue
             import objtree
             op = objtree.package(pkn)
+            # M46: ParticleModuleSizeMultiplyLife driven by an instance parameter (DistributionVectorParticleParameter,
+            # RE pass 4: the HoverFX 'Size'); cooked as the compiled stream's module_id 0 (PMI_Unknown) slot
+            sp = None
+            for i2, e2 in enumerate(p.exports):
+                path2 = p.object_path(i2 + 1)
+                if p.class_name(e2) == 'DistributionVectorParticleParameter' and path2.lower().startswith(t.lower() + '.')                         and 'sizemultiplylife' in path2.lower():
+                    d2 = _R([pk]).obj(path2.lower()) or {}
+                    sp = {'name': d2.get('ParameterName'), 'constant': d2.get('Constant', [1.0, 1.0, 1.0])}
+            if sp:
+                for e in s['emitters']:
+                    for L in e['lods']:
+                        if any(m['module'] == 'PMI_Unknown' for m in L.get('compiled_modules', [])):
+                            L['size_param'] = sp
             for e in s['emitters']:
                 for L in e['lods']:
                     if not any(m['module'] == 'PMI_ColorByParameter' for m in L.get('compiled_modules', [])): continue
