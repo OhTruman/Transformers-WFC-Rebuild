@@ -734,8 +734,14 @@ public:
 
     MeshHandle uploadMesh(const MeshData& mesh) override {
         if (mesh.empty()) return kInvalidMesh;
-        meshes_.push_back(mesh);            // keep a CPU copy for GL 1.1 client arrays
-        gpu_.push_back(wfc_.active() ? wfc_.upload(mesh) : -1);
+        const int gpu = wfc_.active() ? wfc_.upload(mesh) : -1;
+        // CPU copy for the GL 1.1 client-array fallback and WFC_PICK. A large world mesh owned by the shader path is
+        // never drawn from it: dropping it saves ~150 MB per Streets load (M11 memory high-water). Small meshes keep
+        // theirs (drawMeshFx falls back to it when an effect material is missing).
+        static const bool picking = std::getenv("WFC_PICK") != nullptr;
+        if (gpu >= 0 && mesh.vertexCount() > 100000 && !picking) meshes_.push_back(MeshData{});
+        else meshes_.push_back(mesh);
+        gpu_.push_back(gpu);
         return (MeshHandle)(meshes_.size() - 1);
     }
 

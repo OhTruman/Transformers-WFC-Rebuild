@@ -1,4 +1,8 @@
 #include <chrono>
+#ifdef _WIN32
+#include <windows.h>
+#include <psapi.h>
+#endif
 #include "render/HudMarkers.h"
 #include "core/Application.h"
 #include "core/Config.h"
@@ -47,6 +51,35 @@ void Application::run() {
     // Diagnostics: a frontend 3D scene through the renderer contract, without the frontend runtime.
     // WFC_FRONTENDSCENE=<level>[,<level>...]; WFC_SCENECAM=x,y,z,pitch,yaw,roll,fov (UE units / degrees; default the
     // UI_FrontEnd_m title camera CameraActor_6585); WFC_SMOKE_FRAMES / WFC_SHOT as usual.
+    if (const char* mc = std::getenv("WFC_MEMCYCLE")) {   // diagnostics: renderer-only map load / unload memory cycle
+        auto privMB = [] {
+#ifdef _WIN32
+            PROCESS_MEMORY_COUNTERS_EX pmc{};
+            if (K32GetProcessMemoryInfo(GetCurrentProcess(), (PROCESS_MEMORY_COUNTERS*)&pmc, sizeof pmc))
+                return pmc.PrivateUsage / (1024.0 * 1024.0);
+#endif
+            return 0.0;
+        };
+        std::string list = mc;
+        platform::InputFrame in;
+        LOG_INFO("MEMCYCLE start private %.1f MB", privMB());
+        for (size_t a = 0; a <= list.size();) {
+            size_t b = list.find(',', a);
+            std::string m = list.substr(a, b == std::string::npos ? std::string::npos : b - a);
+            if (renderer_->loadFrontendScene({m})) {
+                for (int f = 0; f < 30 && window_->pump(in); ++f) {
+                    renderer_->drawFrontendScene(core::Vec3{0, 0, 300}, core::Vec3{0, 0, 0}, 90, window_->width(), window_->height(), f / 60.0);
+                    window_->present();
+                }
+                double loaded = privMB();
+                renderer_->unloadFrontendScene();
+                LOG_INFO("MEMCYCLE %s loaded %.1f MB unloaded %.1f MB", m.c_str(), loaded, privMB());
+            } else LOG_WARN("MEMCYCLE %s: no render data", m.c_str());
+            if (b == std::string::npos) break;
+            a = b + 1;
+        }
+        return;
+    }
     if (const char* fs = std::getenv("WFC_FRONTENDSCENE")) {
         std::vector<std::string> levels;
         std::string s = fs;
