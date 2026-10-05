@@ -738,6 +738,17 @@ MovieClip* Player::duplicate(DisplayObject* src, const std::string& name, int as
     return mc;
 }
 
+void Player::unloadChildren(MovieClip* mc) {
+    // As before, no onUnload here: only the lifetime changes (marked removed, kept alive).
+    std::function<void(DisplayObject*)> markRemoved = [&](DisplayObject* d) {
+        d->removed = true;
+        if (d->kind == DisplayObject::Kind::Clip)
+            for (auto& [dd, ch] : static_cast<MovieClip*>(d)->children) markRemoved(ch.get());
+    };
+    for (auto& [d, ch] : mc->children) { markRemoved(ch.get()); graveyard.push_back(std::move(ch)); }
+    mc->children.clear();
+}
+
 void Player::unloadClip(DisplayObject* d) {
     if (!d || d->removed) return;
     d->removed = true;
@@ -868,6 +879,12 @@ void Player::tickIntervals() {
         int fired = 0;
         while (!intervals_[i].dead && timeMs_ >= intervals_[i].next && fired < 8) {
             Interval iv = intervals_[i];
+            // setInterval(clip, "method", ms) on a clip removed since: Flash finds no method on a removed clip, so the
+            // interval does nothing (e.g. Customize mc_loading never clears its close interval; it removes itself).
+            if (!iv.method.empty() && iv.target.isObject() && iv.target.o->display && iv.target.o->display->removed) {
+                intervals_[i].dead = true;
+                break;
+            }
             intervals_[i].next += std::max(1.0, iv.ms);
             if (iv.once) intervals_[i].dead = true;
             ++fired;
@@ -1237,7 +1254,8 @@ void Player::advance(float dt) {
     drainActions();
     // Garbage collection: every few seconds (roots: display objects, listeners, intervals, queued work).
     static int counter = 0;
-    if (++counter % 300 == 0 && vm_->heapSize() > 20000) {
+    static const bool noGc = std::getenv("WFC_GFX_NO_GC") != nullptr;   // diagnostics: never collect
+    if (!noGc && ++counter % 300 == 0 && vm_->heapSize() > 20000) {
         std::vector<Object*> roots;
         for (Object* o : keyListeners) roots.push_back(o);
         for (Object* o : stageListeners) roots.push_back(o);
@@ -1247,7 +1265,14 @@ void Player::advance(float dt) {
         std::vector<MovieClip*> all;
         collectEnterFrame(root_, all);
         for (MovieClip* mc : all) if (mc->script) roots.push_back(mc->script);
-        for (auto& g : graveyard) if (g->script) roots.push_back(g->script);
+        // Removed instances and everything under them: their script objects stay valid while scripts still refer to
+        // them (a removed clip's children were collected before and crashed a later stale access).
+        std::function<void(DisplayObject*)> keep = [&](DisplayObject* d) {
+            if (d->script) roots.push_back(d->script);
+            if (d->kind == DisplayObject::Kind::Clip)
+                for (auto& [dd, ch] : static_cast<MovieClip*>(d)->children) keep(ch.get());
+        };
+        for (auto& g : graveyard) keep(g.get());
         vm_->collect(roots);
     }
 }

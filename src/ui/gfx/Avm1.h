@@ -83,6 +83,7 @@ public:
     std::vector<std::pair<std::string, Property>> props;
     std::unordered_map<std::string, size_t> index;
     bool marked = false;
+    bool zombie = false;                     // diagnostics (WFC_GFX_GCCHECK): collected but kept to catch later use
     std::string className;                   // diagnostics / typeof ("movieclip")
 
     // Function data (kind == Function).
@@ -235,6 +236,10 @@ private:
 
     gfx::Player* player_;
     std::vector<std::unique_ptr<Object>> heap_;
+    std::vector<std::unique_ptr<Object>> zombies_;   // WFC_GFX_GCCHECK
+public:
+    void zombieUse(Object* o, const char* op, const std::string& key);
+private:
     int depth_ = 0;
 };
 

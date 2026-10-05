@@ -323,8 +323,7 @@ void VM::installDisplayBuiltins() {
     method(vm, P, "unloadMovie", [](VM& vm, const Value& self, Args&) -> Value {
         gfx::MovieClip* mc = clipOf(self);
         if (mc) {
-            for (auto& [d, ch] : mc->children) { ch->removed = true; }
-            mc->children.clear();
+            vm.player()->unloadChildren(mc);   // the children go to the graveyard (not freed under their script objects)
             mc->sprite = nullptr;
             mc->frame = 0;
         }

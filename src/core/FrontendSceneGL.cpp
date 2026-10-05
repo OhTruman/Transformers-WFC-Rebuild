@@ -71,8 +71,21 @@ std::string assetRoot() {
 }
 }
 
+template <class R> void nativeGround(R* r, FrontendSceneGL::PreviewSlot& s) {
+    if constexpr (HasGroundHeight<R>::value) {
+        float g = 0;
+        if (r && r->sceneGroundHeight(s.pos[0], s.pos[1], s.pos[2], g)) s.pos[2] = g;
+    } else { (void)r; (void)s; }
+}
+
+void FrontendSceneGL::setPreview(std::vector<PreviewSlot> slots) {
+    for (PreviewSlot& s : slots) nativeGround(r_, s);
+    preview_ = std::move(slots);
+}
+
 void FrontendSceneGL::drawPreview(render::IRenderer& r) {
-    for (size_t i = 0; i < preview_.size(); ++i) nativePreviewDraw(r, preview_[i], (int)i, previewMeshes_);
+    for (size_t i = 0; i < preview_.size(); ++i)
+        if (i >= 2 || !previewHidden_[i]) nativePreviewDraw(r, preview_[i], (int)i, previewMeshes_);
 }
 
 std::string FrontendSceneGL::familyFor(const std::string& uiLevel) {

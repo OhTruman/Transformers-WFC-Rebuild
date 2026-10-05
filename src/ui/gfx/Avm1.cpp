@@ -114,7 +114,11 @@ void VM::collect(const std::vector<Object*>& extraRoots) {
     // Objects bound to live display objects stay alive (their display owns them).
     for (auto& o : heap_)
         if (!o->marked && o->display && !o->display->removed) mark(o.get());
-    heap_.erase(std::remove_if(heap_.begin(), heap_.end(), [](const std::unique_ptr<Object>& o) { return !o->marked; }), heap_.end());
+    static const bool gcCheck = std::getenv("WFC_GFX_GCCHECK") != nullptr;
+    if (gcCheck) {   // diagnostics: keep collected objects as zombies and report any later use
+        for (auto& o : heap_) if (!o->marked) { o->zombie = true; zombies_.push_back(std::move(o)); }
+    }
+    heap_.erase(std::remove_if(heap_.begin(), heap_.end(), [](const std::unique_ptr<Object>& o) { return !o || !o->marked; }), heap_.end());
     if (before - heap_.size() > 10000) LOG_INFO("AVM1 gc: %zu -> %zu objects", before, heap_.size());
 }
 
@@ -362,8 +366,16 @@ bool VM::has(Object* o, const std::string& key) {
 bool displayGetProp(VM& vm, gfx::DisplayObject* d, const std::string& key, Value& out);
 bool displaySetProp(VM& vm, gfx::DisplayObject* d, const std::string& key, const Value& v);
 
+void VM::zombieUse(Object* o, const char* op, const std::string& key) {
+    std::string props;
+    for (size_t i = 0; i < o->props.size() && i < 8; ++i) props += o->props[i].first + ",";
+    LOG_WARN("AVM1 GCCHECK: %s '%s' on a collected object (kind %d class '%s' native '%s' display %p props %s)", op, key.c_str(),
+             (int)o->kind, o->className.c_str(), o->nativeType.c_str(), (void*)o->display, props.c_str());
+}
+
 Value VM::get(Object* o, const std::string& key) {
     if (!o) return Value::undef();
+    if (o->zombie) zombieUse(o, "get", key);
     if (key == "__proto__") return o->proto ? Value(o->proto) : Value::undef();
     if (o->kind == ObjKind::Array) {
         if (key == "length") return Value((double)o->elems.size());
@@ -423,6 +435,7 @@ Value VM::getV(const Value& base, const std::string& key) {
 
 void VM::set(Object* o, const std::string& key, const Value& vIn) {
     if (!o) return;
+    if (o->zombie) zombieUse(o, "set", key);
     Value v = vIn;
     if (key == "__proto__") { o->proto = v.isObject() ? v.o : nullptr; return; }
     if (!o->watches.empty()) {
