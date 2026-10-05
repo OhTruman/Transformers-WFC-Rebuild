@@ -16,12 +16,23 @@
 
 namespace frontend {
 
+// A colour as TnPlayerCharacterData stores it: the colour itself (black = "take it from the palette swatch") plus the
+// palette id (0-4 Autobot, 5-9 Decepticon) and the swatch coordinates in that palette.
+struct CharacterColor {
+    int r = 0, g = 0, b = 0, a = 255;
+    int palette = 0;
+    float x = 0, y = 0;
+    bool isBlack() const { return r == 0 && g == 0 && b == 0 && a == 255; }
+};
+
 struct CharacterPreset {
     std::string name;                         // CharacterName ("Scout")
+    std::string friendlyName;                 // FriendlyName (the player's name for the class; empty = CharacterName)
     std::string specialty;                    // Scout / Scientist / Soldier / Leader
     std::string chassis[2];                   // per faction: Autobot, Decepticon (roster chassis ids, e.g. Car2 / Car4)
     std::string iconicNames[2];               // display names of those chassis (Sideswipe / Barricade)
-    std::vector<std::string> weapons, vehicleWeapons, melee, abilities;
+    std::vector<std::string> weapons, vehicleWeapons, melee, abilities, skills;
+    CharacterColor primary[2], secondary[2];  // per faction
 };
 
 struct ChassisInfo {
@@ -33,14 +44,24 @@ struct ChassisInfo {
 class CharacterRoster {
 public:
     bool load(const std::string& rosterPackagePath);
-    bool loaded() const { return !presets_.empty(); }
-    const std::vector<CharacterPreset>& customCharacters() const { return presets_; }   // fresh profile
+    // The presets' authored character data (colours, skills, melee): data/frontend/character_presets.json.
+    void loadAuthored(const std::string& presetsPath);
+    bool loaded() const { return !characters_.empty(); }
+    // The player's custom characters: the class presets on a fresh profile, edited by Create a Character
+    // (Customize.CommitCharacter) and kept in the customization file (WriteCustomizationFile).
+    const std::vector<CharacterPreset>& customCharacters() const { return characters_; }
     const CharacterPreset* find(const std::string& name) const;
+    CharacterPreset* findMutable(const std::string& name);
+    void reset(const std::string& name);       // TnLocalPlayer.ResetCharacter: back to the class preset
+    // Customization file (PC original: TnLocalPlayer.WriteCustomizationFile; the rebuild's file is wfc_characters.ini).
+    bool save(const std::string& path) const;
+    void loadSaved(const std::string& path);
     const ChassisInfo* chassis(const std::string& id) const;
     const std::map<std::string, ChassisInfo>& allChassis() const { return chassis_; }
 
 private:
-    std::vector<CharacterPreset> presets_;
+    std::vector<CharacterPreset> presets_;     // class defaults
+    std::vector<CharacterPreset> characters_;  // the player's characters
     std::map<std::string, ChassisInfo> chassis_;
 };
 

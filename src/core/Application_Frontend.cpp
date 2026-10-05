@@ -10,6 +10,7 @@
 #include "frontend/FrontendRuntime.h"
 #include "game/MapState.h"
 #include "game/MatchOpponent.h"
+#include "platform/Image.h"
 #include "platform/Movie.h"
 #include "platform/Window.h"
 #include "render/Renderer.h"
@@ -20,6 +21,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <new>
 #include <string>
 
@@ -168,6 +170,23 @@ void Application::attachPresenter() {
     frontend_->script().shotHook = [this](const std::string& f) { pendingShot_ = f; };
     frontend_->script().clipHook = [this](const std::string& path, int& x, int& y) {
         return presenter_ && presenter_->clipWindowCenter(path, x, y);
+    };
+    // Create a Character palette swatches (GetPixelColor): pixel of the palette PNG, images cached for the session.
+    frontend_->sampleImage = [](const std::string& png, int x, int y, int& r, int& g, int& b) {
+        static std::map<std::string, render::ImageData> cache;
+        auto it = cache.find(png);
+        if (it == cache.end()) {
+            render::ImageData img;
+            platform::decodeImage(png, img);
+            it = cache.emplace(png, std::move(img)).first;
+        }
+        const render::ImageData& im = it->second;
+        if (!im.valid()) return false;
+        x = std::max(0, std::min(im.w - 1, x));
+        y = std::max(0, std::min(im.h - 1, y));
+        const uint8_t* px = &im.rgba[((size_t)y * (size_t)im.w + (size_t)x) * 4];
+        r = px[0]; g = px[1]; b = px[2];
+        return true;
     };
     frontend_->script().dumpHook = [this](const std::string& m) {
         for (const std::string& o : presenter_->openMovieObjects())

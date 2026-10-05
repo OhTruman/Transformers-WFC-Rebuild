@@ -128,6 +128,7 @@ public:
     // chassis of the player's team from it (GetResolvedCharacterFaction = TeamNum).
     struct SelectedCharacter { std::string name; int type = 0; std::string chassis[2]; std::string specialty; bool valid = false; };
     void selectCharacter(const SelectedCharacter& c);
+    void clearSelectedCharacter();   // PRI.ClearCharacter
     const SelectedCharacter& selectedCharacter() const { return selected_; }
     void showMenu();                                // TnPlayerController.ShowMenu (Escape / Start release)
     // [integration] Gameplay MatchOver -> 15 s -> TnGame.ReturnToGameLobby: ServerTravel to the game lobby

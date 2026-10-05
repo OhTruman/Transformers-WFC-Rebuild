@@ -116,6 +116,15 @@ public:
     const FrontendScene& scene() const { return scene_; }
     HudController& hud() { return hud_; }
     const CharacterRoster& roster() const { return roster_; }
+    // Create a Character: the palette swatch sampler (PNG pixel; platform image decoding) and the preview-pawn request
+    // (Customize.UpdatePreviewCharacter / TransformPreviewCharacter*), forwarded to the preview owner.
+    std::function<bool(const std::string& png, int x, int y, int& r, int& g, int& b)> sampleImage;
+    struct PreviewRequest {
+        std::string call;                                    // UpdatePreviewCharacter / TransformPreviewCharacter / ...ToRobot
+        std::vector<std::string> chassis, primary, secondary;   // per preview controller (Autobot, Decepticon)
+    };
+    std::function<void(const PreviewRequest&)> previewHook;
+    static constexpr const char* kCharactersFile = "wfc_characters.ini";
     // Full-screen movie decoding (platform). Without one, each movie reports Stopped at once.
     void setMoviePlayerFactory(std::function<platform::IMoviePlayer*()> f) { movieFactory_ = std::move(f); }
     // One frontend frame (frontend levels and the loading screen).
@@ -163,6 +172,7 @@ private:
     BridgeValue customize(const std::string& fn, const std::vector<std::string>& args);
     DisplayHooks display_;
     BridgeValue account(const std::string& fn, const std::vector<std::string>& args);
+    BridgeValue commitCharacter(const std::vector<std::string>& args);
     BridgeValue pcSettings(const std::string& fn, const std::vector<std::string>& args);
     HudController hud_;
     bool scoreboard_ = false;

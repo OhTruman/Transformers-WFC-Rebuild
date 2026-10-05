@@ -141,7 +141,9 @@ GfxMovie* GfxPresenter::openMovie(const std::string& object) {
 
 Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
     std::vector<std::string> sa;
-    for (const Value& v : a) sa.push_back(m.player().vm().toString(v));
+    // An undefined / null argument reaches an UnrealScript string parameter as "" (not "undefined"): e.g. the
+    // Customize.CommitCharacter weapon list of an unset slot.
+    for (const Value& v : a) sa.push_back(v.isNullish() ? std::string() : m.player().vm().toString(v));
     if (fn == "Self.Close") {
         // TnUIController: the open UI closing itself (pause "Resume" etc.).
         m.closeRequested = true;

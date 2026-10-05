@@ -195,6 +195,8 @@ bool FrontendRuntime::init() {
     else if (const char* a = std::getenv("WFC_FRONTEND_AUTOPLAY")) script_.load(ScriptDriver::autoplayScript(a));
     stores_ = std::make_unique<DataStores>(flow_, catalog_);
     roster_.load(Catalog::defaultManifestRoot() + "/mp_content/roster_package.json");
+    roster_.loadAuthored(std::string(WFC_SOURCE_DIR) + "/data/frontend/character_presets.json");
+    roster_.loadSaved(kCharactersFile);   // the player's edits (Create a Character)
     if (!scene_.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/scenes.json")) LOG_WARN("frontend: data/frontend/scenes.json missing (no scene cameras)");
     return flow_.init(catalog_, o);
 }
@@ -270,9 +272,7 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     // level 0 (a fresh profile), leaderboard reads report nothing [SERVICE DEPENDENT; values as the original offline].
     if (fn == "Stats.GetChallengeValue" || fn == "Stats.GetChallengeLevel") return BridgeValue(0);
     if (fn.rfind("Stats.", 0) == 0) { FlowTrace::emit("service.unavailable", {{"fn", fn}, {"service", "online stats"}}); return {}; }
-    if (fn.rfind("Account.", 0) == 0) { FlowTrace::emit("service.unavailable", {{"fn", fn}, {"service", "Demonware accounts"}}); return {}; }
     if (fn == "Customize.IsPrimeModeAvailable") return BridgeValue(false);
-    if (fn.rfind("Customize.", 0) == 0) { BridgeValue r = customize(fn, args); if (r.kind != BridgeValue::Kind::Void || fn == "Customize.SelectCharacter" || fn == "Customize.CheckCustomCharacterDataLoaded") return r; }
     // TnXpManager (via TnCharacterScriptBinding): XP lives in the online stats archive; without a stats interface the
     // original returns 0 earned [CONFIRMED script]. Levels from Default__TnXpManager.LevelTable [CONFIRMED authored].
     // No XP transactions are produced in the rebuild yet, so "last match" is 0 as well [PARTIAL].
@@ -292,8 +292,30 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
             return BridgeValue(level == 0 ? 0.0 : kLevelTable[level - 1]);
         }
     }
+    if (fn.rfind("Customize.", 0) == 0) return customize(fn, args);   // TnCharacterScriptBinding
     if (fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
     return flow_.call(fn, args);
+}
+
+namespace {
+std::string hexColor(int r, int g, int b) {   // ColorToHexString: "0x" + RRGGBB [digit case PROVISIONAL]
+    char buf[16];
+    std::snprintf(buf, sizeof buf, "0x%02X%02X%02X", r & 0xFF, g & 0xFF, b & 0xFF);
+    return buf;
+}
+std::string floatText(float v) {   // UnrealScript float -> string ("0.00")
+    char buf[32];
+    std::snprintf(buf, sizeof buf, "%.2f", v);
+    return buf;
+}
+std::vector<std::string> splitCsv(const std::string& s) {
+    std::vector<std::string> out;
+    std::string cur;
+    for (char c : s) { if (c == ',') { out.push_back(cur); cur.clear(); } else cur += c; }
+    if (!s.empty()) out.push_back(cur);
+    return out;
+}
+std::string join2(const std::vector<std::string>& v) { std::string o; for (const auto& x : v) o += (o.empty() ? "" : ",") + x; return o; }
 }
 
 BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<std::string>& args) {
@@ -322,17 +344,120 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
         flow_.selectCharacter(s);
         return {};
     }
+    // ---- TnCharacterScriptBinding script bodies [CONFIRMED decompile] ----
+    // GetPixelColor(TextureId, X, Y): the palette texture's pixel, packed "0xRRGGBB;TextureId;X;Y" (PackColorData).
+    // Palettes 0-4 autobotPalette_N, 5-9 decepticonPalette_N (UI_GFxCustomize_p, the movie's external textures).
+    auto pixel = [&](int tex, int x, int y) {
+        int r = 0, g = 0, b = 0;
+        std::string png = Catalog::defaultExtractedRoot() + "/content/UI_GFxCustomize_p/" +
+                          (tex < 5 ? "autobotPalette_" : "decepticonPalette_") + std::to_string(tex) + ".png";
+        if (!sampleImage || !sampleImage(png, x, y, r, g, b))
+            FlowTrace::emit("customize.palette", {{"texture", std::to_string(tex)}, {"sampled", "false"}});
+        return hexColor(r, g, b) + ";" + std::to_string(tex) + ";" + std::to_string(x) + ";" + std::to_string(y);
+    };
+    if (fn == "Customize.GetPixelColor") return BridgeValue(pixel(std::atoi(arg(0).c_str()), std::atoi(arg(1).c_str()), std::atoi(arg(2).c_str())));
+    if (fn == "Customize.ClearCharacter") {   // PRI.ClearCharacter
+        flow_.clearSelectedCharacter();
+        return {};
+    }
+    if (fn == "Customize.WriteCustomizationFile") {
+        bool ok = roster_.save(kCharactersFile);
+        FlowTrace::emit("customize.write", {{"file", kCharactersFile}, {"ok", FlowTrace::boolean(ok)}, {"provenance", "PC ADAPTATION (file)"}});
+        return {};
+    }
+    if (fn == "Customize.ResetCharacter") {
+        roster_.reset(arg(0));
+        FlowTrace::emit("customize.reset", {{"character", arg(0)}});
+        return {};
+    }
+    if (fn == "Customize.CommitCharacter") return commitCharacter(args);
+    if (fn == "Customize.UpdatePreviewCharacter" || fn == "Customize.TransformPreviewCharacter" ||
+        fn == "Customize.TransformPreviewCharacterToRobot") {
+        // The preview pawn (UI_CharacterCustomization_m PreviewGuy controllers) is drawn by Rendering from the
+        // chassis / colours / form Gameplay's character data resolves; the frontend only forwards the request.
+        PreviewRequest pr;
+        pr.call = fn.substr(10);
+        if (fn == "Customize.UpdatePreviewCharacter") { pr.chassis = splitCsv(arg(0)); pr.primary = splitCsv(arg(1)); pr.secondary = splitCsv(arg(2)); }
+        if (previewHook) previewHook(pr);
+        FlowTrace::emit("customize.preview", {{"call", pr.call}, {"chassis", arg(0)}, {"primary", arg(1)}, {"secondary", arg(2)},
+                                              {"owner", previewHook ? "renderer" : "none"}});
+        return {};
+    }
+    if (fn == "Customize.VerifyCharacterOptionsData" || fn == "Customize.MarkSkillAsOld") return {};
     if (!c) return {};
+    const int faction = std::atoi(arg(1).c_str()) == 1 ? 1 : 0;   // FactionFilter
     if (fn == "Customize.GetCharacterSpecialty") return BridgeValue(c->specialty);
-    if (fn == "Customize.GetCharacterFriendlyName") return BridgeValue(c->name);
-    if (fn == "Customize.GetCharacterChassis") return BridgeValue(c->chassis[0] + "," + c->chassis[1]);
-    if (fn == "Customize.GetCharacterWeaponTypes") return BridgeValue(join(c->weapons));
+    if (fn == "Customize.GetCharacterFriendlyName") return BridgeValue(c->friendlyName.empty() ? c->name : c->friendlyName);
+    if (fn == "Customize.GetCharacterChassis") return BridgeValue(c->chassis[faction]);   // ChassisTypes[FactionFilter]
+    if (fn == "Customize.GetCharacterWeaponTypes") {
+        // WeaponTypes with MeleeWeapons[0] inserted at index 2.
+        std::vector<std::string> w = c->weapons;
+        if (!c->melee.empty()) w.insert(w.begin() + (long)std::min<size_t>(2, w.size()), c->melee.front());
+        return BridgeValue(join(w));
+    }
     if (fn == "Customize.GetCharacterAbilities") return BridgeValue(join(c->abilities));
-    if (fn == "Customize.GetCharacterVehicleWeapon") return BridgeValue(c->vehicleWeapons.empty() ? std::string() : c->vehicleWeapons.front());
-    if (fn == "Customize.GetCharacterSkills") return BridgeValue(std::string());   // presets carry no skills
-    // The *_PCD_MP presets author black colours on palette 0 for both factions [CONFIRMED authored].
-    if (fn == "Customize.GetCharacterPrimaryColor" || fn == "Customize.GetCharacterSecondaryColor") return BridgeValue(0);
+    if (fn == "Customize.GetCharacterVehicleWeapon") return BridgeValue(join(c->vehicleWeapons));
+    if (fn == "Customize.GetCharacterSkills") return BridgeValue(join(c->skills));
+    if (fn == "Customize.GetCharacterPrimaryColor" || fn == "Customize.GetCharacterSecondaryColor") {
+        // A black colour means "the palette swatch": GetPixelColor(palette, coords) (packed); else "0x" + hex.
+        const CharacterColor& col = fn == "Customize.GetCharacterPrimaryColor" ? c->primary[faction] : c->secondary[faction];
+        if (col.isBlack()) return BridgeValue(pixel(col.palette, (int)col.x, (int)col.y));
+        return BridgeValue(hexColor(col.r, col.g, col.b));
+    }
+    if (fn == "Customize.GetPrimaryPalette" || fn == "Customize.GetSecondaryPalette") {
+        const CharacterColor& col = fn == "Customize.GetPrimaryPalette" ? c->primary[faction] : c->secondary[faction];
+        return BridgeValue(std::to_string(col.palette) + "," + floatText(col.x) + "," + floatText(col.y));
+    }
     if (fn == "Customize.GetCharacterDecal") return BridgeValue(std::string());
+    FlowTrace::emit("bridge.unhandled", {{"fn", fn}});
+    return {};
+}
+
+BridgeValue FrontendRuntime::commitCharacter(const std::vector<std::string>& args) {
+    // TnCharacterScriptBinding.CommitCharacter(CharacterName, FriendlyName, ChassisTypes, Specialty, PrimaryColorsHex,
+    // SecondaryColorsHex, Skills, WeaponTypes_, Abilities, VehicleWeapons) [CONFIRMED decompile]: empty fields keep
+    // the stored value; "Empty" clears skills / abilities; only the first two weapon types are replaced (the melee
+    // slot is separate); colours are "0xRRGGBB;palette;x;y" per faction.
+    auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
+    std::string name = arg(0);
+    CharacterPreset* c = roster_.findMutable(name);
+    if (!c) { FlowTrace::emit("customize.commit", {{"character", name}, {"found", "false"}}); return {}; }
+    if (!arg(1).empty()) c->friendlyName = arg(1);
+    if (!arg(2).empty()) { auto ch = splitCsv(arg(2)); for (size_t i = 0; i < ch.size() && i < 2; ++i) c->chassis[i] = ch[i]; }
+    if (!arg(3).empty()) c->specialty = arg(3);
+    auto colors = [&](const std::string& csv, CharacterColor* out) {
+        if (csv.empty()) return;
+        auto items = splitCsv(csv);
+        for (size_t i = 0; i < items.size() && i < 2; ++i) {
+            std::vector<std::string> p;
+            std::string cur;
+            for (char ch : items[i]) { if (ch == ';') { p.push_back(cur); cur.clear(); } else cur += ch; }
+            p.push_back(cur);
+            CharacterColor& col = out[i];
+            std::string hex = p[0].rfind("0x", 0) == 0 ? p[0].substr(2) : std::string();   // HexStringToColor: "0x" else black
+            while (!hex.empty() && hex.size() < 6) hex = "0" + hex;
+            unsigned v = hex.empty() ? 0u : (unsigned)std::strtoul(hex.c_str(), nullptr, 16);
+            col.r = (int)((v >> 16) & 0xFF); col.g = (int)((v >> 8) & 0xFF); col.b = (int)(v & 0xFF); col.a = 255;
+            if (p.size() == 4) { col.palette = std::atoi(p[1].c_str()); col.x = (float)std::atof(p[2].c_str()); col.y = (float)std::atof(p[3].c_str()); }
+        }
+    };
+    colors(arg(4), c->primary);
+    colors(arg(5), c->secondary);
+    if (!arg(6).empty()) { if (arg(6) == "Empty") c->skills.clear(); else c->skills = splitCsv(arg(6)); }
+    if (!arg(7).empty()) {
+        auto w = splitCsv(arg(7));
+        if (c->weapons.size() < 2) c->weapons.resize(2);
+        // An unset slot arrives as "undefined" inside the movie's array; the stored weapon is kept.
+        for (size_t i = 0; i < w.size() && i < 2; ++i) if (!w[i].empty() && w[i] != "undefined") c->weapons[i] = w[i];
+    }
+    if (!arg(8).empty()) { if (arg(8) == "Empty") c->abilities.clear(); else c->abilities = splitCsv(arg(8)); }
+    if (!arg(9).empty()) {
+        auto v = splitCsv(arg(9));
+        if (c->vehicleWeapons.size() < 2) c->vehicleWeapons.resize(std::max<size_t>(c->vehicleWeapons.size(), v.size()));
+        for (size_t i = 0; i < v.size() && i < 2; ++i) if (!v[i].empty() && v[i] != "undefined") c->vehicleWeapons[i] = v[i];
+    }
+    FlowTrace::emit("customize.commit", {{"character", name}, {"friendlyName", c->friendlyName}, {"chassis", c->chassis[0] + "," + c->chassis[1]},
+                                         {"weapons", join2(c->weapons)}, {"abilities", join2(c->abilities)}});
     return {};
 }
 

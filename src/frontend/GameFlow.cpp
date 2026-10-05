@@ -517,6 +517,11 @@ void GameFlow::selectCharacter(const SelectedCharacter& c) {
     if (level_ == LevelKind::Match) characterSelected();
 }
 
+void GameFlow::clearSelectedCharacter() {
+    selected_ = SelectedCharacter{};
+    FlowTrace::emit("character.cleared", {});
+}
+
 void GameFlow::quitToMainMenu() {
     // Game.QuitToMainMenu -> TnGameActionScriptBinding -> TnGame: ClientTravelToMap("UI_FrontEnd_m").
     if (level_ == LevelKind::Match) {
