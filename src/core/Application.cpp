@@ -1777,6 +1777,66 @@ void Application::runParticipantTest() {
         check(haveWeapon && robotNoLock && lockedVeh && lockAt > 0.45f && lockAt < 0.55f && homed,
               "Homing: no lock on robots (CanLockOnToRobots false); vehicle lock after LockOnTime 0.5 s; locked rocket homes 4 m into the target");
     }
+    // Barrier (TnAbilityBarrier): wall 10 m ahead after 0.5 s; blocks shots and pawns; decays 15/s; cooldown after it is gone.
+    {
+        game::MatchLaunch L5; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L5);
+        world_.launchMatch(L5);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Leader; me.abilities = {"Barrier", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("W" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        bool up = false, shotBlocked = false, walkBlocked = false, decays = false, cdWait = false, cdAfter = false;
+        float hp0 = 0, hpShot = 0, hpLater = 0, walked = 0;
+        if (E) {
+            core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
+            for (auto* o : ops) if (o != E) o->setPosition(lp.position() - fwd * 30.0f);
+            platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(sh, dt); world_.tick(dt);
+            run(0.45f);
+            bool notYet = !world_.barrier().alive;
+            run(0.1f);
+            up = notYet && world_.barrier().alive && world_.hudState().barrier;
+            hp0 = world_.barrier().health;
+            // Enemy 16 m ahead behind the wall; aim the crosshair at it and fire the Ion Blaster for 0.5 s.
+            core::Vec3 T = lp.position() + fwd * 16.0f;
+            float eh0 = 0;
+            for (int i = 0; i < 30; ++i) {
+                E->setPosition(T);
+                core::Vec3 d = E->pawn().actorLocation() - ctl.cameraPos();
+                ctl.setCameraYaw(std::atan2(-d.x, -d.z)); ctl.setCameraPitch(std::atan2(d.y, std::hypot(d.x, d.z)));
+                if (i == 0) eh0 = E->pawn().health().current;
+                platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+                world_.handleInput(fire, dt); world_.tick(dt);
+            }
+            hpShot = world_.barrier().health;
+            shotBlocked = E->pawn().health().current == eh0 && hp0 - hpShot > 15.0f * 0.5f + 20.0f;
+            // Walk into the wall for 3 s.
+            core::Vec3 p0 = lp.position();
+            platform::InputFrame fw; fw.down[(int)platform::Button::Forward] = true;
+            for (int i = 0; i < 180; ++i) { world_.handleInput(fw, dt); world_.tick(dt); }
+            walked = core::dot(lp.position() - p0, fwd);
+            walkBlocked = walked < 9.5f;
+            float h1 = world_.barrier().health;
+            run(4.0f);
+            hpLater = world_.barrier().health;
+            decays = std::fabs((h1 - hpLater) - 60.0f) < 1.0f;
+            cdWait = world_.hudState().abilities[0].cooldown == 0.0f;
+            world_.damageBarrier(5000.0f, "TransGame.TnDamageTypeIonBlaster");
+            run(2.9f);
+            bool fading = world_.barrier().alive && world_.hudState().abilities[0].cooldown == 0.0f;
+            run(0.3f);
+            cdAfter = fading && !world_.barrier().alive && world_.hudState().abilities[0].cooldown > 19.0f;
+        }
+        LOG_INFO("PARTICIPANT barrier: up %d hp %.0f -> %.0f after shots (target untouched %d), walked %.1f m, decay over 4 s %.1f, cooldown waits %d, after fade %d",
+                 (int)up, hp0, hpShot, (int)shotBlocked, walked, hp0 - hpLater, (int)cdWait, (int)cdAfter);
+        check(E && up && shotBlocked && walkBlocked && decays && cdWait && cdAfter,
+              "Barrier: up after 0.5 s; blocks and absorbs hitscan; blocks pawns; decays 15/s; 3 s fade; cooldown 20 s once gone");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

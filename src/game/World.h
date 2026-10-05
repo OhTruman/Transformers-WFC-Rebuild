@@ -61,6 +61,8 @@ struct HudGameState {
     bool dodging = false;
     bool cloaked = false;
     int hoverState = 0;
+    bool barrier = false;                        // the local Barrier ability's wall is up
+    float barrierHealth = 0.0f;                  // BarrierHealth 1000, DegenRate 15/s
     std::string heavyWeapon;                     // carried flag / bomb weapon ItemName ("" none): replaces the gun while held
     int grenades = 0;                            // grenade bag reserve (WT_Grenades); -1 = no bag
     int lockTarget = -1;                         // homing weapon: target match player (-1 none)
@@ -243,7 +245,22 @@ public:
     };
     // TnGrenadeThrower: G in robot form -> toss after TossDelay 0.4 s.
     void startLocalGrenadeToss();
+    struct BarrierState {
+        bool alive = false;
+        core::Vec3 pos{0, 0, 0}; float yaw = 0.0f;
+        float health = 0.0f, fade = -1.0f, t = 0.0f;   // fade: FadeOutTime countdown once health reached 0 (-1 = up)
+        core::Mat4 world, boxInv;                      // mesh world matrix; world -> collision-box local
+        core::Vec3 half{0, 0, 0};
+    };
     float grenadeTossDelay_ = -1.0f, grenadeCooldown_ = 0.0f;
+    BarrierState barrier_;
+    float barrierDelay_ = -1.0f;
+    int barrierDyn_ = -1, barrierDynW_ = -1;
+    assets::SkinnedModel barrierModel_;
+    bool barrierModelTried_ = false;
+    render::MeshData barrierMesh_;
+    void spawnBarrier();
+    void tickBarrier(float dt);
     core::Vec3 grenadeTarget_{0, 0, 0};
     const Weapon* grenadeBag(const Character& c) const;
     void spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const Weapon& w, int instigator);
@@ -355,6 +372,10 @@ private:
     int lockedClip_ = 0;
 public:
     void applyKnockback(int victim, const core::Vec3& momentumUU, const std::string& damageType);   // RE §I gated knockback
+    // TnAbilityBarrier / TnBarrierSpawnable (the local owner's) [CONF script + authored; RE §I3].
+    const BarrierState& barrier() const { return barrier_; }
+    bool barrierRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const;
+    void damageBarrier(float amount, const std::string& type);
     // TnPlayerController.TriggerKillstreak for the local player: the newest acquired streak; RequiresRobotForm streaks in
     // vehicle form transform first and trigger after (DeferredTriggerKillstreak). Returns the triggered id or "".
     std::string triggerLocalKillstreak();

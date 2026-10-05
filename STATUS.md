@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22q (2026-10-05) — Barrier ability
+- Wall spawn / collision / health / decay / fade / cooldown from authored data; blocks shots and pawns. PARTICIPANT 10/10.
+
 ## GAMEPLAY PASS 22p (2026-10-05) — flag / bomb carrier rules and knockback
 - Carrier holds the heavy weapon (no gun / grenade, 9999 melee), drops on transform / swap; knockback gated by damage type. PARTICIPANT 9/9, CTF 12/12.
 

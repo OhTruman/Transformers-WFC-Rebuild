@@ -173,7 +173,8 @@ public:
     std::vector<int> meleeHit_;           // match players already hit by the active sweep
     int meleeAlternate_ = 0;
     int meleeHitCount_ = 0;               // total melee hits landed (diagnostics)
-    bool meleeCarrier_ = false;           // the attack is the flag / bomb carrier's MWT_Flag / MWT_Bomb attack
+    bool meleeCarrier_ = false;
+    bool barrierAlive_ = false;           // TnAbilityBarrier: SpawnBarrier timer active or the barrier exists (cooldown waits)           // the attack is the flag / bomb carrier's MWT_Flag / MWT_Bomb attack
     int meleeVariant_ = 0;
     int carryingHeavy_ = 0;               // 1 flag, 2 bomb held as the current (WT_Heavy) weapon
     bool heavyDropRequested_ = false;     // a weapon swap away from the heavy weapon (ChangedWeapon -> TossWeapon)              // AnimSet chooser: Melee_EnergonSword_01 / _03
@@ -207,9 +208,9 @@ public:
         for (int i = 0; i < 2; ++i) {
             AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
             a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking" || a.id == "Hover" ||
-                            a.id == "Whirlwind";
+                            a.id == "Whirlwind" || a.id == "Barrier";
             // Cooldown[skill data index 0]: Dodge [2.0, 0.5]; Warcry [60]; Shockwave [60] [CONF authored CDOs].
-            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : 0.0f;
+            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : a.id == "Barrier" ? 20.0f : 0.0f;
             abilities_[i] = a;
         }
     }
@@ -220,7 +221,8 @@ public:
             // HadAndLostBuffCondition - after the owner's Warcry buff ended).
             if (a.pendingCooldown && !(a.id == "Dodge" && isDodging()) && !(a.id == "Warcry" && (warcryRemain_ > 0.0f || pendingAbilityEffect_ == "Warcry")) &&
                 !(a.id == "Cloaking" && cloakRemain_ > 0.0f) && !(a.id == "Hover" && (hoverState_ != 0 || hoverRequested_)) &&
-                !(a.id == "Whirlwind" && (meleeState_ == 2 || pendingAbilityEffect_ == "Whirlwind"))) {
+                !(a.id == "Whirlwind" && (meleeState_ == 2 || pendingAbilityEffect_ == "Whirlwind")) &&
+                !(a.id == "Barrier" && (barrierAlive_ || pendingAbilityEffect_ == "Barrier"))) {
                 a.pendingCooldown = false; a.cooldown = a.cooldownTime;
             }
             if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));

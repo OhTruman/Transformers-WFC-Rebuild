@@ -234,8 +234,18 @@ Inputs:
   - DropFrom FindSpot box (450, 450, 100) is not run; the drop is at the carrier [PARTIAL].
   - Tests (WFC_CTFTEST 12/12, Streets + Gorge): transform drop, no vehicle re-pick, robot re-pick on a new touch;
     the local carrier's gun is blocked and a swap tosses the flag.
-- Barrier, RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
-  SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (log + HUD
+- **Barrier** [CONF TnAbilityBarrier / TnBarrierSpawnable script + authored; RE §I3]:
+  - Skill_Barrier anim, then SpawnDelay 0.5 s: wall at Location + (1000, 0, −200) rotated by the pawn, facing it.
+  - Collision: the PHYSSYS box (167 × 1736 × 823.5 UU at (−59, 0, 91) about C_Robo01_XT, bone frame taken as
+    the actor frame [PROV]) as a dynamic set in the pawn and weapon collision.
+  - Blocks pawns, hitscan and projectiles (zero-extent blocking HIGH); takes hitscan and radius damage, not melee.
+  - BarrierHealth 1000, DegenRate 15/s; at 0: FadeOutTime 3 s, then gone; destroyed with the owner.
+  - Cooldown 20 s once the barrier is gone. Mesh WEP_Barrier_SKEL with Barrier_Equip, drawn by Gameplay.
+  - PARTIAL: the flashbang instant break and the TnBuffIncreaseBarrierHealth +500.
+  - Test (PARTICIPANT 10/10): up at 0.5 s; shots absorbed (999 → 784) with the target untouched; owner
+    stopped at 6.9 m; 60 HP decay in 4 s; cooldown 20 s after the fade.
+- RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
+  SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (Barrier now implemented) (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].
 - **Correction:** the Pass 21f contract doc said robot Shift ran a dash. It did nothing until this pass.
 

@@ -510,7 +510,10 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
             targetDist = th; hitDes = d; hitTarget = nullptr; hitOpp = nullptr;
         }
     }
-    float dist = (hitTarget || hitDes || hitOpp) ? targetDist : bestDist;
+    bool hitBarrier = false;
+    { float th; if (barrierRayHit(origin, dir, range, th) && th <= targetDist + 0.05f) { targetDist = th; hitBarrier = true; hitTarget = nullptr; hitDes = nullptr; hitOpp = nullptr; } }
+    float dist = (hitTarget || hitDes || hitOpp || hitBarrier) ? targetDist : bestDist;
+    if (hitBarrier) damageBarrier(w.damageAt(dist), w.damageType ? w.damageType : "");
     if (hitOpp) applyMatchDamage(hitOpp->matchPlayer(), localPlayer_, w.damageAt(dist), false, w.damageType);   // InstantHitDamage, falloff, the weapon's InstantHitDamageTypes[0]
     core::Vec3 hitPoint = origin + dir * dist;
     if (hitTarget) hitTarget->applyDamage(w.damageAt(dist));   // [CONF] range-based falloff
@@ -1129,6 +1132,7 @@ HudGameState World::hudState() const {
     h.cloaked = pc.cloakRemain_ > 0.0f;
     h.hoverState = pc.hoverState_;
     h.lockTarget = lockTarget_; h.locked = locked_;
+    h.barrier = barrier_.alive; h.barrierHealth = barrier_.health;
     h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
     { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
     {
@@ -1395,6 +1399,7 @@ void World::draw(render::IRenderer& r) const {
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene).
     fx_.draw(r);
     if (!localPlayerDead()) vehicleFx_.draw(r);
+    if (barrier_.alive && !barrierMesh_.positions.empty()) r.drawDynamicMesh(barrierMesh_, barrier_.world, core::Vec3{1, 1, 1});   // TnBarrierSpawnable mesh
 
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {
@@ -1642,6 +1647,14 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
     }
     for (Destructible* d : destructibles_)
         if (d->state() == 0) { core::Vec3 c = (d->boxMin() + d->boxMax()) * 0.5f; float k = falloff(c); if (k > 0.0f) d->applyDamage(*this, damage * k); }
+    if (barrier_.alive) {
+        // Distance to the wall box (clamped point), not its centre.
+        core::Vec3 l = core::transformPoint(barrier_.boxInv, at);
+        core::Vec3 q{std::max(-barrier_.half.x, std::min(l.x, barrier_.half.x)), std::max(-barrier_.half.y, std::min(l.y, barrier_.half.y)),
+                     std::max(-barrier_.half.z, std::min(l.z, barrier_.half.z))};
+        float dd = core::length(l - q);
+        if (dd < radius) damageBarrier(damage * (1.0f - dd / std::max(radius, 1e-3f)), type);
+    }
 }
 
 void World::tickProjectiles(float dt) {
@@ -1708,6 +1721,8 @@ void World::tickProjectiles(float dt) {
         float t;
         if (lineWorld && lineWorld->segmentHit(p.pos, next, t)) { best = t; hit = true; }
         core::Vec3 d = next - p.pos; float len = core::length(d);
+        bool barrierHit = false;
+        if (len > 1e-5f) { float tb; if (barrierRayHit(p.pos, d * (1.0f / len), len, tb) && tb / len < best) { best = tb / len; hit = true; barrierHit = true; } }
         if (len > 1e-5f) {
             core::Vec3 dir = d * (1.0f / len);
             for (MatchOpponent* o : opponents_) {
@@ -1728,6 +1743,7 @@ void World::tickProjectiles(float dt) {
         if (hit || p.life <= 0.0f || closingExpired) {
             core::Vec3 at = p.pos + d * best;
             if (hit || closingExpired) radiusDamage(at, p.damage, p.radius, p.instigator, p.damageType);
+            if (barrierHit && barrier_.alive && barrier_.health > 0.0f) {}   // radiusDamage reached the barrier
             projectiles_.erase(projectiles_.begin() + (long)i);
             continue;
         }
@@ -1805,9 +1821,15 @@ void World::tickAbilityEffects(float dt) {
         pc.shockwaveDelay_ = 0.25f;                       // Delay 0.25 -> Shockwave()
     } else if (fx == "Whirlwind") {
         startLocalMelee(true);                            // MeleeService.StartMeleeAttack(MELEE_Whirlwind)
+    } else if (fx == "Barrier") {
+        pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
+        barrierDelay_ = 0.5f;                             // SpawnDelay 0.5 -> SpawnBarrier
+        pc.barrierAlive_ = true;
     }
+    tickBarrier(dt);
     tickLocalMelee(dt);
     tickHomingLock(dt);
+    if (localDead_ && barrier_.alive) { barrier_.alive = false; barrierDelay_ = -1.0f; }
     grenadeCooldown_ = std::max(0.0f, grenadeCooldown_ - dt);
     if (grenadeTossDelay_ >= 0.0f) {
         grenadeTossDelay_ -= dt;
@@ -2067,6 +2089,107 @@ void World::applyKnockback(int victim, const core::Vec3& m, const std::string& t
     if (victim == localPlayer_) p = localDead_ ? nullptr : &player_.pawn();
     for (MatchOpponent* o : opponents_) if (o->matchPlayer() == victim && o->spawned()) p = &o->pawn();
     if (p) p->addMomentum(m, extraZ);
+}
+
+// ---- Barrier [CONF TnAbilityBarrier / TnBarrierSpawnable script + authored CDOs; RE TARGETED_PASS3 §I3] ----
+// Spawn at Location + BarrierOffset (1000, 0, -200) rotated by the pawn, facing the pawn's rotation. Collision = the
+// WEP_Barrier_PHYSSYS box on C_Robo01_XT: X 167 / Y 1736 / Z 823.5 UU at (-59, 0, 91) - placed about the bone's
+// end-of-Barrier_Equip position with the bone frame taken as the actor frame [PROV]. Blocks pawns, hitscan and projectiles
+// (zero-extent blocking HIGH). BarrierHealth 1000, DegenRate 15/s, ignores melee; at 0: FadeOutTime 3 s, then destroyed;
+// destroyed on the owner's death. The ability Cooldown 20 s starts once the barrier is gone (ServerCanStartCooldown).
+namespace {
+std::vector<core::Vec3> boxTris(const core::Vec3& c, const core::Vec3& h) {
+    const core::Vec3 v[8] = {{c.x - h.x, c.y - h.y, c.z - h.z}, {c.x + h.x, c.y - h.y, c.z - h.z}, {c.x + h.x, c.y + h.y, c.z - h.z},
+                             {c.x - h.x, c.y + h.y, c.z - h.z}, {c.x - h.x, c.y - h.y, c.z + h.z}, {c.x + h.x, c.y - h.y, c.z + h.z},
+                             {c.x + h.x, c.y + h.y, c.z + h.z}, {c.x - h.x, c.y + h.y, c.z + h.z}};
+    const int f[12][3] = {{0, 2, 1}, {0, 3, 2}, {4, 5, 6}, {4, 6, 7}, {0, 1, 5}, {0, 5, 4}, {3, 7, 6}, {3, 6, 2},
+                          {0, 4, 7}, {0, 7, 3}, {1, 2, 6}, {1, 6, 5}};
+    std::vector<core::Vec3> out;
+    for (const auto& t : f) for (int k = 0; k < 3; ++k) out.push_back(v[t[k]]);
+    return out;
+}
+}
+
+void World::spawnBarrier() {
+    Character& pc = player_.pawn();
+    if (localDead_) { pc.barrierAlive_ = false; return; }   // IsOwnerDead
+    if (!barrierModelTried_) {
+        barrierModelTried_ = true;
+        const std::string ext = assetRoot() + "/../content/WEP_Shield_p/Barrier/";
+        if (assets::loadSkinnedGlb(ext + "WEP_Barrier_SKEL.gltf", barrierModel_) && barrierModel_.valid()) {
+            assets::loadAnimationsByName(ext + "WEP_Barrier_ANIM.anim.gltf", barrierModel_);
+            resolveModelTextures(barrierModel_);
+        } else LOG_ERROR("barrier: WEP_Barrier_SKEL unavailable (collision only)");
+    }
+    BarrierState& b = barrier_;
+    b = BarrierState{};
+    b.alive = true; b.health = 1000.0f; b.yaw = pc.yaw();
+    const core::Vec3 fwd = core::forwardFromYawPitch(b.yaw, 0.0f);
+    b.pos = pc.actorLocation() + fwd * 10.0f + core::Vec3{0, -2.0f, 0};
+    b.world = core::Mat4::translate(b.pos) * core::Mat4::rotateY(b.yaw + core::config::kMeshYawOffset);
+    // C_Robo01_XT position at the end of Barrier_Equip (mesh space), else the actor origin.
+    core::Vec3 bone{0, 0, 0};
+    if (barrierModel_.valid()) {
+        int clip = barrierModel_.clipByName("Barrier_Equip"), node = barrierModel_.nodeByName("C_Robo01_XT");
+        if (node >= 0) {
+            assets::LocalPose lp; std::vector<core::Mat4> g;
+            if (clip >= 0) {
+                assets::samplePose(barrierModel_, clip, barrierModel_.clips[(size_t)clip].duration, false, lp);
+                assets::skinPose(barrierModel_, lp, g, barrierMesh_);
+            }
+            if ((size_t)node < g.size()) bone = core::Vec3{g[(size_t)node].m[12], g[(size_t)node].m[13], g[(size_t)node].m[14]};
+        }
+    }
+    const core::Vec3 centre = bone + core::Vec3{-0.59f, 0.91f, 0.0f};
+    b.half = core::Vec3{0.835f, 4.1175f, 8.68f};          // (X 167, Z 823.5, Y 1736) / 2 in mesh axes (fwd, up, right)
+    b.boxInv = core::Mat4::translate(centre * -1.0f) * core::Mat4::rotateY(-(b.yaw + core::config::kMeshYawOffset)) * core::Mat4::translate(b.pos * -1.0f);
+    const std::vector<core::Vec3> tris = boxTris(centre, b.half);
+    if (barrierDyn_ < 0) barrierDyn_ = collision_.addDynamicSet(tris, b.world); else { collision_.setDynamicPose(barrierDyn_, b.world); collision_.setDynamicEnabled(barrierDyn_, true); }
+    if (weaponCollision_.valid()) {
+        if (barrierDynW_ < 0) barrierDynW_ = weaponCollision_.addDynamicSet(tris, b.world);
+        else { weaponCollision_.setDynamicPose(barrierDynW_, b.world); weaponCollision_.setDynamicEnabled(barrierDynW_, true); }
+    }
+    LOG_INFO("ability Barrier: wall at (%.1f %.1f %.1f), 1000 HP", b.pos.x, b.pos.y, b.pos.z);
+}
+
+void World::tickBarrier(float dt) {
+    Character& pc = player_.pawn();
+    if (barrierDelay_ >= 0.0f) { barrierDelay_ -= dt; if (barrierDelay_ < 0.0f) spawnBarrier(); }
+    BarrierState& b = barrier_;
+    if (b.alive) {
+        b.t += dt;
+        if (b.fade < 0.0f) {
+            b.health -= 15.0f * dt;                        // DegenRate
+            if (b.health <= 0.0f) { b.health = 0.0f; b.fade = 3.0f; }   // DestroySound, FadeOutTime
+        } else {
+            b.fade -= dt;
+            if (b.fade <= 0.0f) b.alive = false;
+        }
+    }
+    if (!b.alive) {
+        if (barrierDyn_ >= 0) collision_.setDynamicEnabled(barrierDyn_, false);
+        if (barrierDynW_ >= 0) weaponCollision_.setDynamicEnabled(barrierDynW_, false);
+    }
+    pc.barrierAlive_ = b.alive || barrierDelay_ >= 0.0f;
+    if (b.alive && barrierModel_.valid()) {
+        int clip = barrierModel_.clipByName("Barrier_Equip");
+        assets::LocalPose lp; std::vector<core::Mat4> g;
+        if (clip >= 0) { assets::samplePose(barrierModel_, clip, b.t, false, lp); assets::skinPose(barrierModel_, lp, g, barrierMesh_); }
+    }
+}
+
+bool World::barrierRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const {
+    if (!barrier_.alive) return false;
+    const core::Vec3 lo = core::transformPoint(barrier_.boxInv, o);
+    const core::Vec3 ld = core::transformPoint(barrier_.boxInv, o + d) - lo;
+    return rayAabb(lo, ld, range, barrier_.half * -1.0f, barrier_.half, t);
+}
+
+void World::damageBarrier(float amount, const std::string& type) {
+    if (!barrier_.alive || barrier_.fade >= 0.0f) return;
+    if (type.find("Melee") != std::string::npos || type.find("Whirlwind") != std::string::npos) return;   // ignores melee
+    barrier_.health -= amount;
+    if (barrier_.health <= 0.0f) { barrier_.health = 0.0f; barrier_.fade = 3.0f; }
 }
 
 } // namespace game
