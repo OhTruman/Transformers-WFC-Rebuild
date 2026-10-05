@@ -863,7 +863,14 @@ bool Pipeline::load(const std::string& mapName) {
         }
         const assets::Json& C = L["postprocess"]["clut"];
         ImageData strip;
-        if (C.isObject() && platform::decodeImage(C["file"].asString(), strip) && strip.valid()) {
+        // The build writes the strip next to lighting.json; the recorded "file" is relative to the build's cwd, so it
+        // only resolved when the exe ran from the worktree root (M25: the player route ran every map ungraded).
+        std::string clutFile = C.isObject() ? C["file"].asString() : std::string();
+        if (!clutFile.empty()) {
+            size_t sl = clutFile.find_last_of("/\\");
+            clutFile = dataDir_ + "/" + (sl == std::string::npos ? clutFile : clutFile.substr(sl + 1));
+        }
+        if (!clutFile.empty() && platform::decodeImage(clutFile, strip) && strip.valid()) {
             int n = C["size"][0].asInt(32);
             std::vector<uint8_t> vol((size_t)n * n * n * 4);
             for (int z = 0; z < n; ++z)

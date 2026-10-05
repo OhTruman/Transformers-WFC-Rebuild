@@ -2268,6 +2268,12 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 24 / 25 (2026-10-05, agents/rendering) — vertex lightmaps, volume grades
+- **Render data must be regenerated** (tool changes in build_lighting.py): FLightMap1D samples now parse on every map (M24), and the PostProcessVolume grade lands in lighting.json postprocess (M25). Streets output is byte-identical.
+- The renderer resolves clut.png against the map data dir, so the CLUT applies on the player route.
+- Harness: the black-frame threshold is now 80 %, and WFC_M11_INHERITSTATE injects the depth-test leak. Release-path check: fix PASS, reproduction FAIL. 10 maps × 3 views PASS. Streets suite identical to ref_m21.
+- API: `releasePreviewBody(h)` and `previewBodyCount()`.
+
 ## RENDERING MILESTONE 20 / 21 (2026-10-05, agents/rendering) — multi-map fidelity
 - All 10 cooked MP maps build and render through the generic path. 30 captures pass, with 0 materials without a program,
   0 draws without depth testing and 0 GL errors.

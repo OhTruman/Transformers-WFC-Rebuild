@@ -175,6 +175,12 @@ public:
         (void)robotGltf; (void)animSets; (void)anim; return -1;
     }
     virtual bool posePreviewBody(int handle, float timeSec, MeshData& out) { (void)handle; (void)timeSec; (void)out; return false; }
+    // Lifetime: a preview body is CPU-only (skeleton, skinned mesh, its AnimSets' clips) and independent of the
+    // frontend scene - a handle stays valid across unloadFrontendScene / loadFrontendScene and map loads until
+    // releasePreviewBody(handle). Released slots are reused by later loads; posing a released handle returns false.
+    virtual void releasePreviewBody(int handle) { (void)handle; }
+    // Bodies currently held (diagnostics; the soak checks the cache stays bounded).
+    virtual int previewBodyCount() const { return 0; }
     // Matinee-driven actor pose in the loaded scene (Frontend's matinee evaluator): absolute world location (UU) and
     // rotation (pitch, yaw, roll in degrees), including RelativeToInitial / attachment. Actors not sent keep their
     // authored pose (and PHYS_Rotating). Visibility stays with setActorHidden (authored bHidden applies until then).

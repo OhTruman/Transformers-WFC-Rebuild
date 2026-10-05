@@ -515,6 +515,33 @@ def postprocess(mapname, out):
         Image.fromarray(strip).save(fn)
         res['clut'] = {'object': clut, 'file': fn.replace(os.sep, '/'), 'size': [sx, sy, sz],
                        'srgb': bool(o.get('SRGB', False))}       # Default__Texture3D SRGB=False
+    # M25: PostProcessVolumes. UE3 gives a view inside an enabled PostProcessVolume that volume's Settings (highest
+    # Priority wins) instead of the WorldInfo defaults. 8 of 9 non-Streets maps grade on one volume that contains
+    # every player start (AssetTools completeness: Gorge 115/115, Berth 120/120, Remnant 4/4): its Settings (over the
+    # FPostProcessSettings defaults) and its ColorCorrectionTexture become the map's effective grade. The volume brush
+    # is not exported, so "inside" is taken from the player-start coverage [HIGH for gameplay views].
+    ap = os.path.join(VS_MAPS, mapname, 'postprocess.json')
+    if os.path.exists(ap):
+        vols = [v for v in (json.load(open(ap, encoding='utf-8')).get('volumes') or [])
+                if (v.get('props') or {}).get('bEnabled', True) is not False]
+        if vols:
+            v = max(vols, key=lambda x: float((x.get('props') or {}).get('Priority', 0.0) or 0.0))
+            vs = dict(settings(wi_def.get('DefaultPostProcessSettings')))
+            for k, x in ((v.get('props') or {}).get('Settings') or {}).items():
+                # FVector props arrive as {X, Y, Z} from the AssetTools export; the WorldInfo path writes [x, y, z]
+                vs[k] = [x['X'], x['Y'], x['Z']] if isinstance(x, dict) and set(x) == {'X', 'Y', 'Z'} else x
+            res['settings'] = vs
+            res['source'] = {k: v['volume'] for k in vs}
+            res['volume'] = v['volume']
+            vc = v.get('clut') or {}
+            png = os.path.join(os.path.dirname(VS_MAPS.rstrip('/\\')), '..', vc.get('png', '')) if vc.get('png') else None
+            if png and os.path.exists(png):
+                fn = os.path.join(out, 'clut.png')
+                shutil.copyfile(png, fn)
+                res['clut'] = {'object': vc.get('object'), 'file': fn.replace(os.sep, '/'), 'size': vc.get('size', [32, 32, 32]),
+                               'srgb': False}             # Default__Texture3D SRGB=False (AssetTools srgb_tag None)
+            elif not vs.get('ColorCorrectionTexture'):
+                res['clut'] = None
     return res
 
 
