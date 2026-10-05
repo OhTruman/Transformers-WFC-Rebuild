@@ -511,7 +511,7 @@ void Application::routeMatchToFrontend(float dt) {
         fillFullSelection(cs, fc);
         world_.match().selectCharacter(me, cs);
         selectionSent_ = true;
-        const int f = team == 1 ? 1 : 0;
+        const int f = world_.match().faction(me) == 1 ? 1 : 0;   // [integration M08] resolved faction (FFA: Decepticon)
         frontend::FlowTrace::emit("match.characterSelected", {{"name", fc.name}, {"type", std::to_string(cs.type)}, {"specialty", sp},
                                                             {"faction", f == 1 ? "Decepticon" : "Autobot"},
                                                             {"chassis", game::resolveChassis(cs, f)},
@@ -583,7 +583,9 @@ void Application::routeMatchToFrontend(float dt) {
                 // it (TnFactionTeamAutobots / TnFactionTeamDecepticons / neutral TnTeamInfo class defaults, CONFIRMED values from
                 // the AssetTools chassis export via World::teamEnergon; FLinearColor). Missing data: logged, material default kept.
                 const game::MatchPlayer& mp = match.players()[(size_t)me];
-                const int f = teamOf(me) == 1 ? 1 : 0;
+                // The faction the body resolved for (TnGame.GetResolvedCharacterFaction: the team; FFA forces 1 = Decepticon) -
+                // not the team, which FFA does not have (a Deathmatch Leader spawns Soundwave and takes the Decepticon paint).
+                const int f = match.faction(me) == 1 ? 1 : 0;
                 auto lin = [](int c) { float v = c / 255.0f; return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
                 render::CharacterColors cc;
                 const game::CharacterColor* src[2] = {&mp.selection.primary[f], &mp.selection.secondary[f]};
