@@ -38,6 +38,7 @@ public:
         regenBuffRemain_ = 0.0f; fastCooldownRemain_ = 0.0f; ammoLockRemain_ = 0.0f;
         warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f; pendingAbilityEffect_.clear(); shockwaveDelay_ = -1.0f;
         cloakRemain_ = 0.0f; hoverState_ = 0; hoverRemain_ = 0.0f;
+        meleeState_ = 0; meleeT_ = 0.0f; lungeRemain_ = 0.0f; meleeSweep_ = -1; meleeHit_.clear(); actionClip_ = -1; actionW_ = 0.0f;
         health_ = Health{}; overShield_ = false;
         if (!specHealth_.empty()) health_.initialize(specHealth_, specOvershield_);   // ApplySpecialty: Health_<Class>
         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;   // TnCharacterApplier.ApplyWeapons
@@ -70,7 +71,8 @@ public:
     void setSpeedMultiplier(float m) { speedMult_ = m; }
     // Factors multiply (TnPawn.UpdateSpeeds over _SpeedMultiplierFactors): the specialty factor (associated with the
     // pawn itself) stays for the pawn's life; the fine-aim factor comes and goes.
-    float speedMultiplier() const { return speedMult_ * specialtySpeedMult_; }
+    // + melee GroundSpeedMultiplier (WeaponAttack 0.75, Whirlwind 1.2) while attacking [CONF TnMeleeSet].
+    float speedMultiplier() const { return speedMult_ * specialtySpeedMult_ * (meleeState_ == 1 ? 0.75f : meleeState_ == 2 ? 1.2f : 1.0f); }
     // TnSpecialty.Apply: SetSpeedMultiplier(SpeedMultiplier, P) + InitializeSegmentedHealth(HealthBlueprint) [CONF].
     void setSpecialty(const std::string& id, float speedMult, const std::vector<float>& segments, float overshield) {
         specialty_ = id; specialtySpeedMult_ = speedMult; specHealth_ = segments; specOvershield_ = overshield;
@@ -163,6 +165,19 @@ public:
     float cloakRemain_ = 0.0f;
     // TnAcrobaticsManager JumpingToHover (state 2) / Hovering (state 3): HoverDuration, PHYS_Flying at HoverAirSpeed,
     // TnBuffIncreaseDamageDuringHover FloatModifier[0] 1.4 while hovering [CONF script + authored].
+    // Melee (TnMeleeManager Attacking): 1 MELEE_WeaponAttack, 2 MELEE_Whirlwind; elapsed / length; lunge (AttackDash).
+    int meleeState_ = 0;
+    float meleeT_ = 0.0f, meleeLen_ = 0.0f, lungeRemain_ = 0.0f;
+    core::Vec3 lungeDir_{0, 0, 0};
+    int meleeSweep_ = -1;                 // index of the active sweep window
+    std::vector<int> meleeHit_;           // match players already hit by the active sweep
+    int meleeAlternate_ = 0;
+    int meleeHitCount_ = 0;               // total melee hits landed (diagnostics)              // AnimSet chooser: Melee_EnergonSword_01 / _03
+    bool isMeleeing() const { return meleeState_ != 0; }
+    // One-shot action layer (melee clips): full body or upper body over locomotion.
+    void playAction(const std::string& clip, bool upperBody) {
+        actionClip_ = robotModel_ ? robotModel_->clipByName(clip) : -1; actionT_ = 0.0f; actionUpper_ = upperBody;
+    }
     int hoverState_ = 0;
     bool hoverRequested_ = false;   // triggered, not yet started by the movement step
     float hoverRemain_ = 0.0f;
@@ -176,9 +191,10 @@ public:
     void setAbilities(const std::vector<std::string>& ids) {
         for (int i = 0; i < 2; ++i) {
             AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
-            a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking" || a.id == "Hover";
+            a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking" || a.id == "Hover" ||
+                            a.id == "Whirlwind";
             // Cooldown[skill data index 0]: Dodge [2.0, 0.5]; Warcry [60]; Shockwave [60] [CONF authored CDOs].
-            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : 0.0f;
+            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : 0.0f;
             abilities_[i] = a;
         }
     }
@@ -188,7 +204,8 @@ public:
             // TnAbilityManager.Tick: the cooldown starts once CanStartCooldown (Dodge: no longer dodging; Warcry:
             // HadAndLostBuffCondition - after the owner's Warcry buff ended).
             if (a.pendingCooldown && !(a.id == "Dodge" && isDodging()) && !(a.id == "Warcry" && (warcryRemain_ > 0.0f || pendingAbilityEffect_ == "Warcry")) &&
-                !(a.id == "Cloaking" && cloakRemain_ > 0.0f) && !(a.id == "Hover" && (hoverState_ != 0 || hoverRequested_))) {
+                !(a.id == "Cloaking" && cloakRemain_ > 0.0f) && !(a.id == "Hover" && (hoverState_ != 0 || hoverRequested_)) &&
+                !(a.id == "Whirlwind" && (meleeState_ == 2 || pendingAbilityEffect_ == "Whirlwind"))) {
                 a.pendingCooldown = false; a.cooldown = a.cooldownTime;
             }
             if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));
@@ -468,6 +485,10 @@ private:
     float reloadW_ = 0.0f, reloadT_ = 0.0f;
     bool prevReloading_ = false;
     std::vector<float> reloadMask_;
+    int actionClip_ = -1;
+    float actionT_ = 0.0f, actionW_ = 0.0f;
+    bool actionUpper_ = false;
+    std::vector<float> actionMask_;
     float airTime_ = 0.0f, landT_ = 0.0f, airApexY_ = 0.0f;
     int landClipSel_ = -1;                    // landing clip picked from SharedAcrobatics.LandingAnims
     float hoverW_ = 0.0f, hoverT_ = 0.0f;

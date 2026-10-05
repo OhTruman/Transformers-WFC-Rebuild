@@ -1650,6 +1650,59 @@ void Application::runParticipantTest() {
                  h.killstreaks.empty() ? "" : h.killstreaks.back().c_str(), (int)refilled, clip0, lp.weapon().ammo, (int)reset);
         check(acquired && refilled && locked && reset, "Soldier: 3 kills -> Ammo Matrix; B: reserves full + clip locked 10 s; death resets the streak");
     }
+    // Melee: Q -> MELEE_WeaponAttack (150, one hit per sweep) with the assist lunge; Whirlwind ability -> 85 per sweep window.
+    {
+        game::MatchLaunch L3; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L3);
+        world_.launchMatch(L3);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Leader; me.abilities = {"Whirlwind", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("M" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        auto place = [&](float d) {
+            core::Vec3 f = core::forwardFromYawPitch(world_.player().controller().viewYaw(), 0.0f);
+            E->setPosition(core::Vec3{lp.position().x + f.x * d, lp.position().y, lp.position().z + f.z * d});
+        };
+        bool ok = E != nullptr;
+        float h0 = 0, h1 = 0, h2 = 0, moved = 0;
+        bool refusedReady = false, cdHeld = false;
+        int whirlHits = 0;
+        if (ok) {
+            place(5.0f);
+            run(0.1f);
+            h0 = E->pawn().health().current;
+            core::Vec3 p0 = lp.position();
+            platform::InputFrame q; q.pressed[(int)platform::Button::Melee] = true; q.down[(int)platform::Button::Melee] = true;
+            world_.handleInput(q, dt); world_.tick(dt);
+            run(0.2f);
+            h1 = E->pawn().health().current;
+            moved = core::length(core::Vec3{lp.position().x - p0.x, 0, lp.position().z - p0.z});
+        }
+        LOG_INFO("PARTICIPANT melee: target %.0f -> %.0f HP, lunge %.2f m", h0, h1, moved);
+        check(ok && h0 - h1 == 150.0f && moved > 2.0f, "Q melee: assist lunge toward the enemy, MELEE_WeaponAttack 150 once per sweep");
+        if (ok) {
+            place(2.0f);
+            run(0.1f);
+            h1 = E->pawn().health().current;
+            const int hits0 = lp.meleeHitCount_;
+            // Still in the 1.33 s Q swing: the trigger must fail and keep the ability ready.
+            platform::InputFrame w; w.pressed[(int)platform::Button::Dash] = true; w.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(w, dt); world_.tick(dt);
+            refusedReady = lp.isMeleeing() && lp.meleeState_ == 1 && world_.hudState().abilities[0].cooldown == 0.0f;
+            run(1.2f);
+            world_.handleInput(w, dt); world_.tick(dt);
+            for (int i = 0; i < 120; ++i) { place(2.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }   // 2.0 s: sweeps 0.9, 1.6
+            h2 = E->pawn().health().current;
+            whirlHits = lp.meleeHitCount_ - hits0;
+            cdHeld = world_.hudState().abilities[0].cooldown == 0.0f && lp.meleeState_ == 2;
+        }
+        LOG_INFO("PARTICIPANT whirlwind: refused during Q swing %d; %d hits in 2 s, target %.0f -> %.0f HP, cooldown held %d", (int)refusedReady, whirlHits, h1, h2, (int)cdHeld);
+        check(ok && refusedReady && whirlHits >= 2 && (h1 - h2 >= 140.0f || h2 <= 0.0f) && cdHeld,
+              "Whirlwind: refused (no cooldown) while meleeing; 85 per sweep window (target hit in both windows of the first 2 s; other enemies in the box also hit); cooldown waits for the end");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
@@ -1926,12 +1979,12 @@ void Application::runWeaponTest() {
     for (int i = 0; i < 30; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
     check(pc.weapon().ammo < before && std::string(pc.weapon().damageType) == "TransGame.TnDamageTypeShotgun",
           "fire: Shotgun ammo spent (" + std::to_string(before) + " -> " + std::to_string(pc.weapon().ammo) + "), damage type TnDamageTypeShotgun");
-    // Abilities: Car2 iconic [Whirlwind, Dodge] -> Ability1 (Ctrl) = Dodge (TnAcrobaticsManager), Ability0 = Whirlwind (PARTIAL).
+    // Abilities: Car2 iconic [Whirlwind, Dodge] -> Ability1 (Ctrl) = Dodge (TnAcrobaticsManager), Ability0 = Whirlwind (melee).
     world_.applyChassisToLocalPawn("Car2");
     run(1.0f);
     {
         game::HudGameState h0 = world_.hudState();
-        bool slots = h0.abilities.size() == 2 && h0.abilities[0].id == "Whirlwind" && !h0.abilities[0].implemented &&
+        bool slots = h0.abilities.size() == 2 && h0.abilities[0].id == "Whirlwind" && h0.abilities[0].implemented &&
                      h0.abilities[1].id == "Dodge" && h0.abilities[1].implemented;
         core::Vec3 p0 = pc.position();
         core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(pc.yaw(), 0.0f), core::Vec3{0, 1, 0}));
@@ -1951,7 +2004,7 @@ void Application::runWeaponTest() {
         bool ready = pc.isDodging();
         check(slots && dodging && sp > 25.0f && lateral > 8.0f && cooling && refused && ready,
               "Dodge (Ctrl): " + std::to_string((int)sp) + " m/s, " + std::to_string(lateral).substr(0, 4) +
-              " m to the right in 0.6 s, 2.0 s cooldown after the dodge, refused while cooling, available again; Whirlwind slot PARTIAL");
+              " m to the right in 0.6 s, 2.0 s cooldown after the dodge, refused while cooling, available again; Whirlwind slot implemented");
     }
     // Projectiles + vehicle weapon: Warpath (Tank3) TankCannon (TankShell_PROJDATA 20000 UU/s, 170, radius 2500 UU).
     {

@@ -167,6 +167,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     if (!vehicleForm && in.wasPressed(Button::Ability1)) wantAbility_ = 1;  // Ability1
     abilityStickFwd_ = intent_.moveForward; abilityStickRight_ = intent_.moveRight;
     if (in.wasPressed(Button::Killstreak)) wantKillstreak_ = true;
+    if (in.wasPressed(Button::Melee)) wantMelee_ = true;
     if (in.wasPressed(Button::NextWeapon)) wantSwitch_ = 1;
     if (in.wasPressed(Button::PrevWeapon)) wantSwitch_ = -1;
     if (!reloadDown) reloadHeld_ = 0.0f;
@@ -600,14 +601,17 @@ void PlayerController::applyToPawn(World& world, float dt) {
     if (wantAbility_ >= 0) {
         Character::AbilitySlot& a = pawn_->abilities_[wantAbility_];
         bool can = pawn_->moveForm() == Form::Robot && !pawn_->isTransforming() && !pawn_->weapon().reloading() && !pawn_->isDodging();
-        if (can && !a.id.empty() && a.spam <= 0.0f && a.cooldown <= 0.0f && !a.pendingCooldown) {
+        // TnAbilityWhirlwind.LocalTriggerAbility fails (no cooldown) unless StartMeleeAttack(MELEE_Whirlwind) starts: the melee
+        // manager must be Idle, in robot form [CONF script].
+        const bool meleeRefused = a.id == "Whirlwind" && (pawn_->isMeleeing() || pawn_->moveForm() != Form::Robot || pawn_->isTransforming());
+        if (can && !meleeRefused && !a.id.empty() && a.spam <= 0.0f && a.cooldown <= 0.0f && !a.pendingCooldown) {
             if (a.implemented) {
                 if (a.id == "Dodge") {
                     // TnPlayerInput.Dodge: |JoyUp| >= |JoyRight| ? (Up < 0 ? back : forward) : (Right < 0 ? left : right).
                     float up = abilityStickFwd_, rt = abilityStickRight_;
                     step.dodgeDir = std::fabs(up) >= std::fabs(rt) ? (up < 0.0f ? 4 : 3) : (rt < 0.0f ? 1 : 2);
                 }
-                if (a.id == "Warcry" || a.id == "Shockwave") pawn_->pendingAbilityEffect_ = a.id;   // ServerTriggerAbility (World)
+                if (a.id == "Warcry" || a.id == "Shockwave" || a.id == "Whirlwind") pawn_->pendingAbilityEffect_ = a.id;   // World
                 if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
                 if (a.id == "Hover") { step.hoverRequest = true; pawn_->hoverRequested_ = true; }   // PlayerController.Hover
                 a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_;
@@ -647,7 +651,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
     Weapon& w = pawn_->weapon();
     // Weapon gate: robot control form, and during vehicle->robot only once restored (25% of the
     // fold) + EquipTime 0.2 s [CONF]. Robot->vehicle stores the weapon at fold start.
-    bool usable = pawn_->weaponUsable();
+    bool usable = pawn_->weaponUsable() && !pawn_->isMeleeing();
     if (wantReload_) {                       // latched tap; consumed by this step
         if (usable) w.beginReload();
         wantReload_ = false;

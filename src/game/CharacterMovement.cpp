@@ -706,6 +706,14 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         if (c.hoverRemain_ <= 0.0f || in.wantJump) c.hoverState_ = 0;
     }
     const bool hovering = c.hoverState_ == 2;
+    // Melee AttackDash: yaw-only lunge at Speed 2500 UU/s for Time 0.25 s, then Velocity x EndVelocityScaler 0.3 [CONF].
+    if (c.lungeRemain_ > 0.0f) {
+        c.lungeRemain_ -= dt;
+        v.x = c.lungeDir_.x * 25.0f; v.z = c.lungeDir_.z * 25.0f;
+        if (c.lungeRemain_ <= 0.0f) { v.x *= 0.3f; v.z *= 0.3f; }
+        hv = core::Vec3{v.x, 0, v.z};
+    }
+    const bool lunging = c.lungeRemain_ > 0.0f;
     const bool dodging = c.dodgeRemain_ > 0.0f;
     if (hovering) {
         // PHYS_Flying: planar input toward HoverAirSpeed at AccelRate; no gravity, no vertical drift.
@@ -717,6 +725,8 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         hv = core::Vec3{v.x, 0, v.z};
     } else if (dodging) {
         c.dodgeRemain_ -= dt;   // PHYS_Flying: no gravity, the velocity carries (Acceleration = Normal(Velocity))
+    } else if (lunging) {
+        // velocity set above
     } else if (c.rammedRemain_ > 0.0f) {
         // RammedReaction [CONF native M03 P8]: the forced velocity set on entry carries for 0.5 s (no
         // movement input); EndState restores air movement with Velocity = (0, 0, base Z).

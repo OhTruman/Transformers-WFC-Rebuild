@@ -412,6 +412,23 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
         assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, reloadW_, R.upperMask, finalPose_);
     }
 
+    // 3b) Melee action layer: the attack clip over locomotion (BlendIn / BlendOut 0.15 s, TnMeleeSet); whirlwind upper body.
+    if (actionClip_ >= 0 && robotRig) {
+        const float len = mdl.clips[(size_t)actionClip_].duration;
+        actionT_ += dt;
+        bool on = actionT_ < len;
+        actionW_ = approach(actionW_, on ? 1.0f : 0.0f, dt, 0.15f);
+        if (actionW_ > 0.0f) {
+            assets::samplePose(mdl, actionClip_, std::min(actionT_, len), false, layerPose_);
+            if (actionUpper_) assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, actionW_, R.upperMask, finalPose_);
+            else {
+                actionMask_.assign(R.upperMask.size(), 1.0f);
+                for (size_t i = 0; i < actionMask_.size(); ++i) if ((int)i == R.rootRef || mdl.nodes[i].parent < 0) actionMask_[i] = 0.0f;
+                assets::blendPose(finalPose_, layerPose_, actionW_, finalPose_, &actionMask_);
+            }
+        } else if (!on) actionClip_ = -1;
+    }
+
     // 4) Weapon recoil skel-controls (HmSkelControlRecoil via TnRecoiler), restarted per shot.
     // Applied in mesh space in the aim frame (bBoneSpaceRecoil=false): SpineRecoil on
     // C_Spine02_Lumbar02_XB, RightHandRecoil on R_Arm02_Shoulder_XB [CONF Robot_ANIMTREE].

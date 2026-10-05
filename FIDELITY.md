@@ -159,7 +159,23 @@ Inputs:
   - jumping or expiry → Falling; TnBuffIncreaseDamageDuringHover ×1.4 while hovering;
   - Cooldown[0] 35 s once not hovering.
   - Test: rose 4.9 m, held height, ≤ 5 m/s, fell back; cooldown 31.4 s, 3.6 s after the end.
-- Barrier, Whirlwind (melee), RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
+- **Melee** [CONF RE TARGETED_PASS3 §H; TnMeleeSet authored]:
+  - Q → MELEE_WeaponAttack (player pawns never stomp): Melee_EnergonSword_01 / _03 alternately, full body.
+  - Assist target: an enemy within 20 m inside the picker cone clamp(4°, atan(3.5 m/d), atan(4.5 m/d)).
+    The pawn lunges toward it, yaw only: 25 m/s for 0.25 s, then ×0.3. Ground speed ×0.75 while attacking.
+  - Damage sweep at t 0.19 s for 0.35 s: box (250, 250, 350) UU at MeleeSocket_SmallRobot. Clear-trace check;
+    one hit per actor per sweep; 150 TnDamageTypeMelee.
+  - **Whirlwind** ability → MELEE_Whirlwind: Transform_Whirlwind_ROBO, upper body, ground speed ×1.2.
+    Eight 0.4 s sweeps (0.9 … 5.19 s), box (450, 450, 200) at PositionSocket, 85 TnDamageTypeWhirlwind each.
+    The trigger fails (no cooldown) unless the melee manager is idle in robot form;
+    Cooldown 60 s starts once the whirlwind ends.
+  - PARTIAL:
+    - melee impulse / momentum and hit reactions are not applied;
+    - flag / bomb carrier 9999 attacks, the type-2 melee weapons' own attacks, GunButt combo and per-chassis sweep times
+      (the LightMedium shared set is used for all).
+  - Tests (WFC_PARTICIPANTTEST 7/7): Q 150 with a 5.4 m lunge; Whirlwind refused during the swing, hits in both
+    early windows, cooldown held until the end.
+- Barrier, RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].
 - **Correction:** the Pass 21f contract doc said robot Shift ran a dash. It did nothing until this pass.

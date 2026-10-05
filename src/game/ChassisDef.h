@@ -90,6 +90,7 @@ struct ChassisDef {
     std::string armGltf, armAnimGltf;         // ArmBlueprint (umodel content paths)
     SocketDef weaponPrimary, weaponSecondary; // robot WeaponSocket_Primary / _Secondary
     SocketDef vehicleWeapon;                  // vehicle WeaponSocket_Primary
+    SocketDef meleeSmall, meleeLarge, positionSocket;   // robot MeleeSocket_SmallRobot / _LargeRobot / PositionSocket
     RobotParams robot;
     VehicleParams vehicle;
     CamStrategy camHover{core::config::kHoverCamAnchor, core::config::kHoverCamDist, core::config::kHoverCamPitchMin,

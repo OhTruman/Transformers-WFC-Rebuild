@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22l (2026-10-05) — melee (Q) and the Whirlwind ability
+- Q melee: assist lunge, authored damage sweeps, 150 damage; Whirlwind: 8 sweep windows of 85. WFC_PARTICIPANTTEST 7/7, WEAPONTEST 16/16.
+
 ## GAMEPLAY PASS 22k (2026-10-05) — Cloaking and Hover abilities, objective markers for all modes
 - Implemented abilities: Dodge, Warcry, Shockwave, Cloaking, Hover (authored values). WFC_WEAPONTEST 16/16.
 

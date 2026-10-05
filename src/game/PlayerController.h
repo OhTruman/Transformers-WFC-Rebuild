@@ -158,9 +158,10 @@ private:
     float lookScale_ = 1.0f;
     float lookUpSmoothed_ = 0.0f, tank180Cooldown_ = 0.0f;
     int wantSwitch_ = 0;
-    bool wantKillstreak_ = false;
+    bool wantKillstreak_ = false, wantMelee_ = false;
 public:
     bool consumeKillstreakRequest() { bool b = wantKillstreak_; wantKillstreak_ = false; return b; }
+    bool consumeMeleeRequest() { bool b = wantMelee_; wantMelee_ = false; return b; }
 private:
     int wantAbility_ = -1, abilityTriggers_ = 0;
     float abilityStickFwd_ = 0.0f, abilityStickRight_ = 0.0f;

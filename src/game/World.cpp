@@ -873,6 +873,7 @@ void World::tick(float dt) {
             lp.weapon().ammo = std::max(lp.weapon().ammo, lockedClip_);
         } else lockedClip_ = 0;
         if (matchActive_ && player_.controller().consumeKillstreakRequest()) triggerLocalKillstreak();
+        if (player_.controller().consumeMeleeRequest()) startLocalMelee(false);
         if (deferredKillstreak_ && lp.moveForm() == Form::Robot && !lp.isTransforming()) { deferredKillstreak_ = false; triggerLocalKillstreak(); }
     }
     tickAbilityEffects(dt);
@@ -1715,7 +1716,10 @@ void World::tickAbilityEffects(float dt) {
         LOG_INFO("ability Warcry: %zu friendlies, buff level %d (damage x%.1f, taken x%.1f, 15 s)", friends.size(), level, dmg[level], taken[level]);
     } else if (fx == "Shockwave") {
         pc.shockwaveDelay_ = 0.25f;                       // Delay 0.25 -> Shockwave()
+    } else if (fx == "Whirlwind") {
+        startLocalMelee(true);                            // MeleeService.StartMeleeAttack(MELEE_Whirlwind)
     }
+    tickLocalMelee(dt);
     if (pc.shockwaveDelay_ >= 0.0f) {
         pc.shockwaveDelay_ -= dt;
         if (pc.shockwaveDelay_ < 0.0f && !localDead_) {
@@ -1730,6 +1734,87 @@ void World::tickAbilityEffects(float dt) {
                 if (d->state() == 0 && core::length((d->boxMin() + d->boxMax()) * 0.5f - at) <= 25.0f) d->applyDamage(*this, 65.0f);
         }
     }
+}
+
+// ---- Melee [CONF RE TARGETED_PASS3 §H: TnMeleeManager / TnMeleeSet / TnAnimNotify_DamageSweep / TnTraceSweeper] ----
+namespace {
+struct Sweep { float t, dur; bool positionSocket; core::Vec3 extentUU; };
+// Melee_EnergonSword_01 / _03: t 0.19, MeleeSocket_SmallRobot, Extent (250, 250, 350), 0.35 s.
+const Sweep kWeaponSweeps[] = {{0.19f, 0.35f, false, {250, 250, 350}}};
+// Transform_Whirlwind_ROBO (LightMedium shared set, 5.9 s): PositionSocket, Extent (450, 450, 200), 0.4 s each [HIGH: the
+// per-chassis whirlwind anim sets shift these times slightly].
+const Sweep kWhirlSweeps[] = {{0.9f, 0.4f, true, {450, 450, 200}}, {1.6f, 0.4f, true, {450, 450, 200}}, {2.2f, 0.4f, true, {450, 450, 200}},
+                              {2.8f, 0.4f, true, {450, 450, 200}}, {3.4f, 0.4f, true, {450, 450, 200}}, {4.0f, 0.4f, true, {450, 450, 200}},
+                              {4.54f, 0.4f, true, {450, 450, 200}}, {5.19f, 0.4f, true, {450, 450, 200}}};
+}
+
+void World::startLocalMelee(bool whirlwind) {
+    Character& pc = player_.pawn();
+    if (localPlayerDead() || pc.moveForm() != Form::Robot || pc.isTransforming() || pc.isMeleeing()) return;
+    if (!whirlwind && pc.weapon().reloading()) return;
+    pc.meleeState_ = whirlwind ? 2 : 1;
+    pc.meleeT_ = 0.0f; pc.meleeSweep_ = -1; pc.meleeHit_.clear();
+    if (whirlwind) {
+        pc.meleeLen_ = 5.9f;
+        pc.playAction("Transform_Whirlwind_ROBO", true);
+        return;
+    }
+    // AnimSet chooser: Melee_EnergonSword -> _01 / _03 alternately; clip length (1.0 s authored) from the model when present.
+    const char* clip = (pc.meleeAlternate_++ % 2) ? "Melee_EnergonSword_03" : "Melee_EnergonSword_01";
+    pc.playAction(clip, false);
+    pc.meleeLen_ = 1.0f;
+    if (const assets::SkinnedModel* m = pc.currentModel()) { int ci = m->clipByName(clip); if (ci >= 0) pc.meleeLen_ = m->clips[(size_t)ci].duration; }
+    // PlayerTargeting.GetMeleeAssistTarget: an enemy within 2000 UU inside the picker cone (half angle
+    // clamp(4 deg, atan(3.5 m / d), atan(4.5 m / d)) about the view direction) -> AttackDash lunge toward it (yaw only).
+    if (!matchActive_) return;
+    const core::Vec3 eye = pc.actorLocation();
+    const core::Vec3 fwd = core::forwardFromYawPitch(player_.controller().viewYaw(), 0.0f);
+    float best = 1e9f;
+    for (MatchOpponent* o : opponents_) {
+        if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
+        core::Vec3 d = o->pawn().actorLocation() - eye; d.y = 0.0f;
+        float dist = core::length(d);
+        if (dist > 20.0f || dist < 1e-3f) continue;
+        float half = std::max(4.0f * 0.0174533f, std::min(std::atan(4.5f / dist), std::max(std::atan(3.5f / dist), 4.0f * 0.0174533f)));
+        if (std::acos(core::clampf(core::dot(d * (1.0f / dist), fwd), -1.0f, 1.0f)) > half) continue;
+        if (dist < best) { best = dist; pc.lungeDir_ = d * (1.0f / dist); }
+    }
+    if (best < 1e9f) { pc.lungeRemain_ = 0.25f; pc.setYaw(std::atan2(-pc.lungeDir_.x, -pc.lungeDir_.z)); }
+}
+
+void World::tickLocalMelee(float dt) {
+    Character& pc = player_.pawn();
+    if (!pc.isMeleeing()) return;
+    pc.meleeT_ += dt;
+    const bool whirl = pc.meleeState_ == 2;
+    const Sweep* sw = whirl ? kWhirlSweeps : kWeaponSweeps;
+    const int n = whirl ? 8 : 1;
+    int active = -1;
+    for (int i = 0; i < n; ++i) if (pc.meleeT_ >= sw[i].t && pc.meleeT_ < sw[i].t + sw[i].dur) active = i;
+    if (active != pc.meleeSweep_) { pc.meleeSweep_ = active; pc.meleeHit_.clear(); }   // a new sweep: hit list reset
+    if (active >= 0 && matchActive_) {
+        const SocketDef& sd = sw[active].positionSocket ? pc.chassis().positionSocket : pc.chassis().meleeSmall;
+        core::Vec3 at = pc.actorLocation();
+        core::Mat4 bm;
+        if (sd.valid && pc.boneWorld(sd.bone, bm)) { core::Mat4 w = bm * sd.local; at = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
+        const core::Vec3 ex{sw[active].extentUU.x * 0.01f, sw[active].extentUU.z * 0.01f, sw[active].extentUU.y * 0.01f};   // UE Z = up
+        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+        const float damage = whirl ? 85.0f : 150.0f;
+        const char* type = whirl ? "TransGame.TnDamageTypeWhirlwind" : "TransGame.TnDamageTypeMelee";
+        for (MatchOpponent* o : opponents_) {
+            if (!o->spawned() || std::find(pc.meleeHit_.begin(), pc.meleeHit_.end(), o->matchPlayer()) != pc.meleeHit_.end()) continue;
+            const Character& v = o->pawn();
+            const core::Vec3 c = v.actorLocation();
+            const float r = v.cylinderRadius(v.moveForm()), hh = v.cylinderHalfHeight(v.moveForm());
+            // MultiPointCheck of the box against the victim cylinder (as a box), then a clear trace attacker -> victim.
+            if (std::fabs(c.x - at.x) > ex.x + r || std::fabs(c.z - at.z) > ex.z + r || std::fabs(c.y - at.y) > ex.y + hh) continue;
+            float t;
+            if (line && line->segmentHit(pc.actorLocation(), c, t)) continue;
+            pc.meleeHit_.push_back(o->matchPlayer()); ++pc.meleeHitCount_;
+            applyMatchDamage(o->matchPlayer(), localPlayer_, damage, false, type);   // momentum x Impulse not applied [PARTIAL]
+        }
+    }
+    if (pc.meleeT_ >= pc.meleeLen_) { pc.meleeState_ = 0; pc.meleeSweep_ = -1; }
 }
 
 } // namespace game
