@@ -10,6 +10,7 @@
 // (material, screen alignment, burst, duration, local space) is tagged. See FIDELITY.md for the
 // decode and which module-role assignments are inferred.
 #pragma once
+#include <functional>
 #include <set>
 #include <string>
 #include <vector>
@@ -64,7 +65,7 @@ public:
 
     size_t liveParticles() const { return parts_.size(); }
     // Lifecycle (match reset / map unload): drop every live particle, mesh, smoke trail and stream.
-    void clearParticles() { parts_.clear(); meshParts_.clear(); smoke_.clear(); streams_.clear(); haveMuzzle_ = false; }
+    void clearParticles() { parts_.clear(); meshParts_.clear(); smoke_.clear(); streams_.clear(); follow_.clear(); haveMuzzle_ = false; }
     int liveImpacts() const;
 
     // One authored emitter, LOD 0, values converted to metres / seconds.
@@ -106,9 +107,32 @@ public:
     // Templates asked for that are not reconstructed (diagnostics / tests).
     const std::set<std::string>& missingTemplates() const { return missing_; }
 
+    // Rendering's generic particle runtime (agents/rendering 38c9ecf: IRenderer::spawnParticleEffect /
+    // spawnParticleEffectSegment / setParticleEffectTransform / stopParticleEffect). Bound by the host, e.g.
+    //   fx.setGenericRuntime({[&r](auto& t, auto& p, auto& f, auto& u) { return r.spawnParticleEffect(t, p, f, u); },
+    //                         [&r](auto& t, auto& a, auto& b) { return r.spawnParticleEffectSegment(t, a, b); },
+    //                         [&r](int h, auto& p, auto& f, auto& u) { return r.setParticleEffectTransform(h, p, f, u); }});
+    // Unbound (or a -1 return): the template is logged once and not drawn. Conventions (Rendering): metres,
+    // forward = the template's UE +X, up = its +Z. No colour is passed: the reconstructed templates' blue is their own
+    // stream constant, not a weapon tint (TnParticleSystemParameterEnergonColor = no override), so other templates
+    // get their own default - not decoded by the runtime yet (white) [PARTIAL].
+    struct GenericRuntime {
+        std::function<int(const std::string&, const core::Vec3&, const core::Vec3&, const core::Vec3&)> spawnAt;
+        std::function<int(const std::string&, const core::Vec3&, const core::Vec3&)> spawnSegment;
+        std::function<bool(int, const core::Vec3&, const core::Vec3&, const core::Vec3&)> setTransform;
+    };
+    void setGenericRuntime(GenericRuntime g) { generic_ = std::move(g); }
+    int genericSpawned() const { return genericSpawned_; }
+
 private:
     bool unreconstructed(const char* kind, const std::string& psTemplate);
+    bool spawnGenericAt(const char* kind, const std::string& t, const core::Vec3& pos, const core::Vec3& fwd, const core::Vec3& up,
+                        bool followMuzzle);
     std::set<std::string> missing_;
+    GenericRuntime generic_;
+    int genericSpawned_ = 0;
+    struct Follow { int handle; float age; };
+    std::vector<Follow> follow_;          // generic muzzle effects kept on the socket (setParticleEffectTransform)
     struct Part {
         const EmitterDef* def;
         core::Vec3 pos, vel;            // world, or socket space when def->localSpace

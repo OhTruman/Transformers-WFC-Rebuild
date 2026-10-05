@@ -123,9 +123,19 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
     * Impact_IonBlaster_FX — the Ion Blaster only.
   * Any other template draws nothing; another weapon's FX is never substituted. Each missing template is logged
     once (Integration M08 decision); the weapon's sounds still play [PARTIAL].
-  * Next step (Integration decision): unreconstructed templates go through Rendering's generic WfcMapFx runtime, once
-    it offers spawn-at-transform / spawn-along-segment. `WeaponFx::unreconstructed` is the single seam for this.
-    No hand-ports.
+  * Unreconstructed templates go through Rendering's generic WfcMapFx runtime (Integration decision; API in
+    agents/rendering 38c9ecf). `WeaponFx::setGenericRuntime` takes three callbacks, bound by the host to
+    IRenderer::spawnParticleEffect, spawnParticleEffectSegment and setParticleEffectTransform:
+    * muzzle: socket position, X forward / Z up, and it follows the socket for 2 s;
+    * impact: +X = the surface normal;
+    * tracer: start → end.
+  * A -1 return or no binding: logged once, nothing drawn. `tools/systems/weaponfx_generic_probe.cpp` checks all of
+    this against a recording fake.
+  * PARTIAL:
+    * colour is not passed — the reconstructed blue is those templates' own stream constant, not a weapon tint, and
+      the runtime does not decode template defaults yet;
+    * the runtime does not draw Trail2 ribbons yet.
+  * No hand-ports.
 * **PARTIAL:**
   * 169 dialogue waves are absent from the extraction (AssetTools).
 * `SoundCues::findCue` resolves full asset names to the compiled short names, but only for the exact packages that
