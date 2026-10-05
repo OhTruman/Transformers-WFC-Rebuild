@@ -86,6 +86,8 @@ public:
     void setPlayerCharacterAudio(const std::string& chassisKey);
     // The player's current weapon class (its WeaponSounds: WP_Fire / WP_LowAmmoFire / WP_LoopingTail / fine aim).
     void setPlayerWeaponAudio(const std::string& weaponClass);
+    // Weapon equip / put-down (Gameplay): the held weapon mesh's WP_Equip / WP_PutDown animation sounds.
+    void weaponAnimEvent(WeaponSoundTimeline::Event e) { weaponSounds_.play(e); }
     const char* weaponCue(const char* event) const;
     const CharacterAudioProfile& audioProfile() const {
         return audioProfile_ ? *audioProfile_ : CharacterAudio::defaultProfile();
@@ -193,6 +195,9 @@ private:
     std::string weaponClass_ = "TransContent.TnWeaponIonBlaster";
     // TnHitEffectPlayer.LastHitEffectTimes per victim (here: the damage targets) per effect entry [CONF script].
     std::map<std::pair<const void*, int>, float> lastHitEffect_;
+    // The held weapon's mesh-animation sounds (reload / idle / equip / put-down notifies), by weapon class.
+    WeaponSoundTimeline weaponSounds_;
+    std::vector<const std::string*> weaponSoundsFired_;
     float hitClock_ = 0.0f;
     const CharacterAudioProfile* audioProfile_ = nullptr;
     int transformCue_ = -1;

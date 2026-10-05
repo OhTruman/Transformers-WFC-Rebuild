@@ -9,7 +9,8 @@ timers duplicate Gameplay state.
 | when (Gameplay) | call | plays |
 |---|---|---|
 | the local player's body is chosen / changes | `world.setPlayerCharacterAudio(chassisKey)` (roster chassis key: `Truck`, `Car`, `Tank`, `Jet`, `Car2`…) | footsteps / exertions / landing / take-off / transform / vehicle engine / boost / ram / death from that chassis's SoundEventSets and clip notifies |
-| the held weapon changes | `world.setPlayerWeaponAudio("TransContent.TnWeaponHeavyPistol")` | fire / low-ammo fire / tail / fine aim / dry fire from that class's WeaponSounds |
+| the held weapon changes | `world.setPlayerWeaponAudio("TransContent.TnWeaponHeavyPistol")` | fire / low-ammo fire / tail / fine aim / dry fire from that class's WeaponSounds; its world impact (DefaultImpactSound), victim hit sound, and reload / idle mesh-animation sounds |
+| weapon equipped / put down | `world.weaponAnimEvent(WeaponSoundTimeline::Event::Equip / PutDown)` | the weapon mesh's ANIM_EQUIP / ANIM_HOLSTER notifies |
 | match begins / final stretch / time or kills announcement / ends | `world.matchAudio().onMatchStarted(modeTag, team)`, `onGameNearlyComplete()`, `onProgressAnnouncement(sw)`, `onMatchEnded(winner, localWon)` | the M07 match audio, unchanged |
 | flag event (TnFlagMessage switch 0 returned, 1 picked up, 2 dropped, 3 scored) | `matchAudio().flagMessage(sw)` | the HUD stinger CTF_FLAG_* plus the announcer line |
 | bomb event (TnBombMessage 1 pickup, 2 drop, 3 detonated, 4 defused, 5 planted; `team` of RelatedPRI_1) | `matchAudio().bombMessage(sw, team)` | the announcer line (team-specific for pickup / detonated) |

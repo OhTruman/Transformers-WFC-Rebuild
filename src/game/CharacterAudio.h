@@ -14,6 +14,7 @@
 // Verified: the default profile reproduces the previous hand-made Optimus tables exactly (26 / 26 locomotion notifies,
 // the landing / take-off / idle notifies, all 14 vehicle sounds, the transform cues).
 #pragma once
+#include <cmath>
 #include <map>
 #include <string>
 #include <vector>
@@ -47,6 +48,50 @@ struct WeaponHitEffect {
     bool causesBlood = false;    // TnPawn.ShouldPlayHitEffect needs DamageType.bCausesBlood
 };
 
+// A weapon mesh's animation sounds (HmAnimNotify_Sound on its own AnimSet) [CONF data]: the WeaponEventAnims
+// sequences and the IdleAnimation sequence (<Seq>Group -> <Seq> [HIGH name rule]).
+struct WeaponAnimSounds {
+    struct Clip { std::string name; float length = 0.0f; std::vector<std::pair<float, std::string>> sounds; };
+    Clip idle, fire, reload, equip, putDown;
+};
+
+// The weapon mesh's animation timeline, for its sounds only (the visual WeaponMesh is the Ion Blaster's; this follows
+// the HELD weapon class). Same rules as WeaponMesh: an event anim replaces the current one, plays once and returns
+// to the looping idle; a notify fires when its time is crossed (a notify at 0 on the first step; loops wrap).
+class WeaponSoundTimeline {
+public:
+    enum class Event { Idle, Fire, Reload, Equip, PutDown };
+    void set(const WeaponAnimSounds* s) { s_ = s; play(Event::Idle); }
+    const WeaponAnimSounds* sounds() const { return s_; }
+    void play(Event e) {
+        cur_ = nullptr;
+        if (!s_) return;
+        const WeaponAnimSounds::Clip* c = e == Event::Fire ? &s_->fire : e == Event::Reload ? &s_->reload
+                                        : e == Event::Equip ? &s_->equip : e == Event::PutDown ? &s_->putDown : &s_->idle;
+        if (c->length <= 0.0f) c = &s_->idle;
+        cur_ = c->length > 0.0f ? c : nullptr;
+        t_ = 0.0f;
+        loop_ = (c == &s_->idle);
+    }
+    const char* clip() const { return cur_ ? cur_->name.c_str() : "-"; }
+    void tick(float dt, std::vector<const std::string*>& out) {
+        if (!cur_) return;
+        const float len = cur_->length;
+        if (dt > 0.0f) {
+            const float a = loop_ ? std::fmod(t_, len) : t_, b = a + dt;
+            for (const auto& n : cur_->sounds)
+                if ((n.first >= a && n.first < b) || (loop_ && b > len && n.first < b - len)) out.push_back(&n.second);
+        }
+        t_ += dt;
+        if (!loop_ && t_ >= len) play(Event::Idle);
+    }
+private:
+    const WeaponAnimSounds* s_ = nullptr;
+    const WeaponAnimSounds::Clip* cur_ = nullptr;
+    float t_ = 0.0f;
+    bool loop_ = true;
+};
+
 class CharacterAudio {
 public:
     static const CharacterAudioProfile* find(const std::string& keyOrName);   // roster chassis key or display name
@@ -62,6 +107,8 @@ public:
     static int loadWeaponCues(SoundCues& cues, const std::string& weaponClass);
     // The weapon's hit effect (nullptr: no entry matches its damage type -> no hit sound, as in the original).
     static const WeaponHitEffect* weaponHitEffect(const std::string& weaponClass);
+    // The weapon mesh's animation sounds (nullptr: no anim set in the data).
+    static const WeaponAnimSounds* weaponAnimSounds(const std::string& weaponClass);
     // Load the victim's hit / block cues for that weapon (level-owned). Returns the number added.
     static int loadHitCues(SoundCues& cues, const CharacterAudioProfile& victim, const std::string& weaponClass);
 };

@@ -1737,6 +1737,31 @@ static void testCharacterAudio() {
         game::CharacterAudio::loadHitCues(cues, game::CharacterAudio::defaultProfile(), "TransContent.TnWeaponSniperRifle");
         CHECK(cues.hasCue("BL_WPN_GUN_SNIPER.IMPT_DMG") && cues.hasCue("BL_WPN_GUN_SNIPER.IMPT_BLOCK"), "victim hit / block cues load");
     }
+    {   // weapon-mesh animation sounds: the Ion Blaster's generated table = the hand-checked M03 table; timeline rules
+        const game::WeaponAnimSounds* ion = game::CharacterAudio::weaponAnimSounds("TransContent.TnWeaponIonBlaster");
+        auto near = [](float a, float b) { return std::fabs(a - b) < 0.001f; };
+        CHECK(ion && ion->reload.name == "Shooting_Reload_IonBlaster_AP" && ion->reload.sounds.size() == 2 &&
+              near(ion->reload.sounds[0].first, 0.0f) && near(ion->reload.sounds[1].first, 0.137f) &&
+              ion->reload.sounds[1].second == "BL_WPN_GUN_ION_BLASTER.ANIM_RELOAD_02" && ion->idle.name == "IonBlaster_Idle" &&
+              near(ion->idle.length, 4.2f) && ion->idle.sounds.size() == 2 && near(ion->idle.sounds[1].first, 2.751f) &&
+              ion->equip.sounds.size() == 1 && ion->putDown.sounds.size() == 1 && ion->fire.sounds.empty(),
+              "Ion Blaster weapon-anim sounds = the M03 hand table (reload 0 / 0.137, idle 0.022 / 2.751, equip, holster)");
+        game::WeaponSoundTimeline tl;
+        tl.set(ion);
+        std::vector<const std::string*> out;
+        std::vector<float> at;
+        tl.play(game::WeaponSoundTimeline::Event::Reload);
+        for (int k = 0; k < 120; ++k) { const size_t n = out.size(); tl.tick(1.0f / 60.0f, out); for (size_t i = n; i < out.size(); ++i) at.push_back(k / 60.0f); }
+        CHECK(out.size() == 3 && *out[0] == "BL_WPN_GUN_ION_BLASTER.ANIM_RELOAD_01" && near(at[0], 0.0f) &&
+              *out[1] == "BL_WPN_GUN_ION_BLASTER.ANIM_RELOAD_02" && std::fabs(at[1] - 0.137f) < 1.0f / 60.0f + 1e-4f &&
+              *out[2] == "BL_WPN_GUN_ION_BLASTER.IDLE_01" && at[2] > 1.66f && at[2] < 1.72f,
+              "timeline: reload notifies at their times, then back to the looping idle (%zu sounds)", out.size());
+        const game::WeaponAnimSounds* hp = game::CharacterAudio::weaponAnimSounds("TransContent.TnWeaponHeavyPistol");
+        game::CharacterAudio::loadWeaponCues(cues, "TransContent.TnWeaponSniperRifle");
+        CHECK(hp && hp->reload.name == "heavypistol_reload" && hp->reload.sounds.size() == 1 &&
+              hp->reload.sounds[0].second == "BL_WPN_GUN_PISTOL_HVY.ANIM_RELOAD" && cues.hasCue("BL_WPN_GUN_SNIPER.ANIM_RELOAD") &&
+              cues.hasCue("BL_WPN_GUN_SNIPER.IDLE_02"), "Heavy Pistol / Sniper: their own reload / idle sounds, loaded with the weapon");
+    }
     cues.unloadMapCues();
     CHECK(cues.mapCueCount() == 0, "character / weapon cues are level-owned (released with the level)");
 }

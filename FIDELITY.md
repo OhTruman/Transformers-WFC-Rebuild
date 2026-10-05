@@ -85,8 +85,18 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
     their class chain, so they play no hit sound, as in the original.
   * The rebuild's damage targets are stand-ins, so they use the default profile as the victim [PROV].
   * Missing data (AssetTools): projectile and melee weapons have no damage types in mp_weapons.
+* **Weapon-mesh animation sounds** [CONF data]:
+  * Source: the HmAnimNotify_Sound notifies on each weapon's own AnimSet, reached via WEPMESH → AnimatedMesh →
+    SkeletalMeshComponent.AnimSets. 43 of 53 weapons have one.
+  * The WeaponEventAnims (WP_Fire / WP_Reload / WP_Equip / WP_PutDown) and the IdleAnimation sequence
+    (`<Seq>Group` → `<Seq>` [HIGH name rule]).
+  * The Ion Blaster's generated table equals the M03 hand-checked one, and a lockstep run plays the same 28 reload
+    cues in the same order as before.
+  * `WeaponSoundTimeline` follows the held weapon class and uses WeaponMesh's rules: an event anim replaces the
+    current clip, plays once, then returns to the looping idle.
+  * The visual WeaponMesh stays the Ion Blaster's; only its effect notifies are used.
+  * Equip / put-down sounds play when Gameplay calls `World::weaponAnimEvent`.
 * **PARTIAL:**
-  * weapon idle / reload anim notifies are missing;
   * the vehicle component tunables are OptimusTruckForm's;
   * 169 dialogue waves are absent from the extraction (AssetTools).
 * `SoundCues::findCue` resolves full asset names to the compiled short names, but only for the exact packages that

@@ -762,12 +762,28 @@ bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
 // Weapon-mesh event animations (TnWeaponMesh.WeaponEventAnims) + their AnimNotifies.
 void World::tickWeaponPresentation(float dt) {
     const Weapon& w = player_.pawn().weapon();
-    if (w.reloadSerial != weaponSeenReload_) { weaponSeenReload_ = w.reloadSerial; weaponAnim_.play(WeaponMesh::Event::Reload); }
-    if (w.shotSerial != weaponSeenShot_)     { weaponSeenShot_ = w.shotSerial;     weaponAnim_.play(WeaponMesh::Event::Fire); }
+    if (weaponSounds_.sounds() != CharacterAudio::weaponAnimSounds(weaponClass_))
+        weaponSounds_.set(CharacterAudio::weaponAnimSounds(weaponClass_));
+    if (w.reloadSerial != weaponSeenReload_) {
+        weaponSeenReload_ = w.reloadSerial;
+        weaponAnim_.play(WeaponMesh::Event::Reload);
+        weaponSounds_.play(WeaponSoundTimeline::Event::Reload);
+    }
+    if (w.shotSerial != weaponSeenShot_) {
+        weaponSeenShot_ = w.shotSerial;
+        weaponAnim_.play(WeaponMesh::Event::Fire);
+        weaponSounds_.play(WeaponSoundTimeline::Event::Fire);
+    }
     notifies_.clear();
     weaponAnim_.tick(dt, notifies_);
-    if (player_.pawn().hasWeapon())
-        for (const WeaponNotify& n : notifies_) handleWeaponNotify(n);
+    weaponSoundsFired_.clear();
+    weaponSounds_.tick(dt, weaponSoundsFired_);
+    if (player_.pawn().hasWeapon()) {
+        // Visual-mesh effects; its sound notifies are the Ion Blaster's, so the held class's timeline plays them.
+        for (const WeaponNotify& n : notifies_)
+            if (n.kind == WeaponNotify::Kind::Effect) handleWeaponNotify(n);
+        for (const std::string* q : weaponSoundsFired_) handleWeaponNotify({WeaponNotify::Kind::Sound, 0.0f, *q, ""});
+    }
 }
 
 void World::handleWeaponNotify(const WeaponNotify& n) {

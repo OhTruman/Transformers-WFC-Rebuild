@@ -107,6 +107,34 @@ def causes_blood(dt):
         if 'bCausesBlood' in d: return bool(d['bCausesBlood'])
         t = type_super(t)
     return False
+# Weapon-mesh animation sounds (HmAnimNotify_Sound on the weapon's own AnimSet sequences) [CONF data]: the WEPMESH's
+# WeaponEventAnims (WP_Fire / WP_Reload / WP_Equip / WP_PutDown -> sequence) and IdleAnimation (<Seq>Group -> <Seq>,
+# HIGH: the name rule; CONF for the Ion Blaster's hand-checked table). AnimSets via AnimatedMesh -> Mesh -> AnimSets.
+def weapon_anims(wepmesh):
+    if not wepmesh: return {}
+    _, wm = props(wepmesh)
+    _, am = props(wm.get('AnimatedMesh') or '')
+    _, sk = props(am.get('Mesh') or '')
+    seqs = {}
+    for aset in [x for x in (sk.get('AnimSets') or []) if x]:
+        for o, pr in c.execute("select opath, props from objects where class='AnimSequence' and opath like ?", (aset + '.%',)):
+            if o.count('.') != 2: continue
+            d = json.loads(pr)
+            snd = []
+            for n in d.get('Notifies') or []:
+                cl, np = props(n.get('Notify') or '')
+                if cl in ('HmAnimNotify_Sound', 'AnimNotify_Sound', 'HmAnimNotify_ConditionalSound'):
+                    q = np.get('SoundCue') or np.get('Sound')
+                    if q: snd.append([round(n['Time'], 6), q])
+            seqs.setdefault(d.get('SequenceName'), {'length': round(d.get('SequenceLength', 0.0), 6), 'sounds': snd})
+    out = {}
+    for e in wm.get('WeaponEventAnims') or []:
+        sq = seqs.get(e.get('AnimName'))
+        if sq: out[e['WeaponEventType']] = dict(sq, clip=e['AnimName'])
+    idle = (wm.get('IdleAnimation') or '')
+    if idle.endswith('Group') and seqs.get(idle[:-5]): out['Idle'] = dict(seqs[idle[:-5]], clip=idle[:-5])
+    return out
+
 wpn = {}
 for cls, w in weapons.items():
     snd = w.get('sounds') or {}
@@ -125,7 +153,10 @@ for cls, w in weapons.items():
             hit = {'damage_type': dts[0], 'index': i, 'hit_event': (e.get('HitSound') or '').split('.')[-1],
                    'block_event': (e.get('BlockSound') or '').split('.')[-1], 'retrigger': e.get('RetriggerTime', 0.0),
                    'causes_blood': causes_blood(dts[0])}
-    wpn[cls] = {'events': ev, 'pickup_sound': dp.get('PickupSound'), 'damage_types': dts, 'hit_effect': hit}
+    wpn[cls] = {'events': ev, 'pickup_sound': dp.get('PickupSound'), 'damage_types': dts, 'hit_effect': hit,
+                'anims': weapon_anims((w.get('mesh') or {}).get('weapon_mesh_template'))}
+    for an in wpn[cls]['anims'].values():
+        for t, q in an['sounds']: all_cues.add(q)
     all_cues |= set(ev.values())
     if dp.get('PickupSound'): all_cues.add(dp['PickupSound'])
 
@@ -149,6 +180,8 @@ print('hit effects: %d entries; weapons with an effect %d / %d; no effect: %s' %
       len(wpn), sorted(k.split('.')[-1] for k, w in wpn.items() if not w['hit_effect'])))
 for k in ('TransContent.TnWeaponIonBlaster', 'TransContent.TnWeaponHeavyPistol', 'TransContent.TnWeaponShortSword'):
     if k in wpn: print('  ', k.split('.')[-1], wpn[k]['events'].get('DefaultImpactSound'), wpn[k]['hit_effect'])
+print('weapon anims: %d / %d weapons; Ion Blaster %s' % (sum(1 for w in wpn.values() if w['anims']), len(wpn),
+      {k: (v['clip'], v['length'], v['sounds']) for k, v in wpn['TransContent.TnWeaponIonBlaster']['anims'].items()}))
 for k in ('Truck', 'Car', 'Tank', 'Jet'):
     p = profiles.get(k)
     if p: print('  %-6s %-20s voice %3d vehicle %2d clips %3d weapons %s death %s' % (k, p['name'], len(p['voice']), len(p['vehicle']),

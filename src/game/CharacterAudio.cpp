@@ -17,6 +17,7 @@ struct Db {
     std::map<std::string, std::map<std::string, std::string>> weaponEvents;
     std::map<std::string, std::string> weaponPickup;
     std::map<std::string, WeaponHitEffect> weaponHit;
+    std::map<std::string, WeaponAnimSounds> weaponAnims;
 };
 
 const Db& db() {
@@ -51,6 +52,20 @@ const Db& db() {
     for (const auto& kv : d.doc["weapons"].obj) {
         for (const auto& e : kv.second["events"].obj) d.weaponEvents[kv.first][e.first] = e.second.asString();
         d.weaponPickup[kv.first] = kv.second["pickup_sound"].asString();
+        const assets::Json& an = kv.second["anims"];
+        if (an.isObject() && !an.obj.empty()) {
+            WeaponAnimSounds& ws = d.weaponAnims[kv.first];
+            const std::pair<const char*, WeaponAnimSounds::Clip*> slots[] = {
+                {"Idle", &ws.idle}, {"WP_Fire", &ws.fire}, {"WP_Reload", &ws.reload}, {"WP_Equip", &ws.equip}, {"WP_PutDown", &ws.putDown}};
+            for (const auto& sl : slots) {
+                const assets::Json& j = an[sl.first];
+                if (!j.isObject()) continue;
+                sl.second->name = j["clip"].asString();
+                sl.second->length = j["length"].asFloat();
+                for (size_t i = 0; i < j["sounds"].size(); ++i)
+                    sl.second->sounds.push_back({j["sounds"][i][0].asFloat(), j["sounds"][i][1].asString()});
+            }
+        }
         const assets::Json& h = kv.second["hit_effect"];
         if (h.isObject()) {
             WeaponHitEffect e;
@@ -138,10 +153,15 @@ int CharacterAudio::loadWeaponCues(SoundCues& cues, const std::string& cls) {
     const Db& d = db();
     assets::Json sub;
     sub.type = assets::Json::Type::Object;
+    auto want = [&](const std::string& q) {
+        if (!q.empty() && !cues.hasCue(q.c_str()) && d.doc["cues"][q].isObject()) sub.obj[q] = d.doc["cues"][q];
+    };
     auto it = d.weaponEvents.find(cls);
-    if (it == d.weaponEvents.end()) return 0;
-    for (const auto& e : it->second)
-        if (!e.second.empty() && !cues.hasCue(e.second.c_str()) && d.doc["cues"][e.second].isObject()) sub.obj[e.second] = d.doc["cues"][e.second];
+    if (it != d.weaponEvents.end()) for (const auto& e : it->second) want(e.second);
+    auto an = d.weaponAnims.find(cls);
+    if (an != d.weaponAnims.end())
+        for (const WeaponAnimSounds::Clip* c : {&an->second.idle, &an->second.fire, &an->second.reload, &an->second.equip, &an->second.putDown})
+            for (const auto& n : c->sounds) want(n.second);
     if (sub.obj.empty()) return 0;
     const char* root = std::getenv("WFC_ASSETS");
     return cues.addCues(sub, std::string(root ? root : core::config::kAssetRootDefault) + "/../content/");
@@ -153,6 +173,12 @@ const std::string& CharacterAudio::weaponCue(const std::string& cls, const std::
     if (it == d.weaponEvents.end()) return empty();
     auto e = it->second.find(event);
     return e == it->second.end() ? empty() : e->second;
+}
+
+const WeaponAnimSounds* CharacterAudio::weaponAnimSounds(const std::string& cls) {
+    const Db& d = db();
+    auto it = d.weaponAnims.find(cls);
+    return it == d.weaponAnims.end() ? nullptr : &it->second;
 }
 
 const WeaponHitEffect* CharacterAudio::weaponHitEffect(const std::string& cls) {
