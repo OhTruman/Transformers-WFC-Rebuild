@@ -53,7 +53,16 @@
     "TnSpawnCluster_11813"
    ],
    "launchable": true,
-   "versus_launchable": true
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 1,
+    "DM": 1,
+    "DOM": 1,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 1
+   }
   },
   {
    "runtime": "MP_IAC_Berth",
@@ -103,7 +112,16 @@
     "TnSpawnCluster_6473"
    ],
    "launchable": true,
-   "versus_launchable": true
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
   },
   {
    "runtime": "MP_UND_Complex",
@@ -153,7 +171,16 @@
     "TnSpawnCluster_15956"
    ],
    "launchable": true,
-   "versus_launchable": true
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
   },
   {
    "runtime": "MP_IAC_Rust",
@@ -203,7 +230,16 @@
     "TnSpawnCluster_48"
    ],
    "launchable": true,
-   "versus_launchable": true
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 2,
+    "DM": 2,
+    "DOM": 2,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 2
+   }
   },
   {
    "runtime": "MP_ESC_BrokenHope",
@@ -234,7 +270,16 @@
    "player_starts": 4,
    "initial_spawn_clusters": [],
    "launchable": true,
-   "versus_launchable": false
+   "versus_launchable": false,
+   "mode_actors_total": 0,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 0,
+    "EXT": 0,
+    "KOTH": 0
+   }
   },
   {
    "runtime": "MP_ESC_Remnant",
@@ -265,7 +310,16 @@
    "player_starts": 4,
    "initial_spawn_clusters": [],
    "launchable": true,
-   "versus_launchable": false
+   "versus_launchable": false,
+   "mode_actors_total": 0,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 0,
+    "EXT": 0,
+    "KOTH": 0
+   }
   },
   {
    "runtime": "MP_ORB_Debris",
@@ -315,7 +369,16 @@
     "TnSpawnCluster_12996"
    ],
    "launchable": true,
-   "versus_launchable": true
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
   },
   {
    "runtime": "MP_IAC_Streets",
@@ -365,7 +428,16 @@
     "TnSpawnCluster_7810"
    ],
    "launchable": true,
-   "versus_launchable": true
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
   },
   {
    "runtime": "MP_KON_Molten",
@@ -415,7 +487,16 @@
     "TnSpawnCluster_7814"
    ],
    "launchable": true,
-   "versus_launchable": true
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
   },
   {
    "runtime": "MP_UND_Gorge",
@@ -465,7 +546,16 @@
     "TnSpawnCluster_6294"
    ],
    "launchable": true,
-   "versus_launchable": true
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
   },
   {
    "runtime": "MP_KON_Fortress",
@@ -1203,6 +1293,12 @@
     "MP_IAC_Streets",
     "MP_KON_Molten",
     "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsTDM",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressKills"
    ]
   },
   {
@@ -1231,6 +1327,12 @@
     "MP_IAC_Streets",
     "MP_KON_Molten",
     "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsDM",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressKills"
    ]
   },
   {
@@ -1261,6 +1363,13 @@
     "MP_IAC_Streets",
     "MP_KON_Molten",
     "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreDomination",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressPoints"
    ]
   },
   {
@@ -1292,6 +1401,13 @@
     "MP_IAC_Streets",
     "MP_KON_Molten",
     "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_SingleFlagCTF",
+    "TransGame.TnGameRules_ScoreFlags",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTimeCTF"
    ]
   },
   {
@@ -1323,6 +1439,12 @@
     "MP_IAC_Streets",
     "MP_KON_Molten",
     "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreBombingRun",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime"
    ]
   },
   {
@@ -1353,6 +1475,13 @@
     "MP_IAC_Streets",
     "MP_KON_Molten",
     "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreKingOfTheHill",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressPoints"
    ]
   }
  ],

@@ -96,7 +96,29 @@ for cls, g in gmi.items():
     modes.append({"tag": tag, "class": cls, "name": g.get("FriendlyName"), "team": tag not in ("DM",),
                   "objective_actors": MODE_ACTORS.get(tag, []), "start_class": MODE_STARTS.get(tag, "TnTeamPlayerStart"),
                   "maps": maps_per_mode.get(tag) if isinstance(maps_per_mode, dict) else None,
-                  "maps_with_runtime": [m["runtime"] for m in maps if tag in m["modes"] and m["launchable"]]})
+                  "maps_with_runtime": [m["runtime"] for m in maps if tag in m["modes"] and m["launchable"]],
+                  "rules": (fm.get("online_game_settings_classes", {}).get("TnOnlineGameSettings" + tag, {}) or {}).get("Rules", [])})
+
+# ---- mode-dependent visibility (BASE Kismet SeqCond_GameRuleActive -> SeqAct_ToggleHidden, gameplay.json): the number
+# of those actors visible under each mode = initially visible, plus targets of an UnHide rule the mode carries
+for m in maps:
+    gp = os.path.join(VS, "Maps", m["runtime"] or "", "gameplay.json")
+    if not m["runtime"] or not os.path.exists(gp):
+        continue
+    mdv = load(gp).get("mode_dependent_visibility", []) or []
+    actors = {}
+    for r in mdv:
+        for t in r.get("targets", []):
+            actors.setdefault(t["actor"], not t.get("initially_hidden", True))
+    m["mode_actors_total"] = len(actors)
+    m["mode_visible_expected"] = {}
+    for md in modes:
+        vis = dict(actors)
+        for r in mdv:
+            if r.get("rule") in md["rules"]:
+                for t in r.get("targets", []):
+                    vis[t["actor"]] = (r.get("action") == "UnHide")
+        m["mode_visible_expected"][md["tag"]] = sum(vis.values())
 
 # ---- title Matinee (UI_FrontEnd Kismet, frontend_flow.json): every SeqAct_Interp with its comment and looping flag
 def interps(node, acc):

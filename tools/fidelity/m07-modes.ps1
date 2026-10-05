@@ -36,6 +36,46 @@ if ($H.Contains("WFC_MODEPLAYTEST")) { $d = Join-Path $OutDir "modeplaytest"; Ne
     if (-not $ReportOnly -and (Wait-WfcGpu)) { $null = Invoke-WfcExe $relExe $d @{ WFC_MODEPLAYTEST = "1" } "run.log" 900 }
     $cur = ""; if (Test-Path (Join-Path $d "wfc.log")) { foreach ($ln in [IO.File]::ReadLines((Join-Path $d "wfc.log"))) { if ($ln -match 'MODEPLAY (PASS|FAIL) (.*)') { $t = $Matches[2]; foreach ($m in $modes) { if ($t -match "\b$m\b|\($m\)") { $cur = $m } }; if (-not $mp.ContainsKey($cur)) { $mp[$cur] = @() }; $mp[$cur] += "$($Matches[1]) $t" } } } }
 
+# One match log judged by the mode's own rules. The MATCH protocol is emitted only for frontend-launched matches
+# (Application_Frontend); a direct boot (WFC_BOOT=match) logs prose ("match: <MODE> begin", "local player spawned at"):
+# there setup / spawn are judged from the prose and the protocol-only checks are UNKNOWN (see the frontend row).
+function JudgeMatch($log, $mode, $map) {
+    $init = @(Grep-Log $log '\] MATCH init ')[0]; $ms = @(Grep-Log $log 'mapstate: mode \S+, .*mode-dependent actors \((\d+) visible\)')[0]
+    $spawns = @(Grep-Log $log '\] MATCH spawn ' | ForEach-Object { [regex]::Match($_.text, 'start=(\S+?)_\d+').Groups[1].Value })
+    $timer = @(Grep-Log $log '\] MATCH timer remaining_s=(\d+)' | ForEach-Object { [int][regex]::Match($_.text, 'remaining_s=(\d+)').Groups[1].Value })
+    $kills = @(Grep-Log $log '\] MATCH kill '); $scores = @(Grep-Log $log '\] MATCH score '); $deaths = @(Grep-Log $log '\] MATCH death ')
+    $resp = @(Grep-Log $log '\] MATCH respawn ' | ForEach-Object { [double][regex]::Match($_.text, 'delay_s=([\d.]+)').Groups[1].Value }); $end = @(Grep-Log $log '\] MATCH end ')[0]
+    $teams = if ($init) { [int][regex]::Match($init.text, 'teams=(\d+)').Groups[1].Value } else { -1 }
+    $visible = if ($ms) { [int][regex]::Match($ms.text, '\((\d+) visible\)').Groups[1].Value } else { -1 }
+    $objMode = $mode.objective_actors.Count -gt 0
+    # mode-dependent actors = Kismet GameRuleActive -> ToggleHidden targets (not the objectives): expected count from the authored rules
+    $mapX2 = @($X.maps | Where-Object { $_.runtime -eq ($map -replace ' .*$', '') })[0]; $expVis = if ($mapX2 -and $mapX2.mode_visible_expected) { $mapX2.mode_visible_expected.($mode.tag) } else { $null }
+    $notImpl = @(Grep-Log $log 'match rules are not implemented')[0]
+    $r = [ordered]@{ mode = $mode.tag; map = $map
+        setup = $(if (-not $init) { "FAIL" } elseif ($init.text -notmatch "mode=$($mode.tag)\b") { "FAIL" } elseif ((-not $mode.team -and $teams -gt 1) -or ($mode.team -and $teams -ne 2)) { "FAIL" } else { "PASS" })
+        actors = $(if ($visible -lt 0 -or $expVis -eq $null) { "UNKNOWN" } elseif ($visible -ne $expVis) { "FAIL" } else { "PASS" })
+        spawn = $(if (-not $spawns.Count) { "FAIL" } elseif (@($spawns | Where-Object { $_ -ne $mode.start_class }).Count) { "FAIL" } else { "PASS" })
+        timer = $(if ($timer.Count -ge 3 -and $timer[0] -gt $timer[-1]) { "PASS" } elseif ($timer.Count) { "PARTIAL" } else { "FAIL" })
+        score = ""; death_respawn = $(if ($deaths.Count -and $resp.Count) { "PASS" } elseif ($kills.Count) { "FAIL" } else { "UNKNOWN" })
+        end = ""; note = "" }
+    if ($mode.tag -eq "TDM") { $r.score = if (@($scores | Where-Object { $_.text -match 'team=[01] score=[1-9]' }).Count) { "PASS" } else { "FAIL" }; $r.end = if ($end -and $end.text -match 'score_limit') { "PASS" } else { "FAIL" } }
+    elseif ($mode.tag -eq "DM") { $r.score = if (@($scores | Where-Object { $_.text -match 'team=-1 player=\d+ score=[1-9]' }).Count) { "PASS" } else { "FAIL" }; $r.end = if ($end -and $end.text -match 'score_limit') { "PASS" } else { "FAIL" } }
+    else { $kTeamScore = @($scores | Where-Object { $_.text -match 'team=[01] score=[1-9]' }).Count
+        $mpl = @($mp[$mode.tag]); $r.score = if ($mpl.Count -and -not @($mpl | Where-Object { $_ -like "FAIL*" }).Count) { "PASS" } elseif ($mpl.Count) { "FAIL" } elseif ($kTeamScore -gt 0 -and $kills.Count -and $kTeamScore -ge $kills.Count) { "FAIL" } else { "UNKNOWN" }
+        $r.end = if ($end) { "INFO" } else { "UNKNOWN" } }
+    $r.note = $(if ($notImpl) { "RULES NOT IMPLEMENTED; " } else { "" }) + "init: {0}; mode-dependent actors visible {1} (authored {10}); spawn classes {2}; timer {3} -> {4}; kills {5}, deaths {6}, respawn {7}; end {8}; MODEPLAY {9}" -f $(if ($init) { $init.text -replace '^.*MATCH init ', '' } else { "none" }), $visible, (($spawns | Select-Object -Unique) -join ","), $(if ($timer.Count) { $timer[0] }), $(if ($timer.Count) { $timer[-1] }), $kills.Count, $deaths.Count, (($resp | Select-Object -First 3 | ForEach-Object { "{0:N2}" -f $_ }) -join ","), $(if ($end) { $end.text -replace '^.*MATCH end ', '' } else { "none" }), (@($mp[$mode.tag]) -join " | "), $expVis
+    if (-not @(Grep-Log $log '\] MATCH ').Count) {
+        $beg = @(Grep-Log $log 'match: (\S+) begin \(goal (\d+), time limit (\d+) s')[0]; $sp = @(Grep-Log $log 'local player spawned at (\S+?)_\d+ \(.*team (\d+)\)')
+        $spCls = @($sp | ForEach-Object { [regex]::Match($_.text, 'spawned at (\S+?)_\d+').Groups[1].Value } | Select-Object -Unique); $spTeam = @($sp | ForEach-Object { [int][regex]::Match($_.text, 'team (\d+)\)').Groups[1].Value } | Select-Object -Unique)
+        $teamOk = if ($mode.team) { -not @($spTeam | Where-Object { $_ -gt 1 }).Count } else { -not @($spTeam | Where-Object { $_ -ne 255 }).Count }
+        $r.setup = if (-not $beg) { "FAIL" } elseif ($beg.text -notmatch "match: $($mode.tag) begin") { "FAIL" } elseif (-not $teamOk) { "FAIL" } else { "PASS" }
+        $r.spawn = if (-not $spCls.Count) { "FAIL" } elseif (@($spCls | Where-Object { $_ -ne $mode.start_class }).Count) { "FAIL" } else { "PASS" }
+        foreach ($k in "timer", "score", "death_respawn", "end") { $r[$k] = "UNKNOWN" }
+        $r.note = $(if ($notImpl) { "RULES NOT IMPLEMENTED ($($notImpl.text -replace '^.*match: ', '')); " } else { "" }) + "direct boot (no MATCH protocol on this path - timer / score / death / end judged in the frontend-launched row): {0}; spawn {1} team {2}; mode-dependent actors visible {3} (authored for this mode: {4})" -f $(if ($beg) { $beg.text -replace '^.*match: ', '' } else { "no begin line" }), ($spCls -join ","), ($spTeam -join ","), $visible, $expVis
+    }
+    return $r
+}
+
 foreach ($mode in $X.modes) {
     foreach ($map in $Maps) {
         $mapX = @($X.maps | Where-Object { $_.runtime -eq $map })[0]
@@ -43,27 +83,7 @@ foreach ($mode in $X.modes) {
         $d = Join-Path $OutDir "direct_$($mode.tag)_$map"; New-Item -ItemType Directory -Force $d | Out-Null
         if (-not $ReportOnly -and (Wait-WfcGpu)) { $null = Invoke-WfcExe $relExe $d @{ WFC_BOOT = "match"; WFC_MAP = $map; WFC_GAMEMODE = $mode.tag; WFC_MATCH = $mode.tag; WFC_LIFECYCLE = "3"; WFC_LOCKSTEP = "1"; WFC_SMOKE_FRAMES = "3600"; WFC_LOGEVERY = "60"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2"; WFC_NOMOUSE = "1" } "run.log" 600 }
         $log = Join-Path $d "wfc.log"; if (-not (Test-Path $log)) { Res "$($mode.tag).$map.direct" "SKIP" "no run" "Experimental"; continue }
-        $init = @(Grep-Log $log '\] MATCH init ')[0]; $ms = @(Grep-Log $log 'mapstate: mode \S+, .*mode-dependent actors \((\d+) visible\)')[0]
-        $spawns = @(Grep-Log $log '\] MATCH spawn ' | ForEach-Object { [regex]::Match($_.text, 'start=(\S+?)_\d+').Groups[1].Value })
-        $timer = @(Grep-Log $log '\] MATCH timer remaining_s=(\d+)' | ForEach-Object { [int][regex]::Match($_.text, 'remaining_s=(\d+)').Groups[1].Value })
-        $kills = @(Grep-Log $log '\] MATCH kill '); $scores = @(Grep-Log $log '\] MATCH score '); $deaths = @(Grep-Log $log '\] MATCH death ')
-        $resp = @(Grep-Log $log '\] MATCH respawn ' | ForEach-Object { [double][regex]::Match($_.text, 'delay_s=([\d.]+)').Groups[1].Value }); $end = @(Grep-Log $log '\] MATCH end ')[0]
-        $teams = if ($init) { [int][regex]::Match($init.text, 'teams=(\d+)').Groups[1].Value } else { -1 }
-        $visible = if ($ms) { [int][regex]::Match($ms.text, '\((\d+) visible\)').Groups[1].Value } else { -1 }
-        $objMode = $mode.objective_actors.Count -gt 0
-        $r = [ordered]@{ mode = $mode.tag; map = $map
-            setup = $(if (-not $init) { "FAIL" } elseif ($init.text -notmatch "mode=$($mode.tag)\b") { "FAIL" } elseif ((-not $mode.team -and $teams -gt 1) -or ($mode.team -and $teams -ne 2)) { "FAIL" } else { "PASS" })
-            actors = $(if ($visible -lt 0) { "UNKNOWN" } elseif ($objMode -and $visible -eq 0) { "FAIL" } elseif (-not $objMode -and $visible -gt 0) { "FAIL" } else { "PASS" })
-            spawn = $(if (-not $spawns.Count) { "FAIL" } elseif (@($spawns | Where-Object { $_ -ne $mode.start_class }).Count) { "FAIL" } else { "PASS" })
-            timer = $(if ($timer.Count -ge 3 -and $timer[0] -gt $timer[-1]) { "PASS" } elseif ($timer.Count) { "PARTIAL" } else { "FAIL" })
-            score = ""; death_respawn = $(if ($deaths.Count -and $resp.Count) { "PASS" } elseif ($kills.Count) { "FAIL" } else { "UNKNOWN" })
-            end = ""; note = "" }
-        if ($mode.tag -eq "TDM") { $r.score = if (@($scores | Where-Object { $_.text -match 'team=[01] score=[1-9]' }).Count) { "PASS" } else { "FAIL" }; $r.end = if ($end -and $end.text -match 'score_limit') { "PASS" } else { "FAIL" } }
-        elseif ($mode.tag -eq "DM") { $r.score = if (@($scores | Where-Object { $_.text -match 'team=-1 player=\d+ score=[1-9]' }).Count) { "PASS" } else { "FAIL" }; $r.end = if ($end -and $end.text -match 'score_limit') { "PASS" } else { "FAIL" } }
-        else { $kTeamScore = @($scores | Where-Object { $_.text -match 'team=[01] score=[1-9]' }).Count
-            $mpl = @($mp[$mode.tag]); $r.score = if ($mpl.Count -and -not @($mpl | Where-Object { $_ -like "FAIL*" }).Count) { "PASS" } elseif ($mpl.Count) { "FAIL" } elseif ($kTeamScore -gt 0 -and $kills.Count -and $kTeamScore -ge $kills.Count) { "FAIL" } else { "UNKNOWN" }
-            $r.end = if ($end) { "INFO" } else { "UNKNOWN" } }
-        $r.note = "init: {0}; mode actors visible {1}; spawn classes {2}; timer {3} -> {4}; kills {5}, deaths {6}, respawn {7}; end {8}; MODEPLAY {9}" -f $(if ($init) { $init.text -replace '^.*MATCH init ', '' } else { "none" }), $visible, (($spawns | Select-Object -Unique) -join ","), $(if ($timer.Count) { $timer[0] }), $(if ($timer.Count) { $timer[-1] }), $kills.Count, $deaths.Count, (($resp | Select-Object -First 3 | ForEach-Object { "{0:N2}" -f $_ }) -join ","), $(if ($end) { $end.text -replace '^.*MATCH end ', '' } else { "none" }), (@($mp[$mode.tag]) -join " | ")
+        $r = JudgeMatch $log $mode $map
         $rows.Add([pscustomobject]$r)
         foreach ($c in "setup", "actors", "spawn", "timer", "score", "death_respawn", "end") { Res "$($mode.tag).$map.$c" $r[$c] $r.note $(if ($c -in "actors") { "Gameplay/Rendering" } else { "Gameplay" }) }
     }
@@ -87,6 +107,10 @@ foreach ($mode in $X.modes) {
         results = $(if ($resultsOk -eq $null) { "UNKNOWN" } elseif ($resultsOk) { "PASS" } else { "FAIL" }); lobby_return = $(if ($snaps -contains "alobby") { "PASS" } else { "FAIL" })
         second_match = $(if ($snaps -contains "blobby" -or (Test-Path "$d\b2_play.bmp")) { "PASS" } else { "FAIL" }); world = (Present-WorldSetVerdict $ws) }
     foreach ($c in "frontend_setup", "results", "lobby_return", "second_match", "world") { Res "$($mode.tag).frontend.$c" $fr[$c] ("Gameplay modes launched {0}; snapshots {1}; world detail {2}" -f ($gm -join ","), ($snaps -join ","), (($ws | ForEach-Object { $_.detail }) -join "/")) $(if ($c -eq "world") { "Rendering/Frontend" } else { "Frontend/Gameplay" }) }
+    $flog = Join-Path $d "wfc.log"
+    if (Test-Path $flog) { $rf = JudgeMatch $flog $mode "MP_IAC_Streets (frontend)"
+        if (@(Grep-Log $flog '\] MATCH ').Count) { foreach ($c in "setup", "actors", "spawn", "timer", "score", "death_respawn", "end") { Res "$($mode.tag).frontend.$c" $rf[$c] $rf.note $(if ($c -in "actors") { "Gameplay/Rendering" } else { "Gameplay" }) } }
+        foreach ($k in $fr.Keys) { if ($k -ne "mode") { $rf[$k] = $fr[$k] } }; $rows.Add([pscustomobject]$rf) }
     foreach ($row in @($rows | Where-Object { $_.mode -eq $mode.tag })) { foreach ($k in $fr.Keys) { if ($k -ne "mode") { $row | Add-Member -Force -NotePropertyName $k -NotePropertyValue $fr[$k] } } }
     $tiles = @(Get-ChildItem $d -Filter *.bmp -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { @{ png = $_.FullName; label = "$($mode.tag) $($_.BaseName)" } }); if ($tiles.Count) { New-WfcSheet $tiles (Join-Path $OutDir "sheet_$($mode.tag).png") 4 400 225 }
 }
