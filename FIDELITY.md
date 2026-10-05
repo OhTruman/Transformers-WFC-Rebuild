@@ -212,7 +212,7 @@ loading screen and the opaque pause backdrop.
 **PC ADAPTATION:**
 - the default `WIN` identity (`WFC_PLATFORM=XBOX360` for the console presentation);
 - Space as Start on the console presentation; Tab as ShowScores;
-- borderless fullscreen;
+- borderless fullscreen (pass 3; superseded: fullscreen now switches the monitor to the saved resolution);
 - `wfc_input.ini` binding overrides;
 - the local identity fallback (`[Identity]` / `WFC_PLAYERNAME` / "Player").
 
