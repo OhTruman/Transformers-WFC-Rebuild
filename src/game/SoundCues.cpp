@@ -641,11 +641,15 @@ void SoundCues::tick(float dt) {
             in.fadeLeft -= dt;
             if (in.fadeLeft <= 0.0f) done = true;
         } else if (!in.looping && in.age > lastEventTime(cues_[(size_t)in.cue])) {
-            // One-shot: retire once every voice has finished (attached voices keep following their
-            // owner until then); kInstanceTail bounds it for backends that cannot report voices.
-            bool sounding = !audio_->reportsVoices();   // unknown: keep following until kInstanceTail
+            // One-shot: retire once every voice has finished (the AudioComponent lives until its sound ends;
+            // attached voices keep following their owner until then). kInstanceTail bounds it only for backends
+            // that cannot report voices. (It used to bound every instance: a long one-shot - the 380 s frontend
+            // music, long dialogue - was dropped 10 s in while its voice kept sounding, unmanaged: no mute, fade,
+            // stop or "already playing" check reached it.)
+            const bool reports = audio_->reportsVoices();
+            bool sounding = !reports;                   // unknown: keep following until kInstanceTail
             for (const VoiceRef& r : in.voices) if (audio_->isPlaying(r.v)) { sounding = true; break; }
-            if (!sounding || in.age > lastEventTime(cues_[(size_t)in.cue]) + kInstanceTail) {
+            if (!sounding || (!reports && in.age > lastEventTime(cues_[(size_t)in.cue]) + kInstanceTail)) {
                 retire(i);
                 continue;
             }

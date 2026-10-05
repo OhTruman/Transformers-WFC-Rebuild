@@ -24,7 +24,7 @@
 static int g_fail = 0;
 #define CHECK(c, ...) do { if (c) std::printf("  ok   "); else { std::printf("  FAIL "); ++g_fail; } std::printf(__VA_ARGS__); std::printf("\n"); } while (0)
 
-struct Peaks { float movie = -96.0f, game = -96.0f; long long underrun = 0; };
+struct Peaks { float movie = -96.0f, game = -96.0f, gameLate = -96.0f; long long underrun = 0; };   // gameLate: from 2.5 s in
 
 int main(int argc, char** argv) {
     const std::string root = "F:/Transformers Rebuild/ExtractedAssets/";
@@ -52,9 +52,12 @@ int main(int argc, char** argv) {
         const long long u0 = underrun();
         const bool has = rt->startMovieAudio(root + "movies/" + name + ".mkv");
         const auto t0 = std::chrono::steady_clock::now();
+        Peaks* pkp = &pk;
+        auto late = [&] { if (std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count() > 2.5) {
+                              audio::MixStats s; a->mixStats(s); pkp->gameLate = std::max(pkp->gameLate, s.peakDb); } };
         if (has) {
             const auto end = t0 + std::chrono::duration<double>(secs);
-            while (std::chrono::steady_clock::now() < end && !rt->movieAudioFinished()) run(0.1, &pk);
+            while (std::chrono::steady_clock::now() < end && !rt->movieAudioFinished()) { run(0.1, &pk); late(); }
         } else run(std::min(secs, 1.5), &pk);
         const double wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
         const double clock = rt->movieAudioClock();
@@ -89,6 +92,32 @@ int main(int argc, char** argv) {
     CHECK(rt->playUiSound("BUTTON_START") >= 0 && rt->playUiSound("BUTTON_ACCEPT") >= 0 && rt->playUiSound("BUTTON_DOWN") >= 0 &&
           rt->playUiSound("BUTTON_BACK") >= 0, "menu sounds: start / accept / selection / back");
     run(1.0);
+    // Extras -> Movies (human playtest M08): a GFx script movie - the frontend does NOT raise setMoviePlaying for it;
+    // the movie sound alone holds the movie preset. After it (end / skip / back) the title music must come back: the
+    // SAME music instance (ducked, never restarted), no duplicate, no stream left.
+    std::printf("[Extras -> Movies: natural end, skip, back, consecutive]\n");
+    const int titleInst = rt->state().musicInstance;
+    std::printf("  title before Extras: music %s state %d instance %d active %d\n", rt->state().music.c_str(), rt->state().musicState,
+                titleInst, rt->cues().activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01"));
+    struct ExtraCase { const char* movie; double secs; bool skip; const char* how; };
+    const ExtraCase extras[] = {{"Logo_Hasbro", 60.0, false, "natural end"}, {"FMV_a1intro", 2.5, true, "skip"},
+                                {"FMV_d1intro", 2.0, true, "back / exit"}, {"Logo_HighMoon", 1.5, true, "consecutive skip"}};
+    for (const ExtraCase& e : extras) {
+        audio::MixStats ms0; a->mixStats(ms0);
+        auto r = movie(e.movie, e.secs, e.skip);
+        audio::MixStats ms1; a->mixStats(ms1);
+        std::printf("    voices %d, stolen %lld, dropped %lld during the movie\n", a->activeVoices(),
+                    (long long)(ms1.stolenVoices - ms0.stolenVoices), (long long)(ms1.droppedVoices - ms0.droppedVoices));
+        Peaks after; run(1.0, &after);
+        auto s = rt->state();
+        // The menu mix is muted at once (CINE_MUTE fade-in 0); the front-end reverb tail of what played just before
+        // decays under the first second (the reverb sits after the category volumes) - -49 dB at 0.2 s, -89 at 2 s: checked from 2.5 s in.
+        CHECK(r.first && r.second.movie > -40.0f && r.second.gameLate <= -90.0f && !s.movie && s.masterScale > 0.99f && s.streams == 0 &&
+              s.musicInstance == titleInst && s.musicState == 2 &&
+              rt->cues().activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01") == 1 && after.game > -40.0f && after.movie <= -90.0f,
+              "Extras %s (%s): menu mix muted under it (%.1f dB from 2.5 s; reverb tail at onset %.1f dB), then the same title music back (%.1f dB, instance %d), streams %d",
+              e.movie, e.how, r.second.gameLate, r.second.game, after.game, s.musicInstance, s.streams);
+    }
     std::printf("[menus -> lobbies -> loading -> match]\n");
     rt->levelChange(); rt->uiLevelStarted("UI_PartyLobby_m"); run(2.0);
     CHECK(rt->state().music == "BL_LVL_HUD_INTERFACE.MP_PARTY_LOBBY_MX" && rt->cues().activeInstances("BL_LVL_HUD_INTERFACE.FRONTEND_MX_ORBIT_01") == 0,
