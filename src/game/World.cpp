@@ -1070,6 +1070,7 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
             amount *= veh ? vp->vehicleParams().damageMultiplier : vp->robotParams().damageMultiplier;
             if (instigator == victim) amount *= veh ? vp->vehicleParams().selfDamageMultiplier : vp->robotParams().selfDamageMultiplier;
             if (vp->warcryRemain_ > 0.0f) amount *= vp->warcryTakenMul_;          // TnBuffWarcryDecreaseDamageTaken
+            if (vp->hardLockedRemain_ > 0.0f) amount *= 1.4f;   // TnBuffHardLocked FloatModifier[0] in _AllDamageModifierSelf [CONF RE §K]
         }
         const Character* ip = instigator == localPlayer_ ? &player_.pawn() : nullptr;
         if (!ip) for (MatchOpponent* o : opponents_) if (o->matchPlayer() == instigator) ip = &o->pawn();
@@ -1871,12 +1872,36 @@ void World::tickAbilityEffects(float dt) {
                 if (o->spawned() && o->team() == team && core::length(o->pawn().actorLocation() - pc.actorLocation()) <= 30.0f) friends.push_back(&o->pawn());
         int level = std::max(0, std::min((int)friends.size() - 1, 1));
         const float dmg[3] = {1.1f, 1.2f, 1.3f}, taken[3] = {0.5f, 0.4f, 0.3f};
-        for (Character* p : friends) { p->warcryRemain_ = 15.0f; p->warcryDamageMul_ = dmg[level]; p->warcryTakenMul_ = taken[level]; }
+        for (Character* p : friends) { p->warcryRemain_ = 15.0f; p->warcryDamageMul_ = dmg[level]; p->warcryTakenMul_ = taken[level]; p->hardLockedRemain_ = 0.0f; }
         LOG_INFO("ability Warcry: %zu friendlies, buff level %d (damage x%.1f, taken x%.1f, 15 s)", friends.size(), level, dmg[level], taken[level]);
     } else if (fx == "Shockwave") {
         pc.shockwaveDelay_ = 0.25f;                       // Delay 0.25 -> Shockwave()
     } else if (fx == "Whirlwind") {
         startLocalMelee(true);                            // MeleeService.StartMeleeAttack(MELEE_Whirlwind)
+    } else if (fx == "HardLock" || fx == "MarkTarget") {
+        // TnAbilityHardLock: target = the homing-lock pick (picker 4); TnBuffHardLocked level 0, 10 s; fails without a target.
+        pc.playAction("Skill_MarkTarget", false);
+        const int tgt = pickHomingTarget(true, 300.0f);
+        for (MatchOpponent* o : opponents_)
+            if (o->matchPlayer() == tgt && o->spawned()) {
+                o->pawn().hardLockedRemain_ = 10.0f;
+                o->pawn().hardLockedByTeam_ = matchActive_ ? match_.players()[(size_t)localPlayer_].team : 255;
+                LOG_INFO("ability HardLock: player %d marked", tgt);
+            }
+        if (tgt < 0) LOG_INFO("ability HardLock: no target");
+    } else if (fx == "AbilityJammer" || fx == "TransformDisruptor") {
+        // Projectile from the owner (jammer offset (0, 175, 25)) along the aim: jammer 10000 UU/s radius 500, disruptor 6000 / 250.
+        const bool jam = fx == "AbilityJammer";
+        pc.playAction("Skill_AbilityJammer", false);
+        const PlayerController& ctl = player_.controller();
+        const core::Vec3 rt = core::normalize(core::cross(core::forwardFromYawPitch(pc.yaw(), 0.0f), core::Vec3{0, 1, 0}));
+        const core::Vec3 from = pc.actorLocation() + (jam ? rt * 1.75f + core::Vec3{0, 0.25f, 0} : core::Vec3{0, 0.25f, 0});
+        // Aimed through the crosshair like weapon fire: camera ray trace -> aim point -> from the spawn point toward it.
+        const core::Vec3 camDir = core::forwardFromYawPitch(ctl.camYaw(), ctl.camPitch()), camPos = ctl.cameraPos();
+        core::Vec3 aimPoint = camPos + camDir * 300.0f; float tt;
+        if (collision_.valid() && collision_.segmentHit(camPos, aimPoint, tt)) aimPoint = camPos + camDir * (300.0f * tt);
+        const core::Vec3 dir = core::normalize(aimPoint - from);
+        buffShots_.push_back({from, dir * (jam ? 100.0f : 60.0f), jam ? 5.0f : 2.5f, 3.0f, jam ? 0 : 1});
     } else if (fx == "RollerSphere") {
         pc.playAction("Skill_AbilityJammer", false);       // OnTriggerAnimParams
         rollerDelay_ = 0.5f;                               // SpawnDelay 0.5
@@ -1901,6 +1926,10 @@ void World::tickAbilityEffects(float dt) {
     tickSentry(dt);
     tickGuidedMissile(dt);
     tickRollerMine(dt);
+    tickBuffShots(dt);
+    auto tickTD = [dt](Character& p) { p.transformDisruptRemain_ = std::max(0.0f, p.transformDisruptRemain_ - dt); };
+    tickTD(pc);
+    for (MatchOpponent* o : opponents_) tickTD(o->pawn());
     // TnBuffDrainSource (Blueprints[0]): each tick every enemy TnPawn within Range 2000 UU with line of sight takes
     // DamagePerSecond 25 x dt; the caster heals HealthPerSecond 35 x dt per target [CONF authored + RE §J]. Heal type
     // AddHealthToAll [PROV].
@@ -2647,6 +2676,65 @@ void World::tickRollerMine(float dt) {
         if (boom) explodeRollerMine();
     }
     pc.rollerAlive_ = m.alive || rollerDelay_ >= 0.0f;
+}
+
+int World::pickHomingTarget(bool allowRobots, float range) const {
+    const core::Vec3 eye = player_.controller().cameraPos();
+    const core::Vec3 fwd = core::forwardFromYawPitch(player_.controller().camYaw(), player_.controller().camPitch());
+    const float deg4 = 4.0f * 0.0174533f;
+    int best = -1; float bestAng = 1e9f;
+    if (!matchActive_) return -1;
+    for (const MatchOpponent* o : opponents_) {
+        if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
+        const Character& t = o->pawn();
+        const bool robot = t.moveForm() == Form::Robot;
+        if (robot && !allowRobots) continue;
+        core::Vec3 d = t.actorLocation() - eye;
+        float dist = core::length(d);
+        if (dist < 1e-3f || dist > range) continue;
+        const float minR = robot ? 6.0f : 5.0f, maxR = 7.0f;
+        float half = std::min(std::max(deg4, std::atan(minR / dist)), std::atan(maxR / dist));
+        float ang = std::acos(core::clampf(core::dot(d * (1.0f / dist), fwd), -1.0f, 1.0f));
+        if (ang <= half && ang < bestAng) { bestAng = ang; best = o->matchPlayer(); }
+    }
+    return best;
+}
+
+// AbilityJammer: TnBuffAbilityJammed 15 s (removes Cloak / Disguise / Warcry / DrainSource; abilities blocked; cooldowns frozen).
+// TransformDisruptor: TnBuffTransformDisruptor 3 s (ForceIntoForm(opposite) now; transforming disabled while active)
+// [CONF RE §K]. Enemies only; world hit or 3 s life ends the shot (life PROV).
+void World::tickBuffShots(float dt) {
+    const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+    for (size_t i = 0; i < buffShots_.size();) {
+        BuffShot& s = buffShots_[i];
+        const core::Vec3 next = s.pos + s.vel * dt;
+        float t; bool done = false;
+        if (line && line->segmentHit(s.pos, next, t)) done = true;
+        if (matchActive_)
+            for (MatchOpponent* o : opponents_) {
+                if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
+                Character& e = o->pawn();
+                const core::Vec3 c = e.actorLocation();
+                // segment-vs-cylinder approximated by the closest point on the step segment
+                core::Vec3 seg = next - s.pos; float sl2 = core::dot(seg, seg);
+                float u = sl2 > 1e-8f ? core::clampf(core::dot(c - s.pos, seg) / sl2, 0.0f, 1.0f) : 0.0f;
+                core::Vec3 q = s.pos + seg * u;
+                if (std::hypot(q.x - c.x, q.z - c.z) > e.cylinderRadius(e.moveForm()) + s.radius * 0.1f ||
+                    std::fabs(q.y - c.y) > e.cylinderHalfHeight(e.moveForm()) + s.radius * 0.1f) continue;
+                if (s.kind == 0) { e.applyJammed(15.0f); LOG_INFO("ability AbilityJammer: player %d jammed 15 s", o->matchPlayer()); }
+                else {
+                    e.transformDisruptRemain_ = 3.0f;
+                    if (!e.isTransforming()) e.beginTransform();   // ForceIntoForm(opposite) [PROV: via the transform path]
+                    LOG_INFO("ability TransformDisruptor: player %d forced to transform", o->matchPlayer());
+                }
+                done = true;
+                break;
+            }
+        s.life -= dt;
+        if (done || s.life <= 0.0f) { buffShots_.erase(buffShots_.begin() + (long)i); continue; }
+        s.pos = next;
+        ++i;
+    }
 }
 
 } // namespace game

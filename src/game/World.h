@@ -413,6 +413,12 @@ private:
     void tickProjectiles(float dt);
     void tickAbilityEffects(float dt);
     void tickHomingLock(float dt);
+    // PlayerTargeting.GetHomingLockTarget picker (index 4) about the crosshair; robots only when allowRobots.
+    int pickHomingTarget(bool allowRobots, float range) const;
+    // TnAbilityAbilityJammer / TnAbilityTransformDisruptor projectiles (enemies only, no damage).
+    struct BuffShot { core::Vec3 pos, vel; float radius, life; int kind; };   // kind 0 jammer, 1 transform disruptor
+    std::vector<BuffShot> buffShots_;
+    void tickBuffShots(float dt);
     const Character* matchPawn(int matchPlayer) const;
     // TnWeaponHoming lock state of the local pawn's active weapon.
     int lockCandidate_ = -1, lockTarget_ = -1;

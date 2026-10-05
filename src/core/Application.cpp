@@ -1924,7 +1924,7 @@ void Application::runParticipantTest() {
             bool reconOver = !enemyTagDrawn();
             float eh = E->pawn().health().current;
             trigger("ImprovedOrbitalReconStreak");
-            hard = reconOver && E->pawn().hardLockedRemain_ > 9.9f && E->pawn().health().current == eh - 1.0f && enemyTagDrawn();
+            hard = reconOver && E->pawn().hardLockedRemain_ > 9.9f && std::fabs(E->pawn().health().current - (eh - 1.4f)) < 0.01f && enemyTagDrawn();   // 1 x HardLocked 1.4
             trigger("FriendlyKillHealthBonusStreak");
             game::Character& lp = world_.player().pawn();
             lp.health().current = 40.0f;
@@ -1939,7 +1939,7 @@ void Application::runParticipantTest() {
         }
         LOG_INFO("PARTICIPANT streaks: recon %d, improved recon %d, health matrix %d, EMP %d", (int)recon, (int)hard, (int)matrix, (int)emp);
         check(ok && recon && hard && matrix && emp,
-              "Killstreaks: Orbital Beacon markers 30 s; Beacon 2.0 hard lock 10 s + 1 dmg; Health Matrix full health on kill; EMP jam 30 s strips cloak");
+              "Killstreaks: Orbital Beacon markers 30 s; Beacon 2.0 hard lock 10 s (x1.4 taken) + 1 dmg; Health Matrix full health on kill; EMP jam 30 s strips cloak");
     }
     // Drain: 7 s, 25 DPS to each enemy within 20 m (LOS), caster heals 35 HPS per target, speed x0.7; cooldown after the buff.
     {
@@ -2140,6 +2140,52 @@ void Application::runParticipantTest() {
                  (int)spawned, v0, v1, (int)unarmed, (int)slowed, (int)boom, eh0, eh1, (int)cd);
         check(E && spawned && damped && unarmed && slowed && boom && cd,
               "Roller sphere: 0.5 s spawn at 27.5 m/s, LinearDamping 0.6, aura slow, armed after 3 s, contact explodes 135, 60 s cooldown");
+    }
+    // Class-pool abilities: HardLock (mark + x1.4 damage taken, 10 s), TransformDisruptor (forced transform, 3 s lockout),
+    // AbilityJammer (15 s jam). Shots / picks aimed through the crosshair at an enemy 20 m ahead.
+    for (int pass = 0; pass < 2; ++pass) {
+        game::MatchLaunch LC; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", LC);
+        world_.launchMatch(LC);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Scout;
+        me.abilities = pass == 0 ? std::vector<std::string>{"HardLock", "TransformDisruptor"} : std::vector<std::string>{"AbilityJammer", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("P" + std::to_string(pass) + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        bool ok1 = false, ok2 = false;
+        float dmg = 0;
+        if (E) {
+            ctl.setCameraYaw(lp.yaw());
+            if (moveToOpenLine(25.0f)) run(0.3f);
+            const core::Vec3 fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 80.0f);
+            const core::Vec3 T = lp.position() + fwd * 20.0f;
+            auto aim = [&]() { E->setPosition(T); core::Vec3 d = E->pawn().actorLocation() - ctl.cameraPos();
+                               ctl.setCameraYaw(std::atan2(-d.x, -d.z)); ctl.setCameraPitch(std::atan2(d.y, std::hypot(d.x, d.z))); };
+            auto press = [&](platform::Button b) { aim(); platform::InputFrame in; in.pressed[(int)b] = true; in.down[(int)b] = true; world_.handleInput(in, dt); world_.tick(dt); };
+            auto hold = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f); ++i) { aim(); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+            hold(0.3f);
+            if (pass == 0) {
+                press(platform::Button::Dash); hold(0.1f);
+                const float h0 = E->pawn().health().current;
+                world_.applyMatchDamage(E->matchPlayer(), world_.localMatchPlayer(), 10.0f, false, "TransGame.TnDamageTypeIonBlaster");
+                dmg = h0 - E->pawn().health().current;
+                ok1 = E->pawn().hardLockedRemain_ > 9.5f && std::fabs(dmg - 14.0f) < 0.01f;
+                press(platform::Button::Ability1); hold(0.5f);
+                ok2 = E->pawn().transformDisruptRemain_ > 2.0f && (E->pawn().isTransforming() || E->pawn().form() == game::Form::Vehicle);
+                LOG_INFO("PARTICIPANT pool: hardlock %d (10 dmg -> %.1f), disruptor %d", (int)ok1, dmg, (int)ok2);
+                check(E && ok1 && ok2, "HardLock: marked 10 s, damage taken x1.4; TransformDisruptor: forced transform, 3 s transform lockout");
+            } else {
+                press(platform::Button::Dash); hold(0.5f);
+                ok1 = E->pawn().jammedRemain_ > 14.0f;
+                LOG_INFO("PARTICIPANT pool: jammer %d", (int)ok1);
+                check(E && ok1, "AbilityJammer: projectile jams the enemy 15 s (TnBuffAbilityJammed)");
+            }
+        }
     }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }

@@ -566,6 +566,7 @@ bool PlayerController::findRobotSpot(const CollisionWorld* col_, const core::Vec
 
 bool PlayerController::tryBeginTransform() {
     if (!pawn_) return false;
+    if (pawn_->transformDisruptRemain_ > 0.0f) return false;   // TnBuffTransformDisruptor: transforming disabled
     if (pawn_->moveForm() == Form::Vehicle && col_) {
         // Target = robot: its 4 m cylinder must fit (vehicle actor -> floor below).
         core::Vec3 a = pawn_->actorLocation();
@@ -612,7 +613,8 @@ void PlayerController::applyToPawn(World& world, float dt) {
     }
     if (wantAbility_ >= 0) {
         Character::AbilitySlot& a = pawn_->abilities_[wantAbility_];
-        bool can = pawn_->moveForm() == Form::Robot && !pawn_->isTransforming() && !pawn_->weapon().reloading() && !pawn_->isDodging();
+        bool can = pawn_->moveForm() == Form::Robot && !pawn_->isTransforming() && !pawn_->weapon().reloading() && !pawn_->isDodging() &&
+                   pawn_->jammedRemain_ <= 0.0f;   // TnBuffAbilityJammed (derived): abilities blocked [CONF RE §K]
         // TnAbilityWhirlwind.LocalTriggerAbility fails (no cooldown) unless StartMeleeAttack(MELEE_Whirlwind) starts: the melee
         // manager must be Idle, in robot form [CONF script].
         const bool meleeRefused = a.id == "Whirlwind" && (pawn_->isMeleeing() || pawn_->moveForm() != Form::Robot || pawn_->isTransforming());
@@ -623,7 +625,8 @@ void PlayerController::applyToPawn(World& world, float dt) {
                     float up = abilityStickFwd_, rt = abilityStickRight_;
                     step.dodgeDir = std::fabs(up) >= std::fabs(rt) ? (up < 0.0f ? 4 : 3) : (rt < 0.0f ? 1 : 2);
                 }
-                if (a.id == "Warcry" || a.id == "Shockwave" || a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "SpawnSentry" || a.id == "GuidedMissile" || a.id == "RollerSphere") pawn_->pendingAbilityEffect_ = a.id;   // World
+                if (a.id == "Warcry" || a.id == "Shockwave" || a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "SpawnSentry" || a.id == "GuidedMissile" || a.id == "RollerSphere" ||
+                    a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor") pawn_->pendingAbilityEffect_ = a.id;   // World
                 if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
                 if (a.id == "Drain") pawn_->drainRemain_ = 7.0f;                                    // AddSelfBuff(TnBuffDrainSource)
                 if (a.id == "Hover") { step.hoverRequest = true; pawn_->hoverRequested_ = true; }   // PlayerController.Hover

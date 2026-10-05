@@ -287,7 +287,7 @@ Classification:
   - **Orbital Beacon:** team TnBuffSeeEnemyObjectiveMarkers 30 s. SetupEnemyMarker draws enemy markers unless the
     enemy has a Warcry buff.
   - **Orbital Beacon 2.0:** other team TnBuffHardLocked 10 s (marker for the instigator's team) plus 1 damage
-    TnDamageTypeFlashBang. HardLocked's FloatModifier 1.4 / 1.55 / 1.6 consumer is not in script [UNKNOWN, not applied].
+    TnDamageTypeFlashBang. HardLocked FloatModifier[0] 1.4 = damage taken (TnPawn._AllDamageModifierSelf) [CONF RE §K].
   - **Health Matrix 2.0:** team TnBuffRefillHealthOnKill 60 s. TnPawn.HandleDied gives the killer
     HealDamage(TnHealTypeHealthPickup = SHT_AddAllSegments).
   - **EMP:** other team TnBuffAbilityJammedKillstreak 30 s. TnBuffAbilityJammed.Apply: CooldownMultiplier 0
@@ -333,8 +333,18 @@ Classification:
   - Aura: visible enemies within 1500 UU get speed ×0.75 (1 s robot / 2 s vehicle), refreshed.
   - Gone with the owner; cooldown 60 s once gone. Mesh RollerMineAbility_STAT for Rendering (HUD rollerPos).
   - Test (PARTICIPANT 16/16): 26.4 → 14.5 m/s in 1 s (e^−0.6); safe before arming; armed contact −135.
-- Remaining unimplemented abilities (in no iconic preset; class pools only): DecoyTrap, HardLock, Disguise, AbilityJammer,
-  TransformDisruptor, MarkTarget … are listed per slot and reported unimplemented (log + HUD `implemented = false`) [PARTIAL].
+- **Class-pool abilities** [CONF RE §K]:
+  - **HardLock (Mark Target):** the homing-lock pick (picker 4, robots allowed) gets TnBuffHardLocked level 0 for 10 s
+    (marker for the team; damage taken ×1.4); no target → fails; Warcry removes it.
+  - **AbilityJammer:** projectile 10000 UU/s from offset (0, 175, 25), enemies only → TnBuffAbilityJammed 15 s.
+    Abilities are blocked (controller HasDerivedBuff), cooldowns frozen, cloak / warcry / drain stripped.
+  - **TransformDisruptor:** projectile 6000 UU/s → TnBuffTransformDisruptor 3 s: forced into the other form,
+    transforming disabled.
+  - Shots aim through the crosshair. Their life after a miss (3 s) is PROV.
+  - Cooldowns 60 s.
+  - Test (PARTICIPANT 18/18).
+- Remaining unimplemented abilities (class pools only): Disguise, DecoyTrap are listed per slot and reported
+  unimplemented (log + HUD `implemented = false`) [PARTIAL].
   Skills are not applied in versus (skill-data index 0, no skill effects) [PARTIAL]; killstreaks: see above.
 - **Correction:** the Pass 21f contract doc said robot Shift ran a dash. It did nothing until this pass.
 

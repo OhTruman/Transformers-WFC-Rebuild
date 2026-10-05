@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22y (2026-10-05) — HardLock, AbilityJammer, TransformDisruptor; HardLocked x1.4
+- RE §K: class-pool abilities and the HardLocked damage-taken multiplier (Orbital Beacon 2.0 now x1.4). PARTICIPANT 18/18.
+
 ## GAMEPLAY PASS 22x (2026-10-05) — RollerSphere; loader reload fix
 - Every ability used by an iconic preset is now implemented (Dodge, Warcry, Shockwave, Cloaking, Hover, Whirlwind, Barrier, SpawnAmmoCrate, Drain, SpawnSentry, GuidedMissile, RollerSphere). PARTICIPANT 16/16.
 - assets::loadSkinnedGlb resets the model before loading (same one-liner as agents/rendering 088b703).
