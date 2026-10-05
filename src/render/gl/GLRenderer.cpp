@@ -455,6 +455,10 @@ public:
         endFrame();
     }
     void setFrontendSceneDraw(std::function<void(IRenderer&)> f) override { sceneDraw_ = std::move(f); }
+    bool loadContentMesh(const std::string& gl, MeshData& out) override {
+        std::string rel = gl.rfind("content/", 0) == 0 ? gl.substr(8) : gl;
+        return assets::loadGlb(wfc::Pipeline::contentRoot() + rel, out) && !out.empty();
+    }
     void unloadFrontendScene() override {
         if (sceneMesh_ == kInvalidMesh && sceneDir_.empty()) return;
         unloadMapRenderData();

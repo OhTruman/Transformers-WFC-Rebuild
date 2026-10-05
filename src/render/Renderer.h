@@ -151,6 +151,15 @@ public:
     // PreviewGuy controllers) with setDrawOwner(slot) + setCharacterColors + drawDynamicMesh: the body (chassis, form,
     // pose) is Gameplay's, the drawing Rendering's. Use ueActorMatrix for UE placements. Empty function = none.
     virtual void setFrontendSceneDraw(std::function<void(IRenderer&)> drawInScene) { (void)drawInScene; }
+    // Member forms for compile-time detection by callers built against an IRenderer that may lack them:
+    // actorMatrix = render::ueActorMatrix; loadContentMesh = an exported content glTF (path relative to
+    // ExtractedAssets/content, e.g. the AssetTools roster's robot / vehicle "gltf") in BIND POSE with its source
+    // material names (the renderer resolves them to the compiled originals). Interim body until Gameplay supplies
+    // posed preview bodies; returns false if the file is missing.
+    virtual core::Mat4 actorMatrix(const core::Vec3& posUE, const core::Vec3& rotUEdeg) const {
+        return ueActorMatrix(posUE, rotUEdeg);
+    }
+    virtual bool loadContentMesh(const std::string& contentGltf, MeshData& out) { (void)contentGltf; (void)out; return false; }
     // Matinee-driven actor pose in the loaded scene (Frontend's matinee evaluator): absolute world location (UU) and
     // rotation (pitch, yaw, roll in degrees), including RelativeToInitial / attachment. Actors not sent keep their
     // authored pose (and PHYS_Rotating). Visibility stays with setActorHidden (authored bHidden applies until then).
