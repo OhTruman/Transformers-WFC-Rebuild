@@ -17,13 +17,20 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
   hard-coded; the default profile reproduces him exactly.
   - Gameplay calls `setPlayerCharacterAudio(chassis)` and `setPlayerWeaponAudio(class)`.
   - In game, Bumblebee, Megatron, Starscream and the Heavy Pistol play their own sounds, with 0 missing cues.
+  - Per-weapon audio:
+    - world impacts use the weapon's DefaultImpactSound;
+    - target hits use the victim's HitEffectPlayer HitSound, with retrigger and the damage type's bCausesBlood;
+    - reload, idle, equip and holster sounds come from each weapon's own AnimSet.
+    - The Ion Blaster is unchanged.
+  - Vehicle form: each chassis's own HmPlayerVehicleAudioComponent (gears, one-shots, slots, tunables). Optimus is
+    identical to the previous port (A/B probe, 92 / 92 events).
 - **Movies (RE-confirmed):** language track 5 + L from GLanguage (`WFC_LANGUAGE`), speaker routing, the logos at 0.8
   volume, and other movies at the FX slider / 100 (`setMovieFxSlider`; default 80 → 0.8).
 - **Lifecycle:** a 40-cycle real-device soak (`tools/systems/lifecycle_probe.cpp`): frontend (logo skip, title,
   party, lobby) → map N → frontend, rotating all 10 maps and the character profiles.
   - Every cycle returns to 0 voices, 0 streams, 0 level cues and the base mixer presets / cue table.
   - Decoded PCM never grows (61 → 52 MB).
-- **Validation:** suite 598 / 0; wfc_fidelity 194 / 0 / 19; movie probe OK.
+- **Validation:** suite 609 / 0; wfc_fidelity 194 / 0 / 19; movie probe OK.
 - **Handoff:** `docs/handoff/SYSTEMS_M08_AUDIO_HANDOFF.md`; FIDELITY.md MILESTONE 08.
 
 ## SYSTEMS MILESTONE 07 (2026-10-04) — boot-movie audio, match / announcer audio
