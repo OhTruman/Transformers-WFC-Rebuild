@@ -111,6 +111,9 @@ private:
     bool loop_ = true;
 };
 
+// A weapon class's WP_Fire presentation templates (WEPMESH MuzzleFlashes / TracerTemplates, DefaultSquib) [CONF data].
+struct WeaponFxTemplates { std::string muzzle, tracer, squib; };
+
 class CharacterAudio {
 public:
     static const CharacterAudioProfile* find(const std::string& keyOrName);   // roster chassis key or display name
@@ -128,6 +131,8 @@ public:
     static const WeaponHitEffect* weaponHitEffect(const std::string& weaponClass);
     // The weapon mesh's animation sounds (nullptr: no anim set in the data).
     static const WeaponAnimSounds* weaponAnimSounds(const std::string& weaponClass);
+    // The weapon's particle templates (nullptr: unknown class).
+    static const WeaponFxTemplates* weaponFx(const std::string& weaponClass);
     // Load the victim's hit / block cues for that weapon (level-owned). Returns the number added.
     static int loadHitCues(SoundCues& cues, const CharacterAudioProfile& victim, const std::string& weaponClass);
 };

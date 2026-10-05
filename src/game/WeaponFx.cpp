@@ -351,6 +351,27 @@ bool WeaponFx::spawnNotifyEffect(const std::string& ps, const core::Mat4& socket
     return false;
 }
 
+bool WeaponFx::reconstructs(const std::string& t) {
+    return t == kMuzzleFlashTemplate || t == kTracerTemplate || t == kImpactTemplate;
+}
+
+bool WeaponFx::spawnMuzzleFlash(const std::string& t, const core::Mat4& socketWorld) {
+    if (t != kMuzzleFlashTemplate) return false;
+    spawnMuzzleFlash(socketWorld);
+    return true;
+}
+
+bool WeaponFx::spawnTracer(const std::string& t, const Vec3& muzzle, const Vec3& hit) {
+    if (t != kTracerTemplate) return false;
+    spawnTracer(muzzle, hit);
+    return true;
+}
+
+bool WeaponFx::spawnImpact(const std::string& t, const Vec3& pos, const Vec3& normal, const Vec3& viewPos) {
+    if (t != kImpactTemplate) return false;
+    return spawnImpact(pos, normal, viewPos);
+}
+
 void WeaponFx::spawnMuzzleFlash(const core::Mat4& socketWorld) {
     muzzleNow_ = socketWorld; haveMuzzle_ = true;
     emit(kFlashLong, socketWorld, -1);

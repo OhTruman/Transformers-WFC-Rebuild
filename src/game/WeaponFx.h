@@ -30,6 +30,18 @@ public:
     // Returns false when the squib was culled (percentage / distance / max-count rules).
     bool spawnImpact(const core::Vec3& pos, const core::Vec3& normal, const core::Vec3& viewPos);
 
+    // By ParticleSystem template (a weapon class's WEPMESH MuzzleFlashes / TracerTemplates / DefaultSquib): only the
+    // templates reconstructed here are drawn; any other returns false and draws nothing (another weapon's template is
+    // never substituted). Reconstructed: kMuzzleFlashTemplate, kTracerTemplate, kImpactTemplate - shared by the Ion
+    // Blaster, Assault Rifle and Heavy Pistol (muzzle + tracer) and the Burst Rifle / Heavy MG (tracer) [CONF data].
+    static constexpr const char* kMuzzleFlashTemplate = "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX";
+    static constexpr const char* kTracerTemplate = "FX_AssaultRifle_p.FX.Tracer_AssaultRifle_FX";
+    static constexpr const char* kImpactTemplate = "FX_IonBlaster_p.FX.Impact_IonBlaster_FX";
+    static bool reconstructs(const std::string& psTemplate);
+    bool spawnMuzzleFlash(const std::string& psTemplate, const core::Mat4& socketWorld);
+    bool spawnTracer(const std::string& psTemplate, const core::Vec3& muzzle, const core::Vec3& hit);
+    bool spawnImpact(const std::string& psTemplate, const core::Vec3& pos, const core::Vec3& normal, const core::Vec3& viewPos);
+
     // Weapon AnimNotify effects (HmAnimNotify_PlayEffect), spawned at the named socket's frame:
     //   FX_AssaultRifle_p.FX.Shell_AssaultRifle_FX   (IonBlaster_Fire @0.005, ShellSocket)
     //   FX_AssaultRifle_p.FX.Reload_AssaultRifle_FX  (Reload_AP @0.034, MuzzleFlash)

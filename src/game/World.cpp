@@ -355,11 +355,15 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
                      core::config::kMuzzleLocalY, core::config::kMuzzleLocalZ});
     }
     // WP_Fire presentation: muzzle flash at the MuzzleFlash socket, tracer muzzle -> impact,
-    // impact squib where the trace hit something (world or target).
-    if (weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(ms);
-    fx_.spawnTracer(muzzle, hitPoint);
+    // impact squib where the trace hit something (world or target) - the HELD weapon class's templates
+    // (setPlayerWeaponAudio); WeaponFx draws the ones it reconstructs and nothing for the others [PARTIAL].
+    static const WeaponFxTemplates kIonFx{WeaponFx::kMuzzleFlashTemplate, WeaponFx::kTracerTemplate, WeaponFx::kImpactTemplate};
+    const WeaponFxTemplates* wfx = CharacterAudio::weaponFx(weaponClass_);
+    if (!wfx) wfx = &kIonFx;
+    if (weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(wfx->muzzle, ms);
+    fx_.spawnTracer(wfx->tracer, muzzle, hitPoint);
     if (dist < range - 0.01f)
-        fx_.spawnImpact(hitPoint, dir * -1.0f, origin);
+        fx_.spawnImpact(wfx->squib, hitPoint, dir * -1.0f, origin);
     if (std::getenv("WFC_MUZZLELOG") && player_.pawn().hasWeapon()) {
         const core::Mat4& wm = player_.pawn().weaponWorld();
         LOG_INFO("MUZZLE hand=%.2f,%.2f,%.2f tip=%.2f,%.2f,%.2f (|offset|=%.2fm) aimYaw=%.3f legYaw=%.3f",

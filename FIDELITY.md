@@ -113,6 +113,16 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
     and hover-booster slots.
   * Not ported: SpeedSound, CustomLoopingSound (ram alert, turret rotate) and OneEightySound. They were not driven
     before either.
+* **Weapon FX by template** [CONF data]:
+  * Each weapon class's WEPMESH WP_Fire muzzle and tracer templates and its DefaultSquib are generated per class.
+  * World spawns the held class's templates. WeaponFx draws only the three it reconstructs, all shared with the Ion
+    Blaster:
+    * MuzzleFlash_AssaultRifle_FX and Tracer_AssaultRifle_FX — Assault Rifle (plus its plane and vehicle
+      variants), Heavy Pistol and Plane Machine Gun get both;
+    * Tracer_AssaultRifle_FX only — Burst Rifle and Heavy MG;
+    * Impact_IonBlaster_FX — the Ion Blaster only.
+  * Any other template draws nothing; another weapon's FX is never substituted [PARTIAL]. Candidates for Rendering's
+    generic particle runtime.
 * **PARTIAL:**
   * 169 dialogue waves are absent from the extraction (AssetTools).
 * `SoundCues::findCue` resolves full asset names to the compiled short names, but only for the exact packages that
