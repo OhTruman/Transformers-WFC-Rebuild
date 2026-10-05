@@ -198,27 +198,31 @@ def library(mapname):
             if s.get('missing_in'): continue
             import objtree
             op = objtree.package(pkn)
-            # M46: ParticleModuleSizeMultiplyLife driven by an instance parameter (DistributionVectorParticleParameter,
-            # RE pass 4: the HoverFX 'Size'); cooked as the compiled stream's module_id 0 (PMI_Unknown) slot
-            sp = None
+            # M46 / M47: ParticleModuleSizeMultiplyLife driven by an instance parameter (DistributionVectorParticleParameter,
+            # RE pass 4: the HoverFX 'Size'). The LODs' Modules arrays are stripped by the cook, so a LOD uses the module
+            # when its serialized bytes reference the module's export index (big-endian int32; RE raw scan: CarHover_A's
+            # shared _9193 is in all 7 level-0 LODs and no level-1 LOD) [HIGH]
+            import struct as _st
+            pidx = {p.object_path(k + 1).lower(): k for k, _e in enumerate(p.exports)}
+            mods = []
             for i2, e2 in enumerate(p.exports):
                 path2 = p.object_path(i2 + 1)
                 if p.class_name(e2) == 'DistributionVectorParticleParameter' and path2.lower().startswith(t.lower() + '.')                         and 'sizemultiplylife' in path2.lower():
                     d2 = _R([pk]).obj(path2.lower()) or {}
-                    sp = {'name': d2.get('ParameterName'), 'constant': d2.get('Constant', [1.0, 1.0, 1.0])}
-            if sp:
+                    mi = pidx.get(path2.rsplit('.', 1)[0].lower())
+                    if mi is not None:
+                        mods.append((_st.pack('>i', mi + 1), {'name': d2.get('ParameterName'),
+                                                              'constant': d2.get('Constant', [1.0, 1.0, 1.0])}))
+            if mods:
                 for e in s['emitters']:
                     for L in e['lods']:
-                        if any(m['module'] == 'PMI_Unknown' for m in L.get('compiled_modules', [])):
-                            L['size_param'] = sp
-            for e in s['emitters']:
-                for L in e['lods']:
-                    if not any(m['module'] == 'PMI_ColorByParameter' for m in L.get('compiled_modules', [])): continue
-                    try:
-                        tail = pstream.lod_tail(op, op._idx[L['lod'].lower()])
-                        L['default_color'] = default_color(tail, len(pstream.parse(tail)['records']))
-                    except Exception:
-                        L['default_color'] = None
+                        li = pidx.get(L['lod'].lower())
+                        if li is None: continue
+                        ex = p.exports[li]
+                        blob = p.data[ex['serial_offset']:ex['serial_offset'] + ex['serial_size']]
+                        for pat, sp in mods:
+                            if pat in blob:
+                                L['size_param'] = sp
             out[t] = s
     return out
 
