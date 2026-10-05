@@ -37,7 +37,7 @@ def compiled_params(repo, path):
 def main():
     data = sys.argv[1]
     mapname = sys.argv[2] if len(sys.argv) > 2 else 'MP_IAC_Streets'
-    repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx'])
+    repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx'])
     mats = json.load(open(os.path.join(data, 'materials_glsl.json')))
     report = {}
     bad = 0

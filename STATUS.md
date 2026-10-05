@@ -2123,8 +2123,13 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   - `tools/render/visual_check.py` and `visual_suite.sh` cover fixed Streets cameras, the title scene and the human flow.
 - **Transition audit:** frontend ↔ match shows no state or resource leak. Both matches in a cycle are identical, and the
   inherited GL state is harmless.
+- **Lobby / preview (follow-up):**
+  - `setFrontendSceneDraw` + `ueActorMatrix` give the preview pawn a draw path;
+  - `-Map Standard` builds the five UI families;
+  - lobby scenes now use the persistent level's data, so chassis materials compile;
+  - the `build_lighting` BSP fix from Integration is applied.
 - **Open:**
-  - character preview (no API on either side);
+  - preview pawn pose, animation and placement (Gameplay / Frontend);
   - map FX following matinee poses (one title emitter);
   - multi-level scene composition.
 

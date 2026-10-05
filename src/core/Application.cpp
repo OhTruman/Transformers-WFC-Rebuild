@@ -193,6 +193,38 @@ void Application::run() {
         }
         if (const char* gs = std::getenv("WFC_GAMMASETTING"))   // diagnostics: profile Brightness 0..100
             renderer_->setDisplayGamma(2.2f + (-0.95f + 1.9f * std::min(std::max((float)std::atof(gs) / 100.0f, 0.0f), 1.0f)));
+        // diagnostics: a roster body drawn through setFrontendSceneDraw:
+        //   WFC_SCENEPREVIEW=<content glTF>|x,y,z,yawDeg|r,g,b;r,g,b[#<next body>...]   (bind pose; linear colours, optional)
+        struct PreviewBody { render::MeshData mesh; core::Mat4 model; render::CharacterColors colors; };
+        static std::vector<PreviewBody> previews;
+        if (const char* pv = std::getenv("WFC_SCENEPREVIEW")) {
+            std::string all = pv;
+            for (size_t p0 = 0; p0 <= all.size();) {
+                size_t p1 = all.find('#', p0);
+                std::string s = all.substr(p0, p1 == std::string::npos ? std::string::npos : p1 - p0);
+                size_t a = s.find('|'), b = a == std::string::npos ? a : s.find('|', a + 1);
+                PreviewBody body;
+                float x = 0, y = 0, z = 0, yaw = 0;
+                if (a != std::string::npos) std::sscanf(s.c_str() + a + 1, "%f,%f,%f,%f", &x, &y, &z, &yaw);
+                if (b != std::string::npos)
+                    std::sscanf(s.c_str() + b + 1, "%f,%f,%f;%f,%f,%f", &body.colors.primary[0], &body.colors.primary[1],
+                                &body.colors.primary[2], &body.colors.secondary[0], &body.colors.secondary[1],
+                                &body.colors.secondary[2]);
+                if (renderer_->loadContentMesh(s.substr(0, a), body.mesh)) {
+                    body.model = renderer_->actorMatrix(core::Vec3{x, y, z}, core::Vec3{0, yaw, 0});
+                    previews.push_back(std::move(body));
+                } else LOG_WARN("WFC_SCENEPREVIEW: cannot load %s", s.substr(0, a).c_str());
+                if (p1 == std::string::npos) break;
+                p0 = p1 + 1;
+            }
+            renderer_->setFrontendSceneDraw([](render::IRenderer& r) {
+                for (size_t i = 0; i < previews.size(); ++i) {
+                    r.setDrawOwner(1 + (int)i);
+                    r.setCharacterColors(previews[i].colors);
+                    r.drawDynamicMesh(previews[i].mesh, previews[i].model, core::Vec3{1, 1, 1});
+                }
+            });
+        }
         if (const char* sp = std::getenv("WFC_SCENEPOSE")) {     // diagnostics: actor,x,y,z,pitch,yaw,roll (UE, deg)
             char name[128] = {0}; float v[6] = {0};
             if (std::sscanf(sp, "%127[^,],%f,%f,%f,%f,%f,%f", name, &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 7)

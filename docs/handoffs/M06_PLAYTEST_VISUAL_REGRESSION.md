@@ -73,7 +73,12 @@ All runs below are in `agents/rendering/work/m10`.
   - The M06 executable's failure mode fails every capture. A good build passes every capture.
 
 ## Not caused by the renderer, but seen in the recording
-- **Character preview** in customization: nothing instantiates one.
+- **Character preview** in customization: Rendering now provides the draw path.
+  - **Draw:** `IRenderer::setFrontendSceneDraw`. Inside it, call `setDrawOwner(slot)`, `setCharacterColors`, then
+    `drawDynamicMesh(body, render::ueActorMatrix(posUE, rotUEdeg))`. Verified with Bumblebee: original materials, lobby light,
+    colour overrides.
+  - **Render data:** run `tools/render/build_render_data.ps1 -Map Standard` in every tree that runs the frontend.
+  - Before this pass, nothing instantiated one:
   - All 66 robot / vehicle body meshes of the 33 roster chassis are exported (AssetTools `roster_package.json`, every glTF
     present).
   - No code path hands the selection to the renderer: Frontend's `setFrontendPreviewCharacter` is still a proposal in
