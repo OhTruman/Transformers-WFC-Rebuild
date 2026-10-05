@@ -39,9 +39,7 @@ $H = Get-ExeHooks $exe
 # text entry: "type:<text>" (WM_CHAR-equivalent, Frontend f5ada69+) when the build has it, else key:<code> per letter
 $typeStep = [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern '"type:"' -SimpleMatch -List | Select-Object -First 1)
 $quitBox = [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp, *.h -ErrorAction SilentlyContinue | Select-String -Pattern "TnQuitMessageBox" -SimpleMatch -List | Select-Object -First 1)
-function WaitGpu { # one graphical WFC instance at a time (any session): wait up to 30 min for the others to finish
-    $deadline = (Get-Date).AddMinutes([int]$(if ($env:WFC_GATE_GPU_WAIT_MIN) { $env:WFC_GATE_GPU_WAIT_MIN } else { 240 })); while ((Get-Date) -lt $deadline) { if (-not @(Get-Process wfc_rebuild -ErrorAction SilentlyContinue).Count) { Start-Sleep 3; if (-not @(Get-Process wfc_rebuild -ErrorAction SilentlyContinue).Count) { return } }; Start-Sleep 10 }
-    throw "another wfc_rebuild.exe kept running past WFC_GATE_GPU_WAIT_MIN (default 240 min): refusing to start a second graphical instance" }
+function WaitGpu { . (Join-Path $PSScriptRoot "lib\M07.ps1"); if (-not (Wait-WfcGpu)) { throw "GPU busy past WFC_GATE_GPU_WAIT_MIN: refusing to start a second Experimental renderer" } }   # shared policy (lib\M07.ps1)
 $res = New-WfcResults
 function Res($id, $status, $note, $owner = "", $m = $null) { Add-WfcResult $res "present.$id" $status $m $note $owner }
 $MapDirs = @{ 501 = "MP_IAC_Seed"; 502 = "MP_IAC_Berth"; 503 = "MP_UND_Complex"; 504 = "MP_IAC_Rust"; 507 = "MP_ORB_Debris"; 508 = "MP_IAC_Streets"; 509 = "MP_KON_Molten"; 510 = "MP_UND_Gorge" }

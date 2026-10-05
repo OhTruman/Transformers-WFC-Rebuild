@@ -8,18 +8,29 @@ function Get-M07Expectations([switch]$Regenerate) {
     return Get-Content -Raw $f | ConvertFrom-Json
 }
 
-# One graphical WFC instance at a time, system-wide (other sessions included). Waits; returns $false on timeout so a
-# suite can record SKIP instead of starting a second renderer.
-function Wait-WfcGpu([int]$Minutes = 0) {
+# GPU policy. Never more than ONE Experimental renderer. "strict" (the default): no wfc_rebuild.exe from ANY session
+# may run. "shared" (opt-in, WFC_GATE_GPU_POLICY=shared): wait up to
+# WFC_GATE_GPU_GRACE_MIN (default 15) for other sessions' renderers, then run alongside at most
+# WFC_GATE_GPU_MAX_OTHERS (default 1) of them (recorded in
+# $script:GpuShared, so a result taken while sharing the GPU can be told apart). Returns $false only on timeout.
+$script:GpuShared = @()
+function Wait-WfcGpu([int]$Minutes = 0, [switch]$Strict) {
     if (-not $Minutes) { $Minutes = if ($env:WFC_GATE_GPU_WAIT_MIN) { [int]$env:WFC_GATE_GPU_WAIT_MIN } else { 240 } }
-    $deadline = (Get-Date).AddMinutes($Minutes)
+    $grace = if ($env:WFC_GATE_GPU_GRACE_MIN) { [int]$env:WFC_GATE_GPU_GRACE_MIN } else { 15 }
+    $maxOthers = if ($env:WFC_GATE_GPU_MAX_OTHERS) { [int]$env:WFC_GATE_GPU_MAX_OTHERS } else { 1 }   # never share with more than this many other renderers
+    if ($env:WFC_GATE_GPU_POLICY -ne "shared") { $Strict = $true }   # default strict; sharing is opt-in
+    $t0 = Get-Date; $deadline = $t0.AddMinutes($Minutes)
     while ((Get-Date) -lt $deadline) {
-        if (-not @(Get-Process wfc_rebuild -ErrorAction SilentlyContinue).Count) { Start-Sleep 3; if (-not @(Get-Process wfc_rebuild -ErrorAction SilentlyContinue).Count) { return $true } }
+        $procs = @(Get-CimInstance Win32_Process -Filter "Name='wfc_rebuild.exe'" -ErrorAction SilentlyContinue)
+        $mine = @($procs | Where-Object { "$($_.ExecutablePath)" -like "*Rebuild-Experimental*" }); $others = @($procs | Where-Object { "$($_.ExecutablePath)" -notlike "*Rebuild-Experimental*" })
+        if (-not $mine.Count) {
+            if (-not $others.Count) { Start-Sleep 3; if (-not @(Get-Process wfc_rebuild -ErrorAction SilentlyContinue).Count) { return $true } }
+            elseif (-not $Strict -and $others.Count -le $maxOthers -and ((Get-Date) - $t0).TotalMinutes -ge $grace) { $script:GpuShared += ("{0:HH:mm} shared with {1}" -f (Get-Date), (($others | ForEach-Object { Split-Path (Split-Path (Split-Path $_.ExecutablePath)) -Leaf }) -join ",")); return $true }
+        }
         Start-Sleep 10
     }
     return $false
 }
-
 # Rendering's per-shot diagnostics (WFC_VISUALCHECK + shot: writes <shot>.json): inherited GL state at beginFrame,
 # opaque draws without depth testing, GL errors, draw counts. $null when the build has no such report.
 function Read-ShotDiag([string]$Bmp) {

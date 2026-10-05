@@ -9,8 +9,10 @@
 - **Build:** isolated Debug + Release of exactly that sha in `work\ab\m7_<sha>`, with render data for every launchable
   map and the 5 UI levels.
 - **Layout:** a mirror of the user's layout (`build\release\bin`) for the map-loss test.
-- **Suites:** run strictly one renderer at a time. They wait for other sessions' `wfc_rebuild.exe`
-  (`WFC_GATE_GPU_WAIT_MIN`, default 240 min), so please **close other renderer windows** while it runs.
+- **Suites:** run one renderer at a time. By default a suite starts only when no `wfc_rebuild.exe` from any session is
+  running, and waits up to `WFC_GATE_GPU_WAIT_MIN` (240 min) for that, so please **close other renderer windows**.
+  Sharing is opt-in: with `WFC_GATE_GPU_POLICY=shared`, a suite waits `WFC_GATE_GPU_GRACE_MIN` (15 min) and then runs
+  alongside at most `WFC_GATE_GPU_MAX_OTHERS` (1) other renderer.
 - **Read `M07-GATE.md` from the top.** The VISUAL HEALTH line overrides every count. PASS / asset / draw counts are
   never accepted as presentation.
 
@@ -57,5 +59,13 @@ If a hook is missing the check reports SKIP / UNKNOWN, not PASS.
   - explicit chassis fallback logging;
   - character-selection spawn gate;
   - per-form look settings.
-- **AssetTools:** 33 chassis exported (robot / vehicle / character.json, all loadable). Only the IonBlaster weapon is
-  exported, so loadout checks report ASSET MISSING for the other preset weapons.
+- **Gameplay 1216e80 (22a):** the selected chassis spawns from the roster export, with no Optimus substitution.
+  `WFC_CHASSIS=<id>` lets the gate boot every one of the 33 chassis and check robot and vehicle bodies, and
+  `WFC_CHASSISTEST` is parsed too.
+- **Rendering 03a08c8 (M22):** `WFC_MEMCYCLE` is used by the soak: a renderer-only load / unload of every map × passes,
+  failing on growth after unload.
+- **AssetTools:** 33 chassis exported (robot / vehicle / character.json, all loadable). Every preset weapon is exported.
+  Vehicle-form and grenade weapons have no held mesh by design (weapon.json `mesh_note`), so they are not expected as
+  loaded meshes.
+- **06b baseline (dry run):** OPTIMUS FALLBACK for all 4 class presets (robot and vehicle body) and IonBlaster for every
+  class: 12 character FAILs, expected to clear with Gameplay 22a.
