@@ -17,6 +17,88 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 08 SYSTEMS — MULTI-MAP, MODE, CHARACTER / WEAPON AND MOVIE-LANGUAGE AUDIO (2026-10-05, agents/systems)
+
+**Handoff:** `docs/handoff/SYSTEMS_M08_AUDIO_HANDOFF.md`.
+
+### Multi-map (all 10 processed MP maps)
+* **Generator:** `gen_level_audio.py` walks every MP map folder in VerticalSlice/Maps, covering each sublevel's
+  Main_Sequence. It emits one runtime graph per map into `LevelAudio.inc`. There are no per-map source branches.
+* **Graph sources:**
+  * SeqEvent_Touch, using the AssetTools zone geometry keyed by event name;
+  * SeqAct_AmbientAudioZone, Delay and Gate;
+  * GameplayStarted;
+  * remote events;
+  * gameplay-owned events as `Game:<class>:<output>`.
+* **Graph sinks:** PlaySound, PlayerPositional, Flyby, Reverb, Mixer, Play/StopMusic.
+* **Pruning:** ops that cannot reach a sound are dropped.
+* **Semantics** [CONF native A1, M06]:
+  * zone enter makes that zone current globally; a scene input sets the next scene, and the tick fires Ended / Begun;
+  * Reset clears without output;
+  * Touch is a pawn-edge trigger with MaxTriggerCount / ReTriggerDelay, and death untouches;
+  * Delay, Gate and the Mixer preset enable / disable follow the native implementation.
+* **Flyby** [PARTIAL]: native trigger, PROVISIONAL motion (start at a distance, pass through the head point).
+* **Mixer:** map presets with several categories (e.g. MP_COMPLEX_WATERFALL_DUCK, the GLB_Audio_m radio presets)
+  come from the authored rows [CONF data].
+* **Validation:** Streets' graph matches the M06 hand-flattened zones over a 60-step walk and 120 s pool dwells. All
+  10 maps load, run their bed / zones / reverb, survive death and reset, and unload to baseline (suite, 3 × 10
+  cycles).
+
+### Mode audio [CONF script + class defaults]
+* Each mode's messages are ported switch-for-switch from the decompiled scripts:
+  * TnFlagMessage.GetColoredString: the stinger via PC.PlaySound, plus the announcer line;
+  * TnBombMessage: team-specific pickup / detonate lines;
+  * TnDominationMessage: point × 10 + type, for points A–E;
+  * TnCTFMessage: attacker / defender line;
+  * TnRoundBasedGameMessage: time-up and switching-sides lines, plus music (FadeIn / FadeOut 0, Priority 0);
+  * TnKingOfTheHillZoneBase: zone change and the defender-changed lines; suppressed when IgnoringAnnouncer, when
+    the match is over, or on the first claim.
+* The cue names come from the class defaults, written to the shared `__match_messages__` manifest.
+* Gameplay drives every one of these; Systems keeps no timers.
+
+### Character / weapon audio
+* **Generator:** `gen_character_audio.py` combines the roster chassis, mp_weapons and authored.db into
+  `CharacterAudio.inc`: 33 profiles, 53 weapons, 575 cues.
+* **What a profile carries:**
+  * the robot and vehicle SoundEventSets;
+  * the vehicle death sound;
+  * every robot clip's sound notifies (AnimNotify_Footstep → FS event, HmAnimNotify_SoundEvent / _Sound; later
+    anim sets override earlier ones);
+  * the loadout.
+* **Optimus equivalence:** the default profile (Truck) reproduces the old hand-made Optimus tables exactly: 26/26
+  notifies, landing / take-off / idle, and the vehicle and transform cues.
+* **Wired to the profile:** RobotFoley, VehicleAudio, the transform sound, and weapon fire / tail / fine aim.
+* **PARTIAL:**
+  * impacts (IMPT_*) are still the Ion Blaster's;
+  * weapon idle / reload anim notifies are missing;
+  * the vehicle component tunables are OptimusTruckForm's;
+  * 169 dialogue waves are absent from the extraction (AssetTools).
+* `SoundCues::findCue` resolves full asset names to the compiled short names, but only for the exact packages that
+  were compiled under a short name.
+
+### Movie audio (RE 433ef9e + follow-up, CONFIRMED native)
+* **Tracks:** BinkSetSoundTrack([0, 1, 2, 3, 4, 5 + L]). L comes from GLanguage: FRA 1, ITA 2, DEU 3, ESN 4, RUS 5,
+  POL 6; any other language 0. The M07 UNKNOWN is closed: INT is track 5.
+  * `audio::movieLanguageSlot`; `WFC_LANGUAGE`.
+  * A track index the file does not have plays nothing.
+* **Routing** (0x8369A780): 0 FL, 1 FR, 2 SL, 3 SR, 4 LFE, the language track C. This matches the M07 data analysis.
+* **Volume** (Function_82CCA028):
+  * every track is set to Volume × 65536;
+  * the MoviesToAlwaysPlaySound logos use 0xCCCC = 0.8;
+  * the other movies' request Volume is untraced [HIGH 1.0].
+* **Still PROVISIONAL:** the stereo fold-down matrix and the Master-relative level.
+
+### Lifecycle (real device)
+* `tools/systems/lifecycle_probe.cpp` runs 40 cycles of: frontend (logo started and skipped, title, party lobby,
+  game lobby) → map N (all 10 in rotation, a different character profile each cycle). Each match covers start,
+  progress, final stretch, a flag message, death, round reset and end, then returns to the frontend.
+* Every cycle returns to: 0 voices, 0 streams, 0 queued events, 0 level cues, the base cue table (63) and mixer
+  presets (4), no music, an idle announcer and empty reverb.
+* Decoded PCM after each match is ≤ its pre-match value and never exceeds cycle 0 (61.4 → 52.4 MB).
+* The peak is ~96 voices (Rust / Seed / Complex beds) and ≤ 246 MB of PCM while a map is up.
+
+---
+
 ## MILESTONE 07 SYSTEMS — MOVIE AUDIO, MATCH / ANNOUNCER AUDIO, LIFECYCLE RE-VALIDATION (2026-10-04, agents/systems)
 
 **Trigger:** human playtest — the boot movies (logos, FMV_intro) show, but no sound plays.
