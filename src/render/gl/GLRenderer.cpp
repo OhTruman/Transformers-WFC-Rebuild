@@ -196,6 +196,7 @@ public:
             if (!platform::decodeImage(dir + J["pages"][i].asString(), img)) continue;
             f.pageSize.push_back({img.w, img.h});
             f.pages.push_back(uploadTexture(img));
+            setTexturePersistent(f.pages.back());   // fonts are cached for the session (first use may be in a match)
         }
         f.ok = !f.chars.empty() && !f.pages.empty();
         return f;
@@ -288,7 +289,7 @@ public:
     }
 
     bool updateTexture(TextureHandle h, const ImageData& img) override {
-        if (h < 0 || (size_t)h >= textures_.size() || !img.valid()) return false;
+        if (h < 0 || (size_t)h >= textures_.size() || !textures_[(size_t)h] || !img.valid()) return false;
         glBindTexture(GL_TEXTURE_2D, textures_[(size_t)h]);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img.rgba.data());
@@ -564,6 +565,14 @@ public:
         sceneSampled_ = false;
         wfc_.release();
         for (size_t i = 0; i < meshes_.size(); ++i) { meshes_[i] = MeshData{}; gpu_[i] = -1; }
+        // M28: textures uploaded since the previous unload are match-owned (Frontend persistent-renderer soak: +60..105
+        // live textures per match, never released, when the renderer outlives the match)
+        int freed = 0;
+        static const bool keepTex = std::getenv("WFC_M28_KEEPTEX") != nullptr;   // A/B: the pre-M28 behaviour
+        for (size_t i = texEpoch_; i < textures_.size() && !keepTex; ++i)
+            if (textures_[i] && !persistentTex_[i]) { glDeleteTextures(1, &textures_[i]); textures_[i] = 0; ++freed; }
+        texEpoch_ = textures_.size();
+        LOG_INFO("renderer: unloadMapRenderData released %d match textures (%d live)", freed, liveTextureCount());
     }
 
     // ---- validation (M10) ------------------------------------------------------------------------------------
@@ -871,7 +880,21 @@ public:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.w, img.h, 0, GL_RGBA, GL_UNSIGNED_BYTE, img.rgba.data());
         textures_.push_back(id);
+        persistentTex_.push_back(false);
         return (TextureHandle)(textures_.size() - 1);
+    }
+    void setTexturePersistent(TextureHandle h) override {
+        if (h >= 0 && (size_t)h < persistentTex_.size()) persistentTex_[(size_t)h] = true;
+    }
+    void releaseTexture(TextureHandle h) override {
+        if (h < 0 || (size_t)h >= textures_.size() || !textures_[(size_t)h]) return;
+        glDeleteTextures(1, &textures_[(size_t)h]);
+        textures_[(size_t)h] = 0;
+    }
+    int liveTextureCount() const override {
+        int n = 0;
+        for (GLuint t : textures_) n += t ? 1 : 0;
+        return n;
     }
 
     void drawMesh(MeshHandle h, const core::Mat4& model, const core::Vec3& color) override {
@@ -1336,6 +1359,8 @@ private:
     bool inFrame_ = false;
     std::vector<MeshData> meshes_;
     std::vector<GLuint> textures_;
+    std::vector<bool> persistentTex_;     // parallel to textures_: survives unloadMapRenderData
+    size_t texEpoch_ = 0;                 // first texture uploaded since the previous unloadMapRenderData
 };
 
 } // namespace

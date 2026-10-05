@@ -396,8 +396,11 @@ void Application::run() {
 
         // Diagnostic: level-travel render-data cycle (WFC_RELOADTEST=<frame>): release everything, reload the map,
         // re-load the world's meshes (as a travel back into the match does).
+        // "<frame>[,<period>]": with a period the cycle repeats (M28 texture-lifetime soak: live textures must plateau).
         if (const char* rt = std::getenv("WFC_RELOADTEST")) {
-            if (frame == std::atoi(rt)) {
+            long first = std::atol(rt), period = 0;
+            if (const char* c = std::strchr(rt, ',')) period = std::atol(c + 1);
+            if (frame == first || (period > 0 && frame > first && (frame - first) % period == 0)) {
                 renderer_->unloadMapRenderData();
                 world_.load(*renderer_);
             }

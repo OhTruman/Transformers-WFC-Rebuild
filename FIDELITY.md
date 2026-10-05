@@ -17,6 +17,13 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 28 — TEXTURE LIFETIME FOR A PERSISTENT RENDERER (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| uploadTexture leak across matches | unloadMapRenderData freed uploadMesh slots but never uploadTexture textures: World::load map textures, Weapon / Vehicle FX textures, mesh material and lightmap textures. Frontend's persistent-renderer chain: +60..105 live textures per match (Streets 114 -> 716 after 9 maps). My M22 "71 textures = the game's own" were these: renderer-only runs never reloaded the World | Frontend chainP census; WFC_RELOADTEST pre-M28: 355 live after 5 reloads | CONFIRMED | unloadMapRenderData releases every texture uploaded since the previous unload unless setTexturePersistent (canvas font pages are). Released handles are never reused; updateTexture refuses them. New IRenderer::setTexturePersistent / releaseTexture / liveTextureCount. WFC_RELOADTEST=60,60: 71 released per cycle, 0 live; after 4 cycles the frame matches a no-reload run (PASS, diff = shot timing). WFC_M28_KEEPTEX = old behaviour (A/B) |
+| In-process World reload hang | WFC_RELOADTEST with a period hangs after the 5th reload (0 CPU, not responding), with or without M28 and with or without fire | runs keeptex / nofire | UNKNOWN (pre-existing, diagnostic same-World reload only; Frontend's route recreates the World) | open |
+| Title reference | re-baselined after UI_FrontEnd's volume grade (M25 verdict above) | suite | — | work/ref_m21/title_scene |
+
 ## MILESTONE 26 — DEBRIS SIGN COMPILE, ION BLASTER TRACER SLABS (2026-10-05, overnight)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
