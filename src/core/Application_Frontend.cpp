@@ -200,6 +200,13 @@ void Application::attachPresenter() {
                                                                 {"openMovie", frontend_->flow().ui().openMovie()}};
         if (presenter_) for (auto& p : presenter_->navReport()) kv.push_back(p);
         kv.push_back({"privateMB", processMemoryMB()});
+        if (g_scene) {   // Create a Character preview state (slots / visible / vehicle form / cached meshes / posed bodies)
+            FrontendSceneGL::PreviewStats ps = g_scene->previewStats();
+            kv.push_back({"preview", std::to_string(ps.slots) + "/" + std::to_string(ps.visible) + "/" + std::to_string(ps.vehicles) + "/" +
+                                     std::to_string(ps.meshes) + "/" + std::to_string(ps.bodies)});
+        }
+        kv.push_back({"matinees", std::to_string(frontend_->scene().playing().size())});
+        kv.push_back({"camera", frontend_->scene().view().camera});
         std::string line;
         for (const auto& [k, v] : kv) line += " " + k + "=" + (v.empty() ? std::string("-") : v);
         LOG_INFO("FLOW nav.check%s", line.c_str());

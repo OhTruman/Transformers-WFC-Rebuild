@@ -93,6 +93,38 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND PASS 6: CREATE A CHARACTER PREVIEW AND SELECTION (2026-10-05, agents/frontend)
+Original behaviour from TnCharacterScriptBinding / TnCharacterCustomizationData / TnCharacterApplier (decompiled),
+CustomTransformers_GFX (AVM1) and UI_CharacterCustomization_m (Kismet). RE re-workspace confirmed the room, camera and
+palette findings independently (notes/TARGETED_PASS3_2026-10-05.md §B).
+
+| Area | Original | Rebuild | Label |
+|---|---|---|---|
+| Preview bodies | PreviewGuy0 / 1 per faction, respawned only on a chassis change (UpdateSinglePreviewCharacter) | roster robot glTF per slot; the respawn resets form and idle clock | CONFIRMED |
+| Idle | SetupPreviewAnim: IdleNode.SetAnim(Cust_Idle); 13 chassis have it, the rest keep the reference pose | Rendering loadPreviewBody / posePreviewBody (detected) | CONFIRMED |
+| Ground | OnPreviewPawnTick FindGround | Rendering sceneGroundHeight (detected) | HIGH |
+| Change Form | TransformPreviewCharacter toggles the first visible pawn; ...ToRobot forces robot (clickLStick / buttonY) | vehicle glTF swap; no transform animation | CONFIRMED script / PC ADAPTATION (no animation) |
+| Rotation | none (bRotateTowardFocus false, no rotate call in the movie) | none | CONFIRMED |
+| Weapon on the preview | none (preview CharacterData has chassis + colours only) | none; weapons are 2D icons in the menu | CONFIRMED |
+| Faction pawn visibility | Preview_Characters fscommand -> ToggleHidden PreviewGuyN | pawnVisibility export | CONFIRMED |
+| Class camera | Chassis_To_Cam_ID* by CustomizationCameraId; Play / Reverse; FOVAngle 70 -> 60 / 65 | as original | CONFIRMED |
+| UpdatePreviewCharacter args | wrapper (CharacterChassis, CharacterFaction, CharacterPrimary, CharacterSecondary) | fixed (faction was read as the primaries) | CONFIRMED |
+| Palette textures | GFxMovie ExternalTextures: autobotPalette_0..4 -> UI_CustomChar_p.A_*, decepticonPalette_5..9 -> D_* | sampled from the bound textures (was the "EXTERNAL TEXTURE" placeholders) | CONFIRMED |
+| Palette coordinates | picker gradient 256 x 256 units (gradWidth / gradHeight) over the 128 px texture | scaled x * w / 256 | HIGH |
+| New / reset character colours | ResetCharacterFromName: random palettes (Autobot 0-4, Decepticon 5-9), coords RandomInt(255), colours black; reset keeps FriendlyName | as original; a fresh profile is randomised once and written | CONFIRMED |
+| Match colours | black = kUseDefaultColor (material default paint); committed picker colours are sRGB | carried in the selection contract | CONFIRMED |
+| Colour picker cursor | Input.RegisterLeftStickCallback(path.updatePaletteCursor), (StickX, StickY) per frame; LT / RT change palette | presenter calls it with the pad stick / held arrows | CONFIRMED contract, PC keys PC ADAPTATION |
+| Selection handoff | TnPlayerController.SelectCharacter -> PRI._SelectedCharacter | GameFlow::SelectedCharacter contract -> game::CharacterSelection (full fields, detected) | CONFIRMED fields |
+
+GFx runtime fixes found by this pass: intervals on removed clips no longer fire; the collector roots removed clips'
+subtrees (intermittent use-after-free crash); unloadMovie keeps children alive. Diagnostics: WFC_GFX_GCCHECK,
+WFC_GFX_NO_GC, WFC_NOPAD. The collector counter is per movie (it was shared, so one movie took every collection).
+Posed preview bodies: LRU cache of 8 (Rendering: bodies are CPU-only, valid across scene loads; releasePreviewBody when
+present).
+
+UNKNOWN: the native GetPixelColor coordinate scaling (taken as 256-unit gradient space); the PC key binding of the
+picker cursor (arrows used).
+
 ## FRONTEND: CUSTOMIZATION CAMERA PER CHASSIS, MATINEE FLOAT TRACKS (2026-10-04, agents/frontend)
 - **Customization camera per chassis: CONFIRMED ORIGINAL.**
   - The chain, all from cooked data:

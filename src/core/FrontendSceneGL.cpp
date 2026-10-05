@@ -45,22 +45,45 @@ template <class R> void nativePreviewHook(R* r, FrontendSceneGL* self, bool on) 
         else r->setFrontendSceneDraw({});
     } else { (void)r; (void)self; (void)on; }
 }
+template <class R> void nativeReleaseBody(R& r, int h) {
+    if constexpr (HasReleaseBody<R>::value) { if (h >= 0) r.releasePreviewBody(h); }
+    else { (void)r; (void)h; }
+}
 template <class R> bool nativePosedBody(R& r, const FrontendSceneGL::PreviewSlot& s, int slot, bool vehicle, double t,
-                                         std::map<std::string, int>& bodies, render::MeshData& out) {
+                                         std::map<std::string, FrontendSceneGL::CachedBody>& bodies, uint64_t& clock,
+                                         const std::vector<FrontendSceneGL::PreviewSlot>& shown, render::MeshData& out) {
     if constexpr (HasPreviewBody<R>::value) {
         if (vehicle) return false;
         std::string key = s.gltf + "#" + std::to_string(slot);
         auto it = bodies.find(key);
-        if (it == bodies.end()) it = bodies.emplace(key, r.loadPreviewBody(s.gltf, s.animSets, "Cust_Idle")).first;
-        return it->second >= 0 && r.posePreviewBody(it->second, (float)t, out) && !out.empty();
-    } else { (void)r; (void)s; (void)slot; (void)vehicle; (void)t; (void)bodies; (void)out; return false; }
+        if (it == bodies.end()) {
+            // LRU cap: evict the least recently used body that no slot shows now (released when the renderer can).
+            while (bodies.size() >= FrontendSceneGL::kMaxPreviewBodies) {
+                auto victim = bodies.end();
+                for (auto b = bodies.begin(); b != bodies.end(); ++b) {
+                    bool inUse = false;
+                    for (size_t i = 0; i < shown.size(); ++i) inUse = inUse || b->first == shown[i].gltf + "#" + std::to_string(i);
+                    if (!inUse && (victim == bodies.end() || b->second.lastUse < victim->second.lastUse)) victim = b;
+                }
+                if (victim == bodies.end()) break;
+                nativeReleaseBody(r, victim->second.handle);
+                bodies.erase(victim);
+            }
+            FrontendSceneGL::CachedBody cb;
+            cb.handle = r.loadPreviewBody(s.gltf, s.animSets, "Cust_Idle");
+            it = bodies.emplace(key, cb).first;
+        }
+        it->second.lastUse = ++clock;
+        return it->second.handle >= 0 && r.posePreviewBody(it->second.handle, (float)t, out) && !out.empty();
+    } else { (void)r; (void)s; (void)slot; (void)vehicle; (void)t; (void)bodies; (void)clock; (void)shown; (void)out; return false; }
 }
 template <class R> void nativePreviewDraw(R& r, const FrontendSceneGL::PreviewSlot& s, int slot, bool vehicle, double t,
-                                          std::map<std::string, render::MeshData>& cache, std::map<std::string, int>& bodies,
-                                          render::MeshData& posed) {
+                                          std::map<std::string, render::MeshData>& cache,
+                                          std::map<std::string, FrontendSceneGL::CachedBody>& bodies, uint64_t& clock,
+                                          const std::vector<FrontendSceneGL::PreviewSlot>& shown, render::MeshData& posed) {
     if constexpr (HasPreviewDraw<R>::value) {
         const render::MeshData* mesh = nullptr;
-        if (nativePosedBody(r, s, slot, vehicle, t, bodies, posed)) mesh = &posed;
+        if (nativePosedBody(r, s, slot, vehicle, t, bodies, clock, shown, posed)) mesh = &posed;
         else {
             const std::string& g = vehicle && !s.vehicleGltf.empty() ? s.vehicleGltf : s.gltf;
             auto it = cache.find(g);
@@ -78,7 +101,7 @@ template <class R> void nativePreviewDraw(R& r, const FrontendSceneGL::PreviewSl
         r.setCharacterColors(cc);
         r.drawDynamicMesh(*mesh, r.actorMatrix(Vec3{s.pos[0], s.pos[1], s.pos[2]}, Vec3{0, s.yawDeg, 0}), Vec3{1, 1, 1});
         r.setDrawOwner(0);
-    } else { (void)r; (void)s; (void)slot; (void)vehicle; (void)t; (void)cache; (void)bodies; (void)posed; }
+    } else { (void)r; (void)s; (void)slot; (void)vehicle; (void)t; (void)cache; (void)bodies; (void)clock; (void)shown; (void)posed; }
 }
 template <class R> void nativeUnload(R* r) {
     if constexpr (HasFrontendScene<R>::value) r->unloadFrontendScene();
@@ -135,7 +158,8 @@ FrontendSceneGL::PreviewStats FrontendSceneGL::previewStats() const {
 void FrontendSceneGL::drawPreview(render::IRenderer& r) {
     for (size_t i = 0; i < preview_.size(); ++i)
         if (i < 2 && !previewHidden_[i])
-            nativePreviewDraw(r, preview_[i], (int)i, previewVehicle_[i], previewClock() - previewSpawn_[i], previewMeshes_, previewBodies_, posed_);
+            nativePreviewDraw(r, preview_[i], (int)i, previewVehicle_[i], previewClock() - previewSpawn_[i], previewMeshes_, previewBodies_,
+                              bodyClock_, preview_, posed_);
 }
 
 std::string FrontendSceneGL::familyFor(const std::string& uiLevel) {
@@ -202,6 +226,11 @@ bool FrontendSceneGL::load(const std::vector<std::string>& levels) {
 
 std::string FrontendSceneGL::release(const ui::GlCensus::Owned& keep) {
     if (!r_ || family_.empty()) return "";
+    // Leaving the room: the preview pawns go with it (a new visit spawns them again: initStreamingLvl -> SPAWN_Char).
+    // The posed-body handles stay cached (Rendering owns their lifetime; bounded by the roster).
+    preview_.clear();
+    previewHidden_[0] = previewHidden_[1] = false;
+    previewVehicle_[0] = previewVehicle_[1] = false;
     if (native_) { nativePreviewHook(r_, this, false); previewMeshes_.clear(); nativeUnload(r_); native_ = false; family_.clear(); return "renderer unloadFrontendScene"; }
     r_->unloadMapRenderData();
     std::string s = censusActive_ ? census_.release(keep) : std::string();
