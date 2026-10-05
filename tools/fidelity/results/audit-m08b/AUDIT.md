@@ -20,7 +20,10 @@ No new graphical runs: other sessions' renderers were active throughout.
 - **P2:** hidden correctness issue likely to surface later.
 - **P3:** polish / unsupported.
 
-**P0: none found.** The world-loss class is covered: GL entry state was sane after every overlay in the 175a634 runs, and the renderer releases all match-owned GL objects at match end.
+**P0: none found by this audit.** Rendering has since found and fixed one P0-class defect: a skinned sub-mesh drawn
+out of bounds, where "an AMD driver may page-fault and reset" (agents/rendering M45, `WfcPipeline.cpp:1460-1470`).
+It is not yet integrated. `fast-gate.ps1` now FAILs `render.out_of_bounds_draws` on that error. The world-loss class
+is covered: GL entry state was sane after every overlay in the 175a634 runs, and the renderer releases all match-owned GL objects at match end.
 
 ## Why a short playtest misses most of these
 A normal offline match is **solo**. Opponents exist only through a diagnostic hook (`WFC_MATCH_OPPONENTS`,
@@ -162,14 +165,14 @@ human tester. Findings P1-2 and P2-2 hide behind this.
 - The rebuild emits `bridge.unhandled` for them (26× in the 175a634 runs). The Flash `mc_hurt` overlay still shows;
   the native screen effect under it does not.
 
-### P2-5 A failed map render-data load silently falls back to the legacy renderer with the Streets fog
-- **Owner:** Gameplay (caller), Rendering.
-- **Visible:** not now (all 10 maps have render data). **Confidence:** HIGH.
-- `game/World.cpp:88` ignores `loadMapRenderData()`'s result.
-- On failure the fixed-function `world.glb` path draws with the GL fog hard-coded to Streets' HeightFog
-  (`render/gl/GLRenderer.cpp:84-92`).
-- The `legacy fallback` marker (`GLRenderer.cpp:643-649`) is reported only under `WFC_VISUALCHECK`.
-- **Recommend:** LOG_ERROR on failure in a normal run, plus a frontend-visible note.
+### P2-5 (corrected → P3) The caller ignores a failed map render-data load
+- **Owner:** Gameplay (optional hard failure).
+- **Correction (Rendering, 2026-10-05):** this is **not silent**. `WfcPipeline.cpp:614` logs
+  `LOG_ERROR wfc: render data not found … LEGACY RENDERER, not the original presentation` on every failed load, in
+  normal runs.
+- The original finding looked only at the ignored bool (`World.cpp:88`) and the diagnostic marker.
+- What remains: the caller continues on the fixed-function path (Streets fog constant, `GLRenderer.cpp:84-92`).
+  Gameplay may make it a hard failure. `fast-gate.ps1` now FAILs `render.legacy_renderer` on that error.
 
 ### P2-6 The test design hides team and combat bugs
 - **Owner:** Experimental / Integration.

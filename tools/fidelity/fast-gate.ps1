@@ -130,6 +130,22 @@ foreach ($run in @(@{ k = "route"; d = (Join-Path $pres "route") }, @{ k = "maps
     Res "resources.$($run.k)" $(if (-not $pm.Count -and -not $gc.Count) { "UNKNOWN" } elseif ($peak -and $peak -gt 6000) { "FAIL" } else { "INFO" }) ("private MB first {0:N0} / peak {1:N0} / last {2:N0} over {3} samples; GL census per match end: {4} (FAST tier: explosion check only - plateau proof is TARGETED / FULL soak)" -f $(if ($pm.Count) { $pm[0] }), $peak, $(if ($pm.Count) { $pm[-1] }), $pm.Count, (($gc | ForEach-Object { "$($_.live)" }) -join " -> ")) "Rendering/Systems"
 }
 
+# ---------- renderer error scan over every log of this gate (Rendering M45 evidence fields; audit 2026-10-05)
+#   "sub-mesh … out of bounds … not drawn": a draw that can make the GPU fetch out of bounds (driver page fault / reset risk)
+#   "LEGACY RENDERER": a map / scene drawn without its original render data
+#   VISUALCHECK glDebug=<n>: GL debug-output messages (driver-reported errors / warnings)
+$allLogs = @(Get-ChildItem $OutDir -Recurse -Filter wfc.log -ErrorAction SilentlyContinue)
+$oob = @(); $legacy = @(); $glDbg = 0
+foreach ($lf in $allLogs) {
+    $oob += @(Grep-Log $lf.FullName 'out of bounds .*not drawn' | ForEach-Object { $_.text -replace '^\[[^\]]*\] ', '' })
+    $legacy += @(Grep-Log $lf.FullName 'LEGACY RENDERER' | ForEach-Object { "$($lf.Directory.Name): " + ($_.text -replace '^\[[^\]]*\] ', '') })
+    foreach ($m in @(Grep-Log $lf.FullName 'VISUALCHECK .*glDebug=(\d+)')) { $glDbg = [Math]::Max($glDbg, [int][regex]::Match($m.text, 'glDebug=(\d+)').Groups[1].Value) }
+}
+$oobCheck = [bool](Get-ChildItem (Join-Path $tgt "srcender") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'out of bounds (%zu indices' -SimpleMatch -List | Select-Object -First 1)
+Res "render.out_of_bounds_draws" $(if ($oob.Count) { "FAIL" } elseif (-not $oobCheck) { "UNKNOWN" } else { "PASS" }) ("rejected out-of-bounds sub-mesh draws (GPU fault / driver-reset class, Rendering M45): {0}{1}{2}" -f $oob.Count, $(if ($oob.Count) { " - " + (($oob | Select-Object -Unique -First 3) -join " | ") } else { "" }), $(if (-not $oobCheck) { " - this build predates the M45 draw validation, so it cannot report them (not a PASS)" } else { "" })) "Rendering"
+Res "render.legacy_renderer" $(if ($legacy.Count) { "FAIL" } else { "PASS" }) ("LEGACY RENDERER (no original render data) errors: {0}{1}" -f $legacy.Count, $(if ($legacy.Count) { " - " + (($legacy | Select-Object -Unique -First 3) -join " | ") } else { "" })) "Rendering"
+Res "render.gl_debug" $(if ($glDbg -gt 0) { "PARTIAL" } else { "INFO" }) ("max VISUALCHECK glDebug count {0} (field present from Rendering 84ba009; 0 / absent on older builds)" -f $glDbg) "Rendering"
+
 # ---------- report
 function Rep($p) { if (Test-Path $p) { return @((Get-Content -Raw $p | ConvertFrom-Json).results) } else { return @() } }
 $sub = [ordered]@{ route = (Rep (Join-Path $pres "report.json")); mapswitch = (Rep (Join-Path $ml "report.json")); renderstate = (Rep (Join-Path $rs "report.json")) }
