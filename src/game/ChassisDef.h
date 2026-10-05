@@ -22,6 +22,7 @@ struct RobotParams {
     float terminalVel = core::config::kRobotTerminalVel;
     float jumpHeight = core::config::kRobotMaxJumpH;                                        // Acrobatics JumpHeight
     float dodgeSpeed = 30.0f, dodgeTime = 0.5f;                                             // Acrobatics DodgeSpeed / DodgeTime
+    float hoverJumpHeight = 5.0f, hoverDuration = 7.0f, hoverAirSpeed = 5.0f;              // Acrobatics HoverJumpHeight / Duration / AirSpeed
     float momGroundFwd = core::config::kMomentumGroundFwd, momGroundNeutral = core::config::kMomentumGroundNeutral,
           momGroundBack = core::config::kMomentumGroundBack;
     float momAirFwd = core::config::kMomentumAirFwd, momAirNeutral = core::config::kMomentumAirNeutral,

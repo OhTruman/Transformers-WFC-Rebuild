@@ -183,6 +183,9 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     R.jumpHeight = acro["JumpHeight"].asFloat(500) * 0.01f;
     R.dodgeSpeed = acro["DodgeSpeed"].asFloat(3000) * 0.01f;
     R.dodgeTime = acro["DodgeTime"].asFloat(0.5f);
+    R.hoverJumpHeight = acro["HoverJumpHeight"].asFloat(500) * 0.01f;
+    R.hoverDuration = acro["HoverDuration"].asFloat(7.0f);
+    R.hoverAirSpeed = acro["HoverAirSpeed"].asFloat(500) * 0.01f;
     const assets::Json& mom = st["momentum"]["values"];
     R.momGroundFwd = mom["OnGround"]["Forward"].asFloat(R.momGroundFwd);
     R.momGroundNeutral = mom["OnGround"]["Neutral"].asFloat(R.momGroundNeutral);

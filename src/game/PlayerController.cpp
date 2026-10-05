@@ -609,6 +609,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                 }
                 if (a.id == "Warcry" || a.id == "Shockwave") pawn_->pendingAbilityEffect_ = a.id;   // ServerTriggerAbility (World)
                 if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
+                if (a.id == "Hover") { step.hoverRequest = true; pawn_->hoverRequested_ = true; }   // PlayerController.Hover
                 a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_;
             } else if (a.id != lastRefusedAbility_) {
                 LOG_WARN("ability %s (slot %d) is not implemented in the rebuild [PARTIAL]", a.id.c_str(), wantAbility_);

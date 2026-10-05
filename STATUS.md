@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22k (2026-10-05) — Cloaking and Hover abilities, objective markers for all modes
+- Implemented abilities: Dodge, Warcry, Shockwave, Cloaking, Hover (authored values). WFC_WEAPONTEST 16/16.
+
 ## GAMEPLAY PASS 22i (2026-10-05) — Warcry and Shockwave abilities
 - Warcry (team damage/taken buffs by level, 15 s, cooldown after the buff) and Shockwave (0.25 s delay, 65 within 25 m) per authored CDOs. WFC_WEAPONTEST 14/14.
 

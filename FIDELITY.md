@@ -153,7 +153,14 @@ Inputs:
   - cooldown 15 s after it ends;
   - HUD `cloaked`; the cloak shader belongs to Rendering [CONF script].
 - **Whirlwind** is a melee attack (TnMeleeService type 3), so it waits for the melee system [PARTIAL].
-- Barrier, Hover … are listed per slot and reported unimplemented (log + HUD
+- **Hover:**
+  - TnAbilityHover → TnAcrobaticsManager JumpingToHover (jump to HoverJumpHeight 500 UU), then Hovering when descending:
+    PHYS_Flying, MaxAirSpeed HoverAirSpeed 500 UU/s, HoverDuration 7 s;
+  - jumping or expiry → Falling; TnBuffIncreaseDamageDuringHover ×1.4 while hovering;
+  - Cooldown[0] 35 s once not hovering.
+  - Test: rose 4.9 m, held height, ≤ 5 m/s, fell back; cooldown 31.4 s, 3.6 s after the end.
+- Barrier, Whirlwind (melee), RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
+  SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].
 - **Correction:** the Pass 21f contract doc said robot Shift ran a dash. It did nothing until this pass.
 

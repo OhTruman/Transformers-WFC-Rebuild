@@ -37,7 +37,7 @@ public:
         for (AbilitySlot& a : abilities_) { a.cooldown = 0.0f; a.spam = 0.0f; a.pendingCooldown = false; }
         regenBuffRemain_ = 0.0f; fastCooldownRemain_ = 0.0f; ammoLockRemain_ = 0.0f;
         warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f; pendingAbilityEffect_.clear(); shockwaveDelay_ = -1.0f;
-        cloakRemain_ = 0.0f;
+        cloakRemain_ = 0.0f; hoverState_ = 0; hoverRemain_ = 0.0f;
         health_ = Health{}; overShield_ = false;
         if (!specHealth_.empty()) health_.initialize(specHealth_, specOvershield_);   // ApplySpecialty: Health_<Class>
         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;   // TnCharacterApplier.ApplyWeapons
@@ -161,6 +161,11 @@ public:
     // TnBuffCloak (BuffTime[0] 20 s): removed by ExposeSelf - on firing (TnWeapon.OnPreServerFire) and on damage taken
     // (TnPlayerPawn.TakeDamage); hides the TDM name-tag label. The cloak shader belongs to Rendering [CONF script].
     float cloakRemain_ = 0.0f;
+    // TnAcrobaticsManager JumpingToHover (state 2) / Hovering (state 3): HoverDuration, PHYS_Flying at HoverAirSpeed,
+    // TnBuffIncreaseDamageDuringHover FloatModifier[0] 1.4 while hovering [CONF script + authored].
+    int hoverState_ = 0;
+    bool hoverRequested_ = false;   // triggered, not yet started by the movement step
+    float hoverRemain_ = 0.0f;
     void exposeSelf() { cloakRemain_ = 0.0f; }
     bool isDodging() const { return dodgeRemain_ > 0.0f; }
     // Abilities (TnAbilityManager): CharacterData.Abilities[0] on Ability0 (Shift), [1] on Ability1 (Ctrl) [CONF bindings].
@@ -171,9 +176,9 @@ public:
     void setAbilities(const std::vector<std::string>& ids) {
         for (int i = 0; i < 2; ++i) {
             AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
-            a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking";
+            a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking" || a.id == "Hover";
             // Cooldown[skill data index 0]: Dodge [2.0, 0.5]; Warcry [60]; Shockwave [60] [CONF authored CDOs].
-            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : 0.0f;
+            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : 0.0f;
             abilities_[i] = a;
         }
     }
@@ -183,7 +188,7 @@ public:
             // TnAbilityManager.Tick: the cooldown starts once CanStartCooldown (Dodge: no longer dodging; Warcry:
             // HadAndLostBuffCondition - after the owner's Warcry buff ended).
             if (a.pendingCooldown && !(a.id == "Dodge" && isDodging()) && !(a.id == "Warcry" && (warcryRemain_ > 0.0f || pendingAbilityEffect_ == "Warcry")) &&
-                !(a.id == "Cloaking" && cloakRemain_ > 0.0f)) {
+                !(a.id == "Cloaking" && cloakRemain_ > 0.0f) && !(a.id == "Hover" && (hoverState_ != 0 || hoverRequested_))) {
                 a.pendingCooldown = false; a.cooldown = a.cooldownTime;
             }
             if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));

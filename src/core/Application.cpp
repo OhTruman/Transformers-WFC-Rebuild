@@ -2050,6 +2050,31 @@ void Application::runWeaponTest() {
         bool cd = world_.hudState().abilities[1].cooldown > 14.0f;
         check(cloaked && stillPending && exposed && cd, "Cloaking (Air Raid Ctrl): cloaked, firing decloaks (ExposeSelf), 15 s cooldown after the cloak");
     }
+    // Hover (Soldier class pool): custom Warpath loadout with Abilities [Hover, Dodge].
+    {
+        world_.applyChassisToLocalPawn("Tank3");
+        game::CharacterSelection hs; hs.type = 0; hs.specialty = game::Specialty::Soldier; hs.abilities = {"Hover", "Dodge"};
+        world_.applyLoadout(&hs);
+        run(1.0f);
+        float y0 = pc.position().y;
+        platform::InputFrame h; h.pressed[(int)platform::Button::Dash] = true; h.down[(int)platform::Button::Dash] = true;
+        world_.handleInput(h, dt); world_.tick(dt);
+        run(1.2f);
+        float yTop = pc.position().y;
+        bool hoveringNow = world_.hudState().hoverState == 2;
+        platform::InputFrame fw; fw.down[(int)platform::Button::Forward] = true;
+        float maxH = 0.0f;
+        for (int i = 0; i < 180; ++i) { world_.handleInput(fw, dt); world_.tick(dt); maxH = std::max(maxH, std::hypot(pc.velocity().x, pc.velocity().z)); }
+        float yMid = pc.position().y;
+        run(5.0f);
+        bool ended = world_.hudState().hoverState == 0;
+        run(2.0f);
+        float yEnd = pc.position().y;
+        bool cd = world_.hudState().abilities[0].cooldown > 30.0f;
+        LOG_INFO("WEAPON hover: y0 %.2f top %.2f mid %.2f end %.2f, max horizontal %.1f m/s, ended %d, cooldown %.1f", y0, yTop, yMid, yEnd, maxH, (int)ended, world_.hudState().abilities[0].cooldown);
+        check(hoveringNow && yTop - y0 > 4.0f && std::fabs(yMid - yTop) < 0.3f && maxH <= 5.01f && ended && yEnd < yTop - 3.0f && cd,
+              "Hover: rises to HoverJumpHeight, holds height 7 s at <= HoverAirSpeed 5 m/s, falls after; 35 s cooldown");
+    }
     LOG_INFO("WEAPON SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

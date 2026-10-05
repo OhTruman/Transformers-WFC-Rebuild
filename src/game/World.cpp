@@ -1060,6 +1060,7 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         const Character* ip = instigator == localPlayer_ ? &player_.pawn() : nullptr;
         if (!ip) for (MatchOpponent* o : opponents_) if (o->matchPlayer() == instigator) ip = &o->pawn();
         if (ip && instigator != victim && ip->warcryRemain_ > 0.0f) amount *= ip->warcryDamageMul_;   // TnBuffWarcryIncreaseDamage
+        if (ip && instigator != victim && ip->hoverState_ == 2) amount *= 1.4f;   // TnBuffIncreaseDamageDuringHover [0]
     }
     float applied = h->applyDamage(amount);
     if (applied > 0.0f) {                                   // TnPlayerPawn.TakeDamage -> ExposeSelf
@@ -1116,6 +1117,7 @@ HudGameState World::hudState() const {
     for (const Character::AbilitySlot& a : pc.abilities_) h.abilities.push_back({a.id, a.implemented, a.cooldown, a.pendingCooldown});
     h.dodging = pc.isDodging();
     h.cloaked = pc.cloakRemain_ > 0.0f;
+    h.hoverState = pc.hoverState_;
     h.damageTakenCount = damageTakenCount_;
     h.lastDamageFrom = lastDamageFrom_;
     if (damageTakenCount_ > 0) {

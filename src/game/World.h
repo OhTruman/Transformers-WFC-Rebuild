@@ -59,7 +59,8 @@ struct HudGameState {
     struct Ability { std::string id; bool implemented; float cooldown; bool active; };
     std::vector<Ability> abilities;
     bool dodging = false;
-    bool cloaked = false;                        // TnBuffCloak active (Rendering: cloak shader)
+    bool cloaked = false;
+    int hoverState = 0;                          // 1 rising to hover, 2 hovering (TnAcrobaticsManager)                        // TnBuffCloak active (Rendering: cloak shader)
     // CTF / EXT: attacking team (GRI.AttackingTeam), rounds, carried objectives, planted bomb (CurrentObjectiveCountdown).
     int attackingTeam = 255, currentRound = 0, rounds = 0;
     bool betweenRounds = false;

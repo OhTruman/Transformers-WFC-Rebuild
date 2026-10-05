@@ -693,8 +693,29 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         c.setOnGround(false);
         hv = core::Vec3{v.x, 0, v.z};
     }
+    // Hover: JumpingToHover (Falling at the HoverJumpHeight jump velocity) -> Hovering when descending or on the ground
+    // (PHYS_Flying, MaxAirSpeed HoverAirSpeed, HoverDuration) -> Falling on expiry or on jump [CONF script].
+    if (in.hoverRequest && c.hoverState_ == 0 && !c.isTransforming()) {
+        v.y = std::sqrt(2.0f * core::config::kGravity * RPd.hoverJumpHeight);
+        c.hoverState_ = 1; c.setOnGround(false);
+    }
+    c.hoverRequested_ = false;
+    if (c.hoverState_ == 1 && (v.y <= 0.0f || c.onGround()) && !in.hoverRequest) { c.hoverState_ = 2; c.hoverRemain_ = RPd.hoverDuration; }
+    if (c.hoverState_ == 2) {
+        c.hoverRemain_ -= dt;
+        if (c.hoverRemain_ <= 0.0f || in.wantJump) c.hoverState_ = 0;
+    }
+    const bool hovering = c.hoverState_ == 2;
     const bool dodging = c.dodgeRemain_ > 0.0f;
-    if (dodging) {
+    if (hovering) {
+        // PHYS_Flying: planar input toward HoverAirSpeed at AccelRate; no gravity, no vertical drift.
+        core::Vec3 des = wish * RPd.hoverAirSpeed;
+        core::Vec3 dv{des.x - v.x, 0.0f, des.z - v.z};
+        float l = core::length(dv), mx = RPd.accel * dt;
+        if (l > mx && l > 1e-5f) dv = dv * (mx / l);
+        v.x += dv.x; v.z += dv.z; v.y = 0.0f;
+        hv = core::Vec3{v.x, 0, v.z};
+    } else if (dodging) {
         c.dodgeRemain_ -= dt;   // PHYS_Flying: no gravity, the velocity carries (Acceleration = Normal(Velocity))
     } else if (c.rammedRemain_ > 0.0f) {
         // RammedReaction [CONF native M03 P8]: the forced velocity set on entry carries for 0.5 s (no
@@ -707,11 +728,11 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     }
 
     // [CONF] pawn gravity -29.4 m/s^2 (not while dodging: PHYS_Flying).
-    if (!dodging) v.y -= core::config::kGravity * dt;
+    if (!dodging && !hovering) v.y -= core::config::kGravity * dt;
     v.y = std::max(v.y, -c.robotParams().terminalVel);
 
     // Jumping stays a robot-form, non-transforming action [PROV during a fold].
-    if (in.wantJump && c.onGround() && !c.isTransforming() && t.jumpSpeed > 0.0f) {
+    if (in.wantJump && c.onGround() && !c.isTransforming() && !hovering && t.jumpSpeed > 0.0f) {
         v.y = c.robotParams().jumpSpeed();   // JumpZ = sqrt(2 g JumpHeight) of this chassis' acrobatics
         c.setOnGround(false);
     }

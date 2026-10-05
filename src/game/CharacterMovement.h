@@ -21,6 +21,7 @@ struct MoveIntent {
     float viewPitch = 0.0f;    // controller (camera) pitch, radians (jet hover strafes in the full view frame)
     float turnIn = 0.0f, lookUpIn = 0.0f;   // GetNormalizedTurn / GetNormalizedLookUp (jet flight lean)
     bool ascend = false, descend = false;   // jet Hover Up / Down (held)
+    bool hoverRequest = false; // TnPlayerController.Hover -> TnAcrobaticsManager.Hover (JumpingToHover)
     int dodgeDir = 0;          // TnAcrobaticsManager dodge request: 1 left, 2 right, 3 forward, 4 back (0 = none)
 };
 
