@@ -1290,6 +1290,10 @@ HudGameState World::hudState() const {
     }
     h.vehicleForm = pc.moveForm() == Form::Vehicle; h.transforming = pc.isTransforming();
     h.cantTransformCount = player_.controller().cantTransformCount();
+    if (matchActive_ && localPlayer_ >= 0 && (size_t)localPlayer_ < match_.players().size()) {
+        const MatchPlayer& mp = match_.players()[(size_t)localPlayer_];
+        h.selectedChassis = mp.chassis; h.drawnChassis = mp.drawnChassis; h.chassisFallback = mp.chassisFallback;
+    }
     h.matchActive = matchActive_;
     if (!matchActive_ || localPlayer_ < 0) return h;
     const MatchPlayer& me = match_.players()[(size_t)localPlayer_];

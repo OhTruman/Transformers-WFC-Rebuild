@@ -78,6 +78,8 @@ struct MatchPlayer {
     bool hasSelectedCharacter = false; // PRI.HasSelectedCharacter: spawning waits for it [CONF]
     CharacterSelection selection;
     std::string chassis;               // body resolved at the last spawn (faction from the team)
+    std::string drawnChassis;          // body actually drawn: the selection when its pawn resources load, else "Truck"
+    bool chassisFallback = false;      // true when drawnChassis != chassis [RECONSTRUCTION FALLBACK, logged]
 };
 
 class Match {

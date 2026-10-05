@@ -46,16 +46,49 @@ KillsLeftAnnouncement, PointsLeftAnnouncement, MatchEnded, ReturnToLobby. Consum
   fill `PawnDefinition` (33 chassis in `notes/data/mp_chassis_roster.json`).
 
 ## 4. Settings / input contract
-| Item | Owner | Value / rule | Provenance |
+### PC keyboard / mouse defaults: the shipped Controls card (TnPlayerInput.KeyDescriptions, Xe-TransInput.ini + TransGame.int) [CONF]
+Robot form:
+
+| Key | Action | Rebuild status |
+|---|---|---|
+| WASD / arrows, mouse | Move, Look | implemented |
+| LMB | Fire | implemented |
+| RMB | Fine Aim / Detonate Grenade | fine aim implemented; grenades not |
+| R | Reload | implemented |
+| Space | Jump | implemented |
+| F | Change Form | implemented (with clearance refusal) |
+| Shift | Ability 1 | Optimus's dash wired here; the ability system is not generalised |
+| Ctrl | Ability 2 | not implemented |
+| MMB / Q | Melee | not implemented |
+| G | Throw Grenade / Detach Turret | not implemented |
+| E | Interact / Pick Up / Revive / Add to Generator | pickups are automatic (touch); the interact action is not implemented |
+| B | Look At / Kill Streak (MP) | not implemented |
+| Wheel / PgUp / PgDn | Swap Weapons | one weapon only |
+| Tab | Scoreboard | Frontend (reads `scoreboard[]`) |
+| Esc | Pause | Frontend |
+
+Vehicle form:
+
+| Key | Action | Rebuild status |
+|---|---|---|
+| RMB | Speed Boost (held). Accelerator fixed at 1 while Driving | implemented |
+| Shift | truck: Ram (Nitro while boosting; Dash while hovering) / car: Flip / tank: Quick Turn / jet: Roll Start | truck implemented |
+| C / V | jet Hover Up / Down | not applicable (Optimus only) |
+
+### Profile settings
+| Item | Owner | Rule | Provenance |
 |---|---|---|---|
-| Transform | Gameplay action | F / pad Y. Refused with NotifyCantTransform when the target form does not fit | CONF |
-| Fine aim | Gameplay | RMB / LT, **robot only** | CONF |
-| Boost | Gameplay | RMB / LT in **vehicle**, held. Accelerator fixed at 1 while Driving (no throttle) | CONF |
-| Dash / Nitro | Gameplay | Shift: Dash while hovering, Nitro while boosting (steer × 0.3) | CONF |
-| Jump / Reload / Fire | Gameplay | Space; R (tap < 0.3 s, on release); LMB held | CONF |
-| ShowScores | Frontend | Tab toggles the scoreboard (reads `scoreboard[]`) | CONF binding |
-| Pause | Frontend | Esc | CONF |
-| Camera sensitivity | Frontend → Gameplay | default 30 (profile). Gameplay's `kMouseSens` 0.0022 rad / px is PROVISIONAL until the profile scale is mapped (MouseSensitivity 0.00114286 noted by RE) | PARTIAL |
-| Invert look | Frontend → Gameplay | per form (robot / vehicle) profile flags; not yet plumbed | PARTIAL |
-| FOV | Frontend / camera strategy | owned by the camera sets, not by a settings slider in Gameplay | HIGH |
+| Camera sensitivity | Frontend -> `PlayerController::setLookSettings` | profile default 30 = scale 1.0; linear mapping | PROV mapping |
+| Invert Y | Frontend -> `setLookSettings(sensitivity, invertRobot, invertVehicle)` | per form | CONF per-form flags; plumbing done |
+| FOV | camera strategy sets | not a Gameplay setting | HIGH |
 | Minimap | — | none in the original | CONF |
+
+### Kill-feed damage type
+`KillFeedEntry::damageType` carries the DamageType class (e.g. `TransGame.TnDamageTypeIonBlaster`), suicides included. Use
+it for the weapon icon / DeathString lookup.
+
+### Selected body
+- `HudGameState::selectedChassis` / `drawnChassis` / `chassisFallback`.
+- Spawning logs `MATCH spawn <name> chassis=<id> drawn=Optimus fallback=missing ROBODEF/VEHDEF export` whenever the body
+  drawn is not the selection.
+- `Match::requireCharacterSelection` (identical to integration M06) gates the spawn until `selectCharacter`.
