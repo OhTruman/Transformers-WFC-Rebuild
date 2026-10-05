@@ -188,6 +188,32 @@ void Application::attachPresenter() {
         r = px[0]; g = px[1]; b = px[2];
         return true;
     };
+    frontend_->script().navCheckHook = [this](const std::string& label) {
+        // Navigation stress harness: UI state + presenter report + process memory in one trace line.
+        std::vector<std::pair<std::string, std::string>> kv = {{"label", label},
+                                                                {"uiState", frontend::uiStateName(frontend_->flow().ui().state())},
+                                                                {"level", frontend::levelKindName(frontend_->flow().level())},
+                                                                {"openMovie", frontend_->flow().ui().openMovie()}};
+        if (presenter_) for (auto& p : presenter_->navReport()) kv.push_back(p);
+        kv.push_back({"privateMB", processMemoryMB()});
+        std::string line;
+        for (const auto& [k, v] : kv) line += " " + k + "=" + (v.empty() ? std::string("-") : v);
+        LOG_INFO("FLOW nav.check%s", line.c_str());
+    };
+    // Create a Character preview pawns -> the scene adapter (drawn by the renderer when it has the preview entry points).
+    frontend_->previewHook = [](const frontend::FrontendRuntime::PreviewRequest& pr) {
+        if (!g_scene || pr.call != "UpdatePreviewCharacter") return;
+        std::vector<FrontendSceneGL::PreviewSlot> slots;
+        for (const auto& s : pr.slots) {
+            if (s.robotGltf.empty()) continue;
+            FrontendSceneGL::PreviewSlot ps;
+            ps.gltf = s.robotGltf;
+            for (int k = 0; k < 3; ++k) { ps.pos[k] = s.posUE[k]; ps.primary[k] = s.primaryLinear[k]; ps.secondary[k] = s.secondaryLinear[k]; }
+            ps.yawDeg = s.rotUEdeg[1];
+            slots.push_back(ps);
+        }
+        g_scene->setPreview(std::move(slots));
+    };
     frontend_->script().dumpHook = [this](const std::string& m) {
         for (const std::string& o : presenter_->openMovieObjects())
             if (o.find(m) != std::string::npos) LOG_INFO("GFX DUMP %s\n%s", o.c_str(), presenter_->dumpMovie(o).c_str());

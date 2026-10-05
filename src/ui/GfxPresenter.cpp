@@ -229,6 +229,54 @@ void GfxPresenter::syncPopup(frontend::GameFlow& flow) {
     }
 }
 
+namespace {
+size_t countDisplay(const gfx::DisplayObject* d) {
+    if (!d || d->removed) return 0;
+    size_t n = 1;
+    if (d->kind == gfx::DisplayObject::Kind::Clip)
+        for (const auto& [depth, ch] : static_cast<const gfx::MovieClip*>(d)->children) n += countDisplay(ch.get());
+    return n;
+}
+}
+
+std::vector<std::pair<std::string, std::string>> GfxPresenter::navReport() {
+    std::vector<std::pair<std::string, std::string>> r;
+    std::string movies, extras;
+    size_t heap = 0, nodes = 0, grave = 0;
+    auto add = [&](GfxMovie& m) {
+        heap += m.player().vm().heapSize();
+        nodes += countDisplay(m.player().root());
+        grave += m.player().graveyard.size();
+    };
+    for (Open& o : movies_) { movies += (movies.empty() ? "" : "+") + o.object; add(*o.movie); }
+    int focusExtras = 0;
+    for (Extra& e : extras_) { extras += (extras.empty() ? "" : "+") + e.object + (e.focus ? "*" : ""); add(*e.movie); focusExtras += e.focus; }
+    GfxMovie* focus = scoreboard_ ? scoreboard_.get() : (movies_.empty() ? nullptr : movies_.back().movie.get());
+    for (Extra& e : extras_) if (e.focus) focus = e.movie.get();
+    std::string owner = "-", ownerVisible = "-";
+    if (focus) {
+        gfx::avm1::VM& vm = focus->player().vm();
+        gfx::avm1::Value cm = vm.get(vm.global, "currentMenu");
+        if (cm.isObject() && cm.o->display) {
+            owner = cm.o->display->targetPath();
+            ownerVisible = cm.o->display->removed ? "removed" : (cm.o->display->worldVisible() ? "1" : "0");
+        } else owner = cm.isObject() ? "object" : "none";
+    }
+    r.push_back({"movies", movies.empty() ? "-" : movies});
+    r.push_back({"extras", extras.empty() ? "-" : extras});
+    r.push_back({"focus", focus ? focus->object() : "-"});
+    r.push_back({"focusExtras", std::to_string(focusExtras)});
+    r.push_back({"inputOwner", owner});
+    r.push_back({"inputOwnerVisible", ownerVisible});
+    r.push_back({"popup", rt_.flow().popup().open ? "open" : "closed"});
+    r.push_back({"scoreboard", scoreboard_ ? "1" : "0"});
+    r.push_back({"asHeap", std::to_string(heap)});
+    r.push_back({"displayNodes", std::to_string(nodes)});
+    r.push_back({"graveyard", std::to_string(grave)});
+    r.push_back({"glShapes", std::to_string(gl_.cachedShapes())});
+    return r;
+}
+
 void GfxPresenter::fsCommand(GfxMovie& m, const std::string& cmd, const std::string& arg) {
     rt_.flow().fsCommand(m.object(), cmd, arg);
 }

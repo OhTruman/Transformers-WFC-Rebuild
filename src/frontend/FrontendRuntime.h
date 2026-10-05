@@ -79,6 +79,7 @@ public:
     std::function<void(int code, bool down)> keyHook;          // key:<code>
     std::function<void(const std::string& file)> shotHook;     // shot:<file>
     std::function<void(const std::string& movie)> dumpHook;    // dump:<movie substring>
+    std::function<void(const std::string& label)> navCheckHook;   // navcheck:<label> (navigation stress harness)
     // clickclip:<clip target path>: window position of a clip's centre in the focused movie (false = not found).
     std::function<bool(const std::string& path, int& x, int& y)> clipHook;
     static std::string autoplayScript(const std::string& tagAndMap);   // "TDM,508"
@@ -121,7 +122,14 @@ public:
     std::function<bool(const std::string& png, int x, int y, int& r, int& g, int& b)> sampleImage;
     struct PreviewRequest {
         std::string call;                                    // UpdatePreviewCharacter / TransformPreviewCharacter / ...ToRobot
-        std::vector<std::string> chassis, primary, secondary;   // per preview controller (Autobot, Decepticon)
+        std::vector<std::string> chassis, primary, secondary;   // per preview controller (Autobot, Decepticon), as the movie sent
+        // Per slot, ready for the renderer's preview draw (Rendering: setFrontendSceneDraw + setDrawOwner(1 / 2) +
+        // setCharacterColors + drawDynamicMesh(ueActorMatrix(pos, rot))): the authored spawn point of the slot's
+        // SeqAct_TnPawnFactory (UI_CharacterCustomization_m Preview_Characters: Autobot -> PathNode_16191, Decepticon ->
+        // PathNode_7537; UE units / degrees) and the colours as linear RGB (FLinearColor(FColor): sRGB -> linear).
+        struct Slot { std::string chassis, robotGltf; float posUE[3] = {0, 0, 0}; float rotUEdeg[3] = {0, 0, 0};
+                      float primaryLinear[3] = {0, 0, 0}, secondaryLinear[3] = {0, 0, 0}; };
+        std::vector<Slot> slots;
     };
     std::function<void(const PreviewRequest&)> previewHook;
     static constexpr const char* kCharactersFile = "wfc_characters.ini";

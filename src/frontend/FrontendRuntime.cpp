@@ -5,6 +5,7 @@
 #include "platform/UiBindings.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <chrono>
 #include <cstring>
@@ -172,6 +173,7 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             return;
         }
         if (st.rfind("dump:", 0) == 0) { if (dumpHook) dumpHook(st.substr(5)); continue; }
+        if (st.rfind("navcheck:", 0) == 0) { if (navCheckHook) navCheckHook(st.substr(9)); continue; }
         if (st.rfind("shot:", 0) == 0) { if (shotHook) shotHook(st.substr(5)); return; }
         if (st.rfind("uievent:", 0) == 0) { flow.onUIEvent(std::atoi(st.c_str() + 8)); return; }
         if (st.rfind("snapshot:", 0) == 0) { flow.traceSnapshot(st.c_str() + 9); continue; }
@@ -404,7 +406,32 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
         // chassis / colours / form Gameplay's character data resolves; the frontend only forwards the request.
         PreviewRequest pr;
         pr.call = fn.substr(10);
-        if (fn == "Customize.UpdatePreviewCharacter") { pr.chassis = splitCsv(arg(0)); pr.primary = splitCsv(arg(1)); pr.secondary = splitCsv(arg(2)); }
+        if (fn == "Customize.UpdatePreviewCharacter") {
+            pr.chassis = splitCsv(arg(0)); pr.primary = splitCsv(arg(1)); pr.secondary = splitCsv(arg(2));
+            // Authored spawn points (authored.db: SeqAct_TnPawnFactory_8107 "Autobot" / _10632 "Decepticon"; rotation
+            // yaw 16-bit units -> degrees). The pawn's ground snap (OnPreviewPawnTick FindGround) is Gameplay's.
+            static const float kPos[2][3] = {{-285.862f, 5587.910f, 179.0f}, {-286.862f, 4701.910f, 179.0f}};
+            static const float kYaw[2] = {-11264.0f * 360.0f / 65536.0f, 8192.0f * 360.0f / 65536.0f};
+            auto linear = [](const std::string& packed, float out[3]) {
+                std::string hex = packed.rfind("0x", 0) == 0 ? packed.substr(2, 6) : std::string();
+                unsigned v = hex.empty() ? 0u : (unsigned)std::strtoul(hex.c_str(), nullptr, 16);
+                const unsigned c[3] = {(v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF};
+                for (int i = 0; i < 3; ++i) {   // FLinearColor(FColor): the sRGB decode
+                    float f = c[i] / 255.0f;
+                    out[i] = f <= 0.04045f ? f / 12.92f : std::pow((f + 0.055f) / 1.055f, 2.4f);
+                }
+            };
+            for (size_t i = 0; i < pr.chassis.size() && i < 2; ++i) {
+                PreviewRequest::Slot sl;
+                sl.chassis = pr.chassis[i];
+                if (const ChassisInfo* ci = roster_.chassis(sl.chassis)) sl.robotGltf = ci->robotGltf;   // roster package
+                for (int k = 0; k < 3; ++k) sl.posUE[k] = kPos[i][k];
+                sl.rotUEdeg[1] = kYaw[i];
+                if (i < pr.primary.size()) linear(pr.primary[i], sl.primaryLinear);
+                if (i < pr.secondary.size()) linear(pr.secondary[i], sl.secondaryLinear);
+                pr.slots.push_back(sl);
+            }
+        }
         if (previewHook) previewHook(pr);
         FlowTrace::emit("customize.preview", {{"call", pr.call}, {"chassis", arg(0)}, {"primary", arg(1)}, {"secondary", arg(2)},
                                               {"owner", previewHook ? "renderer" : "none"}});

@@ -185,8 +185,10 @@ void UIController::onCharacterSelected(bool matchHasBegun) {
 }
 
 void UIController::onCurrentUIClosed() {
-    // Paused: closing the pause UI returns to InGame.
-    openMovie_.clear();
+    // The open UI closed itself (e.g. pause Resume): Paused.NotifyUIClosed -> CheckCloseCurrentUI(Movie) closes it,
+    // then GotoState('InGame') [CONFIRMED script]. The movie must leave the open set, or it stays drawn (with focus)
+    // over gameplay that already receives input (stress harness m*.resumed).
+    closeCurrentUI();
     if (state_ == UIState::Paused) gotoState(UIState::InGame);
     else if (state_ == UIState::PausedSpectating) gotoState(UIState::Spectating);
 }
