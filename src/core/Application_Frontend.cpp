@@ -440,6 +440,11 @@ void Application::routeMatchToFrontend(float dt) {
                 // RestartPlayer leaves spectating -> UI event 5 (RE E7.4).
                 flow.onUIEvent((int)frontend::UIEvent::Respawn);
                 localDeadForUi_ = spectatingUi_ = false;
+            } else if (e.player == me && flow.ui().state() == frontend::UIState::WaitingOnGameStart) {
+                // First spawn after the character was chosen: the player leaves the waiting state -> OnRespawn (5)
+                // -> InGame; WaitingOnGameStart.EndState closes the pre-game screen [CONFIRMED TnUIController;
+                // the waiting-state sender is HIGH: PlayerWaitingSpectating / PlayerWaitingWatchingMatinee EndState].
+                flow.onUIEvent((int)frontend::UIEvent::Respawn);
             }
             break;
         case game::MatchEvent::Type::MatchEnded:

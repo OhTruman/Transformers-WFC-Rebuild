@@ -118,8 +118,12 @@ public:
     const MatchLaunch& pendingMatch() const { return match_; }
     void matchLoaded();                             // world loaded: close the loading movie, Multiplayer UI controller
     void matchLoadFailed(const std::string& why);
-    void onUIEvent(int code) { ui_.onUIEvent(code); }
-    void characterSelected() { ui_.onCharacterSelected(false); }   // TnUIControllerMultiplayer.OnCharacterSelected
+    // UI events from the game. OnBeginGame (3) in a match marks GRI.bMatchHasBegun (InProgress.BeginState sends it).
+    void onUIEvent(int code) { if (code == 3 && level_ == LevelKind::Match) matchHasBegun_ = true; ui_.onUIEvent(code); }
+    // TnUIControllerMultiplayer.OnCharacterSelected: before the match begins the pre-game screen follows; after, only
+    // the CharacterSelectedInGame notification (the spawn then enters InGame) [CONFIRMED script].
+    void characterSelected() { ui_.onCharacterSelected(matchHasBegun_); }
+    bool matchHasBegun() const { return matchHasBegun_; }
     // TnPlayerController.SelectCharacter(name, type 0 custom / 1 iconic) -> PRI._SelectedCharacter; Gameplay spawns the
     // chassis of the player's team from it (GetResolvedCharacterFaction = TeamNum).
     struct SelectedCharacter { std::string name; int type = 0; std::string chassis[2]; std::string specialty; bool valid = false; };
@@ -200,7 +204,7 @@ private:
     std::string buildMatchUrl(const GameSettings& gs) const;
     void openMovie(const std::string& movie);
     void closeMovie(const std::string& movie);
-    void setUIController(UIControllerClass cls);
+    void setUIController(UIControllerClass cls, bool inGameLobby = false);
     int pickTeam();
 
     const Catalog* cat_ = nullptr;
@@ -233,6 +237,7 @@ private:
     std::vector<std::string> kismetTriggers_;
     std::string kismetMovie_;
     std::string scriptMovie_;
+    bool matchHasBegun_ = false;
     std::vector<std::pair<std::string, std::string>> uiInvokes_;
     std::vector<std::string> openMovies_;
     bool frontEndStarted_ = false, watchedIntro_ = false, pendingWatchedWrite_ = false;

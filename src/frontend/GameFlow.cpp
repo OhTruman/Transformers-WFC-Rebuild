@@ -189,7 +189,7 @@ void GameFlow::tick(float dt) {
 // ---------------------------------------------------------------------------------------------------------------
 // UI_FrontEnd_m (TnFrontEndGame + Main_Sequence Kismet)
 
-void GameFlow::setUIController(UIControllerClass cls) {
+void GameFlow::setUIController(UIControllerClass cls, bool inGameLobby) {
     ui_.initialize(cls,
         [this](const std::string& m) {
             openMovies_.push_back(m);
@@ -204,7 +204,7 @@ void GameFlow::setUIController(UIControllerClass cls) {
         [this](UIState from, UIState to) {
             FlowTrace::emit("ui.state", {{"from", uiStateName(from)}, {"to", uiStateName(to)},
                                          {"controller", uiControllerClassName(ui_.cls())}, {"level", levelKindName(level_)}});
-        });
+        }, inGameLobby);
 }
 
 void GameFlow::frontEndBegin() {
@@ -689,7 +689,13 @@ void GameFlow::matchLoaded() {
     FlowTrace::emit("level.begin", {{"level", "Match"}, {"map", levelUrl_.map()}, {"url", levelUrl_.toString()}});
     // GRI.PostBeginPlay -> OnUIEvent(15); UpdateUiController selects GRI.GameClass.default.UIControllerClass:
     // TnVersusGame / TnMultiplayerGame -> TnUIControllerMultiplayer (StartingState WaitingOnGameStart).
-    setUIController(UIControllerClass::Multiplayer);
+    // The match's PlayerReplicationInfo is new: no character is selected yet, so UpdateUiController initializes the
+    // controller with UseInGameLobby = !PRI.HasSelectedCharacter() = true [CONFIRMED script]. WaitingOnGameStart then
+    // ignores OnBeginGame (Choose Character stays up until a character is chosen) and the UI enters InGame when the
+    // player's pawn spawns (OnRespawn, event 5).
+    selected_ = SelectedCharacter{};
+    matchHasBegun_ = false;
+    setUIController(UIControllerClass::Multiplayer, !selected_.valid);
     ui_.setGRIAvailable(true);
     // PlayerController.CanCloseLoadingMovie: the world is fully loaded before gameplay [HIGH].
     closeLoadingMovie();
