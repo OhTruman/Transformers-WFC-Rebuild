@@ -6,6 +6,7 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
 ## GAMEPLAY PASS 22x (2026-10-05) — RollerSphere; loader reload fix
 - Every ability used by an iconic preset is now implemented (Dodge, Warcry, Shockwave, Cloaking, Hover, Whirlwind, Barrier, SpawnAmmoCrate, Drain, SpawnSentry, GuidedMissile, RollerSphere). PARTICIPANT 16/16.
 - assets::loadSkinnedGlb resets the model before loading (same one-liner as agents/rendering 088b703).
+- WFC_CAMSYNC at 60 / 144 / 240 Hz render (60 Hz sim) on fe689fe: character screen jitter with the per-frame camera 0.0002–0.11 deg mean (max 0.25) across robot run+turn, hover drive+turn and boost. No regression from the Pass 22 gameplay work.
 
 ## GAMEPLAY PASS 22w (2026-10-05) — GuidedMissile, multi-map validation
 - Guided missile ability + Omega Missile streak (9 of 12 class killstreaks). Participant tests place themselves on open lines and pass 15/15 on Streets, Gorge, Debris and Rust.
