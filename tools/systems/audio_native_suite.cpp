@@ -1722,6 +1722,21 @@ static void testCharacterAudio() {
     CHECK(game::CharacterAudio::weaponCue("TransContent.TnWeaponHeavyPistol", "WP_Fire") == "BL_WPN_GUN_PISTOL_HVY.SHOOT" &&
           game::CharacterAudio::loadWeaponCues(cues, "TransContent.TnWeaponHeavyPistol") >= 0 && cues.hasCue("BL_WPN_GUN_PISTOL_HVY.SHOOT"),
           "weapon class WeaponSounds load and resolve");
+    {   // impacts: the weapon mesh's DefaultImpactSound (world) + the victim's HitEffectPlayer HitSound event
+        const game::WeaponHitEffect* ion = game::CharacterAudio::weaponHitEffect("TransContent.TnWeaponIonBlaster");
+        const game::WeaponHitEffect* hp = game::CharacterAudio::weaponHitEffect("TransContent.TnWeaponHeavyPistol");
+        CHECK(game::CharacterAudio::weaponCue("TransContent.TnWeaponIonBlaster", "DefaultImpactSound") == "BL_WPN_GUN_ION_BLASTER.IMPT_WORLD" &&
+              game::CharacterAudio::weaponCue("TransContent.TnWeaponSniperRifle", "DefaultImpactSound") == "BL_WPN_GUN_SNIPER.IMPT_WORLD",
+              "world impact = the weapon's DefaultImpactSound");
+        CHECK(ion && ion->hitEvent == "IMPT_DMG_ION" && ion->blockEvent == "IMPT_BLOCK_ION" && ion->index == 0 && ion->causesBlood &&
+              std::fabs(ion->retrigger - 0.1f) < 1e-6f && hp && hp->hitEvent == "IMPT_DMG_PISTOL_HVY" &&
+              game::CharacterAudio::defaultProfile().voiceCue(ion->hitEvent) == "BL_WPN_GUN_ION_BLASTER.IMPT_DMG",
+              "hit effect by damage type (SharedHitEffectPlayer) -> the victim's IMPT_DMG event cue, retrigger 0.1 s");
+        CHECK(!game::CharacterAudio::weaponHitEffect("TransContent.TnWeaponShotgun"),
+              "TnDamageTypeShotgun has no entry (nor its parents): no hit sound, as FindEffect returns -1");
+        game::CharacterAudio::loadHitCues(cues, game::CharacterAudio::defaultProfile(), "TransContent.TnWeaponSniperRifle");
+        CHECK(cues.hasCue("BL_WPN_GUN_SNIPER.IMPT_DMG") && cues.hasCue("BL_WPN_GUN_SNIPER.IMPT_BLOCK"), "victim hit / block cues load");
+    }
     cues.unloadMapCues();
     CHECK(cues.mapCueCount() == 0, "character / weapon cues are level-owned (released with the level)");
 }

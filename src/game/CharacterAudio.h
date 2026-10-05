@@ -37,6 +37,16 @@ struct CharacterAudioProfile {
     const Clip* clip(const std::string& name) const;
 };
 
+// The hit effect a weapon's damage type selects in the victim's TnHitEffectPlayerBlueprint (SharedHitEffectPlayer),
+// resolved by the generator with FindEffect's rule (exact DamageType, then the first ClassIsChildOf) [CONF script].
+// hitEvent / blockEvent are sound EVENTS looked up in the VICTIM's SoundEventSet (CharacterAudioProfile::voice).
+struct WeaponHitEffect {
+    std::string damageType, hitEvent, blockEvent;
+    int index = -1;              // entry index: the retrigger timer is per victim per entry
+    float retrigger = 0.0f;      // RetriggerTime
+    bool causesBlood = false;    // TnPawn.ShouldPlayHitEffect needs DamageType.bCausesBlood
+};
+
 class CharacterAudio {
 public:
     static const CharacterAudioProfile* find(const std::string& keyOrName);   // roster chassis key or display name
@@ -50,6 +60,10 @@ public:
     static const std::string& weaponCue(const std::string& weaponClass, const std::string& event);
     static const std::string& weaponPickupSound(const std::string& weaponClass);
     static int loadWeaponCues(SoundCues& cues, const std::string& weaponClass);
+    // The weapon's hit effect (nullptr: no entry matches its damage type -> no hit sound, as in the original).
+    static const WeaponHitEffect* weaponHitEffect(const std::string& weaponClass);
+    // Load the victim's hit / block cues for that weapon (level-owned). Returns the number added.
+    static int loadHitCues(SoundCues& cues, const CharacterAudioProfile& victim, const std::string& weaponClass);
 };
 
 } // namespace game

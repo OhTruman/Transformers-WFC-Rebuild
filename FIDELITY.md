@@ -68,8 +68,24 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 * **Optimus equivalence:** the default profile (Truck) reproduces the old hand-made Optimus tables exactly: 26/26
   notifies, landing / take-off / idle, and the vehicle and transform cues.
 * **Wired to the profile:** RobotFoley, VehicleAudio, the transform sound, and weapon fire / tail / fine aim.
+* **Impacts** [CONF script + data]:
+  * **World hit:** HmWeaponMesh.CreateImpactEffects → TnWeaponMesh.GetImpactSound tries, in order:
+    1. the surface's weapon-type sound — no physical material authors WeaponTypeSpecificImpactSounds;
+    2. PhysMaterial.ImpactSound — only special surfaces such as ForceField and destructibles; per-surface lookup is
+       not done here [PARTIAL];
+    3. the weapon mesh's DefaultImpactSound, played at the hit point.
+  * **Pawn hit:** Transformers have AllowHitEffects false [HIGH: only Vehicle / MatineePawn / SentryPawn set it], so
+    the weapon's impact sound does not play. Instead, the victim's TnHitEffectPlayer (SharedHitEffectPlayer, 55
+    entries) does the following:
+    * picks the entry by DamageType — exact match, then the first parent class (FindEffect);
+    * plays its HitSound as an event in the victim's own SoundEventSet (IMPT_DMG_<weapon>);
+    * only if the damage type has bCausesBlood;
+    * at most once per RetriggerTime (0.1 s) per victim per entry.
+  * The generator resolves this rule for 13 hitscan weapons. Shotgun and CarMachineGun have no entry anywhere in
+    their class chain, so they play no hit sound, as in the original.
+  * The rebuild's damage targets are stand-ins, so they use the default profile as the victim [PROV].
+  * Missing data (AssetTools): projectile and melee weapons have no damage types in mp_weapons.
 * **PARTIAL:**
-  * impacts (IMPT_*) are still the Ion Blaster's;
   * weapon idle / reload anim notifies are missing;
   * the vehicle component tunables are OptimusTruckForm's;
   * 169 dialogue waves are absent from the extraction (AssetTools).

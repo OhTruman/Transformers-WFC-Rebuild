@@ -41,5 +41,9 @@ Every switch → cue rule is ported from the decompiled script (`ClientReceive` 
 
 ## AssetTools
 
+* `mp_weapons.json` `damage_types` is `Engine.DamageType` or empty for projectile and melee weapons (RocketLauncher,
+  GrenadeLauncher, TankCannon, swords …). Their projectile / melee damage types are needed to choose the victim's
+  hit sound.
+
 * 169 dialogue waves referenced by character SoundEventSets are absent from the extraction. They are mainly the
   WL_DX_CARD01 / CARA01 groups. Those lines are skipped at load (they log as missing cues); nothing crashes.

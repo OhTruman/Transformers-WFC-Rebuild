@@ -81,11 +81,51 @@ for key, ch in roster['chassis'].items():
     for cl in clips.values():
         for n in cl['notifies']:
             if n.get('cue'): all_cues.add(n['cue'])
+# Hit effects (TnHitEffectPlayer.PlayEffect / FindEffect [CONF script]): the victim's blueprint (every MP Transformer:
+# TR_HitEffectPlayer_p.SharedHitEffectPlayer; OmegaSupreme_HitEffect only on Omega) maps the hit's DamageType - exact
+# match first, then the first entry it ClassIsChildOf - to HitSound / BlockSound sound EVENTS played on the victim
+# (its own SoundEventSet), retriggered at most every RetriggerTime per entry; only if the damage type bCausesBlood
+# (TnPawn.ShouldPlayHitEffect).
+_, HEP = props('TR_HitEffectPlayer_p.SharedHitEffectPlayer')
+HIT_EFFECTS = HEP.get('Effects') or []
+def type_super(t):
+    r = c.execute('select super from types where path=?', (t,)).fetchone()
+    return r[0] if r else None
+def find_effect(dt):
+    for i, e in enumerate(HIT_EFFECTS):
+        if e.get('DamageType') == dt: return i
+    chain, t = [], dt
+    while t:
+        chain.append(t); t = type_super(t)
+    for i, e in enumerate(HIT_EFFECTS):
+        if e.get('DamageType') in chain: return i
+    return -1
+def causes_blood(dt):
+    t = dt
+    while t:
+        _, d = props(t.replace('.', '.Default__', 1))
+        if 'bCausesBlood' in d: return bool(d['bCausesBlood'])
+        t = type_super(t)
+    return False
 wpn = {}
 for cls, w in weapons.items():
-    ev = {e['WeaponEventType']: e['WeaponSound'] for e in ((w.get('sounds') or {}).get('events') or []) if e.get('WeaponSound')}
+    snd = w.get('sounds') or {}
+    ev = {e['WeaponEventType']: e['WeaponSound'] for e in (snd.get('events') or []) if e.get('WeaponSound')}
+    # HmWeaponMesh.DefaultImpactSound (CreateImpactEffects -> GetImpactSound fallback) and BulletBySound (the
+    # victim's NotifyNearlyShot) of the weapon's WEPMESH [CONF data + script].
+    if snd.get('impact'): ev['DefaultImpactSound'] = snd['impact']
+    if snd.get('bullet_by'): ev['BulletBySound'] = snd['bullet_by']
     _, dp = props(cls.replace('TransContent.', 'TransContent.Default__').replace('TransGame.', 'TransGame.Default__'))
-    wpn[cls] = {'events': ev, 'pickup_sound': dp.get('PickupSound')}
+    dts = list((w.get('damage_types') or {}).keys())
+    hit = None
+    if dts:
+        i = find_effect(dts[0])
+        if i >= 0:
+            e = HIT_EFFECTS[i]
+            hit = {'damage_type': dts[0], 'index': i, 'hit_event': (e.get('HitSound') or '').split('.')[-1],
+                   'block_event': (e.get('BlockSound') or '').split('.')[-1], 'retrigger': e.get('RetriggerTime', 0.0),
+                   'causes_blood': causes_blood(dts[0])}
+    wpn[cls] = {'events': ev, 'pickup_sound': dp.get('PickupSound'), 'damage_types': dts, 'hit_effect': hit}
     all_cues |= set(ev.values())
     if dp.get('PickupSound'): all_cues.add(dp['PickupSound'])
 
@@ -105,6 +145,10 @@ for q in sorted(x for x in all_cues if x):
 doc = {'map': '__characters__', 'source': 'Systems tools/systems/gen_character_audio.py (AssetTools roster_package / mp_weapons / authored.db)',
        'profiles': profiles, 'weapons': wpn, 'cues': cues}
 print('profiles %d, weapons %d, cues %d (missing %d: %s)' % (len(profiles), len(wpn), len(cues), len(missing), missing[:6]))
+print('hit effects: %d entries; weapons with an effect %d / %d; no effect: %s' % (len(HIT_EFFECTS), sum(1 for w in wpn.values() if w['hit_effect']),
+      len(wpn), sorted(k.split('.')[-1] for k, w in wpn.items() if not w['hit_effect'])))
+for k in ('TransContent.TnWeaponIonBlaster', 'TransContent.TnWeaponHeavyPistol', 'TransContent.TnWeaponShortSword'):
+    if k in wpn: print('  ', k.split('.')[-1], wpn[k]['events'].get('DefaultImpactSound'), wpn[k]['hit_effect'])
 for k in ('Truck', 'Car', 'Tank', 'Jet'):
     p = profiles.get(k)
     if p: print('  %-6s %-20s voice %3d vehicle %2d clips %3d weapons %s death %s' % (k, p['name'], len(p['voice']), len(p['vehicle']),

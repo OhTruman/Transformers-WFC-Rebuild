@@ -16,6 +16,7 @@ struct Db {
     std::map<std::string, CharacterAudioProfile> profiles;
     std::map<std::string, std::map<std::string, std::string>> weaponEvents;
     std::map<std::string, std::string> weaponPickup;
+    std::map<std::string, WeaponHitEffect> weaponHit;
 };
 
 const Db& db() {
@@ -50,6 +51,17 @@ const Db& db() {
     for (const auto& kv : d.doc["weapons"].obj) {
         for (const auto& e : kv.second["events"].obj) d.weaponEvents[kv.first][e.first] = e.second.asString();
         d.weaponPickup[kv.first] = kv.second["pickup_sound"].asString();
+        const assets::Json& h = kv.second["hit_effect"];
+        if (h.isObject()) {
+            WeaponHitEffect e;
+            e.damageType = h["damage_type"].asString();
+            e.hitEvent = h["hit_event"].asString();
+            e.blockEvent = h["block_event"].asString();
+            e.index = h["index"].asInt(-1);
+            e.retrigger = h["retrigger"].asFloat();
+            e.causesBlood = h["causes_blood"].asBool();
+            d.weaponHit[kv.first] = e;
+        }
     }
     return d;
 }
@@ -141,6 +153,27 @@ const std::string& CharacterAudio::weaponCue(const std::string& cls, const std::
     if (it == d.weaponEvents.end()) return empty();
     auto e = it->second.find(event);
     return e == it->second.end() ? empty() : e->second;
+}
+
+const WeaponHitEffect* CharacterAudio::weaponHitEffect(const std::string& cls) {
+    const Db& d = db();
+    auto it = d.weaponHit.find(cls);
+    return it == d.weaponHit.end() ? nullptr : &it->second;
+}
+
+int CharacterAudio::loadHitCues(SoundCues& cues, const CharacterAudioProfile& victim, const std::string& cls) {
+    const WeaponHitEffect* h = weaponHitEffect(cls);
+    if (!h) return 0;
+    const Db& d = db();
+    assets::Json sub;
+    sub.type = assets::Json::Type::Object;
+    for (const std::string* ev : {&h->hitEvent, &h->blockEvent}) {
+        const std::string q = victim.voiceCue(*ev);
+        if (!q.empty() && !cues.hasCue(q.c_str()) && d.doc["cues"][q].isObject()) sub.obj[q] = d.doc["cues"][q];
+    }
+    if (sub.obj.empty()) return 0;
+    const char* root = std::getenv("WFC_ASSETS");
+    return cues.addCues(sub, std::string(root ? root : core::config::kAssetRootDefault) + "/../content/");
 }
 
 const std::string& CharacterAudio::weaponPickupSound(const std::string& cls) {

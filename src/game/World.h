@@ -22,6 +22,7 @@
 #include "game/LevelAudioHost.h"
 #include "game/CharacterAudio.h"
 #include "game/VehicleAudio.h"
+#include <map>
 
 namespace render { class IRenderer; }
 
@@ -190,6 +191,9 @@ private:
     bool transformCuePlayed_ = false;
     int transformNotify_ = 0;                // next transform-clip notify to fire
     std::string weaponClass_ = "TransContent.TnWeaponIonBlaster";
+    // TnHitEffectPlayer.LastHitEffectTimes per victim (here: the damage targets) per effect entry [CONF script].
+    std::map<std::pair<const void*, int>, float> lastHitEffect_;
+    float hitClock_ = 0.0f;
     const CharacterAudioProfile* audioProfile_ = nullptr;
     int transformCue_ = -1;
     float trackT_ = 0.0f;
