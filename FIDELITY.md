@@ -59,6 +59,60 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND PASS 4: HUMAN-PLAYTEST CORRECTNESS (2026-10-04, agents/frontend, based on integration/milestone-06)
+Full detail: `docs/FRONTEND.md` §1, §3, §8, §9, §13-§17. Each playtest finding was traced to the original script, native
+code or authored data before anything changed.
+
+**CONFIRMED ORIGINAL:**
+- **Intro chain on every launch.** HasWatchedIntroMovie is one zero-initialised native global (0x83757450), written
+  only by SetHasWatchedIntroMovie and the controller-assignment tick, never saved. The rebuild had persisted it; it is
+  now a session flag (the player's "cinematic did not replay" was the rebuild's deviation).
+- **Extras Movies / Credits.** `_global.MovieStarted` removes the menu's input; `Game.PlayMovie` plays a full-screen
+  movie; EndMovieMode → `InvokeOnCurrentUIConditional(FrontEndUI, "_global.MovieEnded")` gives it back. The rebuild
+  never played the movie or called MovieEnded (the soft-lock).
+- **Profile defaults.** All 74 `Default__TnProfileSettings` fields (A1..D5Difficulty = -1: the unlockable movies are
+  locked on a fresh profile).
+- **Match entry.** `UseInGameLobby = !PRI.HasSelectedCharacter()`; `WaitingOnGameStart.OnBeginGame` only leaves for
+  InGame when !_InGameLobby; OnCharacterSelected after the start is a notification; the spawn's OnRespawn enters
+  InGame; every TnUIController EndState (screens close with their state, the HUD hides when InGame ends).
+- **Return routing.** TnQuitMessageBox (Quit Game? Yes / No, "Quitting...") then `QuitGame(0)`: game lobby / private
+  match → party lobby; party lobby → front end. Exit Game asks (Continue / Cancel). The message box is TnUIController
+  ShowPopupUI: MessagePrompt_GFX, `_global.DisplayMessage`, `MessageBox.OnA..OnY`.
+- **Create a Character.** TnCharacterScriptBinding as decompiled: ChassisTypes[FactionFilter], melee inserted at weapon
+  index 2, palette-swatch colours (GetPixelColor on the palette textures, `0xRRGGBB;palette;x;y`), CommitCharacter /
+  ResetCharacter / ClearCharacter rules.
+- **Text entry path.** PC names go through DisplayTextPrompt → TextPrompt_GFX's input TextField (Selection.setFocus,
+  Enter / Escape listener, callback); `GetAccountNames` is a comma-separated string.
+- **Controls.** Mouse/Keyboard Layout is a read-only reference card: `GetKeyDescription` = MapInputKeyForController +
+  `TnPlayerInput.KeyDescriptions` (Xe-TransInput.ini + TransGame.int, per-form overrides). **No key rebinding exists
+  in the shipped menus.**
+
+**HIGH:**
+- the full-screen movie takes all menu input while it plays (UI event 12 hides the UI);
+- the waiting-state sender of OnRespawn for the first spawn (PlayerWaitingSpectating / WatchingMatinee EndState);
+- Flash input-field behaviour (caret, editing keys, click focus) as Flash Player 8;
+- TextField bounds measured on read (the lobby ticker spaces messages by `_width` right after `htmlText`).
+
+**PC ADAPTATION:**
+- Accounts: local account names (create / delete / sign in / out; signed-in name = player name) - the original's
+  Demonware accounts are SERVICE DEPENDENT;
+- the custom-character file `wfc_characters.ini` (the original's WriteCustomizationFile location is native);
+- undefined ExternalInterface arguments reach handlers as "" (UnrealScript string parameters); an unset weapon slot
+  ("undefined" inside the movie's array) keeps the stored weapon.
+
+**PARTIAL:**
+- the preview pawn: drawn through Rendering's setFrontendSceneDraw at the authored PreviewGuy spawn points (detected,
+  verified in a merge preview); bind pose, no ground snap, no form switch, default lobby camera (the per-chassis
+  SeqVar_TnCustomizationCameraId camera is the next frontend item);
+- the selected body in the match (Gameplay's pawn is still Optimus);
+- the frontend scene needs the UI render data built per worktree (without it: black, not the malformed raw level).
+
+**SERVICE DEPENDENT:** Demonware accounts, leaderboards / challenge progress, friends, matchmaking (unchanged).
+
+**UNKNOWN / PROVISIONAL:** `ColorToHexColor` digit case (upper used); where the PC SKU stored the customization file.
+
+**PC EXTENSION / FUTURE:** key rebinding, FOV, refresh rate, mouse sensitivity, quality presets - not added.
+
 ## FRONTEND PASS 3: PC SKU, LIVE SCENES, LOADING, MOVIE AUDIO, HUD, SETTINGS, CHARACTER SELECTION (2026-10-04, agents/frontend)
 Full detail: `docs/FRONTEND.md`. This pass supersedes the pass-2 entries on Bink audio, black backgrounds, the frozen
 loading screen and the opaque pause backdrop.
