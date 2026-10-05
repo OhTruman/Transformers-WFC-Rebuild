@@ -890,6 +890,17 @@ void FrontendRuntime::draw(int w, int h) {
             else sceneRenderer_->setActorHidden(c.actor, c.value);
         }
         SceneView v = scene_.view();
+        {   // emblem state for gates: logged when a material parameter crosses its midpoint
+            for (const auto& mp : v.materialParams) {
+                bool on = mp.value >= 0.5;
+                auto key = mp.actor + "." + mp.param;
+                auto it = emblemOn_.find(key);
+                if (it == emblemOn_.end() || it->second != on) {
+                    emblemOn_[key] = on;
+                    FlowTrace::emit("scene.emblem", {{"actor", mp.actor}, {"param", mp.param}, {"state", on ? "on" : "off"}});
+                }
+            }
+        }
         if (v.valid) sceneRenderer_->draw(v, w, h);
     }
     static const bool sceneOnly = std::getenv("WFC_SCENE_ONLY") != nullptr;   // diagnostics: the 3D layer alone

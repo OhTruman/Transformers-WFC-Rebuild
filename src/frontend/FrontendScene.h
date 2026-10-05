@@ -32,6 +32,10 @@ struct SceneView {
     // Matinee DrawScale tracks (InterpTrackFloatProp): absolute DrawScale per actor (vignette ships / boosters).
     struct ActorScale { std::string actor; double drawScale; };
     std::vector<ActorScale> scales;
+    // InterpTrackFloatMaterialParam: scalar parameters of MaterialInstanceActors (the faction emblems' Highlighted /
+    // Opacity, driven by the movie's glow / dim / fadein / fadeout fscommands).
+    struct MaterialParam { std::string actor, param; double value; };
+    std::vector<MaterialParam> materialParams;
 };
 
 // Implemented by Rendering: draws the scene levels with the frontend's camera before the GFx overlay.
@@ -78,10 +82,12 @@ private:
                    std::vector<std::pair<double, std::string>> cuts;
                    std::vector<std::pair<double, int>> toggles;              // 0 off, 1 on, 2 toggle
                    std::vector<std::pair<double, std::string>> events;
-                   std::vector<std::pair<std::string, std::vector<Key>>> floats; };   // InterpTrackFloatProp (property, keys)
+                   std::vector<std::pair<std::string, std::vector<Key>>> floats;   // InterpTrackFloatProp (property, keys)
+                   std::vector<std::pair<std::string, std::vector<Key>>> materialParams; };   // InterpTrackFloatMaterialParam
     struct EventAction { std::string event; int action = 2; std::vector<std::string> targets; };   // 0 hide 1 unhide 2 toggle
     struct Matinee { std::string name, comment; bool looping = false; double length = 0; std::vector<Group> groups;
                      std::vector<std::string> fscommands; bool onMovieStopped = false;
+                     std::vector<std::string> reverseFscommands;   // fscommands that Reverse it (through subsequence inputs)
                      std::vector<std::string> remoteEvents;   // SeqEvent_RemoteEvent names that play it
                      std::vector<EventAction> eventActions;
                      struct SubStart { std::string sub, output; bool reverse = false; };

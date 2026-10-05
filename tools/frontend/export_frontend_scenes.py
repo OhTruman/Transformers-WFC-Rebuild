@@ -83,6 +83,30 @@ def export_level(level):
             for l in out.get('Links') or []:
                 incoming.setdefault(l.get('LinkedOp'), []).append((op, out.get('LinkDesc'), l.get('InputLinkIdx', 0)))
     actors, matinees = {}, []
+
+    def seq_input_fscommands(event_op, depth=0):
+        # GFxEvent_FsCommand names reaching a SeqEvent_SequenceActivated through its parent Sequence's input (and, for
+        # nested subsequences, through the grandparent's input feeding that parent).
+        parent = event_op.rsplit('.', 1)[0]
+        pc, pp = by_path.get(parent, (None, {}))
+        if pc != 'Sequence' or depth > 4:
+            return []
+        ep = by_path.get(event_op, (None, {}))[1]
+        name = ep.get('InputLabel') or ep.get('ObjComment')
+        inputs = [l.get('LinkDesc') for l in pp.get('InputLinks') or []]
+        if name not in inputs:
+            return []
+        want = inputs.index(name)
+        out = []
+        for src, desc, idx in incoming.get(parent, []):
+            if idx != want:
+                continue
+            sc, sp = by_path.get(src, (None, {}))
+            if sc == 'GFxEvent_FsCommand' and sp.get('FsCommand'):
+                out.append(sp['FsCommand'])
+            elif sc == 'SeqEvent_SequenceActivated':
+                out += seq_input_fscommands(src, depth + 1)
+        return out
     for op, (c, p) in by_path.items():
         if c != 'SeqAct_Interp':
             continue
@@ -123,6 +147,9 @@ def export_level(level):
                 elif tc == 'InterpTrackFloatProp':   # e.g. DrawScale (vignette ships / boosters), FOVAngle (cameras)
                     entry['tracks'].append({'class': tc, 'property': tp.get('PropertyName'),
                                             'keys': float_track((tp.get('FloatTrack') or {}).get('Points'))})
+                elif tc == 'InterpTrackFloatMaterialParam':   # material instance scalar (emblem Highlighted / Opacity)
+                    entry['tracks'].append({'class': tc, 'property': tp.get('ParamName'), 'materialParam': True,
+                                            'keys': float_track((tp.get('FloatTrack') or {}).get('Points'))})
                 elif tc == 'InterpTrackDirector':
                     entry['tracks'].append({'class': tc, 'cuts': [{'t': x.get('Time', 0.0), 'group': x.get('TargetCamGroup'),
                                                                    'blend': x.get('TransitionTime', 0.0)}
@@ -133,9 +160,14 @@ def export_level(level):
         starts = []
         for src, desc, idx in incoming.get(op, []):
             sc, sp = by_path.get(src, (None, {}))
-            starts.append({'from': src.rsplit('.', 1)[-1], 'class': sc, 'output': desc,
-                           'input': ['Play', 'Reverse', 'Stop', 'Pause', 'Change Dir'][idx] if 0 <= idx < 5 else idx,
-                           'fscommand': sp.get('FsCommand'), 'event': sp.get('EventName'), 'comment': sp.get('ObjComment')})
+            entry = {'from': src.rsplit('.', 1)[-1], 'class': sc, 'output': desc,
+                     'input': ['Play', 'Reverse', 'Stop', 'Pause', 'Change Dir'][idx] if 0 <= idx < 5 else idx,
+                     'fscommand': sp.get('FsCommand'), 'event': sp.get('EventName'), 'comment': sp.get('ObjComment')}
+            if sc == 'SeqEvent_SequenceActivated':
+                # A subsequence input event: the movie fscommands wired to that input of the parent Sequence (e.g.
+                # UI_CharacterCustomization_m emblem glow / fade: glowAutobot -> GLOWIN_Autobot -> Autobot_Glow Play).
+                entry['fscommands'] = sorted(set(seq_input_fscommands(src)))
+            starts.append(entry)
         # Event-track outputs wired to SeqAct_ToggleHidden (inputs Hide / UnHide / Toggle) with their target actors.
         actions = []
         for out in p.get('OutputLinks') or []:

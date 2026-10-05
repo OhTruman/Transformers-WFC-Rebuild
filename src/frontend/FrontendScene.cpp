@@ -140,6 +140,8 @@ bool FrontendScene::load(const std::string& path) {
                             const std::string& a = T["toggles"][k]["action"].asString();
                             gr.toggles.push_back({T["toggles"][k]["t"].asDouble(), a == "ETTA_Off" ? 0 : a == "ETTA_Toggle" ? 2 : 1});
                         }
+                    } else if (T["class"].asString() == "InterpTrackFloatMaterialParam") {
+                        gr.materialParams.push_back({T["property"].asString(), keys(T["keys"])});
                     } else if (T["class"].asString() == "InterpTrackFloatProp") {
                         gr.floats.push_back({T["property"].asString(), keys(T["keys"])});
                     } else if (T["class"].asString() == "InterpTrackEvent") {
@@ -170,6 +172,11 @@ bool FrontendScene::load(const std::string& path) {
                     ss.reverse = S["input"].asString() == "Reverse";
                     M.subStarts.push_back(ss);
                     continue;
+                }
+                // Subsequence input events resolved to the movie fscommands that reach them (exporter "fscommands").
+                for (size_t k = 0; k < S["fscommands"].size(); ++k) {
+                    if (S["input"].asString() == "Play") M.fscommands.push_back(S["fscommands"][k].asString());
+                    else if (S["input"].asString() == "Reverse") M.reverseFscommands.push_back(S["fscommands"][k].asString());
                 }
                 if (S["input"].asString() != "Play") continue;
                 if (S["class"].asString() == "GFxEvent_FsCommand" && S["fscommand"].isString()) M.fscommands.push_back(S["fscommand"].asString());
@@ -292,6 +299,12 @@ void FrontendScene::trigger(const std::string& trig) {
         for (const Matinee& m : it->second.matinees) {
             bool go = (fs && std::find(m.fscommands.begin(), m.fscommands.end(), cmd) != m.fscommands.end()) || (movie && m.onMovieStopped);
             if (go) start(m);
+            if (fs && std::find(m.reverseFscommands.begin(), m.reverseFscommands.end(), cmd) != m.reverseFscommands.end()) {
+                // Matinee Reverse: a playing / played matinee runs back to its start.
+                for (Playing& p : playing_)
+                    if (p.m == &m) { p.t = std::min(p.t, m.length); p.rate = -1.0; p.order = ++order_; }
+                FlowTrace::emit("scene.matinee", {{"matinee", m.name}, {"comment", m.comment}, {"reverse", "true"}, {"fscommand", cmd}});
+            }
         }
         for (const RemoteActivator& r : it->second.remotes)
             if ((fs && std::find(r.fscommands.begin(), r.fscommands.end(), cmd) != r.fscommands.end()) || (movie && r.onMovieStopped))
@@ -480,6 +493,20 @@ SceneView FrontendScene::view() const {
                 v.actors.push_back(ap);
             }
         }
+    // Material scalar tracks (latest playing matinee per actor / parameter).
+    for (const Playing& p : playing_)
+        for (const Group& g : p.m->groups)
+            for (const auto& f : g.materialParams) {
+                if (f.second.empty()) continue;
+                double o[3];
+                evalCurve(f.second, std::min(p.t, p.m->length > 0 ? p.m->length : p.t), o);
+                for (const std::string& name : g.actors) {
+                    bool replaced = false;
+                    for (auto& mp : v.materialParams)
+                        if (mp.actor == name && mp.param == f.first) { mp.value = o[0]; replaced = true; }
+                    if (!replaced) v.materialParams.push_back({name, f.first, o[0]});
+                }
+            }
     // DrawScale tracks: the absolute DrawScale each track sets (latest playing matinee per actor).
     for (const Playing& p : playing_)
         for (const Group& g : p.m->groups)

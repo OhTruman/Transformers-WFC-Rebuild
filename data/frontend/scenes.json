@@ -481,7 +481,49 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "Opacity",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.30000001192092896,
+           "v": [
+            1.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       },
@@ -493,7 +535,49 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "Opacity",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.30000001192092896,
+           "v": [
+            1.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -506,7 +590,11 @@
        "input": "Reverse",
        "fscommand": null,
        "event": null,
-       "comment": "FADEOUT_Autobot"
+       "comment": "FADEOUT_Autobot",
+       "fscommands": [
+        "fadeoutAutobot",
+        "hidePlayer"
+       ]
       },
       {
        "from": "SeqEvent_SequenceActivated_3089",
@@ -515,7 +603,11 @@
        "input": "Play",
        "fscommand": null,
        "event": null,
-       "comment": "FADEIN_Autobot"
+       "comment": "FADEIN_Autobot",
+       "fscommands": [
+        "fadeinAutobot",
+        "unhidePlayer"
+       ]
       }
      ],
      "eventActions": []
@@ -1198,7 +1290,49 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "Highlighted",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            1.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       },
@@ -1210,7 +1344,49 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "Highlighted",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            1.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -1223,7 +1399,11 @@
        "input": "Reverse",
        "fscommand": null,
        "event": null,
-       "comment": "GLOWOUT_Decepticon"
+       "comment": "GLOWOUT_Decepticon",
+       "fscommands": [
+        "dimDecepticon",
+        "hidePlayer"
+       ]
       },
       {
        "from": "SeqEvent_SequenceActivated_3666",
@@ -1232,7 +1412,10 @@
        "input": "Play",
        "fscommand": null,
        "event": null,
-       "comment": "GLOWIN_Decepticon"
+       "comment": "GLOWIN_Decepticon",
+       "fscommands": [
+        "glowDecepticon"
+       ]
       }
      ],
      "eventActions": []
@@ -1583,7 +1766,49 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "Highlighted",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            1.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       },
@@ -1595,7 +1820,49 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "Highlighted",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            1.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -1608,7 +1875,10 @@
        "input": "Play",
        "fscommand": null,
        "event": null,
-       "comment": "GLOWIN_Autobot"
+       "comment": "GLOWIN_Autobot",
+       "fscommands": [
+        "glowAutobot"
+       ]
       },
       {
        "from": "SeqEvent_SequenceActivated_8358",
@@ -1617,7 +1887,11 @@
        "input": "Reverse",
        "fscommand": null,
        "event": null,
-       "comment": "GLOWOUT_Autobot"
+       "comment": "GLOWOUT_Autobot",
+       "fscommands": [
+        "dimAutobot",
+        "hidePlayer"
+       ]
       }
      ],
      "eventActions": []
@@ -1793,7 +2067,49 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "Opacity",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.30000001192092896,
+           "v": [
+            1.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       },
@@ -1805,7 +2121,49 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "Opacity",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.30000001192092896,
+           "v": [
+            1.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -1818,7 +2176,11 @@
        "input": "Play",
        "fscommand": null,
        "event": null,
-       "comment": "FADEIN_Decepticon"
+       "comment": "FADEIN_Decepticon",
+       "fscommands": [
+        "fadeinDecepticon",
+        "unhidePlayer"
+       ]
       },
       {
        "from": "SeqEvent_SequenceActivated_6216",
@@ -1827,7 +2189,11 @@
        "input": "Reverse",
        "fscommand": null,
        "event": null,
-       "comment": "FADEOUT_Decepticon"
+       "comment": "FADEOUT_Decepticon",
+       "fscommands": [
+        "fadeoutDecepticon",
+        "hidePlayer"
+       ]
       }
      ],
      "eventActions": []
@@ -28533,10 +28899,94 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "DownScaleUVs",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            9.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            -25.280899047851562,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            -25.280899047851562,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveUser"
+          },
+          {
+           "t": 1.100000023841858,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            -25.813400268554688,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         },
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "PulseEmissiveMultiplier",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            50.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            -98.05249786376953,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            -98.05249786376953,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveUser"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            3.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       },
@@ -28548,7 +28998,68 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "Opacity",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.5,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            8.741570472717285,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            8.741570472717285,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveUser"
+          },
+          {
+           "t": 0.6000000238418579,
+           "v": [
+            2.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.02499997615814209,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.02499997615814209,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.8500000238418579,
+           "v": [
+            0.05000000074505806,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       },
@@ -28560,7 +29071,68 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatMaterialParam"
+         "class": "InterpTrackFloatMaterialParam",
+         "property": "Opacity",
+         "materialParam": true,
+         "keys": [
+          {
+           "t": 0.6000000238418579,
+           "v": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            8.028510093688965,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            8.028510093688965,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveUser"
+          },
+          {
+           "t": 0.699999988079071,
+           "v": [
+            2.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.02499997615814209,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.02499997615814209,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.949999988079071,
+           "v": [
+            0.05000000074505806,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       },
