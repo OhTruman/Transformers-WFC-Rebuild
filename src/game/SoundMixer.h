@@ -50,6 +50,10 @@ public:
                       const float masterWet[kParams]);
     // Map unload: Flush, then forget every map-owned preset. Returns the number removed.
     int removeMapPresets();
+    // A map-owned preset over several categories (`rows`: category name -> that category's DSP values in CategoryPreset
+    // order; only Volume is applied outside MASTER_WET): SeqAct_Mixer presets such as EXT DUCK.
+    bool addMapPresetRows(const std::string& name, float priority, float fadeIn, float fadeOut, float duration,
+                          const std::vector<std::pair<std::string, std::vector<float>>>& rows);
     int mapPresetCount() const;
 
     bool enable(const std::string& name);                 // EnableMixerPreset (false = unknown preset)
