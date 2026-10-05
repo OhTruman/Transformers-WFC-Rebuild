@@ -17,6 +17,23 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 11 — REAL RELEASE PATH: MAPS DRAWN WITHOUT DEPTH TESTING AFTER THE MENUS (2026-10-04)
+Input: the human recording of `Rebuild\build\release\bin\wfc_rebuild.exe` (M06b): Streets and Berth incomplete. The
+human's session log is `F:\Transformers Rebuild\wfc.log` (account OhTruman, 20:50). Full evidence:
+`docs/handoffs/M11_RELEASE_PATH_MAP_REGRESSION.md`.
+
+| Item | Finding | Evidence | Mark |
+|---|---|---|---|
+| Root cause | `GLRenderer`'s 3D frame never established depth test / func / scissor / stencil / colour mask / polygon mode (set once in `init()`). The frontend GFx pass left `GL_DEPTH_TEST` disabled, so after the menus every map surface was drawn without depth testing | real Release exe + human profile, same pinned camera: direct boot vs frontend route submit identical draws (1900; 1468 world / 394 BSP); entry state depth=1 vs depth=0; 88 % of pixels differ | CONFIRMED ROOT CAUSE |
+| Second owner | Frontend's GFx pass did not restore the state it changed (Experimental bisect b1fce97); fixed in agents/frontend a96f841 (save / restore). Rendering's frame now establishes its own state regardless | Frontend report, Rendering reproduction | CONFIRMED |
+| Loading / data | human log: Streets 1,983,988 tris, 2,249 submeshes, 2,239 programs, 2,081 lightmap bindings; Berth 1,292,885 tris, 1,755 programs; render-data root and map dir correct; texture paths absolute | human wfc.log | CONFIRMED: not involved |
+| Fix on the real path | integration 681fd29 + Rendering, Release layout, integration render data, human profile: frontend → Streets equals direct boot (apart from HUD / character); Streets → Berth → Streets: identical Streets counts (1641 / 357), Berth 1273 / 288, 0 opaque draws without depth test, 0 GL errors | captures `work/m11/cycle`, `rpc_*` | VISUALLY VERIFIED |
+| Resolution / fullscreen | no correlation: cold boots at 1280×720 windowed, 1920×1080 windowed and fullscreen (desktop 2560×1440); runtime switch 1920×1080 → fullscreen → Streets; restart with persisted settings. All draw the full structure, 0 GL errors | `work/m11/r*`, `rtres*` | CONFIRMED (disproved as cause) |
+| Long session | one process, 10 alternating Streets / Berth matches: all captures pass, 0 GL errors; loaded Streets 2,867 → 2,940 → 2,945 → 2,950 → 2,950 MB (one +73 MB step, then flat); Berth 2,725 → 2,687 MB | `work/m11/long` | HIGH CONFIDENCE (no growth / leak in Release) |
+| AMD driver resets | no GL errors and no instability in any single-process run after the fix | runs above | UNKNOWN (not reproduced) |
+| Validation | new: opaque draws without depth testing and GL errors FAIL the verdict. `tools/render/release_path_check.sh`: the player route with no data override, structural floors on submitted world + BSP submeshes (Streets 2801, Berth 2059 in every run). It FAILs the reproduced bug (`WFC_M11_INHERITSTATE`) on every capture, title included, and passes the fix. Black / flat heuristics now judge only levels (the lobby dome produced 98 false FAILs) | rpc_good / rpc_broken | CONFIRMED |
+| Fullscreen size, HUD scale, movie bars | fullscreen ignores the saved resolution (desktop size); GFx stage scaling | captures | handoff (Frontend / platform) |
+
 ## MILESTONE 10 — M06 PLAYTEST VISUAL REGRESSION: ROOT CAUSE, GUARDS (2026-10-04)
 Input: human recording of the integrated M06 executable, showing a black Streets world and malformed menu
 backgrounds. Full evidence: `docs/handoffs/M06_PLAYTEST_VISUAL_REGRESSION.md`.

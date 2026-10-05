@@ -150,6 +150,7 @@ public:
     struct FrameCounts {
         int draws = 0, worldDraws = 0, bspDraws = 0, dynamicDraws = 0, fxDraws = 0;
         int opaque = 0, translucent = 0, lightmapped = 0, culled = 0, noProgram = 0;
+        int opaqueNoDepthTest = 0;          // opaque draws issued with GL_DEPTH_TEST disabled (M11 regression)
         int materials = 0, programs = 0;
         std::vector<std::string> noProgramMats;
     };
