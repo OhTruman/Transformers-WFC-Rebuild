@@ -83,7 +83,7 @@ Labels: **CONFIRMED** (CONFIRMED ORIGINAL), **HIGH**, **PC ADAPTATION**, **PARTI
 | FX / Dialogue / Music Volume 80, Subtitles | ORIGINAL | stored; Systems volume API: pending |
 | Vibration, Scheme A/B, Invert Y ×4, Camera Sensitivity 30 | ORIGINAL | stored; Gameplay camera API: pending |
 | Controls → Mouse/Keyboard Layout | ORIGINAL PC SKU: a **read-only** reference card per form (Robot / Car / Truck / Tank / Jet) | `Console.GetKeyDescription` from `TnPlayerInput.KeyDescriptions` (Xe-TransInput.ini keys, TransGame.int texts, per-form overrides; MapInputKeyForController) |
-| Resolution, Fullscreen, Texture Quality, VSync, Commit | ORIGINAL PC SKU (`PCSettings.*`) | window resolution / borderless fullscreen (PC ADAPTATION), VSync (swap interval); texture quality: stored, no renderer control |
+| Resolution, Fullscreen, Texture Quality, VSync, Commit | ORIGINAL PC SKU (`PCSettings.*`) | windowed client size; fullscreen switches the monitor to the saved resolution (current refresh rate when offered; desktop mode restored on windowed / alt-tab / exit; HIGH), VSync (swap interval); texture quality: stored, no renderer control |
 | Antialiasing | `HmInterfacePCSettings` declares Get/Set/List, but **no shipped menu calls them** | not shown |
 | FOV, refresh rate, key rebinding, mouse sensitivity, quality presets | not in the shipped menus | **PC EXTENSION / FUTURE PC EXTENSION**; not added to the original menu |
 

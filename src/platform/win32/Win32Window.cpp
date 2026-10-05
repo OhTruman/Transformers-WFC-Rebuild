@@ -78,6 +78,7 @@ public:
     }
 
     ~Win32Window() override {
+        restoreDesktopMode();
         if (hglrc_) { wglMakeCurrent(nullptr, nullptr); wglDeleteContext(hglrc_); }
         if (hdc_ && hwnd_) ReleaseDC(hwnd_, hdc_);
         if (hwnd_) DestroyWindow(hwnd_);
@@ -171,20 +172,59 @@ public:
         return out;
     }
 
+    // Fullscreen = the chosen resolution: the monitor is switched to w x h (CDS_FULLSCREEN: a temporary mode that Windows
+    // also undoes when the process ends) and a borderless window covers it. Losing focus restores the desktop mode and
+    // minimises; regaining focus switches back. If the mode switch fails, the window covers the monitor at its current
+    // mode [PC: the shipped SKU ran fullscreen at the chosen resolution; its native mode handling is not in the dump].
+    bool applyFullscreenMode() {
+        HMONITOR mon = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY);
+        MONITORINFOEXW mi{};
+        mi.cbSize = sizeof(mi);
+        GetMonitorInfoW(mon, &mi);
+        monitorDevice_ = mi.szDevice;
+        DEVMODEW cur{};
+        cur.dmSize = sizeof(cur);
+        EnumDisplaySettingsW(mi.szDevice, ENUM_CURRENT_SETTINGS, &cur);
+        bool ok = false;
+        if (fsW_ > 0 && fsH_ > 0 && ((int)cur.dmPelsWidth != fsW_ || (int)cur.dmPelsHeight != fsH_ || modeChanged_)) {
+            // The requested size at the current refresh rate when the monitor offers it, else its highest rate.
+            DEVMODEW best{}, dm{};
+            dm.dmSize = sizeof(dm);
+            for (DWORD i = 0; EnumDisplaySettingsW(mi.szDevice, i, &dm); ++i) {
+                if ((int)dm.dmPelsWidth != fsW_ || (int)dm.dmPelsHeight != fsH_ || dm.dmBitsPerPel < 32) continue;
+                bool better = best.dmSize == 0 || dm.dmDisplayFrequency == cur.dmDisplayFrequency ||
+                              (best.dmDisplayFrequency != cur.dmDisplayFrequency && dm.dmDisplayFrequency > best.dmDisplayFrequency);
+                if (better) best = dm;
+            }
+            if (best.dmSize) {
+                best.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT | DM_BITSPERPEL | DM_DISPLAYFREQUENCY;
+                ok = ChangeDisplaySettingsExW(mi.szDevice, &best, nullptr, CDS_FULLSCREEN, nullptr) == DISP_CHANGE_SUCCESSFUL;
+                if (ok) { modeChanged_ = true; LOG_INFO("window: fullscreen %dx%d @ %lu Hz", fsW_, fsH_, best.dmDisplayFrequency); }
+            }
+            if (!ok) LOG_WARN("window: display mode %dx%d not available; fullscreen at the desktop size", fsW_, fsH_);
+        }
+        GetMonitorInfoW(mon, &mi);   // the monitor rectangle in the new mode
+        SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE);
+        SetWindowPos(hwnd_, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
+                     mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+        return ok;
+    }
+    void restoreDesktopMode() {
+        if (!modeChanged_) return;
+        ChangeDisplaySettingsExW(monitorDevice_.empty() ? nullptr : monitorDevice_.c_str(), nullptr, nullptr, 0, nullptr);
+        modeChanged_ = false;
+    }
+
     void setDisplayMode(int w, int h, bool full) override {
-        // Windowed: a client area of w x h. Fullscreen: a borderless window over the monitor (no display mode change;
-        // the swap chain renders at the monitor size) [PC adaptation; the shipped PC SKU's exact mode handling is native].
+        // Windowed: a client area of w x h. Fullscreen: the monitor at w x h (applyFullscreenMode).
         if (full) {
             if (!fullscreen_) { GetWindowRect(hwnd_, &windowedRect_); }
-            MONITORINFO mi{};
-            mi.cbSize = sizeof(mi);
-            GetMonitorInfoW(MonitorFromWindow(hwnd_, MONITOR_DEFAULTTOPRIMARY), &mi);
-            SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_POPUP | WS_VISIBLE);
-            SetWindowPos(hwnd_, HWND_TOP, mi.rcMonitor.left, mi.rcMonitor.top, mi.rcMonitor.right - mi.rcMonitor.left,
-                         mi.rcMonitor.bottom - mi.rcMonitor.top, SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+            fsW_ = w; fsH_ = h;
             fullscreen_ = true;
+            applyFullscreenMode();
             return;
         }
+        restoreDesktopMode();
         SetWindowLongPtrW(hwnd_, GWL_STYLE, WS_OVERLAPPEDWINDOW | WS_VISIBLE);
         RECT r = {0, 0, w, h};
         AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
@@ -250,6 +290,9 @@ private:
     wchar_t highSurrogate_ = 0;
     bool cursorHidden_ = false;
     bool fullscreen_ = false, vsync_ = false;
+    bool modeChanged_ = false;     // the monitor runs our fullscreen mode (restore on windowed / focus loss / exit)
+    int fsW_ = 0, fsH_ = 0;
+    std::wstring monitorDevice_;
     RECT windowedRect_{};
 
     static int vkByName(const std::string& n) {
@@ -343,6 +386,13 @@ private:
                 if (LOWORD(lp) == HTCLIENT && (cursorHidden_ || mouseCaptured_)) { SetCursor(nullptr); return TRUE; }
                 break;
             case WM_KILLFOCUS: focused_ = false; return 0;
+            case WM_ACTIVATEAPP:
+                // Fullscreen at a changed mode: alt-tab returns the desktop to its own mode; coming back reapplies ours.
+                if (fullscreen_) {
+                    if (!wp && modeChanged_) { restoreDesktopMode(); ShowWindow(hwnd_, SW_MINIMIZE); }
+                    else if (wp && !modeChanged_ && fsW_ > 0) { ShowWindow(hwnd_, SW_RESTORE); applyFullscreenMode(); }
+                }
+                break;
             case WM_CHAR: {
                 // UTF-16 code units -> code points (surrogate pairs joined); control characters are keys, not text.
                 wchar_t c = (wchar_t)wp;
