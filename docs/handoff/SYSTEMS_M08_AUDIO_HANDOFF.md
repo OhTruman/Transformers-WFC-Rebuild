@@ -27,8 +27,8 @@ Every switch → cue rule is ported from the decompiled script (`ClientReceive` 
 * **Language:** movie audio now follows RE 433ef9e. Tracks 0..4 always play, plus the centre track 5 + L, where L is
   derived from GLanguage. Set `WFC_LANGUAGE` (INT/FRA/ITA/DEU/ESN/RUS/POL) where the build learns the language.
 * **Volume:** the three logos (MoviesToAlwaysPlaySound) play at Bink volume 0.8. Other movies follow the FX Volume
-  option (GetMovieVolume, RE CONFIRMED): call `frontendAudio.setMovieSfxVolume(fxClassVolume)` when the option is
-  applied. The default is 1.0.
+  option (GetMovieVolume, RE CONFIRMED). Call `frontendAudio.setMovieFxSlider(fxSlider0to100)` when the profile
+  settings are applied; the volume is slider / 100. The default is the profile default 80 → 0.8.
 * **File choice:** RE §E2 gives the native order, which the Frontend movie player should follow:
   1. `<Name>_360_<LANG>`
   2. `<Name>_360_INT`

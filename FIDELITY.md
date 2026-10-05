@@ -87,8 +87,9 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
   * the MoviesToAlwaysPlaySound logos use 0xCCCC = 0.8;
   * the other movies use GetMovieVolume (0x82CDDC08) [CONF]: [MoviePlayer] VolumeScalar (absent → 1.0) × the
     device's 'SFX' class volume (the FX Volume option), clamped to [0,1]. FullVolumeMovies is empty.
-    `LevelAudioHost` / `FrontendAudioRuntime::setMovieSfxVolume` takes the option's class volume. The default is
-    1.0, because the slider-to-gain mapping is not recovered.
+    The class volume is FX slider / 100, linear [CONF script: UpdateLocalCacheOfProfileSettings →
+    SetAudioGroupVolume('SFX', GetFxVolume())]. That the device's 'SFX' lookup returns it unchanged is HIGH.
+    `setMovieFxSlider(slider)` / `setMovieSfxVolume(v)`; the default is the profile default 80 → 0.8.
 * **Still PROVISIONAL:** the stereo fold-down matrix and the Master-relative level.
 
 ### Lifecycle (real device)

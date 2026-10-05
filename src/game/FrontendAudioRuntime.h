@@ -47,6 +47,7 @@ public:
     void setMoviePlaying(bool playing) { host_->setMoviePlaying(playing); }
     bool startMovieAudio(const std::string& moviePath, int languageSlot = -1) { return host_->startMovieAudio(moviePath, languageSlot); }
     void setMovieSfxVolume(float v) { host_->setMovieSfxVolume(v); }   // the FX Volume option's class volume
+    void setMovieFxSlider(int slider) { host_->setMovieFxSlider(slider); } // FX Volume option 0..100 (/ 100)
     void stopMovieAudio() { host_->stopMovieAudio(); }
     void setMovieAudioPaused(bool paused) { host_->setMovieAudioPaused(paused); }
     double movieAudioClock() const { return host_->movieAudioClock(); }

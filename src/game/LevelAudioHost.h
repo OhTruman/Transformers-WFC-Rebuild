@@ -63,13 +63,16 @@ public:
     bool movieAudioActive() const { return movieAudio_ != nullptr; }
     // GetMovieVolume (0x82CDDC08) [CONF native]: [MoviePlayer] VolumeScalar (absent -> 1.0) x the audio device's 'SFX'
     // class volume (the FX Volume option; Frontend owns it), clamped [0,1]; FullVolumeMovies (empty) skip the SFX
-    // factor; MoviesToAlwaysPlaySound (the logos) override with 0xCCCC. Default 1.0: the slider -> gain mapping is
-    // not recovered. Applies to the next movie and the running one.
+    // factor; MoviesToAlwaysPlaySound (the logos) override with 0xCCCC. The class volume is the FX slider / 100
+    // (HmPlayerController.UpdateLocalCacheOfProfileSettings -> SetAudioGroupVolume('SFX', GetFxVolume()),
+    // GetNormalizedPropertyValue = FClamp(slider / 100, 0, 1) [CONF script]; that the device's 'SFX' lookup returns it
+    // unchanged is HIGH). Default: the profile default 80 -> 0.8. Applies to the next movie and the running one.
     void setMovieSfxVolume(float v) {
         movieSfxVolume_ = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
         if (movieAudio_ && !movieFixedVolume_) movieAudio_->setVolume(movieSfxVolume_);
     }
     float movieSfxVolume() const { return movieSfxVolume_; }
+    void setMovieFxSlider(int slider) { setMovieSfxVolume((float)slider / 100.0f); }   // the options FX Volume, 0..100
     double movieAudioClock() const { return movieAudio_ ? movieAudio_->clock() : 0.0; }   // video can slave to it
     bool movieAudioFinished() const { return !movieAudio_ || movieAudio_->finished(); }
     bool prefetch(const std::string& level);
@@ -110,7 +113,7 @@ private:
     std::string root_, level_;
     bool movie_ = false;
     std::unique_ptr<audio::MovieAudioPlayer> movieAudio_;
-    float movieSfxVolume_ = 1.0f;
+    float movieSfxVolume_ = 0.8f;
     bool movieFixedVolume_ = false;
 };
 

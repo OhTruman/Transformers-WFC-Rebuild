@@ -50,7 +50,7 @@ bool LevelAudioHost::startMovieAudio(const std::string& path, int languageSlot) 
         return false;
     }
     // MoviesToAlwaysPlaySound (the logos): fixed Bink volume 0xCCCC = 0.8; others GetMovieVolume = the SFX class
-    // volume (setMovieSfxVolume) [CONF native].
+    // volume (setMovieSfxVolume; default FX 80 -> 0.8) [CONF native + script; HIGH device lookup].
     std::string name = path.substr(path.find_last_of("/\\") + 1);
     name = name.substr(0, name.find('.'));
     movieFixedVolume_ = SoundMixer::movieAlwaysPlaysSound(name);

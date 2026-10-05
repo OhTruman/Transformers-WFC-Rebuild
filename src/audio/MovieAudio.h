@@ -23,7 +23,7 @@
 // Speaker routing [CONF native 0x8369A780, RE pass3 follow-up]: track 0 FL, 1 FR, 2 SL, 3 SR, 4 LFE, language track C.
 // Volume [CONF native Function_82CCA028]: every track at the play request's Volume (x 65536); the three
 // MoviesToAlwaysPlaySound logos at the fixed 0xCCCC = 0.8 of full scale; the others at GetMovieVolume = VolumeScalar
-// (1.0) x the device's SFX class volume (LevelAudioHost::setMovieSfxVolume).
+// (1.0) x the device's SFX class volume = FX slider / 100 (LevelAudioHost::setMovieFxSlider; default 80 -> 0.8).
 // Stereo fold-down [PROVISIONAL: the platform's default 5.1 -> stereo matrix]: L = FL + 0.707 C + 0.707 SL,
 // R = FR + 0.707 C + 0.707 SR, LFE dropped.
 #pragma once
