@@ -269,6 +269,13 @@ Inputs:
   - **EMP:** other team TnBuffAbilityJammedKillstreak 30 s. TnBuffAbilityJammed.Apply: CooldownMultiplier 0
     (cooldowns frozen; ready abilities still usable); Cloak / Disguise / Warcry removed; hover falls; whirlwind aborts.
   - HUD seeEnemies / hardLocked / refillOnKill / abilitiesJammed (s left). Test (PARTICIPANT 12/12).
+- **Drain** [CONF authored TnAbilityDrain / TnBuffDrainSource Blueprints[0] + RE §J]:
+  - Self buff 7 s at caster speed ×0.7.
+  - Each tick, every enemy within 2000 UU with line of sight takes 25 DPS (TnDamageTypeDrain); the caster heals
+    35 HPS per target (heal type AddHealthToAll [PROV]).
+  - Cooldown 60 s after the buff (HadAndLostBuff). Removed by AbilityJammed.
+  - Beam FX DrainRay_Beam_FX from MeleeSocket_LeftHand → Rendering (HUD drain).
+  - Test (PARTICIPANT 13/13): enemy −50 in 2 s.
 - RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (Barrier now implemented) (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].

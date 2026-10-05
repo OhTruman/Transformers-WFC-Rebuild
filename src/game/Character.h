@@ -72,7 +72,10 @@ public:
     // Factors multiply (TnPawn.UpdateSpeeds over _SpeedMultiplierFactors): the specialty factor (associated with the
     // pawn itself) stays for the pawn's life; the fine-aim factor comes and goes.
     // + melee GroundSpeedMultiplier (WeaponAttack 0.75, Whirlwind 1.2) while attacking [CONF TnMeleeSet].
-    float speedMultiplier() const { return speedMult_ * specialtySpeedMult_ * (meleeState_ == 1 ? 0.75f : meleeState_ == 2 ? 1.2f : 1.0f); }
+    float speedMultiplier() const {
+        return speedMult_ * specialtySpeedMult_ * (meleeState_ == 1 ? 0.75f : meleeState_ == 2 ? 1.2f : 1.0f) *
+               (drainRemain_ > 0.0f ? 0.7f : 1.0f);   // TnBuffDrainSource SpeedMultiplier 0.7
+    }
     // TnSpecialty.Apply: SetSpeedMultiplier(SpeedMultiplier, P) + InitializeSegmentedHealth(HealthBlueprint) [CONF].
     void setSpecialty(const std::string& id, float speedMult, const std::vector<float>& segments, float overshield) {
         specialty_ = id; specialtySpeedMult_ = speedMult; specHealth_ = segments; specOvershield_ = overshield;
@@ -179,12 +182,13 @@ public:
     // Killstreak buffs [CONF authored CDOs + script]: TnBuffSeeEnemyObjectiveMarkers 30 s; TnBuffHardLocked 10 s (marker for
     // the instigator's team; FloatModifier consumer not recovered); TnBuffRefillHealthOnKill 60 s; TnBuffAbilityJammedKillstreak
     // 30 s (TnAbilityManager CooldownMultiplier 0).
+    float drainRemain_ = 0.0f;           // TnBuffDrainSource BuffTime 7 s (Blueprints[0])
     float seeEnemiesRemain_ = 0.0f, hardLockedRemain_ = 0.0f, refillOnKillRemain_ = 0.0f, jammedRemain_ = 0.0f;
     int hardLockedByTeam_ = 255;
     // TnBuffAbilityJammed.Apply: CooldownMultiplier 0; remove Cloak / Disguise / Warcry buffs; StopShield; Fall; abort Whirlwind.
     void applyJammed(float t) {
         jammedRemain_ = std::max(jammedRemain_, t);
-        cloakRemain_ = 0.0f;
+        cloakRemain_ = 0.0f; drainRemain_ = 0.0f;   // TnBuffDrainSource is in BuffsToRemoveWhenJammed
         warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f;
         if (hoverState_ != 0) hoverState_ = 0;
         if (meleeState_ == 2) { meleeState_ = 0; meleeSweep_ = -1; actionClip_ = -1; }
@@ -223,9 +227,9 @@ public:
         for (int i = 0; i < 2; ++i) {
             AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
             a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking" || a.id == "Hover" ||
-                            a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate";
+                            a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "Drain";
             // Cooldown[skill data index 0]: Dodge [2.0, 0.5]; Warcry [60]; Shockwave [60] [CONF authored CDOs].
-            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : a.id == "Barrier" ? 20.0f : a.id == "SpawnAmmoCrate" ? 60.0f : 0.0f;
+            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : a.id == "Barrier" ? 20.0f : a.id == "SpawnAmmoCrate" ? 60.0f : a.id == "Drain" ? 60.0f : 0.0f;
             abilities_[i] = a;
         }
     }
@@ -238,7 +242,8 @@ public:
                 !(a.id == "Cloaking" && cloakRemain_ > 0.0f) && !(a.id == "Hover" && (hoverState_ != 0 || hoverRequested_)) &&
                 !(a.id == "Whirlwind" && (meleeState_ == 2 || pendingAbilityEffect_ == "Whirlwind")) &&
                 !(a.id == "Barrier" && (barrierAlive_ || pendingAbilityEffect_ == "Barrier")) &&
-                !(a.id == "SpawnAmmoCrate" && (beaconAlive_ || pendingAbilityEffect_ == "SpawnAmmoCrate"))) {
+                !(a.id == "SpawnAmmoCrate" && (beaconAlive_ || pendingAbilityEffect_ == "SpawnAmmoCrate")) &&
+                !(a.id == "Drain" && drainRemain_ > 0.0f)) {
                 a.pendingCooldown = false; a.cooldown = a.cooldownTime;
             }
             if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (jammedRemain_ > 0.0f ? 0.0f : fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));

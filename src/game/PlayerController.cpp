@@ -614,7 +614,8 @@ void PlayerController::applyToPawn(World& world, float dt) {
                     step.dodgeDir = std::fabs(up) >= std::fabs(rt) ? (up < 0.0f ? 4 : 3) : (rt < 0.0f ? 1 : 2);
                 }
                 if (a.id == "Warcry" || a.id == "Shockwave" || a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate") pawn_->pendingAbilityEffect_ = a.id;   // World
-                if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
+                if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;
+                if (a.id == "Drain") pawn_->drainRemain_ = 7.0f;                                    // AddSelfBuff(TnBuffDrainSource)                               // AddBuff(TnBuffCloak)
                 if (a.id == "Hover") { step.hoverRequest = true; pawn_->hoverRequested_ = true; }   // PlayerController.Hover
                 a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_;
             } else if (a.id != lastRefusedAbility_) {

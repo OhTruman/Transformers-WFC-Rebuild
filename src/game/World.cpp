@@ -1146,6 +1146,7 @@ HudGameState World::hudState() const {
     }
     h.ammoBeacon = beacon_.alive; h.ammoBeaconPos = beacon_.pos; h.ammoBeaconLife = beacon_.life; h.ammoBeaconHealth = beacon_.health;
     h.ammoBeaconBuff = pc.beaconDamageBuff_ > 0.0f;
+    h.drain = pc.drainRemain_;
     h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
     h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
     { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
@@ -1870,6 +1871,24 @@ void World::tickAbilityEffects(float dt) {
     }
     tickBarrier(dt);
     tickAmmoBeacon(dt);
+    // TnBuffDrainSource (Blueprints[0]): each tick every enemy TnPawn within Range 2000 UU with line of sight takes
+    // DamagePerSecond 25 x dt; the caster heals HealthPerSecond 35 x dt per target [CONF authored + RE §J]. Heal type
+    // AddHealthToAll [PROV].
+    if (pc.drainRemain_ > 0.0f) {
+        pc.drainRemain_ = localDead_ ? 0.0f : std::max(0.0f, pc.drainRemain_ - dt);
+        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+        int targets = 0;
+        if (matchActive_ && !localDead_)
+            for (MatchOpponent* o : opponents_) {
+                if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
+                if (core::length(o->pawn().actorLocation() - pc.actorLocation()) > 20.0f) continue;
+                float t;
+                if (line && line->segmentHit(pc.actorLocation(), o->pawn().actorLocation(), t)) continue;
+                ++targets;
+                applyMatchDamage(o->matchPlayer(), localPlayer_, 25.0f * dt, false, "TransGame.TnDamageTypeDrain");
+            }
+        if (targets > 0 && !localDead_) pc.health().heal(Health::HealType::AddHealthToAll, 35.0f * dt * targets);
+    }
     tickLocalMelee(dt);
     tickHomingLock(dt);
     if (localDead_ && barrier_.alive) { barrier_.alive = false; barrierDelay_ = -1.0f; }

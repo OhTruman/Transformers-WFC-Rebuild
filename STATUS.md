@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22u (2026-10-05) — Drain ability
+- 7 s drain aura (25 DPS / 35 HPS per target, speed x0.7), cooldown after the buff. PARTICIPANT 13/13.
+
 ## GAMEPLAY PASS 22t (2026-10-05) — contextual flag / bomb pickup (E)
 - RE §J: objectives are picked up with the Interact button, not on touch; CanPickupInventory gates. CTF 12/12 (Streets, Gorge).
 

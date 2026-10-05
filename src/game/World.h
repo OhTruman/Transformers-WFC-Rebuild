@@ -63,6 +63,7 @@ struct HudGameState {
     int hoverState = 0;
     // Ammo beacon (SpawnAmmoCrate): Rendering draws PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT at ammoBeaconPos
     // (PickupRotationRate yaw 10000); objective marker "Ammo Beacon" for the owner's team.
+    float drain = 0.0f;                          // Drain ability active (s left)
     float seeEnemies = 0.0f, refillOnKill = 0.0f, abilitiesJammed = 0.0f, hardLocked = 0.0f;   // killstreak buffs on the local pawn (s left)
     bool ammoBeacon = false;
     core::Vec3 ammoBeaconPos{0, 0, 0};

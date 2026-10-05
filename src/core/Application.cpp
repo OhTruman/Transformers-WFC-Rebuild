@@ -1919,6 +1919,38 @@ void Application::runParticipantTest() {
         check(ok && recon && hard && matrix && emp,
               "Killstreaks: Orbital Beacon markers 30 s; Beacon 2.0 hard lock 10 s + 1 dmg; Health Matrix full health on kill; EMP jam 30 s strips cloak");
     }
+    // Drain: 7 s, 25 DPS to each enemy within 20 m (LOS), caster heals 35 HPS per target, speed x0.7; cooldown after the buff.
+    {
+        game::MatchLaunch L8; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L8);
+        world_.launchMatch(L8);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Leader; me.abilities = {"Drain", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("D" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        float eh0 = 0, eh1 = 0, lh0 = 0, lh1 = 0, cdDuring = -1, cdAfter = -1;
+        if (E) {
+            core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
+            for (auto* o : ops) if (o != E) o->setPosition(lp.position() - fwd * 40.0f);
+            E->setPosition(lp.position() + fwd * 10.0f);
+            run(0.1f);
+            lp.health().current = 100.0f;
+            eh0 = E->pawn().health().current; lh0 = lp.health().current;
+            platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(sh, dt); world_.tick(dt);
+            for (int i = 0; i < 119; ++i) { E->setPosition(lp.position() + fwd * 10.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            eh1 = E->pawn().health().current; lh1 = lp.health().current;
+            cdDuring = world_.hudState().abilities[0].cooldown;
+            run(5.2f);
+            cdAfter = world_.hudState().abilities[0].cooldown;
+        }
+        LOG_INFO("PARTICIPANT drain: enemy %.1f -> %.1f, caster %.1f -> %.1f in 2 s; cooldown during %.1f after %.1f", eh0, eh1, lh0, lh1, cdDuring, cdAfter);
+        check(E && std::fabs((eh0 - eh1) - 50.0f) < 2.0f && (lh1 - lh0) >= 67.0f && cdDuring == 0.0f && cdAfter > 59.0f,
+              "Drain: 25 DPS to an enemy in range, caster +35 HPS per target (plus normal regen), cooldown 60 s after the 7 s buff");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
