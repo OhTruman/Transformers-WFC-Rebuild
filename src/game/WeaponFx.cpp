@@ -95,8 +95,9 @@ constexpr float kTrailBaseW = 100 * UU;
 //   W(v) = clamp(1 - 4(v - 0.5)^2, 0, 1)^2 (both long edges -> 0), L(u) = clamp(20u, 0, 1) * clamp(3(1 - u), 0, 1).
 // Here: W and (N + 0.2) baked into the cloud texture's alpha (the quad's U runs across the width), the second, panned
 // cloud sample approximated by the texture's mean [PROV]; L per ribbon segment (kTrailSegments). Clamping the texel
-// before the vertex alpha under-reads only where vertexAlpha < 1 and the raw product > 1. The end the ribbon's u = 0
-// lies at (the newest / hit end here) is [PROV].
+// before the vertex alpha under-reads only where vertexAlpha < 1 and the raw product > 1. u = 0 at the trail head (the
+// newest particle, on the tracer: the hit end) [HIGH: stock UE3 FDynamicTrail2EmitterData::FillIndexAndVertexBuffers
+// starts Tex_U at TRAIL_EMITTER_IS_START; the xex Trail2 fill is not traced]. DynamicParameter.x desaturate not applied.
 constexpr int kTrailSegments = 24;
 inline float trailWidthMask(float v) { float w = core::clampf(1.0f - 4.0f * (v - 0.5f) * (v - 0.5f), 0.0f, 1.0f); return w * w; }
 inline float trailLengthMask(float u) { return core::clampf(20.0f * u, 0.0f, 1.0f) * core::clampf(3.0f * (1.0f - u), 0.0f, 1.0f); }
