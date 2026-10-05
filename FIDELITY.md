@@ -59,6 +59,44 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND PASS 5: WORLD LOSS, VIEWPORT, HUD PRESENTATION (2026-10-04, agents/frontend)
+Human playtest of the integrated Release build plus Experimental's presentation gate (bisect: first bad b1fce97).
+
+**Frontend-launched world loss (fixed, a96f841):**
+- **Cause:** `GfxRendererGL::begin` disabled `GL_DEPTH_TEST` / `GL_CULL_FACE` (plus scissor / alpha test / lighting /
+  fog), enabled stencil and blend, and bound its own program / VAO / buffers / FBOs; `end()` did not restore them.
+  From b1fce97 the in-match HUD movie ran that pass on every match frame, so the next world frame drew Streets
+  without depth testing: later draws (sky, smoke, translucents) covered the architecture; the pawn, effects, decals and
+  HUD stayed visible.
+- **Why direct boot worked:** it never runs the UI pass (no frontend, no HUD movie). `WFC_GFX_EMPTY` skips only the
+  movie draws, not begin / end; `WFC_NO_FRONTEND_SCENE` removes an unrelated layer.
+- **Fix:** the UI pass records the GL state it changes and restores it (state contract below). The HUD stays.
+  `WFC_GFX_NO_GLRESTORE=1` reproduces the pre-fix frames.
+
+**CONFIRMED ORIGINAL (authored movie behaviour now honoured):**
+- **Hud_GFX native extensions** (`_global.gfxExtensions`): `MovieClip.interp` → `HmObjectInterpolator.addInterp` and
+  `setColor` → `HmActionScript.setColor` were unhandled, so every HUD tween stayed at its start values and every
+  colour stayed white (the "too large" health segments and ammo bar were their glow / start states; the clock and
+  announcements never appeared). They now run with the menus' own AS interpolator semantics.
+- **`Stage.scaleMode = 'noScale'`** (Hud_GFX): the movie lays itself out from the viewport (`Stage.width / height`,
+  9 safe-frame anchors scaled by `Stage.height / 720`, origin centred) and listens for `onResize`. The runtime now
+  draws a noScale movie 1:1 in pixels and reports the viewport.
+- **Account creation result** (`OnCreateAccountComplete`): the CreateAccountTitle message box.
+
+**HIGH:**
+- the ease curve forms of `findInterpValue` (structure from the AS; the folded exponent forms are standard power /
+  back easing);
+- full-screen movies letterbox over black (the engine's movie player); the startup movie stays up until the logo
+  chain starts (it plays until the front-end map is loaded in the original).
+
+**PC ADAPTATION:** a newly created local account is signed in when none is (offline there is no login service), so the
+typed name is the player name at once.
+
+**GL state contract (for Integration / Rendering):** the UI pass (`GfxRendererGL::begin .. end`) may change any GL
+state inside; on return every enable flag, mask, blend func / equation, viewport, clear value, program, VAO, array
+buffer, active texture + 2D binding and draw / read framebuffer equals what the caller had. Renderers must still not
+depend on UI-pass state; the frame order is world → frontend scene → UI pass → present.
+
 ## FRONTEND PASS 4: HUMAN-PLAYTEST CORRECTNESS (2026-10-04, agents/frontend, based on integration/milestone-06)
 Full detail: `docs/FRONTEND.md` §1, §3, §8, §9, §13-§17. Each playtest finding was traced to the original script, native
 code or authored data before anything changed.

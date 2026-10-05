@@ -147,6 +147,16 @@ void GfxRendererGL::ownedNames(GlCensus::Owned& o) const {
     for (unsigned pr : {prog_, compProg_}) if (pr) o.programs.insert(pr);
 }
 
+gfx::Matrix GfxRendererGL::movieMatrix(const gfx::Player& p, int width, int height) {
+    if (!p.noScale()) return stageMatrix(p.stageWidth, p.stageHeight, width, height);
+    // noScale: 1:1 pixels, the authored stage centred in the viewport (Stage.align "").
+    gfx::Matrix m;
+    m.a = m.d = 1.0f / 20.0f;
+    m.tx = (width - p.stageWidth) * 0.5f;
+    m.ty = (height - p.stageHeight) * 0.5f;
+    return m;
+}
+
 gfx::Matrix GfxRendererGL::stageMatrix(float stageW, float stageH, int width, int height) {
     float s = std::min(width / stageW, height / stageH);
     gfx::Matrix m;
@@ -557,7 +567,12 @@ void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
         videoSerial_ = serial;
     }
-    // Uniform scale, centred (the movies are 16:9 like the GFx stages).
+    // Uniform scale, centred: the shipped Binks are 1280x720 (16:9); a viewport of another aspect gets black bars,
+    // as the engine's full-screen movie player letterboxes over black [HIGH] - never the live scene around the movie.
+    applyBlend(0);
+    glDisable(GL_BLEND);
+    fullscreen();
+    glEnable(GL_BLEND);
     float s = std::min((float)w_ / w, (float)h_ / h);
     float dw = w * s, dh = h * s, ox = (w_ - dw) * 0.5f, oy = (h_ - dh) * 0.5f;
     gfx::FillStyle fs;

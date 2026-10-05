@@ -21,6 +21,7 @@ public:
     void begin(int width, int height);
     // Base matrix that maps a movie stage (twips) into the window ("showAll": uniform scale, centred).
     static gfx::Matrix stageMatrix(float stageW, float stageH, int width, int height);
+    static gfx::Matrix movieMatrix(const gfx::Player& p, int width, int height);   // honours Stage.scaleMode noScale
     void draw(const std::vector<gfx::Player::RenderItem>& items, float alpha = 1.0f);
     // Composites the UI onto the default framebuffer.
     void end();

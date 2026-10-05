@@ -302,3 +302,16 @@ owner (`_global.currentMenu`, visible), modal state, AS heap, display nodes, GL 
 `tools/frontend/nav_check.js` asserts: the script reaches its end (no soft-lock), at most one focused overlay, no modal
 outside the quit / prompt checks, a visible input owner on every menu screen, the main menu fully restored after each
 cycle, Choose Character owning the match start, nothing over gameplay in InGame, and bounded resources across cycles.
+
+## 18. Presentation contracts (pass 5)
+- **GL state.** The UI pass (`GfxRendererGL::begin .. end`) restores every GL state it changes (enables, masks, blend,
+  viewport, clear values, program, VAO, array buffer, textures, framebuffers). Without it the in-match HUD left depth
+  testing off and the frontend-launched world lost its architecture (first bad b1fce97, fixed a96f841).
+  `WFC_GFX_NO_GLRESTORE=1` reproduces it. Frame order: world → frontend scene → UI pass → present.
+- **Movies.** Full-screen movies (startup, logos, FMV, Extras) letterbox over black; the 3D scene is not drawn under
+  them. The startup movie stays up until the logo chain starts while the title scene loads behind it (load yields).
+  A new movie starts at frame 0.
+- **HUD.** Hud_GFX runs with `Stage.scaleMode noScale` (1:1 pixels, viewport-sized Stage, onResize) and its native
+  `HmObjectInterpolator.addInterp` / `HmActionScript.setColor` (menus' AS interpolator semantics).
+  `WFC_GFX_IGNORE_NOSCALE=1` restores the old stage mapping for comparison.
+- **Script steps** `display:<w>,<h>,<0|1>` (runtime display mode change); `key:<code>` types into a focused input field.

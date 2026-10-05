@@ -368,6 +368,46 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 6. Gorge is shown disabled.
 7. A long session: private memory should plateau (about 2.8 GB in the lobby, 3.5 GB in a match).
 
+## FRONTEND PASS 5 (2026-10-04, branch `agents/frontend`): world loss, viewport, HUD presentation
+**Frontend-launched world loss: fixed (a96f841).** First bad commit b1fce97 (Experimental bisect). The UI pass left
+`GL_DEPTH_TEST` / `GL_CULL_FACE` disabled; from b1fce97 it ran every match frame (the HUD movie), so Streets drew
+without depth testing. The UI pass now saves and restores the GL state it changes; the HUD is unchanged.
+
+**Other playtest findings:**
+- **Boot movies uncovered at the sides:** in a viewport other than 16:9 (e.g. a maximised window) the 16:9 Binks
+  showed the live title scene in the bars. Full-screen movies now letterbox over black, and the scene is not drawn
+  while one plays.
+- **First boot item frozen:** the startup movie closed before the title scene's synchronous load, so its last frame
+  stood still for the load. It now stays up full screen through that load (presented by load yields) until the logos
+  start, and a newly opened movie starts at frame 0 (Activision began 0.25 s in).
+- **HUD ammo / health too large:** Hud_GFX's native interp / setColor were unhandled (start states, white); also
+  noScale stage handling. Fixed; the HUD is the authored one at 1280×720, 1920×1080, fullscreen 2560×1440, after a
+  runtime resolution change and after a restart.
+- **TDM lobby showed "Player":** a created account was not signed in. The original result box now shows; a new account
+  is signed in when none is (PC ADAPTATION). The game lobby lists the typed name.
+
+**Validation (Debug, frontend route):**
+- Reproduction matrix: A cold boot → Multiplayer → Private Match → TDM → Streets; B Streets → quit → party lobby →
+  Streets; C Streets → Seed of Corruption → Streets; D character selection → gameplay with the HUD: complete world and
+  active HUD in every match; pause / resume clears; quit returns to the party lobby, then the title.
+- Same exe with `WFC_GFX_NO_GLRESTORE=1`: the world loss reproduces (sky and smoke through the walls).
+- Experimental presentation gate (734bde4 tooling, this build): every world check PASSES (route vs direct boot detail
+  ratio 0.76, was 0.28; spawn / moving frames; Streets reference cameras unchanged; pause cleared). The other FAILs are
+  gate expectations that predate pass 4's CONFIRMED routing (Quit / Back show the confirmation box and return a match
+  to the party lobby; the Controls page has no rebinding), automation typing (fixed: key events now type into a
+  focused field), the party-lobby scene without render data in this tree, and the selected body (AssetTools /
+  Gameplay).
+- Navigation stress harness: 3 menu cycles + 2 private matches, 87 checks PASS (no soft-lock, menus restored, AS heap
+  2265 / 76 nodes / 48 shapes identical per cycle, memory flat ~1.5 GB).
+- `wfc_frontend_tests` 69 / 0.
+
+**Handoffs:**
+- Integration: the GL state contract (FIDELITY); merge a96f841 first (world fix, self-contained).
+- Rendering: memory after Seed then Streets is ~460 MB higher than the first Streets visit (world / renderer
+  retention).
+- Experimental: update the gate's route model (quit box → party lobby; Back from the party lobby → box → title) and
+  drop the rebinding expectation (not in the shipped menus).
+
 ## FRONTEND PASS 4 (2026-10-04, branch `agents/frontend`): human-playtest correctness pass
 Based on integration/milestone-06 (fast-forwarded with the user's approval). Details: `docs/FRONTEND.md` §13-§17.
 

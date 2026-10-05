@@ -681,9 +681,10 @@ void VM::installBuiltins() {
     // ---------------- Stage ----------------
     stageObj = newPlain();
     global->setRaw("Stage", Value(stageObj), DontEnum);
-    getterSetter(vm, stageObj, "width", [](VM& vm, const Value&, Args&) -> Value { return Value((double)vm.player()->stageWidth); }, nullptr);
-    getterSetter(vm, stageObj, "height", [](VM& vm, const Value&, Args&) -> Value { return Value((double)vm.player()->stageHeight); }, nullptr);
-    stageObj->setRaw("scaleMode", Value("showAll"));
+    getterSetter(vm, stageObj, "width", [](VM& vm, const Value&, Args&) -> Value { return Value((double)vm.player()->stageViewW()); }, nullptr);
+    getterSetter(vm, stageObj, "height", [](VM& vm, const Value&, Args&) -> Value { return Value((double)vm.player()->stageViewH()); }, nullptr);
+    getterSetter(vm, stageObj, "scaleMode", [](VM& vm, const Value&, Args&) -> Value { return Value(vm.player()->scaleMode); },
+                 [](VM& vm, const Value&, Args& a) -> Value { vm.player()->scaleMode = vm.toString(arg(a, 0)); return Value::undef(); });
     stageObj->setRaw("align", Value(""));
     stageObj->setRaw("showMenu", Value(false));
     method(vm, stageObj, "addListener", addL(&Player::stageListeners));

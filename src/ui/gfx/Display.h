@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <set>
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -276,6 +277,16 @@ public:
     std::map<std::string, std::string> fontMap;   // "$TitleFont" -> "Distilla Cyrillic Regular"
     float stageWidth = 1120, stageHeight = 720;   // Stage.width / height (stage units)
     std::vector<avm1::Object*> keyListeners, stageListeners, mouseListeners;
+    // Stage.scaleMode (Hud_GFX sets "noScale"): a noScale movie is drawn 1:1 in viewport pixels with its authored stage
+    // centred, and Stage.width / height report the viewport; its Stage listeners get onResize when the viewport changes
+    // (Flash Player semantics). The host sets the viewport (hostViewport* before a movie's first frame runs).
+    std::string scaleMode = "showAll";
+    float viewportW = 0, viewportH = 0;
+    static float hostViewportW, hostViewportH;
+    bool noScale() const { static const bool off = std::getenv("WFC_GFX_IGNORE_NOSCALE") != nullptr; return !off && scaleMode == "noScale"; }   // env: the pre-fix behaviour
+    float stageViewW() const { return noScale() ? (viewportW > 0 ? viewportW : (hostViewportW > 0 ? hostViewportW : stageWidth)) : stageWidth; }
+    float stageViewH() const { return noScale() ? (viewportH > 0 ? viewportH : (hostViewportH > 0 ? hostViewportH : stageHeight)) : stageHeight; }
+    void setViewport(float w, float h);
     std::set<int> keysDown;
     int lastKeyCode = 0, lastAscii = 0;
     std::vector<std::unique_ptr<DisplayObject>> graveyard;   // removed instances (script objects may still refer)

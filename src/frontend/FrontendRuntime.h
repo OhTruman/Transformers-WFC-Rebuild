@@ -80,6 +80,7 @@ public:
     std::function<void(const std::string& file)> shotHook;     // shot:<file>
     std::function<void(const std::string& movie)> dumpHook;    // dump:<movie substring>
     std::function<void(const std::string& label)> navCheckHook;   // navcheck:<label> (navigation stress harness)
+    std::function<void(int w, int h, bool fullscreen)> displayHook;   // display:<w>,<h>,<0|1> (runtime resolution change)
     // clickclip:<clip target path>: window position of a clip's centre in the focused movie (false = not found).
     std::function<bool(const std::string& path, int& x, int& y)> clipHook;
     static std::string autoplayScript(const std::string& tagAndMap);   // "TDM,508"
@@ -203,6 +204,18 @@ private:
     bool movieAudioWanted_ = false;   // a SeqAct_MoviePlayer movie (the loading underlays author no sound)
     bool movieAudioPlaying_ = false;  // Systems is playing its sound
     bool movieInputHold_ = false;     // full-screen movie owns input (and until its skip key is released)
+    // Boot: the initial startup Bink ([LoadingMovie] InitialStartupFileName) stays up full screen until the logo chain
+    // starts, as the original's startup movie plays until the front-end map is loaded; the title scene loads behind it.
+    std::string bootUnderlay_;
+    bool bootDone_ = false;
+    bool fullScreenMovie_ = false;    // a movie covers the presentation (startup, intro chain, Game.PlayMovie)
+    bool sceneLoading_ = false;
+public:
+    // Frontend scene loads (title / lobby families) run inside this wrapper: the application presents frames through
+    // core::loadYield while the load blocks (the startup movie keeps animating).
+    std::function<void(const std::function<void()>&)> sceneLoadWrapper;
+    bool fullScreenMovie() const { return fullScreenMovie_; }
+private:
     uint64_t videoGen_ = 0;
     bool moviePlaying_ = false;
     std::string prefetched_;

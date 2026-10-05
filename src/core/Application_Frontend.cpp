@@ -214,6 +214,21 @@ void Application::attachPresenter() {
         }
         g_scene->setPreview(std::move(slots));
     };
+    // Title / lobby scene loads present frames while they block (the boot startup movie keeps playing) - the same
+    // cooperative yield as the match load, also through the renderer's own load steps.
+    frontend_->sceneLoadWrapper = [this](const std::function<void()>& load) {
+        core::setLoadYield([this](double dt) {
+            platform::InputFrame in;
+            window_->pump(in);
+            frontend_->updateLoading((float)std::min(dt, 0.1));
+            drawFrontendFrame();
+        });
+        setRendererYield(renderer_, true);
+        load();
+        setRendererYield(renderer_, false);
+        core::setLoadYield(nullptr);
+    };
+    frontend_->script().displayHook = [this](int w, int h, bool full) { window_->setDisplayMode(w, h, full); };
     frontend_->script().dumpHook = [this](const std::string& m) {
         for (const std::string& o : presenter_->openMovieObjects())
             if (o.find(m) != std::string::npos) LOG_INFO("GFX DUMP %s\n%s", o.c_str(), presenter_->dumpMovie(o).c_str());

@@ -164,6 +164,24 @@ Rect MovieClip::localBounds() const { return boundsIn(Matrix{}); }
 // ---------------------------------------------------------------------------------------------------------------
 // Player
 
+float Player::hostViewportW = 0, Player::hostViewportH = 0;
+
+void Player::setViewport(float w, float h) {
+    if (w == viewportW && h == viewportH) return;
+    viewportW = w;
+    viewportH = h;
+    if (!noScale()) return;
+    std::vector<avm1::Object*> ls = stageListeners;
+    for (avm1::Object* l : ls) {
+        try {
+            vm_->callMethod(avm1::Value(l), "onResize", {});
+        } catch (const avm1::ScriptThrow& t) {
+            LOG_WARN("GFX Stage onResize threw: %s", vm_->toString(t.v).c_str());
+        }
+        drainActions();
+    }
+}
+
 Player::Player() : vm_(std::make_unique<avm1::VM>(this)) {
     vm_->traceSink = [this](const std::string& m) { LOG_INFO("GFX trace [%s] %s", movieName.c_str(), m.c_str()); };
 }

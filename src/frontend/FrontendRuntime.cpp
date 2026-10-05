@@ -174,6 +174,11 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
         }
         if (st.rfind("dump:", 0) == 0) { if (dumpHook) dumpHook(st.substr(5)); continue; }
         if (st.rfind("navcheck:", 0) == 0) { if (navCheckHook) navCheckHook(st.substr(9)); continue; }
+        if (st.rfind("display:", 0) == 0) {
+            std::vector<std::string> p = split(st.substr(8), ',');
+            if (p.size() >= 2 && displayHook) displayHook(std::atoi(p[0].c_str()), std::atoi(p[1].c_str()), p.size() > 2 && p[2] == "1");
+            return;
+        }
         if (st.rfind("shot:", 0) == 0) { if (shotHook) shotHook(st.substr(5)); return; }
         if (st.rfind("uievent:", 0) == 0) { flow.onUIEvent(std::atoi(st.c_str() + 8)); return; }
         if (st.rfind("snapshot:", 0) == 0) { flow.traceSnapshot(st.c_str() + 9); continue; }
@@ -218,7 +223,17 @@ BridgeValue FrontendRuntime::account(const std::string& fn, const std::vector<st
         // TextPrompt limits the name to 15 characters; an empty / blank or duplicate name is not created.
         bool blank = arg0.find_first_not_of(' ') == std::string::npos;
         bool ok = !blank && arg0.find(',') == std::string::npos && find(arg0) == p.accounts.end();   // ',' separates the list
-        if (ok) { p.accounts.push_back(arg0); p.save(); }
+        if (ok) {
+            p.accounts.push_back(arg0);
+            // Offline there is no separate login service: a new account is signed in when none is, so the name the
+            // player typed is the player name at once (lobbies, scoreboard, kill feed) [PC ADAPTATION].
+            if (p.loggedInAccount.empty()) p.loggedInAccount = arg0;
+            p.save();
+        }
+        // OnCreateAccountComplete: the CreateAccountTitle message box with the result [CONFIRMED script]; offline the
+        // only failures are local (blank / duplicate / comma).
+        flow_.showMessage("$UIText.MessagePrompts.CreateAccountTitle", ok ? "$UIText.MessagePrompts.CreateAccountSucceededMessage"
+                                                                         : "$UIText.MessagePrompts.CreateAccountInvalidUsernameMessage");
         FlowTrace::emit("account.create", {{"name", arg0}, {"created", FlowTrace::boolean(ok)}, {"provenance", "PC ADAPTATION (local)"}});
         return {};
     }
@@ -673,13 +688,20 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
                 if (std::ifstream(Catalog::defaultExtractedRoot() + "/movies/" + c + ".mkv").good()) { underlay_ = c; break; }
         }
         want = underlay_;
+        if (flow_.loading().kind == "InitialStartup" && !bootDone_) bootUnderlay_ = underlay_;
     }
+    if (!m.empty() || flow_.frontEndStarted()) bootDone_ = true;
+    const bool bootHold = want.empty() && !bootDone_ && !bootUnderlay_.empty();
+    if (bootHold) want = bootUnderlay_;   // the startup movie, full screen, until the logos start
+    fullScreenMovie_ = !m.empty() || bootHold;
     if (want != videoName_) {
         if (want.empty()) { stopMovieAudio(); video_.reset(); videoName_.clear(); }
         else if (!openVideo(want, m.empty()) && !m.empty()) { stopped(m); videoName_.clear(); }
     }
     if (!video_) return;
-    video_->advance(dt);
+    // A newly opened movie starts at its first frame: the long frame that opened it (e.g. a blocking scene load) is
+    // not counted as playback time (the Activision logo used to start 0.25 s in).
+    video_->advance(videoFramed_ ? dt : 0.0f);
     const uint8_t* px = nullptr;
     int vw = 0, vh = 0;
     uint64_t serial = 0;
@@ -725,7 +747,11 @@ void FrontendRuntime::updateScene(float dt) {
         sceneLevel_ = map;
         if (!map.empty()) {
             scene_.enterLevel(map);
-            sceneDrawable_ = sceneRenderer_ && !scene_.levels().empty() && sceneRenderer_->load(scene_.levels());
+            auto loadScene = [&] { sceneDrawable_ = sceneRenderer_ && !scene_.levels().empty() && sceneRenderer_->load(scene_.levels()); };
+            sceneLoading_ = true;   // frames presented during the load do not draw the half-loaded scene
+            if (sceneLoadWrapper) sceneLoadWrapper(loadScene);
+            else loadScene();
+            sceneLoading_ = false;
             std::string lvls;
             for (const std::string& l : scene_.levels()) lvls += (lvls.empty() ? "" : "+") + l;
             FlowTrace::emit("scene.levels", {{"uiLevel", map}, {"levels", lvls}, {"drawn", FlowTrace::boolean(sceneDrawable_)},
@@ -805,7 +831,8 @@ void FrontendRuntime::updateLoading(float dt) {
 }
 
 void FrontendRuntime::draw(int w, int h) {
-    if (sceneRenderer_ && sceneDrawable_) {
+    // A full-screen movie hides the game presentation (BeginMovieMode): the scene is not drawn under it.
+    if (sceneRenderer_ && sceneDrawable_ && !fullScreenMovie_ && !sceneLoading_) {
         for (const SceneChange& c : scene_.takeChanges()) {
             if (c.kind == SceneChange::Effect) sceneRenderer_->setEffectActive(c.actor, c.value);
             else sceneRenderer_->setActorHidden(c.actor, c.value);
@@ -819,7 +846,7 @@ void FrontendRuntime::draw(int w, int h) {
     const uint8_t* px = nullptr;
     int vw = 0, vh = 0;
     uint64_t serial = 0;
-    bool over = !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty();   // SeqAct_MoviePlayer / Game.PlayMovie
+    bool over = fullScreenMovie_;   // SeqAct_MoviePlayer / Game.PlayMovie / the boot startup movie
     // The serial is unique across movies (the presenter re-uploads on change).
     if (video_ && video_->frame(px, vw, vh, serial)) presenter_->setVideoFrame(px, vw, vh, (videoGen_ << 40) | serial, over);
     else presenter_->setVideoFrame(nullptr, 0, 0, 0, false);
