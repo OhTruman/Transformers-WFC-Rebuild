@@ -33,7 +33,10 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (inMatch && mv.valid) {
         if (markup == "<CurrentGame:IsCountingDown>") return b(mv.countingDown);
         if (markup == "<CurrentGame:CurrentCountdown>") return std::to_string(mv.countdown);
-        if (markup == "<CurrentGame:GoalScore>") return std::to_string(mv.goalScore);
+        if (markup == "<CurrentGame:GoalScore>" && mv.goalScore > 0) return std::to_string(mv.goalScore);
+        if (markup == "<CurrentGame:AttackingTeamIndex>") return std::to_string(mv.attackingTeamIndex);
+        if (markup == "<CurrentGame:CurrentObjectiveCountdown>") return std::to_string(mv.currentObjectiveCountdown);
+        if (markup == "<CurrentGame:CompetitiveScoreEnabled>") return b(mv.competitiveScoreEnabled);
         if (markup == "<PlayerOwner:Score>") return std::to_string(mv.score);
         if (markup == "<PlayerOwner:TeamID>") return std::to_string(mv.myTeam);
         if (markup == "<PlayerOwner:TimeToRespawn>") return std::to_string((int)std::ceil(std::max(0.0f, mv.timeToRespawn)));
@@ -41,6 +44,17 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:GameModeTag>" || markup == "<CurrentGame:MapCompatibilityTag>") return tag;
     // TnVersusGameOverMessage -> GRI.SetGameOverMessage, read by EndGameStats_GFX [RE A5, CONFIRMED]; Gameplay's result.
     if (markup == "<CurrentGame:GameOverMessage>") return flow_.matchValues().gameOverMessage;
+    // GRI defaults before Gameplay's match values (Default__TnGameReplicationInfoMultiplayer: AttackingTeamIndex -1,
+    // CurrentObjectiveCountdown -1 [CONF]; CompetitiveScoreEnabled engine default 0 [HIGH]). ActiveObjectives is the
+    // pause menu's objective text (empty -> no objective clip): none in versus [HIGH]. _CurrentWave / _NextWaveTime are
+    // Escalation's (unset class defaults 0 [HIGH]).
+    if (markup == "<CurrentGame:AttackingTeamIndex>" || markup == "<CurrentGame:CurrentObjectiveCountdown>") return "-1";
+    if (markup == "<CurrentGame:CompetitiveScoreEnabled>") return "0";
+    if (markup == "<CurrentGame:ActiveObjectives>") return "";
+    if (markup == "<CurrentGame:_CurrentWave>" || markup == "<CurrentGame:_NextWaveTime>") return "0";
+    // GRI.GoalScore = PointsToWin (TnMultiplayerGame.InitGame). Hud_GFX reads it once when it loads and falls back to 10
+    // when it is not > 0, which fills the TDM (40) / DM (20) team bars at 10 points [Hud_GFX AS, Experimental audit P1-2].
+    if (markup == "<CurrentGame:GoalScore>") return std::to_string(inMatch ? flow_.currentMatch().goalScore : (L.settings && L.settings->pointsToWin > 0 ? L.settings->pointsToWin : 0));
     if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
         std::string field = markup.substr(30, markup.size() - 31);
         if (LocalProfile::isOriginalField(field)) return flow_.profile().get(field);

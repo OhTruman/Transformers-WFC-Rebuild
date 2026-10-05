@@ -140,6 +140,9 @@ provenance stays in its section.
 - Fix: showAll movies report the visible area in stage units (1280 x 720 at 16:9) and every movie gets onResize when the
   viewport changes or a listener registers. The authored vignette is unchanged; it now spans -80..1200. [GFx behaviour
   the movies rely on: HIGH; nothing replaced]. Hud_GFX keeps noScale.
+- RE (re-workspace, native): UGFxMovie::execStart (0x82A24770) -> view setup (0x82A1FF08) sets the viewport to the full
+  game viewport and never calls SetViewScaleMode or an alignment setter [CONFIRMED], so the menus run at Scaleform's
+  default showAll / Align_Center with off-stage content unclipped [HIGH] - the model the fix uses.
 - Verified at 2560 x 1440 fullscreen, 1920 x 1080 fullscreen and windowed: edge columns 36-47 (dark) vs 61-71 before;
   Settings / Extras / party lobby render with full-width backgrounds.
 
