@@ -59,6 +59,12 @@ struct HasPreviewBody<R, std::void_t<decltype(std::declval<R&>().loadPreviewBody
 template <class R, class = void> struct HasReleaseBody : std::false_type {};
 template <class R>
 struct HasReleaseBody<R, std::void_t<decltype(std::declval<R&>().releasePreviewBody(0))>> : std::true_type {};
+// Material instance scalar parameters of scene actors (emblems; Rendering: setFrontendMaterialParam, detected).
+template <class R, class = void> struct HasMaterialParam : std::false_type {};
+template <class R>
+struct HasMaterialParam<R, std::void_t<decltype(std::declval<R&>().setFrontendMaterialParam(std::declval<const std::string&>(),
+                                                                                           std::declval<const std::string&>(), 0.0f))>>
+    : std::true_type {};
 template <class R, class = void> struct HasBodyCount : std::false_type {};
 template <class R>
 struct HasBodyCount<R, std::void_t<decltype(std::declval<const R&>().previewBodyCount())>> : std::true_type {};

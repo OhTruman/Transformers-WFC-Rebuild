@@ -27,7 +27,12 @@ template <class R> void nativeActors(R* r, const frontend::SceneView& v) {
                                          Vec3{(float)a.rot[0], (float)a.rot[1], (float)a.rot[2]});
     } else { (void)r; (void)v; }
 }
+template <class R> void nativeMaterialParams(R* r, const frontend::SceneView& v) {
+    if constexpr (HasMaterialParam<R>::value) { for (const auto& m : v.materialParams) r->setFrontendMaterialParam(m.actor, m.param, (float)m.value); }
+    else { (void)r; (void)v; }
+}
 template <class R> void nativeScales(R* r, const frontend::SceneView& v) {
+    nativeMaterialParams(r, v);
     if constexpr (HasActorScale<R>::value) { for (const auto& s : v.scales) r->setFrontendActorScale(s.actor, (float)s.drawScale); }
     else { (void)r; (void)v; }
 }
