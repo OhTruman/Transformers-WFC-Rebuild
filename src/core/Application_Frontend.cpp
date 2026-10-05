@@ -696,6 +696,10 @@ void Application::unloadMatch() {
     delete audio_;
     audio_ = audio::createAudio();
 #endif
+    if (!recreate) {
+        // Per-match presentation state a new renderer would start without: the HUD reticle (setReticle) is the match's.
+        renderer_->setReticle(render::IRenderer::ReticleState{});
+    }
     if (recreate) {
         delete renderer_;
         renderer_ = render::createGLRenderer();
