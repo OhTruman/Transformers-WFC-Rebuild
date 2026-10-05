@@ -215,7 +215,10 @@ class MatCompiler:
             code = authored
         # VectorParameter outputs 1..4 = R, G, B, A. Applied only to materials proven by their compiled
         # permutation (vector_channel_proven.txt), or to all with WFC_MATC_VECTOR_CHANNELS=1 (evaluation).
-        if 1 <= o <= 4 and (os.environ.get('WFC_MATC_VECTOR_CHANNELS') == '1' or self.inst in VECTOR_CHANNEL_PROVEN):
+        # M35: the proof is about the master's graph, so instances of a proven master inherit it (LogoAUT / LogoDEC
+        # _MATINST of ParticleBase_BW_MAT failed GLSL: vec4(vec4, vec4))
+        proven = self.inst in VECTOR_CHANNEL_PROVEN or (self.master or '') in VECTOR_CHANNEL_PROVEN or             any(c in VECTOR_CHANNEL_PROVEN for c in (self.chain or []))
+        if 1 <= o <= 4 and (os.environ.get('WFC_MATC_VECTOR_CHANNELS') == '1' or proven):
             return '(%s).%s' % (code, 'xyzw'[o - 1]), 1
         return code, 4
 

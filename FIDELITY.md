@@ -2396,6 +2396,22 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
 
 ---
 
+## MILESTONE 35 — VECTOR-CHANNEL PROOF INHERITED BY INSTANCES (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| LogoAUT / LogoDEC_MATINST GLSL error (Integration M08b) | instances of ParticleBase_BW_MAT, whose graph is already proven to use VectorParameter channel outputs (vector_channel_proven.txt: AppendVector(UVandOffset.B, UVandOffset.B) is invalid as vec4 + vec4); matc tested only the instance path, so instances fell back to the full-vector reading (vec4(vec4, vec4)) | Integration m08b_soak wfc.log; matc trace | CONFIRMED | matc applies the proof to the instance's master / chain. Streets: only the two Logo instances change; 0 compile failures |
+
+## MILESTONE 34 — PARTICLE ColorByParameter DefaultColor (per template) (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Template colour | the Ion blue Systems used is MuzzleFlash / Tracer_AssaultRifle's own ColorByParameter DefaultColor, not a weapon tint (the weapon's EnergonColor parameter is (255,255,255,A=0) = no override); each template carries its own | Systems a1d38c5 notes; LOD stream bytes | CONFIRMED (Systems / data) | runtime ColorByParameter order: component InstanceParameter, caller colour, decoded DefaultColor, white |
+| Decode | ARGB FColor after the module-order list (count = module records, bytes 0..n-1), a counted byte list and 20 bytes [HIGH: reproduces ff 33 19 ff on every AssaultRifle emitter]; other layouts: the stream's single A = 0xFF value after a zero int [MEDIUM]. Streets: 435 / 451 ColorByParameter emitters decoded, every template internally consistent (AssaultRifle (51,25,255), EMP shotgun (255,65,65), Sniper (255,12,12)); EMP red matches its editor thumbnail (the Sniper / AssaultRifle thumbnails are identical, generic) | build_map_fx.py default_color(); work/m34_thumbs.png | HIGH / MEDIUM | WFC_FXTEST without a caller colour: EMP red, Sniper red (was blown-out white), AssaultRifle Ion blue |
+
+## MILESTONE 33 — MATINEE MATERIAL PARAMETERS (lobby faction emblems) (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Faction emblems invisible | UI_CharacterCustomization's MaterialInstanceActors (8803 / 16331 Autobot logo / glow, 5865 / 1120 Decepticon) drive their MICs' Highlighted / Opacity through Matinee; compiled with the authored defaults (Opacity 0) the emblems were constant-folded to emissive 0 (additive: invisible) | materials_glsl.json; Frontend matinee evaluation | CONFIRMED | build_materials: every MaterialInstanceActor's MIC compiles with runtime parameters (no map names) + material_instance_actors.json; IRenderer::setFrontendMaterialParam(actor, param, value) routes to the MIC (held until changed; unset = authored). WFC_MATPARAM: Opacity / Highlighted 1 shows both emblems and glows, unset stays invisible (VISUALLY VERIFIED) |
+
 ## MILESTONE 32 — RUNTIME PARTICLE TEMPLATES (weapon muzzle / impact FX from data) (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

@@ -887,6 +887,10 @@ public:
         return wfc_.active() && fxRows(pos, fwd, up, R, T) && wfc_.setFxTransform(h, R, T);
     }
     void stopParticleEffect(int h) override { if (wfc_.active()) wfc_.stopFx(h); }
+    bool setFrontendMaterialParam(const std::string& actor, const std::string& param, float value) override {
+        const float v[4] = {value, value, value, value};
+        return wfc_.active() && wfc_.setMaterialParam(actor, param, v);
+    }
     int liveParticleEffects() const override { return wfc_.liveFx(); }
     bool drawsAuthoredMapFx() const override { return wfc_.active(); }
     void setMapClock(float t) override { wfc_.setMapClock(t); }

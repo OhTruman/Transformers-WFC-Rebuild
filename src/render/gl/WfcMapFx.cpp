@@ -21,6 +21,7 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -172,6 +173,14 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     lod.typeData = td == "mesh" ? 1 : td == "trail2" ? 2 : td == "beam2" ? 3 : 0;
                     lod.subH = std::max(1, rq["subimages"][(size_t)0].asInt(1));
                     lod.subV = std::max(1, rq["subimages"][(size_t)1].asInt(1));
+                    const assets::Json& dc = L["default_color"];         // FColor (R, G, B, A) -> FLinearColor
+                    if (dc.isArray() && dc.size() == 4) {
+                        lod.hasDefaultColor = true;
+                        for (int c = 0; c < 4; ++c) {
+                            float v = dc[(size_t)c].asFloat(255) / 255.0f;
+                            lod.defaultColor[c] = c < 3 ? std::pow(v, 2.2f) : v;
+                        }
+                    }
                     const std::string sm = L["subuv_method"].asString();   // EParticleSubUVInterpMethod
                     lod.subMethod = sm.find("RANDOM") != std::string::npos || sm.find("Random") != std::string::npos ? 2
                                   : (sm.empty() || sm == "PSUVIM_None") ? 0 : 1;
@@ -495,9 +504,12 @@ void Pipeline::tickMapFx(float dt) {
                         // the FName in the compiled LOD stream), else DefaultColor (CDO white; the stream carries
                         // FFFFFFFF). Single colour parameter per Streets instance.
                         float c4[4] = {1, 1, 1, 1};
+                        // order: the component's InstanceParameter, the spawnFx caller's colour, the module's decoded
+                        // DefaultColor (M34), white
                         auto it = in.colorParams.find("SteamColor");
                         if (it == in.colorParams.end()) it = in.colorParams.find("*");   // spawnFx colour
                         if (it != in.colorParams.end()) std::copy(it->second.begin(), it->second.end(), c4);
+                        else if (L.hasDefaultColor) std::copy(L.defaultColor, L.defaultColor + 4, c4);
                         std::copy(c4, c4 + 4, q.baseColor);
                     } else if (m.name == "PMI_DynamicParameter") {          // [PARTIAL] slot order
                         for (int k = 0; k < 4; ++k) {
@@ -581,6 +593,26 @@ bool Pipeline::setFxTransform(int id, const float R[3][3], const float T[3]) {
 void Pipeline::stopFx(int id) {
     for (FxInstance& in : fxInstances_)
         if (in.transient && in.id == id) in.active = false;
+}
+
+bool Pipeline::setMaterialParam(const std::string& actor, const std::string& param, const float v[4]) {
+    std::string a = actor;
+    std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+    if (a.rfind('.') != std::string::npos) a = a.substr(a.rfind('.') + 1);
+    auto it = miaMaterial_.find(a);
+    if (it == miaMaterial_.end()) {
+        static std::set<std::string> logged;
+        if (logged.insert(dataDir_ + "|" + a).second)
+            LOG_WARN("material param: %s is not a MaterialInstanceActor of this scene", actor.c_str());
+        return false;
+    }
+    std::string id;                                     // matc rt_ident: the uniform suffix
+    for (char ch : param) id += (std::isalnum((unsigned char)ch) || ch == '_') ? ch : '_';
+    auto& ps = matParams_[it->second];
+    for (auto& pv : ps)
+        if (pv.first == id) { std::copy(v, v + 4, pv.second.begin()); return true; }
+    ps.push_back({id, {v[0], v[1], v[2], v[3]}});
+    return true;
 }
 
 int Pipeline::liveFx() const {

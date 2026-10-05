@@ -341,6 +341,12 @@ public:
         (void)handle; (void)pos; (void)forward; (void)up; return false;
     }
     virtual void stopParticleEffect(int handle) { (void)handle; }
+    // Matinee material parameters (MaterialParamTrack on a MaterialInstanceActor, e.g. the lobby faction emblems'
+    // "Highlighted" / "Opacity"): sets the scalar on that actor's MIC in the loaded scene, held until changed; before
+    // any call the MIC's authored values apply. Returns false when the actor is not a MaterialInstanceActor here.
+    virtual bool setFrontendMaterialParam(const std::string& actor, const std::string& param, float value) {
+        (void)actor; (void)param; (void)value; return false;
+    }
     virtual int liveParticleEffects() const { return 0; }
     // True when the renderer draws the authored map particle components itself (Systems must not draw them too).
     virtual bool drawsAuthoredMapFx() const { return false; }
