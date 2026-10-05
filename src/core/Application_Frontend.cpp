@@ -675,10 +675,14 @@ void Application::routeMatchToFrontend(float dt) {
     hf.overshield = h.normalizedOverShield;
     const auto& wpn = world_.player().pawn().weapon();
     hf.clip = h.clipAmmo; hf.clipCapacity = wpn.magSize; hf.reserve = h.reserveAmmo; hf.reserveCapacity = wpn.reserveMax;
-    // [integration M08] The equipped weapon's TnWeapon class suffix (NotifyCurrentWeaponChanged / icon export), from
-    // Gameplay's Pass 22 weapon table (WeaponDef::id, e.g. RocketLauncher; the provider id can differ: HomingRocket).
-    // Was the Ion Blaster for every weapon.
-    hf.weapon = wpn.def ? wpn.def->id : std::string();
+    {   // Gameplay's TnHUD observer state: fine aim (EHudAimType) -> NotifyFineAimChanged. The weapon class name goes to
+        // NotifyCurrentWeaponChanged and Hud_GFX itself picks the icon / crosshair / reticule / scope (RE 934ecde, CONFIRMED).
+        // [integration M08b] The class comes from the EQUIPPED weapon (Gameplay WeaponDef::id; Hud prefixes "TnWeapon"):
+        // hudAimState().weaponClass is still the Ion Blaster for every weapon in Gameplay ddd8a58. No Ion default.
+        const auto& aim = world_.player().controller().hudAimState();
+        hf.weapon = wpn.def ? wpn.def->id : std::string();
+        hf.aimType = aim.aimType;
+    }
     hf.vehicleForm = h.vehicleForm;
     hf.spectating = spectatingUi_;
     frontend_->hud().setFrame(hf);
