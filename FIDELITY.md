@@ -189,6 +189,9 @@ Inputs:
     [PARTIAL].
   - **Camera:** HoverPlane ±45° / 9 m / FOV 80; FlyingPlane ±80° / FOV 100 [CONF authored]. Follow-camera behaviour
     [PROV].
+- **Vehicle FX and sounds** drawn by Gameplay (VehicleFx: BoostFx / HoverFX / JumpFX / ram) are OptimusTruckForm's, on
+  VH_OptimusPrime bones. They now play only for the Optimus chassis (Truck / Truck7). Other chassis' authored sets
+  (character.json vehicle.fx, e.g. Starscream Afterburner_D_FX) are left to Rendering [PARTIAL].
 - **Hulls:** each chassis' VH_*_PHYSSYS convex hull (BodySetup ConvexElems bounds, C_Reference_XR) from authored data
   [CONF] (VehicleHullTable.inc). Element 0 of VH_Optimus_PHYSSYS reproduces the Pass 17 hull exactly.
 - **ChassisOffset:** unset → 0 (no class default authored). The loader first defaulted it to Optimus's 15, which lifted

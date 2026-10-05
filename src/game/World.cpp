@@ -588,7 +588,11 @@ void World::playSfx(Sfx s, const core::Vec3& pos) {
 // and the boost wheels peel-out). Jump [MED]: vehicle take-off with upward velocity.
 void World::tickVehicleBoost(float dt) {
     Character& pc = player_.pawn();
-    bool vehicle = pc.form() == Form::Vehicle && !pc.isTransforming();
+    // These effects / sounds are OptimusTruckForm's (BoostFx / HoverFX / JumpFX on VH_OptimusPrime bones). Other chassis
+    // author their own sets (character.json vehicle.fx) on their own sockets: Rendering's per-chassis FX [PARTIAL here],
+    // so they are not drawn at the truck's socket positions on another body.
+    const bool optimusFx = pc.chassis().id == "Truck" || pc.chassis().id == "Truck7";
+    bool vehicle = optimusFx && pc.form() == Form::Vehicle && !pc.isTransforming();
     bool boost = vehicle && pc.vehicleState().driving;
     bool hover = vehicle && !boost;
 
