@@ -1941,3 +1941,5 @@ isolated effort, not cut into this pass to avoid leaving the build broken.
 - Camera follow distance/offset: HM camera behavior assets (cooked packages) or exe.
 - Vehicle base speed/accel/turn: `TnCarForm`/`TnTruckForm` compiled defaults in exe.
 - Lighting: lightmaps not extracted; dominant directional light direction/colour from map.
+- Remaining unimplemented abilities (in no iconic preset; class pools only): DecoyTrap, HardLock, Disguise, AbilityJammer,
+  TransformDisruptor, MarkTarget … are listed per slot and reported unimplemented [PARTIAL].
