@@ -23,6 +23,24 @@ namespace game {
 
 class SoundCues;
 
+// The vehicle form's HmPlayerVehicleAudioComponent [CONF data]: the object merged over its archetype chain and the
+// HmVehicleAudioComponent / HmPlayerVehicleAudioComponent class defaults. Sounds are EVENT names, resolved through the
+// chassis's vehicle SoundEventSet ("" = slot unset -> nothing plays).
+struct VehicleAudioComponentData {
+    struct Gear { float maxSpeed = 0.0f; std::vector<std::string> onLoops, onOneshots, offLoops, offOneshots; };
+    struct Land { float t = 0.0f; std::string event; };
+    bool valid = false;
+    std::vector<Gear> drive;                   // DriveSounds (ComputeGear: first with speed <= MaxSpeed, else the last)
+    Gear reverse;                              // ReverseSound
+    std::vector<std::string> boostLoops, boostOneshots, jumpLoops, jumpOneshots;
+    bool useJumpRev = false;                   // JumpRevSounds.UseJumpRev
+    std::vector<Land> hoverLand, boostLand;    // TimeInAirThreshold ascending
+    std::string boost, boostWheels, boostStop, ascend, ram, booster, nitro, squeal;
+    float boostFadeIn = 0.1f, boostFadeOut = 0.1f, boostWheelsDelay = 0.25f, squealMinMph = 3.0f, squealFade = 0.1f;
+    float engineFadeIn = 0.1f, engineFadeOut = 0.1f, jumpRevTime = 0.25f, oneshotSpazTime = 1.0f;
+    int speedHistory = 15;
+};
+
 struct CharacterAudioProfile {
     struct Notify { float t; std::string event, cue; float minWeight; };   // event (resolved via voice) or cue
     struct Clip { float length; std::vector<Notify> notifies; };
@@ -30,6 +48,7 @@ struct CharacterAudioProfile {
     std::map<std::string, std::string> voice, vehicle;
     std::map<std::string, Clip> clips;
     std::vector<std::string> weapons;
+    VehicleAudioComponentData vehicleComponent;
 
     // The cue a notify plays ("" = the set has no sound for its event).
     const std::string& notifyCue(const Notify& n) const;

@@ -96,8 +96,24 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
     current clip, plays once, then returns to the looping idle.
   * The visual WeaponMesh stays the Ion Blaster's; only its effect notifies are used.
   * Equip / put-down sounds play when Gameplay calls `World::weaponAnimEvent`.
+* **Vehicle-form audio per chassis** [CONF data + script]:
+  * Source: each chassis's own HmPlayerVehicleAudioComponent (roster `vehicle.definition`), merged over its
+    archetype chain and the class defaults. All 33 chassis have one.
+  * Slots: drive gears (MaxSpeed, on/off-load loops and one-shots), reverse, boost and jump-rev loops and one-shots,
+    UseJumpRev, the land tables, and the single slots (boost, boost wheels, boost stop, ascend, ram, booster, nitro,
+    tire squeal).
+  * Tunables: fades, squeal speed, wheels delay, jump-rev time, one-shot spaz time, speed-history length.
+  * `VehicleAudio` ports HmPlayerVehicleAudioComponentImpl onto that data:
+    * ComputeGear runs at BeginState only;
+    * one-shots are gated by EngineOneshotSpazTimer, and skipped when coming from Boosting or JumpReving;
+    * an unset slot plays nothing.
+  * Optimus is unchanged: the A/B probe `tools/systems/vehicle_audio_ab.cpp` shows the same 92 voice starts / stops
+    as the previous hand-entered port on a deterministic drive script.
+  * Megatron has no ram, boost-wheels or jump-rev sound, and squeals from 3 mph. Starscream uses its hover-ascend
+    and hover-booster slots.
+  * Not ported: SpeedSound, CustomLoopingSound (ram alert, turret rotate) and OneEightySound. They were not driven
+    before either.
 * **PARTIAL:**
-  * the vehicle component tunables are OptimusTruckForm's;
   * 169 dialogue waves are absent from the extraction (AssetTools).
 * `SoundCues::findCue` resolves full asset names to the compiled short names, but only for the exact packages that
   were compiled under a short name.

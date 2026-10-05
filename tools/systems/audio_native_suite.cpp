@@ -1737,6 +1737,23 @@ static void testCharacterAudio() {
         game::CharacterAudio::loadHitCues(cues, game::CharacterAudio::defaultProfile(), "TransContent.TnWeaponSniperRifle");
         CHECK(cues.hasCue("BL_WPN_GUN_SNIPER.IMPT_DMG") && cues.hasCue("BL_WPN_GUN_SNIPER.IMPT_BLOCK"), "victim hit / block cues load");
     }
+    {   // vehicle components: Optimus = the previous hand-entered values; other chassis their own slots / tunables
+        const game::VehicleAudioComponentData& o = game::CharacterAudio::defaultProfile().vehicleComponent;
+        const game::CharacterAudioProfile* tank = game::CharacterAudio::find("Tank");
+        const game::CharacterAudioProfile* jet = game::CharacterAudio::find("Jet");
+        auto near = [](float a, float b) { return std::fabs(a - b) < 1e-4f; };
+        CHECK(o.valid && near(o.boostFadeIn, 0.1f) && near(o.boostFadeOut, 0.15f) && near(o.boostWheelsDelay, 0.27f) &&
+              near(o.squealMinMph, 20.0f) && near(o.squealFade, 0.5f) && near(o.engineFadeIn, 0.1f) && near(o.engineFadeOut, 0.2f) &&
+              near(o.jumpRevTime, 0.25f) && o.useJumpRev && o.speedHistory == 15 && o.drive.size() == 2 && near(o.drive[0].maxSpeed, 20.0f) &&
+              o.hoverLand.size() == 2 && near(o.hoverLand[1].t, 2.0f) && o.ram == "Auto_Ram_Impact" && o.squeal == "Auto_Tire_Squeal_Default",
+              "Optimus vehicle component = the previous hand-entered tunables / slots");
+        CHECK(tank && tank->vehicleComponent.valid && tank->vehicleComponent.ram.empty() && tank->vehicleComponent.boostWheels.empty() &&
+              !tank->vehicleComponent.useJumpRev && near(tank->vehicleComponent.squealMinMph, 3.0f) &&
+              tank->vehicleComponent.boostOneshots.size() == 1 && near(tank->vehicleComponent.drive[1].maxSpeed, 100.0f),
+              "Megatron: no ram / boost-wheels slot, no jump rev, class-default squeal speed, a boost one-shot, gear 2 to 100 mph");
+        CHECK(jet && jet->vehicleComponent.ascend == "Auto_Engine_Hover_Ascend" && jet->vehicleComponent.booster == "Auto_Hover_Boosters",
+              "Starscream: hover ascend / boosters slots");
+    }
     {   // weapon-mesh animation sounds: the Ion Blaster's generated table = the hand-checked M03 table; timeline rules
         const game::WeaponAnimSounds* ion = game::CharacterAudio::weaponAnimSounds("TransContent.TnWeaponIonBlaster");
         auto near = [](float a, float b) { return std::fabs(a - b) < 0.001f; };

@@ -47,6 +47,37 @@ const Db& db() {
             p.clips[c.first] = clip;
         }
         for (size_t i = 0; i < j["weapons"].size(); ++i) p.weapons.push_back(j["weapons"][i].asString());
+        const assets::Json& vc = j["vehicle_component"];
+        if (vc.isObject()) {
+            VehicleAudioComponentData& v = p.vehicleComponent;
+            auto list = [](const assets::Json& a, std::vector<std::string>& out) {
+                for (size_t i = 0; i < a.size(); ++i) out.push_back(a[i].asString());
+            };
+            auto gear = [&](const assets::Json& g, VehicleAudioComponentData::Gear& out) {
+                out.maxSpeed = g["max_speed"].asFloat();
+                list(g["on_loops"], out.onLoops); list(g["on_oneshots"], out.onOneshots);
+                list(g["off_loops"], out.offLoops); list(g["off_oneshots"], out.offOneshots);
+            };
+            for (size_t i = 0; i < vc["drive"].size(); ++i) { v.drive.emplace_back(); gear(vc["drive"][i], v.drive.back()); }
+            gear(vc["reverse"], v.reverse);
+            list(vc["boost_loops"], v.boostLoops); list(vc["boost_oneshots"], v.boostOneshots);
+            list(vc["jump_rev"]["loops"], v.jumpLoops); list(vc["jump_rev"]["oneshots"], v.jumpOneshots);
+            v.useJumpRev = vc["jump_rev"]["use"].asBool();
+            for (const char* k : {"hover_land", "boost_land"})
+                for (size_t i = 0; i < vc[k].size(); ++i)
+                    (k[0] == 'h' ? v.hoverLand : v.boostLand).push_back({vc[k][i]["t"].asFloat(), vc[k][i]["event"].asString()});
+            const assets::Json& s = vc["slots"];
+            v.boost = s["BoostSound"].asString(); v.boostWheels = s["BoostWheelsSound"].asString();
+            v.boostStop = s["BoostStopSound"].asString(); v.ascend = s["AscendSound"].asString(); v.ram = s["RamSound"].asString();
+            v.booster = s["BoosterSound"].asString(); v.nitro = s["NitroSound"].asString(); v.squeal = s["DefaultTireSquealSound"].asString();
+            const assets::Json& t = vc["tunables"];
+            v.boostFadeIn = t["boost_fade_in"].asFloat(v.boostFadeIn); v.boostFadeOut = t["boost_fade_out"].asFloat(v.boostFadeOut);
+            v.boostWheelsDelay = t["boost_wheels_delay"].asFloat(v.boostWheelsDelay); v.squealMinMph = t["squeal_min_mph"].asFloat(v.squealMinMph);
+            v.squealFade = t["squeal_fade"].asFloat(v.squealFade); v.engineFadeIn = t["engine_fade_in"].asFloat(v.engineFadeIn);
+            v.engineFadeOut = t["engine_fade_out"].asFloat(v.engineFadeOut); v.jumpRevTime = t["jump_rev_time"].asFloat(v.jumpRevTime);
+            v.oneshotSpazTime = t["oneshot_spaz_time"].asFloat(v.oneshotSpazTime); v.speedHistory = t["speed_history"].asInt(15);
+            v.valid = true;
+        }
         d.profiles[p.key] = p;
     }
     for (const auto& kv : d.doc["weapons"].obj) {

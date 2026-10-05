@@ -1,7 +1,8 @@
-// Clean-room reconstruction — Optimus truck audio: a port of WFC's HmVehicleAudioComponent +
+// Clean-room reconstruction — vehicle-form audio: a port of WFC's HmVehicleAudioComponent +
 // HmPlayerVehicleAudioComponent(Impl) behaviour, as decompiled from HM_Engine script
-// (RE-Workspace/work/script/decomp, read-only) with OptimusTruckForm.HmPlayerVehicleAudioComponent_6670
-// values and the Veh_Optimus_Prime_SoundSet event -> cue map. [CONF] unless marked.
+// (RE-Workspace/work/script/decomp, read-only), driven by each chassis's own HmPlayerVehicleAudioComponent data
+// (gears, reverse / boost / jump-rev loops and one-shots, land tables, slots, tunables) and vehicle SoundEventSet
+// (CharacterAudio). [CONF] unless marked.
 //
 // Inputs mirror what TnCarForm feeds the component:
 //   Hovering.UpdateSounds: IsOnGround = hover sim on ground, WheelSlipRatio = 0,
@@ -18,10 +19,11 @@
 #include <functional>
 #include "core/Math.h"
 #include "game/SoundCues.h"
+#include "game/CharacterAudio.h"
+#include <algorithm>
+#include <vector>
 
 namespace game {
-
-struct CharacterAudioProfile;
 
 class VehicleAudio {
 public:
@@ -50,31 +52,31 @@ public:
 
 private:
     enum class State { None, Boosting, JumpReving, ForwardOnLoad, ForwardOffLoad, ReverseOnLoad, ReverseOffLoad };
-    struct Names {
-        std::string boostStart, boostWheels, boostEnd, boostLoop, onLoad, offLoad, jumpLoop, ascend, booster, nitro, ram, squeal;
-        std::string hoverLand[2], wheelsLand[2];
-    } n_;
+    VehicleAudioComponentData c_;    // the chassis's component, sounds resolved to cues
     bool named_ = false;
     void ensureNames();
     struct Loop { int id = -1; const char* cue = nullptr; };
 
     bool playLooping(Loop& l, const char* cue, float fadeIn, SoundCues& cues, const EmitterFn& at);
     void stopLooping(Loop& l, float fadeOut, SoundCues& cues);
-    void playEvent(const char* cue, SoundCues& cues, const EmitterFn& at);
+    void playEvent(const std::string& cue, SoundCues& cues, const EmitterFn& at);
     void gotoState(State s, SoundCues& cues, const EmitterFn& at);
+    int computeGear() const;
     void attach();
     void detach(SoundCues& cues);
 
     bool entered_ = false;
     bool boosting_ = false;
-    float speedHist_[15] = {};       // VehicleSpeedHistoryLength 15 (class default)
+    std::vector<float> speedHist_ = std::vector<float>(15, 0.0f);   // VehicleSpeedHistoryLength
     int histIdx_ = 0;
     float speed_ = 0.0f;             // averaged mph
     float boostWheelsTimer_ = 0.0f;
     bool onGroundPrev_ = false;
     float jumpRevTimer_ = 0.0f, landTimer_ = 0.0f;
+    float spazTimer_ = 0.0f;         // Impl.EngineOneshotSpazTimer
     State state_ = State::None;
-    Loop boost_, boostWheels_, booster_, squeal_, engine_;
+    Loop boost_, boostWheels_, booster_, squeal_;
+    std::vector<Loop> engine_, oneshots_;   // the state's engine loops; one-shot components
 };
 
 } // namespace game

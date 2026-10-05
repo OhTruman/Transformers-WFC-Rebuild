@@ -4,37 +4,36 @@
 namespace game {
 namespace {
 
-// [CONF] OptimusTruckForm.HmPlayerVehicleAudioComponent_6670 over the class defaults.
-constexpr float kBoostFadeIn = 0.1f;      // Default__HmVehicleAudioComponent.BoostFadeInTime
-constexpr float kBoostFadeOut = 0.15f;    // BoostFadeOutTime
-constexpr float kBoostWheelsDelay = 0.27f;// BoostWheelsGroundCheckDelay
-constexpr float kSquealMinMph = 20.0f;    // TireSquealSpeedMin
-constexpr float kSquealFade = 0.5f;       // TireSquealCrossfadeTime
-constexpr float kEngineFadeIn = 0.1f;     // Default__HmPlayerVehicleAudioComponent.EngineFadeInTime
-constexpr float kEngineFadeOut = 0.2f;    // EngineFadeOutTime
-constexpr float kJumpRevTime = 0.25f;     // JumpRevTime (JumpRevSounds.UseJumpRev = true)
 constexpr float kMph = 2.23694f;          // ComputeSpeedMPH: |Velocity| (UU/s) x 0.0223694
 
-// The vehicle sounds are the character profile's vehicle SoundEventSet (CharacterAudio; default: Optimus
-// Veh_Optimus_Prime_SoundSet). Event -> slot [CONF HmVehicleAudioComponent / HmPlayerVehicleAudioComponent fields]:
-//   Auto_Boost_Start BoostSound, Auto_Boost_Wheels BoostWheelsSound, Auto_Boost_End BoostStopSound, Auto_Boost_Loop
-//   BoostSounds.BoostLoops, Auto_Engine_Gear_1_OnLoad / _OffLoad DriveSounds[*] (and ReverseSound), Auto_Jump_Loop
-//   JumpRevLoops, Auto_Jump_Start AscendSound, Auto_Ram_Boost BoosterSound, Auto_Ram_Nitro NitroSound, Auto_Ram_Impact
-//   RamSound, Auto_Tire_Squeal_Default DefaultTireSquealSound, Auto_Land_Hover_* HoverLandSound, Auto_Land_Wheels_*
-//   BoostLandSound. Events mapped to None play nothing. [PARTIAL] the component tunables above are OptimusTruckForm's;
-// other vehicles' HmPlayerVehicleAudioComponent values are not generated yet.
-constexpr float kLandThreshold[2] = {0.15f, 2.0f};
+// Every sound slot, list and tunable comes from the chassis's own HmPlayerVehicleAudioComponent (CharacterAudio
+// vehicleComponent: the object over its archetype chain and the class defaults) [CONF data]; the event -> cue map is
+// the chassis's vehicle SoundEventSet; an unset slot or an event the set maps to None plays nothing [CONF script].
+// Optimus (OptimusTruckForm.HmPlayerVehicleAudioComponent_6670) gives the previous hand-entered values exactly:
+// BoostFadeOut 0.15, BoostWheelsGroundCheckDelay 0.27, TireSquealSpeedMin 20, TireSquealCrossfadeTime 0.5,
+// EngineFadeOut 0.2, UseJumpRev, land thresholds 0.15 / 2.0; his gear one-shot event is unmapped in his set.
+
+std::string cueOf(const CharacterAudioProfile& p, const std::string& ev) { return ev.empty() ? std::string() : p.vehicleCue(ev); }
+
+void resolve(const CharacterAudioProfile& p, std::vector<std::string>& v) {
+    for (std::string& e : v) e = cueOf(p, e);
+}
 
 } // namespace
 
 void VehicleAudio::setProfile(const CharacterAudioProfile& p) {
-    auto ev = [&](const char* e) { return p.vehicleCue(e); };
-    n_.boostStart = ev("Auto_Boost_Start"); n_.boostWheels = ev("Auto_Boost_Wheels"); n_.boostEnd = ev("Auto_Boost_End");
-    n_.boostLoop = ev("Auto_Boost_Loop"); n_.onLoad = ev("Auto_Engine_Gear_1_OnLoad"); n_.offLoad = ev("Auto_Engine_Gear_1_OffLoad");
-    n_.jumpLoop = ev("Auto_Jump_Loop"); n_.ascend = ev("Auto_Jump_Start"); n_.booster = ev("Auto_Ram_Boost");
-    n_.nitro = ev("Auto_Ram_Nitro"); n_.ram = ev("Auto_Ram_Impact"); n_.squeal = ev("Auto_Tire_Squeal_Default");
-    n_.hoverLand[0] = ev("Auto_Land_Hover_Light"); n_.hoverLand[1] = ev("Auto_Land_Hover_Heavy");
-    n_.wheelsLand[0] = ev("Auto_Land_Wheels_Light"); n_.wheelsLand[1] = ev("Auto_Land_Wheels_Heavy");
+    c_ = p.vehicleComponent;
+    if (!c_.valid) c_ = CharacterAudio::defaultProfile().vehicleComponent;   // (every MP chassis has one)
+    // Events -> this chassis's cues, once.
+    for (auto* g : {&c_.reverse}) { resolve(p, g->onLoops); resolve(p, g->onOneshots); resolve(p, g->offLoops); resolve(p, g->offOneshots); }
+    for (auto& g : c_.drive) { resolve(p, g.onLoops); resolve(p, g.onOneshots); resolve(p, g.offLoops); resolve(p, g.offOneshots); }
+    resolve(p, c_.boostLoops); resolve(p, c_.boostOneshots); resolve(p, c_.jumpLoops); resolve(p, c_.jumpOneshots);
+    for (auto& l : c_.hoverLand) l.event = cueOf(p, l.event);
+    for (auto& l : c_.boostLand) l.event = cueOf(p, l.event);
+    for (std::string* s : {&c_.boost, &c_.boostWheels, &c_.boostStop, &c_.ascend, &c_.ram, &c_.booster, &c_.nitro, &c_.squeal})
+        *s = cueOf(p, *s);
+    speedHist_.assign((size_t)std::max(1, c_.speedHistory), 0.0f);
+    histIdx_ = 0;
     named_ = true;
 }
 
@@ -68,26 +67,63 @@ void VehicleAudio::stopLooping(Loop& l, float fadeOut, SoundCues& cues) {
     l.id = -1; l.cue = nullptr;
 }
 
-void VehicleAudio::playEvent(const char* cue, SoundCues& cues, const EmitterFn& at) {
-    if (!cue || !*cue) return;
-    cues.play(cue, at(), 0.0f, speed_);
+void VehicleAudio::playEvent(const std::string& cue, SoundCues& cues, const EmitterFn& at) {
+    if (cue.empty()) return;
+    cues.play(cue.c_str(), at(), 0.0f, speed_);
 }
 
-void VehicleAudio::ram(SoundCues& cues, const EmitterFn& at) { ensureNames(); playEvent(n_.ram.c_str(), cues, at); }
+void VehicleAudio::ram(SoundCues& cues, const EmitterFn& at) { ensureNames(); playEvent(c_.ram, cues, at); }
 
-// HmPlayerVehicleAudioComponentImpl states: EndState stops that state's loops, BeginState plays the next.
+// Impl.ComputeGear: the first DriveSounds entry whose MaxSpeed >= the vehicle speed, else the last; false if none.
+int VehicleAudio::computeGear() const {
+    if (c_.drive.empty()) return -1;
+    for (size_t i = 0; i < c_.drive.size(); ++i)
+        if (speed_ <= c_.drive[i].maxSpeed) return (int)i;
+    return (int)c_.drive.size() - 1;
+}
+
+// HmPlayerVehicleAudioComponentImpl states. EndState stops that state's loops (one-shots run out); BeginState plays
+// the new state's loops (Boosting: BoostFadeInTime, others EngineFadeInTime), then - if EngineOneshotSpazTimer <= 0 -
+// its one-shots (PlayLoopingSound, fade 0), each resetting the timer to EngineOneshotSpazTime. Drive / reverse
+// one-shots are skipped when coming from Boosting or JumpReving. The drive gear is chosen at BeginState only
+// (GotoState to the current state does not re-enter it). [CONF script]
 void VehicleAudio::gotoState(State s, SoundCues& cues, const EmitterFn& at) {
     if (s == state_) return;
-    stopLooping(engine_, state_ == State::Boosting ? kBoostFadeOut : kEngineFadeOut, cues);
+    const float fadeOut = state_ == State::Boosting ? c_.boostFadeOut : c_.engineFadeOut;
+    for (Loop& l : engine_) stopLooping(l, fadeOut, cues);
+    const State prev = state_;
     state_ = s;
+    const std::vector<std::string>* loops = nullptr;
+    const std::vector<std::string>* shots = nullptr;
+    float fadeIn = c_.engineFadeIn;
+    const bool fromBoostOrJump = prev == State::Boosting || prev == State::JumpReving;
     switch (s) {
-        case State::Boosting: playLooping(engine_, n_.boostLoop.c_str(), kBoostFadeIn, cues, at); break;
-        case State::JumpReving: playLooping(engine_, n_.jumpLoop.c_str(), kEngineFadeIn, cues, at); break;
-        case State::ForwardOnLoad: case State::ReverseOnLoad: playLooping(engine_, n_.onLoad.c_str(), kEngineFadeIn, cues, at); break;
-        case State::ForwardOffLoad: case State::ReverseOffLoad: playLooping(engine_, n_.offLoad.c_str(), kEngineFadeIn, cues, at); break;
+        case State::Boosting: loops = &c_.boostLoops; shots = &c_.boostOneshots; fadeIn = c_.boostFadeIn; break;
+        case State::JumpReving: loops = &c_.jumpLoops; shots = &c_.jumpOneshots; break;
+        case State::ReverseOnLoad: loops = &c_.reverse.onLoops; shots = fromBoostOrJump ? nullptr : &c_.reverse.onOneshots; break;
+        case State::ReverseOffLoad: loops = &c_.reverse.offLoops; shots = fromBoostOrJump ? nullptr : &c_.reverse.offOneshots; break;
+        case State::ForwardOnLoad: case State::ForwardOffLoad: {
+            const int g = computeGear();
+            if (g < 0) break;
+            const VehicleAudioComponentData::Gear& gear = c_.drive[(size_t)g];
+            const bool on = s == State::ForwardOnLoad;
+            loops = on ? &gear.onLoops : &gear.offLoops;
+            shots = fromBoostOrJump ? nullptr : (on ? &gear.onOneshots : &gear.offOneshots);
+            break;
+        }
         default: break;
     }
-    // The gear / boost / jump-rev / reverse one-shot lists map to None for Optimus (no EngineOneshotSpaz).
+    if (loops) {
+        if (engine_.size() < loops->size()) engine_.resize(loops->size());
+        for (size_t i = 0; i < loops->size(); ++i) playLooping(engine_[i], (*loops)[i].c_str(), fadeIn, cues, at);
+    }
+    if (shots && spazTimer_ <= 0.0f) {
+        if (oneshots_.size() < shots->size()) oneshots_.resize(shots->size());
+        for (size_t i = 0; i < shots->size(); ++i) {
+            spazTimer_ = c_.oneshotSpazTime;
+            playLooping(oneshots_[i], (*shots)[i].c_str(), 0.0f, cues, at);
+        }
+    }
 }
 
 void VehicleAudio::attach() {
@@ -100,9 +136,9 @@ void VehicleAudio::attach() {
 
 void VehicleAudio::detach(SoundCues& cues) {
     gotoState(State::None, cues, nullptr);                 // Impl.Detached: StopEngineSounds
-    stopLooping(squeal_, kSquealFade, cues);
-    stopLooping(boost_, kBoostFadeOut, cues);
-    stopLooping(boostWheels_, kBoostFadeOut, cues);
+    stopLooping(squeal_, c_.squealFade, cues);
+    stopLooping(boost_, c_.boostFadeOut, cues);
+    stopLooping(boostWheels_, c_.boostFadeOut, cues);
     entered_ = false;
 }
 
@@ -114,45 +150,49 @@ void VehicleAudio::tick(float dt, const Input& in, SoundCues& cues, const Emitte
 
     // Boost: Driving.BeginState -> PlayBoostSound; EndState (also on leaving the form) -> StopBoostSound.
     if (in.boosting && !boosting_ && in.entered) {
-        playLooping(boost_, n_.boostStart.c_str(), kBoostFadeIn, cues, at);
-        if (in.onGround) playLooping(boostWheels_, n_.boostWheels.c_str(), kBoostFadeIn, cues, at);
+        playLooping(boost_, c_.boost.c_str(), c_.boostFadeIn, cues, at);
+        if (in.onGround) playLooping(boostWheels_, c_.boostWheels.c_str(), c_.boostFadeIn, cues, at);
         boostWheelsTimer_ = 0.0f;
     } else if (boosting_ && (!in.boosting || !in.entered)) {
-        stopLooping(boost_, kBoostFadeOut, cues);
-        stopLooping(boostWheels_, kBoostFadeOut, cues);
-        playEvent(n_.boostEnd.c_str(), cues, at);
+        stopLooping(boost_, c_.boostFadeOut, cues);
+        stopLooping(boostWheels_, c_.boostFadeOut, cues);
+        playEvent(c_.boostStop, cues, at);
     }
     boosting_ = in.boosting && in.entered;
 
     if (!in.entered) { if (entered_) detach(cues); return; }
 
-    if (in.ascend) playEvent(n_.ascend.c_str(), cues, at);                          // PlayAscendSound
-    if (in.booster) playLooping(booster_, n_.booster.c_str(), 0.0f, cues, at);     // PlayBoosterSound (no fade)
-    if (in.nitro) playEvent(n_.nitro.c_str(), cues, at);                            // PlayNitroSound
+    if (in.ascend) playEvent(c_.ascend, cues, at);                                  // PlayAscendSound
+    if (in.booster) playLooping(booster_, c_.booster.c_str(), 0.0f, cues, at);     // PlayBoosterSound (no fade)
+    if (in.nitro) playEvent(c_.nitro, cues, at);                                    // PlayNitroSound
 
-    // HmVehicleAudioComponent.Tick: UpdateVehicleSpeed (15-sample mph average), tire squeal, boost wheels.
-    speedHist_[histIdx_] = core::length(in.velocity) * kMph;
-    histIdx_ = (histIdx_ + 1) % 15;
+    // HmVehicleAudioComponent.Tick: UpdateVehicleSpeed (VehicleSpeedHistoryLength-sample mph average), tire squeal,
+    // boost wheels.
+    speedHist_[(size_t)histIdx_] = core::length(in.velocity) * kMph;
+    histIdx_ = (histIdx_ + 1) % (int)speedHist_.size();
     speed_ = 0.0f;
     for (float h : speedHist_) speed_ += h;
-    speed_ /= 15.0f;
-    if (in.onGround && speed_ >= kSquealMinMph) {
-        playLooping(squeal_, n_.squeal.c_str(), kSquealFade, cues, at);
+    speed_ /= (float)speedHist_.size();
+    if (in.onGround && speed_ >= c_.squealMinMph) {
+        playLooping(squeal_, c_.squeal.c_str(), c_.squealFade, cues, at);
         cues.update(squeal_.id, {0, 0, 0}, in.wheelSlip);
     } else {
-        stopLooping(squeal_, kSquealFade, cues);
+        stopLooping(squeal_, c_.squealFade, cues);
     }
     if (boosting_) {
         boostWheelsTimer_ += dt;
-        if (boostWheelsTimer_ >= kBoostWheelsDelay && !in.onGround) stopLooping(boostWheels_, kBoostFadeOut, cues);
+        if (boostWheelsTimer_ >= c_.boostWheelsDelay && !in.onGround) stopLooping(boostWheels_, c_.boostFadeOut, cues);
     }
 
     // Impl.UpdateEngineSound.
     int dir = 0;                                                      // GetMovementDirection
     if (speed_ > 1.0f) dir = core::dot(in.velocity, in.forward) >= 0.0f ? 1 : 2;
-    bool jumpRev = false;                                             // GetIsJumpReving
-    if (in.onGround) jumpRevTimer_ = 0.0f;
-    else { jumpRevTimer_ += dt; jumpRev = jumpRevTimer_ >= kJumpRevTime; }
+    spazTimer_ = std::max(0.0f, spazTimer_ - dt);                     // UpdateEngineOneshotSpazTimer
+    bool jumpRev = false;                                             // GetIsJumpReving (only with UseJumpRev)
+    if (c_.useJumpRev) {
+        if (in.onGround) jumpRevTimer_ = 0.0f;
+        else { jumpRevTimer_ += dt; jumpRev = jumpRevTimer_ >= c_.jumpRevTime; }
+    }
     State s;
     if (boosting_) s = State::Boosting;
     else if (jumpRev) s = State::JumpReving;
@@ -160,15 +200,16 @@ void VehicleAudio::tick(float dt, const Input& in, SoundCues& cues, const Emitte
     else if (dir == 1) s = in.loadState == 1 ? State::ForwardOnLoad : State::ForwardOffLoad;
     else s = State::ForwardOffLoad;
     gotoState(s, cues, at);
-    if (engine_.id >= 0) cues.update(engine_.id, {0, 0, 0}, speed_);   // UpdateEngineSoundParameters
+    for (const Loop& l : engine_)                                     // UpdateEngineSoundParameters
+        if (l.id >= 0) cues.update(l.id, {0, 0, 0}, speed_);
     if (boost_.id >= 0) cues.update(boost_.id, {0, 0, 0}, speed_);
 
     // Impl.UpdateLandSound: on touchdown the highest TimeInAirThreshold reached (Boosting: BoostLandSound).
     if (in.onGround) {
         if (!onGroundPrev_) {
-            const std::string* table = state_ == State::Boosting ? n_.wheelsLand : n_.hoverLand;
-            for (int i = 1; i >= 0; --i)
-                if (landTimer_ >= kLandThreshold[i]) { playEvent(table[i].c_str(), cues, at); break; }
+            const auto& table = state_ == State::Boosting ? c_.boostLand : c_.hoverLand;
+            for (int i = (int)table.size() - 1; i >= 0; --i)
+                if (landTimer_ >= table[(size_t)i].t) { playEvent(table[(size_t)i].event, cues, at); break; }
         }
         landTimer_ = 0.0f;
     } else {
