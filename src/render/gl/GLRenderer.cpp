@@ -94,6 +94,7 @@ public:
     }
 
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
+        glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
         if (visualCheckOn()) glEntry_ = captureGlState();   // what the previous user of the context left bound
         // The 3D frame owns its GL state. The draws set blend / depth writes / culling per material, but depth TEST,
         // depth func, scissor, stencil, colour mask and polygon mode were only set once in init(). M11 root cause:
@@ -143,7 +144,9 @@ public:
     }
 
     void endFrame() override {
+        if (glx::GetGraphicsResetStatus) glx::pollResetStatus();   // M43: a lost context is logged (once)
         if (wfc_.active()) { wfc_.drawMapPresentation(); wfc_.endFrame(); }
+        glx::gpuTimerEnd();
         if (visualCheckOn()) {                       // GL errors raised by this frame's 3D work (first ones logged)
             int n = 0;
             for (GLenum e = glGetError(); e != GL_NO_ERROR && n < 64; e = glGetError(), ++n)
@@ -635,8 +638,9 @@ public:
         RenderDiagnostics d = renderDiagnostics();
         std::string why = verdict(d, m);
         LOG_INFO("VISUALCHECK frame %d path=%s black=%.3f flat=%.3f lumaP50=%.0f colors=%d draws=%d world=%d bsp=%d "
-                 "materials=%d noProgram=%d noDepth=%d glErr=%d -> %s", d.frame, d.originalPath ? "original" : "legacy", m.black, m.flat,
+                 "materials=%d noProgram=%d noDepth=%d glErr=%d gpu=%.1fms glDebug=%u -> %s", d.frame, d.originalPath ? "original" : "legacy", m.black, m.flat,
                  m.p50, m.colors, d.draws, d.worldDraws, d.bspDraws, d.distinctMaterials, d.noProgramSubs, d.opaqueNoDepthTest, d.glErrors,
+                 glx::lastGpuFrameMs(), glx::debugCounts().errors + glx::debugCounts().undefined + glx::debugCounts().high,
                  why.empty() ? "PASS" : ("FAIL: " + why).c_str());
     }
 
@@ -650,6 +654,10 @@ public:
         if (d.originalPath && d.worldDraws + d.bspDraws == 0) add("no map geometry drawn");
         if (d.opaqueNoDepthTest > 0) add(std::to_string(d.opaqueNoDepthTest) + " opaque draws without depth testing");
         if (d.glErrors > 0) add(std::to_string(d.glErrors) + " GL errors");
+        {   // M43: driver debug-output errors / undefined behaviour since start (always-on callback)
+            const auto& dc = glx::debugCounts();
+            if (dc.errors + dc.undefined > 0) add(std::to_string(dc.errors + dc.undefined) + " GL debug errors");
+        }
         // black / flat coverage judges a level (or a fallback), not a sparse menu backdrop: the lobby SpaceDome is ~70 %
         // flat by design (M11 long session: 98 false FAILs at 8 draws)
         const bool judgeImage = !d.originalPath || d.worldDraws + d.bspDraws >= 100;
@@ -887,6 +895,9 @@ public:
         return wfc_.active() && fxRows(pos, fwd, up, R, T) && wfc_.setFxTransform(h, R, T);
     }
     void stopParticleEffect(int h) override { if (wfc_.active()) wfc_.stopFx(h); }
+    bool setParticleEffectParam(int h, const std::string& n, const float v[4]) override {
+        return wfc_.active() && wfc_.setFxParam(h, n, v);
+    }
     bool setFrontendMaterialParam(const std::string& actor, const std::string& param, float value) override {
         const float v[4] = {value, value, value, value};
         return wfc_.active() && wfc_.setMaterialParam(actor, param, v);

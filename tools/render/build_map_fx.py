@@ -113,6 +113,11 @@ def system_runtime(name, s):
                    'type_data': {'ParticleModuleTypeDataMesh': 'mesh', 'ParticleModuleTypeDataTrail2': 'trail2',
                                  'ParticleModuleTypeDataBeam2': 'beam2'}.get(tdc, 'sprite' if not tdc else tdc),
                    'subuv_method': req.get('InterpolationMethod', 'PSUVIM_None'),
+                   # M44: Beam2 / Trail2 type data (MaxBeamCount caps live beams; taper / tessellation PARTIAL)
+                   'beam_trail': {k: td[k] for k in ('MaxBeamCount', 'TaperMethod', 'InterpolationPoints', 'Speed',
+                                                     'MaxParticleInTrailCount', 'TessellationFactor',
+                                                     'bEmitOnlyWhenMoving', 'bConnectToSource') if k in td}
+                                 if tdc in ('ParticleModuleTypeDataBeam2', 'ParticleModuleTypeDataTrail2') else None,
                    'required': {'emitter_duration': req.get('EmitterDuration', 1.0),
                                 'emitter_loops': req.get('EmitterLoops', 0),
                                 'spawn_rate': tagged_dist(req.get('SpawnRate'), [0.0]),

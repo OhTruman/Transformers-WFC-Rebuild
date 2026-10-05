@@ -203,6 +203,7 @@ private:
         float lmCoord[4] = {1, 1, 0, 0};
         GLuint vlmTex = 0;        // vertex (LMT_1D) lightmap: RGB32F, width = vertices, rows = coefficients
         bool noLights = false;    // authored: receives no light (bAcceptsLights false / no lighting channels)
+        bool dynChannel = false;  // authored LightingChannels = Dynamic only: Dynamic-channel lights, per frame
         int vlmBase = 0;          // first vertex of the component in the VBO (gl_VertexID - base)
         core::Vec3 bmin, bmax;
         bool envReady = false;
@@ -302,6 +303,7 @@ private:
     struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };
     std::map<std::string, VertexLM> vertexLMs_;          // component (lower) -> decoded samples
     std::set<std::string> hiddenComponents_, noLightComponents_;   // authored render flags (lower-case keys)
+    std::set<std::string> dynChannelComponents_;
     LightVisibilityVolume lvv_;   // WFC LightsVisibilitiesVolume (native layout, b52dca9)
     // WFC DirectLightEnv per character form (0 robot, 1 vehicle): WfcDirectLightEnv.cpp
     struct DirectLightEnvState {
@@ -421,6 +423,7 @@ public:
     bool setMaterialParam(const std::string& actor, const std::string& param, const float v[4]);
     bool setFxTransform(int id, const float R[3][3], const float T[3]);
     void stopFx(int id);
+    bool setFxParam(int id, const std::string& name, const float v[4]);
     int liveFx() const;
     void drawMapPresentation();                                   // map FX + totems + destructible
     // map FX data (WfcMapFx.cpp)
@@ -434,7 +437,8 @@ public:
     struct FxLod {
         std::string material, meshGltf;
         bool overrideMaterial = false, localSpace = false, rectangle = false;
-        int typeData = 0;                 // 0 sprite, 1 mesh, 2 Trail2, 3 Beam2 (2 / 3 not drawn yet)
+        int typeData = 0;                 // 0 sprite, 1 mesh, 2 Trail2, 3 Beam2
+        int maxBeams = 0;                 // Beam2 MaxBeamCount (0 = no cap)
         bool velocityAligned = false;     // PSA_Velocity
         int subH = 1, subV = 1, subMethod = 0;   // SubUV: 0 none, 1 linear, 2 random
         bool hasDefaultColor = false; float defaultColor[4] = {1, 1, 1, 1};   // ColorByParameter DefaultColor (linear)
@@ -460,6 +464,8 @@ private:
         std::vector<bool> burstFired;
         std::vector<FxParticle> parts;
         float dynParam[4] = {1, 1, 1, 1}; bool hasDyn = false;
+        std::vector<std::array<float, 4>> trail;   // Trail2: recent source positions (UE) + age (s), newest last
+        int forceSpawn = 0;                        // Trail2: particles owed by source movement (spawn per unit)
     };
     struct FxInstance {
         std::string component, owner, ownerClass, system, role, requiredRule;

@@ -341,6 +341,13 @@ public:
         (void)handle; (void)pos; (void)forward; (void)up; return false;
     }
     virtual void stopParticleEffect(int handle) { (void)handle; }
+    // PSC instance parameters (UE3 SetVectorParameter / SetColorParameter), held until changed. "Color" drives
+    // ColorByParameter (linear RGBA; e.g. a vehicle boost's EnergonColor -> Yellow lerp, alpha 100..255 / 255);
+    // "Size" scales every particle of the effect per axis (hover thrusters: min(1, thrust) x socket scale, RE)
+    // [PARTIAL: the consuming module is undecoded, applied as an effect-wide size scale].
+    virtual bool setParticleEffectParam(int handle, const std::string& name, const float rgba[4]) {
+        (void)handle; (void)name; (void)rgba; return false;
+    }
     // Matinee material parameters (MaterialParamTrack on a MaterialInstanceActor, e.g. the lobby faction emblems'
     // "Highlighted" / "Opacity"): sets the scalar on that actor's MIC in the loaded scene, held until changed; before
     // any call the MIC's authored values apply. Returns false when the actor is not a MaterialInstanceActor here.

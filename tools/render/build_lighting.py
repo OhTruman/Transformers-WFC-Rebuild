@@ -110,6 +110,12 @@ def component_flags(mapname):
             f['hidden'] = True
         if r.get('bAcceptsLights') is False or pr.get('lighting_channels_on') == []:
             f['no_lights'] = True
+        elif pr.get('lighting_channels_on') and 'Static' not in pr['lighting_channels_on'] and \
+                'Dynamic' in pr['lighting_channels_on']:
+            # M41: Dynamic-channel primitives (movable InterpActors with an enabled LightEnvironment: the title scene's
+            # transports / debris) are lit by the lights in the Dynamic channel (SkyLight included), not the static
+            # set; lit as the static set they rendered near black
+            f['dynamic_channel'] = True
         if f:
             out[pr['component']] = f
             if pr.get('container_class') != 'StaticMeshCollectionActor':

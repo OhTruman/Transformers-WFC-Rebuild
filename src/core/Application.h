@@ -55,6 +55,7 @@ private:
     std::map<int, float> deathAt_;
     bool selectionSent_ = false;   // the frontend's character selection reached Gameplay this match
 
+    std::vector<std::pair<int, core::Vec3>> orbit_;   // WFC_FXTEST "~" sources (handle, centre)
     void updateTitleHud(double realDt);
     void runPickupTest();
     void runTraverseTest();

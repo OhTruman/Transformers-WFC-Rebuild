@@ -2643,6 +2643,22 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING HUMAN-PLAYTEST PASS M41-M45 (2026-10-05, agents/rendering) — title, weapons, effects, AMD stability
+- **Title black ships (M41):** Dynamic-channel movable actors (51 title InterpActors) are lit by the Dynamic-channel lights (SkyLight + PointLight_8444) instead of the static set. Near-black 9.9 % -> 2.5 %. No global ambient change.
+- **Title vignette strips:** owned by Frontend's GFx host (Stage.width / onResize for showAll movies; agents/frontend a661851). Verified on a merged preview at 1280x720, 1920x1080, 2560x1440 windowed and fullscreen: edge luma 40 vs 64 inside (was the brightest part).
+- **Untextured Sniper / grey Scientist (M42):** every exported MP weapon material now compiles (weapon_materials.py; 6 -> 57 WEP_ materials). The Scientist's grey mass was its Burst Rifle; the Air Raid body was correct.
+- **Effects (M32-M34, M44):**
+  - runtime particle templates;
+  - per-template colours;
+  - Beam2 / Trail2 ribbons (MaxBeamCount cap; spawn per distance);
+  - setParticleEffectParam (Color / Size) for vehicle hover / boost.
+  - Vehicle FX wiring per socket is Systems'.
+- **AMD stability (M43 / M45):**
+  - always-on GL debug output, context-reset poll and GPU frame timer;
+  - index-range guards;
+  - the guards found a real out-of-bounds skinned draw (stale sub-mesh ranges on a reused pose buffer), fixed.
+- **Render data must be regenerated** (weapons, template library, beam / trail data, dynamic-channel flags).
+
 ## RENDERING MILESTONE 24 / 25 (2026-10-05, agents/rendering) — vertex lightmaps, volume grades
 - **Render data must be regenerated** (tool changes in build_lighting.py): FLightMap1D samples now parse on every map (M24), and the PostProcessVolume grade lands in lighting.json postprocess (M25). Streets output is byte-identical.
 - The renderer resolves clut.png against the map data dir, so the CLUT applies on the player route.
