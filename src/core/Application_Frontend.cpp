@@ -46,6 +46,20 @@ struct HasMatchTextureRelease<R, std::void_t<decltype(std::declval<R&>().setText
     : std::true_type {};
 constexpr bool kRendererReleasesMatchTextures = HasMatchTextureRelease<render::IRenderer>::value;
 
+// Gameplay's GRI objective fields (agents/gameplay bec41cd: HudGameState attackingTeamIndex / currentObjectiveCountdown /
+// competitiveScoreEnabled), detected.
+template <class H, class = void> struct HasGriObjective : std::false_type {};
+template <class H>
+struct HasGriObjective<H, std::void_t<decltype(std::declval<H&>().attackingTeamIndex), decltype(std::declval<H&>().currentObjectiveCountdown),
+                                      decltype(std::declval<H&>().competitiveScoreEnabled)>> : std::true_type {};
+template <class H> void fillGriObjective(const H& h, frontend::MatchValues& v) {
+    if constexpr (HasGriObjective<H>::value) {
+        v.attackingTeamIndex = h.attackingTeamIndex;
+        v.currentObjectiveCountdown = h.currentObjectiveCountdown;
+        v.competitiveScoreEnabled = h.competitiveScoreEnabled;
+    } else { (void)h; (void)v; }
+}
+
 template <class PC, class = void> struct HasLookSettings : std::false_type {};
 template <class PC>
 struct HasLookSettings<PC, std::void_t<decltype(std::declval<PC&>().setLookSettings(0, false, false, false, false))>> : std::true_type {};
@@ -621,6 +635,7 @@ void Application::routeMatchToFrontend(float dt) {
     v.dead = !h.alive;
     v.timeToRespawn = h.timeToRespawn;
     v.gameOverMessage = h.result;
+    fillGriObjective(h, v);
     for (size_t i = 0; i < match.players().size(); ++i) {
         const auto& mp = match.players()[i];
         frontend::MatchValues::Player p;
