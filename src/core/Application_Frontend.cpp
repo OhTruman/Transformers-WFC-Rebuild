@@ -19,6 +19,7 @@
 #include "ui/gl/GlCensus.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <map>
@@ -436,6 +437,23 @@ void Application::routeMatchToFrontend(float dt) {
         const int team = world_.match().players()[(size_t)me].team;
         cs.chassisId = fc.chassis[team == 1 ? 1 : 0].empty() ? fc.chassis[0] : fc.chassis[team == 1 ? 1 : 0];
         cs.customSlot = fc.name;
+        // [integration M07] The whole TnPlayerCharacterData, not only the class: the custom character's ChassisTypes
+        // per faction (what Create a Character previewed and saved), its colours and loadout lists. Without these a
+        // custom character resolved to the class preset body, so the preview and the spawned body could disagree.
+        for (int f = 0; f < 2; ++f) cs.chassisByFaction[f] = fc.chassis[f];
+        if (const frontend::CharacterPreset* p = frontend_->roster().find(fc.name)) {
+            for (int f = 0; f < 2; ++f) {
+                if (cs.chassisByFaction[f].empty()) cs.chassisByFaction[f] = p->chassis[f];
+                const frontend::CharacterColor* src[2] = {&p->primary[f], &p->secondary[f]};
+                game::CharacterColor* dst[2] = {&cs.primary[f], &cs.secondary[f]};
+                for (int k = 0; k < 2; ++k) {
+                    dst[k]->r = src[k]->r; dst[k]->g = src[k]->g; dst[k]->b = src[k]->b; dst[k]->a = src[k]->a;
+                    dst[k]->palette = src[k]->palette; dst[k]->x = src[k]->x; dst[k]->y = src[k]->y;
+                }
+            }
+            cs.weapons = p->weapons; cs.vehicleWeapons = p->vehicleWeapons; cs.melee = p->melee;
+            cs.abilities = p->abilities; cs.skills = p->skills;
+        }
         world_.match().selectCharacter(me, cs);
         selectionSent_ = true;
         frontend::FlowTrace::emit("match.characterSelected", {{"name", fc.name}, {"type", std::to_string(cs.type)}, {"specialty", sp},
@@ -496,6 +514,24 @@ void Application::routeMatchToFrontend(float dt) {
                          sp.x, sp.y, sp.z, match.players()[(size_t)e.player].chassis.c_str());
                 auto d = deathAt_.find(e.player);
                 if (d != deathAt_.end()) { LOG_INFO("MATCH respawn player=%d start=%s delay_s=%.2f", e.player, e.text.c_str(), matchClock_ - d->second); deathAt_.erase(d); }
+            }
+            if (e.player == me && renderer_) {
+                // [integration M07] TnCharacterApplier on the spawned pawn: the selection's colours for the faction it
+                // spawned as (Cust_Color_A / Cust_COLOR_B; black = the material's own paint, as in the preview). The
+                // match pawn is draw owner 0. Energon colour (team) stays the material default [PARTIAL].
+                const game::MatchPlayer& mp = match.players()[(size_t)me];
+                const int f = teamOf(me) == 1 ? 1 : 0;
+                auto lin = [](int c) { float v = c / 255.0f; return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
+                render::CharacterColors cc;
+                const game::CharacterColor* src[2] = {&mp.selection.primary[f], &mp.selection.secondary[f]};
+                float* dst[2] = {cc.primary, cc.secondary};
+                for (int k = 0; k < 2; ++k) { dst[k][0] = lin(src[k]->r); dst[k][1] = lin(src[k]->g); dst[k][2] = lin(src[k]->b); dst[k][3] = 1.0f; }
+                renderer_->setDrawOwner(0);
+                renderer_->setCharacterColors(cc);
+                frontend::FlowTrace::emit("match.pawnBody", {{"chassis", mp.chassis}, {"faction", std::to_string(f)},
+                                                             {"primary", std::to_string(src[0]->r) + "," + std::to_string(src[0]->g) + "," + std::to_string(src[0]->b)},
+                                                             {"secondary", std::to_string(src[1]->r) + "," + std::to_string(src[1]->g) + "," + std::to_string(src[1]->b)},
+                                                             {"drawn", world_.localChassis()}});
             }
             if (e.player == me && localDeadForUi_) {
                 // RestartPlayer leaves spectating -> UI event 5 (RE E7.4).
