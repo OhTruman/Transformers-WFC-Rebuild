@@ -333,9 +333,9 @@ Classification:
   - Aura: visible enemies within 1500 UU get speed ×0.75 (1 s robot / 2 s vehicle), refreshed.
   - Gone with the owner; cooldown 60 s once gone. Mesh RollerMineAbility_STAT for Rendering (HUD rollerPos).
   - Test (PARTICIPANT 16/16): 26.4 → 14.5 m/s in 1 s (e^−0.6); safe before arming; armed contact −135.
-- Remaining unimplemented abilities (not in any iconic preset): , DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
-  SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (Barrier now implemented) (log + HUD
-  `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].
+- Remaining unimplemented abilities (in no iconic preset; class pools only): DecoyTrap, HardLock, Disguise, AbilityJammer,
+  TransformDisruptor, MarkTarget … are listed per slot and reported unimplemented (log + HUD `implemented = false`) [PARTIAL].
+  Skills are not applied in versus (skill-data index 0, no skill effects) [PARTIAL]; killstreaks: see above.
 - **Correction:** the Pass 21f contract doc said robot Shift ran a dash. It did nothing until this pass.
 
 ### Vehicle forms — CONFIRMED script (RE §C), rigid-body details PROVISIONAL
