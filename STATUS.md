@@ -3,6 +3,95 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 06c (2026-10-05) — stabilization baseline: frontend → world rendering — branch `integration/milestone-06c`
+
+**Playtest executables (plain launch, no environment variables):**
+- Release: `F:\Transformers Rebuild\Rebuild\build\release\bin\wfc_rebuild.exe`
+- Debug: `F:\Transformers Rebuild\Rebuild\build\bin\wfc_rebuild.exe`
+
+Both select `F:\Transformers Rebuild\Rebuild\work\render` at runtime: the log says `wfc: render data root …` and
+`shader path active: 325 materials, 1975 lightmapped components, 268 lights` for Streets.
+
+### Lane heads merged in this pass
+| lane | head | content |
+|---|---|---|
+| agents/frontend | 89df3bc | a96f841 GPU-state save / restore around the UI pass; f5ada69 Hud_GFX noScale + native interp / setColor + movie letterbox; 9aa28ea pause close; 74b84d8 fullscreen at the saved resolution; 89df3bc customization cameras + matinee FOV / DrawScale |
+| agents/rendering | b0d47b2 | ab851f5 each 3D frame establishes its GL state + depth / GL-error guards + release_path_check.sh; 412713c no CPU copy of large world meshes; 359da41 / 504730f preview-pawn path, standard UI render data; M12–M14 vignette DrawScale, matinee FOV, particle size × emitter scale (CONFIRMED in the xex) |
+| agents/gameplay | 1a4e36b | explicit chassis fallback, per-form look settings |
+| agents/systems | 0f293c7 | unchanged (M07 audio) |
+| agents/experimental | 734bde4 | validation only (presentation gate), not merged |
+
+**Recorded for the next full integration (not merged in this pass, per instruction):**
+- agents/frontend df79c6f / 4b2fae1: Create a Character preview pawn visibility, grounding, the GFx collector crash fix;
+- agents/rendering e014f45: `sceneGroundHeight`, used by df79c6f.
+
+### The frontend → world regression (two causes, both fixed)
+| cause | owner fix | mark |
+|---|---|---|
+| Render data root resolved to build/work/render for the Release exe → legacy fallback | Rendering 398b732 (M06b) | INTEGRATION REGRESSION, FIXED |
+| The UI pass (GfxRendererGL) left depth test / culling off; from b1fce97 the HUD ran it every frame, so the world drew without depth testing on the frontend route only (sky / smoke over architecture) | Frontend a96f841 (restores what it changes) + Rendering ab851f5 (each 3D frame establishes what it needs) | ROOT CAUSE CONFIRMED (Experimental bisect b1fce97, Rendering reproduction), FIXED, VISUALLY VERIFIED |
+
+**Evidence (final binaries):**
+- **Rendering release_path_check** (frontend → Streets → lobby → Berth → lobby → Streets, no overrides): PASS. Every
+  capture has noDepth = 0 and glErr = 0; Streets 2801 submitted draws (1641 world, 357 BSP) on both visits; Berth 2059.
+- **Rendering visual suite:** 11 / 11. The Streets pinned cameras are identical to the post-fix reference (refdiff
+  0.000); the frontend-route match frames differ from it by 0.002.
+- **Before / after a96f841** (frontend-route match frame, the same scripted path): 54 % of pixels changed. The
+  smoke / fog veil over the architecture is gone; direct-boot cameras are unchanged (refdiff 0.000).
+- **Frontend vs direct:** the same submission on both routes (Rendering M11: only the depth state differed; now
+  noDepth = 0 on the route). Experimental's route-vs-direct image comparison was skipped because its route script
+  stopped on the Quit confirmation (stale test, below).
+
+### Memory: Streets ↔ Seed (private MB, product trace at each load / unload)
+| build | sequence | loaded | after unload |
+|---|---|---|---|
+| Release | Streets, Streets, Seed, Streets, Seed, Streets, Seed | 2354, 2314, 2894, 2475, 2840, 2479, 2848 | 2230, 2300, 2668, 2396, 2672, 2399, 2700 |
+| Debug | Streets, Seed, Streets, Seed, Streets, Seed, Streets | 2350, 2927, 2528, 2908, 2533, 2913, 2535 | 2241, 2760, 2480, 2749, 2480, 2771, 2473 |
+
+- **Pattern:** a one-time rise at the first Seed visit, then a plateau (±20 MB) in both builds.
+- **Seed's unload** now releases 150–230 MB (Rendering 412713c: no CPU copy of large meshes; previously ~45 MB).
+- **Verdict:** no accumulating map-resource leak in Debug or Release (HIGH CONFIDENCE; allocator / driver pooling plateau,
+  as Rendering measured). Closed.
+
+### Other checks
+| area | result |
+|---|---|
+| Intro | cold boot from the first movie: startup Bink → Activision at 0.47 s (no freeze on its last frame), Hasbro, High Moon, FMV, each with its Systems audio; 16:9 movies pillarboxed over black in a 2000×800 window (not stretched) |
+| HUD scale | Hud_GFX noScale, laid out from the real window size each frame: verified at 1280×720 and 2000×800 windowed (anchored corners, normal size); 1920×1080 / 2560×1440 fullscreen verified by Frontend; human check |
+| Account / player name | offline account "IntegrationTest" (field limit: 15 of 17 typed characters) shows the original "account created" confirmation and becomes the identity in the party lobby, game lobby and kill feed [PC ADAPTATION, no Xbox Live identity] |
+| Integrated loops | cold boot → intro → title → Multiplayer → TDM → Streets → character selection → pause / resume → Quit → confirmation → party lobby → Streets → leave → Seed → leave → Streets …: 7 matches, 1420 / 1420 frame verdicts path=original PASS |
+| Suites | frontend 74 / 0; harness 191 / 0 FAIL / 22 known; TDM 42 / 42; DOM / KOTH 21 / 21; transform stress 0 / 1520; chaos 0 / 0 / 0; camera jitter 0.0003 / 0.0003 / 0.0002° at 60 / 144 / 240 Hz; audio suite 566 / 0; movie probe OK; withheld render data → error + VISUALCHECK FAIL (no silent fallback) |
+
+### Experimental presentation gate (734bde4), Debug: 20 pass / 7 fail / 2 partial / 1 unknown / 1 skip
+| check | classification |
+|---|---|
+| route completes (FAIL) | **stale test**: expects Quit → main menu directly; the original shows the Leave Lobby confirmation and returns to the party lobby (Frontend 5c53986, CONFIRMED script) |
+| settings controls rebind (FAIL) | **stale test**: the shipped PC menus have no rebinding (the controls pages are the original reference pages) |
+| customization / back_forward soft lock (4 FAIL) | **stale test**: Back from Create a Character returns to the party lobby, and a further Back opens the original Quit Game confirmation. The gate expects the main menu; the screens respond. Preview pawns render (both factions shown together until Frontend df79c6f, next integration) |
+| body resolves (FAIL) | **real, known**: Jet4 selected, Optimus drawn (Gameplay explicit RECONSTRUCTION FALLBACK; no other pawn resources yet) |
+| world detail a09 (PARTIAL 0.143 vs 0.15) | borderline on one moving frame; human check |
+| credits (PARTIAL) | screen present; the movie plays and returns (verified separately) |
+| no movement under menus (UNKNOWN) | harness limitation: scripted input enters after the menu gate |
+| route vs direct (SKIP) | not run (route stopped on the confirmation) |
+
+### Remaining visible discrepancies (top)
+1. The selected character is not the drawn body (Optimus for every chassis).
+2. Create a Character: both faction preview pawns visible at once; framing provisional (fixed in Frontend df79c6f, next
+   integration).
+3. Lobby / title scenes: some authored dark; one title laser / Matinee effect partial.
+4. Non-Streets maps: material / collision PARTIALs from M06 (Molten floor material, Debris shader, Escalation
+   materials, Gorge / Molten edge cases).
+5. Fullscreen now changes the monitor mode (saved resolution); alt-tab restores the desktop [PC ADAPTATION, human check].
+
+### Human checks
+- Streets through the full frontend route: architecture, BSP, glass, smoke, decals, sky, fog, lightmaps, pickups,
+  movers, Optimus, weapon, HUD.
+- HUD at fullscreen 1920×1080 / 2560×1440 and after a live resolution change.
+- Intro sound / picture sync and the pillarbox on a wide monitor.
+- Account creation with the real keyboard.
+- Create a Character navigation; Quit confirmations.
+- Seed and Berth through the frontend.
+
 ## INTEGRATION MILESTONE 06b (2026-10-04) — human-playtest regression containment — branch `integration/milestone-06b`
 
 **Next human playtest — plain launch, no environment variables needed:**

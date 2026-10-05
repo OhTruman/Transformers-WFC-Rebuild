@@ -17,6 +17,22 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## INTEGRATION MILESTONE 06c — CLASSIFICATION (2026-10-05)
+| Item | Mark | Notes |
+|---|---|---|
+| Frontend-route world without depth testing (UI pass left GL state) | ROOT CAUSE CONFIRMED / FIXED / VISUALLY VERIFIED | Frontend a96f841 restores; Rendering ab851f5 establishes; release_path_check noDepth = 0 on every capture |
+| Render-data root (Release layout) | FIXED (M06b) | Rendering 398b732 |
+| Streets ↔ Seed memory | HIGH CONFIDENCE: plateau, no accumulating leak | Debug and Release measured; Rendering 412713c drops load peaks by ~100 MB |
+| Movie pillarbox (16:9 over black) | CONFIRMED ORIGINAL presentation / PC window handling | verified at 2000×800 |
+| HUD layout from the live window size (Hud_GFX noScale) | CONFIRMED (movie) / PC ADAPTATION (window sizes) | Frontend f5ada69 |
+| Offline account identity | PC ADAPTATION | the typed name in the lobbies / kill feed; no Xbox Live identity |
+| Fullscreen at the saved resolution (display mode change) | PC ADAPTATION | Frontend 74b84d8 |
+| Particle size × emitter scale | CONFIRMED ORIGINAL (xex) | Rendering b0d47b2; the Streets pinned cameras are unchanged |
+| Quit → confirmation → party lobby | CONFIRMED ORIGINAL (script) | Experimental's direct-to-main-menu expectation is stale |
+| Selected body drawn | PARTIAL (RECONSTRUCTION FALLBACK) | Gameplay explicit fallback |
+
+---
+
 ## INTEGRATION MILESTONE 06b — PLAYTEST REGRESSION CLASSIFICATION (2026-10-04)
 Full report: STATUS.md (INTEGRATION MILESTONE 06b).
 
