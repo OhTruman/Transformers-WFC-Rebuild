@@ -123,6 +123,7 @@ struct Program {
     bool original = false;        // compiled from the original material graph (not the glTF fallback)
     bool sceneDepth = false;      // reads scene depth (DepthBiasedAlpha / SceneDepth)
     bool sceneColor = false;      // reads the resolved scene colour (SceneTexture)
+    std::string material;         // original material path, lower case (material-parameter routing)
     int distProg = -1;            // distortion-accumulate variant (material Distortion connected)
     int shadowProg = -1;          // shadow-depth variant (opaque/masked: depth, masked clip)
     float clip = 0.3333f;
@@ -253,6 +254,8 @@ private:
     float displayGamma_ = 2.2f;                        // Xe-TransEngine.ini DisplayGamma / profile Brightness
     float canvasInvGamma_ = 0.0f;                      // > 0 while drawing Canvas tiles
     const std::vector<std::pair<std::string, std::array<float, 4>>>* drawParams_ = nullptr;   // per-draw runtime params
+    std::map<std::string, std::string> miaMaterial_;   // MaterialInstanceActor (lower) -> MIC path (lower)
+    std::map<std::string, std::vector<std::pair<std::string, std::array<float, 4>>>> matParams_;   // MIC -> params
     bool deferTrans_ = false, flushingTrans_ = false;
     float viewDepth(const core::Vec3& p) const;
 public:
@@ -414,6 +417,8 @@ public:
     void setDestructibleState(const std::string& actor, int state);
     // runtime particle effects from the template library (IRenderer::spawnParticleEffect; UE units / axes)
     int spawnFx(const std::string& tpl, const float R[3][3], const float T[3], const float* color, const float* target);
+    // Matinee material parameters on a MaterialInstanceActor's MIC (material_instance_actors.json); held until changed
+    bool setMaterialParam(const std::string& actor, const std::string& param, const float v[4]);
     bool setFxTransform(int id, const float R[3][3], const float T[3]);
     void stopFx(int id);
     int liveFx() const;

@@ -228,6 +228,21 @@ void Application::run() {
                 p0 = p1 + 1;
             }
         }
+        if (const char* mp = std::getenv("WFC_MATPARAM")) {      // diagnostics: actor,param,value[;actor,param,value...]
+            std::string all = mp;
+            for (size_t p0 = 0; p0 <= all.size();) {
+                size_t p1 = all.find(';', p0);
+                std::string t = all.substr(p0, p1 == std::string::npos ? std::string::npos : p1 - p0);
+                size_t c1 = t.find(','), c2 = c1 == std::string::npos ? c1 : t.find(',', c1 + 1);
+                if (c2 != std::string::npos) {
+                    bool ok = renderer_->setFrontendMaterialParam(t.substr(0, c1), t.substr(c1 + 1, c2 - c1 - 1),
+                                                                  (float)std::atof(t.c_str() + c2 + 1));
+                    LOG_INFO("MATPARAM %s -> %d", t.c_str(), ok ? 1 : 0);
+                }
+                if (p1 == std::string::npos) break;
+                p0 = p1 + 1;
+            }
+        }
         if (const char* sp = std::getenv("WFC_SCENEPOSE")) {     // diagnostics: actor,x,y,z,pitch,yaw,roll (UE, deg)
             char name[128] = {0}; float v[6] = {0};
             if (std::sscanf(sp, "%127[^,],%f,%f,%f,%f,%f,%f", name, &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 7)

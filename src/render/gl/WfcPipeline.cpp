@@ -596,6 +596,17 @@ bool Pipeline::load(const std::string& mapName) {
     loadMovers(dataDir_ + "/movers.json");
     yieldLoad();
     loadMapFx(dataDir_ + "/map_fx_runtime.json");
+    {   // MaterialInstanceActor -> MIC (build_materials.py): Matinee material-parameter routing
+        assets::Json MJ;
+        std::string mt = readText(dataDir_ + "/material_instance_actors.json");
+        if (!mt.empty() && assets::Json::parse(mt, MJ))
+            for (const auto& kv : MJ["actors"].obj) {
+                std::string a = kv.first, m = kv.second.asString();
+                std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+                std::transform(m.begin(), m.end(), m.begin(), ::tolower);
+                miaMaterial_[a] = m;
+            }
+    }
     yieldLoad();
     if (mj.empty() || lj.empty()) {
         lastLoadError() = "render data not found in " + dataDir_;
@@ -1216,6 +1227,11 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
         int r = buildProgram(key, s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, lightmapped, s.rtParams);
         if (r >= 0) {
             progs_[(size_t)r].original = true;
+            {
+                std::string ml = matNameIn;
+                std::transform(ml.begin(), ml.end(), ml.begin(), ::tolower);
+                progs_[(size_t)r].material = ml;
+            }
             if (!lightmapped && s.glsl.find("o.Distortion = vec3(0.0);") == std::string::npos &&
                 s.glsl.find("o.Distortion =") != std::string::npos) {
                 mainOverride_ = kFSMainDistort;
@@ -1634,10 +1650,17 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     Uniform2f(uloc(P, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
     Uniform1i(uloc(P, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
     Uniform1f(uloc(P, "uCanvasInvGamma"), canvasInvGamma_);
-    for (const auto& kv : P.rtLoc) {                   // per-draw runtime parameters (Canvas / MID); unset = authored
+    // per-draw runtime parameters: Canvas tiles pass their own; otherwise the material's Matinee-driven values
+    // (setMaterialParam on its MaterialInstanceActor); unset = authored
+    const std::vector<std::pair<std::string, std::array<float, 4>>>* params = drawParams_;
+    if (!params && !P.rtLoc.empty() && !matParams_.empty()) {
+        auto mp = matParams_.find(P.material);
+        if (mp != matParams_.end()) params = &mp->second;
+    }
+    for (const auto& kv : P.rtLoc) {
         const std::array<float, 4>* v = nullptr;
-        if (drawParams_)
-            for (const auto& pv : *drawParams_) if (pv.first == kv.first) v = &pv.second;
+        if (params)
+            for (const auto& pv : *params) if (pv.first == kv.first) v = &pv.second;
         if (kv.second.second >= 0) Uniform1i(kv.second.second, v ? 1 : 0);
         if (v && kv.second.first >= 0) Uniform4f(kv.second.first, (*v)[0], (*v)[1], (*v)[2], (*v)[3]);
     }

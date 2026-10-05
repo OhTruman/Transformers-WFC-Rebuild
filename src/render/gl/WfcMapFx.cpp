@@ -21,6 +21,7 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -581,6 +582,26 @@ bool Pipeline::setFxTransform(int id, const float R[3][3], const float T[3]) {
 void Pipeline::stopFx(int id) {
     for (FxInstance& in : fxInstances_)
         if (in.transient && in.id == id) in.active = false;
+}
+
+bool Pipeline::setMaterialParam(const std::string& actor, const std::string& param, const float v[4]) {
+    std::string a = actor;
+    std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+    if (a.rfind('.') != std::string::npos) a = a.substr(a.rfind('.') + 1);
+    auto it = miaMaterial_.find(a);
+    if (it == miaMaterial_.end()) {
+        static std::set<std::string> logged;
+        if (logged.insert(dataDir_ + "|" + a).second)
+            LOG_WARN("material param: %s is not a MaterialInstanceActor of this scene", actor.c_str());
+        return false;
+    }
+    std::string id;                                     // matc rt_ident: the uniform suffix
+    for (char ch : param) id += (std::isalnum((unsigned char)ch) || ch == '_') ? ch : '_';
+    auto& ps = matParams_[it->second];
+    for (auto& pv : ps)
+        if (pv.first == id) { std::copy(v, v + 4, pv.second.begin()); return true; }
+    ps.push_back({id, {v[0], v[1], v[2], v[3]}});
+    return true;
 }
 
 int Pipeline::liveFx() const {

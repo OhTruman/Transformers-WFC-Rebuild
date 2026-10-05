@@ -183,6 +183,19 @@ def main():
     json.dump({'%s|%d' % k: v for k, v in slot_map.items()},
               open(os.path.join(out, 'slot_materials.json'), 'w'), indent=1)
     print('default-material slots resolved to original materials: %d' % len(slot_map))
+    # M33: MaterialInstanceActors (Matinee MaterialParamTracks drive their MIC's scalar / vector parameters, e.g. the
+    # lobby faction emblems' Highlighted / Opacity): their MICs compile with every parameter settable at runtime, and
+    # the actor -> MIC table lets the renderer route IRenderer::setFrontendMaterialParam to the right material.
+    mia = {}
+    for path in repo.index:
+        if (repo.cls(path) or '') != 'MaterialInstanceActor' or 'default__' in path: continue
+        mi = (repo.obj(path) or {}).get('MatInst')
+        mi = mi.get('ref') if isinstance(mi, dict) else mi
+        if mi: mia[path.split('.')[-1]] = mi
+    json.dump({'generated_by': 'tools/render/build_materials.py', 'actors': mia},
+              open(os.path.join(out, 'material_instance_actors.json'), 'w'), indent=1)
+    mia_mats = {m.lower() for m in mia.values()}
+    if mia: print('material instance actors: %d (runtime parameters)' % len(mia))
     mats = sorted(names - {None}) + extra
     tr = TexResolver(repo, out)
 
@@ -192,6 +205,8 @@ def main():
             try:
                 # TnCharacterApplier targets character meshes and their weapon only
                 rt = mp in extra and mp.split('.')[0].upper().startswith(('TR_', 'WEP_'))
+                if mp.lower() in mia_mats:
+                    rt = 'all'                 # Matinee-driven MIC (MaterialInstanceActor): parameters per frame
                 if mp in extra and mp.split('.')[0].upper().startswith('UI_'):
                     rt = 'all'                 # Canvas materials: parameters set per draw (MaterialInstanceDynamic)
                 mc = matc.MatCompiler(repo, mp, tr, runtime_params=rt)

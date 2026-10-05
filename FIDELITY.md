@@ -17,6 +17,11 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 33 — MATINEE MATERIAL PARAMETERS (lobby faction emblems) (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Faction emblems invisible | UI_CharacterCustomization's MaterialInstanceActors (8803 / 16331 Autobot logo / glow, 5865 / 1120 Decepticon) drive their MICs' Highlighted / Opacity through Matinee; compiled with the authored defaults (Opacity 0) the emblems were constant-folded to emissive 0 (additive: invisible) | materials_glsl.json; Frontend matinee evaluation | CONFIRMED | build_materials: every MaterialInstanceActor's MIC compiles with runtime parameters (no map names) + material_instance_actors.json; IRenderer::setFrontendMaterialParam(actor, param, value) routes to the MIC (held until changed; unset = authored). WFC_MATPARAM: Opacity / Highlighted 1 shows both emblems and glows, unset stays invisible (VISUALLY VERIFIED) |
+
 ## MILESTONE 32 — RUNTIME PARTICLE TEMPLATES (weapon muzzle / impact FX from data) (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
