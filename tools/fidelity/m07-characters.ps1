@@ -61,6 +61,27 @@ foreach ($cls in @($X.class_presets.PSObject.Properties | ForEach-Object { $_.Na
     if ($noMesh) { $script:NoMeshWeapons += $w; Res "data.weapon.$cls.$w" "PASS" ("{0} preset weapon {1}: no held mesh by design (export: the weapon mesh component authors no SkeletalMesh - vehicle socket / thrown projectile)" -f $cls, $w) "AssetTools"; continue }
     Res "data.weapon.$cls.$w" $(if ($gi -and $gi.ok -and $gi.meshes -gt 0) { "PASS" } else { "FAIL" }) ("{0} preset weapon {1}: {2}" -f $cls, $w, $(if ($gi -and $gi.ok) { "{0} ({1} meshes, {2} joints)" -f $g.Name, $gi.meshes, $gi.joints } else { "no loadable glb under Weapons\$w" })) "AssetTools" } }
 
+# ---------------- C. runtime: EVERY exported chassis by direct boot (WFC_CHASSIS, Gameplay 22a+) + Gameplay's chassis test
+$relExe = Join-Path $Root "build-release\bin\wfc_rebuild.exe"; if (-not (Test-Path $relExe)) { $relExe = $exe }
+if ($H.Contains("WFC_CHASSIS")) {
+    $dc = Join-Path $OutDir "chassis"; New-Item -ItemType Directory -Force $dc | Out-Null; $cRows = New-Object System.Collections.Generic.List[object]
+    foreach ($c in $X.characters) { $dd = Join-Path $dc $c.chassis; New-Item -ItemType Directory -Force $dd | Out-Null
+        if (-not $ReportOnly -and -not (Test-Path (Join-Path $dd "wfc.log")) -and (Wait-WfcGpu)) { $null = Invoke-WfcExe $relExe $dd @{ WFC_BOOT = "match"; WFC_MAP = "MP_IAC_Streets"; WFC_CHASSIS = $c.chassis; WFC_LOCKSTEP = "1"; WFC_SMOKE_FRAMES = "160"; WFC_SHOTEVERY = "$dd,120,120"; WFC_LOGEVERY = "0" } "run.log" 240 }
+        $lg = Join-Path $dd "wfc.log"; if (-not (Test-Path $lg)) { continue }
+        $rb = @(Grep-Log $lg 'skinned glb: .*?/Characters/([^/\\]+)/robot\.glb' | ForEach-Object { [regex]::Match($_.text, '/Characters/([^/\\]+)/robot').Groups[1].Value } | Select-Object -Unique)
+        $vb = @(Grep-Log $lg 'skinned glb: .*?/Characters/([^/\\]+)/vehicle\.glb' | ForEach-Object { [regex]::Match($_.text, '/Characters/([^/\\]+)/vehicle').Groups[1].Value } | Select-Object -Unique)
+        $unavail = @(Grep-Log $lg 'chassis unavailable|fallback='); $opt = ($c.chassis -ne "Optimus") -and ($rb -contains "Optimus" -or $vb -contains "Optimus")
+        $st = if ($unavail.Count) { "FAIL" } elseif ($opt) { "FAIL" } elseif ($rb -contains $c.chassis -and $vb -contains $c.chassis) { "PASS" } elseif (-not $rb.Count) { "UNKNOWN" } else { "FAIL" }
+        $cRows.Add([pscustomobject]@{ chassis = $c.chassis; iconic = $c.iconic; robot = ($rb -join ","); vehicle = ($vb -join ","); status = $(if ($opt) { "FAIL (OPTIMUS FALLBACK)" } else { $st }) })
+        Res "chassis.$($c.chassis)" $st ("WFC_CHASSIS={0} ({1}): robot body {2}; vehicle body {3}{4}{5}" -f $c.chassis, $c.iconic, ($rb -join ","), ($vb -join ","), $(if ($opt) { "; OPTIMUS FALLBACK" } else { "" }), $(if ($unavail.Count) { "; " + ($unavail[0].text -replace '^.*\] ', '') } else { "" })) "Gameplay/AssetTools" }
+    Write-WfcCsv $cRows (Join-Path $OutDir "characters_chassis.csv")
+    $tiles = @(Get-ChildItem $dc -Recurse -Filter *.bmp -ErrorAction SilentlyContinue | Sort-Object FullName | ForEach-Object { @{ png = $_.FullName; label = (Split-Path (Split-Path $_.FullName) -Leaf) } }); if ($tiles.Count) { New-WfcSheet $tiles (Join-Path $OutDir "sheet_chassis.png") 6 320 180 }
+} else { Res "chassis" "SKIP" "build has no WFC_CHASSIS (Gameplay 22a+): every-chassis runtime check not possible" "Experimental" }
+if ($H.Contains("WFC_CHASSISTEST")) { $dt = Join-Path $OutDir "chassistest"; New-Item -ItemType Directory -Force $dt | Out-Null
+    if (-not $ReportOnly -and (Wait-WfcGpu)) { $null = Invoke-WfcExe $relExe $dt @{ WFC_CHASSISTEST = "1" } "run.log" 600 }
+    $cl = @(Grep-Log (Join-Path $dt "wfc.log") 'CHASSIS (PASS|FAIL) '); $sumL = @(Grep-Log (Join-Path $dt "wfc.log") 'CHASSIS SUMMARY')[0]
+    Res "gameplay_chassistest" $(if (@($cl | Where-Object { $_.text -match 'CHASSIS FAIL' }).Count) { "FAIL" } elseif ($cl.Count) { "PASS" } else { "SKIP" }) ("Gameplay WFC_CHASSISTEST: {0}; failing: {1}" -f $(if ($sumL) { $sumL.text -replace '^.*CHASSIS ', '' } else { "no summary" }), ((@($cl | Where-Object { $_.text -match 'CHASSIS FAIL' }) | Select-Object -First 5 | ForEach-Object { $_.text -replace '^.*CHASSIS FAIL ', '' }) -join " | ")) "Gameplay" }
+
 # ---------------- B. runtime: the class presets through Choose Character
 $d = Join-Path $OutDir "runtime"; New-Item -ItemType Directory -Force $d | Out-Null
 $presetOrder = @("Scout", "Scientist", "Leader", "Soldier")   # Choose Character list order (CustomTransformers_GFX); verified per match from the selection event

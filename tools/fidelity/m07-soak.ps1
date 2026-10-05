@@ -54,6 +54,20 @@ foreach ($map in @($rows | ForEach-Object { $_.map } | Select-Object -Unique)) {
     $wdRatio = if ($wd.Count -ge 2) { [Math]::Round([double]$wd[-1] / [Math]::Max(1, [double]$wd[0]), 2) } else { $null }
     Res "map.$map" $(if (($memGrow -ne $null -and $memGrow -gt 25) -or $tex.Count -gt 1 -or ($wdRatio -ne $null -and ($wdRatio -lt 0.8 -or $wdRatio -gt 1.25))) { "FAIL" } else { "PASS" }) ("{0} visits {1}: private MB after unload {2} (revisit growth {3} MB from pass 2); GL textures released {4}; in-play world draws {5}" -f $map, $v.Count, ($mem -join " > "), $memGrow, ($tex -join "/"), ($wd -join " > ")) "Rendering/Integration"
 }
+# ---------- renderer-only map load / unload cycle (Rendering WFC_MEMCYCLE): every launchable map x passes, one process
+$exe2 = Join-Path $Root "build-release\bin\wfc_rebuild.exe"; $H2 = Get-ExeHooks $exe2
+if ($H2.Contains("WFC_MEMCYCLE")) { $dm = Join-Path $OutDir "memcycle"; New-Item -ItemType Directory -Force $dm | Out-Null
+    $list = (@(1..$Passes) | ForEach-Object { @($X.maps | Where-Object { $_.launchable } | ForEach-Object { $_.runtime }) }) -join ","
+    if (-not $ReportOnly -and (Wait-WfcGpu)) { $null = Invoke-WfcExe $exe2 $dm @{ WFC_MEMCYCLE = $list } "run.log" 1800 }
+    $mc = @(Grep-Log (Join-Path $dm "wfc.log") 'MEMCYCLE (\S+) loaded ([\d.]+) MB unloaded ([\d.]+) MB \| GL (.*)$' | ForEach-Object { $m = [regex]::Match($_.text, 'MEMCYCLE (\S+) loaded ([\d.]+) MB unloaded ([\d.]+) MB \| GL (.*)$'); [pscustomobject]@{ map = $m.Groups[1].Value; loaded = [double]$m.Groups[2].Value; unloaded = [double]$m.Groups[3].Value; gl = $m.Groups[4].Value.Trim() } })
+    Write-WfcCsv $mc (Join-Path $OutDir "memcycle.csv")
+    if ($mc.Count) { $nMaps = @($mc | ForEach-Object { $_.map } | Select-Object -Unique).Count
+        $after = @($mc | Select-Object -Skip $nMaps); $sl = Slope ($after | ForEach-Object { $_.unloaded })
+        Res "memcycle.unloaded_plateau" $(if ($sl -ne $null -and $sl -gt 5) { "FAIL" } elseif ($sl -ne $null) { "PASS" } else { "SKIP" }) ("renderer-only cycle over {0} maps x {1}: private MB after unload first {2:N0}, end of pass 1 {3:N0}, last {4:N0}; slope from pass 2 {5} MB per map load (plateau vs growth)" -f $nMaps, $Passes, $mc[0].unloaded, $mc[$nMaps - 1].unloaded, $mc[-1].unloaded, $sl) "Rendering"
+        foreach ($g in @($mc | Group-Object map)) { $gls = @($g.Group | ForEach-Object { $_.gl } | Select-Object -Unique); $un = @($g.Group | ForEach-Object { $_.unloaded })
+            Res "memcycle.$($g.Name)" $(if ($gls.Count -gt 1) { "FAIL" } else { "PASS" }) ("{0}: loaded {1} MB; after unload {2} MB; GL census after unload {3}" -f $g.Name, (($g.Group | ForEach-Object { $_.loaded }) -join " / "), ($un -join " / "), ($gls -join " | ")) "Rendering" } }
+} else { Res "memcycle" "SKIP" "build has no WFC_MEMCYCLE (Rendering M11+)" "Experimental" }
+
 $sum = Write-WfcReport $res (Join-Path $OutDir "report_m07.json")
 Write-M07Matrix $rows @("cycle", "pass", "map", "frontend_private_mb", "frontend_ws_mb", "unloaded_private_mb", "handles", "threads", "gl_textures_released", "world_draws", "nav_heap", "nav_nodes") (Join-Path $OutDir "SOAK.md") "M07 multi-map soak" @("$cycles cycles = $Passes passes over $($ids.Count) maps. Pass 1 loads every map once (plateau expected); growth is judged from pass 2 on and per map revisit. R4 checks (audio release, UI movies, launches): report.json.")
 "M07 SOAK: " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
