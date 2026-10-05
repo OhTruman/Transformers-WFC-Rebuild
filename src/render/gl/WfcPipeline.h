@@ -13,6 +13,7 @@
 #include <memory>
 #include <set>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 #include <vector>
 #include <functional>
@@ -132,7 +133,7 @@ public:
     // Shared read-only asset roots: WFC_ASSETS (default core::config::kAssetRootDefault, the VerticalSlice export)
     // and the content directory beside it (WFC_CONTENT overrides). Map render data stays in WFC_RENDER_DATA.
     static std::string assetRoot();
-    static std::string renderDataRoot();              // WFC_RENDER_DATA, default <exe>/../../work/render
+    static std::string renderDataRoot();              // WFC_RENDER_DATA, else the first work/render above the exe holding data
     static std::string contentRoot();
     void release();                                   // delete every GL object, reset to the unloaded state
     void setLoadYield(std::function<void()> y) { loadYield_ = std::move(y); }
@@ -145,6 +146,26 @@ public:
     void setCharacterColors(const CharacterColors& c) { charColorsBy_[drawOwner_] = c; }
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
+    // per-frame draw counters (always on, cheap) and resource counts for IRenderer::renderDiagnostics
+    struct FrameCounts {
+        int draws = 0, worldDraws = 0, bspDraws = 0, dynamicDraws = 0, fxDraws = 0;
+        int opaque = 0, translucent = 0, lightmapped = 0, culled = 0, noProgram = 0;
+        int materials = 0, programs = 0;
+        std::vector<std::string> noProgramMats;
+    };
+    const FrameCounts& lastFrameCounts() const { return lastCounts_; }
+    int frameNumber() const { return frameNo_; }
+    const std::string& dataDir() const { return dataDir_; }
+    size_t materialCount() const { return mats_.size(); }
+    size_t programCount() const { return progs_.size(); }
+    size_t textureCount() const { return texCache_.size(); }
+    size_t lightmapCount() const { return lmTextures_.size(); }
+    size_t meshCount() const { return meshes_.size(); }
+    const core::Mat4& viewProjMatrix() const { return viewProj_; }
+    const core::Vec3& cameraPos() const { return camPos_; }
+    static std::string& lastLoadError() { static std::string e; return e; }   // survives release()
+    int scenePosesApplied() const { return posesApplied_; }
+    const std::set<std::string>& scenePosesUnknown() const { return posesUnknown_; }
     void setActorPose(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg);
     void loadSceneActors(const assets::Json& actorsByLevel);   // render_index actors_by_level (UI families)
 
@@ -201,6 +222,10 @@ private:
     struct FrameDraw { int draws = 0; int blend = 0; bool lit = false, lightmapped = false, vertexLM = false,
                        distortion = false, dynamic = false, fx = false; };
     std::map<std::string, FrameDraw> frameDraws_;
+    FrameCounts counts_, lastCounts_;
+    std::unordered_set<std::string> frameMats_;   // copies: dynamic meshes are temporaries
+    std::set<std::string> frameNoProg_;
+    std::vector<char> progSeen_;
     std::vector<std::string> frameEnvs_;
     bool frameFx_ = false;
     void writeFrameReport();
@@ -471,6 +496,8 @@ private:
     };
     std::vector<MoverRT> movers_;
     std::map<std::string, MoverRT> actorPoses_;        // frontend-driven absolute poses (kind 2)
+    int posesApplied_ = 0;                             // validation: poses received for known / unknown actors
+    std::set<std::string> posesUnknown_;
     std::unordered_map<std::string, core::Mat4> moverDelta_;
     std::unordered_map<std::string, bool> actorHidden_;
     std::set<std::string> authoredHiddenActors_;

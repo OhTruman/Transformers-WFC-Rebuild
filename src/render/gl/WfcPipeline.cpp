@@ -486,9 +486,34 @@ std::string Pipeline::assetRoot() {
     return core::config::kAssetRootDefault;
 }
 
+// The worktree's work/render above the executable, whatever the build layout (build/bin, build/release/bin, a
+// copied bin/): a candidate counts only if it holds render data (a map's materials_glsl.json or the _ui data).
+// M10 root cause: this was <exe>/../../work/render only, so the Release layout (build/release/bin) resolved to
+// build/work/render (absent) and every map and frontend scene silently fell back to the legacy fixed-function
+// renderer (human playtest M06: black world, malformed menu scene).
 std::string Pipeline::renderDataRoot() {
     if (const char* e = std::getenv("WFC_RENDER_DATA")) return e;
-    return exeDir() + "/../../work/render";
+    static const std::string root = [] {
+        auto holdsData = [](const std::string& c) {
+            if (std::ifstream(c + "/_ui/hud_markers.json").good()) return true;
+            for (const char* m : {"MP_IAC_Streets", "UI_FrontEnd"})
+                if (std::ifstream(c + "/" + m + "/materials_glsl.json").good()) return true;
+            return false;
+        };
+        std::string dir = exeDir();
+        for (int up = 0; up <= 4; ++up) {
+            if (holdsData(dir + "/work/render")) {
+                LOG_INFO("wfc: render data root %s/work/render", dir.c_str());
+                return dir + "/work/render";
+            }
+            dir += "/..";
+        }
+        LOG_ERROR("wfc: NO RENDER DATA found in work/render above %s (set WFC_RENDER_DATA or run "
+                  "tools/render/build_render_data.ps1): maps and frontend scenes will use the legacy renderer",
+                  exeDir().c_str());
+        return exeDir() + "/../../work/render";
+    }();
+    return root;
 }
 
 std::string Pipeline::contentRoot() {
@@ -552,10 +577,17 @@ bool Pipeline::load(const std::string& mapName) {
     loadMapFx(dataDir_ + "/map_fx_runtime.json");
     yieldLoad();
     if (mj.empty() || lj.empty()) {
-        LOG_WARN("wfc: render data not found in %s (run tools/render/*.py); legacy renderer", dataDir_.c_str());
+        lastLoadError() = "render data not found in " + dataDir_;
+        LOG_ERROR("wfc: render data not found in %s (run tools/render/build_render_data.ps1): LEGACY RENDERER, "
+                  "not the original presentation", dataDir_.c_str());
         return false;
     }
-    if (!glx::load()) { LOG_WARN("wfc: GL 3.3 entry points unavailable; legacy renderer"); return false; }
+    if (!glx::load()) {
+        lastLoadError() = "GL 3.3 entry points unavailable";
+        LOG_ERROR("wfc: GL 3.3 entry points unavailable: LEGACY RENDERER");
+        return false;
+    }
+    lastLoadError().clear();
 
     assets::Json M, L;
     if (!assets::Json::parse(mj, M) || !assets::Json::parse(lj, L)) { LOG_ERROR("wfc: render data JSON parse failed"); return false; }
@@ -1592,7 +1624,11 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
         for (size_t si = 0; si < g.subs.size(); ++si) {
             if (onlySub >= 0 && (int)si != onlySub) continue;
             Sub& s = g.subs[si];
-            if (s.prog < 0) continue;
+            if (s.prog < 0) {
+                ++counts_.noProgram;
+                if (frameNoProg_.size() < 64) frameNoProg_.insert(s.matName.empty() ? std::string("<none>") : s.matName);
+                continue;
+            }
             static const char* skipMat = std::getenv("WFC_SKIPMAT");   // diagnostics: hide by material
             if (skipMat) {                    // ';'-separated substrings, "<none>" = no material identity
                 bool hide = false;
@@ -1651,7 +1687,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                                   pl[2] >= 0 ? s.bmax.z : s.bmin.z};
                     if (pl[0] * pv.x + pl[1] * pv.y + pl[2] * pv.z + pl[3] < 0) out = true;
                 }
-                if (out) continue;
+                if (out) { ++counts_.culled; continue; }
             }
             bindCommon(P, subModel);
             Uniform1i(uloc(P, "uDecalClip"), g.decal ? 1 : 0);
@@ -1767,6 +1803,15 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             }
             glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
             ++gStats.draws;
+            ++counts_.draws;
+            if (meshIdx >= 0 && meshIdx == bspMesh_) ++counts_.bspDraws;
+            else if (g.world) ++counts_.worldDraws;
+            if (dynamicObject) ++counts_.dynamicDraws;
+            if (frameFx_) ++counts_.fxDraws;
+            if (trans) ++counts_.translucent; else ++counts_.opaque;
+            if (s.lmTex[0] >= 0 || s.vlmTex != 0) ++counts_.lightmapped;
+            frameMats_.insert(s.matName);
+            if ((size_t)s.prog < progSeen_.size() && !progSeen_[(size_t)s.prog]) { progSeen_[(size_t)s.prog] = 1; ++counts_.programs; }
             if (reportFrame) {
                 FrameDraw& fd = frameDraws_[s.matName.empty() ? std::string("<gltf>") : s.matName];
                 ++fd.draws; fd.blend = P.blend; fd.lit = P.lit; fd.lightmapped |= s.lmTex[0] >= 0;
@@ -2181,6 +2226,10 @@ void Pipeline::ensureTargets(int w, int h) {
 
 void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     ++frameNo_;
+    counts_ = FrameCounts();
+    frameMats_.clear();
+    frameNoProg_.clear();
+    progSeen_.assign(progs_.size(), 0);
     if (frameNo_ == 2) {
         // Prewarm: build every compiled original material not yet used (effect, weapon, character
         // materials) and decode its textures now, as the original had them resident from the map's
@@ -2277,6 +2326,11 @@ void Pipeline::drawCanvasTiles() {
 
 void Pipeline::endFrame() {
     flushTranslucency();                               // nothing queued normally: drawMapPresentation flushed it
+    {
+        counts_.materials = (int)frameMats_.size();
+        counts_.noProgramMats.assign(frameNoProg_.begin(), frameNoProg_.end());
+        lastCounts_ = counts_;
+    }
     deferTrans_ = false;
     double thisRenderMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gFrameStart).count();
     gStats.renderMs += thisRenderMs;

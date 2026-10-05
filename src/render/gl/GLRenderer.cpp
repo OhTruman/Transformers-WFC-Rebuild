@@ -93,6 +93,7 @@ public:
     }
 
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
+        if (visualCheckOn()) glEntry_ = captureGlState();   // what the previous user of the context left bound
         const Camera& cam0 = camIn;
         glViewport(0, 0, vpW, vpH);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -102,6 +103,7 @@ public:
         if (const char* rc = std::getenv("WFC_RENDERCAM"))
             std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
         const Camera& cam = camOv;
+        lastCam_ = cam;
         if (wfc_.active()) wfc_.beginFrame(cam, vpW, vpH);
         vpW_ = vpW; vpH_ = vpH;
         inFrame_ = true;
@@ -120,6 +122,8 @@ public:
 
     void endFrame() override {
         if (wfc_.active()) { wfc_.drawMapPresentation(); wfc_.endFrame(); }
+        sampleScene();
+        drawLegacyMarker();
         drawReticle();
         for (const ScreenBatch& b : screenQueue_) drawScreenNow(b);   // 2D composition on top, in order
         screenQueue_.clear();
@@ -407,7 +411,12 @@ public:
             size_t sz = (size_t)glb.tellg();
             if (dir.empty() || sz > bestSize) { dir = d; bestSize = sz; }
         }
-        if (dir.empty()) { LOG_WARN("frontend scene: no render data for any of %zu levels", levels.size()); return false; }
+        if (dir.empty()) {
+            renderDataRequested_ = true;     // the caller's fallback (fixed-function world.glb) is not the original scene
+            wfc::Pipeline::lastLoadError() = "no frontend-scene render data in " + data + " for " + (levels.empty() ? std::string("-") : levels.front());
+            LOG_ERROR("frontend scene: NO RENDER DATA (legacy presentation) for any of %zu levels", levels.size());
+            return false;
+        }
         MeshData world;
         auto tw = std::chrono::steady_clock::now();
         bool okWorld = assets::loadGlb(assets + "/Maps/" + dir + "/world.glb", world);
@@ -450,8 +459,209 @@ public:
     void setLoadYield(std::function<void()> y) override { wfc_.setLoadYield(std::move(y)); }
 
     void unloadMapRenderData() override {
+        renderDataRequested_ = false;
+        sceneSampled_ = false;
         wfc_.release();
         for (size_t i = 0; i < meshes_.size(); ++i) { meshes_[i] = MeshData{}; gpu_[i] = -1; }
+    }
+
+    // ---- validation (M10) ------------------------------------------------------------------------------------
+    // Scene image metrics before 2D composition (WFC_VISUALCHECK): near-black fraction, flat-tile fraction, luminance
+    // percentiles, quantized colour count. One readback every 120 frames and before each screenshot.
+    struct ImageMetrics { float black = 0, flat = 0, p50 = 0, p95 = 0; int colors = 0; };
+    static ImageMetrics imageMetrics(const std::vector<uint8_t>& rgb, int w, int h) {
+        ImageMetrics m;
+        if (w <= 0 || h <= 0) return m;
+        std::vector<int> hist(256, 0);
+        std::vector<char> seen(1 << 15, 0);
+        size_t n = (size_t)w * h, black = 0;
+        for (size_t i = 0; i < n; ++i) {
+            const uint8_t* p = &rgb[i * 3];
+            int l = (p[0] * 54 + p[1] * 183 + p[2] * 19) >> 8;
+            ++hist[(size_t)l];
+            if (l < 10) ++black;
+            int q = ((p[0] >> 3) << 10) | ((p[1] >> 3) << 5) | (p[2] >> 3);
+            if (!seen[(size_t)q]) { seen[(size_t)q] = 1; ++m.colors; }
+        }
+        m.black = (float)black / (float)n;
+        size_t acc = 0; bool h50 = false;
+        for (int l = 0; l < 256; ++l) {
+            acc += (size_t)hist[(size_t)l];
+            if (!h50 && acc >= n / 2) { m.p50 = (float)l; h50 = true; }
+            if (acc >= n * 95 / 100) { m.p95 = (float)l; break; }
+        }
+        const int T = 16;
+        int tiles = 0, flat = 0;
+        for (int ty = 0; ty + T <= h; ty += T)
+            for (int tx = 0; tx + T <= w; tx += T) {
+                int lo[3] = {255, 255, 255}, hi[3] = {0, 0, 0};
+                for (int y = ty; y < ty + T; ++y)
+                    for (int x = tx; x < tx + T; ++x)
+                        for (int c = 0; c < 3; ++c) {
+                            int v = rgb[((size_t)y * w + x) * 3 + c];
+                            lo[c] = std::min(lo[c], v); hi[c] = std::max(hi[c], v);
+                        }
+                ++tiles;
+                if (hi[0] - lo[0] <= 3 && hi[1] - lo[1] <= 3 && hi[2] - lo[2] <= 3) ++flat;
+            }
+        m.flat = tiles ? (float)flat / (float)tiles : 0.0f;
+        return m;
+    }
+    static bool visualCheckOn() { static const bool on = std::getenv("WFC_VISUALCHECK") != nullptr; return on; }
+
+    void sampleScene() {
+        if (!visualCheckOn() || !inFrame_) return;
+        ++sceneFrames_;
+        if (!sceneSamplePending_ && sceneFrames_ % 120 != 0) return;
+        sceneSamplePending_ = false;
+        GLint vp[4];
+        glGetIntegerv(GL_VIEWPORT, vp);
+        if (vp[2] <= 0 || vp[3] <= 0) return;
+        std::vector<uint8_t> rgb((size_t)vp[2] * vp[3] * 3);
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glReadPixels(vp[0], vp[1], vp[2], vp[3], GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
+        ImageMetrics m = imageMetrics(rgb, vp[2], vp[3]);
+        scene_ = m; sceneSampled_ = true;
+        RenderDiagnostics d = renderDiagnostics();
+        std::string why = verdict(d, m);
+        LOG_INFO("VISUALCHECK frame %d path=%s black=%.3f flat=%.3f lumaP50=%.0f colors=%d draws=%d world=%d bsp=%d "
+                 "materials=%d noProgram=%d -> %s", d.frame, d.originalPath ? "original" : "legacy", m.black, m.flat,
+                 m.p50, m.colors, d.draws, d.worldDraws, d.bspDraws, d.distinctMaterials, d.noProgramSubs,
+                 why.empty() ? "PASS" : ("FAIL: " + why).c_str());
+    }
+
+    // Rejects obviously broken 3D scenes (the M06 playtest recording): legacy fallback, mostly black, mostly flat,
+    // almost no colours, nothing of the map drawn. Thresholds are deliberately loose: a FAIL is a broken scene.
+    static std::string verdict(const RenderDiagnostics& d, const ImageMetrics& m) {
+        std::string why;
+        auto add = [&](const std::string& s) { why += (why.empty() ? "" : "; ") + s; };
+        if (d.renderDataRequested && !d.originalPath && !d.legacyRequested)
+            add("legacy fallback (" + (d.lastLoadError.empty() ? std::string("no render data") : d.lastLoadError) + ")");
+        if (d.originalPath && d.worldDraws + d.bspDraws == 0) add("no map geometry drawn");
+        if (m.black > 0.60f) add("scene " + std::to_string((int)(m.black * 100)) + "% black");
+        if (m.flat > 0.70f) add("scene " + std::to_string((int)(m.flat * 100)) + "% flat tiles");
+        // few colours alone is not a failure (the lobby SpaceDome is dark and smooth: 19 colours); with an almost
+        // black image it is
+        if (m.colors < 32 && m.p95 < 16.0f) add("near-black (" + std::to_string(m.colors) + " colours, luma p95 " +
+                                                 std::to_string((int)m.p95) + ")");
+        return why;
+    }
+
+    // Compact dump of the GL state a frame inherits (render-state leak audit between frontend scene / loading
+    // screen / GFx host / map). Values: depth test/func/mask, blend + func, cull + mode, front face, scissor, colour
+    // mask, polygon mode, program, VAO, array / element buffers, framebuffer, active texture + 2D binding,
+    // fixed-function lighting / fog / texture 2D.
+    static std::string captureGlState() {
+        GLint v[4] = {0, 0, 0, 0};
+        GLboolean b4[4] = {0, 0, 0, 0}, bm = 0;
+        std::string s;
+        auto I = [&](const char* n, GLenum e) { GLint x = 0; glGetIntegerv(e, &x); s += std::string(n) + "=" + std::to_string(x) + " "; };
+        auto B = [&](const char* n, GLenum e) { s += std::string(n) + "=" + (glIsEnabled(e) ? "1 " : "0 "); };
+        B("depth", GL_DEPTH_TEST); I("depthFunc", GL_DEPTH_FUNC);
+        glGetBooleanv(GL_DEPTH_WRITEMASK, &bm); s += std::string("depthMask=") + (bm ? "1 " : "0 ");
+        B("blend", GL_BLEND); I("blendSrc", GL_BLEND_SRC); I("blendDst", GL_BLEND_DST);
+        B("cull", GL_CULL_FACE); I("cullMode", GL_CULL_FACE_MODE); I("frontFace", GL_FRONT_FACE);
+        B("scissor", GL_SCISSOR_TEST);
+        glGetBooleanv(GL_COLOR_WRITEMASK, b4);
+        s += "colorMask=" + std::to_string((int)b4[0]) + std::to_string((int)b4[1]) + std::to_string((int)b4[2]) + std::to_string((int)b4[3]) + " ";
+        glGetIntegerv(GL_POLYGON_MODE, v); s += "polygonMode=" + std::to_string(v[0]) + " ";
+        I("program", 0x8B8D /* GL_CURRENT_PROGRAM */); I("vao", 0x85B5 /* GL_VERTEX_ARRAY_BINDING */);
+        I("arrayBuf", 0x8894 /* GL_ARRAY_BUFFER_BINDING */); I("elemBuf", 0x8895 /* GL_ELEMENT_ARRAY_BUFFER_BINDING */);
+        I("fbo", 0x8CA6 /* GL_FRAMEBUFFER_BINDING */); I("activeTex", 0x84E0 /* GL_ACTIVE_TEXTURE */);
+        I("tex2D", GL_TEXTURE_BINDING_2D);
+        B("lighting", GL_LIGHTING); B("fog", GL_FOG); B("texture2D", GL_TEXTURE_2D);
+        if (!s.empty()) s.pop_back();
+        return s;
+    }
+
+    // A map or frontend scene asked for the original presentation and did not get it: a red frame on screen, so a
+    // broken run cannot pass as a visual success. WFC_LEGACYRENDER (intended fallback) draws nothing.
+    void drawLegacyMarker() {
+        if (!renderDataRequested_ || wfc_.active() || std::getenv("WFC_LEGACYRENDER") || !inFrame_) return;
+        glPushAttrib(GL_ALL_ATTRIB_BITS);
+        glDisable(GL_DEPTH_TEST); glDisable(GL_LIGHTING); glDisable(GL_TEXTURE_2D); glDisable(GL_FOG);
+        glDisable(GL_CULL_FACE); glDisable(GL_BLEND);
+        glMatrixMode(GL_PROJECTION); glPushMatrix(); glLoadIdentity();
+        glOrtho(0, vpW_, vpH_, 0, -1, 1);
+        glMatrixMode(GL_MODELVIEW); glPushMatrix(); glLoadIdentity();
+        const float b = 10.0f, W = (float)vpW_, Hh = (float)vpH_;
+        glColor3f(1.0f, 0.0f, 0.0f);
+        glBegin(GL_QUADS);
+        glVertex2f(0, 0); glVertex2f(W, 0); glVertex2f(W, b); glVertex2f(0, b);
+        glVertex2f(0, Hh - b); glVertex2f(W, Hh - b); glVertex2f(W, Hh); glVertex2f(0, Hh);
+        glVertex2f(0, 0); glVertex2f(b, 0); glVertex2f(b, Hh); glVertex2f(0, Hh);
+        glVertex2f(W - b, 0); glVertex2f(W, 0); glVertex2f(W, Hh); glVertex2f(W - b, Hh);
+        glEnd();
+        glPopMatrix(); glMatrixMode(GL_PROJECTION); glPopMatrix(); glMatrixMode(GL_MODELVIEW);
+        glPopAttrib();
+    }
+
+    RenderDiagnostics renderDiagnostics() const override {
+        RenderDiagnostics d;
+        d.originalPath = wfc_.active();
+        d.legacyRequested = std::getenv("WFC_LEGACYRENDER") != nullptr;
+        d.renderDataRequested = renderDataRequested_;
+        d.renderDataRoot = wfc::Pipeline::renderDataRoot();
+        d.mapDataDir = wfc_.active() ? wfc_.dataDir() : std::string();
+        d.lastLoadError = wfc::Pipeline::lastLoadError();
+        const auto& c = wfc_.lastFrameCounts();
+        d.frame = wfc_.frameNumber();
+        d.draws = c.draws; d.worldDraws = c.worldDraws; d.bspDraws = c.bspDraws; d.dynamicDraws = c.dynamicDraws;
+        d.fxDraws = c.fxDraws; d.opaqueDraws = c.opaque; d.translucentDraws = c.translucent;
+        d.lightmappedDraws = c.lightmapped; d.culledSubs = c.culled; d.noProgramSubs = c.noProgram;
+        d.distinctMaterials = c.materials; d.distinctPrograms = c.programs; d.noProgramMaterials = c.noProgramMats;
+        d.materials = wfc_.materialCount(); d.programs = wfc_.programCount(); d.textures = wfc_.textureCount();
+        d.lightmaps = wfc_.lightmapCount(); d.meshes = wfc_.meshCount();
+        const core::Vec3& p = wfc_.cameraPos();
+        d.camPos[0] = p.x; d.camPos[1] = p.y; d.camPos[2] = p.z;
+        d.camYaw = lastCam_.yaw; d.camPitch = lastCam_.pitch; d.camFovX = lastCam_.fovXDeg;
+        std::copy(wfc_.viewProjMatrix().m, wfc_.viewProjMatrix().m + 16, d.viewProj);
+        glGetIntegerv(GL_VIEWPORT, d.viewport);
+        glGetIntegerv(0x8CA6 /* GL_FRAMEBUFFER_BINDING */, &d.framebuffer);
+        d.sceneSampled = sceneSampled_;
+        d.sceneBlack = scene_.black; d.sceneFlat = scene_.flat; d.sceneLumaP50 = scene_.p50; d.sceneLumaP95 = scene_.p95;
+        d.sceneColors = scene_.colors;
+        d.scenePosesApplied = wfc_.scenePosesApplied();
+        d.scenePosesUnknown = (int)wfc_.scenePosesUnknown().size();
+        d.glEntryState = glEntry_;
+        return d;
+    }
+
+    void writeVisualCheck(const std::string& path, const std::vector<uint8_t>& rgb, int w, int h) {
+        RenderDiagnostics d = renderDiagnostics();
+        ImageMetrics fin = imageMetrics(rgb, w, h);
+        std::string why = sceneSampled_ ? verdict(d, scene_) : verdict(d, fin);
+        std::FILE* f = std::fopen((path + ".json").c_str(), "w");
+        if (!f) return;
+        auto esc = [](const std::string& s) { std::string o; for (char ch : s) { if (ch == '"' || ch == '\\') o += '\\'; o += ch; } return o; };
+        std::fprintf(f, "{\n  \"verdict\": \"%s\",\n  \"reasons\": \"%s\",\n", why.empty() ? "PASS" : "FAIL", esc(why).c_str());
+        std::fprintf(f, "  \"render_path\": \"%s\", \"legacy_requested\": %s, \"render_data_requested\": %s,\n",
+                     d.originalPath ? "original" : "legacy", d.legacyRequested ? "true" : "false", d.renderDataRequested ? "true" : "false");
+        std::fprintf(f, "  \"render_data_root\": \"%s\", \"map_data_dir\": \"%s\", \"last_load_error\": \"%s\",\n",
+                     esc(d.renderDataRoot).c_str(), esc(d.mapDataDir).c_str(), esc(d.lastLoadError).c_str());
+        std::fprintf(f, "  \"frame\": %d, \"draws\": %d, \"world_draws\": %d, \"bsp_draws\": %d, \"dynamic_draws\": %d, \"fx_draws\": %d,\n",
+                     d.frame, d.draws, d.worldDraws, d.bspDraws, d.dynamicDraws, d.fxDraws);
+        std::fprintf(f, "  \"opaque_draws\": %d, \"translucent_draws\": %d, \"lightmapped_draws\": %d, \"culled_subs\": %d, \"no_program_subs\": %d,\n",
+                     d.opaqueDraws, d.translucentDraws, d.lightmappedDraws, d.culledSubs, d.noProgramSubs);
+        std::fprintf(f, "  \"distinct_materials\": %d, \"distinct_programs\": %d,\n  \"no_program_materials\": [",
+                     d.distinctMaterials, d.distinctPrograms);
+        for (size_t i = 0; i < d.noProgramMaterials.size(); ++i)
+            std::fprintf(f, "%s\"%s\"", i ? ", " : "", esc(d.noProgramMaterials[i]).c_str());
+        std::fprintf(f, "],\n  \"loaded\": {\"materials\": %zu, \"programs\": %zu, \"textures\": %zu, \"lightmaps\": %zu, \"meshes\": %zu},\n",
+                     d.materials, d.programs, d.textures, d.lightmaps, d.meshes);
+        std::fprintf(f, "  \"camera_pos\": [%.3f, %.3f, %.3f], \"camera_yaw\": %.5f, \"camera_pitch\": %.5f, \"camera_fovx\": %.2f,\n  \"view_proj\": [",
+                     d.camPos[0], d.camPos[1], d.camPos[2], d.camYaw, d.camPitch, d.camFovX);
+        for (int i = 0; i < 16; ++i) std::fprintf(f, "%s%.6g", i ? ", " : "", d.viewProj[i]);
+        std::fprintf(f, "],\n  \"viewport\": [%d, %d, %d, %d], \"framebuffer\": %d,\n", d.viewport[0], d.viewport[1],
+                     d.viewport[2], d.viewport[3], d.framebuffer);
+        std::fprintf(f, "  \"gl_entry_state\": \"%s\",\n", esc(d.glEntryState).c_str());
+        std::fprintf(f, "  \"scene_poses\": {\"applied\": %d, \"unknown_actors\": %d},\n", d.scenePosesApplied, d.scenePosesUnknown);
+        std::fprintf(f, "  \"scene\": {\"sampled\": %s, \"black\": %.4f, \"flat\": %.4f, \"luma_p50\": %.0f, \"luma_p95\": %.0f, \"colors\": %d},\n",
+                     sceneSampled_ ? "true" : "false", scene_.black, scene_.flat, scene_.p50, scene_.p95, scene_.colors);
+        std::fprintf(f, "  \"final\": {\"black\": %.4f, \"flat\": %.4f, \"luma_p50\": %.0f, \"luma_p95\": %.0f, \"colors\": %d}\n}\n",
+                     fin.black, fin.flat, fin.p50, fin.p95, fin.colors);
+        std::fclose(f);
+        LOG_INFO("VISUALCHECK %s -> %s%s", path.c_str(), why.empty() ? "PASS" : "FAIL: ", why.c_str());
     }
 
     bool loadMapRenderData(const std::string& mapName) override {
@@ -460,6 +670,8 @@ public:
             unloadMapRenderData();
             sceneMesh_ = kInvalidMesh; sceneDir_.clear();
         }
+        renderDataRequested_ = true;
+        sceneSampled_ = false;
         bool ok = wfc_.load(mapName);
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
         return ok;
@@ -552,6 +764,7 @@ public:
         std::vector<uint8_t> rgb((size_t)w * h * 3);
         glPixelStorei(GL_PACK_ALIGNMENT, 1);
         glReadPixels(0, 0, w, h, GL_RGB, GL_UNSIGNED_BYTE, rgb.data());
+        if (visualCheckOn()) writeVisualCheck(path, rgb, w, h);
 
         std::FILE* f = std::fopen(path, "wb");
         if (!f) return false;
@@ -779,9 +992,11 @@ public:
 private:
     void drawMeshArrays(const MeshData& m, const core::Mat4& model, const core::Vec3& color) {
         // client-side vertex arrays: no buffer object may be bound (another renderer / UI pass may leave one)
-        glx::BindBuffer(GL_ARRAY_BUFFER, 0);
-        glx::BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-        glx::BindVertexArray(0);
+        // [integration M06] the extension entry points are loaded with the WFC pipeline; on the legacy path
+        // (WFC_LEGACYRENDER, no render data) they are null and nothing else binds buffers (was a crash: probe
+        // still_vehicle_legacy, exit 0xC0000005)
+        if (glx::BindBuffer) { glx::BindBuffer(GL_ARRAY_BUFFER, 0); glx::BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0); }
+        if (glx::BindVertexArray) glx::BindVertexArray(0);
         core::Mat4 mv = view_ * model;
         glLoadMatrixf(mv.m);
         glEnable(GL_LIGHTING);
@@ -932,6 +1147,12 @@ private:
 
     core::Mat4 view_;
     int vpW_ = 0, vpH_ = 0;
+    std::string glEntry_;
+    Camera lastCam_;
+    bool renderDataRequested_ = false;   // a map / scene asked for the original presentation (M10 legacy-fallback marker)
+    bool sceneSampled_ = false, sceneSamplePending_ = false;
+    long sceneFrames_ = 0;
+    ImageMetrics scene_;
     ReticleState reticle_;
     GLuint reticleTex_ = 0;
     bool reticleTried_ = false;

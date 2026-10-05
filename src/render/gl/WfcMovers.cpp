@@ -256,7 +256,12 @@ void Pipeline::setActorPose(const std::string& actor, const core::Vec3& p, const
     std::string a = actor.substr(actor.rfind('.') == std::string::npos ? 0 : actor.rfind('.') + 1);
     std::transform(a.begin(), a.end(), a.begin(), ::tolower);
     auto it = actorPose0_.find(a);
-    if (it == actorPose0_.end()) return;
+    if (it == actorPose0_.end()) {                     // no such placed actor in the loaded scene: reported, not guessed
+        if (posesUnknown_.insert(a).second && posesUnknown_.size() <= 8)
+            LOG_WARN("wfc: frontend pose for unknown actor %s (not in the scene's actors_by_level)", a.c_str());
+        return;
+    }
+    ++posesApplied_;
     MoverRT m;
     m.actor = a; m.kind = 2;
     std::copy(it->second.L, it->second.L + 3, m.L);

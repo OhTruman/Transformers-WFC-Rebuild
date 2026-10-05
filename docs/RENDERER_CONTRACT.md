@@ -102,6 +102,20 @@ Gameplay passes the markers its rules show. Ownership of the in-match HUD layers
   MP chassis, all verified against their shipped permutations). They compile on the character's first draw, not in
   the prewarm.
 
+## 2d. Render path diagnostics (M10)
+- **Render data root:** `WFC_RENDER_DATA`, else the first `work/render` up to 4 levels above the executable that holds
+  render data. A missing root is an ERROR.
+- **`renderDiagnostics()`:**
+  - render path (original / legacy, and why);
+  - last frame's draw counts (world / BSP / dynamic / FX / opaque / translucent / lightmapped / culled / without program);
+  - distinct materials and programs;
+  - loaded resource counts;
+  - camera and matrices, viewport, framebuffer;
+  - with `WFC_VISUALCHECK`: pre-UI scene metrics and the inherited GL state.
+- **Legacy fallback:** when a map or frontend scene asked for render data and fell back, a red 10 px frame is drawn unless
+  `WFC_LEGACYRENDER` is set.
+- **Validation:** `tools/render/visual_check.py`, `tools/render/visual_suite.sh`.
+
 ## 3. 2D composition (GFx movies, Bink frames, loading screens, fades)
 
 | Call | Behaviour |
