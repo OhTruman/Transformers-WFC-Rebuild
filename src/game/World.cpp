@@ -47,13 +47,13 @@ void World::load(render::IRenderer& renderer) {
 bool World::loadVerticalSlice(render::IRenderer& renderer) {
     const std::string root = assetRoot();
     render::MeshData mapMesh;
-    renderer.loadMapRenderData("MP_IAC_Streets");   // original-data shader path (if generated)
+    renderer.loadMapRenderData(mapName_);   // original-data shader path (if generated)
     // The match's authored rule classes gate rule-dependent presentation (objective bases, Conquest totems,
     // objective-factory effects) exactly as GameInfo.HasRule gates the world state.
     renderer.setActiveGameRules(gameRulesForMode(matchMode_));
 
     renderer_ = &renderer;
-    bool okMap = assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", mapMesh);
+    bool okMap = assets::loadGlb(mapDir() + "world.glb", mapMesh);
     if (!okMap) return false;
     auto resolveOne = [&](const std::string& uri) { return resolveTexture(uri); };
     auto resolveTextures = [&](std::vector<render::Material>& mats) {
@@ -69,7 +69,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     LOG_INFO("textures: %d loaded, %d failed, %zu unique", texLoaded_, texFailed_, texCache_.size());
 
     // Baked lightmap atlases: resolve each submesh's _LM atlas name to a GL texture.
-    const std::string lmDir = root + "/Maps/MP_IAC_Streets/lightmaps/";
+    const std::string lmDir = mapDir() + "lightmaps/";
     int lmBound = 0;
     for (render::SubMesh& sm : mapMesh.subs) {
         if (sm.lightmapName.empty()) continue;
@@ -105,7 +105,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     // collision_weapon.glb blocks hitscan / line checks (BSP + the 34 weapon-blocking volumes + hulls).
     // collision.glb (render geometry of every blocking prop) is only a fallback. Movers' triangles are split
     // out into moving collision sets (MapState).
-    const std::string mapDir = root + "/Maps/MP_IAC_Streets/";
+    const std::string mapDir = this->mapDir();
     mapState_.load(mapDir + "gameplay.json", matchMode_);
     mapState_.loadObjectiveVolumes(mapDir + "physics.json");
     auto splitMovers = [](const render::MeshData& in, render::MeshData& out,
@@ -167,14 +167,28 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
                 if (lineWorld.segmentHit(a + d * ((float)i / n), a + d * ((float)(i + 1) / n), t)) return true;
             return false;
         });
-        killZ_ = -750.0f;   // BASE TnWorldInfo KillZ -75000 UU [CONF PHYSICS_STREETS]
+        // KillZ of the persistent level's WorldInfo (physics.json world[<Map>_BASE_m].KillZ) [CONF authored]: Streets -75000,
+        // Gorge -7500, Debris +10000 UU ... Streets' value stays the fallback.
+        killZ_ = -750.0f;
+        {
+            std::string txt;
+            assets::Json pj;
+            if (readTextFile(mapDir + "physics.json", txt) && assets::Json::parse(txt, pj)) {
+                for (const auto& kv : pj["world"].obj) {
+                    std::string k = kv.first; for (char& ch : k) ch = (char)std::tolower((unsigned char)ch);
+                    if (k.size() > 7 && k.compare(k.size() - 7, 7, "_base_m") == 0 && kv.second.has("KillZ")) killZ_ = kv.second["KillZ"].asFloat() * 0.01f;
+                }
+            }
+            LOG_INFO("map %s: KillZ %.1f m", mapName_.c_str(), killZ_);
+        }
+        loadHazards();
     }
 
     // Place the player at an authored start of the match's class (FFA in DM, team starts otherwise), with the
     // start's authored rotation.
     spawnPos_ = {0, 0, 0};
     spawnYaw_ = 0.0f;
-    if (loadSpawn(root + "/Maps/MP_IAC_Streets/spawnpoints.json", spawnPos_, spawnYaw_)) {
+    if (loadSpawn(mapDir + "spawnpoints.json", spawnPos_, spawnYaw_)) {
         LOG_INFO("World: %s spawn at %.1f, %.1f, %.1f facing yaw %.2f", gameModeName(matchMode_),
                  spawnPos_.x, spawnPos_.y, spawnPos_.z, spawnYaw_);
     }
@@ -195,8 +209,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
 
     // Authored Streets pickup factories and destructibles (AssetTools 7a69756), plus the weapon-test dummy.
     actors_.clear();
-    loadPickupFactories(root + "/Maps/MP_IAC_Streets/gameplay.json");
-    loadDestructibles(root + "/Maps/MP_IAC_Streets/physics.json", root + "/../content/");
+    loadPickupFactories(mapDir + "gameplay.json");
+    loadDestructibles(mapDir + "physics.json", root + "/../content/");
     // Weapon-test dummy (DamageTarget): test instrumentation, not WFC content — only with WFC_TESTDUMMY=1.
     if (std::getenv("WFC_TESTDUMMY")) {
         core::Vec3 d = spawnPos_ + core::forwardFromYawPitch(spawnYaw_, 0.0f) * 10.0f;
@@ -488,7 +502,7 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
         }
     }
     float dist = (hitTarget || hitDes || hitOpp) ? targetDist : bestDist;
-    if (hitOpp) applyMatchDamage(hitOpp->matchPlayer(), localPlayer_, w.damageAt(dist), false, "TransGame.TnDamageTypeIonBlaster");   // InstantHitDamage, falloff
+    if (hitOpp) applyMatchDamage(hitOpp->matchPlayer(), localPlayer_, w.damageAt(dist), false, w.damageType);   // InstantHitDamage, falloff, the weapon's InstantHitDamageTypes[0]
     core::Vec3 hitPoint = origin + dir * dist;
     if (hitTarget) hitTarget->applyDamage(w.damageAt(dist));   // [CONF] range-based falloff
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
@@ -507,8 +521,11 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     }
     // WP_Fire presentation: muzzle flash at the MuzzleFlash socket, tracer muzzle -> impact,
     // impact squib where the trace hit something (world or target).
-    if (weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(ms);
-    fx_.spawnTracer(muzzle, hitPoint);
+    // WeaponFx reproduces the Ion Blaster's cooked particle systems only; other weapons' muzzle / tracer / squib templates
+    // are exposed (HudGameState / WeaponDef) for Rendering instead of drawing the Ion Blaster's [PARTIAL].
+    const bool ionFx = !w.def || std::string(w.def->id) == "IonBlaster";
+    if (ionFx && weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(ms);
+    if (ionFx) fx_.spawnTracer(muzzle, hitPoint);
     if (dist < range - 0.01f)
         fx_.spawnImpact(hitPoint, dir * -1.0f, origin);
     if (std::getenv("WFC_MUZZLELOG") && player_.pawn().hasWeapon()) {
@@ -743,7 +760,60 @@ bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
 }
 
 // Weapon-mesh event animations (TnWeaponMesh.WeaponEventAnims) + their AnimNotifies.
+const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
+    auto it = weaponModels_.find(d.id);
+    if (it != weaponModels_.end()) return it->second.get();
+    auto m = std::make_unique<assets::SkinnedModel>();
+    const std::string ext = assetRoot() + "/../";
+    bool ok = d.meshGltf && *d.meshGltf && assets::loadSkinnedGlb(ext + d.meshGltf, *m) && m->valid();
+    if (ok) {
+        if (d.animGltf && *d.animGltf) assets::loadAnimationsByName(ext + d.animGltf, *m);
+        resolveModelTextures(*m);
+    } else LOG_ERROR("weapon %s: mesh %s unavailable", d.id, d.meshGltf ? d.meshGltf : "-");
+    const assets::SkinnedModel* raw = ok ? m.get() : nullptr;
+    weaponModels_[d.id] = std::move(m);
+    return raw;
+}
+
+// The weapon mesh drawn at the socket is the ACTIVE inventory weapon's (no other weapon may be shown in its place).
+void World::syncShownWeapon() {
+    const Weapon& w = player_.pawn().weapon();
+    std::string id = w.def ? w.def->id : "IonBlaster";
+    if (id == shownWeapon_) return;
+    shownWeapon_ = id;
+    if (id == "IonBlaster") weaponAnim_.setModel(weaponModel_.valid() ? &weaponModel_ : nullptr);
+    else if (const assets::SkinnedModel* m = weaponModelFor(*w.def)) weaponAnim_.setModelGeneric(m, *w.def);
+    else weaponAnim_.setModel(nullptr);
+    weaponSeenShot_ = w.shotSerial; weaponSeenReload_ = w.reloadSerial;
+}
+
+std::vector<std::string> World::applyLoadout(const CharacterSelection* sel) {
+    Character& pc = player_.pawn();
+    const ChassisDef& d = pc.chassis();
+    std::vector<std::string> refused;
+    const bool custom = sel && sel->type == 0 && !sel->weapons.empty();
+    const std::vector<std::string>& names = custom ? sel->weapons : d.iconicWeapons;
+    std::vector<Weapon> robot;
+    for (const std::string& n : names) {
+        const WeaponDef* wd = findWeaponDef(n);
+        bool allowed = !custom || std::find(d.allowedOnFoot.begin(), d.allowedOnFoot.end(), n) != d.allowedOnFoot.end();
+        if (!wd || !allowed) {
+            refused.push_back(n);
+            LOG_ERROR("loadout: weapon %s %s for chassis %s - not equipped", n.c_str(), !wd ? "unknown" : "not allowed (TnDataProvider_Weapon restriction)", d.id.c_str());
+            continue;
+        }
+        robot.push_back(Weapon::fromDef(*wd));
+    }
+    std::vector<std::string> veh = (sel && sel->type == 0 && !sel->vehicleWeapons.empty()) ? sel->vehicleWeapons : d.iconicVehicleWeapons;
+    pc.setLoadout(robot, veh);
+    // TnCharacterApplier.ApplyAbilities: CharacterData.Abilities (custom selection, else the iconic preset).
+    pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
+    syncShownWeapon();
+    return refused;
+}
+
 void World::tickWeaponPresentation(float dt) {
+    if (player_.pawn().weaponChangeSerial() != seenWeaponChange_) { seenWeaponChange_ = player_.pawn().weaponChangeSerial(); syncShownWeapon(); }
     const Weapon& w = player_.pawn().weapon();
     if (w.reloadSerial != weaponSeenReload_) { weaponSeenReload_ = w.reloadSerial; weaponAnim_.play(WeaponMesh::Event::Reload); }
     if (w.shotSerial != weaponSeenShot_)     { weaponSeenShot_ = w.shotSerial;     weaponAnim_.play(WeaponMesh::Event::Fire); }
@@ -849,6 +919,7 @@ void World::tick(float dt) {
         cues_.tick(dt);
     }
 
+    tickHazards(dt);
     if (player_.pawn().position().y < killZ_ && !localPlayerDead()) {
         // Below KillZ: FellOutOfWorld -> Died with no killer (an environmental death in a match).
         LOG_INFO("World: player fell out of world; %s", matchActive_ ? "killed (KillZ)" : "respawning");
@@ -867,7 +938,7 @@ void World::tick(float dt) {
 void World::startLocalMatch(const MatchSettings& s) {
     if (match_.starts().empty()) {
         std::string root = assetRoot();
-        match_.loadSpawnData(root + "/Maps/MP_IAC_Streets/gameplay.json");
+        match_.loadSpawnData(mapDir() + "gameplay.json");
     }
     match_.setChassisCheck([this](const std::string& id, std::string& err) {
         const ChassisAssets* a = chassisAssets(id);
@@ -900,7 +971,7 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     std::string map = url.substr(0, q);
     std::string lower = map;
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
-    if (lower.rfind("mp_iac_streets", 0) == 0) out.map = "MP_IAC_Streets"; else out.map = map;
+    out.map = World::canonicalMapName(map);
     std::map<std::string, std::string> opt;
     while (q != std::string::npos) {
         size_t next = url.find('?', q + 1);
@@ -927,7 +998,10 @@ void World::resetForNewLevel() {
 }
 
 bool World::launchMatch(const MatchLaunch& l) {
-    if (l.map != "MP_IAC_Streets" || !usingSlice_) { LOG_WARN("match: map %s is not loaded (only MP_IAC_Streets)", l.map.c_str()); return false; }
+    if (canonicalMapName(l.map) != mapName_ || !usingSlice_) {
+        LOG_WARN("match: map %s is not the loaded map (%s); the world loads one map per session", l.map.c_str(), mapName_.c_str());
+        return false;
+    }
     MatchMode mode = MatchMode::DM;
     bool known = false;
     for (MatchMode m : {MatchMode::DM, MatchMode::TDM, MatchMode::CTF, MatchMode::KOTH, MatchMode::EXT, MatchMode::DOM})
@@ -983,6 +1057,16 @@ HudGameState World::hudState() const {
     h.activeSegment = pc.health().activeSegment(); h.segmentCount = pc.health().segmentCount;
     h.clipAmmo = pc.weapon().ammo; h.reserveAmmo = pc.weapon().reserve;
     h.weaponName = pc.weapon().name;
+    h.weaponId = pc.weapon().def ? pc.weapon().def->provider : "IonBlaster";
+    h.weaponSimulated = pc.weapon().simulated();
+    h.weaponIcon = pc.weapon().def ? pc.weapon().def->killFeedIcon : "death_IonBlaster";
+    h.weaponSwitching = pc.switchingWeapon();
+    for (const Weapon& iw : pc.inventory()) h.inventory.push_back(iw.def ? iw.def->provider : "IonBlaster");
+    h.activeWeapon = pc.activeWeaponIndex();
+    h.vehicleWeapons = pc.vehicleWeapons();
+    h.loadoutRefused = loadoutRefused_;
+    for (const Character::AbilitySlot& a : pc.abilities_) h.abilities.push_back({a.id, a.implemented, a.cooldown, a.pendingCooldown});
+    h.dodging = pc.isDodging();
     h.damageTakenCount = damageTakenCount_;
     h.lastDamageFrom = lastDamageFrom_;
     if (damageTakenCount_ > 0) {
@@ -1103,10 +1187,11 @@ void World::tickMatch(float dt) {
                     {
                         const ChassisAssets* ca = chassisAssets(mp.chassis);
                         mp.specialty = mp.selection.type == 0 ? specialtyName(mp.selection.specialty)
-                                                              : (ca ? ca->def.defaultSpecialty : std::string());
+                                                              : (ca ? ca->def.iconicSpecialty : std::string());   // CharacterData.Specialty of the preset [CONF RE]
                         if (const SpecialtyDef* sd = specialtyDef(mp.specialty))
                             pc.setSpecialty(sd->id, sd->speedMultiplier, sd->segments, sd->overshield);
                         else pc.clearSpecialty();
+                        loadoutRefused_ = applyLoadout(&mp.selection);
                     }
                     core::Vec3 p = st.pos;
                     float gy; core::Vec3 gn;
@@ -1276,6 +1361,16 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
     } else {
         resolveModelTextures(a->robot);
         resolveModelTextures(a->vehicle);
+        if (!a->def.vehicle.hullFromPhysics) {
+            // Hull from the vehicle mesh bind-pose bounds (glTF x = UE forward, z = UE right) [PROV until the per-chassis
+            // physics assets are exported]; the Truck keeps its VH_Optimus_PHYSSYS box.
+            VehicleParams& V = a->def.vehicle;
+            const auto& lo = a->vehicle.boundsMin; const auto& hi = a->vehicle.boundsMax;
+            V.hullFront = hi.x; V.hullBack = -lo.x; V.hullHalfWidth = std::max(std::fabs(lo.z), std::fabs(hi.z));
+            V.hullBottom = lo.y; V.hullTop = hi.y; V.hullFromMesh = true;
+            LOG_INFO("chassis %s hull from mesh bounds: front %.2f back %.2f half-width %.2f bottom %.2f top %.2f", id.c_str(),
+                     V.hullFront, V.hullBack, V.hullHalfWidth, V.hullBottom, V.hullTop);
+        }
         if (!a->def.armGltf.empty() && assets::loadSkinnedGlb(ext + a->def.armGltf, a->arm)) {
             if (!a->def.armAnimGltf.empty()) assets::loadAnimationsByName(ext + a->def.armAnimGltf, a->arm);
             resolveModelTextures(a->arm);
@@ -1304,7 +1399,87 @@ bool World::applyChassisToLocalPawn(const std::string& id) {
     if (ws.valid) pc.setArmSocket(a->robot.nodeByName(ws.bone), ws.local);
     else pc.setArmSocket(-1, core::Mat4::identity());
     localChassis_ = id;
+    applyLoadout(nullptr);   // iconic preset WeaponTypes / VehicleWeapons
     return true;
+}
+
+std::string World::mapDir() const { return assetRoot() + "/Maps/" + mapName_ + "/"; }
+
+std::string World::canonicalMapName(const std::string& m) {
+    std::string base = m;
+    for (const char* suf : {"_BASE_m", "_Base_m", "_base_m", "_m"}) {
+        size_t n = std::char_traits<char>::length(suf);
+        if (base.size() > n && base.compare(base.size() - n, n, suf) == 0) { base.resize(base.size() - n); break; }
+    }
+    static const char* kMaps[] = {"MP_IAC_Streets", "MP_UND_Gorge", "MP_ESC_BrokenHope", "MP_ESC_Remnant", "MP_IAC_Berth",
+                                  "MP_IAC_Rust", "MP_IAC_Seed", "MP_KON_Molten", "MP_ORB_Debris", "MP_UND_Complex"};
+    auto lower = [](std::string x) { for (char& c : x) c = (char)std::tolower((unsigned char)c); return x; };
+    for (const char* k : kMaps) if (lower(base) == lower(k)) return k;
+    return base;
+}
+
+void World::loadHazards() {
+    hazards_.clear();
+    const char* mr = std::getenv("WFC_MANIFESTS");
+    std::string path = std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/maps/" + mapName_ + "/hazard_volumes.json";
+    std::string txt;
+    assets::Json j;
+    if (!readTextFile(path, txt) || !assets::Json::parse(txt, j)) { LOG_INFO("map %s: no hazard volumes (%s)", mapName_.c_str(), path.c_str()); return; }
+    const assets::Json& list = j["hazard_volumes"];
+    for (size_t i = 0; i < list.size(); ++i) {
+        const assets::Json& v = list[i];
+        HazardVolume h;
+        h.actor = v["actor"].asString();
+        h.damageType = v["DamageType"].asString();
+        h.damagePerSec = v["DamagePerSec"].asFloat(0.0f);
+        h.painInterval = v["PainInterval"].isNumber() ? v["PainInterval"].asFloat() : 1.0f;
+        h.entryPain = v["bEntryPain"].type == assets::Json::Type::Bool ? v["bEntryPain"].asBool() : true;
+        const assets::Json& polys = v["polygons_gltf"];
+        core::Vec3 c{0, 0, 0}; int nv = 0;
+        for (size_t p = 0; p < polys.size(); ++p)
+            for (size_t k = 0; k < polys[p].size(); ++k) { c = c + core::Vec3{polys[p][k][0].asFloat(), polys[p][k][1].asFloat(), polys[p][k][2].asFloat()}; ++nv; }
+        if (nv == 0 || h.damagePerSec <= 0.0f) continue;
+        c = c * (1.0f / nv);
+        h.centroid = c;
+        for (size_t p = 0; p < polys.size(); ++p) {
+            if (polys[p].size() < 3) continue;
+            auto P = [&](size_t k) { return core::Vec3{polys[p][k][0].asFloat(), polys[p][k][1].asFloat(), polys[p][k][2].asFloat()}; };
+            core::Vec3 n = core::normalize(core::cross(P(1) - P(0), P(2) - P(0)));
+            float w = core::dot(n, P(0));
+            if (core::dot(n, c) > w) { n = n * -1.0f; w = -w; }   // outward: the centroid is inside
+            h.planes.push_back(HazardVolume::Plane{n, w});
+        }
+        hazards_.push_back(std::move(h));
+    }
+    LOG_INFO("map %s: %zu hazard volumes", mapName_.c_str(), hazards_.size());
+}
+
+int World::hazardAt(const core::Vec3& p) const {
+    for (size_t i = 0; i < hazards_.size(); ++i) {
+        bool in = !hazards_[i].planes.empty();
+        for (const HazardVolume::Plane& pl : hazards_[i].planes) if (core::dot(pl.n, p) > pl.w) { in = false; break; }
+        if (in) return (int)i;
+    }
+    return -1;
+}
+
+void World::tickHazards(float dt) {
+    if (hazards_.empty()) return;
+    Character& pc = player_.pawn();
+    if (localPlayerDead()) { localHazard_ = -1; return; }
+    int h = hazardAt(pc.actorLocation());
+    if (h < 0) { localHazard_ = -1; return; }
+    const HazardVolume& v = hazards_[(size_t)h];
+    bool entered = h != localHazard_;
+    localHazard_ = h;
+    if (entered) localPainTimer_ = v.entryPain ? 0.0f : v.painInterval;
+    else localPainTimer_ -= dt;
+    if (localPainTimer_ > 0.0f) return;
+    localPainTimer_ += v.painInterval;
+    float dmg = v.damagePerSec * v.painInterval;
+    LOG_INFO("hazard %s: %.0f damage (%s)", v.actor.c_str(), dmg, v.damageType.c_str());
+    if (matchActive_) applyMatchDamage(localPlayer_, -1, dmg, true, v.damageType);   // environment: no instigator
+    else if (pc.health().applyDamage(dmg) > 0.0f && pc.health().isDead()) respawnPlayer();
 }
 
 } // namespace game

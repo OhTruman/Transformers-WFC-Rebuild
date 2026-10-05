@@ -37,8 +37,8 @@ void Destructible::tick(World& world, float dt) {
     // HmTouchDestructionTrigger: the player pawn's collision cylinder entering the piece box.
     const Character& c = world.player().pawn();
     core::Vec3 a = c.actorLocation();
-    float r = c.moveForm() == Form::Robot ? core::config::kPawnRadius : 3.34f;
-    float h = c.moveForm() == Form::Robot ? core::config::kPawnHalfHeight : 1.22f;
+    float r = c.cylinderRadius(c.moveForm());
+    float h = c.cylinderHalfHeight(c.moveForm());
     core::Vec3 lo = boxMin(), hi = boxMax();
     if (a.x + r < lo.x || a.x - r > hi.x || a.z + r < lo.z || a.z - r > hi.z || a.y + h < lo.y || a.y - h > hi.y) return;
     transition(world, 1);

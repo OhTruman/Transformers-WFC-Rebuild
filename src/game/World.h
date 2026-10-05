@@ -46,7 +46,18 @@ struct HudGameState {
     float health = 0, healthMax = 0, overshield = 0, normalizedOverShield = 0;
     int activeSegment = 0, segmentCount = 4;
     int clipAmmo = 0, reserveAmmo = 0;
-    std::string weaponName;                      // current weapon (only the Ion Blaster exists in the rebuild)
+    std::string weaponName;                      // current weapon ItemName
+    std::string weaponId, weaponIcon;            // provider UniqueId; Hud_GFX kill-feed / weapon icon (death_<Weapon>)
+    bool weaponSimulated = true;                 // false: projectile / melee / grenade weapon equipped but not simulated [PARTIAL]
+    bool weaponSwitching = false;
+    std::vector<std::string> inventory;          // robot weapons (provider ids), CharacterData.WeaponTypes order
+    int activeWeapon = 0;
+    std::vector<std::string> vehicleWeapons;     // CharacterData.VehicleWeapons
+    std::vector<std::string> loadoutRefused;     // selected weapons not equipped (unknown / chassis restriction)
+    // Ability0 (Shift) / Ability1 (Ctrl): id, simulated by the rebuild, cooldown remaining (s), cooldown pending (in use).
+    struct Ability { std::string id; bool implemented; float cooldown; bool active; };
+    std::vector<Ability> abilities;
+    bool dodging = false;
     // Damage taken (TakeDamage -> HUD damage direction): increments per damaging hit; the instigator location at that hit
     // (world) and its bearing relative to the view (radians, 0 = ahead, + = right). Presentation belongs to Hud_GFX.
     int damageTakenCount = 0;
@@ -154,6 +165,23 @@ public:
     const std::vector<DestructibleEvent>& destructibleEvents() const { return destructibleEvents_; }
     void raiseDestructibleEvent(const DestructibleEvent& e) { destructibleEvents_.push_back(e); }
     bool usingSlice() const { return usingSlice_; }
+    // The multiplayer map this world loads (AssetTools VerticalSlice/Maps/<Map>: world.glb, collision_pawn / _weapon.glb,
+    // gameplay.json, physics.json, navigation.json - one contract for every processed MP map). Set before load().
+    void setMap(const std::string& m) { mapName_ = m; }
+    const std::string& mapName() const { return mapName_; }
+    float killZ() const { return killZ_; }   // persistent level WorldInfo.KillZ (m)
+    // Pain-causing PhysicsVolumes of the map (AssetTools maps/<Map>/hazard_volumes.json): convex brush planes, damage
+    // per second and damage type. Stock UE3 PhysicsVolume pain: on entry (bEntryPain) and every PainInterval while
+    // touching, DamagePerSec * PainInterval [HIGH: stock defaults PainInterval 1, bEntryPain true].
+    struct HazardVolume { std::string actor, damageType; float damagePerSec = 0, painInterval = 1.0f; bool entryPain = true;
+                          core::Vec3 centroid{0, 0, 0};
+                          struct Plane { core::Vec3 n; float w; };
+                          std::vector<Plane> planes; };   // outward normal n, offset w (inside: n.p <= w)
+    const std::vector<HazardVolume>& hazardVolumes() const { return hazards_; }
+    int hazardAt(const core::Vec3& p) const;
+    std::string mapDir() const;
+    // "MP_UND_Gorge_BASE_m" / "mp_und_gorge" -> "MP_UND_Gorge" when that map's export exists; else the input.
+    static std::string canonicalMapName(const std::string& m);
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).
     const CollisionWorld* collision() const { return collision_.valid() ? &collision_ : nullptr; }
@@ -200,6 +228,10 @@ public:
     const ChassisAssets* chassisAssets(const std::string& id);
     // TnPawn.ApplyTransformer for the local pawn: models, rigs, collision, stats, weapon socket. False = unavailable.
     bool applyChassisToLocalPawn(const std::string& id);
+    // TnCharacterApplier.ApplyWeapons for the local pawn: CharacterData.WeaponTypes (custom selection, validated against the
+    // chassis' TnDataProvider_Weapon restrictions) or the chassis' iconic preset; VehicleWeapons alike. Returns the
+    // weapons that were refused (unknown provider / not allowed on this chassis).
+    std::vector<std::string> applyLoadout(const CharacterSelection* sel);
     const std::string& localChassis() const { return localChassis_; }
     // Authored collision actor(s) (collision_pawn.glb node: BlockingVolume_*, BSP, prop actor names) whose
     // bounds contain p (expanded by pad metres): for tracing blocked / incorrect areas back to authored objects.
@@ -251,7 +283,19 @@ private:
     bool usingSlice_ = false;
 
     std::map<std::string, std::unique_ptr<ChassisAssets>> chassisCache_;
+    std::map<std::string, std::unique_ptr<assets::SkinnedModel>> weaponModels_;   // raw umodel weapon meshes + AnimSets
+    std::string shownWeapon_ = "IonBlaster";
+    std::vector<std::string> loadoutRefused_;
+    unsigned seenWeaponChange_ = 0;
+    const assets::SkinnedModel* weaponModelFor(const WeaponDef& d);
+    void syncShownWeapon();
     std::string localChassis_;
+    std::string mapName_ = "MP_IAC_Streets";
+    std::vector<HazardVolume> hazards_;
+    int localHazard_ = -1;
+    float localPainTimer_ = 0.0f;
+    void loadHazards();
+    void tickHazards(float dt);
     render::IRenderer* renderer_ = nullptr;
     std::map<std::string, render::TextureHandle> texCache_;
     int texLoaded_ = 0, texFailed_ = 0;

@@ -33,10 +33,13 @@ public:
     void respawnReset() {
         trans_ = Transition::None; transClip_ = -1; partnerVisible_ = false; partnerClip_ = -1;
         veh_ = VehicleState{}; restoreTimer_ = -1.0f; lastDriving_ = false; shiftRemain_ = 0.0f;
-        velocity_ = {0, 0, 0}; onGround_ = true; rammedRemain_ = 0.0f;
+        velocity_ = {0, 0, 0}; onGround_ = true; rammedRemain_ = 0.0f; dodgeRemain_ = 0.0f; landedSinceDodge_ = true;
+        for (AbilitySlot& a : abilities_) { a.cooldown = 0.0f; a.spam = 0.0f; a.pendingCooldown = false; }
         health_ = Health{}; overShield_ = false;
         if (!specHealth_.empty()) health_.initialize(specHealth_, specOvershield_);   // ApplySpecialty: Health_<Class>
-        weapon_ = Weapon{}; speedMult_ = 1.0f; fineAiming_ = false;
+        inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;   // TnCharacterApplier.ApplyWeapons
+        activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1;
+        speedMult_ = 1.0f; fineAiming_ = false;
         form_ = Form::Robot == form_ ? form_ : Form::Robot; setForm(Form::Robot); animTime_ = 0.0f; clip_ = -1;
     }
     Form form() const { return form_; }      // displayed form (mesh handoff happens mid-fold)
@@ -141,6 +144,31 @@ public:
     void addVelocityInVehicle(const core::Vec3& v) { velocity_ = velocity_ + v * 0.5f; }
     float rammedRemain() const { return rammedRemain_; }
     float rammedRemain_ = 0.0f;
+    // Dodging (TnAcrobaticsManager state 5): PHYS_Flying at DodgeSpeed for DodgeTime; CanDodge = landed since the last dodge.
+    float dodgeRemain_ = 0.0f;
+    bool landedSinceDodge_ = true;
+    bool isDodging() const { return dodgeRemain_ > 0.0f; }
+    // Abilities (TnAbilityManager): CharacterData.Abilities[0] on Ability0 (Shift), [1] on Ability1 (Ctrl) [CONF bindings].
+    // Versus: GetCurrentSkillDataIndex 0 (TnMultiplayerGame) -> Cooldown[0]; no resource (GetResourceRequired 0 unless
+    // index 1) [CONF]. SpamPreventionTime 1.0. Only Dodge is simulated; others are reported unimplemented [PARTIAL].
+    struct AbilitySlot { std::string id; bool implemented = false; float cooldownTime = 0.0f, cooldown = 0.0f, spam = 0.0f; bool pendingCooldown = false; };
+    AbilitySlot abilities_[2];
+    void setAbilities(const std::vector<std::string>& ids) {
+        for (int i = 0; i < 2; ++i) {
+            AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
+            a.implemented = a.id == "Dodge";
+            a.cooldownTime = a.id == "Dodge" ? 2.0f : 0.0f;   // Default__TnAbilityDodge Cooldown [2.0, 0.5] -> index 0
+            abilities_[i] = a;
+        }
+    }
+    void tickAbilities(float dt) {
+        for (AbilitySlot& a : abilities_) {
+            a.spam = std::max(0.0f, a.spam - dt);
+            // TnAbilityManager.Tick: the cooldown starts once CanStartCooldown (Dodge: no longer dodging).
+            if (a.pendingCooldown && !(a.id == "Dodge" && isDodging())) { a.pendingCooldown = false; a.cooldown = a.cooldownTime; }
+            if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt);
+        }
+    }
     float rammedBaseY_ = 0.0f;
     bool handShrunk() const { return handShrunk_; }
     // TnWeaponSpreadModifier (robot form) [CONF RE d50e2a9]: AirborneMultiplier 2.0, ramps up over 0.25 s while
@@ -155,7 +183,7 @@ public:
     // HmWeapon.GetSpread for the robot weapon: Data.Spread (0 for the Ion Blaster) + CurrentSpread x
     // CurrentAirborneMultiplier x (fine aim ? FineAimSpreadModifier 0.5 : 1) [CONF RE d50e2a9].
     float effectiveSpread() const {
-        return weapon_.spread * airSpreadMult_ * (fineAiming_ ? core::config::kFineAimSpreadMult : 1.0f);
+        return weapon().spread * airSpreadMult_ * (fineAiming_ ? weapon().fineAimSpreadMult : 1.0f);
     }
     float airSpreadMult_ = 1.0f;
     // TnOverShieldPickup granted (amount/duration are native and not recovered: state flag only [PARTIAL]).
@@ -214,8 +242,35 @@ public:
 
     Health& health() { return health_; }
     const Health& health() const { return health_; }
-    Weapon& weapon() { return weapon_; }
-    const Weapon& weapon() const { return weapon_; }
+    // Robot inventory: CharacterData.WeaponTypes in order, the first one active (CreateWeapons ActivateFirstWeapon) [CONF].
+    Weapon& weapon() { return inventory_[(size_t)activeWeapon_]; }
+    const Weapon& weapon() const { return inventory_[(size_t)activeWeapon_]; }
+    const std::vector<Weapon>& inventory() const { return inventory_; }
+    int activeWeaponIndex() const { return activeWeapon_; }
+    // The loadout every spawn starts from; vehicle-form weapons are kept for the HUD / future vehicle firing.
+    void setLoadout(const std::vector<Weapon>& robot, const std::vector<std::string>& vehicleWeapons) {
+        loadout_ = robot; vehicleWeapons_ = vehicleWeapons;
+        inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;
+        activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1;
+    }
+    const std::vector<std::string>& vehicleWeapons() const { return vehicleWeapons_; }
+    // Swap Weapons (mouse wheel / PgUp / PgDn): put the current weapon down (PutDownTime), then equip the next one
+    // (EquipTime); no firing in between [HIGH: HmWeapon PutDown / Equip states, WEPDATA times CONF].
+    void requestWeaponSwitch(int dir) {
+        int n = (int)inventory_.size();
+        if (n < 2 || switchTo_ >= 0 || weapon().reloading()) return;
+        switchTo_ = ((activeWeapon_ + dir) % n + n) % n;
+        switchRemain_ = weapon().putDownTime + inventory_[(size_t)switchTo_].equipTime;
+        switchSwapAt_ = inventory_[(size_t)switchTo_].equipTime;
+    }
+    void tickWeaponSwitch(float dt) {
+        if (switchTo_ < 0) return;
+        switchRemain_ -= dt;
+        if (switchRemain_ <= switchSwapAt_ && activeWeapon_ != switchTo_) { activeWeapon_ = switchTo_; ++weaponChangeSerial_; }
+        if (switchRemain_ <= 0.0f) { switchRemain_ = 0.0f; switchTo_ = -1; }
+    }
+    bool switchingWeapon() const { return switchTo_ >= 0; }
+    unsigned weaponChangeSerial() const { return weaponChangeSerial_; }
     Ability& ability() { return ability_; }
 
     const char* animName() const { return animName_.c_str(); }
@@ -235,6 +290,10 @@ public:
     struct VehicleState {
         bool driving = false;         // TnCarForm state Driving (normal boost, wheels)
         bool tankBoost = false;       // TnHoverTankSimulation boosting (tank form)
+        bool flying = false;          // TnPlaneForm state Flying (jet)
+        float rollRemain = 0.0f;      // car barrel roll (JumpTimeRemaining) / jet roll time
+        float rollDir = 0.0f;
+        float leanP = 0.0f, leanY = 0.0f, leanR = 0.0f;   // TnPlaneSimulation RLerp'd extra rotation (rad)
         float rideHeight = 0.0f;      // diagnostics: COM height above the surface below it (m)
         float driftRemain = 0.0f;     // Hovering.BeginState Drift(): steering authority ramp
         float dashRemain = 0.0f;      // hover dash time remaining
@@ -280,7 +339,11 @@ private:
     core::Vec3 boxSize_{1, 2, 1};
     core::Vec3 color_{1, 1, 1};
     Health health_;
-    Weapon weapon_;
+    std::vector<Weapon> loadout_, inventory_{Weapon{}};
+    std::vector<std::string> vehicleWeapons_;
+    int activeWeapon_ = 0, switchTo_ = -1;
+    float switchRemain_ = 0.0f, switchSwapAt_ = 0.0f;
+    unsigned weaponChangeSerial_ = 0;
     Ability ability_;
 
     const ChassisDef* chassis_ = nullptr;

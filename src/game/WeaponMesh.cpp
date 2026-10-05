@@ -1,5 +1,7 @@
 #include "game/WeaponMesh.h"
 #include "core/Log.h"
+#include "game/WeaponDef.h"
+#include "game/ChassisDef.h"
 
 #include <cmath>
 
@@ -47,6 +49,31 @@ void WeaponMesh::setModel(const assets::SkinnedModel* m) {
     tick(0.0f, none);
 }
 
+void WeaponMesh::setModelGeneric(const assets::SkinnedModel* m, const WeaponDef& d) {
+    model_ = m;
+    sockets_.clear();
+    if (!valid()) return;
+    auto clip = [&](const char* n) { return (n && *n) ? m->clipByName(n) : -1; };
+    clipFire_ = clip(d.animFire);
+    clipReload_ = clip(d.animReload);
+    // IdleAnimation names an anim group ("AssaultRifle_IdleGroup"); its sequence is <prefix>_Idle.
+    clipIdle_ = clip(d.animIdle);
+    if (clipIdle_ < 0 && d.animIdle && *d.animIdle) {
+        std::string g = d.animIdle;
+        size_t p = g.rfind("Group");
+        if (p != std::string::npos) clipIdle_ = m->clipByName(g.substr(0, p));
+    }
+    if (clipIdle_ < 0) clipIdle_ = m->clipByName(std::string(d.id) + "_Idle");
+    core::Mat4 rel = ueSocketToGltf(d.muzzleLocUE, d.muzzleRotUE);
+    sockets_.push_back({"MuzzleFlash", m->nodeByName(d.muzzleBone), rel});
+    LOG_INFO("weapon mesh %s: %zu clips idle=%d fire=%d reload=%d muzzleNode=%d", d.id, m->clips.size(), clipIdle_, clipFire_,
+             clipReload_, sockets_[0].node);
+    clip_ = -1;
+    play(Event::Idle);
+    std::vector<WeaponNotify> none;
+    tick(0.0f, none);
+}
+
 void WeaponMesh::play(Event e) {
     int c = e == Event::Fire ? clipFire_ : (e == Event::Reload ? clipReload_ : clipIdle_);
     if (c < 0) c = clipIdle_;
@@ -61,7 +88,12 @@ const char* WeaponMesh::clipName() const {
 }
 
 void WeaponMesh::tick(float dt, std::vector<WeaponNotify>& fired) {
-    if (!valid() || clip_ < 0) return;
+    if (!valid()) return;
+    if (clip_ < 0) {                              // no idle sequence: hold the bind pose
+        assets::samplePose(*model_, -1, 0.0f, false, pose0_);
+        assets::skinPose(*model_, pose0_, globals_, pose_);
+        return;
+    }
     const assets::AnimClip& c = model_->clips[(size_t)clip_];
     // Notifies inside [t0, t0+dt) fire this step (a notify at 0 fires on the first step);
     // looping clips wrap around.

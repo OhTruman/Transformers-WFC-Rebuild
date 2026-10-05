@@ -153,7 +153,9 @@ bool MapState::load(const std::string& path, MatchMode mode) {
     const Dome domes[] = {{"StaticInterpActor_15810", 12027.0f, -51121.1015625f, -70664.140625f},
                           {"StaticInterpActor_7381", 12027.0f, -49089.1015625f, -69880.140625f},
                           {"StaticInterpActor_8114", 12031.0f, -47345.1015625f, -69312.140625f}};
+    const bool streets = path.find("MP_IAC_Streets") != std::string::npos;   // the domes are Streets' ART-level movers
     for (const Dome& d : domes) {
+        if (!streets) break;
         MapMover m;
         m.actor = d.actor; m.mesh = "ENV_IAC_Deco_1_p.StaticMesh.DecoSphereHalf01_STAT";
         m.kind = MapMover::Kind::Rotating;

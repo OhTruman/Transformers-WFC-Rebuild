@@ -1,4 +1,5 @@
 #include "game/PlayerController.h"
+#include "core/Log.h"
 #include "game/Character.h"
 #include "game/World.h"
 #include "game/Collision.h"
@@ -50,7 +51,11 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // control form switches at transform start (see Character::moveForm).
     bool transforming = pawn_ && pawn_->isTransforming();
     bool vehicleForm = pawn_ && pawn_->moveForm() == Form::Vehicle;
-    bool driving = vehicleForm && pawn_->vehicleState().driving;
+    const VehicleFormType vform = pawn_ ? pawn_->vehicleParams().form : VehicleFormType::Truck;
+    const bool jet = vehicleForm && vform == VehicleFormType::Jet;
+    // Jets keep the camera mouse-driven in both modes (the plane turns toward the view rotation); "driving" here means
+    // the wheeled boost camera of cars / trucks.
+    bool driving = vehicleForm && !jet && pawn_->vehicleState().driving;
 
     // Look input. Fine aim halves the look speed (OverTheShoulder TnOrbitRotationCameraBehavior:
     // FineAim 25/12.5 vs default 50/25) [CONF ratio]. While Driving the look X axis is the steering
@@ -69,6 +74,12 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     if (vehicleForm) {
         pMin = driving ? cfg::kDriveCamPitchMin : cfg::kHoverCamPitchMin;
         pMax = driving ? cfg::kDriveCamPitchMax : cfg::kHoverCamPitchMax;
+        if (jet) {
+            // HoverPlane_<Jet>_STRATEGY TnOrbitRotationCameraBehavior PitchRange -45..45; FlyingPlane_<Jet>_STRATEGY
+            // TnFlyingFollowCameraBehavior PitchRange -80..80 [CONF authored CAM_Flying_Strategies_p].
+            float r = pawn_->vehicleState().flying ? 1.3962634f : 0.7853982f;
+            pMin = -r; pMax = r;
+        }
     }
     camPitch_ = core::clampf(camPitch_, pMin, pMax);
     // Boost steering input = TnPlayerInput.GetNormalizedTurn() = aTurn (XboxTypeS_RightX) after HmPlayerInput's
@@ -88,6 +99,19 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     if (std::fabs(steerIn) < 1e-4f) steerIn = steerSmoothed_;
     if (const char* s = std::getenv("WFC_STEERSTICK")) steerIn = (float)std::atof(s);   // test: right-stick X after deadzone
     intent_.steer = driving ? steerIn : 0.0f;
+    // Jet flight lean inputs: GetNormalizedTurn / GetNormalizedLookUp (PlayerInPlaneForm.SetLocalInputs) [CONF]; the PC
+    // mouse supplies them through the same rate translation as boost steering [PROV].
+    {
+        float mouseRateY = dt > 0.0f ? -in.mouseDY / dt : 0.0f;
+        float stickY = core::clampf(mouseRateY / cfg::kDriveMouseFullRate, -1.0f, 1.0f);
+        lookUpSmoothed_ += (stickY - lookUpSmoothed_) * (1.0f - std::exp(-dt / 0.05f));
+        float lookIn = lookUpSmoothed_;
+        if (in.padConnected && std::fabs(in.padRY) > 0.25f) lookIn = core::clampf(in.padRY, -1.0f, 1.0f);
+        intent_.turnIn = jet ? steerIn : 0.0f;
+        intent_.lookUpIn = jet ? lookIn : 0.0f;
+    }
+    intent_.ascend = jet && in.isDown(Button::Ascend);
+    intent_.descend = jet && in.isDown(Button::Descend);
 
     // Movement axes from keys or left stick.
     float fwd = 0.0f, rgt = 0.0f;
@@ -109,7 +133,13 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // Edge latches persist until a simulation step consumes them [CONF RE input semantics], so a
     // press on a render frame that runs zero 60 Hz steps is not lost.
     if (in.wasPressed(Button::Jump)) wantJumpLatched_ = true;
-    if (in.wasPressed(Button::Dash)) wantDashLatched_ = true;
+    if (in.wasPressed(Button::Dash)) {
+        wantDashLatched_ = true;
+        // Tank special move "180": TnCamera.RecenterCamera, cooldown TimeBetween180s 1.2 s [CONF RE C2]; the hull follows
+        // the camera yaw. The recentre is applied as a half turn of the view [PROV: TnTurnAroundCameraBehavior timing].
+        if (vehicleForm && vform == VehicleFormType::Tank && tank180Cooldown_ <= 0.0f) { camYaw_ += 3.1415927f; tank180Cooldown_ = 1.2f; }
+    }
+    tank180Cooldown_ = std::max(0.0f, tank180Cooldown_ - dt);
 
     // Fine aim wants (robot): PC RightMouseButton = ToggleFineAim; pad LeftTrigger = FineAim |
     // OnRelease StopFineAim (hold) [CONF Xe-TransInput.ini]. Vehicle states ignore FineAim.
@@ -134,6 +164,11 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     bool reloadDown = in.isDown(Button::Reload);
     if (reloadDown) reloadHeld_ += dt;
     if (!reloadDown && prevReloadDown_ && reloadHeld_ < cfg::kReloadTapTime) wantReload_ = true;
+    if (!vehicleForm && in.wasPressed(Button::Dash)) wantAbility_ = 0;      // Ability0
+    if (!vehicleForm && in.wasPressed(Button::Ability1)) wantAbility_ = 1;  // Ability1
+    abilityStickFwd_ = intent_.moveForward; abilityStickRight_ = intent_.moveRight;
+    if (in.wasPressed(Button::NextWeapon)) wantSwitch_ = 1;
+    if (in.wasPressed(Button::PrevWeapon)) wantSwitch_ = -1;
     if (!reloadDown) reloadHeld_ = 0.0f;
     prevReloadDown_ = reloadDown;
 
@@ -142,6 +177,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // Hovering faces the controller rotation, which PlayerInVehicleForm.PlayerMove sets to the CAMERA
     // rotation (after the strategy's orbit smoother) [CONF bytecode]; the robot faces the aim.
     intent_.faceYaw = vehicleForm ? viewYaw_ : camYaw_;
+    intent_.viewPitch = viewPitch_;
 }
 
 // Camera strategies (HmCameraStrategySet Truck_Optimus_CAMSET): OverTheShoulder for the robot (and
@@ -151,13 +187,16 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
     if (!pawn_) return;
     bool vehicleForm = pawn_->moveForm() == Form::Vehicle;
     const Character::VehicleState& vs = pawn_->vehicleState();
-    bool driving = vehicleForm && vs.driving;
+    const bool jet = vehicleForm && pawn_->vehicleParams().form == VehicleFormType::Jet;
+    bool driving = vehicleForm && !jet && vs.driving;
     bool nitro = driving && vs.nitroRemain > 0.0f;
     int want = !vehicleForm ? 0 : (driving ? 2 : 1);
 
-    // Strategy targets [CONF strategy data; see Config.h].
+    // Strategy targets [CONF strategy data; see Config.h]. The robot anchor sits Offset Z 200 UU above the actor
+    // (cylinder centre) of this chassis.
     float anchor = cfg::kCamHeight - cfg::kPawnHalfHeight, dist = cfg::kCamDistance;
     if (want == 1) { anchor = cfg::kHoverCamAnchor; dist = cfg::kHoverCamDist; }
+    if (jet) { anchor = 1.5f; dist = 9.0f; }   // HoverPlane / FlyingPlane: anchor Offset Z 150, LocationOffset X -900 [CONF]
     if (want == 2) {
         // TnLocationOffsetCameraBehavior: TnPCS_Boosting (nitro) orbit 650, in 0.5 s / out 2.0 s.
         float rate = nitro ? 1.0f / cfg::kNitroCamDistIn : -1.0f / cfg::kNitroCamDistOut;
@@ -204,7 +243,7 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
     // FOV (TnFovCameraBehavior): first matching PCS row, HmC2Smoother with that row's SmoothTime.
     float fovT = cfg::kCamFovXDeg, fovSm = cfg::kCamFovSmooth;
     if (want == 0 && fineAiming_) { fovT = cfg::kFineAimFovXDeg; fovSm = cfg::kFineAimFovSmooth; }
-    if (want == 1) fovT = cfg::kHoverCamFov;
+    if (want == 1) fovT = jet && vs.flying ? 100.0f : cfg::kHoverCamFov;   // FlyingPlane DefaultFOV 100 [CONF]
     if (want == 2) { fovT = nitro ? cfg::kNitroCamFov : cfg::kDriveCamFov; fovSm = nitro ? cfg::kNitroCamFovSmooth : cfg::kCamFovSmooth; }
     fovCur_ = fovS_.smooth(fovCur_, fovT, fovSm, dt);
 
@@ -474,9 +513,11 @@ void PlayerController::tickFineAim() {
 // Robot cylinder (radius 200, height 400 UU) standing on the floor at feet: five vertical columns (centre + 4 at 0.7 r)
 // from above MaxStepHeight to the cylinder top must be clear of the movement collision. [PROV: whether the native
 // FindSpotAwayFromPawns tests world geometry as well as pawns is PARTIAL in RE; the refusal itself is CONF]
-bool PlayerController::robotFitsAt(const CollisionWorld* col_, const core::Vec3& feet) {
+bool PlayerController::robotFitsAt(const CollisionWorld* col_, const core::Vec3& feet, const Character* pawn) {
     if (!col_) return true;
-    const float r = core::config::kPawnRadius * 0.7f, top = 2.0f * core::config::kPawnHalfHeight;
+    // Robot cylinder of the pawn's chassis (ROBODEF CollisionRadius / Height).
+    const float r = (pawn ? pawn->robotParams().radius : core::config::kPawnRadius) * 0.7f,
+                top = 2.0f * (pawn ? pawn->robotParams().halfHeight : core::config::kPawnHalfHeight);
     const core::Vec3 off[5] = {{0, 0, 0}, {r, 0, 0}, {-r, 0, 0}, {0, 0, r}, {0, 0, -r}};
     float t;
     // Centre column from above MaxStepHeight; offset columns from 1.8 m (0.4 + r x tan 45 deg): walkable slopes and stairs
@@ -489,20 +530,33 @@ bool PlayerController::robotFitsAt(const CollisionWorld* col_, const core::Vec3&
     return true;
 }
 
-bool PlayerController::findRobotSpot(const CollisionWorld* col_, const core::Vec3& feet, core::Vec3& out) {
-    if (robotFitsAt(col_, feet)) { out = feet; return true; }
+bool PlayerController::findRobotSpot(const CollisionWorld* col_, const core::Vec3& feet, core::Vec3& out, const Character* pawn) {
+    if (robotFitsAt(col_, feet, pawn)) { out = feet; return true; }
     if (!col_) return false;
+    // UWorld::FindSpot order [CONF RE TARGETED_PASS3 C6]: two passes at probe scale 1.0 then 0.5, pushing out along Z, then
+    // X, then Y (both directions), then the diagonals +-X+-Y+-Z at 0.5; the first clear spot wins. Extent = the target
+    // (robot) cylinder. A spot needs floor under it and no wall between it and the start.
+    const float r = pawn ? pawn->robotParams().radius : core::config::kPawnRadius;
+    const float hh = pawn ? pawn->robotParams().halfHeight : core::config::kPawnHalfHeight;
+    std::vector<core::Vec3> cand;
+    for (float sc : {1.0f, 0.5f}) {
+        cand.push_back({0, hh * sc, 0});
+        cand.push_back({r * sc, 0, 0}); cand.push_back({-r * sc, 0, 0});
+        cand.push_back({0, 0, r * sc}); cand.push_back({0, 0, -r * sc});
+    }
+    for (int dx : {-1, 1}) for (int dz : {-1, 1}) for (int dy : {1, -1}) cand.push_back({dx * r * 0.5f, dy * hh * 0.5f, dz * r * 0.5f});
     float t;
-    for (float d : {1.0f, 2.0f})
-        for (int k = 0; k < 8; ++k) {
-            float a = k * 0.7853982f;
-            core::Vec3 c = feet + core::Vec3{std::cos(a) * d, 0.0f, std::sin(a) * d};
-            float gy; core::Vec3 gn;
-            if (!col_->groundHeight(c.x, c.z, feet.y + 0.5f, 1.0f, gy, gn)) continue;          // needs floor
-            c.y = gy;
-            if (col_->segmentHit(feet + core::Vec3{0, 1.0f, 0}, c + core::Vec3{0, 1.0f, 0}, t)) continue;   // no wall between
-            if (robotFitsAt(col_, c)) { out = c; return true; }
-        }
+    for (const core::Vec3& o : cand) {
+        core::Vec3 c = feet + core::Vec3{o.x, 0.0f, o.z};
+        float gy; core::Vec3 gn;
+        // Floor under the spot: a lateral push may step up to 1.5 m; a vertical push rises at most its own extent (never
+        // onto a surface above the start, e.g. the top of a ceiling slab).
+        bool vert = o.x == 0.0f && o.z == 0.0f;
+        if (!col_->groundHeight(c.x, c.z, feet.y + (vert ? o.y : 0.5f), vert ? 0.0f : 1.0f, gy, gn)) continue;
+        c.y = gy;
+        if ((o.x != 0.0f || o.z != 0.0f) && col_->segmentHit(feet + core::Vec3{0, 1.0f, 0}, c + core::Vec3{0, 1.0f, 0}, t)) continue;
+        if (robotFitsAt(col_, c, pawn)) { out = c; return true; }
+    }
     return false;
 }
 
@@ -515,7 +569,7 @@ bool PlayerController::tryBeginTransform() {
         core::Vec3 feet = a;
         if (col_->groundHeight(a.x, a.z, a.y, 4.0f, gy, gn)) feet.y = gy; else feet.y = a.y - pawn_->meshToActor(Form::Vehicle);
         core::Vec3 spot;
-        if (!findRobotSpot(col_, feet, spot)) {
+        if (!findRobotSpot(col_, feet, spot, pawn_)) {
             ++cantTransformCount_;                       // NotifyCantTransform + TransformFailedSound; no transform
             return false;
         }
@@ -539,11 +593,33 @@ void PlayerController::applyToPawn(World& world, float dt) {
     step.wantJump = wantJumpLatched_;
     step.wantDash = wantDashLatched_;
     wantDashLatched_ = false;   // consumed by this step
+    // TnAbilityManager.TriggerAbility: spam prevention, availability (cooldown), LocalTriggerAbility, then the cooldown
+    // waits for CanStartCooldown. PlayerWalking.CanUseAbilities refuses while reloading or dodging [CONF].
+    step.dodgeDir = 0;
+    if (wantAbility_ >= 0) {
+        Character::AbilitySlot& a = pawn_->abilities_[wantAbility_];
+        bool can = pawn_->moveForm() == Form::Robot && !pawn_->isTransforming() && !pawn_->weapon().reloading() && !pawn_->isDodging();
+        if (can && !a.id.empty() && a.spam <= 0.0f && a.cooldown <= 0.0f && !a.pendingCooldown) {
+            if (a.implemented) {
+                if (a.id == "Dodge") {
+                    // TnPlayerInput.Dodge: |JoyUp| >= |JoyRight| ? (Up < 0 ? back : forward) : (Right < 0 ? left : right).
+                    float up = abilityStickFwd_, rt = abilityStickRight_;
+                    step.dodgeDir = std::fabs(up) >= std::fabs(rt) ? (up < 0.0f ? 4 : 3) : (rt < 0.0f ? 1 : 2);
+                }
+                a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_;
+            } else if (a.id != lastRefusedAbility_) {
+                LOG_WARN("ability %s (slot %d) is not implemented in the rebuild [PARTIAL]", a.id.c_str(), wantAbility_);
+                lastRefusedAbility_ = a.id;
+            }
+        }
+        wantAbility_ = -1;
+    }
+    pawn_->tickAbilities(dt);
     CharacterMovement::update(*pawn_, step, dt, world.collision());
     // InRobotForm.BeginState (authority): MoveToSafeLocation; still stuck -> ForceIntoForm(vehicle) [CONF B3].
     if (wasTransforming_ && !pawn_->isTransforming() && pawn_->form() == Form::Robot && col_) {
         core::Vec3 feet = pawn_->position(), spot;
-        if (!findRobotSpot(col_, feet, spot)) {
+        if (!findRobotSpot(col_, feet, spot, pawn_)) {
             float above = pawn_->meshToActor(Form::Robot) - pawn_->meshToActor(Form::Vehicle);
             pawn_->setForm(Form::Vehicle);
             pawn_->setPosition(pawn_->position() + core::Vec3{0, above, 0});
@@ -556,6 +632,9 @@ void PlayerController::applyToPawn(World& world, float dt) {
     pawn_->setAimPitch(camPitch_);   // drives the upper-body aim offset
     pawn_->tickSpreadModifier(dt);   // TnWeaponSpreadModifier airborne ramp
     wantJumpLatched_ = false;
+    // Swap Weapons (latched until a step consumes it), robot form only.
+    if (wantSwitch_ != 0) { if (pawn_->moveForm() == Form::Robot && !pawn_->isTransforming()) pawn_->requestWeaponSwitch(wantSwitch_); wantSwitch_ = 0; }
+    pawn_->tickWeaponSwitch(dt);
     pawn_->weapon().tick(dt);
     pawn_->ability().tick(dt);
 
@@ -575,7 +654,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
             if (!noRecoil) pawn_->notifyFired();   // per-shot skeletal recoil (TnRecoiler)
             // Aim through the crosshair: trace the camera ray to find the aimed point, then fire
             // from the pawn eye toward it (the camera is offset over the shoulder).
-            core::Vec3 eye = pawn_->actorLocation() + core::Vec3{0, core::config::kEyeHeight - core::config::kPawnHalfHeight, 0};
+            core::Vec3 eye = pawn_->actorLocation() + core::Vec3{0, pawn_->robotParams().eyeHeight, 0};   // BaseEyeHeight above the actor
             core::Vec3 camDir = core::forwardFromYawPitch(camYaw_, camPitch_);
             core::Vec3 camPos = cameraPos();
             float range = pawn_->weapon().rangeM;
@@ -584,7 +663,8 @@ void PlayerController::applyToPawn(World& world, float dt) {
             if (world.collision() && world.collision()->segmentHit(camPos, aimPoint, th))
                 aimPoint = camPos + camDir * (range * th);
             core::Vec3 dir = core::normalize(aimPoint - eye);
-            world.fireHitscan(eye, dir);
+            // NumShotsToFire traces per shot (shotgun pellets), each with its own spread sample [CONF data; HIGH: one ammo per shot].
+            for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) world.fireHitscan(eye, dir);
         } else if (w.ammo == 0 && w.canReload()) {
             w.beginReload();
         }

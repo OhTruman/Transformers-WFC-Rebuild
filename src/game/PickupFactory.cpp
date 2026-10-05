@@ -55,8 +55,8 @@ bool PickupFactory::tryGive(Character& c) {
 
 bool PickupFactory::overlaps(const Character& c) const {
     core::Vec3 a = c.actorLocation();
-    float pr = c.moveForm() == Form::Robot ? core::config::kPawnRadius : 3.34f;   // vehicle: CalculateCylinderBounds
-    float ph = c.moveForm() == Form::Robot ? core::config::kPawnHalfHeight : 1.22f;
+    float pr = c.cylinderRadius(c.moveForm());     // vehicle: CalculateCylinderBounds
+    float ph = c.cylinderHalfHeight(c.moveForm());
     float dx = a.x - pos_.x, dz = a.z - pos_.z;
     return std::sqrt(dx * dx + dz * dz) <= pr + kTouchRadius && std::fabs(a.y - pos_.y) <= ph + kTouchHalfHeight;
 }

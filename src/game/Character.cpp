@@ -394,7 +394,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
     // space like UE3's per-bone blend (torso stays on the aim over strafe hips / planted legs).
     // Standing still the legs also take the clip, locally, keeping the root's yaw.
     // [PROV] slot blend time.
-    bool reloading = weapon_.reloading();
+    bool reloading = weapon().reloading();
     if (reloading && !prevReloading_) reloadT_ = 0.0f;
     prevReloading_ = reloading;
     reloadT_ += dt;
@@ -716,6 +716,7 @@ core::Mat4 Character::meshMatrix(Form f) const {
 
 bool Character::weaponUsable() const {
     if (moveForm() != Form::Robot) return false;
+    if (switchTo_ >= 0) return false;              // putting down / equipping
     if (trans_ == Transition::None) return true;
     // Restored + EquipTime 0.2 s, and the gun is actually drawn on a displayed robot mesh this step:
     // no shot can originate from an invisible weapon.

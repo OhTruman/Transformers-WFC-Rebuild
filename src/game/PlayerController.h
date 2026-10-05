@@ -90,8 +90,8 @@ public:
     void setLookSettings(float sensitivity, bool invertRobot, bool invertVehicle) {
         lookScale_ = sensitivity > 0.0f ? sensitivity / 30.0f : 1.0f; invertY_[0] = invertRobot; invertY_[1] = invertVehicle;
     }
-    static bool robotFitsAt(const CollisionWorld* col, const core::Vec3& feet);
-    static bool findRobotSpot(const CollisionWorld* col, const core::Vec3& feet, core::Vec3& out);
+    static bool robotFitsAt(const CollisionWorld* col, const core::Vec3& feet, const Character* pawn = nullptr);
+    static bool findRobotSpot(const CollisionWorld* col, const core::Vec3& feet, core::Vec3& out, const Character* pawn = nullptr);
     // No pawn (PendingMatch: ShouldSpectateOnLogin): the controller views from its own location / rotation, which
     // GameInfo.Login took from FindPlayerStart [HIGH: stock UE3 Login + PlayerWaitingSpectating].
     void setSpectatorView(const core::Vec3& pos, float yaw) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; }
@@ -154,6 +154,11 @@ private:
     bool spectating_ = false;
     int cantTransformCount_ = 0, forcedVehicleCount_ = 0;
     float lookScale_ = 1.0f;
+    float lookUpSmoothed_ = 0.0f, tank180Cooldown_ = 0.0f;
+    int wantSwitch_ = 0;
+    int wantAbility_ = -1, abilityTriggers_ = 0;
+    float abilityStickFwd_ = 0.0f, abilityStickRight_ = 0.0f;
+    std::string lastRefusedAbility_;
     bool invertY_[2] = {false, false};
     bool wasTransforming_ = false;
 

@@ -75,6 +75,173 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 22 — SELECTED CHARACTERS, CLASSES, VEHICLE FORMS, WEAPONS, MULTI-MAP (2026-10-05, gameplay agent)
+Inputs:
+- AssetTools per-chassis export `VerticalSlice/Characters/<ChassisId>` (vs_roster_export) and `roster_package.json`;
+- RE TARGETED_PASS3 §A (selection → pawn), §C (car / tank / jet simulations, script bytecode), §C6 (FindSpot);
+- RE confirmations relayed this pass: specialty health, versus weapon data;
+- decompiled TransGame script; authored.db (read-only).
+
+### Selected character → pawn — CONFIRMED chain, no substitute body
+- **Chain:** CharacterSelection (Frontend fills it from GameFlow::SelectedCharacter) → team faction (FFA = 1) →
+  `resolveChassis` (CharacterData.ChassisTypes[faction], else the class preset) → `Match` chassis check →
+  `World::applyChassisToLocalPawn` (TnPawn.ApplyTransformer) → ApplySpecialty → ApplyWeapons.
+- **Chassis definition** (`ChassisDef`), read from `character.json` + roster collision:
+  - robot / vehicle glb with skeleton and clips;
+  - ArmBlueprint mesh + anims;
+  - WeaponSocket_Primary / _Secondary and the vehicle weapon socket, via UE → glTF socket math (verified against the
+    recovered Optimus matrix);
+  - ROBODEF speeds, accel, air control, terminal velocity;
+  - acrobatics JumpHeight;
+  - momentum blueprint;
+  - hover / car / suspension / wheel blueprints.
+- **WFC_CHASSISTEST 13 / 13:** all 27 multiplayer chassis load. "Truck" reproduces every hand-entered Optimus
+  constant. An unknown id fails.
+- **No fallback** (the original has none either: FindChassis failing gives a body-less pawn + log):
+  - an unavailable body refuses the spawn, retries every second, and sets `spawnError` (HUD) with a loud log;
+  - `drawnChassis` is the spawned body;
+  - `chassisFallback` is removed.
+- **Visually verified** (screenshots): Sideswipe, Starscream, Warpath and Soundwave skinned, holding their own weapons.
+- The direct boot and the harnesses use `Characters/Truck` (RB_OptimusWeaponArm_SKEL, the authored MP mesh).
+  `WFC_CHASSIS=<id>` boots or selects any chassis.
+
+### Class behaviour — CONFIRMED (script + authored; RE agrees)
+- ApplyCharacter → TnPlayerPawn.ApplySpecialty → TnSpecialty.Apply, when the game's ApplySpecialtyBuffs is true
+  (Default__TnGame true; only campaign / survival / campaign-lobby set it false):
+  - **SetSpeedMultiplier(SpeedMultiplier):** a per-source factor (TnPawn.UpdateSpeeds multiplies them; fine aim stacks);
+  - **InitializeSegmentedHealth(Health_<Class>):** replaces SharedHealth.
+
+| class | segments | HealthMax | overshield | speed × |
+|---|---|---|---|---|
+| Leader | 5 × 60 | 300 | 200 | 0.95 |
+| Scientist | 3 × 60 | 180 | 200 | 0.90 |
+| Scout | 4 × 50 | 200 | 200 | 1.00 |
+| Soldier | 6 × 55 | 330 | 200 | 0.90 |
+
+- **Correction:** versus does **not** use SharedHealth 550 (Passes 19–21 did). The custom specialty comes from the slot;
+  iconic characters use the chassis DefaultSpecialty [HIGH].
+- **Iconic specialty:** the iconic preset's CharacterData.Specialty (CONFIRMED RE via AssetTools), not the chassis
+  DefaultSpecialty (UI grouping only). Sideswipe = Soldier, Starscream = Soldier, Soundwave = Scientist, Optimus = Leader.
+
+### Abilities — framework CONFIRMED script; Dodge implemented, the rest PARTIAL
+- TnAbilityManager:
+  - CharacterData.Abilities[0] on Ability0 (Shift), [1] on Ability1 (Ctrl);
+  - SpamPreventionTime 1.0;
+  - versus skill-data index 0 (TnMultiplayerGame.GetSkillDataIndex) → Cooldown[0], and no resource cost;
+  - the cooldown starts at CanStartCooldown;
+  - PlayerWalking.CanUseAbilities refuses while reloading or dodging.
+- **Dodge** (TnAcrobaticsManager.Dodging):
+  - direction from TnPlayerInput.Dodge: |up| ≥ |right| → forward / back, else right / left;
+  - PHYS_Flying at Acrobatics DodgeSpeed 3000 for DodgeTime 0.5;
+  - EndState clamps to MaxAir / MaxGroundSpeed; a wall hit ends it early;
+  - CanDodge requires landing since the last dodge; cooldown 2.0 s.
+  - Test: Sideswipe dodges right at 30 m/s, 10.9 m in 0.6 s, refused while cooling.
+- Warcry, Whirlwind, Barrier, Cloaking, Shockwave, Hover … are listed per slot and reported unimplemented (log + HUD
+  `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].
+- **Correction:** the Pass 21f contract doc said robot Shift ran a dash. It did nothing until this pass.
+
+### Vehicle forms — CONFIRMED script (RE §C), rigid-body details PROVISIONAL
+- **Car** (Car–Car7): the same TnHoverCarSimulation as the truck.
+  - Blueprints: HoverCar_Physics (accel 4000, mount radius 100, dash 0.5 s @ 3000); HoverCar_Supension (K 8000,
+    rest 200, D 4000); Car_Physics (mass 1500, 4 wheels from TnWheelPhysicsBlueprint LocalPosition / friction).
+  - Hover dash along the **dominant stick axis** (TnCarForm.Hovering.DoDash).
+  - **Barrel roll:** Shift while boosting → Roll(): v += yawFrame(0, dir·1200, 1000 − vz); RollDuration 0.7, cooldown
+    2.0. A full turn completes in VEHTEST.
+  - The roll rate (one turn per RollDuration) stands in for the unrecovered PhysX max angular velocity [PROV].
+- **Tank** (TnHoverTankSimulation):
+  - suspension 4 rays, radius 250, K 20000, D 6000;
+  - strafe servo in the camera-yaw frame, only when stable;
+  - boost cap 2500 with input forced forward; release → drift 0.5 s; jump every 0.5 s;
+  - pitch / roll corrected unless stable on the ground;
+  - Shift "180" = view half-turn, cooldown 1.2 s [PROV: TnTurnAroundCameraBehavior timing].
+  - Cannon recoil (−750 local X on fire) waits for vehicle weapons [PARTIAL].
+- **Jet** (TnPlaneForm Hovering / Flying), gravity cancelled in both modes:
+  - **Hover:** servo in the full view frame (mask 1,1,1), accel 2500 × max(drift², |stick|), cap 1500. Ascend / Descend
+    (C / V, the shipped binding) → Dash ±Z at 1000. Roll at |stickX| ≥ 0.5, 0.6 s @ 3000.
+  - **Flight:** boost held → always thrust along the view (4000 / 3000), quadratic lateral drag (DragCoefficient 600).
+    Lean = RLerp((−pitch²·27, yaw²·16, yaw²·77)°, 0.1), with the pitch term fading 45 → 60°. Roll 0.8 s. Release, or
+    a hit above 3000, returns to hover.
+  - The plane rigid-body mass in the drag formula is unknown (100 used) [PROV]. The motion lean of hover is omitted
+    [PARTIAL].
+  - **Camera:** HoverPlane ±45° / 9 m / FOV 80; FlyingPlane ±80° / FOV 100 [CONF authored]. Follow-camera behaviour
+    [PROV].
+- **Hulls:** each chassis' VH_*_PHYSSYS convex hull (BodySetup ConvexElems bounds, C_Reference_XR) from authored data
+  [CONF] (VehicleHullTable.inc). Element 0 of VH_Optimus_PHYSSYS reproduces the Pass 17 hull exactly.
+- **ChassisOffset:** unset → 0 (no class default authored). The loader first defaulted it to Optimus's 15, which lifted
+  the COM of Soundwave and others wrongly.
+- **VEHTEST forms:**
+  - car rest at the spring L_eq;
+  - car dash right 30 m/s;
+  - car barrel roll 180° max roll, landing level;
+  - tank hover 15 / boost 25 with strafe input ignored / drift after release;
+  - jet holds altitude, ascends at 10 m/s, flies 40 m/s along the view, releases to hover.
+- **Truck numbers unchanged** (rest 1.2872 m, steering, nitro, ramp sweep, boost continuity).
+
+### Transform clearance — UWorld::FindSpot order (RE §C6, CONFIRMED native)
+- Robot-extent overlap test against world geometry.
+- Depenetration candidates: Z, then X, then Y at 1.0 extent, then 0.5; then the ±X±Y±Z diagonals at 0.5. The first
+  clear spot wins; refuse only when none is clear.
+- A vertical push never lands on a surface above the start.
+- VEHTEST clearance: refuse / fit / displace pass.
+
+### Weapons — selection → inventory → mesh → firing → kill feed are one weapon
+- **Data:** versus uses **MultiplayerData** (TnMultiplayerGame.DesiredWeaponDataType = 3, CONFIRMED RE). It falls back
+  to PlayerData when a weapon has none (TnWeapon, CONFIRMED). Generated `WeaponTable.inc` (52 weapons) from
+  authored.db + mp_weapons.json + cooked weapon sockets.
+  - mp_weapons.json's "player WEPDATA" block is the SP set; reported to AssetTools.
+- **Inventory** (TnCharacterApplier.ApplyWeapons / CreateWeapons): CharacterData.WeaponTypes in order, first active.
+  - Iconic → the chassis preset.
+  - Custom → the selection's list, validated against the chassis' TnDataProvider_Weapon restrictions. A disallowed
+    pick is refused and reported (`loadoutRefused`), never replaced.
+  - VehicleWeapons are kept and reported.
+- **Swap Weapons** (PgUp / PgDn): PutDownTime + EquipTime from WEPDATA; no firing in between.
+  - **Instant-hit weapons simulate:** damage, interval, NumShotsToFire pellets, falloff, spread, reload.
+  - **Projectile, melee and grenade weapons** are equipped and shown but flagged `weaponSimulated = false` [PARTIAL].
+- **Presentation:** the active weapon's own mesh and AnimSet at the chassis socket, with its MuzzleFlash socket.
+  - Ion Blaster particle FX are drawn only for the Ion Blaster; other weapons expose their FX template names
+    [PARTIAL, Rendering].
+  - Weapon sounds stay the Ion Blaster's [PARTIAL, Systems].
+- **WFC_WEAPONTEST 9 / 9:**
+  - the table reproduces IonBlaster_WEPDATA;
+  - iconic loadouts for Truck / Car2 / Jet / Tank3 / Truck4;
+  - Car2 AssaultRifle refused (ChassisRestriction Jet / Tank);
+  - Shotgun 8 pellets;
+  - swap timing to ShortSword (not simulated);
+  - firing spends the active weapon's ammo with its damage type.
+- **Visually verified:** Sideswipe holding the Neutron Assault Rifle.
+
+### HUD state additions
+`selectedChassis`, `drawnChassis`, `specialty`, `spawnError`, `weaponId`, `weaponIcon`, `weaponSimulated`,
+`weaponSwitching`, `inventory[]`, `activeWeapon`, `vehicleWeapons[]`, `loadoutRefused[]`. `segmentCount` follows the class.
+
+### Multi-map
+- World loads any processed MP map (`WFC_MAP`, or the launch URL's map). Everything is read through the shared contract:
+  world / collision / gameplay / physics / navigation.
+- KillZ comes from the persistent level's WorldInfo: Streets −750 m, Gorge −75 m, Rust −5.1 m, Debris +100 m.
+- Streets' rotating domes are restricted to Streets.
+- Gorge, Rust and Debris load with their own starts, pickups, objectives and destructibles.
+- **Hazard volumes** (AssetTools maps/<Map>/hazard_volumes.json): convex PhysicsVolume brushes with DamagePerSec / DamageType.
+  Stock UE3 pain applies: DamagePerSec × PainInterval on entry and every PainInterval (1 s default) [HIGH].
+  TnDamageTypeInstantKillAi forces Died only for AI pawns (TnAiPawn.TakeDamage); for players it is 2000 damage, which is
+  lethal [CONF].
+- Harnesses take the map's paths and KillZ. `WFC_MAPSUITE` runs per map: TDM launch, 12 respawns on floor and clear,
+  KillZ death, hazard damage, pickups, second match.
+
+### Stress per chassis (Streets, fixed 60 Hz)
+| chassis | WFC_CHAOS | WFC_XFORMTEST |
+|---|---|---|
+| Truck (Optimus) | 60 starts: 0 under map, 0 KillZ, 0 stuck | 0 / 1520 under map |
+| Car2 (Sideswipe) | 30: 1 under, 0 KillZ, 1 stuck (before the hull / ChassisOffset fix) | 0 / 760 |
+| Jet (Starscream) | 30: 0 / 0 / 0 | 0 / 760 (1 forced back to vehicle) |
+| Tank3 (Warpath) | 30: 0 under, 0 KillZ, 1 stuck | 0 / 760 (1 refused, 7 forced back) |
+| Truck4 (Soundwave) | 30: 6 under + 1 KillZ before the fixes → **1 under (4 frames, vehicle under a deck its 1.42 m hull top clears), 0 KillZ** after | 0 / 760 |
+
+- Weapons and loadouts: WFC_WEAPONTEST 10 / 10.
+- TDM 43 / 43, modes 21 / 21, chassis 13 / 13.
+- CAMSYNC 60 / 144 / 240 Hz unchanged (robot 0.0003°).
+
+---
+
 ## PASS 21e — TRANSFORM CLEARANCE, ROSTER CONTRACT, HUD STATE COMPLETION, REGRESSION GUARDS (2026-10-04, gameplay agent)
 Inputs:
 - RE OVERNIGHT_2026-10-04 §A2, A5, B3, E, F;

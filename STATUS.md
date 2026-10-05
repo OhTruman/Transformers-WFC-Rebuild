@@ -3,6 +3,12 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22b (2026-10-05) — vehicle forms, weapons, abilities, multi-map
+- Car / tank / jet vehicle sims from RE script digest (barrel roll, tank boost/180, jet hover + flight); per-chassis physics-asset hulls; ChassisOffset default fixed.
+- Weapons: generated MultiplayerData table (52), loadout per selection with provider restrictions, swap, per-weapon mesh/socket/damage type. WFC_WEAPONTEST 10/10.
+- Abilities: TnAbilityManager slots (Shift/Ctrl), Dodge implemented; others PARTIAL. Iconic specialty from the preset.
+- Multi-map: WFC_MAP / URL map, per-map KillZ, hazard volumes; WFC_MAPSUITE. Chassis stress table in FIDELITY PASS 22.
+
 ## GAMEPLAY PASS 22a (2026-10-05) — selected chassis spawns (no Optimus substitution)
 - ChassisDef: per-chassis definition from AssetTools Characters/<ChassisId>/character.json + roster_package.json (collision); robot/vehicle glb, arm, sockets, ROBODEF/acrobatics/momentum, hover/car/suspension/wheel blueprints. WFC_CHASSISTEST 13/13: 27/27 MP chassis load; Truck reproduces every Optimus constant.
 - Movement reads the pawn chassis (robot speeds/jump/collision; vehicle hover/drive/suspension/wheels). Car hover dash = dominant stick axis (TnCarForm.Hovering.DoDash); tank boost in hover sim (PROV); car roll + tank 180 + jet flight PARTIAL (natives requested from RE).

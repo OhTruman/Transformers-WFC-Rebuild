@@ -89,9 +89,18 @@ bool Application::init() {
         for (game::MatchMode m : {game::MatchMode::DM, game::MatchMode::TDM, game::MatchMode::CTF, game::MatchMode::KOTH,
                                   game::MatchMode::EXT, game::MatchMode::DOM})
             if (std::string(gm) == game::gameModeName(m)) world_.setMatchMode(m);
+    // Map: WFC_MAP=<MapName>, else the launch URL's map, else Streets (one map per session).
+    if (const char* mp = std::getenv("WFC_MAP")) world_.setMap(game::World::canonicalMapName(mp));
+    else if (const char* u = std::getenv("WFC_MATCH_URL")) {
+        std::string url = u; world_.setMap(game::World::canonicalMapName(url.substr(0, url.find('?'))));
+    }
+    LOG_INFO("map: %s", world_.mapName().c_str());
     world_.load(*renderer_);
     if (std::getenv("WFC_PICKUPTEST")) { runPickupTest(); return false; }   // measurements only
     if (std::getenv("WFC_TRAVERSE")) { runTraverseTest(); return false; }   // measurements only
+    // WFC_CHASSIS=<UniqueId>: boot as that chassis (free play and every harness), or select it as the iconic character in a launched match.
+    const char* bootChassis = std::getenv("WFC_CHASSIS");
+    if (bootChassis && !world_.applyChassisToLocalPawn(bootChassis)) LOG_ERROR("WFC_CHASSIS=%s: chassis unavailable", bootChassis);
     if (std::getenv("WFC_MAPTRAVERSE")) { runMapTraverse(); return false; }   // measurements only
     if (std::getenv("WFC_XFORMTEST")) { runTransformStress(); return false; }  // measurements only
     if (std::getenv("WFC_MATCHTEST")) { runMatchTest(); return false; }        // measurements only
@@ -100,17 +109,16 @@ bool Application::init() {
     if (std::getenv("WFC_TDMTEST")) { runTdmSessionTest(); return false; }     // measurements only
     if (std::getenv("WFC_CAMSYNC")) { runCameraSyncTest(); return false; }     // measurements only
     if (std::getenv("WFC_MODEPLAYTEST")) { runModePlayTest(); return false; }  // measurements only
+    if (std::getenv("WFC_WEAPONTEST")) { runWeaponTest(); return false; }      // measurements only
+    if (std::getenv("WFC_MAPSUITE")) { runMapSuite(); return false; }          // measurements only
     world_.setAudio(audio_);
-    // WFC_CHASSIS=<UniqueId>: boot as that chassis (free play), or select it as the iconic character in a launched match.
-    const char* bootChassis = std::getenv("WFC_CHASSIS");
-    if (bootChassis && !world_.applyChassisToLocalPawn(bootChassis)) LOG_ERROR("WFC_CHASSIS=%s: chassis unavailable", bootChassis);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
     {
         game::MatchLaunch launch;
         bool want = false;
         if (const char* u = std::getenv("WFC_MATCH_URL")) want = game::MatchLaunch::fromURL(u, launch);
-        else if (const char* mm = std::getenv("WFC_MATCH")) { want = game::MatchLaunch::fromURL(std::string("MP_IAC_Streets?GameModeTag=") + mm, launch); }
+        else if (const char* mm = std::getenv("WFC_MATCH")) { want = game::MatchLaunch::fromURL(world_.mapName() + "?GameModeTag=" + mm, launch); }
         if (want && world_.launchMatch(launch) && bootChassis) {
             game::CharacterSelection sel; sel.type = 1; sel.chassisId = bootChassis;
             world_.match().selectCharacter(world_.localMatchPlayer(), sel);
@@ -456,7 +464,7 @@ void Application::runTraverseTest() {
                     world_.handleInput(in, dt);
                     world_.tick(dt);
                     ymin = std::min(ymin, pc.position().y); ymax = std::max(ymax, pc.position().y);
-                    if (pc.position().y < -749.0f || !std::isfinite(pc.position().y)) { fell = true; break; }
+                    if (pc.position().y < world_.killZ() + 1.0f || !std::isfinite(pc.position().y)) { fell = true; break; }
                 }
                 core::Vec3 p1 = pc.position();
                 float dist = std::sqrt((p1.x - p0.x) * (p1.x - p0.x) + (p1.z - p0.z) * (p1.z - p0.z));
@@ -475,7 +483,7 @@ void Application::runTraverseTest() {
             pc.beginTransform();
             for (int k = 0; k < (int)(3.0f / dt); ++k) { world_.handleInput(none, dt); world_.tick(dt); }
             LOG_INFO("TRAVERSE transform x2 at start %d: y %.2f -> %.2f form %s", si, y0, pc.position().y, game::formName(pc.form()));
-            if (pc.position().y < -749.0f) ++falls;
+            if (pc.position().y < world_.killZ() + 1.0f) ++falls;
         }
     }
     LOG_INFO("TRAVERSE summary: %d runs, %d falls below KillZ, %d snags (<2 m in 4 s with no wall within 4.5 m)", runs, falls, stuck);
@@ -517,7 +525,7 @@ void Application::runMapTraverse() {
     const game::CollisionWorld* col = world_.collision();
     if (!col) { LOG_WARN("MAPTRAVERSE: no collision"); return; }
     std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) { LOG_WARN("MAPTRAVERSE: cannot read navigation.json"); return; }
@@ -545,10 +553,10 @@ void Application::runMapTraverse() {
     for (const Node& n : nodes) {
         float gy; core::Vec3 gn;
         bool g = col->groundHeight(n.p.x, n.p.z, n.p.y + 1.5f, 3.0f, gy, gn);
-        bool in = n.p.x >= bmn.x && n.p.x <= bmx.x && n.p.z >= bmn.z && n.p.z <= bmx.z && n.p.y > -750.0f;
+        bool in = n.p.x >= bmn.x && n.p.x <= bmx.x && n.p.z >= bmn.z && n.p.z <= bmx.z && n.p.y > world_.killZ();
         if (!in || !g) { ++outside; LOG_INFO("MAPTRAVERSE bounds %s %s at (%.1f %.1f %.1f): inside=%d floor=%d", n.cls.c_str(), n.name.c_str(), n.p.x, n.p.y, n.p.z, (int)in, (int)g); }
     }
-    LOG_INFO("MAPTRAVERSE bounds: %zu nav points, %d outside the collision bounds / without floor (KillZ -750 m)", nodes.size(), outside);
+    LOG_INFO("MAPTRAVERSE bounds: %zu nav points, %d outside the collision bounds / without floor (KillZ of the map)", nodes.size(), outside);
 
     // Visual / collision coherence: the rendered map (world.glb, minus movers and the mode-hidden objective bases)
     // as a trace world, each render component joined to its authored pawn collision representation
@@ -556,7 +564,7 @@ void Application::runMapTraverse() {
     std::map<std::string, std::pair<std::string, std::string>> compRep;   // component -> (pawn rep, mesh)
     std::map<std::string, bool> compBlockCam;                             // component -> authored BlockCameras
     {
-        std::ifstream pf(root + "/Maps/MP_IAC_Streets/physics.json", std::ios::binary);
+        std::ifstream pf(world_.mapDir() + "physics.json", std::ios::binary);
         std::stringstream ps; ps << pf.rdbuf();
         assets::Json ph;
         if (assets::Json::parse(ps.str(), ph))
@@ -571,7 +579,7 @@ void Application::runMapTraverse() {
     game::CollisionWorld renderCol;
     {
         render::MeshData rm, rs;
-        assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", rm);
+        assets::loadGlb(world_.mapDir() + "world.glb", rm);
         std::vector<std::string> skip = game::MapState::moverActorNames();
         for (const auto& v : world_.mapState().modeVisibleActors()) if (!v.visible) skip.push_back(v.actor);
         rs.positions = rm.positions;
@@ -648,7 +656,7 @@ void Application::runMapTraverse() {
                 }
             }
             r.ymin = std::min(r.ymin, pc.position().y); r.ymax = std::max(r.ymax, pc.position().y);
-            if (pc.position().y < -749.0f || !std::isfinite(pc.position().y)) { r.fell = true; break; }
+            if (pc.position().y < world_.killZ() + 1.0f || !std::isfinite(pc.position().y)) { r.fell = true; break; }
             r.t = t;
         }
         r.end = pc.position();
@@ -784,7 +792,7 @@ void Application::runMapTraverse() {
                 in.down[(int)platform::Button::Jump] = in.pressed[(int)platform::Button::Jump] = k == 60;
                 stepChecked(in);
                 sweepTop = std::max(sweepTop, pc.position().y);
-                if (pc.position().y < -749.0f) { ++sweepFalls; break; }
+                if (pc.position().y < world_.killZ() + 1.0f) { ++sweepFalls; break; }
             }
             core::Vec3 e = pc.position();
             if (e.x < bmn.x || e.x > bmx.x || e.z < bmn.z || e.z > bmx.z) ++sweepOut;
@@ -797,7 +805,7 @@ void Application::runMapTraverse() {
                 in.down[(int)platform::Button::Forward] = true;
                 in.down[(int)platform::Button::Jump] = in.pressed[(int)platform::Button::Jump] = k == 20;
                 stepChecked(in);
-                if (pc.position().y < -749.0f) { ++sweepFalls; break; }
+                if (pc.position().y < world_.killZ() + 1.0f) { ++sweepFalls; break; }
             }
             ++sweeps;
             // (c) transform robot -> vehicle -> robot where the run ended (next to geometry when blocked), after
@@ -812,7 +820,7 @@ void Application::runMapTraverse() {
                 ++transforms;
                 float gy; core::Vec3 gn;
                 bool floor = col->groundHeight(pc.position().x, pc.position().z, pc.position().y + 1.0f, 3.0f, gy, gn);
-                if (!floor || std::fabs(pc.position().y - y0) > 1.0f || pc.position().y < -749.0f) {
+                if (!floor || std::fabs(pc.position().y - y0) > 1.0f || pc.position().y < world_.killZ() + 1.0f) {
                     ++transformBad;
                     LOG_INFO("MAPTRAVERSE transform at %s dir %d: y %.2f -> %.2f floor=%d form %s", nodes[ni].name.c_str(), dir, y0, pc.position().y,
                              (int)floor, game::formName(pc.form()));
@@ -883,7 +891,7 @@ void Application::runTransformStress() {
     const game::CollisionWorld* col = world_.collision();
     if (!col) return;
     std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) return;
@@ -897,7 +905,7 @@ void Application::runTransformStress() {
     game::CollisionWorld bspCol;
     {
         render::MeshData cm, bm;
-        assets::loadGlb(root + "/Maps/MP_IAC_Streets/collision_pawn.glb", cm);
+        assets::loadGlb(world_.mapDir() + "collision_pawn.glb", cm);
         bm.positions = cm.positions;
         for (const render::SubMesh& sm : cm.subs)
             if (sm.nodeName.rfind("BSPCollision", 0) == 0)
@@ -975,7 +983,7 @@ void Application::runTransformStress() {
                     world_.handleInput(in, dt); world_.tick(dt);
                     core::Vec3 p = pc.position();
                     ymin = std::min(ymin, p.y);
-                    if (p.y < -749.0f) { killz = true; break; }
+                    if (p.y < world_.killZ() + 1.0f) { killz = true; break; }
                     if (pc.moveForm() == game::Form::Robot && !pc.isTransforming()) {   // full robot cylinder (after the fold)
                         float gy; core::Vec3 gn;
                         // Under the map = a walkable LEVEL (BSP) floor above the feet; a prop / volume above = low overhang.
@@ -1071,7 +1079,7 @@ void Application::runMatchTest() {
     {
         game::Match m;
         std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-        m.loadSpawnData(root + "/Maps/MP_IAC_Streets/gameplay.json");
+        m.loadSpawnData(world_.mapDir() + "gameplay.json");
         game::MatchSettings s = game::MatchSettings::forMode("TDM");
         s.timeLimit = 125;
         m.begin(s);
@@ -1088,7 +1096,7 @@ void Application::runMatchTest() {
     {
         game::Match m;
         std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-        m.loadSpawnData(root + "/Maps/MP_IAC_Streets/gameplay.json");
+        m.loadSpawnData(world_.mapDir() + "gameplay.json");
         m.begin(game::MatchSettings::forMode("DM"));
         int p0 = m.addPlayer("P0"), p1 = m.addPlayer("P1");
         float t = 0.0f; (void)t;
@@ -1123,7 +1131,7 @@ void Application::runCameraTest() {
     game::CollisionWorld renderCol;
     {
         render::MeshData rm, rs;
-        assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", rm);
+        assets::loadGlb(world_.mapDir() + "world.glb", rm);
         std::vector<std::string> skip = game::MapState::moverActorNames();
         for (const auto& v : world_.mapState().modeVisibleActors()) if (!v.visible) skip.push_back(v.actor);
         rs.positions = rm.positions;
@@ -1133,7 +1141,7 @@ void Application::runCameraTest() {
         }
         renderCol.build(rs);
     }
-    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) return;
@@ -1204,7 +1212,7 @@ void Application::runChaosTest() {
     const game::CollisionWorld* col = world_.collision();
     if (!col) return;
     std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-    std::ifstream f(root + "/Maps/MP_IAC_Streets/navigation.json", std::ios::binary);
+    std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) return;
@@ -1218,7 +1226,7 @@ void Application::runChaosTest() {
     game::CollisionWorld bspCol;   // level shell (BSP) of the pawn collision: under it = under the map
     {
         render::MeshData cm, bm;
-        assets::loadGlb(root + "/Maps/MP_IAC_Streets/collision_pawn.glb", cm);
+        assets::loadGlb(world_.mapDir() + "collision_pawn.glb", cm);
         bm.positions = cm.positions;
         for (const render::SubMesh& sm : cm.subs)
             if (sm.nodeName.rfind("BSPCollision", 0) == 0)
@@ -1238,7 +1246,7 @@ void Application::runChaosTest() {
         pc.setPosition(p0); pc.velocity() = {0, 0, 0}; pc.groundY = p0.y;
         float yaw = rnd() * 6.2831853f, nextChange = 0.0f;
         bool fwd = true, back = false, left = false, right = false, boost = false;
-        int underFrames = 0, propFrames = 0; float worst = 0.0f; core::Vec3 worstAt;
+        int underFrames = 0, propFrames = 0; float worst = 0.0f; core::Vec3 worstAt; std::string worstState;
         core::Vec3 stuckRef = pc.position(); float stuckT = 0.0f; bool reportedStuck = false;
         for (int k = 0; k < (int)(20.0f / dt); ++k) {
             float t = k * dt;
@@ -1262,7 +1270,7 @@ void Application::runChaosTest() {
             world_.tick(dt);
             ++ticks;
             core::Vec3 p = pc.position();
-            if (p.y < -749.0f) { ++killz; LOG_INFO("CHAOS KILLZ from %s at t=%.2f", nodes[ni].first.c_str(), t); break; }
+            if (p.y < world_.killZ() + 1.0f) { ++killz; LOG_INFO("CHAOS KILLZ from %s at t=%.2f", nodes[ni].first.c_str(), t); break; }
             if (!pc.isTransforming()) {
                 bool robot = pc.moveForm() == game::Form::Robot;
                 float lo = 0.3f, hi = robot ? 3.0f : 1.5f;
@@ -1272,7 +1280,7 @@ void Application::runChaosTest() {
                 if (slab && !bsp) ++propFrames;
                 if (bsp) {
                     ++underFrames;
-                    if (gy - p.y > worst) { worst = gy - p.y; worstAt = p; }
+                    if (gy - p.y > worst) { worst = gy - p.y; worstAt = p; worstState = std::string(game::formName(pc.moveForm())) + (pc.vehicleState().driving ? "/boost" : "") + (pc.isDodging() ? "/dodge" : ""); }
                 }
             }
             stuckT += dt;
@@ -1289,7 +1297,7 @@ void Application::runChaosTest() {
         if (propFrames > 3) ++propRuns;
         if (underFrames > 3) {
             ++underRuns;
-            LOG_INFO("CHAOS UNDER-FLOOR from %s: %d frames, worst %.2f m at (%.1f %.1f %.1f) blockers %s", nodes[ni].first.c_str(), underFrames, worst,
+            LOG_INFO("CHAOS UNDER-FLOOR from %s: %d frames, worst %.2f m (%s) at (%.1f %.1f %.1f) blockers %s", nodes[ni].first.c_str(), underFrames, worst, worstState.c_str(),
                      worstAt.x, worstAt.y, worstAt.z, world_.collisionActorsAt(worstAt + core::Vec3{0, worst, 0}, 0.5f).c_str());
         }
     }
@@ -1544,6 +1552,148 @@ void Application::runCameraSyncTest() {
 // defaults): capture 20 s per attacker, defender holds, +1 team / 3 s per owned node, capture +2 personal, kills personal only;
 // KOTH zone only after MatchStarting, +1 personal & team per living pawn per second when uncontested, contested = no score,
 // rotation after 60 s to an unvisited zone, zones deactivate at the end; score-limit end.
+// WFC_MAPSUITE: the loaded map (WFC_MAP) through the shared match framework - TDM launch, spawns on floor and clear of
+// geometry, KillZ and hazard-volume deaths with their damage types, pickups / objectives present, a second match.
+void Application::runMapSuite() {
+    int checks = 0, fails = 0;
+    const std::string map = world_.mapName();
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("MAPSUITE %s %s %s", map.c_str(), ok ? "PASS" : "FAIL", what.c_str()); };
+    game::Character& pc = world_.player().pawn();
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    const game::CollisionWorld* col = world_.collision();
+    game::MatchLaunch L;
+    game::MatchLaunch::fromURL(map + "_BASE_m?GameModeTag=TDM", L);
+    bool launched = world_.launchMatch(L);
+    check(launched, "TDM launches on the loaded map");
+    if (!launched) { LOG_INFO("MAPSUITE %s SUMMARY: %d/%d checks passed", map.c_str(), checks - fails, checks); return; }
+    run(10.5f);
+    check(world_.match().state() == game::Match::State::InProgress && !world_.localPlayerDead(), "match starts and spawns the local player");
+    // Spawn quality over repeated deaths: on a floor, robot cylinder clear (PlayerController::robotFitsAt), above KillZ.
+    int spawns = 0, onFloor = 0, clear = 0;
+    for (int k = 0; k < 12; ++k) {
+        core::Vec3 p = pc.position();
+        float gy; core::Vec3 gn;
+        ++spawns;
+        if (col && col->groundHeight(p.x, p.z, p.y + 0.5f, 0.6f, gy, gn) && std::fabs(p.y - gy) < 0.6f) ++onFloor;
+        if (game::PlayerController::robotFitsAt(col, p, &pc)) ++clear;
+        world_.killLocalPlayer(-1, true);
+        run(5.6f);
+    }
+    check(onFloor == spawns && clear == spawns, "spawns on floor " + std::to_string(onFloor) + "/" + std::to_string(spawns) + ", clear of geometry " +
+          std::to_string(clear) + "/" + std::to_string(spawns));
+    // KillZ: below the persistent level's KillZ -> death (environmental).
+    {
+        int deathsBefore = world_.match().players()[(size_t)world_.localMatchPlayer()].deaths;
+        core::Vec3 p = pc.position(); pc.setPosition({p.x, world_.killZ() - 5.0f, p.z});
+        run(0.1f);
+        check(world_.localPlayerDead() && world_.match().players()[(size_t)world_.localMatchPlayer()].deaths == deathsBefore + 1,
+              "below KillZ " + std::to_string((int)world_.killZ()) + " m -> death");
+        run(5.6f);
+    }
+    // Hazard volumes: inside the first one -> damage of its type (lethal ones kill).
+    const auto& hz = world_.hazardVolumes();
+    LOG_INFO("MAPSUITE %s: %zu hazard volumes, %zu pickup factories, %zu objectives, KillZ %.1f m", map.c_str(), hz.size(),
+             world_.pickupFactories().size(), world_.mapState().objectives().size(), world_.killZ());
+    if (!hz.empty()) {
+        // The brush centroid is inside a convex volume; hazardAt is the oracle.
+        core::Vec3 inside = hz[0].centroid; bool found = world_.hazardAt(inside) == 0;
+        if (found) {
+            float hpBefore = pc.health().current;
+            pc.setPosition(inside - core::Vec3{0, pc.meshToActor(pc.moveForm()), 0});
+            world_.tick(dt);
+            bool hurt = pc.health().current < hpBefore || world_.localPlayerDead();
+            std::string killType;
+            for (const auto& k : world_.match().killHistory()) killType = k.damageType;
+            check(hurt, "hazard " + hz[0].actor + " (" + hz[0].damageType + ", " + std::to_string((int)hz[0].damagePerSec) + "/s) damages on entry" +
+                  (world_.localPlayerDead() ? " - killed, kill type " + killType : ""));
+            run(5.6f);
+        } else check(false, "hazard " + hz[0].actor + ": centroid not inside (plane orientation)");
+    }
+    check(!world_.pickupFactories().empty(), "pickup factories present (" + std::to_string(world_.pickupFactories().size()) + ")");
+    // Second match on the same map.
+    world_.launchMatch(L);
+    run(10.5f);
+    check(world_.match().state() == game::Match::State::InProgress && !world_.localPlayerDead(), "second match starts and spawns");
+    LOG_INFO("MAPSUITE %s SUMMARY: %d/%d checks passed", map.c_str(), checks - fails, checks);
+}
+
+// WFC_WEAPONTEST: selection -> loadout -> active weapon -> mesh -> firing -> damage type are one weapon, per chassis.
+void Application::runWeaponTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("WEAPON %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    game::Character& pc = world_.player().pawn();
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    auto inv = [&]() { std::string s; for (const auto& w : pc.inventory()) s += std::string(w.def ? w.def->provider : "IonBlaster") + " "; return s; };
+    // Generated table reproduces the hand-checked Ion Blaster versus data.
+    const game::WeaponDef* ib = game::findWeaponDef("IonBlaster");
+    check(ib && ib->damage == 15.0f && ib->clip == 50 && ib->initialReserve == 150 && std::string(ib->dataSource) == "MP" &&
+          std::fabs(ib->falloffNearM - 50.0f) < 1e-3f, "WeaponTable: Ion Blaster = IonBlaster_WEPDATA (MultiplayerData) 15 / 50 / 150 / 50 m");
+    LOG_INFO("WEAPON table: %d weapons", game::weaponDefCount());
+    // Iconic presets per chassis (TnCharacterApplier.ApplyWeapons: WeaponTypes order, first active).
+    struct Case { const char* chassis; const char* first; };
+    for (Case c : {Case{"Truck", "IonBlaster"}, Case{"Car2", "AssaultRifle"}, Case{"Jet", ""}, Case{"Tank3", "AssaultRifle"}, Case{"Truck4", ""}}) {
+        bool ok = world_.applyChassisToLocalPawn(c.chassis);
+        game::HudGameState h = world_.hudState();
+        const std::string want = c.first[0] ? c.first : (pc.chassis().iconicWeapons.empty() ? "" : pc.chassis().iconicWeapons[0]);
+        LOG_INFO("WEAPON %s (%s): inventory [%s] vehicle [%s] active %s (%s, damage %.0f, clip %d, %s)", c.chassis, pc.chassis().iconic.c_str(),
+                 inv().c_str(), h.vehicleWeapons.empty() ? "" : h.vehicleWeapons[0].c_str(), h.weaponId.c_str(), pc.weapon().name,
+                 pc.weapon().damage, pc.weapon().magSize, pc.weapon().simulated() ? "simulated" : "NOT simulated (PARTIAL)");
+        check(ok && h.weaponId == want && !pc.inventory().empty(), std::string(c.chassis) + ": the iconic preset's first weapon is active (" + want + ")");
+    }
+    // Custom selection: a weapon outside the chassis' provider restrictions is refused, not substituted.
+    world_.applyChassisToLocalPawn("Car2");
+    game::CharacterSelection sel; sel.type = 0; sel.specialty = game::Specialty::Scout; sel.weapons = {"Shotgun", "AssaultRifle", "ShortSword"};
+    std::vector<std::string> refused = world_.applyLoadout(&sel);
+    check(refused.size() == 1 && refused[0] == "AssaultRifle" && pc.weapon().def && std::string(pc.weapon().def->provider) == "Shotgun" &&
+          pc.weapon().shots == 8, "custom Car2 loadout: AssaultRifle refused (ChassisRestriction Jet/Tank), Shotgun active with 8 pellets");
+    // Swap Weapons: put down + equip, no fire in between, then the next weapon (ShortSword, melee: not simulated).
+    pc.requestWeaponSwitch(1);
+    bool blocked = !pc.weaponUsable();
+    run(0.2f);
+    bool midway = pc.switchingWeapon();
+    run(1.0f);
+    check(blocked && midway && !pc.switchingWeapon() && pc.weapon().def && std::string(pc.weapon().def->provider) == "ShortSword" &&
+          !pc.weapon().canFire() && world_.hudState().weaponId == "ShortSword" && !world_.hudState().weaponSimulated,
+          "swap: put down 0.5 s + equip, then ShortSword (melee, equipped but not simulated, cannot fire)");
+    // Firing the active weapon spends its own ammo and carries its own damage type.
+    pc.requestWeaponSwitch(-1); run(1.0f);
+    int before = pc.weapon().ammo;
+    platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+    for (int i = 0; i < 30; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+    check(pc.weapon().ammo < before && std::string(pc.weapon().damageType) == "TransGame.TnDamageTypeShotgun",
+          "fire: Shotgun ammo spent (" + std::to_string(before) + " -> " + std::to_string(pc.weapon().ammo) + "), damage type TnDamageTypeShotgun");
+    // Abilities: Car2 iconic [Whirlwind, Dodge] -> Ability1 (Ctrl) = Dodge (TnAcrobaticsManager), Ability0 = Whirlwind (PARTIAL).
+    world_.applyChassisToLocalPawn("Car2");
+    run(1.0f);
+    {
+        game::HudGameState h0 = world_.hudState();
+        bool slots = h0.abilities.size() == 2 && h0.abilities[0].id == "Whirlwind" && !h0.abilities[0].implemented &&
+                     h0.abilities[1].id == "Dodge" && h0.abilities[1].implemented;
+        core::Vec3 p0 = pc.position();
+        core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(pc.yaw(), 0.0f), core::Vec3{0, 1, 0}));
+        platform::InputFrame in; in.down[(int)platform::Button::Right] = true; in.pressed[(int)platform::Button::Ability1] = true;
+        in.down[(int)platform::Button::Ability1] = true;
+        world_.handleInput(in, dt); world_.tick(dt);
+        float sp = core::length(core::Vec3{pc.velocity().x, 0, pc.velocity().z});
+        bool dodging = pc.isDodging();
+        run(0.6f);
+        float lateral = core::dot(pc.position() - p0, right);
+        bool cooling = world_.hudState().abilities[1].cooldown > 1.0f;
+        platform::InputFrame again; again.pressed[(int)platform::Button::Ability1] = true; again.down[(int)platform::Button::Ability1] = true;
+        world_.handleInput(again, dt); world_.tick(dt);
+        bool refused = !pc.isDodging();
+        run(2.5f);
+        world_.handleInput(again, dt); world_.tick(dt);
+        bool ready = pc.isDodging();
+        check(slots && dodging && sp > 25.0f && lateral > 8.0f && cooling && refused && ready,
+              "Dodge (Ctrl): " + std::to_string((int)sp) + " m/s, " + std::to_string(lateral).substr(0, 4) +
+              " m to the right in 0.6 s, 2.0 s cooldown after the dodge, refused while cooling, available again; Whirlwind slot PARTIAL");
+    }
+    LOG_INFO("WEAPON SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
 void Application::runModePlayTest() {
     const float dt = (float)clock_.stepSeconds();
     auto& pc = world_.player().pawn();

@@ -29,6 +29,8 @@ private:
     void runTdmSessionTest();
     void runCameraSyncTest();
     void runModePlayTest();
+    void runWeaponTest();
+    void runMapSuite();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

@@ -57,13 +57,13 @@ Robot form:
 | R | Reload | implemented |
 | Space | Jump | implemented |
 | F | Change Form | implemented (with clearance refusal) |
-| Shift | Ability 1 | Optimus's dash wired here; the ability system is not generalised |
-| Ctrl | Ability 2 | not implemented |
+| Shift | Ability 1 (CharacterData.Abilities[0]) | ability slots implemented (Pass 22); only Dodge is simulated, others report unimplemented |
+| Ctrl | Ability 2 (CharacterData.Abilities[1]) | as Shift (e.g. Optimus / Sideswipe: Dodge on Ctrl) |
 | MMB / Q | Melee | not implemented |
 | G | Throw Grenade / Detach Turret | not implemented |
 | E | Interact / Pick Up / Revive / Add to Generator | pickups are automatic (touch); the interact action is not implemented |
 | B | Look At / Kill Streak (MP) | not implemented |
-| Wheel / PgUp / PgDn | Swap Weapons | one weapon only |
+| Wheel / PgUp / PgDn | Swap Weapons | PgUp / PgDn implemented (inventory from the loadout); wheel pending |
 | Tab | Scoreboard | Frontend (reads `scoreboard[]`) |
 | Esc | Pause | Frontend |
 
@@ -72,8 +72,8 @@ Vehicle form:
 | Key | Action | Rebuild status |
 |---|---|---|
 | RMB | Speed Boost (held). Accelerator fixed at 1 while Driving | implemented |
-| Shift | truck: Ram (Nitro while boosting; Dash while hovering) / car: Flip / tank: Quick Turn / jet: Roll Start | truck implemented |
-| C / V | jet Hover Up / Down | not applicable (Optimus only) |
+| Shift | truck: Ram (Nitro while boosting; Dash while hovering) / car: dash (hover) + barrel roll (boost) / tank: 180 / jet: roll | all four implemented (Pass 22; tank 180 timing PROV) |
+| C / V | jet Hover Up / Down | implemented (Pass 22) |
 
 ### Profile settings
 | Item | Owner | Rule | Provenance |
@@ -92,3 +92,9 @@ it for the weapon icon / DeathString lookup.
 - Spawning logs `MATCH spawn <name> chassis=<id> drawn=Optimus fallback=missing ROBODEF/VEHDEF export` whenever the body
   drawn is not the selection.
 - `Match::requireCharacterSelection` (identical to integration M06) gates the spawn until `selectCharacter`.
+
+### Pass 22 additions
+- HUD: selectedChassis, drawnChassis, specialty, spawnError, weaponId, weaponIcon, weaponSimulated, weaponSwitching,
+  inventory[], activeWeapon, vehicleWeapons[], loadoutRefused[], abilities[] (id, implemented, cooldown, active), dodging.
+- Camera settings entry point: PlayerController::setLookSettings(sensitivity, invertRobot, invertVehicle) - per-form
+  vehicle invert (Car / Plane / Tank) is a follow-up.
