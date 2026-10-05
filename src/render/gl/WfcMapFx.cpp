@@ -65,6 +65,7 @@ core::Vec3 ueToGltf(const float p[3]) { return {p[0] * 0.01f, p[2] * 0.01f, p[1]
 // content-glTF mesh. Content glTFs are metres in the same Y-up local frame as world.glb's meshes (identical vertex
 // data; local y = UE local Z, local z = UE local Y): M = P * A_ue * P with P the y<->z swap, so a proper UE rotation
 // stays a proper rotation (no winding change).
+} // namespace
 core::Mat4 ueRowsToGltf(const float R[3][3], const float T[3]) {
     core::Mat4 M = core::Mat4::identity();
     auto sw = [](int i) { return i == 0 ? 0 : (i == 1 ? 2 : 1); };
@@ -83,6 +84,7 @@ void rotRows(float pitch, float yaw, float roll, float out[3][3]) {   // UE3 FRo
                               {-(CR * SP * CY + SR * SY), CY * SR - CR * SP * SY, CR * CP}};
     std::memcpy(out, rows, sizeof(rows));
 }
+namespace {
 } // namespace
 
 // ---- distributions (FRawDistribution layouts, AssetTools pstream DIST_LAYOUT) ----
@@ -801,4 +803,12 @@ void Pipeline::drawMapPresentation() {
 }
 
 } // namespace wfc
+
+core::Mat4 ueActorMatrix(const core::Vec3& p, const core::Vec3& r) {
+    const float d2u = 65536.0f / 360.0f;
+    float R[3][3];
+    wfc::rotRows(r.x * d2u, r.y * d2u, r.z * d2u, R);
+    const float T[3] = {p.x, p.y, p.z};
+    return wfc::ueRowsToGltf(R, T);
+}
 } // namespace render

@@ -171,7 +171,7 @@ def main():
     os.makedirs(out, exist_ok=True)
     # TransGame.xxx (startup package) cooks the pickup FX and their materials (AssetTools 7a69756
     # streets_pickup_fx.json: package TransGame); map copies win when both exist (largest export).
-    repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx'])
+    repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx'])
     j = glb_json(os.path.join(VS, 'Maps', mapname, 'world.glb'))
     names = {m.get('extras', {}).get('wfc_material') for m in j['materials']}
     for extra_glb in ('bsp.glb', 'decals.glb'):  # rebuilt by build_lighting.py (run it first)

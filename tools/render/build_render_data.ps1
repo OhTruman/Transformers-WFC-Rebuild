@@ -1,8 +1,18 @@
 # Regenerate the WFC original-data render inputs for a map into <worktree>\work\render\<Map>.
 # Reads only the shared read-only sources (Game Dump cooked packages, ExtractedAssets, AssetTools).
 # Usage: powershell -ExecutionPolicy Bypass -File tools\render\build_render_data.ps1 [-Map MP_IAC_Streets]
+# -Map Standard: the per-worktree standard set - MP_IAC_Streets plus the five frontend scene families the menus load
+# (loadFrontendScene: title, customization / lobbies, campaign lobby). A tree without them shows no menu backgrounds.
 param([string]$Map = "MP_IAC_Streets")
 $ErrorActionPreference = "Stop"
+if ($Map -eq "Standard") {
+    foreach ($m in @("MP_IAC_Streets", "UI_FrontEnd", "UI_CharacterCustomization", "UI_PartyLobby", "UI_Lobby", "UI_CampaignLobby")) {
+        Write-Host "== $m"
+        & $PSCommandPath -Map $m
+        if (-not $?) { throw "render data failed for $m" }
+    }
+    return
+}
 $root = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Definition))
 $py = "F:\Transformers Rebuild\AssetTools\bin\py\python.exe"
 $umodel = "F:\Transformers Rebuild\AssetTools\bin\umodel\umodel_64.exe"

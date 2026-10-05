@@ -246,7 +246,9 @@ def bsp_lighting(repo, out):
         for mi in [i + 1 for i, e in enumerate(p.exports) if p.class_name(e) == 'Model' and e['outer'] == level]:
             try:
                 M = bspmod.read_model(p, mi)
-                if M['nodes'] and (best is None or len(M['nodes']) > len(best[2]['nodes'])): best = (pk, mi, M)
+                # [integration M06] len(), not truthiness: AssetTools bsp.read_model returns the nodes as a numpy array,
+                # whose truth value raises (swallowed below), so every map lost its lit BSP (Streets included).
+                if len(M['nodes']) > 0 and (best is None or len(M['nodes']) > len(best[2]['nodes'])): best = (pk, mi, M)
             except Exception:
                 pass
     if best is None:
@@ -254,6 +256,9 @@ def bsp_lighting(repo, out):
         return {}
     pk, mi, M = best
     p = repo.pkgs[pk]; pr = repo.readers[pk]
+    # [integration M06] the Level of the package that holds the BSP (the search loop above leaves `level` at the last
+    # package scanned, e.g. BASE, so no ModelComponent of ART matched and the BSP came out empty)
+    level = next((i + 1 for i, e in enumerate(p.exports) if p.class_name(e) == 'Level'), None)
     lmset = {i + 1 for i, e in enumerate(p.exports) if p.class_name(e) == 'LightMapTexture2D'}
     e = p.exports[mi - 1]
     t = p.data[e['serial_offset'] + M['end_offset']:e['serial_offset'] + e['serial_size']]
@@ -412,12 +417,17 @@ def decals(repo, out, mapname=None):
 
     prims = []
     skipped = 0
+    unplaced = 0
     for i, e in enumerate(p.exports):
         if p.class_name(e) != 'DecalComponent': continue
         t, used = pr.read_object(i + 1)
         d = tags_to_dict(t)
         mat = (d.get('DecalMaterial') or {}).get('ref')
         tail = p.data[e['serial_offset'] + used:e['serial_offset'] + e['serial_size']]
+        if not all(k in d for k in ('Location', 'HitTangent', 'HitBinormal')):
+            # [integration M06] placement not serialized on the component (archetype / default values; Berth, Rust):
+            # not guessed - the decal is skipped and counted [PARTIAL]
+            unplaced += 1; continue
         L = np.array(d['Location']); T = np.array(d['HitTangent']); B = np.array(d['HitBinormal'])
         W = d.get('Width', 200.0); H = d.get('Height', 200.0)
         tx, ty = d.get('TileX', 1.0), d.get('TileY', 1.0); ox, oy = d.get('OffsetX', 0.0), d.get('OffsetY', 0.0)
@@ -445,6 +455,7 @@ def decals(repo, out, mapname=None):
                       'P': np.array(P_, 'f4'), 'N': np.array(N_, 'f4'), 'UV': np.array(UV_, 'f4'),
                       'SUV': np.zeros((len(P_), 2), 'f4'), 'I': np.array(I_, 'u4')})
     write_glb(os.path.join(out, 'decals.glb'), prims, kind='decal')
+    if unplaced: print('decals: %d components without serialized placement skipped (PARTIAL)' % unplaced)
     print('decals: %d (%d tris), %d receivers without transform' %
           (len(prims), sum(len(q['I']) // 3 for q in prims), skipped))
 

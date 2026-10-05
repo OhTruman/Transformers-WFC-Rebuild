@@ -78,6 +78,8 @@ Gameplay passes the markers its rules show. Ownership of the in-match HUD layers
 | `setFrontendActorTransform(actor, posUE, rotUEdeg)` | Absolute matinee pose (UE units, degrees, attachment already applied) for a scene actor; applied as a delta against its authored pose. Actors not sent keep their authored pose and PHYS_Rotating. |
 | `setMapEffectActive(key, on)` | Key = Emitter actor name (short or full path) or its ParticleSystemComponent name. Scene emitters start in their authored bAutoActivate state. |
 | `setDisplayGamma(g)` | UE3 DisplayGamma for the scene resolve and Canvas material tiles (default 2.2). Profile Brightness → g is `HmProfileSettings.GetGammaSetting`: `2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting/100, 0, 1))` (CONFIRMED script), computed by the caller. GFx / video / Canvas text stay display-referred. |
+| `setFrontendSceneDraw(callback)` | Called inside `drawFrontendScene` after the scene geometry, before translucency / post. The caller draws dynamic bodies there, e.g. the customization preview pawns: `setDrawOwner(slot)` + `setCharacterColors` + `drawDynamicMesh`. Gameplay owns the body (chassis, form, pose); Rendering draws it. |
+| `render::ueActorMatrix(posUE, rotUEdeg)` | Model matrix for an exported content glTF (roster robot / vehicle) placed at a UE location / rotation, as authored actors are placed. |
 | `setDrawOwner(id)` | Per-character light environment and applier colours for the following dynamic draws. |
 
 **Frontend scenes:**
@@ -91,6 +93,13 @@ Gameplay passes the markers its rules show. Ownership of the in-match HUD layers
 - authored poses, authored bHidden (`setActorHidden` overrides) and PHYS_Rotating for the actors in world.glb;
 - skeletal actors (the 17 vignette ships) are loaded from their glTF in bind pose, materials via
   `tools/render/scene_materials.py`. Their skeletal animation is not played [PARTIAL].
+
+**Scene family:** the persistent level's family (`levels.front()`) is preferred: its render data composes its streamed
+sublevels. The lobbies cook every MP chassis material in `UI_PartyLobby_m` / `UI_Lobby_m`, not in
+`UI_CharacterCustomization_m`.
+
+**Standard render data:** `build_render_data.ps1 -Map Standard` builds `MP_IAC_Streets` plus the five UI families. Every
+worktree that runs the frontend needs it.
 
 **Loading yields:**
 - On UI_FrontEnd: 193 yields, longest step 70 ms. The remaining long steps are single large texture decodes.

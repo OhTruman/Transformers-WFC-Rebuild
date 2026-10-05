@@ -399,15 +399,19 @@ public:
     bool loadFrontendScene(const std::vector<std::string>& levels) override {
         unloadFrontendScene();
         const std::string data = wfc::Pipeline::renderDataRoot(), assets = wfc::Pipeline::assetRoot();
-        // One render-data map at a time: the requested level with the most placed scenery (a lobby's persistent level is
-        // nearly empty and streams UI_CharacterCustomization_m) [PARTIAL: no multi-level composition yet].
+        // One render-data map at a time. The persistent level's family (levels.front()) is preferred: its render data
+        // composes its streamed sublevels (map.json) and holds what the persistent level cooks - the lobbies cook every
+        // MP chassis material (the preview pawn's) in UI_PartyLobby_m / UI_Lobby_m, not in the streamed
+        // UI_CharacterCustomization_m. Otherwise the requested level with the most placed scenery.
         std::string dir;
         size_t bestSize = 0;
-        for (const std::string& l : levels) {
+        for (size_t li = 0; li < levels.size(); ++li) {
+            const std::string& l = levels[li];
             std::string d = l.size() > 2 && l.compare(l.size() - 2, 2, "_m") == 0 ? l.substr(0, l.size() - 2) : l;
             std::ifstream probe(data + "/" + d + "/materials_glsl.json");
             std::ifstream glb(assets + "/Maps/" + d + "/world.glb", std::ios::binary | std::ios::ate);
             if (!probe || !glb) continue;
+            if (li == 0) { dir = d; break; }
             size_t sz = (size_t)glb.tellg();
             if (dir.empty() || sz > bestSize) { dir = d; bestSize = sz; }
         }
@@ -447,8 +451,10 @@ public:
         setMapClock((float)t);
         beginFrame(cam, w, h);
         drawMesh(sceneMesh_, core::Mat4::identity(), core::Vec3{1, 1, 1});
+        if (sceneDraw_) { sceneDraw_(*this); setDrawOwner(0); }
         endFrame();
     }
+    void setFrontendSceneDraw(std::function<void(IRenderer&)> f) override { sceneDraw_ = std::move(f); }
     void unloadFrontendScene() override {
         if (sceneMesh_ == kInvalidMesh && sceneDir_.empty()) return;
         unloadMapRenderData();
@@ -1148,6 +1154,7 @@ private:
     core::Mat4 view_;
     int vpW_ = 0, vpH_ = 0;
     std::string glEntry_;
+    std::function<void(IRenderer&)> sceneDraw_;
     Camera lastCam_;
     bool renderDataRequested_ = false;   // a map / scene asked for the original presentation (M10 legacy-fallback marker)
     bool sceneSampled_ = false, sceneSamplePending_ = false;

@@ -47,6 +47,10 @@ struct CharacterColors {
     float energon[4] = {0, 0, 0, 1};     // EnergonColor
 };
 
+// Model matrix of an exported content glTF (ExtractedAssets/content, the AssetTools roster's robot / vehicle gltf) placed
+// at a UE location (UU) and rotation (pitch, yaw, roll in degrees), as the renderer places authored actors.
+core::Mat4 ueActorMatrix(const core::Vec3& posUE, const core::Vec3& rotUEdeg);
+
 class IRenderer {
 public:
     virtual ~IRenderer() = default;
@@ -142,6 +146,11 @@ public:
     virtual void drawFrontendScene(const core::Vec3& camPosUE, const core::Vec3& camRotUEdeg, float fovDeg, int w, int h,
                                    double timeSec) { (void)camPosUE; (void)camRotUEdeg; (void)fovDeg; (void)w; (void)h; (void)timeSec; }
     virtual void unloadFrontendScene() {}
+    // Dynamic draws inside the frontend scene's frame: drawFrontendScene calls this after the scene geometry and
+    // before translucency / post / endFrame. The caller draws e.g. the customization preview pawns (UI_CharacterCustomization
+    // PreviewGuy controllers) with setDrawOwner(slot) + setCharacterColors + drawDynamicMesh: the body (chassis, form,
+    // pose) is Gameplay's, the drawing Rendering's. Use ueActorMatrix for UE placements. Empty function = none.
+    virtual void setFrontendSceneDraw(std::function<void(IRenderer&)> drawInScene) { (void)drawInScene; }
     // Matinee-driven actor pose in the loaded scene (Frontend's matinee evaluator): absolute world location (UU) and
     // rotation (pitch, yaw, roll in degrees), including RelativeToInitial / attachment. Actors not sent keep their
     // authored pose (and PHYS_Rotating). Visibility stays with setActorHidden (authored bHidden applies until then).
