@@ -428,6 +428,29 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     return true;
 }
 
+namespace {
+// Gameplay's full CharacterSelection (agents/gameplay 1216e80: chassisByFaction, colours, loadout lists) is filled from
+// the Frontend contract when this tree has it; older Gameplay keeps the chassisId-by-team mapping only.
+template <class CS, class = void> struct HasFullSelection : std::false_type {};
+template <class CS> struct HasFullSelection<CS, std::void_t<decltype(std::declval<CS&>().chassisByFaction[0]),
+                                                            decltype(std::declval<CS&>().primary[0].palette),
+                                                            decltype(std::declval<CS&>().weapons)>> : std::true_type {};
+template <class CS> void fillFullSelection(CS& cs, const frontend::GameFlow::SelectedCharacter& fc) {
+    if constexpr (HasFullSelection<CS>::value) {
+        for (int f = 0; f < 2; ++f) {
+            cs.chassisByFaction[f] = fc.chassis[f];
+            auto col = [](const frontend::GameFlow::CharacterColorSel& in, auto& out) {
+                out.r = in.r; out.g = in.g; out.b = in.b; out.a = in.a; out.palette = in.palette; out.x = in.x; out.y = in.y;
+            };
+            col(fc.primary[f], cs.primary[f]);
+            col(fc.secondary[f], cs.secondary[f]);
+        }
+        cs.weapons = fc.weapons; cs.vehicleWeapons = fc.vehicleWeapons; cs.melee = fc.melee;
+        cs.abilities = fc.abilities; cs.skills = fc.skills;
+    } else { (void)cs; (void)fc; }
+}
+}
+
 void Application::routeMatchToFrontend(float dt) {
     frontend::GameFlow& flow = frontend_->flow();
     const int me = world_.localMatchPlayer();
@@ -443,6 +466,7 @@ void Application::routeMatchToFrontend(float dt) {
         const int team = world_.match().players()[(size_t)me].team;
         cs.chassisId = fc.chassis[team == 1 ? 1 : 0].empty() ? fc.chassis[0] : fc.chassis[team == 1 ? 1 : 0];
         cs.customSlot = fc.name;
+        fillFullSelection(cs, fc);
         world_.match().selectCharacter(me, cs);
         selectionSent_ = true;
         const int f = team == 1 ? 1 : 0;
