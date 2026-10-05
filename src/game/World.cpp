@@ -1149,6 +1149,7 @@ HudGameState World::hudState() const {
     h.ammoBeacon = beacon_.alive; h.ammoBeaconPos = beacon_.pos; h.ammoBeaconLife = beacon_.life; h.ammoBeaconHealth = beacon_.health;
     h.ammoBeaconBuff = pc.beaconDamageBuff_ > 0.0f;
     h.drain = pc.drainRemain_;
+    h.kamikazeMines = (int)mines_.size(); h.tempWeaponLeft = pc.tempWeapon_ == 1 ? pc.tempWeaponRemain_ : 0.0f;
     h.roller = roller_.alive; h.rollerArmed = roller_.alive && roller_.t >= 3.0f; h.rollerPos = roller_.pos;
     h.rollerFuse = roller_.alive ? std::max(0.0f, 10.0f - roller_.t) : 0.0f; h.rollerHealth = roller_.health; h.rollerSlow = pc.rollerSlowRemain_;
     h.guidedMissile = missile_.alive; h.guidedMissilePos = missile_.pos; h.guidedMissileFuse = missile_.life;
@@ -1800,7 +1801,7 @@ std::string World::triggerLocalKillstreak() {
     const std::string id = mp.acquiredKillstreaks.back();
     Character& pc = player_.pawn();
     // RequiresRobotForm streaks (abilities spawned / used on foot) in vehicle form: StartTransform(robot) + defer.
-    const bool needsRobot = id == "PokeStreak" || id == "MinePooperStreak" || id == "SpawnRocketTurretStreak" || id == "GuidedMissileStreak";
+    const bool needsRobot = id == "PokeStreak" || id == "MinePooperStreak" || id == "SpawnRocketTurretStreak" || id == "GuidedMissileStreak";   // RequiresRobotForm
     if (needsRobot && pc.moveForm() != Form::Robot) {
         if (!pc.isTransforming()) player_.controller().tryBeginTransform();
         deferredKillstreak_ = true;
@@ -1830,6 +1831,12 @@ std::string World::triggerLocalKillstreak() {
         pc.fastCooldownRemain_ = 30.0f;                    // TnBuffFastAbilityCooldown CooldownMultiplier 5, BuffTime 30
     } else if (id == "GuidedMissileStreak") {
         startGuidedMissile();                              // Omega Missile: the same TnGuidedMissile (RequiresRobotForm)
+    } else if (id == "PokeStreak") {
+        if (const WeaponDef* d = findWeaponDef("Poke")) pc.grantTempWeapon(*d, 1, 20.0f);   // TnAbilityPoke -> TnWeaponPoke
+    } else if (id == "SpawnRocketTurretStreak") {
+        if (const WeaponDef* d = findWeaponDef("HeavyRocketTurret")) pc.grantTempWeapon(*d, 2, 1e9f);   // CreateInventory
+    } else if (id == "MinePooperStreak") {
+        pc.minePooperRemain_ = 15.0f; pc.minePooperTimer_ = 0.0f;   // AddSelfBuff(TnBuffMinePooper)
     } else if (id == "OrbitalReconStreak") {
         teamPawns([](Character& p) { p.seeEnemiesRemain_ = 30.0f; });   // ABT_Team TnBuffSeeEnemyObjectiveMarkers
     } else if (id == "ImprovedOrbitalReconStreak") {
@@ -1927,6 +1934,7 @@ void World::tickAbilityEffects(float dt) {
     tickGuidedMissile(dt);
     tickRollerMine(dt);
     tickBuffShots(dt);
+    tickKillstreakItems(dt);
     auto tickTD = [dt](Character& p) { p.transformDisruptRemain_ = std::max(0.0f, p.transformDisruptRemain_ - dt); };
     tickTD(pc);
     for (MatchOpponent* o : opponents_) tickTD(o->pawn());
@@ -2028,6 +2036,14 @@ void World::startLocalMelee(bool whirlwind) {
     pc.meleeState_ = whirlwind ? 2 : 1;
     pc.meleeT_ = 0.0f; pc.meleeSweep_ = -1; pc.meleeHit_.clear();
     pc.meleeCarrier_ = !whirlwind && pc.carryingHeavy_ != 0;
+    pc.meleePoke_ = !whirlwind && !pc.meleeCarrier_ && pc.tempWeapon_ == 1;
+    if (pc.meleePoke_) {
+        // MWT_Poke: Melee_Axe (TR shared set: _01 1.5 s, sweep t 0.335 MeleeSocket_LargeRobot (250, 250, 350) 0.30 s), 9999,
+        // TnDamageTypePoke, Impulse 200000, AttackDash 2500 / 0.25 (the assist lunge below), GroundSpeedMultiplier 1.5 [CONF].
+        pc.playAction("Melee_Axe_01", false);
+        pc.meleeLen_ = 1.5f;
+        if (const assets::SkinnedModel* mm = pc.currentModel()) { int ci = mm->clipByName("Melee_Axe_01"); if (ci >= 0) pc.meleeLen_ = mm->clips[(size_t)ci].duration; }
+    }
     if (pc.meleeCarrier_) {
         // FindAttack: current weapon MeleeWeaponType MWT_Flag / MWT_Bomb -> Melee_Mace (chooser _01/_02/_03), 9999, AttackDash
         // Speed 0 (no lunge), GroundSpeedMultiplier 0.75 [CONF TnMeleeSet]. Clip lengths / sweep times from the anim set when
@@ -2041,16 +2057,20 @@ void World::startLocalMelee(bool whirlwind) {
         if (const assets::SkinnedModel* m = pc.currentModel()) { int ci = m->clipByName(kMace[k]); if (ci >= 0) pc.meleeLen_ = m->clips[(size_t)ci].duration; }
         return;
     }
-    if (whirlwind) {
+    if (pc.meleePoke_) {
+        // fall through to the assist lunge
+    } else if (whirlwind) {
         pc.meleeLen_ = 5.9f;
         pc.playAction("Transform_Whirlwind_ROBO", true);
         return;
     }
     // AnimSet chooser: Melee_EnergonSword -> _01 / _03 alternately; clip length (1.0 s authored) from the model when present.
     const char* clip = (pc.meleeAlternate_++ % 2) ? "Melee_EnergonSword_03" : "Melee_EnergonSword_01";
+    if (!pc.meleePoke_) {
     pc.playAction(clip, false);
     pc.meleeLen_ = 1.0f;
     if (const assets::SkinnedModel* m = pc.currentModel()) { int ci = m->clipByName(clip); if (ci >= 0) pc.meleeLen_ = m->clips[(size_t)ci].duration; }
+    }
     // PlayerTargeting.GetMeleeAssistTarget: an enemy within 2000 UU inside the picker cone (half angle
     // clamp(4 deg, atan(3.5 m / d), atan(4.5 m / d)) about the view direction) -> AttackDash lunge toward it (yaw only).
     if (!matchActive_) return;
@@ -2075,9 +2095,10 @@ void World::tickLocalMelee(float dt) {
     pc.meleeT_ += dt;
     const bool whirl = pc.meleeState_ == 2;
     // Melee_Mace_01/_02/_03 sweeps (LightMedium shared set): t 0.328 / 0.287 / 0.383, SmallRobot, (250, 250, 350), 0.30 s.
+    static const Sweep kPokeSweep = {0.335f, 0.30f, false, {250, 250, 350}};
     static const Sweep kMaceSweeps[3] = {{0.328f, 0.30f, false, {250, 250, 350}}, {0.287f, 0.30f, false, {250, 250, 350}},
                                          {0.383f, 0.30f, false, {250, 250, 350}}};
-    const Sweep* sw = whirl ? kWhirlSweeps : pc.meleeCarrier_ ? &kMaceSweeps[pc.meleeVariant_ % 3] : kWeaponSweeps;
+    const Sweep* sw = whirl ? kWhirlSweeps : pc.meleeCarrier_ ? &kMaceSweeps[pc.meleeVariant_ % 3] : pc.meleePoke_ ? &kPokeSweep : kWeaponSweeps;
     const int n = whirl ? 8 : 1;
     int active = -1;
     for (int i = 0; i < n; ++i) if (pc.meleeT_ >= sw[i].t && pc.meleeT_ < sw[i].t + sw[i].dur) active = i;
@@ -2089,14 +2110,14 @@ void World::tickLocalMelee(float dt) {
         if (sd.valid && pc.boneWorld(sd.bone, bm)) { core::Mat4 w = bm * sd.local; at = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
         const core::Vec3 ex{sw[active].extentUU.x * 0.01f, sw[active].extentUU.z * 0.01f, sw[active].extentUU.y * 0.01f};   // UE Z = up
         const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
-        const float damage = whirl ? 85.0f : pc.meleeCarrier_ ? 9999.0f : 150.0f;
+        const float damage = whirl ? 85.0f : (pc.meleeCarrier_ || pc.meleePoke_) ? 9999.0f : 150.0f;
         if (roller_.alive && !pc.meleeHitRoller_ && std::fabs(roller_.pos.x - at.x) <= ex.x + 1.21f && std::fabs(roller_.pos.z - at.z) <= ex.z + 1.21f &&
             std::fabs(roller_.pos.y - at.y) <= ex.y + 1.21f) {
             core::Vec3 d = roller_.pos - pc.actorLocation(); d.y = 0.0f;
             if (core::length(d) > 1e-4f) roller_.vel = roller_.vel + core::normalize(d) * 50.0f;   // TnRollerMineAbility.MeleeImpulse 5000
             pc.meleeHitRoller_ = true;
         }
-        const char* type = whirl ? "TransGame.TnDamageTypeWhirlwind" : "TransGame.TnDamageTypeMelee";
+        const char* type = whirl ? "TransGame.TnDamageTypeWhirlwind" : pc.meleePoke_ ? "TransGame.TnDamageTypePoke" : "TransGame.TnDamageTypeMelee";
         for (MatchOpponent* o : opponents_) {
             if (!o->spawned() || std::find(pc.meleeHit_.begin(), pc.meleeHit_.end(), o->matchPlayer()) != pc.meleeHit_.end()) continue;
             const Character& v = o->pawn();
@@ -2109,7 +2130,7 @@ void World::tickLocalMelee(float dt) {
             pc.meleeHit_.push_back(o->matchPlayer()); ++pc.meleeHitCount_;
             applyMatchDamage(o->matchPlayer(), localPlayer_, damage, false, type);
             // Momentum = normal(victim - attacker) x Impulse (WeaponAttack 30000, flag / bomb 80000, Whirlwind 2000) [CONF].
-            const float impulse = whirl ? 2000.0f : pc.meleeCarrier_ ? 80000.0f : 30000.0f;
+            const float impulse = whirl ? 2000.0f : pc.meleeCarrier_ ? 80000.0f : pc.meleePoke_ ? 200000.0f : 30000.0f;
             core::Vec3 dir = c - pc.actorLocation();
             if (core::length(dir) > 1e-4f) applyKnockback(o->matchPlayer(), core::normalize(dir) * impulse, type);
         }
@@ -2733,6 +2754,64 @@ void World::tickBuffShots(float dt) {
         s.life -= dt;
         if (done || s.life <= 0.0f) { buffShots_.erase(buffShots_.begin() + (long)i); continue; }
         s.pos = next;
+        ++i;
+    }
+}
+
+// Killstreak items: P.O.K.E. timer / fire, rocket turret drop, MinePooper mines [CONF RE §K + authored].
+void World::tickKillstreakItems(float dt) {
+    Character& pc = player_.pawn();
+    // TnWeaponPoke: SecondsUntilDeactivated 20 [H]; primary fire starts the MWT_Poke melee attack [H: melee weapons attack on fire].
+    if (pc.tempWeapon_ == 1) {
+        pc.tempWeaponRemain_ -= dt;
+        if (pc.tempWeaponRemain_ <= 0.0f || localDead_) pc.removeTempWeapon();
+        else if (player_.controller().fireHeld() && !pc.isMeleeing()) startLocalMelee(false);
+    }
+    // Rocket turret (WT_Heavy): tossed on Transform to vehicle (DropHeavyWeapons) or a swap (ChangedWeapon) [CONF]; the
+    // dropped turret pickup is not re-takeable here [PARTIAL].
+    if (pc.tempWeapon_ == 2 && (pc.isTransforming() || pc.form() == Form::Vehicle || pc.tempDropRequested_ || localDead_)) pc.removeTempWeapon();
+    pc.tempDropRequested_ = false;
+    // MinePooper: every 2.0 s while the 15 s buff lasts, spawn at owner + (400, 100, 0) rotated.
+    if (pc.minePooperRemain_ > 0.0f && !localDead_) {
+        pc.minePooperRemain_ -= dt; pc.minePooperTimer_ -= dt;
+        if (pc.minePooperTimer_ <= 0.0f) {
+            pc.minePooperTimer_ += 2.0f;
+            const core::Vec3 f = core::forwardFromYawPitch(pc.yaw(), 0.0f), r = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
+            KamikazeMine m; m.pos = pc.actorLocation() + f * 4.0f + r * 1.0f; m.vel = {0, 0, 0};
+            mines_.push_back(m);
+        }
+    }
+    const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+    for (size_t i = 0; i < mines_.size();) {
+        KamikazeMine& m = mines_[i];
+        m.t += dt;
+        bool boom = false, gone = m.t >= 60.0f || m.health <= 0.0f || localDead_;   // LifeSpan 60; destroyed with the owner [PROV]
+        if (m.t < 2.0f) {
+            // Hover phase (2 s) between 50 and 150 UU above the floor: rise to 1.0 m [PROV height within the range].
+            float gy; core::Vec3 gn;
+            if (collision_.valid() && collision_.groundHeight(m.pos.x, m.pos.z, m.pos.y + 0.5f, 0.5f, gy, gn)) m.pos.y += (gy + 1.0f - m.pos.y) * std::min(1.0f, 4.0f * dt);
+        } else {
+            // Seek: closest visible enemy within SearchRadius 2000 UU (disguised pawns ignored), HomingSpeed 2300 UU/s.
+            const MatchOpponent* tgt = nullptr; float best = 20.0f;
+            if (matchActive_)
+                for (const MatchOpponent* o : opponents_) {
+                    if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
+                    float d = core::length(o->pawn().actorLocation() - m.pos), tt;
+                    if (d < best && !(line && line->segmentHit(m.pos, o->pawn().actorLocation(), tt))) { best = d; tgt = o; }
+                }
+            if (tgt) {
+                m.vel = core::normalize(tgt->pawn().actorLocation() - m.pos) * 23.0f;
+                const Character& e = tgt->pawn();
+                const core::Vec3 d = e.actorLocation() - m.pos;
+                if (std::hypot(d.x, d.z) <= e.cylinderRadius(e.moveForm()) + 0.3f && std::fabs(d.y) <= e.cylinderHalfHeight(e.moveForm()) + 0.3f) boom = true;
+            } else m.vel = {0, 0, 0};
+            const core::Vec3 next = m.pos + m.vel * dt;
+            float tt;
+            if (line && core::length(m.vel) > 0.0f && line->segmentHit(m.pos, next, tt)) boom = true;
+            else m.pos = next;
+        }
+        if (boom) radiusDamage(m.pos, 125.0f, 5.0f, localPlayer_, "TransGame.TnDamageTypeKamikazeMine");
+        if (boom || gone) { mines_.erase(mines_.begin() + (long)i); continue; }
         ++i;
     }
 }

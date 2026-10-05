@@ -3,6 +3,11 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22z (2026-10-05) — last three killstreaks; Pass 22 complete
+- P.O.K.E. 2.0, Nucleon Shock Cannon, Thermo Mine Re-Spawner: all 12 class killstreaks implemented.
+- All abilities used by iconic presets plus HardLock / AbilityJammer / TransformDisruptor implemented; Disguise and DecoyTrap remain PARTIAL.
+- Regression: PARTICIPANT 21/21 (Streets, Gorge), WEAPON 18/18, TDM 43/43, CTF 12/12, CHASSIS 13/13, MAPSUITE 12/12.
+
 ## GAMEPLAY PASS 22y (2026-10-05) — HardLock, AbilityJammer, TransformDisruptor; HardLocked x1.4
 - RE §K: class-pool abilities and the HardLocked damage-taken multiplier (Orbital Beacon 2.0 now x1.4). PARTICIPANT 18/18.
 

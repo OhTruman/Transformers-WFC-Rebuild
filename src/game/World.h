@@ -66,6 +66,8 @@ struct HudGameState {
     float drain = 0.0f;                          // Drain ability active (s left)
     float seeEnemies = 0.0f, refillOnKill = 0.0f, abilitiesJammed = 0.0f, hardLocked = 0.0f;   // killstreak buffs on the local pawn (s left)
     // Roller sphere: Rendering draws FX_RollerMine_p.Mesh.RollerMineAbility_STAT (scale 0.5) at rollerPos.
+    int kamikazeMines = 0;                       // live MinePooper mines (positions: World::kamikazeMines())
+    float tempWeaponLeft = 0.0f;                 // P.O.K.E. 2.0 seconds left (0 otherwise)
     bool roller = false, rollerArmed = false;
     core::Vec3 rollerPos{0, 0, 0};
     float rollerFuse = 0.0f, rollerHealth = 0.0f, rollerSlow = 0.0f;
@@ -418,6 +420,11 @@ private:
     // TnAbilityAbilityJammer / TnAbilityTransformDisruptor projectiles (enemies only, no damage).
     struct BuffShot { core::Vec3 pos, vel; float radius, life; int kind; };   // kind 0 jammer, 1 transform disruptor
     std::vector<BuffShot> buffShots_;
+    // TnProjectileKamikazeMineKillstreak (MinePooper) [CONF RE §K]: hover 2 s, then seek an enemy within SearchRadius 2000 UU
+    // at HomingSpeed 2300 UU/s; 125 / 500 UU on contact; Health 50; LifeSpan 60.
+    struct KamikazeMine { core::Vec3 pos, vel; float t = 0.0f, health = 50.0f; int target = -1; };
+    std::vector<KamikazeMine> mines_;
+    void tickKillstreakItems(float dt);
     void tickBuffShots(float dt);
     const Character* matchPawn(int matchPlayer) const;
     // TnWeaponHoming lock state of the local pawn's active weapon.
@@ -438,6 +445,7 @@ public:
     const Sentry& sentry() const { return sentry_; }
     bool guidedMissileAlive() const { return missile_.alive; }
     const RollerMine& rollerMine() const { return roller_; }
+    const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }
     void damageRollerMine(float amount, int instigator);
     core::Vec3 guidedMissilePos() const { return missile_.pos; }
     void damageSentry(float amount, int instigator, const std::string& type);

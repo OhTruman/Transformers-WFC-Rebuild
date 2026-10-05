@@ -343,6 +343,15 @@ Classification:
   - Shots aim through the crosshair. Their life after a miss (3 s) is PROV.
   - Cooldowns 60 s.
   - Test (PARTICIPANT 18/18).
+- **Weapon / spawner killstreaks** [CONF RE §K + authored]:
+  - **P.O.K.E. 2.0:** TnWeaponPoke for 20 s (SecondsUntilDeactivated [H]): DisallowWeaponSwitching, ground speed ×1.5.
+    Fire or Q = the MWT_Poke attack: Melee_Axe sweep at 0.335 s, 9999 TnDamageTypePoke, impulse 200000, lunge.
+  - **Nucleon Shock Cannon:** HeavyRocketTurret (HeavyTurret_Rocket_WEPDATA: 10 rockets, 1.75 s, 120 m/s, 500 / 25 m),
+    WT_Heavy: dropped on swap or transform (not re-takeable [PARTIAL]); ground speed ×0.75.
+  - **Thermo Mine Re-Spawner:** 15 s buff spawning a kamikaze mine every 2 s at owner + (400, 100, 0).
+    Mine: hover 2 s (1 m [PROV within 50–150 UU]), then seeks the closest visible enemy within 2000 UU at 2300 UU/s;
+    125 / 500 UU on contact; health 50; life 60 s.
+  - All 12 class killstreaks are implemented. Test (PARTICIPANT 21/21 on Streets and Gorge).
 - Remaining unimplemented abilities (class pools only): Disguise, DecoyTrap are listed per slot and reported
   unimplemented (log + HUD `implemented = false`) [PARTIAL].
   Skills are not applied in versus (skill-data index 0, no skill effects) [PARTIAL]; killstreaks: see above.

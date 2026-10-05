@@ -75,7 +75,8 @@ public:
     float speedMultiplier() const {
         return speedMult_ * specialtySpeedMult_ * (meleeState_ == 1 ? 0.75f : meleeState_ == 2 ? 1.2f : 1.0f) *
                (drainRemain_ > 0.0f ? 0.7f : 1.0f) *   // TnBuffDrainSource SpeedMultiplier 0.7
-               (rollerSlowRemain_ > 0.0f ? 0.75f : 1.0f);   // TnBuffRollerSphere
+               (rollerSlowRemain_ > 0.0f ? 0.75f : 1.0f) *   // TnBuffRollerSphere
+               (tempWeapon_ == 1 ? 1.5f : tempWeapon_ == 2 ? 0.75f : 1.0f);   // Poke / rocket turret ground speed
     }
     // TnSpecialty.Apply: SetSpeedMultiplier(SpeedMultiplier, P) + InitializeSegmentedHealth(HealthBlueprint) [CONF].
     void setSpecialty(const std::string& id, float speedMult, const std::vector<float>& segments, float overshield) {
@@ -83,6 +84,7 @@ public:
         health_.initialize(segments, overshield);
     }
     void clearSpecialty() { specialty_.clear(); specialtySpeedMult_ = 1.0f; specHealth_.clear(); specOvershield_ = 550.0f; health_ = Health{}; }
+    float specialtySpeedMultiplierForTest() const { return speedMult_ * specialtySpeedMult_; }   // base x specialty (no buffs)
     const std::string& specialty() const { return specialty_; }
     // Fine aim state (TnFineAimManager.bFineAiming), owned by the controller.
     void setFineAiming(bool b) { fineAiming_ = b; }
@@ -176,7 +178,28 @@ public:
     int meleeSweep_ = -1;                 // index of the active sweep window
     std::vector<int> meleeHit_;           // match players already hit by the active sweep
     int meleeAlternate_ = 0;
-    bool meleeHitRoller_ = false;         // the roller mine was already kicked by this sweep
+    bool meleeHitRoller_ = false;
+    bool meleePoke_ = false;              // the attack is the MWT_Poke attack (P.O.K.E. 2.0)
+    // Killstreak weapons [CONF RE §K + authored]: 1 TnWeaponPoke (SecondsUntilDeactivated 20, DisallowWeaponSwitching, ground
+    // speed x1.5), 2 TnWeaponRocketTurretKillStreak (HeavyTurret_Rocket_WEPDATA, WT_Heavy, ground speed x0.75).
+    int tempWeapon_ = 0;
+    float tempWeaponRemain_ = 0.0f;
+    int tempPrevActive_ = 0;
+    bool tempDropRequested_ = false;
+    void grantTempWeapon(const WeaponDef& d, int kind, float secs) {
+        removeTempWeapon();
+        inventory_.push_back(Weapon::fromDef(d));
+        tempPrevActive_ = activeWeapon_;
+        activeWeapon_ = (int)inventory_.size() - 1; switchTo_ = -1; switchRemain_ = 0.0f;
+        tempWeapon_ = kind; tempWeaponRemain_ = secs;
+    }
+    void removeTempWeapon() {
+        if (!tempWeapon_ || inventory_.empty()) { tempWeapon_ = 0; return; }
+        inventory_.pop_back();
+        activeWeapon_ = std::min(tempPrevActive_, (int)inventory_.size() - 1);
+        tempWeapon_ = 0; tempWeaponRemain_ = 0.0f;
+    }
+    float minePooperRemain_ = 0.0f, minePooperTimer_ = 0.0f;   // TnBuffMinePooper 15 s, a mine every 2.0 s         // the roller mine was already kicked by this sweep
     int meleeHitCount_ = 0;               // total melee hits landed (diagnostics)
     bool meleeCarrier_ = false;
     bool barrierAlive_ = false;
@@ -347,7 +370,7 @@ public:
         for (const std::string& n : vehicleWeapons) if (const WeaponDef* d = findWeaponDef(n)) vehicleLoadout_.push_back(Weapon::fromDef(*d));
         vehicleInventory_ = vehicleLoadout_;
         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;
-        activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1;
+        activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1; tempWeapon_ = 0; tempWeaponRemain_ = 0.0f; minePooperRemain_ = 0.0f;
         while (activeWeapon_ + 1 < (int)inventory_.size() && inventory_[(size_t)activeWeapon_].fireType == WeaponFire::Grenade) ++activeWeapon_;
     }
     const std::vector<std::string>& vehicleWeapons() const { return vehicleWeapons_; }
@@ -359,6 +382,8 @@ public:
     void requestWeaponSwitch(int dir) {
         // The grenade bag (TnGrenadeBag, WT_Grenades) is given without activation and thrown with G: not in the swap cycle.
         if (carryingHeavy_) { heavyDropRequested_ = true; return; }   // ChangedWeapon tosses the heavy weapon; the gun returns
+        if (tempWeapon_ == 1) return;                                  // TnWeaponPoke.DisallowWeaponSwitching
+        if (tempWeapon_ == 2) { tempDropRequested_ = true; return; }   // WT_Heavy rocket turret: tossed on swap
         int n = (int)inventory_.size();
         if (n < 2 || switchTo_ >= 0 || weapon().reloading()) return;
         int to = activeWeapon_;

@@ -170,6 +170,7 @@ private:
 public:
     bool consumeKillstreakRequest() { bool b = wantKillstreak_; wantKillstreak_ = false; return b; }
     bool consumeMeleeRequest() { bool b = wantMelee_; wantMelee_ = false; return b; }
+    bool fireHeld() const { return wantFire_; }
     bool consumeGrenadeRequest() { bool b = wantGrenade_; wantGrenade_ = false; return b; }
     bool consumePickupRequest() { bool b = wantPickup_; wantPickup_ = false; return b; }
 private:

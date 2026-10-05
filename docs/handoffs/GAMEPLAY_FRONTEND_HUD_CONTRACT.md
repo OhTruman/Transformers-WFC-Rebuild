@@ -111,6 +111,7 @@ it for the weapon icon / DeathString lookup.
 | Carried objectives | `carried[]` {kind 0 flag / 1 bomb, holder, holderTeam, dropped, active, pos, autoReturn, returnLeft, sleep}, `localCarrying` | flag-return progress = 1 − returnLeft / 10 |
 | Bomb | `bombPlanted`, `bombFuse` (CurrentObjectiveCountdown), `bombDefuse`, `bombPlantTeam` | |
 | Objective markers | `objectives[]` for every active-in-mode objective (DOM, KOTH, flag factories, capture points, bomb, plant points) with `ownerTeam` and `active` | |
+| Killstreak items | `tempWeaponLeft` (P.O.K.E. s left), `kamikazeMines` (count; positions World::kamikazeMines()) | Poke / rocket turret show as the active weapon (weaponId Poke / HeavyRocketTurret) |
 | Roller sphere | `roller`, `rollerArmed`, `rollerPos`, `rollerFuse` (of 10), `rollerHealth` (of 200), `rollerSlow` (local pawn slowed, s) | Rendering draws RollerMineAbility_STAT ×0.5 at rollerPos |
 | Guided missile | `guidedMissile`, `guidedMissilePos`, `guidedMissileFuse` (of 30) | the camera follows the missile (Gameplay camera); missile FX for Rendering |
 | Sentry | `sentry`, `sentryHealth` (of 135), `sentryPos`, `sentryTarget` | mesh drawn by Gameplay; marker TnObjectiveMarkerTypeSentryAbility |

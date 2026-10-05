@@ -2187,6 +2187,71 @@ void Application::runParticipantTest() {
             }
         }
     }
+    // Weapon / spawner killstreaks: P.O.K.E. 2.0, Nucleon Shock Cannon, Thermo Mine Re-Spawner.
+    {
+        game::MatchLaunch LD; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", LD);
+        world_.launchMatch(LD);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("K" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        const int me = world_.localMatchPlayer();
+        auto trigger = [&](const char* id) {
+            world_.match().playerMutable(me).acquiredKillstreaks.push_back(id);
+            platform::InputFrame b; b.pressed[(int)platform::Button::Killstreak] = true; b.down[(int)platform::Button::Killstreak] = true;
+            world_.handleInput(b, dt); world_.tick(dt);
+        };
+        bool poke = false, turret = false, mines = false;
+        if (E) {
+            ctl.setCameraYaw(lp.yaw());
+            if (moveToOpenLine(25.0f)) run(0.3f);
+            const core::Vec3 fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 80.0f);
+            // P.O.K.E.
+            trigger("PokeStreak");
+            const bool held = lp.weapon().def && std::string(lp.weapon().def->id) == "Poke" && std::fabs(lp.speedMultiplier() / lp.specialtySpeedMultiplierForTest() - 1.5f) < 0.01f;
+            platform::InputFrame sw; sw.pressed[(int)platform::Button::NextWeapon] = true; sw.down[(int)platform::Button::NextWeapon] = true;
+            world_.handleInput(sw, dt); world_.tick(dt); run(1.0f);
+            const bool noSwap = lp.weapon().def && std::string(lp.weapon().def->id) == "Poke";
+            E->setPosition(lp.position() + fwd * 4.0f); run(0.1f);
+            platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+            for (int i = 0; i < 60; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+            const bool killed = !E->spawned();
+            run(19.0f);
+            const bool expired = !(lp.weapon().def && std::string(lp.weapon().def->id) == "Poke");
+            poke = held && noSwap && killed && expired;
+            LOG_INFO("PARTICIPANT poke: held x1.5 %d, swap refused %d, fire kill %d, expired at 20 s %d", (int)held, (int)noSwap, (int)killed, (int)expired);
+            // Rocket turret
+            run(6.0f);
+            trigger("SpawnRocketTurretStreak");
+            const bool tHeld = lp.weapon().def && std::string(lp.weapon().def->id) == "HeavyRocketTurret" && lp.weapon().ammo == 10;
+            const size_t p0 = world_.projectiles().size();
+            for (int i = 0; i < 10; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+            const bool shot = world_.projectiles().size() > p0 || lp.weapon().ammo < 10;
+            world_.handleInput(sw, dt); world_.tick(dt); run(0.1f);
+            const bool dropped = !(lp.weapon().def && std::string(lp.weapon().def->id) == "HeavyRocketTurret");
+            turret = tHeld && shot && dropped;
+            LOG_INFO("PARTICIPANT turret: held 10 rockets %d, fired %d, swap dropped %d", (int)tHeld, (int)shot, (int)dropped);
+            // MinePooper
+            run(3.0f);
+            if (!E->spawned()) run(6.0f);
+            trigger("MinePooperStreak");
+            run(2.1f);
+            const int live = (int)world_.kamikazeMines().size();
+            E->setPosition(lp.position() + fwd * 10.0f);
+            const float eh0 = E->pawn().health().current;
+            for (int i = 0; i < 180; ++i) { E->setPosition(lp.position() + fwd * 10.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            const float eh1 = E->spawned() ? E->pawn().health().current : 0.0f;
+            mines = live >= 1 && eh0 - eh1 >= 100.0f;
+            LOG_INFO("PARTICIPANT minepooper: %d mine(s) after 2.1 s, enemy %.0f -> %.0f", live, eh0, eh1);
+        }
+        check(E && poke, "P.O.K.E. 2.0: Poke held (speed x1.5, no swapping), fire = 9999 poke, removed after 20 s");
+        check(E && turret, "Nucleon Shock Cannon: rocket turret with 10 rockets fires; a swap drops it (WT_Heavy)");
+        check(E && mines, "Thermo Mine Re-Spawner: a mine every 2 s; it seeks an enemy within 20 m and detonates (125)");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
