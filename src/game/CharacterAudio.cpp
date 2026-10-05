@@ -18,6 +18,7 @@ struct Db {
     std::map<std::string, std::string> weaponPickup;
     std::map<std::string, WeaponHitEffect> weaponHit;
     std::map<std::string, WeaponAnimSounds> weaponAnims;
+    std::map<std::string, WeaponFxTemplates> weaponFx;
 };
 
 const Db& db() {
@@ -83,6 +84,8 @@ const Db& db() {
     for (const auto& kv : d.doc["weapons"].obj) {
         for (const auto& e : kv.second["events"].obj) d.weaponEvents[kv.first][e.first] = e.second.asString();
         d.weaponPickup[kv.first] = kv.second["pickup_sound"].asString();
+        const assets::Json& fx = kv.second["fx"];
+        if (fx.isObject()) d.weaponFx[kv.first] = {fx["muzzle"].asString(), fx["tracer"].asString(), fx["squib"].asString()};
         const assets::Json& an = kv.second["anims"];
         if (an.isObject() && !an.obj.empty()) {
             WeaponAnimSounds& ws = d.weaponAnims[kv.first];
@@ -204,6 +207,12 @@ const std::string& CharacterAudio::weaponCue(const std::string& cls, const std::
     if (it == d.weaponEvents.end()) return empty();
     auto e = it->second.find(event);
     return e == it->second.end() ? empty() : e->second;
+}
+
+const WeaponFxTemplates* CharacterAudio::weaponFx(const std::string& cls) {
+    const Db& d = db();
+    auto it = d.weaponFx.find(cls);
+    return it == d.weaponFx.end() ? nullptr : &it->second;
 }
 
 const WeaponAnimSounds* CharacterAudio::weaponAnimSounds(const std::string& cls) {

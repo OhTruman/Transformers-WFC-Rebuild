@@ -205,7 +205,14 @@ for cls, w in weapons.items():
                    'block_event': (e.get('BlockSound') or '').split('.')[-1], 'retrigger': e.get('RetriggerTime', 0.0),
                    'causes_blood': causes_blood(dts[0])}
     wpn[cls] = {'events': ev, 'pickup_sound': dp.get('PickupSound'), 'damage_types': dts, 'hit_effect': hit,
-                'anims': weapon_anims((w.get('mesh') or {}).get('weapon_mesh_template'))}
+                'anims': weapon_anims((w.get('mesh') or {}).get('weapon_mesh_template')),
+                # WEPMESH MuzzleFlashes / TracerTemplates [WP_Fire] and DefaultSquib [CONF data] (presentation, not audio:
+                # kept here so one per-class table drives the held weapon)
+                'fx': {'muzzle': next((e.get('PSTemplate') for e in ((w.get('effects') or {}).get('muzzle_flashes') or [])
+                                       if e.get('WeaponEventType') == 'WP_Fire'), None) or '',
+                       'tracer': next((e.get('TracerTemplate') for e in ((w.get('effects') or {}).get('tracers') or [])
+                                       if e.get('WeaponEventType') == 'WP_Fire'), None) or '',
+                       'squib': (w.get('effects') or {}).get('default_squib') or ''}}
     for an in wpn[cls]['anims'].values():
         for t, q in an['sounds']: all_cues.add(q)
     all_cues |= set(ev.values())

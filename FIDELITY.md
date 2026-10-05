@@ -550,6 +550,29 @@ AssetTools FRONTEND.md + manifests/frontend_*.json (cc9773e). Full table: `docs/
     and hover-booster slots.
   * Not ported: SpeedSound, CustomLoopingSound (ram alert, turret rotate) and OneEightySound. They were not driven
     before either.
+* **Weapon FX by template** [CONF data]:
+  * Each weapon class's WEPMESH WP_Fire muzzle and tracer templates and its DefaultSquib are generated per class.
+  * World spawns the held class's templates. WeaponFx draws only the three it reconstructs, all shared with the Ion
+    Blaster:
+    * MuzzleFlash_AssaultRifle_FX and Tracer_AssaultRifle_FX — Assault Rifle (plus its plane and vehicle
+      variants), Heavy Pistol and Plane Machine Gun get both;
+    * Tracer_AssaultRifle_FX only — Burst Rifle and Heavy MG;
+    * Impact_IonBlaster_FX — the Ion Blaster only.
+  * Any other template draws nothing; another weapon's FX is never substituted. Each missing template is logged
+    once (Integration M08 decision); the weapon's sounds still play [PARTIAL].
+  * Unreconstructed templates go through Rendering's generic WfcMapFx runtime (Integration decision; API in
+    agents/rendering 38c9ecf). `WeaponFx::setGenericRuntime` takes three callbacks, bound by the host to
+    IRenderer::spawnParticleEffect, spawnParticleEffectSegment and setParticleEffectTransform:
+    * muzzle: socket position, X forward / Z up, and it follows the socket for 2 s;
+    * impact: +X = the surface normal;
+    * tracer: start → end.
+  * A -1 return or no binding: logged once, nothing drawn. `tools/systems/weaponfx_generic_probe.cpp` checks all of
+    this against a recording fake.
+  * PARTIAL:
+    * colour is not passed — the reconstructed blue is those templates' own stream constant, not a weapon tint, and
+      the runtime does not decode template defaults yet;
+    * the runtime does not draw Trail2 ribbons yet.
+  * No hand-ports.
 * **PARTIAL:**
   * 169 dialogue waves are absent from the extraction (AssetTools).
 * `SoundCues::findCue` resolves full asset names to the compiled short names, but only for the exact packages that

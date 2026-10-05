@@ -351,6 +351,61 @@ bool WeaponFx::spawnNotifyEffect(const std::string& ps, const core::Mat4& socket
     return false;
 }
 
+bool WeaponFx::reconstructs(const std::string& t) {
+    return t == kMuzzleFlashTemplate || t == kTracerTemplate || t == kImpactTemplate;
+}
+
+bool WeaponFx::unreconstructed(const char* kind, const std::string& t) {
+    if (t.empty()) return false;                                   // the weapon authors none: nothing to draw
+    if (missing_.insert(t).second)
+        LOG_WARN("weapon fx: %s template %s is not reconstructed - not drawn (no substitute)", kind, t.c_str());
+    return false;
+}
+
+bool WeaponFx::spawnGenericAt(const char* kind, const std::string& t, const Vec3& pos, const Vec3& fwd, const Vec3& up, bool followMuzzle) {
+    if (t.empty()) return false;
+    const int h = generic_.spawnAt ? generic_.spawnAt(t, pos, fwd, up) : -1;
+    if (h < 0) return unreconstructed(kind, t);
+    ++genericSpawned_;
+    if (followMuzzle) follow_.push_back({h, 0.0f});
+    return true;
+}
+
+static Vec3 anyUp(const Vec3& f) {                     // an up vector perpendicular to f
+    const Vec3 ref = std::fabs(f.y) < 0.9f ? Vec3{0, 1, 0} : Vec3{1, 0, 0};
+    return core::normalize(core::cross(core::cross(f, ref), f) * -1.0f);
+}
+
+bool WeaponFx::spawnMuzzleFlash(const std::string& t, const core::Mat4& socketWorld) {
+    if (t != kMuzzleFlashTemplate) {
+        const core::Mat4 f = orthonormal(socketWorld);
+        return spawnGenericAt("muzzle", t, col(f, 3), col(f, 0), col(f, 2), true);   // socket X = barrel forward, Z = up
+    }
+    spawnMuzzleFlash(socketWorld);
+    return true;
+}
+
+bool WeaponFx::spawnTracer(const std::string& t, const Vec3& muzzle, const Vec3& hit) {
+    if (t != kTracerTemplate) {
+        if (t.empty()) return false;
+        // Trail2 ribbons are not simulated by the runtime yet: only the template's sprite emitters draw [PARTIAL].
+        const int h = generic_.spawnSegment ? generic_.spawnSegment(t, muzzle, hit) : -1;
+        if (h < 0) return unreconstructed("tracer", t);
+        ++genericSpawned_;
+        return true;
+    }
+    spawnTracer(muzzle, hit);
+    return true;
+}
+
+bool WeaponFx::spawnImpact(const std::string& t, const Vec3& pos, const Vec3& normal, const Vec3& viewPos) {
+    if (t != kImpactTemplate) {
+        const Vec3 n = core::normalize(normal);                       // the squib's +X faces out of the surface
+        return spawnGenericAt("impact", t, pos, n, anyUp(n), false);
+    }
+    return spawnImpact(pos, normal, viewPos);
+}
+
 void WeaponFx::spawnMuzzleFlash(const core::Mat4& socketWorld) {
     muzzleNow_ = socketWorld; haveMuzzle_ = true;
     emit(kFlashLong, socketWorld, -1);
@@ -393,6 +448,17 @@ bool WeaponFx::spawnImpact(const Vec3& pos, const Vec3& normal, const Vec3& view
 
 void WeaponFx::tick(float dt, const core::Mat4* muzzleNow, const CollisionWorld* colw) {
     if (muzzleNow) { muzzleNow_ = *muzzleNow; haveMuzzle_ = true; } else haveMuzzle_ = false;
+    // Generic muzzle effects follow the socket while they can live (local-space emitters move with it; dead handles
+    // are no-ops in the runtime). 2 s covers every weapon muzzle template's emitter duration [HIGH].
+    for (size_t i = 0; i < follow_.size();) {
+        follow_[i].age += dt;
+        if (follow_[i].age > 2.0f || !haveMuzzle_) { follow_[i] = follow_.back(); follow_.pop_back(); continue; }
+        if (generic_.setTransform) {
+            const core::Mat4 f = orthonormal(muzzleNow_);
+            generic_.setTransform(follow_[i].handle, col(f, 3), col(f, 0), col(f, 2));
+        }
+        ++i;
+    }
     // Continuous emitters: SpawnRate particles/s at the current muzzle frame for EmitterDuration.
     for (size_t i = 0; i < streams_.size();) {
         Stream& st = streams_[i];

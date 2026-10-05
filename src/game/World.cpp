@@ -1,4 +1,5 @@
 #include "game/World.h"
+#include <set>
 #include "core/LoadYield.h"
 #include "game/CharacterAudio.h"
 #include "game/DamageTarget.h"
@@ -122,6 +123,12 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     mapMesh_ = renderer.uploadMesh(mapMesh);
     core::loadYield("World: map mesh upload");
     fx_.load(renderer, root + "/../content/");
+    // [integration M08b] Weapon templates WeaponFx does not reconstruct go to Rendering's particle runtime (M32: cooked
+    // ParticleSystems of the map packages; released at unloadMapRenderData). The renderer outlives this World.
+    fx_.setGenericRuntime({
+        [&renderer](const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { return renderer.spawnParticleEffect(t, p, f, u); },
+        [&renderer](const std::string& t, const core::Vec3& a, const core::Vec3& b) { return renderer.spawnParticleEffectSegment(t, a, b); },
+        [&renderer](int h, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) { return renderer.setParticleEffectTransform(h, p, f, u); }});
     core::loadYield("World: effects");
     fx_.loadMeshes(renderer, root + "/../content/");
     vehicleFx_.load(renderer, root + "/../content/");
@@ -579,14 +586,19 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
                      core::config::kMuzzleLocalY, core::config::kMuzzleLocalZ});
     }
     // WP_Fire presentation: muzzle flash at the MuzzleFlash socket, tracer muzzle -> impact,
-    // impact squib where the trace hit something (world or target).
-    // WeaponFx reproduces the Ion Blaster's cooked particle systems only; other weapons' muzzle / tracer / squib templates
-    // are exposed (HudGameState / WeaponDef) for Rendering instead of drawing the Ion Blaster's [PARTIAL].
-    const bool ionFx = !w.def || std::string(w.def->id) == "IonBlaster";
-    if (ionFx && weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(ms);
-    if (ionFx) fx_.spawnTracer(muzzle, hitPoint);
-    if (dist < range - 0.01f)
-        fx_.spawnImpact(hitPoint, dir * -1.0f, origin);
+    // impact squib where the trace hit something (world or target) - the HELD weapon class's templates
+    // (setPlayerWeaponAudio); WeaponFx draws the ones it reconstructs, Rendering's particle runtime the others
+    // (setGenericRuntime), and nothing for a template neither has (logged once) [integration M08b: no other weapon's
+    // FX is substituted - a class without an FX entry draws none].
+    const WeaponFxTemplates* wfx = CharacterAudio::weaponFx(weaponClass_);
+    if (!wfx) {
+        static std::set<std::string> warned;
+        if (warned.insert(weaponClass_).second) LOG_WARN("weapon fx: no templates for %s (nothing drawn)", weaponClass_.c_str());
+    }
+    if (wfx && weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(wfx->muzzle, ms);
+    if (wfx) fx_.spawnTracer(wfx->tracer, muzzle, hitPoint);
+    if (wfx && dist < range - 0.01f)
+        fx_.spawnImpact(wfx->squib, hitPoint, dir * -1.0f, origin);
     if (std::getenv("WFC_MUZZLELOG") && player_.pawn().hasWeapon()) {
         const core::Mat4& wm = player_.pawn().weaponWorld();
         LOG_INFO("MUZZLE hand=%.2f,%.2f,%.2f tip=%.2f,%.2f,%.2f (|offset|=%.2fm) aimYaw=%.3f legYaw=%.3f",
