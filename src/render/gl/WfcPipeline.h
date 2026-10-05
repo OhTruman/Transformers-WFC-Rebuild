@@ -203,6 +203,7 @@ private:
         float lmCoord[4] = {1, 1, 0, 0};
         GLuint vlmTex = 0;        // vertex (LMT_1D) lightmap: RGB32F, width = vertices, rows = coefficients
         bool noLights = false;    // authored: receives no light (bAcceptsLights false / no lighting channels)
+        bool dynChannel = false;  // authored LightingChannels = Dynamic only: Dynamic-channel lights, per frame
         int vlmBase = 0;          // first vertex of the component in the VBO (gl_VertexID - base)
         core::Vec3 bmin, bmax;
         bool envReady = false;
@@ -302,6 +303,7 @@ private:
     struct VertexLM { int count = 0; std::vector<float> rgb; float scale[3][3]; };
     std::map<std::string, VertexLM> vertexLMs_;          // component (lower) -> decoded samples
     std::set<std::string> hiddenComponents_, noLightComponents_;   // authored render flags (lower-case keys)
+    std::set<std::string> dynChannelComponents_;
     LightVisibilityVolume lvv_;   // WFC LightsVisibilitiesVolume (native layout, b52dca9)
     // WFC DirectLightEnv per character form (0 robot, 1 vehicle): WfcDirectLightEnv.cpp
     struct DirectLightEnvState {

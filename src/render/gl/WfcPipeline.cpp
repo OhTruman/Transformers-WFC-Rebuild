@@ -728,6 +728,7 @@ bool Pipeline::load(const std::string& mapName) {
         std::transform(key.begin(), key.end(), key.begin(), ::tolower);
         if (kv.second["hidden"].asBool(false)) hiddenComponents_.insert(key);
         if (kv.second["no_lights"].asBool(false)) noLightComponents_.insert(key);
+        if (kv.second["dynamic_channel"].asBool(false)) dynChannelComponents_.insert(key);
     }
 
     const assets::Json& jl = L["lights"];
@@ -1511,6 +1512,7 @@ int Pipeline::upload(const MeshData& m) {
         // by game rule); collection components without an actor identity are dropped as before
         if (hiddenComponents_.count(key) && !std::getenv("WFC_SHOWHIDDEN") && d.actor.empty()) continue;
         d.noLights = noLightComponents_.count(key) > 0;
+        d.dynChannel = dynChannelComponents_.count(key) > 0;
         if (key.rfind("actor:", 0) == 0) {
             auto ac = actorComponent_.find(key.substr(6));
             if (ac != actorComponent_.end() && !ac->second.empty()) key = ac->second;
@@ -1870,6 +1872,12 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                         dynEnvReady = true;
                     }
                     env = &dynEnv;
+                } else if (s.dynChannel && !s.noLights) {
+                    // Dynamic-channel primitive (movable actor with a light environment): the Dynamic-channel lights
+                    // at its current position, re-evaluated per frame as it moves (rotating debris, Matinee ships)
+                    core::Vec3 c = core::transformPoint(subModel, (s.bmin + s.bmax) * 0.5f);
+                    computeEnv(c, true, s.env);
+                    env = &s.env;
                 } else {
                     if (!s.envReady) {
                         if (s.noLights) s.env = LightEnv{};    // no overlapping lighting channel: emissive only

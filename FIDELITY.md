@@ -17,6 +17,13 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 41 — HUMAN PLAYTEST PASS: TITLE BLACK SHIPS, TITLE VIGNETTE OWNERSHIP (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Title ships / debris solid black | the title's 51 movable InterpActors (transports, debris; UI_FrontEnd_capture_VIG_m / UI_FrontEnd_m) author LightingChannels = {Dynamic} with their own enabled LightEnvironmentComponent (engine default bEnabled False). UE3 lights them with the Dynamic-channel lights (SkyLight 2.0 (142,173,210), PointLight_8444 15.0 cyan r 250 m); the renderer lit every non-lightmapped world submesh with the Static set only (one 5.0 / 40 m point light): near black. Albedo was intact (WFC_ALBEDO), lighting was missing (WFC_LIGHTINGONLY) | cooked components (props_authored lighting_channels_on, LightEnvironmentComponent_7904 bEnabled); debug views | CONFIRMED (data + UE3 channel overlap) | build_lighting component_flags dynamic_channel; such submeshes take the Dynamic-channel environment at their current position each frame. Title near-black 9.9 % -> 2.5 %; the M08b human frame's black transport is lit with its hull detail. Streets suite identical (its 8 Dynamic-only components unchanged on screen). Not a global ambient change |
+| Empty-channel components | the title's 41 empty-channel components are glow spheres / light cones / debris cards / SpaceDome with bAcceptsLights False: emissive only is right | props_authored | CONFIRMED | unchanged |
+| Title vignette side strips (HUMAN-CONFIRMED) | reproduced on M08b at 1280x720, 1920x1080, 2560x1440 windowed and 2560x1440 fullscreen: darkening covers 87.5 % of the width. The vignette is a GFx asset (FrontEnd_GFX_I24, black, alpha 58 at edges -> 0 centre, scale-9 clip screenSoftEdges_mc); FrontEnd / Hud stages are 1120x720 (14:9). The movie's own Stage.onResize stretches it to Stage.width x Stage.height; the GFx host reported the authored 1120 and sent onResize only to noScale movies | SWF headers, I24 pixels, renderer-only title frame has no vignette, Frontend's AS reading | CONFIRMED | ownership: Frontend GFx host (not renderer viewport / scissor / quad). Fixed in agents/frontend (showAll movies get the visible area as Stage.width / height + onResize; authored art unchanged); recheck pending on a merged preview |
+
 ## MILESTONE 35 — VECTOR-CHANNEL PROOF INHERITED BY INSTANCES (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
