@@ -3,6 +3,53 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08c (2026-10-05) — human-playtest rendering, AMD stability, Gameplay Pass 23 — branch `integration/milestone-08c`
+
+On top of 08b (cb51fc1). Same executable paths; render data regenerated (Standard + 10 MP maps: weapon materials, Trail2 /
+Beam2 data, dynamic-channel flags).
+
+| lane | head | content |
+|---|---|---|
+| agents/rendering | 84ba009 | M41 Dynamic-channel lighting (title ships no longer black); M42 all 57 weapon materials (untextured Sniper / grey Burst Rifle); M43 / M44 GL debug output, context-reset poll, GPU frame timer, index-range guards, Trail2 / Beam2 ribbons; M45 skinPose sub-mesh ranges (out-of-bounds GPU fetch, a likely AMD reset trigger) |
+| agents/gameplay | aa0dfd1 | Pass 23: mouse wheel / PgUp / PgDn = NextWeapon, TryPutDown switching (32 / 32); vehicle UpdateTurn semantics (glancing-wall tilt 69° → 6°), boost jump (apex 4.9 m vs RE 5.05), VEHPHYS 26 / 26; hudAimState weapon class; GRI; middle-mouse melee |
+| agents/frontend | ba1f31c | GoalScore before match values; GRI objective defaults; wave keys only for the SV GRI |
+| agents/systems | 9081f22 | localized wave twins (docs) |
+
+**Integration:**
+- One mouse-wheel accumulator. The merge left two members and two reads, and the first read zeroed the wheel.
+- HUD weapon class back to Gameplay's hudAimState() as the single source.
+- Gameplay Pass 23 harnesses added to the direct-boot list.
+- A TDM HUD showed "NEW WAVE IN 0" (Frontend 386295d with Gameplay bec41cd); fixed, and adopted by Frontend in ba1f31c.
+
+**Validation (final binaries):**
+- Builds and suites:
+  - Debug / Release clean;
+  - frontend 79 / 0, harness 191 / 0;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 21, chassis 13, switch 32 / 32, vehicle physics 26 / 26, score 9 / 9;
+  - transform 0 / 1520, chaos 0 / 0 / 0;
+  - jitter 0.0003 / 0.0003 / 0.0002°;
+  - audio 612 / 0.
+- Map suite: 8 / 8 versus maps.
+- release_path_check PASS.
+- Visual suite: Streets cameras refdiff 0.000. Title and route-match frames differ by design: lit title ships; the lobby team now picks the spawn side.
+- Frontend soaks:
+  - 10 matches, Rendering + Frontend tree;
+  - 10 matches, + Gameplay Pass 23;
+  - 4 matches, final.
+  - All three: 0 GL debug errors, 0 out-of-bounds draws, 0 context resets, 0 timeouts. The final binaries logged 0 GPU frames over 250 ms (the pre-Gameplay soak logged 3, at 258–292 ms).
+  - Bodies / weapons / both factions correct.
+  - Textures plateau at 78. Memory plateaus after the Rust high water (~3.7 GB unloaded; ~400 MB above M08: weapon materials, ribbon data, ~300-clip character exports).
+
+**AMD resets:** the human's resets were not reproduced on this machine. M45 (out-of-bounds index fetch on body reuse) is the strongest candidate and is fixed (UNKNOWN until a human session confirms). If one recurs, keep wfc.log: its last "GPU frame time", "GL debug" and "out of bounds" lines are the evidence.
+
+**Open:**
+- Tank glancing-wall tilt up to its 30° rule; ramp launches not compared (Gameplay PARTIAL).
+- Jet / tank / car-hover vehicle audio inputs (Gameplay → Systems).
+- Beam taper / trail tessellation; 16 / 451 undecoded default colours (Rendering).
+- Vehicle-form HUD weapon panel empty (hudAimState has no class when no robot weapon is drawn; check against the original).
+- Robust GL context (WGL_ARB_create_context_robustness), recommended by Rendering, platform.
+
 ## INTEGRATION MILESTONE 08b (2026-10-05) — weapon effects from the original data — branch `integration/milestone-08b`
 
 Follow-up to M08 (76b25dd / 9bc9f1b, unchanged). Same executables (`build\bin` / `build\release\bin\wfc_rebuild.exe`),
