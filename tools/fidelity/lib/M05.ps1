@@ -118,6 +118,14 @@ function FlatGreyFraction([string]$bmp) {
 # Frontend pass-4 routing (CONFIRMED original per Frontend: TnQuitMessageBox): Quit asks "Quit Game?" (Yes / No) and a
 # match / game lobby quits to the PARTY LOBBY; Back from the party lobby (+ Yes) returns to the title. Detected from the
 # build's source; scripts written for the old direct routing are rewritten so tomorrow's gate does not stall on the box.
+# Park the real desktop cursor in the window corner before scripted menu input: a cursor over the window changes menu
+# focus by hover (Integration M07: two runs picked the wrong item). Uses the frontend "mouse:x,y" step when the build has it.
+$script:MouseParkCache = @{}
+function Get-MousePark([string]$Root) {
+    if (-not $Root) { return "wait:t=0" }
+    if (-not $script:MouseParkCache.ContainsKey($Root)) { $script:MouseParkCache[$Root] = [bool](Get-ChildItem (Join-Path $Root "srcrontend") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'rfind("mouse:"' -SimpleMatch -List | Select-Object -First 1) }
+    if ($script:MouseParkCache[$Root]) { return "mouse:2,2" } else { return "wait:t=0" }
+}
 function Test-QuitBox([string]$Root) { return [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp, *.h -ErrorAction SilentlyContinue | Select-String -Pattern "TnQuitMessageBox" -SimpleMatch -List | Select-Object -First 1) }
 function Convert-QuitRouting([string]$Script, [bool]$QuitBox) {
     if (-not $QuitBox -or -not $Script) { return $Script }

@@ -65,7 +65,7 @@ if ($Parts -contains "route") {
           "ui:Down", "wait:t=0.8", "shot:$d\${p}06_charselect_down.bmp", "ui:Accept", "wait:ui=InGame", "wait:t=1.5", "shot:$d\${p}07_spawn.bmp", "wait:t=3", "shot:$d\${p}08_moving.bmp", "wait:t=3", "shot:$d\${p}09_moving2.bmp",
           "showmenu", "wait:ui=Paused", "wait:t=1.5", "shot:$d\${p}10_paused.bmp", "wait:t=1", "shot:$d\${p}10b_paused_later.bmp", "ui:Accept", "wait:ui=InGame", "wait:t=1.5", "shot:$d\${p}11_resumed.bmp", "wait:t=2", "shot:$d\${p}12_resumed_later.bmp",
           "showmenu", "wait:ui=Paused", "wait:t=0.5", "call:Game.QuitToMainMenu", $(if ($quitBox) { "wait:t=1.5;shot:$d\${p}12b_quitbox.bmp;ui:Accept;wait:level=PartyLobby;wait:ui=InLobby;wait:t=2;shot:$d\${p}12c_party_after.bmp;ui:Back;wait:t=1.5;ui:Accept;wait:level=FrontEnd;wait:ui=FrontEnd" } else { "wait:level=FrontEnd;wait:ui=FrontEnd" }), "wait:t=3", "shot:$d\${p}13_frontend_after.bmp") -join ";" }
-    $s = @("wait:frontend", "wait:ui=FrontEnd", "wait:t=3", "shot:$d\a00_title.bmp", "wait:t=6", "shot:$d\a01_title_9s.bmp", (& $match "a"), (& $match "b"), "quit") -join ";"
+    $s = @("wait:frontend", (Get-MousePark $Root), "wait:ui=FrontEnd", "wait:t=3", "shot:$d\a00_title.bmp", "wait:t=6", "shot:$d\a01_title_9s.bmp", (& $match "a"), (& $match "b"), "quit") -join ";"
     if (-not $H.Contains("WFC_CHARSELECT")) { $s = $s.Replace("wait:movie=CustomTransformers;", "").Replace(";dump:CustomTransformers;ui:Down;wait:t=0.8;", ";").Replace("ui:Accept;wait:ui=InGame", "wait:ui=InGame") }   # builds before character selection: the match starts on its own
     $e = BaseEnv $d @{ WFC_FRONTEND_SCRIPT = $s; WFC_CHARSELECT = "1"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.25"; WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "10" }
     $r = if ($ReportOnly) { [pscustomobject]@{ rc = "n/a"; timedOut = "n/a" } } else { WaitGpu; Invoke-WfcSampled $exe $d $e 900 1.0 }
@@ -184,7 +184,7 @@ if ($Parts -contains "watchdog") {
         # alternative exits a player would try when Back does nothing: the dialog's Cancel (Right + Accept), Start, Esc
         $altSteps = "ui:Right;wait:t=0.4;ui:Accept;wait:t=2;shot:$d\e_alt1_cancel.bmp;dump:FrontEnd;ui:Start;wait:t=2;shot:$d\e_alt2_start.bmp;dump:FrontEnd;key:27;wait:t=2;shot:$d\e_alt3_esc.bmp;dump:FrontEnd;snapshot:alt"
         if ($sc.exits -eq 0) { $exitSteps = "shot:$d\d_exit1.bmp;snapshot:exit1" }
-        $s = @("wait:frontend", "wait:ui=FrontEnd", "wait:t=3", "shot:$d\a_main.bmp", "dump:FrontEnd", $sc.path.Replace("{D}", $d), "shot:$d\b_inside.bmp", "snapshot:inside", "dump:FrontEnd", "dump:Lobbies", "dump:Customize", $typing, $rebind, $exitSteps, $(if ($sc.exits -gt 0) { $altSteps }), "wait:t=1", "quit") | Where-Object { $_ }
+        $s = @("wait:frontend", (Get-MousePark $Root), "wait:ui=FrontEnd", "wait:t=3", "shot:$d\a_main.bmp", "dump:FrontEnd", $sc.path.Replace("{D}", $d), "shot:$d\b_inside.bmp", "snapshot:inside", "dump:FrontEnd", "dump:Lobbies", "dump:Customize", $typing, $rebind, $exitSteps, $(if ($sc.exits -gt 0) { $altSteps }), "wait:t=1", "quit") | Where-Object { $_ }
         if (-not $ReportOnly) { WaitGpu; $r = Invoke-WfcSampled $exe $d (BaseEnv $d @{ WFC_FRONTEND_SCRIPT = ($s -join ";"); WFC_FLOW_TIMEOUT = "150" }) 240 1.0 }
         $F = Read-FlowLog (Join-Path $d "flow.jsonl"); $log = Join-Path $d "wfc.log"; $ls = LastStep $d; $finished = @(Flow-Ev $F "snapshot" | Where-Object { $_.why -like "exit*" }).Count -gt 0
         $dumps = @(Read-GfxDumps $log); $mainDump = @($dumps | Where-Object { $_.movie -like "*FrontEnd_GFX*" } | Select-Object -First 1)[0]
@@ -220,8 +220,11 @@ if ($Parts -contains "watchdog") {
                      $inter = $layoutTexts.Count -ge 6; $interNote = "Mouse / Keyboard Layout card (read-only by design, CONFIRMED ORIGINAL per Frontend decompile): $($layoutTexts.Count) binding description texts visible (need >= 6; e.g. $(($layoutTexts | Select-Object -First 4) -join ' / '))" }
             "movie"  { $mp = @(Flow-Ev $F "movie.play") + @(Flow-Ev $F "movie.open" | Where-Object { $_.movie -notlike "TF_*" }); $inter = $mp.Count -gt 0; $interNote = "a movie started: $($mp.Count -gt 0)" }
             "credits" { $c1 = Present-Similar $inside "$d\b0_list.bmp"; $inter = $c1 -and $c1.grad -lt 0.8; $interNote = "after Accept on Credits the screen differs from the Extras list: $inter (similarity $(if ($c1) { $c1.grad }))" }
-            "preview" { $bodyL = @(Grep-Log $log 'skinned glb: .*?/Characters/'); $loadingTxt = @($dumps | ForEach-Object { $_.texts } | Where-Object { $_ -match '(?i)^loading' }).Count
-                     $inter = $bodyL.Count -gt 0 -and -not $loadingTxt; $interNote = "character model loaded for the preview: $($bodyL.Count -gt 0); 'LOADING' still shown: $([bool]$loadingTxt)" }
+            "preview" { # preview bodies: Rendering loadPreviewBody (Cust_Idle) via FrontendSceneGL logs "preview body <gltf>"; older builds "skinned glb: .../Characters/"
+                     $bodyL = @(Grep-Log $log 'preview body content/|skinned glb: .*?/Characters/'); $loadingTxt = @($dumps | ForEach-Object { $_.texts } | Where-Object { $_ -match '(?i)^loading' }).Count
+                     $pv = @(Flow-Ev $F "customize.preview"); $pvOwner = @($pv | ForEach-Object { "$($_.owner)" } | Select-Object -Unique)
+                     $ownerOk = (-not $pv.Count) -or ($pvOwner -contains "renderer")
+                     $inter = $bodyL.Count -gt 0 -and $ownerOk -and -not $loadingTxt; $interNote = "preview body loaded: $($bodyL.Count -gt 0) ($((@($bodyL | ForEach-Object { [regex]::Match($_.text, '(?:content/|Characters/)([^/]+)').Groups[1].Value } | Select-Object -Unique)) -join ', ')); customize.preview owner: $(if ($pv.Count) { $pvOwner -join ',' } else { 'no trace' }); 'LOADING' still shown: $([bool]$loadingTxt); the posed body on screen: HUMAN (sheet)" }
             default  { $inter = $present; $interNote = "" }
         }
         $state = if (-not $present) { "SCREEN NOT PRESENT" } elseif (-not $display) { "SCREEN PRESENT" } elseif (-not $inter) { "DISPLAY CORRECT (automated part)" } elseif (-not $exitOk) { "INTERACTION WORKING" } else { "FULLY FUNCTIONAL" }

@@ -54,7 +54,7 @@ foreach ($cfg in $Configs) {
         "call:Online.SetSelectedMapID,$($m.id);wait:t=1.5;shot:$d\$($m.key)_0lobby.bmp;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:t=1.5;shot:$d\$($m.key)_1spawn.bmp;wait:t=1.5;shot:$d\$($m.key)_2move.bmp;wait:t=1.5;shot:$d\$($m.key)_3move.bmp;snapshot:$($m.key)_ingame;wait:ui=GameEnded;wait:level=GameLobby;wait:ui=InLobby;wait:t=2;shot:$d\$($m.key)_4lobby_after.bmp"
     }
     $s = @("wait:t=2", "shot:$d\i1_intro_2s.bmp", "wait:t=4", "shot:$d\i2_intro_6s.bmp", "ui:Accept", "wait:t=3", "shot:$d\i3_intro_next.bmp", "ui:Accept", "wait:t=2", "ui:Accept", "wait:t=2", "ui:Accept",
-           "wait:frontend", "wait:ui=FrontEnd", "wait:t=3", "shot:$d\f0_title.bmp", "call:Online.OpenPartyLobby,GTS_TeamGame", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=2",
+           "wait:frontend", (Get-MousePark $root), "wait:ui=FrontEnd", "wait:t=3", "shot:$d\f0_title.bmp", "call:Online.OpenPartyLobby,GTS_TeamGame", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=2",
            "call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=2") + @($seg) + @("quit")
     $e = @{ WFC_FRONTEND_SCRIPT = ($s -join ";"); WFC_FLOWLOG = (Join-Path $d "flow.jsonl"); WFC_FLOW_TIMEOUT = "600"; WFC_NOMOUSE = "1"; WFC_VISUALCHECK = "1"; WFC_LIFECYCLE = "2"
             WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2"; WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "30" }
