@@ -202,6 +202,11 @@ bool FrontendSceneGL::load(const std::vector<std::string>& levels) {
 
 std::string FrontendSceneGL::release(const ui::GlCensus::Owned& keep) {
     if (!r_ || family_.empty()) return "";
+    // Leaving the room: the preview pawns go with it (a new visit spawns them again: initStreamingLvl -> SPAWN_Char).
+    // The posed-body handles stay cached (Rendering owns their lifetime; bounded by the roster).
+    preview_.clear();
+    previewHidden_[0] = previewHidden_[1] = false;
+    previewVehicle_[0] = previewVehicle_[1] = false;
     if (native_) { nativePreviewHook(r_, this, false); previewMeshes_.clear(); nativeUnload(r_); native_ = false; family_.clear(); return "renderer unloadFrontendScene"; }
     r_->unloadMapRenderData();
     std::string s = censusActive_ ? census_.release(keep) : std::string();

@@ -260,9 +260,10 @@ size_t countDisplay(const gfx::DisplayObject* d) {
 std::vector<std::pair<std::string, std::string>> GfxPresenter::navReport() {
     std::vector<std::pair<std::string, std::string>> r;
     std::string movies, extras;
-    size_t heap = 0, nodes = 0, grave = 0;
+    size_t heap = 0, nodes = 0, grave = 0, timers = 0;
     auto add = [&](GfxMovie& m) {
         heap += m.player().vm().heapSize();
+        timers += m.player().intervalCount();
         nodes += countDisplay(m.player().root());
         grave += m.player().graveyard.size();
     };
@@ -281,6 +282,8 @@ std::vector<std::pair<std::string, std::string>> GfxPresenter::navReport() {
         } else owner = cm.isObject() ? "object" : "none";
     }
     r.push_back({"movies", movies.empty() ? "-" : movies});
+    r.push_back({"asTimers", std::to_string(timers)});
+    r.push_back({"stickCb", std::to_string(stickCallbacks_.size())});
     r.push_back({"extras", extras.empty() ? "-" : extras});
     r.push_back({"focus", focus ? focus->object() : "-"});
     r.push_back({"focusExtras", std::to_string(focusExtras)});
@@ -519,9 +522,14 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     deliverKeys(in);
     deliverMouse(in);
     if (!stickCallbacks_.empty()) {
-        // Left stick for registered callbacks: the pad (XInput +Y up -> +Y down) or, on PC, the held arrow keys as full
-        // deflection [PC ADAPTATION: the shipped PC binding of the picker cursor is native].
+        // Left stick for registered callbacks: the pad (XInput +Y up -> +Y down) or, on PC, the movement keys (W / A / S / D,
+        // the PC left-stick equivalent) and the held arrow keys as full deflection [PC ADAPTATION: the shipped PC
+        // binding of the picker cursor is native; on WIN the movie only adds mouse handlers to the palette arrows].
         float sx = in.padLX, sy = -in.padLY;
+        if (in.isDown(platform::Button::Left)) sx = -1;
+        if (in.isDown(platform::Button::Right)) sx = 1;
+        if (in.isDown(platform::Button::Forward)) sy = -1;
+        if (in.isDown(platform::Button::Back)) sy = 1;
         if (in.uiIsDown(platform::UiKey::Left)) sx = -1;
         if (in.uiIsDown(platform::UiKey::Right)) sx = 1;
         if (in.uiIsDown(platform::UiKey::Up)) sy = -1;

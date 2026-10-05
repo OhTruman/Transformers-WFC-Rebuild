@@ -238,6 +238,7 @@ public:
     BitmapInstance* attachBitmap(MovieClip* parent, avm1::Object* bitmapData, int asDepth, bool smoothing);
     MovieClip* duplicate(DisplayObject* src, const std::string& name, int asDepth, avm1::Object* initObj);
     void removeObject(DisplayObject* d);
+    size_t intervalCount() const { size_t n = 0; for (const auto& iv : intervals_) n += iv.dead ? 0 : 1; return n; }
     // MovieClip.unloadMovie: every child is unloaded and kept in the graveyard (script objects may still refer to it).
     void unloadChildren(MovieClip* mc);
     bool swapDepths(DisplayObject* d, int newSwfDepth);
