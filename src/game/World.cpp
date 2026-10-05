@@ -1082,6 +1082,11 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
     }
     match_.recordDamage(victim, instigator, applied);
     if (victim == localPlayer_ && applied > 0.0f && instigator != victim) { ++damageTakenCount_; lastDamageFrom_ = match_.playerLocation(instigator); }
+    if (h->isDead() && instigator >= 0 && instigator != victim) {
+        Character* kp = instigator == localPlayer_ ? (localDead_ ? nullptr : &player_.pawn()) : nullptr;
+        for (MatchOpponent* o : opponents_) if (o->matchPlayer() == instigator && o->spawned()) kp = &o->pawn();
+        if (kp && kp->refillOnKillRemain_ > 0.0f) kp->health().heal(Health::HealType::AddAllSegments, 1.0f);   // TnBuffRefillHealthOnKill
+    }
     if (h->isDead()) {
         if (victim == localPlayer_) killLocalPlayer(instigator, false, damageType);
         else { match_.killed(instigator, victim, false, damageType); if (opp) opp->despawn(); }
@@ -1136,6 +1141,7 @@ HudGameState World::hudState() const {
     h.barrier = barrier_.alive; h.barrierHealth = barrier_.health;
     h.ammoBeacon = beacon_.alive; h.ammoBeaconPos = beacon_.pos; h.ammoBeaconLife = beacon_.life; h.ammoBeaconHealth = beacon_.health;
     h.ammoBeaconBuff = pc.beaconDamageBuff_ > 0.0f;
+    h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
     h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
     { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
     {
@@ -1204,7 +1210,14 @@ HudGameState World::hudState() const {
         t.ally = match_.settings().teamGame && t.team == me.team;
         t.drawn = t.ally;                                                       // enemy marker disabled by default
         t.label = t.drawn;
-        for (MatchOpponent* o : opponents_) if (o->matchPlayer() == (int)i) { t.pos = o->position(); if (o->pawn().cloakRemain_ > 0.0f) t.label = false; }   // TnBuffCloak: DisableLabel
+        for (MatchOpponent* o : opponents_) if (o->matchPlayer() == (int)i) {
+            t.pos = o->position();
+            // SetupEnemyMarker: drawn with TnBuffSeeEnemyObjectiveMarkers unless the enemy has a Warcry buff, or when the enemy is
+            // HardLocked by the displayer's team [CONF TnObjectiveMarkerTypeTransformerVersus].
+            if (!t.ally && ((pc.seeEnemiesRemain_ > 0.0f && o->pawn().warcryRemain_ <= 0.0f) ||
+                            (o->pawn().hardLockedRemain_ > 0.0f && o->pawn().hardLockedByTeam_ == me.team))) { t.drawn = true; t.label = true; }
+            if (o->pawn().cloakRemain_ > 0.0f) t.label = false;   // TnBuffCloak: DisableLabel
+        }
         h.tags.push_back(t);
     }
     return h;
@@ -1792,6 +1805,20 @@ std::string World::triggerLocalKillstreak() {
         pc.regenBuffRemain_ = 30.0f;                       // TnBuffHealthRegenKillStreak FloatModifier 2, BuffTime 30
     } else if (id == "FastAbilityCooldownStreak") {
         pc.fastCooldownRemain_ = 30.0f;                    // TnBuffFastAbilityCooldown CooldownMultiplier 5, BuffTime 30
+    } else if (id == "OrbitalReconStreak") {
+        teamPawns([](Character& p) { p.seeEnemiesRemain_ = 30.0f; });   // ABT_Team TnBuffSeeEnemyObjectiveMarkers
+    } else if (id == "ImprovedOrbitalReconStreak") {
+        // ABT_OtherTeam TnBuffHardLocked (BuffTime 10) + each opposing member TakeDamage(1, TnDamageTypeFlashBang).
+        for (MatchOpponent* o : opponents_)
+            if (o->spawned() && !match_.sameTeam(o->matchPlayer(), localPlayer_)) {
+                o->pawn().hardLockedRemain_ = 10.0f; o->pawn().hardLockedByTeam_ = team;
+                applyMatchDamage(o->matchPlayer(), localPlayer_, 1.0f, false, "TransGame.TnDamageTypeFlashBang");
+            }
+    } else if (id == "FriendlyKillHealthBonusStreak") {
+        teamPawns([](Character& p) { p.refillOnKillRemain_ = 60.0f; });   // ABT_Team TnBuffRefillHealthOnKill
+    } else if (id == "TeamAbilityJammerStreak") {
+        for (MatchOpponent* o : opponents_)                                // ABT_OtherTeam TnBuffAbilityJammedKillstreak 30 s
+            if (o->spawned() && !match_.sameTeam(o->matchPlayer(), localPlayer_)) o->pawn().applyJammed(30.0f);
     } else {
         LOG_WARN("killstreak %s triggered: effect not implemented in the rebuild [PARTIAL]", id.c_str());
     }
@@ -2212,7 +2239,13 @@ void World::damageBarrier(float amount, const std::string& type) {
 // FadeOut duration not applied: removal is immediate [PARTIAL].
 void World::tickAmmoBeacon(float dt) {
     Character& pc = player_.pawn();
-    auto tickBuff = [dt](Character& p) { p.beaconDamageBuff_ = std::max(0.0f, p.beaconDamageBuff_ - dt); };
+    auto tickBuff = [dt](Character& p) {
+        p.beaconDamageBuff_ = std::max(0.0f, p.beaconDamageBuff_ - dt);
+        p.seeEnemiesRemain_ = std::max(0.0f, p.seeEnemiesRemain_ - dt);
+        p.hardLockedRemain_ = std::max(0.0f, p.hardLockedRemain_ - dt);
+        p.refillOnKillRemain_ = std::max(0.0f, p.refillOnKillRemain_ - dt);
+        p.jammedRemain_ = std::max(0.0f, p.jammedRemain_ - dt);
+    };
     tickBuff(pc);
     for (MatchOpponent* o : opponents_) tickBuff(o->pawn());
     if (beaconDelay_ >= 0.0f) {

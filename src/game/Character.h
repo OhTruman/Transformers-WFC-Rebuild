@@ -175,7 +175,20 @@ public:
     int meleeHitCount_ = 0;               // total melee hits landed (diagnostics)
     bool meleeCarrier_ = false;
     bool barrierAlive_ = false;
-    bool beaconAlive_ = false;            // TnAbilitySpawnAmmoCrate: SpawnInventory timer active or the beacon exists
+    bool beaconAlive_ = false;
+    // Killstreak buffs [CONF authored CDOs + script]: TnBuffSeeEnemyObjectiveMarkers 30 s; TnBuffHardLocked 10 s (marker for
+    // the instigator's team; FloatModifier consumer not recovered); TnBuffRefillHealthOnKill 60 s; TnBuffAbilityJammedKillstreak
+    // 30 s (TnAbilityManager CooldownMultiplier 0).
+    float seeEnemiesRemain_ = 0.0f, hardLockedRemain_ = 0.0f, refillOnKillRemain_ = 0.0f, jammedRemain_ = 0.0f;
+    int hardLockedByTeam_ = 255;
+    // TnBuffAbilityJammed.Apply: CooldownMultiplier 0; remove Cloak / Disguise / Warcry buffs; StopShield; Fall; abort Whirlwind.
+    void applyJammed(float t) {
+        jammedRemain_ = std::max(jammedRemain_, t);
+        cloakRemain_ = 0.0f;
+        warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f;
+        if (hoverState_ != 0) hoverState_ = 0;
+        if (meleeState_ == 2) { meleeState_ = 0; meleeSweep_ = -1; actionClip_ = -1; }
+    }            // TnAbilitySpawnAmmoCrate: SpawnInventory timer active or the beacon exists
     float beaconDamageBuff_ = 0.0f;       // TnBuffAmmoBeaconIncreaseDamage remaining (x1.15, BuffTime 1 s, refreshed in range)           // TnAbilityBarrier: SpawnBarrier timer active or the barrier exists (cooldown waits)           // the attack is the flag / bomb carrier's MWT_Flag / MWT_Bomb attack
     int meleeVariant_ = 0;
     int carryingHeavy_ = 0;               // 1 flag, 2 bomb held as the current (WT_Heavy) weapon
@@ -228,7 +241,7 @@ public:
                 !(a.id == "SpawnAmmoCrate" && (beaconAlive_ || pendingAbilityEffect_ == "SpawnAmmoCrate"))) {
                 a.pendingCooldown = false; a.cooldown = a.cooldownTime;
             }
-            if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));
+            if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (jammedRemain_ > 0.0f ? 0.0f : fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));
         }
     }
     float rammedBaseY_ = 0.0f;

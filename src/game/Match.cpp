@@ -494,17 +494,17 @@ void Match::restartRound() {
 
 namespace {
 const KillstreakDef kKillstreaks[] = {
-    {"OrbitalReconStreak", 3, "Scout", "Orbital Beacon", false},
+    {"OrbitalReconStreak", 3, "Scout", "Orbital Beacon", true},
     {"HealthRegenStreak", 5, "Scout", "Energon Recharger", true},
-    {"ImprovedOrbitalReconStreak", 7, "Scout", "Orbital Beacon 2.0", false},
+    {"ImprovedOrbitalReconStreak", 7, "Scout", "Orbital Beacon 2.0", true},
     {"FastAbilityCooldownStreak", 3, "Leader", "Intercooler", true},
     {"PokeStreak", 5, "Leader", "P.O.K.E. 2.0", false},
     {"MinePooperStreak", 7, "Leader", "Thermo Mine Re-Spawner", false},
-    {"FriendlyKillHealthBonusStreak", 3, "Scientist", "Health Matrix 2.0", false},
+    {"FriendlyKillHealthBonusStreak", 3, "Scientist", "Health Matrix 2.0", true},
     {"OverShieldStreak", 5, "Scientist", "Overshield Matrix", true},
     {"SpawnRocketTurretStreak", 7, "Scientist", "Nucleon Shock Cannon", false},
     {"RefillAmmoStreak", 3, "Soldier", "Ammo Matrix", true},
-    {"TeamAbilityJammerStreak", 5, "Soldier", "Electromagnetic Pulse", false},
+    {"TeamAbilityJammerStreak", 5, "Soldier", "Electromagnetic Pulse", true},
     {"GuidedMissileStreak", 7, "Soldier", "Omega Missile", false},
 };
 }

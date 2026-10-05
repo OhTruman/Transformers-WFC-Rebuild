@@ -256,6 +256,16 @@ Inputs:
     (PROP_NEU_AmmoPickup_STAT).
   - PARTIAL: FadeOut duration (removal is immediate); skill gifts / grenades (no skills in versus).
   - Test (PARTICIPANT 11/11).
+- **Buff killstreaks** [CONF authored TnKillstreak* CDOs (TnAbilityAddBuff BuffTarget / BuffToAdd) + script]:
+  - **Orbital Beacon:** team TnBuffSeeEnemyObjectiveMarkers 30 s. SetupEnemyMarker draws enemy markers unless the
+    enemy has a Warcry buff.
+  - **Orbital Beacon 2.0:** other team TnBuffHardLocked 10 s (marker for the instigator's team) plus 1 damage
+    TnDamageTypeFlashBang. HardLocked's FloatModifier 1.4 / 1.55 / 1.6 consumer is not in script [UNKNOWN, not applied].
+  - **Health Matrix 2.0:** team TnBuffRefillHealthOnKill 60 s. TnPawn.HandleDied gives the killer
+    HealDamage(TnHealTypeHealthPickup = SHT_AddAllSegments).
+  - **EMP:** other team TnBuffAbilityJammedKillstreak 30 s. TnBuffAbilityJammed.Apply: CooldownMultiplier 0
+    (cooldowns frozen; ready abilities still usable); Cloak / Disguise / Warcry removed; hover falls; whirlwind aborts.
+  - HUD seeEnemies / hardLocked / refillOnKill / abilitiesJammed (s left). Test (PARTICIPANT 12/12).
 - RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (Barrier now implemented) (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].

@@ -1876,6 +1876,49 @@ void Application::runParticipantTest() {
         check(E && dropped && refilled && buffGone && ownIgnored && destroyed && cdWait && cdAfter,
               "Ammo beacon: dropped after 0.5 s; refills + x1.15 buff within 15 m; owner damage ignored; enemy destroys it; 60 s cooldown once gone");
     }
+    // Buff killstreaks: Orbital Beacon (enemy markers), Orbital Beacon 2.0 (hard lock + 1 flashbang damage), Health Matrix 2.0
+    // (full health on kill), EMP (enemy abilities jammed: cooldowns frozen, cloak removed).
+    {
+        game::MatchLaunch L7; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L7);
+        world_.launchMatch(L7);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("S" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        const int me = world_.localMatchPlayer();
+        auto trigger = [&](const char* id) {
+            world_.match().playerMutable(me).acquiredKillstreaks.push_back(id);
+            platform::InputFrame b; b.pressed[(int)platform::Button::Killstreak] = true; b.down[(int)platform::Button::Killstreak] = true;
+            world_.handleInput(b, dt); world_.tick(dt);
+        };
+        auto enemyTagDrawn = [&]() { for (const auto& t : world_.hudState().tags) if (E && t.player == E->matchPlayer()) return t.drawn; return false; };
+        bool ok = E != nullptr, recon = false, hard = false, matrix = false, emp = false;
+        if (ok) {
+            bool before = enemyTagDrawn();
+            trigger("OrbitalReconStreak");
+            recon = !before && enemyTagDrawn() && world_.hudState().seeEnemies > 29.0f;
+            run(31.0f);
+            bool reconOver = !enemyTagDrawn();
+            float eh = E->pawn().health().current;
+            trigger("ImprovedOrbitalReconStreak");
+            hard = reconOver && E->pawn().hardLockedRemain_ > 9.9f && E->pawn().health().current == eh - 1.0f && enemyTagDrawn();
+            trigger("FriendlyKillHealthBonusStreak");
+            game::Character& lp = world_.player().pawn();
+            lp.health().current = 40.0f;
+            world_.applyMatchDamage(E->matchPlayer(), me, 99999.0f, false, "TransGame.TnDamageTypeIonBlaster");
+            matrix = world_.hudState().refillOnKill > 59.0f && lp.health().current == lp.health().max;
+            run(6.0f);
+            if (E->spawned()) {
+                E->pawn().cloakRemain_ = 10.0f;
+                trigger("TeamAbilityJammerStreak");
+                emp = E->pawn().jammedRemain_ > 29.9f && E->pawn().cloakRemain_ == 0.0f;
+            }
+        }
+        LOG_INFO("PARTICIPANT streaks: recon %d, improved recon %d, health matrix %d, EMP %d", (int)recon, (int)hard, (int)matrix, (int)emp);
+        check(ok && recon && hard && matrix && emp,
+              "Killstreaks: Orbital Beacon markers 30 s; Beacon 2.0 hard lock 10 s + 1 dmg; Health Matrix full health on kill; EMP jam 30 s strips cloak");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

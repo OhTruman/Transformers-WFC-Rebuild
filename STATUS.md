@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22s (2026-10-05) — buff killstreaks
+- Orbital Beacon, Orbital Beacon 2.0, Health Matrix 2.0, EMP. 8 of 12 class killstreaks implemented. PARTICIPANT 12/12.
+
 ## GAMEPLAY PASS 22r (2026-10-05) — SpawnAmmoCrate (ammo beacon)
 - Beacon drop / refill / damage buff / health / lifespan / cooldown from script and authored data. PARTICIPANT 11/11.
 
