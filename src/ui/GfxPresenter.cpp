@@ -152,7 +152,6 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
         frontend::FlowTrace::emit("gfx.externalTexture", {{"movie", m.object()}, {"resource", sa[0]}, {"texture", obj}});
         return Value();
     }
-    if (fn.rfind("Self.", 0) == 0) { frontend::FlowTrace::emit("bridge.unhandled", {{"fn", fn}, {"movie", m.object()}}); return Value(); }
     if (fn == "Self.OpenMovieWithPath" && !sa.empty()) {
         for (const Extra& e : extras_) if (e.object == sa[0]) return Value();
         Extra e;
@@ -171,6 +170,7 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
             if (extras_[i].object == sa[0]) { rt_.dataStores().forgetMovie(sa[0]); deferredErase_.push_back(sa[0]); }
         return Value();
     }
+    if (fn.rfind("Self.", 0) == 0) { frontend::FlowTrace::emit("bridge.unhandled", {{"fn", fn}, {"movie", m.object()}}); return Value(); }
     if (fn == "Online.CheckIsProfileReady") {
         // TnOnlineActionScriptBinding.CheckIsProfileReady [CONFIRMED script]: a ready profile -> OwnerMovie.Invoke(
         // ProfileIsReadyCallback = "ProfileIsReady", CheckId); otherwise the TnLoadProfileStatusMessageBox popup. The
@@ -269,7 +269,8 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         for (size_t i = extras_.size(); i-- > 0;) if (extras_[i].object == o) { extras_.erase(extras_.begin() + (long)i); shapesStale_ = true; }
     deferredErase_.clear();
     for (Extra& e : extras_) e.movie->advance(dt);
-    // Deferred engine -> AS invokes.
+    // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).
+    for (const auto& iv : rt_.flow().takeUiInvokes()) deferred_.push_back({iv.first, iv.second, {}});
     std::vector<Deferred> due;
     due.swap(deferred_);
     for (Deferred& d : due) {

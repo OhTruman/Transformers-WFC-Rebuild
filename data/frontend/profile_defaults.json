@@ -1,0 +1,524 @@
+{
+ "source": "TransGame.Default__TnProfileSettings (DefaultSettings + ProfileMappings), authored.db",
+ "versionNumber": 52,
+ "fields": [
+  {
+   "id": 1,
+   "name": "Controller Vibration",
+   "type": "SDT_Bool",
+   "default": "True",
+   "owner": "OPPO_OnlineService"
+  },
+  {
+   "id": 2,
+   "name": "Invert Y",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_OnlineService"
+  },
+  {
+   "id": 12,
+   "name": "Game Difficulty",
+   "type": "SDT_Int32",
+   "default": "1",
+   "owner": "OPPO_OnlineService"
+  },
+  {
+   "id": 30,
+   "name": "Subtitles",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 31,
+   "name": "Music Volume",
+   "type": "SDT_Int32",
+   "default": "80",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 32,
+   "name": "FX Volume",
+   "type": "SDT_Int32",
+   "default": "80",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 33,
+   "name": "Dialogue Volume",
+   "type": "SDT_Int32",
+   "default": "80",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 34,
+   "name": "HasAdjustedGamma",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 35,
+   "name": "GammaSetting",
+   "type": "SDT_Int32",
+   "default": "50",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 37,
+   "name": "ProfileCorruptionState",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 40,
+   "name": "CameraSensitivity",
+   "type": "SDT_Int32",
+   "default": "30",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 41,
+   "name": "InvertY_Robot",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 42,
+   "name": "InvertY_Car",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 43,
+   "name": "InvertY_Tank",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 44,
+   "name": "InvertY_Plane",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 45,
+   "name": "SwitchRightThumbstickAndB",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 46,
+   "name": "UseAlternateControlScheme",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 47,
+   "name": "HasShownMPWarning",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 53,
+   "name": "HasShownTutorialWarning",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 54,
+   "name": "HasUploadedHardwareData",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 96,
+   "name": "A1Available",
+   "type": "SDT_Bool",
+   "default": "True",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 128,
+   "name": "A1Difficulty",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 112,
+   "name": "A1Checkpoint",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 97,
+   "name": "A2Available",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 129,
+   "name": "A2Difficulty",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 113,
+   "name": "A2Checkpoint",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 98,
+   "name": "A3Available",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 130,
+   "name": "A3Difficulty",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 114,
+   "name": "A3Checkpoint",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 99,
+   "name": "A4Available",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 131,
+   "name": "A4Difficulty",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 115,
+   "name": "A4Checkpoint",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 100,
+   "name": "A5Available",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 132,
+   "name": "A5Difficulty",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 116,
+   "name": "A5Checkpoint",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 101,
+   "name": "D1Available",
+   "type": "SDT_Bool",
+   "default": "True",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 133,
+   "name": "D1Difficulty",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 117,
+   "name": "D1Checkpoint",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 102,
+   "name": "D2Available",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 134,
+   "name": "D2Difficulty",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 118,
+   "name": "D2Checkpoint",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 103,
+   "name": "D3Available",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 135,
+   "name": "D3Difficulty",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 119,
+   "name": "D3Checkpoint",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 104,
+   "name": "D4Available",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 136,
+   "name": "D4Difficulty",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 120,
+   "name": "D4Checkpoint",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 105,
+   "name": "D5Available",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 137,
+   "name": "D5Difficulty",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 121,
+   "name": "D5Checkpoint",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 55,
+   "name": "AutobotCheckpointMissionComplete",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 56,
+   "name": "DecepticonCheckpointMissionComplete",
+   "type": "SDT_Int32",
+   "default": "-1",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 60,
+   "name": "Tutorial0",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 61,
+   "name": "Tutorial1",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 62,
+   "name": "Tutorial2",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 63,
+   "name": "Tutorial3",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 64,
+   "name": "Tutorial4",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 65,
+   "name": "Tutorial5",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 66,
+   "name": "Tutorial6",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 67,
+   "name": "Tutorial7",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 50,
+   "name": "SeenAutobotCampaignComplete",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 51,
+   "name": "SeenDecepticonCampaignComplete",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 52,
+   "name": "UseAllRegionMatchmaking",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_Game"
+  },
+  {
+   "id": 68,
+   "name": "HasBootedGame",
+   "type": "SDT_Bool",
+   "default": "False",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 12288,
+   "name": "BigSpenderAchievement",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 12295,
+   "name": "A1Special",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 12289,
+   "name": "A2Special",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 12290,
+   "name": "D2Special",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 12291,
+   "name": "Negotiator",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 12292,
+   "name": "Exterminator",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 12293,
+   "name": "DemolitionExpert",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 12294,
+   "name": "RocketsAway",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 12296,
+   "name": "CollectAutobot",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  },
+  {
+   "id": 12297,
+   "name": "CollectDecepticon",
+   "type": "SDT_Int32",
+   "default": "0",
+   "owner": "OPPO_GamePermanent"
+  }
+ ]
+}

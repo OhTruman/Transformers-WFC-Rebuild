@@ -274,6 +274,14 @@ void GameFlow::movieStopped(const std::string& movie) {
     }
 }
 
+void GameFlow::scriptMovieStopped() {
+    // EndMovieMode -> OnFullScreenMovieStop: MovieEnded on the current UI when it is the FrontEnd UI.
+    FlowTrace::emit("movie.stopped", {{"movie", scriptMovie_}, {"by", "Game.PlayMovie"}});
+    scriptMovie_.clear();
+    if (ui_.cls() == UIControllerClass::FrontEnd && !ui_.openMovie().empty())
+        uiInvokes_.push_back({ui_.openMovie(), "_global.MovieEnded"});
+}
+
 void GameFlow::frontEndStart() {
     if (frontEndStarted_) return;
     frontEndStarted_ = true;
@@ -313,6 +321,16 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     // Settings: the movie wrote the <OnlinePlayerData:ProfileData.*> fields; apply / save pushes them to their owners
     // and persists the profile (TnProfileSettings) [CONFIRMED call names].
     if (fn == "Game.ApplyProfileSettings" || fn == "Console.SaveProfileSettings") { profile_.apply(); return true; }
+    if (fn == "Game.PlayMovie") {
+        // TnGameActionScriptBinding.PlayMovie (native) -> HmPlayerController.ClientPlayMovie -> BeginMovieMode
+        // (OnFullScreenMovieStart: UI event 12, HUD / UI hidden) ... EndMovieMode (OnFullScreenMovieStop: UI event 13,
+        // then InvokeOnCurrentUIConditional(FrontEndUI, "_global.MovieEnded")) [CONFIRMED script]. The Extras menu
+        // removes its own input in _global.MovieStarted and gets it back only from MovieEnded.
+        scriptMovie_ = arg(0);
+        FlowTrace::emit("movie.play", {{"movie", scriptMovie_}, {"by", "Game.PlayMovie"}});
+        if (scriptMovie_.empty()) scriptMovieStopped();
+        return {};
+    }
     if (fn == "Game.QuitToMainMenu") { quitToMainMenu(); return {}; }
     if (fn == "Game.ExitGame") { quit_ = true; FlowTrace::emit("exit", {}); return {}; }
 

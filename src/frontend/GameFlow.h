@@ -147,6 +147,11 @@ public:
     // Kismet-driven frontend presentation (UI_FrontEnd_m Main_Sequence).
     const std::string& kismetMovie() const { return kismetMovie_; }        // SeqAct_MoviePlayer currently playing
     const std::vector<std::string>& queuedMovies() const { return movieQueue_; }   // the chain still to play
+    // Game.PlayMovie (Extras Movies / Credits): a full-screen movie in HmPlayerController movie mode.
+    const std::string& scriptMovie() const { return scriptMovie_; }
+    void scriptMovieStopped();
+    // Engine -> ActionScript invokes the flow raises (movie object, function path); the presenter delivers them.
+    std::vector<std::pair<std::string, std::string>> takeUiInvokes() { std::vector<std::pair<std::string, std::string>> v; v.swap(uiInvokes_); return v; }
     const std::vector<std::string>& openMovies() const { return openMovies_; }   // GFxAction_OpenMovie / OpenUI
     bool frontEndStarted() const { return frontEndStarted_; }
     // Level Kismet triggers the frontend owns, in order ("FsCommand:<cmd>", "MovieStopped:<movie>").
@@ -227,6 +232,8 @@ private:
     std::vector<std::string> movieQueue_;
     std::vector<std::string> kismetTriggers_;
     std::string kismetMovie_;
+    std::string scriptMovie_;
+    std::vector<std::pair<std::string, std::string>> uiInvokes_;
     std::vector<std::string> openMovies_;
     bool frontEndStarted_ = false, watchedIntro_ = false, pendingWatchedWrite_ = false;
     bool startScreenPassed_ = false;   // controller / profile / storage assigned (ShowDeviceSelectionUI)

@@ -420,8 +420,10 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
     // The loading underlay: [LoadingMovie] InitialStartupFileName / DefaultFileName (Xe-TransGame.ini), looped under
     // LoadScreen_GFX while a loading screen is up [HIGH]. The extracted files carry region / language suffixes; the
     // rebuild picks <name>_NA_INT, then <name>_INT, then <name> [PARTIAL: region of the dump UNKNOWN, see GetRegionCode].
-    const std::string& m = flow_.kismetMovie();
+    const bool scripted = flow_.kismetMovie().empty() && !flow_.scriptMovie().empty();
+    const std::string& m = scripted ? flow_.scriptMovie() : flow_.kismetMovie();
     std::string want = m;
+    auto stopped = [&](const std::string& name) { if (scripted) flow_.scriptMovieStopped(); else flow_.movieStopped(name); };
     if (want.empty() && flow_.loading().active && !flow_.loading().binkMovie.empty()) {
         const std::string& b = flow_.loading().binkMovie;
         if (b != underlayFor_) {
@@ -434,7 +436,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
     }
     if (want != videoName_) {
         if (want.empty()) { stopMovieAudio(); video_.reset(); videoName_.clear(); }
-        else if (!openVideo(want, m.empty()) && !m.empty()) { flow_.movieStopped(m); videoName_.clear(); }
+        else if (!openVideo(want, m.empty()) && !m.empty()) { stopped(m); videoName_.clear(); }
     }
     if (!video_) return;
     video_->advance(dt);
@@ -465,7 +467,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         video_.reset();
         std::string done = videoName_;
         videoName_.clear();
-        if (!m.empty()) flow_.movieStopped(done);
+        if (!m.empty()) stopped(done);
     }
 }
 
@@ -513,7 +515,14 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     flow_.tick(dt);
     runNativeShims();
     updateMoviePlayer(dt, in);
-    if (presenter_) presenter_->update(flow_, in, dt);
+    // Full-screen movie mode (BeginMovieMode: UI event 12, the UI hidden) takes all input; after the movie the menus
+    // see input again once the skip key is released, so the skip press does not also act on the menu [HIGH].
+    bool fullScreenMovie = !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty();
+    if (fullScreenMovie) movieInputHold_ = true;
+    else if (movieInputHold_ && in.uiDown == 0 && !in.mouseLeft) movieInputHold_ = false;
+    platform::InputFrame none;
+    none.mouseX = in.mouseX; none.mouseY = in.mouseY;
+    if (presenter_) presenter_->update(flow_, movieInputHold_ ? none : in, dt);
     script_.update(flow_, dt);
     updateAudio(dt);
     updateScene(dt);
@@ -570,7 +579,7 @@ void FrontendRuntime::draw(int w, int h) {
     const uint8_t* px = nullptr;
     int vw = 0, vh = 0;
     uint64_t serial = 0;
-    bool over = !flow_.kismetMovie().empty();
+    bool over = !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty();   // SeqAct_MoviePlayer / Game.PlayMovie
     // The serial is unique across movies (the presenter re-uploads on change).
     if (video_ && video_->frame(px, vw, vh, serial)) presenter_->setVideoFrame(px, vw, vh, (videoGen_ << 40) | serial, over);
     else presenter_->setVideoFrame(nullptr, 0, 0, 0, false);

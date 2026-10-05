@@ -180,6 +180,7 @@ private:
     std::string videoPath_;           // the open movie file (Systems movie audio)
     bool movieAudioWanted_ = false;   // a SeqAct_MoviePlayer movie (the loading underlays author no sound)
     bool movieAudioPlaying_ = false;  // Systems is playing its sound
+    bool movieInputHold_ = false;     // full-screen movie owns input (and until its skip key is released)
     uint64_t videoGen_ = 0;
     bool moviePlaying_ = false;
     std::string prefetched_;
