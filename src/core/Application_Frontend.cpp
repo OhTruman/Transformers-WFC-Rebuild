@@ -37,6 +37,21 @@
 #include "game/FrontendAudioRuntime.h"
 #define WFC_SYSTEMS_FRONTEND_AUDIO 1
 namespace {
+// Gameplay's look settings (PlayerController::setLookSettings(CameraSensitivity, InvertY_Robot, InvertY_Car,
+// InvertY_Plane, InvertY_Tank); the 5-argument form, detected). Car covers trucks, as UpdateInvertMouseBy*Form.
+template <class PC, class = void> struct HasLookSettings : std::false_type {};
+template <class PC>
+struct HasLookSettings<PC, std::void_t<decltype(std::declval<PC&>().setLookSettings(0, false, false, false, false))>> : std::true_type {};
+template <class PC> bool applyLookSettings(PC& pc, const frontend::LocalProfile& p) {
+    if constexpr (HasLookSettings<PC>::value) {
+        pc.setLookSettings(p.getInt("CameraSensitivity"), p.getBool("InvertY_Robot"), p.getBool("InvertY_Car"),
+                           p.getBool("InvertY_Plane"), p.getBool("InvertY_Tank"));
+        return true;
+    } else { (void)pc; (void)p; return false; }
+}
+}
+
+namespace {
 struct SystemsFrontendAudio final : frontend::IFrontendAudio {
     game::FrontendAudioRuntime rt;
     explicit SystemsFrontendAudio(audio::IAudio* a) : rt(a) {}
@@ -149,6 +164,8 @@ void Application::attachPresenter() {
     applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
         applyGamma(renderer_, p.getInt("GammaSetting"));
+        if (applyLookSettings(world_.player().controller(), p))
+            frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});
         frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},
                                                     {"MusicVolume", p.get("Music Volume")}, {"CameraSensitivity", p.get("CameraSensitivity")},
                                                     {"InvertY_Robot", p.get("InvertY_Robot")}, {"Vibration", p.get("Controller Vibration")},
@@ -311,6 +328,7 @@ void Application::runFrontend() {
             continue;
         }
         flow.matchLoaded();
+        applyLookSettings(world_.player().controller(), flow.profile());   // the profile's look settings for this match
         // [integration] Frontend's PROVISIONAL adapter (immediate BeginGame) is replaced by Gameplay's match lifecycle.
         // World::launchMatch put the match in PendingMatch (10 s). Client order (RE M05 blockers D5): WaitingOnGameStart ->
         // character select -> PreGameCountdown during PendingMatch -> UI event 3 at InProgress. No character select screen
