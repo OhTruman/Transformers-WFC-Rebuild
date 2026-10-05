@@ -36,6 +36,7 @@ private:
     void runSwitchTest();
     void runScoreTest();
     void runHeightTest();
+    void runVehPhysTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

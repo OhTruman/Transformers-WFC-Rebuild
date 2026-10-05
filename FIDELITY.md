@@ -86,6 +86,44 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - GRI values for Hud_GFX: attackingTeamIndex (CTF / EXT, else -1) and currentObjectiveCountdown (EXT fuse, else -1) [CONF CDO
   defaults], competitiveScoreEnabled 0 [HIGH: not authored]. DOM / KOTH objective countdown [PARTIAL].
 
+### Vehicle handling [RE TARGETED_PASS4 §A CONFIRMED ORIGINAL; measured with WFC_VEHPHYS]
+Human playtest: jumps too high in some situations, violent wall bounces, teetering / rolling about an odd axis, not settling.
+Each RE item was compared with the code and measured (Streets, flat run-up into a vertical wall; Sideswipe car, Optimus truck,
+Warpath tank).
+
+Defects found and fixed:
+1. **UpdateTurn semantics** (cause of the teetering / rolling / not settling).
+   - Original: each step the angular velocity is REPLACED by axisAngle(current → upright with view yaw) × mask / dt.
+   - mask = (0.05, 0.05, 1) normally; (1, 1, 1) when ShouldUpright (no suspension contacts, or up.Z < 0.01).
+   - The rebuild applied nothing on the ground (spring and contact torque accumulated step after step) and only 5% per tick
+     in the air (the jump nose-up spin kept turning).
+   - Now the original replacement for car / truck. The tank keeps its own rule: no pitch / roll correction while stable on
+     the ground, else TurnRate 0.05 (RE C2).
+   - Glancing (22°) wall hit, Sideswipe hovering: max tilt 69° → 6.3°, pitch / roll rate 218 → 9.7 °/s. Truck 1.8°.
+2. **Boost (Driving) jump never fired.**
+   - A provisional overhead-hull guard started its ray at the COM height. That is floor level while driving on the wheels,
+     so it read the floor as a ceiling and zeroed v.y in the jump's own step.
+   - The probe now starts ≥ 0.1 m above the root.
+   - Boost jump apex: car 4.93 m, truck 4.91 m vs RE local (600, 0, 1400) → 1400² / (2 × 1940.4) = 5.05 UU-m.
+
+Verified unchanged (already as the original):
+- **Hover jump:** additive world Δv 1200 UU/s, RB gravity −2940 × 0.66, fresh press only, 0.3 s cooldown counted on the
+  ground, IsOnTheGround = contacts > 0 and average normal Z > 0.707.
+  - Apex 3.81–3.83 m (RE 3.71 + spring). A jump pressed right at landing peaks at 1.8–2.6 m. Holding Jump = one jump.
+- **Suspension:** 4 diagonal probes, implicit spring with m / 4, push-only, no force without a hit.
+- **Walls:** head-on rebound 0.00 m/s for car, truck and tank. Physmat restitution 0.05 and no script bounce: the rebuild
+  removes the into-wall velocity (restitution 0) [HIGH: 0.05 vs 0, PhysX combine untraced].
+- **Frontal boost crash (> 0.866 into the wall) drops Driving → Hovering.** Holding Boost re-enters Driving after the drift
+  window (A6).
+
+Remaining:
+- **Tank glancing wall:** a diagonal probe losing the floor at a wall base tilts the tank up to its stability limit (~30°)
+  before TurnRate 0.05 engages. That is the RE tank rule, but the PhysX hull-to-wall contact that might also support it is not
+  modelled [PARTIAL].
+- **Ramps / terrain:** the probes and springs follow the authored model, but ramp launches were not measured separately
+  against a capture [PARTIAL].
+- WFC_VEHPHYS 26/26: settle, jump, re-jump, boost jump, held jump, and walls (hover / boost, head-on / 22°) × 3 vehicles.
+
 ### Scout body height idle vs locomotion [HIGH CONFIDENCE authentic: RE pass 4 + WFC_HEIGHTTEST measurement]
 - Playtest: the Scout looks crouched at rest and much taller while running.
 - Measured per tick (WFC_HEIGHTTEST, heights above the feet): capsule centre, mesh origin and root bone (C_Root_Reference_XR) never

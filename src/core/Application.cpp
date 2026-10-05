@@ -141,7 +141,8 @@ bool Application::init() {
     if (std::getenv("WFC_PARTICIPANTTEST")) { runParticipantTest(); return false; }
     if (std::getenv("WFC_SWITCHTEST")) { runSwitchTest(); return false; }   // weapon switching, human playtest M09
     if (std::getenv("WFC_SCORETEST")) { runScoreTest(); return false; }     // fresh match state, human playtest M09
-    if (std::getenv("WFC_HEIGHTTEST")) { runHeightTest(); return false; }   // robot body height idle vs locomotion, human playtest M09   // measurements only
+    if (std::getenv("WFC_HEIGHTTEST")) { runHeightTest(); return false; }   // robot body height idle vs locomotion, human playtest M09
+    if (std::getenv("WFC_VEHPHYS")) { runVehPhysTest(); return false; }     // vehicle jump / attitude / wall response, human playtest M09   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -3130,6 +3131,147 @@ void Application::runHeightTest() {
         }
         platform::InputFrame stop; for (int i = 0; i < 60; ++i) { world_.handleInput(stop, dt); world_.tick(dt); }
     }
+}
+
+// WFC_VEHPHYS: vehicle handling measured against RE pass 4 (TnHoverCarSimulation / TnCarSimulation, physmats):
+//  settle (teeter amplitude), one hover jump (apex vs Dv 1200 / g 1940.4 = 3.71 m; nose-up; settle), held jump (one jump),
+//  hover and boost into a wall head-on and at 45 deg (rebound speed vs restitution 0.05; attitude after).
+void Application::runVehPhysTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("VEHPHYS %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    const float d2r = 0.0174533f;
+    game::PlayerController& ctl = world_.player().controller();
+    const game::CollisionWorld* cw = world_.collision();
+    // A flat floor point with a vertical wall 25-40 m ahead (clear, flat run-up) and clear sky above.
+    auto findWallRun = [&](core::Vec3& start, float& yaw) -> bool {
+        const core::Vec3 b0 = cw->boundsMin(), b1 = cw->boundsMax();
+        for (float x = b0.x + 5.0f; x < b1.x; x += 7.0f)
+            for (float z = b0.z + 5.0f; z < b1.z; z += 7.0f) {
+                float gy; core::Vec3 gn;
+                if (!cw->groundHeight(x, z, world_.player().pawn().position().y + 5.0f, 0.5f, gy, gn) || gn.y < 0.99f) continue;
+                core::Vec3 p{x, gy + 1.0f, z}; float t; core::Vec3 n;
+                if (cw->segmentHit(p, p + core::Vec3{0, 15.0f, 0}, t)) continue;
+                for (int k = 0; k < 8; ++k) {
+                    float yw = k * 0.785398f; core::Vec3 d = core::forwardFromYawPitch(yw, 0.0f);
+                    if (!cw->segmentHit(p, p + d * 40.0f, t, n) || t * 40.0f < 25.0f || std::fabs(n.y) > 0.2f) continue;
+                    bool flat = true;
+                    for (float s2 = 2.0f; s2 < t * 40.0f - 2.0f && flat; s2 += 2.0f) {
+                        core::Vec3 q = p + d * s2; float gy2; core::Vec3 gn2;
+                        if (!cw->groundHeight(q.x, q.z, gy + 1.0f, 0.3f, gy2, gn2) || std::fabs(gy2 - gy) > 0.2f) flat = false;
+                    }
+                    if (!flat) continue;
+                    start = core::Vec3{x, gy + 0.1f, z}; yaw = yw; return true;
+                }
+            }
+        return false;
+    };
+    const core::Vec3 spawnPos = world_.player().pawn().position();
+    core::Vec3 start; float yaw0 = 0.0f;
+    if (!cw || !findWallRun(start, yaw0)) { LOG_INFO("VEHPHYS no wall run found on this map"); return; }
+    LOG_INFO("VEHPHYS run start (%.1f %.1f %.1f) yaw %.2f", start.x, start.y, start.z, yaw0);
+    for (const char* id : {"Car2", "Truck", "Tank3"}) {
+        if (const char* only = std::getenv("WFC_VEHPHYS_ONLY")) if (std::string(only) != id) continue;
+        world_.applyChassisToLocalPawn(id);
+        world_.applyLoadout(nullptr);
+        game::Character& pc = world_.player().pawn();
+        auto& vs = pc.vehicleState();
+        auto place = [&](float yaw) { pc.setPosition(start); pc.velocity() = {0, 0, 0}; pc.setYaw(yaw); ctl.setCameraYaw(yaw); vs.pitch = vs.roll = 0.0f; vs.angVel = {0, 0, 0}; };
+        auto step = [&](const platform::InputFrame& in) { ctl.setCameraYaw(ctl.camYaw()); world_.handleInput(in, dt); world_.tick(dt); };
+        platform::InputFrame idle, tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+        pc.setPosition(spawnPos); pc.velocity() = {0, 0, 0};
+        if (pc.form() != game::Form::Vehicle) { step(tf); for (int i = 0; i < 180; ++i) step(idle); }   // transform at the spawn (the run start may be too tight for a robot)
+        if (pc.form() != game::Form::Vehicle) { check(false, std::string(id) + ": did not reach vehicle form"); continue; }
+        // 1) settle: pitch / roll amplitude over 2 s after 3 s
+        place(yaw0); for (int i = 0; i < 180; ++i) step(idle);
+        float pMin = 1e9f, pMax = -1e9f, rMin = 1e9f, rMax = -1e9f, yRest = 0.0f;
+        for (int i = 0; i < 120; ++i) { step(idle); pMin = std::min(pMin, vs.pitch); pMax = std::max(pMax, vs.pitch); rMin = std::min(rMin, vs.roll); rMax = std::max(rMax, vs.roll); yRest += pc.position().y / 120.0f; }
+        LOG_INFO("VEHPHYS %s settle: pitch %.2f..%.2f deg, roll %.2f..%.2f deg, rest y %.3f", id, pMin / d2r, pMax / d2r, rMin / d2r, rMax / d2r, yRest);
+        check((pMax - pMin) < 1.0f * d2r && (rMax - rMin) < 1.0f * d2r, std::string(id) + ": settles level (teeter < 1 deg)");
+        // 2) one hover jump
+        platform::InputFrame jp; jp.pressed[(int)platform::Button::Jump] = true; jp.down[(int)platform::Button::Jump] = true;
+        step(jp);
+        float apex = -1e9f, maxNose = 0.0f, landT = -1.0f; int i;
+        for (i = 0; i < 300; ++i) {
+            step(idle);
+            apex = std::max(apex, pc.position().y - yRest); maxNose = std::max(maxNose, vs.pitch);
+            if (i > 20 && landT < 0.0f && vs.onTheGround) landT = i * dt;
+        }
+        float pp = 0.0f; for (int k = 0; k < 60; ++k) { step(idle); pp = std::max(pp, std::fabs(vs.pitch)); }
+        LOG_INFO("VEHPHYS %s jump: apex %.2f m above rest (RE: Dv 12 m/s, g 19.4 -> 3.71 m + spring), max nose-up %.1f deg, landed %.2f s, |pitch| 5 s later %.2f deg",
+                 id, apex, maxNose / d2r, landT, pp / d2r);
+        check(apex > 2.5f && apex < 5.0f && pp < 2.0f * d2r, std::string(id) + ": jump apex near 3.7 m, level again after landing");
+        // 2b) hover jump pressed again at the first ground contact after landing (springs compressed)
+        {
+            place(yaw0); for (int k = 0; k < 120; ++k) step(idle);
+            step(jp);
+            bool landed = false; int k = 0;
+            for (; k < 300 && !landed; ++k) { step(idle); if (k > 20 && vs.contacts > 0) landed = true; }
+            for (int w = 0; w < 18 && !vs.onTheGround; ++w) step(idle);   // until IsOnTheGround (0.3 s cooldown also counts on the ground)
+            for (int w = 0; w < 18; ++w) { step(jp); if (pc.velocity().y > 8.0f) break; }
+            float ap = -1e9f; for (int w = 0; w < 240; ++w) { step(idle); ap = std::max(ap, pc.position().y - yRest); }
+            LOG_INFO("VEHPHYS %s re-jump on landing: apex %.2f m", id, ap);
+            check(ap < 5.0f, std::string(id) + ": a jump pressed right at landing stays near the normal apex (" + std::to_string(ap) + " m)");
+        }
+        // 2c) boost jump on flat: local (600, 0, 1400) -> apex ~5.05 m
+        if (std::string(id) != "Tank3") {
+            place(yaw0); for (int k = 0; k < 120; ++k) step(idle);
+            platform::InputFrame b = idle; b.down[(int)platform::Button::FineAim] = true;
+            for (int k = 0; k < 40; ++k) step(b);
+            platform::InputFrame bj = b; bj.pressed[(int)platform::Button::Jump] = true; bj.down[(int)platform::Button::Jump] = true;
+            const float y0 = pc.position().y;
+            LOG_INFO("VEHPHYS %s boost before jump: driving %d ground %d jumpWait %.2f v (%.1f %.1f %.1f)", id, (int)vs.driving, (int)vs.onTheGround, vs.jumpWait, pc.velocity().x, pc.velocity().y, pc.velocity().z);
+            step(bj);
+            float ap = -1e9f; for (int w = 0; w < 120; ++w) { step(b); ap = std::max(ap, pc.position().y - y0); if (std::getenv("WFC_VEHDBG") && w < 40 && w % 2 == 0) LOG_INFO("VEHTRACE %s boostjump w%d vy %.2f y %.3f driving %d ground %d", id, w, pc.velocity().y, pc.position().y - y0, (int)vs.driving, (int)vs.onTheGround); }
+            LOG_INFO("VEHPHYS %s boost jump: apex %.2f m above the driving height (RE: local Z 14 m/s -> 5.05 m)", id, ap);
+            check(ap > 4.0f && ap < 6.0f, std::string(id) + ": boost jump apex near 5.05 m");
+        }
+        // 3) held jump = one jump
+        place(yaw0); for (int k = 0; k < 120; ++k) step(idle);
+        int jumps = 0; bool up = false; float yPrev = pc.position().y;
+        for (int k = 0; k < 240; ++k) {
+            platform::InputFrame h = idle; h.down[(int)platform::Button::Jump] = true; if (k == 0) h.pressed[(int)platform::Button::Jump] = true;
+            step(h);
+            float vy = pc.velocity().y;
+            if (!up && vy > 5.0f) { ++jumps; up = true; }
+            if (up && vy < 0.0f) up = false;
+            yPrev = pc.position().y;
+        }
+        (void)yPrev;
+        check(jumps == 1, std::string(id) + ": holding Jump 4 s = " + std::to_string(jumps) + " jump(s) (fresh press only)");
+        // 4) walls: hover and boost, head-on and 45 deg
+        for (int boost = 0; boost < 2; ++boost)
+            for (int angle = 0; angle < 2; ++angle) {
+                const float yaw = yaw0 + (angle ? 0.785398f * 0.5f : 0.0f);
+                place(yaw0); for (int k = 0; k < 90; ++k) step(idle);
+                pc.setYaw(yaw); ctl.setCameraYaw(yaw);
+                platform::InputFrame drive = idle; drive.down[(int)platform::Button::Forward] = true;
+                if (boost) drive.down[(int)platform::Button::FineAim] = true;
+                const core::Vec3 wallDir = core::forwardFromYawPitch(yaw0, 0.0f);
+                float maxInto = 0.0f, minInto = 1e9f, maxTilt = 0.0f, maxAng = 0.0f, maxUp = 0.0f; bool hit = false; int after = 0;
+                for (int k = 0; k < 600 && after < 90; ++k) {
+                    step(drive);
+                    const float into = core::dot(pc.velocity(), wallDir);
+                    if (!hit) { maxInto = std::max(maxInto, into); if (maxInto > 5.0f && into < 0.3f * maxInto) hit = true; }
+                    else {
+                        ++after; minInto = std::min(minInto, into);
+                        if (std::getenv("WFC_VEHDBG") && after <= 60) LOG_INFO("VEHTRACE %s b%d a%d t%d roll %.1f pitch %.1f wx %.1f wy %.1f contacts %d ground %d v (%.1f %.1f %.1f) y %.3f", id, boost, angle, after, vs.roll / d2r, vs.pitch / d2r, vs.angVel.x / d2r, vs.angVel.y / d2r, vs.contacts, (int)vs.onTheGround, pc.velocity().x, pc.velocity().y, pc.velocity().z, pc.position().y);
+                        maxTilt = std::max(maxTilt, std::max(std::fabs(vs.pitch), std::fabs(vs.roll)));
+                        maxAng = std::max(maxAng, std::max(std::fabs(vs.angVel.x), std::fabs(vs.angVel.y)));
+                        maxUp = std::max(maxUp, pc.velocity().y);
+                    }
+                }
+                const float rebound = hit ? std::max(0.0f, -minInto) : -1.0f;
+                LOG_INFO("VEHPHYS %s %s %s wall: impact %.1f m/s, rebound %.2f m/s, after-hit max tilt %.1f deg, max pitch/roll rate %.1f deg/s, max up %.1f m/s, still driving %d",
+                         id, boost ? "boost" : "hover", angle ? "22deg" : "head-on", maxInto, rebound, maxTilt / d2r, maxAng / d2r, maxUp, (int)vs.driving);
+                // Tank: TnHoverTankSimulation corrects pitch / roll only once unstable (> HoverStability 30 deg) [CONF RE C2], so a probe
+                // losing the floor at a wall base tilts it up to that limit; car / truck correct every step (mask 0.05) [CONF RE pass 4].
+                const float tiltLimit = (std::string(id) == "Tank3" ? 32.0f : 15.0f) * d2r;
+                check(hit && rebound < 0.15f * maxInto + 0.5f && maxTilt < tiltLimit && maxUp < 4.0f,
+                      std::string(id) + " " + (boost ? "boost" : "hover") + (angle ? " 22deg" : " head-on") + " wall: no pinball rebound, stays upright");
+            }
+    }
+    LOG_INFO("VEHPHYS SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

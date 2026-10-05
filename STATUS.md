@@ -3,6 +3,26 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 23 (2026-10-05) — human playtest fidelity pass
+
+| item | result | provenance |
+|---|---|---|
+| Weapon switching | mouse wheel (both directions) + PageUp / PageDown = NextWeapon; HmWeapon.TryPutDown states (reload abandoned, refire wait, retarget, re-put-down after equip); blocked in melee / transform / vehicle; WFC_SWITCHTEST 32/32 over Scout / Scientist / Soldier / Leader | CONFIRMED ORIGINAL |
+| Vehicle attitude | UpdateTurn replaces ω each step (mask 0.05 grounded, 1 airborne / inverted): glancing-wall tilt 69° → 6° (car), no lingering spin | CONFIRMED ORIGINAL |
+| Vehicle boost jump | was cancelled by a provisional overhead probe reading the floor; now 4.9 m (RE 5.05) | CONFIRMED ORIGINAL (values) |
+| Hover jump / walls / suspension | already the original: apex 3.8 m, head-on rebound 0, fresh press only; WFC_VEHPHYS 26/26 | CONFIRMED ORIGINAL |
+| Tank glancing wall tilt up to ~30° | RE tank rule; PhysX hull-wall contact not modelled | PARTIAL |
+| Scout height idle vs jog | measured: capsule / root / scale fixed; hips 1.53 → 1.94-2.32 m = original shared AnimSet posing (RE 154 / 194-232 UU) | HIGH CONFIDENCE (authentic) |
+| Fresh match state | WFC_SCORETEST 9/9 (three launches); the visible bad score was the Hud_GFX GoalScore default 10 (Frontend fix) | CONFIRMED ORIGINAL |
+| HUD / input extras | hudAimState weaponClass = active class; GRI AttackingTeamIndex / CurrentObjectiveCountdown (-1) / CompetitiveScoreEnabled; middle-mouse melee; sub-tick fire latch | CONFIRMED / HIGH |
+| skinPose UV / subs copy | mirrors Rendering 79388f5 (out-of-bounds GPU draws after form / chassis change) | fix |
+
+Regression: WEAPON 19/19, PARTICIPANT 21/21, TDM 43/43, CTF 12/12, CHASSIS 13/13, SCORE 9/9, SWITCH 32/32, VEHPHYS 26/26;
+transforms 0/760 under the map for Car2 / Truck / Tank3 / Jet; chaos 0 KillZ (1 Car2 under-deck fall, open air - detector false
+positive); CAMSYNC 60/144/240 Hz unchanged (0.0002-0.11 deg mean).
+
+Handoff: docs/handoffs/GAMEPLAY_PASS23_PLAYTEST.md.
+
 ## GAMEPLAY PASS 22z (2026-10-05) — last three killstreaks; Pass 22 complete
 - P.O.K.E. 2.0, Nucleon Shock Cannon, Thermo Mine Re-Spawner: all 12 class killstreaks implemented.
 - All abilities used by iconic presets plus HardLock / AbilityJammer / TransformDisruptor implemented; Disguise and DecoyTrap remain PARTIAL.
