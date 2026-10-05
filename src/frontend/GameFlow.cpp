@@ -73,7 +73,10 @@ void GameFlow::travel(const std::string& urlText, bool server) {
     FlowTrace::emit("travel", {{"url", url.toString()}, {"server", FlowTrace::boolean(server)},
                                {"from", levelKindName(level_)}});
     if (level_ == LevelKind::Match) unloadWorld_ = true;   // the match world is replaced
-    // Every travel replaces the world and its PlayerController; the UI controller goes with it.
+    // Every travel replaces the world and its PlayerController; the UI controller goes with it - and any open message
+    // box (its movie belongs to the old world): a modal left over from a script / bridge travel must not answer the
+    // next Accept in the new level.
+    if (popup_.open) { FlowTrace::emit("popup.closedByTravel", {{"title", popup_.title}}); closePopup(); }
     openMovies_.clear();
     kismetMovie_.clear();
     movieQueue_.clear();
