@@ -172,6 +172,7 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     R.airControl = rs["AirControl"].asFloat(0.4f);
     R.terminalVel = rs["TerminalVelocity"].asFloat(6000) * 0.01f;
     R.damageMultiplier = rs["DamageMultiplier"].asFloat(1.0f);
+    R.selfDamageMultiplier = rs["SelfDamageMultiplier"].asFloat(0.45f);
     float eye = rs["BaseEyeHeight"].asFloat(150) * 0.01f;
     const assets::Json& acro = st["acrobatics"]["values"];
     R.jumpHeight = acro["JumpHeight"].asFloat(500) * 0.01f;
@@ -201,6 +202,7 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
            : form == "jet" ? VehicleFormType::Jet : VehicleFormType::Truck;
     const assets::Json& vsc = st["vehicle_scalars (VEHDEF)"];
     V.damageMultiplier = vsc["DamageMultiplier"].asFloat(1.0f);
+    V.selfDamageMultiplier = vsc["SelfDamageMultiplier"].asFloat(0.45f);
     float chassisOffset = vsc["ChassisOffset"].asFloat(0.0f);   // unset = 0 (no class default authored)
     const assets::Json& vp = st["vehicle_physics"];
     const assets::Json& hov = vp.has("HoverBlueprint") ? vp["HoverBlueprint"]["values"]

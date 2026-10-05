@@ -14,7 +14,10 @@ struct Weapon {
     float putDownTime  = 0.5f;     // PutDownTime
     float fineAimSpreadMult = 0.5f;   // FineAimSpreadModifier
     const char* damageType = "TransGame.TnDamageTypeIonBlaster";
-    bool simulated() const { return fireType == WeaponFire::InstantHit; }   // projectile / melee / grenade: PARTIAL
+    // Instant-hit weapons and projectile weapons with recovered PROJDATA are simulated; melee / grenade: PARTIAL.
+    float projSpeed = 0.0f, projDamage = 0.0f, projRadiusM = 0.0f; bool projHoming = false;
+    bool simulated() const { return fireType == WeaponFire::InstantHit || (fireType == WeaponFire::Projectile && projSpeed > 0.0f); }
+    bool projectile() const { return fireType == WeaponFire::Projectile && projSpeed > 0.0f; }
     static Weapon fromDef(const WeaponDef& d) {
         Weapon w;
         w.def = &d; w.name = d.display; w.fireType = d.fire; w.shots = d.shots > 0 ? d.shots : 1; w.autoFire = d.autoFire;
@@ -24,6 +27,8 @@ struct Weapon {
         w.falloffFarMul = d.falloffFarMul; w.spreadMin = d.spreadMin; w.spreadMax = d.spreadMax; w.spreadPerShot = d.spreadPerShot;
         w.spreadCooldown = d.spreadCooldown > 0.0f ? d.spreadCooldown : 2.0f; w.spread = d.spreadMin;
         w.fineAimSpreadMult = d.fineAimSpread; w.damageType = d.damageType;
+        w.projSpeed = d.projSpeed; w.projDamage = d.projDamage; w.projRadiusM = d.projRadiusM; w.projHoming = d.projHoming;
+        if (w.projectile() && d.projDamageType && *d.projDamageType) w.damageType = d.projDamageType;
         return w;
     }
     float damage        = 15.0f;    // [CONF] InstantHitDamage

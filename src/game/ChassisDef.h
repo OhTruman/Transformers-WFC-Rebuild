@@ -27,6 +27,7 @@ struct RobotParams {
     float momAirFwd = core::config::kMomentumAirFwd, momAirNeutral = core::config::kMomentumAirNeutral,
           momAirBack = core::config::kMomentumAirBack;
     float damageMultiplier = 1.0f;                                                          // ROBODEF DamageMultiplier
+    float selfDamageMultiplier = 0.45f;                                                     // ROBODEF SelfDamageMultiplier
     float jumpSpeed() const { return std::sqrt(2.0f * core::config::kGravity * jumpHeight); }   // JumpZ (ApplyTransformer)
 };
 
@@ -60,6 +61,7 @@ struct VehicleParams {
     float rollDuration = 0.0f;                                     // car: barrel roll (RollDuration 0.7); truck 0
     std::vector<WheelDef> wheels;                                  // empty = the truck wheel set (CharacterMovement)
     float damageMultiplier = 1.0f;                                 // VEHDEF DamageMultiplier
+    float selfDamageMultiplier = 0.45f;                            // VEHDEF SelfDamageMultiplier
     // Rigid-body hull around the mesh root (m). Truck: VH_Optimus_PHYSSYS convex box [CONF AssetTools PHYSICS_STREETS];
     // every MP chassis: its VH_*_PHYSSYS convex hull (VehicleHullTable.inc) [CONF authored]; mesh bounds only as a fallback.
     float hullFront = 3.38f, hullBack = 3.10f, hullHalfWidth = 1.54f, hullBottom = -0.35f, hullTop = 1.85f;

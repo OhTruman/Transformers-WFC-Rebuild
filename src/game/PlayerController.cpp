@@ -649,7 +649,27 @@ void PlayerController::applyToPawn(World& world, float dt) {
         if (usable) w.beginReload();
         wantReload_ = false;
     }
-    // Ion Blaster: hitscan while the trigger is held (held flag persists across render frames).
+    // Vehicle form: the vehicle weapon (CharacterData.VehicleWeapons, first active) fires from the vehicle [CONF loadout;
+    // origin = the vehicle actor + 1 m, aim = the camera ray [PROV: vehicle WeaponSocket_Primary bone transform not used]].
+    if (pawn_->moveForm() == Form::Vehicle && !pawn_->isTransforming()) {
+        if (Weapon* vw = pawn_->vehicleWeapon()) {
+            vw->tick(dt);
+            if (wantFire_ && vw->canFire()) {
+                vw->onFired();
+                core::Vec3 origin = pawn_->actorLocation() + core::Vec3{0, 1.0f, 0};
+                core::Vec3 camDir = core::forwardFromYawPitch(viewYaw_, viewPitch_);
+                core::Vec3 camPos = cameraPos();
+                float range = vw->rangeM > 0.0f ? vw->rangeM : 300.0f;
+                core::Vec3 aimPoint = camPos + camDir * range;
+                float th;
+                if (world.collision() && world.collision()->segmentHit(camPos, aimPoint, th)) aimPoint = camPos + camDir * (range * th);
+                core::Vec3 dir = core::normalize(aimPoint - origin);
+                if (vw->projectile()) world.fireWeapon(*vw, origin + dir * 1.5f, dir);
+                else if (vw->simulated()) for (int k = 0; k < std::max(1, vw->shots); ++k) world.fireWeapon(*vw, origin, dir);
+            } else if (vw->ammo == 0 && vw->canReload()) vw->beginReload();
+        }
+    }
+    // Robot weapon: fires while the trigger is held (held flag persists across render frames).
     if (wantFire_ && usable) {
         if (w.canFire()) {
             w.onFired();
@@ -666,8 +686,9 @@ void PlayerController::applyToPawn(World& world, float dt) {
             if (world.collision() && world.collision()->segmentHit(camPos, aimPoint, th))
                 aimPoint = camPos + camDir * (range * th);
             core::Vec3 dir = core::normalize(aimPoint - eye);
+            if (w.projectile()) world.fireWeapon(w, eye, dir);
             // NumShotsToFire traces per shot (shotgun pellets), each with its own spread sample [CONF data; HIGH: one ammo per shot].
-            for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) world.fireHitscan(eye, dir);
+            else for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) world.fireHitscan(eye, dir);
         } else if (w.ammo == 0 && w.canReload()) {
             w.beginReload();
         }

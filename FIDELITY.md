@@ -259,6 +259,20 @@ Inputs:
 - Invert per form: car and truck share InvertY_Car.
 - Frontend calls it on Settings commit and at match start.
 
+### Projectiles and vehicle weapons
+- Projectile weapons fire their WeaponProjectiles[0] class with its MultiplayerData TnProjectileData: InitialSpeed, Damage,
+  DamageRadius, DamageType [CONF authored]. Examples: TankShell 20000 / 170 / 2500; RocketVh 18000 / 55 / 1500.
+- Flight is straight. Homing lock-on (TnProjectileDataHoming HomingForce / ClosingForce) is PARTIAL: fired straight.
+- On any hit: HurtRadius with stock UE3 linear falloff [HIGH]. Teammates are filtered; the instigator is never hit by its
+  own shot in flight.
+- **Damage taken** is scaled by the victim form's DamageMultiplier (ROBODEF 1.0; VEHDEF e.g. 0.75 tank, 0.8 jet, 0.9 car)
+  and, for self damage, by SelfDamageMultiplier 0.45 [CONF data; HIGH placement in TakeDamage].
+- **Vehicle form fires** its CharacterData.VehicleWeapons[0] (projectile or hitscan). Origin = actor + 1 m [PROV: the
+  vehicle WeaponSocket_Primary bone transform is not used]; aim = the camera ray.
+- Repair rays are flagged unsimulated (they heal) [PARTIAL]. Projectile meshes and trails are drawn as a small box
+  marker until Rendering draws them [PROV presentation].
+- WFC_WEAPONTEST 12 / 12: Warpath's TankCannon shell flies and hits for 131; self damage 49.8 ≤ 170 × 0.45 × 0.75.
+
 ### Non-local participant pawns (bot-ready architecture, RECONSTRUCTION EXTENSION boundary)
 - Participants (MatchOpponent) are full pawns: the same chassis, specialty, loadout, movement, transformation, damage,
   death / respawn and objective paths as the local pawn. Their inputs come only from `setIntent` (harnesses); no AI.

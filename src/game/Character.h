@@ -38,6 +38,7 @@ public:
         health_ = Health{}; overShield_ = false;
         if (!specHealth_.empty()) health_.initialize(specHealth_, specOvershield_);   // ApplySpecialty: Health_<Class>
         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;   // TnCharacterApplier.ApplyWeapons
+        vehicleInventory_ = vehicleLoadout_;
         activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1;
         speedMult_ = 1.0f; fineAiming_ = false;
         form_ = Form::Robot == form_ ? form_ : Form::Robot; setForm(Form::Robot); animTime_ = 0.0f; clip_ = -1;
@@ -250,10 +251,16 @@ public:
     // The loadout every spawn starts from; vehicle-form weapons are kept for the HUD / future vehicle firing.
     void setLoadout(const std::vector<Weapon>& robot, const std::vector<std::string>& vehicleWeapons) {
         loadout_ = robot; vehicleWeapons_ = vehicleWeapons;
+        vehicleLoadout_.clear();
+        for (const std::string& n : vehicleWeapons) if (const WeaponDef* d = findWeaponDef(n)) vehicleLoadout_.push_back(Weapon::fromDef(*d));
+        vehicleInventory_ = vehicleLoadout_;
         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;
         activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1;
     }
     const std::vector<std::string>& vehicleWeapons() const { return vehicleWeapons_; }
+    // Vehicle-form weapon (CreateWeapons(VehicleWeapons), the first one active in vehicle form); null when none.
+    Weapon* vehicleWeapon() { return vehicleInventory_.empty() ? nullptr : &vehicleInventory_[0]; }
+    const Weapon* vehicleWeapon() const { return vehicleInventory_.empty() ? nullptr : &vehicleInventory_[0]; }
     // Swap Weapons (mouse wheel / PgUp / PgDn): put the current weapon down (PutDownTime), then equip the next one
     // (EquipTime); no firing in between [HIGH: HmWeapon PutDown / Equip states, WEPDATA times CONF].
     void requestWeaponSwitch(int dir) {
@@ -341,6 +348,7 @@ private:
     Health health_;
     std::vector<Weapon> loadout_, inventory_{Weapon{}};
     std::vector<std::string> vehicleWeapons_;
+    std::vector<Weapon> vehicleLoadout_, vehicleInventory_;
     int activeWeapon_ = 0, switchTo_ = -1;
     float switchRemain_ = 0.0f, switchSwapAt_ = 0.0f;
     unsigned weaponChangeSerial_ = 0;

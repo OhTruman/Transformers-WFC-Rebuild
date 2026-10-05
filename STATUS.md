@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22e (2026-10-05) — projectiles, vehicle weapons, damage multipliers
+- Projectile weapons from MP PROJDATA (straight; homing PARTIAL), HurtRadius falloff; vehicle-form weapons fire; victim form DamageMultiplier + SelfDamageMultiplier. WFC_WEAPONTEST 12/12.
+
 ## GAMEPLAY PASS 22d (2026-10-05) — non-local participant pawns (bot-ready, no AI)
 - MatchOpponent owns a full Character: chassis body / specialty / loadout at spawn, shared movement + transformation, real cylinder hits, death/respawn. WFC_PARTICIPANTTEST 4/4; TDM 43/43 (assists by victim HealthMax), CTF/EXT 10/10, modes 21/21.
 

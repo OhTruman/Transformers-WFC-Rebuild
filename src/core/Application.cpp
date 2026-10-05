@@ -1866,6 +1866,47 @@ void Application::runWeaponTest() {
               "Dodge (Ctrl): " + std::to_string((int)sp) + " m/s, " + std::to_string(lateral).substr(0, 4) +
               " m to the right in 0.6 s, 2.0 s cooldown after the dodge, refused while cooling, available again; Whirlwind slot PARTIAL");
     }
+    // Projectiles + vehicle weapon: Warpath (Tank3) TankCannon (TankShell_PROJDATA 20000 UU/s, 170, radius 2500 UU).
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+        world_.launchMatch(L);
+        game::CharacterSelection sel; sel.type = 1; sel.chassisId = "Tank3";
+        world_.match().selectCharacter(world_.localMatchPlayer(), sel);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("E" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* enemy = nullptr;
+        for (auto* o : ops) if (!world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) enemy = o;
+        pc.beginTransform();
+        run(3.0f);
+        const game::Weapon* vw = pc.vehicleWeapon();
+        bool tank = pc.moveForm() == game::Form::Vehicle && vw && vw->projectile() && std::string(vw->def->provider) == "TankCannon";
+        bool hit = false; float dmgTaken = 0.0f;
+        if (enemy && tank) {
+            core::Vec3 fwd = core::forwardFromYawPitch(world_.player().controller().viewYaw(), 0.0f);
+            enemy->setPosition(pc.position() + fwd * 30.0f);
+            float hp0 = enemy->pawn().health().current;
+            platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+            world_.handleInput(fire, dt); world_.tick(dt);
+            bool inFlight = !world_.projectiles().empty();
+            run(0.5f);
+            dmgTaken = hp0 - enemy->pawn().health().current;
+            hit = inFlight && dmgTaken > 20.0f;
+            LOG_INFO("WEAPON tank shell: in flight %d, enemy took %.0f (TankShell 170 x falloff x victim form multiplier)", (int)inFlight, dmgTaken);
+        }
+        check(tank && hit, "vehicle weapon: Warpath's TankCannon shell flies and explodes on the enemy (HurtRadius falloff)");
+        // Self damage: shoot the floor at our own position -> x SelfDamageMultiplier 0.45 x VEHDEF DamageMultiplier.
+        float hp0 = pc.health().current;
+        world_.player().controller().setCameraYaw(world_.player().controller().viewYaw());
+        run(2.1f);   // TankCannon FireInterval 2.0 s
+        game::Weapon* vw2 = pc.vehicleWeapon();
+        if (vw2) { vw2->ammo = vw2->magSize; world_.spawnProjectile(pc.actorLocation() + core::Vec3{0, 1.0f, 0}, core::Vec3{0, -50.0f, 0}, *vw2, world_.localMatchPlayer()); }
+        run(0.3f);
+        float self = hp0 - pc.health().current;
+        float expect = 170.0f * pc.vehicleParams().selfDamageMultiplier * pc.vehicleParams().damageMultiplier;
+        LOG_INFO("WEAPON self damage %.1f (<= 170 x Self 0.45 x vehicle DamageMultiplier %.2f = %.1f, falloff by distance)", self, pc.vehicleParams().damageMultiplier, expect);
+        check(self > 0.0f && self <= expect + 0.01f, "own projectile: self damage scaled by SelfDamageMultiplier and the form DamageMultiplier");
+    }
     LOG_INFO("WEAPON SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

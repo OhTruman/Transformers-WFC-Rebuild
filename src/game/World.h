@@ -1,5 +1,6 @@
 // Clean-room reconstruction — the world: owns the level, player, and dynamic actors.
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 #include <map>
@@ -218,6 +219,18 @@ public:
     // TnPlayerPawn.TakeDamage for a match player (local or opponent): teammate damage is discarded except
     // TnDamageTypeAOE; damage reaching the pawn enters its DamageHistory; lethal damage -> Game.Killed(instigator).
     bool applyMatchDamage(int victimPlayer, int instigatorPlayer, float amount, bool aoe, const std::string& damageType = std::string());
+    // Projectiles (TnProjectile + its TnProjectileData): straight flight at InitialSpeed (homing lock-on PARTIAL); on any hit
+    // HurtRadius(Damage, DamageRadius) with stock UE3 linear falloff [HIGH]; the instigator is not hit by its own shot.
+    struct Projectile { core::Vec3 pos, vel; float damage, radius, life; std::string damageType; int instigator; };
+    void spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const Weapon& w, int instigator);
+    const std::vector<Projectile>& projectiles() const { return projectiles_; }
+    void fireHitscanWith(const Weapon& w, const core::Vec3& origin, const core::Vec3& dirIn);
+    // Controller fire entry: one shot of w from origin along dir (projectile spawn or one hitscan trace). Inline dispatch
+    // through a hook World installs at load, so harnesses that stub World (tools/fidelity) still link with fireHitscan.
+    std::function<void(const Weapon&, const core::Vec3&, const core::Vec3&)> weaponFireHook;
+    void fireWeapon(const Weapon& w, const core::Vec3& origin, const core::Vec3& dir) {
+        if (weaponFireHook) weaponFireHook(w, origin, dir); else fireHitscan(origin, dir);
+    }
     int damageTakenCount_ = 0;
     core::Vec3 lastDamageFrom_{0, 0, 0};
     // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
@@ -303,6 +316,9 @@ private:
     std::string localChassis_;
     std::string mapName_ = "MP_IAC_Streets";
     std::vector<HazardVolume> hazards_;
+    std::vector<Projectile> projectiles_;
+    void tickProjectiles(float dt);
+    void radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type);
     int localHazard_ = -1;
     float localPainTimer_ = 0.0f;
     void loadHazards();

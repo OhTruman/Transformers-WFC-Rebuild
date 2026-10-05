@@ -34,6 +34,10 @@ static bool readTextFile(const std::string& path, std::string& out) {
 }
 
 void World::load(render::IRenderer& renderer) {
+    weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
+        if (w.projectile()) spawnProjectile(o + d * 1.5f, d * w.projSpeed, w, localPlayer_);
+        else fireHitscanWith(w, o, d);
+    };
     if (loadVerticalSlice(renderer)) {
         usingSlice_ = true;
         LOG_INFO("World: loaded vertical slice from %s", assetRoot().c_str());
@@ -452,8 +456,9 @@ static bool rayAabb(const core::Vec3& o, const core::Vec3& d, float len,
     return true;
 }
 
-void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
-    const Weapon& w = player_.pawn().weapon();
+void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) { fireHitscanWith(player_.pawn().weapon(), origin, dirIn); }
+
+void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const core::Vec3& dirIn) {
     const float range = w.rangeM;   // [CONF] 300 m
 
     // Apply per-shot spread as a small random cone around the aim direction.
@@ -921,6 +926,7 @@ void World::tick(float dt) {
     }
 
     tickHazards(dt);
+    tickProjectiles(dt);
     if (player_.pawn().position().y < killZ_ && !localPlayerDead()) {
         // Below KillZ: FellOutOfWorld -> Died with no killer (an environmental death in a match).
         LOG_INFO("World: player fell out of world; %s", matchActive_ ? "killed (KillZ)" : "respawning");
@@ -1029,6 +1035,16 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
     if (victim == localPlayer_) h = &player_.pawn().health();
     else for (MatchOpponent* o : opponents_) if (o->matchPlayer() == victim) { opp = o; h = &o->health(); }
     if (!h) return false;
+    // Form damage multiplier (ROBODEF / VEHDEF DamageMultiplier, e.g. vehicles 0.75-0.9) and self damage
+    // (SelfDamageMultiplier 0.45) of the victim pawn [CONF data; HIGH: applied in TnPawn.TakeDamage / AdjustDamage].
+    {
+        const Character* vp = victim == localPlayer_ ? &player_.pawn() : (opp ? &opp->pawn() : nullptr);
+        if (vp) {
+            const bool veh = vp->moveForm() == Form::Vehicle;
+            amount *= veh ? vp->vehicleParams().damageMultiplier : vp->robotParams().damageMultiplier;
+            if (instigator == victim) amount *= veh ? vp->vehicleParams().selfDamageMultiplier : vp->robotParams().selfDamageMultiplier;
+        }
+    }
     float applied = h->applyDamage(amount);
     match_.recordDamage(victim, instigator, applied);
     if (victim == localPlayer_ && applied > 0.0f && instigator != victim) { ++damageTakenCount_; lastDamageFrom_ = match_.playerLocation(instigator); }
@@ -1305,6 +1321,8 @@ void World::draw(render::IRenderer& r) const {
     }
     for (const auto& a : actors_) if (a->alive()) a->draw(r);
     if (!localPlayerDead()) player_.draw(r);
+    // Projectiles: a small box marker until Rendering draws the authored projectile meshes / trails [PROV presentation].
+    for (const Projectile& p : projectiles_) r.drawBox(p.pos, core::Vec3{0.25f, 0.25f, 0.25f}, core::Vec3{1.0f, 0.6f, 0.2f});
 
     // Ion Blaster mesh held at the weapon socket (robot form only).
     if (localPlayerDead()) { /* no pawn: no weapon / pawn effects (PendingMatch, dead) */ }
@@ -1530,6 +1548,66 @@ void World::tickHazards(float dt) {
     LOG_INFO("hazard %s: %.0f damage (%s)", v.actor.c_str(), dmg, v.damageType.c_str());
     if (matchActive_) applyMatchDamage(localPlayer_, -1, dmg, true, v.damageType);   // environment: no instigator
     else if (pc.health().applyDamage(dmg) > 0.0f && pc.health().isDead()) respawnPlayer();
+}
+
+void World::spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const Weapon& w, int instigator) {
+    float range = w.rangeM > 0.0f ? w.rangeM : 300.0f;
+    projectiles_.push_back({pos, vel, w.projDamage, w.projRadiusM, std::max(1.0f, range / std::max(1.0f, core::length(vel))) + 1.0f,
+                            w.damageType ? w.damageType : "", instigator});
+}
+
+void World::radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type) {
+    // Actor.HurtRadius: each damageable pawn within DamageRadius takes Damage x (1 - dist / DamageRadius) [HIGH stock UE3];
+    // teammates are filtered by applyMatchDamage (projectile damage types are not TnDamageTypeAOE).
+    auto falloff = [&](const core::Vec3& p) { float d = core::length(p - at); return d >= radius ? 0.0f : 1.0f - d / std::max(radius, 1e-3f); };
+    if (matchActive_ && !localDead_) {
+        float k = falloff(player_.pawn().actorLocation());
+        if (k > 0.0f) applyMatchDamage(localPlayer_, instigator, damage * k, false, type);
+    }
+    for (MatchOpponent* o : opponents_) {
+        if (!o->spawned()) continue;
+        float k = falloff(o->pawn().actorLocation());
+        if (k > 0.0f) applyMatchDamage(o->matchPlayer(), instigator, damage * k, false, type);
+    }
+    for (Destructible* d : destructibles_)
+        if (d->state() == 0) { core::Vec3 c = (d->boxMin() + d->boxMax()) * 0.5f; float k = falloff(c); if (k > 0.0f) d->applyDamage(*this, damage * k); }
+}
+
+void World::tickProjectiles(float dt) {
+    const CollisionWorld* lineWorld = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+    for (size_t i = 0; i < projectiles_.size();) {
+        Projectile& p = projectiles_[i];
+        core::Vec3 next = p.pos + p.vel * dt;
+        float best = 1.0f; bool hit = false;
+        float t;
+        if (lineWorld && lineWorld->segmentHit(p.pos, next, t)) { best = t; hit = true; }
+        core::Vec3 d = next - p.pos; float len = core::length(d);
+        if (len > 1e-5f) {
+            core::Vec3 dir = d * (1.0f / len);
+            for (MatchOpponent* o : opponents_) {
+                if (o->matchPlayer() == p.instigator) continue;
+                float th;
+                if (o->rayHit(p.pos, dir, len, th) && th / len < best) { best = th / len; hit = true; }
+            }
+            if (matchActive_ && !localDead_ && p.instigator != localPlayer_) {
+                const Character& pc = player_.pawn();
+                core::Vec3 c = pc.actorLocation(); float r = pc.cylinderRadius(pc.moveForm()), hh = pc.cylinderHalfHeight(pc.moveForm());
+                for (int k = 1; k <= 8; ++k) {   // sampled segment vs the local cylinder
+                    core::Vec3 q = p.pos + d * (k / 8.0f);
+                    if (std::hypot(q.x - c.x, q.z - c.z) <= r && std::fabs(q.y - c.y) <= hh && k / 8.0f < best) { best = k / 8.0f; hit = true; break; }
+                }
+            }
+        }
+        p.life -= dt;
+        if (hit || p.life <= 0.0f) {
+            core::Vec3 at = p.pos + d * best;
+            if (hit) radiusDamage(at, p.damage, p.radius, p.instigator, p.damageType);
+            projectiles_.erase(projectiles_.begin() + (long)i);
+            continue;
+        }
+        p.pos = next;
+        ++i;
+    }
 }
 
 } // namespace game
