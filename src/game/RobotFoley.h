@@ -40,6 +40,7 @@ namespace assets { struct SkinnedModel; }
 namespace game {
 
 class Character;
+struct CharacterAudioProfile;
 
 class RobotFoley {
 public:
@@ -47,6 +48,8 @@ public:
     // to the pawn, to `out`. Call after the pawn's animation update.
     void tick(const Character& pc, float dt, std::vector<const char*>& out);
 
+    // The character whose clips / sound set drive the foley (default: CharacterAudio::defaultProfile()).
+    void setProfile(const CharacterAudioProfile* p) { profile_ = p; }
     // Diagnostics: last landing classification.
     const char* lastLandClip() const { return lastLand_; }
     float lastFallHeightUU() const { return lastFallUU_; }
@@ -54,9 +57,12 @@ public:
 private:
     void clipNotifies(const std::string& clip, float a, float b, bool includeStart, float weight,
                       std::vector<const char*>& out) const;
+    const CharacterAudioProfile& profile() const;
+    void clipOneShot(const char* clip, std::vector<const char*>& out);
     void clipNotifiesTimed(const std::string& clip, float dur, bool loop, float t0, float t1, bool includeStart,
                            std::vector<const char*>& out) const;
 
+    const CharacterAudioProfile* profile_ = nullptr;
     bool active_ = false;            // robot form, not transforming, last step
     bool grounded_ = true;
     float apexY_ = 0.0f;             // _FallBaseHeight

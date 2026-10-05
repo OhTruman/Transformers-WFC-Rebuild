@@ -1,5 +1,6 @@
 #include "game/RobotFoley.h"
 #include "game/Character.h"
+#include "game/CharacterAudio.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,36 +9,9 @@
 namespace game {
 namespace {
 
-// CHR_OPTIMUS event -> cue (SoundCues table names).
-constexpr const char* kWalk = "BL_FS_LRG_BOT.FS_WALK_DEFAULT";
-constexpr const char* kRun = "BL_FS_LRG_BOT.FS_RUN_DEFAULT";
-constexpr const char* kScuff = "BL_FS_LRG_BOT.FS_SCUFF_DEFAULT";
-constexpr const char* kJump = "BL_FS_LRG_BOT.FS_JUMP";
-constexpr const char* kLand = "BL_FS_LRG_BOT.FS_LAND_DEFAULT";
-constexpr const char* kHardLand = "BL_FS_LRG_BOT.FS_LAND_HARD";
-constexpr const char* kHighFall = "BL_FS_LRG_BOT.FS_LAND_HIGH_FALL";
-constexpr const char* kGroan = "BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01";
-constexpr const char* kIdleFoley = "BL_FOLY_IDLES.OPTIMUS_IDLE";
-
-// [CONF] notify times in seconds of the AUTHORED SequenceLength (the glTF clips are one frame
-// shorter, so times are compared as fractions of the authored length).
-struct Notify { const char* clip; float len; float t; const char* cue; float minWeight; };
-const Notify kNotifies[] = {
-    {"Nav_StrafeJog_F", 0.766667f, 0.091f, kRun, 0.25f}, {"Nav_StrafeJog_F", 0.766667f, 0.513f, kRun, 0.25f},
-    {"Nav_StrafeJog_B", 0.766667f, 0.194f, kRun, 0.0f},  {"Nav_StrafeJog_B", 0.766667f, 0.543f, kRun, 0.25f},
-    {"Nav_StrafeJog_L", 0.766667f, 0.137f, kRun, 0.25f}, {"Nav_StrafeJog_L", 0.766667f, 0.523f, kRun, 0.25f},
-    {"Nav_StrafeJog_R", 0.766667f, 0.132f, kRun, 0.25f}, {"Nav_StrafeJog_R", 0.766667f, 0.529f, kRun, 0.25f},
-    {"Nav_StrafeWalk_F", 1.133333f, 0.238f, kWalk, 0.0f}, {"Nav_StrafeWalk_F", 1.133333f, 0.855f, kWalk, 0.25f},
-    {"Nav_StrafeWalk_B", 1.133333f, 0.208f, kWalk, 0.0f}, {"Nav_StrafeWalk_B", 1.133333f, 0.777f, kWalk, 0.25f},
-    {"Nav_StrafeWalk_L", 1.133333f, 0.231f, kWalk, 0.0f}, {"Nav_StrafeWalk_L", 1.133333f, 0.808f, kWalk, 0.25f},
-    {"Nav_StrafeWalk_R", 1.133333f, 0.230f, kWalk, 0.0f}, {"Nav_StrafeWalk_R", 1.133333f, 0.811f, kWalk, 0.25f},
-    {"Nav_IdlePivot90_L", 0.566667f, 0.002f, kScuff, 0.0f}, {"Nav_IdlePivot90_L", 0.566667f, 0.007f, kGroan, 0.25f},
-    {"Nav_IdlePivot90_L", 0.566667f, 0.015f, kWalk, 0.0f},  {"Nav_IdlePivot90_L", 0.566667f, 0.222f, kWalk, 0.0f},
-    {"Nav_IdlePivot90_R", 0.566667f, 0.002f, kScuff, 0.0f}, {"Nav_IdlePivot90_R", 0.566667f, 0.006f, kWalk, 0.0f},
-    {"Nav_IdlePivot90_R", 0.566667f, 0.034f, kGroan, 0.25f}, {"Nav_IdlePivot90_R", 0.566667f, 0.129f, kWalk, 0.25f},
-    {"Nav_IdlePivot90_R", 0.566667f, 0.389f, kWalk, 0.25f},
-    {"NAV_Idle", 3.666667f, 0.0f, kIdleFoley, 0.25f},       // Optimus_ROBO_ANIM NAV_Idle
-};
+// The notifies and their sounds are the character profile's (CharacterAudio: the clips of its robot anim sets, the
+// FS_DEFAULT_* events resolved through its CHR_* SoundEventSet). The default profile (Optimus) reproduces the previous
+// hand-made table exactly (26 / 26 locomotion + pivot notifies, NAV_Idle, Nav_TakeOff_01, Nav_Land / _02 / _03).
 
 // [CONF] TR_Acrobatics_p.SharedAcrobatics.LandingAnims, in array order.
 struct LandingAnim { float minHeight, minSpeed; const char* clip; };
@@ -50,15 +24,25 @@ constexpr float UU = 0.01f;
 
 } // namespace
 
+const CharacterAudioProfile& RobotFoley::profile() const {
+    return profile_ ? *profile_ : CharacterAudio::defaultProfile();
+}
+
 void RobotFoley::clipNotifies(const std::string& clip, float a, float b, bool includeStart, float weight,
                               std::vector<const char*>& out) const {
-    // Window (a, b] in normalized time; wraps when b < a (looping clip / sync-group phase).
-    for (const Notify& n : kNotifies) {
-        if (clip != n.clip || weight < n.minWeight) continue;
-        float x = n.t / n.len;
+    // Window (a, b] in normalized time; wraps when b < a (looping clip / sync-group phase). Notify times are in
+    // seconds of the AUTHORED SequenceLength (the glTF clips are one frame shorter, so fractions are compared).
+    const CharacterAudioProfile& p = profile();
+    const CharacterAudioProfile::Clip* c = p.clip(clip);
+    if (!c || c->length <= 0.0f) return;
+    for (const CharacterAudioProfile::Notify& n : c->notifies) {
+        if (weight < n.minWeight) continue;
+        const std::string& cue = p.notifyCue(n);
+        if (cue.empty()) continue;
+        float x = n.t / c->length;
         bool in = b >= a ? ((x > a || (includeStart && x >= a)) && x <= b)
                          : (x > a || x <= b || (includeStart && x >= a));
-        if (in) out.push_back(n.cue);
+        if (in) out.push_back(cue.c_str());
     }
 }
 
@@ -67,21 +51,38 @@ void RobotFoley::clipNotifies(const std::string& clip, float a, float b, bool in
 void RobotFoley::clipNotifiesTimed(const std::string& clip, float dur, bool loop, float t0, float t1,
                                    bool includeStart, std::vector<const char*>& out) const {
     if (dur <= 0.0f || t1 < t0) return;
-    for (const Notify& n : kNotifies) {
-        if (clip != n.clip) continue;
+    const CharacterAudioProfile& p = profile();
+    const CharacterAudioProfile::Clip* c = p.clip(clip);
+    if (!c || c->length <= 0.0f) return;
+    for (const CharacterAudioProfile::Notify& n : c->notifies) {
+        const std::string& cue = p.notifyCue(n);
+        if (cue.empty()) continue;
         // Authored fraction -> glTF clip seconds; MinWeight gate: the clip blends in linearly over its
         // transition time, so a notify cannot fire before the clip's weight reaches MinWeight
         // (Idle<->Moving 0.2 s, pivot TransitionBlendTime 0.1 s [CONF]; a one-step flip never fires).
         const float blendIn = clip == "NAV_Idle" ? 0.2f : 0.1f;
-        float x = std::max(n.t / n.len * dur, n.minWeight * blendIn);
+        float x = std::max(n.t / c->length * dur, n.minWeight * blendIn);
         if (!loop) {
-            if ((x > t0 || (includeStart && x >= t0)) && x <= t1) out.push_back(n.cue);
+            if ((x > t0 || (includeStart && x >= t0)) && x <= t1) out.push_back(cue.c_str());
             continue;
         }
         for (float k = std::floor(t0 / dur); k * dur <= t1; k += 1.0f) {
             float xt = k * dur + x;
-            if ((xt > t0 || (includeStart && xt >= t0)) && xt <= t1) out.push_back(n.cue);
+            if ((xt > t0 || (includeStart && xt >= t0)) && xt <= t1) out.push_back(cue.c_str());
         }
+    }
+}
+
+// A one-shot clip's notifies by authored time (landing / take-off): t = 0 now, later ones delayed.
+void RobotFoley::clipOneShot(const char* clip, std::vector<const char*>& out) {
+    const CharacterAudioProfile& p = profile();
+    const CharacterAudioProfile::Clip* c = p.clip(clip);
+    if (!c) return;
+    for (const CharacterAudioProfile::Notify& n : c->notifies) {
+        const std::string& cue = p.notifyCue(n);
+        if (cue.empty()) continue;
+        if (n.t <= 0.0f) out.push_back(cue.c_str());
+        else delayed_.push_back({n.t, cue.c_str()});
     }
 }
 
@@ -99,7 +100,7 @@ void RobotFoley::tick(const Character& pc, float dt, std::vector<const char*>& o
     if (!active) { active_ = false; grounded_ = grounded; apexY_ = y; prevVy_ = 0.0f; clip_.clear(); delayed_.clear(); return; }
 
     // Take-off: Nav_TakeOff_01 (FS_DEFAULT_JUMP @0, MinWeight 0) when the jump launches.
-    if (active_ && grounded_ && !grounded && pc.velocity().y > 0.5f) out.push_back(kJump);
+    if (active_ && grounded_ && !grounded && pc.velocity().y > 0.5f) clipOneShot("Nav_TakeOff_01", out);
     // _FallBaseHeight [CONF TnAcrobaticsManager]: the ground height (OnTheGroundBase.BeginState), reset by
     // Falling.BeginState when a fall starts - walking off a ledge, or Jumping/DoubleJumping turning into
     // (FallingFromJump/)Falling as soon as the pawn descends.
@@ -118,13 +119,7 @@ void RobotFoley::tick(const Character& pc, float dt, std::vector<const char*>& o
             if (fallUU >= la.minHeight && speedUU >= la.minSpeed) { clip = la.clip; break; }
         lastFallUU_ = fallUU;
         lastLand_ = clip ? clip : "-";
-        if (clip && std::strcmp(clip, "Nav_Land") == 0) out.push_back(kLand);
-        else if (clip && std::strcmp(clip, "Nav_Land_02") == 0) out.push_back(kHardLand);
-        else if (clip) {                                   // Nav_Land_03
-            out.push_back(kHighFall);
-            out.push_back(kHardLand);
-            delayed_.push_back({0.432f, kGroan});
-        }
+        if (clip) clipOneShot(clip, out);                    // the landing clip's notifies (Nav_Land_03: + groan @0.432)
     }
     if (grounded) apexY_ = y;                           // OnTheGroundBase.BeginState / standing
 

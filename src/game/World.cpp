@@ -1,4 +1,5 @@
 #include "game/World.h"
+#include "game/CharacterAudio.h"
 #include "game/DamageTarget.h"
 #include "render/Renderer.h"
 #include "render/Camera.h"
@@ -371,7 +372,7 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     float ownDist = core::length(muzzle - origin);
     SoundCues::Emitter me = atWeapon("MuzzleFlash");
     me.pos = muzzle;
-    cues_.play(w.lowAmmo() ? "SHOOT_LOW_AMMO" : "SHOOT", me, ownDist);
+    cues_.play(weaponCue(w.lowAmmo() ? "WP_LowAmmoFire" : "WP_Fire"), me, ownDist);
     burstActive_ = true; sinceShot_ = 0.0f;
     // DefaultImpactSound (world) / damage impact cue at the hit point.
     if (hitTarget) cues_.play("IMPT_DMG", hitPoint, core::length(hitPoint - listenerPos_));
@@ -389,6 +390,9 @@ void World::setAudio(audio::IAudio* a, bool loadSliceMap) {
     float thr, att, rel, mk;
     if (SoundMixer::masterCompressor(thr, att, rel, mk)) a->setMasterCompressor(thr, att, rel, mk);
     if (loadSliceMap) loadMapAudio("MP_IAC_Streets");   // the hard-wired slice; a frontend boot loads its own level
+    // Validation hook: the slice body with another character's audio profile (Gameplay sets the real chassis).
+    if (const char* ch = std::getenv("WFC_CHARACTER_AUDIO")) if (*ch) setPlayerCharacterAudio(ch);
+    if (const char* wc = std::getenv("WFC_WEAPON_AUDIO")) if (*wc) setPlayerWeaponAudio(wc);
     // Occlusion line check listener -> source against the world collision. Attached (player-owned)
     // sounds are tested against the pawn's body (mesh origin + 1.5 m), not the socket tip, which can
     // poke into walls (the arm / gun have no collision). The last 0.5 m at the source and 0.25 m at
@@ -415,7 +419,30 @@ void World::setAudio(audio::IAudio* a, bool loadSliceMap) {
 
 bool World::loadMapAudio(const std::string& level) {
     if (!levelAudio_.level().empty()) unloadMapAudio();
-    return levelAudio_.load(level);
+    const bool ok = levelAudio_.load(level);
+    if (ok) { CharacterAudio::loadCues(cues_, audioProfile()); CharacterAudio::loadWeaponCues(cues_, weaponClass_); }   // level-owned
+    return ok;
+}
+
+// The player's weapon WeaponSounds (CharacterAudio weapon table, by weapon class; default TnWeaponIonBlaster) [CONF data].
+const char* World::weaponCue(const char* event) const {
+    const std::string& c = CharacterAudio::weaponCue(weaponClass_, event);
+    return c.c_str();
+}
+
+void World::setPlayerWeaponAudio(const std::string& weaponClass) {
+    weaponClass_ = weaponClass;
+    if (audio_ && !levelAudio_.level().empty()) CharacterAudio::loadWeaponCues(cues_, weaponClass);
+}
+
+void World::setPlayerCharacterAudio(const std::string& chassisKey) {
+    const CharacterAudioProfile* p = CharacterAudio::find(chassisKey);
+    if (!p) { LOG_WARN("character audio: no profile for %s (default kept)", chassisKey.c_str()); return; }
+    audioProfile_ = p;
+    robotFoley_.setProfile(p);
+    vehicleAudio_.setProfile(*p);
+    if (audio_ && !levelAudio_.level().empty()) CharacterAudio::loadCues(cues_, *p);
+    LOG_INFO("character audio: %s (%s / %s)", p->key.c_str(), p->voiceSet.c_str(), p->vehicleSet.c_str());
 }
 
 void World::tickAudioOnly(float dt) {
@@ -437,6 +464,7 @@ void World::unloadMapAudio() {
 void World::resetSystemsForMatch() {
     cues_.stopNonMapInstances();               // weapon / vehicle / foley / transform / pickup sounds (immediate)
     vehicleAudio_ = VehicleAudio{};
+    vehicleAudio_.setProfile(audioProfile());
     robotFoley_ = RobotFoley{};
     nitro_ = VehicleNitro{};
     fx_.clearParticles();
@@ -495,8 +523,9 @@ SoundCues::Emitter World::atWeapon(const char* socket) const {
 }
 
 // Robot / transformation / fine-aim audio, attached to the pawn or its weapon.
-//   Transformation [CONF Optimus_ROBO_ANIM]: Transform_ToVehicle_ROBO HmAnimNotify_Sound
-//   BL_TRANSFORM.OPTIMUS_BOT2VEH @0.125 s of 2.0 s; Transform_ToRobot_ROBO OPTIMUS_VEH2BOT @0.0 (MinWeight 0).
+//   Transformation [CONF, the character profile's clips]: the HmAnimNotify_Sound notifies of Transform_ToVehicle_ROBO /
+//   Transform_ToRobot_ROBO at their authored times (Optimus: BL_TRANSFORM.OPTIMUS_BOT2VEH @0.125 s of 2.0 s;
+//   OPTIMUS_VEH2BOT @0.0, MinWeight 0; Megatron adds BOT2VEH_ENGINESTART).
 //   No SocketName: the component sits on the pawn's skeletal mesh and moves with it for the whole
 //   layered cue (servos 0.0, main 0.15, land thump 0.64, flare 1.44, air release 1.59, finish 1.67 s).
 //   Fine aim [CONF TnWeaponIonBlaster]: WP_StartFineAim / WP_EndFineAim -> BL_WPN_GUN_PULSE_RIFLE.
@@ -504,13 +533,22 @@ SoundCues::Emitter World::atWeapon(const char* socket) const {
 void World::tickCharacterAudio(float dt) {
     const Character& pc = player_.pawn();
     bool tf = pc.isTransforming();
-    if (tf && !prevTransforming_) { transformCuePlayed_ = false; transformTarget_ = pc.moveForm(); }
-    if (tf && !transformCuePlayed_) {
-        const bool toVehicle = transformTarget_ == Form::Vehicle;
-        const float at = toVehicle ? 0.125f / 2.0f : 0.0f;          // notify time / authored length
-        if (pc.transformProgress() >= at) {
-            transformCue_ = cues_.play(toVehicle ? "BL_TRANSFORM.OPTIMUS_BOT2VEH" : "BL_TRANSFORM.OPTIMUS_VEH2BOT", atPawn(), 0.0f);
-            transformCuePlayed_ = true;
+    if (tf && !prevTransforming_) { transformCuePlayed_ = false; transformNotify_ = 0; transformTarget_ = pc.moveForm(); }
+    if (tf) {
+        const CharacterAudioProfile& prof = audioProfile();
+        const CharacterAudioProfile::Clip* clip =
+            prof.clip(transformTarget_ == Form::Vehicle ? "Transform_ToVehicle_ROBO" : "Transform_ToRobot_ROBO");
+        // Sound notifies in authored order; each fires once when the fold passes its time / authored length.
+        for (int i = transformNotify_; clip && i < (int)clip->notifies.size(); ++i) {
+            const CharacterAudioProfile::Notify& n = clip->notifies[(size_t)i];
+            if (clip->length > 0.0f && pc.transformProgress() < n.t / clip->length) break;
+            const std::string& cue = prof.notifyCue(n);
+            if (!cue.empty()) {
+                const int id = cues_.play(cue.c_str(), atPawn(), 0.0f);
+                if (!transformCuePlayed_) transformCue_ = id;
+                transformCuePlayed_ = true;
+            }
+            transformNotify_ = i + 1;
         }
     }
     prevTransforming_ = tf;
@@ -545,8 +583,7 @@ void World::tickCharacterAudio(float dt) {
 
     bool fa = pc.fineAiming() && pc.hasWeapon();
     if (fa != prevFineAim_)
-        cues_.play(fa ? "BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START" : "BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END",
-                   atWeapon(), 0.0f);
+        if (*weaponCue(fa ? "WP_StartFineAim" : "WP_EndFineAim")) cues_.play(weaponCue(fa ? "WP_StartFineAim" : "WP_EndFineAim"), atWeapon(), 0.0f);
     prevFineAim_ = fa;
 }
 
@@ -786,7 +823,7 @@ void World::tick(float dt) {
         if (burstActive_ && sinceShot_ > w.fireInterval * 2.0f) {
             burstActive_ = false;
             SoundCues::Emitter te = atWeapon("MuzzleFlash");   // WP_LoopingTail on the weapon
-            cues_.play("SHOOT_TAIL", te, core::length(te.pos - pp));
+            if (*weaponCue("WP_LoopingTail")) cues_.play(weaponCue("WP_LoopingTail"), te, core::length(te.pos - pp));
         }
         static const bool audioTime = std::getenv("WFC_AUDIOTIME") != nullptr;
         if (audioTime && audio_) {

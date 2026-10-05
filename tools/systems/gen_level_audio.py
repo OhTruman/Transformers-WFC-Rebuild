@@ -67,10 +67,10 @@ def cue_tree(cue, prefer=None):
     params = {k: v for k, v in rp.items() if k not in ('ChildNodes', 'Category', 'SecondaryCategory', 'PlayMixerPreset')}
     if rp.get('Category'): params['Category'] = row(rp['Category'])[1].get('CategoryName', '')
     kids = []
-    for en in rp.get('ChildNodes', []):
+    for en in [x for x in (rp.get('ChildNodes') or []) if x]:
         ecls, ep, _ = row(en)
         waves = []
-        for w in ep.get('ChildNodes', []):
+        for w in [x for x in (ep.get('ChildNodes') or []) if x]:
             pk, nm = w.split('.', 1)
             wav = 'content/%s/%s.wav' % (pk, nm)
             if not os.path.exists(CONTENT + wav[8:]): print('  MISSING wave', wav)

@@ -48,7 +48,8 @@ public:
     // A Bink movie is up (the intro chain, a loading underlay): MovieMixerPreset on the game mix.
     void setMoviePlaying(bool playing);
     // The movie's own sound: opens the movie file's audio tracks and starts them now (call when its video starts);
-    // also marks the movie as up. `languageSlot` < 0: WFC_MOVIE_LANGSLOT, else 0. False: the movie has no audio
+    // also marks the movie as up. `languageSlot` < 0: the language's slot (movieLanguageSlot(GLanguage); WFC_LANGUAGE,
+    // default INT; WFC_MOVIE_LANGSLOT overrides). False: the movie has no audio
     // (the loading Binks) - nothing plays, by design.
     bool startMovieAudio(const std::string& moviePath, int languageSlot = -1);
     // Movie end or skip: the movie sound stops at once. The game-mix mute stays until setMoviePlaying(false) (a

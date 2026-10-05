@@ -39,7 +39,11 @@ bool LevelAudioHost::startMovieAudio(const std::string& path, int languageSlot) 
     stopMovieAudio();
     if (!audio_) return false;
     setMoviePlaying(true);
-    if (languageSlot < 0) languageSlot = std::getenv("WFC_MOVIE_LANGSLOT") ? std::atoi(std::getenv("WFC_MOVIE_LANGSLOT")) : 0;
+    if (languageSlot < 0) {
+        const char* lang = std::getenv("WFC_LANGUAGE");                 // GLanguage (Language=int in Xe-TransEngine.ini)
+        languageSlot = audio::movieLanguageSlot(lang ? lang : "INT");
+        if (const char* s = std::getenv("WFC_MOVIE_LANGSLOT")) languageSlot = std::atoi(s);
+    }
     std::unique_ptr<audio::MovieAudioPlayer> p(audio::createMovieAudioPlayer());
     if (!p->open(audio_, path, languageSlot)) {
         LOG_INFO("movie audio: %s has no audio tracks (silent by design)", path.c_str());

@@ -1,6 +1,6 @@
 // Systems M03 pass 5 native-audio validation suite (not part of the CMake build). Build from the repo root:
 //   .toolchain/llvm-mingw-*/bin/clang++.exe -std=c++17 -O2 -Isrc tools/systems/audio_native_suite.cpp src/game/SoundCues.cpp \
-//     src/game/SoundMixer.cpp src/game/AmbientAudio.cpp src/game/LevelAudioScript.cpp src/game/LevelAudioHost.cpp src/game/MatchAudio.cpp src/game/FrontendAudioRuntime.cpp src/game/MusicPlayer.cpp src/platform/win32/Win32MovieAudio.cpp \n//     src/game/FrontendAudio.cpp src/game/PickupPresentation.cpp src/core/Log.cpp src/platform/win32/Win32Audio.cpp -lwinmm -static -o suite.exe
+//     src/game/SoundMixer.cpp src/game/AmbientAudio.cpp src/game/LevelAudioScript.cpp src/game/LevelAudioHost.cpp src/game/MatchAudio.cpp src/game/FrontendAudioRuntime.cpp src/game/MusicPlayer.cpp src/platform/win32/Win32MovieAudio.cpp \n//     src/game/FrontendAudio.cpp src/game/PickupPresentation.cpp src/game/CharacterAudio.cpp src/core/Log.cpp src/platform/win32/Win32Audio.cpp -lwinmm -static -o suite.exe
 // Reads ExtractedAssets (read only). Channel-mode checks need an audio device (skipped otherwise).
 // Systems M03 native-audio validation suite (RE 7c4a2e0): mixer, zones, emitter geometry, dB, channel modes.
 // Deterministic: recording backends for SoundCues / AmbientAudio; the real Win32 backend for channel modes.
@@ -11,6 +11,8 @@
 #include "game/FrontendAudio.h"
 #include "game/LevelAudioHost.h"
 #include "game/FrontendAudioRuntime.h"
+#include "game/CharacterAudio.h"
+#include "audio/MovieAudio.h"
 #include <algorithm>
 #include "assets/Json.h"
 #include <chrono>
@@ -1681,7 +1683,50 @@ static void testZoneGraph() {
     CHECK(allOk, "3 cycles x 10 MP maps: each loads its bed, enters zones, switches reverb, survives death / reset, unloads to the baseline");
 }
 
+// M08: character audio profiles + the movie language track rule (RE 433ef9e).
+static void testCharacterAudio() {
+    std::printf("[character audio profiles; movie language tracks]\n");
+    using audio::movieLanguageSlot;
+    CHECK(movieLanguageSlot("INT") == 0 && movieLanguageSlot("int") == 0 && movieLanguageSlot("FRA") == 1 && movieLanguageSlot("ITA") == 2 &&
+          movieLanguageSlot("DEU") == 3 && movieLanguageSlot("ESN") == 4 && movieLanguageSlot("RUS") == 5 && movieLanguageSlot("POL") == 6 &&
+          movieLanguageSlot("JPN") == 0, "GLanguage -> L (0x82CBEEE0)");
+    CHECK(audio::movieTrackLayout(10, 0).c == 5 && audio::movieTrackLayout(10, 1).c == 6 && audio::movieTrackLayout(10, 4).c == 9 &&
+          audio::movieTrackLayout(10, 5).c == -1 && audio::movieTrackLayout(6, 0).c == 5 && audio::movieTrackLayout(6, 1).c == -1 &&
+          audio::movieTrackLayout(10, 0).lfe == 4, "tracks [0..4, 5 + L], a missing index ignored");
+    CHECK(game::CharacterAudio::profileCount() == 33, "33 roster chassis profiles (%d)", game::CharacterAudio::profileCount());
+    const game::CharacterAudioProfile& op = game::CharacterAudio::defaultProfile();
+    CHECK(op.key == "Truck" && op.voiceCue("FS_DEFAULT_WALK") == "BL_FS_LRG_BOT.FS_WALK_DEFAULT" &&
+          op.vehicleCue("Auto_Boost_Start") == "BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START" &&
+          op.vehicleCue("Auto_Ram_Impact") == "BL_VEH_SOUNDWAVE.VEH_TRUCK_RAM_IMPACT" && op.clip("Transform_ToVehicle_ROBO") &&
+          op.notifyCue(op.clip("Transform_ToVehicle_ROBO")->notifies[0]) == "BL_TRANSFORM.OPTIMUS_BOT2VEH",
+          "default profile = Optimus: walk, boost, ram, transform cues");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    CHECK(cues.hasCue("BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START") && cues.hasCue("BL_WPN_GUN_ION_BLASTER.SHOOT") &&
+          cues.hasCue("BL_WPN_FOLEY.SHOOT_DRY_FIRE_ELECTRICITY") && !cues.hasCue("BL_WPN_GUN_NEUTRON_RIFLE.SHOOT"),
+          "full asset names resolve to the compiled short names (exact packages only)");
+    int missingDefault = 0;
+    for (const auto& e : op.vehicle) missingDefault += cues.hasCue(e.second.c_str()) ? 0 : 1;
+    CHECK(game::CharacterAudio::loadCues(cues, op) >= 0, "default profile loads");
+    for (const char* key : {"Car", "Tank", "Jet"}) {
+        const game::CharacterAudioProfile* p = game::CharacterAudio::find(key);
+        const int before = cues.mapCueCount();
+        const int added = p ? game::CharacterAudio::loadCues(cues, *p) : -1;
+        int resolved = 0, total = 0;
+        if (p) for (const auto& e : p->vehicle) { ++total; resolved += cues.hasCue(e.second.c_str()) ? 1 : 0; }
+        CHECK(p && added > 0 && cues.mapCueCount() == before + added && resolved == total && !p->voiceCue("FS_DEFAULT_WALK").empty() &&
+              cues.hasCue(p->voiceCue("FS_DEFAULT_WALK").c_str()),
+              "%s (%s): %d cues loaded, vehicle %d / %d resolve, walk %s", key, p ? p->voiceSet.c_str() : "-", added, resolved, total,
+              p ? p->voiceCue("FS_DEFAULT_WALK").c_str() : "-");
+    }
+    CHECK(game::CharacterAudio::weaponCue("TransContent.TnWeaponHeavyPistol", "WP_Fire") == "BL_WPN_GUN_PISTOL_HVY.SHOOT" &&
+          game::CharacterAudio::loadWeaponCues(cues, "TransContent.TnWeaponHeavyPistol") >= 0 && cues.hasCue("BL_WPN_GUN_PISTOL_HVY.SHOOT"),
+          "weapon class WeaponSounds load and resolve");
+    cues.unloadMapCues();
+    CHECK(cues.mapCueCount() == 0, "character / weapon cues are level-owned (released with the level)");
+}
+
 int main() {
+    testCharacterAudio();
     testZoneGraph();
     testMatchAudio();
     testFrontendSeam();
