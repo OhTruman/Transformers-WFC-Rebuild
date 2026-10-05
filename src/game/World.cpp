@@ -1074,6 +1074,7 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         if (!ip) for (MatchOpponent* o : opponents_) if (o->matchPlayer() == instigator) ip = &o->pawn();
         if (ip && instigator != victim && ip->warcryRemain_ > 0.0f) amount *= ip->warcryDamageMul_;   // TnBuffWarcryIncreaseDamage
         if (ip && instigator != victim && ip->hoverState_ == 2) amount *= 1.4f;   // TnBuffIncreaseDamageDuringHover [0]
+        if (ip && instigator != victim && ip->beaconDamageBuff_ > 0.0f) amount *= 1.15f;   // TnBuffAmmoBeaconIncreaseDamage [0]
     }
     float applied = h->applyDamage(amount);
     if (applied > 0.0f) {                                   // TnPlayerPawn.TakeDamage -> ExposeSelf
@@ -1133,6 +1134,8 @@ HudGameState World::hudState() const {
     h.hoverState = pc.hoverState_;
     h.lockTarget = lockTarget_; h.locked = locked_;
     h.barrier = barrier_.alive; h.barrierHealth = barrier_.health;
+    h.ammoBeacon = beacon_.alive; h.ammoBeaconPos = beacon_.pos; h.ammoBeaconLife = beacon_.life; h.ammoBeaconHealth = beacon_.health;
+    h.ammoBeaconBuff = pc.beaconDamageBuff_ > 0.0f;
     h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
     { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
     {
@@ -1647,6 +1650,8 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
     }
     for (Destructible* d : destructibles_)
         if (d->state() == 0) { core::Vec3 c = (d->boxMin() + d->boxMax()) * 0.5f; float k = falloff(c); if (k > 0.0f) d->applyDamage(*this, damage * k); }
+    if (beacon_.alive && core::length(beacon_.pos - at) < radius)
+        damageAmmoBeacon(damage * (1.0f - core::length(beacon_.pos - at) / std::max(radius, 1e-3f)), instigator);
     if (barrier_.alive) {
         // Distance to the wall box (clamped point), not its centre.
         core::Vec3 l = core::transformPoint(barrier_.boxInv, at);
@@ -1821,12 +1826,17 @@ void World::tickAbilityEffects(float dt) {
         pc.shockwaveDelay_ = 0.25f;                       // Delay 0.25 -> Shockwave()
     } else if (fx == "Whirlwind") {
         startLocalMelee(true);                            // MeleeService.StartMeleeAttack(MELEE_Whirlwind)
+    } else if (fx == "SpawnAmmoCrate") {
+        pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
+        beaconDelay_ = 0.5f;                              // SpawnDelay 0.5 -> SpawnInventory
+        pc.beaconAlive_ = true;
     } else if (fx == "Barrier") {
         pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
         barrierDelay_ = 0.5f;                             // SpawnDelay 0.5 -> SpawnBarrier
         pc.barrierAlive_ = true;
     }
     tickBarrier(dt);
+    tickAmmoBeacon(dt);
     tickLocalMelee(dt);
     tickHomingLock(dt);
     if (localDead_ && barrier_.alive) { barrier_.alive = false; barrierDelay_ = -1.0f; }
@@ -2190,6 +2200,71 @@ void World::damageBarrier(float amount, const std::string& type) {
     if (type.find("Melee") != std::string::npos || type.find("Whirlwind") != std::string::npos) return;   // ignores melee
     barrier_.health -= amount;
     if (barrier_.health <= 0.0f) { barrier_.health = 0.0f; barrier_.fade = 3.0f; }
+}
+
+// ---- Ammo beacon [CONF TnAbilitySpawnInventory / TnAbilitySpawnAmmoCrate / TnDroppedPickupAmmoBeacon / TnDroppedPickupDefrag
+// script + authored CDOs] ----
+// SpawnDelay 0.5 -> DropFrom(owner Location, TossVelocity (2000, 1200, 0) rotated by the owner) -> falls and lands.
+// BeaconLifespan 60 s; the owner dead -> FadeOut. Pickup.Tick: every pawn within Radius 1500 UU that VisibleCollidingActors
+// finds (owner or same team): current weapon FillReserveAmmo when not full, TnBuffAmmoBeaconIncreaseDamage (x1.15, 1 s,
+// reset while in range). Health 100: damage from the owner or the owner's team is ignored. TnAmmoBeacon.PickupAllowed false.
+// Cooldown[0] 60 s once the beacon is gone (ServerCanStartCooldown). Skill gifts / grenades not applied (no skills in MP).
+// FadeOut duration not applied: removal is immediate [PARTIAL].
+void World::tickAmmoBeacon(float dt) {
+    Character& pc = player_.pawn();
+    auto tickBuff = [dt](Character& p) { p.beaconDamageBuff_ = std::max(0.0f, p.beaconDamageBuff_ - dt); };
+    tickBuff(pc);
+    for (MatchOpponent* o : opponents_) tickBuff(o->pawn());
+    if (beaconDelay_ >= 0.0f) {
+        beaconDelay_ -= dt;
+        if (beaconDelay_ < 0.0f && !localDead_) {
+            const core::Vec3 f = core::forwardFromYawPitch(pc.yaw(), 0.0f), r{-f.z, 0.0f, f.x};
+            beacon_ = AmmoBeacon{};
+            beacon_.alive = true; beacon_.pos = pc.actorLocation(); beacon_.vel = f * 20.0f + r * 12.0f;
+            beacon_.life = 60.0f; beacon_.health = 100.0f;
+            LOG_INFO("ability SpawnAmmoCrate: beacon dropped");
+        }
+    }
+    AmmoBeacon& b = beacon_;
+    if (b.alive) {
+        b.life -= dt;
+        if (b.life <= 0.0f || localDead_ || b.health <= 0.0f) b.alive = false;
+    }
+    if (b.alive && !b.landed) {
+        // PHYS_Falling until it lands (stock DroppedPickup physics; walls stop the horizontal travel).
+        b.vel.y -= core::config::kGravity * dt;
+        core::Vec3 next = b.pos + b.vel * dt;
+        float t; core::Vec3 n;
+        if (collision_.valid() && collision_.segmentHit(b.pos, next, t, n)) {
+            next = b.pos + (next - b.pos) * std::max(0.0f, t - 1e-3f);
+            if (n.y > 0.7f) { b.landed = true; b.vel = {0, 0, 0}; } else { b.vel.x = 0.0f; b.vel.z = 0.0f; }
+        }
+        b.pos = next;
+        if (b.pos.y < killZ_) b.alive = false;
+    }
+    if (b.alive) {
+        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+        const core::Vec3 eye = b.pos + core::Vec3{0, 0.5f, 0};
+        auto serve = [&](Character& p) {
+            if (core::length(p.actorLocation() - b.pos) > 15.0f) return;
+            float t;
+            if (line && line->segmentHit(eye, p.actorLocation(), t)) return;   // VisibleCollidingActors
+            Weapon& w = p.weapon();
+            if (w.reserve < w.reserveMax) w.reserve = w.reserveMax;          // FillReserveAmmo
+            p.beaconDamageBuff_ = 1.0f;                                       // AddBuff / ResetBuffTime
+        };
+        if (!localDead_) serve(pc);
+        const int team = matchActive_ && localPlayer_ >= 0 ? match_.players()[(size_t)localPlayer_].team : 255;
+        if (matchActive_ && match_.settings().teamGame)
+            for (MatchOpponent* o : opponents_) if (o->spawned() && o->team() == team) serve(o->pawn());
+    }
+    pc.beaconAlive_ = b.alive || beaconDelay_ >= 0.0f;
+}
+
+void World::damageAmmoBeacon(float amount, int instigator) {
+    if (!beacon_.alive || instigator < 0 || instigator == localPlayer_) return;
+    if (matchActive_ && match_.sameTeam(instigator, localPlayer_)) return;
+    beacon_.health -= amount;
 }
 
 } // namespace game

@@ -61,6 +61,12 @@ struct HudGameState {
     bool dodging = false;
     bool cloaked = false;
     int hoverState = 0;
+    // Ammo beacon (SpawnAmmoCrate): Rendering draws PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT at ammoBeaconPos
+    // (PickupRotationRate yaw 10000); objective marker "Ammo Beacon" for the owner's team.
+    bool ammoBeacon = false;
+    core::Vec3 ammoBeaconPos{0, 0, 0};
+    float ammoBeaconLife = 0.0f, ammoBeaconHealth = 0.0f;
+    bool ammoBeaconBuff = false;                 // TnBuffAmmoBeaconIncreaseDamage on the local pawn
     bool barrier = false;                        // the local Barrier ability's wall is up
     float barrierHealth = 0.0f;                  // BarrierHealth 1000, DegenRate 15/s
     std::string heavyWeapon;                     // carried flag / bomb weapon ItemName ("" none): replaces the gun while held
@@ -254,6 +260,11 @@ public:
     };
     float grenadeTossDelay_ = -1.0f, grenadeCooldown_ = 0.0f;
     BarrierState barrier_;
+    // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
+    struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f; };
+    AmmoBeacon beacon_;
+    float beaconDelay_ = -1.0f;
+    void tickAmmoBeacon(float dt);
     float barrierDelay_ = -1.0f;
     int barrierDyn_ = -1, barrierDynW_ = -1;
     assets::SkinnedModel barrierModel_;
@@ -374,6 +385,9 @@ public:
     void applyKnockback(int victim, const core::Vec3& momentumUU, const std::string& damageType);   // RE §I gated knockback
     // TnAbilityBarrier / TnBarrierSpawnable (the local owner's) [CONF script + authored; RE §I3].
     const BarrierState& barrier() const { return barrier_; }
+    bool ammoBeaconAlive() const { return beacon_.alive; }
+    core::Vec3 ammoBeaconPos() const { return beacon_.pos; }
+    void damageAmmoBeacon(float amount, int instigator);
     bool barrierRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const;
     void damageBarrier(float amount, const std::string& type);
     // TnPlayerController.TriggerKillstreak for the local player: the newest acquired streak; RequiresRobotForm streaks in

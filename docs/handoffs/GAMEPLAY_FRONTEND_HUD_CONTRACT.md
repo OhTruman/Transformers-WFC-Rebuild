@@ -111,6 +111,7 @@ it for the weapon icon / DeathString lookup.
 | Carried objectives | `carried[]` {kind 0 flag / 1 bomb, holder, holderTeam, dropped, active, pos, autoReturn, returnLeft, sleep}, `localCarrying` | flag-return progress = 1 − returnLeft / 10 |
 | Bomb | `bombPlanted`, `bombFuse` (CurrentObjectiveCountdown), `bombDefuse`, `bombPlantTeam` | |
 | Objective markers | `objectives[]` for every active-in-mode objective (DOM, KOTH, flag factories, capture points, bomb, plant points) with `ownerTeam` and `active` | |
+| Ammo beacon | `ammoBeacon`, `ammoBeaconPos`, `ammoBeaconLife` (of 60), `ammoBeaconHealth` (of 100), `ammoBeaconBuff` | Rendering draws PROP_NEU_AmmoPickup_STAT at the position; marker caption "Ammo Beacon" for the owner's team |
 | Barrier | `barrier`, `barrierHealth` (of 1000) | the wall mesh is drawn by Gameplay (World) |
 | Carried weapon | `heavyWeapon` ("Code Of Power" / "Bomb" / "") | replaces the gun on the weapon HUD while held |
 | Grenades | `grenades` (bag reserve; −1 = no bag) | G throws; grenade marker (ShowMarker) on live grenades via `projectiles` [PARTIAL] |

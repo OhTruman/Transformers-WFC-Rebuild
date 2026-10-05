@@ -244,6 +244,18 @@ Inputs:
   - PARTIAL: the flashbang instant break and the TnBuffIncreaseBarrierHealth +500.
   - Test (PARTICIPANT 10/10): up at 0.5 s; shots absorbed (999 → 784) with the target untouched; owner
     stopped at 6.9 m; 60 HP decay in 4 s; cooldown 20 s after the fade.
+- **SpawnAmmoCrate (ammo beacon)** [CONF TnAbilitySpawnInventory / SpawnAmmoCrate / TnDroppedPickupAmmoBeacon / Defrag
+  script + authored]:
+  - Skill_Barrier anim; SpawnDelay 0.5 s; dropped from the owner with TossVelocity (2000, 1200, 0) rotated by the
+    owner; falls and lands.
+  - BeaconLifespan 60 s; gone with the owner.
+  - Each tick, the owner and teammates within 1500 UU with line of sight: current weapon FillReserveAmmo, and
+    TnBuffAmmoBeaconIncreaseDamage ×1.15 (BuffTime 1 s, refreshed).
+  - Health 100: owner / team damage ignored. Not a pickup.
+  - Cooldown[0] 60 s once it is gone. The HUD exposes the mesh position for Rendering
+    (PROP_NEU_AmmoPickup_STAT).
+  - PARTIAL: FadeOut duration (removal is immediate); skill gifts / grenades (no skills in versus).
+  - Test (PARTICIPANT 11/11).
 - RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (Barrier now implemented) (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].

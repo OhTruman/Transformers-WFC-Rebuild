@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22r (2026-10-05) — SpawnAmmoCrate (ammo beacon)
+- Beacon drop / refill / damage buff / health / lifespan / cooldown from script and authored data. PARTICIPANT 11/11.
+
 ## GAMEPLAY PASS 22q (2026-10-05) — Barrier ability
 - Wall spawn / collision / health / decay / fade / cooldown from authored data; blocks shots and pawns. PARTICIPANT 10/10.
 

@@ -1837,6 +1837,45 @@ void Application::runParticipantTest() {
         check(E && up && shotBlocked && walkBlocked && decays && cdWait && cdAfter,
               "Barrier: up after 0.5 s; blocks and absorbs hitscan; blocks pawns; decays 15/s; 3 s fade; cooldown 20 s once gone");
     }
+    // Ammo beacon (SpawnAmmoCrate): dropped after 0.5 s; refills the reserve and buffs damage within 15 m; enemy damage
+    // destroys it; the cooldown (60 s) starts once it is gone.
+    {
+        game::MatchLaunch L6; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L6);
+        world_.launchMatch(L6);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Leader; me.abilities = {"SpawnAmmoCrate", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("A" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+        world_.handleInput(sh, dt); world_.tick(dt);
+        run(0.4f);
+        bool notYet = !world_.ammoBeaconAlive();
+        run(2.0f);
+        bool dropped = notYet && world_.ammoBeaconAlive();
+        lp.weapon().reserve = 0;
+        run(0.1f);
+        bool refilled = lp.weapon().reserve == lp.weapon().reserveMax && world_.hudState().ammoBeaconBuff;
+        core::Vec3 bpos = world_.ammoBeaconPos(), away = core::normalize(core::Vec3{lp.position().x - bpos.x, 0, lp.position().z - bpos.z});
+        lp.setPosition(lp.position() + away * 25.0f);
+        run(1.2f);
+        bool buffGone = !world_.hudState().ammoBeaconBuff;
+        bool cdWait = world_.hudState().abilities[0].cooldown == 0.0f;
+        world_.damageAmmoBeacon(60.0f, world_.localMatchPlayer());   // own damage ignored
+        bool ownIgnored = world_.hudState().ammoBeaconHealth == 100.0f;
+        if (E) world_.damageAmmoBeacon(100.0f, E->matchPlayer());
+        run(0.1f);
+        bool destroyed = !world_.ammoBeaconAlive();
+        run(0.1f);
+        bool cdAfter = world_.hudState().abilities[0].cooldown > 59.0f;
+        LOG_INFO("PARTICIPANT beacon: dropped %d refilled+buff %d buff gone out of range %d own damage ignored %d enemy destroyed %d cooldown waits %d / starts %d",
+                 (int)dropped, (int)refilled, (int)buffGone, (int)ownIgnored, (int)destroyed, (int)cdWait, (int)cdAfter);
+        check(E && dropped && refilled && buffGone && ownIgnored && destroyed && cdWait && cdAfter,
+              "Ammo beacon: dropped after 0.5 s; refills + x1.15 buff within 15 m; owner damage ignored; enemy destroys it; 60 s cooldown once gone");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
