@@ -17,6 +17,13 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 30 — ROBOT / VEHICLE FORM ACROSS ALL MAPS (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Optimus robot + vehicle, 10 MP maps, spawn 7 | 20 / 20 PASS (0 noProgram / noDepth / GL errors), vehicle form active in all 10 vehicle runs; materials, hover FX and lighting present on every map; luma p50 8-44 (graded range) | work/m30/sheet0.png, sheet1.png | VISUALLY CHECKED (no defect found) | — |
+| Debris haze | strong brown cast from its WorldInfo CLUT (MP_OrbitalDebris_CLUT) + fog; no volume grade | captures | PARTIAL (no original frame) | — |
+| Harness note | the agents/rendering exe has no WFC_MAP (map selection lives in the integration code): map audits must use the integration-based build, or every capture is Streets | first m30 run | — | — |
+
 ## MILESTONE 28 — TEXTURE LIFETIME FOR A PERSISTENT RENDERER (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
