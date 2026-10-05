@@ -87,7 +87,7 @@ Release, one process, frontend → map → frontend each time. GL census after e
 | Systems audio suite | 609 / 0; movie probe OK |
 | Rendering release_path_check (persistent) | PASS (noDepth 0, glErr 0, both Streets visits identical) |
 | Rendering visual suite vs M07 | 11 / 11; Streets pinned cameras refdiff 0.000 |
-| Experimental presentation gate f06fd88 (Debug) | 36 pass / 2 fail / 3 partial / 1 unknown. The 2 FAILs: party / game lobby backgrounds mostly blank (unchanged since M06; listed below) |
+| Experimental presentation gate f06fd88 (Debug) | 36 pass / 2 fail / 3 partial / 1 unknown. The 2 FAILs (b02_party / b03_lobby "mostly blank") are a stale expectation: the sparse lobby backdrop is CONFIRMED original (see below) |
 
 ### Weapons
 - Equipped and fired in real frontend matches: Shotgun, Burst Rifle, Assault Rifle, Ion Blaster (robot form). Vehicle weapons fire in vehicle form (Gameplay).
@@ -96,9 +96,9 @@ Release, one process, frontend → map → frontend each time. GL census after e
 
 ### Remaining visible discrepancies
 1. Muzzle flash / tracer effects exist only for the Ion Blaster (Systems WeaponFx). Other weapons fire with impact effects and their own audio but no muzzle / tracer template [PARTIAL].
-2. Party / game lobby 3D background mostly empty (8 draws): the menu panels sit over a flat backdrop [PARTIAL, unchanged since M06].
+2. (Retired) Party / game lobby backdrop: CONFIRMED original per authored.db (Frontend). UI_PartyLobby_m / UI_Lobby_m hold no geometry; the visible scene is UI_CharacterCustomization_m's SpaceDome + four CybertronCards + faction emblems (glow / dim fscommands). Characters appear only when Create a Character opens. The gate should check that the dome / cards draw and that the emblems respond.
 3. Deathmatch energon trim is neutral orange-gold (authored TnTeamInfo default) [HIGH, human check against the original FFA].
-4. HUD crosshair per weapon: PROVISIONAL name mapping.
+4. HUD crosshair per weapon: types 0 Generic / 1 Shotgun / 2 IonBlaster / 3 Bazooka (HIGH, Hud_GFX clip order); weapon → type PROVISIONAL (native).
 5. Grenades / melee / repair beam equipped; projectiles drawn as box markers until Rendering draws authored projectile meshes [PROV].
 6. Disguise / DecoyTrap abilities PARTIAL (Gameplay).
 7. The camera can sit under authored geometry without simple collision (Streets ceiling arch). CONFIRMED authentic (TraceCamera = simple collision).

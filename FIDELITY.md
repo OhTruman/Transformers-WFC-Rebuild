@@ -31,7 +31,7 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 | Per-map colour grades on the player route | CONFIRMED data / applied | MP_Streets_CLUT, MP_OrbitalDebris_CLUT, clut_mp40, desaturation40 per map |
 | Camera inside Streets Ceiling_Arch underside | CONFIRMED ORIGINAL | TraceCamera simple collision only (RE f150a6a) |
 | Escalation maps under versus modes | not applicable | no versus mode actors authored |
-| Lobby 3D background | PARTIAL | mostly empty backdrop since M06 |
+| Lobby backdrop (SpaceDome + CybertronCards + emblems, no room / characters) | CONFIRMED ORIGINAL (authored.db, Frontend) | the presentation gate's "mostly blank" lobby check is a stale expectation |
 | Non-Ion weapon muzzle / tracer FX | PARTIAL | Systems WeaponFx templates pending |
 
 ---
