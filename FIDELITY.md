@@ -2359,6 +2359,7 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
 |---|---|---|---|---|
 | Optimus robot + vehicle, 10 MP maps, spawn 7 | 20 / 20 PASS (0 noProgram / noDepth / GL errors), vehicle form active in all 10 vehicle runs; materials, hover FX and lighting present on every map; luma p50 8-44 (graded range) | work/m30/sheet0.png, sheet1.png | VISUALLY CHECKED (no defect found) | — |
 | Debris haze | strong brown cast from its WorldInfo CLUT (MP_OrbitalDebris_CLUT) + fog; no volume grade | captures | PARTIAL (no original frame) | — |
+| Streets camera inside Ceiling_Arch (Integration M08 near-black frame) | the third-person camera can sit under the arch's curved underside: Ceiling_Arch_STAT's authored simple collision (RB_BodySetup_10993: slab + legs) has no curve, and the original camera trace never tests per-triangle (execTraceCamera -> SingleLineCheck, World | 0x0A000000 BlockCameras, no complex bit; RE via Gameplay). The frame-filling dark view is the original's behaviour; its VISUALCHECK "near-black" is a legitimate camera-in-geometry frame | WFC_SHOTLIST + WFC_PICK: render 0.74 m vs collision 20.9 m; RE | CONFIRMED (authentic) | none |
 | Harness note | the agents/rendering exe has no WFC_MAP (map selection lives in the integration code): map audits must use the integration-based build, or every capture is Streets | first m30 run | — | — |
 
 ## MILESTONE 28 — TEXTURE LIFETIME FOR A PERSISTENT RENDERER (2026-10-05)
