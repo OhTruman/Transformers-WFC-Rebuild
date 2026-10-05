@@ -31,6 +31,7 @@ struct InputFrame {
     float padLX = 0, padLY = 0;   // left stick, -1..1
     float padRX = 0, padRY = 0;   // right stick, -1..1
     float padLT = 0;              // left trigger, 0..1
+    float mouseWheel = 0.0f;      // notches this frame (+ = away from the user)
 
     bool isDown(Button b) const { return down[(int)b]; }
     bool wasPressed(Button b) const { return pressed[(int)b]; }

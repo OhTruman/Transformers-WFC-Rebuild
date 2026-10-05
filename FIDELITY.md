@@ -75,6 +75,30 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 23 — human playtest fidelity (2026-10-05)
+
+### Weapon switching [CONFIRMED ORIGINAL: HmInventoryManager / HmWeapon / Engine.Weapon script; Xe-TransInput.ini; RE pass 4]
+- Playtest symptom: the selected primary appeared, but the player could not switch to the secondary.
+- Chain checked:
+  - profile / class loadout → Frontend selection (PCD_MP WeaponTypes; slots 0–1 customisable) → applyLoadout;
+  - no refusals in the playtest log; both guns are in the inventory (WFC_SWITCHTEST, four classes).
+- Defects fixed:
+  1. The mouse wheel did nothing. The shipped binding is NextWeapon on wheel up, wheel down, PageUp and PageDown.
+     There is no PrevWeapon, so every input cycles forward.
+  2. Switching was refused while reloading or while a switch was in progress. Original HmWeapon.TryPutDown:
+     - Active: put down now;
+     - WeaponReloading: put down now, the reload is abandoned (no RefillClip);
+     - WeaponFiring: put down now if MinReloadPct 0.5 of the refire interval has passed, else at the next RefireCheckTimer;
+     - WeaponPuttingDown: retarget the pending weapon;
+     - WeaponEquipping: put down again once equipped.
+- Switching stays blocked while transforming, in vehicle form, during a melee attack, and with DisallowWeaponSwitching
+  (Poke). Heavy weapons are dropped when switched away.
+- Test WFC_SWITCHTEST 32/32: Scout (Car2), Scientist (Jet4), Soldier (Tank3) and Leader (Truck3), each:
+  - wheel / PgUp / PgDn ×4 idle;
+  - while moving, jumping (airborne), firing and reloading (reload abandoned, clip unchanged);
+  - transform to vehicle and back (active weapon kept), then switch again;
+  - HUD weaponId = the active weapon.
+
 ## PASS 22 — SELECTED CHARACTERS, CLASSES, VEHICLE FORMS, WEAPONS, MULTI-MAP (2026-10-05, gameplay agent)
 Inputs:
 - AssetTools per-chassis export `VerticalSlice/Characters/<ChassisId>` (vs_roster_export) and `roster_package.json`;

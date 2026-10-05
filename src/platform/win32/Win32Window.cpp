@@ -105,6 +105,8 @@ public:
             input.down[i] = nowDown;
         }
 
+        input.mouseWheel = wheel_ / (float)WHEEL_DELTA;
+        wheel_ = 0;
         // Mouse-look via cursor recentering while captured + focused.
         input.mouseDX = input.mouseDY = 0.0f;
         if (mouseCaptured_ && focused_) {
@@ -207,6 +209,7 @@ private:
                 if (height_ < 1) height_ = 1;
                 return 0;
             case WM_SETFOCUS: focused_ = true; return 0;
+            case WM_MOUSEWHEEL: wheel_ += GET_WHEEL_DELTA_WPARAM(wp); return 0;
             case WM_KILLFOCUS: focused_ = false; return 0;
         }
         return DefWindowProcW(hwnd, msg, wp, lp);
@@ -218,6 +221,7 @@ private:
     HGLRC hglrc_ = nullptr;
     int width_ = 0, height_ = 0;
     bool focused_ = true;
+    int wheel_ = 0;
     bool wantClose_ = false;
     bool mouseCaptured_ = false;
 };

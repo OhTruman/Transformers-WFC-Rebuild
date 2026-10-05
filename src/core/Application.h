@@ -33,6 +33,7 @@ private:
     void runMapSuite();
     void runCtfExtTest();
     void runParticipantTest();
+    void runSwitchTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

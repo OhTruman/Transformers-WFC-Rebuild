@@ -138,7 +138,8 @@ bool Application::init() {
     if (std::getenv("WFC_WEAPONTEST")) { runWeaponTest(); return false; }      // measurements only
     if (std::getenv("WFC_MAPSUITE")) { runMapSuite(); return false; }          // measurements only
     if (std::getenv("WFC_CTFTEST")) { runCtfExtTest(); return false; }         // measurements only
-    if (std::getenv("WFC_PARTICIPANTTEST")) { runParticipantTest(); return false; }   // measurements only
+    if (std::getenv("WFC_PARTICIPANTTEST")) { runParticipantTest(); return false; }
+    if (std::getenv("WFC_SWITCHTEST")) { runSwitchTest(); return false; }   // weapon switching, human playtest M09   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -2938,6 +2939,99 @@ void Application::shutdown() {
     delete renderer_; renderer_ = nullptr;
     delete window_; window_ = nullptr;
     LOG_INFO("Shutdown complete");
+}
+
+// WFC_SWITCHTEST: the class presets as the Frontend sends them (custom type 0, PCD_MP weapons, both faction chassis) through the
+// real match spawn; NextWeapon (wheel / PageUp / PageDown) idle, moving, jumping, firing, reloading, after transforming.
+void Application::runSwitchTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("SWITCH %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    auto run = [&](float secs, const platform::InputFrame& in) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) step(in); };
+    struct Cls { const char* name; game::Specialty sp; const char* aut; const char* dec; std::vector<std::string> w; };
+    const Cls classes[] = {
+        {"Scout", game::Specialty::Scout, "Car2", "Car4", {"Shotgun", "HeavyPistol", "FlashBangs"}},
+        {"Scientist", game::Specialty::Scientist, "Jet4", "Jet", {"BurstRifle", "RepairRay", "HealGrenades"}},
+        {"Soldier", game::Specialty::Soldier, "Tank3", "Tank2", {"AssaultRifle", "HomingRocket", "FlakGrenades"}},
+        {"Leader", game::Specialty::Leader, "Truck3", "Truck4", {"IonBlaster", "GrenadeLauncher", "KamikazeMines"}},
+    };
+    for (const Cls& c : classes) {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+        world_.launchMatch(L);
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = c.sp; cs.chassisByFaction[0] = c.aut; cs.chassisByFaction[1] = c.dec;
+        cs.chassisId = c.aut; cs.weapons = c.w;
+        world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+        run(10.6f, idle);
+        game::Character& pc = world_.player().pawn();
+        const std::string tag = std::string(c.name) + " (" + pc.chassis().id + ")";
+        auto id = [&]() { return std::string(pc.weapon().def ? pc.weapon().def->provider : "?"); };   // provider UniqueId (selection names)
+        std::vector<std::string> guns;
+        for (const auto& w : pc.inventory()) if (w.fireType != game::WeaponFire::Grenade) guns.push_back(w.def ? w.def->provider : "?");
+        const bool twoGuns = guns.size() == 2 && guns[0] == c.w[0] && guns[1] == c.w[1];
+        check(twoGuns && id() == c.w[0], tag + ": inventory " + (guns.size() > 0 ? guns[0] : "") + (guns.size() > 1 ? " + " + guns[1] : "") +
+              ", primary active");
+        // Switch with a given input source while holding 'hold'; returns the weapon id after the swap finished.
+        auto doSwitch = [&](int source, const platform::InputFrame& hold, float maxWait) {
+            platform::InputFrame in = hold;
+            if (source == 0) in.mouseWheel = 1.0f;
+            if (source == 1) { in.pressed[(int)platform::Button::NextWeapon] = true; in.down[(int)platform::Button::NextWeapon] = true; }
+            if (source == 2) { in.pressed[(int)platform::Button::PrevWeapon] = true; in.down[(int)platform::Button::PrevWeapon] = true; }
+            step(in);
+            for (int i = 0; i < (int)(maxWait * 60.0f) && pc.switchingWeapon(); ++i) step(hold);
+            step(hold);
+            return id();
+        };
+        // idle: wheel, PageUp, PageDown, repeatedly
+        std::string a = doSwitch(0, idle, 3.0f), b = doSwitch(1, idle, 3.0f), d = doSwitch(2, idle, 3.0f), e = doSwitch(0, idle, 3.0f);
+        check(a == c.w[1] && b == c.w[0] && d == c.w[1] && e == c.w[0],
+              tag + ": idle wheel / PgUp / PgDn x4 -> " + a + ", " + b + ", " + d + ", " + e);
+        // moving
+        platform::InputFrame fwd; fwd.down[(int)platform::Button::Forward] = true;
+        std::string m1 = doSwitch(1, fwd, 3.0f), m2 = doSwitch(0, fwd, 3.0f);
+        check(m1 == c.w[1] && m2 == c.w[0], tag + ": while moving -> " + m1 + ", " + m2);
+        // jumping (switch right after take-off)
+        platform::InputFrame jump; jump.pressed[(int)platform::Button::Jump] = true; jump.down[(int)platform::Button::Jump] = true;
+        step(jump); run(0.1f, idle);
+        const bool airborne = !pc.onGround();
+        std::string j1 = doSwitch(1, idle, 3.0f);
+        run(1.5f, idle);
+        check(airborne && j1 == c.w[1], tag + ": while jumping (airborne " + std::to_string((int)airborne) + ") -> " + j1);
+        // firing: hold fire, switch; no shot after the put-down started
+        platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+        run(0.5f, fire);
+        std::string f1 = doSwitch(0, fire, 3.0f);
+        check(f1 == c.w[0], tag + ": while firing -> " + f1);
+        run(0.3f, idle);
+        // reloading: empty a few rounds, reload, switch mid-reload -> switches, reload abandoned
+        game::Weapon& w0 = pc.weapon();
+        if (w0.magSize > 1 && w0.ammo == w0.magSize) w0.ammo = w0.magSize - 1;
+        platform::InputFrame rl; rl.pressed[(int)platform::Button::Reload] = true; rl.down[(int)platform::Button::Reload] = true;
+        step(rl); run(0.1f, idle);
+        const bool wasReloading = pc.weapon().reloading();
+        const int clipBefore = pc.weapon().ammo;
+        std::string r1 = doSwitch(1, idle, 3.0f);
+        int clipAfterOld = -1;
+        for (const auto& w : pc.inventory()) if (w.def && std::string(w.def->provider) == c.w[0]) clipAfterOld = w.ammo;
+        check(r1 == c.w[1] && (!wasReloading || clipAfterOld == clipBefore),
+              tag + ": while reloading (reloading " + std::to_string((int)wasReloading) + ") -> " + r1 + ", reload abandoned (clip " +
+              std::to_string(clipBefore) + " -> " + std::to_string(clipAfterOld) + ")");
+        // transform: vehicle and back keeps the active weapon; switching works afterwards
+        platform::InputFrame tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+        step(tf); run(3.0f, idle);
+        const bool veh = pc.form() == game::Form::Vehicle;
+        std::string inVeh = doSwitch(1, idle, 0.5f);   // vehicle form: no robot weapon switch
+        step(tf); run(3.0f, idle);
+        const bool robot = pc.form() == game::Form::Robot;
+        const std::string kept = id();
+        std::string t1 = doSwitch(0, idle, 3.0f);
+        check(veh && robot && kept == c.w[1] && t1 == c.w[0],
+              tag + ": transform to vehicle and back keeps " + kept + "; switch after -> " + t1);
+        // weapon mesh follows the active weapon (shown weapon id = active)
+        check(pc.weapon().def && world_.hudState().weaponId == pc.weapon().def->id && !world_.hudState().weaponSwitching, tag + ": HUD weaponId " + world_.hudState().weaponId + " = active");
+    }
+    LOG_INFO("SWITCH SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core
