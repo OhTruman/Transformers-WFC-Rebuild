@@ -70,7 +70,8 @@ for key, ch in roster['chassis'].items():
         clips.update(anim_set_clips(s))                   # later sets override earlier ones
     loadout = (ch.get('weapons') or {}).get('iconic_loadout') or {}
     disp = ch.get('display') or {}
-    prof = {'key': key, 'name': disp.get('name') if isinstance(disp, dict) else disp, 'faction': ch.get('faction'),
+    name = ((disp.get('iconic') or disp.get('custom_body') or {}).get('INT')) if isinstance(disp, dict) else disp
+    prof = {'key': key, 'name': name, 'faction': ch.get('faction'),
             'voice_set': (au.get('voice') or {}).get('object'), 'vehicle_set': (au.get('vehicle') or {}).get('object'),
             'voice': voice, 'vehicle': vehicle, 'vehicle_death_sound': au.get('vehicle_death_sound'),
             'clips': clips, 'weapons': sorted(set(loadout.values()))}

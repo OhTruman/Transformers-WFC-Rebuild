@@ -61,6 +61,15 @@ public:
     }
     void setMovieAudioPaused(bool paused) { if (movieAudio_) movieAudio_->setPaused(paused); }
     bool movieAudioActive() const { return movieAudio_ != nullptr; }
+    // GetMovieVolume (0x82CDDC08) [CONF native]: [MoviePlayer] VolumeScalar (absent -> 1.0) x the audio device's 'SFX'
+    // class volume (the FX Volume option; Frontend owns it), clamped [0,1]; FullVolumeMovies (empty) skip the SFX
+    // factor; MoviesToAlwaysPlaySound (the logos) override with 0xCCCC. Default 1.0: the slider -> gain mapping is
+    // not recovered. Applies to the next movie and the running one.
+    void setMovieSfxVolume(float v) {
+        movieSfxVolume_ = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+        if (movieAudio_ && !movieFixedVolume_) movieAudio_->setVolume(movieSfxVolume_);
+    }
+    float movieSfxVolume() const { return movieSfxVolume_; }
     double movieAudioClock() const { return movieAudio_ ? movieAudio_->clock() : 0.0; }   // video can slave to it
     bool movieAudioFinished() const { return !movieAudio_ || movieAudio_->finished(); }
     bool prefetch(const std::string& level);
@@ -101,6 +110,8 @@ private:
     std::string root_, level_;
     bool movie_ = false;
     std::unique_ptr<audio::MovieAudioPlayer> movieAudio_;
+    float movieSfxVolume_ = 1.0f;
+    bool movieFixedVolume_ = false;
 };
 
 } // namespace game

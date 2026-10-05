@@ -17,8 +17,8 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
   hard-coded; the default profile reproduces him exactly.
   - Gameplay calls `setPlayerCharacterAudio(chassis)` and `setPlayerWeaponAudio(class)`.
   - In game, Bumblebee, Megatron, Starscream and the Heavy Pistol play their own sounds, with 0 missing cues.
-- **Movies (RE-confirmed):** language track 5 + L from GLanguage (`WFC_LANGUAGE`), speaker routing, and the logos at
-  0.8 volume.
+- **Movies (RE-confirmed):** language track 5 + L from GLanguage (`WFC_LANGUAGE`), speaker routing, the logos at 0.8
+  volume, and other movies at the SFX class volume (`setMovieSfxVolume`).
 - **Lifecycle:** a 40-cycle real-device soak (`tools/systems/lifecycle_probe.cpp`): frontend (logo skip, title,
   party, lobby) → map N → frontend, rotating all 10 maps and the character profiles.
   - Every cycle returns to 0 voices, 0 streams, 0 level cues and the base mixer presets / cue table.

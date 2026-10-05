@@ -49,10 +49,12 @@ bool LevelAudioHost::startMovieAudio(const std::string& path, int languageSlot) 
         LOG_INFO("movie audio: %s has no audio tracks (silent by design)", path.c_str());
         return false;
     }
-    // MoviesToAlwaysPlaySound (the logos): fixed Bink volume 0xCCCC = 0.8 [CONF]; others the request's 1.0 [HIGH].
+    // MoviesToAlwaysPlaySound (the logos): fixed Bink volume 0xCCCC = 0.8; others GetMovieVolume = the SFX class
+    // volume (setMovieSfxVolume) [CONF native].
     std::string name = path.substr(path.find_last_of("/\\") + 1);
     name = name.substr(0, name.find('.'));
-    p->setVolume(SoundMixer::movieAlwaysPlaysSound(name) ? (float)0xCCCC / 65536.0f : 1.0f);
+    movieFixedVolume_ = SoundMixer::movieAlwaysPlaysSound(name);
+    p->setVolume(movieFixedVolume_ ? (float)0xCCCC / 65536.0f : movieSfxVolume_);
     p->start();
     movieAudio_ = std::move(p);
     return true;

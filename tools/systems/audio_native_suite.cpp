@@ -1765,6 +1765,10 @@ static void testObjectiveMessages() {
           "round time up queues TimeUpMusic COP_ROUND_OVER");
     CHECK(game::SoundMixer::movieAlwaysPlaysSound("Logo_Hasbro") && !game::SoundMixer::movieAlwaysPlaysSound("FMV_intro"),
           "MoviesToAlwaysPlaySound: the three logos (fixed Bink volume 0xCCCC = 0.8)");
+    host.setMovieSfxVolume(1.7f);
+    const float hi = host.movieSfxVolume();
+    host.setMovieSfxVolume(0.6f);
+    CHECK(hi == 1.0f && host.movieSfxVolume() == 0.6f, "GetMovieVolume: the SFX class volume, clamped [0,1]");
     host.unload();
 }
 
