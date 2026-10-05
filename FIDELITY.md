@@ -259,6 +259,16 @@ Inputs:
 - Invert per form: car and truck share InvertY_Car.
 - Frontend calls it on Settings commit and at match start.
 
+### Vehicle cameras per chassis — CONFIRMED authored
+- Each chassis' HmCameraStrategySet (roster cameras) supplies hover / driving / flying strategy values: anchor, orbit
+  distance, pitch range and FOV (CameraTable.inc, tools/gameplay/gen_camera_table.js).
+  - Truck 1.85 / 9.5 m (drive 2.15 / 10.5);
+  - car 1.25 / 5.25 m;
+  - tank 1.75 / 8.25 m, pitch −10..25°;
+  - jet hover 1.5 / 9 m ±45°, flying ±80° FOV 100.
+- The truck row reproduces the existing constants exactly.
+- CAMSYNC at 144 Hz: Sideswipe and Starscream show no separation (robot 0.0002°).
+
 ### Killstreaks — framework CONFIRMED script; 4 of 12 effects implemented
 - **Counting:** PRI._CurrentKillStreak += kills (AddKills); death resets it (AddDeaths → KillStreakEnded).
 - **Earning:** UpdateKillstreakRewards(count) → FindKillstreak(Specialty, count) → AcquireKillstreak (stack, no duplicates).

@@ -75,14 +75,10 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // PitchRange of the active strategy: OverTheShoulder -75..75, HoverTruck -20..30, Truck -25..25.
     float pMin = cfg::kPitchMin, pMax = cfg::kPitchMax;
     if (vehicleForm) {
-        pMin = driving ? cfg::kDriveCamPitchMin : cfg::kHoverCamPitchMin;
-        pMax = driving ? cfg::kDriveCamPitchMax : cfg::kHoverCamPitchMax;
-        if (jet) {
-            // HoverPlane_<Jet>_STRATEGY TnOrbitRotationCameraBehavior PitchRange -45..45; FlyingPlane_<Jet>_STRATEGY
-            // TnFlyingFollowCameraBehavior PitchRange -80..80 [CONF authored CAM_Flying_Strategies_p].
-            float r = pawn_->vehicleState().flying ? 1.3962634f : 0.7853982f;
-            pMin = -r; pMax = r;
-        }
+        // The chassis' camera set: hover / driving / flying strategy PitchRange [CONF authored per chassis].
+        const ChassisDef& cd = pawn_->chassis();
+        const CamStrategy& cs = (jet && pawn_->vehicleState().flying && cd.camFly.dist > 0.0f) ? cd.camFly : (driving ? cd.camDrive : cd.camHover);
+        pMin = cs.pitchMin; pMax = cs.pitchMax;
     }
     camPitch_ = core::clampf(camPitch_, pMin, pMax);
     // Boost steering input = TnPlayerInput.GetNormalizedTurn() = aTurn (XboxTypeS_RightX) after HmPlayerInput's
@@ -199,14 +195,15 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
     // Strategy targets [CONF strategy data; see Config.h]. The robot anchor sits Offset Z 200 UU above the actor
     // (cylinder centre) of this chassis.
     float anchor = cfg::kCamHeight - cfg::kPawnHalfHeight, dist = cfg::kCamDistance;
-    if (want == 1) { anchor = cfg::kHoverCamAnchor; dist = cfg::kHoverCamDist; }
-    if (jet) { anchor = 1.5f; dist = 9.0f; }   // HoverPlane / FlyingPlane: anchor Offset Z 150, LocationOffset X -900 [CONF]
+    const ChassisDef& cdef = pawn_->chassis();
+    const CamStrategy& camH = (jet && vs.flying && cdef.camFly.dist > 0.0f) ? cdef.camFly : cdef.camHover;
+    if (want == 1) { anchor = camH.anchor; dist = camH.dist; }
     if (want == 2) {
         // TnLocationOffsetCameraBehavior: TnPCS_Boosting (nitro) orbit 650, in 0.5 s / out 2.0 s.
         float rate = nitro ? 1.0f / cfg::kNitroCamDistIn : -1.0f / cfg::kNitroCamDistOut;
         nitroDist_ = core::clampf(nitroDist_ + rate * dt, 0.0f, 1.0f);
-        anchor = cfg::kDriveCamAnchor;
-        dist = cfg::kDriveCamDist + (cfg::kNitroCamDist - cfg::kDriveCamDist) * smoothstep01(nitroDist_);
+        anchor = cdef.camDrive.anchor;
+        dist = cdef.camDrive.dist + (cfg::kNitroCamDist - cfg::kDriveCamDist) * smoothstep01(nitroDist_);
     } else {
         nitroDist_ = 0.0f;
     }
@@ -241,14 +238,14 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
         float blend = std::min(1.0f, std::sqrt(hs * hs + v.y * v.y) / cfg::kTruckDriveSpeed);   // PitchVelocityBlend 1
         float target = vs.pitch + (velPitch - vs.pitch) * blend + camPitch_;
         float p = viewPitch_ + (target - viewPitch_) * std::min(1.0f, cfg::kDriveCamMatchRate * dt);
-        viewPitch_ = core::clampf(p, vs.pitch + cfg::kDriveCamPitchMin, vs.pitch + cfg::kDriveCamPitchMax);
+        viewPitch_ = core::clampf(p, vs.pitch + pawn_->chassis().camDrive.pitchMin, vs.pitch + pawn_->chassis().camDrive.pitchMax);
     }
 
     // FOV (TnFovCameraBehavior): first matching PCS row, HmC2Smoother with that row's SmoothTime.
     float fovT = cfg::kCamFovXDeg, fovSm = cfg::kCamFovSmooth;
     if (want == 0 && fineAiming_) { fovT = cfg::kFineAimFovXDeg; fovSm = cfg::kFineAimFovSmooth; }
-    if (want == 1) fovT = jet && vs.flying ? 100.0f : cfg::kHoverCamFov;   // FlyingPlane DefaultFOV 100 [CONF]
-    if (want == 2) { fovT = nitro ? cfg::kNitroCamFov : cfg::kDriveCamFov; fovSm = nitro ? cfg::kNitroCamFovSmooth : cfg::kCamFovSmooth; }
+    if (want == 1) fovT = camH.fov;
+    if (want == 2) { fovT = nitro ? cfg::kNitroCamFov : cdef.camDrive.fov; fovSm = nitro ? cfg::kNitroCamFovSmooth : cfg::kCamFovSmooth; }
     fovCur_ = fovS_.smooth(fovCur_, fovT, fovSm, dt);
 
     // Screen-space offset by pitch (orbit space: x toward the anchor, y right, z up).

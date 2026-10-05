@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22h (2026-10-05) — per-chassis vehicle cameras, vehicle weapon socket
+- Camera strategy values per chassis from authored camera sets; vehicle weapons fire from the vehicle WeaponSocket_Primary; map suite covers every mode + pickups.
+
 ## GAMEPLAY PASS 22f (2026-10-05) — killstreaks
 - Streak count / acquisition by specialty (3/5/7) / B trigger with robot-form deferral; Overshield Matrix, Ammo Matrix, Energon Recharger, Intercooler implemented; 8 others PARTIAL. WFC_PARTICIPANTTEST 5/5.
 

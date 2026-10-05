@@ -76,6 +76,10 @@ struct VehicleParams {
 
 struct SocketDef { std::string bone; core::Mat4 local; bool valid = false; };
 
+// Vehicle camera strategy values of the chassis' HmCameraStrategySet (CameraTable.inc) [CONF authored]: anchor Offset Z
+// (m above the actor), orbit distance (m), pitch range (rad), horizontal FOV (deg). Defaults = the Optimus truck sets.
+struct CamStrategy { float anchor, dist, pitchMin, pitchMax, fov; };
+
 struct ChassisDef {
     std::string id = "Truck", iconic = "Optimus Prime", customBody;
     int faction = 0;                          // FactionRestriction 0 Autobot, 1 Decepticon
@@ -87,6 +91,11 @@ struct ChassisDef {
     SocketDef vehicleWeapon;                  // vehicle WeaponSocket_Primary
     RobotParams robot;
     VehicleParams vehicle;
+    CamStrategy camHover{core::config::kHoverCamAnchor, core::config::kHoverCamDist, core::config::kHoverCamPitchMin,
+                         core::config::kHoverCamPitchMax, core::config::kHoverCamFov};
+    CamStrategy camDrive{core::config::kDriveCamAnchor, core::config::kDriveCamDist, core::config::kDriveCamPitchMin,
+                         core::config::kDriveCamPitchMax, core::config::kDriveCamFov};
+    CamStrategy camFly{0, 0, 0, 0, 0};   // jets: FlyingPlane strategy (zero = none)
     std::vector<std::string> iconicWeapons, iconicVehicleWeapons, allowedOnFoot, iconicAbilities;
     std::string classDefaultSecondary;
     bool mpCharacter = true;                  // referenced by TnAssetReferencesMultiplayer

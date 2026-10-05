@@ -49,6 +49,11 @@ const HullRow kHulls[] = {
 #include "game/VehicleHullTable.inc"
 };
 
+struct CamRow { const char* id; float h[5], d[5], f[5]; };
+const CamRow kCams[] = {
+#include "game/CameraTable.inc"
+};
+
 std::string contentPath(const std::string& objectPath, const char* ext) {
     // "TR_Sideswipe_ROBO_p.CP_SideswipeArm_SKEL" -> "content/TR_Sideswipe_ROBO_p/CP_SideswipeArm_SKEL<ext>"
     size_t dot = objectPath.find('.');
@@ -259,6 +264,13 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
         V.mass = core::config::kVehMass;
     }
 
+    for (const CamRow& cr : kCams)
+        if (id == cr.id) {
+            const float d2r = 0.0174533f;
+            auto mk = [&](const float* v) { return CamStrategy{v[0], v[1], v[2] * d2r, v[3] * d2r, v[4]}; };
+            d.camHover = mk(cr.h); d.camDrive = mk(cr.d);
+            if (cr.f[1] > 0.0f) d.camFly = mk(cr.f);
+        }
     for (const HullRow& h : kHulls)
         if (id == h.id) { V.hullFront = h.front; V.hullBack = h.back; V.hullHalfWidth = h.halfWidth; V.hullBottom = h.bottom; V.hullTop = h.top; V.hullFromPhysics = true; }
     const assets::Json& w = c["weapons"];

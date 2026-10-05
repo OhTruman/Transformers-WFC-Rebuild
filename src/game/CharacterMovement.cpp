@@ -252,6 +252,8 @@ void jetStep(Character& c, const MoveIntent& in, float dt, const CollisionWorld*
         float gy2; core::Vec3 n3;
         vs.onTheGround = col->groundHeight(p.x, p.z, p.y, 0.0f, gy2, n3) && p.y + VP.hullBottom - gy2 < 0.3f;
     } else if (p.y + VP.hullBottom < c.groundY) { p.y = c.groundY - VP.hullBottom; v.y = std::max(v.y, 0.0f); vs.onTheGround = true; }
+    static const bool jdbg = std::getenv("WFC_JETDBG") != nullptr;
+    if (jdbg) { static int n = 0; if (++n % 20 == 0) LOG_INFO("JETDBG p (%.2f %.2f %.2f) v (%.2f %.2f %.2f) hit %d flying %d accel (%.1f %.1f %.1f) fwd %.2f", p.x, p.y, p.z, v.x, v.y, v.z, (int)hit, (int)vs.flying, accel.x, accel.y, accel.z, in.moveForward); }
     if (hit && vs.flying && speedBefore > 30.0f) { vs.flying = false; vs.driving = false; vs.driftRemain = VP.driftDuration; }
     vs.contacts = vs.onTheGround ? 4 : 0;
     c.setOnGround(vs.onTheGround);
