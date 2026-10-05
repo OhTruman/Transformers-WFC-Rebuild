@@ -17,6 +17,11 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 45 — OUT-OF-BOUNDS SKINNED DRAWS (AMD stability, real defect) (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Stale sub-mesh ranges on a reused skinned output | assets::skinPose kept the output's previous subs / uv when only their count matched the new model; a reused output (robot <-> vehicle form, chassis change: equal section counts) carried another model's index ranges (e.g. [2733, +26937) on a 26388-index, 7377-vertex mesh). Every such draw fetched past the index buffer on the GPU: undefined behaviour an AMD driver may answer with a page fault / reset | M43 guard on the release path: 20 rejected sub-meshes after the Optimus spawn + one 364 ms GPU frame | CONFIRMED defect (reset link HIGH, not reproduced as a reset here) | subs / uv always taken from the posed model; release path 0 rejected, 0 long GPU frames |
+
 ## MILESTONE 44 — TRAIL2 / BEAM2 RIBBONS, PSC PARAMETERS (vehicle / tracer / beam effects from data) (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
