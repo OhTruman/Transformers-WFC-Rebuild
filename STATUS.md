@@ -3,6 +3,13 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22a (2026-10-05) — selected chassis spawns (no Optimus substitution)
+- ChassisDef: per-chassis definition from AssetTools Characters/<ChassisId>/character.json + roster_package.json (collision); robot/vehicle glb, arm, sockets, ROBODEF/acrobatics/momentum, hover/car/suspension/wheel blueprints. WFC_CHASSISTEST 13/13: 27/27 MP chassis load; Truck reproduces every Optimus constant.
+- Movement reads the pawn chassis (robot speeds/jump/collision; vehicle hover/drive/suspension/wheels). Car hover dash = dominant stick axis (TnCarForm.Hovering.DoDash); tank boost in hover sim (PROV); car roll + tank 180 + jet flight PARTIAL (natives requested from RE).
+- Spawn: Match chassis check (no fallback: spawn refused + spawnError), ApplyTransformer (models/rigs/sockets) + ApplySpecialty (TnSpecialty speed x and Health_<Class> segments, ApplySpecialtyBuffs CONF). Versus health corrected: Leader 5x60, Scientist 3x60, Scout 4x50, Soldier 6x55, overshield 200.
+- CharacterSelection carries Frontend GameFlow::SelectedCharacter fields (per-faction chassis, colours, loadout lists). WFC_CHASSIS=<id> boot option. TDMTEST 43/43, MODEPLAY 21/21, CAMSYNC unchanged.
+- Open: weapons per loadout (Ion Blaster only), camera set per chassis, vehicle FX sockets per chassis, opponents as full pawns.
+
 ## GAMEPLAY PASS 21f (2026-10-04) — Frontend playtest follow-ups
 - Selected body: spawn reports selectedChassis/drawnChassis/chassisFallback and logs "MATCH spawn ... drawn=Optimus fallback=missing ROBODEF/VEHDEF export" (no hidden placeholder).
 - Match::requireCharacterSelection (identical to integration M06); TDMTEST 42/42 covers the spawn gate.

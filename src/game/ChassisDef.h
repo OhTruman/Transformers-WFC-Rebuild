@@ -1,0 +1,102 @@
+// Clean-room reconstruction — per-chassis character definition (TnTransformer ROBODEF + VEHDEF as applied by
+// TnPawn.ApplyTransformer, plus the specialty applied by TnCharacterApplier.ApplyCharacter -> ApplySpecialty).
+//
+// Source: AssetTools' per-chassis export ExtractedAssets/VerticalSlice/Characters/<ChassisId>/character.json
+// (vs_roster_export.py, keyed by the RE chassis UniqueId) and the authored blueprint values it references.
+// Defaults below are the Optimus ("Truck") values the rebuild used before Pass 22, so a missing field keeps behaviour.
+#pragma once
+#include <cmath>
+#include <string>
+#include <vector>
+#include "core/Config.h"
+#include "core/Math.h"
+
+namespace game {
+
+// Robot form (ROBODEF scalars, acrobatics, momentum), metres / seconds.
+struct RobotParams {
+    float radius = core::config::kPawnRadius, halfHeight = core::config::kPawnHalfHeight;   // CollisionRadius / Height
+    float eyeHeight = core::config::kEyeHeight - core::config::kPawnHalfHeight;            // BaseEyeHeight above the centre
+    float groundSpeed = core::config::kRobotMoveSpeed, accel = core::config::kRobotAccel;
+    float airSpeed = core::config::kAirSpeed, airControl = core::config::kAirControl;
+    float terminalVel = core::config::kRobotTerminalVel;
+    float jumpHeight = core::config::kRobotMaxJumpH;                                        // Acrobatics JumpHeight
+    float momGroundFwd = core::config::kMomentumGroundFwd, momGroundNeutral = core::config::kMomentumGroundNeutral,
+          momGroundBack = core::config::kMomentumGroundBack;
+    float momAirFwd = core::config::kMomentumAirFwd, momAirNeutral = core::config::kMomentumAirNeutral,
+          momAirBack = core::config::kMomentumAirBack;
+    float damageMultiplier = 1.0f;                                                          // ROBODEF DamageMultiplier
+    float jumpSpeed() const { return std::sqrt(2.0f * core::config::kGravity * jumpHeight); }   // JumpZ (ApplyTransformer)
+};
+
+// Vehicle form. formType: TnCarFormBlueprint (car), TnTruckFormBlueprint (truck), TnTankFormBlueprint (tank),
+// TnPlaneFormBlueprint (jet).
+enum class VehicleFormType { Car, Truck, Tank, Jet };
+
+struct WheelDef { float x, y, z, radius, maxSteerDeg, friction, driftScale; };   // UU, body local (TnWheelPhysicsBlueprint)
+
+struct VehicleParams {
+    VehicleFormType form = VehicleFormType::Truck;
+    // Hover simulation (TnHoverCarSimulationBlueprint / TnHoverTankSimulationBlueprint), metres.
+    float hoverSpeed = core::config::kVehicleMoveSpeed, hoverAccel = core::config::kVehicleAccel;
+    float dashSpeed = core::config::kVehicleBoostSpeed, dashTime = core::config::kVehicleDashTime;
+    float driftDuration = core::config::kHoverDriftDuration;
+    float jumpSpeed = core::config::kVehicleJumpSpeed, jumpAngSpeed = core::config::kHoverJumpAngSpeed;
+    float suspMountRadius = core::config::kSuspMountRadius;
+    float suspRest = core::config::kSuspRestLength, suspStiffness = core::config::kSuspStiffness,
+          suspDamping = core::config::kSuspDamping;
+    float maxBoostSpeed = 0.0f;   // tank (MaxBoostSpeed)
+    float recoilVelocity = 0.0f;  // tank cannon recoil
+    // Car physics (TnCarPhysicsBlueprint, Driving).
+    float mass = core::config::kVehMass, inertiaX = core::config::kVehInertiaX, inertiaY = core::config::kVehInertiaY,
+          inertiaZ = 5890.0f;                                      // kg m^2
+    float comFwd = core::config::kVehComFwd, comUp = core::config::kVehComUp;   // m (CenterOfMass - ChassisOffset)
+    float driveSpeed = core::config::kTruckDriveSpeed, driveAccel = core::config::kTruckDriveAccel;
+    float driveJumpFwd = core::config::kDriveJumpFwd, driveJumpUp = core::config::kDriveJumpUp;
+    float driveJumpAngVel = core::config::kDriveJumpAngVel;
+    float airTurnAccel = core::config::kDriveAirTurnAccel, airStrafeAccel = core::config::kDriveAirStrafeAccel;
+    float angularDamping = core::config::kDriveAngularDamping;
+    float rollDuration = 0.0f;                                     // car: barrel roll (RollDuration 0.7); truck 0
+    std::vector<WheelDef> wheels;                                  // empty = the truck wheel set (CharacterMovement)
+    float damageMultiplier = 1.0f;                                 // VEHDEF DamageMultiplier
+    bool hasDriving() const { return form == VehicleFormType::Car || form == VehicleFormType::Truck; }
+};
+
+struct SocketDef { std::string bone; core::Mat4 local; bool valid = false; };
+
+struct ChassisDef {
+    std::string id = "Truck", iconic = "Optimus Prime", customBody;
+    int faction = 0;                          // FactionRestriction 0 Autobot, 1 Decepticon
+    std::string defaultSpecialty = "Leader";
+    std::string robotGlb, vehicleGlb;         // relative to the asset root's parent (ExtractedAssets)
+    std::string armGltf, armAnimGltf;         // ArmBlueprint (umodel content paths)
+    SocketDef weaponPrimary, weaponSecondary; // robot WeaponSocket_Primary / _Secondary
+    SocketDef vehicleWeapon;                  // vehicle WeaponSocket_Primary
+    RobotParams robot;
+    VehicleParams vehicle;
+    std::vector<std::string> iconicWeapons, iconicVehicleWeapons, allowedOnFoot, iconicAbilities;
+    std::string classDefaultSecondary;
+    bool mpCharacter = true;                  // referenced by TnAssetReferencesMultiplayer
+    bool lockedChassis = false, lockedCharacter = false;
+    std::string loadError;                    // non-empty: this chassis cannot be spawned
+};
+
+// TnSpecialty CDOs (TransGame.TnSpecialty<Class>): SpeedMultiplier and HealthBlueprint, applied in every TnGame with
+// ApplySpecialtyBuffs (Default__TnGame true; only campaign / survival / lobby games override it to false) [CONF].
+struct SpecialtyDef {
+    const char* id;
+    float speedMultiplier;
+    std::vector<float> segments;              // TR_Health_p.Health_<Class>
+    float overshield;
+    const char* defaultSecondary;             // DefaultSecondaryWeapon
+};
+const SpecialtyDef* specialtyDef(const std::string& id);
+
+// UE relative location (UU) + rotator (65536 units) -> glTF-space (x, z, y) local transform, metres.
+core::Mat4 ueSocketToGltf(const float locUE[3], const int rotUE[3]);
+
+// Loads Characters/<id>/character.json under `verticalSliceRoot`. Returns false (and sets def.loadError) when the
+// export is missing or incomplete; nothing falls back to another chassis.
+bool loadChassisDef(const std::string& verticalSliceRoot, const std::string& id, ChassisDef& def);
+
+} // namespace game

@@ -31,6 +31,10 @@ namespace core {
 bool Application::init() {
     LOG_INFO("WFC Rebuild starting (clean-room skeleton)");
     if (std::getenv("WFC_VEHTEST")) { game::runVehicleTests(); return false; }   // measurements only
+    if (std::getenv("WFC_CHASSISTEST")) {
+        game::runChassisTests(std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault);
+        return false;
+    }
     if (std::getenv("WFC_MODETEST")) {   // Streets per-mode objective state (no rendering)
         const char* root = std::getenv("WFC_ASSET_ROOT");
         std::string gp = std::string(root ? root : "F:/Transformers Rebuild/ExtractedAssets/VerticalSlice") + "/Maps/MP_IAC_Streets/gameplay.json";
@@ -97,6 +101,9 @@ bool Application::init() {
     if (std::getenv("WFC_CAMSYNC")) { runCameraSyncTest(); return false; }     // measurements only
     if (std::getenv("WFC_MODEPLAYTEST")) { runModePlayTest(); return false; }  // measurements only
     world_.setAudio(audio_);
+    // WFC_CHASSIS=<UniqueId>: boot as that chassis (free play), or select it as the iconic character in a launched match.
+    const char* bootChassis = std::getenv("WFC_CHASSIS");
+    if (bootChassis && !world_.applyChassisToLocalPawn(bootChassis)) LOG_ERROR("WFC_CHASSIS=%s: chassis unavailable", bootChassis);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
     {
@@ -104,7 +111,11 @@ bool Application::init() {
         bool want = false;
         if (const char* u = std::getenv("WFC_MATCH_URL")) want = game::MatchLaunch::fromURL(u, launch);
         else if (const char* mm = std::getenv("WFC_MATCH")) { want = game::MatchLaunch::fromURL(std::string("MP_IAC_Streets?GameModeTag=") + mm, launch); }
-        if (want && world_.launchMatch(launch))
+        if (want && world_.launchMatch(launch) && bootChassis) {
+            game::CharacterSelection sel; sel.type = 1; sel.chassisId = bootChassis;
+            world_.match().selectCharacter(world_.localMatchPlayer(), sel);
+        }
+        if (want && world_.matchActive())
             if (const char* n = std::getenv("WFC_MATCH_OPPONENTS"))   // diagnostic only: static synthetic participants (drawn boxes)
                 for (int i = 0; i < std::atoi(n); ++i) world_.addMatchOpponent("Opponent" + std::to_string(i), true);
     }
@@ -1342,23 +1353,27 @@ void Application::runTdmSessionTest() {
     check(pc.health().current == h0, "teammate instant-hit damage discarded (TnPlayerPawn.TakeDamage)");
     world_.applyMatchDamage(me, ally->matchPlayer(), 50.0f, true);
     check(pc.health().current == h0 - 50.0f, "teammate AOE damage applies");
-    {   // Regeneration: 20 HP/s after 2.0 s, up to the current segment top (here 425 -> segment 2 top 425 .. damage to 400).
+    // The local pawn is the iconic Optimus ("Truck", DefaultSpecialty Leader): versus applies TnSpecialtyLeader ->
+    // TR_Health_p.Health_Leader 5 x 60 = 300, overshield 200, speed x 0.95 [CONF script, RE TARGETED_PASS3].
+    check(pc.specialty() == "Leader" && pc.health().max == 300.0f && pc.health().segmentCount == 5 &&
+          std::fabs(pc.speedMultiplier() - 0.95f) < 1e-4f, "ApplySpecialty: Leader 5 x 60 health, speed x 0.95");
+    {   // Regeneration: 20 HP/s after 2.0 s, up to the current segment top (damage 300 -> 200: segment 3 = 180..240).
         pc.health().reset();
         int dmgBefore = world_.hudState().damageTakenCount;
-        world_.applyMatchDamage(me, enemies[0]->matchPlayer(), 150.0f, false);   // 550 -> 400 (segment 2: 300..425)
+        world_.applyMatchDamage(me, enemies[0]->matchPlayer(), 100.0f, false);   // 300 -> 200
         check(world_.hudState().damageTakenCount == dmgBefore + 1 && !world_.hudState().weaponName.empty(), "HUD damage event + weapon identity exposed");
         run(1.9f);
         float before = pc.health().current;
         run(1.0f);
         float after = pc.health().current;
         run(2.0f);
-        check(before == 400.0f && after > 400.0f && after < 425.0f && pc.health().current == 425.0f,
-              "regen: none for 2.0 s, then 20 HP/s up to the current segment top (425), not to HealthMax");
+        check(before == 200.0f && after > 200.0f && after < 240.0f && pc.health().current == 240.0f,
+              "regen: none for 2.0 s, then 20 HP/s up to the current segment top (240), not to HealthMax");
     }
     pc.health().heal(game::Health::HealType::AddOverShield, 1.0f);
-    check(pc.health().current == 1100.0f && pc.health().activeSegment() == 4, "overshield: HealthMax + 550, top segment");
-    world_.applyMatchDamage(me, enemies[0]->matchPlayer(), 300.0f, false);
-    check(pc.health().current == 800.0f && pc.health().overshield() == 250.0f, "enemy damage comes off the overshield first");
+    check(pc.health().current == 500.0f && pc.health().activeSegment() == 5, "overshield: HealthMax + Health_Leader.Overshield 200, top segment");
+    world_.applyMatchDamage(me, enemies[0]->matchPlayer(), 150.0f, false);
+    check(pc.health().current == 350.0f && pc.health().overshield() == 50.0f, "enemy damage comes off the overshield first");
     // 5. Real hitscan kill: enemy 12 m in front of the local pawn, fire the Ion Blaster through World::fireHitscan.
     {
         game::MatchOpponent* e = enemies[0];
@@ -1394,7 +1409,7 @@ void Application::runTdmSessionTest() {
         pc.health().current = 100.0f;
         pc.setPosition(hf->position()); pc.velocity() = {0, 0, 0};
         run(0.1f);
-        bool taken = !hf->available() && pc.health().current == 550.0f;
+        bool taken = !hf->available() && pc.health().current == pc.health().max;
         check(taken, "health pickup: full heal to HealthMax (SHT_AddAllSegments)");
         pc.setForm(game::Form::Vehicle);
         pc.beginTransform();                       // vehicle -> robot fold in progress
@@ -1410,8 +1425,8 @@ void Application::runTdmSessionTest() {
         run(3.05f);
         check(world_.hudState().spectating, "spectating after MinRespawnDelay 3.0 s");
         run(2.25f);
-        check(!world_.localPlayerDead() && pc.form() == game::Form::Robot && !pc.isTransforming() && pc.health().current == 550.0f &&
-              pc.weapon().ammo == pc.weapon().magSize && pc.weapon().reserve == 150, "respawn: fresh robot pawn, 550 health, 50 / 150 ammo, no fold");
+        check(!world_.localPlayerDead() && pc.form() == game::Form::Robot && !pc.isTransforming() && pc.health().current == 300.0f &&
+              pc.weapon().ammo == pc.weapon().magSize && pc.weapon().reserve == 150, "respawn: fresh robot pawn, Health_Leader 300, 50 / 150 ammo, no fold");
         check(!hf->available(), "pickup factory still sleeping after the respawn (timers are not reset by death)");
     }
     // 7. Score limit (goal 5): local kills the remaining enemy repeatedly.
@@ -1451,7 +1466,7 @@ void Application::runTdmSessionTest() {
         run(10.5f);
         check(m.state() == game::Match::State::InProgress && !world_.localPlayerDead(), "second match starts and spawns");
         game::HudGameState hd = world_.hudState();
-        check(hd.matchActive && hd.goalScore == 40 && hd.myTeam == myTeam && hd.healthMax == 550.0f && hd.clipAmmo == 50, "HUD state contract populated");
+        check(hd.matchActive && hd.goalScore == 40 && hd.myTeam == myTeam && hd.healthMax == 300.0f && hd.segmentCount == 5 && hd.clipAmmo == 50, "HUD state contract populated");
         int allyTags = 0; for (const auto& t : hd.tags) allyTags += t.ally && t.drawn;
         check(allyTags == 1, "player tags: one ally tag drawn, enemy markers disabled");
     }
@@ -1468,8 +1483,9 @@ void Application::runTdmSessionTest() {
         run(1.0f);
         game::HudGameState h3 = world_.hudState();
         const char* want = game::defaultChassis(game::Specialty::Scout, m3.faction(me3));
-        check(waited && m3.players()[(size_t)me3].alive && h3.selectedChassis == want && h3.chassisFallback && h3.drawnChassis == "Truck",
-              "selection gate: no spawn until selectCharacter; custom Scout resolves per faction; Optimus fallback explicit");
+        check(waited && m3.players()[(size_t)me3].alive && h3.selectedChassis == want && h3.drawnChassis == want &&
+              world_.player().pawn().chassis().id == want && h3.specialty == "Scout" && h3.healthMax == 200.0f && h3.segmentCount == 4,
+              "selection gate + selected body spawns: custom Scout -> faction body, Health_Scout 4x50");
     }
     LOG_INFO("TDMTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }

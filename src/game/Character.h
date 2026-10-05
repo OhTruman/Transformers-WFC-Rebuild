@@ -9,6 +9,7 @@
 #include "game/Weapon.h"
 #include "game/Ability.h"
 #include "game/Recoil.h"
+#include "game/ChassisDef.h"
 #include "render/Renderer.h"
 #include "render/Mesh.h"
 
@@ -34,6 +35,7 @@ public:
         veh_ = VehicleState{}; restoreTimer_ = -1.0f; lastDriving_ = false; shiftRemain_ = 0.0f;
         velocity_ = {0, 0, 0}; onGround_ = true; rammedRemain_ = 0.0f;
         health_ = Health{}; overShield_ = false;
+        if (!specHealth_.empty()) health_.initialize(specHealth_, specOvershield_);   // ApplySpecialty: Health_<Class>
         weapon_ = Weapon{}; speedMult_ = 1.0f; fineAiming_ = false;
         form_ = Form::Robot == form_ ? form_ : Form::Robot; setForm(Form::Robot); animTime_ = 0.0f; clip_ = -1;
     }
@@ -59,7 +61,16 @@ public:
 
     // TnPawn speed multipliers (SetSpeedMultiplier / UpdateSpeeds): GroundSpeed/AirSpeed scale.
     void setSpeedMultiplier(float m) { speedMult_ = m; }
-    float speedMultiplier() const { return speedMult_; }
+    // Factors multiply (TnPawn.UpdateSpeeds over _SpeedMultiplierFactors): the specialty factor (associated with the
+    // pawn itself) stays for the pawn's life; the fine-aim factor comes and goes.
+    float speedMultiplier() const { return speedMult_ * specialtySpeedMult_; }
+    // TnSpecialty.Apply: SetSpeedMultiplier(SpeedMultiplier, P) + InitializeSegmentedHealth(HealthBlueprint) [CONF].
+    void setSpecialty(const std::string& id, float speedMult, const std::vector<float>& segments, float overshield) {
+        specialty_ = id; specialtySpeedMult_ = speedMult; specHealth_ = segments; specOvershield_ = overshield;
+        health_.initialize(segments, overshield);
+    }
+    void clearSpecialty() { specialty_.clear(); specialtySpeedMult_ = 1.0f; specHealth_.clear(); specOvershield_ = 550.0f; health_ = Health{}; }
+    const std::string& specialty() const { return specialty_; }
     // Fine aim state (TnFineAimManager.bFineAiming), owned by the controller.
     void setFineAiming(bool b) { fineAiming_ = b; }
     bool fineAiming() const { return fineAiming_; }
@@ -77,7 +88,7 @@ public:
     // form f. The robot mesh hangs CollisionHeight below the cylinder centre; TnVehicleForm.CalculateCylinderBounds
     // translates the vehicle mesh by -(bounds centre). position() is the mesh origin of moveForm().
     float meshToActor(Form f) const {
-        if (f == Form::Robot) return core::config::kPawnHalfHeight;
+        if (f == Form::Robot) return chassis().robot.halfHeight;
         return vehicleModel_ ? 0.5f * (vehicleModel_->boundsMin.y + vehicleModel_->boundsMax.y) : 1.0f;
     }
     // Height of the vehicle mesh top above its origin (bind-pose bounds).
@@ -91,7 +102,27 @@ public:
 
     // Real skinned models per form (owned elsewhere). If unset, draws a fallback box.
     void setFormModels(const assets::SkinnedModel* robot, const assets::SkinnedModel* vehicle) {
+        if (robot != robotModel_) { robotRig_ = RobotRig{}; lastModel_ = nullptr; clip_ = -1; }
+        if (vehicle != vehicleModel_) { vehicleRig_ = VehicleRig{}; lastModel_ = nullptr; clip_ = -1; }
         robotModel_ = robot; vehicleModel_ = vehicle;
+    }
+    // The chassis this pawn was spawned as (TnPawn._Blueprint after ApplyTransformer). Never null: the default is
+    // the pre-Pass-22 Optimus definition used by the harnesses.
+    void setChassis(const ChassisDef* d) { chassis_ = d; }
+    const ChassisDef& chassis() const { static const ChassisDef def; return chassis_ ? *chassis_ : def; }
+    const RobotParams& robotParams() const { return chassis().robot; }
+    const VehicleParams& vehicleParams() const { return chassis().vehicle; }
+    // Collision cylinder of a form: robot = ROBODEF CollisionRadius / Height; vehicle = TnVehicleForm.CalculateCylinderBounds
+    // of the vehicle mesh bounds (horizontal half-extent, vertical half-height) [HIGH].
+    float cylinderRadius(Form f) const {
+        if (f == Form::Robot) return chassis().robot.radius;
+        if (!vehicleModel_) return 3.34f;
+        const auto& a = vehicleModel_->boundsMin; const auto& b = vehicleModel_->boundsMax;
+        return 0.5f * std::sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
+    }
+    float cylinderHalfHeight(Form f) const {
+        if (f == Form::Robot) return chassis().robot.halfHeight;
+        return vehicleModel_ ? 0.5f * (vehicleModel_->boundsMax.y - vehicleModel_->boundsMin.y) : 1.22f;
     }
     // Optimus_ROBODEF.ArmBlueprint: CP_OptimusArm_SKEL (+ OptimusArm_ROBO_ANIM ARM_Equip/ARM_Unequip),
     // attached at WeaponSocket_Secondary (R_Arm03_Elbow_XB, pitch 180) while no robot weapon is drawn.
@@ -153,6 +184,8 @@ public:
     static float meshYawOffset();
 
     // Weapon socket (robot form): the bone node to follow + a local offset transform.
+    // ArmBlueprint.AttachSocket (WeaponSocket_Secondary) of this chassis' robot mesh.
+    void setArmSocket(int boneNode, const core::Mat4& offset) { armBone_ = boneNode; armOffset_ = offset; }
     void setWeaponSocket(int boneNode, const core::Mat4& offset) {
         weaponBone_ = boneNode; weaponOffset_ = offset;
     }
@@ -201,6 +234,7 @@ public:
     // movement code; read by animation and diagnostics.
     struct VehicleState {
         bool driving = false;         // TnCarForm state Driving (normal boost, wheels)
+        bool tankBoost = false;       // TnHoverTankSimulation boosting (tank form)
         float rideHeight = 0.0f;      // diagnostics: COM height above the surface below it (m)
         float driftRemain = 0.0f;     // Hovering.BeginState Drift(): steering authority ramp
         float dashRemain = 0.0f;      // hover dash time remaining
@@ -249,6 +283,13 @@ private:
     Weapon weapon_;
     Ability ability_;
 
+    const ChassisDef* chassis_ = nullptr;
+    int armBone_ = -1;
+    core::Mat4 armOffset_;
+    std::string specialty_;
+    float specialtySpeedMult_ = 1.0f;
+    std::vector<float> specHealth_;
+    float specOvershield_ = 550.0f;
     const assets::SkinnedModel* robotModel_ = nullptr;
     const assets::SkinnedModel* vehicleModel_ = nullptr;
     int clip_ = -1;                  // active base-layer source (clip index or kVehicleHoverKey)

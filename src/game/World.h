@@ -2,6 +2,7 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <map>
 #include <vector>
 #include "core/Math.h"
 #include "game/Player.h"
@@ -9,6 +10,7 @@
 #include "game/PickupFactory.h"
 #include "game/MapState.h"
 #include "game/Match.h"
+#include "game/ChassisDef.h"
 #include "game/MatchOpponent.h"
 #include "game/Destructible.h"
 #include "game/SpawnPoint.h"
@@ -52,8 +54,9 @@ struct HudGameState {
     float lastDamageBearing = 0.0f;
     bool vehicleForm = false, transforming = false;
     int cantTransformCount = 0;
-    std::string selectedChassis, drawnChassis;   // resolved selection vs. body drawn (fallback when they differ)
-    bool chassisFallback = false;                  // increments per refused transform (HUD NotifyCantTransform + TransformFailedSound)
+    std::string selectedChassis, drawnChassis;   // resolved selection and the body actually spawned (always equal when spawned)
+    std::string specialty;                       // applied specialty (Leader / Scientist / Scout / Soldier)
+    std::string spawnError;                      // why the selected body cannot spawn (empty = fine)                  // increments per refused transform (HUD NotifyCantTransform + TransformFailedSound)
     float timeToRespawn = -1.0f;                 // <PlayerOwner:TimeToRespawn> (MultiplayerRespawn_GFX)
     bool spectating = false;                     // dead >= MinRespawnDelay 3.0 s: PlayerSpectating (UI event 4)
     // Match
@@ -186,6 +189,18 @@ public:
     MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
     const std::vector<MatchOpponent*>& matchOpponents() const { return opponents_; }
     HudGameState hudState() const;
+    // Per-chassis pawn resources (AssetTools Characters/<ChassisId>: robot.glb, vehicle.glb, character.json, ArmBlueprint),
+    // loaded on first use and kept for the session. ok == false carries the reason; nothing substitutes another body.
+    struct ChassisAssets {
+        ChassisDef def;
+        assets::SkinnedModel robot, vehicle, arm;
+        bool ok = false, hasArm = false;
+        std::string error;
+    };
+    const ChassisAssets* chassisAssets(const std::string& id);
+    // TnPawn.ApplyTransformer for the local pawn: models, rigs, collision, stats, weapon socket. False = unavailable.
+    bool applyChassisToLocalPawn(const std::string& id);
+    const std::string& localChassis() const { return localChassis_; }
     // Authored collision actor(s) (collision_pawn.glb node: BlockingVolume_*, BSP, prop actor names) whose
     // bounds contain p (expanded by pad metres): for tracing blocked / incorrect areas back to authored objects.
     struct ColActor { std::string name, kind, mesh; core::Vec3 lo, hi; };
@@ -235,9 +250,13 @@ private:
     core::Vec3 mapColor_{0.55f, 0.57f, 0.6f};
     bool usingSlice_ = false;
 
-    assets::SkinnedModel robotModel_;
-    assets::SkinnedModel armModel_;      // CP_OptimusArm_SKEL (TnArmAttachment), Gameplay
-    assets::SkinnedModel vehicleModel_;
+    std::map<std::string, std::unique_ptr<ChassisAssets>> chassisCache_;
+    std::string localChassis_;
+    render::IRenderer* renderer_ = nullptr;
+    std::map<std::string, render::TextureHandle> texCache_;
+    int texLoaded_ = 0, texFailed_ = 0;
+    render::TextureHandle resolveTexture(const std::string& uri);
+    void resolveModelTextures(assets::SkinnedModel& m);
 
     // Ion Blaster as an animated skeletal mesh (own Fire/Reload/Idle anims, sockets, notifies).
     assets::SkinnedModel weaponModel_;

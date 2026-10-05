@@ -52,25 +52,10 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     // objective-factory effects) exactly as GameInfo.HasRule gates the world state.
     renderer.setActiveGameRules(gameRulesForMode(matchMode_));
 
+    renderer_ = &renderer;
     bool okMap = assets::loadGlb(root + "/Maps/MP_IAC_Streets/world.glb", mapMesh);
-    bool okRobot = assets::loadSkinnedGlb(root + "/Characters/Optimus/robot.glb", robotModel_);
-    bool okVeh = assets::loadSkinnedGlb(root + "/Characters/Optimus/vehicle.glb", vehicleModel_);
-    if (!okMap || !okRobot || !okVeh) return false;
-
-    // Resolve base-colour textures (decode PNG -> upload GL texture), cached by URI.
-    std::map<std::string, render::TextureHandle> texCache;
-    int loaded = 0, failed = 0;
-    auto resolveOne = [&](const std::string& uri) -> render::TextureHandle {
-        if (uri.empty()) return render::kInvalidTexture;
-        auto it = texCache.find(uri);
-        if (it != texCache.end()) return it->second;
-        render::ImageData img;
-        render::TextureHandle th = render::kInvalidTexture;
-        if (platform::decodeImage(uri, img)) { th = renderer.uploadTexture(img); ++loaded; }
-        else ++failed;
-        texCache[uri] = th;
-        return th;
-    };
+    if (!okMap) return false;
+    auto resolveOne = [&](const std::string& uri) { return resolveTexture(uri); };
     auto resolveTextures = [&](std::vector<render::Material>& mats) {
         for (render::Material& M : mats) {
             M.tex = resolveOne(M.baseColorUri);
@@ -78,17 +63,10 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         }
     };
     resolveTextures(mapMesh.mats);
-    resolveTextures(robotModel_.mats);
-    resolveTextures(vehicleModel_.mats);
-    // Optimus_ROBODEF.ArmBlueprint: CP_OptimusArm_SKEL + OptimusArm_ROBO_ANIM (ARM_Equip / ARM_Unequip),
-    // umodel glTF exports in the same Y-up metre convention as robot.glb.
-    if (assets::loadSkinnedGlb(root + "/../content/TR_Optimus_ROBO_p/CP_OptimusArm_SKEL.gltf", armModel_)) {
-        assets::loadAnimationsByName(root + "/../content/TR_HeavyMedium_ANM_p/OptimusArm_ROBO_ANIM.anim.gltf", armModel_);
-        resolveTextures(armModel_.mats);
-        player_.pawn().setArmModel(&armModel_);
-        for (const auto& c : armModel_.clips) LOG_INFO("arm clip %s %.2f s", c.name.c_str(), c.duration);
-    }
-    LOG_INFO("textures: %d loaded, %d failed, %zu unique", loaded, failed, texCache.size());
+    // The pawn body comes from the selected chassis (applyChassisToLocalPawn). Before any selection the direct boot
+    // and the harnesses use the iconic "Truck" (Optimus Prime) export, exactly like a selection of it.
+    if (!applyChassisToLocalPawn("Truck")) return false;
+    LOG_INFO("textures: %d loaded, %d failed, %zu unique", texLoaded_, texFailed_, texCache_.size());
 
     // Baked lightmap atlases: resolve each submesh's _LM atlas name to a GL texture.
     const std::string lmDir = root + "/Maps/MP_IAC_Streets/lightmaps/";
@@ -104,7 +82,6 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
     fx_.load(renderer, root + "/../content/");
     fx_.loadMeshes(renderer, root + "/../content/");
     vehicleFx_.load(renderer, root + "/../content/");
-    player_.pawn().setFormModels(&robotModel_, &vehicleModel_);
 
     // Ion Blaster: animated skeletal mesh held at the robot's primary weapon socket (falls back
     // to the static bind-pose mesh if the skinned load fails).
@@ -119,16 +96,8 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
             resolveTextures(weaponMesh.mats);
             weaponMesh_ = renderer.uploadMesh(weaponMesh);
         }
-        int bone = robotModel_.nodeByName("R_Arm03_Elbow_XB");
-        // [CONF] WeaponSocket_Primary relative transform (character.json): loc_ue [-40,0,0],
-        // rot_ue [pitch 0, yaw 31311, roll 5461] -> gltf-space socket matrix (column-major).
-        float sm[16] = {-0.990259f, 0.0f,       0.139234f, 0.0f,
-                        -0.069613f, 0.866041f, -0.495102f, 0.0f,
-                        -0.120583f, -0.499972f, -0.857606f, 0.0f,
-                        -0.4f,      0.0f,       0.0f,       1.0f};
-        core::Mat4 off = core::mat4FromArray(sm);
-        player_.pawn().setWeaponSocket(bone, off);
-        LOG_INFO("weapon: Ion Blaster loaded, socket bone R_Arm03_Elbow_XB node=%d", bone);
+        // The socket itself is the chassis' WeaponSocket_Primary (applyChassisToLocalPawn).
+        LOG_INFO("weapon: Ion Blaster loaded");
     }
 
     // Collision: the authored per-trace worlds (AssetTools PHYSICS_STREETS): collision_pawn.glb blocks pawn and
@@ -900,6 +869,12 @@ void World::startLocalMatch(const MatchSettings& s) {
         std::string root = assetRoot();
         match_.loadSpawnData(root + "/Maps/MP_IAC_Streets/gameplay.json");
     }
+    match_.setChassisCheck([this](const std::string& id, std::string& err) {
+        const ChassisAssets* a = chassisAssets(id);
+        if (a && a->ok) return true;
+        err = a ? a->error : std::string("unknown chassis");
+        return false;
+    });
     match_.begin(s);
     if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");
     matchActive_ = true;
@@ -1005,7 +980,7 @@ HudGameState World::hudState() const {
     h.alive = !localPlayerDead();
     h.health = pc.health().current; h.healthMax = pc.health().max;
     h.overshield = pc.health().overshield(); h.normalizedOverShield = pc.health().normalizedOverShield();
-    h.activeSegment = pc.health().activeSegment(); h.segmentCount = Health::kSegmentCount;
+    h.activeSegment = pc.health().activeSegment(); h.segmentCount = pc.health().segmentCount;
     h.clipAmmo = pc.weapon().ammo; h.reserveAmmo = pc.weapon().reserve;
     h.weaponName = pc.weapon().name;
     h.damageTakenCount = damageTakenCount_;
@@ -1020,7 +995,8 @@ HudGameState World::hudState() const {
     h.cantTransformCount = player_.controller().cantTransformCount();
     if (matchActive_ && localPlayer_ >= 0 && (size_t)localPlayer_ < match_.players().size()) {
         const MatchPlayer& mp = match_.players()[(size_t)localPlayer_];
-        h.selectedChassis = mp.chassis; h.drawnChassis = mp.drawnChassis; h.chassisFallback = mp.chassisFallback;
+        h.selectedChassis = mp.chassis; h.drawnChassis = mp.alive ? localChassis_ : std::string();
+        h.specialty = mp.specialty; h.spawnError = mp.spawnError;
     }
     h.matchActive = matchActive_;
     if (!matchActive_ || localPlayer_ < 0) return h;
@@ -1119,7 +1095,19 @@ void World::tickMatch(float dt) {
                     // RestartPlayer: a fresh pawn (robot form, full health, default inventory) at the chosen start,
                     // with its authored rotation.
                     const Match::Start& st = match_.starts()[(size_t)e.value];
+                    // TnPawn.PostBeginPlay -> ApplyTransformer(chassis), then SetPlayerDefaults -> ApplyCharacter ->
+                    // ApplySpecialty (StartingForm forced to robot) [CONF script, RE TARGETED_PASS3 §A].
+                    MatchPlayer& mp = match_.playerMutable(localPlayer_);
+                    applyChassisToLocalPawn(mp.chassis);
                     pc.respawnReset();   // a fresh pawn: robot form, no fold, HealthMax, default inventory
+                    {
+                        const ChassisAssets* ca = chassisAssets(mp.chassis);
+                        mp.specialty = mp.selection.type == 0 ? specialtyName(mp.selection.specialty)
+                                                              : (ca ? ca->def.defaultSpecialty : std::string());
+                        if (const SpecialtyDef* sd = specialtyDef(mp.specialty))
+                            pc.setSpecialty(sd->id, sd->speedMultiplier, sd->segments, sd->overshield);
+                        else pc.clearSpecialty();
+                    }
                     core::Vec3 p = st.pos;
                     float gy; core::Vec3 gn;
                     if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, gn)) p.y = gy;
@@ -1252,6 +1240,71 @@ void World::draw(render::IRenderer& r) const {
         r.drawBox(pp + core::Vec3{0, 10, 0}, core::Vec3{0.6f, 20.0f, 0.6f}, core::Vec3{1.0f, 0.1f, 0.9f});
         r.drawBox(pp + core::Vec3{0, 0.1f, 0}, core::Vec3{2.0f, 0.2f, 2.0f}, core::Vec3{0.1f, 1.0f, 0.2f});
     }
+}
+
+render::TextureHandle World::resolveTexture(const std::string& uri) {
+    if (uri.empty() || !renderer_) return render::kInvalidTexture;
+    auto it = texCache_.find(uri);
+    if (it != texCache_.end()) return it->second;
+    render::ImageData img;
+    render::TextureHandle th = render::kInvalidTexture;
+    if (platform::decodeImage(uri, img)) { th = renderer_->uploadTexture(img); ++texLoaded_; }
+    else ++texFailed_;
+    texCache_[uri] = th;
+    return th;
+}
+
+void World::resolveModelTextures(assets::SkinnedModel& m) {
+    for (render::Material& M : m.mats) {
+        M.tex = resolveTexture(M.baseColorUri);
+        M.emissiveTexHandle = resolveTexture(M.emissiveUri);
+    }
+}
+
+const World::ChassisAssets* World::chassisAssets(const std::string& id) {
+    auto it = chassisCache_.find(id);
+    if (it != chassisCache_.end()) return it->second.get();
+    auto a = std::make_unique<ChassisAssets>();
+    const std::string root = assetRoot();
+    const std::string ext = root + "/../";
+    if (!loadChassisDef(root, id, a->def)) {
+        a->error = a->def.loadError;
+    } else if (!assets::loadSkinnedGlb(ext + a->def.robotGlb, a->robot) || !a->robot.valid()) {
+        a->error = "robot.glb failed to load for " + id;
+    } else if (!assets::loadSkinnedGlb(ext + a->def.vehicleGlb, a->vehicle) || !a->vehicle.valid()) {
+        a->error = "vehicle.glb failed to load for " + id;
+    } else {
+        resolveModelTextures(a->robot);
+        resolveModelTextures(a->vehicle);
+        if (!a->def.armGltf.empty() && assets::loadSkinnedGlb(ext + a->def.armGltf, a->arm)) {
+            if (!a->def.armAnimGltf.empty()) assets::loadAnimationsByName(ext + a->def.armAnimGltf, a->arm);
+            resolveModelTextures(a->arm);
+            a->hasArm = true;
+        }
+        a->ok = true;
+    }
+    if (a->ok) LOG_INFO("chassis %s (%s): robot %zu clips, vehicle %zu clips, arm %s", id.c_str(), a->def.iconic.c_str(),
+                        a->robot.clips.size(), a->vehicle.clips.size(), a->hasArm ? "yes" : "no");
+    else LOG_ERROR("chassis %s UNAVAILABLE: %s", id.c_str(), a->error.c_str());
+    ChassisAssets* raw = a.get();
+    chassisCache_[id] = std::move(a);
+    return raw;
+}
+
+bool World::applyChassisToLocalPawn(const std::string& id) {
+    const ChassisAssets* a = chassisAssets(id);
+    if (!a || !a->ok) return false;
+    Character& pc = player_.pawn();
+    pc.setChassis(&a->def);
+    pc.setFormModels(&a->robot, &a->vehicle);
+    pc.setArmModel(a->hasArm ? &a->arm : nullptr);
+    const SocketDef& wp = a->def.weaponPrimary;
+    pc.setWeaponSocket(a->robot.nodeByName(wp.bone), wp.local);
+    const SocketDef& ws = a->def.weaponSecondary;
+    if (ws.valid) pc.setArmSocket(a->robot.nodeByName(ws.bone), ws.local);
+    else pc.setArmSocket(-1, core::Mat4::identity());
+    localChassis_ = id;
+    return true;
 }
 
 } // namespace game

@@ -4,24 +4,40 @@
 //
 //   frontend selection (CustomTransformers: Customize.SelectCharacter(name, type 0 custom / 1 iconic))
 //   -> CharacterSelection (stable ids, no file names) -> resolveChassis(selection, faction at spawn)
-//   -> PawnDefinition (AssetTools-exported ROBODEF / VEHDEF data keyed by chassis UniqueId) -> spawn.
+//   -> ChassisDef (AssetTools Characters/<ChassisId> export keyed by the RE chassis UniqueId) -> spawn.
 //
 // The faction is the player's team at spawn (TnGame.GetResolvedCharacterFaction = TeamNum; FFA forces 1 = Decepticon), so
 // one custom character becomes an Autobot or a Decepticon body by team [CONF]. Spawning waits for a selection
 // (TnPlayerSpawnHelperMultiplayer.CheckReadySpawn: PRI.HasSelectedCharacter) [CONF].
 #pragma once
 #include <string>
+#include <vector>
 
 namespace game {
 
 enum class Specialty { Leader = 0, Scientist = 1, Scout = 2, Soldier = 3 };
 
+struct CharacterColor { int r = 0, g = 0, b = 0, a = 255; int palette = 0; float x = 0, y = 0; };   // black = material default paint
+
+// PRI._SelectedCharacter (TnPlayerCharacterData, string ids). Filled by Frontend from GameFlow::SelectedCharacter.
 struct CharacterSelection {
     int type = 1;                    // 0 custom (specialty preset / customization slot), 1 iconic (a named chassis)
     Specialty specialty = Specialty::Leader;
     std::string chassisId = "Truck"; // iconic: the chassis UniqueId (e.g. "Truck" = Optimus Prime)
-    std::string customSlot;          // custom: customization slot / character name (profile data; outside Gameplay)
+    std::string customSlot;          // custom: customization slot / CharacterName
+    // CharacterData parallel arrays per faction (0 Autobot, 1 Decepticon): ChassisTypes / colours. Empty chassis =
+    // the specialty preset's body (TR_MPPlayerCharacterData_p.<Class>_PCD_MP).
+    std::string chassisByFaction[2];
+    CharacterColor primary[2], secondary[2];
+    // WeaponTypes / VehicleWeapons / MeleeWeapons / Abilities / Skills (provider UniqueIds). Empty = the chassis'
+    // iconic preset lists.
+    std::vector<std::string> weapons, vehicleWeapons, melee, abilities, skills;
 };
+
+inline const char* specialtyName(Specialty s) {
+    static const char* n[4] = {"Leader", "Scientist", "Scout", "Soldier"};
+    return n[(int)s];
+}
 
 // Default MP presets TR_MPPlayerCharacterData_p.*_PCD_MP: chassis per specialty and faction [CONF].
 inline const char* defaultChassis(Specialty s, int faction) {
@@ -35,17 +51,11 @@ inline const char* defaultChassis(Specialty s, int faction) {
 // ResolveReplicatedCharacterData: the body for this spawn.
 inline std::string resolveChassis(const CharacterSelection& sel, int faction) {
     if (sel.type == 1) return sel.chassisId;                // iconic characters keep their own chassis
+    int f = faction == 1 ? 1 : 0;                           // ResolveReplicatedCharacterData: Index of the faction
+    if (!sel.chassisByFaction[f].empty()) return sel.chassisByFaction[f];
     return defaultChassis(sel.specialty, faction);          // custom: the specialty's body for the resolved faction
 }
 
-// What Gameplay needs to build a pawn for a chassis (filled from the AssetTools ROBODEF / VEHDEF export). Only the
-// Optimus ("Truck") resources are loaded today: any other resolved chassis falls back to them [RECONSTRUCTION FALLBACK].
-struct PawnDefinition {
-    std::string chassisId = "Truck";
-    float collisionRadius = 2.0f, collisionHalfHeight = 2.0f;   // ROBODEF CollisionRadius / Height (Optimus 200 / 200 UU)
-    float groundSpeed = 14.0f, accelRate = 120.0f, airSpeed = 12.0f;   // shared player values (1400 / 12000 / 1200 UU)
-    std::string momentumBlueprint = "TR_Acrobatics_p.TruckTransformerMomentum";
-    std::string vehicleClass = "TnTruckFormBlueprint";
-};
+// The pawn itself is built from game::ChassisDef (ChassisDef.h): AssetTools Characters/<ChassisId>, no substitute body.
 
 } // namespace game
