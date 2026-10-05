@@ -17,6 +17,17 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 23 — FRONTEND SCENES OVER TIME, CUSTOMIZATION, RETURN FROM MATCH (2026-10-05, overnight)
+Merge preview: agents/frontend 1af7e74 (Cust_Idle body, pawn hiding, GFx fixes) + agents/rendering 03a08c8, rebuilt render data.
+
+| Item | Finding | Evidence | Mark |
+|---|---|---|---|
+| Title over time | t = 5 / 30 / 60 / 120 / 240 s: the orbit camera sweeps (different framing each), debris fields / ships move, bursts fire (240 s), no GL errors, no unknown actors. RE: the whole title is ONE synchronised 393.55 s loop (Orbiter + 1st / 2nd / 3rd QTR + Plane Fly By start together at FMV_intro Stopped), FOV fixed 45 | captures work/m23/run/t*.bmp, VISUALCHECK | VISUALLY VERIFIED |
+| Customization class cameras | Scout / Scientist × Autobot / Decepticon: the class camera frames that faction's pawn, ground-snapped, other pawn hidden; idles resolve through the chooser groups (Sideswipe / Barricade / AirRaid → NAV_Idle, Starscream → Cust_Idle) | captures, preview-body log | VISUALLY VERIFIED |
+| Return from match | game lobby 3D layer before vs after a Streets match: same camera, draws (8), materials (6), inherited GL state (depth on); pixel differences come from the authored time-animated BackdropSpaceDome_MAT_INST | WFC_SCENE_ONLY captures | CONFIRMED (no state carried over) |
+| All MP chassis | 27 chassis × robot + vehicle all render (54 captures PASS). Warpath's vehicle (Tank3) looked garbled in the close sweep: its bind pose equals Transform_ToRobot_VEH at t 0, i.e. the vehicle form; the close camera cut through the long tank | fixed-time clip samples (WFC_SCENEPREVIEW anim@seconds) | VISUALLY VERIFIED |
+| RandomSeed | WFC material uniform "RandomSeed", one float per mesh element (FMeshElement +0xBC) set in the material PS SetMesh 0x82E982E8; the proxy field that fills it is not identified | RE | CONFIRMED (what) / UNKNOWN (source); the wrecked-soldier prop keeps its fallback |
+
 ## MILESTONE 20 / 21 — MULTI-MAP FIDELITY: LIGHTMAPS, LIGHT COLOURS, MATERIALS, CHASSIS (2026-10-05, overnight)
 Audit: all 10 cooked MP maps built through the generic pipeline (no map names in renderer source), 30 direct-boot captures
 (3 spawn views per map) on integration 9e133bb + agents/rendering, WFC_VISUALCHECK.

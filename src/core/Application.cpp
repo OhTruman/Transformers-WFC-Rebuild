@@ -153,7 +153,7 @@ void Application::run() {
         // diagnostics: a roster body drawn through setFrontendSceneDraw:
         //   WFC_SCENEPREVIEW=<content glTF>|x,y,z,yawDeg|r,g,b;r,g,b[#<next body>...]   (bind pose; linear colours, optional)
         // optional 4th / 5th fields: AnimSets (a;b;...) and the sequence: loadPreviewBody + posePreviewBody per frame
-        struct PreviewBody { render::MeshData mesh; core::Mat4 model; render::CharacterColors colors; int body = -1; };
+        struct PreviewBody { render::MeshData mesh; core::Mat4 model; render::CharacterColors colors; int body = -1; float fixedT = -1.0f; };
         static std::vector<PreviewBody> previews;
         if (const char* pv = std::getenv("WFC_SCENEPREVIEW")) {
             std::string all = pv;
@@ -184,7 +184,10 @@ void Application::run() {
                         if (q1 == std::string::npos) break;
                         q0 = q1 + 1;
                     }
-                    body.body = renderer_->loadPreviewBody(s.substr(0, a), sets, s.substr(c4 + 1));
+                    std::string an = s.substr(c4 + 1);
+                    size_t at = an.find('@');                     // "anim@seconds": sample at a fixed time
+                    if (at != std::string::npos) { body.fixedT = (float)std::atof(an.c_str() + at + 1); an = an.substr(0, at); }
+                    body.body = renderer_->loadPreviewBody(s.substr(0, a), sets, an);
                 }
                 if (renderer_->loadContentMesh(s.substr(0, a), body.mesh)) {
                     body.model = renderer_->actorMatrix(core::Vec3{x, y, z}, core::Vec3{0, yaw, 0});
@@ -199,7 +202,8 @@ void Application::run() {
                 for (size_t i = 0; i < previews.size(); ++i) {
                     r.setDrawOwner(1 + (int)i);
                     r.setCharacterColors(previews[i].colors);
-                    if (previews[i].body >= 0) r.posePreviewBody(previews[i].body, frame / 60.0f, previews[i].mesh);
+                    if (previews[i].body >= 0)
+                        r.posePreviewBody(previews[i].body, previews[i].fixedT >= 0 ? previews[i].fixedT : frame / 60.0f, previews[i].mesh);
                     r.drawDynamicMesh(previews[i].mesh, previews[i].model, core::Vec3{1, 1, 1});
                 }
             });
