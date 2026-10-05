@@ -43,6 +43,9 @@ struct MatchLaunch {
     std::string map = "MP_IAC_Streets";
     std::string modeTag = "TDM";
     MatchSettings settings = MatchSettings::forMode("TDM");
+    // [integration M08b] The local player's team from the lobby (TnGameLobby FinalCountdown / SwitchTeam: 0 Autobots,
+    // 1 Decepticons; travels with the player). -1: Gameplay's PickTeam (direct boot / harnesses). Team games only.
+    int localTeam = -1;
     static bool fromURL(const std::string& url, MatchLaunch& out);
 };
 
@@ -318,7 +321,7 @@ public:
     void teleportToStart(int index);   // test/debug spawn selection
     // Local versus match (launch-independent; not started in ordinary free play). The local player joins as player 0:
     // hidden and frozen in PendingMatch, spawned by the match at its chosen start, killed / respawned through it.
-    void startLocalMatch(const MatchSettings& s);
+    void startLocalMatch(const MatchSettings& s, int localTeam = -1);   // localTeam: the lobby team (-1 = PickTeam)
     bool matchActive() const { return matchActive_; }
     Match& match() { return match_; }
     const Match& match() const { return match_; }

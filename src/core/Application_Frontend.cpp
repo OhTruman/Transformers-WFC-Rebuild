@@ -434,6 +434,9 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     game::MatchLaunch gl;
     game::MatchLaunch::fromURL(m.url.toString(), gl);
     gl.map = m.map->runtimeDir;
+    // [integration M08b] The team the lobby assigned (random PickTeam or the player's Switch Team) is the team the player
+    // spawns on; Gameplay's own PickTeam used to override it (always Autobots offline). Experimental audit P1-1.
+    gl.localTeam = m.teamIndex;
     // TEST / VALIDATION ONLY (explicit opt-in): WFC_LIFECYCLE=<goal score> shortens the match to that score and adds
     // one Gameplay diagnostic opponent (MatchOpponent); driveLifecycleTest() then produces kills and deaths through
     // World::applyMatchDamage, so the real rules run scoring, death, respawn wave, score-limit end and the return.

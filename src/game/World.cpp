@@ -1327,7 +1327,7 @@ void World::tick(float dt) {
 
 // Local match host glue (TnMultiplayerGame / TnTeamGame on the authority): the Match decides spawns, deaths and the
 // end; World applies them to the local pawn and the map actors.
-void World::startLocalMatch(const MatchSettings& s) {
+void World::startLocalMatch(const MatchSettings& s, int localTeam) {
     if (match_.starts().empty()) {
         std::string root = assetRoot();
         match_.loadSpawnData(mapDir() + "gameplay.json");
@@ -1340,6 +1340,10 @@ void World::startLocalMatch(const MatchSettings& s) {
     });
     match_.begin(s);
     if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");
+    if (s.teamGame && (localTeam == 0 || localTeam == 1)) {
+        match_.playerMutable(localPlayer_).team = localTeam;   // [integration M08b] the lobby's team (before the login start)
+        LOG_INFO("match: local player team %d from the lobby", localTeam);
+    }
     matchActive_ = true;
     localDead_ = true;            // PendingMatch: TrySpawnPlayer false -> nobody spawns before the start
     // GameInfo.Login: the controller is created at FindPlayerStart (team start of the initial cluster) and spectates
@@ -1405,7 +1409,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     matchMode_ = mode;
     mapState_.setMode(mode);
     resetForNewLevel();
-    startLocalMatch(l.settings);
+    startLocalMatch(l.settings, l.localTeam);
     LOG_INFO("match: launched %s %s (goal %d, time %d s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore, l.settings.timeLimit);
     return true;
 }
