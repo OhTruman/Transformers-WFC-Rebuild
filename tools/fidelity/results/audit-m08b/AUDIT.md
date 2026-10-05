@@ -90,6 +90,8 @@ human tester. Findings P1-2 and P2-2 hide behind this.
 - It is documented only as one line in a 4,887-line FIDELITY.md (`:3444` "Repair rays are flagged unsimulated").
 - **Fix direction:** at minimum an on-screen or log "unsupported weapon" indication; then the heal / drain beam
   (Beam2 rendering is the known Rendering gap).
+- **Status (2026-10-05):** open. Gameplay will add an unsupported log + HUD flag; `HudGameState.weaponSimulated`
+  already reports false.
 
 ### P1-5 Original PC controls shown on the in-game Layout card but not wired
 - **Owner:** Gameplay / Platform.
@@ -104,6 +106,11 @@ human tester. Findings P1-2 and P2-2 hide behind this.
 - Every other card action is wired: Fine Aim / Boost RMB, Ability 1 / 2 Shift / Ctrl, Kill Streak B, Hover C / V,
   Interact / Pick Up E, Change Form F, Grenade G, Reload R, Scoreboard Tab, Pause Esc.
 - Detonate Grenade is on the ability button (CONF RE). Turrets exist only on the Escalation maps.
+- **Status (2026-10-05):** fixed on agents/gameplay; code reviewed by Experimental.
+  - `2089910`: wheel / PageUp / PageDown all run NextWeapon, the shipped single "Swap Weapons" binding;
+    WFC_SWITCHTEST 32/32.
+  - `bec41cd`: MiddleMouseButton = Melee, polled with the same focus gate as every key (`Win32Window.cpp:103-105`).
+  - Runtime proof is pending the next integration.
 
 ---
 
@@ -161,7 +168,7 @@ human tester. Findings P1-2 and P2-2 hide behind this.
 ## P3: polish / unsupported / logging
 | # | issue | where | owner |
 |---|---|---|---|
-| P3-1 | Fire is sampled per render frame (`wantFire_ = isDown`). At ≥144 Hz a click shorter than one 16.7 ms sim step can miss a tick; all other presses are latched | `game/PlayerController.cpp:161` | Gameplay |
+| P3-1 | **Fixed on agents/gameplay bec41cd** (fire press latched for the next sim step). Was: Fire is sampled per render frame (`wantFire_ = isDown`). At ≥144 Hz a click shorter than one 16.7 ms sim step can miss a tick; all other presses are latched | `game/PlayerController.cpp:161` | Gameplay |
 | P3-2 | Hidden Ion Blaster fallbacks: `syncShownWeapon` uses id "IonBlaster" when the weapon has no def; HUD weapon / icon / inventory default "IonBlaster"; static Ion mesh drawn when a skinned load fails. Not exercised now; recommend LOG once when taken | `game/World.cpp:1043,1476-1480,1827` | Gameplay |
 | P3-3 | Low-ammo cue threshold 5 (Ion Blaster WEPMESH) for every weapon | `game/Weapon.h:74` | Gameplay / Systems |
 | P3-4 | `decodeImage` has two silent failure returns (zero-size / oversize); World logs failed textures only as a count, never by name (0 failures in the 175a634 runs) | `platform/win32/Win32Image.cpp:10,15`; `game/World.cpp:111` | Rendering |
