@@ -32,7 +32,7 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 | Camera inside Streets Ceiling_Arch underside | CONFIRMED ORIGINAL | TraceCamera simple collision only (RE f150a6a) |
 | Escalation maps under versus modes | not applicable | no versus mode actors authored |
 | Lobby backdrop (SpaceDome + CybertronCards + emblems, no room / characters) | CONFIRMED ORIGINAL (authored.db, Frontend) | the presentation gate's "mostly blank" lobby check is a stale expectation |
-| Non-Ion weapon muzzle / tracer FX | PARTIAL | Systems WeaponFx templates pending |
+| Non-Ion weapon muzzle / tracer FX | HIGH CONFIDENCE (cooked templates) / VISUALLY VERIFIED (Shotgun, Assault Rifle) [M08b] | Rendering M32 runtime + Systems WeaponFx; Trail2 / Beam2 ribbons PARTIAL |
 
 ---
 

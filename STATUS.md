@@ -3,6 +3,45 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08b (2026-10-05) — weapon effects from the original data — branch `integration/milestone-08b`
+
+Follow-up to M08 (76b25dd / 9bc9f1b, unchanged). Same executables (`build\bin` / `build\release\bin\wfc_rebuild.exe`),
+render data regenerated for Standard + 10 MP maps (per-map particle template library).
+
+| lane | head | content |
+|---|---|---|
+| agents/rendering | f5490be | M32 runtime particle templates + spawn API (spawnParticleEffect / Segment / Transform, released at unload); M33 lobby emblem Matinee parameters; M34 per-template DefaultColor; M35 Logo materials compile |
+| agents/systems | 79148d0 (code 5ecdbf0) | WeaponFx keyed by the held class's templates; reconstructed templates exact, every other template through the generic runtime; no borrowed squib (missing = logged once, nothing drawn) |
+| agents/frontend | 7a6255e (code a72befa) | lobby emblem glow / fade (subsequence-input fscommands) |
+| agents/gameplay | ddd8a58 | unchanged |
+
+**Integration:**
+- Conflict World.cpp fireHitscan: Systems' single template path (weaponFx(weaponClass_)), without the Ion-template fallback. A class with no FX entry draws nothing and logs once.
+- Seam: `fx_.setGenericRuntime` binds WeaponFx to IRenderer::spawnParticleEffect / spawnParticleEffectSegment / setParticleEffectTransform.
+
+**Weapon effects (VISUALLY VERIFIED, direct boot firing + frontend soak):**
+- Assault Rifle (Sideswipe, Warpath): the reconstructed muzzle flash + tracer.
+- Shotgun (Air Raid, Ironhide): its own cooked templates through Rendering's runtime, in the authored red. Was nothing / the Ion squib.
+- Ion Blaster unchanged.
+- 0 "template not reconstructed / not in render data" warnings; 0 shader compile failures.
+- Trail2 / Beam2 ribbons (tracer trails, repair / drain beams) are not drawn yet (Rendering, logged) [PARTIAL].
+
+**Validation:**
+
+| check | result |
+|---|---|
+| Debug / Release clean | exit 0 / 0 |
+| Frontend tests | 79 / 0 |
+| Harness | 191 / 0 |
+| TDM / modes / CTF | 43 / 21 / 12 |
+| Weapons / participants / chassis | 19 / 21 / 13 |
+| Transform / chaos | 0 / 1520; 0 / 0 / 0 |
+| Camera jitter | 0.0003 / 0.0003 / 0.0002° |
+| Audio suite | 609 / 0 |
+| release_path_check | PASS |
+| Visual suite | 11 / 11, Streets cameras refdiff 0.000 |
+| Frontend soak (4 matches: TDM Streets / DM Gorge / TDM Berth / DM Streets) | correct bodies / weapons / faction colours; 0 timeouts; GL textures 56 → 66; audio at baseline |
+
 ## INTEGRATION MILESTONE 08 (2026-10-05) — one offline multiplayer runtime: selected characters, generic weapons, every map, one renderer — branch `integration/milestone-08`
 
 **Playtest executables (plain launch, no environment variables):**
