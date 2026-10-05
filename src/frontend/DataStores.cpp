@@ -46,12 +46,13 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:GameOverMessage>") return flow_.matchValues().gameOverMessage;
     // GRI defaults before Gameplay's match values (Default__TnGameReplicationInfoMultiplayer: AttackingTeamIndex -1,
     // CurrentObjectiveCountdown -1 [CONF]; CompetitiveScoreEnabled engine default 0 [HIGH]). ActiveObjectives is the
-    // pause menu's objective text (empty -> no objective clip): none in versus [HIGH]. _CurrentWave / _NextWaveTime are
-    // Escalation's (unset class defaults 0 [HIGH]).
+    // pause menu's objective text (empty -> no objective clip): none in versus [HIGH].
     if (markup == "<CurrentGame:AttackingTeamIndex>" || markup == "<CurrentGame:CurrentObjectiveCountdown>") return "-1";
     if (markup == "<CurrentGame:CompetitiveScoreEnabled>") return "0";
     if (markup == "<CurrentGame:ActiveObjectives>") return "";
-    if (markup == "<CurrentGame:_CurrentWave>" || markup == "<CurrentGame:_NextWaveTime>") return "0";
+    // Escalation (mode SV) GRI only: a versus GRI has no wave properties, so the read is empty and Hud_GFX keeps its wave
+    // clip hidden (it shows "NEW WAVE IN n" for any value; "0" did so in TDM - Integration M08c).
+    if (markup == "<CurrentGame:_CurrentWave>" || markup == "<CurrentGame:_NextWaveTime>") return tag == "SV" ? "0" : "";
     // GRI.GoalScore = PointsToWin (TnMultiplayerGame.InitGame). Hud_GFX reads it once when it loads and falls back to 10
     // when it is not > 0, which fills the TDM (40) / DM (20) team bars at 10 points [Hud_GFX AS, Experimental audit P1-2].
     if (markup == "<CurrentGame:GoalScore>") return std::to_string(inMatch ? flow_.currentMatch().goalScore : (L.settings && L.settings->pointsToWin > 0 ? L.settings->pointsToWin : 0));
