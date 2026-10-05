@@ -1,5 +1,17 @@
 # Milestone 06: independent validation of `integration/milestone-06` 95edd7b
 
+> **CORRECTION, after the human playtest.** The visual verdict of this report was **overly positive and is withdrawn**.
+> Re-validated with the new presentation gate, this build is **VISUALLY BROKEN**:
+> - the frontend-launched Streets match draws almost no world;
+> - the pause menu persists over play;
+> - several frontend screens soft-lock;
+> - text input and rebinding do not work;
+> - the character preview never loads.
+>
+> Flow, match rules, audio, collision and lifetime results below are unaffected. Every "TDM PLAYABLE" / "visual" statement
+> here is superseded by [`../m06-presentation/REGRESSION-REPORT.md`](../m06-presentation/REGRESSION-REPORT.md) and
+> [`MAP-VERDICTS.md`](../m06-presentation/MAP-VERDICTS.md).
+
 | | |
 |---|---|
 | integration commit | `95edd7b34107e6bab5a44d6cbbc191db46209e8a` (verified against `origin/integration/milestone-06` before the build) |

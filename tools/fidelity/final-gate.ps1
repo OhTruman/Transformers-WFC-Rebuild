@@ -15,6 +15,10 @@
 #   vehicle  vehicle-collision.ps1 (pass-through + ramp hard stops)
 #   visual   playtest-regressions.ps1 + m05\visual-compare.ps1 (int-04 baseline / Rendering lane / merged)
 #   soak     m05-e2e-gate.ps1 R4 x SoakCycles
+#   present  presentation-gate.ps1 on the DEBUG exe (what the human playtest runs): frontend scene, menu screens, Streets
+#            world coverage with the HUD / player excluded, route vs direct boot, known-good Streets reference, pause
+#            overlay, soft-lock watchdog, text input, rebinding. Its verdict heads FINAL.md: counts of PASS can never
+#            stand in for presentation (M06 lesson: asset / draw / event counters all passed on a black Streets world).
 # Report FINAL.md: PRODUCT FAIL (owner lane) / TEST-HARNESS FAIL (owner Experimental) / KNOWN / UNKNOWN + WAITING /
 # HUMAN CHECK, per area, with the exact commit and exe paths. A Debug and a Release build of the same sha are required.
 param([Parameter(Mandatory)][string]$Ref, [string]$Name = "", [switch]$Build, [switch]$Quick, [string]$OutDir = "",
@@ -38,7 +42,7 @@ function Step($name, [scriptblock]$sb) { $t0 = Get-Date; Note ("[{0}] {1} ..." -
 $starts = if ($Quick) { "0,5,12,20,33,41,47,60,71,77" } else { "" }
 $cyc = if ($Quick) { 4 } else { 8 }
 Note "FINAL GATE $Ref = $sha; Release $rel; Debug $dbg$(if ($ReportOnly) { ' (report only)' })"
-if ($ReportOnly) { $Only = @("none") }
+if ($ReportOnly) { $Only = @("none") }   # suites: gate accept jitter debug stress vehicle visual soak present
 if (Want "gate")    { Step "gate Release" { & (Join-Path $PSScriptRoot "m05-e2e-gate.ps1") -Root $tgt -Config Release -Full -Cycles $cyc -OutDir (Join-Path $OutDir "gate_release") } }
 if (Want "accept")  { Step "playtest acceptance" { & (Join-Path $PSScriptRoot "playtest-acceptance.ps1") -Root $tgt -OutDir (Join-Path $OutDir "acceptance") } }
 if (Want "jitter")  { Step "motion jitter" { & (Join-Path $PSScriptRoot "motion-jitter.ps1") -Exe $rel -RenderData $rd -OutDir (Join-Path $OutDir "jitter") } }
@@ -51,11 +55,12 @@ if (Want "visual")  {
     $lane = if ($LaneRendering) { $LaneRendering } else { Join-Path $root "tools\fidelity\results\m05-prep\lane_rendering_187e6e9" }
     if (Test-Path $lane) { Step "visual compare" { & (Join-Path $PSScriptRoot "m05\visual-compare.ps1") -Baseline $base -Lane $lane -Merged (Join-Path $OutDir "visual_playtest") -OutDir (Join-Path $OutDir "visual_compare") } }
 }
+if (Want "present") { Step "presentation (Debug, human config)" { & (Join-Path $PSScriptRoot "presentation-gate.ps1") -Root $tgt -OutDir (Join-Path $OutDir "presentation") -Config $(if (Test-Path $dbg) { "Debug" } else { "Release" }) -Label $Ref } }
 if (Want "soak")    { Step "lifecycle soak" { & (Join-Path $PSScriptRoot "m05-e2e-gate.ps1") -Root $tgt -Config Release -Runs "R4" -Cycles $SoakCycles -OutDir (Join-Path $OutDir "soak") } }
 
 # ---------------------------------------------------------------- FINAL.md
 function Rep($dir) { $p = Join-Path $OutDir "$dir\report.json"; if (Test-Path $p) { return @((Get-Content $p -Raw | ConvertFrom-Json).results) } else { return @() } }
-$suites = [ordered]@{ gate_release = "lifecycle gate (Release)"; acceptance = "playtest acceptance"; jitter = "motion / jitter"; gate_debug = "lifecycle gate (Debug)"; transform_stress = "transform stress"; vehicle_collision = "vehicle collision"; visual_compare = "visual (merged vs baseline vs lane)"; soak = "lifetime soak" }
+$suites = [ordered]@{ presentation = "PRESENTATION (Debug, human config)"; gate_release = "lifecycle gate (Release)"; acceptance = "playtest acceptance"; jitter = "motion / jitter"; gate_debug = "lifecycle gate (Debug)"; transform_stress = "transform stress"; vehicle_collision = "vehicle collision"; visual_compare = "visual (merged vs baseline vs lane)"; soak = "lifetime soak" }
 $all = @(); $per = [ordered]@{}
 foreach ($k in $suites.Keys) { $rows = @(Rep $k | Where-Object { $_.id -notlike "transform_stress.run.*" -and $_.id -notlike "vehicle_collision.actor.*" }); $per[$k] = $rows; $all += $rows }
 # classification: a FAIL owned by Experimental (or flagged as a tool fault) is a test / harness failure, not a product failure
@@ -66,6 +71,10 @@ function Cnt($rows) { $c = [ordered]@{ "PRODUCT FAIL" = 0; "TEST/HARNESS FAIL" =
 $md = New-Object System.Collections.Generic.List[string]
 $md.Add("# Final gate - $Ref"); $md.Add("")
 $md.Add("| | |"); $md.Add("|---|---|"); $md.Add("| integration commit | ``$sha`` |"); $md.Add("| Release exe | ``$rel`` |"); $md.Add("| Debug exe | ``$dbg`` $(if (-not (Test-Path $dbg)) { '(MISSING)' }) |"); $md.Add("| run | $(Get-Date -Format 'yyyy-MM-dd HH:mm')$(if ($Quick) { ' QUICK subset' }) |"); $md.Add("")
+$pv = Join-Path $OutDir "presentation\PRESENTATION.md"
+$visual = if (Test-Path $pv) { ((Get-Content $pv | Where-Object { $_ -like "Verdict:*" } | Select-Object -First 1) -replace "Verdict:\s*", "") -replace "\*", "" } else { "NOT RUN - no visual verdict may be given" }
+$md.Add("## VISUAL HEALTH: **$visual**"); $md.Add("")
+$md.Add("This line overrides the counts below: a build whose presentation gate is VISUALLY BROKEN (or not run) is not visually healthy, however many checks pass."); $md.Add("")
 $md.Add("**" + (Cnt $all) + "**"); $md.Add("")
 $md.Add("| suite | result |"); $md.Add("|---|---|"); foreach ($k in $suites.Keys) { $md.Add("| $($suites[$k]) | $(if ($per[$k].Count) { Cnt $per[$k] } else { 'not run' }) |") }; $md.Add("")
 foreach ($sec in @(@{ t = "PRODUCT FAIL (owner lane)"; f = { (Kind $args[0]) -eq "PRODUCT" } }, @{ t = "TEST / HARNESS FAIL (Experimental)"; f = { (Kind $args[0]) -eq "TEST" } }, @{ t = "KNOWN (documented gaps)"; f = { $args[0].status -eq "KNOWN" } }, @{ t = "UNKNOWN / WAITING (evidence or presentation pending)"; f = { $args[0].status -in "UNKNOWN", "WAITING", "PARTIAL" } }, @{ t = "HUMAN CHECK (framing evidence)"; f = { $args[0].status -eq "HUMAN" } })) {

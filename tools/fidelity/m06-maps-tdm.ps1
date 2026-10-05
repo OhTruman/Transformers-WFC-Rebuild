@@ -13,7 +13,7 @@ $ErrorActionPreference = "Stop"
 $Maps = @($Maps | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 $order = [ordered]@{ MP_IAC_Seed = 501; MP_IAC_Berth = 502; MP_UND_Complex = 503; MP_IAC_Rust = 504; MP_ORB_Debris = 507; MP_IAC_Streets = 508; MP_KON_Molten = 509; MP_UND_Gorge = 510 }
 if (-not $Maps.Count) { $Maps = @($order.Keys) }
-. (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1")
+. (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\Present.ps1")
 Add-Type -ReferencedAssemblies System.Drawing -Path (Join-Path $PSScriptRoot "lib\ImageStats.cs") -ErrorAction SilentlyContinue
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 $exe = Join-Path $Root "build-release\bin\wfc_rebuild.exe"; $rd = Join-Path $Root "work\render"
@@ -65,6 +65,10 @@ foreach ($map in $Maps) {
     Res "$map.return_to_lobby" $(if ($retTr -and (Parse-Url $retTr.url).keys.MapId -eq "$id") { "PASS" } else { "FAIL" }) ("lobby travel after the match keeps MapId {0} (selected {1})" -f $row.return_mapId, $id) "Gameplay/Frontend"
     Res "$map.robot_vehicle_boost" $(if ($forms -contains "ROBOT" -and $forms -contains "VEHICLE" -and $boostF -gt 0) { "PASS" } elseif ($frames.Count) { "FAIL" } else { "SKIP" }) ("forms seen {0}; boosting frames {1} (transform every 5 s, boost cycles, firing)" -f $row.forms, $boostF) "Gameplay"
     Res "$map.not_under_map" $(if ($fell.Count) { "FAIL" } else { "PASS" }) ("fell out of the world (KillZ) {0}; min y {1}" -f $fell.Count, $miny) "Gameplay"
+    # world coverage of the frontend-launched match with the HUD band and the player excluded (a HUD over a missing world FAILS)
+    $wv = @("d_ingame", "e_ingame_later" | ForEach-Object { Present-World (Join-Path $d "$_.bmp") } | Where-Object { $_ })
+    $wvd = @($wv | ForEach-Object { Present-WorldVerdict $_ })
+    Res "$map.world_coverage" (Present-WorldSetVerdict $wv) ("in-match world detail (HUD and player excluded): {0}; verdicts {1} (PASS >= 0.15, FAIL < 0.10 or black >= 0.6 or one blank area >= 0.5)" -f (($wv | ForEach-Object { $_.detail }) -join " / "), ($wvd -join " / ")) "Rendering/Integration"
     Res "$map.presented" $(if (-not $shotStats.d_ingame) { "SKIP" } elseif ($shotStats.d_ingame.black -gt 0.85 -or $row.ingame_flatgrey -gt 0.15) { "FAIL" } else { "HUMAN" }) ("in-game frame: near-black {0:P0}, flat grey {1:P0}; HUD movie opened {2}; tdm_{3}.png is the human check" -f $row.ingame_black, $row.ingame_flatgrey, $hudOpen, $map) "Rendering/Frontend"
     Res "$map.match_audio" $(if ($music.Count) { "PASS" } else { "FAIL" }) ("game-type music starts: {0}; announcer lines played {1} (RE OV A5: DM_START, final stretch, DM_END_<winner>)" -f $row.dm_music, $announce.Count) "Systems/Gameplay"
 }

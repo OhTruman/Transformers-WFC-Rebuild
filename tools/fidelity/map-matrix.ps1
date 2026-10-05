@@ -15,7 +15,7 @@ param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir
 $ErrorActionPreference = "Stop"
 $Maps = @($Maps | ForEach-Object { $_ -split "," } | Where-Object { $_ })
 if (-not $Maps.Count) { $Maps = @("MP_IAC_Streets", "MP_UND_Gorge", "MP_IAC_Seed", "MP_IAC_Berth", "MP_UND_Complex", "MP_IAC_Rust", "MP_ORB_Debris", "MP_KON_Molten", "MP_ESC_BrokenHope", "MP_ESC_Remnant") }
-. (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\Shots.ps1")
+. (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\Shots.ps1"); . (Join-Path $PSScriptRoot "lib\Present.ps1")
 Add-Type -ReferencedAssemblies System.Drawing -Path (Join-Path $PSScriptRoot "lib\ImageStats.cs") -ErrorAction SilentlyContinue
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
 $exe = Join-Path $Root "build-release\bin\wfc_rebuild.exe"; $rd = Join-Path $Root "work\render"
@@ -69,13 +69,13 @@ foreach ($map in $Maps) {
     $matFail = @(Grep-Log $log '(?i)(shader|material).*(fail|error|unsupported)|compile error')
     $loaded = @(Grep-Log $log '(?i)starts: \d+ player starts|uploaded mesh 0:|render data').Count -gt 0
     $imgs = @(Get-ChildItem (Join-Path $d "shots") -Filter *.jpg | Where-Object { $_.BaseName -notlike "warm*" } | Sort-Object Name)
-    $fm = @($imgs | ForEach-Object { $m = Frame-Measures $_.FullName; $m | Add-Member -NotePropertyName shot -NotePropertyValue $_.BaseName -PassThru })
+    $fm = @($imgs | ForEach-Object { $m = Frame-Measures $_.FullName; $w = [WfcPresent]::Measure($_.FullName, 0, 0, 1, 1); $m | Add-Member -NotePropertyName detail -NotePropertyValue ([Math]::Round($w[1], 3)); $m | Add-Member -NotePropertyName maxFlat -NotePropertyValue ([Math]::Round($w[3], 3)); $m | Add-Member -NotePropertyName shot -NotePropertyValue $_.BaseName -PassThru })
     Write-WfcCsv $fm (Join-Path $d "frames.csv")
     if ($imgs.Count) { New-WfcSheet @($imgs | Select-Object -First 24 | ForEach-Object { @{ png = $_.FullName; label = "$map $($_.BaseName)" } }) (Join-Path $OutDir "sheet_$map.png") 6 320 180 }
     $med = { param($prop) $v = @($fm | ForEach-Object { $_.$prop } | Sort-Object); if ($v.Count) { $v[[int]($v.Count / 2)] } else { $null } }
     $row = [pscustomobject][ordered]@{ map = $map; render_data = $hasRd; loads = $loaded -and $imgs.Count -gt 0; load_s = $secs; views = $imgs.Count; errors = $errs.Count; warnings = $warns.Count; material_failures = $matFail.Count
         black_views = @($fm | Where-Object { $_.black -gt 0.6 }).Count; magenta_views = @($fm | Where-Object { $_.magenta -gt 0.01 }).Count; flatgrey_views = @($fm | Where-Object { $_.flatgrey -gt 0.15 }).Count
-        median_mean = (& $med "mean"); median_std = (& $med "std"); median_sat = (& $med "sat"); washed_views = @($fm | Where-Object { $_.mean -gt 140 -and $_.std -lt 28 }).Count
+        median_detail = (& $med "detail"); empty_views = @($fm | Where-Object { $_.detail -lt 0.10 -or $_.maxFlat -ge 0.5 }).Count; median_mean = (& $med "mean"); median_std = (& $med "std"); median_sat = (& $med "sat"); washed_views = @($fm | Where-Object { $_.mean -gt 140 -and $_.std -lt 28 }).Count
         chaos = ""; chaos_under = $null; chaos_killz = $null; chaos_stuck = $null; xform = ""; xform_under = $null }
     # ---- Gameplay's structural self-tests on this map
     if (-not $NoSelfTests) {
@@ -89,6 +89,9 @@ foreach ($map in $Maps) {
     # ---- verdicts per map
     Res "$map.loads" $(if ($row.loads) { "PASS" } else { "FAIL" }) ("direct load: {0} views captured in {1} s; log errors {2}, warnings {3}; render data present {4}" -f $row.views, $row.load_s, $row.errors, $row.warnings, $hasRd) "Integration/Rendering"
     Res "$map.materials" $(if ($row.material_failures -eq 0) { "PASS" } else { "PARTIAL" }) ("material / shader failure lines: {0} {1}" -f $row.material_failures, (($matFail | Select-Object -First 3 | ForEach-Object { $_.text -replace '^.*\] ', '' }) -join " | ")) "Rendering"
+    # VISUAL COVERAGE: textured world in the frame (not just "not black"): a sky / fog / black / one-blank-area view is empty
+    Res "$map.visual_coverage" $(if ($row.empty_views -gt $row.views * 0.25) { "FAIL" } elseif ($row.median_detail -lt 0.15) { "PARTIAL" } else { "PASS" }) ("{0} views: empty (textured detail < 0.10 or one blank area >= 50 %) {1}; median textured detail {2}. Direct boot only: the frontend-launched world is judged by m06-maps-tdm / presentation-gate" -f $row.views, $row.empty_views, $row.median_detail) "Rendering/AssetTools"
+    Res "$map.lighting" $(if ($row.black_views -gt $row.views * 0.25 -or $row.median_mean -lt 16) { "FAIL" } elseif ($row.washed_views -gt $row.views * 0.3) { "PARTIAL" } else { "PASS" }) ("median luma {0}, mostly-black views {1}, washed-out views {2}" -f $row.median_mean, $row.black_views, $row.washed_views) "Rendering"
     Res "$map.visual_metrics" $(if ($row.black_views -gt $row.views * 0.25 -or $row.magenta_views -or $row.flatgrey_views -gt 2) { "FAIL" } elseif ($row.washed_views -gt $row.views * 0.3) { "HUMAN" } else { "HUMAN" }) ("{0} views over the map: mostly-black {1}, magenta default material {2}, flat untextured grey {3}, washed out (mean > 140, contrast < 28) {4}; median luma {5}, contrast {6}, saturation {7}. Pixels cannot prove the map looks like WFC: sheet_{8}.png is the human check" -f $row.views, $row.black_views, $row.magenta_views, $row.flatgrey_views, $row.washed_views, $row.median_mean, $row.median_std, $row.median_sat, $map) "Rendering/AssetTools"
     if ($row.chaos -ne "" -or $row.chaos_under -ne $null) { Res "$map.chaos" $(if ($row.chaos_under -or $row.chaos_killz) { "FAIL" } elseif ($row.chaos_stuck) { "PARTIAL" } else { "PASS" }) ("WFC_CHAOS {0} starts x 20 s: under the map {1}, KillZ {2}, stuck {3}. {4}" -f $Chaos, $row.chaos_under, $row.chaos_killz, $row.chaos_stuck, $row.chaos) "Gameplay" }
     if ($row.xform) { Res "$map.xform" $(if ($row.xform_under) { "FAIL" } else { "PASS" }) ("WFC_XFORMTEST: {0} transforms ended under the map / KillZ" -f $row.xform) "Gameplay" }
