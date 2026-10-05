@@ -138,7 +138,11 @@ bool Application::wantsFrontendBoot() {
                           "WFC_MAPTRAVERSE", "WFC_LOCKSTEP", "WFC_DEBUGCAM", "WFC_STARTVEHICLE",
                           // [integration M05] Gameplay / Rendering harnesses written against the direct boot
                           "WFC_XFORMTEST", "WFC_MATCHTEST", "WFC_CAMTEST", "WFC_CHAOS", "WFC_TDMTEST", "WFC_MATCH",
-                          "WFC_MATCH_URL", "WFC_RELOADTEST", "WFC_CAMSYNC", "WFC_MODEPLAYTEST", "WFC_FRONTENDSCENE"})
+                          "WFC_MATCH_URL", "WFC_RELOADTEST", "WFC_CAMSYNC", "WFC_MODEPLAYTEST", "WFC_FRONTENDSCENE",
+                          // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
+                          "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
+                          "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
+                          "WFC_CHASSIS"})
         if (std::getenv(v)) return false;
     return true;
 }
