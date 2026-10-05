@@ -60,6 +60,28 @@ void GlCensus::begin() {
     active_ = true;
 }
 
+std::string GlCensus::snapshot() {
+    Fns& f = fns();
+    auto live = [](auto isName) {
+        int count = 0, gap = 0;
+        for (unsigned n = 1; gap < 4096 && n < 4000000u; ++n) {
+            if (!isName(n)) { ++gap; continue; }
+            gap = 0;
+            ++count;
+        }
+        return count;
+    };
+    int t = live([](GLuint n) { return glIsTexture(n) == GL_TRUE; });
+    int b = live([&](GLuint n) { return f.isBuffer(n) == GL_TRUE; });
+    int fb = live([&](GLuint n) { return f.isFramebuffer(n) == GL_TRUE; });
+    int rb = live([&](GLuint n) { return f.isRenderbuffer(n) == GL_TRUE; });
+    int va = live([&](GLuint n) { return f.isVertexArray(n) == GL_TRUE; });
+    int pr = live([&](GLuint n) { return f.isProgram(n) == GL_TRUE; });
+    char b2[256];
+    std::snprintf(b2, sizeof b2, "textures=%d buffers=%d framebuffers=%d renderbuffers=%d vertexArrays=%d programs=%d", t, b, fb, rb, va, pr);
+    return b2;
+}
+
 std::string GlCensus::release(const Owned& keep) {
     if (!active_) return "inactive";
     active_ = false;

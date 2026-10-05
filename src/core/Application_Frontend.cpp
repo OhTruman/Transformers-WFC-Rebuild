@@ -223,6 +223,10 @@ void Application::attachPresenter() {
             kv.push_back({"rendererBodies", std::to_string(ps.rendererBodies)});   // -1: the renderer cannot report it
         }
         kv.push_back({"matinees", std::to_string(frontend_->scene().playing().size())});
+        {   // live GL names (textures first): scene / map load hygiene across menu visits
+            std::string live = ui::GlCensus::snapshot();
+            kv.push_back({"glTextures", live.substr(9, live.find(' ') - 9)});
+        }
         kv.push_back({"camera", frontend_->scene().view().camera});
         std::string line;
         for (const auto& [k, v] : kv) line += " " + k + "=" + (v.empty() ? std::string("-") : v);
@@ -673,19 +677,37 @@ void Application::unloadMatch() {
     frontend_->flow().setMatchValues(frontend::MatchValues{});   // no stale match values in the lobby / frontend
     LOG_INFO("MATCH cleanup");                                   // RUNTIME-EVENTS: the match world is gone
     renderer_->unloadMapRenderData();
-    ui::GlCensus::Owned keep;
-    if (presenter_) presenter_->ownedGl(keep);
-    if (!std::getenv("WFC_NO_GL_RELEASE")) frontend::FlowTrace::emit("match.glRelease", {{"released", g_census.release(keep)}});
+    // One renderer for the whole session: unloadMapRenderData releases everything map-owned (map meshes / BSP /
+    // decals, lightmaps, CLUT, map FX and movers, material programs, post / scene-copy targets, map textures and every
+    // uploadMesh slot - Rendering M22, census-verified). Names the renderer created during the match and keeps on
+    // purpose (lazy programs, preview / dynamic buffers, helper textures) must not be swept, so the census only
+    // measures then. Opt-in (WFC_PERSISTENT_RENDERER=1) until the textures match code creates through uploadTexture
+    // (World / VehicleFx / WeaponFx) are released with the match (~60-105 per match otherwise, census-measured); the
+    // default stays the M06 hard reset (census sweep + a new renderer).
+    static const bool recreate = std::getenv("WFC_PERSISTENT_RENDERER") == nullptr;
+    if (recreate) {
+        ui::GlCensus::Owned keep;
+        if (presenter_) presenter_->ownedGl(keep);
+        if (!std::getenv("WFC_NO_GL_RELEASE")) frontend::FlowTrace::emit("match.glRelease", {{"released", g_census.release(keep)}});
+    }
     gameMode_ = game::GameMode();
 #ifndef WFC_SYSTEMS_FRONTEND_AUDIO
     // Without the Systems lifecycle the device is recreated to drop the match's voices.
     delete audio_;
     audio_ = audio::createAudio();
 #endif
-    delete renderer_;
-    renderer_ = render::createGLRenderer();
-    if (g_scene) g_scene->setRenderer(renderer_);
-    applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));   // the new renderer starts at its default
+    if (recreate) {
+        delete renderer_;
+        renderer_ = render::createGLRenderer();
+        if (g_scene) g_scene->setRenderer(renderer_);
+        applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));   // the new renderer starts at its default
+    }
+    {   // owner split for the census: GL the UI presenter (GFx movies, HUD, fonts) holds right now
+        ui::GlCensus::Owned ui;
+        if (presenter_) presenter_->ownedGl(ui);
+        frontend::FlowTrace::emit("match.glCensus", {{"live", ui::GlCensus::snapshot()}, {"renderer", recreate ? "recreated" : "persistent"},
+                                                     {"uiTextures", std::to_string(ui.textures.size())}, {"uiBuffers", std::to_string(ui.buffers.size())}});
+    }
     camera_ = render::Camera();
     clock_ = FixedStepClock(60.0);
     escWasDown_ = false;
