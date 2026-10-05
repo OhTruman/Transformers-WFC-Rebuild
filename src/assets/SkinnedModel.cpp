@@ -562,8 +562,11 @@ void skinPose(const SkinnedModel& model, const LocalPose& pose,
     out.positions.resize(vc * 3);
     out.normals.resize(vc * 3);
     out.indices = model.indices;
-    if (out.uv.size() != model.uv.size()) out.uv = model.uv;   // UVs are pose-invariant
-    if (out.subs.size() != model.subs.size()) out.subs = model.subs;
+    // M45: always from THIS model. Keeping them when only the count matched left another model's sub-mesh ranges /
+    // UVs on a reused output (robot <-> vehicle, chassis change: equal section counts): every draw then read past the
+    // index buffer (out-of-bounds GPU vertex fetch; caught by the M43 guard on the player route: Optimus spawn).
+    out.uv = model.uv;
+    out.subs = model.subs;
     out.mats = model.mats;                                      // picks up resolved texture handles
     for (size_t i = 0; i < vc; ++i) {
         core::Vec3 p{model.positions[i * 3], model.positions[i * 3 + 1], model.positions[i * 3 + 2]};
