@@ -758,6 +758,14 @@ void Pipeline::drawMapPresentation() {
             const FxLod& L = sys.emitters[e].lods[(size_t)rt.lod];
             float IR[3][3];                                    // instance rows (ammo factory: spinning yaw)
             std::memcpy(IR, in.R, sizeof(IR));
+            // Particle size scale (UE3 FParticle*EmitterInstance::FillReplayData: Source.Scale = Component->Scale *
+            // Scale3D * owner DrawScale * DrawScale3D; sprites / mesh particles render Particle.Size * Source.Scale)
+            // = the per-axis length of the instance rows (component transform incl. DrawScale and matinee scale).
+            static const bool noSizeScale = std::getenv("WFC_FX_NOSIZESCALE") != nullptr;   // A/B diagnostics
+            float sizeScale[3] = {1, 1, 1};
+            if (!noSizeScale)
+                for (int r = 0; r < 3; ++r)
+                    sizeScale[r] = std::sqrt(in.R[r][0] * in.R[r][0] + in.R[r][1] * in.R[r][1] + in.R[r][2] * in.R[r][2]);
             if (pickupSpin_.count(in.owner)) {               // the factory actor's spin carries its components
                 float spin[3][3];
                 rotRows(0.0f, pickupYaw(in.owner), 0.0f, spin);
@@ -779,7 +787,7 @@ void Pipeline::drawMapPresentation() {
                     float Rm[3][3];
                     for (int r = 0; r < 3; ++r)
                         for (int c = 0; c < 3; ++c) {
-                            float s = q.size[r];
+                            float s = q.size[r] * (L.localSpace ? 1.0f : sizeScale[r]);   // local space: IR carries it
                             Rm[r][c] = L.localSpace
                                 ? s * (rows[r][0] * IR[0][c] + rows[r][1] * IR[1][c] + rows[r][2] * IR[2][c])
                                 : s * rows[r][c];
@@ -796,7 +804,7 @@ void Pipeline::drawMapPresentation() {
                 for (const FxParticle& q : rt.parts) {
                     float wp[3]; worldPos(q.pos, wp);
                     core::Vec3 c = ueToGltf(wp);
-                    float w = q.size[0] * 0.01f, h = (L.rectangle ? q.size[1] : q.size[0]) * 0.01f;
+                    float w = q.size[0] * sizeScale[0] * 0.01f, h = (L.rectangle ? q.size[1] : q.size[0]) * sizeScale[1] * 0.01f;
                     float cr = std::cos(q.rot), sr = std::sin(q.rot);
                     core::Vec3 ax = camR * cr + camU * sr, ay = camU * cr - camR * sr;
                     core::Vec3 hx = ax * (w * 0.5f), hy = ay * (h * 0.5f);

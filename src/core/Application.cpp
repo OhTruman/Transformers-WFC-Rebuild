@@ -156,6 +156,15 @@ void Application::run() {
                 }
             });
         }
+        if (const char* fx = std::getenv("WFC_SCENEFX")) {   // diagnostics: activate scene emitters (a,b,...)
+            std::string u = fx;
+            for (size_t x = 0; x <= u.size();) {
+                size_t y = u.find(',', x);
+                renderer_->setMapEffectActive(u.substr(x, y == std::string::npos ? std::string::npos : y - x), true);
+                if (y == std::string::npos) break;
+                x = y + 1;
+            }
+        }
         if (const char* ss = std::getenv("WFC_SCENESCALE")) {   // diagnostics: actor,drawScale[;actor,drawScale...]
             std::string all = ss;
             for (size_t p0 = 0; p0 <= all.size();) {

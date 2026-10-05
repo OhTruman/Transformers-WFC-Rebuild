@@ -607,6 +607,8 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
 - Their missing animation is Matinee DrawScale. `setFrontendActorScale` now applies it to ships and emitters, and
   emitters follow matinee poses.
 - Frontend needs to evaluate the 7 DrawScale FloatProp tracks.
+- Particle sprite and mesh sizes now scale with the emitter's scale (UE3 Source.Scale, HIGH CONFIDENCE). Streets is
+  unchanged; the scaled title emitters draw at their authored size.
 
 ## RENDERING MILESTONE 11 (2026-10-04, agents/rendering) — real Release path: maps without depth testing
 - **Root cause:** after the frontend menus, every map was drawn with `GL_DEPTH_TEST` disabled.
