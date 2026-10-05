@@ -625,6 +625,8 @@ void PlayerController::applyToPawn(World& world, float dt) {
         core::Vec3 feet = pawn_->position(), spot;
         if (!findRobotSpot(col_, feet, spot, pawn_)) {
             float above = pawn_->meshToActor(Form::Robot) - pawn_->meshToActor(Form::Vehicle);
+            static const bool xlog = std::getenv("WFC_XFORMLOG") != nullptr;
+            if (xlog) LOG_INFO("XFORMLOG forced back to vehicle at (%.2f %.2f %.2f)", feet.x, feet.y, feet.z);
             pawn_->setForm(Form::Vehicle);
             pawn_->setPosition(pawn_->position() + core::Vec3{0, above, 0});
             ++forcedVehicleCount_;

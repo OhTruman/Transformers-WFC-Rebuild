@@ -101,6 +101,21 @@ bool Application::init() {
     // WFC_CHASSIS=<UniqueId>: boot as that chassis (free play and every harness), or select it as the iconic character in a launched match.
     const char* bootChassis = std::getenv("WFC_CHASSIS");
     if (bootChassis && !world_.applyChassisToLocalPawn(bootChassis)) LOG_ERROR("WFC_CHASSIS=%s: chassis unavailable", bootChassis);
+    if (const char* fp = std::getenv("WFC_FITPROBE")) {   // diagnostic: robot clearance columns at x,y,z (feet)
+        core::Vec3 p{0, 0, 0}; std::sscanf(fp, "%f,%f,%f", &p.x, &p.y, &p.z);
+        const game::CollisionWorld* col = world_.collision();
+        const float r = world_.player().pawn().robotParams().radius * 0.7f, top = 2.0f * world_.player().pawn().robotParams().halfHeight;
+        const core::Vec3 off[5] = {{0, 0, 0}, {r, 0, 0}, {-r, 0, 0}, {0, 0, r}, {0, 0, -r}};
+        for (int i = 0; i < 5; ++i) {
+            float from = i == 0 ? 0.4f : 0.4f + r, t; core::Vec3 n;
+            core::Vec3 a = p + off[i] + core::Vec3{0, from, 0}, b = p + off[i] + core::Vec3{0, top, 0};
+            bool hit = col && col->segmentHit(a, b, t, n);
+            float gy = 0; core::Vec3 gn; bool g = col && col->groundHeight(a.x, a.z, p.y + 0.5f, 1.0f, gy, gn);
+            LOG_INFO("FITPROBE col %d: %s at %.2f m (n %.2f %.2f %.2f); floor %s %.2f; actors %s", i, hit ? "BLOCKED" : "clear", hit ? from + (top - from) * t : 0.0f,
+                     n.x, n.y, n.z, g ? "at" : "none", gy - p.y, world_.collisionActorsAt(a + core::Vec3{0, 1.0f, 0}, 1.0f).c_str());
+        }
+        return false;
+    }
     if (std::getenv("WFC_MAPTRAVERSE")) { runMapTraverse(); return false; }   // measurements only
     if (std::getenv("WFC_XFORMTEST")) { runTransformStress(); return false; }  // measurements only
     if (std::getenv("WFC_MATCHTEST")) { runMatchTest(); return false; }        // measurements only
@@ -1688,7 +1703,7 @@ void Application::runCtfExtTest() {
               "defenders cannot take the flag; the attacker takes it and captures: team +1, personal +10, flag home (round continues)");
         // Drop on death, defender return (ReturnFlagTime 10 drained at dt x defenders).
         X->setPosition(at(flag)); run(0.2f);
-        core::Vec3 dropAt = at(flag) + core::Vec3{0, 0, 15};
+        core::Vec3 dropAt = at(flag);   // the factory spot is on the floor on every map (a dropped flag there is not "home")
         X->setPosition(dropAt); run(0.1f);
         world_.applyMatchDamage(X->matchPlayer(), Y->matchPlayer(), 99999.0f, false);
         run(0.1f);
@@ -1697,6 +1712,7 @@ void Application::runCtfExtTest() {
         bool stillDropped = false; for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.dropped) stillDropped = true;
         run(1.5f);
         bool returned = true; for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.dropped) returned = false;
+        LOG_INFO("CTFTEST drop: dropped %d stillDropped %d returned %d", (int)dropped, (int)stillDropped, (int)returned);
         check(dropped && stillDropped && returned, "carrier killed -> flag dropped; a defender on it returns it after ReturnFlagTime 10 s");
         // Round timer: round 1 ends at TimeLimit -> 5 s between rounds -> round 2 with the attackers swapped -> match end.
         bool between = false; int roundSeen = 0;
@@ -1821,6 +1837,42 @@ void Application::runMapSuite() {
         } else check(false, "hazard " + hz[0].actor + ": centroid not inside (plane orientation)");
     }
     check(!world_.pickupFactories().empty(), "pickup factories present (" + std::to_string(world_.pickupFactories().size()) + ")");
+    // Pickup interaction: damaged pawn steps onto a health factory -> SHT_AddAllSegments heal; the factory sleeps.
+    {
+        game::PickupFactory* hf = nullptr;
+        for (game::PickupFactory* pf : world_.pickupFactories()) if (pf->kind() == game::PickupFactory::Kind::Health && pf->available()) { hf = pf; break; }
+        if (hf && !world_.localPlayerDead()) {
+            world_.applyMatchDamage(world_.localMatchPlayer(), -1, pc.health().max * 0.5f, true);
+            float hp = pc.health().current;
+            pc.setPosition(hf->position());
+            run(0.3f);
+            check(pc.health().current > hp && !hf->available(), "health pickup: " + std::to_string((int)hp) + " -> " + std::to_string((int)pc.health().current) + ", factory taken");
+        } else check(false, "no available health factory / player dead");
+    }
+    // Every versus mode on this map: its mode actors activate and the match spawns the player.
+    for (const char* mode : {"DM", "DOM", "KOTH", "CTF", "EXT"}) {
+        game::MatchLaunch LM; game::MatchLaunch::fromURL(map + "_BASE_m?GameModeTag=" + mode, LM);
+        if (!world_.launchMatch(LM)) { check(false, std::string(mode) + " launch"); continue; }
+        run(10.6f);
+        int dom = 0, kothActive = 0, flags = 0, caps = 0, bombs = 0, plants = 0;
+        for (const auto& o : world_.mapState().objectives()) {
+            if (!o.activeInMode) continue;
+            if (o.cls == "TnDominationPoint") ++dom;
+            if (o.cls == "TnKingOfTheHillZone" && o.state == game::ObjectiveObject::State::Active) ++kothActive;
+            if (o.cls == "TnGameObjectivePickupFactoryFlag") ++flags;
+            if (o.cls == "TnFlagCapturePoint") ++caps;
+            if (o.cls == "TnGameObjectivePickupFactoryBomb") ++bombs;
+            if (o.cls == "TnBombPlantPoint") ++plants;
+        }
+        std::string m(mode);
+        bool ok = !world_.localPlayerDead() && world_.match().state() == game::Match::State::InProgress;
+        if (m == "DOM") ok = ok && dom >= 1;
+        if (m == "KOTH") ok = ok && kothActive == 1;
+        if (m == "CTF") ok = ok && flags == 2 && caps == 2 && world_.mapState().carried().size() == 2;
+        if (m == "EXT") ok = ok && bombs == 1 && plants == 2;
+        check(ok, m + ": spawned; mode actors dom " + std::to_string(dom) + " koth-active " + std::to_string(kothActive) + " flags " +
+              std::to_string(flags) + " caps " + std::to_string(caps) + " bomb " + std::to_string(bombs) + " plants " + std::to_string(plants));
+    }
     // Second match on the same map.
     world_.launchMatch(L);
     run(10.5f);
