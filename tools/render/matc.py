@@ -459,6 +459,14 @@ class MatCompiler:
     def x_SceneDepth(self, c, n, p, o):
         self.uses.add('scenedepth'); return 'm.sceneDepth', 1
 
+    def x_SceneTexture(self, c, n, p, o):
+        # UE3 MaterialExpressionSceneTexture (SceneTex_Lighting): the resolved scene colour at screen-space Coordinates
+        # (default: this pixel); outputs as a texture sample (0 = RGB, 1..4 = R, G, B, A). MP_KON_Molten rain puddles.
+        uv = self.input(c, n, 'Coordinates', ('wfcScreenUV()', 2))
+        s = self.tmp(4, 'wfcSceneColor(%s)' % cast(uv[0], uv[1], 2))
+        if o == 0: return '%s.rgb' % s, 3
+        return '%s.%s' % (s, 'rgba'[min(o, 4) - 1]), 1
+
     def x_DestDepth(self, c, n, p, o):
         self.uses.add('scenedepth'); return 'm.sceneDepth', 1
 

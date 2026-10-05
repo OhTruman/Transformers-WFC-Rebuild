@@ -122,6 +122,7 @@ struct Program {
     bool twoSided = false, lit = true;
     bool original = false;        // compiled from the original material graph (not the glTF fallback)
     bool sceneDepth = false;      // reads scene depth (DepthBiasedAlpha / SceneDepth)
+    bool sceneColor = false;      // reads the resolved scene colour (SceneTexture)
     int distProg = -1;            // distortion-accumulate variant (material Distortion connected)
     int shadowProg = -1;          // shadow-depth variant (opaque/masked: depth, masked clip)
     float clip = 0.3333f;
@@ -521,7 +522,9 @@ private:
     std::map<std::string, std::vector<std::string>> ruleGatedActors_;   // actor -> rules that show it
     bool ruleActive(const std::string& rule) const;
     bool depthDirty_ = true;
+    bool sceneColorCopied_ = false;
     void ensureSceneDepth();
+    void ensureSceneColor();
     float fxColor_[4] = {1, 1, 1, 1};
     GLuint spriteVao_ = 0, spriteVbo_ = 0, spriteCbo_ = 0, spriteIbo_ = 0;
     std::map<std::string, int> spriteProg_;
