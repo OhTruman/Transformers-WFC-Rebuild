@@ -314,12 +314,9 @@ void Application::runFrontend() {
         // frontend runs, the lifecycle driver) selects the first default character instead unless WFC_CHARSELECT=1.
         bool automated = std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_FRONTEND_AUTOPLAY") || std::getenv("WFC_LIFECYCLE");
         if (automated && !std::getenv("WFC_CHARSELECT")) {
-            frontend::GameFlow::SelectedCharacter sc;
-            if (!frontend_->roster().customCharacters().empty()) {
-                const auto& p = frontend_->roster().customCharacters().front();
-                sc.name = p.name; sc.specialty = p.specialty; sc.chassis[0] = p.chassis[0]; sc.chassis[1] = p.chassis[1];
-            }
-            flow.selectCharacter(sc);
+            // Same contract as Customize.SelectCharacter (the first custom slot), not a second derivation.
+            std::string first = frontend_->roster().customCharacters().empty() ? std::string() : frontend_->roster().customCharacters().front().name;
+            flow.selectCharacter(frontend_->selectionFor(first));
         }
         localDeadForUi_ = spectatingUi_ = false;
         localDeadTime_ = 0.0f;
@@ -448,8 +445,14 @@ void Application::routeMatchToFrontend(float dt) {
         cs.customSlot = fc.name;
         world_.match().selectCharacter(me, cs);
         selectionSent_ = true;
+        const int f = team == 1 ? 1 : 0;
         frontend::FlowTrace::emit("match.characterSelected", {{"name", fc.name}, {"type", std::to_string(cs.type)}, {"specialty", sp},
-                                                            {"chassis", game::resolveChassis(cs, team == 1 ? 1 : 0)}});
+                                                            {"faction", f == 1 ? "Decepticon" : "Autobot"},
+                                                            {"chassis", game::resolveChassis(cs, f)},
+                                                            {"body", fc.bodyAvailable[f] ? "available" : "MISSING"}});
+        if (!fc.bodyAvailable[f])
+            LOG_WARN("FRONTEND selection handoff: %s chassis %s has no body; the spawn will not be this character", fc.name.c_str(),
+                     fc.chassis[f].c_str());
     }
     const game::Match& match = world_.match();
     matchClock_ += dt;

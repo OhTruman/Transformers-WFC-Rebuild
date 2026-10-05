@@ -379,6 +379,36 @@ std::vector<std::string> splitCsv(const std::string& s) {
 std::string join2(const std::vector<std::string>& v) { std::string o; for (const auto& x : v) o += (o.empty() ? "" : ",") + x; return o; }
 }
 
+GameFlow::SelectedCharacter FrontendRuntime::selectionFor(const std::string& name) const {
+    // TnPlayerController.SelectCharacter(name, 0): the committed custom character, resolved once for Gameplay.
+    GameFlow::SelectedCharacter s;
+    s.name = name;
+    s.type = 0;
+    const CharacterPreset* c = roster_.find(name);
+    if (!c) return s;   // unknown slot: selection recorded, no chassis (bodyAvailable false)
+    s.friendlyName = c->friendlyName;
+    s.specialty = c->specialty;
+    s.weapons = c->weapons; s.vehicleWeapons = c->vehicleWeapons; s.melee = c->melee; s.abilities = c->abilities; s.skills = c->skills;
+    auto color = [](const CharacterColor& in) {
+        GameFlow::CharacterColorSel o;
+        o.r = in.r; o.g = in.g; o.b = in.b; o.a = in.a; o.palette = in.palette; o.x = in.x; o.y = in.y;
+        return o;
+    };
+    for (int f = 0; f < 2; ++f) {
+        s.chassis[f] = c->chassis[f];
+        s.primary[f] = color(c->primary[f]);
+        s.secondary[f] = color(c->secondary[f]);
+        if (const ChassisInfo* ci = roster_.chassis(c->chassis[f])) {
+            s.robotGltf[f] = ci->robotGltf;
+            s.vehicleGltf[f] = ci->vehicleGltf;
+            std::error_code ec;
+            s.bodyAvailable[f] = !ci->robotGltf.empty() &&
+                                 std::filesystem::exists(Catalog::defaultExtractedRoot() + "/" + ci->robotGltf, ec);
+        }
+    }
+    return s;
+}
+
 BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<std::string>& args) {
     // TnCharacterScriptBinding ("Customize.*") over the local characters (CharacterRoster: roster package presets).
     // Custom mode (iconic mode = GameTeamStatus 2 / 4 or OnlyAllowIconicCharacters is not wired yet: PARTIAL).
@@ -398,11 +428,7 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
     if (fn == "Customize.GetNewlyUnlockedSkills" || fn == "Customize.GetNewlyUnlockedAbilities") return BridgeValue(std::string());
     if (fn == "Customize.IsChassisUnlocked") { const ChassisInfo* ci = roster_.chassis(arg(0)); return BridgeValue(ci && !ci->lockedChassis); }
     if (fn == "Customize.SelectCharacter") {
-        GameFlow::SelectedCharacter s;
-        s.name = arg(0);
-        s.type = 0;
-        if (c) { s.chassis[0] = c->chassis[0]; s.chassis[1] = c->chassis[1]; s.specialty = c->specialty; }
-        flow_.selectCharacter(s);
+        flow_.selectCharacter(selectionFor(arg(0)));
         return {};
     }
     // ---- TnCharacterScriptBinding script bodies [CONFIRMED decompile] ----

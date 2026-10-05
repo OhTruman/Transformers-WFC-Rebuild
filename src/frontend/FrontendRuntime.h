@@ -118,6 +118,9 @@ public:
     const FrontendScene& scene() const { return scene_; }
     HudController& hud() { return hud_; }
     const CharacterRoster& roster() const { return roster_; }
+    // The selected-character contract for a custom slot (GameFlow::SelectedCharacter), as Customize.SelectCharacter
+    // records it; automation uses it too, so every path hands Gameplay the same data.
+    GameFlow::SelectedCharacter selectionFor(const std::string& name) const;
     // Create a Character: the palette swatch sampler (PNG pixel; platform image decoding) and the preview-pawn request
     // (Customize.UpdatePreviewCharacter / TransformPreviewCharacter*), forwarded to the preview owner.
     std::function<bool(const std::string& png, int x, int y, int& r, int& g, int& b)> sampleImage;

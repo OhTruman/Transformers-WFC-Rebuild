@@ -529,8 +529,25 @@ void GameFlow::returnToGameLobby() {
 void GameFlow::selectCharacter(const SelectedCharacter& c) {
     selected_ = c;
     selected_.valid = true;
+    auto list = [](const std::vector<std::string>& v) { std::string o; for (const auto& x : v) o += (o.empty() ? "" : ",") + x; return o; };
+    auto col = [](const CharacterColorSel& k) {
+        char b[48];
+        if (k.useDefault()) std::snprintf(b, sizeof b, "default(p%d %.0f,%.0f)", k.palette, k.x, k.y);
+        else std::snprintf(b, sizeof b, "%02X%02X%02X", k.r, k.g, k.b);
+        return std::string(b);
+    };
     FlowTrace::emit("character.selected", {{"name", c.name}, {"type", std::to_string(c.type)}, {"specialty", c.specialty},
-                                           {"autobot", c.chassis[0]}, {"decepticon", c.chassis[1]}});
+                                           {"autobot", c.chassis[0]}, {"decepticon", c.chassis[1]},
+                                           {"autobotBody", c.bodyAvailable[0] ? "ok" : "MISSING"},
+                                           {"decepticonBody", c.bodyAvailable[1] ? "ok" : "MISSING"},
+                                           {"weapons", list(c.weapons)}, {"vehicleWeapon", list(c.vehicleWeapons)}, {"melee", list(c.melee)},
+                                           {"abilities", list(c.abilities)}, {"skills", list(c.skills)},
+                                           {"colorsA", col(c.primary[0]) + "/" + col(c.secondary[0])},
+                                           {"colorsD", col(c.primary[1]) + "/" + col(c.secondary[1])}});
+    for (int f = 0; f < 2; ++f)
+        if (!c.chassis[f].empty() && !c.bodyAvailable[f])
+            LOG_WARN("FRONTEND selection %s: no %s body for chassis %s (%s): Gameplay cannot spawn it", c.name.c_str(),
+                     f == 0 ? "Autobot" : "Decepticon", c.chassis[f].c_str(), c.robotGltf[f].c_str());
     // In the match, the pre-game screen follows (OnCharacterSelected -> GameStartUI); spawn waits for the selection.
     if (level_ == LevelKind::Match) characterSelected();
 }
