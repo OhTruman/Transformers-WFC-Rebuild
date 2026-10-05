@@ -17,6 +17,16 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 17 — CUSTOMIZATION CLASS CAMERA, IMAGE CHECK (2026-10-05)
+Merge preview: agents/frontend 89df3bc + agents/rendering, -Map Standard render data. Route: party lobby → Create a
+Character → first character → Autobot Chassis (clickclip chassisButtonA).
+
+| Item | Finding | Evidence | Mark |
+|---|---|---|---|
+| Class camera chain | fscommand hideDecepticon → Chassis_To_Cam_ID_1 (slot 0, camera id 0) → Scout → "SCOUT - Autobot" (SeqAct_Interp_13491). CameraActor_2082 moves (784, 5252, 235) → (659, 5425, 195); FOV 69.75 → 60 | FLOW log, captures | VISUALLY VERIFIED |
+| Preview pawns | Car2 (Sideswipe) / Car4 (Barricade) at the authored PathNodes with original materials, per-owner light environments | captures | VISUALLY VERIFIED (bind pose) |
+| Pawn height | the pawns stand at PathNode z 179 with their mesh origin (feet) there. The room's floor is the invisible BSP slab (Invisible_MAT, x −1024..3072, y 3200..7296, top z 0), so the original's OnPreviewPawnTick FindGround puts the feet at z 0: currently 179 UU too high. The class camera's final shot crops the head at 179 and frames the whole body at 0 | bsp.glb, render at the camera's final pose | CONFIRMED (geometry) / fix is Frontend / Gameplay (ground snap) |
+
 ## MILESTONE 12 — FRONTEND VIGNETTE SHIPS (2026-10-05)
 | Item | Original | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
