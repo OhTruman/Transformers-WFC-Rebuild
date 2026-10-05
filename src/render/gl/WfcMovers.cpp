@@ -213,7 +213,7 @@ core::Mat4 Pipeline::moverDelta(const MoverRT& m, float t) const {
     auto Cidx = [](int i) { return i == 0 ? 0 : (i == 1 ? 2 : 1); };
     float Bg[9];
     for (int c = 0; c < 3; ++c)
-        for (int r = 0; r < 3; ++r) Bg[c * 3 + r] = B[Cidx(c) * 3 + Cidx(r)];
+        for (int r = 0; r < 3; ++r) Bg[c * 3 + r] = B[Cidx(c) * 3 + Cidx(r)] * (m.kind == 2 ? m.scale : 1.0f);
     float Lg[3] = {m.L[0] * 0.01f, m.L[2] * 0.01f, m.L[1] * 0.01f};
     float Lo[3] = {(m.L[0] + o[0]) * 0.01f, (m.L[2] + o[2]) * 0.01f, (m.L[1] + o[1]) * 0.01f};
     core::Mat4 D = core::Mat4::identity();
@@ -262,14 +262,55 @@ void Pipeline::setActorPose(const std::string& actor, const core::Vec3& p, const
         return;
     }
     ++posesApplied_;
+    auto prev = actorPoses_.find(a);
     MoverRT m;
     m.actor = a; m.kind = 2;
+    if (prev != actorPoses_.end()) m.scale = prev->second.scale;   // a DrawScale track keeps its value
     std::copy(it->second.L, it->second.L + 3, m.L);
     std::copy(it->second.rot, it->second.rot + 3, m.rot0);
     const float d2u = 65536.0f / 360.0f;
     m.L1[0] = p.x; m.L1[1] = p.y; m.L1[2] = p.z;
     m.rot1[0] = r.x * d2u; m.rot1[1] = r.y * d2u; m.rot1[2] = r.z * d2u;
     actorPoses_[a] = m;
+}
+
+bool Pipeline::frontendPoseUE(const std::string& a, float M[9], float L0[3], float L1[3]) const {
+    auto it = actorPoses_.find(a);
+    if (it == actorPoses_.end()) return false;
+    const MoverRT& m = it->second;
+    float A0[9], A1[9], A0t[9];
+    rotColumns(m.rot0[0], m.rot0[1], m.rot0[2], A0);
+    rotColumns(m.rot1[0], m.rot1[1], m.rot1[2], A1);
+    transpose3(A0, A0t);
+    mul3(A1, A0t, M);
+    for (int k = 0; k < 9; ++k) M[k] *= m.scale;
+    std::copy(m.L, m.L + 3, L0);
+    std::copy(m.L1, m.L1 + 3, L1);
+    return true;
+}
+
+// Matinee DrawScale (absolute) -> ratio to the authored DrawScale. An actor without a pose track keeps its authored
+// placement (kind 2 at the authored pose).
+void Pipeline::setActorScale(const std::string& actor, float drawScale) {
+    std::string a = actor.substr(actor.rfind('.') == std::string::npos ? 0 : actor.rfind('.') + 1);
+    std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+    auto it = actorPose0_.find(a);
+    if (it == actorPose0_.end()) {
+        if (posesUnknown_.insert(a).second && posesUnknown_.size() <= 8)
+            LOG_WARN("wfc: frontend DrawScale for unknown actor %s (not in the scene's actors_by_level)", a.c_str());
+        return;
+    }
+    auto pit = actorPoses_.find(a);
+    if (pit == actorPoses_.end()) {
+        MoverRT m;
+        m.actor = a; m.kind = 2;
+        std::copy(it->second.L, it->second.L + 3, m.L);
+        std::copy(it->second.L, it->second.L + 3, m.L1);
+        std::copy(it->second.rot, it->second.rot + 3, m.rot0);
+        std::copy(it->second.rot, it->second.rot + 3, m.rot1);
+        pit = actorPoses_.emplace(a, m).first;
+    }
+    pit->second.scale = it->second.scale > 1e-6f ? std::max(drawScale, 0.0f) / it->second.scale : 1.0f;
 }
 
 // render_index actors_by_level: authored pose (from gltf_matrix), authored bHidden, PHYS_Rotating (UE3 physRotating:
@@ -281,7 +322,7 @@ void Pipeline::loadSceneActors(const assets::Json& L) {
         for (size_t i = 0; i < lv.second.size(); ++i) {
             const assets::Json& e = lv.second[i];
             const std::string cls = e["class"].asString();
-            if (cls != "InterpActor" && cls != "HmSkeletalMeshActor" && cls != "StaticMeshActor") continue;
+            if (cls != "InterpActor" && cls != "HmSkeletalMeshActor" && cls != "StaticMeshActor" && cls != "Emitter") continue;
             const assets::Json& G = e["gltf_matrix"];
             if (G.size() < 16) continue;
             std::string a = e["actor"].asString();
@@ -293,11 +334,14 @@ void Pipeline::loadSceneActors(const assets::Json& L) {
             float R[3][3];
             for (int c = 0; c < 3; ++c)
                 for (int r = 0; r < 3; ++r) R[sw(c)][sw(r)] = g[c * 4 + r];
+            float axisScale = 1.0f;                     // authored DrawScale (DrawScale3D is 1 on these actors)
             for (int k = 0; k < 3; ++k) {
                 float n = std::sqrt(R[k][0] * R[k][0] + R[k][1] * R[k][1] + R[k][2] * R[k][2]);
+                if (k == 0 && n > 1e-8f) axisScale = n;
                 if (n > 1e-8f) for (int c = 0; c < 3; ++c) R[k][c] /= n;
             }
             ActorPose0 p0;
+            p0.scale = axisScale;
             p0.L[0] = g[12] * 100.0f; p0.L[1] = g[14] * 100.0f; p0.L[2] = g[13] * 100.0f;
             const float k2u = 32768.0f / 3.14159265358979f;
             float pitch = std::atan2(R[0][2], std::sqrt(R[0][0] * R[0][0] + R[0][1] * R[0][1]));

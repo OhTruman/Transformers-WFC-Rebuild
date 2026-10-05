@@ -168,6 +168,9 @@ public:
     int scenePosesApplied() const { return posesApplied_; }
     const std::set<std::string>& scenePosesUnknown() const { return posesUnknown_; }
     void setActorPose(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg);
+    void setActorScale(const std::string& actor, float drawScale);
+    // frontend pose of a scene actor in UE space: world = M * (x - L0) + L1, M = DrawScale ratio * A1 A0^T (columns)
+    bool frontendPoseUE(const std::string& actorLower, float M[9], float L0[3], float L1[3]) const;
     void loadSceneActors(const assets::Json& actorsByLevel);   // render_index actors_by_level (UI families)
 
     void beginFrame(const Camera& cam, int w, int h);
@@ -441,6 +444,8 @@ private:
         std::map<std::string, std::array<float, 4>> colorParams;   // InstanceParameters, FLinearColor(FColor)
         bool active = true, hidden = false, attached = true;
         float R[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T[3] = {0, 0, 0};   // UE rows / translation
+        float R0[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}}, T0[3] = {0, 0, 0}; // authored (before matinee poses)
+        std::string ownerShort;                                               // owner actor name (lower case)
         uint32_t rng = 1;
         std::vector<FxEmitterRT> emitters;
     };
@@ -459,7 +464,7 @@ private:
         core::Mat4 model; int state = 0; int stateMesh[2] = {-1, -1};
     };
     std::vector<MapProp> mapProps_;
-    struct ActorPose0 { float L[3]; float rot[3]; };
+    struct ActorPose0 { float L[3]; float rot[3]; float scale = 1.0f; };   // scale: authored DrawScale
     std::map<std::string, ActorPose0> actorPose0_;     // authored pose (lower-case actor) for absolute poses
     int kothMesh_ = -1;
     // ammo-crate PickupFactoryMesh (TnAmmoCratePickup.MeshComponentA): PROP_NEU_AmmoPickup_STAT, CullDistance 8000,
@@ -488,6 +493,7 @@ private:
         std::string actor;
         int kind = 0;                 // 0 PHYS_Rotating, 1 Matinee InterpTrackMove, 2 absolute pose (frontend)
         float L1[3] = {0, 0, 0}, rot1[3] = {0, 0, 0};   // kind 2: target location / rotator (UE units)
+        float scale = 1.0f;                              // kind 2: matinee DrawScale / authored DrawScale
         float L[3] = {0, 0, 0}, rot0[3] = {0, 0, 0}, rate[3] = {0, 0, 0};
         float length = 0.0f; bool looping = true;
         struct RotKey { float t; float q[4]; };

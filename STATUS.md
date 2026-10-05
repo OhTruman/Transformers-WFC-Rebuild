@@ -2120,6 +2120,18 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 12 (2026-10-05, agents/rendering) — vignette ships
+- The ships have no skeletal animation in the original (CONFIRMED from the cooked level), so the bind pose is correct.
+- Their missing animation is Matinee DrawScale. `setFrontendActorScale` now applies it to ships and emitters, and
+  emitters follow matinee poses.
+- Frontend needs to evaluate the 7 DrawScale FloatProp tracks.
+- Camera FOV tracks:
+  - the title's tracks have no keys, so the camera FOV of 45 is already right;
+  - the customization class cameras zoom 70 -> 60 / 65 over 0.5 s. The keys are exported to render data, and
+    `frontendFloatTracks()` + `evalInterpCurveFloat` are provided for Frontend.
+- Particle sprite and mesh sizes now scale with the emitter's scale (UE3 Source.Scale, HIGH CONFIDENCE). Streets is
+  unchanged; the scaled title emitters draw at their authored size.
+
 ## RENDERING MILESTONE 11 (2026-10-04, agents/rendering) — real Release path: maps without depth testing
 - **Root cause:** after the frontend menus, every map was drawn with `GL_DEPTH_TEST` disabled.
   - The GFx pass left it off (Frontend, fixed in a96f841).

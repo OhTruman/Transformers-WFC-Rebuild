@@ -153,6 +153,31 @@ void Application::run() {
     // Diagnostics: a frontend 3D scene through the renderer contract, without the frontend runtime.
     // WFC_FRONTENDSCENE=<level>[,<level>...]; WFC_SCENECAM=x,y,z,pitch,yaw,roll,fov (UE units / degrees; default the
     // UI_FrontEnd_m title camera CameraActor_6585); WFC_SMOKE_FRAMES / WFC_SHOT as usual.
+    if (const char* ft = std::getenv("WFC_FOVTEST")) {   // diagnostics: <SeqAct_Interp> FOVAngle track in the lobby scene
+        if (renderer_->loadFrontendScene({"UI_PartyLobby_m", "UI_CharacterCustomization_m"})) {
+            std::vector<render::IRenderer::InterpKeyF> keys;
+            for (const auto& t : renderer_->frontendFloatTracks()) {
+                LOG_INFO("FOVTEST track %s \"%s\" %s.%s: %zu keys", t.seqActInterp.c_str(), t.matineeComment.c_str(),
+                         t.group.c_str(), t.property.c_str(), t.keys.size());
+                if (t.seqActInterp == ft && t.property == "FOVAngle") keys = t.keys;
+            }
+            for (float tt : {0.0f, 0.125f, 0.25f, 0.375f, 0.5f, 1.0f})
+                LOG_INFO("FOVTEST %s t=%.3f FOVAngle=%.3f", ft, tt, render::IRenderer::evalInterpCurveFloat(keys, tt, 70.0f));
+            platform::InputFrame in;
+            for (float tt : {0.0f, 0.5f}) {
+                float fov = render::IRenderer::evalInterpCurveFloat(keys, tt, 70.0f);
+                for (int f = 0; f < 30 && window_->pump(in); ++f) {
+                    renderer_->drawFrontendScene(core::Vec3{784.123f, 5252.110f, 234.995f}, core::Vec3{-2.988f, -175.605f, 0}, fov,
+                                                 window_->width(), window_->height(), f / 60.0);
+                    if (f == 29) if (const char* sh = std::getenv("WFC_SHOT"))
+                        renderer_->captureScreenshot((std::string(sh) + "_t" + std::to_string((int)(tt * 1000)) + ".bmp").c_str());
+                    window_->present();
+                }
+            }
+            renderer_->unloadFrontendScene();
+        }
+        return;
+    }
     if (const char* mc = std::getenv("WFC_MEMCYCLE")) {   // diagnostics: renderer-only map load / unload memory cycle
         auto privMB = [] {
 #ifdef _WIN32
@@ -257,6 +282,26 @@ void Application::run() {
                     r.drawDynamicMesh(previews[i].mesh, previews[i].model, core::Vec3{1, 1, 1});
                 }
             });
+        }
+        if (const char* fx = std::getenv("WFC_SCENEFX")) {   // diagnostics: activate scene emitters (a,b,...)
+            std::string u = fx;
+            for (size_t x = 0; x <= u.size();) {
+                size_t y = u.find(',', x);
+                renderer_->setMapEffectActive(u.substr(x, y == std::string::npos ? std::string::npos : y - x), true);
+                if (y == std::string::npos) break;
+                x = y + 1;
+            }
+        }
+        if (const char* ss = std::getenv("WFC_SCENESCALE")) {   // diagnostics: actor,drawScale[;actor,drawScale...]
+            std::string all = ss;
+            for (size_t p0 = 0; p0 <= all.size();) {
+                size_t p1 = all.find(';', p0);
+                std::string t = all.substr(p0, p1 == std::string::npos ? std::string::npos : p1 - p0);
+                size_t c = t.find(',');
+                if (c != std::string::npos) renderer_->setFrontendActorScale(t.substr(0, c), (float)std::atof(t.c_str() + c + 1));
+                if (p1 == std::string::npos) break;
+                p0 = p1 + 1;
+            }
         }
         if (const char* sp = std::getenv("WFC_SCENEPOSE")) {     // diagnostics: actor,x,y,z,pitch,yaw,roll (UE, deg)
             char name[128] = {0}; float v[6] = {0};

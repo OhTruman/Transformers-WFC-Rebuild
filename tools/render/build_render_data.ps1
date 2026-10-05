@@ -57,6 +57,10 @@ if ($LASTEXITCODE -ne 0) { throw "build_map_fx failed" }
 # [integration M06] Runtime render index for maps that ship only the AssetTools generic index (all but Streets).
 & $py (Join-Path $PSScriptRoot "build_render_index.py") $Map $out
 if ($LASTEXITCODE -ne 0) { throw "build_render_index failed" }
+
+# Matinee float-property tracks (FOVAngle / DrawScale keys) for the frontend scene families.
+& $py (Join-Path $PSScriptRoot "build_scene_floatprops.py") $Map $out
+if ($LASTEXITCODE -ne 0) { throw "build_scene_floatprops failed" }
 # 5. Map-independent HUD data: Canvas fonts + objective-marker setups -> <render root>\_ui
 & $py (Join-Path $PSScriptRoot "build_hud.py") (Split-Path -Parent $out)
 if ($LASTEXITCODE -ne 0) { throw "build_hud failed" }
