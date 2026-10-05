@@ -90,16 +90,19 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
     const HudFrame& f = frame_;
     if (f.valid) {
         if (!sentValid_) {
-            // A fresh movie: crosshair and the form's widgets. SetWeaponCrosshair's type per weapon is native and
-            // UNKNOWN; IonBlaster -> 2 follows the crosshair symbol names [PROVISIONAL].
+            // A fresh movie: crosshair and the form's widgets. The crosshair type is chosen by the movie itself from
+            // NotifyCurrentWeaponChanged's class name (RE 934ecde), so no SetWeaponCrosshair here.
             call("ShowCrosshair", {true});
-            call("SetWeaponCrosshair", {f.weapon == "IonBlaster" ? 2 : 0});
         }
         if (!sentValid_ || f.fullSegments != sent_.fullSegments || std::fabs(f.currentSegment - sent_.currentSegment) > 1e-3 ||
             f.totalSegments != sent_.totalSegments)
             call("NotifySegmentedHealthChanged", {f.fullSegments, f.currentSegment, f.totalSegments});
         if (!sentValid_ || std::fabs(f.overshield - sent_.overshield) > 1e-3) call("NotifyOverShieldChanged", {f.overshield});
-        if (!sentValid_ || f.weapon != sent_.weapon) call("NotifyCurrentWeaponChanged", {f.weapon});
+        if (!sentValid_ || f.weapon != sent_.weapon) {
+            std::string cls = f.weapon.rfind("Tn", 0) == 0 || f.weapon.empty() ? f.weapon : "TnWeapon" + f.weapon;
+            call("NotifyCurrentWeaponChanged", {cls});
+        }
+        if (!sentValid_ || f.aimType != sent_.aimType) call("NotifyFineAimChanged", {f.aimType});
         if (!sentValid_ || f.clip != sent_.clip || f.clipCapacity != sent_.clipCapacity)
             call("NotifyWeaponClipAmmoChanged", {f.clip, f.clipCapacity});
         if (!sentValid_ || f.reserve != sent_.reserve || f.reserveCapacity != sent_.reserveCapacity)

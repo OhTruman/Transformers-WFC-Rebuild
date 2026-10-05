@@ -644,7 +644,11 @@ void Application::routeMatchToFrontend(float dt) {
     hf.overshield = h.normalizedOverShield;
     const auto& wpn = world_.player().pawn().weapon();
     hf.clip = h.clipAmmo; hf.clipCapacity = wpn.magSize; hf.reserve = h.reserveAmmo; hf.reserveCapacity = wpn.reserveMax;
-    hf.weapon = "IonBlaster";   // the rebuild's only player weapon (Gameplay) - TnWeaponIonBlaster icon / crosshair
+    {   // Gameplay's TnHUD observer state: the drawn weapon's class and the fine-aim state (EHudAimType)
+        const auto& aim = world_.player().controller().hudAimState();
+        hf.weapon = aim.weaponClass && aim.weaponClass[0] ? aim.weaponClass : "TnWeaponIonBlaster";
+        hf.aimType = aim.aimType;
+    }
     hf.vehicleForm = h.vehicleForm;
     hf.spectating = spectatingUi_;
     frontend_->hud().setFrame(hf);

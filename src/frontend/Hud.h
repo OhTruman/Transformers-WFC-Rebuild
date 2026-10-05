@@ -26,7 +26,11 @@ struct HudFrame {
     double currentSegment = 1.0;               // the active segment's fill 0..1
     double overshield = 0.0;                   // normalized (NotifyOverShieldChanged)
     int clip = 0, clipCapacity = 0, reserve = 0, reserveCapacity = 0;
-    std::string weapon;                        // TnWeapon class suffix (NotifyCurrentWeaponChanged, icon export)
+    // The weapon class name ("TnWeaponIonBlaster"; a bare id gets the TnWeapon prefix): NotifyCurrentWeaponChanged. The
+    // movie picks the icon export and the crosshair from it (Shotgun / EmpShotgun 1, IonBlaster 2, Bazooka 3, else 0;
+    // mounted turrets -> turret reticule; GrenadeLauncher -> range finder) [CONFIRMED Hud_GFX AS, RE 934ecde].
+    std::string weapon;
+    int aimType = 0;                           // NotifyFineAimChanged: 0 standard, 1 fine aim (TnPCS_FineAim)
     bool vehicleForm = false;                  // NotifyCurrentFormChanged
     bool spectating = false;
 };
