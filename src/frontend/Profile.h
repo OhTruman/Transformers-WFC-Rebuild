@@ -32,7 +32,6 @@ public:
     // PC SKU display settings (PCSettings.*).
     struct Display { int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; };
     Display display;
-    bool watchedIntro = false;
     // The local player's display name (GetPlayerAlias / PRI.PlayerName). The original took it from the signed-in
     // Xbox Live gamertag; the offline PC reconstruction has no such service: [Identity] Name in the profile file,
     // else WFC_PLAYERNAME, else "Player" [PC RECONSTRUCTION FALLBACK].

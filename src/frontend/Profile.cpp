@@ -50,7 +50,7 @@ void LocalProfile::load() {
         size_t eq = line.find('=');
         if (eq == std::string::npos) continue;
         std::string k = line.substr(0, eq), v = line.substr(eq + 1);
-        if (k == "HasWatchedIntroMovie") watchedIntro = v == "1";
+        if (k == "HasWatchedIntroMovie") continue;   // written by earlier rebuilds; not a profile field in the original
         else if (section == "[Identity]" && k == "Name") identityName = v;
         else if (section == "[PCSettings]") {
             if (k == "Width") display.width = std::atoi(v.c_str());
@@ -66,7 +66,7 @@ void LocalProfile::save() const {
     std::ofstream f(kFile);
     f << "; WFC rebuild local profile (TnProfileSettings role). Original fields under [ProfileData]; the PC SKU's\n"
          "; display settings under [PCSettings].\n";
-    f << "HasWatchedIntroMovie=" << (watchedIntro ? 1 : 0) << "\n\n[ProfileData]\n";
+    f << "\n[ProfileData]\n";
     for (const auto& [k, v] : values_) f << k << "=" << v << "\n";
     if (!identityName.empty()) f << "\n[Identity]\nName=" << identityName << "\n";
     f << "\n[PCSettings]\nWidth=" << display.width << "\nHeight=" << display.height << "\nFullscreen=" << (display.fullscreen ? 1 : 0)

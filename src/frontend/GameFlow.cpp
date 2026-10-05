@@ -50,7 +50,10 @@ bool GameFlow::init(const Catalog& catalog, const Options& opt) {
     opt_ = opt;
     rng_.seed(opt.seed ? opt.seed : (unsigned)std::chrono::steady_clock::now().time_since_epoch().count());
     profile_.load();
-    watchedIntro_ = opt.skipIntroMovies || profile_.watchedIntro;
+    // HasWatchedIntroMovie is a per-process flag in the original: one zero-initialised global (0x83757450) written
+    // only by SetHasWatchedIntroMovie and the controller-assignment tick, never saved or loaded [CONFIRMED ORIGINAL,
+    // native decompile]. Every launch therefore plays the logos and the intro chain again.
+    watchedIntro_ = opt.skipIntroMovies;
     FlowTrace::emit("boot", {{"map", kFrontEndMap}, {"watchedIntro", FlowTrace::boolean(watchedIntro_)},
                              {"seed", std::to_string(opt.seed)}});
     // Engine boot: [URL] Map=UI_FrontEnd_m. The initial startup movie ([LoadingMovie] InitialStartupFileName
@@ -216,8 +219,8 @@ void GameFlow::frontEndBegin() {
     // login to wait for in the rebuild [online - bypassed]: WaitingForBaseOnlineService / WaitingForNetwork /
     // ReadingAccountNames / LoggingIn* are skipped.
     FlowTrace::emit("frontend.game", {{"state", "WaitingForController"}});
-    // Controller assigned -> SetHasWatchedIntroMovie() -> state None. The flag is persisted (profile file) and
-    // takes effect on the next boot: MovieLoader's decision this boot reads the value loaded at startup [HIGH].
+    // Controller assigned -> SetHasWatchedIntroMovie() -> state None. The flag lives for the session only: a later
+    // return to the frontend (after a match) takes MovieLoader's enterFrontEnd branch [CONFIRMED ORIGINAL].
     FlowTrace::emit("frontend.game", {{"state", "None"}, {"controllerAssigned", "true"}});
     pendingWatchedWrite_ = true;
     // Kismet: SeqEvent_GameplayStarted -> Interp "Black-Out" (InterpLength 0.00105 s, client-side) -> OpenMovie.
@@ -285,8 +288,8 @@ void GameFlow::frontEndStart() {
     // SeqAct_InstallGame (Finished) -> 3 x SetMatInstScalarParam (Energon DownScaleUVs 12, ring Opacity).
     if (pendingWatchedWrite_) {
         pendingWatchedWrite_ = false;
-        // Game.SetHasWatchedIntroMovie: stored in the player profile (LocalProfile).
-        if (!profile_.watchedIntro) { watchedIntro_ = true; profile_.watchedIntro = true; profile_.save(); }
+        // Game.SetHasWatchedIntroMovie: session flag, not part of the profile.
+        watchedIntro_ = true;
         FlowTrace::emit("profile", {{"HasWatchedIntroMovie", "true"}});
     }
 }
