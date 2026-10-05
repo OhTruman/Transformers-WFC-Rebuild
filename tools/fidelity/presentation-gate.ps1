@@ -34,6 +34,14 @@ if ($RenderData) { $RenderData = (Resolve-Path $RenderData).Path }
 if (-not $Reference) { $Reference = Join-Path $PSScriptRoot "references\streets_spawn_m05_1e14900" }
 $sha = if (Test-Path (Join-Path $Root "M05_TARGET.txt")) { ((Get-Content (Join-Path $Root "M05_TARGET.txt")) | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '' } else { "?" }
 $H = Get-ExeHooks $exe
+# Frontend pass 4 routing (CONFIRMED original per Frontend): Quit asks TnQuitMessageBox Yes / No; quitting a match returns
+# to the PARTY LOBBY; Back from the party lobby (+ Yes) returns to the title.
+# text entry: "type:<text>" (WM_CHAR-equivalent, Frontend f5ada69+) when the build has it, else key:<code> per letter
+$typeStep = [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern '"type:"' -SimpleMatch -List | Select-Object -First 1)
+$quitBox = [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp, *.h -ErrorAction SilentlyContinue | Select-String -Pattern "TnQuitMessageBox" -SimpleMatch -List | Select-Object -First 1)
+function WaitGpu { # one graphical WFC instance at a time (any session): wait up to 30 min for the others to finish
+    $deadline = (Get-Date).AddMinutes([int]$(if ($env:WFC_GATE_GPU_WAIT_MIN) { $env:WFC_GATE_GPU_WAIT_MIN } else { 240 })); while ((Get-Date) -lt $deadline) { if (-not @(Get-Process wfc_rebuild -ErrorAction SilentlyContinue).Count) { Start-Sleep 3; if (-not @(Get-Process wfc_rebuild -ErrorAction SilentlyContinue).Count) { return } }; Start-Sleep 10 }
+    throw "another wfc_rebuild.exe kept running past WFC_GATE_GPU_WAIT_MIN (default 240 min): refusing to start a second graphical instance" }
 $res = New-WfcResults
 function Res($id, $status, $note, $owner = "", $m = $null) { Add-WfcResult $res "present.$id" $status $m $note $owner }
 $MapDirs = @{ 501 = "MP_IAC_Seed"; 502 = "MP_IAC_Berth"; 503 = "MP_UND_Complex"; 504 = "MP_IAC_Rust"; 507 = "MP_ORB_Debris"; 508 = "MP_IAC_Streets"; 509 = "MP_KON_Molten"; 510 = "MP_UND_Gorge" }
@@ -58,11 +66,11 @@ if ($Parts -contains "route") {
           "call:Online.BeginLobbyExitCountdown", "wait:loading=1", "wait:t=1", "shot:$d\${p}04_loading.bmp", "wait:level=Match", "wait:movie=CustomTransformers", "wait:t=2", "shot:$d\${p}05_charselect.bmp", "dump:CustomTransformers",
           "ui:Down", "wait:t=0.8", "shot:$d\${p}06_charselect_down.bmp", "ui:Accept", "wait:ui=InGame", "wait:t=1.5", "shot:$d\${p}07_spawn.bmp", "wait:t=3", "shot:$d\${p}08_moving.bmp", "wait:t=3", "shot:$d\${p}09_moving2.bmp",
           "showmenu", "wait:ui=Paused", "wait:t=1.5", "shot:$d\${p}10_paused.bmp", "wait:t=1", "shot:$d\${p}10b_paused_later.bmp", "ui:Accept", "wait:ui=InGame", "wait:t=1.5", "shot:$d\${p}11_resumed.bmp", "wait:t=2", "shot:$d\${p}12_resumed_later.bmp",
-          "showmenu", "wait:ui=Paused", "wait:t=0.5", "call:Game.QuitToMainMenu", "wait:level=FrontEnd", "wait:ui=FrontEnd", "wait:t=3", "shot:$d\${p}13_frontend_after.bmp") -join ";" }
+          "showmenu", "wait:ui=Paused", "wait:t=0.5", "call:Game.QuitToMainMenu", $(if ($quitBox) { "wait:t=1.5;shot:$d\${p}12b_quitbox.bmp;ui:Accept;wait:level=PartyLobby;wait:ui=InLobby;wait:t=2;shot:$d\${p}12c_party_after.bmp;ui:Back;wait:t=1.5;ui:Accept;wait:level=FrontEnd;wait:ui=FrontEnd" } else { "wait:level=FrontEnd;wait:ui=FrontEnd" }), "wait:t=3", "shot:$d\${p}13_frontend_after.bmp") -join ";" }
     $s = @("wait:frontend", "wait:ui=FrontEnd", "wait:t=3", "shot:$d\a00_title.bmp", "wait:t=6", "shot:$d\a01_title_9s.bmp", (& $match "a"), (& $match "b"), "quit") -join ";"
     if (-not $H.Contains("WFC_CHARSELECT")) { $s = $s.Replace("wait:movie=CustomTransformers;", "").Replace(";dump:CustomTransformers;ui:Down;wait:t=0.8;", ";").Replace("ui:Accept;wait:ui=InGame", "wait:ui=InGame") }   # builds before character selection: the match starts on its own
     $e = BaseEnv $d @{ WFC_FRONTEND_SCRIPT = $s; WFC_CHARSELECT = "1"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.25"; WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "10" }
-    $r = if ($ReportOnly) { [pscustomobject]@{ rc = "n/a"; timedOut = "n/a" } } else { Invoke-WfcSampled $exe $d $e 900 1.0 }
+    $r = if ($ReportOnly) { [pscustomobject]@{ rc = "n/a"; timedOut = "n/a" } } else { WaitGpu; Invoke-WfcSampled $exe $d $e 900 1.0 }
     $F = Read-FlowLog (Join-Path $d "flow.jsonl"); $log = Join-Path $d "wfc.log"; $done = @(Flow-Ev $F "script.wait" | Where-Object cond -eq "t=3").Count -ge 3 -and (Test-Path "$d\b13_frontend_after.bmp")
     $ls = LastStep $d
     Res "route.completes" $(if ($done) { "PASS" } else { "FAIL" }) ("frontend -> {0} -> pause / resume -> frontend -> second match: {1}" -f $mapDir, $(if ($done) { "completed" } else { "stopped at '$($ls.cond)$($ls.action)' (exit $($r.rc), timed out $($r.timedOut)) - a soft lock or a missing transition" })) "Integration"
@@ -129,7 +137,7 @@ if ($Parts -contains "direct" -and $routeSpawn) {
     $ps = @((Get-Content -Raw "F:\Transformers Rebuild\ExtractedAssets\VerticalSlice\Maps\$mapDir\gameplay.json" | ConvertFrom-Json).player_starts | Where-Object { @($_.location_gltf).Count -ge 3 })
     $idx = [Array]::IndexOf(@($ps | ForEach-Object { $_.actor }), $routeSpawn)
     $e = @{ WFC_BOOT = "match"; WFC_MAP = $mapDir; WFC_START = "$idx"; WFC_LOCKSTEP = "1"; WFC_SMOKE_FRAMES = "200"; WFC_SHOTEVERY = "$d,120,121"; WFC_LOGEVERY = "0" }; if ($RenderData) { $e.WFC_RENDER_DATA = $RenderData }
-    if (-not $ReportOnly) { $null = Invoke-WfcExe $exe $d $e "run.log" 300 }
+    if (-not $ReportOnly) { WaitGpu; $null = Invoke-WfcExe $exe $d $e "run.log" 300 }
     $f = @(Get-ChildItem $d -Filter "f0120.bmp")[0]; $wd = if ($f) { Present-World $f.FullName } else { $null }; $wr = $routeWorld["a07_spawn"]
     if ($wd -and $wr) { $ratio = [Math]::Round($wr.detail / [Math]::Max(0.01, $wd.detail), 2); Row "direct" "spawn_direct" $f.Name (Present-WorldVerdict $wd) $wd
         Res "gameplay.route_vs_direct" $(if ($ratio -lt 0.5) { "FAIL" } else { "PASS" }) ("same start ({0}) - direct boot world detail {1}, frontend-launched {2} (ratio {3}; FAIL < 0.5: the frontend-launched match loses world content that direct boot draws -> route-specific seam, not the map data)" -f $routeSpawn, $wd.detail, $wr.detail, $ratio) "Integration" }
@@ -142,14 +150,15 @@ if ($Parts -contains "reference") {
     $camFile = Join-Path $PSScriptRoot "references\streets_spawnviews.txt"
     $cams = @(Get-Content $camFile | ForEach-Object { $p = $_ -split ' '; $v = $p[1] -split ',' | ForEach-Object { [double]$_ }; @{ name = $p[0] -replace 'TnTeamPlayerStart_', 's'; c = @($v[0], $v[1], $v[2]); t = @($v[3], $v[4], $v[5]) } })
     $shots = @(); for ($w = 0; $w -lt 4; $w++) { $shots += @{ name = "warm$w"; c = $cams[0].c; t = $cams[0].t } }; $shots += $cams
-    if (-not $ReportOnly) { $null = Invoke-ShotList $exe $d $shots @{ WFC_BOOT = "match"; WFC_MAP = "MP_IAC_Streets" } $RenderData @($shots | ForEach-Object { $_.name }) }
+    if (-not $ReportOnly) { WaitGpu; $null = Invoke-ShotList $exe $d $shots @{ WFC_BOOT = "match"; WFC_MAP = "MP_IAC_Streets" } $RenderData @($shots | ForEach-Object { $_.name }) }
     $cmp = @(); foreach ($c in $cams) { $a = Join-Path $d "$($c.name).jpg"; $b = Join-Path $Reference "$($c.name).jpg"
         if ((Test-Path $a) -and (Test-Path $b)) { $s = Present-Similar $a $b; $wa = Present-World $a; $wb = Present-World $b
             $cmp += [pscustomobject]@{ view = $c.name; grad = $s.grad; luma = $s.luma; iou = $s.iou; detail = $wa.detail; ref_detail = $wb.detail; ratio = [Math]::Round($wa.detail / [Math]::Max(0.01, $wb.detail), 2) } } }
     Write-WfcCsv $cmp (Join-Path $OutDir "reference_compare.csv")
     if ($cmp.Count) { $gm = ($cmp | Sort-Object grad)[[int]($cmp.Count / 2)].grad; $lost = @($cmp | Where-Object { $_.ratio -lt 0.5 -or $_.grad -lt 0.4 })
         Res "reference.streets_pipeline" $(if ($gm -lt 0.6 -or $lost.Count -gt [Math]::Floor($cmp.Count * 0.25)) { "FAIL" } else { "PASS" }) ("{0} fixed Streets cameras vs the known-good reference ({1}): median structural similarity {2}; views lost (detail ratio < 0.5 or similarity < 0.4): {3} {4}. FAIL flags the whole merged visual pipeline regardless of how many maps load" -f $cmp.Count, (Split-Path $Reference -Leaf), $gm, $lost.Count, (($lost | ForEach-Object { $_.view }) -join ",")) "Rendering/Integration" }
-    else { Res "reference.streets_pipeline" "SKIP" "no reference frames at $Reference" "Experimental" }
+    else { $mine = @(Get-ChildItem $d -Filter "s*.jpg" -ErrorAction SilentlyContinue).Count; $refs = @(Get-ChildItem $Reference -Filter "s*.jpg" -ErrorAction SilentlyContinue).Count
+           Res "reference.streets_pipeline" "SKIP" ("no comparison: {0} frames rendered by the build under test, {1} reference frames at {2}" -f $mine, $refs, $Reference) "Experimental" }
 }
 
 # =========================================================================================== watchdog (soft locks, text input, rebinding)
@@ -164,18 +173,21 @@ if ($Parts -contains "watchdog") {
         settings_controls = @{ path = (Down 3) + ";ui:Accept;wait:t=2;" + (Down 2) + ";ui:Accept;wait:t=2.5;clickclip:_root.settingsMenuLoader_mc.settingsMenu_mc.subMenu_mc.listItem1_mc;wait:t=2.5"; exits = 3; owner = "Frontend"; expect = "rebind" }
         customization   = @{ path = "call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=2;" + (Down 2) + ";ui:Accept;wait:t=3;ui:Accept;wait:t=4"; exits = 3; owner = "Frontend/AssetTools"; expect = "preview" }
         # back_forward: focus resets to Campaign after every return (Campaign itself is offline / out of scope)
-        back_forward    = @{ path = ((1..3 | ForEach-Object { (Down 1) + ";ui:Accept;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1.5;ui:Back;wait:level=FrontEnd;wait:ui=FrontEnd;wait:t=2" }) -join ";") + ";" + (Down 3) + ";ui:Accept;wait:t=2;ui:Back;wait:t=2;" + (Down 1) + ";ui:Accept;wait:t=2;ui:Back;wait:t=2"; exits = 0; owner = "Frontend"; expect = "cycle" }
+        back_forward    = @{ path = ((1..3 | ForEach-Object { (Down 1) + ";ui:Accept;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1.5;ui:Back;" + $(if ($quitBox) { "wait:t=1.5;ui:Accept;" } else { "" }) + "wait:level=FrontEnd;wait:ui=FrontEnd;wait:t=2" }) -join ";") + ";" + (Down 3) + ";ui:Accept;wait:t=2;ui:Back;wait:t=2;" + (Down 1) + ";ui:Accept;wait:t=2;ui:Back;wait:t=2"; exits = 0; owner = "Frontend"; expect = "cycle" }
     }
     foreach ($k in $screens.Keys) {
         $sc = $screens[$k]; $d = Join-Path $OutDir "watchdog_$k"; New-Item -ItemType Directory -Force $d | Out-Null
-        $typing = ""; if ($sc.typed) { $typing = (($sc.typed.ToCharArray() | ForEach-Object { "key:$([int][char]$_);wait:t=0.25" }) -join ";") + ";wait:t=1;shot:$d\c_typed.bmp;dump:FrontEnd" }
+        $typing = ""; if ($sc.typed) { $typing = $(if ($typeStep) { "type:$($sc.typed);wait:t=0.5" } else { (($sc.typed.ToCharArray() | ForEach-Object { "key:$([int][char]$_);wait:t=0.25" }) -join ";") }) + ";wait:t=1;shot:$d\c_typed.bmp;dump:FrontEnd" }
         $rebind = ""; if ($sc.expect -eq "rebind") { $rebind = "dump:FrontEnd;ui:Accept;wait:t=1;key:75;wait:t=1.5;shot:$d\c_rebound.bmp;dump:FrontEnd" }
         $exitSteps = (@(1..[Math]::Max(1, $sc.exits)) | ForEach-Object { "ui:Back;wait:t=2;shot:$d\d_exit$_.bmp;snapshot:exit$_;dump:FrontEnd" }) -join ";"
+        # customization is two levels deep (character detail -> Custom Character list -> party lobby); with the pass-4
+        # routing the party lobby Back asks Quit? and Yes returns to the title
+        if ($quitBox -and $k -eq "customization") { $exitSteps = "ui:Back;wait:t=2;shot:$d\d_exit1.bmp;snapshot:exit1;dump:FrontEnd;ui:Back;wait:t=2;shot:$d\d_exit2.bmp;snapshot:exit2;dump:FrontEnd;ui:Back;wait:t=1.5;ui:Accept;wait:level=FrontEnd;wait:ui=FrontEnd;wait:t=2;shot:$d\d_exit3.bmp;snapshot:exit3;dump:FrontEnd" }
         # alternative exits a player would try when Back does nothing: the dialog's Cancel (Right + Accept), Start, Esc
         $altSteps = "ui:Right;wait:t=0.4;ui:Accept;wait:t=2;shot:$d\e_alt1_cancel.bmp;dump:FrontEnd;ui:Start;wait:t=2;shot:$d\e_alt2_start.bmp;dump:FrontEnd;key:27;wait:t=2;shot:$d\e_alt3_esc.bmp;dump:FrontEnd;snapshot:alt"
         if ($sc.exits -eq 0) { $exitSteps = "shot:$d\d_exit1.bmp;snapshot:exit1" }
         $s = @("wait:frontend", "wait:ui=FrontEnd", "wait:t=3", "shot:$d\a_main.bmp", "dump:FrontEnd", $sc.path.Replace("{D}", $d), "shot:$d\b_inside.bmp", "snapshot:inside", "dump:FrontEnd", "dump:Lobbies", "dump:Customize", $typing, $rebind, $exitSteps, $(if ($sc.exits -gt 0) { $altSteps }), "wait:t=1", "quit") | Where-Object { $_ }
-        if (-not $ReportOnly) { $r = Invoke-WfcSampled $exe $d (BaseEnv $d @{ WFC_FRONTEND_SCRIPT = ($s -join ";"); WFC_FLOW_TIMEOUT = "150" }) 240 1.0 }
+        if (-not $ReportOnly) { WaitGpu; $r = Invoke-WfcSampled $exe $d (BaseEnv $d @{ WFC_FRONTEND_SCRIPT = ($s -join ";"); WFC_FLOW_TIMEOUT = "150" }) 240 1.0 }
         $F = Read-FlowLog (Join-Path $d "flow.jsonl"); $log = Join-Path $d "wfc.log"; $ls = LastStep $d; $finished = @(Flow-Ev $F "snapshot" | Where-Object { $_.why -like "exit*" }).Count -gt 0
         $dumps = @(Read-GfxDumps $log); $mainDump = @($dumps | Where-Object { $_.movie -like "*FrontEnd_GFX*" } | Select-Object -First 1)[0]
         $insideDumps = @($dumps | Select-Object -Skip 1)
@@ -204,8 +216,10 @@ if ($Parts -contains "watchdog") {
         switch ($sc.expect) {
             "text" { $tx = @($dumps | ForEach-Object { $_.texts } | Where-Object { $_ -match [regex]::Escape($sc.typed) }); $px = Present-Similar "$d\c_typed.bmp" $inside
                      $inter = $tx.Count -gt 0; $interNote = "typed '$($sc.typed)' with ordinary key events: text in a dump $($tx.Count -gt 0); frame changed after typing $([bool]($px -and $px.grad -lt 0.97))" }
-            "rebind" { $before = @($insideDumps | ForEach-Object { $_.texts }) -join "|"; $after = @($dumps | Select-Object -Last 1 | ForEach-Object { $_.texts }) -join "|"; $px = Present-Similar "$d\c_rebound.bmp" $inside
-                     $inter = ($after -match '(?i)(^|\|)K(\||$)'); $interNote = "Mouse / Keyboard Layout page, Accept on the first binding, then the K key: binding texts changed $($before -ne $after), a 'K' binding shown $($after -match '(?i)(^|\|)K(\||$)')" }
+            "rebind" { # the shipped Mouse/Keyboard Layout page is a read-only reference card (Frontend pass 4: no rebinding calls in any movie,
+                     # CONFIRMED ORIGINAL per Frontend pass 4: SettingsMenu_GFX only calls Console.GetKeyDescription -> TnPlayerInput.GetKeyDescription,\n                     # decompiled): it is functional when it LISTS the bindings for the selected form (Robot 24 rows, Car 13); a K rebind is INFO only
+                     $layoutTexts = @(@($dumps | Select-Object -Skip 1 | Select-Object -First 1) | ForEach-Object { $_.texts } | Where-Object { $_ -and $_ -notmatch "^(Truck|Tank|Robot|Car|Jet|Back|Mouse/Keyboard Layout|MOUSE/KEYBOARD LAYOUT|Controls|CONTROLS)$" })
+                     $inter = $layoutTexts.Count -ge 6; $interNote = "Mouse / Keyboard Layout card (read-only by design, CONFIRMED ORIGINAL per Frontend decompile): $($layoutTexts.Count) binding description texts visible (need >= 6; e.g. $(($layoutTexts | Select-Object -First 4) -join ' / '))" }
             "movie"  { $mp = @(Flow-Ev $F "movie.play") + @(Flow-Ev $F "movie.open" | Where-Object { $_.movie -notlike "TF_*" }); $inter = $mp.Count -gt 0; $interNote = "a movie started: $($mp.Count -gt 0)" }
             "credits" { $c1 = Present-Similar $inside "$d\b0_list.bmp"; $inter = $c1 -and $c1.grad -lt 0.8; $interNote = "after Accept on Credits the screen differs from the Extras list: $inter (similarity $(if ($c1) { $c1.grad }))" }
             "preview" { $bodyL = @(Grep-Log $log 'skinned glb: .*?/Characters/'); $loadingTxt = @($dumps | ForEach-Object { $_.texts } | Where-Object { $_ -match '(?i)^loading' }).Count

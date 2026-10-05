@@ -114,3 +114,14 @@ function FlatGreyFraction([string]$bmp) {
     } }
     return [Math]::Round($flat / [Math]::Max(1, $n), 3)
 }
+
+# Frontend pass-4 routing (CONFIRMED original per Frontend: TnQuitMessageBox): Quit asks "Quit Game?" (Yes / No) and a
+# match / game lobby quits to the PARTY LOBBY; Back from the party lobby (+ Yes) returns to the title. Detected from the
+# build's source; scripts written for the old direct routing are rewritten so tomorrow's gate does not stall on the box.
+function Test-QuitBox([string]$Root) { return [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp, *.h -ErrorAction SilentlyContinue | Select-String -Pattern "TnQuitMessageBox" -SimpleMatch -List | Select-Object -First 1) }
+function Convert-QuitRouting([string]$Script, [bool]$QuitBox) {
+    if (-not $QuitBox -or -not $Script) { return $Script }
+    $s = $Script.Replace("call:Game.QuitToMainMenu;wait:level=FrontEnd", "call:Game.QuitToMainMenu;wait:t=1.5;ui:Accept;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1.5;ui:Back;wait:t=1.5;ui:Accept;wait:level=FrontEnd")
+    $s = $s.Replace("ui:Back;wait:t=1;wait:level=FrontEnd", "ui:Back;wait:t=1.5;ui:Accept;wait:level=FrontEnd")
+    return $s
+}

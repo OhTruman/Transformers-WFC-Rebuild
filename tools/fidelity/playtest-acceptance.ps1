@@ -31,7 +31,8 @@ $H = Get-ExeHooks $exe
 $uiMode = Set-WfcInputMode $H $exe
 $res = New-WfcResults
 function Res($id, $status, $note, $owner = "", $m = $null) { Add-WfcResult $res "accept.$id" $status $m $note $owner }
-function Env0($dir, [hashtable]$x = @{}) { $e = @{ WFC_BOOT = "frontend"; WFC_FLOWLOG = (Join-Path $dir "flow.jsonl"); WFC_FLOWSEED = "1"; WFC_FLOW_TIMEOUT = "900"; WFC_MUSICLOG = "1"; WFC_AMBLOG = "1" }; if (Test-Path $rd) { $e.WFC_RENDER_DATA = $rd }; if ($H.Contains("WFC_PLATFORM")) { $e.WFC_PLATFORM = "XBOX360" }; foreach ($k in $x.Keys) { $e[$k] = $x[$k] }; return $e }
+function Env0($dir, [hashtable]$x = @{}) { $e = @{ WFC_BOOT = "frontend"; WFC_FLOWLOG = (Join-Path $dir "flow.jsonl"); WFC_FLOWSEED = "1"; WFC_FLOW_TIMEOUT = "900"; WFC_MUSICLOG = "1"; WFC_AMBLOG = "1" }; if (Test-Path $rd) { $e.WFC_RENDER_DATA = $rd }; if ($H.Contains("WFC_PLATFORM")) { $e.WFC_PLATFORM = "XBOX360" }; foreach ($k in $x.Keys) { $e[$k] = $x[$k] }; if ($e.WFC_FRONTEND_SCRIPT) { $e.WFC_FRONTEND_SCRIPT = Convert-QuitRouting $e.WFC_FRONTEND_SCRIPT $script:QuitBox }; return $e }
+$script:QuitBox = Test-QuitBox $Root
 function DiffOf($a, $b) { return Shot-Diff $a $b }
 
 # ============================================================== A1 boot / title / navigation

@@ -21,7 +21,7 @@
 # calls only where the original movie would make the same call and a key path is not needed (Quit from pause).
 param([Parameter(Mandatory)][string]$Root, [ValidateSet("Release", "Debug")][string]$Config = "Release", [string]$OutDir = "",
       [int]$Cycles = 8, [switch]$Full, [string[]]$Runs = @(), [int]$TimeoutSec = 1500,
-      [string[]]$ChainMaps = @())   # R4 map chain: lobby map ids per cycle, repeated to -Cycles (M06 multi-map lifetime)
+      [string[]]$ChainMaps = @(), [string]$ExtraEnv = "")   # ExtraEnv: "K=V;K=V" added to every product run (e.g. WFC_VISUALCHECK=1)   # R4 map chain: lobby map ids per cycle, repeated to -Cycles (M06 multi-map lifetime)
 $ErrorActionPreference = "Stop"
 $Runs = @($Runs | ForEach-Object { $_ -split "," } | Where-Object { $_ }); if (-not $Runs.Count) { $Runs = @("R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "S") }
 if (-not $Full) { $Runs = @($Runs | Where-Object { $_ -ne "R3" }) }
@@ -51,8 +51,12 @@ function BaseEnv($dir, [hashtable]$extra = @{}) {
     if (Test-Path $rd) { $e.WFC_RENDER_DATA = $rd }
     if (Has "WFC_PLATFORM") { $e.WFC_PLATFORM = "XBOX360" }   # the Xbox 360 game is the specification (PC SKU: R8)
     foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] }
+    foreach ($kv in ($ExtraEnv -split ";" | Where-Object { $_ })) { $p = $kv -split "=", 2; $e[$p[0]] = $p[1] }
+    if ($e.WFC_FRONTEND_SCRIPT) { $e.WFC_FRONTEND_SCRIPT = Convert-QuitRouting $e.WFC_FRONTEND_SCRIPT $script:QuitBox }
     return $e
 }
+$script:QuitBox = Test-QuitBox $Root
+$script:NavCheck = [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'rfind("navcheck:", 0)' -SimpleMatch -List | Select-Object -First 1)
 $teamCluster = @{ "0" = $X.match_tdm.initial_clusters.value.Autobots; "1" = $X.match_tdm.initial_clusters.value.Decepticons }
 # M06: several maps are selectable, so the map behind selector index 0 is measured per build (R1: first selectable id in
 # TransLevels order, BLK C4 / C7), not assumed to be Streets. Names: frontend catalog (authored map providers).
@@ -301,7 +305,7 @@ if ($Runs -contains "R3") {
 # ======================================================================= R4 repeated frontend <-> Streets cycles (lifetime)
 if ($Runs -contains "R4") {
     $d4 = Join-Path $OutDir "R4_cycles"; New-Item -ItemType Directory -Force $d4 | Out-Null
-    $one = "wait:frontend;wait:ui=FrontEnd;wait:t=2;snapshot:frontend;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1.5;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=1.5;call:Online.SetSelectedMapID,508;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=15;snapshot:inmatch;showmenu;wait:ui=Paused;wait:t=0.5;call:Game.QuitToMainMenu;wait:level=FrontEnd;wait:ui=FrontEnd;wait:t=4;snapshot:returned"
+    $one = "wait:frontend;wait:ui=FrontEnd;wait:t=2;snapshot:frontend;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1.5;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=1.5;call:Online.SetSelectedMapID,508;call:Online.BeginLobbyExitCountdown;wait:level=Match;wait:ui=InGame;wait:t=15;snapshot:inmatch;showmenu;wait:ui=Paused;wait:t=0.5;call:Game.QuitToMainMenu;wait:level=FrontEnd;wait:ui=FrontEnd;wait:t=4;snapshot:returned" + $(if ($script:NavCheck) { ";navcheck:soak.main" } else { "" })
     $ChainMaps = @($ChainMaps | ForEach-Object { $_ -split "," } | Where-Object { $_ })
     $cycMap = @((0..($Cycles - 1)) | ForEach-Object { if ($ChainMaps.Count) { $ChainMaps[$_ % $ChainMaps.Count] } else { "508" } })
     $e4 = BaseEnv $d4 @{ WFC_FRONTEND_SCRIPT = (($cycMap | ForEach-Object { $one.Replace("SetSelectedMapID,508", "SetSelectedMapID,$_") }) -join ";") + ";wait:t=3;quit"; WFC_SKIPINTRO = "1"; WFC_AUTOFIRE = "1"; WFC_AUTOBOOST_CYCLE = "90"; WFC_CUELOG = "1" }
