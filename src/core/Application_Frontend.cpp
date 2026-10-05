@@ -172,6 +172,7 @@ void Application::attachPresenter() {
         return presenter_ && presenter_->clipWindowCenter(path, x, y);
     };
     // Create a Character palette swatches (GetPixelColor): pixel of the palette PNG, images cached for the session.
+    frontend_->externalTexturePath = [this](const std::string& res) { return presenter_ ? presenter_->externalTexturePath(res) : std::string(); };
     frontend_->sampleImage = [](const std::string& png, int x, int y, int& r, int& g, int& b) {
         static std::map<std::string, render::ImageData> cache;
         auto it = cache.find(png);
@@ -182,8 +183,10 @@ void Application::attachPresenter() {
         }
         const render::ImageData& im = it->second;
         if (!im.valid()) return false;
-        x = std::max(0, std::min(im.w - 1, x));
-        y = std::max(0, std::min(im.h - 1, y));
+        // x, y are in the picker's 256-unit gradient space (CustomTransformers_GFX gradWidth / gradHeight 256, the
+        // swatch selector's _x / _y); the palette textures are 128 x 128 [HIGH: the native GetPixelColor scaling].
+        x = std::max(0, std::min(im.w - 1, x * im.w / 256));
+        y = std::max(0, std::min(im.h - 1, y * im.h / 256));
         const uint8_t* px = &im.rgba[((size_t)y * (size_t)im.w + (size_t)x) * 4];
         r = px[0]; g = px[1]; b = px[2];
         return true;
@@ -202,12 +205,19 @@ void Application::attachPresenter() {
     };
     // Create a Character preview pawns -> the scene adapter (drawn by the renderer when it has the preview entry points).
     frontend_->previewHook = [](const frontend::FrontendRuntime::PreviewRequest& pr) {
-        if (!g_scene || pr.call != "UpdatePreviewCharacter") return;
+        if (!g_scene) return;
+        if (pr.call == "TransformPreviewCharacter" || pr.call == "TransformPreviewCharacterToRobot") {
+            g_scene->transformPreview(pr.call == "TransformPreviewCharacterToRobot");
+            return;
+        }
+        if (pr.call != "UpdatePreviewCharacter") return;
         std::vector<FrontendSceneGL::PreviewSlot> slots;
         for (const auto& s : pr.slots) {
             if (s.robotGltf.empty()) continue;
             FrontendSceneGL::PreviewSlot ps;
             ps.gltf = s.robotGltf;
+            ps.vehicleGltf = s.vehicleGltf;
+            ps.animSets = s.robotAnimSets;
             for (int k = 0; k < 3; ++k) { ps.pos[k] = s.posUE[k]; ps.primary[k] = s.primaryLinear[k]; ps.secondary[k] = s.secondaryLinear[k]; }
             ps.yawDeg = s.rotUEdeg[1];
             slots.push_back(ps);

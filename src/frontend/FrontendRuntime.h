@@ -121,6 +121,8 @@ public:
     // Create a Character: the palette swatch sampler (PNG pixel; platform image decoding) and the preview-pawn request
     // (Customize.UpdatePreviewCharacter / TransformPreviewCharacter*), forwarded to the preview owner.
     std::function<bool(const std::string& png, int x, int y, int& r, int& g, int& b)> sampleImage;
+    // GFxMovie ExternalTextures: resource name -> bound texture PNG (the movie's own bitmaps are placeholders).
+    std::function<std::string(const std::string& resource)> externalTexturePath;
     struct PreviewRequest {
         std::string call;                                    // UpdatePreviewCharacter / TransformPreviewCharacter / ...ToRobot
         std::vector<std::string> chassis, primary, secondary;   // per preview controller (Autobot, Decepticon), as the movie sent
@@ -128,7 +130,8 @@ public:
         // setCharacterColors + drawDynamicMesh(ueActorMatrix(pos, rot))): the authored spawn point of the slot's
         // SeqAct_TnPawnFactory (UI_CharacterCustomization_m Preview_Characters: Autobot -> PathNode_16191, Decepticon ->
         // PathNode_7537; UE units / degrees) and the colours as linear RGB (FLinearColor(FColor): sRGB -> linear).
-        struct Slot { std::string chassis, robotGltf; float posUE[3] = {0, 0, 0}; float rotUEdeg[3] = {0, 0, 0};
+        struct Slot { std::string chassis, robotGltf, vehicleGltf; std::vector<std::string> robotAnimSets;
+                      float posUE[3] = {0, 0, 0}; float rotUEdeg[3] = {0, 0, 0};
                       float primaryLinear[3] = {0, 0, 0}, secondaryLinear[3] = {0, 0, 0}; };
         std::vector<Slot> slots;
     };

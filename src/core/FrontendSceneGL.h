@@ -47,6 +47,14 @@ template <class R, class = void> struct HasGroundHeight : std::false_type {};
 template <class R>
 struct HasGroundHeight<R, std::void_t<decltype(std::declval<const R&>().sceneGroundHeight(0.0f, 0.0f, 0.0f, std::declval<float&>()))>>
     : std::true_type {};
+// Posed preview body (agents/rendering c22e356: loadPreviewBody / posePreviewBody, the Cust_Idle preview animation).
+template <class R, class = void> struct HasPreviewBody : std::false_type {};
+template <class R>
+struct HasPreviewBody<R, std::void_t<decltype(std::declval<R&>().loadPreviewBody(std::declval<const std::string&>(),
+                                                                                 std::declval<const std::vector<std::string>&>(),
+                                                                                 std::declval<const std::string&>())),
+                                     decltype(std::declval<R&>().posePreviewBody(0, 0.0f, std::declval<render::MeshData&>()))>>
+    : std::true_type {};
 // Preview pawns (agents/rendering: setFrontendSceneDraw + actorMatrix + loadContentMesh).
 template <class R, class = void> struct HasPreviewDraw : std::false_type {};
 template <class R>
@@ -80,7 +88,13 @@ public:
     // Create a Character preview (TnCharacterScriptBinding.UpdatePreviewCharacter): one body per PreviewGuy slot, drawn
     // inside the scene by the renderer (setDrawOwner(1 + slot), linear colours, the content glTF in bind pose until
     // Gameplay supplies posed bodies). Empty = none.
-    struct PreviewSlot { std::string gltf; float pos[3] = {0, 0, 0}; float yawDeg = 0; float primary[3] = {0, 0, 0}, secondary[3] = {0, 0, 0}; };
+    struct PreviewSlot { std::string gltf, vehicleGltf; std::vector<std::string> animSets; float pos[3] = {0, 0, 0}; float yawDeg = 0;
+                         float primary[3] = {0, 0, 0}, secondary[3] = {0, 0, 0}; };
+    // TnCharacterScriptBinding.TransformPreviewCharacter (toggle) / TransformPreviewCharacterToRobot: the first visible
+    // pawn (FindPreviewCharacterToTransform) changes form. A chassis change respawns the pawn in robot form.
+    void transformPreview(bool toRobotOnly);
+    struct PreviewStats { int slots = 0, visible = 0, vehicles = 0, meshes = 0, bodies = 0; };
+    PreviewStats previewStats() const;
     // Each pawn stands on the floor under its spawn point when the renderer can trace it (the original's
     // OnPreviewPawnTick FindGround; the roster meshes have their origin at the feet), else at the PathNode height.
     void setPreview(std::vector<PreviewSlot> slots);
@@ -95,6 +109,10 @@ private:
     bool native_ = false;                         // Rendering's loadFrontendScene owns the family
     std::vector<PreviewSlot> preview_;
     bool previewHidden_[2] = {false, false};
+    bool previewVehicle_[2] = {false, false};
+    double previewSpawn_[2] = {0, 0};                           // idle clock start per slot (respawn on chassis change)
+    std::map<std::string, int> previewBodies_;                  // posed body handles per (glTF, slot)
+    render::MeshData posed_;
     std::map<std::string, render::MeshData> previewMeshes_;   // per content glTF, loaded once
 };
 

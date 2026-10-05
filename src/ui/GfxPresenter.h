@@ -61,6 +61,8 @@ public:
     // Navigation harness: the movies, the focus target and its input owner (_global.currentMenu), modal state and
     // resource counters, as key=value pairs.
     std::vector<std::pair<std::string, std::string>> navReport();
+    // The texture a movie's external resource is bound to (GFxMovie ExternalTextures), as an extracted PNG path.
+    std::string externalTexturePath(const std::string& resource) const { return lib_.externalTexture(resource); }
 private:
     uint64_t popupSerial_ = 0;
     void deliverKeys(const platform::InputFrame& in);

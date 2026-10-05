@@ -1,4 +1,6 @@
 #include "frontend/Characters.h"
+
+#include <random>
 #include "assets/Json.h"
 #include "core/Log.h"
 
@@ -27,6 +29,7 @@ bool CharacterRoster::load(const std::string& path) {
         ci.lockedCharacter = c["locks"]["LockedCharacter"].asBool();
         ci.robotGltf = c["robot"]["gltf"].asString();
         ci.vehicleGltf = c["vehicle"]["gltf"].asString();
+        for (size_t k = 0; k < c["robot"]["anim_sets"].size(); ++k) ci.robotAnimSets.push_back(c["robot"]["anim_sets"][k].asString());
         chassis_[id] = ci;
     }
     // Fresh profile: one custom character per specialty, SpecialtyClasses order.
@@ -64,6 +67,8 @@ void CharacterRoster::loadAuthored(const std::string& path) {
         out.palette = (int)pal.asDouble();
         out.x = (float)xy["X"].asDouble(); out.y = (float)xy["Y"].asDouble();
     };
+    if (j["customizationData"]["NumberOfColorPalettes"].isNumber())
+        numberOfColorPalettes = (int)j["customizationData"]["NumberOfColorPalettes"].asDouble();
     for (CharacterPreset& p : presets_) {
         const assets::Json& d = j["presets"][p.name + "_PCD_MP"];
         if (!d.isObject()) continue;
@@ -91,9 +96,36 @@ CharacterPreset* CharacterRoster::findMutable(const std::string& name) {
     return nullptr;
 }
 
+namespace {
+// ResetCharacterFromName [CONFIRMED decompile]: Autobot palettes RandomInt(N), Decepticon N + RandomInt(N), coordinates
+// RandomInt(255) in the picker's 256-unit gradient space; the colours stay black (kUseDefaultColor -> the palette).
+void randomizeColors(CharacterPreset& c, int n) {
+    static std::mt19937 rng(std::random_device{}());
+    auto rnd = [](int m) { return m <= 0 ? 0 : (int)(rng() % (unsigned)m); };
+    for (int f = 0; f < 2; ++f)
+        for (CharacterColor* col : {&c.primary[f], &c.secondary[f]}) {
+            col->r = col->g = col->b = 0;
+            col->a = 255;
+            col->palette = (f == 0 ? 0 : n) + rnd(n);
+            col->x = (float)rnd(255);
+            col->y = (float)rnd(255);
+        }
+}
+}
+
 void CharacterRoster::reset(const std::string& name) {
     for (size_t i = 0; i < characters_.size() && i < presets_.size(); ++i)
-        if (characters_[i].name == name) { characters_[i] = presets_[i]; return; }
+        if (characters_[i].name == name) {
+            std::string friendly = characters_[i].friendlyName;
+            characters_[i] = presets_[i];
+            characters_[i].friendlyName = friendly;
+            randomizeColors(characters_[i], numberOfColorPalettes);
+            return;
+        }
+}
+
+void CharacterRoster::randomizeAllColors() {
+    for (CharacterPreset& c : characters_) randomizeColors(c, numberOfColorPalettes);
 }
 
 namespace {

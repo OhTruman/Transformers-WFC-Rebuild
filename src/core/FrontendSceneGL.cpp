@@ -1,4 +1,6 @@
 #include "core/FrontendSceneGL.h"
+
+#include <chrono>
 #include "assets/Gltf.h"
 #include "core/Config.h"
 #include "core/LoadYield.h"
@@ -43,22 +45,40 @@ template <class R> void nativePreviewHook(R* r, FrontendSceneGL* self, bool on) 
         else r->setFrontendSceneDraw({});
     } else { (void)r; (void)self; (void)on; }
 }
-template <class R> void nativePreviewDraw(R& r, const FrontendSceneGL::PreviewSlot& s, int slot, std::map<std::string, render::MeshData>& cache) {
+template <class R> bool nativePosedBody(R& r, const FrontendSceneGL::PreviewSlot& s, int slot, bool vehicle, double t,
+                                         std::map<std::string, int>& bodies, render::MeshData& out) {
+    if constexpr (HasPreviewBody<R>::value) {
+        if (vehicle) return false;
+        std::string key = s.gltf + "#" + std::to_string(slot);
+        auto it = bodies.find(key);
+        if (it == bodies.end()) it = bodies.emplace(key, r.loadPreviewBody(s.gltf, s.animSets, "Cust_Idle")).first;
+        return it->second >= 0 && r.posePreviewBody(it->second, (float)t, out) && !out.empty();
+    } else { (void)r; (void)s; (void)slot; (void)vehicle; (void)t; (void)bodies; (void)out; return false; }
+}
+template <class R> void nativePreviewDraw(R& r, const FrontendSceneGL::PreviewSlot& s, int slot, bool vehicle, double t,
+                                          std::map<std::string, render::MeshData>& cache, std::map<std::string, int>& bodies,
+                                          render::MeshData& posed) {
     if constexpr (HasPreviewDraw<R>::value) {
-        auto it = cache.find(s.gltf);
-        if (it == cache.end()) {
-            render::MeshData m;
-            if (!r.loadContentMesh(s.gltf, m)) LOG_WARN("frontend preview: %s did not load", s.gltf.c_str());
-            it = cache.emplace(s.gltf, std::move(m)).first;
+        const render::MeshData* mesh = nullptr;
+        if (nativePosedBody(r, s, slot, vehicle, t, bodies, posed)) mesh = &posed;
+        else {
+            const std::string& g = vehicle && !s.vehicleGltf.empty() ? s.vehicleGltf : s.gltf;
+            auto it = cache.find(g);
+            if (it == cache.end()) {
+                render::MeshData m;
+                if (!r.loadContentMesh(g, m)) LOG_WARN("frontend preview: %s did not load", g.c_str());
+                it = cache.emplace(g, std::move(m)).first;
+            }
+            mesh = &it->second;
         }
-        if (it->second.empty()) return;
+        if (mesh->empty()) return;
         render::CharacterColors cc;
         for (int i = 0; i < 3; ++i) { cc.primary[i] = s.primary[i]; cc.secondary[i] = s.secondary[i]; cc.energon[i] = 0; }
         r.setDrawOwner(1 + slot);
         r.setCharacterColors(cc);
-        r.drawDynamicMesh(it->second, r.actorMatrix(Vec3{s.pos[0], s.pos[1], s.pos[2]}, Vec3{0, s.yawDeg, 0}), Vec3{1, 1, 1});
+        r.drawDynamicMesh(*mesh, r.actorMatrix(Vec3{s.pos[0], s.pos[1], s.pos[2]}, Vec3{0, s.yawDeg, 0}), Vec3{1, 1, 1});
         r.setDrawOwner(0);
-    } else { (void)r; (void)s; (void)slot; (void)cache; }
+    } else { (void)r; (void)s; (void)slot; (void)vehicle; (void)t; (void)cache; (void)bodies; (void)posed; }
 }
 template <class R> void nativeUnload(R* r) {
     if constexpr (HasFrontendScene<R>::value) r->unloadFrontendScene();
@@ -78,14 +98,44 @@ template <class R> void nativeGround(R* r, FrontendSceneGL::PreviewSlot& s) {
     } else { (void)r; (void)s; }
 }
 
+static double previewClock() {
+    using namespace std::chrono;
+    return duration<double>(steady_clock::now().time_since_epoch()).count();
+}
+
 void FrontendSceneGL::setPreview(std::vector<PreviewSlot> slots) {
-    for (PreviewSlot& s : slots) nativeGround(r_, s);
+    for (size_t i = 0; i < slots.size() && i < 2; ++i) {
+        nativeGround(r_, slots[i]);
+        bool respawn = i >= preview_.size() || preview_[i].gltf != slots[i].gltf;   // UpdateSinglePreviewCharacter ChassisChanged
+        if (respawn) { previewVehicle_[i] = false; previewSpawn_[i] = previewClock(); }
+    }
     preview_ = std::move(slots);
+}
+
+void FrontendSceneGL::transformPreview(bool toRobotOnly) {
+    for (size_t i = 0; i < preview_.size() && i < 2; ++i) {
+        if (previewHidden_[i]) continue;
+        bool v = toRobotOnly ? false : !previewVehicle_[i];
+        if (v && preview_[i].vehicleGltf.empty()) return;   // no vehicle mesh exported for this chassis
+        if (v != previewVehicle_[i]) LOG_INFO("FLOW preview.form slot=%zu form=%s", i, v ? "vehicle" : "robot");
+        previewVehicle_[i] = v;
+        return;
+    }
+}
+
+FrontendSceneGL::PreviewStats FrontendSceneGL::previewStats() const {
+    PreviewStats st;
+    st.slots = (int)preview_.size();
+    for (size_t i = 0; i < preview_.size() && i < 2; ++i) { st.visible += previewHidden_[i] ? 0 : 1; st.vehicles += previewVehicle_[i] ? 1 : 0; }
+    st.meshes = (int)previewMeshes_.size();
+    st.bodies = (int)previewBodies_.size();
+    return st;
 }
 
 void FrontendSceneGL::drawPreview(render::IRenderer& r) {
     for (size_t i = 0; i < preview_.size(); ++i)
-        if (i >= 2 || !previewHidden_[i]) nativePreviewDraw(r, preview_[i], (int)i, previewMeshes_);
+        if (i < 2 && !previewHidden_[i])
+            nativePreviewDraw(r, preview_[i], (int)i, previewVehicle_[i], previewClock() - previewSpawn_[i], previewMeshes_, previewBodies_, posed_);
 }
 
 std::string FrontendSceneGL::familyFor(const std::string& uiLevel) {
