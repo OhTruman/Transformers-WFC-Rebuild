@@ -51,7 +51,9 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:AttackingTeamIndex>" || markup == "<CurrentGame:CurrentObjectiveCountdown>") return "-1";
     if (markup == "<CurrentGame:CompetitiveScoreEnabled>") return "0";
     if (markup == "<CurrentGame:ActiveObjectives>") return "";
-    if (markup == "<CurrentGame:_CurrentWave>" || markup == "<CurrentGame:_NextWaveTime>") return "0";
+    // [integration M08c] Escalation-only: a versus match answers empty (Hud_GFX shows its "NEW WAVE IN" clip for any value,
+    // "0" included - seen in a TDM HUD). Empty was the behaviour before 386295d and keeps the wave clip hidden [HIGH].
+    if (markup == "<CurrentGame:_CurrentWave>" || markup == "<CurrentGame:_NextWaveTime>") return "";
     // GRI.GoalScore = PointsToWin (TnMultiplayerGame.InitGame). Hud_GFX reads it once when it loads and falls back to 10
     // when it is not > 0, which fills the TDM (40) / DM (20) team bars at 10 points [Hud_GFX AS, Experimental audit P1-2].
     if (markup == "<CurrentGame:GoalScore>") return std::to_string(inMatch ? flow_.currentMatch().goalScore : (L.settings && L.settings->pointsToWin > 0 ? L.settings->pointsToWin : 0));
