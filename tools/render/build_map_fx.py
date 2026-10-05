@@ -221,8 +221,20 @@ def library(mapname):
                         ex = p.exports[li]
                         blob = p.data[ex['serial_offset']:ex['serial_offset'] + ex['serial_size']]
                         for pat, sp in mods:
-                            if pat in blob:
+                            offs = [k for k in range(4, len(blob) - 3) if blob[k:k + 4] == pat]
+                            if not offs: continue
+                            # guards (RE: a raw int32 can collide with float bits / counts): exactly one hit, sitting in
+                            # an object array - preceded by its count (1..32) or by another export of this system
+                            # observed layout (all 18 Streets hits): int32 count (1) + one byte + the int32 module index
+                            prev = _st.unpack_from('>i', blob, offs[0] - 4)[0]
+                            cnt5 = _st.unpack_from('>i', blob, offs[0] - 5)[0] if offs[0] >= 5 else 0
+                            in_array = 1 <= prev <= 32 or 1 <= cnt5 <= 32 or (0 < prev <= len(p.exports) and
+                                       p.object_path(prev).lower().startswith(t.lower() + '.'))
+                            if len(offs) == 1 and in_array:
                                 L['size_param'] = sp
+                            else:
+                                print('  size param: %s %s: %d hit(s), prev int %d - not bound' % (t, L['lod'].split('.')[-1],
+                                                                                                  len(offs), prev))
             out[t] = s
     return out
 
