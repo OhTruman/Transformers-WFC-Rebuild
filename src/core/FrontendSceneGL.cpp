@@ -25,8 +25,13 @@ template <class R> void nativeActors(R* r, const frontend::SceneView& v) {
                                          Vec3{(float)a.rot[0], (float)a.rot[1], (float)a.rot[2]});
     } else { (void)r; (void)v; }
 }
+template <class R> void nativeScales(R* r, const frontend::SceneView& v) {
+    if constexpr (HasActorScale<R>::value) { for (const auto& s : v.scales) r->setFrontendActorScale(s.actor, (float)s.drawScale); }
+    else { (void)r; (void)v; }
+}
 template <class R> void nativeDraw(R* r, const frontend::SceneView& v, int w, int h) {
     nativeActors(r, v);
+    nativeScales(r, v);
     if constexpr (HasFrontendScene<R>::value)
         r->drawFrontendScene(Vec3{(float)v.pos[0], (float)v.pos[1], (float)v.pos[2]}, Vec3{(float)v.rot[0], (float)v.rot[1], (float)v.rot[2]},
                              (float)v.fov, w, h, v.time);

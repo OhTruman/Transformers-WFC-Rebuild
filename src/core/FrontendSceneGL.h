@@ -34,6 +34,10 @@ template <class R, class = void> struct HasActorTransform : std::false_type {};
 template <class R>
 struct HasActorTransform<R, std::void_t<decltype(std::declval<R&>().setFrontendActorTransform(
     std::declval<const std::string&>(), std::declval<const Vec3&>(), std::declval<const Vec3&>()))>> : std::true_type {};
+template <class R, class = void> struct HasActorScale : std::false_type {};
+template <class R>
+struct HasActorScale<R, std::void_t<decltype(std::declval<R&>().setFrontendActorScale(std::declval<const std::string&>(), 1.0f))>>
+    : std::true_type {};
 template <class R, class = void> struct HasDisplayGamma : std::false_type {};
 template <class R>
 struct HasDisplayGamma<R, std::void_t<decltype(std::declval<R&>().setDisplayGamma(1.0f))>> : std::true_type {};

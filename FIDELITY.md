@@ -77,6 +77,23 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND: CUSTOMIZATION CAMERA PER CHASSIS, MATINEE FLOAT TRACKS (2026-10-04, agents/frontend)
+- **Customization camera per chassis: CONFIRMED ORIGINAL.**
+  - The chain, all from cooked data:
+    - `SeqVar_TnCustomizationCameraId` (decompiled): the preview pawn's chassis provider's `CustomizationCameraId` (TransCustomization.ini).
+    - `UI_CharacterCustomization_m` `Chassis_To_Cam_ID` / `_0` / `_1` / `_2` compare it with 0..3 and finish with Scout / Scientist / Leader / Soldier.
+    - Those outputs Play (Autobot_IN / Decepticon_IN) or Reverse (Autobot_OUT / Decepticon_OUT) the eight class camera matinees on CameraActor_2082.
+  - The movie's `shiftChassis` / `shiftCenter` (CustomTransformers_GFX) send `hideAutobot` / `hideDecepticon` / `unhideAutobot` / `unhideDecepticon`. Through Preview_Characters these reach those subsequences.
+  - The exporter records this as `cameraSwitches`; the runtime evaluates it with the preview controllers' chassis.
+  - Matinee Reverse runs the camera back to the centre pose.
+- **FOVAngle and DrawScale tracks (InterpTrackFloatProp): CONFIRMED ORIGINAL data, evaluated like the move tracks.**
+  - The class cameras key FOVAngle 70 -> 60 / 65. Keyless title FOV tracks keep the camera's own FOV.
+  - The title vignette DrawScale (ships, boosters) is sent to Rendering's `setFrontendActorScale` when the renderer has it (compile-time detected); otherwise the data is evaluated but not applied.
+- Verified:
+  - Live: Scout -> camera id 0 -> SCOUT moves; Leader (Truck) -> 2 -> LEADER moves; both sides open and reverse.
+  - `wfc_frontend_tests` 74 / 0 (`scene.customizeCamera.*`, `scene.drawScale`: djDS01 0.08, DSbooster 1.0 at 250 s).
+  - The party-lobby 3D set is not drawn in this tree (no render data), so the camera was verified by pose, not by image.
+
 ## FRONTEND PASS 5: WORLD LOSS, VIEWPORT, HUD PRESENTATION (2026-10-04, agents/frontend)
 Human playtest of the integrated Release build plus Experimental's presentation gate (bisect: first bad b1fce97).
 

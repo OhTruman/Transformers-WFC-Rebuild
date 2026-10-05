@@ -3,11 +3,13 @@
 // Exit code = number of failed checks. Every check prints "PASS|FAIL <name> ..." for the Experimental harness.
 #include "frontend/Catalog.h"
 #include "frontend/FrontendRuntime.h"
+#include "frontend/FrontendScene.h"
 #include "frontend/GameFlow.h"
 #include "frontend/UIController.h"
 #include "frontend/Url.h"
 #include "core/Config.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -213,6 +215,52 @@ static void testCatalogExtensibility(const std::string& manifests, const std::st
     fs::remove_all(tmp);
 }
 
+// Customization camera per chassis (Chassis_To_Cam_ID*) and Matinee DrawScale tracks (vignette ships).
+static void testSceneCamera() {
+    FrontendScene sc;
+    bool ok = sc.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/scenes.json");
+    check(ok, "scene.load");
+    if (!ok) return;
+    int camId[2] = {2, 2};   // Leader (Truck CustomizationCameraId 2) in both slots
+    sc.cameraIdForSlot = [&](int slot) { return slot >= 0 && slot < 2 ? camId[slot] : -1; };
+    sc.enterLevel("UI_PartyLobby_m");
+    sc.trigger("FsCommand:initStreamingLvl");
+    sc.tick(0.1);
+    SceneView center = sc.view();
+    sc.trigger("FsCommand:hideDecepticon");   // Autobot chassis menu open -> LEADER - Autobot plays
+    sc.tick(1.0);
+    SceneView a = sc.view();
+    bool leader = false;
+    for (const std::string& p : sc.playing()) leader = leader || p == "LEADER - Autobot";
+    check(leader && a.pos[1] > center.pos[1] + 100 && a.fov < center.fov, "scene.customizeCamera.autobotLeader",
+          "y " + std::to_string(center.pos[1]) + " -> " + std::to_string(a.pos[1]) + " fov " + std::to_string(a.fov));
+    sc.trigger("FsCommand:unhideDecepticon");  // closed -> Reverse back to the centre pose
+    sc.tick(1.0);
+    SceneView b = sc.view();
+    check(std::abs(b.pos[1] - center.pos[1]) < 1.0 && std::abs(b.fov - center.fov) < 0.01, "scene.customizeCamera.reverse");
+    camId[1] = 0;                               // Scout in the Decepticon slot
+    sc.trigger("FsCommand:hideAutobot");
+    sc.tick(1.0);
+    bool scout = false;
+    for (const std::string& p : sc.playing()) scout = scout || p == "SCOUT - Decepticon";
+    check(scout && sc.view().pos[1] < center.pos[1] - 100, "scene.customizeCamera.decepticonScout");
+    // Title vignette: DrawScale keys (djDS01 0.08 before its first key at 236.47 s, booster 0.1 -> 1.0 by 249.42 s).
+    FrontendScene t;
+    t.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/scenes.json");
+    t.enterLevel("UI_FrontEnd_m");
+    t.trigger("FsCommand:enterFrontEnd");
+    t.tick(0.5);
+    auto scaleOf = [&](const std::string& actor) {
+        for (const auto& s2 : t.view().scales) if (s2.actor == actor) return s2.drawScale;
+        return -1.0;
+    };
+    double dj0 = scaleOf("HmSkeletalMeshActor_6787");
+    t.tick(250.0);
+    double boost = scaleOf("Emitter_13686");
+    check(std::abs(dj0 - 0.08) < 1e-3 && std::abs(boost - 1.0) < 1e-3, "scene.drawScale",
+          "djDS01 " + std::to_string(dj0) + " DSbooster@250s " + std::to_string(boost));
+}
+
 int main() {
     std::string vs = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
     Catalog c;
@@ -221,6 +269,7 @@ int main() {
     testUrl();
     if (ok) testCatalog(c);
     testUIController();
+    testSceneCamera();
     if (ok) testFlow();
     if (ok) testCatalogExtensibility(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot());
     std::printf("frontend tests: %d pass, %d fail\n", g_pass, g_fail);

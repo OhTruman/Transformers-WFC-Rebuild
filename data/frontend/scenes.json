@@ -119,7 +119,8 @@
      "eventActions": []
     }
    ],
-   "remoteEvents": []
+   "remoteEvents": [],
+   "cameraSwitches": []
   },
   "UI_CharacterCustomization_m": {
    "actors": [
@@ -397,7 +398,48 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            70.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            65.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -575,7 +617,48 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            70.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            65.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -700,7 +783,48 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            70.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            60.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -825,7 +949,48 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            70.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            60.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -950,7 +1115,48 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            70.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            60.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -1128,7 +1334,48 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            70.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            65.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -1253,7 +1500,48 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            70.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            60.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -1641,7 +1929,48 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            70.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 0.5,
+           "v": [
+            65.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       }
@@ -1680,6 +2009,64 @@
        "fscommand": null,
        "event": null
       }
+     ]
+    }
+   ],
+   "cameraSwitches": [
+    {
+     "name": "Chassis_To_Cam_ID",
+     "comment": "Decepticon_OUT",
+     "previewSlot": 1,
+     "outputs": {
+      "3": "Soldier",
+      "2": "Leader",
+      "1": "Scientist",
+      "0": "Scout"
+     },
+     "triggers": [
+      "unhideAutobot"
+     ]
+    },
+    {
+     "name": "Chassis_To_Cam_ID_0",
+     "comment": "Decepticon_IN",
+     "previewSlot": 1,
+     "outputs": {
+      "0": "Scout",
+      "1": "Scientist",
+      "2": "Leader",
+      "3": "Soldier"
+     },
+     "triggers": [
+      "hideAutobot"
+     ]
+    },
+    {
+     "name": "Chassis_To_Cam_ID_1",
+     "comment": "Autobot_IN",
+     "previewSlot": 0,
+     "outputs": {
+      "0": "Scout",
+      "1": "Scientist",
+      "2": "Leader",
+      "3": "Soldier"
+     },
+     "triggers": [
+      "hideDecepticon"
+     ]
+    },
+    {
+     "name": "Chassis_To_Cam_ID_2",
+     "comment": "Autobot_OUT",
+     "previewSlot": 0,
+     "outputs": {
+      "0": "Scout",
+      "1": "Scientist",
+      "2": "Leader",
+      "3": "Soldier"
+     },
+     "triggers": [
+      "unhideDecepticon"
      ]
     }
    ]
@@ -7144,7 +7531,9 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": []
         }
        ]
       },
@@ -8454,7 +8843,9 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": []
         }
        ]
       },
@@ -12802,7 +13193,9 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": []
         }
        ]
       },
@@ -14112,7 +14505,9 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": []
         }
        ]
       },
@@ -18418,7 +18813,9 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": []
         }
        ]
       },
@@ -19728,7 +20125,9 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": []
         }
        ]
       },
@@ -19938,7 +20337,67 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "DrawScale",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.20000000298023224,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          },
+          {
+           "t": 19.201459884643555,
+           "v": [
+            0.20000000298023224,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            -0.09950000047683716,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            -0.09950000047683716,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          },
+          {
+           "t": 25.08572769165039,
+           "v": [
+            0.05000000074505806,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          }
+         ]
         },
         {
          "class": "InterpTrackEvent",
@@ -19985,7 +20444,67 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "DrawScale",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.5,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          },
+          {
+           "t": 17.3700008392334,
+           "v": [
+            0.5,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          },
+          {
+           "t": 27.521974563598633,
+           "v": [
+            0.07999999821186066,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          }
+         ]
         }
        ]
       },
@@ -19998,7 +20517,67 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "DrawScale",
+         "keys": [
+          {
+           "t": 0.0,
+           "v": [
+            0.20000000298023224,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          },
+          {
+           "t": 19.201459884643555,
+           "v": [
+            0.20000000298023224,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            -0.09950000047683716,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            -0.09950000047683716,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          },
+          {
+           "t": 25.08572769165039,
+           "v": [
+            0.05000000074505806,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          }
+         ]
         }
        ]
       },
@@ -22071,7 +22650,124 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "DrawScale",
+         "keys": [
+          {
+           "t": 237.30877685546875,
+           "v": [
+            0.019999999552965164,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          },
+          {
+           "t": 237.30877685546875,
+           "v": [
+            0.019999999552965164,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 239.85891723632812,
+           "v": [
+            0.019999999552965164,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.09000000357627869,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.09000000357627869,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 249.2344970703125,
+           "v": [
+            0.20000000298023224,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.09000000357627869,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.09000000357627869,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 253.43936157226562,
+           "v": [
+            0.20000000298023224,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.15000000596046448,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.15000000596046448,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 270.56732177734375,
+           "v": [
+            0.5,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         },
         {
          "class": "InterpTrackEvent",
@@ -22120,7 +22816,48 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "DrawScale",
+         "keys": [
+          {
+           "t": 237.0003204345703,
+           "v": [
+            0.10000000149011612,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          },
+          {
+           "t": 249.4249725341797,
+           "v": [
+            1.0,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          }
+         ]
         }
        ]
       },
@@ -22133,7 +22870,86 @@
        ],
        "tracks": [
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "DrawScale",
+         "keys": [
+          {
+           "t": 236.47117614746094,
+           "v": [
+            0.07999999821186066,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 239.9292755126953,
+           "v": [
+            0.07999999821186066,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.1599999964237213,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.1599999964237213,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 253.35751342773438,
+           "v": [
+            0.4000000059604645,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.3349999785423279,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.3349999785423279,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          },
+          {
+           "t": 272.4309997558594,
+           "v": [
+            0.75,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_CurveAuto"
+          }
+         ]
         }
        ]
       },
@@ -22159,7 +22975,48 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "DrawScale",
+         "keys": [
+          {
+           "t": 237.0003204345703,
+           "v": [
+            0.10000000149011612,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          },
+          {
+           "t": 249.4249725341797,
+           "v": [
+            0.6000000238418579,
+            0.0,
+            0.0
+           ],
+           "ai": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "lo": [
+            0.0,
+            0.0,
+            0.0
+           ],
+           "mode": "CIM_Linear"
+          }
+         ]
         }
        ]
       },
@@ -22759,7 +23616,9 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": []
         }
        ]
       },
@@ -24069,7 +24928,9 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": []
         }
        ]
       },
@@ -25588,7 +26449,8 @@
      "eventActions": []
     }
    ],
-   "remoteEvents": []
+   "remoteEvents": [],
+   "cameraSwitches": []
   },
   "UI_FrontEnd_m": {
    "actors": [
@@ -25867,7 +26729,9 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": []
         }
        ]
       },
@@ -27179,7 +28043,9 @@
          ]
         },
         {
-         "class": "InterpTrackFloatProp"
+         "class": "InterpTrackFloatProp",
+         "property": "FOVAngle",
+         "keys": []
         }
        ]
       },
@@ -27896,7 +28762,8 @@
       }
      ]
     }
-   ]
+   ],
+   "cameraSwitches": []
   },
   "UI_Lobby_m": {
    "actors": [
@@ -27993,7 +28860,8 @@
      "eventActions": []
     }
    ],
-   "remoteEvents": []
+   "remoteEvents": [],
+   "cameraSwitches": []
   },
   "UI_PartyLobby_m": {
    "actors": [
@@ -28090,7 +28958,8 @@
      "eventActions": []
     }
    ],
-   "remoteEvents": []
+   "remoteEvents": [],
+   "cameraSwitches": []
   }
  }
 }

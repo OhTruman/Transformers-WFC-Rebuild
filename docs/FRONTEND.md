@@ -38,7 +38,7 @@ Labels: **CONFIRMED** (CONFIRMED ORIGINAL), **HIGH**, **PC ADAPTATION**, **PARTI
 |---|---|---|
 | Main menu, Multiplayer, Private Match, Host Options, Game Lobby, Pause, Results | **WORKING** | original movies and data |
 | Settings (Graphics / Audio / Controls) | **WORKING** | values from the profile; Controls → Mouse/Keyboard Layout is the original read-only reference card (§3) |
-| Choose Character / Create a Character | **WORKING**; preview pawn **PARTIAL** | the player's characters: rename, weapons, abilities, chassis, colours, reset, saved (§8); the preview pawn has no owner yet |
+| Choose Character / Create a Character | **WORKING**; preview pawn **PARTIAL** | the player's characters: rename, weapons, abilities, chassis, colours, reset, saved (§8); the preview pawn is drawn by Rendering; the camera moves to the chassis class camera (CONFIRMED, FIDELITY) |
 | Teletraan I → Challenges | **WORKING** | 121 authored challenges; progress needs the stats service (0 offline) |
 | Teletraan I → Leaderboards | **SERVICE DEPENDENT** | the screen opens; the online stats archive is absent |
 | Friends List | **SERVICE DEPENDENT** | "No Friends Online..." |
