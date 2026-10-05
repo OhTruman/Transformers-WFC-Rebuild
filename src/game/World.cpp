@@ -985,6 +985,8 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     out.settings.modeTag = out.modeTag;
     // TnMultiplayerGame.InitGame: GoalScore = max(0, PointsToWin); GameInfo.InitGame: TimeLimit = max(0, TimeLimit) s.
     if (opt.count("PointsToWin")) out.settings.goalScore = std::max(0, std::atoi(opt["PointsToWin"].c_str()));
+    // RoundsBase: GRI.Rounds = GoalScore for the round-based rule (CTF; must be even) [CONF RE §4].
+    if (out.settings.rounds > 0 && opt.count("PointsToWin")) { out.settings.rounds = std::max(2, std::atoi(opt["PointsToWin"].c_str())); out.settings.goalScore = 1000000; }
     if (opt.count("TimeLimit")) out.settings.timeLimit = std::max(0, (int)std::atof(opt["TimeLimit"].c_str()));
     return !out.map.empty();
 }
@@ -1007,10 +1009,7 @@ bool World::launchMatch(const MatchLaunch& l) {
     for (MatchMode m : {MatchMode::DM, MatchMode::TDM, MatchMode::CTF, MatchMode::KOTH, MatchMode::EXT, MatchMode::DOM})
         if (l.modeTag == gameModeName(m)) { mode = m; known = true; }
     if (!known) { LOG_WARN("match: unknown mode %s", l.modeTag.c_str()); return false; }
-    if (mode != MatchMode::TDM && mode != MatchMode::DM && mode != MatchMode::DOM && mode != MatchMode::KOTH) {
-        LOG_WARN("match: %s match rules are not implemented (map state only)", l.modeTag.c_str());
-        return false;
-    }
+    // All six versus modes run on the shared framework (CTF rounds / EXT bomb: Pass 22).
     matchMode_ = mode;
     mapState_.setMode(mode);
     resetForNewLevel();
@@ -1065,6 +1064,13 @@ HudGameState World::hudState() const {
     h.activeWeapon = pc.activeWeaponIndex();
     h.vehicleWeapons = pc.vehicleWeapons();
     h.loadoutRefused = loadoutRefused_;
+    h.attackingTeam = match_.attackingTeam(); h.currentRound = match_.currentRound(); h.rounds = match_.settings().rounds;
+    h.betweenRounds = match_.betweenRounds();
+    for (const MapState::Carried& c : mapState_.carried())
+        h.carried.push_back({c.kind, c.holder, c.holderTeam, c.dropped, c.active, c.pos, c.autoReturn, c.returnLeft, c.sleep});
+    h.bombPlanted = mapState_.planted().active; h.bombFuse = mapState_.planted().fuse; h.bombDefuse = mapState_.planted().defuse;
+    h.bombPlantTeam = mapState_.planted().team;
+    h.localCarrying = matchActive_ && mapState_.carriedBy(localPlayer_) >= 0;
     for (const Character::AbilitySlot& a : pc.abilities_) h.abilities.push_back({a.id, a.implemented, a.cooldown, a.pendingCooldown});
     h.dodging = pc.isDodging();
     h.damageTakenCount = damageTakenCount_;
@@ -1144,7 +1150,8 @@ void World::tickMatch(float dt) {
     for (MatchOpponent* o : opponents_) if (o->spawned()) match_.setPlayerLocation(o->matchPlayer(), o->position());
     match_.tick(dt);
     // Live objective rules (DOM nodes, KOTH zone) while InProgress: pawns -> captures / scores -> the match rules.
-    if (match_.state() == Match::State::InProgress) {
+    if (match_.state() == Match::State::InProgress && !match_.betweenRounds()) {
+        mapState_.setKillZ(killZ_);
         std::vector<MapState::ObjPawn> pawns;
         if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true});
         for (MatchOpponent* o : opponents_)
@@ -1155,6 +1162,16 @@ void World::tickMatch(float dt) {
         for (auto& p : sc.objectiveScores) match_.scoreObjective(p.first, p.second);
         for (auto& t : sc.teamScores) match_.scoreTeamObjective(t.first, t.second);
         for (auto& msg : sc.messages) LOG_INFO("match: %s switch %d", msg.first.c_str(), msg.second);
+        if (sc.attackingTeam >= 0) match_.setAttackingTeam(sc.attackingTeam);
+        // HurtRadius (bomb detonation, AOE): every match pawn within the radius.
+        for (const auto& rd : sc.radiusDamage) {
+            LOG_INFO("match: HurtRadius %.0f within %.0f m (%s)", rd.damage, rd.radius, rd.damageType.c_str());
+            if (!localDead_ && core::length(pc.actorLocation() - rd.pos) <= rd.radius)
+                applyMatchDamage(localPlayer_, rd.instigator, rd.damage, true, rd.damageType);
+            for (MatchOpponent* o : opponents_)
+                if (o->spawned() && core::length(o->position() - rd.pos) <= rd.radius)
+                    applyMatchDamage(o->matchPlayer(), rd.instigator, rd.damage, true, rd.damageType);
+        }
         std::vector<Match::SpawnModifier> mods;
         for (const ObjectiveObject& o : mapState_.objectives()) {
             if (!o.activeInMode) continue;
@@ -1169,8 +1186,11 @@ void World::tickMatch(float dt) {
             case MatchEvent::Type::MatchEnded:
                 mapState_.matchEnded();                // ScoreKingOfTheHill.CheckEndGame: every zone deactivates
                 break;
+            case MatchEvent::Type::RoundStarted:
+                mapState_.roundStart(e.value);         // SingleFlagCTF.SetupRoundStart (attacking team)
+                break;
             case MatchEvent::Type::MatchStarted:
-                mapState_.matchStarting();             // KOTH initial zone (MatchStarting)
+                mapState_.matchStarting();             // KOTH initial zone (MatchStarting); CTF / EXT carried objectives
                 // TnTeamGame.StartMatch: Reset() every pickup factory (sleeping factories return to 'Pickup').
                 for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
                 break;
@@ -1192,6 +1212,7 @@ void World::tickMatch(float dt) {
                             pc.setSpecialty(sd->id, sd->speedMultiplier, sd->segments, sd->overshield);
                         else pc.clearSpecialty();
                         loadoutRefused_ = applyLoadout(&mp.selection);
+                        mp.healthMax = pc.health().max;
                     }
                     core::Vec3 p = st.pos;
                     float gy; core::Vec3 gn;

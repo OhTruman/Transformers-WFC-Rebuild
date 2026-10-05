@@ -62,7 +62,10 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // input (PlayerInCarForm.SetLocalInputs: SteeringInput = TnPlayerInput.GetNormalizedTurn()) and
     // the orbit yaw follows the truck (TnDrivingOrbitRotationCameraBehavior) [CONF bytecode].
     float look = (fineAiming_ ? cfg::kFineAimLookScale : 1.0f) * lookScale_;
-    const float invY = invertY_[vehicleForm ? 1 : 0] ? -1.0f : 1.0f;
+    // UpdateInvertMouseByRobotForm / ...ByVehicleForm: one bInvertMouse flag from the profile per form [CONF].
+    bool inv = invertY_[0];
+    if (vehicleForm) inv = vform == VehicleFormType::Jet ? invertPlane_ : vform == VehicleFormType::Tank ? invertTank_ : invertCar_;
+    const float invY = inv ? -1.0f : 1.0f;
     if (!driving) {
         camYaw_ -= in.mouseDX * cfg::kMouseSens * look;
         if (in.padConnected) camYaw_ -= in.padRX * 0.04f * look;

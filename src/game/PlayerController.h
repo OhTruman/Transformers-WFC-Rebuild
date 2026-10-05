@@ -85,12 +85,14 @@ public:
     int cantTransformCount() const { return cantTransformCount_; }      // pulses for the HUD / Systems
     int forcedVehicleCount() const { return forcedVehicleCount_; }
     bool tryBeginTransform();
-    // LocalProfile look settings (Frontend owns the values): camera sensitivity (profile default 30 = scale 1.0 [PROV
-    // linear mapping until the profile -> look-rate scale is recovered]) and invert Y per form (0 robot, 1 vehicle).
-    void setLookSettings(float sensitivity, bool invertRobot, bool invertVehicle) {
-        lookScale_ = sensitivity > 0.0f ? sensitivity / 30.0f : 1.0f; invertY_[0] = invertRobot; invertY_[1] = invertVehicle;
-    }
-    static bool robotFitsAt(const CollisionWorld* col, const core::Vec3& feet, const Character* pawn = nullptr);
+    // LocalProfile look settings (Frontend owns the values) [CONF RE TARGETED_PASS3 G2]: CameraSensitivity 0-100 (default
+    // 30) scales the orbit speed by Lerp(0.03, 0.20, s/100) - applied relative to the default 30 (the absolute mouse rate
+    // stays PROV); invert Y per form: InvertY_Robot, InvertY_Car (car AND truck), InvertY_Plane, InvertY_Tank.
+    void setLookSettings(int cameraSensitivity, bool invertRobot, bool invertCar, bool invertPlane, bool invertTank) {
+        auto curve = [](float s) { return 0.03f + (0.20f - 0.03f) * s; };
+        lookScale_ = curve(std::max(0, std::min(100, cameraSensitivity)) / 100.0f) / curve(0.30f);
+        invertY_[0] = invertRobot; invertCar_ = invertCar; invertPlane_ = invertPlane; invertTank_ = invertTank;
+    }    static bool robotFitsAt(const CollisionWorld* col, const core::Vec3& feet, const Character* pawn = nullptr);
     static bool findRobotSpot(const CollisionWorld* col, const core::Vec3& feet, core::Vec3& out, const Character* pawn = nullptr);
     // No pawn (PendingMatch: ShouldSpectateOnLogin): the controller views from its own location / rotation, which
     // GameInfo.Login took from FindPlayerStart [HIGH: stock UE3 Login + PlayerWaitingSpectating].
@@ -160,6 +162,7 @@ private:
     float abilityStickFwd_ = 0.0f, abilityStickRight_ = 0.0f;
     std::string lastRefusedAbility_;
     bool invertY_[2] = {false, false};
+    bool invertCar_ = false, invertPlane_ = false, invertTank_ = false;
     bool wasTransforming_ = false;
 
     core::Vec3 specPos_{0, 0, 0};

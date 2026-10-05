@@ -58,6 +58,13 @@ struct HudGameState {
     struct Ability { std::string id; bool implemented; float cooldown; bool active; };
     std::vector<Ability> abilities;
     bool dodging = false;
+    // CTF / EXT: attacking team (GRI.AttackingTeam), rounds, carried objectives, planted bomb (CurrentObjectiveCountdown).
+    int attackingTeam = 255, currentRound = 0, rounds = 0;
+    bool betweenRounds = false;
+    struct CarriedObj { int kind; int holder; int holderTeam; bool dropped; bool active; core::Vec3 pos; float autoReturn, returnLeft, sleep; };
+    std::vector<CarriedObj> carried;
+    bool bombPlanted = false; float bombFuse = 0.0f, bombDefuse = 0.0f; int bombPlantTeam = 255;
+    bool localCarrying = false;
     // Damage taken (TakeDamage -> HUD damage direction): increments per damaging hit; the instigator location at that hit
     // (world) and its bearing relative to the view (radians, 0 = ahead, + = right). Presentation belongs to Hud_GFX.
     int damageTakenCount = 0;

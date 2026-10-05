@@ -3,6 +3,10 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22c (2026-10-05) — CTF + EXT: all six versus modes on the shared framework
+- Rounds (RoundsBase + SingleFlagCTF: attacker alternation, 5 s between rounds, mercy rule); flag carry / capture / drop / defender return; bomb plant / fuse 15 / defuse 5 / detonation HurtRadius; WFC_CTFTEST 10/10.
+- Camera settings per RE G2 (sensitivity curve, per-form invert); assists by the victim HealthMax.
+
 ## GAMEPLAY PASS 22b (2026-10-05) — vehicle forms, weapons, abilities, multi-map
 - Car / tank / jet vehicle sims from RE script digest (barrel roll, tank boost/180, jet hover + flight); per-chassis physics-asset hulls; ChassisOffset default fixed.
 - Weapons: generated MultiplayerData table (52), loadout per selection with provider restrictions, swap, per-weapon mesh/socket/damage type. WFC_WEAPONTEST 10/10.

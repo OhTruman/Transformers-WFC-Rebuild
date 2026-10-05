@@ -210,6 +210,55 @@ Inputs:
   - firing spends the active weapon's ammo with its damage type.
 - **Visually verified:** Sideswipe holding the Neutron Assault Rifle.
 
+### Code of Power (CTF) and Countdown to Extinction (EXT) — all six versus modes on the shared framework
+- **Rounds** (TnGameRules_RoundsBase, CONFIRMED):
+  - GRI.Rounds = PointsToWin for CTF (default 2), TimeLimit per round (default 300);
+  - the round timer replaces the match clock (RunGameTimer false);
+  - at 0 → CurrentRound++ → EndGame(none, "Score") after the last round, else BetweenRounds 5 s → RestartRound (every
+    player respawns, no death counted);
+  - RoundEnded / RoundStarted events.
+- **SingleFlagCTF:** first attacker RandomInt(2), alternating each round.
+  - SetupRoundStart: the attackers' capture point _Active; the defenders' flag factory in Pickup, the other asleep.
+  - Mercy rule on the last round (the last attacker already leads → end).
+  - A capture does not end the round.
+- **Flag:**
+  - defenders can't take it (ValidTouch);
+  - capture = carrier inside the active capture point's ObjectiveVolume → ScoreObjective(1): +1 team, +10 personal
+    (IndividualScore 10); the flag goes straight home;
+  - carrier death → dropped flag: AutoReturnTime 30; defenders touching it drain ReturnFlagTime 10 at dt × count,
+    recovering +dt with none; attackers re-take it; falling below KillZ sends it home.
+- **Bomb:**
+  - neutral factory; anyone takes it; GRI.AttackingTeam = holder team;
+  - plant on the ENEMY TnBombPlantPoint (ObjectiveVolume) → FuseTime 15;
+  - defenders inside accumulate DefuseTime 5 (reset when none) → the bomb drops at the point (DefuseBombSpawnClass);
+  - detonation → ScoreObjective(planter, 1), HurtRadius DetonateDamage 9999 / DetonateRadius 5000 UU (AOE), bomb home,
+    factory WaitAfterScoreTime 5;
+  - PointsToWin 3, TimeLimit 900.
+  - All values come from authored TnBombPlantPointBase / TnDroppedPickupFlagBase / factory defaults [CONF].
+- **Teams:** flag factories, capture points and plant points carry authored DefenderTeamIndex (byte default 0).
+  Clusters filter TNGT_CTF / TNGT_EXT.
+- **Touch shapes:** factory CylinderComponent 200 / 100 UU; dropped pickup TouchCylinder = CylinderComponent default
+  22 UU [HIGH]; pawn cylinder 2 m [PROV for non-Optimus chassis].
+- **PARTIAL:**
+  - the carrier's TnWeaponFlag1Hand / TnWeaponBomb weapon swap (the carrier keeps its weapon);
+  - carrying in vehicle form is allowed [UNKNOWN];
+  - flag / bomb messages are logged (switch numbers), not presented;
+  - XP events are not implemented.
+- **WFC_CTFTEST 10 / 10:**
+  - round-1 activation;
+  - defender refused, attacker capture +1 / +10, flag home;
+  - drop + defender return in 10 s;
+  - round timer → 5 s break → attackers swap → match end by Score;
+  - EXT: holder sets the attacking team; plant / defuse 5 s / drop at the point;
+  - detonation +1 team, +10 (+1 blast kill) personal, blast kills within 50 m, factory sleeps.
+- **Assists** now divide by the victim's HealthMax (its class blueprint), not 550.
+
+### Camera settings (RE TARGETED_PASS3 §G2)
+- `PlayerController::setLookSettings(CameraSensitivity 0–100, InvertY_Robot, InvertY_Car, InvertY_Plane, InvertY_Tank)`.
+- Orbit speed follows Lerp(0.03, 0.20, s/100) relative to the default 30 [CONF curve; absolute mouse rate PROV].
+- Invert per form: car and truck share InvertY_Car.
+- Frontend calls it on Settings commit and at match start.
+
 ### HUD state additions
 `selectedChassis`, `drawnChassis`, `specialty`, `spawnError`, `weaponId`, `weaponIcon`, `weaponSimulated`,
 `weaponSwitching`, `inventory[]`, `activeWeapon`, `vehicleWeapons[]`, `loadoutRefused[]`. `segmentCount` follows the class.

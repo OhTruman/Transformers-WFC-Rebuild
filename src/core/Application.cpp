@@ -111,6 +111,7 @@ bool Application::init() {
     if (std::getenv("WFC_MODEPLAYTEST")) { runModePlayTest(); return false; }  // measurements only
     if (std::getenv("WFC_WEAPONTEST")) { runWeaponTest(); return false; }      // measurements only
     if (std::getenv("WFC_MAPSUITE")) { runMapSuite(); return false; }          // measurements only
+    if (std::getenv("WFC_CTFTEST")) { runCtfExtTest(); return false; }         // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -1552,6 +1553,130 @@ void Application::runCameraSyncTest() {
 // defaults): capture 20 s per attacker, defender holds, +1 team / 3 s per owned node, capture +2 personal, kills personal only;
 // KOTH zone only after MatchStarting, +1 personal & team per living pawn per second when uncontested, contested = no score,
 // rotation after 60 s to an unvisited zone, zones deactivate at the end; score-limit end.
+// WFC_CTFTEST: Code of Power (single-flag CTF, rounds) and Countdown to Extinction (bomb) on the shared framework,
+// driven with synthetic participants placed on the authored objectives.
+void Application::runCtfExtTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("CTFTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    auto objPos = [&](const char* cls, int team) -> core::Vec3 {
+        for (const auto& o : world_.mapState().objectives()) if (o.cls == cls && o.activeInMode && (team < 0 || o.authoredTeam == team)) return o.pos;
+        return core::Vec3{0, 0, 0};
+    };
+    auto at = [](const core::Vec3& p) { return p + core::Vec3{0, 0.05f, 0}; };   // opponent feet on the objective
+    // ---------------- CTF ----------------
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=CTF?TimeLimit=40", L);
+        check(world_.launchMatch(L) && L.settings.rounds == 2, "CTF launches (rounds 2, round TimeLimit 40 via URL)");
+        std::vector<game::MatchOpponent*> ops{world_.addMatchOpponent("A", false), world_.addMatchOpponent("B", false)};
+        while (std::none_of(ops.begin(), ops.end(), [](game::MatchOpponent* o) { return o->team() == 0; }) ||
+               std::none_of(ops.begin(), ops.end(), [](game::MatchOpponent* o) { return o->team() == 1; }))
+            ops.push_back(world_.addMatchOpponent("P" + std::to_string(ops.size()), false));
+        auto onTeam = [&](int t) { for (auto* o : ops) if (o->team() == t) return o; return ops[0]; };
+        run(10.5f);
+        int att = world_.match().attackingTeam(), def = att == 0 ? 1 : 0;
+        game::MatchOpponent* X = onTeam(att);   // attacker
+        game::MatchOpponent* Y = onTeam(def);   // defender
+        for (auto* o : ops) if (o != X && o != Y) o->setPosition(o->position() + core::Vec3{0, 0, 60});
+        bool teamsOk = X->team() == att && Y->team() == def;
+        int capActive = 0, flagActive = -1;
+        for (const auto& o : world_.mapState().objectives())
+            if (o.cls == "TnFlagCapturePoint" && o.state == game::ObjectiveObject::State::Active) capActive += (o.authoredTeam == att) ? 1 : 100;
+        for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.active) flagActive = world_.mapState().objectives()[(size_t)c.home].authoredTeam;
+        LOG_INFO("CTFTEST setup: att %d X team %d Y team %d capActive %d flagActive %d carried %zu", att, X->team(), Y->team(), capActive, flagActive, world_.mapState().carried().size());
+        for (const auto& o : world_.mapState().objectives()) if (o.cls == "TnFlagCapturePoint" || o.cls == "TnGameObjectivePickupFactoryFlag") LOG_INFO("CTFTEST obj %s team %d/%d state %d active %d vol %zu", o.actor.c_str(), o.authoredTeam, o.defenderTeam, (int)o.state, (int)o.activeInMode, o.volume.size());
+        check(teamsOk && (att == 0 || att == 1) && capActive == 1 && flagActive == def,
+              "round 1: attacking team " + std::to_string(att) + "; its capture point active, the defenders' flag factory in Pickup");
+        core::Vec3 flag = objPos("TnGameObjectivePickupFactoryFlag", def), cap = objPos("TnFlagCapturePoint", att);
+        Y->setPosition(at(flag)); run(0.2f);
+        bool defenderRefused = world_.mapState().carriedBy(Y->matchPlayer()) < 0;
+        Y->setPosition(at(cap) + core::Vec3{30, 0, 0});
+        X->setPosition(at(flag)); run(0.2f);
+        bool taken = world_.mapState().carriedBy(X->matchPlayer()) >= 0;
+        int ts0 = world_.match().teamScore(att), ps0 = world_.match().players()[(size_t)X->matchPlayer()].score;
+        X->setPosition(at(cap)); run(0.2f);
+        int ts1 = world_.match().teamScore(att), ps1 = world_.match().players()[(size_t)X->matchPlayer()].score;
+        bool home = world_.mapState().carriedBy(X->matchPlayer()) < 0;
+        LOG_INFO("CTFTEST capture: refused %d taken %d team %d->%d personal %d->%d home %d", (int)defenderRefused, (int)taken, ts0, ts1, ps0, ps1, (int)home);
+        check(defenderRefused && taken && ts1 == ts0 + 1 && ps1 == ps0 + 10 && home,
+              "defenders cannot take the flag; the attacker takes it and captures: team +1, personal +10, flag home (round continues)");
+        // Drop on death, defender return (ReturnFlagTime 10 drained at dt x defenders).
+        X->setPosition(at(flag)); run(0.2f);
+        core::Vec3 dropAt = at(flag) + core::Vec3{0, 0, 15};
+        X->setPosition(dropAt); run(0.1f);
+        world_.applyMatchDamage(X->matchPlayer(), Y->matchPlayer(), 99999.0f, false);
+        run(0.1f);
+        bool dropped = false; for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.dropped) dropped = true;
+        Y->setPosition(dropAt); run(9.0f);
+        bool stillDropped = false; for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.dropped) stillDropped = true;
+        run(1.5f);
+        bool returned = true; for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.dropped) returned = false;
+        check(dropped && stillDropped && returned, "carrier killed -> flag dropped; a defender on it returns it after ReturnFlagTime 10 s");
+        // Round timer: round 1 ends at TimeLimit -> 5 s between rounds -> round 2 with the attackers swapped -> match end.
+        bool between = false; int roundSeen = 0;
+        for (int i = 0; i < 60 * 40 && world_.match().state() == game::Match::State::InProgress; ++i) {
+            platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt);
+            if (world_.match().betweenRounds()) between = true;
+            roundSeen = std::max(roundSeen, world_.match().currentRound());
+            if (roundSeen == 1 && !world_.match().betweenRounds()) break;
+        }
+        int att2 = world_.match().attackingTeam();
+        check(between && roundSeen == 1 && att2 == def, "round 1 ends on time, 5 s between rounds, round 2 attacked by the other team");
+        for (int i = 0; i < 60 * 45 && world_.match().state() == game::Match::State::InProgress; ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+        check(world_.match().state() == game::Match::State::MatchOver && world_.match().endReason() == "Score",
+              "after the last round the match ends (EndGame reason Score; team " + std::to_string(att) + " won " +
+              std::to_string(world_.match().teamScore(att)) + "-" + std::to_string(world_.match().teamScore(def)) + ")");
+    }
+    // ---------------- EXT ----------------
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=EXT", L);
+        check(world_.launchMatch(L) && L.settings.goalScore == 3, "EXT launches (PointsToWin 3)");
+        std::vector<game::MatchOpponent*> ops{world_.addMatchOpponent("A", false), world_.addMatchOpponent("B", false)};
+        while (std::none_of(ops.begin(), ops.end(), [](game::MatchOpponent* o) { return o->team() == 0; }) ||
+               std::none_of(ops.begin(), ops.end(), [](game::MatchOpponent* o) { return o->team() == 1; }))
+            ops.push_back(world_.addMatchOpponent("P" + std::to_string(ops.size()), false));
+        auto onTeam = [&](int t) { for (auto* o : ops) if (o->team() == t) return o; return ops[0]; };
+        run(10.5f);
+        core::Vec3 bomb = objPos("TnGameObjectivePickupFactoryBomb", -1);
+        game::MatchOpponent* X = onTeam(0); game::MatchOpponent* Y = onTeam(1);
+        for (auto* o : ops) if (o != X && o != Y) o->setPosition(o->position() + core::Vec3{0, 0, 60});
+        int xt = X->team(), yt = Y->team();
+        X->setPosition(at(bomb)); run(0.2f);
+        bool held = world_.mapState().carriedBy(X->matchPlayer()) >= 0;
+        check(held && world_.match().attackingTeam() == xt, "bomb taken; GRI.AttackingTeam = the holder's team");
+        core::Vec3 enemyPoint = objPos("TnBombPlantPoint", yt);
+        Y->setPosition(at(bomb) + core::Vec3{40, 0, 0});
+        X->setPosition(at(enemyPoint)); run(0.2f);
+        bool planted = world_.mapState().planted().active && world_.mapState().planted().team == xt;
+        X->setPosition(at(bomb) + core::Vec3{-40, 0, 0});
+        Y->setPosition(at(enemyPoint)); run(4.8f);
+        bool notYet = world_.mapState().planted().active;
+        run(0.4f);
+        bool defused = !world_.mapState().planted().active;
+        bool droppedAtPoint = false;
+        for (const auto& c : world_.mapState().carried()) if (c.kind == 1 && (c.dropped || c.holder == Y->matchPlayer())) droppedAtPoint = true;   // dropped; the defuser standing there may take it (legal)
+        if (world_.mapState().carriedBy(Y->matchPlayer()) >= 0) { world_.applyMatchDamage(Y->matchPlayer(), X->matchPlayer(), 99999.0f, false); run(5.5f); }
+        if (!world_.match().players()[(size_t)Y->matchPlayer()].alive) run(1.0f);
+        check(planted && notYet && defused && droppedAtPoint, "planted on the enemy point; a defender on it defuses in DefuseTime 5 s; the bomb drops at the point");
+        // Re-take (the dropped bomb at the point) and detonate.
+        Y->setPosition(at(bomb) + core::Vec3{40, 0, 0});
+        X->setPosition(at(enemyPoint)); run(0.3f);
+        bool replanted = world_.mapState().planted().active;
+        X->setPosition(at(bomb) + core::Vec3{-40, 0, 0});
+        int ts0 = world_.match().teamScore(xt), ps0 = world_.match().players()[(size_t)X->matchPlayer()].score;
+        Y->setPosition(at(enemyPoint) + core::Vec3{20, 0, 0});   // inside the 50 m blast, outside the plant volume
+        run(15.2f);
+        int ts1 = world_.match().teamScore(xt), ps1 = world_.match().players()[(size_t)X->matchPlayer()].score;
+        bool yDead = !world_.match().players()[(size_t)Y->matchPlayer()].alive;
+        bool sleeping = false; for (const auto& c : world_.mapState().carried()) if (c.kind == 1 && c.sleep > 0.0f) sleeping = true;
+        LOG_INFO("CTFTEST detonate: replanted %d team %d->%d personal %d->%d yDead %d sleeping %d xAlive %d", (int)replanted, ts0, ts1, ps0, ps1, (int)yDead, (int)sleeping, (int)world_.match().players()[(size_t)X->matchPlayer()].alive);
+        check(replanted && ts1 == ts0 + 1 && ps1 == ps0 + 10 + 1 && yDead && sleeping,
+              "fuse 15 s -> detonation: team +1, planter +10 (+1 for the blast kill, ScoreKillsMP), HurtRadius 9999 kills within 50 m, bomb home + factory sleeps 5 s");
+    }
+    LOG_INFO("CTFTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
 // WFC_MAPSUITE: the loaded map (WFC_MAP) through the shared match framework - TDM launch, spawns on floor and clear of
 // geometry, KillZ and hazard-volume deaths with their damage types, pickups / objectives present, a second match.
 void Application::runMapSuite() {

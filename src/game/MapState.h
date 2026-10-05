@@ -65,6 +65,7 @@ struct ObjectiveObject {
     std::string volumeActor;
     int pointNumber = 0;                   // TnDominationPoint.PointNumber (HUD NodeID)
     int defenderTeam = 255;                // DefenderTeamIndex: 255 none, 254 contested (KOTH)
+    int authoredTeam = 255;                // authored DefenderTeamIndex (flag / capture / plant: byte default 0)
     int claimingTeam = 255;                // DOM ClaimingTeam
     float captureTime = 0.0f;              // DOM CurrentCaptureTime (s; CaptureTime 20)
     float scoreTime = 0.0f;                // DOM CurrentScoreTime (ScoreInterval 3)
@@ -109,8 +110,31 @@ public:
         std::vector<std::pair<int, int>> teamScores;        // TnGame.ScoreTeamObjective(team, amount)
         std::vector<std::pair<int, int>> personalScores;    // PRI.AddScore(amount) without team (DOM capture +2)
         std::vector<std::pair<std::string, int>> messages;  // (message class, switch) broadcasts
+        struct Radius { core::Vec3 pos; float radius, damage; int instigator; std::string damageType; };
+        std::vector<Radius> radiusDamage;                   // HurtRadius (bomb detonation)
+        int attackingTeam = -1;                             // EXT ObjectiveHolderChanged -> GRI.AttackingTeam (-1 = unchanged)
     };
-    void matchStarting();                                   // MatchStarting: KOTH initial zone
+    // Carried objectives (CTF flag / EXT bomb) [CONF RE MILESTONE05_GAMEPLAY_UNKNOWNS §4, OVERNIGHT §G, PLAYTEST §3; authored
+    // TnDroppedPickupFlagBase / TnBombPlantPointBase / TnGameObjectivePickupFactoryBomb defaults].
+    struct Carried {
+        int kind = 0;               // 0 flag (TnWeaponFlag1Hand), 1 bomb (TnWeaponBomb)
+        int home = -1;              // objectives_ index of the home factory
+        int holder = -1, holderTeam = 255;
+        bool active = true;         // factory in state Pickup (CTF: only the defenders' factory)
+        bool dropped = false;
+        core::Vec3 pos{0, 0, 0};    // dropped location / last carrier location
+        float autoReturn = 0.0f;    // AutoReturnTime 30
+        float returnLeft = 10.0f;   // flag: ReturnFlagTime 10, drained at dt x defenders nearby, recovers +dt
+        float sleep = 0.0f;         // bomb factory WaitAfterScoreTime 5 after a detonation
+    };
+    struct Planted { bool active = false; int point = -1; int planter = -1; int team = 255; float fuse = 0.0f, defuse = 0.0f; };
+    const std::vector<Carried>& carried() const { return carried_; }
+    const Planted& planted() const { return planted_; }
+    // SingleFlagCTF.SetupRoundStart: the attackers' capture point _Active, the defenders' flag factory Pickup, others asleep.
+    void roundStart(int attackingTeam);
+    int carriedBy(int player) const;   // index into carried() held by this match player, or -1
+    void setKillZ(float z) { killZ_ = z; }   // a carried objective dropped below KillZ goes home ("falling out sends it home")
+    void matchStarting();                                   // MatchStarting: KOTH initial zone; CTF / EXT carried objectives
     void matchEnded();                                      // ScoreKingOfTheHill.CheckEndGame: every zone Deactivate
     void tickObjectives(float dt, const std::vector<ObjPawn>& pawns, ObjectiveScoring& out);
     // Split the movers' triangles out of the static collision meshes into moving sets.
@@ -145,6 +169,10 @@ private:
     float clock_ = 0.0f;
     std::vector<MapMover> movers_;
     std::vector<ObjectiveObject> objectives_;
+    std::vector<Carried> carried_;
+    Planted planted_;
+    int ctfAttacking_ = 255;
+    float killZ_ = -1e9f;
     std::vector<ModeVisibleActor> modeActors_;
     int kothActive_ = -1;
     float kothZoneActiveTime_ = 60.0f;     // TnKingOfTheHillZoneBase ZoneActiveTime (authored CDO)
