@@ -454,11 +454,17 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         c.setYaw(in.faceYaw);
         // Tank UpdateTurn [CONF RE C2]: if IsStable && OnTheGround only yaw is applied, else pitch / roll are also
         // corrected at TurnRate 0.05. Car / truck: only with no contact or upside down (ShouldUpright).
-        bool upright = tank ? !(!unstable && vs.onTheGround) : (contacts == 0 || B.z.y < 0.01f);
-        if (upright) {
-            float f = 1.0f - std::pow(1.0f - cfg::kHoverUprightPerTick, dt * 30.0f);
-            vs.angVel.x = f * vs.roll / dt;
-            vs.angVel.y = f * vs.pitch / dt;
+        // TnHoverCarSimulation.UpdateTurn [CONF RE pass 4 A4]: the angular velocity is REPLACED each step by
+        // axisAngle(current -> upright-with-view-yaw) x mask / dt (correction = target / dt - omega), so pitch / roll spin
+        // never accumulates: mask (0.05, 0.05, 1) normally (weak pull, the springs set the grounded attitude), (1, 1, 1) when
+        // ShouldUpright (no contacts or up.Z < 0.01): upright in one step. Angular damping is 0 (Activate).
+        // Tank (TnHoverTankSimulation [CONF RE C2]): only yaw while stable on the ground, else pitch / roll at TurnRate 0.05.
+        if (tank) {
+            if (!(!unstable && vs.onTheGround)) { vs.angVel.x = 0.05f * vs.roll / dt; vs.angVel.y = 0.05f * vs.pitch / dt; }
+        } else {
+            const float mask = (contacts == 0 || B.z.y < 0.01f) ? 1.0f : 0.05f;
+            vs.angVel.x = mask * vs.roll / dt;
+            vs.angVel.y = mask * vs.pitch / dt;
         }
         comAbove = rest;
         float gy; core::Vec3 gn;
@@ -621,10 +627,12 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     // near-zero length and the spring damper term spikes).
     if (col && v.y > 0.0f) {
         float top = VP.hullTop;                   // hull top above the root
-        core::Vec3 a{p.x, oldPos.y + VP.comUp, p.z};
+        // Start at least 0.1 m above the root: in Driving the root rests ON the floor, and a probe starting at floor level
+        // read the floor itself as a ceiling - it zeroed every boost jump in its first step (Pass 23 playtest: car / truck).
+        core::Vec3 a{p.x, oldPos.y + std::max(VP.comUp, 0.1f), p.z};
         core::Vec3 b = core::Vec3{p.x, p.y + top, p.z};
         float t; core::Vec3 n;
-        if (top > VP.comUp && col->segmentHit(a, b, t, n) && std::fabs(n.y) > 0.7f) {   // ceilings only
+        if (top > std::max(VP.comUp, 0.1f) && col->segmentHit(a, b, t, n) && std::fabs(n.y) > 0.7f) {   // ceilings only
             float yHit = a.y + (b.y - a.y) * t;
             p.y = std::min(p.y, yHit - top);
             v.y = 0.0f;

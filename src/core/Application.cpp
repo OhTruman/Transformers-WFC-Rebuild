@@ -169,7 +169,11 @@ bool Application::init() {
     if (std::getenv("WFC_WEAPONTEST")) { runWeaponTest(); return false; }      // measurements only
     if (std::getenv("WFC_MAPSUITE")) { runMapSuite(); return false; }          // measurements only
     if (std::getenv("WFC_CTFTEST")) { runCtfExtTest(); return false; }         // measurements only
-    if (std::getenv("WFC_PARTICIPANTTEST")) { runParticipantTest(); return false; }   // measurements only
+    if (std::getenv("WFC_PARTICIPANTTEST")) { runParticipantTest(); return false; }
+    if (std::getenv("WFC_SWITCHTEST")) { runSwitchTest(); return false; }   // weapon switching, human playtest M09
+    if (std::getenv("WFC_SCORETEST")) { runScoreTest(); return false; }     // fresh match state, human playtest M09
+    if (std::getenv("WFC_HEIGHTTEST")) { runHeightTest(); return false; }   // robot body height idle vs locomotion, human playtest M09
+    if (std::getenv("WFC_VEHPHYS")) { runVehPhysTest(); return false; }     // vehicle jump / attitude / wall response, human playtest M09   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -3438,6 +3442,336 @@ void Application::shutdown() {
     delete renderer_; renderer_ = nullptr;
     delete window_; window_ = nullptr;
     LOG_INFO("Shutdown complete");
+}
+
+// WFC_SWITCHTEST: the class presets as the Frontend sends them (custom type 0, PCD_MP weapons, both faction chassis) through the
+// real match spawn; NextWeapon (wheel / PageUp / PageDown) idle, moving, jumping, firing, reloading, after transforming.
+void Application::runSwitchTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("SWITCH %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    auto run = [&](float secs, const platform::InputFrame& in) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) step(in); };
+    struct Cls { const char* name; game::Specialty sp; const char* aut; const char* dec; std::vector<std::string> w; };
+    const Cls classes[] = {
+        {"Scout", game::Specialty::Scout, "Car2", "Car4", {"Shotgun", "HeavyPistol", "FlashBangs"}},
+        {"Scientist", game::Specialty::Scientist, "Jet4", "Jet", {"BurstRifle", "RepairRay", "HealGrenades"}},
+        {"Soldier", game::Specialty::Soldier, "Tank3", "Tank2", {"AssaultRifle", "HomingRocket", "FlakGrenades"}},
+        {"Leader", game::Specialty::Leader, "Truck3", "Truck4", {"IonBlaster", "GrenadeLauncher", "KamikazeMines"}},
+    };
+    for (const Cls& c : classes) {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+        world_.launchMatch(L);
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = c.sp; cs.chassisByFaction[0] = c.aut; cs.chassisByFaction[1] = c.dec;
+        cs.chassisId = c.aut; cs.weapons = c.w;
+        world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+        run(10.6f, idle);
+        game::Character& pc = world_.player().pawn();
+        const std::string tag = std::string(c.name) + " (" + pc.chassis().id + ")";
+        auto id = [&]() { return std::string(pc.weapon().def ? pc.weapon().def->provider : "?"); };   // provider UniqueId (selection names)
+        std::vector<std::string> guns;
+        for (const auto& w : pc.inventory()) if (w.fireType != game::WeaponFire::Grenade) guns.push_back(w.def ? w.def->provider : "?");
+        const bool twoGuns = guns.size() == 2 && guns[0] == c.w[0] && guns[1] == c.w[1];
+        check(twoGuns && id() == c.w[0], tag + ": inventory " + (guns.size() > 0 ? guns[0] : "") + (guns.size() > 1 ? " + " + guns[1] : "") +
+              ", primary active");
+        // Switch with a given input source while holding 'hold'; returns the weapon id after the swap finished.
+        auto doSwitch = [&](int source, const platform::InputFrame& hold, float maxWait) {
+            platform::InputFrame in = hold;
+            if (source == 0) in.mouseWheel = 1.0f;
+            if (source == 1) { in.pressed[(int)platform::Button::NextWeapon] = true; in.down[(int)platform::Button::NextWeapon] = true; }
+            if (source == 2) { in.pressed[(int)platform::Button::PrevWeapon] = true; in.down[(int)platform::Button::PrevWeapon] = true; }
+            step(in);
+            for (int i = 0; i < (int)(maxWait * 60.0f) && pc.switchingWeapon(); ++i) step(hold);
+            step(hold);
+            return id();
+        };
+        // idle: wheel, PageUp, PageDown, repeatedly
+        std::string a = doSwitch(0, idle, 3.0f), b = doSwitch(1, idle, 3.0f), d = doSwitch(2, idle, 3.0f), e = doSwitch(0, idle, 3.0f);
+        check(a == c.w[1] && b == c.w[0] && d == c.w[1] && e == c.w[0],
+              tag + ": idle wheel / PgUp / PgDn x4 -> " + a + ", " + b + ", " + d + ", " + e);
+        // moving
+        platform::InputFrame fwd; fwd.down[(int)platform::Button::Forward] = true;
+        std::string m1 = doSwitch(1, fwd, 3.0f), m2 = doSwitch(0, fwd, 3.0f);
+        check(m1 == c.w[1] && m2 == c.w[0], tag + ": while moving -> " + m1 + ", " + m2);
+        // jumping (switch right after take-off)
+        platform::InputFrame jump; jump.pressed[(int)platform::Button::Jump] = true; jump.down[(int)platform::Button::Jump] = true;
+        step(jump); run(0.1f, idle);
+        const bool airborne = !pc.onGround();
+        std::string j1 = doSwitch(1, idle, 3.0f);
+        run(1.5f, idle);
+        check(airborne && j1 == c.w[1], tag + ": while jumping (airborne " + std::to_string((int)airborne) + ") -> " + j1);
+        // firing: hold fire, switch; no shot after the put-down started
+        platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+        run(0.5f, fire);
+        std::string f1 = doSwitch(0, fire, 3.0f);
+        check(f1 == c.w[0], tag + ": while firing -> " + f1);
+        run(0.3f, idle);
+        // reloading: empty a few rounds, reload, switch mid-reload -> switches, reload abandoned
+        game::Weapon& w0 = pc.weapon();
+        if (w0.magSize > 1 && w0.ammo == w0.magSize) w0.ammo = w0.magSize - 1;
+        platform::InputFrame rl; rl.pressed[(int)platform::Button::Reload] = true; rl.down[(int)platform::Button::Reload] = true;
+        step(rl); run(0.1f, idle);
+        const bool wasReloading = pc.weapon().reloading();
+        const int clipBefore = pc.weapon().ammo;
+        std::string r1 = doSwitch(1, idle, 3.0f);
+        int clipAfterOld = -1;
+        for (const auto& w : pc.inventory()) if (w.def && std::string(w.def->provider) == c.w[0]) clipAfterOld = w.ammo;
+        check(r1 == c.w[1] && (!wasReloading || clipAfterOld == clipBefore),
+              tag + ": while reloading (reloading " + std::to_string((int)wasReloading) + ") -> " + r1 + ", reload abandoned (clip " +
+              std::to_string(clipBefore) + " -> " + std::to_string(clipAfterOld) + ")");
+        // transform: vehicle and back keeps the active weapon; switching works afterwards
+        platform::InputFrame tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+        step(tf); run(3.0f, idle);
+        const bool veh = pc.form() == game::Form::Vehicle;
+        std::string inVeh = doSwitch(1, idle, 0.5f);   // vehicle form: no robot weapon switch
+        step(tf); run(3.0f, idle);
+        const bool robot = pc.form() == game::Form::Robot;
+        const std::string kept = id();
+        std::string t1 = doSwitch(0, idle, 3.0f);
+        check(veh && robot && kept == c.w[1] && t1 == c.w[0],
+              tag + ": transform to vehicle and back keeps " + kept + "; switch after -> " + t1);
+        // weapon mesh follows the active weapon (shown weapon id = active)
+        const std::string hudCls = world_.player().controller().hudAimState().weaponClass;
+        check(pc.weapon().def && world_.hudState().weaponId == pc.weapon().def->id && !world_.hudState().weaponSwitching &&
+              hudCls == std::string("TnWeapon") + pc.weapon().def->id, tag + ": HUD weaponId " + world_.hudState().weaponId + ", NotifyCurrentWeaponChanged " + hudCls + " = active");
+    }
+    LOG_INFO("SWITCH SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_SCORETEST: a fresh TDM starts at the original values (PRI / Team Score 0, kills / deaths 0, clock = TimeLimit, InProgress
+// after the countdown, full clip); a second match after kills / deaths / MatchOver starts fresh again [CONF RE pass 4].
+void Application::runScoreTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("SCORE %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    auto snapshot = [&](const char* when) {
+        game::HudGameState h = world_.hudState();
+        std::string rows;
+        for (const auto& r : h.scoreboard) rows += " [" + r.name + " " + std::to_string(r.score) + "/" + std::to_string(r.kills) + "/" + std::to_string(r.deaths) + "]";
+        LOG_INFO("SCORE %s: state %d team %d-%d score %d kills %d deaths %d clock %d/%d goal %d clip %d/%d%s", when, h.matchState, h.teamScore[0],
+                 h.teamScore[1], h.score, h.kills, h.deaths, h.remainingTime, h.timeLimit, h.goalScore, h.clipAmmo, h.reserveAmmo, rows.c_str());
+        return h;
+    };
+    auto fresh = [&](const game::HudGameState& h, const std::string& tag) {
+        bool rowsZero = true;
+        for (const auto& r : h.scoreboard) rowsZero = rowsZero && r.score == 0 && r.kills == 0 && r.deaths == 0;
+        check(h.teamScore[0] == 0 && h.teamScore[1] == 0 && h.score == 0 && h.kills == 0 && h.deaths == 0 && rowsZero,
+              tag + ": team 0-0, personal score / kills / deaths 0, every scoreboard row 0");
+    };
+    for (int matchNo = 1; matchNo <= 3; ++matchNo) {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=120", L);
+        world_.launchMatch(L);
+        if (matchNo == 1) for (int i = 0; i < 2; ++i) world_.addMatchOpponent("S" + std::to_string(i), false);
+        game::HudGameState h0 = snapshot(("match " + std::to_string(matchNo) + " t=0").c_str());
+        fresh(h0, "match " + std::to_string(matchNo) + " at launch");
+        run(10.6f);
+        game::HudGameState h1 = snapshot(("match " + std::to_string(matchNo) + " in progress").c_str());
+        fresh(h1, "match " + std::to_string(matchNo) + " after the countdown");
+        const game::Character& pc = world_.player().pawn();
+        check(h1.matchState == (int)game::Match::State::InProgress && h1.timeLimit == 120 && h1.remainingTime > 100 && h1.remainingTime <= 120 &&
+              h1.clipAmmo == pc.weapon().magSize, "match " + std::to_string(matchNo) + ": InProgress, clock " + std::to_string(h1.remainingTime) +
+              " of 120, full clip " + std::to_string(h1.clipAmmo));
+        // Activity: a kill, a death, damage; then MatchOver (time) before the next launch.
+        for (game::MatchOpponent* o : world_.matchOpponents())
+            if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) {
+                world_.applyMatchDamage(o->matchPlayer(), world_.localMatchPlayer(), 99999.0f, false, "TransGame.TnDamageTypeIonBlaster"); break; }
+        world_.killLocalPlayer(-1, true);
+        world_.player().pawn().weapon().ammo = 3;
+        run(1.0f);
+        snapshot(("match " + std::to_string(matchNo) + " after activity").c_str());
+        if (matchNo == 2) { for (int i = 0; i < 60 * 130 && world_.match().state() == game::Match::State::InProgress; ++i) run(dt); }
+    }
+    LOG_INFO("SCORE SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_HEIGHTTEST: per tick, feet (pawn position), capsule centre, mesh origin, root / hips / head bone world heights and the hips /
+// root scale (matrix column lengths) while idle and while jogging forward - does the body move or scale in world space, or only pose?
+void Application::runHeightTest() {
+    const float dt = 1.0f / 60.0f;
+    for (const char* id : {"Car2", "Car4", "Truck"}) {
+        world_.applyChassisToLocalPawn(id);
+        world_.applyLoadout(nullptr);
+        game::Character& pc = world_.player().pawn();
+        // Face the longest clear line so the jog phase actually moves (the free-play spawn faces a wall for some bodies).
+        if (const game::CollisionWorld* cw = world_.collision()) {
+            float bestYaw = 0.0f, bestLen = 0.0f;
+            for (int k = 0; k < 16; ++k) {
+                float yaw = k * 6.2831853f / 16.0f, t; core::Vec3 d = core::forwardFromYawPitch(yaw, 0.0f), p = pc.actorLocation();
+                float len = cw->segmentHit(p, p + d * 30.0f, t) ? t * 30.0f : 30.0f;
+                if (len > bestLen) { bestLen = len; bestYaw = yaw; }
+            }
+            world_.player().controller().setCameraYaw(bestYaw);
+        }
+        struct Acc { float lo = 1e9f, hi = -1e9f, sum = 0; int n = 0; void add(float v) { lo = std::min(lo, v); hi = std::max(hi, v); sum += v; ++n; }
+                     std::string s() const { char b[64]; std::snprintf(b, sizeof b, "%.3f..%.3f (mean %.3f)", lo, hi, n ? sum / n : 0.0f); return b; } };
+        for (int phase = 0; phase < 2; ++phase) {
+            platform::InputFrame in;
+            if (phase == 1) in.down[(int)platform::Button::Forward] = true;
+            Acc capsule, origin, root, hips, head, hipScale, rootScale;
+            std::string clips;
+            for (int i = 0; i < 180; ++i) {
+                world_.handleInput(in, dt); world_.tick(dt);
+                if (i < 60) continue;   // settle 1 s
+                const float feet = pc.position().y;
+                capsule.add(pc.actorLocation().y - feet);
+                core::Mat4 mm = pc.meshMatrix(game::Form::Robot);
+                origin.add(mm.m[13] - feet);
+                core::Mat4 b;
+                auto colLen = [](const core::Mat4& m, int c) { return std::sqrt(m.m[c * 4] * m.m[c * 4] + m.m[c * 4 + 1] * m.m[c * 4 + 1] + m.m[c * 4 + 2] * m.m[c * 4 + 2]); };
+                if (pc.boneWorld("C_Root_Reference_XR", b)) { root.add(b.m[13] - feet); rootScale.add(colLen(b, 0)); }
+                if (pc.boneWorld("C_Spine00_Hips_XB", b)) { hips.add(b.m[13] - feet); hipScale.add((colLen(b, 0) + colLen(b, 1) + colLen(b, 2)) / 3.0f); }
+                if (pc.boneWorld("C_Spine04_Head_XB", b)) head.add(b.m[13] - feet);
+                if (clips.find(pc.animName()) == std::string::npos && clips.size() < 120) clips += std::string(pc.animName()) + " ";
+            }
+            LOG_INFO("HEIGHT %s %s: feet->capsule %s | mesh origin %s | root %s scale %s | hips %s scale %s | head %s | clips %s", id,
+                     phase ? "jog" : "idle", capsule.s().c_str(), origin.s().c_str(), root.s().c_str(), rootScale.s().c_str(), hips.s().c_str(),
+                     hipScale.s().c_str(), head.s().c_str(), clips.c_str());
+        }
+        platform::InputFrame stop; for (int i = 0; i < 60; ++i) { world_.handleInput(stop, dt); world_.tick(dt); }
+    }
+}
+
+// WFC_VEHPHYS: vehicle handling measured against RE pass 4 (TnHoverCarSimulation / TnCarSimulation, physmats):
+//  settle (teeter amplitude), one hover jump (apex vs Dv 1200 / g 1940.4 = 3.71 m; nose-up; settle), held jump (one jump),
+//  hover and boost into a wall head-on and at 45 deg (rebound speed vs restitution 0.05; attitude after).
+void Application::runVehPhysTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("VEHPHYS %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    const float d2r = 0.0174533f;
+    game::PlayerController& ctl = world_.player().controller();
+    const game::CollisionWorld* cw = world_.collision();
+    // A flat floor point with a vertical wall 25-40 m ahead (clear, flat run-up) and clear sky above.
+    auto findWallRun = [&](core::Vec3& start, float& yaw) -> bool {
+        const core::Vec3 b0 = cw->boundsMin(), b1 = cw->boundsMax();
+        for (float x = b0.x + 5.0f; x < b1.x; x += 7.0f)
+            for (float z = b0.z + 5.0f; z < b1.z; z += 7.0f) {
+                float gy; core::Vec3 gn;
+                if (!cw->groundHeight(x, z, world_.player().pawn().position().y + 5.0f, 0.5f, gy, gn) || gn.y < 0.99f) continue;
+                core::Vec3 p{x, gy + 1.0f, z}; float t; core::Vec3 n;
+                if (cw->segmentHit(p, p + core::Vec3{0, 15.0f, 0}, t)) continue;
+                for (int k = 0; k < 8; ++k) {
+                    float yw = k * 0.785398f; core::Vec3 d = core::forwardFromYawPitch(yw, 0.0f);
+                    if (!cw->segmentHit(p, p + d * 40.0f, t, n) || t * 40.0f < 25.0f || std::fabs(n.y) > 0.2f) continue;
+                    bool flat = true;
+                    for (float s2 = 2.0f; s2 < t * 40.0f - 2.0f && flat; s2 += 2.0f) {
+                        core::Vec3 q = p + d * s2; float gy2; core::Vec3 gn2;
+                        if (!cw->groundHeight(q.x, q.z, gy + 1.0f, 0.3f, gy2, gn2) || std::fabs(gy2 - gy) > 0.2f) flat = false;
+                    }
+                    if (!flat) continue;
+                    start = core::Vec3{x, gy + 0.1f, z}; yaw = yw; return true;
+                }
+            }
+        return false;
+    };
+    const core::Vec3 spawnPos = world_.player().pawn().position();
+    core::Vec3 start; float yaw0 = 0.0f;
+    if (!cw || !findWallRun(start, yaw0)) { LOG_INFO("VEHPHYS no wall run found on this map"); return; }
+    LOG_INFO("VEHPHYS run start (%.1f %.1f %.1f) yaw %.2f", start.x, start.y, start.z, yaw0);
+    for (const char* id : {"Car2", "Truck", "Tank3"}) {
+        if (const char* only = std::getenv("WFC_VEHPHYS_ONLY")) if (std::string(only) != id) continue;
+        world_.applyChassisToLocalPawn(id);
+        world_.applyLoadout(nullptr);
+        game::Character& pc = world_.player().pawn();
+        auto& vs = pc.vehicleState();
+        auto place = [&](float yaw) { pc.setPosition(start); pc.velocity() = {0, 0, 0}; pc.setYaw(yaw); ctl.setCameraYaw(yaw); vs.pitch = vs.roll = 0.0f; vs.angVel = {0, 0, 0}; };
+        auto step = [&](const platform::InputFrame& in) { ctl.setCameraYaw(ctl.camYaw()); world_.handleInput(in, dt); world_.tick(dt); };
+        platform::InputFrame idle, tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+        pc.setPosition(spawnPos); pc.velocity() = {0, 0, 0};
+        if (pc.form() != game::Form::Vehicle) { step(tf); for (int i = 0; i < 180; ++i) step(idle); }   // transform at the spawn (the run start may be too tight for a robot)
+        if (pc.form() != game::Form::Vehicle) { check(false, std::string(id) + ": did not reach vehicle form"); continue; }
+        // 1) settle: pitch / roll amplitude over 2 s after 3 s
+        place(yaw0); for (int i = 0; i < 180; ++i) step(idle);
+        float pMin = 1e9f, pMax = -1e9f, rMin = 1e9f, rMax = -1e9f, yRest = 0.0f;
+        for (int i = 0; i < 120; ++i) { step(idle); pMin = std::min(pMin, vs.pitch); pMax = std::max(pMax, vs.pitch); rMin = std::min(rMin, vs.roll); rMax = std::max(rMax, vs.roll); yRest += pc.position().y / 120.0f; }
+        LOG_INFO("VEHPHYS %s settle: pitch %.2f..%.2f deg, roll %.2f..%.2f deg, rest y %.3f", id, pMin / d2r, pMax / d2r, rMin / d2r, rMax / d2r, yRest);
+        check((pMax - pMin) < 1.0f * d2r && (rMax - rMin) < 1.0f * d2r, std::string(id) + ": settles level (teeter < 1 deg)");
+        // 2) one hover jump
+        platform::InputFrame jp; jp.pressed[(int)platform::Button::Jump] = true; jp.down[(int)platform::Button::Jump] = true;
+        step(jp);
+        float apex = -1e9f, maxNose = 0.0f, landT = -1.0f; int i;
+        for (i = 0; i < 300; ++i) {
+            step(idle);
+            apex = std::max(apex, pc.position().y - yRest); maxNose = std::max(maxNose, vs.pitch);
+            if (i > 20 && landT < 0.0f && vs.onTheGround) landT = i * dt;
+        }
+        float pp = 0.0f; for (int k = 0; k < 60; ++k) { step(idle); pp = std::max(pp, std::fabs(vs.pitch)); }
+        LOG_INFO("VEHPHYS %s jump: apex %.2f m above rest (RE: Dv 12 m/s, g 19.4 -> 3.71 m + spring), max nose-up %.1f deg, landed %.2f s, |pitch| 5 s later %.2f deg",
+                 id, apex, maxNose / d2r, landT, pp / d2r);
+        check(apex > 2.5f && apex < 5.0f && pp < 2.0f * d2r, std::string(id) + ": jump apex near 3.7 m, level again after landing");
+        // 2b) hover jump pressed again at the first ground contact after landing (springs compressed)
+        {
+            place(yaw0); for (int k = 0; k < 120; ++k) step(idle);
+            step(jp);
+            bool landed = false; int k = 0;
+            for (; k < 300 && !landed; ++k) { step(idle); if (k > 20 && vs.contacts > 0) landed = true; }
+            for (int w = 0; w < 18 && !vs.onTheGround; ++w) step(idle);   // until IsOnTheGround (0.3 s cooldown also counts on the ground)
+            for (int w = 0; w < 18; ++w) { step(jp); if (pc.velocity().y > 8.0f) break; }
+            float ap = -1e9f; for (int w = 0; w < 240; ++w) { step(idle); ap = std::max(ap, pc.position().y - yRest); }
+            LOG_INFO("VEHPHYS %s re-jump on landing: apex %.2f m", id, ap);
+            check(ap < 5.0f, std::string(id) + ": a jump pressed right at landing stays near the normal apex (" + std::to_string(ap) + " m)");
+        }
+        // 2c) boost jump on flat: local (600, 0, 1400) -> apex ~5.05 m
+        if (std::string(id) != "Tank3") {
+            place(yaw0); for (int k = 0; k < 120; ++k) step(idle);
+            platform::InputFrame b = idle; b.down[(int)platform::Button::FineAim] = true;
+            for (int k = 0; k < 40; ++k) step(b);
+            platform::InputFrame bj = b; bj.pressed[(int)platform::Button::Jump] = true; bj.down[(int)platform::Button::Jump] = true;
+            const float y0 = pc.position().y;
+            LOG_INFO("VEHPHYS %s boost before jump: driving %d ground %d jumpWait %.2f v (%.1f %.1f %.1f)", id, (int)vs.driving, (int)vs.onTheGround, vs.jumpWait, pc.velocity().x, pc.velocity().y, pc.velocity().z);
+            step(bj);
+            float ap = -1e9f; for (int w = 0; w < 120; ++w) { step(b); ap = std::max(ap, pc.position().y - y0); if (std::getenv("WFC_VEHDBG") && w < 40 && w % 2 == 0) LOG_INFO("VEHTRACE %s boostjump w%d vy %.2f y %.3f driving %d ground %d", id, w, pc.velocity().y, pc.position().y - y0, (int)vs.driving, (int)vs.onTheGround); }
+            LOG_INFO("VEHPHYS %s boost jump: apex %.2f m above the driving height (RE: local Z 14 m/s -> 5.05 m)", id, ap);
+            check(ap > 4.0f && ap < 6.0f, std::string(id) + ": boost jump apex near 5.05 m");
+        }
+        // 3) held jump = one jump
+        place(yaw0); for (int k = 0; k < 120; ++k) step(idle);
+        int jumps = 0; bool up = false; float yPrev = pc.position().y;
+        for (int k = 0; k < 240; ++k) {
+            platform::InputFrame h = idle; h.down[(int)platform::Button::Jump] = true; if (k == 0) h.pressed[(int)platform::Button::Jump] = true;
+            step(h);
+            float vy = pc.velocity().y;
+            if (!up && vy > 5.0f) { ++jumps; up = true; }
+            if (up && vy < 0.0f) up = false;
+            yPrev = pc.position().y;
+        }
+        (void)yPrev;
+        check(jumps == 1, std::string(id) + ": holding Jump 4 s = " + std::to_string(jumps) + " jump(s) (fresh press only)");
+        // 4) walls: hover and boost, head-on and 45 deg
+        for (int boost = 0; boost < 2; ++boost)
+            for (int angle = 0; angle < 2; ++angle) {
+                const float yaw = yaw0 + (angle ? 0.785398f * 0.5f : 0.0f);
+                place(yaw0); for (int k = 0; k < 90; ++k) step(idle);
+                pc.setYaw(yaw); ctl.setCameraYaw(yaw);
+                platform::InputFrame drive = idle; drive.down[(int)platform::Button::Forward] = true;
+                if (boost) drive.down[(int)platform::Button::FineAim] = true;
+                const core::Vec3 wallDir = core::forwardFromYawPitch(yaw0, 0.0f);
+                float maxInto = 0.0f, minInto = 1e9f, maxTilt = 0.0f, maxAng = 0.0f, maxUp = 0.0f; bool hit = false; int after = 0;
+                for (int k = 0; k < 600 && after < 90; ++k) {
+                    step(drive);
+                    const float into = core::dot(pc.velocity(), wallDir);
+                    if (!hit) { maxInto = std::max(maxInto, into); if (maxInto > 5.0f && into < 0.3f * maxInto) hit = true; }
+                    else {
+                        ++after; minInto = std::min(minInto, into);
+                        if (std::getenv("WFC_VEHDBG") && after <= 60) LOG_INFO("VEHTRACE %s b%d a%d t%d roll %.1f pitch %.1f wx %.1f wy %.1f contacts %d ground %d v (%.1f %.1f %.1f) y %.3f", id, boost, angle, after, vs.roll / d2r, vs.pitch / d2r, vs.angVel.x / d2r, vs.angVel.y / d2r, vs.contacts, (int)vs.onTheGround, pc.velocity().x, pc.velocity().y, pc.velocity().z, pc.position().y);
+                        maxTilt = std::max(maxTilt, std::max(std::fabs(vs.pitch), std::fabs(vs.roll)));
+                        maxAng = std::max(maxAng, std::max(std::fabs(vs.angVel.x), std::fabs(vs.angVel.y)));
+                        maxUp = std::max(maxUp, pc.velocity().y);
+                    }
+                }
+                const float rebound = hit ? std::max(0.0f, -minInto) : -1.0f;
+                LOG_INFO("VEHPHYS %s %s %s wall: impact %.1f m/s, rebound %.2f m/s, after-hit max tilt %.1f deg, max pitch/roll rate %.1f deg/s, max up %.1f m/s, still driving %d",
+                         id, boost ? "boost" : "hover", angle ? "22deg" : "head-on", maxInto, rebound, maxTilt / d2r, maxAng / d2r, maxUp, (int)vs.driving);
+                // Tank: TnHoverTankSimulation corrects pitch / roll only once unstable (> HoverStability 30 deg) [CONF RE C2], so a probe
+                // losing the floor at a wall base tilts it up to that limit; car / truck correct every step (mask 0.05) [CONF RE pass 4].
+                const float tiltLimit = (std::string(id) == "Tank3" ? 32.0f : 15.0f) * d2r;
+                check(hit && rebound < 0.15f * maxInto + 0.5f && maxTilt < tiltLimit && maxUp < 4.0f,
+                      std::string(id) + " " + (boost ? "boost" : "hover") + (angle ? " 22deg" : " head-on") + " wall: no pinball rebound, stays upright");
+            }
+    }
+    LOG_INFO("VEHPHYS SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

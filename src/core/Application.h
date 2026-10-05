@@ -71,6 +71,10 @@ private:
     void runMapSuite();
     void runCtfExtTest();
     void runParticipantTest();
+    void runSwitchTest();
+    void runScoreTest();
+    void runHeightTest();
+    void runVehPhysTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

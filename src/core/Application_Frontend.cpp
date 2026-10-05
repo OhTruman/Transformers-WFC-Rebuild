@@ -156,7 +156,7 @@ bool Application::wantsFrontendBoot() {
                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
-                          "WFC_CHASSIS"})
+                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE"})
         if (std::getenv(v)) return false;
     return true;
 }
@@ -695,10 +695,10 @@ void Application::routeMatchToFrontend(float dt) {
     hf.clip = h.clipAmmo; hf.clipCapacity = wpn.magSize; hf.reserve = h.reserveAmmo; hf.reserveCapacity = wpn.reserveMax;
     {   // Gameplay's TnHUD observer state: fine aim (EHudAimType) -> NotifyFineAimChanged. The weapon class name goes to
         // NotifyCurrentWeaponChanged and Hud_GFX itself picks the icon / crosshair / reticule / scope (RE 934ecde, CONFIRMED).
-        // [integration M08b] The class comes from the EQUIPPED weapon (Gameplay WeaponDef::id; Hud prefixes "TnWeapon"):
-        // hudAimState().weaponClass is still the Ion Blaster for every weapon in Gameplay ddd8a58. No Ion default.
+        // [integration M08c] Gameplay's accessor is the single source again (aa0dfd1 / bec41cd: "TnWeapon" + the active
+        // WeaponDef::id, TnWeaponFlag1Hand / TnWeaponBomb while carrying). No Ion default.
         const auto& aim = world_.player().controller().hudAimState();
-        hf.weapon = wpn.def ? wpn.def->id : std::string();
+        hf.weapon = aim.weaponClass ? aim.weaponClass : "";
         hf.aimType = aim.aimType;
     }
     hf.vehicleForm = h.vehicleForm;

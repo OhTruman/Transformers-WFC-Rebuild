@@ -140,6 +140,7 @@ private:
     MoveIntent intent_;
     bool wantJumpLatched_ = false;
     bool wantFire_ = false;
+    bool fireLatch_ = false;   // Fire pressed since the last simulation step
     bool wantReload_ = false;     // latched on release of a tap < kReloadTapTime
     bool wantDashLatched_ = false;
     bool prevReloadDown_ = false;
@@ -174,7 +175,7 @@ private:
 public:
     bool consumeKillstreakRequest() { bool b = wantKillstreak_; wantKillstreak_ = false; return b; }
     bool consumeMeleeRequest() { bool b = wantMelee_; wantMelee_ = false; return b; }
-    bool fireHeld() const { return wantFire_; }
+    bool fireHeld() const { return wantFire_ || fireLatch_; }
     bool consumeGrenadeRequest() { bool b = wantGrenade_; wantGrenade_ = false; return b; }
     bool consumePickupRequest() { bool b = wantPickup_; wantPickup_ = false; return b; }
 private:

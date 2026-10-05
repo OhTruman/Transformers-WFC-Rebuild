@@ -3062,6 +3062,101 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 23 — human playtest fidelity (2026-10-05)
+
+### Fresh match state [CONFIRMED ORIGINAL: RE pass 4 - PRI / Team Score 0, OldPRI.Reset, TnTeamInfo zeroed on seamless travel]
+- WFC_SCORETEST 9/9, three consecutive TDM launches with kills / deaths / damage / a timed-out match in between. At launch and
+  after the countdown every value is fresh: team 0-0, personal score / kills / deaths 0, all scoreboard rows 0, clock = TimeLimit,
+  full clip, InProgress after PendingMatch. The Frontend route uses the same World::launchMatch reset.
+- The visible "wrong score" in the playtest was the Hud_GFX GoalScore default (10, read once at load) filling the TDM bars before the
+  match's PointsToWin arrived - fixed on the Frontend side (agents/frontend), not Gameplay state.
+- GRI values for Hud_GFX: attackingTeamIndex (CTF / EXT, else -1) and currentObjectiveCountdown (EXT fuse, else -1) [CONF CDO
+  defaults], competitiveScoreEnabled 0 [HIGH: not authored]. DOM / KOTH objective countdown [PARTIAL].
+
+### Vehicle handling [RE TARGETED_PASS4 §A CONFIRMED ORIGINAL; measured with WFC_VEHPHYS]
+Human playtest: jumps too high in some situations, violent wall bounces, teetering / rolling about an odd axis, not settling.
+Each RE item was compared with the code and measured (Streets, flat run-up into a vertical wall; Sideswipe car, Optimus truck,
+Warpath tank).
+
+Defects found and fixed:
+1. **UpdateTurn semantics** (cause of the teetering / rolling / not settling).
+   - Original: each step the angular velocity is REPLACED by axisAngle(current → upright with view yaw) × mask / dt.
+   - mask = (0.05, 0.05, 1) normally; (1, 1, 1) when ShouldUpright (no suspension contacts, or up.Z < 0.01).
+   - The rebuild applied nothing on the ground (spring and contact torque accumulated step after step) and only 5% per tick
+     in the air (the jump nose-up spin kept turning).
+   - Now the original replacement for car / truck. The tank keeps its own rule: no pitch / roll correction while stable on
+     the ground, else TurnRate 0.05 (RE C2).
+   - Glancing (22°) wall hit, Sideswipe hovering: max tilt 69° → 6.3°, pitch / roll rate 218 → 9.7 °/s. Truck 1.8°.
+2. **Boost (Driving) jump never fired.**
+   - A provisional overhead-hull guard started its ray at the COM height. That is floor level while driving on the wheels,
+     so it read the floor as a ceiling and zeroed v.y in the jump's own step.
+   - The probe now starts ≥ 0.1 m above the root.
+   - Boost jump apex: car 4.93 m, truck 4.91 m vs RE local (600, 0, 1400) → 1400² / (2 × 1940.4) = 5.05 UU-m.
+
+Verified unchanged (already as the original):
+- **Hover jump:** additive world Δv 1200 UU/s, RB gravity −2940 × 0.66, fresh press only, 0.3 s cooldown counted on the
+  ground, IsOnTheGround = contacts > 0 and average normal Z > 0.707.
+  - Apex 3.81–3.83 m (RE 3.71 + spring). A jump pressed right at landing peaks at 1.8–2.6 m. Holding Jump = one jump.
+- **Suspension:** 4 diagonal probes, implicit spring with m / 4, push-only, no force without a hit.
+- **Walls:** head-on rebound 0.00 m/s for car, truck and tank. Physmat restitution 0.05 and no script bounce: the rebuild
+  removes the into-wall velocity (restitution 0) [HIGH: 0.05 vs 0, PhysX combine untraced].
+- **Frontal boost crash (> 0.866 into the wall) drops Driving → Hovering.** Holding Boost re-enters Driving after the drift
+  window (A6).
+
+Remaining:
+- **Tank glancing wall:** a diagonal probe losing the floor at a wall base tilts the tank up to its stability limit (~30°)
+  before TurnRate 0.05 engages. That is the RE tank rule, but the PhysX hull-to-wall contact that might also support it is not
+  modelled [PARTIAL].
+- **Ramps / terrain:** the probes and springs follow the authored model, but ramp launches were not measured separately
+  against a capture [PARTIAL].
+- WFC_VEHPHYS 26/26: settle, jump, re-jump, boost jump, held jump, and walls (hover / boost, head-on / 22°) × 3 vehicles.
+
+### Scout body height idle vs locomotion [HIGH CONFIDENCE authentic: RE pass 4 + WFC_HEIGHTTEST measurement]
+- Playtest: the Scout looks crouched at rest and much taller while running.
+- Measured per tick (WFC_HEIGHTTEST, heights above the feet): capsule centre, mesh origin and root bone (C_Root_Reference_XR) never
+  move. Root and hip scale stay 1.000. Only the pose changes:
+
+  | body | idle hips / head (m) | jog hips / head (m) |
+  |---|---|---|
+  | Car2 Sideswipe | 1.531–1.540 / 2.42 | 1.941–2.322 / 3.51 mean |
+  | Car4 Barricade | 1.490–1.520 / 2.63 | 1.941–2.321 / 3.51 mean |
+  | Truck Optimus | 1.971–1.988 / 3.37 | 1.865–2.180 / 3.46 mean |
+
+- Cause (RE pass 4): Car2 / Car4 own AnimSets hold only idles and transforms. Jog / walk / sprint come from Shared_ROBO_ANIM, authored
+  on Starscream, applied with bAnimRotationOnly = False (translations as authored). The original Scout's hips are about 154 UU idle
+  and 194–232 UU jog, the same as measured here. Root bone Z = 0 in every clip, so no root motion.
+- Not root translation, scaling, capsule coupling, retarget error or a pivot mismatch. Left as is. A shipped capture would move this
+  to CONFIRMED.
+
+### Input details [CONFIRMED ORIGINAL: shipped PC bindings]
+- Melee is Q or the middle mouse button.
+- A Fire click shorter than one simulation tick (144 / 240 Hz frames) is latched for the next step (one shot attempt); a release
+  before the refire still clears it, as StopFire clears PendingFire.
+- PlayerController::hudAimState().weaponClass = the held class (TnWeapon<id>, or TnWeaponFlag1Hand / TnWeaponBomb while carrying);
+  it was hard-coded TnWeaponIonBlaster (Integration report).
+
+### Weapon switching [CONFIRMED ORIGINAL: HmInventoryManager / HmWeapon / Engine.Weapon script; Xe-TransInput.ini; RE pass 4]
+- Playtest symptom: the selected primary appeared, but the player could not switch to the secondary.
+- Chain checked:
+  - profile / class loadout → Frontend selection (PCD_MP WeaponTypes; slots 0–1 customisable) → applyLoadout;
+  - no refusals in the playtest log; both guns are in the inventory (WFC_SWITCHTEST, four classes).
+- Defects fixed:
+  1. The mouse wheel did nothing. The shipped binding is NextWeapon on wheel up, wheel down, PageUp and PageDown.
+     There is no PrevWeapon, so every input cycles forward.
+  2. Switching was refused while reloading or while a switch was in progress. Original HmWeapon.TryPutDown:
+     - Active: put down now;
+     - WeaponReloading: put down now, the reload is abandoned (no RefillClip);
+     - WeaponFiring: put down now if MinReloadPct 0.5 of the refire interval has passed, else at the next RefireCheckTimer;
+     - WeaponPuttingDown: retarget the pending weapon;
+     - WeaponEquipping: put down again once equipped.
+- Switching stays blocked while transforming, in vehicle form, during a melee attack, and with DisallowWeaponSwitching
+  (Poke). Heavy weapons are dropped when switched away.
+- Test WFC_SWITCHTEST 32/32: Scout (Car2), Scientist (Jet4), Soldier (Tank3) and Leader (Truck3), each:
+  - wheel / PgUp / PgDn ×4 idle;
+  - while moving, jumping (airborne), firing and reloading (reload abandoned, clip unchanged);
+  - transform to vehicle and back (active weapon kept), then switch again;
+  - HUD weaponId = the active weapon.
+
 ## PASS 22 — SELECTED CHARACTERS, CLASSES, VEHICLE FORMS, WEAPONS, MULTI-MAP (2026-10-05, gameplay agent)
 Inputs:
 - AssetTools per-chassis export `VerticalSlice/Characters/<ChassisId>` (vs_roster_export) and `roster_package.json`;

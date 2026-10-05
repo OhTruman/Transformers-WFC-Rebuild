@@ -370,7 +370,7 @@ public:
         for (const std::string& n : vehicleWeapons) if (const WeaponDef* d = findWeaponDef(n)) vehicleLoadout_.push_back(Weapon::fromDef(*d));
         vehicleInventory_ = vehicleLoadout_;
         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;
-        activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1; tempWeapon_ = 0; tempWeaponRemain_ = 0.0f; minePooperRemain_ = 0.0f;
+        activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1; queuedSwitch_ = false; tempWeapon_ = 0; tempWeaponRemain_ = 0.0f; minePooperRemain_ = 0.0f;
         while (activeWeapon_ + 1 < (int)inventory_.size() && inventory_[(size_t)activeWeapon_].fireType == WeaponFire::Grenade) ++activeWeapon_;
     }
     const std::vector<std::string>& vehicleWeapons() const { return vehicleWeapons_; }
@@ -384,20 +384,50 @@ public:
         if (carryingHeavy_) { heavyDropRequested_ = true; return; }   // ChangedWeapon tosses the heavy weapon; the gun returns
         if (tempWeapon_ == 1) return;                                  // TnWeaponPoke.DisallowWeaponSwitching
         if (tempWeapon_ == 2) { tempDropRequested_ = true; return; }   // WT_Heavy rocket turret: tossed on swap
+        // HmInventoryManager.SetCurrentWeapon / NextWeapon + HmWeapon.TryPutDown + Engine.Weapon states [CONF script]:
+        //  - Active: PutDownWeapon now.
+        //  - WeaponReloading: PutDownWeapon now; the reload is abandoned (EndState clears WeaponReloaded, no RefillClip).
+        //  - WeaponFiring: put down now if MinReloadPct (0.5, HmWeaponData default) of the refire interval has passed, else at the
+        //    next RefireCheckTimer (no further shot fires).
+        //  - WeaponPuttingDown: PendingWeapon = the new choice (retarget); the current weapon is never re-selected.
+        //  - WeaponEquipping: bWeaponPutDown -> put down again once equipped.
+        if (meleeState_ != 0) return;   // PreWeaponSwitch: blocked during a melee attack [CONF RE pass 4]
         int n = (int)inventory_.size();
-        if (n < 2 || switchTo_ >= 0 || weapon().reloading()) return;
-        int to = activeWeapon_;
-        for (int k = 0; k < n; ++k) { to = ((to + dir) % n + n) % n; if (inventory_[(size_t)to].fireType != WeaponFire::Grenade) break; }
+        if (n < 2) return;
+        auto nextFrom = [&](int from) {
+            int to = from;
+            for (int k = 0; k < n; ++k) { to = ((to + dir) % n + n) % n; if (inventory_[(size_t)to].fireType != WeaponFire::Grenade) break; }
+            return to;
+        };
+        if (switchTo_ >= 0) {
+            if (activeWeapon_ != switchTo_) {                      // putting down: retarget the pending weapon
+                const int to = nextFrom(switchTo_);
+                if (to == activeWeapon_ || to == switchTo_) return;
+                const float putDownLeft = switchRemain_ - switchSwapAt_;
+                switchTo_ = to;
+                switchSwapAt_ = inventory_[(size_t)to].equipTime;
+                switchRemain_ = putDownLeft + switchSwapAt_;
+            } else queuedSwitch_ = true;                            // equipping: put down once equipped
+            return;
+        }
+        const int to = nextFrom(activeWeapon_);
         if (to == activeWeapon_) return;
+        Weapon& w = weapon();
+        float wait = 0.0f;
+        if (w.reloading()) w.reloadTimer = 0.0f;                     // abandon the reload
+        else if (w.sinceShot < w.fireInterval && w.sinceShot < 0.5f * w.fireInterval) wait = w.fireInterval - w.sinceShot;
         switchTo_ = to;
-        switchRemain_ = weapon().putDownTime + inventory_[(size_t)switchTo_].equipTime;
-        switchSwapAt_ = inventory_[(size_t)switchTo_].equipTime;
+        switchSwapAt_ = inventory_[(size_t)to].equipTime;
+        switchRemain_ = wait + w.putDownTime + switchSwapAt_;
     }
     void tickWeaponSwitch(float dt) {
         if (switchTo_ < 0) return;
         switchRemain_ -= dt;
         if (switchRemain_ <= switchSwapAt_ && activeWeapon_ != switchTo_) { activeWeapon_ = switchTo_; ++weaponChangeSerial_; }
-        if (switchRemain_ <= 0.0f) { switchRemain_ = 0.0f; switchTo_ = -1; }
+        if (switchRemain_ <= 0.0f) {
+            switchRemain_ = 0.0f; switchTo_ = -1;
+            if (queuedSwitch_) { queuedSwitch_ = false; requestWeaponSwitch(1); }   // bWeaponPutDown set while equipping
+        }
     }
     bool switchingWeapon() const { return switchTo_ >= 0; }
     unsigned weaponChangeSerial() const { return weaponChangeSerial_; }
@@ -477,6 +507,7 @@ private:
     std::vector<std::string> vehicleWeapons_;
     std::vector<Weapon> vehicleLoadout_, vehicleInventory_;
     int activeWeapon_ = 0, switchTo_ = -1;
+    bool queuedSwitch_ = false;
     float switchRemain_ = 0.0f, switchSwapAt_ = 0.0f;
     unsigned weaponChangeSerial_ = 0;
     Ability ability_;

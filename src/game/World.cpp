@@ -1486,6 +1486,8 @@ HudGameState World::hudState() const {
     h.vehicleWeapons = pc.vehicleWeapons();
     h.loadoutRefused = loadoutRefused_;
     h.attackingTeam = match_.attackingTeam(); h.currentRound = match_.currentRound(); h.rounds = match_.settings().rounds;
+    h.attackingTeamIndex = (matchMode_ == MatchMode::CTF || matchMode_ == MatchMode::EXT) && (h.attackingTeam == 0 || h.attackingTeam == 1) ? h.attackingTeam : -1;
+    h.currentObjectiveCountdown = mapState_.planted().active ? (int)std::ceil(mapState_.planted().fuse) : -1;
     h.betweenRounds = match_.betweenRounds();
     for (const MapState::Carried& c : mapState_.carried())
         h.carried.push_back({c.kind, c.holder, c.holderTeam, c.dropped, c.active, c.pos, c.autoReturn, c.returnLeft, c.sleep});

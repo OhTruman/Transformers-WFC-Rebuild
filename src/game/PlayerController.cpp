@@ -1,4 +1,6 @@
 #include "game/PlayerController.h"
+
+#include <set>
 #include "core/Log.h"
 #include "game/Character.h"
 #include "game/World.h"
@@ -159,6 +161,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
 
     // Fire: held flag persists across frames (consumed per simulation step while held) [CONF RE].
     wantFire_ = in.isDown(Button::Fire);
+    if (in.wasPressed(Button::Fire)) fireLatch_ = true;   // a click shorter than one simulation tick still fires once
     // Reload: activates on RELEASE of a tap shorter than 0.3 s [CONF RE]; latched until consumed.
     bool reloadDown = in.isDown(Button::Reload);
     if (reloadDown) reloadHeld_ += dt;
@@ -170,8 +173,9 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     if (in.wasPressed(Button::Melee)) wantMelee_ = true;
     if (in.wasPressed(Button::Grenade)) wantGrenade_ = true;
     if (in.wasPressed(Button::Interact)) wantPickup_ = true;
-    if (in.wasPressed(Button::NextWeapon)) wantSwitch_ = 1;
-    if (in.wasPressed(Button::PrevWeapon)) wantSwitch_ = -1;
+    // Shipped PC bindings: mouse wheel and PageUp / PageDown are all "NextWeapon" (TnInventoryManager.NextWeapon cycles from the
+    // pending weapon) [CONF Xe-TransInput.ini via RE MILESTONE05_PLAYTEST_RE 1.1].
+    if (in.wasPressed(Button::NextWeapon) || in.wasPressed(Button::PrevWeapon) || in.mouseWheel != 0.0f) wantSwitch_ = 1;
     if (!reloadDown) reloadHeld_ = 0.0f;
     prevReloadDown_ = reloadDown;
 
@@ -306,7 +310,17 @@ HudAimState PlayerController::hudAimState() const {
     HudAimState s;
     if (!pawn_) return s;
     bool drawn = pawn_->hasWeapon();                 // gun attached on a displayed robot mesh
-    s.weaponClass = drawn ? "TnWeaponIonBlaster" : "";
+    // NotifyCurrentWeaponChanged(className): the held weapon's class - the carried objective's (TnWeaponFlag1Hand / TnWeaponBomb)
+    // while carrying, else TnWeapon<WeaponDef::id>. Hud_GFX picks the icon / crosshair / scope from it [CONF RE 934ecde].
+    // Interned so the pointer stays valid inside queued HudNotify entries.
+    static std::set<std::string> interned;
+    std::string cls;
+    if (drawn) {
+        if (pawn_->carryingHeavy_ == 1) cls = "TnWeaponFlag1Hand";
+        else if (pawn_->carryingHeavy_ == 2) cls = "TnWeaponBomb";
+        else cls = std::string("TnWeapon") + (pawn_->weapon().def ? pawn_->weapon().def->id : "IonBlaster");
+    }
+    s.weaponClass = interned.insert(cls).first->c_str();
     s.aimType = fineAiming_ ? 1 : 0;
     s.spread = pawn_->effectiveSpread();             // raw spread: bloom x airborne x fine aim [CONF RE d50e2a9]
     s.crosshairVisible = drawn;
@@ -677,7 +691,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
     if (pawn_->moveForm() == Form::Vehicle && !pawn_->isTransforming()) {
         if (Weapon* vw = pawn_->vehicleWeapon()) {
             vw->tick(dt);
-            if (wantFire_ && vw->canFire()) {
+            if ((wantFire_ || fireLatch_) && vw->canFire()) {
                 pawn_->exposeSelf();
                 vw->onFired();
                 // Origin: the chassis' vehicle WeaponSocket_Primary (bone x socket) when the vehicle mesh is displayed [CONF
@@ -702,7 +716,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
         }
     }
     // Robot weapon: fires while the trigger is held (held flag persists across render frames).
-    if (wantFire_ && usable) {
+    if ((wantFire_ || fireLatch_) && usable) {
         if (w.canFire()) {
             pawn_->exposeSelf();          // TnWeapon.OnPreServerFire -> ExposeSelf (decloak)
             w.onFired();
@@ -726,6 +740,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
             w.beginReload();
         }
     }
+    fireLatch_ = false;   // consumed by this step (a release before the refire clears PendingFire, as StopFire does)
 }
 
 void PlayerController::updateCamera(render::Camera& cam) const {
