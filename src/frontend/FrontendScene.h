@@ -90,8 +90,9 @@ private:
     struct RemoteActivator { std::string event; std::vector<std::string> fscommands; bool onMovieStopped = false; };
     struct Actor { std::string name, cls; double loc[3] = {0, 0, 0}, rot[3] = {0, 0, 0}; std::string base;
                    double relLoc[3] = {0, 0, 0}, relRot[3] = {0, 0, 0}; double fov = 0; bool camera = false; };
+    struct PawnVisibility { std::string fscommand; int action = 2; std::vector<std::string> pawns; };   // 0 hide 1 unhide 2 toggle
     struct Level { std::vector<Matinee> matinees; std::map<std::string, Actor> actors; std::vector<RemoteActivator> remotes;
-                   std::vector<CameraSwitch> switches; };
+                   std::vector<CameraSwitch> switches; std::vector<PawnVisibility> pawnVis; };
     void subOutput(const std::string& sub, const std::string& output);
     void remoteEvent(const std::string& name);
     struct Playing { const Matinee* m; double t; int order; double rate = 1.0; };   // rate -1: Reverse

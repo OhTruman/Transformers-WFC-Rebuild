@@ -120,7 +120,8 @@
     }
    ],
    "remoteEvents": [],
-   "cameraSwitches": []
+   "cameraSwitches": [],
+   "pawnVisibility": []
   },
   "UI_CharacterCustomization_m": {
    "actors": [
@@ -2067,6 +2068,80 @@
      },
      "triggers": [
       "unhideDecepticon"
+     ]
+    }
+   ],
+   "pawnVisibility": [
+    {
+     "fscommand": "hideAutobot",
+     "action": "hide",
+     "pawns": [
+      "PreviewGuy0"
+     ]
+    },
+    {
+     "fscommand": "hideDecepticon",
+     "action": "hide",
+     "pawns": [
+      "PreviewGuy1"
+     ]
+    },
+    {
+     "fscommand": "hidePlayer",
+     "action": "hide",
+     "pawns": [
+      "PreviewGuy0",
+      "PreviewGuy1"
+     ]
+    },
+    {
+     "fscommand": "invisibleAutobotMesh",
+     "action": "hide",
+     "pawns": [
+      "PreviewGuy0"
+     ]
+    },
+    {
+     "fscommand": "invisibleDecepticonMesh",
+     "action": "hide",
+     "pawns": [
+      "PreviewGuy1"
+     ]
+    },
+    {
+     "fscommand": "unhideAutobot",
+     "action": "unhide",
+     "pawns": [
+      "PreviewGuy0"
+     ]
+    },
+    {
+     "fscommand": "unhideDecepticon",
+     "action": "unhide",
+     "pawns": [
+      "PreviewGuy1"
+     ]
+    },
+    {
+     "fscommand": "unhidePlayer",
+     "action": "unhide",
+     "pawns": [
+      "PreviewGuy0",
+      "PreviewGuy1"
+     ]
+    },
+    {
+     "fscommand": "visibleAutobotMesh",
+     "action": "unhide",
+     "pawns": [
+      "PreviewGuy0"
+     ]
+    },
+    {
+     "fscommand": "visibleDecepticonMesh",
+     "action": "unhide",
+     "pawns": [
+      "PreviewGuy1"
      ]
     }
    ]
@@ -26450,7 +26525,8 @@
     }
    ],
    "remoteEvents": [],
-   "cameraSwitches": []
+   "cameraSwitches": [],
+   "pawnVisibility": []
   },
   "UI_FrontEnd_m": {
    "actors": [
@@ -28763,7 +28839,8 @@
      ]
     }
    ],
-   "cameraSwitches": []
+   "cameraSwitches": [],
+   "pawnVisibility": []
   },
   "UI_Lobby_m": {
    "actors": [
@@ -28861,7 +28938,8 @@
     }
    ],
    "remoteEvents": [],
-   "cameraSwitches": []
+   "cameraSwitches": [],
+   "pawnVisibility": []
   },
   "UI_PartyLobby_m": {
    "actors": [
@@ -28959,7 +29037,8 @@
     }
    ],
    "remoteEvents": [],
-   "cameraSwitches": []
+   "cameraSwitches": [],
+   "pawnVisibility": []
   }
  }
 }

@@ -251,9 +251,45 @@ def export_level(level):
                             triggers.append(sp2['FsCommand'])
         switches.append({'name': op.rsplit('.', 1)[-1], 'comment': p.get('ObjComment'), 'previewSlot': slot,
                          'outputs': outputs, 'triggers': sorted(set(triggers))})
+    # Spawned-pawn visibility (Preview_Characters): fscommand -> subsequence input -> SeqAct_ToggleHidden (Hide / UnHide /
+    # Toggle) on named pawn variables (SeqVar_Named FindVarName / SeqVar_Object VarName, e.g. PreviewGuy0 / 1).
+    pawn_vis = []
+    for op, (c, p) in by_path.items():
+        if c != 'Sequence':
+            continue
+        inner = sub_objects(op)
+        inputs = [l.get('LinkDesc') for l in p.get('InputLinks') or []]
+        for o, (c2, p2) in inner.items():
+            if c2 != 'SeqEvent_SequenceActivated':
+                continue
+            in_name = p2.get('ObjComment') or p2.get('InputLabel')
+            if in_name not in inputs:
+                continue
+            cmds = [by_path[s2][1].get('FsCommand') for s2, d2, i2 in incoming.get(op, [])
+                    if i2 == inputs.index(in_name) and by_path.get(s2, (None,))[0] == 'GFxEvent_FsCommand']
+            for out in p2.get('OutputLinks') or []:
+                for l in out.get('Links') or []:
+                    t = l.get('LinkedOp')
+                    if inner.get(t, (None,))[0] != 'SeqAct_ToggleHidden':
+                        continue
+                    idx = l.get('InputLinkIdx', 0)
+                    names = []
+                    for vl in inner[t][1].get('VariableLinks') or []:
+                        if vl.get('LinkDesc') != 'Target':
+                            continue
+                        for v in vl.get('LinkedVariables') or []:
+                            vp = inner.get(v, (None, {}))[1] if v in inner else (props(v) or {})
+                            n = vp.get('FindVarName') or vp.get('VarName')
+                            if n:
+                                names.append(n)
+                    for cmd in cmds:
+                        if cmd and names and not any(x['fscommand'] == cmd and x['pawns'] == sorted(names) for x in pawn_vis):
+                            pawn_vis.append({'fscommand': cmd, 'action': ['hide', 'unhide', 'toggle'][idx] if 0 <= idx < 3 else 'toggle',
+                                             'pawns': sorted(names)})
     return {'actors': sorted(actors.values(), key=lambda a: a['name']), 'matinees': sorted(matinees, key=lambda m: m['name']),
             'remoteEvents': sorted(remotes, key=lambda r: r['name']),
-            'cameraSwitches': sorted(switches, key=lambda w: w['name'])}
+            'cameraSwitches': sorted(switches, key=lambda w: w['name']),
+            'pawnVisibility': sorted(pawn_vis, key=lambda x: (x['fscommand'], x['action']))}
 
 
 def main():

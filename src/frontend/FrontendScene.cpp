@@ -198,6 +198,15 @@ bool FrontendScene::load(const std::string& path) {
             for (size_t t = 0; t < cs[i]["triggers"].size(); ++t) W.triggers.push_back(cs[i]["triggers"][t].asString());
             lv.switches.push_back(W);
         }
+        const assets::Json& pv = L["pawnVisibility"];
+        for (size_t i = 0; i < pv.size(); ++i) {
+            PawnVisibility P;
+            P.fscommand = pv[i]["fscommand"].asString();
+            const std::string& a = pv[i]["action"].asString();
+            P.action = a == "hide" ? 0 : a == "unhide" ? 1 : 2;
+            for (size_t t = 0; t < pv[i]["pawns"].size(); ++t) P.pawns.push_back(pv[i]["pawns"][t].asString());
+            lv.pawnVis.push_back(P);
+        }
     }
     loaded_ = !data_.empty();
     return loaded_;
@@ -247,6 +256,22 @@ void FrontendScene::trigger(const std::string& trig) {
     bool fs = trig.rfind("FsCommand:", 0) == 0, movie = trig.rfind("MovieStopped:", 0) == 0;
     std::string cmd = fs ? trig.substr(10) : std::string();
     std::vector<std::string> remotes;
+    // Spawned pawns (PreviewGuy0 / 1): Kismet ToggleHidden, reported like the matinee visibility changes.
+    if (fs)
+        for (const std::string& l : levels_) {
+            auto it = data_.find(l);
+            if (it == data_.end()) continue;
+            for (const PawnVisibility& p : it->second.pawnVis) {
+                if (p.fscommand != cmd) continue;
+                for (const std::string& a : p.pawns) {
+                    auto st = hidden_.find(a);
+                    bool cur = st != hidden_.end() && st->second;   // spawned visible
+                    bool h = p.action == 0 ? true : p.action == 1 ? false : !cur;
+                    hidden_[a] = h;
+                    changes_.push_back({SceneChange::Hidden, a, h});
+                }
+            }
+        }
     // Customization camera switches (Chassis_To_Cam_ID*): the preview slot's camera id selects the class output.
     if (fs)
         for (const std::string& l : levels_) {

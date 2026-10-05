@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include <cstdlib>
 #include <functional>
 #include <map>
 
@@ -41,6 +42,11 @@ struct HasActorScale<R, std::void_t<decltype(std::declval<R&>().setFrontendActor
 template <class R, class = void> struct HasDisplayGamma : std::false_type {};
 template <class R>
 struct HasDisplayGamma<R, std::void_t<decltype(std::declval<R&>().setDisplayGamma(1.0f))>> : std::true_type {};
+// Ground under a point (agents/rendering: IRenderer::sceneGroundHeight, a downward trace against the scene's level BSP).
+template <class R, class = void> struct HasGroundHeight : std::false_type {};
+template <class R>
+struct HasGroundHeight<R, std::void_t<decltype(std::declval<const R&>().sceneGroundHeight(0.0f, 0.0f, 0.0f, std::declval<float&>()))>>
+    : std::true_type {};
 // Preview pawns (agents/rendering: setFrontendSceneDraw + actorMatrix + loadContentMesh).
 template <class R, class = void> struct HasPreviewDraw : std::false_type {};
 template <class R>
@@ -60,7 +66,14 @@ public:
     void draw(const frontend::SceneView& view, int width, int height) override;
     void unload() override {}   // the family stays loaded while UI levels travel within it; released by release()
     void setEffectActive(const std::string& actor, bool on) override { if (r_ && native_) r_->setMapEffectActive(actor, on); }
-    void setActorHidden(const std::string& actor, bool hidden) override { if (r_ && native_) r_->setActorHidden(actor, hidden); }
+    void setActorHidden(const std::string& actor, bool hidden) override {
+        if (actor.rfind("PreviewGuy", 0) == 0) {   // spawned preview pawns (Preview_Characters ToggleHidden)
+            int slot = std::atoi(actor.c_str() + 10);
+            if (slot >= 0 && slot < 2) previewHidden_[slot] = hidden;
+            return;
+        }
+        if (r_ && native_) r_->setActorHidden(actor, hidden);
+    }
     // Before a match loads: the scene's render data and GL objects go (keep = the UI renderer's own objects).
     std::string release(const ui::GlCensus::Owned& keep);
     static std::string familyFor(const std::string& uiLevel);
@@ -68,7 +81,9 @@ public:
     // inside the scene by the renderer (setDrawOwner(1 + slot), linear colours, the content glTF in bind pose until
     // Gameplay supplies posed bodies). Empty = none.
     struct PreviewSlot { std::string gltf; float pos[3] = {0, 0, 0}; float yawDeg = 0; float primary[3] = {0, 0, 0}, secondary[3] = {0, 0, 0}; };
-    void setPreview(std::vector<PreviewSlot> slots) { preview_ = std::move(slots); }
+    // Each pawn stands on the floor under its spawn point when the renderer can trace it (the original's
+    // OnPreviewPawnTick FindGround; the roster meshes have their origin at the feet), else at the PathNode height.
+    void setPreview(std::vector<PreviewSlot> slots);
     void drawPreview(render::IRenderer& r);
 
 private:
@@ -79,6 +94,7 @@ private:
     bool censusActive_ = false;
     bool native_ = false;                         // Rendering's loadFrontendScene owns the family
     std::vector<PreviewSlot> preview_;
+    bool previewHidden_[2] = {false, false};
     std::map<std::string, render::MeshData> previewMeshes_;   // per content glTF, loaded once
 };
 

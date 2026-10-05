@@ -762,6 +762,8 @@ struct Interp {
 Value VM::call(const Value& fnV, const Value& self, Args& args, Object* superProto) {
     if (!fnV.isObject() || fnV.o->kind != ObjKind::Function) return Value::undef();
     Object* fn = fnV.o;
+    if (fn->zombie) zombieUse(fn, "call", fn->className);
+    if (self.isObject() && self.o->zombie) zombieUse(self.o, "call this", fn->className);
     if (depth_ > 200) { LOG_WARN("AVM1 call depth exceeded"); return Value::undef(); }
     if (depth_ == 0) instructions = 0;   // per top-level entry budget
     struct DepthGuard { int& d; DepthGuard(int& x) : d(x) { ++d; } ~DepthGuard() { --d; } } guard(depth_);
