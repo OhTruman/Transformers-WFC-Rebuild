@@ -129,6 +129,8 @@ public:
         std::string glEntryState;         // GL state inherited at beginFrame (WFC_VISUALCHECK): leak audit
     };
     virtual RenderDiagnostics renderDiagnostics() const { return RenderDiagnostics{}; }
+    // Live GL object census (diagnostics: map load / unload hygiene): names 1..131072 probed with glIs*.
+    virtual std::string glObjectCensus() const { return std::string(); }
     // Loading presentation (RE MILESTONE05_PLAYTEST §6: the original loading Bink plays on the rendering thread while the
     // game thread blocks): during loadMapRenderData / loadFrontendScene the renderer calls this between bounded steps
     // (each mesh submesh with its material program and textures, each map prop, each load phase) with no GL objects

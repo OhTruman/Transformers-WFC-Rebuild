@@ -17,6 +17,19 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 20 / 21 — MULTI-MAP FIDELITY: LIGHTMAPS, LIGHT COLOURS, MATERIALS, CHASSIS (2026-10-05, overnight)
+Audit: all 10 cooked MP maps built through the generic pipeline (no map names in renderer source), 30 direct-boot captures
+(3 spawn views per map) on integration 9e133bb + agents/rendering, WFC_VISUALCHECK.
+
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| "Mostly black" maps (Gorge, Rust, Seed, Berth, Broken Hope, Molten, Complex) | build_lighting found each component's FLightMap2D coefficients by searching for the FIRST component's first light GUID; every component whose light list started with another light was dropped, so its static mesh got no baked light. Gorge 256 of 1137 records, Rust 127 of 1412 | lighting-only / albedo debug views (geometry present, walls unlit); record counts | CONFIRMED ROOT CAUSE (tooling) | FLightMap2D parsed structurally (type at 13, LightGuids.Num at 17, GUIDs, Owner, 3 coefficients, scale / bias). Streets records identical (1795 / 1795), lighting.json byte-identical. Lightmapped draws ×4–×10 on the affected maps; Gorge black 62–72 % → 15–37 %, Rust 35–50 % → 13–21 %. VISUALLY VERIFIED |
+| Light / sky / fog colours | cooked FColor serializes DWColor big-endian; the reader lists [B, G, R, A]. build_lighting consumed it as RGB: every tinted light (Streets 260 of 268), every SkyLight lower colour and the height-fog colour had red / blue swapped (Streets fog (234, 91, 116) → actually (116, 91, 234)) | AssetTools authored.db field-named decode ({R:78, G:148, B:186} for the customization SkyLight; Streets fog {R:116, B:234}); RE customization facts; the original Streets level thumbnail's cool grey-violet tone | CONFIRMED | `fcolor_rgb` in build_lighting. Lightmaps unchanged; dynamic lighting / fog corrected. Streets suite re-baselined (work/ref_m21): 0.1–12.6 % per camera, cooler / neutral as the thumbnail |
+| World materials | per map, every material the world glTF references is compiled, except Molten's floor (TextureSetSample) / rain puddle (SceneTexture) and the wrecked-soldier prop on Debris / Broken Hope (RandomSeed) | world.glb wfc_material audit | CONFIRMED | TextureSetSample added (TextureSet blueprint ENV_MainTexSet_BluePrint: Color_NormX = Color.rgb + Normal.x, Masks_NormY = Masks.rgb + Normal.y; alpha channels verified as a unit normal xy in the exported intermediates). Molten floors compile. SceneTexture (needs a scene-colour copy) and RandomSeed (WFC per-primitive value, no data) remain [PARTIAL]. The other material failures in the build logs are Streets-only extras the map never draws |
+| All MP chassis previews | 27 shipped MP chassis × robot + vehicle: 144 body materials, every MP one resolves to a compiled original. The 17 unresolved belong to six CAMPAIGN-ONLY bodies (generic car soldiers, Frenzy, Rumble, Laserbeak) | offline resolution + 54 renders in the customization room | CONFIRMED | contact sheets work/m20/chassis: correct orientation, floor contact, materials, faction colours |
+| Preview idle via chooser groups | SetAnim remaps through AnimSet ChooserGroups, last set first; every playable chassis has a Cust_Idle group (→ Cust_Idle or NAV_Idle; Brawl weighted pair) | RE (xex SetAnim Function_82E3FF48, ChooserGroups from authored.db) | CONFIRMED | `tools/render/build_anim_choosers.py` → _ui/anim_choosers.json; loadPreviewBody resolves through it (weighted random pick: HIGH) |
+| GL object census | `IRenderer::glObjectCensus()` (glIs* over names 1..131072) in WFC_MEMCYCLE | — | — | for the load / unload hygiene runs |
+
 ## MILESTONE 19 — PREVIEW PAWN POSE (2026-10-05)
 | Item | Original | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

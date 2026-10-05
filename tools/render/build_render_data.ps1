@@ -60,4 +60,6 @@ if ($LASTEXITCODE -ne 0) { throw "build_scene_floatprops failed" }
 # 5. Map-independent HUD data: Canvas fonts + objective-marker setups -> <render root>\_ui
 & $py (Join-Path $PSScriptRoot "build_hud.py") (Split-Path -Parent $out)
 if ($LASTEXITCODE -ne 0) { throw "build_hud failed" }
+& $py (Join-Path $PSScriptRoot "build_anim_choosers.py") (Split-Path -Parent $out)
+if ($LASTEXITCODE -ne 0) { throw "build_anim_choosers failed" }
 Write-Host "render data -> $out"
