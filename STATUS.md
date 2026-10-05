@@ -3,6 +3,90 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 06b (2026-10-04) — human-playtest regression containment — branch `integration/milestone-06`
+
+**Next human playtest — plain launch, no environment variables needed:**
+- Release: `F:\Transformers Rebuild\Rebuild\build\release\bin\wfc_rebuild.exe`
+- Debug: `F:\Transformers Rebuild\Rebuild\build\bin\wfc_rebuild.exe`
+
+Both find the render data in `F:\Transformers Rebuild\Rebuild\work\render` by themselves; the log's first lines name the
+root. If no data is found, the frame is visibly red and the log has an ERROR; there is no silent legacy fallback.
+
+### Root cause of the black world and malformed menus (INTEGRATION REGRESSION, reproduced and fixed)
+- **Cause:** the renderer's default render-data root was `<exe>/../../work/render`.
+  - Correct for `build\bin` (Debug).
+  - Wrong for `build\release\bin`, the exe given for the M06 playtest: it resolved to `build\work\render`, which does
+    not exist.
+  - Every map and every frontend 3D scene silently fell back to the legacy fixed-function renderer: world mostly black
+    and untextured, Optimus / HUD / FX drawn, malformed menu backgrounds, grey panels.
+- **Why automation missed it:** every automated run since M01 set `WFC_RENDER_DATA` explicitly, so the testing did not
+  match a human launch.
+- **Reproduction:** a plain Release launch (no environment) logged "render data not found … legacy renderer", and its
+  Streets frame matched the recording. Fixed, it logs "shader path active: 325 materials, 1975 lightmapped components,
+  268 lights".
+- **Fix:**
+  - Rendering's `renderDataRoot()` (agents/rendering 398b732: searches up to 4 levels above the exe, logs the root,
+    visible failure). The integration's own equivalent patch was superseded by the owner's.
+  - The integration test runners no longer set `WFC_RENDER_DATA`.
+- **Not the cause** (checked):
+  - the frontend scene / movie / loading teardown: the same flow renders correctly once the root is found;
+  - resolution changes: 1600×900 flows render correctly; render targets follow the frame size;
+  - generic-map conversion: Streets uses its shipped runtime index.
+
+### Other playtest findings
+| finding | cause | resolution | mark |
+|---|---|---|---|
+| Frontend screens over live gameplay (pause menu stayed after Resume) | UI controller did not run the close callback when a screen closed itself | Frontend 6fb19f8: scripted UI EndStates (the integration's interim fix superseded) | VISUALLY VERIFIED (resume frames) |
+| Choose Character closed at match start with no character → body-less match / soft lock | UseInGameLobby (`!PRI.HasSelectedCharacter`) ignored | Frontend 6fb19f8: Choose Character stays until chosen; first spawn → OnRespawn → InGame (integration interim hold removed) | CONFIRMED script (Frontend) |
+| Extras → Movies / Credits soft lock | `Game.PlayMovie` unhandled; the menu removes its input in MovieStarted and only gets it back from `_global.MovieEnded` | Frontend 732a5b2 (MovieEnded handshake); verified: Credits plays with Systems audio, skip, `MovieEnded`, menu responds | CONFIRMED script / VISUALLY VERIFIED |
+| Account / rename text entry did nothing | no WM_CHAR path, no input TextFields | Frontend 9dc70ec: TextPrompt_GFX input fields; verified: "Tester" typed and the local account created | PC ADAPTATION (local accounts) |
+| Second boot skipped the intro | the rebuild persisted HasWatchedIntroMovie | Frontend 3e9db97: a session flag in the original | CONFIRMED (Frontend RE); corrects the integration's earlier "persisted = original" note |
+| Kill-feed rows overlap; HUD bars / clock do not animate | `HmObjectInterpolator.addInterp` (the HUD movie's native tween) unhandled | open | PRODUCT FAIL (Frontend) |
+| 3D character preview absent; colour customization incomplete | preview pawn not implemented (setFrontendPreviewCharacter handoff) | open | PARTIAL (Frontend / Rendering) |
+| Selected body is not the in-game character | only Optimus' pawn resources load | open | RECONSTRUCTION FALLBACK (Gameplay / AssetTools) |
+| Keyboard layout shows categories but no rebinding | the shipped PC menus have no rebinding (Frontend audit) | none (not a 1:1 feature) | FUTURE PC EXTENSION |
+| Lobby backgrounds look flat | the customization room draws only its dome; class cameras / preview pawn are Frontend-driven | open | PARTIAL |
+| TDM description text malformed while scrolling | not reproduced in scripted runs | open | human check |
+| Hang in SwapBuffers (2 of 2 runs at 1600×900, with 3–4 other lanes' GL processes on the GPU) | the main thread blocks inside the AMD driver's SwapBuffers; another lane's process froze the same way | not isolated | UNKNOWN (environment vs. resolution) — human check at higher resolutions |
+
+### Process note
+During this pass the integration session stopped every `wfc_rebuild` process on the machine, not only its own. That
+included two processes belonging to other lanes (an Experimental or Rendering run may have been interrupted and needs to
+be repeated). From then on only the session's own processes were stopped, by PID.
+
+### Lane heads in this build
+| lane | head | notes |
+|---|---|---|
+| agents/rendering | 398b732 | renderDataRoot() root fix (owner's version taken over the integration's), visible failure, visual checks |
+| agents/frontend | 4401c73 | 732a5b2 Extras MovieEnded; 9dc70ec text entry; 3e9db97 intro session flag; 6fb19f8 Choose Character ownership / UI EndStates; 88f19df Create a Character; 4401c73 lobby ticker; 5c53986 return routing |
+| agents/gameplay | e258179 | unchanged since M06 |
+| agents/systems | 0f293c7 | unchanged since M06 |
+| agents/experimental | d7959e1 | validation only, not merged |
+
+Integration's own M06b changes that remain:
+- the pause-close fix in `UIController::onCurrentUIClosed` (also missing on the Frontend head);
+- test runners that no longer set `WFC_RENDER_DATA`.
+
+The integration's interim versions of the root fix, the Choose Character hold and `Game.PlayMovie` were replaced by the
+owners' versions.
+
+### Validation (clean Debug / Release of this build; no environment overrides)
+| check | result |
+|---|---|
+| render-data root chosen at runtime | Release: `build\release\bin\..\..\..\work\render` = `F:\Transformers Rebuild\Rebuild\work\render`; Debug: `build\bin\..\..\work\render` (same folder) |
+| renderer verdict, plain launch (WFC_VISUALCHECK) | `path=original`, 325 materials, 1975 lightmapped components, 268 lights (both exes) |
+| render data withheld (WFC_RENDER_DATA → missing folder) | `[error] wfc: render data not found …`, `VISUALCHECK path=legacy -> FAIL`: a missing folder can no longer pass as a loaded map |
+| Rendering visual suite (5 pinned Streets cameras, title scene, title → lobbies → Streets → lobby → Streets) | **11 / 11 PASS**, all `path=original`; the Streets cameras are pixel-identical (refdiff 0.000) to the first passing run; match 1 = match 2 = 2033 draws / 1641 world / 357 BSP (no leak) |
+| frontend unit | 68 / 0 |
+| wfc_fidelity | 191 / 0 FAIL / 22 known |
+| TDM / DOM-KOTH | 41 / 41; 21 / 21 |
+| transform stress / chaos (Streets) | 0 / 1520 under the map; 0 under / 0 KillZ / 0 stuck |
+| high-refresh camera (144 Hz) | 0.0003° |
+| audio suite / movie probe | 566 / 0; repeated chains end with 0 streams / 0 voices |
+| Extras Credits | plays with its audio, skip, `_global.MovieEnded`, the menu responds |
+| Accounts text entry | "Tester" typed, the local account created |
+| pause → resume (InGame and PausedSpectating) | the pause movie closes (`ui.close`, `gfx.movieClosed`); the live match is visible |
+
 ## INTEGRATION MILESTONE 06 (2026-10-04) — branch `integration/milestone-06` — first multi-map, audio-complete build
 
 **Executables:**

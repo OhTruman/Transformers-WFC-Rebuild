@@ -17,6 +17,24 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## INTEGRATION MILESTONE 06b — PLAYTEST REGRESSION CLASSIFICATION (2026-10-04)
+Full report: STATUS.md (INTEGRATION MILESTONE 06b).
+
+| Item | Original | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| M06 black world / malformed menus | — | plain Release launch reproduced it; Rendering 398b732 reproduced it independently | **INTEGRATION REGRESSION — ROOT CAUSE CONFIRMED, FIXED, VISUALLY VERIFIED** | render-data root resolved from build/release/bin to a missing folder → silent legacy fallback. Rendering's renderDataRoot() search; visible failure (error + VISUALCHECK FAIL + red frame); 11 / 11 visual suite and 29 / 29 human-flow frames on the original path |
+| Pause menu over gameplay after Resume | pause UI closes on Resume | merged-build trace (no ui.close) | INTEGRATION REGRESSION — FIXED, VISUALLY VERIFIED | onCurrentUIClosed runs closeCurrentUI |
+| Choose Character at match start | stays until chosen (UseInGameLobby = !HasSelectedCharacter) | Frontend 6fb19f8 (script) | CONFIRMED ORIGINAL | Frontend implementation |
+| Extras Movies / Credits | Game.PlayMovie → MovieStarted / MovieEnded | Frontend 732a5b2 (script) | CONFIRMED ORIGINAL / VISUALLY VERIFIED | Credits plays with audio, skip returns control |
+| Intro on later boots | HasWatchedIntroMovie is a session flag | Frontend 3e9db97 | CONFIRMED ORIGINAL | the earlier M06 note ("persisted = original") is corrected |
+| Account name / rename text entry | TextPrompt_GFX input fields | Frontend 9dc70ec | PC ADAPTATION (local accounts) | verified by typing |
+| HUD tweens / kill-feed stacking | HmObjectInterpolator.addInterp | unhandled bridge call | PARTIAL (Frontend) | open |
+| Customization preview pawn | preview pawn of the selected chassis | Rendering / Frontend handoff | PARTIAL | open |
+| Lobby / title presentation | live UI levels | Rendering M09 | PARTIAL (some scenes authored dark; one title laser / Matinee effect partial) | — |
+| SwapBuffers hang at 1600×900 under multi-process GPU load | — | 2 hangs in the AMD driver with 3–4 other lanes' GL processes running | UNKNOWN | human check |
+
+---
+
 ## INTEGRATION MILESTONE 06 — PROVENANCE OF INTEGRATION DECISIONS (2026-10-04)
 Full report: STATUS.md (INTEGRATION MILESTONE 06). Lane provenance stays in each lane's section.
 
