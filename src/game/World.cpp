@@ -878,6 +878,7 @@ void World::tick(float dt) {
         } else lockedClip_ = 0;
         if (matchActive_ && player_.controller().consumeKillstreakRequest()) triggerLocalKillstreak();
         if (player_.controller().consumeMeleeRequest()) startLocalMelee(false);
+        if (player_.controller().consumeGrenadeRequest()) startLocalGrenadeToss();
         if (deferredKillstreak_ && lp.moveForm() == Form::Robot && !lp.isTransforming()) { deferredKillstreak_ = false; triggerLocalKillstreak(); }
     }
     tickAbilityEffects(dt);
@@ -1128,6 +1129,7 @@ HudGameState World::hudState() const {
     h.cloaked = pc.cloakRemain_ > 0.0f;
     h.hoverState = pc.hoverState_;
     h.lockTarget = lockTarget_; h.locked = locked_;
+    { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
     {
         const Weapon* aw = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
         h.lockProgress = aw && aw->lockOnTime > 0.0f ? std::min(1.0f, lockTimer_ / aw->lockOnTime) : 0.0f;
@@ -1654,6 +1656,43 @@ void World::tickProjectiles(float dt) {
             }
         }
         if (p.closingRemain >= 0.0f) { p.closingRemain -= dt; if (p.closingRemain < 0.0f) closingExpired = true; }
+        if (p.grenade) {
+            // PHYS_Falling at GravityScale; HitWall / Bump -> HitThing: explode on a pawn only with ExplodeWhenHittingPawn; else
+            // the first impact starts the fuse (LifeSpan = RandomInRange(FuseTime)), v = BounceDampening x reflect(v), at rest
+            // (PHYS_None) when |v|^2 < LowSpeedThreshold 500 UU^2/s^2 [CONF script + authored].
+            if (!p.resting) {
+                p.vel.y -= core::config::kGravity * p.gravityScale * dt;
+                core::Vec3 nx = p.pos + p.vel * dt;
+                float tw;
+                bool hitPawn = false;
+                core::Vec3 seg = nx - p.pos; float sl = core::length(seg);
+                if (sl > 1e-5f)
+                    for (MatchOpponent* o : opponents_) {
+                        float th;
+                        if (o->matchPlayer() != p.instigator && o->rayHit(p.pos, seg * (1.0f / sl), sl, th)) { hitPawn = true; break; }
+                    }
+                auto impact = [&](const core::Vec3& n) {
+                    if (p.life > 1e8f) p.life = p.fuseMin + (p.fuseMax - p.fuseMin) * (float)(std::rand() % 1000) / 999.0f;
+                    p.vel = (p.vel - n * (2.0f * core::dot(p.vel, n))) * p.bounce;
+                    if (core::dot(p.vel, p.vel) < 500.0f * 1e-4f) { p.resting = true; p.vel = {0, 0, 0}; }
+                };
+                if (hitPawn && p.explodeOnPawn) { radiusDamage(p.pos, p.damage, p.radius, p.instigator, p.damageType); projectiles_.erase(projectiles_.begin() + (long)i); continue; }
+                if (hitPawn) {
+                    core::Vec3 n = core::normalize(core::Vec3{-seg.x, 0.0f, -seg.z});
+                    impact(n);
+                } else if (lineWorld && lineWorld->segmentHit(p.pos, nx, tw)) {
+                    // Surface normal: floor when moving down onto it, else the reversed horizontal travel [PROV normal estimate].
+                    core::Vec3 n = p.vel.y < 0.0f && std::fabs(p.vel.y) > std::hypot(p.vel.x, p.vel.z) * 0.5f ? core::Vec3{0, 1, 0}
+                                                                                                         : core::normalize(core::Vec3{-p.vel.x, 0.0f, -p.vel.z});
+                    p.pos = p.pos + seg * std::max(0.0f, tw - 1e-3f);
+                    impact(n);
+                } else p.pos = nx;
+            }
+            p.life -= dt;
+            if (p.life <= 0.0f) { radiusDamage(p.pos + core::Vec3{0, 0.1f, 0}, p.damage, p.radius, p.instigator, p.damageType); projectiles_.erase(projectiles_.begin() + (long)i); continue; }
+            ++i;
+            continue;
+        }
         core::Vec3 next = p.pos + p.vel * dt;
         float best = 1.0f; bool hit = false;
         float t;
@@ -1759,6 +1798,44 @@ void World::tickAbilityEffects(float dt) {
     }
     tickLocalMelee(dt);
     tickHomingLock(dt);
+    grenadeCooldown_ = std::max(0.0f, grenadeCooldown_ - dt);
+    if (grenadeTossDelay_ >= 0.0f) {
+        grenadeTossDelay_ -= dt;
+        Character& gp = player_.pawn();
+        const Weapon* gb = grenadeBag(gp);
+        if (grenadeTossDelay_ < 0.0f && gb && !localDead_ && gp.moveForm() == Form::Robot) {
+            // TnGrenadeThrower.SpawnGrenade at MeleeSocket_RightHand.
+            core::Vec3 src = gp.actorLocation() + core::Vec3{0, gp.robotParams().eyeHeight, 0};
+            const SocketDef& sd = gp.chassis().rightHand;
+            core::Mat4 bm;
+            if (sd.valid && gp.boneWorld(sd.bone, bm)) { core::Mat4 w = bm * sd.local; src = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
+            const WeaponDef& d = *gb->def;
+            // SuggestTossVelocity(target, src, TossStrength): the lower ballistic arc at that speed under world gravity
+            // (native; exact solve here, 45 deg when out of reach) [PROV].
+            core::Vec3 to = grenadeTarget_ - src;
+            float hd = std::hypot(to.x, to.z), dy = to.y, S = d.tossStrength, g = core::config::kGravity;
+            float disc = S * S * S * S - g * (g * hd * hd + 2.0f * dy * S * S);
+            float ang = disc >= 0.0f && hd > 1e-3f ? std::atan((S * S - std::sqrt(disc)) / (g * hd)) : 0.7853982f;
+            core::Vec3 hdir = hd > 1e-3f ? core::Vec3{to.x / hd, 0, to.z / hd} : core::forwardFromYawPitch(gp.yaw(), 0.0f);
+            core::Vec3 vel = hdir * (S * std::cos(ang)) + core::Vec3{0, S * std::sin(ang), 0};
+            // AdjustTossVelocity: aim pitch (src -> target) <= LowPitchDegrees.Max -> speed lerps toward LowPitchSpeed at .Min.
+            const float aimPitch = std::atan2(dy, std::max(hd, 1e-3f)) * 57.29578f;
+            if (d.lowPitchMin != d.lowPitchMax && aimPitch <= d.lowPitchMax) {
+                float np = core::clampf((aimPitch - d.lowPitchMin) / (d.lowPitchMax - d.lowPitchMin), 0.0f, 1.0f);
+                float sp = core::length(vel);
+                vel = core::normalize(vel) * (d.lowPitchSpeed + (sp - d.lowPitchSpeed) * np);
+            }
+            // Grenade.Init: x Lerp(SpeedScaleAtMinPitch, SpeedScaleAtMaxPitch, pct(launch pitch, MinPitch, MaxPitch)).
+            const float launchPitch = std::atan2(vel.y, std::hypot(vel.x, vel.z)) * 57.29578f;
+            float lp = core::clampf((launchPitch - d.minPitch) / (d.maxPitch - d.minPitch), 0.0f, 1.0f);
+            vel = vel * (d.speedScaleMinPitch + (d.speedScaleMaxPitch - d.speedScaleMinPitch) * lp);
+            Projectile pr{src, vel, d.projDamage, d.projRadiusM, 1e9f, d.projDamageType ? d.projDamageType : "", localPlayer_};
+            pr.grenade = true; pr.explodeOnPawn = d.explodeOnPawn; pr.gravityScale = d.gravityScale; pr.bounce = d.bounce;
+            pr.fuseMin = d.fuseMin; pr.fuseMax = d.fuseMax;
+            projectiles_.push_back(pr);
+            LOG_INFO("grenade %s: |v| %.1f m/s pitch %.1f deg (aim %.1f)", d.id, core::length(vel), launchPitch, aimPitch);
+        }
+    }
     if (pc.shockwaveDelay_ >= 0.0f) {
         pc.shockwaveDelay_ -= dt;
         if (pc.shockwaveDelay_ < 0.0f && !localDead_) {
@@ -1906,6 +1983,35 @@ void World::tickHomingLock(float dt) {
             if (holdLockTimer_ >= w->holdLockOnTime || !matchPawn(lockTarget_)) { locked_ = false; lockTarget_ = -1; holdLockTimer_ = 0.0f; }
         }
     }
+}
+
+const Weapon* World::grenadeBag(const Character& c) const {
+    for (const Weapon& w : c.inventory()) if (w.grenade()) return &w;
+    return nullptr;
+}
+
+// TnPlayerController.PlayerWalking.TossGrenade -> TnGrenadeBag.TossGrenade (CanToss: ammo, FireInterval 1.5 s) ->
+// TnGrenadeThrower: target = the view trace from TargetTraceRange.Min 1000 to .Max 10000 UU (hit or end); GrenadeThrow
+// upper-body anim; spawn after TossDelay 0.4 s [CONF script + authored].
+void World::startLocalGrenadeToss() {
+    Character& pc = player_.pawn();
+    if (localDead_ || pc.moveForm() != Form::Robot || pc.isTransforming() || pc.isMeleeing() || grenadeTossDelay_ >= 0.0f) return;
+    Weapon* gb = nullptr;
+    for (Weapon& w : pc.inventoryMutable()) if (w.grenade()) { gb = &w; break; }
+    if (!gb) return;
+    if (gb->reserve <= 0 || grenadeCooldown_ > 0.0f) return;   // PlayDryFireSound
+    gb->reserve -= 1;
+    grenadeCooldown_ = gb->fireInterval;
+    const core::Vec3 cam = player_.controller().cameraPos();
+    const core::Vec3 dir = core::forwardFromYawPitch(player_.controller().camYaw(), player_.controller().camPitch());
+    const core::Vec3 a = cam + dir * 10.0f, b = cam + dir * 100.0f;
+    grenadeTarget_ = b;
+    float t;
+    const CollisionWorld* line = collision_.valid() ? &collision_ : nullptr;
+    if (line && line->segmentHit(a, b, t)) grenadeTarget_ = a + (b - a) * t;
+    pc.playAction("GrenadeThrow", true);
+    pc.exposeSelf();   // ServerTossGrenade -> ExposeSelf
+    grenadeTossDelay_ = 0.4f;
 }
 
 } // namespace game

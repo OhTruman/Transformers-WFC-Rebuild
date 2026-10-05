@@ -18,6 +18,7 @@ struct Weapon {
     float projSpeed = 0.0f, projDamage = 0.0f, projRadiusM = 0.0f; bool projHoming = false;
     float homingForce = 0.0f, closingDistM = 0.0f, closingForce = 0.0f, closingTime = 0.0f, projMaxSpeed = 0.0f;
     float lockOnTime = 0.0f, holdLockOnTime = 0.0f; bool lockRobots = false;
+    bool grenade() const { return fireType == WeaponFire::Grenade && def && def->tossStrength > 0.0f; }
     bool simulated() const { return fireType == WeaponFire::InstantHit || (fireType == WeaponFire::Projectile && projSpeed > 0.0f); }
     bool projectile() const { return fireType == WeaponFire::Projectile && projSpeed > 0.0f; }
     static Weapon fromDef(const WeaponDef& d) {

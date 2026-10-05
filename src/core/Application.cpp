@@ -2182,6 +2182,36 @@ void Application::runWeaponTest() {
         check(hoveringNow && yTop - y0 > 4.0f && std::fabs(yMid - yTop) < 0.3f && maxH <= 5.01f && ended && yEnd < yTop - 3.0f && cd,
               "Hover: rises to HoverJumpHeight, holds height 7 s at <= HoverAirSpeed 5 m/s, falls after; 35 s cooldown");
     }
+    // Grenade (Optimus custom loadout IonBlaster + FlakGrenades, 1 in the bag; swaps skip the bag): G -> spawn after TossDelay 0.4 s, bounces, fuse 2.0 s from the first
+    // impact, then explodes; the empty bag refuses the next toss.
+    {
+        world_.applyChassisToLocalPawn("Truck");
+        game::CharacterSelection gs; gs.type = 0; gs.specialty = game::Specialty::Leader; gs.weapons = {"IonBlaster", "FlakGrenades"};
+        world_.applyLoadout(&gs);
+        run(1.0f);
+        int bag0 = world_.hudState().grenades;
+        size_t n0 = world_.projectiles().size();
+        platform::InputFrame g; g.pressed[(int)platform::Button::Grenade] = true; g.down[(int)platform::Button::Grenade] = true;
+        world_.handleInput(g, dt); world_.tick(dt);
+        run(0.3f);
+        bool notYet = world_.projectiles().size() == n0;
+        run(0.15f);
+        bool spawned = world_.projectiles().size() == n0 + 1 && world_.projectiles().back().grenade;
+        float firstImpact = -1.0f, gone = -1.0f;
+        for (int i = 0; i < 60 * 8 && gone < 0.0f; ++i) {
+            platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt);
+            if (world_.projectiles().size() == n0) { gone = (i + 1) * dt; break; }
+            if (firstImpact < 0.0f && world_.projectiles().back().life < 1e8f) firstImpact = (i + 1) * dt;
+        }
+        int bag1 = world_.hudState().grenades;
+        world_.handleInput(g, dt); world_.tick(dt);
+        run(0.6f);
+        bool refused = world_.projectiles().size() == n0;
+        LOG_INFO("WEAPON grenade: bag %d -> %d, spawned at 0.4 s %d, first impact %.2f s, exploded %.2f s (fuse %.2f), empty bag refused %d",
+                 bag0, bag1, (int)(notYet && spawned), firstImpact, gone, gone - firstImpact, (int)refused);
+        check(bag0 == 1 && bag1 == 0 && notYet && spawned && firstImpact > 0.0f && std::fabs((gone - firstImpact) - 2.0f) < 0.05f && refused,
+              "Flak grenade: G tosses after 0.4 s, fuse 2.0 s from the first impact, 1 in the bag");
+    }
     LOG_INFO("WEAPON SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

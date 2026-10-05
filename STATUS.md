@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22n (2026-10-05) — grenades (G)
+- Grenade bag toss, bounce, fuse-on-first-impact and HurtRadius from authored data; bag not in the swap cycle. WFC_WEAPONTEST 17/17.
+
 ## GAMEPLAY PASS 22m (2026-10-05) — homing lock-on and TakeRadiusDamage falloff
 - Thermo Rocket Launcher / Jet Rocket lock vehicles (not robots) after 0.5 s; locked rockets home and close. WFC_PARTICIPANTTEST 8/8.
 - Chassis stress on the current build: 0/760 transforms under the map for Car2, Jet, Tank3, Truck4 and Truck; chaos 0 under-map except 1 Truck4 deck case.

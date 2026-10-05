@@ -169,6 +169,7 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     socketFrom(c["robot"]["sockets"], "MeleeSocket_SmallRobot", d.meleeSmall);
     socketFrom(c["robot"]["sockets"], "MeleeSocket_LargeRobot", d.meleeLarge);
     socketFrom(c["robot"]["sockets"], "PositionSocket", d.positionSocket);
+    socketFrom(c["robot"]["sockets"], "MeleeSocket_RightHand", d.rightHand);
 
     // ---- Robot (ROBODEF scalars, acrobatics, momentum; collision from the roster identity) ----
     const assets::Json& st = c["stats"];

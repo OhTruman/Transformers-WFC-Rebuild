@@ -91,6 +91,7 @@ struct ChassisDef {
     SocketDef weaponPrimary, weaponSecondary; // robot WeaponSocket_Primary / _Secondary
     SocketDef vehicleWeapon;                  // vehicle WeaponSocket_Primary
     SocketDef meleeSmall, meleeLarge, positionSocket;   // robot MeleeSocket_SmallRobot / _LargeRobot / PositionSocket
+    SocketDef rightHand;                                // robot MeleeSocket_RightHand (TnGrenadeThrower.TossSocket)
     RobotParams robot;
     VehicleParams vehicle;
     CamStrategy camHover{core::config::kHoverCamAnchor, core::config::kHoverCamDist, core::config::kHoverCamPitchMin,

@@ -61,6 +61,7 @@ struct HudGameState {
     bool dodging = false;
     bool cloaked = false;
     int hoverState = 0;
+    int grenades = 0;                            // grenade bag reserve (WT_Grenades); -1 = no bag
     int lockTarget = -1;                         // homing weapon: target match player (-1 none)
     float lockProgress = 0.0f;                   // LockOnTimer / LockOnTime
     bool locked = false;                         // lock acquired (the next shot homes)                          // 1 rising to hover, 2 hovering (TnAcrobaticsManager)                        // TnBuffCloak active (Rendering: cloak shader)
@@ -235,7 +236,15 @@ public:
         int target = -1;                       // homing target match player (SetTarget; -1 = flies straight)
         float homingForce = 0, closingDist = 0, closingForce = 0, closingTime = 0, maxSpeed = 0, closingRemain = -1.0f;
         bool lockRobots = false;
+        // Grenade (TnProjectileGrenadeBase): gravity scale, bounce, fuse (starts on the first impact), resting, explode on pawn.
+        bool grenade = false, explodeOnPawn = false, resting = false;
+        float gravityScale = 1.0f, bounce = 1.0f, fuseMin = 0.0f, fuseMax = 0.0f;
     };
+    // TnGrenadeThrower: G in robot form -> toss after TossDelay 0.4 s.
+    void startLocalGrenadeToss();
+    float grenadeTossDelay_ = -1.0f, grenadeCooldown_ = 0.0f;
+    core::Vec3 grenadeTarget_{0, 0, 0};
+    const Weapon* grenadeBag(const Character& c) const;
     void spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const Weapon& w, int instigator);
     const std::vector<Projectile>& projectiles() const { return projectiles_; }
     void fireHitscanWith(const Weapon& w, const core::Vec3& origin, const core::Vec3& dirIn);

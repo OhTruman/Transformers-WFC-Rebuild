@@ -189,6 +189,24 @@ Inputs:
   - Test: no lock on a robot; vehicle lock at 0.52 s (0.5 s + frame); the rocket aimed 4 m off at 50 m hits.
 - **Splash falloff** now subtracts the victim's collision radius before scaling:
   Dist = max(d − ColRadius, 0), scale 1 − Dist/DamageRadius [HIGH stock UE3 Actor.TakeRadiusDamage].
+- **Grenades** [CONF script TnGrenadeBag / TnGrenadeThrower / TnProjectileGrenadeBase + authored; RE §H4]:
+  - G ("Throw Grenade") in robot form → TnGrenadeBag.TossGrenade. CanToss = ammo and no FireInterval timer (1.5 s);
+    otherwise dry fire.
+  - The bag is given without activation: not in the weapon-swap cycle; reserve = MaxAmmoCount (Flak 1, FlashBangs 2).
+  - Target: view trace from 10 m to 100 m (hit or end point). GrenadeThrow upper-body clip; spawn after
+    TossDelay 0.4 s at MeleeSocket_RightHand; ExposeSelf.
+  - Velocity:
+    - SuggestTossVelocity(TossStrength 110 m/s) [PROV: native; the exact lower ballistic arc under world gravity];
+    - AdjustTossVelocity lerps toward LowPitchSpeed below LowPitchDegrees.Max;
+    - Init scales by lerp(SpeedScaleAtMinPitch, AtMaxPitch, pct(pitch, MinPitch, MaxPitch)).
+  - Flight: gravity × GravityScale. Impacts reflect × BounceDampening and rest when v² < 500 UU²/s².
+    The fuse (RandomInRange(FuseTime)) starts on the first impact; ExplodeWhenHittingPawn grenades detonate on a pawn.
+    Explosion = HurtRadius (Flak 325 / 20 m, TnDamageTypeFlakGrenade).
+  - The surface normal at a world impact is estimated (floor or reversed travel) [PROV]. Flashbang blind, heal
+    grenade healing and kamikaze-mine seeking are not simulated [PARTIAL].
+  - HUD grenades (reserve, −1 without a bag).
+  - Test (WFC_WEAPONTEST 17/17): spawned at 0.4 s, first impact 0.35 s later, exploded 2.00 s after it; the empty
+    bag refused the next toss.
 - Barrier, RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].

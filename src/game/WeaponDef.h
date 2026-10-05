@@ -32,6 +32,9 @@ struct WeaponDef {
     float projSpeed, projDamage, projRadiusM; const char* projDamageType; bool projHoming;
     // TnProjectileDataHoming (m/s2, m, s) and the weapon's TnWeaponHoming lock values [CONF authored].
     float homingForce, closingDistM, closingForce, closingTime, projMaxSpeed, lockOnTime, holdLockOnTime; bool lockRobots;
+    // Grenade bag (TnWeaponDataGrenadeBag + TnProjectileDataGrenadeLauncher) [CONF authored].
+    float tossStrength, lowPitchMin, lowPitchMax, lowPitchSpeed, fuseMin, fuseMax, bounce, gravityScale; bool explodeOnPawn;
+    float speedScaleMinPitch, speedScaleMaxPitch, minPitch, maxPitch;
 };
 
 // By provider UniqueId or class id (case-sensitive); null when unknown.

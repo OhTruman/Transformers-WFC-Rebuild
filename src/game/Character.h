@@ -298,6 +298,7 @@ public:
         vehicleInventory_ = vehicleLoadout_;
         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;
         activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1;
+        while (activeWeapon_ + 1 < (int)inventory_.size() && inventory_[(size_t)activeWeapon_].fireType == WeaponFire::Grenade) ++activeWeapon_;
     }
     const std::vector<std::string>& vehicleWeapons() const { return vehicleWeapons_; }
     // Vehicle-form weapon (CreateWeapons(VehicleWeapons), the first one active in vehicle form); null when none.
@@ -306,9 +307,13 @@ public:
     // Swap Weapons (mouse wheel / PgUp / PgDn): put the current weapon down (PutDownTime), then equip the next one
     // (EquipTime); no firing in between [HIGH: HmWeapon PutDown / Equip states, WEPDATA times CONF].
     void requestWeaponSwitch(int dir) {
+        // The grenade bag (TnGrenadeBag, WT_Grenades) is given without activation and thrown with G: not in the swap cycle.
         int n = (int)inventory_.size();
         if (n < 2 || switchTo_ >= 0 || weapon().reloading()) return;
-        switchTo_ = ((activeWeapon_ + dir) % n + n) % n;
+        int to = activeWeapon_;
+        for (int k = 0; k < n; ++k) { to = ((to + dir) % n + n) % n; if (inventory_[(size_t)to].fireType != WeaponFire::Grenade) break; }
+        if (to == activeWeapon_) return;
+        switchTo_ = to;
         switchRemain_ = weapon().putDownTime + inventory_[(size_t)switchTo_].equipTime;
         switchSwapAt_ = inventory_[(size_t)switchTo_].equipTime;
     }
