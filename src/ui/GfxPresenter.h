@@ -49,6 +49,10 @@ private:
     gfx::avm1::Value bridge(GfxMovie& m, const std::string& fn, gfx::avm1::Args& a);
     void fsCommand(GfxMovie& m, const std::string& cmd, const std::string& arg);
     void syncMovies(frontend::GameFlow& flow);
+    // TnUIController message box: MessageBoxUI (UI_GFxShared_p.MessagePrompt_GFX_1) with focus while the flow's popup
+    // is open; _global.DisplayMessage is invoked whenever the popup changes.
+    void syncPopup(frontend::GameFlow& flow);
+    uint64_t popupSerial_ = 0;
     void deliverKeys(const platform::InputFrame& in);
 
     frontend::FrontendRuntime& rt_;

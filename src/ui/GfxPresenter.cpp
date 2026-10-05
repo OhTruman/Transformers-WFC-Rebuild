@@ -29,6 +29,7 @@ Value toValue(gfx::avm1::VM& vm, const frontend::BridgeValue& b) {
 // arrows navigate, 13 A, 27 B, 112 X, 113 Y, 114 Start, 115 Back, 33 LB, 34 RB, 36 LT, 35 RT, 116/117 stick clicks.
 // That the engine sends exactly these codes for the pad buttons is HIGH (native GFx key mapping not traced).
 const int kFlashCode[(int)platform::UiKey::Count] = {38, 40, 37, 39, 13, 27, 112, 113, 114, 115, 33, 34, 36, 35, 116, 117};
+const char* const kPopupMovie = "UI_GFxShared_p.MessagePrompt_GFX_1";   // Default__TnUIController.MessageBoxUI
 } // namespace
 
 bool GfxPresenter::init() {
@@ -144,6 +145,12 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
     // An undefined / null argument reaches an UnrealScript string parameter as "" (not "undefined"): e.g. the
     // Customize.CommitCharacter weapon list of an unset slot.
     for (const Value& v : a) sa.push_back(v.isNullish() ? std::string() : m.player().vm().toString(v));
+    if (fn == "Self.Close" && m.object() == kPopupMovie) {
+        // The message box movie closed itself (its own CloseMessagePrompt path).
+        deferredErase_.push_back(m.object());
+        rt_.flow().popupClosedByMovie();
+        return Value();
+    }
     if (fn == "Self.Close") {
         // TnUIController: the open UI closing itself (pause "Resume" etc.).
         m.closeRequested = true;
@@ -188,6 +195,38 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
         return Value();
     }
     return toValue(m.player().vm(), rt_.bridge(m.object(), fn, sa));
+}
+
+void GfxPresenter::syncPopup(frontend::GameFlow& flow) {
+    const frontend::GameFlow::Popup& p = flow.popup();
+    Extra* box = nullptr;
+    for (Extra& e : extras_) if (e.object == kPopupMovie) box = &e;
+    if (!p.open) {
+        if (box && std::find(deferredErase_.begin(), deferredErase_.end(), box->object) == deferredErase_.end()) {
+            rt_.dataStores().forgetMovie(box->object);
+            deferredErase_.push_back(box->object);
+        }
+        return;
+    }
+    if (!box) {
+        Extra e;
+        e.object = kPopupMovie;
+        e.focus = true;
+        e.movie = std::make_unique<GfxMovie>();
+        bool ok = e.movie->open(lib_, &rt_.catalog(), kPopupMovie,
+                                [this](GfxMovie& mv, const std::string& f, Args& aa) { return bridge(mv, f, aa); },
+                                [this](GfxMovie& mv, const std::string& c, const std::string& aa) { fsCommand(mv, c, aa); });
+        frontend::FlowTrace::emit("gfx.movie", {{"movie", kPopupMovie}, {"opened", frontend::FlowTrace::boolean(ok)}, {"by", "popup"}});
+        if (!ok) { flow.popupClosedByMovie(); return; }   // never leave a modal without a movie
+        extras_.push_back(std::move(e));
+        box = &extras_.back();
+        popupSerial_ = 0;
+    }
+    if (popupSerial_ != p.serial) {
+        popupSerial_ = p.serial;
+        box->movie->invoke("_global.DisplayMessage", {Value(p.title), Value(p.message), Value(p.buttonString()), Value((double)p.icon)});
+        frontend::FlowTrace::emit("gfx.invoke", {{"movie", kPopupMovie}, {"fn", "_global.DisplayMessage"}, {"buttons", p.buttonString()}});
+    }
 }
 
 void GfxPresenter::fsCommand(GfxMovie& m, const std::string& cmd, const std::string& arg) {
@@ -262,6 +301,7 @@ void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
 
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
     syncMovies(flow);
+    syncPopup(flow);
     if (!cursor_) {
         cursor_ = std::make_unique<GfxMovie>();
         bool ok = cursor_->open(lib_, &rt_.catalog(), "UI_GFxMouseCursor_p.Cursor_GFX_1",

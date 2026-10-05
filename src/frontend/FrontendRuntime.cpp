@@ -175,7 +175,7 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
         if (st.rfind("shot:", 0) == 0) { if (shotHook) shotHook(st.substr(5)); return; }
         if (st.rfind("uievent:", 0) == 0) { flow.onUIEvent(std::atoi(st.c_str() + 8)); return; }
         if (st.rfind("snapshot:", 0) == 0) { flow.traceSnapshot(st.c_str() + 9); continue; }
-        if (st == "quit") { flow.call("Game.ExitGame"); return; }
+        if (st == "quit") { flow.exitNow(); return; }
         LOG_WARN("FRONTEND script: unknown step '%s'", st.c_str());
     }
 }
