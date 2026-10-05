@@ -113,6 +113,8 @@ public:
     // MaxConcurrentPlayCount / InstanceLimiting: the entry's own fields (the level manifest's cue_limits are merged in
     // by AmbientAudio::load), else Engine.Default__SoundCue (5 / kKillFarthest).
     int addCues(const assets::Json& cues, const std::string& contentRoot);
+    // A localized wave's file for the selected language's _LOC twin ("" = no such twin extracted: not played).
+    static std::string localizedWave(const std::string& rel, const std::string& ownerTwin, const std::string& contentRoot);
 
     // ---- lifecycle ----
     // Hard stop of every instance (voices stopped at once, queued wave events dropped, cue mixer presets
