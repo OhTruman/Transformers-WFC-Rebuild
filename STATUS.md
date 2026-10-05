@@ -3,7 +3,7 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
-## INTEGRATION MILESTONE 06b (2026-10-04) — human-playtest regression containment — branch `integration/milestone-06`
+## INTEGRATION MILESTONE 06b (2026-10-04) — human-playtest regression containment — branch `integration/milestone-06b`
 
 **Next human playtest — plain launch, no environment variables needed:**
 - Release: `F:\Transformers Rebuild\Rebuild\build\release\bin\wfc_rebuild.exe`
