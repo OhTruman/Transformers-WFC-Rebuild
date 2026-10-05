@@ -3,6 +3,7 @@
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
 #include "assets/Gltf.h"
+#include "assets/SkinnedModel.h"
 #include "assets/Json.h"
 #include <sstream>
 #include <map>
@@ -478,6 +479,29 @@ public:
         endFrame();
     }
     void setFrontendSceneDraw(std::function<void(IRenderer&)> f) override { sceneDraw_ = std::move(f); }
+    int loadPreviewBody(const std::string& gl, const std::vector<std::string>& sets, const std::string& anim) override {
+        auto b = std::make_unique<PreviewBody>();
+        const std::string content = wfc::Pipeline::contentRoot();
+        auto rel = [](const std::string& p) { return p.rfind("content/", 0) == 0 ? p.substr(8) : p; };
+        if (!assets::loadSkinnedGlb(content + rel(gl), b->model)) return -1;
+        for (auto it = sets.rbegin(); it != sets.rend(); ++it) {   // last set first: clipByName returns its clip
+            const std::string& s = *it;
+            size_t dot = s.find('.');
+            if (dot == std::string::npos) continue;
+            assets::loadAnimationsByName(content + s.substr(0, dot) + "/" + s.substr(dot + 1) + ".anim.gltf", b->model);
+        }
+        b->clip = b->model.clipByName(anim);
+        if (b->clip < 0) LOG_WARN("preview body %s: sequence %s not in its AnimSets; reference pose", gl.c_str(), anim.c_str());
+        else LOG_INFO("preview body %s: %s (%.2f s)", gl.c_str(), anim.c_str(), b->model.clips[(size_t)b->clip].duration);
+        previewBodies_.push_back(std::move(b));
+        return (int)previewBodies_.size() - 1;
+    }
+    bool posePreviewBody(int h, float t, MeshData& out) override {
+        if (h < 0 || (size_t)h >= previewBodies_.size() || !previewBodies_[(size_t)h]) return false;
+        PreviewBody& b = *previewBodies_[(size_t)h];
+        assets::evaluatePose(b.model, b.clip, t, b.scratch, out, true);
+        return !out.empty();
+    }
     bool loadContentMesh(const std::string& gl, MeshData& out) override {
         std::string rel = gl.rfind("content/", 0) == 0 ? gl.substr(8) : gl;
         return assets::loadGlb(wfc::Pipeline::contentRoot() + rel, out) && !out.empty();
@@ -1225,6 +1249,8 @@ private:
     core::Mat4 view_;
     int vpW_ = 0, vpH_ = 0;
     std::string glEntry_;
+    struct PreviewBody { assets::SkinnedModel model; int clip = -1; std::vector<core::Mat4> scratch; };
+    std::vector<std::unique_ptr<PreviewBody>> previewBodies_;
     std::function<void(IRenderer&)> sceneDraw_;
     Camera lastCam_;
     bool renderDataRequested_ = false;   // a map / scene asked for the original presentation (M10 legacy-fallback marker)

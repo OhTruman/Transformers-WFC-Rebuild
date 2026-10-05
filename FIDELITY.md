@@ -17,6 +17,13 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 19 — PREVIEW PAWN POSE (2026-10-05)
+| Item | Original | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Preview animation | TnCharacterScriptBinding.SetupPreviewAnim → IdleNode.SetAnim(PreviewAnim); class defaults IdleNodeName=IdleNode, PreviewAnim=Cust_Idle | decompiled script, cooked Default__TnCharacterScriptBinding | CONFIRMED | `IRenderer::loadPreviewBody(robotGltf, animSets, "Cust_Idle")` + `posePreviewBody(h, t, mesh)`: roster sets loaded, sequence found last set first (UE3 FindAnimSequence), looping |
+| Which chassis have Cust_Idle | 13 sets (SequenceName): Jetfire, Optimus, Scattershot, Warpath, Zeta, Ironhide, Onslaught, Skywarp, Soundwave, Starscream, Thundercracker, Breakdown, Deadend. Arcee has only Cust_idle_active; the others (e.g. Sideswipe, Barricade) have none | cooked UI_PartyLobby_m (all MP sets cooked there) | CONFIRMED | VISUALLY VERIFIED: Warpath (12.3 s) and Starscream (9.9 s) animate in the customization room |
+| Chassis without Cust_Idle | UE3 SetAnim on a missing sequence clears AnimSeq (warning) and the node outputs the reference pose | stock UE3 AnimNodeSequence; the rest of Robot_ANIMTREE above IdleNode not traced (asked RE) | HIGH (node) / UNKNOWN (tree result) | reference pose (logged) |
+
 ## MILESTONE 17 — CUSTOMIZATION CLASS CAMERA, IMAGE CHECK (2026-10-05)
 Merge preview: agents/frontend 89df3bc + agents/rendering, -Map Standard render data. Route: party lobby → Create a
 Character → first character → Autobot Chassis (clickclip chassisButtonA).
