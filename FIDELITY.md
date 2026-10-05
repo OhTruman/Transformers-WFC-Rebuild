@@ -59,6 +59,19 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND: TITLE VIGNETTE / MENU BACKGROUNDS COVER THE SCREEN (2026-10-05, agents/frontend)
+- Human-confirmed: the title vignette left bright vertical strips at both sides (87.5 % of the width covered at 16:9).
+- Cause (Frontend, GFx host): the menus are authored on a 1120 x 720 stage, fitted (showAll) and centred; every menu sizes
+  its full-screen pieces in its own Stage.onResize from Stage.width / height (FrontEnd_GFX: screenSoftEdges_mc, the
+  authored scale-9 vignette FrontEnd_GFX_I24, centred at 560; PauseMenu bg_mc / bg2_mc; Settings, Extras, Accounts, lobby
+  movies alike) and footer_mc is authored at x = 1200, outside the stage. The rebuild reported Stage.width = 1120 and
+  sent onResize only to noScale movies, so the vignette stopped at the stage edges.
+- Fix: showAll movies report the visible area in stage units (1280 x 720 at 16:9) and every movie gets onResize when the
+  viewport changes or a listener registers. The authored vignette is unchanged; it now spans -80..1200. [GFx behaviour
+  the movies rely on: HIGH; nothing replaced]. Hud_GFX keeps noScale.
+- Verified at 2560 x 1440 fullscreen, 1920 x 1080 fullscreen and windowed: edge columns 36-47 (dark) vs 61-71 before;
+  Settings / Extras / party lobby render with full-width backgrounds.
+
 ## FRONTEND: LOBBY EMBLEMS AND BACKDROP (2026-10-05, agents/frontend)
 - **Party / game lobby backdrop: CONFIRMED ORIGINAL (sparse).** UI_PartyLobby_m / UI_Lobby_m hold no geometry; the
   streamed UI_CharacterCustomization_m shows UI_LobbyMaterials_p.SpaceDome_STAT and four CybertronCard_STAT planes; the

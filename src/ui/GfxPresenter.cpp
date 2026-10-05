@@ -546,6 +546,11 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
     std::vector<std::string> objs;
     for (const Open& o : movies_) objs.push_back(o.object);
+    // Every movie gets the viewport (Stage.width / height and onResize: the menus size their backgrounds from it).
+    for (Open& op : movies_) op.movie->player().setViewport((float)viewW_, (float)viewH_);
+    for (Extra& e : extras_) e.movie->player().setViewport((float)viewW_, (float)viewH_);
+    if (scoreboard_) scoreboard_->player().setViewport((float)viewW_, (float)viewH_);
+    if (loading_) loading_->player().setViewport((float)viewW_, (float)viewH_);
     for (const std::string& o : objs)
         for (Open& op : movies_) if (op.object == o) { op.movie->advance(dt); break; }
     // Movie-opened movies: closes requested during their own script run are applied here; advance the rest.

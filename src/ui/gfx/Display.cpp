@@ -167,10 +167,14 @@ Rect MovieClip::localBounds() const { return boundsIn(Matrix{}); }
 float Player::hostViewportW = 0, Player::hostViewportH = 0;
 
 void Player::setViewport(float w, float h) {
-    if (w == viewportW && h == viewportH) return;
+    // onResize when the visible area changes (every scale mode: the menus lay out their full-screen backgrounds from it),
+    // and for listeners registered since the last notification (a menu adds its listener in its first frame, after
+    // the host has set the viewport) [GFx behaviour, HIGH].
+    bool changed = w != viewportW || h != viewportH;
+    if (!changed && resizeNotified_ >= stageListeners.size()) return;
     viewportW = w;
     viewportH = h;
-    if (!noScale()) return;
+    resizeNotified_ = stageListeners.size();
     std::vector<avm1::Object*> ls = stageListeners;
     for (avm1::Object* l : ls) {
         try {
