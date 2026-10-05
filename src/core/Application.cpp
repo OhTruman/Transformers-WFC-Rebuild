@@ -2034,6 +2034,22 @@ void Application::runWeaponTest() {
         float hit = enemy ? ehp0 - enemy->pawn().health().current : 0.0f;
         check(okBody && early == 0.0f && hit > 0.0f, "Shockwave (Warpath Shift): nothing before Delay 0.25 s, then " + std::to_string((int)hit) + " damage to the enemy 10 m away");
     }
+    // Cloaking (Air Raid Ability1): TnBuffCloak 20 s, decloak on firing, 15 s cooldown after the cloak ends.
+    {
+        world_.applyChassisToLocalPawn("Jet4");
+        run(0.5f);
+        platform::InputFrame c; c.pressed[(int)platform::Button::Ability1] = true; c.down[(int)platform::Button::Ability1] = true;
+        world_.handleInput(c, dt); world_.tick(dt);
+        bool cloaked = world_.hudState().cloaked && world_.hudState().abilities.size() == 2 && world_.hudState().abilities[1].id == "Cloaking";
+        run(1.0f);
+        bool stillPending = world_.hudState().abilities[1].active;
+        platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+        for (int i = 0; i < 5; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+        bool exposed = !world_.hudState().cloaked;
+        run(0.2f);
+        bool cd = world_.hudState().abilities[1].cooldown > 14.0f;
+        check(cloaked && stillPending && exposed && cd, "Cloaking (Air Raid Ctrl): cloaked, firing decloaks (ExposeSelf), 15 s cooldown after the cloak");
+    }
     LOG_INFO("WEAPON SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

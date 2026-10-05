@@ -1062,6 +1062,9 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         if (ip && instigator != victim && ip->warcryRemain_ > 0.0f) amount *= ip->warcryDamageMul_;   // TnBuffWarcryIncreaseDamage
     }
     float applied = h->applyDamage(amount);
+    if (applied > 0.0f) {                                   // TnPlayerPawn.TakeDamage -> ExposeSelf
+        if (victim == localPlayer_) player_.pawn().exposeSelf(); else if (opp) opp->pawn().exposeSelf();
+    }
     match_.recordDamage(victim, instigator, applied);
     if (victim == localPlayer_ && applied > 0.0f && instigator != victim) { ++damageTakenCount_; lastDamageFrom_ = match_.playerLocation(instigator); }
     if (h->isDead()) {
@@ -1112,6 +1115,7 @@ HudGameState World::hudState() const {
     h.regenBuff = pc.regenBuffRemain_; h.fastCooldownBuff = pc.fastCooldownRemain_; h.ammoLockBuff = pc.ammoLockRemain_;
     for (const Character::AbilitySlot& a : pc.abilities_) h.abilities.push_back({a.id, a.implemented, a.cooldown, a.pendingCooldown});
     h.dodging = pc.isDodging();
+    h.cloaked = pc.cloakRemain_ > 0.0f;
     h.damageTakenCount = damageTakenCount_;
     h.lastDamageFrom = lastDamageFrom_;
     if (damageTakenCount_ > 0) {
@@ -1154,10 +1158,14 @@ HudGameState World::hudState() const {
                        ? std::string()   // TnFreeForAllGameOverMessage sets an empty GameOverMessage [CONF RE OVERNIGHT A5]
                        : (match_.winnerTeam() < 0 ? "Tie game" : (match_.winnerTeam() == me.team ? "Your team won" : "Your team lost"));
     for (const ObjectiveObject& o : mapState_.objectives()) {
-        if (!o.activeInMode || (o.cls != "TnDominationPoint" && o.cls != "TnKingOfTheHillZone")) continue;
+        if (!o.activeInMode) continue;
         HudGameState::Objective ob;
         ob.actor = o.actor; ob.markerType = o.markerTypeString; ob.pointNumber = o.pointNumber; ob.ownerTeam = o.defenderTeam;
-        ob.active = o.cls == "TnDominationPoint" || o.state == ObjectiveObject::State::Active;
+        ob.active = o.cls == "TnDominationPoint" || o.cls == "TnBombPlantPoint" || o.state == ObjectiveObject::State::Active;
+        // Flag / bomb factories: active while their objective is in state Pickup at home (not carried / dropped / asleep).
+        for (const MapState::Carried& c : mapState_.carried())
+            if (&mapState_.objectives()[(size_t)c.home] == &o) ob.active = c.active && c.holder < 0 && !c.dropped && c.sleep <= 0.0f;
+        ob.ownerTeam = (o.cls == "TnDominationPoint" || o.cls == "TnKingOfTheHillZone") ? o.defenderTeam : o.authoredTeam;
         ob.captureProgress = o.captureTime / 20.0f; ob.beingCaptured = o.captureTime > 0.0f;
         ob.timeLeft = o.activeTimeLeft; ob.pos = o.pos;
         h.objectives.push_back(ob);
@@ -1168,7 +1176,8 @@ HudGameState World::hudState() const {
         t.player = (int)i; t.name = match_.players()[i].name; t.team = match_.players()[i].team;
         t.ally = match_.settings().teamGame && t.team == me.team;
         t.drawn = t.ally;                                                       // enemy marker disabled by default
-        for (MatchOpponent* o : opponents_) if (o->matchPlayer() == (int)i) t.pos = o->position();
+        t.label = t.drawn;
+        for (MatchOpponent* o : opponents_) if (o->matchPlayer() == (int)i) { t.pos = o->position(); if (o->pawn().cloakRemain_ > 0.0f) t.label = false; }   // TnBuffCloak: DisableLabel
         h.tags.push_back(t);
     }
     return h;
@@ -1679,6 +1688,7 @@ std::string World::triggerLocalKillstreak() {
 void World::tickAbilityEffects(float dt) {
     Character& pc = player_.pawn();
     auto tickBuff = [dt](Character& p) {
+        p.cloakRemain_ = std::max(0.0f, p.cloakRemain_ - dt);
         if (p.warcryRemain_ > 0.0f) { p.warcryRemain_ = std::max(0.0f, p.warcryRemain_ - dt); if (p.warcryRemain_ == 0.0f) { p.warcryDamageMul_ = 1.0f; p.warcryTakenMul_ = 1.0f; } }
     };
     tickBuff(pc);

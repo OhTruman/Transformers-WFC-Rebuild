@@ -59,6 +59,7 @@ struct HudGameState {
     struct Ability { std::string id; bool implemented; float cooldown; bool active; };
     std::vector<Ability> abilities;
     bool dodging = false;
+    bool cloaked = false;                        // TnBuffCloak active (Rendering: cloak shader)
     // CTF / EXT: attacking team (GRI.AttackingTeam), rounds, carried objectives, planted bomb (CurrentObjectiveCountdown).
     int attackingTeam = 255, currentRound = 0, rounds = 0;
     bool betweenRounds = false;
@@ -108,7 +109,7 @@ struct HudGameState {
     std::vector<Row> scoreboard;
     // TDM player tags (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled,
     // enemy markers disabled by default (no TnBuffSeeEnemyObjectiveMarkers / HardLocked / Revenge buffs here).
-    struct Tag { int player; std::string name; int team; bool ally; bool drawn; core::Vec3 pos; };
+    struct Tag { int player; std::string name; int team; bool ally; bool drawn; core::Vec3 pos; bool label = true; };
     std::vector<Tag> tags;
     // Objectives of the current mode (DOM nodes, KOTH zones): HUD markers + capture state.
     struct Objective {

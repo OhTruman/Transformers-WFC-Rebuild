@@ -608,6 +608,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                     step.dodgeDir = std::fabs(up) >= std::fabs(rt) ? (up < 0.0f ? 4 : 3) : (rt < 0.0f ? 1 : 2);
                 }
                 if (a.id == "Warcry" || a.id == "Shockwave") pawn_->pendingAbilityEffect_ = a.id;   // ServerTriggerAbility (World)
+                if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
                 a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_;
             } else if (a.id != lastRefusedAbility_) {
                 LOG_WARN("ability %s (slot %d) is not implemented in the rebuild [PARTIAL]", a.id.c_str(), wantAbility_);
@@ -656,6 +657,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
         if (Weapon* vw = pawn_->vehicleWeapon()) {
             vw->tick(dt);
             if (wantFire_ && vw->canFire()) {
+                pawn_->exposeSelf();
                 vw->onFired();
                 // Origin: the chassis' vehicle WeaponSocket_Primary (bone x socket) when the vehicle mesh is displayed [CONF
                 // socket data]; else the actor + 1 m.
@@ -681,6 +683,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
     // Robot weapon: fires while the trigger is held (held flag persists across render frames).
     if (wantFire_ && usable) {
         if (w.canFire()) {
+            pawn_->exposeSelf();          // TnWeapon.OnPreServerFire -> ExposeSelf (decloak)
             w.onFired();
             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
             if (!noRecoil) pawn_->notifyFired();   // per-shot skeletal recoil (TnRecoiler)

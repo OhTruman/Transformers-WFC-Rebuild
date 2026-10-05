@@ -146,7 +146,14 @@ Inputs:
   - after Delay 0.25 s, Blueprint[0] Damage 65 within 2500 UU (bDoFullDamage) from the PositionSocket; Cooldown 60 s;
   - the owner is not hurt [HIGH]; the 700000 momentum knock-back is not applied [PARTIAL].
   - Test: 65 damage to an enemy 10 m away, nothing before the delay.
-- Whirlwind, Barrier, Cloaking, Hover … are listed per slot and reported unimplemented (log + HUD
+- **Cloaking:**
+  - TnBuffCloak BuffTime[0] 20 s;
+  - ExposeSelf removes it on firing (TnWeapon.OnPreServerFire) and on damage taken (TnPlayerPawn.TakeDamage);
+  - the TDM name-tag label is hidden (TnObjectiveMarkerTypeTransformerVersus DisableLabel);
+  - cooldown 15 s after it ends;
+  - HUD `cloaked`; the cloak shader belongs to Rendering [CONF script].
+- **Whirlwind** is a melee attack (TnMeleeService type 3), so it waits for the melee system [PARTIAL].
+- Barrier, Hover … are listed per slot and reported unimplemented (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].
 - **Correction:** the Pass 21f contract doc said robot Shift ran a dash. It did nothing until this pass.
 
@@ -316,6 +323,11 @@ Inputs:
 - Participants (MatchOpponent) are full pawns: the same chassis, specialty, loadout, movement, transformation, damage,
   death / respawn and objective paths as the local pawn. Their inputs come only from `setIntent` (harnesses); no AI.
 - WFC_PARTICIPANTTEST 4 / 4. TDM assists now use the victim's class HealthMax.
+
+### HUD objective markers for every mode
+- HudGameState.objectives now lists every active-in-mode objective: DOM nodes, KOTH zones, CTF flag factories (active at
+  home) and capture points (active for the attackers), the EXT bomb factory and plant points, each with its team.
+  Tags carry `label` (false when cloaked).
 
 ### HUD state additions
 `selectedChassis`, `drawnChassis`, `specialty`, `spawnError`, `weaponId`, `weaponIcon`, `weaponSimulated`,
