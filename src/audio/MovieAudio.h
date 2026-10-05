@@ -20,6 +20,10 @@
 //   [CONF config] [HM_Engine.FmodAudioDevice] MovieMixerPreset=CINE_MUTE_FOR_BINK (the GAME mix's Master to 0 while
 //       a movie plays) and [HM_Engine.SoundMixerProperties] UnflushableMixerPresets=CINE_MUTE_FOR_BINK. The movie's
 //       own sound is not part of that mix: the stream bypasses the category / Master scale (IAudio streams).
+// Speaker routing [CONF native 0x8369A780, RE pass3 follow-up]: track 0 FL, 1 FR, 2 SL, 3 SR, 4 LFE, language track C.
+// Volume [CONF native Function_82CCA028]: every track at the play request's Volume (x 65536); the three
+// MoviesToAlwaysPlaySound logos at the fixed 0xCCCC = 0.8 of full scale. The request Volume of the other movies is
+// not traced (HIGH: 1.0).
 // Stereo fold-down [PROVISIONAL: the platform's default 5.1 -> stereo matrix]: L = FL + 0.707 C + 0.707 SL,
 // R = FR + 0.707 C + 0.707 SR, LFE dropped.
 #pragma once
@@ -81,6 +85,8 @@ public:
     virtual bool open(IAudio* a, const std::string& path, int languageSlot = 0) = 0;
     virtual void start() = 0;
     virtual void setPaused(bool paused) = 0;
+    // Bink volume on every enabled track (0x8369A6E8: clamp(Volume x 65536, 0, 65536); 1.0 = full scale) [CONF].
+    virtual void setVolume(float v) = 0;
     virtual void stop() = 0;                       // the stream closes at once (skip / movie end)
     virtual int tracks() const = 0;
     virtual double clock() const = 0;              // seconds of movie audio played (the stream clock)

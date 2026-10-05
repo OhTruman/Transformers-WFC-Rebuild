@@ -64,6 +64,7 @@ public:
     void flush();
     static bool unflushable(const std::string& name);
     static const char* movieMixerPreset();               // [HM_Engine.FmodAudioDevice] MovieMixerPreset [CONF config]
+    static bool movieAlwaysPlaysSound(const std::string& movieName);   // [Engine.MovieSettings] MoviesToAlwaysPlaySound
     // SeqAct_Reverb.Activated (0x82764858) [CONF]: if `preset` differs from the global current-reverb slot
     // (0x8374FCCC): Enable(preset); on success explicitly Disable(previous, force=0) and store `preset`.
     // The same preset again is a no-op (no Enable, no ref-count change, no timer reset).

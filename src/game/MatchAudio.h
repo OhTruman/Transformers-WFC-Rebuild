@@ -66,6 +66,27 @@ public:
     bool onMatchEnded(int winnerTeam, bool localPlayerWon);
     static std::string messageClassForMode(const std::string& modeTag);
 
+    // ---- objective / round messages (Gameplay broadcasts; Systems plays) [CONF script + class defaults] ----
+    // TnFlagMessage.GetColoredString: 0 returned, 1 picked up, 2 dropped, 3 scored -> the HUD stinger (PC.PlaySound,
+    // 2D: CTF_FLAG_RETURN / PICKUP / DROP / CAPTURE) and the announcer line (MP_Flag*Dialog).
+    bool flagMessage(int sw);
+    // TnBombMessage: 1 picked up (by `team`: MP_AutobotPickupBomb / MP_DecepticonPickupBomb), 2 dropped, 3 detonated
+    // (by `team`), 4 defused, 5 planted.
+    bool bombMessage(int sw, int team);
+    // TnDominationMessage: switch = point * 10 + type; type 0 Autobots take point, 1 Decepticons take, 2 Autobots
+    // capturing, 3 Decepticons capturing; points A..E.
+    bool dominationMessage(int sw);
+    // TnCTFMessage: the local player's team attacks -> AttackerDialog, else DefenderDialog.
+    bool ctfMessage(bool localTeamAttacks);
+    // TnRoundBasedGameMessage: 0 Autobots win the round, 1 Decepticons, 2 time up (+ TimeUpMusic), 3 switching sides
+    // (+ SwitchingSidesMusic); music FadeIn / FadeOut 0, Priority 0.
+    bool roundMessage(int sw);
+    // TnKingOfTheHillZoneBase.PlayAnnouncerDialog (not while the match is over): Active.BeginState -> ZoneChangeSound;
+    // DefendingTeamChanged (unless IgnoringTeamChangeAnnouncement): 0 / 1 captured by that team, 254 contested,
+    // 255 neutral.
+    bool kothZoneActivated(bool matchOver = false);
+    bool kothDefenderChanged(int defenderTeamIndex, bool ignoringTeamChange = false, bool matchOver = false);
+
     // Diagnostics.
     const std::string& currentCue() const { return current_; }
     const std::string& queuedCue() const { return queued_; }
