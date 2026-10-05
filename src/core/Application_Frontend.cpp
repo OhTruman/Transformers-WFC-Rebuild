@@ -39,6 +39,13 @@
 namespace {
 // Gameplay's look settings (PlayerController::setLookSettings(CameraSensitivity, InvertY_Robot, InvertY_Car,
 // InvertY_Plane, InvertY_Tank); the 5-argument form, detected). Car covers trucks, as UpdateInvertMouseBy*Form.
+// Rendering M28: unloadMapRenderData releases every texture the match uploaded (setTexturePersistent marks exceptions).
+template <class R, class = void> struct HasMatchTextureRelease : std::false_type {};
+template <class R>
+struct HasMatchTextureRelease<R, std::void_t<decltype(std::declval<R&>().setTexturePersistent(std::declval<render::TextureHandle>()))>>
+    : std::true_type {};
+constexpr bool kRendererReleasesMatchTextures = HasMatchTextureRelease<render::IRenderer>::value;
+
 template <class PC, class = void> struct HasLookSettings : std::false_type {};
 template <class PC>
 struct HasLookSettings<PC, std::void_t<decltype(std::declval<PC&>().setLookSettings(0, false, false, false, false))>> : std::true_type {};
@@ -681,10 +688,12 @@ void Application::unloadMatch() {
     // decals, lightmaps, CLUT, map FX and movers, material programs, post / scene-copy targets, map textures and every
     // uploadMesh slot - Rendering M22, census-verified). Names the renderer created during the match and keeps on
     // purpose (lazy programs, preview / dynamic buffers, helper textures) must not be swept, so the census only
-    // measures then. Opt-in (WFC_PERSISTENT_RENDERER=1) until the textures match code creates through uploadTexture
-    // (World / VehicleFx / WeaponFx) are released with the match (~60-105 per match otherwise, census-measured); the
-    // default stays the M06 hard reset (census sweep + a new renderer).
-    static const bool recreate = std::getenv("WFC_PERSISTENT_RENDERER") == nullptr;
+    // measures then. Default when the renderer releases the match's uploadTexture textures in unloadMapRenderData
+    // (Rendering M28: setTexturePersistent / liveTextureCount, detected); older renderers leaked ~60-105 textures per
+    // match that way, so they keep the M06 hard reset (census sweep + a new renderer). WFC_RECREATE_RENDERER=1 forces
+    // the hard reset; WFC_PERSISTENT_RENDERER=1 forces the persistent path.
+    static const bool recreate = std::getenv("WFC_RECREATE_RENDERER") != nullptr ||
+                                 (!kRendererReleasesMatchTextures && std::getenv("WFC_PERSISTENT_RENDERER") == nullptr);
     if (recreate) {
         ui::GlCensus::Owned keep;
         if (presenter_) presenter_->ownedGl(keep);

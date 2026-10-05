@@ -59,6 +59,17 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND: ONE RENDERER ACROSS MATCHES (2026-10-05, agents/frontend)
+- The match cleanup recreated the renderer (M06 hard reset, not original). With Rendering M28 (unloadMapRenderData also
+  releases the textures a match uploaded) one renderer now serves the session: detected at compile time; renderers
+  without M28 keep the hard reset. WFC_RECREATE_RENDERER=1 / WFC_PERSISTENT_RENDERER=1 force either path. PC ADAPTATION
+  (engine lifecycle).
+- Evidence (merge preview with agents/rendering ea2a3f3): release_path_check PASS on the default path; 8-map chain live
+  textures 43 -> 49 (+1 per new map: its UI thumbnail; the Streets revisit adds none) and privateMB 2253 -> 2612 (the
+  recreate path: 42 -> 48, 2256 -> 2646); before M28 the persistent chain leaked 114 -> 716. Customize soak 69 checks
+  PASS with preview bodies kept across the match; the post-match Create a Character frame matches the recreate path
+  after the match reticle is cleared at unload. Preview body handles belong to the renderer instance.
+
 ## FRONTEND PASS 6: CREATE A CHARACTER PREVIEW AND SELECTION (2026-10-05, agents/frontend)
 Original behaviour from TnCharacterScriptBinding / TnCharacterCustomizationData / TnCharacterApplier (decompiled),
 CustomTransformers_GFX (AVM1) and UI_CharacterCustomization_m (Kismet). RE re-workspace confirmed the room, camera and
