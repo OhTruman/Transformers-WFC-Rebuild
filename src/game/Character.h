@@ -182,6 +182,7 @@ public:
     // Killstreak buffs [CONF authored CDOs + script]: TnBuffSeeEnemyObjectiveMarkers 30 s; TnBuffHardLocked 10 s (marker for
     // the instigator's team; FloatModifier consumer not recovered); TnBuffRefillHealthOnKill 60 s; TnBuffAbilityJammedKillstreak
     // 30 s (TnAbilityManager CooldownMultiplier 0).
+    bool sentryAlive_ = false;            // TnAbilitySpawnSentry: SpawnSentry timer active or the sentry exists
     float drainRemain_ = 0.0f;           // TnBuffDrainSource BuffTime 7 s (Blueprints[0])
     float seeEnemiesRemain_ = 0.0f, hardLockedRemain_ = 0.0f, refillOnKillRemain_ = 0.0f, jammedRemain_ = 0.0f;
     int hardLockedByTeam_ = 255;
@@ -227,9 +228,9 @@ public:
         for (int i = 0; i < 2; ++i) {
             AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
             a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking" || a.id == "Hover" ||
-                            a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "Drain";
+                            a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "Drain" || a.id == "SpawnSentry";
             // Cooldown[skill data index 0]: Dodge [2.0, 0.5]; Warcry [60]; Shockwave [60] [CONF authored CDOs].
-            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : a.id == "Barrier" ? 20.0f : a.id == "SpawnAmmoCrate" ? 60.0f : a.id == "Drain" ? 60.0f : 0.0f;
+            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : a.id == "Barrier" ? 20.0f : a.id == "SpawnAmmoCrate" ? 60.0f : a.id == "Drain" ? 60.0f : a.id == "SpawnSentry" ? 60.0f : 0.0f;
             abilities_[i] = a;
         }
     }
@@ -243,7 +244,8 @@ public:
                 !(a.id == "Whirlwind" && (meleeState_ == 2 || pendingAbilityEffect_ == "Whirlwind")) &&
                 !(a.id == "Barrier" && (barrierAlive_ || pendingAbilityEffect_ == "Barrier")) &&
                 !(a.id == "SpawnAmmoCrate" && (beaconAlive_ || pendingAbilityEffect_ == "SpawnAmmoCrate")) &&
-                !(a.id == "Drain" && drainRemain_ > 0.0f)) {
+                !(a.id == "Drain" && drainRemain_ > 0.0f) &&
+                !(a.id == "SpawnSentry" && (sentryAlive_ || pendingAbilityEffect_ == "SpawnSentry"))) {
                 a.pendingCooldown = false; a.cooldown = a.cooldownTime;
             }
             if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (jammedRemain_ > 0.0f ? 0.0f : fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));

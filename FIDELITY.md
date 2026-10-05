@@ -276,6 +276,19 @@ Inputs:
   - Cooldown 60 s after the buff (HadAndLostBuff). Removed by AbilityJammed.
   - Beam FX DrainRay_Beam_FX from MeleeSocket_LeftHand → Rendering (HUD drain).
   - Test (PARTICIPANT 13/13): enemy −50 in 2 s.
+- **SpawnSentry** [CONF TnAbilitySpawnSentry / TnSentryPawnAbility / TnAiSentryController + authored Default_TURRETDEF /
+  Default_WEPDATA / Sentry_DSYS; RE §J]:
+  - Spawn: 0.2 s delay; owner + 375 UU up, clamped by a trace, then settled on the floor; the previous sentry is killed.
+  - Body: 135 HP draining over Lifetime 30 s; owner damage ignored; melee kills it; dies with the owner.
+  - Aim: closest visible enemy within pitch ±45° (SightRadius 30000); YawPitchControl 270°/s; fires within 3° and
+    6000 UU.
+  - Weapon: 8 instant-hit (range modifier 1.0 to 8000 → 0.5 at 30000) every 0.12 s, spread 0.1; heat +2 to 100 then
+    OverheatDelay 2 s (heat reset [PROV]). Kill credit to the owner.
+  - Cooldown 60 s once gone. Mesh WEP_SentryDeploy_SKEL with WEP_DeployedTurret_Activate, drawn by Gameplay.
+  - Hit volume: the 200 UU cylinder [HIGH].
+  - PARTIAL: flashbang dormancy, Rocket / Repair blueprints, turret pitch on the mesh, 5 s corpse, the 2-sentry claim
+    limit (one sentry per owner here).
+  - Test (PARTICIPANT 14/14): 16 shots in 2 s, hits of 8, drain 18 HP in 4 s.
 - RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (Barrier now implemented) (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].

@@ -65,6 +65,10 @@ struct HudGameState {
     // (PickupRotationRate yaw 10000); objective marker "Ammo Beacon" for the owner's team.
     float drain = 0.0f;                          // Drain ability active (s left)
     float seeEnemies = 0.0f, refillOnKill = 0.0f, abilitiesJammed = 0.0f, hardLocked = 0.0f;   // killstreak buffs on the local pawn (s left)
+    bool sentry = false;                         // the local SpawnSentry turret is up
+    float sentryHealth = 0.0f;                   // of 135 (drains 4.5/s: Lifetime 30 s)
+    core::Vec3 sentryPos{0, 0, 0};
+    int sentryTarget = -1;
     bool ammoBeacon = false;
     core::Vec3 ammoBeaconPos{0, 0, 0};
     float ammoBeaconLife = 0.0f, ammoBeaconHealth = 0.0f;
@@ -266,6 +270,20 @@ public:
     // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
     struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f; };
     AmmoBeacon beacon_;
+    // TnSentryPawnAbility + TnAiSentryController (the local owner's, Default_TURRETDEF) [CONF RE §J + authored].
+    struct Sentry {
+        bool alive = false;
+        core::Vec3 pos{0, 0, 0};
+        float yaw = 0.0f, pitch = 0.0f, health = 0.0f, fireTimer = 0.0f, heat = 0.0f, overheat = 0.0f, t = 0.0f;
+        int target = -1, shots = 0;
+    };
+    Sentry sentry_;
+    float sentryDelay_ = -1.0f;
+    assets::SkinnedModel sentryModel_;
+    bool sentryModelTried_ = false;
+    render::MeshData sentryMesh_;
+    void spawnSentry();
+    void tickSentry(float dt);
     float beaconDelay_ = -1.0f;
     void tickAmmoBeacon(float dt);
     float barrierDelay_ = -1.0f;
@@ -391,6 +409,9 @@ public:
     bool ammoBeaconAlive() const { return beacon_.alive; }
     core::Vec3 ammoBeaconPos() const { return beacon_.pos; }
     void damageAmmoBeacon(float amount, int instigator);
+    const Sentry& sentry() const { return sentry_; }
+    void damageSentry(float amount, int instigator, const std::string& type);
+    bool sentryRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const;
     bool barrierRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const;
     void damageBarrier(float amount, const std::string& type);
     // TnPlayerController.TriggerKillstreak for the local player: the newest acquired streak; RequiresRobotForm streaks in

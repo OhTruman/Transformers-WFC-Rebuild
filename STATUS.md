@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22v (2026-10-05) — SpawnSentry
+- Deployable sentry turret from the authored TURRETDEF / WEPDATA / DSYS and RE §J. PARTICIPANT 14/14.
+
 ## GAMEPLAY PASS 22u (2026-10-05) — Drain ability
 - 7 s drain aura (25 DPS / 35 HPS per target, speed x0.7), cooldown after the buff. PARTICIPANT 13/13.
 

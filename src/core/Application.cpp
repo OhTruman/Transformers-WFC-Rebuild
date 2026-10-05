@@ -1951,6 +1951,55 @@ void Application::runParticipantTest() {
         check(E && std::fabs((eh0 - eh1) - 50.0f) < 2.0f && (lh1 - lh0) >= 67.0f && cdDuring == 0.0f && cdAfter > 59.0f,
               "Drain: 25 DPS to an enemy in range, caster +35 HPS per target (plus normal regen), cooldown 60 s after the 7 s buff");
     }
+    // Sentry (SpawnSentry): up after 0.2 s; targets an enemy at 20 m and fires 8-damage shots; owner damage ignored;
+    // health drains over Lifetime 30 s; melee kills it; cooldown 60 s once gone.
+    {
+        game::MatchLaunch L9; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L9);
+        world_.launchMatch(L9);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Leader; me.abilities = {"SpawnSentry", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("T" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        bool up = false, targeted = false, owner = false, drains = false, melee = false, cd = false;
+        float eh0 = 0, eh1 = 0, hp0 = 0, hp1 = 0;
+        int shots = 0;
+        if (E) {
+            core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
+            for (auto* o : ops) if (o != E) o->setPosition(lp.position() - fwd * 80.0f);
+            platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(sh, dt); world_.tick(dt);
+            run(0.15f);
+            bool notYet = !world_.sentry().alive;
+            run(0.1f);
+            up = notYet && world_.sentry().alive;
+            core::Vec3 T = world_.sentry().pos + fwd * 20.0f;
+            E->setPosition(T); run(0.05f);
+            eh0 = E->pawn().health().current;
+            for (int i = 0; i < 120; ++i) { E->setPosition(T); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            eh1 = E->spawned() ? E->pawn().health().current : 0.0f;
+            shots = world_.sentry().shots;
+            targeted = world_.sentry().target == E->matchPlayer() && shots > 0 && eh0 - eh1 > 0.0f && std::fmod(eh0 - eh1, 8.0f) < 0.01f;
+            hp0 = world_.sentry().health;
+            world_.damageSentry(50.0f, world_.localMatchPlayer(), "TransGame.TnDamageTypeIonBlaster");
+            owner = world_.sentry().health == hp0;
+            run(4.0f);
+            hp1 = world_.sentry().health;
+            drains = std::fabs((hp0 - hp1) - 18.0f) < 0.5f;
+            world_.damageSentry(1.0f, E->matchPlayer(), "TransGame.TnDamageTypeMelee");
+            run(0.05f);
+            melee = !world_.sentry().alive;
+            run(0.1f);
+            cd = world_.hudState().abilities[0].cooldown > 59.0f;
+        }
+        LOG_INFO("PARTICIPANT sentry: up %d; target %d, %d shots, enemy %.0f -> %.0f; owner damage ignored %d; drain 4 s %.1f; melee kill %d; cooldown %d",
+                 (int)up, (int)targeted, shots, eh0, eh1, (int)owner, hp0 - hp1, (int)melee, (int)cd);
+        check(E && up && targeted && owner && drains && melee && cd,
+              "Sentry: up after 0.2 s; targets and shoots an enemy (8 per hit); owner damage ignored; 4.5 HP/s drain; melee kills; 60 s cooldown once gone");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

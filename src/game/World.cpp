@@ -510,6 +510,7 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
             targetDist = th; hitDes = d; hitTarget = nullptr; hitOpp = nullptr;
         }
     }
+    { float ts; if (sentryRayHit(origin, dir, range, ts) && ts < targetDist) { targetDist = ts; hitTarget = nullptr; hitDes = nullptr; hitOpp = nullptr; damageSentry(w.damageAt(ts), localPlayer_, w.damageType ? w.damageType : ""); } }
     bool hitBarrier = false;
     { float th; if (barrierRayHit(origin, dir, range, th) && th <= targetDist + 0.05f) { targetDist = th; hitBarrier = true; hitTarget = nullptr; hitDes = nullptr; hitOpp = nullptr; } }
     float dist = (hitTarget || hitDes || hitOpp || hitBarrier) ? targetDist : bestDist;
@@ -1147,6 +1148,7 @@ HudGameState World::hudState() const {
     h.ammoBeacon = beacon_.alive; h.ammoBeaconPos = beacon_.pos; h.ammoBeaconLife = beacon_.life; h.ammoBeaconHealth = beacon_.health;
     h.ammoBeaconBuff = pc.beaconDamageBuff_ > 0.0f;
     h.drain = pc.drainRemain_;
+    h.sentry = sentry_.alive; h.sentryHealth = sentry_.health; h.sentryPos = sentry_.pos; h.sentryTarget = sentry_.target;
     h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
     h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
     { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
@@ -1423,6 +1425,8 @@ void World::draw(render::IRenderer& r) const {
     fx_.draw(r);
     if (!localPlayerDead()) vehicleFx_.draw(r);
     if (barrier_.alive && !barrierMesh_.positions.empty()) r.drawDynamicMesh(barrierMesh_, barrier_.world, core::Vec3{1, 1, 1});   // TnBarrierSpawnable mesh
+    if (sentry_.alive && !sentryMesh_.positions.empty())
+        r.drawDynamicMesh(sentryMesh_, core::Mat4::translate(sentry_.pos) * core::Mat4::rotateY(sentry_.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
 
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {
@@ -1670,6 +1674,10 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
     }
     for (Destructible* d : destructibles_)
         if (d->state() == 0) { core::Vec3 c = (d->boxMin() + d->boxMax()) * 0.5f; float k = falloff(c); if (k > 0.0f) d->applyDamage(*this, damage * k); }
+    if (sentry_.alive) {
+        float dd = std::max(0.0f, core::length(sentry_.pos + core::Vec3{0, 2.0f, 0} - at) - 2.0f);
+        if (dd < radius) damageSentry(damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator, type);
+    }
     if (beacon_.alive && core::length(beacon_.pos - at) < radius)
         damageAmmoBeacon(damage * (1.0f - core::length(beacon_.pos - at) / std::max(radius, 1e-3f)), instigator);
     if (barrier_.alive) {
@@ -1860,6 +1868,10 @@ void World::tickAbilityEffects(float dt) {
         pc.shockwaveDelay_ = 0.25f;                       // Delay 0.25 -> Shockwave()
     } else if (fx == "Whirlwind") {
         startLocalMelee(true);                            // MeleeService.StartMeleeAttack(MELEE_Whirlwind)
+    } else if (fx == "SpawnSentry") {
+        if (sentry_.alive) sentry_.alive = false;         // ActiveSentry.Kill()
+        sentryDelay_ = 0.2f;                              // SpawnDelay 0.2 (OnTriggerAnim ADD_Grenade_Throw additive: not played)
+        pc.sentryAlive_ = true;
     } else if (fx == "SpawnAmmoCrate") {
         pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
         beaconDelay_ = 0.5f;                              // SpawnDelay 0.5 -> SpawnInventory
@@ -1871,6 +1883,7 @@ void World::tickAbilityEffects(float dt) {
     }
     tickBarrier(dt);
     tickAmmoBeacon(dt);
+    tickSentry(dt);
     // TnBuffDrainSource (Blueprints[0]): each tick every enemy TnPawn within Range 2000 UU with line of sight takes
     // DamagePerSecond 25 x dt; the caster heals HealthPerSecond 35 x dt per target [CONF authored + RE §J]. Heal type
     // AddHealthToAll [PROV].
@@ -2323,6 +2336,130 @@ void World::damageAmmoBeacon(float amount, int instigator) {
     if (!beacon_.alive || instigator < 0 || instigator == localPlayer_) return;
     if (matchActive_ && match_.sameTeam(instigator, localPlayer_)) return;
     beacon_.health -= amount;
+}
+
+// ---- Sentry [CONF TnAbilitySpawnSentry / TnSentryPawnAbility / TnAiSentryController script + authored Default_TURRETDEF /
+// Default_WEPDATA / Sentry_DSYS; RE TARGETED_PASS3 §J] ----
+// Spawn: SpawnDelay 0.2; desired = owner + (0, 0, SpawnHeight 375) rotated, clamped by a trace from the owner; the sentry pawn
+// then settles on the floor below [HIGH pawn falling]. Health 135 (Sentry_DSYS), drained to 0 over Lifetime 30 s; owner
+// damage ignored; melee kills it; dies with the owner; one per owner. Targeting: the closest visible enemy (SightRadius
+// 30000, 360 deg) within pitch -45..45; YawPitchControl LagDegreesPerSecond 270; fires while aimed within
+// AimedAtTargetThreshold 3 deg and closer than MaxAttackRange 6000: instant hit 8 x RangeDamageModifiers (1.0 to 8000,
+// 0.5 at 30000) every 0.12 s with PerShotSpread 0.1; heat +2 per shot to HeatMax 100, OverheatDelay 2 s (heat then
+// reset [PROV: lose-heat rate native]). Kill credit to the owner (_KillOwner). Cooldown 60 s once the sentry is gone.
+// PARTIAL: flashbang dormancy, Rocket / Repair blueprints (skills), turret pitch on the mesh, corpse (LifeSpanAfterDeath 5).
+void World::spawnSentry() {
+    Character& pc = player_.pawn();
+    if (localDead_) return;
+    if (!sentryModelTried_) {
+        sentryModelTried_ = true;
+        const std::string ext = assetRoot() + "/../content/WEP_SentryAbility_p/";
+        if (assets::loadSkinnedGlb(ext + "WEP_SentryDeploy_SKEL.gltf", sentryModel_) && sentryModel_.valid()) {
+            assets::loadAnimationsByName(ext + "WEP_DeployedTurret_ANIM.anim.gltf", sentryModel_);
+            resolveModelTextures(sentryModel_);
+        } else LOG_ERROR("sentry: WEP_SentryDeploy_SKEL unavailable");
+    }
+    core::Vec3 from = pc.actorLocation(), desired = from + core::Vec3{0, 3.75f, 0};
+    float t;
+    if (collision_.valid() && collision_.segmentHit(from, desired, t)) desired = from + (desired - from) * std::max(0.0f, t - 0.02f);
+    core::Vec3 gn; float gy;
+    core::Vec3 p = desired;
+    if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y, 0.2f, gy, gn)) p.y = gy; else p = pc.position();
+    sentry_ = Sentry{};
+    sentry_.alive = true; sentry_.pos = p; sentry_.yaw = pc.yaw(); sentry_.health = 135.0f;
+    LOG_INFO("ability SpawnSentry: sentry at (%.1f %.1f %.1f)", p.x, p.y, p.z);
+}
+
+void World::tickSentry(float dt) {
+    Character& pc = player_.pawn();
+    if (sentryDelay_ >= 0.0f) { sentryDelay_ -= dt; if (sentryDelay_ < 0.0f) spawnSentry(); }
+    Sentry& s = sentry_;
+    if (s.alive) {
+        s.t += dt;
+        s.health -= 135.0f / 30.0f * dt;                  // Lifetime 30
+        if (s.health <= 0.0f || localDead_) { s.alive = false; s.target = -1; }
+    }
+    if (s.alive) {
+        const core::Vec3 muzzle = s.pos + core::Vec3{0, 2.0f, 0};
+        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+        // Target: closest visible valid enemy within the pitch constraints.
+        s.target = -1;
+        float best = 300.0f;
+        const MatchOpponent* tgt = nullptr;
+        if (matchActive_)
+            for (MatchOpponent* o : opponents_) {
+                if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
+                core::Vec3 d = o->pawn().actorLocation() - muzzle;
+                float dist = core::length(d);
+                if (dist > best || dist < 1e-3f) continue;
+                if (std::fabs(std::atan2(d.y, std::hypot(d.x, d.z))) > 45.0f * 0.0174533f) continue;
+                float tt;
+                if (line && line->segmentHit(muzzle, o->pawn().actorLocation(), tt)) continue;
+                best = dist; s.target = o->matchPlayer(); tgt = o;
+            }
+        float wantYaw = s.yaw, wantPitch = 0.0f;   // idle: pitch returns to 0
+        if (tgt) {
+            core::Vec3 d = tgt->pawn().actorLocation() - muzzle;
+            wantYaw = std::atan2(-d.x, -d.z);
+            wantPitch = std::atan2(d.y, std::hypot(d.x, d.z));
+        }
+        const float maxStep = 270.0f * 0.0174533f * dt;
+        float dy = std::remainder(wantYaw - s.yaw, 6.2831853f);
+        s.yaw += core::clampf(dy, -maxStep, maxStep);
+        s.pitch += core::clampf(wantPitch - s.pitch, -maxStep, maxStep);
+        s.fireTimer = std::max(0.0f, s.fireTimer - dt);
+        if (s.overheat > 0.0f) { s.overheat -= dt; if (s.overheat <= 0.0f) s.heat = 0.0f; }
+        if (tgt && s.overheat <= 0.0f && s.fireTimer <= 0.0f) {
+            float err = std::fabs(std::remainder(wantYaw - s.yaw, 6.2831853f)) + std::fabs(wantPitch - s.pitch);
+            float dist = core::length(tgt->pawn().actorLocation() - muzzle);
+            if (err <= 3.0f * 0.0174533f && dist < 60.0f) {
+                s.fireTimer = 0.12f;
+                ++s.shots;
+                s.heat += 2.0f;
+                if (s.heat >= 100.0f) s.overheat = 2.0f;
+                core::Vec3 dir = core::forwardFromYawPitch(s.yaw, s.pitch);
+                core::Vec3 up{0, 1, 0}, rt = core::normalize(core::cross(dir, up)), u2 = core::cross(rt, dir);
+                auto rf = []() { return (float)(std::rand() % 2001 - 1000) / 1000.0f; };
+                dir = core::normalize(dir + rt * (rf() * 0.1f) + u2 * (rf() * 0.1f));
+                float wall = 300.0f, tw;
+                if (line && line->segmentHit(muzzle, muzzle + dir * 300.0f, tw)) wall = 300.0f * tw;
+                MatchOpponent* hit = nullptr; float hd = wall;
+                for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(muzzle, dir, wall, th) && th < hd) { hd = th; hit = o; } }
+                if (hit && !match_.sameTeam(hit->matchPlayer(), localPlayer_)) {
+                    float mod = hd <= 80.0f ? 1.0f : 1.0f - 0.5f * std::min(1.0f, (hd - 80.0f) / 220.0f);
+                    applyMatchDamage(hit->matchPlayer(), localPlayer_, 8.0f * mod, false, "TransGame.TnDamageTypeSentry");
+                }
+            }
+        }
+        if (sentryModel_.valid()) {
+            int clip = sentryModel_.clipByName("WEP_DeployedTurret_Activate");
+            if (clip >= 0) { assets::LocalPose lp; std::vector<core::Mat4> g; assets::samplePose(sentryModel_, clip, s.t, false, lp); assets::skinPose(sentryModel_, lp, g, sentryMesh_); }
+        }
+    }
+    pc.sentryAlive_ = s.alive || sentryDelay_ >= 0.0f;
+}
+
+bool World::sentryRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const {
+    if (!sentry_.alive) return false;
+    // CollisionCylinder radius 200 / height 200 UU about the base + 2 m [HIGH: the DSYS mesh physics is the hit volume].
+    const core::Vec3 c = sentry_.pos + core::Vec3{0, 2.0f, 0};
+    float ox = o.x - c.x, oz = o.z - c.z, a = d.x * d.x + d.z * d.z, b = 2.0f * (ox * d.x + oz * d.z), cc = ox * ox + oz * oz - 4.0f;
+    if (a < 1e-8f) return false;
+    float disc = b * b - 4.0f * a * cc;
+    if (disc < 0.0f) return false;
+    float tt = std::max(0.0f, (-b - std::sqrt(disc)) / (2.0f * a));
+    if (tt > range) return false;
+    float y = o.y + d.y * tt;
+    if (y < c.y - 2.0f || y > c.y + 2.0f) return false;
+    t = tt;
+    return true;
+}
+
+void World::damageSentry(float amount, int instigator, const std::string& type) {
+    if (!sentry_.alive || instigator == localPlayer_) return;   // the owner cannot damage it
+    if (instigator >= 0 && matchActive_ && match_.sameTeam(instigator, localPlayer_)) return;
+    if (type.find("Melee") != std::string::npos || type.find("Whirlwind") != std::string::npos) { sentry_.health = 0.0f; return; }   // melee kills
+    sentry_.health -= amount;
 }
 
 } // namespace game
