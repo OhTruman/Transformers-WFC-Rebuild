@@ -1139,6 +1139,11 @@ HudGameState World::hudState() const {
     h.hoverState = pc.hoverState_;
     h.lockTarget = lockTarget_; h.locked = locked_;
     h.barrier = barrier_.alive; h.barrierHealth = barrier_.health;
+    if (matchActive_ && !localDead_) {
+        MapState::ObjPawn op{localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, pc.form() == Form::Robot && !pc.isTransforming() && !pc.isMeleeing()};
+        int ci = mapState_.pickupCandidate(op);
+        h.pickupPrompt = ci < 0 ? "" : mapState_.carried()[(size_t)ci].kind == 0 ? "Code Of Power" : "Bomb";
+    }
     h.ammoBeacon = beacon_.alive; h.ammoBeaconPos = beacon_.pos; h.ammoBeaconLife = beacon_.life; h.ammoBeaconHealth = beacon_.health;
     h.ammoBeaconBuff = pc.beaconDamageBuff_ > 0.0f;
     h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
@@ -1247,10 +1252,11 @@ void World::tickMatch(float dt) {
         pc.heavyDropRequested_ = false;
         for (MatchOpponent* o : opponents_)
             if (o->spawned() && (o->pawn().isTransforming() || o->pawn().form() == Form::Vehicle)) mapState_.dropCarriedBy(o->matchPlayer(), o->pawn().actorLocation());
-        auto robotForm = [](const Character& c) { return c.form() == Form::Robot && !c.isTransforming(); };
-        if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, robotForm(pc)});
+        auto robotForm = [](const Character& c) { return c.form() == Form::Robot && !c.isTransforming() && !c.isMeleeing(); };
+        const bool localPickup = player_.controller().consumePickupRequest();
+        if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, robotForm(pc), localPickup});
         for (MatchOpponent* o : opponents_)
-            if (o->spawned()) pawns.push_back({o->matchPlayer(), o->team(), o->pawn().actorLocation(), true, robotForm(o->pawn())});
+            if (o->spawned()) pawns.push_back({o->matchPlayer(), o->team(), o->pawn().actorLocation(), true, robotForm(o->pawn()), o->pressesPickup});
         MapState::ObjectiveScoring sc;
         mapState_.tickObjectives(dt, pawns, sc);
         for (auto& p : sc.personalScores) match_.addPersonalScore(p.first, p.second);

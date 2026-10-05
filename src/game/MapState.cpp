@@ -419,10 +419,23 @@ void MapState::roundStart(int attackingTeam) {
     }
 }
 
+int MapState::pickupCandidate(const ObjPawn& p) const {
+    if (!p.alive || !p.canPickup) return -1;
+    for (size_t ci = 0; ci < carried_.size(); ++ci) {
+        const Carried& c = carried_[ci];
+        if (c.sleep > 0.0f || !c.active || c.holder >= 0) continue;
+        const ObjectiveObject& home = objectives_[(size_t)c.home];
+        if (c.kind == 0 && p.team == home.defenderTeam && !c.dropped) continue;
+        if (c.kind == 0 && c.dropped && p.team != ctfAttacking_) continue;
+        const core::Vec3 at = c.dropped ? c.pos : home.pos;
+        if (c.dropped ? cylTouch(p.pos, at, kDroppedTouchR, kDroppedTouchR) : cylTouch(p.pos, at, kFactoryTouchR, kFactoryTouchHH)) return (int)ci;
+    }
+    return -1;
+}
+
 bool MapState::dropCarriedBy(int player, const core::Vec3& at) {
     for (Carried& c : carried_)
         if (c.holder == player) {
-            c.untouchedBy = player;
             c.holder = -1; c.holderTeam = 255; c.dropped = true; c.pos = at; c.autoReturn = 30.0f; c.returnLeft = 10.0f;
             if (c.pos.y < killZ_ + 1.0f) { c.dropped = false; c.pos = objectives_[(size_t)c.home].pos; }
             LOG_INFO("match: %s (tossed)", c.kind == 0 ? "TnFlagMessage(dropped)" : "TnBombMessage(dropped)");
@@ -492,13 +505,12 @@ static void tickCarried(std::vector<ObjectiveObject>& objs, std::vector<MapState
         }
         // Pickup: flag - attackers only (ValidTouch rejects DefenderTeamIndex); bomb - anyone; dropped re-pick by touch.
         for (const auto& p : pawns) {
-            if (!p.alive || !p.canPickup) continue;
+            if (!p.alive || !p.canPickup || !p.wantsPickup) continue;
             if (c.kind == 0 && p.team == home.defenderTeam && !c.dropped) continue;
             if (c.kind == 0 && c.dropped && p.team != ctfAttacking) continue;
             bool touch = c.dropped ? cylTouch(p.pos, at, kDroppedTouchR, kDroppedTouchR) : cylTouch(p.pos, at, kFactoryTouchR, kFactoryTouchHH);
-            if (p.player == c.untouchedBy) { if (!touch) c.untouchedBy = -1; continue; }
             if (!touch) continue;
-            c.holder = p.player; c.holderTeam = p.team; c.dropped = false; c.pos = p.pos; c.untouchedBy = -1;
+            c.holder = p.player; c.holderTeam = p.team; c.dropped = false; c.pos = p.pos;
             if (c.kind == 1) out.attackingTeam = p.team;                 // ObjectiveHolderChanged -> GRI.AttackingTeam
             out.messages.push_back({c.kind == 0 ? "TnFlagMessage(taken)" : "TnBombMessage(taken)", p.team});
             break;

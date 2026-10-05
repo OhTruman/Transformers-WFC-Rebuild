@@ -169,6 +169,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     if (in.wasPressed(Button::Killstreak)) wantKillstreak_ = true;
     if (in.wasPressed(Button::Melee)) wantMelee_ = true;
     if (in.wasPressed(Button::Grenade)) wantGrenade_ = true;
+    if (in.wasPressed(Button::Interact)) wantPickup_ = true;
     if (in.wasPressed(Button::NextWeapon)) wantSwitch_ = 1;
     if (in.wasPressed(Button::PrevWeapon)) wantSwitch_ = -1;
     if (!reloadDown) reloadHeld_ = 0.0f;

@@ -229,8 +229,11 @@ Inputs:
   - Q = the MWT_Flag / MWT_Bomb attack: Melee_Mace _01/_02/_03 sweeps, 9999 damage, impulse 80000, no lunge.
   - Dropped (a pickup at the carrier) on Transform to vehicle (DropHeavyWeapons), on a weapon swap (ChangedWeapon
     TossWeapon) and on death.
-  - A dropped pickup is taken on a new Touch only: a pawn standing on it must leave and re-enter [HIGH stock Touch].
-  - Vehicle-form pawns do not take the flag / bomb [PROV: the vehicle-side gate is not recovered].
+  - Pickup is contextual, not on touch (TnWeapon.PickupWhenTouched needs the class already held):
+    E ("Interact / Pick Up") → TryPickup → ServerPickup → TnPickupManager.Pickup on a touching factory or dropped
+    flag / bomb that passes ValidTouch. HUD pickupPrompt. [CONF RE §J]
+  - TnPlayerPawn.CanPickupInventory rejects vehicle form, meleeing (and downed) pawns; defenders are rejected for the flag.
+    The pickup line-of-sight recheck is not run [PARTIAL]. Diagnostic participants hold the pickup button (no AI).
   - DropFrom FindSpot box (450, 450, 100) is not run; the drop is at the carrier [PARTIAL].
   - Tests (WFC_CTFTEST 12/12, Streets + Gorge): transform drop, no vehicle re-pick, robot re-pick on a new touch;
     the local carrier's gun is blocked and a swap tosses the flag.

@@ -31,6 +31,8 @@ public:
         pos_ = p; spawned_ = true; intent_ = MoveIntent{};
     }
     void despawn() { spawned_ = false; }
+    // DIAGNOSTIC participant input: holds the contextual pickup button (no AI decides this).
+    bool pressesPickup = true;
     void setPosition(const core::Vec3& p) { pos_ = p; pawn_.setPosition(p); pawn_.velocity() = {0, 0, 0}; }
     // Inputs for the next simulation steps (MoveIntent, the same contract PlayerController produces).
     void setIntent(const MoveIntent& in) { intent_ = in; }

@@ -34,6 +34,7 @@ int vkFor(Button b) {
         case Button::Killstreak:   return 'B';
         case Button::Melee:        return 'Q';
         case Button::Grenade:      return 'G';
+        case Button::Interact:     return 'E';
         case Button::PrevWeapon:   return VK_NEXT;
         case Button::Quit:         return VK_ESCAPE;
         case Button::FineAim:      return VK_RBUTTON;

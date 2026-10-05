@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22t (2026-10-05) — contextual flag / bomb pickup (E)
+- RE §J: objectives are picked up with the Interact button, not on touch; CanPickupInventory gates. CTF 12/12 (Streets, Gorge).
+
 ## GAMEPLAY PASS 22s (2026-10-05) — buff killstreaks
 - Orbital Beacon, Orbital Beacon 2.0, Health Matrix 2.0, EMP. 8 of 12 class killstreaks implemented. PARTICIPANT 12/12.
 

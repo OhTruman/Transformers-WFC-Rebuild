@@ -1995,13 +1995,9 @@ void Application::runCtfExtTest() {
             run(3.0f);
             bool vehNoPick = X->pawn().form() == game::Form::Vehicle && world_.mapState().carriedBy(X->matchPlayer()) < 0;
             X->pawn().beginTransform(); run(3.0f);
-            bool noRepickInPlace = world_.mapState().carriedBy(X->matchPlayer()) < 0;   // still overlapping: no new Touch
-            core::Vec3 dropSpot = X->position();
-            X->setPosition(dropSpot + core::Vec3{8, 0, 0}); run(0.2f);
-            X->setPosition(dropSpot); run(0.2f);
-            bool repick = noRepickInPlace && X->pawn().form() == game::Form::Robot && world_.mapState().carriedBy(X->matchPlayer()) >= 0;
+            bool repick = X->pawn().form() == game::Form::Robot && world_.mapState().carriedBy(X->matchPlayer()) >= 0;   // pickup button on the dropped flag
             LOG_INFO("CTFTEST carrier: held %d dropped on transform %d vehicle no re-pick %d robot re-pick %d", (int)held, (int)droppedOnTransform, (int)vehNoPick, (int)repick);
-            check(held && droppedOnTransform && vehNoPick && repick, "carrier transform to vehicle drops the flag; vehicle form does not re-take it; robot form re-takes it on a new touch");
+            check(held && droppedOnTransform && vehNoPick && repick, "carrier transform to vehicle drops the flag; vehicle form cannot take it (CanPickupInventory); robot form takes it with the pickup button");
             world_.applyMatchDamage(X->matchPlayer(), -1, 99999.0f, true, "TransGame.TnDamageTypeInstantKill");
             run(0.2f);
         }
@@ -2021,7 +2017,10 @@ void Application::runCtfExtTest() {
             game::Character& lp = world_.player().pawn();
             core::Vec3 fl = objPos("TnGameObjectivePickupFactoryFlag", att);
             lp.setPosition(at(fl)); run(0.3f);
-            bool lheld = world_.mapState().carriedBy(world_.localMatchPlayer()) >= 0 && world_.hudState().heavyWeapon == "Code Of Power";
+            bool noAuto = world_.mapState().carriedBy(world_.localMatchPlayer()) < 0 && world_.hudState().pickupPrompt == "Code Of Power";
+            platform::InputFrame ek; ek.pressed[(int)platform::Button::Interact] = true; ek.down[(int)platform::Button::Interact] = true;
+            world_.handleInput(ek, dt); world_.tick(dt); run(0.1f);
+            bool lheld = noAuto && world_.mapState().carriedBy(world_.localMatchPlayer()) >= 0 && world_.hudState().heavyWeapon == "Code Of Power";
             int ammo0 = lp.weapon().ammo;
             platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
             for (int i = 0; i < 30; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
@@ -2030,7 +2029,7 @@ void Application::runCtfExtTest() {
             world_.handleInput(sw, dt); world_.tick(dt); run(0.1f);
             bool swapDrop = world_.mapState().carriedBy(world_.localMatchPlayer()) < 0;
             LOG_INFO("CTFTEST local carrier: held %d gun blocked %d swap dropped %d", (int)lheld, (int)noGun, (int)swapDrop);
-            check(lheld && noGun && swapDrop, "local carrier: the flag is the held weapon (no gun fire); a weapon swap tosses it");
+            check(lheld && noGun && swapDrop, "local carrier: not taken on touch, prompt shown, E takes it; the flag is the held weapon (no gun fire); a weapon swap tosses it");
         } else LOG_INFO("CTFTEST local carrier: local player not an attacker in round 2 (skipped)");
         for (int i = 0; i < 60 * 45 && world_.match().state() == game::Match::State::InProgress; ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
         check(world_.match().state() == game::Match::State::MatchOver && world_.match().endReason() == "Score",

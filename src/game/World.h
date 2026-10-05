@@ -70,6 +70,7 @@ struct HudGameState {
     bool ammoBeaconBuff = false;                 // TnBuffAmmoBeaconIncreaseDamage on the local pawn
     bool barrier = false;                        // the local Barrier ability's wall is up
     float barrierHealth = 0.0f;                  // BarrierHealth 1000, DegenRate 15/s
+    std::string pickupPrompt;                    // TnPickupManager prompt (E): "Code Of Power" / "Bomb" / "" (refreshed 0.1 s in the original)
     std::string heavyWeapon;                     // carried flag / bomb weapon ItemName ("" none): replaces the gun while held
     int grenades = 0;                            // grenade bag reserve (WT_Grenades); -1 = no bag
     int lockTarget = -1;                         // homing weapon: target match player (-1 none)

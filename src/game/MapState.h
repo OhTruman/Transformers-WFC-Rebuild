@@ -104,9 +104,12 @@ public:
     // Objective volumes from physics.json (ObjectiveVolume -> TriggerVolume brush polygons).
     void loadObjectiveVolumes(const std::string& physicsJson);
     // Live objective rules, ticked only while the match is InProgress.
-    // canPickup: robot form (a dropped flag / bomb is not taken by a vehicle-form pawn [PROV: TnPawn.Transform to vehicle drops
-    // heavy weapons (CONF); the vehicle-side pickup gate is not recovered]).
-    struct ObjPawn { int player; int team; core::Vec3 pos; bool alive; bool canPickup = true; };
+    // canPickup: TnPlayerPawn.CanPickupInventory (no TnWeapon in vehicle form, downed, meleeing) [CONF RE §J].
+    // wantsPickup: the contextual pickup button this step (TryPickup -> ServerPickup -> TnPickupManager.Pickup): the flag /
+    // bomb are NOT taken on touch (TnWeapon.PickupWhenTouched only when already holding the class) [CONF RE §J].
+    struct ObjPawn { int player; int team; core::Vec3 pos; bool alive; bool canPickup = true; bool wantsPickup = false; };
+    // TnPickupManager prompt: index into carried() the pawn could pick up now (touching, ValidTouch), or -1.
+    int pickupCandidate(const ObjPawn& p) const;
     struct ObjectiveScoring {
         std::vector<std::pair<int, int>> objectiveScores;   // Game.ScoreObjective(PRI, score)
         std::vector<std::pair<int, int>> teamScores;        // TnGame.ScoreTeamObjective(team, amount)
@@ -128,7 +131,6 @@ public:
         float autoReturn = 0.0f;    // AutoReturnTime 30
         float returnLeft = 10.0f;   // flag: ReturnFlagTime 10, drained at dt x defenders nearby, recovers +dt
         float sleep = 0.0f;         // bomb factory WaitAfterScoreTime 5 after a detonation
-        int untouchedBy = -1;       // dropped where this player stands: Touch fires on a new overlap only [HIGH stock UE3 Touch]
     };
     struct Planted { bool active = false; int point = -1; int planter = -1; int team = 255; float fuse = 0.0f, defuse = 0.0f; };
     const std::vector<Carried>& carried() const { return carried_; }
