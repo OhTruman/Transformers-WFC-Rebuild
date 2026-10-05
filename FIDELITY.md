@@ -111,6 +111,17 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND: ONE RENDERER ACROSS MATCHES (2026-10-05, agents/frontend)
+- The match cleanup recreated the renderer (M06 hard reset, not original). With Rendering M28 (unloadMapRenderData also
+  releases the textures a match uploaded) one renderer now serves the session: detected at compile time; renderers
+  without M28 keep the hard reset. WFC_RECREATE_RENDERER=1 / WFC_PERSISTENT_RENDERER=1 force either path. PC ADAPTATION
+  (engine lifecycle).
+- Evidence (merge preview with agents/rendering ea2a3f3): release_path_check PASS on the default path; 8-map chain live
+  textures 43 -> 49 (+1 per new map: its UI thumbnail; the Streets revisit adds none) and privateMB 2253 -> 2612 (the
+  recreate path: 42 -> 48, 2256 -> 2646); before M28 the persistent chain leaked 114 -> 716. Customize soak 69 checks
+  PASS with preview bodies kept across the match; the post-match Create a Character frame matches the recreate path
+  after the match reticle is cleared at unload. Preview body handles belong to the renderer instance.
+
 ## FRONTEND PASS 6: CREATE A CHARACTER PREVIEW AND SELECTION (2026-10-05, agents/frontend)
 Original behaviour from TnCharacterScriptBinding / TnCharacterCustomizationData / TnCharacterApplier (decompiled),
 CustomTransformers_GFX (AVM1) and UI_CharacterCustomization_m (Kismet). RE re-workspace confirmed the room, camera and
@@ -137,8 +148,9 @@ palette findings independently (notes/TARGETED_PASS3_2026-10-05.md §B).
 GFx runtime fixes found by this pass: intervals on removed clips no longer fire; the collector roots removed clips'
 subtrees (intermittent use-after-free crash); unloadMovie keeps children alive. Diagnostics: WFC_GFX_GCCHECK,
 WFC_GFX_NO_GC, WFC_NOPAD. The collector counter is per movie (it was shared, so one movie took every collection).
-Posed preview bodies: LRU cache of 8 (Rendering: bodies are CPU-only, valid across scene loads; releasePreviewBody when
-present).
+Posed preview bodies: LRU cache of 8 (Rendering: bodies are CPU-only; releasePreviewBody on eviction). Preview handles
+belong to the renderer instance: the match cleanup recreates the renderer, so setRenderer drops the cache (soak: the
+renderer held 0 bodies after a match while 8 stale handles were cached); previewBodyCount guards it as well.
 
 UNKNOWN: the native GetPixelColor coordinate scaling (taken as 256-unit gradient space); the PC key binding of the
 picker cursor (arrows used).

@@ -38,6 +38,28 @@
 #include "game/FrontendAudioRuntime.h"
 #define WFC_SYSTEMS_FRONTEND_AUDIO 1
 namespace {
+// Gameplay's look settings (PlayerController::setLookSettings(CameraSensitivity, InvertY_Robot, InvertY_Car,
+// InvertY_Plane, InvertY_Tank); the 5-argument form, detected). Car covers trucks, as UpdateInvertMouseBy*Form.
+// Rendering M28: unloadMapRenderData releases every texture the match uploaded (setTexturePersistent marks exceptions).
+template <class R, class = void> struct HasMatchTextureRelease : std::false_type {};
+template <class R>
+struct HasMatchTextureRelease<R, std::void_t<decltype(std::declval<R&>().setTexturePersistent(std::declval<render::TextureHandle>()))>>
+    : std::true_type {};
+constexpr bool kRendererReleasesMatchTextures = HasMatchTextureRelease<render::IRenderer>::value;
+
+template <class PC, class = void> struct HasLookSettings : std::false_type {};
+template <class PC>
+struct HasLookSettings<PC, std::void_t<decltype(std::declval<PC&>().setLookSettings(0, false, false, false, false))>> : std::true_type {};
+template <class PC> bool applyLookSettings(PC& pc, const frontend::LocalProfile& p) {
+    if constexpr (HasLookSettings<PC>::value) {
+        pc.setLookSettings(p.getInt("CameraSensitivity"), p.getBool("InvertY_Robot"), p.getBool("InvertY_Car"),
+                           p.getBool("InvertY_Plane"), p.getBool("InvertY_Tank"));
+        return true;
+    } else { (void)pc; (void)p; return false; }
+}
+}
+
+namespace {
 struct SystemsFrontendAudio final : frontend::IFrontendAudio {
     game::FrontendAudioRuntime rt;
     explicit SystemsFrontendAudio(audio::IAudio* a) : rt(a) {}
@@ -150,6 +172,8 @@ void Application::attachPresenter() {
     applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
         applyGamma(renderer_, p.getInt("GammaSetting"));
+        if (applyLookSettings(world_.player().controller(), p))
+            frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});
         frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},
                                                     {"MusicVolume", p.get("Music Volume")}, {"CameraSensitivity", p.get("CameraSensitivity")},
                                                     {"InvertY_Robot", p.get("InvertY_Robot")}, {"Vibration", p.get("Controller Vibration")},
@@ -204,8 +228,13 @@ void Application::attachPresenter() {
             FrontendSceneGL::PreviewStats ps = g_scene->previewStats();
             kv.push_back({"preview", std::to_string(ps.slots) + "/" + std::to_string(ps.visible) + "/" + std::to_string(ps.vehicles) + "/" +
                                      std::to_string(ps.meshes) + "/" + std::to_string(ps.bodies)});
+            kv.push_back({"rendererBodies", std::to_string(ps.rendererBodies)});   // -1: the renderer cannot report it
         }
         kv.push_back({"matinees", std::to_string(frontend_->scene().playing().size())});
+        {   // live GL names (textures first): scene / map load hygiene across menu visits
+            std::string live = ui::GlCensus::snapshot();
+            kv.push_back({"glTextures", live.substr(9, live.find(' ') - 9)});
+        }
         kv.push_back({"camera", frontend_->scene().view().camera});
         std::string line;
         for (const auto& [k, v] : kv) line += " " + k + "=" + (v.empty() ? std::string("-") : v);
@@ -312,6 +341,7 @@ void Application::runFrontend() {
             continue;
         }
         flow.matchLoaded();
+        applyLookSettings(world_.player().controller(), flow.profile());   // the profile's look settings for this match
         // [integration] Frontend's PROVISIONAL adapter (immediate BeginGame) is replaced by Gameplay's match lifecycle.
         // World::launchMatch put the match in PendingMatch (10 s). Client order (RE M05 blockers D5): WaitingOnGameStart ->
         // character select -> PreGameCountdown during PendingMatch -> UI event 3 at InProgress. No character select screen
@@ -674,19 +704,43 @@ void Application::unloadMatch() {
     frontend_->flow().setMatchValues(frontend::MatchValues{});   // no stale match values in the lobby / frontend
     LOG_INFO("MATCH cleanup");                                   // RUNTIME-EVENTS: the match world is gone
     renderer_->unloadMapRenderData();
-    ui::GlCensus::Owned keep;
-    if (presenter_) presenter_->ownedGl(keep);
-    if (!std::getenv("WFC_NO_GL_RELEASE")) frontend::FlowTrace::emit("match.glRelease", {{"released", g_census.release(keep)}});
+    // One renderer for the whole session: unloadMapRenderData releases everything map-owned (map meshes / BSP /
+    // decals, lightmaps, CLUT, map FX and movers, material programs, post / scene-copy targets, map textures and every
+    // uploadMesh slot - Rendering M22, census-verified). Names the renderer created during the match and keeps on
+    // purpose (lazy programs, preview / dynamic buffers, helper textures) must not be swept, so the census only
+    // measures then. Default when the renderer releases the match's uploadTexture textures in unloadMapRenderData
+    // (Rendering M28: setTexturePersistent / liveTextureCount, detected); older renderers leaked ~60-105 textures per
+    // match that way, so they keep the M06 hard reset (census sweep + a new renderer). WFC_RECREATE_RENDERER=1 forces
+    // the hard reset; WFC_PERSISTENT_RENDERER=1 forces the persistent path.
+    static const bool recreate = std::getenv("WFC_RECREATE_RENDERER") != nullptr ||
+                                 (!kRendererReleasesMatchTextures && std::getenv("WFC_PERSISTENT_RENDERER") == nullptr);
+    if (recreate) {
+        ui::GlCensus::Owned keep;
+        if (presenter_) presenter_->ownedGl(keep);
+        if (!std::getenv("WFC_NO_GL_RELEASE")) frontend::FlowTrace::emit("match.glRelease", {{"released", g_census.release(keep)}});
+    }
     gameMode_ = game::GameMode();
 #ifndef WFC_SYSTEMS_FRONTEND_AUDIO
     // Without the Systems lifecycle the device is recreated to drop the match's voices.
     delete audio_;
     audio_ = audio::createAudio();
 #endif
-    delete renderer_;
-    renderer_ = render::createGLRenderer();
-    if (g_scene) g_scene->setRenderer(renderer_);
-    applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));   // the new renderer starts at its default
+    if (!recreate) {
+        // Per-match presentation state a new renderer would start without: the HUD reticle (setReticle) is the match's.
+        renderer_->setReticle(render::IRenderer::ReticleState{});
+    }
+    if (recreate) {
+        delete renderer_;
+        renderer_ = render::createGLRenderer();
+        if (g_scene) g_scene->setRenderer(renderer_);
+        applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));   // the new renderer starts at its default
+    }
+    {   // owner split for the census: GL the UI presenter (GFx movies, HUD, fonts) holds right now
+        ui::GlCensus::Owned ui;
+        if (presenter_) presenter_->ownedGl(ui);
+        frontend::FlowTrace::emit("match.glCensus", {{"live", ui::GlCensus::snapshot()}, {"renderer", recreate ? "recreated" : "persistent"},
+                                                     {"uiTextures", std::to_string(ui.textures.size())}, {"uiBuffers", std::to_string(ui.buffers.size())}});
+    }
     camera_ = render::Camera();
     clock_ = FixedStepClock(60.0);
     escWasDown_ = false;

@@ -25,6 +25,8 @@ for ((c = 1; c <= CYC; ++c)); do
     if [ $k -eq 0 ]; then S="$S;ui:Accept"; else S="$S;ui:Down;wait:t=0.7;ui:Accept"; fi
     S="$S;wait:t=5;navcheck:$n.overview"
     S="$S;clickclip:$O.chassisButtonA_mc;wait:t=2.5;navcheck:$n.autobot;ui:LThumb;wait:t=1.2;navcheck:$n.vehicle;ui:LThumb;wait:t=1.2"
+    # Scout: the next Autobot chassis and back (Speedster -> Runner -> Speedster): a 9th posed body, so the LRU evicts.
+    if [ $k -eq 0 ]; then S="$S;ui:Right;wait:t=3;navcheck:$n.chassis2;ui:Left;wait:t=3"; fi
     S="$S;ui:Back;wait:t=3;clickclip:$O.chassisButtonD_mc;wait:t=2.5;navcheck:$n.decepticon;ui:Back;wait:t=3;navcheck:$n.overview2"
     if [ $k -eq $(( (c - 1) % 4 )) ]; then   # one colour edit per cycle: Color 1 picker, move, next palette, accept
       S="$S;clickclip:$O.chassisButtonA_mc;wait:t=2.5;ui:Down;wait:t=0.7;ui:Accept;wait:t=1.5;navcheck:$n.picker"

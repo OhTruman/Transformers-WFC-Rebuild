@@ -17,6 +17,9 @@ public:
     void begin();
     // Returns a summary ("textures=N buffers=N ...").
     std::string release(const Owned& keep);
+    // Measurement only: live GL names of each kind (glIs* from name 1 until a long gap), for the match-over-match
+    // plateau check with a persistent renderer ("textures=N buffers=N ...").
+    static std::string snapshot();
 
 private:
     bool active_ = false;
