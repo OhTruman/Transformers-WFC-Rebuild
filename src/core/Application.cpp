@@ -396,6 +396,29 @@ void Application::run() {
 
         // Diagnostic: level-travel render-data cycle (WFC_RELOADTEST=<frame>): release everything, reload the map,
         // re-load the world's meshes (as a travel back into the match does).
+        // Diagnostic: WFC_FXTEST="<template>[;<template>...]" spawns each runtime particle template (M32 template
+        // library) 4 m in front of the camera, emitting to the camera's right, every 30 frames, side by side.
+        if (const char* ft = std::getenv("WFC_FXTEST")) {
+            static std::vector<std::string> tpls;
+            static bool parsed = false;
+            if (!parsed) {
+                parsed = true;
+                std::string s = ft, cur;
+                for (char ch : s) { if (ch == ';') { if (!cur.empty()) tpls.push_back(cur); cur.clear(); } else cur += ch; }
+                if (!cur.empty()) tpls.push_back(cur);
+            }
+            if (frame % 30 == 1) {
+                core::Vec3 f = core::forwardFromYawPitch(camera_.yaw, 0.0f);
+                core::Vec3 right = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
+                const float ion[4] = {0.033f, 0.010f, 1.0f, 1.0f};   // (51, 25, 255) through the 2.2 table
+                for (size_t i = 0; i < tpls.size(); ++i) {
+                    core::Vec3 p = camera_.pos + f * 4.0f + right * (((float)i - 0.5f * (float)(tpls.size() - 1)) * 1.5f);
+                    int h = renderer_->spawnParticleEffect(tpls[i], p, right, core::Vec3{0, 1, 0}, ion);
+                    if (frame == 1) LOG_INFO("FXTEST %s -> handle %d", tpls[i].c_str(), h);
+                }
+                LOG_INFO("FXTEST frame %ld live effects %d", frame, renderer_->liveParticleEffects());
+            }
+        }
         // "<frame>[,<period>]": with a period the cycle repeats (M28 texture-lifetime soak: live textures must plateau).
         if (const char* rt = std::getenv("WFC_RELOADTEST")) {
             long first = std::atol(rt), period = 0;

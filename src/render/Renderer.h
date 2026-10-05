@@ -319,6 +319,29 @@ public:
     // Gameplay's active game-rule classes (e.g. "TnGameRules_SingleFlagCTF"): presentation gates authored on rules
     // (Kismet UnHide of the objective bases, Conquest totems, objective-factory effects).
     virtual void setActiveGameRules(const std::vector<std::string>& rules) { (void)rules; }
+    // Runtime particle effects from the map's cooked template library (M32; every ParticleSystem cooked into the map
+    // packages, e.g. FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX). Transform in glTF metres: pos, forward = the
+    // template's +X (emit direction), up = its +Z. color (linear RGBA, optional) feeds ParticleModuleColorByParameter
+    // (the weapon / team energon colour; the authored DefaultColor is not decoded yet). Returns a handle, or -1 when
+    // the template is not in this map's data (logged once). A one-shot effect is released when its emitters finish;
+    // a looping one runs until stopParticleEffect (stops spawning; live particles finish). All effects are released
+    // by unloadMapRenderData. Trail2 / Beam2 emitters are not drawn yet (logged once per template) [PARTIAL].
+    virtual int spawnParticleEffect(const std::string& tpl, const core::Vec3& pos, const core::Vec3& forward,
+                                    const core::Vec3& up, const float* colorRGBA = nullptr) {
+        (void)tpl; (void)pos; (void)forward; (void)up; (void)colorRGBA; return -1;
+    }
+    // Tracer / beam templates: placed at start with +X towards end; the end point is kept as the beam target.
+    virtual int spawnParticleEffectSegment(const std::string& tpl, const core::Vec3& start, const core::Vec3& end,
+                                           const float* colorRGBA = nullptr) {
+        (void)tpl; (void)start; (void)end; (void)colorRGBA; return -1;
+    }
+    // Move a live effect (a muzzle flash following its socket; local-space emitters follow, world-space ones keep
+    // their spawned particles where they are).
+    virtual bool setParticleEffectTransform(int handle, const core::Vec3& pos, const core::Vec3& forward, const core::Vec3& up) {
+        (void)handle; (void)pos; (void)forward; (void)up; return false;
+    }
+    virtual void stopParticleEffect(int handle) { (void)handle; }
+    virtual int liveParticleEffects() const { return 0; }
     // True when the renderer draws the authored map particle components itself (Systems must not draw them too).
     virtual bool drawsAuthoredMapFx() const { return false; }
     // Gameplay's map clock: seconds since SeqEvent_GameplayStarted (MapState). Movers (PHYS_Rotating domes, the

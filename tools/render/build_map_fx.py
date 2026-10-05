@@ -103,7 +103,12 @@ def system_runtime(name, s):
         for L in e['lods']:
             req = L['RequiredModule']['props']
             td = (L.get('TypeDataModule') or {}).get('props') or {}
+            tdc = (L.get('TypeDataModule') or {}).get('class') or ''
             lod = {'level': L['level'], 'material': req.get('Material'),
+                   # M32: emitter kind (sprite / mesh / trail2 / beam2) and the SubUV interpolation method
+                   'type_data': {'ParticleModuleTypeDataMesh': 'mesh', 'ParticleModuleTypeDataTrail2': 'trail2',
+                                 'ParticleModuleTypeDataBeam2': 'beam2'}.get(tdc, 'sprite' if not tdc else tdc),
+                   'subuv_method': req.get('InterpolationMethod', 'PSUVIM_None'),
                    'required': {'emitter_duration': req.get('EmitterDuration', 1.0),
                                 'emitter_loops': req.get('EmitterLoops', 0),
                                 'spawn_rate': tagged_dist(req.get('SpawnRate'), [0.0]),
@@ -135,7 +140,43 @@ def system_runtime(name, s):
     return out
 
 
+def library(mapname):
+    """M32: every ParticleSystem cooked into the map's level packages (weapon muzzle / tracer / impact templates
+    are cooked into each MP BASE package) -> {template: (pstream summary, package)}. The runtime spawns these by name
+    (IRenderer::spawnParticleEffect)."""
+    from ue3obj import map_packages, Repo as _R
+    sys.path.insert(0, WFC)
+    import pstream
+    out = {}
+    for pk in map_packages(mapname)[0]:
+        p = _R([pk]).pkgs[0]
+        for i, e in enumerate(p.exports):
+            if p.class_name(e) != 'ParticleSystem': continue
+            t = p.object_path(i + 1)
+            if t in out: continue
+            try:
+                s = pstream.system(t, pk[:-4] if pk.lower().endswith('.xxx') else pk)
+            except Exception as ex:
+                print('  library: %s: %s' % (t, ex)); continue
+            if s.get('missing_in'): continue
+            out[t] = s
+    return out
+
+
+def library_materials(lib):
+    mats = set()
+    for s in lib.values():
+        for e in s['emitters']:
+            for L in e['lods']:
+                m = (L['RequiredModule']['props'] or {}).get('Material')
+                if m: mats.add(m)
+    return sorted(mats)
+
+
 def main():
+    if sys.argv[1] == '--list-materials':          # build_render_data: materials of the template library
+        for m in library_materials(library(sys.argv[2])): print(m)
+        return
     mapname, out = sys.argv[1], sys.argv[2]
     fx = json.load(open(os.path.join(VS_MAPS, mapname, 'map_fx.json'), encoding='utf-8'))
     pk = (manifest(mapname, 'pickup_fx') or {}).get('systems', {})
@@ -150,6 +191,11 @@ def main():
             pkg = (fx['particle_systems'].get(t) or {}).get('package')
             s = pstream.system(t, pkg)
             systems[t] = system_runtime(t, s)
+    nlib = 0
+    for t, s in library(mapname).items():
+        if t not in systems:
+            systems[t] = system_runtime(t, s); nlib += 1
+    print('map fx: template library +%d systems' % nlib)
     inst = []
     for comp in fx['particle_components']:
         oc, t = comp['owner_class'], comp['props'].get('Template')
