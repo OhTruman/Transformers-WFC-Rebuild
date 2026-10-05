@@ -261,7 +261,7 @@ Inputs:
 
 ### Non-local participant pawns (bot-ready architecture, RECONSTRUCTION EXTENSION boundary)
 - Participants (MatchOpponent) are full pawns: the same chassis, specialty, loadout, movement, transformation, damage,
-  death / respawn and objective paths as the local pawn. Their inputs come only from  (harnesses); no AI.
+  death / respawn and objective paths as the local pawn. Their inputs come only from `setIntent` (harnesses); no AI.
 - WFC_PARTICIPANTTEST 4 / 4. TDM assists now use the victim's class HealthMax.
 
 ### HUD state additions
