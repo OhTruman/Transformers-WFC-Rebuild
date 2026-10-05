@@ -10,6 +10,7 @@
 // (material, screen alignment, burst, duration, local space) is tagged. See FIDELITY.md for the
 // decode and which module-role assignments are inferred.
 #pragma once
+#include <set>
 #include <string>
 #include <vector>
 #include "core/Math.h"
@@ -34,6 +35,9 @@ public:
     // templates reconstructed here are drawn; any other returns false and draws nothing (another weapon's template is
     // never substituted). Reconstructed: kMuzzleFlashTemplate, kTracerTemplate, kImpactTemplate - shared by the Ion
     // Blaster, Assault Rifle and Heavy Pistol (muzzle + tracer) and the Burst Rifle / Heavy MG (tracer) [CONF data].
+    // Every other template goes through unreconstructed(): logged once per template (Integration M08 rule: fail
+    // loudly, never substitute). That is the one seam for Rendering's generic particle runtime (WfcMapFx) once it
+    // offers spawn-at-transform / spawn-along-segment; the sounds are independent and always play.
     static constexpr const char* kMuzzleFlashTemplate = "FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX";
     static constexpr const char* kTracerTemplate = "FX_AssaultRifle_p.FX.Tracer_AssaultRifle_FX";
     static constexpr const char* kImpactTemplate = "FX_IonBlaster_p.FX.Impact_IonBlaster_FX";
@@ -99,7 +103,12 @@ public:
         core::Vec3 velMin, velMax;      // socket frame, m/s
     };
 
+    // Templates asked for that are not reconstructed (diagnostics / tests).
+    const std::set<std::string>& missingTemplates() const { return missing_; }
+
 private:
+    bool unreconstructed(const char* kind, const std::string& psTemplate);
+    std::set<std::string> missing_;
     struct Part {
         const EmitterDef* def;
         core::Vec3 pos, vel;            // world, or socket space when def->localSpace

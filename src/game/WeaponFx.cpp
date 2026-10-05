@@ -355,20 +355,27 @@ bool WeaponFx::reconstructs(const std::string& t) {
     return t == kMuzzleFlashTemplate || t == kTracerTemplate || t == kImpactTemplate;
 }
 
+bool WeaponFx::unreconstructed(const char* kind, const std::string& t) {
+    if (t.empty()) return false;                                   // the weapon authors none: nothing to draw
+    if (missing_.insert(t).second)
+        LOG_WARN("weapon fx: %s template %s is not reconstructed - not drawn (no substitute)", kind, t.c_str());
+    return false;
+}
+
 bool WeaponFx::spawnMuzzleFlash(const std::string& t, const core::Mat4& socketWorld) {
-    if (t != kMuzzleFlashTemplate) return false;
+    if (t != kMuzzleFlashTemplate) return unreconstructed("muzzle", t);
     spawnMuzzleFlash(socketWorld);
     return true;
 }
 
 bool WeaponFx::spawnTracer(const std::string& t, const Vec3& muzzle, const Vec3& hit) {
-    if (t != kTracerTemplate) return false;
+    if (t != kTracerTemplate) return unreconstructed("tracer", t);
     spawnTracer(muzzle, hit);
     return true;
 }
 
 bool WeaponFx::spawnImpact(const std::string& t, const Vec3& pos, const Vec3& normal, const Vec3& viewPos) {
-    if (t != kImpactTemplate) return false;
+    if (t != kImpactTemplate) return unreconstructed("impact", t);
     return spawnImpact(pos, normal, viewPos);
 }
 

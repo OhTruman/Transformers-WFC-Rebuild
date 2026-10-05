@@ -121,8 +121,11 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
       variants), Heavy Pistol and Plane Machine Gun get both;
     * Tracer_AssaultRifle_FX only — Burst Rifle and Heavy MG;
     * Impact_IonBlaster_FX — the Ion Blaster only.
-  * Any other template draws nothing; another weapon's FX is never substituted [PARTIAL]. Candidates for Rendering's
-    generic particle runtime.
+  * Any other template draws nothing; another weapon's FX is never substituted. Each missing template is logged
+    once (Integration M08 decision); the weapon's sounds still play [PARTIAL].
+  * Next step (Integration decision): unreconstructed templates go through Rendering's generic WfcMapFx runtime, once
+    it offers spawn-at-transform / spawn-along-segment. `WeaponFx::unreconstructed` is the single seam for this.
+    No hand-ports.
 * **PARTIAL:**
   * 169 dialogue waves are absent from the extraction (AssetTools).
 * `SoundCues::findCue` resolves full asset names to the compiled short names, but only for the exact packages that
