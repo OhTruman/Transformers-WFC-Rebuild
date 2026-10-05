@@ -804,6 +804,17 @@ void World::syncShownWeapon() {
     weaponSeenShot_ = w.shotSerial; weaponSeenReload_ = w.reloadSerial;
 }
 
+// The class's own grenade bag: TR_MPPlayerCharacterData_p.<Class>_PCD_MP WeaponTypes give Scout FlashBangs, Scientist
+// HealGrenades, Soldier FlakGrenades, Leader KamikazeMines to the class's own chassis [CONF authored]. The exported per-chassis
+// on-foot list (TnDataProvider_Weapon restriction) does not cover grenade bags consistently (it omits these on the class's
+// own chassis), so a WT_Grenades bag is accepted when it is the selection class's preset grenade; other grenades stay refused.
+static bool classPresetGrenadeAllowed(const CharacterSelection* sel, const WeaponDef* wd) {
+    if (!sel || !wd || wd->fire != WeaponFire::Grenade) return false;
+    static const char* kClassGrenade[4] = {"KamikazeMines", "HealGrenades", "FlashBangs", "FlakGrenades"};   // Leader, Scientist, Scout, Soldier
+    const int c = (int)sel->specialty;
+    return c >= 0 && c < 4 && std::string(wd->id) == kClassGrenade[c];
+}
+
 std::vector<std::string> World::applyLoadout(const CharacterSelection* sel) {
     Character& pc = player_.pawn();
     const ChassisDef& d = pc.chassis();
@@ -813,7 +824,8 @@ std::vector<std::string> World::applyLoadout(const CharacterSelection* sel) {
     std::vector<Weapon> robot;
     for (const std::string& n : names) {
         const WeaponDef* wd = findWeaponDef(n);
-        bool allowed = !custom || std::find(d.allowedOnFoot.begin(), d.allowedOnFoot.end(), n) != d.allowedOnFoot.end();
+        bool allowed = !custom || std::find(d.allowedOnFoot.begin(), d.allowedOnFoot.end(), n) != d.allowedOnFoot.end() ||
+                       classPresetGrenadeAllowed(sel, wd);
         if (!wd || !allowed) {
             refused.push_back(n);
             LOG_ERROR("loadout: weapon %s %s for chassis %s - not equipped", n.c_str(), !wd ? "unknown" : "not allowed (TnDataProvider_Weapon restriction)", d.id.c_str());
@@ -1558,7 +1570,8 @@ std::vector<std::string> World::applyCharacterTo(Character& pc, const CharacterS
     std::vector<Weapon> robot;
     for (const std::string& n : custom ? sel->weapons : d.iconicWeapons) {
         const WeaponDef* wd = findWeaponDef(n);
-        bool allowed = !custom || std::find(d.allowedOnFoot.begin(), d.allowedOnFoot.end(), n) != d.allowedOnFoot.end();
+        bool allowed = !custom || std::find(d.allowedOnFoot.begin(), d.allowedOnFoot.end(), n) != d.allowedOnFoot.end() ||
+                       classPresetGrenadeAllowed(sel, wd);
         if (!wd || !allowed) { refused.push_back(n); continue; }
         robot.push_back(Weapon::fromDef(*wd));
     }

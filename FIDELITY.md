@@ -343,6 +343,10 @@ Classification:
   - Shots aim through the crosshair. Their life after a miss (3 s) is PROV.
   - Cooldowns 60 s.
   - Test (PARTICIPANT 18/18).
+- **Class preset grenades** [CONF authored TR_MPPlayerCharacterData_p.<Class>_PCD_MP]: Scout FlashBangs, Scientist HealGrenades,
+  Soldier FlakGrenades and Leader KamikazeMines are equipped on the class's chassis. The exported per-chassis on-foot list
+  omits them there, so a grenade bag is accepted when it is the selection class's preset grenade; other classes' grenades
+  stay refused. Reported by the M08 soak (every preset grenade was refused). WEAPON 19/19.
 - **Weapon / spawner killstreaks** [CONF RE §K + authored]:
   - **P.O.K.E. 2.0:** TnWeaponPoke for 20 s (SecondsUntilDeactivated [H]): DisallowWeaponSwitching, ground speed ×1.5.
     Fire or Q = the MWT_Poke attack: Melee_Axe sweep at 0.335 s, 9999 TnDamageTypePoke, impulse 200000, lunge.

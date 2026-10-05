@@ -120,6 +120,17 @@ bool Application::init() {
     if (std::getenv("WFC_XFORMTEST")) { runTransformStress(); return false; }  // measurements only
     if (std::getenv("WFC_MATCHTEST")) { runMatchTest(); return false; }        // measurements only
     if (std::getenv("WFC_CAMTEST")) { runCameraTest(); return false; }         // measurements only
+    if (const char* pp = std::getenv("WFC_POINTPROBE")) {   // diagnostic: rays from a point in 6 directions (pawn / weapon collision)
+        core::Vec3 p{}; std::sscanf(pp, "%f,%f,%f", &p.x, &p.y, &p.z);
+        const core::Vec3 dirs[6] = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+        for (const core::Vec3& d : dirs) {
+            float t1 = -1, t2 = -1, t; core::Vec3 n;
+            if (world_.collision() && world_.collision()->segmentHit(p, p + d * 20.0f, t, n)) t1 = t * 20.0f;
+            if (world_.weaponCollision() && world_.weaponCollision()->segmentHit(p, p + d * 20.0f, t, n)) t2 = t * 20.0f;
+            LOG_INFO("POINTPROBE dir (%.0f %.0f %.0f): pawn %.2f m weapon %.2f m", d.x, d.y, d.z, t1, t2);
+        }
+        return false;
+    }
     if (std::getenv("WFC_CHAOS")) { runChaosTest(); return false; }            // measurements only
     if (std::getenv("WFC_TDMTEST")) { runTdmSessionTest(); return false; }     // measurements only
     if (std::getenv("WFC_CAMSYNC")) { runCameraSyncTest(); return false; }     // measurements only
@@ -2778,6 +2789,31 @@ void Application::runWeaponTest() {
                  (int)(pc.vehicleParams().form == game::VehicleFormType::Tank), p0, p1, camP, maxRate * 57.2958f);
         check(pc.form() == game::Form::Vehicle && std::fabs((p1 - p0) - (camP - 0.0f)) < 0.03f && maxRate * 57.2958f <= 365.0f,
               "Tank cannon pitches with the view pitch (hull-relative), lag <= 360 deg/s");
+    }
+    // Class preset grenades on the class's own chassis (PCD_MP WeaponTypes): never refused by the per-chassis on-foot list;
+    // a different class's grenade still is (M08 soak: every preset grenade was refused).
+    {
+        struct P { const char* chassis; game::Specialty sp; std::vector<std::string> w; int bag; };
+        const P presets[] = {{"Car4", game::Specialty::Scout, {"Shotgun", "HeavyPistol", "FlashBangs"}, 2},
+                             {"Tank3", game::Specialty::Soldier, {"AssaultRifle", "HomingRocket", "FlakGrenades"}, 1},
+                             {"Truck3", game::Specialty::Leader, {"IonBlaster", "GrenadeLauncher", "KamikazeMines"}, 1},
+                             {"Jet", game::Specialty::Scientist, {"BurstRifle", "RepairRay", "HealGrenades"}, 1}};
+        bool all = true; std::string log;
+        for (const P& p : presets) {
+            world_.applyChassisToLocalPawn(p.chassis);
+            game::CharacterSelection cs; cs.type = 0; cs.specialty = p.sp; cs.weapons = p.w;
+            std::vector<std::string> ref = world_.applyLoadout(&cs);
+            run(0.1f);
+            const int bag = world_.hudState().grenades;
+            log += std::string(p.chassis) + " refused " + std::to_string(ref.size()) + " bag " + std::to_string(bag) + "; ";
+            all = all && ref.empty() && bag == p.bag;
+        }
+        world_.applyChassisToLocalPawn("Car4");
+        game::CharacterSelection bad; bad.type = 0; bad.specialty = game::Specialty::Scout; bad.weapons = {"Shotgun", "FlakGrenades"};
+        std::vector<std::string> ref = world_.applyLoadout(&bad);
+        const bool foreign = ref.size() == 1 && ref[0] == "FlakGrenades";
+        LOG_INFO("WEAPON class grenades: %s foreign grenade refused %d", log.c_str(), (int)foreign);
+        check(all && foreign, "class preset loadouts on their own chassis equip fully (grenade bag present); a foreign class grenade is refused");
     }
     LOG_INFO("WEAPON SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
