@@ -132,9 +132,11 @@ def parse_lightmap_1d(nat):
         return None
     data = nat[o:o + size]; o += size
     scales = [list(struct.unpack_from('>3f', nat, o + 12 * k)) for k in range(3)]
-    # FColor serialized as a byte-swapped DWColor: A,R,G,B. A is 255/254; each R/G/B channel of each
-    # coefficient is normalized to 255 (max over the vertices), i.e. ScaleVectors = per-channel maxima.
-    if any(data[k * 4] < 250 for k in range(min(count * 3, 64))):
+    # FColor serialized as a byte-swapped DWColor: A,R,G,B; each R/G/B channel of each coefficient is normalized to
+    # 255 (max over the vertices), i.e. ScaleVectors = per-channel maxima. The alpha byte is not a lighting input and
+    # is not constant across maps (Streets 255/254, Gorge / Rust 0): M24 - an "alpha >= 250" sanity check dropped
+    # every vertex-lit component of Gorge (561) and Rust (635). Alignment is validated by the size and the ScaleVectors.
+    if not all(all(abs(x) < 1e4 and x == x for x in s) for s in scales):
         return None
     return {'count': count, 'samples_hex': data.hex(), 'scales': scales}
 

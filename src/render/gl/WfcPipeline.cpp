@@ -135,6 +135,9 @@ uniform vec2 uViewport;      // pixels
 uniform vec4 uDynParam;      // particle DynamicParameter (map FX emitters; 1 otherwise)
 uniform sampler2D uSceneDepth;
 uniform int uHasSceneDepth;
+uniform sampler2D uSceneColor;   // MaterialExpressionSceneTexture: the resolved opaque scene colour (HDR)
+vec4 wfcSceneColor(vec2 uv) { return texture(uSceneColor, uv); }
+vec2 wfcScreenUV() { return gl_FragCoord.xy / vec2(textureSize(uSceneColor, 0)); }
 struct MatIn { vec2 uv0; vec2 uv1; vec4 vertexColor; vec3 worldPosUE; vec3 cameraVector; vec3 reflectionVector;
                vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; float sceneDepth;
                vec4 dynParam; };
@@ -1131,6 +1134,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     P.slots = slots;
     P.blend = blend; P.twoSided = twoSided; P.lit = lit; P.clip = clip;
     P.sceneDepth = code.find("m.sceneDepth") != std::string::npos || code.find("wfcDepthBiasedAlpha(") != std::string::npos;
+    P.sceneColor = code.find("wfcSceneColor(") != std::string::npos;
     if (slots.size() > 12) LOG_WARN("wfc: %s uses %zu texture slots (unit 12 is scene depth)", key.c_str(), slots.size());
     UseProgram(id);
     for (size_t k = 0; k < slots.size(); ++k) {
@@ -1145,6 +1149,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     }
     Uniform1i(U("uLM0"), 13); Uniform1i(U("uLM1"), 14); Uniform1i(U("uLM2"), 15);
     Uniform1i(U("uSceneDepth"), 12);
+    Uniform1i(U("uSceneColor"), 16);
     Uniform1i(U("uVLM"), 11);
     Uniform1i(U("uShadowMask"), 10);
     UseProgram(0);
@@ -1451,6 +1456,32 @@ int Pipeline::upload(const MeshData& m) {
     std::vector<SubMesh> subs = m.subs;
     if (subs.empty()) { SubMesh s; s.indexOffset = 0; s.indexCount = (uint32_t)m.indices.size(); subs.push_back(s); }
     int nLM = 0, nProg = 0;
+    // Vertex lightmaps (FLightMap1D) cover the component's whole cooked LOD0 vertex buffer, all sections in order; the
+    // glTF splits a component into one submesh per section. Per component: the sections' vertex ranges in submesh
+    // order, so a section indexes the shared samples at its cumulative offset (M24: multi-section components on
+    // Gorge / Rust never bound - "2415 samples vs 954 vertices").
+    std::map<std::string, std::vector<std::pair<uint32_t, uint32_t>>> vlmRanges;
+    auto componentKey = [&](const SubMesh& s) {
+        std::string key = s.component;
+        std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        if (key.rfind("actor:", 0) == 0) {
+            auto ac = actorComponent_.find(key.substr(6));
+            if (ac != actorComponent_.end() && !ac->second.empty()) key = ac->second;
+        }
+        return key;
+    };
+    if (!vertexLMs_.empty())
+        for (const SubMesh& s : subs) {
+            if (s.indexCount == 0) continue;
+            std::string key = componentKey(s);
+            if (!vertexLMs_.count(key)) continue;
+            uint32_t lo = UINT32_MAX, hi = 0;
+            for (uint32_t k = 0; k < s.indexCount; ++k) {
+                uint32_t vi = m.indices[s.indexOffset + k];
+                lo = std::min(lo, vi); hi = std::max(hi, vi);
+            }
+            vlmRanges[key].push_back({lo, hi});
+        }
     for (const SubMesh& s : subs) {
         Sub d;
         d.first = s.indexOffset; d.count = s.indexCount;
@@ -1479,20 +1510,34 @@ int Pipeline::upload(const MeshData& m) {
                 lo = std::min(lo, vi); hi = std::max(hi, vi);
             }
             const VertexLM& v = vit->second;
-            if ((int)(hi - lo + 1) == v.count) {
+            int cum = 0, total = 0;
+            {
+                const auto& rs = vlmRanges[key];
+                bool before = true;
+                for (const auto& rg : rs) {
+                    int n = (int)(rg.second - rg.first + 1);
+                    total += n;
+                    if (rg.first == lo && rg.second == hi) before = false;
+                    else if (before) cum += n;
+                }
+                if ((int)(hi - lo + 1) == v.count) cum = 0;          // single-section (or self-contained) component
+                else if (total != v.count) cum = -1;                // layout not reproducible: not bound
+            }
+            if (cum >= 0) {
                 glGenTextures(1, &d.vlmTex);
                 glBindTexture(GL_TEXTURE_2D, d.vlmTex);
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, v.count, 3, 0, GL_RGB, GL_FLOAT, v.rgb.data());
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                 glBindTexture(GL_TEXTURE_2D, 0);
-                d.vlmBase = (int)lo;
+                d.vlmBase = (int)lo - cum;
                 for (int k = 0; k < 3; ++k)
                     for (int c = 0; c < 3; ++c) d.lmScale[k][c] = v.scale[k][c];
                 lm = true;
                 ++nLM;
             } else {
-                LOG_WARN("wfc: vertex lightmap %s: %d samples vs %u vertices; not bound", key.c_str(), v.count, hi - lo + 1);
+                LOG_WARN("wfc: vertex lightmap %s: %d samples vs %u vertices (sections total %d); not bound", key.c_str(),
+                         v.count, hi - lo + 1, total);
             }
         }
         if (lm && !d.vlmTex) {
@@ -1599,6 +1644,7 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     static const int legacyTrans = std::getenv("WFC_M05TRANS") ? 1 : 0;
     Uniform1i(uloc(P, "uLegacyTrans"), legacyTrans);
     if (P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_); }
+    if (P.sceneColor) { ensureSceneColor(); ActiveTexture(GL_TEXTURE0 + 16); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_); }
     VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
     static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
     Uniform1i(uloc(P, "uDebug"), dbg);
@@ -2087,6 +2133,16 @@ GLuint Pipeline::shadowMaskTexFor(bool character) {
     return neutralMaskTex_;
 }
 
+// UE3 resolves scene colour once before the translucent pass; SceneTexture reads that copy (first use per frame).
+void Pipeline::ensureSceneColor() {
+    if (sceneColorCopied_ || !sceneCopyFbo_) return;
+    BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
+    BindFramebuffer(GL_DRAW_FRAMEBUFFER, sceneCopyFbo_);
+    BlitFramebuffer(0, 0, vpW_, vpH_, 0, 0, vpW_, vpH_, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    sceneColorCopied_ = true;
+}
+
 void Pipeline::ensureSceneDepth() {
     if (!depthDirty_ || !depthCopyFbo_) return;
     BindFramebuffer(GL_READ_FRAMEBUFFER, fbo_);
@@ -2261,6 +2317,7 @@ void Pipeline::ensureTargets(int w, int h) {
 void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     ++frameNo_;
     counts_ = FrameCounts();
+    sceneColorCopied_ = false;
     frameMats_.clear();
     frameNoProg_.clear();
     progSeen_.assign(progs_.size(), 0);
