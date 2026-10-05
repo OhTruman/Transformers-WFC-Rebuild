@@ -41,6 +41,7 @@ const std::map<std::string, std::string>& defaults() {
 bool LocalProfile::isOriginalField(const std::string& field) { return defaults().count(field) > 0; }
 
 std::string LocalProfile::playerName() const {
+    if (!loggedInAccount.empty()) return loggedInAccount;
     if (!identityName.empty()) return identityName;
     if (const char* n = std::getenv("WFC_PLAYERNAME")) if (*n) return n;
     return "Player";
@@ -72,6 +73,8 @@ void LocalProfile::load() {
         std::string k = line.substr(0, eq), v = line.substr(eq + 1);
         if (k == "HasWatchedIntroMovie") continue;   // written by earlier rebuilds; not a profile field in the original
         else if (section == "[Identity]" && k == "Name") identityName = v;
+        else if (section == "[Accounts]" && k == "Account" && !v.empty()) accounts.push_back(v);
+        else if (section == "[Accounts]" && k == "SignedIn") loggedInAccount = v;
         else if (section == "[PCSettings]") {
             if (k == "Width") display.width = std::atoi(v.c_str());
             else if (k == "Height") display.height = std::atoi(v.c_str());
@@ -89,6 +92,11 @@ void LocalProfile::save() const {
     f << "\n[ProfileData]\n";
     for (const auto& [k, v] : values_) f << k << "=" << v << "\n";
     if (!identityName.empty()) f << "\n[Identity]\nName=" << identityName << "\n";
+    if (!accounts.empty()) {
+        f << "\n[Accounts]\n";
+        for (const std::string& a : accounts) f << "Account=" << a << "\n";
+        if (!loggedInAccount.empty()) f << "SignedIn=" << loggedInAccount << "\n";
+    }
     f << "\n[PCSettings]\nWidth=" << display.width << "\nHeight=" << display.height << "\nFullscreen=" << (display.fullscreen ? 1 : 0)
       << "\nTextureQuality=" << display.textureQuality << "\nVSync=" << (display.vsync ? 1 : 0) << "\n";
 }

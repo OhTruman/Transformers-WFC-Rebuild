@@ -700,10 +700,31 @@ void VM::installBuiltins() {
     global->setRaw("Selection", Value(selection), DontEnum);
     method(vm, selection, "getFocus", [](VM& vm, const Value&, Args&) -> Value { return vm.get(vm.global, "__selectionFocus"); });
     method(vm, selection, "setFocus", [](VM& vm, const Value&, Args& a) -> Value {
+        // An instance or a target-path string (relative to the calling timeline, e.g. "inputText_mc.label_txt").
         Value v = arg(a, 0);
-        if (v.isObject() && v.o->display) vm.global->setRaw("__selectionFocus", Value(v.o->display->targetPath()), DontEnum);
-        else vm.global->setRaw("__selectionFocus", Value::null(), DontEnum);
-        return Value(true);
+        gfx::DisplayObject* d = nullptr;
+        if (v.isObject() && v.o->display) d = v.o->display;
+        else if (v.isString() && vm.player()) d = vm.player()->resolveTarget(vm.toString(v), vm.currentTarget);
+        if (d && d->kind == gfx::DisplayObject::Kind::Text && static_cast<gfx::TextField*>(d)->editable()) {
+            vm.player()->setTextFocus(static_cast<gfx::TextField*>(d));
+            return Value(true);
+        }
+        if (vm.player()) vm.player()->setTextFocus(nullptr);
+        vm.global->setRaw("__selectionFocus", d ? Value(d->targetPath()) : Value::null(), DontEnum);
+        return Value(d != nullptr);
+    });
+    method(vm, selection, "getCaretIndex", [](VM& vm, const Value&, Args&) -> Value {
+        return vm.player() && vm.player()->textFocus() ? Value((double)vm.player()->caretIndex()) : Value(-1.0);
+    });
+    method(vm, selection, "setSelection", [](VM& vm, const Value&, Args& a) -> Value {
+        if (vm.player()) vm.player()->setCaretIndex((size_t)std::max(0.0, vm.toNumber(arg(a, 1))));
+        return Value::undef();
+    });
+    method(vm, selection, "getBeginIndex", [](VM& vm, const Value&, Args&) -> Value {
+        return vm.player() && vm.player()->textFocus() ? Value((double)vm.player()->caretIndex()) : Value(-1.0);
+    });
+    method(vm, selection, "getEndIndex", [](VM& vm, const Value&, Args&) -> Value {
+        return vm.player() && vm.player()->textFocus() ? Value((double)vm.player()->caretIndex()) : Value(-1.0);
     });
     method(vm, selection, "captureFocus", [](VM&, const Value&, Args&) -> Value { return Value::undef(); });
     Object* system = newPlain();

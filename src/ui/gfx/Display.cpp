@@ -371,6 +371,7 @@ DisplayObject* Player::instantiate(MovieClip* parent, const std::shared_ptr<cons
         t->autoSize = e.autoSize ? "left" : "none";
         t->variable = e.variable;
         t->maxChars = e.maxLength;
+        t->inputType = !e.readOnly;
         TextFormatSpan& f = t->newFormat;
         f.size = e.height / 20.0f;
         if (e.hasColor) f.color = e.color;
@@ -410,6 +411,7 @@ DisplayObject* Player::instantiate(MovieClip* parent, const std::shared_ptr<cons
         Object* proto = vm_->movieClipProto;
         if (en != def->exportNames.end()) {
             auto rc = vm_->registeredClasses.find(en->second);
+            if (std::getenv("WFC_GFX_CLASSLOG")) LOG_INFO("GFX place %s char %d linkage %s class %s", name.c_str(), (int)charId, en->second.c_str(), rc != vm_->registeredClasses.end() ? "yes" : "NO");
             if (rc != vm_->registeredClasses.end()) {
                 Value p = vm_->get(rc->second, "prototype");
                 if (p.isObject()) proto = p.o;
@@ -634,6 +636,7 @@ MovieClip* Player::attachMovie(MovieClip* parent, const std::string& linkage, co
     applyFrameTags(mc, 0, true);
     mc->frame = 0;
     constructClip(mc, initObj);
+    if (std::getenv("WFC_GFX_CLASSLOG")) LOG_INFO("GFX attachMovie %s as %s depth %d -> %s", linkage.c_str(), name.c_str(), asDepth, mc->targetPath().c_str());
     queueAction([this, mc]() { if (!mc->removed) dispatchClipEvent(mc, "onLoad", EvLoad); });
     return mc;
 }
@@ -863,6 +866,7 @@ void Player::tickIntervals() {
 }
 
 void Player::keyEvent(int keyCode, bool down) {
+    if (down) textEditKey(keyCode);
     lastKeyCode = keyCode;
     lastAscii = keyCode == 13 ? 13 : keyCode == 27 ? 27 : (keyCode >= 32 && keyCode < 127 ? keyCode : 0);
     if (down) keysDown.insert(keyCode); else keysDown.erase(keyCode);
@@ -875,6 +879,104 @@ void Player::keyEvent(int keyCode, bool down) {
         }
         drainActions();
     }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Text entry (Flash input TextField: Selection focus, caret, onChanged, maxChars, variable binding)
+
+void Player::setTextFocus(TextField* tf) {
+    if (tf && (tf->removed || !tf->editable())) tf = nullptr;
+    if (tf != focusText_) LOG_INFO("GFX text focus -> %s", tf ? tf->targetPath().c_str() : "(none)");
+    focusText_ = tf;
+    caret_ = tf ? tf->chars.size() : 0;
+    vm_->global->setRaw("__selectionFocus", tf ? avm1::Value(tf->targetPath()) : avm1::Value::null(), avm1::DontEnum);
+}
+
+void Player::setCaretIndex(size_t i) {
+    TextField* tf = textFocus();
+    caret_ = tf ? std::min(i, tf->chars.size()) : 0;
+}
+
+void Player::inputChanged(TextField* tf) {
+    tf->htmlSource.clear();
+    tf->layoutDirty = true;
+    // Two-way variable binding: the typed text becomes the variable's value.
+    if (!tf->variable.empty() && tf->parent) {
+        std::string path = tf->variable, name = path;
+        DisplayObject* target = tf->parent;
+        size_t dot = path.find_last_of(".:/");
+        if (dot != std::string::npos) { name = path.substr(dot + 1); target = resolveTarget(path.substr(0, dot), tf->parent); }
+        if (target) {
+            std::string s = tf->plainText();
+            vm_->set(scriptObject(target), name, avm1::Value(s));
+            tf->variableShown = s;
+        }
+    }
+    try {
+        vm_->callMethod(avm1::Value(scriptObject(tf)), "onChanged", {avm1::Value(scriptObject(tf))});
+    } catch (const avm1::ScriptThrow& t) {
+        LOG_WARN("GFX onChanged threw: %s", vm_->toString(t.v).c_str());
+    }
+    drainActions();
+}
+
+bool Player::textInput(char32_t c) {
+    TextField* tf = textFocus();
+    if (!tf || c < 32 || c == 127 || c > 0xFFFF) return false;   // the embedded fonts cover the BMP only
+    if (tf->maxChars > 0 && (int)tf->chars.size() >= tf->maxChars) return true;
+    caret_ = std::min(caret_, tf->chars.size());
+    if (tf->formats.empty()) tf->formats = {tf->newFormat};
+    int fmt = tf->charFormat.empty() ? 0 : tf->charFormat[caret_ > 0 ? caret_ - 1 : 0];
+    tf->chars.insert(tf->chars.begin() + (long)caret_, (char16_t)c);
+    tf->charFormat.insert(tf->charFormat.begin() + (long)caret_, fmt);
+    ++caret_;
+    inputChanged(tf);
+    return true;
+}
+
+bool Player::textEditKey(int keyCode) {
+    TextField* tf = textFocus();
+    if (!tf) return false;
+    caret_ = std::min(caret_, tf->chars.size());
+    switch (keyCode) {
+    case 8:   // Backspace
+        if (caret_ == 0) return true;
+        --caret_;
+        tf->chars.erase(tf->chars.begin() + (long)caret_);
+        if (caret_ < tf->charFormat.size()) tf->charFormat.erase(tf->charFormat.begin() + (long)caret_);
+        inputChanged(tf);
+        return true;
+    case 46:  // Delete
+        if (caret_ >= tf->chars.size()) return true;
+        tf->chars.erase(tf->chars.begin() + (long)caret_);
+        if (caret_ < tf->charFormat.size()) tf->charFormat.erase(tf->charFormat.begin() + (long)caret_);
+        inputChanged(tf);
+        return true;
+    case 37: if (caret_ > 0) --caret_; return true;                       // Left
+    case 39: if (caret_ < tf->chars.size()) ++caret_; return true;        // Right
+    case 36: caret_ = 0; return true;                                     // Home
+    case 35: caret_ = tf->chars.size(); return true;                      // End
+    default: return false;
+    }
+}
+
+TextField* Player::inputFieldAt(MovieClip* mc, const Point& world, const Matrix& parent) {
+    if (!mc || mc->removed || !mc->visible) return nullptr;
+    (void)parent;
+    TextField* found = nullptr;
+    for (auto& [depth, ch] : mc->children) {   // later (higher depth) children are on top
+        if (ch->removed || !ch->visible) continue;
+        if (ch->kind == DisplayObject::Kind::Clip) {
+            if (TextField* t = inputFieldAt(static_cast<MovieClip*>(ch.get()), world, parent)) found = t;
+        } else if (ch->kind == DisplayObject::Kind::Text) {
+            auto* tf = static_cast<TextField*>(ch.get());
+            if (!tf->editable()) continue;
+            Point local = tf->worldMatrix().inverse().apply(world);
+            if (local.x >= tf->bounds.xmin && local.x <= tf->bounds.xmax && local.y >= tf->bounds.ymin && local.y <= tf->bounds.ymax)
+                found = tf;
+        }
+    }
+    return found;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1021,6 +1123,12 @@ void Player::mouseButton(bool down) {
     if (down == mouseDown_) return;
     mouseDown_ = down;
     if (down) {
+        // Clicking an input field focuses it (caret at the end); clicking anywhere else clears text focus.
+        if (root_) {
+            Point world{mouseX * 20.0f, mouseY * 20.0f};   // twips, as findButton
+            TextField* hit = mouseInside_ ? inputFieldAt(root_, world, Matrix{}) : nullptr;
+            if (hit != textFocus()) setTextFocus(hit);
+        }
         broadcastMouse("onMouseDown", EvMouseDown, {});
         updateHover();
         if (hover_ && !hover_->removed) {
@@ -1241,6 +1349,32 @@ void Player::renderObject(const DisplayObject* d, const Matrix& m, const CXForm&
             float s = g.size / g.font->emSize();
             RenderItem it; it.type = RenderItem::Glyph; it.shape = &g.font->glyphs[(size_t)g.glyph];
             it.m = wm * Matrix{s, 0, 0, s, g.x, g.y}; it.cx = wc; it.glyphColor = g.color; it.owner = d;
+            out.push_back(it);
+        }
+        // The focused input field's caret (blinking about twice a second, as Flash Player's).
+        if (tf == textFocus() && std::fmod(timeMs_, 1060.0) < 530.0) {
+            if (!caretShape_) {
+                caretShape_ = std::make_shared<ShapeDef>();
+                caretShape_->bounds = Rect{0, 0, 1, 1};
+                caretShape_->fillSets.emplace_back();
+                caretShape_->lineSets.emplace_back();
+                FillStyle f;
+                f.color = RGBA{255, 255, 255, 255};
+                caretShape_->fillSets[0].push_back(f);
+                ShapePath p;
+                p.pts = {{0, 0}, {1, 0}, {1, 1}, {0, 1}, {0, 0}};
+                p.fill1 = 1;
+                caretShape_->paths.push_back(p);
+            }
+            RenderItem it; it.type = RenderItem::Shape; it.shape = caretShape_.get(); it.owner = d;
+            TextField::CaretPos cp;
+            size_t ci = std::min(caret_, tf->chars.size());
+            if (ci < tf->caretPos.size()) cp = tf->caretPos[ci];
+            else { cp.x = tf->bounds.xmin + 40; cp.y = tf->bounds.ymin + 40; cp.h = tf->newFormat.size * 20.0f; }
+            RGBA col = tf->formats.empty() ? tf->newFormat.color : tf->formats[0].color;
+            CXForm tint = wc;
+            tint.mr = col.r / 255.0f * wc.mr; tint.mg = col.g / 255.0f * wc.mg; tint.mb = col.b / 255.0f * wc.mb;
+            it.m = wm * Matrix{20.0f, 0, 0, cp.h, cp.x, cp.y}; it.cx = tint;
             out.push_back(it);
         }
         break;

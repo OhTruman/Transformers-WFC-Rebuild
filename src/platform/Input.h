@@ -2,6 +2,8 @@
 // Gameplay code depends ONLY on this, never on Win32/XInput/etc.
 #pragma once
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace platform {
 
@@ -33,6 +35,10 @@ struct InputFrame {
     int   mouseX = -1, mouseY = -1;
     bool  mouseLeft = false, mouseRight = false;
     float mouseWheel = 0.0f;      // notches this frame (+ = away from the user)
+    // Text entry (UI input fields): characters typed this frame (WM_CHAR, UTF-32) and raw key presses including
+    // auto-repeat (Win32 virtual-key codes), in order.
+    std::u32string text;
+    std::vector<uint16_t> keyPresses;
 
     bool isDown(Button b) const { return down[(int)b]; }
     bool wasPressed(Button b) const { return pressed[(int)b]; }

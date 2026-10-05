@@ -37,6 +37,12 @@ public:
     // else WFC_PLAYERNAME, else "Player" [PC RECONSTRUCTION FALLBACK].
     std::string playerName() const;
     std::string identityName;
+    // Accounts menu (PC SKU). The original's accounts were Demonware online accounts bound to the product key
+    // (TnAccountActionScriptBinding: CreateOnlineAccount, Login), and the signed-in account name was the player's name.
+    // Offline the rebuild keeps local account names instead [PC ADAPTATION]: create / delete / sign in / sign out;
+    // the signed-in name is the player name, and the last signed-in account signs in again at the next launch.
+    std::vector<std::string> accounts;
+    std::string loggedInAccount;
 
     // Called after the movie applies / saves the profile (Game.ApplyProfileSettings, Console.SaveProfileSettings) and
     // after PCSettings commits: the application pushes the values to their runtime owners.

@@ -2,6 +2,7 @@
 #include "ui/gfx/Avm1.h"
 #include "ui/gfx/Display.h"
 #include "core/Log.h"
+#include <cstdlib>
 
 #include <algorithm>
 #include <cctype>
@@ -169,7 +170,7 @@ bool displayGetProp(VM& vm, gfx::DisplayObject* d, const std::string& key, Value
         if (k == "variable") { out = tf->variable.empty() ? Value::null() : Value(tf->variable); return true; }
         if (k == "scroll" || k == "maxscroll" || k == "bottomScroll") { out = Value(1); return true; }
         if (k == "hscroll" || k == "maxhscroll") { out = Value(0); return true; }
-        if (k == "type") { out = Value("dynamic"); return true; }
+        if (k == "type") { out = Value(tf->inputType ? "input" : "dynamic"); return true; }
         if (k == "verticalAlign") { out = Value(tf->verticalAlign); return true; }
         if (k == "textAutoSize") { out = Value(tf->textAutoSize); return true; }
         if (k == "shadowAlpha") { out = Value((double)tf->shadowAlpha); return true; }
@@ -254,6 +255,7 @@ bool displaySetProp(VM& vm, gfx::DisplayObject* d, const std::string& key, const
         if (k == "multiline") { tf->multiline = vm.toBool(v); tf->layoutDirty = true; return true; }
         if (k == "maxChars") { tf->maxChars = (int)num(); return true; }
         if (k == "selectable") { tf->selectable = vm.toBool(v); return true; }
+        if (k == "type") { tf->inputType = vm.toString(v) == "input"; return true; }
         if (k == "embedFonts") { tf->embedFonts = vm.toBool(v); return true; }
         if (k == "border") { tf->border = vm.toBool(v); return true; }
         if (k == "background") { tf->background = vm.toBool(v); return true; }
@@ -314,6 +316,7 @@ void VM::installDisplayBuiltins() {
     method(vm, P, "removeMovieClip", [](VM& vm, const Value& self, Args&) -> Value {
         gfx::MovieClip* mc = clipOf(self);
         // Only script-created clips, or clips moved to the script depth range, can be removed.
+        if (mc && std::getenv("WFC_GFX_CLASSLOG")) LOG_INFO("GFX removeMovieClip %s", mc->targetPath().c_str());
         if (mc && mc->parent && mc->depth >= gfx::kDepthOffset && mc->depth < gfx::kDepthOffset + 1048576) vm.player()->removeObject(mc);
         return Value::undef();
     });

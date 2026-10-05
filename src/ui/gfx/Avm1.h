@@ -216,6 +216,9 @@ public:
     static std::string defaultVersionString;
     std::string versionString = defaultVersionString;
     bool traceEnabled = true;
+    // The timeline whose code is running (DoAction / clip event / function target); Selection.setFocus resolves
+    // path strings against it.
+    gfx::DisplayObject* currentTarget = nullptr;
     long long instructions = 0;
 
     // Callbacks into the host.

@@ -11,11 +11,16 @@ using gfx::avm1::Args;
 using gfx::avm1::Value;
 
 namespace {
-Value toValue(const frontend::BridgeValue& b) {
+Value toValue(gfx::avm1::VM& vm, const frontend::BridgeValue& b) {
     switch (b.kind) {
     case frontend::BridgeValue::Kind::Bool: return Value(b.b);
     case frontend::BridgeValue::Kind::Number: return Value(b.n);
     case frontend::BridgeValue::Kind::String: return Value(b.s);
+    case frontend::BridgeValue::Kind::Array: {   // e.g. Account.GetAccountNames
+        std::vector<Value> items;
+        for (const frontend::BridgeValue& i : b.items) items.push_back(toValue(vm, i));
+        return Value(vm.newArray(items));
+    }
     default: return Value();
     }
 }
@@ -73,7 +78,7 @@ void GfxPresenter::setScoreboard(bool open) {
 void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
     if (!hud_) return;
     Args a;
-    for (const frontend::BridgeValue& b : args) a.push_back(toValue(b));
+    for (const frontend::BridgeValue& b : args) a.push_back(toValue(hud_->player().vm(), b));
     hud_->invoke(fn, a);
 }
 
@@ -180,7 +185,7 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
         deferred_.push_back({m.object(), "_global.ProfileIsReady", {Value(sa.empty() ? 0.0 : std::atof(sa[0].c_str()))}});
         return Value();
     }
-    return toValue(rt_.bridge(m.object(), fn, sa));
+    return toValue(m.player().vm(), rt_.bridge(m.object(), fn, sa));
 }
 
 void GfxPresenter::fsCommand(GfxMovie& m, const std::string& cmd, const std::string& arg) {
@@ -231,9 +236,19 @@ void GfxPresenter::syncMovies(frontend::GameFlow& flow) {
 void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
     uint32_t now = in.uiDown, changed = now ^ prevUi_;
     prevUi_ = now;
-    if (!changed || loading_ || (movies_.empty() && !scoreboard_)) return;
+    if (loading_ || (movies_.empty() && !scoreboard_)) return;
     GfxMovie* focus = scoreboard_ ? scoreboard_.get() : movies_.back().movie.get();
     for (Extra& e : extras_) if (e.focus) focus = e.movie.get();
+    // Text entry (PC: TextPrompt_GFX input field for account names / character renaming): typed characters and the
+    // editing keys without a UI action (Backspace, Delete) go to the focused movie; arrows / Home / End / Enter / Escape
+    // arrive through their UI actions below and edit the field in Player::keyEvent.
+    if (focus->hasTextFocus()) {
+        for (char32_t c : in.text) focus->textInput(c);
+        for (uint16_t vk : in.keyPresses)
+            if (vk == 8 || vk == 46) { focus->key(vk, true); focus->key(vk, false); }
+        if (!in.text.empty()) frontend::FlowTrace::emit("gfx.text", {{"movie", focus->object()}, {"chars", std::to_string(in.text.size())}});
+    }
+    if (!changed) return;
     for (int k = 0; k < (int)platform::UiKey::Count; ++k) {
         if (!(changed & (1u << k))) continue;
         bool down = now & (1u << k);

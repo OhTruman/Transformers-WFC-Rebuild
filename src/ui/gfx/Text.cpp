@@ -347,6 +347,7 @@ void TextField::layout() {
         // Positions.
         float y = gutter;
         std::vector<GlyphRun> out;
+        std::vector<CaretPos> carets(chars.size() + 1);
         for (size_t li = 0; li < lines.size(); ++li) {
             Line& L = lines[li];
             y += L.ascent;
@@ -357,6 +358,7 @@ void TextField::layout() {
             else if (L.align == 2) x += (inner - L.width) * 0.5f;
             for (size_t k = L.b; k < L.e; ++k) {
                 const Item& it = items[k];
+                if (k < carets.size()) carets[k] = {boxMin + x, bounds.ymin + y - L.ascent, L.ascent + L.descent};
                 if (it.sub >= 0) {
                     // Image baseline (baseLineY in the image's own pixels) sits on the text baseline.
                     const ImageSub& is = imageSubs[(size_t)it.sub];
@@ -373,6 +375,7 @@ void TextField::layout() {
                 }
                 x += it.adv;
             }
+            if (L.e < carets.size()) carets[L.e] = {boxMin + x, bounds.ymin + y - L.ascent, L.ascent + L.descent};
             y += L.descent + (li + 1 < lines.size() ? L.leading : 0);
         }
         textHeight = y - gutter;
@@ -382,6 +385,7 @@ void TextField::layout() {
             continue;
         }
         glyphs.swap(out);
+        caretPos.swap(carets);
         if (autoSize != "none" && autoSize != "false") {
             bounds.xmin = boxMin;
             bounds.xmax = boxMax;
@@ -393,7 +397,7 @@ void TextField::layout() {
         float fieldH = bounds.ymax - bounds.ymin;
         float off = fieldH - (textHeight + 2 * gutter);
         if (verticalAlign == "center") off *= 0.5f;
-        if (off > 0) for (auto& g : glyphs) g.y += off;
+        if (off > 0) { for (auto& g : glyphs) g.y += off; for (auto& c : caretPos) c.y += off; }
     }
     if (border || background) {
         boxShape = std::make_shared<ShapeDef>();

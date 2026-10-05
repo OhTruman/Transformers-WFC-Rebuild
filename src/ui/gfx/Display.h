@@ -139,6 +139,12 @@ public:
     float shadowAlpha = 0, shadowDistance = 0, shadowAngle = 45, shadowBlurX = 0, shadowBlurY = 0, shadowStrength = 1;
     uint32_t shadowColor = 0;
     std::shared_ptr<ShapeDef> boxShape;       // border / background (built on demand)
+    // Input fields: DefineEditText without ReadOnly, or type = "input". Caret positions per character index (left
+    // edge, line top, line height; index chars.size() = after the last character), filled by layout().
+    bool inputType = false;
+    bool editable() const { return inputType; }
+    struct CaretPos { float x = 0, y = 0, h = 0; };
+    std::vector<CaretPos> caretPos;
     struct ImageSub { std::u16string key; std::string path; float w = 0, h = 0, baseLineY = 0, natH = 0; };
     std::vector<ImageSub> imageSubs;          // GFx TextField.setImageSubstitutions
 
@@ -198,6 +204,14 @@ public:
     void advance(float dt);
     // Key events (Flash key codes) to Key listeners / Key.isDown.
     void keyEvent(int keyCode, bool down);
+    // Text entry into the focused input field (Selection focus): typed characters, and the editing keys Backspace (8),
+    // Delete (46), Left (37), Right (39), Home (36), End (35). Return true when a focused input field took it.
+    bool textInput(char32_t c);
+    bool textEditKey(int keyCode);
+    void setTextFocus(TextField* tf);          // nullptr clears; mirrors Selection.getFocus
+    TextField* textFocus() const { return focusText_ && !focusText_->removed ? focusText_ : nullptr; }
+    size_t caretIndex() const { return caret_; }
+    void setCaretIndex(size_t i);
     // Mouse (stage pixels). Flash 8 button semantics: the topmost visible, enabled clip with a button handler
     // (onPress / onRelease / onReleaseOutside / onRollOver / onRollOut / onDragOver / onDragOut, own or inherited)
     // whose geometry (or hitArea) contains the pointer receives the button events; Mouse listeners and clip
@@ -314,6 +328,11 @@ private:
     struct PendingLoad { MovieClip* target; std::string url; avm1::Object* loader; };
     std::vector<PendingLoad> loads_;
     double timeMs_ = 0;
+    TextField* focusText_ = nullptr;
+    size_t caret_ = 0;
+    std::shared_ptr<ShapeDef> caretShape_;    // unit rectangle, scaled to the caret
+    TextField* inputFieldAt(MovieClip* mc, const Point& world, const Matrix& parent);
+    void inputChanged(TextField* tf);
     std::set<const MovieDef*> initDone_;      // per definition: init actions executed (by sprite id)
     std::map<const MovieDef*, std::set<uint16_t>> initRun_;
     std::map<std::string, std::shared_ptr<MovieDef>> fontLib_;

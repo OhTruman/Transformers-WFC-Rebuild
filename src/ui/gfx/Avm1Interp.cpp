@@ -2,6 +2,7 @@
 #include "ui/gfx/Avm1.h"
 #include "ui/gfx/Display.h"
 #include "core/Log.h"
+#include <cstdlib>
 
 #include <algorithm>
 #include <cmath>
@@ -218,6 +219,12 @@ struct Interp {
                 return Flow::Return;
             }
             uint8_t op = d[pc];
+            {   // diagnostics: WFC_GFX_OPTRACE=<target path substring> logs every op run on that timeline
+                static const char* ot = std::getenv("WFC_GFX_OPTRACE");
+                if (ot && c.target && c.target->targetPath().find(ot) != std::string::npos)
+                    LOG_INFO("AVM1 op %04zx %02x stack %zu top %s", pc - pcLow_, op, c.stack.size(),
+                             c.stack.empty() ? "-" : vm.toString(c.stack.back()).substr(0, 40).c_str());
+            }
             size_t opPos = pc;
             ++pc;
             uint16_t len = 0;
@@ -374,6 +381,8 @@ struct Interp {
                     Value self = t ? Value(t) : Value::undef();
                     push(c, vm.call(f, self, args));
                 } else {
+                    static const bool log = std::getenv("WFC_GFX_MISSINGFN") != nullptr;   // diagnostics
+                    if (log) LOG_INFO("AVM1 CallFunction %s: not a function (target %s)", name.c_str(), c.target ? c.target->targetPath().c_str() : "-");
                     push(c, Value::undef());
                 }
                 break;
@@ -643,6 +652,9 @@ struct Interp {
     }
 
     Value callMethodOp(Ctx& c, const Value& obj, const Value& nameV, Args& args) {
+        static const bool logMissing = std::getenv("WFC_GFX_MISSINGFN") != nullptr;   // diagnostics
+        if (logMissing && !obj.isObject() && nameV.isString())
+            LOG_INFO("AVM1 CallMethod %s on %s (target %s)", nameV.s.c_str(), vm.typeOf(obj).c_str(), c.target ? c.target->targetPath().c_str() : "-");
         bool noName = nameV.isNullish() || (nameV.isString() && nameV.s.empty());
         if (noName) {
             // Call the object itself; super() calls the superclass constructor with the current this.
@@ -818,6 +830,8 @@ Value VM::call(const Value& fnV, const Value& self, Args& args, Object* superPro
     in.pcLow_ = sc.start;
     size_t jt = 0;
     c.end = sc.start + sc.length;
+    struct TargetScope { VM& v; gfx::DisplayObject* prev; ~TargetScope() { v.currentTarget = prev; } } ts{*this, currentTarget};
+    currentTarget = c.target;
     in.run(c, sc.start, c.end, jt);
     return c.returned ? c.retval : Value::undef();
 }
@@ -840,6 +854,8 @@ void VM::runBlock(const std::shared_ptr<std::vector<uint8_t>>& code, size_t star
     in.pcLow_ = start;
     size_t jt = 0;
     instructions = 0;
+    struct TargetScope { VM& v; gfx::DisplayObject* prev; ~TargetScope() { v.currentTarget = prev; } } ts{*this, currentTarget};
+    currentTarget = target;
     try {
         in.run(c, start, start + len, jt);
     } catch (const ScriptThrow& t) {

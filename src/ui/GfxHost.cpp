@@ -127,6 +127,8 @@ void GfxMovie::setExternalTexture(const std::string& resource, const std::string
 }
 
 void GfxMovie::key(int code, bool down) { if (player_) player_->keyEvent(code, down); }
+bool GfxMovie::textInput(char32_t c) { return player_ && player_->textInput(c); }
+bool GfxMovie::hasTextFocus() const { return player_ && player_->textFocus() != nullptr; }
 
 gfx::avm1::Value GfxMovie::invoke(const std::string& path, gfx::avm1::Args args) {
     if (!player_) return {};
