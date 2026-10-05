@@ -65,9 +65,9 @@ public:
     bool prefetch(const std::string& level);
     void resetMatch() { ambient_.resetMatch(); }
     // Level audio (emitters, zones at `pawn`, pools, Kismet ops) + the music player. The caller ticks the cues.
-    void tick(float dt, const core::Vec3& listener, const core::Vec3& pawn) {
+    void tick(float dt, const core::Vec3& listener, const core::Vec3& pawn, bool pawnAlive = true) {
         if (!audio_) return;
-        ambient_.tick(dt, listener, pawn, cues_);
+        ambient_.tick(dt, listener, pawn, cues_, pawnAlive);
         match_.tick(dt);
         music_.tick(dt);
     }

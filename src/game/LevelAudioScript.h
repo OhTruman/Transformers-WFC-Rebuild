@@ -26,9 +26,29 @@
 //                    stock UE3 InterpTrackEvent / SeqAct_Interp; authored times and PlayRate CONF]. The rebuild runs
 //                    the timeline's clock itself (client-side matinee started by the same trigger; the frontend owns
 //                    the camera it moves).
+//   touch            SeqEvent_Touch on a TriggerVolume (Systems M08; MP maps): the local player's pawn (a point 1 m above
+//                    its origin, as AmbientAudio) entering fires "Touched", leaving fires "UnTouched" [CONF links; bLocalPlayerOnly,
+//                    bClientSideOnly, camera ignored]; bForceOverlapping: a pawn that spawns inside touches at once
+//                    [HIGH]; MaxTriggerCount (0 = unlimited) / ReTriggerDelay; the pawn dying untouches
+//                    (NotifyTouchingPawnDied, bAllowDeadPawns false) [CONF script].
+//   zone             SeqAct_AmbientAudioZone [CONF native 0x827892D8 / 0x82763F10, RE A1]: Enter -> if the local PC's
+//                    AmbientAudioZone is another zone, that zone's IsEntered = false; this zone becomes current, IsEntered;
+//                    "Scene k" inputs set SceneIndexNext. Per tick: IsEntered and Current != Next -> "Scene <cur> Ended"
+//                    (if any), "Scene <next> Begun"; not IsEntered with a current scene -> "Scene <cur> Ended". Reset:
+//                    IsEntered false, SceneIndexCurrent -1 (no output) [CONF script]; PC.AmbientAudioZone is kept.
+//   delay            SeqAct_Delay: Start (re)starts Duration, Stop -> "Aborted", Pause toggles; "Finished" at 0 [HIGH, UE3].
+//   gate             SeqAct_Gate: In -> "Out" while open; Open / Close / Toggle [HIGH, UE3].
+//   mixer            SeqAct_Mixer: "Enable Preset" / "Disable Preset" -> EnableMixerPreset / DisableMixerPreset [CONF link
+//                    names; native].
+//   flyby            SeqAct_PlayFlybySound [PARTIAL: native, not traced; fields CONF]: Play / Stop like a positional pool
+//                    (Delay, Looping); each one-shot starts RandRange(StartingDistanceMin, Max) from the Target (the
+//                    player) at a random yaw within AngleMax, offset vertically by RandRange(HeadOffsetMin, Max), and
+//                    moves through the target point at RandRange(SpeedMin, SpeedMax) UU/s [PROVISIONAL motion model].
 // Triggers ("links" from): GameplayStarted (fired by AmbientAudio on the level's first tick), FsCommand:<cmd> and
 // MovieStopped:<movie> (GFx fscommands / Bink movie ends - the frontend owner forwards them, fire()), and
-// Timeline:<op>:<event> (internal). A sub-sequence's Start / Stop inputs are already flattened by the generator.
+// Timeline:<op>:<event> and Out:<op>:<output> (internal), Game:<event class>:<output> (gameplay-owned Kismet events,
+// e.g. Game:TnSeqEvent_SurvivalEvents:Round Begin - fired by Gameplay through World::levelAudioEvent). Sub-sequences,
+// remote events and pass-through actions are flattened by the generator.
 #pragma once
 #include <string>
 #include <unordered_map>
@@ -49,7 +69,14 @@ public:
     void resetMatch();                    // Kismet Reset: positional pools IsPlaying false (sounds keep playing)
     // An authored trigger (see above). Returns the number of op inputs it reached (0 = unknown trigger).
     int fire(const std::string& trigger, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
-    void tick(float dt, const core::Vec3& listener, SoundCues& cues, MusicPlayer* music);
+    // `pawn` = the local player's pawn origin (touch volumes, "player" sources); `pawnAlive` false = no / dead pawn.
+    void tick(float dt, const core::Vec3& listener, SoundCues& cues, MusicPlayer* music,
+              const core::Vec3* pawn = nullptr, bool pawnAlive = true);
+    bool hasTouchZones() const { return touches_ > 0; }   // this script owns the level's zones (not the manifest's)
+    const std::string& currentZone() const { return currentZoneLabel_; }   // the current zone's label ("" = None)
+    int zoneCount() const;
+    int poolCount() const;                 // positional pools + flybys
+    int flybysPlaying() const;
 
     // Diagnostics.
     int opCount() const { return (int)ops_.size(); }
@@ -66,7 +93,7 @@ public:
     int fired() const { return fired_; }
 
 private:
-    enum class Type { PlaySound, Pool, Reverb, PlayMusic, StopMusic, Timeline };
+    enum class Type { PlaySound, Pool, Reverb, PlayMusic, StopMusic, Timeline, Touch, Zone, Delay, Gate, Mixer, Flyby };
     struct Event { float time; std::string trigger; };
     struct Op {
         Type type = Type::PlaySound;
@@ -87,10 +114,29 @@ private:
         float length = 0.0f, rate = 1.0f, pos = 0.0f;
         bool tlLooping = false;
         std::vector<Event> events;
+        // touch
+        std::vector<core::Vec3> tris;     // triangle soup (glTF)
+        core::Vec3 bmin{0, 0, 0}, bmax{0, 0, 0};
+        bool inside = false;
+        int maxTrigger = 0, triggered = 0;
+        float retrigger = 0.0f, sinceTrigger = 1e9f;
+        // zone
+        std::string label;
+        bool entered = false;
+        int sceneCurrent = -1, sceneNext = 0;
+        // delay / gate
+        float duration = 1.0f;
+        bool paused = false, open = true;
+        // flyby
+        float angleMax = 359.0f, startMin = 2000, startMax = 2000, speedMin = 1000, speedMax = 2000, headMin = -100, headMax = 100;
+        bool playerSource = false;        // pool / flyby reference = the local pawn
     };
+    struct Flyby { int instance; core::Vec3 pos, vel; float life; };
     struct Sound { int actor; std::string cue; int instance; bool fading; };   // -1 actor = the player
 
     void input(Op& op, int idx, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
+    void out(const Op& op, const char* output, SoundCues& cues, MusicPlayer* music, const core::Vec3& listener);
+    bool insideVolume(const Op& op, const core::Vec3& p) const;
     void fireRange(const Op& tl, float from, float to, bool inclusiveEnd, SoundCues& cues, MusicPlayer* music,
                    const core::Vec3& listener);
     core::Vec3 actorPos(int a, const core::Vec3& listener) const;
@@ -99,6 +145,12 @@ private:
     std::vector<core::Vec3> actors_;
     std::unordered_map<std::string, std::vector<std::pair<int, int>>> byTrigger_;   // trigger -> (op, input)
     std::vector<Sound> sounds_;
+    std::vector<Flyby> flybys_;
+    std::string currentZone_;             // PlayerController.AmbientAudioZone (op id; "" = None)
+    std::string currentZoneLabel_;
+    core::Vec3 pawn_{0, 0, 0};
+    bool havePawn_ = false;
+    int touches_ = 0;
     int links_ = 0, oneShots_ = 0, fired_ = 0, depth_ = 0;
     std::string musicStart_;
 };

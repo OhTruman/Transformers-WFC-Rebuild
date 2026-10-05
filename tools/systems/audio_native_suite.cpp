@@ -249,6 +249,7 @@ static void testZones() {
 
     Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
     game::AmbientAudio amb;
+    amb.setPreferManifestZones(true);                 // the AssetTools flattened zones (graph equivalence: testZoneGraph)
     amb.load(kRoot + "/Maps/MP_IAC_Streets/audio.json", kRoot + "/../content/", cues, &rec);
     game::SoundMixer& m = cues.mixer();
     auto frame = [&](const Vec3& pawn, float dt = 1.0f / 60.0f) {
@@ -676,6 +677,7 @@ static void testWorldBed() {
     assets::Json aj = loadJson(kRoot + "/Maps/MP_IAC_Streets/audio.json");
     Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
     game::AmbientAudio amb;
+    amb.setPreferManifestZones(true);
     amb.load(kRoot + "/Maps/MP_IAC_Streets/audio.json", kRoot + "/../content/", cues, &rec);
     int kinds[3] = {0, 0, 0};
     for (int i = 0; i < amb.emitterCount(); ++i) ++kinds[amb.emitterKind(i)];
@@ -904,17 +906,18 @@ static void testLifecycle() {
     std::vector<int> bed;
     for (int i = 0; i < amb.emitterCount(); ++i) bed.push_back(amb.emitterInstance(i));
     const std::string listBefore = cues.mixer().activeList(), reverbBefore = cues.mixer().currentReverb();
-    CHECK(amb.poolsRunning(), "pools run before the reset");
+    auto pools = [&] { return amb.poolsRunning() || amb.script().poolsPlaying() > 0; };   // manifest or generated zones
+    CHECK(pools(), "pools run before the reset");
     int stopped = cues.stopNonMapInstances();
     amb.resetMatch();
     bool bedSame = true;
     for (int i = 0; i < amb.emitterCount(); ++i) bedSame = bedSame && amb.emitterInstance(i) == bed[(size_t)i] && (bed[(size_t)i] < 0 || cues.playing(bed[(size_t)i]));
     CHECK(stopped >= 2 && cues.activeInstances("SHOOT") == 0 && cues.activeInstances("VEH_OPTIMUS_DRIVE_ONLOAD") == 0,
           "match reset stops the player sounds (%d)", stopped);
-    CHECK(bedSame && !amb.poolsRunning() && cues.mixer().activeList() == listBefore && cues.mixer().currentReverb() == reverbBefore,
+    CHECK(bedSame && !pools() && cues.mixer().activeList() == listBefore && cues.mixer().currentReverb() == reverbBefore,
           "match reset keeps the bed and the reverb; pools stop");
     for (int k = 0; k < 3; ++k) { cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f); }
-    CHECK(amb.poolsRunning() && cues.mixer().activeList() == listBefore, "re-touch after reset: scene re-begins, no duplicate preset enable [%s]",
+    CHECK(pools() && cues.mixer().activeList() == listBefore, "re-touch after reset: scene re-begins, no duplicate preset enable [%s]",
           cues.mixer().activeList().c_str());
     amb.unload(cues); cues.stopAll();
 
@@ -1183,17 +1186,11 @@ static void testLevelLifecycle() {
     auto musicInstances = [&](game::SoundCues& c) { int n = 0; for (const char* m : kMusic) n += c.activeInstances(m); return n; };
 
     // Manifest inventory.
-    // [integration M06] gen_level_audio.py now emits every multiplayer map with runtime audio data (was Streets +
-    // Gorge): 4 UI levels + the match messages + one per Maps/MP_*/audio.json.
-    int mpMaps = 0;
-    for (const char* m : {"MP_ESC_BrokenHope", "MP_ESC_Remnant", "MP_IAC_Berth", "MP_IAC_Rust", "MP_IAC_Seed", "MP_IAC_Streets",
-                          "MP_KON_Molten", "MP_ORB_Debris", "MP_UND_Complex", "MP_UND_Gorge"})
-        mpMaps += std::ifstream(kRoot + "/Maps/" + m + "/audio.json").good() && game::AmbientAudio::hasLevelManifest(m);
-    CHECK(game::AmbientAudio::levelManifestCount() == 5 + mpMaps && game::AmbientAudio::hasLevelManifest("UI_FrontEnd_m") &&
+    CHECK(game::AmbientAudio::levelManifestCount() == 15 && game::AmbientAudio::hasLevelManifest("UI_FrontEnd_m") &&
           game::AmbientAudio::hasLevelManifest("MP_UND_Gorge") && game::AmbientAudio::manifestJson("__match_messages__") &&
           game::AmbientAudio::hasLevelManifest("UI_PartyLobby_m") && game::AmbientAudio::hasLevelManifest("UI_Lobby_m") &&
           game::AmbientAudio::hasLevelManifest("UI_CampaignLobby_m") && game::AmbientAudio::hasLevelManifest("MP_IAC_Streets"),
-          "Systems manifests: 4 UI levels, match messages, every MP map with audio.json (limits / announcer)");
+          "15 Systems manifests (4 UI levels, 10 MP maps, match messages)");
     { game::MusicTrack fr, lob, party, none;
       CHECK(game::FrontendAudio::frontendTrack("UI_FrontEnd_m", fr) && fr.cue == kMusic[0] && fr.fadeIn == 0.25f && fr.fadeOut == 1.0f &&
             game::FrontendAudio::frontendTrack("UI_Lobby_m", lob) && lob.cue == kMusic[1] && lob.fadeIn == 0.0f &&
@@ -1523,9 +1520,9 @@ static void testMatchAudio() {
     CHECK(!m.announcerEvent("SoundEvents_Dialog.Announcer.MP_1MinuteLeftDialog"), "no announcer outside a match level");
 
     // MP_UND_Gorge: the AssetTools manifest + Systems manifest through the same path (not play-ready; audio only).
-    CHECK(host.load("MP_UND_Gorge") && host.ambient().emitterCount() == 15 && host.ambient().zoneCount() == 23 &&
-          cues.mixer().mapPresetCount() == 6 && cues.mapCueCount() == 13 + 157 && host.ambient().announcerEvents().size() == 140,
-          "Gorge: 15 emitters, 23 zones, 6 reverb presets, 13 + 157 cues, announcer (%d / %d / %d / %d)", host.ambient().emitterCount(),
+    CHECK(host.load("MP_UND_Gorge") && host.ambient().emitterCount() == 15 && host.ambient().zoneCount() == 12 &&
+          cues.mixer().mapPresetCount() == 6 && cues.mapCueCount() == 13 + 18 + 157 && host.ambient().announcerEvents().size() == 140,
+          "Gorge: 15 emitters, 12 zone ops (23 touch volumes), 6 reverb presets, 13 + 157 cues, announcer (%d / %d / %d / %d)", host.ambient().emitterCount(),
           host.ambient().zoneCount(), cues.mixer().mapPresetCount(), cues.mapCueCount());
     run(3.0f);
     CHECK(host.ambient().activeEmitters() > 0, "Gorge bed plays (%d emitters)", host.ambient().activeEmitters());
@@ -1550,7 +1547,142 @@ static void testMatchAudio() {
     CHECK(ok, "10 x (Streets -> Gorge -> frontend) with match messages: baseline at every unload (%s)", why.c_str());
 }
 
+// M08: the generated Kismet graph (touch -> zone -> reverb / pools ...) against the AssetTools flattened zones on
+// Streets (the path validated since M04): the same pawn walk must give the same zone, reverb, mixer stack, environment
+// and pool cues at every step. Then every processed multiplayer map loads, walks its zones and unloads to the baseline.
+static std::vector<ZoneGeo> mapZoneGeos(const assets::Json& j) {
+    std::vector<ZoneGeo> zs;
+    for (size_t i = 0; i < j["zones"].size(); ++i) {
+        const assets::Json& z = j["zones"][i];
+        ZoneGeo g; g.name = z["comment"].asString(); g.preset = z["reverb_preset"].asString();
+        g.mn = {1e30f, 1e30f, 1e30f}; g.mx = {-1e30f, -1e30f, -1e30f};
+        const assets::Json& polys = z["trigger_polygons_gltf"];
+        for (size_t p = 0; p < polys.size(); ++p)
+            for (size_t v = 1; v + 1 < polys[p].size(); ++v)
+                for (size_t k : {(size_t)0, v, v + 1}) {
+                    Vec3 t{polys[p][k][0].asFloat(), polys[p][k][1].asFloat(), polys[p][k][2].asFloat()};
+                    g.tris.push_back(t);
+                    g.mn = {std::min(g.mn.x, t.x), std::min(g.mn.y, t.y), std::min(g.mn.z, t.z)};
+                    g.mx = {std::max(g.mx.x, t.x), std::max(g.mx.y, t.y), std::max(g.mx.z, t.z)};
+                }
+        zs.push_back(g);
+    }
+    return zs;
+}
+// One interior point per zone volume (the pawn probe is 1 m above the origin: return the origin).
+static std::vector<Vec3> zonePoints(const std::vector<ZoneGeo>& zs, unsigned seed) {
+    std::srand(seed);
+    auto rnd = [](float a, float b) { return a + (b - a) * (float)std::rand() / (float)RAND_MAX; };
+    std::vector<Vec3> pts(zs.size(), Vec3{1e9f, 0, 0});
+    for (size_t z = 0; z < zs.size(); ++z)
+        for (int k = 0; k < 20000; ++k) {
+            Vec3 p{rnd(zs[z].mn.x, zs[z].mx.x), rnd(zs[z].mn.y, zs[z].mx.y), rnd(zs[z].mn.z, zs[z].mx.z)};
+            if (insideZ(zs[z], p)) { pts[z] = p - Vec3{0, 1.0f, 0}; break; }
+        }
+    return pts;
+}
+
+static void testZoneGraph() {
+    std::printf("[generated zone graph vs manifest zones; every MP map]\n");
+    const std::string content = kRoot + "/../content/";
+    assets::Json sj = loadJson(streetsAudio());
+    std::vector<ZoneGeo> zs = mapZoneGeos(sj);
+    std::vector<Vec3> pts = zonePoints(zs, 11);
+    const Vec3 nowhere{0.0f, 5000.0f, 0.0f};
+    Rec ra, rb; game::SoundCues ca, cb; ca.load(&ra, content); cb.load(&rb, content);
+    game::AmbientAudio ga, ma;
+    ma.setPreferManifestZones(true);
+    CHECK(ga.load(streetsAudio(), content, ca, &ra) && ma.load(streetsAudio(), content, cb, &rb), "Streets loads both ways");
+    CHECK(ga.zoneCount() == 9 && ma.zoneCount() == 9 && ga.poolCount() == 11 && ma.poolCount() == 11 && ga.script().hasTouchZones(),
+          "graph: 9 zones / 11 pools (%d / %d); manifest 9 / 11", ga.zoneCount(), ga.poolCount());
+    std::srand(3);
+    int steps = 0, same = 0;
+    auto step = [&](const Vec3& p, float secs) {
+        for (float t = 0; t < secs; t += 1.0f / 30.0f) {
+            ga.tick(1.0f / 30.0f, p, p, ca); ca.tick(1.0f / 30.0f);
+            ma.tick(1.0f / 30.0f, p, p, cb); cb.tick(1.0f / 30.0f);
+        }
+        ++steps;
+        const bool eq = ca.mixer().currentReverb() == cb.mixer().currentReverb() && ca.mixer().activeList() == cb.mixer().activeList() &&
+                        !std::strcmp(ga.zoneName(), ma.zoneName()) &&
+                        (ra.envs.empty() == rb.envs.empty()) && (ra.envs.empty() || near(ra.envs.back().room, rb.envs.back().room, 0.5f));
+        if (eq) ++same;
+        else std::printf("  step %d: graph %s [%s] vs manifest %s [%s]\n", steps, ga.zoneName(), ca.mixer().activeList().c_str(),
+                         ma.zoneName(), cb.mixer().activeList().c_str());
+    };
+    step(nowhere, 0.5f);
+    for (int k = 0; k < 60; ++k) {
+        const int z = std::rand() % (int)zs.size();
+        if (pts[(size_t)z].x > 1e8f) continue;
+        step(pts[(size_t)z], 1.0f + (float)(std::rand() % 40) / 10.0f);   // pools run while inside
+        if (k % 5 == 0) step(nowhere, 0.5f);                                 // leaving keeps the last zone
+    }
+    CHECK(same == steps, "60-step random walk: zone, reverb, mixer stack and environment identical at %d / %d steps", same, steps);
+    // Pool one-shots: a 120 s dwell in each pooled zone fires the same pools at the same mean rate on both paths.
+    int gaN = 0, maN = 0;
+    for (size_t z = 0; z < zs.size(); ++z) {
+        if (pts[z].x > 1e8f) continue;
+        const int g0 = ga.script().oneShots(), m0 = ma.oneShotsPlayed();
+        step(pts[z], 120.0f);
+        gaN += ga.script().oneShots() - g0; maN += ma.oneShotsPlayed() - m0;
+    }
+    CHECK(gaN > 50 && maN > 50 && std::abs(gaN - maN) < (gaN + maN) / 5, "zone pools over 9 x 120 s: graph %d vs manifest %d one-shots (within 20 %%)",
+          gaN, maN);
+    ga.resetMatch(); ma.resetMatch();
+    CHECK(ga.script().poolsPlaying() == 0 && !ma.poolsRunning(), "match reset stops the pools on both paths");
+    step(pts[0], 0.5f);
+    CHECK(ga.script().poolsPlaying() > 0 && ma.poolsRunning(), "re-touch after reset restarts the scene on both paths");
+    ga.unload(ca); ma.unload(cb); ca.stopAll(); cb.stopAll();
+
+    // Every processed MP map: load, walk each zone volume (death / respawn included), unload -> baseline.
+    Rec rec; game::SoundCues cues; cues.load(&rec, content);
+    game::LevelAudioHost host(cues);
+    host.attach(&rec, kRoot);
+    const size_t baseCues = cues.cueCount();
+    const int basePresets = cues.mixer().presetCount();
+    std::string why;
+    const char* maps[] = {"MP_ESC_BrokenHope", "MP_ESC_Remnant", "MP_IAC_Berth", "MP_IAC_Rust", "MP_IAC_Seed", "MP_IAC_Streets",
+                          "MP_KON_Molten", "MP_ORB_Debris", "MP_UND_Complex", "MP_UND_Gorge"};
+    bool allOk = true;
+    for (int cycle = 0; cycle < 3; ++cycle)
+        for (const char* mname : maps) {
+            const bool ok = host.load(mname);
+            assets::Json aj = loadJson(kRoot + "/Maps/" + mname + "/audio.json");
+            std::vector<ZoneGeo> g = mapZoneGeos(aj);
+            std::vector<Vec3> zp = zonePoints(g, 5 + (unsigned)cycle);
+            std::set<std::string> reverbs, zones;
+            int entered = 0;
+            auto run = [&](const Vec3& p, float secs, bool alive = true) {
+                for (float t = 0; t < secs; t += 1.0f / 30.0f) { cues.setListener(p); host.tick(1.0f / 30.0f, p, p, alive); cues.tick(1.0f / 30.0f); }
+            };
+            for (size_t z = 0; z < zp.size(); ++z) {
+                if (zp[z].x > 1e8f) continue;
+                run(zp[z], 0.4f);
+                if (!std::string(host.ambient().zoneName()).empty() && std::strcmp(host.ambient().zoneName(), "-")) { ++entered; zones.insert(host.ambient().zoneName()); }
+                if (!cues.mixer().currentReverb().empty()) reverbs.insert(cues.mixer().currentReverb());
+                if (z == zp.size() / 2) { run(zp[z], 0.5f, false); host.resetMatch(); run(zp[z], 0.5f); }   // death, round reset, respawn
+            }
+            const auto st = host.state();
+            if (cycle == 0)
+                std::printf("  %-18s %s: %d emitters, %d zones, %d pools/flybys, %zu touch volumes walked, %zu zones entered, %zu reverbs, "
+                            "%d presets, %d level cues, one-shots %d, mixer [%s]\n", mname, ok ? "ok" : "FAILED", host.ambient().emitterCount(),
+                            host.ambient().zoneCount(), host.ambient().poolCount(), zp.size(), zones.size(), reverbs.size(),
+                            cues.mixer().mapPresetCount(), cues.mapCueCount(), host.ambient().script().oneShots(), st.mixer.c_str());
+            const bool hasReverbOps = cues.mixer().mapPresetCount() > 0;
+            const bool good = ok && host.ambient().emitterCount() > 0 && (!hasReverbOps || !reverbs.empty()) && entered > 0 &&
+                              host.ambient().announcerEvents().size() == 140;
+            if (!good) std::printf("  FAILED map %s (cycle %d): ok %d emitters %d reverbs %zu entered %d announcer %zu\n", mname, cycle, ok,
+                                   host.ambient().emitterCount(), reverbs.size(), entered, host.ambient().announcerEvents().size());
+            host.unload();
+            const bool base = atBaseline(host, cues, baseCues, basePresets, why);
+            if (!base) std::printf("  FAILED baseline after %s: %s\n", mname, why.c_str());
+            allOk = allOk && good && base;
+        }
+    CHECK(allOk, "3 cycles x 10 MP maps: each loads its bed, enters zones, switches reverb, survives death / reset, unloads to the baseline");
+}
+
 int main() {
+    testZoneGraph();
     testMatchAudio();
     testFrontendSeam();
     testLevelLifecycle();

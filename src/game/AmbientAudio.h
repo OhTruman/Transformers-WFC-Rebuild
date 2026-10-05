@@ -64,7 +64,7 @@ public:
     // Round reset without a level change (Kismet Reset of the zone / pool ops); the bed keeps playing.
     void resetMatch();
     // `listener` = camera (attenuation / emitter placement); `pawn` = the touching actor for zones.
-    void tick(float dt, const core::Vec3& listener, const core::Vec3& pawn, SoundCues& cues);
+    void tick(float dt, const core::Vec3& listener, const core::Vec3& pawn, SoundCues& cues, bool pawnAlive = true);
     // The level's WorldInfo music player (SeqAct_PlayMusic / StopMusic ops); owned by the caller.
     void setMusicPlayer(MusicPlayer* m) { music_ = m; }
     // A frontend-owned Kismet trigger of the loaded level ("FsCommand:enterFrontEnd", "MovieStopped:FMV_intro").
@@ -89,11 +89,17 @@ public:
     int emitterKind(int i) const { return (int)emitters_[(size_t)i].kind; }
     const std::string& emitterCue(int i) const { return emitters_[(size_t)i].cue; }
     int emitterInstance(int i) const { return emitters_[(size_t)i].instance; }
-    int zoneCount() const { return (int)zones_.size(); }
+    int zoneCount() const { return (int)zones_.size() + script_.zoneCount(); }
     int currentZone() const { return zone_; }
-    bool poolsRunning() const { return zone_ >= 0 && sceneActive_[(size_t)zone_] && !poolTimers_.empty(); }
-    int poolCount() const { int n = 0; for (const Zone& z : zones_) n += (int)z.pools.size(); return n; }
-    const char* zoneName() const { return zone_ >= 0 ? zones_[(size_t)zone_].name.c_str() : "-"; }
+    bool poolsRunning() const { return zone_ >= 0 && sceneActive_[(size_t)zone_] && !poolTimers_.empty(); }   // manifest zones
+    int poolCount() const { int n = script_.poolCount(); for (const Zone& z : zones_) n += (int)z.pools.size(); return n; }
+    // Validation only: run the AssetTools manifest's flattened zones even when the generated graph has touch volumes
+    // (the graph's own zones are then dropped). Set before load().
+    void setPreferManifestZones(bool on) { preferManifestZones_ = on; }
+    const char* zoneName() const {
+        if (zone_ >= 0) return zones_[(size_t)zone_].name.c_str();
+        return script_.currentZone().empty() ? "-" : script_.currentZone().c_str();
+    }
     int oneShotsPlayed() const { return oneShots_; }
 
 private:
@@ -123,6 +129,7 @@ private:
 
     bool loaded_ = false;
     std::string level_;
+    bool preferManifestZones_ = false;
     std::map<std::string, std::string> announcer_;
     LevelAudioScript script_;
     MusicPlayer* music_ = nullptr;

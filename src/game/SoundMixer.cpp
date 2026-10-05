@@ -77,6 +77,22 @@ bool SoundMixer::addMapPreset(const std::string& name, float priority, float fad
     return true;
 }
 
+bool SoundMixer::addMapPresetRows(const std::string& name, float priority, float fadeIn, float fadeOut, float duration,
+                                  const std::vector<std::pair<std::string, std::vector<float>>>& rows) {
+    if (find(name) >= 0) { LOG_WARN("mixer: preset %s already exists (map preset ignored)", name.c_str()); return false; }
+    Preset p{name, priority, fadeIn, fadeOut, duration};
+    p.map = true;
+    presets_.push_back(p);
+    for (const auto& r : rows) {
+        int c = category(r.first);
+        if (c < 0 || r.second.size() < (size_t)kParams) continue;          // categories the mixer does not model
+        Entry e; e.name = name; e.map = true;
+        std::copy(r.second.begin(), r.second.begin() + kParams, e.v);
+        cats_[(size_t)c].table.push_back(e);
+    }
+    return true;
+}
+
 int SoundMixer::removeMapPresets() {
     flush();                                          // only Default (index 0, built-in) stays active
     int n = 0;
