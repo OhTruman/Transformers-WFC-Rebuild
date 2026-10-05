@@ -145,4 +145,72 @@ bool MatchAudio::onMatchEnded(int winnerTeam, bool localPlayerWon) {
     return true;
 }
 
+namespace {
+const assets::Json& objective(const char* cls) { return messages()["objective_messages"][cls]; }
+} // namespace
+
+bool MatchAudio::flagMessage(int sw) {
+    const assets::Json& m = objective("TnFlagMessage");
+    static const char* kStinger[4] = {"ReturnedSound", "PickupSound", "DropSound", "ScoredSound"};
+    static const char* kDialog[4] = {"ReturnedDialogSound", "PickupDialogSound", "DropDialogSound", "ScoredDialogSound"};
+    if (sw < 0 || sw > 3 || !m.isObject()) return false;
+    const std::string& st = m[kStinger[sw]].asString();
+    if (!st.empty() && cues_.hasCue(st.c_str())) { SoundCues::Emitter e; e.owner = SoundCues::kUI; cues_.play(st.c_str(), e, 0.0f); }
+    announcerEvent(m[kDialog[sw]].asString());
+    return true;
+}
+
+bool MatchAudio::bombMessage(int sw, int team) {
+    const assets::Json& m = objective("TnBombMessage");
+    std::string ev;
+    switch (sw) {
+    case 1: ev = m[team == 0 ? "AutobotPickupDialogSound" : "DecepticonPickupDialogSound"].asString(); break;
+    case 2: ev = m["DropDialogSound"].asString(); break;
+    case 3: ev = m[team == 0 ? "AutobotDetonatedDialogSound" : "DecepticonDetonatedDialogSound"].asString(); break;
+    case 4: ev = m["DefusedDialogSound"].asString(); break;
+    case 5: ev = m["PlantedDialogSound"].asString(); break;
+    default: return false;
+    }
+    return announcerEvent(ev);
+}
+
+bool MatchAudio::dominationMessage(int sw) {
+    const assets::Json& m = objective("TnDominationMessage");
+    static const char* kLists[4] = {"AutobotsTakePointDialog", "DecepticonsTakePointDialog", "AutobotsCapturingPointDialog",
+                                    "DecepticonsCapturingPointDialog"};
+    const int type = sw % 10, point = sw / 10;
+    if (type < 0 || type > 3) return false;
+    return announcerEvent(m[kLists[type]][(size_t)point].asString());
+}
+
+bool MatchAudio::ctfMessage(bool localTeamAttacks) {
+    const assets::Json& m = objective("TnCTFMessage");
+    return announcerEvent(m[localTeamAttacks ? "AttackerDialog" : "DefenderDialog"].asString());
+}
+
+bool MatchAudio::roundMessage(int sw) {
+    const assets::Json& m = objective("TnRoundBasedGameMessage");
+    if (sw < 0 || sw >= (int)m["DialogSound"].size()) return false;
+    announcerEvent(m["DialogSound"][(size_t)sw].asString());
+    const char* field = sw == 2 ? "TimeUpMusic" : sw == 3 ? "SwitchingSidesMusic" : nullptr;
+    if (field && !m[field].asString().empty()) {
+        MusicTrack t; t.cue = m[field].asString(); t.fadeIn = 0.0f; t.fadeOut = 0.0f; t.priority = 0;
+        if (cues_.hasCue(t.cue.c_str())) music_.playMusic(t);
+    }
+    return true;
+}
+
+bool MatchAudio::kothZoneActivated(bool matchOver) {
+    if (matchOver) return false;
+    return announcerEvent(objective("TnKingOfTheHillZone")["ZoneChangeSound"].asString());
+}
+
+bool MatchAudio::kothDefenderChanged(int team, bool ignoring, bool matchOver) {
+    if (ignoring || matchOver) return false;
+    const assets::Json& m = objective("TnKingOfTheHillZone");
+    const char* f = team == 0 ? "CapturedSoundAutobotSound" : team == 1 ? "CapturedSoundDecepticonSound"
+                  : team == 254 ? "ContestedSound" : team == 255 ? "NeutralSound" : nullptr;
+    return f && announcerEvent(m[f].asString());
+}
+
 } // namespace game

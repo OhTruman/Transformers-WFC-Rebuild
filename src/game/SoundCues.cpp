@@ -93,6 +93,16 @@ std::vector<CurvePt> jsonCurve(const assets::Json& c) {
 
 int SoundCues::findCue(const char* name) const {
     for (size_t i = 0; i < cues_.size(); ++i) if (cues_[i].name == name) return (int)i;
+    // Full asset names of the cues the compiled table keeps under a short name (tools/systems/gen_cues.py short()):
+    // a character / weapon profile names them by package.
+    static const struct { const char* pkg; const char* prefix; } kAlias[] = {
+        {"BL_WPN_GUN_ION_BLASTER.", ""}, {"BL_WPN_FOLEY.", "FOLEY."}, {"BL_VEH_OPTIMUS_PRIME.", ""}, {"BL_VEH_SOUNDWAVE.", ""}};
+    for (const auto& a : kAlias) {
+        const size_t n = std::strlen(a.pkg);
+        if (std::strncmp(name, a.pkg, n) != 0) continue;
+        const std::string s = std::string(a.prefix) + (name + n);
+        for (size_t i = 0; i < cues_.size(); ++i) if (cues_[i].name == s && !cues_[i].mapBank) return (int)i;
+    }
     return -1;
 }
 

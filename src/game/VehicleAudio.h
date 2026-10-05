@@ -14,11 +14,14 @@
 // bStopWhenOwnerDestroyed=true, no SoundLocation): owner-attached [HIGH: UE3 engine default].
 // Looping events use Owner.CreateAudioComponent (attached, SocketName, FadeIn / FadeOut).
 #pragma once
+#include <string>
 #include <functional>
 #include "core/Math.h"
 #include "game/SoundCues.h"
 
 namespace game {
+
+struct CharacterAudioProfile;
 
 class VehicleAudio {
 public:
@@ -36,6 +39,8 @@ public:
     };
     using EmitterFn = std::function<SoundCues::Emitter()>;
 
+    // The character's vehicle sounds (CharacterAudioProfile::vehicle); until set, the default profile's.
+    void setProfile(const CharacterAudioProfile& p);
     void tick(float dt, const Input& in, SoundCues& cues, const EmitterFn& at);
     void ram(SoundCues& cues, const EmitterFn& at);       // PlayRamSound
 
@@ -45,6 +50,12 @@ public:
 
 private:
     enum class State { None, Boosting, JumpReving, ForwardOnLoad, ForwardOffLoad, ReverseOnLoad, ReverseOffLoad };
+    struct Names {
+        std::string boostStart, boostWheels, boostEnd, boostLoop, onLoad, offLoad, jumpLoop, ascend, booster, nitro, ram, squeal;
+        std::string hoverLand[2], wheelsLand[2];
+    } n_;
+    bool named_ = false;
+    void ensureNames();
     struct Loop { int id = -1; const char* cue = nullptr; };
 
     bool playLooping(Loop& l, const char* cue, float fadeIn, SoundCues& cues, const EmitterFn& at);

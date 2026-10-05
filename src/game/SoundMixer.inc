@@ -59,5 +59,6 @@ const CategoryRow kCategoryRows[] = {
 };
 const char* const kUnflushablePresets[] = {"CINE_MUTE_FOR_BINK"};
 const char* const kMovieMixerPresetName = "CINE_MUTE_FOR_BINK";
+const char* const kMoviesToAlwaysPlaySound[] = {"Logo_Activision", "Logo_Hasbro", "Logo_HighMoon"};
 // Master Default compressor {DSPEffectConfig, Threshold dB, Attack ms, Release ms, GainMakeup dB}
 const float kMasterCompressor[5] = {32.0f, -6.0f, 10.0f, 50.0f, 0.0f};

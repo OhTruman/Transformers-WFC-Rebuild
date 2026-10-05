@@ -48,7 +48,8 @@ public:
     // A Bink movie is up (the intro chain, a loading underlay): MovieMixerPreset on the game mix.
     void setMoviePlaying(bool playing);
     // The movie's own sound: opens the movie file's audio tracks and starts them now (call when its video starts);
-    // also marks the movie as up. `languageSlot` < 0: WFC_MOVIE_LANGSLOT, else 0. False: the movie has no audio
+    // also marks the movie as up. `languageSlot` < 0: the language's slot (movieLanguageSlot(GLanguage); WFC_LANGUAGE,
+    // default INT; WFC_MOVIE_LANGSLOT overrides). False: the movie has no audio
     // (the loading Binks) - nothing plays, by design.
     bool startMovieAudio(const std::string& moviePath, int languageSlot = -1);
     // Movie end or skip: the movie sound stops at once. The game-mix mute stays until setMoviePlaying(false) (a
@@ -60,6 +61,18 @@ public:
     }
     void setMovieAudioPaused(bool paused) { if (movieAudio_) movieAudio_->setPaused(paused); }
     bool movieAudioActive() const { return movieAudio_ != nullptr; }
+    // GetMovieVolume (0x82CDDC08) [CONF native]: [MoviePlayer] VolumeScalar (absent -> 1.0) x the audio device's 'SFX'
+    // class volume (the FX Volume option; Frontend owns it), clamped [0,1]; FullVolumeMovies (empty) skip the SFX
+    // factor; MoviesToAlwaysPlaySound (the logos) override with 0xCCCC. The class volume is the FX slider / 100
+    // (HmPlayerController.UpdateLocalCacheOfProfileSettings -> SetAudioGroupVolume('SFX', GetFxVolume()),
+    // GetNormalizedPropertyValue = FClamp(slider / 100, 0, 1) [CONF script]; that the device's 'SFX' lookup returns it
+    // unchanged is HIGH). Default: the profile default 80 -> 0.8. Applies to the next movie and the running one.
+    void setMovieSfxVolume(float v) {
+        movieSfxVolume_ = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
+        if (movieAudio_ && !movieFixedVolume_) movieAudio_->setVolume(movieSfxVolume_);
+    }
+    float movieSfxVolume() const { return movieSfxVolume_; }
+    void setMovieFxSlider(int slider) { setMovieSfxVolume((float)slider / 100.0f); }   // the options FX Volume, 0..100
     double movieAudioClock() const { return movieAudio_ ? movieAudio_->clock() : 0.0; }   // video can slave to it
     bool movieAudioFinished() const { return !movieAudio_ || movieAudio_->finished(); }
     bool prefetch(const std::string& level);
@@ -100,6 +113,8 @@ private:
     std::string root_, level_;
     bool movie_ = false;
     std::unique_ptr<audio::MovieAudioPlayer> movieAudio_;
+    float movieSfxVolume_ = 0.8f;
+    bool movieFixedVolume_ = false;
 };
 
 } // namespace game

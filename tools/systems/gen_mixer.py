@@ -14,6 +14,7 @@ PRESETS = ['VEHICLE_JUMP', 'VEHICLE_BOOST_END', 'CINE_MUTE_FOR_BINK']
 INI = 'F:/Transformers Rebuild/ExtractedAssets/config/Coalesced_ini/TransGame/Config/Xenon/Cooked/Xe-TransEngine.ini'
 ini = io.open(INI, encoding='utf-8', errors='replace').read()
 UNFLUSHABLE = re.findall(r'^UnflushableMixerPresets=(\S+)', ini, re.M)       # [HM_Engine.SoundMixerProperties]
+ALWAYS = re.findall(r'^MoviesToAlwaysPlaySound=(\S+)', ini, re.M)           # [Engine.MovieSettings]
 MOVIE = re.findall(r'^MovieMixerPreset=(\S+)', ini, re.M)                   # [HM_Engine.FmodAudioDevice]
 assert MOVIE and MOVIE[0] in PRESETS, MOVIE
 
@@ -50,6 +51,7 @@ out.append('};\n')
 # Xe-TransEngine.ini: presets a mixer Flush (level change) keeps, and the movie preset.
 out.append('const char* const kUnflushablePresets[] = {%s};\n' % ', '.join('"%s"' % n for n in UNFLUSHABLE))
 out.append('const char* const kMovieMixerPresetName = "%s";\n' % MOVIE[0])
+out.append('const char* const kMoviesToAlwaysPlaySound[] = {%s};\n' % ', '.join('"%s"' % n for n in sorted(set(ALWAYS))))
 # Master's Default DSP compressor (global; DSPEffectConfig bit 32 = compressor stage [MED]).
 m = [k for k in d['SoundCategories'] if k['Name'] == 'Master'][0]
 mc = [p for p in m['DSPPresets'] if p['Name'] == 'Default'][0]['Compressor']

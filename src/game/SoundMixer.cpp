@@ -130,6 +130,11 @@ bool SoundMixer::unflushable(const std::string& name) {
 
 const char* SoundMixer::movieMixerPreset() { return kMovieMixerPresetName; }
 
+bool SoundMixer::movieAlwaysPlaysSound(const std::string& n) {
+    for (const char* m : kMoviesToAlwaysPlaySound) if (n == m) return true;
+    return false;
+}
+
 void SoundMixer::flush() {
     std::vector<std::pair<int, int>> keep;                // active unflushable presets (index, refs)
     for (int p : active_) if (unflushable(presets_[(size_t)p].name)) keep.push_back({p, presets_[(size_t)p].refs});

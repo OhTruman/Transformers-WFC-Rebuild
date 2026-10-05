@@ -127,6 +127,7 @@ public:
 
     void start() override { if (audio_ && stream_ > 0) audio_->setStreamPaused(stream_, false); }
     void setPaused(bool p) override { if (audio_ && stream_ > 0) audio_->setStreamPaused(stream_, p); }
+    void setVolume(float v) override { volume_ = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v); }
 
     void stop() override {
         run_ = false;
@@ -186,6 +187,8 @@ private:
                 for (size_t i = 0; i < streams_.size(); ++i) planes[i] = streams_[i].pcm.data();
                 lr.resize(n * 2);
                 movieDownmix(layout_, planes.data(), n, lr.data());
+                const float vol = volume_;
+                if (vol != 1.0f) for (float& x : lr) x *= vol;
                 size_t done = 0;
                 while (run_ && done < n) {
                     const size_t k = audio_->pushStream(stream_, lr.data() + done * 2, n - done);
@@ -223,6 +226,7 @@ private:
     int rate_ = 48000, stream_ = -1;
     double duration_ = 0.0;
     std::atomic<bool> run_{false}, eos_{false};
+    std::atomic<float> volume_{1.0f};
     std::thread thread_;
 };
 

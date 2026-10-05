@@ -39,12 +39,22 @@ bool LevelAudioHost::startMovieAudio(const std::string& path, int languageSlot) 
     stopMovieAudio();
     if (!audio_) return false;
     setMoviePlaying(true);
-    if (languageSlot < 0) languageSlot = std::getenv("WFC_MOVIE_LANGSLOT") ? std::atoi(std::getenv("WFC_MOVIE_LANGSLOT")) : 0;
+    if (languageSlot < 0) {
+        const char* lang = std::getenv("WFC_LANGUAGE");                 // GLanguage (Language=int in Xe-TransEngine.ini)
+        languageSlot = audio::movieLanguageSlot(lang ? lang : "INT");
+        if (const char* s = std::getenv("WFC_MOVIE_LANGSLOT")) languageSlot = std::atoi(s);
+    }
     std::unique_ptr<audio::MovieAudioPlayer> p(audio::createMovieAudioPlayer());
     if (!p->open(audio_, path, languageSlot)) {
         LOG_INFO("movie audio: %s has no audio tracks (silent by design)", path.c_str());
         return false;
     }
+    // MoviesToAlwaysPlaySound (the logos): fixed Bink volume 0xCCCC = 0.8; others GetMovieVolume = the SFX class
+    // volume (setMovieSfxVolume; default FX 80 -> 0.8) [CONF native + script; HIGH device lookup].
+    std::string name = path.substr(path.find_last_of("/\\") + 1);
+    name = name.substr(0, name.find('.'));
+    movieFixedVolume_ = SoundMixer::movieAlwaysPlaysSound(name);
+    p->setVolume(movieFixedVolume_ ? (float)0xCCCC / 65536.0f : movieSfxVolume_);
     p->start();
     movieAudio_ = std::move(p);
     return true;

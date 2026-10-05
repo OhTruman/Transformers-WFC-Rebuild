@@ -67,10 +67,10 @@ def cue_tree(cue, prefer=None):
     params = {k: v for k, v in rp.items() if k not in ('ChildNodes', 'Category', 'SecondaryCategory', 'PlayMixerPreset')}
     if rp.get('Category'): params['Category'] = row(rp['Category'])[1].get('CategoryName', '')
     kids = []
-    for en in rp.get('ChildNodes', []):
+    for en in [x for x in (rp.get('ChildNodes') or []) if x]:
         ecls, ep, _ = row(en)
         waves = []
-        for w in ep.get('ChildNodes', []):
+        for w in [x for x in (ep.get('ChildNodes') or []) if x]:
             pk, nm = w.split('.', 1)
             wav = 'content/%s/%s.wav' % (pk, nm)
             if not os.path.exists(CONTENT + wav[8:]): print('  MISSING wave', wav)
@@ -319,7 +319,20 @@ rules = {}
 for o, pr in c.execute("select opath, props from objects where opath like 'TransGame.Default__TnGameRules_ReportGameProgress%'"):
     d = json.loads(pr)
     if d.get('Sounds'): rules[o.split('Default__')[1]] = d['Sounds']
+# Objective / round message classes (flag, bomb, domination, CTF, round-based, KOTH zone): their dialogue / stinger /
+# music fields [CONF class defaults; the switch rules are ported in MatchAudio from the decompiled ClientReceive /
+# GetColoredString / DefendingTeamChanged].
+OBJ_CLASSES = ('TnFlagMessage', 'TnBombMessage', 'TnDominationMessage', 'TnCTFMessage', 'TnRoundBasedGameMessage', 'TnKingOfTheHillZone')
+objective = {}
+for o, pr in c.execute("select opath, props from objects where opath like 'Trans%.Default__Tn%'"):
+    cls = o.split('Default__')[1]
+    if not any(cls == k or (cls.startswith(k) and '.' not in cls) for k in OBJ_CLASSES): continue
+    d = json.loads(pr)
+    f = {k: v for k, v in d.items() if v and ('Sound' in k or 'Dialog' in k or 'Music' in k)}
+    if f: objective[cls] = f
 match_music = sorted({v for g in gametypes.values() for k, v in g.items() if k.endswith('Music')})
+match_music = sorted(set(match_music) | {v for f in objective.values() for k, v in f.items() if k.endswith('Music') and isinstance(v, str)})
+stingers = sorted({v for f in objective.values() for k, v in f.items() if isinstance(v, str) and v.startswith('BL_')})
 # Mode tag -> the game-type message class its rules broadcast (TnOnlineGameSettings<mode>.Rules: the rule with a
 # Team / FFA GameMessageClass; TnGameRules.BroadcastGameTypeMessage picks by WorldInfo.Game.bTeamGame; DM's game class
 # is TnFreeForAllGame (FFA), SV is cooperative - both message classes are the same there).
@@ -343,7 +356,7 @@ docs.append({'map': '__match_messages__',
              'game_type_messages': gametypes, 'progress_announcement_sounds': progress,
              'versus_game_over': {k: gameover[k] for k in ('AutobotWinSound', 'DecepticonWinSound') if k in gameover},
              'announcer': {'team0_dialog_character': annc.get('Team0DialogCharacter'), 'team1_dialog_character': annc.get('Team1DialogCharacter')},
-             'progress_rules': rules, 'mode_messages': mode_messages})
+             'progress_rules': rules, 'mode_messages': mode_messages, 'objective_messages': objective})
 print('match messages: %d game types, %d progress sounds, %d music cues' % (len(gametypes), len(progress), len(match_music)))
 
 # Every processed multiplayer map (ExtractedAssets/VerticalSlice/Maps/MP_*/audio.json): the full Kismet audio graph of
@@ -371,7 +384,7 @@ for level_name in sorted(d for d in os.listdir(MAPS_DIR) if d.startswith('MP_') 
 match_doc = [d for d in docs if d['map'] == '__match_messages__'][0]
 match_doc['announcer_sets'] = announcer_sets
 mc = {}
-for q in sorted({v for ev in announcer_sets.values() for v in ev.values()} | set(match_music)):
+for q in sorted({v for ev in announcer_sets.values() for v in ev.values()} | set(match_music) | set(stingers)):
     d = cue_tree(q)
     if d: d['streamed'] = True; mc[q] = d
     else: print('  WARN missing match cue', q)

@@ -27,6 +27,7 @@
 #include "game/RobotFoley.h"
 #include "game/AmbientAudio.h"
 #include "game/LevelAudioHost.h"
+#include "game/CharacterAudio.h"
 #include "game/VehicleAudio.h"
 
 namespace render { class IRenderer; }
@@ -167,6 +168,15 @@ public:
     //   TnGameRules HandleStartGame / HandleGameNearlyComplete / HandleEndGame -> gameTypeMessage(class, 0 / 1 / 2, ...);
     //   TnGameRules_ReportGameProgress* -> progressAnnouncement(switch); any TnAnnouncer.PlayEvent -> announcerEvent.
     MatchAudio& matchAudio() { return levelAudio_.match(); }
+    // The player character's audio (CharacterAudio profile by roster chassis key, e.g. "Truck" Optimus, "Car"
+    // Bumblebee, "Tank" Megatron): footsteps / foley / transform / vehicle sounds follow it. Default: "Truck".
+    void setPlayerCharacterAudio(const std::string& chassisKey);
+    // The player's current weapon class (its WeaponSounds: WP_Fire / WP_LowAmmoFire / WP_LoopingTail / fine aim).
+    void setPlayerWeaponAudio(const std::string& weaponClass);
+    const char* weaponCue(const char* event) const;
+    const CharacterAudioProfile& audioProfile() const {
+        return audioProfile_ ? *audioProfile_ : CharacterAudio::defaultProfile();
+    }
     // During a loading screen: decode the next level's streamed music now (avoids the first-play decode stall).
     bool prefetchLevelAudio(const std::string& level) { return levelAudio_.prefetch(level); }
     // The listener (frontend camera) for audio-only ticking; World::tick sets it from the game camera itself.
@@ -355,6 +365,9 @@ private:
     std::vector<const char*> foleyCues_;
     // Transformation cue (HmAnimNotify_Sound on the Optimus transform clips) for the current fold.
     bool transformCuePlayed_ = false;
+    int transformNotify_ = 0;                // next transform-clip notify to fire
+    std::string weaponClass_ = "TransContent.TnWeaponIonBlaster";
+    const CharacterAudioProfile* audioProfile_ = nullptr;
     int transformCue_ = -1;
     float trackT_ = 0.0f;
     bool prevTransforming_ = false;

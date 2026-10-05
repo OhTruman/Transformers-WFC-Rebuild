@@ -1,6 +1,6 @@
 // Systems M03 pass 5 native-audio validation suite (not part of the CMake build). Build from the repo root:
 //   .toolchain/llvm-mingw-*/bin/clang++.exe -std=c++17 -O2 -Isrc tools/systems/audio_native_suite.cpp src/game/SoundCues.cpp \
-//     src/game/SoundMixer.cpp src/game/AmbientAudio.cpp src/game/LevelAudioScript.cpp src/game/LevelAudioHost.cpp src/game/MatchAudio.cpp src/game/FrontendAudioRuntime.cpp src/game/MusicPlayer.cpp src/platform/win32/Win32MovieAudio.cpp \n//     src/game/FrontendAudio.cpp src/game/PickupPresentation.cpp src/core/Log.cpp src/platform/win32/Win32Audio.cpp -lwinmm -static -o suite.exe
+//     src/game/SoundMixer.cpp src/game/AmbientAudio.cpp src/game/LevelAudioScript.cpp src/game/LevelAudioHost.cpp src/game/MatchAudio.cpp src/game/FrontendAudioRuntime.cpp src/game/MusicPlayer.cpp src/platform/win32/Win32MovieAudio.cpp \n//     src/game/FrontendAudio.cpp src/game/PickupPresentation.cpp src/game/CharacterAudio.cpp src/core/Log.cpp src/platform/win32/Win32Audio.cpp -lwinmm -static -o suite.exe
 // Reads ExtractedAssets (read only). Channel-mode checks need an audio device (skipped otherwise).
 // Systems M03 native-audio validation suite (RE 7c4a2e0): mixer, zones, emitter geometry, dB, channel modes.
 // Deterministic: recording backends for SoundCues / AmbientAudio; the real Win32 backend for channel modes.
@@ -11,9 +11,12 @@
 #include "game/FrontendAudio.h"
 #include "game/LevelAudioHost.h"
 #include "game/FrontendAudioRuntime.h"
+#include "game/CharacterAudio.h"
+#include "audio/MovieAudio.h"
 #include <algorithm>
 #include "assets/Json.h"
 #include <chrono>
+#include <functional>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -851,7 +854,7 @@ static void testLifecycle() {
     const Vec3 streetsSpawn{363.5f, -724.5f, -341.8f};      // a Streets spawn (DEC_ROOM_LOWER)
     struct MapCase { const char* name; std::string path; int cues, presets, emitters, zones, pools; Vec3 spot; const char* reverb; };
     const MapCase maps[2] = {
-        {"MP_IAC_Streets", streetsAudio(), 32 + 157, 10, 70, 9, 11, streetsSpawn, "REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER"},
+        {"MP_IAC_Streets", streetsAudio(), 32 + 162, 10, 70, 9, 11, streetsSpawn, "REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER"},
         {"FAKE_TEST_MAP", fake, 2, 1, 3, 1, 1, Vec3{0, -1.0f, 0}, "REVERB_FAKE_ROOM"}};
     bool allClean = true;
     for (int cycle = 0; cycle < 6; ++cycle)
@@ -894,8 +897,8 @@ static void testLifecycle() {
     const size_t oneBed = cues.liveInstances();
     amb.load(streetsAudio(), content, cues, &rec);
     cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f);
-    CHECK(cues.liveInstances() == oneBed && cues.mapCueCount() == 32 + 157 && cues.mixer().mapPresetCount() == 10,
-          "reload without unload: one bed (%zu instances, was %zu), 32 bank + 157 streamed match cues, 10 presets", cues.liveInstances(), oneBed);
+    CHECK(cues.liveInstances() == oneBed && cues.mapCueCount() == 32 + 162 && cues.mixer().mapPresetCount() == 10,
+          "reload without unload: one bed (%zu instances, was %zu), 32 bank + 162 streamed match cues, 10 presets", cues.liveInstances(), oneBed);
 
     // Match reset on the same map: player sounds stop, the bed keeps playing, the zone scene re-begins on re-touch
     // (pools restart, the reverb slot and preset ref-counts are unchanged).
@@ -1460,8 +1463,8 @@ static void testMatchAudio() {
     const Vec3 L{363.5f, -724.5f, -341.8f};
     auto run = [&](float secs) { for (int k = 0; k < (int)(secs * 30.0f); ++k) stageTick(host, cues, L, L, dt, mx); };
     std::string why;
-    CHECK(host.load("MP_IAC_Streets") && host.ambient().announcerEvents().size() == 140 && cues.mapCueCount() == 32 + 157,
-          "Streets: 140 announcer events, 32 bank + 157 streamed match cues (%zu / %d)", host.ambient().announcerEvents().size(), cues.mapCueCount());
+    CHECK(host.load("MP_IAC_Streets") && host.ambient().announcerEvents().size() == 140 && cues.mapCueCount() == 32 + 162,
+          "Streets: 140 announcer events, 32 bank + 162 streamed match cues (%zu / %d)", host.ambient().announcerEvents().size(), cues.mapCueCount());
     const size_t residentBefore = rec.paths.size();
     game::MatchAudio& m = host.match();
     CHECK(game::MatchAudio::hasMessageClass("TnGameTypeMessageTDM") && m.dialogCharacter() == "DialogCharacters.OPRIME",
@@ -1521,7 +1524,7 @@ static void testMatchAudio() {
 
     // MP_UND_Gorge: the AssetTools manifest + Systems manifest through the same path (not play-ready; audio only).
     CHECK(host.load("MP_UND_Gorge") && host.ambient().emitterCount() == 15 && host.ambient().zoneCount() == 12 &&
-          cues.mixer().mapPresetCount() == 6 && cues.mapCueCount() == 13 + 18 + 157 && host.ambient().announcerEvents().size() == 140,
+          cues.mixer().mapPresetCount() == 6 && cues.mapCueCount() == 13 + 18 + 162 && host.ambient().announcerEvents().size() == 140,
           "Gorge: 15 emitters, 12 zone ops (23 touch volumes), 6 reverb presets, 13 + 157 cues, announcer (%d / %d / %d / %d)", host.ambient().emitterCount(),
           host.ambient().zoneCount(), cues.mixer().mapPresetCount(), cues.mapCueCount());
     run(3.0f);
@@ -1681,7 +1684,101 @@ static void testZoneGraph() {
     CHECK(allOk, "3 cycles x 10 MP maps: each loads its bed, enters zones, switches reverb, survives death / reset, unloads to the baseline");
 }
 
+// M08: character audio profiles + the movie language track rule (RE 433ef9e).
+static void testCharacterAudio() {
+    std::printf("[character audio profiles; movie language tracks]\n");
+    using audio::movieLanguageSlot;
+    CHECK(movieLanguageSlot("INT") == 0 && movieLanguageSlot("int") == 0 && movieLanguageSlot("FRA") == 1 && movieLanguageSlot("ITA") == 2 &&
+          movieLanguageSlot("DEU") == 3 && movieLanguageSlot("ESN") == 4 && movieLanguageSlot("RUS") == 5 && movieLanguageSlot("POL") == 6 &&
+          movieLanguageSlot("JPN") == 0, "GLanguage -> L (0x82CBEEE0)");
+    CHECK(audio::movieTrackLayout(10, 0).c == 5 && audio::movieTrackLayout(10, 1).c == 6 && audio::movieTrackLayout(10, 4).c == 9 &&
+          audio::movieTrackLayout(10, 5).c == -1 && audio::movieTrackLayout(6, 0).c == 5 && audio::movieTrackLayout(6, 1).c == -1 &&
+          audio::movieTrackLayout(10, 0).lfe == 4, "tracks [0..4, 5 + L], a missing index ignored");
+    CHECK(game::CharacterAudio::profileCount() == 33, "33 roster chassis profiles (%d)", game::CharacterAudio::profileCount());
+    const game::CharacterAudioProfile& op = game::CharacterAudio::defaultProfile();
+    CHECK(op.key == "Truck" && op.voiceCue("FS_DEFAULT_WALK") == "BL_FS_LRG_BOT.FS_WALK_DEFAULT" &&
+          op.vehicleCue("Auto_Boost_Start") == "BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START" &&
+          op.vehicleCue("Auto_Ram_Impact") == "BL_VEH_SOUNDWAVE.VEH_TRUCK_RAM_IMPACT" && op.clip("Transform_ToVehicle_ROBO") &&
+          op.notifyCue(op.clip("Transform_ToVehicle_ROBO")->notifies[0]) == "BL_TRANSFORM.OPTIMUS_BOT2VEH",
+          "default profile = Optimus: walk, boost, ram, transform cues");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    CHECK(cues.hasCue("BL_VEH_OPTIMUS_PRIME.VEH_OPTIMUS_BOOST_START") && cues.hasCue("BL_WPN_GUN_ION_BLASTER.SHOOT") &&
+          cues.hasCue("BL_WPN_FOLEY.SHOOT_DRY_FIRE_ELECTRICITY") && !cues.hasCue("BL_WPN_GUN_NEUTRON_RIFLE.SHOOT"),
+          "full asset names resolve to the compiled short names (exact packages only)");
+    int missingDefault = 0;
+    for (const auto& e : op.vehicle) missingDefault += cues.hasCue(e.second.c_str()) ? 0 : 1;
+    CHECK(game::CharacterAudio::loadCues(cues, op) >= 0, "default profile loads");
+    for (const char* key : {"Car", "Tank", "Jet"}) {
+        const game::CharacterAudioProfile* p = game::CharacterAudio::find(key);
+        const int before = cues.mapCueCount();
+        const int added = p ? game::CharacterAudio::loadCues(cues, *p) : -1;
+        int resolved = 0, total = 0;
+        if (p) for (const auto& e : p->vehicle) { ++total; resolved += cues.hasCue(e.second.c_str()) ? 1 : 0; }
+        CHECK(p && added > 0 && cues.mapCueCount() == before + added && resolved == total && !p->voiceCue("FS_DEFAULT_WALK").empty() &&
+              cues.hasCue(p->voiceCue("FS_DEFAULT_WALK").c_str()),
+              "%s (%s): %d cues loaded, vehicle %d / %d resolve, walk %s", key, p ? p->voiceSet.c_str() : "-", added, resolved, total,
+              p ? p->voiceCue("FS_DEFAULT_WALK").c_str() : "-");
+    }
+    CHECK(game::CharacterAudio::weaponCue("TransContent.TnWeaponHeavyPistol", "WP_Fire") == "BL_WPN_GUN_PISTOL_HVY.SHOOT" &&
+          game::CharacterAudio::loadWeaponCues(cues, "TransContent.TnWeaponHeavyPistol") >= 0 && cues.hasCue("BL_WPN_GUN_PISTOL_HVY.SHOOT"),
+          "weapon class WeaponSounds load and resolve");
+    cues.unloadMapCues();
+    CHECK(cues.mapCueCount() == 0, "character / weapon cues are level-owned (released with the level)");
+}
+
+// M08: objective / round message audio (TnFlagMessage, TnBombMessage, TnDominationMessage, TnCTFMessage,
+// TnRoundBasedGameMessage, TnKingOfTheHillZoneBase) - which announcer cue / stinger / music each switch plays.
+static void testObjectiveMessages() {
+    std::printf("[objective / round messages]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    game::LevelAudioHost host(cues);
+    host.attach(&rec, kRoot);
+    CHECK(host.load("MP_IAC_Seed"), "Seed loads (announcer + match cues)");
+    game::MatchAudio& m = host.match();
+    const auto& ev = host.ambient().announcerEvents();
+    auto cueOf = [&](const char* e) { auto it = ev.find(std::string("SoundEvents_Dialog.Announcer.") + e); return it == ev.end() ? std::string() : it->second; };
+    auto idle = [&] { for (int k = 0; k < 30 * 30 && (m.speaking() || !m.queuedCue().empty()); ++k) { host.tick(1.0f / 30.0f, {0, 0, 0}, {0, 0, 0}); cues.tick(1.0f / 30.0f); } };
+    struct Case { const char* what; std::function<bool()> fire; const char* event; };
+    const Case cases[] = {
+        {"flag picked up", [&] { return m.flagMessage(1); }, "MP_FlagPickedUpDialog"},
+        {"flag scored", [&] { return m.flagMessage(3); }, "MP_FlagScoredDialog"},
+        {"bomb picked up by Decepticons", [&] { return m.bombMessage(1, 1); }, "MP_DecepticonPickupBombDialog"},
+        {"bomb planted", [&] { return m.bombMessage(5, 0); }, "MP_BombPlantedDialog"},
+        {"Autobots capturing C", [&] { return m.dominationMessage(2 * 10 + 2); }, "MP_AutobotsCapturing_C_Dialog"},
+        {"CTF attacker line", [&] { return m.ctfMessage(true); }, "MP_GameTypeCaptureCodeOfPowerDialog"},
+        {"round time up", [&] { return m.roundMessage(2); }, "MP_RoundTimeUp"},
+        {"hill moved", [&] { return m.kothZoneActivated(); }, "MP_HillMovedDialog"},
+        {"hill contested", [&] { return m.kothDefenderChanged(254); }, "MP_HillContestedDialog"},
+    };
+    for (const Case& c : cases) {
+        idle();
+        const bool ok = c.fire();
+        const std::string want = cueOf(c.event);
+        CHECK(ok && !want.empty() && m.currentCue() == want, "%s -> %s (%s, now %s)", c.what, c.event, want.c_str(), m.currentCue().c_str());
+    }
+    idle();
+    const int before = cues.activeInstances("BL_HUD_INTERFACE.CTF_FLAG_CAPTURE");
+    m.flagMessage(3);
+    CHECK(cues.activeInstances("BL_HUD_INTERFACE.CTF_FLAG_CAPTURE") == before + 1, "flag scored: the HUD stinger CTF_FLAG_CAPTURE plays");
+    CHECK(!m.kothDefenderChanged(0, true) && !m.kothZoneActivated(true), "KOTH: ignored team change / match over -> no line");
+    CHECK(host.music().queued().cue == "BL_LVL_MP_MX.COP_ROUND_OVER" || host.music().current().cue == "BL_LVL_MP_MX.COP_ROUND_OVER",
+          "round time up queues TimeUpMusic COP_ROUND_OVER");
+    CHECK(game::SoundMixer::movieAlwaysPlaysSound("Logo_Hasbro") && !game::SoundMixer::movieAlwaysPlaysSound("FMV_intro"),
+          "MoviesToAlwaysPlaySound: the three logos (fixed Bink volume 0xCCCC = 0.8)");
+    const float def = host.movieSfxVolume();
+    host.setMovieFxSlider(55);
+    const float s55 = host.movieSfxVolume();
+    host.setMovieSfxVolume(1.7f);
+    const float hi = host.movieSfxVolume();
+    host.setMovieSfxVolume(0.6f);
+    CHECK(def == 0.8f && s55 == 0.55f && hi == 1.0f && host.movieSfxVolume() == 0.6f,
+          "GetMovieVolume: the SFX class volume = FX slider / 100 (default 80 -> 0.8), clamped [0,1]");
+    host.unload();
+}
+
 int main() {
+    testObjectiveMessages();
+    testCharacterAudio();
     testZoneGraph();
     testMatchAudio();
     testFrontendSeam();

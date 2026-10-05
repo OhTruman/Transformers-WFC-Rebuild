@@ -1410,6 +1410,29 @@ camdis.txt, pcdis.txt via work/pass11/ue3dis.py) and authored data (VEH_SHARED_p
   - ram collision;
   - wheel/tire steering.
 
+## SYSTEMS MILESTONE 08 (2026-10-05) — every MP map, mode, character and movie-language audio
+- **All 10 processed MP maps** (BrokenHope, Remnant, Berth, Rust, Seed, Streets, Molten, Debris, Complex, Gorge) go
+  through one generic runtime. There are no per-map source branches.
+  - Each map's Kismet sound graph comes from its own manifest: touch volumes, ambient zones / scenes, delays, gates,
+    mixer presets, flybys, music, remote events and gameplay-owned `Game:` events.
+  - The shared announcer and match cues are loaded per level.
+  - Streets' graph matches the hand-flattened zones.
+- **Mode audio:** flag / bomb / domination / CTF / round / KOTH messages are ported from the decompiled script.
+  - Gameplay calls `world.matchAudio().*Message(...)`; there are no Systems timers.
+  - The flag stingers and the round time-up / switching-sides music are included.
+- **Characters / weapons:** 33 roster chassis and 53 weapon classes use authored audio profiles. Optimus is no longer
+  hard-coded; the default profile reproduces him exactly.
+  - Gameplay calls `setPlayerCharacterAudio(chassis)` and `setPlayerWeaponAudio(class)`.
+  - In game, Bumblebee, Megatron, Starscream and the Heavy Pistol play their own sounds, with 0 missing cues.
+- **Movies (RE-confirmed):** language track 5 + L from GLanguage (`WFC_LANGUAGE`), speaker routing, the logos at 0.8
+  volume, and other movies at the FX slider / 100 (`setMovieFxSlider`; default 80 → 0.8).
+- **Lifecycle:** a 40-cycle real-device soak (`tools/systems/lifecycle_probe.cpp`): frontend (logo skip, title,
+  party, lobby) → map N → frontend, rotating all 10 maps and the character profiles.
+  - Every cycle returns to 0 voices, 0 streams, 0 level cues and the base mixer presets / cue table.
+  - Decoded PCM never grows (61 → 52 MB).
+- **Validation:** suite 598 / 0; wfc_fidelity 194 / 0 / 19; movie probe OK.
+- **Handoff:** `docs/handoff/SYSTEMS_M08_AUDIO_HANDOFF.md`; FIDELITY.md MILESTONE 08.
+
 ## SYSTEMS MILESTONE 07 (2026-10-04) — boot-movie audio, match / announcer audio
 - **Silent boot movies, fixed in Systems** (+ a ~25-line Frontend patch):
   - the movies' sound is their Bink audio tracks (10 mono: 5.1 with per-language centres);
