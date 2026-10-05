@@ -172,6 +172,7 @@ public:
     // frontend pose of a scene actor in UE space: world = M * (x - L0) + L1, M = DrawScale ratio * A1 A0^T (columns)
     bool frontendPoseUE(const std::string& actorLower, float M[9], float L0[3], float L1[3]) const;
     void loadSceneActors(const assets::Json& actorsByLevel);   // render_index actors_by_level (UI families)
+    void loadSceneNonDrawnActors(const assets::Json& actorsByLevel, const assets::Json& cameras);   // cameras, lens flares
 
     void beginFrame(const Camera& cam, int w, int h);
     void endFrame();
