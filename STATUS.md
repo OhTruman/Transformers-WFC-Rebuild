@@ -42,6 +42,24 @@ render data regenerated for Standard + 10 MP maps (per-map particle template lib
 | Visual suite | 11 / 11, Streets cameras refdiff 0.000 |
 | Frontend soak (4 matches: TDM Streets / DM Gorge / TDM Berth / DM Streets) | correct bodies / weapons / faction colours; 0 timeouts; GL textures 56 → 66; audio at baseline |
 
+### M08b additions after 175a634 (human-playtest fixes)
+| merge / change | result | verification |
+|---|---|---|
+| Frontend a661851: showAll menus get the visible Stage size + onResize | title vignette / Settings / Extras / pause backgrounds cover the full screen (no bright side strips) | frames at 1280×720, 2000×800, 1920×1080; edge columns darker (title 47 → 33 left, 55 → 29 right) |
+| Frontend 3e7ce28: weapon class → NotifyCurrentWeaponChanged; Hud_GFX picks crosshair / icon / reticule / scope (RE 934ecde CONFIRMED); fine aim forwarded | the integration's PROVISIONAL crosshair table is dropped | Shotgun "SCATTER BLASTER" icon + its crosshair; Ion Blaster its own (frames) |
+| Integration: the class comes from the equipped WeaponDef (Gameplay hudAimState().weaponClass was the Ion Blaster for all; fixed in agents/gameplay bec41cd, next integration) | no Ion default | — |
+| Integration: lobby team → Match (MatchLaunch.localTeam, World::startLocalMatch) — Experimental audit P1-1 | team games spawn on the lobby's side; Decepticon bodies in TDM | 3 / 3 Decepticon lobbies → team 1, Barricade, Decepticon energon / HUD logo / scoreboard side |
+| Systems 4a40ddc: Extras movie → menu audio, localized waves (_LOC twin), per-form vehicle audio | Gameplay must feed the new jet / tank / car-hover inputs (queued) | audio suite 612 / 0 |
+| AssetTools c6c519c / d71cd07 (unversioned ExtractedAssets) | robot.glb with ~300 clips per chassis | match loads 4.5–5.4 s, private 2.7–3.1 GB |
+
+Final 08b checks:
+- clean Debug / Release;
+- frontend 79 / 0, harness 191 / 0, TDM 43, modes 21, CTF 12, weapons 19, participants 21, chassis 13;
+- transform 0 / 1520, chaos 0 / 0 / 0;
+- audio 612 / 0;
+- release_path_check PASS;
+- 4-match frontend soak: Barricade / Soundwave / Brawl / Starscream, correct weapons and energon, 0 timeouts.
+
 ## INTEGRATION MILESTONE 08 (2026-10-05) — one offline multiplayer runtime: selected characters, generic weapons, every map, one renderer — branch `integration/milestone-08`
 
 **Playtest executables (plain launch, no environment variables):**
