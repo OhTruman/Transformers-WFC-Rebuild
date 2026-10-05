@@ -173,6 +173,35 @@ public:
     // (dec01 / dec0203 0.2, djDS01 0.08 -> ..., megatronDS 0.02) and the booster emitters (cooked VIG package).
     virtual void setFrontendActorScale(const std::string& actor, float drawScale) { (void)actor; (void)drawScale; }
 
+    // Matinee InterpTrackFloatProp tracks of the loaded frontend scene family (render data matinee_floatprops.json,
+    // tools/render/build_scene_floatprops.py, from the cooked levels): the frontend scene exports carry these tracks
+    // without keys. The customization class cameras animate FOVAngle 70 -> 60 / 65 over 0.5 s (CameraActor_2082); the
+    // title's FOVAngle tracks have no keys (FOV = the camera actor's FOVAngle); the vignette keys DrawScale.
+    struct InterpKeyF { float t = 0, v = 0, arrive = 0, leave = 0; int mode = 1; };   // mode: 0 constant, 1 linear, 2 curve
+    struct FloatPropTrack {
+        std::string level, seqActInterp, matineeComment, interpData, group, property;
+        std::vector<InterpKeyF> keys;
+    };
+    virtual std::vector<FloatPropTrack> frontendFloatTracks() const { return {}; }
+    // UE3 FInterpCurveFloat::Eval: before the first / after the last key -> that key's value; CIM_Constant holds the
+    // segment start; CIM_Linear lerps; the curve modes are cubic Hermite with the cooked tangents scaled by the segment
+    // length (FMath CubicInterp(P0, T0 * dt, P1, T1 * dt, alpha)). No keys -> fallback (a keyless track does nothing).
+    static float evalInterpCurveFloat(const std::vector<InterpKeyF>& k, float t, float fallback) {
+        if (k.empty()) return fallback;
+        if (t <= k.front().t || k.size() == 1) return k.front().v;
+        if (t >= k.back().t) return k.back().v;
+        size_t i = 1;
+        while (i < k.size() && t >= k[i].t) ++i;
+        const InterpKeyF& a = k[i - 1];
+        const InterpKeyF& b = k[i];
+        const float dt = b.t - a.t;
+        if (dt <= 0.0f || a.mode == 0) return a.v;
+        const float u = (t - a.t) / dt;
+        if (a.mode == 1) return a.v + (b.v - a.v) * u;
+        const float u2 = u * u, u3 = u2 * u;
+        return (2 * u3 - 3 * u2 + 1) * a.v + (u3 - 2 * u2 + u) * a.leave * dt + (-2 * u3 + 3 * u2) * b.v + (u3 - u2) * b.arrive * dt;
+    }
+
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile / UCanvas.DrawMaterialTile): a screen quad shaded by a
     // compiled original material (e.g. UI_HudMarkers_p) with per-draw parameter values (MaterialInstanceDynamic
     // SetScalarParameterValue / SetVectorParameterValue). Pixels, top-left origin; drawn after the scene's post

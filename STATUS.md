@@ -607,6 +607,10 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
 - Their missing animation is Matinee DrawScale. `setFrontendActorScale` now applies it to ships and emitters, and
   emitters follow matinee poses.
 - Frontend needs to evaluate the 7 DrawScale FloatProp tracks.
+- Camera FOV tracks:
+  - the title's tracks have no keys, so the camera FOV of 45 is already right;
+  - the customization class cameras zoom 70 -> 60 / 65 over 0.5 s. The keys are exported to render data, and
+    `frontendFloatTracks()` + `evalInterpCurveFloat` are provided for Frontend.
 - Particle sprite and mesh sizes now scale with the emitter's scale (UE3 Source.Scale, HIGH CONFIDENCE). Streets is
   unchanged; the scaled title emitters draw at their authored size.
 

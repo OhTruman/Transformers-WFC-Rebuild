@@ -725,6 +725,33 @@ public:
         wfc_.setActorPose(a, p, r);
     }
     void setFrontendActorScale(const std::string& a, float s) override { wfc_.setActorScale(a, s); }
+    std::vector<FloatPropTrack> frontendFloatTracks() const override {
+        std::vector<FloatPropTrack> out;
+        if (sceneDir_.empty()) return out;
+        std::ifstream f(wfc::Pipeline::renderDataRoot() + "/" + sceneDir_ + "/matinee_floatprops.json");
+        if (!f) { LOG_WARN("frontend scene %s: no matinee_floatprops.json (rebuild render data)", sceneDir_.c_str()); return out; }
+        std::stringstream ss; ss << f.rdbuf();
+        assets::Json J;
+        if (!assets::Json::parse(ss.str(), J)) return out;
+        const assets::Json& T = J["tracks"];
+        for (size_t i = 0; i < T.size(); ++i) {
+            FloatPropTrack t;
+            t.level = T[i]["level"].asString(); t.seqActInterp = T[i]["seqact_interp"].asString();
+            t.matineeComment = T[i]["matinee_comment"].asString(); t.interpData = T[i]["interp_data"].asString();
+            t.group = T[i]["group"].asString(); t.property = T[i]["property"].asString();
+            const assets::Json& K = T[i]["keys"];
+            for (size_t k = 0; k < K.size(); ++k) {
+                InterpKeyF key;
+                key.t = K[k]["t"].asFloat(); key.v = K[k]["v"].asFloat();
+                key.arrive = K[k]["arrive"].asFloat(); key.leave = K[k]["leave"].asFloat();
+                const std::string m = K[k]["mode"].asString();
+                key.mode = m == "CIM_Constant" ? 0 : (m == "CIM_Linear" ? 1 : 2);
+                t.keys.push_back(key);
+            }
+            out.push_back(std::move(t));
+        }
+        return out;
+    }
     void setActorHidden(const std::string& actor, bool hidden) override { wfc_.setActorHidden(actor, hidden); }
     void setMapEffectActive(const std::string& what, bool active) override { wfc_.setMapEffectActive(what, active); }
     void setMapEffectState(const std::string& k, bool a, bool h) override { wfc_.setMapEffectState(k, a, h); }
