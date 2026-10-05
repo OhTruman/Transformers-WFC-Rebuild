@@ -183,6 +183,13 @@ public:
         std::vector<InterpKeyF> keys;
     };
     virtual std::vector<FloatPropTrack> frontendFloatTracks() const { return {}; }
+    // Ground under a point of the loaded scene / map (UE units): a downward trace against the level BSP, which includes
+    // invisible collision brushes - the customization room's floor is one (Invisible_MAT slab, top z 0). The preview
+    // pawn's OnPreviewPawnTick FindGround lands it there; the roster robot meshes have their origin at the feet, so
+    // a body drawn at (x, y, groundZ) stands on the floor. False if nothing is below zFrom.
+    virtual bool sceneGroundHeight(float xUE, float yUE, float zFromUE, float& groundZ) const {
+        (void)xUE; (void)yUE; (void)zFromUE; (void)groundZ; return false;
+    }
     // UE3 FInterpCurveFloat::Eval: before the first / after the last key -> that key's value; CIM_Constant holds the
     // segment start; CIM_Linear lerps; the curve modes are cubic Hermite with the cooked tangents scaled by the segment
     // length (FMath CubicInterp(P0, T0 * dt, P1, T1 * dt, alpha)). No keys -> fallback (a keyless track does nothing).

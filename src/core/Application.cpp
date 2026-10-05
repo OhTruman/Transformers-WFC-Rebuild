@@ -166,6 +166,12 @@ void Application::run() {
                     std::sscanf(s.c_str() + b + 1, "%f,%f,%f;%f,%f,%f", &body.colors.primary[0], &body.colors.primary[1],
                                 &body.colors.primary[2], &body.colors.secondary[0], &body.colors.secondary[1],
                                 &body.colors.secondary[2]);
+                if (std::getenv("WFC_SCENEPREVIEW_SNAP")) {   // FindGround: the floor under the spawn point
+                    float g = 0.0f;
+                    bool ok = renderer_->sceneGroundHeight(x, y, z, g);
+                    LOG_INFO("WFC_SCENEPREVIEW ground under (%.1f, %.1f) from z %.1f: %s %.1f", x, y, z, ok ? "hit" : "none", g);
+                    if (ok) z = g;
+                }
                 if (renderer_->loadContentMesh(s.substr(0, a), body.mesh)) {
                     body.model = renderer_->actorMatrix(core::Vec3{x, y, z}, core::Vec3{0, yaw, 0});
                     previews.push_back(std::move(body));

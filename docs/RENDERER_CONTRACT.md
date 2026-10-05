@@ -82,6 +82,7 @@ Gameplay passes the markers its rules show. Ownership of the in-match HUD layers
 | `render::ueActorMatrix(posUE, rotUEdeg)` | Model matrix for an exported content glTF (roster robot / vehicle) placed at a UE location / rotation, as authored actors are placed. |
 | `setFrontendActorScale(actor, drawScale)` | Matinee `InterpTrackFloatProp` DrawScale, absolute: drawn at drawScale / authored DrawScale about the actor's location. Meshes and Emitter actors (emitters also follow `setFrontendActorTransform`; particles already emitted stay in world space). |
 | `frontendFloatTracks()` / `evalInterpCurveFloat(keys, t, fallback)` | Matinee float-property tracks (FOVAngle, DrawScale) of the loaded frontend scene family, with UE3 `FInterpCurve` evaluation. The scene exports lack these keys. A keyless track does nothing (returns the fallback). |
+| `sceneGroundHeight(x, y, zFrom, groundZ)` | Downward trace against the loaded scene / map's level BSP (invisible collision brushes included), UE units. The preview pawns' FindGround: place the feet-origin roster body at the returned height. |
 | `setDrawOwner(id)` | Per-character light environment and applier colours for the following dynamic draws. |
 
 **Frontend scenes:**

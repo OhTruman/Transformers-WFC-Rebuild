@@ -491,6 +491,24 @@ std::string Pipeline::assetRoot() {
 // M10 root cause: this was <exe>/../../work/render only, so the Release layout (build/release/bin) resolved to
 // build/work/render (absent) and every map and frontend scene silently fell back to the legacy fixed-function
 // renderer (human playtest M06: black world, malformed menu scene).
+bool Pipeline::groundBelowUE(float x, float y, float zFrom, float& zHit) const {
+    bool hit = false;
+    for (size_t t = 0; t + 9 <= bspTris_.size(); t += 9) {
+        const float* v = &bspTris_[t];
+        // 2D barycentric containment of (x, y) in the triangle's XY projection, then the plane height there
+        float x0 = v[0], y0 = v[1], x1 = v[3], y1 = v[4], x2 = v[6], y2 = v[7];
+        float d = (y1 - y2) * (x0 - x2) + (x2 - x1) * (y0 - y2);
+        if (std::fabs(d) < 1e-6f) continue;              // vertical / degenerate in plan view
+        float a = ((y1 - y2) * (x - x2) + (x2 - x1) * (y - y2)) / d;
+        float b = ((y2 - y0) * (x - x2) + (x0 - x2) * (y - y2)) / d;
+        float c = 1.0f - a - b;
+        if (a < -1e-5f || b < -1e-5f || c < -1e-5f) continue;
+        float z = a * v[2] + b * v[5] + c * v[8];
+        if (z <= zFrom + 0.01f && (!hit || z > zHit)) { zHit = z; hit = true; }
+    }
+    return hit;
+}
+
 std::string Pipeline::renderDataRoot() {
     if (const char* e = std::getenv("WFC_RENDER_DATA")) return e;
     static const std::string root = [] {
@@ -893,7 +911,15 @@ bool Pipeline::load(const std::string& mapName) {
     active_ = true;
     {
         MeshData bsp;
-        if (assets::loadGlb(dataDir_ + "/bsp.glb", bsp)) bspMesh_ = upload(bsp);
+        if (assets::loadGlb(dataDir_ + "/bsp.glb", bsp)) {
+            bspMesh_ = upload(bsp);
+            bspTris_.clear();                          // glTF (x, y, z) m -> UE (x, z, y) * 100
+            bspTris_.reserve(bsp.indices.size() * 3);
+            for (uint32_t ix : bsp.indices) {
+                const float* p = &bsp.positions[(size_t)ix * 3];
+                bspTris_.push_back(p[0] * 100.0f); bspTris_.push_back(p[2] * 100.0f); bspTris_.push_back(p[1] * 100.0f);
+            }
+        }
         else LOG_WARN("wfc: bsp.glb missing; level BSP stays unlit");
         MeshData dec;
         if (assets::loadGlb(dataDir_ + "/decals.glb", dec)) {

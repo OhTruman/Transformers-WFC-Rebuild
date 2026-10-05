@@ -725,6 +725,9 @@ public:
         wfc_.setActorPose(a, p, r);
     }
     void setFrontendActorScale(const std::string& a, float s) override { wfc_.setActorScale(a, s); }
+    bool sceneGroundHeight(float x, float y, float zFrom, float& z) const override {
+        return wfc_.active() && wfc_.groundBelowUE(x, y, zFrom, z);
+    }
     std::vector<FloatPropTrack> frontendFloatTracks() const override {
         std::vector<FloatPropTrack> out;
         if (sceneDir_.empty()) return out;
