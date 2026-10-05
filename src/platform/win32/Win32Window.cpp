@@ -31,6 +31,7 @@ int vkFor(Button b) {
         case Button::Descend:      return 'V';
         case Button::NextWeapon:   return VK_PRIOR;
         case Button::Ability1:     return VK_CONTROL;
+        case Button::Killstreak:   return 'B';
         case Button::PrevWeapon:   return VK_NEXT;
         case Button::Quit:         return VK_ESCAPE;
         case Button::FineAim:      return VK_RBUTTON;

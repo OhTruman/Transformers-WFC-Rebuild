@@ -170,6 +170,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     if (!vehicleForm && in.wasPressed(Button::Dash)) wantAbility_ = 0;      // Ability0
     if (!vehicleForm && in.wasPressed(Button::Ability1)) wantAbility_ = 1;  // Ability1
     abilityStickFwd_ = intent_.moveForward; abilityStickRight_ = intent_.moveRight;
+    if (in.wasPressed(Button::Killstreak)) wantKillstreak_ = true;
     if (in.wasPressed(Button::NextWeapon)) wantSwitch_ = 1;
     if (in.wasPressed(Button::PrevWeapon)) wantSwitch_ = -1;
     if (!reloadDown) reloadHeld_ = 0.0f;

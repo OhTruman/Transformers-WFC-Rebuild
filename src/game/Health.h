@@ -60,11 +60,12 @@ struct Health {
             case HealType::AddOverShield: current = max + overshieldMax; break;
         }
     }
-    void tickRegen(float dt) {
+    void tickRegen(float dt, float rateScale = 1.0f) {
         sinceDamage += dt;
         if (current <= 0.0f || current >= max || sinceDamage < kRegenDelay) return;
         float top = segmentTop(activeSegment());
-        if (current < top) current = current + kRegenRate * dt > top ? top : current + kRegenRate * dt;
+        const float rate = kRegenRate * rateScale;
+        if (current < top) current = current + rate * dt > top ? top : current + rate * dt;
     }
     void reset() { current = max; sinceDamage = 1e9f; }
 };

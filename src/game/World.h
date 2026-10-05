@@ -66,6 +66,10 @@ struct HudGameState {
     std::vector<CarriedObj> carried;
     bool bombPlanted = false; float bombFuse = 0.0f, bombDefuse = 0.0f; int bombPlantTeam = 255;
     bool localCarrying = false;
+    int killStreak = 0;                          // PRI._CurrentKillStreak
+    std::vector<std::string> killstreaks;        // AcquiredKillstreaks (newest last = CurrentKillstreakId)
+    bool killstreakImplemented = false;          // the newest one is simulated by the rebuild
+    float regenBuff = 0.0f, fastCooldownBuff = 0.0f, ammoLockBuff = 0.0f;   // buff time left (s)
     // Damage taken (TakeDamage -> HUD damage direction): increments per damaging hit; the instigator location at that hit
     // (world) and its bearing relative to the view (radians, 0 = ahead, + = right). Presentation belongs to Hud_GFX.
     int damageTakenCount = 0;
@@ -318,6 +322,13 @@ private:
     std::vector<HazardVolume> hazards_;
     std::vector<Projectile> projectiles_;
     void tickProjectiles(float dt);
+    bool deferredKillstreak_ = false;
+    int lockedClip_ = 0;
+public:
+    // TnPlayerController.TriggerKillstreak for the local player: the newest acquired streak; RequiresRobotForm streaks in
+    // vehicle form transform first and trigger after (DeferredTriggerKillstreak). Returns the triggered id or "".
+    std::string triggerLocalKillstreak();
+private:
     void radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type);
     int localHazard_ = -1;
     float localPainTimer_ = 0.0f;

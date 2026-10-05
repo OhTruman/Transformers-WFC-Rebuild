@@ -74,6 +74,11 @@ struct KillFeedEntry {
     static constexpr float kLifetime = 5.0f, kFade = 1.0f;
 };
 
+// TnDataProvider_Killstreak (TransCustomization.ini) [CONF authored, mp_classes.json]: id, KillsRequired, SpecialtyRestriction.
+struct KillstreakDef { const char* id; int kills; const char* specialty; const char* name; bool implemented; };
+const KillstreakDef* findKillstreak(const std::string& specialty, int kills);
+const KillstreakDef* killstreakById(const std::string& id);
+
 struct MatchPlayer {
     std::string name;
     int team = 255;                    // 0 Autobots, 1 Decepticons, 255 none (FFA)
@@ -87,6 +92,10 @@ struct MatchPlayer {
     std::string chassis;               // body resolved at the last spawn (faction from the team)
     std::string specialty;             // specialty applied at the last spawn (custom: the slot's; iconic: chassis default)
     std::string spawnError;            // non-empty while the resolved chassis cannot be spawned (no substitute body)
+    // Killstreaks: PRI._CurrentKillStreak (+kills, reset by AddDeaths -> KillStreakEnded) and the controller's
+    // AcquiredKillstreaks stack (UpdateKillstreakRewards: FindKillstreak(Specialty, count); cleared at ClientGameEnded).
+    int currentKillStreak = 0;
+    std::vector<std::string> acquiredKillstreaks;
 };
 
 class Match {

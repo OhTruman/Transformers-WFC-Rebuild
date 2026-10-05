@@ -259,6 +259,24 @@ Inputs:
 - Invert per form: car and truck share InvertY_Car.
 - Frontend calls it on Settings commit and at match start.
 
+### Killstreaks — framework CONFIRMED script; 4 of 12 effects implemented
+- **Counting:** PRI._CurrentKillStreak += kills (AddKills); death resets it (AddDeaths → KillStreakEnded).
+- **Earning:** UpdateKillstreakRewards(count) → FindKillstreak(Specialty, count) → AcquireKillstreak (stack, no duplicates).
+  Each class has three streaks at 3 / 5 / 7 kills (TnDataProvider_Killstreak).
+- **Triggering:** B (TriggerKillstreak) fires the newest; RequiresRobotForm streaks in vehicle form transform first and
+  then trigger (Deferred). ClientGameEnded clears the stack.
+- **Implemented:**
+  - Overshield Matrix: team OverShieldPickup heal;
+  - Ammo Matrix: team FillReserveAmmo + TnBuffLockAmmoClip 10 s;
+  - Energon Recharger: regen × FloatModifier 2 for 30 s;
+  - Intercooler: ability cooldown × 5 for 30 s.
+  - Buff values come from the authored TnBuff* defaults [CONF]; the exact buff hooks are HIGH.
+- **PARTIAL** (acquired and triggered, effect reported unimplemented): Orbital Beacon 1 / 2, P.O.K.E. 2.0, Thermo Mine
+  Re-Spawner, Health Matrix 2.0, Nucleon Shock Cannon, Electromagnetic Pulse, Omega Missile.
+- **Test:** WFC_PARTICIPANTTEST 5 / 5. Custom Soldier: 3 kills → Ammo Matrix; B refills and locks the clip (32 stays 32);
+  death resets the streak.
+- **HUD:** killStreak, killstreaks[] (newest last), killstreakImplemented, regenBuff, fastCooldownBuff, ammoLockBuff.
+
 ### Projectiles and vehicle weapons
 - Projectile weapons fire their WeaponProjectiles[0] class with its MultiplayerData TnProjectileData: InitialSpeed, Damage,
   DamageRadius, DamageType [CONF authored]. Examples: TankShell 20000 / 170 / 2500; RocketVh 18000 / 55 / 1500.

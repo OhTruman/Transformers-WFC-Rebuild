@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22f (2026-10-05) — killstreaks
+- Streak count / acquisition by specialty (3/5/7) / B trigger with robot-form deferral; Overshield Matrix, Ammo Matrix, Energon Recharger, Intercooler implemented; 8 others PARTIAL. WFC_PARTICIPANTTEST 5/5.
+
 ## GAMEPLAY PASS 22e (2026-10-05) — projectiles, vehicle weapons, damage multipliers
 - Projectile weapons from MP PROJDATA (straight; homing PARTIAL), HurtRadius falloff; vehicle-form weapons fire; victim form DamageMultiplier + SelfDamageMultiplier. WFC_WEAPONTEST 12/12.
 

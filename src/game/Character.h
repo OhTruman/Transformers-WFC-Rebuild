@@ -35,6 +35,7 @@ public:
         veh_ = VehicleState{}; restoreTimer_ = -1.0f; lastDriving_ = false; shiftRemain_ = 0.0f;
         velocity_ = {0, 0, 0}; onGround_ = true; rammedRemain_ = 0.0f; dodgeRemain_ = 0.0f; landedSinceDodge_ = true;
         for (AbilitySlot& a : abilities_) { a.cooldown = 0.0f; a.spam = 0.0f; a.pendingCooldown = false; }
+        regenBuffRemain_ = 0.0f; fastCooldownRemain_ = 0.0f; ammoLockRemain_ = 0.0f;
         health_ = Health{}; overShield_ = false;
         if (!specHealth_.empty()) health_.initialize(specHealth_, specOvershield_);   // ApplySpecialty: Health_<Class>
         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;   // TnCharacterApplier.ApplyWeapons
@@ -148,6 +149,9 @@ public:
     // Dodging (TnAcrobaticsManager state 5): PHYS_Flying at DodgeSpeed for DodgeTime; CanDodge = landed since the last dodge.
     float dodgeRemain_ = 0.0f;
     bool landedSinceDodge_ = true;
+    // Killstreak buffs: TnBuffHealthRegenKillStreak (FloatModifier 2, 30 s), TnBuffFastAbilityCooldown (x5, 30 s),
+    // TnBuffLockAmmoClip (10 s: shots cost no clip ammo) [CONF authored buff defaults; effect placement HIGH].
+    float regenBuffRemain_ = 0.0f, fastCooldownRemain_ = 0.0f, ammoLockRemain_ = 0.0f;
     bool isDodging() const { return dodgeRemain_ > 0.0f; }
     // Abilities (TnAbilityManager): CharacterData.Abilities[0] on Ability0 (Shift), [1] on Ability1 (Ctrl) [CONF bindings].
     // Versus: GetCurrentSkillDataIndex 0 (TnMultiplayerGame) -> Cooldown[0]; no resource (GetResourceRequired 0 unless
@@ -167,7 +171,7 @@ public:
             a.spam = std::max(0.0f, a.spam - dt);
             // TnAbilityManager.Tick: the cooldown starts once CanStartCooldown (Dodge: no longer dodging).
             if (a.pendingCooldown && !(a.id == "Dodge" && isDodging())) { a.pendingCooldown = false; a.cooldown = a.cooldownTime; }
-            if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt);
+            if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));
         }
     }
     float rammedBaseY_ = 0.0f;
@@ -247,6 +251,7 @@ public:
     Weapon& weapon() { return inventory_[(size_t)activeWeapon_]; }
     const Weapon& weapon() const { return inventory_[(size_t)activeWeapon_]; }
     const std::vector<Weapon>& inventory() const { return inventory_; }
+    std::vector<Weapon>& inventoryMutable() { return inventory_; }
     int activeWeaponIndex() const { return activeWeapon_; }
     // The loadout every spawn starts from; vehicle-form weapons are kept for the HUD / future vehicle firing.
     void setLoadout(const std::vector<Weapon>& robot, const std::vector<std::string>& vehicleWeapons) {

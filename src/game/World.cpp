@@ -860,7 +860,18 @@ void World::tick(float dt) {
         listenerPos_ = cam.pos;
     }
     // Health regeneration (robot blueprint HealthRegenParameters, both forms) for every live pawn.
-    if (!localPlayerDead()) player_.pawn().health().tickRegen(dt);
+    {
+        Character& lp = player_.pawn();
+        lp.regenBuffRemain_ = std::max(0.0f, lp.regenBuffRemain_ - dt);
+        lp.fastCooldownRemain_ = std::max(0.0f, lp.fastCooldownRemain_ - dt);
+        if (lp.ammoLockRemain_ > 0.0f) {                   // TnBuffLockAmmoClip: the clip does not drain while active
+            lp.ammoLockRemain_ = std::max(0.0f, lp.ammoLockRemain_ - dt);
+            lp.weapon().ammo = std::max(lp.weapon().ammo, lockedClip_);
+        } else lockedClip_ = 0;
+        if (matchActive_ && player_.controller().consumeKillstreakRequest()) triggerLocalKillstreak();
+        if (deferredKillstreak_ && lp.moveForm() == Form::Robot && !lp.isTransforming()) { deferredKillstreak_ = false; triggerLocalKillstreak(); }
+    }
+    if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
     if (matchActive_) tickMatch(dt);
     if (!localPlayerDead()) {                       // dead / not yet spawned (match): no pawn simulation
@@ -1088,6 +1099,12 @@ HudGameState World::hudState() const {
     h.bombPlanted = mapState_.planted().active; h.bombFuse = mapState_.planted().fuse; h.bombDefuse = mapState_.planted().defuse;
     h.bombPlantTeam = mapState_.planted().team;
     h.localCarrying = matchActive_ && mapState_.carriedBy(localPlayer_) >= 0;
+    if (matchActive_ && localPlayer_ >= 0 && (size_t)localPlayer_ < match_.players().size()) {
+        const MatchPlayer& mp = match_.players()[(size_t)localPlayer_];
+        h.killStreak = mp.currentKillStreak; h.killstreaks = mp.acquiredKillstreaks;
+        if (!mp.acquiredKillstreaks.empty()) if (const KillstreakDef* k = killstreakById(mp.acquiredKillstreaks.back())) h.killstreakImplemented = k->implemented;
+    }
+    h.regenBuff = pc.regenBuffRemain_; h.fastCooldownBuff = pc.fastCooldownRemain_; h.ammoLockBuff = pc.ammoLockRemain_;
     for (const Character::AbilitySlot& a : pc.abilities_) h.abilities.push_back({a.id, a.implemented, a.cooldown, a.pendingCooldown});
     h.dodging = pc.isDodging();
     h.damageTakenCount = damageTakenCount_;
@@ -1201,6 +1218,7 @@ void World::tickMatch(float dt) {
     for (const MatchEvent& e : match_.events()) {
         switch (e.type) {
             case MatchEvent::Type::MatchEnded:
+                for (size_t i = 0; i < match_.players().size(); ++i) match_.playerMutable((int)i).acquiredKillstreaks.clear();   // ClientGameEnded
                 mapState_.matchEnded();                // ScoreKingOfTheHill.CheckEndGame: every zone deactivates
                 break;
             case MatchEvent::Type::RoundStarted:
@@ -1608,6 +1626,48 @@ void World::tickProjectiles(float dt) {
         p.pos = next;
         ++i;
     }
+}
+
+std::string World::triggerLocalKillstreak() {
+    if (!matchActive_ || localDead_ || localPlayer_ < 0) return "";
+    MatchPlayer& mp = match_.playerMutable(localPlayer_);
+    if (mp.acquiredKillstreaks.empty()) return "";
+    const std::string id = mp.acquiredKillstreaks.back();
+    Character& pc = player_.pawn();
+    // RequiresRobotForm streaks (abilities spawned / used on foot) in vehicle form: StartTransform(robot) + defer.
+    const bool needsRobot = id == "PokeStreak" || id == "MinePooperStreak" || id == "SpawnRocketTurretStreak" || id == "GuidedMissileStreak";
+    if (needsRobot && pc.moveForm() != Form::Robot) {
+        if (!pc.isTransforming()) player_.controller().tryBeginTransform();
+        deferredKillstreak_ = true;
+        return "";
+    }
+    mp.acquiredKillstreaks.pop_back();
+    const int team = mp.team;
+    auto teamPawns = [&](auto fn) {   // TnTeamHandler.GetTeamMembers: living pawns of the owner's team (FFA: the owner)
+        if (!localDead_) fn(pc);
+        if (match_.settings().teamGame)
+            for (MatchOpponent* o : opponents_) if (o->spawned() && o->team() == team) fn(o->pawn());
+    };
+    if (id == "OverShieldStreak") {
+        teamPawns([](Character& p) { p.health().heal(Health::HealType::AddOverShield, 1.0f); });   // HealDamage(TnHealTypeOverShieldPickup)
+    } else if (id == "RefillAmmoStreak") {
+        // RefillAmmo: FillReserveAmmo for WT_Primary / Secondary / Grenades / Vehicle of every team member; the owner gets
+        // TnBuffLockAmmoClip 10 s.
+        auto fill = [](Character& p) {
+            for (Weapon& w : p.inventoryMutable()) w.reserve = w.reserveMax;
+            if (Weapon* vw = p.vehicleWeapon()) vw->reserve = vw->reserveMax;
+        };
+        teamPawns(fill);
+        pc.ammoLockRemain_ = 10.0f; lockedClip_ = pc.weapon().ammo;
+    } else if (id == "HealthRegenStreak") {
+        pc.regenBuffRemain_ = 30.0f;                       // TnBuffHealthRegenKillStreak FloatModifier 2, BuffTime 30
+    } else if (id == "FastAbilityCooldownStreak") {
+        pc.fastCooldownRemain_ = 30.0f;                    // TnBuffFastAbilityCooldown CooldownMultiplier 5, BuffTime 30
+    } else {
+        LOG_WARN("killstreak %s triggered: effect not implemented in the rebuild [PARTIAL]", id.c_str());
+    }
+    LOG_INFO("killstreak %s triggered", id.c_str());
+    return id;
 }
 
 } // namespace game

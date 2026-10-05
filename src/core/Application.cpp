@@ -1600,6 +1600,41 @@ void Application::runParticipantTest() {
     run(6.0f);
     check(died && B->spawned() && B->pawn().chassis().id == "Jet" && B->pawn().health().current == B->pawn().health().max && B->pawn().form() == game::Form::Robot,
           "death -> wave respawn as a fresh robot pawn with the same body and full class health");
+    // Killstreaks: the local player as a custom Soldier; 3 kills -> RefillAmmoStreak (Ammo Matrix) acquired; B triggers it.
+    {
+        game::MatchLaunch L2; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L2);
+        world_.launchMatch(L2);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Soldier;
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 5; ++i) ops.push_back(world_.addMatchOpponent("K" + std::to_string(i), false));
+        run(10.6f);
+        int kills = 0;
+        for (int round = 0; round < 6 && kills < 3; ++round) {
+            for (auto* o : ops)
+                if (kills < 3 && o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) {
+                    world_.applyMatchDamage(o->matchPlayer(), world_.localMatchPlayer(), 99999.0f, false, "TransGame.TnDamageTypeIonBlaster");
+                    ++kills;
+                }
+            run(6.0f);
+        }
+        game::HudGameState h = world_.hudState();
+        bool acquired = h.killStreak == 3 && !h.killstreaks.empty() && h.killstreaks.back() == "RefillAmmoStreak" && h.killstreakImplemented;
+        game::Character& lp = world_.player().pawn();
+        lp.weapon().reserve = 0;
+        int clip0 = lp.weapon().ammo;
+        platform::InputFrame b; b.pressed[(int)platform::Button::Killstreak] = true; b.down[(int)platform::Button::Killstreak] = true;
+        world_.handleInput(b, dt); world_.tick(dt);
+        bool refilled = lp.weapon().reserve == lp.weapon().reserveMax && world_.hudState().ammoLockBuff > 9.0f && world_.hudState().killstreaks.empty();
+        platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+        for (int i = 0; i < 60; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+        bool locked = lp.weapon().ammo == clip0;
+        world_.killLocalPlayer(-1, true);
+        bool reset = world_.match().players()[(size_t)world_.localMatchPlayer()].currentKillStreak == 0;
+        LOG_INFO("PARTICIPANT killstreak: streak %d acquired [%s] refilled %d clip %d -> %d reset %d", h.killStreak,
+                 h.killstreaks.empty() ? "" : h.killstreaks.back().c_str(), (int)refilled, clip0, lp.weapon().ammo, (int)reset);
+        check(acquired && refilled && locked && reset, "Soldier: 3 kills -> Ammo Matrix; B: reserves full + clip locked 10 s; death resets the streak");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

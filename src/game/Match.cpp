@@ -210,6 +210,7 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
     if (killer >= (int)players_.size()) killer = -1;
     MatchPlayer& V = players_[(size_t)victim];
     if (!V.alive) return;
+    V.currentKillStreak = 0;                                      // AddDeaths -> KillStreakEnded
     // TnMultiplayerGame.Killed: TnTombstone at the victim (team set) - a spawn modifier.
     tombstones_.push_back({locs_[(size_t)victim], V.team});
     const bool killedSelf = killer == victim;
@@ -220,6 +221,12 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
             K.score += 1;
             if (s_.teamGame && s_.teamScoreAmount > 0 && (K.team == 0 || K.team == 1)) teamScore_[K.team] += 1;   // Team.AddScore(1)
             K.kills += 1;                                         // TrackKillsMP: +1 -> AddKills
+            // AddKills: _CurrentKillStreak += 1; TnKillStreakAnnouncer -> UpdateKillstreakRewards(count) -> AcquireKillstreak
+            // (no duplicates) [CONF script].
+            K.currentKillStreak += 1;
+            if (const KillstreakDef* ks = findKillstreak(K.specialty, K.currentKillStreak))
+                if (std::find(K.acquiredKillstreaks.begin(), K.acquiredKillstreaks.end(), ks->id) == K.acquiredKillstreaks.end())
+                    K.acquiredKillstreaks.push_back(ks->id);
         }
     }
     // TrackKillsMP.ScoreAssists: the first damager in the victim's DamageHistory that is neither killer nor victim
@@ -483,6 +490,31 @@ void Match::restartRound() {
     // TnGame.RestartRound: SoftReset - every player respawns (no death counted).
     for (size_t i = 0; i < players_.size(); ++i) { players_[i].alive = false; restartPlayer((int)i); }
     emit(MatchEvent::Type::RoundStarted, -1, attackingTeam_);
+}
+
+namespace {
+const KillstreakDef kKillstreaks[] = {
+    {"OrbitalReconStreak", 3, "Scout", "Orbital Beacon", false},
+    {"HealthRegenStreak", 5, "Scout", "Energon Recharger", true},
+    {"ImprovedOrbitalReconStreak", 7, "Scout", "Orbital Beacon 2.0", false},
+    {"FastAbilityCooldownStreak", 3, "Leader", "Intercooler", true},
+    {"PokeStreak", 5, "Leader", "P.O.K.E. 2.0", false},
+    {"MinePooperStreak", 7, "Leader", "Thermo Mine Re-Spawner", false},
+    {"FriendlyKillHealthBonusStreak", 3, "Scientist", "Health Matrix 2.0", false},
+    {"OverShieldStreak", 5, "Scientist", "Overshield Matrix", true},
+    {"SpawnRocketTurretStreak", 7, "Scientist", "Nucleon Shock Cannon", false},
+    {"RefillAmmoStreak", 3, "Soldier", "Ammo Matrix", true},
+    {"TeamAbilityJammerStreak", 5, "Soldier", "Electromagnetic Pulse", false},
+    {"GuidedMissileStreak", 7, "Soldier", "Omega Missile", false},
+};
+}
+const KillstreakDef* findKillstreak(const std::string& specialty, int kills) {
+    for (const KillstreakDef& k : kKillstreaks) if (specialty == k.specialty && kills == k.kills) return &k;
+    return nullptr;
+}
+const KillstreakDef* killstreakById(const std::string& id) {
+    for (const KillstreakDef& k : kKillstreaks) if (id == k.id) return &k;
+    return nullptr;
 }
 
 } // namespace game
