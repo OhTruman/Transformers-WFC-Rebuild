@@ -285,8 +285,9 @@ Inputs:
   own shot in flight.
 - **Damage taken** is scaled by the victim form's DamageMultiplier (ROBODEF 1.0; VEHDEF e.g. 0.75 tank, 0.8 jet, 0.9 car)
   and, for self damage, by SelfDamageMultiplier 0.45 [CONF data; HIGH placement in TakeDamage].
-- **Vehicle form fires** its CharacterData.VehicleWeapons[0] (projectile or hitscan). Origin = actor + 1 m [PROV: the
-  vehicle WeaponSocket_Primary bone transform is not used]; aim = the camera ray.
+- **Vehicle form fires** its CharacterData.VehicleWeapons[0] (projectile or hitscan). Origin = the chassis' vehicle
+  WeaponSocket_Primary (bone × socket, CONF); aim = the camera aim point. The tank cannon turret rotation
+  (UpdateCannonRotation) is not animated [PARTIAL].
 - Repair rays are flagged unsimulated (they heal) [PARTIAL]. Projectile meshes and trails are drawn as a small box
   marker until Rendering draws them [PROV presentation].
 - WFC_WEAPONTEST 12 / 12: Warpath's TankCannon shell flies and hits for 131; self damage 49.8 ≤ 170 × 0.45 × 0.75.

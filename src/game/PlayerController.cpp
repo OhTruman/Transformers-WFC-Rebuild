@@ -652,14 +652,22 @@ void PlayerController::applyToPawn(World& world, float dt) {
         if (usable) w.beginReload();
         wantReload_ = false;
     }
-    // Vehicle form: the vehicle weapon (CharacterData.VehicleWeapons, first active) fires from the vehicle [CONF loadout;
-    // origin = the vehicle actor + 1 m, aim = the camera ray [PROV: vehicle WeaponSocket_Primary bone transform not used]].
+    // Vehicle form: the vehicle weapon (CharacterData.VehicleWeapons, first active) fires from the vehicle's
+    // WeaponSocket_Primary toward the camera aim point [CONF loadout + socket].
     if (pawn_->moveForm() == Form::Vehicle && !pawn_->isTransforming()) {
         if (Weapon* vw = pawn_->vehicleWeapon()) {
             vw->tick(dt);
             if (wantFire_ && vw->canFire()) {
                 vw->onFired();
+                // Origin: the chassis' vehicle WeaponSocket_Primary (bone x socket) when the vehicle mesh is displayed [CONF
+                // socket data]; else the actor + 1 m.
                 core::Vec3 origin = pawn_->actorLocation() + core::Vec3{0, 1.0f, 0};
+                const SocketDef& vs = pawn_->chassis().vehicleWeapon;
+                core::Mat4 bm;
+                if (vs.valid && pawn_->form() == Form::Vehicle && pawn_->boneWorld(vs.bone, bm)) {
+                    core::Mat4 w = bm * vs.local;
+                    origin = core::Vec3{w.m[12], w.m[13], w.m[14]};
+                }
                 core::Vec3 camDir = core::forwardFromYawPitch(viewYaw_, viewPitch_);
                 core::Vec3 camPos = cameraPos();
                 float range = vw->rangeM > 0.0f ? vw->rangeM : 300.0f;
