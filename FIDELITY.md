@@ -17,6 +17,25 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## INTEGRATION MILESTONE 08 — CLASSIFICATION (2026-10-05)
+| Item | Mark | Notes |
+|---|---|---|
+| Selected class / chassis → spawned body, both factions, 8 chassis played through the frontend | CONFIRMED contract / VISUALLY VERIFIED | 10-match soak frames; FFA = Decepticon (TnGame) |
+| Robot ↔ vehicle pairs per chassis | VISUALLY VERIFIED (Runner, Warpath, Soundwave, Ironhide, Brawl) | Gameplay Pass 22 forms |
+| Class loadouts from the generic weapon table (no universal Ion Blaster) | HIGH CONFIDENCE (authored presets + provider restrictions) | grenade bags = the class PCD_MP grenade (Gameplay bb4f209) |
+| HUD current weapon from the equipped weapon | CONFIRMED movie API / HIGH mapping | crosshair type per weapon PROVISIONAL (native UNKNOWN) |
+| Weapon audio follows the equipped weapon | HIGH CONFIDENCE (Systems tables) | integration seam |
+| Team EnergonColor (Autobots / Decepticons / neutral) | CONFIRMED values (class defaults) / HIGH application | drives the energon trim; DM neutral orange is a human check |
+| Ion Blaster tracer (Tracer_Smoke_MAT) | VISUALLY VERIFIED | Systems ba5e9da / 7385d02 |
+| Persistent renderer, bounded resources | HIGH CONFIDENCE | GL census +1 texture per new map, flat on revisits; decoded audio baseline; release_path_check PASS |
+| Per-map colour grades on the player route | CONFIRMED data / applied | MP_Streets_CLUT, MP_OrbitalDebris_CLUT, clut_mp40, desaturation40 per map |
+| Camera inside Streets Ceiling_Arch underside | CONFIRMED ORIGINAL | TraceCamera simple collision only (RE f150a6a) |
+| Escalation maps under versus modes | not applicable | no versus mode actors authored |
+| Lobby 3D background | PARTIAL | mostly empty backdrop since M06 |
+| Non-Ion weapon muzzle / tracer FX | PARTIAL | Systems WeaponFx templates pending |
+
+---
+
 ## INTEGRATION MILESTONE 07 — CLASSIFICATION (2026-10-05)
 | Item | Mark | Notes |
 |---|---|---|

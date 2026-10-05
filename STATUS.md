@@ -3,6 +3,123 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08 (2026-10-05) — one offline multiplayer runtime: selected characters, generic weapons, every map, one renderer — branch `integration/milestone-08`
+
+**Playtest executables (plain launch, no environment variables):**
+- Release: `F:\Transformers Rebuild\Rebuild\build\release\bin\wfc_rebuild.exe`
+- Debug: `F:\Transformers Rebuild\Rebuild\build\bin\wfc_rebuild.exe`
+
+Render data: `F:\Transformers Rebuild\Rebuild\work\render`, regenerated with Rendering 5ef78f6 tools (standard set + 10 MP maps).
+
+### Inputs consumed
+| source | revision | content |
+|---|---|---|
+| agents/frontend | e5b523a | one renderer across matches when the renderer releases match textures (M28 detected); popup closed on travel; look settings → Gameplay; preview body lifetime |
+| agents/gameplay | ddd8a58 (code bb4f209, after 8486aa7 / ee86e95) | Pass 22: car / tank / jet vehicle forms, 52-weapon generic table + loadouts with provider restrictions, every preset ability, 12 killstreaks, melee / grenades / homing, CTF + EXT, non-local participant pawns, per-map KillZ / hazards; class grenade bags |
+| agents/rendering | d889dfe (code 5ef78f6) | M26–M30: match textures released by unloadMapRenderData (persistent renderer), loader reload fix, matc Panner / Rotator vector Time (Debris), robot / vehicle forms on all 10 maps |
+| agents/systems | 2d31bd0 | tracer smoke follows Tracer_Smoke_MAT (Ion Blaster slab fix), per-weapon impact / reload / equip audio, per-chassis vehicle audio |
+| agents/experimental | f06fd88 (gate tool only) | validation only, not merged |
+| AssetTools | eb3335b | 33-chassis roster export (+ ability / grenade / melee clips), 53 weapons, 10 cooked MP maps generic (render index, vertex lightmaps, volume grades, hazard volumes) — read only |
+| RE-Workspace | f150a6a | pass 3 abilities / killstreaks; TraceCamera = simple collision only — read only |
+
+### Conflicts and resolutions
+| merge | files | resolution |
+|---|---|---|
+| rendering 5ef78f6 | FIDELITY.md | both |
+| systems 2d31bd0 | World.cpp (tick) | both: per-frame event clears + hit clock |
+| gameplay 8486aa7 | World.cpp / .h, MapState.cpp, Application.cpp, SkinnedModel.cpp, STATUS.md | integration multi-map loader kept (mapDir(), loading-screen yields; KillZ default = UE3 WorldInfo -262143 UU, not a Streets value) + Gameplay's loadHazards; data-driven movers manifest kept (Streets dome table dropped); mover names per loaded map (instance); reticle / profiler draw kept with Gameplay's projectile / barrier / sentry draws; one mapName_; setPlayerCharacterAudio inside applyChassisToLocalPawn |
+| gameplay ee86e95 / ddd8a58, rendering d889dfe | — | clean |
+
+**Integration code in this milestone:**
+- HUD: NotifyCurrentWeaponChanged gets the equipped weapon (WeaponDef::id), not the Ion Blaster for every weapon. SetWeaponCrosshair is re-sent on weapon change: 1 Shotgun / 2 IonBlaster / 3 Bazooka by symbol name, PROVISIONAL; others Generic.
+- Weapon audio follows the equipped weapon (setPlayerWeaponAudio on every shown-weapon change).
+- Team EnergonColor: TnFactionTeam* / neutral class defaults (CONFIRMED values from the chassis export). Applied to the local pawn at spawn and to every participant pawn (draw owner 100 + match player).
+- Spawn colours use the resolved faction (FFA → Decepticon), not the team.
+- Gameplay Pass 22 harnesses select the direct boot.
+
+### Persistent renderer / resource lifetime (Rendering M28 + Frontend e5b523a, default ON)
+Release, one process, frontend → map → frontend each time. GL census after every unload:
+
+| chain | live textures after unload | privateMB at Streets loads |
+|---|---|---|
+| Streets, Berth, Seed, Streets, Gorge, Streets, Complex, Rust, Debris, Molten, Streets ×2 rounds (22 matches, pre-Gameplay tree) | 43, 44, 44, 44, 45, 45, 46, 47, 48, 49, 49, then 49 for all 11 of round 2 | 2384, 2548, 2588, 2807, 2811, 2839, 2851, 2840 |
+| soak 1 (10 matches + Create a Character, Release) | 68 → 77 (+1 per new map), 77 / 77 / 77 at the Streets revisits | 2874 → 3357 / 3360 |
+| soak 2 (144 Hz, Release) | 56 → 71, 71 / 71 at the revisits | 2419 → 2898 / 2914 |
+| soak Debug | 56 → 70, 70 / 70 at the revisits | 2393 → 3243 / 3274 |
+
+- Textures grow by one per new map (its UI thumbnail, bounded). A second Streets visit adds nothing. Buffers, framebuffers, VAOs and programs stay constant.
+- Decoded audio returns to the 36.5 MB baseline after every match.
+- Process memory plateaus after the high-water map (Rust), not per match.
+- Verdict: bounded (HIGH CONFIDENCE). Rendering's release_path_check on the persistent default: PASS.
+
+### The selected character, end to end (frontend route, frames inspected)
+| match | mode / map | class | spawned body | weapon | faction paint / energon |
+|---|---|---|---|---|---|
+| 1 | TDM Streets | Scout (edited: Runner) | Car (Bumblebee) | Shotgun | picked colours / Autobot red |
+| 2 | TDM Seed | Scientist | Jet4 (Air Raid) | BurstRifle | material default / Autobot |
+| 3 | TDM Berth | Soldier | Tank3 (Warpath) | AssaultRifle | default / Autobot |
+| 4 | DM Gorge | Leader | Truck4 (Soundwave) | IonBlaster | Decepticon side / neutral |
+| 5 | DM Molten | Scout | Car4 (Barricade) | Shotgun | Decepticon slot colours / neutral |
+| 6 | TDM Rust | Leader | Truck3 (Ironhide) | IonBlaster | default / Autobot |
+| 7 | DM Debris | Scientist | Jet (Starscream) | BurstRifle | default / neutral |
+| 8 | TDM Complex | Soldier | Tank3 | AssaultRifle | default / Autobot |
+| 9 | DM Streets | Soldier | Tank2 (Brawl) | AssaultRifle | default / neutral |
+| 10 | TDM Streets (revisit) | Scout | Car | Shotgun | picked colours / Autobot |
+
+- Every match: lobby → loading → Choose Character → spawn → walk / turn / fire / reload / jump / transform / boost → scoreboard → pause / resume → lifecycle kills to the goal → the original "Experience Earned" results → game lobby → leave → party lobby. Back to the title at the end.
+- 0 timeouts, 0 refused spawns, in Release, 144 Hz Release and Debug.
+- Saved characters persist across launches (soak 2 / Debug started from soak 1's file: Runner and its colours).
+- Deathmatch puts the player on the Decepticon side (TnGame FFA = 1), so both factions' bodies were played.
+- Robot ↔ vehicle use each chassis' own pair (vehicle frames of Runner, Warpath, Soundwave, Ironhide, Brawl).
+
+### Automated results (final binaries, after Gameplay ddd8a58)
+| suite | result |
+|---|---|
+| Debug / Release clean build | exit 0 / 0 |
+| Frontend tests | 79 / 0 |
+| Fidelity harness | 191 pass, 0 FAIL |
+| TDM / mode play / CTF+EXT | 43 / 43; 21 / 21; 12 / 12 |
+| Weapons / participants / chassis | 19 / 19; 21 / 21; 13 / 13 |
+| Map suite | 8 versus maps all PASS (Streets, Seed, Berth, Gorge, Complex, Rust, Debris, Molten). Broken Hope / Remnant: non-versus checks pass; the versus-mode checks don't apply (Escalation-only maps) |
+| Transform stress | 0 / 1520 under the map |
+| Chaos | 0 under the map / 0 KillZ / 0 stuck |
+| Camera jitter (60 / 144 / 240 Hz) | 0.0003 / 0.0003 / 0.0002° |
+| Systems audio suite | 609 / 0; movie probe OK |
+| Rendering release_path_check (persistent) | PASS (noDepth 0, glErr 0, both Streets visits identical) |
+| Rendering visual suite vs M07 | 11 / 11; Streets pinned cameras refdiff 0.000 |
+| Experimental presentation gate f06fd88 (Debug) | 36 pass / 2 fail / 3 partial / 1 unknown. The 2 FAILs: party / game lobby backgrounds mostly blank (unchanged since M06; listed below) |
+
+### Weapons
+- Equipped and fired in real frontend matches: Shotgun, Burst Rifle, Assault Rifle, Ion Blaster (robot form). Vehicle weapons fire in vehicle form (Gameplay).
+- Gameplay's harnesses cover all 52 table weapons (19 / 19).
+- The Ion Blaster tracer is fixed: the tracer is thin streaks + a soft smoke puff while moving and jumping (VISUALLY VERIFIED). The grey slab is gone.
+
+### Remaining visible discrepancies
+1. Muzzle flash / tracer effects exist only for the Ion Blaster (Systems WeaponFx). Other weapons fire with impact effects and their own audio but no muzzle / tracer template [PARTIAL].
+2. Party / game lobby 3D background mostly empty (8 draws): the menu panels sit over a flat backdrop [PARTIAL, unchanged since M06].
+3. Deathmatch energon trim is neutral orange-gold (authored TnTeamInfo default) [HIGH, human check against the original FFA].
+4. HUD crosshair per weapon: PROVISIONAL name mapping.
+5. Grenades / melee / repair beam equipped; projectiles drawn as box markers until Rendering draws authored projectile meshes [PROV].
+6. Disguise / DecoyTrap abilities PARTIAL (Gameplay).
+7. The camera can sit under authored geometry without simple collision (Streets ceiling arch). CONFIRMED authentic (TraceCamera = simple collision).
+8. Title / lobby desaturation (UI_FrontEnd PostProcessVolume), HIGH.
+
+### Remaining missing data
+- Escalation maps (Broken Hope, Remnant) have no versus mode actors; Escalation mode is not implemented.
+- MP_KON_Fortress, MP_ORB_Havoc, MP_ESC_Tranquillity are not cooked in this dump.
+- No tactical navigation data (bots are a later milestone).
+- Weapon → crosshair type is native and UNKNOWN.
+
+### Service dependent (not faked)
+Xbox Live / Demonware accounts, matchmaking (Find Match), Friends List, leaderboards, online XP, DLC. Offline: local accounts, private matches.
+
+### Human playtest route
+1. Cold boot → intro movies (skip one) → title → Multiplayer → Create a Character → Scout → Autobot Chassis → Runner → Color 1 (LT/RT palette, stick / arrows / WASD, Accept) → Back ×3.
+2. Private Match → Team Deathmatch → Streets → Start → choose Scout → check that Runner (yellow/your colours) is the body. Move, jump, fire (Shotgun), reload, transform (F), boost, transform back, die, respawn, scoreboard (Back/Select), pause / resume. Play to the end → results → lobby.
+3. Leave → party lobby → Private Match → Deathmatch → Gorge → choose Leader → Soundwave (Decepticon) with the Ion Blaster; check its vehicle form and trim colour.
+4. Then Seed (Scientist / Air Raid), Berth (Soldier / Warpath), Molten (Scout in DM = Barricade), then Streets again: nothing from earlier maps should remain.
+5. Quit to the title; relaunch and confirm Runner is still saved.
+
 ## INTEGRATION MILESTONE 07 (2026-10-05) — the selected character, end to end — branch `integration/milestone-07`
 
 **Playtest executables (plain launch, no environment variables):**
