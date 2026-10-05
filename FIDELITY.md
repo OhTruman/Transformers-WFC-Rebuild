@@ -2017,6 +2017,23 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
 
 ---
 
+## MILESTONE 10 — M06 PLAYTEST VISUAL REGRESSION: ROOT CAUSE, GUARDS (2026-10-04)
+Input: human recording of the integrated M06 executable, showing a black Streets world and malformed menu
+backgrounds. Full evidence: `docs/handoffs/M06_PLAYTEST_VISUAL_REGRESSION.md`.
+
+| Item | Finding | Evidence | Mark |
+|---|---|---|---|
+| Root cause | The Release executable (`build/release/bin`) resolved render data to `build/work/render`, which does not exist. Every map and frontend scene silently fell back to the legacy fixed-function renderer | integration 95edd7b rebuilt locally: human path with data correct; the same path without data reproduces every symptom in the recording | CONFIRMED |
+| Render data | integration's Streets data equals Rendering's (geometry, lightmaps, LVV, decals, movers, FX byte-identical; materials and lighting differ only in absolute vs relative file paths) | byte compare | CONFIRMED |
+| Fix | `renderDataRoot()` searches `work/render` up to 4 levels above the executable; root logged | Release-layout copy finds the data without env; Streets 0 px vs M08 | VISUALLY VERIFIED |
+| Silent fallback | ERROR log, `renderDiagnostics().originalPath`, red screen frame when render data was asked for and missing | no-data run: FAIL with reason, red frame visible | VISUALLY VERIFIED |
+| Scene transitions | title → lobbies → Streets → match end → lobby → Streets: both matches have identical draw / resource counts (2033 draws, 1641 world, 357 BSP, 161 materials, 0 drawn without a program), the same resources as a direct boot | merge preview (95edd7b + this branch), WFC_VISUALCHECK | CONFIRMED: no leak |
+| Inherited GL state | the frontend / GFx host leaves depth test off, blend ONE / ONE-or-ONE_MINUS_SRC_ALPHA, a texture bound. The pipeline sets its own state; image and counts are unchanged | `gl_entry_state` per capture | CONFIRMED harmless (no blind reset added) |
+| Title scene inputs | Frontend camera = authored CameraActor_6585 (−6701.84, −15212.47, 237.44; −0.61° / 72.42° / 0.34°; FOV 45). 88k matinee poses applied; 2 unknown names: a camera (not drawn) and Emitter_13640 (a laser emitter carried by a matinee track: map FX do not follow poses yet) | pose counters | CONFIRMED / emitter-follow PARTIAL |
+| Character preview | not instantiated: no selection → renderer path exists on either side (`setFrontendPreviewCharacter` proposal only). Body data present for all 33 chassis (66 glTF) | grep, roster_package | UNKNOWN look / wiring PARTIAL |
+| Lobby background | authored SpaceDome only (180 vertices), drawn correctly, dark by design. The preview pawn and class cameras are missing | scene-only capture | PARTIAL |
+| Visual regression guard | `WFC_VISUALCHECK`, `tools/render/visual_check.py`, `tools/render/visual_suite.sh` (5 fixed Streets cameras, title scene, human flow) | good build passes all captures; no-data build fails all | CONFIRMED |
+
 ## MILESTONE 09 — FRONTEND SCENES, LOADING, ROSTER READINESS, RE OVERNIGHT HUD (2026-10-04)
 Inputs:
 - RE `OVERNIGHT_2026-10-04_HUD_VEHICLE_FRONTEND_ROSTER_AI.md` (A HUD, D frontend backgrounds, E roster);

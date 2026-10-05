@@ -96,6 +96,33 @@ public:
     // That mapping is profile logic (caller's); the renderer takes the DisplayGamma value. GFx / video / Canvas text
     // batches stay display-referred.
     virtual void setDisplayGamma(float displayGamma) { (void)displayGamma; }
+
+    // Render-path and frame diagnostics (validation: Experimental / Integration must be able to reject a broken scene
+    // without trusting load counts). Counts are from the last completed frame.
+    struct RenderDiagnostics {
+        bool originalPath = false;        // shader path with the map's render data (false = legacy fixed-function)
+        bool legacyRequested = false;     // WFC_LEGACYRENDER (an intended fallback)
+        bool renderDataRequested = false; // a map / frontend scene asked for render data since the last unload
+        std::string renderDataRoot, mapDataDir, lastLoadError;
+        int frame = 0;
+        int draws = 0, worldDraws = 0, bspDraws = 0, dynamicDraws = 0, fxDraws = 0;
+        int opaqueDraws = 0, translucentDraws = 0, lightmappedDraws = 0, culledSubs = 0, noProgramSubs = 0;
+        int distinctMaterials = 0, distinctPrograms = 0;
+        std::vector<std::string> noProgramMaterials;   // drawn submeshes without a compiled original material
+        size_t materials = 0, programs = 0, textures = 0, lightmaps = 0, meshes = 0;
+        float camPos[3] = {0, 0, 0};
+        float camYaw = 0, camPitch = 0, camFovX = 0;   // the frame's camera (WFC_RENDERCAM format: x,y,z,yaw,pitch)
+        float viewProj[16] = {};
+        int viewport[4] = {0, 0, 0, 0};
+        int framebuffer = 0;
+        // scene image metrics (before 2D composition), sampled when WFC_VISUALCHECK is set
+        bool sceneSampled = false;
+        float sceneBlack = 0, sceneFlat = 0, sceneLumaP50 = 0, sceneLumaP95 = 0;
+        int sceneColors = 0;
+        int scenePosesApplied = 0, scenePosesUnknown = 0;   // setFrontendActorTransform: matched / unknown actors
+        std::string glEntryState;         // GL state inherited at beginFrame (WFC_VISUALCHECK): leak audit
+    };
+    virtual RenderDiagnostics renderDiagnostics() const { return RenderDiagnostics{}; }
     // Loading presentation (RE MILESTONE05_PLAYTEST §6: the original loading Bink plays on the rendering thread while the
     // game thread blocks): during loadMapRenderData / loadFrontendScene the renderer calls this between bounded steps
     // (each mesh submesh with its material program and textures, each map prop, each load phase) with no GL objects
@@ -231,7 +258,7 @@ public:
 // Factory (fixed-function GL implementation for the first milestone).
 IRenderer* createGLRenderer();
 
-// Render-data root (WFC_RENDER_DATA, default <exe>/../../work/render): map data in <root>/<map>, UI data in <root>/_ui.
+// Render-data root (WFC_RENDER_DATA, else the first work/render above the executable that holds render data): map data in <root>/<map>, UI data in <root>/_ui.
 std::string wfcRenderDataRoot();
 
 } // namespace render

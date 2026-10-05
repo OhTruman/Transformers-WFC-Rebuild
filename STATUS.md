@@ -1943,6 +1943,25 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 10 (2026-10-04, agents/rendering) — M06 playtest visual regression
+- **Root cause:** the Release executable (`build/release/bin`) found no render data, so every map and menu scene silently
+  used the legacy fixed-function renderer: black Streets, giant grey sphere and rainbow tori behind the menu.
+  - Reproduced exactly from integration 95edd7b.
+  - The integrated code and render data are correct.
+- **Fixed:**
+  - `renderDataRoot()` searches above the executable;
+  - legacy fallback is an ERROR plus a red screen frame;
+  - `IRenderer::renderDiagnostics()`.
+- **Guards:**
+  - `WFC_VISUALCHECK` writes per-capture JSON verdicts and periodic VISUALCHECK log lines;
+  - `tools/render/visual_check.py` and `visual_suite.sh` cover fixed Streets cameras, the title scene and the human flow.
+- **Transition audit:** frontend ↔ match shows no state or resource leak. Both matches in a cycle are identical, and the
+  inherited GL state is harmless.
+- **Open:**
+  - character preview (no API on either side);
+  - map FX following matinee poses (one title emitter);
+  - multi-level scene composition.
+
 ## RENDERING MILESTONE 09 (2026-10-04, agents/rendering) — frontend scenes, loading, roster readiness
 - The menus' live 3D levels render through `loadFrontendScene` / `drawFrontendScene`:
   - the title Cybertron scene is VISUALLY VERIFIED from the authored camera;
