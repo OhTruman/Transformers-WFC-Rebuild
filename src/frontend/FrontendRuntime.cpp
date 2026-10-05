@@ -294,6 +294,33 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     }
     if (fn.rfind("Customize.", 0) == 0) return customize(fn, args);   // TnCharacterScriptBinding
     if (fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
+    if (fn == "Console.GetKeyDescription") {
+        // TnConsoleActionScriptBinding -> TnPlayerInput.GetKeyDescription(Key, Form) [CONFIRMED script]: the key goes
+        // through TnGameViewportClient.MapInputKeyForController (profile SwitchRightThumbstickAndB / alternate scheme),
+        // then KeyDescriptions[Key].Description, replaced by the form's own text when it has one. The Controls pages
+        // are read-only references: the shipped menus have no key rebinding.
+        std::string key = arg(0), form = arg(1);
+        const LocalProfile& pr = flow_.profile();
+        if (pr.getBool("SwitchRightThumbstickAndB")) {
+            if (key == "XboxTypeS_B") key = "XboxTypeS_RightThumbstick";
+            else if (key == "XboxTypeS_RightThumbstick") key = "XboxTypeS_B";
+        }
+        if (pr.getBool("UseAlternateControlScheme")) {
+            if (key == "XboxTypeS_Y") key = "XboxTypeS_LeftThumbstick";
+            else if (key == "XboxTypeS_LeftThumbstick") key = "NoKey";
+            else if (key == "XboxTypeS_DPad_Up") key = "XboxTypeS_Y";
+        }
+        const Catalog::KeyDescription* kd = catalog_.keyDescription(key);
+        if (!kd) return BridgeValue(std::string());
+        std::string d = kd->description;
+        auto over = [&](const std::string& o) { if (!o.empty()) d = o; };
+        if (form == "Robot") over(kd->robot);
+        else if (form == "Car") over(kd->car);
+        if (form == "Truck") over(kd->truck);
+        else if (form == "Tank") over(kd->tank);
+        else if (form == "Plane") over(kd->plane);
+        return BridgeValue(d);
+    }
     return flow_.call(fn, args);
 }
 

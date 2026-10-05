@@ -105,6 +105,7 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
     }
 
     loadProviders(extractedRoot);
+    loadKeyDescriptions(extractedRoot);
 
     // ---- maps ----
     assets::Json mj;
@@ -394,6 +395,41 @@ void Catalog::loadProviders(const std::string& extractedRoot) {
     size_t n = 0;
     for (const auto& [k, v] : providers_) n += v.size();
     LOG_INFO("FRONTEND catalog: %zu authored TnDataProvider objects (%zu kinds)", n, providers_.size());
+}
+
+void Catalog::loadKeyDescriptions(const std::string& extractedRoot) {
+    keyDescriptions_.clear();
+    std::ifstream f(extractedRoot + "/config/Coalesced_ini/TransGame/Config/Xenon/Cooked/Xe-TransInput.ini");
+    std::string line;
+    // KeyDescriptions[i]=(Key="Space") in [TransGame.TnPlayerInput]; TransGame.int [TnPlayerInput] KeyDescriptions[i]=
+    // (Description="Jump", Plane="Ascend").
+    auto field = [](const std::string& s, const std::string& name) {
+        size_t p = s.find(name + "=\"");
+        while (p != std::string::npos && p > 0 && std::isalnum((unsigned char)s[p - 1])) p = s.find(name + "=\"", p + 1);
+        if (p == std::string::npos) return std::string();
+        size_t b = p + name.size() + 2, e = s.find('"', b);
+        return e == std::string::npos ? std::string() : s.substr(b, e - b);
+    };
+    while (std::getline(f, line)) {
+        if (!line.empty() && line.back() == '\r') line.pop_back();
+        if (line.rfind("KeyDescriptions[", 0) != 0) continue;
+        size_t close = line.find(']');
+        if (close == std::string::npos) continue;
+        std::string idx = line.substr(0, close + 1);
+        KeyDescription kd;
+        kd.key = field(line, "Key");
+        std::string loc = localize("TransGame", "TnPlayerInput", idx);
+        kd.description = field(loc, "Description");
+        kd.robot = field(loc, "Robot"); kd.car = field(loc, "Car"); kd.truck = field(loc, "Truck");
+        kd.tank = field(loc, "Tank"); kd.plane = field(loc, "Plane");
+        keyDescriptions_.push_back(kd);
+    }
+    LOG_INFO("FRONTEND catalog: %zu key descriptions", keyDescriptions_.size());
+}
+
+const Catalog::KeyDescription* Catalog::keyDescription(const std::string& key) const {
+    for (const KeyDescription& k : keyDescriptions_) if (k.key == key) return &k;
+    return nullptr;
 }
 
 std::string Catalog::localize(const std::string& file, const std::string& section, const std::string& key) const {
