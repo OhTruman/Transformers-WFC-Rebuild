@@ -3,6 +3,99 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 07 (2026-10-05) — the selected character, end to end — branch `integration/milestone-07`
+
+**Playtest executables (plain launch, no environment variables):**
+- Release: `F:\Transformers Rebuild\Rebuild\build\release\bin\wfc_rebuild.exe`
+- Debug: `F:\Transformers Rebuild\Rebuild\build\bin\wfc_rebuild.exe`
+
+Render data: `F:\Transformers Rebuild\Rebuild\work\render` (regenerated with the final Rendering tools for the
+standard set plus all 10 MP maps).
+
+### Lane heads merged (newest stable pushed heads; Experimental validation only)
+| lane | head | content in this milestone |
+|---|---|---|
+| agents/frontend | 4982493 | 4b2fae1 / df79c6f preview pawn visibility, grounding, GFx collector crash fix; 79b47cd preview colours (real palettes, random slot colours, Change Form, Cust_Idle); 8f4c729 / 89eddba selection contract + full CharacterSelection; 1af7e74 colour picker input (RegisterLeftStickCallback); 2c2f5cc preview reset on leaving the room, customize soak; 4982493 per-movie GFx collection, preview body LRU |
+| agents/gameplay | 1216e80 | Pass 22a: the selected chassis spawns from the AssetTools per-chassis export (27 MP chassis), no Optimus substitution; spawn refused + logged if a body cannot be built; TnSpecialty health / speed |
+| agents/rendering | 833daa3 | M15–M25: preview pose (Cust_Idle), sceneGroundHeight, lightmap records + FColor channel order, TextureSetSample, vertex lightmaps on every map, scene texture, PostProcessVolume grades + CLUT on the player route, releasePreviewBody |
+| agents/systems | e37c489 | M08: every MP map's Kismet audio graph, character / weapon audio profiles, objective / round messages, movie volume |
+| agents/experimental | 734bde4 | not merged (presentation gate used for validation) |
+
+**Recorded for the next integration (after the freeze):**
+- agents/gameplay 44cb835: vehicle forms, 52-weapon loadouts, per-chassis hulls, CTF / EXT, 5-argument look settings;
+- agents/frontend 92dd833 / 3c2febd / 3c0c1f9:
+  - popup closed on travel;
+  - look settings → Gameplay;
+  - WFC_PERSISTENT_RENDERER, inert by default. Keep the recreate default until match uploads are released.
+- agents/rendering after 833daa3: matc Panner float3 fix (the Debris compile error).
+
+### Conflicts and resolutions
+| merge | files | resolution |
+|---|---|---|
+| rendering c22e356 / 309facc / a76540e / 833daa3 | FIDELITY.md | both kept |
+| systems 5bf5731 | gen_level_audio.py, audio_native_suite.cpp, LevelAudio.inc | Systems' version (it now enumerates every MP map itself, superseding the M06 integration list); the regenerated LevelAudio.inc is byte-identical to Systems' |
+| gameplay 1216e80 | World.cpp, Application.cpp, STATUS.md | Gameplay's per-chassis body (applyChassisToLocalPawn, member texture cache) on the integration multi-map loader (Maps/<mapName_>, loading-screen yields kept, resolveTexture yields); WFC_MATCH keeps the loaded map and takes WFC_CHASSIS |
+| frontend 89eddba | Application_Frontend.cpp | Frontend's fillFullSelection is the one selection mapping (the integration forwarding is dropped) |
+| systems e37c489 | World.cpp, FIDELITY.md, STATUS.md | integration map-audio load + Systems' validation hooks; both includes |
+
+**Integration seams (code written here):**
+- On the local spawn, the selection's colours for the spawned faction go to the renderer (draw owner 0, TnCharacterApplier Cust_Color_A / Cust_COLOR_B; black stays the material default). Trace: `match.pawnBody`.
+- `World::applyChassisToLocalPawn` selects Systems' character audio profile for the spawned chassis (log `character audio: Car (CHR_BUMBLEBEE / Veh_Bumblebee_SoundSet)`).
+
+### Create a Character → match, end to end (cold boot, real menus, frames)
+| run | path | result |
+|---|---|---|
+| e2e1 (Release, 60 Hz, intro) | intro → title → Multiplayer → Create a Character → Scout → Autobot chassis Speedster → **Runner** (Car, Bumblebee) → colour picker (RT palette, cursor, Accept) → back ×3 (saved) → Private Match TDM **Streets** → choose Scout → spawn → move / fire / transform → scoreboard → pause / resume → Quit → confirmation → party lobby → TDM **Seed** → same → party lobby → title | selection `chassis=Car body=available`; spawned body `Car` with colours 26,88,1 / 139,239,100 on both maps; audio CHR_BUMBLEBEE; 841 / 841 frame checks PASS |
+| e2e2 (Release, **144 Hz**, boost) | starts from e2e1's saved characters (**persistence: Scout still Car**) → Soldier → Defender (Tank3, Warpath; the next Autobot soldier is campaign-locked, as in the original) → colour → TDM **Berth** → **Gorge** → title | spawned `Tank3` with the picked colours on both maps; audio CHR_WARPATH; 804 / 804 PASS |
+| map chain ×2 (Release) | Streets, Seed, Berth, Gorge, Complex, Rust, Orbital Debris, Molten, Streets, then the same eight again | 17 / 17 matches with the selected body (default Scout = Car2, Sideswipe); 0 spawns refused; 3334 / 3334 PASS |
+
+Preview vs match: the same roster mesh, the same chassis id and the same colours (preview: Frontend's sRGB→linear;
+match: the same conversion). Verified side by side for Runner (green) and Warpath (red / yellow).
+
+### Memory (private MB at match load / after unload; per-match renderer reset is the default)
+| build | sequence | loaded | after unload |
+|---|---|---|---|
+| Release ×2 cycles | Streets, Seed, Berth, Gorge, Complex, Rust, Debris, Molten, Streets, … , Streets | cycle 1: 2379, 2910, 2389, 2623, 2697, 3232, 2786, 2976, 2774; cycle 2: 3132, 2602, 2751, 2805, 3220, 2783, 2927, 2804 | Streets 2227 → 2678 → 2685; Rust 3044 → 3073 |
+| Debug | Streets, Seed, Streets, Seed, Streets | 2417, 3022, 2608, 2995, 2606 | 2325, 2813, 2516, 2814, 2546 |
+
+- **Pattern:** a high-water rise during the first cycle through new maps (peak at Rust), then a plateau. Second-cycle loads are within ±50 MB of the first-cycle values (Rust 3232 → 3220, Debris 2786 → 2783, Molten 2976 → 2927; Streets 2774 → 2804).
+- **Verdict:** no accumulating map leak (HIGH CONFIDENCE).
+- **Cross-check:** Frontend's census (3c0c1f9) agrees. With the per-match renderer reset, GL textures stay bounded (+1 per new map, the map thumbnail). A persistent renderer would grow by ~60–100 textures per match until match uploads are released (next integration).
+
+### Automated results (final binaries)
+| suite | result |
+|---|---|
+| Debug / Release clean build | exit 0 / exit 0 |
+| Frontend tests | 79 / 0 (Debug and Release) |
+| Fidelity harness | 191 pass, 0 FAIL, 22 known (Debug and Release) |
+| Gameplay CHASSISTEST | 13 / 13 (Debug and Release) |
+| TDM / mode play | 43 / 43; 21 / 21 |
+| Transform stress | 0 / 1520 under the map |
+| Chaos | 0 under the map / 0 KillZ / 0 stuck |
+| Camera jitter (60 / 144 / 240 Hz) | 0.0003 / 0.0003 / 0.0002° |
+| Systems audio suite | 599 / 0 (the suite now needs CharacterAudio.cpp) |
+| Movie audio probe | OK |
+| Plain launches | original path; withheld render data → error + VISUALCHECK FAIL |
+| Rendering release_path_check | PASS: Streets / Berth / Streets, noDepth 0, glErr 0, both Streets visits identical (1639 world / 357 BSP) |
+| Experimental presentation gate (734bde4, Debug) | 22 pass / 6 fail / 2 partial / 1 unknown (was 20 / 7 / 2 / 1 / 1 skip at 06c). charselect.body_resolves now PASS; route vs direct now runs and passes. The 6 FAILs are retired stale expectations (Quit → main menu; keyboard rebinding; Back from Create a Character → main menu ×2; preview "model loaded" log pattern — frames show the posed preview bodies) |
+| Rendering visual suite vs the M06c reference | 7 / 11. The 4 differences are intended: M21 FColor order + M25 grade (Streets refdiff 0.04–0.21), Sideswipe instead of Optimus in the route frames, title grade. Draw counts unchanged |
+
+### Remaining visible discrepancies (top)
+1. Every chassis still holds the Ion Blaster: per-chassis loadouts, vehicle forms (car roll, tank, jet flight) and abilities are in Gameplay 44cb835, next integration.
+2. Ion Blaster tracer smoke draws as hard-edged grey slabs. Systems' WeaponFx ribbon lacks the original Tracer_Smoke_MAT width mask; reported to Systems.
+3. Title / customization scenes are more desaturated since M25: UI_FrontEnd PostProcessVolume desat 0.5 / bloom 0.2. HIGH, not CONFIRMED; human check against an original title capture.
+4. Orbital Debris: one material fails to compile (Megatron_com_Mat|LM); fixed on agents/rendering after the freeze.
+5. Energon (team) colour on the match pawn stays the material default [PARTIAL]. Decepticon-faction bodies are exercised by the chassis test and the preview, not by a frontend match: offline private matches put the player on Autobots.
+6. Fullscreen display-mode change, and the multi-lane GPU contention: a display-driver reset (event 4101) hung test runs while four lanes' GL processes ran; the game does not recover from GL context loss (0x0507).
+
+### Human playtest checklist
+- Create a Character: each class, Autobot and Decepticon chassis, Change Form, both colours with stick / arrows / WASD + LT / RT, save, leave and reopen.
+- Private Match TDM Streets: the spawned body matches the preview (robot and vehicle form, colours); move, fire, transform, boost, transform back; scoreboard; pause / resume; Quit → confirmation → party lobby.
+- A second map (Seed / Berth / Gorge): the selected body again; no leftovers from the previous map.
+- Title screen look vs the original (desaturation, bloom).
+- HUD at 1280×720 and fullscreen; intro movies and their audio; account name in lobby / kill feed.
+- High refresh (144 / 240 Hz monitor): robot and vehicle camera smoothness.
+
 ## INTEGRATION MILESTONE 06c (2026-10-05) — stabilization baseline: frontend → world rendering — branch `integration/milestone-06c`
 
 **Playtest executables (plain launch, no environment variables):**

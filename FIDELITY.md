@@ -17,6 +17,24 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## INTEGRATION MILESTONE 07 — CLASSIFICATION (2026-10-05)
+| Item | Mark | Notes |
+|---|---|---|
+| Selected chassis spawned (frontend selection → Gameplay body → drawn) | CONFIRMED contract (TnPlayerCharacterData / ResolveReplicatedCharacterData) / PARTIAL content | 27 MP chassis load from the AssetTools export; no substitute body. A body that cannot be built refuses the spawn and logs it [RECONSTRUCTION: loud failure; the original leaves a body-less pawn] |
+| Custom character ChassisTypes per faction → spawned body | CONFIRMED (script) | Frontend fillFullSelection → Gameplay resolveChassis(chassisByFaction[team]) |
+| Preview vs match body / colours | HIGH CONFIDENCE | the same roster mesh and chassis id; the same sRGB → linear colour conversion; verified by frames |
+| Character colours on the match pawn (Cust_Color_A / Cust_COLOR_B) | CONFIRMED parameters (TnCharacterApplier) / PARTIAL | energon (team) colour not applied yet |
+| Character audio profile follows the body | HIGH CONFIDENCE (Systems profiles from authored SoundEventSets) | integration seam in applyChassisToLocalPawn |
+| Colour picker input (left-stick callback; LT / RT palettes; no mouse on swatches on PC) | CONFIRMED (movie script) | Frontend 1af7e74 |
+| Create a Character persistence (wfc_characters.ini) | PC ADAPTATION | the original writes the profile customization file |
+| Locked chassis skipped in the chassis cycle | CONFIRMED (LockedChassis flags) | e.g. Scattershot needs the campaign |
+| Title / customization desaturation | HIGH (authored PostProcessVolume_15709 desat 0.5 / bloom 0.2), not CONFIRMED | human check against an original capture |
+| Map memory across 8 maps × 2 | HIGH CONFIDENCE: no accumulating leak | high water at Rust, then a plateau; per-match renderer reset stays the default |
+| Tracer smoke slabs | PARTIAL (Systems WeaponFx) | the original material's width mask is missing |
+| Experimental presentation-gate expectations: Quit → main menu; keyboard rebinding; Back to main menu from Create a Character; "Optimus for a non-Optimus selection" | STALE (retired here) | the original confirms Quit through the lobby; the PC menus have no rebinding; Back from Create a Character returns to the party lobby; the body check now passes on the real body |
+
+---
+
 ## INTEGRATION MILESTONE 06c — CLASSIFICATION (2026-10-05)
 | Item | Mark | Notes |
 |---|---|---|
