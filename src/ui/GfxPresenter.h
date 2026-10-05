@@ -52,6 +52,16 @@ private:
     // TnUIController message box: MessageBoxUI (UI_GFxShared_p.MessagePrompt_GFX_1) with focus while the flow's popup
     // is open; _global.DisplayMessage is invoked whenever the popup changes.
     void syncPopup(frontend::GameFlow& flow);
+    // Hud_GFX's native GFx extensions (_global.gfxExtensions): MovieClip.interp -> HmObjectInterpolator.addInterp and
+    // setColor -> HmActionScript.setColor, served here with the semantics of the menus' own AS interpolator.
+    gfx::avm1::Value hudInterpAdd(GfxMovie& m, gfx::avm1::Args& a);
+    void hudInterpUpdate(GfxMovie& m);
+    static void setColorHex(gfx::avm1::VM& vm, const gfx::avm1::Value& target, const gfx::avm1::Value& color);
+public:
+    // Navigation harness: the movies, the focus target and its input owner (_global.currentMenu), modal state and
+    // resource counters, as key=value pairs.
+    std::vector<std::pair<std::string, std::string>> navReport();
+private:
     uint64_t popupSerial_ = 0;
     void deliverKeys(const platform::InputFrame& in);
 

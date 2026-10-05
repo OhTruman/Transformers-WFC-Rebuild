@@ -4,6 +4,7 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <cmath>
 #include <cstring>
 
@@ -146,6 +147,16 @@ void GfxRendererGL::ownedNames(GlCensus::Owned& o) const {
     for (unsigned pr : {prog_, compProg_}) if (pr) o.programs.insert(pr);
 }
 
+gfx::Matrix GfxRendererGL::movieMatrix(const gfx::Player& p, int width, int height) {
+    if (!p.noScale()) return stageMatrix(p.stageWidth, p.stageHeight, width, height);
+    // noScale: 1:1 pixels, the authored stage centred in the viewport (Stage.align "").
+    gfx::Matrix m;
+    m.a = m.d = 1.0f / 20.0f;
+    m.tx = (width - p.stageWidth) * 0.5f;
+    m.ty = (height - p.stageHeight) * 0.5f;
+    return m;
+}
+
 gfx::Matrix GfxRendererGL::stageMatrix(float stageW, float stageH, int width, int height) {
     float s = std::min(width / stageW, height / stageH);
     gfx::Matrix m;
@@ -155,9 +166,90 @@ gfx::Matrix GfxRendererGL::stageMatrix(float stageW, float stageH, int width, in
     return m;
 }
 
+#ifndef GL_CURRENT_PROGRAM
+#define GL_CURRENT_PROGRAM 0x8B8D
+#endif
+#ifndef GL_VERTEX_ARRAY_BINDING
+#define GL_VERTEX_ARRAY_BINDING 0x85B5
+#endif
+#ifndef GL_ARRAY_BUFFER_BINDING
+#define GL_ARRAY_BUFFER_BINDING 0x8894
+#endif
+#ifndef GL_ACTIVE_TEXTURE
+#define GL_ACTIVE_TEXTURE 0x84E0
+#endif
+#ifndef GL_DRAW_FRAMEBUFFER_BINDING
+#define GL_DRAW_FRAMEBUFFER_BINDING 0x8CA6
+#endif
+#ifndef GL_READ_FRAMEBUFFER_BINDING
+#define GL_READ_FRAMEBUFFER_BINDING 0x8CAA
+#endif
+#ifndef GL_BLEND_SRC_RGB
+#define GL_BLEND_SRC_RGB 0x80C9
+#define GL_BLEND_DST_RGB 0x80C8
+#define GL_BLEND_SRC_ALPHA 0x80CB
+#define GL_BLEND_DST_ALPHA 0x80CA
+#endif
+#ifndef GL_BLEND_EQUATION_RGB
+#define GL_BLEND_EQUATION_RGB 0x8009
+#define GL_BLEND_EQUATION_ALPHA 0x883D
+#endif
+
+void GfxRendererGL::saveGlState() {
+    SavedGl& g = saved_;
+    g.depthTest = glIsEnabled(GL_DEPTH_TEST); g.cullFace = glIsEnabled(GL_CULL_FACE); g.scissor = glIsEnabled(GL_SCISSOR_TEST);
+    g.alphaTest = glIsEnabled(GL_ALPHA_TEST); g.lighting = glIsEnabled(GL_LIGHTING); g.fog = glIsEnabled(GL_FOG);
+    g.stencil = glIsEnabled(GL_STENCIL_TEST); g.blend = glIsEnabled(GL_BLEND);
+    GLboolean dm = GL_TRUE;
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &dm);
+    g.depthMask = dm;
+    GLboolean cm[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
+    glGetBooleanv(GL_COLOR_WRITEMASK, cm);
+    for (int i = 0; i < 4; ++i) g.colorMask[i] = cm[i];
+    glGetIntegerv(GL_STENCIL_WRITEMASK, &g.stencilWriteMask);
+    glGetIntegerv(GL_BLEND_SRC_RGB, &g.blendSrcRgb); glGetIntegerv(GL_BLEND_DST_RGB, &g.blendDstRgb);
+    glGetIntegerv(GL_BLEND_SRC_ALPHA, &g.blendSrcA); glGetIntegerv(GL_BLEND_DST_ALPHA, &g.blendDstA);
+    glGetIntegerv(GL_BLEND_EQUATION_RGB, &g.blendEqRgb); glGetIntegerv(GL_BLEND_EQUATION_ALPHA, &g.blendEqA);
+    glGetIntegerv(GL_VIEWPORT, g.viewport);
+    glGetFloatv(GL_COLOR_CLEAR_VALUE, g.clearColor);
+    glGetIntegerv(GL_STENCIL_CLEAR_VALUE, &g.clearStencil);
+    glGetIntegerv(GL_CURRENT_PROGRAM, &g.program); glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &g.vao);
+    glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &g.arrayBuffer); glGetIntegerv(GL_ACTIVE_TEXTURE, &g.activeTexture);
+    glx::ActiveTexture(GL_TEXTURE0);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &g.texture2D);
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &g.drawFbo); glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &g.readFbo);
+}
+
+void GfxRendererGL::restoreGlState() {
+    static const bool off = std::getenv("WFC_GFX_NO_GLRESTORE") != nullptr;   // diagnostics: the pre-fix behaviour
+    if (off) return;
+    const SavedGl& g = saved_;
+    auto en = [](GLenum cap, bool on) { if (on) glEnable(cap); else glDisable(cap); };
+    en(GL_DEPTH_TEST, g.depthTest); en(GL_CULL_FACE, g.cullFace); en(GL_SCISSOR_TEST, g.scissor); en(GL_ALPHA_TEST, g.alphaTest);
+    en(GL_LIGHTING, g.lighting); en(GL_FOG, g.fog); en(GL_STENCIL_TEST, g.stencil); en(GL_BLEND, g.blend);
+    glDepthMask(g.depthMask ? GL_TRUE : GL_FALSE);
+    glColorMask(g.colorMask[0], g.colorMask[1], g.colorMask[2], g.colorMask[3]);
+    glStencilMask((GLuint)g.stencilWriteMask);
+    glx::BlendFuncSeparate((GLenum)g.blendSrcRgb, (GLenum)g.blendDstRgb, (GLenum)g.blendSrcA, (GLenum)g.blendDstA);
+    if (glBlendEq) glBlendEq((GLenum)g.blendEqRgb);
+    curBlend_ = -1;
+    glViewport(g.viewport[0], g.viewport[1], g.viewport[2], g.viewport[3]);
+    glClearColor(g.clearColor[0], g.clearColor[1], g.clearColor[2], g.clearColor[3]);
+    glClearStencil(g.clearStencil);
+    glx::BindFramebuffer(GL_DRAW_FRAMEBUFFER, (GLuint)g.drawFbo);
+    glx::BindFramebuffer(GL_READ_FRAMEBUFFER, (GLuint)g.readFbo);
+    glx::UseProgram((GLuint)g.program);
+    glx::BindVertexArray((GLuint)g.vao);
+    glx::BindBuffer(GL_ARRAY_BUFFER, (GLuint)g.arrayBuffer);
+    glx::ActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, (GLuint)g.texture2D);
+    glx::ActiveTexture((GLenum)g.activeTexture);
+}
+
 void GfxRendererGL::begin(int width, int height) {
     w_ = width; h_ = height;
     if (!ok_) return;
+    saveGlState();
     if (width != fbw_ || height != fbh_) {
         if (msFbo_) { glx::DeleteFramebuffers(1, &msFbo_); glx::DeleteRenderbuffers(1, &msColor_); glx::DeleteRenderbuffers(1, &msDepth_); }
         if (resFbo_) { glx::DeleteFramebuffers(1, &resFbo_); glDeleteTextures(1, &resTex_); }
@@ -290,6 +382,7 @@ void GfxRendererGL::end() {
     glx::DisableVertexAttribArray(0);
     glx::BindBuffer(GL_ARRAY_BUFFER, 0);
     glBindTexture(GL_TEXTURE_2D, 0);
+    restoreGlState();
 }
 
 const GfxRendererGL::Cached& GfxRendererGL::cache(const gfx::ShapeDef* s, bool glyph) {
@@ -474,7 +567,12 @@ void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial
         glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, w, h, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
         videoSerial_ = serial;
     }
-    // Uniform scale, centred (the movies are 16:9 like the GFx stages).
+    // Uniform scale, centred: the shipped Binks are 1280x720 (16:9); a viewport of another aspect gets black bars,
+    // as the engine's full-screen movie player letterboxes over black [HIGH] - never the live scene around the movie.
+    applyBlend(0);
+    glDisable(GL_BLEND);
+    fullscreen();
+    glEnable(GL_BLEND);
     float s = std::min((float)w_ / w, (float)h_ / h);
     float dw = w * s, dh = h * s, ox = (w_ - dw) * 0.5f, oy = (h_ - dh) * 0.5f;
     gfx::FillStyle fs;

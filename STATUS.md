@@ -452,6 +452,88 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 6. Gorge is shown disabled.
 7. A long session: private memory should plateau (about 2.8 GB in the lobby, 3.5 GB in a match).
 
+## FRONTEND PASS 5 (2026-10-04, branch `agents/frontend`): world loss, viewport, HUD presentation
+**Frontend-launched world loss: fixed (a96f841).** First bad commit b1fce97 (Experimental bisect). The UI pass left
+`GL_DEPTH_TEST` / `GL_CULL_FACE` disabled; from b1fce97 it ran every match frame (the HUD movie), so Streets drew
+without depth testing. The UI pass now saves and restores the GL state it changes; the HUD is unchanged.
+
+**Other playtest findings:**
+- **Boot movies uncovered at the sides:** in a viewport other than 16:9 (e.g. a maximised window) the 16:9 Binks
+  showed the live title scene in the bars. Full-screen movies now letterbox over black, and the scene is not drawn
+  while one plays.
+- **First boot item frozen:** the startup movie closed before the title scene's synchronous load, so its last frame
+  stood still for the load. It now stays up full screen through that load (presented by load yields) until the logos
+  start, and a newly opened movie starts at frame 0 (Activision began 0.25 s in).
+- **HUD ammo / health too large:** Hud_GFX's native interp / setColor were unhandled (start states, white); also
+  noScale stage handling. Fixed; the HUD is the authored one at 1280×720, 1920×1080, fullscreen 2560×1440, after a
+  runtime resolution change and after a restart.
+- **TDM lobby showed "Player":** a created account was not signed in. The original result box now shows; a new account
+  is signed in when none is (PC ADAPTATION). The game lobby lists the typed name.
+
+**Validation (Debug, frontend route):**
+- Reproduction matrix: A cold boot → Multiplayer → Private Match → TDM → Streets; B Streets → quit → party lobby →
+  Streets; C Streets → Seed of Corruption → Streets; D character selection → gameplay with the HUD: complete world and
+  active HUD in every match; pause / resume clears; quit returns to the party lobby, then the title.
+- Same exe with `WFC_GFX_NO_GLRESTORE=1`: the world loss reproduces (sky and smoke through the walls).
+- Experimental presentation gate (734bde4 tooling, this build): every world check PASSES (route vs direct boot detail
+  ratio 0.76, was 0.28; spawn / moving frames; Streets reference cameras unchanged; pause cleared). The other FAILs are
+  gate expectations that predate pass 4's CONFIRMED routing (Quit / Back show the confirmation box and return a match
+  to the party lobby; the Controls page has no rebinding), automation typing (fixed: key events now type into a
+  focused field), the party-lobby scene without render data in this tree, and the selected body (AssetTools /
+  Gameplay).
+- Navigation stress harness: 3 menu cycles + 2 private matches, 87 checks PASS (no soft-lock, menus restored, AS heap
+  2265 / 76 nodes / 48 shapes identical per cycle, memory flat ~1.5 GB).
+- `wfc_frontend_tests` 69 / 0.
+
+**Handoffs:**
+- Integration: the GL state contract (FIDELITY); merge a96f841 first (world fix, self-contained).
+- Rendering: memory after Seed then Streets is ~460 MB higher than the first Streets visit (world / renderer
+  retention).
+- Experimental: update the gate's route model (quit box → party lobby; Back from the party lobby → box → title) and
+  drop the rebinding expectation (not in the shipped menus).
+
+## FRONTEND PASS 4 (2026-10-04, branch `agents/frontend`): human-playtest correctness pass
+Based on integration/milestone-06 (fast-forwarded with the user's approval). Details: `docs/FRONTEND.md` §13-§17.
+
+**Playtest findings → cause → fix:**
+- **Cinematic not replayed after restart:** the rebuild saved HasWatchedIntroMovie; the original's flag is per process
+  (native global, never saved). Session flag now; intro chain on every launch.
+- **Malformed menu background:** with no UI render data, Frontend's interim path drew the raw world.glb (opaque white sky
+  dome, rainbow rings). It now draws nothing and names `build_render_data.ps1 -Map UI_FrontEnd`; with the data,
+  Rendering's scene (nebula, ring, galaxy, ships) is correct.
+- **Extras Movies / Credits soft-lock:** Game.PlayMovie was unhandled, so MovieEnded never gave input back. Full-screen
+  play with Systems audio, MovieEnded on end / skip / missing file; the movie draws opaque over the menu.
+- **Accounts / renaming typing:** the runtime had no editable text fields. Input TextFields added (typing, caret,
+  Backspace / Delete / arrows / Home / End, Enter, Escape, click focus); local accounts (PC ADAPTATION).
+- **Keyboard configuration:** the original is a read-only reference card; it now shows the original descriptions per
+  form. No rebinding (not in the shipped menus).
+- **Scrolling TDM / lobby text corrupted:** TextField `_width` was stale until drawn, so the ticker overlapped messages.
+- **Create a Character:** empty Weapon Slot 2 and "undefined" weapons (chassis faction filter), colours, rename, reset,
+  saving - now as scripted; preview pawns drawn through Rendering's scene-draw hook (detected; merge preview verified).
+- **Menu over gameplay / Choose Character:** match start closed Choose Character with no character (InGameLobby flag);
+  now it stays until chosen and InGame comes with the spawn; EndStates close screens / hide the HUD; Pause -> Resume no
+  longer leaves the pause movie drawn and focused over live gameplay (found by the stress harness).
+- **Quit returned too far:** QuitGame(0) returns a private match or game lobby to the party lobby (was the front end);
+  confirmations as scripted (Quit Game?, Exit Game?).
+
+**Validation:**
+- `wfc_frontend_tests` 69 / 0 (new: quit confirmation / routing, match-start ownership, pause hides the HUD).
+- Live checks with screenshots: two cold boots with an old profile (intro plays both times); Extras Movies / Credits
+  (play, skip, menu input back, locks); Accounts (type, edit keys, Enter, Escape, click focus, sign in → lobby name);
+  Create a Character (Weapon Slot 2 list, rename + restart, chassis screen, reset); ticker over 29 s; game lobby,
+  party lobby and Exit Game boxes and their destinations; Choose Character before / after the match start.
+- Navigation stress harness (`tools/frontend/nav_stress.sh`): 5 menu cycles + 2 private matches, 133 checks: no
+  soft-lock, the main menu fully restored every cycle, no orphaned modal, AS heap 2263 / 76 display nodes / 48 cached
+  shapes identical every cycle, memory 2,147 -> 2,105 MB. It found one real bug: Pause -> Resume left the pause movie
+  drawn and focused over gameplay that already had input (fixed; rerun 64 checks PASS). One earlier run stopped at a
+  Windows display-driver reset (event 4101) shared with two other sessions' game instances; not a frontend fault.
+- Preview pawns verified in a merge preview with agents/rendering 504730f (original materials; bind pose, camera crop).
+
+**Handoffs:** Gameplay (selected body: explicit Optimus fallback until ROBODEF / VEHDEF exports, agents/gameplay 1a4e36b;
+look settings and kill-feed damage type to wire after that merge; posed preview bodies), Rendering (UI render data
+`-Map Standard`), Systems (volume categories), AssetTools (preset colours, ROBODEF / VEHDEF).
+Next frontend item: the per-chassis customization camera (SeqVar_TnCustomizationCameraId).
+
 ## FRONTEND PASS 3 (2026-10-04, branch `agents/frontend`): PC build presentation, live scenes, HUD, settings, selection
 Details, screen classification and handoffs: `docs/FRONTEND.md`. Based on integration/milestone-05 (fast-forwarded with
 the user's approval).

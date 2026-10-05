@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <functional>
+#include <map>
 
 #include "frontend/FrontendScene.h"
 #include "render/Renderer.h"
@@ -36,6 +37,13 @@ struct HasActorTransform<R, std::void_t<decltype(std::declval<R&>().setFrontendA
 template <class R, class = void> struct HasDisplayGamma : std::false_type {};
 template <class R>
 struct HasDisplayGamma<R, std::void_t<decltype(std::declval<R&>().setDisplayGamma(1.0f))>> : std::true_type {};
+// Preview pawns (agents/rendering: setFrontendSceneDraw + actorMatrix + loadContentMesh).
+template <class R, class = void> struct HasPreviewDraw : std::false_type {};
+template <class R>
+struct HasPreviewDraw<R, std::void_t<decltype(std::declval<R&>().setFrontendSceneDraw(std::declval<std::function<void(R&)>>())),
+                                     decltype(std::declval<const R&>().actorMatrix(std::declval<const Vec3&>(), std::declval<const Vec3&>())),
+                                     decltype(std::declval<R&>().loadContentMesh(std::declval<const std::string&>(), std::declval<render::MeshData&>()))>>
+    : std::true_type {};
 template <class R, class = void> struct HasLoadYield : std::false_type {};
 template <class R>
 struct HasLoadYield<R, std::void_t<decltype(std::declval<R&>().setLoadYield(std::declval<std::function<void()>>()))>> : std::true_type {};
@@ -43,7 +51,7 @@ struct HasLoadYield<R, std::void_t<decltype(std::declval<R&>().setLoadYield(std:
 class FrontendSceneGL final : public frontend::IFrontendSceneRenderer {
 public:
     explicit FrontendSceneGL(render::IRenderer* r) : r_(r) {}
-    void setRenderer(render::IRenderer* r) { r_ = r; family_.clear(); mesh_ = render::kInvalidMesh; censusActive_ = false; }
+    void setRenderer(render::IRenderer* r) { r_ = r; family_.clear(); mesh_ = render::kInvalidMesh; censusActive_ = false; previewMeshes_.clear(); }
     bool load(const std::vector<std::string>& levels) override;
     void draw(const frontend::SceneView& view, int width, int height) override;
     void unload() override {}   // the family stays loaded while UI levels travel within it; released by release()
@@ -52,6 +60,12 @@ public:
     // Before a match loads: the scene's render data and GL objects go (keep = the UI renderer's own objects).
     std::string release(const ui::GlCensus::Owned& keep);
     static std::string familyFor(const std::string& uiLevel);
+    // Create a Character preview (TnCharacterScriptBinding.UpdatePreviewCharacter): one body per PreviewGuy slot, drawn
+    // inside the scene by the renderer (setDrawOwner(1 + slot), linear colours, the content glTF in bind pose until
+    // Gameplay supplies posed bodies). Empty = none.
+    struct PreviewSlot { std::string gltf; float pos[3] = {0, 0, 0}; float yawDeg = 0; float primary[3] = {0, 0, 0}, secondary[3] = {0, 0, 0}; };
+    void setPreview(std::vector<PreviewSlot> slots) { preview_ = std::move(slots); }
+    void drawPreview(render::IRenderer& r);
 
 private:
     render::IRenderer* r_;
@@ -60,6 +74,8 @@ private:
     ui::GlCensus census_;
     bool censusActive_ = false;
     bool native_ = false;                         // Rendering's loadFrontendScene owns the family
+    std::vector<PreviewSlot> preview_;
+    std::map<std::string, render::MeshData> previewMeshes_;   // per content glTF, loaded once
 };
 
 } // namespace core

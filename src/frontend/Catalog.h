@@ -102,6 +102,10 @@ public:
     // Specialty, Killstreak... Fields as authored (repeated keys joined with ',').
     struct Provider { std::string name; std::vector<std::pair<std::string, std::string>> fields; std::string get(const std::string& k) const; };
     const std::vector<Provider>& providers(const std::string& kind) const;
+    // TnPlayerInput.KeyDescriptions: Key (Xe-TransInput.ini) + Description and per-form overrides (TransGame.int)
+    // - the Controls reference pages (gamepad diagram and the PC keyboard card).
+    struct KeyDescription { std::string key, description, robot, car, truck, tank, plane; };
+    const KeyDescription* keyDescription(const std::string& key) const;
     const std::vector<GameModeInfo>& gameModes() const { return modes_; }
     const MapInfo* mapById(int id) const;
     const MapInfo* mapByFilename(const std::string& f) const;            // case-insensitive
@@ -131,6 +135,8 @@ public:
 private:
     std::map<std::string, std::vector<Provider>> providers_;
     void loadProviders(const std::string& extractedRoot);
+    void loadKeyDescriptions(const std::string& extractedRoot);
+    std::vector<KeyDescription> keyDescriptions_;
     void loadSettingsDefaults(const std::string& manifestRoot);
     std::vector<MapInfo> maps_;
     std::vector<Playlist> playlists_;

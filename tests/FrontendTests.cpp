@@ -118,6 +118,7 @@ static void testUIController() {
     check(ui2.state() == UIState::Paused && !hud2, "ui.pause_hides_hud");
     ui2.onCurrentUIClosed();
     check(ui2.state() == UIState::InGame && hud2, "ui.resume_shows_hud");
+    check(open2.empty() && ui2.openMovie().empty(), "ui.resume_closes_pause_movie");
 }
 
 // Runs the runtime (flow + shims + script) until `pred` or a frame budget.

@@ -32,6 +32,29 @@ template <class R> void nativeDraw(R* r, const frontend::SceneView& v, int w, in
                              (float)v.fov, w, h, v.time);
     else { (void)r; (void)v; (void)w; (void)h; }
 }
+template <class R> void nativePreviewHook(R* r, FrontendSceneGL* self, bool on) {
+    if constexpr (HasPreviewDraw<R>::value) {
+        if (on) r->setFrontendSceneDraw([self](R& rr) { self->drawPreview(rr); });
+        else r->setFrontendSceneDraw({});
+    } else { (void)r; (void)self; (void)on; }
+}
+template <class R> void nativePreviewDraw(R& r, const FrontendSceneGL::PreviewSlot& s, int slot, std::map<std::string, render::MeshData>& cache) {
+    if constexpr (HasPreviewDraw<R>::value) {
+        auto it = cache.find(s.gltf);
+        if (it == cache.end()) {
+            render::MeshData m;
+            if (!r.loadContentMesh(s.gltf, m)) LOG_WARN("frontend preview: %s did not load", s.gltf.c_str());
+            it = cache.emplace(s.gltf, std::move(m)).first;
+        }
+        if (it->second.empty()) return;
+        render::CharacterColors cc;
+        for (int i = 0; i < 3; ++i) { cc.primary[i] = s.primary[i]; cc.secondary[i] = s.secondary[i]; cc.energon[i] = 0; }
+        r.setDrawOwner(1 + slot);
+        r.setCharacterColors(cc);
+        r.drawDynamicMesh(it->second, r.actorMatrix(Vec3{s.pos[0], s.pos[1], s.pos[2]}, Vec3{0, s.yawDeg, 0}), Vec3{1, 1, 1});
+        r.setDrawOwner(0);
+    } else { (void)r; (void)s; (void)slot; (void)cache; }
+}
 template <class R> void nativeUnload(R* r) {
     if constexpr (HasFrontendScene<R>::value) r->unloadFrontendScene();
     else (void)r;
@@ -41,6 +64,10 @@ std::string assetRoot() {
     if (const char* e = std::getenv("WFC_ASSETS")) return e;
     return config::kAssetRootDefault;
 }
+}
+
+void FrontendSceneGL::drawPreview(render::IRenderer& r) {
+    for (size_t i = 0; i < preview_.size(); ++i) nativePreviewDraw(r, preview_[i], (int)i, previewMeshes_);
 }
 
 std::string FrontendSceneGL::familyFor(const std::string& uiLevel) {
@@ -61,7 +88,9 @@ bool FrontendSceneGL::load(const std::vector<std::string>& levels) {
     if (nativeLoad(r_, levels)) {
         family_ = family;
         native_ = true;
-        LOG_INFO("frontend scene: %s presented by the renderer (loadFrontendScene)", family.c_str());
+        nativePreviewHook(r_, this, true);
+        LOG_INFO("frontend scene: %s presented by the renderer (loadFrontendScene)%s", family.c_str(),
+                 HasPreviewDraw<render::IRenderer>::value ? " + preview pawns" : "");
         return true;
     }
     native_ = false;
@@ -105,7 +134,7 @@ bool FrontendSceneGL::load(const std::vector<std::string>& levels) {
 
 std::string FrontendSceneGL::release(const ui::GlCensus::Owned& keep) {
     if (!r_ || family_.empty()) return "";
-    if (native_) { nativeUnload(r_); native_ = false; family_.clear(); return "renderer unloadFrontendScene"; }
+    if (native_) { nativePreviewHook(r_, this, false); previewMeshes_.clear(); nativeUnload(r_); native_ = false; family_.clear(); return "renderer unloadFrontendScene"; }
     r_->unloadMapRenderData();
     std::string s = censusActive_ ? census_.release(keep) : std::string();
     censusActive_ = false;

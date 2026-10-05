@@ -5,6 +5,7 @@
 #include "platform/UiBindings.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <chrono>
 #include <cstring>
@@ -172,6 +173,12 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             return;
         }
         if (st.rfind("dump:", 0) == 0) { if (dumpHook) dumpHook(st.substr(5)); continue; }
+        if (st.rfind("navcheck:", 0) == 0) { if (navCheckHook) navCheckHook(st.substr(9)); continue; }
+        if (st.rfind("display:", 0) == 0) {
+            std::vector<std::string> p = split(st.substr(8), ',');
+            if (p.size() >= 2 && displayHook) displayHook(std::atoi(p[0].c_str()), std::atoi(p[1].c_str()), p.size() > 2 && p[2] == "1");
+            return;
+        }
         if (st.rfind("shot:", 0) == 0) { if (shotHook) shotHook(st.substr(5)); return; }
         if (st.rfind("uievent:", 0) == 0) { flow.onUIEvent(std::atoi(st.c_str() + 8)); return; }
         if (st.rfind("snapshot:", 0) == 0) { flow.traceSnapshot(st.c_str() + 9); continue; }
@@ -216,7 +223,17 @@ BridgeValue FrontendRuntime::account(const std::string& fn, const std::vector<st
         // TextPrompt limits the name to 15 characters; an empty / blank or duplicate name is not created.
         bool blank = arg0.find_first_not_of(' ') == std::string::npos;
         bool ok = !blank && arg0.find(',') == std::string::npos && find(arg0) == p.accounts.end();   // ',' separates the list
-        if (ok) { p.accounts.push_back(arg0); p.save(); }
+        if (ok) {
+            p.accounts.push_back(arg0);
+            // Offline there is no separate login service: a new account is signed in when none is, so the name the
+            // player typed is the player name at once (lobbies, scoreboard, kill feed) [PC ADAPTATION].
+            if (p.loggedInAccount.empty()) p.loggedInAccount = arg0;
+            p.save();
+        }
+        // OnCreateAccountComplete: the CreateAccountTitle message box with the result [CONFIRMED script]; offline the
+        // only failures are local (blank / duplicate / comma).
+        flow_.showMessage("$UIText.MessagePrompts.CreateAccountTitle", ok ? "$UIText.MessagePrompts.CreateAccountSucceededMessage"
+                                                                         : "$UIText.MessagePrompts.CreateAccountInvalidUsernameMessage");
         FlowTrace::emit("account.create", {{"name", arg0}, {"created", FlowTrace::boolean(ok)}, {"provenance", "PC ADAPTATION (local)"}});
         return {};
     }
@@ -294,6 +311,33 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     }
     if (fn.rfind("Customize.", 0) == 0) return customize(fn, args);   // TnCharacterScriptBinding
     if (fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
+    if (fn == "Console.GetKeyDescription") {
+        // TnConsoleActionScriptBinding -> TnPlayerInput.GetKeyDescription(Key, Form) [CONFIRMED script]: the key goes
+        // through TnGameViewportClient.MapInputKeyForController (profile SwitchRightThumbstickAndB / alternate scheme),
+        // then KeyDescriptions[Key].Description, replaced by the form's own text when it has one. The Controls pages
+        // are read-only references: the shipped menus have no key rebinding.
+        std::string key = arg(0), form = arg(1);
+        const LocalProfile& pr = flow_.profile();
+        if (pr.getBool("SwitchRightThumbstickAndB")) {
+            if (key == "XboxTypeS_B") key = "XboxTypeS_RightThumbstick";
+            else if (key == "XboxTypeS_RightThumbstick") key = "XboxTypeS_B";
+        }
+        if (pr.getBool("UseAlternateControlScheme")) {
+            if (key == "XboxTypeS_Y") key = "XboxTypeS_LeftThumbstick";
+            else if (key == "XboxTypeS_LeftThumbstick") key = "NoKey";
+            else if (key == "XboxTypeS_DPad_Up") key = "XboxTypeS_Y";
+        }
+        const Catalog::KeyDescription* kd = catalog_.keyDescription(key);
+        if (!kd) return BridgeValue(std::string());
+        std::string d = kd->description;
+        auto over = [&](const std::string& o) { if (!o.empty()) d = o; };
+        if (form == "Robot") over(kd->robot);
+        else if (form == "Car") over(kd->car);
+        if (form == "Truck") over(kd->truck);
+        else if (form == "Tank") over(kd->tank);
+        else if (form == "Plane") over(kd->plane);
+        return BridgeValue(d);
+    }
     return flow_.call(fn, args);
 }
 
@@ -377,7 +421,32 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
         // chassis / colours / form Gameplay's character data resolves; the frontend only forwards the request.
         PreviewRequest pr;
         pr.call = fn.substr(10);
-        if (fn == "Customize.UpdatePreviewCharacter") { pr.chassis = splitCsv(arg(0)); pr.primary = splitCsv(arg(1)); pr.secondary = splitCsv(arg(2)); }
+        if (fn == "Customize.UpdatePreviewCharacter") {
+            pr.chassis = splitCsv(arg(0)); pr.primary = splitCsv(arg(1)); pr.secondary = splitCsv(arg(2));
+            // Authored spawn points (authored.db: SeqAct_TnPawnFactory_8107 "Autobot" / _10632 "Decepticon"; rotation
+            // yaw 16-bit units -> degrees). The pawn's ground snap (OnPreviewPawnTick FindGround) is Gameplay's.
+            static const float kPos[2][3] = {{-285.862f, 5587.910f, 179.0f}, {-286.862f, 4701.910f, 179.0f}};
+            static const float kYaw[2] = {-11264.0f * 360.0f / 65536.0f, 8192.0f * 360.0f / 65536.0f};
+            auto linear = [](const std::string& packed, float out[3]) {
+                std::string hex = packed.rfind("0x", 0) == 0 ? packed.substr(2, 6) : std::string();
+                unsigned v = hex.empty() ? 0u : (unsigned)std::strtoul(hex.c_str(), nullptr, 16);
+                const unsigned c[3] = {(v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF};
+                for (int i = 0; i < 3; ++i) {   // FLinearColor(FColor): the sRGB decode
+                    float f = c[i] / 255.0f;
+                    out[i] = f <= 0.04045f ? f / 12.92f : std::pow((f + 0.055f) / 1.055f, 2.4f);
+                }
+            };
+            for (size_t i = 0; i < pr.chassis.size() && i < 2; ++i) {
+                PreviewRequest::Slot sl;
+                sl.chassis = pr.chassis[i];
+                if (const ChassisInfo* ci = roster_.chassis(sl.chassis)) sl.robotGltf = ci->robotGltf;   // roster package
+                for (int k = 0; k < 3; ++k) sl.posUE[k] = kPos[i][k];
+                sl.rotUEdeg[1] = kYaw[i];
+                if (i < pr.primary.size()) linear(pr.primary[i], sl.primaryLinear);
+                if (i < pr.secondary.size()) linear(pr.secondary[i], sl.secondaryLinear);
+                pr.slots.push_back(sl);
+            }
+        }
         if (previewHook) previewHook(pr);
         FlowTrace::emit("customize.preview", {{"call", pr.call}, {"chassis", arg(0)}, {"primary", arg(1)}, {"secondary", arg(2)},
                                               {"owner", previewHook ? "renderer" : "none"}});
@@ -619,13 +688,20 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
                 if (std::ifstream(Catalog::defaultExtractedRoot() + "/movies/" + c + ".mkv").good()) { underlay_ = c; break; }
         }
         want = underlay_;
+        if (flow_.loading().kind == "InitialStartup" && !bootDone_) bootUnderlay_ = underlay_;
     }
+    if (!m.empty() || flow_.frontEndStarted()) bootDone_ = true;
+    const bool bootHold = want.empty() && !bootDone_ && !bootUnderlay_.empty();
+    if (bootHold) want = bootUnderlay_;   // the startup movie, full screen, until the logos start
+    fullScreenMovie_ = !m.empty() || bootHold;
     if (want != videoName_) {
         if (want.empty()) { stopMovieAudio(); video_.reset(); videoName_.clear(); }
         else if (!openVideo(want, m.empty()) && !m.empty()) { stopped(m); videoName_.clear(); }
     }
     if (!video_) return;
-    video_->advance(dt);
+    // A newly opened movie starts at its first frame: the long frame that opened it (e.g. a blocking scene load) is
+    // not counted as playback time (the Activision logo used to start 0.25 s in).
+    video_->advance(videoFramed_ ? dt : 0.0f);
     const uint8_t* px = nullptr;
     int vw = 0, vh = 0;
     uint64_t serial = 0;
@@ -671,7 +747,11 @@ void FrontendRuntime::updateScene(float dt) {
         sceneLevel_ = map;
         if (!map.empty()) {
             scene_.enterLevel(map);
-            sceneDrawable_ = sceneRenderer_ && !scene_.levels().empty() && sceneRenderer_->load(scene_.levels());
+            auto loadScene = [&] { sceneDrawable_ = sceneRenderer_ && !scene_.levels().empty() && sceneRenderer_->load(scene_.levels()); };
+            sceneLoading_ = true;   // frames presented during the load do not draw the half-loaded scene
+            if (sceneLoadWrapper) sceneLoadWrapper(loadScene);
+            else loadScene();
+            sceneLoading_ = false;
             std::string lvls;
             for (const std::string& l : scene_.levels()) lvls += (lvls.empty() ? "" : "+") + l;
             FlowTrace::emit("scene.levels", {{"uiLevel", map}, {"levels", lvls}, {"drawn", FlowTrace::boolean(sceneDrawable_)},
@@ -751,7 +831,8 @@ void FrontendRuntime::updateLoading(float dt) {
 }
 
 void FrontendRuntime::draw(int w, int h) {
-    if (sceneRenderer_ && sceneDrawable_) {
+    // A full-screen movie hides the game presentation (BeginMovieMode): the scene is not drawn under it.
+    if (sceneRenderer_ && sceneDrawable_ && !fullScreenMovie_ && !sceneLoading_) {
         for (const SceneChange& c : scene_.takeChanges()) {
             if (c.kind == SceneChange::Effect) sceneRenderer_->setEffectActive(c.actor, c.value);
             else sceneRenderer_->setActorHidden(c.actor, c.value);
@@ -765,7 +846,7 @@ void FrontendRuntime::draw(int w, int h) {
     const uint8_t* px = nullptr;
     int vw = 0, vh = 0;
     uint64_t serial = 0;
-    bool over = !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty();   // SeqAct_MoviePlayer / Game.PlayMovie
+    bool over = fullScreenMovie_;   // SeqAct_MoviePlayer / Game.PlayMovie / the boot startup movie
     // The serial is unique across movies (the presenter re-uploads on change).
     if (video_ && video_->frame(px, vw, vh, serial)) presenter_->setVideoFrame(px, vw, vh, (videoGen_ << 40) | serial, over);
     else presenter_->setVideoFrame(nullptr, 0, 0, 0, false);

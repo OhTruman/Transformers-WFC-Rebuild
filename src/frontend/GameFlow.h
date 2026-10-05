@@ -155,6 +155,8 @@ public:
     const Popup& popup() const { return popup_; }
     void popupButton(char which);     // 'A' 'B' 'X' 'Y'
     void popupClosedByMovie();
+    // TnUIController.ShowPopupUI(Title, Message): a message box with the default Ok button.
+    void showMessage(const std::string& title, const std::string& message) { Popup p; p.title = title; p.message = message; showPopup(p); }
     bool wantsWorldUnload() const { return unloadWorld_; }   // travel away from a match map
     void worldUnloaded() { unloadWorld_ = false; }
 

@@ -3,6 +3,9 @@
 #include "frontend/FlowTrace.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <cstdlib>
 #include <cstdlib>
 
 namespace ui {
@@ -89,7 +92,7 @@ bool GfxPresenter::clipWindowCenter(const std::string& path, int& x, int& y) {
     gfx::DisplayObject* d = p->resolveTarget(path, p->root());
     if (!d || d->removed) return false;
     gfx::Rect b = d->boundsIn(d->worldMatrix());   // stage twips
-    gfx::Point c = GfxRendererGL::stageMatrix(p->stageWidth, p->stageHeight, viewW_, viewH_)
+    gfx::Point c = GfxRendererGL::movieMatrix(*p, viewW_, viewH_)
                        .apply({(b.xmin + b.xmax) * 0.5f, (b.ymin + b.ymax) * 0.5f});
     x = (int)c.x; y = (int)c.y;
     return true;
@@ -98,7 +101,7 @@ bool GfxPresenter::clipWindowCenter(const std::string& path, int& x, int& y) {
 void GfxPresenter::deliverMouse(const platform::InputFrame& in) {
     // Window pixels -> each movie's stage pixels (the inverse of the draw mapping; stages differ per movie).
     auto toStage = [&](gfx::Player& p, float& sx, float& sy) {
-        gfx::Matrix inv = GfxRendererGL::stageMatrix(p.stageWidth, p.stageHeight, viewW_, viewH_).inverse();
+        gfx::Matrix inv = GfxRendererGL::movieMatrix(p, viewW_, viewH_).inverse();
         gfx::Point s = inv.apply({(float)in.mouseX, (float)in.mouseY});
         sx = s.x / 20.0f; sy = s.y / 20.0f;
     };
@@ -145,6 +148,8 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
     // An undefined / null argument reaches an UnrealScript string parameter as "" (not "undefined"): e.g. the
     // Customize.CommitCharacter weapon list of an unset slot.
     for (const Value& v : a) sa.push_back(v.isNullish() ? std::string() : m.player().vm().toString(v));
+    if (fn == "HmObjectInterpolator.addInterp") return hudInterpAdd(m, a);
+    if (fn == "HmActionScript.setColor") { if (a.size() >= 2) setColorHex(m.player().vm(), a[0], a[1]); return Value(); }
     if (fn == "Self.Close" && m.object() == kPopupMovie) {
         // The message box movie closed itself (its own CloseMessagePrompt path).
         deferredErase_.push_back(m.object());
@@ -227,6 +232,194 @@ void GfxPresenter::syncPopup(frontend::GameFlow& flow) {
         box->movie->invoke("_global.DisplayMessage", {Value(p.title), Value(p.message), Value(p.buttonString()), Value((double)p.icon)});
         frontend::FlowTrace::emit("gfx.invoke", {{"movie", kPopupMovie}, {"fn", "_global.DisplayMessage"}, {"buttons", p.buttonString()}});
     }
+}
+
+namespace {
+size_t countDisplay(const gfx::DisplayObject* d) {
+    if (!d || d->removed) return 0;
+    size_t n = 1;
+    if (d->kind == gfx::DisplayObject::Kind::Clip)
+        for (const auto& [depth, ch] : static_cast<const gfx::MovieClip*>(d)->children) n += countDisplay(ch.get());
+    return n;
+}
+}
+
+std::vector<std::pair<std::string, std::string>> GfxPresenter::navReport() {
+    std::vector<std::pair<std::string, std::string>> r;
+    std::string movies, extras;
+    size_t heap = 0, nodes = 0, grave = 0;
+    auto add = [&](GfxMovie& m) {
+        heap += m.player().vm().heapSize();
+        nodes += countDisplay(m.player().root());
+        grave += m.player().graveyard.size();
+    };
+    for (Open& o : movies_) { movies += (movies.empty() ? "" : "+") + o.object; add(*o.movie); }
+    int focusExtras = 0;
+    for (Extra& e : extras_) { extras += (extras.empty() ? "" : "+") + e.object + (e.focus ? "*" : ""); add(*e.movie); focusExtras += e.focus; }
+    GfxMovie* focus = scoreboard_ ? scoreboard_.get() : (movies_.empty() ? nullptr : movies_.back().movie.get());
+    for (Extra& e : extras_) if (e.focus) focus = e.movie.get();
+    std::string owner = "-", ownerVisible = "-";
+    if (focus) {
+        gfx::avm1::VM& vm = focus->player().vm();
+        gfx::avm1::Value cm = vm.get(vm.global, "currentMenu");
+        if (cm.isObject() && cm.o->display) {
+            owner = cm.o->display->targetPath();
+            ownerVisible = cm.o->display->removed ? "removed" : (cm.o->display->worldVisible() ? "1" : "0");
+        } else owner = cm.isObject() ? "object" : "none";
+    }
+    r.push_back({"movies", movies.empty() ? "-" : movies});
+    r.push_back({"extras", extras.empty() ? "-" : extras});
+    r.push_back({"focus", focus ? focus->object() : "-"});
+    r.push_back({"focusExtras", std::to_string(focusExtras)});
+    r.push_back({"inputOwner", owner});
+    r.push_back({"inputOwnerVisible", ownerVisible});
+    r.push_back({"popup", rt_.flow().popup().open ? "open" : "closed"});
+    r.push_back({"scoreboard", scoreboard_ ? "1" : "0"});
+    r.push_back({"asHeap", std::to_string(heap)});
+    r.push_back({"displayNodes", std::to_string(nodes)});
+    r.push_back({"graveyard", std::to_string(grave)});
+    r.push_back({"glShapes", std::to_string(gl_.cachedShapes())});
+    return r;
+}
+
+namespace {
+// The menus' _global.findInterpValue (AS2, every menu movie): linear, easein, easeout (curve < 2: quadratic-style; even
+// / odd curves: the power form) and easeinout, with an overshoot term [CONFIRMED structure; exponent forms HIGH].
+double interpValue(double b, double dest, double t0, double now, double t1, const std::string& anim, double curve, double s) {
+    double t = now - t0, c = dest - b, d = t1 - t0;
+    if (d <= 0) return dest;
+    std::string a = anim;
+    for (char& ch : a) ch = (char)std::tolower((unsigned char)ch);
+    if (curve == 0 || a == "linear" || a.empty()) return c * t / d + b;
+    if (a == "easein") { double u = t / d; return c * u * std::pow(u, curve - 1) * ((s + 1) * u - s) + b; }
+    if (a == "easeout") {
+        if (curve < 2) { double u = t / d; return -c * u * ((s + 1) * (u - 2) + s) + b; }
+        double u = t / d - 1;
+        if ((int)curve % 2 == 0) return c * (u * std::pow(u, curve - 1) * ((s + 1) * u + s) + 1) + b;
+        return -c * (u * std::pow(u, curve - 1) * ((s + 1) * u + s) - 1) + b;
+    }
+    if (a == "easeinout") {
+        if (t < d / 2) return interpValue(0, c, 0, t * 2, d, "easein", curve, s) * 0.5 + b;
+        return interpValue(0, c, 0, t * 2 - d, d, "easeout", curve, s) * 0.5 + c * 0.5 + b;
+    }
+    return dest;
+}
+bool parseHexColor(gfx::avm1::VM& vm, const gfx::avm1::Value& v, float rgb[3]) {
+    unsigned x = 0;
+    if (v.isNumber()) x = (unsigned)vm.toNumber(v);
+    else {
+        std::string h = vm.toString(v);
+        if (h.rfind("0x", 0) == 0) h = h.substr(2);
+        if (h.empty()) return false;
+        x = (unsigned)std::strtoul(h.c_str(), nullptr, 16);
+    }
+    rgb[0] = ((x >> 16) & 0xFF) / 255.0f; rgb[1] = ((x >> 8) & 0xFF) / 255.0f; rgb[2] = (x & 0xFF) / 255.0f;
+    return true;
+}
+}
+
+void GfxPresenter::setColorHex(gfx::avm1::VM& vm, const Value& target, const Value& color) {
+    // MovieClip / TextField setColor: a ColorTransform with the colour as the multipliers, alpha = _alpha / 100.
+    if (!target.isObject() || !target.o->display) return;
+    float rgb[3];
+    if (!parseHexColor(vm, color, rgb)) return;
+    gfx::DisplayObject* d = target.o->display;
+    d->cx.mr = rgb[0]; d->cx.mg = rgb[1]; d->cx.mb = rgb[2];
+    d->cx.ar = d->cx.ag = d->cx.ab = 0;
+}
+
+Value GfxPresenter::hudInterpAdd(GfxMovie& m, Args& a) {
+    // HmObjectInterpolator.addInterp(target, interpTime, animType, interpCurve, overShoot, interpParams): one entry
+    // per parameter; an entry for the same target + property replaces the running one (_global.addInterp).
+    gfx::avm1::VM& vm = m.player().vm();
+    auto arg = [&](size_t i) { return i < a.size() ? a[i] : Value::undef(); };
+    Value target = arg(0), params = arg(5);
+    if (!target.isObject() || !params.isObject()) return Value();
+    double time = arg(1).isUndef() ? 1.0 : vm.toNumber(arg(1));
+    std::string anim = arg(2).isNullish() ? std::string("linear") : vm.toString(arg(2));
+    double curve = arg(3).isNullish() ? 0.0 : vm.toNumber(arg(3)), over = arg(4).isNullish() ? 0.0 : vm.toNumber(arg(4));
+    Value listV = vm.get(vm.global, "__hmInterps");
+    if (!listV.isObject()) { listV = Value(vm.newArray()); vm.global->setRaw("__hmInterps", listV, gfx::avm1::DontEnum); }
+    std::vector<Value>& list = listV.o->elems;
+    double now = m.player().timeMs();
+    for (const std::string& prop : vm.enumerate(params.o)) {
+        list.erase(std::remove_if(list.begin(), list.end(), [&](const Value& e) {
+            return e.isObject() && vm.get(e.o, "targ").o == target.o && vm.toString(vm.get(e.o, "prop")) == prop;
+        }), list.end());
+        gfx::avm1::Object* e = vm.newPlain();
+        e->setRaw("targ", target);
+        e->setRaw("prop", Value(prop));
+        e->setRaw("dest", vm.get(params.o, prop));
+        e->setRaw("t0", Value(now));
+        e->setRaw("t1", Value(now + time * 1000.0));
+        e->setRaw("anim", Value(anim));
+        e->setRaw("curve", Value(curve));
+        e->setRaw("over", Value(over));
+        if (prop == "color") {
+            gfx::DisplayObject* d = target.o->display;
+            gfx::avm1::Object* init = vm.newPlain();
+            init->setRaw("r", Value(d ? (double)d->cx.mr : 1.0)); init->setRaw("g", Value(d ? (double)d->cx.mg : 1.0));
+            init->setRaw("b", Value(d ? (double)d->cx.mb : 1.0));
+            e->setRaw("init", Value(init));
+        } else if (prop != "callback") {
+            e->setRaw("init", vm.get(target.o, prop));
+        }
+        list.push_back(Value(e));
+    }
+    return Value();
+}
+
+void GfxPresenter::hudInterpUpdate(GfxMovie& m) {
+    gfx::avm1::VM& vm = m.player().vm();
+    Value listV = vm.get(vm.global, "__hmInterps");
+    if (!listV.isObject()) return;
+    double now = m.player().timeMs();
+    std::vector<Value> list = listV.o->elems;   // copy: callbacks may add entries
+    std::vector<Value> keep;
+    std::vector<Value> callbacks;
+    for (const Value& ev : list) {
+        if (!ev.isObject()) continue;
+        gfx::avm1::Object* e = ev.o;
+        Value targ = vm.get(e, "targ");
+        if (!targ.isObject() || (targ.o->display && targ.o->display->removed)) continue;   // the target went away
+        std::string prop = vm.toString(vm.get(e, "prop"));
+        double t1 = vm.toNumber(vm.get(e, "t1"));
+        bool done = now >= t1;
+        Value dest = vm.get(e, "dest");
+        if (prop == "callback") {
+            if (done) { if (dest.isObject()) callbacks.push_back(dest); }
+            else keep.push_back(ev);
+            continue;
+        }
+        double t0 = vm.toNumber(vm.get(e, "t0")), curve = vm.toNumber(vm.get(e, "curve")), over = vm.toNumber(vm.get(e, "over"));
+        std::string anim = vm.toString(vm.get(e, "anim"));
+        if (prop == "color") {
+            float to[3];
+            Value init = vm.get(e, "init");
+            if (targ.o->display && init.isObject() && parseHexColor(vm, dest, to)) {
+                const char* ch[3] = {"r", "g", "b"};
+                float v[3];
+                for (int i = 0; i < 3; ++i) {
+                    double b = vm.toNumber(vm.get(init.o, ch[i]));
+                    v[i] = (float)(done ? to[i] : interpValue(b, to[i], t0, now, t1, anim, curve, over));
+                }
+                targ.o->display->cx.mr = v[0]; targ.o->display->cx.mg = v[1]; targ.o->display->cx.mb = v[2];
+            }
+        } else {
+            double b = vm.toNumber(vm.get(e, "init")), d = vm.toNumber(dest);
+            vm.set(targ.o, prop, done ? dest : Value(interpValue(b, d, t0, now, t1, anim, curve, over)));
+        }
+        if (!done) keep.push_back(ev);
+    }
+    // Entries added by callbacks during this update are kept too.
+    std::vector<Value>& live = listV.o->elems;
+    for (size_t i = list.size(); i < live.size(); ++i) keep.push_back(live[i]);
+    live = keep;
+    for (const Value& cb : callbacks) {
+        Args none;
+        try { vm.call(cb, Value::undef(), none); } catch (const gfx::avm1::ScriptThrow&) {}
+    }
+    if (!callbacks.empty()) m.player().drainActions();
 }
 
 void GfxPresenter::fsCommand(GfxMovie& m, const std::string& cmd, const std::string& arg) {
@@ -313,7 +506,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     deliverKeys(in);
     deliverMouse(in);
     if (cursor_) cursor_->advance(dt);
-    if (hud_) hud_->advance(dt);
+    if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); }
     if (scoreboard_) scoreboard_->advance(dt);
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
@@ -351,6 +544,8 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     (void)flow;
     if (!glReady_) { glReady_ = gl_.init(); if (!glReady_) return; }
     viewW_ = w; viewH_ = h;
+    gfx::Player::hostViewportW = (float)w;   // a noScale movie opened later lays out for this viewport
+    gfx::Player::hostViewportH = (float)h;
     if (shapesStale_) { gl_.forgetShapes(); shapesStale_ = false; }
     if (movies_.empty() && !loading_ && !video_ && !(hud_ && hudVisible_) && !scoreboard_) return;
     gl_.begin(w, h);
@@ -358,7 +553,7 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     auto drawMovie = [&](GfxMovie& m) {
         items_.clear();
         gfx::Player& p = m.player();
-        p.buildRenderList(GfxRendererGL::stageMatrix(p.stageWidth, p.stageHeight, w, h), items_);
+        p.buildRenderList(GfxRendererGL::movieMatrix(p, w, h), items_);
         gl_.draw(items_);
     };
     static const bool emptyLayer = std::getenv("WFC_GFX_EMPTY") != nullptr;   // diagnostics: composite only
@@ -377,7 +572,12 @@ void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
 
 void GfxPresenter::injectKey(int code, bool down) {
     if (movies_.empty()) return;
-    movies_.back().movie->key(code, down);
+    GfxMovie* m = movies_.back().movie.get();
+    for (Extra& e : extras_) if (e.focus) m = e.movie.get();
+    // A key event on a focused input field also types its character, as in Flash Player (automation key:<code>; real
+    // keyboards deliver text through WM_CHAR).
+    if (down && code >= 32 && code < 127 && m->hasTextFocus()) m->textInput((char32_t)code);
+    m->key(code, down);
 }
 
 std::vector<std::string> GfxPresenter::openMovieObjects() const {
