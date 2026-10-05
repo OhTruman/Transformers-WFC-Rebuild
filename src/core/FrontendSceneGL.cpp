@@ -121,6 +121,11 @@ template <class R> void nativeGround(R* r, FrontendSceneGL::PreviewSlot& s) {
     } else { (void)r; (void)s; }
 }
 
+template <class R> int nativeBodyCount(const R* r) {
+    if constexpr (HasBodyCount<R>::value) { return r ? (int)r->previewBodyCount() : -1; }
+    else { (void)r; return -1; }
+}
+
 static double previewClock() {
     using namespace std::chrono;
     return duration<double>(steady_clock::now().time_since_epoch()).count();
@@ -152,10 +157,17 @@ FrontendSceneGL::PreviewStats FrontendSceneGL::previewStats() const {
     for (size_t i = 0; i < preview_.size() && i < 2; ++i) { st.visible += previewHidden_[i] ? 0 : 1; st.vehicles += previewVehicle_[i] ? 1 : 0; }
     st.meshes = (int)previewMeshes_.size();
     st.bodies = (int)previewBodies_.size();
+    st.rendererBodies = nativeBodyCount(r_);
     return st;
 }
 
 void FrontendSceneGL::drawPreview(render::IRenderer& r) {
+    // Belt and braces (setRenderer drops the cache on a new renderer): never pose handles the renderer no longer holds.
+    int held = nativeBodyCount(&r);
+    if (held >= 0 && (size_t)held < previewBodies_.size()) {
+        LOG_INFO("frontend preview: renderer holds %d posed bodies, %zu cached; cache dropped", held, previewBodies_.size());
+        previewBodies_.clear();
+    }
     for (size_t i = 0; i < preview_.size(); ++i)
         if (i < 2 && !previewHidden_[i])
             nativePreviewDraw(r, preview_[i], (int)i, previewVehicle_[i], previewClock() - previewSpawn_[i], previewMeshes_, previewBodies_,

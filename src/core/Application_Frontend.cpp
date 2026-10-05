@@ -220,6 +220,7 @@ void Application::attachPresenter() {
             FrontendSceneGL::PreviewStats ps = g_scene->previewStats();
             kv.push_back({"preview", std::to_string(ps.slots) + "/" + std::to_string(ps.visible) + "/" + std::to_string(ps.vehicles) + "/" +
                                      std::to_string(ps.meshes) + "/" + std::to_string(ps.bodies)});
+            kv.push_back({"rendererBodies", std::to_string(ps.rendererBodies)});   // -1: the renderer cannot report it
         }
         kv.push_back({"matinees", std::to_string(frontend_->scene().playing().size())});
         kv.push_back({"camera", frontend_->scene().view().camera});

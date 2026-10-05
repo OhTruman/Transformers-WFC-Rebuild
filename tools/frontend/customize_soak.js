@@ -49,6 +49,11 @@ for (const [k, s] of Object.entries(series)) {
   if (ma && mb && mb > ma + 150) growth.push(`${k} privateMB ${ma} -> ${mb}`);
 }
 const gy = checks.map(c => Number(c.graveyard)).filter(Number.isFinite);
+const rb = checks.map(c => Number(c.rendererBodies)).filter(v => Number.isFinite(v) && v >= 0);
+if (rb.length) {
+  console.log(`renderer preview bodies: max ${Math.max(...rb)} last ${rb[rb.length - 1]}`);
+  if (Math.max(...rb) > 8) fails.push(`renderer holds ${Math.max(...rb)} preview bodies (LRU cap 8)`);
+}
 console.log(`checks ${checks.length}`);
 console.log(`AS throws ${count(/GFX (interval|mouse listener|key listener)? ?threw|AVM1 .*threw/)}  GCCHECK uses ${count(/AVM1 GCCHECK/)}  missing fns ${count(/GFX missing function/)}`);
 const peak = Math.max(...checks.map(c => Number(c.asHeap) || 0));

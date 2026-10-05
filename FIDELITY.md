@@ -85,8 +85,9 @@ palette findings independently (notes/TARGETED_PASS3_2026-10-05.md §B).
 GFx runtime fixes found by this pass: intervals on removed clips no longer fire; the collector roots removed clips'
 subtrees (intermittent use-after-free crash); unloadMovie keeps children alive. Diagnostics: WFC_GFX_GCCHECK,
 WFC_GFX_NO_GC, WFC_NOPAD. The collector counter is per movie (it was shared, so one movie took every collection).
-Posed preview bodies: LRU cache of 8 (Rendering: bodies are CPU-only, valid across scene loads; releasePreviewBody when
-present).
+Posed preview bodies: LRU cache of 8 (Rendering: bodies are CPU-only; releasePreviewBody on eviction). Preview handles
+belong to the renderer instance: the match cleanup recreates the renderer, so setRenderer drops the cache (soak: the
+renderer held 0 bodies after a match while 8 stale handles were cached); previewBodyCount guards it as well.
 
 UNKNOWN: the native GetPixelColor coordinate scaling (taken as 256-unit gradient space); the PC key binding of the
 picker cursor (arrows used).

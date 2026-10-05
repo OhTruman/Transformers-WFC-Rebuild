@@ -59,6 +59,9 @@ struct HasPreviewBody<R, std::void_t<decltype(std::declval<R&>().loadPreviewBody
 template <class R, class = void> struct HasReleaseBody : std::false_type {};
 template <class R>
 struct HasReleaseBody<R, std::void_t<decltype(std::declval<R&>().releasePreviewBody(0))>> : std::true_type {};
+template <class R, class = void> struct HasBodyCount : std::false_type {};
+template <class R>
+struct HasBodyCount<R, std::void_t<decltype(std::declval<const R&>().previewBodyCount())>> : std::true_type {};
 // Preview pawns (agents/rendering: setFrontendSceneDraw + actorMatrix + loadContentMesh).
 template <class R, class = void> struct HasPreviewDraw : std::false_type {};
 template <class R>
@@ -73,7 +76,9 @@ struct HasLoadYield<R, std::void_t<decltype(std::declval<R&>().setLoadYield(std:
 class FrontendSceneGL final : public frontend::IFrontendSceneRenderer {
 public:
     explicit FrontendSceneGL(render::IRenderer* r) : r_(r) {}
-    void setRenderer(render::IRenderer* r) { r_ = r; family_.clear(); mesh_ = render::kInvalidMesh; censusActive_ = false; previewMeshes_.clear(); }
+    // Preview body handles belong to the renderer instance: a new renderer (the match cleanup recreates it) invalidates
+    // them all, so the cache goes with the old one.
+    void setRenderer(render::IRenderer* r) { r_ = r; family_.clear(); mesh_ = render::kInvalidMesh; censusActive_ = false; previewMeshes_.clear(); previewBodies_.clear(); }
     bool load(const std::vector<std::string>& levels) override;
     void draw(const frontend::SceneView& view, int width, int height) override;
     void unload() override {}   // the family stays loaded while UI levels travel within it; released by release()
@@ -97,7 +102,7 @@ public:
     // TnCharacterScriptBinding.TransformPreviewCharacter (toggle) / TransformPreviewCharacterToRobot: the first visible
     // pawn (FindPreviewCharacterToTransform) changes form. A chassis change respawns the pawn in robot form.
     void transformPreview(bool toRobotOnly);
-    struct PreviewStats { int slots = 0, visible = 0, vehicles = 0, meshes = 0, bodies = 0; };
+    struct PreviewStats { int slots = 0, visible = 0, vehicles = 0, meshes = 0, bodies = 0, rendererBodies = -1; };
     PreviewStats previewStats() const;
     struct CachedBody { int handle = -1; uint64_t lastUse = 0; };
     static constexpr size_t kMaxPreviewBodies = 8;   // posed-body cache: a full class cycle (4 classes x 2 factions)
