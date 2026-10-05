@@ -1,0 +1,1654 @@
+{
+ "source": "AssetTools scripts/wfc/vs_character.sockets (SkeletalMeshSocket exports of the cooked weapon meshes), run read-only by Gameplay pass 22 (tools/gameplay/weapon_sockets.py); glTF-space conversion happens at load (ueSocketToGltf)",
+ "weapons": {
+  "TransContent.TnWeaponAssaultRifle": {
+   "mesh": "WEP_AssaultRifle_p.WEP_AssaultRifle_SKEL",
+   "sockets": [
+    {
+     "socket": "ClipSocket",
+     "bone": "C_Robo22_XT",
+     "relative_location_ue": [
+      1.8428432941436768,
+      5.058474540710449,
+      -9.327594757080078
+     ],
+     "relative_rotation_ue": [
+      -10922,
+      12743,
+      0
+     ],
+     "relative_location_gltf": [
+      0.01843,
+      -0.09328,
+      0.05058
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "ShellEject",
+     "bone": "C_Robo21_XT",
+     "relative_location_ue": [
+      -12.569709777832031,
+      15.429154396057129,
+      17.499998092651367
+     ],
+     "relative_rotation_ue": [
+      0,
+      16384,
+      0
+     ],
+     "relative_location_gltf": [
+      -0.1257,
+      0.175,
+      0.15429
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo20_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponAxe": {
+   "mesh": "WEP_Axe_p.Autobot.WEP_Axe_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo03_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponBazooka": {
+   "mesh": "WEP_BazookaTemp1_p.WEP_Bazooka_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo08_XT",
+     "relative_location_ue": [
+      -0.19494414329528809,
+      73.73799133300781,
+      0.0
+     ],
+     "relative_rotation_ue": [
+      0,
+      16384,
+      0
+     ],
+     "relative_location_gltf": [
+      -0.00195,
+      0.0,
+      0.73738
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponBeatDownClub": {
+   "mesh": "WEP_BeatDownClub_p.WEP_BeatDownClub_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo02_XT",
+     "relative_location_ue": [
+      0.0,
+      0.0,
+      60.749996185302734
+     ],
+     "relative_rotation_ue": [
+      -16384,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.6075,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponBroadSword": {
+   "mesh": "WEP_BroadSword_p.WEP_BroadSword_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "WEP_Body_XB",
+     "relative_location_ue": [
+      4.83719509759839e-15,
+      0.0,
+      39.5
+     ],
+     "relative_rotation_ue": [
+      16384,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.395,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponBurstRifle": {
+   "mesh": "WEP_BurstRifle_p.WEP_BurstRifle_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo04_XT",
+     "relative_location_ue": [
+      2.972536563873291,
+      0.0,
+      0.0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.02973,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "ClipSocket",
+     "bone": "WEP_Body_XB",
+     "relative_location_ue": [
+      97.74569702148438,
+      24.26311492919922,
+      0.0
+     ],
+     "relative_rotation_ue": [
+      0,
+      10922,
+      0
+     ],
+     "relative_location_gltf": [
+      0.97746,
+      0.0,
+      0.24263
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "ShellEject",
+     "bone": "R_Robo01_XT",
+     "relative_location_ue": [
+      0.0,
+      0.0,
+      13.999999046325684
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.14,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponButterflyAxe": {
+   "mesh": "WEP_ButterflyAxe_p.WEP_ButterflyAxe_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo03_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponCeremonialStaff": {
+   "mesh": "WEP_CeremonialStaff_p.WEP_CeremonialStaff_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo04_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponEmpShotgun": {
+   "mesh": "WEP_EMPShotgun_p.WEP_EMPShotgun_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo12_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      -29143
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MagazineSocket",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      70.92401123046875,
+      0.0,
+      -29.906082153320312
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.70924,
+      -0.29906,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "ShellSocket",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      32.31918716430664,
+      17.079309463500977,
+      -23.07037353515625
+     ],
+     "relative_rotation_ue": [
+      -3444,
+      14627,
+      -13886
+     ],
+     "relative_location_gltf": [
+      0.32319,
+      -0.2307,
+      0.17079
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponFightingStaff": {
+   "mesh": "WEP_FightingStaff_p.WEP_FightingStaff_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo04_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      16384,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponFlashBangs": {
+   "mesh": "WEP_GrenadeLauncher_p.WEP_GrenadeLauncher_SKEL",
+   "sockets": [
+    {
+     "socket": "AmmoShell",
+     "bone": "C_Robo17_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      -16384,
+      32768
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo13_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponGatlingGun": {
+   "mesh": "WEP_TurretIonGun_p.WEP_TurretIonGun_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo18_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponGrenadeLauncher": {
+   "mesh": "WEP_GrenadeLauncher_p.WEP_GrenadeLauncher_SKEL",
+   "sockets": [
+    {
+     "socket": "AmmoShell",
+     "bone": "C_Robo17_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      -16384,
+      32768
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo13_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponHalberdAxe": {
+   "mesh": "WEP_HalberdAxe_p.WEP_HalberdAxe_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo03_XT",
+     "relative_location_ue": [
+      12.253335952758789,
+      0.0,
+      0.0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.12253,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponHammer": {
+   "mesh": "WEP_Hammer_p.WEP_Hammer_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo03_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponHealGrenades": {
+   "mesh": "WEP_GrenadeLauncher_p.WEP_GrenadeLauncher_SKEL",
+   "sockets": [
+    {
+     "socket": "AmmoShell",
+     "bone": "C_Robo17_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      -16384,
+      32768
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo13_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponHeavyMG": {
+   "mesh": "WEP_HeavyMG_p.WEP_HeavyMG_SKEL",
+   "sockets": [
+    {
+     "socket": "ShellSocket",
+     "bone": "R_Robo03_XT",
+     "relative_location_ue": [
+      42.784358978271484,
+      11.83182430267334,
+      6.401806831359863
+     ],
+     "relative_rotation_ue": [
+      0,
+      16384,
+      0
+     ],
+     "relative_location_gltf": [
+      0.42784,
+      0.06402,
+      0.11832
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash_1",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      288.40869140625,
+      0.0,
+      14.75
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      2.88409,
+      0.1475,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash_3",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      288.4192199707031,
+      19.022680282592773,
+      -5.5
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      2.88419,
+      -0.055,
+      0.19023
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MagazineSocket",
+     "bone": "R_Robo03_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      16384,
+      16384,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash_2",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      288.3901672363281,
+      -19.183277130126953,
+      -6.75
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      2.8839,
+      -0.0675,
+      -0.19183
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponHeavyPistol": {
+   "mesh": "WEP_HeavyPistol_p.WEP_HeavyPistol_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo10_XT",
+     "relative_location_ue": [
+      -16.98411750793457,
+      0.0,
+      0.0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      -0.16984,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "ShellEject",
+     "bone": "R_Robo01_XT",
+     "relative_location_ue": [
+      37.25892639160156,
+      -4.5627500699408925e-15,
+      0.0
+     ],
+     "relative_rotation_ue": [
+      0,
+      16384,
+      32768
+     ],
+     "relative_location_gltf": [
+      0.37259,
+      0.0,
+      -0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponHeavyRepairRay": {
+   "mesh": "WEP_TurretRepairRay_p.WEP_TurretRepairRay_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo04_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponHeavyRocketTurret": {
+   "mesh": "WEP_TurretRocket_p.WEP_TurretRocket_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash_back",
+     "bone": "C_Robo24_XT",
+     "relative_location_ue": [
+      51.571773529052734,
+      -6.315515347694216e-15,
+      0.0
+     ],
+     "relative_rotation_ue": [
+      0,
+      32768,
+      0
+     ],
+     "relative_location_gltf": [
+      0.51572,
+      0.0,
+      -0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      83.5121841430664,
+      15.4325532913208,
+      5.489718437194824
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.83512,
+      0.0549,
+      0.15433
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponHuntingDagger": {
+   "mesh": "WEP_HuntingDagger_p.WEP_HuntingDagger_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      23.75,
+      0.0,
+      0.0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.2375,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponIonBlaster": {
+   "mesh": "WEP_IonBlaster_p.WEP_IonBlaster_SKEL",
+   "sockets": [
+    {
+     "socket": "ShellSocket",
+     "bone": "C_Robo15_XT",
+     "relative_location_ue": [
+      -12.6287841796875,
+      -3.354200839996338,
+      -5.589078903198242
+     ],
+     "relative_rotation_ue": [
+      -10421,
+      32768,
+      -32768
+     ],
+     "relative_location_gltf": [
+      -0.12629,
+      -0.05589,
+      -0.03354
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MagSocket",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      24.77898597717285,
+      -3.6682987213134766,
+      36.46816635131836
+     ],
+     "relative_rotation_ue": [
+      11680,
+      11200,
+      10689
+     ],
+     "relative_location_gltf": [
+      0.24779,
+      0.36468,
+      -0.03668
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo04_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponKamikazeMines": {
+   "mesh": "WEP_GrenadeLauncher_p.WEP_GrenadeLauncher_SKEL",
+   "sockets": [
+    {
+     "socket": "AmmoShell",
+     "bone": "C_Robo17_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      -16384,
+      32768
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo13_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponLancingSpear": {
+   "mesh": "WEP_LancingSpear_p.WEP_LancingSpear_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo07_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponLongSword": {
+   "mesh": "WEP_LongSword_p.WEP_LongSword_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo03_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponMaul": {
+   "mesh": "WEP_Maul_p.WEP_Maul_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo05_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponMountedHeavyIonBlaster": {
+   "mesh": "WEP_TurretIonGun_p.WEP_TurretIonGun_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo18_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponMountedRepairRay": {
+   "mesh": "WEP_TurretRepairRay_p.WEP_TurretRepairRay_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo04_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponMountedRocketTurret": {
+   "mesh": "WEP_TurretRocket_p.WEP_TurretRocket_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash_back",
+     "bone": "C_Robo24_XT",
+     "relative_location_ue": [
+      51.571773529052734,
+      -6.315515347694216e-15,
+      0.0
+     ],
+     "relative_rotation_ue": [
+      0,
+      32768,
+      0
+     ],
+     "relative_location_gltf": [
+      0.51572,
+      0.0,
+      -0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      83.5121841430664,
+      15.4325532913208,
+      5.489718437194824
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.83512,
+      0.0549,
+      0.15433
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponPlasmaCannon": {
+   "mesh": "WEP_PlasmaCannon_p.WEP_PlasmaCannon_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo07_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponPoke": {
+   "mesh": "WEP_BroadSword_p.WEP_BroadSword_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "WEP_Body_XB",
+     "relative_location_ue": [
+      4.83719509759839e-15,
+      0.0,
+      39.5
+     ],
+     "relative_rotation_ue": [
+      16384,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.395,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponProngDagger": {
+   "mesh": "WEP_ProngDagger_p.WEP_ProngDagger_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "WEP_Body_XB",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      16384,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponRepairRay": {
+   "mesh": "WEP_RepairBeam_p.WEP_RepairBeam_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo21_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponRocketLauncher": {
+   "mesh": "WEP_RocketLauncher_p.WEP_RocketLauncher_SKEL",
+   "sockets": [
+    {
+     "socket": "Exhaust",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      50.640323638916016,
+      10.371774673461914,
+      21.607192993164062
+     ],
+     "relative_rotation_ue": [
+      9102,
+      32768,
+      0
+     ],
+     "relative_location_gltf": [
+      0.5064,
+      0.21607,
+      0.10372
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash_back",
+     "bone": "C_Robo13_XT",
+     "relative_location_ue": [
+      0.0,
+      -36.076316833496094,
+      0.7476524114608765
+     ],
+     "relative_rotation_ue": [
+      0,
+      -16384,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.00748,
+      -0.36076
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      69.3218002319336,
+      13.234928131103516,
+      -17.25
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.69322,
+      -0.1725,
+      0.13235
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponRocketTemp": {
+   "mesh": "WEP_Rocket_p.WEP_IonCannon_A_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "WEP_MuzzleFlash_XL1",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": [
+      2.0,
+      2.0,
+      2.0
+     ]
+    }
+   ]
+  },
+  "TransContent.TnWeaponRocketTurretKillStreak": {
+   "mesh": "WEP_TurretRocket_p.WEP_TurretRocket_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash_back",
+     "bone": "C_Robo24_XT",
+     "relative_location_ue": [
+      51.571773529052734,
+      -6.315515347694216e-15,
+      0.0
+     ],
+     "relative_rotation_ue": [
+      0,
+      32768,
+      0
+     ],
+     "relative_location_gltf": [
+      0.51572,
+      0.0,
+      -0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      83.5121841430664,
+      15.4325532913208,
+      5.489718437194824
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.83512,
+      0.0549,
+      0.15433
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponSerratedBlade": {
+   "mesh": "WEP_SerratedBlade_p.WEP_SerratedBlade_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo04_XT",
+     "relative_location_ue": [
+      0.04656758904457092,
+      3.742091655731201,
+      25.75
+     ],
+     "relative_rotation_ue": [
+      -16384,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.00047,
+      0.2575,
+      0.03742
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponShortSword": {
+   "mesh": "WEP_ShortSword_p.WEP_ShortSword_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "WEP_Body_XB",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      16384,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponShotgun": {
+   "mesh": "WEP_Shotgun_p.WEP_Shotgun_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo03_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MagazineSocket",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      121.3035888671875,
+      28.707138061523438,
+      -33.15608215332031
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      1.21304,
+      -0.33156,
+      0.28707
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "ShellSocket",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      -21.600818634033203,
+      1.4156744480133057,
+      47.6992301940918
+     ],
+     "relative_rotation_ue": [
+      -3444,
+      14627,
+      -13886
+     ],
+     "relative_location_gltf": [
+      -0.21601,
+      0.47699,
+      0.01416
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponSniperRifle": {
+   "mesh": "WEP_SniperRifle_p.WEP_SniperRifle_SKEL",
+   "sockets": [
+    {
+     "socket": "ShellEject",
+     "bone": "R_Robo02_XT",
+     "relative_location_ue": [
+      18.996387481689453,
+      -2.3263103445805237e-15,
+      -11.249999046325684
+     ],
+     "relative_rotation_ue": [
+      0,
+      8643,
+      0
+     ],
+     "relative_location_gltf": [
+      0.18996,
+      -0.1125,
+      -0.0
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "LaserSight",
+     "bone": "WEP_Reference_XR",
+     "relative_location_ue": [
+      76.20545959472656,
+      27.143205642700195,
+      -23.999998092651367
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.76205,
+      -0.24,
+      0.27143
+     ],
+     "relative_scale": 1.0
+    },
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo08_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponSpikedBat": {
+   "mesh": "WEP_SpikedBat_p.WEP_SpikedBat_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo04_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      16384,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponSpikedMace": {
+   "mesh": "WEP_SpikedMace_p.WEP_SpikedMace_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo03_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      16384,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponTortureSword": {
+   "mesh": "WEP_TortureSword_p.WEP_TortureSword_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo01_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      -9862,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponViciousAxe": {
+   "mesh": "WEP_ViciousAxe_p.WEP_ViciousAxe_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo03_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  },
+  "TransContent.TnWeaponWarHammer": {
+   "mesh": "WEP_WarHammer_p.WEP_WarHammer_SKEL",
+   "sockets": [
+    {
+     "socket": "MuzzleFlash",
+     "bone": "C_Robo03_XT",
+     "relative_location_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_rotation_ue": [
+      0,
+      0,
+      0
+     ],
+     "relative_location_gltf": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "relative_scale": 1.0
+    }
+   ]
+  }
+ }
+}

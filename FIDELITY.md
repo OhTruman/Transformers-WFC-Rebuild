@@ -2907,6 +2907,495 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 22 — SELECTED CHARACTERS, CLASSES, VEHICLE FORMS, WEAPONS, MULTI-MAP (2026-10-05, gameplay agent)
+Inputs:
+- AssetTools per-chassis export `VerticalSlice/Characters/<ChassisId>` (vs_roster_export) and `roster_package.json`;
+- RE TARGETED_PASS3 §A (selection → pawn), §C (car / tank / jet simulations, script bytecode), §C6 (FindSpot);
+- RE confirmations relayed this pass: specialty health, versus weapon data;
+- decompiled TransGame script; authored.db (read-only).
+
+### Selected character → pawn — CONFIRMED chain, no substitute body
+- **Chain:** CharacterSelection (Frontend fills it from GameFlow::SelectedCharacter) → team faction (FFA = 1) →
+  `resolveChassis` (CharacterData.ChassisTypes[faction], else the class preset) → `Match` chassis check →
+  `World::applyChassisToLocalPawn` (TnPawn.ApplyTransformer) → ApplySpecialty → ApplyWeapons.
+- **Chassis definition** (`ChassisDef`), read from `character.json` + roster collision:
+  - robot / vehicle glb with skeleton and clips;
+  - ArmBlueprint mesh + anims;
+  - WeaponSocket_Primary / _Secondary and the vehicle weapon socket, via UE → glTF socket math (verified against the
+    recovered Optimus matrix);
+  - ROBODEF speeds, accel, air control, terminal velocity;
+  - acrobatics JumpHeight;
+  - momentum blueprint;
+  - hover / car / suspension / wheel blueprints.
+- **WFC_CHASSISTEST 13 / 13:** all 27 multiplayer chassis load. "Truck" reproduces every hand-entered Optimus
+  constant. An unknown id fails.
+- **No fallback** (the original has none either: FindChassis failing gives a body-less pawn + log):
+  - an unavailable body refuses the spawn, retries every second, and sets `spawnError` (HUD) with a loud log;
+  - `drawnChassis` is the spawned body;
+  - `chassisFallback` is removed.
+- **Visually verified** (screenshots): Sideswipe, Starscream, Warpath and Soundwave skinned, holding their own weapons.
+- The direct boot and the harnesses use `Characters/Truck` (RB_OptimusWeaponArm_SKEL, the authored MP mesh).
+  `WFC_CHASSIS=<id>` boots or selects any chassis.
+
+### Class behaviour — CONFIRMED (script + authored; RE agrees)
+- ApplyCharacter → TnPlayerPawn.ApplySpecialty → TnSpecialty.Apply, when the game's ApplySpecialtyBuffs is true
+  (Default__TnGame true; only campaign / survival / campaign-lobby set it false):
+  - **SetSpeedMultiplier(SpeedMultiplier):** a per-source factor (TnPawn.UpdateSpeeds multiplies them; fine aim stacks);
+  - **InitializeSegmentedHealth(Health_<Class>):** replaces SharedHealth.
+
+| class | segments | HealthMax | overshield | speed × |
+|---|---|---|---|---|
+| Leader | 5 × 60 | 300 | 200 | 0.95 |
+| Scientist | 3 × 60 | 180 | 200 | 0.90 |
+| Scout | 4 × 50 | 200 | 200 | 1.00 |
+| Soldier | 6 × 55 | 330 | 200 | 0.90 |
+
+- **Correction:** versus does **not** use SharedHealth 550 (Passes 19–21 did). The custom specialty comes from the slot;
+  iconic characters use the chassis DefaultSpecialty [HIGH].
+- **Iconic specialty:** the iconic preset's CharacterData.Specialty (CONFIRMED RE via AssetTools), not the chassis
+  DefaultSpecialty (UI grouping only). Sideswipe = Soldier, Starscream = Soldier, Soundwave = Scientist, Optimus = Leader.
+
+### Abilities — framework CONFIRMED script; Dodge implemented, the rest PARTIAL
+- TnAbilityManager:
+  - CharacterData.Abilities[0] on Ability0 (Shift), [1] on Ability1 (Ctrl);
+  - SpamPreventionTime 1.0;
+  - versus skill-data index 0 (TnMultiplayerGame.GetSkillDataIndex) → Cooldown[0], and no resource cost;
+  - the cooldown starts at CanStartCooldown;
+  - PlayerWalking.CanUseAbilities refuses while reloading or dodging.
+- **Dodge** (TnAcrobaticsManager.Dodging):
+  - direction from TnPlayerInput.Dodge: |up| ≥ |right| → forward / back, else right / left;
+  - PHYS_Flying at Acrobatics DodgeSpeed 3000 for DodgeTime 0.5;
+  - EndState clamps to MaxAir / MaxGroundSpeed; a wall hit ends it early;
+  - CanDodge requires landing since the last dodge; cooldown 2.0 s.
+  - Test: Sideswipe dodges right at 30 m/s, 10.9 m in 0.6 s, refused while cooling.
+- **Warcry** (TnAbilityWarcry, CONF):
+  - friendlies within AoeRange 3000 UU (FFA: the owner) get TnBuffWarcryIncreaseDamage ×1.1 / 1.2 / 1.3 and
+    DecreaseDamageTaken ×0.5 / 0.4 / 0.3;
+  - level = Clamp(friendlies − 1, 0, 1), +1 with the ImprovedWarcry skill (skills not applied);
+  - BuffTime[0] 15 s; Cooldown[0] 60 s, started after the owner's buff ends (HadAndLostBuffCondition).
+  - Test: Optimus with one friendly in range took 40 of 100; cooldown 59.5 s right after the buff.
+- **Shockwave** (TnAbilityShockwave, CONF):
+  - after Delay 0.25 s, Blueprint[0] Damage 65 within 2500 UU (bDoFullDamage) from the PositionSocket; Cooldown 60 s;
+  - the owner is not hurt [HIGH]; the 700000 momentum knock-back is not applied [PARTIAL].
+  - Test: 65 damage to an enemy 10 m away, nothing before the delay.
+- **Cloaking:**
+  - TnBuffCloak BuffTime[0] 20 s;
+  - ExposeSelf removes it on firing (TnWeapon.OnPreServerFire) and on damage taken (TnPlayerPawn.TakeDamage);
+  - the TDM name-tag label is hidden (TnObjectiveMarkerTypeTransformerVersus DisableLabel);
+  - cooldown 15 s after it ends;
+  - HUD `cloaked`; the cloak shader belongs to Rendering [CONF script].
+- **Whirlwind** is a melee attack (TnMeleeService type 3), so it waits for the melee system [PARTIAL].
+- **Hover:**
+  - TnAbilityHover → TnAcrobaticsManager JumpingToHover (jump to HoverJumpHeight 500 UU), then Hovering when descending:
+    PHYS_Flying, MaxAirSpeed HoverAirSpeed 500 UU/s, HoverDuration 7 s;
+  - jumping or expiry → Falling; TnBuffIncreaseDamageDuringHover ×1.4 while hovering;
+  - Cooldown[0] 35 s once not hovering.
+  - Test: rose 4.9 m, held height, ≤ 5 m/s, fell back; cooldown 31.4 s, 3.6 s after the end.
+- **Melee** [CONF RE TARGETED_PASS3 §H; TnMeleeSet authored]:
+  - Q → MELEE_WeaponAttack (player pawns never stomp): Melee_EnergonSword_01 / _03 alternately, full body.
+  - Assist target: an enemy within 20 m inside the picker cone clamp(4°, atan(3.5 m/d), atan(4.5 m/d)).
+    The pawn lunges toward it, yaw only: 25 m/s for 0.25 s, then ×0.3. Ground speed ×0.75 while attacking.
+  - Damage sweep at t 0.19 s for 0.35 s: box (250, 250, 350) UU at MeleeSocket_SmallRobot. Clear-trace check;
+    one hit per actor per sweep; 150 TnDamageTypeMelee.
+  - **Whirlwind** ability → MELEE_Whirlwind: Transform_Whirlwind_ROBO, upper body, ground speed ×1.2.
+    Eight 0.4 s sweeps (0.9 … 5.19 s), box (450, 450, 200) at PositionSocket, 85 TnDamageTypeWhirlwind each.
+    The trigger fails (no cooldown) unless the melee manager is idle in robot form;
+    Cooldown 60 s starts once the whirlwind ends.
+  - PARTIAL:
+    - melee impulse / momentum and hit reactions are not applied;
+    - flag / bomb carrier 9999 attacks, the type-2 melee weapons' own attacks, GunButt combo and per-chassis sweep times
+      (the LightMedium shared set is used for all).
+  - Tests (WFC_PARTICIPANTTEST 7/7): Q 150 with a 5.4 m lunge; Whirlwind refused during the swing, hits in both
+    early windows, cooldown held until the end.
+- **Homing lock-on** [CONF RE TARGETED_PASS3 §H2; authored WEPDATA / PROJDATA in WeaponTable.inc]:
+  - TnWeaponHoming.Active.Tick for the active weapon (on foot or the vehicle weapon).
+  - Target: an enemy within weapon range inside picker index 4 about the crosshair ray: 4°, clamped to cover
+    600–700 UU (robots) or 500–700 UU (cars; other vehicle forms use the car picker [PROV]).
+    Robots are skipped while CanLockOnToRobots is false (every MP homing weapon).
+  - Lock: LockOnTimer reaches LockOnTime → locked; a target change resets it; HoldLockOnTime drops it
+    with no target.
+  - The shot carries the target only if locked. The projectile homes with HomingForce, switches to
+    ClosingForce within ClosingDistance and explodes after ClosingTime; capped at MaxSpeed; stops homing if
+    the target dies or becomes a robot.
+  - HUD: lockTarget / lockProgress / locked.
+  - Test: no lock on a robot; vehicle lock at 0.52 s (0.5 s + frame); the rocket aimed 4 m off at 50 m hits.
+### Pass 22 multi-map stress (2026-10-05, build of 1fc54a3; logs work/pass22/logs/maps)
+
+All ten MP maps load with their own KillZ (BASE WorldInfo), hazard volumes, pickups and objectives. WFC_MAPSUITE passes on every map.
+
+| Map | Oracle (authored ReachSpecs arrived) | Tours robot / vehicle (fell) | Transforms under map / KillZ | Chaos (20 × 20 s) |
+|---|---|---|---|---|
+| Streets | 852/852 | 100/122, 98/122 (0) | 0/380 | 0 under, 0 KillZ |
+| Gorge | 1473/1476 | 134/147, 126/147 (0) | 0/380 | 2 under (lower path under a deck), 1 KillZ (chasm) |
+| Rust | 1672/1706 | 116/139, 118/139 (0) | 0/380 | 0 / 0, 1 stuck |
+| Debris | 349/350 | 53/75, 55/75 (4) | 2/380, both KillZ | 7 KillZ |
+| Berth | 1302/1302 | 128/143, 127/143 (0) | 0/380 | 0 / 0 |
+| Seed | 972/972 | 109/136, 110/136 (0) | 0/380 | 0 / 0 |
+| Remnant | 5600/5916 | 1305/1363, 1242/1363 (0) | 0/380 | 0 / 0, 2 stuck |
+| BrokenHope | 5570/6074 | 1132/1196, 1112/1196 (0) | 0/380, 8 refused | 1 KillZ |
+| Molten | 887/914 | 87/119, 87/119 (0) | 17/380: 16 KillZ from one start (lava pit edge), 1 under a deck 2.96 m | 1 KillZ |
+| Complex | 1317/1322 | 109/130, 111/130 (1) | 0/380 | 2 KillZ |
+
+Classification:
+- **Debris:** KillZ 100.0 m sits just under the lowest walkable floor (100.4 m), so any fall off a platform edge dies:
+  authentic for the space map. The transform KillZ cases are pawns carried off edges at 15–28 m/s.
+- **Gorge / Molten under-floor cases:** a pawn on a lower path beneath a walkable deck, not inside geometry.
+- **Remnant / BrokenHope oracle shortfalls:** long jump / air-path ReachSpecs on the two largest maps (6000 runs).
+  No falls; not yet broken down [PARTIAL].
+
+- **Splash falloff** now subtracts the victim's collision radius before scaling:
+  Dist = max(d − ColRadius, 0), scale 1 − Dist/DamageRadius [HIGH stock UE3 Actor.TakeRadiusDamage].
+- **Grenades** [CONF script TnGrenadeBag / TnGrenadeThrower / TnProjectileGrenadeBase + authored; RE §H4]:
+  - G ("Throw Grenade") in robot form → TnGrenadeBag.TossGrenade. CanToss = ammo and no FireInterval timer (1.5 s);
+    otherwise dry fire.
+  - The bag is given without activation: not in the weapon-swap cycle; reserve = MaxAmmoCount (Flak 1, FlashBangs 2).
+  - Target: view trace from 10 m to 100 m (hit or end point). GrenadeThrow upper-body clip; spawn after
+    TossDelay 0.4 s at MeleeSocket_RightHand; ExposeSelf.
+  - Velocity:
+    - SuggestTossVelocity(TossStrength 110 m/s) [PROV: native; the exact lower ballistic arc under world gravity];
+    - AdjustTossVelocity lerps toward LowPitchSpeed below LowPitchDegrees.Max;
+    - Init scales by lerp(SpeedScaleAtMinPitch, AtMaxPitch, pct(pitch, MinPitch, MaxPitch)).
+  - Flight: gravity × GravityScale. Impacts reflect × BounceDampening and rest when v² < 500 UU²/s².
+    The fuse (RandomInRange(FuseTime)) starts on the first impact; ExplodeWhenHittingPawn grenades detonate on a pawn.
+    Explosion = HurtRadius (Flak 325 / 20 m, TnDamageTypeFlakGrenade).
+  - The surface normal at a world impact is estimated (floor or reversed travel) [PROV]. Flashbang blind, heal
+    grenade healing and kamikaze-mine seeking are not simulated [PARTIAL].
+  - HUD grenades (reserve, −1 without a bag).
+  - Test (WFC_WEAPONTEST 17/17): spawned at 0.4 s, first impact 0.35 s later, exploded 2.00 s after it; the empty
+    bag refused the next toss.
+- **Tank cannon** [CONF script + authored VEH_Tank_ANIMTREE; RE §H3]:
+  - WeaponPrimary = HmSkelControl_TurretConstrained on C_Cannon_XB, actor space, no constraints.
+  - Player DesiredBoneRotation = (view pitch, hull yaw, 0): the cannon only pitches; the hull yaw is camera-slaved.
+  - LagDegreesPerSecond 360 applied as a max turn rate [HIGH].
+  - Applied as a mesh-space pitch over the animated pose (cannon level at rest) [PROV].
+  - Test: 0.300 rad view → 0.300 rad hull-relative cannon, peak 360°/s.
+- **Knockback** [CONF RE TARGETED_PASS3 §I]:
+  - TnPawn bIgnoreForces: only RequestRespectForcesApplied damage types push: Melee / WeakMelee / Whirlwind,
+    Shockwave, AOE*, HeavyTankShell*, ShieldPush*, OmegaAOE*, ExplodeWithForces …
+    (* bExtraMomentumZ: Z = max(Z, 0.4|M|)). Weapon, projectile and grenade damage types give none.
+  - Momentum / Mass 100. Robot: Pawn.AddVelocity (walking → falling; halve a rising Z above JumpZ).
+    Vehicle: ×0.5 linear velocity.
+  - Sources:
+    - melee normal(victim − attacker) × Impulse: 30000; flag / bomb 80000; Whirlwind 2000;
+    - Shockwave 700000 from the origin.
+  - Test: melee 3.00 m/s, Shockwave 70.0 m/s, IonBlaster 0, vehicle 1.50 m/s.
+- **Flag / bomb carrier** [CONF script TnWeaponFlagBase / TnInventoryManager / TnPawn.Transform; RE §I]:
+  - The objective is the held WT_Heavy weapon (Code Of Power / Bomb, HUD heavyWeapon): no gun fire, and
+    grenade toss refused (dry fire).
+  - Q = the MWT_Flag / MWT_Bomb attack: Melee_Mace _01/_02/_03 sweeps, 9999 damage, impulse 80000, no lunge.
+  - Dropped (a pickup at the carrier) on Transform to vehicle (DropHeavyWeapons), on a weapon swap (ChangedWeapon
+    TossWeapon) and on death.
+  - Pickup is contextual, not on touch (TnWeapon.PickupWhenTouched needs the class already held):
+    E ("Interact / Pick Up") → TryPickup → ServerPickup → TnPickupManager.Pickup on a touching factory or dropped
+    flag / bomb that passes ValidTouch. HUD pickupPrompt. [CONF RE §J]
+  - TnPlayerPawn.CanPickupInventory rejects vehicle form, meleeing (and downed) pawns; defenders are rejected for the flag.
+    The pickup line-of-sight recheck is not run [PARTIAL]. Diagnostic participants hold the pickup button (no AI).
+  - DropFrom FindSpot box (450, 450, 100) is not run; the drop is at the carrier [PARTIAL].
+  - Tests (WFC_CTFTEST 12/12, Streets + Gorge): transform drop, no vehicle re-pick, robot re-pick on a new touch;
+    the local carrier's gun is blocked and a swap tosses the flag.
+- **Barrier** [CONF TnAbilityBarrier / TnBarrierSpawnable script + authored; RE §I3]:
+  - Skill_Barrier anim, then SpawnDelay 0.5 s: wall at Location + (1000, 0, −200) rotated by the pawn, facing it.
+  - Collision: the PHYSSYS box (167 × 1736 × 823.5 UU at (−59, 0, 91) about C_Robo01_XT, bone frame taken as
+    the actor frame [PROV]) as a dynamic set in the pawn and weapon collision.
+  - Blocks pawns, hitscan and projectiles (zero-extent blocking HIGH); takes hitscan and radius damage, not melee.
+  - BarrierHealth 1000, DegenRate 15/s; at 0: FadeOutTime 3 s, then gone; destroyed with the owner.
+  - Cooldown 20 s once the barrier is gone. Mesh WEP_Barrier_SKEL with Barrier_Equip, drawn by Gameplay.
+  - PARTIAL: the flashbang instant break and the TnBuffIncreaseBarrierHealth +500.
+  - Test (PARTICIPANT 10/10): up at 0.5 s; shots absorbed (999 → 784) with the target untouched; owner
+    stopped at 6.9 m; 60 HP decay in 4 s; cooldown 20 s after the fade.
+- **SpawnAmmoCrate (ammo beacon)** [CONF TnAbilitySpawnInventory / SpawnAmmoCrate / TnDroppedPickupAmmoBeacon / Defrag
+  script + authored]:
+  - Skill_Barrier anim; SpawnDelay 0.5 s; dropped from the owner with TossVelocity (2000, 1200, 0) rotated by the
+    owner; falls and lands.
+  - BeaconLifespan 60 s; gone with the owner.
+  - Each tick, the owner and teammates within 1500 UU with line of sight: current weapon FillReserveAmmo, and
+    TnBuffAmmoBeaconIncreaseDamage ×1.15 (BuffTime 1 s, refreshed).
+  - Health 100: owner / team damage ignored. Not a pickup.
+  - Cooldown[0] 60 s once it is gone. The HUD exposes the mesh position for Rendering
+    (PROP_NEU_AmmoPickup_STAT).
+  - PARTIAL: FadeOut duration (removal is immediate); skill gifts / grenades (no skills in versus).
+  - Test (PARTICIPANT 11/11).
+- **Buff killstreaks** [CONF authored TnKillstreak* CDOs (TnAbilityAddBuff BuffTarget / BuffToAdd) + script]:
+  - **Orbital Beacon:** team TnBuffSeeEnemyObjectiveMarkers 30 s. SetupEnemyMarker draws enemy markers unless the
+    enemy has a Warcry buff.
+  - **Orbital Beacon 2.0:** other team TnBuffHardLocked 10 s (marker for the instigator's team) plus 1 damage
+    TnDamageTypeFlashBang. HardLocked FloatModifier[0] 1.4 = damage taken (TnPawn._AllDamageModifierSelf) [CONF RE §K].
+  - **Health Matrix 2.0:** team TnBuffRefillHealthOnKill 60 s. TnPawn.HandleDied gives the killer
+    HealDamage(TnHealTypeHealthPickup = SHT_AddAllSegments).
+  - **EMP:** other team TnBuffAbilityJammedKillstreak 30 s. TnBuffAbilityJammed.Apply: CooldownMultiplier 0
+    (cooldowns frozen; ready abilities still usable); Cloak / Disguise / Warcry removed; hover falls; whirlwind aborts.
+  - HUD seeEnemies / hardLocked / refillOnKill / abilitiesJammed (s left). Test (PARTICIPANT 12/12).
+- **Drain** [CONF authored TnAbilityDrain / TnBuffDrainSource Blueprints[0] + RE §J]:
+  - Self buff 7 s at caster speed ×0.7.
+  - Each tick, every enemy within 2000 UU with line of sight takes 25 DPS (TnDamageTypeDrain); the caster heals
+    35 HPS per target (heal type AddHealthToAll [PROV]).
+  - Cooldown 60 s after the buff (HadAndLostBuff). Removed by AbilityJammed.
+  - Beam FX DrainRay_Beam_FX from MeleeSocket_LeftHand → Rendering (HUD drain).
+  - Test (PARTICIPANT 13/13): enemy −50 in 2 s.
+- **SpawnSentry** [CONF TnAbilitySpawnSentry / TnSentryPawnAbility / TnAiSentryController + authored Default_TURRETDEF /
+  Default_WEPDATA / Sentry_DSYS; RE §J]:
+  - Spawn: 0.2 s delay; owner + 375 UU up, clamped by a trace, then settled on the floor; the previous sentry is killed.
+  - Body: 135 HP draining over Lifetime 30 s; owner damage ignored; melee kills it; dies with the owner.
+  - Aim: closest visible enemy within pitch ±45° (SightRadius 30000); YawPitchControl 270°/s; fires within 3° and
+    6000 UU.
+  - Weapon: 8 instant-hit (range modifier 1.0 to 8000 → 0.5 at 30000) every 0.12 s, spread 0.1; heat +2 to 100 then
+    OverheatDelay 2 s (heat reset [PROV]). Kill credit to the owner.
+  - Cooldown 60 s once gone. Mesh WEP_SentryDeploy_SKEL with WEP_DeployedTurret_Activate, drawn by Gameplay.
+  - Hit volume: the 200 UU cylinder [HIGH].
+  - PARTIAL: flashbang dormancy, Rocket / Repair blueprints, turret pitch on the mesh, 5 s corpse, the 2-sentry claim
+    limit (one sentry per owner here).
+  - Test (PARTICIPANT 14/14): 16 shots in 2 s, hits of 8, drain 18 HP in 4 s.
+- **GuidedMissile** (ability and the Soldier 7-kill Omega Missile streak) [CONF RE §J3 + authored GuidedMissile_PROJDATA /
+  GuidedMissile_STRATEGY]:
+  - Launch: 1.0 s Skill_GuidedMissile; spawned along the controller rotation with pitch clamped to 3.8°–90°.
+  - GuidingMissile: inputs cleared (pawn stops); camera attached at (135, 0, 125) UU in the missile frame, FOV 120.
+  - Steering: per-tick camera deltas → LeftRight / UpDown clamp ±1 → lateral ControlStrength 2500; speed held at 2000.
+  - Ability press detonates: 10000 within 4500 UU. The owner within 45 m dies to self damage (×0.45).
+  - Fuse 30 s; cooldown 45 s once the missile is gone.
+  - PROV: chest socket (eye height used), fuse expiry detonation, camera-delta rotator units.
+  - Test (PARTICIPANT 15/15 on Streets, Gorge, Debris and Rust).
+- **RollerSphere** [CONF TnAbilityRollerSphere / TnRollerMineAbility CDOs, RE §J4, AssetTools ability_physics.json]:
+  - Spawn: 0.5 s, at owner + (500, 0, 100) if safe (else retry every 1 s), local velocity 2750 UU/s.
+  - PhysX sphere: radius 1.208 m (241.5 UU × scale 0.5), LinearDamping 0.6 (authored PHYSMAT); Friction 0.7 and
+    Restitution 0.3 (Engine PhysicalMaterial defaults).
+  - PROV: slope acceleration, angular damping, mass.
+  - ArmTime 3 s; Fuse 10 s; Health 200 (enemy damage only).
+  - Armed contact with an enemy → 135 / 1500 UU (TnDamageTypeRollerMine, no momentum).
+  - Owner / team melee kick: +5000 UU/s horizontal.
+  - Aura: visible enemies within 1500 UU get speed ×0.75 (1 s robot / 2 s vehicle), refreshed.
+  - Gone with the owner; cooldown 60 s once gone. Mesh RollerMineAbility_STAT for Rendering (HUD rollerPos).
+  - Test (PARTICIPANT 16/16): 26.4 → 14.5 m/s in 1 s (e^−0.6); safe before arming; armed contact −135.
+- **Class-pool abilities** [CONF RE §K]:
+  - **HardLock (Mark Target):** the homing-lock pick (picker 4, robots allowed) gets TnBuffHardLocked level 0 for 10 s
+    (marker for the team; damage taken ×1.4); no target → fails; Warcry removes it.
+  - **AbilityJammer:** projectile 10000 UU/s from offset (0, 175, 25), enemies only → TnBuffAbilityJammed 15 s.
+    Abilities are blocked (controller HasDerivedBuff), cooldowns frozen, cloak / warcry / drain stripped.
+  - **TransformDisruptor:** projectile 6000 UU/s → TnBuffTransformDisruptor 3 s: forced into the other form,
+    transforming disabled.
+  - Shots aim through the crosshair. Their life after a miss (3 s) is PROV.
+  - Cooldowns 60 s.
+  - Test (PARTICIPANT 18/18).
+- **Weapon / spawner killstreaks** [CONF RE §K + authored]:
+  - **P.O.K.E. 2.0:** TnWeaponPoke for 20 s (SecondsUntilDeactivated [H]): DisallowWeaponSwitching, ground speed ×1.5.
+    Fire or Q = the MWT_Poke attack: Melee_Axe sweep at 0.335 s, 9999 TnDamageTypePoke, impulse 200000, lunge.
+  - **Nucleon Shock Cannon:** HeavyRocketTurret (HeavyTurret_Rocket_WEPDATA: 10 rockets, 1.75 s, 120 m/s, 500 / 25 m),
+    WT_Heavy: dropped on swap or transform (not re-takeable [PARTIAL]); ground speed ×0.75.
+  - **Thermo Mine Re-Spawner:** 15 s buff spawning a kamikaze mine every 2 s at owner + (400, 100, 0).
+    Mine: hover 2 s (1 m [PROV within 50–150 UU]), then seeks the closest visible enemy within 2000 UU at 2300 UU/s;
+    125 / 500 UU on contact; health 50; life 60 s.
+  - All 12 class killstreaks are implemented. Test (PARTICIPANT 21/21 on Streets and Gorge).
+- Remaining unimplemented abilities (class pools only): Disguise, DecoyTrap are listed per slot and reported
+  unimplemented (log + HUD `implemented = false`) [PARTIAL].
+  Skills are not applied in versus (skill-data index 0, no skill effects) [PARTIAL]; killstreaks: see above.
+- **Correction:** the Pass 21f contract doc said robot Shift ran a dash. It did nothing until this pass.
+
+### Vehicle forms — CONFIRMED script (RE §C), rigid-body details PROVISIONAL
+- **Car** (Car–Car7): the same TnHoverCarSimulation as the truck.
+  - Blueprints: HoverCar_Physics (accel 4000, mount radius 100, dash 0.5 s @ 3000); HoverCar_Supension (K 8000,
+    rest 200, D 4000); Car_Physics (mass 1500, 4 wheels from TnWheelPhysicsBlueprint LocalPosition / friction).
+  - Hover dash along the **dominant stick axis** (TnCarForm.Hovering.DoDash).
+  - **Barrel roll:** Shift while boosting → Roll(): v += yawFrame(0, dir·1200, 1000 − vz); RollDuration 0.7, cooldown
+    2.0. A full turn completes in VEHTEST.
+  - The roll rate (one turn per RollDuration) stands in for the unrecovered PhysX max angular velocity [PROV].
+- **Tank** (TnHoverTankSimulation):
+  - suspension 4 rays, radius 250, K 20000, D 6000;
+  - strafe servo in the camera-yaw frame, only when stable;
+  - boost cap 2500 with input forced forward; release → drift 0.5 s; jump every 0.5 s;
+  - pitch / roll corrected unless stable on the ground;
+  - Shift "180" = view half-turn, cooldown 1.2 s [PROV: TnTurnAroundCameraBehavior timing].
+  - Cannon recoil (−750 local X on fire) waits for vehicle weapons [PARTIAL].
+- **Jet** (TnPlaneForm Hovering / Flying), gravity cancelled in both modes:
+  - **Hover:** servo in the full view frame (mask 1,1,1), accel 2500 × max(drift², |stick|), cap 1500. Ascend / Descend
+    (C / V, the shipped binding) → Dash ±Z at 1000. Roll at |stickX| ≥ 0.5, 0.6 s @ 3000.
+  - **Flight:** boost held → always thrust along the view (4000 / 3000), quadratic lateral drag (DragCoefficient 600).
+    Lean = RLerp((−pitch²·27, yaw²·16, yaw²·77)°, 0.1), with the pitch term fading 45 → 60°. Roll 0.8 s. Release, or
+    a hit above 3000, returns to hover.
+  - The plane rigid-body mass in the drag formula is unknown (100 used) [PROV]. The motion lean of hover is omitted
+    [PARTIAL].
+  - **Camera:** HoverPlane ±45° / 9 m / FOV 80; FlyingPlane ±80° / FOV 100 [CONF authored]. Follow-camera behaviour
+    [PROV].
+- **Vehicle FX and sounds** drawn by Gameplay (VehicleFx: BoostFx / HoverFX / JumpFX / ram) are OptimusTruckForm's, on
+  VH_OptimusPrime bones. They now play only for the Optimus chassis (Truck / Truck7). Other chassis' authored sets
+  (character.json vehicle.fx, e.g. Starscream Afterburner_D_FX) are left to Rendering [PARTIAL].
+- **Hulls:** each chassis' VH_*_PHYSSYS convex hull (BodySetup ConvexElems bounds, C_Reference_XR) from authored data
+  [CONF] (VehicleHullTable.inc). Element 0 of VH_Optimus_PHYSSYS reproduces the Pass 17 hull exactly.
+- **ChassisOffset:** unset → 0 (no class default authored). The loader first defaulted it to Optimus's 15, which lifted
+  the COM of Soundwave and others wrongly.
+- **VEHTEST forms:**
+  - car rest at the spring L_eq;
+  - car dash right 30 m/s;
+  - car barrel roll 180° max roll, landing level;
+  - tank hover 15 / boost 25 with strafe input ignored / drift after release;
+  - jet holds altitude, ascends at 10 m/s, flies 40 m/s along the view, releases to hover.
+- **Truck numbers unchanged** (rest 1.2872 m, steering, nitro, ramp sweep, boost continuity).
+
+### Transform clearance — UWorld::FindSpot order (RE §C6, CONFIRMED native)
+- Robot-extent overlap test against world geometry.
+- Depenetration candidates: Z, then X, then Y at 1.0 extent, then 0.5; then the ±X±Y±Z diagonals at 0.5. The first
+  clear spot wins; refuse only when none is clear.
+- A vertical push never lands on a surface above the start.
+- VEHTEST clearance: refuse / fit / displace pass.
+
+### Weapons — selection → inventory → mesh → firing → kill feed are one weapon
+- **Data:** versus uses **MultiplayerData** (TnMultiplayerGame.DesiredWeaponDataType = 3, CONFIRMED RE). It falls back
+  to PlayerData when a weapon has none (TnWeapon, CONFIRMED). Generated `WeaponTable.inc` (52 weapons) from
+  authored.db + mp_weapons.json + cooked weapon sockets.
+  - mp_weapons.json's "player WEPDATA" block is the SP set; reported to AssetTools.
+- **Inventory** (TnCharacterApplier.ApplyWeapons / CreateWeapons): CharacterData.WeaponTypes in order, first active.
+  - Iconic → the chassis preset.
+  - Custom → the selection's list, validated against the chassis' TnDataProvider_Weapon restrictions. A disallowed
+    pick is refused and reported (`loadoutRefused`), never replaced.
+  - VehicleWeapons are kept and reported.
+- **Swap Weapons** (PgUp / PgDn): PutDownTime + EquipTime from WEPDATA; no firing in between.
+  - **Instant-hit weapons simulate:** damage, interval, NumShotsToFire pellets, falloff, spread, reload.
+  - **Projectile, melee and grenade weapons** are equipped and shown but flagged `weaponSimulated = false` [PARTIAL].
+- **Presentation:** the active weapon's own mesh and AnimSet at the chassis socket, with its MuzzleFlash socket.
+  - Ion Blaster particle FX are drawn only for the Ion Blaster; other weapons expose their FX template names
+    [PARTIAL, Rendering].
+  - Weapon sounds stay the Ion Blaster's [PARTIAL, Systems].
+- **WFC_WEAPONTEST 9 / 9:**
+  - the table reproduces IonBlaster_WEPDATA;
+  - iconic loadouts for Truck / Car2 / Jet / Tank3 / Truck4;
+  - Car2 AssaultRifle refused (ChassisRestriction Jet / Tank);
+  - Shotgun 8 pellets;
+  - swap timing to ShortSword (not simulated);
+  - firing spends the active weapon's ammo with its damage type.
+- **Visually verified:** Sideswipe holding the Neutron Assault Rifle.
+
+### Code of Power (CTF) and Countdown to Extinction (EXT) — all six versus modes on the shared framework
+- **Rounds** (TnGameRules_RoundsBase, CONFIRMED):
+  - GRI.Rounds = PointsToWin for CTF (default 2), TimeLimit per round (default 300);
+  - the round timer replaces the match clock (RunGameTimer false);
+  - at 0 → CurrentRound++ → EndGame(none, "Score") after the last round, else BetweenRounds 5 s → RestartRound (every
+    player respawns, no death counted);
+  - RoundEnded / RoundStarted events.
+- **SingleFlagCTF:** first attacker RandomInt(2), alternating each round.
+  - SetupRoundStart: the attackers' capture point _Active; the defenders' flag factory in Pickup, the other asleep.
+  - Mercy rule on the last round (the last attacker already leads → end).
+  - A capture does not end the round.
+- **Flag:**
+  - defenders can't take it (ValidTouch);
+  - capture = carrier inside the active capture point's ObjectiveVolume → ScoreObjective(1): +1 team, +10 personal
+    (IndividualScore 10); the flag goes straight home;
+  - carrier death → dropped flag: AutoReturnTime 30; defenders touching it drain ReturnFlagTime 10 at dt × count,
+    recovering +dt with none; attackers re-take it; falling below KillZ sends it home.
+- **Bomb:**
+  - neutral factory; anyone takes it; GRI.AttackingTeam = holder team;
+  - plant on the ENEMY TnBombPlantPoint (ObjectiveVolume) → FuseTime 15;
+  - defenders inside accumulate DefuseTime 5 (reset when none) → the bomb drops at the point (DefuseBombSpawnClass);
+  - detonation → ScoreObjective(planter, 1), HurtRadius DetonateDamage 9999 / DetonateRadius 5000 UU (AOE), bomb home,
+    factory WaitAfterScoreTime 5;
+  - PointsToWin 3, TimeLimit 900.
+  - All values come from authored TnBombPlantPointBase / TnDroppedPickupFlagBase / factory defaults [CONF].
+- **Teams:** flag factories, capture points and plant points carry authored DefenderTeamIndex (byte default 0).
+  Clusters filter TNGT_CTF / TNGT_EXT.
+- **Touch shapes:** factory CylinderComponent 200 / 100 UU; dropped pickup TouchCylinder = CylinderComponent default
+  22 UU [HIGH]; pawn cylinder 2 m [PROV for non-Optimus chassis].
+- **PARTIAL:**
+  - the carrier's TnWeaponFlag1Hand / TnWeaponBomb weapon swap (the carrier keeps its weapon);
+  - carrying in vehicle form is allowed [UNKNOWN];
+  - flag / bomb messages are logged (switch numbers), not presented;
+  - XP events are not implemented.
+- **WFC_CTFTEST 10 / 10:**
+  - round-1 activation;
+  - defender refused, attacker capture +1 / +10, flag home;
+  - drop + defender return in 10 s;
+  - round timer → 5 s break → attackers swap → match end by Score;
+  - EXT: holder sets the attacking team; plant / defuse 5 s / drop at the point;
+  - detonation +1 team, +10 (+1 blast kill) personal, blast kills within 50 m, factory sleeps.
+- **Assists** now divide by the victim's HealthMax (its class blueprint), not 550.
+
+### Camera settings (RE TARGETED_PASS3 §G2)
+- `PlayerController::setLookSettings(CameraSensitivity 0–100, InvertY_Robot, InvertY_Car, InvertY_Plane, InvertY_Tank)`.
+- Orbit speed follows Lerp(0.03, 0.20, s/100) relative to the default 30 [CONF curve; absolute mouse rate PROV].
+- Invert per form: car and truck share InvertY_Car.
+- Frontend calls it on Settings commit and at match start.
+
+### Vehicle cameras per chassis — CONFIRMED authored
+- Each chassis' HmCameraStrategySet (roster cameras) supplies hover / driving / flying strategy values: anchor, orbit
+  distance, pitch range and FOV (CameraTable.inc, tools/gameplay/gen_camera_table.js).
+  - Truck 1.85 / 9.5 m (drive 2.15 / 10.5);
+  - car 1.25 / 5.25 m;
+  - tank 1.75 / 8.25 m, pitch −10..25°;
+  - jet hover 1.5 / 9 m ±45°, flying ±80° FOV 100.
+- The truck row reproduces the existing constants exactly.
+- CAMSYNC at 144 Hz: Sideswipe and Starscream show no separation (robot 0.0002°).
+
+### Killstreaks — framework CONFIRMED script; 4 of 12 effects implemented
+- **Counting:** PRI._CurrentKillStreak += kills (AddKills); death resets it (AddDeaths → KillStreakEnded).
+- **Earning:** UpdateKillstreakRewards(count) → FindKillstreak(Specialty, count) → AcquireKillstreak (stack, no duplicates).
+  Each class has three streaks at 3 / 5 / 7 kills (TnDataProvider_Killstreak).
+- **Triggering:** B (TriggerKillstreak) fires the newest; RequiresRobotForm streaks in vehicle form transform first and
+  then trigger (Deferred). ClientGameEnded clears the stack.
+- **Implemented:**
+  - Overshield Matrix: team OverShieldPickup heal;
+  - Ammo Matrix: team FillReserveAmmo + TnBuffLockAmmoClip 10 s;
+  - Energon Recharger: regen × FloatModifier 2 for 30 s;
+  - Intercooler: ability cooldown × 5 for 30 s.
+  - Buff values come from the authored TnBuff* defaults [CONF]; the exact buff hooks are HIGH.
+- **PARTIAL** (acquired and triggered, effect reported unimplemented): Orbital Beacon 1 / 2, P.O.K.E. 2.0, Thermo Mine
+  Re-Spawner, Health Matrix 2.0, Nucleon Shock Cannon, Electromagnetic Pulse, Omega Missile.
+- **Test:** WFC_PARTICIPANTTEST 5 / 5. Custom Soldier: 3 kills → Ammo Matrix; B refills and locks the clip (32 stays 32);
+  death resets the streak.
+- **HUD:** killStreak, killstreaks[] (newest last), killstreakImplemented, regenBuff, fastCooldownBuff, ammoLockBuff.
+
+### Projectiles and vehicle weapons
+- Projectile weapons fire their WeaponProjectiles[0] class with its MultiplayerData TnProjectileData: InitialSpeed, Damage,
+  DamageRadius, DamageType [CONF authored]. Examples: TankShell 20000 / 170 / 2500; RocketVh 18000 / 55 / 1500.
+- Flight is straight. Homing lock-on (TnProjectileDataHoming HomingForce / ClosingForce) is PARTIAL: fired straight.
+- On any hit: HurtRadius with stock UE3 linear falloff [HIGH]. Teammates are filtered; the instigator is never hit by its
+  own shot in flight.
+- **Damage taken** is scaled by the victim form's DamageMultiplier (ROBODEF 1.0; VEHDEF e.g. 0.75 tank, 0.8 jet, 0.9 car)
+  and, for self damage, by SelfDamageMultiplier 0.45 [CONF data; HIGH placement in TakeDamage].
+- **Vehicle form fires** its CharacterData.VehicleWeapons[0] (projectile or hitscan). Origin = the chassis' vehicle
+  WeaponSocket_Primary (bone × socket, CONF); aim = the camera aim point. The tank cannon turret rotation
+  (UpdateCannonRotation) is not animated [PARTIAL].
+- Repair rays are flagged unsimulated (they heal) [PARTIAL]. Projectile meshes and trails are drawn as a small box
+  marker until Rendering draws them [PROV presentation].
+- WFC_WEAPONTEST 12 / 12: Warpath's TankCannon shell flies and hits for 131; self damage 49.8 ≤ 170 × 0.45 × 0.75.
+
+### Non-local participant pawns (bot-ready architecture, RECONSTRUCTION EXTENSION boundary)
+- Participants (MatchOpponent) are full pawns: the same chassis, specialty, loadout, movement, transformation, damage,
+  death / respawn and objective paths as the local pawn. Their inputs come only from `setIntent` (harnesses); no AI.
+- WFC_PARTICIPANTTEST 4 / 4. TDM assists now use the victim's class HealthMax.
+
+### HUD objective markers for every mode
+- HudGameState.objectives now lists every active-in-mode objective: DOM nodes, KOTH zones, CTF flag factories (active at
+  home) and capture points (active for the attackers), the EXT bomb factory and plant points, each with its team.
+  Tags carry `label` (false when cloaked).
+
+### HUD state additions
+`selectedChassis`, `drawnChassis`, `specialty`, `spawnError`, `weaponId`, `weaponIcon`, `weaponSimulated`,
+`weaponSwitching`, `inventory[]`, `activeWeapon`, `vehicleWeapons[]`, `loadoutRefused[]`. `segmentCount` follows the class.
+
+### Multi-map
+- World loads any processed MP map (`WFC_MAP`, or the launch URL's map). Everything is read through the shared contract:
+  world / collision / gameplay / physics / navigation.
+- KillZ comes from the persistent level's WorldInfo: Streets −750 m, Gorge −75 m, Rust −5.1 m, Debris +100 m.
+- Streets' rotating domes are restricted to Streets.
+- Gorge, Rust and Debris load with their own starts, pickups, objectives and destructibles.
+- **Hazard volumes** (AssetTools maps/<Map>/hazard_volumes.json): convex PhysicsVolume brushes with DamagePerSec / DamageType.
+  Stock UE3 pain applies: DamagePerSec × PainInterval on entry and every PainInterval (1 s default) [HIGH].
+  TnDamageTypeInstantKillAi forces Died only for AI pawns (TnAiPawn.TakeDamage); for players it is 2000 damage, which is
+  lethal [CONF].
+- Harnesses take the map's paths and KillZ. `WFC_MAPSUITE` runs per map: TDM launch, 12 respawns on floor and clear,
+  KillZ death, hazard damage, pickups, second match.
+
+### Stress per chassis (Streets, fixed 60 Hz)
+| chassis | WFC_CHAOS | WFC_XFORMTEST |
+|---|---|---|
+| Truck (Optimus) | 60 starts: 0 under map, 0 KillZ, 0 stuck | 0 / 1520 under map |
+| Car2 (Sideswipe) | 30: 1 under, 0 KillZ, 1 stuck (before the hull / ChassisOffset fix) | 0 / 760 |
+| Jet (Starscream) | 30: 0 / 0 / 0 | 0 / 760 (1 forced back to vehicle) |
+| Tank3 (Warpath) | 30: 0 under, 0 KillZ, 1 stuck | 0 / 760 (1 refused, 7 forced back) |
+| Truck4 (Soundwave) | 30: 6 under + 1 KillZ before the fixes → **1 under (4 frames, vehicle under a deck its 1.42 m hull top clears), 0 KillZ** after | 0 / 760 |
+
+- Weapons and loadouts: WFC_WEAPONTEST 10 / 10.
+- TDM 43 / 43, modes 21 / 21, chassis 13 / 13.
+- CAMSYNC 60 / 144 / 240 Hz unchanged (robot 0.0003°).
+
+---
+
 ## PASS 21e — TRANSFORM CLEARANCE, ROSTER CONTRACT, HUD STATE COMPLETION, REGRESSION GUARDS (2026-10-04, gameplay agent)
 Inputs:
 - RE OVERNIGHT_2026-10-04 §A2, A5, B3, E, F;
@@ -4304,3 +4793,5 @@ isolated effort, not cut into this pass to avoid leaving the build broken.
 - Camera follow distance/offset: HM camera behavior assets (cooked packages) or exe.
 - Vehicle base speed/accel/turn: `TnCarForm`/`TnTruckForm` compiled defaults in exe.
 - Lighting: lightmaps not extracted; dominant directional light direction/colour from map.
+- Remaining unimplemented abilities (in no iconic preset; class pools only): DecoyTrap, HardLock, Disguise, AbilityJammer,
+  TransformDisruptor, MarkTarget … are listed per slot and reported unimplemented [PARTIAL].

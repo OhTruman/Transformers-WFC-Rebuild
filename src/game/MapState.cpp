@@ -247,6 +247,10 @@ bool MapState::load(const std::string& path, MatchMode mode) {
         for (size_t i = 0; i < list.size(); ++i) {
             ObjectiveObject o;
             o.actor = list[i]["actor"].asString(); o.cls = oc.cls;
+            // Team-owned objectives (flag factory / capture point / plant point): authored DefenderTeamIndex, byte default 0.
+            if (std::string(oc.cls) == "TnGameObjectivePickupFactoryFlag" || std::string(oc.cls) == "TnFlagCapturePoint" ||
+                std::string(oc.cls) == "TnBombPlantPoint")
+                o.authoredTeam = list[i]["effective"]["DefenderTeamIndex"].asInt(0);
             const assets::Json& L = list[i]["location_gltf"];
             o.pos = {L[0].asFloat(), L[1].asFloat(), L[2].asFloat()};
             o.yawDeg = list[i]["yaw_deg"].asFloat();
@@ -356,6 +360,16 @@ void MapState::activateKothZone(int idx) {
 }
 
 void MapState::matchStarting() {
+    // CTF / EXT: one carried objective per flag factory / the bomb factory (state Pickup; CTF activation per round).
+    carried_.clear(); planted_ = Planted{};
+    for (size_t i = 0; i < objectives_.size(); ++i) {
+        const ObjectiveObject& o = objectives_[i];
+        if (!o.activeInMode) continue;
+        if (o.cls == "TnGameObjectivePickupFactoryFlag" || o.cls == "TnGameObjectivePickupFactoryBomb") {
+            Carried c; c.kind = o.cls == "TnGameObjectivePickupFactoryBomb" ? 1 : 0; c.home = (int)i; c.pos = o.pos;
+            carried_.push_back(c);
+        }
+    }
     // TnKingOfTheHillZoneBase.MatchStarting: the first zone to receive it picks InitialZoneIndex = RandRange(-1,
     // len(AllOtherZones)) - itself or one of the others [CONF; RandRange's integer distribution approximated as uniform].
     std::vector<int> koth;
@@ -419,7 +433,162 @@ void MapState::loadObjectiveVolumes(const std::string& path) {
 
 // Live objective rules (InProgress only). Pawn membership = the pawn's location inside the ObjectiveVolume brush
 // [HIGH: Volume.AssociatedActor forwards Touch / UnTouch; the cylinder-vs-brush overlap is approximated by the location].
+// ---- Carried objectives (CTF / EXT) ----------------------------------------------------------------------------------
+namespace {
+constexpr float kFactoryTouchR = 2.0f, kFactoryTouchHH = 1.0f;   // pickup factory CylinderComponent 200 / 100 UU
+constexpr float kPawnR = 2.0f, kPawnHH = 2.0f;                   // pawn cylinder (robot) for touches
+constexpr float kDroppedTouchR = 0.22f;                          // dropped pickup TouchCylinder: CylinderComponent default 22 UU [HIGH]
+bool cylTouch(const core::Vec3& pawn, const core::Vec3& at, float r, float hh) {
+    float dx = pawn.x - at.x, dz = pawn.z - at.z;
+    return std::sqrt(dx * dx + dz * dz) <= r + kPawnR && std::fabs(pawn.y - at.y) <= hh + kPawnHH;
+}
+}
+
+int MapState::carriedBy(int player) const {
+    for (size_t i = 0; i < carried_.size(); ++i) if (carried_[i].holder == player && player >= 0) return (int)i;
+    return -1;
+}
+
+void MapState::roundStart(int attackingTeam) {
+    ctfAttacking_ = attackingTeam;
+    for (ObjectiveObject& o : objectives_) {
+        if (!o.activeInMode) continue;
+        // TnFlagCapturePointBase.ActivateIfMatchingTeam(AttackingTeam): SetActive(DefenderTeamIndex == attacking team).
+        if (o.cls == "TnFlagCapturePoint") o.state = (o.defenderTeam == attackingTeam) ? ObjectiveObject::State::Active : ObjectiveObject::State::Inert;
+    }
+    for (Carried& c : carried_) {
+        if (c.kind != 0) continue;
+        // TnGameObjectiveWeaponPickupFactory.ActivateIfMatchingTeam(DefendingTeam): the defenders' factory Pickup, others Sleeping.
+        const ObjectiveObject& f = objectives_[(size_t)c.home];
+        c.active = f.defenderTeam == (attackingTeam == 0 ? 1 : 0);
+        c.holder = -1; c.holderTeam = 255; c.dropped = false; c.pos = f.pos; c.autoReturn = 0.0f; c.returnLeft = 10.0f;
+    }
+}
+
+int MapState::pickupCandidate(const ObjPawn& p) const {
+    if (!p.alive || !p.canPickup) return -1;
+    for (size_t ci = 0; ci < carried_.size(); ++ci) {
+        const Carried& c = carried_[ci];
+        if (c.sleep > 0.0f || !c.active || c.holder >= 0) continue;
+        const ObjectiveObject& home = objectives_[(size_t)c.home];
+        if (c.kind == 0 && p.team == home.defenderTeam && !c.dropped) continue;
+        if (c.kind == 0 && c.dropped && p.team != ctfAttacking_) continue;
+        const core::Vec3 at = c.dropped ? c.pos : home.pos;
+        if (c.dropped ? cylTouch(p.pos, at, kDroppedTouchR, kDroppedTouchR) : cylTouch(p.pos, at, kFactoryTouchR, kFactoryTouchHH)) return (int)ci;
+    }
+    return -1;
+}
+
+bool MapState::dropCarriedBy(int player, const core::Vec3& at) {
+    for (Carried& c : carried_)
+        if (c.holder == player) {
+            c.holder = -1; c.holderTeam = 255; c.dropped = true; c.pos = at; c.autoReturn = 30.0f; c.returnLeft = 10.0f;
+            if (c.pos.y < killZ_ + 1.0f) { c.dropped = false; c.pos = objectives_[(size_t)c.home].pos; }
+            LOG_INFO("match: %s (tossed)", c.kind == 0 ? "TnFlagMessage(dropped)" : "TnBombMessage(dropped)");
+            return true;
+        }
+    return false;
+}
+
+static void tickCarried(std::vector<ObjectiveObject>& objs, std::vector<MapState::Carried>& carried, MapState::Planted& planted,
+                        int ctfAttacking, float killZ, float dt, const std::vector<MapState::ObjPawn>& pawns, MapState::ObjectiveScoring& out) {
+    using Carried = MapState::Carried;
+    auto alivePawn = [&](int player) -> const MapState::ObjPawn* {
+        for (const auto& p : pawns) if (p.player == player && p.alive) return &p;
+        return nullptr;
+    };
+    for (size_t ci = 0; ci < carried.size(); ++ci) {
+        Carried& c = carried[ci];
+        ObjectiveObject& home = objs[(size_t)c.home];
+        if (c.sleep > 0.0f) { c.sleep = std::max(0.0f, c.sleep - dt); continue; }
+        if (!c.active) continue;
+        if (c.holder >= 0) {
+            const MapState::ObjPawn* h = alivePawn(c.holder);
+            if (!h) {
+                // The carrier died: TnDroppedPickup at the last location (TnWeaponFlagBase / Bomb dropped on death).
+                c.holder = -1; c.dropped = true; c.autoReturn = 30.0f; c.returnLeft = 10.0f;
+                if (c.pos.y < killZ + 1.0f) { c.dropped = false; c.pos = home.pos; }   // fell out of the world: home
+                out.messages.push_back({c.kind == 0 ? "TnFlagMessage(dropped)" : "TnBombMessage(dropped)", (int)ci});
+                continue;
+            }
+            c.pos = h->pos;
+            // Capture: TnFlagCapturePoint.Touch while _Active with a flag carrier -> ScoreObjective(PRI, 1), Flag.OnScore
+            // -> home (reason 3, sleep 0: immediately available) [CONF].
+            if (c.kind == 0) {
+                for (const ObjectiveObject& o : objs)
+                    if (o.activeInMode && o.cls == "TnFlagCapturePoint" && o.state == ObjectiveObject::State::Active && o.contains(h->pos)) {
+                        out.objectiveScores.push_back({c.holder, 1});
+                        out.messages.push_back({"TnFlagMessage(captured)", h->team});
+                        c.holder = -1; c.holderTeam = 255; c.dropped = false; c.pos = home.pos;
+                        break;
+                    }
+            } else if (!planted.active) {
+                // Plant: the carrier touches the ENEMY plant point (DefenderTeamIndex != carrier team) [CONF].
+                for (size_t oi = 0; oi < objs.size(); ++oi) {
+                    const ObjectiveObject& o = objs[oi];
+                    if (!o.activeInMode || o.cls != "TnBombPlantPoint" || o.defenderTeam == h->team || !o.contains(h->pos)) continue;
+                    planted.active = true; planted.point = (int)oi; planted.planter = c.holder; planted.team = h->team;
+                    planted.fuse = 15.0f; planted.defuse = 0.0f;                 // FuseTime 15
+                    c.holder = -1; c.holderTeam = 255; c.dropped = false; c.active = false;   // the bomb is in the point
+                    out.messages.push_back({"TnBombMessage(planted)", h->team});
+                    break;
+                }
+            }
+            continue;
+        }
+        const core::Vec3 at = c.dropped ? c.pos : home.pos;
+        if (c.dropped) {
+            // TnDroppedPickupFlagBase / Bomb: AutoReturnTime 30; flag: defenders touching drain ReturnFlagTime 10 at dt x count,
+            // +dt recovery with none; at 0 -> returned. Falling out of the world sends it home (handled by the host).
+            c.autoReturn -= dt;
+            if (c.kind == 0) {
+                int defending = ctfAttacking == 0 ? 1 : 0, n = 0;
+                for (const auto& p : pawns) if (p.alive && p.team == defending && cylTouch(p.pos, at, kDroppedTouchR, kDroppedTouchR)) ++n;
+                c.returnLeft = n > 0 ? c.returnLeft - dt * n : std::min(10.0f, c.returnLeft + dt);
+                if (c.returnLeft <= 0.0f) { c.dropped = false; c.pos = home.pos; out.messages.push_back({"TnFlagMessage(returned)", defending}); continue; }
+            }
+            if (c.autoReturn <= 0.0f) { c.dropped = false; c.pos = home.pos; out.messages.push_back({c.kind == 0 ? "TnFlagMessage(returned)" : "TnBombMessage(returned)", -1}); continue; }
+        }
+        // Pickup: flag - attackers only (ValidTouch rejects DefenderTeamIndex); bomb - anyone; dropped re-pick by touch.
+        for (const auto& p : pawns) {
+            if (!p.alive || !p.canPickup || !p.wantsPickup) continue;
+            if (c.kind == 0 && p.team == home.defenderTeam && !c.dropped) continue;
+            if (c.kind == 0 && c.dropped && p.team != ctfAttacking) continue;
+            bool touch = c.dropped ? cylTouch(p.pos, at, kDroppedTouchR, kDroppedTouchR) : cylTouch(p.pos, at, kFactoryTouchR, kFactoryTouchHH);
+            if (!touch) continue;
+            c.holder = p.player; c.holderTeam = p.team; c.dropped = false; c.pos = p.pos;
+            if (c.kind == 1) out.attackingTeam = p.team;                 // ObjectiveHolderChanged -> GRI.AttackingTeam
+            out.messages.push_back({c.kind == 0 ? "TnFlagMessage(taken)" : "TnBombMessage(taken)", p.team});
+            break;
+        }
+    }
+    // Planted bomb: fuse; defenders on the point accumulate DefuseTime 5 (reset when nobody); detonation: ScoreObjective
+    // (planter, 1), HurtRadius 9999 / 5000 UU AOE, the bomb returns home and its factory sleeps WaitAfterScoreTime 5 [CONF].
+    if (planted.active) {
+        const ObjectiveObject& pt = objs[(size_t)planted.point];
+        int defenders = 0;
+        for (const auto& p : pawns) if (p.alive && p.team == pt.defenderTeam && pt.contains(p.pos)) ++defenders;
+        planted.defuse = defenders > 0 ? planted.defuse + dt : 0.0f;
+        planted.fuse -= dt;
+        Carried* bomb = nullptr;
+        for (Carried& c : carried) if (c.kind == 1) bomb = &c;
+        if (planted.defuse >= 5.0f) {
+            // Defused: the bomb spawns at the point (DefuseBombSpawnClass = a dropped TnWeaponBomb).
+            planted.active = false;
+            if (bomb) { bomb->active = true; bomb->dropped = true; bomb->pos = pt.pos; bomb->autoReturn = 30.0f; }
+            out.messages.push_back({"TnBombMessage(defused)", pt.defenderTeam});
+        } else if (planted.fuse <= 0.0f) {
+            planted.active = false;
+            out.objectiveScores.push_back({planted.planter, 1});
+            out.radiusDamage.push_back({pt.pos, 50.0f, 9999.0f, planted.planter, "TransGame.TnDamageTypeBombExplosion"});
+            if (bomb) { bomb->active = true; bomb->dropped = false; bomb->holder = -1; bomb->pos = objs[(size_t)bomb->home].pos; bomb->sleep = 5.0f; }
+            out.messages.push_back({"TnBombMessage(detonated)", planted.team});
+        }
+    }
+}
+
 void MapState::tickObjectives(float dt, const std::vector<ObjPawn>& pawns, ObjectiveScoring& out) {
+    if (!carried_.empty()) tickCarried(objectives_, carried_, planted_, ctfAttacking_, killZ_, dt, pawns, out);
     for (size_t idx = 0; idx < objectives_.size(); ++idx) {
         ObjectiveObject& o = objectives_[idx];
         if (!o.activeInMode) continue;
@@ -512,8 +681,9 @@ void MapState::resetForNewMatch() {
     clock_ = 0.0f;
     for (ObjectiveObject& o : objectives_) {
         o.animClock = 0.0f; o.kothVisited = false;
-        o.defenderTeam = 255; o.claimingTeam = 255; o.captureTime = 0.0f; o.scoreTime = 0.0f;
+        o.defenderTeam = o.authoredTeam; o.claimingTeam = 255; o.captureTime = 0.0f; o.scoreTime = 0.0f;
     }
+    carried_.clear(); planted_ = Planted{}; ctfAttacking_ = 255;
     applyObjectiveStates();
     applyModeVisibility();
     pose();

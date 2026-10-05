@@ -27,6 +27,13 @@ MatchSettings MatchSettings::forMode(const std::string& tag) {
     // ReportGameProgressTime + Points [CONF authored TnOnlineGameSettings + RE PLAYTEST section 3].
     if (tag == "DM") { s.teamGame = false; s.goalScore = 20; s.timeLimit = 900; s.gameType = "TNGT_DM"; }
     else if (tag == "DOM") { s.teamGame = true; s.goalScore = 400; s.timeLimit = 900; s.gameType = "TNGT_DOM"; s.teamScoreAmount = 0; s.reportKills = false; s.reportPoints = true; }
+    // CTF (Code of Power): rounds 2 (2/4/6), TimeLimit per round 300, capture IndividualScore 10 + team 1, ScoreKillsMP.
+    // EXT (Countdown to Extinction): PointsToWin 3 (1/3/5), TimeLimit 900, detonation IndividualScore 10 + team 1
+    // [CONF RE MILESTONE05_PLAYTEST_RE §3].
+    else if (tag == "CTF") { s.teamGame = true; s.goalScore = 1000000; s.timeLimit = 300; s.gameType = "TNGT_CTF"; s.teamScoreAmount = 0;
+                             s.reportKills = false; s.reportPoints = false; s.objectiveIndividualScore = 10; s.rounds = 2; s.singleFlagCTF = true; }
+    else if (tag == "EXT") { s.teamGame = true; s.goalScore = 3; s.timeLimit = 900; s.gameType = "TNGT_EXT"; s.teamScoreAmount = 0;
+                             s.reportKills = false; s.reportPoints = false; s.objectiveIndividualScore = 10; }
     else if (tag == "KOTH") { s.teamGame = true; s.goalScore = 400; s.timeLimit = 900; s.gameType = "TNGT_KOTH"; s.teamScoreAmount = 0; s.reportKills = false; s.reportPoints = true; s.objectiveIndividualScore = 1; }
     else { s.modeTag = "TDM"; s.teamGame = true; s.goalScore = 40; s.timeLimit = 900; s.gameType = "TNGT_TDM"; }
     return s;
@@ -148,6 +155,7 @@ void Match::tick(float dt) {
             if (p.timeToRespawn <= 0.0f) restartPlayer((int)i);
         }
         if (s_.teamGame) updateClusters(dt);
+        if (s_.rounds > 0) tickRounds(dt);
     } else if (state_ == State::MatchOver && stateTime_ >= s_.matchOverCountdown) {
         // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (ServerTravel to the lobby URL).
         state_ = State::Returned;
@@ -163,6 +171,7 @@ void Match::secondTimer() {
     }
     if (state_ != State::InProgress) return;
     ++elapsedTime_;
+    if (s_.rounds > 0) return;                                   // RoundsBase: RunGameTimer false, the round timer runs
     if (remainingTime_ > 0) {                                    // bStopCountDown false: rules RunGameTimer
         --remainingTime_;
         // TnGameRules_ReportGameProgressTime: 30 / 60 / 120 s -> switch 0 / 1 / 2; 60 also NotifyGameNearlyComplete.
@@ -184,7 +193,14 @@ void Match::startMatch() {
     gameStatus_ = 3;
     elapsedTime_ = 0;
     stateTime_ = 0.0f;
+    if (s_.rounds > 0) {
+        // RoundsBase.MatchStarting -> Active: TimeTillNextReset = TimeLimit; SingleFlagCTF: AttackingTeam = RandomInt(2).
+        currentRound_ = 0; betweenRounds_ = false; roundTimeLeft_ = (float)s_.timeLimit;
+        if (s_.singleFlagCTF) attackingTeam_ = std::rand() % 2;
+        remainingTime_ = s_.timeLimit;
+    }
     emit(MatchEvent::Type::MatchStarted);
+    if (s_.rounds > 0) emit(MatchEvent::Type::RoundStarted, -1, attackingTeam_);
     // SpawnHelper: RespawnHelper.InitialSpawn -> Wave TimeToAllowInstantInitialSpawns -1: always immediate.
     for (size_t i = 0; i < players_.size(); ++i) restartPlayer((int)i);
 }
@@ -194,6 +210,7 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
     if (killer >= (int)players_.size()) killer = -1;
     MatchPlayer& V = players_[(size_t)victim];
     if (!V.alive) return;
+    V.currentKillStreak = 0;                                      // AddDeaths -> KillStreakEnded
     // TnMultiplayerGame.Killed: TnTombstone at the victim (team set) - a spawn modifier.
     tombstones_.push_back({locs_[(size_t)victim], V.team});
     const bool killedSelf = killer == victim;
@@ -204,12 +221,18 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
             K.score += 1;
             if (s_.teamGame && s_.teamScoreAmount > 0 && (K.team == 0 || K.team == 1)) teamScore_[K.team] += 1;   // Team.AddScore(1)
             K.kills += 1;                                         // TrackKillsMP: +1 -> AddKills
+            // AddKills: _CurrentKillStreak += 1; TnKillStreakAnnouncer -> UpdateKillstreakRewards(count) -> AcquireKillstreak
+            // (no duplicates) [CONF script].
+            K.currentKillStreak += 1;
+            if (const KillstreakDef* ks = findKillstreak(K.specialty, K.currentKillStreak))
+                if (std::find(K.acquiredKillstreaks.begin(), K.acquiredKillstreaks.end(), ks->id) == K.acquiredKillstreaks.end())
+                    K.acquiredKillstreaks.push_back(ks->id);
         }
     }
     // TrackKillsMP.ScoreAssists: the first damager in the victim's DamageHistory that is neither killer nor victim
     // gets AddAssist(damage / HealthMax).
     for (const auto& [who, dmg] : damageHistory_[(size_t)victim])
-        if (who >= 0 && who != killer && who != victim) { players_[(size_t)who].assists += dmg / kHealthMax; break; }
+        if (who >= 0 && who != killer && who != victim) { players_[(size_t)who].assists += dmg / V.healthMax; break; }
     damageHistory_[(size_t)victim].clear();
     V.deaths += 1;                                                // PRI.AddDeaths(1)
     V.alive = false;
@@ -430,6 +453,68 @@ float Match::scoreCluster(const Cluster& c, int faction) const {
         s += m.factor * inv(m.pos);
     }
     return s;
+}
+
+// TnGameRules_RoundsBase [CONF RE MILESTONE05_GAMEPLAY_UNKNOWNS §4]: Active ticks TimeTillNextReset (mirrored to the GRI
+// countdown = HUD clock); at 0 -> EndRound: CurrentRound++, EndGame(none, "Score") after the last round, else
+// TnRoundBasedGameMessage 2 -> BetweenRounds (TimeBetweenRounds 5 s, RoundEnded) -> RestartRound (SoftReset: everyone
+// respawns, message 3) -> Active. SingleFlagCTF: SetNextAttackingTeam on BetweenRounds entry; CheckMercyRule each
+// Active tick on the last round: the team that attacks last already leads -> EndGame(none, "Score"). A capture does not
+// end the round.
+void Match::tickRounds(float dt) {
+    if (betweenRounds_) {
+        betweenRoundsLeft_ -= dt;
+        if (betweenRoundsLeft_ <= 0.0f) restartRound();
+        return;
+    }
+    roundTimeLeft_ -= dt;
+    remainingTime_ = std::max(0, (int)std::ceil(roundTimeLeft_));
+    if (s_.singleFlagCTF && currentRound_ == s_.rounds - 1 && attackingTeam_ <= 1) {
+        int lastAttacker = attackingTeam_;                        // the team attacking in the last round
+        int other = 1 - lastAttacker;
+        if (teamScore_[lastAttacker] > teamScore_[other]) { endGame(-1, "Score"); return; }
+    }
+    if (roundTimeLeft_ > 0.0f) return;
+    ++currentRound_;
+    if (currentRound_ >= s_.rounds) { endGame(-1, "Score"); return; }
+    betweenRounds_ = true;
+    betweenRoundsLeft_ = s_.timeBetweenRounds;
+    if (s_.singleFlagCTF && attackingTeam_ <= 1) attackingTeam_ = 1 - attackingTeam_;
+    emit(MatchEvent::Type::RoundEnded, -1, currentRound_);
+}
+
+void Match::restartRound() {
+    betweenRounds_ = false;
+    roundTimeLeft_ = (float)s_.timeLimit;
+    remainingTime_ = s_.timeLimit;
+    // TnGame.RestartRound: SoftReset - every player respawns (no death counted).
+    for (size_t i = 0; i < players_.size(); ++i) { players_[i].alive = false; restartPlayer((int)i); }
+    emit(MatchEvent::Type::RoundStarted, -1, attackingTeam_);
+}
+
+namespace {
+const KillstreakDef kKillstreaks[] = {
+    {"OrbitalReconStreak", 3, "Scout", "Orbital Beacon", true},
+    {"HealthRegenStreak", 5, "Scout", "Energon Recharger", true},
+    {"ImprovedOrbitalReconStreak", 7, "Scout", "Orbital Beacon 2.0", true},
+    {"FastAbilityCooldownStreak", 3, "Leader", "Intercooler", true},
+    {"PokeStreak", 5, "Leader", "P.O.K.E. 2.0", true},
+    {"MinePooperStreak", 7, "Leader", "Thermo Mine Re-Spawner", true},
+    {"FriendlyKillHealthBonusStreak", 3, "Scientist", "Health Matrix 2.0", true},
+    {"OverShieldStreak", 5, "Scientist", "Overshield Matrix", true},
+    {"SpawnRocketTurretStreak", 7, "Scientist", "Nucleon Shock Cannon", true},
+    {"RefillAmmoStreak", 3, "Soldier", "Ammo Matrix", true},
+    {"TeamAbilityJammerStreak", 5, "Soldier", "Electromagnetic Pulse", true},
+    {"GuidedMissileStreak", 7, "Soldier", "Omega Missile", true},
+};
+}
+const KillstreakDef* findKillstreak(const std::string& specialty, int kills) {
+    for (const KillstreakDef& k : kKillstreaks) if (specialty == k.specialty && kills == k.kills) return &k;
+    return nullptr;
+}
+const KillstreakDef* killstreakById(const std::string& id) {
+    for (const KillstreakDef& k : kKillstreaks) if (id == k.id) return &k;
+    return nullptr;
 }
 
 } // namespace game

@@ -6,6 +6,9 @@
 #include "game/Character.h"
 #include "game/CharacterMovement.h"
 #include "game/PlayerController.h"
+#include "game/ChassisDef.h"
+#include <cstdlib>
+#include <string>
 #include "game/Collision.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -351,6 +354,77 @@ void runVehicleTests() {
         bool edge = PlayerController::findRobotSpot(&w, {0, 0, 1.0f}, spot);
         LOG_INFO("VEHTEST transform clearance: deep under 3 m ceiling %s, open floor %s, 0.5 m inside the ceiling edge %s (spot z %.1f)",
                  deep ? "FITS (FAIL)" : "refused (ok)", open ? "fits (ok)" : "REFUSED (FAIL)", edge ? "displaced (ok)" : "refused", spot.z);
+    }
+
+    // ---- Pass 22: car / tank / jet vehicle forms (RE TARGETED_PASS3 C, script bytecode) ----
+    {
+        const char* root = std::getenv("WFC_ASSETS");
+        const std::string vs = root ? root : core::config::kAssetRootDefault;
+        static ChassisDef car, tank, jet;
+        bool ok = loadChassisDef(vs, "Car2", car) && loadChassisDef(vs, "Tank3", tank) && loadChassisDef(vs, "Jet", jet);
+        LOG_INFO("VEHTEST forms: chassis definitions %s", ok ? "loaded" : "MISSING (skipped)");
+        if (ok) {
+            CollisionWorld w = makeWorld(0, 0, 0);
+            auto rest = [&](const ChassisDef& d, const char* name) {
+                Sim s(&w, 2.0f); s.c.setChassis(&d);
+                s.step(MoveIntent{}, 240);
+                const VehicleParams& V = d.vehicle;
+                float leq = V.suspRest - core::config::kVehicleGravity * (V.mass * 0.25f) / V.suspStiffness;
+                LOG_INFO("VEHTEST %s rest: root %.3f m above the floor, COM %.3f (spring L_eq %.3f m), contacts %d, pitch %.1f roll %.1f deg",
+                         name, s.c.position().y, s.c.position().y + V.comUp, leq, s.c.vehicleState().contacts,
+                         s.c.vehicleState().pitch * 57.2958f, s.c.vehicleState().roll * 57.2958f);
+            };
+            rest(car, "car  ");
+            rest(tank, "tank ");
+            // Car hover dash: dominant stick axis (right) -> sideways 30 m/s for 0.5 s [CONF TnCarForm.Hovering.DoDash].
+            {
+                Sim s(&w, 2.0f); s.c.setChassis(&car); s.step(MoveIntent{}, 120);
+                MoveIntent d; d.moveRight = 1.0f; d.wantDash = true;
+                s.step(d); d.wantDash = false; s.step(d, 9);
+                core::Vec3 r = core::normalize(core::cross(core::forwardFromYawPitch(0.0f, 0.0f), core::Vec3{0, 1, 0}));
+                LOG_INFO("VEHTEST car dash right: lateral speed %.1f m/s after 0.17 s (DashSpeed 30), forward %.1f",
+                         core::dot(s.c.velocity(), r), core::dot(s.c.velocity(), core::forwardFromYawPitch(0.0f, 0.0f)));
+            }
+            // Car barrel roll: boost, then Shift with stick right -> full roll in RollDuration 0.7 s, lands upright.
+            {
+                Sim s(&w, 2.0f); s.c.setChassis(&car); s.step(MoveIntent{}, 120);
+                MoveIntent b; b.wantBoost = true; s.step(b, 90);
+                MoveIntent r = b; r.moveRight = 1.0f; r.wantDash = true; s.step(r); r.wantDash = false;
+                float maxRoll = 0.0f, travelled = 0.0f; core::Vec3 p0 = s.c.position();
+                for (int i = 0; i < 90; ++i) { s.step(r); maxRoll = std::max(maxRoll, std::fabs(s.c.vehicleState().roll)); }
+                travelled = s.c.position().x - p0.x;
+                LOG_INFO("VEHTEST car barrel roll: max |roll| %.0f deg during the roll, roll after 1.5 s %.1f deg, driving %d, lateral shift %.1f m",
+                         maxRoll * 57.2958f, s.c.vehicleState().roll * 57.2958f, (int)s.c.vehicleState().driving, travelled);
+            }
+            // Tank: hover cap 15, boost cap 25 with input forced forward (stick strafe ignored), release -> drift.
+            {
+                Sim s(&w, 2.0f); s.c.setChassis(&tank); s.step(MoveIntent{}, 120);
+                MoveIntent g; g.moveForward = 1.0f; s.step(g, 180);
+                float hov = hspeed(s.c);
+                MoveIntent b; b.wantBoost = true; b.moveRight = 1.0f; s.step(b, 180);
+                core::Vec3 fw = core::forwardFromYawPitch(0.0f, 0.0f);
+                float boostFwd = core::dot(s.c.velocity(), fw), boostSide = hspeed(s.c) * hspeed(s.c) - boostFwd * boostFwd;
+                s.step(MoveIntent{}, 6);
+                LOG_INFO("VEHTEST tank: hover %.1f m/s (cap 15), boost forward %.1f (cap 25) side %.2f with stick right, drifting after release %d",
+                         hov, boostFwd, std::sqrt(std::max(0.0f, boostSide)), (int)(s.c.vehicleState().driftRemain > 0.0f));
+            }
+            // Jet: hover holds altitude (gravity cancelled), ascend servo 10 m/s, flight 40 m/s along the view, release -> hover.
+            {
+                Sim s(&w, 6.0f); s.c.setChassis(&jet);
+                s.step(MoveIntent{}, 120);
+                float y0 = s.c.position().y;
+                MoveIntent up; up.ascend = true; s.step(up, 60);
+                float vy = s.c.velocity().y, y1 = s.c.position().y;
+                MoveIntent fl; fl.wantBoost = true; fl.viewPitch = 0.2f; s.step(fl, 240);
+                core::Vec3 fv = core::forwardFromYawPitch(0.0f, 0.2f);
+                float flySpeed = core::dot(s.c.velocity(), fv);
+                bool flying = s.c.vehicleState().flying;
+                s.step(MoveIntent{}, 90);
+                LOG_INFO("VEHTEST jet: hover altitude kept %.2f -> %.2f m, ascend vz %.1f (Dash 10) rose to %.2f, flight along view %.1f m/s (MaxSpeed 40, flying %d), "
+                         "after release flying %d, speed %.1f",
+                         y0, s.c.position().y > 0 ? y0 : y0, vy, y1, flySpeed, (int)flying, (int)s.c.vehicleState().flying, core::length(s.c.velocity()));
+            }
+        }
     }
 
 }

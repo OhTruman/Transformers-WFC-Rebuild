@@ -1,11 +1,41 @@
-// Clean-room reconstruction — Ion Blaster (SMG). All values below are [CONF] recovered from
-// WEP_IonBlaster package metadata (ExtractedAssets/.../weapon.json) unless marked otherwise.
+// Clean-room reconstruction — a weapon instance (TnWeapon + its TnWeaponData). Defaults = the Ion Blaster's versus data
+// (IonBlaster_WEPDATA, MultiplayerData) [CONF]; fromDef() fills any weapon from the generated WeaponDef table.
 #pragma once
+#include "game/WeaponDef.h"
 
 namespace game {
 
 struct Weapon {
     const char* name = "Ion Blaster";
+    const WeaponDef* def = nullptr;         // null = the built-in Ion Blaster defaults
+    WeaponFire fireType = WeaponFire::InstantHit;
+    int  shots         = 1;        // NumShotsToFire (pellets per shot)
+    bool autoFire      = true;     // bAutoFire
+    float putDownTime  = 0.5f;     // PutDownTime
+    float fineAimSpreadMult = 0.5f;   // FineAimSpreadModifier
+    const char* damageType = "TransGame.TnDamageTypeIonBlaster";
+    // Instant-hit weapons and projectile weapons with recovered PROJDATA are simulated; melee / grenade: PARTIAL.
+    float projSpeed = 0.0f, projDamage = 0.0f, projRadiusM = 0.0f; bool projHoming = false;
+    float homingForce = 0.0f, closingDistM = 0.0f, closingForce = 0.0f, closingTime = 0.0f, projMaxSpeed = 0.0f;
+    float lockOnTime = 0.0f, holdLockOnTime = 0.0f; bool lockRobots = false;
+    bool grenade() const { return fireType == WeaponFire::Grenade && def && def->tossStrength > 0.0f; }
+    bool simulated() const { return fireType == WeaponFire::InstantHit || (fireType == WeaponFire::Projectile && projSpeed > 0.0f); }
+    bool projectile() const { return fireType == WeaponFire::Projectile && projSpeed > 0.0f; }
+    static Weapon fromDef(const WeaponDef& d) {
+        Weapon w;
+        w.def = &d; w.name = d.display; w.fireType = d.fire; w.shots = d.shots > 0 ? d.shots : 1; w.autoFire = d.autoFire;
+        w.damage = d.damage; w.fireInterval = d.interval; w.magSize = d.clip; w.ammo = d.clip; w.reserveMax = d.maxAmmo;
+        w.reserve = d.initialReserve; w.reloadTime = d.reloadTime; w.equipTime = d.equipTime; w.putDownTime = d.putDownTime;
+        w.hitscan = d.fire == WeaponFire::InstantHit; w.rangeM = d.rangeM; w.falloffNearM = d.falloffNearM;
+        w.falloffFarMul = d.falloffFarMul; w.spreadMin = d.spreadMin; w.spreadMax = d.spreadMax; w.spreadPerShot = d.spreadPerShot;
+        w.spreadCooldown = d.spreadCooldown > 0.0f ? d.spreadCooldown : 2.0f; w.spread = d.spreadMin;
+        w.fineAimSpreadMult = d.fineAimSpread; w.damageType = d.damageType;
+        w.projSpeed = d.projSpeed; w.projDamage = d.projDamage; w.projRadiusM = d.projRadiusM; w.projHoming = d.projHoming;
+        w.homingForce = d.homingForce; w.closingDistM = d.closingDistM; w.closingForce = d.closingForce; w.closingTime = d.closingTime;
+        w.projMaxSpeed = d.projMaxSpeed; w.lockOnTime = d.lockOnTime; w.holdLockOnTime = d.holdLockOnTime; w.lockRobots = d.lockRobots;
+        if (w.projectile() && d.projDamageType && *d.projDamageType) w.damageType = d.projDamageType;
+        return w;
+    }
     float damage        = 15.0f;    // [CONF] InstantHitDamage
     float fireInterval  = 0.065f;   // [CONF] FireIntervalModifier.IntervalRange (Min=Max)
     // Refire timer. [CONF, native RE] one-shot timer reset to zero after each shot; the weapon fires
@@ -56,7 +86,7 @@ struct Weapon {
         }
     }
     bool reloading() const { return reloadTimer > 0.0f; }
-    bool canFire() const { return sinceShot > fireInterval && ammo > 0 && !reloading(); }
+    bool canFire() const { return simulated() && sinceShot > fireInterval && ammo > 0 && !reloading(); }
     void onFired() {
         sinceShot = 0.0f;                       // reset to zero: overshoot discarded
         if (ammo > 0) --ammo;

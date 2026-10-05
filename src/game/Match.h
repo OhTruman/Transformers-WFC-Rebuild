@@ -28,6 +28,11 @@ struct MatchSettings {
     std::string gameType = "TNGT_TDM"; // ETnGameType: cluster ActiveGameTypes filter
     bool reportKills = true;           // ReportGameProgressKills (TDM / DM)
     bool reportPoints = false;         // ReportGameProgressPoints (DOM / KOTH): 50 / 25 left on ScoreObjective
+    // TnGameRules_RoundsBase (CTF): GRI.Rounds > 0 -> the round timer (TimeLimit per round) replaces the match clock
+    // (RunGameTimer false); TimeBetweenRounds 5; SingleFlagCTF: first attacker RandomInt(2), alternating, mercy rule.
+    int rounds = 0;
+    float timeBetweenRounds = 5.0f;
+    bool singleFlagCTF = false;
     int objectiveIndividualScore = 0;  // ScoreObjectives.IndividualScore (KOTH 1; CTF / EXT 10)
     float matchAutoStartCountdown = 10.0f;   // TnMultiplayerGame.MatchAutoStartCountdown
     float matchOverCountdown = 15.0f;        // TnMultiplayerGame.MatchOverCountdown
@@ -47,7 +52,7 @@ struct MatchEvent {
         KillsLeftAnnouncement,// switch 5/6/7 (1/3/5 scores left)
         PointsLeftAnnouncement,// ReportGameProgressPoints switch 4 / 3 (50 / 25 left; DOM / KOTH)
         MatchEnded,           // EndGame -> MatchOver: winner (team index / player index / -1 tie), reason
-        ReturnToLobby,        // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (host handoff)
+        ReturnToLobby, RoundEnded, RoundStarted,        // MatchOver.OnCountdownComplete -> TnGame.ReturnToGameLobby (host handoff)
     };
     Type type;
     int player = -1, other = -1;       // victim / killer, spawned player, winning player (FFA)
@@ -69,6 +74,11 @@ struct KillFeedEntry {
     static constexpr float kLifetime = 5.0f, kFade = 1.0f;
 };
 
+// TnDataProvider_Killstreak (TransCustomization.ini) [CONF authored, mp_classes.json]: id, KillsRequired, SpecialtyRestriction.
+struct KillstreakDef { const char* id; int kills; const char* specialty; const char* name; bool implemented; };
+const KillstreakDef* findKillstreak(const std::string& specialty, int kills);
+const KillstreakDef* killstreakById(const std::string& id);
+
 struct MatchPlayer {
     std::string name;
     int team = 255;                    // 0 Autobots, 1 Decepticons, 255 none (FFA)
@@ -77,10 +87,15 @@ struct MatchPlayer {
     bool alive = false;
     float timeToRespawn = -1.0f;       // >= 0 while queued in the respawn helper (PRI.TimeToRespawn)
     bool hasSelectedCharacter = false; // PRI.HasSelectedCharacter: spawning waits for it [CONF]
+    float healthMax = 550.0f;          // the pawn's HealthMax (specialty blueprint), set by the host at spawn (assists)
     CharacterSelection selection;
     std::string chassis;               // body resolved at the last spawn (faction from the team)
     std::string specialty;             // specialty applied at the last spawn (custom: the slot's; iconic: chassis default)
     std::string spawnError;            // non-empty while the resolved chassis cannot be spawned (no substitute body)
+    // Killstreaks: PRI._CurrentKillStreak (+kills, reset by AddDeaths -> KillStreakEnded) and the controller's
+    // AcquiredKillstreaks stack (UpdateKillstreakRewards: FindKillstreak(Specialty, count); cleared at ClientGameEnded).
+    int currentKillStreak = 0;
+    std::vector<std::string> acquiredKillstreaks;
 };
 
 class Match {
@@ -110,6 +125,12 @@ public:
     void setChassisCheck(std::function<bool(const std::string&, std::string&)> f) { chassisCheck_ = std::move(f); }
     void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
     void tick(float dt);
+    // Rounds (CTF) and the attacking team (CTF: SingleFlagCTF; EXT: the bomb holder's team, set by the objective layer).
+    int attackingTeam() const { return attackingTeam_; }
+    void setAttackingTeam(int t) { attackingTeam_ = t; }
+    int currentRound() const { return currentRound_; }
+    bool betweenRounds() const { return betweenRounds_; }
+    float roundTimeLeft() const { return roundTimeLeft_; }
     // GameInfo.Killed. killer < 0: environmental. suicide: DmgType_Suicided or killer == victim.
     void killed(int killer, int victim, bool suicide = false, const std::string& damageType = std::string());
     // Kill feed: entries still within their LocalMessage lifetime (oldest first), and the whole match history.
@@ -140,7 +161,6 @@ public:
         return s_.teamGame && a >= 0 && b >= 0 && (size_t)a < players_.size() && (size_t)b < players_.size() &&
                players_[(size_t)a].team == players_[(size_t)b].team && players_[(size_t)a].team < 2;
     }
-    static constexpr float kHealthMax = 550.0f;   // TR_Health_p.SharedHealth (assist = damage / HealthMax)
     // TnSpawnModifierComponent owners other than player pawns (positions in metres).
     void setPlayerLocation(int p, const core::Vec3& pos) { if (p >= 0 && (size_t)p < players_.size()) locs_[(size_t)p] = pos; }
     core::Vec3 playerLocation(int p) const { return (p >= 0 && (size_t)p < locs_.size()) ? locs_[(size_t)p] : core::Vec3{0, 0, 0}; }
@@ -171,6 +191,11 @@ private:
     std::vector<MatchPlayer> players_;
     std::vector<core::Vec3> locs_;
     std::function<bool(const std::string&, std::string&)> chassisCheck_;
+    int attackingTeam_ = 255, currentRound_ = 0;
+    bool betweenRounds_ = false;
+    float roundTimeLeft_ = 0.0f, betweenRoundsLeft_ = 0.0f;
+    void tickRounds(float dt);
+    void restartRound();
     std::vector<int> spawnAt_;
     std::vector<MatchEvent> events_;
     std::vector<Start> starts_;

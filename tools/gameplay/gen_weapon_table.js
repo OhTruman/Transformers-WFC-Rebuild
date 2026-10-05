@@ -1,0 +1,110 @@
+// Generates src/game/WeaponTable.inc from authored data (read-only):
+//   AssetTools authored.db: weapon class CDO -> MultiplayerData (versus: TnMultiplayerGame.DesiredWeaponDataType = 3,
+//     CONFIRMED RE TARGETED_PASS3) or PlayerData when MultiplayerData is none (TnWeapon falls back to type 1, CONFIRMED),
+//     over HM_Engine.Default__HmWeaponData + TransGame.Default__TnWeaponData.
+//   AssetTools mp_weapons.json: mesh / event anims / effects / damage types / kill-feed icons / display names.
+//   data/gameplay/weapon_sockets.json: SkeletalMeshSocket exports (AssetTools vs_character.sockets, read-only).
+const {DatabaseSync} = require('node:sqlite');
+const fs = require('fs');
+const AT = 'F:/Transformers Rebuild/AssetTools/manifests/';
+const EXT = 'F:/Transformers Rebuild/ExtractedAssets/';
+const db = new DatabaseSync(AT + 'authored.db', {readOnly: true});
+const get = op => { const r = db.prepare('select props from objects where opath=?').get(op); return r ? JSON.parse(r.props) : null; };
+const W = JSON.parse(fs.readFileSync(AT + 'mp_content/mp_weapons.json', 'utf8')).weapons;
+const SOCK = JSON.parse(fs.readFileSync('data/gameplay/weapon_sockets.json', 'utf8')).weapons;
+const defaults = Object.assign({}, get('HM_Engine.Default__HmWeaponData') || {}, get('TransGame.Default__TnWeaponData') || {});
+const q = s => JSON.stringify(s == null ? '' : String(s));
+const f = x => (x == null || isNaN(x) ? 0 : Number(x)).toFixed(4) + 'f';
+let rows = [];
+for (const w of Object.values(W)) {
+  const cdo = get(w.class.replace('TransContent.', 'TransContent.Default__')) || {};
+  let src = 'MP', dataObj = cdo.MultiplayerData, d = dataObj ? get(dataObj) : null;
+  if (!d) { src = 'SP'; dataObj = cdo.PlayerData; d = dataObj ? get(dataObj) : null; }
+  if (!d) continue;
+  d = Object.assign({}, defaults, d);
+  const types = d.WeaponFireTypes || [];
+  const code = w.weapon_type_code == null ? -1 : Number(w.weapon_type_code);
+  let fire = 'Other';
+  if (code === 2 || (d.MaxAmmoClipCount === 9999 && !d.InstantHitDamage)) fire = 'Melee';
+  else if (code === 4) fire = 'Grenade';
+  else if (types[0] === 'EWFT_Projectile') fire = 'Projectile';
+  else if (/RepairRay/.test(w.class)) fire = 'Other';   // repair beams heal (TnWeaponRepairRay): not a damage hitscan [PARTIAL]
+  else if ((d.InstantHitDamage && d.InstantHitDamage[0] > 0) || cdo.bInstantHit) fire = 'InstantHit';
+  const rm = d.RangeDamageModifiers || [];
+  const near = rm[0] || {Range: d.WeaponRange || 30000, Modifier: 1}, far = rm[rm.length - 1] || near;
+  const ps = d.PerShotSpreadModifier || {};
+  const psm = ps.Modifier || {};
+  const iv = (d.FireIntervalModifier && d.FireIntervalModifier.IntervalRange) || {Min: 1, Max: 1};
+  const m = w.mesh || {};
+  const anim = m.gltf ? m.gltf.replace(/_SKEL\.gltf$/, '_ANIM.anim.gltf') : '';
+  const animOk = anim && fs.existsSync(EXT + anim);
+  const ev = {}; for (const e of (m.event_anims || [])) ev[e.WeaponEventType] = e.AnimName;
+  const sk = (SOCK[w.class] || {}).sockets || [];
+  const mz = sk.find(s => s.socket === (m.muzzle_sockets || ['MuzzleFlash'])[0]) || sk.find(s => /Muzzle/i.test(s.socket));
+  const dtName = (d.InstantHitDamageTypes || [])[0] || Object.keys(w.damage_types || {})[0] || '';
+  const dtRec = (w.damage_types || {})[dtName] || {};
+  const icon = Object.keys(w.kill_feed_icon || {})[0] || '';
+  const fx = w.effects || {};
+  const muzzleFx = ((fx.muzzle_flashes || [])[0] || {}).PSTemplate || '';
+  // Projectile: WeaponProjectiles[0] class CDO -> MultiplayerData (else Data) TnProjectileData [CONF authored].
+  let pr = {InitialSpeed: 0, Damage: 0, DamageRadius: 0, DamageType: '', homing: false, HomingForce: 0, ClosingDistance: 0, ClosingForce: 0, ClosingTime: 0, MaxSpeed: 0};
+  const pcls = (d.WeaponProjectiles || [])[0];
+  if (fire === 'Projectile' && pcls) {
+    const pc = get(pcls.replace('TransContent.', 'TransContent.Default__')) || get(pcls.replace('TransContent.', 'TransGame.Default__')) || {};
+    const pd = get(pc.MultiplayerData || '') || get(pc.Data || '');
+    if (pd) pr = {InitialSpeed: pd.InitialSpeed || 0, Damage: pd.Damage || 0, DamageRadius: pd.DamageRadius || 0, DamageType: pd.DamageType || '', homing: !!pd.HomingForce,
+                  HomingForce: pd.HomingForce || 0, ClosingDistance: pd.ClosingDistance || 0, ClosingForce: pd.ClosingForce || 0,
+                  ClosingTime: pd.ClosingTime || 0, MaxSpeed: pd.MaxSpeed || 0};
+  }
+  // Grenade bag (WT_Grenades): WeaponProjectiles[0] MultiplayerData TnProjectileDataGrenadeLauncher over its class CDO, and the
+  // TnWeaponDataGrenadeBag toss values [CONF authored; RE TARGETED_PASS3 §H4].
+  let gr = {TossStrength: 0, LowMin: 0, LowMax: 0, LowSpeed: 0, FuseMin: 0, FuseMax: 0, Bounce: 1, Gravity: 1, OnPawn: false, ScaleMin: 1, ScaleMax: 1, PMin: -45, PMax: 45};
+  if (fire === 'Grenade' && pcls) {
+    const pc = get(pcls.replace('TransContent.', 'TransContent.Default__')) || get(pcls.replace('TransGame.', 'TransGame.Default__')) || {};
+    const pdo = pc.MultiplayerData || pc.Data || '';
+    const row = db.prepare('select class from objects where opath=?').get(pdo);
+    const cdoP = Object.assign({}, get('TransGame.Default__TnProjectileDataGrenadeLauncher') || {}, row ? (get('TransGame.Default__' + row.class) || {}) : {});
+    const pd = Object.assign({}, cdoP, get(pdo) || {});
+    pd.FuseTime = Object.assign({}, cdoP.FuseTime || {}, (get(pdo) || {}).FuseTime || {});
+    pr = {InitialSpeed: 0, Damage: pd.Damage || 0, DamageRadius: pd.DamageRadius || 0, DamageType: pd.DamageType || '', homing: false,
+          HomingForce: 0, ClosingDistance: 0, ClosingForce: 0, ClosingTime: 0, MaxSpeed: 0};
+    gr = {TossStrength: d.TossStrength || 0, LowMin: (d.LowPitchDegrees || {}).Min || 0, LowMax: (d.LowPitchDegrees || {}).Max || 0, LowSpeed: d.LowPitchSpeed || 0,
+          FuseMin: pd.FuseTime.Min || 0, FuseMax: pd.FuseTime.Max || 0, Bounce: pd.BounceDampening == null ? 1 : pd.BounceDampening,
+          Gravity: pd.GravityScale == null ? 1 : pd.GravityScale, OnPawn: !!pd.ExplodeWhenHittingPawn,
+          ScaleMin: pd.SpeedScaleAtMinPitch == null ? 1 : pd.SpeedScaleAtMinPitch, ScaleMax: pd.SpeedScaleAtMaxPitch == null ? 1 : pd.SpeedScaleAtMaxPitch,
+          PMin: pd.MinPitch == null ? -45 : pd.MinPitch, PMax: pd.maxPitch == null ? 45 : pd.maxPitch};
+  }
+  const tracerFx = ((fx.tracers || [])[0] || {}).TracerTemplate || '';
+  rows.push(`    {${q(w.class.replace('TransContent.TnWeapon', ''))}, ${q((w.provider_ids || [])[0] || '')}, ${q(w.display_name && w.display_name.INT)}, ${code}, ` +
+    `WeaponFire::${fire}, ${q(src)}, ${q(dataObj)},\n` +
+    `     ${f((d.InstantHitDamage || [0])[0])}, ${d.NumShotsToFire || 1}, ${d.MaxAmmoClipCount || 0}, ${d.MaxAmmoCount || 0}, ${d.InitialReserveAmmoCount || 0}, ` +
+    `${f(iv.Min)}, ${f((d.WeaponRange || 30000) * 0.01)}, ${f(near.Range * 0.01)}, ${f(far.Modifier)}, ` +
+    `${f(psm.Min)}, ${f(psm.Max)}, ${f(ps.ModifierChangePerShot)}, ${f(ps.Cooldown || 2)}, ${f(d.FineAimSpreadModifier || 1)}, ` +
+    `${f(d.WeaponReloadAnimTime)}, ${f(d.EquipTime)}, ${f(d.PutDownTime)}, ${d.bAutoFire ? 'true' : 'false'}, ${f((d.HeatProperties || {}).HeatMax)},\n` +
+    `     ${q(m.gltf)}, ${q(animOk ? anim : '')}, ${q(mz ? mz.bone : '')}, {${f(mz ? mz.relative_location_ue[0] : 0)}, ${f(mz ? mz.relative_location_ue[1] : 0)}, ${f(mz ? mz.relative_location_ue[2] : 0)}}, ` +
+    `{${mz ? mz.relative_rotation_ue.join(', ') : '0, 0, 0'}},\n` +
+    `     ${q(ev.WP_Fire)}, ${q(ev.WP_Reload)}, ${q(ev.WP_Equip)}, ${q(ev.WP_PutDown)}, ${q(m.idle_animation)},\n` +
+    `     ${q(dtName)}, ${q(dtRec.DeathString)}, ${q(dtRec.Suicide)}, ${q(icon)}, ${q(muzzleFx)}, ${q(tracerFx)},
+` +
+    `     ${f(pr.InitialSpeed * 0.01)}, ${f(pr.Damage)}, ${f(pr.DamageRadius * 0.01)}, ${q(pr.DamageType)}, ${pr.homing ? 'true' : 'false'},\n` +
+    `     ${f(pr.HomingForce * 0.01)}, ${f(pr.ClosingDistance * 0.01)}, ${f(pr.ClosingForce * 0.01)}, ${f(pr.ClosingTime)}, ${f(pr.MaxSpeed * 0.01)}, ` +
+    `${f(d.LockOnTime || 0)}, ${f(d.HoldLockOnTime || 0)}, ${d.CanLockOnToRobots ? 'true' : 'false'},\n` +
+    `     ${f(gr.TossStrength * 0.01)}, ${f(gr.LowMin)}, ${f(gr.LowMax)}, ${f(gr.LowSpeed * 0.01)}, ${f(gr.FuseMin)}, ${f(gr.FuseMax)}, ${f(gr.Bounce)}, ` +
+    `${f(gr.Gravity)}, ${gr.OnPawn ? 'true' : 'false'}, ${f(gr.ScaleMin)}, ${f(gr.ScaleMax)}, ${f(gr.PMin)}, ${f(gr.PMax)}},`);
+}
+const out = `// GENERATED by tools/gameplay/gen_weapon_table.js - do not edit. Sources (read-only): AssetTools authored.db (weapon class
+// CDO MultiplayerData, else PlayerData, over HmWeaponData / TnWeaponData defaults), mp_content/mp_weapons.json (mesh,
+// event anims, effects, damage types, kill-feed icons), data/gameplay/weapon_sockets.json (cooked SkeletalMeshSockets).
+// Fields: id, provider, display, WeaponType code, fire type, data source, data object,
+//   damage, shots, clip, maxAmmo, initialReserve, interval, range m, falloff-near m, far modifier,
+//   spread min/max/perShot/cooldown, fineAim spread, reload, equip, putDown, autoFire, heatMax,
+//   mesh glTF, anim glTF, muzzle bone, muzzle loc UE, muzzle rot UE, anims fire/reload/equip/putdown/idle,
+//   damage type, DeathString, Suicide, kill-feed icon, muzzle FX template, tracer FX template,
+//   projectile speed m/s, projectile damage, damage radius m, projectile damage type, homing,
+//   HomingForce m/s2, ClosingDistance m, ClosingForce m/s2, ClosingTime, MaxSpeed m/s, LockOnTime, HoldLockOnTime, CanLockOnToRobots,
+//   grenade: TossStrength m/s, LowPitchDegrees min/max, LowPitchSpeed m/s, FuseTime min/max, BounceDampening, GravityScale,
+//   ExplodeWhenHittingPawn, SpeedScaleAtMin/MaxPitch, Min/MaxPitch deg.
+${rows.join('\n')}
+`;
+fs.writeFileSync('src/game/WeaponTable.inc', out);
+console.log('rows', rows.length);

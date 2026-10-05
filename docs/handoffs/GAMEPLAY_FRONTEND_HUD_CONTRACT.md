@@ -57,13 +57,13 @@ Robot form:
 | R | Reload | implemented |
 | Space | Jump | implemented |
 | F | Change Form | implemented (with clearance refusal) |
-| Shift | Ability 1 | Optimus's dash wired here; the ability system is not generalised |
-| Ctrl | Ability 2 | not implemented |
+| Shift | Ability 1 (CharacterData.Abilities[0]) | ability slots implemented (Pass 22); only Dodge is simulated, others report unimplemented |
+| Ctrl | Ability 2 (CharacterData.Abilities[1]) | as Shift (e.g. Optimus / Sideswipe: Dodge on Ctrl) |
 | MMB / Q | Melee | not implemented |
 | G | Throw Grenade / Detach Turret | not implemented |
 | E | Interact / Pick Up / Revive / Add to Generator | pickups are automatic (touch); the interact action is not implemented |
 | B | Look At / Kill Streak (MP) | not implemented |
-| Wheel / PgUp / PgDn | Swap Weapons | one weapon only |
+| Wheel / PgUp / PgDn | Swap Weapons | PgUp / PgDn implemented (inventory from the loadout); wheel pending |
 | Tab | Scoreboard | Frontend (reads `scoreboard[]`) |
 | Esc | Pause | Frontend |
 
@@ -72,8 +72,8 @@ Vehicle form:
 | Key | Action | Rebuild status |
 |---|---|---|
 | RMB | Speed Boost (held). Accelerator fixed at 1 while Driving | implemented |
-| Shift | truck: Ram (Nitro while boosting; Dash while hovering) / car: Flip / tank: Quick Turn / jet: Roll Start | truck implemented |
-| C / V | jet Hover Up / Down | not applicable (Optimus only) |
+| Shift | truck: Ram (Nitro while boosting; Dash while hovering) / car: dash (hover) + barrel roll (boost) / tank: 180 / jet: roll | all four implemented (Pass 22; tank 180 timing PROV) |
+| C / V | jet Hover Up / Down | implemented (Pass 22) |
 
 ### Profile settings
 | Item | Owner | Rule | Provenance |
@@ -92,3 +92,35 @@ it for the weapon icon / DeathString lookup.
 - Spawning logs `MATCH spawn <name> chassis=<id> drawn=Optimus fallback=missing ROBODEF/VEHDEF export` whenever the body
   drawn is not the selection.
 - `Match::requireCharacterSelection` (identical to integration M06) gates the spawn until `selectCharacter`.
+
+### Pass 22 additions
+- HUD: selectedChassis, drawnChassis, specialty, spawnError, weaponId, weaponIcon, weaponSimulated, weaponSwitching,
+  inventory[], activeWeapon, vehicleWeapons[], loadoutRefused[], abilities[] (id, implemented, cooldown, active), dodging.
+- Camera settings entry point: PlayerController::setLookSettings(sensitivity, invertRobot, invertVehicle) - per-form
+  vehicle invert (Car / Plane / Tank) is a follow-up.
+
+## Pass 22 HUD state additions (2026-10-05, agents/gameplay up to e64e4af)
+
+| Need | Field(s) | Notes |
+|---|---|---|
+| Spawned body | `selectedChassis`, `drawnChassis`, `specialty`, `spawnError` | no substitute body; `spawnError` explains a refused spawn |
+| Weapon | `weaponId`, `weaponName`, `weaponIcon` (death_<Weapon>), `weaponSimulated`, `weaponSwitching`, `inventory[]`, `activeWeapon`, `vehicleWeapons[]`, `loadoutRefused[]` | melee / grenade / repair-beam weapons are equipped but not simulated |
+| Abilities | `abilities[2]` {id, implemented, cooldown s, active}, `dodging`, `cloaked`, `hoverState` (1 rising, 2 hovering) | Shift = abilities[0], Ctrl = abilities[1] |
+| Killstreaks | `killStreak`, `killstreaks[]` (newest last = the B key), `killstreakImplemented`, `regenBuff`, `fastCooldownBuff`, `ammoLockBuff` | |
+| Rounds / attacking side | `attackingTeam`, `currentRound`, `rounds`, `betweenRounds` | CTF rounds; EXT attacking team = bomb holder |
+| Carried objectives | `carried[]` {kind 0 flag / 1 bomb, holder, holderTeam, dropped, active, pos, autoReturn, returnLeft, sleep}, `localCarrying` | flag-return progress = 1 − returnLeft / 10 |
+| Bomb | `bombPlanted`, `bombFuse` (CurrentObjectiveCountdown), `bombDefuse`, `bombPlantTeam` | |
+| Objective markers | `objectives[]` for every active-in-mode objective (DOM, KOTH, flag factories, capture points, bomb, plant points) with `ownerTeam` and `active` | |
+| Killstreak items | `tempWeaponLeft` (P.O.K.E. s left), `kamikazeMines` (count; positions World::kamikazeMines()) | Poke / rocket turret show as the active weapon (weaponId Poke / HeavyRocketTurret) |
+| Roller sphere | `roller`, `rollerArmed`, `rollerPos`, `rollerFuse` (of 10), `rollerHealth` (of 200), `rollerSlow` (local pawn slowed, s) | Rendering draws RollerMineAbility_STAT ×0.5 at rollerPos |
+| Guided missile | `guidedMissile`, `guidedMissilePos`, `guidedMissileFuse` (of 30) | the camera follows the missile (Gameplay camera); missile FX for Rendering |
+| Sentry | `sentry`, `sentryHealth` (of 135), `sentryPos`, `sentryTarget` | mesh drawn by Gameplay; marker TnObjectiveMarkerTypeSentryAbility |
+| Ammo beacon | `ammoBeacon`, `ammoBeaconPos`, `ammoBeaconLife` (of 60), `ammoBeaconHealth` (of 100), `ammoBeaconBuff` | Rendering draws PROP_NEU_AmmoPickup_STAT at the position; marker caption "Ammo Beacon" for the owner's team |
+| Barrier | `barrier`, `barrierHealth` (of 1000) | the wall mesh is drawn by Gameplay (World) |
+| Pickup prompt | `pickupPrompt` ("Code Of Power" / "Bomb" / "") | E ("Pick Up") prompt while standing on a takeable objective |
+| Carried weapon | `heavyWeapon` ("Code Of Power" / "Bomb" / "") | replaces the gun on the weapon HUD while held |
+| Grenades | `grenades` (bag reserve; −1 = no bag) | G throws; grenade marker (ShowMarker) on live grenades via `projectiles` [PARTIAL] |
+| Homing lock | `lockTarget` (match player, −1 none), `lockProgress` 0..1, `locked` | LockOn marker on the target; sound event 14 on lock |
+| Tags | `tags[].label` | false while the tagged pawn is cloaked |
+
+Events added to `MatchEvent::Type` (appended at the end): `RoundEnded`, `RoundStarted`.

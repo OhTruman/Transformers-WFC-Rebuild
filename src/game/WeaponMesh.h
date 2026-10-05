@@ -28,6 +28,9 @@ public:
     enum class Event { Idle, Fire, Reload };
 
     void setModel(const assets::SkinnedModel* m);
+    // Any other weapon: event anims and the MuzzleFlash socket from its WeaponDef (TnWeaponMesh.WeaponEventAnims,
+    // IdleAnimation, SkeletalMeshSockets) [CONF data]. Authored AnimNotifies are reproduced for the Ion Blaster only.
+    void setModelGeneric(const assets::SkinnedModel* m, const struct WeaponDef& d);
     bool valid() const { return model_ && model_->valid(); }
 
     void play(Event e);

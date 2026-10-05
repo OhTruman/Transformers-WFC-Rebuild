@@ -13,6 +13,13 @@ enum class Button {
     Reload, CameraToggle, Debug, Quit,
     FineAim,   // WFC: RightMouseButton = "ToggleFineAim | Boost"; pad LeftTrigger = "FineAim | Boost"
     Dash,      // Dash = VehicleSpecialMove (hover dash / nitro): PC Shift, pad RightShoulder [CONF]
+    Ascend, Descend,
+    NextWeapon, PrevWeapon,
+    Melee,     // Q / middle mouse = "Melee" [CONF Controls card]
+    Grenade,   // G = "Throw Grenade / Detach Turret" (TossGrenade) [CONF Controls card]
+    Interact,  // E = "Interact / Pick Up / Revive" (TryPickup) [CONF Controls card]
+    Killstreak,  // B = "Look At / Kill Streak" (TriggerKillstreak) [CONF Controls card]
+    Ability1,  // Ctrl = Ability1 (Ability0 is Shift = Button::Dash in robot form) [CONF Controls card]   // Swap Weapons: PC PgUp / PgDn (and the mouse wheel) [CONF Controls card]   // jet Hover Up / Down: PC C / V [CONF Controls card, TnPlayerInput.KeyDescriptions]
     DebugNextStart, DebugPrevStart,   // test only (not WFC): F6 / F7 cycle the authored player starts
     Count
 };

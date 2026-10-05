@@ -33,10 +33,18 @@ public:
     void respawnReset() {
         trans_ = Transition::None; transClip_ = -1; partnerVisible_ = false; partnerClip_ = -1;
         veh_ = VehicleState{}; restoreTimer_ = -1.0f; lastDriving_ = false; shiftRemain_ = 0.0f;
-        velocity_ = {0, 0, 0}; onGround_ = true; rammedRemain_ = 0.0f;
+        velocity_ = {0, 0, 0}; onGround_ = true; rammedRemain_ = 0.0f; dodgeRemain_ = 0.0f; landedSinceDodge_ = true;
+        for (AbilitySlot& a : abilities_) { a.cooldown = 0.0f; a.spam = 0.0f; a.pendingCooldown = false; }
+        regenBuffRemain_ = 0.0f; fastCooldownRemain_ = 0.0f; ammoLockRemain_ = 0.0f;
+        warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f; pendingAbilityEffect_.clear(); shockwaveDelay_ = -1.0f;
+        cloakRemain_ = 0.0f; hoverState_ = 0; hoverRemain_ = 0.0f;
+        meleeState_ = 0; meleeT_ = 0.0f; lungeRemain_ = 0.0f; meleeSweep_ = -1; meleeHit_.clear(); actionClip_ = -1; actionW_ = 0.0f;
         health_ = Health{}; overShield_ = false;
         if (!specHealth_.empty()) health_.initialize(specHealth_, specOvershield_);   // ApplySpecialty: Health_<Class>
-        weapon_ = Weapon{}; speedMult_ = 1.0f; fineAiming_ = false;
+        inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;   // TnCharacterApplier.ApplyWeapons
+        vehicleInventory_ = vehicleLoadout_;
+        activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1;
+        speedMult_ = 1.0f; fineAiming_ = false;
         form_ = Form::Robot == form_ ? form_ : Form::Robot; setForm(Form::Robot); animTime_ = 0.0f; clip_ = -1;
     }
     Form form() const { return form_; }      // displayed form (mesh handoff happens mid-fold)
@@ -63,13 +71,20 @@ public:
     void setSpeedMultiplier(float m) { speedMult_ = m; }
     // Factors multiply (TnPawn.UpdateSpeeds over _SpeedMultiplierFactors): the specialty factor (associated with the
     // pawn itself) stays for the pawn's life; the fine-aim factor comes and goes.
-    float speedMultiplier() const { return speedMult_ * specialtySpeedMult_; }
+    // + melee GroundSpeedMultiplier (WeaponAttack 0.75, Whirlwind 1.2) while attacking [CONF TnMeleeSet].
+    float speedMultiplier() const {
+        return speedMult_ * specialtySpeedMult_ * (meleeState_ == 1 ? 0.75f : meleeState_ == 2 ? 1.2f : 1.0f) *
+               (drainRemain_ > 0.0f ? 0.7f : 1.0f) *   // TnBuffDrainSource SpeedMultiplier 0.7
+               (rollerSlowRemain_ > 0.0f ? 0.75f : 1.0f) *   // TnBuffRollerSphere
+               (tempWeapon_ == 1 ? 1.5f : tempWeapon_ == 2 ? 0.75f : 1.0f);   // Poke / rocket turret ground speed
+    }
     // TnSpecialty.Apply: SetSpeedMultiplier(SpeedMultiplier, P) + InitializeSegmentedHealth(HealthBlueprint) [CONF].
     void setSpecialty(const std::string& id, float speedMult, const std::vector<float>& segments, float overshield) {
         specialty_ = id; specialtySpeedMult_ = speedMult; specHealth_ = segments; specOvershield_ = overshield;
         health_.initialize(segments, overshield);
     }
     void clearSpecialty() { specialty_.clear(); specialtySpeedMult_ = 1.0f; specHealth_.clear(); specOvershield_ = 550.0f; health_ = Health{}; }
+    float specialtySpeedMultiplierForTest() const { return speedMult_ * specialtySpeedMult_; }   // base x specialty (no buffs)
     const std::string& specialty() const { return specialty_; }
     // Fine aim state (TnFineAimManager.bFineAiming), owned by the controller.
     void setFineAiming(bool b) { fineAiming_ = b; }
@@ -141,6 +156,134 @@ public:
     void addVelocityInVehicle(const core::Vec3& v) { velocity_ = velocity_ + v * 0.5f; }
     float rammedRemain() const { return rammedRemain_; }
     float rammedRemain_ = 0.0f;
+    // Dodging (TnAcrobaticsManager state 5): PHYS_Flying at DodgeSpeed for DodgeTime; CanDodge = landed since the last dodge.
+    float dodgeRemain_ = 0.0f;
+    bool landedSinceDodge_ = true;
+    // Killstreak buffs: TnBuffHealthRegenKillStreak (FloatModifier 2, 30 s), TnBuffFastAbilityCooldown (x5, 30 s),
+    // TnBuffLockAmmoClip (10 s: shots cost no clip ammo) [CONF authored buff defaults; effect placement HIGH].
+    float regenBuffRemain_ = 0.0f, fastCooldownRemain_ = 0.0f, ammoLockRemain_ = 0.0f;
+    // Warcry buffs (TnBuffWarcryIncreaseDamage / DecreaseDamageTaken FloatModifier[level], BuffTime[0] 15 s) [CONF].
+    float warcryRemain_ = 0.0f, warcryDamageMul_ = 1.0f, warcryTakenMul_ = 1.0f;
+    std::string pendingAbilityEffect_;   // a triggered ability whose effect World applies this step (Warcry / Shockwave)
+    float shockwaveDelay_ = -1.0f;       // TnAbilityShockwave.Delay 0.25 s timer
+    // TnBuffCloak (BuffTime[0] 20 s): removed by ExposeSelf - on firing (TnWeapon.OnPreServerFire) and on damage taken
+    // (TnPlayerPawn.TakeDamage); hides the TDM name-tag label. The cloak shader belongs to Rendering [CONF script].
+    float cloakRemain_ = 0.0f;
+    // TnAcrobaticsManager JumpingToHover (state 2) / Hovering (state 3): HoverDuration, PHYS_Flying at HoverAirSpeed,
+    // TnBuffIncreaseDamageDuringHover FloatModifier[0] 1.4 while hovering [CONF script + authored].
+    // Melee (TnMeleeManager Attacking): 1 MELEE_WeaponAttack, 2 MELEE_Whirlwind; elapsed / length; lunge (AttackDash).
+    int meleeState_ = 0;
+    float meleeT_ = 0.0f, meleeLen_ = 0.0f, lungeRemain_ = 0.0f;
+    core::Vec3 lungeDir_{0, 0, 0};
+    int meleeSweep_ = -1;                 // index of the active sweep window
+    std::vector<int> meleeHit_;           // match players already hit by the active sweep
+    int meleeAlternate_ = 0;
+    bool meleeHitRoller_ = false;
+    bool meleePoke_ = false;              // the attack is the MWT_Poke attack (P.O.K.E. 2.0)
+    // Killstreak weapons [CONF RE §K + authored]: 1 TnWeaponPoke (SecondsUntilDeactivated 20, DisallowWeaponSwitching, ground
+    // speed x1.5), 2 TnWeaponRocketTurretKillStreak (HeavyTurret_Rocket_WEPDATA, WT_Heavy, ground speed x0.75).
+    int tempWeapon_ = 0;
+    float tempWeaponRemain_ = 0.0f;
+    int tempPrevActive_ = 0;
+    bool tempDropRequested_ = false;
+    void grantTempWeapon(const WeaponDef& d, int kind, float secs) {
+        removeTempWeapon();
+        inventory_.push_back(Weapon::fromDef(d));
+        tempPrevActive_ = activeWeapon_;
+        activeWeapon_ = (int)inventory_.size() - 1; switchTo_ = -1; switchRemain_ = 0.0f;
+        tempWeapon_ = kind; tempWeaponRemain_ = secs;
+    }
+    void removeTempWeapon() {
+        if (!tempWeapon_ || inventory_.empty()) { tempWeapon_ = 0; return; }
+        inventory_.pop_back();
+        activeWeapon_ = std::min(tempPrevActive_, (int)inventory_.size() - 1);
+        tempWeapon_ = 0; tempWeaponRemain_ = 0.0f;
+    }
+    float minePooperRemain_ = 0.0f, minePooperTimer_ = 0.0f;   // TnBuffMinePooper 15 s, a mine every 2.0 s         // the roller mine was already kicked by this sweep
+    int meleeHitCount_ = 0;               // total melee hits landed (diagnostics)
+    bool meleeCarrier_ = false;
+    bool barrierAlive_ = false;
+    bool beaconAlive_ = false;
+    // Killstreak buffs [CONF authored CDOs + script]: TnBuffSeeEnemyObjectiveMarkers 30 s; TnBuffHardLocked 10 s (marker for
+    // the instigator's team; FloatModifier consumer not recovered); TnBuffRefillHealthOnKill 60 s; TnBuffAbilityJammedKillstreak
+    // 30 s (TnAbilityManager CooldownMultiplier 0).
+    bool rollerAlive_ = false;            // TnAbilityRollerSphere: spawn pending or the roller mine exists
+    float rollerSlowRemain_ = 0.0f;       // TnBuffRollerSphere (enemy aura): speed x0.75, 1 s robot / 2 s vehicle, refreshed
+    bool missileAlive_ = false;           // TnAbilityGuidedMissile: launch pending or the missile is flying
+    bool sentryAlive_ = false;            // TnAbilitySpawnSentry: SpawnSentry timer active or the sentry exists
+    float transformDisruptRemain_ = 0.0f; // TnBuffTransformDisruptor 3 s: transforming disabled
+    float drainRemain_ = 0.0f;           // TnBuffDrainSource BuffTime 7 s (Blueprints[0])
+    float seeEnemiesRemain_ = 0.0f, hardLockedRemain_ = 0.0f, refillOnKillRemain_ = 0.0f, jammedRemain_ = 0.0f;
+    int hardLockedByTeam_ = 255;
+    // TnBuffAbilityJammed.Apply: CooldownMultiplier 0; remove Cloak / Disguise / Warcry buffs; StopShield; Fall; abort Whirlwind.
+    void applyJammed(float t) {
+        jammedRemain_ = std::max(jammedRemain_, t);
+        cloakRemain_ = 0.0f; drainRemain_ = 0.0f;   // TnBuffDrainSource is in BuffsToRemoveWhenJammed
+        warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f;
+        if (hoverState_ != 0) hoverState_ = 0;
+        if (meleeState_ == 2) { meleeState_ = 0; meleeSweep_ = -1; actionClip_ = -1; }
+    }            // TnAbilitySpawnAmmoCrate: SpawnInventory timer active or the beacon exists
+    float beaconDamageBuff_ = 0.0f;       // TnBuffAmmoBeaconIncreaseDamage remaining (x1.15, BuffTime 1 s, refreshed in range)           // TnAbilityBarrier: SpawnBarrier timer active or the barrier exists (cooldown waits)           // the attack is the flag / bomb carrier's MWT_Flag / MWT_Bomb attack
+    int meleeVariant_ = 0;
+    int carryingHeavy_ = 0;               // 1 flag, 2 bomb held as the current (WT_Heavy) weapon
+    bool heavyDropRequested_ = false;     // a weapon swap away from the heavy weapon (ChangedWeapon -> TossWeapon)              // AnimSet chooser: Melee_EnergonSword_01 / _03
+    bool isMeleeing() const { return meleeState_ != 0; }
+    // Knockback [CONF RE TARGETED_PASS3 §I]: Pawn.TakeDamage Momentum /= Mass (blueprint Mass 100). Robot: Pawn.AddVelocity
+    // (walking -> falling; Velocity.Z > JumpZ and new Z > 0 -> new Z x 0.5); vehicle: AddLinearVelocity(M / Mass x 0.5).
+    // momentumUU in UE units (UU kg / s); extraZ = the damage type's bExtraMomentumZ (Z = max(Z, 0.4 |M|), walking / RB only).
+    void addMomentum(core::Vec3 momentumUU, bool extraZ) {
+        if (extraZ) momentumUU.y = std::max(momentumUU.y, 0.4f * core::length(momentumUU));
+        core::Vec3 dv = momentumUU * (1.0f / 100.0f) * 0.01f;   // / Mass 100, UU/s -> m/s
+        if (moveForm() == Form::Vehicle) { velocity_ = velocity_ + dv * 0.5f; return; }
+        if (velocity_.y > robotParams().jumpSpeed() && dv.y > 0.0f) dv.y *= 0.5f;
+        if (onGround_) onGround_ = false;   // PHYS_Walking -> PHYS_Falling
+        velocity_ = velocity_ + dv;
+    }
+    // One-shot action layer (melee clips): full body or upper body over locomotion.
+    void playAction(const std::string& clip, bool upperBody) {
+        actionClip_ = robotModel_ ? robotModel_->clipByName(clip) : -1; actionT_ = 0.0f; actionUpper_ = upperBody;
+    }
+    int hoverState_ = 0;
+    bool hoverRequested_ = false;   // triggered, not yet started by the movement step
+    float hoverRemain_ = 0.0f;
+    void exposeSelf() { cloakRemain_ = 0.0f; }
+    bool isDodging() const { return dodgeRemain_ > 0.0f; }
+    // Abilities (TnAbilityManager): CharacterData.Abilities[0] on Ability0 (Shift), [1] on Ability1 (Ctrl) [CONF bindings].
+    // Versus: GetCurrentSkillDataIndex 0 (TnMultiplayerGame) -> Cooldown[0]; no resource (GetResourceRequired 0 unless
+    // index 1) [CONF]. SpamPreventionTime 1.0. Only Dodge is simulated; others are reported unimplemented [PARTIAL].
+    struct AbilitySlot { std::string id; bool implemented = false; float cooldownTime = 0.0f, cooldown = 0.0f, spam = 0.0f; bool pendingCooldown = false; };
+    AbilitySlot abilities_[2];
+    void setAbilities(const std::vector<std::string>& ids) {
+        for (int i = 0; i < 2; ++i) {
+            AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
+            a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking" || a.id == "Hover" ||
+                            a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "Drain" || a.id == "SpawnSentry" || a.id == "GuidedMissile" || a.id == "RollerSphere" ||
+                            a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor";
+            // Cooldown[skill data index 0]: Dodge [2.0, 0.5]; Warcry [60]; Shockwave [60] [CONF authored CDOs].
+            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : a.id == "Barrier" ? 20.0f : a.id == "SpawnAmmoCrate" ? 60.0f : a.id == "Drain" ? 60.0f : a.id == "SpawnSentry" ? 60.0f : a.id == "GuidedMissile" ? 45.0f : a.id == "RollerSphere" ? 60.0f :
+                             (a.id == "HardLock" || a.id == "MarkTarget" || a.id == "AbilityJammer" || a.id == "TransformDisruptor") ? 60.0f : 0.0f;
+            abilities_[i] = a;
+        }
+    }
+    void tickAbilities(float dt) {
+        for (AbilitySlot& a : abilities_) {
+            a.spam = std::max(0.0f, a.spam - dt);
+            // TnAbilityManager.Tick: the cooldown starts once CanStartCooldown (Dodge: no longer dodging; Warcry:
+            // HadAndLostBuffCondition - after the owner's Warcry buff ended).
+            if (a.pendingCooldown && !(a.id == "Dodge" && isDodging()) && !(a.id == "Warcry" && (warcryRemain_ > 0.0f || pendingAbilityEffect_ == "Warcry")) &&
+                !(a.id == "Cloaking" && cloakRemain_ > 0.0f) && !(a.id == "Hover" && (hoverState_ != 0 || hoverRequested_)) &&
+                !(a.id == "Whirlwind" && (meleeState_ == 2 || pendingAbilityEffect_ == "Whirlwind")) &&
+                !(a.id == "Barrier" && (barrierAlive_ || pendingAbilityEffect_ == "Barrier")) &&
+                !(a.id == "SpawnAmmoCrate" && (beaconAlive_ || pendingAbilityEffect_ == "SpawnAmmoCrate")) &&
+                !(a.id == "Drain" && drainRemain_ > 0.0f) &&
+                !(a.id == "SpawnSentry" && (sentryAlive_ || pendingAbilityEffect_ == "SpawnSentry")) &&
+                !(a.id == "GuidedMissile" && (missileAlive_ || pendingAbilityEffect_ == "GuidedMissile")) &&
+                !(a.id == "RollerSphere" && (rollerAlive_ || pendingAbilityEffect_ == "RollerSphere"))) {
+                a.pendingCooldown = false; a.cooldown = a.cooldownTime;
+            }
+            if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (jammedRemain_ > 0.0f ? 0.0f : fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));
+        }
+    }
     float rammedBaseY_ = 0.0f;
     bool handShrunk() const { return handShrunk_; }
     // TnWeaponSpreadModifier (robot form) [CONF RE d50e2a9]: AirborneMultiplier 2.0, ramps up over 0.25 s while
@@ -155,7 +298,7 @@ public:
     // HmWeapon.GetSpread for the robot weapon: Data.Spread (0 for the Ion Blaster) + CurrentSpread x
     // CurrentAirborneMultiplier x (fine aim ? FineAimSpreadModifier 0.5 : 1) [CONF RE d50e2a9].
     float effectiveSpread() const {
-        return weapon_.spread * airSpreadMult_ * (fineAiming_ ? core::config::kFineAimSpreadMult : 1.0f);
+        return weapon().spread * airSpreadMult_ * (fineAiming_ ? weapon().fineAimSpreadMult : 1.0f);
     }
     float airSpreadMult_ = 1.0f;
     // TnOverShieldPickup granted (amount/duration are native and not recovered: state flag only [PARTIAL]).
@@ -214,8 +357,50 @@ public:
 
     Health& health() { return health_; }
     const Health& health() const { return health_; }
-    Weapon& weapon() { return weapon_; }
-    const Weapon& weapon() const { return weapon_; }
+    // Robot inventory: CharacterData.WeaponTypes in order, the first one active (CreateWeapons ActivateFirstWeapon) [CONF].
+    Weapon& weapon() { return inventory_[(size_t)activeWeapon_]; }
+    const Weapon& weapon() const { return inventory_[(size_t)activeWeapon_]; }
+    const std::vector<Weapon>& inventory() const { return inventory_; }
+    std::vector<Weapon>& inventoryMutable() { return inventory_; }
+    int activeWeaponIndex() const { return activeWeapon_; }
+    // The loadout every spawn starts from; vehicle-form weapons are kept for the HUD / future vehicle firing.
+    void setLoadout(const std::vector<Weapon>& robot, const std::vector<std::string>& vehicleWeapons) {
+        loadout_ = robot; vehicleWeapons_ = vehicleWeapons;
+        vehicleLoadout_.clear();
+        for (const std::string& n : vehicleWeapons) if (const WeaponDef* d = findWeaponDef(n)) vehicleLoadout_.push_back(Weapon::fromDef(*d));
+        vehicleInventory_ = vehicleLoadout_;
+        inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;
+        activeWeapon_ = 0; switchRemain_ = 0.0f; switchTo_ = -1; tempWeapon_ = 0; tempWeaponRemain_ = 0.0f; minePooperRemain_ = 0.0f;
+        while (activeWeapon_ + 1 < (int)inventory_.size() && inventory_[(size_t)activeWeapon_].fireType == WeaponFire::Grenade) ++activeWeapon_;
+    }
+    const std::vector<std::string>& vehicleWeapons() const { return vehicleWeapons_; }
+    // Vehicle-form weapon (CreateWeapons(VehicleWeapons), the first one active in vehicle form); null when none.
+    Weapon* vehicleWeapon() { return vehicleInventory_.empty() ? nullptr : &vehicleInventory_[0]; }
+    const Weapon* vehicleWeapon() const { return vehicleInventory_.empty() ? nullptr : &vehicleInventory_[0]; }
+    // Swap Weapons (mouse wheel / PgUp / PgDn): put the current weapon down (PutDownTime), then equip the next one
+    // (EquipTime); no firing in between [HIGH: HmWeapon PutDown / Equip states, WEPDATA times CONF].
+    void requestWeaponSwitch(int dir) {
+        // The grenade bag (TnGrenadeBag, WT_Grenades) is given without activation and thrown with G: not in the swap cycle.
+        if (carryingHeavy_) { heavyDropRequested_ = true; return; }   // ChangedWeapon tosses the heavy weapon; the gun returns
+        if (tempWeapon_ == 1) return;                                  // TnWeaponPoke.DisallowWeaponSwitching
+        if (tempWeapon_ == 2) { tempDropRequested_ = true; return; }   // WT_Heavy rocket turret: tossed on swap
+        int n = (int)inventory_.size();
+        if (n < 2 || switchTo_ >= 0 || weapon().reloading()) return;
+        int to = activeWeapon_;
+        for (int k = 0; k < n; ++k) { to = ((to + dir) % n + n) % n; if (inventory_[(size_t)to].fireType != WeaponFire::Grenade) break; }
+        if (to == activeWeapon_) return;
+        switchTo_ = to;
+        switchRemain_ = weapon().putDownTime + inventory_[(size_t)switchTo_].equipTime;
+        switchSwapAt_ = inventory_[(size_t)switchTo_].equipTime;
+    }
+    void tickWeaponSwitch(float dt) {
+        if (switchTo_ < 0) return;
+        switchRemain_ -= dt;
+        if (switchRemain_ <= switchSwapAt_ && activeWeapon_ != switchTo_) { activeWeapon_ = switchTo_; ++weaponChangeSerial_; }
+        if (switchRemain_ <= 0.0f) { switchRemain_ = 0.0f; switchTo_ = -1; }
+    }
+    bool switchingWeapon() const { return switchTo_ >= 0; }
+    unsigned weaponChangeSerial() const { return weaponChangeSerial_; }
     Ability& ability() { return ability_; }
 
     const char* animName() const { return animName_.c_str(); }
@@ -239,6 +424,10 @@ public:
     struct VehicleState {
         bool driving = false;         // TnCarForm state Driving (normal boost, wheels)
         bool tankBoost = false;       // TnHoverTankSimulation boosting (tank form)
+        bool flying = false;          // TnPlaneForm state Flying (jet)
+        float rollRemain = 0.0f;      // car barrel roll (JumpTimeRemaining) / jet roll time
+        float rollDir = 0.0f;
+        float leanP = 0.0f, leanY = 0.0f, leanR = 0.0f;   // TnPlaneSimulation RLerp'd extra rotation (rad)
         float rideHeight = 0.0f;      // diagnostics: COM height above the surface below it (m)
         float driftRemain = 0.0f;     // Hovering.BeginState Drift(): steering authority ramp
         float dashRemain = 0.0f;      // hover dash time remaining
@@ -284,7 +473,12 @@ private:
     core::Vec3 boxSize_{1, 2, 1};
     core::Vec3 color_{1, 1, 1};
     Health health_;
-    Weapon weapon_;
+    std::vector<Weapon> loadout_, inventory_{Weapon{}};
+    std::vector<std::string> vehicleWeapons_;
+    std::vector<Weapon> vehicleLoadout_, vehicleInventory_;
+    int activeWeapon_ = 0, switchTo_ = -1;
+    float switchRemain_ = 0.0f, switchSwapAt_ = 0.0f;
+    unsigned weaponChangeSerial_ = 0;
     Ability ability_;
 
     const ChassisDef* chassis_ = nullptr;
@@ -354,11 +548,13 @@ private:
         bool valid = false;
         int hoverAddClip = -1;                   // ADD_Nav_Hover_VEH
         int hoverToBoost = -1, boostToHover = -1, wheels = -1;   // Driving (normal boost) clips
+        int cannon = -1;                         // C_Cannon_XB (VEH_Tank_ANIMTREE WeaponPrimary)
     } vehicleRig_;
     void buildRobotRig(const assets::SkinnedModel& mdl);
     void buildVehicleRig(const assets::SkinnedModel& mdl);
 
     float aimPitch_ = 0.0f, aimPitchN_ = 0.0f, aimYawN_ = 0.0f, aimW_ = 0.0f;
+    float cannonPitch_ = 0.0f;   // tank cannon pitch after the 360 deg/s lag
     // Turn in place (TnAnimTurnInPlace): legs keep their world yaw while the pawn follows the aim.
     float legYaw_ = 0.0f, lastYaw_ = 0.0f;
     bool yawInit_ = false;
@@ -377,6 +573,10 @@ private:
     float reloadW_ = 0.0f, reloadT_ = 0.0f;
     bool prevReloading_ = false;
     std::vector<float> reloadMask_;
+    int actionClip_ = -1;
+    float actionT_ = 0.0f, actionW_ = 0.0f;
+    bool actionUpper_ = false;
+    std::vector<float> actionMask_;
     float airTime_ = 0.0f, landT_ = 0.0f, airApexY_ = 0.0f;
     int landClipSel_ = -1;                    // landing clip picked from SharedAcrobatics.LandingAnims
     float hoverW_ = 0.0f, hoverT_ = 0.0f;

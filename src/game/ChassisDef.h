@@ -21,11 +21,14 @@ struct RobotParams {
     float airSpeed = core::config::kAirSpeed, airControl = core::config::kAirControl;
     float terminalVel = core::config::kRobotTerminalVel;
     float jumpHeight = core::config::kRobotMaxJumpH;                                        // Acrobatics JumpHeight
+    float dodgeSpeed = 30.0f, dodgeTime = 0.5f;                                             // Acrobatics DodgeSpeed / DodgeTime
+    float hoverJumpHeight = 5.0f, hoverDuration = 7.0f, hoverAirSpeed = 5.0f;              // Acrobatics HoverJumpHeight / Duration / AirSpeed
     float momGroundFwd = core::config::kMomentumGroundFwd, momGroundNeutral = core::config::kMomentumGroundNeutral,
           momGroundBack = core::config::kMomentumGroundBack;
     float momAirFwd = core::config::kMomentumAirFwd, momAirNeutral = core::config::kMomentumAirNeutral,
           momAirBack = core::config::kMomentumAirBack;
     float damageMultiplier = 1.0f;                                                          // ROBODEF DamageMultiplier
+    float selfDamageMultiplier = 0.45f;                                                     // ROBODEF SelfDamageMultiplier
     float jumpSpeed() const { return std::sqrt(2.0f * core::config::kGravity * jumpHeight); }   // JumpZ (ApplyTransformer)
 };
 
@@ -59,21 +62,43 @@ struct VehicleParams {
     float rollDuration = 0.0f;                                     // car: barrel roll (RollDuration 0.7); truck 0
     std::vector<WheelDef> wheels;                                  // empty = the truck wheel set (CharacterMovement)
     float damageMultiplier = 1.0f;                                 // VEHDEF DamageMultiplier
+    float selfDamageMultiplier = 0.45f;                            // VEHDEF SelfDamageMultiplier
+    // Rigid-body hull around the mesh root (m). Truck: VH_Optimus_PHYSSYS convex box [CONF AssetTools PHYSICS_STREETS];
+    // every MP chassis: its VH_*_PHYSSYS convex hull (VehicleHullTable.inc) [CONF authored]; mesh bounds only as a fallback.
+    float hullFront = 3.38f, hullBack = 3.10f, hullHalfWidth = 1.54f, hullBottom = -0.35f, hullTop = 1.85f;
+    bool hullFromMesh = false, hullFromPhysics = false;   // physics-asset convex hull (CONF) / mesh bounds fallback (PROV)
+    // Jet (TnHoverPlaneSimulation HoverPlane_Physics + TnPlaneSimulation Plane_Physics) [CONF RE TARGETED_PASS3 C3].
+    float hoverRollTime = 0.6f, hoverRollSpeed = 30.0f;           // RollDuration / RollLinearSpeed
+    float flySpeed = 40.0f, flyAccel = 30.0f, flyDrag = 600.0f;     // MaxSpeed / MaxAcceleration / DragCoefficient
+    float pitchDuePitch = 27.0f, yawDueYaw = 16.0f, rollDueYaw = 77.0f, extraRotLerp = 0.1f;
+    float maxPitchDeg = 60.0f, fullPitchDeg = 45.0f, flyRollTime = 0.8f, flyRollSpeed = 30.0f, flyRollAngSpeed = 8.0f;
     bool hasDriving() const { return form == VehicleFormType::Car || form == VehicleFormType::Truck; }
 };
 
 struct SocketDef { std::string bone; core::Mat4 local; bool valid = false; };
 
+// Vehicle camera strategy values of the chassis' HmCameraStrategySet (CameraTable.inc) [CONF authored]: anchor Offset Z
+// (m above the actor), orbit distance (m), pitch range (rad), horizontal FOV (deg). Defaults = the Optimus truck sets.
+struct CamStrategy { float anchor, dist, pitchMin, pitchMax, fov; };
+
 struct ChassisDef {
     std::string id = "Truck", iconic = "Optimus Prime", customBody;
     int faction = 0;                          // FactionRestriction 0 Autobot, 1 Decepticon
-    std::string defaultSpecialty = "Leader";
+    std::string defaultSpecialty = "Leader";   // TnDataProvider_Chassis DefaultSpecialty (UI grouping only)
+    std::string iconicSpecialty = "Leader";    // the iconic preset CharacterData.Specialty: applied for iconic selections
     std::string robotGlb, vehicleGlb;         // relative to the asset root's parent (ExtractedAssets)
     std::string armGltf, armAnimGltf;         // ArmBlueprint (umodel content paths)
     SocketDef weaponPrimary, weaponSecondary; // robot WeaponSocket_Primary / _Secondary
     SocketDef vehicleWeapon;                  // vehicle WeaponSocket_Primary
+    SocketDef meleeSmall, meleeLarge, positionSocket;   // robot MeleeSocket_SmallRobot / _LargeRobot / PositionSocket
+    SocketDef rightHand;                                // robot MeleeSocket_RightHand (TnGrenadeThrower.TossSocket)
     RobotParams robot;
     VehicleParams vehicle;
+    CamStrategy camHover{core::config::kHoverCamAnchor, core::config::kHoverCamDist, core::config::kHoverCamPitchMin,
+                         core::config::kHoverCamPitchMax, core::config::kHoverCamFov};
+    CamStrategy camDrive{core::config::kDriveCamAnchor, core::config::kDriveCamDist, core::config::kDriveCamPitchMin,
+                         core::config::kDriveCamPitchMax, core::config::kDriveCamFov};
+    CamStrategy camFly{0, 0, 0, 0, 0};   // jets: FlyingPlane strategy (zero = none)
     std::vector<std::string> iconicWeapons, iconicVehicleWeapons, allowedOnFoot, iconicAbilities;
     std::string classDefaultSecondary;
     bool mpCharacter = true;                  // referenced by TnAssetReferencesMultiplayer

@@ -1,5 +1,6 @@
 // Clean-room reconstruction — the world: owns the level, player, and dynamic actors.
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 #include <map>
@@ -53,7 +54,60 @@ struct HudGameState {
     float health = 0, healthMax = 0, overshield = 0, normalizedOverShield = 0;
     int activeSegment = 0, segmentCount = 4;
     int clipAmmo = 0, reserveAmmo = 0;
-    std::string weaponName;                      // current weapon (only the Ion Blaster exists in the rebuild)
+    std::string weaponName;                      // current weapon ItemName
+    std::string weaponId, weaponIcon;            // provider UniqueId; Hud_GFX kill-feed / weapon icon (death_<Weapon>)
+    bool weaponSimulated = true;                 // false: projectile / melee / grenade weapon equipped but not simulated [PARTIAL]
+    bool weaponSwitching = false;
+    std::vector<std::string> inventory;          // robot weapons (provider ids), CharacterData.WeaponTypes order
+    int activeWeapon = 0;
+    std::vector<std::string> vehicleWeapons;     // CharacterData.VehicleWeapons
+    std::vector<std::string> loadoutRefused;     // selected weapons not equipped (unknown / chassis restriction)
+    // Ability0 (Shift) / Ability1 (Ctrl): id, simulated by the rebuild, cooldown remaining (s), cooldown pending (in use).
+    struct Ability { std::string id; bool implemented; float cooldown; bool active; };
+    std::vector<Ability> abilities;
+    bool dodging = false;
+    bool cloaked = false;
+    int hoverState = 0;
+    // Ammo beacon (SpawnAmmoCrate): Rendering draws PROP_NEU_Pickups_p.AmmoPickup.PROP_NEU_AmmoPickup_STAT at ammoBeaconPos
+    // (PickupRotationRate yaw 10000); objective marker "Ammo Beacon" for the owner's team.
+    float drain = 0.0f;                          // Drain ability active (s left)
+    float seeEnemies = 0.0f, refillOnKill = 0.0f, abilitiesJammed = 0.0f, hardLocked = 0.0f;   // killstreak buffs on the local pawn (s left)
+    // Roller sphere: Rendering draws FX_RollerMine_p.Mesh.RollerMineAbility_STAT (scale 0.5) at rollerPos.
+    int kamikazeMines = 0;                       // live MinePooper mines (positions: World::kamikazeMines())
+    float tempWeaponLeft = 0.0f;                 // P.O.K.E. 2.0 seconds left (0 otherwise)
+    bool roller = false, rollerArmed = false;
+    core::Vec3 rollerPos{0, 0, 0};
+    float rollerFuse = 0.0f, rollerHealth = 0.0f, rollerSlow = 0.0f;
+    bool guidedMissile = false;                  // the local player is guiding a missile (camera follows it)
+    core::Vec3 guidedMissilePos{0, 0, 0};
+    float guidedMissileFuse = 0.0f;
+    bool sentry = false;                         // the local SpawnSentry turret is up
+    float sentryHealth = 0.0f;                   // of 135 (drains 4.5/s: Lifetime 30 s)
+    core::Vec3 sentryPos{0, 0, 0};
+    int sentryTarget = -1;
+    bool ammoBeacon = false;
+    core::Vec3 ammoBeaconPos{0, 0, 0};
+    float ammoBeaconLife = 0.0f, ammoBeaconHealth = 0.0f;
+    bool ammoBeaconBuff = false;                 // TnBuffAmmoBeaconIncreaseDamage on the local pawn
+    bool barrier = false;                        // the local Barrier ability's wall is up
+    float barrierHealth = 0.0f;                  // BarrierHealth 1000, DegenRate 15/s
+    std::string pickupPrompt;                    // TnPickupManager prompt (E): "Code Of Power" / "Bomb" / "" (refreshed 0.1 s in the original)
+    std::string heavyWeapon;                     // carried flag / bomb weapon ItemName ("" none): replaces the gun while held
+    int grenades = 0;                            // grenade bag reserve (WT_Grenades); -1 = no bag
+    int lockTarget = -1;                         // homing weapon: target match player (-1 none)
+    float lockProgress = 0.0f;                   // LockOnTimer / LockOnTime
+    bool locked = false;                         // lock acquired (the next shot homes)                          // 1 rising to hover, 2 hovering (TnAcrobaticsManager)                        // TnBuffCloak active (Rendering: cloak shader)
+    // CTF / EXT: attacking team (GRI.AttackingTeam), rounds, carried objectives, planted bomb (CurrentObjectiveCountdown).
+    int attackingTeam = 255, currentRound = 0, rounds = 0;
+    bool betweenRounds = false;
+    struct CarriedObj { int kind; int holder; int holderTeam; bool dropped; bool active; core::Vec3 pos; float autoReturn, returnLeft, sleep; };
+    std::vector<CarriedObj> carried;
+    bool bombPlanted = false; float bombFuse = 0.0f, bombDefuse = 0.0f; int bombPlantTeam = 255;
+    bool localCarrying = false;
+    int killStreak = 0;                          // PRI._CurrentKillStreak
+    std::vector<std::string> killstreaks;        // AcquiredKillstreaks (newest last = CurrentKillstreakId)
+    bool killstreakImplemented = false;          // the newest one is simulated by the rebuild
+    float regenBuff = 0.0f, fastCooldownBuff = 0.0f, ammoLockBuff = 0.0f;   // buff time left (s)
     // Damage taken (TakeDamage -> HUD damage direction): increments per damaging hit; the instigator location at that hit
     // (world) and its bearing relative to the view (radians, 0 = ahead, + = right). Presentation belongs to Hud_GFX.
     int damageTakenCount = 0;
@@ -92,7 +146,7 @@ struct HudGameState {
     std::vector<Row> scoreboard;
     // TDM player tags (TnObjectiveMarkerTypeTransformerVersus): hidden for self and the dead; allies labelled,
     // enemy markers disabled by default (no TnBuffSeeEnemyObjectiveMarkers / HardLocked / Revenge buffs here).
-    struct Tag { int player; std::string name; int team; bool ally; bool drawn; core::Vec3 pos; };
+    struct Tag { int player; std::string name; int team; bool ally; bool drawn; core::Vec3 pos; bool label = true; };
     std::vector<Tag> tags;
     // Objectives of the current mode (DOM nodes, KOTH zones): HUD markers + capture state.
     struct Objective {
@@ -233,6 +287,22 @@ public:
     // (>= 0) = TnCarForm.Driving.UpdateSounds' CarSimulation.SlipAngle; hovering feeds 0 [CONF]. Until
     // Gameplay provides it the driving value is 0 (the squeal loop runs silent per its volume curve).
     void setTireSlipAngle(float rad) { tireSlipOverride_ = rad; }
+    // The multiplayer map this world loads (AssetTools VerticalSlice/Maps/<Map>: world.glb, collision_pawn / _weapon.glb,
+    // gameplay.json, physics.json, navigation.json - one contract for every processed MP map). Set before load().
+    void setMap(const std::string& m) { mapName_ = m; }
+    float killZ() const { return killZ_; }   // persistent level WorldInfo.KillZ (m)
+    // Pain-causing PhysicsVolumes of the map (AssetTools maps/<Map>/hazard_volumes.json): convex brush planes, damage
+    // per second and damage type. Stock UE3 PhysicsVolume pain: on entry (bEntryPain) and every PainInterval while
+    // touching, DamagePerSec * PainInterval [HIGH: stock defaults PainInterval 1, bEntryPain true].
+    struct HazardVolume { std::string actor, damageType; float damagePerSec = 0, painInterval = 1.0f; bool entryPain = true;
+                          core::Vec3 centroid{0, 0, 0};
+                          struct Plane { core::Vec3 n; float w; };
+                          std::vector<Plane> planes; };   // outward normal n, offset w (inside: n.p <= w)
+    const std::vector<HazardVolume>& hazardVolumes() const { return hazards_; }
+    int hazardAt(const core::Vec3& p) const;
+    std::string mapDir() const;
+    // "MP_UND_Gorge_BASE_m" / "mp_und_gorge" -> "MP_UND_Gorge" when that map's export exists; else the input.
+    static std::string canonicalMapName(const std::string& m);
 
     // Collision for queries by movement; null when none is loaded (graybox fallback).
     const CollisionWorld* collision() const { return collision_.valid() ? &collision_ : nullptr; }
@@ -262,6 +332,78 @@ public:
     // TnPlayerPawn.TakeDamage for a match player (local or opponent): teammate damage is discarded except
     // TnDamageTypeAOE; damage reaching the pawn enters its DamageHistory; lethal damage -> Game.Killed(instigator).
     bool applyMatchDamage(int victimPlayer, int instigatorPlayer, float amount, bool aoe, const std::string& damageType = std::string());
+    // Projectiles (TnProjectile + its TnProjectileData): straight flight at InitialSpeed (homing lock-on PARTIAL); on any hit
+    // HurtRadius(Damage, DamageRadius) with stock UE3 linear falloff [HIGH]; the instigator is not hit by its own shot.
+    struct Projectile {
+        core::Vec3 pos, vel; float damage, radius, life; std::string damageType; int instigator;
+        int target = -1;                       // homing target match player (SetTarget; -1 = flies straight)
+        float homingForce = 0, closingDist = 0, closingForce = 0, closingTime = 0, maxSpeed = 0, closingRemain = -1.0f;
+        bool lockRobots = false;
+        // Grenade (TnProjectileGrenadeBase): gravity scale, bounce, fuse (starts on the first impact), resting, explode on pawn.
+        bool grenade = false, explodeOnPawn = false, resting = false;
+        float gravityScale = 1.0f, bounce = 1.0f, fuseMin = 0.0f, fuseMax = 0.0f;
+    };
+    // TnGrenadeThrower: G in robot form -> toss after TossDelay 0.4 s.
+    void startLocalGrenadeToss();
+    struct BarrierState {
+        bool alive = false;
+        core::Vec3 pos{0, 0, 0}; float yaw = 0.0f;
+        float health = 0.0f, fade = -1.0f, t = 0.0f;   // fade: FadeOutTime countdown once health reached 0 (-1 = up)
+        core::Mat4 world, boxInv;                      // mesh world matrix; world -> collision-box local
+        core::Vec3 half{0, 0, 0};
+    };
+    float grenadeTossDelay_ = -1.0f, grenadeCooldown_ = 0.0f;
+    BarrierState barrier_;
+    // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
+    struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f; };
+    AmmoBeacon beacon_;
+    // TnSentryPawnAbility + TnAiSentryController (the local owner's, Default_TURRETDEF) [CONF RE §J + authored].
+    struct Sentry {
+        bool alive = false;
+        core::Vec3 pos{0, 0, 0};
+        float yaw = 0.0f, pitch = 0.0f, health = 0.0f, fireTimer = 0.0f, heat = 0.0f, overheat = 0.0f, t = 0.0f;
+        int target = -1, shots = 0;
+    };
+    Sentry sentry_;
+    // TnGuidedMissile (ability / GuidedMissileStreak) [CONF RE §J3 + authored GuidedMissile_PROJDATA / GuidedMissile_STRATEGY].
+    struct GuidedMissile { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f; };
+    GuidedMissile missile_;
+    // TnRollerMineAbility (the local owner's) [CONF authored CDOs + RE §J4; PhysX ball HIGH].
+    struct RollerMine { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float t = 0.0f, health = 0.0f; bool onGround = false; };
+    RollerMine roller_;
+    float rollerDelay_ = -1.0f;
+    void tickRollerMine(float dt);
+    void explodeRollerMine();
+    float missileDelay_ = -1.0f;
+    void startGuidedMissile();
+    void tickGuidedMissile(float dt);
+    void detonateGuidedMissile(const core::Vec3& at);
+    float sentryDelay_ = -1.0f;
+    assets::SkinnedModel sentryModel_;
+    bool sentryModelTried_ = false;
+    render::MeshData sentryMesh_;
+    void spawnSentry();
+    void tickSentry(float dt);
+    float beaconDelay_ = -1.0f;
+    void tickAmmoBeacon(float dt);
+    float barrierDelay_ = -1.0f;
+    int barrierDyn_ = -1, barrierDynW_ = -1;
+    assets::SkinnedModel barrierModel_;
+    bool barrierModelTried_ = false;
+    render::MeshData barrierMesh_;
+    void spawnBarrier();
+    void tickBarrier(float dt);
+    core::Vec3 grenadeTarget_{0, 0, 0};
+    const Weapon* grenadeBag(const Character& c) const;
+    void spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const Weapon& w, int instigator);
+    const std::vector<Projectile>& projectiles() const { return projectiles_; }
+    void fireHitscanWith(const Weapon& w, const core::Vec3& origin, const core::Vec3& dirIn);
+    // Controller fire entry: one shot of w from origin along dir (projectile spawn or one hitscan trace). Inline dispatch
+    // through a hook World installs at load, so harnesses that stub World (tools/fidelity) still link with fireHitscan.
+    std::function<void(const Weapon&, const core::Vec3&, const core::Vec3&)> weaponFireHook;
+    void fireWeapon(const Weapon& w, const core::Vec3& origin, const core::Vec3& dir) {
+        if (weaponFireHook) weaponFireHook(w, origin, dir); else fireHitscan(origin, dir);
+    }
     int damageTakenCount_ = 0;
     core::Vec3 lastDamageFrom_{0, 0, 0};
     // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
@@ -279,6 +421,14 @@ public:
     const ChassisAssets* chassisAssets(const std::string& id);
     // TnPawn.ApplyTransformer for the local pawn: models, rigs, collision, stats, weapon socket. False = unavailable.
     bool applyChassisToLocalPawn(const std::string& id);
+    // TnPawn.ApplyTransformer for any pawn (local or participant): models, rigs, collision, stats, weapon / arm sockets.
+    bool applyChassisToPawn(Character& pc, const std::string& id);
+    // ApplySpecialty + ApplyWeapons / ApplyAbilities for any pawn; returns refused weapons.
+    std::vector<std::string> applyCharacterTo(Character& pc, const CharacterSelection* sel, MatchPlayer* mp);
+    // TnCharacterApplier.ApplyWeapons for the local pawn: CharacterData.WeaponTypes (custom selection, validated against the
+    // chassis' TnDataProvider_Weapon restrictions) or the chassis' iconic preset; VehicleWeapons alike. Returns the
+    // weapons that were refused (unknown provider / not allowed on this chassis).
+    std::vector<std::string> applyLoadout(const CharacterSelection* sel);
     const std::string& localChassis() const { return localChassis_; }
     // Authored collision actor(s) (collision_pawn.glb node: BlockingVolume_*, BSP, prop actor names) whose
     // bounds contain p (expanded by pad metres): for tracing blocked / incorrect areas back to authored objects.
@@ -331,7 +481,65 @@ private:
     bool usingSlice_ = false;
 
     std::map<std::string, std::unique_ptr<ChassisAssets>> chassisCache_;
+    std::map<std::string, std::unique_ptr<assets::SkinnedModel>> weaponModels_;   // raw umodel weapon meshes + AnimSets
+    std::string shownWeapon_ = "IonBlaster";
+    std::vector<std::string> loadoutRefused_;
+    unsigned seenWeaponChange_ = 0;
+    const assets::SkinnedModel* weaponModelFor(const WeaponDef& d);
+    void syncShownWeapon();
     std::string localChassis_;
+    std::string mapName_ = "MP_IAC_Streets";
+    std::vector<HazardVolume> hazards_;
+    std::vector<Projectile> projectiles_;
+    void tickProjectiles(float dt);
+    void tickAbilityEffects(float dt);
+    void tickHomingLock(float dt);
+    // PlayerTargeting.GetHomingLockTarget picker (index 4) about the crosshair; robots only when allowRobots.
+    int pickHomingTarget(bool allowRobots, float range) const;
+    // TnAbilityAbilityJammer / TnAbilityTransformDisruptor projectiles (enemies only, no damage).
+    struct BuffShot { core::Vec3 pos, vel; float radius, life; int kind; };   // kind 0 jammer, 1 transform disruptor
+    std::vector<BuffShot> buffShots_;
+    // TnProjectileKamikazeMineKillstreak (MinePooper) [CONF RE §K]: hover 2 s, then seek an enemy within SearchRadius 2000 UU
+    // at HomingSpeed 2300 UU/s; 125 / 500 UU on contact; Health 50; LifeSpan 60.
+    struct KamikazeMine { core::Vec3 pos, vel; float t = 0.0f, health = 50.0f; int target = -1; };
+    std::vector<KamikazeMine> mines_;
+    void tickKillstreakItems(float dt);
+    void tickBuffShots(float dt);
+    const Character* matchPawn(int matchPlayer) const;
+    // TnWeaponHoming lock state of the local pawn's active weapon.
+    int lockCandidate_ = -1, lockTarget_ = -1;
+    float lockTimer_ = 0.0f, holdLockTimer_ = 0.0f;
+    bool locked_ = false;
+    void startLocalMelee(bool whirlwind);
+    void tickLocalMelee(float dt);
+    bool deferredKillstreak_ = false;
+    int lockedClip_ = 0;
+public:
+    void applyKnockback(int victim, const core::Vec3& momentumUU, const std::string& damageType);   // RE §I gated knockback
+    // TnAbilityBarrier / TnBarrierSpawnable (the local owner's) [CONF script + authored; RE §I3].
+    const BarrierState& barrier() const { return barrier_; }
+    bool ammoBeaconAlive() const { return beacon_.alive; }
+    core::Vec3 ammoBeaconPos() const { return beacon_.pos; }
+    void damageAmmoBeacon(float amount, int instigator);
+    const Sentry& sentry() const { return sentry_; }
+    bool guidedMissileAlive() const { return missile_.alive; }
+    const RollerMine& rollerMine() const { return roller_; }
+    const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }
+    void damageRollerMine(float amount, int instigator);
+    core::Vec3 guidedMissilePos() const { return missile_.pos; }
+    void damageSentry(float amount, int instigator, const std::string& type);
+    bool sentryRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const;
+    bool barrierRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const;
+    void damageBarrier(float amount, const std::string& type);
+    // TnPlayerController.TriggerKillstreak for the local player: the newest acquired streak; RequiresRobotForm streaks in
+    // vehicle form transform first and trigger after (DeferredTriggerKillstreak). Returns the triggered id or "".
+    std::string triggerLocalKillstreak();
+private:
+    void radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type);
+    int localHazard_ = -1;
+    float localPainTimer_ = 0.0f;
+    void loadHazards();
+    void tickHazards(float dt);
     render::IRenderer* renderer_ = nullptr;
     std::map<std::string, render::TextureHandle> texCache_;
     int texLoaded_ = 0, texFailed_ = 0;

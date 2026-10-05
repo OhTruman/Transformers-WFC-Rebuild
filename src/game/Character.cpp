@@ -272,6 +272,7 @@ void Character::buildVehicleRig(const assets::SkinnedModel& mdl) {
     V.hoverToBoost = mdl.clipByName("Nav_HoverToBoost_VEH");
     V.boostToHover = mdl.clipByName("Nav_BoostToHover_VEH");
     V.wheels = mdl.clipByName("Nav_Idle_Wheels_VEH");
+    V.cannon = mdl.nodeByName("C_Cannon_XB");
     if (ci < 0 || cf < 0 || cb < 0 || cl < 0 || cr < 0) return;
     assets::samplePose(mdl, ci, 0.0f, false, V.idle);
     assets::samplePose(mdl, cf, 0.0f, false, V.f);
@@ -395,7 +396,7 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
     // space like UE3's per-bone blend (torso stays on the aim over strafe hips / planted legs).
     // Standing still the legs also take the clip, locally, keeping the root's yaw.
     // [PROV] slot blend time.
-    bool reloading = weapon_.reloading();
+    bool reloading = weapon().reloading();
     if (reloading && !prevReloading_) reloadT_ = 0.0f;
     prevReloading_ = reloading;
     reloadT_ += dt;
@@ -411,6 +412,23 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
         assets::samplePose(mdl, R.reloadClip, reloadT_, false, layerPose_);
         assets::blendPose(finalPose_, layerPose_, reloadW_, finalPose_, &reloadMask_);
         assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, reloadW_, R.upperMask, finalPose_);
+    }
+
+    // 3b) Melee action layer: the attack clip over locomotion (BlendIn / BlendOut 0.15 s, TnMeleeSet); whirlwind upper body.
+    if (actionClip_ >= 0 && robotRig) {
+        const float len = mdl.clips[(size_t)actionClip_].duration;
+        actionT_ += dt;
+        bool on = actionT_ < len;
+        actionW_ = approach(actionW_, on ? 1.0f : 0.0f, dt, 0.15f);
+        if (actionW_ > 0.0f) {
+            assets::samplePose(mdl, actionClip_, std::min(actionT_, len), false, layerPose_);
+            if (actionUpper_) assets::blendPoseMeshSpace(mdl, finalPose_, layerPose_, actionW_, R.upperMask, finalPose_);
+            else {
+                actionMask_.assign(R.upperMask.size(), 1.0f);
+                for (size_t i = 0; i < actionMask_.size(); ++i) if ((int)i == R.rootRef || mdl.nodes[i].parent < 0) actionMask_[i] = 0.0f;
+                assets::blendPose(finalPose_, layerPose_, actionW_, finalPose_, &actionMask_);
+            }
+        } else if (!on) actionClip_ = -1;
     }
 
     // 4) Weapon recoil skel-controls (HmSkelControlRecoil via TnRecoiler), restarted per shot.
@@ -448,6 +466,15 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
         assets::addPose(finalPose_, layerPose_, hoverW_);
     }
 
+    // Tank cannon (VEH_Tank_ANIMTREE WeaponPrimary: HmSkelControl_TurretConstrained on C_Cannon_XB, actor space, no
+    // constraints, LagDegreesPerSecond 360): the player sets DesiredBoneRotation = (view pitch, hull yaw, 0), so the cannon only
+    // pitches [CONF script + authored; lag as a max turn rate HIGH]. Applied as a mesh-space pitch over the animated pose
+    // (the cannon rests level in the vehicle clips) [PROV].
+    if (&mdl == vehicleModel_ && vehicleRig_.cannon >= 0 && vehicleParams().form == VehicleFormType::Tank && steady) {
+        const float maxStep = 6.2831853f * dt;   // 360 deg/s
+        cannonPitch_ += core::clampf(aimPitch_ - cannonPitch_, -maxStep, maxStep);
+        assets::applyMeshSpace(mdl, finalPose_, vehicleRig_.cannon, assets::quatAxisAngle({0, 0, 1}, cannonPitch_), {0, 0, 0});
+    }
     if (&mdl == robotModel_) applyHandControl(mdl, finalPose_);
     assets::skinPose(mdl, finalPose_, animScratch_, poseBuf_);
     updateWeaponSocket();
@@ -717,6 +744,7 @@ core::Mat4 Character::meshMatrix(Form f) const {
 
 bool Character::weaponUsable() const {
     if (moveForm() != Form::Robot) return false;
+    if (switchTo_ >= 0) return false;              // putting down / equipping
     if (trans_ == Transition::None) return true;
     // Restored + EquipTime 0.2 s, and the gun is actually drawn on a displayed robot mesh this step:
     // no shot can originate from an invisible weapon.

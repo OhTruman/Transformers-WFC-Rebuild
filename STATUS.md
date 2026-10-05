@@ -1272,6 +1272,85 @@ Left as the owners labelled them:
 - **Systems:** add `PickupPresentation.cpp` to the audio suite's documented build line.
 - **Systems/Gameplay:** nobody calls `notifyRamHit` yet (no pawn victims in the slice).
 
+## GAMEPLAY PASS 22z (2026-10-05) — last three killstreaks; Pass 22 complete
+- P.O.K.E. 2.0, Nucleon Shock Cannon, Thermo Mine Re-Spawner: all 12 class killstreaks implemented.
+- All abilities used by iconic presets plus HardLock / AbilityJammer / TransformDisruptor implemented; Disguise and DecoyTrap remain PARTIAL.
+- Regression: PARTICIPANT 21/21 (Streets, Gorge), WEAPON 18/18, TDM 43/43, CTF 12/12, CHASSIS 13/13, MAPSUITE 12/12.
+
+## GAMEPLAY PASS 22y (2026-10-05) — HardLock, AbilityJammer, TransformDisruptor; HardLocked x1.4
+- RE §K: class-pool abilities and the HardLocked damage-taken multiplier (Orbital Beacon 2.0 now x1.4). PARTICIPANT 18/18.
+
+## GAMEPLAY PASS 22x (2026-10-05) — RollerSphere; loader reload fix
+- Every ability used by an iconic preset is now implemented (Dodge, Warcry, Shockwave, Cloaking, Hover, Whirlwind, Barrier, SpawnAmmoCrate, Drain, SpawnSentry, GuidedMissile, RollerSphere). PARTICIPANT 16/16.
+- assets::loadSkinnedGlb resets the model before loading (same one-liner as agents/rendering 088b703).
+- WFC_CAMSYNC at 60 / 144 / 240 Hz render (60 Hz sim) on fe689fe: character screen jitter with the per-frame camera 0.0002–0.11 deg mean (max 0.25) across robot run+turn, hover drive+turn and boost. No regression from the Pass 22 gameplay work.
+
+## GAMEPLAY PASS 22w (2026-10-05) — GuidedMissile, multi-map validation
+- Guided missile ability + Omega Missile streak (9 of 12 class killstreaks). Participant tests place themselves on open lines and pass 15/15 on Streets, Gorge, Debris and Rust.
+- Ten-map stress table in FIDELITY.md (oracle / tours / transforms / chaos); all KillZ and under-floor cases classified.
+
+## GAMEPLAY PASS 22v (2026-10-05) — SpawnSentry
+- Deployable sentry turret from the authored TURRETDEF / WEPDATA / DSYS and RE §J. PARTICIPANT 14/14.
+
+## GAMEPLAY PASS 22u (2026-10-05) — Drain ability
+- 7 s drain aura (25 DPS / 35 HPS per target, speed x0.7), cooldown after the buff. PARTICIPANT 13/13.
+
+## GAMEPLAY PASS 22t (2026-10-05) — contextual flag / bomb pickup (E)
+- RE §J: objectives are picked up with the Interact button, not on touch; CanPickupInventory gates. CTF 12/12 (Streets, Gorge).
+
+## GAMEPLAY PASS 22s (2026-10-05) — buff killstreaks
+- Orbital Beacon, Orbital Beacon 2.0, Health Matrix 2.0, EMP. 8 of 12 class killstreaks implemented. PARTICIPANT 12/12.
+
+## GAMEPLAY PASS 22r (2026-10-05) — SpawnAmmoCrate (ammo beacon)
+- Beacon drop / refill / damage buff / health / lifespan / cooldown from script and authored data. PARTICIPANT 11/11.
+
+## GAMEPLAY PASS 22q (2026-10-05) — Barrier ability
+- Wall spawn / collision / health / decay / fade / cooldown from authored data; blocks shots and pawns. PARTICIPANT 10/10.
+
+## GAMEPLAY PASS 22p (2026-10-05) — flag / bomb carrier rules and knockback
+- Carrier holds the heavy weapon (no gun / grenade, 9999 melee), drops on transform / swap; knockback gated by damage type. PARTICIPANT 9/9, CTF 12/12.
+
+## GAMEPLAY PASS 22o (2026-10-05) — tank cannon pitch
+- C_Cannon_XB follows the view pitch at <= 360 deg/s (TurretConstrained WeaponPrimary). WFC_WEAPONTEST 18/18.
+
+## GAMEPLAY PASS 22n (2026-10-05) — grenades (G)
+- Grenade bag toss, bounce, fuse-on-first-impact and HurtRadius from authored data; bag not in the swap cycle. WFC_WEAPONTEST 17/17.
+
+## GAMEPLAY PASS 22m (2026-10-05) — homing lock-on and TakeRadiusDamage falloff
+- Thermo Rocket Launcher / Jet Rocket lock vehicles (not robots) after 0.5 s; locked rockets home and close. WFC_PARTICIPANTTEST 8/8.
+- Chassis stress on the current build: 0/760 transforms under the map for Car2, Jet, Tank3, Truck4 and Truck; chaos 0 under-map except 1 Truck4 deck case.
+
+## GAMEPLAY PASS 22l (2026-10-05) — melee (Q) and the Whirlwind ability
+- Q melee: assist lunge, authored damage sweeps, 150 damage; Whirlwind: 8 sweep windows of 85. WFC_PARTICIPANTTEST 7/7, WEAPONTEST 16/16.
+
+## GAMEPLAY PASS 22k (2026-10-05) — Cloaking and Hover abilities, objective markers for all modes
+- Implemented abilities: Dodge, Warcry, Shockwave, Cloaking, Hover (authored values). WFC_WEAPONTEST 16/16.
+
+## GAMEPLAY PASS 22i (2026-10-05) — Warcry and Shockwave abilities
+- Warcry (team damage/taken buffs by level, 15 s, cooldown after the buff) and Shockwave (0.25 s delay, 65 within 25 m) per authored CDOs. WFC_WEAPONTEST 14/14.
+
+## GAMEPLAY PASS 22h (2026-10-05) — per-chassis vehicle cameras, vehicle weapon socket
+- Camera strategy values per chassis from authored camera sets; vehicle weapons fire from the vehicle WeaponSocket_Primary; map suite covers every mode + pickups.
+
+## GAMEPLAY PASS 22f (2026-10-05) — killstreaks
+- Streak count / acquisition by specialty (3/5/7) / B trigger with robot-form deferral; Overshield Matrix, Ammo Matrix, Energon Recharger, Intercooler implemented; 8 others PARTIAL. WFC_PARTICIPANTTEST 5/5.
+
+## GAMEPLAY PASS 22e (2026-10-05) — projectiles, vehicle weapons, damage multipliers
+- Projectile weapons from MP PROJDATA (straight; homing PARTIAL), HurtRadius falloff; vehicle-form weapons fire; victim form DamageMultiplier + SelfDamageMultiplier. WFC_WEAPONTEST 12/12.
+
+## GAMEPLAY PASS 22d (2026-10-05) — non-local participant pawns (bot-ready, no AI)
+- MatchOpponent owns a full Character: chassis body / specialty / loadout at spawn, shared movement + transformation, real cylinder hits, death/respawn. WFC_PARTICIPANTTEST 4/4; TDM 43/43 (assists by victim HealthMax), CTF/EXT 10/10, modes 21/21.
+
+## GAMEPLAY PASS 22c (2026-10-05) — CTF + EXT: all six versus modes on the shared framework
+- Rounds (RoundsBase + SingleFlagCTF: attacker alternation, 5 s between rounds, mercy rule); flag carry / capture / drop / defender return; bomb plant / fuse 15 / defuse 5 / detonation HurtRadius; WFC_CTFTEST 10/10.
+- Camera settings per RE G2 (sensitivity curve, per-form invert); assists by the victim HealthMax.
+
+## GAMEPLAY PASS 22b (2026-10-05) — vehicle forms, weapons, abilities, multi-map
+- Car / tank / jet vehicle sims from RE script digest (barrel roll, tank boost/180, jet hover + flight); per-chassis physics-asset hulls; ChassisOffset default fixed.
+- Weapons: generated MultiplayerData table (52), loadout per selection with provider restrictions, swap, per-weapon mesh/socket/damage type. WFC_WEAPONTEST 10/10.
+- Abilities: TnAbilityManager slots (Shift/Ctrl), Dodge implemented; others PARTIAL. Iconic specialty from the preset.
+- Multi-map: WFC_MAP / URL map, per-map KillZ, hazard volumes; WFC_MAPSUITE. Chassis stress table in FIDELITY PASS 22.
+
 ## GAMEPLAY PASS 22a (2026-10-05) — selected chassis spawns (no Optimus substitution)
 - ChassisDef: per-chassis definition from AssetTools Characters/<ChassisId>/character.json + roster_package.json (collision); robot/vehicle glb, arm, sockets, ROBODEF/acrobatics/momentum, hover/car/suspension/wheel blueprints. WFC_CHASSISTEST 13/13: 27/27 MP chassis load; Truck reproduces every Optimus constant.
 - Movement reads the pawn chassis (robot speeds/jump/collision; vehicle hover/drive/suspension/wheels). Car hover dash = dominant stick axis (TnCarForm.Hovering.DoDash); tank boost in hover sim (PROV); car roll + tank 180 + jet flight PARTIAL (natives requested from RE).

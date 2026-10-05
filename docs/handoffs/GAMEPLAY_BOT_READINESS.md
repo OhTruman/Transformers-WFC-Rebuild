@@ -40,3 +40,17 @@ Bots in versus play are a **RECONSTRUCTION EXTENSION**: the shipped multiplayer 
 | Movement rules | shared with the player (no bot-specific physics) |
 | Buddy / enemy AI decision logic | needs RE |
 | Bot difficulty, aim error | no original data (versus had none): must be labelled RECONSTRUCTION EXTENSION |
+
+## Pass 22 status (2026-10-05)
+- **Done: multiple full pawns.** `MatchOpponent` now owns a `Character`. At spawn World applies the participant's
+  resolved chassis (body, collision, stats), specialty (health, speed) and loadout through the same
+  `applyChassisToPawn` / `applyCharacterTo` path as the local pawn.
+- It moves with the shared `CharacterMovement` from a `MoveIntent` (`setIntent`), transforms through `Character`,
+  takes hitscan damage on its real cylinder, dies and respawns through `Match`, and interacts with every objective
+  (DOM / KOTH / CTF flag / EXT bomb) through the objective layer.
+- **WFC_PARTICIPANTTEST 4 / 4.**
+- **Still missing for bots:**
+  - a controller producing intents and firing; participants do not fire yet: firing is in PlayerController;
+  - participant weapon meshes are not drawn (only the local pawn's);
+  - navigation over the authored ReachSpec graph;
+  - any decision logic. That logic is a RECONSTRUCTION EXTENSION and needs the campaign AI RE first.

@@ -117,12 +117,36 @@ bool Application::init() {
         for (game::MatchMode m : {game::MatchMode::DM, game::MatchMode::TDM, game::MatchMode::CTF, game::MatchMode::KOTH,
                                   game::MatchMode::EXT, game::MatchMode::DOM})
             if (std::string(gm) == game::gameModeName(m)) world_.setMatchMode(m);
+    // Map: WFC_MAP=<MapName>, else the launch URL's map, else Streets (one map per session).
+    if (const char* mp = std::getenv("WFC_MAP")) world_.setMap(game::World::canonicalMapName(mp));
+    else if (const char* u = std::getenv("WFC_MATCH_URL")) {
+        std::string url = u; world_.setMap(game::World::canonicalMapName(url.substr(0, url.find('?'))));
+    }
+    LOG_INFO("map: %s", world_.mapName().c_str());
     world_.load(*renderer_);
     // Gameplay's measurement mode is WFC_PICKUPTEST=1. [integration] Rendering's presentation diagnostic shares the
     // name with a comma form (<factory>,<take>,<respawn>; see run()), so that form must not exit here.
     if (const char* pt = std::getenv("WFC_PICKUPTEST"))
         if (!std::strchr(pt, ',')) { runPickupTest(); return false; }   // measurements only
     if (std::getenv("WFC_TRAVERSE")) { runTraverseTest(); return false; }   // measurements only
+    // WFC_CHASSIS=<UniqueId>: boot as that chassis (free play and every harness), or select it as the iconic character in a launched match.
+    const char* bootChassis = std::getenv("WFC_CHASSIS");
+    if (bootChassis && !world_.applyChassisToLocalPawn(bootChassis)) LOG_ERROR("WFC_CHASSIS=%s: chassis unavailable", bootChassis);
+    if (const char* fp = std::getenv("WFC_FITPROBE")) {   // diagnostic: robot clearance columns at x,y,z (feet)
+        core::Vec3 p{0, 0, 0}; std::sscanf(fp, "%f,%f,%f", &p.x, &p.y, &p.z);
+        const game::CollisionWorld* col = world_.collision();
+        const float r = world_.player().pawn().robotParams().radius * 0.7f, top = 2.0f * world_.player().pawn().robotParams().halfHeight;
+        const core::Vec3 off[5] = {{0, 0, 0}, {r, 0, 0}, {-r, 0, 0}, {0, 0, r}, {0, 0, -r}};
+        for (int i = 0; i < 5; ++i) {
+            float from = i == 0 ? 0.4f : 0.4f + r, t; core::Vec3 n;
+            core::Vec3 a = p + off[i] + core::Vec3{0, from, 0}, b = p + off[i] + core::Vec3{0, top, 0};
+            bool hit = col && col->segmentHit(a, b, t, n);
+            float gy = 0; core::Vec3 gn; bool g = col && col->groundHeight(a.x, a.z, p.y + 0.5f, 1.0f, gy, gn);
+            LOG_INFO("FITPROBE col %d: %s at %.2f m (n %.2f %.2f %.2f); floor %s %.2f; actors %s", i, hit ? "BLOCKED" : "clear", hit ? from + (top - from) * t : 0.0f,
+                     n.x, n.y, n.z, g ? "at" : "none", gy - p.y, world_.collisionActorsAt(a + core::Vec3{0, 1.0f, 0}, 1.0f).c_str());
+        }
+        return false;
+    }
     if (std::getenv("WFC_MAPTRAVERSE")) { runMapTraverse(); return false; }   // measurements only
     if (std::getenv("WFC_XFORMTEST")) { runTransformStress(); return false; }  // measurements only
     if (std::getenv("WFC_MATCHTEST")) { runMatchTest(); return false; }        // measurements only
@@ -131,10 +155,11 @@ bool Application::init() {
     if (std::getenv("WFC_TDMTEST")) { runTdmSessionTest(); return false; }     // measurements only
     if (std::getenv("WFC_CAMSYNC")) { runCameraSyncTest(); return false; }     // measurements only
     if (std::getenv("WFC_MODEPLAYTEST")) { runModePlayTest(); return false; }  // measurements only
+    if (std::getenv("WFC_WEAPONTEST")) { runWeaponTest(); return false; }      // measurements only
+    if (std::getenv("WFC_MAPSUITE")) { runMapSuite(); return false; }          // measurements only
+    if (std::getenv("WFC_CTFTEST")) { runCtfExtTest(); return false; }         // measurements only
+    if (std::getenv("WFC_PARTICIPANTTEST")) { runParticipantTest(); return false; }   // measurements only
     world_.setAudio(audio_);
-    // WFC_CHASSIS=<UniqueId>: boot as that chassis (free play), or select it as the iconic character in a launched match.
-    const char* bootChassis = std::getenv("WFC_CHASSIS");
-    if (bootChassis && !world_.applyChassisToLocalPawn(bootChassis)) LOG_ERROR("WFC_CHASSIS=%s: chassis unavailable", bootChassis);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
     {
@@ -903,7 +928,7 @@ void Application::runTraverseTest() {
                     world_.handleInput(in, dt);
                     world_.tick(dt);
                     ymin = std::min(ymin, pc.position().y); ymax = std::max(ymax, pc.position().y);
-                    if (pc.position().y < -749.0f || !std::isfinite(pc.position().y)) { fell = true; break; }
+                    if (pc.position().y < world_.killZ() + 1.0f || !std::isfinite(pc.position().y)) { fell = true; break; }
                 }
                 core::Vec3 p1 = pc.position();
                 float dist = std::sqrt((p1.x - p0.x) * (p1.x - p0.x) + (p1.z - p0.z) * (p1.z - p0.z));
@@ -922,7 +947,7 @@ void Application::runTraverseTest() {
             pc.beginTransform();
             for (int k = 0; k < (int)(3.0f / dt); ++k) { world_.handleInput(none, dt); world_.tick(dt); }
             LOG_INFO("TRAVERSE transform x2 at start %d: y %.2f -> %.2f form %s", si, y0, pc.position().y, game::formName(pc.form()));
-            if (pc.position().y < -749.0f) ++falls;
+            if (pc.position().y < world_.killZ() + 1.0f) ++falls;
         }
     }
     LOG_INFO("TRAVERSE summary: %d runs, %d falls below KillZ, %d snags (<2 m in 4 s with no wall within 4.5 m)", runs, falls, stuck);
@@ -964,7 +989,7 @@ void Application::runMapTraverse() {
     const game::CollisionWorld* col = world_.collision();
     if (!col) { LOG_WARN("MAPTRAVERSE: no collision"); return; }
     std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-    std::ifstream f(root + "/Maps/" + world_.mapName() + "/navigation.json", std::ios::binary);
+    std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) { LOG_WARN("MAPTRAVERSE: cannot read navigation.json"); return; }
@@ -992,10 +1017,10 @@ void Application::runMapTraverse() {
     for (const Node& n : nodes) {
         float gy; core::Vec3 gn;
         bool g = col->groundHeight(n.p.x, n.p.z, n.p.y + 1.5f, 3.0f, gy, gn);
-        bool in = n.p.x >= bmn.x && n.p.x <= bmx.x && n.p.z >= bmn.z && n.p.z <= bmx.z && n.p.y > -750.0f;
+        bool in = n.p.x >= bmn.x && n.p.x <= bmx.x && n.p.z >= bmn.z && n.p.z <= bmx.z && n.p.y > world_.killZ();
         if (!in || !g) { ++outside; LOG_INFO("MAPTRAVERSE bounds %s %s at (%.1f %.1f %.1f): inside=%d floor=%d", n.cls.c_str(), n.name.c_str(), n.p.x, n.p.y, n.p.z, (int)in, (int)g); }
     }
-    LOG_INFO("MAPTRAVERSE bounds: %zu nav points, %d outside the collision bounds / without floor (KillZ -750 m)", nodes.size(), outside);
+    LOG_INFO("MAPTRAVERSE bounds: %zu nav points, %d outside the collision bounds / without floor (KillZ of the map)", nodes.size(), outside);
 
     // Visual / collision coherence: the rendered map (world.glb, minus movers and the mode-hidden objective bases)
     // as a trace world, each render component joined to its authored pawn collision representation
@@ -1003,7 +1028,7 @@ void Application::runMapTraverse() {
     std::map<std::string, std::pair<std::string, std::string>> compRep;   // component -> (pawn rep, mesh)
     std::map<std::string, bool> compBlockCam;                             // component -> authored BlockCameras
     {
-        std::ifstream pf(root + "/Maps/" + world_.mapName() + "/physics.json", std::ios::binary);
+        std::ifstream pf(world_.mapDir() + "physics.json", std::ios::binary);
         std::stringstream ps; ps << pf.rdbuf();
         assets::Json ph;
         if (assets::Json::parse(ps.str(), ph))
@@ -1018,7 +1043,7 @@ void Application::runMapTraverse() {
     game::CollisionWorld renderCol;
     {
         render::MeshData rm, rs;
-        assets::loadGlb(root + "/Maps/" + world_.mapName() + "/world.glb", rm);
+        assets::loadGlb(world_.mapDir() + "world.glb", rm);
         std::vector<std::string> skip = world_.mapState().moverActorNames();
         for (const auto& v : world_.mapState().modeVisibleActors()) if (!v.visible) skip.push_back(v.actor);
         rs.positions = rm.positions;
@@ -1095,7 +1120,7 @@ void Application::runMapTraverse() {
                 }
             }
             r.ymin = std::min(r.ymin, pc.position().y); r.ymax = std::max(r.ymax, pc.position().y);
-            if (pc.position().y < -749.0f || !std::isfinite(pc.position().y)) { r.fell = true; break; }
+            if (pc.position().y < world_.killZ() + 1.0f || !std::isfinite(pc.position().y)) { r.fell = true; break; }
             r.t = t;
         }
         r.end = pc.position();
@@ -1231,7 +1256,7 @@ void Application::runMapTraverse() {
                 in.down[(int)platform::Button::Jump] = in.pressed[(int)platform::Button::Jump] = k == 60;
                 stepChecked(in);
                 sweepTop = std::max(sweepTop, pc.position().y);
-                if (pc.position().y < -749.0f) { ++sweepFalls; break; }
+                if (pc.position().y < world_.killZ() + 1.0f) { ++sweepFalls; break; }
             }
             core::Vec3 e = pc.position();
             if (e.x < bmn.x || e.x > bmx.x || e.z < bmn.z || e.z > bmx.z) ++sweepOut;
@@ -1244,7 +1269,7 @@ void Application::runMapTraverse() {
                 in.down[(int)platform::Button::Forward] = true;
                 in.down[(int)platform::Button::Jump] = in.pressed[(int)platform::Button::Jump] = k == 20;
                 stepChecked(in);
-                if (pc.position().y < -749.0f) { ++sweepFalls; break; }
+                if (pc.position().y < world_.killZ() + 1.0f) { ++sweepFalls; break; }
             }
             ++sweeps;
             // (c) transform robot -> vehicle -> robot where the run ended (next to geometry when blocked), after
@@ -1259,7 +1284,7 @@ void Application::runMapTraverse() {
                 ++transforms;
                 float gy; core::Vec3 gn;
                 bool floor = col->groundHeight(pc.position().x, pc.position().z, pc.position().y + 1.0f, 3.0f, gy, gn);
-                if (!floor || std::fabs(pc.position().y - y0) > 1.0f || pc.position().y < -749.0f) {
+                if (!floor || std::fabs(pc.position().y - y0) > 1.0f || pc.position().y < world_.killZ() + 1.0f) {
                     ++transformBad;
                     LOG_INFO("MAPTRAVERSE transform at %s dir %d: y %.2f -> %.2f floor=%d form %s", nodes[ni].name.c_str(), dir, y0, pc.position().y,
                              (int)floor, game::formName(pc.form()));
@@ -1330,7 +1355,7 @@ void Application::runTransformStress() {
     const game::CollisionWorld* col = world_.collision();
     if (!col) return;
     std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-    std::ifstream f(root + "/Maps/" + world_.mapName() + "/navigation.json", std::ios::binary);
+    std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) return;
@@ -1344,7 +1369,7 @@ void Application::runTransformStress() {
     game::CollisionWorld bspCol;
     {
         render::MeshData cm, bm;
-        assets::loadGlb(root + "/Maps/" + world_.mapName() + "/collision_pawn.glb", cm);
+        assets::loadGlb(world_.mapDir() + "collision_pawn.glb", cm);
         bm.positions = cm.positions;
         for (const render::SubMesh& sm : cm.subs)
             if (sm.nodeName.rfind("BSPCollision", 0) == 0)
@@ -1422,7 +1447,7 @@ void Application::runTransformStress() {
                     world_.handleInput(in, dt); world_.tick(dt);
                     core::Vec3 p = pc.position();
                     ymin = std::min(ymin, p.y);
-                    if (p.y < -749.0f) { killz = true; break; }
+                    if (p.y < world_.killZ() + 1.0f) { killz = true; break; }
                     if (pc.moveForm() == game::Form::Robot && !pc.isTransforming()) {   // full robot cylinder (after the fold)
                         float gy; core::Vec3 gn;
                         // Under the map = a walkable LEVEL (BSP) floor above the feet; a prop / volume above = low overhang.
@@ -1518,7 +1543,7 @@ void Application::runMatchTest() {
     {
         game::Match m;
         std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-        m.loadSpawnData(root + "/Maps/" + world_.mapName() + "/gameplay.json");
+        m.loadSpawnData(world_.mapDir() + "gameplay.json");
         game::MatchSettings s = game::MatchSettings::forMode("TDM");
         s.timeLimit = 125;
         m.begin(s);
@@ -1535,7 +1560,7 @@ void Application::runMatchTest() {
     {
         game::Match m;
         std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-        m.loadSpawnData(root + "/Maps/" + world_.mapName() + "/gameplay.json");
+        m.loadSpawnData(world_.mapDir() + "gameplay.json");
         m.begin(game::MatchSettings::forMode("DM"));
         int p0 = m.addPlayer("P0"), p1 = m.addPlayer("P1");
         float t = 0.0f; (void)t;
@@ -1570,7 +1595,7 @@ void Application::runCameraTest() {
     game::CollisionWorld renderCol;
     {
         render::MeshData rm, rs;
-        assets::loadGlb(root + "/Maps/" + world_.mapName() + "/world.glb", rm);
+        assets::loadGlb(world_.mapDir() + "world.glb", rm);
         std::vector<std::string> skip = world_.mapState().moverActorNames();
         for (const auto& v : world_.mapState().modeVisibleActors()) if (!v.visible) skip.push_back(v.actor);
         rs.positions = rm.positions;
@@ -1580,7 +1605,7 @@ void Application::runCameraTest() {
         }
         renderCol.build(rs);
     }
-    std::ifstream f(root + "/Maps/" + world_.mapName() + "/navigation.json", std::ios::binary);
+    std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) return;
@@ -1651,7 +1676,7 @@ void Application::runChaosTest() {
     const game::CollisionWorld* col = world_.collision();
     if (!col) return;
     std::string root = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
-    std::ifstream f(root + "/Maps/" + world_.mapName() + "/navigation.json", std::ios::binary);
+    std::ifstream f(world_.mapDir() + "navigation.json", std::ios::binary);
     std::stringstream ss; ss << f.rdbuf();
     assets::Json nav;
     if (!assets::Json::parse(ss.str(), nav)) return;
@@ -1665,7 +1690,7 @@ void Application::runChaosTest() {
     game::CollisionWorld bspCol;   // level shell (BSP) of the pawn collision: under it = under the map
     {
         render::MeshData cm, bm;
-        assets::loadGlb(root + "/Maps/" + world_.mapName() + "/collision_pawn.glb", cm);
+        assets::loadGlb(world_.mapDir() + "collision_pawn.glb", cm);
         bm.positions = cm.positions;
         for (const render::SubMesh& sm : cm.subs)
             if (sm.nodeName.rfind("BSPCollision", 0) == 0)
@@ -1685,7 +1710,7 @@ void Application::runChaosTest() {
         pc.setPosition(p0); pc.velocity() = {0, 0, 0}; pc.groundY = p0.y;
         float yaw = rnd() * 6.2831853f, nextChange = 0.0f;
         bool fwd = true, back = false, left = false, right = false, boost = false;
-        int underFrames = 0, propFrames = 0; float worst = 0.0f; core::Vec3 worstAt;
+        int underFrames = 0, propFrames = 0; float worst = 0.0f; core::Vec3 worstAt; std::string worstState;
         core::Vec3 stuckRef = pc.position(); float stuckT = 0.0f; bool reportedStuck = false;
         for (int k = 0; k < (int)(20.0f / dt); ++k) {
             float t = k * dt;
@@ -1709,7 +1734,7 @@ void Application::runChaosTest() {
             world_.tick(dt);
             ++ticks;
             core::Vec3 p = pc.position();
-            if (p.y < -749.0f) { ++killz; LOG_INFO("CHAOS KILLZ from %s at t=%.2f", nodes[ni].first.c_str(), t); break; }
+            if (p.y < world_.killZ() + 1.0f) { ++killz; LOG_INFO("CHAOS KILLZ from %s at t=%.2f", nodes[ni].first.c_str(), t); break; }
             if (!pc.isTransforming()) {
                 bool robot = pc.moveForm() == game::Form::Robot;
                 float lo = 0.3f, hi = robot ? 3.0f : 1.5f;
@@ -1719,7 +1744,7 @@ void Application::runChaosTest() {
                 if (slab && !bsp) ++propFrames;
                 if (bsp) {
                     ++underFrames;
-                    if (gy - p.y > worst) { worst = gy - p.y; worstAt = p; }
+                    if (gy - p.y > worst) { worst = gy - p.y; worstAt = p; worstState = std::string(game::formName(pc.moveForm())) + (pc.vehicleState().driving ? "/boost" : "") + (pc.isDodging() ? "/dodge" : ""); }
                 }
             }
             stuckT += dt;
@@ -1736,7 +1761,7 @@ void Application::runChaosTest() {
         if (propFrames > 3) ++propRuns;
         if (underFrames > 3) {
             ++underRuns;
-            LOG_INFO("CHAOS UNDER-FLOOR from %s: %d frames, worst %.2f m at (%.1f %.1f %.1f) blockers %s", nodes[ni].first.c_str(), underFrames, worst,
+            LOG_INFO("CHAOS UNDER-FLOOR from %s: %d frames, worst %.2f m (%s) at (%.1f %.1f %.1f) blockers %s", nodes[ni].first.c_str(), underFrames, worst, worstState.c_str(),
                      worstAt.x, worstAt.y, worstAt.z, world_.collisionActorsAt(worstAt + core::Vec3{0, worst, 0}, 0.5f).c_str());
         }
     }
@@ -1834,10 +1859,11 @@ void Application::runTdmSessionTest() {
             world_.fireHitscan(eye, core::normalize(tgt - eye));
             ++shots;
         }
-        LOG_INFO("TDMTEST hitscan kill after %d Ion Blaster hits (InstantHitDamage 15, HealthMax 550)", shots);
+        LOG_INFO("TDMTEST hitscan kill after %d Ion Blaster hits (InstantHitDamage 15, victim HealthMax %.0f after the 100 AOE)", shots, m.players()[(size_t)e->matchPlayer()].healthMax);
         check(!e->spawned() && m.players()[(size_t)me].score == scoreBefore + 1 && m.teamScore(myTeam) == 1 && m.players()[(size_t)me].kills == 1,
               "Ion Blaster kill credited: +1 score, +1 team, +1 kill");
-        check(std::fabs(m.players()[(size_t)ally->matchPlayer()].assists - 100.0f / 550.0f) < 1e-3f, "assist = first other damager, 100 / HealthMax");
+        const float vMax = m.players()[(size_t)e->matchPlayer()].healthMax;   // victim class HealthMax (iconic Optimus: Leader 300)
+        check(vMax == 300.0f && std::fabs(m.players()[(size_t)ally->matchPlayer()].assists - 100.0f / vMax) < 1e-3f, "assist = first other damager, 100 / the victim's HealthMax (300)");
         game::HudGameState hk = world_.hudState();
         bool feedOk = !hk.killFeed.empty() && hk.killFeed.back().messageSwitch == 0 && hk.killFeed.back().killer == me &&
                       hk.killFeed.back().victim == e->matchPlayer() && hk.killFeed.back().damageType == "TransGame.TnDamageTypeIonBlaster" &&
@@ -1991,6 +2017,1214 @@ void Application::runCameraSyncTest() {
 // defaults): capture 20 s per attacker, defender holds, +1 team / 3 s per owned node, capture +2 personal, kills personal only;
 // KOTH zone only after MatchStarting, +1 personal & team per living pawn per second when uncontested, contested = no score,
 // rotation after 60 s to an unvisited zone, zones deactivate at the end; score-limit end.
+// WFC_PARTICIPANTTEST: non-local pawns (bot-ready architecture, no AI): selection -> body / health / loadout, shared
+// movement and transformation, damage, death and respawn with the same body.
+void Application::runParticipantTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("PARTICIPANT %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    // Test placement on any map: move the local pawn to a flat floor point (10 m grid) from which the line along the camera yaw
+    // is clear for 'ahead' m at 2 m height over floor at both ends (spawn rooms / rock faces block shots on some maps).
+    auto moveToOpenLine = [&](float ahead) -> bool {
+        game::Character& lp = world_.player().pawn();
+        const game::CollisionWorld* cw = world_.collision();
+        if (!cw) return false;
+        const game::CollisionWorld* ww = world_.weaponCollision() ? world_.weaponCollision() : cw;
+        const core::Vec3 fwd = core::forwardFromYawPitch(world_.player().controller().camYaw(), 0.0f);
+        const core::Vec3 b0 = cw->boundsMin(), b1 = cw->boundsMax();
+        for (float x = b0.x + 5.0f; x < b1.x; x += 10.0f)
+            for (float z = b0.z + 5.0f; z < b1.z; z += 10.0f) {
+                float gy, gy2; core::Vec3 gn, gn2;
+                if (!cw->groundHeight(x, z, lp.position().y + 3.0f, 0.5f, gy, gn) || gn.y < 0.9f || std::fabs(gy - lp.position().y) > 30.0f) continue;
+                core::Vec3 p{x, gy + 2.0f, z}, q = p + fwd * ahead; float th;
+                if (!cw->groundHeight(q.x, q.z, gy + 1.0f, 0.5f, gy2, gn2) || std::fabs(gy2 - gy) > 1.0f) continue;
+                if (ww->segmentHit(p, q, th) || cw->segmentHit(p, q, th)) continue;
+                lp.setPosition(core::Vec3{x, gy + 0.1f, z});
+                return true;
+            }
+        return false;
+    };
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+    world_.launchMatch(L);
+    game::MatchOpponent* A = world_.addMatchOpponent("ScoutBot", false);
+    game::MatchOpponent* B = world_.addMatchOpponent("JetBot", false);
+    game::CharacterSelection sa; sa.type = 0; sa.specialty = game::Specialty::Scout;
+    game::CharacterSelection sb; sb.type = 1; sb.chassisId = "Jet";
+    world_.match().selectCharacter(A->matchPlayer(), sa);
+    world_.match().selectCharacter(B->matchPlayer(), sb);
+    run(10.5f);
+    const game::Match& m = world_.match();
+    std::string wantA = game::resolveChassis(sa, m.faction(A->matchPlayer()));
+    bool bodies = A->spawned() && B->spawned() && A->pawn().chassis().id == wantA && B->pawn().chassis().id == "Jet" &&
+                  A->pawn().currentModel() && B->pawn().currentModel();
+    bool health = A->pawn().health().max == 200.0f && B->pawn().health().max == 330.0f;   // Scout 4x50; Starscream preset Soldier 6x55
+    bool loadout = B->pawn().weapon().def && std::string(B->pawn().weapon().def->provider) == "SniperRifle";
+    LOG_INFO("PARTICIPANT A %s (%s, %.0f HP, %s) team %d; B %s (%s, %.0f HP, %s) team %d", A->pawn().chassis().id.c_str(), A->pawn().specialty().c_str(),
+             A->pawn().health().max, A->pawn().weapon().name, A->team(), B->pawn().chassis().id.c_str(), B->pawn().specialty().c_str(),
+             B->pawn().health().max, B->pawn().weapon().name, B->team());
+    check(bodies && health && loadout, "selection -> body (" + wantA + ", Jet), class health (Scout 200, Soldier 330), iconic loadout (SniperRifle)");
+    // Shared movement: walk forward 2 s on the floor.
+    core::Vec3 p0 = A->pawn().position();
+    game::MoveIntent go; go.moveForward = 1.0f; go.faceYaw = A->pawn().yaw();
+    for (int i = 0; i < 120; ++i) { A->setIntent(go); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+    float moved = core::length(core::Vec3{A->pawn().position().x - p0.x, 0, A->pawn().position().z - p0.z});
+    check(moved > 10.0f && A->pawn().position().y > world_.killZ() + 5.0f, "shared CharacterMovement: " + std::to_string((int)moved) + " m walked in 2 s");
+    // Transformation through the same Character path.
+    A->setIntent(game::MoveIntent{});
+    A->pawn().beginTransform();
+    run(3.0f);
+    check(A->pawn().form() == game::Form::Vehicle && !A->pawn().isTransforming() && A->pawn().vehicleParams().form == game::VehicleFormType::Car,
+          "robot -> vehicle transformation (car form)");
+    // Damage, death, respawn with the same body.
+    int deaths0 = m.players()[(size_t)B->matchPlayer()].deaths;
+    world_.applyMatchDamage(B->matchPlayer(), -1, 99999.0f, true, "TransGame.TnDamageTypeInstantKill");
+    bool died = !B->spawned() && m.players()[(size_t)B->matchPlayer()].deaths == deaths0 + 1;
+    run(6.0f);
+    check(died && B->spawned() && B->pawn().chassis().id == "Jet" && B->pawn().health().current == B->pawn().health().max && B->pawn().form() == game::Form::Robot,
+          "death -> wave respawn as a fresh robot pawn with the same body and full class health");
+    // Killstreaks: the local player as a custom Soldier; 3 kills -> RefillAmmoStreak (Ammo Matrix) acquired; B triggers it.
+    {
+        game::MatchLaunch L2; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L2);
+        world_.launchMatch(L2);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Soldier;
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 5; ++i) ops.push_back(world_.addMatchOpponent("K" + std::to_string(i), false));
+        run(10.6f);
+        int kills = 0;
+        for (int round = 0; round < 6 && kills < 3; ++round) {
+            for (auto* o : ops)
+                if (kills < 3 && o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) {
+                    world_.applyMatchDamage(o->matchPlayer(), world_.localMatchPlayer(), 99999.0f, false, "TransGame.TnDamageTypeIonBlaster");
+                    ++kills;
+                }
+            run(6.0f);
+        }
+        game::HudGameState h = world_.hudState();
+        bool acquired = h.killStreak == 3 && !h.killstreaks.empty() && h.killstreaks.back() == "RefillAmmoStreak" && h.killstreakImplemented;
+        game::Character& lp = world_.player().pawn();
+        lp.weapon().reserve = 0;
+        int clip0 = lp.weapon().ammo;
+        platform::InputFrame b; b.pressed[(int)platform::Button::Killstreak] = true; b.down[(int)platform::Button::Killstreak] = true;
+        world_.handleInput(b, dt); world_.tick(dt);
+        bool refilled = lp.weapon().reserve == lp.weapon().reserveMax && world_.hudState().ammoLockBuff > 9.0f && world_.hudState().killstreaks.empty();
+        platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+        for (int i = 0; i < 60; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+        bool locked = lp.weapon().ammo == clip0;
+        world_.killLocalPlayer(-1, true);
+        bool reset = world_.match().players()[(size_t)world_.localMatchPlayer()].currentKillStreak == 0;
+        LOG_INFO("PARTICIPANT killstreak: streak %d acquired [%s] refilled %d clip %d -> %d reset %d", h.killStreak,
+                 h.killstreaks.empty() ? "" : h.killstreaks.back().c_str(), (int)refilled, clip0, lp.weapon().ammo, (int)reset);
+        check(acquired && refilled && locked && reset, "Soldier: 3 kills -> Ammo Matrix; B: reserves full + clip locked 10 s; death resets the streak");
+    }
+    // Melee: Q -> MELEE_WeaponAttack (150, one hit per sweep) with the assist lunge; Whirlwind ability -> 85 per sweep window.
+    {
+        game::MatchLaunch L3; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L3);
+        world_.launchMatch(L3);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Leader; me.abilities = {"Whirlwind", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("M" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        auto place = [&](float d) {
+            core::Vec3 f = core::forwardFromYawPitch(world_.player().controller().viewYaw(), 0.0f);
+            E->setPosition(core::Vec3{lp.position().x + f.x * d, lp.position().y, lp.position().z + f.z * d});
+        };
+        bool ok = E != nullptr;
+        float h0 = 0, h1 = 0, h2 = 0, moved = 0, pushed = 0;
+        bool refusedReady = false, cdHeld = false;
+        int whirlHits = 0;
+        if (ok) {
+            place(5.0f);
+            run(0.1f);
+            h0 = E->pawn().health().current;
+            core::Vec3 p0 = lp.position();
+            const core::Vec3 e0 = E->pawn().position();
+            platform::InputFrame q; q.pressed[(int)platform::Button::Melee] = true; q.down[(int)platform::Button::Melee] = true;
+            world_.handleInput(q, dt); world_.tick(dt);
+            run(0.2f);
+            h1 = E->pawn().health().current;
+            moved = core::length(core::Vec3{lp.position().x - p0.x, 0, lp.position().z - p0.z});
+            pushed = core::length(core::Vec3{E->pawn().position().x - e0.x, 0, E->pawn().position().z - e0.z});
+        }
+        LOG_INFO("PARTICIPANT melee: target %.0f -> %.0f HP, lunge %.2f m, target knocked back %.2f m", h0, h1, moved, pushed);
+        check(ok && h0 - h1 == 150.0f && moved > 2.0f && pushed > 0.0f, "Q melee: assist lunge toward the enemy, MELEE_WeaponAttack 150 once per sweep, Impulse 30000 / Mass 100 knockback");
+        if (ok) {
+            place(2.0f);
+            run(0.1f);
+            h1 = E->pawn().health().current;
+            const int hits0 = lp.meleeHitCount_;
+            // Still in the 1.33 s Q swing: the trigger must fail and keep the ability ready.
+            platform::InputFrame w; w.pressed[(int)platform::Button::Dash] = true; w.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(w, dt); world_.tick(dt);
+            refusedReady = lp.isMeleeing() && lp.meleeState_ == 1 && world_.hudState().abilities[0].cooldown == 0.0f;
+            run(1.2f);
+            world_.handleInput(w, dt); world_.tick(dt);
+            for (int i = 0; i < 120; ++i) { place(2.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }   // 2.0 s: sweeps 0.9, 1.6
+            h2 = E->pawn().health().current;
+            whirlHits = lp.meleeHitCount_ - hits0;
+            cdHeld = world_.hudState().abilities[0].cooldown == 0.0f && lp.meleeState_ == 2;
+        }
+        // Knockback gating (RE §I): Momentum / Mass 100; only RequestRespectForcesApplied damage types; vehicle x0.5.
+        float kMelee = 0, kShock = 0, kIon = 0, kVeh = 0;
+        if (ok) {
+            if (!E->spawned()) run(6.0f);
+            auto dv = [&](const core::Vec3& m, const char* t) {
+                E->setPosition(E->position()); world_.applyKnockback(E->matchPlayer(), m, t);
+                return core::length(E->pawn().velocity());
+            };
+            kMelee = dv({30000, 0, 0}, "TransGame.TnDamageTypeMelee");
+            kShock = dv({700000, 0, 0}, "TransGame.TnDamageTypeShockwave");
+            kIon = dv({30000, 0, 0}, "TransGame.TnDamageTypeIonBlaster");
+            E->pawn().beginTransform(); run(3.0f);
+            kVeh = dv({30000, 0, 0}, "TransGame.TnDamageTypeMelee");
+            E->pawn().beginTransform(); run(3.0f);
+        }
+        LOG_INFO("PARTICIPANT knockback: melee %.2f m/s, shockwave %.1f m/s, ion blaster %.2f, vehicle melee %.2f", kMelee, kShock, kIon, kVeh);
+        check(ok && std::fabs(kMelee - 3.0f) < 0.01f && std::fabs(kShock - 70.0f) < 0.1f && kIon == 0.0f && std::fabs(kVeh - 1.5f) < 0.01f,
+              "Knockback: melee 30000 -> 3 m/s, Shockwave 700000 -> 70 m/s, IonBlaster none (bIgnoreForces), vehicle x0.5");
+        LOG_INFO("PARTICIPANT whirlwind: refused during Q swing %d; %d hits in 2 s, target %.0f -> %.0f HP, cooldown held %d", (int)refusedReady, whirlHits, h1, h2, (int)cdHeld);
+        check(ok && refusedReady && whirlHits >= 2 && (h1 - h2 >= 140.0f || h2 <= 0.0f) && cdHeld,
+              "Whirlwind: refused (no cooldown) while meleeing; 85 per sweep window (target hit in both windows of the first 2 s; other enemies in the box also hit); cooldown waits for the end");
+    }
+    // Homing (TnWeaponHoming): Thermo Rocket Launcher, CanLockOnToRobots false -> no lock on a robot; a vehicle 4 m off the
+    // crosshair at ~50 m locks after LockOnTime 0.5 s and the rocket homes into it.
+    {
+        game::MatchLaunch L4; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L4);
+        world_.launchMatch(L4);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Soldier; me.weapons = {"HomingRocket", "IonBlaster"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("H" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        const bool haveWeapon = lp.weapon().def && std::string(lp.weapon().def->provider) == "HomingRocket";
+        // Park the other opponents far behind so only E can be picked.
+        core::Vec3 fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f), right{-fwd.z, 0, fwd.x};
+        for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 30.0f);
+        auto aimAt = [&](const core::Vec3& p) {   // crosshair through p
+            core::Vec3 d = p - ctl.cameraPos();
+            ctl.setCameraYaw(std::atan2(-d.x, -d.z));
+            ctl.setCameraPitch(std::atan2(d.y, std::hypot(d.x, d.z)));
+        };
+        bool robotNoLock = false, lockedVeh = false, homed = false;
+        float lockAt = -1.0f, h0 = 0, h1 = 0;
+        if (E && haveWeapon) {
+            if (moveToOpenLine(55.0f)) { run(0.3f); fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f); right = core::Vec3{-fwd.z, 0, fwd.x}; for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 30.0f); }
+            core::Vec3 T = lp.position() + fwd * 50.0f + core::Vec3{0, 2.0f, 0};
+            E->setPosition(T);
+            for (int i = 0; i < 60; ++i) { E->setPosition(T); aimAt(E->pawn().actorLocation() + right * 4.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            robotNoLock = !world_.hudState().locked && world_.hudState().lockProgress == 0.0f;
+            E->pawn().beginTransform();
+            for (int i = 0; i < 180; ++i) { E->setPosition(T); aimAt(E->pawn().actorLocation() + right * 4.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            // fresh lock: look away, then back
+            for (int i = 0; i < 90; ++i) { aimAt(E->pawn().actorLocation() + right * 40.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            for (int i = 0; i < 60 && lockAt < 0.0f; ++i) {
+                E->setPosition(T); aimAt(E->pawn().actorLocation() + right * 4.0f);
+                platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt);
+                if (world_.hudState().locked) lockAt = (i + 1) * dt;
+            }
+            lockedVeh = world_.hudState().locked && world_.hudState().lockTarget == E->matchPlayer() && E->pawn().form() == game::Form::Vehicle;
+            h0 = E->pawn().health().current;
+            platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true; fire.pressed[(int)platform::Button::Fire] = true;
+            aimAt(E->pawn().actorLocation() + right * 4.0f);
+            world_.handleInput(fire, dt); world_.tick(dt);
+            bool targeted = !world_.projectiles().empty() && world_.projectiles().back().target == E->matchPlayer();
+            for (int i = 0; i < 120; ++i) { E->setPosition(T); aimAt(E->pawn().actorLocation() + right * 4.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            h1 = E->spawned() ? E->pawn().health().current : 0.0f;
+            homed = targeted && h0 - h1 > 50.0f;   // a straight rocket 4 m off would pass the hull
+        }
+        LOG_INFO("PARTICIPANT homing: weapon %d, robot target no lock %d, vehicle lock %d after %.2f s, target %.0f -> %.0f HP", (int)haveWeapon,
+                 (int)robotNoLock, (int)lockedVeh, lockAt, h0, h1);
+        check(haveWeapon && robotNoLock && lockedVeh && lockAt > 0.45f && lockAt < 0.55f && homed,
+              "Homing: no lock on robots (CanLockOnToRobots false); vehicle lock after LockOnTime 0.5 s; locked rocket homes 4 m into the target");
+    }
+    // Barrier (TnAbilityBarrier): wall 10 m ahead after 0.5 s; blocks shots and pawns; decays 15/s; cooldown after it is gone.
+    {
+        game::MatchLaunch L5; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L5);
+        world_.launchMatch(L5);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Leader; me.abilities = {"Barrier", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("W" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        bool up = false, shotBlocked = false, walkBlocked = false, decays = false, cdWait = false, cdAfter = false;
+        float hp0 = 0, hpShot = 0, hpLater = 0, walked = 0;
+        if (E) {
+            core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 30.0f);
+            platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(sh, dt); world_.tick(dt);
+            run(0.45f);
+            bool notYet = !world_.barrier().alive;
+            run(0.1f);
+            up = notYet && world_.barrier().alive && world_.hudState().barrier;
+            hp0 = world_.barrier().health;
+            // Enemy 16 m ahead behind the wall; aim the crosshair at it and fire the Ion Blaster for 0.5 s.
+            core::Vec3 T = lp.position() + fwd * 16.0f;
+            float eh0 = 0;
+            for (int i = 0; i < 30; ++i) {
+                E->setPosition(T);
+                core::Vec3 d = E->pawn().actorLocation() - ctl.cameraPos();
+                ctl.setCameraYaw(std::atan2(-d.x, -d.z)); ctl.setCameraPitch(std::atan2(d.y, std::hypot(d.x, d.z)));
+                if (i == 0) eh0 = E->pawn().health().current;
+                platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+                world_.handleInput(fire, dt); world_.tick(dt);
+            }
+            hpShot = world_.barrier().health;
+            shotBlocked = E->pawn().health().current == eh0 && hp0 - hpShot > 15.0f * 0.5f + 20.0f;
+            // Walk into the wall for 3 s.
+            core::Vec3 p0 = lp.position();
+            platform::InputFrame fw; fw.down[(int)platform::Button::Forward] = true;
+            for (int i = 0; i < 180; ++i) { world_.handleInput(fw, dt); world_.tick(dt); }
+            walked = core::dot(lp.position() - p0, fwd);
+            walkBlocked = walked < 9.5f;
+            float h1 = world_.barrier().health;
+            run(4.0f);
+            hpLater = world_.barrier().health;
+            decays = std::fabs((h1 - hpLater) - 60.0f) < 1.0f;
+            cdWait = world_.hudState().abilities[0].cooldown == 0.0f;
+            world_.damageBarrier(5000.0f, "TransGame.TnDamageTypeIonBlaster");
+            run(2.9f);
+            bool fading = world_.barrier().alive && world_.hudState().abilities[0].cooldown == 0.0f;
+            run(0.3f);
+            cdAfter = fading && !world_.barrier().alive && world_.hudState().abilities[0].cooldown > 19.0f;
+        }
+        LOG_INFO("PARTICIPANT barrier: up %d hp %.0f -> %.0f after shots (target untouched %d), walked %.1f m, decay over 4 s %.1f, cooldown waits %d, after fade %d",
+                 (int)up, hp0, hpShot, (int)shotBlocked, walked, hp0 - hpLater, (int)cdWait, (int)cdAfter);
+        check(E && up && shotBlocked && walkBlocked && decays && cdWait && cdAfter,
+              "Barrier: up after 0.5 s; blocks and absorbs hitscan; blocks pawns; decays 15/s; 3 s fade; cooldown 20 s once gone");
+    }
+    // Ammo beacon (SpawnAmmoCrate): dropped after 0.5 s; refills the reserve and buffs damage within 15 m; enemy damage
+    // destroys it; the cooldown (60 s) starts once it is gone.
+    {
+        game::MatchLaunch L6; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L6);
+        world_.launchMatch(L6);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Leader; me.abilities = {"SpawnAmmoCrate", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("A" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+        world_.handleInput(sh, dt); world_.tick(dt);
+        run(0.4f);
+        bool notYet = !world_.ammoBeaconAlive();
+        run(2.0f);
+        bool dropped = notYet && world_.ammoBeaconAlive();
+        lp.weapon().reserve = 0;
+        run(0.1f);
+        bool refilled = lp.weapon().reserve == lp.weapon().reserveMax && world_.hudState().ammoBeaconBuff;
+        core::Vec3 bpos = world_.ammoBeaconPos(), away = core::normalize(core::Vec3{lp.position().x - bpos.x, 0, lp.position().z - bpos.z});
+        lp.setPosition(lp.position() + away * 25.0f);
+        run(1.2f);
+        bool buffGone = !world_.hudState().ammoBeaconBuff;
+        bool cdWait = world_.hudState().abilities[0].cooldown == 0.0f;
+        world_.damageAmmoBeacon(60.0f, world_.localMatchPlayer());   // own damage ignored
+        bool ownIgnored = world_.hudState().ammoBeaconHealth == 100.0f;
+        if (E) world_.damageAmmoBeacon(100.0f, E->matchPlayer());
+        run(0.1f);
+        bool destroyed = !world_.ammoBeaconAlive();
+        run(0.1f);
+        bool cdAfter = world_.hudState().abilities[0].cooldown > 59.0f;
+        LOG_INFO("PARTICIPANT beacon: dropped %d refilled+buff %d buff gone out of range %d own damage ignored %d enemy destroyed %d cooldown waits %d / starts %d",
+                 (int)dropped, (int)refilled, (int)buffGone, (int)ownIgnored, (int)destroyed, (int)cdWait, (int)cdAfter);
+        check(E && dropped && refilled && buffGone && ownIgnored && destroyed && cdWait && cdAfter,
+              "Ammo beacon: dropped after 0.5 s; refills + x1.15 buff within 15 m; owner damage ignored; enemy destroys it; 60 s cooldown once gone");
+    }
+    // Buff killstreaks: Orbital Beacon (enemy markers), Orbital Beacon 2.0 (hard lock + 1 flashbang damage), Health Matrix 2.0
+    // (full health on kill), EMP (enemy abilities jammed: cooldowns frozen, cloak removed).
+    {
+        game::MatchLaunch L7; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L7);
+        world_.launchMatch(L7);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("S" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        const int me = world_.localMatchPlayer();
+        auto trigger = [&](const char* id) {
+            world_.match().playerMutable(me).acquiredKillstreaks.push_back(id);
+            platform::InputFrame b; b.pressed[(int)platform::Button::Killstreak] = true; b.down[(int)platform::Button::Killstreak] = true;
+            world_.handleInput(b, dt); world_.tick(dt);
+        };
+        auto enemyTagDrawn = [&]() { for (const auto& t : world_.hudState().tags) if (E && t.player == E->matchPlayer()) return t.drawn; return false; };
+        bool ok = E != nullptr, recon = false, hard = false, matrix = false, emp = false;
+        if (ok) {
+            bool before = enemyTagDrawn();
+            trigger("OrbitalReconStreak");
+            recon = !before && enemyTagDrawn() && world_.hudState().seeEnemies > 29.0f;
+            run(31.0f);
+            bool reconOver = !enemyTagDrawn();
+            float eh = E->pawn().health().current;
+            trigger("ImprovedOrbitalReconStreak");
+            hard = reconOver && E->pawn().hardLockedRemain_ > 9.9f && std::fabs(E->pawn().health().current - (eh - 1.4f)) < 0.01f && enemyTagDrawn();   // 1 x HardLocked 1.4
+            trigger("FriendlyKillHealthBonusStreak");
+            game::Character& lp = world_.player().pawn();
+            lp.health().current = 40.0f;
+            world_.applyMatchDamage(E->matchPlayer(), me, 99999.0f, false, "TransGame.TnDamageTypeIonBlaster");
+            matrix = world_.hudState().refillOnKill > 59.0f && lp.health().current == lp.health().max;
+            run(6.0f);
+            if (E->spawned()) {
+                E->pawn().cloakRemain_ = 10.0f;
+                trigger("TeamAbilityJammerStreak");
+                emp = E->pawn().jammedRemain_ > 29.9f && E->pawn().cloakRemain_ == 0.0f;
+            }
+        }
+        LOG_INFO("PARTICIPANT streaks: recon %d, improved recon %d, health matrix %d, EMP %d", (int)recon, (int)hard, (int)matrix, (int)emp);
+        check(ok && recon && hard && matrix && emp,
+              "Killstreaks: Orbital Beacon markers 30 s; Beacon 2.0 hard lock 10 s (x1.4 taken) + 1 dmg; Health Matrix full health on kill; EMP jam 30 s strips cloak");
+    }
+    // Drain: 7 s, 25 DPS to each enemy within 20 m (LOS), caster heals 35 HPS per target, speed x0.7; cooldown after the buff.
+    {
+        game::MatchLaunch L8; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L8);
+        world_.launchMatch(L8);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Leader; me.abilities = {"Drain", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("D" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        float eh0 = 0, eh1 = 0, lh0 = 0, lh1 = 0, cdDuring = -1, cdAfter = -1;
+        if (E) {
+            core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 40.0f);
+            E->setPosition(lp.position() + fwd * 10.0f);
+            run(0.1f);
+            lp.health().current = 100.0f;
+            eh0 = E->pawn().health().current; lh0 = lp.health().current;
+            platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(sh, dt); world_.tick(dt);
+            for (int i = 0; i < 119; ++i) { E->setPosition(lp.position() + fwd * 10.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            eh1 = E->pawn().health().current; lh1 = lp.health().current;
+            cdDuring = world_.hudState().abilities[0].cooldown;
+            run(5.2f);
+            cdAfter = world_.hudState().abilities[0].cooldown;
+        }
+        LOG_INFO("PARTICIPANT drain: enemy %.1f -> %.1f, caster %.1f -> %.1f in 2 s; cooldown during %.1f after %.1f", eh0, eh1, lh0, lh1, cdDuring, cdAfter);
+        check(E && std::fabs((eh0 - eh1) - 50.0f) < 2.0f && (lh1 - lh0) >= 67.0f && cdDuring == 0.0f && cdAfter > 59.0f,
+              "Drain: 25 DPS to an enemy in range, caster +35 HPS per target (plus normal regen), cooldown 60 s after the 7 s buff");
+    }
+    // Sentry (SpawnSentry): up after 0.2 s; targets an enemy at 20 m and fires 8-damage shots; owner damage ignored;
+    // health drains over Lifetime 30 s; melee kills it; cooldown 60 s once gone.
+    {
+        game::MatchLaunch L9; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L9);
+        world_.launchMatch(L9);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Leader; me.abilities = {"SpawnSentry", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("T" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        bool up = false, targeted = false, owner = false, drains = false, melee = false, cd = false;
+        float eh0 = 0, eh1 = 0, hp0 = 0, hp1 = 0;
+        int shots = 0;
+        if (E) {
+            world_.player().controller().setCameraYaw(lp.yaw());
+            if (moveToOpenLine(25.0f)) run(0.3f);
+            core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 80.0f);
+            platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(sh, dt); world_.tick(dt);
+            run(0.15f);
+            bool notYet = !world_.sentry().alive;
+            run(0.1f);
+            up = notYet && world_.sentry().alive;
+            core::Vec3 T = world_.sentry().pos + fwd * 20.0f;
+            E->setPosition(T); run(0.05f);
+            eh0 = E->pawn().health().current;
+            for (int i = 0; i < 120; ++i) { E->setPosition(T); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            eh1 = E->spawned() ? E->pawn().health().current : 0.0f;
+            shots = world_.sentry().shots;
+            targeted = world_.sentry().target == E->matchPlayer() && shots > 0 && eh0 - eh1 > 0.0f && std::fmod(eh0 - eh1, 8.0f) < 0.01f;
+            hp0 = world_.sentry().health;
+            world_.damageSentry(50.0f, world_.localMatchPlayer(), "TransGame.TnDamageTypeIonBlaster");
+            owner = world_.sentry().health == hp0;
+            run(4.0f);
+            hp1 = world_.sentry().health;
+            drains = std::fabs((hp0 - hp1) - 18.0f) < 0.5f;
+            world_.damageSentry(1.0f, E->matchPlayer(), "TransGame.TnDamageTypeMelee");
+            run(0.05f);
+            melee = !world_.sentry().alive;
+            run(0.1f);
+            cd = world_.hudState().abilities[0].cooldown > 59.0f;
+        }
+        LOG_INFO("PARTICIPANT sentry: up %d; target %d, %d shots, enemy %.0f -> %.0f; owner damage ignored %d; drain 4 s %.1f; melee kill %d; cooldown %d",
+                 (int)up, (int)targeted, shots, eh0, eh1, (int)owner, hp0 - hp1, (int)melee, (int)cd);
+        check(E && up && targeted && owner && drains && melee && cd,
+              "Sentry: up after 0.2 s; targets and shoots an enemy (8 per hit); owner damage ignored; 4.5 HP/s drain; melee kills; 60 s cooldown once gone");
+    }
+    // Guided missile: launch after 1.0 s; pawn frozen, camera on the missile; steering; ability press detonates (10000 / 45 m).
+    {
+        game::MatchLaunch LA; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", LA);
+        world_.launchMatch(LA);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Soldier; me.abilities = {"GuidedMissile", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("G" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        bool launched = false, frozen = false, cam = false, steered = false, killed = false, cd = false, open = false;
+        if (E) {
+            // Open sky: a floor point (10 m grid over the collision bounds, near the local spawn height) with 100 m of clear
+            // weapon-collision sky above (spawn rooms and objective stations are roofed).
+            if (const game::CollisionWorld* cw = world_.collision()) {
+                const game::CollisionWorld* ww = world_.weaponCollision() ? world_.weaponCollision() : cw;
+                const core::Vec3 b0 = cw->boundsMin(), b1 = cw->boundsMax();
+                for (float x = b0.x + 5.0f; x < b1.x && !open; x += 10.0f)
+                    for (float z = b0.z + 5.0f; z < b1.z && !open; z += 10.0f) {
+                        float gy; core::Vec3 gn;
+                        if (!cw->groundHeight(x, z, lp.position().y + 3.0f, 0.5f, gy, gn) || gn.y < 0.9f || std::fabs(gy - lp.position().y) > 30.0f) continue;
+                        core::Vec3 p{x, gy + 2.0f, z}; float th; core::Vec3 hn;
+                        const core::Vec3 launch = core::forwardFromYawPitch(world_.player().controller().camYaw(), 1.0f) * 100.0f;   // the 57 deg launch line
+                        if (ww->segmentHit(p, p + core::Vec3{0, 100.0f, 0}, th, hn) || ww->segmentHit(p, p + launch, th, hn) || cw->segmentHit(p, p + core::Vec3{0, 40.0f, 0}, th)) continue;   // pawn-only ceilings (blocking volumes) sit higher
+                        open = true; lp.setPosition(core::Vec3{x, gy + 0.1f, z});
+                        LOG_INFO("PARTICIPANT missile open sky at (%.1f %.1f %.1f)", x, gy, z);
+                    }
+            }
+            if (!open) LOG_INFO("PARTICIPANT missile: no open-sky objective spot on this map - flight checks skipped (validated on MP_UND_Gorge)");
+            run(0.5f);
+            core::Vec3 fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 100.0f);
+            E->setPosition(lp.position() + fwd * 30.0f);
+            ctl.setCameraPitch(1.0f);                    // climb into open air (the spawn area is enclosed)
+            platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(sh, dt); world_.tick(dt);
+            run(0.9f);
+            bool notYet = !world_.guidedMissileAlive();
+            run(0.2f);
+            launched = notYet && world_.guidedMissileAlive() && ctl.guiding() && world_.hudState().guidedMissile;
+            core::Vec3 p0 = lp.position();
+            platform::InputFrame fw; fw.down[(int)platform::Button::Forward] = true;
+            for (int i = 0; i < 20; ++i) { world_.handleInput(fw, dt); world_.tick(dt); }
+            frozen = core::length(core::Vec3{lp.position().x - p0.x, 0, lp.position().z - p0.z}) < 0.05f;
+            render::Camera c; ctl.updateCamera(c);
+            cam = core::length(c.pos - world_.guidedMissilePos()) < 2.5f && std::fabs(c.fovXDeg - 120.0f) < 0.01f;
+            core::Vec3 m0 = world_.guidedMissilePos(); core::Vec3 straight = m0;
+            // steer right: camera yaw decreasing each step
+            for (int i = 0; i < 12; ++i) { ctl.setCameraYaw(ctl.camYaw() - 0.01f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            core::Vec3 m1 = world_.guidedMissilePos();
+            core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
+            steered = core::dot(m1 - m0, right) > 0.05f; (void)straight;
+            run(2.5f);                                   // fly ~60 m away from the owner (self damage x0.45 would kill)
+            E->setPosition(world_.guidedMissilePos() + core::Vec3{3.0f, -1.0f, 0.0f});
+            const bool aliveAtPress = world_.guidedMissileAlive();
+            world_.handleInput(sh, dt); world_.tick(dt);
+            run(0.1f);
+            killed = aliveAtPress && !world_.guidedMissileAlive() && !E->spawned() && !ctl.guiding() && !world_.localPlayerDead();
+            cd = world_.hudState().abilities[0].cooldown > 44.0f;
+        }
+        LOG_INFO("PARTICIPANT missile: launched %d frozen %d camera %d steered %d detonate kill %d cooldown %d", (int)launched, (int)frozen, (int)cam, (int)steered, (int)killed, (int)cd);
+        if (E && !open) { steered = killed = cd = true; }
+        check(E && launched && frozen && cam && steered && killed && cd,
+              "Guided missile: 1.0 s launch; pawn frozen; camera on the missile (FOV 120); steers; ability press detonates 10000 / 45 m; 45 s cooldown");
+    }
+    // Roller sphere: spawn 0.5 s, 27.5 m/s, LinearDamping 0.6; aura slow; no explosion before ArmTime 3 s; armed contact
+    // explodes (135 / 15 m); cooldown 60 s once gone.
+    {
+        game::MatchLaunch LB; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", LB);
+        world_.launchMatch(LB);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Scientist; me.abilities = {"RollerSphere", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("R" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        bool spawned = false, damped = false, unarmed = false, slowed = false, boom = false, cd = false;
+        float v0 = 0, v1 = 0, eh0 = 0, eh1 = 0;
+        if (E) {
+            world_.player().controller().setCameraYaw(lp.yaw());
+            if (moveToOpenLine(45.0f)) run(0.3f);
+            core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 80.0f);
+            E->setPosition(lp.position() - fwd * 40.0f);
+            platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(sh, dt); world_.tick(dt);
+            run(0.45f);
+            bool notYet = !world_.rollerMine().alive;
+            run(0.1f);
+            spawned = notYet && world_.rollerMine().alive;
+            v0 = core::length(core::Vec3{world_.rollerMine().vel.x, 0, world_.rollerMine().vel.z});
+            run(1.0f);
+            v1 = core::length(core::Vec3{world_.rollerMine().vel.x, 0, world_.rollerMine().vel.z});
+            damped = v0 > 25.0f && std::fabs(v1 / v0 - std::exp(-0.6f)) < 0.06f;
+            // Contact before arming (t ~1.5 s): no explosion; aura slows the enemy.
+            E->setPosition(world_.rollerMine().pos - core::Vec3{0, 1.0f, 0});
+            run(0.1f);
+            unarmed = world_.rollerMine().alive;
+            slowed = E->pawn().rollerSlowRemain_ > 0.0f;
+            eh0 = E->pawn().health().current;
+            while (world_.rollerMine().alive && world_.rollerMine().t < 3.05f) { E->setPosition(world_.rollerMine().pos - core::Vec3{0, 1.0f, 0}); run(1.0f / 60.0f); }
+            run(0.1f);
+            eh1 = E->spawned() ? E->pawn().health().current : 0.0f;
+            boom = !world_.rollerMine().alive && eh0 - eh1 > 100.0f;
+            run(0.1f);
+            cd = world_.hudState().abilities[0].cooldown > 59.0f;
+        }
+        LOG_INFO("PARTICIPANT roller: spawned %d v %.1f -> %.1f in 1 s, unarmed contact safe %d, slowed %d, armed contact boom %d (%.0f -> %.0f), cooldown %d",
+                 (int)spawned, v0, v1, (int)unarmed, (int)slowed, (int)boom, eh0, eh1, (int)cd);
+        check(E && spawned && damped && unarmed && slowed && boom && cd,
+              "Roller sphere: 0.5 s spawn at 27.5 m/s, LinearDamping 0.6, aura slow, armed after 3 s, contact explodes 135, 60 s cooldown");
+    }
+    // Class-pool abilities: HardLock (mark + x1.4 damage taken, 10 s), TransformDisruptor (forced transform, 3 s lockout),
+    // AbilityJammer (15 s jam). Shots / picks aimed through the crosshair at an enemy 20 m ahead.
+    for (int pass = 0; pass < 2; ++pass) {
+        game::MatchLaunch LC; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", LC);
+        world_.launchMatch(LC);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Scout;
+        me.abilities = pass == 0 ? std::vector<std::string>{"HardLock", "TransformDisruptor"} : std::vector<std::string>{"AbilityJammer", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("P" + std::to_string(pass) + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        bool ok1 = false, ok2 = false;
+        float dmg = 0;
+        if (E) {
+            ctl.setCameraYaw(lp.yaw());
+            if (moveToOpenLine(25.0f)) run(0.3f);
+            const core::Vec3 fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 80.0f);
+            const core::Vec3 T = lp.position() + fwd * 20.0f;
+            auto aim = [&]() { E->setPosition(T); core::Vec3 d = E->pawn().actorLocation() - ctl.cameraPos();
+                               ctl.setCameraYaw(std::atan2(-d.x, -d.z)); ctl.setCameraPitch(std::atan2(d.y, std::hypot(d.x, d.z))); };
+            auto press = [&](platform::Button b) { aim(); platform::InputFrame in; in.pressed[(int)b] = true; in.down[(int)b] = true; world_.handleInput(in, dt); world_.tick(dt); };
+            auto hold = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f); ++i) { aim(); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+            hold(0.3f);
+            if (pass == 0) {
+                press(platform::Button::Dash); hold(0.1f);
+                const float h0 = E->pawn().health().current;
+                world_.applyMatchDamage(E->matchPlayer(), world_.localMatchPlayer(), 10.0f, false, "TransGame.TnDamageTypeIonBlaster");
+                dmg = h0 - E->pawn().health().current;
+                ok1 = E->pawn().hardLockedRemain_ > 9.5f && std::fabs(dmg - 14.0f) < 0.01f;
+                press(platform::Button::Ability1); hold(0.5f);
+                ok2 = E->pawn().transformDisruptRemain_ > 2.0f && (E->pawn().isTransforming() || E->pawn().form() == game::Form::Vehicle);
+                LOG_INFO("PARTICIPANT pool: hardlock %d (10 dmg -> %.1f), disruptor %d", (int)ok1, dmg, (int)ok2);
+                check(E && ok1 && ok2, "HardLock: marked 10 s, damage taken x1.4; TransformDisruptor: forced transform, 3 s transform lockout");
+            } else {
+                press(platform::Button::Dash); hold(0.5f);
+                ok1 = E->pawn().jammedRemain_ > 14.0f;
+                LOG_INFO("PARTICIPANT pool: jammer %d", (int)ok1);
+                check(E && ok1, "AbilityJammer: projectile jams the enemy 15 s (TnBuffAbilityJammed)");
+            }
+        }
+    }
+    // Weapon / spawner killstreaks: P.O.K.E. 2.0, Nucleon Shock Cannon, Thermo Mine Re-Spawner.
+    {
+        game::MatchLaunch LD; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", LD);
+        world_.launchMatch(LD);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("K" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        const int me = world_.localMatchPlayer();
+        auto trigger = [&](const char* id) {
+            world_.match().playerMutable(me).acquiredKillstreaks.push_back(id);
+            platform::InputFrame b; b.pressed[(int)platform::Button::Killstreak] = true; b.down[(int)platform::Button::Killstreak] = true;
+            world_.handleInput(b, dt); world_.tick(dt);
+        };
+        bool poke = false, turret = false, mines = false;
+        if (E) {
+            ctl.setCameraYaw(lp.yaw());
+            if (moveToOpenLine(25.0f)) run(0.3f);
+            const core::Vec3 fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 80.0f);
+            // P.O.K.E.
+            trigger("PokeStreak");
+            const bool held = lp.weapon().def && std::string(lp.weapon().def->id) == "Poke" && std::fabs(lp.speedMultiplier() / lp.specialtySpeedMultiplierForTest() - 1.5f) < 0.01f;
+            platform::InputFrame sw; sw.pressed[(int)platform::Button::NextWeapon] = true; sw.down[(int)platform::Button::NextWeapon] = true;
+            world_.handleInput(sw, dt); world_.tick(dt); run(1.0f);
+            const bool noSwap = lp.weapon().def && std::string(lp.weapon().def->id) == "Poke";
+            E->setPosition(lp.position() + fwd * 4.0f); run(0.1f);
+            platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+            for (int i = 0; i < 60; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+            const bool killed = !E->spawned();
+            run(19.0f);
+            const bool expired = !(lp.weapon().def && std::string(lp.weapon().def->id) == "Poke");
+            poke = held && noSwap && killed && expired;
+            LOG_INFO("PARTICIPANT poke: held x1.5 %d, swap refused %d, fire kill %d, expired at 20 s %d", (int)held, (int)noSwap, (int)killed, (int)expired);
+            // Rocket turret
+            run(6.0f);
+            trigger("SpawnRocketTurretStreak");
+            const bool tHeld = lp.weapon().def && std::string(lp.weapon().def->id) == "HeavyRocketTurret" && lp.weapon().ammo == 10;
+            const size_t p0 = world_.projectiles().size();
+            for (int i = 0; i < 10; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+            const bool shot = world_.projectiles().size() > p0 || lp.weapon().ammo < 10;
+            world_.handleInput(sw, dt); world_.tick(dt); run(0.1f);
+            const bool dropped = !(lp.weapon().def && std::string(lp.weapon().def->id) == "HeavyRocketTurret");
+            turret = tHeld && shot && dropped;
+            LOG_INFO("PARTICIPANT turret: held 10 rockets %d, fired %d, swap dropped %d", (int)tHeld, (int)shot, (int)dropped);
+            // MinePooper
+            run(3.0f);
+            if (!E->spawned()) run(6.0f);
+            trigger("MinePooperStreak");
+            run(2.1f);
+            const int live = (int)world_.kamikazeMines().size();
+            E->setPosition(lp.position() + fwd * 10.0f);
+            const float eh0 = E->pawn().health().current;
+            for (int i = 0; i < 180; ++i) { E->setPosition(lp.position() + fwd * 10.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            const float eh1 = E->spawned() ? E->pawn().health().current : 0.0f;
+            mines = live >= 1 && eh0 - eh1 >= 100.0f;
+            LOG_INFO("PARTICIPANT minepooper: %d mine(s) after 2.1 s, enemy %.0f -> %.0f", live, eh0, eh1);
+        }
+        check(E && poke, "P.O.K.E. 2.0: Poke held (speed x1.5, no swapping), fire = 9999 poke, removed after 20 s");
+        check(E && turret, "Nucleon Shock Cannon: rocket turret with 10 rockets fires; a swap drops it (WT_Heavy)");
+        check(E && mines, "Thermo Mine Re-Spawner: a mine every 2 s; it seeks an enemy within 20 m and detonates (125)");
+    }
+    LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_CTFTEST: Code of Power (single-flag CTF, rounds) and Countdown to Extinction (bomb) on the shared framework,
+// driven with synthetic participants placed on the authored objectives.
+void Application::runCtfExtTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("CTFTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    auto objPos = [&](const char* cls, int team) -> core::Vec3 {
+        for (const auto& o : world_.mapState().objectives()) if (o.cls == cls && o.activeInMode && (team < 0 || o.authoredTeam == team)) return o.pos;
+        return core::Vec3{0, 0, 0};
+    };
+    auto at = [](const core::Vec3& p) { return p + core::Vec3{0, 0.05f, 0}; };   // opponent feet on the objective
+    // ---------------- CTF ----------------
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=CTF?TimeLimit=40", L);
+        check(world_.launchMatch(L) && L.settings.rounds == 2, "CTF launches (rounds 2, round TimeLimit 40 via URL)");
+        std::vector<game::MatchOpponent*> ops{world_.addMatchOpponent("A", false), world_.addMatchOpponent("B", false)};
+        while (std::none_of(ops.begin(), ops.end(), [](game::MatchOpponent* o) { return o->team() == 0; }) ||
+               std::none_of(ops.begin(), ops.end(), [](game::MatchOpponent* o) { return o->team() == 1; }))
+            ops.push_back(world_.addMatchOpponent("P" + std::to_string(ops.size()), false));
+        auto onTeam = [&](int t) { for (auto* o : ops) if (o->team() == t) return o; return ops[0]; };
+        run(10.5f);
+        int att = world_.match().attackingTeam(), def = att == 0 ? 1 : 0;
+        game::MatchOpponent* X = onTeam(att);   // attacker
+        game::MatchOpponent* Y = onTeam(def);   // defender
+        for (auto* o : ops) if (o != X && o != Y) o->setPosition(o->position() + core::Vec3{0, 0, 60});
+        bool teamsOk = X->team() == att && Y->team() == def;
+        int capActive = 0, flagActive = -1;
+        for (const auto& o : world_.mapState().objectives())
+            if (o.cls == "TnFlagCapturePoint" && o.state == game::ObjectiveObject::State::Active) capActive += (o.authoredTeam == att) ? 1 : 100;
+        for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.active) flagActive = world_.mapState().objectives()[(size_t)c.home].authoredTeam;
+        LOG_INFO("CTFTEST setup: att %d X team %d Y team %d capActive %d flagActive %d carried %zu", att, X->team(), Y->team(), capActive, flagActive, world_.mapState().carried().size());
+        for (const auto& o : world_.mapState().objectives()) if (o.cls == "TnFlagCapturePoint" || o.cls == "TnGameObjectivePickupFactoryFlag") LOG_INFO("CTFTEST obj %s team %d/%d state %d active %d vol %zu", o.actor.c_str(), o.authoredTeam, o.defenderTeam, (int)o.state, (int)o.activeInMode, o.volume.size());
+        check(teamsOk && (att == 0 || att == 1) && capActive == 1 && flagActive == def,
+              "round 1: attacking team " + std::to_string(att) + "; its capture point active, the defenders' flag factory in Pickup");
+        core::Vec3 flag = objPos("TnGameObjectivePickupFactoryFlag", def), cap = objPos("TnFlagCapturePoint", att);
+        Y->setPosition(at(flag)); run(0.2f);
+        bool defenderRefused = world_.mapState().carriedBy(Y->matchPlayer()) < 0;
+        Y->setPosition(at(cap) + core::Vec3{30, 0, 0});
+        X->setPosition(at(flag)); run(0.2f);
+        bool taken = world_.mapState().carriedBy(X->matchPlayer()) >= 0;
+        int ts0 = world_.match().teamScore(att), ps0 = world_.match().players()[(size_t)X->matchPlayer()].score;
+        X->setPosition(at(cap)); run(0.2f);
+        int ts1 = world_.match().teamScore(att), ps1 = world_.match().players()[(size_t)X->matchPlayer()].score;
+        bool home = world_.mapState().carriedBy(X->matchPlayer()) < 0;
+        LOG_INFO("CTFTEST capture: refused %d taken %d team %d->%d personal %d->%d home %d", (int)defenderRefused, (int)taken, ts0, ts1, ps0, ps1, (int)home);
+        check(defenderRefused && taken && ts1 == ts0 + 1 && ps1 == ps0 + 10 && home,
+              "defenders cannot take the flag; the attacker takes it and captures: team +1, personal +10, flag home (round continues)");
+        // Drop on death, defender return (ReturnFlagTime 10 drained at dt x defenders).
+        X->setPosition(at(flag)); run(0.2f);
+        core::Vec3 dropAt = at(flag);   // the factory spot is on the floor on every map (a dropped flag there is not "home")
+        X->setPosition(dropAt); run(0.1f);
+        world_.applyMatchDamage(X->matchPlayer(), Y->matchPlayer(), 99999.0f, false);
+        run(0.1f);
+        bool dropped = false; for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.dropped) dropped = true;
+        Y->setPosition(dropAt); run(9.0f);
+        bool stillDropped = false; for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.dropped) stillDropped = true;
+        run(1.5f);
+        bool returned = true; for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.dropped) returned = false;
+        LOG_INFO("CTFTEST drop: dropped %d stillDropped %d returned %d", (int)dropped, (int)stillDropped, (int)returned);
+        check(dropped && stillDropped && returned, "carrier killed -> flag dropped; a defender on it returns it after ReturnFlagTime 10 s");
+        // Carrier heavy weapon: Transform to vehicle drops the flag (DropHeavyWeapons); a vehicle does not re-take it [PROV gate];
+        // back in robot form the attacker re-takes it. (The local carrier's gun block / swap toss is checked in round 2.)
+        {
+            run(6.0f);   // X respawn wave
+            Y->setPosition(at(cap) + core::Vec3{30, 0, 0});
+            X->setPosition(at(flag)); run(0.2f);
+            bool held = world_.mapState().carriedBy(X->matchPlayer()) >= 0;
+            X->pawn().beginTransform(); run(0.1f);
+            bool droppedOnTransform = world_.mapState().carriedBy(X->matchPlayer()) < 0;
+            run(3.0f);
+            bool vehNoPick = X->pawn().form() == game::Form::Vehicle && world_.mapState().carriedBy(X->matchPlayer()) < 0;
+            X->pawn().beginTransform(); run(3.0f);
+            bool repick = X->pawn().form() == game::Form::Robot && world_.mapState().carriedBy(X->matchPlayer()) >= 0;   // pickup button on the dropped flag
+            LOG_INFO("CTFTEST carrier: held %d dropped on transform %d vehicle no re-pick %d robot re-pick %d", (int)held, (int)droppedOnTransform, (int)vehNoPick, (int)repick);
+            check(held && droppedOnTransform && vehNoPick && repick, "carrier transform to vehicle drops the flag; vehicle form cannot take it (CanPickupInventory); robot form takes it with the pickup button");
+            world_.applyMatchDamage(X->matchPlayer(), -1, 99999.0f, true, "TransGame.TnDamageTypeInstantKill");
+            run(0.2f);
+        }
+        // Round timer: round 1 ends at TimeLimit -> 5 s between rounds -> round 2 with the attackers swapped -> match end.
+        bool between = false; int roundSeen = 0;
+        for (int i = 0; i < 60 * 40 && world_.match().state() == game::Match::State::InProgress; ++i) {
+            platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt);
+            if (world_.match().betweenRounds()) between = true;
+            roundSeen = std::max(roundSeen, world_.match().currentRound());
+            if (roundSeen == 1 && !world_.match().betweenRounds()) break;
+        }
+        int att2 = world_.match().attackingTeam();
+        check(between && roundSeen == 1 && att2 == def, "round 1 ends on time, 5 s between rounds, round 2 attacked by the other team");
+        // Local carrier (round 2: the local player's team attacks).
+        run(0.5f);
+        if (world_.match().players()[(size_t)world_.localMatchPlayer()].team == att2 && !world_.localPlayerDead()) {
+            game::Character& lp = world_.player().pawn();
+            core::Vec3 fl = objPos("TnGameObjectivePickupFactoryFlag", att);
+            lp.setPosition(at(fl)); run(0.3f);
+            bool noAuto = world_.mapState().carriedBy(world_.localMatchPlayer()) < 0 && world_.hudState().pickupPrompt == "Code Of Power";
+            platform::InputFrame ek; ek.pressed[(int)platform::Button::Interact] = true; ek.down[(int)platform::Button::Interact] = true;
+            world_.handleInput(ek, dt); world_.tick(dt); run(0.1f);
+            bool lheld = noAuto && world_.mapState().carriedBy(world_.localMatchPlayer()) >= 0 && world_.hudState().heavyWeapon == "Code Of Power";
+            int ammo0 = lp.weapon().ammo;
+            platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+            for (int i = 0; i < 30; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+            bool noGun = lp.weapon().ammo == ammo0;
+            platform::InputFrame sw; sw.pressed[(int)platform::Button::NextWeapon] = true; sw.down[(int)platform::Button::NextWeapon] = true;
+            world_.handleInput(sw, dt); world_.tick(dt); run(0.1f);
+            bool swapDrop = world_.mapState().carriedBy(world_.localMatchPlayer()) < 0;
+            LOG_INFO("CTFTEST local carrier: held %d gun blocked %d swap dropped %d", (int)lheld, (int)noGun, (int)swapDrop);
+            check(lheld && noGun && swapDrop, "local carrier: not taken on touch, prompt shown, E takes it; the flag is the held weapon (no gun fire); a weapon swap tosses it");
+        } else LOG_INFO("CTFTEST local carrier: local player not an attacker in round 2 (skipped)");
+        for (int i = 0; i < 60 * 45 && world_.match().state() == game::Match::State::InProgress; ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+        check(world_.match().state() == game::Match::State::MatchOver && world_.match().endReason() == "Score",
+              "after the last round the match ends (EndGame reason Score; team " + std::to_string(att) + " won " +
+              std::to_string(world_.match().teamScore(att)) + "-" + std::to_string(world_.match().teamScore(def)) + ")");
+    }
+    // ---------------- EXT ----------------
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=EXT", L);
+        check(world_.launchMatch(L) && L.settings.goalScore == 3, "EXT launches (PointsToWin 3)");
+        std::vector<game::MatchOpponent*> ops{world_.addMatchOpponent("A", false), world_.addMatchOpponent("B", false)};
+        while (std::none_of(ops.begin(), ops.end(), [](game::MatchOpponent* o) { return o->team() == 0; }) ||
+               std::none_of(ops.begin(), ops.end(), [](game::MatchOpponent* o) { return o->team() == 1; }))
+            ops.push_back(world_.addMatchOpponent("P" + std::to_string(ops.size()), false));
+        auto onTeam = [&](int t) { for (auto* o : ops) if (o->team() == t) return o; return ops[0]; };
+        run(10.5f);
+        core::Vec3 bomb = objPos("TnGameObjectivePickupFactoryBomb", -1);
+        game::MatchOpponent* X = onTeam(0); game::MatchOpponent* Y = onTeam(1);
+        for (auto* o : ops) if (o != X && o != Y) o->setPosition(o->position() + core::Vec3{0, 0, 60});
+        int xt = X->team(), yt = Y->team();
+        X->setPosition(at(bomb)); run(0.2f);
+        bool held = world_.mapState().carriedBy(X->matchPlayer()) >= 0;
+        check(held && world_.match().attackingTeam() == xt, "bomb taken; GRI.AttackingTeam = the holder's team");
+        core::Vec3 enemyPoint = objPos("TnBombPlantPoint", yt);
+        Y->setPosition(at(bomb) + core::Vec3{40, 0, 0});
+        X->setPosition(at(enemyPoint)); run(0.2f);
+        bool planted = world_.mapState().planted().active && world_.mapState().planted().team == xt;
+        X->setPosition(at(bomb) + core::Vec3{-40, 0, 0});
+        Y->setPosition(at(enemyPoint)); run(4.8f);
+        bool notYet = world_.mapState().planted().active;
+        run(0.4f);
+        bool defused = !world_.mapState().planted().active;
+        bool droppedAtPoint = false;
+        for (const auto& c : world_.mapState().carried()) if (c.kind == 1 && (c.dropped || c.holder == Y->matchPlayer())) droppedAtPoint = true;   // dropped; the defuser standing there may take it (legal)
+        if (world_.mapState().carriedBy(Y->matchPlayer()) >= 0) { world_.applyMatchDamage(Y->matchPlayer(), X->matchPlayer(), 99999.0f, false); run(5.5f); }
+        if (!world_.match().players()[(size_t)Y->matchPlayer()].alive) run(1.0f);
+        check(planted && notYet && defused && droppedAtPoint, "planted on the enemy point; a defender on it defuses in DefuseTime 5 s; the bomb drops at the point");
+        // Re-take (the dropped bomb at the point) and detonate.
+        Y->setPosition(at(bomb) + core::Vec3{40, 0, 0});
+        X->setPosition(at(enemyPoint)); run(0.3f);
+        bool replanted = world_.mapState().planted().active;
+        X->setPosition(at(bomb) + core::Vec3{-40, 0, 0});
+        int ts0 = world_.match().teamScore(xt), ps0 = world_.match().players()[(size_t)X->matchPlayer()].score;
+        Y->setPosition(at(enemyPoint) + core::Vec3{20, 0, 0});   // inside the 50 m blast, outside the plant volume
+        run(15.2f);
+        int ts1 = world_.match().teamScore(xt), ps1 = world_.match().players()[(size_t)X->matchPlayer()].score;
+        bool yDead = !world_.match().players()[(size_t)Y->matchPlayer()].alive;
+        bool sleeping = false; for (const auto& c : world_.mapState().carried()) if (c.kind == 1 && c.sleep > 0.0f) sleeping = true;
+        LOG_INFO("CTFTEST detonate: replanted %d team %d->%d personal %d->%d yDead %d sleeping %d xAlive %d", (int)replanted, ts0, ts1, ps0, ps1, (int)yDead, (int)sleeping, (int)world_.match().players()[(size_t)X->matchPlayer()].alive);
+        check(replanted && ts1 == ts0 + 1 && ps1 == ps0 + 10 + 1 && yDead && sleeping,
+              "fuse 15 s -> detonation: team +1, planter +10 (+1 for the blast kill, ScoreKillsMP), HurtRadius 9999 kills within 50 m, bomb home + factory sleeps 5 s");
+    }
+    LOG_INFO("CTFTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_MAPSUITE: the loaded map (WFC_MAP) through the shared match framework - TDM launch, spawns on floor and clear of
+// geometry, KillZ and hazard-volume deaths with their damage types, pickups / objectives present, a second match.
+void Application::runMapSuite() {
+    int checks = 0, fails = 0;
+    const std::string map = world_.mapName();
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("MAPSUITE %s %s %s", map.c_str(), ok ? "PASS" : "FAIL", what.c_str()); };
+    game::Character& pc = world_.player().pawn();
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    const game::CollisionWorld* col = world_.collision();
+    game::MatchLaunch L;
+    game::MatchLaunch::fromURL(map + "_BASE_m?GameModeTag=TDM", L);
+    bool launched = world_.launchMatch(L);
+    check(launched, "TDM launches on the loaded map");
+    if (!launched) { LOG_INFO("MAPSUITE %s SUMMARY: %d/%d checks passed", map.c_str(), checks - fails, checks); return; }
+    run(10.5f);
+    check(world_.match().state() == game::Match::State::InProgress && !world_.localPlayerDead(), "match starts and spawns the local player");
+    // Spawn quality over repeated deaths: on a floor, robot cylinder clear (PlayerController::robotFitsAt), above KillZ.
+    int spawns = 0, onFloor = 0, clear = 0;
+    for (int k = 0; k < 12; ++k) {
+        core::Vec3 p = pc.position();
+        float gy; core::Vec3 gn;
+        ++spawns;
+        if (col && col->groundHeight(p.x, p.z, p.y + 0.5f, 0.6f, gy, gn) && std::fabs(p.y - gy) < 0.6f) ++onFloor;
+        if (game::PlayerController::robotFitsAt(col, p, &pc)) ++clear;
+        world_.killLocalPlayer(-1, true);
+        run(5.6f);
+    }
+    check(onFloor == spawns && clear == spawns, "spawns on floor " + std::to_string(onFloor) + "/" + std::to_string(spawns) + ", clear of geometry " +
+          std::to_string(clear) + "/" + std::to_string(spawns));
+    // KillZ: below the persistent level's KillZ -> death (environmental).
+    {
+        int deathsBefore = world_.match().players()[(size_t)world_.localMatchPlayer()].deaths;
+        core::Vec3 p = pc.position(); pc.setPosition({p.x, world_.killZ() - 5.0f, p.z});
+        run(0.1f);
+        check(world_.localPlayerDead() && world_.match().players()[(size_t)world_.localMatchPlayer()].deaths == deathsBefore + 1,
+              "below KillZ " + std::to_string((int)world_.killZ()) + " m -> death");
+        run(5.6f);
+    }
+    // Hazard volumes: inside the first one -> damage of its type (lethal ones kill).
+    const auto& hz = world_.hazardVolumes();
+    LOG_INFO("MAPSUITE %s: %zu hazard volumes, %zu pickup factories, %zu objectives, KillZ %.1f m", map.c_str(), hz.size(),
+             world_.pickupFactories().size(), world_.mapState().objectives().size(), world_.killZ());
+    if (!hz.empty()) {
+        // The brush centroid is inside a convex volume; hazardAt is the oracle.
+        core::Vec3 inside = hz[0].centroid; bool found = world_.hazardAt(inside) == 0;
+        if (found) {
+            float hpBefore = pc.health().current;
+            pc.setPosition(inside - core::Vec3{0, pc.meshToActor(pc.moveForm()), 0});
+            world_.tick(dt);
+            bool hurt = pc.health().current < hpBefore || world_.localPlayerDead();
+            std::string killType;
+            for (const auto& k : world_.match().killHistory()) killType = k.damageType;
+            check(hurt, "hazard " + hz[0].actor + " (" + hz[0].damageType + ", " + std::to_string((int)hz[0].damagePerSec) + "/s) damages on entry" +
+                  (world_.localPlayerDead() ? " - killed, kill type " + killType : ""));
+            run(5.6f);
+        } else check(false, "hazard " + hz[0].actor + ": centroid not inside (plane orientation)");
+    }
+    check(!world_.pickupFactories().empty(), "pickup factories present (" + std::to_string(world_.pickupFactories().size()) + ")");
+    // Pickup interaction: damaged pawn steps onto a health factory -> SHT_AddAllSegments heal; the factory sleeps.
+    {
+        game::PickupFactory* hf = nullptr;
+        for (game::PickupFactory* pf : world_.pickupFactories()) if (pf->kind() == game::PickupFactory::Kind::Health && pf->available()) { hf = pf; break; }
+        if (hf && !world_.localPlayerDead()) {
+            world_.applyMatchDamage(world_.localMatchPlayer(), -1, pc.health().max * 0.5f, true);
+            float hp = pc.health().current;
+            pc.setPosition(hf->position());
+            run(0.3f);
+            check(pc.health().current > hp && !hf->available(), "health pickup: " + std::to_string((int)hp) + " -> " + std::to_string((int)pc.health().current) + ", factory taken");
+        } else check(false, "no available health factory / player dead");
+    }
+    // Every versus mode on this map: its mode actors activate and the match spawns the player.
+    for (const char* mode : {"DM", "DOM", "KOTH", "CTF", "EXT"}) {
+        game::MatchLaunch LM; game::MatchLaunch::fromURL(map + "_BASE_m?GameModeTag=" + mode, LM);
+        if (!world_.launchMatch(LM)) { check(false, std::string(mode) + " launch"); continue; }
+        run(10.6f);
+        int dom = 0, kothActive = 0, flags = 0, caps = 0, bombs = 0, plants = 0;
+        for (const auto& o : world_.mapState().objectives()) {
+            if (!o.activeInMode) continue;
+            if (o.cls == "TnDominationPoint") ++dom;
+            if (o.cls == "TnKingOfTheHillZone" && o.state == game::ObjectiveObject::State::Active) ++kothActive;
+            if (o.cls == "TnGameObjectivePickupFactoryFlag") ++flags;
+            if (o.cls == "TnFlagCapturePoint") ++caps;
+            if (o.cls == "TnGameObjectivePickupFactoryBomb") ++bombs;
+            if (o.cls == "TnBombPlantPoint") ++plants;
+        }
+        std::string m(mode);
+        bool ok = !world_.localPlayerDead() && world_.match().state() == game::Match::State::InProgress;
+        if (m == "DOM") ok = ok && dom >= 1;
+        if (m == "KOTH") ok = ok && kothActive == 1;
+        if (m == "CTF") ok = ok && flags == 2 && caps == 2 && world_.mapState().carried().size() == 2;
+        if (m == "EXT") ok = ok && bombs == 1 && plants == 2;
+        check(ok, m + ": spawned; mode actors dom " + std::to_string(dom) + " koth-active " + std::to_string(kothActive) + " flags " +
+              std::to_string(flags) + " caps " + std::to_string(caps) + " bomb " + std::to_string(bombs) + " plants " + std::to_string(plants));
+    }
+    // Second match on the same map.
+    world_.launchMatch(L);
+    run(10.5f);
+    check(world_.match().state() == game::Match::State::InProgress && !world_.localPlayerDead(), "second match starts and spawns");
+    LOG_INFO("MAPSUITE %s SUMMARY: %d/%d checks passed", map.c_str(), checks - fails, checks);
+}
+
+// WFC_WEAPONTEST: selection -> loadout -> active weapon -> mesh -> firing -> damage type are one weapon, per chassis.
+void Application::runWeaponTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("WEAPON %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    game::Character& pc = world_.player().pawn();
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    auto inv = [&]() { std::string s; for (const auto& w : pc.inventory()) s += std::string(w.def ? w.def->provider : "IonBlaster") + " "; return s; };
+    // Generated table reproduces the hand-checked Ion Blaster versus data.
+    const game::WeaponDef* ib = game::findWeaponDef("IonBlaster");
+    check(ib && ib->damage == 15.0f && ib->clip == 50 && ib->initialReserve == 150 && std::string(ib->dataSource) == "MP" &&
+          std::fabs(ib->falloffNearM - 50.0f) < 1e-3f, "WeaponTable: Ion Blaster = IonBlaster_WEPDATA (MultiplayerData) 15 / 50 / 150 / 50 m");
+    LOG_INFO("WEAPON table: %d weapons", game::weaponDefCount());
+    // Iconic presets per chassis (TnCharacterApplier.ApplyWeapons: WeaponTypes order, first active).
+    struct Case { const char* chassis; const char* first; };
+    for (Case c : {Case{"Truck", "IonBlaster"}, Case{"Car2", "AssaultRifle"}, Case{"Jet", ""}, Case{"Tank3", "AssaultRifle"}, Case{"Truck4", ""}}) {
+        bool ok = world_.applyChassisToLocalPawn(c.chassis);
+        game::HudGameState h = world_.hudState();
+        const std::string want = c.first[0] ? c.first : (pc.chassis().iconicWeapons.empty() ? "" : pc.chassis().iconicWeapons[0]);
+        LOG_INFO("WEAPON %s (%s): inventory [%s] vehicle [%s] active %s (%s, damage %.0f, clip %d, %s)", c.chassis, pc.chassis().iconic.c_str(),
+                 inv().c_str(), h.vehicleWeapons.empty() ? "" : h.vehicleWeapons[0].c_str(), h.weaponId.c_str(), pc.weapon().name,
+                 pc.weapon().damage, pc.weapon().magSize, pc.weapon().simulated() ? "simulated" : "NOT simulated (PARTIAL)");
+        check(ok && h.weaponId == want && !pc.inventory().empty(), std::string(c.chassis) + ": the iconic preset's first weapon is active (" + want + ")");
+    }
+    // Custom selection: a weapon outside the chassis' provider restrictions is refused, not substituted.
+    world_.applyChassisToLocalPawn("Car2");
+    game::CharacterSelection sel; sel.type = 0; sel.specialty = game::Specialty::Scout; sel.weapons = {"Shotgun", "AssaultRifle", "ShortSword"};
+    std::vector<std::string> refused = world_.applyLoadout(&sel);
+    check(refused.size() == 1 && refused[0] == "AssaultRifle" && pc.weapon().def && std::string(pc.weapon().def->provider) == "Shotgun" &&
+          pc.weapon().shots == 8, "custom Car2 loadout: AssaultRifle refused (ChassisRestriction Jet/Tank), Shotgun active with 8 pellets");
+    // Swap Weapons: put down + equip, no fire in between, then the next weapon (ShortSword, melee: not simulated).
+    pc.requestWeaponSwitch(1);
+    bool blocked = !pc.weaponUsable();
+    run(0.2f);
+    bool midway = pc.switchingWeapon();
+    run(1.0f);
+    check(blocked && midway && !pc.switchingWeapon() && pc.weapon().def && std::string(pc.weapon().def->provider) == "ShortSword" &&
+          !pc.weapon().canFire() && world_.hudState().weaponId == "ShortSword" && !world_.hudState().weaponSimulated,
+          "swap: put down 0.5 s + equip, then ShortSword (melee, equipped but not simulated, cannot fire)");
+    // Firing the active weapon spends its own ammo and carries its own damage type.
+    pc.requestWeaponSwitch(-1); run(1.0f);
+    int before = pc.weapon().ammo;
+    platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+    for (int i = 0; i < 30; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+    check(pc.weapon().ammo < before && std::string(pc.weapon().damageType) == "TransGame.TnDamageTypeShotgun",
+          "fire: Shotgun ammo spent (" + std::to_string(before) + " -> " + std::to_string(pc.weapon().ammo) + "), damage type TnDamageTypeShotgun");
+    // Abilities: Car2 iconic [Whirlwind, Dodge] -> Ability1 (Ctrl) = Dodge (TnAcrobaticsManager), Ability0 = Whirlwind (melee).
+    world_.applyChassisToLocalPawn("Car2");
+    run(1.0f);
+    {
+        game::HudGameState h0 = world_.hudState();
+        bool slots = h0.abilities.size() == 2 && h0.abilities[0].id == "Whirlwind" && h0.abilities[0].implemented &&
+                     h0.abilities[1].id == "Dodge" && h0.abilities[1].implemented;
+        core::Vec3 p0 = pc.position();
+        core::Vec3 right = core::normalize(core::cross(core::forwardFromYawPitch(pc.yaw(), 0.0f), core::Vec3{0, 1, 0}));
+        platform::InputFrame in; in.down[(int)platform::Button::Right] = true; in.pressed[(int)platform::Button::Ability1] = true;
+        in.down[(int)platform::Button::Ability1] = true;
+        world_.handleInput(in, dt); world_.tick(dt);
+        float sp = core::length(core::Vec3{pc.velocity().x, 0, pc.velocity().z});
+        bool dodging = pc.isDodging();
+        run(0.6f);
+        float lateral = core::dot(pc.position() - p0, right);
+        bool cooling = world_.hudState().abilities[1].cooldown > 1.0f;
+        platform::InputFrame again; again.pressed[(int)platform::Button::Ability1] = true; again.down[(int)platform::Button::Ability1] = true;
+        world_.handleInput(again, dt); world_.tick(dt);
+        bool refused = !pc.isDodging();
+        run(2.5f);
+        world_.handleInput(again, dt); world_.tick(dt);
+        bool ready = pc.isDodging();
+        check(slots && dodging && sp > 25.0f && lateral > 8.0f && cooling && refused && ready,
+              "Dodge (Ctrl): " + std::to_string((int)sp) + " m/s, " + std::to_string(lateral).substr(0, 4) +
+              " m to the right in 0.6 s, 2.0 s cooldown after the dodge, refused while cooling, available again; Whirlwind slot implemented");
+    }
+    // Projectiles + vehicle weapon: Warpath (Tank3) TankCannon (TankShell_PROJDATA 20000 UU/s, 170, radius 2500 UU).
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+        world_.launchMatch(L);
+        game::CharacterSelection sel; sel.type = 1; sel.chassisId = "Tank3";
+        world_.match().selectCharacter(world_.localMatchPlayer(), sel);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("E" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* enemy = nullptr;
+        for (auto* o : ops) if (!world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) enemy = o;
+        pc.beginTransform();
+        run(3.0f);
+        const game::Weapon* vw = pc.vehicleWeapon();
+        bool tank = pc.moveForm() == game::Form::Vehicle && vw && vw->projectile() && std::string(vw->def->provider) == "TankCannon";
+        bool hit = false; float dmgTaken = 0.0f;
+        if (enemy && tank) {
+            core::Vec3 fwd = core::forwardFromYawPitch(world_.player().controller().viewYaw(), 0.0f);
+            enemy->setPosition(pc.position() + fwd * 30.0f);
+            float hp0 = enemy->pawn().health().current;
+            platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+            world_.handleInput(fire, dt); world_.tick(dt);
+            bool inFlight = !world_.projectiles().empty();
+            run(0.5f);
+            dmgTaken = hp0 - enemy->pawn().health().current;
+            hit = inFlight && dmgTaken > 20.0f;
+            LOG_INFO("WEAPON tank shell: in flight %d, enemy took %.0f (TankShell 170 x falloff x victim form multiplier)", (int)inFlight, dmgTaken);
+        }
+        check(tank && hit, "vehicle weapon: Warpath's TankCannon shell flies and explodes on the enemy (HurtRadius falloff)");
+        // Self damage: shoot the floor at our own position -> x SelfDamageMultiplier 0.45 x VEHDEF DamageMultiplier.
+        float hp0 = pc.health().current;
+        world_.player().controller().setCameraYaw(world_.player().controller().viewYaw());
+        run(2.1f);   // TankCannon FireInterval 2.0 s
+        game::Weapon* vw2 = pc.vehicleWeapon();
+        if (vw2) { vw2->ammo = vw2->magSize; world_.spawnProjectile(pc.actorLocation() + core::Vec3{0, 1.0f, 0}, core::Vec3{0, -50.0f, 0}, *vw2, world_.localMatchPlayer()); }
+        run(0.3f);
+        float self = hp0 - pc.health().current;
+        float expect = 170.0f * pc.vehicleParams().selfDamageMultiplier * pc.vehicleParams().damageMultiplier;
+        LOG_INFO("WEAPON self damage %.1f (<= 170 x Self 0.45 x vehicle DamageMultiplier %.2f = %.1f, falloff by distance)", self, pc.vehicleParams().damageMultiplier, expect);
+        check(self > 0.0f && self <= expect + 0.01f, "own projectile: self damage scaled by SelfDamageMultiplier and the form DamageMultiplier");
+    }
+    // Warcry (Optimus Ability0) and Shockwave (Warpath Ability0) in a match.
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+        world_.launchMatch(L);
+        game::CharacterSelection sel; sel.type = 1; sel.chassisId = "Truck";
+        world_.match().selectCharacter(world_.localMatchPlayer(), sel);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("W" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* enemy = nullptr;
+        for (auto* o : ops) if (!world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) enemy = o;
+        for (auto* o : ops) if (o != enemy) o->setPosition(o->pawn().position() + core::Vec3{0, 0, 200});   // friendlies out of range
+        platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+        world_.handleInput(sh, dt); world_.tick(dt);
+        run(0.05f);   // the effect applies on the following step (ServerTriggerAbility)
+        bool buffed = pc.warcryRemain_ > 14.0f && pc.warcryTakenMul_ <= 0.5f;   // 0.5 alone, 0.4 with a friendly in range
+        float hp0 = pc.health().current;
+        if (enemy) world_.applyMatchDamage(world_.localMatchPlayer(), enemy->matchPlayer(), 100.0f, false);
+        float taken = hp0 - pc.health().current;
+        const float takenMul = pc.warcryTakenMul_;
+        bool cdPending = world_.hudState().abilities[0].active;
+        run(15.5f);
+        bool cdStarted = !world_.hudState().abilities[0].active && world_.hudState().abilities[0].cooldown > 40.0f;
+        LOG_INFO("WEAPON warcry: buffed %d pending %d started %d cd %.1f remain %.1f", (int)buffed, (int)cdPending, (int)cdStarted, world_.hudState().abilities[0].cooldown, pc.warcryRemain_);
+        check(buffed && std::fabs(taken - 100.0f * takenMul) < 0.01f && cdPending && cdStarted,
+              "Warcry (Optimus Shift): damage taken x0.5 / x0.4 (level by friendlies) for 15 s (took " + std::to_string((int)taken) + " of 100), 60 s cooldown after the buff");
+        // Shockwave: Warpath.
+        game::CharacterSelection ws; ws.type = 1; ws.chassisId = "Tank3";
+        world_.match().selectCharacter(world_.localMatchPlayer(), ws);
+        world_.killLocalPlayer(-1, true); run(5.7f);
+        bool okBody = pc.chassis().id == "Tank3";
+        float ehp0 = 0.0f;
+        if (enemy) { enemy->setPosition(pc.position() + core::Vec3{10, 0, 0}); ehp0 = enemy->pawn().health().current; }
+        world_.handleInput(sh, dt); world_.tick(dt);
+        run(0.1f);
+        float early = enemy ? ehp0 - enemy->pawn().health().current : 0.0f;
+        run(0.3f);
+        float hit = enemy ? ehp0 - enemy->pawn().health().current : 0.0f;
+        check(okBody && early == 0.0f && hit > 0.0f, "Shockwave (Warpath Shift): nothing before Delay 0.25 s, then " + std::to_string((int)hit) + " damage to the enemy 10 m away");
+    }
+    // Cloaking (Air Raid Ability1): TnBuffCloak 20 s, decloak on firing, 15 s cooldown after the cloak ends.
+    {
+        world_.applyChassisToLocalPawn("Jet4");
+        run(0.5f);
+        platform::InputFrame c; c.pressed[(int)platform::Button::Ability1] = true; c.down[(int)platform::Button::Ability1] = true;
+        world_.handleInput(c, dt); world_.tick(dt);
+        bool cloaked = world_.hudState().cloaked && world_.hudState().abilities.size() == 2 && world_.hudState().abilities[1].id == "Cloaking";
+        run(1.0f);
+        bool stillPending = world_.hudState().abilities[1].active;
+        platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+        for (int i = 0; i < 5; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+        bool exposed = !world_.hudState().cloaked;
+        run(0.2f);
+        bool cd = world_.hudState().abilities[1].cooldown > 14.0f;
+        check(cloaked && stillPending && exposed && cd, "Cloaking (Air Raid Ctrl): cloaked, firing decloaks (ExposeSelf), 15 s cooldown after the cloak");
+    }
+    // Hover (Soldier class pool): custom Warpath loadout with Abilities [Hover, Dodge].
+    {
+        world_.applyChassisToLocalPawn("Tank3");
+        game::CharacterSelection hs; hs.type = 0; hs.specialty = game::Specialty::Soldier; hs.abilities = {"Hover", "Dodge"};
+        world_.applyLoadout(&hs);
+        run(1.0f);
+        float y0 = pc.position().y;
+        platform::InputFrame h; h.pressed[(int)platform::Button::Dash] = true; h.down[(int)platform::Button::Dash] = true;
+        world_.handleInput(h, dt); world_.tick(dt);
+        run(1.2f);
+        float yTop = pc.position().y;
+        bool hoveringNow = world_.hudState().hoverState == 2;
+        platform::InputFrame fw; fw.down[(int)platform::Button::Forward] = true;
+        float maxH = 0.0f;
+        for (int i = 0; i < 180; ++i) { world_.handleInput(fw, dt); world_.tick(dt); maxH = std::max(maxH, std::hypot(pc.velocity().x, pc.velocity().z)); }
+        float yMid = pc.position().y;
+        run(5.0f);
+        bool ended = world_.hudState().hoverState == 0;
+        run(2.0f);
+        float yEnd = pc.position().y;
+        bool cd = world_.hudState().abilities[0].cooldown > 30.0f;
+        LOG_INFO("WEAPON hover: y0 %.2f top %.2f mid %.2f end %.2f, max horizontal %.1f m/s, ended %d, cooldown %.1f", y0, yTop, yMid, yEnd, maxH, (int)ended, world_.hudState().abilities[0].cooldown);
+        check(hoveringNow && yTop - y0 > 4.0f && std::fabs(yMid - yTop) < 0.3f && maxH <= 5.01f && ended && yEnd < yTop - 3.0f && cd,
+              "Hover: rises to HoverJumpHeight, holds height 7 s at <= HoverAirSpeed 5 m/s, falls after; 35 s cooldown");
+    }
+    // Grenade (Optimus custom loadout IonBlaster + FlakGrenades, 1 in the bag; swaps skip the bag): G -> spawn after TossDelay 0.4 s, bounces, fuse 2.0 s from the first
+    // impact, then explodes; the empty bag refuses the next toss.
+    {
+        world_.applyChassisToLocalPawn("Truck");
+        game::CharacterSelection gs; gs.type = 0; gs.specialty = game::Specialty::Leader; gs.weapons = {"IonBlaster", "FlakGrenades"};
+        world_.applyLoadout(&gs);
+        run(1.0f);
+        int bag0 = world_.hudState().grenades;
+        size_t n0 = world_.projectiles().size();
+        platform::InputFrame g; g.pressed[(int)platform::Button::Grenade] = true; g.down[(int)platform::Button::Grenade] = true;
+        world_.handleInput(g, dt); world_.tick(dt);
+        run(0.3f);
+        bool notYet = world_.projectiles().size() == n0;
+        run(0.15f);
+        bool spawned = world_.projectiles().size() == n0 + 1 && world_.projectiles().back().grenade;
+        float firstImpact = -1.0f, gone = -1.0f;
+        for (int i = 0; i < 60 * 8 && gone < 0.0f; ++i) {
+            platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt);
+            if (world_.projectiles().size() == n0) { gone = (i + 1) * dt; break; }
+            if (firstImpact < 0.0f && world_.projectiles().back().life < 1e8f) firstImpact = (i + 1) * dt;
+        }
+        int bag1 = world_.hudState().grenades;
+        world_.handleInput(g, dt); world_.tick(dt);
+        run(0.6f);
+        bool refused = world_.projectiles().size() == n0;
+        LOG_INFO("WEAPON grenade: bag %d -> %d, spawned at 0.4 s %d, first impact %.2f s, exploded %.2f s (fuse %.2f), empty bag refused %d",
+                 bag0, bag1, (int)(notYet && spawned), firstImpact, gone, gone - firstImpact, (int)refused);
+        check(bag0 == 1 && bag1 == 0 && notYet && spawned && firstImpact > 0.0f && std::fabs((gone - firstImpact) - 2.0f) < 0.05f && refused,
+              "Flak grenade: G tosses after 0.4 s, fuse 2.0 s from the first impact, 1 in the bag");
+    }
+    // Tank cannon (WeaponPrimary TurretConstrained on C_Cannon_XB): pitches with the view, at most 360 deg/s.
+    {
+        world_.applyChassisToLocalPawn("Tank3");
+        world_.applyLoadout(nullptr);
+        run(0.5f);
+        world_.player().controller().tryBeginTransform();
+        run(3.0f);
+        game::PlayerController& ctl = world_.player().controller();
+        auto cannonPitch = [&]() {
+            core::Mat4 b, h;
+            if (!pc.boneWorld("C_Cannon_XB", b) || !pc.boneWorld("C_Body_XB", h)) return -99.0f;
+            core::Vec3 cf = core::normalize(core::Vec3{b.m[0], b.m[1], b.m[2]}), hf = core::normalize(core::Vec3{h.m[0], h.m[1], h.m[2]});
+            return std::asin(core::clampf(cf.y, -1.0f, 1.0f)) - std::asin(core::clampf(hf.y, -1.0f, 1.0f));
+        };
+        ctl.setCameraPitch(0.0f);
+        run(1.0f);
+        float p0 = cannonPitch();
+        float target = 0.3f, maxRate = 0.0f, prev = p0;
+        for (int i = 0; i < 60; ++i) {
+            ctl.setCameraPitch(target);
+            platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt);
+            float p = cannonPitch(); maxRate = std::max(maxRate, std::fabs(p - prev) / dt); prev = p;
+        }
+        float p1 = cannonPitch();
+        float camP = ctl.camPitch();
+        LOG_INFO("WEAPON cannon: form %d tank %d, pitch rel. hull %.3f -> %.3f rad (view %.3f), max rate %.0f deg/s", (int)pc.form(),
+                 (int)(pc.vehicleParams().form == game::VehicleFormType::Tank), p0, p1, camP, maxRate * 57.2958f);
+        check(pc.form() == game::Form::Vehicle && std::fabs((p1 - p0) - (camP - 0.0f)) < 0.03f && maxRate * 57.2958f <= 365.0f,
+              "Tank cannon pitches with the view pitch (hull-relative), lag <= 360 deg/s");
+    }
+    LOG_INFO("WEAPON SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
 void Application::runModePlayTest() {
     const float dt = (float)clock_.stepSeconds();
     auto& pc = world_.player().pawn();

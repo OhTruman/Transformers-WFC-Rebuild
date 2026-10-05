@@ -30,8 +30,17 @@ int vkFor(Button b) {
         case Button::Fire:         return VK_LBUTTON;
         case Button::Sprint:       return 0;        // no sprint in WFC (no binding)
         case Button::Reload:       return 'R';
-        case Button::CameraToggle: return 'C';
-        case Button::Debug:        return 'B';
+        case Button::CameraToggle: return VK_F8;    // rebuild debug (C / B belong to WFC: Hover Up, Look At)
+        case Button::Debug:        return VK_F9;
+        case Button::Ascend:       return 'C';
+        case Button::Descend:      return 'V';
+        case Button::NextWeapon:   return VK_PRIOR;
+        case Button::Ability1:     return VK_CONTROL;
+        case Button::Killstreak:   return 'B';
+        case Button::Melee:        return 'Q';
+        case Button::Grenade:      return 'G';
+        case Button::Interact:     return 'E';
+        case Button::PrevWeapon:   return VK_NEXT;
         case Button::Quit:         return VK_ESCAPE;
         case Button::FineAim:      return VK_RBUTTON;
         case Button::DebugNextStart: return VK_F6;  // test spawn cycling (not a WFC binding)

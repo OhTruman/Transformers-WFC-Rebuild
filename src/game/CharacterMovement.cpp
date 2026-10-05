@@ -14,10 +14,7 @@ static constexpr float kStepUpConf = 0.35f; // [CONF] TnRobotForm._MovementCapab
 // WFC_STEPUP=m overrides it for A/B diagnostics only.
 static const float kStepUp = std::getenv("WFC_STEPUP") ? (float)std::atof(std::getenv("WFC_STEPUP")) : kStepUpConf;
 static constexpr float kSnapDown = 1.0f;    // follow downward slopes/stairs while grounded
-// Optimus truck rigid-body hull: VH_Optimus_PHYSSYS body on C_Reference_XR, convex hull box
-// x -310..338, y +-154, z -35..185 UU around the mesh root [CONF AssetTools PHYSICS_STREETS].
-static constexpr float kHullFront = 3.38f, kHullBack = 3.10f, kHullHalfWidth = 1.54f;
-static constexpr float kHullBottom = -0.35f, kHullTop = 1.85f;
+// Rigid-body hull extents live in VehicleParams (truck: VH_Optimus_PHYSSYS convex box, CONF).
 
 namespace {
 
@@ -141,10 +138,133 @@ core::Vec3 clampLength(core::Vec3 a, float maxLen) {
 //    ground steering is a yaw rate [PROV].
 //  Three mechanics stay separate: normal boost (Driving), hover dash (Dash while Hovering, forward only:
 //  TnTruckForm.Hovering.DoDash), nitro/ram (Dash while Driving).
+// Jet vehicle form: TnPlaneForm Hovering (TnHoverPlaneSimulation) / Flying (TnPlaneSimulation) [CONF RE TARGETED_PASS3 C3,
+// script bytecode]. Both cancel gravity. Strafe = velocity servo a = ClampLength((dir*MaxSpeed - v)/dt, MaxAccel);
+// Turn = angular servo toward the target rotation at TurnRate (roll 0.1, pitch 0.5, yaw 0.5).
+void jetStep(Character& c, const MoveIntent& in, float dt, const CollisionWorld* col) {
+    namespace cfg = core::config;
+    Character::VehicleState& vs = c.vehicleState();
+    const VehicleParams& VP = c.vehicleParams();
+    core::Vec3& v = c.velocity();
+    const core::Vec3 oldPos = c.position();
+    core::Vec3 p = oldPos;
+    vs.dashCooldown = std::max(0.0f, vs.dashCooldown - dt);
+    // Hovering -> Flying: boost held and not drifting. Flying -> Hovering: boost released (Hovering.BeginState: Drift).
+    if (!vs.flying && in.wantBoost && vs.driftRemain <= 0.0f) { vs.flying = true; vs.rollRemain = 0.0f; }
+    else if (vs.flying && !in.wantBoost) { vs.flying = false; vs.driftRemain = VP.driftDuration; vs.rollRemain = 0.0f; }
+    vs.driving = vs.flying;                       // the boost state consumers (FX / HUD) read Driving
+    vs.driftRemain = std::max(0.0f, vs.driftRemain - dt);
+    auto sgnsq = [](float x) { return x < 0.0f ? -x * x : x * x; };
+    // View frame (controller rotation = camera).
+    core::Vec3 Fv = core::forwardFromYawPitch(in.faceYaw, in.viewPitch);
+    core::Vec3 Fy = core::forwardFromYawPitch(in.faceYaw, 0.0f);
+    core::Vec3 Ry = core::normalize(core::cross(Fy, core::Vec3{0, 1, 0}));
+    core::Vec3 Uv = core::normalize(core::cross(Ry, Fv));
+    core::Vec3 accel{0, 0, 0};                    // gravity cancelled in both modes
+    float tgtYaw = in.faceYaw, tgtPitch = in.viewPitch, tgtRoll = 0.0f;
+    // Special move (Shift): roll. Hover: needs |stick X| >= 0.5, 0.6 s, cooldown 1.2 s; flight: 0.8 s.
+    if (in.wantDash && vs.dashCooldown <= 0.0f && vs.rollRemain <= 0.0f && (vs.flying || std::fabs(in.moveRight) >= 0.5f)) {
+        vs.rollDir = in.moveRight >= 0.0f ? 1.0f : -1.0f;
+        vs.rollRemain = vs.flying ? VP.flyRollTime : VP.hoverRollTime;
+        vs.dashCooldown = 1.2f;
+    }
+    vs.rollRemain = std::max(0.0f, vs.rollRemain - dt);
+    const bool rolling = vs.rollRemain > 0.0f;
+    if (!vs.flying) {
+        if (rolling) {
+            // UpdateRoll: strafe sideways at RollLinearSpeed (accel 10000), barrel roll 2pi/RollDuration about local X.
+            core::Vec3 des = Ry * (vs.rollDir * VP.hoverRollSpeed);
+            core::Vec3 dv = des - core::Vec3{v.x, 0.0f, v.z} * 1.0f; dv.y = -v.y;
+            accel = accel + clampLength(dv * (1.0f / dt), 100.0f);
+            vs.angVel.x = vs.rollDir * 6.2831853f / VP.hoverRollTime;
+        } else {
+            // UpdateStrafe: maxA = 2500 x max(driftScale, max(|fwd|,|right|)), mask (1,1,1) in the full VIEW frame.
+            float drift = 1.0f - vs.driftRemain / VP.driftDuration;
+            float fi = core::clampf(in.moveForward, -1.0f, 1.0f), ri = core::clampf(in.moveRight, -1.0f, 1.0f);
+            float maxA = VP.hoverAccel * std::max(drift * drift, std::max(std::fabs(fi), std::fabs(ri)));
+            core::Vec3 des = Fv * (fi * VP.hoverSpeed) + Ry * (ri * VP.hoverSpeed);
+            core::Vec3 a = clampLength((des - v) * (1.0f / dt), maxA);
+            // Ascend / Descend held -> Dash(+-Z) each frame: vertical servo at DashSpeed 1000, accel 10000, mask Z.
+            if (in.ascend != in.descend) {
+                float vz = (in.ascend ? 1.0f : -1.0f) * VP.dashSpeed;
+                a.y = core::clampf((vz - v.y) / dt, -100.0f, 100.0f);
+            }
+            accel = accel + a;
+        }
+    } else {
+        // TnPlaneSimulation.UpdateFly: Strafe((1,0,0), mask (1,0,0), view frame, MaxAccel, MaxSpeed) - always thrusting.
+        float vf = core::dot(v, Fv);
+        float af = core::clampf((VP.flySpeed - vf) / dt, -VP.flyAccel, VP.flyAccel);
+        // ApplyDrag on the local (0, y, z) velocity: solve A s^2 + s - |v_perp| = 0, A = dt * DragCoefficient / Mass, and
+        // set |v_perp| to s [CONF formula]. Mass: the plane rigid body's mass is not recovered -> 100 [PROV].
+        core::Vec3 vperp = v - Fv * vf;
+        float vp = core::length(vperp) * 100.0f;               // UU/s
+        float A = dt * VP.flyDrag / 100.0f;
+        float sNew = vp > 1e-3f ? (-1.0f + std::sqrt(1.0f + 4.0f * A * vp)) / (2.0f * A) : 0.0f;
+        if (vp > 1e-3f) v = v - vperp * (1.0f - sNew / vp);
+        if (rolling) {
+            v = v + Ry * ((vs.rollDir * VP.flyRollSpeed - core::dot(v, Ry)) * std::min(1.0f, 10.0f * dt));
+            vs.angVel.x = vs.rollDir * VP.flyRollAngSpeed;
+        }
+        accel = accel + Fv * af;
+        // Target = view (+) RLerp(prev, (-pitch^2*27, yaw^2*16, yaw^2*77) deg, 0.1); the pitch term fades from 45 to 0 at 60.
+        const float d2r = 0.0174533f;
+        float lp = -sgnsq(in.lookUpIn) * VP.pitchDuePitch * d2r, ly = sgnsq(in.turnIn) * VP.yawDueYaw * d2r,
+              lr = sgnsq(in.turnIn) * VP.rollDueYaw * d2r;
+        float bodyPitchDeg = std::fabs(vs.pitch) / d2r;
+        float fade = core::clampf((VP.maxPitchDeg - bodyPitchDeg) / (VP.maxPitchDeg - VP.fullPitchDeg), 0.0f, 1.0f);
+        lp *= fade;
+        vs.leanP += (lp - vs.leanP) * VP.extraRotLerp;
+        vs.leanY += (ly - vs.leanY) * VP.extraRotLerp;
+        vs.leanR += (lr - vs.leanR) * VP.extraRotLerp;
+        tgtYaw -= vs.leanY; tgtPitch += vs.leanP; tgtRoll = vs.leanR;
+    }
+    // Turn: angular servo toward the target rotation; TurnRate (0.1, 0.5, 0.5) per tick [CONF]; AngularDamping 6 / 8 [PROV form].
+    float dyaw = std::remainder(tgtYaw - c.yaw(), 6.2831853f);
+    c.setYaw(c.yaw() + dyaw * (1.0f - std::pow(1.0f - 0.5f, dt * 60.0f)));
+    vs.yawRate = -dyaw / std::max(dt, 1e-4f) * 0.5f;
+    vs.pitch += (tgtPitch - vs.pitch) * (1.0f - std::pow(1.0f - 0.5f, dt * 60.0f));
+    if (rolling) vs.roll = std::remainder(vs.roll - vs.angVel.x * dt, 6.2831853f);
+    else vs.roll += (std::remainder(tgtRoll, 6.2831853f) - std::remainder(vs.roll, 6.2831853f)) * (1.0f - std::pow(1.0f - 0.1f, dt * 60.0f));
+    vs.pitch = core::clampf(vs.pitch, -1.4f, 1.4f);
+    // Integrate.
+    v = v + accel * dt;
+    p = p + v * dt;
+    // Collision: hull probes against walls; floor / ceiling keep the hull out of the geometry. A flying hit faster than
+    // ReturnToHoverCrashSpeed 3000 returns to hover [CONF].
+    core::Vec3 moveDir = core::normalize(core::Vec3{p.x - oldPos.x, 0.0f, p.z - oldPos.z});
+    core::Vec3 hf = core::forwardFromYawPitch(c.yaw(), 0.0f);
+    core::Vec3 hr = core::normalize(core::cross(hf, core::Vec3{0, 1, 0}));
+    float along = core::dot(moveDir, hf);
+    float reach = std::fabs(along) * (along >= 0.0f ? VP.hullFront : VP.hullBack) + std::fabs(core::dot(moveDir, hr)) * VP.hullHalfWidth;
+    float speedBefore = core::length(v);
+    bool hit = false;
+    for (float h : {VP.hullBottom + 0.15f, 0.5f * (VP.hullBottom + VP.hullTop), VP.hullTop - 0.1f})
+        hit |= wallBlock(col, oldPos, p, v, std::max(reach, VP.hullHalfWidth), h, 0.5f);
+    if (col) {
+        float gy; core::Vec3 n;
+        if (col->groundHeight(p.x, p.z, std::max(oldPos.y, p.y) - VP.hullBottom, 0.6f, gy, n) && p.y + VP.hullBottom < gy) {
+            p.y = gy - VP.hullBottom; if (v.y < 0.0f) { hit |= v.y < -1.0f; v.y = 0.0f; }
+        }
+        float t; core::Vec3 n2;
+        core::Vec3 a{p.x, oldPos.y + 0.5f * (VP.hullBottom + VP.hullTop), p.z}, b{p.x, p.y + VP.hullTop, p.z};
+        if (v.y > 0.0f && col->segmentHit(a, b, t, n2) && std::fabs(n2.y) > 0.7f) { p.y = std::min(p.y, a.y + (b.y - a.y) * t - VP.hullTop); v.y = 0.0f; hit = true; }
+        float gy2; core::Vec3 n3;
+        vs.onTheGround = col->groundHeight(p.x, p.z, p.y, 0.0f, gy2, n3) && p.y + VP.hullBottom - gy2 < 0.3f;
+    } else if (p.y + VP.hullBottom < c.groundY) { p.y = c.groundY - VP.hullBottom; v.y = std::max(v.y, 0.0f); vs.onTheGround = true; }
+    static const bool jdbg = std::getenv("WFC_JETDBG") != nullptr;
+    if (jdbg) { static int n = 0; if (++n % 20 == 0) LOG_INFO("JETDBG p (%.2f %.2f %.2f) v (%.2f %.2f %.2f) hit %d flying %d accel (%.1f %.1f %.1f) fwd %.2f", p.x, p.y, p.z, v.x, v.y, v.z, (int)hit, (int)vs.flying, accel.x, accel.y, accel.z, in.moveForward); }
+    if (hit && vs.flying && speedBefore > 30.0f) { vs.flying = false; vs.driving = false; vs.driftRemain = VP.driftDuration; }
+    vs.contacts = vs.onTheGround ? 4 : 0;
+    c.setOnGround(vs.onTheGround);
+    c.setPosition(p);
+}
+
 void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWorld* col) {
     namespace cfg = core::config;
     Character::VehicleState& vs = c.vehicleState();
     const VehicleParams& VP = c.vehicleParams();
+    if (VP.form == VehicleFormType::Jet) { jetStep(c, in, dt, col); return; }
     const bool truck = VP.form == VehicleFormType::Truck, tank = VP.form == VehicleFormType::Tank;
     core::Vec3& v = c.velocity();
     const core::Vec3 oldPos = c.position();
@@ -191,9 +311,22 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
                 vs.dashCooldown = cfg::kHoverDashCooldown;
             }
         } else if (!truck) {
-            // Car: Driving.UpdateRolling -> CarSimulation.Roll (barrel roll, RollDuration 0.7): native not recovered
-            // [PARTIAL]; the special-move cooldown TimeBetweenRolls 2.0 still starts [CONF].
-            if (vs.dashCooldown <= 0.0f && VP.rollDuration > 0.0f) vs.dashCooldown = 2.0f;
+            // Car: TnCarForm.Driving.UpdateRolling -> TnCarSimulation.Roll() when CanRoll (RollDuration > 0) and the special
+            // move is off cooldown; cooldown TimeBetweenRolls 2.0 [CONF RE C4]. Roll(): dir = Sign(RollControl = stick X);
+            // v += yawFrame(0, dir*1200, 1000 - vz); JumpTimeRemaining = RollDuration; local angular X += -dir*100.
+            if (vs.dashCooldown <= 0.0f && VP.rollDuration > 0.0f) {
+                float dir = in.moveRight > 0.1f ? 1.0f : (in.moveRight < -0.1f ? -1.0f : 0.0f);
+                core::Vec3 Fy = core::forwardFromYawPitch(c.yaw(), 0.0f);
+                core::Vec3 Ry = core::normalize(core::cross(Fy, core::Vec3{0, 1, 0}));
+                v = v + Ry * (dir * 12.0f);
+                v.y += 10.0f - v.y;
+                vs.rollRemain = VP.rollDuration; vs.rollDir = dir;
+                // The rigid body's max angular velocity clamps the -dir*100 impulse; one turn over RollDuration is used
+                // [PROV: PhysX MaxAngularVelocity of the car body not recovered].
+                vs.angVel.x = dir * 6.2831853f / VP.rollDuration;
+                vs.onTheGround = false;
+                vs.dashCooldown = 2.0f;
+            }
         } else if (vs.nitroCooldown <= 0.0f && vs.nitroRemain <= 0.0f) {
             vs.nitroRemain = cfg::kNitroDuration;      // TnTruckForm.Driving.UpdateNitro -> StartNitro
             vs.nitroCooldown = cfg::kNitroCooldown;
@@ -272,7 +405,26 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         // ---- UpdateDash / UpdateStrafe (body-local; ApplyLocalLinearAcceleration) ----
         core::Vec3 lv{core::dot(v, B.x), core::dot(v, B.y), core::dot(v, B.z)};
         core::Vec3 la;
-        if (vs.dashRemain > 0.0f) {
+        if (tank) {
+            // TnHoverTankSimulation.UpdateStrafe [CONF RE C2]: Drift -= dt; nothing while unstable (|pitch| or |roll| >= 30);
+            // maxA = 2500 x (1 - Drift/DriftDuration)^2, cap Boosting ? MaxBoostSpeed : MaxLinearSpeed, input forced to
+            // (1,0,0) while boosting; Strafe mask (1,1,0) in the camera-yaw frame F.
+            vs.driftRemain = std::max(0.0f, vs.driftRemain - dt);
+            if (!unstable) {
+                core::Vec3 Fy = core::forwardFromYawPitch(in.faceYaw, 0.0f);
+                core::Vec3 Ry = core::normalize(core::cross(Fy, core::Vec3{0, 1, 0}));
+                float drift = 1.0f - vs.driftRemain / VP.driftDuration;
+                float maxA = VP.hoverAccel * drift * drift;
+                float cap = vs.tankBoost ? VP.maxBoostSpeed : VP.hoverSpeed;
+                float fi = vs.tankBoost ? 1.0f : core::clampf(in.moveForward, -1.0f, 1.0f);
+                float ri = vs.tankBoost ? 0.0f : core::clampf(in.moveRight, -1.0f, 1.0f);
+                core::Vec3 desW = Fy * (fi * cap) + Ry * (ri * cap);
+                core::Vec3 dv{desW.x - v.x, 0.0f, desW.z - v.z};
+                core::Vec3 a = clampLength(dv * (1.0f / dt), maxA);
+                accel = accel + a;
+            }
+            la = core::Vec3{0, 0, 0};
+        } else if (vs.dashRemain > 0.0f) {
             vs.dashRemain = unstable ? 0.0f : std::max(0.0f, vs.dashRemain - dt);
             float maxS = vs.dashRemain > 0.0f ? VP.dashSpeed : VP.hoverSpeed;
             core::Vec3 des{vs.dashDir.x * maxS, vs.dashDir.z * maxS, 0.0f};
@@ -289,7 +441,7 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
                            core::clampf(in.moveRight, -1.0f, 1.0f) * hs, 0.0f};
             la = clampLength(core::Vec3{des.x - lv.x, des.y - lv.y, 0.0f} * (1.0f / dt), maxA);   // AxisMask (1,1,0)
         }
-        accel = accel + B.x * la.x + B.y * la.y + B.z * la.z;
+        if (!tank) accel = accel + B.x * la.x + B.y * la.y + B.z * la.z;
 
         // ---- UpdateRoll: ApplyLocalAngularAcceleration(RightLeftInput - LocalAngularVelocity.Z, 0, 0) ----
         angAx += core::clampf(in.moveRight, -1.0f, 1.0f) - vs.angVel.z;
@@ -300,7 +452,10 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         vs.angVel.z = -dyaw / dt;                      // UE yaw rate (+ = turning right)
         vs.yawRate = vs.angVel.z;
         c.setYaw(in.faceYaw);
-        if (contacts == 0 || B.z.y < 0.01f) {
+        // Tank UpdateTurn [CONF RE C2]: if IsStable && OnTheGround only yaw is applied, else pitch / roll are also
+        // corrected at TurnRate 0.05. Car / truck: only with no contact or upside down (ShouldUpright).
+        bool upright = tank ? !(!unstable && vs.onTheGround) : (contacts == 0 || B.z.y < 0.01f);
+        if (upright) {
             float f = 1.0f - std::pow(1.0f - cfg::kHoverUprightPerTick, dt * 30.0f);
             vs.angVel.x = f * vs.roll / dt;
             vs.angVel.y = f * vs.pitch / dt;
@@ -335,9 +490,16 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         // UpdateAngularDamping: AngularDamping x (1-|Steering|)^2 with a wheel down, else x 1.
         float damp = VP.angularDamping * (wheels ? (1.0f - std::fabs(vs.steer)) * (1.0f - std::fabs(vs.steer)) : 1.0f);
         vs.angVel = vs.angVel * std::max(0.0f, 1.0f - damp * dt);   // PhysX damping form [UNKNOWN: assumed]
+        // Rolling: angular accel X -dir*100 every tick, held at the body's max rate (one turn per RollDuration [PROV rate]).
+        if (vs.rollRemain > 0.0f && std::fabs(vs.rollDir) == 1.0f) vs.angVel.x = vs.rollDir * 6.2831853f / VP.rollDuration;
         core::Vec3 F = core::forwardFromYawPitch(c.yaw(), 0.0f);
         core::Vec3 R = core::normalize(core::cross(F, core::Vec3{0, 1, 0}));
-        if (!wheels) {
+        vs.rollRemain = std::max(0.0f, vs.rollRemain - dt);
+        if (vs.rollRemain > 0.0f && std::fabs(vs.rollDir) == 1.0f) {
+            // TnCarSimulation.UpdateRolling: lateral accel yawFrame(0, dir*1000, 0); angular accel X -dir*100 (held at the
+            // body's max rate) - replaces air control and leveling while JumpTimeRemaining > 0 [CONF RE C4].
+            accel = accel + R * (vs.rollDir * 10.0f);
+        } else if (!wheels) {
             // UpdateAirControl: strafe + turn by steering; pitch the nose down to PitchForwardLimit.
             accel = accel + R * (vs.steer * VP.airStrafeAccel);
             vs.angVel.z += vs.steer * VP.airTurnAccel * dt;
@@ -387,7 +549,7 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             v = v + R * (fSum / VP.mass * dt);
             vs.angVel.z += tz / izz * dt;
             vs.tireForce = fSum;
-            vs.angVel.x = 0.0f;
+            if (vs.rollRemain <= 0.0f) vs.angVel.x = 0.0f;
             if (vs.angVel.y > 0.0f) vs.angVel.y = 0.0f;       // keep a jump's nose-up rate, else level
             // [PROV] settle on the wheels, onto the support slope under the truck (single support normal at the root):
             // the body pitches with the ground so UpdateBoost's BoostScale (fades to 0 between forward.Z 0.5 and 0.866,
@@ -410,7 +572,8 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     vs.angVel.y += angAy * dt;
     vs.roll -= vs.angVel.x * dt;                       // + angular velocity about x lifts the right side
     vs.pitch -= vs.angVel.y * dt;                      // + angular velocity about y drops the nose
-    vs.roll = core::clampf(vs.roll, -1.2f, 1.2f);
+    if (vs.rollRemain > 0.0f && vs.driving) vs.roll = std::remainder(vs.roll, 6.2831853f);   // barrel roll: full turn
+    else vs.roll = core::clampf(vs.roll, -1.2f, 1.2f);
     vs.pitch = core::clampf(vs.pitch, -1.2f, 1.2f);
     v = v + accel * dt;
     p = p + v * dt;
@@ -420,7 +583,7 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     core::Vec3 hf = core::forwardFromYawPitch(c.yaw(), 0.0f);
     core::Vec3 hr = core::normalize(core::cross(hf, core::Vec3{0, 1, 0}));
     float along = core::dot(moveDir, hf);
-    float hullReach = std::fabs(along) * (along >= 0.0f ? kHullFront : kHullBack) + std::fabs(core::dot(moveDir, hr)) * kHullHalfWidth;
+    float hullReach = std::fabs(along) * (along >= 0.0f ? VP.hullFront : VP.hullBack) + std::fabs(core::dot(moveDir, hr)) * VP.hullHalfWidth;
     // Hull against walls: probes across the PhysicalVehicleMesh hull's height (root -0.35 .. +1.85 m) instead of the
     // robot torso height (2 m above the root, above the hull top: the truck drove through anything lower). The low
     // probe sits above the wheel / spring clearance (driving: wheels down, root on the floor; hovering: hull bottom
@@ -428,13 +591,13 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     // a sloped face is pushed up it, which the chassis-ground / spring code reproduces; near-vertical faces block.
     // (Pass 20 skipped only n.y > 0.7, so 45-60 deg ramp faces stopped the truck dead.) [PROV: probes approximate the
     // RB box contact]
-    const float probes[3] = {vs.driving ? 0.45f : kHullBottom + 0.15f, 0.5f * (kHullBottom + kHullTop), kHullTop - 0.1f};
+    const float probes[3] = {vs.driving ? 0.45f : VP.hullBottom + 0.15f, 0.5f * (VP.hullBottom + VP.hullTop), VP.hullTop - 0.1f};
     bool hullBlocked = false;
     core::Vec3 hitN{0, 0, 0};
     float hitH = 0.0f;
     for (float h : probes) {
         core::Vec3 n{0, 0, 0};
-        if (wallBlock(col, oldPos, p, v, std::max(hullReach, kHullHalfWidth), h, 0.5f, &n)) { if (!hullBlocked) { hitN = n; hitH = h; } hullBlocked = true; }
+        if (wallBlock(col, oldPos, p, v, std::max(hullReach, VP.hullHalfWidth), h, 0.5f, &n)) { if (!hullBlocked) { hitN = n; hitH = h; } hullBlocked = true; }
     }
     if (hullBlocked && vs.driving) {
         // Driving.OnRigidBodyCollision: a frontal hit drops back to Hovering when the contact normal . forward >
@@ -447,8 +610,8 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             static const bool dropLog = std::getenv("WFC_VEHDROPLOG") != nullptr;
             if (dropLog) LOG_INFO("VEHDROP frontal hull block -> Hovering: probe %.2f m, normal (%.2f %.2f %.2f), speed %.1f, at (%.2f %.2f %.2f)", hitH, hitN.x, hitN.y, hitN.z, core::length(core::Vec3{v.x, 0, v.z}), p.x, p.y, p.z);
             vs.driving = false;
-            vs.nitroRemain = 0.0f; vs.dashRemain = 0.0f;
-            vs.driftRemain = cfg::kHoverDriftDuration;
+            vs.nitroRemain = 0.0f; vs.dashRemain = 0.0f; vs.rollRemain = 0.0f;
+            vs.driftRemain = VP.driftDuration;
             for (float& l : vs.spLen) l = -1.0f;
         }
     }
@@ -457,11 +620,11 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     // through awnings/decks (otherwise a suspension ray starting just above a thin surface reports a
     // near-zero length and the spring damper term spikes).
     if (col && v.y > 0.0f) {
-        float top = kHullTop;                     // hull top above the root
-        core::Vec3 a{p.x, oldPos.y + cfg::kVehComUp, p.z};
+        float top = VP.hullTop;                   // hull top above the root
+        core::Vec3 a{p.x, oldPos.y + VP.comUp, p.z};
         core::Vec3 b = core::Vec3{p.x, p.y + top, p.z};
         float t; core::Vec3 n;
-        if (top > cfg::kVehComUp && col->segmentHit(a, b, t, n) && std::fabs(n.y) > 0.7f) {   // ceilings only
+        if (top > VP.comUp && col->segmentHit(a, b, t, n) && std::fabs(n.y) > 0.7f) {   // ceilings only
             float yHit = a.y + (b.y - a.y) * t;
             p.y = std::min(p.y, yHit - top);
             v.y = 0.0f;
@@ -478,10 +641,10 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             }
         } else {
             // [PROV] the PhysicalVehicleMesh hull keeps the chassis off the ground when the springs bottom out.
-            core::Vec3 com = p + B.x * cfg::kVehComFwd + B.z * cfg::kVehComUp;
-            if (col->groundHeight(com.x, com.z, std::max(oldPos.y, p.y) + cfg::kVehComUp, 0.6f, gy, n) &&
-                com.y - gy < cfg::kVehComUp - kHullBottom) {          // hull bottom 0.35 m below the root
-                p.y += (cfg::kVehComUp - kHullBottom) - (com.y - gy);
+            core::Vec3 com = p + B.x * VP.comFwd + B.z * VP.comUp;
+            if (col->groundHeight(com.x, com.z, std::max(oldPos.y, p.y) + VP.comUp, 0.6f, gy, n) &&
+                com.y - gy < VP.comUp - VP.hullBottom) {              // truck hull bottom 0.35 m below the root
+                p.y += (VP.comUp - VP.hullBottom) - (com.y - gy);
                 if (v.y < 0.0f) v.y = 0.0f;
             }
         }
@@ -517,7 +680,54 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     bool wasGround = c.onGround();
     core::Vec3& v = c.velocity();
     core::Vec3 hv{v.x, 0, v.z};
-    if (c.rammedRemain_ > 0.0f) {
+    const RobotParams& RPd = c.robotParams();
+    // TnAcrobaticsManager.DodgeTowards: refused unless CanDodge (landed since the last dodge, not rammed). SetupDodge:
+    // PHYS_Flying, MaxAirSpeed = DodgeSpeed, Velocity = dir * DodgeSpeed (+ base velocity), DodgeTime [CONF script].
+    if (in.dodgeDir != 0 && c.landedSinceDodge_ && c.rammedRemain_ <= 0.0f && !c.isTransforming() && c.dodgeRemain_ <= 0.0f) {
+        core::Vec3 X = core::forwardFromYawPitch(c.yaw(), 0.0f);
+        core::Vec3 Y = core::normalize(core::cross(X, core::Vec3{0, 1, 0}));
+        core::Vec3 d = in.dodgeDir == 3 ? X : in.dodgeDir == 4 ? X * -1.0f : in.dodgeDir == 2 ? Y : Y * -1.0f;
+        v = d * RPd.dodgeSpeed;
+        c.dodgeRemain_ = RPd.dodgeTime;
+        c.landedSinceDodge_ = false;
+        c.setOnGround(false);
+        hv = core::Vec3{v.x, 0, v.z};
+    }
+    // Hover: JumpingToHover (Falling at the HoverJumpHeight jump velocity) -> Hovering when descending or on the ground
+    // (PHYS_Flying, MaxAirSpeed HoverAirSpeed, HoverDuration) -> Falling on expiry or on jump [CONF script].
+    if (in.hoverRequest && c.hoverState_ == 0 && !c.isTransforming()) {
+        v.y = std::sqrt(2.0f * core::config::kGravity * RPd.hoverJumpHeight);
+        c.hoverState_ = 1; c.setOnGround(false);
+    }
+    c.hoverRequested_ = false;
+    if (c.hoverState_ == 1 && (v.y <= 0.0f || c.onGround()) && !in.hoverRequest) { c.hoverState_ = 2; c.hoverRemain_ = RPd.hoverDuration; }
+    if (c.hoverState_ == 2) {
+        c.hoverRemain_ -= dt;
+        if (c.hoverRemain_ <= 0.0f || in.wantJump) c.hoverState_ = 0;
+    }
+    const bool hovering = c.hoverState_ == 2;
+    // Melee AttackDash: yaw-only lunge at Speed 2500 UU/s for Time 0.25 s, then Velocity x EndVelocityScaler 0.3 [CONF].
+    if (c.lungeRemain_ > 0.0f) {
+        c.lungeRemain_ -= dt;
+        v.x = c.lungeDir_.x * 25.0f; v.z = c.lungeDir_.z * 25.0f;
+        if (c.lungeRemain_ <= 0.0f) { v.x *= 0.3f; v.z *= 0.3f; }
+        hv = core::Vec3{v.x, 0, v.z};
+    }
+    const bool lunging = c.lungeRemain_ > 0.0f;
+    const bool dodging = c.dodgeRemain_ > 0.0f;
+    if (hovering) {
+        // PHYS_Flying: planar input toward HoverAirSpeed at AccelRate; no gravity, no vertical drift.
+        core::Vec3 des = wish * RPd.hoverAirSpeed;
+        core::Vec3 dv{des.x - v.x, 0.0f, des.z - v.z};
+        float l = core::length(dv), mx = RPd.accel * dt;
+        if (l > mx && l > 1e-5f) dv = dv * (mx / l);
+        v.x += dv.x; v.z += dv.z; v.y = 0.0f;
+        hv = core::Vec3{v.x, 0, v.z};
+    } else if (dodging) {
+        c.dodgeRemain_ -= dt;   // PHYS_Flying: no gravity, the velocity carries (Acceleration = Normal(Velocity))
+    } else if (lunging) {
+        // velocity set above
+    } else if (c.rammedRemain_ > 0.0f) {
         // RammedReaction [CONF native M03 P8]: the forced velocity set on entry carries for 0.5 s (no
         // movement input); EndState restores air movement with Velocity = (0, 0, base Z).
         c.rammedRemain_ -= dt;
@@ -527,12 +737,12 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         v.x = hv.x; v.z = hv.z;
     }
 
-    // [CONF] pawn gravity -29.4 m/s^2.
-    v.y -= core::config::kGravity * dt;
+    // [CONF] pawn gravity -29.4 m/s^2 (not while dodging: PHYS_Flying).
+    if (!dodging && !hovering) v.y -= core::config::kGravity * dt;
     v.y = std::max(v.y, -c.robotParams().terminalVel);
 
     // Jumping stays a robot-form, non-transforming action [PROV during a fold].
-    if (in.wantJump && c.onGround() && !c.isTransforming() && t.jumpSpeed > 0.0f) {
+    if (in.wantJump && c.onGround() && !c.isTransforming() && !hovering && t.jumpSpeed > 0.0f) {
         v.y = c.robotParams().jumpSpeed();   // JumpZ = sqrt(2 g JumpHeight) of this chassis' acrobatics
         c.setOnGround(false);
     }
@@ -552,6 +762,15 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     robotBlocked |= wallBlock(col, oldPos, p, v, 0.7f, 0.55f, 0.7f);
     if (robotBlocked) {
         v.x = (p.x - oldPos.x) / dt; v.z = (p.z - oldPos.z) / dt;
+        if (dodging) c.dodgeRemain_ = 0.0f;               // Dodging.OnHitWall -> Falling
+    }
+    if (dodging && c.dodgeRemain_ <= 0.0f) {
+        // Dodging.EndState: Velocity = ClampLength(Velocity * (1,1,0), airborne ? MaxAirSpeed : MaxGroundSpeed).
+        core::Vec3 h{v.x, 0.0f, v.z};
+        float cap = (c.onGround() ? RPd.groundSpeed : RPd.airSpeed) * c.speedMultiplier();
+        float l = core::length(h);
+        if (l > cap && l > 1e-4f) h = h * (cap / l);
+        v = core::Vec3{h.x, 0.0f, h.z};
     }
 
     // --- Ground resolution ---
@@ -589,6 +808,7 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
         if (p.y <= c.groundY) { p.y = c.groundY; if (v.y < 0) v.y = 0; grounded = true; }
     }
     c.setOnGround(grounded);
+    if (grounded && c.dodgeRemain_ <= 0.0f) c.landedSinceDodge_ = true;
     c.setPosition(p);
 
     // Facing: the robot faces the aim (camera) yaw every frame.

@@ -85,16 +85,26 @@ public:
     int cantTransformCount() const { return cantTransformCount_; }      // pulses for the HUD / Systems
     int forcedVehicleCount() const { return forcedVehicleCount_; }
     bool tryBeginTransform();
-    // LocalProfile look settings (Frontend owns the values): camera sensitivity (profile default 30 = scale 1.0 [PROV
-    // linear mapping until the profile -> look-rate scale is recovered]) and invert Y per form (0 robot, 1 vehicle).
-    void setLookSettings(float sensitivity, bool invertRobot, bool invertVehicle) {
-        lookScale_ = sensitivity > 0.0f ? sensitivity / 30.0f : 1.0f; invertY_[0] = invertRobot; invertY_[1] = invertVehicle;
-    }
-    static bool robotFitsAt(const CollisionWorld* col, const core::Vec3& feet);
-    static bool findRobotSpot(const CollisionWorld* col, const core::Vec3& feet, core::Vec3& out);
+    // LocalProfile look settings (Frontend owns the values) [CONF RE TARGETED_PASS3 G2]: CameraSensitivity 0-100 (default
+    // 30) scales the orbit speed by Lerp(0.03, 0.20, s/100) - applied relative to the default 30 (the absolute mouse rate
+    // stays PROV); invert Y per form: InvertY_Robot, InvertY_Car (car AND truck), InvertY_Plane, InvertY_Tank.
+    void setLookSettings(int cameraSensitivity, bool invertRobot, bool invertCar, bool invertPlane, bool invertTank) {
+        auto curve = [](float s) { return 0.03f + (0.20f - 0.03f) * s; };
+        lookScale_ = curve(std::max(0, std::min(100, cameraSensitivity)) / 100.0f) / curve(0.30f);
+        invertY_[0] = invertRobot; invertCar_ = invertCar; invertPlane_ = invertPlane; invertTank_ = invertTank;
+    }    static bool robotFitsAt(const CollisionWorld* col, const core::Vec3& feet, const Character* pawn = nullptr);
+    static bool findRobotSpot(const CollisionWorld* col, const core::Vec3& feet, core::Vec3& out, const Character* pawn = nullptr);
     // No pawn (PendingMatch: ShouldSpectateOnLogin): the controller views from its own location / rotation, which
     // GameInfo.Login took from FindPlayerStart [HIGH: stock UE3 Login + PlayerWaitingSpectating].
-    void setSpectatorView(const core::Vec3& pos, float yaw) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; }
+    void setSpectatorView(const core::Vec3& pos, float yaw) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; specPitch_ = 0.0f; specFov_ = 0.0f; }
+    // Camera strategy override with pitch / FOV (TnGuidedMissileCameraStrategyType).
+    void setSpectatorView(const core::Vec3& pos, float yaw, float pitch, float fov) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; specPitch_ = pitch; specFov_ = fov; }
+    // PlayerController state GuidingMissile: inputs cleared (the pawn stops), camera deltas steer, an ability press detonates.
+    void setGuiding(bool g) { if (g && !guiding_) { guideYaw0_ = camYaw_; guidePitch0_ = camPitch_; } guiding_ = g; }
+    bool guiding() const { return guiding_; }
+    float guideLR() const { return guideLR_; }
+    float guideUD() const { return guideUD_; }
+    bool consumeDetonateRequest() { bool b = detonate_; detonate_ = false; return b; }
     void clearSpectatorView() { spectating_ = false; }
     bool spectating() const { return spectating_; }
     void setViewAspect(float a) { aspect_ = a > 0.0f ? a : aspect_; }
@@ -158,11 +168,27 @@ private:
     bool spectating_ = false;
     int cantTransformCount_ = 0, forcedVehicleCount_ = 0;
     float lookScale_ = 1.0f;
+    float lookUpSmoothed_ = 0.0f, tank180Cooldown_ = 0.0f;
+    int wantSwitch_ = 0;
+    bool wantKillstreak_ = false, wantMelee_ = false, wantGrenade_ = false, wantPickup_ = false;
+public:
+    bool consumeKillstreakRequest() { bool b = wantKillstreak_; wantKillstreak_ = false; return b; }
+    bool consumeMeleeRequest() { bool b = wantMelee_; wantMelee_ = false; return b; }
+    bool fireHeld() const { return wantFire_; }
+    bool consumeGrenadeRequest() { bool b = wantGrenade_; wantGrenade_ = false; return b; }
+    bool consumePickupRequest() { bool b = wantPickup_; wantPickup_ = false; return b; }
+private:
+    int wantAbility_ = -1, abilityTriggers_ = 0;
+    float abilityStickFwd_ = 0.0f, abilityStickRight_ = 0.0f;
+    std::string lastRefusedAbility_;
     bool invertY_[2] = {false, false};
+    bool invertCar_ = false, invertPlane_ = false, invertTank_ = false;
     bool wasTransforming_ = false;
 
     core::Vec3 specPos_{0, 0, 0};
-    float specYaw_ = 0.0f;
+    float specYaw_ = 0.0f, specPitch_ = 0.0f, specFov_ = 0.0f;
+    bool guiding_ = false, detonate_ = false;
+    float guideYaw0_ = 0.0f, guidePitch0_ = 0.0f, guideLR_ = 0.0f, guideUD_ = 0.0f;
     float camSmoothRemain_ = 0.0f;
     int camCollStrategy_ = -1;
     std::vector<HudNotify> hudNotifies_;

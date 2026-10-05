@@ -44,6 +44,16 @@ const std::map<std::string, std::vector<WheelDef>>& wheelTable() {
     return t;
 }
 
+struct HullRow { const char* id; float front, back, halfWidth, bottom, top; };
+const HullRow kHulls[] = {
+#include "game/VehicleHullTable.inc"
+};
+
+struct CamRow { const char* id; float h[5], d[5], f[5]; };
+const CamRow kCams[] = {
+#include "game/CameraTable.inc"
+};
+
 std::string contentPath(const std::string& objectPath, const char* ext) {
     // "TR_Sideswipe_ROBO_p.CP_SideswipeArm_SKEL" -> "content/TR_Sideswipe_ROBO_p/CP_SideswipeArm_SKEL<ext>"
     size_t dot = objectPath.find('.');
@@ -156,6 +166,10 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     socketFrom(c["robot"]["sockets"], "WeaponSocket_Primary", d.weaponPrimary);
     socketFrom(c["robot"]["sockets"], "WeaponSocket_Secondary", d.weaponSecondary);
     socketFrom(c["vehicle"]["sockets"], "WeaponSocket_Primary", d.vehicleWeapon);
+    socketFrom(c["robot"]["sockets"], "MeleeSocket_SmallRobot", d.meleeSmall);
+    socketFrom(c["robot"]["sockets"], "MeleeSocket_LargeRobot", d.meleeLarge);
+    socketFrom(c["robot"]["sockets"], "PositionSocket", d.positionSocket);
+    socketFrom(c["robot"]["sockets"], "MeleeSocket_RightHand", d.rightHand);
 
     // ---- Robot (ROBODEF scalars, acrobatics, momentum; collision from the roster identity) ----
     const assets::Json& st = c["stats"];
@@ -167,9 +181,15 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     R.airControl = rs["AirControl"].asFloat(0.4f);
     R.terminalVel = rs["TerminalVelocity"].asFloat(6000) * 0.01f;
     R.damageMultiplier = rs["DamageMultiplier"].asFloat(1.0f);
+    R.selfDamageMultiplier = rs["SelfDamageMultiplier"].asFloat(0.45f);
     float eye = rs["BaseEyeHeight"].asFloat(150) * 0.01f;
     const assets::Json& acro = st["acrobatics"]["values"];
     R.jumpHeight = acro["JumpHeight"].asFloat(500) * 0.01f;
+    R.dodgeSpeed = acro["DodgeSpeed"].asFloat(3000) * 0.01f;
+    R.dodgeTime = acro["DodgeTime"].asFloat(0.5f);
+    R.hoverJumpHeight = acro["HoverJumpHeight"].asFloat(500) * 0.01f;
+    R.hoverDuration = acro["HoverDuration"].asFloat(7.0f);
+    R.hoverAirSpeed = acro["HoverAirSpeed"].asFloat(500) * 0.01f;
     const assets::Json& mom = st["momentum"]["values"];
     R.momGroundFwd = mom["OnGround"]["Forward"].asFloat(R.momGroundFwd);
     R.momGroundNeutral = mom["OnGround"]["Neutral"].asFloat(R.momGroundNeutral);
@@ -194,7 +214,8 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
            : form == "jet" ? VehicleFormType::Jet : VehicleFormType::Truck;
     const assets::Json& vsc = st["vehicle_scalars (VEHDEF)"];
     V.damageMultiplier = vsc["DamageMultiplier"].asFloat(1.0f);
-    float chassisOffset = vsc["ChassisOffset"].asFloat(15.0f);
+    V.selfDamageMultiplier = vsc["SelfDamageMultiplier"].asFloat(0.45f);
+    float chassisOffset = vsc["ChassisOffset"].asFloat(0.0f);   // unset = 0 (no class default authored)
     const assets::Json& vp = st["vehicle_physics"];
     const assets::Json& hov = vp.has("HoverBlueprint") ? vp["HoverBlueprint"]["values"]
                             : vp.has("Blueprint") ? vp["Blueprint"]["values"] : vp["HoverVehicleBlueprint"]["values"];
@@ -208,6 +229,19 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     V.suspMountRadius = hov["SuspensionRadius"].asFloat(200) * 0.01f;
     V.maxBoostSpeed = hov["MaxBoostSpeed"].asFloat(0.0f) * 0.01f;
     V.recoilVelocity = hov["RecoilVelocity"].asFloat(0.0f) * 0.01f;
+    V.hoverRollTime = hov["RollDuration"].asFloat(0.6f);
+    V.hoverRollSpeed = hov["RollLinearSpeed"].asFloat(3000) * 0.01f;
+    if (vp.has("FlyingVehicleBlueprint")) {
+        const assets::Json& fl = vp["FlyingVehicleBlueprint"]["values"];
+        V.flySpeed = fl["MaxSpeed"].asFloat(4000) * 0.01f;
+        V.flyAccel = fl["MaxAcceleration"].asFloat(3000) * 0.01f;
+        V.flyDrag = fl["DragCoefficient"].asFloat(600);
+        V.pitchDuePitch = fl["PitchDueToPitchValue"].asFloat(27); V.yawDueYaw = fl["YawDueToYawValue"].asFloat(16);
+        V.rollDueYaw = fl["RollDueToYawValue"].asFloat(77); V.extraRotLerp = fl["ExtraRotationLerpValue"].asFloat(0.1f);
+        V.maxPitchDeg = fl["MaxPitchValue"].asFloat(60); V.fullPitchDeg = fl["FullPitchThreshold"].asFloat(45);
+        V.flyRollTime = fl["RollDuration"].asFloat(0.8f); V.flyRollSpeed = fl["RollLinearSpeed"].asFloat(3000) * 0.01f;
+        V.flyRollAngSpeed = fl["RollAngularSpeed"].asFloat(8);
+    }
     auto sit = suspensionTable().find(hov["SuspensionBlueprint"].asString());
     if (sit != suspensionTable().end()) {
         V.suspRest = sit->second.rest * 0.01f; V.suspStiffness = sit->second.stiffness; V.suspDamping = sit->second.damping;
@@ -237,8 +271,18 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
         V.mass = core::config::kVehMass;
     }
 
+    for (const CamRow& cr : kCams)
+        if (id == cr.id) {
+            const float d2r = 0.0174533f;
+            auto mk = [&](const float* v) { return CamStrategy{v[0], v[1], v[2] * d2r, v[3] * d2r, v[4]}; };
+            d.camHover = mk(cr.h); d.camDrive = mk(cr.d);
+            if (cr.f[1] > 0.0f) d.camFly = mk(cr.f);
+        }
+    for (const HullRow& h : kHulls)
+        if (id == h.id) { V.hullFront = h.front; V.hullBack = h.back; V.hullHalfWidth = h.halfWidth; V.hullBottom = h.bottom; V.hullTop = h.top; V.hullFromPhysics = true; }
     const assets::Json& w = c["weapons"];
     const assets::Json& ip = c["iconic_preset"];
+    d.iconicSpecialty = ip["Specialty"].asString().empty() ? d.defaultSpecialty : ip["Specialty"].asString();
     stringList(ip["WeaponTypes"], d.iconicWeapons);
     stringList(ip["VehicleWeapons"], d.iconicVehicleWeapons);
     stringList(ip["Abilities"], d.iconicAbilities);
