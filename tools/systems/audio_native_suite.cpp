@@ -1722,6 +1722,63 @@ static void testCharacterAudio() {
     CHECK(game::CharacterAudio::weaponCue("TransContent.TnWeaponHeavyPistol", "WP_Fire") == "BL_WPN_GUN_PISTOL_HVY.SHOOT" &&
           game::CharacterAudio::loadWeaponCues(cues, "TransContent.TnWeaponHeavyPistol") >= 0 && cues.hasCue("BL_WPN_GUN_PISTOL_HVY.SHOOT"),
           "weapon class WeaponSounds load and resolve");
+    {   // impacts: the weapon mesh's DefaultImpactSound (world) + the victim's HitEffectPlayer HitSound event
+        const game::WeaponHitEffect* ion = game::CharacterAudio::weaponHitEffect("TransContent.TnWeaponIonBlaster");
+        const game::WeaponHitEffect* hp = game::CharacterAudio::weaponHitEffect("TransContent.TnWeaponHeavyPistol");
+        CHECK(game::CharacterAudio::weaponCue("TransContent.TnWeaponIonBlaster", "DefaultImpactSound") == "BL_WPN_GUN_ION_BLASTER.IMPT_WORLD" &&
+              game::CharacterAudio::weaponCue("TransContent.TnWeaponSniperRifle", "DefaultImpactSound") == "BL_WPN_GUN_SNIPER.IMPT_WORLD",
+              "world impact = the weapon's DefaultImpactSound");
+        CHECK(ion && ion->hitEvent == "IMPT_DMG_ION" && ion->blockEvent == "IMPT_BLOCK_ION" && ion->index == 0 && ion->causesBlood &&
+              std::fabs(ion->retrigger - 0.1f) < 1e-6f && hp && hp->hitEvent == "IMPT_DMG_PISTOL_HVY" &&
+              game::CharacterAudio::defaultProfile().voiceCue(ion->hitEvent) == "BL_WPN_GUN_ION_BLASTER.IMPT_DMG",
+              "hit effect by damage type (SharedHitEffectPlayer) -> the victim's IMPT_DMG event cue, retrigger 0.1 s");
+        CHECK(!game::CharacterAudio::weaponHitEffect("TransContent.TnWeaponShotgun"),
+              "TnDamageTypeShotgun has no entry (nor its parents): no hit sound, as FindEffect returns -1");
+        game::CharacterAudio::loadHitCues(cues, game::CharacterAudio::defaultProfile(), "TransContent.TnWeaponSniperRifle");
+        CHECK(cues.hasCue("BL_WPN_GUN_SNIPER.IMPT_DMG") && cues.hasCue("BL_WPN_GUN_SNIPER.IMPT_BLOCK"), "victim hit / block cues load");
+    }
+    {   // vehicle components: Optimus = the previous hand-entered values; other chassis their own slots / tunables
+        const game::VehicleAudioComponentData& o = game::CharacterAudio::defaultProfile().vehicleComponent;
+        const game::CharacterAudioProfile* tank = game::CharacterAudio::find("Tank");
+        const game::CharacterAudioProfile* jet = game::CharacterAudio::find("Jet");
+        auto near = [](float a, float b) { return std::fabs(a - b) < 1e-4f; };
+        CHECK(o.valid && near(o.boostFadeIn, 0.1f) && near(o.boostFadeOut, 0.15f) && near(o.boostWheelsDelay, 0.27f) &&
+              near(o.squealMinMph, 20.0f) && near(o.squealFade, 0.5f) && near(o.engineFadeIn, 0.1f) && near(o.engineFadeOut, 0.2f) &&
+              near(o.jumpRevTime, 0.25f) && o.useJumpRev && o.speedHistory == 15 && o.drive.size() == 2 && near(o.drive[0].maxSpeed, 20.0f) &&
+              o.hoverLand.size() == 2 && near(o.hoverLand[1].t, 2.0f) && o.ram == "Auto_Ram_Impact" && o.squeal == "Auto_Tire_Squeal_Default",
+              "Optimus vehicle component = the previous hand-entered tunables / slots");
+        CHECK(tank && tank->vehicleComponent.valid && tank->vehicleComponent.ram.empty() && tank->vehicleComponent.boostWheels.empty() &&
+              !tank->vehicleComponent.useJumpRev && near(tank->vehicleComponent.squealMinMph, 3.0f) &&
+              tank->vehicleComponent.boostOneshots.size() == 1 && near(tank->vehicleComponent.drive[1].maxSpeed, 100.0f),
+              "Megatron: no ram / boost-wheels slot, no jump rev, class-default squeal speed, a boost one-shot, gear 2 to 100 mph");
+        CHECK(jet && jet->vehicleComponent.ascend == "Auto_Engine_Hover_Ascend" && jet->vehicleComponent.booster == "Auto_Hover_Boosters",
+              "Starscream: hover ascend / boosters slots");
+    }
+    {   // weapon-mesh animation sounds: the Ion Blaster's generated table = the hand-checked M03 table; timeline rules
+        const game::WeaponAnimSounds* ion = game::CharacterAudio::weaponAnimSounds("TransContent.TnWeaponIonBlaster");
+        auto near = [](float a, float b) { return std::fabs(a - b) < 0.001f; };
+        CHECK(ion && ion->reload.name == "Shooting_Reload_IonBlaster_AP" && ion->reload.sounds.size() == 2 &&
+              near(ion->reload.sounds[0].first, 0.0f) && near(ion->reload.sounds[1].first, 0.137f) &&
+              ion->reload.sounds[1].second == "BL_WPN_GUN_ION_BLASTER.ANIM_RELOAD_02" && ion->idle.name == "IonBlaster_Idle" &&
+              near(ion->idle.length, 4.2f) && ion->idle.sounds.size() == 2 && near(ion->idle.sounds[1].first, 2.751f) &&
+              ion->equip.sounds.size() == 1 && ion->putDown.sounds.size() == 1 && ion->fire.sounds.empty(),
+              "Ion Blaster weapon-anim sounds = the M03 hand table (reload 0 / 0.137, idle 0.022 / 2.751, equip, holster)");
+        game::WeaponSoundTimeline tl;
+        tl.set(ion);
+        std::vector<const std::string*> out;
+        std::vector<float> at;
+        tl.play(game::WeaponSoundTimeline::Event::Reload);
+        for (int k = 0; k < 120; ++k) { const size_t n = out.size(); tl.tick(1.0f / 60.0f, out); for (size_t i = n; i < out.size(); ++i) at.push_back(k / 60.0f); }
+        CHECK(out.size() == 3 && *out[0] == "BL_WPN_GUN_ION_BLASTER.ANIM_RELOAD_01" && near(at[0], 0.0f) &&
+              *out[1] == "BL_WPN_GUN_ION_BLASTER.ANIM_RELOAD_02" && std::fabs(at[1] - 0.137f) < 1.0f / 60.0f + 1e-4f &&
+              *out[2] == "BL_WPN_GUN_ION_BLASTER.IDLE_01" && at[2] > 1.66f && at[2] < 1.72f,
+              "timeline: reload notifies at their times, then back to the looping idle (%zu sounds)", out.size());
+        const game::WeaponAnimSounds* hp = game::CharacterAudio::weaponAnimSounds("TransContent.TnWeaponHeavyPistol");
+        game::CharacterAudio::loadWeaponCues(cues, "TransContent.TnWeaponSniperRifle");
+        CHECK(hp && hp->reload.name == "heavypistol_reload" && hp->reload.sounds.size() == 1 &&
+              hp->reload.sounds[0].second == "BL_WPN_GUN_PISTOL_HVY.ANIM_RELOAD" && cues.hasCue("BL_WPN_GUN_SNIPER.ANIM_RELOAD") &&
+              cues.hasCue("BL_WPN_GUN_SNIPER.IDLE_02"), "Heavy Pistol / Sniper: their own reload / idle sounds, loaded with the weapon");
+    }
     cues.unloadMapCues();
     CHECK(cues.mapCueCount() == 0, "character / weapon cues are level-owned (released with the level)");
 }

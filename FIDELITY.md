@@ -474,10 +474,52 @@ AssetTools FRONTEND.md + manifests/frontend_*.json (cc9773e). Full table: `docs/
 * **Optimus equivalence:** the default profile (Truck) reproduces the old hand-made Optimus tables exactly: 26/26
   notifies, landing / take-off / idle, and the vehicle and transform cues.
 * **Wired to the profile:** RobotFoley, VehicleAudio, the transform sound, and weapon fire / tail / fine aim.
+* **Impacts** [CONF script + data]:
+  * **World hit:** HmWeaponMesh.CreateImpactEffects → TnWeaponMesh.GetImpactSound tries, in order:
+    1. the surface's weapon-type sound — no physical material authors WeaponTypeSpecificImpactSounds;
+    2. PhysMaterial.ImpactSound — only special surfaces such as ForceField and destructibles; per-surface lookup is
+       not done here [PARTIAL];
+    3. the weapon mesh's DefaultImpactSound, played at the hit point.
+  * **Pawn hit:** Transformers have AllowHitEffects false [HIGH: only Vehicle / MatineePawn / SentryPawn set it], so
+    the weapon's impact sound does not play. Instead, the victim's TnHitEffectPlayer (SharedHitEffectPlayer, 55
+    entries) does the following:
+    * picks the entry by DamageType — exact match, then the first parent class (FindEffect);
+    * plays its HitSound as an event in the victim's own SoundEventSet (IMPT_DMG_<weapon>);
+    * only if the damage type has bCausesBlood;
+    * at most once per RetriggerTime (0.1 s) per victim per entry.
+  * The generator resolves this rule for 13 hitscan weapons. Shotgun and CarMachineGun have no entry anywhere in
+    their class chain, so they play no hit sound, as in the original.
+  * The rebuild's damage targets are stand-ins, so they use the default profile as the victim [PROV].
+  * Missing data (AssetTools): projectile and melee weapons have no damage types in mp_weapons.
+* **Weapon-mesh animation sounds** [CONF data]:
+  * Source: the HmAnimNotify_Sound notifies on each weapon's own AnimSet, reached via WEPMESH → AnimatedMesh →
+    SkeletalMeshComponent.AnimSets. 43 of 53 weapons have one.
+  * The WeaponEventAnims (WP_Fire / WP_Reload / WP_Equip / WP_PutDown) and the IdleAnimation sequence
+    (`<Seq>Group` → `<Seq>` [HIGH name rule]).
+  * The Ion Blaster's generated table equals the M03 hand-checked one, and a lockstep run plays the same 28 reload
+    cues in the same order as before.
+  * `WeaponSoundTimeline` follows the held weapon class and uses WeaponMesh's rules: an event anim replaces the
+    current clip, plays once, then returns to the looping idle.
+  * The visual WeaponMesh stays the Ion Blaster's; only its effect notifies are used.
+  * Equip / put-down sounds play when Gameplay calls `World::weaponAnimEvent`.
+* **Vehicle-form audio per chassis** [CONF data + script]:
+  * Source: each chassis's own HmPlayerVehicleAudioComponent (roster `vehicle.definition`), merged over its
+    archetype chain and the class defaults. All 33 chassis have one.
+  * Slots: drive gears (MaxSpeed, on/off-load loops and one-shots), reverse, boost and jump-rev loops and one-shots,
+    UseJumpRev, the land tables, and the single slots (boost, boost wheels, boost stop, ascend, ram, booster, nitro,
+    tire squeal).
+  * Tunables: fades, squeal speed, wheels delay, jump-rev time, one-shot spaz time, speed-history length.
+  * `VehicleAudio` ports HmPlayerVehicleAudioComponentImpl onto that data:
+    * ComputeGear runs at BeginState only;
+    * one-shots are gated by EngineOneshotSpazTimer, and skipped when coming from Boosting or JumpReving;
+    * an unset slot plays nothing.
+  * Optimus is unchanged: the A/B probe `tools/systems/vehicle_audio_ab.cpp` shows the same 92 voice starts / stops
+    as the previous hand-entered port on a deterministic drive script.
+  * Megatron has no ram, boost-wheels or jump-rev sound, and squeals from 3 mph. Starscream uses its hover-ascend
+    and hover-booster slots.
+  * Not ported: SpeedSound, CustomLoopingSound (ram alert, turret rotate) and OneEightySound. They were not driven
+    before either.
 * **PARTIAL:**
-  * impacts (IMPT_*) are still the Ion Blaster's;
-  * weapon idle / reload anim notifies are missing;
-  * the vehicle component tunables are OptimusTruckForm's;
   * 169 dialogue waves are absent from the extraction (AssetTools).
 * `SoundCues::findCue` resolves full asset names to the compiled short names, but only for the exact packages that
   were compiled under a short name.
@@ -3822,7 +3864,7 @@ plus class defaults (CDOs) in `TransGame.xxx` / `HM_Engine.xxx`.
 | Weapon sockets | MuzzleFlash -> C_Robo04_XT; ShellSocket -> C_Robo15_XT (+loc/rot); MagSocket -> C_Robo01_XT (+loc/rot) | `WEP_IonBlaster_SKEL` SkeletalMeshSockets | CONF | **APPLIED**; muzzle/tracer origin = MuzzleFlash socket (replaces the geometric barrel tip) |
 | Event timing (AnimNotifies) | Fire: Shell_AssaultRifle_FX @0.005 ShellSocket. Reload_AP: ANIM_RELOAD_01 @0.000, Reload_AssaultRifle_FX @0.034 MuzzleFlash, ANIM_RELOAD_02 @0.137, Magazine_IonBlaster_FX @0.174 MagSocket. Idle: IDLE_01 @0.022, IDLE_02 @2.751 | `WEP_IonBlaster_ANIM` (HmAnimNotify_Sound / HmAnimNotify_PlayEffect) | CONF | **APPLIED** for sounds and effects (shell/reload/magazine FX: PASS 7c) |
 | Muzzle flash | `FX_AssaultRifle_p.FX.MuzzleFlash_AssaultRifle_FX`, local space at MuzzleFlash | WEPMESH.MuzzleFlashes | CONF | **APPLIED**: Long (MuzzleFlash_Side_02, velocity-aligned, burst 10, life 0.15-0.2, 1.9-2.1 x 3.5-5 m, +1.9 m, 9 m/s), Top (smokeball_02 star), Sparks (SparksSheet 2x2 SubUV). Omitted: Glow_Mod (modulate), distortion ring, BackSteam/BackJet (alpha <= 0.05) |
-| Tracer | `Tracer_AssaultRifle_FX`: Bolt (Bolt_ADD_MAT, PSA_Velocity, burst 1, life 0.6, 2 x 5-7 m, 15000 UU/s) + Trail2 smoke ribbon (Tracer_Smoke, life 0.9) | WEPMESH.TracerTemplates | CONF | **APPLIED**; bolt removed at the impact point; smoke ribbon opacity 0.35 **PROV** |
+| Tracer | `Tracer_AssaultRifle_FX`: Bolt (Bolt_ADD_MAT, PSA_Velocity, burst 1, life 0.6, 2 x 5-7 m, 15000 UU/s) + Trail2 smoke ribbon (Tracer_Smoke, life 0.9) | WEPMESH.TracerTemplates | CONF | **APPLIED**; bolt removed at the impact point; smoke ribbon = Tracer_Smoke_MAT opacity graph (width mask W, length mask L, cloud noise; Rendering matc, M08) **CONF graph**, **PARTIAL**: the second cloud sample is approximated by its mean and DynamicParameter desaturate is not applied (**PROV**); u = 0 at the trail head / hit end is **HIGH** (stock UE3 Trail2 fill) |
 | Impact squib | `Impact_IonBlaster_FX`: GLOW_Dup (MuzzleFlash2, burst 10), Sparks_bolts (Spark_Tail, burst 20, 1.5-10 m/s), Smoke (SmokeThin, burst 4, x5 growth); rules 60 %, max 5 live, 25 m max distance | WEPMESH.DefaultSquib / TnWeaponMesh CDO | CONF | **APPLIED**; surface normal approximated by -shot dir (collision query returns no normal) |
 | Effect colour | native colour constant `ff 33 19 ff` read as ARGB = (51,25,255) blue-violet; EnergonColor param (255,255,255,A=0) = no override; SwitchableColorScaleOverLife A/B chosen by Team | LOD streams, WEPMESH params, editor thumbnails | HI | APPLIED (team A) |
 | FX module roles | WFC compiles modules into a native per-LOD stream; distributions decode exactly (type/op/n/chunk + BE float table), but **which module each belongs to is inferred from order** (Lifetime, StartRotation, ..., AlphaOverLife, StartSize, SizeMultLife, Velocity, ColorOverLife, Location) | stream analysis | MED | used as above; x4 / x2 overbright assignment MED |

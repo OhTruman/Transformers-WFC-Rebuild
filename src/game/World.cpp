@@ -584,9 +584,29 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     me.pos = muzzle;
     cues_.play(weaponCue(w.lowAmmo() ? "WP_LowAmmoFire" : "WP_Fire"), me, ownDist);
     burstActive_ = true; sinceShot_ = 0.0f;
-    // DefaultImpactSound (world) / damage impact cue at the hit point.
-    if (hitTarget) cues_.play("IMPT_DMG", hitPoint, core::length(hitPoint - listenerPos_));
-    else if (dist < range - 0.01f) cues_.play("IMPT_WORLD", hitPoint, core::length(hitPoint - listenerPos_));
+    // World hit: HmWeaponMesh.CreateImpactEffects -> TnWeaponMesh.GetImpactSound: the surface's weapon-type sound (no
+    // physmat authors one [CONF data]) -> PhysMaterial.ImpactSound (only special surfaces, e.g. ForceField; surfaces
+    // are not resolved here [PARTIAL]) -> the weapon mesh's DefaultImpactSound, played at the hit location [CONF].
+    // Pawn hit: Transformers have AllowHitEffects false (only Vehicle / MatineePawn / SentryPawn set it) [HIGH], so no
+    // weapon impact sound; the victim's TnHitEffectPlayer plays HitSound (an event in the VICTIM's SoundEventSet) if
+    // the damage type bCausesBlood, at most every RetriggerTime per victim per entry [CONF script]. The damage
+    // targets are stand-ins without a character: they use the default profile as the victim [PROV].
+    const float hitDist = core::length(hitPoint - listenerPos_);
+    if (hitTarget) {
+        const WeaponHitEffect* he = CharacterAudio::weaponHitEffect(weaponClass_);
+        if (he && he->causesBlood) {
+            auto key = std::make_pair((const void*)hitTarget, he->index);
+            auto it = lastHitEffect_.find(key);
+            if (it == lastHitEffect_.end() || it->second + he->retrigger < hitClock_) {
+                lastHitEffect_[key] = hitClock_;
+                const std::string cue = CharacterAudio::defaultProfile().voiceCue(he->hitEvent);
+                if (!cue.empty()) cues_.play(cue.c_str(), hitPoint, hitDist);
+            }
+        }
+    } else if (dist < range - 0.01f) {
+        const char* impact = weaponCue("DefaultImpactSound");
+        if (*impact) cues_.play(impact, hitPoint, hitDist);
+    }
 }
 
 void World::setAudio(audio::IAudio* a, bool loadSliceMap) {
@@ -632,7 +652,12 @@ void World::setAudio(audio::IAudio* a, bool loadSliceMap) {
 bool World::loadMapAudio(const std::string& level) {
     if (!levelAudio_.level().empty()) unloadMapAudio();
     const bool ok = levelAudio_.load(level);
-    if (ok) { CharacterAudio::loadCues(cues_, audioProfile()); CharacterAudio::loadWeaponCues(cues_, weaponClass_); }   // level-owned
+    if (ok) {                                                         // level-owned
+        CharacterAudio::loadCues(cues_, audioProfile());
+        CharacterAudio::loadWeaponCues(cues_, weaponClass_);
+        CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), weaponClass_);   // the targets' hit sounds
+        lastHitEffect_.clear();
+    }
     return ok;
 }
 
@@ -644,7 +669,10 @@ const char* World::weaponCue(const char* event) const {
 
 void World::setPlayerWeaponAudio(const std::string& weaponClass) {
     weaponClass_ = weaponClass;
-    if (audio_ && !levelAudio_.level().empty()) CharacterAudio::loadWeaponCues(cues_, weaponClass);
+    if (audio_ && !levelAudio_.level().empty()) {
+        CharacterAudio::loadWeaponCues(cues_, weaponClass);
+        CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), weaponClass);
+    }
 }
 
 void World::setPlayerCharacterAudio(const std::string& chassisKey) {
@@ -963,12 +991,28 @@ bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
 // Weapon-mesh event animations (TnWeaponMesh.WeaponEventAnims) + their AnimNotifies.
 void World::tickWeaponPresentation(float dt) {
     const Weapon& w = player_.pawn().weapon();
-    if (w.reloadSerial != weaponSeenReload_) { weaponSeenReload_ = w.reloadSerial; weaponAnim_.play(WeaponMesh::Event::Reload); }
-    if (w.shotSerial != weaponSeenShot_)     { weaponSeenShot_ = w.shotSerial;     weaponAnim_.play(WeaponMesh::Event::Fire); }
+    if (weaponSounds_.sounds() != CharacterAudio::weaponAnimSounds(weaponClass_))
+        weaponSounds_.set(CharacterAudio::weaponAnimSounds(weaponClass_));
+    if (w.reloadSerial != weaponSeenReload_) {
+        weaponSeenReload_ = w.reloadSerial;
+        weaponAnim_.play(WeaponMesh::Event::Reload);
+        weaponSounds_.play(WeaponSoundTimeline::Event::Reload);
+    }
+    if (w.shotSerial != weaponSeenShot_) {
+        weaponSeenShot_ = w.shotSerial;
+        weaponAnim_.play(WeaponMesh::Event::Fire);
+        weaponSounds_.play(WeaponSoundTimeline::Event::Fire);
+    }
     notifies_.clear();
     weaponAnim_.tick(dt, notifies_);
-    if (player_.pawn().hasWeapon())
-        for (const WeaponNotify& n : notifies_) handleWeaponNotify(n);
+    weaponSoundsFired_.clear();
+    weaponSounds_.tick(dt, weaponSoundsFired_);
+    if (player_.pawn().hasWeapon()) {
+        // Visual-mesh effects; its sound notifies are the Ion Blaster's, so the held class's timeline plays them.
+        for (const WeaponNotify& n : notifies_)
+            if (n.kind == WeaponNotify::Kind::Effect) handleWeaponNotify(n);
+        for (const std::string* q : weaponSoundsFired_) handleWeaponNotify({WeaponNotify::Kind::Sound, 0.0f, *q, ""});
+    }
 }
 
 void World::handleWeaponNotify(const WeaponNotify& n) {
@@ -995,6 +1039,7 @@ void World::tick(float dt) {
     pickupEvents_.clear();
     matchEvents_.clear();
     destructibleEvents_.clear();
+    hitClock_ += dt;
     static const bool hitchLog = std::getenv("WFC_HITCHLOG") != nullptr;   // game-thread gaps between ticks
     if (hitchLog) {
         static auto last = std::chrono::steady_clock::now();

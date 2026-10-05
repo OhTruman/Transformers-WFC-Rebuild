@@ -90,7 +90,17 @@ const ED kTracerBolt = {"Bolt", kBolt, ParticleBlend::Additive, true, true, fals
 //   curve kTrailAlpha, width multiplier 0.1 -> 1.5 over life (base 100 UU). Drawn as a ribbon.
 constexpr float kTrailLife = 0.9f;
 constexpr float kTrailBaseW = 100 * UU;
-constexpr float kTrailOpacity = 0.35f;   // [PROV] Tracer_Smoke_MAT opacity graph not evaluated
+// Tracer_Smoke_MAT [CONF material graph, Rendering matc 2026-10-05]: translucent unlit, u along the trail, v across;
+//   opacity = clamp(vertexAlpha * L(u) * W(v) * (N + 0.2), 0, 1), N = DiffClouds.r(uv A) + DiffClouds.r(uv B) + 0.2,
+//   W(v) = clamp(1 - 4(v - 0.5)^2, 0, 1)^2 (both long edges -> 0), L(u) = clamp(20u, 0, 1) * clamp(3(1 - u), 0, 1).
+// Here: W and (N + 0.2) baked into the cloud texture's alpha (the quad's U runs across the width), the second, panned
+// cloud sample approximated by the texture's mean [PROV]; L per ribbon segment (kTrailSegments). Clamping the texel
+// before the vertex alpha under-reads only where vertexAlpha < 1 and the raw product > 1. u = 0 at the trail head (the
+// newest particle, on the tracer: the hit end) [HIGH: stock UE3 FDynamicTrail2EmitterData::FillIndexAndVertexBuffers
+// starts Tex_U at TRAIL_EMITTER_IS_START; the xex Trail2 fill is not traced]. DynamicParameter.x desaturate not applied.
+constexpr int kTrailSegments = 24;
+inline float trailWidthMask(float v) { float w = core::clampf(1.0f - 4.0f * (v - 0.5f) * (v - 0.5f), 0.0f, 1.0f); return w * w; }
+inline float trailLengthMask(float u) { return core::clampf(20.0f * u, 0.0f, 1.0f) * core::clampf(3.0f * (1.0f - u), 0.0f, 1.0f); }
 
 // ---- FX_IonBlaster_p.FX.Impact_IonBlaster_FX (world space, frame X = surface normal) ------
 // "GLOW_Dup": MuzzleFlash_01_MAT (MuzzleFlash2 burst), burst 10, life U[0.2,0.25], random
@@ -223,7 +233,18 @@ void WeaponFx::load(render::IRenderer& r, const std::string& contentRoot) {
     for (int i = 0; i < kTexCount; ++i) {
         render::ImageData img;
         if (!platform::decodeImage(contentRoot + kTex[i].path, img)) continue;
-        if (kTex[i].smoke) {
+        if (i == kDiffClouds && img.w > 0) {          // Tracer_Smoke_MAT: rgb = alpha = W(across) * (N + 0.2)
+            double sum = 0;
+            for (size_t p = 0; p + 3 < img.rgba.size(); p += 4) sum += img.rgba[p] / 255.0;
+            const float mean = (float)(sum / std::max<size_t>(1, img.rgba.size() / 4));
+            for (int y = 0; y < img.h; ++y)
+                for (int x = 0; x < img.w; ++x) {
+                    uint8_t* px = &img.rgba[((size_t)y * img.w + x) * 4];
+                    const float w = trailWidthMask(((float)x + 0.5f) / (float)img.w);
+                    const float a = core::clampf((px[0] / 255.0f + mean + 0.4f) * w, 0.0f, 1.0f);
+                    px[0] = px[1] = px[2] = px[3] = (uint8_t)(a * 255.0f + 0.5f);   // emissive = vertexColor x the same term
+                }
+        } else if (kTex[i].smoke) {
             for (size_t p = 0; p + 3 < img.rgba.size(); p += 4) {
                 uint8_t* px = &img.rgba[p];
                 int lum = (px[0] * 77 + px[1] * 150 + px[2] * 29) >> 8;
@@ -439,17 +460,24 @@ void WeaponFx::draw(render::IRenderer& r) const {
         for (const TracerSmoke& s : smoke_) {
             float t = s.age / kTrailLife;
             Curve a{kTrailAlpha};
-            render::Particle p;
-            Vec3 d = s.b - s.a;
-            p.pos = (s.a + s.b) * 0.5f;
-            p.axis = d;
-            p.h = core::length(d);
-            p.w = kTrailBaseW * lerp(0.1f, 1.5f, t);
-            float c = lerp(1.0f, 0.6f, t);
-            p.r = c; p.g = c; p.b = c;
-            p.a = a.eval(t) * kTrailOpacity;
-            p.v0 = 0; p.v1 = std::max(1.0f, p.h / 4.0f);   // tile the cloud texture along the trail
-            q.push_back(p);
+            const Vec3 d = s.b - s.a;
+            const float len = core::length(d);
+            const float c = lerp(1.0f, 0.6f, t);
+            const float alpha = a.eval(t);
+            for (int k = 0; k < kTrailSegments; ++k) {     // u = 0 at the hit end, 1 at the muzzle
+                const float u0 = (float)k / kTrailSegments, u1 = (float)(k + 1) / kTrailSegments;
+                const float l = trailLengthMask(0.5f * (u0 + u1));
+                if (l <= 0.0f) continue;
+                render::Particle p;
+                p.pos = s.b - d * (0.5f * (u0 + u1));
+                p.axis = d;
+                p.h = len / kTrailSegments;
+                p.w = kTrailBaseW * lerp(0.1f, 1.5f, t);
+                p.r = c; p.g = c; p.b = c;
+                p.a = alpha * l;
+                p.v0 = (1.0f - u1) * len / 4.0f; p.v1 = (1.0f - u0) * len / 4.0f;   // the cloud tiles every 4 m
+                q.push_back(p);
+            }
         }
         r.drawParticles({tex_[kDiffClouds], ParticleBlend::Translucent, 1.0f, q.data(), q.size()});
     }
