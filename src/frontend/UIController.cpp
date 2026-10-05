@@ -174,7 +174,10 @@ void UIController::onCharacterSelected(bool matchHasBegun) {
 
 void UIController::onCurrentUIClosed() {
     // Paused: closing the pause UI returns to InGame.
-    openMovie_.clear();
+    // [integration M06b] closeCurrentUI (not just clearing openMovie_): its close callback removes the movie from the
+    // flow's open movies. Clearing first made InGame's closeCurrentUI a no-op, so the self-closed pause menu kept
+    // drawing over live gameplay (human playtest: frontend screens over the match). INTEGRATION REGRESSION fix.
+    closeCurrentUI();
     if (state_ == UIState::Paused) gotoState(UIState::InGame);
     else if (state_ == UIState::PausedSpectating) gotoState(UIState::Spectating);
 }

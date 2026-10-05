@@ -489,7 +489,24 @@ std::string Pipeline::assetRoot() {
 
 std::string Pipeline::renderDataRoot() {
     if (const char* e = std::getenv("WFC_RENDER_DATA")) return e;
-    return exeDir() + "/../../work/render";
+    // [integration M06b] The worktree's work/render above the executable: build/bin (Debug: 2 levels) and
+    // build/release/bin (Release: 3 levels). Was <exe>/../../work/render only, which for the Release exe is
+    // build/work/render (absent): a plain launch of the Release build silently fell back to the legacy renderer
+    // (human playtest M06: world mostly black, frontend scenes malformed). INTEGRATION REGRESSION.
+    static const std::string root = [] {
+        const std::string exe = exeDir();
+        for (const char* up : {"/../../work/render", "/../../../work/render", "/../work/render", "/work/render"}) {
+            std::string c = exe + up;
+            if (std::ifstream(c + "/MP_IAC_Streets/materials_glsl.json").good() || std::ifstream(c + "/_ui/hud_markers.json").good()) {
+                LOG_INFO("wfc: render data root %s", c.c_str());
+                return c;
+            }
+        }
+        LOG_ERROR("wfc: no render data found above %s (run tools/render/build_render_data.ps1 or set WFC_RENDER_DATA); "
+                  "maps will use the legacy renderer", exe.c_str());
+        return exe + "/../../work/render";
+    }();
+    return root;
 }
 
 std::string Pipeline::contentRoot() {

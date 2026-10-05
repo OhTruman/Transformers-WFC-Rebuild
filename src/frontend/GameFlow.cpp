@@ -312,6 +312,16 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Game.ApplyProfileSettings" || fn == "Console.SaveProfileSettings") { profile_.apply(); return true; }
     if (fn == "Game.QuitToMainMenu") { quitToMainMenu(); return {}; }
     if (fn == "Game.ExitGame") { quit_ = true; FlowTrace::emit("exit", {}); return {}; }
+    // TnGameActionScriptBinding.PlayMovie(name) [CONFIRMED binding function; native behaviour UNKNOWN (RE)]: Extras ->
+    // Movies / Credits. [integration M06b] Played through the same full-screen movie path as the intro chain (video +
+    // its own audio via Systems, skip with A / Start / B); was unhandled, so the menu waited on a movie that never ran
+    // (human playtest soft lock). How the native player hands control back to the menu is UNKNOWN.
+    if (fn == "Game.PlayMovie" && !args.empty() && kismetMovie_.empty()) {
+        movieQueue_.clear();
+        kismetMovie_ = args[0];
+        FlowTrace::emit("movie.play", {{"movie", kismetMovie_}, {"source", "Game.PlayMovie"}});
+        return {};
+    }
 
     // ---- TnOnlineActionScriptBinding ----
     if (fn == "Online.CheckCanPlayOnlineModes" || fn == "Online.CanPlayOnlineModes") return true;   // no profile gate offline

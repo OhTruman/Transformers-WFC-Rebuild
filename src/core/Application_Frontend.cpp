@@ -340,6 +340,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     // comes from the frontend's CustomTransformers selection; CheckReadySpawn waits for it [CONF].
     world_.match().requireCharacterSelection(world_.localMatchPlayer());
     selectionSent_ = false;
+    beginGameHeld_ = false;
     lifecycleT_ = 0.0f; lifecycleStep_ = 0;
     frontend::FlowTrace::emit("match.gameplay", {{"map", gl.map}, {"mode", gl.modeTag}, {"goalScore", std::to_string(gl.settings.goalScore)},
                                                  {"timeLimit", std::to_string(gl.settings.timeLimit)}});
@@ -378,6 +379,11 @@ void Application::routeMatchToFrontend(float dt) {
         cs.customSlot = fc.name;
         world_.match().selectCharacter(me, cs);
         selectionSent_ = true;
+        if (beginGameHeld_) {   // the match already began: the pre-game screen closes into the game now
+            beginGameHeld_ = false;
+            flow.onUIEvent((int)frontend::UIEvent::BeginGame);
+            frontend::FlowTrace::emit("match.beginGameReleased", {});
+        }
         frontend::FlowTrace::emit("match.characterSelected", {{"name", fc.name}, {"type", std::to_string(cs.type)}, {"specialty", sp},
                                                             {"chassis", game::resolveChassis(cs, team == 1 ? 1 : 0)}});
     }
@@ -392,8 +398,12 @@ void Application::routeMatchToFrontend(float dt) {
     for (const game::MatchEvent& e : world_.matchEvents()) {
         switch (e.type) {
         case game::MatchEvent::Type::MatchStarted:
-            // InProgress.BeginState -> SendUIEventToControllers(3) (the character was selected at load, in PendingMatch).
-            flow.onUIEvent((int)frontend::UIEvent::BeginGame);
+            // InProgress.BeginState -> SendUIEventToControllers(3). [integration M06b] If the local player has not chosen a
+            // character yet, Gameplay keeps it unspawned (CheckReadySpawn) and event 3 would close "Choose Character" with
+            // no way back (human playtest soft lock). The event is held until the selection reaches Gameplay, so the
+            // character screen stays modal [INTEGRATION ADAPTATION; the original handling of a late choice is UNKNOWN].
+            if (selectionSent_) flow.onUIEvent((int)frontend::UIEvent::BeginGame);
+            else { beginGameHeld_ = true; frontend::FlowTrace::emit("match.beginGameHeld", {{"why", "no character selected yet"}}); }
             // TnGameTypeMessage switch 0: HUD GameAnnouncement with the mode name [RE A5, CONFIRMED].
             frontend_->hud().announce(frontend_->catalog().modeFriendlyName(match.settings().modeTag));
             frontend::FlowTrace::emit("match.started", {});
