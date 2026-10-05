@@ -124,6 +124,15 @@ human tester. Findings P1-2 and P2-2 hide behind this.
   `Shooting_Reload_AssaultRifle_ROBO`, `…Shotgun…`, `…RocketLauncher…`, …).
 - The chassis export (27 player chassis) carries only the Ion Blaster clip + `ADD_Shooting_Reload_Fast/Med/Slow_ROBO`.
 - The reload pose and length ignore each weapon's `WeaponReloadAnimTime` (Shotgun 2.5 s).
+- **Status (2026-10-05):** data fixed in AssetTools c6c519c / d71cd07, verified by Experimental: 13 per-weapon
+  `Shooting_Reload_<W>_ROBO` in every player chassis. Gameplay still has to select the clip per weapon.
+- **New risk (P2):** the robot exports now carry every compatible AnimSet clip.
+  - 296-325 clips and **about 55 MB per robot.glb** (1.5 GB for all of them), from about 92 clips before.
+  - Every match loads the selected chassis plus the boot-default Truck; previews load more.
+  - ExtractedAssets is unversioned, so existing builds (M08b included) pick this up with no code change: their load
+    time / memory baselines are no longer comparable.
+  - The next FAST gate's resources check (private MB) and the match load time must be compared with the 175a634
+    numbers (peak about 3.2 GB private).
 
 ### P2-2 Hit reactions and melee knock-back animations are never played (undocumented)
 - **Owner:** Gameplay.
@@ -173,7 +182,7 @@ human tester. Findings P1-2 and P2-2 hide behind this.
 | P3-3 | Low-ammo cue threshold 5 (Ion Blaster WEPMESH) for every weapon | `game/Weapon.h:74` | Gameplay / Systems |
 | P3-4 | `decodeImage` has two silent failure returns (zero-size / oversize); World logs failed textures only as a count, never by name (0 failures in the 175a634 runs) | `platform/win32/Win32Image.cpp:10,15`; `game/World.cpp:111` | Rendering |
 | P3-5 | Sound-cue package aliases are hard-coded for Ion Blaster, Foley, Optimus Prime and Soundwave vehicles only; other packages rely on short names (0 `not in table` warnings in the 175a634 runs, but only a few chassis exercised) | `game/SoundCues.cpp:98` | Systems |
-| P3-6 | Remnant's `PostProcessVolumeHeightFog` is not exported (Escalation map; Debris has no HeightFog in the original: authentic) | AssetTools `manifests/maps/MP_ESC_Remnant*` | AssetTools |
+| P3-6 | **Exported in AssetTools d71cd07** (`lighting.json` globals.postprocess_volume_height_fogs, PROVISIONAL volume-link semantics); Rendering must consume it. Was: Remnant's `PostProcessVolumeHeightFog` is not exported (Escalation map; Debris has no HeightFog in the original: authentic) | AssetTools `manifests/maps/MP_ESC_Remnant*` | AssetTools |
 | P3-7 | Scoreboard on Tab is a toggle; the original PC behaviour (hold vs toggle) is UNKNOWN | `frontend/FrontendRuntime.cpp:870` | Frontend |
 
 ## UNKNOWN (needs a short graphical run; not run because other renderers were active)
