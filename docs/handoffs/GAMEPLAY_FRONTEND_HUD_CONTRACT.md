@@ -98,3 +98,19 @@ it for the weapon icon / DeathString lookup.
   inventory[], activeWeapon, vehicleWeapons[], loadoutRefused[], abilities[] (id, implemented, cooldown, active), dodging.
 - Camera settings entry point: PlayerController::setLookSettings(sensitivity, invertRobot, invertVehicle) - per-form
   vehicle invert (Car / Plane / Tank) is a follow-up.
+
+## Pass 22 HUD state additions (2026-10-05, agents/gameplay up to e64e4af)
+
+| Need | Field(s) | Notes |
+|---|---|---|
+| Spawned body | `selectedChassis`, `drawnChassis`, `specialty`, `spawnError` | no substitute body; `spawnError` explains a refused spawn |
+| Weapon | `weaponId`, `weaponName`, `weaponIcon` (death_<Weapon>), `weaponSimulated`, `weaponSwitching`, `inventory[]`, `activeWeapon`, `vehicleWeapons[]`, `loadoutRefused[]` | melee / grenade / repair-beam weapons are equipped but not simulated |
+| Abilities | `abilities[2]` {id, implemented, cooldown s, active}, `dodging`, `cloaked`, `hoverState` (1 rising, 2 hovering) | Shift = abilities[0], Ctrl = abilities[1] |
+| Killstreaks | `killStreak`, `killstreaks[]` (newest last = the B key), `killstreakImplemented`, `regenBuff`, `fastCooldownBuff`, `ammoLockBuff` | |
+| Rounds / attacking side | `attackingTeam`, `currentRound`, `rounds`, `betweenRounds` | CTF rounds; EXT attacking team = bomb holder |
+| Carried objectives | `carried[]` {kind 0 flag / 1 bomb, holder, holderTeam, dropped, active, pos, autoReturn, returnLeft, sleep}, `localCarrying` | flag-return progress = 1 − returnLeft / 10 |
+| Bomb | `bombPlanted`, `bombFuse` (CurrentObjectiveCountdown), `bombDefuse`, `bombPlantTeam` | |
+| Objective markers | `objectives[]` for every active-in-mode objective (DOM, KOTH, flag factories, capture points, bomb, plant points) with `ownerTeam` and `active` | |
+| Tags | `tags[].label` | false while the tagged pawn is cloaked |
+
+Events added to `MatchEvent::Type` (appended at the end): `RoundEnded`, `RoundStarted`.
