@@ -46,15 +46,22 @@ public:
     int playUiSound(const char* name) { return frontend_.playUiSound(name); }
     bool stopUiSound(const char* name, float fade) { return frontend_.stopUiSound(name, fade); }
     // A Bink movie is up (the intro chain, a loading underlay): MovieMixerPreset on the game mix.
+    // The preset (CINE_MUTE_FOR_BINK) is held while EITHER the caller says a movie is up OR a movie sound is playing
+    // (startMovieAudio .. stopMovieAudio): the FmodAudioDevice applies it for as long as a Bink plays [CONF config:
+    // MovieMixerPreset], whichever path started the movie. The intro chain's explicit flag keeps the game mix down
+    // between its movies; a movie started without it (Extras -> Movies, a GFx script movie) releases the preset when
+    // its sound stops, so the frontend music - ducked, still playing - comes back where it was (it is never restarted).
     void setMoviePlaying(bool playing);
     // The movie's own sound: opens the movie file's audio tracks and starts them now (call when its video starts);
     // also marks the movie as up. `languageSlot` < 0: the language's slot (movieLanguageSlot(GLanguage); WFC_LANGUAGE,
     // default INT; WFC_MOVIE_LANGSLOT overrides). False: the movie has no audio
     // (the loading Binks) - nothing plays, by design.
     bool startMovieAudio(const std::string& moviePath, int languageSlot = -1);
-    // Movie end or skip: the movie sound stops at once. The game-mix mute stays until setMoviePlaying(false) (a
-    // chain of movies keeps the game mix down between them).
+    // Movie end, skip or back: the movie sound stops at once; the movie preset is released unless the caller still
+    // says a movie is up (setMoviePlaying(true), e.g. between the intro chain's movies).
     void stopMovieAudio() {                       // inline: World's destructor needs it in every build
+        movieStream_ = false;
+        applyMovieMute();
         if (!movieAudio_) return;
         movieAudio_->stop();
         movieAudio_.reset();
@@ -111,7 +118,16 @@ private:
     AmbientAudio ambient_;
     audio::IAudio* audio_ = nullptr;
     std::string root_, level_;
-    bool movie_ = false;
+    bool movie_ = false;          // the movie preset is enabled
+    bool movieExplicit_ = false;  // setMoviePlaying
+    bool movieStream_ = false;    // a movie sound is up
+    void applyMovieMute() {       // inline: see stopMovieAudio
+        const bool want = movieExplicit_ || movieStream_;
+        if (want == movie_) return;
+        movie_ = want;
+        if (want) cues_.mixer().enable(SoundMixer::movieMixerPreset());
+        else cues_.mixer().disable(SoundMixer::movieMixerPreset(), false);
+    }
     std::unique_ptr<audio::MovieAudioPlayer> movieAudio_;
     float movieSfxVolume_ = 0.8f;
     bool movieFixedVolume_ = false;

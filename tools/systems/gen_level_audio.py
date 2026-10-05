@@ -74,7 +74,11 @@ def cue_tree(cue, prefer=None):
             pk, nm = w.split('.', 1)
             wav = 'content/%s/%s.wav' % (pk, nm)
             if not os.path.exists(CONTENT + wav[8:]): print('  MISSING wave', wav)
-            waves.append({'node': w, 'class': 'SoundNodeWaveEx', 'wav': wav})
+            entry = {'node': w, 'class': 'SoundNodeWaveEx', 'wav': wav}
+            # Localized wave: the extracted file came from this _LOC_ twin (authored.db keeps one per path) [RE pass4 C].
+            r = c.execute("select package from objects where opath=? and class like 'SoundNodeWave%'", (w,)).fetchone()
+            if r and '_LOC_' in (r[0] or ''): entry['loc'] = r[0].rsplit('_LOC_', 1)[-1]
+            waves.append(entry)
         kids.append({'node': en.split('.')[-1], 'class': ecls,
                      'params': {k: v for k, v in ep.items() if k != 'ChildNodes'}, 'children': waves})
     out = {'cue': cue, 'class': 'SoundCue', 'tree': {'node': p['FirstNode'].split('.')[-1], 'class': 'SoundNodeRoot',

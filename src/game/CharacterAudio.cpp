@@ -71,12 +71,16 @@ const Db& db() {
             v.boost = s["BoostSound"].asString(); v.boostWheels = s["BoostWheelsSound"].asString();
             v.boostStop = s["BoostStopSound"].asString(); v.ascend = s["AscendSound"].asString(); v.ram = s["RamSound"].asString();
             v.booster = s["BoosterSound"].asString(); v.nitro = s["NitroSound"].asString(); v.squeal = s["DefaultTireSquealSound"].asString();
+            v.speed = s["SpeedSound"].asString(); v.ascendStop = s["AscendStopSound"].asString(); v.descend = s["DescendSound"].asString();
+            v.descendStop = s["DescendStopSound"].asString(); v.roll = s["RollSound"].asString(); v.oneEighty = s["OneEightySound"].asString();
+            v.enter = s["EnterSound"].asString(); v.exit = s["ExitSound"].asString(); v.tread = s["DefaultTireTreadSound"].asString();
             const assets::Json& t = vc["tunables"];
             v.boostFadeIn = t["boost_fade_in"].asFloat(v.boostFadeIn); v.boostFadeOut = t["boost_fade_out"].asFloat(v.boostFadeOut);
             v.boostWheelsDelay = t["boost_wheels_delay"].asFloat(v.boostWheelsDelay); v.squealMinMph = t["squeal_min_mph"].asFloat(v.squealMinMph);
             v.squealFade = t["squeal_fade"].asFloat(v.squealFade); v.engineFadeIn = t["engine_fade_in"].asFloat(v.engineFadeIn);
             v.engineFadeOut = t["engine_fade_out"].asFloat(v.engineFadeOut); v.jumpRevTime = t["jump_rev_time"].asFloat(v.jumpRevTime);
             v.oneshotSpazTime = t["oneshot_spaz_time"].asFloat(v.oneshotSpazTime); v.speedHistory = t["speed_history"].asInt(15);
+            v.treadFade = t["tread_fade"].asFloat(v.treadFade);
             v.valid = true;
         }
         d.profiles[p.key] = p;

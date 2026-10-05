@@ -30,7 +30,9 @@ void VehicleAudio::setProfile(const CharacterAudioProfile& p) {
     resolve(p, c_.boostLoops); resolve(p, c_.boostOneshots); resolve(p, c_.jumpLoops); resolve(p, c_.jumpOneshots);
     for (auto& l : c_.hoverLand) l.event = cueOf(p, l.event);
     for (auto& l : c_.boostLand) l.event = cueOf(p, l.event);
-    for (std::string* s : {&c_.boost, &c_.boostWheels, &c_.boostStop, &c_.ascend, &c_.ram, &c_.booster, &c_.nitro, &c_.squeal})
+    for (std::string* s : {&c_.boost, &c_.boostWheels, &c_.boostStop, &c_.ascend, &c_.ram, &c_.booster, &c_.nitro, &c_.squeal,
+                           &c_.speed, &c_.ascendStop, &c_.descend, &c_.descendStop, &c_.roll, &c_.oneEighty, &c_.enter, &c_.exit,
+                           &c_.tread})
         *s = cueOf(p, *s);
     speedHist_.assign((size_t)std::max(1, c_.speedHistory), 0.0f);
     histIdx_ = 0;
@@ -126,17 +128,23 @@ void VehicleAudio::gotoState(State s, SoundCues& cues, const EmitterFn& at) {
     }
 }
 
-void VehicleAudio::attach() {
+// HmVehicleAudioComponent.Attached: speed history cleared, the SpeedSound loop starts (fade 0); the form's
+// OnBeginPlay plays EnterSound. Impl.Attached resets the land / jump-rev timers.
+void VehicleAudio::attach(SoundCues& cues, const EmitterFn& at) {
     entered_ = true;
     for (float& h : speedHist_) h = 0.0f;
     histIdx_ = 0; speed_ = 0.0f;
     onGroundPrev_ = false; jumpRevTimer_ = 0.0f; landTimer_ = 0.0f;   // Impl.Attached
     state_ = State::None;
+    playLooping(speedLoop_, c_.speed.c_str(), 0.0f, cues, at);
+    playEvent(c_.enter, cues, at);
 }
 
 void VehicleAudio::detach(SoundCues& cues) {
     gotoState(State::None, cues, nullptr);                 // Impl.Detached: StopEngineSounds
-    stopLooping(squeal_, c_.squealFade, cues);
+    stopLooping(speedLoop_, 0.0f, cues);                   // Detached: speed / tread / squeal loops (fade 0)
+    stopLooping(tread_, 0.0f, cues);
+    stopLooping(squeal_, 0.0f, cues);
     stopLooping(boost_, c_.boostFadeOut, cues);
     stopLooping(boostWheels_, c_.boostFadeOut, cues);
     entered_ = false;
@@ -146,7 +154,7 @@ void VehicleAudio::ensureNames() { if (!named_) setProfile(CharacterAudio::defau
 
 void VehicleAudio::tick(float dt, const Input& in, SoundCues& cues, const EmitterFn& at) {
     ensureNames();
-    if (in.entered && !entered_) attach();
+    if (in.entered && !entered_) attach(cues, at);
 
     // Boost: Driving.BeginState -> PlayBoostSound; EndState (also on leaving the form) -> StopBoostSound.
     if (in.boosting && !boosting_ && in.entered) {
@@ -160,10 +168,20 @@ void VehicleAudio::tick(float dt, const Input& in, SoundCues& cues, const Emitte
     }
     boosting_ = in.boosting && in.entered;
 
-    if (!in.entered) { if (entered_) detach(cues); return; }
+    if (!in.entered) {
+        if (entered_) { playEvent(c_.exit, cues, at); detach(cues); }   // the form's OnEndPlay: PlayExitSound
+        return;
+    }
 
     if (in.ascend) playEvent(c_.ascend, cues, at);                                  // PlayAscendSound
-    if (in.booster) playLooping(booster_, c_.booster.c_str(), 0.0f, cues, at);     // PlayBoosterSound (no fade)
+    if (in.booster) playLooping(booster_, c_.booster.c_str(), 0.0f, cues, at);     // PlayBoosterSound (fade 0)
+    if (in.boosterStop) stopLooping(booster_, 0.0f, cues);                          // StopBoosterSound (fade 0)
+    if (in.boosterAmount >= 0.0f && booster_.id >= 0) cues.update(booster_.id, {0, 0, 0}, in.boosterAmount);   // BoosterParameter
+    if (in.ascendStop) playEvent(c_.ascendStop, cues, at);
+    if (in.descend) playEvent(c_.descend, cues, at);
+    if (in.descendStop) playEvent(c_.descendStop, cues, at);
+    if (in.roll) playEvent(c_.roll, cues, at);
+    if (in.oneEighty) playEvent(c_.oneEighty, cues, at);
     if (in.nitro) playEvent(c_.nitro, cues, at);                                    // PlayNitroSound
 
     // HmVehicleAudioComponent.Tick: UpdateVehicleSpeed (VehicleSpeedHistoryLength-sample mph average), tire squeal,
@@ -173,6 +191,14 @@ void VehicleAudio::tick(float dt, const Input& in, SoundCues& cues, const Emitte
     speed_ = 0.0f;
     for (float h : speedHist_) speed_ += h;
     speed_ /= (float)speedHist_.size();
+    // UpdateTireTreadSound: on the ground the tread loop (TireTreadCrossfadeTime) with SpeedSoundParameter = speed.
+    if (in.onGround) {
+        playLooping(tread_, c_.tread.c_str(), c_.treadFade, cues, at);
+        if (tread_.id >= 0) cues.update(tread_.id, {0, 0, 0}, speed_);
+    } else {
+        stopLooping(tread_, c_.treadFade, cues);
+    }
+    if (speedLoop_.id >= 0) cues.update(speedLoop_.id, {0, 0, 0}, speed_);          // UpdateSpeedSound
     if (in.onGround && speed_ >= c_.squealMinMph) {
         playLooping(squeal_, c_.squeal.c_str(), c_.squealFade, cues, at);
         cues.update(squeal_.id, {0, 0, 0}, in.wheelSlip);

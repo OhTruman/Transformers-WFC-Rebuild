@@ -29,16 +29,16 @@ void LevelAudioHost::unload() {
 // [HM_Engine.FmodAudioDevice] MovieMixerPreset=CINE_MUTE_FOR_BINK, enabled for the movie's lifetime [CONF config;
 // HIGH: the native movie player's enable / disable points]; UnflushableMixerPresets keeps it through a level change.
 void LevelAudioHost::setMoviePlaying(bool playing) {
-    if (playing == movie_) return;
-    movie_ = playing;
-    if (playing) cues_.mixer().enable(SoundMixer::movieMixerPreset());
-    else cues_.mixer().disable(SoundMixer::movieMixerPreset(), false);
+    movieExplicit_ = playing;
+    applyMovieMute();
 }
+
 
 bool LevelAudioHost::startMovieAudio(const std::string& path, int languageSlot) {
     stopMovieAudio();
     if (!audio_) return false;
-    setMoviePlaying(true);
+    movieStream_ = true;
+    applyMovieMute();
     if (languageSlot < 0) {
         const char* lang = std::getenv("WFC_LANGUAGE");                 // GLanguage (Language=int in Xe-TransEngine.ini)
         languageSlot = audio::movieLanguageSlot(lang ? lang : "INT");
@@ -47,6 +47,8 @@ bool LevelAudioHost::startMovieAudio(const std::string& path, int languageSlot) 
     std::unique_ptr<audio::MovieAudioPlayer> p(audio::createMovieAudioPlayer());
     if (!p->open(audio_, path, languageSlot)) {
         LOG_INFO("movie audio: %s has no audio tracks (silent by design)", path.c_str());
+        movieStream_ = false;
+        applyMovieMute();
         return false;
     }
     // MoviesToAlwaysPlaySound (the logos): fixed Bink volume 0xCCCC = 0.8; others GetMovieVolume = the SFX class

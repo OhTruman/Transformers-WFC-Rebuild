@@ -1,4 +1,7 @@
 #include "game/SoundCues.h"
+#include <cstdio>
+#include <cctype>
+#include <set>
 #include "assets/Json.h"
 #include "core/Log.h"
 
@@ -119,7 +122,8 @@ void SoundCues::loadWaves(size_t c, const std::string& contentRoot) {
     for (const EventDef& e : cues_[c].events) {
         std::vector<audio::Sound> w;
         for (const std::string& f : e.waves) {
-            audio::Sound s = audio_ ? audio_->load(contentRoot + f) : audio::kInvalidSound;
+            const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');       // a localized twin outside content/
+            audio::Sound s = audio_ ? audio_->load(abs ? f : contentRoot + f) : audio::kInvalidSound;
             if (s != audio::kInvalidSound) w.push_back(s);
         }
         waves_[c].push_back(w);
@@ -157,6 +161,35 @@ int SoundCues::applyLoopPoints() {
 
 // A map bank's cue graphs as AssetTools vs_audio.py writes them: {name: {tree: {class, params,
 // children}}}; root = SoundNodeRoot, children SoundNodeWaveEvent -> SoundNodeWaveEx {wav}.
+// Localized waves (dialogue / announcer) [CONF RE TARGETED_PASS4 C]: the SoundNodeWaves live only in the map's
+// <Map>_LOC_<lang> twin packages (_LOC_int, _LOC_FRA; same object paths) and the engine loads the ONE twin of GLanguage
+// - the same language as the movies' Bink track (movieLanguageSlot), resolved by package instead of by track.
+// The extracted content/<group>/<name>.wav is whichever twin the manifest row came from (`loc`: 3445 FRA vs 2836 int
+// rows - the TDM match-start lines are French). Resolution: content/_LOC/<twin>/<group>/<name>.wav (WFC_LOC_ROOT
+// overrides the _LOC root), else the merged file if `loc` is the selected twin, else NOT played (logged once): another
+// language is never substituted. Twin of GLanguage: INT -> "int", else the language code (FRA ...).
+std::string SoundCues::localizedWave(const std::string& rel, const std::string& owner, const std::string& contentRoot) {
+    const char* lang = std::getenv("WFC_LANGUAGE");
+    std::string twin = lang && *lang ? lang : "INT";
+    for (char& ch : twin) ch = (char)std::toupper((unsigned char)ch);
+    if (twin == "INT") twin = "int";
+    const char* locRoot = std::getenv("WFC_LOC_ROOT");
+    const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + twin + "/" + rel;
+    if (std::FILE* fp = std::fopen((alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt).c_str(), "rb")) {
+        std::fclose(fp);
+        return alt;
+    }
+    std::string o = owner, t = twin;
+    for (char& ch : o) ch = (char)std::toupper((unsigned char)ch);
+    for (char& ch : t) ch = (char)std::toupper((unsigned char)ch);
+    if (o == t) return rel;
+    static std::set<std::string> warned;
+    if (warned.insert(rel).second)
+        LOG_WARN("sound cues: localized wave %s: no _LOC_%s twin extracted (the extracted copy is _LOC_%s) - not played",
+                 rel.c_str(), twin.c_str(), owner.c_str());
+    return std::string();
+}
+
 int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot) {
     int added = 0;
     for (const auto& kv : cues.obj) {
@@ -214,6 +247,8 @@ int SoundCues::addCues(const assets::Json& cues, const std::string& contentRoot)
             for (size_t w = 0; w < waves.size(); ++w) {
                 std::string f = waves[w]["wav"].asString();
                 if (f.rfind("content/", 0) == 0) f = f.substr(8);
+                const std::string loc = waves[w]["loc"].asString();
+                if (!loc.empty()) f = localizedWave(f, loc, contentRoot);
                 if (!f.empty()) e.waves.push_back(f);
             }
             d.events.push_back(e);
@@ -641,11 +676,15 @@ void SoundCues::tick(float dt) {
             in.fadeLeft -= dt;
             if (in.fadeLeft <= 0.0f) done = true;
         } else if (!in.looping && in.age > lastEventTime(cues_[(size_t)in.cue])) {
-            // One-shot: retire once every voice has finished (attached voices keep following their
-            // owner until then); kInstanceTail bounds it for backends that cannot report voices.
-            bool sounding = !audio_->reportsVoices();   // unknown: keep following until kInstanceTail
+            // One-shot: retire once every voice has finished (the AudioComponent lives until its sound ends;
+            // attached voices keep following their owner until then). kInstanceTail bounds it only for backends
+            // that cannot report voices. (It used to bound every instance: a long one-shot - the 380 s frontend
+            // music, long dialogue - was dropped 10 s in while its voice kept sounding, unmanaged: no mute, fade,
+            // stop or "already playing" check reached it.)
+            const bool reports = audio_->reportsVoices();
+            bool sounding = !reports;                   // unknown: keep following until kInstanceTail
             for (const VoiceRef& r : in.voices) if (audio_->isPlaying(r.v)) { sounding = true; break; }
-            if (!sounding || in.age > lastEventTime(cues_[(size_t)in.cue]) + kInstanceTail) {
+            if (!sounding || (!reports && in.age > lastEventTime(cues_[(size_t)in.cue]) + kInstanceTail)) {
                 retire(i);
                 continue;
             }

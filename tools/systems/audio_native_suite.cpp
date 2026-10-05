@@ -1453,6 +1453,9 @@ static std::string recSoundPath(const Rec& r, int snd) {
 static void testMatchAudio() {
     std::printf("[match / announcer audio + second map]\n");
     const std::string content = kRoot + "/../content/";
+    // The match-start line's waves exist (in the merged extraction) only as the French twin: use the _LOC_int twin
+    // extracted by work/m8_loc_extract.py (until AssetTools extracts the twins) [RE TARGETED_PASS4 C].
+    _putenv_s("WFC_LOC_ROOT", "F:/Transformers Rebuild/Rebuild-Systems/work/m8_loc/tree");
     Rec rec; game::SoundCues cues; cues.load(&rec, content);
     game::LevelAudioHost host(cues);
     host.attach(&rec, kRoot);
@@ -1480,8 +1483,9 @@ static void testMatchAudio() {
         if (p.find("WL_DX_") != std::string::npos) { ++voicesFirst; first = p; }
     }
     CHECK(m.currentCue() == "BL_DX_SWITCHBOARD.SC002657" && voicesFirst == 1 && first.find("DX_OPRIME_LK002657") != std::string::npos &&
+          first.find("/int/") != std::string::npos &&
           m.queuedCue() == host.ambient().announcerEvents().at("SoundEvents_Dialog.Announcer.MP_GameDescriptionTeamDeathMatchDialog"),
-          "game type line SC002657 in the Autobot announcer's voice only (%d dialogue voice, %s), description queued (%s)",
+          "game type line SC002657 in the Autobot announcer's voice only, from the _LOC_int twin (%d dialogue voice, %s), description queued (%s)",
           voicesFirst, first.c_str(), m.queuedCue().c_str());
     CHECK(host.music().current().cue == "BL_LVL_MP_MX.DM_START" && host.music().state() == game::MusicPlayer::State::Playing &&
           host.music().current().priority == 0 && host.music().current().fadeIn == 0.0f, "DM_START music (fades 0, priority 0)");
@@ -1833,7 +1837,46 @@ static void testObjectiveMessages() {
     host.unload();
 }
 
+// Localized announcer waves (RE TARGETED_PASS4 C): the TDM match-start line SC002657 must come from the selected
+// language's _LOC twin - never the French copy the merged extraction holds.
+static void testLocalizedWaves() {
+    std::printf("[localized waves: _LOC twin of GLanguage]\n");
+    const std::string content = kRoot + "/../content/";
+    auto loadedPaths = [&](const char* locRoot) {
+        if (locRoot) _putenv_s("WFC_LOC_ROOT", locRoot); else _putenv_s("WFC_LOC_ROOT", "");
+        Rec rec; game::SoundCues cues; cues.load(&rec, content);
+        game::LevelAudioHost host(cues);
+        host.attach(&rec, kRoot);
+        host.load("MP_IAC_Streets");
+        host.match().onMatchStarted("TDM", 0);
+        for (int k = 0; k < 60; ++k) { host.tick(1.0f / 30.0f, {0, 0, 0}, {0, 0, 0}); cues.tick(1.0f / 30.0f); }
+        std::vector<std::string> out;
+        for (const auto& kv : rec.paths) if (kv.first.find("LK002657") != std::string::npos || kv.first.find("LK002666") != std::string::npos) out.push_back(kv.first);
+        host.unload();
+        return out;
+    };
+    // AssetTools extracts both twins into content/_LOC/<twin>/ (int: the English line).
+    auto shipped = loadedPaths(nullptr);
+    bool shippedInt = !shipped.empty();
+    for (const std::string& p : shipped) shippedInt = shippedInt && p.find("/_LOC/int/") != std::string::npos;
+    CHECK(shippedInt, "match-start line from content/_LOC/int (AssetTools twins), never the merged French copy (%zu loaded: %s)",
+          shipped.size(), shipped.empty() ? "-" : shipped[0].c_str());
+    const std::string tree = "F:/Transformers Rebuild/Rebuild-Systems/work/m8_loc/tree";
+    std::FILE* fp = std::fopen((tree + "/int/WL_DX_OPRIME/DX_OPRIME_LK002657.wav").c_str(), "rb");
+    if (fp) {
+        std::fclose(fp);
+        auto withTree = loadedPaths(tree.c_str());
+        bool intOnly = !withTree.empty();
+        for (const std::string& p : withTree) intOnly = intOnly && p.find("/int/") != std::string::npos;
+        CHECK(intOnly, "with the _LOC_int twin: the match-start line loads from it (%s)", withTree.empty() ? "-" : withTree[0].c_str());
+    } else std::printf("  (skip: work/m8_loc/tree not generated - run work/m8_loc_extract.py)\n");
+    _putenv_s("WFC_LOC_ROOT", "");
+    CHECK(game::SoundCues::localizedWave("WL_DX_X/A.wav", "int", content) == "WL_DX_X/A.wav" &&
+          game::SoundCues::localizedWave("WL_DX_X/A.wav", "FRA", content).empty(), "an int-owned copy plays as is; a FRA-owned copy never substitutes");
+}
+
 int main() {
+    testLocalizedWaves();
     testObjectiveMessages();
     testCharacterAudio();
     testZoneGraph();

@@ -478,6 +478,27 @@ AssetTools FRONTEND.md + manifests/frontend_*.json (cc9773e). Full table: `docs/
 - the Bink / GFx loading composite and close timing.
 
 
+
+## SYSTEMS M08c — PLAYTEST AUDIO FIXES (2026-10-05, agents/systems)
+Details are in `docs/handoff/SYSTEMS_M08C_AUDIO_HANDOFF.md`.
+
+* **Movie preset ownership** [CONF config + HIGH]:
+  * MovieMixerPreset is held while a Bink plays, whichever path started it: the caller's flag OR the movie sound.
+  * The Extras script movies previously left it stuck on.
+* **AudioComponent lifetime** [HIGH, UE3]:
+  * An instance lives until its sound ends.
+  * The 10 s tail bound now applies only to backends that cannot report voices.
+* **Localized VO** [CONF RE pass4 C + data]:
+  * The GLanguage `_LOC` twin is used (content/_LOC/<int|FRA>/); another language is never substituted.
+  * The merged extraction had the TDM start line from `_LOC_FRA`.
+* **Vehicle component** [CONF script HmVehicleAudioComponent / form classes]:
+  * Ported: the SpeedSound loop (Attached / Detached), the TireTread loop, the BoosterSound loop with Stop / BoosterAmount, and the AscendStop / Descend / DescendStop / Roll / OneEighty / Enter / Exit events.
+  * Detached uses fade 0.
+  * The per-form input mapping is in the handoff.
+  * CustomLoopingSound is never called by TransGame script: unported.
+
+---
+
 ## MILESTONE 08 SYSTEMS — MULTI-MAP, MODE, CHARACTER / WEAPON AND MOVIE-LANGUAGE AUDIO (2026-10-05, agents/systems)
 
 **Handoff:** `docs/handoff/SYSTEMS_M08_AUDIO_HANDOFF.md`.

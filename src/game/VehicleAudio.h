@@ -36,8 +36,15 @@ public:
         core::Vec3 velocity{0, 0, 0};   // m/s
         core::Vec3 forward{0, 0, 1};    // pawn rotation as a vector
         bool ascend = false;         // a jump started this step
-        bool booster = false;        // a hover dash started this step
+        bool booster = false;        // PlayBoosterSound this step: Car / Truck Hovering.DoDash, Plane Hovering.PlayHoverFx
+        bool boosterStop = false;    // StopBoosterSound this step: Plane Hovering.StopHoverFx
+        float boosterAmount = -1.0f; // set_BoosterAmount (Car / Plane Hovering.UpdateFx: the largest thruster
+                                     // contribution) -> BoosterParameter on the booster sound; < 0: not set this step
         bool nitro = false;          // a nitro started this step
+        // Plane Hovering.UpdateDashing: PlayAscendSound / StopAscendSound / PlayDescendSound / StopDescendSound;
+        // Car Driving.UpdateRolling and Plane UpdateRolling / OnUpdateAi: PlayRollSound (Car: PlayAscendSound);
+        // Tank ClientPlaySpecialMoveSound: PlayOneEightySound.
+        bool ascendStop = false, descend = false, descendStop = false, roll = false, oneEighty = false;
     };
     using EmitterFn = std::function<SoundCues::Emitter()>;
 
@@ -62,7 +69,7 @@ private:
     void playEvent(const std::string& cue, SoundCues& cues, const EmitterFn& at);
     void gotoState(State s, SoundCues& cues, const EmitterFn& at);
     int computeGear() const;
-    void attach();
+    void attach(SoundCues& cues, const EmitterFn& at);
     void detach(SoundCues& cues);
 
     bool entered_ = false;
@@ -75,7 +82,7 @@ private:
     float jumpRevTimer_ = 0.0f, landTimer_ = 0.0f;
     float spazTimer_ = 0.0f;         // Impl.EngineOneshotSpazTimer
     State state_ = State::None;
-    Loop boost_, boostWheels_, booster_, squeal_;
+    Loop boost_, boostWheels_, booster_, squeal_, speedLoop_, tread_;
     std::vector<Loop> engine_, oneshots_;   // the state's engine loops; one-shot components
 };
 
