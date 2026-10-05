@@ -114,8 +114,6 @@ public:
             input.down[i] = nowDown;
         }
 
-        input.mouseWheel = wheel_ / (float)WHEEL_DELTA;
-        wheel_ = 0;
         // Mouse-look via cursor recentering while captured + focused.
         input.mouseDX = input.mouseDY = 0.0f;
         if (mouseCaptured_ && focused_) {
@@ -433,7 +431,6 @@ private:
     HGLRC hglrc_ = nullptr;
     int width_ = 0, height_ = 0;
     bool focused_ = true;
-    int wheel_ = 0;
     bool wantClose_ = false;
     bool mouseCaptured_ = false;
 };
