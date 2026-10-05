@@ -61,6 +61,10 @@ foreach ($cls in @($X.class_presets.PSObject.Properties | ForEach-Object { $_.Na
     if ($noMesh) { $script:NoMeshWeapons += $w; Res "data.weapon.$cls.$w" "PASS" ("{0} preset weapon {1}: no held mesh by design (export: the weapon mesh component authors no SkeletalMesh - vehicle socket / thrown projectile)" -f $cls, $w) "AssetTools"; continue }
     Res "data.weapon.$cls.$w" $(if ($gi -and $gi.ok -and $gi.meshes -gt 0) { "PASS" } else { "FAIL" }) ("{0} preset weapon {1}: {2}" -f $cls, $w, $(if ($gi -and $gi.ok) { "{0} ({1} meshes, {2} joints)" -f $g.Name, $gi.meshes, $gi.joints } else { "no loadable glb under Weapons\$w" })) "AssetTools" } }
 
+# Optimus identities: 06b's fallback body folder "Optimus" and Optimus Prime's roster chassis id "Truck" (Gameplay 22a+,
+# also the boot-default body loaded before WFC_CHASSIS / the selection is applied). A non-Optimus selection whose ACTIVE
+# body is one of these is an OPTIMUS FALLBACK.
+$OptIds = @("Optimus", "Truck")
 # ---------------- C. runtime: EVERY exported chassis by direct boot (WFC_CHASSIS, Gameplay 22a+) + Gameplay's chassis test
 $relExe = Join-Path $Root "build-release\bin\wfc_rebuild.exe"; if (-not (Test-Path $relExe)) { $relExe = $exe }
 if ($H.Contains("WFC_CHASSIS")) {
@@ -70,17 +74,19 @@ if ($H.Contains("WFC_CHASSIS")) {
         $lg = Join-Path $dd "wfc.log"; if (-not (Test-Path $lg)) { continue }
         $rb = @(Grep-Log $lg 'skinned glb: .*?/Characters/([^/\\]+)/robot\.glb' | ForEach-Object { [regex]::Match($_.text, '/Characters/([^/\\]+)/robot').Groups[1].Value } | Select-Object -Unique)
         $vb = @(Grep-Log $lg 'skinned glb: .*?/Characters/([^/\\]+)/vehicle\.glb' | ForEach-Object { [regex]::Match($_.text, '/Characters/([^/\\]+)/vehicle').Groups[1].Value } | Select-Object -Unique)
-        $unavail = @(Grep-Log $lg 'chassis unavailable|fallback='); $opt = ($c.chassis -ne "Optimus") -and ($rb -contains "Optimus" -or $vb -contains "Optimus")
-        $st = if ($unavail.Count) { "FAIL" } elseif ($opt) { "FAIL" } elseif ($rb -contains $c.chassis -and $vb -contains $c.chassis) { "PASS" } elseif (-not $rb.Count) { "UNKNOWN" } else { "FAIL" }
-        $cRows.Add([pscustomobject]@{ chassis = $c.chassis; iconic = $c.iconic; robot = ($rb -join ","); vehicle = ($vb -join ","); status = $(if ($opt) { "FAIL (OPTIMUS FALLBACK)" } else { $st }) })
-        Res "chassis.$($c.chassis)" $st ("WFC_CHASSIS={0} ({1}): robot body {2}; vehicle body {3}{4}{5}" -f $c.chassis, $c.iconic, ($rb -join ","), ($vb -join ","), $(if ($opt) { "; OPTIMUS FALLBACK" } else { "" }), $(if ($unavail.Count) { "; " + ($unavail[0].text -replace '^.*\] ', '') } else { "" })) "Gameplay/AssetTools" }
+        # the ACTIVE chassis = the last one applied ("chassis <id> (<name>): robot N clips ..."); earlier loads are the boot default
+        $applied = @([IO.File]::ReadLines($lg) | Where-Object { $_ -cmatch '\] chassis (\S+) \(' } | ForEach-Object { [regex]::Match($_, '\] chassis (\S+) \(').Groups[1].Value }); $active = if ($applied.Count) { $applied[-1] } else { "" }
+        $unavail = @(Grep-Log $lg 'chassis unavailable|fallback='); $opt = ($OptIds -notcontains $c.chassis) -and ($OptIds -contains $active -or (-not $active -and @($rb | Where-Object { $OptIds -contains $_ }).Count -and $rb -notcontains $c.chassis))
+        $st = if ($unavail.Count) { "FAIL" } elseif ($opt) { "FAIL" } elseif ($active -and $active -ne $c.chassis) { "FAIL" } elseif ($rb -contains $c.chassis -and $vb -contains $c.chassis) { "PASS" } elseif (-not $rb.Count) { "UNKNOWN" } else { "FAIL" }
+        $cRows.Add([pscustomobject]@{ chassis = $c.chassis; iconic = $c.iconic; active = $active; robot = ($rb -join ","); vehicle = ($vb -join ","); status = $(if ($opt) { "FAIL (OPTIMUS FALLBACK)" } else { $st }) })
+        Res "chassis.$($c.chassis)" $st ("WFC_CHASSIS={0} ({1}): active chassis {6}; robot bodies loaded {2}; vehicle bodies loaded {3}{4}{5}" -f $c.chassis, $c.iconic, ($rb -join ","), ($vb -join ","), $(if ($opt) { "; OPTIMUS FALLBACK" } else { "" }), $(if ($unavail.Count) { "; " + ($unavail[0].text -replace '^.*\] ', '') } else { "" }), $(if ($active) { $active } else { "not logged" })) "Gameplay/AssetTools" }
     Write-WfcCsv $cRows (Join-Path $OutDir "characters_chassis.csv")
     $tiles = @(Get-ChildItem $dc -Recurse -Filter *.bmp -ErrorAction SilentlyContinue | Sort-Object FullName | ForEach-Object { @{ png = $_.FullName; label = (Split-Path (Split-Path $_.FullName) -Leaf) } }); if ($tiles.Count) { New-WfcSheet $tiles (Join-Path $OutDir "sheet_chassis.png") 6 320 180 }
 } else { Res "chassis" "SKIP" "build has no WFC_CHASSIS (Gameplay 22a+): every-chassis runtime check not possible" "Experimental" }
 if ($H.Contains("WFC_CHASSISTEST")) { $dt = Join-Path $OutDir "chassistest"; New-Item -ItemType Directory -Force $dt | Out-Null
     if (-not $ReportOnly -and (Wait-WfcGpu)) { $null = Invoke-WfcExe $relExe $dt @{ WFC_CHASSISTEST = "1" } "run.log" 600 }
     $cl = @(Grep-Log (Join-Path $dt "wfc.log") 'CHASSIS (PASS|FAIL) '); $sumL = @(Grep-Log (Join-Path $dt "wfc.log") 'CHASSIS SUMMARY')[0]
-    Res "gameplay_chassistest" $(if (@($cl | Where-Object { $_.text -match 'CHASSIS FAIL' }).Count) { "FAIL" } elseif ($cl.Count) { "PASS" } else { "SKIP" }) ("Gameplay WFC_CHASSISTEST: {0}; failing: {1}" -f $(if ($sumL) { $sumL.text -replace '^.*CHASSIS ', '' } else { "no summary" }), ((@($cl | Where-Object { $_.text -match 'CHASSIS FAIL' }) | Select-Object -First 5 | ForEach-Object { $_.text -replace '^.*CHASSIS FAIL ', '' }) -join " | ")) "Gameplay" }
+    Res "gameplay_chassistest" $(if (@($cl | Where-Object { $_.text -cmatch '\] CHASSIS FAIL ' }).Count) { "FAIL" } elseif ($cl.Count) { "PASS" } else { "SKIP" }) ("Gameplay WFC_CHASSISTEST: {0}; failing: {1}" -f $(if ($sumL) { $sumL.text -replace '^.*CHASSIS ', '' } else { "no summary" }), ((@($cl | Where-Object { $_.text -cmatch '\] CHASSIS FAIL ' }) | Select-Object -First 5 | ForEach-Object { $_.text -replace '^.*CHASSIS FAIL ', '' }) -join " | ")) "Gameplay" }
 
 # ---------------- B. runtime: the class presets through Choose Character
 $d = Join-Path $OutDir "runtime"; New-Item -ItemType Directory -Force $d | Out-Null
@@ -111,7 +117,7 @@ else {
         $want = if ($p -and $fac -ne "?") { $p.$fac } else { "" }; $man = @($X.characters | Where-Object { $_.chassis -eq $sg.game_chassis })[0]
         $body = @($sg.robot | Select-Object -Unique); $vbody = @($sg.vehicle | Select-Object -Unique)
         if (-not $body.Count -and $lastRobot.Count) { $body = $lastRobot }; if (-not $vbody.Count -and $lastVeh.Count) { $vbody = $lastVeh }; $lastRobot = $body; $lastVeh = $vbody
-        $optimusFallback = ($sg.game_chassis -and $sg.game_chassis -ne "Optimus" -and ($body -contains "Optimus" -or $sg.drawn -eq "Optimus"))
+        $optimusFallback = ($sg.game_chassis -and $OptIds -notcontains $sg.game_chassis -and (($OptIds -contains $sg.drawn) -or (@($body | Where-Object { $OptIds -contains $_ }).Count -and $body -notcontains $sg.game_chassis)))
         $wantW = @($p.weapons); $gotW = @($sg.weapons | Select-Object -Unique); if (-not $gotW.Count -and $lastW.Count) { $gotW = $lastW }; $lastW = $gotW; $missingExport = @($wantW | Where-Object { $X.weapon_exports -notcontains $_ })
         $wrongW = @($gotW | Where-Object { $wantW -notcontains $_ }); $notLoaded = @($wantW | Where-Object { $gotW -notcontains $_ -and $X.weapon_exports -contains $_ -and $script:NoMeshWeapons -notcontains $_ })
         $loadout = if (-not $wantW.Count) { "UNKNOWN" } elseif ($wrongW.Count -or $notLoaded.Count) { "FAIL" } elseif ($missingExport.Count) { "ASSET MISSING" } else { "PASS" }
@@ -120,7 +126,7 @@ else {
             expected_chassis = $want; selected_chassis = $sg.game_chassis; body = ($body -join ","); vehicle_body = ($vbody -join ",")
             body_resolves = $(if ($optimusFallback) { "FAIL (OPTIMUS FALLBACK)" } elseif ($body -contains $sg.game_chassis) { "PASS" } elseif (-not $body.Count) { "UNKNOWN" } else { "FAIL" })
             faction = $(if ($fac -eq "?") { "UNKNOWN" } elseif ($man -and $man.faction -eq $fac -and (-not $want -or $want -eq $sg.game_chassis)) { "PASS" } else { "FAIL" })
-            vehicle = $(if ($vbody -contains $sg.game_chassis) { "PASS" } elseif ($vbody -contains "Optimus" -and $sg.game_chassis -ne "Optimus") { "FAIL (OPTIMUS FALLBACK)" } elseif (-not $vbody.Count) { "UNKNOWN" } else { "FAIL" })
+            vehicle = $(if ($vbody -contains $sg.game_chassis) { "PASS" } elseif (@($vbody | Where-Object { $OptIds -contains $_ }).Count -and $OptIds -notcontains $sg.game_chassis) { "FAIL (OPTIMUS FALLBACK)" } elseif (-not $vbody.Count) { "UNKNOWN" } else { "FAIL" })
             class = $(if ($man -and $man.default_class -eq $cls -and $formByClass[$cls] -eq $man.vehicle_form) { "PASS" } elseif ($man) { "FAIL" } else { "UNKNOWN" })
             loadout = $loadout; loadout_note = "expected {0}; loaded {1}; wrong weapon(s) {2}; exported but not loaded {3}; not exported {4}" -f ($wantW -join ","), ($gotW -join ","), ($wrongW -join ","), ($notLoaded -join ","), ($missingExport -join ",")
             rendered = "HUMAN (sheet)"; gameplay_log = $(if ($sg.drawn) { "drawn=$($sg.drawn) fallback=$($sg.fallback)" } else { "" }) }
