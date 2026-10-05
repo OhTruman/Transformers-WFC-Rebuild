@@ -59,6 +59,17 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND: LOBBY EMBLEMS AND BACKDROP (2026-10-05, agents/frontend)
+- **Party / game lobby backdrop: CONFIRMED ORIGINAL (sparse).** UI_PartyLobby_m / UI_Lobby_m hold no geometry; the
+  streamed UI_CharacterCustomization_m shows UI_LobbyMaterials_p.SpaceDome_STAT and four CybertronCard_STAT planes; the
+  two robot SkeletalMeshActors are authored hidden; robots appear only in Create a Character (initStreamingLvl).
+- **Faction emblems: CONFIRMED.** Four MaterialInstanceActors (Autobot / Decepticon icon and glow) animated by matinees
+  (InterpTrackFloatMaterialParam Highlighted 0 -> 1 / 0.5 s, Opacity 0 -> 1 / 0.3 s) that the movie drives through
+  subsequence inputs (glow / dim / fadein / fadeout <Faction>, hidePlayer / unhidePlayer). The exporter resolves those
+  inputs; values go to Rendering's setFrontendMaterialParam (M33). Verified on screen: emblems behind the robots in
+  the overview, the selected faction glowing in its chassis menu, none in the party lobby / class list. FLOW
+  scene.emblem for the gates. No vector material tracks exist in the frontend levels.
+
 ## FRONTEND: ONE RENDERER ACROSS MATCHES (2026-10-05, agents/frontend)
 - The match cleanup recreated the renderer (M06 hard reset, not original). With Rendering M28 (unloadMapRenderData also
   releases the textures a match uploaded) one renderer now serves the session: detected at compile time; renderers
