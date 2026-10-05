@@ -1455,6 +1455,22 @@ void Application::runTdmSessionTest() {
         int allyTags = 0; for (const auto& t : hd.tags) allyTags += t.ally && t.drawn;
         check(allyTags == 1, "player tags: one ally tag drawn, enemy markers disabled");
     }
+    {   // Frontend selection flow: no spawn before selectCharacter (CheckReadySpawn); the selected chassis is reported,
+        // and the Optimus stand-in is flagged as a fallback rather than hidden.
+        world_.startLocalMatch(game::MatchSettings::forMode("TDM"));
+        game::Match& m3 = world_.match();
+        int me3 = world_.localMatchPlayer();
+        m3.requireCharacterSelection(me3);
+        run(12.0f);
+        bool waited = m3.state() == game::Match::State::InProgress && !m3.players()[(size_t)me3].alive;
+        game::CharacterSelection sel; sel.type = 0; sel.specialty = game::Specialty::Scout;
+        m3.selectCharacter(me3, sel);
+        run(1.0f);
+        game::HudGameState h3 = world_.hudState();
+        const char* want = game::defaultChassis(game::Specialty::Scout, m3.faction(me3));
+        check(waited && m3.players()[(size_t)me3].alive && h3.selectedChassis == want && h3.chassisFallback && h3.drawnChassis == "Truck",
+              "selection gate: no spawn until selectCharacter; custom Scout resolves per faction; Optimus fallback explicit");
+    }
     LOG_INFO("TDMTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

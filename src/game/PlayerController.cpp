@@ -56,13 +56,14 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // FineAim 25/12.5 vs default 50/25) [CONF ratio]. While Driving the look X axis is the steering
     // input (PlayerInCarForm.SetLocalInputs: SteeringInput = TnPlayerInput.GetNormalizedTurn()) and
     // the orbit yaw follows the truck (TnDrivingOrbitRotationCameraBehavior) [CONF bytecode].
-    float look = fineAiming_ ? cfg::kFineAimLookScale : 1.0f;
+    float look = (fineAiming_ ? cfg::kFineAimLookScale : 1.0f) * lookScale_;
+    const float invY = invertY_[vehicleForm ? 1 : 0] ? -1.0f : 1.0f;
     if (!driving) {
         camYaw_ -= in.mouseDX * cfg::kMouseSens * look;
         if (in.padConnected) camYaw_ -= in.padRX * 0.04f * look;
     }
-    camPitch_ -= in.mouseDY * cfg::kMouseSens * look;
-    if (in.padConnected) camPitch_ += in.padRY * 0.03f * look;
+    camPitch_ -= in.mouseDY * cfg::kMouseSens * look * invY;
+    if (in.padConnected) camPitch_ += in.padRY * 0.03f * look * invY;
     // PitchRange of the active strategy: OverTheShoulder -75..75, HoverTruck -20..30, Truck -25..25.
     float pMin = cfg::kPitchMin, pMax = cfg::kPitchMax;
     if (vehicleForm) {

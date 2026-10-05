@@ -51,7 +51,9 @@ struct HudGameState {
     core::Vec3 lastDamageFrom{0, 0, 0};
     float lastDamageBearing = 0.0f;
     bool vehicleForm = false, transforming = false;
-    int cantTransformCount = 0;                  // increments per refused transform (HUD NotifyCantTransform + TransformFailedSound)
+    int cantTransformCount = 0;
+    std::string selectedChassis, drawnChassis;   // resolved selection vs. body drawn (fallback when they differ)
+    bool chassisFallback = false;                  // increments per refused transform (HUD NotifyCantTransform + TransformFailedSound)
     float timeToRespawn = -1.0f;                 // <PlayerOwner:TimeToRespawn> (MultiplayerRespawn_GFX)
     bool spectating = false;                     // dead >= MinRespawnDelay 3.0 s: PlayerSpectating (UI event 4)
     // Match

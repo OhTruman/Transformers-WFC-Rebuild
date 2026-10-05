@@ -3,6 +3,12 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 21f (2026-10-04) — Frontend playtest follow-ups
+- Selected body: spawn reports selectedChassis/drawnChassis/chassisFallback and logs "MATCH spawn ... drawn=Optimus fallback=missing ROBODEF/VEHDEF export" (no hidden placeholder).
+- Match::requireCharacterSelection (identical to integration M06); TDMTEST 42/42 covers the spawn gate.
+- PlayerController::setLookSettings(sensitivity, invertRobot, invertVehicle) for LocalProfile values.
+- Contract doc: shipped PC Controls card with per-action implementation status; kill-feed damage type field.
+
 ## GAMEPLAY PASS 21e (2026-10-04) — transform clearance, roster contract, HUD state completion
 - Vehicle->robot refused with NotifyCantTransform + TransformFailedSound when the robot cannot fit; displaced spot; post-fold ForceIntoForm(vehicle).
 - CharacterRoster.h: selection before spawn, team faction, specialty default bodies, stable chassis IDs (Optimus default).

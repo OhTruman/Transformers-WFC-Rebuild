@@ -78,6 +78,8 @@ struct MatchPlayer {
     bool hasSelectedCharacter = false; // PRI.HasSelectedCharacter: spawning waits for it [CONF]
     CharacterSelection selection;
     std::string chassis;               // body resolved at the last spawn (faction from the team)
+    std::string drawnChassis;          // body actually drawn: the selection when its pawn resources load, else "Truck"
+    bool chassisFallback = false;      // true when drawnChassis != chassis [RECONSTRUCTION FALLBACK, logged]
 };
 
 class Match {
@@ -99,6 +101,9 @@ public:
     int addPlayer(const std::string& name);      // PostLogin: team via TnTeamHandlerTwoTeams.PickTeam (team games)
     // TnPlayerController.SelectCharacter -> ReplicateCharacterData -> PRI._SelectedCharacter (applies at the next spawn).
     void selectCharacter(int p, const CharacterSelection& s) { if (p >= 0 && (size_t)p < players_.size()) { players_[(size_t)p].selection = s; players_[(size_t)p].hasSelectedCharacter = true; } }
+    // [integration M06] A player whose character comes from the frontend's selection screen: no default selection,
+    // so CheckReadySpawn waits for selectCharacter (addPlayer pre-selects Optimus only for the direct boot / harnesses).
+    void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
     void tick(float dt);
     // GameInfo.Killed. killer < 0: environmental. suicide: DmgType_Suicided or killer == victim.
     void killed(int killer, int victim, bool suicide = false, const std::string& damageType = std::string());

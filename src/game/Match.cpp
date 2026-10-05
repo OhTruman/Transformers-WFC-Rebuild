@@ -331,6 +331,11 @@ void Match::restartPlayer(int p) {
     MatchPlayer& P = players_[(size_t)p];
     if (!P.hasSelectedCharacter) { P.timeToRespawn = 0.1f; return; }   // CheckReadySpawn: no selection, no spawn (retry)
     P.chassis = resolveChassis(P.selection, faction(p));
+    // Only the Optimus ("Truck") pawn resources exist in the rebuild: any other chassis is drawn as Optimus, explicitly.
+    P.drawnChassis = "Truck";
+    P.chassisFallback = P.chassis != P.drawnChassis;
+    if (P.chassisFallback)
+        LOG_INFO("MATCH spawn %s chassis=%s drawn=Optimus fallback=missing ROBODEF/VEHDEF export", P.name.c_str(), P.chassis.c_str());
     int st = findPlayerStart(p);
     spawnAt_[(size_t)p] = st;
     P.alive = true;

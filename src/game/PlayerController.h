@@ -85,6 +85,11 @@ public:
     int cantTransformCount() const { return cantTransformCount_; }      // pulses for the HUD / Systems
     int forcedVehicleCount() const { return forcedVehicleCount_; }
     bool tryBeginTransform();
+    // LocalProfile look settings (Frontend owns the values): camera sensitivity (profile default 30 = scale 1.0 [PROV
+    // linear mapping until the profile -> look-rate scale is recovered]) and invert Y per form (0 robot, 1 vehicle).
+    void setLookSettings(float sensitivity, bool invertRobot, bool invertVehicle) {
+        lookScale_ = sensitivity > 0.0f ? sensitivity / 30.0f : 1.0f; invertY_[0] = invertRobot; invertY_[1] = invertVehicle;
+    }
     static bool robotFitsAt(const CollisionWorld* col, const core::Vec3& feet);
     static bool findRobotSpot(const CollisionWorld* col, const core::Vec3& feet, core::Vec3& out);
     // No pawn (PendingMatch: ShouldSpectateOnLogin): the controller views from its own location / rotation, which
@@ -148,6 +153,8 @@ private:
     bool camOldValid_ = false;
     bool spectating_ = false;
     int cantTransformCount_ = 0, forcedVehicleCount_ = 0;
+    float lookScale_ = 1.0f;
+    bool invertY_[2] = {false, false};
     bool wasTransforming_ = false;
 
     core::Vec3 specPos_{0, 0, 0};
