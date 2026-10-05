@@ -48,6 +48,24 @@ private:
     void fullscreen();
 
     bool ok_ = false;
+    // GL state contract with the world / scene renderer: the UI pass (begin .. end) changes depth / cull / stencil /
+    // blend / scissor / fixed-function enables, masks, the program, VAO, buffers, textures, framebuffers and the
+    // viewport; begin() records them and end() restores them, so the next world frame starts from the state it left.
+    // (From b1fce97 the in-match HUD ran this pass every match frame and left GL_DEPTH_TEST disabled: the Streets
+    // architecture was overdrawn by later draws - the frontend-route world loss.)
+    struct SavedGl {
+        bool depthTest, cullFace, scissor, alphaTest, lighting, fog, stencil, blend;
+        int depthMask;
+        unsigned char colorMask[4];
+        int stencilWriteMask;
+        int blendSrcRgb, blendDstRgb, blendSrcA, blendDstA, blendEqRgb, blendEqA;
+        int viewport[4];
+        float clearColor[4];
+        int clearStencil;
+        int program, vao, arrayBuffer, activeTexture, texture2D, drawFbo, readFbo;
+    } saved_{};
+    void saveGlState();
+    void restoreGlState();
     int w_ = 0, h_ = 0, fbw_ = 0, fbh_ = 0;
     unsigned prog_ = 0, compProg_ = 0, vbo_ = 0, vao_ = 0;
     unsigned msFbo_ = 0, msColor_ = 0, msDepth_ = 0, resFbo_ = 0, resTex_ = 0;
