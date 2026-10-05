@@ -156,6 +156,17 @@ void Application::run() {
                 }
             });
         }
+        if (const char* ss = std::getenv("WFC_SCENESCALE")) {   // diagnostics: actor,drawScale[;actor,drawScale...]
+            std::string all = ss;
+            for (size_t p0 = 0; p0 <= all.size();) {
+                size_t p1 = all.find(';', p0);
+                std::string t = all.substr(p0, p1 == std::string::npos ? std::string::npos : p1 - p0);
+                size_t c = t.find(',');
+                if (c != std::string::npos) renderer_->setFrontendActorScale(t.substr(0, c), (float)std::atof(t.c_str() + c + 1));
+                if (p1 == std::string::npos) break;
+                p0 = p1 + 1;
+            }
+        }
         if (const char* sp = std::getenv("WFC_SCENEPOSE")) {     // diagnostics: actor,x,y,z,pitch,yaw,roll (UE, deg)
             char name[128] = {0}; float v[6] = {0};
             if (std::sscanf(sp, "%127[^,],%f,%f,%f,%f,%f,%f", name, &v[0], &v[1], &v[2], &v[3], &v[4], &v[5]) == 7)

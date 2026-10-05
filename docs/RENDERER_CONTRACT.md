@@ -80,6 +80,7 @@ Gameplay passes the markers its rules show. Ownership of the in-match HUD layers
 | `setDisplayGamma(g)` | UE3 DisplayGamma for the scene resolve and Canvas material tiles (default 2.2). Profile Brightness → g is `HmProfileSettings.GetGammaSetting`: `2.2 + Lerp(-0.95, 0.95, Clamp(GammaSetting/100, 0, 1))` (CONFIRMED script), computed by the caller. GFx / video / Canvas text stay display-referred. |
 | `setFrontendSceneDraw(callback)` | Called inside `drawFrontendScene` after the scene geometry, before translucency / post. The caller draws dynamic bodies there, e.g. the customization preview pawns: `setDrawOwner(slot)` + `setCharacterColors` + `drawDynamicMesh`. Gameplay owns the body (chassis, form, pose); Rendering draws it. |
 | `render::ueActorMatrix(posUE, rotUEdeg)` | Model matrix for an exported content glTF (roster robot / vehicle) placed at a UE location / rotation, as authored actors are placed. |
+| `setFrontendActorScale(actor, drawScale)` | Matinee `InterpTrackFloatProp` DrawScale, absolute: drawn at drawScale / authored DrawScale about the actor's location. Meshes and Emitter actors (emitters also follow `setFrontendActorTransform`; particles already emitted stay in world space). |
 | `setDrawOwner(id)` | Per-character light environment and applier colours for the following dynamic draws. |
 
 **Frontend scenes:**

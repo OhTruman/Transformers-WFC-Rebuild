@@ -17,6 +17,15 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 12 — FRONTEND VIGNETTE SHIPS (2026-10-05)
+| Item | Original | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Ship skeletal animation | none: the 17 HmSkeletalMeshActors (7 SoldierJetAut, 10 SoldierJetDec) have no AnimSets; their AnimNodeSequence serializes no properties (no sequence, not playing); the VIG / UI_FrontEnd Kismet has no animation action; no InterpTrackAnimControl in either level | cooked UI_FrontEnd_capture_VIG_m / UI_FrontEnd_m | CONFIRMED | reference (bind) pose is the original look |
+| Ship motion | InterpTrackMove (26 tracks) | cooked VIG | CONFIRMED | Frontend matinee → `setFrontendActorTransform` (done) |
+| Ship / booster scale animation | 7 InterpTrackFloatProp DrawScale tracks: dec01, dec0203 (0.2), djDS01 (0.08 → …), megatronDS (0.02), thrust01, DSbooster, djDSboosters (0.1 → 0.6 / 1.0) | cooked VIG keys | CONFIRMED | `setFrontendActorScale` (relative to the authored DrawScale = gltf_matrix scale); emitters follow pose + scale. VISUALLY VERIFIED with the diagnostic (djDS01 0.47 → 0.08). Frontend's evaluator must export / evaluate the FloatProp keys [PARTIAL until wired] |
+| Particle size under DrawScale | — | — | UNKNOWN | positions / velocities scale (component transform), sprite size does not (as for static emitters) |
+| Camera FOVAngle tracks | 8 InterpTrackFloatProp FOVAngle (NewCameraGroup, CameraDummy) | cooked VIG | CONFIRMED | Frontend's camera evaluation |
+
 ## MILESTONE 11 — REAL RELEASE PATH: MAPS DRAWN WITHOUT DEPTH TESTING AFTER THE MENUS (2026-10-04)
 Input: the human recording of `Rebuild\build\release\bin\wfc_rebuild.exe` (M06b): Streets and Berth incomplete. The
 human's session log is `F:\Transformers Rebuild\wfc.log` (account OhTruman, 20:50). Full evidence:

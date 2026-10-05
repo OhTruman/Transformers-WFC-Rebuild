@@ -168,6 +168,10 @@ public:
     virtual void setFrontendActorTransform(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg) {
         (void)actor; (void)posUE; (void)rotUEdeg;
     }
+    // Matinee InterpTrackFloatProp "DrawScale" (Actor.DrawScale, absolute, as the track sets it): the actor is drawn at
+    // drawScale / its authored DrawScale about its location. The UI_FrontEnd vignette keys it on the ship groups
+    // (dec01 / dec0203 0.2, djDS01 0.08 -> ..., megatronDS 0.02) and the booster emitters (cooked VIG package).
+    virtual void setFrontendActorScale(const std::string& actor, float drawScale) { (void)actor; (void)drawScale; }
 
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile / UCanvas.DrawMaterialTile): a screen quad shaded by a
     // compiled original material (e.g. UI_HudMarkers_p) with per-draw parameter values (MaterialInstanceDynamic

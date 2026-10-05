@@ -216,6 +216,9 @@ bool Pipeline::loadMapFx(const std::string& path) {
         for (int r = 0; r < 3; ++r)
             for (int c = 0; c < 3; ++c) in.R[r][c] = M[(size_t)r][(size_t)c].asFloat();
         for (int c = 0; c < 3; ++c) in.T[c] = M[3][(size_t)c].asFloat();
+        std::copy(&in.R[0][0], &in.R[0][0] + 9, &in.R0[0][0]);
+        std::copy(in.T, in.T + 3, in.T0);
+        in.ownerShort = in.owner.substr(in.owner.rfind('.') == std::string::npos ? 0 : in.owner.rfind('.') + 1);
         in.rng = 0x9E3779B9u * (uint32_t)(i + 1);
         auto it = fxSystems_.find(in.system);
         if (it == fxSystems_.end()) continue;
@@ -303,6 +306,20 @@ void Pipeline::tickMapFx(float dt) {
     for (FxInstance& in : fxInstances_) {
         const FxSystem& sys = fxSystems_[in.system];
         if (!in.requiredRule.empty() && !ruleActive(in.requiredRule)) continue;   // factory not in this mode
+        if (!actorPoses_.empty()) {                     // frontend matinee: the Emitter actor's pose / DrawScale
+            // world = M (x - L0) + L1; rows of R are the component's axes in world space (TransformNormal), so
+            // each row is rotated and scaled
+            float Mx[9], L0[3], L1[3];
+            if (frontendPoseUE(in.ownerShort, Mx, L0, L1)) {
+                auto apply = [&](const float v[3], float o[3]) {
+                    for (int r = 0; r < 3; ++r) o[r] = Mx[0 * 3 + r] * v[0] + Mx[1 * 3 + r] * v[1] + Mx[2 * 3 + r] * v[2];
+                };
+                for (int r = 0; r < 3; ++r) apply(in.R0[r], in.R[r]);
+                float d[3] = {in.T0[0] - L0[0], in.T0[1] - L0[1], in.T0[2] - L0[2]}, o[3];
+                apply(d, o);
+                for (int c = 0; c < 3; ++c) in.T[c] = L1[c] + o[c];
+            }
+        }
         // LOD: Automatic = by distance to the camera; DirectSet = level 0 (no code sets it)
         float dx = in.T[0] - camUE[0], dy = in.T[1] - camUE[1], dz = in.T[2] - camUE[2];
         float dist = std::sqrt(dx * dx + dy * dy + dz * dz);

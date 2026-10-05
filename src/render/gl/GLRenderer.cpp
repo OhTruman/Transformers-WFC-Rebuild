@@ -724,6 +724,7 @@ public:
     void setFrontendActorTransform(const std::string& a, const core::Vec3& p, const core::Vec3& r) override {
         wfc_.setActorPose(a, p, r);
     }
+    void setFrontendActorScale(const std::string& a, float s) override { wfc_.setActorScale(a, s); }
     void setActorHidden(const std::string& actor, bool hidden) override { wfc_.setActorHidden(actor, hidden); }
     void setMapEffectActive(const std::string& what, bool active) override { wfc_.setMapEffectActive(what, active); }
     void setMapEffectState(const std::string& k, bool a, bool h) override { wfc_.setMapEffectState(k, a, h); }
