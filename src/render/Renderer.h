@@ -259,6 +259,16 @@ public:
     virtual void drawScreenTriangles(const ScreenBatch& b) { (void)b; }
     // Replace a texture's contents (same or new size): streamed video frames, dynamic UI bitmaps.
     virtual bool updateTexture(TextureHandle h, const ImageData& image) { (void)h; (void)image; return false; }
+    // Texture lifetime (M28, persistent renderer across matches). uploadTexture handles are match-owned by default:
+    // unloadMapRenderData releases every texture uploaded since the previous unloadMapRenderData (World::load's map
+    // textures, Weapon / Vehicle FX textures, mesh material and lightmap textures) unless it was marked persistent.
+    // Released handles are never reused: a stale handle binds no texture. A texture that must survive matches (a
+    // frontend / movie / UI texture uploaded while a map is loaded or between matches) calls setTexturePersistent.
+    virtual void setTexturePersistent(TextureHandle h) { (void)h; }
+    // Explicit early release by the owner (optional; unloadMapRenderData covers match-owned textures).
+    virtual void releaseTexture(TextureHandle h) { (void)h; }
+    // Live uploadTexture textures (diagnostics: the match load / unload soak checks this returns to a plateau).
+    virtual int liveTextureCount() const { return 0; }
     // Canvas text in an original UE3 font (render data _ui/fonts/<font>.json, tools/render/build_hud.py): UE3 Canvas
     // layout (glyph USize advance, VerticalOffset, no kerning), glyph coverage in alpha x colour, display-referred,
     // composited like drawScreenTriangles. font = short name, e.g. "MarkerFont". Returns false if unavailable.

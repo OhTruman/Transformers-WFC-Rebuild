@@ -147,6 +147,10 @@ void parseClips(const Json& root, const Doc& doc, SkinnedModel& m, const std::ve
 } // namespace
 
 bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
+    // A load replaces the model. Loading into a used model appended children / roots (and kept stale clips): every
+    // reload duplicated each edge, so poseGlobals' DFS walked k^depth paths (M29: WFC_RELOADTEST "hang" at reload 4-5,
+    // main thread in poseGlobals).
+    m = SkinnedModel();
     Glb g;
     if (!openGlb(path, g)) { LOG_ERROR("skinned glb: open failed %s", path.c_str()); return false; }
     Json root;

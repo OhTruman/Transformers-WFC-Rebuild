@@ -359,7 +359,13 @@ class MatCompiler:
         uv = self.input(c, n, 'Coordinate', ('m.uv0', 2))
         tm = self.input(c, n, 'Time')
         if not tm: self.uses.add('time'); tm = ('m.time', 1)
-        return '(%s + %s * vec2(%s, %s))' % (cast(uv[0], uv[1], 2), tm[0], glf(n.get('SpeedX', 0.0)),
+        tc = tm[0]
+        if tm[1] > 1:
+            # Mul(Time, Constant2) with a vector Time: HLSL truncates to float2 (lenient like binop; M26: Debris
+            # Megatron_com_Mat feeds a desaturated float3, so .xy carries the same value in both lanes)
+            tc = cast(tm[0], tm[1], 2)
+            self.type_violations = getattr(self, 'type_violations', 0) + 1
+        return '(%s + %s * vec2(%s, %s))' % (cast(uv[0], uv[1], 2), tc, glf(n.get('SpeedX', 0.0)),
                                              glf(n.get('SpeedY', 0.0))), 2
 
     def x_Rotator(self, c, n, p, o):
@@ -367,7 +373,9 @@ class MatCompiler:
         tm = self.input(c, n, 'Time')
         if not tm: self.uses.add('time'); tm = ('m.time', 1)
         cx, cy, sp = n.get('CenterX', 0.5), n.get('CenterY', 0.5), n.get('Speed', 0.25)
-        a = self.tmp(1, '%s * %s' % (tm[0], glf(sp)))
+        if tm[1] > 1:
+            self.type_violations = getattr(self, 'type_violations', 0) + 1
+        a = self.tmp(1, '%s * %s' % (cast(tm[0], tm[1], 1), glf(sp)))
         return ('(mat2(cos(%s), -sin(%s), sin(%s), cos(%s)) * (%s - vec2(%s, %s)) + vec2(%s, %s))'
                 % (a, a, a, a, cast(uv[0], uv[1], 2), glf(cx), glf(cy), glf(cx), glf(cy))), 2
 
