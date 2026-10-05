@@ -111,6 +111,10 @@ public:
             glCullFace(GL_BACK);
             glFrontFace(GL_CCW);
             glDisable(GL_BLEND);
+        } else {
+            // M25: the Frontend now restores its own state too (a96f841), so merely inheriting no longer reproduces
+            // anything. Inject the leak the GFx pass used to leave, so the harness keeps proving it FAILs this state.
+            glDisable(GL_DEPTH_TEST);
         }
         const Camera& cam0 = camIn;
         glViewport(0, 0, vpW, vpH);
@@ -523,8 +527,18 @@ public:
         if (resolved != anim) LOG_INFO("preview body %s: %s -> %s (AnimSet chooser)", gl.c_str(), anim.c_str(), resolved.c_str());
         if (b->clip < 0) LOG_WARN("preview body %s: sequence %s not in its AnimSets; reference pose", gl.c_str(), resolved.c_str());
         else LOG_INFO("preview body %s: %s (%.2f s)", gl.c_str(), resolved.c_str(), b->model.clips[(size_t)b->clip].duration);
+        for (size_t i = 0; i < previewBodies_.size(); ++i)
+            if (!previewBodies_[i]) { previewBodies_[i] = std::move(b); return (int)i; }
         previewBodies_.push_back(std::move(b));
         return (int)previewBodies_.size() - 1;
+    }
+    void releasePreviewBody(int h) override {
+        if (h >= 0 && (size_t)h < previewBodies_.size()) previewBodies_[(size_t)h].reset();
+    }
+    int previewBodyCount() const override {
+        int n = 0;
+        for (const auto& b : previewBodies_) n += b ? 1 : 0;
+        return n;
     }
     bool posePreviewBody(int h, float t, MeshData& out) override {
         if (h < 0 || (size_t)h >= previewBodies_.size() || !previewBodies_[(size_t)h]) return false;
@@ -630,7 +644,9 @@ public:
         // black / flat coverage judges a level (or a fallback), not a sparse menu backdrop: the lobby SpaceDome is ~70 %
         // flat by design (M11 long session: 98 false FAILs at 8 draws)
         const bool judgeImage = !d.originalPath || d.worldDraws + d.bspDraws >= 100;
-        if (judgeImage && m.black > 0.60f) add("scene " + std::to_string((int)(m.black * 100)) + "% black");
+        // M25: with the authored volume grades (Bloom_Scale 0.1 as on Streets, HighLights 1.5) dark maps are 60-65 %
+        // below luma 10 at lit, correct views (Molten lava cave, Gorge shaft); a lost world is > 90 %
+        if (judgeImage && m.black > 0.80f) add("scene " + std::to_string((int)(m.black * 100)) + "% black");
         if (judgeImage && m.flat > 0.70f) add("scene " + std::to_string((int)(m.flat * 100)) + "% flat tiles");
         // few colours alone is not a failure (the lobby SpaceDome is dark and smooth: 19 colours); with an almost
         // black image it is
@@ -699,7 +715,7 @@ public:
         }
         return "textures=" + std::to_string(tex) + " buffers=" + std::to_string(buf) + " programs=" + std::to_string(prog) +
                " framebuffers=" + std::to_string(fbo) + " vaos=" + std::to_string(vao) + " cpuMeshes=" + std::to_string(meshes_.size()) +
-               " previewBodies=" + std::to_string(previewBodies_.size());
+               " previewBodies=" + std::to_string(previewBodyCount());
     }
     RenderDiagnostics renderDiagnostics() const override {
         RenderDiagnostics d;

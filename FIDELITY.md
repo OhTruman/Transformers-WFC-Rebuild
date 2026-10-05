@@ -17,12 +17,21 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 25 — POST-PROCESS VOLUME GRADES, CLUT PATH, HARNESS (2026-10-05, overnight)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Map grade | Seed, Berth, Rust, Complex, Gorge, Molten, BrokenHope and Remnant author their grade on one enabled PostProcessVolume that contains every player start, not on TnWorldInfo. Bloom_Scale is 0.10 there (as on Streets' WorldInfo); the renderer used the Default__WorldInfo 1.0, so these maps were over-bloomed and ungraded | AssetTools postprocess.json volumes[] + completeness (Gorge 115/115 starts inside, Berth 120/120, Remnant 4/4) | CONFIRMED (data); "inside" from player-start coverage, the brush is not exported: HIGH for gameplay views | build_lighting: the highest-Priority enabled volume's Settings (over the FPostProcessSettings defaults, FVector {X,Y,Z} -> list) and its CLUT strip become lighting.json postprocess. Streets / Debris (no volume) byte-identical. Non-Streets p50 drops into Streets' range (10-45). Tone formula unchanged (UberPostProcess microcode, CONFIRMED pass 7) |
+| CLUT never loaded off the worktree root | lighting.json records the strip path relative to the build's cwd; the renderer opened it verbatim, so a player-route exe (cwd elsewhere) ran every map without its CLUT | log "image: decode failed work/render/.../clut.png" from work/m20/maps | CONFIRMED (renderer bug) | resolved against the map's data dir. Release path now applies MP_Streets_CLUT |
+| Black-frame rule | Graded dark views (Molten lava cave, Gorge shaft) are 60-65 % below luma 10 while correctly lit; the 60 % rule FAILed them. No real regression was ever caught by it (depth / GL-error / legacy / near-black rules caught them) | 30-view audit + contact sheet | harness | threshold 80 % (a lost world is > 90 %); 30 / 30 audit views now PASS. Molten / Gorge darkness is PARTIAL (no original capture to compare) |
+| M11 coverage | Frontend restores its GL state since a96f841, so WFC_M11_INHERITSTATE alone no longer reproduced the leak and the release-path check PASSed it | release_path_check with the switch: PASS | harness | the switch now also injects GL_DEPTH_TEST off; release_path_check: fix PASS (6/6), reproduction FAIL (6/6, noDepth ~1450-1810) |
+| Preview body lifetime | bodies are CPU-only and survive scene unloads; nothing freed them | code | — | IRenderer::releasePreviewBody (slot reuse) + previewBodyCount; Frontend LRU-caps at 8, soak plateau 1246 -> 1253 MB |
+
 ## MILESTONE 24 — VERTEX LIGHTMAPS ON EVERY MAP (2026-10-05, overnight)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
 | Black arches / pillars on Gorge, Rust, Seed | (1) build_lighting rejected FLightMap1D sample blocks whose alpha byte is not 255 ("alignment" check): Gorge / Rust samples carry alpha 0, so 0 of 561 / 635 vertex-lit components parsed. (2) The renderer bound a vertex lightmap only when ONE glTF section covered the whole cooked LOD0 buffer, so multi-section components never bound | header dumps (count × 12 = size, valid ScaleVectors, alpha 0); AssetTools vertex_lightmaps.json agrees byte for byte | CONFIRMED ROOT CAUSE (tooling + renderer) | parser validates size and ScaleVectors instead of alpha: every vertex-lit component of every map parses (Gorge 561, Rust 635, Seed 257, …). Sections index the shared samples at their cumulative offset: Gorge unbound 124 → 4, Rust 381 → 0. Streets lighting.json byte-identical, suite identical. Gorge view 0 black 37 % → 21 % (arch lit). VISUALLY VERIFIED |
 | Remaining | one Gorge component whose glTF sections total 1616 vertices against 1576 cooked samples (export differs from the cooked buffer) | renderer log | PARTIAL (not bound rather than guessed) | — |
-| Map colour grade | 8 of 9 non-Streets maps grade on a PostProcessVolume containing the player starts (e.g. Gorge clut_mp40 + Scene_HighLights 1.5), not on WorldInfo | AssetTools 992fbf1 postprocess.json volumes[] | CONFIRMED (data) | not yet consumed [open] |
+| Map colour grade | 8 of 9 non-Streets maps grade on a PostProcessVolume containing the player starts (e.g. Gorge clut_mp40 + Scene_HighLights 1.5), not on WorldInfo | AssetTools 992fbf1 postprocess.json volumes[] | CONFIRMED (data) | applied in M25 |
 
 ## MILESTONE 23 — FRONTEND SCENES OVER TIME, CUSTOMIZATION, RETURN FROM MATCH (2026-10-05, overnight)
 Merge preview: agents/frontend 1af7e74 (Cust_Idle body, pawn hiding, GFx fixes) + agents/rendering 03a08c8, rebuilt render data.
