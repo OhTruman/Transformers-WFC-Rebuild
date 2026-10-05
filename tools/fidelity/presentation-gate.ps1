@@ -82,8 +82,16 @@ if ($Parts -contains "route") {
         $m = Present-Measure "$d\$t.bmp" $script:PresentRegions.full; if (-not $m) { continue }; $v = Present-UiVerdict $m; Row "route" $t "$t.bmp" $v $m
         $sc = if ($t -like "*0[23]_*") { Present-Measure "$d\$t.bmp" $script:PresentRegions.lobby_scene } else { $null }
         $grey = if ($sc) { FlatGreyFraction "$d\$t.bmp" } else { 0 }
-        $v2 = if ($v -eq "FAIL") { "FAIL" } elseif ($sc -and ($sc.maxFlat -ge 0.6 -or $grey -gt 0.15)) { "FAIL" } else { "PASS" }
-        Res "frontend.screen.$t" $v2 ("screen: detail {0}, black {1}, largest blank {2}, untextured {4} / {5}, noise {6}{3}" -f $m.detail, $m.black, $m.maxFlat, $(if ($sc) { "; scene area right of the panel: largest blank {0}, flat grey {1:P0}" -f $sc.maxFlat, $grey }), $m.untexMax, $m.untexFrac, $m.noise) "Frontend/Rendering"
+        # The original party / game lobby backdrop is SPARSE (CONFIRMED, Frontend from authored.db): UI_PartyLobby_m / UI_Lobby_m
+        # have no geometry; the scene is UI_CharacterCustomization_m's SpaceDome_STAT + four CybertronCard_STAT planes and the
+        # emblem MaterialInstanceActors; its robots are authored hidden (they appear only in Create a Character). A dark dome
+        # with large quiet areas is correct (measured: detail 0.07-0.12, largest blank 0.42-0.58); a clear colour (detail 0,
+        # blank 1.0) or an untextured grey slab is not. No room or characters are expected here.
+        $lv = if ($sc) { @(Flow-Ev $F "scene.levels" | Where-Object { "$($_.uiLevel)" -match $(if ($t -like "*party*") { "UI_PartyLobby" } else { "^UI_Lobby" }) }) } else { @() }
+        $domeLv = @($lv | Where-Object { "$($_.levels)" -match "UI_CharacterCustomization_m" -and "$($_.drawn)" -eq "True" }).Count -gt 0
+        $clear = $sc -and ($sc.detail -lt 0.02 -or $sc.maxFlat -ge 0.95)
+        $v2 = if ($v -eq "FAIL") { "FAIL" } elseif ($sc -and ($clear -or $grey -gt 0.15)) { "FAIL" } elseif ($sc -and $lv.Count -and -not $domeLv) { "FAIL" } else { "PASS" }
+        Res "frontend.screen.$t" $v2 ("screen: detail {0}, black {1}, largest blank {2}, untextured {4} / {5}, noise {6}{3}" -f $m.detail, $m.black, $m.maxFlat, $(if ($sc) { "; lobby backdrop (dome + 4 cards, sparse by design) right of the panel: detail {0}, largest blank {1} (FAIL as clear colour: detail < 0.02 or blank >= 0.95), flat grey {2:P0}; dome/cards level UI_CharacterCustomization_m drawn: {3}; emblem glow and no robots outside Create a Character: HUMAN" -f $sc.detail, $sc.maxFlat, $grey, $(if ($lv.Count) { $domeLv } else { "no scene.levels trace" }) }), $m.untexMax, $m.untexFrac, $m.noise) "Frontend/Rendering"
     }
     # --- character select: UI visible, preview / body resolution
     foreach ($p in "a", "b") {
