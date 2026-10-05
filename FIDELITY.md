@@ -131,10 +131,13 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
     * tracer: start → end.
   * A -1 return or no binding: logged once, nothing drawn. `tools/systems/weaponfx_generic_probe.cpp` checks all of
     this against a recording fake.
-  * PARTIAL:
-    * colour is not passed — the reconstructed blue is those templates' own stream constant, not a weapon tint, and
-      the runtime does not decode template defaults yet;
-    * the runtime does not draw Trail2 ribbons yet.
+  * Colour: none is passed, which is correct. The runtime (agents/rendering M34) resolves component
+    InstanceParameter → caller colour → the template's own decoded ColorByParameter DefaultColor → white.
+    * The results match the reconstruction and the editor thumbnails: AssaultRifle (51,25,255) = the Ion blue,
+      EMP shotgun (255,65,65), Sniper (255,12,12).
+    * Confidence: HIGH structural decode; MEDIUM for the single-candidate stream layouts (Rendering).
+  * PARTIAL: the runtime does not draw Trail2 ribbons yet. Other weapons' tracers show only their sprite emitters,
+    and the Ion tracer stays hand-made.
   * No hand-ports.
 * **PARTIAL:**
   * 169 dialogue waves are absent from the extraction (AssetTools).
