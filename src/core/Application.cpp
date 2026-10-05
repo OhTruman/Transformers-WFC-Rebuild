@@ -2481,7 +2481,11 @@ void Application::runMapSuite() {
     {
         game::PickupFactory* hf = nullptr;
         for (game::PickupFactory* pf : world_.pickupFactories()) if (pf->kind() == game::PickupFactory::Kind::Health && pf->available()) { hf = pf; break; }
+        // Independent of the hazard step before it: wait out a hazard death, then start from full health (so the 50% damage
+        // never kills) [harness order fix, Integration M08 report on Seed / Complex].
+        for (int i = 0; i < 60 * 12 && world_.localPlayerDead(); ++i) run(1.0f / 60.0f);
         if (hf && !world_.localPlayerDead()) {
+            pc.health().current = pc.health().max;
             world_.applyMatchDamage(world_.localMatchPlayer(), -1, pc.health().max * 0.5f, true);
             float hp = pc.health().current;
             pc.setPosition(hf->position());
