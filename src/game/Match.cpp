@@ -505,7 +505,7 @@ const KillstreakDef kKillstreaks[] = {
     {"SpawnRocketTurretStreak", 7, "Scientist", "Nucleon Shock Cannon", false},
     {"RefillAmmoStreak", 3, "Soldier", "Ammo Matrix", true},
     {"TeamAbilityJammerStreak", 5, "Soldier", "Electromagnetic Pulse", true},
-    {"GuidedMissileStreak", 7, "Soldier", "Omega Missile", false},
+    {"GuidedMissileStreak", 7, "Soldier", "Omega Missile", true},
 };
 }
 const KillstreakDef* findKillstreak(const std::string& specialty, int kills) {

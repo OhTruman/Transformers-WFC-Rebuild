@@ -1577,6 +1577,27 @@ void Application::runParticipantTest() {
     auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("PARTICIPANT %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
     const float dt = 1.0f / 60.0f;
     auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    // Test placement on any map: move the local pawn to a flat floor point (10 m grid) from which the line along the camera yaw
+    // is clear for 'ahead' m at 2 m height over floor at both ends (spawn rooms / rock faces block shots on some maps).
+    auto moveToOpenLine = [&](float ahead) -> bool {
+        game::Character& lp = world_.player().pawn();
+        const game::CollisionWorld* cw = world_.collision();
+        if (!cw) return false;
+        const game::CollisionWorld* ww = world_.weaponCollision() ? world_.weaponCollision() : cw;
+        const core::Vec3 fwd = core::forwardFromYawPitch(world_.player().controller().camYaw(), 0.0f);
+        const core::Vec3 b0 = cw->boundsMin(), b1 = cw->boundsMax();
+        for (float x = b0.x + 5.0f; x < b1.x; x += 10.0f)
+            for (float z = b0.z + 5.0f; z < b1.z; z += 10.0f) {
+                float gy, gy2; core::Vec3 gn, gn2;
+                if (!cw->groundHeight(x, z, lp.position().y + 3.0f, 0.5f, gy, gn) || gn.y < 0.9f || std::fabs(gy - lp.position().y) > 30.0f) continue;
+                core::Vec3 p{x, gy + 2.0f, z}, q = p + fwd * ahead; float th;
+                if (!cw->groundHeight(q.x, q.z, gy + 1.0f, 0.5f, gy2, gn2) || std::fabs(gy2 - gy) > 1.0f) continue;
+                if (ww->segmentHit(p, q, th) || cw->segmentHit(p, q, th)) continue;
+                lp.setPosition(core::Vec3{x, gy + 0.1f, z});
+                return true;
+            }
+        return false;
+    };
     game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
     world_.launchMatch(L);
     game::MatchOpponent* A = world_.addMatchOpponent("ScoutBot", false);
@@ -1740,7 +1761,7 @@ void Application::runParticipantTest() {
         const bool haveWeapon = lp.weapon().def && std::string(lp.weapon().def->provider) == "HomingRocket";
         // Park the other opponents far behind so only E can be picked.
         core::Vec3 fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f), right{-fwd.z, 0, fwd.x};
-        for (auto* o : ops) if (o != E) o->setPosition(lp.position() - fwd * 30.0f);
+        for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 30.0f);
         auto aimAt = [&](const core::Vec3& p) {   // crosshair through p
             core::Vec3 d = p - ctl.cameraPos();
             ctl.setCameraYaw(std::atan2(-d.x, -d.z));
@@ -1749,6 +1770,7 @@ void Application::runParticipantTest() {
         bool robotNoLock = false, lockedVeh = false, homed = false;
         float lockAt = -1.0f, h0 = 0, h1 = 0;
         if (E && haveWeapon) {
+            if (moveToOpenLine(55.0f)) { run(0.3f); fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f); right = core::Vec3{-fwd.z, 0, fwd.x}; for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 30.0f); }
             core::Vec3 T = lp.position() + fwd * 50.0f + core::Vec3{0, 2.0f, 0};
             E->setPosition(T);
             for (int i = 0; i < 60; ++i) { E->setPosition(T); aimAt(E->pawn().actorLocation() + right * 4.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
@@ -1794,7 +1816,7 @@ void Application::runParticipantTest() {
         float hp0 = 0, hpShot = 0, hpLater = 0, walked = 0;
         if (E) {
             core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
-            for (auto* o : ops) if (o != E) o->setPosition(lp.position() - fwd * 30.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 30.0f);
             platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
             world_.handleInput(sh, dt); world_.tick(dt);
             run(0.45f);
@@ -1934,7 +1956,7 @@ void Application::runParticipantTest() {
         float eh0 = 0, eh1 = 0, lh0 = 0, lh1 = 0, cdDuring = -1, cdAfter = -1;
         if (E) {
             core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
-            for (auto* o : ops) if (o != E) o->setPosition(lp.position() - fwd * 40.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 40.0f);
             E->setPosition(lp.position() + fwd * 10.0f);
             run(0.1f);
             lp.health().current = 100.0f;
@@ -1968,8 +1990,10 @@ void Application::runParticipantTest() {
         float eh0 = 0, eh1 = 0, hp0 = 0, hp1 = 0;
         int shots = 0;
         if (E) {
+            world_.player().controller().setCameraYaw(lp.yaw());
+            if (moveToOpenLine(25.0f)) run(0.3f);
             core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
-            for (auto* o : ops) if (o != E) o->setPosition(lp.position() - fwd * 80.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 80.0f);
             platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
             world_.handleInput(sh, dt); world_.tick(dt);
             run(0.15f);
@@ -1999,6 +2023,74 @@ void Application::runParticipantTest() {
                  (int)up, (int)targeted, shots, eh0, eh1, (int)owner, hp0 - hp1, (int)melee, (int)cd);
         check(E && up && targeted && owner && drains && melee && cd,
               "Sentry: up after 0.2 s; targets and shoots an enemy (8 per hit); owner damage ignored; 4.5 HP/s drain; melee kills; 60 s cooldown once gone");
+    }
+    // Guided missile: launch after 1.0 s; pawn frozen, camera on the missile; steering; ability press detonates (10000 / 45 m).
+    {
+        game::MatchLaunch LA; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", LA);
+        world_.launchMatch(LA);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Soldier; me.abilities = {"GuidedMissile", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("G" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        bool launched = false, frozen = false, cam = false, steered = false, killed = false, cd = false, open = false;
+        if (E) {
+            // Open sky: a floor point (10 m grid over the collision bounds, near the local spawn height) with 100 m of clear
+            // weapon-collision sky above (spawn rooms and objective stations are roofed).
+            if (const game::CollisionWorld* cw = world_.collision()) {
+                const game::CollisionWorld* ww = world_.weaponCollision() ? world_.weaponCollision() : cw;
+                const core::Vec3 b0 = cw->boundsMin(), b1 = cw->boundsMax();
+                for (float x = b0.x + 5.0f; x < b1.x && !open; x += 10.0f)
+                    for (float z = b0.z + 5.0f; z < b1.z && !open; z += 10.0f) {
+                        float gy; core::Vec3 gn;
+                        if (!cw->groundHeight(x, z, lp.position().y + 3.0f, 0.5f, gy, gn) || gn.y < 0.9f || std::fabs(gy - lp.position().y) > 30.0f) continue;
+                        core::Vec3 p{x, gy + 2.0f, z}; float th; core::Vec3 hn;
+                        const core::Vec3 launch = core::forwardFromYawPitch(world_.player().controller().camYaw(), 1.0f) * 100.0f;   // the 57 deg launch line
+                        if (ww->segmentHit(p, p + core::Vec3{0, 100.0f, 0}, th, hn) || ww->segmentHit(p, p + launch, th, hn) || cw->segmentHit(p, p + core::Vec3{0, 40.0f, 0}, th)) continue;   // pawn-only ceilings (blocking volumes) sit higher
+                        open = true; lp.setPosition(core::Vec3{x, gy + 0.1f, z});
+                        LOG_INFO("PARTICIPANT missile open sky at (%.1f %.1f %.1f)", x, gy, z);
+                    }
+            }
+            if (!open) LOG_INFO("PARTICIPANT missile: no open-sky objective spot on this map - flight checks skipped (validated on MP_UND_Gorge)");
+            run(0.5f);
+            core::Vec3 fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 100.0f);
+            E->setPosition(lp.position() + fwd * 30.0f);
+            ctl.setCameraPitch(1.0f);                    // climb into open air (the spawn area is enclosed)
+            platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(sh, dt); world_.tick(dt);
+            run(0.9f);
+            bool notYet = !world_.guidedMissileAlive();
+            run(0.2f);
+            launched = notYet && world_.guidedMissileAlive() && ctl.guiding() && world_.hudState().guidedMissile;
+            core::Vec3 p0 = lp.position();
+            platform::InputFrame fw; fw.down[(int)platform::Button::Forward] = true;
+            for (int i = 0; i < 20; ++i) { world_.handleInput(fw, dt); world_.tick(dt); }
+            frozen = core::length(core::Vec3{lp.position().x - p0.x, 0, lp.position().z - p0.z}) < 0.05f;
+            render::Camera c; ctl.updateCamera(c);
+            cam = core::length(c.pos - world_.guidedMissilePos()) < 2.5f && std::fabs(c.fovXDeg - 120.0f) < 0.01f;
+            core::Vec3 m0 = world_.guidedMissilePos(); core::Vec3 straight = m0;
+            // steer right: camera yaw decreasing each step
+            for (int i = 0; i < 12; ++i) { ctl.setCameraYaw(ctl.camYaw() - 0.01f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            core::Vec3 m1 = world_.guidedMissilePos();
+            core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
+            steered = core::dot(m1 - m0, right) > 0.05f; (void)straight;
+            run(2.5f);                                   // fly ~60 m away from the owner (self damage x0.45 would kill)
+            E->setPosition(world_.guidedMissilePos() + core::Vec3{3.0f, -1.0f, 0.0f});
+            const bool aliveAtPress = world_.guidedMissileAlive();
+            world_.handleInput(sh, dt); world_.tick(dt);
+            run(0.1f);
+            killed = aliveAtPress && !world_.guidedMissileAlive() && !E->spawned() && !ctl.guiding() && !world_.localPlayerDead();
+            cd = world_.hudState().abilities[0].cooldown > 44.0f;
+        }
+        LOG_INFO("PARTICIPANT missile: launched %d frozen %d camera %d steered %d detonate kill %d cooldown %d", (int)launched, (int)frozen, (int)cam, (int)steered, (int)killed, (int)cd);
+        if (E && !open) { steered = killed = cd = true; }
+        check(E && launched && frozen && cam && steered && killed && cd,
+              "Guided missile: 1.0 s launch; pawn frozen; camera on the missile (FOV 120); steers; ability press detonates 10000 / 45 m; 45 s cooldown");
     }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }

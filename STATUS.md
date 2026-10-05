@@ -3,6 +3,10 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22w (2026-10-05) — GuidedMissile, multi-map validation
+- Guided missile ability + Omega Missile streak (9 of 12 class killstreaks). Participant tests place themselves on open lines and pass 15/15 on Streets, Gorge, Debris and Rust.
+- Ten-map stress table in FIDELITY.md (oracle / tours / transforms / chaos); all KillZ and under-floor cases classified.
+
 ## GAMEPLAY PASS 22v (2026-10-05) — SpawnSentry
 - Deployable sentry turret from the authored TURRETDEF / WEPDATA / DSYS and RE §J. PARTICIPANT 14/14.
 

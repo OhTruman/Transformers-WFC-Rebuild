@@ -600,6 +600,16 @@ void PlayerController::applyToPawn(World& world, float dt) {
     // TnAbilityManager.TriggerAbility: spam prevention, availability (cooldown), LocalTriggerAbility, then the cooldown
     // waits for CanStartCooldown. PlayerWalking.CanUseAbilities refuses while reloading or dodging [CONF].
     step.dodgeDir = 0;
+    if (guiding_) {
+        // GuidingMissile: movement inputs cleared; LeftRight / UpDown = clamp(GuidedMissileMouseSensitivity 1.0 x camera
+        // yaw / pitch delta, -1, 1) per tick (deltas in rotator units [HIGH]); the ability button detonates [CONF RE §J3].
+        MoveIntent z; z.faceYaw = step.faceYaw; z.viewPitch = step.viewPitch; step = z;
+        const float toRot = 65536.0f / 6.2831853f;
+        guideLR_ = core::clampf(-(camYaw_ - guideYaw0_) * toRot, -1.0f, 1.0f);    // yaw + = leftward in the rebuild
+        guideUD_ = core::clampf((camPitch_ - guidePitch0_) * toRot, -1.0f, 1.0f);
+        guideYaw0_ = camYaw_; guidePitch0_ = camPitch_;
+        if (wantAbility_ >= 0) { detonate_ = true; wantAbility_ = -1; }
+    }
     if (wantAbility_ >= 0) {
         Character::AbilitySlot& a = pawn_->abilities_[wantAbility_];
         bool can = pawn_->moveForm() == Form::Robot && !pawn_->isTransforming() && !pawn_->weapon().reloading() && !pawn_->isDodging();
@@ -613,9 +623,9 @@ void PlayerController::applyToPawn(World& world, float dt) {
                     float up = abilityStickFwd_, rt = abilityStickRight_;
                     step.dodgeDir = std::fabs(up) >= std::fabs(rt) ? (up < 0.0f ? 4 : 3) : (rt < 0.0f ? 1 : 2);
                 }
-                if (a.id == "Warcry" || a.id == "Shockwave" || a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "SpawnSentry") pawn_->pendingAbilityEffect_ = a.id;   // World
-                if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;
-                if (a.id == "Drain") pawn_->drainRemain_ = 7.0f;                                    // AddSelfBuff(TnBuffDrainSource)                               // AddBuff(TnBuffCloak)
+                if (a.id == "Warcry" || a.id == "Shockwave" || a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "SpawnSentry" || a.id == "GuidedMissile") pawn_->pendingAbilityEffect_ = a.id;   // World
+                if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
+                if (a.id == "Drain") pawn_->drainRemain_ = 7.0f;                                    // AddSelfBuff(TnBuffDrainSource)
                 if (a.id == "Hover") { step.hoverRequest = true; pawn_->hoverRequested_ = true; }   // PlayerController.Hover
                 a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_;
             } else if (a.id != lastRefusedAbility_) {
@@ -718,7 +728,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
 void PlayerController::updateCamera(render::Camera& cam) const {
     if (!pawn_) return;
     namespace cfg = core::config;
-    if (spectating_) { cam.pos = specPos_; cam.yaw = specYaw_; cam.pitch = 0.0f; cam.fovXDeg = fovCur_; return; }
+    if (spectating_) { cam.pos = specPos_; cam.yaw = specYaw_; cam.pitch = specPitch_; cam.fovXDeg = specFov_ > 0.0f ? specFov_ : fovCur_; return; }
     cam.pos = cameraPos();
     cam.yaw = viewYaw_;
     cam.pitch = viewPitch_;

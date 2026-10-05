@@ -96,7 +96,15 @@ public:
     static bool findRobotSpot(const CollisionWorld* col, const core::Vec3& feet, core::Vec3& out, const Character* pawn = nullptr);
     // No pawn (PendingMatch: ShouldSpectateOnLogin): the controller views from its own location / rotation, which
     // GameInfo.Login took from FindPlayerStart [HIGH: stock UE3 Login + PlayerWaitingSpectating].
-    void setSpectatorView(const core::Vec3& pos, float yaw) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; }
+    void setSpectatorView(const core::Vec3& pos, float yaw) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; specPitch_ = 0.0f; specFov_ = 0.0f; }
+    // Camera strategy override with pitch / FOV (TnGuidedMissileCameraStrategyType).
+    void setSpectatorView(const core::Vec3& pos, float yaw, float pitch, float fov) { spectating_ = true; specPos_ = pos; specYaw_ = yaw; specPitch_ = pitch; specFov_ = fov; }
+    // PlayerController state GuidingMissile: inputs cleared (the pawn stops), camera deltas steer, an ability press detonates.
+    void setGuiding(bool g) { if (g && !guiding_) { guideYaw0_ = camYaw_; guidePitch0_ = camPitch_; } guiding_ = g; }
+    bool guiding() const { return guiding_; }
+    float guideLR() const { return guideLR_; }
+    float guideUD() const { return guideUD_; }
+    bool consumeDetonateRequest() { bool b = detonate_; detonate_ = false; return b; }
     void clearSpectatorView() { spectating_ = false; }
     bool spectating() const { return spectating_; }
     void setViewAspect(float a) { aspect_ = a > 0.0f ? a : aspect_; }
@@ -173,7 +181,9 @@ private:
     bool wasTransforming_ = false;
 
     core::Vec3 specPos_{0, 0, 0};
-    float specYaw_ = 0.0f;
+    float specYaw_ = 0.0f, specPitch_ = 0.0f, specFov_ = 0.0f;
+    bool guiding_ = false, detonate_ = false;
+    float guideYaw0_ = 0.0f, guidePitch0_ = 0.0f, guideLR_ = 0.0f, guideUD_ = 0.0f;
     float camSmoothRemain_ = 0.0f;
     int camCollStrategy_ = -1;
     std::vector<HudNotify> hudNotifies_;

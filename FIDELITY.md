@@ -187,6 +187,30 @@ Inputs:
     the target dies or becomes a robot.
   - HUD: lockTarget / lockProgress / locked.
   - Test: no lock on a robot; vehicle lock at 0.52 s (0.5 s + frame); the rocket aimed 4 m off at 50 m hits.
+### Pass 22 multi-map stress (2026-10-05, build of 1fc54a3; logs work/pass22/logs/maps)
+
+All ten MP maps load with their own KillZ (BASE WorldInfo), hazard volumes, pickups and objectives. WFC_MAPSUITE passes on every map.
+
+| Map | Oracle (authored ReachSpecs arrived) | Tours robot / vehicle (fell) | Transforms under map / KillZ | Chaos (20 × 20 s) |
+|---|---|---|---|---|
+| Streets | 852/852 | 100/122, 98/122 (0) | 0/380 | 0 under, 0 KillZ |
+| Gorge | 1473/1476 | 134/147, 126/147 (0) | 0/380 | 2 under (lower path under a deck), 1 KillZ (chasm) |
+| Rust | 1672/1706 | 116/139, 118/139 (0) | 0/380 | 0 / 0, 1 stuck |
+| Debris | 349/350 | 53/75, 55/75 (4) | 2/380, both KillZ | 7 KillZ |
+| Berth | 1302/1302 | 128/143, 127/143 (0) | 0/380 | 0 / 0 |
+| Seed | 972/972 | 109/136, 110/136 (0) | 0/380 | 0 / 0 |
+| Remnant | 5600/5916 | 1305/1363, 1242/1363 (0) | 0/380 | 0 / 0, 2 stuck |
+| BrokenHope | 5570/6074 | 1132/1196, 1112/1196 (0) | 0/380, 8 refused | 1 KillZ |
+| Molten | 887/914 | 87/119, 87/119 (0) | 17/380: 16 KillZ from one start (lava pit edge), 1 under a deck 2.96 m | 1 KillZ |
+| Complex | 1317/1322 | 109/130, 111/130 (1) | 0/380 | 2 KillZ |
+
+Classification:
+- **Debris:** KillZ 100.0 m sits just under the lowest walkable floor (100.4 m), so any fall off a platform edge dies:
+  authentic for the space map. The transform KillZ cases are pawns carried off edges at 15–28 m/s.
+- **Gorge / Molten under-floor cases:** a pawn on a lower path beneath a walkable deck, not inside geometry.
+- **Remnant / BrokenHope oracle shortfalls:** long jump / air-path ReachSpecs on the two largest maps (6000 runs).
+  No falls; not yet broken down [PARTIAL].
+
 - **Splash falloff** now subtracts the victim's collision radius before scaling:
   Dist = max(d − ColRadius, 0), scale 1 − Dist/DamageRadius [HIGH stock UE3 Actor.TakeRadiusDamage].
 - **Grenades** [CONF script TnGrenadeBag / TnGrenadeThrower / TnProjectileGrenadeBase + authored; RE §H4]:
@@ -289,6 +313,15 @@ Inputs:
   - PARTIAL: flashbang dormancy, Rocket / Repair blueprints, turret pitch on the mesh, 5 s corpse, the 2-sentry claim
     limit (one sentry per owner here).
   - Test (PARTICIPANT 14/14): 16 shots in 2 s, hits of 8, drain 18 HP in 4 s.
+- **GuidedMissile** (ability and the Soldier 7-kill Omega Missile streak) [CONF RE §J3 + authored GuidedMissile_PROJDATA /
+  GuidedMissile_STRATEGY]:
+  - Launch: 1.0 s Skill_GuidedMissile; spawned along the controller rotation with pitch clamped to 3.8°–90°.
+  - GuidingMissile: inputs cleared (pawn stops); camera attached at (135, 0, 125) UU in the missile frame, FOV 120.
+  - Steering: per-tick camera deltas → LeftRight / UpDown clamp ±1 → lateral ControlStrength 2500; speed held at 2000.
+  - Ability press detonates: 10000 within 4500 UU. The owner within 45 m dies to self damage (×0.45).
+  - Fuse 30 s; cooldown 45 s once the missile is gone.
+  - PROV: chest socket (eye height used), fuse expiry detonation, camera-delta rotator units.
+  - Test (PARTICIPANT 15/15 on Streets, Gorge, Debris and Rust).
 - RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (Barrier now implemented) (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].

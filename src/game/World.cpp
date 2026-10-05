@@ -1148,6 +1148,7 @@ HudGameState World::hudState() const {
     h.ammoBeacon = beacon_.alive; h.ammoBeaconPos = beacon_.pos; h.ammoBeaconLife = beacon_.life; h.ammoBeaconHealth = beacon_.health;
     h.ammoBeaconBuff = pc.beaconDamageBuff_ > 0.0f;
     h.drain = pc.drainRemain_;
+    h.guidedMissile = missile_.alive; h.guidedMissilePos = missile_.pos; h.guidedMissileFuse = missile_.life;
     h.sentry = sentry_.alive; h.sentryHealth = sentry_.health; h.sentryPos = sentry_.pos; h.sentryTarget = sentry_.target;
     h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
     h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
@@ -1820,6 +1821,8 @@ std::string World::triggerLocalKillstreak() {
         pc.regenBuffRemain_ = 30.0f;                       // TnBuffHealthRegenKillStreak FloatModifier 2, BuffTime 30
     } else if (id == "FastAbilityCooldownStreak") {
         pc.fastCooldownRemain_ = 30.0f;                    // TnBuffFastAbilityCooldown CooldownMultiplier 5, BuffTime 30
+    } else if (id == "GuidedMissileStreak") {
+        startGuidedMissile();                              // Omega Missile: the same TnGuidedMissile (RequiresRobotForm)
     } else if (id == "OrbitalReconStreak") {
         teamPawns([](Character& p) { p.seeEnemiesRemain_ = 30.0f; });   // ABT_Team TnBuffSeeEnemyObjectiveMarkers
     } else if (id == "ImprovedOrbitalReconStreak") {
@@ -1868,6 +1871,8 @@ void World::tickAbilityEffects(float dt) {
         pc.shockwaveDelay_ = 0.25f;                       // Delay 0.25 -> Shockwave()
     } else if (fx == "Whirlwind") {
         startLocalMelee(true);                            // MeleeService.StartMeleeAttack(MELEE_Whirlwind)
+    } else if (fx == "GuidedMissile") {
+        startGuidedMissile();
     } else if (fx == "SpawnSentry") {
         if (sentry_.alive) sentry_.alive = false;         // ActiveSentry.Kill()
         sentryDelay_ = 0.2f;                              // SpawnDelay 0.2 (OnTriggerAnim ADD_Grenade_Throw additive: not played)
@@ -1884,6 +1889,7 @@ void World::tickAbilityEffects(float dt) {
     tickBarrier(dt);
     tickAmmoBeacon(dt);
     tickSentry(dt);
+    tickGuidedMissile(dt);
     // TnBuffDrainSource (Blueprints[0]): each tick every enemy TnPawn within Range 2000 UU with line of sight takes
     // DamagePerSecond 25 x dt; the caster heals HealthPerSecond 35 x dt per target [CONF authored + RE §J]. Heal type
     // AddHealthToAll [PROV].
@@ -2460,6 +2466,78 @@ void World::damageSentry(float amount, int instigator, const std::string& type) 
     if (instigator >= 0 && matchActive_ && match_.sameTeam(instigator, localPlayer_)) return;
     if (type.find("Melee") != std::string::npos || type.find("Whirlwind") != std::string::npos) { sentry_.health = 0.0f; return; }   // melee kills
     sentry_.health -= amount;
+}
+
+// ---- Guided missile [CONF RE TARGETED_PASS3 §J3; authored GuidedMissile_PROJDATA, CAM_Strategies_p.GuidedMissile_STRATEGY] ----
+// Skill_GuidedMissile loop for 1.0 s, then spawn at ReactionSocket_Chest + (200, 0, 0) along the controller rotation with the
+// pitch clamped to [700, 16384] rotator units (3.8 .. 90 deg). The PC enters GuidingMissile: inputs cleared (pawn stops),
+// camera = HmAttachToActorCameraBehavior LocalOffset (135, 0, 125) in the missile frame, FOV 120. Steering: Acceleration =
+// (LeftRight x right + UpDown x up) x ControlStrength 2500, speed held at MaxSpeed 2000. Ability button again = detonate.
+// Fuse 30 s; Damage 10000 / DamageRadius 4500 (TnDamageTypeGuidedMissile). Cooldown 45 s once the missile is gone.
+// Chest socket approximated by eye height [PROV]; fuse expiry detonates [PROV].
+void World::startGuidedMissile() {
+    Character& pc = player_.pawn();
+    if (localDead_ || missile_.alive || missileDelay_ >= 0.0f) return;
+    pc.playAction("Skill_GuidedMissile", false);
+    missileDelay_ = 1.0f;
+    pc.missileAlive_ = true;
+}
+
+void World::detonateGuidedMissile(const core::Vec3& at) {
+    if (!missile_.alive) return;
+    missile_.alive = false;
+    radiusDamage(at, 10000.0f, 45.0f, localPlayer_, "TransGame.TnDamageTypeGuidedMissile");
+    LOG_INFO("guided missile detonated at (%.1f %.1f %.1f)", at.x, at.y, at.z);
+}
+
+void World::tickGuidedMissile(float dt) {
+    Character& pc = player_.pawn();
+    PlayerController& ctl = player_.controller();
+    if (missileDelay_ >= 0.0f) {
+        missileDelay_ -= dt;
+        if (missileDelay_ < 0.0f && !localDead_) {
+            const float pitch = core::clampf(ctl.camPitch(), 700.0f * 6.2831853f / 65536.0f, 1.5707963f);
+            const core::Vec3 dir = core::forwardFromYawPitch(ctl.camYaw(), pitch);
+            missile_ = GuidedMissile{};
+            missile_.alive = true; missile_.life = 30.0f; missile_.vel = dir * 20.0f;
+            missile_.pos = pc.actorLocation() + core::Vec3{0, pc.robotParams().eyeHeight, 0} + core::forwardFromYawPitch(pc.yaw(), 0.0f) * 2.0f;
+            ctl.setGuiding(true);
+            LOG_INFO("guided missile launched (pitch %.1f deg)", pitch * 57.2958f);
+        }
+    }
+    GuidedMissile& m = missile_;
+    if (m.alive) {
+        if (localDead_) detonateGuidedMissile(m.pos);
+        else if (ctl.consumeDetonateRequest()) detonateGuidedMissile(m.pos);
+    }
+    if (m.alive) {
+        const core::Vec3 f = core::normalize(m.vel);
+        const core::Vec3 r = core::normalize(core::cross(f, core::Vec3{0, 1, 0})), u = core::cross(r, f);
+        m.vel = m.vel + (r * ctl.guideLR() + u * ctl.guideUD()) * (25.0f * dt);
+        m.vel = core::normalize(m.vel) * 20.0f;                 // MaxSpeed 2000
+        const core::Vec3 next = m.pos + m.vel * dt;
+        float t; core::Vec3 n;
+        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+        bool hit = line && line->segmentHit(m.pos, next, t, n);
+        core::Vec3 at = hit ? m.pos + (next - m.pos) * t : next;
+        const core::Vec3 d = next - m.pos; const float len = core::length(d);
+        if (len > 1e-5f)
+            for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(m.pos, d * (1.0f / len), len, th)) { hit = true; at = m.pos + d * (th / len); } }
+        m.life -= dt;
+        if (hit || m.life <= 0.0f || m.pos.y < killZ_) detonateGuidedMissile(at);
+        else m.pos = next;
+    }
+    if (m.alive) {
+        const core::Vec3 f = core::normalize(m.vel);
+        const float yaw = std::atan2(-f.x, -f.z), pitch = std::asin(core::clampf(f.y, -1.0f, 1.0f));
+        const core::Vec3 r = core::normalize(core::cross(f, core::Vec3{0, 1, 0})), u = core::cross(r, f);
+        // LocalOffset (135, 0, 125) UU: X forward, Z up in the missile frame.
+        ctl.setSpectatorView(m.pos + f * 1.35f + u * 1.25f, yaw, pitch, 120.0f);
+    } else if (ctl.guiding()) {
+        ctl.setGuiding(false);
+        ctl.clearSpectatorView();
+    }
+    pc.missileAlive_ = m.alive || missileDelay_ >= 0.0f;
 }
 
 } // namespace game

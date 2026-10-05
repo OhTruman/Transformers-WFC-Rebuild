@@ -65,6 +65,9 @@ struct HudGameState {
     // (PickupRotationRate yaw 10000); objective marker "Ammo Beacon" for the owner's team.
     float drain = 0.0f;                          // Drain ability active (s left)
     float seeEnemies = 0.0f, refillOnKill = 0.0f, abilitiesJammed = 0.0f, hardLocked = 0.0f;   // killstreak buffs on the local pawn (s left)
+    bool guidedMissile = false;                  // the local player is guiding a missile (camera follows it)
+    core::Vec3 guidedMissilePos{0, 0, 0};
+    float guidedMissileFuse = 0.0f;
     bool sentry = false;                         // the local SpawnSentry turret is up
     float sentryHealth = 0.0f;                   // of 135 (drains 4.5/s: Lifetime 30 s)
     core::Vec3 sentryPos{0, 0, 0};
@@ -278,6 +281,13 @@ public:
         int target = -1, shots = 0;
     };
     Sentry sentry_;
+    // TnGuidedMissile (ability / GuidedMissileStreak) [CONF RE §J3 + authored GuidedMissile_PROJDATA / GuidedMissile_STRATEGY].
+    struct GuidedMissile { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f; };
+    GuidedMissile missile_;
+    float missileDelay_ = -1.0f;
+    void startGuidedMissile();
+    void tickGuidedMissile(float dt);
+    void detonateGuidedMissile(const core::Vec3& at);
     float sentryDelay_ = -1.0f;
     assets::SkinnedModel sentryModel_;
     bool sentryModelTried_ = false;
@@ -410,6 +420,8 @@ public:
     core::Vec3 ammoBeaconPos() const { return beacon_.pos; }
     void damageAmmoBeacon(float amount, int instigator);
     const Sentry& sentry() const { return sentry_; }
+    bool guidedMissileAlive() const { return missile_.alive; }
+    core::Vec3 guidedMissilePos() const { return missile_.pos; }
     void damageSentry(float amount, int instigator, const std::string& type);
     bool sentryRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const;
     bool barrierRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const;
