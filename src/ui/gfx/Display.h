@@ -287,8 +287,22 @@ public:
     float viewportW = 0, viewportH = 0;
     static float hostViewportW, hostViewportH;
     bool noScale() const { static const bool off = std::getenv("WFC_GFX_IGNORE_NOSCALE") != nullptr; return !off && scaleMode == "noScale"; }   // env: the pre-fix behaviour
-    float stageViewW() const { return noScale() ? (viewportW > 0 ? viewportW : (hostViewportW > 0 ? hostViewportW : stageWidth)) : stageWidth; }
-    float stageViewH() const { return noScale() ? (viewportH > 0 ? viewportH : (hostViewportH > 0 ? hostViewportH : stageHeight)) : stageHeight; }
+    float stageViewW() const { return noScale() ? (viewportW > 0 ? viewportW : (hostViewportW > 0 ? hostViewportW : stageWidth)) : visibleStageW(); }
+    float stageViewH() const { return noScale() ? (viewportH > 0 ? viewportH : (hostViewportH > 0 ? hostViewportH : stageHeight)) : visibleStageH(); }
+    // showAll (the menus' default): the authored stage is fitted and centred, and Stage.width / height report the visible
+    // area in stage units (e.g. 1280 x 720 for the 1120 x 720 stage on 16:9) - the GFx behaviour the menus' own
+    // Stage.onResize code relies on (FrontEnd_GFX sizes screenSoftEdges_mc, the pause menu bg_mc, ... to Stage.width).
+    float visibleStageW() const {
+        float vw = viewportW > 0 ? viewportW : hostViewportW, vh = viewportH > 0 ? viewportH : hostViewportH;
+        if (vw <= 0 || vh <= 0 || stageWidth <= 0 || stageHeight <= 0) return stageWidth;
+        return vw / vh > stageWidth / stageHeight ? stageHeight * vw / vh : stageWidth;
+    }
+    float visibleStageH() const {
+        float vw = viewportW > 0 ? viewportW : hostViewportW, vh = viewportH > 0 ? viewportH : hostViewportH;
+        if (vw <= 0 || vh <= 0 || stageWidth <= 0 || stageHeight <= 0) return stageHeight;
+        return vw / vh > stageWidth / stageHeight ? stageHeight : stageWidth * vh / vw;
+    }
+    size_t resizeNotified_ = 0;   // Stage listeners that have had onResize for the current viewport
     void setViewport(float w, float h);
     std::set<int> keysDown;
     int lastKeyCode = 0, lastAscii = 0;
