@@ -88,6 +88,9 @@ public:
 private:
     struct Synth { uint32_t uiDown = 0; int mouseX = -1, mouseY = -1; bool mouseLeft = false; bool pointer = false; };
     Synth synth_;
+    // One-shot text entry for the next frame (type:<text>, vk:<code>).
+    mutable std::u32string typeText_;
+    mutable std::vector<uint16_t> typeKeys_;
     std::vector<Synth> synthQueue_;   // one entry per frame
     void queuePress(uint32_t uiBit);
     void queueClick(int x, int y);
@@ -159,6 +162,7 @@ private:
     CharacterRoster roster_;
     BridgeValue customize(const std::string& fn, const std::vector<std::string>& args);
     DisplayHooks display_;
+    BridgeValue account(const std::string& fn, const std::vector<std::string>& args);
     BridgeValue pcSettings(const std::string& fn, const std::vector<std::string>& args);
     HudController hud_;
     bool scoreboard_ = false;
@@ -180,6 +184,7 @@ private:
     std::string videoPath_;           // the open movie file (Systems movie audio)
     bool movieAudioWanted_ = false;   // a SeqAct_MoviePlayer movie (the loading underlays author no sound)
     bool movieAudioPlaying_ = false;  // Systems is playing its sound
+    bool movieInputHold_ = false;     // full-screen movie owns input (and until its skip key is released)
     uint64_t videoGen_ = 0;
     bool moviePlaying_ = false;
     std::string prefetched_;

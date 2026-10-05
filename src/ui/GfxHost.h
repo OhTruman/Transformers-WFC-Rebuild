@@ -47,6 +47,9 @@ public:
     // Runs whole movie frames at the authored frame rate.
     void advance(float dt);
     void key(int flashKeyCode, bool down);
+    // A typed character for the focused input field (Selection focus); false when no input field has focus.
+    bool textInput(char32_t c);
+    bool hasTextFocus() const;
     gfx::avm1::Value invoke(const std::string& path, gfx::avm1::Args args);   // engine -> AS (_global.SetLevelText ...)
     std::string dumpTree() const;
     // Self.SetExternalTextureWithPath(resource, "Package.Texture"): replaces an external image at runtime.

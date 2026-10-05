@@ -101,6 +101,23 @@ static void testUIController() {
     ui.onUIEvent(6);
     ui.onUIEvent(11);
     check(ui.state() == UIState::NotInGame, "ui.event11_gotomainmenu");
+
+    // UseInGameLobby (no character selected yet): OnBeginGame is ignored; spawn (OnRespawn) enters InGame and closes
+    // the open pre-game screen; leaving InGame for the pause menu hides the HUD (InGame.EndState).
+    UIController ui2;
+    std::string open2;
+    bool hud2 = false;
+    ui2.initialize(UIControllerClass::Multiplayer, [&](const std::string& m) { open2 = m; }, [&] { open2.clear(); }, [&](bool v) { hud2 = v; }, nullptr, true);
+    ui2.setGRIAvailable(true);
+    ui2.onUIEvent(3);
+    check(ui2.state() == UIState::WaitingOnGameStart && open2 == "UI_GFxCustomize_p.CustomTransformers_GFX_1", "ui.ingamelobby_ignores_begingame");
+    ui2.onCharacterSelected(true);
+    ui2.onUIEvent(5);
+    check(ui2.state() == UIState::InGame && hud2 && open2.empty() && ui2.openMovie().empty(), "ui.spawn_closes_choose_character");
+    ui2.onUIEvent(6);
+    check(ui2.state() == UIState::Paused && !hud2, "ui.pause_hides_hud");
+    ui2.onCurrentUIClosed();
+    check(ui2.state() == UIState::InGame && hud2, "ui.resume_shows_hud");
 }
 
 // Runs the runtime (flow + shims + script) until `pred` or a frame budget.
@@ -143,9 +160,13 @@ static void testFlow() {
     check(f.loading().engageTexts.size() == 3, "flow.loading_three_engage_texts");
     f.matchLoaded();
     check(f.level() == LevelKind::Match && !f.loading().active && f.ui().cls() == UIControllerClass::Multiplayer, "flow.match_level");
-    f.characterSelected();
+    // New match PRI: UseInGameLobby = !HasSelectedCharacter() -> OnBeginGame alone does not leave Choose Character.
     f.onUIEvent(3);
-    check(f.ui().state() == UIState::InGame && f.ui().hudVisible(), "flow.match_ingame");
+    check(f.ui().state() == UIState::WaitingOnGameStart && f.ui().openMovie() == "UI_GFxCustomize_p.CustomTransformers_GFX_1",
+          "flow.match_start_keeps_choose_character");
+    f.characterSelected();
+    f.onUIEvent(5);   // the pawn spawns: OnRespawn -> InGame, WaitingOnGameStart.EndState closes the screen
+    check(f.ui().state() == UIState::InGame && f.ui().hudVisible() && f.ui().openMovie().empty(), "flow.match_ingame");
     f.showMenu();
     check(f.ui().state() == UIState::Paused && f.ui().openMovie() == "UI_GFxPause_p.PauseMenu_GFX_1", "flow.showmenu_pause");
     f.call("Game.QuitToMainMenu");

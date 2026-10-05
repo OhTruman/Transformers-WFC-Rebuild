@@ -94,8 +94,21 @@ void UIController::setGRIAvailable(bool v) {
 
 void UIController::gotoState(UIState s) {
     UIState from = state_;
-    // EndState side effects.
-    if (from == UIState::Paused || from == UIState::PausedSpectating) LOG_INFO("FLOW ui SetPause(false)");
+    // EndState of the state being left [CONFIRMED TnUIController script]: the states that own a screen close it;
+    // InGame / Spectating hide the HUD; Paused (unless entering a paused child state) closes the pause UI and unpauses.
+    bool pausedTo = s == UIState::Paused || s == UIState::PausedSpectating;
+    switch (from) {
+    case UIState::FrontEnd: case UIState::InLobby: case UIState::WaitingOnGameStart: case UIState::WaitingOnNextRound:
+    case UIState::GameEnded:
+        closeCurrentUI();
+        break;
+    case UIState::InGame: setHudVisible(false); break;
+    case UIState::Spectating: setHudVisible(false); closeCurrentUI(); break;
+    case UIState::Paused: case UIState::PausedSpectating:
+        if (!pausedTo) { closeCurrentUI(); LOG_INFO("FLOW ui SetPause(false)"); }
+        break;
+    default: break;
+    }
     state_ = s;
     LOG_INFO("FLOW uistate %s -> %s (%s)", uiStateName(from), uiStateName(s), uiControllerClassName(cls_));
     switch (s) {
@@ -105,10 +118,9 @@ void UIController::gotoState(UIState s) {
         if (griAvailable_) openUI(cls_ == UIControllerClass::Multiplayer || inGameLobby_ ? inGameLobbyUI() : gameStartUI());
         break;
     case UIState::InGame:
-        closeCurrentUI();
         if (!hideHud_) setHudVisible(true);
         break;
-    case UIState::Spectating: setHudVisible(true); openUI(spectatingUI()); break;
+    case UIState::Spectating: if (!hideHud_) setHudVisible(true); openUI(spectatingUI()); break;
     case UIState::Paused: case UIState::PausedSpectating:
         LOG_INFO("FLOW ui SetPause(true)");   // TnGame.bPauseable = false: the MP world keeps running [HIGH]
         openUI(pauseUI());
@@ -174,10 +186,7 @@ void UIController::onCharacterSelected(bool matchHasBegun) {
 
 void UIController::onCurrentUIClosed() {
     // Paused: closing the pause UI returns to InGame.
-    // [integration M06b] closeCurrentUI (not just clearing openMovie_): its close callback removes the movie from the
-    // flow's open movies. Clearing first made InGame's closeCurrentUI a no-op, so the self-closed pause menu kept
-    // drawing over live gameplay (human playtest: frontend screens over the match). INTEGRATION REGRESSION fix.
-    closeCurrentUI();
+    openMovie_.clear();
     if (state_ == UIState::Paused) gotoState(UIState::InGame);
     else if (state_ == UIState::PausedSpectating) gotoState(UIState::Spectating);
 }

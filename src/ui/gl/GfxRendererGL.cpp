@@ -489,7 +489,12 @@ void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial
     glStencilMask(0x00);
     float q[] = {ox, oy, ox + dw, oy, ox + dw, oy + dh, ox, oy, ox + dw, oy + dh, ox, oy + dh};
     std::vector<float> v(q, q + 12);
+    // The movie is opaque: normal blending, never the blend mode the last GFx item left set (the Extras movie list
+    // uses screen / add, which added the movie over the menu instead of covering it).
+    applyBlend(0);
+    glDisable(GL_BLEND);
     drawTriangles(v, id);
+    glEnable(GL_BLEND);
 }
 
 void GfxRendererGL::fullscreen() {

@@ -1,19 +1,39 @@
 #include "frontend/Profile.h"
+#include "assets/Json.h"
+#include "core/Log.h"
 #include "frontend/FlowTrace.h"
 
 #include <cstdlib>
 #include <fstream>
+#include <sstream>
 
 namespace frontend {
 
 namespace {
-// TnProfileSettings defaults [CONFIRMED, RE MILESTONE05_PLAYTEST_RE section 4].
+// Every original profile field and its fresh-profile value: TransGame.Default__TnProfileSettings DefaultSettings +
+// ProfileMappings (74 fields), exported by tools/frontend/export_profile_defaults.py [CONFIRMED ORIGINAL, authored
+// data]. E.g. the campaign progress fields A1Difficulty ... D5Difficulty are -1 (not completed), which keeps the
+// Extras movies that unlock with them locked on a fresh profile.
+std::map<std::string, std::string> loadDefaults() {
+    std::map<std::string, std::string> d;
+    std::ifstream f(std::string(WFC_SOURCE_DIR) + "/data/frontend/profile_defaults.json", std::ios::binary);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    assets::Json j;
+    if (assets::Json::parse(ss.str(), j))
+        for (size_t i = 0; i < j["fields"].size(); ++i)
+            d[j["fields"][i]["name"].asString()] = j["fields"][i]["default"].asString();
+    if (d.empty()) {
+        LOG_WARN("profile: data/frontend/profile_defaults.json missing; settings defaults only");
+        d = {{"FX Volume", "80"}, {"Dialogue Volume", "80"}, {"Music Volume", "80"}, {"Subtitles", "False"},
+             {"Controller Vibration", "True"}, {"UseAlternateControlScheme", "False"}, {"InvertY_Car", "False"},
+             {"InvertY_Plane", "False"}, {"InvertY_Tank", "False"}, {"InvertY_Robot", "False"}, {"CameraSensitivity", "30"},
+             {"GammaSetting", "50"}, {"HasAdjustedGamma", "False"}};
+    }
+    return d;
+}
 const std::map<std::string, std::string>& defaults() {
-    static const std::map<std::string, std::string> d = {
-        {"FX Volume", "80"}, {"Dialogue Volume", "80"}, {"Music Volume", "80"}, {"Subtitles", "False"},
-        {"Controller Vibration", "True"}, {"UseAlternateControlScheme", "False"}, {"InvertY_Car", "False"},
-        {"InvertY_Plane", "False"}, {"InvertY_Tank", "False"}, {"InvertY_Robot", "False"}, {"CameraSensitivity", "30"},
-        {"GammaSetting", "50"}, {"HasAdjustedGamma", "False"}};
+    static const std::map<std::string, std::string> d = loadDefaults();
     return d;
 }
 }
@@ -21,6 +41,7 @@ const std::map<std::string, std::string>& defaults() {
 bool LocalProfile::isOriginalField(const std::string& field) { return defaults().count(field) > 0; }
 
 std::string LocalProfile::playerName() const {
+    if (!loggedInAccount.empty()) return loggedInAccount;
     if (!identityName.empty()) return identityName;
     if (const char* n = std::getenv("WFC_PLAYERNAME")) if (*n) return n;
     return "Player";
@@ -50,8 +71,10 @@ void LocalProfile::load() {
         size_t eq = line.find('=');
         if (eq == std::string::npos) continue;
         std::string k = line.substr(0, eq), v = line.substr(eq + 1);
-        if (k == "HasWatchedIntroMovie") watchedIntro = v == "1";
+        if (k == "HasWatchedIntroMovie") continue;   // written by earlier rebuilds; not a profile field in the original
         else if (section == "[Identity]" && k == "Name") identityName = v;
+        else if (section == "[Accounts]" && k == "Account" && !v.empty()) accounts.push_back(v);
+        else if (section == "[Accounts]" && k == "SignedIn") loggedInAccount = v;
         else if (section == "[PCSettings]") {
             if (k == "Width") display.width = std::atoi(v.c_str());
             else if (k == "Height") display.height = std::atoi(v.c_str());
@@ -66,9 +89,14 @@ void LocalProfile::save() const {
     std::ofstream f(kFile);
     f << "; WFC rebuild local profile (TnProfileSettings role). Original fields under [ProfileData]; the PC SKU's\n"
          "; display settings under [PCSettings].\n";
-    f << "HasWatchedIntroMovie=" << (watchedIntro ? 1 : 0) << "\n\n[ProfileData]\n";
+    f << "\n[ProfileData]\n";
     for (const auto& [k, v] : values_) f << k << "=" << v << "\n";
     if (!identityName.empty()) f << "\n[Identity]\nName=" << identityName << "\n";
+    if (!accounts.empty()) {
+        f << "\n[Accounts]\n";
+        for (const std::string& a : accounts) f << "Account=" << a << "\n";
+        if (!loggedInAccount.empty()) f << "SignedIn=" << loggedInAccount << "\n";
+    }
     f << "\n[PCSettings]\nWidth=" << display.width << "\nHeight=" << display.height << "\nFullscreen=" << (display.fullscreen ? 1 : 0)
       << "\nTextureQuality=" << display.textureQuality << "\nVSync=" << (display.vsync ? 1 : 0) << "\n";
 }

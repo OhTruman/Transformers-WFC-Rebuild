@@ -50,7 +50,10 @@ bool GameFlow::init(const Catalog& catalog, const Options& opt) {
     opt_ = opt;
     rng_.seed(opt.seed ? opt.seed : (unsigned)std::chrono::steady_clock::now().time_since_epoch().count());
     profile_.load();
-    watchedIntro_ = opt.skipIntroMovies || profile_.watchedIntro;
+    // HasWatchedIntroMovie is a per-process flag in the original: one zero-initialised global (0x83757450) written
+    // only by SetHasWatchedIntroMovie and the controller-assignment tick, never saved or loaded [CONFIRMED ORIGINAL,
+    // native decompile]. Every launch therefore plays the logos and the intro chain again.
+    watchedIntro_ = opt.skipIntroMovies;
     FlowTrace::emit("boot", {{"map", kFrontEndMap}, {"watchedIntro", FlowTrace::boolean(watchedIntro_)},
                              {"seed", std::to_string(opt.seed)}});
     // Engine boot: [URL] Map=UI_FrontEnd_m. The initial startup movie ([LoadingMovie] InitialStartupFileName
@@ -186,7 +189,7 @@ void GameFlow::tick(float dt) {
 // ---------------------------------------------------------------------------------------------------------------
 // UI_FrontEnd_m (TnFrontEndGame + Main_Sequence Kismet)
 
-void GameFlow::setUIController(UIControllerClass cls) {
+void GameFlow::setUIController(UIControllerClass cls, bool inGameLobby) {
     ui_.initialize(cls,
         [this](const std::string& m) {
             openMovies_.push_back(m);
@@ -201,7 +204,7 @@ void GameFlow::setUIController(UIControllerClass cls) {
         [this](UIState from, UIState to) {
             FlowTrace::emit("ui.state", {{"from", uiStateName(from)}, {"to", uiStateName(to)},
                                          {"controller", uiControllerClassName(ui_.cls())}, {"level", levelKindName(level_)}});
-        });
+        }, inGameLobby);
 }
 
 void GameFlow::frontEndBegin() {
@@ -216,8 +219,8 @@ void GameFlow::frontEndBegin() {
     // login to wait for in the rebuild [online - bypassed]: WaitingForBaseOnlineService / WaitingForNetwork /
     // ReadingAccountNames / LoggingIn* are skipped.
     FlowTrace::emit("frontend.game", {{"state", "WaitingForController"}});
-    // Controller assigned -> SetHasWatchedIntroMovie() -> state None. The flag is persisted (profile file) and
-    // takes effect on the next boot: MovieLoader's decision this boot reads the value loaded at startup [HIGH].
+    // Controller assigned -> SetHasWatchedIntroMovie() -> state None. The flag lives for the session only: a later
+    // return to the frontend (after a match) takes MovieLoader's enterFrontEnd branch [CONFIRMED ORIGINAL].
     FlowTrace::emit("frontend.game", {{"state", "None"}, {"controllerAssigned", "true"}});
     pendingWatchedWrite_ = true;
     // Kismet: SeqEvent_GameplayStarted -> Interp "Black-Out" (InterpLength 0.00105 s, client-side) -> OpenMovie.
@@ -271,6 +274,14 @@ void GameFlow::movieStopped(const std::string& movie) {
     }
 }
 
+void GameFlow::scriptMovieStopped() {
+    // EndMovieMode -> OnFullScreenMovieStop: MovieEnded on the current UI when it is the FrontEnd UI.
+    FlowTrace::emit("movie.stopped", {{"movie", scriptMovie_}, {"by", "Game.PlayMovie"}});
+    scriptMovie_.clear();
+    if (ui_.cls() == UIControllerClass::FrontEnd && !ui_.openMovie().empty())
+        uiInvokes_.push_back({ui_.openMovie(), "_global.MovieEnded"});
+}
+
 void GameFlow::frontEndStart() {
     if (frontEndStarted_) return;
     frontEndStarted_ = true;
@@ -285,8 +296,8 @@ void GameFlow::frontEndStart() {
     // SeqAct_InstallGame (Finished) -> 3 x SetMatInstScalarParam (Energon DownScaleUVs 12, ring Opacity).
     if (pendingWatchedWrite_) {
         pendingWatchedWrite_ = false;
-        // Game.SetHasWatchedIntroMovie: stored in the player profile (LocalProfile).
-        if (!profile_.watchedIntro) { watchedIntro_ = true; profile_.watchedIntro = true; profile_.save(); }
+        // Game.SetHasWatchedIntroMovie: session flag, not part of the profile.
+        watchedIntro_ = true;
         FlowTrace::emit("profile", {{"HasWatchedIntroMovie", "true"}});
     }
 }
@@ -310,18 +321,18 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     // Settings: the movie wrote the <OnlinePlayerData:ProfileData.*> fields; apply / save pushes them to their owners
     // and persists the profile (TnProfileSettings) [CONFIRMED call names].
     if (fn == "Game.ApplyProfileSettings" || fn == "Console.SaveProfileSettings") { profile_.apply(); return true; }
-    if (fn == "Game.QuitToMainMenu") { quitToMainMenu(); return {}; }
-    if (fn == "Game.ExitGame") { quit_ = true; FlowTrace::emit("exit", {}); return {}; }
-    // TnGameActionScriptBinding.PlayMovie(name) [CONFIRMED binding function; native behaviour UNKNOWN (RE)]: Extras ->
-    // Movies / Credits. [integration M06b] Played through the same full-screen movie path as the intro chain (video +
-    // its own audio via Systems, skip with A / Start / B); was unhandled, so the menu waited on a movie that never ran
-    // (human playtest soft lock). How the native player hands control back to the menu is UNKNOWN.
-    if (fn == "Game.PlayMovie" && !args.empty() && kismetMovie_.empty()) {
-        movieQueue_.clear();
-        kismetMovie_ = args[0];
-        FlowTrace::emit("movie.play", {{"movie", kismetMovie_}, {"source", "Game.PlayMovie"}});
+    if (fn == "Game.PlayMovie") {
+        // TnGameActionScriptBinding.PlayMovie (native) -> HmPlayerController.ClientPlayMovie -> BeginMovieMode
+        // (OnFullScreenMovieStart: UI event 12, HUD / UI hidden) ... EndMovieMode (OnFullScreenMovieStop: UI event 13,
+        // then InvokeOnCurrentUIConditional(FrontEndUI, "_global.MovieEnded")) [CONFIRMED script]. The Extras menu
+        // removes its own input in _global.MovieStarted and gets it back only from MovieEnded.
+        scriptMovie_ = arg(0);
+        FlowTrace::emit("movie.play", {{"movie", scriptMovie_}, {"by", "Game.PlayMovie"}});
+        if (scriptMovie_.empty()) scriptMovieStopped();
         return {};
     }
+    if (fn == "Game.QuitToMainMenu") { quitToMainMenu(); return {}; }
+    if (fn == "Game.ExitGame") { quit_ = true; FlowTrace::emit("exit", {}); return {}; }
 
     // ---- TnOnlineActionScriptBinding ----
     if (fn == "Online.CheckCanPlayOnlineModes" || fn == "Online.CanPlayOnlineModes") return true;   // no profile gate offline
@@ -678,7 +689,13 @@ void GameFlow::matchLoaded() {
     FlowTrace::emit("level.begin", {{"level", "Match"}, {"map", levelUrl_.map()}, {"url", levelUrl_.toString()}});
     // GRI.PostBeginPlay -> OnUIEvent(15); UpdateUiController selects GRI.GameClass.default.UIControllerClass:
     // TnVersusGame / TnMultiplayerGame -> TnUIControllerMultiplayer (StartingState WaitingOnGameStart).
-    setUIController(UIControllerClass::Multiplayer);
+    // The match's PlayerReplicationInfo is new: no character is selected yet, so UpdateUiController initializes the
+    // controller with UseInGameLobby = !PRI.HasSelectedCharacter() = true [CONFIRMED script]. WaitingOnGameStart then
+    // ignores OnBeginGame (Choose Character stays up until a character is chosen) and the UI enters InGame when the
+    // player's pawn spawns (OnRespawn, event 5).
+    selected_ = SelectedCharacter{};
+    matchHasBegun_ = false;
+    setUIController(UIControllerClass::Multiplayer, !selected_.valid);
     ui_.setGRIAvailable(true);
     // PlayerController.CanCloseLoadingMovie: the world is fully loaded before gameplay [HIGH].
     closeLoadingMovie();

@@ -65,6 +65,16 @@ bool FrontendSceneGL::load(const std::vector<std::string>& levels) {
         return true;
     }
     native_ = false;
+    if constexpr (HasFrontendScene<render::IRenderer>::value) {
+        // The renderer owns frontend scenes and has no render data for this family. The raw world.glb without the
+        // original materials (sky dome opaque white, additive rings opaque) is a wrong picture, not the scene:
+        // nothing is drawn under the menus until the data is built (playtest 2026-10-04: "malformed background").
+        family_ = family;
+        mesh_ = render::kInvalidMesh;
+        LOG_WARN("frontend scene: %s not drawn: no render data (build it: tools\\render\\build_render_data.ps1 -Map %s)",
+                 family.c_str(), family.c_str());
+        return false;
+    }
     const std::string mapDir = assetRoot() + "/Maps/" + family + "/";
     if (!std::ifstream(mapDir + "world.glb").good()) { family_ = family; mesh_ = render::kInvalidMesh; return false; }
     if (!censusActive_) { census_.begin(); censusActive_ = true; }

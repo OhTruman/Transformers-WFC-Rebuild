@@ -133,6 +133,10 @@ public:
         }
         input.mouseWheel = wheel_ / (float)WHEEL_DELTA;
         wheel_ = 0;
+        input.text.swap(typed_);
+        typed_.clear();
+        input.keyPresses.swap(keyPresses_);
+        keyPresses_.clear();
         return true;
     }
 
@@ -241,6 +245,9 @@ private:
     std::vector<int> uiVk_[(int)UiKey::Count];
     std::vector<uint32_t> uiPad_[(int)UiKey::Count];
     int wheel_ = 0;
+    std::u32string typed_;
+    std::vector<uint16_t> keyPresses_;
+    wchar_t highSurrogate_ = 0;
     bool cursorHidden_ = false;
     bool fullscreen_ = false, vsync_ = false;
     RECT windowedRect_{};
@@ -336,6 +343,18 @@ private:
                 if (LOWORD(lp) == HTCLIENT && (cursorHidden_ || mouseCaptured_)) { SetCursor(nullptr); return TRUE; }
                 break;
             case WM_KILLFOCUS: focused_ = false; return 0;
+            case WM_CHAR: {
+                // UTF-16 code units -> code points (surrogate pairs joined); control characters are keys, not text.
+                wchar_t c = (wchar_t)wp;
+                if (c >= 0xD800 && c <= 0xDBFF) { highSurrogate_ = c; return 0; }
+                char32_t cp = c;
+                if (c >= 0xDC00 && c <= 0xDFFF) { cp = highSurrogate_ ? 0x10000 + ((highSurrogate_ - 0xD800) << 10) + (c - 0xDC00) : 0; highSurrogate_ = 0; }
+                if (cp >= 32 && cp != 127 && typed_.size() < 64) typed_.push_back(cp);
+                return 0;
+            }
+            case WM_KEYDOWN:
+                if (keyPresses_.size() < 64) keyPresses_.push_back((uint16_t)wp);
+                break;
         }
         return DefWindowProcW(hwnd, msg, wp, lp);
     }

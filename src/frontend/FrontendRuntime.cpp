@@ -77,6 +77,10 @@ void ScriptDriver::queueClick(int x, int y) {
 void ScriptDriver::applySynthetic(platform::InputFrame& in) const {
     in.uiDown |= synth_.uiDown;
     if (synth_.pointer) { in.mouseX = synth_.mouseX; in.mouseY = synth_.mouseY; in.mouseLeft = synth_.mouseLeft; }
+    in.text += typeText_;
+    in.keyPresses.insert(in.keyPresses.end(), typeKeys_.begin(), typeKeys_.end());
+    typeText_.clear();
+    typeKeys_.clear();
 }
 
 void ScriptDriver::update(GameFlow& flow, float dt) {
@@ -153,6 +157,20 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             if (ok) queueClick(x, y);
             return;
         }
+        if (st.rfind("type:", 0) == 0) {   // typed text (%XX escapes, e.g. %20 for a space)
+            std::string t = st.substr(5);
+            for (size_t i = 0; i < t.size(); ++i) {
+                if (t[i] == '%' && i + 2 < t.size()) { typeText_.push_back((char32_t)std::strtol(t.substr(i + 1, 2).c_str(), nullptr, 16)); i += 2; }
+                else typeText_.push_back((char32_t)(unsigned char)t[i]);
+            }
+            FlowTrace::emit("script.type", {{"text", t}});
+            return;
+        }
+        if (st.rfind("vk:", 0) == 0) {    // a raw key press (Win32 virtual-key code, e.g. 8 Backspace, 46 Delete)
+            typeKeys_.push_back((uint16_t)std::atoi(st.c_str() + 3));
+            FlowTrace::emit("script.vk", {{"code", st.substr(3)}});
+            return;
+        }
         if (st.rfind("dump:", 0) == 0) { if (dumpHook) dumpHook(st.substr(5)); continue; }
         if (st.rfind("shot:", 0) == 0) { if (shotHook) shotHook(st.substr(5)); return; }
         if (st.rfind("uievent:", 0) == 0) { flow.onUIEvent(std::atoi(st.c_str() + 8)); return; }
@@ -181,6 +199,49 @@ bool FrontendRuntime::init() {
     return flow_.init(catalog_, o);
 }
 
+BridgeValue FrontendRuntime::account(const std::string& fn, const std::vector<std::string>& args) {
+    LocalProfile& p = flow_.profile();
+    auto arg0 = args.empty() ? std::string() : args[0];
+    auto find = [&](const std::string& n) { return std::find(p.accounts.begin(), p.accounts.end(), n); };
+    if (fn == "Account.GetAccountNames") {
+        // One comma-separated string: HmInterfaceAccount.GetAccountNames splits it (r1.split(',')) [CONFIRMED AS2].
+        std::string joined;
+        for (const std::string& n : p.accounts) joined += (joined.empty() ? "" : ",") + n;
+        return BridgeValue(joined);
+    }
+    if (fn == "Account.GetLoggedInAccount") return BridgeValue(p.loggedInAccount);
+    if (fn == "Account.CreateAccount") {
+        // TextPrompt limits the name to 15 characters; an empty / blank or duplicate name is not created.
+        bool blank = arg0.find_first_not_of(' ') == std::string::npos;
+        bool ok = !blank && arg0.find(',') == std::string::npos && find(arg0) == p.accounts.end();   // ',' separates the list
+        if (ok) { p.accounts.push_back(arg0); p.save(); }
+        FlowTrace::emit("account.create", {{"name", arg0}, {"created", FlowTrace::boolean(ok)}, {"provenance", "PC ADAPTATION (local)"}});
+        return {};
+    }
+    if (fn == "Account.DeleteAccount") {
+        auto it = find(arg0);
+        if (it != p.accounts.end()) p.accounts.erase(it);
+        if (p.loggedInAccount == arg0) p.loggedInAccount.clear();
+        p.save();
+        FlowTrace::emit("account.delete", {{"name", arg0}});
+        return {};
+    }
+    if (fn == "Account.Login") {
+        if (find(arg0) != p.accounts.end()) { p.loggedInAccount = arg0; p.save(); }
+        FlowTrace::emit("account.login", {{"name", arg0}, {"playerName", p.playerName()}});
+        return {};
+    }
+    if (fn == "Account.Logout") {
+        p.loggedInAccount.clear();
+        p.save();
+        FlowTrace::emit("account.logout", {{"playerName", p.playerName()}});
+        return {};
+    }
+    if (fn == "Account.SetDefaultAccount") return {};   // the signed-in account is remembered (LocalProfile)
+    FlowTrace::emit("bridge.unhandled", {{"fn", fn}});
+    return {};
+}
+
 BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string& fn, const std::vector<std::string>& args) {
     auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
     if (fn.rfind("DataStores.", 0) == 0) return stores_->call(fn.substr(11), args, movie);
@@ -201,10 +262,10 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     if (fn == "Debug.ShouldDisplayBuildInfo") return BridgeValue(false);
     if (fn == "Debug.GetBuildInfo") return BridgeValue(std::string());
     if (fn.rfind("PCSettings.", 0) == 0) return pcSettings(fn, args);
-    // TnAccountActionScriptBinding (PC SKU Accounts menu): Demonware online accounts. No online service in the
-    // offline reconstruction: no accounts are listed or created [SERVICE DEPENDENT]; the local display name is the
-    // profile identity (LocalProfile::playerName).
-    if (fn == "Account.GetAccountNames" || fn == "Account.GetLoggedInAccount") return BridgeValue(std::string());
+    // TnAccountActionScriptBinding (PC SKU Accounts menu). Original: Demonware online accounts bound to the product
+    // key [SERVICE DEPENDENT]. Offline: local account names in the profile [PC ADAPTATION]; the signed-in account is
+    // the player name (LocalProfile::playerName).
+    if (fn.rfind("Account.", 0) == 0) return account(fn, args);
     // Stats (online stats archive): challenge progress and leaderboards. Offline there is no archive: progress 0,
     // level 0 (a fresh profile), leaderboard reads report nothing [SERVICE DEPENDENT; values as the original offline].
     if (fn == "Stats.GetChallengeValue" || fn == "Stats.GetChallengeLevel") return BridgeValue(0);
@@ -420,8 +481,10 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
     // The loading underlay: [LoadingMovie] InitialStartupFileName / DefaultFileName (Xe-TransGame.ini), looped under
     // LoadScreen_GFX while a loading screen is up [HIGH]. The extracted files carry region / language suffixes; the
     // rebuild picks <name>_NA_INT, then <name>_INT, then <name> [PARTIAL: region of the dump UNKNOWN, see GetRegionCode].
-    const std::string& m = flow_.kismetMovie();
+    const bool scripted = flow_.kismetMovie().empty() && !flow_.scriptMovie().empty();
+    const std::string& m = scripted ? flow_.scriptMovie() : flow_.kismetMovie();
     std::string want = m;
+    auto stopped = [&](const std::string& name) { if (scripted) flow_.scriptMovieStopped(); else flow_.movieStopped(name); };
     if (want.empty() && flow_.loading().active && !flow_.loading().binkMovie.empty()) {
         const std::string& b = flow_.loading().binkMovie;
         if (b != underlayFor_) {
@@ -434,7 +497,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
     }
     if (want != videoName_) {
         if (want.empty()) { stopMovieAudio(); video_.reset(); videoName_.clear(); }
-        else if (!openVideo(want, m.empty()) && !m.empty()) { flow_.movieStopped(m); videoName_.clear(); }
+        else if (!openVideo(want, m.empty()) && !m.empty()) { stopped(m); videoName_.clear(); }
     }
     if (!video_) return;
     video_->advance(dt);
@@ -465,7 +528,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         video_.reset();
         std::string done = videoName_;
         videoName_.clear();
-        if (!m.empty()) flow_.movieStopped(done);
+        if (!m.empty()) stopped(done);
     }
 }
 
@@ -513,7 +576,14 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     flow_.tick(dt);
     runNativeShims();
     updateMoviePlayer(dt, in);
-    if (presenter_) presenter_->update(flow_, in, dt);
+    // Full-screen movie mode (BeginMovieMode: UI event 12, the UI hidden) takes all input; after the movie the menus
+    // see input again once the skip key is released, so the skip press does not also act on the menu [HIGH].
+    bool fullScreenMovie = !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty();
+    if (fullScreenMovie) movieInputHold_ = true;
+    else if (movieInputHold_ && in.uiDown == 0 && !in.mouseLeft) movieInputHold_ = false;
+    platform::InputFrame none;
+    none.mouseX = in.mouseX; none.mouseY = in.mouseY;
+    if (presenter_) presenter_->update(flow_, movieInputHold_ ? none : in, dt);
     script_.update(flow_, dt);
     updateAudio(dt);
     updateScene(dt);
@@ -570,7 +640,7 @@ void FrontendRuntime::draw(int w, int h) {
     const uint8_t* px = nullptr;
     int vw = 0, vh = 0;
     uint64_t serial = 0;
-    bool over = !flow_.kismetMovie().empty();
+    bool over = !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty();   // SeqAct_MoviePlayer / Game.PlayMovie
     // The serial is unique across movies (the presenter re-uploads on change).
     if (video_ && video_->frame(px, vw, vh, serial)) presenter_->setVideoFrame(px, vw, vh, (videoGen_ << 40) | serial, over);
     else presenter_->setVideoFrame(nullptr, 0, 0, 0, false);

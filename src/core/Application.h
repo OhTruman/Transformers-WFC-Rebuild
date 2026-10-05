@@ -54,7 +54,6 @@ private:
     float matchClock_ = 0.0f;
     std::map<int, float> deathAt_;
     bool selectionSent_ = false;   // the frontend's character selection reached Gameplay this match
-    bool beginGameHeld_ = false;   // UI event 3 waiting for the local character selection (M06b)
 
     void updateTitleHud(double realDt);
     void runPickupTest();
