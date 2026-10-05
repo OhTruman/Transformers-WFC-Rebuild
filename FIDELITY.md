@@ -17,6 +17,12 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 34 — PARTICLE ColorByParameter DefaultColor (per template) (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Template colour | the Ion blue Systems used is MuzzleFlash / Tracer_AssaultRifle's own ColorByParameter DefaultColor, not a weapon tint (the weapon's EnergonColor parameter is (255,255,255,A=0) = no override); each template carries its own | Systems a1d38c5 notes; LOD stream bytes | CONFIRMED (Systems / data) | runtime ColorByParameter order: component InstanceParameter, caller colour, decoded DefaultColor, white |
+| Decode | ARGB FColor after the module-order list (count = module records, bytes 0..n-1), a counted byte list and 20 bytes [HIGH: reproduces ff 33 19 ff on every AssaultRifle emitter]; other layouts: the stream's single A = 0xFF value after a zero int [MEDIUM]. Streets: 435 / 451 ColorByParameter emitters decoded, every template internally consistent (AssaultRifle (51,25,255), EMP shotgun (255,65,65), Sniper (255,12,12)); EMP red matches its editor thumbnail (the Sniper / AssaultRifle thumbnails are identical, generic) | build_map_fx.py default_color(); work/m34_thumbs.png | HIGH / MEDIUM | WFC_FXTEST without a caller colour: EMP red, Sniper red (was blown-out white), AssaultRifle Ion blue |
+
 ## MILESTONE 33 — MATINEE MATERIAL PARAMETERS (lobby faction emblems) (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

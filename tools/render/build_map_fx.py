@@ -116,7 +116,8 @@ def system_runtime(name, s):
                                 'use_local_space': bool(req.get('bUseLocalSpace', False)),
                                 'screen_alignment': req.get('ScreenAlignment', 'PSA_Square'),
                                 'subimages': [req.get('SubImages_Horizontal', 1), req.get('SubImages_Vertical', 1)]},
-                   'mesh': None, 'modules': [], 'assignment_complete': L.get('assignment_complete', False)}
+                   'mesh': None, 'modules': [], 'assignment_complete': L.get('assignment_complete', False),
+                   'default_color': L.get('default_color')}
             if td.get('Mesh'):
                 lod['mesh'] = {'object': td['Mesh'], 'gltf': mesh_gltf(td['Mesh']),
                                'override_material': bool(td.get('bOverrideMaterial', False))}
@@ -140,6 +141,36 @@ def system_runtime(name, s):
     return out
 
 
+def default_color(tail, nrec):
+    """M34: ParticleModuleColorByParameter's DefaultColor in the compiled LOD stream: after the module-order list
+    (int count = number of module records, then bytes 0..n-1) and the following counted byte list, 16 bytes
+    (12 zero + an int) and 4 more, an ARGB FColor. Verified against every emitter of MuzzleFlash_AssaultRifle_FX
+    (ff 33 19 ff = the Ion blue (51, 25, 255)) and the editor thumbnails (EMP shotgun muzzle / squib red). Other stream
+    layouts (alpha != 0xff at that position) are not decoded: None."""
+    import struct
+    for i in range(0, len(tail) - 8):
+        n = struct.unpack_from('>i', tail, i)[0]
+        if n != nrec or n < 2 or i + 4 + n + 4 > len(tail): continue
+        if list(tail[i + 4:i + 4 + n]) != list(range(n)): continue
+        j = i + 4 + n
+        m = struct.unpack_from('>i', tail, j)[0]
+        if not (0 <= m <= 64): continue
+        k = j + 4 + m + 20
+        if k + 4 > len(tail): return None
+        a, r, g, b = tail[k:k + 4]
+        if a == 0xFF: return [r, g, b, a]
+        break
+    # Fallback [MEDIUM]: other stream layouts carry the same FColor after a zero int; accepted only when the stream
+    # holds exactly one such A = 0xFF candidate (reproduces every structurally decoded colour, e.g. the Ion blue in
+    # MuzzleFlash_AssaultRifle_FX's BackJet / GLOW emitters).
+    cands = [k for k in range(4, len(tail) - 3)
+             if tail[k] == 0xFF and tail[k - 4:k] == b'\0\0\0\0' and tail[k + 1:k + 4] != b'\0\0\0']
+    if len(cands) == 1:
+        a, r, g, b = tail[cands[0]:cands[0] + 4]
+        return [r, g, b, a]
+    return None
+
+
 def library(mapname):
     """M32: every ParticleSystem cooked into the map's level packages (weapon muzzle / tracer / impact templates
     are cooked into each MP BASE package) -> {template: (pstream summary, package)}. The runtime spawns these by name
@@ -154,11 +185,22 @@ def library(mapname):
             if p.class_name(e) != 'ParticleSystem': continue
             t = p.object_path(i + 1)
             if t in out: continue
+            pkn = pk[:-4] if pk.lower().endswith('.xxx') else pk
             try:
-                s = pstream.system(t, pk[:-4] if pk.lower().endswith('.xxx') else pk)
+                s = pstream.system(t, pkn)
             except Exception as ex:
                 print('  library: %s: %s' % (t, ex)); continue
             if s.get('missing_in'): continue
+            import objtree
+            op = objtree.package(pkn)
+            for e in s['emitters']:
+                for L in e['lods']:
+                    if not any(m['module'] == 'PMI_ColorByParameter' for m in L.get('compiled_modules', [])): continue
+                    try:
+                        tail = pstream.lod_tail(op, op._idx[L['lod'].lower()])
+                        L['default_color'] = default_color(tail, len(pstream.parse(tail)['records']))
+                    except Exception:
+                        L['default_color'] = None
             out[t] = s
     return out
 

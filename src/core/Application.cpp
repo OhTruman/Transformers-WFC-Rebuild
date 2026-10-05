@@ -425,10 +425,9 @@ void Application::run() {
             if (frame % 30 == 1) {
                 core::Vec3 f = core::forwardFromYawPitch(camera_.yaw, 0.0f);
                 core::Vec3 right = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
-                const float ion[4] = {0.033f, 0.010f, 1.0f, 1.0f};   // (51, 25, 255) through the 2.2 table
                 for (size_t i = 0; i < tpls.size(); ++i) {
                     core::Vec3 p = camera_.pos + f * 4.0f + right * (((float)i - 0.5f * (float)(tpls.size() - 1)) * 1.5f);
-                    int h = renderer_->spawnParticleEffect(tpls[i], p, right, core::Vec3{0, 1, 0}, ion);
+                    int h = renderer_->spawnParticleEffect(tpls[i], p, right, core::Vec3{0, 1, 0});   // authored colours
                     if (frame == 1) LOG_INFO("FXTEST %s -> handle %d", tpls[i].c_str(), h);
                 }
                 LOG_INFO("FXTEST frame %ld live effects %d", frame, renderer_->liveParticleEffects());

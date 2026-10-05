@@ -437,6 +437,7 @@ public:
         int typeData = 0;                 // 0 sprite, 1 mesh, 2 Trail2, 3 Beam2 (2 / 3 not drawn yet)
         bool velocityAligned = false;     // PSA_Velocity
         int subH = 1, subV = 1, subMethod = 0;   // SubUV: 0 none, 1 linear, 2 random
+        bool hasDefaultColor = false; float defaultColor[4] = {1, 1, 1, 1};   // ColorByParameter DefaultColor (linear)
         float duration = 1.0f; int loops = 0;
         FxDist spawnRate;
         std::vector<FxBurst> bursts;
