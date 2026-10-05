@@ -9,6 +9,7 @@
 // No bots / networking: players are registered by the host (the local player; a test harness may add more and
 // drive deaths through killed()). Presentation (HUD movies, announcer) consumes events().
 #pragma once
+#include <functional>
 #include "core/Math.h"
 #include "game/CharacterRoster.h"
 
@@ -78,8 +79,8 @@ struct MatchPlayer {
     bool hasSelectedCharacter = false; // PRI.HasSelectedCharacter: spawning waits for it [CONF]
     CharacterSelection selection;
     std::string chassis;               // body resolved at the last spawn (faction from the team)
-    std::string drawnChassis;          // body actually drawn: the selection when its pawn resources load, else "Truck"
-    bool chassisFallback = false;      // true when drawnChassis != chassis [RECONSTRUCTION FALLBACK, logged]
+    std::string specialty;             // specialty applied at the last spawn (custom: the slot's; iconic: chassis default)
+    std::string spawnError;            // non-empty while the resolved chassis cannot be spawned (no substitute body)
 };
 
 class Match {
@@ -103,6 +104,10 @@ public:
     void selectCharacter(int p, const CharacterSelection& s) { if (p >= 0 && (size_t)p < players_.size()) { players_[(size_t)p].selection = s; players_[(size_t)p].hasSelectedCharacter = true; } }
     // [integration M06] A player whose character comes from the frontend's selection screen: no default selection,
     // so CheckReadySpawn waits for selectCharacter (addPlayer pre-selects Optimus only for the direct boot / harnesses).
+    // Host check that a resolved chassis can be built (pawn resources exported and loadable). The original has no
+    // fallback chassis: FindChassis failing leaves ChassisType none (a body-less pawn + log). The rebuild refuses the
+    // spawn instead, keeps retrying once a second, and reports the reason (spawnError) [RECONSTRUCTION: loud failure].
+    void setChassisCheck(std::function<bool(const std::string&, std::string&)> f) { chassisCheck_ = std::move(f); }
     void requireCharacterSelection(int p) { if (p >= 0 && (size_t)p < players_.size()) players_[(size_t)p].hasSelectedCharacter = false; }
     void tick(float dt);
     // GameInfo.Killed. killer < 0: environmental. suicide: DmgType_Suicided or killer == victim.
@@ -143,6 +148,7 @@ public:
     State state() const { return state_; }
     const MatchSettings& settings() const { return s_; }
     const std::vector<MatchPlayer>& players() const { return players_; }
+    MatchPlayer& playerMutable(int p) { return players_[(size_t)p]; }
     int teamScore(int t) const { return (t == 0 || t == 1) ? teamScore_[t] : 0; }
     int remainingTime() const { return remainingTime_; }      // GRI.RemainingTime (s)
     int elapsedTime() const { return elapsedTime_; }          // GRI.ElapsedTime (s)
@@ -164,6 +170,7 @@ private:
     State state_ = State::None;
     std::vector<MatchPlayer> players_;
     std::vector<core::Vec3> locs_;
+    std::function<bool(const std::string&, std::string&)> chassisCheck_;
     std::vector<int> spawnAt_;
     std::vector<MatchEvent> events_;
     std::vector<Start> starts_;

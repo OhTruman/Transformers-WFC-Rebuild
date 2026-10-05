@@ -31,7 +31,8 @@ namespace {
 core::Vec3 robotCalcVelocity(const Character& c, const core::Vec3& wish, const core::Vec3& prev,
                              bool falling, float faceYaw, float dt) {
     const float mult = c.speedMultiplier();
-    const float maxSpeed = (falling ? core::config::kAirSpeed : core::config::kRobotMoveSpeed) * mult;
+    const RobotParams& RP = c.robotParams();
+    const float maxSpeed = (falling ? RP.airSpeed : RP.groundSpeed) * mult;
     float wishLen = core::length(wish);
     core::Vec3 desired;
     if (wishLen < 1e-4f) desired = falling ? prev : core::Vec3{0, 0, 0};
@@ -46,15 +47,15 @@ core::Vec3 robotCalcVelocity(const Character& c, const core::Vec3& wish, const c
         if (wishLen > 1e-4f && flatSpeed > 1e-4f)
             dir = (wish.x * prev.x + wish.z * prev.z) / (wishLen * flatSpeed);
         if (wishLen > 1e-4f && dir > core::config::kMomentumFwdCos)
-            preservation = airSet ? core::config::kMomentumAirFwd : core::config::kMomentumGroundFwd;
+            preservation = airSet ? RP.momAirFwd : RP.momGroundFwd;
         else if (wishLen < 1e-4f)
-            preservation = airSet ? core::config::kMomentumAirNeutral : core::config::kMomentumGroundNeutral;
+            preservation = airSet ? RP.momAirNeutral : RP.momGroundNeutral;
         else
-            preservation = airSet ? core::config::kMomentumAirBack : core::config::kMomentumGroundBack;
+            preservation = airSet ? RP.momAirBack : RP.momGroundBack;
     }
-    float maxAccel = core::config::kRobotAccel / (1.0f + preservation);
+    float maxAccel = RP.accel / (1.0f + preservation);
     // [PROV] AirControl: UE3 native falling scales acceleration; applied to the accel limit here.
-    if (falling) maxAccel *= core::config::kAirControl;
+    if (falling) maxAccel *= RP.airControl;
 
     core::Vec3 fwd = core::forwardFromYawPitch(faceYaw, 0.0f);
     core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
@@ -143,6 +144,8 @@ core::Vec3 clampLength(core::Vec3 a, float maxLen) {
 void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWorld* col) {
     namespace cfg = core::config;
     Character::VehicleState& vs = c.vehicleState();
+    const VehicleParams& VP = c.vehicleParams();
+    const bool truck = VP.form == VehicleFormType::Truck, tank = VP.form == VehicleFormType::Tank;
     core::Vec3& v = c.velocity();
     const core::Vec3 oldPos = c.position();
     core::Vec3 p = oldPos;
@@ -153,12 +156,17 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     // Hovering.UpdateBoosting: Boost && (!IsDrifting) -> Driving (CarSimulation.Activate: JumpTimeRemaining 0).
     // Driving.UpdateBoosting: !Boost -> Hovering (EndState StopNitro; Hovering.BeginState: hover Activate
     // clears dash/drift and resets the springs, then Drift() starts the 0.5 s authority ramp).
-    if (!vs.driving && in.wantBoost && vs.driftRemain <= 0.0f) {
+    // Tank (TnTankForm.UpdateBoosting): StartBoost while not drifting; StopBoost + Drift on release; the hover
+    // simulation keeps running (TnHoverTankSimulation boost: native not recovered -> speed cap MaxBoostSpeed [PROV]).
+    if (tank) {
+        if (!vs.tankBoost && in.wantBoost && vs.driftRemain <= 0.0f) vs.tankBoost = true;
+        else if (vs.tankBoost && !in.wantBoost) { vs.tankBoost = false; vs.driftRemain = VP.driftDuration; }
+    } else if (VP.hasDriving() && !vs.driving && in.wantBoost && vs.driftRemain <= 0.0f) {
         vs.driving = true; vs.jumpBoost = 0.0f;
     } else if (vs.driving && !in.wantBoost) {
         vs.driving = false;
         vs.nitroRemain = 0.0f; vs.dashRemain = 0.0f;
-        vs.driftRemain = cfg::kHoverDriftDuration;
+        vs.driftRemain = VP.driftDuration;
         for (float& l : vs.spLen) l = -1.0f;              // TnSpring.Reset: _Length = -1
     }
 
@@ -167,14 +175,25 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     bool unstable = std::fabs(vs.pitch) > stabRad || std::fabs(vs.roll) > stabRad;
 
     // Special move (VehicleSpecialMove = Dash input): CanUseSpecialMove = no cooldown running.
-    if (in.wantDash) {
+    if (in.wantDash && !tank) {   // tank special move = 180 quick turn (native not recovered: PARTIAL, not implemented)
         if (!vs.driving) {
             if (vs.dashCooldown <= 0.0f) {
-                // TnTruckForm.Hovering.DoDash -> HoverSimulation.Dash((1,0,0)): forward only; Dash() is
-                // refused while unstable; the cooldown starts either way (UpdateDashing).
-                if (!unstable) { vs.dashRemain = cfg::kVehicleDashTime; vs.dashDir = core::Vec3{1, 0, 0}; }
+                // Truck: TnTruckForm.Hovering.DoDash -> Dash((1,0,0)), forward only. Car: TnCarForm.Hovering.DoDash ->
+                // Dash(|StrafeRL| > |StrafeFB| ? (0, Sign(RL), 0) : (Sign(FB), 0, 0)). Dash() is refused while unstable;
+                // the cooldown (TimeBetweenDashes 2.0) starts either way (UpdateDashing).
+                core::Vec3 dir{1, 0, 0};
+                if (!truck) {
+                    float fb = in.moveForward, rl = in.moveRight;
+                    auto sgn = [](float x) { return x > 0.0f ? 1.0f : (x < 0.0f ? -1.0f : 0.0f); };
+                    dir = std::fabs(rl) > std::fabs(fb) ? core::Vec3{0, 0, sgn(rl)} : core::Vec3{sgn(fb), 0, 0};
+                }
+                if (!unstable && (dir.x != 0.0f || dir.z != 0.0f)) { vs.dashRemain = VP.dashTime; vs.dashDir = dir; }
                 vs.dashCooldown = cfg::kHoverDashCooldown;
             }
+        } else if (!truck) {
+            // Car: Driving.UpdateRolling -> CarSimulation.Roll (barrel roll, RollDuration 0.7): native not recovered
+            // [PARTIAL]; the special-move cooldown TimeBetweenRolls 2.0 still starts [CONF].
+            if (vs.dashCooldown <= 0.0f && VP.rollDuration > 0.0f) vs.dashCooldown = 2.0f;
         } else if (vs.nitroCooldown <= 0.0f && vs.nitroRemain <= 0.0f) {
             vs.nitroRemain = cfg::kNitroDuration;      // TnTruckForm.Driving.UpdateNitro -> StartNitro
             vs.nitroCooldown = cfg::kNitroCooldown;
@@ -186,17 +205,17 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         // Hovering.UpdateJumping: the 0.3 s interval only counts down on the ground.
         if (vs.onTheGround && vs.jumpWait > 0.0f) vs.jumpWait = std::max(0.0f, vs.jumpWait - dt);
         if (in.wantJump && vs.jumpWait == 0.0f && vs.onTheGround) {
-            v.y += cfg::kVehicleJumpSpeed;                 // ApplyLinearVelocity(0,0,JumpLinearSpeed 1200)
-            vs.angVel.y -= cfg::kHoverJumpAngSpeed;        // ApplyLocalAngularVelocity(0,-1,0): nose up
-            vs.jumpWait = cfg::kVehJumpInterval;
+            v.y += VP.jumpSpeed;                           // ApplyLinearVelocity(0,0,JumpLinearSpeed 1200)
+            vs.angVel.y -= VP.jumpAngSpeed;                // ApplyLocalAngularVelocity(0,-1,0): nose up
+            vs.jumpWait = tank ? 0.5f : cfg::kVehJumpInterval;   // TnTankForm.get_TimeBetweenJumps 0.5 / TnCarForm 0.3
         }
     } else if (vs.onTheGround) {
         // Driving.UpdateJumping -> TnCarSimulation.Jump: local (600,0,1400), angular (0,-2,0).
         vs.jumpWait = std::max(0.0f, vs.jumpWait - dt);
         if (vs.jumpWait == 0.0f && in.wantJump) {
             vs.jumpBoost = cfg::kDriveJumpBoostTime;
-            v = v + B.x * cfg::kDriveJumpFwd + B.z * cfg::kDriveJumpUp;
-            vs.angVel.y -= cfg::kDriveJumpAngVel;
+            v = v + B.x * VP.driveJumpFwd + B.z * VP.driveJumpUp;
+            vs.angVel.y -= VP.driveJumpAngVel;
             vs.jumpWait = cfg::kVehJumpInterval;
             vs.onTheGround = false;
         }
@@ -209,16 +228,16 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
 
     if (!vs.driving) {
         // ---- TnHoverCarSimulation.UpdateSuspension ----
-        const float ms = cfg::kVehMass * 0.25f;
-        const float K = cfg::kSuspStiffness / ms, Bd = cfg::kSuspDamping / ms, rest = cfg::kSuspRestLength;
-        core::Vec3 com = p + B.x * cfg::kVehComFwd + B.z * cfg::kVehComUp;
+        const float ms = VP.mass * 0.25f;
+        const float K = VP.suspStiffness / ms, Bd = VP.suspDamping / ms, rest = VP.suspRest;
+        core::Vec3 com = p + B.x * VP.comFwd + B.z * VP.comUp;
         core::Vec3 down = B.z * -1.0f;
         float gs = B.z.y * -gRB;   // (-Direction.Z) * GetGravityZ(): PHYS_RigidBody -> -2940 x 0.66 [CONF native M03 P1]
         core::Vec3 nsum{0, 0, 0};
         int contacts = 0;
         for (int i = 0; i < 4; ++i) {
             float ang = 0.7853982f + 1.5707963f * (float)i;   // Normal(1,1,0) rotated by 90 deg steps
-            float rx = std::cos(ang) * cfg::kSuspMountRadius, ry = std::sin(ang) * cfg::kSuspMountRadius;
+            float rx = std::cos(ang) * VP.suspMountRadius, ry = std::sin(ang) * VP.suspMountRadius;
             core::Vec3 mount = com + B.x * rx + B.y * ry;
             float t = 1.0f; core::Vec3 n{0, 1, 0};
             bool hit = col ? col->segmentHit(mount, mount + down * rest, t, n) : false;
@@ -235,9 +254,9 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             if (!hit) continue;
             if (core::dot(n, B.z) < 0.0f) n = n * -1.0f;
             float Fa = std::max(0.0f, core::dot(B.z, n) * F);   // ApplyForce(up * FMax(0, Dot(up,N)*Force), mount)
-            accel = accel + B.z * (Fa / cfg::kVehMass);
-            angAx += ry * Fa / cfg::kVehInertiaX;             // body torque r x F (F along body z)
-            angAy += -rx * Fa / cfg::kVehInertiaY;
+            accel = accel + B.z * (Fa / VP.mass);
+            angAx += ry * Fa / VP.inertiaX;                   // body torque r x F (F along body z)
+            angAy += -rx * Fa / VP.inertiaY;
             nsum = nsum + n; ++contacts;
             static const bool dbg = std::getenv("WFC_VEHDBG") != nullptr;
             if (dbg) LOG_INFO("susp %d L=%.3f vel=%.2f F=%.0f Fa=%.0f n=(%.2f,%.2f,%.2f) mount.y=%.2f",
@@ -255,16 +274,19 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         core::Vec3 la;
         if (vs.dashRemain > 0.0f) {
             vs.dashRemain = unstable ? 0.0f : std::max(0.0f, vs.dashRemain - dt);
-            float maxS = vs.dashRemain > 0.0f ? cfg::kVehicleBoostSpeed : cfg::kVehicleMoveSpeed;
+            float maxS = vs.dashRemain > 0.0f ? VP.dashSpeed : VP.hoverSpeed;
             core::Vec3 des{vs.dashDir.x * maxS, vs.dashDir.z * maxS, 0.0f};
             la = clampLength((des - lv) * (1.0f / dt), cfg::kHoverDashAccel);     // AxisMask (1,1,1)
         } else {
             vs.driftRemain = std::max(0.0f, vs.driftRemain - dt);
             float stab = B.z.y * B.z.y;                                         // Square(Abs(up.Z))
-            float drift = 1.0f - vs.driftRemain / cfg::kHoverDriftDuration;     // CalculateDriftScale
-            float maxA = cfg::kVehicleAccel * drift * drift * stab;
-            core::Vec3 des{core::clampf(in.moveForward, -1.0f, 1.0f) * cfg::kVehicleMoveSpeed,
-                           core::clampf(in.moveRight, -1.0f, 1.0f) * cfg::kVehicleMoveSpeed, 0.0f};
+            float drift = 1.0f - vs.driftRemain / VP.driftDuration;            // CalculateDriftScale
+            float maxA = VP.hoverAccel * drift * drift * stab;
+            // Tank boost: forward at MaxBoostSpeed [PROV: TnHoverTankSimulation boost native not recovered].
+            const bool tb = tank && vs.tankBoost;
+            const float hs = tb ? VP.maxBoostSpeed : VP.hoverSpeed;
+            core::Vec3 des{core::clampf(tb ? 1.0f : in.moveForward, -1.0f, 1.0f) * hs,
+                           core::clampf(in.moveRight, -1.0f, 1.0f) * hs, 0.0f};
             la = clampLength(core::Vec3{des.x - lv.x, des.y - lv.y, 0.0f} * (1.0f / dt), maxA);   // AxisMask (1,1,0)
         }
         accel = accel + B.x * la.x + B.y * la.y + B.z * la.z;
@@ -311,28 +333,28 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             if (v.y < -tv) v.y = -tv;
         }
         // UpdateAngularDamping: AngularDamping x (1-|Steering|)^2 with a wheel down, else x 1.
-        float damp = cfg::kDriveAngularDamping * (wheels ? (1.0f - std::fabs(vs.steer)) * (1.0f - std::fabs(vs.steer)) : 1.0f);
+        float damp = VP.angularDamping * (wheels ? (1.0f - std::fabs(vs.steer)) * (1.0f - std::fabs(vs.steer)) : 1.0f);
         vs.angVel = vs.angVel * std::max(0.0f, 1.0f - damp * dt);   // PhysX damping form [UNKNOWN: assumed]
         core::Vec3 F = core::forwardFromYawPitch(c.yaw(), 0.0f);
         core::Vec3 R = core::normalize(core::cross(F, core::Vec3{0, 1, 0}));
         if (!wheels) {
             // UpdateAirControl: strafe + turn by steering; pitch the nose down to PitchForwardLimit.
-            accel = accel + R * (vs.steer * cfg::kDriveAirStrafeAccel);
-            vs.angVel.z += vs.steer * cfg::kDriveAirTurnAccel * dt;
+            accel = accel + R * (vs.steer * VP.airStrafeAccel);
+            vs.angVel.z += vs.steer * VP.airTurnAccel * dt;
             if (vs.pitch > cfg::kDrivePitchFwdLimit) angAy += cfg::kDrivePitchFwdAccel;
         } else {
             // UpdateDrag: -Normal(v) * v^2 |g_RB| / TerminalVelocity^2.
             float sp = core::length(v);
             if (sp > 1e-4f) accel = accel - v * (1.0f / sp) * (sp * sp * gRB / (cfg::kPawnTerminalVel * cfg::kPawnTerminalVel));
             // UpdateBoost: Lerp(MaxAcceleration, Drag(MaxSpeed), fwd/MaxSpeed) + ExtraBoost, x BoostScale x 1.
-            float maxS = cfg::kTruckDriveSpeed * (nitro ? cfg::kNitroSpeedScale : 1.0f);
+            float maxS = VP.driveSpeed * (nitro ? cfg::kNitroSpeedScale : 1.0f);
             float fwd = core::dot(v, B.x);
             float dragMax = maxS * maxS * gRB / (cfg::kPawnTerminalVel * cfg::kPawnTerminalVel);
-            float a0 = cfg::kTruckDriveAccel * cfg::kDriveLowSpeedBoostScale, z = maxS * cfg::kDriveLowSpeedBoostThreshold;
+            float a0 = VP.driveAccel * cfg::kDriveLowSpeedBoostScale, z = maxS * cfg::kDriveLowSpeedBoostThreshold;
             float cs = core::clampf(fwd, 0.0f, z);
             float extra = std::min(a0 / (z * z) * cs * cs - 2.0f * a0 / z * cs + a0, cfg::kDriveMaxExtraAccel);
             float boostScale = 1.0f - (core::clampf(B.x.y, 0.5f, 0.866f) - 0.5f) / (0.866f - 0.5f);
-            float acc = cfg::kTruckDriveAccel + (dragMax - cfg::kTruckDriveAccel) * (fwd / maxS) + extra;
+            float acc = VP.driveAccel + (dragMax - VP.driveAccel) * (fwd / maxS) + extra;
             accel = accel + B.x * (acc * boostScale);
             // TnWheelAssembly / TnTire (RE MILESTONE03_VEHICLE_BOOST_STEERING) [CONF laws + constants]: every wheel
             // gets the same Steering; front MaxSteeringAngle 25 deg, rear 0. v_w = point velocity of the wheel in
@@ -340,17 +362,20 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             // +-2 (M/4)|g|), applied along BODY +Y (ApplyLocalForce((0,F,0)) in body space, reproduced literally)
             // at the contact point. Load = static (M/4)|g| [HIGH; no load transfer]. Heading comes only from the
             // resulting yaw torque (inertia 58.9e6 kg UU^2); nothing sets the yaw rate.
-            struct Wheel { float x, y, maxSteerDeg; };
-            // Body-local positions relative to the COM (UU): axles at +-130 (a = b), track +-126 front / +-137 rear.
-            const Wheel wheels4[4] = {{130.0f, -126.0f, 25.0f}, {130.0f, 126.0f, 25.0f}, {-130.0f, -137.0f, 0.0f}, {-130.0f, 137.0f, 0.0f}};
-            const float load = cfg::kVehMass * 0.25f * gRB;          // N (kg m/s^2), static per-wheel load
-            const float coef = 0.0015f * 100.0f;                      // 0.0015 per UU/s -> per m/s (F in N)
+            // Wheels: TnWheelPhysicsBlueprint LocalPosition relative to the COM. Truck: axles +-130 UU (a = b), track
+            // +-126 front / +-137 rear; car: +83 / -93, track +-75. TireFrictionCoefficient per wheel (truck 0.0015,
+            // car 0.0017 front / 0.002 rear) [CONF authored].
+            static const std::vector<WheelDef> kTruckWheels = {{83, -126, 21, 45, 25, 0.0015f, 0.8f}, {83, 126, 21, 45, 25, 0.0015f, 0.8f},
+                                                               {-177, -137, 21, 45, 0, 0.0015f, 0.5f}, {-177, 137, 21, 45, 0, 0.0015f, 0.5f}};
+            const std::vector<WheelDef>& wheelsN = VP.wheels.empty() ? kTruckWheels : VP.wheels;
+            const float load = VP.mass * 0.25f * gRB;                // N (kg m/s^2), static per-wheel load
             const float fMax = 2.0f * load;
             float vx = core::dot(v, F), vy = core::dot(v, R);
             float wz = vs.angVel.z;                                   // UE yaw rate (+ = right)
             float fSum = 0.0f, tz = 0.0f;
-            for (const Wheel& w : wheels4) {
-                float rx = w.x * 0.01f, ry = w.y * 0.01f;
+            for (const WheelDef& w : wheelsN) {
+                const float coef = w.friction * 100.0f;               // per UU/s -> per m/s (F in N)
+                float rx = w.x * 0.01f - VP.comFwd, ry = w.y * 0.01f;
                 float px = vx - wz * ry, py = vy + wz * rx;            // v + w x r (planar, body frame)
                 float d = vs.steer * w.maxSteerDeg * 0.0174533f;      // steering angle (+ = right)
                 float vlat = -std::sin(d) * px + std::cos(d) * py;     // wheel-frame lateral velocity
@@ -358,8 +383,8 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
                 fSum += f;
                 tz += rx * f;                                          // r x (0, F, 0): yaw torque = r.x * F
             }
-            const float izz = 5890.0f;                                // kg m^2 (58.9e6 kg UU^2)
-            v = v + R * (fSum / cfg::kVehMass * dt);
+            const float izz = VP.inertiaZ;                            // kg m^2 (truck 58.9e6 kg UU^2)
+            v = v + R * (fSum / VP.mass * dt);
             vs.angVel.z += tz / izz * dt;
             vs.tireForce = fSum;
             vs.angVel.x = 0.0f;
@@ -504,11 +529,11 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
 
     // [CONF] pawn gravity -29.4 m/s^2.
     v.y -= core::config::kGravity * dt;
-    v.y = std::max(v.y, -core::config::kRobotTerminalVel);
+    v.y = std::max(v.y, -c.robotParams().terminalVel);
 
     // Jumping stays a robot-form, non-transforming action [PROV during a fold].
     if (in.wantJump && c.onGround() && !c.isTransforming() && t.jumpSpeed > 0.0f) {
-        v.y = t.jumpSpeed;
+        v.y = c.robotParams().jumpSpeed();   // JumpZ = sqrt(2 g JumpHeight) of this chassis' acrobatics
         c.setOnGround(false);
     }
 
@@ -518,8 +543,9 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     // physWalking: after a blocked move the velocity is the actual displacement over the step. Probes: capsule centre
     // (2 m) and head (3.6 m: the 4 m cylinder does not pass under overhangs lower than its top); steps / stairs belong to
     // the centre-point ground model (MaxStepHeight 0.35 m). [PROV collision model: no capsule sweep]
-    bool robotBlocked = wallBlock(col, oldPos, p, v, core::config::kPawnRadius);
-    robotBlocked |= wallBlock(col, oldPos, p, v, core::config::kPawnRadius, 2.0f * core::config::kPawnHalfHeight - 0.4f);
+    const float pr = c.robotParams().radius, phh = c.robotParams().halfHeight;
+    bool robotBlocked = wallBlock(col, oldPos, p, v, pr, phh);
+    robotBlocked |= wallBlock(col, oldPos, p, v, pr, 2.0f * phh - 0.4f);
     // Knee probe (0.55 m, above MaxStepHeight 0.35; short reach 0.7 m; walkable faces skipped): low props (crates, battery, supports 1-2 m tall)
     // block the body instead of being walked through; the short reach keeps stairs to the centre-point ground model
     // (a 35 deg stair 0.7 m ahead is ~0.49 m high). [PROV: the native cylinder sweep with step-up is not reproduced]
@@ -539,7 +565,7 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     float lift = 0.0f;
     if (c.isTransforming()) {
         float remaining = 1.0f - c.transformProgress();
-        float hhVeh = c.meshToActor(Form::Vehicle), hhRobot = core::config::kPawnHalfHeight;
+        float hhVeh = c.meshToActor(Form::Vehicle), hhRobot = c.robotParams().halfHeight;
         lift = hhRobot - (hhRobot * (1.0f - remaining) + hhVeh * remaining);
     }
     bool grounded = false;

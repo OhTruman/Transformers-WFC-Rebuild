@@ -681,7 +681,8 @@ void Character::updateArm(float dt) {
     assets::skinPose(*armModel_, armPose_, armScratch_, armBuf_);
     // WeaponSocket_Secondary: bone R_Arm03_Elbow_XB, relative rotation pitch 32768 (180 deg about UE Y =
     // glTF Z), no offset [CONF character.json].
-    armWorld_ = meshMatrix(Form::Robot) * (*robotScratch)[(size_t)weaponBone_] * core::Mat4::rotateZ(3.1415927f);
+    if (armBone_ >= 0 && (size_t)armBone_ < robotScratch->size()) armWorld_ = meshMatrix(Form::Robot) * (*robotScratch)[(size_t)armBone_] * armOffset_;
+    else armWorld_ = meshMatrix(Form::Robot) * (*robotScratch)[(size_t)weaponBone_] * core::Mat4::rotateZ(3.1415927f);
     armVisible_ = true;
 }
 
