@@ -74,7 +74,8 @@ public:
     // + melee GroundSpeedMultiplier (WeaponAttack 0.75, Whirlwind 1.2) while attacking [CONF TnMeleeSet].
     float speedMultiplier() const {
         return speedMult_ * specialtySpeedMult_ * (meleeState_ == 1 ? 0.75f : meleeState_ == 2 ? 1.2f : 1.0f) *
-               (drainRemain_ > 0.0f ? 0.7f : 1.0f);   // TnBuffDrainSource SpeedMultiplier 0.7
+               (drainRemain_ > 0.0f ? 0.7f : 1.0f) *   // TnBuffDrainSource SpeedMultiplier 0.7
+               (rollerSlowRemain_ > 0.0f ? 0.75f : 1.0f);   // TnBuffRollerSphere
     }
     // TnSpecialty.Apply: SetSpeedMultiplier(SpeedMultiplier, P) + InitializeSegmentedHealth(HealthBlueprint) [CONF].
     void setSpecialty(const std::string& id, float speedMult, const std::vector<float>& segments, float overshield) {
@@ -175,6 +176,7 @@ public:
     int meleeSweep_ = -1;                 // index of the active sweep window
     std::vector<int> meleeHit_;           // match players already hit by the active sweep
     int meleeAlternate_ = 0;
+    bool meleeHitRoller_ = false;         // the roller mine was already kicked by this sweep
     int meleeHitCount_ = 0;               // total melee hits landed (diagnostics)
     bool meleeCarrier_ = false;
     bool barrierAlive_ = false;
@@ -182,6 +184,8 @@ public:
     // Killstreak buffs [CONF authored CDOs + script]: TnBuffSeeEnemyObjectiveMarkers 30 s; TnBuffHardLocked 10 s (marker for
     // the instigator's team; FloatModifier consumer not recovered); TnBuffRefillHealthOnKill 60 s; TnBuffAbilityJammedKillstreak
     // 30 s (TnAbilityManager CooldownMultiplier 0).
+    bool rollerAlive_ = false;            // TnAbilityRollerSphere: spawn pending or the roller mine exists
+    float rollerSlowRemain_ = 0.0f;       // TnBuffRollerSphere (enemy aura): speed x0.75, 1 s robot / 2 s vehicle, refreshed
     bool missileAlive_ = false;           // TnAbilityGuidedMissile: launch pending or the missile is flying
     bool sentryAlive_ = false;            // TnAbilitySpawnSentry: SpawnSentry timer active or the sentry exists
     float drainRemain_ = 0.0f;           // TnBuffDrainSource BuffTime 7 s (Blueprints[0])
@@ -229,9 +233,9 @@ public:
         for (int i = 0; i < 2; ++i) {
             AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
             a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave" || a.id == "Cloaking" || a.id == "Hover" ||
-                            a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "Drain" || a.id == "SpawnSentry" || a.id == "GuidedMissile";
+                            a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "Drain" || a.id == "SpawnSentry" || a.id == "GuidedMissile" || a.id == "RollerSphere";
             // Cooldown[skill data index 0]: Dodge [2.0, 0.5]; Warcry [60]; Shockwave [60] [CONF authored CDOs].
-            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : a.id == "Barrier" ? 20.0f : a.id == "SpawnAmmoCrate" ? 60.0f : a.id == "Drain" ? 60.0f : a.id == "SpawnSentry" ? 60.0f : a.id == "GuidedMissile" ? 45.0f : 0.0f;
+            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : a.id == "Cloaking" ? 15.0f : a.id == "Hover" ? 35.0f : a.id == "Whirlwind" ? 60.0f : a.id == "Barrier" ? 20.0f : a.id == "SpawnAmmoCrate" ? 60.0f : a.id == "Drain" ? 60.0f : a.id == "SpawnSentry" ? 60.0f : a.id == "GuidedMissile" ? 45.0f : a.id == "RollerSphere" ? 60.0f : 0.0f;
             abilities_[i] = a;
         }
     }
@@ -247,7 +251,8 @@ public:
                 !(a.id == "SpawnAmmoCrate" && (beaconAlive_ || pendingAbilityEffect_ == "SpawnAmmoCrate")) &&
                 !(a.id == "Drain" && drainRemain_ > 0.0f) &&
                 !(a.id == "SpawnSentry" && (sentryAlive_ || pendingAbilityEffect_ == "SpawnSentry")) &&
-                !(a.id == "GuidedMissile" && (missileAlive_ || pendingAbilityEffect_ == "GuidedMissile"))) {
+                !(a.id == "GuidedMissile" && (missileAlive_ || pendingAbilityEffect_ == "GuidedMissile")) &&
+                !(a.id == "RollerSphere" && (rollerAlive_ || pendingAbilityEffect_ == "RollerSphere"))) {
                 a.pendingCooldown = false; a.cooldown = a.cooldownTime;
             }
             if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (jammedRemain_ > 0.0f ? 0.0f : fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));

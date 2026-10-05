@@ -2092,6 +2092,55 @@ void Application::runParticipantTest() {
         check(E && launched && frozen && cam && steered && killed && cd,
               "Guided missile: 1.0 s launch; pawn frozen; camera on the missile (FOV 120); steers; ability press detonates 10000 / 45 m; 45 s cooldown");
     }
+    // Roller sphere: spawn 0.5 s, 27.5 m/s, LinearDamping 0.6; aura slow; no explosion before ArmTime 3 s; armed contact
+    // explodes (135 / 15 m); cooldown 60 s once gone.
+    {
+        game::MatchLaunch LB; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", LB);
+        world_.launchMatch(LB);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Scientist; me.abilities = {"RollerSphere", "Dodge"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("R" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        bool spawned = false, damped = false, unarmed = false, slowed = false, boom = false, cd = false;
+        float v0 = 0, v1 = 0, eh0 = 0, eh1 = 0;
+        if (E) {
+            world_.player().controller().setCameraYaw(lp.yaw());
+            if (moveToOpenLine(45.0f)) run(0.3f);
+            core::Vec3 fwd = core::forwardFromYawPitch(lp.yaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != E) o->setPosition(lp.position() - fwd * 80.0f);
+            E->setPosition(lp.position() - fwd * 40.0f);
+            platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+            world_.handleInput(sh, dt); world_.tick(dt);
+            run(0.45f);
+            bool notYet = !world_.rollerMine().alive;
+            run(0.1f);
+            spawned = notYet && world_.rollerMine().alive;
+            v0 = core::length(core::Vec3{world_.rollerMine().vel.x, 0, world_.rollerMine().vel.z});
+            run(1.0f);
+            v1 = core::length(core::Vec3{world_.rollerMine().vel.x, 0, world_.rollerMine().vel.z});
+            damped = v0 > 25.0f && std::fabs(v1 / v0 - std::exp(-0.6f)) < 0.06f;
+            // Contact before arming (t ~1.5 s): no explosion; aura slows the enemy.
+            E->setPosition(world_.rollerMine().pos - core::Vec3{0, 1.0f, 0});
+            run(0.1f);
+            unarmed = world_.rollerMine().alive;
+            slowed = E->pawn().rollerSlowRemain_ > 0.0f;
+            eh0 = E->pawn().health().current;
+            while (world_.rollerMine().alive && world_.rollerMine().t < 3.05f) { E->setPosition(world_.rollerMine().pos - core::Vec3{0, 1.0f, 0}); run(1.0f / 60.0f); }
+            run(0.1f);
+            eh1 = E->spawned() ? E->pawn().health().current : 0.0f;
+            boom = !world_.rollerMine().alive && eh0 - eh1 > 100.0f;
+            run(0.1f);
+            cd = world_.hudState().abilities[0].cooldown > 59.0f;
+        }
+        LOG_INFO("PARTICIPANT roller: spawned %d v %.1f -> %.1f in 1 s, unarmed contact safe %d, slowed %d, armed contact boom %d (%.0f -> %.0f), cooldown %d",
+                 (int)spawned, v0, v1, (int)unarmed, (int)slowed, (int)boom, eh0, eh1, (int)cd);
+        check(E && spawned && damped && unarmed && slowed && boom && cd,
+              "Roller sphere: 0.5 s spawn at 27.5 m/s, LinearDamping 0.6, aura slow, armed after 3 s, contact explodes 135, 60 s cooldown");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

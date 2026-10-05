@@ -65,6 +65,10 @@ struct HudGameState {
     // (PickupRotationRate yaw 10000); objective marker "Ammo Beacon" for the owner's team.
     float drain = 0.0f;                          // Drain ability active (s left)
     float seeEnemies = 0.0f, refillOnKill = 0.0f, abilitiesJammed = 0.0f, hardLocked = 0.0f;   // killstreak buffs on the local pawn (s left)
+    // Roller sphere: Rendering draws FX_RollerMine_p.Mesh.RollerMineAbility_STAT (scale 0.5) at rollerPos.
+    bool roller = false, rollerArmed = false;
+    core::Vec3 rollerPos{0, 0, 0};
+    float rollerFuse = 0.0f, rollerHealth = 0.0f, rollerSlow = 0.0f;
     bool guidedMissile = false;                  // the local player is guiding a missile (camera follows it)
     core::Vec3 guidedMissilePos{0, 0, 0};
     float guidedMissileFuse = 0.0f;
@@ -284,6 +288,12 @@ public:
     // TnGuidedMissile (ability / GuidedMissileStreak) [CONF RE §J3 + authored GuidedMissile_PROJDATA / GuidedMissile_STRATEGY].
     struct GuidedMissile { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f; };
     GuidedMissile missile_;
+    // TnRollerMineAbility (the local owner's) [CONF authored CDOs + RE §J4; PhysX ball HIGH].
+    struct RollerMine { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float t = 0.0f, health = 0.0f; bool onGround = false; };
+    RollerMine roller_;
+    float rollerDelay_ = -1.0f;
+    void tickRollerMine(float dt);
+    void explodeRollerMine();
     float missileDelay_ = -1.0f;
     void startGuidedMissile();
     void tickGuidedMissile(float dt);
@@ -421,6 +431,8 @@ public:
     void damageAmmoBeacon(float amount, int instigator);
     const Sentry& sentry() const { return sentry_; }
     bool guidedMissileAlive() const { return missile_.alive; }
+    const RollerMine& rollerMine() const { return roller_; }
+    void damageRollerMine(float amount, int instigator);
     core::Vec3 guidedMissilePos() const { return missile_.pos; }
     void damageSentry(float amount, int instigator, const std::string& type);
     bool sentryRayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const;

@@ -1148,6 +1148,8 @@ HudGameState World::hudState() const {
     h.ammoBeacon = beacon_.alive; h.ammoBeaconPos = beacon_.pos; h.ammoBeaconLife = beacon_.life; h.ammoBeaconHealth = beacon_.health;
     h.ammoBeaconBuff = pc.beaconDamageBuff_ > 0.0f;
     h.drain = pc.drainRemain_;
+    h.roller = roller_.alive; h.rollerArmed = roller_.alive && roller_.t >= 3.0f; h.rollerPos = roller_.pos;
+    h.rollerFuse = roller_.alive ? std::max(0.0f, 10.0f - roller_.t) : 0.0f; h.rollerHealth = roller_.health; h.rollerSlow = pc.rollerSlowRemain_;
     h.guidedMissile = missile_.alive; h.guidedMissilePos = missile_.pos; h.guidedMissileFuse = missile_.life;
     h.sentry = sentry_.alive; h.sentryHealth = sentry_.health; h.sentryPos = sentry_.pos; h.sentryTarget = sentry_.target;
     h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
@@ -1675,6 +1677,10 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
     }
     for (Destructible* d : destructibles_)
         if (d->state() == 0) { core::Vec3 c = (d->boxMin() + d->boxMax()) * 0.5f; float k = falloff(c); if (k > 0.0f) d->applyDamage(*this, damage * k); }
+    if (roller_.alive) {
+        float dd = std::max(0.0f, core::length(roller_.pos - at) - 1.21f);
+        if (dd < radius) damageRollerMine(damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator);
+    }
     if (sentry_.alive) {
         float dd = std::max(0.0f, core::length(sentry_.pos + core::Vec3{0, 2.0f, 0} - at) - 2.0f);
         if (dd < radius) damageSentry(damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator, type);
@@ -1871,6 +1877,10 @@ void World::tickAbilityEffects(float dt) {
         pc.shockwaveDelay_ = 0.25f;                       // Delay 0.25 -> Shockwave()
     } else if (fx == "Whirlwind") {
         startLocalMelee(true);                            // MeleeService.StartMeleeAttack(MELEE_Whirlwind)
+    } else if (fx == "RollerSphere") {
+        pc.playAction("Skill_AbilityJammer", false);       // OnTriggerAnimParams
+        rollerDelay_ = 0.5f;                               // SpawnDelay 0.5
+        pc.rollerAlive_ = true;
     } else if (fx == "GuidedMissile") {
         startGuidedMissile();
     } else if (fx == "SpawnSentry") {
@@ -1890,6 +1900,7 @@ void World::tickAbilityEffects(float dt) {
     tickAmmoBeacon(dt);
     tickSentry(dt);
     tickGuidedMissile(dt);
+    tickRollerMine(dt);
     // TnBuffDrainSource (Blueprints[0]): each tick every enemy TnPawn within Range 2000 UU with line of sight takes
     // DamagePerSecond 25 x dt; the caster heals HealthPerSecond 35 x dt per target [CONF authored + RE §J]. Heal type
     // AddHealthToAll [PROV].
@@ -2041,7 +2052,7 @@ void World::tickLocalMelee(float dt) {
     const int n = whirl ? 8 : 1;
     int active = -1;
     for (int i = 0; i < n; ++i) if (pc.meleeT_ >= sw[i].t && pc.meleeT_ < sw[i].t + sw[i].dur) active = i;
-    if (active != pc.meleeSweep_) { pc.meleeSweep_ = active; pc.meleeHit_.clear(); }   // a new sweep: hit list reset
+    if (active != pc.meleeSweep_) { pc.meleeSweep_ = active; pc.meleeHit_.clear(); pc.meleeHitRoller_ = false; }   // a new sweep: hit list reset
     if (active >= 0 && matchActive_) {
         const SocketDef& sd = sw[active].positionSocket ? pc.chassis().positionSocket : pc.chassis().meleeSmall;
         core::Vec3 at = pc.actorLocation();
@@ -2050,6 +2061,12 @@ void World::tickLocalMelee(float dt) {
         const core::Vec3 ex{sw[active].extentUU.x * 0.01f, sw[active].extentUU.z * 0.01f, sw[active].extentUU.y * 0.01f};   // UE Z = up
         const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
         const float damage = whirl ? 85.0f : pc.meleeCarrier_ ? 9999.0f : 150.0f;
+        if (roller_.alive && !pc.meleeHitRoller_ && std::fabs(roller_.pos.x - at.x) <= ex.x + 1.21f && std::fabs(roller_.pos.z - at.z) <= ex.z + 1.21f &&
+            std::fabs(roller_.pos.y - at.y) <= ex.y + 1.21f) {
+            core::Vec3 d = roller_.pos - pc.actorLocation(); d.y = 0.0f;
+            if (core::length(d) > 1e-4f) roller_.vel = roller_.vel + core::normalize(d) * 50.0f;   // TnRollerMineAbility.MeleeImpulse 5000
+            pc.meleeHitRoller_ = true;
+        }
         const char* type = whirl ? "TransGame.TnDamageTypeWhirlwind" : "TransGame.TnDamageTypeMelee";
         for (MatchOpponent* o : opponents_) {
             if (!o->spawned() || std::find(pc.meleeHit_.begin(), pc.meleeHit_.end(), o->matchPlayer()) != pc.meleeHit_.end()) continue;
@@ -2538,6 +2555,98 @@ void World::tickGuidedMissile(float dt) {
         ctl.clearSpectatorView();
     }
     pc.missileAlive_ = m.alive || missileDelay_ >= 0.0f;
+}
+
+// ---- Roller sphere [CONF TnAbilityRollerSphere / TnRollerMineAbility CDOs + RE §J4; authored RB_BodySetup / PHYSMAT] ----
+// SpawnDelay 0.5 -> at owner + SpawnOffset (500, 0, 100) rotated if the spot is safe (radius x 1.1 clear), else retry every
+// 1 s; InitialVelocity (2750, 0, 0) local. Rigid-body sphere: radius 241.5 UU x mesh scale 0.5 = 1.21 m, PhysMaterial
+// LinearDamping 0.6, stock Friction 0.7 / Restitution 0.3 [HIGH: UE3 PhysicalMaterial defaults]; rolling under gravity on
+// the floor (slope acceleration not modelled [PROV]). ArmTime 3 s; _Fuse 10 s -> explodes; _Health 200; armed + touching an
+// enemy pawn -> explodes: 135 / 1500 UU, no momentum (TnDamageTypeRollerMine). Owner / teammate melee kicks it: + normal
+// (horizontal) x MeleeImpulse 5000. Aura BuffRadius 1500 (visible enemies): TnBuffRollerSphere speed x0.75 (1 s robot /
+// 2 s vehicle), refreshed. Destroyed with the owner. Cooldown 60 s once gone.
+void World::explodeRollerMine() {
+    if (!roller_.alive) return;
+    roller_.alive = false;
+    radiusDamage(roller_.pos, 135.0f, 15.0f, localPlayer_, "TransGame.TnDamageTypeRollerMine");
+    LOG_INFO("roller sphere exploded at (%.1f %.1f %.1f) t %.2f", roller_.pos.x, roller_.pos.y, roller_.pos.z, roller_.t);
+}
+
+void World::damageRollerMine(float amount, int instigator) {
+    if (!roller_.alive || instigator < 0 || instigator == localPlayer_) return;
+    if (matchActive_ && match_.sameTeam(instigator, localPlayer_)) return;
+    roller_.health -= amount;
+    if (roller_.health <= 0.0f) explodeRollerMine();
+}
+
+void World::tickRollerMine(float dt) {
+    Character& pc = player_.pawn();
+    auto tickBuff = [dt](Character& p) { p.rollerSlowRemain_ = std::max(0.0f, p.rollerSlowRemain_ - dt); };
+    tickBuff(pc);
+    for (MatchOpponent* o : opponents_) tickBuff(o->pawn());
+    const float R = 1.21f;
+    if (rollerDelay_ >= 0.0f) {
+        rollerDelay_ -= dt;
+        if (rollerDelay_ < 0.0f && !localDead_) {
+            const core::Vec3 f = core::forwardFromYawPitch(pc.yaw(), 0.0f);
+            const core::Vec3 spot = pc.actorLocation() + f * 5.0f + core::Vec3{0, 1.0f, 0};
+            float t; core::Vec3 n;
+            bool safe = collision_.valid() && !collision_.segmentHit(pc.actorLocation(), spot + f * (R * 1.1f), t, n);
+            if (safe) {
+                roller_ = RollerMine{};
+                roller_.alive = true; roller_.pos = spot; roller_.vel = f * 27.5f; roller_.health = 200.0f;
+                LOG_INFO("ability RollerSphere: spawned");
+            } else rollerDelay_ = 1.0f;   // SpawnLocationValidator failed: retry every 1 s
+        }
+    }
+    RollerMine& m = roller_;
+    if (m.alive && localDead_) m.alive = false;   // destroyed with the owner
+    if (m.alive) {
+        m.t += dt;
+        // Rigid body: gravity, PhysX linear damping, floor contact, wall bounce with restitution 0.3.
+        m.vel.y -= core::config::kGravity * dt;
+        m.vel = m.vel * std::max(0.0f, 1.0f - 0.6f * dt);
+        core::Vec3 next = m.pos + m.vel * dt;
+        float gy; core::Vec3 gn;
+        if (collision_.valid() && collision_.groundHeight(next.x, next.z, next.y - R + 0.3f, 0.5f, gy, gn) && next.y - R <= gy) {
+            next.y = gy + R;
+            if (m.vel.y < 0.0f) m.vel.y = -m.vel.y * 0.3f < 0.5f ? 0.0f : -m.vel.y * 0.3f;
+            m.onGround = true;
+        } else m.onGround = false;
+        float t; core::Vec3 n;
+        const core::Vec3 c0 = m.pos + core::Vec3{0, 0.2f, 0}, c1 = next + core::Vec3{0, 0.2f, 0};
+        core::Vec3 hv{m.vel.x, 0, m.vel.z};
+        if (core::length(hv) > 1e-4f && collision_.valid() && collision_.segmentHit(c0, c1 + core::normalize(hv) * R, t, n)) {
+            core::Vec3 hn = core::normalize(core::Vec3{n.x, 0.0f, n.z});
+            if (core::length(core::Vec3{n.x, 0, n.z}) < 1e-3f) hn = core::normalize(hv) * -1.0f;
+            const float vn = core::dot(m.vel, hn);
+            if (vn < 0.0f) m.vel = m.vel - hn * (vn * 1.3f);   // reflect the normal part x restitution 0.3
+            next = m.pos;
+        }
+        m.pos = next;
+        if (m.pos.y < killZ_) m.alive = false;
+    }
+    if (m.alive) {
+        const bool armed = m.t >= 3.0f;
+        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+        bool boom = m.t >= 10.0f;                                  // _Fuse
+        if (matchActive_)
+            for (MatchOpponent* o : opponents_) {
+                if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
+                const Character& e = o->pawn();
+                const core::Vec3 d = e.actorLocation() - m.pos;
+                const float dist = core::length(d);
+                if (dist <= 15.0f) {
+                    float tt;
+                    if (!line || !line->segmentHit(m.pos, e.actorLocation(), tt))
+                        o->pawn().rollerSlowRemain_ = std::max(o->pawn().rollerSlowRemain_, e.moveForm() == Form::Vehicle ? 2.0f : 1.0f);
+                }
+                const float r = e.cylinderRadius(e.moveForm()), hh = e.cylinderHalfHeight(e.moveForm());
+                if (armed && std::hypot(d.x, d.z) <= r + R && std::fabs(d.y) <= hh + R) boom = true;   // RB contact
+            }
+        if (boom) explodeRollerMine();
+    }
+    pc.rollerAlive_ = m.alive || rollerDelay_ >= 0.0f;
 }
 
 } // namespace game

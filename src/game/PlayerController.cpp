@@ -623,7 +623,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                     float up = abilityStickFwd_, rt = abilityStickRight_;
                     step.dodgeDir = std::fabs(up) >= std::fabs(rt) ? (up < 0.0f ? 4 : 3) : (rt < 0.0f ? 1 : 2);
                 }
-                if (a.id == "Warcry" || a.id == "Shockwave" || a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "SpawnSentry" || a.id == "GuidedMissile") pawn_->pendingAbilityEffect_ = a.id;   // World
+                if (a.id == "Warcry" || a.id == "Shockwave" || a.id == "Whirlwind" || a.id == "Barrier" || a.id == "SpawnAmmoCrate" || a.id == "SpawnSentry" || a.id == "GuidedMissile" || a.id == "RollerSphere") pawn_->pendingAbilityEffect_ = a.id;   // World
                 if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
                 if (a.id == "Drain") pawn_->drainRemain_ = 7.0f;                                    // AddSelfBuff(TnBuffDrainSource)
                 if (a.id == "Hover") { step.hoverRequest = true; pawn_->hoverRequested_ = true; }   // PlayerController.Hover

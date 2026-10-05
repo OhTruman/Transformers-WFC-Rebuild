@@ -322,7 +322,18 @@ Classification:
   - Fuse 30 s; cooldown 45 s once the missile is gone.
   - PROV: chest socket (eye height used), fuse expiry detonation, camera-delta rotator units.
   - Test (PARTICIPANT 15/15 on Streets, Gorge, Debris and Rust).
-- RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
+- **RollerSphere** [CONF TnAbilityRollerSphere / TnRollerMineAbility CDOs, RE §J4, AssetTools ability_physics.json]:
+  - Spawn: 0.5 s, at owner + (500, 0, 100) if safe (else retry every 1 s), local velocity 2750 UU/s.
+  - PhysX sphere: radius 1.208 m (241.5 UU × scale 0.5), LinearDamping 0.6 (authored PHYSMAT); Friction 0.7 and
+    Restitution 0.3 (Engine PhysicalMaterial defaults).
+  - PROV: slope acceleration, angular damping, mass.
+  - ArmTime 3 s; Fuse 10 s; Health 200 (enemy damage only).
+  - Armed contact with an enemy → 135 / 1500 UU (TnDamageTypeRollerMine, no momentum).
+  - Owner / team melee kick: +5000 UU/s horizontal.
+  - Aura: visible enemies within 1500 UU get speed ×0.75 (1 s robot / 2 s vehicle), refreshed.
+  - Gone with the owner; cooldown 60 s once gone. Mesh RollerMineAbility_STAT for Rendering (HUD rollerPos).
+  - Test (PARTICIPANT 16/16): 26.4 → 14.5 m/s in 1 s (e^−0.6); safe before arming; armed contact −135.
+- Remaining unimplemented abilities (not in any iconic preset): , DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (Barrier now implemented) (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].
 - **Correction:** the Pass 21f contract doc said robot Shift ran a dash. It did nothing until this pass.

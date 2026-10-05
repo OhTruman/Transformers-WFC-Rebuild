@@ -147,6 +147,7 @@ void parseClips(const Json& root, const Doc& doc, SkinnedModel& m, const std::ve
 } // namespace
 
 bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
+    m = SkinnedModel();   // a load always replaces the model (no appended nodes / clips on reload) [same fix as agents/rendering 088b703]
     Glb g;
     if (!openGlb(path, g)) { LOG_ERROR("skinned glb: open failed %s", path.c_str()); return false; }
     Json root;
