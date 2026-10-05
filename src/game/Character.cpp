@@ -271,6 +271,7 @@ void Character::buildVehicleRig(const assets::SkinnedModel& mdl) {
     V.hoverToBoost = mdl.clipByName("Nav_HoverToBoost_VEH");
     V.boostToHover = mdl.clipByName("Nav_BoostToHover_VEH");
     V.wheels = mdl.clipByName("Nav_Idle_Wheels_VEH");
+    V.cannon = mdl.nodeByName("C_Cannon_XB");
     if (ci < 0 || cf < 0 || cb < 0 || cl < 0 || cr < 0) return;
     assets::samplePose(mdl, ci, 0.0f, false, V.idle);
     assets::samplePose(mdl, cf, 0.0f, false, V.f);
@@ -464,6 +465,15 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
         assets::addPose(finalPose_, layerPose_, hoverW_);
     }
 
+    // Tank cannon (VEH_Tank_ANIMTREE WeaponPrimary: HmSkelControl_TurretConstrained on C_Cannon_XB, actor space, no
+    // constraints, LagDegreesPerSecond 360): the player sets DesiredBoneRotation = (view pitch, hull yaw, 0), so the cannon only
+    // pitches [CONF script + authored; lag as a max turn rate HIGH]. Applied as a mesh-space pitch over the animated pose
+    // (the cannon rests level in the vehicle clips) [PROV].
+    if (&mdl == vehicleModel_ && vehicleRig_.cannon >= 0 && vehicleParams().form == VehicleFormType::Tank && steady) {
+        const float maxStep = 6.2831853f * dt;   // 360 deg/s
+        cannonPitch_ += core::clampf(aimPitch_ - cannonPitch_, -maxStep, maxStep);
+        assets::applyMeshSpace(mdl, finalPose_, vehicleRig_.cannon, assets::quatAxisAngle({0, 0, 1}, cannonPitch_), {0, 0, 0});
+    }
     if (&mdl == robotModel_) applyHandControl(mdl, finalPose_);
     assets::skinPose(mdl, finalPose_, animScratch_, poseBuf_);
     updateWeaponSocket();

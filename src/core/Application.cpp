@@ -2212,6 +2212,36 @@ void Application::runWeaponTest() {
         check(bag0 == 1 && bag1 == 0 && notYet && spawned && firstImpact > 0.0f && std::fabs((gone - firstImpact) - 2.0f) < 0.05f && refused,
               "Flak grenade: G tosses after 0.4 s, fuse 2.0 s from the first impact, 1 in the bag");
     }
+    // Tank cannon (WeaponPrimary TurretConstrained on C_Cannon_XB): pitches with the view, at most 360 deg/s.
+    {
+        world_.applyChassisToLocalPawn("Tank3");
+        world_.applyLoadout(nullptr);
+        run(0.5f);
+        world_.player().controller().tryBeginTransform();
+        run(3.0f);
+        game::PlayerController& ctl = world_.player().controller();
+        auto cannonPitch = [&]() {
+            core::Mat4 b, h;
+            if (!pc.boneWorld("C_Cannon_XB", b) || !pc.boneWorld("C_Body_XB", h)) return -99.0f;
+            core::Vec3 cf = core::normalize(core::Vec3{b.m[0], b.m[1], b.m[2]}), hf = core::normalize(core::Vec3{h.m[0], h.m[1], h.m[2]});
+            return std::asin(core::clampf(cf.y, -1.0f, 1.0f)) - std::asin(core::clampf(hf.y, -1.0f, 1.0f));
+        };
+        ctl.setCameraPitch(0.0f);
+        run(1.0f);
+        float p0 = cannonPitch();
+        float target = 0.3f, maxRate = 0.0f, prev = p0;
+        for (int i = 0; i < 60; ++i) {
+            ctl.setCameraPitch(target);
+            platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt);
+            float p = cannonPitch(); maxRate = std::max(maxRate, std::fabs(p - prev) / dt); prev = p;
+        }
+        float p1 = cannonPitch();
+        float camP = ctl.camPitch();
+        LOG_INFO("WEAPON cannon: form %d tank %d, pitch rel. hull %.3f -> %.3f rad (view %.3f), max rate %.0f deg/s", (int)pc.form(),
+                 (int)(pc.vehicleParams().form == game::VehicleFormType::Tank), p0, p1, camP, maxRate * 57.2958f);
+        check(pc.form() == game::Form::Vehicle && std::fabs((p1 - p0) - (camP - 0.0f)) < 0.03f && maxRate * 57.2958f <= 365.0f,
+              "Tank cannon pitches with the view pitch (hull-relative), lag <= 360 deg/s");
+    }
     LOG_INFO("WEAPON SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

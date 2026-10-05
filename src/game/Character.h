@@ -468,11 +468,13 @@ private:
         bool valid = false;
         int hoverAddClip = -1;                   // ADD_Nav_Hover_VEH
         int hoverToBoost = -1, boostToHover = -1, wheels = -1;   // Driving (normal boost) clips
+        int cannon = -1;                         // C_Cannon_XB (VEH_Tank_ANIMTREE WeaponPrimary)
     } vehicleRig_;
     void buildRobotRig(const assets::SkinnedModel& mdl);
     void buildVehicleRig(const assets::SkinnedModel& mdl);
 
     float aimPitch_ = 0.0f, aimPitchN_ = 0.0f, aimYawN_ = 0.0f, aimW_ = 0.0f;
+    float cannonPitch_ = 0.0f;   // tank cannon pitch after the 360 deg/s lag
     // Turn in place (TnAnimTurnInPlace): legs keep their world yaw while the pawn follows the aim.
     float legYaw_ = 0.0f, lastYaw_ = 0.0f;
     bool yawInit_ = false;

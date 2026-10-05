@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22o (2026-10-05) — tank cannon pitch
+- C_Cannon_XB follows the view pitch at <= 360 deg/s (TurretConstrained WeaponPrimary). WFC_WEAPONTEST 18/18.
+
 ## GAMEPLAY PASS 22n (2026-10-05) — grenades (G)
 - Grenade bag toss, bounce, fuse-on-first-impact and HurtRadius from authored data; bag not in the swap cycle. WFC_WEAPONTEST 17/17.
 

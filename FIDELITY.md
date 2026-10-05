@@ -207,6 +207,12 @@ Inputs:
   - HUD grenades (reserve, −1 without a bag).
   - Test (WFC_WEAPONTEST 17/17): spawned at 0.4 s, first impact 0.35 s later, exploded 2.00 s after it; the empty
     bag refused the next toss.
+- **Tank cannon** [CONF script + authored VEH_Tank_ANIMTREE; RE §H3]:
+  - WeaponPrimary = HmSkelControl_TurretConstrained on C_Cannon_XB, actor space, no constraints.
+  - Player DesiredBoneRotation = (view pitch, hull yaw, 0): the cannon only pitches; the hull yaw is camera-slaved.
+  - LagDegreesPerSecond 360 applied as a max turn rate [HIGH].
+  - Applied as a mesh-space pitch over the animated pose (cannon level at rest) [PROV].
+  - Test: 0.300 rad view → 0.300 rad hull-relative cannon, peak 360°/s.
 - Barrier, RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].
