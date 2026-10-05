@@ -1253,9 +1253,10 @@ void Player::advance(float dt) {
     processLoads();
     drainActions();
     // Garbage collection: every few seconds (roots: display objects, listeners, intervals, queued work).
-    static int counter = 0;
+    // Per movie: a counter shared by all players (a function static) made the same movie take every 300th tick while
+    // the open-movie count divided 300, so the others collected only when that count changed (heaps of ~200k objects).
     static const bool noGc = std::getenv("WFC_GFX_NO_GC") != nullptr;   // diagnostics: never collect
-    if (!noGc && ++counter % 300 == 0 && vm_->heapSize() > 20000) {
+    if (!noGc && ++gcCounter_ % 300 == 0 && vm_->heapSize() > 20000) {
         std::vector<Object*> roots;
         for (Object* o : keyListeners) roots.push_back(o);
         for (Object* o : stageListeners) roots.push_back(o);

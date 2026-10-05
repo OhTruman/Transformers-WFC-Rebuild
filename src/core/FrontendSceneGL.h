@@ -55,6 +55,10 @@ struct HasPreviewBody<R, std::void_t<decltype(std::declval<R&>().loadPreviewBody
                                                                                  std::declval<const std::string&>())),
                                      decltype(std::declval<R&>().posePreviewBody(0, 0.0f, std::declval<render::MeshData&>()))>>
     : std::true_type {};
+// Releasing a posed body (agents/rendering M25: releasePreviewBody; bodies are CPU-only and never freed otherwise).
+template <class R, class = void> struct HasReleaseBody : std::false_type {};
+template <class R>
+struct HasReleaseBody<R, std::void_t<decltype(std::declval<R&>().releasePreviewBody(0))>> : std::true_type {};
 // Preview pawns (agents/rendering: setFrontendSceneDraw + actorMatrix + loadContentMesh).
 template <class R, class = void> struct HasPreviewDraw : std::false_type {};
 template <class R>
@@ -95,6 +99,8 @@ public:
     void transformPreview(bool toRobotOnly);
     struct PreviewStats { int slots = 0, visible = 0, vehicles = 0, meshes = 0, bodies = 0; };
     PreviewStats previewStats() const;
+    struct CachedBody { int handle = -1; uint64_t lastUse = 0; };
+    static constexpr size_t kMaxPreviewBodies = 8;   // posed-body cache: a full class cycle (4 classes x 2 factions)
     // Each pawn stands on the floor under its spawn point when the renderer can trace it (the original's
     // OnPreviewPawnTick FindGround; the roster meshes have their origin at the feet), else at the PathNode height.
     void setPreview(std::vector<PreviewSlot> slots);
@@ -111,7 +117,8 @@ private:
     bool previewHidden_[2] = {false, false};
     bool previewVehicle_[2] = {false, false};
     double previewSpawn_[2] = {0, 0};                           // idle clock start per slot (respawn on chassis change)
-    std::map<std::string, int> previewBodies_;                  // posed body handles per (glTF, slot)
+    std::map<std::string, CachedBody> previewBodies_;           // posed body handles per (glTF, slot), LRU-capped
+    uint64_t bodyClock_ = 0;
     render::MeshData posed_;
     std::map<std::string, render::MeshData> previewMeshes_;   // per content glTF, loaded once
 };

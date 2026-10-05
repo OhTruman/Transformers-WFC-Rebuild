@@ -341,6 +341,7 @@ private:
     struct Interval { int id; avm1::Value target; std::string method; double ms; double next; avm1::Args args; bool once; bool dead = false; };
     std::vector<Interval> intervals_;
     int nextInterval_ = 1;
+    int gcCounter_ = 0;                       // advances since start (collection every 300 per movie)
     struct PendingLoad { MovieClip* target; std::string url; avm1::Object* loader; };
     std::vector<PendingLoad> loads_;
     double timeMs_ = 0;

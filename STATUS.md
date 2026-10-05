@@ -368,6 +368,34 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 6. Gorge is shown disabled.
 7. A long session: private memory should plateau (about 2.8 GB in the lobby, 3.5 GB in a match).
 
+## FRONTEND PASS 6 (2026-10-05, branch `agents/frontend`): Create a Character preview, selection contract, soak
+**Player-visible fixes** (details and labels: FIDELITY pass 6):
+- **Preview colours** were wrong for every character: the preview read the faction argument as the primary colours,
+  sampled placeholder palette bitmaps, and never gave new characters the original's random palettes (all green). Fixed.
+- **Colour picker** could not be moved from keyboard or pad (the movie's left-stick callback was not driven); now pad
+  stick, arrows and W / A / S / D; LT / RT change palette; Accept commits. Mouse: only the palette arrows are clickable,
+  as in the original PC movie.
+- **Change Form** shows the vehicle; **idle animation** (Cust_Idle, where the chassis has it) through Rendering.
+- **Other faction's robot** hidden when a chassis menu opens; **class cameras** per chassis; robots stand on the floor.
+- **Intermittent crash** in Create a Character (GFx collector freeing removed clips' children) fixed.
+- **Stale preview** state no longer carries into the next visit to the room.
+
+**Selection handoff:** `GameFlow::SelectedCharacter` is the single contract (class, slot, per-faction chassis / body
+availability / colours, weapons, vehicle weapon, melee, abilities, skills), filling Gameplay's full
+`game::CharacterSelection` (merged by Integration in milestone-07 as the only mapping). A missing body is reported,
+not substituted.
+
+**Soak** (`tools/frontend/customize_soak.sh`): 6 cycles (each: all four classes, both factions, Change Form, a colour edit) + 3 private matches with
+in-match selection and reopening: 197 checks, no AS errors, no use of collected objects (WFC_GFX_GCCHECK), AS heap at
+room entry 10127-10197 and on the title 2265 every cycle, AS timers 3, preview cache bounded; memory 1246 MB at the 2nd
+room visit and 1253 MB at the 6th, matches flat at 3.4-3.9 GB. A second run (4 cycles + 2 matches) after the per-movie
+collector fix: 132 checks PASS, peak AS heap between collections 92k (was ~199k with the shared counter).
+
+- **GFx collector** ran on a counter shared by all movies, so one movie took every collection; now per movie.
+- **Posed preview bodies** cached LRU (8) and released through Rendering's releasePreviewBody when present.
+
+**Commits:** 79b47cd, 8f4c729, 1af7e74, 89eddba, 2c2f5cc, and this checkpoint.
+
 ## FRONTEND: customization camera per chassis (2026-10-04, branch `agents/frontend`)
 - The Create a Character camera now moves to the class camera of the chosen chassis when a chassis menu opens, and reverses when it closes. This is the original Kismet driven by `CustomizationCameraId`, with the FOV 70 -> 60 / 65 track.
 - Matinee DrawScale tracks (title vignette ships / boosters) are exported and evaluated; Rendering's `setFrontendActorScale` receives them when present.

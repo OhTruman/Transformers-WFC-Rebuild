@@ -36,7 +36,10 @@ const growth = [];
 for (const [k, s] of Object.entries(series)) {
   if (s.length < 3) continue;
   const a = s[1], b = s[s.length - 1];
+  // asHeap only at settled points (between collections the count is a sawtooth): room entry, party lobby, title.
+  const settled = /(\.cac|partylobby|\.main|^main\.\w+)$/.test(k);
   for (const f of ['asHeap', 'displayNodes', 'asTimers', 'stickCb', 'glShapes']) {
+    if (f === 'asHeap' && !settled) continue;
     const va = Number(a[f]), vb = Number(b[f]);
     if (Number.isFinite(va) && Number.isFinite(vb) && vb > va * 1.05 + 2) growth.push(`${k} ${f} ${va} -> ${vb}`);
   }
@@ -48,6 +51,8 @@ for (const [k, s] of Object.entries(series)) {
 const gy = checks.map(c => Number(c.graveyard)).filter(Number.isFinite);
 console.log(`checks ${checks.length}`);
 console.log(`AS throws ${count(/GFX (interval|mouse listener|key listener)? ?threw|AVM1 .*threw/)}  GCCHECK uses ${count(/AVM1 GCCHECK/)}  missing fns ${count(/GFX missing function/)}`);
+const peak = Math.max(...checks.map(c => Number(c.asHeap) || 0));
+console.log(`peak AS heap between collections ${peak}`);
 console.log(`graveyard first ${gy[0]} last ${gy[gy.length - 1]} (removed clips kept for stale references)`);
 for (const k of ['main.start', 'c1.cac', 'c2.cac', `c${Math.max(...checks.map(c => Number((c.label || '').match(/^c(\d+)/)?.[1] || 0)))}.cac`, 'main.end']) {
   const c = checks.find(x => x.label === k);
