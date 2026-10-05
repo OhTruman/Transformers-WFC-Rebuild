@@ -166,6 +166,16 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     lod.bursts.push_back({bl[b]["Count"].asInt(0), bl[b]["CountLow"].asInt(0), bl[b]["Time"].asFloat(0)});
                 lod.localSpace = rq["use_local_space"].asBool(false);
                 lod.rectangle = rq["screen_alignment"].asString() == "PSA_Rectangle";
+                lod.velocityAligned = rq["screen_alignment"].asString() == "PSA_Velocity";
+                {
+                    const std::string td = L["type_data"].asString();
+                    lod.typeData = td == "mesh" ? 1 : td == "trail2" ? 2 : td == "beam2" ? 3 : 0;
+                    lod.subH = std::max(1, rq["subimages"][(size_t)0].asInt(1));
+                    lod.subV = std::max(1, rq["subimages"][(size_t)1].asInt(1));
+                    const std::string sm = L["subuv_method"].asString();   // EParticleSubUVInterpMethod
+                    lod.subMethod = sm.find("RANDOM") != std::string::npos || sm.find("Random") != std::string::npos ? 2
+                                  : (sm.empty() || sm == "PSUVIM_None") ? 0 : 1;
+                }
                 if (L.has("mesh") && L["mesh"].isObject()) {
                     lod.meshGltf = L["mesh"]["gltf"].asString();
                     lod.overrideMaterial = L["mesh"]["override_material"].asBool(false);
@@ -332,16 +342,40 @@ void Pipeline::tickMapFx(float dt) {
             if (!em.renderable || !in.attached) continue;
             const FxLod& L = em.lods[(size_t)std::min<int>(lodIdx, (int)em.lods.size() - 1)];
             rt.lod = std::min<int>(lodIdx, (int)em.lods.size() - 1);
+            if (L.typeData >= 2) {                      // Trail2 / Beam2: not implemented [PARTIAL]
+                static std::set<std::string> logged;
+                if (logged.insert(in.system + "/" + em.name).second)
+                    LOG_WARN("map fx: %s emitter %s is %s; not drawn yet", in.system.c_str(), em.name.c_str(),
+                             L.typeData == 2 ? "Trail2" : "Beam2");
+                rt.done = true;
+                continue;
+            }
             // update / kill
             for (size_t p = 0; p < rt.parts.size();) {
                 FxParticle& q = rt.parts[p];
                 q.relTime += dt * q.oneOverLife;
                 if (q.oneOverLife > 0.0f && q.relTime >= 1.0f) { rt.parts[p] = rt.parts.back(); rt.parts.pop_back(); continue; }
+                // ParticleModuleAcceleration: Velocity and BaseVelocity += UsedAcceleration * dt
+                for (int c = 0; c < 3; ++c) q.baseVel[c] += q.accel[c] * dt;
                 for (int c = 0; c < 3; ++c) q.vel[c] = q.baseVel[c], q.size[c] = q.baseSize[c];
                 for (int c = 0; c < 4; ++c) q.color[c] = q.baseColor[c];
                 for (const FxModule& m : L.modules) {
                     if (m.flagA == 0) continue;               // disabled module (RE: flagA = bEnabled, HIGH)
-                    if (m.name == "PMI_SizeMultiplyLife") {
+                    if (m.name == "PMI_VelocityOverLife") {   // bAbsolute = false (multiplier) [PARTIAL: flag]
+                        float s[3]; evalDist(m, "VelOverLife", q.relTime, in.rng, s);
+                        for (int c = 0; c < 3; ++c) q.vel[c] *= s[c];
+                    } else if (m.name == "PMI_SizeScale") {   // Size = BaseSize * SizeScale(RelativeTime)
+                        float s[3]; evalDist(m, "SizeScale", q.relTime, in.rng, s);
+                        for (int c = 0; c < 3; ++c) q.size[c] = q.baseSize[c] * s[c];
+                    } else if (m.name == "PMI_ColorOverLife") {   // sets Color (not BaseColor) from RelativeTime
+                        float cv[3], av[1];
+                        auto ic = m.dists.find("ColorOverLife"), ia = m.dists.find("AlphaOverLife");
+                        if (ic != m.dists.end()) { ic->second.eval(q.relTime, in.rng, cv); for (int c = 0; c < 3; ++c) q.color[c] = cv[c]; }
+                        if (ia != m.dists.end()) { ia->second.eval(q.relTime, in.rng, av); q.color[3] = av[0]; }
+                    } else if (m.name == "PMI_SubUV" && L.subMethod == 1) {   // linear: image from the index curve
+                        float v[3]; evalDist(m, "SubImageIndex", q.relTime, in.rng, v);
+                        q.subImage = std::max(0, std::min((int)v[0], L.subH * L.subV - 1));
+                    } else if (m.name == "PMI_SizeMultiplyLife") {
                         float s[3]; evalDist(m, "LifeMultiplier", q.relTime, in.rng, s);
                         for (int c = 0; c < 3; ++c) q.size[c] *= s[c];
                     } else if (m.name == "PMI_ColorScaleOverLife") {
@@ -438,6 +472,21 @@ void Pipeline::tickMapFx(float dt) {
                     } else if (m.name == "PMI_MeshRotation") {
                         evalDist(m, "StartRotation", efrac, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.meshRot[c] += v3[c] * 360.0f;   // turns -> degrees
+                    } else if (m.name == "PMI_RotationRate") {   // turns / s -> radians / s
+                        evalDist(m, "StartRotationRate", efrac, in.rng, v1);
+                        q.rotRate += v1[0] * 6.2831853f;
+                    } else if (m.name == "PMI_ColorOverLife") {  // spawn: Color = BaseColor = value at RelativeTime 0
+                        auto ic = m.dists.find("ColorOverLife"), ia = m.dists.find("AlphaOverLife");
+                        if (ic != m.dists.end()) { ic->second.eval(0.0f, in.rng, v3); for (int c = 0; c < 3; ++c) q.baseColor[c] = v3[c]; }
+                        if (ia != m.dists.end()) { ia->second.eval(0.0f, in.rng, v1); q.baseColor[3] = v1[0]; }
+                    } else if (m.name == "PMI_Acceleration") {
+                        evalDist(m, "Acceleration", efrac, in.rng, v3);
+                        toWorldDir(v3, w3);
+                        for (int c = 0; c < 3; ++c) q.accel[c] += w3[c];
+                    } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {
+                        int n = L.subH * L.subV;
+                        if (L.subMethod == 2) { in.rng = in.rng * 1664525u + 1013904223u; q.subImage = (int)((in.rng >> 8) % (uint32_t)n); }
+                        else { evalDist(m, "SubImageIndex", 0.0f, in.rng, v3); q.subImage = std::max(0, std::min((int)v3[0], n - 1)); }
                     } else if (m.name == "PMI_MeshRotationRate") {
                         evalDist(m, "StartRotationRate", efrac, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.meshRotRate[c] += v3[c] * 360.0f;
@@ -447,6 +496,7 @@ void Pipeline::tickMapFx(float dt) {
                         // FFFFFFFF). Single colour parameter per Streets instance.
                         float c4[4] = {1, 1, 1, 1};
                         auto it = in.colorParams.find("SteamColor");
+                        if (it == in.colorParams.end()) it = in.colorParams.find("*");   // spawnFx colour
                         if (it != in.colorParams.end()) std::copy(it->second.begin(), it->second.end(), c4);
                         std::copy(c4, c4 + 4, q.baseColor);
                     } else if (m.name == "PMI_DynamicParameter") {          // [PARTIAL] slot order
@@ -482,7 +532,59 @@ void Pipeline::tickMapFx(float dt) {
             }
         }
     }
+    // runtime effects: released once nothing will spawn again and every particle has died
+    fxInstances_.erase(std::remove_if(fxInstances_.begin(), fxInstances_.end(), [](const FxInstance& in) {
+        if (!in.transient) return false;
+        for (const FxEmitterRT& rt : in.emitters)
+            if (!rt.parts.empty() || (in.active && !rt.done)) return false;
+        return true;
+    }), fxInstances_.end());
     statFxMs_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+}
+
+// ---- runtime particle effects (template library) ----
+int Pipeline::spawnFx(const std::string& tpl, const float R[3][3], const float T[3], const float* color, const float* target) {
+    auto it = fxSystems_.find(tpl);
+    if (it == fxSystems_.end()) {
+        static std::set<std::string> logged;
+        if (logged.insert(dataDir_ + "|" + tpl).second)
+            LOG_WARN("fx: template %s is not in this map's render data (map_fx_runtime.json)", tpl.c_str());
+        return -1;
+    }
+    FxInstance in;
+    in.system = tpl;
+    in.role = "runtime";
+    in.transient = true;
+    in.id = nextFxId_++;
+    std::copy(&R[0][0], &R[0][0] + 9, &in.R[0][0]);
+    std::copy(T, T + 3, in.T);
+    std::copy(&R[0][0], &R[0][0] + 9, &in.R0[0][0]);
+    std::copy(T, T + 3, in.T0);
+    if (color) in.colorParams["*"] = {color[0], color[1], color[2], color[3]};
+    if (target) { in.hasTarget = true; std::copy(target, target + 3, in.target); }
+    in.rng = 0x9E3779B9u * (uint32_t)in.id;
+    in.emitters.resize(it->second.emitters.size());
+    fxInstances_.push_back(std::move(in));
+    return fxInstances_.back().id;
+}
+
+bool Pipeline::setFxTransform(int id, const float R[3][3], const float T[3]) {
+    for (FxInstance& in : fxInstances_)
+        if (in.transient && in.id == id) {
+            std::copy(&R[0][0], &R[0][0] + 9, &in.R[0][0]);
+            std::copy(T, T + 3, in.T);
+            return true;
+        }
+    return false;
+}
+
+void Pipeline::stopFx(int id) {
+    for (FxInstance& in : fxInstances_)
+        if (in.transient && in.id == id) in.active = false;
+}
+
+int Pipeline::liveFx() const {
+    return (int)std::count_if(fxInstances_.begin(), fxInstances_.end(), [](const FxInstance& in) { return in.transient; });
 }
 
 // ---- map props: totems + destructible ----
@@ -807,13 +909,38 @@ void Pipeline::drawMapPresentation() {
                 for (const FxParticle& q : rt.parts) {
                     float wp[3]; worldPos(q.pos, wp);
                     core::Vec3 c = ueToGltf(wp);
-                    float w = q.size[0] * sizeScale[0] * 0.01f, h = (L.rectangle ? q.size[1] : q.size[0]) * sizeScale[1] * 0.01f;
-                    float cr = std::cos(q.rot), sr = std::sin(q.rot);
-                    core::Vec3 ax = camR * cr + camU * sr, ay = camU * cr - camR * sr;
+                    float w = q.size[0] * sizeScale[0] * 0.01f,
+                          h = (L.rectangle || L.velocityAligned ? q.size[1] : q.size[0]) * sizeScale[1] * 0.01f;
+                    core::Vec3 ax, ay;
+                    bool aligned = false;
+                    if (L.velocityAligned) {
+                        // PSA_Velocity: the sprite's up axis along the (world) velocity, its right axis across the
+                        // view (UE3 ParticleSprite velocity alignment); no particle rotation
+                        float v[3] = {q.vel[0], q.vel[1], q.vel[2]}, vw[3];
+                        if (L.localSpace) { for (int k = 0; k < 3; ++k) vw[k] = v[0] * IR[0][k] + v[1] * IR[1][k] + v[2] * IR[2][k]; }
+                        else std::copy(v, v + 3, vw);
+                        core::Vec3 dir{vw[0], vw[2], vw[1]};           // UE -> glTF axes
+                        float dl = core::length(dir);
+                        if (dl > 1e-4f) {
+                            ay = dir * (1.0f / dl);
+                            core::Vec3 rx = core::cross(camF, ay);
+                            float rl = core::length(rx);
+                            if (rl > 1e-4f) { ax = rx * (1.0f / rl); aligned = true; }
+                        }
+                    }
+                    if (!aligned) {
+                        float cr = std::cos(q.rot), sr = std::sin(q.rot);
+                        ax = camR * cr + camU * sr; ay = camU * cr - camR * sr;
+                    }
                     core::Vec3 hx = ax * (w * 0.5f), hy = ay * (h * 0.5f);
                     Sprite s;
                     s.c[0] = c - hx - hy; s.c[1] = c + hx - hy; s.c[2] = c + hx + hy; s.c[3] = c - hx + hy;
-                    const float uv[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
+                    float uv[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
+                    if (L.subMethod != 0 && L.subH * L.subV > 1) {     // SubUV: the image's cell of the sheet
+                        float du = 1.0f / (float)L.subH, dv = 1.0f / (float)L.subV;
+                        float u0 = (float)(q.subImage % L.subH) * du, v0 = (float)(q.subImage / L.subH) * dv;
+                        for (auto& t : uv) { t[0] = u0 + t[0] * du; t[1] = v0 + t[1] * dv; }
+                    }
                     std::memcpy(s.uv, uv, sizeof(uv));
                     std::copy(q.color, q.color + 4, s.color);
                     sp.push_back(s);

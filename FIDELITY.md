@@ -2373,6 +2373,14 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
 
 ---
 
+## MILESTONE 32 — RUNTIME PARTICLE TEMPLATES (weapon muzzle / impact FX from data) (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Where weapon FX live | the FX_<weapon>_p packages are empty stubs; every MP weapon template is cooked into each MP map's BASE package (Streets BASE: 130 ParticleSystems, 789 emitters, 784 fully assigned by pstream) | cooked export census (work/m32_ps_index_all.json) | CONFIRMED | build_map_fx.py library(): all map-package ParticleSystems join map_fx_runtime.json systems (Streets +131); their materials compile via build_render_data (@fxlib; Streets 325 -> 405 materials, existing GLSL byte-identical) |
+| Spawn API | IRenderer::spawnParticleEffect(tpl, pos, forward, up, color) / spawnParticleEffectSegment(tpl, start, end, color) / setParticleEffectTransform / stopParticleEffect / liveParticleEffects. glTF metres; forward = template +X, up = +Z. Unknown template -> -1, logged once. One-shot effects release when finished; loops until stopped; all released by unloadMapRenderData | WFC_FXTEST (4 templates every 30 frames): handles, live count plateaus at 10 | VISUALLY VERIFIED (Streets) | — |
+| Modules added | RotationRate, ColorOverLife (spawn + update), Acceleration, SizeScale, VelocityOverLife (bAbsolute assumed false: multiplier values), SubUV (linear / random by RequiredModule InterpolationMethod), PSA_Velocity sprites (up = velocity, right = view x velocity) | UE3 module semantics | HIGH (VelocityOverLife flag PARTIAL) | — |
+| Not yet | Trail2 / Beam2 emitters (tracers, repair / drain beams) are skipped and logged; PMI_Gravity / PMI_Unknown have no decoded payload; ColorByParameter DefaultColor not decoded (the caller passes the weapon colour); LocationPrimitiveSphere StartRadius / VelocityScale undecoded on some templates; VelocityInheritParent = 0 (static spawns) | logs | PARTIAL / UNKNOWN | next |
+
 ## MILESTONE 30 — ROBOT / VEHICLE FORM ACROSS ALL MAPS (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

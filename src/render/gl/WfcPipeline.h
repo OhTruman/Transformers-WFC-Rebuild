@@ -412,6 +412,11 @@ public:
     void setMapClock(float t) { mapClock_ = t; hasMapClock_ = true; }  // Gameplay MapState clock
     float mapTime() const { return hasMapClock_ ? mapClock_ : time_; }
     void setDestructibleState(const std::string& actor, int state);
+    // runtime particle effects from the template library (IRenderer::spawnParticleEffect; UE units / axes)
+    int spawnFx(const std::string& tpl, const float R[3][3], const float T[3], const float* color, const float* target);
+    bool setFxTransform(int id, const float R[3][3], const float T[3]);
+    void stopFx(int id);
+    int liveFx() const;
     void drawMapPresentation();                                   // map FX + totems + destructible
     // map FX data (WfcMapFx.cpp)
     struct FxDist {
@@ -424,6 +429,9 @@ public:
     struct FxLod {
         std::string material, meshGltf;
         bool overrideMaterial = false, localSpace = false, rectangle = false;
+        int typeData = 0;                 // 0 sprite, 1 mesh, 2 Trail2, 3 Beam2 (2 / 3 not drawn yet)
+        bool velocityAligned = false;     // PSA_Velocity
+        int subH = 1, subV = 1, subMethod = 0;   // SubUV: 0 none, 1 linear, 2 random
         float duration = 1.0f; int loops = 0;
         FxDist spawnRate;
         std::vector<FxBurst> bursts;
@@ -438,6 +446,8 @@ private:
         float color[4] = {1, 1, 1, 1}, baseColor[4] = {1, 1, 1, 1};
         float rot = 0, rotRate = 0, relTime = 0, oneOverLife = 0;
         float meshRot[3] = {0, 0, 0}, meshRotRate[3] = {0, 0, 0};
+        float accel[3] = {0, 0, 0};       // ParticleModuleAcceleration (world / emitter space as spawned)
+        int subImage = 0;
     };
     struct FxEmitterRT {
         float time = 0, spawnFrac = 0; int loop = 0, lod = 0; bool done = false;
@@ -454,7 +464,10 @@ private:
         std::string ownerShort;                                               // owner actor name (lower case)
         uint32_t rng = 1;
         std::vector<FxEmitterRT> emitters;
+        int id = 0; bool transient = false;   // runtime spawned (spawnFx), released when finished / at unload
+        bool hasTarget = false; float target[3] = {0, 0, 0};
     };
+    int nextFxId_ = 1;
     std::map<std::string, FxSystem> fxSystems_;
     std::vector<FxInstance> fxInstances_;
     std::map<std::string, int> fxMeshes_;

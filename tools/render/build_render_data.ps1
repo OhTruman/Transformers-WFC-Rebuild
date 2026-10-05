@@ -44,8 +44,11 @@ $chars = @((& $py (Join-Path $PSScriptRoot "character_materials.py")) | Where-Ob
 $scene = @((& $py (Join-Path $PSScriptRoot "scene_materials.py") $Map) | Where-Object { $_ -match '\S' })
 # Canvas (HUD marker) materials: compiled with per-draw runtime parameters
 $ui = Get-Content (Join-Path $PSScriptRoot "ui_materials.txt") | Where-Object { $_ -match '\S' }
+# Particle template library (every ParticleSystem cooked into the map packages: weapon muzzle / tracer / impact FX
+# spawned at runtime by IRenderer::spawnParticleEffect)
+$fxlib = @((& $py (Join-Path $PSScriptRoot "build_map_fx.py") --list-materials $Map) | Where-Object { $_ -match '^\S+\.\S+$' })
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
-    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx @ui @scene
+    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx @ui @scene @fxlib
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 
 

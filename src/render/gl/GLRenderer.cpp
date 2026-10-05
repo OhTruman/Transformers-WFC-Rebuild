@@ -851,6 +851,43 @@ public:
     void setMapEffectActive(const std::string& what, bool active) override { wfc_.setMapEffectActive(what, active); }
     void setMapEffectState(const std::string& k, bool a, bool h) override { wfc_.setMapEffectState(k, a, h); }
     void setActiveGameRules(const std::vector<std::string>& r) override { wfc_.setActiveGameRules(r); }
+    // glTF metres -> UE component rows: X = forward, Z = up (orthogonalised), Y = Z x X; position x100 (y / z swapped)
+    static bool fxRows(const core::Vec3& pos, const core::Vec3& fwd, const core::Vec3& up, float R[3][3], float T[3]) {
+        core::Vec3 x{fwd.x, fwd.z, fwd.y}, z{up.x, up.z, up.y};
+        float xl = core::length(x);
+        if (xl < 1e-6f) return false;
+        x = x * (1.0f / xl);
+        z = z - x * core::dot(z, x);
+        float zl = core::length(z);
+        if (zl < 1e-6f) {                                   // up parallel to forward: any perpendicular
+            z = std::fabs(x.z) < 0.9f ? core::Vec3{0, 0, 1} : core::Vec3{1, 0, 0};
+            z = z - x * core::dot(z, x); zl = core::length(z);
+        }
+        z = z * (1.0f / zl);
+        core::Vec3 y = core::cross(z, x);
+        const core::Vec3 rows[3] = {x, y, z};
+        for (int r = 0; r < 3; ++r) { R[r][0] = rows[r].x; R[r][1] = rows[r].y; R[r][2] = rows[r].z; }
+        T[0] = pos.x * 100.0f; T[1] = pos.z * 100.0f; T[2] = pos.y * 100.0f;
+        return true;
+    }
+    int spawnParticleEffect(const std::string& tpl, const core::Vec3& pos, const core::Vec3& fwd, const core::Vec3& up,
+                            const float* color) override {
+        float R[3][3], T[3];
+        if (!wfc_.active() || !fxRows(pos, fwd, up, R, T)) return -1;
+        return wfc_.spawnFx(tpl, R, T, color, nullptr);
+    }
+    int spawnParticleEffectSegment(const std::string& tpl, const core::Vec3& a, const core::Vec3& b, const float* color) override {
+        float R[3][3], T[3];
+        if (!wfc_.active() || !fxRows(a, b - a, core::Vec3{0, 1, 0}, R, T)) return -1;
+        float tgt[3] = {b.x * 100.0f, b.z * 100.0f, b.y * 100.0f};
+        return wfc_.spawnFx(tpl, R, T, color, tgt);
+    }
+    bool setParticleEffectTransform(int h, const core::Vec3& pos, const core::Vec3& fwd, const core::Vec3& up) override {
+        float R[3][3], T[3];
+        return wfc_.active() && fxRows(pos, fwd, up, R, T) && wfc_.setFxTransform(h, R, T);
+    }
+    void stopParticleEffect(int h) override { if (wfc_.active()) wfc_.stopFx(h); }
+    int liveParticleEffects() const override { return wfc_.liveFx(); }
     bool drawsAuthoredMapFx() const override { return wfc_.active(); }
     void setMapClock(float t) override { wfc_.setMapClock(t); }
     void setDestructibleState(const std::string& a, int s) override { wfc_.setDestructibleState(a, s); }
