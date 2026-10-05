@@ -57,8 +57,9 @@ foreach ($m in $todo) {
         $dist = 0.0; for ($i = 1; $i -lt $fr.Count; $i++) { $dist += [Math]::Sqrt([Math]::Pow($fr[$i].x - $fr[$i - 1].x, 2) + [Math]::Pow($fr[$i].z - $fr[$i - 1].z, 2)) }
         $row.walk = if ($dist -gt 15) { "PASS" } else { "FAIL" }
         $air = @($fr | Where-Object { "$($_.grounded)" -eq "0" }).Count; $peak = ($fr | ForEach-Object { [double]$_.y } | Measure-Object -Maximum).Maximum
-        $row.jump = if ($air -ge 2 -and $peak -gt [double]$p0.y + 0.5 -and "$($fr[-1].grounded)" -eq "1") { "PASS" } elseif ($air -ge 2) { "PARTIAL" } else { "FAIL" }
-        $row.robot_note = "spawn {0:N1} m from the start; walked {1:N0} m; airborne samples {2}; peak +{3:N1} m" -f $dsp, $dist, $air, ($peak - [double]$p0.y)
+        $landings = 0; for ($q = 1; $q -lt $fr.Count; $q++) { if ("$($fr[$q-1].grounded)" -eq "0" -and "$($fr[$q].grounded)" -eq "1") { $landings++ } }   # the run may end mid-jump: count landings, not the last sample
+        $row.jump = if ($air -ge 2 -and $peak -gt [double]$p0.y + 0.5 -and $landings -ge 1) { "PASS" } elseif ($air -ge 2) { "PARTIAL" } else { "FAIL" }
+        $row.robot_note = "spawn {0:N1} m from the start; walked {1:N0} m; airborne samples {2}; landings {4}; peak +{3:N1} m" -f $dsp, $dist, $air, ($peak - [double]$p0.y), $landings
     } else { $row.spawn = $row.walk = $row.jump = $row.load }
     $fv = @(Read-FrameLog (Join-Path $md "vehicle\wfc.log") | Where-Object { $_.frame -gt 0 })
     if ($fv.Count) {
@@ -82,8 +83,9 @@ foreach ($m in $todo) {
     $row.killplane_note = "KillZ loaded {0} m, authored {1} m (exercised only when a run falls; teleport hook proposed)" -f $kzv, $m.killz_m
     $ml = Join-Path $md "match\wfc.log"
     if (Test-Path $ml) { $kills = @(Grep-Log $ml '\] MATCH kill ').Count; $resp = @(Grep-Log $ml '\] MATCH respawn ' | ForEach-Object { [double][regex]::Match($_.text, 'delay_s=([\d.]+)').Groups[1].Value }); $end = @(Grep-Log $ml '\] MATCH end ')[0]
-        $row.respawn = if ($resp.Count -and @($resp | Where-Object { [Math]::Abs($_ - 5.0) -gt 0.4 }).Count -eq 0) { "PASS" } elseif ($resp.Count) { "FAIL" } else { "FAIL" }
-        $row.match_end = if ($end) { "PASS" } else { "FAIL" }; $row.match_note = "kills {0}, respawn delays {1}, end {2}" -f $kills, (($resp | ForEach-Object { "{0:N2}" -f $_ }) -join ","), $(if ($end) { $end.text -replace '^.*MATCH end ', '' } else { "none" }) }
+        $proto = @(Grep-Log $ml '\] MATCH ').Count -gt 0
+        $row.respawn = if (-not $proto) { "UNKNOWN" } elseif ($resp.Count -and @($resp | Where-Object { [Math]::Abs($_ - 5.0) -gt 0.4 }).Count -eq 0) { "PASS" } else { "FAIL" }
+        $row.match_end = if (-not $proto) { "UNKNOWN" } elseif ($end) { "PASS" } else { "FAIL" }; $row.match_note = $(if (-not $proto) { "direct boot: no MATCH protocol and no lifecycle opponent on this path (frontend launch only) - judged from the frontend chain; " } else { "" }) + "kills {0}, respawn delays {1}, end {2}" -f $kills, (($resp | ForEach-Object { "{0:N2}" -f $_ }) -join ","), $(if ($end) { $end.text -replace '^.*MATCH end ', '' } else { "none" }) }
     else { $row.respawn = $row.match_end = "SKIP" }
     $rows.Add([pscustomobject]$row)
 }
@@ -116,6 +118,16 @@ if (-not $NoChain -and $chain.Count) {
         $ok = $L -and "$($L.level)" -eq $m.runtime -and [int]$L.levelCues -gt 0 -and [double]$L.pcmMB -gt 0; $rel = $U -and [int]$U.voices -eq 0 -and [int]$U.instances -eq 0 -and [int]$U.levelCues -eq 0
         $row | Add-Member -Force -NotePropertyName audio -NotePropertyValue $(if ($ok -and $rel -and $A) { "PASS" } elseif (-not $L) { "FAIL" } else { "FAIL" })
         $row | Add-Member -Force -NotePropertyName audio_note -NotePropertyValue ("loaded level {0}, level cues {1}, PCM {2} MB; ambient {3}; after unload voices / instances / cues {4}/{5}/{6}" -f $L.level, $L.levelCues, $L.pcmMB, $(if ($A) { $A.text -replace '^.*ambient: ', '' } else { "none" }), $U.voices, $U.instances, $U.levelCues) }
+    # kill -> death -> respawn (5 s wave) -> score-limit end, per map, from the frontend-launched chain (WFC_LIFECYCLE=2)
+    $seg = @{}; $cur = ""; foreach ($ln in [IO.File]::ReadLines((Join-Path $d "wfc.log"))) {
+        if ($ln -match 'FLOW level\.begin level=\S+ map=(\S+)') { $cur = ($Matches[1] -replace '_(Base|BASE)_m$', '').ToLower() }
+        elseif ($ln -match '\] MATCH (kill|death|respawn|end) ') { if (-not $seg[$cur]) { $seg[$cur] = New-Object System.Collections.Generic.List[string] }; $seg[$cur].Add($ln) } }
+    foreach ($row in $rows) { $k = "$($row.map)".ToLower(); $L = @($seg[$k]); if (-not $seg.ContainsKey($k)) { continue }
+        $resp = @($L | Where-Object { $_ -match 'MATCH respawn ' } | ForEach-Object { [double][regex]::Match($_, 'delay_s=([\d.]+)').Groups[1].Value }); $end = @($L | Where-Object { $_ -match 'MATCH end ' })[0]
+        $kills = @($L | Where-Object { $_ -match 'MATCH kill ' }).Count; $deaths = @($L | Where-Object { $_ -match 'MATCH death ' }).Count
+        $row.respawn = if ($resp.Count -and @($resp | Where-Object { [Math]::Abs($_ - 5.0) -gt 0.4 }).Count -eq 0) { "PASS" } elseif ($resp.Count -or $deaths) { "FAIL" } else { "UNKNOWN" }
+        $row.match_end = if ($end -and $end -match 'reason=score_limit') { "PASS" } elseif ($kills) { "FAIL" } else { "UNKNOWN" }
+        $row.match_note = "frontend chain: kills {0}, deaths {1}, respawn delays {2} (5 s wave), end {3}" -f $kills, $deaths, (($resp | ForEach-Object { "{0:N2}" -f $_ }) -join ","), $(if ($end) { $end -replace '^.*MATCH end ', '' } else { "none" }) }
     Res "chain.second_map_and_return" $(if ($ret) { "PASS" } else { "FAIL" }) ("frontend chain over {0} maps ({1}) then quit to the title: returned {2}" -f $chain.Count, (($chain | ForEach-Object { $_.runtime }) -join " > "), $ret) "Frontend/Integration"
 }
 
