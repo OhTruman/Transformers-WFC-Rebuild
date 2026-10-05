@@ -46,9 +46,12 @@ $scene = @((& $py (Join-Path $PSScriptRoot "scene_materials.py") $Map) | Where-O
 $ui = Get-Content (Join-Path $PSScriptRoot "ui_materials.txt") | Where-Object { $_ -match '\S' }
 # Particle template library (every ParticleSystem cooked into the map packages: weapon muzzle / tracer / impact FX
 # spawned at runtime by IRenderer::spawnParticleEffect)
+# Every exported weapon's mesh materials (weapon_materials.py; M42: held weapons other than the Ion Blaster were
+# never compiled and drew the glTF fallback)
+$weapons = @((& $py (Join-Path $PSScriptRoot "weapon_materials.py")) | Where-Object { $_ -match '\S' })
 $fxlib = @((& $py (Join-Path $PSScriptRoot "build_map_fx.py") --list-materials $Map) | Where-Object { $_ -match '^\S+\.\S+$' })
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
-    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @fx @ui @scene @fxlib
+    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 
 

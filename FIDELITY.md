@@ -17,6 +17,13 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 42 — EVERY MP WEAPON'S AUTHORED MATERIAL (untextured Sniper, grey Scientist) (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Sniper (Null Ray) untextured | the render data compiled only weapon materials map geometry referenced (pickups / crates: Ion Blaster, EMP Shotgun, Grenade Launcher, rockets, flak) plus WEP_IonBlaster_MATINST; every other held weapon's material (WEP_SniperRifle_p.WEP_SniperRifle_MAT, Burst Rifle, Assault Rifle, ...) was absent, so the weapon drew its glTF fallback (flat grey). The weapon glb names the original material (extras.wfc_material) and every MP map cooks it | weapon.json / weapon.glb, materials_glsl.json (6 WEP_ before) | CONFIRMED | tools/render/weapon_materials.py (all 54 exported weapon material slots) -> build_render_data @weapons: Streets 57 / 57, Gorge 57 / 57 WEP_ materials compile. Starscream (WFC_CHASSIS=Jet) Sniper: flat grey -> authored metal + cyan emissive (VISUALLY VERIFIED) |
+| Autobot Scientist "grey / missing portions" | the grey mass is its primary weapon (Burst Rifle) drawn with the fallback, same cause; the Air Raid (Jet4) body and its 4 materials compile and bind (Norm / SpecPwr / Grunge / CustAB / fractal / Metals cube; MIC Cust_Color_A grey 0.54, B red); frontend preview colours are the palette pick (ResetCharacterFromName randomises, so a grey roll is authentic). Other classes looked complete because their default weapons (EMP Shotgun, Ion Blaster) were among the few compiled | direct preview render vs character-select art; frontend CAC capture; WFC_CHASSIS=Jet4 before / after | CONFIRMED | same fix; Burst Rifle now textured with its cyan emissive |
+| AssetTools audit (dc2d0ee) items | (1) TextureCubes not exported: the render data decodes CHR_Metals_CUBEMAP3D faces itself (tex/*_f0..5); (4) Normal_Map = None on 12 Cust MICs incl. Sideswipe (renders correctly): not the Scientist cause | — | noted | — |
+
 ## MILESTONE 41 — HUMAN PLAYTEST PASS: TITLE BLACK SHIPS, TITLE VIGNETTE OWNERSHIP (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
