@@ -253,7 +253,8 @@ void Application::run() {
             renderer_->setDisplayGamma(2.2f + (-0.95f + 1.9f * std::min(std::max((float)std::atof(gs) / 100.0f, 0.0f), 1.0f)));
         // diagnostics: a roster body drawn through setFrontendSceneDraw:
         //   WFC_SCENEPREVIEW=<content glTF>|x,y,z,yawDeg|r,g,b;r,g,b[#<next body>...]   (bind pose; linear colours, optional)
-        struct PreviewBody { render::MeshData mesh; core::Mat4 model; render::CharacterColors colors; };
+        // optional 4th / 5th fields: AnimSets (a;b;...) and the sequence: loadPreviewBody + posePreviewBody per frame
+        struct PreviewBody { render::MeshData mesh; core::Mat4 model; render::CharacterColors colors; int body = -1; };
         static std::vector<PreviewBody> previews;
         if (const char* pv = std::getenv("WFC_SCENEPREVIEW")) {
             std::string all = pv;
@@ -268,6 +269,24 @@ void Application::run() {
                     std::sscanf(s.c_str() + b + 1, "%f,%f,%f;%f,%f,%f", &body.colors.primary[0], &body.colors.primary[1],
                                 &body.colors.primary[2], &body.colors.secondary[0], &body.colors.secondary[1],
                                 &body.colors.secondary[2]);
+                if (std::getenv("WFC_SCENEPREVIEW_SNAP")) {   // FindGround: the floor under the spawn point
+                    float g = 0.0f;
+                    bool ok = renderer_->sceneGroundHeight(x, y, z, g);
+                    LOG_INFO("WFC_SCENEPREVIEW ground under (%.1f, %.1f) from z %.1f: %s %.1f", x, y, z, ok ? "hit" : "none", g);
+                    if (ok) z = g;
+                }
+                size_t c3 = b == std::string::npos ? b : s.find('|', b + 1), c4 = c3 == std::string::npos ? c3 : s.find('|', c3 + 1);
+                if (c3 != std::string::npos && c4 != std::string::npos) {
+                    std::vector<std::string> sets;
+                    std::string sl = s.substr(c3 + 1, c4 - c3 - 1);
+                    for (size_t q0 = 0; q0 <= sl.size();) {
+                        size_t q1 = sl.find(';', q0);
+                        sets.push_back(sl.substr(q0, q1 == std::string::npos ? std::string::npos : q1 - q0));
+                        if (q1 == std::string::npos) break;
+                        q0 = q1 + 1;
+                    }
+                    body.body = renderer_->loadPreviewBody(s.substr(0, a), sets, s.substr(c4 + 1));
+                }
                 if (renderer_->loadContentMesh(s.substr(0, a), body.mesh)) {
                     body.model = renderer_->actorMatrix(core::Vec3{x, y, z}, core::Vec3{0, yaw, 0});
                     previews.push_back(std::move(body));
@@ -276,9 +295,12 @@ void Application::run() {
                 p0 = p1 + 1;
             }
             renderer_->setFrontendSceneDraw([](render::IRenderer& r) {
+                static int frame = 0;
+                ++frame;
                 for (size_t i = 0; i < previews.size(); ++i) {
                     r.setDrawOwner(1 + (int)i);
                     r.setCharacterColors(previews[i].colors);
+                    if (previews[i].body >= 0) r.posePreviewBody(previews[i].body, frame / 60.0f, previews[i].mesh);
                     r.drawDynamicMesh(previews[i].mesh, previews[i].model, core::Vec3{1, 1, 1});
                 }
             });

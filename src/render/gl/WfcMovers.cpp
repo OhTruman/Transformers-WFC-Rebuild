@@ -313,6 +313,36 @@ void Pipeline::setActorScale(const std::string& actor, float drawScale) {
     pit->second.scale = it->second.scale > 1e-6f ? std::max(drawScale, 0.0f) / it->second.scale : 1.0f;
 }
 
+// Scene actors the renderer never draws but the frontend matinee poses: CameraActors (render_index "cameras": Location /
+// Rotation, null = the property default 0) and LensFlareSources (location_ue / rotation_ue). Registered with their
+// authored pose so a pose for them is accepted, not reported as unknown (M15: CameraActor_2151, the title's CameraDummy).
+void Pipeline::loadSceneNonDrawnActors(const assets::Json& L, const assets::Json& C) {
+    int n = 0;
+    auto reg = [&](const std::string& actor, const assets::Json& loc, const assets::Json& rot) {
+        std::string a = actor;
+        std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+        if (a.empty() || actorPose0_.count(a)) return;
+        ActorPose0 p0;
+        const char* xyz[3] = {"X", "Y", "Z"};
+        const char* pyr[3] = {"Pitch", "Yaw", "Roll"};
+        for (int k = 0; k < 3; ++k) {
+            p0.L[k] = loc.isObject() ? loc[xyz[k]].asFloat() : 0.0f;
+            p0.rot[k] = rot.isObject() ? rot[pyr[k]].asFloat() : 0.0f;   // UE rotator units
+        }
+        actorPose0_[a] = p0;
+        ++n;
+    };
+    for (const auto& lv : C.obj)
+        for (size_t i = 0; i < lv.second.size(); ++i)
+            reg(lv.second[i]["actor"].asString(), lv.second[i]["Location"], lv.second[i]["Rotation"]);
+    for (const auto& lv : L.obj)
+        for (size_t i = 0; i < lv.second.size(); ++i) {
+            const assets::Json& e = lv.second[i];
+            if (e["class"].asString() == "LensFlareSource") reg(e["actor"].asString(), e["location_ue"], e["rotation_ue"]);
+        }
+    LOG_INFO("wfc: scene actors not drawn (cameras, lens flares): %d", n);
+}
+
 // render_index actors_by_level: authored pose (from gltf_matrix), authored bHidden, PHYS_Rotating (UE3 physRotating:
 // Rotation += RotationRate * dt) for the actor-placed meshes in world.glb; skeletal actors are loaded by
 // loadMapProps. The rotator is recovered from the matrix (UE FMatrix::Rotator on the unit axes).

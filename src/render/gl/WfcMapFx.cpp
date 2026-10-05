@@ -530,6 +530,7 @@ void Pipeline::loadMapProps(const std::string& indexPath) {
         const assets::Json& AL = J["actors_by_level (names = Matinee / Kismet targets; world_glb_node = node name in world.glb)"];
         if (AL.isObject()) {
             loadSceneActors(AL);
+            loadSceneNonDrawnActors(AL, J["cameras"]);
             std::map<std::string, int> meshByGltf;
             for (const auto& lv : AL.obj)
                 for (size_t i = 0; i < lv.second.size(); ++i) {

@@ -162,6 +162,17 @@ public:
         return ueActorMatrix(posUE, rotUEdeg);
     }
     virtual bool loadContentMesh(const std::string& contentGltf, MeshData& out) { (void)contentGltf; (void)out; return false; }
+    // Preview body playing an authored sequence (interim until Gameplay supplies posed preview pawns): the roster robot
+    // glTF + its AnimSets (roster "anim_sets" object paths, e.g. "TR_LightSmall_ANM_p.SideSwipe_ROBO_ANIM" ->
+    // content/TR_LightSmall_ANM_p/SideSwipe_ROBO_ANIM.anim.gltf), the sequence found last set first (UE3
+    // USkeletalMeshComponent::FindAnimSequence). The original preview: TnCharacterScriptBinding.SetupPreviewAnim ->
+    // IdleNode.SetAnim(PreviewAnim), class defaults IdleNodeName=IdleNode, PreviewAnim=Cust_Idle (looping).
+    // Returns a handle (-1 on failure); posePreviewBody fills a mesh-local posed MeshData for drawDynamicMesh (same
+    // space as loadContentMesh, so actorMatrix places it). A missing sequence leaves the reference pose (logged).
+    virtual int loadPreviewBody(const std::string& robotGltf, const std::vector<std::string>& animSets, const std::string& anim) {
+        (void)robotGltf; (void)animSets; (void)anim; return -1;
+    }
+    virtual bool posePreviewBody(int handle, float timeSec, MeshData& out) { (void)handle; (void)timeSec; (void)out; return false; }
     // Matinee-driven actor pose in the loaded scene (Frontend's matinee evaluator): absolute world location (UU) and
     // rotation (pitch, yaw, roll in degrees), including RelativeToInitial / attachment. Actors not sent keep their
     // authored pose (and PHYS_Rotating). Visibility stays with setActorHidden (authored bHidden applies until then).
@@ -183,6 +194,13 @@ public:
         std::vector<InterpKeyF> keys;
     };
     virtual std::vector<FloatPropTrack> frontendFloatTracks() const { return {}; }
+    // Ground under a point of the loaded scene / map (UE units): a downward trace against the level BSP, which includes
+    // invisible collision brushes - the customization room's floor is one (Invisible_MAT slab, top z 0). The preview
+    // pawn's OnPreviewPawnTick FindGround lands it there; the roster robot meshes have their origin at the feet, so
+    // a body drawn at (x, y, groundZ) stands on the floor. False if nothing is below zFrom.
+    virtual bool sceneGroundHeight(float xUE, float yUE, float zFromUE, float& groundZ) const {
+        (void)xUE; (void)yUE; (void)zFromUE; (void)groundZ; return false;
+    }
     // UE3 FInterpCurveFloat::Eval: before the first / after the last key -> that key's value; CIM_Constant holds the
     // segment start; CIM_Linear lerps; the curve modes are cubic Hermite with the cooked tangents scaled by the segment
     // length (FMath CubicInterp(P0, T0 * dt, P1, T1 * dt, alpha)). No keys -> fallback (a keyless track does nothing).

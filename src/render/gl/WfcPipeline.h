@@ -169,9 +169,13 @@ public:
     const std::set<std::string>& scenePosesUnknown() const { return posesUnknown_; }
     void setActorPose(const std::string& actor, const core::Vec3& posUE, const core::Vec3& rotUEdeg);
     void setActorScale(const std::string& actor, float drawScale);
+    // Downward trace against the level BSP (includes invisible collision brushes): the highest surface at or below
+    // zFrom under (x, y), UE units. False if nothing is below.
+    bool groundBelowUE(float x, float y, float zFrom, float& zHit) const;
     // frontend pose of a scene actor in UE space: world = M * (x - L0) + L1, M = DrawScale ratio * A1 A0^T (columns)
     bool frontendPoseUE(const std::string& actorLower, float M[9], float L0[3], float L1[3]) const;
     void loadSceneActors(const assets::Json& actorsByLevel);   // render_index actors_by_level (UI families)
+    void loadSceneNonDrawnActors(const assets::Json& actorsByLevel, const assets::Json& cameras);   // cameras, lens flares
 
     void beginFrame(const Camera& cam, int w, int h);
     void endFrame();
@@ -273,6 +277,7 @@ private:
     int testMesh_ = -1;           // WFC_TESTMESH render verification hook
     core::Mat4 testModel_;
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
+    std::vector<float> bspTris_;  // level BSP triangles in UE units (x, y, z per vertex, 3 vertices per triangle) for traces
     int decalMesh_ = -1;          // static decals from their cooked receiver geometry
     bool active_ = false;
     std::string dataDir_;
