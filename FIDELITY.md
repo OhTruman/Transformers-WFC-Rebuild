@@ -259,6 +259,11 @@ Inputs:
 - Invert per form: car and truck share InvertY_Car.
 - Frontend calls it on Settings commit and at match start.
 
+### Non-local participant pawns (bot-ready architecture, RECONSTRUCTION EXTENSION boundary)
+- Participants (MatchOpponent) are full pawns: the same chassis, specialty, loadout, movement, transformation, damage,
+  death / respawn and objective paths as the local pawn. Their inputs come only from  (harnesses); no AI.
+- WFC_PARTICIPANTTEST 4 / 4. TDM assists now use the victim's class HealthMax.
+
 ### HUD state additions
 `selectedChassis`, `drawnChassis`, `specialty`, `spawnError`, `weaponId`, `weaponIcon`, `weaponSimulated`,
 `weaponSwitching`, `inventory[]`, `activeWeapon`, `vehicleWeapons[]`, `loadoutRefused[]`. `segmentCount` follows the class.

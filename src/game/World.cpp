@@ -861,6 +861,7 @@ void World::tick(float dt) {
     if (!localPlayerDead()) {                       // dead / not yet spawned (match): no pawn simulation
         player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
     }
+    for (MatchOpponent* o : opponents_) o->simulate(dt, collision());   // participants: shared movement + animation
     player_.controller().tickCameraCollision(dt);   // obstruction behaviour after the pawn moved
     gameplayRamContacts();
     if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
@@ -1155,7 +1156,7 @@ void World::tickMatch(float dt) {
         std::vector<MapState::ObjPawn> pawns;
         if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true});
         for (MatchOpponent* o : opponents_)
-            if (o->spawned()) pawns.push_back({o->matchPlayer(), o->team(), o->position() + core::Vec3{0, core::config::kPawnHalfHeight, 0}, true});
+            if (o->spawned()) pawns.push_back({o->matchPlayer(), o->team(), o->pawn().actorLocation(), true});
         MapState::ObjectiveScoring sc;
         mapState_.tickObjectives(dt, pawns, sc);
         for (auto& p : sc.personalScores) match_.addPersonalScore(p.first, p.second);
@@ -1226,6 +1227,8 @@ void World::tickMatch(float dt) {
                 }
                 for (MatchOpponent* o : opponents_)
                     if (o->matchPlayer() == e.player && e.value >= 0) {
+                        MatchPlayer& op = match_.playerMutable(o->matchPlayer());
+                        if (applyChassisToPawn(o->pawn(), op.chassis)) applyCharacterTo(o->pawn(), &op.selection, &op);
                         core::Vec3 p = match_.starts()[(size_t)e.value].pos;
                         float gy; core::Vec3 gn;
                         if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, gn)) p.y = gy;
@@ -1407,10 +1410,9 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
     return raw;
 }
 
-bool World::applyChassisToLocalPawn(const std::string& id) {
+bool World::applyChassisToPawn(Character& pc, const std::string& id) {
     const ChassisAssets* a = chassisAssets(id);
     if (!a || !a->ok) return false;
-    Character& pc = player_.pawn();
     pc.setChassis(&a->def);
     pc.setFormModels(&a->robot, &a->vehicle);
     pc.setArmModel(a->hasArm ? &a->arm : nullptr);
@@ -1419,9 +1421,36 @@ bool World::applyChassisToLocalPawn(const std::string& id) {
     const SocketDef& ws = a->def.weaponSecondary;
     if (ws.valid) pc.setArmSocket(a->robot.nodeByName(ws.bone), ws.local);
     else pc.setArmSocket(-1, core::Mat4::identity());
+    return true;
+}
+
+bool World::applyChassisToLocalPawn(const std::string& id) {
+    if (!applyChassisToPawn(player_.pawn(), id)) return false;
     localChassis_ = id;
     applyLoadout(nullptr);   // iconic preset WeaponTypes / VehicleWeapons
     return true;
+}
+
+std::vector<std::string> World::applyCharacterTo(Character& pc, const CharacterSelection* sel, MatchPlayer* mp) {
+    const ChassisDef& d = pc.chassis();
+    // ApplySpecialty: custom -> the slot's specialty; iconic -> the preset's CharacterData.Specialty.
+    std::string spec = (sel && sel->type == 0) ? specialtyName(sel->specialty) : d.iconicSpecialty;
+    if (const SpecialtyDef* sd = specialtyDef(spec)) pc.setSpecialty(sd->id, sd->speedMultiplier, sd->segments, sd->overshield);
+    else pc.clearSpecialty();
+    std::vector<std::string> refused;
+    const bool custom = sel && sel->type == 0 && !sel->weapons.empty();
+    std::vector<Weapon> robot;
+    for (const std::string& n : custom ? sel->weapons : d.iconicWeapons) {
+        const WeaponDef* wd = findWeaponDef(n);
+        bool allowed = !custom || std::find(d.allowedOnFoot.begin(), d.allowedOnFoot.end(), n) != d.allowedOnFoot.end();
+        if (!wd || !allowed) { refused.push_back(n); continue; }
+        robot.push_back(Weapon::fromDef(*wd));
+    }
+    pc.setLoadout(robot, (sel && sel->type == 0 && !sel->vehicleWeapons.empty()) ? sel->vehicleWeapons : d.iconicVehicleWeapons);
+    pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
+    pc.respawnReset();
+    if (mp) { mp->specialty = spec; mp->healthMax = pc.health().max; }
+    return refused;
 }
 
 std::string World::mapDir() const { return assetRoot() + "/Maps/" + mapName_ + "/"; }

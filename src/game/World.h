@@ -235,6 +235,10 @@ public:
     const ChassisAssets* chassisAssets(const std::string& id);
     // TnPawn.ApplyTransformer for the local pawn: models, rigs, collision, stats, weapon socket. False = unavailable.
     bool applyChassisToLocalPawn(const std::string& id);
+    // TnPawn.ApplyTransformer for any pawn (local or participant): models, rigs, collision, stats, weapon / arm sockets.
+    bool applyChassisToPawn(Character& pc, const std::string& id);
+    // ApplySpecialty + ApplyWeapons / ApplyAbilities for any pawn; returns refused weapons.
+    std::vector<std::string> applyCharacterTo(Character& pc, const CharacterSelection* sel, MatchPlayer* mp);
     // TnCharacterApplier.ApplyWeapons for the local pawn: CharacterData.WeaponTypes (custom selection, validated against the
     // chassis' TnDataProvider_Weapon restrictions) or the chassis' iconic preset; VehicleWeapons alike. Returns the
     // weapons that were refused (unknown provider / not allowed on this chassis).

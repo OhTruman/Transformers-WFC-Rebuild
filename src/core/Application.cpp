@@ -112,6 +112,7 @@ bool Application::init() {
     if (std::getenv("WFC_WEAPONTEST")) { runWeaponTest(); return false; }      // measurements only
     if (std::getenv("WFC_MAPSUITE")) { runMapSuite(); return false; }          // measurements only
     if (std::getenv("WFC_CTFTEST")) { runCtfExtTest(); return false; }         // measurements only
+    if (std::getenv("WFC_PARTICIPANTTEST")) { runParticipantTest(); return false; }   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -1396,10 +1397,11 @@ void Application::runTdmSessionTest() {
             world_.fireHitscan(eye, core::normalize(tgt - eye));
             ++shots;
         }
-        LOG_INFO("TDMTEST hitscan kill after %d Ion Blaster hits (InstantHitDamage 15, HealthMax 550)", shots);
+        LOG_INFO("TDMTEST hitscan kill after %d Ion Blaster hits (InstantHitDamage 15, victim HealthMax %.0f after the 100 AOE)", shots, m.players()[(size_t)e->matchPlayer()].healthMax);
         check(!e->spawned() && m.players()[(size_t)me].score == scoreBefore + 1 && m.teamScore(myTeam) == 1 && m.players()[(size_t)me].kills == 1,
               "Ion Blaster kill credited: +1 score, +1 team, +1 kill");
-        check(std::fabs(m.players()[(size_t)ally->matchPlayer()].assists - 100.0f / 550.0f) < 1e-3f, "assist = first other damager, 100 / HealthMax");
+        const float vMax = m.players()[(size_t)e->matchPlayer()].healthMax;   // victim class HealthMax (iconic Optimus: Leader 300)
+        check(vMax == 300.0f && std::fabs(m.players()[(size_t)ally->matchPlayer()].assists - 100.0f / vMax) < 1e-3f, "assist = first other damager, 100 / the victim's HealthMax (300)");
         game::HudGameState hk = world_.hudState();
         bool feedOk = !hk.killFeed.empty() && hk.killFeed.back().messageSwitch == 0 && hk.killFeed.back().killer == me &&
                       hk.killFeed.back().victim == e->matchPlayer() && hk.killFeed.back().damageType == "TransGame.TnDamageTypeIonBlaster" &&
@@ -1553,6 +1555,54 @@ void Application::runCameraSyncTest() {
 // defaults): capture 20 s per attacker, defender holds, +1 team / 3 s per owned node, capture +2 personal, kills personal only;
 // KOTH zone only after MatchStarting, +1 personal & team per living pawn per second when uncontested, contested = no score,
 // rotation after 60 s to an unvisited zone, zones deactivate at the end; score-limit end.
+// WFC_PARTICIPANTTEST: non-local pawns (bot-ready architecture, no AI): selection -> body / health / loadout, shared
+// movement and transformation, damage, death and respawn with the same body.
+void Application::runParticipantTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("PARTICIPANT %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+    world_.launchMatch(L);
+    game::MatchOpponent* A = world_.addMatchOpponent("ScoutBot", false);
+    game::MatchOpponent* B = world_.addMatchOpponent("JetBot", false);
+    game::CharacterSelection sa; sa.type = 0; sa.specialty = game::Specialty::Scout;
+    game::CharacterSelection sb; sb.type = 1; sb.chassisId = "Jet";
+    world_.match().selectCharacter(A->matchPlayer(), sa);
+    world_.match().selectCharacter(B->matchPlayer(), sb);
+    run(10.5f);
+    const game::Match& m = world_.match();
+    std::string wantA = game::resolveChassis(sa, m.faction(A->matchPlayer()));
+    bool bodies = A->spawned() && B->spawned() && A->pawn().chassis().id == wantA && B->pawn().chassis().id == "Jet" &&
+                  A->pawn().currentModel() && B->pawn().currentModel();
+    bool health = A->pawn().health().max == 200.0f && B->pawn().health().max == 330.0f;   // Scout 4x50; Starscream preset Soldier 6x55
+    bool loadout = B->pawn().weapon().def && std::string(B->pawn().weapon().def->provider) == "SniperRifle";
+    LOG_INFO("PARTICIPANT A %s (%s, %.0f HP, %s) team %d; B %s (%s, %.0f HP, %s) team %d", A->pawn().chassis().id.c_str(), A->pawn().specialty().c_str(),
+             A->pawn().health().max, A->pawn().weapon().name, A->team(), B->pawn().chassis().id.c_str(), B->pawn().specialty().c_str(),
+             B->pawn().health().max, B->pawn().weapon().name, B->team());
+    check(bodies && health && loadout, "selection -> body (" + wantA + ", Jet), class health (Scout 200, Soldier 330), iconic loadout (SniperRifle)");
+    // Shared movement: walk forward 2 s on the floor.
+    core::Vec3 p0 = A->pawn().position();
+    game::MoveIntent go; go.moveForward = 1.0f; go.faceYaw = A->pawn().yaw();
+    for (int i = 0; i < 120; ++i) { A->setIntent(go); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+    float moved = core::length(core::Vec3{A->pawn().position().x - p0.x, 0, A->pawn().position().z - p0.z});
+    check(moved > 10.0f && A->pawn().position().y > world_.killZ() + 5.0f, "shared CharacterMovement: " + std::to_string((int)moved) + " m walked in 2 s");
+    // Transformation through the same Character path.
+    A->setIntent(game::MoveIntent{});
+    A->pawn().beginTransform();
+    run(3.0f);
+    check(A->pawn().form() == game::Form::Vehicle && !A->pawn().isTransforming() && A->pawn().vehicleParams().form == game::VehicleFormType::Car,
+          "robot -> vehicle transformation (car form)");
+    // Damage, death, respawn with the same body.
+    int deaths0 = m.players()[(size_t)B->matchPlayer()].deaths;
+    world_.applyMatchDamage(B->matchPlayer(), -1, 99999.0f, true, "TransGame.TnDamageTypeInstantKill");
+    bool died = !B->spawned() && m.players()[(size_t)B->matchPlayer()].deaths == deaths0 + 1;
+    run(6.0f);
+    check(died && B->spawned() && B->pawn().chassis().id == "Jet" && B->pawn().health().current == B->pawn().health().max && B->pawn().form() == game::Form::Robot,
+          "death -> wave respawn as a fresh robot pawn with the same body and full class health");
+    LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
 // WFC_CTFTEST: Code of Power (single-flag CTF, rounds) and Countdown to Extinction (bomb) on the shared framework,
 // driven with synthetic participants placed on the authored objectives.
 void Application::runCtfExtTest() {

@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22d (2026-10-05) — non-local participant pawns (bot-ready, no AI)
+- MatchOpponent owns a full Character: chassis body / specialty / loadout at spawn, shared movement + transformation, real cylinder hits, death/respawn. WFC_PARTICIPANTTEST 4/4; TDM 43/43 (assists by victim HealthMax), CTF/EXT 10/10, modes 21/21.
+
 ## GAMEPLAY PASS 22c (2026-10-05) — CTF + EXT: all six versus modes on the shared framework
 - Rounds (RoundsBase + SingleFlagCTF: attacker alternation, 5 s between rounds, mercy rule); flag carry / capture / drop / defender return; bomb plant / fuse 15 / defuse 5 / detonation HurtRadius; WFC_CTFTEST 10/10.
 - Camera settings per RE G2 (sensitivity curve, per-form invert); assists by the victim HealthMax.

@@ -32,6 +32,7 @@ private:
     void runWeaponTest();
     void runMapSuite();
     void runCtfExtTest();
+    void runParticipantTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;
