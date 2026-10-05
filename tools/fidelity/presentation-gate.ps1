@@ -241,6 +241,23 @@ if ($Parts -contains "watchdog") {
         $clickMiss = @(Flow-Ev $F "script.clickclip" | Where-Object { "$($_.found)" -eq "False" })
         if ($clickMiss.Count) { $state = "NOT REACHED BY THE TEST"; $interNote = "the test could not open the target ($($clickMiss[0].path) not found) - test fault, not a product verdict" }
         Res "watchdog.$k.classification" $(if ($clickMiss.Count) { "UNKNOWN" } elseif ($state -eq "FULLY FUNCTIONAL") { "PASS" } elseif ($state -like "SCREEN NOT PRESENT") { "FAIL" } elseif ($sc.expect -in "text", "rebind", "preview", "movie", "credits" -and -not $inter) { "FAIL" } else { "PARTIAL" }) ("{0}: {1}. {2}" -f $k, $state, $interNote) $sc.owner
+        # lobby emblem glow / fade STATE (Frontend a72befa+: FLOW scene.emblem actor= param=Highlighted|Opacity state=on|off).
+        # Autobot icon / glow 8803 / 16331, Decepticon 5865 / 1120. Opening Create a Character -> Opacity on; the focused
+        # faction's chassis button -> Highlighted on; hidePlayer on the way out -> every Opacity off. Trace = state only: the
+        # visible glow needs Rendering's material parameters (setFrontendMaterialParam), so the image stays a HUMAN check.
+        if ($k -eq "customization") {
+            $emSrc = [bool](Get-ChildItem (Join-Path $Root "src\frontend") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern '"scene.emblem"' -SimpleMatch -List | Select-Object -First 1)
+            $em = @(Flow-Ev $F "scene.emblem" | Sort-Object { [int]$_.seq })
+            if (-not $emSrc) { Res "watchdog.customization.emblem_state" "SKIP" "build has no scene.emblem trace (Frontend a72befa+): emblem glow / fade not checkable; HUMAN-CHECK-M07 item 2" "Experimental" }
+            else {
+                $opOn = @($em | Where-Object { $_.param -eq "Opacity" -and $_.state -eq "on" }); $hiOn = @($em | Where-Object { $_.param -eq "Highlighted" -and $_.state -eq "on" })
+                $last = @{}; foreach ($e in $em) { if ($e.param -eq "Opacity") { $last["$($e.actor)"] = "$($e.state)" } }
+                $stillOn = @($last.Keys | Where-Object { $last[$_] -eq "on" })
+                $st = if (-not $em.Count) { "FAIL" } elseif (-not $opOn.Count -or -not $hiOn.Count) { "FAIL" } elseif ($stillOn.Count) { "PARTIAL" } else { "PASS" }
+                $rmp = [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp, *.h -ErrorAction SilentlyContinue | Select-String -Pattern "setFrontendMaterialParam" -SimpleMatch -List | Select-Object -First 1)
+                Res "watchdog.customization.emblem_state" $st ("STATE ONLY (trace): {0} emblem transitions; Opacity on {1} ({2}); Highlighted on {3} ({4}); Opacity still on after leaving Create a Character: {5}. Visible glow: {6}" -f $em.Count, $opOn.Count, ((@($opOn | ForEach-Object { $_.actor -replace 'MaterialInstanceActor_', '' } | Select-Object -Unique)) -join ","), $hiOn.Count, ((@($hiOn | ForEach-Object { $_.actor -replace 'MaterialInstanceActor_', '' } | Select-Object -Unique)) -join ","), $(if ($stillOn.Count) { $stillOn -join "," } else { "none" }), $(if ($rmp) { "renderer has setFrontendMaterialParam - HUMAN check (item 2)" } else { "NOT YET DRAWN (no setFrontendMaterialParam in this build - Rendering); HUMAN check (item 2)" })) "Frontend"
+            }
+        }
         if ($mi) { Row "watchdog" $k "b_inside.bmp" $(if ($display) { "PASS" } else { "FAIL" }) $mi }
         Sheet $d "watchdog_$k"
     }
