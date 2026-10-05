@@ -140,7 +140,8 @@ bool Application::init() {
     if (std::getenv("WFC_CTFTEST")) { runCtfExtTest(); return false; }         // measurements only
     if (std::getenv("WFC_PARTICIPANTTEST")) { runParticipantTest(); return false; }
     if (std::getenv("WFC_SWITCHTEST")) { runSwitchTest(); return false; }   // weapon switching, human playtest M09
-    if (std::getenv("WFC_SCORETEST")) { runScoreTest(); return false; }     // fresh match state, human playtest M09   // measurements only
+    if (std::getenv("WFC_SCORETEST")) { runScoreTest(); return false; }     // fresh match state, human playtest M09
+    if (std::getenv("WFC_HEIGHTTEST")) { runHeightTest(); return false; }   // robot body height idle vs locomotion, human playtest M09   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -3082,6 +3083,53 @@ void Application::runScoreTest() {
         if (matchNo == 2) { for (int i = 0; i < 60 * 130 && world_.match().state() == game::Match::State::InProgress; ++i) run(dt); }
     }
     LOG_INFO("SCORE SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_HEIGHTTEST: per tick, feet (pawn position), capsule centre, mesh origin, root / hips / head bone world heights and the hips /
+// root scale (matrix column lengths) while idle and while jogging forward - does the body move or scale in world space, or only pose?
+void Application::runHeightTest() {
+    const float dt = 1.0f / 60.0f;
+    for (const char* id : {"Car2", "Car4", "Truck"}) {
+        world_.applyChassisToLocalPawn(id);
+        world_.applyLoadout(nullptr);
+        game::Character& pc = world_.player().pawn();
+        // Face the longest clear line so the jog phase actually moves (the free-play spawn faces a wall for some bodies).
+        if (const game::CollisionWorld* cw = world_.collision()) {
+            float bestYaw = 0.0f, bestLen = 0.0f;
+            for (int k = 0; k < 16; ++k) {
+                float yaw = k * 6.2831853f / 16.0f, t; core::Vec3 d = core::forwardFromYawPitch(yaw, 0.0f), p = pc.actorLocation();
+                float len = cw->segmentHit(p, p + d * 30.0f, t) ? t * 30.0f : 30.0f;
+                if (len > bestLen) { bestLen = len; bestYaw = yaw; }
+            }
+            world_.player().controller().setCameraYaw(bestYaw);
+        }
+        struct Acc { float lo = 1e9f, hi = -1e9f, sum = 0; int n = 0; void add(float v) { lo = std::min(lo, v); hi = std::max(hi, v); sum += v; ++n; }
+                     std::string s() const { char b[64]; std::snprintf(b, sizeof b, "%.3f..%.3f (mean %.3f)", lo, hi, n ? sum / n : 0.0f); return b; } };
+        for (int phase = 0; phase < 2; ++phase) {
+            platform::InputFrame in;
+            if (phase == 1) in.down[(int)platform::Button::Forward] = true;
+            Acc capsule, origin, root, hips, head, hipScale, rootScale;
+            std::string clips;
+            for (int i = 0; i < 180; ++i) {
+                world_.handleInput(in, dt); world_.tick(dt);
+                if (i < 60) continue;   // settle 1 s
+                const float feet = pc.position().y;
+                capsule.add(pc.actorLocation().y - feet);
+                core::Mat4 mm = pc.meshMatrix(game::Form::Robot);
+                origin.add(mm.m[13] - feet);
+                core::Mat4 b;
+                auto colLen = [](const core::Mat4& m, int c) { return std::sqrt(m.m[c * 4] * m.m[c * 4] + m.m[c * 4 + 1] * m.m[c * 4 + 1] + m.m[c * 4 + 2] * m.m[c * 4 + 2]); };
+                if (pc.boneWorld("C_Root_Reference_XR", b)) { root.add(b.m[13] - feet); rootScale.add(colLen(b, 0)); }
+                if (pc.boneWorld("C_Spine00_Hips_XB", b)) { hips.add(b.m[13] - feet); hipScale.add((colLen(b, 0) + colLen(b, 1) + colLen(b, 2)) / 3.0f); }
+                if (pc.boneWorld("C_Spine04_Head_XB", b)) head.add(b.m[13] - feet);
+                if (clips.find(pc.animName()) == std::string::npos && clips.size() < 120) clips += std::string(pc.animName()) + " ";
+            }
+            LOG_INFO("HEIGHT %s %s: feet->capsule %s | mesh origin %s | root %s scale %s | hips %s scale %s | head %s | clips %s", id,
+                     phase ? "jog" : "idle", capsule.s().c_str(), origin.s().c_str(), root.s().c_str(), rootScale.s().c_str(), hips.s().c_str(),
+                     hipScale.s().c_str(), head.s().c_str(), clips.c_str());
+        }
+        platform::InputFrame stop; for (int i = 0; i < 60; ++i) { world_.handleInput(stop, dt); world_.tick(dt); }
+    }
 }
 
 } // namespace core

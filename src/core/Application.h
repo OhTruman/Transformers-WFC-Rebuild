@@ -35,6 +35,7 @@ private:
     void runParticipantTest();
     void runSwitchTest();
     void runScoreTest();
+    void runHeightTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

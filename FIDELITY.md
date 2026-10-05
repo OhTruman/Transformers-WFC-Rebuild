@@ -86,6 +86,23 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - GRI values for Hud_GFX: attackingTeamIndex (CTF / EXT, else -1) and currentObjectiveCountdown (EXT fuse, else -1) [CONF CDO
   defaults], competitiveScoreEnabled 0 [HIGH: not authored]. DOM / KOTH objective countdown [PARTIAL].
 
+### Scout body height idle vs locomotion [HIGH CONFIDENCE authentic: RE pass 4 + WFC_HEIGHTTEST measurement]
+- Playtest: the Scout looks crouched at rest and much taller while running.
+- Measured per tick (WFC_HEIGHTTEST, heights above the feet): capsule centre, mesh origin and root bone (C_Root_Reference_XR) never
+  move. Root and hip scale stay 1.000. Only the pose changes:
+
+  | body | idle hips / head (m) | jog hips / head (m) |
+  |---|---|---|
+  | Car2 Sideswipe | 1.531–1.540 / 2.42 | 1.941–2.322 / 3.51 mean |
+  | Car4 Barricade | 1.490–1.520 / 2.63 | 1.941–2.321 / 3.51 mean |
+  | Truck Optimus | 1.971–1.988 / 3.37 | 1.865–2.180 / 3.46 mean |
+
+- Cause (RE pass 4): Car2 / Car4 own AnimSets hold only idles and transforms. Jog / walk / sprint come from Shared_ROBO_ANIM, authored
+  on Starscream, applied with bAnimRotationOnly = False (translations as authored). The original Scout's hips are about 154 UU idle
+  and 194–232 UU jog, the same as measured here. Root bone Z = 0 in every clip, so no root motion.
+- Not root translation, scaling, capsule coupling, retarget error or a pivot mismatch. Left as is. A shipped capture would move this
+  to CONFIRMED.
+
 ### Input details [CONFIRMED ORIGINAL: shipped PC bindings]
 - Melee is Q or the middle mouse button.
 - A Fire click shorter than one simulation tick (144 / 240 Hz frames) is latched for the next step (one shot attempt); a release
