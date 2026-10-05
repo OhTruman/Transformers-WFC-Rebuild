@@ -607,6 +607,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                     float up = abilityStickFwd_, rt = abilityStickRight_;
                     step.dodgeDir = std::fabs(up) >= std::fabs(rt) ? (up < 0.0f ? 4 : 3) : (rt < 0.0f ? 1 : 2);
                 }
+                if (a.id == "Warcry" || a.id == "Shockwave") pawn_->pendingAbilityEffect_ = a.id;   // ServerTriggerAbility (World)
                 a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_;
             } else if (a.id != lastRefusedAbility_) {
                 LOG_WARN("ability %s (slot %d) is not implemented in the rebuild [PARTIAL]", a.id.c_str(), wantAbility_);

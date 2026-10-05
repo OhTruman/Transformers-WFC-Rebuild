@@ -871,6 +871,7 @@ void World::tick(float dt) {
         if (matchActive_ && player_.controller().consumeKillstreakRequest()) triggerLocalKillstreak();
         if (deferredKillstreak_ && lp.moveForm() == Form::Robot && !lp.isTransforming()) { deferredKillstreak_ = false; triggerLocalKillstreak(); }
     }
+    tickAbilityEffects(dt);
     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
     if (matchActive_) tickMatch(dt);
@@ -1054,7 +1055,11 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
             const bool veh = vp->moveForm() == Form::Vehicle;
             amount *= veh ? vp->vehicleParams().damageMultiplier : vp->robotParams().damageMultiplier;
             if (instigator == victim) amount *= veh ? vp->vehicleParams().selfDamageMultiplier : vp->robotParams().selfDamageMultiplier;
+            if (vp->warcryRemain_ > 0.0f) amount *= vp->warcryTakenMul_;          // TnBuffWarcryDecreaseDamageTaken
         }
+        const Character* ip = instigator == localPlayer_ ? &player_.pawn() : nullptr;
+        if (!ip) for (MatchOpponent* o : opponents_) if (o->matchPlayer() == instigator) ip = &o->pawn();
+        if (ip && instigator != victim && ip->warcryRemain_ > 0.0f) amount *= ip->warcryDamageMul_;   // TnBuffWarcryIncreaseDamage
     }
     float applied = h->applyDamage(amount);
     match_.recordDamage(victim, instigator, applied);
@@ -1668,6 +1673,47 @@ std::string World::triggerLocalKillstreak() {
     }
     LOG_INFO("killstreak %s triggered", id.c_str());
     return id;
+}
+
+// Ability effects for the local pawn (TnAbility*.ServerTriggerAbility) [CONF script + authored CDOs].
+void World::tickAbilityEffects(float dt) {
+    Character& pc = player_.pawn();
+    auto tickBuff = [dt](Character& p) {
+        if (p.warcryRemain_ > 0.0f) { p.warcryRemain_ = std::max(0.0f, p.warcryRemain_ - dt); if (p.warcryRemain_ == 0.0f) { p.warcryDamageMul_ = 1.0f; p.warcryTakenMul_ = 1.0f; } }
+    };
+    tickBuff(pc);
+    for (MatchOpponent* o : opponents_) tickBuff(o->pawn());
+    const std::string fx = pc.pendingAbilityEffect_;
+    pc.pendingAbilityEffect_.clear();
+    const int team = matchActive_ && localPlayer_ >= 0 ? match_.players()[(size_t)localPlayer_].team : 255;
+    if (fx == "Warcry") {
+        // GetFriendliesInRange(AoeRange 3000 UU): same-team pawns (FFA: the owner only); BuffLevel = Clamp(count - 1, 0, 1)
+        // (+1 with TnSkillImprovedWarcry - skills not applied); BuffsToApply x level; BuffTime[0] = 15 s; removes HardLocked.
+        std::vector<Character*> friends{&pc};
+        if (matchActive_ && match_.settings().teamGame)
+            for (MatchOpponent* o : opponents_)
+                if (o->spawned() && o->team() == team && core::length(o->pawn().actorLocation() - pc.actorLocation()) <= 30.0f) friends.push_back(&o->pawn());
+        int level = std::max(0, std::min((int)friends.size() - 1, 1));
+        const float dmg[3] = {1.1f, 1.2f, 1.3f}, taken[3] = {0.5f, 0.4f, 0.3f};
+        for (Character* p : friends) { p->warcryRemain_ = 15.0f; p->warcryDamageMul_ = dmg[level]; p->warcryTakenMul_ = taken[level]; }
+        LOG_INFO("ability Warcry: %zu friendlies, buff level %d (damage x%.1f, taken x%.1f, 15 s)", friends.size(), level, dmg[level], taken[level]);
+    } else if (fx == "Shockwave") {
+        pc.shockwaveDelay_ = 0.25f;                       // Delay 0.25 -> Shockwave()
+    }
+    if (pc.shockwaveDelay_ >= 0.0f) {
+        pc.shockwaveDelay_ -= dt;
+        if (pc.shockwaveDelay_ < 0.0f && !localDead_) {
+            // GetBP(index 0): Damage 65, Radius 2500 UU; HurtRadius(..., bDoFullDamage true) from PositionSocket; the owner
+            // is not hurt [HIGH]; Momentum 700000 knock-back not applied [PARTIAL].
+            const core::Vec3 at = pc.actorLocation();
+            LOG_INFO("ability Shockwave: 65 within 25 m");
+            for (MatchOpponent* o : opponents_)
+                if (o->spawned() && core::length(o->pawn().actorLocation() - at) <= 25.0f)
+                    applyMatchDamage(o->matchPlayer(), localPlayer_, 65.0f, false, "TransGame.TnDamageTypeShockwave");
+            for (Destructible* d : destructibles_)
+                if (d->state() == 0 && core::length((d->boxMin() + d->boxMax()) * 0.5f - at) <= 25.0f) d->applyDamage(*this, 65.0f);
+        }
+    }
 }
 
 } // namespace game

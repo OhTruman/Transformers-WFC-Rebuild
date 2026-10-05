@@ -136,7 +136,17 @@ Inputs:
   - EndState clamps to MaxAir / MaxGroundSpeed; a wall hit ends it early;
   - CanDodge requires landing since the last dodge; cooldown 2.0 s.
   - Test: Sideswipe dodges right at 30 m/s, 10.9 m in 0.6 s, refused while cooling.
-- Warcry, Whirlwind, Barrier, Cloaking, Shockwave, Hover … are listed per slot and reported unimplemented (log + HUD
+- **Warcry** (TnAbilityWarcry, CONF):
+  - friendlies within AoeRange 3000 UU (FFA: the owner) get TnBuffWarcryIncreaseDamage ×1.1 / 1.2 / 1.3 and
+    DecreaseDamageTaken ×0.5 / 0.4 / 0.3;
+  - level = Clamp(friendlies − 1, 0, 1), +1 with the ImprovedWarcry skill (skills not applied);
+  - BuffTime[0] 15 s; Cooldown[0] 60 s, started after the owner's buff ends (HadAndLostBuffCondition).
+  - Test: Optimus with one friendly in range took 40 of 100; cooldown 59.5 s right after the buff.
+- **Shockwave** (TnAbilityShockwave, CONF):
+  - after Delay 0.25 s, Blueprint[0] Damage 65 within 2500 UU (bDoFullDamage) from the PositionSocket; Cooldown 60 s;
+  - the owner is not hurt [HIGH]; the 700000 momentum knock-back is not applied [PARTIAL].
+  - Test: 65 damage to an enemy 10 m away, nothing before the delay.
+- Whirlwind, Barrier, Cloaking, Hover … are listed per slot and reported unimplemented (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].
 - **Correction:** the Pass 21f contract doc said robot Shift ran a dash. It did nothing until this pass.
 

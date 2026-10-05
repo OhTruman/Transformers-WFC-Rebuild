@@ -36,6 +36,7 @@ public:
         velocity_ = {0, 0, 0}; onGround_ = true; rammedRemain_ = 0.0f; dodgeRemain_ = 0.0f; landedSinceDodge_ = true;
         for (AbilitySlot& a : abilities_) { a.cooldown = 0.0f; a.spam = 0.0f; a.pendingCooldown = false; }
         regenBuffRemain_ = 0.0f; fastCooldownRemain_ = 0.0f; ammoLockRemain_ = 0.0f;
+        warcryRemain_ = 0.0f; warcryDamageMul_ = 1.0f; warcryTakenMul_ = 1.0f; pendingAbilityEffect_.clear(); shockwaveDelay_ = -1.0f;
         health_ = Health{}; overShield_ = false;
         if (!specHealth_.empty()) health_.initialize(specHealth_, specOvershield_);   // ApplySpecialty: Health_<Class>
         inventory_ = loadout_.empty() ? std::vector<Weapon>{Weapon{}} : loadout_;   // TnCharacterApplier.ApplyWeapons
@@ -152,6 +153,10 @@ public:
     // Killstreak buffs: TnBuffHealthRegenKillStreak (FloatModifier 2, 30 s), TnBuffFastAbilityCooldown (x5, 30 s),
     // TnBuffLockAmmoClip (10 s: shots cost no clip ammo) [CONF authored buff defaults; effect placement HIGH].
     float regenBuffRemain_ = 0.0f, fastCooldownRemain_ = 0.0f, ammoLockRemain_ = 0.0f;
+    // Warcry buffs (TnBuffWarcryIncreaseDamage / DecreaseDamageTaken FloatModifier[level], BuffTime[0] 15 s) [CONF].
+    float warcryRemain_ = 0.0f, warcryDamageMul_ = 1.0f, warcryTakenMul_ = 1.0f;
+    std::string pendingAbilityEffect_;   // a triggered ability whose effect World applies this step (Warcry / Shockwave)
+    float shockwaveDelay_ = -1.0f;       // TnAbilityShockwave.Delay 0.25 s timer
     bool isDodging() const { return dodgeRemain_ > 0.0f; }
     // Abilities (TnAbilityManager): CharacterData.Abilities[0] on Ability0 (Shift), [1] on Ability1 (Ctrl) [CONF bindings].
     // Versus: GetCurrentSkillDataIndex 0 (TnMultiplayerGame) -> Cooldown[0]; no resource (GetResourceRequired 0 unless
@@ -161,16 +166,20 @@ public:
     void setAbilities(const std::vector<std::string>& ids) {
         for (int i = 0; i < 2; ++i) {
             AbilitySlot a; a.id = i < (int)ids.size() ? ids[(size_t)i] : std::string();
-            a.implemented = a.id == "Dodge";
-            a.cooldownTime = a.id == "Dodge" ? 2.0f : 0.0f;   // Default__TnAbilityDodge Cooldown [2.0, 0.5] -> index 0
+            a.implemented = a.id == "Dodge" || a.id == "Warcry" || a.id == "Shockwave";
+            // Cooldown[skill data index 0]: Dodge [2.0, 0.5]; Warcry [60]; Shockwave [60] [CONF authored CDOs].
+            a.cooldownTime = a.id == "Dodge" ? 2.0f : (a.id == "Warcry" || a.id == "Shockwave") ? 60.0f : 0.0f;
             abilities_[i] = a;
         }
     }
     void tickAbilities(float dt) {
         for (AbilitySlot& a : abilities_) {
             a.spam = std::max(0.0f, a.spam - dt);
-            // TnAbilityManager.Tick: the cooldown starts once CanStartCooldown (Dodge: no longer dodging).
-            if (a.pendingCooldown && !(a.id == "Dodge" && isDodging())) { a.pendingCooldown = false; a.cooldown = a.cooldownTime; }
+            // TnAbilityManager.Tick: the cooldown starts once CanStartCooldown (Dodge: no longer dodging; Warcry:
+            // HadAndLostBuffCondition - after the owner's Warcry buff ended).
+            if (a.pendingCooldown && !(a.id == "Dodge" && isDodging()) && !(a.id == "Warcry" && (warcryRemain_ > 0.0f || pendingAbilityEffect_ == "Warcry"))) {
+                a.pendingCooldown = false; a.cooldown = a.cooldownTime;
+            }
             if (!a.pendingCooldown) a.cooldown = std::max(0.0f, a.cooldown - dt * (fastCooldownRemain_ > 0.0f ? 5.0f : 1.0f));
         }
     }

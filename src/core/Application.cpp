@@ -1994,6 +1994,46 @@ void Application::runWeaponTest() {
         LOG_INFO("WEAPON self damage %.1f (<= 170 x Self 0.45 x vehicle DamageMultiplier %.2f = %.1f, falloff by distance)", self, pc.vehicleParams().damageMultiplier, expect);
         check(self > 0.0f && self <= expect + 0.01f, "own projectile: self damage scaled by SelfDamageMultiplier and the form DamageMultiplier");
     }
+    // Warcry (Optimus Ability0) and Shockwave (Warpath Ability0) in a match.
+    {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+        world_.launchMatch(L);
+        game::CharacterSelection sel; sel.type = 1; sel.chassisId = "Truck";
+        world_.match().selectCharacter(world_.localMatchPlayer(), sel);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("W" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* enemy = nullptr;
+        for (auto* o : ops) if (!world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) enemy = o;
+        for (auto* o : ops) if (o != enemy) o->setPosition(o->pawn().position() + core::Vec3{0, 0, 200});   // friendlies out of range
+        platform::InputFrame sh; sh.pressed[(int)platform::Button::Dash] = true; sh.down[(int)platform::Button::Dash] = true;
+        world_.handleInput(sh, dt); world_.tick(dt);
+        run(0.05f);   // the effect applies on the following step (ServerTriggerAbility)
+        bool buffed = pc.warcryRemain_ > 14.0f && pc.warcryTakenMul_ <= 0.5f;   // 0.5 alone, 0.4 with a friendly in range
+        float hp0 = pc.health().current;
+        if (enemy) world_.applyMatchDamage(world_.localMatchPlayer(), enemy->matchPlayer(), 100.0f, false);
+        float taken = hp0 - pc.health().current;
+        const float takenMul = pc.warcryTakenMul_;
+        bool cdPending = world_.hudState().abilities[0].active;
+        run(15.5f);
+        bool cdStarted = !world_.hudState().abilities[0].active && world_.hudState().abilities[0].cooldown > 40.0f;
+        LOG_INFO("WEAPON warcry: buffed %d pending %d started %d cd %.1f remain %.1f", (int)buffed, (int)cdPending, (int)cdStarted, world_.hudState().abilities[0].cooldown, pc.warcryRemain_);
+        check(buffed && std::fabs(taken - 100.0f * takenMul) < 0.01f && cdPending && cdStarted,
+              "Warcry (Optimus Shift): damage taken x0.5 / x0.4 (level by friendlies) for 15 s (took " + std::to_string((int)taken) + " of 100), 60 s cooldown after the buff");
+        // Shockwave: Warpath.
+        game::CharacterSelection ws; ws.type = 1; ws.chassisId = "Tank3";
+        world_.match().selectCharacter(world_.localMatchPlayer(), ws);
+        world_.killLocalPlayer(-1, true); run(5.7f);
+        bool okBody = pc.chassis().id == "Tank3";
+        float ehp0 = 0.0f;
+        if (enemy) { enemy->setPosition(pc.position() + core::Vec3{10, 0, 0}); ehp0 = enemy->pawn().health().current; }
+        world_.handleInput(sh, dt); world_.tick(dt);
+        run(0.1f);
+        float early = enemy ? ehp0 - enemy->pawn().health().current : 0.0f;
+        run(0.3f);
+        float hit = enemy ? ehp0 - enemy->pawn().health().current : 0.0f;
+        check(okBody && early == 0.0f && hit > 0.0f, "Shockwave (Warpath Shift): nothing before Delay 0.25 s, then " + std::to_string((int)hit) + " damage to the enemy 10 m away");
+    }
     LOG_INFO("WEAPON SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

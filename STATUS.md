@@ -3,6 +3,9 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 22i (2026-10-05) — Warcry and Shockwave abilities
+- Warcry (team damage/taken buffs by level, 15 s, cooldown after the buff) and Shockwave (0.25 s delay, 65 within 25 m) per authored CDOs. WFC_WEAPONTEST 14/14.
+
 ## GAMEPLAY PASS 22h (2026-10-05) — per-chassis vehicle cameras, vehicle weapon socket
 - Camera strategy values per chassis from authored camera sets; vehicle weapons fire from the vehicle WeaponSocket_Primary; map suite covers every mode + pickups.
 

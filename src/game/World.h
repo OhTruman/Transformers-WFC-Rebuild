@@ -322,6 +322,7 @@ private:
     std::vector<HazardVolume> hazards_;
     std::vector<Projectile> projectiles_;
     void tickProjectiles(float dt);
+    void tickAbilityEffects(float dt);
     bool deferredKillstreak_ = false;
     int lockedClip_ = 0;
 public:
