@@ -1122,7 +1122,59 @@
   }
  },
  "weapon_exports": [
-  "IonBlaster"
+  "AssaultRifle",
+  "AssaultRifleVehicle",
+  "Axe",
+  "Bazooka",
+  "BeatDownClub",
+  "BroadSword",
+  "BurstRifle",
+  "ButterflyAxe",
+  "CeremonialStaff",
+  "EMPShotgun",
+  "FightingStaff",
+  "FlakGrenades",
+  "FlashBangs",
+  "GatlingGun",
+  "GrenadeLauncher",
+  "HalberdAxe",
+  "Hammer",
+  "HealGrenades",
+  "HeavyMG",
+  "HeavyPistol",
+  "HeavyRepairRay",
+  "HeavyRocketTurret",
+  "HomingRocket",
+  "HomingRocketVehicle",
+  "HuntingDagger",
+  "IonBlaster",
+  "KamikazeMines",
+  "LancingSpear",
+  "LongSword",
+  "Maul",
+  "MountedHeavyIonBlaster",
+  "MountedRepairRay",
+  "MountedRocketTurret",
+  "PlaneAssaultRifle",
+  "PlaneMachineGun",
+  "PlaneRocket",
+  "PlasmaCannon",
+  "Poke",
+  "ProngDagger",
+  "RepairRay",
+  "RocketTemp",
+  "RocketTurretKillStreak",
+  "RocketVehicle",
+  "SerratedBlade",
+  "ShortSword",
+  "Shotgun",
+  "SniperRifle",
+  "SpikedBat",
+  "SpikedMace",
+  "TankCannon",
+  "TortureSword",
+  "ViciousAxe",
+  "WarHammer"
  ],
  "modes": [
   {
@@ -1302,6 +1354,178 @@
     "MP_KON_Molten",
     "MP_UND_Gorge"
    ]
+  }
+ ],
+ "title_matinees": [
+  {
+   "object": null,
+   "comment": null,
+   "looping": false
+  },
+  {
+   "object": null,
+   "comment": null,
+   "looping": false
+  },
+  {
+   "object": null,
+   "comment": null,
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_5517",
+   "comment": "(OLD) Orbiting Camera",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_6321",
+   "comment": "Primary Camera",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_11805",
+   "comment": "Fade In",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_2880",
+   "comment": "Camera Orbiter",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_9395",
+   "comment": null,
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_991",
+   "comment": "Black-Out",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9525",
+   "comment": "1st QTR",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_1192",
+   "comment": "2nd QTR",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_13634",
+   "comment": "3rd QTR",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_490",
+   "comment": "Plane Fly By",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_991",
+   "comment": "Fade In",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9617",
+   "comment": "Camera Director",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_991",
+   "comment": "Fade In",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9617",
+   "comment": "Camera Director",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_991",
+   "comment": "Fade In",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9617",
+   "comment": "Camera Director",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_8932",
+   "comment": "OLD - Pan to Decepticon",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_10190",
+   "comment": "OLD - Pan to Autobot",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_11020",
+   "comment": "Autobot_Fade",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_6523",
+   "comment": "Autobot_Glow",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9474",
+   "comment": "Decepticon_Fade",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_4264",
+   "comment": "Decepticon_Glow",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_7660",
+   "comment": "Customization Camera Director",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_5800",
+   "comment": "SCOUT - Decepticon",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_13491",
+   "comment": "SCOUT - Autobot",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_12237",
+   "comment": "SOLDIER - Autobot",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9919",
+   "comment": "SOLDIER - Decepticon",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_10399",
+   "comment": "SCIENTIST - Autobot",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_572",
+   "comment": "SCIENTIST - Decepticon",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_3248",
+   "comment": "LEADER - Autobot",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_15345",
+   "comment": "LEADER - Decepticon",
+   "looping": false
   }
  ],
  "rules": {

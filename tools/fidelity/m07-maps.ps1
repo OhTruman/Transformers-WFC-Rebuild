@@ -108,13 +108,21 @@ if (-not $NoChain -and $chain.Count) {
         $row | Add-Member -Force -NotePropertyName unload_lobby -NotePropertyValue $(if (Test-Path (Join-Path $d "$($m.runtime)_3lobby.bmp")) { "PASS" } else { "FAIL" })
         $mv = @($vc | Where-Object { $_.level -like "*$($m.runtime)*" }); $row | Add-Member -Force -NotePropertyName draws -NotePropertyValue $(if ($mv.Count) { "world {0} / bsp {1} / noDepth {2}" -f (Median ($mv | ForEach-Object { $_.world })), (Median ($mv | ForEach-Object { $_.bsp })), (Median ($mv | ForEach-Object { $_.noDepth })) } else { "n/a" })
         $row | Add-Member -Force -NotePropertyName world_detail -NotePropertyValue (($ws | ForEach-Object { $_.detail }) -join "/") }
+    # audio genericization: each visit loads THAT map's audio, and every unload releases it
+    $al = @(Flow-Ev $F "audio.loaded"); $au = @(Flow-Ev $F "audio.unloaded")
+    $amb = @(Grep-Log (Join-Path $d "wfc.log") 'ambient: (MP_\S+): (\d+) level cues, (\d+) reverb presets, (\d+) emitters')
+    for ($i = 0; $i -lt $chain.Count; $i++) { $m = $chain[$i]; $row = @($rows | Where-Object { $_.map -eq $m.runtime })[0]; if (-not $row) { continue }
+        $L = if ($i -lt $al.Count) { $al[$i] } else { $null }; $U = if ($i -lt $au.Count) { $au[$i] } else { $null }; $A = @($amb | Where-Object { $_.text -match "ambient: $($m.runtime):" })[0]
+        $ok = $L -and "$($L.level)" -eq $m.runtime -and [int]$L.levelCues -gt 0 -and [double]$L.pcmMB -gt 0; $rel = $U -and [int]$U.voices -eq 0 -and [int]$U.instances -eq 0 -and [int]$U.levelCues -eq 0
+        $row | Add-Member -Force -NotePropertyName audio -NotePropertyValue $(if ($ok -and $rel -and $A) { "PASS" } elseif (-not $L) { "FAIL" } else { "FAIL" })
+        $row | Add-Member -Force -NotePropertyName audio_note -NotePropertyValue ("loaded level {0}, level cues {1}, PCM {2} MB; ambient {3}; after unload voices / instances / cues {4}/{5}/{6}" -f $L.level, $L.levelCues, $L.pcmMB, $(if ($A) { $A.text -replace '^.*ambient: ', '' } else { "none" }), $U.voices, $U.instances, $U.levelCues) }
     Res "chain.second_map_and_return" $(if ($ret) { "PASS" } else { "FAIL" }) ("frontend chain over {0} maps ({1}) then quit to the title: returned {2}" -f $chain.Count, (($chain | ForEach-Object { $_.runtime }) -join " > "), $ret) "Frontend/Integration"
 }
 
 # ---------- results per map (one result per map and check; nothing folded into a total)
-$checks = "load", "spawn", "walk", "jump", "vehicle", "boost", "transform", "boost_transform", "collision", "killplane", "respawn", "match_end", "frontend_world", "unload_lobby"
-foreach ($r in $rows) { foreach ($c in $checks) { if ($r.PSObject.Properties[$c]) { $note = @("robot_note", "vehicle_note", "collision_note", "killplane_note", "match_note", "world_detail", "draws" | Where-Object { $r.PSObject.Properties[$_] } | ForEach-Object { "$($_): $($r.$_)" }) -join "; "
-    Res "$($r.map).$c" $r.$c $note $(switch ($c) { { $_ -in "frontend_world" } { "Rendering/Frontend" } { $_ -in "load", "unload_lobby" } { "Integration" } default { "Gameplay" } }) } } }
+$checks = "load", "spawn", "walk", "jump", "vehicle", "boost", "transform", "boost_transform", "collision", "killplane", "respawn", "match_end", "frontend_world", "unload_lobby", "audio"
+foreach ($r in $rows) { foreach ($c in $checks) { if ($r.PSObject.Properties[$c]) { $note = @("robot_note", "vehicle_note", "collision_note", "killplane_note", "match_note", "world_detail", "draws", "audio_note" | Where-Object { $r.PSObject.Properties[$_] } | ForEach-Object { "$($_): $($r.$_)" }) -join "; "
+    Res "$($r.map).$c" $r.$c $note $(switch ($c) { { $_ -in "frontend_world" } { "Rendering/Frontend" } { $_ -in "load", "unload_lobby" } { "Integration" } "audio" { "Systems" } default { "Gameplay" } }) } } }
 foreach ($m in @($X.maps | Where-Object { -not $_.launchable })) { Res "$($m.runtime).load" $(if (-not $m.cooked) { "SKIP" } else { "FAIL" }) ("not launchable: cooked {0}, runtime data {1} ({2})" -f $m.cooked, $m.runtime_data, $(if (-not $m.cooked) { "SOURCE DATA ABSENT" } else { "export missing" })) "AssetTools" }
 Write-WfcCsv $rows (Join-Path $OutDir "maps.csv")
 Write-M07Matrix $rows (@("map", "id") + $checks + @("draws", "world_detail")) (Join-Path $OutDir "MAPS.md") "M07 multi-map matrix" @("exe: ``$exe``", "", "One row per map; every cell is its own check (PASS / PARTIAL / FAIL / SKIP / UNKNOWN). Notes: maps.csv.")

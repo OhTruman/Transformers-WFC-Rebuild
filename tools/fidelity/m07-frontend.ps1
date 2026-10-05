@@ -109,6 +109,24 @@ $alog = Join-Path $d2 "wfc.log"; $ad = @(Read-GfxDumps $alog); $inAccounts = @($
 Res "account.typed_name_shown" $(if ($inAccounts) { "PASS" } elseif (Test-Path $alog) { "FAIL" } else { "SKIP" }) ("typed '{0}' ({1}): name present in an Accounts dump {2}" -f $name, $(if ($typeOn) { "type:" } else { "key:" }), [bool]$inAccounts)
 Res "account.name_in_party_lobby" $(if ($inParty) { "PASS" } elseif (Test-Path $alog) { "FAIL" } else { "SKIP" }) ("the created account name '{0}' appears in the party lobby roster: {1} (wrong account name = the lobby shows another name)" -f $name, [bool]$inParty)
 
+# ---------------- F. title Matinee over 60 s: animated, authored tracks only, camera moving, every sample healthy
+$d3 = Join-Path $OutDir "title60"; $X = Get-M07Expectations
+RunFE $d3 ((@("wait:frontend", "wait:ui=FrontEnd") + @(1..12 | ForEach-Object { "wait:t=5;shot:$d3\t{0:D2}.bmp" -f ($_ * 5) }) + @("quit")) -join ";") @{ WFC_SKIPINTRO = "1" }
+$tf = @(Get-ChildItem $d3 -Filter "t*.bmp" -ErrorAction SilentlyContinue | Sort-Object Name)
+if ($tf.Count) {
+    $verd = @($tf | ForEach-Object { Present-SceneVerdict (Present-Measure $_.FullName $script:PresentRegions.title_scene) })
+    $chg = @(); for ($i = 1; $i -lt $tf.Count; $i++) { $chg += (Present-Similar $tf[$i - 1].FullName $tf[$i].FullName $script:PresentRegions.title_scene).grad }
+    $still = @($chg | Where-Object { $_ -gt 0.995 }).Count
+    Res "title.matinee.frames" $(if (@($verd | Where-Object { $_ -eq "FAIL" }).Count) { "FAIL" } elseif ($still -gt 2) { "FAIL" } else { "PASS" }) ("12 samples over 60 s: scene verdicts {0}; consecutive frames practically identical {1} (a frozen title FAILS)" -f (($verd | Group-Object | ForEach-Object { "$($_.Name) $($_.Count)" }) -join ", "), $still) "Frontend/Rendering"
+    $F3 = Read-FlowLog (Join-Path $d3 "flow.jsonl"); $views = @(Flow-Ev $F3 "scene.view")
+    $authored = @($X.title_matinees | ForEach-Object { $_.comment } | Where-Object { $_ } | Select-Object -Unique)
+    $playing = @($views | ForEach-Object { "$($_.playing)" -split "," } | Where-Object { $_ } | Select-Object -Unique)
+    $invented = @($playing | Where-Object { $authored -notcontains $_ }); $core = @("Camera Orbiter", "Primary Camera" | Where-Object { $playing -notcontains $_ })
+    $pos = @($views | ForEach-Object { "$($_.pos)" } | Select-Object -Unique)
+    Res "title.matinee.tracks" $(if (-not $views.Count) { "UNKNOWN" } elseif ($invented.Count -or $core.Count) { "FAIL" } else { "PASS" }) ("playing {0}; not authored {1}; core title loops missing {2}; authored title Interps (all UI levels): {3}" -f ($playing -join ", "), ($invented -join ","), ($core -join ","), ($authored -join ", ")) "Frontend"
+    Res "title.matinee.camera" $(if (-not $views.Count) { "UNKNOWN" } elseif ($pos.Count -ge [Math]::Min(6, $views.Count)) { "PASS" } else { "FAIL" }) ("title camera positions over 60 s: {0} distinct of {1} scene.view events (the orbit must keep moving)" -f $pos.Count, $views.Count) "Frontend"
+    Res "title.matinee.appearance" "HUMAN" "timing, composition and look of the title animation (fireworks, fly-by, orbit): HUMAN-CHECK-M07 item 1" "Frontend"
+}
 foreach ($dd in @(Get-ChildItem $OutDir -Directory)) { $tiles = @(Get-ChildItem $dd.FullName -Filter *.bmp | Sort-Object Name | ForEach-Object { @{ png = $_.FullName; label = "$($dd.Name) $($_.BaseName)" } }); if ($tiles.Count) { New-WfcSheet $tiles (Join-Path $OutDir "sheet_$($dd.Name).png") 4 400 225 } }
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
 $md = @("# M07 frontend presentation", "", "exe: ``$exe``; quit box $quitBox; navcheck $navOn; type: $typeOn", "") + @($res.ToArray() | ForEach-Object { "- $($_.status) **$($_.id)**: $($_.note)" }); $md | Set-Content -Encoding UTF8 (Join-Path $OutDir "FRONTEND.md")

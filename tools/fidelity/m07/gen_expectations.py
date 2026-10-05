@@ -98,8 +98,21 @@ for cls, g in gmi.items():
                   "maps": maps_per_mode.get(tag) if isinstance(maps_per_mode, dict) else None,
                   "maps_with_runtime": [m["runtime"] for m in maps if tag in m["modes"] and m["launchable"]]})
 
+# ---- title Matinee (UI_FrontEnd Kismet, frontend_flow.json): every SeqAct_Interp with its comment and looping flag
+def interps(node, acc):
+    if isinstance(node, dict):
+        if node.get("class") == "SeqAct_Interp":
+            a = node.get("authored", {}) or {}
+            acc.append({"object": node.get("object"), "comment": a.get("ObjComment"), "looping": bool(a.get("bLooping"))})
+        for v in node.values(): interps(v, acc)
+    elif isinstance(node, list):
+        for v in node: interps(v, acc)
+    return acc
+ff = load(os.path.join(AT, "frontend_flow.json"))
+title_interps = interps(ff, [])
+
 out = {"generated_by": "tools/fidelity/m07/gen_expectations.py", "sources": [AT, VS], "maps": maps, "characters": chars,
-       "class_presets": presets, "weapon_exports": weapon_exports, "modes": modes,
+       "class_presets": presets, "weapon_exports": weapon_exports, "modes": modes, "title_matinees": title_interps,
        "rules": {"optimus_fallback": "a selected chassis other than Optimus resolving to Characters/Optimus/* is an explicit FAIL (OPTIMUS FALLBACK)",
                  "vehicle_form_by_class": "Scout=car, Scientist=jet, Soldier=tank, Leader=truck (CONFIRMED, mp_classes.json)"}}
 with open(OUT, "w", encoding="utf-8") as f:
