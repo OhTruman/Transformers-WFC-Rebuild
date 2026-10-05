@@ -120,6 +120,10 @@ foreach ($run in @(@{ k = "route"; d = (Join-Path $pres "route") }, @{ k = "maps
     $dup = @($au | Where-Object { [int]$_.voices -gt 0 -or [int]$_.instances -gt 0 })
     $pcm = @($al | ForEach-Object { [double]$_.pcmMB })
     Res "audio.$($run.k)" $(if (-not $al.Count) { "UNKNOWN" } elseif ($dup.Count) { "FAIL" } elseif ($au.Count -lt [Math]::Max(0, $al.Count - 1)) { "FAIL" } else { "PASS" }) ("map audio loads {0} ({1}), unloads {2}; voices / instances still alive after an unload: {3}; PCM MB per load {4}" -f $al.Count, (($al | ForEach-Object { $_.level }) -join " -> "), $au.Count, $dup.Count, ($pcm -join " / ")) "Systems"
+    # HUD data the original Hud_GFX branches on (audit 2026-10-05): an unanswered GoalScore makes the team bars use 10
+    $un = @(Flow-Ev $F "datastore.unhandled" | ForEach-Object { "$($_.markup)" } | Where-Object { $_ -match '^<CurrentGame:' } | Group-Object | ForEach-Object { "$($_.Name) x$($_.Count)" })
+    $goal = @(Flow-Ev $F "datastore.unhandled" | Where-Object { "$($_.markup)" -eq "<CurrentGame:GoalScore>" }).Count
+    Res "hud.goalscore.$($run.k)" $(if ($goal) { "FAIL" } else { "PASS" }) ("<CurrentGame:GoalScore> unanswered {0}x (Hud_GFX then scales the team bars to 10 points); other unanswered CurrentGame reads: {1}" -f $goal, $(if ($un.Count) { $un -join ", " } else { "none" })) "Frontend"
     $gc = @(Flow-Ev $F "match.glCensus"); $samp = Join-Path $run.d "samples.csv"
     $pm = if (Test-Path $samp) { @(Import-Csv $samp | ForEach-Object { [double]$_.private_mb }) } else { @() }
     $peak = if ($pm.Count) { ($pm | Measure-Object -Maximum).Maximum } else { $null }

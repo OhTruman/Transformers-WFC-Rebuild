@@ -65,6 +65,13 @@ human tester. Findings P1-2 and P2-2 hide behind this.
     bar `_width = 25 + (score / GoalScore) * 141`, clamped below only.
   - TDM goal is 40 and DM goal is 20, so the bars are full at 10 and grow past the 166 px panel afterwards.
 - **Fix direction:** answer `GoalScore` from the match settings (the frontend already holds them in MatchValues).
+- **Status (2026-10-05):**
+  - Fixed on agents/frontend `e1db12b`: answered from the launched match's PointsToWin (GRI.GoalScore = PointsToWin).
+    Code reviewed by Experimental.
+  - Runtime proof is pending the next integration. `fast-gate.ps1` now FAILs `hud.goalscore.*` on any unanswered
+    GoalScore.
+  - P2-3: Frontend asked Gameplay for the GRI values / sourced defaults. P2-4: waits for a Rendering IRenderer entry
+    point; Frontend will forward it.
 
 ### P1-3 Volume sliders, subtitles and vibration are saved but never applied
 - **Owner:** Systems (volumes), Integration (wiring).
