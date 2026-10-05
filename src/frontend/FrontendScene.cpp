@@ -140,6 +140,8 @@ bool FrontendScene::load(const std::string& path) {
                             const std::string& a = T["toggles"][k]["action"].asString();
                             gr.toggles.push_back({T["toggles"][k]["t"].asDouble(), a == "ETTA_Off" ? 0 : a == "ETTA_Toggle" ? 2 : 1});
                         }
+                    } else if (T["class"].asString() == "InterpTrackFloatProp") {
+                        gr.floats.push_back({T["property"].asString(), keys(T["keys"])});
                     } else if (T["class"].asString() == "InterpTrackEvent") {
                         for (size_t k = 0; k < T["events"].size(); ++k)
                             gr.events.push_back({T["events"][k]["t"].asDouble(), T["events"][k]["name"].asString()});
@@ -161,6 +163,14 @@ bool FrontendScene::load(const std::string& path) {
             }
             for (size_t s = 0; s < m["startedBy"].size(); ++s) {
                 const assets::Json& S = m["startedBy"][s];
+                if (S["class"].asString() == "Sequence" && (S["input"].asString() == "Play" || S["input"].asString() == "Reverse")) {
+                    Matinee::SubStart ss;
+                    ss.sub = S["from"].asString();
+                    ss.output = S["output"].asString();
+                    ss.reverse = S["input"].asString() == "Reverse";
+                    M.subStarts.push_back(ss);
+                    continue;
+                }
                 if (S["input"].asString() != "Play") continue;
                 if (S["class"].asString() == "GFxEvent_FsCommand" && S["fscommand"].isString()) M.fscommands.push_back(S["fscommand"].asString());
                 if (S["class"].asString() == "SeqAct_MoviePlayer" && S["output"].asString() == "Stopped") M.onMovieStopped = true;
@@ -178,6 +188,15 @@ bool FrontendScene::load(const std::string& path) {
                 if (S["class"].asString() == "SeqAct_MoviePlayer" && S["output"].asString() == "Stopped") R.onMovieStopped = true;
             }
             lv.remotes.push_back(R);
+        }
+        const assets::Json& cs = L["cameraSwitches"];
+        for (size_t i = 0; i < cs.size(); ++i) {
+            CameraSwitch W;
+            W.name = cs[i]["name"].asString();
+            W.slot = (int)cs[i]["previewSlot"].asDouble();
+            for (const auto& [k, v] : cs[i]["outputs"].obj) W.outputs[std::atoi(k.c_str())] = v.asString();
+            for (size_t t = 0; t < cs[i]["triggers"].size(); ++t) W.triggers.push_back(cs[i]["triggers"][t].asString());
+            lv.switches.push_back(W);
         }
     }
     loaded_ = !data_.empty();
@@ -207,10 +226,41 @@ void FrontendScene::start(const Matinee& m) {
                                       {"length", FlowTrace::num(m.length)}});
 }
 
+void FrontendScene::subOutput(const std::string& sub, const std::string& output) {
+    // A subsequence finished with this output: matinees wired to it Play or Reverse. Reverse runs a playing / played
+    // matinee back from its current position to its start (Matinee Reverse); one at its start does not move.
+    for (const std::string& l : levels_) {
+        auto it = data_.find(l);
+        if (it == data_.end()) continue;
+        for (const Matinee& m : it->second.matinees)
+            for (const Matinee::SubStart& ss : m.subStarts) {
+                if (ss.sub != sub || ss.output != output) continue;
+                if (!ss.reverse) { start(m); continue; }
+                for (Playing& p : playing_)
+                    if (p.m == &m) { p.t = std::min(p.t, m.length); p.rate = -1.0; p.order = ++order_; }
+                FlowTrace::emit("scene.matinee", {{"matinee", m.name}, {"comment", m.comment}, {"reverse", "true"}});
+            }
+    }
+}
+
 void FrontendScene::trigger(const std::string& trig) {
     bool fs = trig.rfind("FsCommand:", 0) == 0, movie = trig.rfind("MovieStopped:", 0) == 0;
     std::string cmd = fs ? trig.substr(10) : std::string();
     std::vector<std::string> remotes;
+    // Customization camera switches (Chassis_To_Cam_ID*): the preview slot's camera id selects the class output.
+    if (fs)
+        for (const std::string& l : levels_) {
+            auto it = data_.find(l);
+            if (it == data_.end()) continue;
+            for (const CameraSwitch& w : it->second.switches) {
+                if (std::find(w.triggers.begin(), w.triggers.end(), cmd) == w.triggers.end()) continue;
+                int id = cameraIdForSlot ? cameraIdForSlot(w.slot) : -1;
+                auto o = w.outputs.find(id);
+                FlowTrace::emit("scene.cameraSwitch", {{"switch", w.name}, {"fscommand", cmd}, {"slot", std::to_string(w.slot)},
+                                                       {"cameraId", std::to_string(id)}, {"output", o == w.outputs.end() ? "-" : o->second}});
+                if (o != w.outputs.end()) subOutput(w.name, o->second);
+            }
+        }
     for (const std::string& l : levels_) {
         auto it = data_.find(l);
         if (it == data_.end()) continue;
@@ -267,6 +317,7 @@ void FrontendScene::crossKeys(const Matinee& m, double from, double to) {
 void FrontendScene::tick(double dt) {
     time_ += dt;
     for (Playing& p : playing_) {
+        if (p.rate < 0) { p.t = std::max(0.0, p.t - dt); continue; }   // Reverse: back to the start, no key events
         double from = p.t <= 0.0 ? -1e-6 : p.t;   // keys at 0 fire on the first tick
         p.t += dt;
         if (p.m->looping && p.m->length > 0 && p.t >= p.m->length) {
@@ -374,6 +425,20 @@ SceneView FrontendScene::view() const {
     actorWorld(cam, v.pos, m);
     matrixRotator(m, v.rot);
     v.fov = a->fov > 0 ? a->fov : 90.0;
+    // FOVAngle tracks on the camera's group (latest playing matinee wins).
+    {
+        int best = -1;
+        for (const Playing& p : playing_)
+            for (const Group& g : p.m->groups) {
+                if (p.order < best || std::find(g.actors.begin(), g.actors.end(), cam) == g.actors.end()) continue;
+                for (const auto& f : g.floats)
+                    if (f.first == "FOVAngle" && !f.second.empty()) {
+                        double o[3];
+                        evalCurve(f.second, std::min(p.t, p.m->length > 0 ? p.m->length : p.t), o);
+                        if (o[0] > 1) { v.fov = o[0]; best = p.order; }
+                    }
+            }
+    }
     v.camera = cam;
     v.matinee = from;
     v.valid = true;
@@ -390,6 +455,19 @@ SceneView FrontendScene::view() const {
                 v.actors.push_back(ap);
             }
         }
+    // DrawScale tracks: the absolute DrawScale each track sets (latest playing matinee per actor).
+    for (const Playing& p : playing_)
+        for (const Group& g : p.m->groups)
+            for (const auto& f : g.floats) {
+                if (f.first != "DrawScale" || f.second.empty()) continue;
+                double o[3];
+                evalCurve(f.second, std::min(p.t, p.m->length > 0 ? p.m->length : p.t), o);
+                for (const std::string& name : g.actors) {
+                    bool replaced = false;
+                    for (auto& sc : v.scales) if (sc.actor == name) { sc.drawScale = o[0]; replaced = true; }
+                    if (!replaced) v.scales.push_back({name, o[0]});
+                }
+            }
     return v;
 }
 

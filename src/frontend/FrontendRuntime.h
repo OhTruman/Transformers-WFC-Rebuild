@@ -178,6 +178,7 @@ private:
     void updateScene(float dt);
     FrontendScene scene_;
     CharacterRoster roster_;
+    std::string previewChassis_[2];   // the chassis each preview controller shows (last UpdatePreviewCharacter)
     BridgeValue customize(const std::string& fn, const std::vector<std::string>& args);
     DisplayHooks display_;
     BridgeValue account(const std::string& fn, const std::vector<std::string>& args);

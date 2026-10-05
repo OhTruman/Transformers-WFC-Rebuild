@@ -204,6 +204,16 @@ bool FrontendRuntime::init() {
     roster_.load(Catalog::defaultManifestRoot() + "/mp_content/roster_package.json");
     roster_.loadAuthored(std::string(WFC_SOURCE_DIR) + "/data/frontend/character_presets.json");
     roster_.loadSaved(kCharactersFile);   // the player's edits (Create a Character)
+    // SeqVar_TnCustomizationCameraId: the preview pawn's chassis provider's CustomizationCameraId (-1 without a pawn).
+    scene_.cameraIdForSlot = [this](int slot) {
+        if (slot < 0 || slot > 1 || previewChassis_[slot].empty()) return -1;
+        for (const Catalog::Provider& p : catalog_.providers("Chassis"))
+            if (p.name == previewChassis_[slot] || p.get("UniqueId") == previewChassis_[slot]) {
+                std::string id = p.get("CustomizationCameraId");
+                return id.empty() ? 0 : std::atoi(id.c_str());
+            }
+        return -1;
+    };
     if (!scene_.load(std::string(WFC_SOURCE_DIR) + "/data/frontend/scenes.json")) LOG_WARN("frontend: data/frontend/scenes.json missing (no scene cameras)");
     return flow_.init(catalog_, o);
 }
@@ -436,6 +446,7 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
                     out[i] = f <= 0.04045f ? f / 12.92f : std::pow((f + 0.055f) / 1.055f, 2.4f);
                 }
             };
+            for (size_t i = 0; i < pr.chassis.size() && i < 2; ++i) previewChassis_[i] = pr.chassis[i];
             for (size_t i = 0; i < pr.chassis.size() && i < 2; ++i) {
                 PreviewRequest::Slot sl;
                 sl.chassis = pr.chassis[i];

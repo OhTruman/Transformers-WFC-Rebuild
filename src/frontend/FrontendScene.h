@@ -8,6 +8,7 @@
 // FOV, director cuts, move tracks, hard attachment). Data: data/frontend/scenes.json (tools/frontend/
 // export_frontend_scenes.py, from authored.db). Drawing the levels is Rendering's (IFrontendSceneRenderer).
 #pragma once
+#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -28,6 +29,9 @@ struct SceneView {
     // degrees, RelativeToInitial and hard attachment applied. Actors not listed keep their authored pose.
     struct ActorPose { std::string actor; double pos[3]; double rot[3]; };
     std::vector<ActorPose> actors;
+    // Matinee DrawScale tracks (InterpTrackFloatProp): absolute DrawScale per actor (vignette ships / boosters).
+    struct ActorScale { std::string actor; double drawScale; };
+    std::vector<ActorScale> scales;
 };
 
 // Implemented by Rendering: draws the scene levels with the frontend's camera before the GFx overlay.
@@ -60,6 +64,9 @@ public:
     std::vector<std::string> playing() const;
     // Effect / visibility changes since the last call (matinee toggle and event keys crossed by tick()).
     std::vector<SceneChange> takeChanges() { std::vector<SceneChange> c; c.swap(changes_); return c; }
+    // Customization camera: the customization camera id (TnDataProvider_Chassis.CustomizationCameraId) of the chassis
+    // shown by preview slot 0 (Autobot) / 1 (Decepticon); -1 = none (SeqVar_TnCustomizationCameraId).
+    std::function<int(int slot)> cameraIdForSlot;
 
     // Evaluation helpers (exposed for the headless tests).
     struct Key { double t = 0; double v[3] = {0, 0, 0}, ai[3] = {0, 0, 0}, lo[3] = {0, 0, 0}; int mode = 0; };   // 0 linear 1 constant 2 curve
@@ -70,18 +77,24 @@ private:
     struct Group { std::string name; bool director = false; std::vector<std::string> actors; std::vector<MoveTrack> moves;
                    std::vector<std::pair<double, std::string>> cuts;
                    std::vector<std::pair<double, int>> toggles;              // 0 off, 1 on, 2 toggle
-                   std::vector<std::pair<double, std::string>> events; };
+                   std::vector<std::pair<double, std::string>> events;
+                   std::vector<std::pair<std::string, std::vector<Key>>> floats; };   // InterpTrackFloatProp (property, keys)
     struct EventAction { std::string event; int action = 2; std::vector<std::string> targets; };   // 0 hide 1 unhide 2 toggle
     struct Matinee { std::string name, comment; bool looping = false; double length = 0; std::vector<Group> groups;
                      std::vector<std::string> fscommands; bool onMovieStopped = false;
                      std::vector<std::string> remoteEvents;   // SeqEvent_RemoteEvent names that play it
-                     std::vector<EventAction> eventActions; };
+                     std::vector<EventAction> eventActions;
+                     struct SubStart { std::string sub, output; bool reverse = false; };
+                     std::vector<SubStart> subStarts; };   // started by a subsequence's output (Play / Reverse)
+    struct CameraSwitch { std::string name; int slot = 0; std::map<int, std::string> outputs; std::vector<std::string> triggers; };
     struct RemoteActivator { std::string event; std::vector<std::string> fscommands; bool onMovieStopped = false; };
     struct Actor { std::string name, cls; double loc[3] = {0, 0, 0}, rot[3] = {0, 0, 0}; std::string base;
                    double relLoc[3] = {0, 0, 0}, relRot[3] = {0, 0, 0}; double fov = 0; bool camera = false; };
-    struct Level { std::vector<Matinee> matinees; std::map<std::string, Actor> actors; std::vector<RemoteActivator> remotes; };
+    struct Level { std::vector<Matinee> matinees; std::map<std::string, Actor> actors; std::vector<RemoteActivator> remotes;
+                   std::vector<CameraSwitch> switches; };
+    void subOutput(const std::string& sub, const std::string& output);
     void remoteEvent(const std::string& name);
-    struct Playing { const Matinee* m; double t; int order; };
+    struct Playing { const Matinee* m; double t; int order; double rate = 1.0; };   // rate -1: Reverse
 
     void start(const Matinee& m);
     // Actor world transform with the playing matinees' tracks applied (UE rotation matrix rows = X / Y / Z axes).

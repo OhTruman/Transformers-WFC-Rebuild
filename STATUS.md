@@ -368,6 +368,11 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 6. Gorge is shown disabled.
 7. A long session: private memory should plateau (about 2.8 GB in the lobby, 3.5 GB in a match).
 
+## FRONTEND: customization camera per chassis (2026-10-04, branch `agents/frontend`)
+- The Create a Character camera now moves to the class camera of the chosen chassis when a chassis menu opens, and reverses when it closes. This is the original Kismet driven by `CustomizationCameraId`, with the FOV 70 -> 60 / 65 track.
+- Matinee DrawScale tracks (title vignette ships / boosters) are exported and evaluated; Rendering's `setFrontendActorScale` receives them when present.
+- Tests 74 / 0. Image check pending Rendering's party-lobby / customization render data in the integrated tree.
+
 ## FRONTEND PASS 5 (2026-10-04, branch `agents/frontend`): world loss, viewport, HUD presentation
 **Frontend-launched world loss: fixed (a96f841).** First bad commit b1fce97 (Experimental bisect). The UI pass left
 `GL_DEPTH_TEST` / `GL_CULL_FACE` disabled; from b1fce97 it ran every match frame (the HUD movie), so Streets drew

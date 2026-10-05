@@ -45,6 +45,12 @@ def track(points):
              'mode': p.get('InterpMode', 'CIM_Linear')} for p in points or []]
 
 
+def float_track(points):
+    # FloatTrack points in the move-track key format (value in v[0]) so the runtime evaluates them with the same curves.
+    return [{'t': p.get('InVal', 0.0), 'v': [p.get('OutVal', 0.0), 0.0, 0.0], 'ai': [p.get('ArriveTangent', 0.0), 0.0, 0.0],
+             'lo': [p.get('LeaveTangent', 0.0), 0.0, 0.0], 'mode': p.get('InterpMode', 'CIM_Linear')} for p in points or []]
+
+
 def actor(op):
     p = props(op) or {}
     loc, rot = p.get('Location') or {}, p.get('Rotation') or {}
@@ -114,6 +120,9 @@ def export_level(level):
                 elif tc == 'InterpTrackEvent':    # named keys -> the matinee's output links of that name
                     entry['tracks'].append({'class': tc, 'events': [{'t': k.get('Time', 0.0), 'name': k.get('EventName')}
                                                                     for k in tp.get('EventTrack') or []]})
+                elif tc == 'InterpTrackFloatProp':   # e.g. DrawScale (vignette ships / boosters), FOVAngle (cameras)
+                    entry['tracks'].append({'class': tc, 'property': tp.get('PropertyName'),
+                                            'keys': float_track((tp.get('FloatTrack') or {}).get('Points'))})
                 elif tc == 'InterpTrackDirector':
                     entry['tracks'].append({'class': tc, 'cuts': [{'t': x.get('Time', 0.0), 'group': x.get('TargetCamGroup'),
                                                                    'blend': x.get('TransitionTime', 0.0)}
@@ -174,8 +183,77 @@ def export_level(level):
                 break
             actors[bop] = actor(bop)
             b = actors[bop].get('base')
+    # Customization camera switches (UI_CharacterCustomization_m): a subsequence whose ChassisID variable is a
+    # SeqVar_TnCustomizationCameraId (PreviewCharNumber = preview slot) compares it with ints and finishes with a class
+    # output (Scout / Scientist / Leader / Soldier); matinees start from those outputs (Play / Reverse). The
+    # subsequence is reached from movie fscommands through another subsequence (Preview_Characters: fscommand ->
+    # input -> FinishSequence output -> this subsequence).
+    def sub_objects(seq_op):
+        sp = by_path.get(seq_op, (None, {}))[1]
+        res = {}
+        for o in sp.get('SequenceObjects') or []:
+            c2, p2 = cls(o), props(o) or {}
+            res[o] = (c2, p2)
+        return res
+    switches = []
+    for op, (c, p) in by_path.items():
+        if c != 'Sequence':
+            continue
+        slot = None
+        for vl in p.get('VariableLinks') or []:
+            for v in vl.get('LinkedVariables') or []:
+                if cls(v) == 'SeqVar_TnCustomizationCameraId':
+                    slot = (props(v) or {}).get('PreviewCharNumber', 0)
+        if slot is None:
+            continue
+        inner = sub_objects(op)
+        outputs = {}
+        for o, (c2, p2) in inner.items():
+            if c2 != 'SeqCond_CompareInt':
+                continue
+            a_val = 0
+            for vl in p2.get('VariableLinks') or []:
+                if vl.get('LinkDesc') == 'A':
+                    for v in vl.get('LinkedVariables') or []:
+                        if v in inner and inner[v][0] == 'SeqVar_Int':
+                            a_val = inner[v][1].get('IntValue', 0)
+            for out in p2.get('OutputLinks') or []:
+                if out.get('LinkDesc') != 'A == B':
+                    continue
+                for l in out.get('Links') or []:
+                    t = l.get('LinkedOp')
+                    if t in inner and inner[t][0] == 'SeqAct_FinishSequence':
+                        outputs[str(a_val)] = inner[t][1].get('ObjComment')
+        # fscommands that reach it: Main_Sequence source -> (if a Sequence) its input event -> its FinishSequence output.
+        triggers = []
+        for src, desc, idx in incoming.get(op, []):
+            sc, sp = by_path.get(src, (None, {}))
+            if sc == 'GFxEvent_FsCommand' and sp.get('FsCommand'):
+                triggers.append(sp['FsCommand'])
+            elif sc == 'Sequence':
+                sinner = sub_objects(src)
+                inputs = [l.get('LinkDesc') for l in sp.get('InputLinks') or []]
+                for o, (c2, p2) in sinner.items():   # input events finishing with output 'desc'
+                    if c2 != 'SeqEvent_SequenceActivated':
+                        continue
+                    reaches = any(sinner.get(l.get('LinkedOp'), (None, {}))[0] == 'SeqAct_FinishSequence' and
+                                  sinner[l.get('LinkedOp')][1].get('ObjComment') == desc
+                                  for out in p2.get('OutputLinks') or [] for l in out.get('Links') or [])
+                    if not reaches:
+                        continue
+                    in_name = p2.get('ObjComment') or p2.get('InputLabel')
+                    if in_name not in inputs:
+                        continue
+                    in_idx = inputs.index(in_name)
+                    for src2, desc2, idx2 in incoming.get(src, []):
+                        sc2, sp2 = by_path.get(src2, (None, {}))
+                        if idx2 == in_idx and sc2 == 'GFxEvent_FsCommand' and sp2.get('FsCommand'):
+                            triggers.append(sp2['FsCommand'])
+        switches.append({'name': op.rsplit('.', 1)[-1], 'comment': p.get('ObjComment'), 'previewSlot': slot,
+                         'outputs': outputs, 'triggers': sorted(set(triggers))})
     return {'actors': sorted(actors.values(), key=lambda a: a['name']), 'matinees': sorted(matinees, key=lambda m: m['name']),
-            'remoteEvents': sorted(remotes, key=lambda r: r['name'])}
+            'remoteEvents': sorted(remotes, key=lambda r: r['name']),
+            'cameraSwitches': sorted(switches, key=lambda w: w['name'])}
 
 
 def main():
