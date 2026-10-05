@@ -16,6 +16,8 @@ struct Weapon {
     const char* damageType = "TransGame.TnDamageTypeIonBlaster";
     // Instant-hit weapons and projectile weapons with recovered PROJDATA are simulated; melee / grenade: PARTIAL.
     float projSpeed = 0.0f, projDamage = 0.0f, projRadiusM = 0.0f; bool projHoming = false;
+    float homingForce = 0.0f, closingDistM = 0.0f, closingForce = 0.0f, closingTime = 0.0f, projMaxSpeed = 0.0f;
+    float lockOnTime = 0.0f, holdLockOnTime = 0.0f; bool lockRobots = false;
     bool simulated() const { return fireType == WeaponFire::InstantHit || (fireType == WeaponFire::Projectile && projSpeed > 0.0f); }
     bool projectile() const { return fireType == WeaponFire::Projectile && projSpeed > 0.0f; }
     static Weapon fromDef(const WeaponDef& d) {
@@ -28,6 +30,8 @@ struct Weapon {
         w.spreadCooldown = d.spreadCooldown > 0.0f ? d.spreadCooldown : 2.0f; w.spread = d.spreadMin;
         w.fineAimSpreadMult = d.fineAimSpread; w.damageType = d.damageType;
         w.projSpeed = d.projSpeed; w.projDamage = d.projDamage; w.projRadiusM = d.projRadiusM; w.projHoming = d.projHoming;
+        w.homingForce = d.homingForce; w.closingDistM = d.closingDistM; w.closingForce = d.closingForce; w.closingTime = d.closingTime;
+        w.projMaxSpeed = d.projMaxSpeed; w.lockOnTime = d.lockOnTime; w.holdLockOnTime = d.holdLockOnTime; w.lockRobots = d.lockRobots;
         if (w.projectile() && d.projDamageType && *d.projDamageType) w.damageType = d.projDamageType;
         return w;
     }

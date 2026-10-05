@@ -1703,6 +1703,60 @@ void Application::runParticipantTest() {
         check(ok && refusedReady && whirlHits >= 2 && (h1 - h2 >= 140.0f || h2 <= 0.0f) && cdHeld,
               "Whirlwind: refused (no cooldown) while meleeing; 85 per sweep window (target hit in both windows of the first 2 s; other enemies in the box also hit); cooldown waits for the end");
     }
+    // Homing (TnWeaponHoming): Thermo Rocket Launcher, CanLockOnToRobots false -> no lock on a robot; a vehicle 4 m off the
+    // crosshair at ~50 m locks after LockOnTime 0.5 s and the rocket homes into it.
+    {
+        game::MatchLaunch L4; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L4);
+        world_.launchMatch(L4);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Soldier; me.weapons = {"HomingRocket", "IonBlaster"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 3; ++i) ops.push_back(world_.addMatchOpponent("H" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { E = o; break; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        const bool haveWeapon = lp.weapon().def && std::string(lp.weapon().def->provider) == "HomingRocket";
+        // Park the other opponents far behind so only E can be picked.
+        core::Vec3 fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f), right{-fwd.z, 0, fwd.x};
+        for (auto* o : ops) if (o != E) o->setPosition(lp.position() - fwd * 30.0f);
+        auto aimAt = [&](const core::Vec3& p) {   // crosshair through p
+            core::Vec3 d = p - ctl.cameraPos();
+            ctl.setCameraYaw(std::atan2(-d.x, -d.z));
+            ctl.setCameraPitch(std::atan2(d.y, std::hypot(d.x, d.z)));
+        };
+        bool robotNoLock = false, lockedVeh = false, homed = false;
+        float lockAt = -1.0f, h0 = 0, h1 = 0;
+        if (E && haveWeapon) {
+            core::Vec3 T = lp.position() + fwd * 50.0f + core::Vec3{0, 2.0f, 0};
+            E->setPosition(T);
+            for (int i = 0; i < 60; ++i) { E->setPosition(T); aimAt(E->pawn().actorLocation() + right * 4.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            robotNoLock = !world_.hudState().locked && world_.hudState().lockProgress == 0.0f;
+            E->pawn().beginTransform();
+            for (int i = 0; i < 180; ++i) { E->setPosition(T); aimAt(E->pawn().actorLocation() + right * 4.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            // fresh lock: look away, then back
+            for (int i = 0; i < 90; ++i) { aimAt(E->pawn().actorLocation() + right * 40.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            for (int i = 0; i < 60 && lockAt < 0.0f; ++i) {
+                E->setPosition(T); aimAt(E->pawn().actorLocation() + right * 4.0f);
+                platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt);
+                if (world_.hudState().locked) lockAt = (i + 1) * dt;
+            }
+            lockedVeh = world_.hudState().locked && world_.hudState().lockTarget == E->matchPlayer() && E->pawn().form() == game::Form::Vehicle;
+            h0 = E->pawn().health().current;
+            platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true; fire.pressed[(int)platform::Button::Fire] = true;
+            aimAt(E->pawn().actorLocation() + right * 4.0f);
+            world_.handleInput(fire, dt); world_.tick(dt);
+            bool targeted = !world_.projectiles().empty() && world_.projectiles().back().target == E->matchPlayer();
+            for (int i = 0; i < 120; ++i) { E->setPosition(T); aimAt(E->pawn().actorLocation() + right * 4.0f); platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+            h1 = E->spawned() ? E->pawn().health().current : 0.0f;
+            homed = targeted && h0 - h1 > 50.0f;   // a straight rocket 4 m off would pass the hull
+        }
+        LOG_INFO("PARTICIPANT homing: weapon %d, robot target no lock %d, vehicle lock %d after %.2f s, target %.0f -> %.0f HP", (int)haveWeapon,
+                 (int)robotNoLock, (int)lockedVeh, lockAt, h0, h1);
+        check(haveWeapon && robotNoLock && lockedVeh && lockAt > 0.45f && lockAt < 0.55f && homed,
+              "Homing: no lock on robots (CanLockOnToRobots false); vehicle lock after LockOnTime 0.5 s; locked rocket homes 4 m into the target");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 

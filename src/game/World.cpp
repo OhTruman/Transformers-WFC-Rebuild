@@ -35,7 +35,11 @@ static bool readTextFile(const std::string& path, std::string& out) {
 
 void World::load(render::IRenderer& renderer) {
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
-        if (w.projectile()) spawnProjectile(o + d * 1.5f, d * w.projSpeed, w, localPlayer_);
+        if (w.projectile()) {
+            spawnProjectile(o + d * 1.5f, d * w.projSpeed, w, localPlayer_);
+            // Fire sends (locked, target): SetTarget(locked ? target : none) [CONF TnWeaponHoming].
+            if (w.projHoming && locked_ && lockTarget_ >= 0) projectiles_.back().target = lockTarget_;
+        }
         else fireHitscanWith(w, o, d);
     };
     if (loadVerticalSlice(renderer)) {
@@ -1123,6 +1127,12 @@ HudGameState World::hudState() const {
     h.dodging = pc.isDodging();
     h.cloaked = pc.cloakRemain_ > 0.0f;
     h.hoverState = pc.hoverState_;
+    h.lockTarget = lockTarget_; h.locked = locked_;
+    {
+        const Weapon* aw = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
+        h.lockProgress = aw && aw->lockOnTime > 0.0f ? std::min(1.0f, lockTimer_ / aw->lockOnTime) : 0.0f;
+        if (locked_) h.lockProgress = 1.0f;
+    }
     h.damageTakenCount = damageTakenCount_;
     h.lastDamageFrom = lastDamageFrom_;
     if (damageTakenCount_ > 0) {
@@ -1593,19 +1603,29 @@ void World::spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const 
     float range = w.rangeM > 0.0f ? w.rangeM : 300.0f;
     projectiles_.push_back({pos, vel, w.projDamage, w.projRadiusM, std::max(1.0f, range / std::max(1.0f, core::length(vel))) + 1.0f,
                             w.damageType ? w.damageType : "", instigator});
+    if (w.projHoming) {
+        Projectile& p = projectiles_.back();
+        p.homingForce = w.homingForce; p.closingDist = w.closingDistM; p.closingForce = w.closingForce;
+        p.closingTime = w.closingTime; p.maxSpeed = w.projMaxSpeed; p.lockRobots = w.lockRobots;
+    }
 }
 
 void World::radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type) {
-    // Actor.HurtRadius: each damageable pawn within DamageRadius takes Damage x (1 - dist / DamageRadius) [HIGH stock UE3];
-    // teammates are filtered by applyMatchDamage (projectile damage types are not TnDamageTypeAOE).
-    auto falloff = [&](const core::Vec3& p) { float d = core::length(p - at); return d >= radius ? 0.0f : 1.0f - d / std::max(radius, 1e-3f); };
+    // Actor.HurtRadius -> TakeRadiusDamage: Dist = max(|Location - origin| - collision radius, 0), scale = 1 - Dist / DamageRadius
+    // (bFullDamage false) [HIGH stock UE3 Actor.TakeRadiusDamage]; teammates are filtered by applyMatchDamage (projectile
+    // damage types are not TnDamageTypeAOE).
+    auto falloff = [&](const core::Vec3& p, float colR = 0.0f) {
+        float d = std::max(core::length(p - at) - colR, 0.0f);
+        return d >= radius ? 0.0f : 1.0f - d / std::max(radius, 1e-3f);
+    };
+    auto colR = [](const Character& c) { return c.cylinderRadius(c.moveForm()); };
     if (matchActive_ && !localDead_) {
-        float k = falloff(player_.pawn().actorLocation());
+        float k = falloff(player_.pawn().actorLocation(), colR(player_.pawn()));
         if (k > 0.0f) applyMatchDamage(localPlayer_, instigator, damage * k, false, type);
     }
     for (MatchOpponent* o : opponents_) {
         if (!o->spawned()) continue;
-        float k = falloff(o->pawn().actorLocation());
+        float k = falloff(o->pawn().actorLocation(), colR(o->pawn()));
         if (k > 0.0f) applyMatchDamage(o->matchPlayer(), instigator, damage * k, false, type);
     }
     for (Destructible* d : destructibles_)
@@ -1616,6 +1636,24 @@ void World::tickProjectiles(float dt) {
     const CollisionWorld* lineWorld = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
     for (size_t i = 0; i < projectiles_.size();) {
         Projectile& p = projectiles_[i];
+        // TnProjectileHoming: Homing (accel HomingForce toward the target, no lead in MP data) -> within ClosingDistance
+        // Closing (ClosingForce; explodes after ClosingTime regardless). Homing stops when the target dies or is in robot
+        // form while CanLockOnToRobots is false. Speed capped at MaxSpeed [CONF script + authored].
+        bool closingExpired = false;
+        if (p.target >= 0) {
+            const Character* tp = matchPawn(p.target);
+            if (!tp || (!p.lockRobots && tp->moveForm() == Form::Robot)) p.target = -1;
+            else {
+                core::Vec3 to = tp->actorLocation() - p.pos;
+                float dist = core::length(to);
+                if (p.closingRemain < 0.0f && dist <= p.closingDist) p.closingRemain = p.closingTime;
+                float force = p.closingRemain >= 0.0f ? p.closingForce : p.homingForce;
+                if (dist > 1e-4f) p.vel = p.vel + to * (force * dt / dist);
+                float sp = core::length(p.vel);
+                if (p.maxSpeed > 0.0f && sp > p.maxSpeed) p.vel = p.vel * (p.maxSpeed / sp);
+            }
+        }
+        if (p.closingRemain >= 0.0f) { p.closingRemain -= dt; if (p.closingRemain < 0.0f) closingExpired = true; }
         core::Vec3 next = p.pos + p.vel * dt;
         float best = 1.0f; bool hit = false;
         float t;
@@ -1638,9 +1676,9 @@ void World::tickProjectiles(float dt) {
             }
         }
         p.life -= dt;
-        if (hit || p.life <= 0.0f) {
+        if (hit || p.life <= 0.0f || closingExpired) {
             core::Vec3 at = p.pos + d * best;
-            if (hit) radiusDamage(at, p.damage, p.radius, p.instigator, p.damageType);
+            if (hit || closingExpired) radiusDamage(at, p.damage, p.radius, p.instigator, p.damageType);
             projectiles_.erase(projectiles_.begin() + (long)i);
             continue;
         }
@@ -1720,6 +1758,7 @@ void World::tickAbilityEffects(float dt) {
         startLocalMelee(true);                            // MeleeService.StartMeleeAttack(MELEE_Whirlwind)
     }
     tickLocalMelee(dt);
+    tickHomingLock(dt);
     if (pc.shockwaveDelay_ >= 0.0f) {
         pc.shockwaveDelay_ -= dt;
         if (pc.shockwaveDelay_ < 0.0f && !localDead_) {
@@ -1815,6 +1854,58 @@ void World::tickLocalMelee(float dt) {
         }
     }
     if (pc.meleeT_ >= pc.meleeLen_) { pc.meleeState_ = 0; pc.meleeSweep_ = -1; }
+}
+
+const Character* World::matchPawn(int mp) const {
+    if (mp < 0) return nullptr;
+    if (mp == localPlayer_) return localDead_ ? nullptr : &player_.pawn();
+    for (const MatchOpponent* o : opponents_) if (o->matchPlayer() == mp) return o->spawned() ? &o->pawn() : nullptr;
+    return nullptr;
+}
+
+// TnWeaponHoming.Active.Tick for the local pawn [CONF RE TARGETED_PASS3 §H2]: PlayerTargeting.GetHomingLockTarget = the picked
+// enemy within weapon range inside TnTargetableComponent picker index 4 ("Homing Lock": robot 4 deg / 600-700 UU; car
+// 4 deg / 500-700 UU; other vehicle forms use the car picker [PROV]), dropped when in robot form and !CanLockOnToRobots.
+// A target accumulates LockOnTimer -> locked at LockOnTime; a target change resets it; with no target HoldLockOnTimer
+// drops the lock after HoldLockOnTime (at once when the target is dead).
+void World::tickHomingLock(float dt) {
+    Character& pc = player_.pawn();
+    const Weapon* w = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
+    if (!matchActive_ || localDead_ || pc.isTransforming() || !w || !w->projHoming || w->lockOnTime <= 0.0f) {
+        lockCandidate_ = lockTarget_ = -1; lockTimer_ = holdLockTimer_ = 0.0f; locked_ = false;
+        return;
+    }
+    // The picker ray is the crosshair (camera) ray, as firing aims through it.
+    const core::Vec3 eye = player_.controller().cameraPos();
+    const core::Vec3 fwd = core::forwardFromYawPitch(player_.controller().camYaw(), player_.controller().camPitch());
+    const float deg4 = 4.0f * 0.0174533f;
+    int best = -1; float bestAng = 1e9f;
+    for (MatchOpponent* o : opponents_) {
+        if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
+        const Character& t = o->pawn();
+        const bool robot = t.moveForm() == Form::Robot;
+        if (robot && !w->lockRobots) continue;
+        core::Vec3 d = t.actorLocation() - eye;
+        float dist = core::length(d);
+        if (dist < 1e-3f || dist > w->rangeM) continue;
+        const float minR = robot ? 6.0f : 5.0f, maxR = 7.0f;
+        float half = std::max(std::atan(minR / dist), std::min(deg4, std::atan(maxR / dist)));
+        half = std::min(half, std::atan(maxR / dist));
+        float ang = std::acos(core::clampf(core::dot(d * (1.0f / dist), fwd), -1.0f, 1.0f));
+        if (ang <= half && ang < bestAng) { bestAng = ang; best = o->matchPlayer(); }
+    }
+    if (best >= 0) {
+        holdLockTimer_ = 0.0f;
+        if (best != lockCandidate_) { lockCandidate_ = best; lockTimer_ = 0.0f; if (best != lockTarget_) locked_ = false; }
+        lockTimer_ += dt;
+        if (lockTimer_ >= w->lockOnTime && (w->ammo > 0 || w->magSize <= 0)) { locked_ = true; lockTarget_ = best; }
+    } else {
+        lockCandidate_ = -1; lockTimer_ = 0.0f;
+        if (locked_) {
+            holdLockTimer_ += dt;
+            if (holdLockTimer_ >= w->holdLockOnTime || !matchPawn(lockTarget_)) { locked_ = false; lockTarget_ = -1; holdLockTimer_ = 0.0f; }
+        }
+    }
 }
 
 } // namespace game

@@ -60,7 +60,10 @@ struct HudGameState {
     std::vector<Ability> abilities;
     bool dodging = false;
     bool cloaked = false;
-    int hoverState = 0;                          // 1 rising to hover, 2 hovering (TnAcrobaticsManager)                        // TnBuffCloak active (Rendering: cloak shader)
+    int hoverState = 0;
+    int lockTarget = -1;                         // homing weapon: target match player (-1 none)
+    float lockProgress = 0.0f;                   // LockOnTimer / LockOnTime
+    bool locked = false;                         // lock acquired (the next shot homes)                          // 1 rising to hover, 2 hovering (TnAcrobaticsManager)                        // TnBuffCloak active (Rendering: cloak shader)
     // CTF / EXT: attacking team (GRI.AttackingTeam), rounds, carried objectives, planted bomb (CurrentObjectiveCountdown).
     int attackingTeam = 255, currentRound = 0, rounds = 0;
     bool betweenRounds = false;
@@ -227,7 +230,12 @@ public:
     bool applyMatchDamage(int victimPlayer, int instigatorPlayer, float amount, bool aoe, const std::string& damageType = std::string());
     // Projectiles (TnProjectile + its TnProjectileData): straight flight at InitialSpeed (homing lock-on PARTIAL); on any hit
     // HurtRadius(Damage, DamageRadius) with stock UE3 linear falloff [HIGH]; the instigator is not hit by its own shot.
-    struct Projectile { core::Vec3 pos, vel; float damage, radius, life; std::string damageType; int instigator; };
+    struct Projectile {
+        core::Vec3 pos, vel; float damage, radius, life; std::string damageType; int instigator;
+        int target = -1;                       // homing target match player (SetTarget; -1 = flies straight)
+        float homingForce = 0, closingDist = 0, closingForce = 0, closingTime = 0, maxSpeed = 0, closingRemain = -1.0f;
+        bool lockRobots = false;
+    };
     void spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const Weapon& w, int instigator);
     const std::vector<Projectile>& projectiles() const { return projectiles_; }
     void fireHitscanWith(const Weapon& w, const core::Vec3& origin, const core::Vec3& dirIn);
@@ -325,6 +333,12 @@ private:
     std::vector<Projectile> projectiles_;
     void tickProjectiles(float dt);
     void tickAbilityEffects(float dt);
+    void tickHomingLock(float dt);
+    const Character* matchPawn(int matchPlayer) const;
+    // TnWeaponHoming lock state of the local pawn's active weapon.
+    int lockCandidate_ = -1, lockTarget_ = -1;
+    float lockTimer_ = 0.0f, holdLockTimer_ = 0.0f;
+    bool locked_ = false;
     void startLocalMelee(bool whirlwind);
     void tickLocalMelee(float dt);
     bool deferredKillstreak_ = false;

@@ -175,6 +175,20 @@ Inputs:
       (the LightMedium shared set is used for all).
   - Tests (WFC_PARTICIPANTTEST 7/7): Q 150 with a 5.4 m lunge; Whirlwind refused during the swing, hits in both
     early windows, cooldown held until the end.
+- **Homing lock-on** [CONF RE TARGETED_PASS3 §H2; authored WEPDATA / PROJDATA in WeaponTable.inc]:
+  - TnWeaponHoming.Active.Tick for the active weapon (on foot or the vehicle weapon).
+  - Target: an enemy within weapon range inside picker index 4 about the crosshair ray: 4°, clamped to cover
+    600–700 UU (robots) or 500–700 UU (cars; other vehicle forms use the car picker [PROV]).
+    Robots are skipped while CanLockOnToRobots is false (every MP homing weapon).
+  - Lock: LockOnTimer reaches LockOnTime → locked; a target change resets it; HoldLockOnTime drops it
+    with no target.
+  - The shot carries the target only if locked. The projectile homes with HomingForce, switches to
+    ClosingForce within ClosingDistance and explodes after ClosingTime; capped at MaxSpeed; stops homing if
+    the target dies or becomes a robot.
+  - HUD: lockTarget / lockProgress / locked.
+  - Test: no lock on a robot; vehicle lock at 0.52 s (0.5 s + frame); the rocket aimed 4 m off at 50 m hits.
+- **Splash falloff** now subtracts the victim's collision radius before scaling:
+  Dist = max(d − ColRadius, 0), scale 1 − Dist/DamageRadius [HIGH stock UE3 Actor.TakeRadiusDamage].
 - Barrier, RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].

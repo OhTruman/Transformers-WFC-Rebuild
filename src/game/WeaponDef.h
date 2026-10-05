@@ -30,6 +30,8 @@ struct WeaponDef {
     const char* muzzleFx; const char* tracerFx;
     // Projectile (WeaponProjectiles[0] -> its MultiplayerData TnProjectileData): speed m/s, damage, radius m, type, homing.
     float projSpeed, projDamage, projRadiusM; const char* projDamageType; bool projHoming;
+    // TnProjectileDataHoming (m/s2, m, s) and the weapon's TnWeaponHoming lock values [CONF authored].
+    float homingForce, closingDistM, closingForce, closingTime, projMaxSpeed, lockOnTime, holdLockOnTime; bool lockRobots;
 };
 
 // By provider UniqueId or class id (case-sensitive); null when unknown.

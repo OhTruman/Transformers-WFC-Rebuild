@@ -111,6 +111,7 @@ it for the weapon icon / DeathString lookup.
 | Carried objectives | `carried[]` {kind 0 flag / 1 bomb, holder, holderTeam, dropped, active, pos, autoReturn, returnLeft, sleep}, `localCarrying` | flag-return progress = 1 − returnLeft / 10 |
 | Bomb | `bombPlanted`, `bombFuse` (CurrentObjectiveCountdown), `bombDefuse`, `bombPlantTeam` | |
 | Objective markers | `objectives[]` for every active-in-mode objective (DOM, KOTH, flag factories, capture points, bomb, plant points) with `ownerTeam` and `active` | |
+| Homing lock | `lockTarget` (match player, −1 none), `lockProgress` 0..1, `locked` | LockOn marker on the target; sound event 14 on lock |
 | Tags | `tags[].label` | false while the tagged pawn is cloaked |
 
 Events added to `MatchEvent::Type` (appended at the end): `RoundEnded`, `RoundStarted`.
