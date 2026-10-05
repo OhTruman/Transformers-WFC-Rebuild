@@ -17,6 +17,12 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 26 — DEBRIS SIGN COMPILE, ION BLASTER TRACER SLABS (2026-10-05, overnight)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Debris Megatron_com_Mat GLSL compile error | Panner_1591's Time is a float3 (Clamp(Desaturation(...)) × 1); matc emitted vec3 * vec2. The cooked material carries no compile errors and hundreds of shipped materials rely on the same lenient vector coercion | expression trace; cooked tail has no error strings | HIGH | matc Panner / Rotator truncate a vector Time like HLSL (.xy / .x), counted as type_violations like binop. Only GLSL that previously failed changes. Debris: 0 compile failures |
+| Ion Blaster grey slabs (Integration E2E) | WeaponFx (Systems) draws the tracer smoke ribbon at flat 0.35 opacity; the original Tracer_Smoke_MAT multiplies by an across-width mask (1 − 4(v−.5)²)² (0 at both long edges) and an end fade clamp(20u)·clamp(3(1−u)) | matc compile of TransGame FX_Materials_p.Materials.Tracer_Smoke_MAT; repro WFC_AUTOFIRE Streets s0 | CONFIRMED (material graph); GAMEPLAY/SYSTEMS code, not renderer | handed to Systems with the formula; renderer unchanged |
+
 ## MILESTONE 25 — POST-PROCESS VOLUME GRADES, CLUT PATH, HARNESS (2026-10-05, overnight)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
