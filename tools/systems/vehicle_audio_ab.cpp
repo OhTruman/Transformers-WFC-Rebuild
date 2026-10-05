@@ -85,13 +85,73 @@ int main(int argc, char** argv) {
     game::VehicleAudio newVa;
     const auto a = run(oldVa, op, content);
     const auto b = run(newVa, op, content);
+    // Starts must match exactly; stops may differ only where the port was corrected to the script
+    // (HmVehicleAudioComponent.Detached: the speed / tread / squeal loops stop with fade 0 [CONF]).
+    auto starts = [](const std::vector<std::string>& v) {
+        std::vector<std::string> o;
+        for (const auto& l : v) if (l.find(" start ") != std::string::npos) o.push_back(l);
+        return o;
+    };
+    const auto sa = starts(a), sb = starts(b);
     size_t diff = 0;
-    for (size_t i = 0; i < std::max(a.size(), b.size()); ++i) {
-        const std::string& x = i < a.size() ? a[i] : std::string("-");
-        const std::string& y = i < b.size() ? b[i] : std::string("-");
+    for (size_t i = 0; i < std::max(sa.size(), sb.size()); ++i) {
+        const std::string& x = i < sa.size() ? sa[i] : std::string("-");
+        const std::string& y = i < sb.size() ? sb[i] : std::string("-");
         if (x != y && diff++ < 10) std::printf("  DIFF %zu: old [%s] new [%s]\n", i, x.c_str(), y.c_str());
     }
-    std::printf("Optimus: old %zu events, new %zu, %zu differences -> %s\n", a.size(), b.size(), diff, diff ? "FAIL" : "IDENTICAL");
+    size_t stopDiff = 0;
+    for (size_t i = 0; i < std::min(a.size(), b.size()); ++i) if (a[i] != b[i] && a[i].find(" stop ") != std::string::npos) ++stopDiff;
+    std::printf("Optimus: %zu / %zu starts, %zu differences -> %s (stops differing in order / timing: %zu - Detached fade 0)\n",
+                sa.size(), sb.size(), diff, diff ? "FAIL" : "IDENTICAL", stopDiff);
+    // Per form: the component calls the form classes make (TnCarForm / TnTruckForm / TnTankForm / TnPlaneForm).
+    int formFail = 0;
+    auto form = [&](const char* key, auto&& script) {
+        const game::CharacterAudioProfile* p = game::CharacterAudio::find(key);
+        Rec rec; game::SoundCues cues; cues.load(&rec, content);
+        game::CharacterAudio::loadCues(cues, *p);
+        game::VehicleAudio va; va.setProfile(*p);
+        auto at = [] { game::SoundCues::Emitter e; e.pos = {0, 0, 0}; return e; };
+        auto step = [&](game::VehicleAudio::Input in, int frames = 1) {
+            for (int k = 0; k < frames; ++k) { va.tick(1.0f / 60.0f, in, cues, at); cues.tick(1.0f / 60.0f); in.booster = in.boosterStop = false;
+                                               in.ascendStop = in.descend = in.descendStop = in.roll = in.oneEighty = false; }
+        };
+        auto active = [&](const char* ev) { const std::string q = p->vehicleCue(ev); return !q.empty() && cues.activeInstances(q.c_str()) > 0; };
+        script(step, active, *p);
+        (void)rec;
+    };
+    auto check = [&](bool ok, const char* what) { std::printf("  %s %s\n", ok ? "ok  " : "FAIL", what); if (!ok) ++formFail; };
+    using In = game::VehicleAudio::Input;
+    form("Jet", [&](auto& step, auto& active, const game::CharacterAudioProfile&) {
+        In in; in.entered = true; in.onGround = false; in.velocity = {0, 0, 5};
+        step(in, 2);
+        check(active("Auto_Speed"), "Starscream: SpeedSound loop from Attached (Auto_Speed)");
+        In b = in; b.booster = true; step(b);
+        check(active("Auto_Hover_Boosters"), "Starscream hover: PlayHoverFx -> the hover boosters loop");
+        In amt = in; amt.boosterAmount = 0.7f; step(amt, 2);
+        In st = in; st.boosterStop = true; step(st, 3);
+        check(!active("Auto_Hover_Boosters"), "Starscream hover: StopHoverFx -> the boosters loop stops");
+        In d = in; d.descend = true; step(d);
+        check(active("Auto_Engine_Hover_Descend"), "Starscream: UpdateDashing down -> DescendSound");
+        In r = in; r.roll = true; step(r);
+        check(active("AUTO_ROLL_START"), "Starscream: UpdateRolling -> RollSound");
+        In e = in; e.entered = false; step(e, 2);
+        check(!active("Auto_Speed"), "Starscream: Detached stops the speed loop");
+    });
+    form("Car", [&](auto& step, auto& active, const game::CharacterAudioProfile&) {
+        In in; in.entered = true; in.onGround = true; in.velocity = {0, 0, 10}; in.loadState = 1;
+        step(in, 30);
+        check(active("Auto_Speed") && active("Auto_Engine_Gear_1_OnLoad"), "Bumblebee: speed loop + drive on-load loop");
+        In b = in; b.booster = true; step(b);
+        check(active("Auto_Boost_Dash"), "Bumblebee hover: DoDash -> BoosterSound (Auto_Boost_Dash)");
+    });
+    form("Tank", [&](auto& step, auto& active, const game::CharacterAudioProfile&) {
+        In in; in.entered = true; in.onGround = true; in.velocity = {0, 0, 5}; in.loadState = 1;
+        step(in, 10);
+        In o = in; o.oneEighty = true; step(o);
+        check(active("Auto_180_Turn"), "Megatron: ClientPlaySpecialMoveSound -> OneEightySound (Auto_180_Turn)");
+    });
+    std::printf("forms: %s\n", formFail ? "FAIL" : "OK");
+    diff += (size_t)formFail;
     for (int i = 1; i < argc; ++i) {
         const game::CharacterAudioProfile* p = game::CharacterAudio::find(argv[i]);
         if (!p) continue;

@@ -1855,8 +1855,12 @@ static void testLocalizedWaves() {
         host.unload();
         return out;
     };
-    auto noTree = loadedPaths(nullptr);
-    CHECK(noTree.empty(), "no _LOC_int twin extracted: the French match-start copy is NOT played (%zu loaded)", noTree.size());
+    // AssetTools extracts both twins into content/_LOC/<twin>/ (int: the English line).
+    auto shipped = loadedPaths(nullptr);
+    bool shippedInt = !shipped.empty();
+    for (const std::string& p : shipped) shippedInt = shippedInt && p.find("/_LOC/int/") != std::string::npos;
+    CHECK(shippedInt, "match-start line from content/_LOC/int (AssetTools twins), never the merged French copy (%zu loaded: %s)",
+          shipped.size(), shipped.empty() ? "-" : shipped[0].c_str());
     const std::string tree = "F:/Transformers Rebuild/Rebuild-Systems/work/m8_loc/tree";
     std::FILE* fp = std::fopen((tree + "/int/WL_DX_OPRIME/DX_OPRIME_LK002657.wav").c_str(), "rb");
     if (fp) {

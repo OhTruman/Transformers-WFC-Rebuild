@@ -36,8 +36,9 @@ struct VehicleAudioComponentData {
     bool useJumpRev = false;                   // JumpRevSounds.UseJumpRev
     std::vector<Land> hoverLand, boostLand;    // TimeInAirThreshold ascending
     std::string boost, boostWheels, boostStop, ascend, ram, booster, nitro, squeal;
+    std::string speed, ascendStop, descend, descendStop, roll, oneEighty, enter, exit, tread;
     float boostFadeIn = 0.1f, boostFadeOut = 0.1f, boostWheelsDelay = 0.25f, squealMinMph = 3.0f, squealFade = 0.1f;
-    float engineFadeIn = 0.1f, engineFadeOut = 0.1f, jumpRevTime = 0.25f, oneshotSpazTime = 1.0f;
+    float engineFadeIn = 0.1f, engineFadeOut = 0.1f, jumpRevTime = 0.25f, oneshotSpazTime = 1.0f, treadFade = 0.1f;
     int speedHistory = 15;
 };
 

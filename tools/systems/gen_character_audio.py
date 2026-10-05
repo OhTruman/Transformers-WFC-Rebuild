@@ -102,13 +102,16 @@ def vehicle_component(definition):
             'jump_rev': {'use': bool(jr.get('UseJumpRev', False)), 'loops': loops(jr, 'JumpRevLoops'), 'oneshots': loops(jr, 'JumpRevOneshots')},
             'hover_land': land('HoverLandSound'), 'boost_land': land('BoostLandSound'),
             'slots': {k: ev_name(d.get(k)) for k in ('BoostSound', 'BoostWheelsSound', 'BoostStopSound', 'AscendSound', 'RamSound',
-                                                     'BoosterSound', 'NitroSound', 'DefaultTireSquealSound')},
+                                                     'BoosterSound', 'NitroSound', 'DefaultTireSquealSound', 'SpeedSound',
+                                                     'AscendStopSound', 'DescendSound', 'DescendStopSound', 'RollSound',
+                                                     'OneEightySound', 'EnterSound', 'ExitSound', 'DefaultTireTreadSound')},
             'tunables': {'boost_fade_in': f(d, 'BoostFadeInTime', 0.1), 'boost_fade_out': f(d, 'BoostFadeOutTime', 0.1),
                          'boost_wheels_delay': f(d, 'BoostWheelsGroundCheckDelay', 0.25), 'squeal_min_mph': f(d, 'TireSquealSpeedMin', 3.0),
                          'squeal_fade': f(d, 'TireSquealCrossfadeTime', 0.1), 'engine_fade_in': f(d, 'EngineFadeInTime', 0.1),
                          'engine_fade_out': f(d, 'EngineFadeOutTime', 0.1), 'jump_rev_time': f(d, 'JumpRevTime', 0.25),
                          'oneshot_spaz_time': f(d, 'EngineOneshotSpazTime', 1.0),
-                         'speed_history': int(f(d, 'VehicleSpeedHistoryLength', 15))}}
+                         'speed_history': int(f(d, 'VehicleSpeedHistoryLength', 15)),
+                         'tread_fade': f(d, 'TireTreadCrossfadeTime', 0.1)}}
 
 profiles, all_cues = {}, set()
 for key, ch in roster['chassis'].items():

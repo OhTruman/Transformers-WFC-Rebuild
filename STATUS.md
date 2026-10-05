@@ -3,6 +3,17 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08c (2026-10-05) — playtest audio fixes (handoff: docs/handoff/SYSTEMS_M08C_AUDIO_HANDOFF.md)
+- **Extras movie → menu silence** — two fixes:
+  - the movie preset is now held by the caller's flag *or* the movie sound, so a GFx script movie releases it when its sound stops;
+  - one-shot instances are no longer retired after 10 s while their voice still sounds (the 380 s title music had gone unmanaged).
+  - Real device: Extras natural end, skip, back and consecutive all return the same music instance; no streams or voices left.
+- **French match-start line**: localized waves now come from the GLanguage `_LOC` twin (AssetTools `content/_LOC/<twin>/`). They are never substituted from another language; all match / announcer waves resolve to `int`.
+- **Vehicle audio per form**: the SpeedSound and tire-tread loops, BoosterSound as a loop (stop, BoosterAmount), and the ascend-stop, descend, roll, 180-turn, enter and exit events — all from HmVehicleAudioComponent.
+  - Optimus is unchanged (57 / 57 starts).
+  - Integration must feed the per-form signals (table in the handoff).
+- **Validation:** suite 612 / 0; movie probe OK; lifecycle 40 / 0; vehicle A/B + per-form OK; wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS MILESTONE 08 (2026-10-05) — every MP map, mode, character and movie-language audio
 - **All 10 processed MP maps** (BrokenHope, Remnant, Berth, Rust, Seed, Streets, Molten, Debris, Complex, Gorge) go
   through one generic runtime. There are no per-map source branches.
