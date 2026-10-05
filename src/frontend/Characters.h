@@ -37,6 +37,7 @@ struct CharacterPreset {
 
 struct ChassisInfo {
     std::string id, displayName, specialty, availability, robotGltf, vehicleGltf;
+    std::vector<std::string> robotAnimSets;   // robot.anim_sets (roster package): the preview idle's AnimSets
     int faction = 3;                          // FactionRestriction 0 Autobot, 1 Decepticon, 3 neutral
     bool lockedChassis = false, lockedCharacter = false;
 };
@@ -52,11 +53,16 @@ public:
     const std::vector<CharacterPreset>& customCharacters() const { return characters_; }
     const CharacterPreset* find(const std::string& name) const;
     CharacterPreset* findMutable(const std::string& name);
-    void reset(const std::string& name);       // TnLocalPlayer.ResetCharacter: back to the class preset
+    // TnCharacterCustomizationData.ResetCharacterFromName (TnLocalPlayer.ResetCharacter): the class preset, the
+    // FriendlyName kept, and random colour palettes / coordinates (colours black = "sample the palette").
+    void reset(const std::string& name);
+    // Fresh profile (FillCharacterSlots -> ResetCharacterFromName per slot): every character gets random palettes.
+    void randomizeAllColors();
     // Customization file (PC original: TnLocalPlayer.WriteCustomizationFile; the rebuild's file is wfc_characters.ini).
     bool save(const std::string& path) const;
     void loadSaved(const std::string& path);
     const ChassisInfo* chassis(const std::string& id) const;
+    int numberOfColorPalettes = 5;            // TnCharacterCustomizationData.NumberOfColorPalettes (authored)
     const std::map<std::string, ChassisInfo>& allChassis() const { return chassis_; }
 
 private:

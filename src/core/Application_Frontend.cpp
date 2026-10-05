@@ -173,6 +173,7 @@ void Application::attachPresenter() {
         return presenter_ && presenter_->clipWindowCenter(path, x, y);
     };
     // Create a Character palette swatches (GetPixelColor): pixel of the palette PNG, images cached for the session.
+    frontend_->externalTexturePath = [this](const std::string& res) { return presenter_ ? presenter_->externalTexturePath(res) : std::string(); };
     frontend_->sampleImage = [](const std::string& png, int x, int y, int& r, int& g, int& b) {
         static std::map<std::string, render::ImageData> cache;
         auto it = cache.find(png);
@@ -183,8 +184,10 @@ void Application::attachPresenter() {
         }
         const render::ImageData& im = it->second;
         if (!im.valid()) return false;
-        x = std::max(0, std::min(im.w - 1, x));
-        y = std::max(0, std::min(im.h - 1, y));
+        // x, y are in the picker's 256-unit gradient space (CustomTransformers_GFX gradWidth / gradHeight 256, the
+        // swatch selector's _x / _y); the palette textures are 128 x 128 [HIGH: the native GetPixelColor scaling].
+        x = std::max(0, std::min(im.w - 1, x * im.w / 256));
+        y = std::max(0, std::min(im.h - 1, y * im.h / 256));
         const uint8_t* px = &im.rgba[((size_t)y * (size_t)im.w + (size_t)x) * 4];
         r = px[0]; g = px[1]; b = px[2];
         return true;
@@ -203,12 +206,19 @@ void Application::attachPresenter() {
     };
     // Create a Character preview pawns -> the scene adapter (drawn by the renderer when it has the preview entry points).
     frontend_->previewHook = [](const frontend::FrontendRuntime::PreviewRequest& pr) {
-        if (!g_scene || pr.call != "UpdatePreviewCharacter") return;
+        if (!g_scene) return;
+        if (pr.call == "TransformPreviewCharacter" || pr.call == "TransformPreviewCharacterToRobot") {
+            g_scene->transformPreview(pr.call == "TransformPreviewCharacterToRobot");
+            return;
+        }
+        if (pr.call != "UpdatePreviewCharacter") return;
         std::vector<FrontendSceneGL::PreviewSlot> slots;
         for (const auto& s : pr.slots) {
             if (s.robotGltf.empty()) continue;
             FrontendSceneGL::PreviewSlot ps;
             ps.gltf = s.robotGltf;
+            ps.vehicleGltf = s.vehicleGltf;
+            ps.animSets = s.robotAnimSets;
             for (int k = 0; k < 3; ++k) { ps.pos[k] = s.posUE[k]; ps.primary[k] = s.primaryLinear[k]; ps.secondary[k] = s.secondaryLinear[k]; }
             ps.yawDeg = s.rotUEdeg[1];
             slots.push_back(ps);
@@ -305,12 +315,9 @@ void Application::runFrontend() {
         // frontend runs, the lifecycle driver) selects the first default character instead unless WFC_CHARSELECT=1.
         bool automated = std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_FRONTEND_AUTOPLAY") || std::getenv("WFC_LIFECYCLE");
         if (automated && !std::getenv("WFC_CHARSELECT")) {
-            frontend::GameFlow::SelectedCharacter sc;
-            if (!frontend_->roster().customCharacters().empty()) {
-                const auto& p = frontend_->roster().customCharacters().front();
-                sc.name = p.name; sc.specialty = p.specialty; sc.chassis[0] = p.chassis[0]; sc.chassis[1] = p.chassis[1];
-            }
-            flow.selectCharacter(sc);
+            // Same contract as Customize.SelectCharacter (the first custom slot), not a second derivation.
+            std::string first = frontend_->roster().customCharacters().empty() ? std::string() : frontend_->roster().customCharacters().front().name;
+            flow.selectCharacter(frontend_->selectionFor(first));
         }
         localDeadForUi_ = spectatingUi_ = false;
         localDeadTime_ = 0.0f;
@@ -422,6 +429,29 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     return true;
 }
 
+namespace {
+// Gameplay's full CharacterSelection (agents/gameplay 1216e80: chassisByFaction, colours, loadout lists) is filled from
+// the Frontend contract when this tree has it; older Gameplay keeps the chassisId-by-team mapping only.
+template <class CS, class = void> struct HasFullSelection : std::false_type {};
+template <class CS> struct HasFullSelection<CS, std::void_t<decltype(std::declval<CS&>().chassisByFaction[0]),
+                                                            decltype(std::declval<CS&>().primary[0].palette),
+                                                            decltype(std::declval<CS&>().weapons)>> : std::true_type {};
+template <class CS> void fillFullSelection(CS& cs, const frontend::GameFlow::SelectedCharacter& fc) {
+    if constexpr (HasFullSelection<CS>::value) {
+        for (int f = 0; f < 2; ++f) {
+            cs.chassisByFaction[f] = fc.chassis[f];
+            auto col = [](const frontend::GameFlow::CharacterColorSel& in, auto& out) {
+                out.r = in.r; out.g = in.g; out.b = in.b; out.a = in.a; out.palette = in.palette; out.x = in.x; out.y = in.y;
+            };
+            col(fc.primary[f], cs.primary[f]);
+            col(fc.secondary[f], cs.secondary[f]);
+        }
+        cs.weapons = fc.weapons; cs.vehicleWeapons = fc.vehicleWeapons; cs.melee = fc.melee;
+        cs.abilities = fc.abilities; cs.skills = fc.skills;
+    } else { (void)cs; (void)fc; }
+}
+}
+
 void Application::routeMatchToFrontend(float dt) {
     frontend::GameFlow& flow = frontend_->flow();
     const int me = world_.localMatchPlayer();
@@ -437,27 +467,17 @@ void Application::routeMatchToFrontend(float dt) {
         const int team = world_.match().players()[(size_t)me].team;
         cs.chassisId = fc.chassis[team == 1 ? 1 : 0].empty() ? fc.chassis[0] : fc.chassis[team == 1 ? 1 : 0];
         cs.customSlot = fc.name;
-        // [integration M07] The whole TnPlayerCharacterData, not only the class: the custom character's ChassisTypes
-        // per faction (what Create a Character previewed and saved), its colours and loadout lists. Without these a
-        // custom character resolved to the class preset body, so the preview and the spawned body could disagree.
-        for (int f = 0; f < 2; ++f) cs.chassisByFaction[f] = fc.chassis[f];
-        if (const frontend::CharacterPreset* p = frontend_->roster().find(fc.name)) {
-            for (int f = 0; f < 2; ++f) {
-                if (cs.chassisByFaction[f].empty()) cs.chassisByFaction[f] = p->chassis[f];
-                const frontend::CharacterColor* src[2] = {&p->primary[f], &p->secondary[f]};
-                game::CharacterColor* dst[2] = {&cs.primary[f], &cs.secondary[f]};
-                for (int k = 0; k < 2; ++k) {
-                    dst[k]->r = src[k]->r; dst[k]->g = src[k]->g; dst[k]->b = src[k]->b; dst[k]->a = src[k]->a;
-                    dst[k]->palette = src[k]->palette; dst[k]->x = src[k]->x; dst[k]->y = src[k]->y;
-                }
-            }
-            cs.weapons = p->weapons; cs.vehicleWeapons = p->vehicleWeapons; cs.melee = p->melee;
-            cs.abilities = p->abilities; cs.skills = p->skills;
-        }
+        fillFullSelection(cs, fc);
         world_.match().selectCharacter(me, cs);
         selectionSent_ = true;
+        const int f = team == 1 ? 1 : 0;
         frontend::FlowTrace::emit("match.characterSelected", {{"name", fc.name}, {"type", std::to_string(cs.type)}, {"specialty", sp},
-                                                            {"chassis", game::resolveChassis(cs, team == 1 ? 1 : 0)}});
+                                                            {"faction", f == 1 ? "Decepticon" : "Autobot"},
+                                                            {"chassis", game::resolveChassis(cs, f)},
+                                                            {"body", fc.bodyAvailable[f] ? "available" : "MISSING"}});
+        if (!fc.bodyAvailable[f])
+            LOG_WARN("FRONTEND selection handoff: %s chassis %s has no body; the spawn will not be this character", fc.name.c_str(),
+                     fc.chassis[f].c_str());
     }
     const game::Match& match = world_.match();
     matchClock_ += dt;

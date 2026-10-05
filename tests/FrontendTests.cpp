@@ -146,6 +146,16 @@ static void testFlow() {
     FrontendRuntime rt;
     check(rt.init(), "flow.init");
     GameFlow& f = rt.flow();
+    {   // Selected-character contract: the committed custom slot, resolved once (Soldier = Warpath / Brawl).
+        GameFlow::SelectedCharacter s = rt.selectionFor("Soldier");
+        check(s.specialty == "Soldier" && s.chassis[0] == "Tank3" && s.chassis[1] == "Tank2" && s.type == 0, "selection.soldier_chassis");
+        check(!s.weapons.empty() && !s.vehicleWeapons.empty() && !s.melee.empty() && !s.abilities.empty(), "selection.soldier_loadout",
+              std::to_string(s.weapons.size()) + " weapons");
+        check(s.bodyAvailable[0] && s.bodyAvailable[1], "selection.soldier_bodies", s.robotGltf[0] + " | " + s.robotGltf[1]);
+        check(s.primary[1].palette >= 5 && s.primary[1].palette <= 9 && s.primary[0].palette <= 4, "selection.palette_ranges");
+        GameFlow::SelectedCharacter u = rt.selectionFor("NoSuchSlot");
+        check(!u.bodyAvailable[0] && !u.bodyAvailable[1] && u.chassis[0].empty(), "selection.unknown_slot_no_body");
+    }
     check(runUntil(rt, [&] { return f.frontEndStarted(); }), "flow.frontend_started");
     check(f.ui().state() == UIState::FrontEnd && f.ui().openMovie() == "UI_GFxFrontEnd_p.FrontEnd_GFX_1", "flow.frontend_ui");
     check(runUntil(rt, [&] { return f.level() == LevelKind::GameLobby && !f.loading().active; }), "flow.reached_gamelobby");

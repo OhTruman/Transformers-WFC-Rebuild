@@ -203,6 +203,13 @@ bool FrontendRuntime::init() {
     stores_ = std::make_unique<DataStores>(flow_, catalog_);
     roster_.load(Catalog::defaultManifestRoot() + "/mp_content/roster_package.json");
     roster_.loadAuthored(std::string(WFC_SOURCE_DIR) + "/data/frontend/character_presets.json");
+    // A fresh profile's characters are created with random palette colours (FillCharacterSlots ->
+    // ResetCharacterFromName) and written at once (MarkAsDirty -> the profile save); later runs load them.
+    if (!std::filesystem::exists(kCharactersFile)) {
+        roster_.randomizeAllColors();
+        roster_.save(kCharactersFile);
+        FlowTrace::emit("customize.freshProfile", {{"file", kCharactersFile}, {"colors", "random palettes"}});
+    }
     roster_.loadSaved(kCharactersFile);   // the player's edits (Create a Character)
     // SeqVar_TnCustomizationCameraId: the preview pawn's chassis provider's CustomizationCameraId (-1 without a pawn).
     scene_.cameraIdForSlot = [this](int slot) {
@@ -372,6 +379,36 @@ std::vector<std::string> splitCsv(const std::string& s) {
 std::string join2(const std::vector<std::string>& v) { std::string o; for (const auto& x : v) o += (o.empty() ? "" : ",") + x; return o; }
 }
 
+GameFlow::SelectedCharacter FrontendRuntime::selectionFor(const std::string& name) const {
+    // TnPlayerController.SelectCharacter(name, 0): the committed custom character, resolved once for Gameplay.
+    GameFlow::SelectedCharacter s;
+    s.name = name;
+    s.type = 0;
+    const CharacterPreset* c = roster_.find(name);
+    if (!c) return s;   // unknown slot: selection recorded, no chassis (bodyAvailable false)
+    s.friendlyName = c->friendlyName;
+    s.specialty = c->specialty;
+    s.weapons = c->weapons; s.vehicleWeapons = c->vehicleWeapons; s.melee = c->melee; s.abilities = c->abilities; s.skills = c->skills;
+    auto color = [](const CharacterColor& in) {
+        GameFlow::CharacterColorSel o;
+        o.r = in.r; o.g = in.g; o.b = in.b; o.a = in.a; o.palette = in.palette; o.x = in.x; o.y = in.y;
+        return o;
+    };
+    for (int f = 0; f < 2; ++f) {
+        s.chassis[f] = c->chassis[f];
+        s.primary[f] = color(c->primary[f]);
+        s.secondary[f] = color(c->secondary[f]);
+        if (const ChassisInfo* ci = roster_.chassis(c->chassis[f])) {
+            s.robotGltf[f] = ci->robotGltf;
+            s.vehicleGltf[f] = ci->vehicleGltf;
+            std::error_code ec;
+            s.bodyAvailable[f] = !ci->robotGltf.empty() &&
+                                 std::filesystem::exists(Catalog::defaultExtractedRoot() + "/" + ci->robotGltf, ec);
+        }
+    }
+    return s;
+}
+
 BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<std::string>& args) {
     // TnCharacterScriptBinding ("Customize.*") over the local characters (CharacterRoster: roster package presets).
     // Custom mode (iconic mode = GameTeamStatus 2 / 4 or OnlyAllowIconicCharacters is not wired yet: PARTIAL).
@@ -391,20 +428,18 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
     if (fn == "Customize.GetNewlyUnlockedSkills" || fn == "Customize.GetNewlyUnlockedAbilities") return BridgeValue(std::string());
     if (fn == "Customize.IsChassisUnlocked") { const ChassisInfo* ci = roster_.chassis(arg(0)); return BridgeValue(ci && !ci->lockedChassis); }
     if (fn == "Customize.SelectCharacter") {
-        GameFlow::SelectedCharacter s;
-        s.name = arg(0);
-        s.type = 0;
-        if (c) { s.chassis[0] = c->chassis[0]; s.chassis[1] = c->chassis[1]; s.specialty = c->specialty; }
-        flow_.selectCharacter(s);
+        flow_.selectCharacter(selectionFor(arg(0)));
         return {};
     }
     // ---- TnCharacterScriptBinding script bodies [CONFIRMED decompile] ----
     // GetPixelColor(TextureId, X, Y): the palette texture's pixel, packed "0xRRGGBB;TextureId;X;Y" (PackColorData).
-    // Palettes 0-4 autobotPalette_N, 5-9 decepticonPalette_N (UI_GFxCustomize_p, the movie's external textures).
+    // Palettes 0-4 autobotPalette_N, 5-9 decepticonPalette_N: OwnerMovie.ExternalTextures[TextureId], bound by the lobby
+    // movies (PartyLobby_GFX / GameLobby_GFX ExternalTextures -> UI_CustomChar_p.A_green ... D_teal, 128x128). The
+    // UI_GFxCustomize_p bitmaps of those names are "EXTERNAL TEXTURE" placeholders.
     auto pixel = [&](int tex, int x, int y) {
         int r = 0, g = 0, b = 0;
-        std::string png = Catalog::defaultExtractedRoot() + "/content/UI_GFxCustomize_p/" +
-                          (tex < 5 ? "autobotPalette_" : "decepticonPalette_") + std::to_string(tex) + ".png";
+        std::string res = (tex < 5 ? "autobotPalette_" : "decepticonPalette_") + std::to_string(tex);
+        std::string png = externalTexturePath ? externalTexturePath(res) : std::string();
         if (!sampleImage || !sampleImage(png, x, y, r, g, b))
             FlowTrace::emit("customize.palette", {{"texture", std::to_string(tex)}, {"sampled", "false"}});
         return hexColor(r, g, b) + ";" + std::to_string(tex) + ";" + std::to_string(x) + ";" + std::to_string(y);
@@ -432,7 +467,9 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
         PreviewRequest pr;
         pr.call = fn.substr(10);
         if (fn == "Customize.UpdatePreviewCharacter") {
-            pr.chassis = splitCsv(arg(0)); pr.primary = splitCsv(arg(1)); pr.secondary = splitCsv(arg(2));
+            // CustomTransformers_GFX HmExternalInterface.Customize.UpdatePreviewCharacter(CharacterChassis, CharacterFaction,
+            // CharacterPrimary, CharacterSecondary) forwards all four; the binding body never reads the faction [CONFIRMED].
+            pr.chassis = splitCsv(arg(0)); pr.primary = splitCsv(arg(2)); pr.secondary = splitCsv(arg(3));
             // Authored spawn points (authored.db: SeqAct_TnPawnFactory_8107 "Autobot" / _10632 "Decepticon"; rotation
             // yaw 16-bit units -> degrees). The pawn's ground snap (OnPreviewPawnTick FindGround) is Gameplay's.
             static const float kPos[2][3] = {{-285.862f, 5587.910f, 179.0f}, {-286.862f, 4701.910f, 179.0f}};
@@ -450,7 +487,11 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
             for (size_t i = 0; i < pr.chassis.size() && i < 2; ++i) {
                 PreviewRequest::Slot sl;
                 sl.chassis = pr.chassis[i];
-                if (const ChassisInfo* ci = roster_.chassis(sl.chassis)) sl.robotGltf = ci->robotGltf;   // roster package
+                if (const ChassisInfo* ci = roster_.chassis(sl.chassis)) {   // roster package
+                    sl.robotGltf = ci->robotGltf;
+                    sl.vehicleGltf = ci->vehicleGltf;
+                    sl.robotAnimSets = ci->robotAnimSets;
+                }
                 for (int k = 0; k < 3; ++k) sl.posUE[k] = kPos[i][k];
                 sl.rotUEdeg[1] = kYaw[i];
                 if (i < pr.primary.size()) linear(pr.primary[i], sl.primaryLinear);
@@ -459,7 +500,7 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
             }
         }
         if (previewHook) previewHook(pr);
-        FlowTrace::emit("customize.preview", {{"call", pr.call}, {"chassis", arg(0)}, {"primary", arg(1)}, {"secondary", arg(2)},
+        FlowTrace::emit("customize.preview", {{"call", pr.call}, {"chassis", arg(0)}, {"primary", arg(2)}, {"secondary", arg(3)},
                                               {"owner", previewHook ? "renderer" : "none"}});
         return {};
     }

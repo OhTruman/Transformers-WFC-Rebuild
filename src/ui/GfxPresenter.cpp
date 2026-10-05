@@ -149,6 +149,19 @@ Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
     // Customize.CommitCharacter weapon list of an unset slot.
     for (const Value& v : a) sa.push_back(v.isNullish() ? std::string() : m.player().vm().toString(v));
     if (fn == "HmObjectInterpolator.addInterp") return hudInterpAdd(m, a);
+    if (fn == "Input.RegisterLeftStickCallback" && !sa.empty()) {
+        for (auto& c : stickCallbacks_) if (c.movie == m.object() && c.path == sa[0]) return Value();
+        stickCallbacks_.push_back({m.object(), sa[0]});
+        frontend::FlowTrace::emit("gfx.stickCallback", {{"movie", m.object()}, {"path", sa[0]}, {"registered", "true"}});
+        return Value();
+    }
+    if (fn == "Input.UnregisterLeftStickCallback") {
+        // No argument: the movie's callback goes (HmPickablePalette.disableInput).
+        for (size_t i = stickCallbacks_.size(); i-- > 0;)
+            if (stickCallbacks_[i].movie == m.object()) stickCallbacks_.erase(stickCallbacks_.begin() + (long)i);
+        frontend::FlowTrace::emit("gfx.stickCallback", {{"movie", m.object()}, {"registered", "false"}});
+        return Value();
+    }
     if (fn == "HmActionScript.setColor") { if (a.size() >= 2) setColorHex(m.player().vm(), a[0], a[1]); return Value(); }
     if (fn == "Self.Close" && m.object() == kPopupMovie) {
         // The message box movie closed itself (its own CloseMessagePrompt path).
@@ -505,6 +518,19 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     }
     deliverKeys(in);
     deliverMouse(in);
+    if (!stickCallbacks_.empty()) {
+        // Left stick for registered callbacks: the pad (XInput +Y up -> +Y down) or, on PC, the held arrow keys as full
+        // deflection [PC ADAPTATION: the shipped PC binding of the picker cursor is native].
+        float sx = in.padLX, sy = -in.padLY;
+        if (in.uiIsDown(platform::UiKey::Left)) sx = -1;
+        if (in.uiIsDown(platform::UiKey::Right)) sx = 1;
+        if (in.uiIsDown(platform::UiKey::Up)) sy = -1;
+        if (in.uiIsDown(platform::UiKey::Down)) sy = 1;
+        std::vector<StickCallback> cbs = stickCallbacks_;
+        for (const StickCallback& c : cbs)
+            for (Open& op : movies_)
+                if (op.object == c.movie) op.movie->invoke(c.path, {Value((double)sx), Value((double)sy)});
+    }
     if (cursor_) cursor_->advance(dt);
     if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); }
     if (scoreboard_) scoreboard_->advance(dt);

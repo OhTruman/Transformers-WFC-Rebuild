@@ -126,7 +126,27 @@ public:
     bool matchHasBegun() const { return matchHasBegun_; }
     // TnPlayerController.SelectCharacter(name, type 0 custom / 1 iconic) -> PRI._SelectedCharacter; Gameplay spawns the
     // chassis of the player's team from it (GetResolvedCharacterFaction = TeamNum).
-    struct SelectedCharacter { std::string name; int type = 0; std::string chassis[2]; std::string specialty; bool valid = false; };
+    //
+    // The selected-character contract (Frontend -> Gameplay). Filled once, from the committed character, when the movie
+    // calls Customize.SelectCharacter; Gameplay spawns from it and must not derive the character again.
+    // - name: the custom slot (CharacterName, e.g. "Scout"); type 0 custom / 1 iconic (iconic: chassis[] = UniqueIds).
+    // - Per faction f (0 Autobot, 1 Decepticon): Gameplay uses f = the player's team (GetResolvedCharacterFaction =
+    //   TeamNum). bodyAvailable[f] = the roster robot glTF exists; when false the selection is still the player's choice
+    //   but no body can be spawned for that faction (reported, never silently replaced).
+    // - Colours as stored in the customization data: rgb black (0,0,0,255) = kUseDefaultColor, the material's default
+    //   paint (TnCharacterApplier.ExtractColors); otherwise sRGB. palette / x / y = the picker swatch (Create a Character).
+    struct CharacterColorSel { int r = 0, g = 0, b = 0, a = 255; int palette = 0; float x = 0, y = 0;
+                               bool useDefault() const { return r == 0 && g == 0 && b == 0 && a == 255; } };
+    struct SelectedCharacter {
+        std::string name, friendlyName;
+        int type = 0;
+        std::string specialty;
+        std::string chassis[2], robotGltf[2], vehicleGltf[2];
+        bool bodyAvailable[2] = {false, false};
+        CharacterColorSel primary[2], secondary[2];
+        std::vector<std::string> weapons, vehicleWeapons, melee, abilities, skills;
+        bool valid = false;
+    };
     void selectCharacter(const SelectedCharacter& c);
     void clearSelectedCharacter();   // PRI.ClearCharacter
     const SelectedCharacter& selectedCharacter() const { return selected_; }
