@@ -490,9 +490,39 @@ public:
             if (dot == std::string::npos) continue;
             assets::loadAnimationsByName(content + s.substr(0, dot) + "/" + s.substr(dot + 1) + ".anim.gltf", b->model);
         }
-        b->clip = b->model.clipByName(anim);
-        if (b->clip < 0) LOG_WARN("preview body %s: sequence %s not in its AnimSets; reference pose", gl.c_str(), anim.c_str());
-        else LOG_INFO("preview body %s: %s (%.2f s)", gl.c_str(), anim.c_str(), b->model.clips[(size_t)b->clip].duration);
+        // UAnimNodeSequence::SetAnim (WFC xex Function_82E3FF48, RE): the requested name is first remapped through the
+        // AnimSets' ChooserGroups, last set first; the first set with that group supplies the anim (weighted pick).
+        // render data _ui/anim_choosers.json (tools/render/build_anim_choosers.py). Cust_Idle -> NAV_Idle on e.g.
+        // Sideswipe / Barricade.
+        std::string resolved = anim;
+        {
+            static assets::Json choosers;
+            static bool loaded = false;
+            if (!loaded) {
+                loaded = true;
+                std::ifstream f(wfc::Pipeline::renderDataRoot() + "/_ui/anim_choosers.json");
+                std::stringstream ss; ss << f.rdbuf();
+                if (!f || !assets::Json::parse(ss.str(), choosers))
+                    LOG_WARN("preview body: no _ui/anim_choosers.json (rebuild render data); sequences used as named");
+            }
+            const assets::Json& S = choosers["sets"];
+            for (auto it = sets.rbegin(); it != sets.rend() && S.isObject(); ++it) {
+                const assets::Json& G = S[*it][anim];
+                if (!G.isArray() || G.size() == 0) continue;
+                int total = 0;
+                for (size_t k = 0; k < G.size(); ++k) total += std::max(G[k][(size_t)1].asInt(1), 0);
+                int pick = total > 0 ? std::rand() % total : 0;   // weighted random pick (HIGH, RE)
+                for (size_t k = 0; k < G.size(); ++k) {
+                    pick -= std::max(G[k][(size_t)1].asInt(1), 0);
+                    if (pick < 0 || k + 1 == G.size()) { resolved = G[k][(size_t)0].asString(); break; }
+                }
+                break;
+            }
+        }
+        b->clip = b->model.clipByName(resolved);
+        if (resolved != anim) LOG_INFO("preview body %s: %s -> %s (AnimSet chooser)", gl.c_str(), anim.c_str(), resolved.c_str());
+        if (b->clip < 0) LOG_WARN("preview body %s: sequence %s not in its AnimSets; reference pose", gl.c_str(), resolved.c_str());
+        else LOG_INFO("preview body %s: %s (%.2f s)", gl.c_str(), resolved.c_str(), b->model.clips[(size_t)b->clip].duration);
         previewBodies_.push_back(std::move(b));
         return (int)previewBodies_.size() - 1;
     }
@@ -658,6 +688,19 @@ public:
         glPopAttrib();
     }
 
+    std::string glObjectCensus() const override {
+        int tex = 0, buf = 0, prog = 0, fbo = 0, vao = 0;
+        for (GLuint n = 1; n <= 131072; ++n) {
+            if (glIsTexture(n)) ++tex;
+            if (glx::IsBuffer && glx::IsBuffer(n)) ++buf;
+            if (glx::IsProgram && glx::IsProgram(n)) ++prog;
+            if (glx::IsFramebuffer && glx::IsFramebuffer(n)) ++fbo;
+            if (glx::IsVertexArray && glx::IsVertexArray(n)) ++vao;
+        }
+        return "textures=" + std::to_string(tex) + " buffers=" + std::to_string(buf) + " programs=" + std::to_string(prog) +
+               " framebuffers=" + std::to_string(fbo) + " vaos=" + std::to_string(vao) + " cpuMeshes=" + std::to_string(meshes_.size()) +
+               " previewBodies=" + std::to_string(previewBodies_.size());
+    }
     RenderDiagnostics renderDiagnostics() const override {
         RenderDiagnostics d;
         d.originalPath = wfc_.active();

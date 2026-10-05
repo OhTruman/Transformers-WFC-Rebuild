@@ -211,7 +211,8 @@ void Application::run() {
                 }
                 double loaded = privMB();
                 renderer_->unloadFrontendScene();
-                LOG_INFO("MEMCYCLE %s loaded %.1f MB unloaded %.1f MB", m.c_str(), loaded, privMB());
+                LOG_INFO("MEMCYCLE %s loaded %.1f MB unloaded %.1f MB | GL %s", m.c_str(), loaded, privMB(),
+                         renderer_->glObjectCensus().c_str());
             } else LOG_WARN("MEMCYCLE %s: no render data", m.c_str());
             if (b == std::string::npos) break;
             a = b + 1;

@@ -2217,6 +2217,17 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 20 / 21 (2026-10-05, agents/rendering) — multi-map fidelity
+- All 10 cooked MP maps build and render through the generic path. 30 captures pass, with 0 materials without a program,
+  0 draws without depth testing and 0 GL errors.
+- "Mostly black" maps root cause: build_lighting dropped most FLightMap2D records (a GUID search instead of a structural
+  parse). Fixed; Streets is byte-identical, and Gorge / Rust / Seed / Berth / Broken Hope gain 4–10x lightmapped draws.
+- Light, sky and fog colours had red and blue swapped (cooked FColor is B,G,R,A), CONFIRMED via authored.db. Fixed;
+  Streets dynamic lighting and fog are re-baselined (work/ref_m21).
+- Material translator: TextureSetSample added, so Molten's floors render. SceneTexture and RandomSeed remain open.
+- Every MP chassis preview renders with original materials. Preview idle goes through the AnimSet chooser groups.
+- Rebuild the render data (`-Map Standard` and each MP map) to pick these up.
+
 ## RENDERING MILESTONE 12 (2026-10-05, agents/rendering) — vignette ships
 - The ships have no skeletal animation in the original (CONFIRMED from the cooked level), so the bind pose is correct.
 - Their missing animation is Matinee DrawScale. `setFrontendActorScale` now applies it to ships and emitters, and

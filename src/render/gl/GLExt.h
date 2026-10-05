@@ -69,6 +69,10 @@ namespace glx {
     X(void, GetShaderInfoLog, (GLuint, GLsizei, GLsizei*, GLchar*)) \
     X(void, DeleteShader, (GLuint)) \
     X(GLuint, CreateProgram, (void)) \
+    X(GLboolean, IsProgram, (GLuint)) \
+    X(GLboolean, IsBuffer, (GLuint)) \
+    X(GLboolean, IsFramebuffer, (GLuint)) \
+    X(GLboolean, IsVertexArray, (GLuint)) \
     X(void, AttachShader, (GLuint, GLuint)) \
     X(void, BindAttribLocation, (GLuint, GLuint, const GLchar*)) \
     X(void, LinkProgram, (GLuint)) \

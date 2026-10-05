@@ -540,13 +540,20 @@ class MatCompiler:
         nm = n.get('ParameterName')
         self.params_read['Texture'].add(nm)
         ts = self.texsets.get(nm) or (n.get('DefaultValue') or {}).get('ref')
+        return self._texset(c, n, p, o, ts)
+
+    def x_TextureSetSample(self, c, n, p, o):
+        # The non-parameter node names its TextureSet in "Set" (MP_KON_Molten floors); outputs Color / Masks / Normal.
+        return self._texset(c, n, p, o, (n.get('Set') or {}).get('ref'))
+
+    def _texset(self, c, n, p, o, ts):
         tso = self.R.obj(ts) or {}
         inter = [x.get('ref') for x in (tso.get('Intermediates') or []) if isinstance(x, dict)]
         cn = next((x for x in inter if x.lower().endswith('_color_normx')), None)
         mn = next((x for x in inter if x.lower().endswith('_masks_normy')), None)
         uv = self.input(c, n, 'UVs', ('m.uv0', 2))
         uvc = cast(uv[0], uv[1], 2)
-        key = ('texset', ts)
+        key = ('texset', ts, uvc)
         if key not in self.memo:
             s0 = self.tex_slot(('2d', cn), '2d', self._tex_info(cn) or {'file': None, 'object': cn})
             s1 = self.tex_slot(('2d', mn), '2d', self._tex_info(mn) or {'file': None, 'object': mn})

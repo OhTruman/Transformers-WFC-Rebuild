@@ -28,6 +28,15 @@ FOG_DEFAULTS = {'bEnabled': True, 'Density': 5e-05, 'LightBrightness': 0.1, 'Lig
                 'ExtinctionDistance': 100000000.0, 'StartDistance': 0.0, 'Height': 0.0}
 
 
+def fcolor_rgb(c):
+    """Cooked FColor -> [R, G, B, A]. FColor serializes its DWColor (A<<24 | R<<16 | G<<8 | B) big-endian on Xenon;
+    the reader lists the bytes as [B, G, R, A] (CONFIRMED: AssetTools authored.db field-named decode, e.g. the
+    customization SkyLight LowerColor {R:78, G:148, B:186} reads [186, 148, 78, 0]). M21: lights / sky lower colour /
+    height fog colour were consumed as RGB with R and B swapped."""
+    c = list(c or [255, 255, 255, 0])
+    return [c[2], c[1], c[0], c[3] if len(c) > 3 else 0] if len(c) >= 3 else c
+
+
 def ue_to_gltf_pos(v):
     return [v[0] * 0.01, v[2] * 0.01, v[1] * 0.01]
 
@@ -40,7 +49,6 @@ def ue_to_gltf_dir(v):
 
 def lm_records(repo, pkg_index):
     p = repo.pkgs[pkg_index]; pr = repo.readers[pkg_index]
-    shared = None
     out = {}
     kinds = {}
     vertex_lm = []
@@ -63,11 +71,15 @@ def lm_records(repo, pkg_index):
             vertex_lm.append(p.object_path(i + 1))
             v = parse_lightmap_1d(nat)
             if v: vertex_samples[p.object_path(i + 1)] = v
-        if shared is None and ltype == 2: shared = nat[21:37]
-        if shared is None or ltype != 2: continue
-        g = nat.find(shared)
-        if g < 1: continue
-        o = g + nat[g - 1] * 16 + 4
+        if ltype != 2: continue
+        # FLightMap2D, big-endian as FLightMap1D: [13] type=2, [17] LightGuids.Num, GUIDs (16 each), Owner (4),
+        # then 3 x (Texture ref, ScaleVector) and CoordinateScale / CoordinateBias. M20: the coefficient block used
+        # to be located by searching for the first component's first light GUID, so every component whose light list
+        # starts with a different light was dropped unlit (Gorge 256 of 1137, Rust, Seed, Berth, Broken Hope).
+        if struct.unpack_from('>i', nat, 13)[0] != 2: continue
+        ng = struct.unpack_from('>i', nat, 17)[0]
+        if ng < 0 or 21 + 16 * ng + 4 > len(nat): continue
+        o = 21 + 16 * ng + 4
         co = []
         while o + 20 <= len(nat):
             nm = lm_name(struct.unpack_from('>i', nat, o)[0])
@@ -149,7 +161,7 @@ def lights(repo, pkg_index):
                 if isinstance(t, dict) and 'name' in t: ch[t['name']] = bool(t['value'])
             M = mats[k]
             pos = M[3, :3]; xaxis = M[0, :3]
-            col = c.get('LightColor') or [255, 255, 255, 0]   # FColor stored B,G,R,A? -> see note
+            col = fcolor_rgb(c.get('LightColor'))
             res.append({
                 'name': cref.split('.')[-1], 'class': cls,
                 'position': ue_to_gltf_pos(pos), 'direction': ue_to_gltf_dir(xaxis),
@@ -160,7 +172,7 @@ def lights(repo, pkg_index):
                 'cast_static_shadows': bool(c.get('CastStaticShadows', True)),
                 'built_into_lightmap': bool(c.get('bHasLightEverBeenBuiltIntoLightMap', False)),
                 'channels': ch, 'affects_classification': c.get('LightAffectsClassification'),
-                'lower_color_srgb8': (c.get('LowerColor') or [255, 255, 255, 0])[:3],
+                'lower_color_srgb8': fcolor_rgb(c.get('LowerColor'))[:3],
                 'lower_brightness': c.get('LowerBrightness', 0.0),
                 # modulated (projected) shadow inputs; defaults from Engine Default__LightComponent /
                 # Default__PointLightComponent (CastDynamicShadows True, ModShadowColor (0,0,0,1),
@@ -189,6 +201,7 @@ def fog(repo, pkg_index):
         if p.class_name(e) == 'HeightFogComponent' and 'Default__' not in p.obj_name(i + 1):
             f = dict(FOG_DEFAULTS); f.update(repo.obj(p.object_path(i + 1)) or {})
             f['height_m'] = f['Height'] * 0.01
+            f['LightColor'] = fcolor_rgb(f.get('LightColor'))
             return f
     return None
 
