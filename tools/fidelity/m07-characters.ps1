@@ -53,6 +53,13 @@ foreach ($c in $X.characters) {
     Res "data.$($c.chassis)" $dataRows[-1].verdict ("{0} ({1}, {2} {3}, vehicle {4}): robot {5}; vehicle {6}; character.json {7}; class / vehicle-form rule {8}" -f $c.chassis, $c.iconic, $c.faction, $c.default_class, $c.vehicle_form, $dataRows[-1].robot, $dataRows[-1].vehicle, $dataRows[-1].character_json, $formOk) "AssetTools"
 }
 Write-WfcCsv $dataRows (Join-Path $OutDir "characters_data.csv")
+# every preset weapon (infantry + vehicle) exported and loadable
+$script:NoMeshWeapons = @()
+foreach ($cls in @($X.class_presets.PSObject.Properties | ForEach-Object { $_.Name })) { foreach ($w in @($X.class_presets.$cls.weapons) + @($X.class_presets.$cls.vehicle_weapons)) { if (-not $w) { continue }
+    $g = @(Get-ChildItem (Join-Path $VS "Weapons\$w") -Filter *.glb -ErrorAction SilentlyContinue | Select-Object -First 1)[0]; $gi = if ($g) { GlbInfo $g.FullName } else { $null }
+    $wj = Join-Path $VS "Weapons\$w\weapon.json"; $noMesh = (Test-Path $wj) -and ((Get-Content -Raw $wj | ConvertFrom-Json).mesh.mesh_note -match 'authors no SkeletalMesh')
+    if ($noMesh) { $script:NoMeshWeapons += $w; Res "data.weapon.$cls.$w" "PASS" ("{0} preset weapon {1}: no held mesh by design (export: the weapon mesh component authors no SkeletalMesh - vehicle socket / thrown projectile)" -f $cls, $w) "AssetTools"; continue }
+    Res "data.weapon.$cls.$w" $(if ($gi -and $gi.ok -and $gi.meshes -gt 0) { "PASS" } else { "FAIL" }) ("{0} preset weapon {1}: {2}" -f $cls, $w, $(if ($gi -and $gi.ok) { "{0} ({1} meshes, {2} joints)" -f $g.Name, $gi.meshes, $gi.joints } else { "no loadable glb under Weapons\$w" })) "AssetTools" } }
 
 # ---------------- B. runtime: the class presets through Choose Character
 $d = Join-Path $OutDir "runtime"; New-Item -ItemType Directory -Force $d | Out-Null
@@ -77,14 +84,16 @@ else {
         if ($ln -match 'skinned glb: .*?/Characters/([^/\\]+)/vehicle\.glb') { $cur.vehicle += $Matches[1] }
         if ($ln -match 'skinned glb: .*?/Weapons/([^/\\]+)/') { $cur.weapons += $Matches[1] }
     } }
-    $rtRows = New-Object System.Collections.Generic.List[object]; $i = 0
+    $rtRows = New-Object System.Collections.Generic.List[object]; $i = 0; $lastRobot = @(); $lastVeh = @(); $lastW = @()   # a body already loaded is reused by the renderer: carry it forward
     foreach ($sg in $segs) {
         $cls = $sg.ui_class; $p = $X.class_presets.$cls; $team = $sg.team; $fac = if ($team -eq "0") { "Autobot" } elseif ($team -eq "1") { "Decepticon" } else { "?" }
         $want = if ($p -and $fac -ne "?") { $p.$fac } else { "" }; $man = @($X.characters | Where-Object { $_.chassis -eq $sg.game_chassis })[0]
         $body = @($sg.robot | Select-Object -Unique); $vbody = @($sg.vehicle | Select-Object -Unique)
+        if (-not $body.Count -and $lastRobot.Count) { $body = $lastRobot }; if (-not $vbody.Count -and $lastVeh.Count) { $vbody = $lastVeh }; $lastRobot = $body; $lastVeh = $vbody
         $optimusFallback = ($sg.game_chassis -and $sg.game_chassis -ne "Optimus" -and ($body -contains "Optimus" -or $sg.drawn -eq "Optimus"))
-        $wantW = @($p.weapons); $gotW = @($sg.weapons | Select-Object -Unique); $missingExport = @($wantW | Where-Object { $X.weapon_exports -notcontains $_ })
-        $loadout = if (-not $wantW.Count) { "UNKNOWN" } elseif (@($wantW | Where-Object { $gotW -contains $_ }).Count -eq $wantW.Count) { "PASS" } elseif ($missingExport.Count -eq $wantW.Count) { "ASSET MISSING" } else { "FAIL" }
+        $wantW = @($p.weapons); $gotW = @($sg.weapons | Select-Object -Unique); if (-not $gotW.Count -and $lastW.Count) { $gotW = $lastW }; $lastW = $gotW; $missingExport = @($wantW | Where-Object { $X.weapon_exports -notcontains $_ })
+        $wrongW = @($gotW | Where-Object { $wantW -notcontains $_ }); $notLoaded = @($wantW | Where-Object { $gotW -notcontains $_ -and $X.weapon_exports -contains $_ -and $script:NoMeshWeapons -notcontains $_ })
+        $loadout = if (-not $wantW.Count) { "UNKNOWN" } elseif ($wrongW.Count -or $notLoaded.Count) { "FAIL" } elseif ($missingExport.Count) { "ASSET MISSING" } else { "PASS" }
         $r = [ordered]@{ n = $i; ui = "$($sg.ui_name) ($cls)"; ui_selection = $(if ($presetOrder -contains $cls) { "PASS" } else { "FAIL" })
             gameplay = $(if ($sg.game_chassis -and $sg.game_chassis -eq $sg.ui_chassis) { "PASS" } else { "FAIL" })
             expected_chassis = $want; selected_chassis = $sg.game_chassis; body = ($body -join ","); vehicle_body = ($vbody -join ",")
@@ -92,7 +101,7 @@ else {
             faction = $(if ($fac -eq "?") { "UNKNOWN" } elseif ($man -and $man.faction -eq $fac -and (-not $want -or $want -eq $sg.game_chassis)) { "PASS" } else { "FAIL" })
             vehicle = $(if ($vbody -contains $sg.game_chassis) { "PASS" } elseif ($vbody -contains "Optimus" -and $sg.game_chassis -ne "Optimus") { "FAIL (OPTIMUS FALLBACK)" } elseif (-not $vbody.Count) { "UNKNOWN" } else { "FAIL" })
             class = $(if ($man -and $man.default_class -eq $cls -and $formByClass[$cls] -eq $man.vehicle_form) { "PASS" } elseif ($man) { "FAIL" } else { "UNKNOWN" })
-            loadout = $loadout; loadout_note = "expected {0}; loaded {1}; not exported {2}" -f ($wantW -join ","), ($gotW -join ","), ($missingExport -join ",")
+            loadout = $loadout; loadout_note = "expected {0}; loaded {1}; wrong weapon(s) {2}; exported but not loaded {3}; not exported {4}" -f ($wantW -join ","), ($gotW -join ","), ($wrongW -join ","), ($notLoaded -join ","), ($missingExport -join ",")
             rendered = "HUMAN (sheet)"; gameplay_log = $(if ($sg.drawn) { "drawn=$($sg.drawn) fallback=$($sg.fallback)" } else { "" }) }
         $rtRows.Add([pscustomobject]$r)
         foreach ($c in "ui_selection", "gameplay", "body_resolves", "faction", "vehicle", "class", "loadout") { $v = "$($r[$c])"; $st = if ($v -like "FAIL*") { "FAIL" } elseif ($v -eq "ASSET MISSING") { "FAIL" } else { $v }
