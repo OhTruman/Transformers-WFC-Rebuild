@@ -371,7 +371,8 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 ## FRONTEND: customization camera per chassis (2026-10-04, branch `agents/frontend`)
 - The Create a Character camera now moves to the class camera of the chosen chassis when a chassis menu opens, and reverses when it closes. This is the original Kismet driven by `CustomizationCameraId`, with the FOV 70 -> 60 / 65 track.
 - Matinee DrawScale tracks (title vignette ships / boosters) are exported and evaluated; Rendering's `setFrontendActorScale` receives them when present.
-- Tests 74 / 0. Image check pending Rendering's party-lobby / customization render data in the integrated tree.
+- Tests 74 / 0. Verified on screen in a merge preview with Rendering's data: class cameras, other pawn hidden, pawns on the floor (df79c6f).
+- Fixed an intermittent Create a Character crash (GFx collector freed removed clips' children; about 1 in 3 runs, 0 in 4 after).
 
 ## FRONTEND PASS 5 (2026-10-04, branch `agents/frontend`): world loss, viewport, HUD presentation
 **Frontend-launched world loss: fixed (a96f841).** First bad commit b1fce97 (Experimental bisect). The UI pass left

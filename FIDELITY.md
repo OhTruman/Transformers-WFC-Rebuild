@@ -74,7 +74,10 @@ provenance stays in its section.
 - Verified:
   - Live: Scout -> camera id 0 -> SCOUT moves; Leader (Truck) -> 2 -> LEADER moves; both sides open and reverse.
   - `wfc_frontend_tests` 74 / 0 (`scene.customizeCamera.*`, `scene.drawScale`: djDS01 0.08, DSbooster 1.0 at 250 s).
-  - The party-lobby 3D set is not drawn in this tree (no render data), so the camera was verified by pose, not by image.
+  - On screen (merge preview of df79c6f with agents/rendering e014f45 and its UI_PartyLobby render data): all four classes, both factions. Opening a chassis menu shows only that faction's pawn, fully framed on the floor (Autobot left of the menu, Decepticon right); Back restores both.
+- **Preview pawn visibility: CONFIRMED ORIGINAL.** The Preview_Characters fscommand -> ToggleHidden (PreviewGuy0 / 1) wiring is exported (`pawnVisibility`) and applied.
+- **Preview pawn height: HIGH.** Stood on the floor under the PathNode with Rendering's `sceneGroundHeight` (the original's OnPreviewPawnTick FindGround), until Gameplay supplies posed bodies.
+- **GFx runtime fixes found by this check (PC ORIGINAL Flash semantics):** an interval on a removed clip no longer fires; removed clips' descendants stay rooted for the collector (an intermittent use-after-free crash, about 1 in 3 customization runs); `unloadMovie` keeps unloaded children. Diagnostics: `WFC_GFX_GCCHECK`, `WFC_GFX_NO_GC`.
 
 ## FRONTEND PASS 5: WORLD LOSS, VIEWPORT, HUD PRESENTATION (2026-10-04, agents/frontend)
 Human playtest of the integrated Release build plus Experimental's presentation gate (bisect: first bad b1fce97).
