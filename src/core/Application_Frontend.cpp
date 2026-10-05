@@ -575,7 +575,9 @@ void Application::routeMatchToFrontend(float dt) {
             if (e.player == me && renderer_) {
                 // [integration M07] TnCharacterApplier on the spawned pawn: the selection's colours for the faction it
                 // spawned as (Cust_Color_A / Cust_COLOR_B; black = the material's own paint, as in the preview). The
-                // match pawn is draw owner 0. Energon colour (team) stays the material default [PARTIAL].
+                // match pawn is draw owner 0. [integration M08] EnergonColor = the team's colour, as TnCharacterApplier pushes
+                // it (TnFactionTeamAutobots / TnFactionTeamDecepticons / neutral TnTeamInfo class defaults, CONFIRMED values from
+                // the AssetTools chassis export via World::teamEnergon; FLinearColor). Missing data: logged, material default kept.
                 const game::MatchPlayer& mp = match.players()[(size_t)me];
                 const int f = teamOf(me) == 1 ? 1 : 0;
                 auto lin = [](int c) { float v = c / 255.0f; return v <= 0.04045f ? v / 12.92f : std::pow((v + 0.055f) / 1.055f, 2.4f); };
@@ -583,11 +585,14 @@ void Application::routeMatchToFrontend(float dt) {
                 const game::CharacterColor* src[2] = {&mp.selection.primary[f], &mp.selection.secondary[f]};
                 float* dst[2] = {cc.primary, cc.secondary};
                 for (int k = 0; k < 2; ++k) { dst[k][0] = lin(src[k]->r); dst[k][1] = lin(src[k]->g); dst[k][2] = lin(src[k]->b); dst[k][3] = 1.0f; }
+                if (world_.teamEnergon(teamOf(me), cc.energon)) cc.energon[3] = 1.0f;   // -1 (FFA): the neutral TnTeamInfo colour
                 renderer_->setDrawOwner(0);
                 renderer_->setCharacterColors(cc);
                 frontend::FlowTrace::emit("match.pawnBody", {{"chassis", mp.chassis}, {"faction", std::to_string(f)},
                                                              {"primary", std::to_string(src[0]->r) + "," + std::to_string(src[0]->g) + "," + std::to_string(src[0]->b)},
                                                              {"secondary", std::to_string(src[1]->r) + "," + std::to_string(src[1]->g) + "," + std::to_string(src[1]->b)},
+                                                             {"energon", frontend::FlowTrace::num(cc.energon[0]) + "," + frontend::FlowTrace::num(cc.energon[1]) + "," + frontend::FlowTrace::num(cc.energon[2])},
+                                                             {"weapon", world_.player().pawn().weapon().def ? world_.player().pawn().weapon().def->id : ""},
                                                              {"drawn", world_.localChassis()}});
             }
             if (e.player == me && localDeadForUi_) {
@@ -664,7 +669,10 @@ void Application::routeMatchToFrontend(float dt) {
     hf.overshield = h.normalizedOverShield;
     const auto& wpn = world_.player().pawn().weapon();
     hf.clip = h.clipAmmo; hf.clipCapacity = wpn.magSize; hf.reserve = h.reserveAmmo; hf.reserveCapacity = wpn.reserveMax;
-    hf.weapon = "IonBlaster";   // the rebuild's only player weapon (Gameplay) - TnWeaponIonBlaster icon / crosshair
+    // [integration M08] The equipped weapon's TnWeapon class suffix (NotifyCurrentWeaponChanged / icon export), from
+    // Gameplay's Pass 22 weapon table (WeaponDef::id, e.g. RocketLauncher; the provider id can differ: HomingRocket).
+    // Was the Ion Blaster for every weapon.
+    hf.weapon = wpn.def ? wpn.def->id : std::string();
     hf.vehicleForm = h.vehicleForm;
     hf.spectating = spectatingUi_;
     frontend_->hud().setFrame(hf);

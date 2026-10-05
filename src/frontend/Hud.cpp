@@ -93,7 +93,14 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
             // A fresh movie: crosshair and the form's widgets. SetWeaponCrosshair's type per weapon is native and
             // UNKNOWN; IonBlaster -> 2 follows the crosshair symbol names [PROVISIONAL].
             call("ShowCrosshair", {true});
-            call("SetWeaponCrosshair", {f.weapon == "IonBlaster" ? 2 : 0});
+        }
+        if (!sentValid_ || f.weapon != sent_.weapon) {
+            // [integration M08] Re-sent when the equipped weapon changes (generic weapons). The symbol names give
+            // 1 Shotgun / 2 IonBlaster / 3 Bazooka (AssetTools HUD_PACKAGE); weapon -> type is native UNKNOWN, so the
+            // name match below is PROVISIONAL and every other weapon keeps 0 Generic.
+            const std::string& w = f.weapon;
+            const int type = (w == "Shotgun" || w == "EmpShotgun") ? 1 : w == "IonBlaster" ? 2 : w == "Bazooka" ? 3 : 0;
+            call("SetWeaponCrosshair", {type});
         }
         if (!sentValid_ || f.fullSegments != sent_.fullSegments || std::fabs(f.currentSegment - sent_.currentSegment) > 1e-3 ||
             f.totalSegments != sent_.totalSegments)

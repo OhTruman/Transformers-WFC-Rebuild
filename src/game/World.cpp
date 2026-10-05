@@ -1031,6 +1031,9 @@ void World::syncShownWeapon() {
     std::string id = w.def ? w.def->id : "IonBlaster";
     if (id == shownWeapon_) return;
     shownWeapon_ = id;
+    // [integration M08] Systems' weapon audio (WP_Fire, reload / equip / impact) follows the equipped weapon; the
+    // CharacterAudio weapon table is keyed by the TnWeapon class (was the Ion Blaster's for every weapon).
+    setPlayerWeaponAudio("TransContent.TnWeapon" + id);
     if (id == "IonBlaster") weaponAnim_.setModel(weaponModel_.valid() ? &weaponModel_ : nullptr);
     else if (const assets::SkinnedModel* m = weaponModelFor(*w.def)) weaponAnim_.setModelGeneric(m, *w.def);
     else weaponAnim_.setModel(nullptr);
@@ -1768,7 +1771,25 @@ void World::draw(render::IRenderer& r) const {
         r.drawGroundGrid(60.0f, 2.0f, core::Vec3{0.30f, 0.33f, 0.38f});
         for (const auto& b : blocks_) r.drawBox(b.center, b.size, b.color);
     }
-    for (const auto& a : actors_) if (a->alive()) a->draw(r);
+    for (const auto& a : actors_) {
+        if (!a->alive()) continue;
+        // [integration M08] Each participant pawn is its own character instance for TnCharacterApplier (draw owner 100 +
+        // match player): its team's EnergonColor; no customization paint (participants carry none: material defaults).
+        // The local pawn stays owner 0 (colours from the selection at spawn).
+        int owner = 0;
+        for (const MatchOpponent* o : opponents_)
+            if (o == a.get()) {
+                owner = 100 + o->matchPlayer();
+                render::CharacterColors cc;
+                const int p = o->matchPlayer();
+                const int team = (p >= 0 && (size_t)p < match_.players().size()) ? match_.players()[(size_t)p].team : -1;
+                if (teamEnergon(team == 255 ? -1 : team, cc.energon)) cc.energon[3] = 1.0f;
+                r.setDrawOwner(owner);
+                r.setCharacterColors(cc);
+            }
+        a->draw(r);
+        if (owner) r.setDrawOwner(0);
+    }
     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawPlayer); player_.draw(r); }
     // Projectiles: a small box marker until Rendering draws the authored projectile meshes / trails [PROV presentation].
     for (const Projectile& p : projectiles_) r.drawBox(p.pos, core::Vec3{0.25f, 0.25f, 0.25f}, core::Vec3{1.0f, 0.6f, 0.2f});
@@ -1949,6 +1970,29 @@ std::vector<std::string> World::applyCharacterTo(Character& pc, const CharacterS
     pc.respawnReset();
     if (mp) { mp->specialty = spec; mp->healthMax = pc.health().max; }
     return refused;
+}
+
+bool World::teamEnergon(int team, float out[3]) const {
+    // The values are class defaults (identical in every chassis export); read once from the first chassis this world
+    // loaded. Keys as AssetTools vs_roster_export writes them.
+    static bool loaded = false, ok[3] = {false, false, false};
+    static float tbl[3][3] = {};
+    if (!loaded && !localChassis_.empty()) {
+        loaded = true;
+        std::string txt;
+        assets::Json j;
+        if (readTextFile(assetRoot() + "/Characters/" + localChassis_ + "/character.json", txt) && assets::Json::parse(txt, j)) {
+            const assets::Json& tc = j["team_colour"]["team_energon_colors (class defaults, CONFIRMED)"];
+            const char* keys[3] = {"Autobots (TnFactionTeamAutobots)", "Decepticons (TnFactionTeamDecepticons)", "neutral (TnTeamInfo)"};
+            for (int i = 0; i < 3; ++i)
+                if (tc.has(keys[i])) { ok[i] = true; tbl[i][0] = tc[keys[i]]["R"].asFloat(); tbl[i][1] = tc[keys[i]]["G"].asFloat(); tbl[i][2] = tc[keys[i]]["B"].asFloat(); }
+        }
+        if (!ok[0] || !ok[1] || !ok[2]) LOG_ERROR("team energon colours missing in the %s export: material defaults kept", localChassis_.c_str());
+    }
+    const int i = team == 0 ? 0 : team == 1 ? 1 : 2;
+    if (!ok[i]) return false;
+    for (int k = 0; k < 3; ++k) out[k] = tbl[i][k];
+    return true;
 }
 
 std::string World::mapDir() const { return assetRoot() + "/Maps/" + mapName_ + "/"; }

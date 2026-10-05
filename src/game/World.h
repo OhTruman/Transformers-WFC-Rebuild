@@ -430,6 +430,9 @@ public:
     // weapons that were refused (unknown provider / not allowed on this chassis).
     std::vector<std::string> applyLoadout(const CharacterSelection* sel);
     const std::string& localChassis() const { return localChassis_; }
+    // [integration M08] EnergonColor TnCharacterApplier pushes for a team (0 Autobots / 1 Decepticons / else the neutral
+    // TnTeamInfo): the CONFIRMED class defaults in the AssetTools chassis export (team_colour). false: no data (logged).
+    bool teamEnergon(int team, float out[3]) const;
     // Authored collision actor(s) (collision_pawn.glb node: BlockingVolume_*, BSP, prop actor names) whose
     // bounds contain p (expanded by pad metres): for tracing blocked / incorrect areas back to authored objects.
     struct ColActor { std::string name, kind, mesh; core::Vec3 lo, hi; };
@@ -488,7 +491,6 @@ private:
     const assets::SkinnedModel* weaponModelFor(const WeaponDef& d);
     void syncShownWeapon();
     std::string localChassis_;
-    std::string mapName_ = "MP_IAC_Streets";
     std::vector<HazardVolume> hazards_;
     std::vector<Projectile> projectiles_;
     void tickProjectiles(float dt);
