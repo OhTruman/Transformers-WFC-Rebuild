@@ -652,7 +652,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
     Weapon& w = pawn_->weapon();
     // Weapon gate: robot control form, and during vehicle->robot only once restored (25% of the
     // fold) + EquipTime 0.2 s [CONF]. Robot->vehicle stores the weapon at fold start.
-    bool usable = pawn_->weaponUsable() && !pawn_->isMeleeing();
+    bool usable = pawn_->weaponUsable() && !pawn_->isMeleeing() && pawn_->carryingHeavy_ == 0;   // the flag / bomb is the held weapon
     if (wantReload_) {                       // latched tap; consumed by this step
         if (usable) w.beginReload();
         wantReload_ = false;

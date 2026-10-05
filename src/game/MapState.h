@@ -104,7 +104,9 @@ public:
     // Objective volumes from physics.json (ObjectiveVolume -> TriggerVolume brush polygons).
     void loadObjectiveVolumes(const std::string& physicsJson);
     // Live objective rules, ticked only while the match is InProgress.
-    struct ObjPawn { int player; int team; core::Vec3 pos; bool alive; };
+    // canPickup: robot form (a dropped flag / bomb is not taken by a vehicle-form pawn [PROV: TnPawn.Transform to vehicle drops
+    // heavy weapons (CONF); the vehicle-side pickup gate is not recovered]).
+    struct ObjPawn { int player; int team; core::Vec3 pos; bool alive; bool canPickup = true; };
     struct ObjectiveScoring {
         std::vector<std::pair<int, int>> objectiveScores;   // Game.ScoreObjective(PRI, score)
         std::vector<std::pair<int, int>> teamScores;        // TnGame.ScoreTeamObjective(team, amount)
@@ -126,6 +128,7 @@ public:
         float autoReturn = 0.0f;    // AutoReturnTime 30
         float returnLeft = 10.0f;   // flag: ReturnFlagTime 10, drained at dt x defenders nearby, recovers +dt
         float sleep = 0.0f;         // bomb factory WaitAfterScoreTime 5 after a detonation
+        int untouchedBy = -1;       // dropped where this player stands: Touch fires on a new overlap only [HIGH stock UE3 Touch]
     };
     struct Planted { bool active = false; int point = -1; int planter = -1; int team = 255; float fuse = 0.0f, defuse = 0.0f; };
     const std::vector<Carried>& carried() const { return carried_; }
@@ -133,6 +136,9 @@ public:
     // SingleFlagCTF.SetupRoundStart: the attackers' capture point _Active, the defenders' flag factory Pickup, others asleep.
     void roundStart(int attackingTeam);
     int carriedBy(int player) const;   // index into carried() held by this match player, or -1
+    // The carrier's heavy weapon is tossed (TnInventoryManager.DropHeavyWeapons on Transform to vehicle; ChangedWeapon away
+    // from it): TnWeaponFlagBase / Bomb DropFrom -> a dropped pickup at the carrier (AutoReturn 30, ReturnFlagTime 10) [CONF].
+    bool dropCarriedBy(int player, const core::Vec3& at);
     void setKillZ(float z) { killZ_ = z; }   // a carried objective dropped below KillZ goes home ("falling out sends it home")
     void matchStarting();                                   // MatchStarting: KOTH initial zone; CTF / EXT carried objectives
     void matchEnded();                                      // ScoreKingOfTheHill.CheckEndGame: every zone Deactivate

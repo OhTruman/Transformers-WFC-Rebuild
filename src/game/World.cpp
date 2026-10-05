@@ -1129,6 +1129,7 @@ HudGameState World::hudState() const {
     h.cloaked = pc.cloakRemain_ > 0.0f;
     h.hoverState = pc.hoverState_;
     h.lockTarget = lockTarget_; h.locked = locked_;
+    h.heavyWeapon = pc.carryingHeavy_ == 1 ? "Code Of Power" : pc.carryingHeavy_ == 2 ? "Bomb" : "";   // ItemName
     { const Weapon* gb = grenadeBag(pc); h.grenades = gb ? gb->reserve : -1; }
     {
         const Weapon* aw = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
@@ -1220,9 +1221,16 @@ void World::tickMatch(float dt) {
     if (match_.state() == Match::State::InProgress && !match_.betweenRounds()) {
         mapState_.setKillZ(killZ_);
         std::vector<MapState::ObjPawn> pawns;
-        if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true});
+        // Carriers: Transform to vehicle drops the heavy weapon (TnPawn.Transform -> DropHeavyWeapons) [CONF].
+        if (!localDead_ && (pc.isTransforming() || pc.form() == Form::Vehicle)) mapState_.dropCarriedBy(localPlayer_, pc.actorLocation());
+        if (!localDead_ && pc.heavyDropRequested_) mapState_.dropCarriedBy(localPlayer_, pc.actorLocation());
+        pc.heavyDropRequested_ = false;
         for (MatchOpponent* o : opponents_)
-            if (o->spawned()) pawns.push_back({o->matchPlayer(), o->team(), o->pawn().actorLocation(), true});
+            if (o->spawned() && (o->pawn().isTransforming() || o->pawn().form() == Form::Vehicle)) mapState_.dropCarriedBy(o->matchPlayer(), o->pawn().actorLocation());
+        auto robotForm = [](const Character& c) { return c.form() == Form::Robot && !c.isTransforming(); };
+        if (!localDead_) pawns.push_back({localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, robotForm(pc)});
+        for (MatchOpponent* o : opponents_)
+            if (o->spawned()) pawns.push_back({o->matchPlayer(), o->team(), o->pawn().actorLocation(), true, robotForm(o->pawn())});
         MapState::ObjectiveScoring sc;
         mapState_.tickObjectives(dt, pawns, sc);
         for (auto& p : sc.personalScores) match_.addPersonalScore(p.first, p.second);
@@ -1230,6 +1238,8 @@ void World::tickMatch(float dt) {
         for (auto& t : sc.teamScores) match_.scoreTeamObjective(t.first, t.second);
         for (auto& msg : sc.messages) LOG_INFO("match: %s switch %d", msg.first.c_str(), msg.second);
         if (sc.attackingTeam >= 0) match_.setAttackingTeam(sc.attackingTeam);
+        // The carrier holds the heavy weapon (TnWeaponFlag1Hand MWT_Flag / TnWeaponBomb MWT_Bomb, WT_Heavy) [CONF].
+        { int ci = mapState_.carriedBy(localPlayer_); pc.carryingHeavy_ = ci >= 0 ? mapState_.carried()[(size_t)ci].kind + 1 : 0; }
         // HurtRadius (bomb detonation, AOE): every match pawn within the radius.
         for (const auto& rd : sc.radiusDamage) {
             LOG_INFO("match: HurtRadius %.0f within %.0f m (%s)", rd.damage, rd.radius, rd.damageType.c_str());
@@ -1844,8 +1854,12 @@ void World::tickAbilityEffects(float dt) {
             const core::Vec3 at = pc.actorLocation();
             LOG_INFO("ability Shockwave: 65 within 25 m");
             for (MatchOpponent* o : opponents_)
-                if (o->spawned() && core::length(o->pawn().actorLocation() - at) <= 25.0f)
+                if (o->spawned() && core::length(o->pawn().actorLocation() - at) <= 25.0f) {
+                    core::Vec3 dir = o->pawn().actorLocation() - at;
                     applyMatchDamage(o->matchPlayer(), localPlayer_, 65.0f, false, "TransGame.TnDamageTypeShockwave");
+                    // HurtRadius momentum (bDoFullDamage: scale 1) = Momentum 700000 along origin -> victim [CONF].
+                    if (core::length(dir) > 1e-4f) applyKnockback(o->matchPlayer(), core::normalize(dir) * 700000.0f, "TransGame.TnDamageTypeShockwave");
+                }
             for (Destructible* d : destructibles_)
                 if (d->state() == 0 && core::length((d->boxMin() + d->boxMax()) * 0.5f - at) <= 25.0f) d->applyDamage(*this, 65.0f);
         }
@@ -1870,6 +1884,20 @@ void World::startLocalMelee(bool whirlwind) {
     if (!whirlwind && pc.weapon().reloading()) return;
     pc.meleeState_ = whirlwind ? 2 : 1;
     pc.meleeT_ = 0.0f; pc.meleeSweep_ = -1; pc.meleeHit_.clear();
+    pc.meleeCarrier_ = !whirlwind && pc.carryingHeavy_ != 0;
+    if (pc.meleeCarrier_) {
+        // FindAttack: current weapon MeleeWeaponType MWT_Flag / MWT_Bomb -> Melee_Mace (chooser _01/_02/_03), 9999, AttackDash
+        // Speed 0 (no lunge), GroundSpeedMultiplier 0.75 [CONF TnMeleeSet]. Clip lengths / sweep times from the anim set when
+        // the robot export lacks the clip.
+        static const char* kMace[3] = {"Melee_Mace_01", "Melee_Mace_02", "Melee_Mace_03"};
+        static const float kMaceLen[3] = {1.033f, 1.233f, 1.167f};
+        const int k = pc.meleeAlternate_++ % 3;
+        pc.meleeVariant_ = k;
+        pc.playAction(kMace[k], false);
+        pc.meleeLen_ = kMaceLen[k];
+        if (const assets::SkinnedModel* m = pc.currentModel()) { int ci = m->clipByName(kMace[k]); if (ci >= 0) pc.meleeLen_ = m->clips[(size_t)ci].duration; }
+        return;
+    }
     if (whirlwind) {
         pc.meleeLen_ = 5.9f;
         pc.playAction("Transform_Whirlwind_ROBO", true);
@@ -1903,7 +1931,10 @@ void World::tickLocalMelee(float dt) {
     if (!pc.isMeleeing()) return;
     pc.meleeT_ += dt;
     const bool whirl = pc.meleeState_ == 2;
-    const Sweep* sw = whirl ? kWhirlSweeps : kWeaponSweeps;
+    // Melee_Mace_01/_02/_03 sweeps (LightMedium shared set): t 0.328 / 0.287 / 0.383, SmallRobot, (250, 250, 350), 0.30 s.
+    static const Sweep kMaceSweeps[3] = {{0.328f, 0.30f, false, {250, 250, 350}}, {0.287f, 0.30f, false, {250, 250, 350}},
+                                         {0.383f, 0.30f, false, {250, 250, 350}}};
+    const Sweep* sw = whirl ? kWhirlSweeps : pc.meleeCarrier_ ? &kMaceSweeps[pc.meleeVariant_ % 3] : kWeaponSweeps;
     const int n = whirl ? 8 : 1;
     int active = -1;
     for (int i = 0; i < n; ++i) if (pc.meleeT_ >= sw[i].t && pc.meleeT_ < sw[i].t + sw[i].dur) active = i;
@@ -1915,7 +1946,7 @@ void World::tickLocalMelee(float dt) {
         if (sd.valid && pc.boneWorld(sd.bone, bm)) { core::Mat4 w = bm * sd.local; at = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
         const core::Vec3 ex{sw[active].extentUU.x * 0.01f, sw[active].extentUU.z * 0.01f, sw[active].extentUU.y * 0.01f};   // UE Z = up
         const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
-        const float damage = whirl ? 85.0f : 150.0f;
+        const float damage = whirl ? 85.0f : pc.meleeCarrier_ ? 9999.0f : 150.0f;
         const char* type = whirl ? "TransGame.TnDamageTypeWhirlwind" : "TransGame.TnDamageTypeMelee";
         for (MatchOpponent* o : opponents_) {
             if (!o->spawned() || std::find(pc.meleeHit_.begin(), pc.meleeHit_.end(), o->matchPlayer()) != pc.meleeHit_.end()) continue;
@@ -1927,7 +1958,11 @@ void World::tickLocalMelee(float dt) {
             float t;
             if (line && line->segmentHit(pc.actorLocation(), c, t)) continue;
             pc.meleeHit_.push_back(o->matchPlayer()); ++pc.meleeHitCount_;
-            applyMatchDamage(o->matchPlayer(), localPlayer_, damage, false, type);   // momentum x Impulse not applied [PARTIAL]
+            applyMatchDamage(o->matchPlayer(), localPlayer_, damage, false, type);
+            // Momentum = normal(victim - attacker) x Impulse (WeaponAttack 30000, flag / bomb 80000, Whirlwind 2000) [CONF].
+            const float impulse = whirl ? 2000.0f : pc.meleeCarrier_ ? 80000.0f : 30000.0f;
+            core::Vec3 dir = c - pc.actorLocation();
+            if (core::length(dir) > 1e-4f) applyKnockback(o->matchPlayer(), core::normalize(dir) * impulse, type);
         }
     }
     if (pc.meleeT_ >= pc.meleeLen_) { pc.meleeState_ = 0; pc.meleeSweep_ = -1; }
@@ -1996,6 +2031,7 @@ const Weapon* World::grenadeBag(const Character& c) const {
 void World::startLocalGrenadeToss() {
     Character& pc = player_.pawn();
     if (localDead_ || pc.moveForm() != Form::Robot || pc.isTransforming() || pc.isMeleeing() || grenadeTossDelay_ >= 0.0f) return;
+    if (pc.carryingHeavy_ != 0) return;   // carrying a WT_Heavy weapon: PlayDryFireSound
     Weapon* gb = nullptr;
     for (Weapon& w : pc.inventoryMutable()) if (w.grenade()) { gb = &w; break; }
     if (!gb) return;
@@ -2012,6 +2048,25 @@ void World::startLocalGrenadeToss() {
     pc.playAction("GrenadeThrow", true);
     pc.exposeSelf();   // ServerTossGrenade -> ExposeSelf
     grenadeTossDelay_ = 0.4f;
+}
+
+// TnPawn bIgnoreForces = True; ShouldIgnoreForces is false only for damage types with RequestRespectForcesApplied: the melee
+// family (Melee / WeakMelee / Whirlwind), Shockwave, AOE*, HeavyTankShell*, ShieldPush*, OmegaAOE*, ExplodeWithForces,
+// BruteBackpack, OmegaTractorBeamGrab (* = bExtraMomentumZ). Weapon / projectile / grenade types give no knockback [CONF §I].
+void World::applyKnockback(int victim, const core::Vec3& m, const std::string& type) {
+    static const char* kRespect[] = {"TnDamageTypeMelee", "TnDamageTypeWeakMelee", "TnDamageTypeWhirlwind", "TnDamageTypeShockwave",
+                                     "TnDamageTypeAOE", "TnDamageTypeHeavyTankShell", "TnDamageTypeShieldPush", "TnDamageTypeOmegaAOE",
+                                     "TnDamageTypeExplodeWithForces", "TnDamageTypeBruteBackpack", "TnDamageTypeOmegaTractorBeamGrab"};
+    static const char* kExtraZ[] = {"TnDamageTypeAOE", "TnDamageTypeHeavyTankShell", "TnDamageTypeShieldPush", "TnDamageTypeOmegaAOE"};
+    const std::string t = type.substr(type.find('.') == std::string::npos ? 0 : type.find('.') + 1);
+    bool respect = false, extraZ = false;
+    for (const char* k : kRespect) if (t.rfind(k, 0) == 0) respect = true;   // prefix: subclasses (AOE*, ...) inherit
+    for (const char* k : kExtraZ) if (t.rfind(k, 0) == 0) extraZ = true;
+    if (!respect) return;
+    Character* p = nullptr;
+    if (victim == localPlayer_) p = localDead_ ? nullptr : &player_.pawn();
+    for (MatchOpponent* o : opponents_) if (o->matchPlayer() == victim && o->spawned()) p = &o->pawn();
+    if (p) p->addMomentum(m, extraZ);
 }
 
 } // namespace game

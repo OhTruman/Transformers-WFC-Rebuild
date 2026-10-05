@@ -172,8 +172,23 @@ public:
     int meleeSweep_ = -1;                 // index of the active sweep window
     std::vector<int> meleeHit_;           // match players already hit by the active sweep
     int meleeAlternate_ = 0;
-    int meleeHitCount_ = 0;               // total melee hits landed (diagnostics)              // AnimSet chooser: Melee_EnergonSword_01 / _03
+    int meleeHitCount_ = 0;               // total melee hits landed (diagnostics)
+    bool meleeCarrier_ = false;           // the attack is the flag / bomb carrier's MWT_Flag / MWT_Bomb attack
+    int meleeVariant_ = 0;
+    int carryingHeavy_ = 0;               // 1 flag, 2 bomb held as the current (WT_Heavy) weapon
+    bool heavyDropRequested_ = false;     // a weapon swap away from the heavy weapon (ChangedWeapon -> TossWeapon)              // AnimSet chooser: Melee_EnergonSword_01 / _03
     bool isMeleeing() const { return meleeState_ != 0; }
+    // Knockback [CONF RE TARGETED_PASS3 §I]: Pawn.TakeDamage Momentum /= Mass (blueprint Mass 100). Robot: Pawn.AddVelocity
+    // (walking -> falling; Velocity.Z > JumpZ and new Z > 0 -> new Z x 0.5); vehicle: AddLinearVelocity(M / Mass x 0.5).
+    // momentumUU in UE units (UU kg / s); extraZ = the damage type's bExtraMomentumZ (Z = max(Z, 0.4 |M|), walking / RB only).
+    void addMomentum(core::Vec3 momentumUU, bool extraZ) {
+        if (extraZ) momentumUU.y = std::max(momentumUU.y, 0.4f * core::length(momentumUU));
+        core::Vec3 dv = momentumUU * (1.0f / 100.0f) * 0.01f;   // / Mass 100, UU/s -> m/s
+        if (moveForm() == Form::Vehicle) { velocity_ = velocity_ + dv * 0.5f; return; }
+        if (velocity_.y > robotParams().jumpSpeed() && dv.y > 0.0f) dv.y *= 0.5f;
+        if (onGround_) onGround_ = false;   // PHYS_Walking -> PHYS_Falling
+        velocity_ = velocity_ + dv;
+    }
     // One-shot action layer (melee clips): full body or upper body over locomotion.
     void playAction(const std::string& clip, bool upperBody) {
         actionClip_ = robotModel_ ? robotModel_->clipByName(clip) : -1; actionT_ = 0.0f; actionUpper_ = upperBody;
@@ -308,6 +323,7 @@ public:
     // (EquipTime); no firing in between [HIGH: HmWeapon PutDown / Equip states, WEPDATA times CONF].
     void requestWeaponSwitch(int dir) {
         // The grenade bag (TnGrenadeBag, WT_Grenades) is given without activation and thrown with G: not in the swap cycle.
+        if (carryingHeavy_) { heavyDropRequested_ = true; return; }   // ChangedWeapon tosses the heavy weapon; the gun returns
         int n = (int)inventory_.size();
         if (n < 2 || switchTo_ >= 0 || weapon().reloading()) return;
         int to = activeWeapon_;

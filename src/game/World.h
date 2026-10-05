@@ -61,6 +61,7 @@ struct HudGameState {
     bool dodging = false;
     bool cloaked = false;
     int hoverState = 0;
+    std::string heavyWeapon;                     // carried flag / bomb weapon ItemName ("" none): replaces the gun while held
     int grenades = 0;                            // grenade bag reserve (WT_Grenades); -1 = no bag
     int lockTarget = -1;                         // homing weapon: target match player (-1 none)
     float lockProgress = 0.0f;                   // LockOnTimer / LockOnTime
@@ -353,6 +354,7 @@ private:
     bool deferredKillstreak_ = false;
     int lockedClip_ = 0;
 public:
+    void applyKnockback(int victim, const core::Vec3& momentumUU, const std::string& damageType);   // RE §I gated knockback
     // TnPlayerController.TriggerKillstreak for the local player: the newest acquired streak; RequiresRobotForm streaks in
     // vehicle form transform first and trigger after (DeferredTriggerKillstreak). Returns the triggered id or "".
     std::string triggerLocalKillstreak();

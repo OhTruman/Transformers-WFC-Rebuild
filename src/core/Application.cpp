@@ -1667,7 +1667,7 @@ void Application::runParticipantTest() {
             E->setPosition(core::Vec3{lp.position().x + f.x * d, lp.position().y, lp.position().z + f.z * d});
         };
         bool ok = E != nullptr;
-        float h0 = 0, h1 = 0, h2 = 0, moved = 0;
+        float h0 = 0, h1 = 0, h2 = 0, moved = 0, pushed = 0;
         bool refusedReady = false, cdHeld = false;
         int whirlHits = 0;
         if (ok) {
@@ -1675,14 +1675,16 @@ void Application::runParticipantTest() {
             run(0.1f);
             h0 = E->pawn().health().current;
             core::Vec3 p0 = lp.position();
+            const core::Vec3 e0 = E->pawn().position();
             platform::InputFrame q; q.pressed[(int)platform::Button::Melee] = true; q.down[(int)platform::Button::Melee] = true;
             world_.handleInput(q, dt); world_.tick(dt);
             run(0.2f);
             h1 = E->pawn().health().current;
             moved = core::length(core::Vec3{lp.position().x - p0.x, 0, lp.position().z - p0.z});
+            pushed = core::length(core::Vec3{E->pawn().position().x - e0.x, 0, E->pawn().position().z - e0.z});
         }
-        LOG_INFO("PARTICIPANT melee: target %.0f -> %.0f HP, lunge %.2f m", h0, h1, moved);
-        check(ok && h0 - h1 == 150.0f && moved > 2.0f, "Q melee: assist lunge toward the enemy, MELEE_WeaponAttack 150 once per sweep");
+        LOG_INFO("PARTICIPANT melee: target %.0f -> %.0f HP, lunge %.2f m, target knocked back %.2f m", h0, h1, moved, pushed);
+        check(ok && h0 - h1 == 150.0f && moved > 2.0f && pushed > 0.0f, "Q melee: assist lunge toward the enemy, MELEE_WeaponAttack 150 once per sweep, Impulse 30000 / Mass 100 knockback");
         if (ok) {
             place(2.0f);
             run(0.1f);
@@ -1699,6 +1701,24 @@ void Application::runParticipantTest() {
             whirlHits = lp.meleeHitCount_ - hits0;
             cdHeld = world_.hudState().abilities[0].cooldown == 0.0f && lp.meleeState_ == 2;
         }
+        // Knockback gating (RE §I): Momentum / Mass 100; only RequestRespectForcesApplied damage types; vehicle x0.5.
+        float kMelee = 0, kShock = 0, kIon = 0, kVeh = 0;
+        if (ok) {
+            if (!E->spawned()) run(6.0f);
+            auto dv = [&](const core::Vec3& m, const char* t) {
+                E->setPosition(E->position()); world_.applyKnockback(E->matchPlayer(), m, t);
+                return core::length(E->pawn().velocity());
+            };
+            kMelee = dv({30000, 0, 0}, "TransGame.TnDamageTypeMelee");
+            kShock = dv({700000, 0, 0}, "TransGame.TnDamageTypeShockwave");
+            kIon = dv({30000, 0, 0}, "TransGame.TnDamageTypeIonBlaster");
+            E->pawn().beginTransform(); run(3.0f);
+            kVeh = dv({30000, 0, 0}, "TransGame.TnDamageTypeMelee");
+            E->pawn().beginTransform(); run(3.0f);
+        }
+        LOG_INFO("PARTICIPANT knockback: melee %.2f m/s, shockwave %.1f m/s, ion blaster %.2f, vehicle melee %.2f", kMelee, kShock, kIon, kVeh);
+        check(ok && std::fabs(kMelee - 3.0f) < 0.01f && std::fabs(kShock - 70.0f) < 0.1f && kIon == 0.0f && std::fabs(kVeh - 1.5f) < 0.01f,
+              "Knockback: melee 30000 -> 3 m/s, Shockwave 700000 -> 70 m/s, IonBlaster none (bIgnoreForces), vehicle x0.5");
         LOG_INFO("PARTICIPANT whirlwind: refused during Q swing %d; %d hits in 2 s, target %.0f -> %.0f HP, cooldown held %d", (int)refusedReady, whirlHits, h1, h2, (int)cdHeld);
         check(ok && refusedReady && whirlHits >= 2 && (h1 - h2 >= 140.0f || h2 <= 0.0f) && cdHeld,
               "Whirlwind: refused (no cooldown) while meleeing; 85 per sweep window (target hit in both windows of the first 2 s; other enemies in the box also hit); cooldown waits for the end");
@@ -1821,6 +1841,28 @@ void Application::runCtfExtTest() {
         bool returned = true; for (const auto& c : world_.mapState().carried()) if (c.kind == 0 && c.dropped) returned = false;
         LOG_INFO("CTFTEST drop: dropped %d stillDropped %d returned %d", (int)dropped, (int)stillDropped, (int)returned);
         check(dropped && stillDropped && returned, "carrier killed -> flag dropped; a defender on it returns it after ReturnFlagTime 10 s");
+        // Carrier heavy weapon: Transform to vehicle drops the flag (DropHeavyWeapons); a vehicle does not re-take it [PROV gate];
+        // back in robot form the attacker re-takes it. (The local carrier's gun block / swap toss is checked in round 2.)
+        {
+            run(6.0f);   // X respawn wave
+            Y->setPosition(at(cap) + core::Vec3{30, 0, 0});
+            X->setPosition(at(flag)); run(0.2f);
+            bool held = world_.mapState().carriedBy(X->matchPlayer()) >= 0;
+            X->pawn().beginTransform(); run(0.1f);
+            bool droppedOnTransform = world_.mapState().carriedBy(X->matchPlayer()) < 0;
+            run(3.0f);
+            bool vehNoPick = X->pawn().form() == game::Form::Vehicle && world_.mapState().carriedBy(X->matchPlayer()) < 0;
+            X->pawn().beginTransform(); run(3.0f);
+            bool noRepickInPlace = world_.mapState().carriedBy(X->matchPlayer()) < 0;   // still overlapping: no new Touch
+            core::Vec3 dropSpot = X->position();
+            X->setPosition(dropSpot + core::Vec3{8, 0, 0}); run(0.2f);
+            X->setPosition(dropSpot); run(0.2f);
+            bool repick = noRepickInPlace && X->pawn().form() == game::Form::Robot && world_.mapState().carriedBy(X->matchPlayer()) >= 0;
+            LOG_INFO("CTFTEST carrier: held %d dropped on transform %d vehicle no re-pick %d robot re-pick %d", (int)held, (int)droppedOnTransform, (int)vehNoPick, (int)repick);
+            check(held && droppedOnTransform && vehNoPick && repick, "carrier transform to vehicle drops the flag; vehicle form does not re-take it; robot form re-takes it on a new touch");
+            world_.applyMatchDamage(X->matchPlayer(), -1, 99999.0f, true, "TransGame.TnDamageTypeInstantKill");
+            run(0.2f);
+        }
         // Round timer: round 1 ends at TimeLimit -> 5 s between rounds -> round 2 with the attackers swapped -> match end.
         bool between = false; int roundSeen = 0;
         for (int i = 0; i < 60 * 40 && world_.match().state() == game::Match::State::InProgress; ++i) {
@@ -1831,6 +1873,23 @@ void Application::runCtfExtTest() {
         }
         int att2 = world_.match().attackingTeam();
         check(between && roundSeen == 1 && att2 == def, "round 1 ends on time, 5 s between rounds, round 2 attacked by the other team");
+        // Local carrier (round 2: the local player's team attacks).
+        run(0.5f);
+        if (world_.match().players()[(size_t)world_.localMatchPlayer()].team == att2 && !world_.localPlayerDead()) {
+            game::Character& lp = world_.player().pawn();
+            core::Vec3 fl = objPos("TnGameObjectivePickupFactoryFlag", att);
+            lp.setPosition(at(fl)); run(0.3f);
+            bool lheld = world_.mapState().carriedBy(world_.localMatchPlayer()) >= 0 && world_.hudState().heavyWeapon == "Code Of Power";
+            int ammo0 = lp.weapon().ammo;
+            platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+            for (int i = 0; i < 30; ++i) { world_.handleInput(fire, dt); world_.tick(dt); }
+            bool noGun = lp.weapon().ammo == ammo0;
+            platform::InputFrame sw; sw.pressed[(int)platform::Button::NextWeapon] = true; sw.down[(int)platform::Button::NextWeapon] = true;
+            world_.handleInput(sw, dt); world_.tick(dt); run(0.1f);
+            bool swapDrop = world_.mapState().carriedBy(world_.localMatchPlayer()) < 0;
+            LOG_INFO("CTFTEST local carrier: held %d gun blocked %d swap dropped %d", (int)lheld, (int)noGun, (int)swapDrop);
+            check(lheld && noGun && swapDrop, "local carrier: the flag is the held weapon (no gun fire); a weapon swap tosses it");
+        } else LOG_INFO("CTFTEST local carrier: local player not an attacker in round 2 (skipped)");
         for (int i = 0; i < 60 * 45 && world_.match().state() == game::Match::State::InProgress; ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
         check(world_.match().state() == game::Match::State::MatchOver && world_.match().endReason() == "Score",
               "after the last round the match ends (EndGame reason Score; team " + std::to_string(att) + " won " +

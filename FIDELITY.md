@@ -213,6 +213,27 @@ Inputs:
   - LagDegreesPerSecond 360 applied as a max turn rate [HIGH].
   - Applied as a mesh-space pitch over the animated pose (cannon level at rest) [PROV].
   - Test: 0.300 rad view → 0.300 rad hull-relative cannon, peak 360°/s.
+- **Knockback** [CONF RE TARGETED_PASS3 §I]:
+  - TnPawn bIgnoreForces: only RequestRespectForcesApplied damage types push: Melee / WeakMelee / Whirlwind,
+    Shockwave, AOE*, HeavyTankShell*, ShieldPush*, OmegaAOE*, ExplodeWithForces …
+    (* bExtraMomentumZ: Z = max(Z, 0.4|M|)). Weapon, projectile and grenade damage types give none.
+  - Momentum / Mass 100. Robot: Pawn.AddVelocity (walking → falling; halve a rising Z above JumpZ).
+    Vehicle: ×0.5 linear velocity.
+  - Sources:
+    - melee normal(victim − attacker) × Impulse: 30000; flag / bomb 80000; Whirlwind 2000;
+    - Shockwave 700000 from the origin.
+  - Test: melee 3.00 m/s, Shockwave 70.0 m/s, IonBlaster 0, vehicle 1.50 m/s.
+- **Flag / bomb carrier** [CONF script TnWeaponFlagBase / TnInventoryManager / TnPawn.Transform; RE §I]:
+  - The objective is the held WT_Heavy weapon (Code Of Power / Bomb, HUD heavyWeapon): no gun fire, and
+    grenade toss refused (dry fire).
+  - Q = the MWT_Flag / MWT_Bomb attack: Melee_Mace _01/_02/_03 sweeps, 9999 damage, impulse 80000, no lunge.
+  - Dropped (a pickup at the carrier) on Transform to vehicle (DropHeavyWeapons), on a weapon swap (ChangedWeapon
+    TossWeapon) and on death.
+  - A dropped pickup is taken on a new Touch only: a pawn standing on it must leave and re-enter [HIGH stock Touch].
+  - Vehicle-form pawns do not take the flag / bomb [PROV: the vehicle-side gate is not recovered].
+  - DropFrom FindSpot box (450, 450, 100) is not run; the drop is at the carrier [PARTIAL].
+  - Tests (WFC_CTFTEST 12/12, Streets + Gorge): transform drop, no vehicle re-pick, robot re-pick on a new touch;
+    the local carrier's gun is blocked and a swap tosses the flag.
 - Barrier, RollerSphere, DecoyTrap, HardLock, Disguise, Drain, SpawnSentry, AbilityJammer,
   SpawnAmmoCrate, TransformDisruptor … are listed per slot and reported unimplemented (log + HUD
   `implemented = false`) [PARTIAL]. Skills and killstreaks are not implemented [PARTIAL].
