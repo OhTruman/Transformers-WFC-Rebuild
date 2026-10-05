@@ -758,9 +758,11 @@ void Pipeline::drawMapPresentation() {
             const FxLod& L = sys.emitters[e].lods[(size_t)rt.lod];
             float IR[3][3];                                    // instance rows (ammo factory: spinning yaw)
             std::memcpy(IR, in.R, sizeof(IR));
-            // Particle size scale (UE3 FParticle*EmitterInstance::FillReplayData: Source.Scale = Component->Scale *
-            // Scale3D * owner DrawScale * DrawScale3D; sprites / mesh particles render Particle.Size * Source.Scale)
-            // = the per-axis length of the instance rows (component transform incl. DrawScale and matinee scale).
+            // Particle size scale, CONFIRMED in the WFC xex (RE 2026-10-05): FillReplayData sprite 0x8300C678 / mesh
+            // 0x83052BD8: Scale = Component Scale(+0x178) * Scale3D(+0x17C) * owner DrawScale(+0x140) * DrawScale3D(+0x144)
+            // unless AbsoluteScale (+0xF4 & 0x100000). Mesh gates: local-space emitters get none (LocalToWorld carries
+            // it: IR below) and a per-instance ignore-component-scale flag drops the component factor - no TypeDataMesh
+            // in Streets / Berth / UI_FrontEnd sets it. = the per-axis length of the instance rows.
             static const bool noSizeScale = std::getenv("WFC_FX_NOSIZESCALE") != nullptr;   // A/B diagnostics
             float sizeScale[3] = {1, 1, 1};
             if (!noSizeScale)
