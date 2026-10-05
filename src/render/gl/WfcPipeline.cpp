@@ -1815,7 +1815,8 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             else if (g.world) ++counts_.worldDraws;
             if (dynamicObject) ++counts_.dynamicDraws;
             if (frameFx_) ++counts_.fxDraws;
-            if (trans) ++counts_.translucent; else ++counts_.opaque;
+            if (trans) ++counts_.translucent;
+            else { ++counts_.opaque; if (!glIsEnabled(GL_DEPTH_TEST)) ++counts_.opaqueNoDepthTest; }
             if (s.lmTex[0] >= 0 || s.vlmTex != 0) ++counts_.lightmapped;
             frameMats_.insert(s.matName);
             if ((size_t)s.prog < progSeen_.size() && !progSeen_[(size_t)s.prog]) { progSeen_[(size_t)s.prog] = 1; ++counts_.programs; }

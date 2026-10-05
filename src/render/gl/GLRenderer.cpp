@@ -94,6 +94,23 @@ public:
 
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         if (visualCheckOn()) glEntry_ = captureGlState();   // what the previous user of the context left bound
+        // The 3D frame owns its GL state. The draws set blend / depth writes / culling per material, but depth TEST,
+        // depth func, scissor, stencil, colour mask and polygon mode were only set once in init(). M11 root cause:
+        // the frontend's GFx host leaves GL_DEPTH_TEST disabled, so after the menus every map was drawn without depth
+        // testing (human playtest: architecture "missing", effects floating) while a direct boot rendered correctly.
+        static const bool inheritState = std::getenv("WFC_M11_INHERITSTATE") != nullptr;   // regression reproduction only
+        if (!inheritState) {
+            glEnable(GL_DEPTH_TEST);
+            glDepthFunc(GL_LEQUAL);
+            glDepthMask(GL_TRUE);
+            glDisable(GL_SCISSOR_TEST);
+            glDisable(GL_STENCIL_TEST);
+            glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+            glCullFace(GL_BACK);
+            glFrontFace(GL_CCW);
+            glDisable(GL_BLEND);
+        }
         const Camera& cam0 = camIn;
         glViewport(0, 0, vpW, vpH);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -122,6 +139,12 @@ public:
 
     void endFrame() override {
         if (wfc_.active()) { wfc_.drawMapPresentation(); wfc_.endFrame(); }
+        if (visualCheckOn()) {                       // GL errors raised by this frame's 3D work (first ones logged)
+            int n = 0;
+            for (GLenum e = glGetError(); e != GL_NO_ERROR && n < 64; e = glGetError(), ++n)
+                if (glErrorLogs_ < 20) { ++glErrorLogs_; LOG_ERROR("GL error 0x%04X in 3D frame %d", (unsigned)e, wfc_.frameNumber()); }
+            glErrors_ = n;
+        }
         sampleScene();
         drawLegacyMarker();
         drawReticle();
@@ -535,8 +558,8 @@ public:
         RenderDiagnostics d = renderDiagnostics();
         std::string why = verdict(d, m);
         LOG_INFO("VISUALCHECK frame %d path=%s black=%.3f flat=%.3f lumaP50=%.0f colors=%d draws=%d world=%d bsp=%d "
-                 "materials=%d noProgram=%d -> %s", d.frame, d.originalPath ? "original" : "legacy", m.black, m.flat,
-                 m.p50, m.colors, d.draws, d.worldDraws, d.bspDraws, d.distinctMaterials, d.noProgramSubs,
+                 "materials=%d noProgram=%d noDepth=%d glErr=%d -> %s", d.frame, d.originalPath ? "original" : "legacy", m.black, m.flat,
+                 m.p50, m.colors, d.draws, d.worldDraws, d.bspDraws, d.distinctMaterials, d.noProgramSubs, d.opaqueNoDepthTest, d.glErrors,
                  why.empty() ? "PASS" : ("FAIL: " + why).c_str());
     }
 
@@ -548,8 +571,13 @@ public:
         if (d.renderDataRequested && !d.originalPath && !d.legacyRequested)
             add("legacy fallback (" + (d.lastLoadError.empty() ? std::string("no render data") : d.lastLoadError) + ")");
         if (d.originalPath && d.worldDraws + d.bspDraws == 0) add("no map geometry drawn");
-        if (m.black > 0.60f) add("scene " + std::to_string((int)(m.black * 100)) + "% black");
-        if (m.flat > 0.70f) add("scene " + std::to_string((int)(m.flat * 100)) + "% flat tiles");
+        if (d.opaqueNoDepthTest > 0) add(std::to_string(d.opaqueNoDepthTest) + " opaque draws without depth testing");
+        if (d.glErrors > 0) add(std::to_string(d.glErrors) + " GL errors");
+        // black / flat coverage judges a level (or a fallback), not a sparse menu backdrop: the lobby SpaceDome is ~70 %
+        // flat by design (M11 long session: 98 false FAILs at 8 draws)
+        const bool judgeImage = !d.originalPath || d.worldDraws + d.bspDraws >= 100;
+        if (judgeImage && m.black > 0.60f) add("scene " + std::to_string((int)(m.black * 100)) + "% black");
+        if (judgeImage && m.flat > 0.70f) add("scene " + std::to_string((int)(m.flat * 100)) + "% flat tiles");
         // few colours alone is not a failure (the lobby SpaceDome is dark and smooth: 19 colours); with an almost
         // black image it is
         if (m.colors < 32 && m.p95 < 16.0f) add("near-black (" + std::to_string(m.colors) + " colours, luma p95 " +
@@ -619,6 +647,7 @@ public:
         d.draws = c.draws; d.worldDraws = c.worldDraws; d.bspDraws = c.bspDraws; d.dynamicDraws = c.dynamicDraws;
         d.fxDraws = c.fxDraws; d.opaqueDraws = c.opaque; d.translucentDraws = c.translucent;
         d.lightmappedDraws = c.lightmapped; d.culledSubs = c.culled; d.noProgramSubs = c.noProgram;
+        d.opaqueNoDepthTest = c.opaqueNoDepthTest; d.glErrors = glErrors_;
         d.distinctMaterials = c.materials; d.distinctPrograms = c.programs; d.noProgramMaterials = c.noProgramMats;
         d.materials = wfc_.materialCount(); d.programs = wfc_.programCount(); d.textures = wfc_.textureCount();
         d.lightmaps = wfc_.lightmapCount(); d.meshes = wfc_.meshCount();
@@ -653,6 +682,7 @@ public:
                      d.frame, d.draws, d.worldDraws, d.bspDraws, d.dynamicDraws, d.fxDraws);
         std::fprintf(f, "  \"opaque_draws\": %d, \"translucent_draws\": %d, \"lightmapped_draws\": %d, \"culled_subs\": %d, \"no_program_subs\": %d,\n",
                      d.opaqueDraws, d.translucentDraws, d.lightmappedDraws, d.culledSubs, d.noProgramSubs);
+        std::fprintf(f, "  \"opaque_no_depth_test\": %d, \"gl_errors\": %d,\n", d.opaqueNoDepthTest, d.glErrors);
         std::fprintf(f, "  \"distinct_materials\": %d, \"distinct_programs\": %d,\n  \"no_program_materials\": [",
                      d.distinctMaterials, d.distinctPrograms);
         for (size_t i = 0; i < d.noProgramMaterials.size(); ++i)
@@ -1164,6 +1194,7 @@ private:
     bool sceneSampled_ = false, sceneSamplePending_ = false;
     long sceneFrames_ = 0;
     ImageMetrics scene_;
+    int glErrors_ = 0, glErrorLogs_ = 0;
     ReticleState reticle_;
     GLuint reticleTex_ = 0;
     bool reticleTried_ = false;

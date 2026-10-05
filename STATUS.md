@@ -2115,6 +2115,24 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 11 (2026-10-04, agents/rendering) — real Release path: maps without depth testing
+- **Root cause:** after the frontend menus, every map was drawn with `GL_DEPTH_TEST` disabled.
+  - The GFx pass left it off (Frontend, fixed in a96f841).
+  - Rendering's frame never re-established it.
+  - Loads and data were complete; the human's log proves it.
+- **Fixed:** `GLRenderer::beginFrame` establishes the frame's GL state.
+- **Verified on the real Release layout:** with the human profile, Streets → Berth → Streets, three resolutions, a runtime
+  fullscreen switch, and a 10-match single-process session. 0 GL errors throughout.
+- **Guards:**
+  - an opaque draw without depth testing or any GL error FAILs the verdict;
+  - `tools/render/release_path_check.sh` checks the player route with structural floors. It fails the reproduced bug and
+    passes the fix.
+- **Integration:**
+  - merge agents/rendering;
+  - rebuild Debug and Release;
+  - `build_render_data.ps1 -Map Standard`;
+  - run `release_path_check.sh`.
+
 ## RENDERING MILESTONE 10 (2026-10-04, agents/rendering) — M06 playtest visual regression
 - **Root cause:** the Release executable (`build/release/bin`) found no render data, so every map and menu scene silently
   used the legacy fixed-function renderer: black Streets, giant grey sphere and rainbow tori behind the menu.

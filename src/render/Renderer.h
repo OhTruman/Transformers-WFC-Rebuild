@@ -111,6 +111,8 @@ public:
         int frame = 0;
         int draws = 0, worldDraws = 0, bspDraws = 0, dynamicDraws = 0, fxDraws = 0;
         int opaqueDraws = 0, translucentDraws = 0, lightmappedDraws = 0, culledSubs = 0, noProgramSubs = 0;
+        int opaqueNoDepthTest = 0;        // opaque draws without depth testing: the M11 menu -> map state leak
+        int glErrors = 0;                 // glGetError count over the last checked frame (WFC_VISUALCHECK)
         int distinctMaterials = 0, distinctPrograms = 0;
         std::vector<std::string> noProgramMaterials;   // drawn submeshes without a compiled original material
         size_t materials = 0, programs = 0, textures = 0, lightmaps = 0, meshes = 0;
