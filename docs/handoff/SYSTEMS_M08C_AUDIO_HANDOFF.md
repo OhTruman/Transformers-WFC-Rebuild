@@ -34,8 +34,8 @@ There were two causes, both fixed in Systems. No Frontend change is needed.
 - AssetTools now extracts both twins to `content/_LOC/<int|FRA>/<group>/<name>.wav` (d71cd07).
 - Systems tags each localized wave with its merged copy's twin, then plays the GLanguage twin (`WFC_LANGUAGE`, default INT → `int`).
 - A wave with no twin for the selected language is not played (logged once); another language is never substituted.
-- All 261 match/announcer waves resolve to `_LOC/int`.
-- 136 French-owned campaign character dialogue waves have no int twin, so they stay silent (AssetTools data).
+- Every localized wave in the Systems manifests resolves to `_LOC/int`: 264 match / announcer and 498 character dialogue.
+- The character dialogue twins come from the per-language dialogue banks `WL_DX_<Char>_INT` / `_FRA` (AssetTools 768ea21).
 
 ## 3. Vehicle audio incomplete
 

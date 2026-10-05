@@ -8,7 +8,7 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
   - the movie preset is now held by the caller's flag *or* the movie sound, so a GFx script movie releases it when its sound stops;
   - one-shot instances are no longer retired after 10 s while their voice still sounds (the 380 s title music had gone unmanaged).
   - Real device: Extras natural end, skip, back and consecutive all return the same music instance; no streams or voices left.
-- **French match-start line**: localized waves now come from the GLanguage `_LOC` twin (AssetTools `content/_LOC/<twin>/`). They are never substituted from another language; all match / announcer waves resolve to `int`.
+- **French match-start line**: localized waves now come from the GLanguage `_LOC` twin (AssetTools `content/_LOC/<twin>/`). They are never substituted from another language. All 762 localized waves (match, announcer and character dialogue) resolve to `int` (AssetTools d71cd07 + 768ea21).
 - **Vehicle audio per form**: the SpeedSound and tire-tread loops, BoosterSound as a loop (stop, BoosterAmount), and the ascend-stop, descend, roll, 180-turn, enter and exit events — all from HmVehicleAudioComponent.
   - Optimus is unchanged (57 / 57 starts).
   - Integration must feed the per-form signals (table in the handoff).
