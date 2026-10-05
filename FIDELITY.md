@@ -17,6 +17,11 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 35 — VECTOR-CHANNEL PROOF INHERITED BY INSTANCES (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| LogoAUT / LogoDEC_MATINST GLSL error (Integration M08b) | instances of ParticleBase_BW_MAT, whose graph is already proven to use VectorParameter channel outputs (vector_channel_proven.txt: AppendVector(UVandOffset.B, UVandOffset.B) is invalid as vec4 + vec4); matc tested only the instance path, so instances fell back to the full-vector reading (vec4(vec4, vec4)) | Integration m08b_soak wfc.log; matc trace | CONFIRMED | matc applies the proof to the instance's master / chain. Streets: only the two Logo instances change; 0 compile failures |
+
 ## MILESTONE 34 — PARTICLE ColorByParameter DefaultColor (per template) (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
