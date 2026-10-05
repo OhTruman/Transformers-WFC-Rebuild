@@ -139,7 +139,8 @@ bool Application::init() {
     if (std::getenv("WFC_MAPSUITE")) { runMapSuite(); return false; }          // measurements only
     if (std::getenv("WFC_CTFTEST")) { runCtfExtTest(); return false; }         // measurements only
     if (std::getenv("WFC_PARTICIPANTTEST")) { runParticipantTest(); return false; }
-    if (std::getenv("WFC_SWITCHTEST")) { runSwitchTest(); return false; }   // weapon switching, human playtest M09   // measurements only
+    if (std::getenv("WFC_SWITCHTEST")) { runSwitchTest(); return false; }   // weapon switching, human playtest M09
+    if (std::getenv("WFC_SCORETEST")) { runScoreTest(); return false; }     // fresh match state, human playtest M09   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -3029,9 +3030,58 @@ void Application::runSwitchTest() {
         check(veh && robot && kept == c.w[1] && t1 == c.w[0],
               tag + ": transform to vehicle and back keeps " + kept + "; switch after -> " + t1);
         // weapon mesh follows the active weapon (shown weapon id = active)
-        check(pc.weapon().def && world_.hudState().weaponId == pc.weapon().def->id && !world_.hudState().weaponSwitching, tag + ": HUD weaponId " + world_.hudState().weaponId + " = active");
+        const std::string hudCls = world_.player().controller().hudAimState().weaponClass;
+        check(pc.weapon().def && world_.hudState().weaponId == pc.weapon().def->id && !world_.hudState().weaponSwitching &&
+              hudCls == std::string("TnWeapon") + pc.weapon().def->id, tag + ": HUD weaponId " + world_.hudState().weaponId + ", NotifyCurrentWeaponChanged " + hudCls + " = active");
     }
     LOG_INFO("SWITCH SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_SCORETEST: a fresh TDM starts at the original values (PRI / Team Score 0, kills / deaths 0, clock = TimeLimit, InProgress
+// after the countdown, full clip); a second match after kills / deaths / MatchOver starts fresh again [CONF RE pass 4].
+void Application::runScoreTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("SCORE %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    auto snapshot = [&](const char* when) {
+        game::HudGameState h = world_.hudState();
+        std::string rows;
+        for (const auto& r : h.scoreboard) rows += " [" + r.name + " " + std::to_string(r.score) + "/" + std::to_string(r.kills) + "/" + std::to_string(r.deaths) + "]";
+        LOG_INFO("SCORE %s: state %d team %d-%d score %d kills %d deaths %d clock %d/%d goal %d clip %d/%d%s", when, h.matchState, h.teamScore[0],
+                 h.teamScore[1], h.score, h.kills, h.deaths, h.remainingTime, h.timeLimit, h.goalScore, h.clipAmmo, h.reserveAmmo, rows.c_str());
+        return h;
+    };
+    auto fresh = [&](const game::HudGameState& h, const std::string& tag) {
+        bool rowsZero = true;
+        for (const auto& r : h.scoreboard) rowsZero = rowsZero && r.score == 0 && r.kills == 0 && r.deaths == 0;
+        check(h.teamScore[0] == 0 && h.teamScore[1] == 0 && h.score == 0 && h.kills == 0 && h.deaths == 0 && rowsZero,
+              tag + ": team 0-0, personal score / kills / deaths 0, every scoreboard row 0");
+    };
+    for (int matchNo = 1; matchNo <= 3; ++matchNo) {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=120", L);
+        world_.launchMatch(L);
+        if (matchNo == 1) for (int i = 0; i < 2; ++i) world_.addMatchOpponent("S" + std::to_string(i), false);
+        game::HudGameState h0 = snapshot(("match " + std::to_string(matchNo) + " t=0").c_str());
+        fresh(h0, "match " + std::to_string(matchNo) + " at launch");
+        run(10.6f);
+        game::HudGameState h1 = snapshot(("match " + std::to_string(matchNo) + " in progress").c_str());
+        fresh(h1, "match " + std::to_string(matchNo) + " after the countdown");
+        const game::Character& pc = world_.player().pawn();
+        check(h1.matchState == (int)game::Match::State::InProgress && h1.timeLimit == 120 && h1.remainingTime > 100 && h1.remainingTime <= 120 &&
+              h1.clipAmmo == pc.weapon().magSize, "match " + std::to_string(matchNo) + ": InProgress, clock " + std::to_string(h1.remainingTime) +
+              " of 120, full clip " + std::to_string(h1.clipAmmo));
+        // Activity: a kill, a death, damage; then MatchOver (time) before the next launch.
+        for (game::MatchOpponent* o : world_.matchOpponents())
+            if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) {
+                world_.applyMatchDamage(o->matchPlayer(), world_.localMatchPlayer(), 99999.0f, false, "TransGame.TnDamageTypeIonBlaster"); break; }
+        world_.killLocalPlayer(-1, true);
+        world_.player().pawn().weapon().ammo = 3;
+        run(1.0f);
+        snapshot(("match " + std::to_string(matchNo) + " after activity").c_str());
+        if (matchNo == 2) { for (int i = 0; i < 60 * 130 && world_.match().state() == game::Match::State::InProgress; ++i) run(dt); }
+    }
+    LOG_INFO("SCORE SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

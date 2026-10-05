@@ -34,6 +34,7 @@ private:
     void runCtfExtTest();
     void runParticipantTest();
     void runSwitchTest();
+    void runScoreTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

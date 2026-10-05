@@ -92,6 +92,12 @@ struct HudGameState {
     bool locked = false;                         // lock acquired (the next shot homes)                          // 1 rising to hover, 2 hovering (TnAcrobaticsManager)                        // TnBuffCloak active (Rendering: cloak shader)
     // CTF / EXT: attacking team (GRI.AttackingTeam), rounds, carried objectives, planted bomb (CurrentObjectiveCountdown).
     int attackingTeam = 255, currentRound = 0, rounds = 0;
+    // GRI values Hud_GFX reads through <CurrentGame:...> [CONF Default__TnGameReplicationInfoMultiplayer: AttackingTeamIndex -1,
+    // CurrentObjectiveCountdown -1; CompetitiveScoreEnabled not authored = engine default 0 (HIGH)]:
+    //  attackingTeamIndex = GRI.AttackingTeamIndex (CTF round attackers / EXT bomb holder team, else -1);
+    //  currentObjectiveCountdown = whole seconds of the planted bomb fuse (EXT), else -1 [PARTIAL: DOM / KOTH not recovered].
+    int attackingTeamIndex = -1, currentObjectiveCountdown = -1;
+    bool competitiveScoreEnabled = false;
     bool betweenRounds = false;
     struct CarriedObj { int kind; int holder; int holderTeam; bool dropped; bool active; core::Vec3 pos; float autoReturn, returnLeft, sleep; };
     std::vector<CarriedObj> carried;

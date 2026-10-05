@@ -100,6 +100,8 @@ public:
         for (int i = 0; i < (int)Button::Count; ++i) {
             int vk = vkFor((Button)i);
             bool nowDown = vk && (GetAsyncKeyState(vk) & 0x8000) != 0;
+            // Melee is also the middle mouse button (shipped PC bindings: Q / MiddleMouseButton) [CONF Controls card].
+            if ((Button)i == Button::Melee && (GetAsyncKeyState(VK_MBUTTON) & 0x8000) != 0) nowDown = true;
             if (!focused_) nowDown = false;
             input.pressed[i] = nowDown && !input.down[i];
             input.down[i] = nowDown;

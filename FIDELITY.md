@@ -77,6 +77,22 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ## PASS 23 — human playtest fidelity (2026-10-05)
 
+### Fresh match state [CONFIRMED ORIGINAL: RE pass 4 - PRI / Team Score 0, OldPRI.Reset, TnTeamInfo zeroed on seamless travel]
+- WFC_SCORETEST 9/9, three consecutive TDM launches with kills / deaths / damage / a timed-out match in between. At launch and
+  after the countdown every value is fresh: team 0-0, personal score / kills / deaths 0, all scoreboard rows 0, clock = TimeLimit,
+  full clip, InProgress after PendingMatch. The Frontend route uses the same World::launchMatch reset.
+- The visible "wrong score" in the playtest was the Hud_GFX GoalScore default (10, read once at load) filling the TDM bars before the
+  match's PointsToWin arrived - fixed on the Frontend side (agents/frontend), not Gameplay state.
+- GRI values for Hud_GFX: attackingTeamIndex (CTF / EXT, else -1) and currentObjectiveCountdown (EXT fuse, else -1) [CONF CDO
+  defaults], competitiveScoreEnabled 0 [HIGH: not authored]. DOM / KOTH objective countdown [PARTIAL].
+
+### Input details [CONFIRMED ORIGINAL: shipped PC bindings]
+- Melee is Q or the middle mouse button.
+- A Fire click shorter than one simulation tick (144 / 240 Hz frames) is latched for the next step (one shot attempt); a release
+  before the refire still clears it, as StopFire clears PendingFire.
+- PlayerController::hudAimState().weaponClass = the held class (TnWeapon<id>, or TnWeaponFlag1Hand / TnWeaponBomb while carrying);
+  it was hard-coded TnWeaponIonBlaster (Integration report).
+
 ### Weapon switching [CONFIRMED ORIGINAL: HmInventoryManager / HmWeapon / Engine.Weapon script; Xe-TransInput.ini; RE pass 4]
 - Playtest symptom: the selected primary appeared, but the player could not switch to the secondary.
 - Chain checked:
