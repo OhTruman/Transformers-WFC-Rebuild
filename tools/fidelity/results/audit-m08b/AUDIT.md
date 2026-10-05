@@ -131,8 +131,13 @@ human tester. Findings P1-2 and P2-2 hide behind this.
   - Every match loads the selected chassis plus the boot-default Truck; previews load more.
   - ExtractedAssets is unversioned, so existing builds (M08b included) pick this up with no code change: their load
     time / memory baselines are no longer comparable.
-  - The next FAST gate's resources check (private MB) and the match load time must be compared with the 175a634
-    numbers (peak about 3.2 GB private).
+  - **Measured (2026-10-05 14:20):** the same 175a634 Release exe, the same frontend route (2 matches), before vs after
+    the re-export.
+    - It loaded Jet4 321 / Truck 298 clips, against 91 / 92 before.
+    - Peak private 3,210 → 3,098 MB, peak working set 918 → 840 MB.
+    - Wall time equal within 1 s (129 vs 128 one-second samples). Flow `t` is simulation time, so it can't time loads.
+    - **No measurable regression; no split needed now.** AssetTools' fallback, if a later gate regresses:
+      `robot.glb` (core) + `robot_anims_extra.glb` (on demand). Before c6c519c robot.glb was 12-14 MB with 72-98 clips.
 
 ### P2-2 Hit reactions and melee knock-back animations are never played (undocumented)
 - **Owner:** Gameplay.
