@@ -22,7 +22,7 @@
 #              must change the binding), Create a Character (preview, exit), repeated forward / back. Every screen is
 #              classified SCREEN PRESENT / DISPLAY CORRECT / INTERACTION WORKING / FULLY FUNCTIONAL; no exit = SOFT LOCK.
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [ValidateSet("Debug", "Release")][string]$Config = "Debug",
-      [string]$RenderData = "", [string[]]$Parts = @(), [string]$Reference = "", [int]$MapId = 508, [string]$Label = "", [switch]$ReportOnly)   # -ReportOnly: judge existing evidence in -OutDir, run nothing
+      [string]$RenderData = "", [string[]]$Parts = @(), [string]$Reference = "", [int]$MapId = 508, [string]$Label = "", [string[]]$Watch = @(), [switch]$ReportOnly)   # -Watch: only these soft-lock watchdog screens (FAST tier)   # -ReportOnly: judge existing evidence in -OutDir, run nothing
 $ErrorActionPreference = "Stop"
 $Parts = @($Parts | ForEach-Object { $_ -split "," } | Where-Object { $_ }); if (-not $Parts.Count) { $Parts = @("route", "direct", "reference", "watchdog") }
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\Shots.ps1"); . (Join-Path $PSScriptRoot "lib\Present.ps1")
@@ -181,7 +181,8 @@ if ($Parts -contains "watchdog") {
         # back_forward: focus resets to Campaign after every return (Campaign itself is offline / out of scope)
         back_forward    = @{ path = ((1..3 | ForEach-Object { (Down 1) + ";ui:Accept;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1.5;ui:Back;" + $(if ($quitBox) { "wait:t=1.5;ui:Accept;" } else { "" }) + "wait:level=FrontEnd;wait:ui=FrontEnd;wait:t=2" }) -join ";") + ";" + (Down 3) + ";ui:Accept;wait:t=2;ui:Back;wait:t=2;" + (Down 1) + ";ui:Accept;wait:t=2;ui:Back;wait:t=2"; exits = 0; owner = "Frontend"; expect = "cycle" }
     }
-    foreach ($k in $screens.Keys) {
+    $Watch = @($Watch | ForEach-Object { $_ -split "," } | Where-Object { $_ })
+    foreach ($k in @($screens.Keys | Where-Object { -not $Watch.Count -or $Watch -contains $_ })) {
         $sc = $screens[$k]; $d = Join-Path $OutDir "watchdog_$k"; New-Item -ItemType Directory -Force $d | Out-Null
         $typing = ""; if ($sc.typed) { $typing = $(if ($typeStep) { "type:$($sc.typed);wait:t=0.5" } else { (($sc.typed.ToCharArray() | ForEach-Object { "key:$([int][char]$_);wait:t=0.25" }) -join ";") }) + ";wait:t=1;shot:$d\c_typed.bmp;dump:FrontEnd" }
         $rebind = ""; if ($sc.expect -eq "rebind") { $rebind = "dump:FrontEnd;ui:Accept;wait:t=1;key:75;wait:t=1.5;shot:$d\c_rebound.bmp;dump:FrontEnd" }
@@ -253,13 +254,15 @@ if ($Parts -contains "watchdog") {
                 $opOn = @($em | Where-Object { $_.param -eq "Opacity" -and $_.state -eq "on" }); $hiOn = @($em | Where-Object { $_.param -eq "Highlighted" -and $_.state -eq "on" })
                 $last = @{}; foreach ($e in $em) { if ($e.param -eq "Opacity") { $last["$($e.actor)"] = "$($e.state)" } }
                 $stillOn = @($last.Keys | Where-Object { $last[$_] -eq "on" })
-                $st = if (-not $em.Count) { "FAIL" } elseif (-not $opOn.Count -or -not $hiOn.Count) { "FAIL" } elseif ($stillOn.Count) { "PARTIAL" } else { "PASS" }
+                # Highlighted turns on only when a faction's CHASSIS button is focused (glow<Faction>): this watchdog path
+                # (overview -> Back) never focuses one, so a missing Highlighted is "not exercised" (PARTIAL), not a failure
+                $st = if (-not $em.Count -or -not $opOn.Count) { "FAIL" } elseif ($stillOn.Count) { "FAIL" } elseif (-not $hiOn.Count) { "PARTIAL" } else { "PASS" }
                 # the glow draws only when the renderer applies material parameters (Rendering M33 setFrontendMaterialParam) AND the
                 # render data carries UI_CharacterCustomization\material_instance_actors.json (without it the call returns false)
                 $rdCand = @($RenderData, (Join-Path (Split-Path $exe) "..\..\work\render"), (Join-Path $Root "work\render")) | Where-Object { $_ }
                 $miaFile = @($rdCand | ForEach-Object { Join-Path $_ "UI_CharacterCustomization\material_instance_actors.json" } | Where-Object { Test-Path $_ } | Select-Object -First 1)[0]
                 $rmp = [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp, *.h -ErrorAction SilentlyContinue | Select-String -Pattern "setFrontendMaterialParam" -SimpleMatch -List | Select-Object -First 1)
-                Res "watchdog.customization.emblem_state" $st ("STATE ONLY (trace): {0} emblem transitions; Opacity on {1} ({2}); Highlighted on {3} ({4}); Opacity still on after leaving Create a Character: {5}. Visible glow: {6}" -f $em.Count, $opOn.Count, ((@($opOn | ForEach-Object { $_.actor -replace 'MaterialInstanceActor_', '' } | Select-Object -Unique)) -join ","), $hiOn.Count, ((@($hiOn | ForEach-Object { $_.actor -replace 'MaterialInstanceActor_', '' } | Select-Object -Unique)) -join ","), $(if ($stillOn.Count) { $stillOn -join "," } else { "none" }), $(if ($rmp -and $miaFile) { "drawable: renderer has setFrontendMaterialParam and $miaFile exists - HUMAN check (item 2): overview = red Autobot + purple Decepticon logos behind the robots; chassis menu = the selected faction's logo glowing, the other hidden; party lobby / class list = none" } elseif ($rmp) { "NOT DRAWN: renderer has setFrontendMaterialParam but the render data lacks UI_CharacterCustomization\material_instance_actors.json (regenerate render data - Rendering); HUMAN check (item 2)" } else { "NOT YET DRAWN (no setFrontendMaterialParam in this build - Rendering M33+); HUMAN check (item 2)" })) "Frontend"
+                Res "watchdog.customization.emblem_state" $st ("STATE ONLY (trace): {0} emblem transitions; Opacity on {1} ({2}); Highlighted on {3} ({4}){7}; Opacity still on after leaving Create a Character: {5}. Visible glow: {6}" -f $em.Count, $opOn.Count, ((@($opOn | ForEach-Object { $_.actor -replace 'MaterialInstanceActor_', '' } | Select-Object -Unique)) -join ","), $hiOn.Count, ((@($hiOn | ForEach-Object { $_.actor -replace 'MaterialInstanceActor_', '' } | Select-Object -Unique)) -join ","), $(if ($stillOn.Count) { $stillOn -join "," } else { "none" }), $(if ($rmp -and $miaFile) { "drawable: renderer has setFrontendMaterialParam and $miaFile exists - HUMAN check (item 2): overview = red Autobot + purple Decepticon logos behind the robots; chassis menu = the selected faction's logo glowing, the other hidden; party lobby / class list = none" } elseif ($rmp) { "NOT DRAWN: renderer has setFrontendMaterialParam but the render data lacks UI_CharacterCustomization\material_instance_actors.json (regenerate render data - Rendering); HUMAN check (item 2)" } else { "NOT YET DRAWN (no setFrontendMaterialParam in this build - Rendering M33+); HUMAN check (item 2)" }), $(if (-not $hiOn.Count) { " - not exercised: this path never focuses a chassis button" } else { "" })) "Frontend"
             }
         }
         if ($mi) { Row "watchdog" $k "b_inside.bmp" $(if ($display) { "PASS" } else { "FAIL" }) $mi }

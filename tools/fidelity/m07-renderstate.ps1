@@ -14,7 +14,7 @@
 # Negative controls (only when the exe has the hooks): WFC_GFX_NO_GLRESTORE=1 (Frontend's restore off),
 # WFC_M11_INHERITSTATE=1 (Rendering's per-frame state reset off), and both: with BOTH defences off the world MUST fail -
 # if it passes, the detector is blind (TEST FAULT); with either one off the other defence must keep the world intact.
-param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [ValidateSet("Release", "Debug")][string]$Config = "Debug", [switch]$ReportOnly)
+param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [ValidateSet("Release", "Debug")][string]$Config = "Debug", [string[]]$OnlyVariants = @(), [switch]$ReportOnly)   # -OnlyVariants normal: FAST tier (no negative controls)
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\Present.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 Add-Type -ReferencedAssemblies System.Drawing -Path (Join-Path $PSScriptRoot "lib\ImageStats.cs") -ErrorAction SilentlyContinue
@@ -31,11 +31,12 @@ $variants = [ordered]@{ normal = @{} }
 if ($H.Contains("WFC_GFX_NO_GLRESTORE")) { $variants.no_frontend_restore = @{ WFC_GFX_NO_GLRESTORE = "1" } }
 if ($H.Contains("WFC_M11_INHERITSTATE")) { $variants.no_renderer_reset = @{ WFC_M11_INHERITSTATE = "1" } }
 if ($H.Contains("WFC_GFX_NO_GLRESTORE") -and $H.Contains("WFC_M11_INHERITSTATE")) { $variants.both_off = @{ WFC_GFX_NO_GLRESTORE = "1"; WFC_M11_INHERITSTATE = "1" } }
+$OnlyVariants = @($OnlyVariants | ForEach-Object { $_ -split "," } | Where-Object { $_ }); if ($OnlyVariants.Count) { foreach ($k in @($variants.Keys)) { if ($OnlyVariants -notcontains $k) { $variants.Remove($k) } } }
 $worldShots = "t1_after_charselect", "t3_after_resume", "t5_after_respawn", "t7_second_match", "t8_second_match_later", "t9_display1080", "t9b_display720"
 $rows = New-Object System.Collections.Generic.List[object]; $verdictByVariant = @{}
 foreach ($v in $variants.Keys) {
     $d = Join-Path $OutDir $v; New-Item -ItemType Directory -Force $d | Out-Null
-    $e = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $script.Replace("{D}", $d); WFC_FLOWLOG = (Join-Path $d "flow.jsonl"); WFC_FLOW_TIMEOUT = "600"; WFC_LIFECYCLE = "2"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2"; WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "60" }
+    $e = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $script.Replace("{D}", $d); WFC_FLOWLOG = (Join-Path $d "flow.jsonl"); WFC_FLOW_TIMEOUT = "600"; WFC_LIFECYCLE = "3"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2"; WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "60" }
     if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }; if ($H.Contains("WFC_VISUALCHECK")) { $e.WFC_VISUALCHECK = "1" }
     foreach ($k in $variants[$v].Keys) { $e[$k] = $variants[$v][$k] }
     if (-not $ReportOnly) { if (Wait-WfcGpu) { $null = Invoke-WfcSampled $exe $d $e 900 1.0 } else { "GPU busy" | Set-Content (Join-Path $d "SKIPPED.txt") } }
@@ -56,7 +57,7 @@ foreach ($v in $variants.Keys) {
 # negative controls: prove the detector still sees the M06 bug, and that each defence alone holds
 if ($variants.Contains("both_off")) { Res "control.both_defences_off" $(if ($verdictByVariant.both_off -gt 0) { "PASS" } else { "FAIL" }) ("with Frontend's GL restore AND Rendering's per-frame reset disabled the world must fail: failing transitions {0}. PASS = the detector still sees the M06 bug; FAIL = TEST FAULT, the detector is blind" -f $verdictByVariant.both_off) "Experimental" }
 foreach ($v in "no_frontend_restore", "no_renderer_reset") { if ($variants.Contains($v)) { Res "control.$v" $(if ($verdictByVariant[$v] -eq 0) { "PASS" } else { "FAIL" }) ("{0}: failing transitions {1} (the other defence alone must keep every world frame sane)" -f $v, $verdictByVariant[$v]) $(if ($v -eq "no_frontend_restore") { "Rendering" } else { "Frontend" }) } }
-if ($variants.Count -eq 1) { Res "control.hooks" "INFO" "this build has neither WFC_GFX_NO_GLRESTORE nor WFC_M11_INHERITSTATE: negative controls not run (they arrive with Frontend a96f841+ / Rendering M11+)" "Experimental" }
+if ($OnlyVariants.Count) { Res "control.hooks" "INFO" ("negative controls not run (-OnlyVariants {0}, FAST tier): detector blindness last proven by the M07 dry run" -f ($OnlyVariants -join ",")) "Experimental" } elseif ($variants.Count -eq 1) { Res "control.hooks" "INFO" "this build has neither WFC_GFX_NO_GLRESTORE nor WFC_M11_INHERITSTATE: negative controls not run (they arrive with Frontend a96f841+ / Rendering M11+)" "Experimental" }
 Write-WfcCsv $rows (Join-Path $OutDir "renderstate.csv")
 Write-M07Matrix $rows @("variant", "transition", "status", "world", "renderer", "gl_entry") (Join-Path $OutDir "RENDERSTATE.md") "M07 render-state after overlays" @("exe: ``$exe``", "", "A world of only HUD / Optimus / effects FAILS on pixels even when draw counts look normal; GL state left by an overlay FAILS even when the renderer re-asserts it (both defences must hold).")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")

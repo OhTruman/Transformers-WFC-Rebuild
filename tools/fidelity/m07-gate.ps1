@@ -22,7 +22,7 @@
 # 4. M07-GATE.md: VISUAL HEALTH first (presentation + map-loss + render state + per-map frontend world), then every
 #    suite, product failures by owner, test faults, UNKNOWN / HUMAN, links to the matrices and the human sheet.
 param([Parameter(Mandatory)][string]$Ref, [string]$Name = "", [switch]$Build, [string[]]$Only = @(), [switch]$Quick, [switch]$ReportOnly, [string]$OutDir = "")
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"   # native tools (cmake, ninja, python) write warnings to stderr: never abort a step on them; failures are judged from the results
 $Only = @($Only | ForEach-Object { $_ -split "," } | Where-Object { $_ }); function Want($k) { return -not $Only.Count -or $Only -contains $k }
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $root = Get-WfcRoot

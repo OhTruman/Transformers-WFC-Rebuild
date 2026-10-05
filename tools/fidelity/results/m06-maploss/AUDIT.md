@@ -30,3 +30,15 @@ split**:
 Every earlier visual check either never took that route (direct boot), or took it while judging only state, counts
 and "not black". So everything that looked at pixels looked in the wrong place, and everything on the right path
 looked at state.
+
+
+## Correction (2026-10-05, M08b FAST gate)
+The figure "Streets world draws in play 35 / BSP 20 vs direct 1641" compared the **median of a scripted walk** with a
+direct boot **standing at the spawn**. Re-judging the same M06b user-exe evidence shows the following.
+- **At the spawn** the broken build drew 1276 world draws (ratio 0.78).
+- A healthy M08b build gives the same walking median (43): the auto-walk ends against a pillar that occludes the scene.
+- So the draws were issued but not visible, which fits the confirmed root cause: the UI pass left GL_DEPTH_TEST /
+  GL_CULL_FACE disabled (b1fce97, fixed in a96f841).
+- The **pixel** world verdict, which still flags all three M06b visits as lost, and the GL entry state are the
+  discriminating checks.
+- `draws_vs_direct` is now INFO (map-loss-gate.ps1) and compares the spawn samples.

@@ -1,3 +1,7 @@
+> **Policy (2026-10-05):** normal integration milestones get the **FAST** gate (`fast-gate.ps1`, ~20-30 min). This
+> FULL gate runs only when explicitly requested (stabilization checkpoint / release candidate). See
+> `VALIDATION-TIERS.md`.
+
 # Milestone 07: the gate Integration runs
 
 ```

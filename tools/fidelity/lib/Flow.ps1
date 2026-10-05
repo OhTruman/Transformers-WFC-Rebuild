@@ -52,6 +52,7 @@ function Invoke-WfcSampled([string]$Exe, [string]$Dir, [hashtable]$Env, [int]$Ti
         } catch { }
     }
     $p.WaitForExit(5000) | Out-Null
+    try { $samples.ToArray() | Export-Csv -NoTypeInformation -Encoding UTF8 (Join-Path $Dir "samples.csv") } catch {}   # process samples kept with the run (resource checks reuse them)
     return @{ rc = $(if ($p.HasExited) { $p.ExitCode } else { -1 }); timedOut = $timedOut; samples = $samples.ToArray() }
 }
 
