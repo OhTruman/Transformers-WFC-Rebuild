@@ -10,6 +10,7 @@
 #include "platform/Window.h"
 #include "core/Log.h"
 
+#include <cstdlib>
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -329,8 +330,12 @@ private:
     }
 
     void pollGamepad(InputFrame& input) {
+        static const bool noPad = std::getenv("WFC_NOPAD") != nullptr;   // scripted runs: ignore a real controller
+        if (noPad) return;
         XINPUT_STATE st{};
         if (XInputGetState(0, &st) == ERROR_SUCCESS) {
+            static bool logged = false;
+            if (!logged) { logged = true; LOG_INFO("input: XInput pad 0 connected"); }
             input.padConnected = true;
             auto axis = [](SHORT v, SHORT dz) -> float {
                 if (v > dz) return float(v - dz) / float(32767 - dz);
