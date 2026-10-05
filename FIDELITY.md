@@ -17,6 +17,13 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 24 — VERTEX LIGHTMAPS ON EVERY MAP (2026-10-05, overnight)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Black arches / pillars on Gorge, Rust, Seed | (1) build_lighting rejected FLightMap1D sample blocks whose alpha byte is not 255 ("alignment" check): Gorge / Rust samples carry alpha 0, so 0 of 561 / 635 vertex-lit components parsed. (2) The renderer bound a vertex lightmap only when ONE glTF section covered the whole cooked LOD0 buffer, so multi-section components never bound | header dumps (count × 12 = size, valid ScaleVectors, alpha 0); AssetTools vertex_lightmaps.json agrees byte for byte | CONFIRMED ROOT CAUSE (tooling + renderer) | parser validates size and ScaleVectors instead of alpha: every vertex-lit component of every map parses (Gorge 561, Rust 635, Seed 257, …). Sections index the shared samples at their cumulative offset: Gorge unbound 124 → 4, Rust 381 → 0. Streets lighting.json byte-identical, suite identical. Gorge view 0 black 37 % → 21 % (arch lit). VISUALLY VERIFIED |
+| Remaining | one Gorge component whose glTF sections total 1616 vertices against 1576 cooked samples (export differs from the cooked buffer) | renderer log | PARTIAL (not bound rather than guessed) | — |
+| Map colour grade | 8 of 9 non-Streets maps grade on a PostProcessVolume containing the player starts (e.g. Gorge clut_mp40 + Scene_HighLights 1.5), not on WorldInfo | AssetTools 992fbf1 postprocess.json volumes[] | CONFIRMED (data) | not yet consumed [open] |
+
 ## MILESTONE 23 — FRONTEND SCENES OVER TIME, CUSTOMIZATION, RETURN FROM MATCH (2026-10-05, overnight)
 Merge preview: agents/frontend 1af7e74 (Cust_Idle body, pawn hiding, GFx fixes) + agents/rendering 03a08c8, rebuilt render data.
 

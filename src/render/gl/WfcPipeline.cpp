@@ -1449,6 +1449,32 @@ int Pipeline::upload(const MeshData& m) {
     std::vector<SubMesh> subs = m.subs;
     if (subs.empty()) { SubMesh s; s.indexOffset = 0; s.indexCount = (uint32_t)m.indices.size(); subs.push_back(s); }
     int nLM = 0, nProg = 0;
+    // Vertex lightmaps (FLightMap1D) cover the component's whole cooked LOD0 vertex buffer, all sections in order; the
+    // glTF splits a component into one submesh per section. Per component: the sections' vertex ranges in submesh
+    // order, so a section indexes the shared samples at its cumulative offset (M24: multi-section components on
+    // Gorge / Rust never bound - "2415 samples vs 954 vertices").
+    std::map<std::string, std::vector<std::pair<uint32_t, uint32_t>>> vlmRanges;
+    auto componentKey = [&](const SubMesh& s) {
+        std::string key = s.component;
+        std::transform(key.begin(), key.end(), key.begin(), ::tolower);
+        if (key.rfind("actor:", 0) == 0) {
+            auto ac = actorComponent_.find(key.substr(6));
+            if (ac != actorComponent_.end() && !ac->second.empty()) key = ac->second;
+        }
+        return key;
+    };
+    if (!vertexLMs_.empty())
+        for (const SubMesh& s : subs) {
+            if (s.indexCount == 0) continue;
+            std::string key = componentKey(s);
+            if (!vertexLMs_.count(key)) continue;
+            uint32_t lo = UINT32_MAX, hi = 0;
+            for (uint32_t k = 0; k < s.indexCount; ++k) {
+                uint32_t vi = m.indices[s.indexOffset + k];
+                lo = std::min(lo, vi); hi = std::max(hi, vi);
+            }
+            vlmRanges[key].push_back({lo, hi});
+        }
     for (const SubMesh& s : subs) {
         Sub d;
         d.first = s.indexOffset; d.count = s.indexCount;
@@ -1477,20 +1503,34 @@ int Pipeline::upload(const MeshData& m) {
                 lo = std::min(lo, vi); hi = std::max(hi, vi);
             }
             const VertexLM& v = vit->second;
-            if ((int)(hi - lo + 1) == v.count) {
+            int cum = 0, total = 0;
+            {
+                const auto& rs = vlmRanges[key];
+                bool before = true;
+                for (const auto& rg : rs) {
+                    int n = (int)(rg.second - rg.first + 1);
+                    total += n;
+                    if (rg.first == lo && rg.second == hi) before = false;
+                    else if (before) cum += n;
+                }
+                if ((int)(hi - lo + 1) == v.count) cum = 0;          // single-section (or self-contained) component
+                else if (total != v.count) cum = -1;                // layout not reproducible: not bound
+            }
+            if (cum >= 0) {
                 glGenTextures(1, &d.vlmTex);
                 glBindTexture(GL_TEXTURE_2D, d.vlmTex);
                 glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, v.count, 3, 0, GL_RGB, GL_FLOAT, v.rgb.data());
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                 glBindTexture(GL_TEXTURE_2D, 0);
-                d.vlmBase = (int)lo;
+                d.vlmBase = (int)lo - cum;
                 for (int k = 0; k < 3; ++k)
                     for (int c = 0; c < 3; ++c) d.lmScale[k][c] = v.scale[k][c];
                 lm = true;
                 ++nLM;
             } else {
-                LOG_WARN("wfc: vertex lightmap %s: %d samples vs %u vertices; not bound", key.c_str(), v.count, hi - lo + 1);
+                LOG_WARN("wfc: vertex lightmap %s: %d samples vs %u vertices (sections total %d); not bound", key.c_str(),
+                         v.count, hi - lo + 1, total);
             }
         }
         if (lm && !d.vlmTex) {
