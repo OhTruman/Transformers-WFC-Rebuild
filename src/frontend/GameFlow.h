@@ -128,6 +128,7 @@ public:
     // chassis of the player's team from it (GetResolvedCharacterFaction = TeamNum).
     struct SelectedCharacter { std::string name; int type = 0; std::string chassis[2]; std::string specialty; bool valid = false; };
     void selectCharacter(const SelectedCharacter& c);
+    void clearSelectedCharacter();   // PRI.ClearCharacter
     const SelectedCharacter& selectedCharacter() const { return selected_; }
     void showMenu();                                // TnPlayerController.ShowMenu (Escape / Start release)
     // [integration] Gameplay MatchOver -> 15 s -> TnGame.ReturnToGameLobby: ServerTravel to the game lobby
@@ -136,6 +137,24 @@ public:
     void setMatchValues(const MatchValues& v) { matchValues_ = v; }
     const MatchValues& matchValues() const { return matchValues_; }
     bool quitRequested() const { return quit_; }
+    void exitNow() { quit_ = true; }   // automation: leave without the Exit Game confirmation
+
+    // TnUIController.ShowPopupUI / ShowCustomPopupUI: one message box (MessageBoxUI UI_GFxShared_p.MessagePrompt_GFX_1)
+    // driven by TnMessageBoxActionScriptInterface: _global.DisplayMessage(Title, Message, Buttons, IconType); the
+    // movie answers MessageBox.OnA / OnB / OnX / OnY [CONFIRMED script / authored defaults].
+    struct PopupButton { std::string text, action; bool closeOnPress = true; };
+    struct Popup {
+        bool open = false;
+        std::string title, message, postConfirm;
+        PopupButton a, b, x, y;
+        int icon = 0;                 // 0 alert, 1 animating (waiting)
+        bool showDefaultButtons = true;
+        uint64_t serial = 0;          // changes whenever the movie must be updated
+        std::string buttonString() const;   // GenerateButtonString
+    };
+    const Popup& popup() const { return popup_; }
+    void popupButton(char which);     // 'A' 'B' 'X' 'Y'
+    void popupClosedByMovie();
     bool wantsWorldUnload() const { return unloadWorld_; }   // travel away from a match map
     void worldUnloaded() { unloadWorld_ = false; }
 
@@ -198,7 +217,10 @@ private:
     void playPrivateGame(const std::string& settingsName);
     void playPlaylist(int playlistId, bool forceHost);
     void hostOnlineGame(const GameSettings* gs);
-    void quitToMainMenu();
+    void quitToMainMenu();             // Game.QuitToMainMenu: TnQuitMessageBox
+    void quitGame();                   // TnPlayerController.QuitGame(0) after the confirmation
+    void showPopup(const Popup& p);
+    void closePopup();
     const GameSettings* settingsByConfigName(const std::string& name, bool privateMatch) const;
     std::string buildLobbyUrl(const GameSettings& gs) const;
     std::string buildMatchUrl(const GameSettings& gs) const;
@@ -237,6 +259,8 @@ private:
     std::vector<std::string> kismetTriggers_;
     std::string kismetMovie_;
     std::string scriptMovie_;
+    Popup popup_;
+    bool quitPending_ = false;        // TnQuitMessageBox.bWaitingForSafeQuit
     bool matchHasBegun_ = false;
     std::vector<std::pair<std::string, std::string>> uiInvokes_;
     std::vector<std::string> openMovies_;

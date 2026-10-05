@@ -1,0 +1,355 @@
+{
+ "source": "TR_MPPlayerCharacterData_p.*_PCD_MP (TnPlayerCharacterData.Data), TransGame.Default__TnCharacterCustomizationData; authored.db",
+ "customizationData": {
+  "UnlockCharacterSlotLevels": [
+   5,
+   10
+  ],
+  "SpecialtyClasses": [
+   "TransGame.TnSpecialtyScout",
+   "TransGame.TnSpecialtyScientist",
+   "TransGame.TnSpecialtySoldier",
+   "TransGame.TnSpecialtyLeader"
+  ],
+  "NumberOfColorPalettes": 5,
+  "ClassVersion": 39
+ },
+ "presets": {
+  "Leader_PCD_MP": {
+   "CharacterName": "Leader",
+   "Specialty": "Leader",
+   "Factions": [
+    "kFactionAutobot",
+    "kFactionDecepticon"
+   ],
+   "ChassisTypes": [
+    "Truck3",
+    "Truck4"
+   ],
+   "PrimaryColors": [
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    },
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    }
+   ],
+   "PrimaryColorPalettes": [
+    0,
+    0
+   ],
+   "PrimaryColorCoords": [
+    {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    {
+     "X": 0.0,
+     "Y": 0.0
+    }
+   ],
+   "SecondaryColors": [
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    },
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    }
+   ],
+   "SecondaryColorPalettes": [
+    0,
+    0
+   ],
+   "SecondaryColorCoords": [
+    {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    {
+     "X": 0.0,
+     "Y": 0.0
+    }
+   ],
+   "WeaponTypes": [
+    "IonBlaster",
+    "GrenadeLauncher",
+    "KamikazeMines"
+   ],
+   "Abilities": [
+    "Warcry",
+    "Barrier"
+   ],
+   "VehicleWeapons": [
+    "RocketVehicle"
+   ],
+   "MeleeWeapons": [
+    "Axe",
+    "ViciousAxe"
+   ]
+  },
+  "Scientist_PCD_MP": {
+   "CharacterName": "Scientist",
+   "Specialty": "Scientist",
+   "Factions": [
+    "kFactionAutobot",
+    "kFactionDecepticon"
+   ],
+   "ChassisTypes": [
+    "Jet4",
+    "Jet"
+   ],
+   "PrimaryColors": [
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    },
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    }
+   ],
+   "PrimaryColorPalettes": [
+    0,
+    0
+   ],
+   "PrimaryColorCoords": [
+    {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    {
+     "X": 0.0,
+     "Y": 0.0
+    }
+   ],
+   "SecondaryColors": [
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    },
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    }
+   ],
+   "SecondaryColorPalettes": [
+    0,
+    0
+   ],
+   "SecondaryColorCoords": [
+    {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    {
+     "X": 0.0,
+     "Y": 0.0
+    }
+   ],
+   "WeaponTypes": [
+    "BurstRifle",
+    "RepairRay",
+    "HealGrenades"
+   ],
+   "Abilities": [
+    "SpawnSentry",
+    "Shockwave"
+   ],
+   "VehicleWeapons": [
+    "HomingRocketVehicle"
+   ],
+   "MeleeWeapons": [
+    "BeatDownClub",
+    "SpikedBat"
+   ]
+  },
+  "Scout_PCD_MP": {
+   "CharacterName": "Scout",
+   "Specialty": "Scout",
+   "Factions": [
+    "kFactionAutobot",
+    "kFactionDecepticon"
+   ],
+   "ChassisTypes": [
+    "Car2",
+    "Car4"
+   ],
+   "PrimaryColors": [
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    },
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    }
+   ],
+   "PrimaryColorPalettes": [
+    0,
+    0
+   ],
+   "PrimaryColorCoords": [
+    {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    {
+     "X": 0.0,
+     "Y": 0.0
+    }
+   ],
+   "SecondaryColors": [
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    },
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    }
+   ],
+   "SecondaryColorPalettes": [
+    0,
+    0
+   ],
+   "SecondaryColorCoords": [
+    {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    {
+     "X": 0.0,
+     "Y": 0.0
+    }
+   ],
+   "WeaponTypes": [
+    "Shotgun",
+    "HeavyPistol",
+    "FlashBangs"
+   ],
+   "Abilities": [
+    "Cloaking",
+    "Dodge"
+   ],
+   "VehicleWeapons": [
+    "AssaultRifleVehicle"
+   ],
+   "MeleeWeapons": [
+    "ShortSword",
+    "TortureSword"
+   ]
+  },
+  "Soldier_PCD_MP": {
+   "CharacterName": "Soldier",
+   "Specialty": "Soldier",
+   "Factions": [
+    "kFactionAutobot",
+    "kFactionDecepticon"
+   ],
+   "ChassisTypes": [
+    "Tank3",
+    "Tank2"
+   ],
+   "PrimaryColors": [
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    },
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    }
+   ],
+   "PrimaryColorPalettes": [
+    0,
+    0
+   ],
+   "PrimaryColorCoords": [
+    {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    {
+     "X": 0.0,
+     "Y": 0.0
+    }
+   ],
+   "SecondaryColors": [
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    },
+    {
+     "B": 0,
+     "G": 0,
+     "R": 0,
+     "A": 255
+    }
+   ],
+   "SecondaryColorPalettes": [
+    0,
+    0
+   ],
+   "SecondaryColorCoords": [
+    {
+     "X": 0.0,
+     "Y": 0.0
+    },
+    {
+     "X": 0.0,
+     "Y": 0.0
+    }
+   ],
+   "WeaponTypes": [
+    "AssaultRifle",
+    "HomingRocket",
+    "FlakGrenades"
+   ],
+   "Abilities": [
+    "Whirlwind",
+    "Hover"
+   ],
+   "VehicleWeapons": [
+    "TankCannon"
+   ],
+   "MeleeWeapons": [
+    "Maul",
+    "Hammer"
+   ]
+  }
+ }
+}

@@ -153,7 +153,9 @@ public:
     std::string plainText() const;
     std::string htmlText() const;
     void layout();
-    Rect localBounds() const override { return bounds; }
+    // Pending text is laid out first: an autoSize field reports the size of its current text (Flash measures on
+    // read, e.g. the lobby ticker spaces its messages by message_txt._width right after setting htmlText).
+    Rect localBounds() const override { if (layoutDirty) const_cast<TextField*>(this)->layout(); return bounds; }
 };
 
 class MovieClip : public DisplayObject {

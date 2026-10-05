@@ -156,6 +156,12 @@ void GameFlow::beginLevel() {
 void GameFlow::tick(float dt) {
     clock_ += dt;
     FlowTrace::setClock(clock_);
+    if (quitPending_) {
+        // TnQuitMessageBox.Tick: FinalizeQuitToMainMenu once TnGame.IsSafeToQuit (no blocking saves offline).
+        quitPending_ = false;
+        closePopup();
+        quitGame();
+    }
     if (travelPending_) {
         if (travelDelayFrames_ > 0) { --travelDelayFrames_; return; }
         if (pendingLevel_ == LevelKind::Match) {
@@ -332,7 +338,19 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
         return {};
     }
     if (fn == "Game.QuitToMainMenu") { quitToMainMenu(); return {}; }
-    if (fn == "Game.ExitGame") { quit_ = true; FlowTrace::emit("exit", {}); return {}; }
+    if (fn == "Game.ExitGame") {
+        // TnGameActionScriptBinding.ExitGame: GenericWarningTitle / ExitGameMessage, A Continue (ConfirmExitGame:
+        // ConsoleCommand "quit", the box stays with the waiting icon), B Cancel [CONFIRMED script].
+        Popup p;
+        p.title = "$UIText.MessagePrompts.GenericWarningTitle";
+        p.message = "$UIText.MessagePrompts.ExitGameMessage";
+        p.a = {"$UIText.MessagePrompts.GenericContinueButton", "exit", false};
+        p.b = {"$UIText.MessagePrompts.GenericCancelButton", "", true};
+        p.showDefaultButtons = false;
+        showPopup(p);
+        return {};
+    }
+    if (fn.rfind("MessageBox.On", 0) == 0 && fn.size() == 14) { popupButton(fn[13]); return {}; }
 
     // ---- TnOnlineActionScriptBinding ----
     if (fn == "Online.CheckCanPlayOnlineModes" || fn == "Online.CanPlayOnlineModes") return true;   // no profile gate offline
@@ -517,14 +535,85 @@ void GameFlow::selectCharacter(const SelectedCharacter& c) {
     if (level_ == LevelKind::Match) characterSelected();
 }
 
+void GameFlow::clearSelectedCharacter() {
+    selected_ = SelectedCharacter{};
+    FlowTrace::emit("character.cleared", {});
+}
+
 void GameFlow::quitToMainMenu() {
-    // Game.QuitToMainMenu -> TnGameActionScriptBinding -> TnGame: ClientTravelToMap("UI_FrontEnd_m").
+    // Game.QuitToMainMenu -> UIController.ShowCustomPopupUI(TnQuitMessageBox): TnGame.GetQuitGameMessage
+    // (LeaveLobby / LeaveLobbyConfirm), A Yes -> ConfirmQuitToMainMenu (waiting icon, "Quitting..." post-confirm
+    // message, then QuitGame(0) once TnGame.IsSafeToQuit), B No [CONFIRMED script].
+    Popup p;
+    p.title = "$UIText.MessagePrompts.LeaveLobby";
+    p.message = "$UIText.MessagePrompts.LeaveLobbyConfirm";
+    p.postConfirm = "$UIText.MessagePrompts.LeaveLobbyInProgressMessage";
+    p.a = {"$UIText.ButtonHints.Yes", "quit", false};
+    p.b = {"$UIText.ButtonHints.No", "", true};
+    p.showDefaultButtons = false;
+    showPopup(p);
+}
+
+void GameFlow::quitGame() {
+    // TnPlayerController.QuitGame(0) [CONFIRMED script]: a standalone world -> QuitToFrontEnd; a listen server (the
+    // lobbies and private matches) -> QuitToFrontEnd from the party lobby (TnPlayerControllerPartyLobby.IsInPartyLobby),
+    // otherwise QuitToPartyLobby: TellClientsToReturnToPartyHost -> ClientReturnToParty -> BuildPartyLobbyURL.
+    bool toFrontEnd = level_ == LevelKind::PartyLobby || level_ == LevelKind::FrontEnd || level_ == LevelKind::None;
     if (level_ == LevelKind::Match) {
         // TnUIController OnGotoMainMenu (11) from the pause state; OnQuitGame -> RecordSessionComplete("Quit").
         ui_.onUIEvent((int)UIEvent::GotoMainMenu);
-        FlowTrace::emit("match.quit", {{"reason", "QuitToMainMenu"}});
+        FlowTrace::emit("match.quit", {{"reason", "QuitGame"}});
     }
-    travel(kFrontEndMap, false);
+    FlowTrace::emit("quit.route", {{"from", levelKindName(level_)}, {"to", toFrontEnd ? "FrontEnd" : "PartyLobby"},
+                                   {"provenance", "CONFIRMED script (TnPlayerController.QuitGame)"}});
+    if (toFrontEnd) travel(kFrontEndMap, false);
+    else travel(kPartyLobbyUrl, false);   // the party's GameTeamStatus is kept
+}
+
+std::string GameFlow::Popup::buttonString() const {
+    std::string s;
+    s += a.text.empty() ? ",," : a.text + ",MessageBox.OnA,";
+    s += b.text.empty() ? ",," : b.text + ",MessageBox.OnB,";
+    s += x.text.empty() ? ",," : x.text + ",MessageBox.OnX,";
+    s += y.text.empty() ? "," : y.text + ",MessageBox.OnY,";
+    if (showDefaultButtons && s == ",,,,,,,") s = "$UIText.ButtonHints.Ok,MessageBox.OnA,,,,,,";
+    return s;
+}
+
+void GameFlow::showPopup(const Popup& p) {
+    uint64_t serial = popup_.serial + 1;
+    popup_ = p;
+    popup_.open = true;
+    popup_.serial = serial;
+    FlowTrace::emit("popup.show", {{"title", p.title}, {"message", p.message}, {"buttons", popup_.buttonString()}});
+}
+
+void GameFlow::closePopup() {
+    if (!popup_.open) return;
+    popup_.open = false;
+    ++popup_.serial;
+    FlowTrace::emit("popup.close", {{"title", popup_.title}});
+}
+
+void GameFlow::popupClosedByMovie() {
+    if (popup_.open && !quitPending_) closePopup();
+}
+
+void GameFlow::popupButton(char which) {
+    if (!popup_.open) return;
+    PopupButton btn = which == 'A' ? popup_.a : which == 'B' ? popup_.b : which == 'X' ? popup_.x : popup_.y;
+    FlowTrace::emit("popup.button", {{"button", std::string(1, which)}, {"action", btn.action}});
+    // HandleButtonPress: close on press, or keep the box with the waiting icon and no buttons.
+    if (btn.closeOnPress) closePopup();
+    else {
+        popup_.icon = 1;
+        popup_.a = popup_.b = popup_.x = popup_.y = PopupButton{};
+        popup_.showDefaultButtons = false;
+        if (!popup_.postConfirm.empty()) popup_.message = popup_.postConfirm;
+        ++popup_.serial;
+    }
+    if (btn.action == "quit") quitPending_ = true;
+    else if (btn.action == "exit") { quit_ = true; FlowTrace::emit("exit", {}); }
 }
 
 // ---------------------------------------------------------------------------------------------------------------

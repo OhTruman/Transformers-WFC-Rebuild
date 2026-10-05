@@ -169,9 +169,22 @@ static void testFlow() {
     check(f.ui().state() == UIState::InGame && f.ui().hudVisible() && f.ui().openMovie().empty(), "flow.match_ingame");
     f.showMenu();
     check(f.ui().state() == UIState::Paused && f.ui().openMovie() == "UI_GFxPause_p.PauseMenu_GFX_1", "flow.showmenu_pause");
+    // Quit: TnQuitMessageBox (Yes / No), then TnPlayerController.QuitGame(0): a private match returns to the party
+    // lobby; from the party lobby Quit returns to the front end [CONFIRMED script].
     f.call("Game.QuitToMainMenu");
+    check(f.popup().open && f.popup().buttonString() == "$UIText.ButtonHints.Yes,MessageBox.OnA,$UIText.ButtonHints.No,MessageBox.OnB,,,,",
+          "flow.quit_asks_confirmation", f.popup().buttonString());
+    f.call("MessageBox.OnB");
+    check(!f.popup().open && !f.wantsWorldUnload(), "flow.quit_no_cancels");
+    f.call("Game.QuitToMainMenu");
+    f.call("MessageBox.OnA");
+    check(f.popup().open && f.popup().icon == 1, "flow.quit_yes_waits");
+    f.tick(0.016f);
     check(f.wantsWorldUnload(), "flow.quit_unloads_world");
     f.worldUnloaded();
+    check(runUntil(rt, [&] { return f.level() == LevelKind::PartyLobby && f.ui().state() == UIState::InLobby; }), "flow.match_quit_returns_to_party_lobby");
+    f.call("Game.QuitToMainMenu");
+    f.call("MessageBox.OnA");
     check(runUntil(rt, [&] { return f.level() == LevelKind::FrontEnd && f.ui().state() == UIState::FrontEnd; }), "flow.returned_to_frontend");
     check(f.hasWatchedIntroMovie(), "flow.intro_marked_watched");
     std::remove("wfc_profile.ini");
