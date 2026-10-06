@@ -23,21 +23,22 @@ unsigned quickTurnSeen_ = 0;
    `if (CharacterAudio::weaponIsBeam(firedCls)) { ... onBeamWeapon(...) ... }`
 2. **Remove** the beam timeout at the top of `World::tick`:
    `beamSinceShot_ += dt; if (weaponAudio_.beamActive() && ...) onBeamWeapon(..., false, 0);`
-3. **Add** the state-driven call, where the HUD state's `repairBeam` fields are final for the frame:
+3. **Add** the state-driven call in `World::tick`, right after Gameplay's beam timer update (agents/gameplay d0452a5):
+   `if (repairBeam_.time <= 0.0f) repairBeam_.active = false;`
 
 ```cpp
-// TnWeaponBeam / TnWeaponRepair sound state from Gameplay's beam (Pass 24c): teammate -> heal loop (WP_Fire),
-// enemy -> damage loop (WP_FireSecondary), no pawn -> neither; release -> WP_LoopingTail.
+// [Systems M08d] TnWeaponBeam / TnWeaponRepair sound state from Gameplay's beam (Pass 24c): teammate -> heal loop
+// (WP_Fire), enemy -> damage loop (WP_FireSecondary), no pawn -> neither; release -> WP_LoopingTail.
 {
-    const bool firing = hud.repairBeam;
-    const int target = !firing ? 0 : hud.repairBeamHealing ? 1 : (hud.repairBeamTarget >= 0 ? 2 : 0);
+    const bool firing = repairBeam_.active && repairBeam_.time > 0.0f;          // = HudState::repairBeam
+    const int target = !firing ? 0 : repairBeam_.healing ? 1 : (repairBeam_.target >= 0 ? 2 : 0);
     if (firing || weaponAudio().beamActive())
         onBeamWeapon("TransContent.TnWeaponRepairRay", firing, target);
 }
 ```
 
-* The class is the equipped repair weapon's (`"TransContent.TnWeapon" + w.def->id`) when Gameplay fires another beam class, such as the heavy or mounted Repair Ray.
-* `repairBeamStart` / `repairBeamEnd` are implied by the `firing` edges. Systems starts and stops the loops itself, so they need no separate call.
+* If Gameplay fires another beam class (the heavy or mounted Repair Ray), pass that weapon's class (`"TransContent.TnWeapon" + w.def->id`).
+* `repairBeamStart` / `repairBeamEnd` are the beam's end points (`Vec3`), for Rendering's beam effect. The sound needs only the firing / target state: the loops are owner-attached, as the original's weapon-mesh sounds are.
 * Ownership: death, class change and match reset already stop the beam (`weaponAudio_.stopAll`).
 
 Systems side: unchanged. `World::onBeamWeapon(cls, firing, target 0/1/2)` and its sound rules are as in M08d. The beam's heal, damage and tail loops are covered by the Systems suite.
