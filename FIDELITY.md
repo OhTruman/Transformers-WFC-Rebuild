@@ -33,7 +33,7 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 |---|---|---|---|---|
 | SubUV update | Every tick for every live particle; Linear(_Blend) from the SubImageIndex curve with frac interp; Random(_Blend) re-picks on RandomImageTime (lifetime fraction, default 0 = every tick); second cell = next, wrapping | RE pass 5 s16 (update runner 0x1F) | CONFIRMED | M67 (was: Random picked once at spawn, no blending) |
 | SubUV blend | The fill writes both cells + interp; ParticleSubUV lerps the two samples | RE s16 (shader lerp HIGH) | HIGH | M67: sprite attribute 6 + matc ParticleSubUV mix |
-| SubUVDirect / Select | Direct UV = (pos + size x corner) x scale (texel units HIGH); Select unused in MP | RE s16 | PARTIAL | not applied (10 MP LODs) |
+| SubUVDirect / Select | Direct UV = (Pos + Size x corner) / SubImages (cell units, CONFIRMED addendum 1), every tick; Select unused in MP | RE s16 + addendum 1 | CONFIRMED | M71: H2H_Punch01 sparks crop a random quarter window |
 
 ## MILESTONES 65-66 — FIXED-AXIS RIBBONS, SPRITE LOCK-AXIS / VELOCITY MODES (2026-10-06)
 | Item | Finding | Evidence | Mark | Rebuild |
