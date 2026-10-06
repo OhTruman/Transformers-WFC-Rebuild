@@ -393,7 +393,7 @@ void Application::qaTick(const platform::InputFrame& in) {
         using K = platform::QaRequest::Kind;
         if (r.kind == K::Respawn || r.kind == K::NextStart || r.kind == K::Noclip || r.kind == K::God || r.kind == K::Dummy) {
             if (!inGame) { qa_->setStatus("In-match tools need a running match."); return; }
-            if (r.kind == K::Dummy) { world_.addMatchOpponent("QA Dummy", false); qa_->setStatus("Spawned a dummy opponent."); }
+            if (r.kind == K::Dummy) { world_.addMatchOpponent("QA Dummy", true /* drawn: visible */); qa_->setStatus("Spawned a dummy opponent."); }
             else qa_->setStatus(qaTool(world_, r.kind, std::string(), startIndex));
             frontend::FlowTrace::emit("qa.tool", {{"kind", std::to_string((int)r.kind)}, {"provenance", "DEBUG ONLY"}});
             return;
