@@ -142,6 +142,8 @@ public:
     void prewarmMaterials();                          // M54: effect / weapon materials, yielding (map loads)
     void requestMaterialPrewarm() { prewarmPending_ = true; }   // run at the end of the world mesh upload
     void skipMaterialPrewarm() { prewarmDone_ = true; prewarmPending_ = false; }   // frontend scenes
+    void prewarmPlacedFx();                           // M58: the placed particle components (frontend scenes)
+    int spriteProgram(const std::string& material);  // particle material program (cached; -1 = fallback)
     void setLoadYield(std::function<void()> y) { loadYield_ = std::move(y); }
     void yieldLoad() { if (loadYield_ && !inLoadYield_) { inLoadYield_ = true; loadYield_(); inLoadYield_ = false; } }
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile): queued, drawn after post onto the back buffer.
