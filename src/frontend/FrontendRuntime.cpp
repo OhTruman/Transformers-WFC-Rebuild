@@ -281,6 +281,17 @@ BridgeValue FrontendRuntime::account(const std::string& fn, const std::vector<st
     return {};
 }
 
+namespace {
+// Development builds (CMake WFC_DEV_TOOLS): debug-only bridge functions (synthetic progression awards).
+bool devTools() {
+#if defined(WFC_DEV_TOOLS) && WFC_DEV_TOOLS
+    return true;
+#else
+    return false;
+#endif
+}
+}
+
 BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string& fn, const std::vector<std::string>& args) {
     auto arg = [&](size_t i) { return i < args.size() ? args[i] : std::string(); };
     if (fn.rfind("DataStores.", 0) == 0) return stores_->call(fn.substr(11), args, movie);
@@ -307,27 +318,47 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     if (fn.rfind("Account.", 0) == 0) return account(fn, args);
     // Stats (online stats archive): challenge progress and leaderboards. Offline there is no archive: progress 0,
     // level 0 (a fresh profile), leaderboard reads report nothing [SERVICE DEPENDENT; values as the original offline].
-    if (fn == "Stats.GetChallengeValue" || fn == "Stats.GetChallengeLevel") return BridgeValue(0);
+    // Challenge progress from the local profile's progression (the original: the stats archive) [PC ADAPTATION storage].
+    if (fn == "Stats.GetChallengeValue" || fn == "Stats.GetChallengeLevel") {
+        const ProgressionState& ps = flow_.profile().progression;
+        const int id = (int)std::strtol(arg(0).c_str(), nullptr, 0);
+        if (fn == "Stats.GetChallengeLevel") { auto t = ps.tiers.find(id); return BridgeValue(t == ps.tiers.end() ? 0 : t->second); }
+        auto v = ps.stats.find(progression::challengeStat(catalog_, id));
+        return BridgeValue(v == ps.stats.end() ? 0.0 : (double)v->second);
+    }
     if (fn.rfind("Stats.", 0) == 0) { FlowTrace::emit("service.unavailable", {{"fn", fn}, {"service", "online stats"}}); return {}; }
-    if (fn == "Customize.IsPrimeModeAvailable") return BridgeValue(false);
-    // TnXpManager (via TnCharacterScriptBinding): XP lives in the online stats archive; without a stats interface the
-    // original returns 0 earned [CONFIRMED script]. Levels from Default__TnXpManager.LevelTable [CONFIRMED authored].
-    // No XP transactions are produced in the rebuild yet, so "last match" is 0 as well [PARTIAL].
+    if (fn == "Customize.IsPrimeModeAvailable") {   // all four specialties at the XP cap, Prime not taken [CONFIRMED]
+        const ProgressionState& ps = flow_.profile().progression;
+        return BridgeValue(progression::levelMaxed(ps) && !ps.prime);
+    }
+    if (fn == "Customize.UnlockPrimeMode") {
+        // UnlockPrimeMode: Prime on (enables the Prime challenges). The original also clears its PrimeModeStatsToClear
+        // challenge stats; that list is not recovered [UNKNOWN], so no stat is cleared here.
+        ProgressionState& ps = flow_.profile().progression;
+        if (progression::levelMaxed(ps) && !ps.prime) { ps.prime = true; flow_.profile().save(); }
+        FlowTrace::emit("progression.prime", {{"active", FlowTrace::boolean(ps.prime)}});
+        return {};
+    }
+    // Development builds: synthetic awards for testing the presentation before Gameplay's award feed exists.
+    if (devTools() && fn == "Debug.ProgressionXp") {
+        XpEvent e; e.transactionId = std::atoi(arg(0).c_str()); e.xp = std::atol(arg(1).c_str());
+        e.announcement = arg(2); e.description = arg(3); e.extra = arg(4);
+        progressionXp(e);
+        return {};
+    }
+    if (devTools() && fn == "Debug.ProgressionStat") {
+        progressionStat((int)std::strtol(arg(0).c_str(), nullptr, 0), std::atol(arg(1).c_str()), std::atoi(arg(2).c_str()));
+        return {};
+    }
+    // TnXpManager (via TnCharacterScriptBinding): XP per specialty (the original: the online stats archive; here the
+    // local profile's progression), levels from Default__TnXpManager.LevelTable [CONFIRMED authored].
     {
-        static const double kLevelTable[] = {500, 1500, 3000, 5000, 7500, 11000, 15500, 21000, 27500, 35000, 44000, 54500, 66500,
-                                             80000, 95000, 112000, 131000, 152000, 175000, 200000, 227000, 256000, 287000, 320000, 355000};
-        const int n = (int)(sizeof kLevelTable / sizeof kLevelTable[0]);
-        if (fn == "Customize.GetXpEarnedForSpecialty" || fn == "Customize.GetXpEarnedForSpecialtyLastMatch") return BridgeValue(0);
-        if (fn == "Customize.GetLevelForSpecialty") {
-            double xp = 0;
-            for (int i = 0; i < n; ++i) if (xp < kLevelTable[i]) return BridgeValue(i);
-            return BridgeValue(n);
-        }
-        if (fn == "Customize.GetXpNeededForLevel") {
-            int level = std::atoi(arg(0).c_str());
-            if (level > n) return BridgeValue(-1);   // kLevelTooHigh
-            return BridgeValue(level == 0 ? 0.0 : kLevelTable[level - 1]);
-        }
+        const ProgressionState& ps = flow_.profile().progression;
+        const int sp = progression::specialtyIndex(arg(0));
+        if (fn == "Customize.GetXpEarnedForSpecialty") return BridgeValue(sp < 0 ? 0.0 : (double)ps.xp[(size_t)sp]);
+        if (fn == "Customize.GetXpEarnedForSpecialtyLastMatch") return BridgeValue(sp < 0 ? 0.0 : (double)ps.lastMatchXp[(size_t)sp]);
+        if (fn == "Customize.GetLevelForSpecialty") return BridgeValue(sp < 0 ? 0 : progression::levelForXp(ps.xp[(size_t)sp]));
+        if (fn == "Customize.GetXpNeededForLevel") return BridgeValue((double)progression::xpNeededForLevel(std::atoi(arg(0).c_str())));
     }
     if (fn.rfind("Customize.", 0) == 0) return customize(fn, args);   // TnCharacterScriptBinding
     if (fn == "Console.CheckCanSaveProfileSettings") return BridgeValue(true);
@@ -628,6 +659,78 @@ BridgeValue FrontendRuntime::pcSettings(const std::string& fn, const std::vector
     return {};
 }
 
+void FrontendRuntime::updateProgression() {
+    // Match begin / end edges: the match's XP starts at 0 (results screen); the profile is saved once at its end
+    // (ClientWriteLeaderboardStats -> SaveProfileSettings) [CONFIRMED order, RE MP_PROGRESSION s2].
+    const LevelKind lv = flow_.loading().active ? LevelKind::None : flow_.level();
+    if (lv == progressionLevel_) return;
+    ProgressionState& ps = flow_.profile().progression;
+    if (lv == LevelKind::Match) {
+        ps.lastMatchXp = {};
+        // ORIGINAL: CanGainXp = !IsPrivateGame() (private matches award no XP / challenge progress). PC ADAPTATION:
+        // offline private matches (the only kind here, with bots) earn progression; WFC_ORIGINAL_XP_RULE=1 keeps the
+        // original rule.
+        canGainXp_ = !std::getenv("WFC_ORIGINAL_XP_RULE") || flow_.lobby().playlistId >= 0;
+        FlowTrace::emit("progression.match", {{"begin", "1"}, {"canGainXp", FlowTrace::boolean(canGainXp_)},
+                                              {"rule", std::getenv("WFC_ORIGINAL_XP_RULE") ? "original" : "PC ADAPTATION offline XP"}});
+    } else if (progressionLevel_ == LevelKind::Match) {
+        flow_.profile().save();
+        std::string lm;
+        for (int i = 0; i < 4; ++i) lm += (i ? "," : "") + std::to_string(ps.lastMatchXp[(size_t)i]);
+        FlowTrace::emit("progression.match", {{"end", "1"}, {"lastMatchXp", lm}, {"level", std::to_string(progression::playerLevel(ps))},
+                                              {"saved", "1"}});
+    }
+    progressionLevel_ = lv;
+}
+
+void FrontendRuntime::presentLevelUps(const std::vector<progression::LevelUp>& ups) {
+    for (const progression::LevelUp& u : ups) {
+        const std::string sp = progression::specialtyName(u.specialty);
+        if (presenter_) presenter_->hudCall("_global.NotifyLevelUp", {BridgeValue(u.level), BridgeValue(sp)});
+        // TnPlayerLevelUpMessage "`p is now a level `l `s" (specialty level) [CONFIRMED text, RE s4].
+        std::string msg = catalog_.localize("TransGame", "TnPlayerLevelUpMessage", "LevelUpMessage");
+        if (msg.empty()) msg = "`p is now a level `l `s";
+        auto sub = [&](const std::string& k, const std::string& v) { for (size_t at; (at = msg.find(k)) != std::string::npos;) msg.replace(at, k.size(), v); };
+        sub("`p", flow_.profile().playerName()); sub("`l", std::to_string(u.level)); sub("`s", sp);
+        if (presenter_) presenter_->hudCall("_global.GameMessage", {BridgeValue(msg)});
+        FlowTrace::emit("progression.levelUp", {{"specialty", sp}, {"level", std::to_string(u.level)}, {"message", msg}});
+    }
+}
+
+void FrontendRuntime::progressionXp(const XpEvent& e) {
+    // TnHudDataObserverXpTransactions -> _global.PointEvent(transactionId, xp, announcement, description, extraData); the
+    // popup shows even when no XP is awarded (ShowXpEvents) [CONFIRMED]. Only the played specialty earns.
+    ProgressionState& ps = flow_.profile().progression;
+    const int sp = progression::specialtyIndex(flow_.selectedCharacter().specialty);
+    const long award = canGainXp_ ? e.xp : 0;
+    if (presenter_)
+        presenter_->hudCall("_global.PointEvent", {BridgeValue(e.transactionId), BridgeValue((double)award), BridgeValue(e.announcement),
+                                                   BridgeValue(e.description), BridgeValue(e.extra)});
+    std::vector<progression::LevelUp> ups;
+    if (award > 0) { progression::LevelUp u = progression::addXp(ps, sp, award); if (u.specialty >= 0) ups.push_back(u); }
+    FlowTrace::emit("progression.xp", {{"transaction", std::to_string(e.transactionId)}, {"xp", std::to_string(award)},
+                                       {"announcement", e.announcement}, {"specialty", progression::specialtyName(sp)},
+                                       {"total", sp >= 0 ? std::to_string(ps.xp[(size_t)sp]) : "-"}});
+    presentLevelUps(ups);
+}
+
+void FrontendRuntime::progressionStat(int statId, long amount, int updateType) {
+    if (!canGainXp_) return;   // the original drops challenge stats in private matches (PRI.ShouldUpdateState)
+    ProgressionState& ps = flow_.profile().progression;
+    const int sp = progression::specialtyIndex(flow_.selectedCharacter().specialty);
+    std::vector<progression::LevelUp> ups;
+    for (const progression::ChallengeUnlock& u : progression::reportStat(ps, catalog_, statId, amount, updateType, sp, ups)) {
+        if (presenter_)
+            presenter_->movieCall("UI_GFxChallengeNotifies_p.ChallengeNotify_GFX", "_global.ChallengeUnlocked",
+                                  {BridgeValue(u.name), BridgeValue(u.description), BridgeValue(u.tier), BridgeValue((double)u.goal),
+                                   BridgeValue((double)u.xp)});
+        FlowTrace::emit("progression.challenge", {{"id", std::to_string(u.challengeId)}, {"name", u.name}, {"tier", std::to_string(u.tier)},
+                                                  {"goal", std::to_string(u.goal)}, {"xp", std::to_string(u.xp)},
+                                                  {"prime", FlowTrace::boolean(u.prime)}});
+    }
+    presentLevelUps(ups);
+}
+
 void FrontendRuntime::updateAudio(float dt) {
     // Music follows the UI levels' Kismet (Systems FrontendAudio plays it): UI_FrontEnd_m starts its track at
     // [FRONTEND START]; the lobby maps at level start; any travel replaces the level's music player.
@@ -894,6 +997,7 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     if (presenter_) presenter_->update(flow_, movieInputHold_ ? none : in, dt);
     { core::prof::Scope prof("script"); script_.update(flow_, dt); }
     { core::prof::Scope prof("+audio.update"); updateAudio(dt); }
+    updateProgression();
     { core::prof::Scope prof("+scene.update"); updateScene(dt); }
 }
 
@@ -908,6 +1012,7 @@ void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt)
     if (presenter_) presenter_->update(flow_, in, dt);
     script_.update(flow_, dt);
     if (audio_) audio_->tick(dt);   // UI sounds of in-match movies (pause menu); match audio is the World's
+    updateProgression();
     // TnHUD: the HUD movie exists for the match; visible in UI states InGame / Spectating only (RE A8).
     bool inMatch = flow_.level() == LevelKind::Match && !flow_.loading().active;
     UIState st = flow_.ui().state();

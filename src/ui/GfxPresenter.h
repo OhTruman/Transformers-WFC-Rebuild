@@ -35,6 +35,7 @@ public:
     void setHud(bool open, bool visible) override;
     void setScoreboard(bool open) override;
     void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
+    void movieCall(const std::string& movie, const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
     void advanceLoading(float dt) override {
         if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
         if (cursor_) cursor_->advance(dt);
@@ -101,6 +102,8 @@ private:
     struct Deferred { std::string movie, fn; gfx::avm1::Args args; };
     std::vector<Deferred> deferred_;
     int viewW_ = 1280, viewH_ = 720;          // last drawn window size (pointer -> stage mapping)
+    struct PendingCall { std::string movie, fn; std::vector<frontend::BridgeValue> args; bool advanced = false; };
+    std::vector<PendingCall> pendingCalls_;   // movieCall: delivered after the movie's first frame
     int frameLimitShown_ = 0;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
     std::map<const gfx::Player*, int> botRowsBuilt_;   // GameLobby menu: the BotRows kind its bot rows were built for
     void syncBotRows(gfx::Player& p, frontend::GameFlow& flow);

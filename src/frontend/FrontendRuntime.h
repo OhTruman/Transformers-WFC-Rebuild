@@ -61,6 +61,11 @@ public:
     // The in-match HUD movie (TnHUD.HudMovie): open for the match, shown per UI state; never takes key focus.
     virtual void setHud(bool open, bool visible) { (void)open; (void)visible; }
     virtual void hudCall(const std::string& fn, const std::vector<BridgeValue>& args) { (void)fn; (void)args; }
+    // A function of a notification movie (e.g. UI_GFxChallengeNotifies_p.ChallengeNotify_GFX ChallengeUnlocked): the
+    // movie is opened without focus if it is not, and the call is made once it has run its first frame.
+    virtual void movieCall(const std::string& movie, const std::string& fn, const std::vector<BridgeValue>& args) {
+        (void)movie; (void)fn; (void)args;
+    }
     // TnHUD.ScoreboardMovie (InGameStats_GFX): open = shown with input focus.
     virtual void setScoreboard(bool open) { (void)open; }
     // This frame's full-screen movie frame (nullptr = none): over the GFx movies (SeqAct_MoviePlayer) or under them
@@ -195,6 +200,12 @@ public:
     // Opens the travel loading underlay ([LoadingMovie] DefaultFileName) and parks it, so the first travel after boot
     // does not open it on the frame its loading screen appears; called under a loading screen. Once.
     void prewarmLoadingUnderlay();
+    // Multiplayer progression awards for the local player (Gameplay's XP events / game stats; RE MP_PROGRESSION s2-s7):
+    // applied to the profile's progression and shown as the original presents them (Hud_GFX PointEvent / NotifyLevelUp /
+    // the TnPlayerLevelUpMessage broadcast, ChallengeNotify_GFX ChallengeUnlocked). Saved when the match ends.
+    struct XpEvent { int transactionId = 0; long xp = 0; std::string announcement, description, extra; };
+    void progressionXp(const XpEvent& e);
+    void progressionStat(int statId, long amount, int updateType);
     bool sceneDrawable() const { return sceneDrawable_; }
 private:
     bool prewarmScene_ = false;
@@ -214,6 +225,10 @@ private:
     float sceneTraceTimer_ = 0.0f;
     IFrontendAudio* audio_ = nullptr;
     LevelKind lastAudioLevel_ = LevelKind::None;
+    LevelKind progressionLevel_ = LevelKind::None;   // the match begin / end edges of the progression
+    bool canGainXp_ = false;
+    void updateProgression();
+    void presentLevelUps(const std::vector<progression::LevelUp>& ups);
     bool frontEndMusic_ = false;
     std::function<platform::IMoviePlayer*()> movieFactory_;
     std::unique_ptr<platform::IMoviePlayer> video_;   // SeqAct_MoviePlayer movie or the loading underlay

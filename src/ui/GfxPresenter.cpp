@@ -88,6 +88,23 @@ void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::Br
     hud_->invoke(fn, a);
 }
 
+void GfxPresenter::movieCall(const std::string& movie, const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
+    bool open = false;
+    for (const Extra& e : extras_) open = open || e.object == movie;
+    if (!open) {
+        Extra e;
+        e.object = movie;
+        e.movie = std::make_unique<GfxMovie>();
+        bool ok = e.movie->open(lib_, &rt_.catalog(), movie,
+                                [this](GfxMovie& mv, const std::string& f, Args& aa) { return bridge(mv, f, aa); },
+                                [this](GfxMovie& mv, const std::string& c, const std::string& aa) { fsCommand(mv, c, aa); });
+        frontend::FlowTrace::emit("gfx.movie", {{"movie", movie}, {"opened", frontend::FlowTrace::boolean(ok)}, {"by", "movieCall"}});
+        if (!ok) return;
+        extras_.push_back(std::move(e));
+    }
+    pendingCalls_.push_back({movie, fn, args, open});
+}
+
 bool GfxPresenter::clipWindowCenter(const std::string& path, int& x, int& y) {
     gfx::Player* p = focusPlayer();
     if (!p) return false;
@@ -693,6 +710,18 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         for (size_t i = extras_.size(); i-- > 0;) if (extras_[i].object == o) { extras_.erase(extras_.begin() + (long)i); shapesStale_ = true; }
     deferredErase_.clear();
     for (Extra& e : extras_) e.movie->advance(dt);
+    for (size_t i = 0; i < pendingCalls_.size();) {   // movieCall: once the (new) movie has run a frame
+        PendingCall& pc = pendingCalls_[i];
+        Extra* target = nullptr;
+        for (Extra& e : extras_) if (e.object == pc.movie) target = &e;
+        if (!target) { pendingCalls_.erase(pendingCalls_.begin() + (long)i); continue; }
+        if (!pc.advanced) { pc.advanced = true; ++i; continue; }
+        Args a;
+        for (const frontend::BridgeValue& b : pc.args) a.push_back(toValue(target->movie->player().vm(), b));
+        target->movie->invoke(pc.fn, a);
+        frontend::FlowTrace::emit("gfx.movieCall", {{"movie", pc.movie}, {"fn", pc.fn}});
+        pendingCalls_.erase(pendingCalls_.begin() + (long)i);
+    }
     frameLimitShown_ = flow.profile().display.frameLimit;
     for (Open& op : movies_) if (op.object.find("GameLobby_GFX") != std::string::npos) syncBotRows(op.movie->player(), flow);
     for (Open& op : movies_) {
