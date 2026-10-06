@@ -785,11 +785,10 @@ void PlayerController::applyToPawn(World& world, float dt) {
             } else if (vw->ammo == 0 && vw->canReload()) vw->beginReload();
         }
     }
-    // Robot weapon: fires while the trigger is held (held flag persists across render frames).
-    if ((wantFire_ || fireLatch_) && usable) {
-        if (w.canFire()) {
+    // One robot shot of weapon (or charge-level copy) sw; the caller has already consumed ammo (onFired).
+    auto fireRobotShot = [&](const Weapon& sw) {
+            const Weapon& w = sw;
             pawn_->exposeSelf();          // TnWeapon.OnPreServerFire -> ExposeSelf (decloak)
-            w.onFired();
             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
             if (!noRecoil) pawn_->notifyFired();   // per-shot skeletal recoil (TnRecoiler)
             // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
@@ -814,6 +813,50 @@ void PlayerController::applyToPawn(World& world, float dt) {
             }
             // NumShotsToFire traces per shot (shotgun pellets), each with its own spread sample [CONF data; HIGH: one ammo per shot].
             else for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) world.fireHitscan(start, camDir);
+    };
+    if (w.charge()) {
+        // TnChargeWeapon. Active.BeginFire: loaded and TimeSinceLastCharge >= FireInterval -> Charging (state 1). Charging.Tick:
+        // ChargeTime += dt, state = GetDesiredChargeState; fully charged drains ChargeDrainRate clip ammo / s (empty -> EndFire).
+        // EndFire (release) -> FireCharge: state 1 fires nothing, 2 / 3 / 4 fire mode 0 / 1 / 2 with that mode's ShotCost and
+        // projectile class; EndState: TimeOfLastCharge, empty clip with reserve -> Reload. TryPutDown / OnReload / OnMelee /
+        // overheat -> state 0 without a shot; a transform ends it the same way [HIGH] [CONF script + PlasmaCannon_WEPDATA].
+        const bool held = wantFire_ || fireLatch_;
+        if (w.chargeState == 0) {
+            if (held && usable && w.ammo > 0 && !w.reloading() && w.sinceCharge >= w.fireInterval) {
+                w.chargeState = 1; w.chargeTime = 0.0f; w.chargeDrained = 0.0f;
+            } else if (usable && w.ammo == 0 && w.canReload()) w.beginReload();
+        } else if (!usable || w.reloading()) {
+            w.chargeState = 0; w.sinceCharge = 0.0f;
+        } else {
+            w.chargeTime += dt;
+            w.chargeState = w.desiredChargeState();
+            bool release = !wantFire_;
+            if (w.chargeState == 4 && !release) {
+                const float nd = w.chargeDrained + dt * Weapon::kChargeDrainRate;
+                const int take = (int)nd - (int)w.chargeDrained;
+                w.chargeDrained = nd;
+                w.ammo = std::max(0, w.ammo - take);
+                if (w.ammo == 0) release = true;
+            }
+            if (release) {
+                if (w.chargeState >= 2) {
+                    const int mode = w.chargeState - 2;
+                    const Weapon::ChargeLevel& L = Weapon::chargeLevel(mode);
+                    Weapon shot = w;
+                    shot.projSpeed = L.speed; shot.projDamage = L.damage; shot.projRadiusM = L.radiusM; shot.projClass = mode;
+                    w.onFired();                                   // spread / serial / one ammo
+                    w.ammo = std::max(0, w.ammo - (L.shotCost - 1));   // ConsumeAmmo(ShotCost[mode]), clamped at 0 [HIGH]
+                    fireRobotShot(shot);
+                }
+                w.chargeState = 0; w.sinceCharge = 0.0f;
+                if (w.ammo == 0 && w.canReload()) w.beginReload();
+            }
+        }
+    } else if ((wantFire_ || fireLatch_) && usable) {
+        // Robot weapon: fires while the trigger is held (held flag persists across render frames).
+        if (w.canFire()) {
+            w.onFired();
+            fireRobotShot(w);
         } else if (w.ammo == 0 && w.canReload()) {
             w.beginReload();
         }

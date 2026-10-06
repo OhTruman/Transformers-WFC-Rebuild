@@ -181,7 +181,9 @@ bool Application::init() {
     if (std::getenv("WFC_QATEST")) { runQaToolTest(); return false; }        // DEV / QA TOOLING self-test (needs WFC_QA=1)
     if (std::getenv("WFC_PROJFXTEST")) { runProjectileFxTest(); return false; }   // projectile FlightEffect / ExplosionEffect binding
     if (std::getenv("WFC_MUZZLETEST")) { runMuzzleTest(); return false; }          // vehicle weapon Primary / Primary2 alternation
-    if (std::getenv("WFC_RMUZZLETEST")) { runRobotMuzzleTest(); return false; }    // robot projectiles spawn at the weapon MuzzleFlash socket   // measurements only
+    if (std::getenv("WFC_RMUZZLETEST")) { runRobotMuzzleTest(); return false; }    // robot projectiles spawn at the weapon MuzzleFlash socket
+    if (std::getenv("WFC_CHARGETEST")) { runChargeTest(); return false; }          // Plasma Cannon charge levels + grenade spin
+    if (std::getenv("WFC_DROPTEST")) { runDropTest(); return false; }              // hover vehicle 10 m drop: per-step vertical trace   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -4159,9 +4161,11 @@ void Application::runRobotMuzzleTest() {
         const size_t n0 = world_.liveProjectiles();
         platform::InputFrame fire; fire.pressed[(int)platform::Button::Fire] = true; fire.down[(int)platform::Button::Fire] = true;
         core::Vec3 spawned{0, 0, 0}; bool fired = false; core::Vec3 muzzleAtShot = muzzle;
-        for (int i = 0; i < 60 && !fired; ++i) {
+        // Charge weapons (Plasma Cannon) fire on release: hold past ChargeDelay1 (0.75 s), then release.
+        const bool chargeW = pc.weapon().charge();
+        for (int i = 0; i < 90 && !fired; ++i) {
             world_.heldWeaponMuzzle(muzzleAtShot);
-            step(fire);
+            step(chargeW && i >= 54 ? idle : fire);
             if (world_.liveProjectiles() > n0) { spawned = world_.projectilePos(world_.liveProjectiles() - 1); fired = true; }
         }
         const core::Vec3 eye = pc.actorLocation() + core::Vec3{0, pc.robotParams().eyeHeight, 0};
@@ -4177,6 +4181,134 @@ void Application::runRobotMuzzleTest() {
         check(have && fired && dMuzzle <= travel && dHand < 3.0f && ahead > 0.0f, std::string(c.id) + ": projectile spawns at the weapon MuzzleFlash socket");
     }
     LOG_INFO("RMUZZLE SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_CHARGETEST: TnChargeWeapon (Plasma Cannon) levels by hold time + TnProjectileGrenadeBase spin.
+void Application::runChargeTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("CHARGE %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) step(idle); };
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+    world_.launchMatch(L);
+    game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Scout; cs.weapons = {"PlasmaCannon", "HeavyPistol", "FlashBangs"};
+    world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+    run(11.0f);
+    game::Character& pc = world_.player().pawn();
+    const std::string held = pc.weapon().def ? pc.weapon().def->id : "?";
+    check(held == "PlasmaCannon", "Scout holds the Plasma Cannon (" + held + ")");
+    if (held != "PlasmaCannon") { LOG_INFO("CHARGE SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
+    struct Shot { bool fired; float speed, damage; int ammoUsed, ammoHeld; std::string tpl, hudMid, hudEnd; };
+    auto hold = [&](float secs) {
+        game::Weapon& w = pc.weapon();
+        w.ammo = w.magSize; w.reserve = w.reserveMax;
+        run(0.5f);
+        const int a0 = w.ammo; const size_t n0 = world_.liveProjectiles();
+        Shot r{false, 0, 0, 0, 0, "", "", ""};
+        const int ticks = (int)(secs * 60.0f + 0.5f);
+        for (int i = 0; i < ticks; ++i) {
+            platform::InputFrame f; f.down[(int)platform::Button::Fire] = true; if (i == 0) f.pressed[(int)platform::Button::Fire] = true;
+            step(f);
+            if (i == 20) r.hudMid = world_.hudState().weaponChargeMessage;
+            if (i == ticks - 1) { r.hudEnd = world_.hudState().weaponChargeMessage; r.ammoHeld = a0 - pc.weapon().ammo; }
+        }
+        step(idle);
+        if (world_.liveProjectiles() > n0) {
+            const size_t k = world_.liveProjectiles() - 1;
+            r.fired = true; r.speed = core::length(world_.projectileVel(k)); r.damage = world_.projectileDamage(k); r.tpl = world_.projectileFlightTemplate(k);
+        }
+        r.ammoUsed = a0 - pc.weapon().ammo;
+        LOG_INFO("CHARGE hold %.2f s: fired %d speed %.0f m/s damage %.0f ammo %d (drained while held %d) hud [%s] -> [%s] trail %s", secs, (int)r.fired, r.speed, r.damage,
+                 r.ammoUsed, r.ammoHeld, r.hudMid.c_str(), r.hudEnd.c_str(), r.tpl.c_str());
+        run(1.0f);
+        return r;
+    };
+    Shot t = hold(0.3f), a = hold(1.0f), b = hold(2.5f), c = hold(4.0f);
+    check(!t.fired && t.ammoUsed == 0 && t.hudEnd == "CHARGING", "tap (0.3 s, state 1): no shot, no ammo; HUD CHARGING");
+    check(a.fired && std::fabs(a.speed - 80.0f) < 1.0f && a.damage == 115.0f && a.ammoUsed == 25 && a.hudEnd == "READY" && a.tpl.find("_Sm_") != std::string::npos,
+          "1.0 s: Charge1 80 m/s, 115 dmg, 25 ammo, small trail, HUD READY");
+    check(b.fired && std::fabs(b.speed - 150.0f) < 1.0f && b.damage == 140.0f && b.ammoUsed == 50 && b.tpl.find("_Med_") != std::string::npos,
+          "2.5 s: Charge2 150 m/s, 140 dmg, 50 ammo, medium trail");
+    check(c.fired && std::fabs(c.speed - 230.0f) < 1.0f && c.damage == 179.0f && c.ammoHeld >= 4 && c.ammoHeld <= 6 && c.ammoUsed == 100 && c.tpl.find("_Lrg_") != std::string::npos,
+          "4.0 s: Charge3 230 m/s, 179 dmg, ~5 drained at full charge then ShotCost 100 (clip clamps at 0), large trail");
+    {
+        game::Weapon& w = pc.weapon(); w.ammo = w.magSize; run(0.5f);
+        const size_t n0 = world_.liveProjectiles(); const int a0 = w.ammo;
+        for (int i = 0; i < 90; ++i) {
+            platform::InputFrame f; f.down[(int)platform::Button::Fire] = true; if (i == 0) f.pressed[(int)platform::Button::Fire] = true;
+            if (i == 70) f.mouseWheel = 1.0f;
+            step(f);
+        }
+        run(1.5f);
+        int cannonAmmo = -1;
+        for (auto& x : pc.inventory()) if (x.def && std::string(x.def->id) == "PlasmaCannon") cannonAmmo = x.ammo;
+        check(world_.liveProjectiles() == n0 && a0 == cannonAmmo && std::string(pc.weapon().def ? pc.weapon().def->id : "?") == "HeavyPistol",
+              "charge level 2 then switch: no shot, no ammo, Heavy Pistol up");
+    }
+    {
+        run(1.0f);
+        const size_t n0 = world_.liveProjectiles();
+        platform::InputFrame g; g.pressed[(int)platform::Button::Grenade] = true; g.down[(int)platform::Button::Grenade] = true;
+        step(g);
+        size_t k = (size_t)-1; float s0 = 0, s1 = 0; int flightTicks = 0; bool rested = false; float sRest = 0, sRestLater = 0;
+        for (int i = 0; i < 600; ++i) {
+            step(idle);
+            if (k == (size_t)-1 && world_.liveProjectiles() > n0) { k = world_.liveProjectiles() - 1; s0 = world_.projectileSpin(k); continue; }
+            if (k == (size_t)-1 || k >= world_.liveProjectiles()) continue;
+            if (flightTicks < 15) { ++flightTicks; s1 = world_.projectileSpin(k); }
+            if (!rested && world_.projectileResting(k)) { rested = true; sRest = world_.projectileSpin(k); }
+            else if (rested) { sRestLater = world_.projectileSpin(k); break; }
+        }
+        const float rateDeg = flightTicks > 0 ? (s1 - s0) / (flightTicks * dt) * 57.29578f : 0.0f;
+        LOG_INFO("CHARGE grenade spin: %.0f deg/s in flight (authored -549), rested %d, spin change at rest %.5f rad", rateDeg, (int)rested, sRestLater - sRest);
+        check(k != (size_t)-1 && std::fabs(rateDeg + 549.3f) < 5.0f && (!rested || std::fabs(sRestLater - sRest) < 1e-5f),
+              "Flashbang tumbles at RotationRate pitch -100000 (-549 deg/s), stops at rest");
+    }
+    LOG_INFO("CHARGE SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_DROPTEST: settle a hover vehicle on flat ground, lift it 10 m, release; log per step the COM height above the floor,
+// vertical speed and probe contacts until 1.5 s after touchdown. Diagnostic (drop recovery investigation).
+void Application::runDropTest() {
+    const float dt = 1.0f / 60.0f;
+    game::PlayerController& ctl = world_.player().controller();
+    const game::CollisionWorld* cw = world_.collision();
+    platform::InputFrame idle, tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    const char* only = std::getenv("WFC_DROPTEST");
+    for (const char* id : {"Car2", "Truck3", "Tank3"}) {
+        if (only && std::strlen(only) > 1 && std::string(only) != id) continue;
+        world_.applyChassisToLocalPawn(id);
+        world_.applyLoadout(nullptr);
+        game::Character& pc = world_.player().pawn();
+        if (pc.form() != game::Form::Vehicle) step(tf);
+        for (int i = 0; i < 240; ++i) step(idle);
+        if (pc.form() != game::Form::Vehicle) { LOG_INFO("DROP %s: no vehicle form", id); continue; }
+        auto& vs = pc.vehicleState();
+        // Flat floor under the pawn with open sky.
+        const core::Vec3 base = pc.position();
+        float gy; core::Vec3 gn;
+        if (!cw || !cw->groundHeight(base.x, base.z, base.y + 1.0f, 2.0f, gy, gn)) { LOG_INFO("DROP %s: no floor", id); continue; }
+        for (int i = 0; i < 180; ++i) step(idle);
+        const float restY = pc.position().y;
+        LOG_INFO("DROP %s rest: root y %.3f (floor %.3f, root above floor %.3f), contacts %d", id, restY, gy, restY - gy, vs.contacts);
+        pc.setPosition(core::Vec3{base.x, restY + 10.0f, base.z});
+        pc.velocity() = {0, 0, 0}; vs.pitch = vs.roll = 0.0f; vs.angVel = {0, 0, 0};
+        ctl.setCameraYaw(pc.yaw());
+        int touch = -1;
+        for (int i = 0; i < 400; ++i) {
+            const float vyBefore = pc.velocity().y;
+            step(idle);
+            const float h = pc.position().y - restY;
+            if (touch < 0 && vs.contacts > 0) touch = i;
+            if (touch >= 0 && i - touch <= 90 && ((i - touch) < 20 || (i - touch) % 5 == 0))
+                LOG_INFO("DROP %s t+%.3f: root %+.3f m vs rest, vy %+.2f (before step %+.2f), contacts %d, pitch %.2f deg",
+                         id, (i - touch) * dt, h, pc.velocity().y, vyBefore, vs.contacts, vs.pitch * 57.29578f);
+            if (touch >= 0 && i - touch > 90) break;
+        }
+    }
 }
 
 } // namespace core

@@ -33,6 +33,51 @@ Commits c5c992c (24a) .. dfc20f8 (24f), on top of aa0dfd1. Full detail: FIDELITY
 - Scout / jet / truck vehicle weapons alternate left / right gun each shot; tank cannon unchanged.
 
 ## Open (documented PARTIAL)
-- Robot-form instant-hit trace still starts at actor + eye height; RE confirmed TnPlayerPawn.GetWeaponStartTraceLocation (crosshair ray point nearest the pawn) applies to robots too — pending a decision.
 - Repair Ray lock-on target pick; Null Ray scope sway; PlasmaCannon charge-level visuals; grenade spin; fine-aim HUD scope symbol (Frontend).
 - Car2 / Car4 chaos stress: 1 under-deck flag each (same as Pass 23).
+
+## Addendum: 24h-24k (91672f1..4177d5e)
+
+Integration merged up to 24g (91672f1). This addendum covers the commits after it.
+
+| commit | change | files |
+|---|---|---|
+| 2f258b6 (24h) | cache + prewarm the eight default MP chassis at startLocalMatch; cache each selected body during PendingMatch (load scheduling only) | World.cpp |
+| 7dbf60f | comment fix (the chassis cache lives per World) | World.cpp |
+| d2c17db (24i) | robot hitscan / Repair Ray traces start at TnPlayerPawn.GetWeaponStartTraceLocation (crosshair-ray point nearest the pawn); the Repair Ray ribbon still starts at the muzzle | PlayerController.cpp, World.cpp |
+| ba0fb4c (24j) | robot projectiles spawn at the held weapon's MuzzleFlash socket (`World::heldWeaponMuzzle` via `heldWeaponMuzzleHook`); weaponFireHook no longer adds 1.5 m (vehicle rockets started 3 m past their socket) | World.h/.cpp, PlayerController.cpp |
+| 7eafecb (24k) | Plasma Cannon charge levels (TnChargeWeapon: hold / release, 3 levels, ShotCost 25/50/100, drain at full charge, cancel on switch / reload / melee / transform); thrown grenade spin (−549°/s pitch until at rest); per-class projectile visuals ("<id>#<k>") | Weapon.h, PlayerController.cpp, World.h/.cpp |
+| 4177d5e | WFC_DROPTEST diagnostic (10 m hover drop trace) | Application.cpp/.h |
+
+### Merge notes
+- PlayerController.cpp: the robot fire block is restructured. The shot body is the `fireRobotShot` lambda, called by the normal
+  path and the new `w.charge()` branch. Systems / Integration hunks in that block need re-placing inside the lambda.
+- World.cpp: `loadProjectileVisuals` now loops over every projectile class; `spawnProjectile` picks the visual by `w.projClass`;
+  grenade spin is in the grenade tick and in draw. Systems' projectile audio hunks sit beside these; keep both.
+- World.h: `heldWeaponMuzzleHook` (installed in World::load next to repairBeamHook); new Projectile fields `yaw0 / pitch0 / spin /
+  spinRate`; test accessors `projectilePos / Vel / Damage / Spin / Resting`.
+
+### HudState additions (for Frontend / Systems)
+- `weaponChargeState` (0 idle, 1 charging, 2-4 levels 1-3) and `weaponChargeMessage` ("CHARGING" / "READY" / "") for the Plasma
+  Cannon (TnChargeWeapon.GetHudMessage).
+- Charge presentation not done here: material glow 0 / ⅓ / ⅔ / 1 and WP events 9-12 (charge loops, release) belong to
+  Rendering / Systems.
+
+### New harnesses
+WFC_RMUZZLETEST (4/4), WFC_CHARGETEST (7/7), WFC_DROPTEST (diagnostic, no pass / fail).
+
+### Validation (agents/gameplay 4177d5e)
+WEAPON 19, SWITCH 32, PARTICIPANT 22, TDM 43, CTF 12, SCORE 9, FINEAIM 3, MUZZLE 5, RMUZZLE 4, CHARGE 7, PROJFX 2 (3/3 with the
+renderer API). In TDMTEST, all eight default chassis load before "match: launched".
+
+### Playtest expectations
+- Plasma Cannon: a tap does nothing; hold 0.75 / 2.0 / 3.5 s for level 1 / 2 / 3 (small / medium / large trail); the HUD message
+  reads CHARGING, then READY.
+- Robot shots go where the crosshair points from the barrel; rockets / grenade launcher rounds leave from the muzzle.
+- Thrown grenades tumble end over end until they settle.
+- No hitch the first time a bot or player uses a chassis mid-match.
+
+### Open
+- Experimental's vehicle checks (see their tools/fidelity): drop10 is a harness false positive (WFC_DROPTEST trace sent);
+  hover_jump.pitch_kick = 0 is intended (RE pass 4 §A4); upright.* = −1 is a harness blind spot; step_025 attitude is open
+  (question with RE).

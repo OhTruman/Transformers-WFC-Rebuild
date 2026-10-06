@@ -1675,6 +1675,10 @@ HudGameState World::hudState() const {
     h.repairBeam = repairBeam_.active && repairBeam_.time > 0.0f; h.repairBeamHealing = repairBeam_.healing;
     h.repairBeamStart = repairBeam_.start; h.repairBeamEnd = repairBeam_.end; h.repairBeamTarget = repairBeam_.target;
     h.vehicleShotSerial = vehicleShotSerial_; h.vehicleShotSocket = vehicleShotSocket_; h.vehicleShotMuzzle = vehicleShotMuzzle_;
+    if (!localPlayerDead() && player_.pawn().weapon().charge()) {
+        h.weaponChargeState = player_.pawn().weapon().chargeState;
+        h.weaponChargeMessage = player_.pawn().weapon().chargeHudMessage();
+    }
     if (matchActive_ && !localDead_) {
         MapState::ObjPawn op{localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, pc.form() == Form::Robot && !pc.isTransforming() && !pc.isMeleeing()};
         int ci = mapState_.pickupCandidate(op);
@@ -2014,8 +2018,11 @@ void World::draw(render::IRenderer& r) const {
     for (const Projectile& p : projectiles_) {
         const ProjectileVisual* v = p.visual >= 0 ? &projVisuals_[(size_t)p.visual] : nullptr;
         if (v && v->body != render::kInvalidMesh) {
-            const float yaw = std::atan2(-p.vel.x, -p.vel.z);
-            r.drawMesh(v->body, core::Mat4::translate(p.pos) * core::Mat4::rotateY(yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
+            // Grenades: spawn rotation (bRotationFollowsVelocity false) x the spinning mesh pitch; others follow the velocity.
+            const float yaw = p.grenade ? p.yaw0 : std::atan2(-p.vel.x, -p.vel.z);
+            const float pitch = p.grenade ? p.pitch0 + p.spin : 0.0f;
+            r.drawMesh(v->body, core::Mat4::translate(p.pos) * core::Mat4::rotateY(yaw + core::config::kMeshYawOffset) * core::Mat4::rotateZ(pitch),
+                       core::Vec3{1, 1, 1});
         } else if (p.fxHandle < 0) {
             r.drawBox(p.pos, core::Vec3{0.25f, 0.25f, 0.25f}, core::Vec3{1.0f, 0.6f, 0.2f});
         }
@@ -2339,7 +2346,11 @@ void World::spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const 
         p.homingForce = w.homingForce; p.closingDist = w.closingDistM; p.closingForce = w.closingForce;
         p.closingTime = w.closingTime; p.maxSpeed = w.projMaxSpeed; p.lockRobots = w.lockRobots;
     }
-    projectiles_.back().visual = projectileVisualFor(w.def ? w.def->id : nullptr);
+    {
+        int vis = -1;
+        if (w.def && w.projClass > 0) vis = projectileVisualFor((std::string(w.def->id) + "#" + std::to_string(w.projClass)).c_str());
+        projectiles_.back().visual = vis >= 0 ? vis : projectileVisualFor(w.def ? w.def->id : nullptr);
+    }
     projectileFxStart(projectiles_.back());
 }
 
@@ -2409,6 +2420,7 @@ void World::tickProjectiles(float dt) {
             // PHYS_Falling at GravityScale; HitWall / Bump -> HitThing: explode on a pawn only with ExplodeWhenHittingPawn; else
             // the first impact starts the fuse (LifeSpan = RandomInRange(FuseTime)), v = BounceDampening x reflect(v), at rest
             // (PHYS_None) when |v|^2 < LowSpeedThreshold 500 UU^2/s^2 [CONF script + authored].
+            p.spin += p.spinRate * dt;   // MeshComp.SetRotation(Rotation + RotationRate * DeltaTime)
             if (!p.resting) {
                 p.vel.y -= core::config::kGravity * p.gravityScale * dt;
                 core::Vec3 nx = p.pos + p.vel * dt;
@@ -2424,7 +2436,7 @@ void World::tickProjectiles(float dt) {
                     onProjectileHitWall(p.weaponClass, p.pos, p.life > 1e8f);   // [Systems M08f] FuseSound (first) + BounceSound
                     if (p.life > 1e8f) p.life = p.fuseMin + (p.fuseMax - p.fuseMin) * (float)(std::rand() % 1000) / 999.0f;
                     p.vel = (p.vel - n * (2.0f * core::dot(p.vel, n))) * p.bounce;
-                    if (core::dot(p.vel, p.vel) < 500.0f * 1e-4f) { p.resting = true; p.vel = {0, 0, 0}; }
+                    if (core::dot(p.vel, p.vel) < 500.0f * 1e-4f) { p.resting = true; p.vel = {0, 0, 0}; p.spinRate = 0.0f; }
                 };
                 if (hitPawn && p.explodeOnPawn) {
                     radiusDamage(p.pos, p.damage, p.radius, p.instigator, p.damageType);
@@ -2713,6 +2725,12 @@ void World::tickAbilityEffects(float dt) {
             pr.grenade = true; pr.explodeOnPawn = d.explodeOnPawn; pr.gravityScale = d.gravityScale; pr.bounce = d.bounce;
             pr.fuseMin = d.fuseMin; pr.fuseMax = d.fuseMax;
             pr.visual = projectileVisualFor(d.id);
+            pr.yaw0 = std::atan2(-vel.x, -vel.z);
+            pr.pitch0 = std::atan2(vel.y, std::hypot(vel.x, vel.z));
+            // RotationRate (Pitch -100000 rotator units/s, the TnProjectileDataGrenadeLauncher default these grenades' data
+            // inherit) [CONF authored]; the tumble sign in mesh space follows the vehicle pitch convention [HIGH].
+            const std::string gid = d.id;
+            if (gid == "FlakGrenades" || gid == "FlashBangs" || gid == "HealGrenades") pr.spinRate = -100000.0f * 6.2831853f / 65536.0f;
             projectiles_.push_back(pr);
             projectileFxStart(projectiles_.back());
             LOG_INFO("grenade %s: |v| %.1f m/s pitch %.1f deg (aim %.1f)", d.id, core::length(vel), launchPitch, aimPitch);
@@ -3737,24 +3755,26 @@ void World::loadProjectileVisuals(const std::string& root, const std::function<v
         }
         if (!found) continue;
         const assets::Json& ps = j["projectiles"];
-        if (ps.size() == 0) continue;
-        // The first projectile class (PlasmaCannon: Charge1; the charge levels are not simulated) [PARTIAL for PlasmaCannon].
-        const assets::Json& v = ps[(size_t)0]["projectile_visual"];
-        ProjectileVisual pv;
-        pv.weapon = d.id;
-        pv.flight = v["flight_effect"]["template"].asString();
-        pv.explosion = v["explosion_effect"]["template"].asString();
-        const std::string gltf = ps[(size_t)0]["body_mesh"]["gltf"].asString();
-        if (!gltf.empty() && renderer_) {
-            render::MeshData md;
-            if (assets::loadGlb(root + "/../" + gltf, md)) {
-                resolveTextures(md.mats);
-                pv.body = renderer_->uploadMesh(md);
-                if (pv.body != render::kInvalidMesh) ++meshes;
+        // One entry per projectile class (WeaponProjectiles by fire mode; PlasmaCannon Charge1 / 2 / 3): class k > 0 is keyed
+        // "<id>#<k>" (Weapon::projClass).
+        for (size_t k = 0; k < ps.size(); ++k) {
+            const assets::Json& v = ps[k]["projectile_visual"];
+            ProjectileVisual pv;
+            pv.weapon = k == 0 ? std::string(d.id) : std::string(d.id) + "#" + std::to_string(k);
+            pv.flight = v["flight_effect"]["template"].asString();
+            pv.explosion = v["explosion_effect"]["template"].asString();
+            const std::string gltf = ps[k]["body_mesh"]["gltf"].asString();
+            if (!gltf.empty() && renderer_) {
+                render::MeshData md;
+                if (assets::loadGlb(root + "/../" + gltf, md)) {
+                    resolveTextures(md.mats);
+                    pv.body = renderer_->uploadMesh(md);
+                    if (pv.body != render::kInvalidMesh) ++meshes;
+                }
             }
+            if (pv.flight.empty() && pv.explosion.empty() && pv.body == render::kInvalidMesh) continue;
+            projVisuals_.push_back(pv);
         }
-        if (pv.flight.empty() && pv.explosion.empty() && pv.body == render::kInvalidMesh) continue;
-        projVisuals_.push_back(pv);
     }
     LOG_INFO("projectile visuals: %zu weapons (%d body meshes), renderer particle API %s", projVisuals_.size(), meshes,
              projectileFxApi() ? "present" : "absent (box marker fallback)");
