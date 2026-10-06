@@ -3724,7 +3724,25 @@ void Application::runChargeTest() {
         run(1.0f);
         return r;
     };
-    Shot t = hold(0.3f), a = hold(1.0f), b = hold(2.5f), c = hold(4.0f);
+    const unsigned fz0 = world_.hudState().weaponChargeFizzle, sr0 = world_.hudState().weaponChargeSerial;
+    Shot t = hold(0.3f);
+    const unsigned fz1 = world_.hudState().weaponChargeFizzle, sr1 = world_.hudState().weaponChargeSerial;
+    // Glow by level: sample while holding through level 3.
+    float glow[3] = {-1, -1, -1};
+    {
+        game::Weapon& w = pc.weapon(); w.ammo = w.magSize; run(0.5f);
+        for (int i = 0; i < 240; ++i) {
+            platform::InputFrame f; f.down[(int)platform::Button::Fire] = true; if (i == 0) f.pressed[(int)platform::Button::Fire] = true;
+            step(f);
+            const int st = world_.hudState().weaponChargeState;
+            if (st >= 2 && glow[st - 2] < 0) glow[st - 2] = world_.hudState().weaponChargeGlow;
+        }
+        step(idle); run(3.0f);   // the full-charge shot empties the clip: let the auto-reload (2.5 s) finish
+    }
+    LOG_INFO("CHARGE presentation: tap fizzle +%u, tap state changes +%u, glow by level %.3f / %.3f / %.3f", fz1 - fz0, sr1 - sr0, glow[0], glow[1], glow[2]);
+    check(fz1 - fz0 == 1 && sr1 - sr0 == 2 && std::fabs(glow[0] - 1.0f / 3.0f) < 1e-4f && std::fabs(glow[1] - 2.0f / 3.0f) < 1e-4f && std::fabs(glow[2] - 1.0f) < 1e-4f,
+          "presentation: tap = 1 fizzle (event 22) and 2 state changes (0->1->0); MaterialGlowAmount 1/3, 2/3, 1 by level");
+    Shot a = hold(1.0f), b = hold(2.5f), c = hold(4.0f);
     check(!t.fired && t.ammoUsed == 0 && t.hudEnd == "CHARGING", "tap (0.3 s, state 1): no shot, no ammo; HUD CHARGING");
     check(a.fired && std::fabs(a.speed - 80.0f) < 1.0f && a.damage == 115.0f && a.ammoUsed == 25 && a.hudEnd == "READY" && a.tpl.find("_Sm_") != std::string::npos,
           "1.0 s: Charge1 80 m/s, 115 dmg, 25 ammo, small trail, HUD READY");

@@ -203,8 +203,13 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   - After a shot an empty clip auto-reloads.
 - HUD: weaponChargeState (0-4) and weaponChargeMessage ("CHARGING" in state 1, "READY" at any level: ChargingMessage /
   FullyChargedMessage).
-- PARTIAL: the charge material glow (MaterialGlowAmount 0 / ⅓ / ⅔ / 1) and the charge muzzle events / sounds (WP events 9-12)
-  are presentation for Rendering / Systems.
+- Charge presentation state (24l) is reported in HudState [CONFIRMED ORIGINAL: UpdateChargeEffects / FireCharge script]:
+  - weaponChargeGlow = MaterialGlowAmount 0 / ⅓ / ⅔ / 1 (SetMaterialParameter(1, ...));
+  - weaponChargeSerial (+1 per state change). Sounds: → 1 play event 9; → 3 stop 9, play 10; → 4 stop 10, play 11; → 0 stop
+    9 / 10 / 11, play 12. Muzzle flash StartMuzzleFlash(0 / 1 / 2 / 3 / 12);
+  - weaponChargeFizzle (+1 on a release before level 1: event 22).
+- PARTIAL: playing them. The glow needs a renderer material parameter for the held weapon mesh (Rendering); the event sounds
+  need a charge path in WeaponAudio (Systems). Both have been sent the contract.
 - WFC_CHARGETEST: a 0.3 s tap fires nothing; 1.0 / 2.5 / 4.0 s holds fire 80 / 150 / 230 m/s, 115 / 140 / 179 damage, 25 / 50 / 100
   ammo (+4 drained at full charge) with the Sm / Med / Lrg trail; charge then switch = no shot.
 

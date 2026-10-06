@@ -92,6 +92,14 @@ struct HudGameState {
     // Charge weapon (Plasma Cannon) state: 0 idle, 1 charging, 2-4 charge levels 1-3; HUD message (GetHudMessage).
     int weaponChargeState = 0;
     std::string weaponChargeMessage;
+    // Charge presentation (TnChargeWeapon.UpdateChargeEffects) for Rendering / Systems:
+    //   weaponChargeGlow     MaterialGlowAmount for the held weapon mesh's SetMaterialParameter(1, ...): 0, 1/3, 2/3, 1.
+    //   weaponChargeSerial   +1 on every state change. Sounds by transition: -> 1 PlayWeaponEvent(9); -> 3 stop 9, play 10;
+    //                        -> 4 stop 10, play 11; -> 0 (EndState) stop 9 / 10 / 11, play 12. Muzzle flash
+    //                        StartMuzzleFlash(0 / 1 / 2 / 3 / 12) for state 1 / 2 / 3 / 4 / 0.
+    //   weaponChargeFizzle   +1 when released before level 1: PlayWeaponEvent(22) instead of a shot.
+    float weaponChargeGlow = 0.0f;
+    unsigned weaponChargeSerial = 0, weaponChargeFizzle = 0;
     int vehicleShotSerial = 0, vehicleShotSocket = 0;
     core::Vec3 vehicleShotMuzzle{0, 0, 0};
     bool barrier = false;                        // the local Barrier ability's wall is up

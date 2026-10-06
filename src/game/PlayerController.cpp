@@ -823,13 +823,13 @@ void PlayerController::applyToPawn(World& world, float dt) {
         const bool held = wantFire_ || fireLatch_;
         if (w.chargeState == 0) {
             if (held && usable && w.ammo > 0 && !w.reloading() && w.sinceCharge >= w.fireInterval) {
-                w.chargeState = 1; w.chargeTime = 0.0f; w.chargeDrained = 0.0f;
+                w.setChargeState(1); w.chargeTime = 0.0f; w.chargeDrained = 0.0f;
             } else if (usable && w.ammo == 0 && w.canReload()) w.beginReload();
         } else if (!usable || w.reloading()) {
-            w.chargeState = 0; w.sinceCharge = 0.0f;
+            w.setChargeState(0); w.sinceCharge = 0.0f;
         } else {
             w.chargeTime += dt;
-            w.chargeState = w.desiredChargeState();
+            w.setChargeState(w.desiredChargeState());
             bool release = !wantFire_;
             if (w.chargeState == 4 && !release) {
                 const float nd = w.chargeDrained + dt * Weapon::kChargeDrainRate;
@@ -847,8 +847,8 @@ void PlayerController::applyToPawn(World& world, float dt) {
                     w.onFired();                                   // spread / serial / one ammo
                     w.ammo = std::max(0, w.ammo - (L.shotCost - 1));   // ConsumeAmmo(ShotCost[mode]), clamped at 0 [HIGH]
                     fireRobotShot(shot);
-                }
-                w.chargeState = 0; w.sinceCharge = 0.0f;
+                } else ++w.chargeFizzle;                            // FireCharge state 1: PlayWeaponEvent(22), no shot
+                w.setChargeState(0); w.sinceCharge = 0.0f;
                 if (w.ammo == 0 && w.canReload()) w.beginReload();
             }
         }

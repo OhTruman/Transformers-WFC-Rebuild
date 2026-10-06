@@ -1189,6 +1189,9 @@ HudGameState World::hudState() const {
     if (!localPlayerDead() && player_.pawn().weapon().charge()) {
         h.weaponChargeState = player_.pawn().weapon().chargeState;
         h.weaponChargeMessage = player_.pawn().weapon().chargeHudMessage();
+        h.weaponChargeGlow = player_.pawn().weapon().chargeGlow();
+        h.weaponChargeSerial = player_.pawn().weapon().chargeSerial;
+        h.weaponChargeFizzle = player_.pawn().weapon().chargeFizzle;
     }
     if (matchActive_ && !localDead_) {
         MapState::ObjPawn op{localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, pc.form() == Form::Robot && !pc.isTransforming() && !pc.isMeleeing()};
