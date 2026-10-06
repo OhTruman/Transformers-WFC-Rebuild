@@ -469,6 +469,21 @@ void Pipeline::tickMapFx(float dt) {
         }
         q.subInit = true;
     };
+    // M71 SubUVDirect (update runner case 0x21; RE s16 + addendum 1, CONFIRMED): (H, V) = SubUVPosition(RelativeTime),
+    // (H2, V2) = SubUVSize(RelativeTime), every tick, interp 0; the fill writes U = (Pos.x + Size.x c) / SubImages_H,
+    // V likewise (cell units, the same scale as the normal modes). pstream labels the two distributions
+    // DynamicParams[0] (SubUVPosition) and [1] (SubUVSize).
+    auto subuvDirect = [&](const FxModule& m, FxParticle& q, uint32_t& rng) {
+        float p[3], s[3];
+        auto ip = m.dists.find("DynamicParams[0].ParamValue"), is = m.dists.find("DynamicParams[1].ParamValue");
+        if (ip == m.dists.end() || is == m.dists.end()) return;
+        ip->second.eval(q.relTime, rng, p);
+        is->second.eval(q.relTime, rng, s);
+        q.subDirect = true;
+        q.subPos[0] = p[0]; q.subPos[1] = p[1];
+        q.subSize[0] = s[0]; q.subSize[1] = s[1];
+        q.subInterp = 0.0f;
+    };
     auto t0 = std::chrono::steady_clock::now();
     float camUE[3] = {camPos_.x * 100.0f, camPos_.z * 100.0f, camPos_.y * 100.0f};
     for (const PickupMeshRT& pm : pickupMeshes_)          // PHYS_Rotating only while available (Pickup state)
@@ -546,6 +561,8 @@ void Pipeline::tickMapFx(float dt) {
                         if (ia != m.dists.end()) { ia->second.eval(q.relTime, in.rng, av); q.color[3] = av[0]; }
                     } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {   // M67: every tick (RE s16)
                         subuvStep(L, m, q, in.rng);
+                    } else if (m.name == "PMI_SubUVDirect" && L.subMethod != 0) {   // M71: every tick
+                        subuvDirect(m, q, in.rng);
                     } else if (m.name == "PMI_SizeMultiplyLife") {
                         float s[3]; evalDist(m, "LifeMultiplier", q.relTime, in.rng, s);
                         for (int c = 0; c < 3; ++c) q.size[c] *= s[c];
@@ -811,6 +828,8 @@ void Pipeline::tickMapFx(float dt) {
                         for (int c = 0; c < 3; ++c) q.accel[c] += w3[c];
                     } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {   // spawn = the first update (M67)
                         subuvStep(L, m, q, in.rng);
+                    } else if (m.name == "PMI_SubUVDirect" && L.subMethod != 0) {   // spawn = the first update (M71)
+                        subuvDirect(m, q, in.rng);
                     } else if (m.name == "PMI_MeshRotationRate") {
                         evalDist(m, "StartRotationRate", efrac, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.meshRotRate[c] += v3[c] * 360.0f;
@@ -1698,8 +1717,13 @@ void Pipeline::drawMapPresentation() {
                         float du = 1.0f / (float)L.subH, dv = 1.0f / (float)L.subV;
                         float u0 = (float)(q.subImage % L.subH) * du, v0 = (float)(q.subImage / L.subH) * dv;
                         float u1 = (float)(q.subImage2 % L.subH) * du, v1 = (float)(q.subImage2 / L.subH) * dv;
-                        for (int k = 0; k < 4; ++k) { s.uv2[k][0] = u1 + uv[k][0] * du; s.uv2[k][1] = v1 + uv[k][1] * dv; }
-                        for (auto& t : uv) { t[0] = u0 + t[0] * du; t[1] = v0 + t[1] * dv; }
+                        float eu = du, ev = dv, eu2 = du, ev2 = dv;
+                        if (q.subDirect) {               // M71: origin Pos / SubImages, extent Size / SubImages; UV2 = UV
+                            u0 = u1 = q.subPos[0] * du; v0 = v1 = q.subPos[1] * dv;
+                            eu = eu2 = q.subSize[0] * du; ev = ev2 = q.subSize[1] * dv;
+                        }
+                        for (int k = 0; k < 4; ++k) { s.uv2[k][0] = u1 + uv[k][0] * eu2; s.uv2[k][1] = v1 + uv[k][1] * ev2; }
+                        for (auto& t : uv) { t[0] = u0 + t[0] * eu; t[1] = v0 + t[1] * ev; }
                         s.blend = q.subInterp;
                         if (std::getenv("WFC_FXTEST") && L.subMethod == 2) {
                             static int nb = 0;
@@ -1736,6 +1760,10 @@ void Pipeline::drawMapPresentation() {
                         du = 1.0f / (float)L.subH; dv = 1.0f / (float)L.subV;
                         cu0 = (float)(q.subImage % L.subH) * du; cv0 = (float)(q.subImage / L.subH) * dv;
                         cu1 = (float)(q.subImage2 % L.subH) * du; cv1 = (float)(q.subImage2 / L.subH) * dv;
+                        if (q.subDirect) {               // M71 SubUVDirect
+                            cu0 = cu1 = q.subPos[0] * du; cv0 = cv1 = q.subPos[1] * dv;
+                            du *= q.subSize[0]; dv *= q.subSize[1];
+                        }
                     }
                     auto setCorner = [&](Sprite& t, int k, const std::array<float, 2>& pc) {
                         t.c[k] = cornerPos(pc[0], pc[1]);

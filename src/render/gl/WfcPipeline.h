@@ -529,6 +529,7 @@ private:
         float accel[3] = {0, 0, 0};       // ParticleModuleAcceleration (world / emitter space as spawned)
         int subImage = 0, subImage2 = 0;  // SubUV cells (row-major index) and the blend interp (RE s16)
         float subInterp = 0.0f, subLastChange = 0.0f; bool subInit = false;
+        bool subDirect = false; float subPos[2] = {0, 0}, subSize[2] = {1, 1};   // SubUVDirect (cell units)
         int noiseCount = 0;               // Beam2 noise points (count + 1 offsets, UE units, beam space)
         float noiseTimer = 0.0f;          // seconds since the noise points were last re-drawn
         uint32_t seq = 0;                 // spawn order within its emitter (Trail2 chains link by spawn order)
