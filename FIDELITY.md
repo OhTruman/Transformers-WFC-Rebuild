@@ -106,6 +106,9 @@ provenance stays in its section.
   Travel start: reopening the TF_LoadingScreen underlay cost 31-34 ms per travel; the decoder is now kept between
   loading screens (PC ADAPTATION, one reader resident), so only the first travel after boot pays it. A load step's
   frontend share (loading movie + underlay) is ~7.5 ms; the rest of each 112-167 ms step is the load work (Rendering).
+  Systems 47b74c0 (level waves warmed by prefetchLevel on a worker) confirmed on 08g + 47b74c0 + 94797cd: no frame
+  over 40 ms involves audio across 7 level starts; the boot title-open frame is under 40 ms. Left over 40 ms: the
+  first underlay open after boot (40 ms frame), and the load steps (Rendering).
 
 ## FRONTEND: TITLE VIGNETTE / MENU BACKGROUNDS COVER THE SCREEN (2026-10-05, agents/frontend)
 - Human-confirmed: the title vignette left bright vertical strips at both sides (87.5 % of the width covered at 16:9).
