@@ -2,7 +2,8 @@
 # For "a human saw something wrong over there": the placements come from the map's props.json (AssetTools export),
 # glTF = UE (X, Z, Y) / 100; each camera sits -Back m behind (UE -X) and -Up m above the prop, looking at it. Direct boot
 # in -Mode (TDM by default, so objective actors are hidden as in the reported match). Reports the renderer's material
-# fallbacks for the props' materials and a contact sheet.
+# fallbacks for the props' materials and a contact sheet. Needs a build with direct-boot map selection (WFC_MAP: integration
+# builds); lane trees without it load Streets and the cameras look at empty space (check the log's spawn / CLUT line).
 #
 #   .\tools\fidelity\prop-capture.ps1 -Root work\ab\<target> -Map MP_ORB_Debris -Mesh 'DeadSoldier|DeadCarSoldier' -OutDir <dir> [-Max 12]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$Map, [Parameter(Mandatory)][string]$Mesh, [Parameter(Mandatory)][string]$OutDir,
