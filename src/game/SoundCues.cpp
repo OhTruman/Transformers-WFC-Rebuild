@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <filesystem>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -30,6 +31,7 @@ struct FsbLoop { const char* wav; int rate, channels; uint32_t totalSamples, loo
 
 
 constexpr float UU = 0.01f;
+constexpr long long kDeferDecodeBytes = 2ll * 1024 * 1024;   // streamed cues above this decode on the worker at play
 constexpr float kInstanceTail = 10.0f;  // upper bound on a one-shot instance's life after its last event
 constexpr float kSpeedParamMax = 120.0f; // [CONF] SoundParameters.Optimus_Prime_Speed.Max
 constexpr float kSlipParamMax = 1.57f;   // [CONF] SoundParameters.Optimus_Prime_Tire_Squeal.Max
@@ -316,20 +318,51 @@ bool SoundCues::prefetch(const char* cue) {
     if (!cues_[(size_t)c].streamed) return true;                   // always resident
     pinned_[(size_t)c] = 1;
     if ((size_t)c < resident_.size() && resident_[(size_t)c]) return true;
-    for (const Warm& w : warming_) if (w.cue == (size_t)c) return true;   // already warming
-    if (audio_ && audio_->threadSafeLoad()) {
-        std::vector<std::string> paths;
-        for (const EventDef& e : cues_[(size_t)c].events)
-            for (const std::string& f : e.waves) {
-                const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
-                paths.push_back(abs ? f : contentRoot_ + f);
-            }
-        audio::IAudio* a = audio_;
-        warming_.push_back({(size_t)c, std::async(std::launch::async, [a, paths] { for (const std::string& p : paths) a->load(p); })});
-        return true;
-    }
+    if (isWarming((size_t)c) || startWarm((size_t)c)) return true;   // already warming / now warming on a worker
     loadWaves((size_t)c, contentRoot_);
     return true;
+}
+
+long long SoundCues::waveBytes(size_t c) {
+    if (waveBytes_.size() <= c) waveBytes_.resize(c + 1, -1);
+    if (waveBytes_[c] >= 0) return waveBytes_[c];
+    long long n = 0;
+    for (const EventDef& e : cues_[c].events)
+        for (const std::string& f : e.waves) {
+            const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
+            std::error_code ec;
+            const auto sz = std::filesystem::file_size(abs ? f : contentRoot_ + f, ec);
+            if (!ec) n += (long long)sz;
+        }
+    return waveBytes_[c] = n;
+}
+
+bool SoundCues::isWarming(size_t c) const {
+    for (const Warm& w : warming_) if (w.cue == c) return true;
+    return false;
+}
+
+bool SoundCues::startWarm(size_t c) {
+    if (!audio_ || !audio_->threadSafeLoad()) return false;
+    std::vector<std::string> paths;
+    for (const EventDef& e : cues_[c].events)
+        for (const std::string& f : e.waves) {
+            const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
+            paths.push_back(abs ? f : contentRoot_ + f);
+        }
+    if (paths.empty()) return false;
+    audio::IAudio* a = audio_;
+    warming_.push_back({c, std::async(std::launch::async, [a, paths] { for (const std::string& p : paths) a->load(p); })});
+    return true;
+}
+
+void SoundCues::startInstance(Instance& in) {
+    const CueDef& cd = cues_[(size_t)in.cue];
+    const int id = in.id;
+    for (int e = 0; e < (int)cd.events.size(); ++e) {
+        if (cd.events[(size_t)e].time <= 0.0f) { Instance* p = find(id); if (p) launch(*p, e); }
+        else pending_.push_back({id, cd.events[(size_t)e].time, e});
+    }
 }
 
 int SoundCues::warmCueWaves(const assets::Json& cues, const std::string& contentRoot, const std::string& tag) {
@@ -521,11 +554,18 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     struct Done { bool on; LARGE_INTEGER_T t0; const char* n; ~Done() { if (on) { double ms = ticksToMs(nowTicks() - t0); if (ms > 0.05) LOG_INFO("AUDIOTIME play %s %.3f ms", n, ms); } } } done{timeLog, t0, name};
     int c = findCue(name);
     if (c < 0) { LOG_WARN("sound cue %s not in table", name); return -1; }
-    if (!warming_.empty()) adoptWarm(true, c);         // a prefetch of this cue still decoding: take it now
+    if (!warming_.empty()) adoptWarm(false, c);        // a finished prefetch of this cue: take it now (no wait)
+    bool deferred = false;
     if (cues_[(size_t)c].streamed && ((size_t)c >= resident_.size() || !resident_[(size_t)c])) {
-        LARGE_INTEGER_T s0 = nowTicks();
-        loadWaves((size_t)c, contentRoot_);
-        LOG_INFO("sound cues: streamed %s decoded in %.1f ms", name, ticksToMs(nowTicks() - s0));
+        // Not resident (no prefetch, or still decoding): on a thread-safe backend decode on the worker and start the
+        // instance when the waves are adopted (a short start delay instead of a 150-700 ms main-thread stall - the match
+        // final-stretch music); otherwise decode now.
+        if (isWarming((size_t)c) || (waveBytes((size_t)c) > kDeferDecodeBytes && startWarm((size_t)c))) deferred = true;
+        else {
+            LARGE_INTEGER_T s0 = nowTicks();
+            loadWaves((size_t)c, contentRoot_);
+            LOG_INFO("sound cues: streamed %s decoded in %.1f ms", name, ticksToMs(nowTicks() - s0));
+        }
     }
     if ((size_t)c < pinned_.size()) pinned_[(size_t)c] = 0;     // played: normal release rule from now on
     const CueDef& cd = cues_[(size_t)c];
@@ -568,11 +608,13 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     }
     for (const EventDef& e : cd.events) if (e.loop) in.looping = true;
     if (cd.rootLoop && cd.loopEnd > cd.loopStart) in.looping = true;   // the timeline wraps forever
+    in.waiting = deferred;
     live_.push_back(in);
-    int id = in.id;
-    for (int e = 0; e < (int)cd.events.size(); ++e) {
-        if (cd.events[(size_t)e].time <= 0.0f) launch(live_.back(), e);
-        else pending_.push_back({id, cd.events[(size_t)e].time, e});
+    const int id = in.id;
+    if (!deferred) startInstance(live_.back());
+    else {
+        static const bool log = std::getenv("WFC_CUELOG") != nullptr || std::getenv("WFC_AUDIOTIME") != nullptr;
+        if (log) LOG_INFO("sound cues: streamed %s decoding on the worker (instance %d starts when ready)", name, id);
     }
     return id;
 }
@@ -598,9 +640,12 @@ void SoundCues::launch(Instance& in, int e) {
                    dbToLinear(ed.volDb) * dbToLinear(randRange(ed.volVarMin, ed.volVarMax));
     ref.baseSt = cd.pitchSt + randRange(cd.pitchVarMin, cd.pitchVarMax) + ed.pitchSt + randRange(ed.pitchVarMin, ed.pitchVarMax);
     float x = paramFor(in);
-    float gain = ref.baseGain * ed.stereoGain * gainOf(in) * dbToLinear(kOcclDb * in.occl) *
-                 evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f);
-    if (gain <= 0.0f && !ed.loop) return;          // silent one-shot layer (distance layering)
+    // Silent one-shot layer: AUTHORED silence only (the -96 dB / distance-layer curves / envelope). Runtime level - a
+    // fade-in starting at 0, the instance volume, a sound-group slider at 0 - must not drop the voice: it would never
+    // sound once the level rises (a deferred music start fades in from 0).
+    const float authored = ref.baseGain * ed.stereoGain * evalCurve(ed.volCurve, x, 1.0f) * evalCurve(ed.envVol, in.age, 1.0f);
+    if (authored <= 0.0f && !ed.loop) return;      // silent one-shot layer (distance layering)
+    float gain = authored * gainOf(in) * dbToLinear(kOcclDb * in.occl);
     audio::VoiceParams p;
     p.volume = gain;
     p.pitch = stToRate(ref.baseSt + evalCurve(ed.pitchCurve, x, 0.0f) + evalCurve(ed.envPitch, in.age, 0.0f));
@@ -721,7 +766,7 @@ void SoundCues::stop(int id, float fade) {
     for (size_t i = 0; i < pending_.size();) {
         if (pending_[i].inst == id) { pending_[i] = pending_.back(); pending_.pop_back(); } else ++i;
     }
-    if (fade > 0.0f) { in->fade = fade; in->fadeLeft = fade; return; }
+    if (fade > 0.0f && !in->waiting) { in->fade = fade; in->fadeLeft = fade; return; }   // a not-started instance: nothing to fade
     for (const VoiceRef& r : in->voices) audio_->stopVoice(r.v);
     for (size_t i = 0; i < live_.size(); ++i)
         if (live_[i].id == id) { retire(i); break; }
@@ -729,12 +774,20 @@ void SoundCues::stop(int id, float fade) {
 
 void SoundCues::tick(float dt) {
     if (!warming_.empty()) adoptWarm(false);
+    for (size_t i = 0; i < live_.size(); ++i) {
+        Instance& in = live_[i];
+        if (!in.waiting || (size_t)in.cue >= resident_.size() || !resident_[(size_t)in.cue]) continue;
+        in.waiting = false; in.age = 0.0f;                       // its timeline starts now
+        resolve(in);
+        startInstance(in);
+    }
     if (!audio_) return;
     // Mixer: timers / Duration expiry, then linear parameter ramps; MASTER_WET goes to the backend as-is
     // (the mixer ramp is the only fade).
     mixer_.tick(dt);
     if (mixer_.environmentChanged()) audio_->setEnvironment(mixer_.environment(), 0.0f);
     for (Instance& in : live_) {
+        if (in.waiting) continue;                                 // not started: no timeline yet
         in.age += dt;
         const CueDef& cd = cues_[(size_t)in.cue];
         if (cd.rootLoop && cd.loopEnd > cd.loopStart && in.age >= cd.loopEnd && in.fade < 0.0f) {
@@ -766,7 +819,7 @@ void SoundCues::tick(float dt) {
         if (in.fade > 0.0f) {
             in.fadeLeft -= dt;
             if (in.fadeLeft <= 0.0f) done = true;
-        } else if (!in.looping && in.age > lastEventTime(cues_[(size_t)in.cue])) {
+        } else if (!in.waiting && !in.looping && in.age > lastEventTime(cues_[(size_t)in.cue])) {
             // One-shot: retire once every voice has finished (the AudioComponent lives until its sound ends;
             // attached voices keep following their owner until then). kInstanceTail bounds it only for backends
             // that cannot report voices. (It used to bound every instance: a long one-shot - the 380 s frontend

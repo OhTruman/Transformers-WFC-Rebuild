@@ -1072,16 +1072,36 @@ static void testFrontend() {
         rfe.music().stopMusic(0.0f); rc.tick(1.0f / 30.0f);
         CHECK(!rc.wavesResident(lobby.cue.c_str()) && a->residentBytes() == base, "released after stop");
     }
+    // A play with no prefetch (the match final-stretch music): decoded on the worker, the instance waits and starts when
+    // the waves are adopted - no main-thread stall (Integration 08n: 159-686 ms) [rebuild performance; start delay only].
     auto t0 = std::chrono::steady_clock::now();
     rfe.music().playMusic(fr, true);   // IgnoreSpazTimer: the lobby play above left SpazTimer at 5 s (StopMusic keeps it)
-    rfe.tick(1.0f / 30.0f);
-    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    rfe.tick(1.0f / 30.0f);            // the music player starts its cue on its tick
+    const double callMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    CHECK(callMs < 5.0 && rc.waitingInstances() == 1, "unprefetched streamed play: no decode on the starting frame (%.2f ms), the instance waits", callMs);
+    double worstTick = 0.0;
+    int frames = 0;
+    for (; frames < 300 && rc.waitingInstances() > 0; ++frames) {
+        auto t = std::chrono::steady_clock::now();
+        rfe.tick(1.0f / 30.0f); rc.tick(1.0f / 30.0f);   // the frame: frontend audio + the cue table (adoption)
+        worstTick = std::max(worstTick, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count());
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
     const size_t during = a->residentBytes();
+    CHECK(rc.waitingInstances() == 0 && rc.activeInstances(fr.cue.c_str()) == 1 && during > base && worstTick < 5.0,
+          "it starts after the worker decode (%d frames, worst tick %.2f ms), resident +%.1f MB", frames, worstTick, (during - base) / 1048576.0);
     rfe.music().stopMusic(0.0f);
     rc.tick(1.0f / 30.0f);
-    std::printf("  FRONTEND_MX_ORBIT_01 first play: %.0f ms decode, +%.1f MB resident, after stop %+.1f MB\n", ms,
-                (during - base) / 1048576.0, ((double)a->residentBytes() - (double)base) / 1048576.0);
-    CHECK(during > base && a->residentBytes() == base, "streamed music decoded on play, released after stop");
+    std::printf("  FRONTEND_MX_ORBIT_01 unprefetched play: call %.2f ms, started after %d frames, +%.1f MB, after stop %+.1f MB\n", callMs,
+                frames, (during - base) / 1048576.0, ((double)a->residentBytes() - (double)base) / 1048576.0);
+    CHECK(a->residentBytes() == base, "released after stop");
+    // Stopped while still decoding: it never sounds; the late-adopted waves are released.
+    const int v0 = a->activeVoices();
+    const int sid = rc.play(fr.cue.c_str(), Vec3{0, 0, 0}, 0.0f);
+    rc.stop(sid, 0.5f);
+    for (int k = 0; k < 300 && rc.warmingPrefetches() > 0; ++k) { rc.tick(1.0f / 30.0f); std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
+    rc.tick(1.0f / 30.0f);
+    CHECK(!rc.playing(sid) && a->activeVoices() == v0 && a->residentBytes() == base, "stopped before its decode finished: silent, nothing left resident");
     delete a;
 }
 

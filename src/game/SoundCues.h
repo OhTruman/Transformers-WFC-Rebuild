@@ -142,6 +142,7 @@ public:
         for (LevelWarm& w : levelWarm_) if (w.done.valid()) w.done.wait();
     }
     int warmingPrefetches() const { return (int)warming_.size(); }
+    int waitingInstances() const { int n = 0; for (const Instance& in : live_) n += in.waiting ? 1 : 0; return n; }
     // Level-start warming (frontend frame budget): decode the eager (non-streamed, non-localized) waves of a manifest cue
     // bank for an upcoming level `tag` on a worker, so the level's addCues finds them in the device cache. Thread-safe
     // backends only (else 0). Returns the number of waves queued.
@@ -209,6 +210,7 @@ private:
         float occl = 0.0f, occlTarget = 0.0f, occlCheck = 0.0f;   // 0 = clear .. 1 = fully occluded
         float fadeInLen = 0.0f;                                   // FadeIn ramp over the instance age
         float lastGain = 1.0f;                                    // gainOf() at the last refresh
+        bool waiting = false;     // a streamed cue still decoding on the worker: starts (age 0) when its waves are adopted
         std::vector<VoiceRef> voices;
         float fade = -1.0f, fadeLeft = 0.0f;   // fade-out duration / remaining (fade < 0 = none)
         bool looping = false;
@@ -252,6 +254,13 @@ private:
     struct LevelWarm { std::string tag; std::vector<std::string> paths; std::future<void> done; };
     std::vector<LevelWarm> levelWarm_;
     void adoptWarm(bool wait, long onlyCue = -1);
+    bool startWarm(size_t cue);                       // queue the cue's waves on a worker (false: not thread-safe / no waves)
+    bool isWarming(size_t cue) const;
+    // Total bytes of a cue's wave files (cached): a large streamed cue (music, tens-hundreds of MB) is decoded on the worker
+    // at play; a small one (HUD ticks, dialogue lines, ~0.1 MB) is decoded at once so it starts on time.
+    long long waveBytes(size_t cue);
+    std::vector<long long> waveBytes_;
+    void startInstance(Instance& in);                 // launch the t=0 events, queue the timed ones
 };
 
 } // namespace game
