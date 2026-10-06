@@ -118,3 +118,37 @@ the renderer API), FINEAIM 3, VEHPHYS 27; HEADJIT and DROPTEST unchanged. Stress
 - Experimental's synthetic step_025 / step_050 against RE's pitch estimates (requested on this head).
 - Wall sliding friction (RE: mu 0.10-0.14 against walls) is not modelled; contacts keep all tangential speed [PARTIAL].
 - Match-start spawn frame CPU spike (52-66 ms, Integration 08i RENDERSTATS): not yet profiled.
+
+## Addendum 3: 24n-24q (8f0c9bf..6ee2c55)
+
+Integration 08k has bd622aa (24n). This covers the rest.
+
+| commit | change | files |
+|---|---|---|
+| bd622aa (24n) | hover / plane per-call factors at the original 30 Hz script tick (RE 59eac82): hover pitch / roll pull, jet TurnRate servo, jet lean lerp applied as 1 - (1 - rate)^(dt x 30) | CharacterMovement.cpp |
+| 335ea8e (24o) | the local faction's four default bodies cached + prewarmed at the end of startLocalMatch (no lobby class-pick hitch) | World.cpp |
+| 0e82a1d (24p) | Plasma Cannon charge glow: the held weapon draw sets the material scalar `Overheat` to the charge glow and clears it after (Rendering M70 `setDrawMaterialParam` / `clearDrawMaterialParam`, compile-time detected) | World.cpp |
+| 79441b0 | diagnostics: `WFC_SPAWNPROF` (spawn path, slow World steps, held-weapon switches), `WFC_WEAPONLOADPROF` (first-use weapon model cost) | World.h/.cpp, Application.cpp |
+| 6ee2c55 (24q) | held-weapon model preload: the local faction's class preset weapons (`classPresetWeapons`, roster package PCD_MP) at match load, the local selection's weapons once selected | World.h/.cpp, ChassisDef.h/.cpp |
+
+### Merge notes
+- startLocalMatch: the 24o / 24q preload block must stay after the local team is final (it uses `match_.faction(localPlayer_)`). If
+  your tree assigns `MatchLaunch.localTeam` inside startLocalMatch, keep the block below that.
+- 24p needs Rendering 87b2112 (M70) and regenerated render data for the glow to show; without it, it is a no-op.
+- The diagnostics are env-gated and change no behaviour.
+
+### Behaviour to expect
+- Jets turn and lean at the original rate (half the previous per-frame servo speed); hover vehicles level in the air at x0.95
+  per 1/30 s.
+- No hitch when picking a preset class in the lobby, or on the first equip / switch of a preset weapon (0.2-0.4 ms, was 6-38 ms).
+- The Plasma Cannon glows at charge levels 1 / 2 / 3.
+- Memory: the four local-faction bodies plus participants' bodies, and the preset weapon models (small).
+
+### Validation (6ee2c55)
+SWITCH 32, WEAPON 19, TDM 43, PARTICIPANT 22, CHARGE 9, RMUZZLE 4, SCORE 9, QA 7, CHASSIS 14; VEHPHYS 27 and XFORMVIS 16 on 24n.
+Experimental on bd622aa: 306 pass / 0 fail / 8 known; jet_servo 0.5 / 0.5 / 0.9 and jet_lean 0.9 x3 per 1/30 s.
+
+### Open
+- Match-start spawn spike (52-66 ms): Gameplay's spawn handler measures about 0 ms with the chassis cached. The remainder is
+  probably Systems' per-chassis audio or Frontend's HUD start. Run `WFC_SYSPROF` with `WFC_SPAWNPROF` on that frame.
+- A custom (CaC) chassis outside the faction defaults, or a first pickup of a non-preset weapon, still loads on that frame.
