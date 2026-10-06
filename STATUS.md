@@ -3,6 +3,45 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08k (2026-10-06) — Plasma Cannon charge, hover handling per RE, ability-actor / kill-streak sounds, Create-a-Character freeze fix, narrowed chassis preload — branch `integration/milestone-08k`
+
+On 08j (b86d638).
+
+| lane | head | content |
+|---|---|---|
+| agents/gameplay | bd622aa | 24l Plasma Cannon charge HudState (glow, transition serial, fizzle, shot level); 24m hover grounded pitch / roll per corrected RE A4, suspension probes start outside walls, chassis preload narrowed to participants' resolved bodies, charge-level ordering fix; 24n hover / plane per-call factors at the original 30 Hz tick |
+| agents/systems | 05caba0 | M08k charge / roller-mine / dodge sounds; M08l action-layer notifies (melee, ability animations, Whirlwind); M08m guided missile / barrier / sentry; M08n kill-streak announcements, overshield-off, dodge wall-hit; glue patches M08K-M08N applied in order |
+| agents/rendering | 50f0742 | M69 AnimSets parsed once and shared; IRenderer::preparePreviewBody |
+| agents/frontend | f0277ce | CaC preview bodies prepared under the PartyLobby loading screen (first class pick 1393 → 48 ms) |
+| agents/experimental | cf99c43 | tools/fidelity/ refresh only |
+
+**Integration:**
+- World.h takes Systems' onWeaponFired fireMode.
+- World.cpp keeps the M08i tickAbilityAudio plus Systems' new entry points.
+- SkinnedModel.h keeps Gameplay's int loadAnimationsByName plus Rendering's AnimFile API.
+- The 08k chain was restarted to take Gameplay 24n.
+
+**Validation:**
+- Builds and suites:
+  - clean Debug / Release; frontend 79 / 0;
+  - **fidelity harness 336 / 0 FAIL / 8 known**;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520;
+  - chaos: 0 under the map / KillZ / stuck, 4 prop pockets (pre-existing per Gameplay A/B);
+  - **audio 700 / 0**.
+- Gameplay tests: CHARGE 9, VEHPHYS 27, RMUZZLE 4, MUZZLE 5, PROJFX 3, QATEST 7, FINEAIM 3, SWITCH 32, SCORE 9, XFORMVIS 16.
+- Map suite: 8 / 8 versus maps.
+- release_path_check PASS; visual suite **11 / 11**.
+- 4-match soak:
+  - 0 long GPU frames (the 08j CaC 365 ms frame is gone);
+  - 2 chassis loads per match (was 9), memory **3.2-3.8 GB** (08i / 08j: 4.3-4.6 GB);
+  - 0 timeouts / resets / leaks.
+- **Known hitch (Gameplay):** 24m caches the selected body when the selection is made in the game lobby, on a visible frame.
+  - WFC_RENDERSTATS shows one 460-565 ms frame per match: glb load, prewarm and texture uploads.
+  - In 08i this ran under the match loading screen. Reported to Gameplay.
+- In matches: no transform spikes; spawn-frame 51-60 ms (Gameplay, open).
+
 ## INTEGRATION MILESTONE 08j (2026-10-06) — ability / buff / hover / kill-confirm sounds, Plasma Cannon charge, particle fidelity M64-M68, loading-movie reuse — branch `integration/milestone-08j`
 
 On 08i (b867397).
