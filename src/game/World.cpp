@@ -2331,8 +2331,10 @@ std::vector<std::string> World::applyCharacterTo(Character& pc, const CharacterS
             cls.push_back("TransContent.TnWeapon" + std::string(vd->id));
             if (vehCls.empty()) vehCls = cls.back();
         }
-        preloadWeaponAudio(cls);
-        setPlayerVehicleWeaponAudio(vehCls);
+        if (&pc == &player_.pawn()) {                  // [Systems M08r] the LOCAL player's loadout only (an opponent's spawn
+            preloadWeaponAudio(cls);                   // overwrote it and decoded its weapon cues on the spawn frame: 67-79 ms)
+            setPlayerVehicleWeaponAudio(vehCls);
+        }
     }
     pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
     pc.respawnReset();
