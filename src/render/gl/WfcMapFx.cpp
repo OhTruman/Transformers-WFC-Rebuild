@@ -157,6 +157,19 @@ bool Pipeline::loadMapFx(const std::string& path) {
                 for (int k = 0; k < 13; ++k) if (la == modes[k]) em.lockAxis = k;
             }
             em.maxPeak = std::max(1, es[e]["max_peak_count"].asInt(1));
+            {
+                const std::string rm = es[e]["render_mode"].asString();
+                em.renderMode = rm == "SERM_Octagon" ? 1 : rm == "SERM_BestFit" ? 2 : 0;
+                const assets::Json& pl = es[e]["best_fit_polygons"];
+                for (size_t k = 0; k < pl.size(); ++k) {
+                    FxEmitter::Polygon pg;
+                    pg.time = pl[k]["time"].asFloat(0.0f);
+                    pg.count = pl[k]["count"].asInt(0);
+                    for (size_t j = 0; j < pl[k]["vertices"].size(); ++j)
+                        pg.v.push_back({pl[k]["vertices"][j][(size_t)0].asFloat(0.0f), pl[k]["vertices"][j][(size_t)1].asFloat(0.0f)});
+                    em.polygons.push_back(std::move(pg));
+                }
+            }
             // flag-invariant look only (build_map_fx.py flag_analysis); WFC_FX_FLAGREADING=A|B draws the rest
             // under one of the two unproven readings (experimental)
             em.renderable = es[e]["renderable"].asBool(true) || std::getenv("WFC_FX_FLAGREADING") != nullptr;
@@ -1696,7 +1709,44 @@ void Pipeline::drawMapPresentation() {
                     }
                     std::memcpy(s.uv, uv, sizeof(uv));
                     std::copy(q.color, q.color + 4, s.color);
-                    sp.push_back(s);
+                    const FxEmitter& EM = sys.emitters[e];
+                    if (EM.renderMode == 0) { sp.push_back(s); continue; }
+                    // M68 Octagon / BestFit (RE pass 5 s17, CONFIRMED): the fill expands each polygon corner (cell-local
+                    // 0..1) exactly like a quad corner and computes the UVs as (cell + corner) x cellSize, so polygon and
+                    // texture stay aligned. Octagon = the unit square minus corner triangles of leg 1 - 1/sqrt2; BestFit =
+                    // the last polygon with Time <= particle age (3..12 vertices; any other count draws nothing).
+                    // Triangulated as a fan (0, k, k + 1): identical to the native index lists for these convex shapes.
+                    static const float kOct[8][2] = {{0.2929f, 0}, {0.7071f, 0}, {1, 0.2929f}, {1, 0.7071f},
+                                                     {0.7071f, 1}, {0.2929f, 1}, {0, 0.7071f}, {0, 0.2929f}};
+                    std::vector<std::array<float, 2>> poly;
+                    if (EM.renderMode == 1) { for (const auto& k8 : kOct) poly.push_back({k8[0], k8[1]}); }
+                    else {
+                        const float age = q.oneOverLife > 0.0f ? q.relTime / q.oneOverLife : 0.0f;
+                        const FxEmitter::Polygon* pg = nullptr;
+                        for (const auto& cand : EM.polygons) if (cand.time <= age) pg = &cand;
+                        if (!pg && !EM.polygons.empty()) pg = &EM.polygons[0];
+                        if (!pg) { sp.push_back(s); continue; }        // no polygon data: the quad
+                        if (pg->count < 3 || pg->count > 12 || (int)pg->v.size() < pg->count) continue;   // not drawn
+                        poly.assign(pg->v.begin(), pg->v.begin() + pg->count);
+                    }
+                    // quad corner (u, v) -> position c + hx (2u - 1) - hy (2v - 1); UV / second cell by the same corner
+                    auto cornerPos = [&](float u, float v) { return c + hx * (2.0f * u - 1.0f) - hy * (2.0f * v - 1.0f); };
+                    float cu0 = 0, cv0 = 0, cu1 = 0, cv1 = 0, du = 1, dv = 1;
+                    if (L.subMethod != 0 && L.subH * L.subV > 1) {
+                        du = 1.0f / (float)L.subH; dv = 1.0f / (float)L.subV;
+                        cu0 = (float)(q.subImage % L.subH) * du; cv0 = (float)(q.subImage / L.subH) * dv;
+                        cu1 = (float)(q.subImage2 % L.subH) * du; cv1 = (float)(q.subImage2 / L.subH) * dv;
+                    }
+                    auto setCorner = [&](Sprite& t, int k, const std::array<float, 2>& pc) {
+                        t.c[k] = cornerPos(pc[0], pc[1]);
+                        t.uv[k][0] = cu0 + pc[0] * du; t.uv[k][1] = cv0 + pc[1] * dv;
+                        t.uv2[k][0] = cu1 + pc[0] * du; t.uv2[k][1] = cv1 + pc[1] * dv;
+                    };
+                    for (size_t k = 1; k + 1 < poly.size(); ++k) {
+                        Sprite t = s;
+                        setCorner(t, 0, poly[0]); setCorner(t, 1, poly[k]); setCorner(t, 2, poly[k + 1]); setCorner(t, 3, poly[k + 1]);
+                        sp.push_back(t);
+                    }
                 }
                 if (rt.hasDyn) { std::copy(rt.dynParam, rt.dynParam + 4, dynParam_); }
                 drawSprites(L.material.c_str(), sp.data(), sp.size(), camF * -1.0f);

@@ -102,6 +102,14 @@ def system_runtime(name, s):
               # M66 emitter-level LockAxisFlags (WFC: no OrientationAxisLock modules; RE pass 5 s15)
               'lock_axis': e['props'].get('LockAxisFlags', 'EPAL_NONE'),
               'render_mode': e['props'].get('SpriteEmitterRenderMode', 'SERM_Normal'), 'lods': []}
+        # M68 WFC BestFit polygons {Time, VertexCount, Vertices[12]} in cell-local 0..1 texture space (RE pass 5 s17);
+        # slots past VertexCount are stale and dropped
+        polys = []
+        for pg in e['props'].get('BestFitPolygons') or []:
+            n = int(pg.get('VertexCount', 0))
+            vs = [[float(v.get('X', 0.0)), float(v.get('Y', 0.0))] for v in (pg.get('Vertices') or [])[:max(n, 0)]]
+            polys.append({'time': float(pg.get('Time', 0.0)), 'count': n, 'vertices': vs})
+        em['best_fit_polygons'] = polys
         for L in e['lods']:
             req = L['RequiredModule']['props']
             td = (L.get('TypeDataModule') or {}).get('props') or {}

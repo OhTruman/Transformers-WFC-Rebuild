@@ -501,6 +501,10 @@ public:
         // M66 ParticleEmitter.LockAxisFlags: 0 none, 1 X, 2 Y, 3 Z, 4 -X, 5 -Y, 6 -Z, 7..9 ROTATE_X/Y/Z,
         // 10..12 ROTATE_X/Y/Z_U (WFC)
         int lockAxis = 0;
+        // M68 SpriteEmitterRenderMode (WFC): 0 Quad, 1 Octagon, 2 BestFit (polygons in cell-local 0..1 texture space)
+        int renderMode = 0;
+        struct Polygon { float time = 0; int count = 0; std::vector<std::array<float, 2>> v; };
+        std::vector<Polygon> polygons;
     };
     struct FxSystem { std::string name; std::vector<float> lodDistances; bool directSet = false; std::vector<FxEmitter> emitters; };
 private:
