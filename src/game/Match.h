@@ -12,6 +12,7 @@
 #include <functional>
 #include "core/Math.h"
 #include "game/CharacterRoster.h"
+#include "game/GameplayEvents.h"
 
 #include <algorithm>
 #include <string>
@@ -38,6 +39,9 @@ struct MatchSettings {
     float matchOverCountdown = 15.0f;        // TnMultiplayerGame.MatchOverCountdown
     float waveRespawnTime = 5.0f;            // TnRespawnHelperWave.WaveRespawnTime
     float forfeitDelay = 1.5f;               // TnVersusGame.ForfeitDelay
+    // ShouldScoreKill (MP): only TnPlayerController victims score; AI / bot victims never do [CONF RE]. PC ADAPTATION: offline
+    // bot matches let bot victims score like players (true) so bots are full participants; false = the original rule.
+    bool botVictimsScore = true;
     static MatchSettings forMode(const std::string& tag);   // authored defaults per TnOnlineGameSettings<tag>
 };
 
@@ -90,6 +94,11 @@ struct MatchPlayer {
     float healthMax = 550.0f;          // the pawn's HealthMax (specialty blueprint), set by the host at spawn (assists)
     CharacterSelection selection;
     std::string chassis;               // body resolved at the last spawn (faction from the team)
+    ParticipantKind kind = ParticipantKind::Remote;   // Local (this machine's player) / Remote / Bot - same rules for all
+    int objectiveScore = 0;            // personal score from objectives (ScoreObjective IndividualScore, DOM capture +2, ...)
+    int bestKillStreak = 0;            // highest _CurrentKillStreak reached this match
+    float spawnTime = -1.0f;           // match time of the last spawn
+    int level = 0;                     // displayed level (progression; HigherLevel kill award), 0 until supplied
     std::string specialty;             // specialty applied at the last spawn (custom: the slot's; iconic: chassis default)
     std::string spawnError;            // non-empty while the resolved chassis cannot be spawned (no substitute body)
     // Killstreaks: PRI._CurrentKillStreak (+kills, reset by AddDeaths -> KillStreakEnded) and the controller's
@@ -116,7 +125,22 @@ public:
     void begin(const MatchSettings& s);          // InitGame + InitGameReplicationInfo + PendingMatch.BeginState
     int addPlayer(const std::string& name);      // PostLogin: team via TnTeamHandlerTwoTeams.PickTeam (team games)
     // TnPlayerController.SelectCharacter -> ReplicateCharacterData -> PRI._SelectedCharacter (applies at the next spawn).
-    void selectCharacter(int p, const CharacterSelection& s) { if (p >= 0 && (size_t)p < players_.size()) { players_[(size_t)p].selection = s; players_[(size_t)p].hasSelectedCharacter = true; } }
+    void selectCharacter(int p, const CharacterSelection& s) {
+        if (p < 0 || (size_t)p >= players_.size()) return;
+        players_[(size_t)p].selection = s; players_[(size_t)p].hasSelectedCharacter = true;
+        GameplayEvent& e = recordEvent(GameplayEventType::CharacterSelected, p);
+        e.text = s.type == 1 ? s.chassisId : specialtyName(s.specialty);
+    }
+    // ---- Authoritative gameplay events (GameplayEvents.h): recorded once, in order; consumers track the last serial. ----
+    const std::vector<GameplayEvent>& gameplayEvents() const { return gevents_; }
+    GameplayEvent& recordEvent(GameplayEventType t, int instigator = -1, int victim = -1);
+    // The host supplies participant snapshots (pawn state the rules test); without it snapshots carry the match state only.
+    void setSnapshotProvider(std::function<ParticipantSnapshot(int)> f) { snapshot_ = std::move(f); }
+    ParticipantSnapshot snapshot(int player) const;
+    // Kill context from the host (TakeDamage -> Died): weapon, melee / ability damage, distance, the killer's own death.
+    struct KillContext { std::string weapon; bool melee = false, headshot = false, backstab = false, ability = false, killAfterDeath = false; float distanceUU = 0.0f; };
+    // An objective action (MapState) after its score was applied: Objective event with the score it carried.
+    void recordObjective(const std::string& kind, int player, int team, int value = 0);
     // [integration M06] A player whose character comes from the frontend's selection screen: no default selection,
     // so CheckReadySpawn waits for selectCharacter (addPlayer pre-selects Optimus only for the direct boot / harnesses).
     // Host check that a resolved chassis can be built (pawn resources exported and loadable). The original has no
@@ -132,7 +156,7 @@ public:
     bool betweenRounds() const { return betweenRounds_; }
     float roundTimeLeft() const { return roundTimeLeft_; }
     // GameInfo.Killed. killer < 0: environmental. suicide: DmgType_Suicided or killer == victim.
-    void killed(int killer, int victim, bool suicide = false, const std::string& damageType = std::string());
+    void killed(int killer, int victim, bool suicide = false, const std::string& damageType = std::string(), const KillContext* ctx = nullptr);
     // Kill feed: entries still within their LocalMessage lifetime (oldest first), and the whole match history.
     std::vector<KillFeedEntry> killFeed() const;
     const std::vector<KillFeedEntry>& killHistory() const { return killHistory_; }
@@ -198,6 +222,9 @@ private:
     void restartRound();
     std::vector<int> spawnAt_;
     std::vector<MatchEvent> events_;
+    std::vector<GameplayEvent> gevents_;
+    uint32_t nextEventSerial_ = 1;
+    std::function<ParticipantSnapshot(int)> snapshot_;
     std::vector<Start> starts_;
     std::vector<Cluster> clusters_;
     int teamScore_[2] = {0, 0};

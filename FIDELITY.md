@@ -75,6 +75,67 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 25 — playtest cleanup + authoritative event / participant foundation (2026-10-06)
+
+### Change Character [CONFIRMED ORIGINAL: TnPlayerController.SelectCharacter, UIText "Selected character used on respawn."]
+- Original: a pick replaces PRI._SelectedCharacter. SelectCharacter never kills the pawn (UIController.OnCharacterSelected is
+  empty in script).
+- The next RestartPlayer resolves body / colours / loadout / abilities from it (SetPlayerDefaults → ApplyCharacter).
+- Gameplay already did this. WFC_CLASSCHANGETEST 22/22: Scout → Scientist → Leader → Soldier → Scout in one match, then a
+  second match; faction body, weapons, abilities, colours, vehicle form and respawn state each time.
+- Defect: the integrated Frontend glue (Application_Frontend.cpp) forwards the selection to Match only once per match
+  (selectionSent_), so mid-match picks were dropped. Fix: Frontend forwards every changed pick to Match::selectCharacter.
+
+### Authoritative gameplay events (GameplayEvents.h) [architecture; rules CONFIRMED ORIGINAL per RE MP_PROGRESSION_SCORING_AI]
+- Match records each scoring-relevant occurrence ONCE, in order, with a unique serial, when it applies the rule:
+  - MatchStart, Spawn, CharacterSelected;
+  - Kill / Suicide / EnvironmentDeath (one death record each);
+  - Assist (the first other damager, fraction of HealthMax);
+  - KillstreakEarned;
+  - Objective (FlagTaken / FlagCapture / FlagDropped / FlagReturn / BombTaken / BombDropped / BombPlant / BombDefuse /
+    BombDetonate / NodeCapture / ZoneHold with the stay's points);
+  - MatchEnd (per-player completion, the GameWin-XP team quirk, MVP).
+- Each record carries participant snapshots (team, kind, specialty, chassis, vehicle form / type / flying, health, fine aim,
+  melee, hover, streak before the event, spawn time, level, flag / bomb carried, in the active KOTH zone / an enemy DOM node,
+  active buffs by original class) and kill context (damage type, weapon, melee / ability, kill after death, distance in UU).
+  These are the facts TnKillAwardManager's rules and the XP events test.
+- Consumers (HUD, scoreboard, kill feed, XP, challenges, medals, bots) read Match::gameplayEvents() by serial: no parallel
+  counters, no double award across respawns.
+- PARTIAL: headshot (hit bone not tracked), backstab, downed (not simulated).
+- Participants: MatchPlayer gains kind (Local / Remote / Bot; the same rules for all), objectiveScore, bestKillStreak, spawnTime
+  and level.
+- PC ADAPTATION (MatchSettings::botVictimsScore, default on): the original ShouldScoreKill / TrackKills.CheckKills only score
+  and award kills when killer AND victim are TnPlayerControllers. Offline bots count as players.
+- Fix: acquired killstreaks leaked into the next match (the original clears them at ClientGameEnded); now cleared at Match::begin.
+- WFC_EVENTTEST 16/16 (two matches): records equal the participant stats, one Assist, melee / vehicle-form / weapon context,
+  suicide and environment death as their own types, streak once, a fresh record per match. WFC_EVENTLOG logs each record.
+
+### Repair Ray targeting and beam [CONFIRMED ORIGINAL: RE answer 2026-10-06, RepairBeam_WEPMESH]
+- PlayerTargeting.GetRepairTarget: picker 6 (4°, radius 200-400 UU, widened by GetAdjustedTargetAngle), no team filter.
+  GetEndTrace locks the beam onto the picked target's TargetableLocation. The widening formula is HIGH.
+- The beam presentation is the looping tracer FX_RepairBeam_p.FX.Tracer_RepairBeam_FX (WP_Looping):
+  - Rendering spawnParticleEffectSegment at the start, setParticleEffectSegment every frame, stopParticleEffect on release;
+  - an impact squib per beam tick: Squib_RepairTeam_FX when healing, the DefaultSquib Squib_RepairEnemy_FX otherwise;
+  - compile-time detected.
+
+### Vehicle weapon HUD [CONFIRMED ORIGINAL script; GFx styling UNKNOWN]
+- The HUD weapon observers read PC.Pawn.Weapon, the vehicle weapon in vehicle form: clip / reserve (all vehicle WEPDATA are
+  ammo-based) plus heat / jammed.
+- No observer exposes refire, cooldown or reload progress, so no cooldown meter is original.
+- Fix: HudState clip / reserve / name / id / icon were always the ROBOT weapon's; they now follow the held weapon (vehicleWeaponHeld,
+  clipMax, reserveMax).
+
+### Jet roll [CONFIRMED ORIGINAL]
+- Hovering and Flying UpdateRolling are identical: roll only with |strafe| >= 0.5, direction = Sign(strafe).
+- Forward / back input is ignored and there is no flip; otherwise silently refused (no cooldown).
+- Fix: Flying rolled without the strafe gate.
+
+### QA live character swap [DEV / QA TOOLING, not original]
+- World::qaSetCharacter(selection): preloadSelections, then Match::selectCharacter, then the QA suicide; the normal respawn wave
+  applies it.
+- qaCharacterChoices() = the four class presets.
+- WFC_QATEST 8/8: Car2 → Tank3 with the Assault Rifle, worst tick 1.7 ms.
+
 ## PASS 24 — human playtest fidelity II (2026-10-05)
 
 ### Fast-turn stutter: body orientation snapping between 60 Hz steps [measured; HIGH CONFIDENCE cause]

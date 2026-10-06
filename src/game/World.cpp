@@ -42,6 +42,15 @@ template <class R> auto fxSetDrawParam(R& r, const char* n, const float* v, int)
 template <class R> void fxSetDrawParam(R&, const char*, const float*, long) {}
 template <class R> auto fxClearDrawParam(R& r, const char* n, int) -> decltype(r.clearDrawMaterialParam(std::string(n)), void()) { r.clearDrawMaterialParam(std::string(n)); }
 template <class R> void fxClearDrawParam(R&, const char*, long) {}
+// Rendering's beam segment API (agents/rendering: spawnParticleEffectSegment / setParticleEffectSegment), compile-time detected.
+template <class R> auto fxSpawnSegment(R& r, const std::string& t, const core::Vec3& a, const core::Vec3& b, int) -> decltype(r.spawnParticleEffectSegment(t, a, b), int()) { return r.spawnParticleEffectSegment(t, a, b); }
+template <class R> int fxSpawnSegment(R&, const std::string&, const core::Vec3&, const core::Vec3&, long) { return -1; }
+template <class R> auto fxSetSegment(R& r, int h, const core::Vec3& a, const core::Vec3& b, int) -> decltype(r.setParticleEffectSegment(h, a, b), void()) { r.setParticleEffectSegment(h, a, b); }
+template <class R> void fxSetSegment(R&, int, const core::Vec3&, const core::Vec3&, long) {}
+template <class R> auto fxStopEffect(R& r, int h, int) -> decltype(r.stopParticleEffect(h), void()) { r.stopParticleEffect(h); }
+template <class R> void fxStopEffect(R&, int, long) {}
+template <class R> auto fxSpawnPoint(R& r, const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int) -> decltype(r.spawnParticleEffect(t, p, f, u), int()) { return r.spawnParticleEffect(t, p, f, u); }
+template <class R> int fxSpawnPoint(R&, const std::string&, const core::Vec3&, const core::Vec3&, const core::Vec3&, long) { return -1; }
 
 // WFC_SPAWNPROF: millisecond timings of the spawn path / slow World steps (diagnostics, no behaviour change).
 static bool spawnProf() { static const bool on = std::getenv("WFC_SPAWNPROF") != nullptr; return on; }
@@ -922,7 +931,32 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
     }
 }
 
+static const char* gameplayEventName(GameplayEventType t) {
+    switch (t) {
+    case GameplayEventType::MatchStart: return "MatchStart"; case GameplayEventType::Spawn: return "Spawn";
+    case GameplayEventType::CharacterSelected: return "CharacterSelected"; case GameplayEventType::Kill: return "Kill";
+    case GameplayEventType::Suicide: return "Suicide"; case GameplayEventType::EnvironmentDeath: return "EnvironmentDeath";
+    case GameplayEventType::Assist: return "Assist"; case GameplayEventType::KillstreakEarned: return "KillstreakEarned";
+    case GameplayEventType::Objective: return "Objective"; case GameplayEventType::MatchEnd: return "MatchEnd";
+    }
+    return "?";
+}
+
 void World::tick(float dt) {
+    // WFC_EVENTLOG (diagnostics): each authoritative gameplay event once, with its main context.
+    {
+        static const bool evlog = std::getenv("WFC_EVENTLOG") != nullptr;
+        if (evlog)
+            for (const GameplayEvent& e : match_.gameplayEvents()) {
+                if (e.serial <= eventLogSerial_) continue;
+                eventLogSerial_ = e.serial;
+                LOG_INFO("EVENT #%u t=%.2f %s inst %d (%s %s%s streak %d) victim %d (%s%s streak %d) dmg %s weapon %s melee %d ability %d dist %.0f UU obj %s score +%d/+%d value %d %s",
+                         e.serial, e.time, gameplayEventName(e.type), e.instigator, e.instigatorState.specialty.c_str(), e.instigatorState.chassis.c_str(),
+                         e.instigatorState.vehicleForm ? " VEH" : "", e.instigatorState.killStreak, e.victim, e.victimState.chassis.c_str(),
+                         e.victimState.vehicleForm ? " VEH" : "", e.victimState.killStreak, e.damageType.c_str(), e.weapon.c_str(), (int)e.melee,
+                         (int)e.ability, e.distanceUU, e.objective.c_str(), e.personalScore, e.teamScore, e.value, e.text.c_str());
+            }
+    }
     struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::tick %.1f ms", ms); } } profScope;
     // Cache (and prewarm) each participant's body as soon as its selection exists - during the countdown for everyone present,
     // and for bots / joiners / class or team changes before their next spawn wave - instead of at the spawn itself (a first
@@ -1066,7 +1100,9 @@ void World::startLocalMatch(const MatchSettings& s) {
         return false;
     });
     match_.begin(s);
+    match_.setSnapshotProvider([this](int p) { return participantSnapshot(p); });
     if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");
+    match_.playerMutable(localPlayer_).kind = ParticipantKind::Local;
     matchActive_ = true;
     localDead_ = true;            // PendingMatch: TrySpawnPlayer false -> nobody spawns before the start
     // GameInfo.Login: the controller is created at FindPlayerStart (team start of the initial cluster) and spectates
@@ -1188,8 +1224,9 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         if (kp && kp->refillOnKillRemain_ > 0.0f) kp->health().heal(Health::HealType::AddAllSegments, 1.0f);   // TnBuffRefillHealthOnKill
     }
     if (h->isDead()) {
-        if (victim == localPlayer_) killLocalPlayer(instigator, false, damageType);
-        else { match_.killed(instigator, victim, false, damageType); if (opp) opp->despawn(); }
+        const Match::KillContext kc = killContext(instigator, victim, damageType);
+        if (victim == localPlayer_) killLocalPlayer(instigator, false, damageType, &kc);
+        else { match_.killed(instigator, victim, false, damageType, &kc); if (opp) opp->despawn(); }
     }
     return true;
 }
@@ -1214,11 +1251,16 @@ HudGameState World::hudState() const {
     h.health = pc.health().current; h.healthMax = pc.health().max;
     h.overshield = pc.health().overshield(); h.normalizedOverShield = pc.health().normalizedOverShield();
     h.activeSegment = pc.health().activeSegment(); h.segmentCount = pc.health().segmentCount;
-    h.clipAmmo = pc.weapon().ammo; h.reserveAmmo = pc.weapon().reserve;
-    h.weaponName = pc.weapon().name;
-    h.weaponId = pc.weapon().def ? pc.weapon().def->provider : "IonBlaster";
-    h.weaponSimulated = pc.weapon().simulated();
-    h.weaponIcon = pc.weapon().def ? pc.weapon().def->killFeedIcon : "death_IonBlaster";
+    // The HUD weapon observers read PC.Pawn.Weapon: in vehicle form that is the vehicle weapon (clip / reserve; all vehicle
+    // WEPDATA are ammo-based, HeatMax 0). No observer exposes refire / cooldown / reload progress [CONF RE answer 2026-10-06].
+    const Weapon* hw = &pc.weapon();
+    if (pc.moveForm() == Form::Vehicle && pc.vehicleWeapon()) hw = pc.vehicleWeapon();
+    h.vehicleWeaponHeld = hw != &pc.weapon();
+    h.clipAmmo = hw->ammo; h.reserveAmmo = hw->reserve; h.clipMax = hw->magSize; h.reserveMax = hw->reserveMax;
+    h.weaponName = hw->name;
+    h.weaponId = hw->def ? hw->def->provider : "IonBlaster";
+    h.weaponSimulated = hw->simulated();
+    h.weaponIcon = hw->def ? hw->def->killFeedIcon : "death_IonBlaster";
     h.weaponSwitching = pc.switchingWeapon();
     for (const Weapon& iw : pc.inventory()) h.inventory.push_back(iw.def ? iw.def->provider : "IonBlaster");
     h.activeWeapon = pc.activeWeaponIndex();
@@ -1351,9 +1393,10 @@ HudGameState World::hudState() const {
     return h;
 }
 
-void World::killLocalPlayer(int killer, bool suicide, const std::string& damageType) {
+void World::killLocalPlayer(int killer, bool suicide, const std::string& damageType, const Match::KillContext* ctx) {
     if (!matchActive_ || localDead_) return;
-    match_.killed(killer, localPlayer_, suicide, damageType);
+    const Match::KillContext kc = ctx ? *ctx : killContext(killer, localPlayer_, damageType);
+    match_.killed(killer, localPlayer_, suicide, damageType, &kc);
     localDead_ = true;
 }
 
@@ -1385,6 +1428,7 @@ void World::tickMatch(float dt) {
         for (auto& p : sc.personalScores) match_.addPersonalScore(p.first, p.second);
         for (auto& p : sc.objectiveScores) match_.scoreObjective(p.first, p.second);
         for (auto& t : sc.teamScores) match_.scoreTeamObjective(t.first, t.second);
+        for (const auto& a : sc.actions) match_.recordObjective(a.kind, a.player, a.team, a.value);
         for (auto& msg : sc.messages) LOG_INFO("match: %s switch %d", msg.first.c_str(), msg.second);
         if (sc.attackingTeam >= 0) match_.setAttackingTeam(sc.attackingTeam);
         // The carrier holds the heavy weapon (TnWeaponFlag1Hand MWT_Flag / TnWeaponBomb MWT_Bomb, WT_Heavy) [CONF].
@@ -1455,6 +1499,7 @@ void World::tickMatch(float dt) {
                     player_.controller().clearSpectatorView();
                     if (spawnProf()) LOG_INFO("SPAWNPROF local spawn: chassis apply %.1f ms, respawnReset %.1f ms, specialty+loadout %.1f ms, rest %.1f ms (%s)",
                                               tp1 - tp0, tp2 - tp1, tp3 - tp2, profNowMs() - tp3, mp.chassis.c_str());
+                    recordSpawnEvent(localPlayer_);
                     LOG_INFO("match: local player spawned at %s (%s team %d)", st.actor.c_str(), st.cluster.c_str(),
                              match_.players()[(size_t)localPlayer_].team);
                 }
@@ -1470,6 +1515,7 @@ void World::tickMatch(float dt) {
                         float gy; core::Vec3 gn;
                         if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, gn)) p.y = gy;
                         o->spawnAt(p);
+                        recordSpawnEvent(o->matchPlayer());
                         if (spawnProf()) LOG_INFO("SPAWNPROF opponent %d spawn: chassis apply %.1f ms, character %.1f ms, place+spawnAt %.1f ms (%s)",
                                                   o->matchPlayer(), to1 - to0, to2 - to1, profNowMs() - to2, op.chassis.c_str());
                     }
@@ -1574,6 +1620,20 @@ void World::draw(render::IRenderer& r) const {
     }
     else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
         r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
+
+    // Repair Ray beam: spawn the looping tracer when the beam starts, move its source / target every frame, stop on release.
+    {
+        const bool on = repairBeam_.active && repairBeam_.time > 0.0f;
+        if (on && repairBeamFx_ < 0) repairBeamFx_ = fxSpawnSegment(r, "FX_RepairBeam_p.FX.Tracer_RepairBeam_FX", repairBeam_.start, repairBeam_.end, 0);
+        else if (on) fxSetSegment(r, repairBeamFx_, repairBeam_.start, repairBeam_.end, 0);
+        else if (repairBeamFx_ >= 0) { fxStopEffect(r, repairBeamFx_, 0); repairBeamFx_ = -1; }
+        if (on && repairSquibDraw_) {
+            const core::Vec3 d = core::normalize(repairBeam_.start - repairBeam_.end);
+            const core::Vec3 up = std::fabs(d.y) > 0.99f ? core::Vec3{0, 0, -1} : core::Vec3{0, 1, 0};
+            fxSpawnPoint(r, repairSquibHealing_ ? "FX_RepairBeam_p.FX.Squib_RepairTeam_FX" : "FX_RepairBeam_p.FX.Squib_RepairEnemy_FX", repairBeam_.end, d, up, 0);
+        }
+        repairSquibDraw_ = false;
+    }
 
     // Weapon + vehicle boost effects last (translucent/additive over the opaque scene).
     fx_.draw(r);
@@ -2122,6 +2182,7 @@ void World::tickAbilityEffects(float dt) {
     tickGuidedMissile(dt);
     tickRollerMine(dt);
     repairBeam_.time = std::max(0.0f, repairBeam_.time - dt);
+    if (repairSquibPending_) { repairSquibDraw_ = true; repairSquibPending_ = false; }
     if (repairBeam_.time <= 0.0f) repairBeam_.active = false;
     tickBuffShots(dt);
     tickKillstreakItems(dt);
@@ -3023,20 +3084,49 @@ void World::fireRepairBeamImpl(const Weapon& w, const core::Vec3& origin, const 
     const core::Vec3 dir = core::normalize(dirIn);
     const float range = w.rangeM > 0.0f ? w.rangeM : 35.0f;
     const float tickSecs = w.fireInterval > 0.0f ? w.fireInterval : 0.1f;
+    core::Vec3 dirLock = dir; bool locked = false;
     float best = range;
     const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
     float t;
     if (line && line->segmentHit(origin, origin + dir * range, t)) best = range * t;
     MatchOpponent* hit = nullptr;
-    for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(origin, dir, best, th) && th < best) { best = th; hit = o; } }
+    // PlayerTargeting.GetRepairTarget [CONF RE answer 2026-10-06]: PickedTarget slot 6 while holding TnWeaponRepair - within the
+    // weapon trace range, inside the target's TnTargetableComponent picker 6 "Repair" (Angle 4 deg, MinRadius 200, MaxRadius 400
+    // UU, the angle widened by GetAdjustedTargetAngle with distance), NO team filter (CanTargetTeammates; enemies too). While a
+    // target exists, GetEndTrace returns its TargetableLocation: the beam locks on even with the crosshair slightly off.
+    // GetAdjustedTargetAngle is taken as max(Angle, atan(radius / distance)) with the radius clamped to [Min, Max] [HIGH];
+    // TargetableLocation as the pawn centre [HIGH].
+    {
+        float bestAng = 1e9f; MatchOpponent* pick = nullptr; core::Vec3 pickAt{0, 0, 0};
+        for (MatchOpponent* o : opponents_) {
+            if (!o->spawned() || o->health().isDead()) continue;
+            const core::Vec3 at = o->pawn().actorLocation();
+            const core::Vec3 to = at - origin; const float d = core::length(to);
+            if (d < 0.1f || d > range) continue;
+            const float radius = core::clampf(d * 0.1f, 2.0f, 4.0f);
+            const float allowed = std::max(4.0f * 0.0174533f, std::atan(radius / d));
+            const float ang = std::acos(core::clampf(core::dot(to * (1.0f / d), dir), -1.0f, 1.0f));
+            if (ang > allowed || ang >= bestAng) continue;
+            float tl;
+            if (line && line->segmentHit(origin, at, tl)) continue;   // no line of sight
+            bestAng = ang; pick = o; pickAt = at;
+        }
+        if (pick) { hit = pick; best = core::length(pickAt - origin); dirLock = core::normalize(pickAt - origin); locked = true; }
+    }
+    if (!locked)
+        for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(origin, dir, best, th) && th < best) { best = th; hit = o; } }
     repairBeam_.active = true; repairBeam_.time = tickSecs * 1.5f;
+    repairBeam_.locked = locked;
     // Ribbon start = the muzzle (as the hitscan tracer); the damage trace itself starts on the crosshair ray (origin).
     core::Vec3 muzzle = origin;
     { core::Mat4 ms;
       if (weaponSocketWorld("MuzzleFlash", ms)) muzzle = {ms.m[12], ms.m[13], ms.m[14]};
       else if (player_.pawn().hasWeapon())
           muzzle = core::transformPoint(player_.pawn().weaponWorld(), core::Vec3{core::config::kMuzzleLocalX, core::config::kMuzzleLocalY, core::config::kMuzzleLocalZ}); }
-    repairBeam_.start = muzzle; repairBeam_.end = origin + dir * best; repairBeam_.target = hit ? hit->matchPlayer() : -1;
+    repairBeam_.start = muzzle; repairBeam_.end = origin + (locked ? dirLock : dir) * best;
+    // One impact squib per beam tick where the beam meets something (OnPlayFireEffects at the fire interval).
+    repairSquibPending_ = hit != nullptr || best < range - 0.01f;
+    repairSquibHealing_ = hit && matchActive_ && match_.sameTeam(hit->matchPlayer(), localPlayer_); repairBeam_.target = hit ? hit->matchPlayer() : -1;
     repairBeam_.healing = false;
     if (!hit || !matchActive_) return;
     if (match_.sameTeam(hit->matchPlayer(), localPlayer_)) {
@@ -3075,6 +3165,26 @@ std::vector<std::string> World::qaSetLoadout(const std::vector<std::string>& ids
 void World::qaRespawn() {
     if (!qaEnabled() || !matchActive_) return;
     killLocalPlayer(localPlayer_, true);   // DmgType_Suicided: no score change; the match's own respawn wave brings the pawn back
+}
+
+void World::qaSetCharacter(const CharacterSelection& sel) {
+    if (!qaEnabled() || !matchActive_ || localPlayer_ < 0) return;
+    preloadSelections({sel});                          // no first-use load on the respawn frame
+    match_.selectCharacter(localPlayer_, sel);
+    if (!localDead_) killLocalPlayer(localPlayer_, true);
+}
+
+std::vector<CharacterSelection> World::qaCharacterChoices() const {
+    std::vector<CharacterSelection> out;
+    if (!qaEnabled()) return out;
+    for (int sp = 0; sp < 4; ++sp) {
+        CharacterSelection c; c.type = 0; c.specialty = (Specialty)sp;
+        c.chassisByFaction[0] = defaultChassis(c.specialty, 0); c.chassisByFaction[1] = defaultChassis(c.specialty, 1);
+        c.weapons = classPresetWeapons(specialtyName(c.specialty));
+        c.customSlot = specialtyName(c.specialty);
+        out.push_back(c);
+    }
+    return out;
 }
 
 void World::qaTeleportToStart(int index) { if (qaEnabled()) teleportToStart(index); }
@@ -3356,6 +3466,78 @@ std::string World::compareRobotShared(const std::string& id, bool& ok) {
                   id.c_str(), same ? "same" : "DIFFERENT", geo, A.clips.size(), B.clips.size(), missing, metaDiff, chanDiff, pose,
                   worst.c_str(), t1 - t0, t2 - t1);
     return b;
+}
+
+// ---- Authoritative gameplay events: participant snapshots / kill context (GameplayEvents.h) ----
+const Character* World::participantPawn(int player) const {
+    if (player < 0) return nullptr;
+    if (player == localPlayer_) return localDead_ ? nullptr : &player_.pawn();
+    for (const MatchOpponent* o : opponents_) if (o->matchPlayer() == player && o->spawned()) return &o->pawn();
+    return nullptr;
+}
+
+ParticipantSnapshot World::participantSnapshot(int player) const {
+    ParticipantSnapshot s;
+    s.player = player;
+    const Character* c = participantPawn(player);
+    if (!c) return s;
+    s.alive = true;
+    s.specialty = c->specialty();
+    s.chassis = c->chassis().id;
+    s.vehicleForm = c->moveForm() == Form::Vehicle;
+    s.transforming = c->isTransforming();
+    if (s.vehicleForm) s.vehicleType = (int)c->vehicleParams().form;
+    s.flying = s.vehicleForm && c->vehicleState().flying;
+    s.health = c->health().current; s.healthMax = c->health().max;
+    s.meleeing = c->isMeleeing();
+    s.hovering = c->hoverState_ == 2;
+    s.fineAim = player == localPlayer_ && player_.controller().fineAiming();
+    s.pos = c->position();
+    // Active buffs (original class names) the kill-award rules test; instigators where the rebuild tracks them.
+    auto buff = [&](bool on, const char* cls) { if (on) s.buffs.push_back({cls, -1}); };
+    buff(c->warcryRemain_ > 0.0f, "TransGame.TnBuffWarcryIncreaseDamage");
+    buff(c->hoverState_ == 2, "TransGame.TnBuffIncreaseDamageDuringHover");
+    buff(c->cloakRemain_ > 0.0f, "TransGame.TnBuffCloak");
+    buff(c->hardLockedRemain_ > 0.0f, "TransGame.TnBuffHardLocked");
+    buff(c->drainRemain_ > 0.0f, "TransGame.TnBuffDrainTarget");
+    buff(c->jammedRemain_ > 0.0f, "TransGame.TnBuffAbilityJammed");
+    buff(c->transformDisruptRemain_ > 0.0f, "TransGame.TnBuffTransformDisruptor");
+    buff(c->rollerSlowRemain_ > 0.0f, "TransGame.TnBuffRollerSphereDecreaseSpeed");
+    buff(c->beaconDamageBuff_ > 0.0f, "TransGame.TnBuffAmmoBeaconIncreaseDamage");
+    if (matchActive_) {
+        const int ci = mapState_.carriedBy(player);
+        if (ci >= 0) s.carrying = mapState_.carried()[(size_t)ci].kind;
+        const int z = mapState_.activeKothZone();
+        if (z >= 0 && (size_t)z < mapState_.objectives().size()) s.inActiveZone = mapState_.objectives()[(size_t)z].contains(s.pos);
+        const int team = match_.players()[(size_t)player].team;
+        for (const ObjectiveObject& o : mapState_.objectives())
+            if (o.activeInMode && o.cls == "TnDominationPoint" && o.defenderTeam != 255 && o.defenderTeam != team && o.contains(s.pos)) s.inEnemyNode = true;
+    }
+    return s;
+}
+
+Match::KillContext World::killContext(int instigator, int victim, const std::string& damageType) const {
+    Match::KillContext k;
+    const Character* ip = participantPawn(instigator);
+    const Character* vp = participantPawn(victim);
+    if (ip) {
+        const Weapon* w = (ip->moveForm() == Form::Vehicle && ip->vehicleWeapon()) ? ip->vehicleWeapon() : &ip->weapon();
+        if (w && w->def) k.weapon = w->def->provider;
+    }
+    k.killAfterDeath = instigator >= 0 && instigator != victim && !ip;   // the killer was already dead (projectile / mine)
+    if (ip && vp) k.distanceUU = core::length(ip->position() - vp->position()) * 100.0f;
+    // Melee death type (RE §12 addendum 20): Melee + MeleeBerzerk, Rammed, ShoulderSlam, WeakMelee, Whirlwind.
+    k.melee = damageType.find("Melee") != std::string::npos || damageType.find("Rammed") != std::string::npos ||
+              damageType.find("ShoulderSlam") != std::string::npos || damageType.find("Whirlwind") != std::string::npos;
+    static const char* abilityTypes[] = {"Whirlwind", "Shockwave", "SentryGun", "KamikazeMine", "RollerSphere", "GuidedMissile",
+                                         "Drain", "AOE", "Rammed"};
+    for (const char* a : abilityTypes) if (damageType.find(a) != std::string::npos) k.ability = true;
+    return k;
+}
+
+void World::recordSpawnEvent(int player) {
+    GameplayEvent& e = match_.recordEvent(GameplayEventType::Spawn, player);
+    e.text = e.instigatorState.chassis;
 }
 
 } // namespace game

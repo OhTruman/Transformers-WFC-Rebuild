@@ -49,6 +49,8 @@ private:
     void runDropTest();
     void runRiserTest();
     void runPreloadTest();
+    void runClassChangeTest();
+    void runEventTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

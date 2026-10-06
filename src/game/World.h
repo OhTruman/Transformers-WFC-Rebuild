@@ -105,6 +105,9 @@ struct HudGameState {
     int weaponChargeShotLevel = 0;
     int vehicleShotSerial = 0, vehicleShotSocket = 0;
     core::Vec3 vehicleShotMuzzle{0, 0, 0};
+    // Current-weapon HUD values are for the HELD weapon (PC.Pawn.Weapon): the vehicle weapon in vehicle form.
+    bool vehicleWeaponHeld = false;
+    int clipMax = 0, reserveMax = 0;
     bool barrier = false;                        // the local Barrier ability's wall is up
     float barrierHealth = 0.0f;                  // BarrierHealth 1000, DegenRate 15/s
     std::string pickupPrompt;                    // TnPickupManager prompt (E): "Code Of Power" / "Bomb" / "" (refreshed 0.1 s in the original)
@@ -276,7 +279,13 @@ public:
     int localMatchPlayer() const { return localPlayer_; }
     const std::vector<MatchEvent>& matchEvents() const { return matchEvents_; }   // consumed during the last tick
     bool localPlayerDead() const { return matchActive_ && localDead_; }
-    void killLocalPlayer(int killer, bool suicide, const std::string& damageType = std::string());   // death of the local pawn
+    void killLocalPlayer(int killer, bool suicide, const std::string& damageType = std::string(), const Match::KillContext* ctx = nullptr);   // death of the local pawn
+    // The participant snapshot Match records with each gameplay event (pawn state of the local player or an opponent).
+    ParticipantSnapshot participantSnapshot(int player) const;
+    const Character* participantPawn(int player) const;   // the live pawn of a match player, or null
+    Match::KillContext killContext(int instigator, int victim, const std::string& damageType) const;
+    void recordSpawnEvent(int player);
+    uint32_t eventLogSerial_ = 0;   // WFC_EVENTLOG: last serial logged
     // Front-end entry: map + mode + settings. Applies the mode's authored world state, resets the map as a fresh level
     // load, and starts the match. False (and nothing changes) for a map that is not loaded or an unsupported mode.
     bool launchMatch(const MatchLaunch& l);
@@ -373,8 +382,14 @@ public:
     std::function<void(const Weapon&, const core::Vec3&, const core::Vec3&)> repairBeamHook;
     void fireRepairBeam(const Weapon& w, const core::Vec3& origin, const core::Vec3& dir) { if (repairBeamHook) repairBeamHook(w, origin, dir); }
     void fireRepairBeamImpl(const Weapon& w, const core::Vec3& origin, const core::Vec3& dir);
-    struct RepairBeam { bool active = false, healing = false; core::Vec3 start{0, 0, 0}, end{0, 0, 0}; int target = -1; float time = 0.0f; };
+    struct RepairBeam { bool active = false, healing = false, locked = false; core::Vec3 start{0, 0, 0}, end{0, 0, 0}; int target = -1; float time = 0.0f; };
     RepairBeam repairBeam_;
+    // Repair Ray presentation (RepairBeam_WEPMESH TracerTemplates WP_Looping = FX_RepairBeam_p.FX.Tracer_RepairBeam_FX; squib
+    // Squib_RepairTeam_FX healing / DefaultSquib Squib_RepairEnemy_FX otherwise) through Rendering's segment API.
+    mutable int repairBeamFx_ = -1;
+    bool repairSquibPending_ = false;
+    mutable bool repairSquibDraw_ = false;
+    bool repairSquibHealing_ = false;
     // Controller fire entry: one shot of w from origin along dir (projectile spawn or one hitscan trace). Inline dispatch
     // through a hook World installs at load, so harnesses that stub World (tools/fidelity) still link with fireHitscan.
     std::function<void(const Weapon&, const core::Vec3&, const core::Vec3&)> weaponFireHook;
@@ -528,6 +543,11 @@ public:
     std::vector<std::string> qaWeaponIds(bool vehicle = false) const;        // WeaponTable provider ids (robot or vehicle weapons)
     std::vector<std::string> qaSetLoadout(const std::vector<std::string>& providerIds);   // returns the refused ids; kept for respawns
     void qaRespawn();                                                         // suicide (no score) -> the normal respawn wave
+    // Live character swap: the selection goes through the real PRI._SelectedCharacter path (Match::selectCharacter), then
+    // qaRespawn - the next spawn applies it (body, loadout, abilities, colours, vehicle form) exactly like a normal pick.
+    void qaSetCharacter(const CharacterSelection& sel);
+    // Choices for the swap: the four class presets (PCD_MP chassis per faction + WeaponTypes), the local faction resolved at spawn.
+    std::vector<CharacterSelection> qaCharacterChoices() const;
     void qaTeleportToStart(int index);                                       // authored player start #index (wraps)
     void qaSetNoclip(bool on);                                               // UFO camera-relative flight, no collision / gravity
     void qaSetGodMode(bool on);                                              // the local pawn ignores damage
