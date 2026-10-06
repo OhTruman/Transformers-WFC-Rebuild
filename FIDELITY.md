@@ -17,6 +17,20 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 09 (RENDERING) — PACING, LIMITER, STABILITY, PLAYTEST DEFECTS (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Original frame timing | Xenon bSmoothFrameRate 15..30 fps, one game tick per rendered frame, no interpolation | RE MP note add. 1; AssetTools timing_config.json | CONFIRMED | above 30 fps is PC ADAPTATION |
+| High-fps "choppy" camera | presentation even (p99 <= 3.5 ms at ~1000 fps); while moving the camera changes only on 60 Hz sim steps (47-49 of 600 frames); strafe + turn yaw rate p10 0.42 / p90 11.3 rad/s for 1.5 input - FixedStepClock::alpha() unused | WFC_PACINGLOG (43bcb50) | CONFIRMED (measured) | render interpolation: Gameplay (in progress) |
+| FPS limiter | PC ADAPTATION: waitable high-resolution timer + ~1 ms spin, deadline-scheduled, presentation only; loop-top call | 73fd427; 144 Hz p50 6.95 / p99 7.46 / max 9.31 ms | VISUALLY / MEASURED | IRenderer::setFrameLimit / waitFrameSlot; Frontend wires the profile FrameLimit |
+| 08o freeze (7900 XTX) | a hang (no TDR / WER), log overwritten | Integration | UNKNOWN cause | stall watchdog: phase log + all-thread minidump at 5 s (e050e84); non-finite draw guards (3bffa0a); robust GL context proposed to Systems |
+| Impact decals | weapon DefaultDecal / PhysMaterial groups; default PhysMaterial Metal; struct defaults 100 / 100 / 10 / 30 s | RE s12 add. 29 / 30 / 34 | CONFIRMED (data) / HIGH (GetPhysicalMaterial chain) | M76 spawnImpactDecal (02022c4); Gameplay call pending |
+| Repair / energy beam | TnWeaponRepairRay -> RepairBeam_WEPMESH TracerTemplates WP_Looping FX_RepairBeam_p.FX.Tracer_RepairBeam_FX, DefaultSquib Squib_RepairEnemy_FX | cooked weapon mesh; WFC_FXTEST renders it in full | CONFIRMED / VISUALLY VERIFIED | setParticleEffectSegment (c7e97b5); the spawn / update / stop call is Gameplay's |
+| Jet boost white particles | game-side VehicleFx sprites (not renderer templates) | Gameplay | — | Gameplay |
+| Debris stray objects | objective bases (Base_A / Base_D / RepairNodeB, authored bHidden) are hidden in TDM, shown in CTF / EXT as the Kismet rule says; wrecked soldiers textured | captures | not yet identified | Experimental capturing positions |
+| Dark shadows | WFC pawn LightEnvironmentComponents carry no AmbientGlow / AmbientShadowColor; fill = SH ambient from sky / overflow lights | cooked defaults | UNKNOWN (asked RE; no original frame) | unchanged |
+| F10 QA menu | Frontend's Win32 panel (WFC_QA only, WM_SYSKEYDOWN, menu-mode freeze) | Frontend e566f6c | — | Frontend fixed |
+
 ## MILESTONE 75 — LOADING-SCREEN WARM-UP; FIRST-FRAME COST (2026-10-06)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
