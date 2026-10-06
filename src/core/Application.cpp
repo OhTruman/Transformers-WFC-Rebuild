@@ -151,7 +151,8 @@ bool Application::init() {
     if (std::getenv("WFC_PROJFXTEST")) { runProjectileFxTest(); return false; }   // projectile FlightEffect / ExplosionEffect binding
     if (std::getenv("WFC_MUZZLETEST")) { runMuzzleTest(); return false; }          // vehicle weapon Primary / Primary2 alternation
     if (std::getenv("WFC_RMUZZLETEST")) { runRobotMuzzleTest(); return false; }    // robot projectiles spawn at the weapon MuzzleFlash socket
-    if (std::getenv("WFC_CHARGETEST")) { runChargeTest(); return false; }          // Plasma Cannon charge levels + grenade spin   // measurements only
+    if (std::getenv("WFC_CHARGETEST")) { runChargeTest(); return false; }          // Plasma Cannon charge levels + grenade spin
+    if (std::getenv("WFC_DROPTEST")) { runDropTest(); return false; }              // hover vehicle 10 m drop: per-step vertical trace   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -3765,6 +3766,48 @@ void Application::runChargeTest() {
               "Flashbang tumbles at RotationRate pitch -100000 (-549 deg/s), stops at rest");
     }
     LOG_INFO("CHARGE SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_DROPTEST: settle a hover vehicle on flat ground, lift it 10 m, release; log per step the COM height above the floor,
+// vertical speed and probe contacts until 1.5 s after touchdown. Diagnostic (drop recovery investigation).
+void Application::runDropTest() {
+    const float dt = 1.0f / 60.0f;
+    game::PlayerController& ctl = world_.player().controller();
+    const game::CollisionWorld* cw = world_.collision();
+    platform::InputFrame idle, tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    const char* only = std::getenv("WFC_DROPTEST");
+    for (const char* id : {"Car2", "Truck3", "Tank3"}) {
+        if (only && std::strlen(only) > 1 && std::string(only) != id) continue;
+        world_.applyChassisToLocalPawn(id);
+        world_.applyLoadout(nullptr);
+        game::Character& pc = world_.player().pawn();
+        if (pc.form() != game::Form::Vehicle) step(tf);
+        for (int i = 0; i < 240; ++i) step(idle);
+        if (pc.form() != game::Form::Vehicle) { LOG_INFO("DROP %s: no vehicle form", id); continue; }
+        auto& vs = pc.vehicleState();
+        // Flat floor under the pawn with open sky.
+        const core::Vec3 base = pc.position();
+        float gy; core::Vec3 gn;
+        if (!cw || !cw->groundHeight(base.x, base.z, base.y + 1.0f, 2.0f, gy, gn)) { LOG_INFO("DROP %s: no floor", id); continue; }
+        for (int i = 0; i < 180; ++i) step(idle);
+        const float restY = pc.position().y;
+        LOG_INFO("DROP %s rest: root y %.3f (floor %.3f, root above floor %.3f), contacts %d", id, restY, gy, restY - gy, vs.contacts);
+        pc.setPosition(core::Vec3{base.x, restY + 10.0f, base.z});
+        pc.velocity() = {0, 0, 0}; vs.pitch = vs.roll = 0.0f; vs.angVel = {0, 0, 0};
+        ctl.setCameraYaw(pc.yaw());
+        int touch = -1;
+        for (int i = 0; i < 400; ++i) {
+            const float vyBefore = pc.velocity().y;
+            step(idle);
+            const float h = pc.position().y - restY;
+            if (touch < 0 && vs.contacts > 0) touch = i;
+            if (touch >= 0 && i - touch <= 90 && ((i - touch) < 20 || (i - touch) % 5 == 0))
+                LOG_INFO("DROP %s t+%.3f: root %+.3f m vs rest, vy %+.2f (before step %+.2f), contacts %d, pitch %.2f deg",
+                         id, (i - touch) * dt, h, pc.velocity().y, vyBefore, vs.contacts, vs.pitch * 57.29578f);
+            if (touch >= 0 && i - touch > 90) break;
+        }
+    }
 }
 
 } // namespace core

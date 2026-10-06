@@ -46,6 +46,7 @@ private:
     void runMuzzleTest();
     void runRobotMuzzleTest();
     void runChargeTest();
+    void runDropTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;
