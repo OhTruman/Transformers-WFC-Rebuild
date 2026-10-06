@@ -417,6 +417,14 @@ public:
     BarrierState barrier_;
     bool qaNoclip_ = false, qaGod_ = false;   // DEV / QA TOOLING
     int vehicleShotSerial_ = 0, vehicleShotSocket_ = 0;
+    int vehicleFlashSerial_ = 0;   // [Systems M08h] the last vehicle shot whose muzzle flash was spawned (one per shot)
+    // [Systems M08h] The current vehicle shot's socket in world space (WeaponSocket_Primary / _Primary2 per
+    // vehicleShotSocket_, posed vehicle bone x socket - the transform Gameplay's noteVehicleShot origin comes from).
+    // False outside vehicle form or before the first vehicle shot.
+    bool vehicleShotSocketWorld(core::Mat4& out) const;
+    // [Systems M08h] HmWeaponMesh.PlayFireEffects for a vehicle shot: the fired weapon's MuzzleFlash template at its
+    // CurrentSocket, once per shot (serial). Returns the muzzle position (tracer start) or false.
+    bool spawnVehicleMuzzleFlash(const std::string& weaponClass, core::Vec3& muzzleOut);
     core::Vec3 vehicleShotMuzzle_{0, 0, 0};
     // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
     struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f; };
@@ -685,8 +693,6 @@ private:
     bool fxPrevRolling_ = false, fxPrevShown_ = false;   // [Systems M08e]
     int projAudioKey_ = 0;
     int kothAudioZone_ = -1, kothAudioDefender_ = 255, objCountdownAudio_ = -1;   // [Systems M08f]
-    float beamSinceShot_ = 1e9f, beamInterval_ = 0.1f;   // [Systems M08d] beam weapon traces
-    std::string beamClassFiring_;
     // TnHitEffectPlayer.LastHitEffectTimes per victim (here: the damage targets) per effect entry [CONF script].
     std::map<std::pair<const void*, int>, float> lastHitEffect_;
     // The held weapon's mesh-animation sounds (reload / idle / equip / put-down notifies), by weapon class.

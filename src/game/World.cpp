@@ -106,6 +106,10 @@ void World::load(render::IRenderer& renderer) {
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
         if (w.projectile()) {
             spawnProjectile(o + d * 1.5f, d * w.projSpeed, w, localPlayer_);
+            if (player_.pawn().moveForm() == Form::Vehicle) {   // [Systems M08h] the vehicle shot's muzzle flash
+                core::Vec3 vm;
+                spawnVehicleMuzzleFlash(projectiles_.back().weaponClass, vm);
+            }
             {   // [Systems M08d] PlayFiringSound for projectile weapons too (it was only on the instant-hit path)
                 const bool vehForm = player_.pawn().moveForm() == Form::Vehicle;
                 onWeaponFired(projectiles_.back().weaponClass, w.lowAmmo(), vehForm, o);
@@ -634,12 +638,17 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     // (setPlayerWeaponAudio); WeaponFx draws the ones it reconstructs, Rendering's particle runtime the others
     // (setGenericRuntime), and nothing for a template neither has (logged once) [integration M08b: no other weapon's
     // FX is substituted - a class without an FX entry draws none].
-    const WeaponFxTemplates* wfx = CharacterAudio::weaponFx(weaponClass_);
+    // [Systems M08h] Vehicle form: the vehicle weapon's own templates, the flash at the shot's alternating socket and the
+    // tracer from that socket (the damage trace still starts at the start-trace location) [CONF RE pass 5 9g].
+    const bool vehShot = player_.pawn().moveForm() == Form::Vehicle && w.def;
+    const std::string fxClass = vehShot ? "TransContent.TnWeapon" + std::string(w.def->id) : weaponClass_;
+    const WeaponFxTemplates* wfx = CharacterAudio::weaponFx(fxClass);
     if (!wfx) {
         static std::set<std::string> warned;
-        if (warned.insert(weaponClass_).second) LOG_WARN("weapon fx: no templates for %s (nothing drawn)", weaponClass_.c_str());
+        if (warned.insert(fxClass).second) LOG_WARN("weapon fx: no templates for %s (nothing drawn)", fxClass.c_str());
     }
-    if (wfx && weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(wfx->muzzle, ms);
+    if (vehShot) { core::Vec3 vm; if (spawnVehicleMuzzleFlash(fxClass, vm)) muzzle = vm; }
+    else if (wfx && weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(wfx->muzzle, ms);
     if (wfx) fx_.spawnTracer(wfx->tracer, muzzle, hitPoint);
     if (wfx && dist < range - 0.01f)
         fx_.spawnImpact(wfx->squib, hitPoint, dir * -1.0f, origin);
@@ -1109,6 +1118,30 @@ bool World::notifyRamHit(const void* target, const core::Vec3& pos) {
     // audio component plays RamSound (owner-attached), not a world sound at the hit point [CONF script].
     (void)pos;
     vehicleAudio_.ram(cues_, [this] { return atPawn({0, 1.4725f, 0}); });
+    return true;
+}
+
+bool World::vehicleShotSocketWorld(core::Mat4& out) const {
+    const Character& pc = player_.pawn();
+    if (vehicleShotSerial_ == 0 || pc.form() != Form::Vehicle) return false;
+    const SocketDef& vs = vehicleShotSocket_ == 1 ? pc.chassis().vehicleWeapon2 : pc.chassis().vehicleWeapon;
+    core::Mat4 bm;
+    if (!vs.valid || !pc.boneWorld(vs.bone, bm)) return false;
+    out = bm * vs.local;
+    return true;
+}
+
+bool World::spawnVehicleMuzzleFlash(const std::string& weaponClass, core::Vec3& muzzleOut) {
+    core::Mat4 sw;
+    if (!vehicleShotSocketWorld(sw)) return false;
+    muzzleOut = {sw.m[12], sw.m[13], sw.m[14]};
+    if (vehicleFlashSerial_ == vehicleShotSerial_) return true;          // NumShotsToFire traces: one flash per shot
+    vehicleFlashSerial_ = vehicleShotSerial_;
+    const WeaponFxTemplates* wfx = CharacterAudio::weaponFx(weaponClass);
+    if (wfx && !wfx->muzzle.empty()) fx_.spawnMuzzleFlash(wfx->muzzle, sw);
+    static const bool log = std::getenv("WFC_MUZZLELOG") != nullptr;
+    if (log) LOG_INFO("VEHICLE MUZZLE shot %d socket %d %s at %.2f,%.2f,%.2f", vehicleShotSerial_, vehicleShotSocket_,
+                      wfx ? wfx->muzzle.c_str() : "(no fx)", sw.m[12], sw.m[13], sw.m[14]);
     return true;
 }
 
