@@ -625,6 +625,18 @@ public:
     // or launch start, the end point and whether it hit something. Robot-weapon mesh FX for bots are not drawn yet [PARTIAL].
     struct ParticipantShot { int player; std::string weapon; core::Vec3 from, to; bool impact; int hitPlayer = -1; };   // hitPlayer: pawn hit (-1 world / none)
     const std::vector<ParticipantShot>& participantShots() const { return participantShots_; }
+    // Participant shot presentation (muzzle flash / tracer / impact of bots' weapons). When set, called once per participant shot
+    // with the shooter's MuzzleFlash socket world matrix (X = barrel forward; the eye frame when no weapon mesh is shown); the
+    // integration glue points it at the player's per-weapon authored FX lookup. Unset: the WeaponDef's authored MuzzleFlash /
+    // Tracer templates are spawned by name through the renderer particle API; a weapon with no template draws nothing (logged once).
+    std::function<void(const ParticipantShot&, const core::Mat4&)> participantShotFxHook;
+    // Diagnostics: spawned participants with a weapon shown (robot form) and how many of them have a posed weapon mesh.
+    void participantWeaponStats(int& shown, int& withMesh) const {
+        shown = withMesh = 0;
+        for (const MatchOpponent* o : opponents_) if (o->spawned() && o->pawn().hasWeapon()) {
+            ++shown; auto it = partWeapons_.find(o->matchPlayer()); withMesh += it != partWeapons_.end() && it->second.anim.valid() && !it->second.anim.pose().empty();
+        }
+    }
     // Progression feed (Frontend contract): XP events (grouped by transactionId per kill) and challenge stat increments for every
     // participant, produced from the event record. Frontend applies the local player's to the profile (CanGainXp rule, current
     // specialty). Drained by the caller.
@@ -699,6 +711,13 @@ private:
     bool botTryAbility(MatchOpponent& o, BotBrain& b, const char* id);   // TnAbilityManager.TriggerAbility rules for a bot's slot
     double botMsAccum_ = 0.0, botMsMax_ = 0.0; long botTicks_ = 0;
     std::vector<ParticipantShot> participantShots_;
+    // Participants' held weapons: the player's weapon models (weaponModelFor) posed per participant, with their fire / reload
+    // event animations, drawn at each pawn's weapon socket.
+    struct ParticipantWeaponView { std::string id; WeaponMesh anim; unsigned seenShot = 0, seenReload = 0; };
+    std::map<int, ParticipantWeaponView> partWeapons_;
+    struct PendingShotFx { std::string weapon; core::Mat4 muzzle; core::Vec3 to; bool tracer = true; };
+    mutable std::vector<PendingShotFx> partShotFx_;   // filled per step, spawned at draw (renderer particle API)
+    void tickParticipantWeapons(float dt);
     void addBotBrain(int player, int difficulty);
     void tickBots(float dt);
     void botThink(MatchOpponent& o, BotBrain& b);

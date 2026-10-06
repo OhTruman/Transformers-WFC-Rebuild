@@ -23,6 +23,7 @@
 #include <fstream>
 #include <array>
 #include <map>
+#include <set>
 #include <sstream>
 
 namespace game {
@@ -134,6 +135,28 @@ void World::load(render::IRenderer& renderer) {
     //                        [&renderer](int h) { renderer.stopParticleEffect(h); }});
     Character::clearRigCache();   // rigs point at models of the previous load
     repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
+    // [integration 09b] Participant (bot) shot presentation through the SAME per-weapon lookup as the local player's WP_Fire:
+    // the fired weapon class's WeaponFx templates (muzzle at the shooter's MuzzleFlash socket, tracer to the hit point, impact
+    // squib where it hit); WeaponFx draws the ones it reconstructs, Rendering's particle runtime the others. No other weapon's
+    // FX is substituted (no Ion fallback): a class without templates draws nothing, logged once. Projectile weapons draw
+    // their own flight effect (no tracer).
+    participantShotFxHook = [this](const ParticipantShot& shot, const core::Mat4& muzzle) {
+        const std::string cls = "TransContent.TnWeapon" + shot.weapon;
+        const WeaponFxTemplates* wfx = CharacterAudio::weaponFx(cls);
+        if (!wfx) {
+            static std::set<std::string> warned;
+            if (warned.insert(cls).second) LOG_WARN("participant weapon fx: no templates for %s (nothing drawn)", cls.c_str());
+            return;
+        }
+        const WeaponDef* d = findWeaponDef(shot.weapon);
+        const bool projectile = d && d->projSpeed > 0.0f;
+        const core::Vec3 from{muzzle.m[12], muzzle.m[13], muzzle.m[14]};
+        if (!wfx->muzzle.empty()) fx_.spawnMuzzleFlash(wfx->muzzle, muzzle);
+        if (!projectile) {
+            fx_.spawnTracer(wfx->tracer, from, shot.to);
+            if (shot.impact) fx_.spawnImpact(wfx->squib, shot.to, core::normalize(shot.from - shot.to), shot.from);
+        }
+    };
     heldWeaponMuzzleHook = [this](core::Vec3& out) { return heldWeaponMuzzleImpl(out); };
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
         if (w.projectile()) {
@@ -1253,6 +1276,53 @@ void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
     }
 }
 
+void World::tickParticipantWeapons(float dt) {
+    // Held weapon views follow each participant's active robot weapon (model swap on a switch, fire / reload event anims).
+    for (MatchOpponent* o : opponents_) {
+        if (!o->spawned()) continue;
+        ParticipantWeaponView& v = partWeapons_[o->matchPlayer()];
+        const Weapon& w = o->pawn().weapon();
+        const std::string id = w.def ? w.def->id : "IonBlaster";
+        if (id != v.id) {
+            v.id = id;
+            if (id == "IonBlaster") v.anim.setModel(weaponModel_.valid() ? &weaponModel_ : nullptr);
+            else if (const assets::SkinnedModel* m = w.def ? weaponModelFor(*w.def) : nullptr) v.anim.setModelGeneric(m, *w.def);
+            else v.anim.setModel(nullptr);
+            v.seenShot = w.shotSerial; v.seenReload = w.reloadSerial;
+        }
+        if (w.reloadSerial != v.seenReload) { v.seenReload = w.reloadSerial; v.anim.play(WeaponMesh::Event::Reload); }
+        if (w.shotSerial != v.seenShot) { v.seenShot = w.shotSerial; v.anim.play(WeaponMesh::Event::Fire); }
+        std::vector<WeaponNotify> notifies;   // participant weapon notifies (shells / magazines) are not presented [PARTIAL]
+        v.anim.tick(dt, notifies);
+    }
+    // This step's participant shots: the muzzle socket of the shooter's shown weapon (else its eye frame along the shot).
+    for (const ParticipantShot& s : participantShots_) {
+        if (s.weapon == "RepairRay") continue;   // the beam has its own looping presentation [PARTIAL for bots]
+        core::Mat4 muzzle = core::Mat4::identity();
+        bool have = false;
+        for (const MatchOpponent* o : opponents_) {
+            if (o->matchPlayer() != s.player || !o->spawned()) continue;
+            auto it = partWeapons_.find(s.player);
+            core::Mat4 local;
+            if (o->pawn().hasWeapon() && it != partWeapons_.end() && it->second.anim.valid() && it->second.anim.socketLocal("MuzzleFlash", local)) {
+                muzzle = o->pawn().weaponWorld() * local; have = true;
+            }
+        }
+        if (!have) {
+            const core::Vec3 f = core::normalize(s.to - s.from);
+            const core::Vec3 rt = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
+            const core::Vec3 up = core::cross(rt, f);
+            muzzle.m[0] = f.x; muzzle.m[1] = f.y; muzzle.m[2] = f.z; muzzle.m[4] = up.x; muzzle.m[5] = up.y; muzzle.m[6] = up.z;
+            muzzle.m[8] = rt.x; muzzle.m[9] = rt.y; muzzle.m[10] = rt.z; muzzle.m[12] = s.from.x; muzzle.m[13] = s.from.y; muzzle.m[14] = s.from.z;
+        }
+        if (participantShotFxHook) participantShotFxHook(s, muzzle);
+        else if (partShotFx_.size() < 256) {
+            const WeaponDef* d = findWeaponDef(s.weapon);
+            partShotFx_.push_back({s.weapon, muzzle, s.to, !(d && d->projSpeed > 0.0f)});   // projectiles draw their own flight effect
+        }
+    }
+}
+
 void World::syncShownWeapon() {
     const Weapon& w = player_.pawn().weapon();
     std::string id = w.def ? w.def->id : "IonBlaster";
@@ -1484,6 +1554,7 @@ void World::tick(float dt) {
     participantShots_.clear();
     tickBots(dt);                                                       // bot participants: decisions -> intents, weapons
     for (MatchOpponent* o : opponents_) o->simulate(dt, collision());   // participants: shared movement + animation
+    tickParticipantWeapons(dt);
     player_.controller().tickCameraCollision(dt);   // obstruction behaviour after the pawn moved
     gameplayRamContacts();
     if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
@@ -1847,6 +1918,7 @@ int World::addBots(const BotLaunch& b) {
         mp.kind = ParticipantKind::Bot;
         mp.level = id.level;
         match_.selectCharacter(p, id.selection);
+        preloadHeldWeaponModels(id.selection.weapons);   // under the match load, not at the bot's first shot
         auto o = std::make_unique<MatchOpponent>(p, mp.team, true);
         o->pressesPickup = true;
         addBotBrain(p, botDifficulty_);
@@ -2321,6 +2393,29 @@ void World::draw(render::IRenderer& r) const {
         else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
             r.drawMesh(weaponMesh_, core::Mat4::translate(player_.pawn().renderOffset()) * player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
     }
+
+    // Participants' held weapons (robot form, weapon shown), at their pawn's interpolated weapon socket.
+    for (const MatchOpponent* o : opponents_) {
+        if (!o->spawned() || !o->pawn().hasWeapon()) continue;
+        auto it = partWeapons_.find(o->matchPlayer());
+        if (it == partWeapons_.end() || !it->second.anim.valid()) continue;
+        r.drawDynamicMesh(it->second.anim.pose(), core::Mat4::translate(o->pawn().renderOffset()) * o->pawn().weaponWorld(), core::Vec3{1, 1, 1});
+    }
+    // Participant shots without a presentation hook: the weapon's authored templates by name [CONF WEPMESH data].
+    for (const PendingShotFx& s : partShotFx_) {
+        const WeaponDef* d = findWeaponDef(s.weapon);
+        const core::Vec3 at{s.muzzle.m[12], s.muzzle.m[13], s.muzzle.m[14]};
+        const core::Vec3 fwd = core::normalize(core::Vec3{s.muzzle.m[0], s.muzzle.m[1], s.muzzle.m[2]});
+        const core::Vec3 up = core::normalize(core::Vec3{s.muzzle.m[4], s.muzzle.m[5], s.muzzle.m[6]});
+        const bool muzzle = d && d->muzzleFx && *d->muzzleFx, tracer = s.tracer && d && d->tracerFx && *d->tracerFx;
+        if (muzzle) fxSpawnPoint(r, d->muzzleFx, at, fwd, up, 0);
+        if (tracer) fxSpawnSegment(r, d->tracerFx, at, s.to, 0);
+        if (!muzzle && !tracer) {
+            static std::set<std::string> warned;
+            if (warned.insert(s.weapon).second) LOG_WARN("participant shot FX: no authored muzzle / tracer template for %s (nothing drawn)", s.weapon.c_str());
+        }
+    }
+    partShotFx_.clear();
 
     // Repair Ray beam: spawn the looping tracer when the beam starts, move its source / target every frame, stop on release.
     {

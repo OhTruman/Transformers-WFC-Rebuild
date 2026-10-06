@@ -657,6 +657,15 @@ Application::MatchExit Application::runMatch() {
         camera_.aspect = (float)window_->width() / (float)(window_->height() > 0 ? window_->height() : 1);
         world_.player().controller().setViewAspect(camera_.aspect);
 
+        // WFC_BOTCAM (diagnostics): frame the first spawned bot from 6 m behind / 2.5 m above, looking at it.
+        if (std::getenv("WFC_BOTCAM"))
+            for (const game::MatchOpponent* o : world_.matchOpponents()) if (o->spawned()) {
+                const core::Vec3 bp = o->pawn().actorLocation();
+                const core::Vec3 fw = core::forwardFromYawPitch(o->pawn().yaw(), 0.0f); const core::Vec3 rt = core::normalize(core::cross(fw, core::Vec3{0, 1, 0}));
+                const core::Vec3 back = std::getenv("WFC_BOTCAM")[0] == 's' ? rt * 6.0f + fw * 2.0f : fw * -6.0f;   // WFC_BOTCAM=side: from its right
+                camera_.pos = bp + back + core::Vec3{0, 1.5f, 0}; const core::Vec3 d = core::normalize(bp - camera_.pos);
+                camera_.yaw = std::atan2(-d.x, -d.z); camera_.pitch = std::asin(d.y); break;
+            }
         // Debug camera overrides (for diagnosis / screenshots): WFC_DEBUGCAM=top|front
         if (const char* dc = std::getenv("WFC_DEBUGCAM")) {
             core::Vec3 pp = world_.player().pawn().position();
@@ -4740,7 +4749,7 @@ void Application::runBotTest() {
         world_.resetBotTiming();
         const size_t ev0 = world_.match().gameplayEvents().size();
         std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
-        int maxAlive = 0; double worstStep = 0.0;
+        int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0;
         platform::InputFrame idle;
         const int steps = (int)((secs + 10.0f) / dt);
         for (int i = 0; i < steps && world_.match().state() != game::Match::State::MatchOver; ++i) {
@@ -4774,6 +4783,7 @@ void Application::runBotTest() {
                 lastPos[o->matchPlayer()] = p;
             }
             maxAlive = std::max(maxAlive, alive);
+            if (i % 600 == 0 && i > 60 * 12) { int sh, wm; world_.participantWeaponStats(sh, wm); weapShown += sh; weapMesh += wm; }
             if (i % (60 * 30) == 0 && i > 0) {
                 int kills = 0; for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) kills += world_.match().gameplayEvents()[e].type == T::Kill;
                 LOG_INFO("BOTTEST t=%.0f s: alive %d, kills %d, team scores %d / %d, AI %.3f ms avg %.2f max", i * dt, alive, kills,
@@ -4804,6 +4814,7 @@ void Application::runBotTest() {
         LOG_INFO("BOTTEST phase %d: AI %.3f ms / step avg, %.2f ms max; worst whole step %.2f ms; state %d; scores %d / %d", phase + 1, world_.botMsAverage(),
                  world_.botMsMax(), worstStep, (int)world_.match().state(), world_.match().teamScore(0), world_.match().teamScore(1));
         check(world_.botNav().valid(), "nav data loaded for " + world_.mapName());
+        check(weapShown > 0 && weapMesh * 10 >= weapShown * 9, "bots hold visible weapon meshes (" + std::to_string(weapMesh) + " / " + std::to_string(weapShown) + " samples)");
         check(maxAlive == bots, "every bot spawned (" + std::to_string(maxAlive) + ")");
         check(movers >= bots * 3 / 4, "bots move around the map (" + std::to_string(movers) + " / " + std::to_string(bots) + " travelled > 40 m)");
         check(worstStill < 20.0f, "no bot idle / stuck out of combat for 20 s");
