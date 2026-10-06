@@ -1635,7 +1635,12 @@ int Pipeline::upload(const MeshData& m) {
         if (key.rfind("actor:", 0) == 0) d.actor = key.substr(6);
         // authored bHidden: actor-placed nodes stay resident (Gameplay may unhide them, e.g. SeqAct_ToggleHidden
         // by game rule); collection components without an actor identity are dropped as before
-        if (hiddenComponents_.count(key) && !std::getenv("WFC_SHOWHIDDEN") && d.actor.empty()) continue;
+        // AssetTools world.glb extras.hidden_game (PrimitiveComponent.HiddenGame; e.g. Seed's 29 tubelight
+        // components whose section material is null): not drawn in game, as authored-hidden collection components
+        if ((hiddenComponents_.count(key) || s.hiddenGame) && !std::getenv("WFC_SHOWHIDDEN") && d.actor.empty()) {
+            if (s.hiddenGame) ++hiddenGameSkipped_;
+            continue;
+        }
         d.noLights = noLightComponents_.count(key) > 0;
         d.dynChannel = dynChannelComponents_.count(key) > 0;
         if (key.rfind("actor:", 0) == 0) {
@@ -1771,6 +1776,7 @@ int Pipeline::upload(const MeshData& m) {
         yieldLoad();                                   // loading presentation: no GL binding held here
     }
     const bool worldUpload = g.world;
+    if (hiddenGameSkipped_) { LOG_INFO("wfc: %d HiddenGame component section(s) not drawn", hiddenGameSkipped_); hiddenGameSkipped_ = 0; }
     meshes_.push_back(std::move(g));
     LOG_INFO("wfc: uploaded mesh %zu: %zu verts, %zu submeshes (%d lightmapped, %d programs, %zu total)",
              meshes_.size() - 1, m.vertexCount(), subs.size(), nLM, nProg, progs_.size());

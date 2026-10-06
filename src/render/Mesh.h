@@ -27,6 +27,7 @@ struct SubMesh {
     std::string component;            // source UE3 component object path (lightmap/data join key)
     std::string sourceMesh;           // source StaticMesh object path (glTF node extras.mesh)
     int sourceSection = -1;           // primitive index within that mesh
+    bool hiddenGame = false;          // PrimitiveComponent.HiddenGame (world.glb extras.hidden_game): not drawn in game
     TextureHandle lightmapTex = kInvalidTexture;
     float lmScale[2] = {1, 1};
     float lmBias[2] = {0, 0};
