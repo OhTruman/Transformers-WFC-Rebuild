@@ -152,3 +152,23 @@ Experimental on bd622aa: 306 pass / 0 fail / 8 known; jet_servo 0.5 / 0.5 / 0.9 
 - Match-start spawn spike (52-66 ms): Gameplay's spawn handler measures about 0 ms with the chassis cached. The remainder is
   probably Systems' per-chassis audio or Frontend's HUD start. Run `WFC_SYSPROF` with `WFC_SPAWNPROF` on that frame.
 - A custom (CaC) chassis outside the faction defaults, or a first pickup of a non-preset weapon, still loads on that frame.
+
+## Addendum 4: 24r (6a5c213)
+
+| commit | change | files |
+|---|---|---|
+| 6a5c213 (24r) | `World::preloadSelections(const std::vector<CharacterSelection>&)`: caches + prewarms the local-faction body and held-weapon models of any selections; `WFC_PRELOADTEST` | World.h/.cpp, Application.cpp/.h, FIDELITY.md |
+
+### Needs a caller (Frontend / Integration)
+- Call `world.preloadSelections(savedCustomSlots)` after startLocalMatch, during the match load / loading screen, with the
+  player's saved Create a Character slots as CharacterSelections (type 0, chassisByFaction, weapons). Without the call, picking
+  a saved custom character whose body is not a local-faction default still loads it on that lobby frame (about 0.5 s).
+- The local faction's four class presets are already preloaded by Gameplay at match load (24o / 24q).
+
+### Pickup weapons
+- Nothing loads on pickup today: the flag / bomb are carry state, not held-weapon models.
+- The Escalation maps' TnWeaponPickupFactory spawners (BrokenHope / Remnant) are not implemented; their weapons can be
+  preloaded at map load from gameplay.json when they are.
+
+### Validation (6a5c213)
+WFC_PRELOADTEST: a custom Bumblebee preloaded then picked spawns in 0.6 ms, first equip 0.2 ms. No change to existing paths.
