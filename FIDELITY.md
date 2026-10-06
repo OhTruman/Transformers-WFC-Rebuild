@@ -17,7 +17,6 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
-<<<<<<< HEAD
 ## INTEGRATION MILESTONE 08 — CLASSIFICATION (2026-10-05)
 | Item | Mark | Notes |
 |---|---|---|
@@ -2517,7 +2516,7 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
   live. CPU skinning in drawPlayer is 3.2 ms.
 
 ---
-=======
+
 ## MILESTONES 56-58 — BEAM NOISE + SINE WAVE (native beam fill), FRONTEND EMITTER PREWARM (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
@@ -2546,7 +2545,6 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
 | Beam2 taper | TaperCount = InterpolationPoints + 1; width_i = size x TaperFactor(r) x TaperScale(r), r along the beam, fixed at spawn | RE pass 5 s9 (Function_8302E898) | CONFIRMED (native) | M55: repair beam tapers from 0 at the source (VISUALLY VERIFIED). |
 | Trail2 tessellation | TessellationFactor vertex pairs per segment (TessellationFactorDistance does not change the count) | RE pass 5 s9 (Function_83019600) | CONFIRMED count / HIGH Hermite (stock UE3, TessellationStrength) | M55. Noise / sine wave: M56-M57. Still PARTIAL: texture tiling distance. |
 | AMD stability | 0 GL debug errors, 0 out-of-bounds draws, 0 context resets across every run of this pass (Molten, Debris, Streets real time, frontend flow x2) | KHR_debug callback, subInBounds | HIGH | M43-M45 guards kept. |
->>>>>>> origin/agents/rendering
 
 ## MILESTONE 45 — OUT-OF-BOUNDS SKINNED DRAWS (AMD stability, real defect) (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
