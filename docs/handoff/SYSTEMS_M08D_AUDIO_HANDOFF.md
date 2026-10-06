@@ -214,8 +214,7 @@ Glue (Integration, after merging Gameplay's bots; untested until a tree has both
 2. At the end of `World::tick` (participantShots_ is cleared at the start of the next tick), for this step's
    `participantShots()`:
    - once per distinct `player`: `onParticipantFired(cls(shot.weapon), shot.from)` (a shotgun's pellets share one fire sound);
-   - for every shot with `impact`: `onParticipantImpact(cls(shot.weapon), shot.to, hitPlayer)`. Pass -1 (world /
-     destructible impact sound) until Gameplay adds the hit player to ParticipantShot. A pawn hit then plays the
-     hit-effect sound instead, as on the local path.
+   - for every shot with `impact`: `onParticipantImpact(cls(shot.weapon), shot.to, shot.hitPlayer)` (agents/gameplay 7ed5faf
+     added `hitPlayer`: -1 = world / destructible -> DefaultImpactSound; a player -> the hit-effect sound, as on the local path).
 3. Projectiles need nothing: bot rockets go through spawnProjectile, which already reaches onProjectileSpawned / Exploded.
 Bots' muzzle / tracer FX are not drawn yet (Gameplay PARTIAL), so the fire sound plays at the shot origin (eye + aim).
