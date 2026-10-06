@@ -373,6 +373,9 @@ public:
     // tests). Paces presentation only - the fixed-step simulation, physics and animation are unchanged. For the lowest
     // latency the main loop calls waitFrameSlot() at the top of each frame (before input); when it does not,
     // endFrame waits instead. High-resolution waitable timer + ~1 ms spin, deadline-scheduled (no catch-up bursts).
+    // A frame presented outside beginFrame / endFrame (a full-motion movie, a frontend-only screen): call once per
+    // presented frame so the renderer's stall watchdog counts it as progress (default no-op).
+    virtual void notePresentedFrame() {}
     virtual void setFrameLimit(float hz) { (void)hz; }
     virtual float frameLimit() const { return 0.0f; }
     virtual void waitFrameSlot() {}

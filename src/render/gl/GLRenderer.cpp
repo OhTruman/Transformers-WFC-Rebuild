@@ -1077,6 +1077,7 @@ public:
         limiter_.setLimit(hz);
     }
     float frameLimit() const override { return limiter_.limit(); }
+    void notePresentedFrame() override { watchdog::phase("presented outside the renderer (movie / frontend)"); }
     void waitFrameSlot() override { watchdog::phase("frame limiter"); limiter_.wait(); slotWaited_ = true; }
     // M73 decal receivers: compact copy (positions + triangle indices) of the authored world geometry - the full CPU
     // world mesh is dropped after upload - with a ground-plane (x, z) grid of triangles for the box query
