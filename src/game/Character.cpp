@@ -656,13 +656,13 @@ bool Character::weaponRestored() const {
            transformProgress() >= core::config::kRestoreWeaponElapsed;
 }
 
-// Authored ToggleHidden windows (Config kToVeh*/kToRobot*), on the shared clip time.
+// Authored ToggleHidden windows of THIS chassis' transform clips (ChassisDef, from character.json), on the shared clip time.
 bool Character::meshVisible(Form f, float t) const {
     namespace cfg = core::config;
     if (trans_ == Transition::None) return f == form_;
     if (transTarget_ == Form::Vehicle)
-        return f == Form::Robot ? t < cfg::kToVehRobotHide : t >= cfg::kToVehVehicleShow;
-    return f == Form::Robot ? t >= cfg::kToRobotRobotShow : t < cfg::kToRobotVehicleHide;
+        return f == Form::Robot ? t < chassis().toVehRobotHide : t >= chassis().toVehVehicleShow;
+    return f == Form::Robot ? t >= chassis().toRobotRobotShow : t < chassis().toRobotVehicleHide;   // per chassis [CONF authored notifies]
 }
 
 // Pose and skin the second mesh of a transformation at the shared clip time.
@@ -733,7 +733,7 @@ void Character::rammedAsRobot(const core::Vec3& dir) {
 }
 
 core::Mat4 Character::meshMatrix(Form f) const {
-    core::Mat4 m = core::Mat4::translate(meshOrigin(f)) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset);
+    core::Mat4 m = core::Mat4::translate(meshOrigin(f)) * core::Mat4::rotateY(yaw_ + core::config::kMeshYawOffset + drawYawOffset_);
     // Vehicle rigid-body attitude (both meshes hang off the body while the movement form is the vehicle).
     // Mesh space: +X forward, +Y up, +Z right; pitch + = nose up, roll + = right side down.
     if (moveForm() == Form::Vehicle && (veh_.pitch != 0.0f || veh_.roll != 0.0f))

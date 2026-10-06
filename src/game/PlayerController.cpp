@@ -46,6 +46,7 @@ float C2Smoother::smooth(float from, float to, float smoothTime, float dt) {
 }
 
 void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
+    sinceStep_ += dt;   // render time since the last simulation step (presentation yaw)
     using platform::Button;
     namespace cfg = core::config;
 
@@ -179,12 +180,20 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     if (!reloadDown) reloadHeld_ = 0.0f;
     prevReloadDown_ = reloadDown;
 
+    // Presentation yaw between 60 Hz steps (the original ticks physics and camera in the same variable frame, so the body
+    // never lags the view; our fixed step does). Physics-steered headings (Driving boost, jet flight) extrapolate the last
+    // step's yaw rate; view-slaved headings (robot, car / truck hover, tank) add the view yaw change since the step (below).
+    const bool physHeading = pawn_ && pawn_->moveForm() == Form::Vehicle &&
+                             ((pawn_->vehicleState().driving && pawn_->vehicleParams().form != VehicleFormType::Tank) ||
+                              pawn_->vehicleParams().form == VehicleFormType::Jet);   // jet: TurnRate 0.5 servo, the body lags the view
+    if (pawn_ && physHeading) pawn_->setDrawYawOffset(stepYawRate_ * std::min(sinceStep_, 1.0f / 60.0f));
     updateCameraStrategy(in, dt);
     tickHud();
     // Hovering faces the controller rotation, which PlayerInVehicleForm.PlayerMove sets to the CAMERA
     // rotation (after the strategy's orbit smoother) [CONF bytecode]; the robot faces the aim.
     intent_.faceYaw = vehicleForm ? viewYaw_ : camYaw_;
     intent_.viewPitch = viewPitch_;
+    if (pawn_ && !physHeading) pawn_->setDrawYawOffset(std::remainder(intent_.faceYaw - stepFaceYaw_, 6.2831853f));
 }
 
 // Camera strategies (HmCameraStrategySet Truck_Optimus_CAMSET): OverTheShoulder for the robot (and
@@ -236,7 +245,7 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
         viewYaw_ = yawS_.smooth(viewYaw_, ty, cfg::kHoverCamRotSmooth, dt);
         viewPitch_ = pitchS_.smooth(viewPitch_, camPitch_, cfg::kHoverCamRotSmooth, dt);
     } else {
-        camYaw_ = pawn_->yaw();
+        camYaw_ = pawn_->yaw() + pawn_->drawYawOffset();   // the drawn heading (presentation extrapolation)
         float ty = viewYaw_ + std::remainder(camYaw_ - viewYaw_, 6.2831853f);
         viewYaw_ = yawS_.smooth(viewYaw_, ty, cfg::kDriveCamRotSmooth, dt);
         const core::Vec3& v = pawn_->velocity();
@@ -740,6 +749,10 @@ void PlayerController::applyToPawn(World& world, float dt) {
             w.beginReload();
         }
     }
+    // Presentation-yaw reference for the frames until the next step.
+    stepYawRate_ = std::remainder(pawn_->yaw() - stepBodyYaw_, 6.2831853f) / std::max(dt, 1e-4f);
+    stepBodyYaw_ = pawn_->yaw(); stepFaceYaw_ = step.faceYaw; sinceStep_ = 0.0f;
+    pawn_->setDrawYawOffset(0.0f);
     fireLatch_ = false;   // consumed by this step (a release before the refire clears PendingFire, as StopFire does)
 }
 

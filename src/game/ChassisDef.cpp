@@ -281,6 +281,26 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     for (const HullRow& h : kHulls)
         if (id == h.id) { V.hullFront = h.front; V.hullBack = h.back; V.hullHalfWidth = h.halfWidth; V.hullBottom = h.bottom; V.hullTop = h.top; V.hullFromPhysics = true; }
     const assets::Json& w = c["weapons"];
+    // TnAnimNotify_ToggleHidden on the four transform clips (Option absent = Toggle_Unhide, the enum default; Toggle_Hide explicit).
+    auto toggleTime = [&](const char* form, const char* clip, bool hide, float def) {
+        const assets::Json& anims = c[form]["animations"];
+        for (size_t i = 0; i < anims.size(); ++i) {
+            if (anims[i]["name"].asString() != clip) continue;
+            const assets::Json& ns = anims[i]["notifies"];
+            float t = -1.0f;
+            for (size_t k = 0; k < ns.size(); ++k) {
+                if (ns[k]["class"].asString() != "TnAnimNotify_ToggleHidden") continue;
+                const bool isHide = ns[k]["params"]["Option"].asString() == "Toggle_Hide";
+                if (isHide == hide) t = ns[k]["time_s"].asFloat(0.0f);   // the last matching toggle wins
+            }
+            return t >= 0.0f ? t : def;
+        }
+        return def;
+    };
+    d.toVehRobotHide = toggleTime("robot", "Transform_ToVehicle_ROBO", true, d.toVehRobotHide);
+    d.toVehVehicleShow = toggleTime("vehicle", "Transform_ToVehicle_VEH", false, d.toVehVehicleShow);
+    d.toRobotRobotShow = toggleTime("robot", "Transform_ToRobot_ROBO", false, d.toRobotRobotShow);
+    d.toRobotVehicleHide = toggleTime("vehicle", "Transform_ToRobot_VEH", true, d.toRobotVehicleHide);
     const assets::Json& ip = c["iconic_preset"];
     d.iconicSpecialty = ip["Specialty"].asString().empty() ? d.defaultSpecialty : ip["Specialty"].asString();
     stringList(ip["WeaponTypes"], d.iconicWeapons);

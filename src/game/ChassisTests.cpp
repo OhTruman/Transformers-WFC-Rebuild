@@ -66,6 +66,17 @@ int runChassisTests(const std::string& vsRoot) {
     ChassisDef bad;
     check(!loadChassisDef(vsRoot, "NoSuchChassis", bad) && !bad.loadError.empty(), "an unknown chassis fails loudly (no fallback)");
 
+    // Per-chassis transform visibility notifies (TnAnimNotify_ToggleHidden) [CONF authored].
+    {
+        ChassisDef c4, tr;
+        const bool ok = loadChassisDef(vsRoot, "Car4", c4) && loadChassisDef(vsRoot, "Truck", tr);
+        LOG_INFO("CHASSIS transform notifies Car4 robot hide %.3f vehicle show %.3f | robot show %.3f vehicle hide %.3f; Truck %.3f %.3f | %.3f %.3f",
+                 c4.toVehRobotHide, c4.toVehVehicleShow, c4.toRobotRobotShow, c4.toRobotVehicleHide, tr.toVehRobotHide, tr.toVehVehicleShow,
+                 tr.toRobotRobotShow, tr.toRobotVehicleHide);
+        check(ok && near(c4.toVehVehicleShow, 0.7049f, 1e-3f) && near(c4.toVehRobotHide, 0.8487f, 1e-3f) && near(c4.toRobotRobotShow, 0.3940f, 1e-3f) &&
+              near(c4.toRobotVehicleHide, 0.6663f, 1e-3f) && near(tr.toVehRobotHide, 0.8796f, 1e-3f) && near(tr.toVehVehicleShow, 0.3958f, 1e-3f),
+              "transform ToggleHidden times per chassis (Barricade 0.705 vehicle show, not Optimus 0.396)");
+    }
     // Specialty table (TnSpecialty CDOs + TR_Health_p.Health_<Class>).
     const SpecialtyDef* sc = specialtyDef("Scout");
     const SpecialtyDef* so = specialtyDef("Soldier");

@@ -37,6 +37,9 @@ private:
     void runScoreTest();
     void runHeightTest();
     void runVehPhysTest();
+    void runHeadingJitterTest();
+    void runVehicleSocketProbe();
+    void runTransformVisibilityTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

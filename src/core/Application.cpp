@@ -142,7 +142,10 @@ bool Application::init() {
     if (std::getenv("WFC_SWITCHTEST")) { runSwitchTest(); return false; }   // weapon switching, human playtest M09
     if (std::getenv("WFC_SCORETEST")) { runScoreTest(); return false; }     // fresh match state, human playtest M09
     if (std::getenv("WFC_HEIGHTTEST")) { runHeightTest(); return false; }   // robot body height idle vs locomotion, human playtest M09
-    if (std::getenv("WFC_VEHPHYS")) { runVehPhysTest(); return false; }     // vehicle jump / attitude / wall response, human playtest M09   // measurements only
+    if (std::getenv("WFC_VEHPHYS")) { runVehPhysTest(); return false; }     // vehicle jump / attitude / wall response, human playtest M09
+    if (std::getenv("WFC_HEADJIT")) { runHeadingJitterTest(); return false; } // drawn heading vs camera per render frame, playtest M10
+    if (std::getenv("WFC_VSOCKET")) { runVehicleSocketProbe(); return false; } // vehicle weapon socket vs hull, playtest M10
+    if (std::getenv("WFC_XFORMVIS")) { runTransformVisibilityTest(); return false; } // per-chassis transform mesh handoff, playtest M10   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -3272,6 +3275,123 @@ void Application::runVehPhysTest() {
             }
     }
     LOG_INFO("VEHPHYS SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_HEADJIT=<Hz>: per RENDER frame, the drawn body heading (mesh matrix forward) relative to the camera yaw, during fast
+// mouse flicks (6 rad/s, sign flips every 0.5 s) and a stick steer in boost, for robot / hover / boost / jet. A per-frame second
+// difference (deg) shows whether the body snaps relative to the view between 60 Hz simulation steps.
+void Application::runHeadingJitterTest() {
+    float hz = (float)std::atof(std::getenv("WFC_HEADJIT"));
+    if (hz < 30.0f) hz = 144.0f;
+    const float rdt = 1.0f / hz;
+    auto& ctl = world_.player().controller();
+    struct Sc { const char* name; const char* chassis; int mode; };   // mode 0 robot, 1 hover, 2 boost (stick steer), 3 jet hover
+    const Sc scs[] = {{"robot flick", "Car2", 0}, {"car hover flick", "Car2", 1}, {"car boost steer", "Car2", 2},
+                      {"truck hover flick", "Truck", 1}, {"jet hover flick", "Jet", 3}};
+    for (const Sc& sc : scs) {
+        world_.applyChassisToLocalPawn(sc.chassis);
+        world_.applyLoadout(nullptr);
+        auto& pc = world_.player().pawn();
+        world_.teleportToStart(20);
+        clock_ = core::FixedStepClock(60.0);
+        auto frame = [&](const platform::InputFrame& in) {
+            world_.handleInput(in, rdt);
+            int steps = clock_.tick(rdt);
+            for (int i = 0; i < steps; ++i) world_.tick(clock_.stepSeconds());
+        };
+        platform::InputFrame idle;
+        if (sc.mode == 0 && pc.form() == game::Form::Vehicle) { platform::InputFrame tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true; frame(tf); for (int i = 0; i < (int)(hz * 3); ++i) frame(idle); }
+        if (sc.mode != 0 && pc.form() != game::Form::Vehicle) { platform::InputFrame tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true; frame(tf); for (int i = 0; i < (int)(hz * 3); ++i) frame(idle); }
+        float yaw = ctl.camYaw();
+        std::vector<float> rel;
+        for (int f = 0; f < (int)(hz * 3.0f); ++f) {
+            platform::InputFrame in;
+            in.down[(int)platform::Button::Forward] = true;
+            if (sc.mode == 2) { in.down[(int)platform::Button::FineAim] = true; in.padConnected = true; in.padRX = ((f / (int)(hz * 0.5f)) % 2) ? 1.0f : -1.0f; }
+            else { yaw += (((f / (int)(hz * 0.5f)) % 2) ? 6.0f : -6.0f) * rdt; ctl.setCameraYaw(yaw); }
+            frame(in);
+            render::Camera cam; ctl.updateCamera(cam);
+            core::Mat4 mm = pc.meshMatrix(pc.form());
+            const float bodyYaw = std::atan2(-mm.m[0], -mm.m[2]);   // mesh +X = forward
+            (void)bodyYaw;
+            const float camFwdYaw = cam.yaw;
+            core::Vec3 bf{mm.m[0], 0.0f, mm.m[2]};
+            core::Vec3 cf = core::forwardFromYawPitch(camFwdYaw, 0.0f);
+            float r = std::atan2(cf.x * bf.z - cf.z * bf.x, cf.x * bf.x + cf.z * bf.z) * 57.2958f;
+            rel.push_back(r);
+        }
+        double s = 0; float mx = 0; int n = 0;
+        for (size_t i = (size_t)(hz * 0.5f); i < rel.size(); ++i) { float d2 = std::fabs(rel[i] - 2 * rel[i - 1] + rel[i - 2]); if (d2 > 90.0f) continue; s += d2; mx = std::max(mx, d2); ++n;
+            if (d2 > 10.0f) LOG_INFO("HEADJIT spike %s frame %zu rel %.2f %.2f %.2f", sc.name, i, rel[i - 2], rel[i - 1], rel[i]); }
+        LOG_INFO("HEADJIT %-18s @%3.0f Hz render: body-vs-camera heading jitter %.3f deg/frame (max %.2f) form %d", sc.name, hz, n ? (float)(s / n) : 0.0f, mx, (int)pc.form());
+    }
+}
+
+// WFC_VSOCKET: each vehicle's WeaponSocket_Primary (bone x socket) in the vehicle's own frame (m: +fwd, +up, +right of the actor)
+// against the chassis physics hull (front / back / half width / bottom / top).
+void Application::runVehicleSocketProbe() {
+    const float dt = 1.0f / 60.0f;
+    for (const char* id : {"Car2", "Car4", "Truck", "Truck4", "Tank3", "Tank2", "Jet", "Jet4"}) {
+        world_.applyChassisToLocalPawn(id);
+        world_.applyLoadout(nullptr);
+        auto& pc = world_.player().pawn();
+        world_.teleportToStart(20);
+        if (pc.form() != game::Form::Vehicle) {
+            platform::InputFrame tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+            world_.handleInput(tf, dt); world_.tick(dt);
+            for (int i = 0; i < 180; ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+        }
+        for (int i = 0; i < 30; ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); }
+        const game::SocketDef& sd = pc.chassis().vehicleWeapon;
+        core::Mat4 bm;
+        if (!sd.valid || pc.form() != game::Form::Vehicle || !pc.boneWorld(sd.bone, bm)) { LOG_INFO("VSOCKET %s: socket %s unavailable (form %d)", id, sd.bone.c_str(), (int)pc.form()); continue; }
+        core::Mat4 w = bm * sd.local;
+        core::Vec3 d = core::Vec3{w.m[12], w.m[13], w.m[14]} - pc.actorLocation();
+        core::Vec3 f = core::forwardFromYawPitch(pc.yaw(), 0.0f), r = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
+        const auto& VP = pc.vehicleParams();
+        float fwd = core::dot(d, f), right = core::dot(d, r), up = d.y;
+        bool inside = fwd <= VP.hullFront + 0.5f && fwd >= -VP.hullBack - 0.5f && std::fabs(right) <= VP.hullHalfWidth + 0.5f && up >= VP.hullBottom - 0.5f && up <= VP.hullTop + 1.0f;
+        LOG_INFO("VSOCKET %s: %s on %s at fwd %.2f right %.2f up %.2f m from the actor; hull fwd %.2f / back %.2f / half width %.2f / %.2f..%.2f -> %s",
+                 id, "WeaponSocket_Primary", sd.bone.c_str(), fwd, right, up, VP.hullFront, VP.hullBack, VP.hullHalfWidth, VP.hullBottom, VP.hullTop, inside ? "inside" : "OUTSIDE");
+    }
+}
+
+// WFC_XFORMVIS: robot->vehicle and vehicle->robot on several chassis; per step which mesh is drawn, against this chassis' authored
+// ToggleHidden times; no step may draw neither mesh.
+void Application::runTransformVisibilityTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("XFORMVIS %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    for (const char* id : {"Car2", "Car4", "Truck", "Truck4", "Jet", "Jet4", "Tank3", "Tank2"}) {
+        world_.applyChassisToLocalPawn(id);
+        world_.applyLoadout(nullptr);
+        auto& pc = world_.player().pawn();
+        world_.teleportToStart(20);
+        platform::InputFrame idle, tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+        if (pc.form() != game::Form::Robot) { world_.handleInput(tf, dt); world_.tick(dt); for (int i = 0; i < 200; ++i) { world_.handleInput(idle, dt); world_.tick(dt); } }
+        for (int i = 0; i < 30; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+        const game::ChassisDef& cd = pc.chassis();
+        for (int dir = 0; dir < 2; ++dir) {
+            world_.handleInput(tf, dt); world_.tick(dt);
+            float firstTarget = -1.0f, lastSource = -1.0f; int gaps = 0, steps = 0;
+            const game::Form src = dir == 0 ? game::Form::Robot : game::Form::Vehicle, dst = dir == 0 ? game::Form::Vehicle : game::Form::Robot;
+            while (pc.isTransforming() && steps < 400) {
+                const float t = pc.transformClipTime();
+                const bool s = pc.meshShown(src), d = pc.meshShown(dst);
+                if (!s && !d) ++gaps;
+                if (d && firstTarget < 0.0f) firstTarget = t;
+                if (s) lastSource = t;
+                world_.handleInput(idle, dt); world_.tick(dt); ++steps;
+            }
+            for (int i = 0; i < 30; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+            const float wantShow = dir == 0 ? cd.toVehVehicleShow : cd.toRobotRobotShow, wantHide = dir == 0 ? cd.toVehRobotHide : cd.toRobotVehicleHide;
+            LOG_INFO("XFORMVIS %s %s: target shown from %.3f s (authored %.3f), source last shown %.3f s (authored hide %.3f), steps with no mesh %d, ended form %d",
+                     id, dir == 0 ? "to vehicle" : "to robot", firstTarget, wantShow, lastSource, wantHide, gaps, (int)pc.form());
+            check(gaps == 0 && std::fabs(firstTarget - wantShow) <= dt * 1.5f + 1e-3f && std::fabs(lastSource - wantHide) <= dt * 1.5f + 1e-3f && pc.form() == dst,
+                  std::string(id) + (dir == 0 ? " robot->vehicle" : " vehicle->robot") + ": mesh handoff at the chassis' own ToggleHidden times, never invisible");
+        }
+    }
+    LOG_INFO("XFORMVIS SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

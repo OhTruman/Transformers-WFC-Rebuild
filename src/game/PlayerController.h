@@ -136,7 +136,8 @@ private:
     MoveIntent intent_;
     bool wantJumpLatched_ = false;
     bool wantFire_ = false;
-    bool fireLatch_ = false;   // Fire pressed since the last simulation step
+    bool fireLatch_ = false;
+    float sinceStep_ = 0.0f, stepFaceYaw_ = 0.0f, stepBodyYaw_ = 0.0f, stepYawRate_ = 0.0f;   // presentation yaw (per render frame)   // Fire pressed since the last simulation step
     bool wantReload_ = false;     // latched on release of a tap < kReloadTapTime
     bool wantDashLatched_ = false;
     bool prevReloadDown_ = false;

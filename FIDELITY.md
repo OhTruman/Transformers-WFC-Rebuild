@@ -75,6 +75,52 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 24 — human playtest fidelity II (2026-10-05)
+
+### Fast-turn stutter: body orientation snapping between 60 Hz steps [measured; HIGH CONFIDENCE cause]
+- Playtest: fast left/right camera or steering motion looks stuttery, mostly in vehicle form, also on foot.
+- Measured (WFC_HEADJIT: drawn body heading vs camera yaw per render frame, 6 rad/s flicks / full-lock boost steer):
+  - 60 Hz render: ≤ 0.05°/frame.
+  - 144 Hz: 4.5–4.7°/frame (max 7°).
+  - 240 Hz: 2.8–4.6° (max 9°).
+  The camera turned every render frame while the body yaw advanced only on simulation steps. The original ticks physics and camera
+  in the same variable-length frame, so the body never lags its view.
+- Not renderer pacing, not camera position (CAMSYNC unchanged), not input quantisation.
+- Fix (presentation only; the simulation is untouched): a draw yaw added to the body mesh and its attachments between steps.
+  - View-slaved headings (robot, car / truck hover, tank) add the view yaw change since the last step.
+  - Physics-steered headings (boost Driving, jet servo TurnRate 0.5) extrapolate the last step's yaw rate.
+  - The boost camera follows the drawn heading.
+- After (mean °/frame at 144 / 240 Hz):
+
+  | scenario | 144 Hz | 240 Hz |
+  |---|---|---|
+  | robot | 0.000 | 0.000 |
+  | car hover | 0.010 | 0.004 |
+  | truck hover | 0.012 | 0.012 |
+  | boost | 0.35 | 0.07 |
+  | jet | 0.70 | 0.19 |
+
+  The jet residual also exists at 60 Hz (0.37°): the authentic TurnRate 0.5 servo lagging at flick reversals.
+
+### Transform mesh handoff per chassis [CONFIRMED ORIGINAL: TnAnimNotify_ToggleHidden in each chassis' transform clips]
+- Playtest: a short malformed / box-like stage in a Decepticon Scout robot→vehicle transform.
+- Cause: every chassis used the Optimus ToggleHidden times (robot hide 0.880, vehicle show 0.396, robot show 0.098, vehicle
+  hide 0.663). Barricade (Car4) authors 0.849 / 0.705 / 0.394 / 0.666, so its vehicle mesh appeared 0.31 s early, half-unfolded.
+  Sideswipe (0.414 / 0.351 / 0.000 / 0.279), Starscream (0.789 / 0.694 / 0.336 / 0.411) and the tanks differ too.
+- Now read per chassis from character.json (Option absent = Toggle_Unhide, Toggle_Hide explicit).
+- WFC_XFORMVIS 16/16 (Car2, Car4, Truck, Truck4, Jet, Jet4, Tank3, Tank2; both directions): the target mesh appears and the
+  source hides at the authored time (within a step), and no step draws neither mesh. Clip, pose, root, momentum and weapon
+  restore (25%) are unchanged.
+- The Scout transform has no authored particles (AssetTools: only Starscream authors Trails FX): a mesh swap plus sound, as
+  now drawn.
+
+### Vehicle weapon origin [CONFIRMED ORIGINAL socket data]
+- WFC_VSOCKET: WeaponSocket_Primary sits on each chassis' left gun bone (L_GunRobo01_XT) or the tank cannon (C_Cannon_XB),
+  inside the vehicle hull; Starscream's is under the wing, 0.8 m below the physics box.
+- So vehicle shots leave the left side as authored.
+- The integrated muzzle / tracer effects pick templates from the held ROBOT weapon class (Systems' weaponFx(weaponClass_)), not
+  the vehicle weapon: reported to Systems / Integration.
+
 ## PASS 23 — human playtest fidelity (2026-10-05)
 
 ### Fresh match state [CONFIRMED ORIGINAL: RE pass 4 - PRI / Team Score 0, OldPRI.Reset, TnTeamInfo zeroed on seamless travel]
