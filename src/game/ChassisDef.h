@@ -87,6 +87,12 @@ struct ChassisDef {
     std::string defaultSpecialty = "Leader";   // TnDataProvider_Chassis DefaultSpecialty (UI grouping only)
     std::string iconicSpecialty = "Leader";    // the iconic preset CharacterData.Specialty: applied for iconic selections
     std::string robotGlb, vehicleGlb;         // relative to the asset root's parent (ExtractedAssets)
+    // The robot body without baked clips (character.json robot.source_gltf, the skeletal mesh export) and its clip list
+    // (robot.animations: clip name, source AnimSet export, category, additive), so a body can be assembled from AnimSets
+    // parsed once and shared by every chassis (World::chassisAssets).
+    struct AnimRef { std::string name, source, category; bool additive = false; };
+    std::string robotSkelGltf;
+    std::vector<AnimRef> robotAnims;
     std::string armGltf, armAnimGltf;         // ArmBlueprint (umodel content paths)
     SocketDef weaponPrimary, weaponSecondary; // robot WeaponSocket_Primary / _Secondary
     SocketDef vehicleWeapon;                  // vehicle WeaponSocket_Primary
