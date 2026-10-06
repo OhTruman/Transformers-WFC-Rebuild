@@ -163,6 +163,10 @@ public:
         setDrawMaterialParam("Defrag", v);
     }
     const std::string* energyDeathFor(const std::string& material) const;
+    bool isTranslucentMaterial(const std::string& material) const {   // compiled blend Translucent / Additive / Modulate
+        auto it = mats_.find(material);
+        return it != mats_.end() && it->second.blend >= 2;
+    }
     // M73 runtime decals (spawnDecal): projected geometry built by the caller; expiry on the map clock, cap 50
     int addRuntimeDecal(MeshData&& mesh, float lifetime);
     size_t runtimeDecalCount() const { return rtDecals_.size(); }

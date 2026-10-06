@@ -369,6 +369,19 @@ public:
         (void)material; (void)location; (void)dir; (void)width; (void)height; (void)thickness; (void)rollDeg; (void)lifetime;
         return -1;
     }
+    // M76 weapon impact decal (HmWeaponMesh.CreateImpactEffects / TnProjectileMesh explosion; RE pass 5 s12 add. 29).
+    // glTF metres; `weaponClass` is the script class (e.g. "TnWeaponAssaultRifle"). The renderer resolves the hit
+    // surface's PhysicalMaterial from the world geometry's material and applies the cooked tables (impact_decals.json):
+    // instant hit (projectile false; caller: hits within 2500 UU only): no decal on a surface without a property object
+    // or with NoDecal; the surface group matching the weapon mesh's WeaponEffectsType, else the weapon's DefaultDecal
+    // (none for sniper / pistols / melee). Projectile (true; caller: skip at throttle >= 3): trace 200 UU along
+    // -normal, the surface's TnWeaponEffectsTypeExplosive group, NoDecal not checked. A random entry of the group;
+    // size min + FRand * range (UniformScale: one FRand for both); random roll unless the entry or the surface
+    // disables it. Returns false when no decal applies.
+    virtual bool spawnImpactDecal(const std::string& weaponClass, const core::Vec3& hit, const core::Vec3& normal,
+                                  bool projectile) {
+        (void)weaponClass; (void)hit; (void)normal; (void)projectile; return false;
+    }
     // Tracer / beam templates: placed at start with +X towards end; the end point is kept as the beam target.
     virtual int spawnParticleEffectSegment(const std::string& tpl, const core::Vec3& start, const core::Vec3& end,
                                            const float* colorRGBA = nullptr) {
