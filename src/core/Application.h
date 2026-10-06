@@ -43,6 +43,7 @@ private:
     void runFineAimTest();
     void runQaToolTest();
     void runProjectileFxTest();
+    void runMuzzleTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

@@ -751,24 +751,37 @@ void PlayerController::applyToPawn(World& world, float dt) {
             if ((wantFire_ || fireLatch_) && vw->canFire()) {
                 pawn_->exposeSelf();
                 vw->onFired();
-                // Origin: the chassis' vehicle WeaponSocket_Primary (bone x socket) when the vehicle mesh is displayed [CONF
-                // socket data]; else the actor + 1 m.
+                // Muzzle: the weapon mesh's CurrentSocket - WeaponSocket_Primary, alternating with _Primary2 per shot for the
+                // weapons whose MuzzleFlashSockets list both (when this chassis authors Primary2) [CONF RE pass 5 9g + socket
+                // data]. Socket world = posed vehicle bone x socket; else the actor + 1 m.
+                const bool two = vw->alternatesMuzzle() && pawn_->chassis().vehicleWeapon2.valid;
+                if (!two) vw->muzzleSocket = 0;
+                const int sock = vw->muzzleSocket;
                 core::Vec3 origin = pawn_->actorLocation() + core::Vec3{0, 1.0f, 0};
-                const SocketDef& vs = pawn_->chassis().vehicleWeapon;
+                const SocketDef& vs = sock == 1 ? pawn_->chassis().vehicleWeapon2 : pawn_->chassis().vehicleWeapon;
                 core::Mat4 bm;
                 if (vs.valid && pawn_->form() == Form::Vehicle && pawn_->boneWorld(vs.bone, bm)) {
                     core::Mat4 w = bm * vs.local;
                     origin = core::Vec3{w.m[12], w.m[13], w.m[14]};
                 }
+                world.noteVehicleShot(sock, origin);
+                if (two) vw->muzzleSocket = (sock + 1) % 2;   // ChangeSocket after the shot's effects
                 core::Vec3 camDir = core::forwardFromYawPitch(viewYaw_, viewPitch_);
                 core::Vec3 camPos = cameraPos();
                 float range = vw->rangeM > 0.0f ? vw->rangeM : 300.0f;
                 core::Vec3 aimPoint = camPos + camDir * range;
                 float th;
                 if (world.collision() && world.collision()->segmentHit(camPos, aimPoint, th)) aimPoint = camPos + camDir * (range * th);
+                // Projectile: RealStartLoc = GetMuzzleLoc() at the shot's socket, aimed at the camera-trace hit point. Instant
+                // hit: the damage trace starts at the pawn's weapon start-trace location, not the socket [CONF RE pass 5 9g];
+                // taken as the pawn view location (actor + BaseEyeHeight) [HIGH: GetPawnViewLocation; vehicle eye height PROV].
                 core::Vec3 dir = core::normalize(aimPoint - origin);
                 if (vw->projectile()) world.fireWeapon(*vw, origin + dir * 1.5f, dir);
-                else if (vw->simulated()) for (int k = 0; k < std::max(1, vw->shots); ++k) world.fireWeapon(*vw, origin, dir);
+                else if (vw->simulated()) {
+                    const core::Vec3 start = pawn_->actorLocation() + core::Vec3{0, pawn_->robotParams().eyeHeight, 0};
+                    const core::Vec3 tdir = core::normalize(aimPoint - start);
+                    for (int k = 0; k < std::max(1, vw->shots); ++k) world.fireWeapon(*vw, start, tdir);
+                }
             } else if (vw->ammo == 0 && vw->canReload()) vw->beginReload();
         }
     }

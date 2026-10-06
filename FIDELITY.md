@@ -203,10 +203,21 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   projectiles end within 12 s. A standalone check (work/pass23/fxcheck) confirms the detection calls spawn / move / stop with
   Rendering's exact signatures.
 
-### Vehicle weapon origin [CONFIRMED ORIGINAL socket data]
+### Vehicle weapon origin and muzzle alternation [CONFIRMED ORIGINAL: socket data + RE pass 5 §9g script]
 - WFC_VSOCKET: WeaponSocket_Primary sits on each chassis' left gun bone (L_GunRobo01_XT) or the tank cannon (C_Cannon_XB),
   inside the vehicle hull; Starscream's is under the wing, 0.8 m below the physics box.
-- So vehicle shots leave the left side as authored.
+- Correction: firing only from the left was NOT original. It came from using WeaponSocket_Primary alone.
+- Original: the vehicle weapon mesh's MuzzleFlashSockets = [Primary, Primary2] (Primary2 on R_GunRobo01_XT) for
+  AssaultRifleVehicle, AssaultRiflePlane, RocketVehicle, RocketPlane and HomingRocketVehicle. HmWeapon.OnPlayFireEffects plays
+  the flash at CurrentSocket, then HmWeaponMesh.ChangeSocket advances it ((i + 1) % N) once per shot.
+  - Projectiles spawn at the shot's socket (Weapon.ProjectileFire RealStartLoc = GetMuzzleLoc() before the advance) and aim at
+    the camera-trace hit point.
+  - Instant-hit MG: the damage trace starts at the pawn's start-trace location (here actor + BaseEyeHeight: HIGH; vehicle eye
+    height PROV); only the flash / tracer alternate.
+- Chassis without Primary2 (the tanks) and weapons not in the list stay on Primary.
+- HudState vehicleShotSerial / vehicleShotSocket / vehicleShotMuzzle let the flash / tracer glue follow the socket.
+- WFC_MUZZLETEST 5/5. Sockets 0,1,0,1… with the muzzle alternating sides: Car2 ±0.5 m, Car4 ±0.71, Jet4 ±1.4, Truck3 ±1.21;
+  Tank3 on Primary only.
 - The integrated muzzle / tracer effects pick templates from the held ROBOT weapon class (Systems' weaponFx(weaponClass_)), not
   the vehicle weapon: reported to Systems / Integration.
 

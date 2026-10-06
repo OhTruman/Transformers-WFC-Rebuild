@@ -148,7 +148,8 @@ bool Application::init() {
     if (std::getenv("WFC_XFORMVIS")) { runTransformVisibilityTest(); return false; } // per-chassis transform mesh handoff, playtest M10
     if (std::getenv("WFC_FINEAIMTEST")) { runFineAimTest(); return false; }   // per-weapon fine aim camera, playtest M10
     if (std::getenv("WFC_QATEST")) { runQaToolTest(); return false; }        // DEV / QA TOOLING self-test (needs WFC_QA=1)
-    if (std::getenv("WFC_PROJFXTEST")) { runProjectileFxTest(); return false; }   // projectile FlightEffect / ExplosionEffect binding   // measurements only
+    if (std::getenv("WFC_PROJFXTEST")) { runProjectileFxTest(); return false; }   // projectile FlightEffect / ExplosionEffect binding
+    if (std::getenv("WFC_MUZZLETEST")) { runMuzzleTest(); return false; }          // vehicle weapon Primary / Primary2 alternation   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -3579,6 +3580,55 @@ void Application::runProjectileFxTest() {
         check(world_.projectileFxSpawned() == total && world_.projectileFxExplosions() > 0,
               "renderer FX: " + std::to_string(world_.projectileFxSpawned()) + " flight, " + std::to_string(world_.projectileFxExplosions()) + " explosions");
     LOG_INFO("PROJFX SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_MUZZLETEST: vehicle weapon shots alternate WeaponSocket_Primary / _Primary2 (left / right gun) per shot on chassis that
+// author both, for the weapons whose MuzzleFlashSockets list both; the tank cannon (Primary only) never alternates.
+void Application::runMuzzleTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("MUZZLE %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    game::PlayerController& ctl = world_.player().controller();
+    platform::InputFrame idle, tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    for (const char* id : {"Car2", "Car4", "Jet4", "Truck3", "Tank3"}) {
+        world_.applyChassisToLocalPawn(id);
+        world_.applyLoadout(nullptr);
+        game::Character& pc = world_.player().pawn();
+        if (pc.form() != game::Form::Vehicle) { step(tf); }
+        for (int i = 0; i < 240; ++i) step(idle);
+        game::Weapon* vw = pc.vehicleWeapon();
+        if (pc.form() != game::Form::Vehicle || !vw) { check(false, std::string(id) + ": vehicle form with a vehicle weapon"); continue; }
+        ctl.setCameraYaw(pc.yaw());
+        std::vector<int> socks; std::vector<float> side;
+        int serial = world_.hudState().vehicleShotSerial;
+        platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+        for (int i = 0; i < 600 && socks.size() < 6; ++i) {
+            vw->ammo = std::max(vw->ammo, 1);
+            step(fire);
+            const auto& h = world_.hudState();
+            if (h.vehicleShotSerial != serial) {
+                serial = h.vehicleShotSerial;
+                socks.push_back(h.vehicleShotSocket);
+                // Lateral offset of the muzzle on the vehicle's right axis (+ = right).
+                const core::Vec3 f = core::forwardFromYawPitch(pc.yaw(), 0.0f);
+                const core::Vec3 r = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
+                side.push_back(core::dot(h.vehicleShotMuzzle - pc.actorLocation(), r));
+            }
+        }
+        std::string seq, pos;
+        for (size_t k = 0; k < socks.size(); ++k) { seq += std::to_string(socks[k]); char b[16]; std::snprintf(b, sizeof b, " %+.2f", side[k]); pos += b; }
+        const bool two = vw->alternatesMuzzle() && pc.chassis().vehicleWeapon2.valid;
+        bool alt = socks.size() >= 4, sidesFlip = socks.size() >= 4;
+        for (size_t k = 1; k < socks.size(); ++k) {
+            if (two) { alt = alt && socks[k] != socks[k - 1]; sidesFlip = sidesFlip && (side[k] > 0.0f) != (side[k - 1] > 0.0f); }
+            else alt = alt && socks[k] == 0;
+        }
+        LOG_INFO("MUZZLE %s %s: alternates %d, sockets %s, lateral m%s", id, vw->def ? vw->def->id : "?", (int)two, seq.c_str(), pos.c_str());
+        check(alt && (!two || sidesFlip), std::string(id) + " " + (vw->def ? vw->def->id : "?") + (two ? ": shots alternate left / right" : ": Primary only"));
+        step(tf); for (int i = 0; i < 180; ++i) step(idle);
+    }
+    LOG_INFO("MUZZLE SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

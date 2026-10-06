@@ -166,6 +166,7 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     socketFrom(c["robot"]["sockets"], "WeaponSocket_Primary", d.weaponPrimary);
     socketFrom(c["robot"]["sockets"], "WeaponSocket_Secondary", d.weaponSecondary);
     socketFrom(c["vehicle"]["sockets"], "WeaponSocket_Primary", d.vehicleWeapon);
+    socketFrom(c["vehicle"]["sockets"], "WeaponSocket_Primary2", d.vehicleWeapon2);
     socketFrom(c["robot"]["sockets"], "MeleeSocket_SmallRobot", d.meleeSmall);
     socketFrom(c["robot"]["sockets"], "MeleeSocket_LargeRobot", d.meleeLarge);
     socketFrom(c["robot"]["sockets"], "PositionSocket", d.positionSocket);

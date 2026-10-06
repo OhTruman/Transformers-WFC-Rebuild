@@ -87,6 +87,10 @@ struct HudGameState {
     bool repairBeam = false, repairBeamHealing = false;
     core::Vec3 repairBeamStart{0, 0, 0}, repairBeamEnd{0, 0, 0};
     int repairBeamTarget = -1;
+    // Last vehicle-weapon shot (for the muzzle flash / tracer glue): its socket (0 = WeaponSocket_Primary, 1 = _Primary2),
+    // the socket's world position, and a serial that increments once per shot.
+    int vehicleShotSerial = 0, vehicleShotSocket = 0;
+    core::Vec3 vehicleShotMuzzle{0, 0, 0};
     bool barrier = false;                        // the local Barrier ability's wall is up
     float barrierHealth = 0.0f;                  // BarrierHealth 1000, DegenRate 15/s
     std::string pickupPrompt;                    // TnPickupManager prompt (E): "Code Of Power" / "Bomb" / "" (refreshed 0.1 s in the original)
@@ -301,6 +305,8 @@ public:
     float grenadeTossDelay_ = -1.0f, grenadeCooldown_ = 0.0f;
     BarrierState barrier_;
     bool qaNoclip_ = false, qaGod_ = false;   // DEV / QA TOOLING
+    int vehicleShotSerial_ = 0, vehicleShotSocket_ = 0;
+    core::Vec3 vehicleShotMuzzle_{0, 0, 0};
     // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
     struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f; };
     AmmoBeacon beacon_;
@@ -481,6 +487,8 @@ public:
     void qaTeleportToStart(int index);                                       // authored player start #index (wraps)
     void qaSetNoclip(bool on);                                               // UFO camera-relative flight, no collision / gravity
     void qaSetGodMode(bool on);                                              // the local pawn ignores damage
+    // A vehicle weapon shot left this socket (PlayerController; reported in HudState for the flash / tracer).
+    void noteVehicleShot(int socket, const core::Vec3& muzzle) { ++vehicleShotSerial_; vehicleShotSocket_ = socket; vehicleShotMuzzle_ = muzzle; }
     // Projectile FX diagnostics: renderer has the particle API, FlightEffects spawned, ExplosionEffects spawned, live projectiles.
     static bool projectileFxApi();
     int projectileFxSpawned() const { return projectileFxSpawned_; }
