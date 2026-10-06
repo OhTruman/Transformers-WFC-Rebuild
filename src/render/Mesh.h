@@ -50,6 +50,9 @@ struct Material {
 struct MeshData {
     std::vector<float> positions;      // x,y,z per vertex
     std::vector<float> normals;        // x,y,z per vertex (parallel; may be empty)
+    // x,y,z,w per vertex (w = bitangent sign), optional: when present (e.g. skinned with the positions / normals) the
+    // renderer uses them instead of deriving tangents from the triangles every frame (the dominant per-character cost)
+    std::vector<float> tangents;
     std::vector<float> uv;             // u,v per vertex (parallel; may be empty)
     std::vector<float> uv1;            // lightmap UV per vertex (parallel; may be empty)
     // cooked LOD0 vertex index per vertex (glTF _WFC_SRCVERT, AssetTools a7b9ef0) where the export duplicated

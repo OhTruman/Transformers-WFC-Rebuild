@@ -1402,7 +1402,7 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
 
 // ------------------------------------------------------------------------- light environment
 namespace {
-struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0, dynBuildMs = 0, dynUploadMs = 0; } gStats;
+struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0, dynBuildMs = 0, dynUploadMs = 0, dynTotalMs = 0, dynShadowMs = 0; int dynCalls = 0, dynCulled = 0; } gStats;
 std::chrono::steady_clock::time_point gFrameStart;
 }
 
@@ -1509,9 +1509,13 @@ void Pipeline::computeEnv(const core::Vec3& p, bool dynamicObject, LightEnv& env
 // ------------------------------------------------------------------------- meshes
 void Pipeline::buildVertices(const MeshData& m, std::vector<float>& v) {
     size_t n = m.vertexCount();
-    std::vector<core::Vec3> tan(n, {0, 0, 0}), bit(n, {0, 0, 0});
+    // scratch reused across calls (bot counts: per-draw allocations of the tangent frames were a measurable part of
+    // the character vertex build); same values as before
+    static thread_local std::vector<core::Vec3> tan, bit;
+    const bool given = m.tangents.size() == n * 4;   // caller-supplied (skinned) tangent frames
+    if (!given) { tan.assign(n, {0, 0, 0}); bit.assign(n, {0, 0, 0}); }
     bool uv = m.hasUV();
-    if (uv) {
+    if (uv && !given) {
         for (size_t t = 0; t + 2 < m.indices.size(); t += 3) {
             uint32_t i0 = m.indices[t], i1 = m.indices[t + 1], i2 = m.indices[t + 2];
             if (i0 >= n || i1 >= n || i2 >= n) continue;
@@ -1538,6 +1542,12 @@ void Pipeline::buildVertices(const MeshData& m, std::vector<float>& v) {
         core::Vec3 N = hasN ? core::Vec3{m.normals[i * 3], m.normals[i * 3 + 1], m.normals[i * 3 + 2]} : core::Vec3{0, 1, 0};
         N = core::normalize(N);
         o[3] = N.x; o[4] = N.y; o[5] = N.z;
+        if (given) {
+            o[6] = m.tangents[i * 4]; o[7] = m.tangents[i * 4 + 1]; o[8] = m.tangents[i * 4 + 2]; o[9] = m.tangents[i * 4 + 3];
+            o[10] = uv ? m.uv[i * 2] : 0.0f; o[11] = uv ? m.uv[i * 2 + 1] : 0.0f;
+            o[12] = hasUV1 ? m.uv1[i * 2] : o[10]; o[13] = hasUV1 ? m.uv1[i * 2 + 1] : o[11];
+            continue;
+        }
         core::Vec3 T = tan[i] - N * core::dot(N, tan[i]);
         float w = 1.0f;
         if (core::dot(T, T) < 1e-20f) {
@@ -2369,28 +2379,53 @@ void Pipeline::prewarmDynamic(const MeshData& m) {
 
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     if (m.empty()) return;
+    struct DynTimer { std::chrono::steady_clock::time_point t = std::chrono::steady_clock::now();
+        ~DynTimer() { gStats.dynTotalMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count(); ++gStats.dynCalls; } } dynTimer;
     if (!finiteMat(model)) {
         reportNonFinite("dynamic model matrix", m.mats.empty() ? std::string("?") : m.mats[0].wfcName);
         return;
     }
-    for (float v : m.positions)
-        if (!std::isfinite(v)) {
+    core::Vec3 bmn{1e30f, 1e30f, 1e30f}, bmx{-1e30f, -1e30f, -1e30f};   // model-space bounds (one pass with the guard)
+    for (size_t i = 0; i + 2 < m.positions.size(); i += 3) {
+        const float x = m.positions[i], y = m.positions[i + 1], z = m.positions[i + 2];
+        if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
             reportNonFinite("dynamic vertex position", m.mats.empty() ? std::string("?") : m.mats[0].wfcName);
             return;
         }
-    std::vector<float> v;
-    auto tb0 = std::chrono::steady_clock::now();
-    buildVertices(m, v);
-    auto tb1 = std::chrono::steady_clock::now();
-    BindVertexArray(dynVao_);
-    BindBuffer(GL_ARRAY_BUFFER, dynVbo_);
-    BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STREAM_DRAW);
-    BindBuffer(GL_ELEMENT_ARRAY_BUFFER, dynIbo_);
-    BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(m.indices.size() * 4), m.indices.data(), GL_STREAM_DRAW);
-    gStats.dynBuildMs += std::chrono::duration<double, std::milli>(tb1 - tb0).count();
-    gStats.dynUploadMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tb1).count();
-    setupAttribs();
-    BindVertexArray(0);
+        bmn = {std::min(bmn.x, x), std::min(bmn.y, y), std::min(bmn.z, z)};
+        bmx = {std::max(bmx.x, x), std::max(bmx.y, y), std::max(bmx.z, z)};
+    }
+    // Frustum cull (bot counts: off-screen characters were skinned-vertex built + uploaded + drawn every frame). The
+    // world-space box of the posed mesh, grown by half its diagonal + 3 m (projected shadows, effects of a character
+    // just outside the view), against the frame's planes. A culled mesh still ticks its light environment below (no
+    // lighting pop when it comes into view); only the vertex build, upload, shadow and draw are skipped.
+    bool offscreen = false;
+    static const bool noDynCull = std::getenv("WFC_NODYNCULL") != nullptr;   // A/B
+    if (!noDynCull && !warmup_) {
+        const core::Vec3 c = core::transformPoint(model, (bmn + bmx) * 0.5f);
+        const float rad = core::length(bmx - bmn) * 0.75f + 3.0f;   // model scale 1 (characters / weapons / gibs)
+        for (int f = 0; f < 6 && !offscreen; ++f) {
+            const float* pl = frustum_[f];
+            const float len = std::sqrt(pl[0] * pl[0] + pl[1] * pl[1] + pl[2] * pl[2]);
+            if (len > 0 && pl[0] * c.x + pl[1] * c.y + pl[2] * c.z + pl[3] < -rad * len) offscreen = true;
+        }
+    }
+    if (offscreen) { ++counts_.culled; ++gStats.dynCulled; }
+    if (!offscreen) {
+        static std::vector<float> v;   // reused: a character's interleaved vertices are ~0.5 MB per draw
+        auto tb0 = std::chrono::steady_clock::now();
+        buildVertices(m, v);
+        auto tb1 = std::chrono::steady_clock::now();
+        BindVertexArray(dynVao_);
+        BindBuffer(GL_ARRAY_BUFFER, dynVbo_);
+        BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STREAM_DRAW);
+        BindBuffer(GL_ELEMENT_ARRAY_BUFFER, dynIbo_);
+        BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(m.indices.size() * 4), m.indices.data(), GL_STREAM_DRAW);
+        gStats.dynBuildMs += std::chrono::duration<double, std::milli>(tb1 - tb0).count();
+        gStats.dynUploadMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tb1).count();
+        setupAttribs();
+        BindVertexArray(0);
+    }
     // Which LightEnvironmentComponent draws this mesh: the Optimus robot (and its weapon, which uses the
     // owner's environment) or vehicle form, identified by the cooked packages of its materials.
     static const std::vector<core::Vec3> kRobotSamples = [] {   // UE (x,y,z) -> glTF (x,z,y)
@@ -2427,6 +2462,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
             tickDirectLightEnv(envForm_, c, envBoundsExtent_, core::Vec3{model.m[12], model.m[13], model.m[14]});
         }
     }
+    if (offscreen) { envSamples_ = nullptr; envForm_ = -1; return; }   // light environment ticked above
     GpuMesh g;
     g.vao = dynVao_;
     std::vector<SubMesh> subs = m.subs;
@@ -2454,7 +2490,9 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     inDynamicDraw_ = true;
     if (envSamples_ && !weapon && !std::getenv("WFC_NOCHARSHADOWS")) {   // the environment's projector -> ShadowMask
         ShadowProjector scratch;
+        const auto ts0 = std::chrono::steady_clock::now();
         if (const ShadowProjector* p = projectorFor(envForm_, scratch)) castCharacterShadow(g, model, *p);
+        gStats.dynShadowMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ts0).count();
     }
     dynamicMaskDraw_ = envSamples_ != nullptr;
     drawSubs(g, model, true);
@@ -2927,8 +2965,9 @@ void Pipeline::endFrame() {
         auto now = std::chrono::steady_clock::now();
         acc += std::chrono::duration<double, std::milli>(now - last).count(); last = now;
         if (++frames == 120) {
-            LOG_INFO("wfc: dynamic meshes: vertex build %.2f ms, upload %.2f ms per frame", gStats.dynBuildMs / 120.0,
-                     gStats.dynUploadMs / 120.0);
+            LOG_INFO("wfc: dynamic meshes: %.1f calls (%.1f culled), total %.2f ms = vertex build %.2f + upload %.2f + "
+                     "shadow %.2f + rest per frame", gStats.dynCalls / 120.0, gStats.dynCulled / 120.0, gStats.dynTotalMs / 120.0,
+                     gStats.dynBuildMs / 120.0, gStats.dynUploadMs / 120.0, gStats.dynShadowMs / 120.0);
             LOG_INFO("wfc: DirectLightEnv per frame: %.2f updates (%.4f ms), %.2f volume queries (%.4f ms), %.2f shadow rays",
                      statEnvCalls_ / 120.0, statUpdateMs_ / 120.0, statLvvQueries_ / 120.0, statLvvMs_ / 120.0,
                      statVisCalls_ / 120.0);
