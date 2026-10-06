@@ -55,6 +55,9 @@ $defrag = @((& $py (Join-Path $PSScriptRoot "energy_death_materials.py") --list)
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
     @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
+# Beast light-probe grids (character ambient SH; only Orbital Debris bakes them)
+& $py (Join-Path $PSScriptRoot "beast_probes.py") $Map $out
+if ($LASTEXITCODE -ne 0) { throw "beast_probes failed" }
 
 
 # 4. Authored map presentation: movers / rule-gated visibility and the map particle components.

@@ -170,6 +170,12 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
     std::vector<Ranked> direct, overflow, shadow, shadowOverflow;
     LightEnv env;
     for (auto& c : env.cube) c = {0, 0, 0};
+    {   // Beast probe SH at the bounds origin (0x82CCB488: zero, + sky, + probe, + overflow; no floor)
+        static const bool noProbes = std::getenv("WFC_NOBEASTPROBES") != nullptr;   // A/B
+        core::Vec3 pc[6];
+        if (!noProbes && beastAmbient(toUE(origin), pc))
+            for (int fc = 0; fc < 6; ++fc) env.cube[fc] = env.cube[fc] + pc[fc];
+    }
     core::Vec3 lightsSH[6];               // LightsSH (+0x108): direct lights folded into the ambient cube
     for (auto& c : lightsSH) c = {0, 0, 0};
     const core::Vec3 axes[6] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};

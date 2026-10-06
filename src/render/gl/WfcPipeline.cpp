@@ -714,6 +714,23 @@ bool Pipeline::load(const std::string& mapName) {
         mats_[kv.first] = std::move(s);
     }
 
+    {   // M09 Beast light-probe grids (beast_probes.py; RE MILESTONE03 lightvis add. 2)
+        assets::Json B;
+        std::string bj = readText(dataDir_ + "/beast_probes.json");
+        if (!bj.empty() && assets::Json::parse(bj, B))
+            for (const assets::Json& v : B["volumes"].arr) {
+                BeastVolume bv;
+                for (int i = 0; i < 3; ++i) {
+                    bv.loc[i] = v["location"][(size_t)i].asFloat(); bv.scale[i] = v["scale"][(size_t)i].asFloat(1.0f);
+                    bv.n[i] = v["points"][(size_t)i].asInt(1);
+                }
+                bv.priority = v["priority"].asInt(0);
+                bv.sh.reserve(v["sh"].size());
+                for (const assets::Json& f : v["sh"].arr) bv.sh.push_back((float)f.asDouble());
+                if (bv.sh.size() == (size_t)bv.n[0] * bv.n[1] * bv.n[2] * 27) beast_.push_back(std::move(bv));
+            }
+        if (!beast_.empty()) LOG_INFO("wfc: %zu Beast light-probe volume(s)", beast_.size());
+    }
     {   // M74 energy-death instances by form-mesh package (build_materials energy_death.json)
         assets::Json E;
         std::string ej = readText(dataDir_ + "/energy_death.json");
@@ -2245,6 +2262,55 @@ void Pipeline::updateRuntimeDecals() {
     } else {
         rtDecalMesh_ = fresh;
     }
+}
+
+// Beast probe ambient (RE CONFIRMED: volume pick 0x82CCB228, trilinear lookup 0x82FC6DB8, SH -> cube 0x82CBE520):
+// enabled volumes containing the point (max |local| <= 1, local = (P - Location) / DrawScale3D); the highest
+// Priority wins, equal priorities averaged. Grid g = (N - 1)(local + 1) / 2 per axis (EdgePolicy 0), 8 corners.
+// Face = dot(SH_rgb, B(dir)) / |B(dir)|^2 (plain radiance, no cosine convolution), stock UE3 L2 basis.
+bool Pipeline::beastAmbient(const core::Vec3& P, core::Vec3 cube[6]) const {
+    if (beast_.empty()) return false;
+    static const float kB[6][9] = {      // basis at +X, -X, +Y, -Y, +Z, -Z (UE axes)
+        {0.282095f, 0, 0, -0.488603f, 0, 0, -0.315392f, 0, 0.546274f},
+        {0.282095f, 0, 0, 0.488603f, 0, 0, -0.315392f, 0, 0.546274f},
+        {0.282095f, -0.488603f, 0, 0, 0, 0, -0.315392f, 0, -0.546274f},
+        {0.282095f, 0.488603f, 0, 0, 0, 0, -0.315392f, 0, -0.546274f},
+        {0.282095f, 0, 0.488603f, 0, 0, 0, 0.630784f, 0, 0},
+        {0.282095f, 0, -0.488603f, 0, 0, 0, 0.630784f, 0, 0}};
+    const float p[3] = {P.x, P.y, P.z};
+    int best = -0x7fffffff, count = 0;
+    float sh[27] = {};
+    for (const BeastVolume& v : beast_) {
+        float local[3]; bool in = true;
+        for (int a = 0; a < 3; ++a) { local[a] = (p[a] - v.loc[a]) / v.scale[a]; in &= std::fabs(local[a]) <= 1.0f; }
+        if (!in || v.priority < best) continue;
+        if (v.priority > best) { best = v.priority; count = 0; std::fill(sh, sh + 27, 0.0f); }
+        int i0[3], i1[3]; float f[3];
+        for (int a = 0; a < 3; ++a) {
+            const float g = (float)(v.n[a] - 1) * (local[a] + 1.0f) * 0.5f;
+            i0[a] = std::max(0, (int)std::floor(g)); i1[a] = std::min(i0[a] + 1, v.n[a] - 1);
+            f[a] = std::min(std::max(g - (float)i0[a], 0.0f), 1.0f);
+        }
+        for (int c = 0; c < 8; ++c) {
+            const int x = (c & 1) ? i1[0] : i0[0], y = (c & 2) ? i1[1] : i0[1], z = (c & 4) ? i1[2] : i0[2];
+            const float w = ((c & 1) ? f[0] : 1 - f[0]) * ((c & 2) ? f[1] : 1 - f[1]) * ((c & 4) ? f[2] : 1 - f[2]);
+            const float* s = &v.sh[(((size_t)z * v.n[1] + y) * v.n[0] + x) * 27];
+            for (int k = 0; k < 27; ++k) sh[k] += w * s[k];
+        }
+        ++count;
+    }
+    if (count == 0) return false;
+    float ue[6][3];
+    for (int fc = 0; fc < 6; ++fc) {
+        float nb = 0; for (int k = 0; k < 9; ++k) nb += kB[fc][k] * kB[fc][k];
+        for (int ch = 0; ch < 3; ++ch) {
+            float d = 0; for (int k = 0; k < 9; ++k) d += sh[ch * 9 + k] * kB[fc][k];
+            ue[fc][ch] = d / nb / (float)count;
+        }
+    }
+    const int toGltf[6] = {0, 1, 4, 5, 2, 3};   // UE +X,-X,+Y,-Y,+Z,-Z -> glTF faces (+Y up = UE +Z)
+    for (int fc = 0; fc < 6; ++fc) cube[toGltf[fc]] = {ue[fc][0], ue[fc][1], ue[fc][2]};
+    return true;
 }
 
 const std::string* Pipeline::energyDeathFor(const std::string& material) const {
