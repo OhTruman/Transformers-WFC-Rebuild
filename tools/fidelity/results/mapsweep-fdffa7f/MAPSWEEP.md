@@ -49,7 +49,7 @@ One lockstep direct boot per map (600 frames). The world verdict uses the frames
   the render data (`LightMapTexture2D_4181 / _5690 / _587`) are absent from
   the AssetTools export (99 source lightmaps vs 569 in the render data), so those surfaces have no baked light:
   **source-data gap**. `decals.glb` is empty because the source has 0 decals (authentic).
-- **Gorge (Rendering, 2026-10-05): export issue.** 1,576 cooked samples vs 1,616 glTF vertices: about 40 vertices
+- **Gorge: FIXED** by AssetTools a7b9ef0 (cooked vertex index) + agents/rendering 8d9bfc8 (pushed 7e47a62); effective once integration regenerates Gorge data. Earlier: **Gorge (Rendering, 2026-10-05): export issue.** 1,576 cooked samples vs 1,616 glTF vertices: about 40 vertices
   are duplicated across the mesh's two sections. Rendering has asked AssetTools for a per-vertex cooked index in
   world.glb. Original note: 4 vertex lightmaps are not bound (sample count ≠ vertex count, e.g. 1576 samples vs 322 / 1294 vertices,
   StaticMeshActor_15751 / _6134).

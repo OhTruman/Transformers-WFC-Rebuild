@@ -479,7 +479,8 @@ void checkInputEdges(Report& r) {
     // original. Pattern to reproduce: exec on edge, set a latch, consume in the sim step.
     static const char* kEdges = "RE TARGETED_PASS2 #5 (latch on edge, consume in the sim step; original has 1 tick per frame)";
     auto zeroStepThenStep = [](platform::InputFrame press, Rig& rig) {
-        for (int i = 0; i < (int)Button::Count; ++i) press.down[i] = press.down[i] || press.pressed[i];   // a real press
+        // a real press from idle carries both the held state and the pressed edge (Win32Window: pressed = nowDown && !wasDown)
+        for (int i = 0; i < (int)Button::Count; ++i) { const bool p = press.down[i] || press.pressed[i]; press.down[i] = p; press.pressed[i] = p; }
         rig.frameWithoutStep(press);           // the frame that carries the press: no sim step
         rig.step(platform::InputFrame{});      // next frame: key released, one step
     };
