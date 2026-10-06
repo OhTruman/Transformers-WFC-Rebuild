@@ -6,7 +6,10 @@
 // explicitly labelled "not promoted".
 #include "CheckUtil.h"
 #include "core/Config.h"
+#if __has_include("game/ChassisDef.h")
 #include "game/ChassisDef.h"
+#define WFC_FID_HAS_CHASSISDEF 1
+#endif
 
 #include <algorithm>
 #include <cmath>
@@ -279,6 +282,7 @@ void checkNativeVehicle(Report& r) {
     // ---- JET TURN SERVO: TnHoverPlaneSimulation / TnPlaneSimulation turn toward the target rotation at TurnRate (roll 0.1,
     // pitch 0.5, yaw 0.5) per call; the sim runs once per 30 Hz game tick [CONF RE pass 4 A4 addendum 59eac82]. So the remaining
     // error after each 1/30 s is x0.5 (yaw, pitch) and x0.9 (roll), independent of the rebuild's 60 Hz step. Real Jet4 chassis data.
+#ifdef WFC_FID_HAS_CHASSISDEF
     {
         static game::ChassisDef jet;
         static const bool jetOk = game::loadChassisDef(Models::assetRoot(), "Jet4", jet);
@@ -315,11 +319,15 @@ void checkNativeVehicle(Report& r) {
                    kGameplay, "remaining roll error after each 1/30 s (hover target roll 0) from a 0.3 rad roll");
         }
     }
+#else
+    r.skip("jet_servo", "this tree has no game/ChassisDef.h (chassis data API): jet check not built");
+#endif
 
     // ---- JET FLIGHT LEAN: TnPlaneSimulation target = view (+) RLerp(prev, lean target, 0.1) per 30 Hz script tick [CONF RE 59eac82],
     // lean target from GetNormalizedTurn / GetNormalizedLookUp. A constant right-stick deflection (radial 0.25 deadzone, no temporal
     // filter) while Flying: each lean component approaches its target geometrically, so the ratio of successive 1/30 s increments
     // is the per-tick factor (0.9) without needing the target value. Pre-Pass-24n per-60 Hz application reads 0.81.
+#ifdef WFC_FID_HAS_CHASSISDEF
     {
         static game::ChassisDef jet;
         static const bool jetOk = game::loadChassisDef(Models::assetRoot(), "Jet4", jet);
@@ -357,6 +365,9 @@ void checkNativeVehicle(Report& r) {
             }
         }
     }
+#else
+    r.skip("jet_lean", "this tree has no game/ChassisDef.h (chassis data API): jet check not built");
+#endif
 
     // ---- Boost (Driving) jump (P4) -------------------------------------------------------------------
     {
