@@ -192,6 +192,13 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
     roster package);
   - as soon as the local selection exists, its weapons (custom list, else the chassis' iconic preset).
 - WFC_SPAWNPROF on SWITCHTEST: every first equip costs 0.2-0.4 ms (was 6-38 ms).
+- Saved custom (CaC) characters (24r): World::preloadSelections(selections) caches the local-faction body and held-weapon models
+  of any selections. Frontend should call it in its match loading step with the player's saved slots. WFC_PRELOADTEST: a
+  Bumblebee custom preloaded, then picked: spawn 0.6 ms, first equip 0.2 ms.
+- Pickup weapons: nothing to preload today.
+  - The objective flag / bomb are carry state, not held-weapon models.
+  - The Escalation maps' TnWeaponPickupFactory spawners (BrokenHope / Remnant, Kismet-driven) are not implemented. Their
+    weapons are known from gameplay.json, so they can be preloaded at map load when they are.
 
 ### Plasma Cannon charge [CONFIRMED ORIGINAL: script TransGame.TnChargeWeapon + PlasmaCannon_WEPDATA + Charge1-3 PROJDATA]
 - Was: every press fired a Charge1 shot for 1 ammo.

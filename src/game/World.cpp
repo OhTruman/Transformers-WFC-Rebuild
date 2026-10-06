@@ -823,6 +823,15 @@ const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
 // The weapon mesh drawn at the socket is the ACTIVE inventory weapon's (no other weapon may be shown in its place).
 double World::profileWeaponModelLoad(const WeaponDef& d) { const double t0 = profNowMs(); weaponModelFor(d); return profNowMs() - t0; }
 
+void World::preloadSelections(const std::vector<CharacterSelection>& selections) {
+    const int fa = localPlayer_ >= 0 ? match_.faction(localPlayer_) : 0;
+    for (const CharacterSelection& sel : selections) {
+        const ChassisAssets* ca = chassisAssets(resolveChassis(sel, fa));
+        if (sel.type == 0 && !sel.weapons.empty()) preloadHeldWeaponModels(sel.weapons);
+        else if (ca) preloadHeldWeaponModels(ca->def.iconicWeapons);
+    }
+}
+
 void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
     for (const std::string& n : weapons) {
         const WeaponDef* d = findWeaponDef(n);

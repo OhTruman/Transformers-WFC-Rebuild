@@ -154,6 +154,7 @@ bool Application::init() {
     if (std::getenv("WFC_CHARGETEST")) { runChargeTest(); return false; }          // Plasma Cannon charge levels + grenade spin
     if (std::getenv("WFC_DROPTEST")) { runDropTest(); return false; }              // hover vehicle 10 m drop: per-step vertical trace
     if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step
+    if (std::getenv("WFC_PRELOADTEST")) { runPreloadTest(); return false; }        // World::preloadSelections (saved custom characters)
     if (std::getenv("WFC_WEAPONLOADPROF")) {   // first-use weapon model load cost per robot weapon (diagnostics)
         double total = 0; for (int i = 0; i < game::weaponDefCount(); ++i) { const game::WeaponDef& d = game::weaponDefAt(i); if (d.typeCode < 0 || d.typeCode == 3 || !d.meshGltf || !*d.meshGltf) continue;
             const double ms = world_.profileWeaponModelLoad(d); total += ms; LOG_INFO("WEAPONLOAD %-22s %6.1f ms", d.id, ms); }
@@ -3926,6 +3927,29 @@ void Application::runRiserTest() {
         LOG_INFO("RISER %s: crossing at %.1f m/s, peak nose-up %.2f deg, nose-down %.2f deg, |pitch| < 0.1 deg %.2f s after reaching the step",
                  id, speed, maxUp, maxDown, settle);
     }
+}
+
+// WFC_PRELOADTEST: a custom selection outside the faction defaults, preloaded with World::preloadSelections after the launch
+// (as Frontend's loading step would), then picked and spawned: the body must not load at the pick, the first equip is cheap.
+// Run with WFC_SPAWNPROF=1 to see the equip cost.
+void Application::runPreloadTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("PRELOAD %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+    world_.launchMatch(L);
+    game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Scout;
+    cs.chassisByFaction[0] = "Car"; cs.chassisByFaction[1] = "Car4"; cs.weapons = {"SniperRifle", "Bazooka"};
+    LOG_INFO("PRELOAD calling preloadSelections");
+    world_.preloadSelections({cs});
+    LOG_INFO("PRELOAD selecting");
+    world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+    run(11.0f);
+    game::Character& pc = world_.player().pawn();
+    LOG_INFO("PRELOAD spawned as %s holding %s", pc.chassis().id.c_str(), pc.weapon().def ? pc.weapon().def->id : "-");
+    check(pc.chassis().id == "Car", "spawned with the custom chassis (Bumblebee)");
+    LOG_INFO("PRELOAD SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

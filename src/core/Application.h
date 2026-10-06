@@ -48,6 +48,7 @@ private:
     void runChargeTest();
     void runDropTest();
     void runRiserTest();
+    void runPreloadTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;
