@@ -181,6 +181,11 @@ provenance stays in its section.
   over 40 ms involves audio across 7 level starts; the boot title-open frame is under 40 ms. The travel underlay is
   now opened under the boot loading screen (PC ADAPTATION), so no travel opens it. Left over 40 ms: the load steps
   and loading-screen frames during scene loads (Rendering's load work).
+- **CaC class pick froze 1.1-1.4 s (fixed with Rendering):** both preview bodies parsed their AnimSets (~900 ms) and
+  compiled materials on the pick's frame. Rendering 50f0742 caches parsed AnimSets per session; 3aac479 prepares the
+  class list's 8 bodies + vehicle materials under the PartyLobby loading screen (preparePreviewBody, detected; PC
+  ADAPTATION, not the roster's 33 chassis). First pick 1393 -> 48 ms, vehicle toggle 118 -> < 40 ms; the first lobby
+  load after boot / a match is ~1.3 s longer (under its loading screen), later visits cheap.
 
 ## FRONTEND: TITLE VIGNETTE / MENU BACKGROUNDS COVER THE SCREEN (2026-10-05, agents/frontend)
 - Human-confirmed: the title vignette left bright vertical strips at both sides (87.5 % of the width covered at 16:9).

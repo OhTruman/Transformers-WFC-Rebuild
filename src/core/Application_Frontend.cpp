@@ -25,6 +25,7 @@
 #include <cstring>
 #include <map>
 #include <new>
+#include <set>
 #include <string>
 
 #ifdef _WIN32
@@ -47,6 +48,36 @@ template <class R>
 struct HasMatchTextureRelease<R, std::void_t<decltype(std::declval<R&>().setTexturePersistent(std::declval<render::TextureHandle>()))>>
     : std::true_type {};
 constexpr bool kRendererReleasesMatchTextures = HasMatchTextureRelease<render::IRenderer>::value;
+
+// Rendering 50f0742: preparePreviewBody parses a body's AnimSets into the shared cache and prewarms its materials without
+// creating a body; loadContentMesh + prewarmDynamicMesh compile a mesh's materials. Detected.
+template <class R, class = void> struct HasPreparePreviewBody : std::false_type {};
+template <class R>
+struct HasPreparePreviewBody<R, std::void_t<decltype(std::declval<R&>().preparePreviewBody(std::string(), std::vector<std::string>())),
+                                            decltype(std::declval<R&>().prewarmDynamicMesh(std::declval<const render::MeshData&>())),
+                                            decltype(std::declval<R&>().loadContentMesh(std::string(), std::declval<render::MeshData&>()))>>
+    : std::true_type {};
+// The party lobby's Create a Character shows the selected character's Autobot and Decepticon (robot and vehicle):
+// the bodies of the characters in the class list (defaults + custom) are prepared during the PartyLobby load, under its
+// loading screen, so the first class pick and the first vehicle toggle do not parse / compile on a visible frame
+// [PC ADAPTATION]. Only those chassis, not the roster's 33.
+template <class R> int preparePreviewBodies(R* r, const frontend::CharacterRoster& roster) {
+    if constexpr (HasPreparePreviewBody<R>::value) {
+        if (!r) return 0;
+        std::set<std::string> done;
+        int n = 0;
+        for (const auto& c : roster.customCharacters())
+            for (const std::string& id : c.chassis) {
+                const frontend::ChassisInfo* ci = roster.chassis(id);
+                if (!ci || !done.insert(id).second) continue;
+                if (!ci->robotGltf.empty()) { r->preparePreviewBody(ci->robotGltf, ci->robotAnimSets); ++n; }
+                render::MeshData m;
+                if (!ci->vehicleGltf.empty() && r->loadContentMesh(ci->vehicleGltf, m)) r->prewarmDynamicMesh(m);
+                core::loadYield("Frontend: preview body prepared");
+            }
+        return n;
+    } else { (void)r; (void)roster; return 0; }
+}
 
 // Gameplay's GRI objective fields (agents/gameplay bec41cd: HudGameState attackingTeamIndex / currentObjectiveCountdown /
 // competitiveScoreEnabled), detected.
@@ -309,6 +340,18 @@ void Application::attachPresenter() {
         setRendererYield(renderer_, false);
         core::setLoadYield(nullptr);
         { core::prof::Scope prof("movie.prewarm"); frontend_->prewarmLoadingUnderlay(); }   // still under the loading screen
+        if (frontend_->flow().level() == frontend::LevelKind::PartyLobby) {
+            core::setLoadYield([this](double dt) {
+                platform::InputFrame in;
+                window_->pump(in);
+                frontend_->updateLoading((float)std::min(dt, 0.1));
+                drawFrontendFrame();
+            });
+            core::prof::Scope prof("preview.prepare");
+            const int n = preparePreviewBodies(renderer_, frontend_->roster());
+            core::setLoadYield(nullptr);
+            if (n > 0) frontend::FlowTrace::emit("preview.prepared", {{"bodies", std::to_string(n)}, {"owner", "renderer"}});
+        }
         if (frontend_->sceneDrawable()) {   // the new scene's first (costly) draw happens under the loading screen
             core::prof::Scope prof("scene.prewarm");
             platform::InputFrame in;
