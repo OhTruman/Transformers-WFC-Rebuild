@@ -15,6 +15,8 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
 | Match countdown | PendingMatch 10 s already original; post-process belongs to Rendering / Frontend | CONFIRMED ORIGINAL |
 | Jet / Scout height / vehicle sockets | authored values; height re-measured, authentic | CONFIRMED / HIGH |
 | DEV / QA tooling | World::qa* (WFC_QA=1 only) for Frontend's QA window | NOT ORIGINAL (tooling) |
+| Projectile visuals (24d) | authored FlightEffect / ExplosionEffect per weapon; thrown grenades draw their mesh; box only as fallback; PROJFX 2/2 (3/3 with the renderer API) | CONFIRMED ORIGINAL bindings |
+| Vehicle muzzle alternation (24e/f) | Primary / Primary2 per shot (Scout no longer left-only); MG trace from TnPlayerPawn start-trace; MUZZLE 5/5 | CONFIRMED ORIGINAL |
 
 Regression: WEAPON 19/19, SWITCH 32/32, SCORE 9/9, TDM 43/43, CTF 12/12, PARTICIPANT 22/22, CHASSIS 14/14, XFORMVIS 16/16,
 FINEAIM 3/3, VEHPHYS 27/27, QATEST 7/7. HEADJIT 60 / 144 / 240 Hz: robot 0.000, hover 0.004-0.05, boost 0.07-0.31, jet 0.19-0.71°/frame.
