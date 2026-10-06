@@ -782,6 +782,7 @@ bool World::loadMapAudio(const std::string& level) {
         CharacterAudio::loadAbilityCues(cues_);                                                // [Systems M08i]
         lastHitEffect_.clear();
         for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
+        applyPreloadedSelectionAudio();                                            // [integration 09a] match-load audio preload
         const SoundCues::LocStats& ls = SoundCues::locStats();
         LOG_INFO("localized waves (language %s): %d from the _LOC twin, %d merged copy of that twin, %d not played",
                  std::getenv("WFC_LANGUAGE") ? std::getenv("WFC_LANGUAGE") : "INT", ls.twin, ls.merged, ls.skipped);
@@ -1220,10 +1221,33 @@ double World::profileWeaponModelLoad(const WeaponDef& d) { const double t0 = pro
 void World::preloadSelections(const std::vector<CharacterSelection>& selections) {
     const int fa = localPlayer_ >= 0 ? match_.faction(localPlayer_) : 0;
     for (const CharacterSelection& sel : selections) {
-        const ChassisAssets* ca = chassisAssets(resolveChassis(sel, fa));
+        const std::string chassis = resolveChassis(sel, fa);
+        const ChassisAssets* ca = chassisAssets(chassis);
         if (sel.type == 0 && !sel.weapons.empty()) preloadHeldWeaponModels(sel.weapons);
         else if (ca) preloadHeldWeaponModels(ca->def.iconicWeapons);
+        if (ca) preloadSelectionAudio(chassis, (sel.type == 0 && !sel.weapons.empty()) ? sel.weapons : ca->def.iconicWeapons,
+                                      (sel.type == 0 && !sel.vehicleWeapons.empty()) ? sel.vehicleWeapons : ca->def.iconicVehicleWeapons);
     }
+}
+
+// [integration 09a] Load scheduling (PC ADAPTATION): the body's character cue set (foley / voice / vehicle) and the loadout's
+// weapon cues are loaded under the match load for every preloaded selection, so the spawn frame's setPlayerCharacterAudio /
+// applyLoadout find them loaded (both skip loaded cues). Before this, each match's first spawn decoded them on that frame
+// (160-207 ms + 31-87 ms in the 09a flow). Cues are level-owned: re-applied from loadMapAudio.
+void World::preloadSelectionAudio(const std::string& chassis, const std::vector<std::string>& weapons,
+                                  const std::vector<std::string>& vehicleWeapons) {
+    if (!chassis.empty()) preloadAudioChassis_.insert(chassis);
+    for (const std::vector<std::string>* list : {&weapons, &vehicleWeapons})
+        for (const std::string& n : *list)
+            if (const WeaponDef* d = findWeaponDef(n)) preloadAudioWeapons_.insert("TransContent.TnWeapon" + std::string(d->id));
+    applyPreloadedSelectionAudio();
+}
+
+void World::applyPreloadedSelectionAudio() {
+    if (!audio_ || levelAudio_.level().empty()) return;          // re-applied when the level's audio loads
+    for (const std::string& c : preloadAudioChassis_)
+        if (const CharacterAudioProfile* p = CharacterAudio::find(c)) CharacterAudio::loadCues(cues_, *p);
+    for (const std::string& w : preloadAudioWeapons_) ensureWeaponAudio(w);
 }
 
 void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
@@ -1637,8 +1661,10 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
     if (localPlayer_ >= 0) {
         const int fa = match_.faction(localPlayer_);
         for (int sp = 0; sp < 4; ++sp) {
-            chassisAssets(defaultChassis((Specialty)sp, fa));
+            const ChassisAssets* pca = chassisAssets(defaultChassis((Specialty)sp, fa));
             preloadHeldWeaponModels(classPresetWeapons(specialtyName((Specialty)sp)));   // its preset weapons too
+            if (pca) preloadSelectionAudio(defaultChassis((Specialty)sp, fa), classPresetWeapons(specialtyName((Specialty)sp)),
+                                           pca->def.iconicVehicleWeapons);              // [integration 09a] + their audio
         }
     }
 }

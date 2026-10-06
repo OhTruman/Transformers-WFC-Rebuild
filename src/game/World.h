@@ -816,6 +816,10 @@ private:
     std::string vehicleWeaponClass_;
     std::set<std::string> weaponAudioLoaded_;      // per level (cleared with the level's cues)
     std::vector<std::string> loadoutWeaponClasses_; // the player's loadout (robot + vehicle weapons)
+    std::set<std::string> preloadAudioChassis_, preloadAudioWeapons_;   // [integration 09a] match-load audio preload
+    void preloadSelectionAudio(const std::string& chassis, const std::vector<std::string>& weapons,
+                               const std::vector<std::string>& vehicleWeapons);
+    void applyPreloadedSelectionAudio();
     WeaponAudio weaponAudio_;
     AbilityAudio abilityAudio_;
     VehicleFormAudio vehicleForm_;
