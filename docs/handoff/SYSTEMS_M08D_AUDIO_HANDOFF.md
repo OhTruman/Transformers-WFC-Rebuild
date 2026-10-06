@@ -200,3 +200,22 @@ Merge agents/systems first; the hook definitions come with it.
 ## M08p: melee hit effects, kamikaze mines (glue)
 
 `docs/handoff/SYSTEMS_M08P_melee_hit_mines_glue.patch`, applied after the M08o patch (against 08k).
+
+## M09b: bot (non-local participant) weapon audio (glue recipe for the 09a merge of agents/gameplay 5151374)
+
+Systems API (agents/systems): `World::preloadParticipantWeaponAudio(classes)`, `onParticipantFired(cls, from)`,
+`onParticipantImpact(cls, at, victimPlayer)`. The weapon class string is `"TransContent.TnWeapon" + WeaponDef::id`.
+
+Glue (Integration, after merging Gameplay's bots; untested until a tree has both):
+1. Right after `launchMatch` / when the roster is final: for every `Match::players()[p]` with p != localPlayer_, collect
+   `"TransContent.TnWeapon" + id` for each of `selection.weapons` (via findWeaponDef) plus the vehicle weapons of
+   `resolveChassis(selection, match.faction(p))`, and call `preloadParticipantWeaponAudio(classes)` once. This decodes the
+   bots' cues at load, not on a bot's first shot.
+2. At the end of `World::tick` (participantShots_ is cleared at the start of the next tick), for this step's
+   `participantShots()`:
+   - once per distinct `player`: `onParticipantFired(cls(shot.weapon), shot.from)` (a shotgun's pellets share one fire sound);
+   - for every shot with `impact`: `onParticipantImpact(cls(shot.weapon), shot.to, hitPlayer)`. Pass -1 (world /
+     destructible impact sound) until Gameplay adds the hit player to ParticipantShot. A pawn hit then plays the
+     hit-effect sound instead, as on the local path.
+3. Projectiles need nothing: bot rockets go through spawnProjectile, which already reaches onProjectileSpawned / Exploded.
+Bots' muzzle / tracer FX are not drawn yet (Gameplay PARTIAL), so the fire sound plays at the shot origin (eye + aim).

@@ -468,8 +468,9 @@ bool World::loadMapAudio(const std::string& level) {
         CharacterAudio::loadWeaponCues(cues_, weaponClass_);
         CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), weaponClass_);   // the targets' hit sounds
         CharacterAudio::loadAbilityCues(cues_);                                                // [Systems M08i]
-        lastHitEffect_.clear();
+        lastHitEffect_.clear(); participantHitEffect_.clear();
         for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
+        for (const std::string& c : participantWeaponClasses_) ensureWeaponAudio(c);   // [Systems M09b] the bots' weapons
         const SoundCues::LocStats& ls = SoundCues::locStats();
         LOG_INFO("localized waves (language %s): %d from the _LOC twin, %d merged copy of that twin, %d not played",
                  std::getenv("WFC_LANGUAGE") ? std::getenv("WFC_LANGUAGE") : "INT", ls.twin, ls.merged, ls.skipped);
@@ -1134,6 +1135,41 @@ void World::onProjectileSpawned(int key, const std::string& weaponClass, const c
 }
 
 void World::onProjectileMoved(int key, const core::Vec3& pos) { weaponAudio_.projectileMoved(cues_, key, pos); }
+
+void World::preloadParticipantWeaponAudio(const std::vector<std::string>& classes) {
+    for (const std::string& c : classes) {
+        if (c.empty()) continue;
+        if (std::find(participantWeaponClasses_.begin(), participantWeaponClasses_.end(), c) == participantWeaponClasses_.end())
+            participantWeaponClasses_.push_back(c);
+        ensureWeaponAudio(c);                        // no-op until the level's audio is loaded (then re-applied there)
+    }
+}
+
+void World::onParticipantFired(const std::string& weaponClass, const core::Vec3& from) {
+    ensureWeaponAudio(weaponClass);                  // safety net; the match-load preload makes this a no-op
+    SoundCues::Emitter e;
+    e.pos = from;                                    // kWorld at the shot origin (bots draw no held weapon yet)
+    weaponAudio_.fire(cues_, weaponClass, false, e, core::length(from - listenerPos_));
+}
+
+void World::onParticipantImpact(const std::string& weaponClass, const core::Vec3& at, int victimPlayer) {
+    const float dist = core::length(at - listenerPos_);
+    if (victimPlayer >= 0) {
+        // A pawn hit: its TnHitEffectPlayer entry for the damage type, retriggered at most every RetriggerTime (the local
+        // path's rule, keyed per weapon class) [CONF data; the victim's own SoundEventSet: default profile, as the targets].
+        const WeaponHitEffect* he = CharacterAudio::weaponHitEffect(weaponClass);
+        if (!he || !he->causesBlood || he->hitEvent.empty()) return;
+        const std::pair<int, int> key{victimPlayer, he->index};
+        auto it = participantHitEffect_.find(key);
+        if (it != participantHitEffect_.end() && hitClock_ - it->second < he->retrigger) return;
+        participantHitEffect_[key] = hitClock_;
+        const std::string cue = CharacterAudio::defaultProfile().voiceCue(he->hitEvent);
+        if (!cue.empty()) cues_.play(cue.c_str(), at, dist);
+        return;
+    }
+    const std::string& impact = CharacterAudio::weaponCue(weaponClass, "DefaultImpactSound");
+    if (!impact.empty()) cues_.play(impact.c_str(), at, dist);
+}
 
 void World::onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos) {
     weaponAudio_.projectileExploded(cues_, key, weaponClass, pos, core::length(pos - listenerPos_));
