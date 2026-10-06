@@ -102,18 +102,19 @@ void checkNativeVehicle(Report& r) {
         save(g, "nv_hover_jump_stationary");
         r.conf("hover_jump_stationary.dvz", after.vel.y - before.vel.y, 12.0, 0.4, "m/s", kP4, kGameplay, "vertical velocity change from rest");
         r.conf("hover_jump_stationary.horizontal_kept", hspeed(after), 0.0, 0.05, "m/s", kP4, kGameplay, "no horizontal velocity from a stationary hop");
-        // Airborne: TnHoverCarSimulation.UpdateTurn REPLACES the angular velocity every step with the full correction to upright
-        // (mask 1,1,1 while ShouldUpright = no contact or up.Z < 0.01): upright within one step, no oscillation [RE TARGETED_PASS4
-        // §A4, CONFIRMED]. Supersedes the pre-pass-4 "5% of the error per 30 Hz tick" expectation (0.95 / tick).
+        // Airborne / inverted (ShouldUpright): UpdateTurn's pitch / roll pull is 0.05 x error / dt - 5% of the error per tick, not a
+        // one-step snap [RE TARGETED_PASS4 §A4 as corrected by RE 5448755 / 6bb8855; Gameplay Pass 24m].
         std::vector<double> airPitch;
-        for (const Frame& f : g.trace()) if (f.t > after.t && f.att.valid && f.att.contacts == 0) airPitch.push_back(std::fabs(f.att.pitch));
-        double residual = 0; for (size_t k = 2; k < airPitch.size(); ++k) residual = std::max(residual, airPitch[k]);   // after the first airborne steps
-        if (airPitch.size() > 2)
-            r.conf("upright.airborne_residual_pitch", residual, 0.0, 0.004, "rad", "RE TARGETED_PASS4 §A4: airborne UpdateTurn replaces the angular "
-                   "velocity with the full upright correction each step (critically damped, no oscillation)", kGameplay,
-                   "max |pitch| while no probe touches, after the first airborne steps");
-        else r.info("upright.airborne_residual_pitch", -1, "rad", "no airborne samples (the hop never left the probes)");
-        r.info("upright.grounded", 0, "", "not a measurement: grounded attitude = springs + 0.05 x error / dt UpdateTurn pull (§A4) - see step_*.attitude_follows_terrain");
+        for (const Frame& f : g.trace()) if (f.t > after.t && f.att.valid && f.att.contacts == 0) airPitch.push_back(f.att.pitch);
+        double ratio = -1; int nr = 0; double acc = 0;
+        for (size_t k = 4; k + 2 < airPitch.size(); k += 2)
+            if (std::fabs(airPitch[k]) > 0.004) { acc += airPitch[k + 2] / airPitch[k]; ++nr; }
+        if (nr) ratio = acc / nr;
+        if (nr)
+            r.conf("upright.airborne_ratio_per_tick", ratio, 0.95, 0.03, "", "RE TARGETED_PASS4 §A4 (corrected): airborne / inverted only, 5% of the "
+                   "pitch / roll error per tick", kGameplay, "pitch ratio per 1/30 s while no probe touches");
+        else r.confTruth("upright.airborne_ratio_per_tick", false, kP4, kGameplay, "no airborne pitch error left to measure a ratio: a one-step snap (pre-Pass-24m reading of §A4) reads like this");
+        r.info("upright.grounded", 0, "", "not a measurement: grounded and upright, UpdateTurn replaces only yaw (mask 0,0,1); pitch / roll come from the springs (§A4 corrected)");
         r.info("hover_lean.anim_blend", -1, "",
                "TnAccelerationAnimBlend velocity-driven lean (ClampLength(v,2000)/2000 x max(0,up.Z)): animation weights are not exposed to "
                "the harness - code-level only (Gameplay Pass 14 provenance)");
@@ -147,8 +148,8 @@ void checkNativeVehicle(Report& r) {
         r.confTruth(id + ".no_one_frame_snap", tCross > 0 && maxDy < 0.5 * h, kP1, kGameplay,
                     "largest one-step (1/60 s) COM height change " + std::to_string(maxDy) + " m crossing a " + std::to_string(h) +
                         " m riser (a snap moves the full riser height in one step)");
-        // OPEN (2026-10-06): since §A4 the grounded attitude comes only from the diagonal springs (angular velocity reset each step);
-        // Gameplay asked RE whether a riser of this size visibly pitches the original - KNOWN until RE answers, not a regression.
+        // §A4 corrected (RE 5448755 / 6bb8855): grounded pitch / roll angular velocity carries over (only yaw is replaced), so a riser
+        // pitches the hull - RE pitch-plane estimate: car 2.6-2.8 deg nose-up at 1500 UU/s on 12.5 UU, ~5.5 deg on 25 UU; truck 2.0 / 4.0.
         r.confTruth(id + ".attitude_follows_terrain", attValid && pitchMax > 0.5, kP2, kGameplay,
                     attValid ? "max |pitch| " + std::to_string(pitchMax) + " deg, |roll| " + std::to_string(rollMax) + " deg crossing the riser"
                              : std::string("no rigid-body attitude in this build"));
@@ -268,12 +269,9 @@ void checkNativeVehicle(Report& r) {
         r.conf("hover_jump.horizontal_kept", hspeed(after) - hspeed(before), 0.0, 0.3, "m/s", kP4, kGameplay,
                "horizontal speed change on the jump step (world-Z impulse only)");
         if (after.att.valid)
-        {   // RE TARGETED_PASS4 §A4: the jump's nose-up spin (A1, JumpAngularSpeed 1.0) is cancelled by the upright drive, which REPLACES
-            // the angular velocity each step; UpdateJumping vs UpdateTurn order is not traced [HIGH], so 0 .. -1 rad/s (one step at most).
-            const double kick = after.att.angVel.y - before.att.angVel.y;
-            r.confTruth("hover_jump.pitch_kick", kick <= 0.05 && kick >= -1.25, kP4, kGameplay,
-                        "local pitch-axis angular velocity change " + std::to_string(kick) + " rad/s (band 0 .. -1 per §A4; local -Y = nose up)");
-        }
+        if (after.att.valid)   // UpdateJumping's angular kick is not masked on the ground: about -1 rad/s right after the jump [§A4 corrected]
+            r.conf("hover_jump.pitch_kick", after.att.angVel.y - before.att.angVel.y, -1.0, 0.25, "rad/s", kP4, kGameplay,
+                   "local pitch-axis angular velocity change (JumpAngularSpeed 1.0, local -Y = nose up)");
         r.info("hover_jump.apex_above_rest", apex - rest, "m", "ballistic 1200^2/(2*1940.4) = 3.71 m plus the spring push (native note)", 3.71);
     }
 
