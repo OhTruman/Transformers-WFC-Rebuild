@@ -144,6 +144,11 @@ public:
     void setBarrierAudio(bool alive, bool fading, const core::Vec3& pos);
     void setSentryAudio(bool alive, int target, const core::Vec3& pos);
     void onSentryShot(const core::Vec3& muzzle, bool worldHit, const core::Vec3& hit);
+    // The local player activated kill streak `id` (TnDataProvider_Killstreak UniqueId): its Self announcement
+    // (team: the activator's, 0 Autobots / 1 Decepticons, for the FactionAnnouncementSound fallback).
+    void onLocalKillstreakActivated(const std::string& id, int team);
+    void setOvershieldAudio(float overshieldHealth);   // the local pawn's overshield health, every tick (alive)
+    void onDodgeHitWall();                             // the local dodge hit a wall (robot form)
     // Drain, every tick while the local Drain buff runs: targets this tick (HealSound), and each victim (DamageSound).
     void onDrainTick(int targets);
     void onDrainVictimTick(const core::Vec3& victimPos);

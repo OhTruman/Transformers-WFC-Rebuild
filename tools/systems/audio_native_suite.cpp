@@ -1832,6 +1832,17 @@ static void testObjectiveMessages() {
         {"round time up", [&] { return m.roundMessage(2); }, "MP_RoundTimeUp"},
         {"hill moved", [&] { return m.kothZoneActivated(); }, "MP_HillMovedDialog"},
         {"hill contested", [&] { return m.kothDefenderChanged(254); }, "MP_HillContestedDialog"},
+        // TnKillstreakActivated* by role (RE pass 5 s12 addendum 11)
+        {"Orbital Recon, activator", [&] { return m.killstreakActivated("OrbitalReconStreak", game::MatchAudio::StreakRole::Self, 0); },
+         "MP_OrbitalReconActivatedSelfDialog"},
+        {"Orbital Recon, activator's team", [&] { return m.killstreakActivated("OrbitalReconStreak", game::MatchAudio::StreakRole::Friendly, 0); },
+         "MP_OrbitalReconActivatedFriendlyDialog"},
+        {"Orbital Recon, the other team", [&] { return m.killstreakActivated("OrbitalReconStreak", game::MatchAudio::StreakRole::Enemy, 0); },
+         "MP_OrbitalReconActivatedEnemyDialog"},
+        {"Ammo Matrix, activator", [&] { return m.killstreakActivated("RefillAmmoStreak", game::MatchAudio::StreakRole::Self, 1); },
+         "MP_AmmoMatrixOnlineDialog"},
+        {"Omega Missile, the other team: FactionAnnouncementSound[Decepticons] fallback",
+         [&] { return m.killstreakActivated("GuidedMissileStreak", game::MatchAudio::StreakRole::Enemy, 1); }, "MP_DecepticonFiredOmegaMissleDialog"},
     };
     for (const Case& c : cases) {
         idle();
@@ -1839,6 +1850,10 @@ static void testObjectiveMessages() {
         const std::string want = cueOf(c.event);
         CHECK(ok && !want.empty() && m.currentCue() == want, "%s -> %s (%s, now %s)", c.what, c.event, want.c_str(), m.currentCue().c_str());
     }
+    idle();
+    CHECK(!m.killstreakActivated("RefillAmmoStreak", game::MatchAudio::StreakRole::Enemy, 0) &&
+          !m.killstreakActivated("NoSuchStreak", game::MatchAudio::StreakRole::Self, 0),
+          "a role with no sound and no faction list (Ammo Matrix, enemy) and an unknown streak: silent");
     idle();
     const int before = cues.activeInstances("BL_HUD_INTERFACE.CTF_FLAG_CAPTURE");
     m.flagMessage(3);
@@ -2262,6 +2277,13 @@ static void testAbilityActors() {
     CHECK(active("BL_TRANS_POWER.SENTRY_SHOOT") >= 1 && active("BL_TRANS_POWER.SENTRY_IMPT") == 1, "shots: SENTRY_SHOOT each, SENTRY_IMPT on the world hit only");
     aa.sentry(cues, false, -1, p, 5.0f); settle(0.4f);
     CHECK(active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP") == 0 && active("BL_TRANS_POWER.SENTRY_EXPL") == 1, "destroyed: loop fades, SENTRY_EXPL");
+    // Overshield off at 0 (depleted or expired), not while it is 0; dodge wall hit.
+    const game::SoundCues::Emitter at{p, game::SoundCues::kWorld, {0, 0, 0}, ""};
+    aa.overshield(cues, 0.0f, at); aa.overshield(cues, 300.0f, at); aa.overshield(cues, 120.0f, at);
+    CHECK(active("BL_HUD_INTERFACE.OVERSHIELD_POWER_DOWN") == 0, "overshield up / draining: no power-down yet");
+    aa.overshield(cues, 0.0f, at); aa.overshield(cues, 0.0f, at);
+    CHECK(active("BL_HUD_INTERFACE.OVERSHIELD_POWER_DOWN") == 1, "overshield reaches 0: OVERSHIELD_POWER_DOWN once");
+    CHECK(aa.dodgeHitWall(cues, at) >= 0 && active("BL_MELEE_IMPT.MTL_DASH_WALL_IMPT") == 1, "dodge into a wall: MTL_DASH_WALL_IMPT");
     aa.sentry(cues, true, -1, p, 5.0f); aa.barrier(cues, true, false, p, 5.0f); aa.guidedMissile(cues, true, p, 5.0f);
     aa.stopAll(cues); settle(0.1f);
     CHECK(active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP") == 0 && active("BL_TRANS_POWER.BARRIER_LP") == 0 &&

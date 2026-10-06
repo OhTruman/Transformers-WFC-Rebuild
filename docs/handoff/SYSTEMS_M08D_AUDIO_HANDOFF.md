@@ -187,3 +187,7 @@ It adds two read-only Character accessors (actionClipIndex / actionTime) and two
 `docs/handoff/SYSTEMS_M08M_ability_actors_glue.patch`, applied after M08l. It adds 3 per-tick calls in tickAbilityAudio, the onGuidedMissileExploded call in detonateGuidedMissile, and onSentryShot in tickSentry's fire.
 
 Default loudness is decided: keep 80 / 80 / 80 -> 0.8 (the original; about -1.9 dB vs pre-M08g). No change.
+
+## M08n: kill-streak announcements, overshield off, dodge wall hit (glue)
+
+`docs/handoff/SYSTEMS_M08N_killstreak_overshield_glue.patch`, applied after M08m (Character.h, CharacterMovement.cpp, World.h / .cpp).

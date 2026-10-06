@@ -3,6 +3,24 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08n (2026-10-06) - kill-streak announcements, overshield off, dodge wall hit
+- **Kill streaks** (RE pass 5 s12 addendum 11, CONF):
+  * Data chain: TransCustomization.ini [<Id> TnDataProvider_Killstreak] ObjectPath -> AnnouncementMessageType (TnKillstreakActivated*)
+    -> Self / Friendly / EnemyAnnouncementSound; a role with none falls back to FactionAnnouncementSound[activator team].
+  * Everything plays through the announcer queue. `MatchAudio::killstreakActivated(id, role, team)`; `__match_messages__.killstreaks`
+    (gen_level_audio.py; UE names are case-insensitive: ini TnKillStreak* vs TnKillstreak*).
+  * The glue plays the Self line when the local player triggers a streak. Earning a streak is silent in the original.
+- **OvershieldOffSound** (TnPlayerPawn.Tick): overshield health reaching 0 (depleted or expired) -> OVERSHIELD_POWER_DOWN at the pawn.
+- **HitWallSound** (InRobotForm.HitWall during a dodge) -> MTL_DASH_WALL_IMPT at the pawn.
+- **Glue:** `docs/handoff/SYSTEMS_M08N_killstreak_overshield_glue.patch` (after M08m).
+  * A Character::dodgeWallHits_ pulse in CharacterMovement's Dodging.OnHitWall.
+  * Per-tick overshield / wall-hit reads; the Self announcement in triggerLocalKillstreak.
+- **In game** (participant harness with audio on, test tree):
+  * Live kills play the killer's KilledRobotSound. This closes M08i's "kill confirm not heard live".
+  * Orbital Recon's Self line and Improved Orbital Recon's faction fallback play. Back-to-back streaks queue / drop per the
+    announcer's single slot (the harness restarts matches rapidly).
+- Suite 700 / 0 (role routing, faction fallback, silent roles, overshield, wall hit); wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS M08m (2026-10-06) - guided missile, barrier, sentry sounds; default loudness decided
 - **Guided missile** (TnGuidedMissile.Mesh = GuidedMissile_PROJMESH): FlightSound SHOOT_TRAIL from launch, following the missile;
   on detonation the flight fades 0.25 s and ExplosionSound EXPL_IMPT_WORLD plays (HmProjectile, as the weapon projectiles).

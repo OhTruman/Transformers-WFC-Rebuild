@@ -75,6 +75,12 @@ public:
     void sentry(SoundCues& cues, bool alive, int target, const core::Vec3& pos, float listenerDist);
     void sentryShot(SoundCues& cues, const core::Vec3& muzzle, float muzzleDist, bool worldHit, const core::Vec3& hit, float hitDist);
 
+    // TnPlayerPawn.Tick [RE pass 5 s12 addendum 11, CONF]: the overshield health reaching 0 while the overshield is up
+    // (depleted or expired) -> OvershieldOffSound at the pawn. Every tick with the local pawn's overshield health.
+    void overshield(SoundCues& cues, float overshieldHealth, const SoundCues::Emitter& pawn);
+    // InRobotForm.HitWall during a dodge -> TnPawn.HitWallSound at the pawn (no speed / angle condition).
+    int dodgeHitWall(SoundCues& cues, const SoundCues::Emitter& pawn);
+
     void stopAll(SoundCues& cues);                   // level unload / match restart: loops stop, nothing else plays
     int liveLoops(const SoundCues& cues) const;      // buff sounds still playing (diagnostics)
     static std::string abilityClass(const std::string& id);   // "Barrier" -> "TnAbilityBarrier"
@@ -88,6 +94,7 @@ private:
     bool missileAlive_ = false; int missileLoop_ = -1;
     bool barrierAlive_ = false, barrierFading_ = false; int barrierLoop_ = -1;
     bool sentryAlive_ = false; int sentryTarget_ = -1, sentryLoop_ = -1;
+    float overshield_ = 0.0f;
 };
 
 } // namespace game

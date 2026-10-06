@@ -212,6 +212,15 @@ bool MatchAudio::playUiCue(const std::string& q) {
     return cues_.play(q.c_str(), e, 0.0f) >= 0;
 }
 
+bool MatchAudio::killstreakActivated(const std::string& id, StreakRole role, int activatorTeam) {
+    const assets::Json& k = messages()["killstreaks"][id];
+    const char* field = role == StreakRole::Self ? "self" : role == StreakRole::Friendly ? "friendly" : "enemy";
+    std::string ev = k[field].asString();
+    const assets::Json& fac = k["faction"];
+    if (ev.empty() && activatorTeam >= 0 && (size_t)activatorTeam < fac.size()) ev = fac[(size_t)activatorTeam].asString();
+    return !ev.empty() && announcerEvent(ev);
+}
+
 bool MatchAudio::objectiveBroadcast(const std::string& tag, int value) {
     auto sub = [&](const char* cls) -> std::string {
         if (tag.rfind(cls, 0) != 0) return "#";

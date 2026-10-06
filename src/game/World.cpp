@@ -1185,6 +1185,14 @@ void World::setSentryAudio(bool alive, int target, const core::Vec3& pos) {
     abilityAudio_.sentry(cues_, alive, target, pos, core::length(pos - listenerPos_));
 }
 
+void World::setOvershieldAudio(float os) { abilityAudio_.overshield(cues_, os, atPawn()); }
+
+void World::onDodgeHitWall() { abilityAudio_.dodgeHitWall(cues_, atPawn()); }
+
+void World::onLocalKillstreakActivated(const std::string& id, int team) {
+    levelAudio_.match().killstreakActivated(id, MatchAudio::StreakRole::Self, team);
+}
+
 void World::onSentryShot(const core::Vec3& muzzle, bool worldHit, const core::Vec3& hit) {
     abilityAudio_.sentryShot(cues_, muzzle, core::length(muzzle - listenerPos_), worldHit, hit, core::length(hit - listenerPos_));
 }

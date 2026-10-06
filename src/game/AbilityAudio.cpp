@@ -175,7 +175,21 @@ void AbilityAudio::sentryShot(SoundCues& cues, const core::Vec3& muzzle, float m
     if (worldHit && !impact.empty()) cues.play(impact.c_str(), hit, hitDist);
 }
 
+void AbilityAudio::overshield(SoundCues& cues, float os, const SoundCues::Emitter& pawn) {
+    if (overshield_ > 0.0f && os <= 0.0f) {
+        const std::string& q = CharacterAudio::classSound("TnPlayerPawn", "OvershieldOffSound");
+        if (!q.empty()) cues.play(q.c_str(), pawn, 0.0f);
+    }
+    overshield_ = os;
+}
+
+int AbilityAudio::dodgeHitWall(SoundCues& cues, const SoundCues::Emitter& pawn) {
+    const std::string& q = CharacterAudio::classSound("TnPawn", "HitWallSound");
+    return q.empty() ? -1 : cues.play(q.c_str(), pawn, 0.0f);
+}
+
 void AbilityAudio::stopAll(SoundCues& cues) {
+    overshield_ = 0.0f;
     for (int* id : {&barrierLoop_, &sentryLoop_}) { if (*id >= 0) cues.stop(*id, 0.0f); *id = -1; }
     barrierAlive_ = barrierFading_ = sentryAlive_ = false; sentryTarget_ = -1;
     if (missileLoop_ >= 0) cues.stop(missileLoop_, 0.0f);
