@@ -292,6 +292,7 @@ void Application::attachPresenter() {
         load();
         setRendererYield(renderer_, false);
         core::setLoadYield(nullptr);
+        { core::prof::Scope prof("movie.prewarm"); frontend_->prewarmLoadingUnderlay(); }   // still under the loading screen
         if (frontend_->sceneDrawable()) {   // the new scene's first (costly) draw happens under the loading screen
             core::prof::Scope prof("scene.prewarm");
             platform::InputFrame in;

@@ -702,8 +702,36 @@ void FrontendRuntime::stopMovieAudio() {
     movieAudioPlaying_ = false;
 }
 
+namespace {
+// The extracted movies carry region / language suffixes: <name>_NA_INT, then <name>_INT, then <name>.
+std::string localizedMovie(const std::string& b) {
+    for (const std::string& c : {b + "_NA_INT", b + "_INT"})
+        if (std::ifstream(Catalog::defaultExtractedRoot() + "/movies/" + c + ".mkv").good()) return c;
+    return b;
+}
+}
+
+void FrontendRuntime::prewarmLoadingUnderlay() {
+    if (underlayPrewarmed_) return;
+    underlayPrewarmed_ = true;
+    const std::string b = catalog_.loadingMovieDefault();
+    if (b.empty() || !movieFactory_ || std::getenv("WFC_NO_VIDEO")) return;
+    const std::string name = localizedMovie(b);
+    if ((video_ && videoName_ == name) || (parkedUnderlay_ && parkedName_ == name)) return;
+    std::unique_ptr<platform::IMoviePlayer> p(movieFactory_());
+    if (!p || !p->open(Catalog::defaultExtractedRoot() + "/movies/" + name + ".mkv")) return;
+    p->advance(0.0);   // the decoder's first frame (its warm-up) also happens here
+    parkedUnderlay_ = std::move(p);
+    parkedName_ = name;
+    FlowTrace::emit("movie.prewarm", {{"movie", name}});
+}
+
 void FrontendRuntime::releaseVideo() {
-    if (video_ && videoLoops_) { parkedUnderlay_ = std::move(video_); parkedName_ = videoName_; }
+    // Only the travel underlay is parked (the boot startup movie never plays again and must not replace it).
+    if (video_ && videoLoops_ && videoName_ == localizedMovie(catalog_.loadingMovieDefault())) {
+        parkedUnderlay_ = std::move(video_);
+        parkedName_ = videoName_;
+    }
     video_.reset();
 }
 
@@ -754,9 +782,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         const std::string& b = flow_.loading().binkMovie;
         if (b != underlayFor_) {
             underlayFor_ = b;
-            underlay_ = b;
-            for (const std::string& c : {b + "_NA_INT", b + "_INT"})
-                if (std::ifstream(Catalog::defaultExtractedRoot() + "/movies/" + c + ".mkv").good()) { underlay_ = c; break; }
+            underlay_ = localizedMovie(b);
         }
         want = underlay_;
         if (flow_.loading().kind == "InitialStartup" && !bootDone_) bootUnderlay_ = underlay_;
