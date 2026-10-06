@@ -3397,6 +3397,18 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING M75 (2026-10-06)
+- Loading-screen warm-up draw of the world (first match frame: world part 21 -> 3 ms). The larger first-frame cost is the player character's materials, already prewarmed in the player flow (Gameplay startLocalMatch); only direct-boot test runs pay it.
+
+## RENDERING M74 (2026-10-06)
+- Energy-death "Defrag" dissolve: each form's original EnergyDeathMaterial, driven per player (IRenderer::setDrawEnergyDeath) by Gameplay.
+
+## RENDERING M73 (2026-10-06)
+- Runtime decals (IRenderer::spawnDecal): the robot death scorch, 30 s, 50-decal pool; Gameplay places it on robot deaths.
+
+## RENDERING M72 (2026-10-06)
+- Every map now compiles all its materials (except one RandomSeed prop): Broken Hope and Remnant characters use their original materials instead of the fallback.
+
 ## RENDERING M69-M70 (2026-10-06)
 - Create-a-Character: class picks no longer freeze (shared AnimSet cache + lobby-load preparation).
 - Weapon material parameters per player (Plasma Cannon charge glow) for Gameplay to drive.

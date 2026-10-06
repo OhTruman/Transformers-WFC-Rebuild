@@ -12,6 +12,7 @@ import json, os, struct, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ue3obj import Repo, map_packages, CONTENT, COOKED  # noqa: E402
 import matc  # noqa: E402
+import impact_decals  # noqa: E402
 import xbox_texture  # noqa: E402
 
 UMODEL = r'F:/Transformers Rebuild/AssetTools/bin/umodel/umodel_64.exe'
@@ -196,7 +197,38 @@ def main():
               open(os.path.join(out, 'material_instance_actors.json'), 'w'), indent=1)
     mia_mats = {m.lower() for m in mia.values()}
     if mia: print('material instance actors: %d (runtime parameters)' % len(mia))
+    # M72: materials the world references but this map's packages don't export (e.g. DES_IAC_WallPanelSign_p's
+    # MICs: the destructible's class package is a seekfree stub; the objects are cooked into other maps' packages).
+    # The packages of the other MP maps that export them are added as fallbacks (original cooked data, not a
+    # substitute); the map's own copies still win.
+    def usable(r, n):                 # a Material, or a MIC whose cooked body names its Parent (stubs don't)
+        c = r.cls(n)
+        return c == 'Material' or (c == 'MaterialInstanceConstant' and bool((r.obj(n) or {}).get('Parent')))
+    missing = sorted(n for n in (names - {None}) | set(extra) if not usable(repo, n))
+    print('materials missing from this map: %d' % len(missing))
+    if missing:
+        ufb = []
+        for other in sorted(os.listdir(os.path.join(VS, 'Maps'))):
+            if not other.startswith('MP_') or other == mapname or not missing: continue
+            for pk in map_packages(other)[0]:
+                pr = Repo([pk])
+                found = [n for n in missing if usable(pr, n)]
+                if found:
+                    ufb.append(pk)
+                    missing = [n for n in missing if n not in found]
+        if ufb:
+            print('materials from other maps packages: %s' % ', '.join(ufb))
+            repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx'] + ufb)
     mats = sorted(names - {None}) + extra
+    # M74 energy-death (Defrag) instances: the form-mesh package -> instance table goes with the render data
+    ed = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'energy_death_materials.json'), encoding='utf-8'))
+    defrag_mats = {m.lower() for m in ed['materials']}
+    # M76 weapon impact decals: per-map tables (weapon / surface / material -> PhysMaterial) and their decal materials
+    impact = impact_decals.build(repo, sorted(names - {None}))
+    for dm in impact_decals.decal_materials(impact):
+        if dm not in mats: mats.append(dm)
+    print('impact decals: %d weapons, %d surfaces, %d materials with a PhysMaterial, decal materials %s' % (
+        len(impact['weapons']), len(impact['surfaces']), len(impact['materials']), impact_decals.decal_materials(impact)))
     tr = TexResolver(repo, out)
 
     # M70: weapon mesh MaterialParameterModifiers (TnWeaponMesh.SetMaterialParameter(index, value) sets the named
@@ -221,6 +253,8 @@ def main():
                 if mp in extra and mp.split('.')[0].upper().startswith('UI_'):
                     rt = 'all'                 # Canvas materials: parameters set per draw (MaterialInstanceDynamic)
                 wep_rt = weapon_rt if mp.split('.')[0].upper().startswith('WEP_') else ()
+                if mp.lower() in defrag_mats:
+                    wep_rt = ('Defrag',)       # M74: TnDefragger ramps the scalar 'Defrag' 1 -> 0 per draw owner
                 mc = matc.MatCompiler(repo, mp, tr, runtime_params=rt, extra_runtime=wep_rt)
                 glsl, info = mc.build()
                 res[mp] = {'glsl': glsl, 'info': info, 'error': None}
@@ -235,6 +269,11 @@ def main():
         tr.cache.clear(); tr.missing.clear()
         res = run()
     json.dump(res, open(os.path.join(out, 'materials_glsl.json'), 'w'), indent=1)
+    json.dump(impact, open(os.path.join(out, 'impact_decals.json'), 'w'), indent=1)
+    # M74: form-mesh package -> energy-death instance, for the instances that compiled
+    json.dump({'generated_by': 'tools/render/build_materials.py (energy_death_materials.json)',
+               'by_package': {k: v for k, v in ed['by_package'].items() if (res.get(v) or {}).get('glsl')}},
+              open(os.path.join(out, 'energy_death.json'), 'w'), indent=1)
     ok = sum(1 for v in res.values() if not v['error'])
     print('materials: %d ok / %d' % (ok, len(res)))
     for k, v in res.items():

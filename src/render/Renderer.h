@@ -89,6 +89,13 @@ public:
     // later dynamic draw of that owner whose material exposes the name, until cleared. Scalars use rgba[0].
     virtual void setDrawMaterialParam(const std::string& name, const float rgba[4]) { (void)name; (void)rgba; }
     virtual void clearDrawMaterialParam(const std::string& name) { (void)name; }
+    // M74 energy death ("Defrag", RE pass 5 s12 addenda 24 / 26): the CURRENT draw owner's dynamic meshes are drawn
+    // with their form's EnergyDeathMaterial (TR_Defrag_MAT instance, looked up by each material's package) at
+    // Defrag = `defrag` (1 = whole, 0 = gone: a straight sweep along U with a glowing edge), character colours
+    // kept. Materials without an energy-death instance (weapons, effects) draw unchanged. defrag < 0 = off.
+    // TnDefragger ramps it 1 -> 0 linearly over TransitionTime (car / tank hull gib: 0.5..1 s delay, 4.5 s; jet hull:
+    // 6 s; robot body + arm: melee deaths only, 3 s).
+    virtual void setDrawEnergyDeath(float defrag) { (void)defrag; }
 
     // Original-data rendering (WFC shader path): load the map's compiled materials, baked
     // directional lightmaps, static lights and height fog produced by tools/render/*.py.
@@ -344,6 +351,36 @@ public:
     virtual int spawnParticleEffect(const std::string& tpl, const core::Vec3& pos, const core::Vec3& forward,
                                     const core::Vec3& up, const float* colorRGBA = nullptr) {
         (void)tpl; (void)pos; (void)forward; (void)up; (void)colorRGBA; return -1;
+    }
+    // M73 runtime decal (UE3 DecalManager.SpawnDecal; RE pass 5 s12 addenda 23 / 27 / 28). glTF metres: `material`
+    // (original object path, e.g. FX_Decals_p.DeathDecal_MAT) projected along `dir` onto the world geometry inside the
+    // box centred on `location` (width x height across, thickness along dir: near / far = -/+ thickness / 2),
+    // rolled by rollDeg. Receivers facing away from the projector are skipped; geometry is clipped to the box
+    // (bNoClip false). UV = 0.5 - (P - location).(tangent, binormal) / (width, height). The decal is drawn at full
+    // strength until `lifetime` seconds (map clock) pass, then removed (no fade). At most 50 live decals (the
+    // engine's MaxActiveDecals, shared by every dynamic decal): the oldest is recycled. Static world geometry only
+    // (no skeletal receivers) [PARTIAL]. Returns an id, or -1 when nothing was hit / no data.
+    // Death scorch (RE s12 add. 23, robot deaths only; the caller does the trace): line trace 300 UU straight down
+    // from the pawn origin; skip when nothing is hit or |N . down| < 0.5; then
+    // spawnDecal("FX_Decals_p.DeathDecal_MAT", hit, {0,-1,0}, s, s, 3.0, roll, 30) with s = (800 + r*150) * 0.01, r and
+    // roll random.
+    virtual int spawnDecal(const std::string& material, const core::Vec3& location, const core::Vec3& dir, float width,
+                           float height, float thickness, float rollDeg, float lifetime) {
+        (void)material; (void)location; (void)dir; (void)width; (void)height; (void)thickness; (void)rollDeg; (void)lifetime;
+        return -1;
+    }
+    // M76 weapon impact decal (HmWeaponMesh.CreateImpactEffects / TnProjectileMesh explosion; RE pass 5 s12 add. 29).
+    // glTF metres; `weaponClass` is the script class (e.g. "TnWeaponAssaultRifle"). The renderer resolves the hit
+    // surface's PhysicalMaterial from the world geometry's material and applies the cooked tables (impact_decals.json):
+    // instant hit (projectile false; caller: hits within 2500 UU only): no decal on a surface without a property object
+    // or with NoDecal; the surface group matching the weapon mesh's WeaponEffectsType, else the weapon's DefaultDecal
+    // (none for sniper / pistols / melee). Projectile (true; caller: skip at throttle >= 3): trace 200 UU along
+    // -normal, the surface's TnWeaponEffectsTypeExplosive group, NoDecal not checked. A random entry of the group;
+    // size min + FRand * range (UniformScale: one FRand for both); random roll unless the entry or the surface
+    // disables it. Returns false when no decal applies.
+    virtual bool spawnImpactDecal(const std::string& weaponClass, const core::Vec3& hit, const core::Vec3& normal,
+                                  bool projectile) {
+        (void)weaponClass; (void)hit; (void)normal; (void)projectile; return false;
     }
     // Tracer / beam templates: placed at start with +X towards end; the end point is kept as the beam target.
     virtual int spawnParticleEffectSegment(const std::string& tpl, const core::Vec3& start, const core::Vec3& end,

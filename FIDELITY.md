@@ -2630,6 +2630,36 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
 
 ---
 
+## MILESTONE 75 — LOADING-SCREEN WARM-UP; FIRST-FRAME COST (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| First match frame "GPU" 150-770 ms | the GPU timer spans the frame; CPU span equal: the GPU waits on submission (no TDR risk) | bc3fa73 diagnostics | CONFIRMED (measured) | — |
+| World share | driver first-draw work, 21-23 ms of frame 1 (Molten / Debris) | split timing | CONFIRMED (measured) | M75 warm-up draw under the loading screen: ~3 ms; +28-40 ms load |
+| Character share | ~160 ms: the player character's material programs + texture decode on its first draw | first-use log frame 1 | CONFIRMED (measured) | covered in the player flow: Gameplay 24o / 24q / 24r prewarm the faction's default and saved custom bodies in startLocalMatch (08o frontend flow: 0 GPU-time warnings); only the direct-boot test path skips it |
+
+## MILESTONE 74 — ENERGY-DEATH DEFRAG DISSOLVE (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Which material | TnFormBlueprint.EnergyDeathMaterial, a TR_Defrag_MAT instance per form (58; two forms borrow another chassis' instance) | cooked blueprints (energy_death_materials.py) | CONFIRMED | table by form-mesh package, compiled with the render data |
+| TR_Defrag_MAT | masked (0.1), unlit; mask U + (2 Defrag - 1) - 0.5; edge glow EdgeEnergyColor (0, 0.5, 2) x (cos(3.1 D) + 1) / 2 ...; colours re-applied | RE s12 add. 24 / 26 (graph) | HIGH (graph) / VISUALLY VERIFIED | compiled from the graph; Defrag runtime per owner |
+| Drivers | Defrag 1 -> 0 linear: car / tank hull gib 0.5..1 s delay, 4.5 s; jet hull 6 s; robot body + arm on melee deaths, 3 s; robot gibs no swap | RE s12 add. 24 | CONFIRMED | `setDrawEnergyDeath` for Gameplay |
+| Shadow / depth of a dissolving body | the owner's parameters reach the shadow caster and depth pre-pass | code order fix | — | not visible at the test viewpoint |
+
+## MILESTONE 73 — RUNTIME DECALS: DEATH SCORCH (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Death scorch | robot deaths: trace 300 UU down, skip glancing (abs(N.down) < 0.5); DeathDecal_MAT (Modulate, unlit), (800 + r 150) UU square, thickness 300 (near / far +-150), random roll, 30 s | RE s12 add. 23 / 27 | CONFIRMED | M73 `spawnDecal`; the caller (Gameplay) owns the trace and the robot-death rule |
+| Decal pool / expiry | MaxActiveDecals 50 shared with impact decals, the oldest recycled; no fade, removed at the lifetime | RE s12 add. 27 / 28 | CONFIRMED (no fade HIGH) | implemented |
+| Projection | receivers facing the projector, clipped to the box; UV per the original decal VS | static decal VS (validated M-static decals) | HIGH | static world receivers only; skeletal receivers not projected [PARTIAL] |
+| Look | (R + Blacks) x 20 modulate: near-black core, flecks above 1 brighten; the compiled PS has no saturate, scene colour is FloatRGB (7e3, <= 31.875) | compiled DeathDecal_MAT + texture stats; RE s12 add. 30 / 31 | VISUALLY VERIFIED / CONFIRMED (no saturate) | float scene target: unclamped as the original |
+| Impact decals | same API: weapon DefaultDecal / PhysMaterial groups, MetalDecal_02/03 MICs of DeathDecal_MAT | RE s12 add. 29 | CONFIRMED (data) | not wired (Gameplay call + materials) |
+
+## MILESTONE 72 — MATERIALS COOKED INTO OTHER MAPS' PACKAGES (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| "no master material" failures | DES_IAC_WallPanelSign_p / DES_IAC_Omega_Cover_p are stub packages; their MICs live in MP_IAC_Streets_ART_m / MP_ESC_BrokenHope_Base_m. Broken Hope / Remnant lack ~50 roster-chassis MICs cooked into other maps | ue3obj package lookups | CONFIRMED | M72: the other MP maps' packages are low-priority fallbacks for missing / stub materials; every map compiles all its materials except the RandomSeed wrecked-soldier prop |
+| Remnant / Broken Hope characters | chassis drew the glTF fallback (white / cyan lights, flat) | before / after capture | VISUALLY VERIFIED | original material and energon glow |
+
 ## MILESTONES 69-70 — CAC PREVIEW ANIMATION CACHE, WEAPON MATERIAL PARAMETERS (2026-10-06)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

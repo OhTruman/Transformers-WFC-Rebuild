@@ -715,6 +715,12 @@ bool Pipeline::load(const std::string& mapName) {
         mats_[kv.first] = std::move(s);
     }
 
+    {   // M74 energy-death instances by form-mesh package (build_materials energy_death.json)
+        assets::Json E;
+        std::string ej = readText(dataDir_ + "/energy_death.json");
+        if (!ej.empty() && assets::Json::parse(ej, E))
+            for (const auto& kv : E["by_package"].obj) energyDeath_[kv.first] = kv.second.asString();
+    }
     {
         assets::Json S;
         std::string sj = readText(dataDir_ + "/slot_materials.json");
@@ -1046,7 +1052,7 @@ struct FirstUseTimer {
     std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
     ~FirstUseTimer() {
         static const bool on = std::getenv("WFC_RENDERSTATS") != nullptr;
-        if (!on || frame <= 2) return;
+        if (!on || frame <= 0) return;   // frame 0 = the load; frames 1-2 are the first presented (M75: they were hidden)
         double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         LOG_INFO("wfc first-use: frame %d %s %s %.2f ms", frame, kind, name.c_str(), ms);
     }
@@ -1939,7 +1945,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             const bool bakedPlacement = model.m[0] == 1.0f && model.m[5] == 1.0f && model.m[10] == 1.0f &&
                                         model.m[12] == 0.0f && model.m[13] == 0.0f && model.m[14] == 0.0f;
             static const bool noFrustum = std::getenv("WFC_NOFRUSTUMCULL") != nullptr;   // diagnostics: culling regression test
-            if (g.world && !moving && bakedPlacement && !noFrustum) {
+            if (g.world && !moving && bakedPlacement && !noFrustum && !warmup_) {
                 bool out = false;
                 for (int f = 0; f < 6 && !out; ++f) {
                     const float* pl = frustum_[f];
@@ -2119,6 +2125,127 @@ void Pipeline::draw(int id, const core::Mat4& model) {
         drawSubs(meshes_[(size_t)decalMesh_], model, false);
         glDisable(GL_POLYGON_OFFSET_FILL);
     }
+    if (g.drawsBsp && !rtDecals_.empty()) {
+        updateRuntimeDecals();
+        if (rtDecalMesh_ >= 0 && !rtDecals_.empty()) {   // M73: the same bias as the static decals [HIGH]
+            glEnable(GL_POLYGON_OFFSET_FILL);
+            glPolygonOffset(-1.0f, -4.0f);
+            drawSubs(meshes_[(size_t)rtDecalMesh_], model, false);
+            glDisable(GL_POLYGON_OFFSET_FILL);
+        }
+    }
+}
+
+// M75 (Integration 08n: the first match frame read 150-770 ms on the GPU timer, CPU span equal: the GPU waiting on
+// submission). The world's share is the driver's first-draw work over ~2,800 draws: 21-23 ms of the first frame on
+// Molten / Debris, ~3 ms after this warm-up, which costs 30-40 ms of load (~380 ms with a cold driver shader cache).
+// The rest of that frame is the player character's materials (programs + texture decode, ~160 ms) unless the caller
+// prewarms the body (prewarmDynamicMesh). The world is drawn once, unculled and hidden, right after its upload and
+// the material prewarm, while the loading screen still presents; glFinish lets the GPU-side residency complete there
+// too. Frame state (frame number, map clock, camera, counters) is saved and restored: the next frame is unchanged.
+void Pipeline::warmupWorld(int id, int w, int h) {
+    if (!active_ || id < 0 || (size_t)id >= meshes_.size() || std::getenv("WFC_NOWARMUP")) return;
+    const auto t0 = std::chrono::steady_clock::now();
+    w = w > 0 ? w : 1280; h = h > 0 ? h : 720;
+    const core::Mat4 vp = viewProj_, cp = camProj_, cv = camView_;
+    const core::Vec3 pos = camPos_;
+    const float zn = znear_, zf = zfar_;
+    const int vw = vpW_, vh = vpH_;
+    const bool defer = deferTrans_, dirty = depthDirty_, copied = sceneColorCopied_;
+    const FrameCounts counts = counts_;
+    float fr[6][4]; std::memcpy(fr, frustum_, sizeof fr);
+    vpW_ = w; vpH_ = h;
+    ensureTargets(w, h);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    glViewport(0, 0, w, h);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    Camera cam;                                    // any view: nothing is culled and the target is never presented
+    cam.pos = {0, 0, 0}; cam.zfar = std::max(cam.zfar, worldRadius_ * 2.0f + 1000.0f);
+    camPos_ = cam.pos; znear_ = cam.znear; zfar_ = cam.zfar;
+    camProj_ = cam.proj(); camView_ = cam.view(); viewProj_ = camProj_ * camView_;
+    counts_ = FrameCounts();
+    deferTrans_ = false;                           // translucent draws immediately (no queue to flush)
+    depthDirty_ = true;
+    warmup_ = true;
+    glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
+    draw(id, core::Mat4::identity());
+    warmup_ = false;
+    // the static light environments it cached were evaluated before the first frame's movers / Matinee light state:
+    // dropped, so the first frame computes them exactly as without the warm-up
+    for (GpuMesh& gm : meshes_)
+        for (Sub& sb : gm.subs) sb.envReady = false;
+    const int draws = counts_.draws;
+    glFinish();
+    viewProj_ = vp; camProj_ = cp; camView_ = cv; camPos_ = pos; znear_ = zn; zfar_ = zf;
+    vpW_ = vw; vpH_ = vh;
+    deferTrans_ = defer; depthDirty_ = dirty; sceneColorCopied_ = copied;
+    counts_ = counts;
+    std::memcpy(frustum_, fr, sizeof fr);
+    BindFramebuffer(GL_FRAMEBUFFER, 0);
+    LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms", draws, w, h,
+             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+}
+
+int Pipeline::addRuntimeDecal(MeshData&& mesh, float lifetime) {
+    if (!active_ || mesh.empty()) return -1;
+    // DecalManager MaxActiveDecals 50, shared by all dynamic decals: when full the OLDEST active one is recycled
+    if (rtDecals_.size() >= 50) rtDecals_.erase(rtDecals_.begin());
+    RuntimeDecal d; d.born = time_; d.life = lifetime; d.mesh = std::move(mesh);
+    rtDecals_.push_back(std::move(d));
+    rtDecalsDirty_ = true;
+    return (int)rtDecals_.size();
+}
+
+void Pipeline::updateRuntimeDecals() {
+    // expiry at the lifetime, no fade (RE s12 add. 28: no script / material fade; stock lifetime countdown [HIGH])
+    const size_t n0 = rtDecals_.size();
+    rtDecals_.erase(std::remove_if(rtDecals_.begin(), rtDecals_.end(),
+                                   [&](const RuntimeDecal& d) { return d.life > 0 && time_ - d.born >= d.life; }),
+                    rtDecals_.end());
+    if (rtDecals_.size() != n0) rtDecalsDirty_ = true;
+    if (!rtDecalsDirty_) return;
+    rtDecalsDirty_ = false;
+    MeshData all;
+    std::map<std::string, int> matIdx;
+    for (const RuntimeDecal& d : rtDecals_) {
+        const uint32_t base = (uint32_t)all.vertexCount();
+        all.positions.insert(all.positions.end(), d.mesh.positions.begin(), d.mesh.positions.end());
+        all.normals.insert(all.normals.end(), d.mesh.normals.begin(), d.mesh.normals.end());
+        all.uv.insert(all.uv.end(), d.mesh.uv.begin(), d.mesh.uv.end());
+        const std::string& mn = d.mesh.mats.empty() ? std::string() : d.mesh.mats[0].wfcName;
+        auto it = matIdx.find(mn);
+        if (it == matIdx.end()) { it = matIdx.emplace(mn, (int)all.mats.size()).first; all.mats.push_back(d.mesh.mats[0]); }
+        SubMesh s; s.indexOffset = (uint32_t)all.indices.size(); s.indexCount = (uint32_t)d.mesh.indices.size();
+        s.material = it->second;
+        for (uint32_t i : d.mesh.indices) all.indices.push_back(base + i);
+        all.subs.push_back(s);
+    }
+    auto drop = [&](int idx) {
+        GpuMesh& g = meshes_[(size_t)idx];
+        if (g.vao) DeleteVertexArrays(1, &g.vao);
+        if (g.vbo) DeleteBuffers(1, &g.vbo);
+        if (g.ibo) DeleteBuffers(1, &g.ibo);
+        g = GpuMesh();
+    };
+    if (all.empty()) { if (rtDecalMesh_ >= 0) drop(rtDecalMesh_); return; }
+    const int fresh = upload(all);
+    if (fresh < 0) return;
+    meshes_[(size_t)fresh].decal = true;
+    if (rtDecalMesh_ >= 0 && rtDecalMesh_ != fresh) {   // reuse the slot: the mesh list never grows per spawn
+        drop(rtDecalMesh_);
+        meshes_[(size_t)rtDecalMesh_] = std::move(meshes_[(size_t)fresh]);
+        meshes_.pop_back();
+    } else {
+        rtDecalMesh_ = fresh;
+    }
+}
+
+const std::string* Pipeline::energyDeathFor(const std::string& material) const {
+    if (energyDeath_.empty() || material.empty()) return nullptr;
+    std::string pkg = material.substr(0, material.find('.'));
+    std::transform(pkg.begin(), pkg.end(), pkg.begin(), ::tolower);
+    auto it = energyDeath_.find(pkg);
+    return it == energyDeath_.end() ? nullptr : &it->second;
 }
 
 int Pipeline::dynamicProgram(const Material* mat) {
@@ -2134,7 +2261,14 @@ void Pipeline::prewarmDynamic(const MeshData& m) {
     size_t before = dynProgCache_.size();
     auto lastYield = t0;
     for (const SubMesh& s : m.subs) {
-        if (s.material >= 0 && (size_t)s.material < m.mats.size()) dynamicProgram(&m.mats[(size_t)s.material]);
+        if (s.material >= 0 && (size_t)s.material < m.mats.size()) {
+            const Material& mt = m.mats[(size_t)s.material];
+            dynamicProgram(&mt);
+            if (const std::string* ed = energyDeathFor(mt.wfcName)) {   // M74: its energy death, with the body
+                Material dm; dm.wfcName = *ed;
+                dynamicProgram(&dm);
+            }
+        }
         auto now = std::chrono::steady_clock::now();     // under a loading screen: keep it presenting
         if (std::chrono::duration<double, std::milli>(now - lastYield).count() >= 16.0) { yieldLoad(); lastYield = now; }
     }
@@ -2206,14 +2340,25 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         d.first = s.indexOffset; d.count = s.indexCount;
         d.prog = dynamicProgram(mat);
         d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
+        auto od = ownerDefrag_.find(drawOwner_);
+        static const bool diagDefrag = std::getenv("WFC_DEFRAG") != nullptr;   // diagnostics: every owner
+        if ((od != ownerDefrag_.end() || diagDefrag) && mat) {   // M74: the form's EnergyDeathMaterial replaces the material
+            if (const std::string* ed = energyDeathFor(mat->wfcName)) {
+                Material dm; dm.wfcName = *ed;
+                const int p = dynamicProgram(&dm);
+                if (p >= 0) { d.prog = p; d.matName = *ed; }
+            }
+        }
         g.subs.push_back(d);
     }
+    // the owner's runtime parameters apply to its shadow caster / depth pre-pass too (M74: a dissolving Defrag body
+    // must not cast or depth-write its whole silhouette)
+    inDynamicDraw_ = true;
     if (envSamples_ && !weapon && !std::getenv("WFC_NOCHARSHADOWS")) {   // the environment's projector -> ShadowMask
         ShadowProjector scratch;
         if (const ShadowProjector* p = projectorFor(envForm_, scratch)) castCharacterShadow(g, model, *p);
     }
     dynamicMaskDraw_ = envSamples_ != nullptr;
-    inDynamicDraw_ = true;
     drawSubs(g, model, true);
     inDynamicDraw_ = false;
     dynamicMaskDraw_ = false;
