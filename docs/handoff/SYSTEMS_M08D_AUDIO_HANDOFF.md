@@ -200,3 +200,34 @@ Merge agents/systems first; the hook definitions come with it.
 ## M08p: melee hit effects, kamikaze mines (glue)
 
 `docs/handoff/SYSTEMS_M08P_melee_hit_mines_glue.patch`, applied after the M08o patch (against 08k).
+
+## M09b: bot (non-local participant) weapon audio (glue recipe for the 09a merge of agents/gameplay 5151374)
+
+Systems API (agents/systems): `World::preloadParticipantWeaponAudio(classes)`, `onParticipantFired(cls, from)`,
+`onParticipantImpact(cls, at, victimPlayer)`. The weapon class string is `"TransContent.TnWeapon" + WeaponDef::id`.
+
+Glue (Integration, after merging Gameplay's bots; untested until a tree has both):
+1. Right after `launchMatch` / when the roster is final: for every `Match::players()[p]` with p != localPlayer_, collect
+   `"TransContent.TnWeapon" + id` for each of `selection.weapons` (via findWeaponDef) plus the vehicle weapons of
+   `resolveChassis(selection, match.faction(p))`, and call `preloadParticipantWeaponAudio(classes)` once. This decodes the
+   bots' cues at load, not on a bot's first shot.
+2. At the end of `World::tick` (participantShots_ is cleared at the start of the next tick), for this step's
+   `participantShots()`:
+   - once per distinct `player`: `onParticipantFired(cls(shot.weapon), shot.from)` (a shotgun's pellets share one fire sound);
+   - for every shot with `impact`: `onParticipantImpact(cls(shot.weapon), shot.to, shot.hitPlayer)` (agents/gameplay 7ed5faf
+     added `hitPlayer`: -1 = world / destructible -> DefaultImpactSound; a player -> the hit-effect sound, as on the local path).
+3. Projectiles need nothing: bot rockets go through spawnProjectile, which already reaches onProjectileSpawned / Exploded.
+Bots' muzzle / tracer FX are not drawn yet (Gameplay PARTIAL), so the fire sound plays at the shot origin (eye + aim).
+
+## M09c: spawn-hitch fix - warm every spawnable selection's audio at match load
+
+`World::preloadSelectionAudio(chassisKeys, weaponClasses)`: decodes (on a worker) the waves of each chassis' character
+cue set (CharacterAudio::loadCues: voice / vehicle / foley / clip notifies / weapon events) and of each weapon class (weapon +
+hit cues), tagged with the level. The spawn-frame `setPlayerCharacterAudio` / `preloadWeaponAudio` loads then find
+the waves in the device cache. If the level's audio isn't loaded yet, it is applied when it loads. Unused warm samples are
+released at the next level load (no decode on release).
+Glue (Integration, from Gameplay's selectionPreloadHook / after launchMatch): for every spawnable selection (the 4 faction
+presets, CaC slots, bot rosters): the chassis keys of `resolveChassis(selection, faction)` for each faction it can play, and
+`"TransContent.TnWeapon" + id` of its robot and vehicle weapons. Call it once.
+Measured (real device): spawn-frame loads cold 30-60 ms per selection -> 1.3-4.6 ms warmed; the warm call is 8 ms at load
+(behind the loading screen); PCM back to base after unload.

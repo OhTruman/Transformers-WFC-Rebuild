@@ -156,6 +156,12 @@ public:
     static const std::string& weaponCue(const std::string& weaponClass, const std::string& event);
     static const std::string& weaponPickupSound(const std::string& weaponClass);
     static int loadWeaponCues(SoundCues& cues, const std::string& weaponClass);
+    // Warm variants (spawn-hitch fix): decode the same cue sets' waves on a worker for a later load* of them (which then
+    // finds them in the device cache). `tag` = the level they belong to (SoundCues::releaseWarmExcept). Returns waves queued.
+    static int warmCues(SoundCues& cues, const CharacterAudioProfile& p, const std::string& tag);
+    static int warmWeaponCues(SoundCues& cues, const std::string& weaponClass, const std::string& tag);
+    static int warmHitCues(SoundCues& cues, const CharacterAudioProfile& victim, const std::string& weaponClass,
+                           const std::string& tag);
     // The weapon's hit effect (nullptr: no entry matches its damage type -> no hit sound, as in the original).
     static const WeaponHitEffect* weaponHitEffect(const std::string& weaponClass);
     // The weapon mesh's animation sounds (nullptr: no anim set in the data).

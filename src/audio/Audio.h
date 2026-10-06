@@ -85,6 +85,8 @@ public:
     virtual bool reportsVoices() const { return false; }   // isPlaying() is meaningful
     // load() may be called from a worker thread concurrently with the mixer and the main thread (prefetch warming).
     virtual bool threadSafeLoad() const { return false; }
+    // The handle of an already-decoded file, WITHOUT decoding it (kInvalidSound if not resident).
+    virtual Sound cached(const std::string& path) const { (void)path; return kInvalidSound; }
     // Lifecycle (map unload / frontend transitions). release: forget a loaded sample (its voices stop; the
     // handle becomes invalid; loading the same path again decodes anew). stopAllVoices: hard stop of every
     // voice. activeVoices / residentBytes: diagnostics (voices sounding, decoded PCM held in memory).

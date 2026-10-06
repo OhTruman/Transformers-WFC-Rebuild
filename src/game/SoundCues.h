@@ -116,7 +116,8 @@ public:
     // by AmbientAudio::load), else Engine.Default__SoundCue (5 / kKillFarthest).
     int addCues(const assets::Json& cues, const std::string& contentRoot);
     // A localized wave's file for the selected language's _LOC twin ("" = no such twin extracted: not played).
-    static std::string localizedWave(const std::string& rel, const std::string& ownerTwin, const std::string& contentRoot);
+    static std::string localizedWave(const std::string& rel, const std::string& ownerTwin, const std::string& contentRoot,
+                                     bool account = true);   // account = false: no LocStats / warnings (prefetch warming)
     // Localized waves resolved so far: from the selected _LOC twin / the merged copy (it is that twin) / not played.
     struct LocStats { int twin = 0, merged = 0, skipped = 0; };
     static LocStats& locStats();

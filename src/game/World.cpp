@@ -780,9 +780,10 @@ bool World::loadMapAudio(const std::string& level) {
         CharacterAudio::loadWeaponCues(cues_, weaponClass_);
         CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), weaponClass_);   // the targets' hit sounds
         CharacterAudio::loadAbilityCues(cues_);                                                // [Systems M08i]
-        lastHitEffect_.clear();
+        lastHitEffect_.clear(); participantHitEffect_.clear();
         for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
-        applyPreloadedSelectionAudio();                                            // [integration 09a] match-load audio preload
+        for (const std::string& c : participantWeaponClasses_) ensureWeaponAudio(c);   // [Systems M09b] the bots' weapons
+        if (!selectionChassis_.empty() || !selectionWeapons_.empty()) preloadSelectionAudio({}, {});   // [Systems M09c]
         const SoundCues::LocStats& ls = SoundCues::locStats();
         LOG_INFO("localized waves (language %s): %d from the _LOC twin, %d merged copy of that twin, %d not played",
                  std::getenv("WFC_LANGUAGE") ? std::getenv("WFC_LANGUAGE") : "INT", ls.twin, ls.merged, ls.skipped);
@@ -1225,29 +1226,21 @@ void World::preloadSelections(const std::vector<CharacterSelection>& selections)
         const ChassisAssets* ca = chassisAssets(chassis);
         if (sel.type == 0 && !sel.weapons.empty()) preloadHeldWeaponModels(sel.weapons);
         else if (ca) preloadHeldWeaponModels(ca->def.iconicWeapons);
-        if (ca) preloadSelectionAudio(chassis, (sel.type == 0 && !sel.weapons.empty()) ? sel.weapons : ca->def.iconicWeapons,
+        if (ca) queueSelectionAudio(chassis, (sel.type == 0 && !sel.weapons.empty()) ? sel.weapons : ca->def.iconicWeapons,
                                       (sel.type == 0 && !sel.vehicleWeapons.empty()) ? sel.vehicleWeapons : ca->def.iconicVehicleWeapons);
     }
 }
 
-// [integration 09a] Load scheduling (PC ADAPTATION): the body's character cue set (foley / voice / vehicle) and the loadout's
-// weapon cues are loaded under the match load for every preloaded selection, so the spawn frame's setPlayerCharacterAudio /
-// applyLoadout find them loaded (both skip loaded cues). Before this, each match's first spawn decoded them on that frame
-// (160-207 ms + 31-87 ms in the 09a flow). Cues are level-owned: re-applied from loadMapAudio.
-void World::preloadSelectionAudio(const std::string& chassis, const std::vector<std::string>& weapons,
-                                  const std::vector<std::string>& vehicleWeapons) {
-    if (!chassis.empty()) preloadAudioChassis_.insert(chassis);
+// [integration 09a/09b] Load scheduling (PC ADAPTATION): every preloaded selection's character cue set and loadout weapon cues
+// are warmed under the match load by Systems M09c preloadSelectionAudio (worker decode; re-applied at level-audio load), so
+// the spawn frame's setPlayerCharacterAudio / applyLoadout find them loaded (09a flow: 160-207 + 31-87 ms -> 0.6 ms).
+void World::queueSelectionAudio(const std::string& chassis, const std::vector<std::string>& weapons,
+                                const std::vector<std::string>& vehicleWeapons) {
+    std::vector<std::string> cls;
     for (const std::vector<std::string>* list : {&weapons, &vehicleWeapons})
         for (const std::string& n : *list)
-            if (const WeaponDef* d = findWeaponDef(n)) preloadAudioWeapons_.insert("TransContent.TnWeapon" + std::string(d->id));
-    applyPreloadedSelectionAudio();
-}
-
-void World::applyPreloadedSelectionAudio() {
-    if (!audio_ || levelAudio_.level().empty()) return;          // re-applied when the level's audio loads
-    for (const std::string& c : preloadAudioChassis_)
-        if (const CharacterAudioProfile* p = CharacterAudio::find(c)) CharacterAudio::loadCues(cues_, *p);
-    for (const std::string& w : preloadAudioWeapons_) ensureWeaponAudio(w);
+            if (const WeaponDef* d = findWeaponDef(n)) cls.push_back("TransContent.TnWeapon" + std::string(d->id));
+    preloadSelectionAudio(chassis.empty() ? std::vector<std::string>{} : std::vector<std::string>{chassis}, cls);
 }
 
 void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
@@ -1630,6 +1623,16 @@ void World::tick(float dt) {
         if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); }
         else ++i;
     }
+    {   // [integration 09b] Systems M09b glue: this step's participant (bot) shots -> one fire sound per player, an impact sound
+        // per shot that hit (hitPlayer -1 = world / destructible; else the victim's hit effect).
+        std::set<int> fired;
+        for (const ParticipantShot& s : participantShots_) {
+            if (s.weapon.empty()) continue;
+            const std::string cls = "TransContent.TnWeapon" + s.weapon;
+            if (fired.insert(s.player).second) onParticipantFired(cls, s.from);
+            if (s.impact) onParticipantImpact(cls, s.to, s.hitPlayer);
+        }
+    }
 }
 
 // Local match host glue (TnMultiplayerGame / TnTeamGame on the authority): the Match decides spawns, deaths and the
@@ -1677,7 +1680,7 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
         for (int sp = 0; sp < 4; ++sp) {
             const ChassisAssets* pca = chassisAssets(defaultChassis((Specialty)sp, fa));
             preloadHeldWeaponModels(classPresetWeapons(specialtyName((Specialty)sp)));   // its preset weapons too
-            if (pca) preloadSelectionAudio(defaultChassis((Specialty)sp, fa), classPresetWeapons(specialtyName((Specialty)sp)),
+            if (pca) queueSelectionAudio(defaultChassis((Specialty)sp, fa), classPresetWeapons(specialtyName((Specialty)sp)),
                                            pca->def.iconicVehicleWeapons);              // [integration 09a] + their audio
         }
     }
@@ -1740,6 +1743,24 @@ bool World::launchMatch(const MatchLaunch& l) {
     const int nb = addBots(l.bots);
     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
              l.settings.timeLimit, nb, l.bots.friendly, l.bots.enemy, botDifficultyName(l.bots.difficulty));
+    {   // [integration 09b] Systems M09b / M09c glue: every other participant's (bots') weapon cues and character cue set are
+        // decoded at match load, not on a bot's first shot / spawn (PC ADAPTATION, load scheduling).
+        std::vector<std::string> cls;
+        for (size_t p = 0; p < match_.players().size(); ++p) {
+            if ((int)p == localPlayer_) continue;
+            const MatchPlayer& mp = match_.players()[p];
+            const std::string ch = resolveChassis(mp.selection, match_.faction((int)p));
+            const ChassisAssets* ca = chassisAssets(ch);
+            if (!ca) continue;
+            const std::vector<std::string>& wpn = !mp.selection.weapons.empty() ? mp.selection.weapons : ca->def.iconicWeapons;
+            const std::vector<std::string>& veh = !mp.selection.vehicleWeapons.empty() ? mp.selection.vehicleWeapons : ca->def.iconicVehicleWeapons;
+            for (const std::vector<std::string>* list : {&wpn, &veh})
+                for (const std::string& n : *list)
+                    if (const WeaponDef* d = findWeaponDef(n)) cls.push_back("TransContent.TnWeapon" + std::string(d->id));
+            queueSelectionAudio(ch, wpn, veh);
+        }
+        if (!cls.empty()) preloadParticipantWeaponAudio(cls);
+    }
     return true;
 }
 
@@ -3952,6 +3973,60 @@ void World::onProjectileSpawned(int key, const std::string& weaponClass, const c
 }
 
 void World::onProjectileMoved(int key, const core::Vec3& pos) { weaponAudio_.projectileMoved(cues_, key, pos); }
+
+int World::preloadSelectionAudio(const std::vector<std::string>& chassisKeys, const std::vector<std::string>& weaponClasses) {
+    for (const std::string& c : chassisKeys)
+        if (!c.empty() && std::find(selectionChassis_.begin(), selectionChassis_.end(), c) == selectionChassis_.end()) selectionChassis_.push_back(c);
+    for (const std::string& w : weaponClasses)
+        if (!w.empty() && std::find(selectionWeapons_.begin(), selectionWeapons_.end(), w) == selectionWeapons_.end()) selectionWeapons_.push_back(w);
+    const std::string& tag = levelAudio_.level();
+    if (!audio_ || tag.empty()) return 0;              // not loaded yet: loadMapAudio re-applies
+    int n = 0;
+    for (const std::string& c : selectionChassis_)
+        if (const CharacterAudioProfile* p = CharacterAudio::find(c)) n += CharacterAudio::warmCues(cues_, *p, tag);
+    for (const std::string& w : selectionWeapons_) {
+        n += CharacterAudio::warmWeaponCues(cues_, w, tag);
+        n += CharacterAudio::warmHitCues(cues_, CharacterAudio::defaultProfile(), w, tag);
+    }
+    LOG_INFO("selection audio: %zu chassis, %zu weapon classes -> %d waves decoding on a worker (level %s)",
+             selectionChassis_.size(), selectionWeapons_.size(), n, tag.c_str());
+    return n;
+}
+
+void World::preloadParticipantWeaponAudio(const std::vector<std::string>& classes) {
+    for (const std::string& c : classes) {
+        if (c.empty()) continue;
+        if (std::find(participantWeaponClasses_.begin(), participantWeaponClasses_.end(), c) == participantWeaponClasses_.end())
+            participantWeaponClasses_.push_back(c);
+        ensureWeaponAudio(c);                        // no-op until the level's audio is loaded (then re-applied there)
+    }
+}
+
+void World::onParticipantFired(const std::string& weaponClass, const core::Vec3& from) {
+    ensureWeaponAudio(weaponClass);                  // safety net; the match-load preload makes this a no-op
+    SoundCues::Emitter e;
+    e.pos = from;                                    // kWorld at the shot origin (bots draw no held weapon yet)
+    weaponAudio_.fire(cues_, weaponClass, false, e, core::length(from - listenerPos_));
+}
+
+void World::onParticipantImpact(const std::string& weaponClass, const core::Vec3& at, int victimPlayer) {
+    const float dist = core::length(at - listenerPos_);
+    if (victimPlayer >= 0) {
+        // A pawn hit: its TnHitEffectPlayer entry for the damage type, retriggered at most every RetriggerTime (the local
+        // path's rule, keyed per weapon class) [CONF data; the victim's own SoundEventSet: default profile, as the targets].
+        const WeaponHitEffect* he = CharacterAudio::weaponHitEffect(weaponClass);
+        if (!he || !he->causesBlood || he->hitEvent.empty()) return;
+        const std::pair<int, int> key{victimPlayer, he->index};
+        auto it = participantHitEffect_.find(key);
+        if (it != participantHitEffect_.end() && hitClock_ - it->second < he->retrigger) return;
+        participantHitEffect_[key] = hitClock_;
+        const std::string cue = CharacterAudio::defaultProfile().voiceCue(he->hitEvent);
+        if (!cue.empty()) cues_.play(cue.c_str(), at, dist);
+        return;
+    }
+    const std::string& impact = CharacterAudio::weaponCue(weaponClass, "DefaultImpactSound");
+    if (!impact.empty()) cues_.play(impact.c_str(), at, dist);
+}
 
 void World::onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos) {
     weaponAudio_.projectileExploded(cues_, key, weaponClass, pos, core::length(pos - listenerPos_));

@@ -293,6 +293,22 @@ public:
     void onProjectileSpawned(int key, const std::string& weaponClass, const core::Vec3& pos);
     void onProjectileMoved(int key, const core::Vec3& pos);
     void onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos);
+    // [Systems M09b] Non-local participants (bots): every participant's loadout weapon classes at match load (their cues are
+    // decoded then, not on a bot's first shot; re-applied when the level's audio loads), one fire sound per shot at the
+    // shot origin (TnWeapon.PlayFiringSound, positional), and per trace that hit something its impact sound: a pawn ->
+    // the hit-effect sound (as the local path), the world / a destructible (victimPlayer -1) -> the weapon's
+    // DefaultImpactSound. Projectile flight / explosion sounds come through onProjectileSpawned / Exploded as for the local pawn.
+    void preloadParticipantWeaponAudio(const std::vector<std::string>& weaponClasses);
+    // [Systems M09c] Spawn-hitch fix: at match load, decode (on a worker) the character + weapon cue waves of every selection
+    // that can spawn (faction presets, CaC slots, bot rosters: chassis keys and weapon classes), so the spawn-frame
+    // setPlayerCharacterAudio / preloadWeaponAudio loads find them in the device cache. Applied now if the level's audio is
+    // loaded, else when it loads. Returns waves queued.
+    int preloadSelectionAudio(const std::vector<std::string>& chassisKeys, const std::vector<std::string>& weaponClasses);
+    // [integration 09b] one selection (chassis + robot / vehicle weapon ids) -> Systems M09c preloadSelectionAudio.
+    void queueSelectionAudio(const std::string& chassis, const std::vector<std::string>& weapons,
+                             const std::vector<std::string>& vehicleWeapons);
+    void onParticipantFired(const std::string& weaponClass, const core::Vec3& from);
+    void onParticipantImpact(const std::string& weaponClass, const core::Vec3& at, int victimPlayer);
     // [Systems M08i] Abilities / buffs (Gameplay owns them; RE pass 5 s12). A successful ability trigger ("Barrier"):
     // its OnTriggerSound at the pawn.
     void onAbilityTriggered(const std::string& abilityId);
@@ -868,10 +884,9 @@ private:
     std::string vehicleWeaponClass_;
     std::set<std::string> weaponAudioLoaded_;      // per level (cleared with the level's cues)
     std::vector<std::string> loadoutWeaponClasses_; // the player's loadout (robot + vehicle weapons)
-    std::set<std::string> preloadAudioChassis_, preloadAudioWeapons_;   // [integration 09a] match-load audio preload
-    void preloadSelectionAudio(const std::string& chassis, const std::vector<std::string>& weapons,
-                               const std::vector<std::string>& vehicleWeapons);
-    void applyPreloadedSelectionAudio();
+    std::vector<std::string> participantWeaponClasses_;   // [Systems M09b] every other participant's loadout
+    std::vector<std::string> selectionChassis_, selectionWeapons_;   // [Systems M09c] warmed at level-audio load
+    std::map<std::pair<int, int>, float> participantHitEffect_;   // (victim player, hit-effect entry) -> last play (hitClock_)
     WeaponAudio weaponAudio_;
     AbilityAudio abilityAudio_;
     VehicleFormAudio vehicleForm_;

@@ -174,7 +174,7 @@ int SoundCues::applyLoopPoints() {
 // language is never substituted. Twin of GLanguage: INT -> "int", else the language code (FRA ...).
 SoundCues::LocStats& SoundCues::locStats() { static LocStats s; return s; }
 
-std::string SoundCues::localizedWave(const std::string& rel, const std::string& owner, const std::string& contentRoot) {
+std::string SoundCues::localizedWave(const std::string& rel, const std::string& owner, const std::string& contentRoot, bool account) {
     const char* lang = std::getenv("WFC_LANGUAGE");
     std::string twin = lang && *lang ? lang : "INT";
     for (char& ch : twin) ch = (char)std::toupper((unsigned char)ch);
@@ -183,13 +183,14 @@ std::string SoundCues::localizedWave(const std::string& rel, const std::string& 
     const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + twin + "/" + rel;
     if (std::FILE* fp = std::fopen((alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt).c_str(), "rb")) {
         std::fclose(fp);
-        ++locStats().twin;
+        if (account) ++locStats().twin;
         return alt;
     }
     std::string o = owner, t = twin;
     for (char& ch : o) ch = (char)std::toupper((unsigned char)ch);
     for (char& ch : t) ch = (char)std::toupper((unsigned char)ch);
-    if (o == t) { ++locStats().merged; return rel; }
+    if (o == t) { if (account) ++locStats().merged; return rel; }
+    if (!account) return std::string();
     ++locStats().skipped;
     static std::set<std::string> warned;
     if (warned.insert(rel).second)
@@ -442,10 +443,13 @@ int SoundCues::warmCueWaves(const assets::Json& cues, const std::string& content
             if (kids[i]["class"].asString() != "SoundNodeWaveEvent") continue;
             const assets::Json& waves = kids[i]["children"];
             for (size_t w = 0; w < waves.size(); ++w) {
-                if (!waves[w]["loc"].asString().empty()) continue;             // localized twins: resolved at load
                 std::string f = waves[w]["wav"].asString();
                 if (f.rfind("content/", 0) == 0) f = f.substr(8);
-                if (!f.empty()) paths.push_back(contentRoot + f);
+                const std::string loc = waves[w]["loc"].asString();
+                if (!loc.empty()) f = localizedWave(f, loc, contentRoot, false);   // the twin the load will pick
+                if (f.empty()) continue;
+                const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
+                paths.push_back(abs ? f : contentRoot + f);
             }
         }
     }
@@ -477,7 +481,7 @@ int SoundCues::releaseWarmExcept(const std::string& keep) {
         timedWait(w.done, "releaseWarmExcept", w.tag);
         if (w.tag != keep && audio_)
             for (const std::string& p : w.paths) {
-                const audio::Sound h = audio_->load(p);                   // cached: the warmed handle, no decode
+                const audio::Sound h = audio_->cached(p);                 // resident only: never decode to release
                 if (h == audio::kInvalidSound) continue;
                 bool owned = false;
                 for (size_t c = 0; c < waves_.size() && !owned; ++c)
