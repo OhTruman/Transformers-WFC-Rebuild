@@ -95,6 +95,10 @@ provenance stays in its section.
   slow first scene draws (269 / 215 ms) are gone, no scene.draw > 40 ms after the load (1920x1080 windowed,
   WFC_FRAMEPROF=40). Remaining: one 90 ms frame as the menu opens at the end of the load (no scene draw in it) and the
   loading-screen steps (40-150 ms, single indivisible items), so the loading animation is choppy, not frozen.
+  Integration milestone 08g (all three owners' fixes + Systems 593311c volumes): travel start 42-47 ms (audio prefetch
+  0.6 ms), title returns 42-46 ms, Settings / Extras / Movies clean, lobby load steps 112-167 ms; the profile volumes are
+  applied at boot (profile.apply owner "volumes -> Systems"). A first run with 200 / 238 ms load steps was machine load
+  from other lanes (a 3-round-trip rerun matched the earlier numbers).
 
 ## FRONTEND: TITLE VIGNETTE / MENU BACKGROUNDS COVER THE SCREEN (2026-10-05, agents/frontend)
 - Human-confirmed: the title vignette left bright vertical strips at both sides (87.5 % of the width covered at 16:9).
