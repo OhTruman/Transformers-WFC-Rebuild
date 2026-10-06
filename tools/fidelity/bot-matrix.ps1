@@ -22,20 +22,24 @@ $exe = Join-Path $Root $(if ($Config -eq "Debug") { "build\bin\wfc_rebuild.exe" 
 $H = Get-ExeHooks $exe
 $sha = if (Test-Path (Join-Path $Root "M05_TARGET.txt")) { ((Get-Content (Join-Path $Root "M05_TARGET.txt")) | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '' } else { "?" }
 $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "bots.$id" $status $null $note $owner }
-$mapId = @{ MP_IAC_Streets = 508; MP_IAC_Berth = 502; MP_UND_Gorge = 510; MP_IAC_Seed = 501 }
+$mapId = @{ MP_IAC_Streets = 508; MP_IAC_Berth = 502; MP_UND_Gorge = 510; MP_IAC_Seed = 501; MP_ORB_Debris = 507 }
 $runs = @(@{ mode = "TDM"; map = "MP_IAC_Streets"; f = 0; e = 1 }, @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 2; e = 3 }, @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 7; e = 8 })
 if ($Matrix -eq "default") {
     $runs += @("DOM", "KOTH", "CTF", "EXT" | ForEach-Object { @{ mode = $_; map = "MP_IAC_Streets"; f = 3; e = 4 } })
     $runs += @("MP_IAC_Berth", "MP_UND_Gorge" | ForEach-Object { @{ mode = "TDM"; map = $_; f = 3; e = 4 } })
+    $runs += @{ mode = "DM"; map = "MP_IAC_Streets"; f = 0; e = 15 }                                   # FFA, full 16 players
+    $runs += @{ mode = "TDM"; map = "MP_ORB_Debris"; f = 3; e = 4; weaker = $true }                    # flight-only islands unreachable until the jet air layer
+    $runs += @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 3; e = 4; diff = 0 }, @{ mode = "TDM"; map = "MP_IAC_Streets"; f = 3; e = 4; diff = 2 }   # EASY vs HARD
 }
 $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Accept;" } else { "" }
 $rows = New-Object System.Collections.Generic.List[object]
 foreach ($r in $runs) {
-    $tag = "{0}_{1}_{2}v{3}" -f $r.mode, ($r.map -replace '^MP_', ''), $r.f, $r.e; $d = Join-Path $OutDir $tag; New-Item -ItemType Directory -Force $d | Out-Null
+    $diff = if ($null -ne $r.diff) { [int]$r.diff } else { $Difficulty }
+    $tag = "{0}_{1}_{2}v{3}{4}" -f $r.mode, ($r.map -replace '^MP_', ''), $r.f, $r.e, $(if ($null -ne $r.diff) { "_d$diff" } else { "" }); $d = Join-Path $OutDir $tag; New-Item -ItemType Directory -Force $d | Out-Null
     $lg = Join-Path $d "wfc.log"
     if (-not $ReportOnly -and -not (Test-Path $lg)) {
         if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
-        "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$($r.f)`nBotsEnemy=$($r.e)`nBotDifficulty=$Difficulty`n" | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
+        "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$($r.f)`nBotsEnemy=$($r.e)`nBotDifficulty=$diff`n" | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
         $party = if ($r.mode -eq "DM") { "GTS_FreeForAllGame" } else { "GTS_TeamGame" }
         $s = @("wait:frontend", (Get-MousePark $Root), "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,$party", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=1",
                "call:Online.EditGameMode,$($r.mode)", "call:Online.PlayPrivateGame,$($r.mode)", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5", "call:Online.SetSelectedMapID,$($mapId[$r.map])", "wait:t=1",
@@ -51,26 +55,39 @@ foreach ($r in $runs) {
     $players = @($spawns | Group-Object p | ForEach-Object { [pscustomobject]@{ p = [int]$_.Name; team = $_.Group[0].team } })
     $kills = @($lines | Where-Object { $_ -match '\] MATCH kill ' }).Count
     $F = Read-FlowLog (Join-Path $d "flow.jsonl"); $feed = @(Flow-Ev $F "hud.killFeed").Count
-    $bl = @($lines | Where-Object { $_ -match '\] BOTLOG ' } | ForEach-Object { $m = [regex]::Match($_, 'BOTLOG (\S+) p(\d+) \(([-\d.]+) ([-\d.]+) ([-\d.]+)\).* stuck (\d+) .* nopath (\d+)')
-        if ($m.Success) { [pscustomobject]@{ p = [int]$m.Groups[2].Value; x = [double]$m.Groups[3].Value; y = [double]$m.Groups[4].Value; z = [double]$m.Groups[5].Value; stuck = [int]$m.Groups[6].Value; nopath = [int]$m.Groups[7].Value } } })
+    $bl = @($lines | Where-Object { $_ -match '\] BOTLOG ' } | ForEach-Object { $m = [regex]::Match($_, 'BOTLOG (\S+) p(\d+) \(([-\d.]+) ([-\d.]+) ([-\d.]+)\) cell (-?\d+) \S+ goal (\S+) .* tgt (-?\d+) .* stuck (\d+) .* shots (\d+) hits (\d+) nopath (\d+)')
+        if ($m.Success) { [pscustomobject]@{ p = [int]$m.Groups[2].Value; x = [double]$m.Groups[3].Value; y = [double]$m.Groups[4].Value; z = [double]$m.Groups[5].Value; cell = [int]$m.Groups[6].Value
+            goal = $m.Groups[7].Value; tgt = [int]$m.Groups[8].Value; stuck = [int]$m.Groups[9].Value; shots = [int]$m.Groups[10].Value; hits = [int]$m.Groups[11].Value; nopath = [int]$m.Groups[12].Value } } })
     $nav = @($bl | Group-Object p | ForEach-Object { $g = @($_.Group); $dist = 0.0; for ($i = 1; $i -lt $g.Count; $i++) { $dx = $g[$i].x - $g[$i - 1].x; $dz = $g[$i].z - $g[$i - 1].z; $step = [Math]::Sqrt($dx * $dx + $dz * $dz); if ($step -lt 30) { $dist += $step } }
-        [pscustomobject]@{ p = [int]$_.Name; samples = $g.Count; dist = [Math]::Round($dist, 1); stuckFrac = [Math]::Round(@($g | Where-Object { $_.stuck -ge 2 }).Count / [Math]::Max(1, $g.Count), 2); nopath = ($g | Measure-Object nopath -Maximum).Maximum } })
+        $frozen = 0; $run = 0; for ($i = 1; $i -lt $g.Count; $i++) { $mv = [Math]::Sqrt([Math]::Pow($g[$i].x - $g[$i - 1].x, 2) + [Math]::Pow($g[$i].z - $g[$i - 1].z, 2))
+            if ($mv -lt 0.1 -and $g[$i].tgt -lt 0 -and $g[$i].goal -match '^(Roam|Attack|Retrieve)') { $run++; $frozen = [Math]::Max($frozen, $run) } else { $run = 0 } }
+        [pscustomobject]@{ p = [int]$_.Name; samples = $g.Count; dist = [Math]::Round($dist, 1); stuckFrac = [Math]::Round(@($g | Where-Object { $_.stuck -ge 2 }).Count / [Math]::Max(1, $g.Count), 2); nopath = ($g | Measure-Object nopath -Maximum).Maximum
+            frozenS = $frozen; offMesh = @($g | Where-Object { $_.cell -lt 0 }).Count; shots = $g[-1].shots; hits = $g[-1].hits } })
     $perf = @($lines | Where-Object { $_ -match 'PERF f\d+ frame=([\d.]+)ms' } | ForEach-Object { [double]([regex]::Match($_, 'frame=([\d.]+)ms').Groups[1].Value) } | Select-Object -Skip 2)
     $frameMs = if ($perf.Count) { [Math]::Round(($perf | Measure-Object -Average).Average, 2) } else { $null }
     $want = $r.f + $r.e + 1
     $local = @($players | Sort-Object p | Select-Object -First 1)[0]
     $teamOk = if ($r.mode -eq "DM" -or -not $local) { $true } else { $fr = @($players | Where-Object { $_.p -ne $local.p -and $_.team -eq $local.team }).Count; $en = @($players | Where-Object { $_.team -ne $local.team }).Count; ($fr -eq $r.f -and $en -eq $r.e) }
     $stuckBots = @($nav | Where-Object { $_.stuckFrac -gt 0.25 -or $_.dist -lt 10 }); $noPathMax = ($nav | Measure-Object nopath -Maximum).Maximum
+    $broken = @($nav | Where-Object { $_.frozenS -ge 20 })   # Gameplay's "broken" criterion: no displacement >= 20 s, no target, moving goal
+    $offMesh = ($nav | Measure-Object offMesh -Sum).Sum
+    $shotsT = ($nav | Measure-Object shots -Sum).Sum; $hitsT = ($nav | Measure-Object hits -Sum).Sum; $acc = if ($shotsT) { [Math]::Round($hitsT / $shotsT, 3) } else { $null }
     $rows.Add([pscustomobject][ordered]@{ run = $tag; spawned = "$($players.Count)/$want"; teams = $teamOk; kills = $kills; kill_feed = $feed; bots_logged = $nav.Count
-        median_bot_path_m = $(if ($nav.Count) { ($nav | ForEach-Object { $_.dist } | Sort-Object)[[int]($nav.Count / 2)] }); stuck_or_idle_bots = $stuckBots.Count; nopath_max = $noPathMax; frame_ms = $frameMs; clean_exit = $clean })
+        median_bot_path_m = $(if ($nav.Count) { ($nav | ForEach-Object { $_.dist } | Sort-Object)[[int]($nav.Count / 2)] }); stuck_or_idle_bots = $stuckBots.Count; broken_bots = $broken.Count; off_mesh_samples = $offMesh; accuracy = $acc; difficulty = $diff; nopath_max = $noPathMax; frame_ms = $frameMs; clean_exit = $clean })
     Res "$tag.spawned" $(if ($players.Count -eq $want -and $teamOk) { "PASS" } elseif ($players.Count) { "FAIL" } else { "UNKNOWN" }) ("distinct spawned players {0} of {1} (local + {2} friendly + {3} enemy); team split correct {4}" -f $players.Count, $want, $r.f, $r.e, $teamOk) "Gameplay"
     if ($r.e -ge 1) { Res "$tag.combat" $(if ($kills -gt 0) { "PASS" } else { "FAIL" }) ("{0} kills in {1} s of play" -f $kills, $Seconds) "Gameplay" }
-    Res "$tag.navigation" $(if (-not $nav.Count) { "UNKNOWN" } elseif ($stuckBots.Count -gt [Math]::Max(1, [int]($nav.Count * 0.2))) { "FAIL" } elseif ($stuckBots.Count) { "PARTIAL" } else { "PASS" }) ("{0} bots logged; median path {1} m; stuck (> 25 % of samples) or idle (< 10 m) bots: {2}; max no-path count {3}" -f $nav.Count, $rows[-1].median_bot_path_m, $(if ($stuckBots.Count) { ($stuckBots | ForEach-Object { "p$($_.p) $($_.dist) m stuck $($_.stuckFrac)" }) -join ", " } else { "none" }), $noPathMax) "Gameplay"
+    $navSt = if (-not $nav.Count) { "UNKNOWN" } elseif ($broken.Count) { "FAIL" } elseif ($stuckBots.Count) { "PARTIAL" } else { "PASS" }
+    if ($r.weaker -and $navSt -eq "FAIL") { $navSt = "PARTIAL" }   # Debris: flight-only islands unreachable until the jet air layer (Gameplay, known)
+    Res "$tag.navigation" $navSt ("{0} bots logged; median path {1} m; BROKEN (no displacement >= 20 s, no target, Roam / Attack / Retrieve goal): {4}; struggling (stuck >= 2 on > 25 % of samples) or idle (< 10 m): {2}; max no-path {3}; off-mesh samples {5}{6}" -f $nav.Count, $rows[-1].median_bot_path_m, $(if ($stuckBots.Count) { ($stuckBots | ForEach-Object { "p$($_.p) $($_.dist) m stuck $($_.stuckFrac)" }) -join ", " } else { "none" }), $noPathMax, $(if ($broken.Count) { ($broken | ForEach-Object { "p$($_.p) $($_.frozenS) s" }) -join ", " } else { "none" }), $offMesh, $(if ($r.weaker) { "; Debris expected weaker (flight-only islands)" } else { "" })) "Gameplay"
     if ($kills -gt 0) { Res "$tag.kill_feed" $(if ($feed -eq $kills) { "PASS" } else { "FAIL" }) ("kill-feed lines {0} vs kills {1}" -f $feed, $kills) "Frontend" }
     Res "$tag.frame_time" $(if ($frameMs -eq $null) { "UNKNOWN" } elseif ($frameMs -gt 16.7) { "PARTIAL" } else { "INFO" }) ("mean frame {0} ms with {1} players" -f $frameMs, $want) "Gameplay/Rendering"
     Res "$tag.clean_exit" $(if ($clean) { "PASS" } else { "FAIL" }) ("shutdown complete {0}" -f $clean) "Integration"
 }
+$easy = @($rows | Where-Object { $_.run -like "*_d0" })[0]; $hard = @($rows | Where-Object { $_.run -like "*_d2" })[0]
+if ($easy -and $hard -and $easy.accuracy -ne $null -and $hard.accuracy -ne $null) {
+    Res "difficulty.hard_beats_easy" $(if ($hard.accuracy -gt $easy.accuracy) { "PASS" } else { "FAIL" }) ("bot hit accuracy EASY {0} vs HARD {1}; kills {2} vs {3} (same map / population)" -f $easy.accuracy, $hard.accuracy, $easy.kills, $hard.kills) "Gameplay" }
+Res "known_partial" "INFO" "not flagged (Gameplay, known PARTIAL): bots never hold vehicle form in combat, jets stay robots, bot abilities unused" "Gameplay"
 Write-WfcCsv $rows (Join-Path $OutDir "bots.csv")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
-Write-M07Matrix $rows @("run", "spawned", "teams", "kills", "kill_feed", "bots_logged", "median_bot_path_m", "stuck_or_idle_bots", "nopath_max", "frame_ms", "clean_exit") (Join-Path $OutDir "BOTS.md") "Bot matrix" @("build: ``$sha`` ($Config); difficulty $Difficulty; $Seconds s per run; frontend-launched private matches with Bot Settings in the run's profile.")
+Write-M07Matrix $rows @("run", "spawned", "teams", "kills", "kill_feed", "bots_logged", "median_bot_path_m", "broken_bots", "stuck_or_idle_bots", "nopath_max", "off_mesh_samples", "accuracy", "frame_ms", "clean_exit") (Join-Path $OutDir "BOTS.md") "Bot matrix" @("build: ``$sha`` ($Config); difficulty $Difficulty; $Seconds s per run; frontend-launched private matches with Bot Settings in the run's profile.")
 "BOT MATRIX: " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
