@@ -5,6 +5,7 @@ to reuse evidence for unchanged systems. The tiers are defined in `VALIDATION-TI
 
 | date | tier | integration commit | previous validated | changed since (files) | verdict | evidence |
 |---|---|---|---|---|---|---|
+| 2026-10-05 | TARGETED map sweep | `fdffa7f` integration/milestone-08c | `175a6348` | - | 0 compile fallbacks on 10 maps; Debris source lightmaps missing; Gorge VLM unbound; reverb presets missing; Seed / Berth dark (A/B pending) | `results/mapsweep-fdffa7f/` |
 | 2026-10-05 | AUDIT (static) | `175a6348` integration/milestone-08b | - | - | 0 P0, 5 P1, 6 P2, 7 P3, 1 UNKNOWN (map compile sweep) | `results/audit-m08b/AUDIT.md` |
 | 2026-10-05 | FAST | `175a6348` integration/milestone-08b | `ed91718` (M07) | gameplay 29, other 8, frontend 7, rendering 5, systems/audio 5, assets 5 | **NO OBVIOUS BREAKAGE** - PASS 52 / KNOWN 1 (Trail2 / Beam2 ribbons, Rendering) / PARTIAL 5 / UNKNOWN 1 / 0 product FAIL | `results/fast-175a634/` |
 | 2026-10-05 | dry run (calibration) | `681fd29` integration/milestone-06b | - | - | calibration of the M07 suites (not a verdict) | `results/m07-dryrun/` |

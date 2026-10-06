@@ -193,7 +193,12 @@ human tester. Findings P1-2 and P2-2 hide behind this.
 | P3-6 | **Exported in AssetTools d71cd07** (`lighting.json` globals.postprocess_volume_height_fogs, PROVISIONAL volume-link semantics); Rendering must consume it. Was: Remnant's `PostProcessVolumeHeightFog` is not exported (Escalation map; Debris has no HeightFog in the original: authentic) | AssetTools `manifests/maps/MP_ESC_Remnant*` | AssetTools |
 | P3-7 | Scoreboard on Tab is a toggle; the original PC behaviour (hold vs toggle) is UNKNOWN | `frontend/FrontendRuntime.cpp:870` | Frontend |
 
-## UNKNOWN (needs a short graphical run; not run because other renderers were active)
+## UNKNOWN → resolved by the per-map sweep on M08c fdffa7f (`results/mapsweep-fdffa7f/MAPSWEEP.md`)
+**Result:** 0 material / particle compile fallbacks, 0 legacy, 0 out-of-bounds draws on all 10 maps. Other findings
+are listed there: Debris lightmaps missing from the source, Gorge vertex lightmaps unbound, ambient reverb presets
+missing, Seed / Berth darkness under A/B.
+
+### Original note
 - **Material / particle compile fallbacks on the 8 maps other than Streets / Berth on M08b.**
   - Streets and Berth on 175a634 had **0** `failed to build; using glTF fallback` and **0** `textured fallback`.
   - The 194 such lines found in older Integration logs are pre-M35 (LogoAUT / LogoDEC, fixed by f5490be) or
