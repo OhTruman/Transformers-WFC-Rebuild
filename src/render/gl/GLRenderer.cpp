@@ -506,17 +506,51 @@ public:
         endFrame();
     }
     void setFrontendSceneDraw(std::function<void(IRenderer&)> f) override { sceneDraw_ = std::move(f); }
+    std::map<std::string, assets::AnimFile> animFileCache_;   // M69 parsed AnimSets by path (preview bodies)
     bool loadingFrontendScene_ = false;
+    const assets::AnimFile* animFile(const std::string& path) {   // M69 parsed AnimSet, cached by path
+        auto cached = animFileCache_.find(path);
+        if (cached == animFileCache_.end()) {
+            assets::AnimFile f;
+            if (!assets::loadAnimationFile(path, f)) return nullptr;
+            cached = animFileCache_.emplace(path, std::move(f)).first;
+        }
+        return &cached->second;
+    }
+    std::string animSetPath(const std::string& s) const {          // "Package.Set" -> content/Package/Set.anim.gltf
+        size_t dot = s.find('.');
+        return dot == std::string::npos ? std::string() : wfc::Pipeline::contentRoot() + s.substr(0, dot) + "/" + s.substr(dot + 1) + ".anim.gltf";
+    }
+    void preparePreviewBody(const std::string& gl, const std::vector<std::string>& sets) override {
+        const auto t0 = std::chrono::steady_clock::now();
+        for (const std::string& s : sets) { std::string p = animSetPath(s); if (!p.empty()) animFile(p); wfc_.yieldLoad(); }
+        if (wfc_.active()) {
+            std::string rel = gl.rfind("content/", 0) == 0 ? gl.substr(8) : gl;
+            assets::SkinnedModel model;
+            if (assets::loadSkinnedGlb(wfc::Pipeline::contentRoot() + rel, model)) {
+                MeshData md; md.subs = model.subs; md.mats = model.mats;
+                wfc_.prewarmDynamic(md);
+            }
+        }
+        LOG_INFO("preview body prepared %s: %.1f ms", gl.c_str(),
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+    }
     int loadPreviewBody(const std::string& gl, const std::vector<std::string>& sets, const std::string& anim) override {
         auto b = std::make_unique<PreviewBody>();
         const std::string content = wfc::Pipeline::contentRoot();
         auto rel = [](const std::string& p) { return p.rfind("content/", 0) == 0 ? p.substr(8) : p; };
+        using Clock = std::chrono::steady_clock;
+        auto ms = [](Clock::time_point a, Clock::time_point b2) { return std::chrono::duration<double, std::milli>(b2 - a).count(); };
+        const auto tStart = Clock::now();
         if (!assets::loadSkinnedGlb(content + rel(gl), b->model)) return -1;
+        const auto tMesh = Clock::now();
         for (auto it = sets.rbegin(); it != sets.rend(); ++it) {   // last set first: clipByName returns its clip
             const std::string& s = *it;
             size_t dot = s.find('.');
             if (dot == std::string::npos) continue;
-            assets::loadAnimationsByName(content + s.substr(0, dot) + "/" + s.substr(dot + 1) + ".anim.gltf", b->model);
+            // M69: AnimSets are parsed once per session and shared by every preview body (the shared robot sets
+            // carry ~300 clips each; re-parsing them per body was the CaC class-pick freeze)
+            if (const assets::AnimFile* f = animFile(animSetPath(s))) assets::appendAnimations(*f, b->model);
         }
         // UAnimNodeSequence::SetAnim (WFC xex Function_82E3FF48, RE): the requested name is first remapped through the
         // AnimSets' ChooserGroups, last set first; the first set with that group supplies the anim (weighted pick).
@@ -548,10 +582,13 @@ public:
             }
         }
         b->clip = b->model.clipByName(resolved);
+        const auto tAnim = Clock::now();
         if (wfc_.active()) {                 // M54: its materials compile now (load), not on its first drawn frame
             MeshData md; md.subs = b->model.subs; md.mats = b->model.mats;
             wfc_.prewarmDynamic(md);
         }
+        LOG_INFO("preview body %s: %.1f ms (mesh %.1f, anim sets %.1f, materials %.1f)", gl.c_str(), ms(tStart, Clock::now()),
+                 ms(tStart, tMesh), ms(tMesh, tAnim), ms(tAnim, Clock::now()));
         if (resolved != anim) LOG_INFO("preview body %s: %s -> %s (AnimSet chooser)", gl.c_str(), anim.c_str(), resolved.c_str());
         if (b->clip < 0) LOG_WARN("preview body %s: sequence %s not in its AnimSets; reference pose", gl.c_str(), resolved.c_str());
         else LOG_INFO("preview body %s: %s (%.2f s)", gl.c_str(), resolved.c_str(), b->model.clips[(size_t)b->clip].duration);
@@ -839,6 +876,7 @@ public:
         bool ok = wfc_.load(mapName);
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
         if (ok && !loadingFrontendScene_) {
+            animFileCache_.clear();          // M69: menu-only data, not held during a match
             wfc_.requestMaterialPrewarm();   // M54: after the world upload, yielding
             for (const MeshData& r : prewarmRequests_) wfc_.prewarmDynamic(r);   // M59: replayed per map load
         }
