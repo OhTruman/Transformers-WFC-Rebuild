@@ -685,7 +685,10 @@ bool Pipeline::load(const std::string& mapName) {
 
     for (const auto& kv : M.obj) {
         const assets::Json& e = kv.second;
-        if (!e["glsl"].isString()) continue;
+        if (!e["glsl"].isString()) {      // compile error in build_materials: remembered for the draw-time warning
+            if (e["error"].isString()) matErrors_[kv.first] = e["error"].asString();
+            continue;
+        }
         MatSrc s;
         s.glsl = e["glsl"].asString();
         for (size_t k = 0; k < e["info"]["runtime_params"].size(); ++k)
@@ -1354,6 +1357,13 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             return r;
         }
         LOG_WARN("wfc: material %s failed to build; using glTF fallback", matName.c_str());
+    } else if (!matName.empty()) {
+        // the original material did not compile offline (build_materials error) - drawn with the glTF fallback;
+        // say so once (Experimental: Debris' grey wreck sections were silent)
+        auto er = matErrors_.find(matName);
+        if (er != matErrors_.end() && warnedMatErrors_.insert(matName).second)
+            LOG_WARN("wfc: material %s has no compiled original (%s); using glTF fallback", matName.c_str(),
+                     er->second.substr(0, 160).c_str());
     }
     // glTF fallback material
     std::vector<Program::Slot> slots;
@@ -1642,7 +1652,12 @@ int Pipeline::upload(const MeshData& m) {
         if (key.rfind("actor:", 0) == 0) d.actor = key.substr(6);
         // authored bHidden: actor-placed nodes stay resident (Gameplay may unhide them, e.g. SeqAct_ToggleHidden
         // by game rule); collection components without an actor identity are dropped as before
-        if (hiddenComponents_.count(key) && !std::getenv("WFC_SHOWHIDDEN") && d.actor.empty()) continue;
+        // AssetTools world.glb extras.hidden_game (PrimitiveComponent.HiddenGame; e.g. Seed's 29 tubelight
+        // components whose section material is null): not drawn in game, as authored-hidden collection components
+        if ((hiddenComponents_.count(key) || s.hiddenGame) && !std::getenv("WFC_SHOWHIDDEN") && d.actor.empty()) {
+            if (s.hiddenGame) ++hiddenGameSkipped_;
+            continue;
+        }
         d.noLights = noLightComponents_.count(key) > 0;
         d.dynChannel = dynChannelComponents_.count(key) > 0;
         if (key.rfind("actor:", 0) == 0) {
@@ -1778,6 +1793,7 @@ int Pipeline::upload(const MeshData& m) {
         yieldLoad();                                   // loading presentation: no GL binding held here
     }
     const bool worldUpload = g.world;
+    if (hiddenGameSkipped_) { LOG_INFO("wfc: %d HiddenGame component section(s) not drawn", hiddenGameSkipped_); hiddenGameSkipped_ = 0; }
     meshes_.push_back(std::move(g));
     LOG_INFO("wfc: uploaded mesh %zu: %zu verts, %zu submeshes (%d lightmapped, %d programs, %zu total)",
              meshes_.size() - 1, m.vertexCount(), subs.size(), nLM, nProg, progs_.size());

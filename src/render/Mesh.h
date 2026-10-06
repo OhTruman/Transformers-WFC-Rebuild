@@ -28,6 +28,7 @@ struct SubMesh {
     std::string sourceMesh;           // source StaticMesh object path (glTF node extras.mesh)
     std::string nodeName;             // glTF node name (placed actor, e.g. StaticInterpActor_15810)
     int sourceSection = -1;           // primitive index within that mesh
+    bool hiddenGame = false;          // PrimitiveComponent.HiddenGame (world.glb extras.hidden_game): not drawn in game
     TextureHandle lightmapTex = kInvalidTexture;
     float lmScale[2] = {1, 1};
     float lmBias[2] = {0, 0};
