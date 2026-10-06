@@ -2000,6 +2000,25 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     }
 }
 
+int Pipeline::dynamicProgram(const Material* mat) {
+    std::string mk = materialKey(mat);
+    auto it = dynProgCache_.find(mk);
+    if (it == dynProgCache_.end())
+        it = dynProgCache_.emplace(mk, programFor(mat ? mat->wfcName : std::string(), mat, false)).first;
+    return it->second;
+}
+
+void Pipeline::prewarmDynamic(const MeshData& m) {
+    auto t0 = std::chrono::steady_clock::now();
+    size_t before = dynProgCache_.size();
+    for (const SubMesh& s : m.subs)
+        if (s.material >= 0 && (size_t)s.material < m.mats.size()) dynamicProgram(&m.mats[(size_t)s.material]);
+    if (m.subs.empty()) dynamicProgram(m.mats.empty() ? nullptr : &m.mats[0]);
+    if (dynProgCache_.size() != before)
+        LOG_INFO("wfc: prewarmed %zu dynamic material(s) in %.1f ms", dynProgCache_.size() - before,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+}
+
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     if (m.empty()) return;
     std::vector<float> v;
@@ -2060,11 +2079,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
         Sub d;
         d.first = s.indexOffset; d.count = s.indexCount;
-        std::string mk = materialKey(mat);
-        auto it = dynProgCache_.find(mk);
-        if (it == dynProgCache_.end())
-            it = dynProgCache_.emplace(mk, programFor(mat ? mat->wfcName : std::string(), mat, false)).first;
-        d.prog = it->second;
+        d.prog = dynamicProgram(mat);
         d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
         g.subs.push_back(d);
     }

@@ -186,6 +186,7 @@ public:
     int upload(const MeshData& m);
     void draw(int id, const core::Mat4& model);
     void drawDynamic(const MeshData& m, const core::Mat4& model);
+    void prewarmDynamic(const MeshData& m);   // resolve drawDynamic's programs / textures without drawing
     // Effects shaded by their original material graphs; `color` is the particle colour (vertex colour,
     // HDR). drawFx returns false when the mesh has no compiled original material (caller falls back).
     bool drawFx(int id, const core::Mat4& model, const float color[4]);
@@ -369,6 +370,7 @@ private:
     // Keyed by material CONTENT, not address: dynamic meshes (the character pose buffer) reuse their
     // storage across robot/vehicle, so a pointer key handed the vehicle the robot's programs.
     std::map<std::string, int> dynProgCache_;
+    int dynamicProgram(const Material* mat);   // cached per material key (drawDynamic / prewarmDynamic)
 
     // frame
     core::Mat4 viewProj_;

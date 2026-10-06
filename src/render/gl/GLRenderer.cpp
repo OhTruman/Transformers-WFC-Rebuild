@@ -968,6 +968,8 @@ public:
         drawMeshArrays(meshes_[(size_t)h], model, color);
     }
 
+    void prewarmDynamicMesh(const MeshData& m) override { if (wfc_.active()) wfc_.prewarmDynamic(m); }
+
     void drawDynamicMesh(const MeshData& m, const core::Mat4& model, const core::Vec3& color) override {
         if (m.empty()) return;
         if (wfc_.active()) { wfc_.drawDynamic(m, model); glLoadMatrixf(view_.m); return; }
