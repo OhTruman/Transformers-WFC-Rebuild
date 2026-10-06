@@ -18,12 +18,13 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
 | Bot objective play (25e) | shared goal layer: KOTH hold, DOM capture / contest / defend, CTF retrieve / capture / support / return / defend, EXT retrieve / plant / defuse / defend; BOTOBJTEST 12/12 | PC ADAPTATION |
 | XP / stat awards (25d) | AwardProducer from the event record: 71 XP events, kill-award rules, assists, objective XP, GameWin / GameLose quirk; challenge stats; Frontend profile applies CanGainXp and persists (verified end to end by Frontend); XPTEST 14/14 | CONFIRMED (RE tables) |
 | Melee / grenades for every participant (25f) | startMeleeFor / tickMeleeFor / releaseGrenade shared by the local player and bots | CONFIRMED mechanics |
+| Bot abilities / weapons (25h-25i) | Scout Dodge / Cloak, Soldier Hover / Whirlwind; held weapon meshes + authored shot FX via participantShotFxHook (no Ion fallback); aim rig cached per model; skinned tangents | CONFIRMED effects; use PC ADAPTATION |
 | Spawn spike (Milestone A) | traced to the integration glue's spawn-time audio loads (fixed by Integration 69d5335); Gameplay spawn 0.4 ms | diagnosis |
 
 Regression: WEAPON 19, SWITCH 32, TDM 43, CTF 12, SCORE 9, PARTICIPANT 22, MODEPLAY 21, CHARGE 9, EVENT 16, CLASSCHANGE 22, XP 14,
 QATEST 8, PACING 4, BOTNAV 7 (9 maps), BOTTEST 24-25, BOTOBJ 12.
 
-PARTIAL: bot abilities, Repair Ray healing / heal grenades by bots, jet flight for bots (air layer exists in AssetTools), vehicle
+PARTIAL: World-effect bot abilities (Warcry / Barrier / Shockwave / Sentry), heal grenades and the Repair Ray beam visual for bots, jet flight for bots (air layer exists in AssetTools), vehicle
 boost for bots, bots' held weapon meshes / FX (participantShots() exposed), headshot / backstab / downed awards, heal XP.
 
 Handoffs: docs/handoffs/GAMEPLAY_BOTS.md (bots, launch, participant fields, presentation hooks).
