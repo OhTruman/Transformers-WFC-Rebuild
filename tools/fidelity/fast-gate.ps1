@@ -29,7 +29,7 @@ $res = New-WfcResults; function Res($id, $status, $note, $owner = "") { Add-WfcR
 $t00 = Get-Date
 
 # ---------- build (exact sha, both configurations)
-if (-not $ReportOnly -and ($Build -or -not (Test-Path (Join-Path $tgt "M05_TARGET.txt")))) { Note "build $sha"; & (Join-Path $PSScriptRoot "m05\build-target.ps1") -Ref $sha -Name $Name -Jobs 4 *> (Join-Path $OutDir "build.log") }
+if (-not $ReportOnly -and ($Build -or -not (Test-Path (Join-Path $tgt "M05_TARGET.txt")))) { Note "build $sha"; & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "m05\build-target.ps1") -Ref $sha -Name $Name -Jobs 4 *> (Join-Path $OutDir "build.log") }
 $built = if (Test-Path (Join-Path $tgt "M05_TARGET.txt")) { ((Get-Content (Join-Path $tgt "M05_TARGET.txt")) | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '' } else { "" }
 if ($built -ne $sha) { throw "work\ab\$Name holds '$built', not ${sha}: rerun with -Build (never mix product revisions)" }
 $dbg = Join-Path $tgt "build\bin\wfc_rebuild.exe"; $rel = Join-Path $tgt "build-release\bin\wfc_rebuild.exe"
@@ -141,7 +141,8 @@ foreach ($lf in $allLogs) {
     $legacy += @(Grep-Log $lf.FullName 'LEGACY RENDERER' | ForEach-Object { "$($lf.Directory.Name): " + ($_.text -replace '^\[[^\]]*\] ', '') })
     foreach ($m in @(Grep-Log $lf.FullName 'VISUALCHECK .*glDebug=(\d+)')) { $glDbg = [Math]::Max($glDbg, [int][regex]::Match($m.text, 'glDebug=(\d+)').Groups[1].Value) }
 }
-$oobCheck = [bool](Get-ChildItem (Join-Path $tgt "srcender") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'out of bounds (%zu indices' -SimpleMatch -List | Select-Object -First 1)
+$oobCheck = [bool](Get-ChildItem (Join-Path $tgt "src
+ender") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'out of bounds (%zu indices' -SimpleMatch -List | Select-Object -First 1)
 Res "render.out_of_bounds_draws" $(if ($oob.Count) { "FAIL" } elseif (-not $oobCheck) { "UNKNOWN" } else { "PASS" }) ("rejected out-of-bounds sub-mesh draws (GPU fault / driver-reset class, Rendering M45): {0}{1}{2}" -f $oob.Count, $(if ($oob.Count) { " - " + (($oob | Select-Object -Unique -First 3) -join " | ") } else { "" }), $(if (-not $oobCheck) { " - this build predates the M45 draw validation, so it cannot report them (not a PASS)" } else { "" })) "Rendering"
 Res "render.legacy_renderer" $(if ($legacy.Count) { "FAIL" } else { "PASS" }) ("LEGACY RENDERER (no original render data) errors: {0}{1}" -f $legacy.Count, $(if ($legacy.Count) { " - " + (($legacy | Select-Object -Unique -First 3) -join " | ") } else { "" })) "Rendering"
 Res "render.gl_debug" $(if ($glDbg -gt 0) { "PARTIAL" } else { "INFO" }) ("max VISUALCHECK glDebug count {0} (field present from Rendering 84ba009; 0 / absent on older builds)" -f $glDbg) "Rendering"

@@ -102,17 +102,18 @@ void checkNativeVehicle(Report& r) {
         save(g, "nv_hover_jump_stationary");
         r.conf("hover_jump_stationary.dvz", after.vel.y - before.vel.y, 12.0, 0.4, "m/s", kP4, kGameplay, "vertical velocity change from rest");
         r.conf("hover_jump_stationary.horizontal_kept", hspeed(after), 0.0, 0.05, "m/s", kP4, kGameplay, "no horizontal velocity from a stationary hop");
-        // Airborne: UpdateTurn corrects pitch by 5% of the error per 30 Hz tick (ShouldUpright = no contact).
+        // Airborne: TnHoverCarSimulation.UpdateTurn REPLACES the angular velocity every step with the full correction to upright
+        // (mask 1,1,1 while ShouldUpright = no contact or up.Z < 0.01): upright within one step, no oscillation [RE TARGETED_PASS4
+        // §A4, CONFIRMED]. Supersedes the pre-pass-4 "5% of the error per 30 Hz tick" expectation (0.95 / tick).
         std::vector<double> airPitch;
-        for (const Frame& f : g.trace()) if (f.t > after.t && f.att.valid && f.att.contacts == 0) airPitch.push_back(f.att.pitch);
-        double ratio = -1; int nr = 0; double acc = 0;
-        for (size_t k = 4; k + 2 < airPitch.size(); k += 2)
-            if (std::fabs(airPitch[k]) > 0.004) { acc += airPitch[k + 2] / airPitch[k]; ++nr; }
-        if (nr) ratio = acc / nr;
-        if (!airPitch.empty())
-            r.conf("upright.airborne_ratio_per_tick", ratio, 0.95, 0.03, "", "native M03 P2: airborne/upside-down only, 5% of the pitch/roll "
-                   "error per 30 Hz tick", kGameplay, "pitch ratio per 1/30 s while no probe touches");
-        r.info("upright.grounded", -1, "", "grounded: no upright controller (attitude from springs) - see step_*.attitude_follows_terrain");
+        for (const Frame& f : g.trace()) if (f.t > after.t && f.att.valid && f.att.contacts == 0) airPitch.push_back(std::fabs(f.att.pitch));
+        double residual = 0; for (size_t k = 2; k < airPitch.size(); ++k) residual = std::max(residual, airPitch[k]);   // after the first airborne steps
+        if (airPitch.size() > 2)
+            r.conf("upright.airborne_residual_pitch", residual, 0.0, 0.004, "rad", "RE TARGETED_PASS4 §A4: airborne UpdateTurn replaces the angular "
+                   "velocity with the full upright correction each step (critically damped, no oscillation)", kGameplay,
+                   "max |pitch| while no probe touches, after the first airborne steps");
+        else r.info("upright.airborne_residual_pitch", -1, "rad", "no airborne samples (the hop never left the probes)");
+        r.info("upright.grounded", 0, "", "not a measurement: grounded attitude = springs + 0.05 x error / dt UpdateTurn pull (§A4) - see step_*.attitude_follows_terrain");
         r.info("hover_lean.anim_blend", -1, "",
                "TnAccelerationAnimBlend velocity-driven lean (ClampLength(v,2000)/2000 x max(0,up.Z)): animation weights are not exposed to "
                "the harness - code-level only (Gameplay Pass 14 provenance)");
@@ -146,6 +147,8 @@ void checkNativeVehicle(Report& r) {
         r.confTruth(id + ".no_one_frame_snap", tCross > 0 && maxDy < 0.5 * h, kP1, kGameplay,
                     "largest one-step (1/60 s) COM height change " + std::to_string(maxDy) + " m crossing a " + std::to_string(h) +
                         " m riser (a snap moves the full riser height in one step)");
+        // OPEN (2026-10-06): since §A4 the grounded attitude comes only from the diagonal springs (angular velocity reset each step);
+        // Gameplay asked RE whether a riser of this size visibly pitches the original - KNOWN until RE answers, not a regression.
         r.confTruth(id + ".attitude_follows_terrain", attValid && pitchMax > 0.5, kP2, kGameplay,
                     attValid ? "max |pitch| " + std::to_string(pitchMax) + " deg, |roll| " + std::to_string(rollMax) + " deg crossing the riser"
                              : std::string("no rigid-body attitude in this build"));
@@ -162,23 +165,32 @@ void checkNativeVehicle(Report& r) {
         vehicleOn(g, s.mesh, {0, 10.0f, 0});
         g.hold(Rig::down({Button::Forward}), 9.0);
         save(g, "nv_drop10");
-        double vImpact = 0, comMin = 1e9, tLand = -1, tSettle = -1;
+        double vImpact = 0, comMin = 1e9, tLand = -1, tSettle = -1, tMin = -1;
         bool air = false;
+        std::vector<const Frame*> landed;
         for (const Frame& f : g.trace()) {
             if (f.pos.z > -61.0f) continue;
             if (f.att.valid && f.att.contacts == 0) air = true;
             if (air && f.vel.y < vImpact) vImpact = f.vel.y;
             if (air && f.att.valid && f.att.contacts > 0 && tLand < 0) tLand = f.t;
             if (tLand > 0 && f.comH >= 0) {
-                comMin = std::min(comMin, (double)f.comH);
-                if (tSettle < 0 && f.t > tLand + 0.05 && std::fabs(f.comH - kRestCom) < 0.03) tSettle = f.t - tLand;
+                landed.push_back(&f);
+                if (f.comH < comMin) { comMin = f.comH; tMin = f.t; }
             }
+        }
+        // Settle = after the compression minimum (first contact is ~a spring length above the slab and the COM falls THROUGH the
+        // rest height on the way down - Gameplay WFC_DROPTEST 2026-10-06), and |COM - rest| < 3 cm held for 0.25 s.
+        for (size_t i = 0; i < landed.size() && tSettle < 0; ++i) {
+            if (landed[i]->t < tMin) continue;
+            bool held = true; size_t j = i;
+            for (; j < landed.size() && landed[j]->t <= landed[i]->t + 0.25; ++j) if (std::fabs(landed[j]->comH - kRestCom) >= 0.03) { held = false; break; }
+            if (held && j < landed.size()) tSettle = landed[i]->t - tLand;
         }
         r.info("drop10.impact_vy", vImpact, "m/s", "vertical speed at touchdown (RB gravity 19.404 m/s^2, terminal 35 m/s)");
         r.info("drop10.min_com_height", comMin, "m",
                "PROVISIONAL - not promoted: hull/chassis contact (min clearance, ceiling probe) is not recovered natively");
         r.confTruth("drop10.recovery_not_instant", tSettle < 0 || tSettle > 0.2, kP1, kGameplay,
-                    "touchdown -> COM within 3 cm of rest took " + std::to_string(tSettle) + " s (springs; 1 step = a snap)");
+                    "touchdown -> COM settled within 3 cm (after the compression minimum, held 0.25 s) took " + std::to_string(tSettle) + " s (springs; 1 step = a snap; Gameplay WFC_DROPTEST ~1.3-1.6 s)");
         r.conf("drop10.settles_to_rest", g.last().comH, kRestCom, 0.03, "m", kP1, kGameplay, "COM height long after landing");
         r.info("drop10.recovery_time", tSettle, "s", "touchdown -> COM within 3 cm of rest (human check: landing weight)");
     }
@@ -256,8 +268,12 @@ void checkNativeVehicle(Report& r) {
         r.conf("hover_jump.horizontal_kept", hspeed(after) - hspeed(before), 0.0, 0.3, "m/s", kP4, kGameplay,
                "horizontal speed change on the jump step (world-Z impulse only)");
         if (after.att.valid)
-            r.conf("hover_jump.pitch_kick", after.att.angVel.y - before.att.angVel.y, -1.0, 0.25, "rad/s", kP4, kGameplay,
-                   "local pitch-axis angular velocity change (JumpAngularSpeed 1.0, local -Y = nose up)");
+        {   // RE TARGETED_PASS4 §A4: the jump's nose-up spin (A1, JumpAngularSpeed 1.0) is cancelled by the upright drive, which REPLACES
+            // the angular velocity each step; UpdateJumping vs UpdateTurn order is not traced [HIGH], so 0 .. -1 rad/s (one step at most).
+            const double kick = after.att.angVel.y - before.att.angVel.y;
+            r.confTruth("hover_jump.pitch_kick", kick <= 0.05 && kick >= -1.25, kP4, kGameplay,
+                        "local pitch-axis angular velocity change " + std::to_string(kick) + " rad/s (band 0 .. -1 per §A4; local -Y = nose up)");
+        }
         r.info("hover_jump.apex_above_rest", apex - rest, "m", "ballistic 1200^2/(2*1940.4) = 3.71 m plus the spring push (native note)", 3.71);
     }
 
