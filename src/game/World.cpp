@@ -2968,6 +2968,7 @@ void World::tickLocalMelee(float dt) {
             if (line && line->segmentHit(pc.actorLocation(), c, t)) continue;
             pc.meleeHit_.push_back(o->matchPlayer()); ++pc.meleeHitCount_;
             applyMatchDamage(o->matchPlayer(), localPlayer_, damage, false, type);
+            onPawnHitEffect(type, v.chassis().id, o->matchPlayer(), c);   // [Systems M08p] the victim's melee hit effect
             // Momentum = normal(victim - attacker) x Impulse (WeaponAttack 30000, flag / bomb 80000, Whirlwind 2000) [CONF].
             const float impulse = whirl ? 2000.0f : pc.meleeCarrier_ ? 80000.0f : pc.meleePoke_ ? 200000.0f : 30000.0f;
             core::Vec3 dir = c - pc.actorLocation();
@@ -3622,6 +3623,7 @@ void World::tickKillstreakItems(float dt) {
             pc.minePooperTimer_ += 2.0f;
             const core::Vec3 f = core::forwardFromYawPitch(pc.yaw(), 0.0f), r = core::normalize(core::cross(f, core::Vec3{0, 1, 0}));
             KamikazeMine m; m.pos = pc.actorLocation() + f * 4.0f + r * 1.0f; m.vel = {0, 0, 0};
+            m.audioKey = ++projAudioKey_;                  // [Systems M08p]
             mines_.push_back(m);
         }
     }
@@ -3655,6 +3657,10 @@ void World::tickKillstreakItems(float dt) {
             else m.pos = next;
         }
         if (boom) radiusDamage(m.pos, 125.0f, 5.0f, localPlayer_, "TransGame.TnDamageTypeKamikazeMine");
+        // [Systems M08p] FoundTarget once tracking (m.vel set toward a target); explosion (target / wall / shot) vs the fizzle
+        if (!boom && !gone) setKamikazeMineAudio(m.audioKey, m.pos, core::length(m.vel) > 0.0f);
+        else if (boom || m.health <= 0.0f) onKamikazeMineExploded(m.audioKey, m.pos);
+        else onKamikazeMineRemoved(m.audioKey);
         if (boom || gone) { mines_.erase(mines_.begin() + (long)i); continue; }
         ++i;
     }

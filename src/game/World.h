@@ -671,7 +671,7 @@ private:
     std::vector<BuffShot> buffShots_;
     // TnProjectileKamikazeMineKillstreak (MinePooper) [CONF RE §K]: hover 2 s, then seek an enemy within SearchRadius 2000 UU
     // at HomingSpeed 2300 UU/s; 125 / 500 UU on contact; Health 50; LifeSpan 60.
-    struct KamikazeMine { core::Vec3 pos, vel; float t = 0.0f, health = 50.0f; int target = -1; };
+    struct KamikazeMine { core::Vec3 pos, vel; float t = 0.0f, health = 50.0f; int target = -1; int audioKey = 0; };   // [Systems M08p] audioKey
     std::vector<KamikazeMine> mines_;
     void tickKillstreakItems(float dt);
     void tickBuffShots(float dt);
