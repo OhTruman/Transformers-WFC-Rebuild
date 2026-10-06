@@ -101,7 +101,11 @@ provenance stays in its section.
   from other lanes (a 3-round-trip rerun matched the earlier numbers).
   Boot title-open frame (95-105 ms): 48 ms was the boot startup movie decoding its backlog after the title load (fixed,
   fe26688: underlay / boot-hold movies advance one frame per update, PC ADAPTATION); the remaining 43-44 ms is the
-  title's level audio start (uiLevelStarted, Systems) on the frame the menu appears. Now 53 ms.
+  title's level audio start (uiLevelStarted, Systems) on the frame the menu appears. Now 53 ms. The same 43-55 ms
+  level-audio start recurs on every return to the title (reported to Systems).
+  Travel start: reopening the TF_LoadingScreen underlay cost 31-34 ms per travel; the decoder is now kept between
+  loading screens (PC ADAPTATION, one reader resident), so only the first travel after boot pays it. A load step's
+  frontend share (loading movie + underlay) is ~7.5 ms; the rest of each 112-167 ms step is the load work (Rendering).
 
 ## FRONTEND: TITLE VIGNETTE / MENU BACKGROUNDS COVER THE SCREEN (2026-10-05, agents/frontend)
 - Human-confirmed: the title vignette left bright vertical strips at both sides (87.5 % of the width covered at 16:9).
