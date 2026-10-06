@@ -49,6 +49,11 @@ private:
     std::vector<Link> links_;
     std::vector<Anchor> anchors_;
     std::vector<int> piece_;     // connected piece id per cell (portals + links, undirected)
+    // A* scratch, reused between searches (generation-stamped instead of cleared).
+    mutable std::vector<float> gs_;
+    mutable std::vector<int> came_, viaLink_;
+    mutable std::vector<unsigned> stamp_, closedStamp_;
+    mutable unsigned gen_ = 0;
     int mainPieceId_ = -1, mainPiece_ = 0;
     // xz bucket grid over cell bounds
     float gx0_ = 0, gz0_ = 0, gcell_ = 8.0f; int gw_ = 0, gh_ = 0;

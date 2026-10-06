@@ -187,43 +187,51 @@ bool BotNav::findPath(const core::Vec3& from, const core::Vec3& to, const Agent&
     int s = findCell(from, 12.0f), g = findCell(to, 12.0f);   // the start may be off the mesh (a prop top, a ledge)
     if (s < 0 || g < 0) return false;
     if (s == g) { out.push_back({to, 0, g}); return true; }
+    if (piece_[(size_t)s] != piece_[(size_t)g]) return false;   // not connected even through links
     const size_t N = cells_.size();
-    std::vector<float> gs(N, 1e30f);
-    std::vector<int> came(N, -1), viaLink(N, -1);
-    std::vector<unsigned char> closed(N, 0);
+    if (gs_.size() != N) { gs_.assign(N, 0.0f); came_.assign(N, -1); viaLink_.assign(N, -1); stamp_.assign(N, 0); closedStamp_.assign(N, 0); gen_ = 0; }
+    if (++gen_ == 0) { std::fill(stamp_.begin(), stamp_.end(), 0u); std::fill(closedStamp_.begin(), closedStamp_.end(), 0u); gen_ = 1; }
+    const unsigned G = gen_;
+    // Stamped views: an entry is valid only when stamped with this search's generation.
+    auto gsAt = [&](int c) -> float { return stamp_[(size_t)c] == G ? gs_[(size_t)c] : 1e30f; };
+    auto setNode = [&](int c, float gv, int from, int link) { stamp_[(size_t)c] = G; gs_[(size_t)c] = gv; came_[(size_t)c] = from; viaLink_[(size_t)c] = link; };
+    auto isClosed = [&](int c) { return closedStamp_[(size_t)c] == G; };
+    // Weighted A* (heuristic x 1.5): far fewer expansions on the fine cell mesh; routes stay within 1.5x of optimal [PC ADAPTATION].
+    const float W = 1.5f;
     using QE = std::pair<float, int>;
-    std::priority_queue<QE, std::vector<QE>, std::greater<QE>> open;
+    static thread_local std::vector<QE> heap;
+    heap.clear();
+    std::priority_queue<QE, std::vector<QE>, std::greater<QE>> open(std::greater<QE>(), std::move(heap));
     const core::Vec3 goalC = cells_[(size_t)g].centroid;
-    gs[(size_t)s] = 0.0f; open.push({core::length(cells_[(size_t)s].centroid - goalC), s});
+    setNode(s, 0.0f, -1, -1); open.push({W * core::length(cells_[(size_t)s].centroid - goalC), s});
     int n = 0;
     while (!open.empty()) {
         const int c = open.top().second; open.pop();
-        if (closed[(size_t)c]) continue;
-        closed[(size_t)c] = 1; ++n;
+        if (isClosed(c)) continue;
+        closedStamp_[(size_t)c] = G; ++n;
         if (c == g) break;
+        if (n > 4000) break;   // one-way (drop-only) unreachable goals would exhaust the mesh: give up, the bot picks another goal
         const Cell& cc = cells_[(size_t)c];
         for (const Portal& p : cc.portals) {
-            if (closed[(size_t)p.to] || (!usable(p.to, a) && p.to != g)) continue;
+            if (isClosed(p.to) || (!usable(p.to, a) && p.to != g)) continue;
             const core::Vec3 mid = (p.a + p.b) * 0.5f;
             const float tight = (!a.vehicle && cells_[(size_t)p.to].clearance < a.radius) ? 1.3f : 1.0f;   // prefer roomy cells [PROV]
-            const float ng = gs[(size_t)c] + (core::length(mid - cc.centroid) + core::length(cells_[(size_t)p.to].centroid - mid)) * tight;
-            if (ng < gs[(size_t)p.to]) { gs[(size_t)p.to] = ng; came[(size_t)p.to] = c; viaLink[(size_t)p.to] = -1;
-                open.push({ng + core::length(cells_[(size_t)p.to].centroid - goalC), p.to}); }
+            const float ng = gsAt(c) + (core::length(mid - cc.centroid) + core::length(cells_[(size_t)p.to].centroid - mid)) * tight;
+            if (ng < gsAt(p.to)) { setNode(p.to, ng, c, -1); open.push({ng + W * core::length(cells_[(size_t)p.to].centroid - goalC), p.to}); }
         }
         for (int li : cc.links) {
             const Link& l = links_[(size_t)li];
-            if (closed[(size_t)l.to] || (a.vehicle ? !l.vehicle : !l.robot)) continue;
+            if (isClosed(l.to) || (a.vehicle ? !l.vehicle : !l.robot)) continue;
             if (!usable(l.to, a) && l.to != g) continue;
-            const float ng = gs[(size_t)c] + core::length(l.fromPos - cc.centroid) + core::length(l.toPos - l.fromPos) * 1.5f + 3.0f +
+            const float ng = gsAt(c) + core::length(l.fromPos - cc.centroid) + core::length(l.toPos - l.fromPos) * 1.5f + 3.0f +
                              core::length(cells_[(size_t)l.to].centroid - l.toPos);
-            if (ng < gs[(size_t)l.to]) { gs[(size_t)l.to] = ng; came[(size_t)l.to] = c; viaLink[(size_t)l.to] = li;
-                open.push({ng + core::length(cells_[(size_t)l.to].centroid - goalC), l.to}); }
+            if (ng < gsAt(l.to)) { setNode(l.to, ng, c, li); open.push({ng + W * core::length(cells_[(size_t)l.to].centroid - goalC), l.to}); }
         }
     }
     if (expanded) *expanded = n;
-    if (came[(size_t)g] < 0) return false;
+    if (stamp_[(size_t)g] != G || came_[(size_t)g] < 0) return false;
     std::vector<int> chain;
-    for (int c = g; c >= 0; c = came[(size_t)c]) { chain.push_back(c); if (c == s) break; }
+    for (int c = g; c >= 0; c = came_[(size_t)c]) { chain.push_back(c); if (c == s) break; }
     std::reverse(chain.begin(), chain.end());
     // String pull (simple stupid funnel) per run of portal steps; links are hard corners with an action.
     const float r = a.vehicle ? 1.5f : std::min(a.radius, 1.2f);
@@ -253,7 +261,7 @@ bool BotNav::findPath(const core::Vec3& from, const core::Vec3& to, const Agent&
     portals.push_back({apex, apex}); portalCell.push_back(s);
     for (size_t i = 1; i < chain.size(); ++i) {
         const int c0 = chain[i - 1], c1 = chain[i];
-        const int li = viaLink[(size_t)c1];
+        const int li = viaLink_[(size_t)c1];
         if (li >= 0) {
             const Link& l = links_[(size_t)li];
             flush(l.fromPos, c0);

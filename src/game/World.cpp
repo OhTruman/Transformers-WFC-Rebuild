@@ -1017,6 +1017,18 @@ void World::tick(float dt) {
     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
     if (matchActive_) tickMatch(dt);
+    if (matchActive_) {
+        awards_.consume(match_);
+        static const bool xplog = std::getenv("WFC_XPLOG") != nullptr;   // diagnostics: each award once (left undrained for the caller)
+        if (xplog) {
+            if (xpLogged_ > awards_.pendingXp().size()) xpLogged_ = 0;   // drained / trimmed since
+            for (size_t i = xpLogged_; i < awards_.pendingXp().size(); ++i) {
+                const XpAward& a = awards_.pendingXp()[i];
+                LOG_INFO("XP p%d txn %d %s +%ld \"%s\" %s", a.player, a.transactionId, a.eventId.c_str(), a.xp, a.announcement.c_str(), a.extra.c_str());
+            }
+            xpLogged_ = awards_.pendingXp().size();
+        }
+    }
     if (!localPlayerDead()) {                       // dead / not yet spawned (match): no pawn simulation
         player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
     }

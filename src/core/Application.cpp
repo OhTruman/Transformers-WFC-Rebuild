@@ -162,6 +162,7 @@ bool Application::init() {
     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
     if (std::getenv("WFC_BOTNAVTEST")) { runBotNavTest(); return false; }           // bot nav data + path corridor validity
+    if (std::getenv("WFC_XPTEST")) { runXpTest(); return false; }                   // XP / stat award producer
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -4353,6 +4354,87 @@ void Application::runBotNavTest() {
         check(worstMs < 8.0, "A* under 8 ms");
     }
     LOG_INFO("BOTNAV SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_XPTEST: the XP / stat award feed from scripted TDM and DM kills (applyMatchDamage through the real kill path).
+void Application::runXpTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("XPTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { world_.handleInput(idle, dt); world_.tick(dt); } };
+    std::vector<game::XpAward> got; std::vector<game::StatAward> stats;
+    auto drain = [&]() { for (auto& a : world_.drainXpAwards()) got.push_back(a); for (auto& s : world_.drainStatAwards()) stats.push_back(s); };
+    auto has = [&](int p, const char* id, long xp) { for (auto& a : got) if (a.player == p && a.eventId == id && (xp < 0 || a.xp == xp)) return true; return false; };
+    auto txnOf = [&](int p, const char* id) { for (auto& a : got) if (a.player == p && a.eventId == id) return a.transactionId; return -1; };
+    auto statSum = [&](int p, int id) { long n = 0; for (auto& s : stats) if (s.player == p && s.statId == id) n += s.amount; return n; };
+    for (int mode = 0; mode < 2; ++mode) {
+        got.clear(); stats.clear();
+        game::MatchLaunch L;
+        game::MatchLaunch::fromURL(world_.mapName() + (mode == 0 ? "_BASE_m?GameModeTag=TDM?TimeLimit=60" : "_BASE_m?GameModeTag=DM?TimeLimit=60"), L);
+        world_.launchMatch(L);
+        const int me = world_.localMatchPlayer();
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        world_.match().selectCharacter(me, cs);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 4; ++i) ops.push_back(world_.addMatchOpponent("XP" + std::to_string(i + mode * 4), false));
+        run(11.0f); drain(); got.clear(); stats.clear();
+        game::MatchOpponent* E = nullptr; game::MatchOpponent* E2 = nullptr; game::MatchOpponent* F = nullptr;
+        for (auto* o : ops) {
+            if (!o->spawned()) continue;
+            if (mode == 0 && world_.match().sameTeam(o->matchPlayer(), me)) { if (!F) F = o; }
+            else if (!E) E = o; else if (!E2) E2 = o;
+        }
+        if (!E || !E2) { check(false, "opponents spawned"); continue; }
+        const char* AR = "TransGame.TnDamageTypeAssaultRifle";
+        auto kill = [&](int killer, game::MatchOpponent* v) { world_.applyMatchDamage(v->matchPlayer(), killer, 99999.0f, false, AR); run(0.05f); drain(); };
+        if (mode == 0) {
+            // 1) first kill: Kill + FirstKill in one transaction; the victim's FirstDeath; an assist; the kills stat.
+            if (F) world_.applyMatchDamage(E->matchPlayer(), F->matchPlayer(), 0.6f * E->health().max, false, AR);
+            kill(me, E);
+            check(has(me, "Kill", 50) && has(me, "FirstKill", 100) && txnOf(me, "Kill") == txnOf(me, "FirstKill"), "Kill 50 + First Blood 100 in one transaction");
+            check(has(E->matchPlayer(), "FirstDeath", 75), "victim: Rough Start (FirstDeath) 75");
+            check(!F || has(F->matchPlayer(), "Assist", 25), "teammate damage > 50 % HealthMax: Assist 25");
+            check(statSum(me, game::AwardProducer::challengeStatId("CHALLENGE_BASIC_KILLS")) == 1, "basic kills stat +1");
+            // 2) a second kill within 3 s: Double Kill.
+            kill(me, E2);
+            check(has(me, "MultiKill2", 100), "Double Kill (2 kills <= 3 s apart) 100");
+            // 3) third kill (E again): 3 Kill Streak with the reward in extra data; Beat Down (same enemy twice in a row).
+            run(6.0f); drain();
+            if (E->spawned()) kill(me, E);
+            bool streakExtra = false;
+            for (auto& a : got) if (a.player == me && a.eventId == "KillStreak3" && a.extra.rfind("Killstreak,", 0) == 0) streakExtra = true;
+            check(has(me, "KillStreak3", 100) && streakExtra, "3 Kill Streak 100 with extra Killstreak,<id>");
+            check(has(me, "KillDomination2", 20), "Beat Down: the same enemy twice in a row (20)");
+            // 4) E kills me (ending my streak of 3), then I kill E: Payback.
+            run(6.0f); drain();
+            if (E->spawned()) world_.applyMatchDamage(me, E->matchPlayer(), 99999.0f, false, AR);
+            run(0.05f); drain();
+            check(has(E->matchPlayer(), "EndKillStreak", 75), "Funkiller: ending a streak of 3 (75)");
+            run(7.0f); drain();
+            if (E->spawned() && !world_.localPlayerDead()) kill(me, E);
+            check(has(me, "KillPayback", 50), "Payback: killing whoever last killed you (50)");
+            // 5) match end: GameWin to the winning PRI's team, GameLose to the rest.
+            run(60.0f); drain();
+            int wins = 0, loses = 0;
+            for (auto& a : got) { wins += a.eventId == "GameWin"; loses += a.eventId == "GameLose"; }
+            check(wins >= 1 && loses >= 1 && wins + loses == (int)world_.match().players().size(), "match end: GameWin / GameLose to every player");
+            check(has(me, "GameWin", 300) || has(me, "GameLose", 150), "the local player gets GameWin 300 or GameLose 150");
+        } else {
+            kill(me, E);
+            check(has(me, "Kill", 25), "DM: Kill uses DeathmatchXpAmount 25");
+            kill(me, E2);
+            check(has(me, "MultiKill2", 50), "DM: Double Kill 50");
+            run(60.0f); drain();
+            bool any = false;
+            for (auto& a : got) any |= a.eventId == "GameWin" || a.eventId == "GameLose";
+            check(!any, "DM: no GameWin / GameLose XP");
+        }
+        long total = 0;
+        for (auto& a : got) if (a.player == me) total += a.xp;
+        LOG_INFO("XPTEST %s: %zu awards, %zu stats, local XP this match %ld", mode == 0 ? "TDM" : "DM", got.size(), stats.size(), total);
+    }
+    LOG_INFO("XPTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

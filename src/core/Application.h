@@ -54,6 +54,7 @@ private:
     void runPacingTest();
     void runBotTest();
     void runBotNavTest();
+    void runXpTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

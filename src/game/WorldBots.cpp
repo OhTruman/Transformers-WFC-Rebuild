@@ -93,7 +93,7 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
     }
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
     const core::Vec3 hitPoint = origin + dir * dist;
-    participantShots_.push_back({instigator, w.def ? w.def->id : "", origin, hitPoint, dist < range - 0.01f});
+    participantShots_.push_back({instigator, w.def ? w.def->id : "", origin, hitPoint, dist < range - 0.01f, hitPlayer});
 }
 
 void World::botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& aimPoint) {
@@ -109,7 +109,7 @@ void World::botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& 
         const core::Vec3 muzzle = eye + d * 1.5f;
         spawnProjectile(muzzle, d * w.projSpeed, w, o.matchPlayer());
         if (w.projHoming && b.target >= 0) projectiles_.back().target = b.target;   // AI fires homing weapons at its enemy
-        participantShots_.push_back({o.matchPlayer(), w.def ? w.def->id : "", muzzle, aimPoint, false});
+        participantShots_.push_back({o.matchPlayer(), w.def ? w.def->id : "", muzzle, aimPoint, false, -1});
     } else if (w.simulated() && !w.beam()) {
         for (int k = 0; k < std::max(1, w.shots); ++k) fireHitscanAs(o.matchPlayer(), pc, w, eye, d);
     }
@@ -433,7 +433,7 @@ void World::tickBots(float dt) {
     if (bots_.empty() || !matchActive_) return;
     const auto t0 = std::chrono::steady_clock::now();
     ensureBotNav();
-    botPathBudget_ = 2;
+    botPathBudget_ = 1;   // one A* per simulation step across all bots (the others wait a step)
     for (BotBrain& b : bots_) {
         MatchOpponent* o = nullptr;
         for (MatchOpponent* q : opponents_) if (q->matchPlayer() == b.player) o = q;

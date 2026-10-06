@@ -175,6 +175,36 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   - Repair Ray healing by bots;
   - bots' held weapon meshes / FX (World::participantShots() exposes their shots).
 
+### XP / stat award producer (25d) [CONF RE MP_PROGRESSION_SCORING_AI §2 / §6 + notes/data; tables generated: tools/gen/progression_table.js]
+- AwardProducer reads the event record by serial and raises the original XP events as World::drainXpAwards() (Frontend
+  contract: player, transactionId, xp, announcement, description, extra).
+- Award amount = GlobalXpMultiplier × (DeathmatchXpAmount when >= 0 in non-team games, else XpAmount).
+- One transaction per kill: Kill first, then the TnKillAwardManager rules in order.
+- Rules implemented:
+  - Killstreak 3 / 5 / 7 with "Killstreak,<id>";
+  - killer / victim-defensive / victim-offensive buff checks (offensive: only a known debuffer; PARTIAL while debuff instigators
+    are not tracked);
+  - damage-type kills; first kill / first death;
+  - killer low health (< 50 HP); long range (> 8000 UU);
+  - flag carrier (CTF) / bomb carrier (EXT) / zone (KOTH) / node (DOM) kills;
+  - multikill (<= 3.0 s, exact 2 / 3 / 4); domination 2 / 3 / 4, payback, payback-after-domination;
+  - end kill streak (victim streak > 2); class melee kills; kill after death; hover-melee.
+- Also: Assist (> 0.5) / WeakAssist (> 0.25); objective XP (capture / return / plant / detonate / defuse / node capture /
+  ZoneHold tiers by points / 10); GameWin / GameLose (team games only, winning PRI's team quirk).
+- Stats (World::drainStatAwards: player, StatPropertyId, amount, ReportGameStat update type):
+  - the rule StatIds; basic kills / vehicle kills / assists / first kill / first death;
+  - fine-aim on / off; higher level; lifetime (PROV: seconds alive, match max);
+  - Prime killstreak per specialty (single match / total, highest);
+  - TnKillAwardRuleSpecialtySpecific per-class weapon / form / buff kills.
+- CanGainXp is applied by Frontend's profile (PC / OFFLINE ADAPTATION default earns offline; WFC_ORIGINAL_XP_RULE = original).
+- Awards for bots are a PC ADAPTATION (MatchSettings::botVictimsScore).
+- PARTIAL:
+  - headshot / backstab / downed (not simulated);
+  - heal XP (heal grenade, repair-ray low health);
+  - sentry / mine kill XP given in addition to Kill [PROV].
+- WFC_XPTEST 14/14 (TDM: First Blood + Kill in one transaction, FirstDeath, Assist, kills stat, Double Kill, 3 Kill Streak + extra,
+  Beat Down, Funkiller, Payback, GameWin / GameLose; DM: Kill 25, Double Kill 50, no win / lose XP). WFC_XPLOG logs each award.
+
 ### QA live character swap [DEV / QA TOOLING, not original]
 - World::qaSetCharacter(selection): preloadSelections, then Match::selectCharacter, then the QA suicide; the normal respawn wave
   applies it.

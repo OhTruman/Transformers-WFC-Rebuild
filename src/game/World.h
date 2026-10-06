@@ -16,6 +16,7 @@
 #include "game/BotRoster.h"
 #include "game/BotBrain.h"
 #include "game/BotNav.h"
+#include "game/Progression.h"
 #include "game/Destructible.h"
 #include "game/SpawnPoint.h"
 #include "game/Collision.h"
@@ -428,8 +429,14 @@ public:
     void resetBotTiming() { botMsAccum_ = 0.0; botMsMax_ = 0.0; botTicks_ = 0; }
     // Participant (non-local) shots this step, for presentation layers (tracers / muzzle / sounds of bots): weapon id, the trace
     // or launch start, the end point and whether it hit something. Robot-weapon mesh FX for bots are not drawn yet [PARTIAL].
-    struct ParticipantShot { int player; std::string weapon; core::Vec3 from, to; bool impact; };
+    struct ParticipantShot { int player; std::string weapon; core::Vec3 from, to; bool impact; int hitPlayer = -1; };   // hitPlayer: pawn hit (-1 world / none)
     const std::vector<ParticipantShot>& participantShots() const { return participantShots_; }
+    // Progression feed (Frontend contract): XP events (grouped by transactionId per kill) and challenge stat increments for every
+    // participant, produced from the event record. Frontend applies the local player's to the profile (CanGainXp rule, current
+    // specialty). Drained by the caller.
+    std::vector<XpAward> drainXpAwards() { return awards_.drainXp(); }
+    std::vector<StatAward> drainStatAwards() { return awards_.drainStats(); }
+    const AwardProducer& awards() const { return awards_; }
     const std::vector<MatchOpponent*>& matchOpponents() const { return opponents_; }
     HudGameState hudState() const;
     // Per-chassis pawn resources (AssetTools Characters/<ChassisId>: robot.glb, vehicle.glb, character.json, ArmBlueprint),
@@ -481,6 +488,8 @@ private:
     Match match_;
     std::vector<MatchOpponent*> opponents_;   // owned by actors_
     int botDifficulty_ = 1;
+    AwardProducer awards_;
+    size_t xpLogged_ = 0;
     std::vector<BotBrain> bots_;
     BotNav botNav_;
     bool botNavTried_ = false;
