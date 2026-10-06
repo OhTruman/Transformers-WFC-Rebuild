@@ -3,6 +3,37 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08f (2026-10-05) — accounts prompt fix, beam fill, match announcer / countdown audio, volume sliders — branch `integration/milestone-08f`
+
+On 08e (1168af2). Render data regenerated (every map and frontend scene; Rendering M56–M58 beam data, AssetTools 439a8ce material fixes).
+
+| lane | head | content |
+|---|---|---|
+| agents/frontend | 5c5eb46 | 136ac7a: a cancelled Create Account prompt no longer creates the account on a later Accept (Selection.getFocus forgets removed fields); PASS 7 docs |
+| agents/rendering | 2692e46 | M56 / M57: Beam2 noise and BeamSineWave per the native beam fill, joined strips; M58: frontend scenes prewarm placed emitters (the title's first-frame stall) |
+| agents/systems | 7d78ac7 | M08f: pre-match countdown ticks, flag / bomb / domination / hill announcer, bomb fuse ticks, grenade fuse / bounce, non-blocking level prefetch (travel hitch). M08g: profile Music / FX / Dialogue volume via SetAudioGroupVolume (default 80 = 0.8, as the original) |
+
+**Integration:**
+- The regenerated Systems glue patch is applied as a delta against the 08e-applied one (computed on 08c copies). It also touches Application_Frontend.
+- A FIDELITY.md merge left conflict markers; resolved in a follow-up commit.
+- Gameplay Pass 24 (dfc20f8: tank 180, Repair Ray, projectile FX, vehicle muzzle alternation, fine-aim cameras) is not integrated: not announced complete.
+
+**Validation:**
+- Builds and suites:
+  - clean Debug / Release;
+  - frontend 79 / 0, harness 191 / 0;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 21, chassis 13;
+  - transform 0 / 1520, chaos 0 / 0 / 0;
+  - jitter unchanged; audio 634 / 0.
+- Map suite: 8 / 8 versus maps.
+- release_path_check PASS; visual suite: Streets refdiff 0.000; the route-match frames swap spawn sides (random lobby team, same draw counts).
+- 10-match frontend soak:
+  - countdown ticks play;
+  - bodies / weapons / both factions correct;
+  - 0 long GPU frames, 0 out-of-bounds / resets, 0 timeouts;
+  - textures plateau at 78.
+
 ## INTEGRATION MILESTONE 08e (2026-10-05) — Create a Character fix, menu hitches, per-chassis vehicle FX — branch `integration/milestone-08e`
 
 On 08d (822535f). Render data regenerated (Standard incl. every frontend scene + 10 MP maps).
