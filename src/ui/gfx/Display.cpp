@@ -1388,6 +1388,14 @@ void Player::renderObject(const DisplayObject* d, const Matrix& m, const CXForm&
             RenderItem it; it.type = RenderItem::Shape; it.shape = tf->boxShape.get(); it.m = wm; it.cx = wc; it.owner = d;
             out.push_back(it);
         }
+        // Scaleform text drop shadow (TextField.shadow* extension: DropShadowFilter on the glyphs): the renderer blurs
+        // the glyph items that follow this marker.
+        size_t shadowAt = (size_t)-1;
+        if (!renderingMask_ && tf->shadowAlpha > 0 && tf->shadowStrength > 0) {
+            RenderItem sh; sh.type = RenderItem::TextShadow; sh.m = wm; sh.cx = wc; sh.owner = d;
+            shadowAt = out.size();
+            out.push_back(sh);
+        }
         for (const GlyphRun& g : tf->glyphs) {
             if (!g.image.empty()) {
                 RenderItem it; it.type = RenderItem::Image; it.imagePath = g.image; it.imgW = g.imgW; it.imgH = g.imgH;
@@ -1400,7 +1408,9 @@ void Player::renderObject(const DisplayObject* d, const Matrix& m, const CXForm&
             RenderItem it; it.type = RenderItem::Glyph; it.shape = &g.font->glyphs[(size_t)g.glyph];
             it.m = wm * Matrix{s, 0, 0, s, g.x, g.y}; it.cx = wc; it.glyphColor = g.color; it.owner = d;
             out.push_back(it);
+            if (shadowAt != (size_t)-1) ++out[shadowAt].count;
         }
+        if (shadowAt != (size_t)-1 && out[shadowAt].count == 0) out.erase(out.begin() + (long)shadowAt);
         // The focused input field's caret (blinking about twice a second, as Flash Player's).
         if (tf == textFocus() && std::fmod(timeMs_, 1060.0) < 530.0) {
             if (!caretShape_) {

@@ -314,7 +314,7 @@ public:
 
     // Rendering traversal.
     struct RenderItem {
-        enum Type { Shape, Glyph, Bitmap, Image, MaskBegin, MaskEnd, MaskPop } type = Shape;
+        enum Type { Shape, Glyph, Bitmap, Image, MaskBegin, MaskEnd, MaskPop, TextShadow } type = Shape;
         std::string imagePath;                // Image: inline text image (stage pixels imgW x imgH)
         float imgW = 0, imgH = 0;
         const ShapeDef* shape = nullptr;      // Shape / Glyph (glyph outline) / mask shapes
@@ -323,6 +323,7 @@ public:
         CXForm cx;
         RGBA glyphColor;
         const DisplayObject* owner = nullptr;
+        int count = 0;                        // TextShadow: the glyph items that follow (owner = the TextField)
     };
     void buildRenderList(const Matrix& base, std::vector<RenderItem>& out);
 
