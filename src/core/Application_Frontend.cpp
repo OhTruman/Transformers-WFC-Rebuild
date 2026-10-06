@@ -61,6 +61,25 @@ template <class R> void notePresented(R* r) {
 
 // [integration 09a] fail the build, not the watchdog progress, if the integrated renderer lacks it.
 static_assert(HasNotePresented<render::IRenderer>::value, "IRenderer::notePresentedFrame");
+// Gameplay agents/gameplay 5151374: MatchPlayer kind (ParticipantKind::Bot) / level / specialty and MatchSettings
+// maxPerTeam / maxPlayers. Detected.
+template <class P, class = void> struct HasParticipantInfo : std::false_type {};
+template <class P>
+struct HasParticipantInfo<P, std::void_t<decltype(std::declval<const P&>().kind == decltype(std::declval<const P&>().kind)::Bot),
+                                         decltype(std::declval<const P&>().level), decltype(std::declval<const P&>().specialty)>>
+    : std::true_type {};
+template <class P> void fillParticipant(const P& mp, frontend::MatchValues::Player& p) {
+    if constexpr (HasParticipantInfo<P>::value) { using Kind = decltype(mp.kind); p.bot = mp.kind == Kind::Bot; p.level = mp.level; p.specialty = mp.specialty; }
+    else { (void)mp; (void)p; }
+}
+template <class S, class = void> struct HasMatchCapacity : std::false_type {};
+template <class S>
+struct HasMatchCapacity<S, std::void_t<decltype(std::declval<const S&>().maxPerTeam), decltype(std::declval<const S&>().maxPlayers)>>
+    : std::true_type {};
+template <class S> bool readCapacity(int& perTeam, int& maxPlayers) {
+    if constexpr (HasMatchCapacity<S>::value) { const S s = S::forMode("TDM"); perTeam = s.maxPerTeam; maxPlayers = s.maxPlayers; return true; }
+    else { (void)perTeam; (void)maxPlayers; return false; }
+}
 
 // Rendering M09 (agents/rendering 73fd427): IRenderer::setFrameLimit(hz) paces presentation (0 = unlimited); the main
 // loop calls waitFrameSlot. Detected; without it the window's own limiter (Win32Window::setFrameLimit) is used.
@@ -217,7 +236,7 @@ bool Application::wantsFrontendBoot() {
                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST"})
+                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_CLASSCHANGETEST", "WFC_PACINGTEST", "WFC_BOTTEST", "WFC_BOTNAVTEST", "WFC_BOTOBJTEST", "WFC_XPTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST"})
         if (std::getenv(v)) return false;
     return true;
 }
@@ -263,6 +282,13 @@ void Application::attachPresenter() {
         game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
     }
 #endif
+    {   // Bot Settings limits = Gameplay's capacity (MatchSettings maxPerTeam / maxPlayers) when it provides them
+        int perTeam = 0, maxPlayers = 0;
+        if (readCapacity<game::MatchSettings>(perTeam, maxPlayers)) {
+            frontend_->flow().setBotCapacity(perTeam, maxPlayers);
+            frontend::FlowTrace::emit("lobby.botCapacity", {{"perTeam", std::to_string(perTeam)}, {"maxPlayers", std::to_string(maxPlayers)}, {"owner", "gameplay"}});
+        }
+    }
     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
         applyGamma(renderer_, p.getInt("GammaSetting"));
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
@@ -412,6 +438,19 @@ struct HasQaApi<W, std::void_t<decltype(std::declval<const W&>().qaWeaponIds(fal
                                decltype(std::declval<W&>().qaRespawn()), decltype(std::declval<W&>().qaTeleportToStart(0)),
                                decltype(std::declval<W&>().qaSetNoclip(true)), decltype(std::declval<W&>().qaSetGodMode(true)),
                                decltype(std::declval<const W&>().qaStatus())>> : std::true_type {};
+// Gameplay agents/gameplay 010c926: World::qaCharacterChoices() (the four class presets, customSlot = class name) /
+// qaSetCharacter(sel) (preload, Match::selectCharacter, QA suicide -> normal respawn); WFC_QA-gated there. Detected.
+template <class W, class = void> struct HasQaSwap : std::false_type {};
+template <class W>
+struct HasQaSwap<W, std::void_t<decltype(std::declval<const W&>().qaCharacterChoices()),
+                                decltype(std::declval<W&>().qaSetCharacter(std::declval<const game::CharacterSelection&>()))>> : std::true_type {};
+template <class W> std::string qaSwap(W& w, const std::string& name) {
+    if constexpr (HasQaSwap<W>::value) {
+        for (const auto& c : w.qaCharacterChoices())
+            if (c.customSlot == name) { w.qaSetCharacter(c); return "Swapping to " + name + " (respawns)."; }
+        return "No class preset named '" + name + "' (custom slots: use Choose Character).";
+    } else { (void)w; (void)name; return "Gameplay QA character swap not in this build"; }
+}
 template <class W> std::vector<std::string> qaWeapons(const W& w) {
     if constexpr (HasQaApi<W>::value) return w.qaWeaponIds(false); else { (void)w; return {}; }
 }
@@ -499,9 +538,11 @@ void Application::qaTick(const platform::InputFrame& in) {
             weaponPending = false;
         }
         using K = platform::QaRequest::Kind;
-        if (r.kind == K::Respawn || r.kind == K::NextStart || r.kind == K::Noclip || r.kind == K::God || r.kind == K::Dummy) {
+        if (r.kind == K::Respawn || r.kind == K::NextStart || r.kind == K::Noclip || r.kind == K::God || r.kind == K::Dummy ||
+            r.kind == K::SwapCharacter) {
             if (!inGame) { qa_->setStatus("In-match tools need a running match."); return; }
             if (r.kind == K::Dummy) { world_.addMatchOpponent("QA Dummy", true /* drawn: visible */); qa_->setStatus("Spawned a dummy opponent."); }
+            else if (r.kind == K::SwapCharacter) qa_->setStatus(qaSwap(world_, r.character));
             else qa_->setStatus(qaTool(world_, r.kind, std::string(), startIndex));
             frontend::FlowTrace::emit("qa.tool", {{"kind", std::to_string((int)r.kind)}, {"provenance", "DEBUG ONLY"}});
             return;
@@ -809,9 +850,32 @@ template <class W, class FE> void preloadSavedCustomCharacters(W&, const FE&, lo
 static_assert(sizeof(decltype(std::declval<game::World&>().preloadSelections(std::vector<game::CharacterSelection>{}), 0)) > 0, "World::preloadSelections");
 }
 
+namespace {
+// Gameplay's progression award feed (agreed contract: game::XpAward {player, transactionId, xp, announcement,
+// description, extra}, game::StatAward {player, statId, amount, updateType}; World::drainXpAwards / drainStatAwards).
+// Detected; the frontend applies the local player's awards to the profile's progression.
+template <class W, class = void> struct HasAwardFeed : std::false_type {};
+template <class W>
+struct HasAwardFeed<W, std::void_t<decltype(std::declval<W&>().drainXpAwards()), decltype(std::declval<W&>().drainStatAwards())>>
+    : std::true_type {};
+template <class W> void forwardAwards(W& w, frontend::FrontendRuntime& rt, int me) {
+    if constexpr (HasAwardFeed<W>::value) {
+        for (const auto& a : w.drainXpAwards()) {
+            if (a.player != me) continue;
+            frontend::FrontendRuntime::XpEvent e;
+            e.transactionId = a.transactionId; e.xp = a.xp; e.announcement = a.announcement; e.description = a.description; e.extra = a.extra;
+            rt.progressionXp(e);
+        }
+        for (const auto& st : w.drainStatAwards())
+            if (st.player == me) rt.progressionStat(st.statId, st.amount, st.updateType);
+    } else { (void)w; (void)rt; (void)me; }
+}
+}
+
 void Application::routeMatchToFrontend(float dt) {
     frontend::GameFlow& flow = frontend_->flow();
     const int me = world_.localMatchPlayer();
+    forwardAwards(world_, *frontend_, me);
     // [integration M06] Customize.SelectCharacter -> TnPlayerController.SelectCharacter -> PRI._SelectedCharacter:
     // the frontend's selection becomes Gameplay's CharacterSelection (type, specialty, iconic chassis UniqueId).
     // Every pick is forwarded, also mid-match (Change Character): the original uses the new selection on the next
@@ -978,6 +1042,7 @@ void Application::routeMatchToFrontend(float dt) {
         frontend::MatchValues::Player p;
         p.name = mp.name; p.team = mp.team == 255 ? -1 : mp.team; p.score = mp.score; p.kills = mp.kills; p.deaths = mp.deaths;
         p.dead = !mp.alive; p.local = (int)i == me;
+        fillParticipant(mp, p);
         v.players.push_back(p);
     }
     flow.setMatchValues(v);
@@ -1015,9 +1080,16 @@ void Application::driveLifecycleTest(float dt) {
     // either side is dead. Uses only Gameplay's match API; no rule is reimplemented here.
     if (lifecycleGoal_ <= 0 || world_.match().state() != game::Match::State::InProgress || world_.matchOpponents().empty()) return;
     if ((lifecycleT_ += dt) < 2.5f) return;
-    game::MatchOpponent* opp = world_.matchOpponents()[0];
+    // The target: an opponent on the other team (bots may also be MatchOpponents, teammates included; FFA: any).
     const int me = world_.localMatchPlayer();
-    if (world_.localPlayerDead() || !opp->spawned()) return;
+    const auto& players = world_.match().players();
+    const int myTeam = me >= 0 && me < (int)players.size() ? players[(size_t)me].team : -1;
+    game::MatchOpponent* opp = nullptr;
+    for (game::MatchOpponent* o : world_.matchOpponents()) {
+        const int t = o->matchPlayer() >= 0 && o->matchPlayer() < (int)players.size() ? players[(size_t)o->matchPlayer()].team : -1;
+        if (myTeam < 0 || myTeam == 255 || t != myTeam) { opp = o; break; }
+    }
+    if (!opp || world_.localPlayerDead() || !opp->spawned()) return;
     lifecycleT_ = 0.0f;
     const bool killOpponent = (lifecycleStep_++ % 2) == 0;
     if (killOpponent) world_.applyMatchDamage(opp->matchPlayer(), me, 100000.0f, false);
@@ -1089,3 +1161,14 @@ void Application::unloadMatch() {
 }
 
 } // namespace core
+
+// [integration 09b] Cross-lane links that Frontend detects at compile time must bind in the integrated tree: a renamed or
+// missing API fails the build here instead of silently disabling the feature (frame limiter, bot info / capacity, QA,
+// awards / progression).
+static_assert(HasRendererFrameLimit<render::IRenderer>::value, "IRenderer::setFrameLimit / waitFrameSlot");
+static_assert(HasParticipantInfo<game::MatchPlayer>::value, "MatchPlayer kind / level / specialty");
+static_assert(HasMatchCapacity<game::MatchSettings>::value, "MatchSettings maxPerTeam / maxPlayers");
+static_assert(core::HasQaApi<game::World>::value, "World QA API");
+static_assert(core::HasQaSwap<game::World>::value, "World::qaCharacterChoices / qaSetCharacter");
+static_assert(core::HasAwardFeed<game::World>::value, "World::drainXpAwards / drainStatAwards");
+

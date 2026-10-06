@@ -9,6 +9,7 @@
 // PC EXTENSIONS (not in the shipped menus) live in their own section and are never shown as original options.
 // Values are strings in the movies' own vocabulary ("80", "True" / "False"). Stored in wfc_profile.ini.
 #pragma once
+#include "frontend/Progression.h"
 #include <functional>
 #include <map>
 #include <string>
@@ -32,6 +33,13 @@ public:
     // PC SKU display settings (PCSettings.*).
     // frameLimit: PC EXTENSION ([PCSettings] FrameLimit, not an original setting; 0 = no cap, the default).
     struct Display { int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0; };
+    // Private Match bot settings (PC ADAPTATION, [PCSettings] BotsFriendly / BotsEnemy / BotDifficulty): AI teammates and
+    // opponents for offline private matches; difficulty 0 EASY, 1 MEDIUM, 2 HARD (the campaign's names; MP has none).
+    struct Bots { int friendly = 0, enemy = 0, difficulty = 1; };
+    Bots bots;
+    // Multiplayer progression ([Progression]): the original keeps it in the online stats archive (XP per specialty,
+    // challenge stats / tiers); offline it lives in the local profile [PC ADAPTATION storage, original values].
+    ProgressionState progression;
     Display display;
     // The local player's display name (GetPlayerAlias / PRI.PlayerName). The original took it from the signed-in
     // Xbox Live gamertag; the offline PC reconstruction has no such service: [Identity] Name in the profile file,

@@ -84,6 +84,17 @@ void LocalProfile::load() {
             else if (k == "TextureQuality") display.textureQuality = std::atoi(v.c_str());
             else if (k == "VSync") display.vsync = v == "1";
             else if (k == "FrameLimit") display.frameLimit = std::max(0, std::atoi(v.c_str()));
+            else if (k == "BotsFriendly") bots.friendly = std::max(0, std::atoi(v.c_str()));
+            else if (k == "BotsEnemy") bots.enemy = std::max(0, std::atoi(v.c_str()));
+            else if (k == "BotDifficulty") bots.difficulty = std::clamp(std::atoi(v.c_str()), 0, 2);
+        } else if (section == "[Progression]") {
+            const int sp = progression::specialtyIndex(k.size() > 2 && k.rfind("Xp", 0) == 0 ? k.substr(2) : std::string());
+            const int lm = progression::specialtyIndex(k.size() > 9 && k.rfind("LastMatch", 0) == 0 ? k.substr(9) : std::string());
+            if (sp >= 0) progression.xp[(size_t)sp] = std::clamp(std::atol(v.c_str()), 0L, progression::kXpCap);
+            else if (lm >= 0) progression.lastMatchXp[(size_t)lm] = std::max(0L, std::atol(v.c_str()));
+            else if (k == "Prime") progression.prime = v == "1";
+            else if (k.rfind("Tier.", 0) == 0) progression.tiers[std::atoi(k.c_str() + 5)] = std::clamp(std::atoi(v.c_str()), 0, 3);
+            else if (k.rfind("Stat.", 0) == 0) progression.stats[std::atoi(k.c_str() + 5)] = std::atol(v.c_str());
         } else if (section == "[ProfileData]") values_[k] = v;
     }
 }
@@ -102,7 +113,14 @@ void LocalProfile::save() const {
     }
     f << "\n[PCSettings]\nWidth=" << display.width << "\nHeight=" << display.height << "\nFullscreen=" << (display.fullscreen ? 1 : 0)
       << "\nTextureQuality=" << display.textureQuality << "\nVSync=" << (display.vsync ? 1 : 0)
-      << "\nFrameLimit=" << display.frameLimit << "\n";
+      << "\nFrameLimit=" << display.frameLimit << "\nBotsFriendly=" << bots.friendly << "\nBotsEnemy=" << bots.enemy
+      << "\nBotDifficulty=" << bots.difficulty << "\n";
+    f << "\n[Progression]\n";
+    for (int i = 0; i < 4; ++i) f << "Xp" << progression::specialtyName(i) << "=" << progression.xp[(size_t)i] << "\n";
+    for (int i = 0; i < 4; ++i) f << "LastMatch" << progression::specialtyName(i) << "=" << progression.lastMatchXp[(size_t)i] << "\n";
+    f << "Prime=" << (progression.prime ? 1 : 0) << "\n";
+    for (const auto& [id, t] : progression.tiers) if (t > 0) f << "Tier." << id << "=" << t << "\n";
+    for (const auto& [id, v] : progression.stats) if (v != 0) f << "Stat." << id << "=" << v << "\n";
 }
 
 } // namespace frontend

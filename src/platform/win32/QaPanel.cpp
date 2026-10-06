@@ -10,7 +10,7 @@
 namespace platform {
 namespace {
 
-enum : int { kMaps = 101, kModes, kChars, kWeapons, kLaunch, kRestart, kTitle, kStatus, kRespawn, kNextStart, kNoclip, kGod, kDummy };
+enum : int { kMaps = 101, kModes, kChars, kWeapons, kLaunch, kRestart, kTitle, kStatus, kRespawn, kNextStart, kNoclip, kGod, kDummy, kSwap };
 
 class Win32QaPanel : public QaPanel {
 public:
@@ -23,7 +23,7 @@ public:
         wc.lpszClassName = L"WfcQaPanel";
         RegisterClassW(&wc);
         hwnd_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"WFC QA (debug only - not original)",
-                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, 40, 40, 760, 390, nullptr, nullptr, wc.hInstance, this);
+                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, 40, 40, 760, 420, nullptr, nullptr, wc.hInstance, this);
         auto label = [&](const wchar_t* t, int x) {
             CreateWindowW(L"STATIC", t, WS_CHILD | WS_VISIBLE, x, 8, 170, 18, hwnd_, nullptr, wc.hInstance, nullptr);
         };
@@ -43,6 +43,9 @@ public:
         };
         small(L"Respawn", kRespawn, 8); small(L"Next start", kNextStart, 156); small(L"Noclip on/off", kNoclip, 304);
         small(L"God mode on/off", kGod, 452); small(L"Spawn dummy", kDummy, 600);
+        // live character swap (Gameplay World::qaSetCharacter): the class picked in the character list
+        CreateWindowW(L"BUTTON", L"Swap to selected character", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 8, 348, 290, 26, hwnd_,
+                      (HMENU)(INT_PTR)kSwap, wc.hInstance, nullptr);
         status_ = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 8, 286, 730, 26, hwnd_, (HMENU)(INT_PTR)kStatus, wc.hInstance, nullptr);
     }
     ~Win32QaPanel() override { if (hwnd_) DestroyWindow(hwnd_); }
@@ -79,6 +82,7 @@ private:
         case kNoclip: r.kind = QaRequest::Kind::Noclip; break;
         case kGod: r.kind = QaRequest::Kind::God; break;
         case kDummy: r.kind = QaRequest::Kind::Dummy; break;
+        case kSwap: r.kind = QaRequest::Kind::SwapCharacter; break;
         default: return;
         }
         r.mapId = std::atoi(selected(0).c_str());

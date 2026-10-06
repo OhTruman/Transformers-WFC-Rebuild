@@ -4,6 +4,7 @@
 #include "frontend/FlowTrace.h"
 
 #include <algorithm>
+#include <map>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -85,6 +86,23 @@ void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::Br
     Args a;
     for (const frontend::BridgeValue& b : args) a.push_back(toValue(hud_->player().vm(), b));
     hud_->invoke(fn, a);
+}
+
+void GfxPresenter::movieCall(const std::string& movie, const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
+    bool open = false;
+    for (const Extra& e : extras_) open = open || e.object == movie;
+    if (!open) {
+        Extra e;
+        e.object = movie;
+        e.movie = std::make_unique<GfxMovie>();
+        bool ok = e.movie->open(lib_, &rt_.catalog(), movie,
+                                [this](GfxMovie& mv, const std::string& f, Args& aa) { return bridge(mv, f, aa); },
+                                [this](GfxMovie& mv, const std::string& c, const std::string& aa) { fsCommand(mv, c, aa); });
+        frontend::FlowTrace::emit("gfx.movie", {{"movie", movie}, {"opened", frontend::FlowTrace::boolean(ok)}, {"by", "movieCall"}});
+        if (!ok) return;
+        extras_.push_back(std::move(e));
+    }
+    pendingCalls_.push_back({movie, fn, args, open});
 }
 
 bool GfxPresenter::clipWindowCenter(const std::string& path, int& x, int& y) {
@@ -551,6 +569,96 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
 }
 }
 
+// PC ADAPTATION: Private Match bot rows. GameLobby_GFX's menu (lobby_mc.menuAnchor_mc.menu_mc: Start Game, Select Map,
+// Create a Character, Teletran I, Friends List; HmMenu navigation through each row's focusUp / focusDown names) gets
+// lateral selectors below its last row, duplicated from its own Select Map selector (HmLateralSelector: text,
+// displaySelection, createSelectionData, selectionUpdated, onOver -> HintWidget.HintText). Team modes: Friendly Bots,
+// Enemy Bots, Bot Difficulty; free-for-all: Bots (opponents), Bot Difficulty; other modes: none. Rebuilt when the mode's
+// kind changes. The values are GameFlow's (persisted; sent in the launch URL).
+void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
+    using frontend::GameFlow;
+    const int kind = (int)flow.botRows();
+    gfx::DisplayObject* menuD = p.resolveTarget("lobby_mc.menuAnchor_mc.menu_mc", p.root());
+    if (!menuD || !menuD->script) { botRowsBuilt_.erase(&p); return; }
+    gfx::avm1::VM& vm = p.vm();
+    gfx::avm1::Object* menu = menuD->script;
+    static const char* kNames[] = {"botFriendly_mc", "botEnemy_mc", "botDifficulty_mc"};
+    auto it = botRowsBuilt_.find(&p);
+    const bool present = vm.get(menu, "botEnemy_mc").isObject() || vm.get(menu, "botDifficulty_mc").isObject();
+    if (it != botRowsBuilt_.end() && it->second == kind && (present || kind == (int)GameFlow::BotRows::None)) return;
+    for (const char* n : kNames) {   // a mode-kind change: the old rows go
+        gfx::avm1::Value r = vm.get(menu, n);
+        if (r.isObject()) vm.callMethod(r, "removeMovieClip", {});
+    }
+    gfx::avm1::Value invite = vm.get(menu, "invite_mc");
+    botRowsBuilt_[&p] = kind;
+    if (kind == (int)GameFlow::BotRows::None) {
+        if (invite.isObject()) vm.set(invite.o, "focusDown", gfx::avm1::Value());
+        return;
+    }
+    gfx::DisplayObject* src = p.resolveTarget("selectMap_mc", menuD);
+    if (!src || !invite.isObject()) return;
+    struct Row { const char* name; std::string field, label, hint; };
+    std::vector<Row> rows;
+    if (kind == (int)GameFlow::BotRows::Teams) {
+        rows.push_back({kNames[0], "friendly", "Friendly Bots", "AI teammates on your team."});
+        rows.push_back({kNames[1], "enemy", "Enemy Bots", "AI opponents on the other team."});
+    } else {
+        rows.push_back({kNames[1], "enemy", "Bots", "AI opponents in the match."});
+    }
+    rows.push_back({kNames[2], "difficulty", "Bot Difficulty", "How tough the AI plays."});
+    const float y0 = vm.toNumber(vm.get(invite.o, "_y")) + 23.0f;
+    const frontend::LocalProfile::Bots& b = flow.profile().bots;
+    std::string prev = "invite_mc";
+    for (size_t i = 0; i < rows.size(); ++i) {
+        const Row& row = rows[i];
+        gfx::avm1::Object* init = vm.newPlain();
+        vm.set(init, "text", gfx::avm1::Value(row.label));
+        vm.set(init, "_y", gfx::avm1::Value((double)(y0 + 23.0f * (float)i)));
+        gfx::MovieClip* dup = p.duplicate(src, row.name, 900 + (int)i, init);
+        if (!dup || !dup->script) continue;
+        gfx::avm1::Object* o = dup->script;
+        // HmLateralSelector copies its text to label_txt when constructed; the duplicate keeps the source's label.
+        vm.set(o, "text", gfx::avm1::Value(row.label));
+        gfx::avm1::Value lab = vm.get(o, "label_txt");
+        if (lab.isObject()) vm.set(lab.o, "htmlText", gfx::avm1::Value(row.label));
+        vm.set(o, "displaySelection", gfx::avm1::Value(true));
+        vm.set(o, "loopNavigation", gfx::avm1::Value(false));
+        vm.set(o, "focusUp", gfx::avm1::Value(prev));
+        vm.set(o, "focusDown", gfx::avm1::Value());
+        gfx::avm1::Value prevObj = vm.get(menu, prev);
+        if (prevObj.isObject()) vm.set(prevObj.o, "focusDown", gfx::avm1::Value(std::string(row.name)));
+        prev = row.name;
+        std::vector<gfx::avm1::Value> choices;
+        const int maxV = flow.botMax(row.field);
+        for (int v = 0; v <= maxV; ++v) {
+            gfx::avm1::Object* c = vm.newPlain();
+            vm.set(c, "Value", gfx::avm1::Value((double)v));
+            static const char* kDiff[] = {"EASY", "MEDIUM", "HARD"};
+            vm.set(c, "FriendlyName", gfx::avm1::Value(row.field == "difficulty" ? std::string(kDiff[v]) : std::to_string(v)));
+            choices.push_back(gfx::avm1::Value(c));
+        }
+        vm.callMethod(gfx::avm1::Value(o), "createSelectionData", {gfx::avm1::Value(vm.newArray(choices))});
+        const int cur = row.field == "friendly" ? b.friendly : row.field == "enemy" ? b.enemy : b.difficulty;
+        vm.set(o, "currentSelectionIndex", gfx::avm1::Value((double)std::clamp(cur, 0, maxV)));
+        const std::string field = row.field, hint = row.hint;
+        vm.set(o, "selectionUpdated", gfx::avm1::Value(vm.newFunction(
+            [&flow, field](gfx::avm1::VM& v, const gfx::avm1::Value& self, gfx::avm1::Args&) -> gfx::avm1::Value {
+                gfx::avm1::Value d = self.isObject() ? v.get(self.o, "currentSelectionData") : gfx::avm1::Value();
+                if (d.isObject()) flow.setBotSetting(field, (int)v.toNumber(v.get(d.o, "Value")));
+                return gfx::avm1::Value();
+            }, "selectionUpdated", 0)));
+        vm.set(o, "onOver", gfx::avm1::Value(vm.newFunction(
+            [menu, hint](gfx::avm1::VM& v, const gfx::avm1::Value&, gfx::avm1::Args&) -> gfx::avm1::Value {
+                gfx::avm1::Value w = v.get(menu, "HintWidget");
+                if (w.isObject()) v.set(w.o, "HintText", gfx::avm1::Value(hint));
+                return gfx::avm1::Value();
+            }, "onOver", 0)));
+    }
+    frontend::FlowTrace::emit("lobby.botRows", {{"kind", kind == (int)GameFlow::BotRows::Teams ? "teams" : "ffa"},
+                                                {"rows", std::to_string(rows.size())}, {"provenance", "PC ADAPTATION"}});
+}
+
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
     core::prof::Scope prof("ui.update");
     syncMovies(flow);
@@ -602,7 +710,20 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         for (size_t i = extras_.size(); i-- > 0;) if (extras_[i].object == o) { extras_.erase(extras_.begin() + (long)i); shapesStale_ = true; }
     deferredErase_.clear();
     for (Extra& e : extras_) e.movie->advance(dt);
+    for (size_t i = 0; i < pendingCalls_.size();) {   // movieCall: once the (new) movie has run a frame
+        PendingCall& pc = pendingCalls_[i];
+        Extra* target = nullptr;
+        for (Extra& e : extras_) if (e.object == pc.movie) target = &e;
+        if (!target) { pendingCalls_.erase(pendingCalls_.begin() + (long)i); continue; }
+        if (!pc.advanced) { pc.advanced = true; ++i; continue; }
+        Args a;
+        for (const frontend::BridgeValue& b : pc.args) a.push_back(toValue(target->movie->player().vm(), b));
+        target->movie->invoke(pc.fn, a);
+        frontend::FlowTrace::emit("gfx.movieCall", {{"movie", pc.movie}, {"fn", pc.fn}});
+        pendingCalls_.erase(pendingCalls_.begin() + (long)i);
+    }
     frameLimitShown_ = flow.profile().display.frameLimit;
+    for (Open& op : movies_) if (op.object.find("GameLobby_GFX") != std::string::npos) syncBotRows(op.movie->player(), flow);
     for (Open& op : movies_) {
         gfx::Player& p = op.movie->player();
         if (!p.attachHook)

@@ -98,7 +98,7 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     if (markup == "<CurrentGame:Rounds>") return std::to_string(inMatch ? flow_.currentMatch().rounds : 0);
     if (markup == "<CurrentGame:CurrentRound>") return "1";
     if (markup == "<CurrentGame:ProgressStatusTitle>" || markup == "<CurrentGame:ProgressStatusMessage>") return "";
-    if (markup == "<PlayerOwner:PrimeModeActive>") return "0";
+    if (markup == "<PlayerOwner:PrimeModeActive>") return flow_.profile().progression.prime ? "1" : "0";
     // No profile / gamertag service: the local player's name is the rebuild profile name [PARTIAL].
     if (markup == "<PlayerOwner:PlayerName>") return playerName();
     if (markup == "<PlayerOwner:TeamID>") return std::to_string(inMatch ? flow_.currentMatch().teamIndex : L.localTeam);
@@ -151,19 +151,40 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
             return t == 0 ? cat_.localize("TransGame", "TnFactionTeamAutobots", "TeamName")
                  : t == 1 ? cat_.localize("TransGame", "TnFactionTeamDecepticons", "TeamName") : std::string();
         };
+        // PlayerLevel<Specialty> / PlayerLevel (the sum): the local player's from the profile's progression; other
+        // participants' levels are not provided yet (0) [RE MP_PROGRESSION s4].
+        const ProgressionState& pr = flow_.profile().progression;
+        const std::string prime = pr.prime ? "1" : "0";
         if (live && !mv.players.empty()) {
             // Gameplay's match roster (local player first as in GRI order of joining).
             for (const MatchValues::Player& p : mv.players) {
-                c.rows.push_back({p.local ? playerName() : p.name, std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score),
-                                  std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0",
-                                  "0", "", "0", "0", "0", "", "", "1", "1", "1", "1", "1"});
+                if (p.local)
+                    c.rows.push_back({playerName(), std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score),
+                                      std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0", "0", "", "0", "0", prime, "", "",
+            std::to_string(progression::levelForXp(pr.xp[3])), std::to_string(progression::levelForXp(pr.xp[1])),
+                          std::to_string(progression::levelForXp(pr.xp[0])), std::to_string(progression::levelForXp(pr.xp[2])),
+                          std::to_string(progression::playerLevel(pr))});
+                else {
+                    // Bots (PC ADAPTATION: the original's scoreboard provider hides bBot PRIs): Gameplay's generated level
+                    // is the summed player level; the played specialty's column shows a quarter of it (0-25).
+                    std::string lv[4] = {"0", "0", "0", "0"};   // Leader, Scientist, Scout, Soldier (column order)
+                    const int sp = progression::specialtyIndex(p.specialty);   // 0 Scout 1 Scientist 2 Soldier 3 Leader
+                    static const int kCol[4] = {2, 1, 3, 0};
+                    if (sp >= 0) lv[kCol[sp]] = std::to_string(std::clamp((p.level + 2) / 4, 0, 25));
+                    c.rows.push_back({p.name, std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score),
+                                      std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0",
+                                      "0", "", "0", "0", "0", "", "", lv[0], lv[1], lv[2], lv[3], std::to_string(p.level)});
+                }
                 c.enabled.push_back(true);
             }
             return true;
         }
         c.rows.push_back({playerName(), std::to_string(team), teamName, std::to_string(live ? mv.score : 0),
                           std::to_string(live ? mv.kills : 0), std::to_string(live ? mv.deaths : 0), live && mv.dead ? "1" : "0",
-                          "0", "", "0", "0", "0", "", "", "1", "1", "1", "1", "1"});
+                          "0", "", "0", "0", prime, "", "",
+            std::to_string(progression::levelForXp(pr.xp[3])), std::to_string(progression::levelForXp(pr.xp[1])),
+                          std::to_string(progression::levelForXp(pr.xp[0])), std::to_string(progression::levelForXp(pr.xp[2])),
+                          std::to_string(progression::playerLevel(pr))});
         c.enabled.push_back(true);
         return true;
     }

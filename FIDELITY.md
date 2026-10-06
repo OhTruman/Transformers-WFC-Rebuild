@@ -169,6 +169,39 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND MILESTONE 09: FPS LIMIT, BOT SETTINGS, PROGRESSION, PLAYTEST DEFECTS (2026-10-06, agents/frontend)
+
+- **Frame Rate Limit (PC ADAPTATION, 938a3d6).** Original timing (AssetTools / RE): Xenon 15-30 fps smoothed
+  (bSmoothFrameRate, MaxSmoothedFrameRate=30), no PC cap known. The PC graphics menu (SettingsMenu_GFX, WIN) gets a
+  "Frame Rate Limit" lateral selector before Commit Changes: 30 60 75 90 100 120 144 165 180 200 240 280 300 360 480
+  1000 Unlimited (+ "Custom (N)" for other ini values), inserted into the Graphics button's attachMovie build array
+  (Player::attachHook) in the menu's own data-store form. [PCSettings] FrameLimit (0 = Unlimited, default); applied live
+  and at boot through Rendering's IRenderer::setFrameLimit (detected) or the window limiter. Measured caps match.
+- **F10 QA panel (DEBUG ONLY, e566f6c).** It needed WFC_QA=1, never received F10 (WM_SYSKEYDOWN) and F10's release
+  froze the loop in window-menu mode. Now: development builds (CMake WFC_DEV_TOOLS, default ON) toggle it on F10;
+  build.ps1 -Shipping compiles it out. Live character swap through Gameplay's qaSetCharacter (62d5b42, detected).
+- **Mid-match Choose Character (3e17483).** Every pick is forwarded (used on the next respawn, no suicide) [CONFIRMED
+  original behaviour]; it used to reach Gameplay once per match.
+- **GFx text drop shadows (d8918c7).** Scaleform TextField shadow* (DropShadowFilter on the glyphs; 16 movies, 41 fields
+  in Hud_GFX) drawn: offscreen coverage, box blur (quality 1), strength / alpha / colour / offset as authored.
+- **Map-selection text.** Matches the authored GameLobby_GFX layout exactly (label anchor (19,149), field (0,-23), bounds
+  -2..198, left autoSize, 2 px gutter); the blue frame is drawn over it additively (depth 16 > 12), so it overlaps the
+  border by design. Not moved. Human visual check listed.
+- **Private Match bot settings (PC ADAPTATION, 7ceeaf4).** Lateral rows below Friends List, duplicated from the menu's
+  own Select Map selector and linked into its focus navigation: team modes Friendly 0..7 / Enemy 0..8 / Difficulty; FFA
+  Bots 0..15 / Difficulty; other modes none. Difficulty EASY / MEDIUM / HARD = the campaign's names (no MP AI names
+  exist; not original MP wording). Capacity 8 per team (the brief; original MaxPlayers=10, 5 a side). Persisted in
+  [PCSettings]; sent as ?BotsFriendly ?BotsEnemy ?BotDifficulty (agreed with Gameplay -> MatchLaunch::bots).
+- **Multiplayer progression (9e4e2aa, 2a8b5bf).** Per-specialty XP / level 0-25 (LevelTable, cap 355000), player level
+  = sum, challenges from TransChallenges.ini with tier unlocks and rewards (Prime -> all four), Prime availability -
+  persisted in [Progression] (the original's stats archive; PC ADAPTATION storage). Original presentation: Hud_GFX
+  PointEvent, NotifyLevelUp + "`p is now a level `l `s", ChallengeNotify_GFX ChallengeUnlocked; the HUD script plays
+  MP_REWARD_DIALOG_BOX / MP_LEVEL_UP_MX_STNG. Bridges (XP / level / challenge value and tier / Prime / player-list levels)
+  answer from the profile; the challenge menu shows real progress. XP rule: ORIGINAL private matches award nothing;
+  PC ADAPTATION offline matches earn (WFC_ORIGINAL_XP_RULE=1 restores the original). Award feed: Gameplay's
+  World::drainXpAwards / drainStatAwards (agreed, detected; pending their producer). Verified with dev-build synthetic
+  awards: popup, level-up, challenge notify, save at match end, restart reload, no duplicate rewards.
+
 ## FRONTEND PASS 7: PLAYTEST PRESENTATION (2026-10-05, agents/frontend)
 - **Create a Character shrink / shift after a weapon slot: fixed (runtime bug, Flash semantics CONFIRMED).** The weapon
   menu's background registers a Stage listener (onResize: setProperty('', _width / _height, Stage size + 30)) and is

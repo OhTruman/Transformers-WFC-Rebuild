@@ -18,6 +18,7 @@
 #include <map>
 #include <memory>
 #include <random>
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -63,7 +64,12 @@ struct MatchValues {
     int currentObjectiveCountdown = -1;    // <CurrentGame:CurrentObjectiveCountdown>: EXT bomb fuse seconds, else -1
     bool competitiveScoreEnabled = false;  // <CurrentGame:CompetitiveScoreEnabled> (engine default 0, HIGH)
     // Every PRI of the match (GRI.PRIArray): <CurrentGame:Players> rows for the scoreboard / player lists.
-    struct Player { std::string name; int team = -1; int score = 0, kills = 0, deaths = 0; bool dead = false, local = false; };
+    struct Player {
+        std::string name; int team = -1; int score = 0, kills = 0, deaths = 0; bool dead = false, local = false;
+        bool bot = false;              // Gameplay ParticipantKind::Bot (PC ADAPTATION: the original lists no bots)
+        int level = 0;                 // Gameplay's displayed level (bots: generated)
+        std::string specialty;         // applied at the last spawn
+    };
     std::vector<Player> players;
 };
 
@@ -208,6 +214,16 @@ public:
     // Level Kismet triggers the frontend owns, in order ("FsCommand:<cmd>", "MovieStopped:<movie>").
     const std::vector<std::string>& kismetTriggers() const { return kismetTriggers_; }
     bool hasWatchedIntroMovie() const { return watchedIntro_; }
+    // Private Match bots (PC ADAPTATION). Team modes (GameTeamStatus 3): friendly 0..capacity-1 (the human takes a slot)
+    // and enemy 0..capacity; free-for-all (1): opponents 0..2*capacity-1; other modes: none. The per-team capacity is a
+    // PC choice (8; the original MaxPlayers=10, i.e. 5 a side) kept in one place.
+    enum class BotRows { None, FreeForAll, Teams };
+    BotRows botRows() const;
+    int botTeamCapacity() const { return botPerTeam_; }
+    // Gameplay's MatchSettings maxPerTeam / maxPlayers (PC ADAPTATION 8 / 16; the original MaxPlayers=10).
+    void setBotCapacity(int perTeam, int maxPlayers) { botPerTeam_ = std::max(1, perTeam); botMaxPlayers_ = std::max(2, maxPlayers); }
+    int botMax(const std::string& field) const;   // "friendly" / "enemy" / "difficulty"
+    void setBotSetting(const std::string& field, int value);   // clamped; saved
     LocalProfile& profile() { return profile_; }
     const LocalProfile& profile() const { return profile_; }
     std::string stateSummary() const;
@@ -278,6 +294,7 @@ private:
     LocalProfile profile_;
     SelectedCharacter selected_;
     uint32_t selectionSerial_ = 0;
+    int botPerTeam_ = 8, botMaxPlayers_ = 16;
     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;
