@@ -22,7 +22,7 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 |---|---|---|---|---|
 | First match frame "GPU" 150-770 ms | the GPU timer spans the frame; CPU span equal: the GPU waits on submission (no TDR risk) | bc3fa73 diagnostics | CONFIRMED (measured) | — |
 | World share | driver first-draw work, 21-23 ms of frame 1 (Molten / Debris) | split timing | CONFIRMED (measured) | M75 warm-up draw under the loading screen: ~3 ms; +28-40 ms load |
-| Character share | ~160 ms: the player character's material programs + texture decode on its first draw | first-use log frame 1 | CONFIRMED (measured) | needs the game to call prewarmDynamicMesh for the match's bodies at load (Integration / Gameplay) |
+| Character share | ~160 ms: the player character's material programs + texture decode on its first draw | first-use log frame 1 | CONFIRMED (measured) | covered in the player flow: Gameplay 24o / 24q / 24r prewarm the faction's default and saved custom bodies in startLocalMatch (08o frontend flow: 0 GPU-time warnings); only the direct-boot test path skips it |
 
 ## MILESTONE 74 — ENERGY-DEATH DEFRAG DISSOLVE (2026-10-06)
 | Item | Finding | Evidence | Mark | Rebuild |

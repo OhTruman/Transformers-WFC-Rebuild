@@ -603,7 +603,7 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
 - Fidelity table + provenance: `FIDELITY.md`.
 
 ## RENDERING M75 (2026-10-06)
-- Loading-screen warm-up draw of the world (first match frame: world part 21 -> 3 ms). The larger first-frame cost is the player character's materials; the game should prewarm the match's bodies at load.
+- Loading-screen warm-up draw of the world (first match frame: world part 21 -> 3 ms). The larger first-frame cost is the player character's materials, already prewarmed in the player flow (Gameplay startLocalMatch); only direct-boot test runs pay it.
 
 ## RENDERING M74 (2026-10-06)
 - Energy-death "Defrag" dissolve: each form's original EnergyDeathMaterial, driven per player (IRenderer::setDrawEnergyDeath) by Gameplay.
