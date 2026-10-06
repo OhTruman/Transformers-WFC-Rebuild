@@ -2318,6 +2318,38 @@ static void testDeathAndGrenade() {
     CHECK(wa.weaponEvent(cues, fb, "WP_NoAmmoFire", at) >= 0 && active("BL_WPN_GRENADE.GRENADE_DRY_FIRE") == 1, "refused toss: WP_NoAmmoFire GRENADE_DRY_FIRE");
 }
 
+// Melee hit effects on the victim and kamikaze mines (M08p).
+static void testMeleeHitAndMines() {
+    std::printf("[melee hit effect, kamikaze mines]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    game::CharacterAudio::loadAbilityCues(cues);
+    game::AbilityAudio aa;
+    auto active = [&](const char* q) { return cues.activeInstances(q); };
+    auto settle = [&](float s) { for (float t = 0; t < s; t += 1.0f / 30.0f) cues.tick(1.0f / 30.0f); };
+    const Vec3 p{6, 0, 0};
+    CHECK(aa.pawnHitEffect(cues, "TransGame.TnDamageTypeMelee", "Jet", 7, p, 6.0f, 1.0f) >= 0 && active("BL_MELEE_IMPT.MTL_HV") == 1,
+          "melee hit: IMPT_DMG_MELEE_HV of the victim's set (Jet: MTL_HV)");
+    CHECK(aa.pawnHitEffect(cues, "TransGame.TnDamageTypeMelee", "Jet", 7, p, 6.0f, 1.05f) < 0 &&
+          aa.pawnHitEffect(cues, "TransGame.TnDamageTypeMelee", "Jet", 8, p, 6.0f, 1.05f) >= 0 &&
+          aa.pawnHitEffect(cues, "TransGame.TnDamageTypeMelee", "Jet", 7, p, 6.0f, 1.2f) >= 0,
+          "RetriggerTime 0.1 s per victim per entry (another victim is independent)");
+    CHECK(aa.pawnHitEffect(cues, "TransGame.TnDamageTypeWeakMelee", "Truck", 9, p, 6.0f, 2.0f) >= 0 && active("BL_MELEE_IMPT.MTL_LT") >= 1,
+          "weak melee: IMPT_DMG_MELEE_LT (MTL_LT)");
+    CHECK(aa.pawnHitEffect(cues, "TransGame.TnDamageTypeNoSuchThing", "Jet", 7, p, 6.0f, 3.0f) < 0, "a damage type without a hit-effect entry: nothing");
+    settle(3.0f);
+    // Kamikaze mine: idle loop -> target found (fuse start, cross-fade to tracking) -> explosion; a second one fizzles.
+    aa.kamikazeMine(cues, 1, p, false, 6.0f);
+    CHECK(active("BL_WPN_GRENADE.KAMIKAZE_FLIGHT_LP_IDLE") == 1, "mine thrown: KAMIKAZE_FLIGHT_LP_IDLE");
+    aa.kamikazeMine(cues, 1, p, true, 6.0f); aa.kamikazeMine(cues, 1, p, false, 6.0f); settle(0.4f);
+    CHECK(active("BL_WPN_GRENADE.KAMIKAZE_FUSE_START") == 1 && active("BL_WPN_GRENADE.KAMIKAZE_FLIGHT_LP_TRACKING") == 1 &&
+          active("BL_WPN_GRENADE.KAMIKAZE_FLIGHT_LP_IDLE") == 0, "target found once: FUSE_START, idle faded, tracking loop (stays after losing it)");
+    aa.kamikazeMineExploded(cues, 1, p, 6.0f); settle(0.4f);
+    CHECK(active("BL_WPN_GRENADE.KAMIKAZE_FLIGHT_LP_TRACKING") == 0 && active("BL_WPN_GRENADE.KAMIKAZE_EXPL_IMPT_WORLD") == 1, "exploded: loop fades, KAMIKAZE_EXPL");
+    aa.kamikazeMine(cues, 2, p, false, 6.0f); aa.kamikazeMineRemoved(cues, 2); settle(0.1f);
+    CHECK(active("BL_WPN_GRENADE.KAMIKAZE_FLIGHT_LP_IDLE") == 0 && active("BL_WPN_GRENADE.KAMIKAZE_EXPL_IMPT_WORLD") <= 1 && aa.kamikazeMines() == 0,
+          "fizzle (LifeSpan / owner death): the loop stops, no explosion");
+}
+
 int main() {
     for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // authored levels
     testSoundGroups();
@@ -2326,6 +2358,7 @@ int main() {
     testChargeAndRoller();
     testAbilityActors();
     testDeathAndGrenade();
+    testMeleeHitAndMines();
     testCountdownAndGrenades();
     testWeaponAudio();
     testLocalizedWaves();

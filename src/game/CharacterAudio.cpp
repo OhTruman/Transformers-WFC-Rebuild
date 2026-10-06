@@ -27,6 +27,7 @@ struct Db {
     std::map<std::string, BuffSounds> buffs;
     std::map<std::string, std::map<std::string, std::string>> classSounds;
     std::set<std::string> meleeDamageTypes;
+    std::map<std::string, WeaponHitEffect> damageHit;
 };
 
 const Db& db() {
@@ -154,6 +155,13 @@ const Db& db() {
         }
     }
     for (const auto& kv : d.doc["abilities"].obj) d.abilityTrigger[kv.first] = kv.second["trigger"].asString();
+    for (const auto& kv : d.doc["damage_hit_effects"].obj) {
+        WeaponHitEffect e;
+        e.damageType = kv.first;
+        e.hitEvent = kv.second["hit_event"].asString(); e.blockEvent = kv.second["block_event"].asString();
+        e.index = kv.second["index"].asInt(-1); e.retrigger = kv.second["retrigger"].asFloat(); e.causesBlood = kv.second["causes_blood"].asBool();
+        d.damageHit[kv.first] = e;
+    }
     for (size_t i = 0; i < d.doc["melee_damage_types"].size(); ++i) d.meleeDamageTypes.insert(d.doc["melee_damage_types"][i].asString());
     for (const auto& kv : d.doc["class_sounds"].obj)
         for (const auto& f : kv.second.obj) d.classSounds[kv.first][f.first] = f.second.asString();
@@ -276,6 +284,12 @@ const std::string& CharacterAudio::classSound(const std::string& cls, const std:
 }
 
 bool CharacterAudio::isMeleeDamageType(const std::string& dt) { return db().meleeDamageTypes.count(dt) != 0; }
+
+const WeaponHitEffect* CharacterAudio::damageHitEffect(const std::string& dt) {
+    const Db& d = db();
+    auto it = d.damageHit.find(dt);
+    return it == d.damageHit.end() ? nullptr : &it->second;
+}
 
 const BuffSounds* CharacterAudio::buffSounds(const std::string& cls) {
     const Db& d = db();

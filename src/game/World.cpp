@@ -3832,6 +3832,20 @@ void World::onGrenadeToss(const std::string& cls, bool refused) {
     weaponAudio_.weaponEvent(cues_, cls, refused ? "WP_NoAmmoFire" : "WP_Fire", atPawn());
 }
 
+void World::setKamikazeMineAudio(int key, const core::Vec3& pos, bool targetFound) {
+    abilityAudio_.kamikazeMine(cues_, key, pos, targetFound, core::length(pos - listenerPos_));
+}
+
+void World::onKamikazeMineExploded(int key, const core::Vec3& pos) {
+    abilityAudio_.kamikazeMineExploded(cues_, key, pos, core::length(pos - listenerPos_));
+}
+
+void World::onKamikazeMineRemoved(int key) { abilityAudio_.kamikazeMineRemoved(cues_, key); }
+
+void World::onPawnHitEffect(const std::string& damageType, const std::string& victimChassis, int victimKey, const core::Vec3& pos) {
+    abilityAudio_.pawnHitEffect(cues_, damageType, victimChassis, victimKey, pos, core::length(pos - listenerPos_), hitClock_);
+}
+
 void World::onPawnDeath(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos) {
     abilityAudio_.pawnDeath(cues_, chassisId, vehicleForm, damageType, pos, core::length(pos - listenerPos_));
 }

@@ -11,6 +11,7 @@
 //   * TnBuffDrainSource.HealSound: every buff tick on the drainer's machine while it has >= 1 target;
 //     TnBuffDrainTarget.DamageSound: every tick, everywhere, at the victim [CONF; per-frame tick rate HIGH].
 #pragma once
+#include <map>
 #include <string>
 #include <vector>
 #include "game/SoundCues.h"
@@ -87,6 +88,21 @@ public:
     int pawnDeath(SoundCues& cues, const std::string& chassisId, bool vehicleForm, const std::string& damageType,
                   const core::Vec3& pos, float listenerDist);
 
+    // A non-weapon hit on a pawn (melee / whirlwind / shoulder slam / ram): the damage type's TnHitEffectPlayer entry
+    // plays its HitSound - an event of the VICTIM's SoundEventSet - if bCausesBlood, at most every RetriggerTime per
+    // victim per entry [CONF script + data, as the weapon hit effects]. `victimKey` identifies the victim.
+    int pawnHitEffect(SoundCues& cues, const std::string& damageType, const std::string& victimChassis, int victimKey,
+                      const core::Vec3& pos, float listenerDist, float clock);
+
+    // TnProjectileKamikazeMine [RE pass 5 s12 addendum 16, CONF], per mine `key`, every tick: FlightSound (idle loop) from
+    // the throw; the first target found -> TargetFoundSound + the idle loop fades out 0.25 s while SecondaryFlightSound
+    // (tracking loop) fades in 0.25 s. Exploded (target reached, wall, touched, shot): the loop fades 0.25 s +
+    // ExplosionSound. Removed otherwise (LifeSpan / owner death: the fade-out fizzle): the loop stops, nothing else.
+    void kamikazeMine(SoundCues& cues, int key, const core::Vec3& pos, bool targetFound, float listenerDist);
+    void kamikazeMineExploded(SoundCues& cues, int key, const core::Vec3& pos, float listenerDist);
+    void kamikazeMineRemoved(SoundCues& cues, int key);
+    int kamikazeMines() const { return (int)mines_.size(); }
+
     void stopAll(SoundCues& cues);                   // level unload / match restart: loops stop, nothing else plays
     int liveLoops(const SoundCues& cues) const;      // buff sounds still playing (diagnostics)
     static std::string abilityClass(const std::string& id);   // "Barrier" -> "TnAbilityBarrier"
@@ -101,6 +117,9 @@ private:
     bool barrierAlive_ = false, barrierFading_ = false; int barrierLoop_ = -1;
     bool sentryAlive_ = false; int sentryTarget_ = -1, sentryLoop_ = -1;
     float overshield_ = 0.0f;
+    std::map<std::pair<int, int>, float> lastHit_;     // (victim, hit-effect entry) -> clock of the last HitSound
+    struct Mine { int loop = -1; bool tracking = false; };
+    std::map<int, Mine> mines_;
 };
 
 } // namespace game

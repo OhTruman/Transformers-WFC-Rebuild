@@ -347,6 +347,12 @@ sws = {e['WeaponEventType']: e['WeaponSound'] for e in (swm.get('WeaponEventSoun
 if swm.get('DefaultImpactSound'): sws['DefaultImpactSound'] = swm['DefaultImpactSound']
 class_sounds['TnWeaponDefaultSentryAbility'] = sws
 for k in ('TnGuidedMissile', 'TnWeaponDefaultSentryAbility'): all_cues |= set(class_sounds[k].values())
+# Kamikaze mines (TnProjectileKamikazeMine.Mesh = KamikazeMine_PROJMESH; MinePooper streak, martyrdom) [CONF data,
+# RE pass 5 s12 addenda 16 / 17]: FlightSound (idle loop), SecondaryFlightSound (tracking loop), TargetFoundSound, ExplosionSound.
+_, _km = props('TransGame.Default__TnProjectileKamikazeMine')
+_, _kmm = props(_km.get('Mesh') or '')
+class_sounds['TnProjectileKamikazeMine'] = {k: _kmm[k] for k in ('FlightSound', 'SecondaryFlightSound', 'TargetFoundSound', 'ExplosionSound') if _kmm.get(k)}
+all_cues |= set(class_sounds['TnProjectileKamikazeMine'].values())
 # Deaths (RE pass 5 s12 addendum 12): robot form plays a sound only through the TnDeathTypeMelee entries' TnDeathModifierPlaySound
 # (SharedRobotDeaths / HoloBruteRobotDeaths); vehicle form plays the chassis' _Blueprint.DeathSound (profiles vehicle_death_sound).
 # The melee death entry is chosen by the damage type's DamageDeathType (resolved down the class chain): every damage type
@@ -357,6 +363,17 @@ for _e in _shared.get('Deaths') or []:
         for _m in _e.get('Modifiers') or []:
             _, _mp = props(_m)
             if _mp.get('Sound'): class_sounds.setdefault('TnDeathTypeMelee', {})['DeathSound'] = _mp['Sound']; all_cues.add(_mp['Sound'])
+# Every SharedHitEffectPlayer entry by its damage type (TnHitEffectPlayer: exact DamageType first, then ClassIsChildOf),
+# for hits that are not weapon shots (melee, whirlwind, shoulder slam, rams): HitSound / BlockSound events of the VICTIM's
+# SoundEventSet, RetriggerTime, and the damage type's bCausesBlood gate [CONF data + script, as the weapon hit effects].
+damage_hit_effects = {}
+for (_dt,) in c.execute("select path from types where path like 'TransGame.TnDamageType%' or path like 'TransContent.TnDamageType%'"):
+    _i = find_effect(_dt)                                  # exact entry, else the nearest ancestor's (ClassIsChildOf)
+    if _i < 0: continue
+    _e = HIT_EFFECTS[_i]
+    damage_hit_effects[_dt] = {'index': _i, 'hit_event': (_e.get('HitSound') or '').split('.')[-1],
+                               'block_event': (_e.get('BlockSound') or '').split('.')[-1],
+                               'retrigger': _e.get('RetriggerTime', 0.0), 'causes_blood': causes_blood(_dt)}
 melee_damage_types = []
 for (_p,) in c.execute("select path from types where path like 'TransGame.TnDamageType%' or path like 'TransContent.TnDamageType%'"):
     _t, _ddt = _p, None
@@ -387,11 +404,13 @@ for q in sorted(x for x in all_cues if x):
     else: missing.append(q)
 doc = {'map': '__characters__', 'source': 'Systems tools/systems/gen_character_audio.py (AssetTools roster_package / mp_weapons / authored.db)',
        'profiles': profiles, 'weapons': wpn, 'abilities': abilities, 'buffs': buffs, 'class_sounds': class_sounds,
-       'melee_damage_types': sorted(melee_damage_types), 'cues': cues}
+       'melee_damage_types': sorted(melee_damage_types), 'damage_hit_effects': damage_hit_effects, 'cues': cues}
 print('profiles %d, weapons %d, cues %d (missing %d: %s)' % (len(profiles), len(wpn), len(cues), len(missing), missing[:6]))
 print('abilities with a trigger sound %d: %s' % (len(abilities), sorted(abilities)))
 print('class sounds: %s' % class_sounds)
 print('melee damage types %d: %s' % (len(melee_damage_types), sorted(x.split('.')[-1] for x in melee_damage_types)))
+print('damage hit effects %d; melee: %s' % (len(damage_hit_effects), {k.split('.')[-1]: (v['hit_event'], v['causes_blood']) for k, v in damage_hit_effects.items()
+                                                                    if any(x in k for x in ('Melee', 'Whirlwind', 'Slam', 'Rammed'))}))
 print('buffs with sounds %d: %s' % (len(buffs), {k: (sorted(x for x in v if x != 'only_local'), v['only_local']) for k, v in sorted(buffs.items())}))
 print('hit effects: %d entries; weapons with an effect %d / %d; no effect: %s' % (len(HIT_EFFECTS), sum(1 for w in wpn.values() if w['hit_effect']),
       len(wpn), sorted(k.split('.')[-1] for k, w in wpn.items() if not w['hit_effect'])))

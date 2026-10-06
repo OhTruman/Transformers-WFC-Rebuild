@@ -202,7 +202,59 @@ int AbilityAudio::pawnDeath(SoundCues& cues, const std::string& chassis, bool ve
     return cues.play(q.c_str(), pos, dist);
 }
 
+int AbilityAudio::pawnHitEffect(SoundCues& cues, const std::string& dt, const std::string& chassis, int victimKey,
+                                const core::Vec3& pos, float dist, float clock) {
+    const WeaponHitEffect* he = CharacterAudio::damageHitEffect(dt);
+    if (!he || !he->causesBlood || he->hitEvent.empty()) return -1;
+    const auto key = std::make_pair(victimKey, he->index);
+    auto it = lastHit_.find(key);
+    if (it != lastHit_.end() && clock < it->second + he->retrigger) return -1;      // RetriggerTime
+    lastHit_[key] = clock;
+    const CharacterAudioProfile* vp = CharacterAudio::find(chassis);
+    const CharacterAudioProfile& p = vp ? *vp : CharacterAudio::defaultProfile();
+    const std::string& q = p.voiceCue(he->hitEvent);
+    if (q.empty()) return -1;
+    if (!cues.hasCue(q.c_str())) CharacterAudio::loadCues(cues, p);                  // the victim body's set, level-owned
+    return cues.play(q.c_str(), pos, dist);
+}
+
+void AbilityAudio::kamikazeMine(SoundCues& cues, int key, const core::Vec3& pos, bool targetFound, float dist) {
+    auto snd = [](const char* f) -> const std::string& { return CharacterAudio::classSound("TnProjectileKamikazeMine", f); };
+    auto it = mines_.find(key);
+    if (it == mines_.end()) {                                            // thrown / spawned: the idle loop
+        Mine m;
+        if (!snd("FlightSound").empty()) m.loop = cues.play(snd("FlightSound").c_str(), pos, dist);
+        it = mines_.emplace(key, m).first;
+    }
+    Mine& m = it->second;
+    if (targetFound && !m.tracking) {                                    // FoundTarget
+        m.tracking = true;
+        if (!snd("TargetFoundSound").empty()) cues.play(snd("TargetFoundSound").c_str(), pos, dist);
+        if (m.loop >= 0) cues.stop(m.loop, 0.25f);
+        m.loop = snd("SecondaryFlightSound").empty() ? -1 : cues.play(snd("SecondaryFlightSound").c_str(), pos, dist);
+        if (m.loop >= 0) cues.fadeIn(m.loop, 0.25f);
+    }
+    if (m.loop >= 0) cues.update(m.loop, pos, 0.0f);
+}
+
+void AbilityAudio::kamikazeMineExploded(SoundCues& cues, int key, const core::Vec3& pos, float dist) {
+    auto it = mines_.find(key);
+    if (it != mines_.end()) { if (it->second.loop >= 0) cues.stop(it->second.loop, 0.25f); mines_.erase(it); }
+    const std::string& q = CharacterAudio::classSound("TnProjectileKamikazeMine", "ExplosionSound");
+    if (!q.empty()) cues.play(q.c_str(), pos, dist);
+}
+
+void AbilityAudio::kamikazeMineRemoved(SoundCues& cues, int key) {
+    auto it = mines_.find(key);
+    if (it == mines_.end()) return;
+    if (it->second.loop >= 0) cues.stop(it->second.loop, 0.0f);         // destroyed after the fade-out: cut
+    mines_.erase(it);
+}
+
 void AbilityAudio::stopAll(SoundCues& cues) {
+    for (auto& kv : mines_) if (kv.second.loop >= 0) cues.stop(kv.second.loop, 0.0f);
+    mines_.clear();
+    lastHit_.clear();
     overshield_ = 0.0f;
     for (int* id : {&barrierLoop_, &sentryLoop_}) { if (*id >= 0) cues.stop(*id, 0.0f); *id = -1; }
     barrierAlive_ = barrierFading_ = sentryAlive_ = false; sentryTarget_ = -1;
