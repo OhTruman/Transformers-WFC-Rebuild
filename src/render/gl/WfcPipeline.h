@@ -417,6 +417,7 @@ public:
     void setMapClock(float t) { mapClock_ = t; hasMapClock_ = true; }  // Gameplay MapState clock
     float mapTime() const { return hasMapClock_ ? mapClock_ : time_; }
     void setDestructibleState(const std::string& actor, int state);
+    float worldRadius() const { return worldRadius_; }   // max distance of world geometry from the origin (m)
     // runtime particle effects from the template library (IRenderer::spawnParticleEffect; UE units / axes)
     int spawnFx(const std::string& tpl, const float R[3][3], const float T[3], const float* color, const float* target);
     // Matinee material parameters on a MaterialInstanceActor's MIC (material_instance_actors.json); held until changed
@@ -482,6 +483,7 @@ private:
         bool hasTarget = false; float target[3] = {0, 0, 0};
     };
     int nextFxId_ = 1;
+    float worldRadius_ = 0.0f;
     std::map<std::string, FxSystem> fxSystems_;
     std::vector<FxInstance> fxInstances_;
     std::map<std::string, int> fxMeshes_;

@@ -125,6 +125,13 @@ public:
         Camera camOv = cam0;
         if (const char* rc = std::getenv("WFC_RENDERCAM"))
             std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
+        // M51: the far plane covers the loaded world's geometry (UE3 renders with an infinite far plane). Debris' sky
+        // dome (SpaceDome x6, radius ~26.6 km) lay beyond the 20 km default and was clipped mid-screen (black sky with
+        // pieces at the view edges). Depth precision is governed by the near plane; one far plane for every 3D pass.
+        if (wfc_.active() && wfc_.worldRadius() > 0.0f) {
+            float need = wfc_.worldRadius() + core::length(camOv.pos) + 1000.0f;
+            if (need > camOv.zfar) camOv.zfar = need;
+        }
         const Camera& cam = camOv;
         lastCam_ = cam;
         if (wfc_.active()) wfc_.beginFrame(cam, vpW, vpH);
@@ -147,6 +154,12 @@ public:
         if (glx::GetGraphicsResetStatus) glx::pollResetStatus();   // M43: a lost context is logged (once)
         if (wfc_.active()) { wfc_.drawMapPresentation(); wfc_.endFrame(); }
         glx::gpuTimerEnd();
+        if (std::getenv("WFC_FRAMELOG") && wfc_.active()) {   // M50 diagnostics: per-frame GPU time + draw counts
+            RenderDiagnostics d = renderDiagnostics();
+            LOG_INFO("FRAME %d gpu=%.2fms draws=%d world=%d bsp=%d dyn=%d fx=%d opaque=%d transl=%d culled=%d cam=%.1f,%.1f,%.1f yaw=%.2f pitch=%.2f",
+                     d.frame, glx::lastGpuFrameMs(), d.draws, d.worldDraws, d.bspDraws, d.dynamicDraws, d.fxDraws, d.opaqueDraws,
+                     d.translucentDraws, d.culledSubs, d.camPos[0], d.camPos[1], d.camPos[2], d.camYaw, d.camPitch);
+        }
         if (visualCheckOn()) {                       // GL errors raised by this frame's 3D work (first ones logged)
             int n = 0;
             for (GLenum e = glGetError(); e != GL_NO_ERROR && n < 64; e = glGetError(), ++n)

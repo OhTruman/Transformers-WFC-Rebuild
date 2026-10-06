@@ -135,8 +135,9 @@ uniform vec4 uDynParam;      // particle DynamicParameter (map FX emitters; 1 ot
 uniform sampler2D uSceneDepth;
 uniform int uHasSceneDepth;
 uniform sampler2D uSceneColor;   // MaterialExpressionSceneTexture: the resolved opaque scene colour (HDR)
-vec4 wfcSceneColor(vec2 uv) { return texture(uSceneColor, uv); }
-vec2 wfcScreenUV() { return gl_FragCoord.xy / vec2(textureSize(uSceneColor, 0)); }
+// Screen UVs in UE3's (D3D) convention, v down (ScreenPositionScaleBias (0.5, -0.5)); the GL scene copy is bottom-up.
+vec4 wfcSceneColor(vec2 uv) { return texture(uSceneColor, vec2(uv.x, 1.0 - uv.y)); }
+vec2 wfcScreenUV() { vec2 s = gl_FragCoord.xy / vec2(textureSize(uSceneColor, 0)); return vec2(s.x, 1.0 - s.y); }
 struct MatIn { vec2 uv0; vec2 uv1; vec4 vertexColor; vec3 worldPosUE; vec3 cameraVector; vec3 reflectionVector;
                vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; float sceneDepth;
                vec4 dynParam; };
@@ -1490,6 +1491,15 @@ int Pipeline::upload(const MeshData& m) {
 
     std::vector<SubMesh> subs = m.subs;
     if (subs.empty()) { SubMesh s; s.indexOffset = 0; s.indexCount = (uint32_t)m.indices.size(); subs.push_back(s); }
+    {   // world extent for the far plane (world.glb / BSP positions are world space)
+        bool worldMesh = false;
+        for (const SubMesh& s : subs) if (!s.component.empty()) { worldMesh = true; break; }
+        if (worldMesh)
+            for (size_t i = 0; i + 2 < m.positions.size(); i += 3) {
+                float r2 = m.positions[i] * m.positions[i] + m.positions[i + 1] * m.positions[i + 1] + m.positions[i + 2] * m.positions[i + 2];
+                if (r2 > worldRadius_ * worldRadius_) worldRadius_ = std::sqrt(r2);
+            }
+    }
     int nLM = 0, nProg = 0;
     // Vertex lightmaps (FLightMap1D) cover the component's whole cooked LOD0 vertex buffer, all sections in order; the
     // glTF splits a component into one submesh per section. Per component: the sections' vertex ranges in submesh

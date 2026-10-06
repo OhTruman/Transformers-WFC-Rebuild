@@ -328,7 +328,9 @@ class MatCompiler:
 
     def x_ScreenPosition(self, c, n, p, o):
         # bScreenAlign: xy/w mapped to [0,1] screen UV (ScreenPositionScaleBias); otherwise clip position
-        if n.get('bScreenAlign'):
+        # M51: WFC's cooked property is 'ScreenAlign' (not the later 'bScreenAlign'); missing it fed clip space into
+        # SceneTexture lookups (Molten rain puddles: a hard dark box split at the screen centre)
+        if n.get('bScreenAlign') or n.get('ScreenAlign'):
             return 'vec4(m.screenPos.xy / m.screenPos.w * vec2(0.5, -0.5) + 0.5, m.screenPos.zw)', 4
         return 'm.screenPos', 4
 
