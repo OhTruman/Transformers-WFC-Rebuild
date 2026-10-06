@@ -137,6 +137,10 @@ private:
     bool wantJumpLatched_ = false;
     bool wantFire_ = false;
     bool fireLatch_ = false;
+    struct FineAimProfile { float fov, distM, offX, offZ, look; };
+    FineAimProfile fineAimProfile() const;
+    float lookBlend_ = 1.0f, robotDist_ = 8.0f;   // fine-aim look speed blend; robot orbit distance
+    float quickTurnRemain_ = 0.0f, quickTurnFrom_ = 0.0f, quickTurnTo_ = 0.0f;   // tank 180 quick turn (TnQuickTurnCameraBehavior)
     float sinceStep_ = 0.0f, stepFaceYaw_ = 0.0f, stepBodyYaw_ = 0.0f, stepYawRate_ = 0.0f;   // presentation yaw (per render frame)   // Fire pressed since the last simulation step
     bool wantReload_ = false;     // latched on release of a tap < kReloadTapTime
     bool wantDashLatched_ = false;

@@ -64,7 +64,13 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // FineAim 25/12.5 vs default 50/25) [CONF ratio]. While Driving the look X axis is the steering
     // input (PlayerInCarForm.SetLocalInputs: SteeringInput = TnPlayerInput.GetNormalizedTurn()) and
     // the orbit yaw follows the truck (TnDrivingOrbitRotationCameraBehavior) [CONF bytecode].
-    float look = (fineAiming_ ? cfg::kFineAimLookScale : 1.0f) * lookScale_;
+    // Look speed per fine-aim row, blended over SpeedTransitionTime 0.5 s; no ramp, no dt in the mouse path [CONF RE pass 5].
+    {
+        const float want = fineAiming_ ? fineAimProfile().look : 1.0f;
+        const float stepL = dt / 0.5f;
+        lookBlend_ += core::clampf(want - lookBlend_, -stepL, stepL);
+    }
+    float look = lookBlend_ * lookScale_;
     // UpdateInvertMouseByRobotForm / ...ByVehicleForm: one bInvertMouse flag from the profile per form [CONF].
     bool inv = invertY_[0];
     if (vehicleForm) inv = vform == VehicleFormType::Jet ? invertPlane_ : vform == VehicleFormType::Tank ? invertTank_ : invertCar_;
@@ -135,11 +141,19 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // Edge latches persist until a simulation step consumes them [CONF RE input semantics], so a
     // press on a render frame that runs zero 60 Hz steps is not lost.
     if (in.wasPressed(Button::Jump)) wantJumpLatched_ = true;
+    // Tank VehicleSpecialMove = 180 quick turn [CONF RE pass 5]: on press, CanUseSpecialMove (TimeBetween180s 1.2 s) -> RecenterCamera
+    // with TnQuickTurnCameraBehavior: camera yaw lerps linearly to tank yaw + 180 deg over 0.3 s; the hull follows the camera
+    // through TnHoverTankSimulation.UpdateTurn (no rate cap), so it spins 180 deg in 0.3 s. Not 360, no repeat while held.
+    if (pawn_ && in.wasPressed(Button::Dash) && pawn_->moveForm() == Form::Vehicle && !pawn_->isTransforming() &&
+        pawn_->vehicleParams().form == VehicleFormType::Tank && pawn_->vehicleState().dashCooldown <= 0.0f && quickTurnRemain_ <= 0.0f) {
+        quickTurnRemain_ = 0.3f; quickTurnFrom_ = camYaw_; quickTurnTo_ = pawn_->yaw() + 3.14159265f;
+        quickTurnFrom_ = quickTurnTo_ - 3.14159265f + std::remainder(camYaw_ - pawn_->yaw(), 6.2831853f);   // start from the current view
+        pawn_->vehicleState().dashCooldown = 1.2f;
+        ++pawn_->vehicleState().quickTurnSerial;   // Systems: Tank 180 sound event
+    }
     if (in.wasPressed(Button::Dash)) {
         wantDashLatched_ = true;
-        // Tank special move "180": TnCamera.RecenterCamera, cooldown TimeBetween180s 1.2 s [CONF RE C2]; the hull follows
-        // the camera yaw. The recentre is applied as a half turn of the view [PROV: TnTurnAroundCameraBehavior timing].
-        if (vehicleForm && vform == VehicleFormType::Tank && tank180Cooldown_ <= 0.0f) { camYaw_ += 3.1415927f; tank180Cooldown_ = 1.2f; }
+        // (Tank 180: see the quick-turn block above; the earlier instant half turn of the view was PROV and is replaced.)
     }
     tank180Cooldown_ = std::max(0.0f, tank180Cooldown_ - dt);
 
@@ -211,6 +225,9 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
     // Strategy targets [CONF strategy data; see Config.h]. The robot anchor sits Offset Z 200 UU above the actor
     // (cylinder centre) of this chassis.
     float anchor = cfg::kCamHeight - cfg::kPawnHalfHeight, dist = cfg::kCamDistance;
+    // Robot orbit distance: 800 UU, or the fine-aim row's (Null Ray / HeavyPistol / BurstRifle 100) smoothed 0.1 s [PROV smooth].
+    robotDist_ += (((want == 0 && fineAiming_) ? fineAimProfile().distM : cfg::kCamDistance) - robotDist_) * std::min(1.0f, dt / 0.1f);
+    dist = robotDist_;
     const ChassisDef& cdef = pawn_->chassis();
     const CamStrategy& camH = (jet && vs.flying && cdef.camFly.dist > 0.0f) ? cdef.camFly : cdef.camHover;
     if (want == 1) { anchor = camH.anchor; dist = camH.dist; }
@@ -241,6 +258,11 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
         viewYaw_ = camYaw_; viewPitch_ = camPitch_;
         yawS_.reset(); pitchS_.reset();
     } else if (want == 1) {
+        if (quickTurnRemain_ > 0.0f) {   // TnQuickTurnCameraBehavior: linear yaw lerp over 0.3 s (look input ignored meanwhile)
+            quickTurnRemain_ = std::max(0.0f, quickTurnRemain_ - dt);
+            camYaw_ = quickTurnFrom_ + (quickTurnTo_ - quickTurnFrom_) * (1.0f - quickTurnRemain_ / 0.3f);
+            viewYaw_ = camYaw_; yawS_.reset();
+        }
         float ty = viewYaw_ + std::remainder(camYaw_ - viewYaw_, 6.2831853f);
         viewYaw_ = yawS_.smooth(viewYaw_, ty, cfg::kHoverCamRotSmooth, dt);
         viewPitch_ = pitchS_.smooth(viewPitch_, camPitch_, cfg::kHoverCamRotSmooth, dt);
@@ -259,7 +281,7 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
 
     // FOV (TnFovCameraBehavior): first matching PCS row, HmC2Smoother with that row's SmoothTime.
     float fovT = cfg::kCamFovXDeg, fovSm = cfg::kCamFovSmooth;
-    if (want == 0 && fineAiming_) { fovT = cfg::kFineAimFovXDeg; fovSm = cfg::kFineAimFovSmooth; }
+    if (want == 0 && fineAiming_) { fovT = fineAimProfile().fov; fovSm = cfg::kFineAimFovSmooth; }
     if (want == 1) fovT = camH.fov;
     if (want == 2) { fovT = nitro ? cfg::kNitroCamFov : cdef.camDrive.fov; fovSm = nitro ? cfg::kNitroCamFovSmooth : cfg::kCamFovSmooth; }
     fovCur_ = fovS_.smooth(fovCur_, fovT, fovSm, dt);
@@ -270,8 +292,9 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
     float offSm;
     if (want == 0) {
         float f = pitchFraction(deg, -75.0f, 75.0f);
-        float zEnd = fineAiming_ ? cfg::kFineAimShoulderZEnd : cfg::kShoulderZEnd;
-        off = core::Vec3{fineAiming_ ? cfg::kFineAimShoulderX : cfg::kShoulderX, cfg::kShoulderY,
+        const FineAimProfile fp = fineAimProfile();
+        float zEnd = fineAiming_ ? fp.offZ : cfg::kShoulderZEnd;
+        off = core::Vec3{fineAiming_ ? fp.offX : cfg::kShoulderX, cfg::kShoulderY,
                          curve3(zEnd, cfg::kShoulderZMid, zEnd, f)};
         offSm = fineAiming_ ? cfg::kFineAimOffsetSmooth : cfg::kShoulderOffsetSmooth;
     } else {
@@ -285,6 +308,18 @@ void PlayerController::updateCameraStrategy(const platform::InputFrame& in, floa
     offset_.z = offZS_.smooth(offset_.z, off.z, offSm, dt);
     wiggleT_ += dt;
     (void)in;
+}
+
+// OverTheShoulder_STRATEGY rows for fine aim by the held weapon's WeaponPCS [CONF RE pass 5 3, AssetTools weapon.json
+// fine_aim_camera]: Null Ray (SniperRifle) FOV 20 / orbit 100 / screen X 350 / look 6.5 of 50; HeavyPistol / BurstRifle FOV 30 /
+// orbit 100 / X 350 / look 9.375; any other weapon FOV 45 / orbit 800 / X -50 (Z 80) / look 25. One zoom stage only.
+PlayerController::FineAimProfile PlayerController::fineAimProfile() const {
+    namespace cfg = core::config;
+    const char* id = pawn_ && pawn_->weapon().def ? pawn_->weapon().def->id : "";
+    const std::string w = id;
+    if (w == "SniperRifle") return {20.0f, 1.0f, 3.5f, cfg::kShoulderZEnd, 6.5f / 50.0f};
+    if (w == "HeavyPistol" || w == "BurstRifle") return {30.0f, 1.0f, 3.5f, cfg::kShoulderZEnd, 9.375f / 50.0f};
+    return {cfg::kFineAimFovXDeg, cfg::kCamDistance, cfg::kFineAimShoulderX, cfg::kFineAimShoulderZEnd, cfg::kFineAimLookScale};
 }
 
 FineAimState PlayerController::fineAimState() const {
@@ -526,6 +561,9 @@ bool PlayerController::canFineAim() const {
 // TnFineAimManager.Tick / StartFineAim / StopFineAim [CONF bytecode].
 void PlayerController::tickFineAim() {
     bool can = canFineAim();
+    // PlayerWalking.FineAim with the Magma Frag Launcher equipped remote-detonates its grenades instead of aiming [CONF RE pass 5];
+    // the launcher's grenades explode on contact here, so nothing to detonate [PARTIAL].
+    if (pawn_->weapon().def && std::string(pawn_->weapon().def->id) == "GrenadeLauncher") { fineAimWanted_ = false; can = false; }
     if (fineAimWanted_ && !fineAiming_ && can) {
         fineAiming_ = true;
         pawn_->setSpeedMultiplier(core::config::kFineAimSpeedMult);   // SetSpeedMultiplier(0.5)

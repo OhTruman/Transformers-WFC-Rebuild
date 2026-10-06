@@ -480,6 +480,7 @@ public:
         float steer = 0.0f;           // Driving steering after sign(s)*s^2 and SteeringScale
         float yawRate = 0.0f;         // rad/s, UE sense (+ = turning right)
         float tireForce = 0.0f;       // Driving: summed lateral tire force (N, body +Y) [diagnostics]
+        unsigned quickTurnSerial = 0; // tank 180 quick turns started (audio: Tank 180)
         float rollControl = 0.0f;     // Driving: RollControl = left-stick X (StrafeRightLeft); no barrel roll (RollDuration 0)
     };
     VehicleState veh_;

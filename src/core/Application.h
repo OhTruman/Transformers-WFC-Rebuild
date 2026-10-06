@@ -40,6 +40,7 @@ private:
     void runHeadingJitterTest();
     void runVehicleSocketProbe();
     void runTransformVisibilityTest();
+    void runFineAimTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

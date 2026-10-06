@@ -114,6 +114,35 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - The Scout transform has no authored particles (AssetTools: only Starscream authors Trails FX): a mesh swap plus sound, as
   now drawn.
 
+### Tank 180 quick turn [CONFIRMED ORIGINAL: RE TARGETED_PASS5 §1]
+- Playtest: the tank special move can cause a rapid 360° manoeuvre.
+- Original: VehicleSpecialMove (Shift / RB) on press → CanUseSpecialMove (TimeBetween180s 1.2 s) → RecenterCamera.
+  TnQuickTurnCameraBehavior lerps the camera yaw linearly to tank yaw + 180° over 0.3 s; the hull follows the camera through
+  TnHoverTankSimulation.UpdateTurn, so it spins 180° in 0.3 s. Not 360°, no repeat while held.
+- The rebuild had a PROVISIONAL instant +180° jump of the view yaw. An exact ±π step is ambiguous to the yaw smoothing and the
+  hull's remainder() follow, a plausible source of the long-way spin. It is replaced by the original 0.3 s linear camera behaviour
+  (+ a quickTurnSerial for the Systems "Tank 180" sound).
+- The Soldier preset's Shift ability in ROBOT form is Whirlwind: a 5.9 s spinning melee attack, authentic, which may also be what
+  was seen.
+- VEHPHYS: 180° reached in 0.28 s; holding Shift 3 s = one turn; a press within 1.2 s is refused.
+
+### Fine aim per weapon [CONFIRMED ORIGINAL: RE pass 5 §3, AssetTools weapon.json fine_aim_camera (OverTheShoulder FOVsByPCS)]
+- PC right mouse = ToggleFineAim (toggle); pad LT hold. Ground speed ×0.5; blocked while meleeing / reloading / dodging (as before).
+- Camera rows by the held weapon's WeaponPCS (previously every weapon used the generic row):
+
+  | weapon | FOV | orbit | screen X | look yaw / pitch |
+  |---|---|---|---|---|
+  | Null Ray (SniperRifle) | 20 | 100 | 350 | 6.5 / 3.25 (×0.13) |
+  | HeavyPistol / BurstRifle | 30 | 100 | 350 | 9.375 / 4.6875 (×0.1875) |
+  | other | 45 | 800 | −50 | 25 / 12.5 (×0.5) |
+
+- One zoom stage only ("10x" is marketing text). Look speed blends over SpeedTransitionTime 0.5 s.
+- Magma Frag Launcher: fine aim remote-detonates instead of aiming. Here fine aim is refused; the launcher's grenades explode on
+  contact, so there is nothing to detonate [PARTIAL].
+- PARTIAL: scope sway wiggle (0.45° at 3 / 10 / 6 Hz), fine-aim orbit-distance smoothing (0.1 s assumed), HUD scope symbol
+  (Frontend: showScope long / short / medium).
+- WFC_FINEAIMTEST 3/3: Null Ray FOV 20 / look 0.130, HeavyPistol 30 / 0.187, IonBlaster 45 / 0.500, speed ×0.50, toggle off → 80.
+
 ### Vehicle weapon origin [CONFIRMED ORIGINAL socket data]
 - WFC_VSOCKET: WeaponSocket_Primary sits on each chassis' left gun bone (L_GunRobo01_XT) or the tank cannon (C_Cannon_XB),
   inside the vehicle hull; Starscream's is under the wing, 0.8 m below the physics box.

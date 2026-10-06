@@ -145,7 +145,8 @@ bool Application::init() {
     if (std::getenv("WFC_VEHPHYS")) { runVehPhysTest(); return false; }     // vehicle jump / attitude / wall response, human playtest M09
     if (std::getenv("WFC_HEADJIT")) { runHeadingJitterTest(); return false; } // drawn heading vs camera per render frame, playtest M10
     if (std::getenv("WFC_VSOCKET")) { runVehicleSocketProbe(); return false; } // vehicle weapon socket vs hull, playtest M10
-    if (std::getenv("WFC_XFORMVIS")) { runTransformVisibilityTest(); return false; } // per-chassis transform mesh handoff, playtest M10   // measurements only
+    if (std::getenv("WFC_XFORMVIS")) { runTransformVisibilityTest(); return false; } // per-chassis transform mesh handoff, playtest M10
+    if (std::getenv("WFC_FINEAIMTEST")) { runFineAimTest(); return false; }   // per-weapon fine aim camera, playtest M10   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -3229,6 +3230,28 @@ void Application::runVehPhysTest() {
             LOG_INFO("VEHPHYS %s boost jump: apex %.2f m above the driving height (RE: local Z 14 m/s -> 5.05 m)", id, ap);
             check(ap > 4.0f && ap < 6.0f, std::string(id) + ": boost jump apex near 5.05 m");
         }
+        // 2d) tank 180 quick turn (VehicleSpecialMove): 180 deg in ~0.3 s, no repeat while held, 1.2 s cooldown [CONF RE pass 5]
+        if (std::string(id) == "Tank3") {
+            place(yaw0); for (int k = 0; k < 120; ++k) step(idle);
+            auto turned = [&](float from) { return std::fabs(std::remainder(pc.yaw() - from, 6.2831853f)) * 57.2958f; };
+            const float y0 = pc.yaw();
+            platform::InputFrame sh = idle; sh.down[(int)platform::Button::Dash] = true;
+            platform::InputFrame shp = sh; shp.pressed[(int)platform::Button::Dash] = true;
+            step(shp);
+            float t180 = -1.0f;
+            for (int k = 0; k < 180; ++k) { step(sh); if (t180 < 0.0f && turned(y0) > 175.0f) t180 = (k + 1) / 60.0f; }   // held 3 s
+            const float afterHold = turned(y0);
+            const float y1 = pc.yaw();
+            step(shp); for (int k = 0; k < 30; ++k) step(idle);    // cooldown already over (3 s held) -> a second turn back
+            const float second = turned(y1);
+            const float y2 = pc.yaw();
+            step(shp); for (int k = 0; k < 30; ++k) step(idle);    // within 1.2 s of the second: refused
+            const float refused = turned(y2);
+            LOG_INFO("VEHPHYS %s quick turn: 180 reached in %.2f s, after holding 3 s %.0f deg, second press %.0f deg, press within cooldown %.0f deg",
+                     id, t180, afterHold, second, refused);
+            check(t180 > 0.2f && t180 < 0.5f && std::fabs(afterHold - 180.0f) < 5.0f && std::fabs(second - 180.0f) < 5.0f && refused < 5.0f,
+                  std::string(id) + ": VehicleSpecialMove = one 180 deg quick turn in ~0.3 s, no repeat while held, 1.2 s cooldown");
+        }
         // 3) held jump = one jump
         place(yaw0); for (int k = 0; k < 120; ++k) step(idle);
         int jumps = 0; bool up = false; float yPrev = pc.position().y;
@@ -3392,6 +3415,50 @@ void Application::runTransformVisibilityTest() {
         }
     }
     LOG_INFO("XFORMVIS SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_FINEAIMTEST: RightMouse toggle; per weapon the OverTheShoulder fine-aim row (FOV / orbit distance / look speed) and the x0.5
+// ground speed [CONF RE pass 5 3]; toggle off restores FOV 80.
+void Application::runFineAimTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("FINEAIM %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto& ctl = world_.player().controller();
+    auto run = [&](float secs, const platform::InputFrame& in) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { world_.handleInput(in, dt); world_.tick(dt); } };
+    struct Case { const char* chassis; std::vector<std::string> weapons; const char* expectWeapon; float fov, dist, look; };
+    const Case cases[] = {{"Jet", {}, "SniperRifle", 20.0f, 1.0f, 0.13f}, {"Car2", {"HeavyPistol", "Shotgun"}, "HeavyPistol", 30.0f, 1.0f, 0.1875f},
+                          {"Truck", {}, "IonBlaster", 45.0f, 8.0f, 0.5f}};
+    for (const Case& c : cases) {
+        world_.applyChassisToLocalPawn(c.chassis);
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Scout; cs.weapons = c.weapons;
+        world_.applyLoadout(c.weapons.empty() ? nullptr : &cs);
+        auto& pc = world_.player().pawn();
+        world_.teleportToStart(20);
+        platform::InputFrame idle; run(1.0f, idle);
+        const std::string wid = pc.weapon().def ? pc.weapon().def->id : "?";
+        auto yawAfterMouse = [&]() { float y0 = ctl.camYaw(); platform::InputFrame m; m.mouseDX = 100.0f; world_.handleInput(m, dt); world_.tick(dt); return std::fabs(ctl.camYaw() - y0); };
+        run(0.6f, idle);
+        const float yawNormal = yawAfterMouse();
+        const float speedNormal = pc.speedMultiplier();
+        platform::InputFrame rm; rm.pressed[(int)platform::Button::FineAim] = true; rm.down[(int)platform::Button::FineAim] = true;
+        world_.handleInput(rm, dt); world_.tick(dt);
+        run(1.0f, idle);   // toggle: released, stays aimed
+        render::Camera cam; ctl.updateCamera(cam);
+        core::Vec3 anchor = pc.actorLocation();
+        const float camDist = core::length(cam.pos - anchor);
+        const float yawAimed = yawAfterMouse();
+        const float speedAimed = pc.speedMultiplier();
+        const bool aimed = ctl.fineAimState().active;
+        world_.handleInput(rm, dt); world_.tick(dt);
+        run(1.5f, idle);
+        render::Camera cam2; ctl.updateCamera(cam2);
+        LOG_INFO("FINEAIM %s %s: aimed %d FOV %.1f (want %.0f), camera %.2f m from the actor, look ratio %.3f (want %.3f), speed x%.2f; off -> FOV %.1f",
+                 c.chassis, wid.c_str(), (int)aimed, cam.fovXDeg, c.fov, camDist, yawNormal > 0.0f ? yawAimed / yawNormal : -1.0f, c.look, speedNormal > 0.0f ? speedAimed / speedNormal : -1.0f, cam2.fovXDeg);
+        check(wid == c.expectWeapon && aimed && std::fabs(cam.fovXDeg - c.fov) < 1.0f && std::fabs(yawAimed / yawNormal - c.look) < 0.02f &&
+              std::fabs(speedAimed / speedNormal - 0.5f) < 0.01f && std::fabs(cam2.fovXDeg - 80.0f) < 1.0f,
+              std::string(c.chassis) + " " + wid + ": fine aim FOV " + std::to_string((int)c.fov) + ", look x" + std::to_string(c.look) + ", speed x0.5, toggle off -> 80");
+    }
+    LOG_INFO("FINEAIM SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core
