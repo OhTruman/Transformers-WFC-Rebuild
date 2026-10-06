@@ -89,7 +89,7 @@ public:
     // (multiplicative FMOD ChannelGroup volume [HIGH]). All listed config Volumes are 1.0 (gen_mixer.py asserts it),
     // so replacing equals the multiplier applied here. Mixer presets never write that fader: EnableMixerPreset
     // (0x82772778) -> tree re-evaluation (0x8276A868) blends presets into each node's DSP preset slots, a separate
-    // stage [CONF path, RE b2d6bd8; HIGH audible product] - so preset volume x group volume, as applied here.
+    // stage [CONF path, RE d832643; HIGH audible product] - so preset volume x group volume, as applied here.
     // HmPlayerController.UpdateLocalCacheOfProfileSettings applies SetAudioGroupVolume('Dialog' | 'SFX' | 'MUSIC',
     // slider / 100 clamped [0,1]) [CONF script]; the TnProfileSettings defaults are 80 / 80 / 80, which is also the
     // value before any profile is applied here. Device-global (the frontend and game cue tables share it), immediate.
