@@ -17,6 +17,15 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 73 — RUNTIME DECALS: DEATH SCORCH (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Death scorch | robot deaths: trace 300 UU down, skip glancing (abs(N.down) < 0.5); DeathDecal_MAT (Modulate, unlit), (800 + r 150) UU square, thickness 300 (near / far +-150), random roll, 30 s | RE s12 add. 23 / 27 | CONFIRMED | M73 `spawnDecal`; the caller (Gameplay) owns the trace and the robot-death rule |
+| Decal pool / expiry | MaxActiveDecals 50 shared with impact decals, the oldest recycled; no fade, removed at the lifetime | RE s12 add. 27 / 28 | CONFIRMED (no fade HIGH) | implemented |
+| Projection | receivers facing the projector, clipped to the box; UV per the original decal VS | static decal VS (validated M-static decals) | HIGH | static world receivers only; skeletal receivers not projected [PARTIAL] |
+| Look | (R + Blacks) x 20 modulate: near-black core, flecks above 1 brighten | compiled DeathDecal_MAT + texture stats | VISUALLY VERIFIED / HIGH (Xbox target clamp not traced) | — |
+| Impact decals | same API: weapon DefaultDecal / PhysMaterial groups, MetalDecal_02/03 MICs of DeathDecal_MAT | RE s12 add. 29 | CONFIRMED (data) | not wired (Gameplay call + materials) |
+
 ## MILESTONE 72 — MATERIALS COOKED INTO OTHER MAPS' PACKAGES (2026-10-06)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

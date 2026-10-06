@@ -602,6 +602,9 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING M73 (2026-10-06)
+- Runtime decals (IRenderer::spawnDecal): the robot death scorch, 30 s, 50-decal pool; Gameplay places it on robot deaths.
+
 ## RENDERING M72 (2026-10-06)
 - Every map now compiles all its materials (except one RandomSeed prop): Broken Hope and Remnant characters use their original materials instead of the fallback.
 
