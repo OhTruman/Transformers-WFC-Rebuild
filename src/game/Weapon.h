@@ -55,6 +55,13 @@ struct Weapon {
     const char* chargeHudMessage() const {             // UpdateChargeEffects: ChargingMessage / FullyChargedMessage
         return chargeState == 1 ? "CHARGING" : (chargeState >= 2 ? "READY" : "");
     }
+    // UpdateChargeEffects MaterialGlowAmount (TnWeaponMesh.SetMaterialParameter(1, glow)): 0 / 0 / 1/3 / 2/3 / 1 by state.
+    float chargeGlow() const { return chargeState <= 1 ? 0.0f : (float)(chargeState - 1) / 3.0f; }
+    // Presentation serials: chargeSerial +1 on every _ChargeState change (SetChargeState -> UpdateChargeEffects); chargeFizzle
+    // +1 when a charge is released in state 1 (FireCharge: PlayWeaponEvent(22) instead of a shot).
+    unsigned chargeSerial = 0, chargeFizzle = 0;
+    int chargeShotLevel = 0;   // level (1-3) of the last released charge shot: FireCharge fire mode + 1 (WP_Fire / _Secondary / _Tertiary)
+    void setChargeState(int s) { if (s != chargeState) { chargeState = s; ++chargeSerial; } }
     static Weapon fromDef(const WeaponDef& d) {
         Weapon w;
         w.def = &d; w.name = d.display; w.fireType = d.fire; w.shots = d.shots > 0 ? d.shots : 1; w.autoFire = d.autoFire;

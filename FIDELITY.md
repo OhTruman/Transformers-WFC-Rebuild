@@ -3417,8 +3417,13 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   - After a shot an empty clip auto-reloads.
 - HUD: weaponChargeState (0-4) and weaponChargeMessage ("CHARGING" in state 1, "READY" at any level: ChargingMessage /
   FullyChargedMessage).
-- PARTIAL: the charge material glow (MaterialGlowAmount 0 / ⅓ / ⅔ / 1) and the charge muzzle events / sounds (WP events 9-12)
-  are presentation for Rendering / Systems.
+- Charge presentation state (24l) is reported in HudState [CONFIRMED ORIGINAL: UpdateChargeEffects / FireCharge script]:
+  - weaponChargeGlow = MaterialGlowAmount 0 / ⅓ / ⅔ / 1 (SetMaterialParameter(1, ...));
+  - weaponChargeSerial (+1 per state change). Sounds: → 1 play event 9; → 3 stop 9, play 10; → 4 stop 10, play 11; → 0 stop
+    9 / 10 / 11, play 12. Muzzle flash StartMuzzleFlash(0 / 1 / 2 / 3 / 12);
+  - weaponChargeFizzle (+1 on a release before level 1: event 22).
+- PARTIAL: playing them. The glow needs a renderer material parameter for the held weapon mesh (Rendering); the event sounds
+  need a charge path in WeaponAudio (Systems). Both have been sent the contract.
 - WFC_CHARGETEST: a 0.3 s tap fires nothing; 1.0 / 2.5 / 4.0 s holds fire 80 / 150 / 230 m/s, 115 / 140 / 179 damage, 25 / 50 / 100
   ammo (+4 drained at full charge) with the Sm / Med / Lrg trail; charge then switch = no shot.
 
@@ -3499,9 +3504,32 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   defaults], competitiveScoreEnabled 0 [HIGH: not authored]. DOM / KOTH objective countdown [PARTIAL].
 
 ### Vehicle handling [RE TARGETED_PASS4 §A CONFIRMED ORIGINAL; measured with WFC_VEHPHYS]
-- Open [HIGH / human check]: grounded pitch over small steps. A 0.25 m riser pitches the hover body about 0.5° (Experimental
-  step_025), because UpdateTurn replaces ω each step and the spring torques act only within that step. Not yet traced:
-  whether the original applies the correction before or after PhysX integrates the same tick's spring forces. Asked RE.
+- Grounded pitch / roll (24m) [CONFIRMED ORIGINAL: RE pass 4 §A4 corrected, 6bb8855].
+  - UpdateTurn: Δω = axisAngle × (0.05, 0.05, 1) / dt − ω, then × (ShouldUpright ? (1,1,1) : (0,0,1)).
+  - Grounded and upright: only yaw is replaced; pitch / roll ω carries over (springs, UpdateRoll; RB damping 0 while hovering).
+  - Airborne / inverted: pitch / roll ω = 0.05 × error / dt, a 5 % per tick pull (it was a one-step snap).
+  - Was (Pass 23, from the earlier A4 text): pitch / roll ω replaced every step, so a 0.25 m riser gave 0.47°.
+  - Now the hover jump keeps its authored JumpAngularSpeed nose-up kick (5.7° car / 7.6° truck / 3.8° tank) and levels in the air.
+  - WFC_RISERTEST on a real Streets kerb (0.15 m by ground height; the bevelled lip reads about 0.07 m to the probes), at 15 m/s:
+    car 1.07°, truck 1.78°, tank 2.48° nose-up. RE's estimate for a 7 UU lip at 1500 UU/s is about 1.5° for the car [HIGH].
+    Experimental's synthetic 0.25 m step is the clean comparison.
+- Suspension probes against walls (24m) [PROV contact model; original behaviour HIGH].
+  - Freeing pitch / roll exposed a collision gap. Our travel-direction hull probes let a hull corner clip a wall while sliding
+    along it at an angle, and the suspension mount inside that corner sat 8-9 cm inside the wall. Its ray started inside the solid,
+    missed the floor, and the car tipped onto the wall (the 69° glancing-wall tilt of the Pass 23 playtest; Pass 23 had only
+    masked it).
+  - In the original the PhysX hull keeps the body, and every mount, out of walls.
+  - Now a probe whose COM→mount segment crosses a near-vertical face starts just short of that face, on the COM side.
+  - VEHPHYS 27/27: glancing-wall tilt 0° for car / truck / tank in hover, 0-8° in boost (was 6-31°).
+  - Rejected: a global hull push-out. A/B chaos runs showed it pushing hulls into tight corners (a 2.5 m tank hull swung by
+    the yaw servo), under a prop deck and into stuck states.
+  - Contact material [CONFIRMED ORIGINAL: RE pass 4 A5 addenda 71df7d6 / f4a8e1e].
+    - UE3 builds every NxMaterial with friction and restitution combine = MULTIPLY.
+    - Car / truck PHYSMAT (μ 0.2, e 0.05) on ENV concrete / metal (0.5 / 0.1) gives μ 0.10, e 0.005; on the engine default material
+      (0.7 / 0.3) μ 0.14, e 0.015.
+    - NX_SKIN_WIDTH 0.025 m (2.5 UU); NX_BOUNCE_THRESHOLD not set (PhysX default 2 m/s, HIGH).
+    - So wall hits are inelastic at every speed, consistent with our zero rebound. Not modelled: the small sliding friction
+      (μ 0.10-0.14 against walls; the push-out keeps all tangential speed) [PARTIAL].
 - Drop recovery (WFC_DROPTEST): Car2 / Truck3 / Tank3 land at about 18 m/s, compress 0.89 / 1.03 / 1.14 m and recover over
   about 1.5 s without overshoot (Experimental drop10 "instant" = their check catching the fall-through of the rest height).
 Human playtest: jumps too high in some situations, violent wall bounces, teetering / rolling about an odd axis, not settling.

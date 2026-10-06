@@ -183,7 +183,8 @@ bool Application::init() {
     if (std::getenv("WFC_MUZZLETEST")) { runMuzzleTest(); return false; }          // vehicle weapon Primary / Primary2 alternation
     if (std::getenv("WFC_RMUZZLETEST")) { runRobotMuzzleTest(); return false; }    // robot projectiles spawn at the weapon MuzzleFlash socket
     if (std::getenv("WFC_CHARGETEST")) { runChargeTest(); return false; }          // Plasma Cannon charge levels + grenade spin
-    if (std::getenv("WFC_DROPTEST")) { runDropTest(); return false; }              // hover vehicle 10 m drop: per-step vertical trace   // measurements only
+    if (std::getenv("WFC_DROPTEST")) { runDropTest(); return false; }              // hover vehicle 10 m drop: per-step vertical trace
+    if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -3833,6 +3834,25 @@ void Application::runVehPhysTest() {
                     if (!hit) { maxInto = std::max(maxInto, into); if (maxInto > 5.0f && into < 0.3f * maxInto) hit = true; }
                     else {
                         ++after; minInto = std::min(minInto, into);
+                        static const char* wt = std::getenv("WFC_VEHWALLTRACE");
+                        if (wt && after >= 22 && after <= 27 && boost == 0 && angle == 1) {
+                            const game::VehicleParams& VPx = pc.vehicleParams();
+                            const core::Vec3 Fx = core::forwardFromYawPitch(pc.yaw(), 0.0f), Rx = core::normalize(core::cross(Fx, core::Vec3{0, 1, 0}));
+                            const core::Vec3 comx = pc.position() + Fx * VPx.comFwd + core::Vec3{0, VPx.comUp, 0};
+                            for (int q = 0; q < 4; ++q) {
+                                const float ang = 0.7853982f + 1.5707963f * (float)q;
+                                // body x = forward, body y = left in UE (right-handed with z up): y>0 -> left
+                                const core::Vec3 m = comx + Fx * (std::cos(ang) * VPx.suspMountRadius) - Rx * (std::sin(ang) * VPx.suspMountRadius);
+                                float tw = 1, tf = 1; core::Vec3 nw, nf;
+                                const bool wall = cw->segmentHit(comx, m, tw, nw);
+                                const bool floor = cw->segmentHit(m, m + core::Vec3{0, -6.0f, 0}, tf, nf);
+                                LOG_INFO("WALLPROBE %s +%d probe %d: COM->mount crosses geometry %d (t %.2f n %.2f %.2f %.2f); floor below mount %s %.2f m (n.y %.2f)", id, after, q, (int)wall, tw, nw.x, nw.y, nw.z, floor ? "at" : "none within", floor ? tf * 6.0f : 6.0f, nf.y);
+                            }
+                        }
+                        if (wt && after <= 45 && boost == 0 && angle == 1)
+                            LOG_INFO("WALLTRACE %s +%d roll %+.2f pitch %+.2f deg | w (%+.1f %+.1f %+.1f) deg/s | contacts %d n (%.2f %.2f %.2f) | L %.2f %.2f %.2f %.2f | v (%+.1f %+.1f %+.1f)",
+                                     id, after, vs.roll * 57.3f, vs.pitch * 57.3f, vs.angVel.x * 57.3f, vs.angVel.y * 57.3f, vs.angVel.z * 57.3f, vs.contacts,
+                                     vs.contactN.x, vs.contactN.y, vs.contactN.z, vs.spLen[0], vs.spLen[1], vs.spLen[2], vs.spLen[3], pc.velocity().x, pc.velocity().y, pc.velocity().z);
                         if (std::getenv("WFC_VEHDBG") && after <= 60) LOG_INFO("VEHTRACE %s b%d a%d t%d roll %.1f pitch %.1f wx %.1f wy %.1f contacts %d ground %d v (%.1f %.1f %.1f) y %.3f", id, boost, angle, after, vs.roll / d2r, vs.pitch / d2r, vs.angVel.x / d2r, vs.angVel.y / d2r, vs.contacts, (int)vs.onTheGround, pc.velocity().x, pc.velocity().y, pc.velocity().z, pc.position().y);
                         maxTilt = std::max(maxTilt, std::max(std::fabs(vs.pitch), std::fabs(vs.roll)));
                         maxAng = std::max(maxAng, std::max(std::fabs(vs.angVel.x), std::fabs(vs.angVel.y)));
@@ -4200,7 +4220,7 @@ void Application::runChargeTest() {
     const std::string held = pc.weapon().def ? pc.weapon().def->id : "?";
     check(held == "PlasmaCannon", "Scout holds the Plasma Cannon (" + held + ")");
     if (held != "PlasmaCannon") { LOG_INFO("CHARGE SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
-    struct Shot { bool fired; float speed, damage; int ammoUsed, ammoHeld; std::string tpl, hudMid, hudEnd; };
+    struct Shot { bool fired; float speed, damage; int ammoUsed, ammoHeld; std::string tpl, hudMid, hudEnd; int level = 0; };
     auto hold = [&](float secs) {
         game::Weapon& w = pc.weapon();
         w.ammo = w.magSize; w.reserve = w.reserveMax;
@@ -4220,12 +4240,32 @@ void Application::runChargeTest() {
             r.fired = true; r.speed = core::length(world_.projectileVel(k)); r.damage = world_.projectileDamage(k); r.tpl = world_.projectileFlightTemplate(k);
         }
         r.ammoUsed = a0 - pc.weapon().ammo;
+        if (r.fired) r.level = world_.hudState().weaponChargeShotLevel;
         LOG_INFO("CHARGE hold %.2f s: fired %d speed %.0f m/s damage %.0f ammo %d (drained while held %d) hud [%s] -> [%s] trail %s", secs, (int)r.fired, r.speed, r.damage,
                  r.ammoUsed, r.ammoHeld, r.hudMid.c_str(), r.hudEnd.c_str(), r.tpl.c_str());
         run(1.0f);
         return r;
     };
-    Shot t = hold(0.3f), a = hold(1.0f), b = hold(2.5f), c = hold(4.0f);
+    const unsigned fz0 = world_.hudState().weaponChargeFizzle, sr0 = world_.hudState().weaponChargeSerial;
+    Shot t = hold(0.3f);
+    const unsigned fz1 = world_.hudState().weaponChargeFizzle, sr1 = world_.hudState().weaponChargeSerial;
+    // Glow by level: sample while holding through level 3.
+    float glow[3] = {-1, -1, -1};
+    {
+        game::Weapon& w = pc.weapon(); w.ammo = w.magSize; run(0.5f);
+        for (int i = 0; i < 240; ++i) {
+            platform::InputFrame f; f.down[(int)platform::Button::Fire] = true; if (i == 0) f.pressed[(int)platform::Button::Fire] = true;
+            step(f);
+            const int st = world_.hudState().weaponChargeState;
+            if (st >= 2 && glow[st - 2] < 0) glow[st - 2] = world_.hudState().weaponChargeGlow;
+        }
+        step(idle); run(3.0f);   // the full-charge shot empties the clip: let the auto-reload (2.5 s) finish
+    }
+    LOG_INFO("CHARGE presentation: tap fizzle +%u, tap state changes +%u, glow by level %.3f / %.3f / %.3f", fz1 - fz0, sr1 - sr0, glow[0], glow[1], glow[2]);
+    check(fz1 - fz0 == 1 && sr1 - sr0 == 2 && std::fabs(glow[0] - 1.0f / 3.0f) < 1e-4f && std::fabs(glow[1] - 2.0f / 3.0f) < 1e-4f && std::fabs(glow[2] - 1.0f) < 1e-4f,
+          "presentation: tap = 1 fizzle (event 22) and 2 state changes (0->1->0); MaterialGlowAmount 1/3, 2/3, 1 by level");
+    Shot a = hold(1.0f), b = hold(2.5f), c = hold(4.0f);
+    check(a.level == 1 && b.level == 2 && c.level == 3, "HudState weaponChargeShotLevel = 1 / 2 / 3 for the released shots");
     check(!t.fired && t.ammoUsed == 0 && t.hudEnd == "CHARGING", "tap (0.3 s, state 1): no shot, no ammo; HUD CHARGING");
     check(a.fired && std::fabs(a.speed - 80.0f) < 1.0f && a.damage == 115.0f && a.ammoUsed == 25 && a.hudEnd == "READY" && a.tpl.find("_Sm_") != std::string::npos,
           "1.0 s: Charge1 80 m/s, 115 dmg, 25 ammo, small trail, HUD READY");
@@ -4308,6 +4348,80 @@ void Application::runDropTest() {
                          id, (i - touch) * dt, h, pc.velocity().y, vyBefore, vs.contacts, vs.pitch * 57.29578f);
             if (touch >= 0 && i - touch > 90) break;
         }
+    }
+}
+
+// WFC_RISERTEST: find a real kerb / step on the map (flat floor, a 0.18-0.32 m rise within 0.6 m, flat on top, clear run-up and
+// run-out), drive each hover vehicle straight across it at hover speed and report the peak pitch and the settle.
+// RE pass 4 A4 addendum (6bb8855) estimates for a 0.25 m riser at 1500 UU/s: car 2.6-2.8 deg, truck ~2 deg (HIGH).
+void Application::runRiserTest() {
+    const float dt = 1.0f / 60.0f;
+    game::PlayerController& ctl = world_.player().controller();
+    const game::CollisionWorld* cw = world_.collision();
+    if (!cw) return;
+    auto floorAt = [&](float x, float z, float yRef, float& gy) { core::Vec3 n; return cw->groundHeight(x, z, yRef + 1.0f, 2.0f, gy, n) && n.y > 0.98f; };
+    // Scan: start S on flat floor; along dir d, flat for 12 m, then a rise of 0.18-0.32 m within 0.6 m, then flat for 8 m.
+    core::Vec3 S{0, 0, 0}; float yaw = 0.0f, rise = 0.0f, edgeAt = 0.0f; bool found = false;
+    const core::Vec3 b0 = cw->boundsMin(), b1 = cw->boundsMax();
+    const float y0 = world_.player().pawn().position().y;
+    for (float x = b0.x + 10.0f; x < b1.x - 10.0f && !found; x += 1.5f)
+        for (float z = b0.z + 10.0f; z < b1.z - 10.0f && !found; z += 1.5f) {
+            float g0; if (!floorAt(x, z, y0, g0)) continue;
+            for (int k = 0; k < 8 && !found; ++k) {
+                const float yw = k * 0.785398f; const core::Vec3 d = core::forwardFromYawPitch(yw, 0.0f);
+                bool flat = true; float prev = g0, edge = -1.0f, top = 0.0f;
+                for (float t = 0.5f; t <= (edge > 0.0f ? edge + 6.0f : 20.0f); t += 0.25f) {
+                    float g; const core::Vec3 q{x + d.x * t, 0, z + d.z * t};
+                    if (!floorAt(q.x, q.z, prev + 0.5f, g)) { flat = false; break; }
+                    const float dh = g - prev;
+                    if (edge < 0.0f) {
+                        if (std::fabs(dh) < 0.03f) { prev = g; continue; }
+                        if (t >= 8.0f && dh > 0.12f && dh < 0.40f && std::fabs(prev - g0) < 0.04f) { edge = t; top = g; rise = g - g0; prev = g; continue; }
+                        flat = false; break;
+                    } else if (std::fabs(g - top) > 0.04f) { flat = false; break; }
+                    prev = g;
+                }
+                float tz; core::Vec3 tn;
+                if (flat && edge > 0.0f && std::fabs(rise - (top - g0)) < 0.05f &&
+                    !cw->segmentHit(core::Vec3{x, g0 + 1.0f, z}, core::Vec3{x + d.x * 20.0f, g0 + 1.0f, z + d.z * 20.0f}, tz, tn)) {   // clear at hull height
+                    S = core::Vec3{x, g0 + 0.1f, z}; yaw = yw; found = true; edgeAt = edge;
+                    LOG_INFO("RISER found: start (%.1f %.1f %.1f) yaw %.2f, step of %.3f m at %.1f m", x, g0, z, yw, rise, edge);
+                }
+            }
+        }
+    if (!found) { LOG_INFO("RISER no suitable step found on this map"); return; }
+    platform::InputFrame idle, tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    for (const char* id : {"Car2", "Truck3", "Tank3"}) {
+        world_.applyChassisToLocalPawn(id);
+        world_.applyLoadout(nullptr);
+        game::Character& pc = world_.player().pawn();
+        auto& vs = pc.vehicleState();
+        pc.setPosition(S);
+        { const game::VehicleParams& V = pc.vehicleParams(); LOG_INFO("RISER %s params: mass %.0f inertia %.0f / %.0f / %.0f kg m2, probe radius %.2f m, k %.0f d %.0f rest %.2f m, COM fwd %.2f up %.2f", id, V.mass, V.inertiaX, V.inertiaY, V.inertiaZ, V.suspMountRadius, V.suspStiffness, V.suspDamping, V.suspRest, V.comFwd, V.comUp); } pc.velocity() = {0, 0, 0}; pc.setYaw(yaw); ctl.setCameraYaw(yaw);
+        if (pc.form() != game::Form::Vehicle) step(tf);
+        for (int i = 0; i < 240; ++i) { ctl.setCameraYaw(yaw); step(idle); }
+        pc.setPosition(S); pc.velocity() = {0, 0, 0}; pc.setYaw(yaw); vs.pitch = vs.roll = 0.0f; vs.angVel = {0, 0, 0};
+        for (int i = 0; i < 120; ++i) { ctl.setCameraYaw(yaw); step(idle); }
+        float maxUp = 0.0f, maxDown = 0.0f, settle = -1.0f, tCross = -1.0f, speed = 0.0f;
+        const core::Vec3 d = core::forwardFromYawPitch(yaw, 0.0f);
+        platform::InputFrame fwd; fwd.down[(int)platform::Button::Forward] = true;
+        for (int i = 0; i < 300; ++i) {
+            ctl.setCameraYaw(yaw);
+            step(core::dot(pc.position() - S, d) < edgeAt + 3.0f ? fwd : idle);   // full hover speed through the step
+            const float along = core::dot(pc.position() - S, d);
+            if (tCross < 0.0f && along > edgeAt - 1.2f) { tCross = i * dt; speed = core::length(core::Vec3{pc.velocity().x, 0, pc.velocity().z}); }
+            const float pdeg = vs.pitch * 57.29578f;    // + = nose up (the VEHPHYS jump convention)
+            static const bool rt = std::getenv("WFC_RISERTRACE") != nullptr;
+            if (rt && std::string(id) == "Car2" && along > edgeAt - 2.0f && along < edgeAt + 3.5f)
+                LOG_INFO("RISERTRACE along %+.2f pitch %+.2f deg w.y %+.1f deg/s L %.3f %.3f %.3f %.3f contacts %d vy %+.2f", along - edgeAt, pdeg, vs.angVel.y * 57.3f, vs.spLen[0], vs.spLen[1], vs.spLen[2], vs.spLen[3], vs.contacts, pc.velocity().y);
+            if (tCross >= 0.0f) {
+                maxUp = std::max(maxUp, pdeg); maxDown = std::min(maxDown, pdeg);
+                if (settle < 0.0f && i * dt > tCross + 0.3f && std::fabs(pdeg) < 0.1f) settle = i * dt - tCross;
+            }
+        }
+        LOG_INFO("RISER %s: crossing at %.1f m/s, peak nose-up %.2f deg, nose-down %.2f deg, |pitch| < 0.1 deg %.2f s after reaching the step",
+                 id, speed, maxUp, maxDown, settle);
     }
 }
 
