@@ -381,6 +381,19 @@ struct HasQaApi<W, std::void_t<decltype(std::declval<const W&>().qaWeaponIds(fal
                                decltype(std::declval<W&>().qaRespawn()), decltype(std::declval<W&>().qaTeleportToStart(0)),
                                decltype(std::declval<W&>().qaSetNoclip(true)), decltype(std::declval<W&>().qaSetGodMode(true)),
                                decltype(std::declval<const W&>().qaStatus())>> : std::true_type {};
+// Gameplay agents/gameplay 010c926: World::qaCharacterChoices() (the four class presets, customSlot = class name) /
+// qaSetCharacter(sel) (preload, Match::selectCharacter, QA suicide -> normal respawn); WFC_QA-gated there. Detected.
+template <class W, class = void> struct HasQaSwap : std::false_type {};
+template <class W>
+struct HasQaSwap<W, std::void_t<decltype(std::declval<const W&>().qaCharacterChoices()),
+                                decltype(std::declval<W&>().qaSetCharacter(std::declval<const game::CharacterSelection&>()))>> : std::true_type {};
+template <class W> std::string qaSwap(W& w, const std::string& name) {
+    if constexpr (HasQaSwap<W>::value) {
+        for (const auto& c : w.qaCharacterChoices())
+            if (c.customSlot == name) { w.qaSetCharacter(c); return "Swapping to " + name + " (respawns)."; }
+        return "No class preset named '" + name + "' (custom slots: use Choose Character).";
+    } else { (void)w; (void)name; return "Gameplay QA character swap not in this build"; }
+}
 template <class W> std::vector<std::string> qaWeapons(const W& w) {
     if constexpr (HasQaApi<W>::value) return w.qaWeaponIds(false); else { (void)w; return {}; }
 }
@@ -468,9 +481,11 @@ void Application::qaTick(const platform::InputFrame& in) {
             weaponPending = false;
         }
         using K = platform::QaRequest::Kind;
-        if (r.kind == K::Respawn || r.kind == K::NextStart || r.kind == K::Noclip || r.kind == K::God || r.kind == K::Dummy) {
+        if (r.kind == K::Respawn || r.kind == K::NextStart || r.kind == K::Noclip || r.kind == K::God || r.kind == K::Dummy ||
+            r.kind == K::SwapCharacter) {
             if (!inGame) { qa_->setStatus("In-match tools need a running match."); return; }
             if (r.kind == K::Dummy) { world_.addMatchOpponent("QA Dummy", true /* drawn: visible */); qa_->setStatus("Spawned a dummy opponent."); }
+            else if (r.kind == K::SwapCharacter) qa_->setStatus(qaSwap(world_, r.character));
             else qa_->setStatus(qaTool(world_, r.kind, std::string(), startIndex));
             frontend::FlowTrace::emit("qa.tool", {{"kind", std::to_string((int)r.kind)}, {"provenance", "DEBUG ONLY"}});
             return;

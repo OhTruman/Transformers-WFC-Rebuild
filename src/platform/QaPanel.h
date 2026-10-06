@@ -11,7 +11,7 @@
 namespace platform {
 
 struct QaRequest {
-    enum class Kind { None, Launch, Restart, Title, Respawn, NextStart, Noclip, God, Dummy } kind = Kind::None;
+    enum class Kind { None, Launch, Restart, Title, Respawn, NextStart, Noclip, God, Dummy, SwapCharacter } kind = Kind::None;
     int mapId = -1;
     std::string mode, character, weapon;
 };
