@@ -63,7 +63,7 @@ class MatCompiler:
     # override, leaving each expression's authored value.
     RUNTIME_PARAMS = ('Cust_Color_A', 'Cust_COLOR_B', 'EnergonColor')
 
-    def __init__(self, repo, inst_path, texture_resolver, runtime_params=False):
+    def __init__(self, repo, inst_path, texture_resolver, runtime_params=False, extra_runtime=()):
         self.R = repo
         self.inst = inst_path
         self.texres = texture_resolver
@@ -75,6 +75,8 @@ class MatCompiler:
         self.uses = set()
         self.notes = []
         self.runtime_params = runtime_params
+        # M70: further parameter names set per draw at runtime (weapon MaterialParameterModifiers, e.g. 'Overheat')
+        self.extra_runtime = set(extra_runtime or ())
         self.rt_used = {}
         self.params_read = {'Scalar': set(), 'Vector': set(), 'Texture': set()}   # vs compiled permutation                # name -> MIC-level authored value (or None = per-expression default)
         # resolve instance chain -> master + params
@@ -190,7 +192,7 @@ class MatCompiler:
         nm = n.get('ParameterName')
         self.params_read['Scalar'].add(nm)
         v = self.scalars.get(nm, n.get('DefaultValue', 0.0))
-        if self.runtime_params == 'all' and nm:
+        if nm and (self.runtime_params == 'all' or nm in self.extra_runtime):
             # Canvas / MID: every parameter settable per draw (unset = the authored value)
             u = rt_ident(nm)
             self.rt_used[u] = None
@@ -202,7 +204,7 @@ class MatCompiler:
         self.params_read['Vector'].add(nm)
         v = self.vectors.get(nm, n.get('DefaultValue') or [0, 0, 0, 1])
         authored = 'vec4(%s)' % ', '.join(glf(x) for x in v)
-        if self.runtime_params == 'all' and nm:
+        if nm and (self.runtime_params == 'all' or nm in self.extra_runtime):
             u = rt_ident(nm)
             self.rt_used[u] = None
             code = '(uRTSet_%s != 0 ? uRT_%s : %s)' % (u, u, authored)

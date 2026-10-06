@@ -84,6 +84,11 @@ public:
     // Call when a mesh that will be drawn later is loaded (e.g. a character's vehicle form at spawn), so its first
     // visible frame does not pay for them (first R->V transform: 59 ms program + 51 ms textures in one frame).
     virtual void prewarmDynamicMesh(const MeshData& mesh) { (void)mesh; }
+    // M70: a material parameter on the CURRENT draw owner's (setDrawOwner) dynamic meshes, e.g. the held weapon's
+    // TnWeaponMesh.SetMaterialParameter (Plasma Cannon charge glow: "Overheat" = MaterialGlowAmount). Applies to every
+    // later dynamic draw of that owner whose material exposes the name, until cleared. Scalars use rgba[0].
+    virtual void setDrawMaterialParam(const std::string& name, const float rgba[4]) { (void)name; (void)rgba; }
+    virtual void clearDrawMaterialParam(const std::string& name) { (void)name; }
 
     // Original-data rendering (WFC shader path): load the map's compiled materials, baked
     // directional lightmaps, static lights and height fog produced by tools/render/*.py.
