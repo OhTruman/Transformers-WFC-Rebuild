@@ -57,6 +57,7 @@ static bool spawnProf() { static const bool on = std::getenv("WFC_SPAWNPROF") !=
 static double profNowMs() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 
 void World::load(render::IRenderer& renderer) {
+    Character::clearRigCache();   // rigs point at models of the previous load
     repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
     heldWeaponMuzzleHook = [this](core::Vec3& out) { return heldWeaponMuzzleImpl(out); };
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {

@@ -46,6 +46,7 @@ struct SkinnedModel {
     // Skinned mesh, in mesh-local space (one combined primitive set).
     std::vector<float> positions;    // 3/vertex
     std::vector<float> normals;      // 3/vertex
+    std::vector<float> tangents;     // 4/vertex (glTF TANGENT xyz + bitangent sign w); empty when the export carries none
     std::vector<float> uv;           // 2/vertex
     std::vector<uint16_t> joints;    // 4/vertex (indices into skinJoints)
     std::vector<float> weights;      // 4/vertex

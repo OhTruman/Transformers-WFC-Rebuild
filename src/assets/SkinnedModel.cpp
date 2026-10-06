@@ -202,6 +202,7 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
         if (nodes[i].has("mesh") && nodes[i].has("skin")) { meshIdx = nodes[i]["mesh"].asInt(0); break; }
     const Json& prims = meshes[(size_t)meshIdx]["primitives"];
     bool bInit = false;
+    bool anyTangent = false;
     for (size_t pi = 0; pi < prims.size(); ++pi) {
         const Json& pr = prims[pi];
         const Json& at = pr["attributes"];
@@ -209,6 +210,8 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
         if (posA < 0) continue;
         std::vector<float> pos = doc.floats(posA);
         std::vector<float> nrm = at.has("NORMAL") ? doc.floats(at["NORMAL"].asInt(-1)) : std::vector<float>();
+        std::vector<float> tan = at.has("TANGENT") ? doc.floats(at["TANGENT"].asInt(-1)) : std::vector<float>();
+        anyTangent = anyTangent || !tan.empty();
         std::vector<float> uvv = at.has("TEXCOORD_0") ? doc.floats(at["TEXCOORD_0"].asInt(-1)) : std::vector<float>();
         std::vector<uint16_t> jnt = at.has("JOINTS_0") ? doc.joints(at["JOINTS_0"].asInt(-1)) : std::vector<uint16_t>();
         std::vector<float> wgt = at.has("WEIGHTS_0") ? doc.floats(at["WEIGHTS_0"].asInt(-1), true) : std::vector<float>();
@@ -220,6 +223,7 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
         for (size_t i = 0; i < vc; ++i) {
             m.positions.push_back(pos[i * 3]); m.positions.push_back(pos[i * 3 + 1]); m.positions.push_back(pos[i * 3 + 2]);
             for (int c = 0; c < 3; ++c) m.normals.push_back(i * 3 + c < nrm.size() ? nrm[i * 3 + c] : 0.0f);
+            for (int c = 0; c < 4; ++c) m.tangents.push_back(i * 4 + c < tan.size() ? tan[i * 4 + c] : (c == 0 || c == 3 ? 1.0f : 0.0f));
             m.uv.push_back(i * 2 < uvv.size() ? uvv[i * 2] : 0.0f);
             m.uv.push_back(i * 2 + 1 < uvv.size() ? uvv[i * 2 + 1] : 0.0f);
             for (int c = 0; c < 4; ++c) m.joints.push_back(i * 4 + c < jnt.size() ? jnt[i * 4 + c] : 0);
@@ -237,6 +241,7 @@ bool loadSkinnedGlb(const std::string& path, SkinnedModel& m) {
         m.subs.push_back(sm);
     }
 
+    if (!anyTangent) m.tangents.clear();
     // Materials: base-colour texture URI (resolved vs the glb dir) + tint factor.
     {
         std::string dir;
@@ -591,6 +596,12 @@ void poseGlobals(const SkinnedModel& model, const LocalPose& pose, std::vector<c
     }
 }
 
+// render::MeshData::tangents (agents/rendering): compile-time detected, so this builds with or without the renderer change.
+namespace {
+template <class M> auto meshTangents(M& m, int) -> decltype(&m.tangents) { return &m.tangents; }
+template <class M> std::vector<float>* meshTangents(M&, long) { return nullptr; }
+}
+
 void skinPose(const SkinnedModel& model, const LocalPose& pose,
               std::vector<core::Mat4>& global, render::MeshData& out) {
     poseGlobals(model, pose, global);
@@ -610,6 +621,10 @@ void skinPose(const SkinnedModel& model, const LocalPose& pose,
     out.uv = model.uv;   // UVs are pose-invariant
     out.subs = model.subs;
     out.mats = model.mats;                                      // picks up resolved texture handles
+    // Bind-pose tangents skinned like the normals (no translation, renormalised; w = the bind bitangent sign), so the renderer
+    // does not re-derive them from the posed triangles every frame (Rendering: about half the per-character draw cost).
+    std::vector<float>* outTan = model.tangents.size() == vc * 4 ? meshTangents(out, 0) : nullptr;
+    if (outTan) outTan->resize(vc * 4);
     for (size_t i = 0; i < vc; ++i) {
         core::Vec3 p{model.positions[i * 3], model.positions[i * 3 + 1], model.positions[i * 3 + 2]};
         core::Vec3 n{model.normals[i * 3], model.normals[i * 3 + 1], model.normals[i * 3 + 2]};
@@ -626,6 +641,18 @@ void skinPose(const SkinnedModel& model, const LocalPose& pose,
         out.positions[i * 3] = sp.x; out.positions[i * 3 + 1] = sp.y; out.positions[i * 3 + 2] = sp.z;
         core::Vec3 nn2 = core::normalize(sn);
         out.normals[i * 3] = nn2.x; out.normals[i * 3 + 1] = nn2.y; out.normals[i * 3 + 2] = nn2.z;
+        if (outTan) {
+            const core::Vec3 t{model.tangents[i * 4], model.tangents[i * 4 + 1], model.tangents[i * 4 + 2]};
+            core::Vec3 st{0, 0, 0};
+            for (int w = 0; w < 4; ++w) {
+                const float wt = model.weights[i * 4 + w];
+                const uint16_t ji = model.joints[i * 4 + w];
+                if (wt > 0 && ji < jm.size()) st += core::transformDir(jm[ji], t) * wt;
+            }
+            const core::Vec3 tn = core::normalize(st);
+            float* o = &(*outTan)[i * 4];
+            o[0] = tn.x; o[1] = tn.y; o[2] = tn.z; o[3] = model.tangents[i * 4 + 3];
+        }
     }
 }
 

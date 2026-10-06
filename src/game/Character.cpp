@@ -1,4 +1,6 @@
 #include "game/Character.h"
+#include <memory>
+#include <map>
 #include "assets/SkinnedModel.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -73,7 +75,18 @@ void Character::beginTransform() {
 
 // Robot rig: the 9-pose Shooting_Aim grid (we use the F column: the body always faces the aim
 // yaw, so only pitch varies), the upper-body mask, and the clips the layers use.
+namespace { std::map<const assets::SkinnedModel*, std::shared_ptr<void>>& rigCache() { static std::map<const assets::SkinnedModel*, std::shared_ptr<void>> c; return c; } }
+void Character::clearRigCache() { rigCache().clear(); }
+
 void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
+    handBone_ = mdl.nodeByName("R_Arm04_Hand_XB");          // HandSkelControl bone (Robot_ANIMTREE)
+    auto& cache = rigCache();
+    if (auto it = cache.find(&mdl); it != cache.end()) { robotRig_ = *static_cast<const RobotRig*>(it->second.get()); return; }
+    buildRobotRigUncached(mdl);
+    cache[&mdl] = std::make_shared<RobotRig>(robotRig_);
+}
+
+void Character::buildRobotRigUncached(const assets::SkinnedModel& mdl) {
     RobotRig& R = robotRig_;
     R.built = true;
     R.upperMask = assets::subtreeMask(mdl, mdl.nodeByName("C_Spine01_Lumbar01_XB"));
@@ -89,7 +102,6 @@ void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
     R.land3Clip = mdl.clipByName("Nav_Land_03");
 
     R.rootRef = mdl.nodeByName("C_Root_Reference_XR");
-    handBone_ = mdl.nodeByName("R_Arm04_Hand_XB");          // HandSkelControl bone (Robot_ANIMTREE)
     R.spine = mdl.nodeByName("C_Spine02_Lumbar02_XB");      // SpineRecoil bone (Robot_ANIMTREE)
     R.rightArm = mdl.nodeByName("R_Arm02_Shoulder_XB");     // RightHandRecoil bone (Robot_ANIMTREE)
     // Turn-in-place transitions [CONF Robot_ANIMTREE TnWeaponAnimChooser, WS_ONE_HANDED]:
@@ -779,6 +791,10 @@ core::Vec3 Character::renderOffset() const {
     return d * (1.0f - renderAlpha_);
 }
 
+// render::MeshData::tangents (agents/rendering), when present: carried with the pose.
+template <class M> static auto copyTangents(M& dst, const M& src, int) -> decltype(dst.tangents = src.tangents, void()) { dst.tangents = src.tangents; }
+template <class M> static void copyTangents(M&, const M&, long) {}
+
 // The skinned pose between the previous and the current step (mesh-local vertices; the same layout only - a model swap
 // this step, e.g. the transformation's form swap, draws the current pose).
 const render::MeshData& Character::blendedPose(const render::MeshData& cur, const std::vector<float>& prevP, const std::vector<float>& prevN,
@@ -796,6 +812,7 @@ const render::MeshData& Character::blendedPose(const render::MeshData& cur, cons
         scratch.normals.resize(cur.normals.size());
         for (size_t i = 0; i < cur.normals.size(); ++i) scratch.normals[i] = prevN[i] + (cur.normals[i] - prevN[i]) * a;
     } else scratch.normals = cur.normals;
+    copyTangents(scratch, cur, 0);
     return scratch;
 }
 

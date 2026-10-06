@@ -423,6 +423,21 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
                 ++b.grenades;
             }
         }
+        // Abilities (PC ADAPTATION: when to use them; the effects are the original ones):
+        //  Dodge - just hit while fighting; Cloaking - closing on a far enemy unseen, or escaping at low health;
+        //  Hover - an enemy at Medium / Far range (TnBuffIncreaseDamageDuringHover); Whirlwind - an enemy within Striking range.
+        {
+            const Character* tp = visible ? participantPawn(b.target) : nullptr;
+            const float d = tp ? core::length(tp->position() - pc.position()) : 1e9f;
+            const float hpFrac = pc.health().max > 0.0f ? pc.health().current / pc.health().max : 1.0f;
+            static const float kUse[3] = {0.25f, 0.45f, 0.7f};
+            const float use = kUse[std::clamp(b.difficulty, 0, 2)];
+            if (visible && now - b.lastDamageTime < 0.5f && b.frand() < use) botTryAbility(o, b, "Dodge");
+            if (((b.goal.kind == BotGoalKind::Attack && !visible && hdist(b.goal.pos, pc.position()) > 25.0f) || (visible && hpFrac < 0.3f)) && b.frand() < use * 0.5f)
+                botTryAbility(o, b, "Cloaking");
+            if (visible && d > 15.0f && d < 50.0f && pc.onGround() && b.frand() < use * 0.3f) botTryAbility(o, b, "Hover");
+            if (visible && d <= aiRangeMaxM(AiRange::Striking) && b.frand() < use) botTryAbility(o, b, "Whirlwind");
+        }
         // Melee rush (PC ADAPTATION): an enemy within 20 m (the melee-assist pick range), now and then by skill or when out of ammo
         // (melee cannot start mid-reload).
         if (visible && std::getenv("WFC_BOTDIST")) if (const Character* tp = participantPawn(b.target)) { static int h[8] = {}; static int n = 0; h[(int)aiRangeBand(core::length(tp->position() - pc.position()))]++; if (++n % 400 == 0) LOG_INFO("BOTDIST bands touch %d striking %d close %d medium %d far %d retreated %d out %d", h[1], h[2], h[3], h[4], h[5], h[6], h[7]); }
@@ -437,6 +452,29 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
         Weapon& cw = pc.weapon();
         if (!visible && cw.ammo < cw.magSize / 2 && cw.canReload()) { cw.beginReload(); ++b.reloads; }
     }
+}
+
+// TnAbilityManager.TriggerAbility for a bot (the PlayerController rules): robot form, not transforming / reloading / dodging,
+// not ability-jammed, past the slot's spam guard and cooldown. Pawn-level abilities only: Dodge, Cloaking, Hover (intent / pawn
+// state) and Whirlwind (the shared melee path). Warcry / Barrier / Shockwave / SpawnSentry / ... run in World's local-player effect
+// code and are not used by bots yet [PARTIAL].
+bool World::botTryAbility(MatchOpponent& o, BotBrain& b, const char* id) {
+    Character& pc = o.pawn();
+    if (pc.moveForm() != Form::Robot || pc.isTransforming() || pc.weapon().reloading() || pc.isDodging() || pc.jammedRemain_ > 0.0f) return false;
+    for (Character::AbilitySlot& a : pc.abilities_) {
+        if (a.id != id || !a.implemented || a.spam > 0.0f || a.cooldown > 0.0f || a.pendingCooldown) continue;
+        if (a.id == "Whirlwind") {
+            if (pc.isMeleeing()) return false;
+            startMeleeFor(pc, o.matchPlayer(), true, b.yaw);
+            if (!pc.isMeleeing()) return false;
+        } else if (a.id == "Dodge") b.pendingDodge = b.frand() < 0.5f ? 1 : 2;
+        else if (a.id == "Cloaking") pc.cloakRemain_ = 20.0f;                     // AddBuff(TnBuffCloak)
+        else if (a.id == "Hover") { b.pendingHover = true; pc.hoverRequested_ = true; }
+        else return false;
+        a.spam = 1.0f; a.pendingCooldown = true; ++b.abilities;
+        return true;
+    }
+    return false;
 }
 
 void World::botPathFailed(BotBrain& b, bool vehicle) {
@@ -552,6 +590,8 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
     in.moveRight = core::dot(moveDir, R);
     in.viewPitch = b.pitch;
     in.wantJump = jump && !vehicle;
+    if (b.pendingDodge) { in.dodgeDir = b.pendingDodge; b.pendingDodge = 0; }
+    if (b.pendingHover) { in.hoverRequest = true; b.pendingHover = false; }
     if (vehicle) { in.steer = core::clampf(wrapPi(in.faceYaw - pc.yaw()) * 1.5f, -1.0f, 1.0f); }
 }
 
@@ -672,11 +712,11 @@ void World::tickBots(float dt) {
         if (!b.wasSpawned) {   // a fresh spawn: reset the brain (the pawn faces the start's yaw)
             const int keepPlayer = b.player, keepDiff = b.difficulty; const unsigned keepRng = b.rng;
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
-            const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals;
+            const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities;
             b = BotBrain{};
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
-            b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he;
+            b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab;
             b.wasSpawned = true; b.yaw = pc.yaw();
         }
         b.life += dt;
@@ -706,6 +746,7 @@ void World::tickBots(float dt) {
             b.transformCooldown = 2.0f;
         }
         b.meleeCooldown -= dt; b.grenadeCooldown -= dt;
+        pc.tickAbilities(dt);
         tickMeleeFor(pc, b.player, dt);
         if (b.grenadeDelay >= 0.0f && (b.grenadeDelay -= dt) < 0.0f && pc.moveForm() == Form::Robot)
             for (Weapon& w : pc.inventoryMutable()) if (w.grenade()) { releaseGrenade(pc, b.player, w, b.grenadeTarget); break; }
