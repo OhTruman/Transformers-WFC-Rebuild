@@ -57,6 +57,10 @@ public:
     // Loads a level's audio: the manifest file `audioJsonPath` (may be missing) merged with the compiled-in Systems
     // manifest of `level` (default: the file's "map"). Any previously loaded level is unloaded first. Returns false
     // if neither exists.
+    // Warm the level's eager waves (the same manifests load() reads: the map's own, the compiled-in one, the shared match
+    // bank when it has an announcer) on a worker for a later load() of `levelName` (SoundCues::warmCueWaves).
+    static int warmLevel(const std::string& audioJsonPath, const std::string& contentRoot, SoundCues& cues,
+                         const std::string& levelName);
     bool load(const std::string& audioJsonPath, const std::string& contentRoot, SoundCues& cues, audio::IAudio* a,
               const std::string& level = std::string());
     // Map unload: stops and forgets everything the map owns (bed, zones, pools, map cues + samples, presets).

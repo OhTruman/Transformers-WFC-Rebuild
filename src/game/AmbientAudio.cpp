@@ -1,4 +1,5 @@
 #include "game/AmbientAudio.h"
+#include <chrono>
 #include "game/SoundCues.h"
 #include "assets/Json.h"
 #include "core/Log.h"
@@ -89,10 +90,35 @@ bool AmbientAudio::levelMusicTrack(const std::string& level, MusicTrack& out) {
     return false;
 }
 
+int AmbientAudio::warmLevel(const std::string& path, const std::string& contentRoot, SoundCues& cues, const std::string& levelName) {
+    assets::Json root, sys;
+    {
+        std::ifstream f(path, std::ios::binary);
+        if (f) { std::stringstream ss; ss << f.rdbuf(); assets::Json::parse(ss.str(), root); }
+    }
+    if (const char* sj = manifestFor(levelName)) assets::Json::parse(std::string(sj), sys);
+    int n = cues.warmCueWaves(root["cues"], contentRoot, levelName) + cues.warmCueWaves(sys["cues"], contentRoot, levelName);
+    const assets::Json& an = root.has("announcer") ? root["announcer"] : sys["announcer"];
+    if (an.has("event_set"))
+        if (const char* mj = manifestFor("__match_messages__")) {
+            assets::Json shared;
+            if (assets::Json::parse(std::string(mj), shared)) n += cues.warmCueWaves(shared["cues"], contentRoot, levelName);
+        }
+    return n;
+}
+
 bool AmbientAudio::load(const std::string& path, const std::string& contentRoot, SoundCues& cues, audio::IAudio* a,
                         const std::string& levelName) {
     unload(cues);                                        // a previous level's bed, zones, pools, script, cues, presets
     audio_ = a;
+    static const bool timeLog = std::getenv("WFC_AUDIOTIME") != nullptr;   // phase timing (frontend frame budget)
+    auto tp = std::chrono::steady_clock::now();
+    auto phase = [&](const char* what) {
+        if (!timeLog) return;
+        const auto n = std::chrono::steady_clock::now();
+        LOG_INFO("AUDIOTIME level %s: %s %.2f ms", levelName.c_str(), what, std::chrono::duration<double, std::milli>(n - tp).count());
+        tp = n;
+    };
     assets::Json root;                                   // the AssetTools map manifest (optional)
     bool haveFile = false;
     {
@@ -108,6 +134,7 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
     const char* sj = manifestFor(name);
     const bool haveSys = sj && assets::Json::parse(std::string(sj), sys);
     if (!haveFile && !haveSys) { LOG_WARN("ambient: no audio manifest for %s (%s)", name.c_str(), path.c_str()); return false; }
+    phase("manifests read + parsed");
     // Sound banks. Concurrency: each cue asset's MaxConcurrentPlayCount / InstanceLimiting from the level's cue_limits
     // (the AssetTools bank entries do not carry them), else Engine.Default__SoundCue.
     assets::Json bank = root["cues"];
@@ -117,6 +144,7 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
             if (!kv.second.has(k) && lim.has(k)) kv.second.obj[k] = lim[k];
     }
     int nc = cues.addCues(bank, contentRoot) + cues.addCues(sys["cues"], contentRoot);
+    phase("level cues added (waves loaded)");
     // A multiplayer map's announcer (TnWorldInfo.AnnouncerSoundEventSet): the set and the match cues (dialogue + mode
     // music, streamed) are shared by every map (the "__match_messages__" manifest) and owned by the level while loaded.
     const assets::Json& an = root.has("announcer") ? root["announcer"] : sys["announcer"];
@@ -129,6 +157,7 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
     }
     for (const auto& kv : an["events"].obj) announcer_[kv.first] = kv.second.asString();
     int np = addReverbPresets(root["reverb_presets"], cues.mixer()) + addReverbPresets(sys["reverb_presets"], cues.mixer());
+    phase("announcer + presets");
 
     // Emitters.
     const char* kinds[3] = {"point", "volume", "line"};
@@ -198,6 +227,7 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
     sceneActive_.assign(zones_.size(), 0);
     touching_.assign(zones_.size(), 0);
     level_ = name;
+    phase("emitters + zones + Kismet");
     LOG_INFO("ambient: %s: %d level cues, %d reverb presets, %zu emitters, %zu zones, %d pools, %d Kismet audio ops / %d links "
              "(manifests: %s%s)", name.c_str(), nc, np, emitters_.size(), (size_t)zoneCount(), poolCount(), ns, script_.linkCount(),
              haveFile ? "AssetTools " : "", haveSys ? "Systems" : "");

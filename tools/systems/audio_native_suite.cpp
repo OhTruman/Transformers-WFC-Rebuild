@@ -2139,10 +2139,44 @@ static void testAbilityAudio() {
     CHECK(aa.liveLoops(cues) == 0 && active("BL_INTRFC_TECH_TREE.CLOAK_DECEPTICON_START_LP") == 0, "stopAll: every buff loop stops");
 }
 
+// Level-start warming (Frontend: the title's level start decoded ~55 ms of waves on the menu's first frame).
+static void testLevelWarm() {
+    std::printf("[level-start warming]\n");
+    IAudio* a = createAudio();
+    if (!a || !a->reportsVoices()) { std::printf("  SKIP backend: no audio device\n"); return; }
+    {
+        game::SoundCues cues; cues.load(a, kRoot + "/../content/");
+        game::LevelAudioHost host(cues);
+        host.attach(a, kRoot);
+        const size_t base = a->residentBytes();
+        auto ms = [](auto t0) { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(); };
+        auto p0 = std::chrono::steady_clock::now();
+        CHECK(host.prefetch("UI_FrontEnd_m"), "prefetch UI_FrontEnd_m (level waves + music)");
+        const double pre = ms(p0);
+        for (int k = 0; k < 60 && cues.warmLevels() > 0; ++k) std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        auto l0 = std::chrono::steady_clock::now();
+        CHECK(host.load("UI_FrontEnd_m"), "load UI_FrontEnd_m");
+        const double load = ms(l0);
+        CHECK(pre < 5.0 && load < 15.0, "prefetch call %.2f ms; warmed level load %.2f ms (cold ~55 ms of decode)", pre, load);
+        host.unload();
+        for (int k = 0; k < 3; ++k) { host.tick(1.0f / 30.0f, Vec3{0, 0, 0}, Vec3{0, 0, 0}); cues.tick(1.0f / 30.0f); }
+        // A prefetched level that never loads: the next level's load releases its warm samples and unpins its music.
+        host.prefetch("UI_Lobby_m");
+        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        host.load("UI_PartyLobby_m");
+        host.unload();
+        for (int k = 0; k < 3; ++k) { host.tick(1.0f / 30.0f, Vec3{0, 0, 0}, Vec3{0, 0, 0}); cues.tick(1.0f / 30.0f); }
+        CHECK(a->residentBytes() == base && cues.warmLevels() == 0, "abandoned UI_Lobby_m prefetch: nothing left resident (%.1f MB over base)",
+              (a->residentBytes() - base) / 1048576.0);
+    }
+    delete a;
+}
+
 int main() {
     for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // authored levels
     testSoundGroups();
     testAbilityAudio();
+    testLevelWarm();
     testCountdownAndGrenades();
     testWeaponAudio();
     testLocalizedWaves();

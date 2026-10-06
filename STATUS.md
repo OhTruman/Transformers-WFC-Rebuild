@@ -3,6 +3,21 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08j (2026-10-06) - level-start warming (frontend title frame), abandoned-prefetch leak
+- **Problem:** Frontend measured 43-55 ms of audio.levelStart on the title's first visible frame (boot and every return). It was the
+  title level's eager cue waves decoding synchronously (56-61 ms here; parse < 1 ms). The music decode then landed on the next frame
+  (~110 ms) when nothing had prefetched it.
+- **Fix:** `prefetchLevel` (which Frontend already calls at boot and at every travel start) now also decodes the level's eager waves on a
+  worker (`AmbientAudio::warmLevel` -> `SoundCues::warmCueWaves`). `LevelAudioHost::load` waits for that level's warm, loads (cache
+  hits), then releases other levels' unadopted warm samples. Win32Audio::load keeps one copy when a worker and the main thread decode
+  the same file.
+- **Measured** (real device, probe): UI_FrontEnd_m level start 50 -> 0.5 ms, the next tick 109 -> 0.02 ms; UI_PartyLobby_m 4.8 -> 0.3 ms;
+  prefetch call < 1 ms, loading ticks < 0.2 ms; PCM per level unchanged.
+- **Leak fixed** (since 8df544b): a prefetched level that never loaded, or that unloaded before its music played, kept its music pinned
+  (~83-140 MB). Prefetched music is now unpinned when another level loads, or when its own level unloads. Back to the 36.5 MB base.
+- Validation: suite 666 / 0 (new [level-start warming]); movie probe OK; lifecycle 40 / 0; slider probe OK; wfc_fidelity 194 / 0 / 19.
+  The 08g frontend boot -> party lobby -> title shows no audio scope in the frame hitches.
+
 ## SYSTEMS M08i (2026-10-06) - ability / buff / hover / kill-confirm / transform-failed sounds
 - New `AbilityAudio` (Systems owns the sound lifecycle; Gameplay owns abilities, buffs and their timers), data from the class defaults
   (gen_character_audio.py: `abilities`, `buffs`, `class_sounds`; 29+ cues, 0 missing). RE pass 5 s12 / s12 addendum / s13.

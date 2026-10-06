@@ -15,6 +15,8 @@
 #pragma once
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 #include "audio/Audio.h"
 #include "audio/MovieAudio.h"
 #include "core/Math.h"
@@ -139,6 +141,8 @@ private:
     }
     std::unique_ptr<audio::MovieAudioPlayer> movieAudio_;
     float movieVolumeApplied_ = -1.0f;
+    std::vector<std::pair<std::string, std::string>> prefetchedMusic_;   // (level, music cue) pinned by prefetch()
+    std::vector<std::string> levelPinnedMusic_;        // the loaded level's prefetched music (unpinned at unload)
     void applyMovieVolume() {
         if (!movieAudio_ || movieFixedVolume_) return;
         movieVolumeApplied_ = movieSfxVolume();

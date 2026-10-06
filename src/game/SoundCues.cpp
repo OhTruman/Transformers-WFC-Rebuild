@@ -332,6 +332,58 @@ bool SoundCues::prefetch(const char* cue) {
     return true;
 }
 
+int SoundCues::warmCueWaves(const assets::Json& cues, const std::string& contentRoot, const std::string& tag) {
+    if (!audio_ || !audio_->threadSafeLoad()) return 0;
+    std::vector<std::string> paths;
+    for (const auto& kv : cues.obj) {
+        if (kv.second["streamed"].asBool(false) || findCue(kv.first.c_str()) >= 0) continue;   // decoded on play / loaded
+        const assets::Json& kids = kv.second["tree"]["children"];
+        for (size_t i = 0; i < kids.size(); ++i) {
+            if (kids[i]["class"].asString() != "SoundNodeWaveEvent") continue;
+            const assets::Json& waves = kids[i]["children"];
+            for (size_t w = 0; w < waves.size(); ++w) {
+                if (!waves[w]["loc"].asString().empty()) continue;             // localized twins: resolved at load
+                std::string f = waves[w]["wav"].asString();
+                if (f.rfind("content/", 0) == 0) f = f.substr(8);
+                if (!f.empty()) paths.push_back(contentRoot + f);
+            }
+        }
+    }
+    if (paths.empty()) return 0;
+    audio::IAudio* a = audio_;
+    const int n = (int)paths.size();
+    levelWarm_.push_back({tag, paths, std::async(std::launch::async, [a, paths] { for (const std::string& p : paths) a->load(p); })});
+    return n;
+}
+
+void SoundCues::unpin(const char* cue) {
+    const int c = findCue(cue);
+    if (c >= 0 && (size_t)c < pinned_.size()) pinned_[(size_t)c] = 0;
+}
+
+void SoundCues::waitWarm(const std::string& tag) {
+    for (LevelWarm& w : levelWarm_) if (w.tag == tag && w.done.valid()) w.done.wait();
+}
+
+int SoundCues::releaseWarmExcept(const std::string& keep) {
+    int released = 0;
+    for (size_t i = 0; i < levelWarm_.size();) {
+        LevelWarm& w = levelWarm_[i];
+        if (w.done.valid()) w.done.wait();
+        if (w.tag != keep && audio_)
+            for (const std::string& p : w.paths) {
+                const audio::Sound h = audio_->load(p);                   // cached: the warmed handle, no decode
+                if (h == audio::kInvalidSound) continue;
+                bool owned = false;
+                for (size_t c = 0; c < waves_.size() && !owned; ++c)
+                    for (const auto& ev : waves_[c]) { for (audio::Sound x : ev) if (x == h) { owned = true; break; } if (owned) break; }
+                if (!owned) { audio_->release(h); ++released; }
+            }
+        levelWarm_.erase(levelWarm_.begin() + (long)i);
+    }
+    return released;
+}
+
 void SoundCues::adoptWarm(bool wait, long onlyCue) {
     for (size_t i = 0; i < warming_.size();) {
         Warm& w = warming_[i];

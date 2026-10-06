@@ -317,6 +317,8 @@ public:
         Sample smp;                                    // decode outside the lock
         if (!loadWav(path, smp.pcm, &smp.srcRate)) return kInvalidSound;
         std::lock_guard<std::mutex> lk(mx_);
+        auto again = loaded_.find(path);               // another thread (prefetch warming) decoded it meanwhile: one copy
+        if (again != loaded_.end()) return again->second;
         sounds_.push_back(std::move(smp));             // deque: existing voices' data pointers stay valid
         loaded_[path] = (Sound)(sounds_.size() - 1);
         return (Sound)(sounds_.size() - 1);
