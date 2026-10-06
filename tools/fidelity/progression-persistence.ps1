@@ -7,10 +7,11 @@
 # challenge) and the saved [Progression] section after each run:
 #   awarded       run A awards XP at all (else UNKNOWN: no kills / no award feed in this build)
 #   no_duplicates a transaction id is awarded once per run
-#   match_sum     the sum of a match's awards == its lastMatchXp
+#   match_sum     per class: progression.xp awards + progression.challenge tier XP (Prime -> all four classes) == the saved
+#                 LastMatch<class> (Frontend semantics 2026-10-06; xp=0 awards are legitimate when CanGainXp is false)
 #   saved_A       the profile after A holds XP<class> == run A's running total
 #   reload_B      the profile is NOT changed by B's boot (no loss / reset on load): B's first award total = saved A + award
-#   saved_B       the profile after B = saved A + run B's awards (per class), challenges / tiers never decrease
+#   saved_B       the profile after B = min(saved A + run B's XP incl. challenge XP, 355000) per class; tiers never decrease
 #
 #   .\tools\fidelity\progression-persistence.ps1 -Root work\ab\<target> -OutDir <dir> [-Bots 0] [-Goal 3] [-ReportOnly]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [int]$Bots = 0, [int]$Goal = 3,
@@ -53,6 +54,16 @@ $okA = RunOnce "A"; $profA = ReadProg (Join-Path $OutDir "profile_after_A.ini")
 $okB = $okA -and (RunOnce "B"); $profB = ReadProg (Join-Path $OutDir "profile_after_B.ini")
 
 function Awards([string]$tag) { $F = Read-FlowLog (Join-Path $OutDir "flow_$tag.jsonl"); return @(Flow-Ev $F "progression.xp") }
+function Challenges([string]$tag) { $F = Read-FlowLog (Join-Path $OutDir "flow_$tag.jsonl"); return @(Flow-Ev $F "progression.challenge") }
+$kCap = 355000
+# per-class XP of one run: awards by specialty + challenge XP (to the played class, or all four when Prime)
+function RunXp([string]$tag) {
+    $h = @{}; $aw = @(Awards $tag); $played = @($aw | ForEach-Object { "$($_.specialty)" } | Where-Object { $_ } | Select-Object -Unique)
+    foreach ($a in $aw) { if ($a.specialty) { $h["$($a.specialty)"] = [long]$h["$($a.specialty)"] + [long]$a.xp } }
+    foreach ($c in (Challenges $tag)) { $targets = if ("$($c.prime)" -match '^(1|true)$') { @("Scout", "Scientist", "Leader", "Soldier") } else { $played }
+        foreach ($t in $targets) { $h[$t] = [long]$h[$t] + [long]$c.xp } }
+    return $h
+}
 function MatchEnd([string]$tag) { $F = Read-FlowLog (Join-Path $OutDir "flow_$tag.jsonl"); return @(Flow-Ev $F "progression.match" | Where-Object { $_.end }) }
 if (-not $okA) { Res "run" "UNKNOWN" "run A produced no flow log (GPU busy / crash)" "Experimental" }
 else {
@@ -65,8 +76,9 @@ else {
             if ($tag -eq "A") { Res "awarded" $(if ($awarded.Count) { "PASS" } else { "UNKNOWN" }) ("run A: {0} XP awards totalling {1} ({2})" -f $awarded.Count, (($awarded | ForEach-Object { [long]$_.xp } | Measure-Object -Sum).Sum), ((@($aw | ForEach-Object { "$($_.transaction):$($_.xp)" }) | Select-Object -First 8) -join " ")) "Frontend/Gameplay" }
             $dup = @($aw | Group-Object transaction | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
             Res "no_duplicates_$tag" $(if ($dup.Count) { "FAIL" } else { "PASS" }) ("run {0}: transaction ids awarded more than once: {1}" -f $tag, $(if ($dup.Count) { $dup -join "," } else { "none" })) "Frontend"
-            if ($me.Count) { $lm = [long]$me[-1].lastMatchXp; $sum = ($aw | ForEach-Object { [long]$_.xp } | Measure-Object -Sum).Sum
-                Res "match_sum_$tag" $(if ($sum -eq $lm) { "PASS" } else { "FAIL" }) ("run {0}: sum of awards {1} vs lastMatchXp {2} (level {3}, saved {4})" -f $tag, $sum, $lm, $me[-1].level, $me[-1].saved) "Frontend" }
+            if ($me.Count) { $prof = if ($tag -eq "A") { $profA } else { $profB }; $rx = RunXp $tag
+                $badM = @($rx.Keys | Where-Object { [long]$prof["LastMatch$_"] -ne $rx[$_] })
+                Res "match_sum_$tag" $(if (-not $rx.Count) { "UNKNOWN" } elseif ($badM.Count) { "FAIL" } else { "PASS" }) ("run {0} per class (awards + challenge XP vs saved LastMatch): {1}; match end level {2}, saved {3}" -f $tag, ((@($rx.Keys | ForEach-Object { "$_ $($rx[$_]) vs $($prof["LastMatch$_"])" })) -join "; "), $me[-1].level, $me[-1].saved) "Frontend" }
             else { Res "match_sum_$tag" "UNKNOWN" "run ${tag}: no progression.match end event (match did not end?)" "Frontend/Gameplay" }
         }
         # saved after A == run A's running totals per class (the last award's 'total' per specialty)
@@ -76,11 +88,11 @@ else {
         if ($okB) {
             # reload: B's first award total per class must be saved A + that award (nothing lost or reset at load)
             $awB = @(Awards "B"); $firstB = @{}; foreach ($a in $awB) { if ($a.specialty -and -not $firstB.ContainsKey("$($a.specialty)") -and "$($a.total)" -ne "-") { $firstB["$($a.specialty)"] = $a } }
-            $badR = @($firstB.Keys | Where-Object { [long]$firstB[$_].total -ne ([long]$profA["Xp$_"] + [long]$firstB[$_].xp) })
-            Res "reload_B" $(if (-not $firstB.Count) { "UNKNOWN" } elseif ($badR.Count) { "FAIL" } else { "PASS" }) ("run B first award per class: {0} (saved A + award expected)" -f ((@($firstB.Keys | ForEach-Object { "$_ total $($firstB[$_].total) = A $($profA["Xp$_"]) + $($firstB[$_].xp)" })) -join "; ")) "Frontend"
-            $sumB = @{}; foreach ($a in $awB) { if ($a.specialty) { $sumB["$($a.specialty)"] = [long]$sumB["$($a.specialty)"] + [long]$a.xp } }
+            $badR = @($firstB.Keys | Where-Object { [long]$firstB[$_].total -ne [Math]::Min([long]$profA["Xp$_"] + [long]$firstB[$_].xp, $kCap) })
+            Res "reload_B" $(if (-not $firstB.Count) { "UNKNOWN" } elseif ($badR.Count) { "FAIL" } else { "PASS" }) ("run B first award per class: {0} (saved A + award expected)" -f ((@($firstB.Keys | ForEach-Object { "$_ total $($firstB[$_].total) = min(A $($profA["Xp$_"]) + $($firstB[$_].xp), 355000)" })) -join "; ")) "Frontend"
+            $sumB = RunXp "B"
             $classes = @(@($profA.Keys) + @($profB.Keys) | Where-Object { $_ -like "Xp*" } | ForEach-Object { $_.Substring(2) } | Select-Object -Unique)
-            $badB = @($classes | Where-Object { [long]$profB["Xp$_"] -ne ([long]$profA["Xp$_"] + [long]$sumB[$_]) })
+            $badB = @($classes | Where-Object { [long]$profB["Xp$_"] -ne [Math]::Min([long]$profA["Xp$_"] + [long]$sumB[$_], $kCap) })
             $tierDrop = @($profA.Keys | Where-Object { $_ -like "Tier.*" -and [int]$profB[$_] -lt [int]$profA[$_] })
             Res "saved_B" $(if ($badB.Count -or $tierDrop.Count) { "FAIL" } else { "PASS" }) ("profile after B per class (A + run B awards): {0}; challenge tiers that decreased: {1}" -f ((@($classes | ForEach-Object { "$_ $($profB["Xp$_"]) = $($profA["Xp$_"]) + $([long]$sumB[$_])" })) -join "; "), $(if ($tierDrop.Count) { $tierDrop -join "," } else { "none" })) "Frontend"
         }
