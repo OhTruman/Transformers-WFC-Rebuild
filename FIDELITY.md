@@ -17,6 +17,12 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONES 69-70 — CAC PREVIEW ANIMATION CACHE, WEAPON MATERIAL PARAMETERS (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| CaC class-pick freeze | Every preview body re-parsed its AnimSets (Shared_ROBO_ANIM 259 clips / 21 MB of keys) | Frontend WFC_FRAMEPROF; loadPreviewBody phase log | CONFIRMED | M69: parsed sets cached and remapped per skeleton; preparePreviewBody during the lobby load (Frontend f0277ce): pick 1393 -> 48 ms |
+| Plasma Cannon charge glow | TnWeaponMesh.SetMaterialParameter(1, glow) = MaterialParameterModifiers[1] MPT_WeaponSpecific 'Overheat' on the held weapon material | PlasmaCannon_WEPMESH cooked props | CONFIRMED | M70: weapon modifier names are runtime parameters of WEP_ materials; per-owner setDrawMaterialParam; overheat glow (VISUALLY VERIFIED) |
+
 ## MILESTONE 68 — SPRITE OCTAGON / BESTFIT POLYGONS (2026-10-06)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
