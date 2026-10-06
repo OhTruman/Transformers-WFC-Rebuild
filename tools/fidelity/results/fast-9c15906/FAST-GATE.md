@@ -169,7 +169,17 @@
 Evidence: `route/` (PRESENTATION.md, sheets), `mapswitch/` (MAP-LOSS.md), `renderstate/`, `mechanics/`, `selftest_*/`.
 
 ## Experimental review (2026-10-06)
-- **Product FAIL t9 / t9b: display-mode change seam (Rendering).**
+- **RETRACTED (2026-10-06): display-mode change seam, not reproduced; most likely a capture / resize race.**
+  - Rendering could not reproduce it in 5 configurations, including 08g on Seed with this script.
+  - Experimental re-ran the identical scenario (Streets → Seed, then display 1920×1080 → 1280×720) with **three
+    consecutive frames after each change**. All six frames are continuous (band luma 33-45 with no step), and t9 /
+    t9b are PARTIAL (dark Seed), not FAIL.
+  - The original frames were most likely read back while the window / swap chain was still resizing, under GPU load
+    from other sessions.
+  - `m07-renderstate.ps1` now captures three frames after each display change and treats a first-frame-only failure
+    as a transient capture race (INFO).
+  - **08g FAST verdict after review: NO OBVIOUS BREAKAGE.**
+  - Original (withdrawn) note: Product FAIL t9 / t9b, display-mode change seam (Rendering).
   - After `display:1920,1080,0` (and back to 1280×720) the frame has a hard horizontal seam about one third down.
   - Above it the scene is brighter; below it, darker (band luma about 21-32 vs about 14). The lower **two thirds**
     (= 720 / 1080) get Seed's colour grade (CLUT), the top third does not.
