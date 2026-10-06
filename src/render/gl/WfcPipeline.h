@@ -152,6 +152,14 @@ public:
     bool active() const { return active_; }
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
     void setCharacterColors(const CharacterColors& c) { charColorsBy_[drawOwner_] = c; }
+    // M74 energy death: the draw owner's dynamic materials swap to their package's Defrag instance at `defrag`
+    void setDrawEnergyDeath(float defrag) {
+        if (defrag < 0.0f) { ownerDefrag_.erase(drawOwner_); clearDrawMaterialParam("Defrag"); return; }
+        ownerDefrag_[drawOwner_] = defrag;
+        const float v[4] = {defrag, defrag, defrag, 1.0f};
+        setDrawMaterialParam("Defrag", v);
+    }
+    const std::string* energyDeathFor(const std::string& material) const;
     // M73 runtime decals (spawnDecal): projected geometry built by the caller; expiry on the map clock, cap 50
     int addRuntimeDecal(MeshData&& mesh, float lifetime);
     size_t runtimeDecalCount() const { return rtDecals_.size(); }
@@ -279,6 +287,8 @@ private:
     float canvasInvGamma_ = 0.0f;                      // > 0 while drawing Canvas tiles
     const std::vector<std::pair<std::string, std::array<float, 4>>>* drawParams_ = nullptr;   // per-draw runtime params
     std::map<int, std::vector<std::pair<std::string, std::array<float, 4>>>> ownerParams_;   // M70 by draw owner
+    std::map<int, float> ownerDefrag_;                    // M74 energy death by draw owner
+    std::map<std::string, std::string> energyDeath_;      // M74 lower-case mesh package -> Defrag instance
     bool inDynamicDraw_ = false;
     std::map<std::string, std::string> miaMaterial_;   // MaterialInstanceActor (lower) -> MIC path (lower)
     std::map<std::string, std::vector<std::pair<std::string, std::array<float, 4>>>> matParams_;   // MIC -> params

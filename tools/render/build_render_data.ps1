@@ -50,8 +50,10 @@ $ui = Get-Content (Join-Path $PSScriptRoot "ui_materials.txt") | Where-Object { 
 # never compiled and drew the glTF fallback)
 $weapons = @((& $py (Join-Path $PSScriptRoot "weapon_materials.py")) | Where-Object { $_ -match '\S' })
 $fxlib = @((& $py (Join-Path $PSScriptRoot "build_map_fx.py") --list-materials $Map) | Where-Object { $_ -match '^\S+\.\S+$' })
+# Energy-death (Defrag) instances of every chassis form (energy_death_materials.json, M74)
+$defrag = @((& $py (Join-Path $PSScriptRoot "energy_death_materials.py") --list) | Where-Object { $_ -match '\S' })
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
-    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib
+    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 
 

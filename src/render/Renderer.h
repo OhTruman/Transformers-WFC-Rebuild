@@ -89,6 +89,13 @@ public:
     // later dynamic draw of that owner whose material exposes the name, until cleared. Scalars use rgba[0].
     virtual void setDrawMaterialParam(const std::string& name, const float rgba[4]) { (void)name; (void)rgba; }
     virtual void clearDrawMaterialParam(const std::string& name) { (void)name; }
+    // M74 energy death ("Defrag", RE pass 5 s12 addenda 24 / 26): the CURRENT draw owner's dynamic meshes are drawn
+    // with their form's EnergyDeathMaterial (TR_Defrag_MAT instance, looked up by each material's package) at
+    // Defrag = `defrag` (1 = whole, 0 = gone: a straight sweep along U with a glowing edge), character colours
+    // kept. Materials without an energy-death instance (weapons, effects) draw unchanged. defrag < 0 = off.
+    // TnDefragger ramps it 1 -> 0 linearly over TransitionTime (car / tank hull gib: 0.5..1 s delay, 4.5 s; jet hull:
+    // 6 s; robot body + arm: melee deaths only, 3 s).
+    virtual void setDrawEnergyDeath(float defrag) { (void)defrag; }
 
     // Original-data rendering (WFC shader path): load the map's compiled materials, baked
     // directional lightmaps, static lights and height fog produced by tools/render/*.py.

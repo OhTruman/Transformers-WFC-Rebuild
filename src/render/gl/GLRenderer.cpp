@@ -1201,6 +1201,7 @@ public:
     // loaded, and every map load resets the pipeline's programs / textures.
     void setDrawMaterialParam(const std::string& n, const float v[4]) override { wfc_.setDrawMaterialParam(n, v); }
     void clearDrawMaterialParam(const std::string& n) override { wfc_.clearDrawMaterialParam(n); }
+    void setDrawEnergyDeath(float d) override { wfc_.setDrawEnergyDeath(d); }
     void prewarmDynamicMesh(const MeshData& m) override {
         std::string key;
         for (const Material& mt : m.mats) key += mt.wfcName + "|" + mt.sourceName + ";";

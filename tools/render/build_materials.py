@@ -219,6 +219,9 @@ def main():
             print('materials from other maps packages: %s' % ', '.join(ufb))
             repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx'] + ufb)
     mats = sorted(names - {None}) + extra
+    # M74 energy-death (Defrag) instances: the form-mesh package -> instance table goes with the render data
+    ed = json.load(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'energy_death_materials.json'), encoding='utf-8'))
+    defrag_mats = {m.lower() for m in ed['materials']}
     tr = TexResolver(repo, out)
 
     # M70: weapon mesh MaterialParameterModifiers (TnWeaponMesh.SetMaterialParameter(index, value) sets the named
@@ -243,6 +246,8 @@ def main():
                 if mp in extra and mp.split('.')[0].upper().startswith('UI_'):
                     rt = 'all'                 # Canvas materials: parameters set per draw (MaterialInstanceDynamic)
                 wep_rt = weapon_rt if mp.split('.')[0].upper().startswith('WEP_') else ()
+                if mp.lower() in defrag_mats:
+                    wep_rt = ('Defrag',)       # M74: TnDefragger ramps the scalar 'Defrag' 1 -> 0 per draw owner
                 mc = matc.MatCompiler(repo, mp, tr, runtime_params=rt, extra_runtime=wep_rt)
                 glsl, info = mc.build()
                 res[mp] = {'glsl': glsl, 'info': info, 'error': None}
@@ -257,6 +262,10 @@ def main():
         tr.cache.clear(); tr.missing.clear()
         res = run()
     json.dump(res, open(os.path.join(out, 'materials_glsl.json'), 'w'), indent=1)
+    # M74: form-mesh package -> energy-death instance, for the instances that compiled
+    json.dump({'generated_by': 'tools/render/build_materials.py (energy_death_materials.json)',
+               'by_package': {k: v for k, v in ed['by_package'].items() if (res.get(v) or {}).get('glsl')}},
+              open(os.path.join(out, 'energy_death.json'), 'w'), indent=1)
     ok = sum(1 for v in res.values() if not v['error'])
     print('materials: %d ok / %d' % (ok, len(res)))
     for k, v in res.items():

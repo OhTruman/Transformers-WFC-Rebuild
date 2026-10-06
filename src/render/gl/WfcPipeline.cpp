@@ -714,6 +714,12 @@ bool Pipeline::load(const std::string& mapName) {
         mats_[kv.first] = std::move(s);
     }
 
+    {   // M74 energy-death instances by form-mesh package (build_materials energy_death.json)
+        assets::Json E;
+        std::string ej = readText(dataDir_ + "/energy_death.json");
+        if (!ej.empty() && assets::Json::parse(ej, E))
+            for (const auto& kv : E["by_package"].obj) energyDeath_[kv.first] = kv.second.asString();
+    }
     {
         assets::Json S;
         std::string sj = readText(dataDir_ + "/slot_materials.json");
@@ -2177,6 +2183,14 @@ void Pipeline::updateRuntimeDecals() {
     }
 }
 
+const std::string* Pipeline::energyDeathFor(const std::string& material) const {
+    if (energyDeath_.empty() || material.empty()) return nullptr;
+    std::string pkg = material.substr(0, material.find('.'));
+    std::transform(pkg.begin(), pkg.end(), pkg.begin(), ::tolower);
+    auto it = energyDeath_.find(pkg);
+    return it == energyDeath_.end() ? nullptr : &it->second;
+}
+
 int Pipeline::dynamicProgram(const Material* mat) {
     std::string mk = materialKey(mat);
     auto it = dynProgCache_.find(mk);
@@ -2190,7 +2204,14 @@ void Pipeline::prewarmDynamic(const MeshData& m) {
     size_t before = dynProgCache_.size();
     auto lastYield = t0;
     for (const SubMesh& s : m.subs) {
-        if (s.material >= 0 && (size_t)s.material < m.mats.size()) dynamicProgram(&m.mats[(size_t)s.material]);
+        if (s.material >= 0 && (size_t)s.material < m.mats.size()) {
+            const Material& mt = m.mats[(size_t)s.material];
+            dynamicProgram(&mt);
+            if (const std::string* ed = energyDeathFor(mt.wfcName)) {   // M74: its energy death, with the body
+                Material dm; dm.wfcName = *ed;
+                dynamicProgram(&dm);
+            }
+        }
         auto now = std::chrono::steady_clock::now();     // under a loading screen: keep it presenting
         if (std::chrono::duration<double, std::milli>(now - lastYield).count() >= 16.0) { yieldLoad(); lastYield = now; }
     }
@@ -2262,14 +2283,25 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         d.first = s.indexOffset; d.count = s.indexCount;
         d.prog = dynamicProgram(mat);
         d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
+        auto od = ownerDefrag_.find(drawOwner_);
+        static const bool diagDefrag = std::getenv("WFC_DEFRAG") != nullptr;   // diagnostics: every owner
+        if ((od != ownerDefrag_.end() || diagDefrag) && mat) {   // M74: the form's EnergyDeathMaterial replaces the material
+            if (const std::string* ed = energyDeathFor(mat->wfcName)) {
+                Material dm; dm.wfcName = *ed;
+                const int p = dynamicProgram(&dm);
+                if (p >= 0) { d.prog = p; d.matName = *ed; }
+            }
+        }
         g.subs.push_back(d);
     }
+    // the owner's runtime parameters apply to its shadow caster / depth pre-pass too (M74: a dissolving Defrag body
+    // must not cast or depth-write its whole silhouette)
+    inDynamicDraw_ = true;
     if (envSamples_ && !weapon && !std::getenv("WFC_NOCHARSHADOWS")) {   // the environment's projector -> ShadowMask
         ShadowProjector scratch;
         if (const ShadowProjector* p = projectorFor(envForm_, scratch)) castCharacterShadow(g, model, *p);
     }
     dynamicMaskDraw_ = envSamples_ != nullptr;
-    inDynamicDraw_ = true;
     drawSubs(g, model, true);
     inDynamicDraw_ = false;
     dynamicMaskDraw_ = false;
