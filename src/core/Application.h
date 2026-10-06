@@ -1,6 +1,7 @@
 // Clean-room reconstruction — application lifecycle + main loop.
 #pragma once
 #include "core/Time.h"
+#include "platform/QaPanel.h"
 #include "render/Camera.h"
 #include "game/World.h"
 #include "game/GameMode.h"
@@ -54,6 +55,11 @@ private:
     float matchClock_ = 0.0f;
     std::map<int, float> deathAt_;
     bool selectionSent_ = false;   // the frontend's character selection reached Gameplay this match
+    // DEBUG-ONLY QA panel (WFC_QA=1, F10; NOT ORIGINAL): see qaTick in Application_Frontend.cpp.
+    void qaTick(const platform::InputFrame& in);
+    std::unique_ptr<platform::QaPanel> qa_;
+    platform::QaRequest qaLast_;
+    std::string qaCharacter_;
 
     void updateTitleHud(double realDt);
     void runPickupTest();

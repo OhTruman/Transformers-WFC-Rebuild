@@ -307,6 +307,84 @@ void Application::attachPresenter() {
     };
 }
 
+void Application::qaTick(const platform::InputFrame& in) {
+    // DEBUG-ONLY QA panel (NOT ORIGINAL): only with WFC_QA=1. A separate tool window (F10 toggles it); its requests run
+    // the normal frontend flow (party lobby -> private game -> map -> countdown) through the script runner.
+    static const bool enabled = std::getenv("WFC_QA") != nullptr;
+    if (!enabled || !frontend_) return;
+    frontend::GameFlow& flow = frontend_->flow();
+    if (!qa_) {
+        qa_ = platform::createQaPanel();
+        if (!qa_) return;
+        std::vector<platform::QaPanel::Option> maps, modes, chars, weapons;
+        for (const auto& m : frontend_->catalog().maps())
+            if (m.mapId > 0) maps.push_back({(m.friendlyName.empty() ? m.mapFilename : m.friendlyName) + " (" + std::to_string(m.mapId) + ")",
+                                             std::to_string(m.mapId)});
+        for (const char* t : {"TDM", "DM", "CTF", "CP", "KOTH", "DOM", "EXT"}) modes.push_back({t, t});
+        for (const auto& c : frontend_->roster().customCharacters()) chars.push_back({c.name, c.name});
+        qa_->setOptions(maps, modes, chars, weapons);
+        qa_->show(true);
+        qa_->setStatus("Debug QA panel (not original). F10 toggles. Weapon override: pending Gameplay.");
+        LOG_INFO("QA panel enabled (WFC_QA, debug only)");
+    }
+    for (uint16_t k : in.keyPresses) if (k == 0x79) qa_->show(!qa_->visible());   // VK_F10
+    platform::QaRequest r = qa_->poll();
+    {   // command-line equivalents (debug only): WFC_QA_LAUNCH=MODE,MAPID,CLASS once from the title;
+        // WFC_QA_RESTART_AFTER=<s>: one Restart after that long in a match
+        static bool launched = false, restarted = false;
+        static double matchSince = 0;
+        if (!launched && r.kind == platform::QaRequest::Kind::None && flow.level() == frontend::LevelKind::FrontEnd && flow.frontEndStarted())
+            if (const char* e = std::getenv("WFC_QA_LAUNCH")) {
+                std::string v = e;
+                size_t a = v.find(','), b = v.find(',', a + 1);
+                if (a != std::string::npos && b != std::string::npos) {
+                    r.kind = platform::QaRequest::Kind::Launch;
+                    r.mode = v.substr(0, a); r.mapId = std::atoi(v.substr(a + 1, b - a - 1).c_str()); r.character = v.substr(b + 1);
+                }
+                launched = true;
+            }
+        if (flow.level() == frontend::LevelKind::Match && flow.ui().state() == frontend::UIState::InGame) {
+            if (matchSince == 0) matchSince = nowSeconds();
+            if (const char* e = std::getenv("WFC_QA_RESTART_AFTER"))
+                if (!restarted && r.kind == platform::QaRequest::Kind::None && nowSeconds() - matchSince > std::atof(e)) {
+                    r.kind = platform::QaRequest::Kind::Restart; restarted = true;
+                }
+        } else matchSince = 0;
+    }
+    if (r.kind == platform::QaRequest::Kind::None) return;
+    if (r.kind == platform::QaRequest::Kind::Restart) {
+        if (qaLast_.kind == platform::QaRequest::Kind::None) { qa_->setStatus("Nothing launched yet."); return; }
+        r = qaLast_;
+    }
+    const frontend::LevelKind level = flow.level();
+    std::string s;
+    if (level == frontend::LevelKind::Match) {   // leave the match through its own quit route (-> party lobby)
+        flow.call("Game.QuitToMainMenu", {});
+        flow.popupButton('A');
+        s = "wait:level=PartyLobby;wait:t=1;";
+    } else if (level == frontend::LevelKind::FrontEnd) {
+        s = "call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:t=1;";
+    } else if (level != frontend::LevelKind::PartyLobby) {
+        qa_->setStatus("Use it from the title, the party lobby or a match.");
+        return;
+    }
+    if (r.kind == platform::QaRequest::Kind::Title) {
+        s += "ui:Back;wait:t=1;ui:Accept";
+        qaCharacter_.clear();
+    } else {
+        qaLast_ = r;
+        qaLast_.kind = platform::QaRequest::Kind::Launch;
+        qaCharacter_ = r.character;
+        s += "call:Online.PlayPrivateGame," + r.mode + ";wait:level=GameLobby;wait:t=1;call:Online.SetSelectedMapID," + std::to_string(r.mapId) +
+             ";wait:t=0.3;call:Online.BeginLobbyExitCountdown";
+    }
+    frontend_->script().load(s);
+    qa_->setStatus(std::string(r.kind == platform::QaRequest::Kind::Title ? "Back to title" : "Launching ") +
+                   (r.kind == platform::QaRequest::Kind::Title ? "" : r.mode + " map " + std::to_string(r.mapId) + " as " + r.character));
+    frontend::FlowTrace::emit("qa.request", {{"kind", r.kind == platform::QaRequest::Kind::Title ? "title" : "launch"}, {"mode", r.mode},
+                                             {"map", std::to_string(r.mapId)}, {"character", r.character}, {"provenance", "DEBUG ONLY"}});
+}
+
 void Application::shutdownFrontend() {
     if (frontend_) { frontend_->setAudio(nullptr); frontend_->setSceneRenderer(nullptr); }
     g_scene.reset();
@@ -349,6 +427,7 @@ void Application::runFrontend() {
             bool pumped;
             { core::prof::Scope prof("pump"); pumped = window_->pump(input); }
             if (!pumped) { quit = true; break; }
+            qaTick(input);
             double now = nowSeconds();
             double dt = now - last;
             last = now;
@@ -392,7 +471,9 @@ void Application::runFrontend() {
         // continues to the pre-game screen [RE MILESTONE05_PLAYTEST_RE section 7, CONFIRMED]. Automation (scripted
         // frontend runs, the lifecycle driver) selects the first default character instead unless WFC_CHARSELECT=1.
         bool automated = std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_FRONTEND_AUTOPLAY") || std::getenv("WFC_LIFECYCLE");
-        if (automated && !std::getenv("WFC_CHARSELECT")) {
+        if (!qaCharacter_.empty()) {   // DEBUG QA launch: the chosen class, through the normal selection contract
+            flow.selectCharacter(frontend_->selectionFor(qaCharacter_));
+        } else if (automated && !std::getenv("WFC_CHARSELECT")) {
             // Same contract as Customize.SelectCharacter (the first custom slot), not a second derivation.
             std::string first = frontend_->roster().customCharacters().empty() ? std::string() : frontend_->roster().customCharacters().front().name;
             flow.selectCharacter(frontend_->selectionFor(first));
