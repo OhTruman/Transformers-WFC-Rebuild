@@ -3,6 +3,43 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08i (2026-10-06) — crosshair-ray trace start, muzzle-origin projectiles, chassis preload, beam / trail / lightmap fidelity, Experimental fidelity harness — branch `integration/milestone-08i`
+
+On 08h (a1388fa).
+
+| lane | head | content |
+|---|---|---|
+| agents/rendering | 480d2ef | M60 Beam2 source / target methods (authored arc ends); M61 trail UVs per fill decode; M62 vertex lightmaps via _WFC_SRCVERT (Gorge's 4 sections; AssetTools a7b9ef0); M63 ribbon width = authored Size |
+| agents/frontend | e2e9208 | boot-hold / loading-underlay movies advance at most one frame per update (title-open frame 95-105 → 53 ms; PC ADAPTATION); profiler scopes |
+| agents/systems | aa15569 | ambient zones: warn about unresolved flattened presets only when used; every map's reverbs locked |
+| agents/gameplay | ba0fb4c | 24h chassis preload at match launch / PendingMatch; 24i robot hitscan / Repair Ray start at TnPlayerPawn.GetWeaponStartTraceLocation (RE CONFIRMED); 24j robot projectiles from the held weapon's MuzzleFlash socket, the 1.5 m spawn offsets dropped |
+| agents/experimental | 495798b | **tools/fidelity/ only** (path checkout, user-approved exception to never merging Experimental) |
+
+**Integration:**
+- weaponFireHook conflict: Gameplay's spawnProjectile(o, ...) is kept, with Systems' M08h vehicle muzzle flash and M08d firing sound after it.
+- WFC_RMUZZLETEST added to the direct-boot list.
+- Render data regenerated with 480d2ef's tools.
+
+**Validation:**
+- Builds and suites:
+  - clean Debug / Release; frontend 79 / 0;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520, chaos 0; audio 635 / 0.
+- Gameplay tests: RMUZZLE 4 / 4, MUZZLE 5 / 5, PROJFX 3 / 3, QATEST 7 / 7, FINEAIM 3 / 3, SWITCH 32 / 32, SCORE 9 / 9, XFORMVIS 16 / 16.
+- **Fidelity harness (Experimental's): 330 pass, 1 FAIL, 12 known-deviation.**
+  - The FAIL is aim_origin_eye_height: 3.70 m against an expected 3.50 m. The expectation is stale after Gameplay 24i (RE-confirmed crosshair-ray start).
+  - Experimental has replaced it with on-ray / nearest-pawn checks; 08j takes that refresh.
+- Map suite: 8 / 8 versus maps.
+- release_path_check PASS; visual suite 10 / 11 (the route-match spawn side varies, as before).
+- 4-match soak: 0 long GPU frames, 0 out-of-bounds / resets, 0 timeouts.
+- **Known cost:** 24h caches 9 chassis per match (8 defaults + selected), against 2 before.
+  - Memory at match start is 4.3-4.5 GB, up from 3.2-3.6 GB. It's bounded: released per match, no growth.
+  - Narrowing is suggested to Gameplay.
+- WFC_RENDERSTATS 4-match soak (Rendering M59):
+  - 27 prewarms at every match load, including matches 2-4; 0 first-use items; no transform spikes.
+  - 52 / 66 ms CPU on the match-start spawn frame (Truck), outside the render span → Gameplay.
+
 ## INTEGRATION MILESTONE 08h (2026-10-05) — vehicle muzzle flash / tracer at the alternating socket, prewarm replay, regenerated render data — branch `integration/milestone-08h`
 
 On 08g (9c15906, which adds Gameplay 24g's chassis prewarm; Integration's own prewarm block was removed so each chassis model is prewarmed once).
