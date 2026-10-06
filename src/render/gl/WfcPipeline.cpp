@@ -2105,8 +2105,20 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
     ActiveTexture(GL_TEXTURE0);
 }
 
+// AMD stability guard (M09): non-finite transforms / vertices are skipped and reported, never submitted (a NaN / INF
+// position or matrix yields undefined primitives - one suspect for the RX 7900 XTX resets / freezes).
+static bool finiteMat(const core::Mat4& m) {
+    for (float v : m.m) if (!std::isfinite(v)) return false;
+    return true;
+}
+static void reportNonFinite(const char* what, const std::string& detail) {
+    static int n = 0;
+    if (n++ < 20) LOG_ERROR("render guard: non-finite %s (%s) - draw skipped", what, detail.c_str());
+}
+
 void Pipeline::draw(int id, const core::Mat4& model) {
     if (id < 0 || (size_t)id >= meshes_.size()) return;
+    if (!finiteMat(model)) { reportNonFinite("model matrix", "mesh " + std::to_string(id)); return; }
     GpuMesh& g = meshes_[(size_t)id];
     drawSubs(g, model, !g.world);
     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
@@ -2273,6 +2285,15 @@ void Pipeline::prewarmDynamic(const MeshData& m) {
 
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     if (m.empty()) return;
+    if (!finiteMat(model)) {
+        reportNonFinite("dynamic model matrix", m.mats.empty() ? std::string("?") : m.mats[0].wfcName);
+        return;
+    }
+    for (float v : m.positions)
+        if (!std::isfinite(v)) {
+            reportNonFinite("dynamic vertex position", m.mats.empty() ? std::string("?") : m.mats[0].wfcName);
+            return;
+        }
     std::vector<float> v;
     auto tb0 = std::chrono::steady_clock::now();
     buildVertices(m, v);
@@ -2557,6 +2578,12 @@ void Pipeline::prewarmPlacedFx() {
 
 bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
     if (!material || !sp || n == 0) return false;
+    for (size_t i = 0; i < n; ++i)
+        for (const core::Vec3& c : sp[i].c)
+            if (!std::isfinite(c.x) || !std::isfinite(c.y) || !std::isfinite(c.z)) {
+                reportNonFinite("sprite corner", material);
+                return false;
+            }
     static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
     if (deferTrans_ && !flushingTrans_ && !immediateTrans) {
         if (spriteProg_.count(material) && spriteProg_[material] < 0) return false;   // known fallback material
