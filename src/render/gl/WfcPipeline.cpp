@@ -2973,9 +2973,21 @@ void Pipeline::endFrame() {
                      statVisCalls_ / 120.0);
             LOG_INFO("wfc: ShadowMask per frame: %.2f projections, %.2f gated", statShadowProj_ / 120.0, statShadowGated_ / 120.0);
             statShadowProj_ = statShadowGated_ = 0;
-            LOG_INFO("wfc: map FX per frame: %.3f ms, %.1f sprites, %.1f mesh particles", statFxMs_ / 120.0,
+            LOG_INFO("wfc: map FX per frame: %.3f ms (simulation %.3f, draw %.3f), %.1f sprites, %.1f mesh particles",
+                     statFxMs_ / 120.0, statFxTickMs_ / 120.0, (statFxMs_ - statFxTickMs_) / 120.0,
                      statFxSprites_ / 120.0, statFxMeshes_ / 120.0);
-            statFxMs_ = 0.0; statFxSprites_ = statFxMeshes_ = 0;
+            {
+                std::vector<std::pair<int, std::string>> top;
+                for (const auto& kv : statFxSpawns_) top.push_back({kv.second, kv.first});
+                std::sort(top.rbegin(), top.rend());
+                std::string list;
+                for (size_t i = 0; i < top.size() && i < 5; ++i)
+                    list += (i ? ", " : "") + top[i].second.substr(top[i].second.rfind('.') + 1) + " x" + std::to_string(top[i].first);
+                LOG_INFO("wfc: map FX instances live %zu; runtime spawns in 120 frames: %s", fxInstances_.size(),
+                         list.empty() ? "none" : list.c_str());
+                statFxSpawns_.clear();
+            }
+            statFxMs_ = 0.0; statFxTickMs_ = 0.0; statFxSprites_ = statFxMeshes_ = 0;
             statEnvCalls_ = statVisCalls_ = statLvvQueries_ = 0; statLvvMs_ = 0.0; statUpdateMs_ = 0.0;
             LOG_INFO("wfc: avg frame %.2f ms (%.0f fps); scene submit %.2f ms, gpu wait %.2f ms; per frame: %.1f draws, "
                      "%.1f light envs (%.2f ms), %.1f visibility traces",

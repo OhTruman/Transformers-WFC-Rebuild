@@ -897,7 +897,10 @@ void Pipeline::tickMapFx(float dt) {
             if (!rt.parts.empty() || (in.active && !rt.done)) return false;
         return true;
     }), fxInstances_.end());
-    statFxMs_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    {
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        statFxMs_ += ms; statFxTickMs_ += ms;   // simulation share
+    }
 }
 
 // ---- runtime particle effects (template library) ----
@@ -909,6 +912,7 @@ int Pipeline::spawnFx(const std::string& tpl, const float R[3][3], const float T
             LOG_WARN("fx: template %s is not in this map's render data (map_fx_runtime.json)", tpl.c_str());
         return -1;
     }
+    ++statFxSpawns_[tpl];                 // WFC_RENDERSTATS: spawns per template per 120 frames
     FxInstance in;
     in.system = tpl;
     in.role = "runtime";
