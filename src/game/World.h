@@ -467,6 +467,17 @@ private:
     std::vector<std::string> loadoutRefused_;
     unsigned seenWeaponChange_ = 0;
     const assets::SkinnedModel* weaponModelFor(const WeaponDef& d);
+    // Robot bodies assembled from shared AnimSets: each .anim.gltf is parsed once (loadAnimationFile) and its clips are
+    // appended to every skeleton that uses it, instead of re-parsing each chassis' robot.glb with its baked copy of ~300
+    // clips (~1.2 s of the ~2 s first load, WFC_SPAWNPROF). Load scheduling only, not original behaviour.
+    struct SharedAnimFile { assets::AnimFile file; std::map<std::string, size_t> byName; bool ok = false; };
+    std::map<std::string, std::unique_ptr<SharedAnimFile>> animFiles_;
+    const SharedAnimFile* sharedAnimFile(const std::string& path);
+public:
+    bool loadRobotShared(const ChassisDef& def, assets::SkinnedModel& out);   // false -> the caller uses robot.glb
+    // WFC_ANIMSHARECHECK: robot.glb vs loadRobotShared for one chassis; returns a one-line report, ok = identical within eps.
+    std::string compareRobotShared(const std::string& chassisId, bool& ok);
+private:
     // Load (and prewarm) the held-weapon models of these provider / class ids ahead of their first equip: the first time a
     // weapon becomes the held weapon its model loads on that frame (3-38 ms, HeavyMG 107 ms; WFC_WEAPONLOADPROF).
     void preloadHeldWeaponModels(const std::vector<std::string>& weapons);

@@ -184,6 +184,25 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - Map / mode / class / lobby: Frontend drives the real lobby flow.
 - WFC_QATEST 7/7 with the gate; without it, every call is refused.
 
+### Body loading: shared AnimSets and participant preload (24s) [load scheduling only, not original behaviour]
+- Profile (WFC_SPAWNPROF, debug build): a first-time body load took about 2 s.
+  - Each chassis robot.glb embeds its own copy of about 300 clips: reading the file 220 ms, its 19 MB of JSON 570 ms, the
+    clips 440 ms.
+  - Textures took about 0.3 s.
+  - Bodies not preloaded (e.g. the enemy faction's bots) loaded inside one World tick: 4.1 s for two.
+- Shared AnimSets: World::loadRobotShared assembles a body from three parts:
+  - the mesh-only skeletal export (character.json robot.source_gltf);
+  - each clip of robot.animations (name, source AnimSet, category, additive) from AnimSet exports, each parsed once and
+    cached (assets::loadAnimationFile; agents/rendering 50f0742 added verbatim);
+  - robot.glb's materials, read from its JSON chunk alone.
+  - robot.glb remains the fallback.
+  - WFC_ANIMSHARECHECK 9/9 MP bodies: skeleton, mesh, skin, materials, clip list and every sampled pose identical (max
+    difference 0).
+  - A body after the first loads in 0.7-1.0 s (was about 2 s).
+- Participant preload: addMatchOpponent caches the opponent's resolved body at once (match load).
+  - The per-tick fallback loads at most one new body per frame.
+  - PARTICIPANTTEST: the 4.1 s single-frame load became 0.79 s and 1.04 s on separate frames.
+
 ### Held-weapon model preload (24q) [load scheduling only, not original behaviour]
 - The first time a weapon became the held weapon, its model (glb, animations, textures) loaded on that frame. WFC_WEAPONLOADPROF:
   6-38 ms (HeavyMG 107 ms), on a spawn with a non-Ion primary, the first switch or the first pickup.

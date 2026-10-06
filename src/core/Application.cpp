@@ -155,6 +155,15 @@ bool Application::init() {
     if (std::getenv("WFC_DROPTEST")) { runDropTest(); return false; }              // hover vehicle 10 m drop: per-step vertical trace
     if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step
     if (std::getenv("WFC_PRELOADTEST")) { runPreloadTest(); return false; }        // World::preloadSelections (saved custom characters)
+    if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
+        int pass = 0, n = 0;
+        for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
+            bool ok = false; const std::string r = world_.compareRobotShared(id, ok); ++n; if (ok) ++pass;
+            LOG_INFO("ANIMSHARE %s %s", ok ? "PASS" : "FAIL", r.c_str());
+        }
+        LOG_INFO("ANIMSHARE SUMMARY: %d/%d checks passed", pass, n);
+        return false;
+    }
     if (std::getenv("WFC_WEAPONLOADPROF")) {   // first-use weapon model load cost per robot weapon (diagnostics)
         double total = 0; for (int i = 0; i < game::weaponDefCount(); ++i) { const game::WeaponDef& d = game::weaponDefAt(i); if (d.typeCode < 0 || d.typeCode == 3 || !d.meshGltf || !*d.meshGltf) continue;
             const double ms = world_.profileWeaponModelLoad(d); total += ms; LOG_INFO("WEAPONLOAD %-22s %6.1f ms", d.id, ms); }

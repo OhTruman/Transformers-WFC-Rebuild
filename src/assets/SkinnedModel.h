@@ -99,6 +99,12 @@ struct SkinnedModel {
 bool loadSkinnedGlb(const std::string& path, SkinnedModel& out);   // .glb or text .gltf + external buffer
 // Append the animations of a separate glTF whose nodes match the model's by name; returns the count.
 int loadAnimationsByName(const std::string& path, SkinnedModel& m);
+// The same file parsed once, skeleton-independent: clips whose channel nodes are the FILE's node indices, plus the
+// file's node names. appendAnimations then matches channels to a skeleton by bone name (as loadAnimationsByName does),
+// so a parsed AnimSet can be cached and shared by every skeleton that uses it (frontend preview bodies).
+struct AnimFile { std::vector<std::string> nodeNames; std::vector<AnimClip> clips; };
+bool loadAnimationFile(const std::string& path, AnimFile& out);
+size_t appendAnimations(const AnimFile& file, SkinnedModel& out);
 
 // Parent-relative bone transforms for every node: the blendable pose representation
 // (UE3 FBoneAtom space). Layering (crossfade, per-bone masks, additive overlays, aim offsets)

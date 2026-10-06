@@ -928,10 +928,15 @@ void World::tick(float dt) {
     // and for bots / joiners / class or team changes before their next spawn wave - instead of at the spawn itself (a first
     // cache costs the glb load + renderer prewarm, ~130-165 ms). Only bodies that can appear in this match are loaded (Pass 24h
     // cached all eight MP defaults: ~1 GB per match, Integration 08i soak). Load scheduling only, not original behaviour.
+    // At most one first-time body load per tick: two late participants never stack into one frame.
     if (matchActive_)
         for (size_t p = 0; p < match_.players().size(); ++p) {
             const MatchPlayer& mp = match_.players()[p];
-            if (mp.hasSelectedCharacter) chassisAssets(resolveChassis(mp.selection, match_.faction((int)p)));
+            if (!mp.hasSelectedCharacter) continue;
+            const std::string id = resolveChassis(mp.selection, match_.faction((int)p));
+            if (chassisCache_.count(id)) continue;
+            chassisAssets(id);
+            break;
         }
     // The local player's selected weapons (only the local pawn draws a held weapon mesh): custom list, else the iconic preset.
     if (matchActive_ && localPlayer_ >= 0 && (size_t)localPlayer_ < match_.players().size()) {
@@ -1195,6 +1200,10 @@ MatchOpponent* World::addMatchOpponent(const std::string& name, bool drawn) {
     MatchOpponent* raw = o.get();
     opponents_.push_back(raw);
     actors_.push_back(std::move(o));
+    // Cache the participant's body now (callers add opponents at match load, under the loading screen) instead of in a
+    // visible World tick later. Load scheduling only, not original behaviour.
+    const MatchPlayer& mp = match_.players()[(size_t)p];
+    if (mp.hasSelectedCharacter) chassisAssets(resolveChassis(mp.selection, match_.faction(p)));
     return raw;
 }
 
@@ -1636,7 +1645,7 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
     const std::string ext = root + "/../";
     if (!loadChassisDef(root, id, a->def)) {
         a->error = a->def.loadError;
-    } else if ((chProf[0] = profNowMs(), !assets::loadSkinnedGlb(ext + a->def.robotGlb, a->robot)) || (chProf[1] = profNowMs(), !a->robot.valid())) {
+    } else if ((chProf[0] = profNowMs(), !(loadRobotShared(a->def, a->robot) || assets::loadSkinnedGlb(ext + a->def.robotGlb, a->robot))) || (chProf[1] = profNowMs(), !a->robot.valid())) {
         a->error = "robot.glb failed to load for " + id;
     } else if (!assets::loadSkinnedGlb(ext + a->def.vehicleGlb, a->vehicle) || (chProf[2] = profNowMs(), !a->vehicle.valid())) {
         a->error = "vehicle.glb failed to load for " + id;
@@ -3179,6 +3188,174 @@ void World::projectileFxEnd(Projectile& p, const core::Vec3& at, const core::Vec
     if (!explode || p.visual < 0 || projVisuals_[(size_t)p.visual].explosion.empty()) return;
     core::Vec3 f, u; fxFrame(normal, f, u);
     if (fxSpawn(*renderer_, projVisuals_[(size_t)p.visual].explosion, at, f, u, 0) >= 0) ++projectileFxExplosions_;
+}
+
+// The materials of a robot.glb without parsing its ~19 MB of clip JSON: read only the JSON chunk, cut out the top-level
+// "materials" / "textures" / "images" arrays (string-aware bracket scan) and parse those with the same parseGltfMaterial.
+static bool glbTopLevelArray(const std::string& js, const char* key, std::string& out) {
+    const std::string k = std::string("\"") + key + "\"";
+    int depth = 0; bool inStr = false;
+    for (size_t i = 0; i < js.size(); ++i) {
+        const char c = js[i];
+        if (inStr) { if (c == '\\') ++i; else if (c == '"') inStr = false; continue; }
+        if (c == '"') {
+            if (depth == 1 && js.compare(i, k.size(), k) == 0) {
+                size_t j = js.find_first_not_of(" \t\r\n:", i + k.size());
+                if (j == std::string::npos || js[j] != '[') return false;
+                int d = 0; bool s2 = false;
+                for (size_t e = j; e < js.size(); ++e) {
+                    const char ch = js[e];
+                    if (s2) { if (ch == '\\') ++e; else if (ch == '"') s2 = false; continue; }
+                    if (ch == '"') s2 = true;
+                    else if (ch == '[' || ch == '{') ++d;
+                    else if (ch == ']' || ch == '}') { if (--d == 0) { out = js.substr(j, e - j + 1); return true; } }
+                }
+                return false;
+            }
+            inStr = true;
+            continue;
+        }
+        if (c == '{' || c == '[') ++depth; else if (c == '}' || c == ']') --depth;
+    }
+    return false;
+}
+
+static bool glbMaterialsOnly(const std::string& path, std::vector<render::Material>& mats) {
+    std::ifstream f(path, std::ios::binary);
+    if (!f) return false;
+    uint32_t hdr[3] = {0, 0, 0}, ch[2] = {0, 0};
+    f.read((char*)hdr, 12); f.read((char*)ch, 8);
+    if (!f || hdr[0] != 0x46546C67u || ch[1] != 0x4E4F534Au) return false;   // 'glTF', chunk 'JSON'
+    std::string js(ch[0], '\0');
+    f.read(&js[0], (std::streamsize)ch[0]);
+    if (!f) return false;
+    std::string m, t, im;
+    if (!glbTopLevelArray(js, "materials", m)) return false;
+    glbTopLevelArray(js, "textures", t); glbTopLevelArray(js, "images", im);
+    const std::string mini = "{\"materials\":" + m + ",\"textures\":" + (t.empty() ? "[]" : t) + ",\"images\":" + (im.empty() ? "[]" : im) + "}";
+    assets::Json root;
+    if (!assets::Json::parse(mini.data(), mini.size(), root)) return false;
+    std::string dir; const size_t sl = path.find_last_of("/\\"); dir = sl == std::string::npos ? "." : path.substr(0, sl);
+    const assets::Json& jm = root["materials"];
+    mats.assign(jm.size(), render::Material{});
+    for (size_t i = 0; i < jm.size(); ++i) assets::parseGltfMaterial(root, i, dir, mats[i]);
+    return true;
+}
+
+const World::SharedAnimFile* World::sharedAnimFile(const std::string& path) {
+    auto it = animFiles_.find(path);
+    if (it != animFiles_.end()) return it->second.get();
+    auto f = std::make_unique<SharedAnimFile>();
+    f->ok = assets::loadAnimationFile(path, f->file);
+    for (size_t i = 0; i < f->file.clips.size(); ++i) f->byName.emplace(f->file.clips[i].name, i);   // first clip of a name
+    const SharedAnimFile* raw = f.get();
+    animFiles_[path] = std::move(f);
+    return raw;
+}
+
+bool World::loadRobotShared(const ChassisDef& def, assets::SkinnedModel& m) {
+    if (def.robotSkelGltf.empty() || def.robotAnims.empty()) return false;
+    const std::string ext = assetRoot() + "/../";
+    if (!assets::loadSkinnedGlb(ext + def.robotSkelGltf, m) || !m.valid()) return false;
+    m.clips.clear();
+    // The exported robot.glb's materials (baked base colour / emissive / specular, wfc_material): same slots, same order.
+    std::vector<render::Material> mats;
+    if (!glbMaterialsOnly(ext + def.robotGlb, mats) || mats.size() != m.mats.size()) {
+        LOG_WARN("shared anims: robot.glb materials unavailable for %s", def.id.c_str());
+        return false;
+    }
+    m.mats = std::move(mats);
+    // Per source file: file node -> model node by bone name (the matching loadAnimationsByName / appendAnimations use).
+    std::map<const SharedAnimFile*, std::vector<int>> remaps;
+    for (const ChassisDef::AnimRef& r : def.robotAnims) {
+        const SharedAnimFile* f = sharedAnimFile(ext + r.source);
+        if (!f || !f->ok) { LOG_WARN("shared anims: %s unavailable for %s", r.source.c_str(), def.id.c_str()); return false; }
+        auto ci = f->byName.find(r.name);
+        if (ci == f->byName.end()) { LOG_WARN("shared anims: clip %s not in %s (%s)", r.name.c_str(), r.source.c_str(), def.id.c_str()); return false; }
+        std::vector<int>& remap = remaps[f];
+        if (remap.empty()) {
+            remap.assign(f->file.nodeNames.size(), -1);
+            for (size_t i = 0; i < f->file.nodeNames.size(); ++i)
+                for (size_t k = 0; k < m.nodeNames.size(); ++k)
+                    if (m.nodeNames[k] == f->file.nodeNames[i]) { remap[i] = (int)k; break; }
+        }
+        const assets::AnimClip& src = f->file.clips[ci->second];
+        assets::AnimClip clip;
+        clip.name = r.name;
+        clip.category = r.category;
+        clip.additive = r.additive;
+        clip.duration = src.duration;
+        clip.samplers = src.samplers;
+        for (const assets::AnimChannel& c : src.channels)
+            if (c.node >= 0 && (size_t)c.node < remap.size() && remap[(size_t)c.node] >= 0) {
+                assets::AnimChannel ch = c; ch.node = remap[(size_t)c.node]; clip.channels.push_back(ch);
+            }
+        m.clips.push_back(std::move(clip));
+    }
+    return true;
+}
+
+std::string World::compareRobotShared(const std::string& id, bool& ok) {
+    ok = false;
+    ChassisDef def;
+    if (!loadChassisDef(assetRoot(), id, def)) return id + ": no chassis def";
+    const std::string ext = assetRoot() + "/../";
+    assets::SkinnedModel A, B;
+    const double t0 = profNowMs();
+    if (!assets::loadSkinnedGlb(ext + def.robotGlb, A)) return id + ": robot.glb failed";
+    const double t1 = profNowMs();
+    if (!loadRobotShared(def, B)) return id + ": shared load failed";
+    const double t2 = profNowMs();
+    char b[512];
+    // Skeleton / mesh.
+    bool same = A.nodeNames == B.nodeNames && A.skinJoints == B.skinJoints && A.positions.size() == B.positions.size() &&
+                A.indices == B.indices && A.subs.size() == B.subs.size() && A.mats.size() == B.mats.size() && A.joints == B.joints;
+    float geo = 0.0f;
+    if (same) {
+        for (size_t i = 0; i < A.positions.size(); ++i) geo = std::max(geo, std::fabs(A.positions[i] - B.positions[i]));
+        for (size_t i = 0; i < A.weights.size() && i < B.weights.size(); ++i) geo = std::max(geo, std::fabs(A.weights[i] - B.weights[i]));
+        for (size_t i = 0; i < A.invBind.size() && i < B.invBind.size(); ++i)
+            for (int k = 0; k < 16; ++k) geo = std::max(geo, std::fabs(A.invBind[i].m[k] - B.invBind[i].m[k]));
+        for (size_t i = 0; i < A.nodes.size(); ++i) {
+            geo = std::max(geo, core::length(A.nodes[i].t - B.nodes[i].t));
+            geo = std::max(geo, std::min(std::fabs(A.nodes[i].r.x - B.nodes[i].r.x) + std::fabs(A.nodes[i].r.y - B.nodes[i].r.y) + std::fabs(A.nodes[i].r.z - B.nodes[i].r.z) + std::fabs(A.nodes[i].r.w - B.nodes[i].r.w),
+                                         std::fabs(A.nodes[i].r.x + B.nodes[i].r.x) + std::fabs(A.nodes[i].r.y + B.nodes[i].r.y) + std::fabs(A.nodes[i].r.z + B.nodes[i].r.z) + std::fabs(A.nodes[i].r.w + B.nodes[i].r.w)));
+        }
+        for (size_t i = 0; i < A.mats.size(); ++i) if (A.mats[i].baseColorUri != B.mats[i].baseColorUri) same = false;
+    }
+    if (!same) LOG_INFO("ANIMSHARE %s detail: names %d joints %d pos %zu/%zu idx %d subs %zu/%zu mats %zu/%zu vjoints %d", id.c_str(),
+        (int)(A.nodeNames == B.nodeNames), (int)(A.skinJoints == B.skinJoints), A.positions.size(), B.positions.size(), (int)(A.indices == B.indices),
+        A.subs.size(), B.subs.size(), A.mats.size(), B.mats.size(), (int)(A.joints == B.joints));
+    if (!same) for (size_t i = 0; i < A.mats.size() && i < B.mats.size(); ++i) if (A.mats[i].baseColorUri != B.mats[i].baseColorUri) { LOG_INFO("ANIMSHARE %s mat %zu: %s | %s", id.c_str(), i, A.mats[i].baseColorUri.c_str(), B.mats[i].baseColorUri.c_str()); break; }
+    // Clips, by name.
+    int missing = 0, metaDiff = 0, chanDiff = 0; float pose = 0.0f; std::string worst;
+    assets::LocalPose pa, pb;
+    for (size_t i = 0; i < A.clips.size(); ++i) {
+        const assets::AnimClip& ca = A.clips[i];
+        int j = -1;
+        for (size_t k = 0; k < B.clips.size(); ++k) if (B.clips[k].name == ca.name) { j = (int)k; break; }
+        if (j < 0) { ++missing; continue; }
+        const assets::AnimClip& cb = B.clips[(size_t)j];
+        if (std::fabs(ca.duration - cb.duration) > 1e-4f || ca.additive != cb.additive || ca.category != cb.category) ++metaDiff;
+        if (ca.channels.size() != cb.channels.size()) ++chanDiff;
+        for (float u : {0.0f, 0.37f, 0.71f, 1.0f}) {
+            assets::samplePose(A, (int)i, ca.duration * u, false, pa, ca.additive);
+            assets::samplePose(B, j, cb.duration * u, false, pb, cb.additive);
+            for (size_t n = 0; n < pa.size() && n < pb.size(); ++n) {
+                float d = std::max(core::length(pa.t[n] - pb.t[n]), core::length(pa.s[n] - pb.s[n]));
+                const core::Quat& qa = pa.r[n]; const core::Quat& qb = pb.r[n];
+                d = std::max(d, std::min(std::fabs(qa.x - qb.x) + std::fabs(qa.y - qb.y) + std::fabs(qa.z - qb.z) + std::fabs(qa.w - qb.w),
+                                         std::fabs(qa.x + qb.x) + std::fabs(qa.y + qb.y) + std::fabs(qa.z + qb.z) + std::fabs(qa.w + qb.w)));
+                if (d > pose) { pose = d; worst = ca.name; }
+            }
+        }
+    }
+    ok = same && geo < 1e-4f && missing == 0 && metaDiff == 0 && chanDiff == 0 && pose < 1e-4f && A.clips.size() == B.clips.size();
+    std::snprintf(b, sizeof b, "%s: skeleton/mesh %s (max diff %.2g), clips %zu vs %zu, missing %d, meta diff %d, channel-count diff %d, "
+                  "max pose diff %.2g (%s); robot.glb %.0f ms, shared %.0f ms",
+                  id.c_str(), same ? "same" : "DIFFERENT", geo, A.clips.size(), B.clips.size(), missing, metaDiff, chanDiff, pose,
+                  worst.c_str(), t1 - t0, t2 - t1);
+    return b;
 }
 
 } // namespace game

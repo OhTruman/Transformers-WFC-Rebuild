@@ -162,6 +162,18 @@ bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef
     d.lockedCharacter = c["locks"]["LockedCharacter"].asBool();
     d.robotGlb = c["robot"]["glb"].asString();
     d.vehicleGlb = c["vehicle"]["glb"].asString();
+    d.robotSkelGltf = c["robot"]["source_gltf"].asString();
+    {
+        const assets::Json& an = c["robot"]["animations"];
+        for (size_t i = 0; i < an.size(); ++i) {
+            ChassisDef::AnimRef r;
+            r.name = an[i]["name"].asString();
+            r.source = an[i]["source_gltf"].asString();
+            r.category = an[i]["category"].asString();
+            r.additive = an[i]["additive"].asBool();
+            if (!r.name.empty() && !r.source.empty()) d.robotAnims.push_back(r);
+        }
+    }
     if (d.robotGlb.empty() || !fileExists(extRoot + d.robotGlb)) { d.loadError = "robot.glb missing for " + id; return false; }
     if (d.vehicleGlb.empty() || !fileExists(extRoot + d.vehicleGlb)) { d.loadError = "vehicle.glb missing for " + id; return false; }
 
