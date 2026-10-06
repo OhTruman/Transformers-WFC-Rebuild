@@ -3,6 +3,36 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08h (2026-10-05) — vehicle muzzle flash / tracer at the alternating socket, prewarm replay, regenerated render data — branch `integration/milestone-08h`
+
+On 08g (9c15906, which adds Gameplay 24g's chassis prewarm; Integration's own prewarm block was removed so each chassis model is prewarmed once).
+
+| lane | head | content |
+|---|---|---|
+| agents/rendering | 16af6ae | M59: prewarmDynamicMesh requests are remembered and replayed after every map load (the second match's first transform) |
+| agents/systems | c7058ba | M08h glue (SYSTEMS_M08H_vehicle_muzzle_glue.patch): each vehicle shot draws the fired vehicle weapon's MuzzleFlash template at Gameplay's alternating socket (Primary / Primary2); instant-hit tracers start there (damage trace unchanged); rockets / tank cannon flash too |
+
+**Integration:**
+- Glue patch applied clean (offset 4).
+- The beam members left unused by the Gameplay-24 addendum are removed.
+- Render data regenerated with 16af6ae's tools for every map and frontend scene. Streets map_fx_runtime now has Impact_AssaultRifle_FX, CarHover_A_01_FX and CarHover_D_01_FX.
+
+**Validation:**
+- 24g prewarm (08g build): WFC_RENDERSTATS + XFORMVIS 16 / 16; no spikes, no first-use program or texture after frame 2; one prewarm per chassis model.
+- Builds and suites:
+  - clean Debug / Release;
+  - frontend 79 / 0, harness 191 / 0;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520, chaos 0; audio 634 / 0.
+- Gameplay tests: MUZZLE 5 / 5, PROJFX 3 / 3, QATEST 7 / 7, FINEAIM 3 / 3, SWITCH 32 / 32.
+- Map suite: 8 / 8 versus maps.
+- 4-match frontend soak: 0 long GPU frames, 0 out-of-bounds / resets, 0 timeouts.
+- Visual suite as 08g: one Streets view +15 draws, one more material, from the regenerated FX data.
+- release_path_check: the first run failed one frame.
+  - Berth b was captured in the death camera after the lifecycle opponent's kill: 171 drawn, 2059 submitted, so the map was complete.
+  - The rerun PASSES on all 6 frames.
+
 ## INTEGRATION MILESTONE 08g (2026-10-05) — Gameplay Pass 24: tank 180, Repair Ray beam, projectile FX, vehicle muzzle alternation, fine-aim cameras, QA API — branch `integration/milestone-08g`
 
 On 08f (ae2df5f). Merges agents/gameplay 0f870ca (c5c992c..0f870ca), merged after Gameplay announced Pass 24 complete and pushed. The other lanes are unchanged since 08f.
