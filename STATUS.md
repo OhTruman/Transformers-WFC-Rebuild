@@ -3,6 +3,59 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08n (2026-10-06) — focused synchronization for the next human playtest — branch `integration/milestone-08n`
+
+On 08m (5479010). Every lane's newest stable head was inspected; AssetTools and RE were checked read-only.
+
+| lane | head | merged content |
+|---|---|---|
+| agents/gameplay | e603433 | 24q held-weapon model preload (local faction's class presets at match load, the local selection once known; first equip 0.2-0.4 ms, was 6-107 ms); 24r World::preloadSelections + its Frontend caller patch (saved CaC slots preloaded under the match load); WFC_SPAWNPROF / WFC_WEAPONLOADPROF diagnostics; WFC_PRELOADTEST, WFC_RISERTEST |
+| agents/rendering | 01e3121 | M71 SubUVDirect sprite frames in cell units (RE a6b7074; H2H_Punch01 sparks), renderer only |
+| agents/systems | cbe51fc | M08p melee hit on the victim, kamikaze-mine idle / tracking / explosion sounds (SYSTEMS_M08P glue applied) |
+| agents/frontend | f0277ce | unchanged since 08k (no Frontend session running) |
+| agents/experimental | eea8a23 | tools/fidelity/ unchanged since 08m |
+| AssetTools | a7b9ef0 | unchanged since 08i; 08m's render data already consumes it, so no regeneration was needed |
+| RE-Workspace | e628793 | grenade sounds, SubUV scale, death pickers, gibs: consumed by Systems M08o / M08p and Rendering M71; the death-picker / gib answers are for future lane work |
+
+**Integration changes:**
+- GAMEPLAY_24R_frontend_preload.patch applied to Application_Frontend.cpp (clean).
+- **Compile-time guards:** every Gameplay → Rendering and Frontend → Rendering / Gameplay link that is detected at compile time is now static_asserted in the integrated tree:
+  - prewarmDynamicMesh, set / clearDrawMaterialParam, spawn / stopParticleEffect;
+  - preparePreviewBody / loadContentMesh;
+  - World::preloadSelections.
+  - A renamed API now fails the build instead of silently dropping the prewarm, glow, effects or preload. All bind today.
+- WFC_AUTOSWITCH_EVERY test input: presses NextWeapon every N frames, env-gated.
+- Removed src/core/Application_Frontend.cpp.orig, a patch backup committed by mistake in 08f.
+- **Duplicate-hook audit:** every Systems sound hook in World / PlayerController was traced to one call per action.
+  - Projectile spawned: spawnProjectile vs the grenade toss, which pushes its own projectile.
+  - Fired: projectile vs hitscan branch.
+  - Explode: the pawn, fuse and impact branches.
+  - Gameplay code plays no cues itself. In the flow run below, 0 cue events started twice in one burst; 0 missing cues.
+- **Correction (08g):** the 08g "24g prewarm verified" run used a stale Release exe; `build.ps1 -Config Release` builds build/, not build/release. 08i-08m clean-build soaks did verify the prewarm.
+
+**Validation (FAST):**
+- Builds and suites:
+  - clean Debug / Release; frontend 79 / 0 both;
+  - harness 342 / 0 / 8; audio **716 / 0**;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520.
+- Gameplay tests: RMUZZLE 4, CHARGE 9, MUZZLE 5, PROJFX 3, QATEST 7, FINEAIM 3, SWITCH 32, SCORE 9, XFORMVIS 16, VEHPHYS 27, PRELOAD 1 / 1.
+- RISERTEST hover kerb tilt: 1.4-2.8° (Gameplay expects about 1-2.5°).
+- **Representative frontend flow, one process.** Boot → Multiplayer → Create a Character (Scout → Runner + colour) → for each of four maps: Private Match → mode → lobby → loading → choose → spawn → move / turn / fire / weapon switch every 7 s / reload / jump / transform → vehicle move / boost / vehicle fire → transform back → scoreboard → pause / resume → kills to the goal → results → game lobby → party lobby. Back to the title.
+  - Maps and classes: Streets TDM (Scout / car), Berth TDM (Scientist / jet), Molten DM (Leader), Orbital Debris TDM (Soldier / tank). Profilers on: WFC_SYSPROF, SPAWNPROF, WEAPONLOADPROF, RENDERSTATS, CUELOG, AUDIOCHECK.
+  - Selected bodies / weapons / factions correct (Car4, Jet4, Truck4, Tank2); weapon switches 0.3-1.0 ms.
+  - 0 timeouts, 0 GL errors, 0 out-of-bounds / context resets, 0 audio leaks, 0 missing / duplicated cues.
+  - Textures grow by one per new map (65 → 87); memory at match start 4.1-4.6 GB.
+  - Screens inspected on all four maps: complete world, HUD (vehicle form shows ammo), muzzle / projectile / boost effects, Debris sky.
+- **Found and routed:**
+  - **Systems:** each match's DM_FINALSTRETCH_LP music is decoded synchronously on the main thread when it starts, a 159-686 ms freeze once per match. This explains 08m's unattributed 90-111 ms mid-match frames.
+  - **Rendering:** the first presented frame after a match load (Choose Character over the map) took 324 ms of GPU on Molten and **768 ms** on Orbital Debris. Under the ~2 s TDR limit, but relevant to the AMD resets; not seen on Streets / Berth.
+  - **Frontend:** a party-lobby revisit after a match prepared Sideswipe's preview body on a visible frame (83 ms).
+  - **Gameplay:** spawn profile: the first spawn applies the chassis in 20 ms (+6 ms loadout), later spawns in 0.6 ms. The 52-66 ms spawn frame recurred once (67 ms) on the **opponent's** spawn (MATCH spawn player=1 chassis=Truck, Berth). SPAWNPROF profiles only the local spawn, so that path is not yet profiled.
+
+**Not merged in this pass:** Rendering 18f4b90 (M72: cross-map material fallbacks). It needs a full render-data regeneration and arrived after validation. Its visible fix is Escalation-map characters (Remnant / Broken Hope), which are not playable in versus modes.
+
 ## INTEGRATION MILESTONE 08m (2026-10-06) — Plasma Cannon charge glow, grenade / death sounds, SubUV / weapon material parameters — branch `integration/milestone-08m`
 
 On 08l (d0c36f3).

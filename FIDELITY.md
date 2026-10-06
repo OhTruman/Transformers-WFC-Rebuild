@@ -17,6 +17,29 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## INTEGRATION MILESTONE 08n — CLASSIFICATION (2026-10-06)
+Integrated through 08h-08n. Labels describe the integrated build; lane sections below hold the evidence. Automated checks are not human visual confirmation.
+
+| Item | Mark | Notes |
+|---|---|---|
+| Hover / plane per-call factors at the original 30 Hz script tick (Gameplay 24n) | CONFIRMED ORIGINAL (RE 59eac82) | jet turn / lean servo at the original rate; hovers level x0.95 per 1/30 s airborne |
+| Hover grounded pitch / roll per corrected RE A4 (24m) | HIGH CONFIDENCE | 1.4-2.8° over a real kerb (RISERTEST); human check: feel over bumps |
+| Robot hitscan / Repair Ray start = crosshair-ray point nearest the pawn (24i) | CONFIRMED ORIGINAL (TnPlayerPawn.GetWeaponStartTraceLocation) | harness aim_origin_on_crosshair_ray / nearest_pawn pass |
+| Robot projectiles from the held weapon's MuzzleFlash socket; no 1.5 m offset (24j) | HIGH CONFIDENCE | RMUZZLE 4 / 4 |
+| Vehicle muzzle flash / tracer at the alternating socket (Systems M08h glue) | HIGH CONFIDENCE | MUZZLE 5 / 5 |
+| Plasma Cannon charge levels, glow ("Overheat"), charge sounds (24k / 24l / 24p, Rendering M70, Systems M08k) | CONFIRMED data / HIGH application | the glow needs M70 render data (in 08m+); human check: visible glow at levels 1-3 |
+| Projectile flight / explosion effects (Gameplay 24, Rendering particles) | VISUALLY VERIFIED (automated captures) | no placeholder boxes in 4-map flow captures |
+| Grenade toss / flight / fuse / bounce / explosion sounds (Systems M08o) | CONFIRMED paths (RE 5950aa8 / fff1fa3) | suite-verified; live grenade audio not harness-forced |
+| Victim death sounds, melee hit, kamikaze mines (Systems M08o / M08p) | HIGH CONFIDENCE (suite only) | no harness forces a melee / vehicle-form kill |
+| Ability / buff / hover / kill-streak / overshield / dodge sounds (Systems M08i-M08n) | HIGH CONFIDENCE | 0 missing / 0 duplicated cues in the 4-map flow |
+| Character / weapon preloading (24g-24r, Rendering M59 / M69, Frontend CaC) | PC ADAPTATION (load scheduling) | no in-match first-use; open: the opponent's spawn frame (67 ms), a lobby revisit's preview body (83 ms) |
+| Music final-stretch start | PARTIAL | 159-686 ms synchronous decode once per match → Systems |
+| First presented match frame on Molten / Debris | PARTIAL (performance) | 324 / 768 ms GPU → Rendering; AMD-relevant, not a reset |
+| Molten floor / puddle; Debris sky; Seed / Berth darkness | needs HUMAN CHECK | renders complete in captures; human playtest decides |
+| Escalation-map character materials (Rendering M72) | not merged | next milestone (needs full data regeneration) |
+
+---
+
 ## INTEGRATION MILESTONE 08 — CLASSIFICATION (2026-10-05)
 | Item | Mark | Notes |
 |---|---|---|
