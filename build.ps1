@@ -4,6 +4,7 @@ param(
     [switch]$Run,
     [switch]$Clean,
     [string]$Config = "Debug",
+    [switch]$Shipping,   # shipping-style build: developer tools (the F10 QA panel) compiled out
     [ValidateRange(1,64)][int]$Jobs = 2
 )
 $ErrorActionPreference = "Stop"
@@ -32,6 +33,7 @@ New-Item -ItemType Directory -Force $build | Out-Null
 & $cmakeExe -S $root -B $build -G Ninja `
     "-DCMAKE_MAKE_PROGRAM=$ninjaExe" `
     "-DCMAKE_BUILD_TYPE=$Config" `
+    "-DWFC_DEV_TOOLS=$(if ($Shipping) { 'OFF' } else { 'ON' })" `
     "-DCMAKE_C_COMPILER=$clangDir\clang.exe" `
     "-DCMAKE_CXX_COMPILER=$clangDir\clang++.exe"
 if ($LASTEXITCODE -ne 0) { throw "cmake configure failed" }

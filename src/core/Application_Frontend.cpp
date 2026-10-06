@@ -380,10 +380,19 @@ template <class W> std::string qaTool(W& w, platform::QaRequest::Kind k, const s
 }
 
 void Application::qaTick(const platform::InputFrame& in) {
-    // DEBUG-ONLY QA panel (NOT ORIGINAL): only with WFC_QA=1. A separate tool window (F10 toggles it); its requests run
-    // the normal frontend flow (party lobby -> private game -> map -> countdown) through the script runner.
-    static const bool enabled = std::getenv("WFC_QA") != nullptr;
-    if (!enabled || !frontend_) return;
+    // DEBUG-ONLY QA panel (NOT ORIGINAL): development builds only (WFC_DEV_TOOLS; compiled out of shipping-style
+    // builds). A separate tool window, never part of the frontend menus: F10 opens / hides it; WFC_QA=1 also opens it at
+    // startup (and enables the WFC_QA_LAUNCH / WFC_QA_RESTART_AFTER shortcuts). Its requests run the normal frontend
+    // flow (party lobby -> private game -> map -> countdown) through the script runner.
+#if !WFC_DEV_TOOLS
+    (void)in;
+    return;
+#else
+    if (!frontend_) return;
+    static const bool atStartup = std::getenv("WFC_QA") != nullptr;
+    bool f10 = false;
+    for (uint16_t k : in.keyPresses) f10 = f10 || k == 0x79;   // VK_F10 (Win32Window takes it from WM_SYSKEYDOWN)
+    if (!qa_ && !atStartup && !f10) return;   // created on the first F10
     frontend::GameFlow& flow = frontend_->flow();
     if (!qa_) {
         qa_ = platform::createQaPanel();
@@ -397,11 +406,14 @@ void Application::qaTick(const platform::InputFrame& in) {
         weapons.push_back({"(class default)", ""});
         for (const std::string& w : qaWeapons(world_)) weapons.push_back({w, w});
         qa_->setOptions(maps, modes, chars, weapons);
-        qa_->show(true);
         qa_->setStatus("Debug QA panel (not original). F10 toggles.");
-        LOG_INFO("QA panel enabled (WFC_QA, debug only)");
+        LOG_INFO("QA panel created (developer build, %s)", atStartup ? "WFC_QA" : "F10");
+        if (atStartup) qa_->show(true);
     }
-    for (uint16_t k : in.keyPresses) if (k == 0x79) qa_->show(!qa_->visible());   // VK_F10
+    if (f10) {
+        qa_->show(!qa_->visible());
+        frontend::FlowTrace::emit("qa.panel", {{"visible", frontend::FlowTrace::boolean(qa_->visible())}, {"provenance", "DEBUG ONLY"}});
+    }
     platform::QaRequest r = qa_->poll();
     {   // command-line equivalents (debug only): WFC_QA_LAUNCH=MODE,MAPID,CLASS once from the title;
         // WFC_QA_RESTART_AFTER=<s>: one Restart after that long in a match
@@ -475,6 +487,7 @@ void Application::qaTick(const platform::InputFrame& in) {
                    (r.kind == platform::QaRequest::Kind::Title ? "" : r.mode + " map " + std::to_string(r.mapId) + " as " + r.character));
     frontend::FlowTrace::emit("qa.request", {{"kind", r.kind == platform::QaRequest::Kind::Title ? "title" : "launch"}, {"mode", r.mode},
                                              {"map", std::to_string(r.mapId)}, {"character", r.character}, {"provenance", "DEBUG ONLY"}});
+#endif   // WFC_DEV_TOOLS
 }
 
 void Application::shutdownFrontend() {
