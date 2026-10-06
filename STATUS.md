@@ -3,6 +3,39 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08m (2026-10-06) — Plasma Cannon charge glow, grenade / death sounds, SubUV / weapon material parameters — branch `integration/milestone-08m`
+
+On 08l (d0c36f3).
+
+| lane | head | content |
+|---|---|---|
+| agents/gameplay | 0e82a1d | 24p: Plasma Cannon charge glow (held-weapon draw sets "Overheat" = charge glow, cleared after) |
+| agents/rendering | 11d2910 | M70 per-owner weapon material parameters (setDrawMaterialParam / clearDrawMaterialParam; 36 weapon materials gain the runtime parameter) + docs |
+| agents/systems | 5add58d | M08o grenade toss / flight / fuse / bounce / explosion sounds (grenades had none: the toss bypasses spawnProjectile); victim death sounds (vehicle wreck, robot melee disintegrate); SYSTEMS_M08O glue applied |
+| agents/experimental | eea8a23 | tools/fidelity/ refresh (jet_servo / jet_lean checks) |
+
+**Integration:**
+- 24p's charge glow is kept inside the integration sysprof DrawWeapon scope.
+- Render data regenerated (M70 weapon materials).
+
+**Validation:**
+- Builds and suites:
+  - clean Debug / Release; frontend 79 / 0;
+  - harness **342 / 0 / 8**; audio **708 / 0**;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520.
+- Gameplay tests: RMUZZLE 4, CHARGE 9, MUZZLE 5, PROJFX 3, QATEST 7, FINEAIM 3, SWITCH 32, SCORE 9, XFORMVIS 16, VEHPHYS 27.
+- Map suite: 8 / 8 versus maps.
+- 4-match soak: 0 long GPU frames, 0 resets / leaks / timeouts.
+- release_path_check PASS.
+- Visual suite 9 / 11: both route-match frames have new views (1324 / 1518 draws).
+  - Match 1 is in vehicle form; match 2 is a Scatter Blaster shot with its muzzle flash. Inspected: complete geometry and HUD.
+  - The scripted player now moves differently (24n vehicle timing / weapons); the references are stale, not a regression.
+- WFC_RENDERSTATS soak:
+  - a 511 ms lobby frame loading the soak's saved custom character (Bumblebee body; Gameplay 24r preloadSelections fixes it in 08n);
+  - 90-111 ms CPU frames mid-match (render span < 3 ms): unattributed, profiled in 08n.
+
 ## INTEGRATION MILESTONE 08l (2026-10-06) — lobby character-select hitch fixed (Gameplay 24o) — branch `integration/milestone-08l`
 
 On 08k (e467663). agents/gameplay 335ea8e (24o): at the end of startLocalMatch, under the loading screen, the local faction's four MP default bodies are cached and prewarmed. A preset class pick in the lobby no longer loads on a visible frame. The block sits after the integration lobby-team assignment. A custom CaC chassis outside the faction defaults still loads on its selection frame (Gameplay's noted gap).
