@@ -205,11 +205,13 @@ bool BotNav::findPath(const core::Vec3& from, const core::Vec3& to, const Agent&
     const core::Vec3 goalC = cells_[(size_t)g].centroid;
     setNode(s, 0.0f, -1, -1); open.push({W * core::length(cells_[(size_t)s].centroid - goalC), s});
     int n = 0;
+    int nearest = s; float nearestD = core::length(cells_[(size_t)s].centroid - goalC);
     while (!open.empty()) {
         const int c = open.top().second; open.pop();
         if (isClosed(c)) continue;
         closedStamp_[(size_t)c] = G; ++n;
         if (c == g) break;
+        { const float d = core::length(cells_[(size_t)c].centroid - goalC); if (d < nearestD) { nearestD = d; nearest = c; } }
         if (n > 4000) break;   // one-way (drop-only) unreachable goals would exhaust the mesh: give up, the bot picks another goal
         const Cell& cc = cells_[(size_t)c];
         for (const Portal& p : cc.portals) {
@@ -229,7 +231,13 @@ bool BotNav::findPath(const core::Vec3& from, const core::Vec3& to, const Agent&
         }
     }
     if (expanded) *expanded = n;
-    if (stamp_[(size_t)g] != G || came_[(size_t)g] < 0) return false;
+    core::Vec3 endPos = to;
+    if (stamp_[(size_t)g] != G || came_[(size_t)g] < 0) {
+        // Unreachable goal (one-way pieces, a point off the walkable set): the reachable cell nearest to it, when close enough -
+        // the bot gets as near as the mesh allows instead of standing still.
+        if (nearest == s || nearestD > 30.0f) return false;
+        g = nearest; endPos = cells_[(size_t)g].centroid;
+    }
     std::vector<int> chain;
     for (int c = g; c >= 0; c = came_[(size_t)c]) { chain.push_back(c); if (c == s) break; }
     std::reverse(chain.begin(), chain.end());
@@ -283,7 +291,7 @@ bool BotNav::findPath(const core::Vec3& from, const core::Vec3& to, const Agent&
         else portals.push_back({b0, a0});
         portalCell.push_back(c1);
     }
-    flush(to, g);
+    flush(endPos, g);
     // Drop the duplicate start point and points closer than 0.5 m to the previous one.
     std::vector<Waypoint> pruned;
     core::Vec3 prev = from;

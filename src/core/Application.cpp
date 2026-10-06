@@ -163,6 +163,7 @@ bool Application::init() {
     if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
     if (std::getenv("WFC_BOTNAVTEST")) { runBotNavTest(); return false; }           // bot nav data + path corridor validity
     if (std::getenv("WFC_XPTEST")) { runXpTest(); return false; }                   // XP / stat award producer
+    if (std::getenv("WFC_BOTOBJTEST")) { runBotObjectiveTest(); return false; }     // bots in KOTH / DOM / CTF / EXT
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -4435,6 +4436,82 @@ void Application::runXpTest() {
         LOG_INFO("XPTEST %s: %zu awards, %zu stats, local XP this match %ld", mode == 0 ? "TDM" : "DM", got.size(), stats.size(), total);
     }
     LOG_INFO("XPTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_BOTOBJTEST: bots play the objective modes (KOTH, DOM, CTF, EXT; or WFC_BOTOBJTEST_MODES=KOTH,DOM...) with the human idle:
+// 5 friendly + 6 enemy MEDIUM bots for WFC_BOTOBJTEST_SECS (default 150) s each. Checks the objective events the bots cause
+// (zone holds, node captures, flag / bomb pickups, captures / plants), goal kinds in use and no bot stuck out of combat.
+void Application::runBotObjectiveTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("BOTOBJ %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    const float secs = std::getenv("WFC_BOTOBJTEST_SECS") ? (float)std::atof(std::getenv("WFC_BOTOBJTEST_SECS")) : 150.0f;
+    std::string modes = std::getenv("WFC_BOTOBJTEST_MODES") ? std::getenv("WFC_BOTOBJTEST_MODES") : "KOTH,DOM,CTF,EXT";
+    using T = game::GameplayEventType;
+    size_t p0 = 0;
+    while (p0 < modes.size()) {
+        size_t p1 = modes.find(',', p0); if (p1 == std::string::npos) p1 = modes.size();
+        const std::string mode = modes.substr(p0, p1 - p0); p0 = p1 + 1;
+        game::MatchLaunch L;
+        game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=" + mode + "?TimeLimit=" + std::to_string((int)secs + 30) +
+                                   "?BotsFriendly=5?BotsEnemy=6?BotDifficulty=1", L);
+        if (!world_.launchMatch(L)) { check(false, mode + ": launch"); continue; }
+        const int me = world_.localMatchPlayer();
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        world_.match().selectCharacter(me, cs);
+        world_.qaSetGodMode(true);   // the idle human does not feed the enemy (QA; no effect without WFC_QA)
+        const size_t ev0 = world_.match().gameplayEvents().size();
+        std::map<std::string, int> goalKinds; std::map<int, core::Vec3> lastPos; std::map<int, float> stillFor; float worstStill = 0.0f;
+        platform::InputFrame idle;
+        for (int i = 0; i < (int)((secs + 10.0f) / dt); ++i) {
+            if (world_.match().state() == game::Match::State::MatchOver) break;
+            world_.handleInput(idle, dt); world_.tick(dt);
+            if (i % 30 == 0)
+                for (const game::BotBrain& b : world_.botBrains()) if (b.wasSpawned) goalKinds[game::botGoalName(b.goal.kind)]++;
+            for (const game::MatchOpponent* o : world_.matchOpponents()) {
+                if (!o->spawned()) { lastPos.erase(o->matchPlayer()); stillFor[o->matchPlayer()] = 0.0f; continue; }
+                const core::Vec3 p = o->pawn().position();
+                auto it = lastPos.find(o->matchPlayer());
+                if (it != lastPos.end()) {
+                    const game::BotBrain* b = world_.botBrain(o->matchPlayer());
+                    // Standing on a held / defended point or fighting is not idling.
+                    const bool busy = b && (b->target >= 0 || ((b->goal.kind == game::BotGoalKind::Hold || b->goal.kind == game::BotGoalKind::Defend ||
+                                       b->goal.kind == game::BotGoalKind::Capture || b->goal.kind == game::BotGoalKind::Contest || b->goal.kind == game::BotGoalKind::Return ||
+                                       b->goal.kind == game::BotGoalKind::Support) && core::length(p - b->goal.pos) < 12.0f));
+                    float& sf = stillFor[o->matchPlayer()];
+                    sf = (core::length(p - it->second) < 0.02f && !busy) ? sf + dt : 0.0f;
+                    if (sf > 15.0f && sf - dt <= 15.0f && b)
+                        LOG_INFO("BOTOBJ idle 15 s: p%d pos (%.1f %.1f %.1f) cell %d %s goal %s (%.1f %.1f %.1f) d %.1f path %zu wp %zu mission %d target %d stuck %d noPaths %d",
+                                 b->player, p.x, p.y, p.z, world_.botNav().findCell(p, 0.0f), game::formName(o->pawn().moveForm()), game::botGoalName(b->goal.kind),
+                                 b->goal.pos.x, b->goal.pos.y, b->goal.pos.z, core::length(p - b->goal.pos), b->path.size(), b->wp, (int)b->mission, b->target, b->stuckLevel, b->noPaths);
+                    worstStill = std::max(worstStill, sf);
+                }
+                lastPos[o->matchPlayer()] = p;
+            }
+        }
+        std::map<std::string, int> obj; int kills = 0;
+        for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) {
+            const auto& ev = world_.match().gameplayEvents()[e];
+            if (ev.type == T::Objective) obj[ev.objective]++;
+            kills += ev.type == T::Kill;
+        }
+        std::string objs, kinds;
+        for (auto& kv : obj) objs += kv.first + " " + std::to_string(kv.second) + ", ";
+        for (auto& kv : goalKinds) kinds += kv.first + " " + std::to_string(kv.second) + ", ";
+        LOG_INFO("BOTOBJ %s: kills %d; objective events: %s", mode.c_str(), kills, objs.c_str());
+        LOG_INFO("BOTOBJ %s: goal samples: %s longest idle %.1f s; team scores %d / %d; AI %.3f ms avg", mode.c_str(), kinds.c_str(), worstStill,
+                 world_.match().teamScore(0), world_.match().teamScore(1), world_.botMsAverage());
+        if (mode == "KOTH") check(obj["ZoneHold"] >= 1 && (world_.match().teamScore(0) + world_.match().teamScore(1)) > 0, "KOTH: bots hold the active zone and score");
+        if (mode == "DOM") check(obj["NodeCapture"] >= 2, "DOM: bots capture nodes");
+        if (mode == "CTF") check(obj["FlagTaken"] >= 1, "CTF: bots take the Code of Power");
+        if (mode == "EXT") check(obj["BombTaken"] >= 1, "EXT: bots take the bomb");
+        if (mode == "CTF") LOG_INFO("BOTOBJ CTF captures %d returns %d", obj["FlagCapture"], obj["FlagReturn"]);
+        if (mode == "EXT") LOG_INFO("BOTOBJ EXT plants %d detonations %d defuses %d", obj["BombPlant"], obj["BombDetonate"], obj["BombDefuse"]);
+        check(kills >= 5, mode + ": bots fight (" + std::to_string(kills) + " kills)");
+        check(worstStill < 20.0f, mode + ": no bot idle away from its objective for 20 s");
+        world_.qaSetGodMode(false);
+    }
+    LOG_INFO("BOTOBJ SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

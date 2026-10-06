@@ -125,8 +125,100 @@ void World::addBotBrain(int player, int difficulty) {
 
 // The goal of a bot without a visible enemy: shared objective layer. TDM / DM: attack the most recent enemy sighting by the
 // bot's team (callouts; PC ADAPTATION), else roam between the map's anchors (pickups and starts) on the nav mesh.
+core::Vec3 World::botSnap(const core::Vec3& p) const {
+    const int c = botNav_.findCell(p, 15.0f);
+    if (c < 0) return p;
+    const BotNav::Cell& cell = botNav_.cells()[(size_t)c];
+    // The point itself when it is on that cell's floor, else the cell centre.
+    return botNav_.findCell(p, 0.0f) == c ? core::Vec3{p.x, cell.centroid.y, p.z} : cell.centroid;
+}
+
+// Objective goals of the four objective modes on the shared goal layer. Roles: each bot is an objective player or a hunter by a
+// fixed share per mode (PC ADAPTATION); carriers, defusers and returners are on a mission that combat does not interrupt.
+bool World::botModeGoal(BotBrain& b, const Character& pc, BotGoal& g) {
+    const MatchPlayer& me = match_.players()[(size_t)b.player];
+    const int team = me.team;
+    const core::Vec3 pos = pc.position();
+    const unsigned role = (unsigned)b.player * 2654435761U >> 28;   // 0..15, fixed per participant
+    auto at = [&](BotGoalKind k, const core::Vec3& p, float r, bool mission) { g.kind = k; g.pos = botSnap(p); g.radius = r; b.mission = mission; return true; };
+    const auto& objs = mapState_.objectives();
+    switch (matchMode_) {
+        case MatchMode::KOTH: {
+            // Power Struggle: hold the active zone (most of the team), hunt with the rest.
+            const int z = mapState_.activeKothZone();
+            if (z < 0 || (size_t)z >= objs.size() || role >= 11) return false;
+            const ObjectiveObject& o = objs[(size_t)z];
+            return at(BotGoalKind::Hold, o.pos, 4.0f, o.contains(pos));
+        }
+        case MatchMode::DOM: {
+            // Conquest: contest a node the enemy is taking, else capture the nearest node not held by us, else defend one.
+            int best = -1; float bestD = 1e9f; BotGoalKind kind = BotGoalKind::Capture;
+            for (size_t i = 0; i < objs.size(); ++i) {
+                const ObjectiveObject& o = objs[i];
+                if (!o.activeInMode || o.cls != "TnDominationPoint") continue;
+                const float d = hdist(o.pos, pos) + (float)((role + i) % 4) * 15.0f;   // spread the team over nodes
+                BotGoalKind k = o.defenderTeam == team ? (o.claimingTeam != 255 && o.claimingTeam != team ? BotGoalKind::Contest : BotGoalKind::Defend)
+                                                       : BotGoalKind::Capture;
+                const float pri = k == BotGoalKind::Contest ? -60.0f : (k == BotGoalKind::Capture ? 0.0f : 80.0f);
+                if (d + pri < bestD) { bestD = d + pri; best = (int)i; kind = k; }
+            }
+            if (best < 0 || role >= 13) return false;
+            return at(kind, objs[(size_t)best].pos, 3.0f, objs[(size_t)best].contains(pos));
+        }
+        case MatchMode::CTF:
+        case MatchMode::EXT: {
+            // The live carried objective: CTF authors one flag factory per team and only the defenders' is in play this round.
+            const MapState::Carried* live = nullptr;
+            for (const MapState::Carried& q : mapState_.carried()) if (q.holder >= 0 || q.dropped || q.active) { live = &q; break; }
+            if (!live) return false;
+            const MapState::Carried& c = *live;
+            const bool ctf = matchMode_ == MatchMode::CTF;
+            const int mine = mapState_.carriedBy(b.player);
+            if (ctf) {
+                const bool attacking = match_.attackingTeam() == team;
+                if (attacking) {
+                    if (mine >= 0) {       // carry the Code of Power to our active capture point
+                        for (const ObjectiveObject& o : objs)
+                            if (o.activeInMode && o.cls == "TnFlagCapturePoint" && o.state == ObjectiveObject::State::Active) return at(BotGoalKind::Capture, o.pos, 2.0f, true);
+                        return false;
+                    }
+                    if (c.holder >= 0) return role < 8 ? at(BotGoalKind::Support, c.pos, 8.0f, false) : false;   // escort the carrier
+                    return at(BotGoalKind::Retrieve, c.dropped ? c.pos : objs[(size_t)c.home].pos, 1.5f, false);
+                }
+                if (c.holder >= 0) { g.target = c.holder; return at(BotGoalKind::Attack, c.pos, 4.0f, false); }   // stop the carrier
+                if (c.dropped) return at(BotGoalKind::Return, c.pos, 2.0f, hdist(c.pos, pos) < 6.0f);           // stand on it to return
+                return role < 10 ? at(BotGoalKind::Defend, objs[(size_t)c.home].pos + core::Vec3{b.frange(-10, 10), 0, b.frange(-10, 10)}, 6.0f, false) : false;
+            }
+            // Countdown to Extinction: the bomb.
+            const MapState::Planted& pl = mapState_.planted();
+            if (pl.active && pl.point >= 0 && (size_t)pl.point < objs.size()) {
+                if (pl.team == team) return at(BotGoalKind::Defend, objs[(size_t)pl.point].pos, 6.0f, false);     // guard our plant
+                return at(BotGoalKind::Contest, objs[(size_t)pl.point].pos, 2.0f, true);                           // defuse theirs
+            }
+            if (mine >= 0) {       // carry the bomb to the nearest enemy plant point and plant it
+                int best = -1; float bestD = 1e9f;
+                for (size_t i = 0; i < objs.size(); ++i)
+                    if (objs[i].activeInMode && objs[i].cls == "TnBombPlantPoint" && objs[i].defenderTeam != team && hdist(objs[i].pos, pos) < bestD) { bestD = hdist(objs[i].pos, pos); best = (int)i; }
+                if (best >= 0) return at(BotGoalKind::Attack, objs[(size_t)best].pos, 2.0f, true);
+                return false;
+            }
+            if (c.holder >= 0) {
+                if (c.holderTeam == team) return role < 8 ? at(BotGoalKind::Support, c.pos, 8.0f, false) : false;
+                g.target = c.holder; return at(BotGoalKind::Attack, c.pos, 4.0f, false);
+            }
+            if (c.active || c.dropped) return role < 12 ? at(BotGoalKind::Retrieve, c.dropped ? c.pos : objs[(size_t)c.home].pos, 1.5f, false) : false;
+            return false;
+        }
+        default: return false;
+    }
+}
+
 BotGoal World::botObjectiveGoal(BotBrain& b, const Character& pc) {
     BotGoal g;
+    b.mission = false;
+    if (match_.matchTime() >= b.objectiveBlockedUntil && botModeGoal(b, pc, g)) return g;
+    b.mission = false;
+    g = BotGoal{};
     const MatchPlayer& me = match_.players()[(size_t)b.player];
     float bestT = -1e9f;
     for (const BotBrain& m : bots_) {
@@ -215,6 +307,7 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
         if (c.p == b.target) score -= 8.0f;
         if (c.p == b.lastAttacker && now - b.lastDamageTime < 3.0f) score -= 10.0f;
         if (c.c->health().current < c.c->health().max * 0.35f) score -= 4.0f;
+        if (mapState_.carriedBy(c.p) >= 0) score -= 15.0f;   // the enemy flag / bomb carrier first
         if (score < bestScore) { bestScore = score; best = c.p; }
     }
     if (best != b.target) {
@@ -224,7 +317,14 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
     // Goal: chase / hold against a target, else the objective layer.
     const bool visible = b.target >= 0 && b.seen[b.target].visible;
     BotGoal ng;
-    if (b.target >= 0) { ng.kind = BotGoalKind::Attack; ng.pos = b.seen[b.target].pos; ng.target = b.target; ng.radius = 4.0f; }
+    // Objective modes re-evaluate every think (carriers, flags and zones move); an objective errand (carrying, defusing,
+    // returning, standing on a point) keeps its goal through combat - the bot fights on the move.
+    const bool objectiveMode = matchMode_ != MatchMode::TDM && matchMode_ != MatchMode::DM;
+    BotGoal og; bool haveOg = false;
+    if (objectiveMode) { og = botObjectiveGoal(b, pc); haveOg = og.kind != BotGoalKind::Roam; }
+    if (haveOg && b.mission) ng = og;
+    else if (b.target >= 0) { ng.kind = BotGoalKind::Attack; ng.pos = b.seen[b.target].pos; ng.target = b.target; ng.radius = 4.0f; b.mission = false; }
+    else if (haveOg) ng = og;
     else if (!b.hasGoal || b.goal.kind == BotGoalKind::Attack || hdist(b.goal.pos, pc.position()) < b.goal.radius || now - b.goalTime > 40.0f)
         ng = botObjectiveGoal(b, pc);
     else ng = b.goal;
@@ -291,6 +391,7 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
             if (vehicle) { b.noVehicleUntil = match_.matchTime() + 15.0f; b.wantVehicle = false; }   // no vehicle corridor: walk it
             else {                                                                                   // unreachable goal: another
                 if (b.goal.kind == BotGoalKind::Attack && b.target < 0) b.ignoreSightingsUntil = match_.matchTime() + 8.0f;
+                if (b.goal.kind != BotGoalKind::Attack && b.goal.kind != BotGoalKind::Roam) { b.objectiveBlockedUntil = match_.matchTime() + 10.0f; b.mission = false; }
                 if (b.target < 0) b.hasGoal = false;
             }
         }
@@ -305,7 +406,7 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
     const AiWeaponData& ad = aiWeaponData(pc.weapon().def ? pc.weapon().def->id : "", pc.weapon().magSize);
     const bool inBand = visible && tdist <= aiRangeMaxM(ad.desired) && tdist >= aiRangeMinM(ad.desired) * 0.7f;
     const bool tooClose = visible && tdist < aiRangeMinM(ad.desired) * 0.7f;
-    if (!inBand && !tooClose) {
+    if (b.mission || (!inBand && !tooClose)) {
         // Path following.
         while (b.wp < b.path.size() && hdist(b.path[b.wp].pos, pos) < (vehicle ? 2.5f : 1.2f) && b.path[b.wp].action != 1) { ++b.wp; b.bestDist = 1e9f; }
         // Look-ahead: skip a corner when the one after it is directly walkable (one check per step); vehicles carry momentum

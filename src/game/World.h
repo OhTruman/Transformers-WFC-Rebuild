@@ -503,6 +503,8 @@ private:
     void botAimAndFire(MatchOpponent& o, BotBrain& b, float dt);
     void botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& aimPoint);
     BotGoal botObjectiveGoal(BotBrain& b, const Character& pc);
+    bool botModeGoal(BotBrain& b, const Character& pc, BotGoal& g);   // CTF / EXT / KOTH / DOM objective goals (false: none)
+    core::Vec3 botSnap(const core::Vec3& p) const;                   // a point on the bot nav near p (p itself when none)
     core::Vec3 botEye(const Character& c) const;
     bool botLineOfSight(const core::Vec3& from, const core::Vec3& to) const;
     void fireHitscanAs(int instigator, const Character& shooter, const Weapon& w, const core::Vec3& origin, const core::Vec3& dir);

@@ -97,6 +97,9 @@ struct BotBrain {
     float switchHold = 0.0f;
     float transformCooldown = 0.0f;
     bool wantVehicle = false;
+    float objectiveBlockedUntil = 0.0f;   // the objective goal had no path: hunt meanwhile
+    bool mission = false;               // the goal is an objective errand that combat must not interrupt (carrying, defusing, ...)
+    float wanderT = 0.0f; core::Vec3 wanderPos{0, 0, 0};   // holding a point: small moves inside its radius
     float noVehicleUntil = 0.0f;
     // Diagnostics
     unsigned rng = 1;

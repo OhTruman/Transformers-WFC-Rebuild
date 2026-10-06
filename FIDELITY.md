@@ -205,6 +205,26 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - WFC_XPTEST 14/14 (TDM: First Blood + Kill in one transaction, FirstDeath, Assist, kills stat, Double Kill, 3 Kill Streak + extra,
   Beat Down, Funkiller, Payback, GameWin / GameLose; DM: Kill 25, Double Kill 50, no win / lose XP). WFC_XPLOG logs each award.
 
+### Bots in the objective modes (25e) [PC ADAPTATION on the shared goal layer]
+- World::botModeGoal fills the shared BotGoal layer per mode, with fixed per-bot roles (objective player / hunter):
+  - KOTH: Hold the active zone.
+  - DOM: Contest a node the enemy is taking, Capture the nearest node not held, else Defend (the team spreads over nodes).
+  - CTF single flag, by the round's attacking team:
+    - attackers Retrieve the live flag, carry it to the active capture point (Capture), or escort the carrier (Support);
+    - defenders Attack the carrier, Return a dropped flag (standing on it), or Defend home.
+  - EXT: Retrieve the bomb, carry it to the nearest enemy plant point (Attack), Contest (defuse) an enemy plant, Defend our own,
+    or Support our carrier.
+- Errands (carrying, defusing, returning, standing on a point) are missions: the bot keeps its route and fights on the move.
+  Carriers are the preferred targets.
+- An unreachable objective falls back to hunting for 10 s.
+- A* returns a partial path to the reachable cell nearest the goal (<= 30 m) instead of failing.
+- WFC_BOTOBJTEST 12/12 (Streets, 5 v 6 MEDIUM, 150 s each):
+  - KOTH: zone holds 11, scores 87 / 10;
+  - DOM: node captures 11;
+  - CTF: flag taken 18, capture 1, return 1;
+  - EXT: bomb taken 12, plants 2, detonations 2;
+  - kills in every mode; longest idle <= 8.1 s.
+
 ### QA live character swap [DEV / QA TOOLING, not original]
 - World::qaSetCharacter(selection): preloadSelections, then Match::selectCharacter, then the QA suicide; the normal respawn wave
   applies it.
