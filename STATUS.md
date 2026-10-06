@@ -3,6 +3,40 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08j (2026-10-06) — ability / buff / hover / kill-confirm sounds, Plasma Cannon charge, particle fidelity M64-M68, loading-movie reuse — branch `integration/milestone-08j`
+
+On 08i (b867397).
+
+| lane | head | content |
+|---|---|---|
+| agents/rendering | 5bc36bf | M64 LocationEmitter / particle-placed Trail2 chains (casing smoke, tracer smoke, debris sparks); M65 fixed-axis ribbons; M66 sprite LockAxis / PSA_Velocity (muzzle flashes down the barrel, flat impact rings); M67 SubUV flipbooks; M68 octagon / BestFit sprite polygons |
+| agents/frontend | 5dcc70a | loading-underlay decoder kept between travels and opened under the boot title load (31-40 ms per travel start removed); load-yield profiler scopes |
+| agents/gameplay | 1fa3ad9 | 24k Plasma Cannon charge levels (TnChargeWeapon), thrown-grenade spin; WFC_DROPTEST; FIDELITY vehicle-handling notes |
+| agents/systems | 47b74c0 | M08i ability / buff / hover / kill-confirm / transform-failed sounds (+ SYSTEMS_M08I_ability_audio_glue.patch); M08j title level-audio start on a worker (50 → 0.5 ms), prefetched-but-unloaded level music leak fixed |
+| agents/experimental | 57367c4 | tools/fidelity/ refresh only: aim origin on the crosshair ray / nearest pawn (Gameplay 24i model); vehicle checks per corrected A4 |
+
+**Integration:**
+- M08i glue applied clean.
+- WFC_CHARGETEST / WFC_DROPTEST on the direct-boot list.
+- Render data regenerated with 5bc36bf's tools.
+- The integration audio-suite runner was missing AbilityAudio.cpp and printed a stale count; fixed and rerun.
+
+**Validation:**
+- Builds and suites:
+  - clean Debug / Release; frontend 79 / 0;
+  - **fidelity harness 333 pass / 0 FAIL / 11 known-deviation**;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520, chaos 0; **audio 666 / 0**.
+- Gameplay tests: CHARGE 7 / 7, RMUZZLE 4, MUZZLE 5, PROJFX 3, QATEST 7, FINEAIM 3, SWITCH 32, SCORE 9, XFORMVIS 16.
+- Map suite: 8 / 8 versus maps.
+- release_path_check PASS; visual suite 10 / 11 (the route spawn side varies).
+- 4-match soak: 0 timeouts, 0 missing cues, 0 leaks.
+- Create-a-Character hitch: one 365 ms GPU frame at CaC open.
+  - With WFC_RENDERSTATS: a 693 ms CPU frame when the Bumblebee preview body first compiles its programs (163 + 99 ms) and uploads its textures.
+  - Owned by Rendering M69 (50f0742) + Frontend 3aac479, both queued for 08k.
+  - In matches: 0 first-use items and no transform spikes (M59 holds).
+
 ## INTEGRATION MILESTONE 08i (2026-10-06) — crosshair-ray trace start, muzzle-origin projectiles, chassis preload, beam / trail / lightmap fidelity, Experimental fidelity harness — branch `integration/milestone-08i`
 
 On 08h (a1388fa).
