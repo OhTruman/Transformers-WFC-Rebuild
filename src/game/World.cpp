@@ -1943,6 +1943,16 @@ void World::tickMatch(float dt) {
                         if (o->matchPlayer() == e.player) {
                             onLocalKilledPawn(false, o->pawn().moveForm() == Form::Robot, o->pawn().chassis().id);   // no headshot state yet
                         }
+                {   // [Systems M08o] the victim's death sound (vehicle form / robot melee death), at the victim
+                    const std::string dt = match_.killHistory().empty() ? std::string() : match_.killHistory().back().damageType;
+                    if (e.player == localPlayer_) {
+                        const Character& vp = player_.pawn();
+                        onPawnDeath(vp.chassis().id, vp.moveForm() == Form::Vehicle, dt, vp.actorLocation());
+                    } else
+                        for (MatchOpponent* o : opponents_)
+                            if (o->matchPlayer() == e.player && o->spawned())
+                                onPawnDeath(o->pawn().chassis().id, o->pawn().moveForm() == Form::Vehicle, dt, o->pawn().actorLocation());
+                }
                 if (e.player == localPlayer_) localDead_ = true;
                 for (MatchOpponent* o : opponents_) if (o->matchPlayer() == e.player) o->despawn();
                 break;
@@ -2767,6 +2777,12 @@ void World::tickAbilityEffects(float dt) {
             const std::string gid = d.id;
             if (gid == "FlakGrenades" || gid == "FlashBangs" || gid == "HealGrenades") pr.spinRate = -100000.0f * 6.2831853f / 65536.0f;
             projectiles_.push_back(pr);
+            {   // [Systems M08o] the grenade's projectile sounds (FlightSound / FuseSound / BounceSound / ExplosionSound)
+                Projectile& np = projectiles_.back();
+                np.weaponClass = "TransContent.TnWeapon" + std::string(d.id);
+                np.audioKey = ++projAudioKey_;
+                onProjectileSpawned(np.audioKey, np.weaponClass, np.pos);
+            }
             projectileFxStart(projectiles_.back());
             LOG_INFO("grenade %s: |v| %.1f m/s pitch %.1f deg (aim %.1f)", d.id, core::length(vel), launchPitch, aimPitch);
         }
@@ -2975,11 +2991,12 @@ const Weapon* World::grenadeBag(const Character& c) const {
 void World::startLocalGrenadeToss() {
     Character& pc = player_.pawn();
     if (localDead_ || pc.moveForm() != Form::Robot || pc.isTransforming() || pc.isMeleeing() || grenadeTossDelay_ >= 0.0f) return;
-    if (pc.carryingHeavy_ != 0) return;   // carrying a WT_Heavy weapon: PlayDryFireSound
     Weapon* gb = nullptr;
     for (Weapon& w : pc.inventoryMutable()) if (w.grenade()) { gb = &w; break; }
+    const std::string gcls = gb && gb->def ? "TransContent.TnWeapon" + std::string(gb->def->id) : std::string();   // [Systems M08o]
+    if (pc.carryingHeavy_ != 0) { if (!gcls.empty()) onGrenadeToss(gcls, true); return; }   // carrying a WT_Heavy weapon: PlayDryFireSound
     if (!gb) return;
-    if (gb->reserve <= 0 || grenadeCooldown_ > 0.0f) return;   // PlayDryFireSound
+    if (gb->reserve <= 0 || grenadeCooldown_ > 0.0f) { onGrenadeToss(gcls, true); return; }   // PlayDryFireSound
     gb->reserve -= 1;
     grenadeCooldown_ = gb->fireInterval;
     const core::Vec3 cam = player_.controller().cameraPos();
@@ -2990,6 +3007,7 @@ void World::startLocalGrenadeToss() {
     const CollisionWorld* line = collision_.valid() ? &collision_ : nullptr;
     if (line && line->segmentHit(a, b, t)) grenadeTarget_ = a + (b - a) * t;
     pc.playAction("GrenadeThrow", true);
+    onGrenadeToss(gcls, false);                        // [Systems M08o] PerformToss: GrenadeBagMesh.PlaySoundEvent(WP_Fire)
     pc.exposeSelf();   // ServerTossGrenade -> ExposeSelf
     grenadeTossDelay_ = 0.4f;
 }
