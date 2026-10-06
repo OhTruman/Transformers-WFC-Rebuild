@@ -180,6 +180,16 @@ const Db& db() {
 
 const std::string& empty() { static const std::string e; return e; }
 
+// The loaders' last step: register the cue set (normal), or - while a warm tag is set (CharacterAudio::warm*) - only decode
+// its waves on a worker for a later load (SoundCues::warmCueWaves), so that load finds them in the device cache.
+const std::string* g_warmTag = nullptr;
+int commit(SoundCues& cues, const assets::Json& sub) {
+    if (sub.obj.empty()) return 0;
+    const char* root = std::getenv("WFC_ASSETS");
+    const std::string content = std::string(root ? root : core::config::kAssetRootDefault) + "/../content/";
+    return g_warmTag ? cues.warmCueWaves(sub, content, *g_warmTag) : cues.addCues(sub, content);
+}
+
 } // namespace
 
 const std::string& CharacterAudioProfile::voiceCue(const std::string& event) const {
@@ -240,10 +250,7 @@ int CharacterAudio::loadCues(SoundCues& cues, const CharacterAudioProfile& p) {
         auto it = d.weaponEvents.find(w);
         if (it != d.weaponEvents.end()) for (const auto& e : it->second) want(e.second);
     }
-    if (sub.obj.empty()) return 0;
-    const char* root = std::getenv("WFC_ASSETS");
-    const std::string content = std::string(root ? root : core::config::kAssetRootDefault) + "/../content/";
-    return cues.addCues(sub, content);
+    return commit(cues, sub);
 }
 
 int CharacterAudio::loadWeaponCues(SoundCues& cues, const std::string& cls) {
@@ -264,9 +271,7 @@ int CharacterAudio::loadWeaponCues(SoundCues& cues, const std::string& cls) {
     if (an != d.weaponAnims.end())
         for (const WeaponAnimSounds::Clip* c : {&an->second.idle, &an->second.fire, &an->second.reload, &an->second.equip, &an->second.putDown})
             for (const auto& n : c->sounds) want(n.second);
-    if (sub.obj.empty()) return 0;
-    const char* root = std::getenv("WFC_ASSETS");
-    return cues.addCues(sub, std::string(root ? root : core::config::kAssetRootDefault) + "/../content/");
+    return commit(cues, sub);
 }
 
 const std::string& CharacterAudio::abilityTriggerSound(const std::string& cls) {
@@ -311,9 +316,7 @@ int CharacterAudio::loadAbilityCues(SoundCues& cues) {
                                      &kv.second.activation})
             want(*q);
     for (const auto& kv : d.classSounds) for (const auto& f : kv.second) want(f.second);
-    if (sub.obj.empty()) return 0;
-    const char* root = std::getenv("WFC_ASSETS");
-    return cues.addCues(sub, std::string(root ? root : core::config::kAssetRootDefault) + "/../content/");
+    return commit(cues, sub);
 }
 
 const std::string& CharacterAudio::weaponCue(const std::string& cls, const std::string& event) {
@@ -373,9 +376,7 @@ int CharacterAudio::loadHitCues(SoundCues& cues, const CharacterAudioProfile& vi
         const std::string q = victim.voiceCue(*ev);
         if (!q.empty() && !cues.hasCue(q.c_str()) && d.doc["cues"][q].isObject()) sub.obj[q] = d.doc["cues"][q];
     }
-    if (sub.obj.empty()) return 0;
-    const char* root = std::getenv("WFC_ASSETS");
-    return cues.addCues(sub, std::string(root ? root : core::config::kAssetRootDefault) + "/../content/");
+    return commit(cues, sub);
 }
 
 const std::string& CharacterAudio::weaponPickupSound(const std::string& cls) {
@@ -384,4 +385,16 @@ const std::string& CharacterAudio::weaponPickupSound(const std::string& cls) {
     return it == d.weaponPickup.end() ? empty() : it->second;
 }
 
+} // namespace game
+
+namespace game {
+int CharacterAudio::warmCues(SoundCues& cues, const CharacterAudioProfile& p, const std::string& tag) {
+    g_warmTag = &tag; const int n = loadCues(cues, p); g_warmTag = nullptr; return n;
+}
+int CharacterAudio::warmWeaponCues(SoundCues& cues, const std::string& cls, const std::string& tag) {
+    g_warmTag = &tag; const int n = loadWeaponCues(cues, cls); g_warmTag = nullptr; return n;
+}
+int CharacterAudio::warmHitCues(SoundCues& cues, const CharacterAudioProfile& victim, const std::string& cls, const std::string& tag) {
+    g_warmTag = &tag; const int n = loadHitCues(cues, victim, cls); g_warmTag = nullptr; return n;
+}
 } // namespace game

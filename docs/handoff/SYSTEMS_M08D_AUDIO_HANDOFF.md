@@ -218,3 +218,16 @@ Glue (Integration, after merging Gameplay's bots; untested until a tree has both
      added `hitPlayer`: -1 = world / destructible -> DefaultImpactSound; a player -> the hit-effect sound, as on the local path).
 3. Projectiles need nothing: bot rockets go through spawnProjectile, which already reaches onProjectileSpawned / Exploded.
 Bots' muzzle / tracer FX are not drawn yet (Gameplay PARTIAL), so the fire sound plays at the shot origin (eye + aim).
+
+## M09c: spawn-hitch fix - warm every spawnable selection's audio at match load
+
+`World::preloadSelectionAudio(chassisKeys, weaponClasses)`: decodes (on a worker) the waves of each chassis' character
+cue set (CharacterAudio::loadCues: voice / vehicle / foley / clip notifies / weapon events) and of each weapon class (weapon +
+hit cues), tagged with the level. The spawn-frame `setPlayerCharacterAudio` / `preloadWeaponAudio` loads then find
+the waves in the device cache. If the level's audio isn't loaded yet, it is applied when it loads. Unused warm samples are
+released at the next level load (no decode on release).
+Glue (Integration, from Gameplay's selectionPreloadHook / after launchMatch): for every spawnable selection (the 4 faction
+presets, CaC slots, bot rosters): the chassis keys of `resolveChassis(selection, faction)` for each faction it can play, and
+`"TransContent.TnWeapon" + id` of its robot and vehicle weapons. Call it once.
+Measured (real device): spawn-frame loads cold 30-60 ms per selection -> 1.3-4.6 ms warmed; the warm call is 8 ms at load
+(behind the loading screen); PCM back to base after unload.

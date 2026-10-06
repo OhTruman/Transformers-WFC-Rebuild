@@ -308,6 +308,11 @@ public:
 
     // A wave referenced by several cues / events is decoded once.
     bool threadSafeLoad() const override { return true; }   // decode outside the lock; deque storage
+    Sound cached(const std::string& path) const override {
+        std::lock_guard<std::mutex> lk(mx_);
+        auto it = loaded_.find(path);
+        return it == loaded_.end() ? kInvalidSound : it->second;
+    }
     Sound load(const std::string& path) override {
         {
             std::lock_guard<std::mutex> lk(mx_);

@@ -120,6 +120,11 @@ public:
     // the hit-effect sound (as the local path), the world / a destructible (victimPlayer -1) -> the weapon's
     // DefaultImpactSound. Projectile flight / explosion sounds come through onProjectileSpawned / Exploded as for the local pawn.
     void preloadParticipantWeaponAudio(const std::vector<std::string>& weaponClasses);
+    // [Systems M09c] Spawn-hitch fix: at match load, decode (on a worker) the character + weapon cue waves of every selection
+    // that can spawn (faction presets, CaC slots, bot rosters: chassis keys and weapon classes), so the spawn-frame
+    // setPlayerCharacterAudio / preloadWeaponAudio loads find them in the device cache. Applied now if the level's audio is
+    // loaded, else when it loads. Returns waves queued.
+    int preloadSelectionAudio(const std::vector<std::string>& chassisKeys, const std::vector<std::string>& weaponClasses);
     void onParticipantFired(const std::string& weaponClass, const core::Vec3& from);
     void onParticipantImpact(const std::string& weaponClass, const core::Vec3& at, int victimPlayer);
     // [Systems M08i] Abilities / buffs (Gameplay owns them; RE pass 5 s12). A successful ability trigger ("Barrier"):
@@ -288,6 +293,7 @@ private:
     std::set<std::string> weaponAudioLoaded_;      // per level (cleared with the level's cues)
     std::vector<std::string> loadoutWeaponClasses_; // the player's loadout (robot + vehicle weapons)
     std::vector<std::string> participantWeaponClasses_;   // [Systems M09b] every other participant's loadout
+    std::vector<std::string> selectionChassis_, selectionWeapons_;   // [Systems M09c] warmed at level-audio load
     std::map<std::pair<int, int>, float> participantHitEffect_;   // (victim player, hit-effect entry) -> last play (hitClock_)
     WeaponAudio weaponAudio_;
     AbilityAudio abilityAudio_;

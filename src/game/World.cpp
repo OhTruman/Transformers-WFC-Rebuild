@@ -471,6 +471,7 @@ bool World::loadMapAudio(const std::string& level) {
         lastHitEffect_.clear(); participantHitEffect_.clear();
         for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
         for (const std::string& c : participantWeaponClasses_) ensureWeaponAudio(c);   // [Systems M09b] the bots' weapons
+        if (!selectionChassis_.empty() || !selectionWeapons_.empty()) preloadSelectionAudio({}, {});   // [Systems M09c]
         const SoundCues::LocStats& ls = SoundCues::locStats();
         LOG_INFO("localized waves (language %s): %d from the _LOC twin, %d merged copy of that twin, %d not played",
                  std::getenv("WFC_LANGUAGE") ? std::getenv("WFC_LANGUAGE") : "INT", ls.twin, ls.merged, ls.skipped);
@@ -1135,6 +1136,25 @@ void World::onProjectileSpawned(int key, const std::string& weaponClass, const c
 }
 
 void World::onProjectileMoved(int key, const core::Vec3& pos) { weaponAudio_.projectileMoved(cues_, key, pos); }
+
+int World::preloadSelectionAudio(const std::vector<std::string>& chassisKeys, const std::vector<std::string>& weaponClasses) {
+    for (const std::string& c : chassisKeys)
+        if (!c.empty() && std::find(selectionChassis_.begin(), selectionChassis_.end(), c) == selectionChassis_.end()) selectionChassis_.push_back(c);
+    for (const std::string& w : weaponClasses)
+        if (!w.empty() && std::find(selectionWeapons_.begin(), selectionWeapons_.end(), w) == selectionWeapons_.end()) selectionWeapons_.push_back(w);
+    const std::string& tag = levelAudio_.level();
+    if (!audio_ || tag.empty()) return 0;              // not loaded yet: loadMapAudio re-applies
+    int n = 0;
+    for (const std::string& c : selectionChassis_)
+        if (const CharacterAudioProfile* p = CharacterAudio::find(c)) n += CharacterAudio::warmCues(cues_, *p, tag);
+    for (const std::string& w : selectionWeapons_) {
+        n += CharacterAudio::warmWeaponCues(cues_, w, tag);
+        n += CharacterAudio::warmHitCues(cues_, CharacterAudio::defaultProfile(), w, tag);
+    }
+    LOG_INFO("selection audio: %zu chassis, %zu weapon classes -> %d waves decoding on a worker (level %s)",
+             selectionChassis_.size(), selectionWeapons_.size(), n, tag.c_str());
+    return n;
+}
 
 void World::preloadParticipantWeaponAudio(const std::vector<std::string>& classes) {
     for (const std::string& c : classes) {
