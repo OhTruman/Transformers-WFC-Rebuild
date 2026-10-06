@@ -2061,6 +2061,16 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
             a->hasArm = true;
         }
         a->ok = true;
+        // [integration M08e] Rendering M53 / M54: prewarm the body's draw programs once per chassis load (the first
+        // robot -> vehicle transform hitched 65-166 ms compiling / linking them).
+        if (renderer_) {
+            const assets::SkinnedModel* models[3] = {&a->robot, &a->vehicle, a->hasArm ? &a->arm : nullptr};
+            for (const assets::SkinnedModel* m : models) {
+                if (!m) continue;
+                render::MeshData md; md.subs = m->subs; md.mats = m->mats;
+                renderer_->prewarmDynamicMesh(md);
+            }
+        }
     }
     if (a->ok) LOG_INFO("chassis %s (%s): robot %zu clips, vehicle %zu clips, arm %s", id.c_str(), a->def.iconic.c_str(),
                         a->robot.clips.size(), a->vehicle.clips.size(), a->hasArm ? "yes" : "no");

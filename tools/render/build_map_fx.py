@@ -127,6 +127,12 @@ def system_runtime(name, s):
                                 'subimages': [req.get('SubImages_Horizontal', 1), req.get('SubImages_Vertical', 1)]},
                    'mesh': None, 'modules': [], 'assignment_complete': L.get('assignment_complete', False),
                    'default_color': L.get('default_color'), 'size_param': L.get('size_param')}
+            if lod['beam_trail'] is not None:
+                # M55 (RE pass 5 s9, native TypeDataBeam2 Spawn / Trail2 vertex count): taper curves along the beam and
+                # the trail tessellation; CDO defaults TaperFactor / TaperScale 1.0, TessellationStrength 1.0
+                lod['beam_trail']['taper_factor'] = tagged_dist(td.get('TaperFactor'), [1.0])
+                lod['beam_trail']['taper_scale'] = tagged_dist(td.get('TaperScale'), [1.0])
+                lod['beam_trail']['TessellationStrength'] = td.get('TessellationStrength', 1.0)
             if td.get('Mesh'):
                 lod['mesh'] = {'object': td['Mesh'], 'gltf': mesh_gltf(td['Mesh']),
                                'override_material': bool(td.get('bOverrideMaterial', False))}
@@ -180,66 +186,89 @@ def default_color(tail, nrec):
     return None
 
 
+def class_templates():
+    """M51: ParticleSystem templates the shipped weapon / character data references (FlightEffect, muzzle, impact,
+    vehicle FX, abilities) -> {package: {template}}. The original loads them with the class's own FX package
+    (e.g. FX_IonBlaster_p, FX_PlasmaCannon_p), which is not always cooked into a map's level packages."""
+    import glob, re
+    pat = re.compile(r'"(FX_[A-Za-z0-9_]+\.[A-Za-z0-9_]+\.[A-Za-z0-9_]+)"')
+    refs = {}
+    vs = os.path.dirname(VS_MAPS)
+    for f in glob.glob(vs + '/Weapons/*/weapon.json') + glob.glob(vs + '/Characters/*/character.json'):
+        for t in pat.findall(open(f, encoding='utf-8').read()):
+            refs.setdefault(t.split('.')[0], set()).add(t)
+    return refs
+
+
 def library(mapname):
     """M32: every ParticleSystem cooked into the map's level packages (weapon muzzle / tracer / impact templates
     are cooked into each MP BASE package) -> {template: (pstream summary, package)}. The runtime spawns these by name
-    (IRenderer::spawnParticleEffect)."""
+    (IRenderer::spawnParticleEffect). M51: plus the class-data templates the level packages lack, from their own
+    cooked FX package."""
     from ue3obj import map_packages, Repo as _R
     sys.path.insert(0, WFC)
     import pstream
     out = {}
+    work = []                                       # (template, package hint)
     for pk in map_packages(mapname)[0]:
         p = _R([pk]).pkgs[0]
-        for i, e in enumerate(p.exports):
-            if p.class_name(e) != 'ParticleSystem': continue
-            t = p.object_path(i + 1)
-            if t in out: continue
-            pkn = pk[:-4] if pk.lower().endswith('.xxx') else pk
-            try:
-                s = pstream.system(t, pkn)
-            except Exception as ex:
-                print('  library: %s: %s' % (t, ex)); continue
-            if s.get('missing_in'): continue
-            import objtree
-            op = objtree.package(pkn)
-            # M46 / M47: ParticleModuleSizeMultiplyLife driven by an instance parameter (DistributionVectorParticleParameter,
-            # RE pass 4: the HoverFX 'Size'). The LODs' Modules arrays are stripped by the cook, so a LOD uses the module
-            # when its serialized bytes reference the module's export index (big-endian int32; RE raw scan: CarHover_A's
-            # shared _9193 is in all 7 level-0 LODs and no level-1 LOD) [HIGH]
-            import struct as _st
-            pidx = {p.object_path(k + 1).lower(): k for k, _e in enumerate(p.exports)}
-            mods = []
-            for i2, e2 in enumerate(p.exports):
-                path2 = p.object_path(i2 + 1)
-                if p.class_name(e2) == 'DistributionVectorParticleParameter' and path2.lower().startswith(t.lower() + '.')                         and 'sizemultiplylife' in path2.lower():
-                    d2 = _R([pk]).obj(path2.lower()) or {}
-                    mi = pidx.get(path2.rsplit('.', 1)[0].lower())
-                    if mi is not None:
-                        mods.append((_st.pack('>i', mi + 1), {'name': d2.get('ParameterName'),
-                                                              'constant': d2.get('Constant', [1.0, 1.0, 1.0])}))
-            if mods:
-                for e in s['emitters']:
-                    for L in e['lods']:
-                        li = pidx.get(L['lod'].lower())
-                        if li is None: continue
-                        ex = p.exports[li]
-                        blob = p.data[ex['serial_offset']:ex['serial_offset'] + ex['serial_size']]
-                        for pat, sp in mods:
-                            offs = [k for k in range(4, len(blob) - 3) if blob[k:k + 4] == pat]
-                            if not offs: continue
-                            # guards (RE: a raw int32 can collide with float bits / counts): exactly one hit, sitting in
-                            # an object array - preceded by its count (1..32) or by another export of this system
-                            # observed layout (all 18 Streets hits): int32 count (1) + one byte + the int32 module index
-                            prev = _st.unpack_from('>i', blob, offs[0] - 4)[0]
-                            cnt5 = _st.unpack_from('>i', blob, offs[0] - 5)[0] if offs[0] >= 5 else 0
-                            in_array = 1 <= prev <= 32 or 1 <= cnt5 <= 32 or (0 < prev <= len(p.exports) and
-                                       p.object_path(prev).lower().startswith(t.lower() + '.'))
-                            if len(offs) == 1 and in_array:
-                                L['size_param'] = sp
-                            else:
-                                print('  size param: %s %s: %d hit(s), prev int %d - not bound' % (t, L['lod'].split('.')[-1],
-                                                                                                  len(offs), prev))
-            out[t] = s
+        pkn = pk[:-4] if pk.lower().endswith('.xxx') else pk
+        work += [(p.object_path(i + 1), pkn) for i, e in enumerate(p.exports) if p.class_name(e) == 'ParticleSystem']
+    # the class FX packages are seekfree stubs on Xenon: pstream resolves the template to the package that holds it
+    work += [(t, None) for ts in class_templates().values() for t in sorted(ts)]
+    repos = {}
+    for t, hint in work:
+        if t in out: continue
+        try:
+            s = pstream.system(t, hint) if hint else pstream.system(t)
+        except Exception as ex:                    # class-data refs also name materials / meshes / modules
+            if hint: print('  library: %s: %s' % (t, ex))
+            continue
+        if s.get('missing_in') or not s.get('emitters'): continue
+        pkn = s['package']
+        pk = pkn + '.xxx'
+        if pk not in repos: repos[pk] = _R([pk]).pkgs[0]
+        p = repos[pk]
+        import objtree
+        op = objtree.package(pkn)
+        # M46 / M47: ParticleModuleSizeMultiplyLife driven by an instance parameter (DistributionVectorParticleParameter,
+        # RE pass 4: the HoverFX 'Size'). The LODs' Modules arrays are stripped by the cook, so a LOD uses the module
+        # when its serialized bytes reference the module's export index (big-endian int32; RE raw scan: CarHover_A's
+        # shared _9193 is in all 7 level-0 LODs and no level-1 LOD) [HIGH]
+        import struct as _st
+        pidx = {p.object_path(k + 1).lower(): k for k, _e in enumerate(p.exports)}
+        mods = []
+        for i2, e2 in enumerate(p.exports):
+            path2 = p.object_path(i2 + 1)
+            if p.class_name(e2) == 'DistributionVectorParticleParameter' and path2.lower().startswith(t.lower() + '.')                         and 'sizemultiplylife' in path2.lower():
+                d2 = _R([pk]).obj(path2.lower()) or {}
+                mi = pidx.get(path2.rsplit('.', 1)[0].lower())
+                if mi is not None:
+                    mods.append((_st.pack('>i', mi + 1), {'name': d2.get('ParameterName'),
+                                                          'constant': d2.get('Constant', [1.0, 1.0, 1.0])}))
+        if mods:
+            for e in s['emitters']:
+                for L in e['lods']:
+                    li = pidx.get(L['lod'].lower())
+                    if li is None: continue
+                    ex = p.exports[li]
+                    blob = p.data[ex['serial_offset']:ex['serial_offset'] + ex['serial_size']]
+                    for pat, sp in mods:
+                        offs = [k for k in range(4, len(blob) - 3) if blob[k:k + 4] == pat]
+                        if not offs: continue
+                        # guards (RE: a raw int32 can collide with float bits / counts): exactly one hit, sitting in
+                        # an object array - preceded by its count (1..32) or by another export of this system
+                        # observed layout (all 18 Streets hits): int32 count (1) + one byte + the int32 module index
+                        prev = _st.unpack_from('>i', blob, offs[0] - 4)[0]
+                        cnt5 = _st.unpack_from('>i', blob, offs[0] - 5)[0] if offs[0] >= 5 else 0
+                        in_array = 1 <= prev <= 32 or 1 <= cnt5 <= 32 or (0 < prev <= len(p.exports) and
+                                   p.object_path(prev).lower().startswith(t.lower() + '.'))
+                        if len(offs) == 1 and in_array:
+                            L['size_param'] = sp
+                        else:
+                            print('  size param: %s %s: %d hit(s), prev int %d - not bound' % (t, L['lod'].split('.')[-1],
+                                                                                              len(offs), prev))
+        out[t] = s
     return out
 
 

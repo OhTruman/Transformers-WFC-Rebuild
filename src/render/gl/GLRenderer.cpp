@@ -53,6 +53,7 @@ namespace {
 
 class GLRenderer final : public IRenderer {
 public:
+    ~GLRenderer() override { wfc::Pipeline::clearProgramCache(); }   // M54: cached programs belong to this context
     bool init() override {
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
@@ -125,6 +126,13 @@ public:
         Camera camOv = cam0;
         if (const char* rc = std::getenv("WFC_RENDERCAM"))
             std::sscanf(rc, "%f,%f,%f,%f,%f", &camOv.pos.x, &camOv.pos.y, &camOv.pos.z, &camOv.yaw, &camOv.pitch);
+        // M51: the far plane covers the loaded world's geometry (UE3 renders with an infinite far plane). Debris' sky
+        // dome (SpaceDome x6, radius ~26.6 km) lay beyond the 20 km default and was clipped mid-screen (black sky with
+        // pieces at the view edges). Depth precision is governed by the near plane; one far plane for every 3D pass.
+        if (wfc_.active() && wfc_.worldRadius() > 0.0f) {
+            float need = wfc_.worldRadius() + core::length(camOv.pos) + 1000.0f;
+            if (need > camOv.zfar) camOv.zfar = need;
+        }
         const Camera& cam = camOv;
         lastCam_ = cam;
         if (wfc_.active()) wfc_.beginFrame(cam, vpW, vpH);
@@ -147,6 +155,12 @@ public:
         if (glx::GetGraphicsResetStatus) glx::pollResetStatus();   // M43: a lost context is logged (once)
         if (wfc_.active()) { wfc_.drawMapPresentation(); wfc_.endFrame(); }
         glx::gpuTimerEnd();
+        if (std::getenv("WFC_FRAMELOG") && wfc_.active()) {   // M50 diagnostics: per-frame GPU time + draw counts
+            RenderDiagnostics d = renderDiagnostics();
+            LOG_INFO("FRAME %d gpu=%.2fms draws=%d world=%d bsp=%d dyn=%d fx=%d opaque=%d transl=%d culled=%d cam=%.1f,%.1f,%.1f yaw=%.2f pitch=%.2f",
+                     d.frame, glx::lastGpuFrameMs(), d.draws, d.worldDraws, d.bspDraws, d.dynamicDraws, d.fxDraws, d.opaqueDraws,
+                     d.translucentDraws, d.culledSubs, d.camPos[0], d.camPos[1], d.camPos[2], d.camYaw, d.camPitch);
+        }
         if (visualCheckOn()) {                       // GL errors raised by this frame's 3D work (first ones logged)
             int n = 0;
             for (GLenum e = glGetError(); e != GL_NO_ERROR && n < 64; e = glGetError(), ++n)
@@ -463,7 +477,11 @@ public:
             LOG_WARN("frontend scene %s: world.glb missing", dir.c_str());
             return false;
         }
-        if (!loadMapRenderData(dir)) return false;
+        loadingFrontendScene_ = true;
+        bool okData = loadMapRenderData(dir);
+        loadingFrontendScene_ = false;
+        if (!okData) return false;
+        wfc_.skipMaterialPrewarm();          // M54: a menu backdrop never draws the match's weapon / effect materials
         sceneMesh_ = uploadMesh(world);
         sceneDir_ = dir;
         LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
@@ -487,6 +505,7 @@ public:
         endFrame();
     }
     void setFrontendSceneDraw(std::function<void(IRenderer&)> f) override { sceneDraw_ = std::move(f); }
+    bool loadingFrontendScene_ = false;
     int loadPreviewBody(const std::string& gl, const std::vector<std::string>& sets, const std::string& anim) override {
         auto b = std::make_unique<PreviewBody>();
         const std::string content = wfc::Pipeline::contentRoot();
@@ -528,6 +547,10 @@ public:
             }
         }
         b->clip = b->model.clipByName(resolved);
+        if (wfc_.active()) {                 // M54: its materials compile now (load), not on its first drawn frame
+            MeshData md; md.subs = b->model.subs; md.mats = b->model.mats;
+            wfc_.prewarmDynamic(md);
+        }
         if (resolved != anim) LOG_INFO("preview body %s: %s -> %s (AnimSet chooser)", gl.c_str(), anim.c_str(), resolved.c_str());
         if (b->clip < 0) LOG_WARN("preview body %s: sequence %s not in its AnimSets; reference pose", gl.c_str(), resolved.c_str());
         else LOG_INFO("preview body %s: %s (%.2f s)", gl.c_str(), resolved.c_str(), b->model.clips[(size_t)b->clip].duration);
@@ -814,6 +837,7 @@ public:
         sceneSampled_ = false;
         bool ok = wfc_.load(mapName);
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
+        if (ok && !loadingFrontendScene_) wfc_.requestMaterialPrewarm();   // M54: after the world upload, yielding
         return ok;
     }
 
@@ -954,6 +978,8 @@ public:
         if (wfc_.active() && gpu_[(size_t)h] >= 0) { wfc_.draw(gpu_[(size_t)h], model); glLoadMatrixf(view_.m); return; }
         drawMeshArrays(meshes_[(size_t)h], model, color);
     }
+
+    void prewarmDynamicMesh(const MeshData& m) override { if (wfc_.active()) wfc_.prewarmDynamic(m); }
 
     void drawDynamicMesh(const MeshData& m, const core::Mat4& model, const core::Vec3& color) override {
         if (m.empty()) return;

@@ -138,6 +138,10 @@ public:
     static std::string renderDataRoot();              // WFC_RENDER_DATA, else the first work/render above the exe holding data
     static std::string contentRoot();
     void release();                                   // delete every GL object, reset to the unloaded state
+    static void clearProgramCache();                  // M54: linked programs kept across loads (renderer teardown)
+    void prewarmMaterials();                          // M54: effect / weapon materials, yielding (map loads)
+    void requestMaterialPrewarm() { prewarmPending_ = true; }   // run at the end of the world mesh upload
+    void skipMaterialPrewarm() { prewarmDone_ = true; prewarmPending_ = false; }   // frontend scenes
     void setLoadYield(std::function<void()> y) { loadYield_ = std::move(y); }
     void yieldLoad() { if (loadYield_ && !inLoadYield_) { inLoadYield_ = true; loadYield_(); inLoadYield_ = false; } }
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile): queued, drawn after post onto the back buffer.
@@ -186,6 +190,7 @@ public:
     int upload(const MeshData& m);
     void draw(int id, const core::Mat4& model);
     void drawDynamic(const MeshData& m, const core::Mat4& model);
+    void prewarmDynamic(const MeshData& m);   // resolve drawDynamic's programs / textures without drawing
     // Effects shaded by their original material graphs; `color` is the particle colour (vertex colour,
     // HDR). drawFx returns false when the mesh has no compiled original material (caller falls back).
     bool drawFx(int id, const core::Mat4& model, const float color[4]);
@@ -369,6 +374,7 @@ private:
     // Keyed by material CONTENT, not address: dynamic meshes (the character pose buffer) reuse their
     // storage across robot/vehicle, so a pointer key handed the vehicle the robot's programs.
     std::map<std::string, int> dynProgCache_;
+    int dynamicProgram(const Material* mat);   // cached per material key (drawDynamic / prewarmDynamic)
 
     // frame
     core::Mat4 viewProj_;
@@ -417,6 +423,7 @@ public:
     void setMapClock(float t) { mapClock_ = t; hasMapClock_ = true; }  // Gameplay MapState clock
     float mapTime() const { return hasMapClock_ ? mapClock_ : time_; }
     void setDestructibleState(const std::string& actor, int state);
+    float worldRadius() const { return worldRadius_; }   // max distance of world geometry from the origin (m)
     // runtime particle effects from the template library (IRenderer::spawnParticleEffect; UE units / axes)
     int spawnFx(const std::string& tpl, const float R[3][3], const float T[3], const float* color, const float* target);
     // Matinee material parameters on a MaterialInstanceActor's MIC (material_instance_actors.json); held until changed
@@ -439,6 +446,9 @@ public:
         bool overrideMaterial = false, localSpace = false, rectangle = false;
         int typeData = 0;                 // 0 sprite, 1 mesh, 2 Trail2, 3 Beam2
         int maxBeams = 0;                 // Beam2 MaxBeamCount (0 = no cap)
+        int taperMethod = 0, interpPoints = 0;   // Beam2: PEBTM_None / Full / Partial; InterpolationPoints
+        FxDist taperFactor, taperScale;           // Beam2: evaluated along the beam (0 source .. 1 target)
+        int tessFactor = 1; float tessStrength = 1.0f;   // Trail2: Hermite steps per segment, tangent scale
         std::string sizeParam;            // SizeMultiplyLife by instance parameter (HoverFX "Size"); "" = none
         float sizeParamConst[3] = {1, 1, 1};
         bool velocityAligned = false;     // PSA_Velocity
@@ -482,6 +492,9 @@ private:
         bool hasTarget = false; float target[3] = {0, 0, 0};
     };
     int nextFxId_ = 1;
+    int progCacheHits_ = 0;
+    bool prewarmDone_ = false, prewarmPending_ = false;
+    float worldRadius_ = 0.0f;
     std::map<std::string, FxSystem> fxSystems_;
     std::vector<FxInstance> fxInstances_;
     std::map<std::string, int> fxMeshes_;

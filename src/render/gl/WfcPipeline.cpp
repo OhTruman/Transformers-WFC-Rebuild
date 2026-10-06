@@ -136,8 +136,9 @@ uniform vec4 uDynParam;      // particle DynamicParameter (map FX emitters; 1 ot
 uniform sampler2D uSceneDepth;
 uniform int uHasSceneDepth;
 uniform sampler2D uSceneColor;   // MaterialExpressionSceneTexture: the resolved opaque scene colour (HDR)
-vec4 wfcSceneColor(vec2 uv) { return texture(uSceneColor, uv); }
-vec2 wfcScreenUV() { return gl_FragCoord.xy / vec2(textureSize(uSceneColor, 0)); }
+// Screen UVs in UE3's (D3D) convention, v down (ScreenPositionScaleBias (0.5, -0.5)); the GL scene copy is bottom-up.
+vec4 wfcSceneColor(vec2 uv) { return texture(uSceneColor, vec2(uv.x, 1.0 - uv.y)); }
+vec2 wfcScreenUV() { vec2 s = gl_FragCoord.xy / vec2(textureSize(uSceneColor, 0)); return vec2(s.x, 1.0 - s.y); }
 struct MatIn { vec2 uv0; vec2 uv1; vec4 vertexColor; vec3 worldPosUE; vec3 cameraVector; vec3 reflectionVector;
                vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; float sceneDepth;
                vec4 dynParam; };
@@ -455,6 +456,17 @@ GLuint compile(GLenum type, const std::string& src, const std::string& tag) {
     return s;
 }
 
+// M54: linked programs survive map / frontend-scene loads (revisits do not recompile), keyed by the fragment source
+// (the vertex shader is shared). Bounded: at unload the least recently used programs beyond kProgCacheMax that the
+// unloading pipeline did not use are deleted. Cleared with the renderer (Pipeline::clearProgramCache).
+namespace {
+struct CachedProg { GLuint id = 0; uint64_t lastUse = 0; };
+std::map<std::string, CachedProg> gProgCache;
+std::map<GLuint, const std::string*> gProgCacheById;
+uint64_t gProgUse = 0;
+constexpr size_t kProgCacheMax = 1500;
+} // namespace
+
 GLuint link(GLuint vs, GLuint fs, const std::string& tag) {
     GLuint p = CreateProgram();
     AttachShader(p, vs); AttachShader(p, fs);
@@ -545,6 +557,35 @@ std::string Pipeline::contentRoot() {
     return (s == std::string::npos ? std::string(".") : a.substr(0, s)) + "/content/";
 }
 
+// Prewarm: build every compiled original material not yet used (effect, weapon materials) and decode its textures,
+// as the original had them resident from the map's cooked packages before combat - instead of on first draw (the
+// first-shot hitch). M54: run by the map loader with the load yields (it used to run on frame 2: a ~1.2 s stall after
+// the loading screen); frontend scenes skip it (no weapons / effects of a match are drawn there).
+void Pipeline::prewarmMaterials() {
+    if (prewarmDone_) return;
+    prewarmDone_ = true;
+    auto t0 = std::chrono::steady_clock::now(), lastYield = t0;
+    int built = 0;
+    for (const auto& kv : mats_) {
+        if (progIndex_.count(kv.first + "|UBER") || progIndex_.count(kv.first + "|LM")) continue;
+        // roster character materials (TR_ packages) compile when their character is first drawn (or prewarmed by
+        // prewarmDynamicMesh): the render data carries every MP chassis, only the ones in the match are needed
+        if (kv.first.rfind("TR_", 0) == 0) continue;
+        if (programFor(kv.first, nullptr, false) >= 0) ++built;
+        auto now = std::chrono::steady_clock::now();     // time-sliced: each yield presents a loading frame
+        if (std::chrono::duration<double, std::milli>(now - lastYield).count() >= 16.0) { yieldLoad(); lastYield = now; }
+    }
+    LOG_INFO("wfc: prewarmed %d material programs in %.0f ms (%d linked programs reused)", built,
+             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(), progCacheHits_);
+}
+
+void Pipeline::clearProgramCache() {
+    const bool ctx = glGetString(GL_VERSION) != nullptr;    // no current context: the objects died with it
+    for (auto& kv : gProgCache) if (ctx && kv.second.id) DeleteProgram(kv.second.id);
+    gProgCache.clear();
+    gProgCacheById.clear();
+}
+
 // ------------------------------------------------------------------------- unloading (level travel)
 void Pipeline::release() {
     if (!active_ && meshes_.empty() && !fbo_) return;
@@ -559,7 +600,20 @@ void Pipeline::release() {
     }
     std::set<GLuint> progIds;
     for (const Program& p : progs_) if (p.id) progIds.insert(p.id);
-    for (GLuint id : progIds) { GLuint p = id; prog(p); }
+    for (GLuint id : progIds) if (!gProgCacheById.count(id)) { GLuint p = id; prog(p); }   // uncached (none expected)
+    if (gProgCache.size() > kProgCacheMax) {      // trim: least recently used, not used by this pipeline
+        std::vector<std::pair<uint64_t, const std::string*>> lru;
+        for (const auto& kv : gProgCache) if (!progIds.count(kv.second.id)) lru.push_back({kv.second.lastUse, &kv.first});
+        std::sort(lru.begin(), lru.end());
+        size_t drop = std::min(lru.size(), gProgCache.size() - kProgCacheMax);
+        for (size_t i = 0; i < drop; ++i) {
+            auto it = gProgCache.find(*lru[i].second);
+            GLuint p = it->second.id;
+            gProgCacheById.erase(p);
+            prog(p);
+            gProgCache.erase(it);
+        }
+    }
     for (auto& kv : texCache_) tex(kv.second);
     for (GLuint& t : lmTextures_) tex(t);
     for (GLuint* t : {&clutTex_, &neutralMaskTex_, &testMaskTex_, &whiteTex_, &blackTex_, &flatNormalTex_, &blackCube_,
@@ -576,7 +630,8 @@ void Pipeline::release() {
                       &constProg_, &maskBlurProg_})
         prog(*p);
     BindFramebuffer(GL_FRAMEBUFFER, 0);
-    LOG_INFO("wfc: released map render data (%zu meshes, %zu programs, %zu textures)", meshes_.size(), progIds.size(),
+    LOG_INFO("wfc: released map render data (%zu meshes, %zu programs (%d reused from the program cache, %zu cached), "
+             "%zu textures)", meshes_.size(), progIds.size(), progCacheHits_, gProgCache.size(),
              texCache_.size() + lmTextures_.size());
     std::function<void()> keepYield = std::move(loadYield_);
     const float keepGamma = displayGamma_;              // caller settings survive a map change
@@ -1129,11 +1184,21 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
 
     static GLuint vsShared = 0;
     if (!vsShared) vsShared = compile(GL_VERTEX_SHADER, kVS, "world.vs");
-    GLuint f = compile(GL_FRAGMENT_SHADER, fs, key);
-    if (!vsShared || !f) return -1;
-    GLuint id = link(vsShared, f, key);
-    DeleteShader(f);
-    if (!id) return -1;
+    GLuint id = 0;
+    auto cached = gProgCache.find(fs);
+    if (cached != gProgCache.end()) {
+        id = cached->second.id;
+        cached->second.lastUse = ++gProgUse;
+        ++progCacheHits_;
+    } else {
+        GLuint f = compile(GL_FRAGMENT_SHADER, fs, key);
+        if (!vsShared || !f) return -1;
+        id = link(vsShared, f, key);
+        DeleteShader(f);
+        if (!id) return -1;
+        auto ins = gProgCache.emplace(fs, CachedProg{id, ++gProgUse}).first;
+        gProgCacheById[id] = &ins->first;
+    }
     Program P;
     P.id = id;
     auto U = [&](const char* n) { return GetUniformLocation(id, n); };
@@ -1497,6 +1562,15 @@ int Pipeline::upload(const MeshData& m) {
 
     std::vector<SubMesh> subs = m.subs;
     if (subs.empty()) { SubMesh s; s.indexOffset = 0; s.indexCount = (uint32_t)m.indices.size(); subs.push_back(s); }
+    {   // world extent for the far plane (world.glb / BSP positions are world space)
+        bool worldMesh = false;
+        for (const SubMesh& s : subs) if (!s.component.empty()) { worldMesh = true; break; }
+        if (worldMesh)
+            for (size_t i = 0; i + 2 < m.positions.size(); i += 3) {
+                float r2 = m.positions[i] * m.positions[i] + m.positions[i + 1] * m.positions[i + 1] + m.positions[i + 2] * m.positions[i + 2];
+                if (r2 > worldRadius_ * worldRadius_) worldRadius_ = std::sqrt(r2);
+            }
+    }
     int nLM = 0, nProg = 0;
     // Vertex lightmaps (FLightMap1D) cover the component's whole cooked LOD0 vertex buffer, all sections in order; the
     // glTF splits a component into one submesh per section. Per component: the sections' vertex ranges in submesh
@@ -1644,9 +1718,12 @@ int Pipeline::upload(const MeshData& m) {
         g.subs.push_back(d);
         yieldLoad();                                   // loading presentation: no GL binding held here
     }
+    const bool worldUpload = g.world;
     meshes_.push_back(std::move(g));
     LOG_INFO("wfc: uploaded mesh %zu: %zu verts, %zu submeshes (%d lightmapped, %d programs, %zu total)",
              meshes_.size() - 1, m.vertexCount(), subs.size(), nLM, nProg, progs_.size());
+    // M54: the map's world is resident (its own programs built): prewarm the rest under the loading screen
+    if (worldUpload && prewarmPending_) { prewarmPending_ = false; prewarmMaterials(); }
     return (int)meshes_.size() - 1;
 }
 
@@ -1997,6 +2074,25 @@ void Pipeline::draw(int id, const core::Mat4& model) {
     }
 }
 
+int Pipeline::dynamicProgram(const Material* mat) {
+    std::string mk = materialKey(mat);
+    auto it = dynProgCache_.find(mk);
+    if (it == dynProgCache_.end())
+        it = dynProgCache_.emplace(mk, programFor(mat ? mat->wfcName : std::string(), mat, false)).first;
+    return it->second;
+}
+
+void Pipeline::prewarmDynamic(const MeshData& m) {
+    auto t0 = std::chrono::steady_clock::now();
+    size_t before = dynProgCache_.size();
+    for (const SubMesh& s : m.subs)
+        if (s.material >= 0 && (size_t)s.material < m.mats.size()) dynamicProgram(&m.mats[(size_t)s.material]);
+    if (m.subs.empty()) dynamicProgram(m.mats.empty() ? nullptr : &m.mats[0]);
+    if (dynProgCache_.size() != before)
+        LOG_INFO("wfc: prewarmed %zu dynamic material(s) in %.1f ms", dynProgCache_.size() - before,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+}
+
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     if (m.empty()) return;
     std::vector<float> v;
@@ -2057,11 +2153,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
         Sub d;
         d.first = s.indexOffset; d.count = s.indexCount;
-        std::string mk = materialKey(mat);
-        auto it = dynProgCache_.find(mk);
-        if (it == dynProgCache_.end())
-            it = dynProgCache_.emplace(mk, programFor(mat ? mat->wfcName : std::string(), mat, false)).first;
-        d.prog = it->second;
+        d.prog = dynamicProgram(mat);
         d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
         g.subs.push_back(d);
     }
@@ -2385,22 +2477,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     frameMats_.clear();
     frameNoProg_.clear();
     progSeen_.assign(progs_.size(), 0);
-    if (frameNo_ == 2) {
-        // Prewarm: build every compiled original material not yet used (effect, weapon, character
-        // materials) and decode its textures now, as the original had them resident from the map's
-        // cooked packages before combat -- instead of on first draw (the first-shot hitch).
-        auto t0 = std::chrono::steady_clock::now();
-        int built = 0;
-        for (const auto& kv : mats_) {
-            if (progIndex_.count(kv.first + "|UBER") || progIndex_.count(kv.first + "|LM")) continue;
-            // roster character materials (TR_ packages) compile when their character is first drawn: the render data
-            // carries every MP chassis, only the ones in the match are needed
-            if (kv.first.rfind("TR_", 0) == 0) continue;
-            if (programFor(kv.first, nullptr, false) >= 0) ++built;
-        }
-        LOG_INFO("wfc: prewarmed %d material programs in %.0f ms", built,
-                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
-    }
+    if (frameNo_ == 2 && !prewarmDone_) prewarmMaterials();   // fallback: no world upload during the load
     gFrameStart = std::chrono::steady_clock::now();
     static auto t0 = std::chrono::steady_clock::now();
     static const bool lockstep = std::getenv("WFC_LOCKSTEP") != nullptr;   // deterministic captures

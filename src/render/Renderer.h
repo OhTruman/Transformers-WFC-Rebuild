@@ -80,6 +80,10 @@ public:
 
     // Draw a transient mesh (e.g. CPU-skinned each frame) without uploading/retaining it.
     virtual void drawDynamicMesh(const MeshData& mesh, const core::Mat4& model, const core::Vec3& color) = 0;
+    // M53: compile the shader programs and upload the textures a transient mesh's materials need, without drawing.
+    // Call when a mesh that will be drawn later is loaded (e.g. a character's vehicle form at spawn), so its first
+    // visible frame does not pay for them (first R->V transform: 59 ms program + 51 ms textures in one frame).
+    virtual void prewarmDynamicMesh(const MeshData& mesh) { (void)mesh; }
 
     // Original-data rendering (WFC shader path): load the map's compiled materials, baked
     // directional lightmaps, static lights and height fog produced by tools/render/*.py.
