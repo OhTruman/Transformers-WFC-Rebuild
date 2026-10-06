@@ -376,7 +376,7 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     float ownDist = core::length(muzzle - origin);
     SoundCues::Emitter me = atWeapon("MuzzleFlash");
     me.pos = muzzle;
-    cues_.play(weaponCue(w.lowAmmo() ? "WP_LowAmmoFire" : "WP_Fire"), me, ownDist);
+    weaponAudio_.fire(cues_, weaponClass_, w.lowAmmo(), me, ownDist);
     burstActive_ = true; sinceShot_ = 0.0f;
     // World hit: HmWeaponMesh.CreateImpactEffects -> TnWeaponMesh.GetImpactSound: the surface's weapon-type sound (no
     // physmat authors one [CONF data]) -> PhysMaterial.ImpactSound (only special surfaces, e.g. ForceField; surfaces
@@ -385,9 +385,10 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     // weapon impact sound; the victim's TnHitEffectPlayer plays HitSound (an event in the VICTIM's SoundEventSet) if
     // the damage type bCausesBlood, at most every RetriggerTime per victim per entry [CONF script]. The damage
     // targets are stand-ins without a character: they use the default profile as the victim [PROV].
+    const std::string& firedCls = weaponClass_;          // this build fires the robot weapon only
     const float hitDist = core::length(hitPoint - listenerPos_);
     if (hitTarget) {
-        const WeaponHitEffect* he = CharacterAudio::weaponHitEffect(weaponClass_);
+        const WeaponHitEffect* he = CharacterAudio::weaponHitEffect(firedCls);
         if (he && he->causesBlood) {
             auto key = std::make_pair((const void*)hitTarget, he->index);
             auto it = lastHitEffect_.find(key);
@@ -398,8 +399,8 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
             }
         }
     } else if (dist < range - 0.01f) {
-        const char* impact = weaponCue("DefaultImpactSound");
-        if (*impact) cues_.play(impact, hitPoint, hitDist);
+        const std::string& impact = CharacterAudio::weaponCue(firedCls, "DefaultImpactSound");
+        if (!impact.empty()) cues_.play(impact.c_str(), hitPoint, hitDist);
     }
 }
 
@@ -449,6 +450,10 @@ bool World::loadMapAudio(const std::string& level) {
         CharacterAudio::loadWeaponCues(cues_, weaponClass_);
         CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), weaponClass_);   // the targets' hit sounds
         lastHitEffect_.clear();
+        for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
+        const SoundCues::LocStats& ls = SoundCues::locStats();
+        LOG_INFO("localized waves (language %s): %d from the _LOC twin, %d merged copy of that twin, %d not played",
+                 std::getenv("WFC_LANGUAGE") ? std::getenv("WFC_LANGUAGE") : "INT", ls.twin, ls.merged, ls.skipped);
     }
     return ok;
 }
@@ -470,6 +475,8 @@ void World::setPlayerWeaponAudio(const std::string& weaponClass) {
 void World::setPlayerCharacterAudio(const std::string& chassisKey) {
     const CharacterAudioProfile* p = CharacterAudio::find(chassisKey);
     if (!p) { LOG_WARN("character audio: no profile for %s (default kept)", chassisKey.c_str()); return; }
+    vehicleAudio_.stopAll(cues_);           // the previous body's vehicle loops end with it (class change)
+    vehicleForm_.reset();
     audioProfile_ = p;
     robotFoley_.setProfile(p);
     vehicleAudio_.setProfile(*p);
@@ -489,12 +496,16 @@ int World::playPickupSound(const char* factoryClass, const core::Vec3& receiverP
 }
 
 void World::unloadMapAudio() {
+    weaponAudioLoaded_.clear();                // the level's cues are released with it
     resetSystemsForMatch();                    // player-side sounds + Systems FX + queues
     levelAudio_.unload();                      // music player, every instance, level cues / samples / presets, Flush
 }
 
 void World::resetSystemsForMatch() {
     cues_.stopNonMapInstances();               // weapon / vehicle / foley / transform / pickup sounds (immediate)
+    vehicleAudio_.stopAll(cues_);
+    weaponAudio_.stopAll(cues_);
+    vehicleForm_.reset();
     vehicleAudio_ = VehicleAudio{};
     vehicleAudio_.setProfile(audioProfile());
     robotFoley_ = RobotFoley{};
@@ -701,25 +712,22 @@ void World::tickVehicleBoost(float dt) {
     const core::Vec3& v = pc.velocity();
     float mph = core::length(v) * 2.23694f;
     {
-        VehicleAudio::Input in;
-        in.entered = vehicle;
-        in.boosting = boost;
-        in.onGround = grounded;
-        const float fwdIn = player_.controller().moveForwardInput();
-        if (!boost) vehLoadState_ = fwdIn > 0.01f ? 1 : (fwdIn < -0.01f ? 2 : 0);   // Hovering.UpdateSounds
-        in.loadState = vehLoadState_;
-        // WheelSlipRatio: 0 while hovering [CONF]; CarSimulation.SlipAngle while driving, which only Gameplay
-        // can provide (World::setTireSlipAngle); none -> 0.
-        in.wheelSlip = boost && tireSlipOverride_ >= 0.0f ? tireSlipOverride_ : 0.0f;
-        tireSlip_ = in.wheelSlip;
-        in.velocity = v;
-        in.forward = core::forwardFromYawPitch(pc.yaw(), 0.0f);
-        in.ascend = tookOff;
-        const bool dashing = pc.vehicleState().dashRemain > 0.0f;
-        in.booster = vehicle && !boost && dashing && !prevDashing_;              // TnTruckForm.Hovering.DoDash
-        prevDashing_ = dashing;
-        in.nitro = ne == VehicleNitro::Event::Started;
-        vehicleAudio_.tick(dt, in, cues_, [this] { return atPawn({0, 1.4725f, 0}); });
+        // Gameplay's vehicle state -> the form class's component calls (VehicleFormAudio). The form kind is the
+        // chassis's roster vehicle_form (audio profile); this build's movement models the car / truck states.
+        VehicleFormSignals s;
+        s.kind = VehicleFormSignals::kindFromForm(audioProfile().vehicleForm);
+        s.vehicle = vehicle;
+        s.onGround = grounded;
+        s.boostState = boost;
+        s.stickForward = player_.controller().moveForwardInput();
+        s.velocity = v;
+        s.forward = core::forwardFromYawPitch(pc.yaw(), 0.0f);
+        s.tookOff = tookOff;
+        s.dashing = pc.vehicleState().dashRemain > 0.0f;
+        s.nitroStarted = ne == VehicleNitro::Event::Started;
+        s.wheelSlip = tireSlipOverride_;          // CarSimulation.SlipAngle only Gameplay can provide (setTireSlipAngle)
+        tickVehicleAudio(dt, s);
+        tireSlip_ = boost && tireSlipOverride_ >= 0.0f ? tireSlipOverride_ : 0.0f;
     }
 
     if (std::getenv("WFC_BOOSTLOG")) {
@@ -1023,6 +1031,74 @@ void World::draw(render::IRenderer& r) const {
         r.drawBox(pp + core::Vec3{0, 10, 0}, core::Vec3{0.6f, 20.0f, 0.6f}, core::Vec3{1.0f, 0.1f, 0.9f});
         r.drawBox(pp + core::Vec3{0, 0.1f, 0}, core::Vec3{2.0f, 0.2f, 2.0f}, core::Vec3{0.1f, 1.0f, 0.2f});
     }
+}
+
+// ---- Systems M08d: per-form vehicle audio, weapon identity, projectiles, beams (Gameplay reports; Systems plays) ----
+
+void World::tickVehicleAudio(float dt, const VehicleFormSignals& s) {
+    VehicleAudio::Input in = vehicleForm_.translate(s, &vehicleEvents_);
+    vehicleAudio_.tick(dt, in, cues_, [this] { return atPawn({0, 1.4725f, 0}); });
+    // WFC_AUDIOCHECK: ownership audit every 30 steps - vehicle loops only while the vehicle form owns them.
+    static const bool check = std::getenv("WFC_AUDIOCHECK") != nullptr;
+    static int n = 0;
+    if (check && ++n % 30 == 0) {
+        const int loops = vehicleAudio_.liveLoops();
+        LOG_INFO("AUDIOCHECK form=%s vehicle=%d entered=%d vehLoops=%d flight=%d beam=%d instances=%zu voices=%d%s",
+                 audioProfile().vehicleForm.c_str(), (int)s.vehicle, (int)vehicleAudio_.entered(), loops, weaponAudio_.flightLoops(),
+                 (int)weaponAudio_.beamActive(), cues_.liveInstances(), audio_ ? audio_->activeVoices() : -1,
+                 (!s.vehicle && loops > 0) ? " LEAK" : "");
+    }
+}
+
+// The cues of a weapon class (WeaponSounds, impact, projectile, mesh anims, the targets' hit sounds), level-owned, loaded
+// once per level - at loadout time (preloadWeaponAudio) and, as a safety net, at its first fire / projectile.
+void World::ensureWeaponAudio(const std::string& cls) {
+    if (cls.empty() || !audio_ || levelAudio_.level().empty() || !weaponAudioLoaded_.insert(cls).second) return;
+    CharacterAudio::loadWeaponCues(cues_, cls);
+    CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), cls);
+}
+
+void World::preloadWeaponAudio(const std::vector<std::string>& classes) {
+    loadoutWeaponClasses_ = classes;            // re-applied when a level's audio loads
+    for (const std::string& c : classes) ensureWeaponAudio(c);
+}
+
+const std::string& World::firingWeaponClass(bool vehicleForm) const {
+    return vehicleForm && !vehicleWeaponClass_.empty() ? vehicleWeaponClass_ : weaponClass_;
+}
+
+void World::setPlayerVehicleWeaponAudio(const std::string& weaponClass) {
+    vehicleWeaponClass_ = weaponClass;
+    ensureWeaponAudio(weaponClass);
+}
+
+int World::onWeaponFired(const std::string& weaponClass, bool lowAmmo, bool vehicleForm, const core::Vec3& muzzle) {
+    // TnWeapon.PlayFiringSound for any fire type: the robot weapon from its MuzzleFlash socket; a vehicle weapon is the
+    // vehicle's (owner-attached at the pawn's audio root) [HIGH: PlaySound on the weapon's owner].
+    ensureWeaponAudio(weaponClass);
+    SoundCues::Emitter e = vehicleForm ? atPawn({0, 1.4725f, 0}) : atWeapon("MuzzleFlash");
+    if (!vehicleForm) e.pos = muzzle;
+    return weaponAudio_.fire(cues_, weaponClass, lowAmmo, e, core::length(muzzle - player_.pawn().position()));
+}
+
+void World::onProjectileSpawned(int key, const std::string& weaponClass, const core::Vec3& pos) {
+    ensureWeaponAudio(weaponClass);
+    weaponAudio_.projectileSpawned(cues_, key, weaponClass, pos, core::length(pos - listenerPos_));
+}
+
+void World::onProjectileMoved(int key, const core::Vec3& pos) { weaponAudio_.projectileMoved(cues_, key, pos); }
+
+void World::onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos) {
+    weaponAudio_.projectileExploded(cues_, key, weaponClass, pos, core::length(pos - listenerPos_));
+}
+
+void World::onProjectileRemoved(int key) { weaponAudio_.projectileRemoved(cues_, key); }
+
+void World::onBeamWeapon(const std::string& weaponClass, bool firing, int target) {
+    weaponAudio_.beam(cues_, weaponClass, firing,
+                      target == 1 ? WeaponAudio::BeamTarget::Friendly : target == 2 ? WeaponAudio::BeamTarget::Enemy
+                                                                          : WeaponAudio::BeamTarget::None,
+                      atWeapon("MuzzleFlash"));
 }
 
 } // namespace game

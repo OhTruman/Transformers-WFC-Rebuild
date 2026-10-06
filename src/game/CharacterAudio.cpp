@@ -19,6 +19,9 @@ struct Db {
     std::map<std::string, WeaponHitEffect> weaponHit;
     std::map<std::string, WeaponAnimSounds> weaponAnims;
     std::map<std::string, WeaponFxTemplates> weaponFx;
+    std::map<std::string, WeaponProjectile> weaponProj;
+    std::map<std::string, bool> weaponBeam;
+    std::map<std::string, std::map<std::string, std::pair<float, float>>> weaponFades;
 };
 
 const Db& db() {
@@ -48,6 +51,7 @@ const Db& db() {
             p.clips[c.first] = clip;
         }
         for (size_t i = 0; i < j["weapons"].size(); ++i) p.weapons.push_back(j["weapons"][i].asString());
+        p.vehicleForm = j["vehicle_form"].asString();
         const assets::Json& vc = j["vehicle_component"];
         if (vc.isObject()) {
             VehicleAudioComponentData& v = p.vehicleComponent;
@@ -88,6 +92,12 @@ const Db& db() {
     for (const auto& kv : d.doc["weapons"].obj) {
         for (const auto& e : kv.second["events"].obj) d.weaponEvents[kv.first][e.first] = e.second.asString();
         d.weaponPickup[kv.first] = kv.second["pickup_sound"].asString();
+        const assets::Json& pj = kv.second["projectile"];
+        if (pj.isObject())
+            d.weaponProj[kv.first] = {pj["class"].asString(), pj["flight_sound"].asString(), pj["secondary_flight_sound"].asString(),
+                                      pj["explosion_sound"].asString(), pj["flight_effect"].asString(), pj["explosion_effect"].asString()};
+        d.weaponBeam[kv.first] = kv.second["beam"].asBool();
+        for (const auto& f : kv.second["fades"].obj) d.weaponFades[kv.first][f.first] = {f.second[0].asFloat(), f.second[1].asFloat()};
         const assets::Json& fx = kv.second["fx"];
         if (fx.isObject()) d.weaponFx[kv.first] = {fx["muzzle"].asString(), fx["tracer"].asString(), fx["squib"].asString()};
         const assets::Json& an = kv.second["anims"];
@@ -196,6 +206,8 @@ int CharacterAudio::loadWeaponCues(SoundCues& cues, const std::string& cls) {
     };
     auto it = d.weaponEvents.find(cls);
     if (it != d.weaponEvents.end()) for (const auto& e : it->second) want(e.second);
+    auto pj = d.weaponProj.find(cls);
+    if (pj != d.weaponProj.end()) { want(pj->second.flightSound); want(pj->second.secondaryFlightSound); want(pj->second.explosionSound); }
     auto an = d.weaponAnims.find(cls);
     if (an != d.weaponAnims.end())
         for (const WeaponAnimSounds::Clip* c : {&an->second.idle, &an->second.fire, &an->second.reload, &an->second.equip, &an->second.putDown})
@@ -211,6 +223,27 @@ const std::string& CharacterAudio::weaponCue(const std::string& cls, const std::
     if (it == d.weaponEvents.end()) return empty();
     auto e = it->second.find(event);
     return e == it->second.end() ? empty() : e->second;
+}
+
+const WeaponProjectile* CharacterAudio::weaponProjectile(const std::string& cls) {
+    const Db& d = db();
+    auto it = d.weaponProj.find(cls);
+    return it == d.weaponProj.end() ? nullptr : &it->second;
+}
+
+bool CharacterAudio::weaponIsBeam(const std::string& cls) {
+    const Db& d = db();
+    auto it = d.weaponBeam.find(cls);
+    return it != d.weaponBeam.end() && it->second;
+}
+
+void CharacterAudio::weaponEventFades(const std::string& cls, const std::string& ev, float& fi, float& fo) {
+    fi = fo = 0.0f;
+    const Db& d = db();
+    auto it = d.weaponFades.find(cls);
+    if (it == d.weaponFades.end()) return;
+    auto e = it->second.find(ev);
+    if (e != it->second.end()) { fi = e->second.first; fo = e->second.second; }
 }
 
 const WeaponFxTemplates* CharacterAudio::weaponFx(const std::string& cls) {

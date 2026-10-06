@@ -52,6 +52,10 @@ public:
     void setProfile(const CharacterAudioProfile& p);
     void tick(float dt, const Input& in, SoundCues& cues, const EmitterFn& at);
     void ram(SoundCues& cues, const EmitterFn& at);       // PlayRamSound
+    // Stop every sound this component owns at once (class change, match restart, map unload, ownership change).
+    void stopAll(SoundCues& cues);
+    int liveLoops() const;                                // diagnostics: loop components with an instance
+    bool entered() const { return entered_; }
 
     // Diagnostics.
     const char* engineState() const;

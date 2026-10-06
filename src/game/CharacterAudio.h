@@ -50,6 +50,7 @@ struct CharacterAudioProfile {
     std::map<std::string, Clip> clips;
     std::vector<std::string> weapons;
     VehicleAudioComponentData vehicleComponent;
+    std::string vehicleForm;        // roster vehicle_form: "car" / "truck" / "tank" / "jet" (which form class)
 
     // The cue a notify plays ("" = the set has no sound for its event).
     const std::string& notifyCue(const Notify& n) const;
@@ -112,6 +113,13 @@ private:
     bool loop_ = true;
 };
 
+// A weapon's projectile (versus WEPDATA WeaponProjectiles[0] -> TnProjectileMesh) [CONF data]: HmProjectile plays
+// FlightSound attached to the projectile from spawn (ClientSpawnFlightEffect) and, on Explode, fades it out over 0.25 s
+// and plays ExplosionSound at the projectile (SpawnExplosionEffect) [CONF script].
+struct WeaponProjectile {
+    std::string projectileClass, flightSound, secondaryFlightSound, explosionSound, flightEffect, explosionEffect;
+};
+
 // A weapon class's WP_Fire presentation templates (WEPMESH MuzzleFlashes / TracerTemplates, DefaultSquib) [CONF data].
 struct WeaponFxTemplates { std::string muzzle, tracer, squib; };
 
@@ -134,6 +142,10 @@ public:
     static const WeaponAnimSounds* weaponAnimSounds(const std::string& weaponClass);
     // The weapon's particle templates (nullptr: unknown class).
     static const WeaponFxTemplates* weaponFx(const std::string& weaponClass);
+    static const WeaponProjectile* weaponProjectile(const std::string& weaponClass);   // nullptr: instant hit
+    static bool weaponIsBeam(const std::string& weaponClass);                         // TnWeaponBeam (Repair Ray)
+    // An event's LoopingFadeInTime / LoopingFadeOutTime (WeaponSounds) [CONF data]; 0 / 0 if not authored.
+    static void weaponEventFades(const std::string& weaponClass, const std::string& event, float& fadeIn, float& fadeOut);
     // Load the victim's hit / block cues for that weapon (level-owned). Returns the number added.
     static int loadHitCues(SoundCues& cues, const CharacterAudioProfile& victim, const std::string& weaponClass);
 };

@@ -147,7 +147,27 @@ void VehicleAudio::detach(SoundCues& cues) {
     stopLooping(squeal_, 0.0f, cues);
     stopLooping(boost_, c_.boostFadeOut, cues);
     stopLooping(boostWheels_, c_.boostFadeOut, cues);
+    // The booster component is the pawn's (Owner.CreateAudioComponent): the form's state end stops it (StopHoverFx); a
+    // dash booster one-shot runs out. Nothing the form owned may outlive it.
+    stopLooping(booster_, 0.0f, cues);
     entered_ = false;
+}
+
+void VehicleAudio::stopAll(SoundCues& cues) {
+    if (entered_) detach(cues);
+    stopLooping(booster_, 0.0f, cues);
+    for (Loop& l : engine_) stopLooping(l, 0.0f, cues);
+    for (Loop& l : oneshots_) stopLooping(l, 0.0f, cues);
+    stopLooping(boost_, 0.0f, cues); stopLooping(boostWheels_, 0.0f, cues);
+    stopLooping(speedLoop_, 0.0f, cues); stopLooping(tread_, 0.0f, cues); stopLooping(squeal_, 0.0f, cues);
+    entered_ = false; boosting_ = false; state_ = State::None;
+}
+
+int VehicleAudio::liveLoops() const {
+    int n = 0;
+    for (const Loop* l : {&boost_, &boostWheels_, &booster_, &squeal_, &speedLoop_, &tread_}) n += l->id >= 0 ? 1 : 0;
+    for (const Loop& l : engine_) n += l.id >= 0 ? 1 : 0;
+    return n;
 }
 
 void VehicleAudio::ensureNames() { if (!named_) setProfile(CharacterAudio::defaultProfile()); }

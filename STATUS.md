@@ -3,6 +3,20 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08d (2026-10-05) — vehicle / weapon / projectile / beam audio by identity (handoff: docs/handoff/SYSTEMS_M08D_AUDIO_HANDOFF.md + SYSTEMS_M08D_integration_glue.patch)
+- **Silent vehicle forms (car / jet / tank)**
+  - Cause: the integration World gated all vehicle audio on the Optimus-only FX gate.
+  - Now every chassis runs its own HmVehicleAudioComponent through `VehicleFormAudio`, following the form-class rules for car / truck / tank / jet.
+- **Weapon audio by the weapon actually fired** (robot or vehicle weapon): fire, impacts and victim hit sounds.
+  - Projectile weapons: launch sound, FlightSound loop and ExplosionSound (16 weapons).
+  - The loadout's weapon cues are preloaded.
+- **Repair Ray:** beam loops per TnWeaponBeam / TnWeaponRepair — WP_Looping, heal / damage loop by target, tail on release — driven by Gameplay's beam traces.
+- **Ownership:** class change, match restart, map unload and death stop every vehicle / beam / flight loop. The `WFC_AUDIOCHECK` audit shows 0 leaks.
+- **Validated in an integration/milestone-08c snapshot with the glue patch:**
+  - 8 class bodies × 3 maps: 0 missing cues, 0 leaks.
+  - Cold boot → TDM: English (282 `_LOC/int` waves, 0 skipped).
+  - Suite 617 / 0; movie / Extras probe OK; lifecycle 40 / 0; wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS M08c (2026-10-05) — playtest audio fixes (handoff: docs/handoff/SYSTEMS_M08C_AUDIO_HANDOFF.md)
 - **Extras movie → menu silence** — two fixes:
   - the movie preset is now held by the caller's flag *or* the movie sound, so a GFx script movie releases it when its sound stops;

@@ -1,0 +1,92 @@
+# Systems M08d handoff: vehicle / weapon / projectile / beam audio by identity (agents/systems)
+
+**For Integration:** merge agents/systems, then apply `SYSTEMS_M08D_integration_glue.patch` (`patch -p1 --ignore-whitespace` or `git apply --ignore-whitespace`; the target files are CRLF). It contains the World.cpp, World.h and PlayerController.h seam changes against integration/milestone-08c. All three have been built and run in an 08c snapshot (git archive into Systems' work/).
+
+## What the human heard, and why
+
+| Report | Cause (verified in the 08c build) | Fix |
+|---|---|---|
+| Car, jet and tank vehicle forms silent | `tickVehicleBoost` gated **everything**, audio included, on `optimusFx` (chassis Truck / Truck7). The gate was meant for the Optimus-only vehicle FX. | The FX keep that gate. Vehicle audio runs for every chassis through `World::tickVehicleAudio(VehicleFormSignals)`, filled from Gameplay's VehicleState and the chassis VehicleFormType. |
+| Vehicle firing wrong | The fire sound and impacts followed the *robot* weapon (`weaponClass_`); vehicle shots played e.g. the Heavy Pistol. | Sound by the weapon actually fired (`w.def->id`): fire, impact and victim hit sounds. Vehicle weapons are emitted at the vehicle. |
+| Projectile weapons silent / wrong | `WP_Fire` only played on the instant-hit path. Projectiles had no flight or explosion sound, and the vehicle weapons' cues were never loaded. | Fire sound on launch for every fire type; the projectile's FlightSound from spawn; ExplosionSound on Explode. The loadout's weapon cues (robot + vehicle) are loaded per level. |
+| Repair Ray incomplete | A beam weapon treated as a plain hitscan gun: the looping `WP_Fire` (heal loop) was started as a one-shot on every trace. | The TnWeaponBeam / TnWeaponRepair rules: `WP_Looping` while tracing, a heal loop on a teammate or a damage loop on an enemy, `WP_LoopingTail` on release. Driven by Gameplay's actual traces. |
+
+## Systems pieces (agents/systems)
+
+* **`VehicleFormAudio`** (header): Gameplay vehicle state → the form class's HmVehicleAudioComponent calls, per form. Source: decompiled TnCarForm / TnTruckForm / TnTankForm / TnPlaneForm.
+  * Car / Truck: hover, Driving, dash, roll, nitro, jump.
+  * Tank: boost, jump, 180.
+  * Jet: hover boosters loop start / stop, ascend / descend held, roll, Flying = boost.
+  * It also produces **`VehicleFormEvents`** for Rendering (see the last section).
+  * Optimus: same voice events as M08c, 99 / 99 on the A/B probe.
+* **`WeaponAudio`**: fire by identity; the beam loop state machine; projectile flight / explosion; `stopAll`.
+* **`VehicleAudio::stopAll`**:
+  * runs on class change, match restart and map unload;
+  * detach also stops the booster loop: nothing the form owned outlives it.
+* **CharacterAudio data**:
+  * per weapon: projectile (16 weapons; FlightSound / ExplosionSound / FlightEffect / ExplosionEffect), beam flag (Repair Rays) and LoopingFade times;
+  * per chassis: `vehicleForm`.
+* **World hooks** (Systems-owned; Gameplay reports, Systems plays):
+  * `tickVehicleAudio`;
+  * `setPlayerVehicleWeaponAudio`, `preloadWeaponAudio`;
+  * `onWeaponFired`;
+  * `onProjectileSpawned` / `Moved` / `Exploded` / `Removed`;
+  * `onBeamWeapon`;
+  * `vehicleEvents()`.
+* **`WFC_AUDIOCHECK`**: an ownership audit; it logs `LEAK` if vehicle loops exist outside vehicle form.
+
+## Validation (08c snapshot + this branch)
+
+* **Vehicle-form runs, before vs after:**
+  * Car / Jet / Tank: 0 vehicle cues before; now each plays its own authored set.
+  * Truck: unchanged.
+* **Matrix:** the default class bodies, Car2 / Car4 / Jet4 / Jet / Truck3 / Truck4 / Tank3 / Tank2, × Streets / Gorge / Molten, with transform every 2.5 s, boost cycles, special moves and autofire.
+  * 0 missing cues and 0 ownership leaks.
+  * Each body plays its own vehicle set: Sideswipe, Barricade, Starscream, Soundwave, Megatron.
+* **Weapons:**
+  * Car / Jet fire `NEUTRON_RIFLE.VEH_SHOOT` with its own impacts.
+  * Truck: `ROCKET.SHOOT` + `TRAIL_LP` + `VEH_EXPL_IMPT_WORLD`.
+  * Tank: `TANK_CANNON` shoot, trail and explosion.
+* **Match-restart cycle in vehicle form:** 0 leaks.
+* **Cold boot** (`WFC_FRONTEND_AUTOPLAY=TDM,508`):
+  * the four intro movies play their audio, followed by the party / lobby music;
+  * TDM start line SC002657 + description;
+  * **localized waves: 282 from the `_LOC/int` twin, 0 not played** (English).
+* **Systems suite:** 617 / 0, including fire identity, rocket flight / explosion / removal, the Repair Ray heal / damage / tail without duplicates, and `stopAll`.
+* **Regressions:**
+  * real-device movie + Extras probe OK;
+  * 40-cycle lifecycle 0 FAIL;
+  * wfc_fidelity 194 / 0 / 19.
+
+## Gameplay requests (state Systems needs, not duplicated in Systems)
+
+* **Tank 180 quick turn:** not implemented in movement (`CharacterMovement` notes PARTIAL). When it is, set `VehicleFormSignals::special180` on its start. The sound (`Auto_180_Turn`) is already wired.
+* **Hover thruster contribution** (`set_BoosterAmount` = the largest thruster linear / angular contribution, RE pass 4):
+  * set `VehicleFormSignals::thrusterAmount` when the hover sim exposes it;
+  * until then the BoosterParameter keeps its default.
+* **Car Driving SlipAngle:** `World::setTireSlipAngle` (existing) feeds the squeal parameter.
+* **The Repair Ray** must be equipped and firing as its beam traces. The glue derives the beam from those traces: target by team; stop after 1.5 × FireInterval without a trace. A dedicated beam state (`onBeamWeapon(cls, firing, target)` per tick) can replace that derivation.
+* **`PlayerController::moveIntent()`:** a read-only accessor added by the glue patch, for the jet Hover Up / Down inputs.
+
+## Event outputs for Rendering (vehicle propulsion / projectile FX)
+
+**`World::vehicleEvents()`** (per step, authored per-form semantics):
+
+| Field | Meaning |
+|---|---|
+| `enter` / `exit` | form OnBeginPlay / OnEndPlay |
+| `hoverOn` / `hoverOff`, `hovering` | HoverFX |
+| `boostOn` / `boostOff`, `boosting` | BoostFx: Driving / Flying / tank boost |
+| `jump` | JumpFX |
+| `roll`, `dash`, `nitro`, `special180` | the special moves |
+| `ascendOn` / `Off`, `descendOn` / `Off` | jet hover up / down |
+
+**Projectiles:**
+* `CharacterAudio::weaponProjectile(cls)` gives the authored FlightEffect / ExplosionEffect templates.
+* The projectile hooks give spawn, move, explode and remove per projectile key.
+
+## Not in this pass
+
+* The frontend `prefetchLevel` hitch (37–94 ms on the first loading frame; Frontend report): queued.
+* RE pass 5 extras: the 10 s countdown ticks (GRI.LowCountdownTickSound) and the grenade bounce / fuse sounds. Gameplay needs to expose those events first.
+* Truck nitro: the decompiled TnTruckForm.Driving.StartNitro calls **PlayNitroSound** (kept). RE pass 5 lists PlayRamSound; that is the ram *hit* (ClientPlayRammingSound).

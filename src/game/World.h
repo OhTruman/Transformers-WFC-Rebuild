@@ -22,7 +22,10 @@
 #include "game/LevelAudioHost.h"
 #include "game/CharacterAudio.h"
 #include "game/VehicleAudio.h"
+#include "game/VehicleFormAudio.h"
+#include "game/WeaponAudio.h"
 #include <map>
+#include <set>
 
 namespace render { class IRenderer; }
 
@@ -86,6 +89,29 @@ public:
     void setPlayerCharacterAudio(const std::string& chassisKey);
     // The player's current weapon class (its WeaponSounds: WP_Fire / WP_LowAmmoFire / WP_LoopingTail / fine aim).
     void setPlayerWeaponAudio(const std::string& weaponClass);
+
+    // ---- Systems M08d hooks: Gameplay reports state / events, Systems plays (docs/handoff/SYSTEMS_M08D_*) ----
+    // Vehicle form: Gameplay's per-step vehicle state (form kind, Hovering / Driving / Flying, dash, roll, nitro, jump,
+    // ascend / descend) -> the form class's component calls; events() for vehicle FX.
+    void tickVehicleAudio(float dt, const VehicleFormSignals& signals);
+    const VehicleFormEvents& vehicleEvents() const { return vehicleEvents_; }
+    // The equipped vehicle weapon (CharacterData.VehicleWeapons) for vehicle-form fire sounds.
+    void setPlayerVehicleWeaponAudio(const std::string& weaponClass);
+    // Load the cues of the loadout's weapon classes (robot + vehicle weapons, grenades) for this level.
+    void preloadWeaponAudio(const std::vector<std::string>& weaponClasses);
+    void ensureWeaponAudio(const std::string& weaponClass);
+    const std::string& firingWeaponClass(bool vehicleForm) const;
+    // One shot (instant hit or projectile launch) of the weapon actually fired.
+    int onWeaponFired(const std::string& weaponClass, bool lowAmmo, bool vehicleForm, const core::Vec3& muzzle);
+    // Projectiles (key = Gameplay's projectile identity): flight loop from spawn, explosion on Explode.
+    void onProjectileSpawned(int key, const std::string& weaponClass, const core::Vec3& pos);
+    void onProjectileMoved(int key, const core::Vec3& pos);
+    void onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos);
+    void onProjectileRemoved(int key);
+    // Beam weapon (Repair Ray), every tick while held: firing, target 0 none / 1 friendly / 2 enemy.
+    void onBeamWeapon(const std::string& weaponClass, bool firing, int target);
+    const WeaponAudio& weaponAudio() const { return weaponAudio_; }
+    const VehicleAudio& vehicleAudio() const { return vehicleAudio_; }
     // Weapon equip / put-down (Gameplay): the held weapon mesh's WP_Equip / WP_PutDown animation sounds.
     void weaponAnimEvent(WeaponSoundTimeline::Event e) { weaponSounds_.play(e); }
     const char* weaponCue(const char* event) const;
@@ -193,6 +219,12 @@ private:
     bool transformCuePlayed_ = false;
     int transformNotify_ = 0;                // next transform-clip notify to fire
     std::string weaponClass_ = "TransContent.TnWeaponIonBlaster";
+    std::string vehicleWeaponClass_;
+    std::set<std::string> weaponAudioLoaded_;      // per level (cleared with the level's cues)
+    std::vector<std::string> loadoutWeaponClasses_; // the player's loadout (robot + vehicle weapons)
+    WeaponAudio weaponAudio_;
+    VehicleFormAudio vehicleForm_;
+    VehicleFormEvents vehicleEvents_;
     // TnHitEffectPlayer.LastHitEffectTimes per victim (here: the damage targets) per effect entry [CONF script].
     std::map<std::pair<const void*, int>, float> lastHitEffect_;
     // The held weapon's mesh-animation sounds (reload / idle / equip / put-down notifies), by weapon class.

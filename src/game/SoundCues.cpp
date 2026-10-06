@@ -168,6 +168,8 @@ int SoundCues::applyLoopPoints() {
 // rows - the TDM match-start lines are French). Resolution: content/_LOC/<twin>/<group>/<name>.wav (WFC_LOC_ROOT
 // overrides the _LOC root), else the merged file if `loc` is the selected twin, else NOT played (logged once): another
 // language is never substituted. Twin of GLanguage: INT -> "int", else the language code (FRA ...).
+SoundCues::LocStats& SoundCues::locStats() { static LocStats s; return s; }
+
 std::string SoundCues::localizedWave(const std::string& rel, const std::string& owner, const std::string& contentRoot) {
     const char* lang = std::getenv("WFC_LANGUAGE");
     std::string twin = lang && *lang ? lang : "INT";
@@ -177,12 +179,14 @@ std::string SoundCues::localizedWave(const std::string& rel, const std::string& 
     const std::string alt = (locRoot && *locRoot ? std::string(locRoot) + "/" : contentRoot + "_LOC/") + twin + "/" + rel;
     if (std::FILE* fp = std::fopen((alt.size() > 1 && (alt[1] == ':' || alt[0] == '/') ? alt : contentRoot + alt).c_str(), "rb")) {
         std::fclose(fp);
+        ++locStats().twin;
         return alt;
     }
     std::string o = owner, t = twin;
     for (char& ch : o) ch = (char)std::toupper((unsigned char)ch);
     for (char& ch : t) ch = (char)std::toupper((unsigned char)ch);
-    if (o == t) return rel;
+    if (o == t) { ++locStats().merged; return rel; }
+    ++locStats().skipped;
     static std::set<std::string> warned;
     if (warned.insert(rel).second)
         LOG_WARN("sound cues: localized wave %s: no _LOC_%s twin extracted (the extracted copy is _LOC_%s) - not played",
