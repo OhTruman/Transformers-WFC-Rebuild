@@ -1749,7 +1749,21 @@ void World::tickMatch(float dt) {
         for (auto& p : sc.personalScores) match_.addPersonalScore(p.first, p.second);
         for (auto& p : sc.objectiveScores) match_.scoreObjective(p.first, p.second);
         for (auto& t : sc.teamScores) match_.scoreTeamObjective(t.first, t.second);
-        for (auto& msg : sc.messages) LOG_INFO("match: %s switch %d", msg.first.c_str(), msg.second);
+        for (auto& msg : sc.messages) {
+            LOG_INFO("match: %s switch %d", msg.first.c_str(), msg.second);
+            matchAudio().objectiveBroadcast(msg.first, msg.second);   // [Systems M08f] the message class's audio
+        }
+        {   // [Systems M08f] KOTH announcer: Active.BeginState -> ZoneChangeSound; DefendingTeamChanged -> captured / contested /
+            // neutral, not for the activation's own UpdateClaim (IgnoringTeamChangeAnnouncement) nor once the match is over.
+            const int kz = mapState_.activeKothZone();
+            const int def = kz >= 0 ? mapState_.objectives()[(size_t)kz].defenderTeam : 255;
+            if (kz >= 0 && kz != kothAudioZone_) matchAudio().kothZoneActivated(!matchActive_);
+            else if (kz >= 0 && def != kothAudioDefender_) matchAudio().kothDefenderChanged(def, false, !matchActive_);
+            kothAudioZone_ = kz; kothAudioDefender_ = def;
+            // TnGameReplicationInfoMultiplayer.OnObjectiveCountdownChange (the planted bomb's fuse)
+            const int oc = mapState_.planted().active ? (int)std::ceil(mapState_.planted().fuse) : -1;
+            if (oc != objCountdownAudio_) { objCountdownAudio_ = oc; matchAudio().objectiveCountdownChanged(oc); }
+        }
         if (sc.attackingTeam >= 0) match_.setAttackingTeam(sc.attackingTeam);
         // The carrier holds the heavy weapon (TnWeaponFlag1Hand MWT_Flag / TnWeaponBomb MWT_Bomb, WT_Heavy) [CONF].
         { int ci = mapState_.carriedBy(localPlayer_); pc.carryingHeavy_ = ci >= 0 ? mapState_.carried()[(size_t)ci].kind + 1 : 0; }
@@ -1783,8 +1797,12 @@ void World::tickMatch(float dt) {
             case MatchEvent::Type::RoundStarted:
                 mapState_.roundStart(e.value);         // SingleFlagCTF.SetupRoundStart (attacking team)
                 break;
+            case MatchEvent::Type::CountdownTick:
+                matchAudio().countdownChanged(e.value, true);   // [Systems M08f] GRI.OnCountdownChange: 10..0 ticks
+                break;
             case MatchEvent::Type::MatchStarted: {
                 mapState_.matchStarting();             // KOTH initial zone (MatchStarting); CTF / EXT carried objectives
+                matchAudio().kothMatchStarting();      // [Systems M08f] StartIgnoringAnnouncer(AnnouncerMatchStartHysteresisTime)
                 // TnTeamGame.StartMatch: Reset() every pickup factory (sleeping factories return to 'Pickup').
                 for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
                 // [integration M06, Systems M07 patch] TnGameRules.HandleStartGame -> the mode's game-type message
@@ -2337,6 +2355,7 @@ void World::tickProjectiles(float dt) {
                         if (o->matchPlayer() != p.instigator && o->rayHit(p.pos, seg * (1.0f / sl), sl, th)) { hitPawn = true; break; }
                     }
                 auto impact = [&](const core::Vec3& n) {
+                    onProjectileHitWall(p.weaponClass, p.pos, p.life > 1e8f);   // [Systems M08f] FuseSound (first) + BounceSound
                     if (p.life > 1e8f) p.life = p.fuseMin + (p.fuseMax - p.fuseMin) * (float)(std::rand() % 1000) / 999.0f;
                     p.vel = (p.vel - n * (2.0f * core::dot(p.vel, n))) * p.bounce;
                     if (core::dot(p.vel, p.vel) < 500.0f * 1e-4f) { p.resting = true; p.vel = {0, 0, 0}; }
@@ -2362,23 +2381,24 @@ void World::tickProjectiles(float dt) {
         core::Vec3 next = p.pos + p.vel * dt;
         float best = 1.0f; bool hit = false;
         float t;
-        if (lineWorld && lineWorld->segmentHit(p.pos, next, t)) { best = t; hit = true; }
+        bool worldHit = false;
+        if (lineWorld && lineWorld->segmentHit(p.pos, next, t)) { best = t; hit = true; worldHit = true; }
         core::Vec3 d = next - p.pos; float len = core::length(d);
         bool barrierHit = false;
-        if (len > 1e-5f) { float tb; if (barrierRayHit(p.pos, d * (1.0f / len), len, tb) && tb / len < best) { best = tb / len; hit = true; barrierHit = true; } }
+        if (len > 1e-5f) { float tb; if (barrierRayHit(p.pos, d * (1.0f / len), len, tb) && tb / len < best) { best = tb / len; hit = true; barrierHit = true; worldHit = false; } }
         if (len > 1e-5f) {
             core::Vec3 dir = d * (1.0f / len);
             for (MatchOpponent* o : opponents_) {
                 if (o->matchPlayer() == p.instigator) continue;
                 float th;
-                if (o->rayHit(p.pos, dir, len, th) && th / len < best) { best = th / len; hit = true; }
+                if (o->rayHit(p.pos, dir, len, th) && th / len < best) { best = th / len; hit = true; worldHit = false; }
             }
             if (matchActive_ && !localDead_ && p.instigator != localPlayer_) {
                 const Character& pc = player_.pawn();
                 core::Vec3 c = pc.actorLocation(); float r = pc.cylinderRadius(pc.moveForm()), hh = pc.cylinderHalfHeight(pc.moveForm());
                 for (int k = 1; k <= 8; ++k) {   // sampled segment vs the local cylinder
                     core::Vec3 q = p.pos + d * (k / 8.0f);
-                    if (std::hypot(q.x - c.x, q.z - c.z) <= r && std::fabs(q.y - c.y) <= hh && k / 8.0f < best) { best = k / 8.0f; hit = true; break; }
+                    if (std::hypot(q.x - c.x, q.z - c.z) <= r && std::fabs(q.y - c.y) <= hh && k / 8.0f < best) { best = k / 8.0f; hit = true; worldHit = false; break; }
                 }
             }
         }
@@ -2387,6 +2407,7 @@ void World::tickProjectiles(float dt) {
             core::Vec3 at = p.pos + d * best;
             if (hit || closingExpired) radiusDamage(at, p.damage, p.radius, p.instigator, p.damageType);
             if (barrierHit && barrier_.alive && barrier_.health > 0.0f) {}   // radiusDamage reached the barrier
+            if (worldHit) onProjectileHitWall(p.weaponClass, at, false);                         // [Systems M08f] HitWall: BounceSound
             if (hit || closingExpired) onProjectileExploded(p.audioKey, p.weaponClass, at);   // [Systems M08d] Explode
             else onProjectileRemoved(p.audioKey);                                               // LifeSpan end: destroyed
             projectiles_.erase(projectiles_.begin() + (long)i);
@@ -3480,6 +3501,10 @@ void World::onProjectileExploded(int key, const std::string& weaponClass, const 
 }
 
 void World::onProjectileRemoved(int key) { weaponAudio_.projectileRemoved(cues_, key); }
+
+void World::onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted) {
+    weaponAudio_.projectileHitWall(cues_, weaponClass, pos, core::length(pos - listenerPos_), fuseStarted);
+}
 
 void World::onBeamWeapon(const std::string& weaponClass, bool firing, int target) {
     weaponAudio_.beam(cues_, weaponClass, firing,

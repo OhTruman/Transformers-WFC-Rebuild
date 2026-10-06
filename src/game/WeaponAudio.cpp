@@ -69,6 +69,13 @@ int WeaponAudio::projectileExploded(SoundCues& cues, int key, const std::string&
     return cues.play(p->explosionSound.c_str(), pos, dist);           // PlaySound(ExplosionSound) on the projectile
 }
 
+void WeaponAudio::projectileHitWall(SoundCues& cues, const std::string& cls, const core::Vec3& pos, float dist, bool fuseStarted) {
+    const WeaponProjectile* p = CharacterAudio::weaponProjectile(cls);
+    if (!p) return;
+    if (fuseStarted && !p->fuseSound.empty()) cues.play(p->fuseSound.c_str(), pos, dist);
+    if (!p->bounceSound.empty()) cues.play(p->bounceSound.c_str(), pos, dist);
+}
+
 void WeaponAudio::projectileRemoved(SoundCues& cues, int key) {
     auto it = flight_.find(key);
     if (it == flight_.end()) return;

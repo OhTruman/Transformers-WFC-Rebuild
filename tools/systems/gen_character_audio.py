@@ -262,8 +262,9 @@ for cls, w in weapons.items():
         _, pm = props(pd.get('Mesh') or '')
         proj = {'class': projs[0], 'mesh': pd.get('Mesh') or '', 'flight_sound': pm.get('FlightSound') or '',
                 'secondary_flight_sound': pm.get('SecondaryFlightSound') or '', 'explosion_sound': pm.get('ExplosionSound') or '',
-                'flight_effect': pm.get('FlightEffect') or '', 'explosion_effect': pm.get('ExplosionEffect') or ''}
-        for q in (proj['flight_sound'], proj['secondary_flight_sound'], proj['explosion_sound']):
+                'flight_effect': pm.get('FlightEffect') or '', 'explosion_effect': pm.get('ExplosionEffect') or '',
+                'bounce_sound': pm.get('BounceSound') or '', 'fuse_sound': pm.get('FuseSound') or ''}
+        for q in (proj['flight_sound'], proj['secondary_flight_sound'], proj['explosion_sound'], proj['bounce_sound'], proj['fuse_sound']):
             if q: all_cues.add(q)
     # Beam weapons (TnWeaponBeam: Repair Ray): WP_Looping while firing + per-target WP_Fire / WP_FireSecondary loops.
     chain, t = [], cls

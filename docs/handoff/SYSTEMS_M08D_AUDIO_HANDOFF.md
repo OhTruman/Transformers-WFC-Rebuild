@@ -130,3 +130,22 @@
 - The vehicle rigid-body gravity is taken as the pawn's kGravity [HIGH].
 - The body frame is the vehicle mesh matrix (yaw + rigid-body pitch / roll).
 - Cloaking is not wired: Gameplay has no cloak state yet.
+
+## M08f: countdown / objective / grenade audio wiring (in the glue patch)
+
+The glue patch now also wires these (all on Gameplay's existing events):
+* `MatchEvent::CountdownTick` → `matchAudio().countdownChanged`;
+* `MatchStarted` → `kothMatchStarting`;
+* MapState `sc.messages` → `matchAudio().objectiveBroadcast`;
+* the KOTH active zone / defender → `kothZoneActivated` / `kothDefenderChanged`;
+* the planted bomb's fuse → `objectiveCountdownChanged`;
+* grenade impacts → `onProjectileHitWall` (fuse on the first impact);
+* non-grenade world hits → `onProjectileHitWall`.
+
+`prefetchLevel` no longer blocks: Frontend's hitch report is fixed on the Systems side, with no Frontend change.
+
+## M08g: profile volume sliders (in the glue patch)
+
+`src/core/Application_Frontend.cpp`: the profile's Music / FX / Dialogue Volume go to `game::LevelAudioHost::applyProfileVolumes` at boot
+and in `profile().onApplied` (replaces the "pending: Systems volumes" note). Static, device-global: no runtime object needed.
+Note for playtests: at the default profile (80) all game audio is now 0.8 (about -1.9 dB) relative to before - this matches the original.

@@ -314,10 +314,42 @@ bool SoundCues::prefetch(const char* cue) {
     if (c < 0) return false;
     if (pinned_.size() <= (size_t)c) pinned_.resize((size_t)c + 1, 0);
     if (!cues_[(size_t)c].streamed) return true;                   // always resident
-    if ((size_t)c >= resident_.size() || !resident_[(size_t)c]) loadWaves((size_t)c, contentRoot_);
     pinned_[(size_t)c] = 1;
+    if ((size_t)c < resident_.size() && resident_[(size_t)c]) return true;
+    for (const Warm& w : warming_) if (w.cue == (size_t)c) return true;   // already warming
+    if (audio_ && audio_->threadSafeLoad()) {
+        std::vector<std::string> paths;
+        for (const EventDef& e : cues_[(size_t)c].events)
+            for (const std::string& f : e.waves) {
+                const bool abs = f.size() > 1 && (f[1] == ':' || f[0] == '/');
+                paths.push_back(abs ? f : contentRoot_ + f);
+            }
+        audio::IAudio* a = audio_;
+        warming_.push_back({(size_t)c, std::async(std::launch::async, [a, paths] { for (const std::string& p : paths) a->load(p); })});
+        return true;
+    }
+    loadWaves((size_t)c, contentRoot_);
     return true;
 }
+
+void SoundCues::adoptWarm(bool wait, long onlyCue) {
+    for (size_t i = 0; i < warming_.size();) {
+        Warm& w = warming_[i];
+        if (onlyCue >= 0 && w.cue != (size_t)onlyCue) { ++i; continue; }
+        if (!wait && w.done.wait_for(std::chrono::seconds(0)) != std::future_status::ready) { ++i; continue; }
+        auto t0 = std::chrono::steady_clock::now();
+        w.done.wait();
+        auto t1 = std::chrono::steady_clock::now();
+        const size_t c = w.cue;
+        warming_.erase(warming_.begin() + (long)i);
+        if (c >= resident_.size() || !resident_[c]) loadWaves(c, contentRoot_);   // device cache hits: no decode here
+        static const bool dbg = std::getenv("WFC_PREFETCHLOG") != nullptr;
+        if (dbg) LOG_INFO("prefetch adopt %s: wait %.2f ms, adopt %.2f ms", cues_[c].name.c_str(),
+                          std::chrono::duration<double, std::milli>(t1 - t0).count(),
+                          std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t1).count());
+    }
+}
+
 
 bool SoundCues::wavesResident(const char* cue) const {
     int c = findCue(cue);
@@ -340,6 +372,7 @@ int SoundCues::mapCueCount() const {
 }
 
 int SoundCues::unloadMapCues() {
+    adoptWarm(true);                                   // warmed samples get an owner before anything is released
     for (size_t i = live_.size(); i-- > 0;) {
         if (!cues_[(size_t)live_[i].cue].mapBank) continue;
         const int id = live_[i].id;
@@ -436,6 +469,7 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     struct Done { bool on; LARGE_INTEGER_T t0; const char* n; ~Done() { if (on) { double ms = ticksToMs(nowTicks() - t0); if (ms > 0.05) LOG_INFO("AUDIOTIME play %s %.3f ms", n, ms); } } } done{timeLog, t0, name};
     int c = findCue(name);
     if (c < 0) { LOG_WARN("sound cue %s not in table", name); return -1; }
+    if (!warming_.empty()) adoptWarm(true, c);         // a prefetch of this cue still decoding: take it now
     if (cues_[(size_t)c].streamed && ((size_t)c >= resident_.size() || !resident_[(size_t)c])) {
         LARGE_INTEGER_T s0 = nowTicks();
         loadWaves((size_t)c, contentRoot_);
@@ -642,6 +676,7 @@ void SoundCues::stop(int id, float fade) {
 }
 
 void SoundCues::tick(float dt) {
+    if (!warming_.empty()) adoptWarm(false);
     if (!audio_) return;
     // Mixer: timers / Duration expiry, then linear parameter ramps; MASTER_WET goes to the backend as-is
     // (the mixer ramp is the only fade).
@@ -718,6 +753,7 @@ void SoundCues::tick(float dt) {
 // Streamed cues (music): the decoded waves go once the last instance has ended (a prefetched, not yet played cue
 // stays pinned).
 int SoundCues::releaseIdleStreams() {
+    adoptWarm(false);                                  // warming cues are pinned (never released here): no need to wait
     int n = 0;
     for (size_t c = 0; c < cues_.size(); ++c) {
         if (!cues_[c].streamed || c >= resident_.size() || !resident_[c]) continue;

@@ -56,7 +56,8 @@ bool LevelAudioHost::startMovieAudio(const std::string& path, int languageSlot) 
     std::string name = path.substr(path.find_last_of("/\\") + 1);
     name = name.substr(0, name.find('.'));
     movieFixedVolume_ = SoundMixer::movieAlwaysPlaysSound(name);
-    p->setVolume(movieFixedVolume_ ? (float)0xCCCC / 65536.0f : movieSfxVolume_);
+    movieVolumeApplied_ = movieFixedVolume_ ? -1.0f : movieSfxVolume();
+    p->setVolume(movieFixedVolume_ ? (float)0xCCCC / 65536.0f : movieVolumeApplied_);
     p->start();
     movieAudio_ = std::move(p);
     return true;

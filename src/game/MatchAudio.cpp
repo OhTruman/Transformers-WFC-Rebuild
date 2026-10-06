@@ -75,7 +75,8 @@ bool MatchAudio::announcerEvent(const std::string& event) {
     return play(it->second);
 }
 
-void MatchAudio::tick(float) {
+void MatchAudio::tick(float dt) {
+    clock_ += dt;
     if (!queued_.empty() && !speaking()) {             // TnAnnouncer.Tick
         const std::string q = queued_;
         queued_.clear();
@@ -123,7 +124,7 @@ bool MatchAudio::versusGameOver(int winnerTeam) {
     const assets::Json& g = messages()["versus_game_over"];
     if (winnerTeam == 0) return announcerEvent(g["AutobotWinSound"].asString());
     if (winnerTeam == 1) return announcerEvent(g["DecepticonWinSound"].asString());
-    return false;                                      // a tie: no win line
+    return false;                                      // a tie: no win line [CONF RE MP sweep S5: forfeits keep it]
 }
 
 std::string MatchAudio::messageClassForMode(const std::string& tag) {
@@ -200,13 +201,56 @@ bool MatchAudio::roundMessage(int sw) {
     return true;
 }
 
+void MatchAudio::kothMatchStarting() {
+    kothIgnoreUntil_ = clock_ + messages()["countdown"]["koth_announcer_start_hysteresis"].asFloat(3.0f);
+}
+
+bool MatchAudio::playUiCue(const std::string& q) {
+    if (q.empty() || !cues_.hasCue(q.c_str())) return false;
+    SoundCues::Emitter e;
+    e.owner = SoundCues::kUI;                          // PlaySound on the GRI (no location): non-positional
+    return cues_.play(q.c_str(), e, 0.0f) >= 0;
+}
+
+bool MatchAudio::objectiveBroadcast(const std::string& tag, int value) {
+    auto sub = [&](const char* cls) -> std::string {
+        if (tag.rfind(cls, 0) != 0) return "#";
+        const size_t a = tag.find('('), b = tag.find(')');
+        return a == std::string::npos || b == std::string::npos ? std::string() : tag.substr(a + 1, b - a - 1);
+    };
+    std::string s = sub("TnFlagMessage");
+    if (s != "#") {
+        const int sw = s == "taken" ? 1 : s == "dropped" ? 2 : s == "captured" ? 3 : s == "returned" ? 0 : -1;
+        return sw >= 0 && flagMessage(sw);
+    }
+    s = sub("TnBombMessage");
+    if (s != "#") {
+        const int sw = s == "taken" ? 1 : s == "dropped" ? 2 : s == "detonated" ? 3 : s == "defused" ? 4 : s == "planted" ? 5 : -1;
+        return sw >= 0 && bombMessage(sw, value);
+    }
+    if (tag == "TnDominationMessage") return dominationMessage(value);
+    return false;
+}
+
+bool MatchAudio::countdownChanged(int current, bool countingDown) {
+    const assets::Json& c = messages()["countdown"];
+    if (!countingDown || current < 0 || current > c["low_tick_threshold"].asInt(10)) return false;
+    return playUiCue(c["low_tick_sound"].asString());
+}
+
+bool MatchAudio::objectiveCountdownChanged(int current) {
+    const assets::Json& c = messages()["countdown"];
+    if (current == -1 || current > c["objective_tick_threshold"].asInt(5)) return false;
+    return playUiCue(c["objective_tick_sound"].asString());
+}
+
 bool MatchAudio::kothZoneActivated(bool matchOver) {
-    if (matchOver) return false;
+    if (matchOver || clock_ < kothIgnoreUntil_) return false;          // PlayAnnouncerDialog: IgnoringAnnouncer
     return announcerEvent(objective("TnKingOfTheHillZone")["ZoneChangeSound"].asString());
 }
 
 bool MatchAudio::kothDefenderChanged(int team, bool ignoring, bool matchOver) {
-    if (ignoring || matchOver) return false;
+    if (ignoring || matchOver || clock_ < kothIgnoreUntil_) return false;
     const assets::Json& m = objective("TnKingOfTheHillZone");
     const char* f = team == 0 ? "CapturedSoundAutobotSound" : team == 1 ? "CapturedSoundDecepticonSound"
                   : team == 254 ? "ContestedSound" : team == 255 ? "NeutralSound" : nullptr;

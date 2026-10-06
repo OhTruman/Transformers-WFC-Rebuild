@@ -518,6 +518,45 @@ AssetTools FRONTEND.md + manifests/frontend_*.json (cc9773e). Full table: `docs/
 
 
 
+
+## SYSTEMS M08g - PROFILE VOLUME SLIDERS (2026-10-05, agents/systems)
+* **Script** [CONF]: HmPlayerController.UpdateLocalCacheOfProfileSettings -> SetAudioGroupVolume('Dialog', GetDialogVolume()),
+  ('SFX', GetFxVolume()), ('MUSIC', GetMusicVolume()); Get* = HmProfileSettings.GetNormalizedPropertyValue = FClamp(slider / 100, 0, 1).
+  TnProfileSettings defaults: Music Volume (31) 80, FX Volume (32) 80, Dialogue Volume (33) 80.
+* **Native** [CONF RE pass 5 §10, RE 639a66c]: exec 0x82C7E5E8 -> SetGroupVolume 0x827666B0 walks SoundGroupCategoryMappings, finds each
+  listed category node and REPLACES its fader (initialised to the config Volume) with the value via SetTarget(v, 0) - immediate; FName
+  match (case-insensitive), unknown group = no-op. Each category's channel group is attached to its parent's [CONF]; descendants
+  inherit multiplicatively [HIGH, FMOD ChannelGroup].
+* **Rebuild:** a device-global per-group scale multiplied into every cue whose category is in the group's subtree. Equivalent to the
+  replace because all five listed categories' config Volume is 1.0 (gen_mixer.py asserts it).
+* **Mixer presets vs. the slider** [CONF path, RE d832643 pass 5 §10 addendum; HIGH audible]: EnableMixerPreset (0x82772778) and the
+  tree re-evaluation (0x8276A868) blend presets into each node's DSP preset slots and never write the group fader, so preset volume and
+  the slider multiply - as applied here, on every category including SFX_DRY / DX_* / MUSIC_DRY.
+* **Movies:** GetMovieVolume's 'SFX' class volume is the same group value; a running movie follows a slider change.
+
+---
+
+## SYSTEMS M08f — COUNTDOWN / OBJECTIVE / GRENADE AUDIO; ASYNC PREFETCH (2026-10-05, agents/systems)
+* **Countdown ticks** [CONF script + CDO]:
+  * TnGameReplicationInfo.OnCountdownChange: IsCountdownBelowThreshold (0 ≤ CurrentCountdown ≤ LowCountdownTickThreshold 10) → PlaySound(LowCountdownTickSound = BL_HUD_INTERFACE.CTF_ROUND_TIMER_01).
+  * TnGameReplicationInfoMultiplayer.OnObjectiveCountdownChange: ≤ 5 and ≠ −1 → BL_HUD_INTERFACE.EXTINCTION_ROUND_TIMER_01.
+* **KOTH** [CONF script + CDO]:
+  * MatchStarting → StartIgnoringAnnouncer(AnnouncerMatchStartHysteresisTime 3.0), so the first zone's "hill moved" line is suppressed.
+  * The activation's own UpdateClaim is silent (IgnoringTeamChangeAnnouncement).
+* **End of match** [CONF RE MP sweep S5]:
+  * a winner (normal or forfeit) gets their team's line;
+  * a tie gets none;
+  * FFA gets no win line.
+* **Grenades** [CONF script + data]:
+  * TnProjectileGrenadeBase.HitThing: the first impact plays FuseSound (the fuse starts); OnHitThing plays BounceSound on every impact.
+  * HmProjectile.HitWall plays BounceSound.
+  * Sound names come from the TnProjectileMesh (e.g. Magma Frag: PROJ_IMPT / GRENADE_FOLEY_SHELL_BOUNCE_HEAVY).
+* **Prefetch** (rebuild performance, no behaviour change):
+  * On a thread-safe backend the worker decodes and warms the device cache; a tick adopts the result (cache hits).
+  * Every load / unload path drains pending decodes first, so residency and pinning match the synchronous rule.
+
+---
+
 ## SYSTEMS M08e — PER-CHASSIS VEHICLE FX (2026-10-05, agents/systems)
 * **Source** [CONF script + data]: TnVehicleFxPlayer.Play / Stop (socket-attached, Color = EnergonColor); TnCarForm Hovering / Driving.UpdateFx, UpdateBoostFx, UpdateJumping / UpdateRolling; TnTruckForm Start / StopNitro (RamFX); TnTankForm.UpdateFx; TnPlaneForm Hovering / Flying.UpdateFx; HoverPhysics.CalculateThrusterLinear / AngularContribution; TnVehicleForm.get_FxAllowed.
 * **Data:** character.json `vehicle_fx` + `vehicle.sockets` (31 chassis).

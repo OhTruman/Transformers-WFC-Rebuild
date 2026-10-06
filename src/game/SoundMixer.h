@@ -19,7 +19,8 @@
 // echo. A cue's gain = its own category's volume x masterScale() (Master volume relative to Master's Default 0.708:
 // the rebuild's output level stands in for Master's Default, so only Master CHANGES - CINE_MUTE_FOR_BINK - are
 // applied). [CONF values; HIGH: Master is the root of every category (sound_group_category_mappings "Master" ->
-// MASTER_DRY / MASTER_WET); the parent chain between the other categories is native and not applied.]
+// MASTER_DRY / MASTER_WET); the parent chain's preset volumes are not applied (no global preset targets a parent).]
+// The profile sound-group volumes DO reach down the authored category tree: gain x groupScale(category) (see below).
 // Preset sources: the global SoundMixerProperties presets the cue table plays (VEHICLE_JUMP, VEHICLE_BOOST_END) and
 // the MovieMixerPreset (CINE_MUTE_FOR_BINK) are built in; a level's REVERB_* presets come from its manifest
 // reverb_presets (mixer_preset + dsp_by_category.MASTER_WET) through addMapPreset() at level load and are removed by
@@ -37,6 +38,9 @@ public:
     struct PresetDef { const char* name; float priority, fadeIn, fadeOut, duration; };
     struct CategoryPreset { const char* name; float v[17]; };   // Volume, Reverb (12), Echo (4)
     struct CategoryRow { const char* category; const char* name; float v[17]; };
+    struct CategoryParent { const char* category; const char* parent; };
+    struct GroupCategory { const char* group; const char* category; };
+    struct GroupDefault { const char* group; int slider; };
     static constexpr int kParams = 17;
 
     SoundMixer();                                         // every category + the built-in global presets (SoundMixer.inc)
@@ -75,6 +79,26 @@ public:
     // Category outputs.
     float categoryVolume(const std::string& category) const;   // linear amplitude, clamped [0,1] (unknown: 1)
     float masterScale() const;                                 // Master volume / Master Default volume
+
+    // Sound groups (the profile volume sliders). UAudioDevice::SetAudioGroupVolume(group, v): [HM_Engine.
+    // SoundMixerProperties] SoundGroupCategoryMappings name the categories a group scales - SFX -> SFX_DRY, SFX_WET;
+    // DIALOG -> DX_DRY, DX_WET; MUSIC -> MUSIC_DRY; MASTER -> MASTER_DRY, MASTER_WET [CONF config]. Native
+    // SetGroupVolume (0x827666B0) finds each listed category node and REPLACES its fader (initialised to the config
+    // Volume) with the value, immediately (SetTarget(v, 0)); FName match, unknown group = no-op [CONF RE pass 5 §10].
+    // Each category's channel group is attached to its parent's [CONF], so the fader scales every descendant
+    // (multiplicative FMOD ChannelGroup volume [HIGH]). All listed config Volumes are 1.0 (gen_mixer.py asserts it),
+    // so replacing equals the multiplier applied here. Mixer presets never write that fader: EnableMixerPreset
+    // (0x82772778) -> tree re-evaluation (0x8276A868) blends presets into each node's DSP preset slots, a separate
+    // stage [CONF path, RE d832643; HIGH audible product] - so preset volume x group volume, as applied here.
+    // HmPlayerController.UpdateLocalCacheOfProfileSettings applies SetAudioGroupVolume('Dialog' | 'SFX' | 'MUSIC',
+    // slider / 100 clamped [0,1]) [CONF script]; the TnProfileSettings defaults are 80 / 80 / 80, which is also the
+    // value before any profile is applied here. Device-global (the frontend and game cue tables share it), immediate.
+    static bool setGroupVolume(const std::string& group, float linear);   // false: unknown group (no-op)
+    static float groupVolume(const std::string& group);                   // unknown: 1
+    static void resetGroupVolumes();                                      // the profile defaults
+    static int profileDefaultSlider(const std::string& group);            // MUSIC / SFX / DIALOG (-1 unknown)
+    // The product of the group volumes over `category` and its ancestors (1 when no group covers it).
+    static float groupScale(const std::string& category);
     // Master's Default DSP compressor (global SoundMixerProperties data; false if its stage is not configured).
     static bool masterCompressor(float& thresholdDb, float& attackMs, float& releaseMs, float& makeupDb);
     bool environmentChanged() const { return envDirty_; }

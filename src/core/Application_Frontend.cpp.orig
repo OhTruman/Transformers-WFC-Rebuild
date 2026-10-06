@@ -193,25 +193,14 @@ void Application::attachPresenter() {
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
     // and reported here so the owners can consume LocalProfile when they add the entry points.
     applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
-#ifdef WFC_SYSTEMS_FRONTEND_AUDIO
-    // [Systems M08g] HmPlayerController.UpdateLocalCacheOfProfileSettings: SetAudioGroupVolume('Dialog' | 'SFX' |
-    // 'MUSIC', slider / 100). Device-global and immediate: frontend, match and movie audio all follow.
-    {
-        const frontend::LocalProfile& p = frontend_->flow().profile();
-        game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
-    }
-#endif
     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
         applyGamma(renderer_, p.getInt("GammaSetting"));
-#ifdef WFC_SYSTEMS_FRONTEND_AUDIO
-        game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
-#endif
         if (applyLookSettings(world_.player().controller(), p))
             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});
         frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},
                                                     {"MusicVolume", p.get("Music Volume")}, {"CameraSensitivity", p.get("CameraSensitivity")},
                                                     {"InvertY_Robot", p.get("InvertY_Robot")}, {"Vibration", p.get("Controller Vibration")},
-                                                    {"owners", "volumes -> Systems; pending: Gameplay camera; gamma -> renderer"}});
+                                                    {"owners", "pending: Systems volumes, Gameplay camera; gamma -> renderer"}});
     };
     if (!std::getenv("WFC_NO_FRONTEND_SCENE")) {
         g_scene = std::make_unique<FrontendSceneGL>(renderer_);

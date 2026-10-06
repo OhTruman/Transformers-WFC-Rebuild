@@ -260,6 +260,8 @@ public:
     void onProjectileMoved(int key, const core::Vec3& pos);
     void onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos);
     void onProjectileRemoved(int key);
+    // World hit / grenade bounce (fuseStarted: the grenade's first impact).
+    void onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted);
     void onBeamWeapon(const std::string& weaponClass, bool firing, int target);
     const WeaponAudio& weaponAudio() const { return weaponAudio_; }
     const VehicleAudio& vehicleAudio() const { return vehicleAudio_; }
@@ -627,6 +629,7 @@ private:
     bool vehicleFxData_ = false;
     bool fxPrevRolling_ = false, fxPrevShown_ = false;   // [Systems M08e]
     int projAudioKey_ = 0;
+    int kothAudioZone_ = -1, kothAudioDefender_ = 255, objCountdownAudio_ = -1;   // [Systems M08f]
     float beamSinceShot_ = 1e9f, beamInterval_ = 0.1f;   // [Systems M08d] beam weapon traces
     std::string beamClassFiring_;
     // TnHitEffectPlayer.LastHitEffectTimes per victim (here: the damage targets) per effect entry [CONF script].

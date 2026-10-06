@@ -52,8 +52,24 @@ public:
     // localPlayerWon only for the DM message (FFA end music).
     bool gameTypeMessage(const std::string& messageClass, int sw, int winnerTeam = -1, bool localPlayerWon = false);
     bool progressAnnouncement(int sw);               // TnGameProgressAnnouncementMessage switch 0..7
-    bool versusGameOver(int winnerTeam);             // [PARTIAL] the winning team's announcer line
+    // TnVersusGameOverMessage.ClientReceive [CONF RE MP sweep S5]: a winner (normal or forfeit) -> MP_GameAutobotWin /
+    // MP_GameDecepticonWin; a tie -> none. FFA (TnFreeForAllGameOverMessage) has no win line.
+    bool versusGameOver(int winnerTeam);
     void tick(float dt);
+
+    // ---- countdown ticks (Gameplay reports every countdown value) [CONF script + class defaults] ----
+    // TnGameReplicationInfo.OnCountdownChange: while counting down, 0 <= CurrentCountdown <= LowCountdownTickThreshold
+    // (10) -> PlaySound(LowCountdownTickSound = BL_HUD_INTERFACE.CTF_ROUND_TIMER_01): the pre-match 10..0 ticks.
+    bool countdownChanged(int currentCountdown, bool countingDown);
+    // A Gameplay objective broadcast (BroadcastLocalizedMessage class + switch) -> the class's ClientReceive audio:
+    //   "TnFlagMessage(taken|dropped|captured|returned)" -> flagMessage(1 / 2 / 3 / 0);
+    //   "TnBombMessage(taken|dropped|planted|defused|detonated)" (value = team where it matters) -> bombMessage(1/2/5/4/3);
+    //   "TnDominationMessage" (value = point * 10 + type) -> dominationMessage. Other classes: false (no audio here; the
+    //   hill lines come from the zone's DefendingTeamChanged -> kothDefenderChanged).
+    bool objectiveBroadcast(const std::string& tag, int value);
+    // TnGameReplicationInfoMultiplayer.OnObjectiveCountdownChange: CurrentObjectiveCountdown <= 5 and != -1 ->
+    // LowObjectiveCountdownTickSound (BL_HUD_INTERFACE.EXTINCTION_ROUND_TIMER_01).
+    bool objectiveCountdownChanged(int currentObjectiveCountdown);
 
     // ---- Gameplay match events (agents/gameplay game::Match::events()) -> the original broadcasts ----
     // MatchStarted: TnGameRules.HandleStartGame -> the mode's game-type message, switch 0. `modeTag` = GameModeTag
@@ -84,6 +100,9 @@ public:
     // TnKingOfTheHillZoneBase.PlayAnnouncerDialog (not while the match is over): Active.BeginState -> ZoneChangeSound;
     // DefendingTeamChanged (unless IgnoringTeamChangeAnnouncement): 0 / 1 captured by that team, 254 contested,
     // 255 neutral.
+    // TnKingOfTheHillZoneBase.MatchStarting -> StartIgnoringAnnouncer(AnnouncerMatchStartHysteresisTime = 3 s): the hill
+    // lines are suppressed that long from the match start [CONF script + class default].
+    void kothMatchStarting();
     bool kothZoneActivated(bool matchOver = false);
     bool kothDefenderChanged(int defenderTeamIndex, bool ignoringTeamChange = false, bool matchOver = false);
 
@@ -96,6 +115,8 @@ public:
     static bool hasMessageClass(const std::string& messageClass);
 
 private:
+    float clock_ = 0.0f, kothIgnoreUntil_ = -1.0f;
+    bool playUiCue(const std::string& cue);
     bool play(const std::string& cue);               // TnAnnouncer.Play / PlayInternal
     bool higherPriority(const std::string& cue) const;
     SoundCues& cues_;

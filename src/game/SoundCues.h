@@ -14,6 +14,7 @@
 //   SoundParameters.Optimus_Prime_Tire_Squeal (Max 1.57 = pi/2): tire slip angle in radians [HI]
 #pragma once
 #include <functional>
+#include <future>
 #include <map>
 #include <string>
 #include <vector>
@@ -132,7 +133,12 @@ public:
     int releaseIdleStreams();
     // Decode a streamed cue's waves ahead of its first play (e.g. on a loading screen); they stay resident until
     // the cue has played and its last instance ended. Returns false for an unknown cue.
+    // Prefetch a streamed cue for an upcoming level (loading screen). On a backend with thread-safe loading the waves
+    // are decoded on a worker (the device's sample cache is warmed) and adopted by the next tick (cache hits) - the
+    // frame that asks no longer blocks on the decode (37-94 ms frontend hitch). Otherwise decoded now.
     bool prefetch(const char* cue);
+    ~SoundCues() { for (Warm& w : warming_) if (w.done.valid()) w.done.wait(); }   // inline: every build links it
+    int warmingPrefetches() const { return (int)warming_.size(); }
     // Diagnostics: a streamed cue's waves are resident (decoded) right now.
     bool wavesResident(const char* cue) const;
     size_t cueCount() const { return cues_.size(); }
@@ -205,7 +211,8 @@ private:
     void retire(size_t liveIndex);              // remove an instance (stop voices, disable its mixer preset)
     // Instance level x the mixer's category volume (linear amplitude) for the cue's category.
     float gainOf(const Instance& in) const {
-        return level(in) * mixer_.categoryVolume(cues_[(size_t)in.cue].category) * mixer_.masterScale();
+        const std::string& cat = cues_[(size_t)in.cue].category;
+        return level(in) * mixer_.categoryVolume(cat) * SoundMixer::groupScale(cat) * mixer_.masterScale();
     }
     SoundMixer mixer_;
     std::string contentRoot_;
@@ -225,6 +232,10 @@ private:
     std::vector<Instance> live_;
     std::vector<Pending> pending_;
     int nextId_ = 0;
+    // Prefetch warming (worker decodes; adopted on the main thread). Every load / release / unload path drains first.
+    struct Warm { size_t cue; std::future<void> done; };
+    std::vector<Warm> warming_;
+    void adoptWarm(bool wait, long onlyCue = -1);
 };
 
 } // namespace game

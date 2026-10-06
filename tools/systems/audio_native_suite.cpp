@@ -855,7 +855,7 @@ static void testLifecycle() {
     const Vec3 streetsSpawn{363.5f, -724.5f, -341.8f};      // a Streets spawn (DEC_ROOM_LOWER)
     struct MapCase { const char* name; std::string path; int cues, presets, emitters, zones, pools; Vec3 spot; const char* reverb; };
     const MapCase maps[2] = {
-        {"MP_IAC_Streets", streetsAudio(), 32 + 162, 10, 70, 9, 11, streetsSpawn, "REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER"},
+        {"MP_IAC_Streets", streetsAudio(), 32 + 164, 10, 70, 9, 11, streetsSpawn, "REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER"},
         {"FAKE_TEST_MAP", fake, 2, 1, 3, 1, 1, Vec3{0, -1.0f, 0}, "REVERB_FAKE_ROOM"}};
     bool allClean = true;
     for (int cycle = 0; cycle < 6; ++cycle)
@@ -898,8 +898,8 @@ static void testLifecycle() {
     const size_t oneBed = cues.liveInstances();
     amb.load(streetsAudio(), content, cues, &rec);
     cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f);
-    CHECK(cues.liveInstances() == oneBed && cues.mapCueCount() == 32 + 162 && cues.mixer().mapPresetCount() == 10,
-          "reload without unload: one bed (%zu instances, was %zu), 32 bank + 162 streamed match cues, 10 presets", cues.liveInstances(), oneBed);
+    CHECK(cues.liveInstances() == oneBed && cues.mapCueCount() == 32 + 164 && cues.mixer().mapPresetCount() == 10,
+          "reload without unload: one bed (%zu instances, was %zu), 32 bank + 164 streamed match cues, 10 presets", cues.liveInstances(), oneBed);
 
     // Match reset on the same map: player sounds stop, the bed keeps playing, the zone scene re-begins on re-touch
     // (pools restart, the reverb slot and preset ref-counts are unchanged).
@@ -1052,8 +1052,17 @@ static void testFrontend() {
         auto p0 = std::chrono::steady_clock::now();
         CHECK(rc.prefetch(lobby.cue.c_str()), "prefetch decodes a streamed track");
         const double pms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - p0).count();
-        rc.tick(1.0f / 30.0f);
-        CHECK(rc.wavesResident(lobby.cue.c_str()), "prefetched waves stay pinned until played");
+        CHECK(pms < 5.0, "prefetch does not block the asking frame (worker decode on a thread-safe backend; %.2f ms)", pms);
+        // the loading screen: frames tick while the worker decodes; the warm is adopted by a tick (no wait)
+        double worstTick = 0.0;
+        for (int k = 0; k < 120 && !rc.wavesResident(lobby.cue.c_str()); ++k) {
+            auto t = std::chrono::steady_clock::now();
+            rc.tick(1.0f / 30.0f);
+            worstTick = std::max(worstTick, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count());
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        }
+        CHECK(rc.wavesResident(lobby.cue.c_str()) && worstTick < 5.0, "prefetched waves adopted during the loading frames without a stall "
+              "(worst tick %.2f ms) and pinned until played", worstTick);
         auto q0 = std::chrono::steady_clock::now();
         rfe.music().playMusic(lobby); rfe.tick(1.0f / 30.0f);
         const double qms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - q0).count();
@@ -1467,8 +1476,8 @@ static void testMatchAudio() {
     const Vec3 L{363.5f, -724.5f, -341.8f};
     auto run = [&](float secs) { for (int k = 0; k < (int)(secs * 30.0f); ++k) stageTick(host, cues, L, L, dt, mx); };
     std::string why;
-    CHECK(host.load("MP_IAC_Streets") && host.ambient().announcerEvents().size() == 140 && cues.mapCueCount() == 32 + 162,
-          "Streets: 140 announcer events, 32 bank + 162 streamed match cues (%zu / %d)", host.ambient().announcerEvents().size(), cues.mapCueCount());
+    CHECK(host.load("MP_IAC_Streets") && host.ambient().announcerEvents().size() == 140 && cues.mapCueCount() == 32 + 164,
+          "Streets: 140 announcer events, 32 bank + 164 streamed match cues (%zu / %d)", host.ambient().announcerEvents().size(), cues.mapCueCount());
     const size_t residentBefore = rec.paths.size();
     game::MatchAudio& m = host.match();
     CHECK(game::MatchAudio::hasMessageClass("TnGameTypeMessageTDM") && m.dialogCharacter() == "DialogCharacters.OPRIME",
@@ -1529,7 +1538,7 @@ static void testMatchAudio() {
 
     // MP_UND_Gorge: the AssetTools manifest + Systems manifest through the same path (not play-ready; audio only).
     CHECK(host.load("MP_UND_Gorge") && host.ambient().emitterCount() == 15 && host.ambient().zoneCount() == 12 &&
-          cues.mixer().mapPresetCount() == 6 && cues.mapCueCount() == 13 + 18 + 162 && host.ambient().announcerEvents().size() == 140,
+          cues.mixer().mapPresetCount() == 6 && cues.mapCueCount() == 13 + 18 + 164 && host.ambient().announcerEvents().size() == 140,
           "Gorge: 15 emitters, 12 zone ops (23 touch volumes), 6 reverb presets, 13 + 157 cues, announcer (%d / %d / %d / %d)", host.ambient().emitterCount(),
           host.ambient().zoneCount(), cues.mixer().mapPresetCount(), cues.mapCueCount());
     run(3.0f);
@@ -1833,8 +1842,11 @@ static void testObjectiveMessages() {
     host.setMovieSfxVolume(1.7f);
     const float hi = host.movieSfxVolume();
     host.setMovieSfxVolume(0.6f);
-    CHECK(def == 0.8f && s55 == 0.55f && hi == 1.0f && host.movieSfxVolume() == 0.6f,
-          "GetMovieVolume: the SFX class volume = FX slider / 100 (default 80 -> 0.8), clamped [0,1]");
+    CHECK(def == 1.0f && s55 == 0.55f && hi == 1.0f && host.movieSfxVolume() == 0.6f && game::SoundMixer::groupVolume("SFX") == 0.6f,
+          "GetMovieVolume: the SFX class volume = the 'SFX' group = FX slider / 100, clamped [0,1] (suite runs at 1)");
+    game::SoundMixer::resetGroupVolumes();
+    CHECK(host.movieSfxVolume() == 0.8f, "profile default FX 80 -> movie volume 0.8");
+    for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);
     host.unload();
 }
 
@@ -1927,7 +1939,98 @@ static void testWeaponAudio() {
     host.unload();
 }
 
+// M08f: countdown ticks, KOTH match-start hysteresis, grenade fuse / bounce.
+static void testCountdownAndGrenades() {
+    std::printf("[countdown ticks, KOTH hysteresis, grenade fuse / bounce]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    game::LevelAudioHost host(cues);
+    host.attach(&rec, kRoot);
+    host.load("MP_IAC_Streets");
+    game::MatchAudio& m = host.match();
+    int ticks = 0;
+    for (int c = 12; c >= -1; --c) ticks += m.countdownChanged(c, true) ? 1 : 0;
+    CHECK(ticks == 11 && !m.countdownChanged(5, false) && cues.activeInstances("BL_HUD_INTERFACE.CTF_ROUND_TIMER_01") > 0,
+          "pre-match countdown: CTF_ROUND_TIMER_01 for 10..0 only (%d ticks), none when not counting down", ticks);
+    int objTicks = 0;
+    for (int c = 8; c >= -1; --c) objTicks += m.objectiveCountdownChanged(c) ? 1 : 0;
+    CHECK(objTicks == 6, "objective countdown: EXTINCTION_ROUND_TIMER_01 for 5..0 (%d), none at -1", objTicks);
+    m.kothMatchStarting();
+    const bool early = m.kothZoneActivated();
+    for (int k = 0; k < 100; ++k) { host.tick(1.0f / 30.0f, {0, 0, 0}, {0, 0, 0}); cues.tick(1.0f / 30.0f); }
+    CHECK(!early && m.kothZoneActivated(), "KOTH: hill lines ignored for AnnouncerMatchStartHysteresisTime (3 s) from the match start");
+    const char* GL = "TransContent.TnWeaponGrenadeLauncher";
+    game::CharacterAudio::loadWeaponCues(cues, GL);
+    game::WeaponAudio wa;
+    wa.projectileHitWall(cues, GL, {0, 0, 0}, 5.0f, true);
+    const bool first = cues.activeInstances("BL_WPN_GUN_GRENADE_LAUNCHER.PROJ_IMPT") == 1 &&
+                       cues.activeInstances("BL_WPN_GRENADE.GRENADE_FOLEY_SHELL_BOUNCE_HEAVY") == 1;
+    wa.projectileHitWall(cues, GL, {0, 0, 1}, 5.0f, false);
+    CHECK(first && cues.activeInstances("BL_WPN_GUN_GRENADE_LAUNCHER.PROJ_IMPT") == 1 &&
+          cues.activeInstances("BL_WPN_GRENADE.GRENADE_FOLEY_SHELL_BOUNCE_HEAVY") == 2,
+          "grenade: first impact FuseSound + BounceSound, later impacts BounceSound only");
+    host.unload();
+}
+
+// Profile volume sliders: SetAudioGroupVolume -> SoundGroupCategoryMappings categories and their whole subtree.
+static void testSoundGroups() {
+    std::printf("[sound groups]\n");
+    using M = game::SoundMixer;
+    M::resetGroupVolumes();
+    CHECK(M::profileDefaultSlider("MUSIC") == 80 && M::profileDefaultSlider("SFX") == 80 && M::profileDefaultSlider("DIALOG") == 80,
+          "TnProfileSettings defaults: Music / FX / Dialogue Volume 80");
+    CHECK(near(M::groupVolume("SFX"), 0.8f, 1e-6f) && near(M::groupVolume("Dialog"), 0.8f, 1e-6f) &&
+          near(M::groupVolume("MUSIC"), 0.8f, 1e-6f) && M::groupVolume("MASTER") == 1.0f,
+          "before any profile: the defaults 80 -> 0.8 (Master has no slider: 1)");
+    CHECK(!M::setGroupVolume("VOICE", 0.5f), "unknown group: no-op");
+    // the authored tree: a group scales its categories' whole subtree, nothing else
+    M::setGroupVolume("SFX", 0.5f); M::setGroupVolume("dialog", 0.25f); M::setGroupVolume("Music", 0.75f);
+    CHECK(near(M::groupScale("SFX_SWORD_HUM"), 0.5f, 1e-6f) && near(M::groupScale("SFX_WET_COMBAT_ROBOT_WPN_SHOOT"), 0.5f, 1e-6f) &&
+          near(M::groupScale("SFX_DRY_HUD"), 0.5f, 1e-6f) && near(M::groupScale("SFX_WET_AMB_3D"), 0.5f, 1e-6f),
+          "SFX reaches SFX_DRY / SFX_WET descendants (sword hum 5 deep, robot weapon shoot, HUD, 3D ambience)");
+    CHECK(near(M::groupScale("DX_DRY_RADIO"), 0.25f, 1e-6f) && near(M::groupScale("DX_WET_PA"), 0.25f, 1e-6f) &&
+          near(M::groupScale("MUSIC_STINGER"), 0.75f, 1e-6f) && near(M::groupScale("MUSIC_DUCK_SFX"), 0.75f, 1e-6f),
+          "Dialog -> DX_DRY / DX_WET subtrees; MUSIC -> MUSIC_DRY subtree (stingers too); names case-insensitive");
+    CHECK(M::groupScale("Master") == 1.0f && M::groupScale("") == 1.0f && M::groupScale("NOT_A_CATEGORY") == 1.0f,
+          "Master / uncategorized: no slider applies");
+    M::setGroupVolume("SFX", 1.7f);
+    CHECK(M::groupVolume("SFX") == 1.0f, "clamped to [0,1] (GetNormalizedPropertyValue FClamp)");
+    game::LevelAudioHost::applyProfileVolumes(30, 120, -5);
+    CHECK(near(M::groupVolume("MUSIC"), 0.3f, 1e-6f) && M::groupVolume("SFX") == 1.0f && M::groupVolume("DIALOG") == 0.0f,
+          "applyProfileVolumes(music, fx, dialog) = SetAudioGroupVolume(slider / 100, clamped)");
+
+    // A playing voice follows at once (gain re-evaluated every tick); the mixer preset volume still multiplies.
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    const char* js = R"({
+      "T.SFXLOOP": {"tree": {"class": "SoundNodeRoot", "params": {"Volume": 0.0, "SpatializationType": "k2D", "Category": "SFX_WET_VEH_ENGINE"},
+        "children": [{"class": "SoundNodeWaveEvent", "params": {"Volume": 0.0, "Loop": true}, "children": [{"wav": "content/WL_ELEC/ELEC_TRANS_TV_03.wav"}]}]}},
+      "T.DX": {"tree": {"class": "SoundNodeRoot", "params": {"Volume": 0.0, "SpatializationType": "k2D", "Category": "DX_DRY_RADIO"},
+        "children": [{"class": "SoundNodeWaveEvent", "params": {"Volume": 0.0}, "children": [{"wav": "content/WL_ELEC/ELEC_TRANS_TV_03.wav"}]}]}}})";
+    assets::Json cj; assets::Json::parse(js, cj);
+    cues.addCues(cj, kRoot + "/../content/");
+    M::setGroupVolume("SFX", 0.8f); M::setGroupVolume("DIALOG", 0.5f);
+    int f = rec.n;
+    const int id = cues.play("T.SFXLOOP", Vec3{0, 0, 0}, 0.0f);
+    cues.play("T.DX", Vec3{0, 0, 0}, 0.0f);
+    CHECK(rec.n - f == 2 && near(rec.v[f].p.volume, 0.8f, 1e-5f) && near(rec.v[f + 1].p.volume, 0.5f, 1e-5f),
+          "new voices: authored level x group volume (SFX 0.8, Dialog 0.5) (%.4f, %.4f)", rec.v[f].p.volume, rec.v[f + 1].p.volume);
+    M::setGroupVolume("SFX", 0.4f);
+    cues.tick(1.0f / 30.0f);
+    CHECK(cues.playing(id) && near(rec.v[f].vol, 0.4f, 1e-5f), "slider change: the playing loop follows at once (%.4f)", rec.v[f].vol);
+    cues.mixer().enable("VEHICLE_JUMP");
+    for (int k = 0; k < 15; ++k) cues.tick(1.0f / 30.0f);     // fade-in 0.3 s, duration 1 s: sample at 0.5 s
+    const float jump = cues.mixer().categoryVolume("SFX_WET_VEH_ENGINE");
+    CHECK(jump < 1.0f && near(rec.v[f].vol, 0.4f * jump, 1e-4f), "mixer preset (VEHICLE_JUMP %.3f) x group volume (%.4f)", jump, rec.v[f].vol);
+    cues.stopAll();
+
+    // Movies: GetMovieVolume's SFX class volume is the same group value; a running movie follows.
+    M::resetGroupVolumes();
+    for (const char* g : {"SFX", "DIALOG", "MUSIC"}) M::setGroupVolume(g, 1.0f);   // the rest of the suite: authored levels
+}
+
 int main() {
+    for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // authored levels
+    testSoundGroups();
+    testCountdownAndGrenades();
     testWeaponAudio();
     testLocalizedWaves();
     testObjectiveMessages();

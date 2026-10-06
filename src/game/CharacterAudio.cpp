@@ -116,7 +116,8 @@ const Db& db() {
         const assets::Json& pj = kv.second["projectile"];
         if (pj.isObject())
             d.weaponProj[kv.first] = {pj["class"].asString(), pj["flight_sound"].asString(), pj["secondary_flight_sound"].asString(),
-                                      pj["explosion_sound"].asString(), pj["flight_effect"].asString(), pj["explosion_effect"].asString()};
+                                      pj["explosion_sound"].asString(), pj["flight_effect"].asString(), pj["explosion_effect"].asString(),
+                                      pj["bounce_sound"].asString(), pj["fuse_sound"].asString()};
         d.weaponBeam[kv.first] = kv.second["beam"].asBool();
         for (const auto& f : kv.second["fades"].obj) d.weaponFades[kv.first][f.first] = {f.second[0].asFloat(), f.second[1].asFloat()};
         const assets::Json& fx = kv.second["fx"];
@@ -228,7 +229,10 @@ int CharacterAudio::loadWeaponCues(SoundCues& cues, const std::string& cls) {
     auto it = d.weaponEvents.find(cls);
     if (it != d.weaponEvents.end()) for (const auto& e : it->second) want(e.second);
     auto pj = d.weaponProj.find(cls);
-    if (pj != d.weaponProj.end()) { want(pj->second.flightSound); want(pj->second.secondaryFlightSound); want(pj->second.explosionSound); }
+    if (pj != d.weaponProj.end()) {
+        want(pj->second.flightSound); want(pj->second.secondaryFlightSound); want(pj->second.explosionSound);
+        want(pj->second.bounceSound); want(pj->second.fuseSound);
+    }
     auto an = d.weaponAnims.find(cls);
     if (an != d.weaponAnims.end())
         for (const WeaponAnimSounds::Clip* c : {&an->second.idle, &an->second.fire, &an->second.reload, &an->second.equip, &an->second.putDown})
