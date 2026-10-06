@@ -72,7 +72,8 @@ public:
     // TnSentryPawnAbility [RE s12 addenda 3 / 4, CONF]: IdleSound loop from deploy, at the sentry; ActivateSound on every
     // EnemyAcquired (the target changing to an enemy); each shot its gun's WP_Fire (TnWeaponDefaultSentryAbility), a world
     // hit its DefaultImpactSound; destroyed (damage or the 30 s lifetime): the loop fades 0.25 s + Sentry_DSYS's
-    // SENTRY_EXPL one-shot [owner-death Kill() path HIGH]. Every tick: alive, target (-1 none), position.
+    // SENTRY_EXPL one-shot; the owner's death too (TnSentryPawn.Kill -> full-health damage trigger -> Destroyed) [CONF RE
+    // pass 5 s12 addendum 5]. Every tick: alive, target (-1 none), position.
     void sentry(SoundCues& cues, bool alive, int target, const core::Vec3& pos, float listenerDist);
     void sentryShot(SoundCues& cues, const core::Vec3& muzzle, float muzzleDist, bool worldHit, const core::Vec3& hit, float hitDist);
 
