@@ -394,6 +394,11 @@ public:
                                            const float* colorRGBA = nullptr) {
         (void)tpl; (void)start; (void)end; (void)colorRGBA; return -1;
     }
+    // Move both ends of a live segment effect (a sustained beam: the repair ray's Tracer_RepairBeam_FX follows its
+    // muzzle and target every frame): re-placed at start with +X towards end, end kept as the beam target.
+    virtual bool setParticleEffectSegment(int handle, const core::Vec3& start, const core::Vec3& end) {
+        (void)handle; (void)start; (void)end; return false;
+    }
     // Move a live effect (a muzzle flash following its socket; local-space emitters follow, world-space ones keep
     // their spawned particles where they are).
     virtual bool setParticleEffectTransform(int handle, const core::Vec3& pos, const core::Vec3& forward, const core::Vec3& up) {

@@ -925,6 +925,12 @@ bool Pipeline::setFxTransform(int id, const float R[3][3], const float T[3]) {
     return false;
 }
 
+bool Pipeline::setFxTarget(int id, const float target[3]) {
+    for (FxInstance& in : fxInstances_)
+        if (in.transient && in.id == id) { in.hasTarget = true; std::copy(target, target + 3, in.target); return true; }
+    return false;
+}
+
 bool Pipeline::setFxParam(int id, const std::string& name, const float v[4]) {
     for (FxInstance& in : fxInstances_)
         if (in.transient && in.id == id) { in.colorParams[name] = {v[0], v[1], v[2], v[3]}; return true; }

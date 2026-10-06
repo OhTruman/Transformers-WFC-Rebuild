@@ -1045,6 +1045,12 @@ public:
         float tgt[3] = {b.x * 100.0f, b.z * 100.0f, b.y * 100.0f};
         return wfc_.spawnFx(tpl, R, T, color, tgt);
     }
+    bool setParticleEffectSegment(int h, const core::Vec3& a, const core::Vec3& b) override {
+        float R[3][3], T[3];
+        if (!wfc_.active() || !fxRows(a, b - a, core::Vec3{0, 1, 0}, R, T)) return false;
+        const float tgt[3] = {b.x * 100.0f, b.z * 100.0f, b.y * 100.0f};
+        return wfc_.setFxTransform(h, R, T) && wfc_.setFxTarget(h, tgt);
+    }
     bool setParticleEffectTransform(int h, const core::Vec3& pos, const core::Vec3& fwd, const core::Vec3& up) override {
         float R[3][3], T[3];
         return wfc_.active() && fxRows(pos, fwd, up, R, T) && wfc_.setFxTransform(h, R, T);

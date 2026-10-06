@@ -472,6 +472,7 @@ public:
     // Matinee material parameters on a MaterialInstanceActor's MIC (material_instance_actors.json); held until changed
     bool setMaterialParam(const std::string& actor, const std::string& param, const float v[4]);
     bool setFxTransform(int id, const float R[3][3], const float T[3]);
+    bool setFxTarget(int id, const float target[3]);   // segment end (beam target), UE units
     void stopFx(int id);
     bool setFxParam(int id, const std::string& name, const float v[4]);
     int liveFx() const;
