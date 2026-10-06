@@ -174,6 +174,7 @@ private:
     void runNativeShims();
     void updateMoviePlayer(float dt, const platform::InputFrame& in);
     bool openVideo(const std::string& name, bool loop);
+    void releaseVideo();   // the travel underlay is parked for the next loading screen; other movies are destroyed
     void stopMovieAudio();
 
     Catalog catalog_;
@@ -191,6 +192,9 @@ public:
     // One scene draw while the loading screen still covers it (the renderer's first draw of a new scene compiles its
     // programs and uploads its textures lazily - a visible stall right after the load otherwise) [PC ADAPTATION].
     void prewarmSceneOnce() { prewarmScene_ = true; }
+    // Opens the travel loading underlay ([LoadingMovie] DefaultFileName) and parks it, so the first travel after boot
+    // does not open it on the frame its loading screen appears; called under a loading screen. Once.
+    void prewarmLoadingUnderlay();
     bool sceneDrawable() const { return sceneDrawable_; }
 private:
     bool prewarmScene_ = false;
@@ -214,6 +218,11 @@ private:
     std::function<platform::IMoviePlayer*()> movieFactory_;
     std::unique_ptr<platform::IMoviePlayer> video_;   // SeqAct_MoviePlayer movie or the loading underlay
     std::string videoName_;
+    // The last loading underlay's decoder, kept between loading screens: reopening it (Media Foundation reader +
+    // H.264 decoder) cost 31-34 ms on the frame each travel began [PC ADAPTATION].
+    std::unique_ptr<platform::IMoviePlayer> parkedUnderlay_;
+    std::string parkedName_;
+    bool underlayPrewarmed_ = false;
     std::string underlayFor_, underlay_;   // loading Bink name -> localized file
     bool videoLoops_ = false;
     bool videoFramed_ = false;

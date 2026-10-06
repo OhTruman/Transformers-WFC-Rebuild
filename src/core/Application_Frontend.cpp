@@ -300,14 +300,15 @@ void Application::attachPresenter() {
     frontend_->sceneLoadWrapper = [this](const std::function<void()>& load) {
         core::setLoadYield([this](double dt) {
             platform::InputFrame in;
-            window_->pump(in);
-            frontend_->updateLoading((float)std::min(dt, 0.1));
+            { core::prof::Scope prof("yield.pump"); window_->pump(in); }
+            { core::prof::Scope prof("+yield.update"); frontend_->updateLoading((float)std::min(dt, 0.1)); }
             drawFrontendFrame();
         });
         setRendererYield(renderer_, true);
         load();
         setRendererYield(renderer_, false);
         core::setLoadYield(nullptr);
+        { core::prof::Scope prof("movie.prewarm"); frontend_->prewarmLoadingUnderlay(); }   // still under the loading screen
         if (frontend_->sceneDrawable()) {   // the new scene's first (costly) draw happens under the loading screen
             core::prof::Scope prof("scene.prewarm");
             platform::InputFrame in;

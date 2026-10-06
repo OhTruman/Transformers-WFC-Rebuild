@@ -702,18 +702,61 @@ void FrontendRuntime::stopMovieAudio() {
     movieAudioPlaying_ = false;
 }
 
+namespace {
+// The extracted movies carry region / language suffixes: <name>_NA_INT, then <name>_INT, then <name>.
+std::string localizedMovie(const std::string& b) {
+    for (const std::string& c : {b + "_NA_INT", b + "_INT"})
+        if (std::ifstream(Catalog::defaultExtractedRoot() + "/movies/" + c + ".mkv").good()) return c;
+    return b;
+}
+}
+
+void FrontendRuntime::prewarmLoadingUnderlay() {
+    if (underlayPrewarmed_) return;
+    underlayPrewarmed_ = true;
+    const std::string b = catalog_.loadingMovieDefault();
+    if (b.empty() || !movieFactory_ || std::getenv("WFC_NO_VIDEO")) return;
+    const std::string name = localizedMovie(b);
+    if ((video_ && videoName_ == name) || (parkedUnderlay_ && parkedName_ == name)) return;
+    std::unique_ptr<platform::IMoviePlayer> p(movieFactory_());
+    if (!p || !p->open(Catalog::defaultExtractedRoot() + "/movies/" + name + ".mkv")) return;
+    p->advance(0.0);   // the decoder's first frame (its warm-up) also happens here
+    parkedUnderlay_ = std::move(p);
+    parkedName_ = name;
+    FlowTrace::emit("movie.prewarm", {{"movie", name}});
+}
+
+void FrontendRuntime::releaseVideo() {
+    // Only the travel underlay is parked (the boot startup movie never plays again and must not replace it).
+    if (video_ && videoLoops_ && videoName_ == localizedMovie(catalog_.loadingMovieDefault())) {
+        parkedUnderlay_ = std::move(video_);
+        parkedName_ = videoName_;
+    }
+    video_.reset();
+}
+
 bool FrontendRuntime::openVideo(const std::string& name, bool loop) {
     stopMovieAudio();
-    video_.reset();
+    releaseVideo();
     videoName_ = name;
     videoLoops_ = loop;
     std::string path = Catalog::defaultExtractedRoot() + "/movies/" + name + ".mkv";
-    std::unique_ptr<platform::IMoviePlayer> p(movieFactory_ && !std::getenv("WFC_NO_VIDEO") ? movieFactory_() : nullptr);
-    if (!p || !p->open(path)) {
-        FlowTrace::emit("movie.unavailable", {{"movie", name}, {"file", path}, {"decoder", FlowTrace::boolean(p != nullptr)}});
-        return false;
+    std::unique_ptr<platform::IMoviePlayer> p;
+    const bool reused = loop && parkedUnderlay_ && parkedName_ == name;
+    if (reused) {   // from its first frame again; decoded now so the last loading screen's final frame is not shown
+        p = std::move(parkedUnderlay_);
+        parkedName_.clear();
+        p->restart();
+        p->advance(0.0);
+    } else {
+        p.reset(movieFactory_ && !std::getenv("WFC_NO_VIDEO") ? movieFactory_() : nullptr);
+        if (!p || !p->open(path)) {
+            FlowTrace::emit("movie.unavailable", {{"movie", name}, {"file", path}, {"decoder", FlowTrace::boolean(p != nullptr)}});
+            return false;
+        }
     }
-    FlowTrace::emit("movie.open", {{"movie", name}, {"seconds", std::to_string(p->duration())}, {"loop", FlowTrace::boolean(loop)}});
+    FlowTrace::emit("movie.open", {{"movie", name}, {"seconds", std::to_string(p->duration())}, {"loop", FlowTrace::boolean(loop)},
+                                   {"reused", FlowTrace::boolean(reused)}});
     // SeqAct_MoviePlayer movies carry their audio; the loading underlays have none (AssetTools video_audio probe).
     videoPath_ = path;
     movieAudioWanted_ = !loop && audio_;
@@ -739,9 +782,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
         const std::string& b = flow_.loading().binkMovie;
         if (b != underlayFor_) {
             underlayFor_ = b;
-            underlay_ = b;
-            for (const std::string& c : {b + "_NA_INT", b + "_INT"})
-                if (std::ifstream(Catalog::defaultExtractedRoot() + "/movies/" + c + ".mkv").good()) { underlay_ = c; break; }
+            underlay_ = localizedMovie(b);
         }
         want = underlay_;
         if (flow_.loading().kind == "InitialStartup" && !bootDone_) bootUnderlay_ = underlay_;
@@ -751,7 +792,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
     if (bootHold) want = bootUnderlay_;   // the startup movie, full screen, until the logos start
     fullScreenMovie_ = !m.empty() || bootHold;
     if (want != videoName_) {
-        if (want.empty()) { stopMovieAudio(); video_.reset(); videoName_.clear(); }
+        if (want.empty()) { stopMovieAudio(); releaseVideo(); videoName_.clear(); }
         else if (!openVideo(want, m.empty()) && !m.empty()) { stopped(m); videoName_.clear(); }
     }
     if (!video_) return;

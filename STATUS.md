@@ -1057,7 +1057,12 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 - **Integration 08g re-profile:** travel start 42-47 ms (audio prefetch 0.6 ms, Systems 8df544b), title returns 42-46 ms,
   Settings / Extras / Movies clean, lobby load steps 112-167 ms; Systems 593311c volumes applied at boot.
 - **Boot title-open frame (fe26688):** 95-105 -> 53 ms; the boot movie no longer decodes its backlog (one frame per
-  update for underlays). Left: the title's level audio start (43 ms, Systems).
+  update for underlays). Left: the title's level audio start (43 ms, Systems), also on every return to the title.
+- **Travel start:** the loading underlay decoder is kept between loading screens (31-34 ms reopen once per boot
+  instead of per travel). Load steps: frontend share ~7.5 ms; the rest is Rendering's load work.
+- **Title level-audio start fixed by Systems 47b74c0** (confirmed with the audio.levelStart scope: no audio in any
+  frame over 40 ms; boot title-open frame under 40 ms).
+- **Travel underlay prewarmed under the boot loading screen:** no travel opens it; travel-start frames <= 41 ms.
 
 
 ## FRONTEND: one renderer across matches (2026-10-05, branch `agents/frontend`)
