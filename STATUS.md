@@ -602,6 +602,9 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING M74 (2026-10-06)
+- Energy-death "Defrag" dissolve: each form's original EnergyDeathMaterial, driven per player (IRenderer::setDrawEnergyDeath) by Gameplay.
+
 ## RENDERING M73 (2026-10-06)
 - Runtime decals (IRenderer::spawnDecal): the robot death scorch, 30 s, 50-decal pool; Gameplay places it on robot deaths.
 
