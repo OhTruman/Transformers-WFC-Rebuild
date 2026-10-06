@@ -1,6 +1,36 @@
+diff -ru --strip-trailing-cr a/src/core/Application_Frontend.cpp b/src/core/Application_Frontend.cpp
+--- a/src/core/Application_Frontend.cpp	2026-10-05 20:43:23.753258800 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-05 20:43:39.479364100 -0500
+@@ -188,14 +188,25 @@
+     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
+     // and reported here so the owners can consume LocalProfile when they add the entry points.
+     applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
++#ifdef WFC_SYSTEMS_FRONTEND_AUDIO
++    // [Systems M08g] HmPlayerController.UpdateLocalCacheOfProfileSettings: SetAudioGroupVolume('Dialog' | 'SFX' |
++    // 'MUSIC', slider / 100). Device-global and immediate: frontend, match and movie audio all follow.
++    {
++        const frontend::LocalProfile& p = frontend_->flow().profile();
++        game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
++    }
++#endif
+     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
+         applyGamma(renderer_, p.getInt("GammaSetting"));
++#ifdef WFC_SYSTEMS_FRONTEND_AUDIO
++        game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
++#endif
+         if (applyLookSettings(world_.player().controller(), p))
+             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});
+         frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},
+                                                     {"MusicVolume", p.get("Music Volume")}, {"CameraSensitivity", p.get("CameraSensitivity")},
+                                                     {"InvertY_Robot", p.get("InvertY_Robot")}, {"Vibration", p.get("Controller Vibration")},
+-                                                    {"owners", "pending: Systems volumes, Gameplay camera; gamma -> renderer"}});
++                                                    {"owners", "volumes -> Systems; pending: Gameplay camera; gamma -> renderer"}});
+     };
+     if (!std::getenv("WFC_NO_FRONTEND_SCENE")) {
+         g_scene = std::make_unique<FrontendSceneGL>(renderer_);
 diff -ru --strip-trailing-cr a/src/game/PlayerController.h b/src/game/PlayerController.h
 --- a/src/game/PlayerController.h	2026-10-05 19:28:44.971465500 -0500
-+++ b/src/game/PlayerController.h	2026-10-05 20:14:37.002641500 -0500
++++ b/src/game/PlayerController.h	2026-10-05 20:43:23.803932500 -0500
 @@ -138,6 +138,10 @@
      float viewYaw_ = 0.0f;        // camera rotation after the strategy's HmOrbitSmoother
      float viewPitch_ = -0.15f;
@@ -14,7 +44,7 @@ diff -ru --strip-trailing-cr a/src/game/PlayerController.h b/src/game/PlayerCont
      bool fireLatch_ = false;   // Fire pressed since the last simulation step
 diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
 --- a/src/game/World.cpp	2026-10-05 19:28:44.952902100 -0500
-+++ b/src/game/World.cpp	2026-10-05 20:14:36.987090600 -0500
++++ b/src/game/World.cpp	2026-10-05 20:43:23.790887700 -0500
 @@ -63,10 +63,38 @@
      return true;
  }
@@ -515,7 +545,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
  } // namespace game
 diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
 --- a/src/game/World.h	2026-10-05 19:28:44.962435500 -0500
-+++ b/src/game/World.h	2026-10-05 20:14:36.995624700 -0500
++++ b/src/game/World.h	2026-10-05 20:43:23.797911900 -0500
 @@ -4,6 +4,7 @@
  #include <memory>
  #include <string>

@@ -2,6 +2,7 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -11,8 +12,60 @@ namespace {
 using PresetDef = SoundMixer::PresetDef;
 using CategoryPreset = SoundMixer::CategoryPreset;
 using CategoryRow = SoundMixer::CategoryRow;
+using CategoryParent = SoundMixer::CategoryParent;
+using GroupCategory = SoundMixer::GroupCategory;
+using GroupDefault = SoundMixer::GroupDefault;
 #include "game/SoundMixer.inc"
 enum { kVolume = 0 };
+bool sameName(const std::string& a, const char* b) {         // FName comparison: case-insensitive
+    const size_t n = std::strlen(b);
+    if (a.size() != n) return false;
+    for (size_t i = 0; i < n; ++i) if (std::toupper((unsigned char)a[i]) != std::toupper((unsigned char)b[i])) return false;
+    return true;
+}
+// The distinct group names, in mapping order, and their current volumes (device-global).
+struct Groups {
+    std::vector<std::string> names;
+    std::vector<float> vol;
+    std::unordered_map<std::string, std::vector<int>> scaleOf;  // category -> groups over it and its ancestors (cache)
+    Groups() {
+        for (const GroupCategory& g : kGroupCategories) {
+            bool known = false;
+            for (const std::string& n : names) known = known || n == g.group;
+            if (!known) names.push_back(g.group);
+        }
+        reset();
+    }
+    int index(const std::string& group) const {
+        for (size_t i = 0; i < names.size(); ++i) if (sameName(group, names[i].c_str())) return (int)i;
+        return -1;
+    }
+    void reset() {
+        vol.assign(names.size(), 1.0f);
+        for (const GroupDefault& d : kProfileGroupDefaults) {
+            const int i = index(d.group);
+            if (i >= 0) vol[(size_t)i] = std::min(1.0f, std::max(0.0f, (float)d.slider / 100.0f));
+        }
+    }
+    const std::vector<int>& groupsOver(const std::string& category) {
+        auto it = scaleOf.find(category);
+        if (it != scaleOf.end()) return it->second;
+        std::vector<int> out;
+        std::string c = category;
+        for (int guard = 0; !c.empty() && guard < 64; ++guard) {
+            for (const GroupCategory& g : kGroupCategories)
+                if (c == g.category) {
+                    const int i = index(g.group);
+                    if (i >= 0 && std::find(out.begin(), out.end(), i) == out.end()) out.push_back(i);
+                }
+            std::string parent;
+            for (const CategoryParent& p : kCategoryParents) if (c == p.category) { parent = p.parent; break; }
+            c = parent;
+        }
+        return scaleOf.emplace(category, out).first->second;
+    }
+};
+Groups& groups() { static Groups g; return g; }
 bool logOn() { static const bool on = std::getenv("WFC_CUELOG") != nullptr || std::getenv("WFC_MIXERLOG") != nullptr; return on; }
 } // namespace
 
@@ -240,6 +293,35 @@ float SoundMixer::categoryVolume(const std::string& name) const {
 bool SoundMixer::masterCompressor(float& thr, float& att, float& rel, float& mk) {
     thr = kMasterCompressor[1]; att = kMasterCompressor[2]; rel = kMasterCompressor[3]; mk = kMasterCompressor[4];
     return ((int)kMasterCompressor[0] & 32) != 0;      // DSPEffectConfig compressor bit [MED]
+}
+
+bool SoundMixer::setGroupVolume(const std::string& group, float linear) {
+    Groups& g = groups();
+    const int i = g.index(group);
+    if (i < 0) { LOG_WARN("mixer: SetAudioGroupVolume: unknown sound group %s", group.c_str()); return false; }
+    g.vol[(size_t)i] = std::min(1.0f, std::max(0.0f, linear));
+    if (logOn()) LOG_INFO("mixer: group %s volume %.2f", g.names[(size_t)i].c_str(), g.vol[(size_t)i]);
+    return true;
+}
+
+float SoundMixer::groupVolume(const std::string& group) {
+    const Groups& g = groups();
+    const int i = g.index(group);
+    return i < 0 ? 1.0f : g.vol[(size_t)i];
+}
+
+void SoundMixer::resetGroupVolumes() { groups().reset(); }
+
+int SoundMixer::profileDefaultSlider(const std::string& group) {
+    for (const GroupDefault& d : kProfileGroupDefaults) if (sameName(group, d.group)) return d.slider;
+    return -1;
+}
+
+float SoundMixer::groupScale(const std::string& category) {
+    Groups& g = groups();
+    float s = 1.0f;
+    for (int i : g.groupsOver(category)) s *= g.vol[(size_t)i];
+    return s;
 }
 
 float SoundMixer::masterScale() const {

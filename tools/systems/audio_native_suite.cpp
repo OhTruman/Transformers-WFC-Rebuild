@@ -1842,8 +1842,11 @@ static void testObjectiveMessages() {
     host.setMovieSfxVolume(1.7f);
     const float hi = host.movieSfxVolume();
     host.setMovieSfxVolume(0.6f);
-    CHECK(def == 0.8f && s55 == 0.55f && hi == 1.0f && host.movieSfxVolume() == 0.6f,
-          "GetMovieVolume: the SFX class volume = FX slider / 100 (default 80 -> 0.8), clamped [0,1]");
+    CHECK(def == 1.0f && s55 == 0.55f && hi == 1.0f && host.movieSfxVolume() == 0.6f && game::SoundMixer::groupVolume("SFX") == 0.6f,
+          "GetMovieVolume: the SFX class volume = the 'SFX' group = FX slider / 100, clamped [0,1] (suite runs at 1)");
+    game::SoundMixer::resetGroupVolumes();
+    CHECK(host.movieSfxVolume() == 0.8f, "profile default FX 80 -> movie volume 0.8");
+    for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);
     host.unload();
 }
 
@@ -1968,7 +1971,65 @@ static void testCountdownAndGrenades() {
     host.unload();
 }
 
+// Profile volume sliders: SetAudioGroupVolume -> SoundGroupCategoryMappings categories and their whole subtree.
+static void testSoundGroups() {
+    std::printf("[sound groups]\n");
+    using M = game::SoundMixer;
+    M::resetGroupVolumes();
+    CHECK(M::profileDefaultSlider("MUSIC") == 80 && M::profileDefaultSlider("SFX") == 80 && M::profileDefaultSlider("DIALOG") == 80,
+          "TnProfileSettings defaults: Music / FX / Dialogue Volume 80");
+    CHECK(near(M::groupVolume("SFX"), 0.8f, 1e-6f) && near(M::groupVolume("Dialog"), 0.8f, 1e-6f) &&
+          near(M::groupVolume("MUSIC"), 0.8f, 1e-6f) && M::groupVolume("MASTER") == 1.0f,
+          "before any profile: the defaults 80 -> 0.8 (Master has no slider: 1)");
+    CHECK(!M::setGroupVolume("VOICE", 0.5f), "unknown group: no-op");
+    // the authored tree: a group scales its categories' whole subtree, nothing else
+    M::setGroupVolume("SFX", 0.5f); M::setGroupVolume("dialog", 0.25f); M::setGroupVolume("Music", 0.75f);
+    CHECK(near(M::groupScale("SFX_SWORD_HUM"), 0.5f, 1e-6f) && near(M::groupScale("SFX_WET_COMBAT_ROBOT_WPN_SHOOT"), 0.5f, 1e-6f) &&
+          near(M::groupScale("SFX_DRY_HUD"), 0.5f, 1e-6f) && near(M::groupScale("SFX_WET_AMB_3D"), 0.5f, 1e-6f),
+          "SFX reaches SFX_DRY / SFX_WET descendants (sword hum 5 deep, robot weapon shoot, HUD, 3D ambience)");
+    CHECK(near(M::groupScale("DX_DRY_RADIO"), 0.25f, 1e-6f) && near(M::groupScale("DX_WET_PA"), 0.25f, 1e-6f) &&
+          near(M::groupScale("MUSIC_STINGER"), 0.75f, 1e-6f) && near(M::groupScale("MUSIC_DUCK_SFX"), 0.75f, 1e-6f),
+          "Dialog -> DX_DRY / DX_WET subtrees; MUSIC -> MUSIC_DRY subtree (stingers too); names case-insensitive");
+    CHECK(M::groupScale("Master") == 1.0f && M::groupScale("") == 1.0f && M::groupScale("NOT_A_CATEGORY") == 1.0f,
+          "Master / uncategorized: no slider applies");
+    M::setGroupVolume("SFX", 1.7f);
+    CHECK(M::groupVolume("SFX") == 1.0f, "clamped to [0,1] (GetNormalizedPropertyValue FClamp)");
+    game::LevelAudioHost::applyProfileVolumes(30, 120, -5);
+    CHECK(near(M::groupVolume("MUSIC"), 0.3f, 1e-6f) && M::groupVolume("SFX") == 1.0f && M::groupVolume("DIALOG") == 0.0f,
+          "applyProfileVolumes(music, fx, dialog) = SetAudioGroupVolume(slider / 100, clamped)");
+
+    // A playing voice follows at once (gain re-evaluated every tick); the mixer preset volume still multiplies.
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    const char* js = R"({
+      "T.SFXLOOP": {"tree": {"class": "SoundNodeRoot", "params": {"Volume": 0.0, "SpatializationType": "k2D", "Category": "SFX_WET_VEH_ENGINE"},
+        "children": [{"class": "SoundNodeWaveEvent", "params": {"Volume": 0.0, "Loop": true}, "children": [{"wav": "content/WL_ELEC/ELEC_TRANS_TV_03.wav"}]}]}},
+      "T.DX": {"tree": {"class": "SoundNodeRoot", "params": {"Volume": 0.0, "SpatializationType": "k2D", "Category": "DX_DRY_RADIO"},
+        "children": [{"class": "SoundNodeWaveEvent", "params": {"Volume": 0.0}, "children": [{"wav": "content/WL_ELEC/ELEC_TRANS_TV_03.wav"}]}]}}})";
+    assets::Json cj; assets::Json::parse(js, cj);
+    cues.addCues(cj, kRoot + "/../content/");
+    M::setGroupVolume("SFX", 0.8f); M::setGroupVolume("DIALOG", 0.5f);
+    int f = rec.n;
+    const int id = cues.play("T.SFXLOOP", Vec3{0, 0, 0}, 0.0f);
+    cues.play("T.DX", Vec3{0, 0, 0}, 0.0f);
+    CHECK(rec.n - f == 2 && near(rec.v[f].p.volume, 0.8f, 1e-5f) && near(rec.v[f + 1].p.volume, 0.5f, 1e-5f),
+          "new voices: authored level x group volume (SFX 0.8, Dialog 0.5) (%.4f, %.4f)", rec.v[f].p.volume, rec.v[f + 1].p.volume);
+    M::setGroupVolume("SFX", 0.4f);
+    cues.tick(1.0f / 30.0f);
+    CHECK(cues.playing(id) && near(rec.v[f].vol, 0.4f, 1e-5f), "slider change: the playing loop follows at once (%.4f)", rec.v[f].vol);
+    cues.mixer().enable("VEHICLE_JUMP");
+    for (int k = 0; k < 15; ++k) cues.tick(1.0f / 30.0f);     // fade-in 0.3 s, duration 1 s: sample at 0.5 s
+    const float jump = cues.mixer().categoryVolume("SFX_WET_VEH_ENGINE");
+    CHECK(jump < 1.0f && near(rec.v[f].vol, 0.4f * jump, 1e-4f), "mixer preset (VEHICLE_JUMP %.3f) x group volume (%.4f)", jump, rec.v[f].vol);
+    cues.stopAll();
+
+    // Movies: GetMovieVolume's SFX class volume is the same group value; a running movie follows.
+    M::resetGroupVolumes();
+    for (const char* g : {"SFX", "DIALOG", "MUSIC"}) M::setGroupVolume(g, 1.0f);   // the rest of the suite: authored levels
+}
+
 int main() {
+    for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // authored levels
+    testSoundGroups();
     testCountdownAndGrenades();
     testWeaponAudio();
     testLocalizedWaves();

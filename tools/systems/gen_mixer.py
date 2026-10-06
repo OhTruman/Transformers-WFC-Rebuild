@@ -58,5 +58,37 @@ mc = [p for p in m['DSPPresets'] if p['Name'] == 'Default'][0]['Compressor']
 out.append('// Master Default compressor {DSPEffectConfig, Threshold dB, Attack ms, Release ms, GainMakeup dB}\n')
 out.append('const float kMasterCompressor[5] = {%s, %s, %s, %s, %s};\n' % (
     f(m['DSPEffectConfig']), f(mc['Threshold']), f(mc['Attack']), f(mc['Release']), f(mc['GainMakeup'])))
+# Category tree (authored ChildCategories): FMOD category volumes multiply down the tree, so a sound group's volume
+# reaches every descendant of its categories.
+out.append('// {category, parent} from SoundCategories ChildCategories (Master is the root)\n')
+out.append('const CategoryParent kCategoryParents[] = {\n')
+nparents = 0
+for cat in d['SoundCategories']:
+    for ch in cat.get('ChildCategories') or []:
+        out.append('    {"%s", "%s"},\n' % (ch if isinstance(ch, str) else ch['Name'], cat['Name'])); nparents += 1
+out.append('};\n')
+# [HM_Engine.SoundMixerProperties] SoundGroupCategoryMappings: SetAudioGroupVolume(group) -> these categories.
+GROUPS = re.findall(r'^SoundGroupCategoryMappings=\(GroupName=(\w+),\s*CategoryNames=\(([^)]*)\)\)', ini, re.M)
+assert GROUPS, 'SoundGroupCategoryMappings'
+# SetAudioGroupVolume REPLACES each listed category's fader (initialised to the category's config Volume) with the
+# slider value [CONF RE pass 5 §10]. The rebuild applies it as a multiplier on the subtree, which is identical only
+# while those config Volumes are 1.0 - check it.
+cfgVol = {k['Name']: k['Volume'] for k in d['SoundCategories']}
+for g, cats in GROUPS:
+    for cn in [x.strip() for x in cats.split(',') if x.strip()]:
+        assert abs(cfgVol[cn] - 1.0) < 1e-6, ('group category config Volume != 1', g, cn, cfgVol[cn])
+out.append('// {group, category} from Xe-TransEngine.ini SoundGroupCategoryMappings\n')
+out.append('const GroupCategory kGroupCategories[] = {\n')
+for g, cats in GROUPS:
+    for cn in [x.strip() for x in cats.split(',') if x.strip()]:
+        out.append('    {"%s", "%s"},\n' % (g, cn))
+out.append('};\n')
+# Profile defaults (TnProfileSettings DefaultSettings): Music Volume 31, FX Volume 32, Dialogue Volume 33 (0..100);
+# HmPlayerController.UpdateLocalCacheOfProfileSettings applies them as SetAudioGroupVolume(group, value / 100).
+ps = json.loads(c.execute("select props from objects where opath='TransGame.Default__TnProfileSettings'").fetchone()[0])
+dv = {x['ProfileSetting']['PropertyId']: x['ProfileSetting']['Data']['Value1'] for x in ps['DefaultSettings']}
+out.append('// TnProfileSettings defaults: {group, slider 0..100}\n')
+out.append('const GroupDefault kProfileGroupDefaults[] = {{"MUSIC", %d}, {"SFX", %d}, {"DIALOG", %d}};\n' % (dv[31], dv[32], dv[33]))
 io.open(sys.argv[1], 'w', encoding='utf-8', newline='\n').write(''.join(out))
-print('presets', len(PRESETS), 'categories', len(d['SoundCategories']), 'Default volume != 1:', nondef)
+print('presets', len(PRESETS), 'categories', len(d['SoundCategories']), 'parents', nparents, 'groups', GROUPS,
+      'profile defaults', dv[31], dv[32], dv[33], 'Default volume != 1:', nondef)

@@ -48,6 +48,11 @@ public:
     bool startMovieAudio(const std::string& moviePath, int languageSlot = -1) { return host_->startMovieAudio(moviePath, languageSlot); }
     void setMovieSfxVolume(float v) { host_->setMovieSfxVolume(v); }   // the FX Volume option's class volume
     void setMovieFxSlider(int slider) { host_->setMovieFxSlider(slider); } // FX Volume option 0..100 (/ 100)
+    // The options / profile Music, FX and Dialogue Volume (0..100): call at profile load and on every slider change.
+    // Applies to all audio (frontend, game, movies) at once - see LevelAudioHost::applyProfileVolumes.
+    void applyProfileVolumes(int musicSlider, int fxSlider, int dialogSlider) {
+        LevelAudioHost::applyProfileVolumes(musicSlider, fxSlider, dialogSlider);
+    }
     void stopMovieAudio() { host_->stopMovieAudio(); }
     void setMovieAudioPaused(bool paused) { host_->setMovieAudioPaused(paused); }
     double movieAudioClock() const { return host_->movieAudioClock(); }

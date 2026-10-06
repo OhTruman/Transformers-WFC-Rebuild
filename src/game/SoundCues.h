@@ -211,7 +211,8 @@ private:
     void retire(size_t liveIndex);              // remove an instance (stop voices, disable its mixer preset)
     // Instance level x the mixer's category volume (linear amplitude) for the cue's category.
     float gainOf(const Instance& in) const {
-        return level(in) * mixer_.categoryVolume(cues_[(size_t)in.cue].category) * mixer_.masterScale();
+        const std::string& cat = cues_[(size_t)in.cue].category;
+        return level(in) * mixer_.categoryVolume(cat) * SoundMixer::groupScale(cat) * mixer_.masterScale();
     }
     SoundMixer mixer_;
     std::string contentRoot_;

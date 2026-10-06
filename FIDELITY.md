@@ -17,6 +17,22 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## SYSTEMS M08g - PROFILE VOLUME SLIDERS (2026-10-05, agents/systems)
+* **Script** [CONF]: HmPlayerController.UpdateLocalCacheOfProfileSettings -> SetAudioGroupVolume('Dialog', GetDialogVolume()),
+  ('SFX', GetFxVolume()), ('MUSIC', GetMusicVolume()); Get* = HmProfileSettings.GetNormalizedPropertyValue = FClamp(slider / 100, 0, 1).
+  TnProfileSettings defaults: Music Volume (31) 80, FX Volume (32) 80, Dialogue Volume (33) 80.
+* **Native** [CONF RE pass 5 §10, RE 639a66c]: exec 0x82C7E5E8 -> SetGroupVolume 0x827666B0 walks SoundGroupCategoryMappings, finds each
+  listed category node and REPLACES its fader (initialised to the config Volume) with the value via SetTarget(v, 0) - immediate; FName
+  match (case-insensitive), unknown group = no-op. Each category's channel group is attached to its parent's [CONF]; descendants
+  inherit multiplicatively [HIGH, FMOD ChannelGroup].
+* **Rebuild:** a device-global per-group scale multiplied into every cue whose category is in the group's subtree. Equivalent to the
+  replace because all five listed categories' config Volume is 1.0 (gen_mixer.py asserts it).
+* **Not traced** [HIGH]: whether mixer presets ramp the same fader as the group volume. They stay a separate factor here (a preset on
+  SFX_WET_VEH_ENGINE multiplies with the SFX group; no global preset in our tables targets a group category).
+* **Movies:** GetMovieVolume's 'SFX' class volume is the same group value; a running movie follows a slider change.
+
+---
+
 ## SYSTEMS M08f — COUNTDOWN / OBJECTIVE / GRENADE AUDIO; ASYNC PREFETCH (2026-10-05, agents/systems)
 * **Countdown ticks** [CONF script + CDO]:
   * TnGameReplicationInfo.OnCountdownChange: IsCountdownBelowThreshold (0 ≤ CurrentCountdown ≤ LowCountdownTickThreshold 10) → PlaySound(LowCountdownTickSound = BL_HUD_INTERFACE.CTF_ROUND_TIMER_01).

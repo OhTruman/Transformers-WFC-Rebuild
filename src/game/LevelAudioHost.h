@@ -74,12 +74,20 @@ public:
     // (HmPlayerController.UpdateLocalCacheOfProfileSettings -> SetAudioGroupVolume('SFX', GetFxVolume()),
     // GetNormalizedPropertyValue = FClamp(slider / 100, 0, 1) [CONF script]; that the device's 'SFX' lookup returns it
     // unchanged is HIGH). Default: the profile default 80 -> 0.8. Applies to the next movie and the running one.
-    void setMovieSfxVolume(float v) {
-        movieSfxVolume_ = v < 0.0f ? 0.0f : (v > 1.0f ? 1.0f : v);
-        if (movieAudio_ && !movieFixedVolume_) movieAudio_->setVolume(movieSfxVolume_);
-    }
-    float movieSfxVolume() const { return movieSfxVolume_; }
+    // The class volume is the device's 'SFX' sound-group volume (SoundMixer::setGroupVolume); setting it here sets the
+    // group (the game's SFX categories follow too). A running movie follows a change made anywhere (tick).
+    void setMovieSfxVolume(float v) { SoundMixer::setGroupVolume("SFX", v); applyMovieVolume(); }
+    float movieSfxVolume() const { return SoundMixer::groupVolume("SFX"); }
     void setMovieFxSlider(int slider) { setMovieSfxVolume((float)slider / 100.0f); }   // the options FX Volume, 0..100
+    // The profile volume sliders (Music / FX / Dialogue Volume, 0..100), as HmPlayerController.
+    // UpdateLocalCacheOfProfileSettings applies them: SetAudioGroupVolume('Dialog' | 'SFX' | 'MUSIC', FClamp(v / 100,
+    // 0, 1)) [CONF script]. Device-global and immediate (playing sounds and a running movie follow).
+    static void applyProfileVolumes(int musicSlider, int fxSlider, int dialogSlider) {
+        SoundMixer::setGroupVolume("Dialog", (float)dialogSlider / 100.0f);
+        SoundMixer::setGroupVolume("SFX", (float)fxSlider / 100.0f);
+        SoundMixer::setGroupVolume("MUSIC", (float)musicSlider / 100.0f);
+    }
+    static bool setAudioGroupVolume(const std::string& group, float linear) { return SoundMixer::setGroupVolume(group, linear); }
     double movieAudioClock() const { return movieAudio_ ? movieAudio_->clock() : 0.0; }   // video can slave to it
     bool movieAudioFinished() const { return !movieAudio_ || movieAudio_->finished(); }
     bool prefetch(const std::string& level);
@@ -90,6 +98,7 @@ public:
         ambient_.tick(dt, listener, pawn, cues_, pawnAlive);
         match_.tick(dt);
         music_.tick(dt);
+        if (movieAudio_ && !movieFixedVolume_ && movieVolumeApplied_ != movieSfxVolume()) applyMovieVolume();
     }
 
     struct State {
@@ -129,7 +138,12 @@ private:
         else cues_.mixer().disable(SoundMixer::movieMixerPreset(), false);
     }
     std::unique_ptr<audio::MovieAudioPlayer> movieAudio_;
-    float movieSfxVolume_ = 0.8f;
+    float movieVolumeApplied_ = -1.0f;
+    void applyMovieVolume() {
+        if (!movieAudio_ || movieFixedVolume_) return;
+        movieVolumeApplied_ = movieSfxVolume();
+        movieAudio_->setVolume(movieVolumeApplied_);
+    }
     bool movieFixedVolume_ = false;
 };
 

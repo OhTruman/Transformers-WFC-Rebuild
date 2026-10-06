@@ -3,6 +3,19 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08g (2026-10-05) - profile volume sliders (Music / FX / Dialogue)
+- **`LevelAudioHost::applyProfileVolumes(music, fx, dialog)`** (also on FrontendAudioRuntime) = HmPlayerController.UpdateLocalCacheOfProfileSettings:
+  SetAudioGroupVolume('Dialog' | 'SFX' | 'MUSIC', slider / 100, clamped).
+- **Group -> categories** from Xe-TransEngine.ini SoundGroupCategoryMappings (SFX -> SFX_DRY/SFX_WET, DIALOG -> DX_DRY/DX_WET, MUSIC -> MUSIC_DRY);
+  the authored category tree (ChildCategories, now in SoundMixer.inc) carries it to every descendant.
+- **Device-global and immediate:** the frontend, match and movie audio follow at once (playing voices too); the movie FX volume is the 'SFX' group.
+- **Defaults** TnProfileSettings 80 / 80 / 80 -> 0.8 before any profile: **game audio is now 1.9 dB quieter than before at the default
+  profile**, matching the original (movies already used 0.8, so the movie / game balance is now faithful).
+- **Integration glue:** Application_Frontend applies the profile at boot and on every `onApplied` (in SYSTEMS_M08D_integration_glue.patch).
+- **Validation:** suite 634 / 0 (new [sound groups]); volume_slider_probe on the device: FX 80 -> 40 on the ambience beds -6.7 dB, a running movie
+  follows, all 0 silent incl. the reverb return; 08c frontend boot -> TDM with Music 40 / FX 50 / Dialogue 25: cue gains exact
+  (countdown tick 0.101 -> 0.063 = 0.5 / 0.8), 0 missing cues, 0 leaks. Movie probe OK; lifecycle 40 / 0; wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS M08f (2026-10-05) — countdown ticks, objective announcer wiring, grenade sounds, prefetch hitch
 - **Pre-match countdown:** 10..0 ticks (GRI.OnCountdownChange → CTF_ROUND_TIMER_01) and the objective-countdown ticks (EXTINCTION_ROUND_TIMER_01, ≤ 5).
   - In the 08c build: 11 ticks per match in TDM / KOTH / DOM.
