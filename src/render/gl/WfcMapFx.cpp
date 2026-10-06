@@ -46,6 +46,17 @@ std::string readFile(const std::string& p) {
 void evalDist(const Pipeline::FxModule& m, const char* name, float t, uint32_t& rng, float* out) {
     auto it = m.dists.find(name);
     if (it != m.dists.end()) { it->second.eval(t, rng, out); return; }
+    // pstream labels LocationPrimitiveSphere's two float distributions DynamicParams[0] / [1] (as SubUVDirect's):
+    // serialization order, base class first - [0] = VelocityScale (ParticleModuleLocationPrimitiveBase), [1] =
+    // StartRadius (the sphere's own) [HIGH: matches every MP value pair, e.g. AR sparks 30 / U(2,5), smoke 0.5 / 5]
+    if (m.name == "PMI_LocationPrimitiveSphere") {
+        const char* alias = std::strcmp(name, "VelocityScale") == 0 ? "DynamicParams[0].ParamValue"
+                          : std::strcmp(name, "StartRadius") == 0 ? "DynamicParams[1].ParamValue" : nullptr;
+        if (alias) {
+            auto al = m.dists.find(alias);
+            if (al != m.dists.end()) { al->second.eval(t, rng, out); return; }
+        }
+    }
     out[0] = out[1] = out[2] = 0.0f;
     static std::set<std::string> logged;
     std::string key = m.name + "." + name;

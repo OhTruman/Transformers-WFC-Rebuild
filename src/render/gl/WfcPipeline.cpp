@@ -1012,6 +1012,8 @@ bool Pipeline::load(const std::string& mapName) {
             decalMesh_ = upload(dec);
             if (decalMesh_ >= 0) meshes_[(size_t)decalMesh_].decal = true;
         }
+        else if (std::ifstream(dataDir_ + "/decals.glb").good())   // written empty: the map authors no DecalActors (Debris)
+            LOG_INFO("wfc: decals.glb has no decals (none authored on this map)");
         else LOG_WARN("wfc: decals.glb missing; static decals not drawn");
     }
     if (const char* cc = std::getenv("WFC_CHARCOLORS")) {   // verification: "pr,pg,pb;sr,sg,sb;er,eg,eb"
