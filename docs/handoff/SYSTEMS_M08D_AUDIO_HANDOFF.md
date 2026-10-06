@@ -191,3 +191,8 @@ Default loudness is decided: keep 80 / 80 / 80 -> 0.8 (the original; about -1.9 
 ## M08n: kill-streak announcements, overshield off, dodge wall hit (glue)
 
 `docs/handoff/SYSTEMS_M08N_killstreak_overshield_glue.patch`, applied after M08m (Character.h, CharacterMovement.cpp, World.h / .cpp).
+
+## M08o: grenade and death sounds (glue against 08k)
+
+`docs/handoff/SYSTEMS_M08O_grenade_death_glue.patch` (World.cpp / .h), made directly against integration/milestone-08k (e467663).
+Merge agents/systems first; the hook definitions come with it.

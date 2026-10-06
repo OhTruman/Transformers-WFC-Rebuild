@@ -3,6 +3,25 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08o (2026-10-06) - grenade sounds, death sounds
+- **Grenades** (RE pass 5 s12 addendum 13 + HmProjectile):
+  * Gameplay's toss built its projectile outside spawnProjectile, so grenades had no flight / fuse / bounce / explosion sound
+    and no toss sound. The glue gives them a weapon class + audio key.
+  * PerformToss plays GrenadeBagMesh WP_Fire (EMP_DEPLOY / MAGMA_DEPLOY / HEAL_DEPLOY), heard only by the thrower.
+  * Every refusal (none left, cooldown, carrying a heavy turret) plays WP_NoAmmoFire GRENADE_DRY_FIRE.
+- **Deaths** (addendum 12, CONF):
+  * Vehicle form: TnVehicleForm.OnPlayDeath plays the chassis' _Blueprint.DeathSound at the wreck on every machine (the killer too).
+  * Robot form: only the TnDeathTypeMelee entry's TnDeathModifierPlaySound (hud_melee_death_disintegrate). It is chosen by the kill
+    damage type's DamageDeathType (TnDamageTypeMelee + subclasses; Poke overrides it) [CONF data].
+  * Granted weapons (Poke, the rocket-turret streak) play no pickup sound. TnPlayerController.DeathSound is campaign-only.
+- **Glue:** `docs/handoff/SYSTEMS_M08O_grenade_death_glue.patch`, made against integration/milestone-08k (e467663).
+  * Grenade toss / refusals, the grenade projectile's audio identity, and the victim death sound on PlayerKilled.
+- **In game** (08k test tree):
+  * FlashBangs toss: EMP_DEPLOY -> EMP_FLIGHT_LP -> EMP_FUSE_BUILD at the first impact -> 6 bounces.
+  * Participant kills: KilledRobotSound x7.
+  * No melee or vehicle-form kill happened in the harnesses, so the death sounds are suite-verified.
+- Suite 708 / 0; wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS M08n (2026-10-06) - kill-streak announcements, overshield off, dodge wall hit
 - **Kill streaks** (RE pass 5 s12 addendum 11, CONF):
   * Data chain: TransCustomization.ini [<Id> TnDataProvider_Killstreak] ObjectPath -> AnnouncementMessageType (TnKillstreakActivated*)

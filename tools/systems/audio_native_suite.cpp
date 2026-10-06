@@ -2290,6 +2290,34 @@ static void testAbilityActors() {
           active("BL_WPN_GUN_GUIDED_MISSILE.SHOOT_TRAIL") == 0, "stopAll: sentry / barrier / missile loops stop");
 }
 
+// Death sounds and grenade toss (M08o; RE pass 5 s12 addenda 12 / 13).
+static void testDeathAndGrenade() {
+    std::printf("[death sounds, grenade toss]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    game::CharacterAudio::loadAbilityCues(cues);
+    game::AbilityAudio aa;
+    auto active = [&](const std::string& q) { return cues.activeInstances(q.c_str()); };
+    const Vec3 p{8, 0, 0};
+    const game::CharacterAudioProfile* car = game::CharacterAudio::find("Car2");
+    CHECK(car && !car->vehicleDeath.empty(), "Car2 authors a vehicle death sound (%s)", car ? car->vehicleDeath.c_str() : "-");
+    CHECK(car && aa.pawnDeath(cues, "Car2", true, "TransGame.TnDamageTypeIonBlaster", p, 8.0f) >= 0 && active(car->vehicleDeath) == 1,
+          "vehicle-form death: the chassis' _Blueprint.DeathSound at the wreck, whatever the damage type");
+    const std::string melee = game::CharacterAudio::classSound("TnDeathTypeMelee", "DeathSound");
+    CHECK(melee == "BL_LVL_HUD_INTERFACE.hud_melee_death_disintegrate", "the melee death entry's sound (%s)", melee.c_str());
+    CHECK(aa.pawnDeath(cues, "Car2", false, "TransGame.TnDamageTypeMelee", p, 8.0f) >= 0 && active(melee) == 1,
+          "robot melee death (DamageDeathType TnDeathTypeMelee): hud_melee_death_disintegrate");
+    CHECK(game::CharacterAudio::isMeleeDamageType("TransGame.TnDamageTypeWhirlwind") && game::CharacterAudio::isMeleeDamageType("TransGame.TnDamageTypeRammed") &&
+          !game::CharacterAudio::isMeleeDamageType("TransGame.TnDamageTypePoke"), "Whirlwind / Rammed inherit TnDeathTypeMelee; Poke overrides it (TnDeathTypePoke)");
+    CHECK(aa.pawnDeath(cues, "Car2", false, "TransGame.TnDamageTypePoke", p, 8.0f) < 0 &&
+          aa.pawnDeath(cues, "Car2", false, "TransGame.TnDamageTypeIonBlaster", p, 8.0f) < 0, "robot non-melee death (Poke, Ion Blaster): no sound");
+    game::WeaponAudio wa;
+    const std::string fb = "TransContent.TnWeaponFlashBangs";
+    game::CharacterAudio::loadWeaponCues(cues, fb);
+    const game::SoundCues::Emitter at{p, game::SoundCues::kWorld, {0, 0, 0}, ""};
+    CHECK(wa.weaponEvent(cues, fb, "WP_Fire", at) >= 0 && active("BL_WPN_GRENADE.EMP_DEPLOY") == 1, "grenade toss: WP_Fire EMP_DEPLOY");
+    CHECK(wa.weaponEvent(cues, fb, "WP_NoAmmoFire", at) >= 0 && active("BL_WPN_GRENADE.GRENADE_DRY_FIRE") == 1, "refused toss: WP_NoAmmoFire GRENADE_DRY_FIRE");
+}
+
 int main() {
     for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // authored levels
     testSoundGroups();
@@ -2297,6 +2325,7 @@ int main() {
     testLevelWarm();
     testChargeAndRoller();
     testAbilityActors();
+    testDeathAndGrenade();
     testCountdownAndGrenades();
     testWeaponAudio();
     testLocalizedWaves();

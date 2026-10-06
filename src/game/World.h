@@ -149,6 +149,10 @@ public:
     void onLocalKillstreakActivated(const std::string& id, int team);
     void setOvershieldAudio(float overshieldHealth);   // the local pawn's overshield health, every tick (alive)
     void onDodgeHitWall();                             // the local dodge hit a wall (robot form)
+    // TnGrenadeBag.PerformToss (local): WP_Fire on a toss, WP_NoAmmoFire on a refused one (no grenades / cooldown / heavy).
+    void onGrenadeToss(const std::string& grenadeClass, bool refused);
+    // A pawn died at `pos` (local or not): vehicle-form death sound / robot melee-death sound.
+    void onPawnDeath(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos);
     // Drain, every tick while the local Drain buff runs: targets this tick (HealSound), and each victim (DamageSound).
     void onDrainTick(int targets);
     void onDrainVictimTick(const core::Vec3& victimPos);

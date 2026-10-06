@@ -81,6 +81,12 @@ public:
     // InRobotForm.HitWall during a dodge -> TnPawn.HitWallSound at the pawn (no speed / angle condition).
     int dodgeHitWall(SoundCues& cues, const SoundCues::Emitter& pawn);
 
+    // A pawn died (RE pass 5 s12 addendum 12, CONF): in vehicle form TnVehicleForm.OnPlayDeath plays the chassis'
+    // _Blueprint.DeathSound at the wreck on every machine (the killer hears it too); in robot form only a melee death
+    // (TnDeathTypeMelee, from a TnDamageTypeMelee kill [selection HIGH]) plays the disintegrate sound. Returns the instance.
+    int pawnDeath(SoundCues& cues, const std::string& chassisId, bool vehicleForm, const std::string& damageType,
+                  const core::Vec3& pos, float listenerDist);
+
     void stopAll(SoundCues& cues);                   // level unload / match restart: loops stop, nothing else plays
     int liveLoops(const SoundCues& cues) const;      // buff sounds still playing (diagnostics)
     static std::string abilityClass(const std::string& id);   // "Barrier" -> "TnAbilityBarrier"
