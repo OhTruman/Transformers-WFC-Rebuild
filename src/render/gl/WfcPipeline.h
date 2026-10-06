@@ -196,7 +196,10 @@ public:
     // Effects shaded by their original material graphs; `color` is the particle colour (vertex colour,
     // HDR). drawFx returns false when the mesh has no compiled original material (caller falls back).
     bool drawFx(int id, const core::Mat4& model, const float color[4]);
-    struct Sprite { core::Vec3 c[4]; float uv[4][2]; float color[4]; };
+    struct Sprite {
+        core::Vec3 c[4]; float uv[4][2]; float color[4];
+        float uv2[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}}; float blend = 0.0f;   // M67 second SubUV cell + interp
+    };
     bool drawSprites(const char* material, const Sprite* s, size_t n, const core::Vec3& facing);
 
 private:
@@ -445,7 +448,7 @@ public:
         std::string name; std::map<std::string, FxDist> dists; int flagA = 1, flagB = 1;
         // M63 PMI_LocationEmitter / PMI_LocationEmitterDirect: the source emitter (by name, in this system instance)
         std::string sourceEmitter;
-        int selection = 0;                // 0 Random, 1 Sequential
+        int selection = 0;                // 0 Random, 1 Sequential, 2 particle 0
         bool inheritVelocity = false, inheritRotation = false;
         float inheritVelocityScale = 1.0f, inheritRotationScale = 1.0f;   // CDO 1 / 1
     };
@@ -475,20 +478,34 @@ public:
         bool beamDistance = false;        // BeamMethod Distance: target = source + X * Distance
         float textureTile = 1.0f, textureTileDistance = 0.0f;   // M61 Trail2 TextureTile (CDO 1); the distance is exported but neither fill reads it (RE s13)
         bool tilePerParticle = false;     // Trail2 bTilePerParticle
+        bool particleTrail = false;       // M63 Trail2 placed by LocationEmitter: one chain through its own particles
+        int trailCap = 0;                 // Trail2: MaxTrailCount x MaxParticleInTrailCount (spawn cap; RE s14)
+        int billboardAxis = -1;           // M65 BillboardSettings.Direction: -1 camera facing, 0..2 local X/Y/Z, 3..5 world
+        float sideScale[2] = {1, 1};      // Alignment: V0 / V1 side scales (Centered 1/1, Positive 0/2, Negative 2/0)
         FxDist distance;
         struct BeamSine { float amp = 0, period = 1, speed = 0, phase = 0, dir[3] = {0, 0, 0}; };
         std::vector<BeamSine> sines;      // ParticleModuleBeamSineWave (WFC addition; render fill CONFIRMED, RE 9i)
         std::string sizeParam;            // SizeMultiplyLife by instance parameter (HoverFX "Size"); "" = none
         float sizeParamConst[3] = {1, 1, 1};
         bool velocityAligned = false;     // PSA_Velocity
-        int subH = 1, subV = 1, subMethod = 0;   // SubUV: 0 none, 1 linear, 2 random
+        int subH = 1, subV = 1, subMethod = 0;   // SubUV: 0 none, 1 Linear, 2 Linear_Blend, 3 Random, 4 Random_Blend
+        float randomImageTime = 0.0f;     // Random re-pick interval (lifetime fraction; 0 = every tick)
         bool hasDefaultColor = false; float defaultColor[4] = {1, 1, 1, 1};   // ColorByParameter DefaultColor (linear)
         float duration = 1.0f; int loops = 0;
         FxDist spawnRate;
         std::vector<FxBurst> bursts;
         std::vector<FxModule> modules;
     };
-    struct FxEmitter { std::string name; int maxPeak = 1; bool renderable = true; std::vector<FxLod> lods; };
+    struct FxEmitter {
+        std::string name; int maxPeak = 1; bool renderable = true; std::vector<FxLod> lods;
+        // M66 ParticleEmitter.LockAxisFlags: 0 none, 1 X, 2 Y, 3 Z, 4 -X, 5 -Y, 6 -Z, 7..9 ROTATE_X/Y/Z,
+        // 10..12 ROTATE_X/Y/Z_U (WFC)
+        int lockAxis = 0;
+        // M68 SpriteEmitterRenderMode (WFC): 0 Quad, 1 Octagon, 2 BestFit (polygons in cell-local 0..1 texture space)
+        int renderMode = 0;
+        struct Polygon { float time = 0; int count = 0; std::vector<std::array<float, 2>> v; };
+        std::vector<Polygon> polygons;
+    };
     struct FxSystem { std::string name; std::vector<float> lodDistances; bool directSet = false; std::vector<FxEmitter> emitters; };
 private:
     struct FxParticle {
@@ -498,9 +515,11 @@ private:
         float rot = 0, rotRate = 0, relTime = 0, oneOverLife = 0;
         float meshRot[3] = {0, 0, 0}, meshRotRate[3] = {0, 0, 0};
         float accel[3] = {0, 0, 0};       // ParticleModuleAcceleration (world / emitter space as spawned)
-        int subImage = 0;
+        int subImage = 0, subImage2 = 0;  // SubUV cells (row-major index) and the blend interp (RE s16)
+        float subInterp = 0.0f, subLastChange = 0.0f; bool subInit = false;
         int noiseCount = 0;               // Beam2 noise points (count + 1 offsets, UE units, beam space)
         float noiseTimer = 0.0f;          // seconds since the noise points were last re-drawn
+        uint32_t seq = 0;                 // spawn order within its emitter (Trail2 chains link by spawn order)
         bool beamInit = false;            // Beam2 ends resolved (UE world units; tangents x strength)
         float beamSrc[3] = {0, 0, 0}, beamTgt[3] = {0, 0, 0}, beamSrcT[3] = {0, 0, 0}, beamTgtT[3] = {0, 0, 0};
         std::vector<float> noiseCur, noiseNext;
@@ -513,6 +532,7 @@ private:
         std::vector<std::array<float, 4>> trail;   // Trail2: recent source positions (UE) + age (s), newest last
         int forceSpawn = 0;                        // Trail2: particles owed by source movement (spawn per unit)
         int locSequence = 0;                       // LocationEmitter Sequential selection counter
+        uint32_t spawnSeq = 0;                     // next particle spawn order
     };
     struct FxInstance {
         std::string component, owner, ownerClass, system, role, requiredRule;
@@ -603,6 +623,7 @@ private:
     void ensureSceneColor();
     float fxColor_[4] = {1, 1, 1, 1};
     GLuint spriteVao_ = 0, spriteVbo_ = 0, spriteCbo_ = 0, spriteIbo_ = 0;
+    GLuint spriteSubBo_ = 0;          // M67 sprite second SubUV cell + blend
     std::map<std::string, int> spriteProg_;
     std::string resolveName(const std::string& name) const;
     GLuint bloomGatherProg_ = 0, blurProg_ = 0, bloomFbo_[2] = {0, 0}, bloomTex_[2] = {0, 0};

@@ -2566,6 +2566,33 @@ The "crude" look of the hover/boost rings is material/blend treatment → Render
 
 ---
 
+## MILESTONE 68 — SPRITE OCTAGON / BESTFIT POLYGONS (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Sprite render modes | Quad (quad list), Octagon (8 verts, corners trimmed), BestFit (authored 3-12 vertex polygon, last with Time <= age); corners expand like quad corners, UV = (cell + corner) x cellSize | RE pass 5 s17 + addenda (fill, index lists, draw path) | CONFIRMED | M68: fan-triangulated polygons through the quad corner transform |
+
+## MILESTONE 67 — SPRITE SUBUV (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| SubUV update | Every tick for every live particle; Linear(_Blend) from the SubImageIndex curve with frac interp; Random(_Blend) re-picks on RandomImageTime (lifetime fraction, default 0 = every tick); second cell = next, wrapping | RE pass 5 s16 (update runner 0x1F) | CONFIRMED | M67 (was: Random picked once at spawn, no blending) |
+| SubUV blend | The fill writes both cells + interp; ParticleSubUV lerps the two samples | RE s16 (shader lerp HIGH) | HIGH | M67: sprite attribute 6 + matc ParticleSubUV mix |
+| SubUVDirect / Select | Direct UV = (pos + size x corner) x scale (texel units HIGH); Select unused in MP | RE s16 | PARTIAL | not applied (10 MP LODs) |
+
+## MILESTONES 65-66 — FIXED-AXIS RIBBONS, SPRITE LOCK-AXIS / VELOCITY MODES (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Beam2 / Trail2 BillboardSettings | Direction other than CameraFacing offsets along a fixed axis (component row or world), Alignment side scales | RE s13 addendum 3 (HIGH, emulated shader) | HIGH | M65; authored on 4 templates, none in MP data; geometry checked numerically |
+| Sprite LockAxisFlags | Emitter-level in WFC; local-space LODs use component rows, else world axes; lock 1-6 fixed plane + in-plane rotation; ROTATE_* turn about the axis, rotation ignored | RE s15 + addenda (CPU CONFIRMED, world formulas HIGH) | HIGH | M66: 178 MP emitters; ground burst rings lie flat (VISUALLY VERIFIED) |
+| Sprite PSA_Velocity | Width along cross(camera - particle, D); length Size.y, V 0 leading; rotation ignored; stationary / view-aligned collapse | RE s15 | HIGH | M66: width axis was mirrored; stationary fallback removed |
+
+## MILESTONES 63-64 — RIBBON WIDTH, LOCATIONEMITTER / PARTICLE TRAILS; MOLTEN PERFORMANCE (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Ribbon width | Beam / trail vertex pairs are offset by (2V - 1) x Size x cross(view, dir): full width 2 x Size; we drew Size | RE s13 addendum 2 (Xenos VS emulated) | HIGH | M63: authored widths |
+| LocationEmitter / Direct | Payload decoded from the LOD tail; selection, space conversion, inheritance, born-this-frame rule, Direct re-snap per RE s14 | RE s14 (spawn / update runners) | CONFIRMED (sub-frame terms PARTIAL) | M64: Streets 57 / 59 modules bound |
+| Trail2 with LocationEmitter | One chain through the emitter's own particles in spawn order, <= 1 per tick, cap MaxTrailCount x MaxParticleInTrailCount | RE s14 | CONFIRMED | M64: shell casings trail smoke (was no ribbon) |
+| Molten "performance drop looking down" | Not reproduced on the current build: 2560x1440 look-down sweep (76 spawns x 8 views) median GPU 0.64 ms, max 2.2 ms; real-time CPU frame 1.4-1.8 ms looking down vs 2.0-2.2 forward (fewer draws); no first-use creation after load. Likely the pre-M54 / M58 first-draw stalls on the human's build | WFC_FRAMELOG, WFC_PERFLOG, WFC_RENDERSTATS | HIGH (not reproduced) | No change; WFC_FRAMELOG at the spot if it recurs |
+
 ## MILESTONES 61-62 — BEAM / TRAIL UV LAYOUT, GORGE VERTEX LIGHTMAPS (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

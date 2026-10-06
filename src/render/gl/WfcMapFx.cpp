@@ -149,7 +149,27 @@ bool Pipeline::loadMapFx(const std::string& path) {
         for (size_t e = 0; e < es.size(); ++e) {
             FxEmitter em;
             em.name = es[e]["name"].asString();
+            {
+                const std::string la = es[e]["lock_axis"].asString();
+                const char* modes[] = {"EPAL_NONE", "EPAL_X", "EPAL_Y", "EPAL_Z", "EPAL_NEGATIVE_X", "EPAL_NEGATIVE_Y",
+                                       "EPAL_NEGATIVE_Z", "EPAL_ROTATE_X", "EPAL_ROTATE_Y", "EPAL_ROTATE_Z", "EPAL_ROTATE_X_U",
+                                       "EPAL_ROTATE_Y_U", "EPAL_ROTATE_Z_U"};
+                for (int k = 0; k < 13; ++k) if (la == modes[k]) em.lockAxis = k;
+            }
             em.maxPeak = std::max(1, es[e]["max_peak_count"].asInt(1));
+            {
+                const std::string rm = es[e]["render_mode"].asString();
+                em.renderMode = rm == "SERM_Octagon" ? 1 : rm == "SERM_BestFit" ? 2 : 0;
+                const assets::Json& pl = es[e]["best_fit_polygons"];
+                for (size_t k = 0; k < pl.size(); ++k) {
+                    FxEmitter::Polygon pg;
+                    pg.time = pl[k]["time"].asFloat(0.0f);
+                    pg.count = pl[k]["count"].asInt(0);
+                    for (size_t j = 0; j < pl[k]["vertices"].size(); ++j)
+                        pg.v.push_back({pl[k]["vertices"][j][(size_t)0].asFloat(0.0f), pl[k]["vertices"][j][(size_t)1].asFloat(0.0f)});
+                    em.polygons.push_back(std::move(pg));
+                }
+            }
             // flag-invariant look only (build_map_fx.py flag_analysis); WFC_FX_FLAGREADING=A|B draws the rest
             // under one of the two unproven readings (experimental)
             em.renderable = es[e]["renderable"].asBool(true) || std::getenv("WFC_FX_FLAGREADING") != nullptr;
@@ -173,6 +193,13 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     lod.typeData = td == "mesh" ? 1 : td == "trail2" ? 2 : td == "beam2" ? 3 : 0;
                     const assets::Json& bt = L["beam_trail"];
                     lod.textureTile = std::max(1.0f, bt["TextureTile"].asFloat(1.0f));
+                    {
+                        const std::string dir = bt["billboard"]["direction"].asString(), al = bt["billboard"]["alignment"].asString();
+                        const char* axes[6] = {"LocalX", "LocalY", "LocalZ", "WorldX", "WorldY", "WorldZ"};
+                        for (int k = 0; k < 6; ++k) if (dir.find(axes[k]) != std::string::npos) lod.billboardAxis = k;
+                        if (al.find("Positive") != std::string::npos) { lod.sideScale[0] = 0.0f; lod.sideScale[1] = 2.0f; }
+                        else if (al.find("Negative") != std::string::npos) { lod.sideScale[0] = 2.0f; lod.sideScale[1] = 0.0f; }
+                    }
                     lod.textureTileDistance = bt["TextureTileDistance"].asFloat(0.0f);
                     lod.tilePerParticle = bt["bTilePerParticle"].asBool(false);
                     if (lod.typeData == 3) {
@@ -246,6 +273,9 @@ bool Pipeline::loadMapFx(const std::string& path) {
                             }
                     }
                     if (lod.typeData == 2) {
+                        // spawn cap = MaxTrailCount (CDO 1) x MaxParticleInTrailCount (Trail2 Spawn 0x83048E40, RE s14),
+                        // not the emitter's MaxPeakCount
+                        lod.trailCap = std::max(1, bt["MaxTrailCount"].asInt(1)) * std::max(1, bt["MaxParticleInTrailCount"].asInt(100));
                         lod.tessFactor = std::max(1, bt["TessellationFactor"].asInt(1));   // 0 -> 1 (native)
                         lod.tessStrength = bt["TessellationStrength"].asFloat(1.0f);
                     }
@@ -264,8 +294,9 @@ bool Pipeline::loadMapFx(const std::string& path) {
                         }
                     }
                     const std::string sm = L["subuv_method"].asString();   // EParticleSubUVInterpMethod
-                    lod.subMethod = sm.find("RANDOM") != std::string::npos || sm.find("Random") != std::string::npos ? 2
-                                  : (sm.empty() || sm == "PSUVIM_None") ? 0 : 1;
+                    lod.subMethod = sm == "PSUVIM_Linear" ? 1 : sm == "PSUVIM_Linear_Blend" ? 2 : sm == "PSUVIM_Random" ? 3
+                                  : sm == "PSUVIM_Random_Blend" ? 4 : 0;
+                    lod.randomImageTime = L["random_image_time"].asFloat(0.0f);
                 }
                 if (L.has("mesh") && L["mesh"].isObject()) {
                     lod.meshGltf = L["mesh"]["gltf"].asString();
@@ -280,7 +311,8 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     const assets::Json& le = ms[m]["location_emitter"];
                     if (le.isObject()) {             // M63 (decoded from the LOD stream by build_map_fx)
                         mod.sourceEmitter = le["emitter"].asString();
-                        mod.selection = le["selection"].asString() == "ELESM_Sequential" ? 1 : 0;
+                        const std::string sel = le["selection"].asString();
+                        mod.selection = sel == "ELESM_Sequential" ? 1 : sel == "ELESM_Particle0" ? 2 : 0;
                         mod.inheritVelocity = le["inherit_velocity"].asBool(false);
                         mod.inheritVelocityScale = le["inherit_velocity_scale"].asFloat(1.0f);
                         mod.inheritRotation = le["inherit_rotation"].asBool(false);
@@ -291,6 +323,8 @@ bool Pipeline::loadMapFx(const std::string& path) {
                         bool vec = dv.second["kind"].asString().rfind("vector", 0) == 0;
                         mod.dists[dv.first] = parseDist(dv.second, vec ? 3 : 1);
                     }
+                    if (lod.typeData == 2 && mod.name == "PMI_LocationEmitter" && !mod.sourceEmitter.empty())
+                        lod.particleTrail = true;
                     lod.modules.push_back(std::move(mod));
                 }
                 em.lods.push_back(std::move(lod));
@@ -408,6 +442,33 @@ int Pipeline::fxMeshFor(const FxLod& L) {
 // ---- simulation (UE3 FParticleEmitterInstance order: kill/update, then spawn) ----
 void Pipeline::tickMapFx(float dt) {
     if (dt <= 0.0f || std::getenv("WFC_NOMAPFX")) return;
+    // M67 SubUV (RE pass 5 s16, update runner case 0x1F, CONFIRMED): every tick for every live particle (and at spawn as
+    // the first update). Cells row-major; the second cell is the next one, wrapping. Linear / Linear_Blend: f =
+    // SubImageIndex(RelativeTime), cell floor(f) clamped, interp frac(f) (Linear: 0). Random / Random_Blend: a new pick
+    // on the first update, RandomImageTime == 0, or RelativeTime - lastChange > RandomImageTime (lifetime fraction);
+    // cell floor(total x r), interp r (Random: 0); otherwise held (interp 0, second cell = the cell).
+    auto subuvStep = [&](const FxLod& L, const FxModule& m, FxParticle& q, uint32_t& rng) {
+        const int total = L.subH * L.subV;
+        if (total <= 1 || L.subMethod == 0) return;
+        if (L.subMethod <= 2) {
+            float v[3]; evalDist(m, "SubImageIndex", q.relTime, rng, v);
+            float f = std::floor(v[0]);
+            q.subImage = std::max(0, std::min((int)f, total - 1));
+            q.subInterp = L.subMethod == 2 ? v[0] - f : 0.0f;
+            q.subImage2 = (q.subImage + 1) % total;
+        } else if (!q.subInit || L.randomImageTime == 0.0f || q.relTime - q.subLastChange > L.randomImageTime) {
+            rng = rng * 1664525u + 1013904223u;
+            float r = (float)(rng >> 8) / 16777216.0f;
+            q.subImage = std::min((int)((float)total * r), total - 1);
+            q.subInterp = L.subMethod == 4 ? r : 0.0f;
+            q.subImage2 = (q.subImage + 1) % total;
+            q.subLastChange = q.relTime;
+        } else {
+            q.subInterp = 0.0f;
+            q.subImage2 = q.subImage;
+        }
+        q.subInit = true;
+    };
     auto t0 = std::chrono::steady_clock::now();
     float camUE[3] = {camPos_.x * 100.0f, camPos_.z * 100.0f, camPos_.y * 100.0f};
     for (const PickupMeshRT& pm : pickupMeshes_)          // PHYS_Rotating only while available (Pickup state)
@@ -483,9 +544,8 @@ void Pipeline::tickMapFx(float dt) {
                         auto ic = m.dists.find("ColorOverLife"), ia = m.dists.find("AlphaOverLife");
                         if (ic != m.dists.end()) { ic->second.eval(q.relTime, in.rng, cv); for (int c = 0; c < 3; ++c) q.color[c] = cv[c]; }
                         if (ia != m.dists.end()) { ia->second.eval(q.relTime, in.rng, av); q.color[3] = av[0]; }
-                    } else if (m.name == "PMI_SubUV" && L.subMethod == 1) {   // linear: image from the index curve
-                        float v[3]; evalDist(m, "SubImageIndex", q.relTime, in.rng, v);
-                        q.subImage = std::max(0, std::min((int)v[0], L.subH * L.subV - 1));
+                    } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {   // M67: every tick (RE s16)
+                        subuvStep(L, m, q, in.rng);
                     } else if (m.name == "PMI_SizeMultiplyLife") {
                         float s[3]; evalDist(m, "LifeMultiplier", q.relTime, in.rng, s);
                         for (int c = 0; c < 3; ++c) q.size[c] *= s[c];
@@ -494,6 +554,17 @@ void Pipeline::tickMapFx(float dt) {
                         auto ic = m.dists.find("ColorScaleOverLife"), ia = m.dists.find("AlphaScaleOverLife");
                         if (ic != m.dists.end()) { ic->second.eval(q.relTime, in.rng, cs); for (int c = 0; c < 3; ++c) q.color[c] *= cs[c]; }
                         if (ia != m.dists.end()) { ia->second.eval(q.relTime, in.rng, as); q.color[3] *= as[0]; }
+                    }
+                }
+                for (const FxModule& m : L.modules) {
+                    if (m.name != "PMI_LocationEmitterDirect" || m.sourceEmitter.empty() || m.flagA == 0) continue;
+                    // M63 Direct update (native update runner 0x83039A18 case 0x14): re-snap particle i to source active
+                    // particle i every tick; i >= the source count is left untouched
+                    for (size_t e2 = 0; e2 < sys.emitters.size(); ++e2) {
+                        if (sys.emitters[e2].name != m.sourceEmitter) continue;
+                        const auto& src = in.emitters[e2].parts;
+                        if (p < src.size()) { std::copy(src[p].pos, src[p].pos + 3, q.pos); std::copy(src[p].vel, src[p].vel + 3, q.vel); }
+                        break;
                     }
                 }
                 if (L.typeData == 3) {
@@ -613,9 +684,12 @@ void Pipeline::tickMapFx(float dt) {
                 if (lo > 0 && hi > lo) { in.rng = in.rng * 1664525u + 1013904223u; spawn += lo + (int)((in.rng >> 8) % (uint32_t)(hi - lo + 1)); }
                 else spawn += hi;
             }
-            const int peak = L.maxBeams > 0 ? std::min(em.maxPeak, L.maxBeams) : em.maxPeak;   // Beam2: MaxBeamCount
+            const int peak = L.maxBeams > 0 ? std::min(em.maxPeak, L.maxBeams)              // Beam2: MaxBeamCount
+                             : L.trailCap > 0 ? L.trailCap : em.maxPeak;                    // Trail2: trail capacity
+            if (L.particleTrail) spawn = std::min(spawn, 1);   // Trail2 Spawn clamps to 1 per tick (RE s14)
             for (int s = 0; s < spawn && (int)rt.parts.size() < peak; ++s) {
                 FxParticle q;
+                q.seq = rt.spawnSeq++;
                 float origin[3] = {0, 0, 0};
                 if (!L.localSpace) std::copy(in.T, in.T + 3, origin);
                 std::copy(origin, origin + 3, q.pos);
@@ -646,23 +720,55 @@ void Pipeline::tickMapFx(float dt) {
                         for (int c = 0; c < 3; ++c) q.pos[c] += w3[c];
                     } else if ((m.name == "PMI_LocationEmitter" || m.name == "PMI_LocationEmitterDirect") &&
                                !m.sourceEmitter.empty()) {
-                        // M63: a live particle of the named emitter in this instance (Random / Sequential); its position,
-                        // and with bInheritSourceVelocity its velocity x scale. Direct: the particle with this index,
-                        // re-placed every tick (update below). No live source particle: the component (pending RE)
-                        const FxParticle* sp = nullptr;
-                        for (size_t e2 = 0; e2 < sys.emitters.size() && !sp; ++e2) {
+                        // M63 (RE pass 5 s14, native spawn runner 0x8303E288 cases 0x13 / 0x14, CONFIRMED): the source
+                        // emitter instance of this system by EmitterName. No source / no live particle: nothing (the
+                        // particle keeps its normal spawn position). Random = floor(frand x count); Sequential = a
+                        // pre-incremented counter wrapping to 0 (1, 2, .., n-1, 0); else particle 0. Direct: the same
+                        // active index (re-snapped every tick below). Position = the source particle's location through
+                        // source space -> this space; a source born this frame uses the source emitter's location.
+                        // Inherit velocity (BaseVelocity and Velocity) / rotation x scale. [PARTIAL: the sub-frame
+                        // terms - src.Velocity x S + Velocity x S are not modelled; this runtime spawns at frame time]
+                        for (size_t e2 = 0; e2 < sys.emitters.size(); ++e2) {
                             if (sys.emitters[e2].name != m.sourceEmitter) continue;
-                            const auto& src = in.emitters[e2].parts;
+                            const auto& srcRt = in.emitters[e2];
+                            const auto& src = srcRt.parts;
                             if (src.empty()) break;
-                            size_t idx;
-                            if (m.name == "PMI_LocationEmitterDirect") idx = rt.parts.size() % src.size();
-                            else if (m.selection == 1) idx = (size_t)(rt.locSequence++) % src.size();
-                            else { in.rng = in.rng * 1664525u + 1013904223u; idx = (size_t)((in.rng >> 8) % (uint32_t)src.size()); }
-                            sp = &src[idx];
-                        }
-                        if (sp) {
-                            std::copy(sp->pos, sp->pos + 3, q.pos);
-                            if (m.inheritVelocity) for (int c = 0; c < 3; ++c) q.baseVel[c] += sp->vel[c] * m.inheritVelocityScale;
+                            size_t idx = 0;
+                            if (m.name == "PMI_LocationEmitterDirect") {
+                                idx = rt.parts.size();
+                                if (idx >= src.size()) break;
+                            } else if (m.selection == 0) {
+                                in.rng = in.rng * 1664525u + 1013904223u;
+                                idx = std::min((size_t)((float)(in.rng >> 8) / 16777216.0f * (float)src.size()), src.size() - 1);
+                            } else if (m.selection == 1) {
+                                if (++rt.locSequence >= (int)src.size()) rt.locSequence = 0;
+                                idx = (size_t)rt.locSequence;
+                            }
+                            const FxParticle& sp = src[idx];
+                            const FxLod& SL = sys.emitters[e2].lods[(size_t)std::min<int>(srcRt.lod, (int)sys.emitters[e2].lods.size() - 1)];
+                            float wpos[3], wvel[3];
+                            if (sp.relTime == 0.0f) std::copy(in.T, in.T + 3, wpos);     // born this frame: emitter location
+                            else if (SL.localSpace) {
+                                for (int c = 0; c < 3; ++c) wpos[c] = sp.pos[0] * in.R[0][c] + sp.pos[1] * in.R[1][c] + sp.pos[2] * in.R[2][c] + in.T[c];
+                            } else std::copy(sp.pos, sp.pos + 3, wpos);
+                            if (SL.localSpace) for (int c = 0; c < 3; ++c) wvel[c] = sp.vel[0] * in.R[0][c] + sp.vel[1] * in.R[1][c] + sp.vel[2] * in.R[2][c];
+                            else std::copy(sp.vel, sp.vel + 3, wvel);
+                            if (L.localSpace) {                          // world -> this emitter's local space
+                                float d[3] = {wpos[0] - in.T[0], wpos[1] - in.T[1], wpos[2] - in.T[2]};
+                                for (int r = 0; r < 3; ++r) {
+                                    float l2 = in.R[r][0] * in.R[r][0] + in.R[r][1] * in.R[r][1] + in.R[r][2] * in.R[r][2];
+                                    q.pos[r] = l2 > 0 ? (d[0] * in.R[r][0] + d[1] * in.R[r][1] + d[2] * in.R[r][2]) / l2 : 0.0f;
+                                    float v = l2 > 0 ? (wvel[0] * in.R[r][0] + wvel[1] * in.R[r][1] + wvel[2] * in.R[r][2]) / l2 : 0.0f;
+                                    if (m.inheritVelocity) { q.baseVel[r] += v * m.inheritVelocityScale; }
+                                }
+                            } else {
+                                std::copy(wpos, wpos + 3, q.pos);
+                                if (m.inheritVelocity) for (int c = 0; c < 3; ++c) q.baseVel[c] += wvel[c] * m.inheritVelocityScale;
+                            }
+                            if (m.inheritRotation) q.rot += sp.rot * m.inheritRotationScale;
+                            if (m.name == "PMI_LocationEmitterDirect")
+                                for (int c = 0; c < 3; ++c) q.baseVel[c] = L.localSpace ? q.baseVel[c] : wvel[c];
+                            break;
                         }
                     } else if (m.name == "PMI_LocationPrimitiveSphere") {   // [PARTIAL] sampling rule
                         float rad[1], vs[1], off[3], d[3];
@@ -703,10 +809,8 @@ void Pipeline::tickMapFx(float dt) {
                         evalDist(m, "Acceleration", efrac, in.rng, v3);
                         toWorldDir(v3, w3);
                         for (int c = 0; c < 3; ++c) q.accel[c] += w3[c];
-                    } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {
-                        int n = L.subH * L.subV;
-                        if (L.subMethod == 2) { in.rng = in.rng * 1664525u + 1013904223u; q.subImage = (int)((in.rng >> 8) % (uint32_t)n); }
-                        else { evalDist(m, "SubImageIndex", 0.0f, in.rng, v3); q.subImage = std::max(0, std::min((int)v3[0], n - 1)); }
+                    } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {   // spawn = the first update (M67)
+                        subuvStep(L, m, q, in.rng);
                     } else if (m.name == "PMI_MeshRotationRate") {
                         evalDist(m, "StartRotationRate", efrac, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.meshRotRate[c] += v3[c] * 360.0f;
@@ -1149,6 +1253,27 @@ void Pipeline::drawMapPresentation() {
                 // target with that particle's width / colour; a trail on a moving source draws one ribbon through its
                 // recent path, fading with age, at the newest particle's width / colour.
                 std::vector<Sprite> sp;
+                // M65 BillboardSettings: a fixed side axis (component LocalToWorld row, normalized, or a world axis)
+                // instead of cross(view, dir); offset = (2V - 1) x Size x sideScale x axis (RE s13 addendum 3, HIGH).
+                // fixedSide = the V0 direction (our corners put V1 at p - side); scales applied per side
+                core::Vec3 fixedSide{0, 0, 0};
+                if (L.billboardAxis >= 0) {
+                    float a[3] = {0, 0, 0};
+                    if (L.billboardAxis < 3) { for (int c = 0; c < 3; ++c) a[c] = in.R[L.billboardAxis][c]; }
+                    else a[L.billboardAxis - 3] = 1.0f;
+                    core::Vec3 g = ueToGltf(a);
+                    float gl = core::length(g);
+                    if (gl > 1e-6f) fixedSide = g * (-1.0f / gl);
+                }
+                const bool fixedAxis = core::length(fixedSide) > 0.0f;
+                if (fixedAxis && std::getenv("WFC_FXTEST")) {
+                    static std::set<std::string> logged;
+                    if (logged.insert(in.system + "/" + sys.emitters[e].name).second)
+                        LOG_INFO("FXTEST billboard %s/%s axis %d side (%.3f %.3f %.3f) component R%d (%.3f %.3f %.3f) scales %.1f/%.1f",
+                                 in.system.c_str(), sys.emitters[e].name.c_str(), L.billboardAxis, fixedSide.x, fixedSide.y,
+                                 fixedSide.z, L.billboardAxis % 3, in.R[L.billboardAxis % 3][0], in.R[L.billboardAxis % 3][1],
+                                 in.R[L.billboardAxis % 3][2], L.sideScale[0], L.sideScale[1]);
+                }
                 auto quad = [&](const core::Vec3& a, const core::Vec3& b, float w0, float w1, const float* col0,
                                 const float* col1, float u0, float u1) {
                     core::Vec3 d = b - a;
@@ -1156,7 +1281,7 @@ void Pipeline::drawMapPresentation() {
                     if (l < 1e-4f) return;
                     core::Vec3 mid = (a + b) * 0.5f;
                     // sprite corner order: x (u) along the ribbon, y (v) across it, facing the camera
-                    core::Vec3 side = core::cross(core::normalize(camPos_ - mid), d * (1.0f / l));
+                    core::Vec3 side = fixedAxis ? fixedSide : core::cross(core::normalize(camPos_ - mid), d * (1.0f / l));
                     float sl = core::length(side);
                     if (sl < 1e-4f) return;
                     side = side * (1.0f / sl);
@@ -1182,6 +1307,7 @@ void Pipeline::drawMapPresentation() {
                     if (n < 2) return;
                     std::vector<core::Vec3> side(n);
                     for (size_t i = 0; i < n; ++i) {
+                        if (fixedAxis) { side[i] = fixedSide; continue; }
                         core::Vec3 d = v[std::min(i + 1, n - 1)].p - v[i == 0 ? 0 : i - 1].p;
                         core::Vec3 sd = core::cross(core::normalize(camPos_ - v[i].p), d);
                         float sl = core::length(sd);
@@ -1191,8 +1317,9 @@ void Pipeline::drawMapPresentation() {
                         if (core::length(side[i]) < 1e-6f || core::length(side[i + 1]) < 1e-6f) continue;
                         Sprite s;
                         // half-width = Size (the ribbon VS offsets each vertex pair by (2V - 1) x Size; RE s13 add. 2, HIGH)
-                        s.c[0] = v[i].p - side[i] * v[i].w; s.c[1] = v[i + 1].p - side[i + 1] * v[i + 1].w;
-                        s.c[2] = v[i + 1].p + side[i + 1] * v[i + 1].w; s.c[3] = v[i].p + side[i] * v[i].w;
+                        const float s1 = L.sideScale[1], s0 = L.sideScale[0];   // V1 corners (c0, c1), V0 corners (c2, c3)
+                        s.c[0] = v[i].p - side[i] * (v[i].w * s1); s.c[1] = v[i + 1].p - side[i + 1] * (v[i + 1].w * s1);
+                        s.c[2] = v[i + 1].p + side[i + 1] * (v[i + 1].w * s0); s.c[3] = v[i].p + side[i] * (v[i].w * s0);
                         // along-ribbon coordinate (tiled) and across (0 / 1); kAlongV swaps them (M61)
                         float ua = v[i].u * tile, ub = v[i + 1].u * tile;
                         float uv[4][2] = {{ua, 1}, {ub, 1}, {ub, 0}, {ua, 0}};
@@ -1350,6 +1477,58 @@ void Pipeline::drawMapPresentation() {
                         quad(a, b, w, w, q.color, q.color, 0.0f, 1.0f);
                     }
                   }
+                } else if (L.typeData == 2 && L.particleTrail) {
+                    // M63 Trail2 placed by LocationEmitter (RE pass 5 s14, CONFIRMED): one chain through this emitter's
+                    // own particles in spawn order (each new particle becomes the head; no per-source trails; the head
+                    // does not follow its source). Per-particle size / colour; U from the head by distance (s13).
+                    std::vector<const FxParticle*> chain;
+                    for (const FxParticle& q : rt.parts) chain.push_back(&q);
+                    std::sort(chain.begin(), chain.end(), [](const FxParticle* x, const FxParticle* y) { return x->seq < y->seq; });
+                    if (chain.size() >= 2) {
+                        auto wpos = [&](const FxParticle& q) {
+                            if (!L.localSpace) return ueToGltf(q.pos);
+                            float w3[3];
+                            for (int c = 0; c < 3; ++c) w3[c] = q.pos[0] * in.R[0][c] + q.pos[1] * in.R[1][c] + q.pos[2] * in.R[2][c] + in.T[c];
+                            return ueToGltf(w3);
+                        };
+                        const size_t n = chain.size();
+                        std::vector<core::Vec3> P(n);
+                        for (size_t k = 0; k < n; ++k) P[k] = wpos(*chain[k]);
+                        const int T = std::max(1, L.tessFactor);
+                        auto tangent = [&](size_t k) {
+                            core::Vec3 d = k == 0 ? P[1] - P[0] : k + 1 == n ? P[n - 1] - P[n - 2] : (P[k + 1] - P[k - 1]) * 0.5f;
+                            return d * L.tessStrength;
+                        };
+                        std::vector<SP> sv;
+                        for (size_t k = 0; k + 1 < n; ++k) {
+                            const FxParticle& q0 = *chain[k];
+                            const FxParticle& q1 = *chain[k + 1];
+                            core::Vec3 m0 = tangent(k), m1 = tangent(k + 1);
+                            for (int st = 0; st < T; ++st) {
+                                float ta = (float)st / (float)T, t2 = ta * ta, t3 = t2 * ta;
+                                core::Vec3 pt = st == 0 ? P[k] : P[k] * (2 * t3 - 3 * t2 + 1) + m0 * (t3 - 2 * t2 + ta) +
+                                                                 P[k + 1] * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
+                                float w = (q0.size[0] + (q1.size[0] - q0.size[0]) * ta) * sizeScale[0] * 0.01f;
+                                SP v{pt, w, {0, 0, 0, 0}, L.tilePerParticle ? (float)(n - 1) - ((float)k + ta) : 0.0f};
+                                for (int c = 0; c < 4; ++c) v.col[c] = q0.color[c] + (q1.color[c] - q0.color[c]) * ta;
+                                sv.push_back(v);
+                            }
+                        }
+                        const FxParticle& ql = *chain[n - 1];
+                        sv.push_back({P[n - 1], ql.size[0] * sizeScale[0] * 0.01f, {ql.color[0], ql.color[1], ql.color[2], ql.color[3]}, 0.0f});
+                        if (!L.tilePerParticle) {
+                            float total = 0.0f;
+                            for (size_t i = 0; i + 1 < sv.size(); ++i) total += core::length(sv[i + 1].p - sv[i].p);
+                            float cum = 0.0f;
+                            sv.back().u = 0.0f;
+                            for (size_t i = sv.size() - 1; i-- > 0;) {
+                                cum += core::length(sv[i + 1].p - sv[i].p);
+                                sv[i].u = total > 1e-6f ? std::min(cum / total, 1.0f) : 0.0f;
+                            }
+                        }
+                        tile = L.textureTile;
+                        strip(sv);
+                    }
                 } else if (L.typeData == 2 && rt.trail.size() >= 2 && !rt.parts.empty()) {
                     const FxParticle& q = rt.parts.back();
                     float w = q.size[0] * sizeScale[0] * 0.01f;
@@ -1454,20 +1633,58 @@ void Pipeline::drawMapPresentation() {
                           h = (L.rectangle || L.velocityAligned ? q.size[1] : q.size[0]) * sizeScale[1] * 0.01f;
                     core::Vec3 ax, ay;
                     bool aligned = false;
+                    // Our quad: U grows along ax, V grows along -ay (c0 = c - hx - hy has UV (0, 1)).
+                    const core::Vec3 toCam = core::normalize(camPos_ - c);
                     if (L.velocityAligned) {
-                        // PSA_Velocity: the sprite's up axis along the (world) velocity, its right axis across the
-                        // view (UE3 ParticleSprite velocity alignment); no particle rotation
+                        // PSA_Velocity (RE pass 5 s15; CPU CONFIRMED, shader HIGH): D = normalize(Pos - OldPos), world;
+                        // length Size.y along D with V = 0 the LEADING edge, width Size.x along cross(camera - particle, D);
+                        // rotation ignored; no speed stretch. A stationary particle collapses (invisible), as the original.
                         float v[3] = {q.vel[0], q.vel[1], q.vel[2]}, vw[3];
                         if (L.localSpace) { for (int k = 0; k < 3; ++k) vw[k] = v[0] * IR[0][k] + v[1] * IR[1][k] + v[2] * IR[2][k]; }
                         else std::copy(v, v + 3, vw);
                         core::Vec3 dir{vw[0], vw[2], vw[1]};           // UE -> glTF axes
                         float dl = core::length(dir);
-                        if (dl > 1e-4f) {
-                            ay = dir * (1.0f / dl);
-                            core::Vec3 rx = core::cross(camF, ay);
-                            float rl = core::length(rx);
-                            if (rl > 1e-4f) { ax = rx * (1.0f / rl); aligned = true; }
+                        if (dl <= 1e-4f) continue;
+                        ay = dir * (1.0f / dl);
+                        core::Vec3 rx = core::cross(toCam, ay);
+                        float rl = core::length(rx);
+                        if (rl <= 1e-4f) continue;                      // moving straight along the view: zero width
+                        ax = rx * (1.0f / rl);
+                        aligned = true;
+                    } else if (sys.emitters[e].lockAxis != 0) {
+                        // M66 LockAxisFlags (RE s15 + addenda; CPU CONFIRMED, world formulas HIGH). Axes: the component
+                        // rows when the LOD is local-space, else world X / Y / Z (CONFIRMED).
+                        auto axis = [&](int k) {                        // UE axis k (0 X, 1 Y, 2 Z) -> glTF unit vector
+                            float a[3] = {0, 0, 0};
+                            if (L.localSpace) for (int c2 = 0; c2 < 3; ++c2) a[c2] = in.R[k][c2];
+                            else a[k] = 1.0f;
+                            core::Vec3 g = ueToGltf(a);
+                            float gl = core::length(g);
+                            return gl > 1e-6f ? g * (1.0f / gl) : core::Vec3{0, 0, 0};
+                        };
+                        const int la = sys.emitters[e].lockAxis;
+                        if (la <= 6) {
+                            // lock 1-6: Pos + (U - 1/2) Size.x (-A) + (V - 1/2) Size.y B; the quad fixed in the A-B plane,
+                            // particle Rotation spins it in-plane. (A, B): X (Z, Y), Y (Z, -X), Z (X, -Y), -X (Z, -Y),
+                            // -Y (Z, X), -Z (X, Y)
+                            static const int aAx[7] = {0, 2, 2, 0, 2, 2, 0}, bAx[7] = {0, 1, 0, 1, 1, 0, 1};
+                            static const float bSg[7] = {0, 1, -1, -1, -1, 1, 1};
+                            core::Vec3 A = axis(aAx[la]), Bv = axis(bAx[la]) * bSg[la];
+                            core::Vec3 R0 = A * -1.0f, U0 = Bv * -1.0f;   // U along -A; V along +B (ay = -B)
+                            float cr = std::cos(q.rot), sr = std::sin(q.rot);
+                            ax = R0 * cr + U0 * sr; ay = U0 * cr - R0 * sr;
+                        } else {
+                            // ROTATE_X/Y/Z: Pos + (U - 1/2) Size.x A + (V - 1/2) Size.y P, P = normalize(cross(C, A));
+                            // ROTATE_*_U: U and V swapped with A negated. Rotation ignored.
+                            const bool swapUV = la >= 10;
+                            core::Vec3 A = axis((la - 7) % 3) * (swapUV ? -1.0f : 1.0f);
+                            core::Vec3 Pv = core::cross(toCam, A);
+                            float pl = core::length(Pv);
+                            if (pl <= 1e-6f) continue;                  // viewed straight down the axis: zero width
+                            Pv = Pv * (1.0f / pl);
+                            if (!swapUV) { ax = A; ay = Pv * -1.0f; } else { ax = Pv; ay = A * -1.0f; }
                         }
+                        aligned = true;
                     }
                     if (!aligned) {
                         float cr = std::cos(q.rot), sr = std::sin(q.rot);
@@ -1477,14 +1694,59 @@ void Pipeline::drawMapPresentation() {
                     Sprite s;
                     s.c[0] = c - hx - hy; s.c[1] = c + hx - hy; s.c[2] = c + hx + hy; s.c[3] = c - hx + hy;
                     float uv[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
-                    if (L.subMethod != 0 && L.subH * L.subV > 1) {     // SubUV: the image's cell of the sheet
+                    if (L.subMethod != 0 && L.subH * L.subV > 1) {     // SubUV: the cell (and the blend cell) of the sheet
                         float du = 1.0f / (float)L.subH, dv = 1.0f / (float)L.subV;
                         float u0 = (float)(q.subImage % L.subH) * du, v0 = (float)(q.subImage / L.subH) * dv;
+                        float u1 = (float)(q.subImage2 % L.subH) * du, v1 = (float)(q.subImage2 / L.subH) * dv;
+                        for (int k = 0; k < 4; ++k) { s.uv2[k][0] = u1 + uv[k][0] * du; s.uv2[k][1] = v1 + uv[k][1] * dv; }
                         for (auto& t : uv) { t[0] = u0 + t[0] * du; t[1] = v0 + t[1] * dv; }
+                        s.blend = q.subInterp;
+                        if (std::getenv("WFC_FXTEST") && L.subMethod == 2) {
+                            static int nb = 0;
+                            if (nb++ < 3) LOG_INFO("FXTEST subuv %s/%s cell %d -> %d blend %.3f (%dx%d)", in.system.c_str(),
+                                                   sys.emitters[e].name.c_str(), q.subImage, q.subImage2, q.subInterp, L.subH, L.subV);
+                        }
                     }
                     std::memcpy(s.uv, uv, sizeof(uv));
                     std::copy(q.color, q.color + 4, s.color);
-                    sp.push_back(s);
+                    const FxEmitter& EM = sys.emitters[e];
+                    if (EM.renderMode == 0) { sp.push_back(s); continue; }
+                    // M68 Octagon / BestFit (RE pass 5 s17, CONFIRMED): the fill expands each polygon corner (cell-local
+                    // 0..1) exactly like a quad corner and computes the UVs as (cell + corner) x cellSize, so polygon and
+                    // texture stay aligned. Octagon = the unit square minus corner triangles of leg 1 - 1/sqrt2; BestFit =
+                    // the last polygon with Time <= particle age (3..12 vertices; any other count draws nothing).
+                    // Triangulated as a fan (0, k, k + 1): identical to the native index lists for these convex shapes.
+                    static const float kOct[8][2] = {{0.2929f, 0}, {0.7071f, 0}, {1, 0.2929f}, {1, 0.7071f},
+                                                     {0.7071f, 1}, {0.2929f, 1}, {0, 0.7071f}, {0, 0.2929f}};
+                    std::vector<std::array<float, 2>> poly;
+                    if (EM.renderMode == 1) { for (const auto& k8 : kOct) poly.push_back({k8[0], k8[1]}); }
+                    else {
+                        const float age = q.oneOverLife > 0.0f ? q.relTime / q.oneOverLife : 0.0f;
+                        const FxEmitter::Polygon* pg = nullptr;
+                        for (const auto& cand : EM.polygons) if (cand.time <= age) pg = &cand;
+                        if (!pg && !EM.polygons.empty()) pg = &EM.polygons[0];
+                        if (!pg) { sp.push_back(s); continue; }        // no polygon data: the quad
+                        if (pg->count < 3 || pg->count > 12 || (int)pg->v.size() < pg->count) continue;   // not drawn
+                        poly.assign(pg->v.begin(), pg->v.begin() + pg->count);
+                    }
+                    // quad corner (u, v) -> position c + hx (2u - 1) - hy (2v - 1); UV / second cell by the same corner
+                    auto cornerPos = [&](float u, float v) { return c + hx * (2.0f * u - 1.0f) - hy * (2.0f * v - 1.0f); };
+                    float cu0 = 0, cv0 = 0, cu1 = 0, cv1 = 0, du = 1, dv = 1;
+                    if (L.subMethod != 0 && L.subH * L.subV > 1) {
+                        du = 1.0f / (float)L.subH; dv = 1.0f / (float)L.subV;
+                        cu0 = (float)(q.subImage % L.subH) * du; cv0 = (float)(q.subImage / L.subH) * dv;
+                        cu1 = (float)(q.subImage2 % L.subH) * du; cv1 = (float)(q.subImage2 / L.subH) * dv;
+                    }
+                    auto setCorner = [&](Sprite& t, int k, const std::array<float, 2>& pc) {
+                        t.c[k] = cornerPos(pc[0], pc[1]);
+                        t.uv[k][0] = cu0 + pc[0] * du; t.uv[k][1] = cv0 + pc[1] * dv;
+                        t.uv2[k][0] = cu1 + pc[0] * du; t.uv2[k][1] = cv1 + pc[1] * dv;
+                    };
+                    for (size_t k = 1; k + 1 < poly.size(); ++k) {
+                        Sprite t = s;
+                        setCorner(t, 0, poly[0]); setCorner(t, 1, poly[k]); setCorner(t, 2, poly[k + 1]); setCorner(t, 3, poly[k + 1]);
+                        sp.push_back(t);
+                    }
                 }
                 if (rt.hasDyn) { std::copy(rt.dynParam, rt.dynParam + 4, dynParam_); }
                 drawSprites(L.material.c_str(), sp.data(), sp.size(), camF * -1.0f);
