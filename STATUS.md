@@ -602,6 +602,10 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING M61-M62 (2026-10-05)
+- Beam / trail UV layout per RE's decode of both fills: beams were already right; trails now start at the newest point and run by distance.
+- Gorge's 4 unbound vertex-lightmap sections bind through AssetTools' _WFC_SRCVERT.
+
 ## RENDERING M59-M60 (2026-10-05)
 - M59 prewarm replay (with Gameplay 91672f1 / 2f258b6: no transform or mid-match hitch, verified over two matches).
 - M60 Beam2 source / target methods per the native resolvers: beams without a game end point now draw from their authored distributions.

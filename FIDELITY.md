@@ -17,6 +17,14 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONES 61-62 — BEAM / TRAIL UV LAYOUT, GORGE VERTEX LIGHTMAPS (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Tiling values | No MP effect authors TextureTile / TextureTileDistance / Sheets / bTilePerParticle (735 Beam2 / Trail2 LODs); CDO TextureTile 1, Sheets 1 | pstream survey; Engine CDOs | CONFIRMED | exported with defaults |
+| Beam UV | U along (0 source -> 1 target, per emitted pair incl. noise sub-steps), V 0 / 1 across; TextureTile never applied by the beam fill; no scrolling | RE pass 5 s13 (0x830298E8 UV writes) | CONFIRMED (world side of V 0: UNKNOWN, Xenon VS) | already U = r |
+| Trail UV | U = 0 at the head = NEWEST particle (Spawn relinks the new particle as head), growing to the oldest by cumulative distance x TextureTile, clamped; bTilePerParticle per segment | RE s13 + addendum (0x8301A700, 0x83048E40); authored trail textures fade from U 0 (iontrail_01, RingsTrail) | CONFIRMED | M61 / M61b: was index-based from the OLDEST point |
+| Gorge vertex lightmaps | Export duplicated 40 of 1576 cooked vertices across two sections | AssetTools a7b9ef0 _WFC_SRCVERT (exact pskx face pairing) | CONFIRMED | M62: samples re-ordered through the cooked index; all 4 sections bind |
+
 ## MILESTONES 59-60 — PREWARM REPLAY, BEAM SOURCE / TARGET METHODS (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
@@ -51,7 +59,7 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 | Menu / match-start stalls | The effect / weapon prewarm ran on frame 2: PartyLobby 158 programs 1174 ms, Streets 161 programs 1.2 s, both after the loading screen. Unload deleted every program, so revisits recompiled. | WFC_RENDERSTATS, WFC_HITCHLOG, Frontend WFC_FRAMEPROF | CONFIRMED | M54: prewarm at the end of the world upload (16 ms yield slices); none for frontend scenes; linked programs cached across loads by source (LRU 1500); preview bodies prewarm at load. Lobby revisit 39 / 39 reused; no tick hitch after the Streets load; title longest load gap 187 -> 73 ms. |
 | High refresh / jitter | Uncapped Streets with fast turning + strafe + fire + transform: CPU frame 1.4-3.5 ms; no GL errors. The only hitches were M53 / M54 (fixed). | WFC_PERFLOG / WFC_HITCHLOG | HIGH | No presentation / interpolation change (the character high-refresh fix is untouched). |
 | Beam2 taper | TaperCount = InterpolationPoints + 1; width_i = size x TaperFactor(r) x TaperScale(r), r along the beam, fixed at spawn | RE pass 5 s9 (Function_8302E898) | CONFIRMED (native) | M55: repair beam tapers from 0 at the source (VISUALLY VERIFIED). |
-| Trail2 tessellation | TessellationFactor vertex pairs per segment (TessellationFactorDistance does not change the count) | RE pass 5 s9 (Function_83019600) | CONFIRMED count / HIGH Hermite (stock UE3, TessellationStrength) | M55. Noise / sine wave: M56-M57. Still PARTIAL: texture tiling distance. |
+| Trail2 tessellation | TessellationFactor vertex pairs per segment (TessellationFactorDistance does not change the count) | RE pass 5 s9 (Function_83019600) | CONFIRMED count / HIGH Hermite (stock UE3, TessellationStrength) | M55. Noise / sine wave: M56-M57; UV layout M61. |
 | AMD stability | 0 GL debug errors, 0 out-of-bounds draws, 0 context resets across every run of this pass (Molten, Debris, Streets real time, frontend flow x2) | KHR_debug callback, subInBounds | HIGH | M43-M45 guards kept. |
 
 ## MILESTONE 45 — OUT-OF-BOUNDS SKINNED DRAWS (AMD stability, real defect) (2026-10-05)
