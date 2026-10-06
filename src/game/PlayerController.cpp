@@ -844,6 +844,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                     const Weapon::ChargeLevel& L = Weapon::chargeLevel(mode);
                     Weapon shot = w;
                     shot.projSpeed = L.speed; shot.projDamage = L.damage; shot.projRadiusM = L.radiusM; shot.projClass = mode;
+                    w.chargeShotLevel = mode + 1;                  // set before onFired(): the shot serial and the level change together
                     w.onFired();                                   // spread / serial / one ammo
                     w.ammo = std::max(0, w.ammo - (L.shotCost - 1));   // ConsumeAmmo(ShotCost[mode]), clamped at 0 [HIGH]
                     fireRobotShot(shot);

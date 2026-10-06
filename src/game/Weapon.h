@@ -60,6 +60,7 @@ struct Weapon {
     // Presentation serials: chargeSerial +1 on every _ChargeState change (SetChargeState -> UpdateChargeEffects); chargeFizzle
     // +1 when a charge is released in state 1 (FireCharge: PlayWeaponEvent(22) instead of a shot).
     unsigned chargeSerial = 0, chargeFizzle = 0;
+    int chargeShotLevel = 0;   // level (1-3) of the last released charge shot: FireCharge fire mode + 1 (WP_Fire / _Secondary / _Tertiary)
     void setChargeState(int s) { if (s != chargeState) { chargeState = s; ++chargeSerial; } }
     static Weapon fromDef(const WeaponDef& d) {
         Weapon w;

@@ -3699,7 +3699,7 @@ void Application::runChargeTest() {
     const std::string held = pc.weapon().def ? pc.weapon().def->id : "?";
     check(held == "PlasmaCannon", "Scout holds the Plasma Cannon (" + held + ")");
     if (held != "PlasmaCannon") { LOG_INFO("CHARGE SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
-    struct Shot { bool fired; float speed, damage; int ammoUsed, ammoHeld; std::string tpl, hudMid, hudEnd; };
+    struct Shot { bool fired; float speed, damage; int ammoUsed, ammoHeld; std::string tpl, hudMid, hudEnd; int level = 0; };
     auto hold = [&](float secs) {
         game::Weapon& w = pc.weapon();
         w.ammo = w.magSize; w.reserve = w.reserveMax;
@@ -3719,6 +3719,7 @@ void Application::runChargeTest() {
             r.fired = true; r.speed = core::length(world_.projectileVel(k)); r.damage = world_.projectileDamage(k); r.tpl = world_.projectileFlightTemplate(k);
         }
         r.ammoUsed = a0 - pc.weapon().ammo;
+        if (r.fired) r.level = world_.hudState().weaponChargeShotLevel;
         LOG_INFO("CHARGE hold %.2f s: fired %d speed %.0f m/s damage %.0f ammo %d (drained while held %d) hud [%s] -> [%s] trail %s", secs, (int)r.fired, r.speed, r.damage,
                  r.ammoUsed, r.ammoHeld, r.hudMid.c_str(), r.hudEnd.c_str(), r.tpl.c_str());
         run(1.0f);
@@ -3743,6 +3744,7 @@ void Application::runChargeTest() {
     check(fz1 - fz0 == 1 && sr1 - sr0 == 2 && std::fabs(glow[0] - 1.0f / 3.0f) < 1e-4f && std::fabs(glow[1] - 2.0f / 3.0f) < 1e-4f && std::fabs(glow[2] - 1.0f) < 1e-4f,
           "presentation: tap = 1 fizzle (event 22) and 2 state changes (0->1->0); MaterialGlowAmount 1/3, 2/3, 1 by level");
     Shot a = hold(1.0f), b = hold(2.5f), c = hold(4.0f);
+    check(a.level == 1 && b.level == 2 && c.level == 3, "HudState weaponChargeShotLevel = 1 / 2 / 3 for the released shots");
     check(!t.fired && t.ammoUsed == 0 && t.hudEnd == "CHARGING", "tap (0.3 s, state 1): no shot, no ammo; HUD CHARGING");
     check(a.fired && std::fabs(a.speed - 80.0f) < 1.0f && a.damage == 115.0f && a.ammoUsed == 25 && a.hudEnd == "READY" && a.tpl.find("_Sm_") != std::string::npos,
           "1.0 s: Charge1 80 m/s, 115 dmg, 25 ammo, small trail, HUD READY");

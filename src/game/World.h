@@ -100,6 +100,9 @@ struct HudGameState {
     //   weaponChargeFizzle   +1 when released before level 1: PlayWeaponEvent(22) instead of a shot.
     float weaponChargeGlow = 0.0f;
     unsigned weaponChargeSerial = 0, weaponChargeFizzle = 0;
+    //   weaponChargeShotLevel  level 1-3 of the last released shot (with the weapon shot serial / projectile launch): fire mode
+    //                          0 / 1 / 2 -> WP_Fire / WP_FireSecondary / WP_FireTertiary.
+    int weaponChargeShotLevel = 0;
     int vehicleShotSerial = 0, vehicleShotSocket = 0;
     core::Vec3 vehicleShotMuzzle{0, 0, 0};
     bool barrier = false;                        // the local Barrier ability's wall is up
