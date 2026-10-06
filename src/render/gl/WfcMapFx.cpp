@@ -149,6 +149,13 @@ bool Pipeline::loadMapFx(const std::string& path) {
         for (size_t e = 0; e < es.size(); ++e) {
             FxEmitter em;
             em.name = es[e]["name"].asString();
+            {
+                const std::string la = es[e]["lock_axis"].asString();
+                const char* modes[] = {"EPAL_NONE", "EPAL_X", "EPAL_Y", "EPAL_Z", "EPAL_NEGATIVE_X", "EPAL_NEGATIVE_Y",
+                                       "EPAL_NEGATIVE_Z", "EPAL_ROTATE_X", "EPAL_ROTATE_Y", "EPAL_ROTATE_Z", "EPAL_ROTATE_X_U",
+                                       "EPAL_ROTATE_Y_U", "EPAL_ROTATE_Z_U"};
+                for (int k = 0; k < 13; ++k) if (la == modes[k]) em.lockAxis = k;
+            }
             em.maxPeak = std::max(1, es[e]["max_peak_count"].asInt(1));
             // flag-invariant look only (build_map_fx.py flag_analysis); WFC_FX_FLAGREADING=A|B draws the rest
             // under one of the two unproven readings (experimental)
@@ -1588,20 +1595,58 @@ void Pipeline::drawMapPresentation() {
                           h = (L.rectangle || L.velocityAligned ? q.size[1] : q.size[0]) * sizeScale[1] * 0.01f;
                     core::Vec3 ax, ay;
                     bool aligned = false;
+                    // Our quad: U grows along ax, V grows along -ay (c0 = c - hx - hy has UV (0, 1)).
+                    const core::Vec3 toCam = core::normalize(camPos_ - c);
                     if (L.velocityAligned) {
-                        // PSA_Velocity: the sprite's up axis along the (world) velocity, its right axis across the
-                        // view (UE3 ParticleSprite velocity alignment); no particle rotation
+                        // PSA_Velocity (RE pass 5 s15; CPU CONFIRMED, shader HIGH): D = normalize(Pos - OldPos), world;
+                        // length Size.y along D with V = 0 the LEADING edge, width Size.x along cross(camera - particle, D);
+                        // rotation ignored; no speed stretch. A stationary particle collapses (invisible), as the original.
                         float v[3] = {q.vel[0], q.vel[1], q.vel[2]}, vw[3];
                         if (L.localSpace) { for (int k = 0; k < 3; ++k) vw[k] = v[0] * IR[0][k] + v[1] * IR[1][k] + v[2] * IR[2][k]; }
                         else std::copy(v, v + 3, vw);
                         core::Vec3 dir{vw[0], vw[2], vw[1]};           // UE -> glTF axes
                         float dl = core::length(dir);
-                        if (dl > 1e-4f) {
-                            ay = dir * (1.0f / dl);
-                            core::Vec3 rx = core::cross(camF, ay);
-                            float rl = core::length(rx);
-                            if (rl > 1e-4f) { ax = rx * (1.0f / rl); aligned = true; }
+                        if (dl <= 1e-4f) continue;
+                        ay = dir * (1.0f / dl);
+                        core::Vec3 rx = core::cross(toCam, ay);
+                        float rl = core::length(rx);
+                        if (rl <= 1e-4f) continue;                      // moving straight along the view: zero width
+                        ax = rx * (1.0f / rl);
+                        aligned = true;
+                    } else if (sys.emitters[e].lockAxis != 0) {
+                        // M66 LockAxisFlags (RE s15 + addenda; CPU CONFIRMED, world formulas HIGH). Axes: the component
+                        // rows when the LOD is local-space, else world X / Y / Z (CONFIRMED).
+                        auto axis = [&](int k) {                        // UE axis k (0 X, 1 Y, 2 Z) -> glTF unit vector
+                            float a[3] = {0, 0, 0};
+                            if (L.localSpace) for (int c2 = 0; c2 < 3; ++c2) a[c2] = in.R[k][c2];
+                            else a[k] = 1.0f;
+                            core::Vec3 g = ueToGltf(a);
+                            float gl = core::length(g);
+                            return gl > 1e-6f ? g * (1.0f / gl) : core::Vec3{0, 0, 0};
+                        };
+                        const int la = sys.emitters[e].lockAxis;
+                        if (la <= 6) {
+                            // lock 1-6: Pos + (U - 1/2) Size.x (-A) + (V - 1/2) Size.y B; the quad fixed in the A-B plane,
+                            // particle Rotation spins it in-plane. (A, B): X (Z, Y), Y (Z, -X), Z (X, -Y), -X (Z, -Y),
+                            // -Y (Z, X), -Z (X, Y)
+                            static const int aAx[7] = {0, 2, 2, 0, 2, 2, 0}, bAx[7] = {0, 1, 0, 1, 1, 0, 1};
+                            static const float bSg[7] = {0, 1, -1, -1, -1, 1, 1};
+                            core::Vec3 A = axis(aAx[la]), Bv = axis(bAx[la]) * bSg[la];
+                            core::Vec3 R0 = A * -1.0f, U0 = Bv * -1.0f;   // U along -A; V along +B (ay = -B)
+                            float cr = std::cos(q.rot), sr = std::sin(q.rot);
+                            ax = R0 * cr + U0 * sr; ay = U0 * cr - R0 * sr;
+                        } else {
+                            // ROTATE_X/Y/Z: Pos + (U - 1/2) Size.x A + (V - 1/2) Size.y P, P = normalize(cross(C, A));
+                            // ROTATE_*_U: U and V swapped with A negated. Rotation ignored.
+                            const bool swapUV = la >= 10;
+                            core::Vec3 A = axis((la - 7) % 3) * (swapUV ? -1.0f : 1.0f);
+                            core::Vec3 Pv = core::cross(toCam, A);
+                            float pl = core::length(Pv);
+                            if (pl <= 1e-6f) continue;                  // viewed straight down the axis: zero width
+                            Pv = Pv * (1.0f / pl);
+                            if (!swapUV) { ax = A; ay = Pv * -1.0f; } else { ax = Pv; ay = A * -1.0f; }
                         }
+                        aligned = true;
                     }
                     if (!aligned) {
                         float cr = std::cos(q.rot), sr = std::sin(q.rot);

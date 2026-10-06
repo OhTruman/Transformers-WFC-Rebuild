@@ -99,6 +99,8 @@ def system_runtime(name, s):
            'lod_method': s['props'].get('LODMethod', 'PARTICLESYSTEMLODMETHOD_Automatic'), 'emitters': []}
     for e in s['emitters']:
         em = {'name': e['name'], 'max_peak_count': e['props'].get('MaxPeakCount', 1),
+              # M66 emitter-level LockAxisFlags (WFC: no OrientationAxisLock modules; RE pass 5 s15)
+              'lock_axis': e['props'].get('LockAxisFlags', 'EPAL_NONE'),
               'render_mode': e['props'].get('SpriteEmitterRenderMode', 'SERM_Normal'), 'lods': []}
         for L in e['lods']:
             req = L['RequiredModule']['props']

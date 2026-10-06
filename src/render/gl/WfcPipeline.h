@@ -492,7 +492,12 @@ public:
         std::vector<FxBurst> bursts;
         std::vector<FxModule> modules;
     };
-    struct FxEmitter { std::string name; int maxPeak = 1; bool renderable = true; std::vector<FxLod> lods; };
+    struct FxEmitter {
+        std::string name; int maxPeak = 1; bool renderable = true; std::vector<FxLod> lods;
+        // M66 ParticleEmitter.LockAxisFlags: 0 none, 1 X, 2 Y, 3 Z, 4 -X, 5 -Y, 6 -Z, 7..9 ROTATE_X/Y/Z,
+        // 10..12 ROTATE_X/Y/Z_U (WFC)
+        int lockAxis = 0;
+    };
     struct FxSystem { std::string name; std::vector<float> lodDistances; bool directSet = false; std::vector<FxEmitter> emitters; };
 private:
     struct FxParticle {
