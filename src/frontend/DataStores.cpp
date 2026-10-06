@@ -164,10 +164,17 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
             std::to_string(progression::levelForXp(pr.xp[3])), std::to_string(progression::levelForXp(pr.xp[1])),
                           std::to_string(progression::levelForXp(pr.xp[0])), std::to_string(progression::levelForXp(pr.xp[2])),
                           std::to_string(progression::playerLevel(pr))});
-                else
+                else {
+                    // Bots (PC ADAPTATION: the original's scoreboard provider hides bBot PRIs): Gameplay's generated level
+                    // is the summed player level; the played specialty's column shows a quarter of it (0-25).
+                    std::string lv[4] = {"0", "0", "0", "0"};   // Leader, Scientist, Scout, Soldier (column order)
+                    const int sp = progression::specialtyIndex(p.specialty);   // 0 Scout 1 Scientist 2 Soldier 3 Leader
+                    static const int kCol[4] = {2, 1, 3, 0};
+                    if (sp >= 0) lv[kCol[sp]] = std::to_string(std::clamp((p.level + 2) / 4, 0, 25));
                     c.rows.push_back({p.name, std::to_string(p.team), teamNameOf(p.team), std::to_string(p.score),
                                       std::to_string(p.kills), std::to_string(p.deaths), p.dead ? "1" : "0",
-                                      "0", "", "0", "0", "0", "", "", "0", "0", "0", "0", "0"});
+                                      "0", "", "0", "0", "0", "", "", lv[0], lv[1], lv[2], lv[3], std::to_string(p.level)});
+                }
                 c.enabled.push_back(true);
             }
             return true;

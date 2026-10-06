@@ -48,6 +48,26 @@ struct HasMatchTextureRelease<R, std::void_t<decltype(std::declval<R&>().setText
     : std::true_type {};
 constexpr bool kRendererReleasesMatchTextures = HasMatchTextureRelease<render::IRenderer>::value;
 
+// Gameplay agents/gameplay 5151374: MatchPlayer kind (ParticipantKind::Bot) / level / specialty and MatchSettings
+// maxPerTeam / maxPlayers. Detected.
+template <class P, class = void> struct HasParticipantInfo : std::false_type {};
+template <class P>
+struct HasParticipantInfo<P, std::void_t<decltype(std::declval<const P&>().kind == decltype(std::declval<const P&>().kind)::Bot),
+                                         decltype(std::declval<const P&>().level), decltype(std::declval<const P&>().specialty)>>
+    : std::true_type {};
+template <class P> void fillParticipant(const P& mp, frontend::MatchValues::Player& p) {
+    if constexpr (HasParticipantInfo<P>::value) { using Kind = decltype(mp.kind); p.bot = mp.kind == Kind::Bot; p.level = mp.level; p.specialty = mp.specialty; }
+    else { (void)mp; (void)p; }
+}
+template <class S, class = void> struct HasMatchCapacity : std::false_type {};
+template <class S>
+struct HasMatchCapacity<S, std::void_t<decltype(std::declval<const S&>().maxPerTeam), decltype(std::declval<const S&>().maxPlayers)>>
+    : std::true_type {};
+template <class S> bool readCapacity(int& perTeam, int& maxPlayers) {
+    if constexpr (HasMatchCapacity<S>::value) { const S s = S::forMode("TDM"); perTeam = s.maxPerTeam; maxPlayers = s.maxPlayers; return true; }
+    else { (void)perTeam; (void)maxPlayers; return false; }
+}
+
 // Rendering M09 (agents/rendering 73fd427): IRenderer::setFrameLimit(hz) paces presentation (0 = unlimited); the main
 // loop calls waitFrameSlot. Detected; without it the window's own limiter (Win32Window::setFrameLimit) is used.
 template <class R, class = void> struct HasRendererFrameLimit : std::false_type {};
@@ -235,6 +255,13 @@ void Application::attachPresenter() {
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
     // and reported here so the owners can consume LocalProfile when they add the entry points.
     applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
+    {   // Bot Settings limits = Gameplay's capacity (MatchSettings maxPerTeam / maxPlayers) when it provides them
+        int perTeam = 0, maxPlayers = 0;
+        if (readCapacity<game::MatchSettings>(perTeam, maxPlayers)) {
+            frontend_->flow().setBotCapacity(perTeam, maxPlayers);
+            frontend::FlowTrace::emit("lobby.botCapacity", {{"perTeam", std::to_string(perTeam)}, {"maxPlayers", std::to_string(maxPlayers)}, {"owner", "gameplay"}});
+        }
+    }
     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
         applyGamma(renderer_, p.getInt("GammaSetting"));
         if (p.display.frameLimit != appliedFrameLimit_) {   // the Frame Rate Limit selector applies on every step
@@ -918,6 +945,7 @@ void Application::routeMatchToFrontend(float dt) {
         frontend::MatchValues::Player p;
         p.name = mp.name; p.team = mp.team == 255 ? -1 : mp.team; p.score = mp.score; p.kills = mp.kills; p.deaths = mp.deaths;
         p.dead = !mp.alive; p.local = (int)i == me;
+        fillParticipant(mp, p);
         v.players.push_back(p);
     }
     flow.setMatchValues(v);

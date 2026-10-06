@@ -491,7 +491,7 @@ int GameFlow::botMax(const std::string& field) const {
     const int cap = botTeamCapacity();
     if (field == "difficulty") return 2;
     if (botRows() == BotRows::Teams) return field == "friendly" ? cap - 1 : cap;
-    if (botRows() == BotRows::FreeForAll) return field == "enemy" ? 2 * cap - 1 : 0;
+    if (botRows() == BotRows::FreeForAll) return field == "enemy" ? botMaxPlayers_ - 1 : 0;
     return 0;
 }
 
