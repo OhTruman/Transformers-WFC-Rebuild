@@ -3335,6 +3335,25 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - Map / mode / class / lobby: Frontend drives the real lobby flow.
 - WFC_QATEST 7/7 with the gate; without it, every call is refused.
 
+### Weapon start trace (all forms) [CONFIRMED ORIGINAL: script TransGame.TnPlayerPawn.GetWeaponStartTraceLocation, RE]
+- Original: the start trace is ViewLoc + ProjectOnTo(Pawn.Location - ViewLoc, view direction), i.e. the point on the third-person
+  camera's crosshair ray nearest the pawn, in robot, vehicle and plane form. Instant-hit and beam traces run from there along the
+  aim for the weapon range. Fallbacks: no controller → HmPawn.GetPawnViewLocation; AI pawns have their own override.
+- Was: robot shots traced from actor + BaseEyeHeight toward the camera-ray hit point.
+- Now:
+  - robot hitscan and Repair Ray traces start at the projected point along the view direction;
+  - projectiles aim at that trace's hit point;
+  - the vehicle MG uses the same start (24f).
+- Presentation: the hitscan tracer and the Repair Ray ribbon still start at the muzzle.
+- Projectiles (24j): Weapon.ProjectileFire spawns at RealStartLoc = GetMuzzleLoc(), the held weapon mesh's MuzzleFlash socket
+  (WeaponDef muzzle bone + authored offset, posed, at the hand socket), aimed at the start-trace hit point [CONFIRMED ORIGINAL].
+  The held mesh is already per weapon (syncShownWeapon). Pawn eye + 1.5 m is only a fallback when no posed socket exists
+  (mid switch, missing mesh).
+- Fix: the projectile spawn hook added 1.5 m along the aim to every origin. Vehicle rockets therefore started 3 m ahead of their
+  socket (the caller added another 1.5 m). Both offsets are removed: projectiles spawn exactly at the muzzle.
+- WFC_RMUZZLETEST 4/4: Thermo Rocket Launcher, Magma Frag Launcher, Fusion Cannon and Plasma Cannon spawn at the socket (the
+  distance measured after the spawn tick equals one tick of flight). The muzzle is 0.68 / 2.12 / 2.03 / 1.70 m ahead of the hand.
+
 ### Projectile visuals [CONFIRMED ORIGINAL bindings: AssetTools weapon.json projectile_visual, RE projectile_effect_bindings]
 - Was: every projectile drew as an orange box marker.
 - Now each projectile carries its weapon's authored visual (projectiles[0].projectile_visual), resolved by class id, else provider

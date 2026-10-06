@@ -480,6 +480,11 @@ public:
     // Controller fire entry: one shot of w from origin along dir (projectile spawn or one hitscan trace). Inline dispatch
     // through a hook World installs at load, so harnesses that stub World (tools/fidelity) still link with fireHitscan.
     std::function<void(const Weapon&, const core::Vec3&, const core::Vec3&)> weaponFireHook;
+    // Weapon.GetMuzzleLoc for the held robot weapon: its mesh's MuzzleFlash socket (WeaponDef muzzle bone + offset, posed) at
+    // the hand socket. False when the shown mesh is not the active weapon (mid switch) or has no socket.
+    std::function<bool(core::Vec3&)> heldWeaponMuzzleHook;   // installed by World::load (stub harnesses still link)
+    bool heldWeaponMuzzle(core::Vec3& out) const { return heldWeaponMuzzleHook && heldWeaponMuzzleHook(out); }
+    bool heldWeaponMuzzleImpl(core::Vec3& out) const;
     void fireWeapon(const Weapon& w, const core::Vec3& origin, const core::Vec3& dir) {
         if (weaponFireHook) weaponFireHook(w, origin, dir); else fireHitscan(origin, dir);
     }
@@ -616,6 +621,7 @@ public:
     int projectileFxSpawned() const { return projectileFxSpawned_; }
     int projectileFxExplosions() const { return projectileFxExplosions_; }
     size_t liveProjectiles() const { return projectiles_.size(); }
+    core::Vec3 projectilePos(size_t i) const { return i < projectiles_.size() ? projectiles_[i].pos : core::Vec3{0, 0, 0}; }
     const std::string& projectileFlightTemplate(size_t i) const { static const std::string none; return i < projectiles_.size() && projectiles_[i].visual >= 0 ? projVisuals_[(size_t)projectiles_[i].visual].flight : none; }
     bool qaNoclip() const { return qaNoclip_; }
     bool qaGodMode() const { return qaGod_; }

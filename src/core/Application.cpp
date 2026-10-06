@@ -180,7 +180,8 @@ bool Application::init() {
     if (std::getenv("WFC_FINEAIMTEST")) { runFineAimTest(); return false; }   // per-weapon fine aim camera, playtest M10
     if (std::getenv("WFC_QATEST")) { runQaToolTest(); return false; }        // DEV / QA TOOLING self-test (needs WFC_QA=1)
     if (std::getenv("WFC_PROJFXTEST")) { runProjectileFxTest(); return false; }   // projectile FlightEffect / ExplosionEffect binding
-    if (std::getenv("WFC_MUZZLETEST")) { runMuzzleTest(); return false; }          // vehicle weapon Primary / Primary2 alternation   // measurements only
+    if (std::getenv("WFC_MUZZLETEST")) { runMuzzleTest(); return false; }          // vehicle weapon Primary / Primary2 alternation
+    if (std::getenv("WFC_RMUZZLETEST")) { runRobotMuzzleTest(); return false; }    // robot projectiles spawn at the weapon MuzzleFlash socket   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -4130,6 +4131,52 @@ void Application::runMuzzleTest() {
         step(tf); for (int i = 0; i < 180; ++i) step(idle);
     }
     LOG_INFO("MUZZLE SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_RMUZZLETEST: robot projectile weapons spawn their projectile at the held weapon mesh's MuzzleFlash socket
+// (Weapon.ProjectileFire RealStartLoc = GetMuzzleLoc) through the real match spawn + loadout.
+void Application::runRobotMuzzleTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("RMUZZLE %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) step(idle); };
+    struct Case { game::Specialty sp; const char* provider; const char* id; };
+    const Case cases[] = {{game::Specialty::Soldier, "HomingRocket", "RocketLauncher"}, {game::Specialty::Leader, "GrenadeLauncher", "GrenadeLauncher"},
+                          {game::Specialty::Leader, "Bazooka", "Bazooka"}, {game::Specialty::Scout, "PlasmaCannon", "PlasmaCannon"}};
+    for (const Case& c : cases) {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+        world_.launchMatch(L);
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = c.sp; cs.weapons = {c.provider, "HeavyPistol"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+        run(11.0f);
+        game::Character& pc = world_.player().pawn();
+        const std::string held = pc.weapon().def ? pc.weapon().def->id : "?";
+        if (held != c.id) { LOG_INFO("RMUZZLE %s not held on %s (holding %s): skipped", c.id, pc.chassis().id.c_str(), held.c_str()); continue; }
+        core::Vec3 muzzle;
+        const bool have = world_.heldWeaponMuzzle(muzzle);
+        const size_t n0 = world_.liveProjectiles();
+        platform::InputFrame fire; fire.pressed[(int)platform::Button::Fire] = true; fire.down[(int)platform::Button::Fire] = true;
+        core::Vec3 spawned{0, 0, 0}; bool fired = false; core::Vec3 muzzleAtShot = muzzle;
+        for (int i = 0; i < 60 && !fired; ++i) {
+            world_.heldWeaponMuzzle(muzzleAtShot);
+            step(fire);
+            if (world_.liveProjectiles() > n0) { spawned = world_.projectilePos(world_.liveProjectiles() - 1); fired = true; }
+        }
+        const core::Vec3 eye = pc.actorLocation() + core::Vec3{0, pc.robotParams().eyeHeight, 0};
+        const core::Vec3 hand{pc.weaponWorld().m[12], pc.weaponWorld().m[13], pc.weaponWorld().m[14]};
+        // The projectile moves one tick (speed x dt) in the step it spawns: compare against the muzzle within that travel.
+        const float travel = (pc.weapon().projSpeed > 0.0f ? pc.weapon().projSpeed : 0.0f) * dt + 0.05f;
+        const float dMuzzle = core::length(spawned - muzzleAtShot), dEye = core::length(spawned - eye), dHand = core::length(muzzleAtShot - hand);
+        LOG_INFO("RMUZZLE %-15s on %-6s: socket %d, spawn %.2f m from muzzle (tick travel %.2f), %.2f m from eye, muzzle %.2f m from hand",
+                 c.id, pc.chassis().id.c_str(), (int)have, dMuzzle, travel, dEye, dHand);
+        // The muzzle lies ahead of the hand along the aim (barrel end; long weapons reach ~2 m).
+        const float ahead = core::dot(muzzleAtShot - hand, core::forwardFromYawPitch(world_.player().controller().camYaw(), 0.0f));
+        LOG_INFO("RMUZZLE %-15s muzzle %.2f m ahead of the hand", c.id, ahead);
+        check(have && fired && dMuzzle <= travel && dHand < 3.0f && ahead > 0.0f, std::string(c.id) + ": projectile spawns at the weapon MuzzleFlash socket");
+    }
+    LOG_INFO("RMUZZLE SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

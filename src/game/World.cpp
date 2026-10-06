@@ -103,9 +103,10 @@ void World::load(render::IRenderer& renderer) {
     //                        [&renderer](int h, auto& n, const float* v) { return renderer.setParticleEffectParam(h, n, v); },
     //                        [&renderer](int h) { renderer.stopParticleEffect(h); }});
     repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
+    heldWeaponMuzzleHook = [this](core::Vec3& out) { return heldWeaponMuzzleImpl(out); };
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
         if (w.projectile()) {
-            spawnProjectile(o + d * 1.5f, d * w.projSpeed, w, localPlayer_);
+            spawnProjectile(o, d * w.projSpeed, w, localPlayer_);   // Spawn at RealStartLoc (callers pass the muzzle)
             if (player_.pawn().moveForm() == Form::Vehicle) {   // [Systems M08h] the vehicle shot's muzzle flash
                 core::Vec3 vm;
                 spawnVehicleMuzzleFlash(projectiles_.back().weaponClass, vm);
@@ -1145,6 +1146,15 @@ bool World::spawnVehicleMuzzleFlash(const std::string& weaponClass, core::Vec3& 
     return true;
 }
 
+bool World::heldWeaponMuzzleImpl(core::Vec3& out) const {
+    const Weapon& w = player_.pawn().weapon();
+    if (shownWeapon_ != (w.def ? w.def->id : "IonBlaster")) return false;
+    core::Mat4 ms;
+    if (!weaponSocketWorld("MuzzleFlash", ms)) return false;
+    out = {ms.m[12], ms.m[13], ms.m[14]};
+    return true;
+}
+
 bool World::weaponSocketWorld(const char* socket, core::Mat4& out) const {
     if (!weaponAnim_.valid() || !player_.pawn().hasWeapon()) return false;
     core::Mat4 local;
@@ -1281,6 +1291,12 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
 }
 
 void World::tick(float dt) {
+    // PendingMatch: cache each selected body (custom chassis included) during the countdown, before anyone spawns.
+    if (matchActive_ && match_.state() == Match::State::PendingMatch)
+        for (size_t p = 0; p < match_.players().size(); ++p) {
+            const MatchPlayer& mp = match_.players()[p];
+            if (mp.hasSelectedCharacter) chassisAssets(resolveChassis(mp.selection, match_.faction((int)p)));
+        }
     pickupEvents_.clear();
     matchEvents_.clear();
     destructibleEvents_.clear();
@@ -1483,6 +1499,11 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
         return false;
     });
     match_.begin(s);
+    // Load (and prewarm) the eight default MP bodies under the match load, not at a pawn's first spawn mid-match (a first
+    // cache costs the glb load + renderer prewarm, ~130-165 ms). The cache lives as long as this World (the frontend flow builds one
+    // per match, so each match load repeats this). Not original: load scheduling only.
+    for (int sp = 0; sp < 4; ++sp)
+        for (int fa = 0; fa < 2; ++fa) chassisAssets(defaultChassis((Specialty)sp, fa));
     if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");
     if (s.teamGame && (localTeam == 0 || localTeam == 1)) {
         match_.playerMutable(localPlayer_).team = localTeam;   // [integration M08b] the lobby's team (before the login start)
@@ -3612,7 +3633,13 @@ void World::fireRepairBeamImpl(const Weapon& w, const core::Vec3& origin, const 
     MatchOpponent* hit = nullptr;
     for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(origin, dir, best, th) && th < best) { best = th; hit = o; } }
     repairBeam_.active = true; repairBeam_.time = tickSecs * 1.5f;
-    repairBeam_.start = origin; repairBeam_.end = origin + dir * best; repairBeam_.target = hit ? hit->matchPlayer() : -1;
+    // Ribbon start = the muzzle (as the hitscan tracer); the damage trace itself starts on the crosshair ray (origin).
+    core::Vec3 muzzle = origin;
+    { core::Mat4 ms;
+      if (weaponSocketWorld("MuzzleFlash", ms)) muzzle = {ms.m[12], ms.m[13], ms.m[14]};
+      else if (player_.pawn().hasWeapon())
+          muzzle = core::transformPoint(player_.pawn().weaponWorld(), core::Vec3{core::config::kMuzzleLocalX, core::config::kMuzzleLocalY, core::config::kMuzzleLocalZ}); }
+    repairBeam_.start = muzzle; repairBeam_.end = origin + dir * best; repairBeam_.target = hit ? hit->matchPlayer() : -1;
     repairBeam_.healing = false;
     if (!hit || !matchActive_) return;
     if (match_.sameTeam(hit->matchPlayer(), localPlayer_)) {
