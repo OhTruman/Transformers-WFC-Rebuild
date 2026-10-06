@@ -3,6 +3,23 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08q (2026-10-06) - no main-thread decode for large streamed music (match final-stretch hitch)
+- **Problem** (Integration 08n): the first final-stretch music of each match decoded synchronously in World::tick.
+  * DM_FINALSTRETCH_LP is 248 MB of waves: 686 ms, then 159-190 ms in later matches.
+  * This also explains 08m's unattributed 90-111 ms mid-match frames.
+- **Fix** (SoundCues):
+  * A streamed cue played while not resident, with more than 2 MB of waves (match / mode music: 20-248 MB), now decodes on the worker.
+  * Its instance is created waiting (no voices, no timeline) and starts, at age 0, on the tick that adopts the waves.
+  * Small streamed cues (HUD ticks, announcer lines: ~0.1 MB, 1-5 ms) still decode at once, so their timing is unchanged.
+  * A waiting instance that is stopped is retired at once (it never sounds); its late waves are released.
+- **Also fixed:** the silent-layer skip in launch used the runtime level (fade-in from 0, instance volume, a sound-group slider at 0), so such a
+  one-shot dropped its voice and never sounded once the level rose. It now uses authored silence only (-96 dB / curves / envelope).
+- **Measured:**
+  * 08k test tree, DM TimeLimit 75: DM_START and DM_FINALSTRETCH_LP decode on the worker; play call 0.16 ms (was 159-686 ms); they start a few frames later.
+  * Countdown ticks / dialogue decode in 1.4-4.9 ms as before. 0 missing cues, 0 leaks.
+  * Suite 719 / 0 (an unprefetched track starts after ~11 frames, worst tick < 5 ms; stop-while-decoding is silent and leaves nothing resident).
+  * Movie probe OK; lifecycle 40 / 0; slider probe OK; wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS M08p (2026-10-06) - melee hit effects on the victim, kamikaze mines
 - **Melee / whirlwind / slam / ram hits:** the damage type's SharedHitEffectPlayer entry (exact, else nearest ancestor), resolved in the VICTIM's
   SoundEventSet (IMPT_DMG_MELEE_HV / _LT -> BL_MELEE_IMPT.MTL_HV / MTL_LT); bCausesBlood gate; RetriggerTime per victim per entry
