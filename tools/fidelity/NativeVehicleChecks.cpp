@@ -316,6 +316,48 @@ void checkNativeVehicle(Report& r) {
         }
     }
 
+    // ---- JET FLIGHT LEAN: TnPlaneSimulation target = view (+) RLerp(prev, lean target, 0.1) per 30 Hz script tick [CONF RE 59eac82],
+    // lean target from GetNormalizedTurn / GetNormalizedLookUp. A constant right-stick deflection (radial 0.25 deadzone, no temporal
+    // filter) while Flying: each lean component approaches its target geometrically, so the ratio of successive 1/30 s increments
+    // is the per-tick factor (0.9) without needing the target value. Pre-Pass-24n per-60 Hz application reads 0.81.
+    {
+        static game::ChassisDef jet;
+        static const bool jetOk = game::loadChassisDef(Models::assetRoot(), "Jet4", jet);
+        if (!jetOk || jet.vehicle.form != game::VehicleFormType::Jet) {
+            r.skip("jet_lean", jetOk ? "Jet4 chassis is not a Jet vehicle form in this export" : "Jet4 chassis definition unavailable (assets)");
+        } else {
+            BoxScene s; s.floor(0, 800);
+            Rig g(60, false);
+            g.pawn().setChassis(&jet);
+            vehicleOn(g, s.mesh, {0, 20.0f, 0});
+            g.idle(1.0);
+            platform::InputFrame fly = Rig::down({platform::Button::FineAim});   // boost held: Hovering -> Flying
+            g.hold(fly, 0.5);
+            auto& vs = g.pawn().vehicleState();
+            const bool flying = vs.flying;
+            platform::InputFrame stick = fly; stick.padConnected = true; stick.padRX = 1.0f; stick.padRY = 1.0f;
+            std::vector<double> lp, ly, lr;
+            for (int k = 0; k < 9; ++k) { lp.push_back(vs.leanP); ly.push_back(vs.leanY); lr.push_back(vs.leanR); g.step(stick); }
+            auto incRatio = [](const std::vector<double>& x) {   // successive 1/30 s increments: d_j = x[2j+2] - x[2j]
+                double acc = 0; int n = 0;
+                for (size_t j = 0; 2 * j + 4 < x.size(); ++j) {
+                    const double d0 = x[2 * j + 2] - x[2 * j], d1 = x[2 * j + 4] - x[2 * j + 2];
+                    if (std::fabs(d0) > 1e-5) { acc += d1 / d0; ++n; }
+                }
+                return n ? acc / n : -1.0;
+            };
+            if (!flying) r.skip("jet_lean", "the jet did not enter Flying with boost (FineAim) held");
+            else {
+                r.conf("jet_lean.yaw_ratio_per_30hz", incRatio(ly), 0.9, 0.03, "", "RE 59eac82: RLerp(prev, lean, 0.1) per 30 Hz script tick", kGameplay,
+                       "leanY increment ratio per 1/30 s after a right-stick X step while Flying");
+                r.conf("jet_lean.roll_ratio_per_30hz", incRatio(lr), 0.9, 0.03, "", "RE 59eac82: RLerp(prev, lean, 0.1) per 30 Hz script tick", kGameplay,
+                       "leanR increment ratio per 1/30 s after a right-stick X step while Flying");
+                r.conf("jet_lean.pitch_ratio_per_30hz", incRatio(lp), 0.9, 0.03, "", "RE 59eac82: RLerp(prev, lean, 0.1) per 30 Hz script tick", kGameplay,
+                       "leanP increment ratio per 1/30 s after a right-stick Y step while Flying (body pitch below the 45 deg fade)");
+            }
+        }
+    }
+
     // ---- Boost (Driving) jump (P4) -------------------------------------------------------------------
     {
         BoxScene s; s.floor(0, 2000);
