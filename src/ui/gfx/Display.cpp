@@ -1,5 +1,6 @@
 // GFx display list, timelines and player (SWF 8 / AS2 execution order).
 #include "ui/gfx/Display.h"
+#include "core/FrameProfile.h"
 #include "core/Log.h"
 
 #include <algorithm>
@@ -799,6 +800,7 @@ void Player::loadMovieInto(MovieClip* target, const std::string& url, Object* lo
 }
 
 void Player::processLoads() {
+    core::prof::Scope prof("movie.loadClip");
     std::vector<PendingLoad> loads;
     loads.swap(loads_);
     for (PendingLoad& l : loads) {

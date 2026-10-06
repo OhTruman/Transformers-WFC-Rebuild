@@ -185,6 +185,13 @@ private:
     FrontendScene scene_;
     CharacterRoster roster_;
     std::string previewChassis_[2];
+public:
+    // One scene draw while the loading screen still covers it (the renderer's first draw of a new scene compiles its
+    // programs and uploads its textures lazily - a visible stall right after the load otherwise) [PC ADAPTATION].
+    void prewarmSceneOnce() { prewarmScene_ = true; }
+    bool sceneDrawable() const { return sceneDrawable_; }
+private:
+    bool prewarmScene_ = false;
     std::map<std::string, bool> emblemOn_;   // scene.emblem trace state (actor.param -> above the midpoint)   // the chassis each preview controller shows (last UpdatePreviewCharacter)
     BridgeValue customize(const std::string& fn, const std::vector<std::string>& args);
     DisplayHooks display_;

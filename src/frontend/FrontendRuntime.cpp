@@ -1,4 +1,5 @@
 #include "frontend/FrontendRuntime.h"
+#include "core/FrameProfile.h"
 #include "frontend/FlowTrace.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -668,11 +669,12 @@ void FrontendRuntime::updateAudio(float dt) {
         if (const MapInfo* mi = catalog_.mapByFilename(dest)) dest = mi->runtimeDir;
         if (!dest.empty() && dest != prefetched_) {
             prefetched_ = dest;
+            core::prof::Scope prof("audio.prefetch");
             if (audio_) audio_->prefetchLevel(dest);
             FlowTrace::emit("audio.prefetch", {{"level", dest}});
         }
     } else prefetched_.clear();
-    if (audio_) audio_->tick(dt);
+    if (audio_) { core::prof::Scope prof("audio.tick"); audio_->tick(dt); }
 }
 
 void FrontendRuntime::runNativeShims() {
@@ -884,7 +886,9 @@ void FrontendRuntime::updateLoading(float dt) {
 
 void FrontendRuntime::draw(int w, int h) {
     // A full-screen movie hides the game presentation (BeginMovieMode): the scene is not drawn under it.
-    if (sceneRenderer_ && sceneDrawable_ && !fullScreenMovie_ && !sceneLoading_) {
+    bool prewarm = prewarmScene_;
+    prewarmScene_ = false;
+    if (sceneRenderer_ && sceneDrawable_ && !fullScreenMovie_ && (!sceneLoading_ || prewarm)) {
         for (const SceneChange& c : scene_.takeChanges()) {
             if (c.kind == SceneChange::Effect) sceneRenderer_->setEffectActive(c.actor, c.value);
             else sceneRenderer_->setActorHidden(c.actor, c.value);
@@ -901,7 +905,7 @@ void FrontendRuntime::draw(int w, int h) {
                 }
             }
         }
-        if (v.valid) sceneRenderer_->draw(v, w, h);
+        if (v.valid) { core::prof::Scope prof("scene.draw"); sceneRenderer_->draw(v, w, h); }
     }
     static const bool sceneOnly = std::getenv("WFC_SCENE_ONLY") != nullptr;   // diagnostics: the 3D layer alone
     if (sceneOnly) return;

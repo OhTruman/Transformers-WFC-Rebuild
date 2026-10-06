@@ -1,4 +1,5 @@
 #include "core/FrontendSceneGL.h"
+#include "core/FrameProfile.h"
 
 #include <chrono>
 #include "assets/Gltf.h"
@@ -75,6 +76,7 @@ template <class R> bool nativePosedBody(R& r, const FrontendSceneGL::PreviewSlot
                 bodies.erase(victim);
             }
             FrontendSceneGL::CachedBody cb;
+            core::prof::Scope prof("preview.body");
             cb.handle = r.loadPreviewBody(s.gltf, s.animSets, "Cust_Idle");
             it = bodies.emplace(key, cb).first;
         }
@@ -94,7 +96,8 @@ template <class R> void nativePreviewDraw(R& r, const FrontendSceneGL::PreviewSl
             auto it = cache.find(g);
             if (it == cache.end()) {
                 render::MeshData m;
-                if (!r.loadContentMesh(g, m)) LOG_WARN("frontend preview: %s did not load", g.c_str());
+                core::prof::Scope prof("preview.mesh");
+            if (!r.loadContentMesh(g, m)) LOG_WARN("frontend preview: %s did not load", g.c_str());
                 it = cache.emplace(g, std::move(m)).first;
             }
             mesh = &it->second;
@@ -186,6 +189,7 @@ std::string FrontendSceneGL::familyFor(const std::string& uiLevel) {
 }
 
 bool FrontendSceneGL::load(const std::vector<std::string>& levels) {
+    core::prof::Scope prof("scene.load");
     if (!r_ || levels.empty()) return false;
     const std::string family = familyFor(levels.front());   // the persistent level names the family folder
     if (family == family_) return mesh_ != render::kInvalidMesh;

@@ -1,4 +1,5 @@
 #include "ui/gl/GfxRendererGL.h"
+#include "core/FrameProfile.h"
 #include "render/gl/GLExt.h"
 #include "platform/Image.h"
 #include "core/Log.h"
@@ -386,6 +387,7 @@ void GfxRendererGL::end() {
 }
 
 const GfxRendererGL::Cached& GfxRendererGL::cache(const gfx::ShapeDef* s, bool glyph) {
+    core::prof::Scope prof("gfx.shapeCache");
     auto key = std::make_pair(s, glyph);
     auto it = shapes_.find(key);
     if (it != shapes_.end()) return it->second;
@@ -443,6 +445,7 @@ unsigned GfxRendererGL::texture(const std::string& path, int& w, int& h) {
     if (it != textures_.end()) { w = it->second.w; h = it->second.h; return it->second.id; }
     Tex t;
     render::ImageData img;
+    core::prof::Scope prof("gfx.image");
     if (!path.empty() && platform::decodeImage(path, img) && img.w > 0) {
         glGenTextures(1, &t.id);
         glBindTexture(GL_TEXTURE_2D, t.id);

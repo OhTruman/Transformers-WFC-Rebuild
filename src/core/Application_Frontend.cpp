@@ -2,6 +2,7 @@
 // The flow itself (levels, lobbies, URLs, UI controller) is src/frontend/GameFlow; this file only owns the
 // process loop: frontend frames, loading the match world the flow launches, and releasing it on return.
 #include "core/Application.h"
+#include "core/FrameProfile.h"
 #include "core/FrontendSceneGL.h"
 #include "core/LoadYield.h"
 #include "core/Log.h"
@@ -287,6 +288,13 @@ void Application::attachPresenter() {
         load();
         setRendererYield(renderer_, false);
         core::setLoadYield(nullptr);
+        if (frontend_->sceneDrawable()) {   // the new scene's first (costly) draw happens under the loading screen
+            core::prof::Scope prof("scene.prewarm");
+            platform::InputFrame in;
+            window_->pump(in);
+            frontend_->prewarmSceneOnce();
+            drawFrontendFrame();
+        }
     };
     frontend_->script().displayHook = [this](int w, int h, bool full) { window_->setDisplayMode(w, h, full); };
     frontend_->script().dumpHook = [this](const std::string& m) {
@@ -308,7 +316,18 @@ void Application::drawFrontendFrame() {
     ui::beginScreenFrame(window_->width(), window_->height());
     frontend_->draw(window_->width(), window_->height());
     if (!pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }
-    window_->present();
+    {   core::prof::Scope prof("present"); window_->present(); }
+    {   // WFC_FRAMEPROF: the gap between two presented frames (main loop and load yields alike), with what ran in it
+        static double lastPresent = 0;
+        double t = core::prof::now();
+        if (lastPresent > 0) {
+            std::string hitch = core::prof::frameEnd(t - lastPresent);
+            if (!hitch.empty())
+                LOG_INFO("FLOW frame.hitch %s level=%s movie=%s", hitch.c_str(), frontend::levelKindName(frontend_->flow().level()),
+                         frontend_->flow().ui().openMovie().c_str());
+        } else core::prof::frameEnd(0);
+        lastPresent = t;
+    }
 }
 
 void Application::runFrontend() {
@@ -323,13 +342,18 @@ void Application::runFrontend() {
         // ---- frontend levels (and the loading screen up to the match load) ----
         bool quit = false;
         for (;;) {
-            if (!window_->pump(input)) { quit = true; break; }
+            bool pumped;
+            { core::prof::Scope prof("pump"); pumped = window_->pump(input); }
+            if (!pumped) { quit = true; break; }
             double now = nowSeconds();
             double dt = now - last;
             last = now;
             if (dt > 0.25) dt = 0.25;
             if (lockstep) dt = 1.0 / 60.0;
-            frontend_->update(input, (float)dt);
+            {
+                core::prof::Scope prof("+frontend.update");
+                frontend_->update(input, (float)dt);
+            }
             if (flow.quitRequested()) { quit = true; break; }
             drawFrontendFrame();
             titleTimer += dt;
