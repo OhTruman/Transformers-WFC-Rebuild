@@ -1173,6 +1173,26 @@ void World::setRollerMineAudio(bool alive, float t, const core::Vec3& pos) {
     abilityAudio_.rollerMine(cues_, alive, t, pos, core::length(pos - listenerPos_));
 }
 
+void World::setGuidedMissileAudio(bool alive, const core::Vec3& pos) {
+    abilityAudio_.guidedMissile(cues_, alive, pos, core::length(pos - listenerPos_));
+}
+
+void World::setBarrierAudio(bool alive, bool fading, const core::Vec3& pos) {
+    abilityAudio_.barrier(cues_, alive, fading, pos, core::length(pos - listenerPos_));
+}
+
+void World::setSentryAudio(bool alive, int target, const core::Vec3& pos) {
+    abilityAudio_.sentry(cues_, alive, target, pos, core::length(pos - listenerPos_));
+}
+
+void World::onSentryShot(const core::Vec3& muzzle, bool worldHit, const core::Vec3& hit) {
+    abilityAudio_.sentryShot(cues_, muzzle, core::length(muzzle - listenerPos_), worldHit, hit, core::length(hit - listenerPos_));
+}
+
+void World::onGuidedMissileExploded(const core::Vec3& pos) {
+    abilityAudio_.guidedMissileExploded(cues_, pos, core::length(pos - listenerPos_));
+}
+
 void World::onRollerMineExploded(const core::Vec3& pos) { abilityAudio_.rollerMineExploded(cues_, pos, core::length(pos - listenerPos_)); }
 
 void World::onActionClip(const std::string& clip, float t) {

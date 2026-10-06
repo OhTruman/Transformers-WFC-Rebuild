@@ -322,7 +322,8 @@ for (path,) in c.execute("select path from types where path like 'TransGame.TnBu
 # (_HoverLoopSound / _HoverCooldownSound), TnRollerMine (_IdleLoopingSound / _BuildupSound / _ExplosionSound),
 # TnRollerMineAbility (ArmSound) [CONF data].
 class_sounds = {}
-for path in ('TransGame.TnPlayerController', 'TransGame.TnAcrobaticsManager', 'TransGame.TnRollerMine', 'TransGame.TnRollerMineAbility'):
+for path in ('TransGame.TnPlayerController', 'TransGame.TnAcrobaticsManager', 'TransGame.TnRollerMine', 'TransGame.TnRollerMineAbility',
+             'TransGame.TnBarrierSpawnable', 'TransGame.TnSentryPawnAbility', 'TransGame.TnAmmoCratePickup'):
     chain, t = [], path
     while t:
         chain.append(t); t = type_super(t)
@@ -333,6 +334,24 @@ for path in ('TransGame.TnPlayerController', 'TransGame.TnAcrobaticsManager', 'T
             if 'Sound' in k and isinstance(v, str) and v and v != 'None' and '.' in v: out[k] = v
     class_sounds[path.split('.')[-1]] = out
     all_cues |= set(out.values())
+# Actors whose sounds live on a referenced mesh: TnGuidedMissile.Mesh (TnProjectileMesh FlightSound / ExplosionSound) and the
+# sentry ability's weapon (Default_TURRETDEF WeaponClass TnWeaponDefaultSentryAbility -> WeaponMeshTemplate WeaponEventSounds +
+# DefaultImpactSound) [CONF data].
+_, gm = props('TransGame.Default__TnGuidedMissile')
+_, gmm = props(gm.get('Mesh') or '')
+class_sounds['TnGuidedMissile'] = {k: gmm[k] for k in ('FlightSound', 'ExplosionSound') if gmm.get(k)}
+_, sw = props('TransGame.Default__TnWeaponDefaultSentryAbility')
+_, swm = props(sw.get('WeaponMeshTemplate') or '')
+sws = {e['WeaponEventType']: e['WeaponSound'] for e in (swm.get('WeaponEventSounds') or []) if e.get('WeaponSound')}
+if swm.get('DefaultImpactSound'): sws['DefaultImpactSound'] = swm['DefaultImpactSound']
+class_sounds['TnWeaponDefaultSentryAbility'] = sws
+for k in ('TnGuidedMissile', 'TnWeaponDefaultSentryAbility'): all_cues |= set(class_sounds[k].values())
+# The sentry's destructible (Sentry_DSYS; the Rocket / Repair variants author the same): its Destroyed state's
+# HmSoundDestructionEffectFactory cue (TerminateSoundOnExitState false) [CONF data, RE pass 5 s12 addendum 4].
+_ds = c.execute("select props from objects where opath like 'WEP_SentryAbility_p.Sentry_DSYS.%' and class='HmSoundDestructionEffectFactory'").fetchone()
+if _ds and json.loads(_ds[0]).get('Cue'):
+    class_sounds['TnSentryPawnAbility']['DestroyedSound'] = json.loads(_ds[0])['Cue']
+    all_cues.add(class_sounds['TnSentryPawnAbility']['DestroyedSound'])
 
 # cue trees (same format as the level manifests)
 import importlib

@@ -181,3 +181,9 @@ It was dry-run against integration/milestone-08h a1388fa after applying the bran
 
 `docs/handoff/SYSTEMS_M08L_action_layer_glue.patch`, applied after the M08k patch.
 It adds two read-only Character accessors (actionClipIndex / actionTime) and two per-tick calls in tickAbilityAudio.
+
+## M08m: guided missile, barrier, sentry (glue)
+
+`docs/handoff/SYSTEMS_M08M_ability_actors_glue.patch`, applied after M08l. It adds 3 per-tick calls in tickAbilityAudio, the onGuidedMissileExploded call in detonateGuidedMissile, and onSentryShot in tickSentry's fire.
+
+Default loudness is decided: keep 80 / 80 / 80 -> 0.8 (the original; about -1.9 dB vs pre-M08g). No change.

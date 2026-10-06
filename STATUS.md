@@ -3,6 +3,32 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08m (2026-10-06) - guided missile, barrier, sentry sounds; default loudness decided
+- **Guided missile** (TnGuidedMissile.Mesh = GuidedMissile_PROJMESH): FlightSound SHOOT_TRAIL from launch, following the missile;
+  on detonation the flight fades 0.25 s and ExplosionSound EXPL_IMPT_WORLD plays (HmProjectile, as the weapon projectiles).
+- **Barrier** (TnBarrierSpawnable, RE pass 5 s12 addendum 3):
+  * BARRIER_LP from spawn until the actor goes;
+  * BARRIER_RETRACT once when health reaches 0 (damage or the DegenRate lifetime);
+  * a re-cast / owner-death removal is silent.
+- **Sentry** (TnSentryPawnAbility, addenda 3 / 4):
+  * SENTRY_ACTIVATE_LP from deploy; POSTDEPLOY on every EnemyAcquired;
+  * each shot TnWeaponDefaultSentryAbility WP_Fire SENTRY_SHOOT, plus SENTRY_IMPT on world hits;
+  * destroyed (damage or the 30 s lifetime): the loop fades 0.25 s, then Sentry_DSYS's SENTRY_EXPL. The owner-death Kill() path is HIGH.
+- **Not wired:**
+  * TnAmmoCratePickup.PickupSound: Gameplay's SpawnAmmoCrate drops TnDroppedPickupAmmoBeacon (a damage buff, no sound); no crate pickup exists.
+  * The decoy trap: not simulated by Gameplay.
+- **Data:** class_sounds gains TnBarrierSpawnable / TnSentryPawnAbility (+ the Sentry_DSYS DestroyedSound) / TnAmmoCratePickup /
+  TnGuidedMissile / TnWeaponDefaultSentryAbility. The generator lines for these came from a parallel Systems session (rebuild-systems-7b),
+  which stopped by our user's decision; this session merged its work.
+- **Glue:** `docs/handoff/SYSTEMS_M08M_ability_actors_glue.patch` (after M08l): the per-tick missile / barrier / sentry state, detonation, and sentry shots.
+- **In game** (08h + gameplay + systems test tree):
+  * Truck6 missile: SHOOT_BUILDUP -> SHOOT_TRAIL -> EXPL_IMPT_WORLD.
+  * Car4 barrier: DEPLOY -> LP -> RETRACT at ~67 s.
+  * Car7 sentry: ACTIVATE -> LP -> EXPL at 30 s.
+  * 0 missing cues, 0 leaks. Suite 691 / 0 (new [guided missile, barrier, sentry]); wfc_fidelity 194 / 0 / 19.
+- **Default loudness: decided** (our user, relayed by the parallel session). Keep the original profile defaults 80 / 80 / 80 -> 0.8 per
+  sound group (about -1.9 dB vs pre-M08g builds), as M08g ships. Closed.
+
 ## SYSTEMS M08l (2026-10-06) - action-layer sound notifies: melee swings, ability animations, whirlwind
 - `RobotFoley::actionLayer`: Gameplay's one-shot action clip (playAction: Melee_*, Skill_AbilityJammer / _Barrier / _GuidedMissile /
   _MarkTarget, Transform_Whirlwind_ROBO, GrenadeThrow) fires its authored AnimNotify_Sound / SoundEvent notifies as it plays.

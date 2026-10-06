@@ -2227,12 +2227,54 @@ static void testChargeAndRoller() {
           "removed without exploding (owner death / kill-Z): loop stops, nothing else");
 }
 
+// Guided missile, barrier, sentry (M08m; RE pass 5 s12 addenda 3 / 4).
+static void testAbilityActors() {
+    std::printf("[guided missile, barrier, sentry]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    game::CharacterAudio::loadAbilityCues(cues);
+    game::AbilityAudio aa;
+    auto active = [&](const char* q) { return cues.activeInstances(q); };
+    auto settle = [&](float s) { for (float t = 0; t < s; t += 1.0f / 30.0f) cues.tick(1.0f / 30.0f); };
+    const Vec3 p{5, 0, 0};
+    aa.guidedMissile(cues, true, p, 5.0f);
+    CHECK(active("BL_WPN_GUN_GUIDED_MISSILE.SHOOT_TRAIL") == 1, "missile launched: FlightSound SHOOT_TRAIL");
+    aa.guidedMissileExploded(cues, p, 5.0f); aa.guidedMissile(cues, false, p, 5.0f); settle(0.4f);
+    CHECK(active("BL_WPN_GUN_GUIDED_MISSILE.SHOOT_TRAIL") == 0 && active("BL_WPN_GUN_GUIDED_MISSILE.EXPL_IMPT_WORLD") == 1,
+          "detonated: flight faded (0.25 s), ExplosionSound");
+    // Barrier: loop from spawn; retract once at health 0; the loop stops with the actor; a silent removal plays nothing.
+    aa.barrier(cues, true, false, p, 5.0f);
+    CHECK(active("BL_TRANS_POWER.BARRIER_LP") == 1, "barrier up: BARRIER_LP");
+    aa.barrier(cues, true, true, p, 5.0f); aa.barrier(cues, true, true, p, 5.0f);
+    CHECK(active("BL_TRANS_POWER.BARRIER_RETRACT") == 1 && active("BL_TRANS_POWER.BARRIER_LP") == 1, "health 0: BARRIER_RETRACT once, loop until gone");
+    aa.barrier(cues, false, false, p, 5.0f); settle(0.1f);
+    CHECK(active("BL_TRANS_POWER.BARRIER_LP") == 0, "fade over: the loop stops");
+    const int retract0 = active("BL_TRANS_POWER.BARRIER_RETRACT");
+    aa.barrier(cues, true, false, p, 5.0f); aa.barrier(cues, false, false, p, 5.0f); settle(0.1f);
+    CHECK(active("BL_TRANS_POWER.BARRIER_LP") == 0 && active("BL_TRANS_POWER.BARRIER_RETRACT") <= retract0,
+          "re-cast / owner death removal: the loop stops, no retract");
+    // Sentry: idle loop, POSTDEPLOY on every EnemyAcquired, shots + world impacts, destroyed -> fade + SENTRY_EXPL.
+    aa.sentry(cues, true, -1, p, 5.0f);
+    CHECK(active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP") == 1, "sentry deployed: SENTRY_ACTIVATE_LP");
+    aa.sentry(cues, true, 3, p, 5.0f); aa.sentry(cues, true, 3, p, 5.0f); aa.sentry(cues, true, -1, p, 5.0f); aa.sentry(cues, true, 4, p, 5.0f);
+    CHECK(active("BL_TRANS_POWER.SENTRY_ACTIVATE_POSTDEPLOY") == 2, "EnemyAcquired twice (target 3, lost, target 4): POSTDEPLOY x2 (%d)",
+          active("BL_TRANS_POWER.SENTRY_ACTIVATE_POSTDEPLOY"));
+    aa.sentryShot(cues, p, 5.0f, true, Vec3{20, 0, 0}, 20.0f); aa.sentryShot(cues, p, 5.0f, false, Vec3{20, 0, 0}, 20.0f);
+    CHECK(active("BL_TRANS_POWER.SENTRY_SHOOT") >= 1 && active("BL_TRANS_POWER.SENTRY_IMPT") == 1, "shots: SENTRY_SHOOT each, SENTRY_IMPT on the world hit only");
+    aa.sentry(cues, false, -1, p, 5.0f); settle(0.4f);
+    CHECK(active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP") == 0 && active("BL_TRANS_POWER.SENTRY_EXPL") == 1, "destroyed: loop fades, SENTRY_EXPL");
+    aa.sentry(cues, true, -1, p, 5.0f); aa.barrier(cues, true, false, p, 5.0f); aa.guidedMissile(cues, true, p, 5.0f);
+    aa.stopAll(cues); settle(0.1f);
+    CHECK(active("BL_TRANS_POWER.SENTRY_ACTIVATE_LP") == 0 && active("BL_TRANS_POWER.BARRIER_LP") == 0 &&
+          active("BL_WPN_GUN_GUIDED_MISSILE.SHOOT_TRAIL") == 0, "stopAll: sentry / barrier / missile loops stop");
+}
+
 int main() {
     for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // authored levels
     testSoundGroups();
     testAbilityAudio();
     testLevelWarm();
     testChargeAndRoller();
+    testAbilityActors();
     testCountdownAndGrenades();
     testWeaponAudio();
     testLocalizedWaves();

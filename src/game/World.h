@@ -137,6 +137,13 @@ public:
     // The local roller mine every tick (alive, age s, position) and its explosion.
     void setRollerMineAudio(bool alive, float t, const core::Vec3& pos);
     void onRollerMineExploded(const core::Vec3& pos);
+    // The local guided missile every tick (alive, position) and its detonation.
+    void setGuidedMissileAudio(bool alive, const core::Vec3& pos);
+    void onGuidedMissileExploded(const core::Vec3& pos);
+    // The local barrier (alive, fading = health 0) and sentry (alive, target -1 none) every tick; each sentry shot.
+    void setBarrierAudio(bool alive, bool fading, const core::Vec3& pos);
+    void setSentryAudio(bool alive, int target, const core::Vec3& pos);
+    void onSentryShot(const core::Vec3& muzzle, bool worldHit, const core::Vec3& hit);
     // Drain, every tick while the local Drain buff runs: targets this tick (HealSound), and each victim (DamageSound).
     void onDrainTick(int targets);
     void onDrainVictimTick(const core::Vec3& victimPos);
