@@ -155,3 +155,14 @@ Note for playtests: at the default profile (80) all game audio is now 0.8 (about
 Separate patch against integration/milestone-08g: `docs/handoff/SYSTEMS_M08H_vehicle_muzzle_glue.patch` (World.cpp / World.h,
 `git apply --ignore-whitespace` or `patch -p1 --ignore-whitespace`). Uses Gameplay's noteVehicleShot state; no Gameplay or
 Rendering change. The unused beamSinceShot_ / beamInterval_ / beamClassFiring_ members Integration noted can be deleted freely.
+
+## M08i: ability / buff sounds
+
+Merge agents/systems first (AbilityAudio, CharacterAudio data, World hooks). Then apply
+`docs/handoff/SYSTEMS_M08I_ability_audio_glue.patch` (`patch -p1 --ignore-whitespace`).
+
+The patch touches four Gameplay-side files:
+* PlayerController.h / .cpp: read-only audio pulses (abilityTriggerCount + lastTriggeredAbility, abilitiesJammedCount, transformFailedCount). They're counted where Gameplay already accepts or refuses; there is no behaviour change.
+* World.cpp / .h: `tickAbilityAudio()` after tickAbilityEffects, drain per-victim / per-tick calls, and the PlayerKilled kill confirm.
+
+It was dry-run against integration/milestone-08h a1388fa after applying the branch's World diff: 0 failed hunks. The snapshot test used a test-only WFC_AUTOABILITY1, which is not in the patch.

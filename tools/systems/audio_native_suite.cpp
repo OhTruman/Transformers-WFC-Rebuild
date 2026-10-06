@@ -11,6 +11,7 @@
 #include "game/FrontendAudio.h"
 #include "game/LevelAudioHost.h"
 #include "game/FrontendAudioRuntime.h"
+#include "game/AbilityAudio.h"
 #include "game/CharacterAudio.h"
 #include "game/WeaponAudio.h"
 #include "audio/MovieAudio.h"
@@ -2038,9 +2039,110 @@ static void testSoundGroups() {
     for (const char* g : {"SFX", "DIALOG", "MUSIC"}) M::setGroupVolume(g, 1.0f);   // the rest of the suite: authored levels
 }
 
+// Ability / buff sounds (RE pass 5 s12): OnTriggerSound on success; buff Apply loop / Unapply; CanPlaySounds; cloak team cues.
+static void testAbilityAudio() {
+    std::printf("[ability / buff sounds]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    const int added = game::CharacterAudio::loadAbilityCues(cues);
+    CHECK(added >= 29 && game::CharacterAudio::loadAbilityCues(cues) == 0, "ability / buff / class cues load once (%d)", added);
+    game::AbilityAudio aa;
+    const game::SoundCues::Emitter at{Vec3{0, 0, 0}, game::SoundCues::kWorld, {0, 0, 0}, ""};
+    auto active = [&](const char* q) { return cues.activeInstances(q); };
+    // OnTriggerSound by class; abilities without one play nothing (their audio is anim notifies / buffs / spawned actors).
+    CHECK(aa.abilityTriggered(cues, "Barrier", at, 5.0f) >= 0 && active("BL_TRANS_POWER.BARRIER_DEPLOY") == 1,
+          "Barrier trigger: OnTriggerSound BARRIER_DEPLOY at the pawn");
+    CHECK(aa.abilityTriggered(cues, "TnAbilitySpawnAmmoCrate", at, 5.0f) >= 0 && active("BL_TRANS_POWER.AMMO_DEPLOY") == 1 &&
+          aa.abilityTriggered(cues, "Drain", at, 5.0f) >= 0 && active("BL_TRANS_POWER.DRAIN_INITIATE") == 1,
+          "SpawnAmmoCrate / Drain triggers: AMMO_DEPLOY / DRAIN_INITIATE");
+    CHECK(aa.abilityTriggered(cues, "Cloaking", at, 5.0f) < 0 && aa.abilityTriggered(cues, "Hover", at, 5.0f) < 0 &&
+          aa.abilityTriggered(cues, "Dodge", at, 5.0f) < 0, "Cloaking / Hover / Dodge author no OnTriggerSound: nothing");
+    cues.stopAll();
+
+    // Cloak (OnlyPlaySoundOnLocalPlayer False): heard for any pawn, the BUFFED pawn's team picks the cue; a loop until unapply.
+    game::AbilityAudio::Owner me; me.key = 1; me.local = true; me.team = 0; me.at = at;
+    game::AbilityAudio::Owner foe; foe.key = 2; foe.local = false; foe.team = 1; foe.at = at;
+    CHECK(aa.setBuff(cues, "TnBuffCloak", me, true) && active("BL_INTRFC_TECH_TREE.CLOAK_AUTOBOT_START_LP") == 1,
+          "local Autobot cloak: CLOAK_AUTOBOT_START_LP");
+    CHECK(aa.setBuff(cues, "TnBuffCloak", foe, true) && active("BL_INTRFC_TECH_TREE.CLOAK_DECEPTICON_START_LP") == 1,
+          "a remote Decepticon's cloak is heard too (OnlyPlaySoundOnLocalPlayer False), Decepticon cue by the buffed pawn's team");
+    CHECK(!aa.setBuff(cues, "TnBuffCloak", me, true) && active("BL_INTRFC_TECH_TREE.CLOAK_AUTOBOT_START_LP") == 1,
+          "re-apply while playing: no restart, no second instance");
+    for (int k = 0; k < 90; ++k) cues.tick(1.0f / 30.0f);
+    CHECK(active("BL_INTRFC_TECH_TREE.CLOAK_AUTOBOT_START_LP") == 1 && aa.liveLoops(cues) == 2, "3 s later both cloak loops still play");
+    aa.setBuff(cues, "TnBuffCloak", me, false);
+    cues.tick(1.0f / 30.0f);
+    CHECK(active("BL_INTRFC_TECH_TREE.CLOAK_AUTOBOT_START_LP") == 0 && active("BL_INTRFC_TECH_TREE.CLOAK_AUTOBOT_OFF") == 1,
+          "unapply: the loop stops, CLOAK_AUTOBOT_OFF plays");
+
+    // Default buffs (OnlyPlaySoundOnLocalPlayer True): only the buffed local player hears them.
+    CHECK(!aa.setBuff(cues, "TnBuffWarcryBase", foe, true) && active("BL_TRANS_POWER.WAR_CRY_STATE_START") == 0,
+          "a remote pawn's Warcry buff: silent here");
+    CHECK(aa.setBuff(cues, "TnBuffWarcry1", me, true) && active("BL_TRANS_POWER.WAR_CRY_STATE_START") == 1,
+          "the local player's Warcry1 (inherits WarcryBase): WAR_CRY_STATE_START");
+    aa.setBuff(cues, "TnBuffWarcry1", me, false);
+    CHECK(active("BL_TRANS_POWER.WAR_CRY_STATE_STOP") == 1, "Warcry ends: WAR_CRY_STATE_STOP");
+    // Death: the loop stops with no Unapply sound.
+    CHECK(aa.setBuff(cues, "TnBuffFlashBangRobot", me, true) && active("BL_WPN_GRENADE.EMP_STATIC_DISCHARGE_VICTIM_LP") == 1,
+          "EMP victim (local): EMP_STATIC_DISCHARGE_VICTIM_LP");
+    aa.pawnDied(cues, me.key);
+    aa.setBuff(cues, "TnBuffFlashBangRobot", me, false);
+    cues.tick(1.0f / 30.0f);
+    CHECK(active("BL_WPN_GRENADE.EMP_STATIC_DISCHARGE_VICTIM_LP") == 0 && active("BL_WPN_GRENADE.EMP_STATIC_DISCHARGE_VICTIM_STOP") == 0,
+          "owner death: the loop stops, no _STOP (Unapply) sound");
+
+    // Drain: HealSound per tick on the drainer's own machine while it has targets; DamageSound per tick at each victim.
+    const int h0 = rec.n;
+    CHECK(aa.drainSourceTick(cues, at, 0.0f, true, 1) >= 0 && aa.drainSourceTick(cues, at, 0.0f, true, 0) < 0 &&
+          aa.drainSourceTick(cues, at, 0.0f, false, 2) < 0, "DRAIN_HEAL: local drainer with >= 1 target only");
+    CHECK(aa.drainTargetTick(cues, Vec3{3, 0, 0}, 3.0f) >= 0 && rec.n > h0, "DRAIN_DAMAGE at the victim each tick");
+    for (int k = 0; k < 30; ++k) { aa.drainSourceTick(cues, at, 0.0f, true, 1); cues.tick(1.0f / 30.0f); }
+    CHECK(active("BL_TRANS_POWER.DRAIN_HEAL") <= 6, "per-tick DRAIN_HEAL stays within MaxConcurrentPlayCount 6 (%d live)",
+          active("BL_TRANS_POWER.DRAIN_HEAL"));
+    // Abilities blocked (jammed): AbilitiesJammedSound.
+    CHECK(aa.abilitiesJammed(cues, at) >= 0 && active("BL_TRANS_POWER.ENERGON_SLING_ABILITYFAILURE") == 1,
+          "jammed ability press: ENERGON_SLING_ABILITYFAILURE");
+    // Hover: JumpingToHover starts the loop, it carries into Hovering, leaving Hovering fades it (0.5 s) + HOVER_JUMP_LAND.
+    aa.hoverState(cues, 1, at, 0.0f);
+    CHECK(active("BL_TRANS_POWER.HOVER_JUMP_LIFT") == 1, "JumpingToHover: HOVER_JUMP_LIFT loop starts");
+    for (int k = 0; k < 30; ++k) cues.tick(1.0f / 30.0f);
+    aa.hoverState(cues, 2, at, 0.0f);
+    for (int k = 0; k < 60; ++k) cues.tick(1.0f / 30.0f);
+    CHECK(active("BL_TRANS_POWER.HOVER_JUMP_LIFT") == 1 && active("BL_TRANS_POWER.HOVER_JUMP_LAND") == 0, "into Hovering: the loop carries on, no land yet");
+    aa.hoverState(cues, 0, at, 0.0f);
+    CHECK(active("BL_TRANS_POWER.HOVER_JUMP_LAND") == 1, "Hovering ends: HOVER_JUMP_LAND");
+    for (int k = 0; k < 20; ++k) cues.tick(1.0f / 30.0f);
+    CHECK(active("BL_TRANS_POWER.HOVER_JUMP_LIFT") == 0, "the lift loop faded out (0.5 s)");
+    aa.hoverState(cues, 1, at, 0.0f); aa.hoverState(cues, 0, at, 0.0f);
+    cues.tick(1.0f / 30.0f);
+    CHECK(active("BL_TRANS_POWER.HOVER_JUMP_LAND") <= 1, "JumpingToHover aborted (not via Hovering): fade only, no extra land");
+    for (int k = 0; k < 20; ++k) cues.tick(1.0f / 30.0f);          // the aborted loop's 0.5 s fade completes
+    aa.hoverState(cues, 1, at, 0.0f);
+    aa.pawnDied(cues, 0);
+    cues.tick(1.0f / 30.0f);
+    CHECK(active("BL_TRANS_POWER.HOVER_JUMP_LIFT") == 0, "death while hovering: the loop stops, no land");
+    // Kill confirm (the killer, 2D): headshot > victim robot form > SoldierJet > SoldierCar > other vehicle (by character class).
+    const struct { bool hs, robot; const char* chassis; const char* cue; } kc[] = {
+        {true, true, "Car2", "BL_HUD_INTERFACE.KilledWithHeadshotSound"}, {false, true, "Jet4", "BL_HUD_INTERFACE.KilledRobotSound"},
+        {false, false, "Jet4", "BL_HUD_INTERFACE.KilledJetSound"}, {false, false, "Car2", "BL_HUD_INTERFACE.KilledCarSound"},
+        {false, false, "Tank3", "BL_HUD_INTERFACE.KilledVehicleSound"}, {false, false, "Truck5", "BL_HUD_INTERFACE.KilledVehicleSound"}};
+    bool kcOk = true;
+    for (const auto& k : kc) {
+        const int before = active(k.cue);
+        const int id = aa.killedPawn(cues, k.hs, k.robot, k.chassis);
+        kcOk = kcOk && id >= 0 && active(k.cue) >= 1 && active(k.cue) <= before + 1;   // instance limits may replace
+        if (id < 0 || active(k.cue) < 1) std::printf("  kill confirm %s / %d / %s: expected %s\n", k.hs ? "hs" : "-", k.robot, k.chassis, k.cue);
+    }
+    CHECK(kcOk, "kill confirm: headshot > robot > Jet > Car > Vehicle (tank / truck) by the victim's character class");
+    CHECK(aa.transformFailed(cues, at) >= 0 && active("BL_TRANS_POWER.TRANSFORM_DISABLED") == 1, "refused transform: TRANSFORM_DISABLED");
+    aa.stopAll(cues);
+    cues.tick(1.0f / 30.0f);
+    CHECK(aa.liveLoops(cues) == 0 && active("BL_INTRFC_TECH_TREE.CLOAK_DECEPTICON_START_LP") == 0, "stopAll: every buff loop stops");
+}
+
 int main() {
     for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // authored levels
     testSoundGroups();
+    testAbilityAudio();
     testCountdownAndGrenades();
     testWeaponAudio();
     testLocalizedWaves();

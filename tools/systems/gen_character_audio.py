@@ -287,6 +287,52 @@ for cls, w in weapons.items():
     all_cues |= set(ev.values())
     if dp.get('PickupSound'): all_cues.add(dp['PickupSound'])
 
+# Abilities and buffs (TransGame TnAbility* / TnBuff* class defaults; a CDO stores only its own overrides, so each
+# class's values are resolved down its super chain). TnAbility.OnTriggerSound; TnBuff ApplySound / UnapplySound /
+# OnlyPlaySoundOnLocalPlayer (TnBuff default True), TnBuffCloak team variants, TnBuffDrainSource.HealSound,
+# TnBuffDrainTarget.DamageSound, TnBuffHealthOnBlock.ActivationSound [CONF data].
+ABILITY_KEYS = ('OnTriggerSound',)
+BUFF_KEYS = ('ApplySound', 'UnapplySound', 'AutobotApplySound', 'AutobotUnapplySound', 'DecepticonApplySound',
+             'DecepticonUnapplySound', 'HealSound', 'DamageSound', 'ActivationSound', 'OnlyPlaySoundOnLocalPlayer')
+def resolved(cls_path, keys):
+    chain, t = [], cls_path
+    while t:
+        chain.append(t); t = type_super(t)
+    out = {}
+    for t in reversed(chain):                      # base first, the class's own overrides last
+        _, d = props(t.replace('TransGame.', 'TransGame.Default__').replace('TransContent.', 'TransContent.Default__'))
+        for k in keys:
+            if k in d: out[k] = d[k]
+    return out
+abilities, buffs = {}, {}
+for (path,) in c.execute("select path from types where path like 'TransGame.TnAbility%' or path like 'TransContent.TnAbility%'"):
+    r = resolved(path, ABILITY_KEYS)
+    if r.get('OnTriggerSound'):
+        abilities[path.split('.')[-1]] = {'trigger': r['OnTriggerSound']}
+        all_cues.add(r['OnTriggerSound'])
+for (path,) in c.execute("select path from types where path like 'TransGame.TnBuff%' or path like 'TransContent.TnBuff%'"):
+    r = resolved(path, BUFF_KEYS)
+    snd = {k: v for k, v in r.items() if k != 'OnlyPlaySoundOnLocalPlayer' and isinstance(v, str) and v and v != 'None'}
+    if snd:
+        buffs[path.split('.')[-1]] = dict(snd, only_local=bool(r.get('OnlyPlaySoundOnLocalPlayer', True)))
+        all_cues |= set(snd.values())
+
+# Gameplay-class sounds Systems plays on Gameplay's events (every authored *Sound field, resolved down the chain):
+# TnPlayerController (AbilitiesJammedSound, TransformFailedSound, Killed*Sound, DeathSound), TnAcrobaticsManager
+# (_HoverLoopSound / _HoverCooldownSound), TnRollerMine (_IdleLoopingSound / _BuildupSound / _ExplosionSound) [CONF data].
+class_sounds = {}
+for path in ('TransGame.TnPlayerController', 'TransGame.TnAcrobaticsManager', 'TransGame.TnRollerMine'):
+    chain, t = [], path
+    while t:
+        chain.append(t); t = type_super(t)
+    out = {}
+    for t in reversed(chain):
+        _, d = props(t.replace('TransGame.', 'TransGame.Default__'))
+        for k, v in d.items():
+            if 'Sound' in k and isinstance(v, str) and v and v != 'None' and '.' in v: out[k] = v
+    class_sounds[path.split('.')[-1]] = out
+    all_cues |= set(out.values())
+
 # cue trees (same format as the level manifests)
 import importlib
 sys.argv_saved = sys.argv
@@ -301,8 +347,11 @@ for q in sorted(x for x in all_cues if x):
     if d: cues[q] = d
     else: missing.append(q)
 doc = {'map': '__characters__', 'source': 'Systems tools/systems/gen_character_audio.py (AssetTools roster_package / mp_weapons / authored.db)',
-       'profiles': profiles, 'weapons': wpn, 'cues': cues}
+       'profiles': profiles, 'weapons': wpn, 'abilities': abilities, 'buffs': buffs, 'class_sounds': class_sounds, 'cues': cues}
 print('profiles %d, weapons %d, cues %d (missing %d: %s)' % (len(profiles), len(wpn), len(cues), len(missing), missing[:6]))
+print('abilities with a trigger sound %d: %s' % (len(abilities), sorted(abilities)))
+print('class sounds: %s' % class_sounds)
+print('buffs with sounds %d: %s' % (len(buffs), {k: (sorted(x for x in v if x != 'only_local'), v['only_local']) for k, v in sorted(buffs.items())}))
 print('hit effects: %d entries; weapons with an effect %d / %d; no effect: %s' % (len(HIT_EFFECTS), sum(1 for w in wpn.values() if w['hit_effect']),
       len(wpn), sorted(k.split('.')[-1] for k, w in wpn.items() if not w['hit_effect'])))
 for k in ('TransContent.TnWeaponIonBlaster', 'TransContent.TnWeaponHeavyPistol', 'TransContent.TnWeaponShortSword'):

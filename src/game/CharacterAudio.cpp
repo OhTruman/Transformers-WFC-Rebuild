@@ -22,6 +22,9 @@ struct Db {
     std::map<std::string, WeaponProjectile> weaponProj;
     std::map<std::string, bool> weaponBeam;
     std::map<std::string, std::map<std::string, std::pair<float, float>>> weaponFades;
+    std::map<std::string, std::string> abilityTrigger;
+    std::map<std::string, BuffSounds> buffs;
+    std::map<std::string, std::map<std::string, std::string>> classSounds;
 };
 
 const Db& db() {
@@ -148,6 +151,19 @@ const Db& db() {
             d.weaponHit[kv.first] = e;
         }
     }
+    for (const auto& kv : d.doc["abilities"].obj) d.abilityTrigger[kv.first] = kv.second["trigger"].asString();
+    for (const auto& kv : d.doc["class_sounds"].obj)
+        for (const auto& f : kv.second.obj) d.classSounds[kv.first][f.first] = f.second.asString();
+    for (const auto& kv : d.doc["buffs"].obj) {
+        const assets::Json& j = kv.second;
+        BuffSounds b;
+        b.apply = j["ApplySound"].asString(); b.unapply = j["UnapplySound"].asString();
+        b.autobotApply = j["AutobotApplySound"].asString(); b.autobotUnapply = j["AutobotUnapplySound"].asString();
+        b.decepticonApply = j["DecepticonApplySound"].asString(); b.decepticonUnapply = j["DecepticonUnapplySound"].asString();
+        b.heal = j["HealSound"].asString(); b.damage = j["DamageSound"].asString(); b.activation = j["ActivationSound"].asString();
+        b.onlyLocal = j["only_local"].asBool(true);
+        d.buffs[kv.first] = b;
+    }
     return d;
 }
 
@@ -237,6 +253,45 @@ int CharacterAudio::loadWeaponCues(SoundCues& cues, const std::string& cls) {
     if (an != d.weaponAnims.end())
         for (const WeaponAnimSounds::Clip* c : {&an->second.idle, &an->second.fire, &an->second.reload, &an->second.equip, &an->second.putDown})
             for (const auto& n : c->sounds) want(n.second);
+    if (sub.obj.empty()) return 0;
+    const char* root = std::getenv("WFC_ASSETS");
+    return cues.addCues(sub, std::string(root ? root : core::config::kAssetRootDefault) + "/../content/");
+}
+
+const std::string& CharacterAudio::abilityTriggerSound(const std::string& cls) {
+    const Db& d = db();
+    auto it = d.abilityTrigger.find(cls);
+    return it == d.abilityTrigger.end() ? empty() : it->second;
+}
+
+const std::string& CharacterAudio::classSound(const std::string& cls, const std::string& field) {
+    const Db& d = db();
+    auto it = d.classSounds.find(cls);
+    if (it == d.classSounds.end()) return empty();
+    auto f = it->second.find(field);
+    return f == it->second.end() ? empty() : f->second;
+}
+
+const BuffSounds* CharacterAudio::buffSounds(const std::string& cls) {
+    const Db& d = db();
+    auto it = d.buffs.find(cls);
+    return it == d.buffs.end() ? nullptr : &it->second;
+}
+
+int CharacterAudio::loadAbilityCues(SoundCues& cues) {
+    const Db& d = db();
+    assets::Json sub;
+    sub.type = assets::Json::Type::Object;
+    auto want = [&](const std::string& q) {
+        if (!q.empty() && !cues.hasCue(q.c_str()) && d.doc["cues"][q].isObject()) sub.obj[q] = d.doc["cues"][q];
+    };
+    for (const auto& kv : d.abilityTrigger) want(kv.second);
+    for (const auto& kv : d.buffs)
+        for (const std::string* q : {&kv.second.apply, &kv.second.unapply, &kv.second.autobotApply, &kv.second.autobotUnapply,
+                                     &kv.second.decepticonApply, &kv.second.decepticonUnapply, &kv.second.heal, &kv.second.damage,
+                                     &kv.second.activation})
+            want(*q);
+    for (const auto& kv : d.classSounds) for (const auto& f : kv.second) want(f.second);
     if (sub.obj.empty()) return 0;
     const char* root = std::getenv("WFC_ASSETS");
     return cues.addCues(sub, std::string(root ? root : core::config::kAssetRootDefault) + "/../content/");

@@ -467,6 +467,7 @@ bool World::loadMapAudio(const std::string& level) {
         CharacterAudio::loadCues(cues_, audioProfile());
         CharacterAudio::loadWeaponCues(cues_, weaponClass_);
         CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), weaponClass_);   // the targets' hit sounds
+        CharacterAudio::loadAbilityCues(cues_);                                                // [Systems M08i]
         lastHitEffect_.clear();
         for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
         const SoundCues::LocStats& ls = SoundCues::locStats();
@@ -524,6 +525,7 @@ void World::resetSystemsForMatch() {
     cues_.stopNonMapInstances();               // weapon / vehicle / foley / transform / pickup sounds (immediate)
     vehicleAudio_.stopAll(cues_);
     weaponAudio_.stopAll(cues_);
+    abilityAudio_.stopAll(cues_);
     vehicleFxDriver_.stopAll();
     vehicleForm_.reset();
     vehicleAudio_ = VehicleAudio{};
@@ -1142,6 +1144,32 @@ void World::onProjectileRemoved(int key) { weaponAudio_.projectileRemoved(cues_,
 void World::onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted) {
     weaponAudio_.projectileHitWall(cues_, weaponClass, pos, core::length(pos - listenerPos_), fuseStarted);
 }
+
+void World::onAbilityTriggered(const std::string& abilityId) {
+    abilityAudio_.abilityTriggered(cues_, abilityId, atPawn(), 0.0f);
+}
+
+void World::setLocalBuffAudio(const std::string& buffClass, bool active, int team) {
+    AbilityAudio::Owner o;
+    o.key = 0; o.local = true; o.team = team; o.at = atPawn();
+    abilityAudio_.setBuff(cues_, buffClass, o, active);
+}
+
+void World::onLocalPawnBuffsLost() { abilityAudio_.pawnDied(cues_, 0); }
+
+void World::onAbilitiesJammed() { abilityAudio_.abilitiesJammed(cues_, atPawn()); }
+
+void World::onLocalKilledPawn(bool headshot, bool robot, const std::string& chassis) {
+    abilityAudio_.killedPawn(cues_, headshot, robot, chassis);
+}
+
+void World::onTransformFailed() { abilityAudio_.transformFailed(cues_, atPawn()); }
+
+void World::setLocalHoverAudio(int hoverState) { abilityAudio_.hoverState(cues_, hoverState, atPawn(), 0.0f); }
+
+void World::onDrainTick(int targets) { abilityAudio_.drainSourceTick(cues_, atPawn(), 0.0f, true, targets); }
+
+void World::onDrainVictimTick(const core::Vec3& p) { abilityAudio_.drainTargetTick(cues_, p, core::length(p - listenerPos_)); }
 
 void World::onBeamWeapon(const std::string& weaponClass, bool firing, int target) {
     weaponAudio_.beam(cues_, weaponClass, firing,

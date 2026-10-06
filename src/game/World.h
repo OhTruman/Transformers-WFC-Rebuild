@@ -24,6 +24,7 @@
 #include "game/VehicleAudio.h"
 #include "game/VehicleFormAudio.h"
 #include "game/WeaponAudio.h"
+#include "game/AbilityAudio.h"
 #include "game/VehicleFxDriver.h"
 #include <map>
 #include <set>
@@ -113,6 +114,21 @@ public:
     void onProjectileSpawned(int key, const std::string& weaponClass, const core::Vec3& pos);
     void onProjectileMoved(int key, const core::Vec3& pos);
     void onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos);
+    // [Systems M08i] Abilities / buffs (Gameplay owns them; RE pass 5 s12). A successful ability trigger ("Barrier"):
+    // its OnTriggerSound at the pawn.
+    void onAbilityTriggered(const std::string& abilityId);
+    // The local pawn's buff state, every tick (buff class "TnBuffCloak"; team 0 Autobot / 1 Decepticon): transitions play
+    // the Apply loop / Unapply sound.
+    void setLocalBuffAudio(const std::string& buffClass, bool active, int team);
+    void onLocalPawnBuffsLost();                       // death: buff loops stop, no Unapply sound
+    void onAbilitiesJammed();                          // an ability press refused because abilities are blocked
+    void setLocalHoverAudio(int hoverState);           // 0 none, 1 JumpingToHover, 2 Hovering (every tick)
+    // The local player killed a pawn: the kill-confirm sound (victim form / character chassis "Car2", "Jet4", "Tank3").
+    void onLocalKilledPawn(bool headshot, bool victimRobotForm, const std::string& victimChassisId);
+    void onTransformFailed();                          // the local PressTransform was refused
+    // Drain, every tick while the local Drain buff runs: targets this tick (HealSound), and each victim (DamageSound).
+    void onDrainTick(int targets);
+    void onDrainVictimTick(const core::Vec3& victimPos);
     void onProjectileRemoved(int key);
     // World hit / grenade bounce (fuseStarted: the grenade's first impact).
     void onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted);
@@ -231,6 +247,7 @@ private:
     std::set<std::string> weaponAudioLoaded_;      // per level (cleared with the level's cues)
     std::vector<std::string> loadoutWeaponClasses_; // the player's loadout (robot + vehicle weapons)
     WeaponAudio weaponAudio_;
+    AbilityAudio abilityAudio_;
     VehicleFormAudio vehicleForm_;
     VehicleFormEvents vehicleEvents_;
     VehicleFxDriver vehicleFxDriver_;
