@@ -194,8 +194,14 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   - projectiles aim at that trace's hit point;
   - the vehicle MG uses the same start (24f).
 - Presentation: the hitscan tracer and the Repair Ray ribbon still start at the muzzle.
-- PARTIAL: robot projectiles leave from the pawn eye, not the weapon mesh's muzzle socket (GetMuzzleLoc). Only the Ion Blaster
-  mesh is loaded for robot weapons.
+- Projectiles (24j): Weapon.ProjectileFire spawns at RealStartLoc = GetMuzzleLoc(), the held weapon mesh's MuzzleFlash socket
+  (WeaponDef muzzle bone + authored offset, posed, at the hand socket), aimed at the start-trace hit point [CONFIRMED ORIGINAL].
+  The held mesh is already per weapon (syncShownWeapon). Pawn eye + 1.5 m is only a fallback when no posed socket exists
+  (mid switch, missing mesh).
+- Fix: the projectile spawn hook added 1.5 m along the aim to every origin. Vehicle rockets therefore started 3 m ahead of their
+  socket (the caller added another 1.5 m). Both offsets are removed: projectiles spawn exactly at the muzzle.
+- WFC_RMUZZLETEST 4/4: Thermo Rocket Launcher, Magma Frag Launcher, Fusion Cannon and Plasma Cannon spawn at the socket (the
+  distance measured after the spawn tick equals one tick of flight). The muzzle is 0.68 / 2.12 / 2.03 / 1.70 m ahead of the hand.
 
 ### Projectile visuals [CONFIRMED ORIGINAL bindings: AssetTools weapon.json projectile_visual, RE projectile_effect_bindings]
 - Was: every projectile drew as an orange box marker.

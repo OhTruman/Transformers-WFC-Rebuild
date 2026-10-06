@@ -44,6 +44,7 @@ private:
     void runQaToolTest();
     void runProjectileFxTest();
     void runMuzzleTest();
+    void runRobotMuzzleTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

@@ -780,7 +780,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                 // the damage trace starts at the start-trace location, not the socket; only the flash / tracer alternate
                 // [CONF RE pass 5 9g + TnPlayerPawn].
                 core::Vec3 dir = core::normalize(aimPoint - origin);
-                if (vw->projectile()) world.fireWeapon(*vw, origin + dir * 1.5f, dir);
+                if (vw->projectile()) world.fireWeapon(*vw, origin, dir);
                 else if (vw->simulated()) for (int k = 0; k < std::max(1, vw->shots); ++k) world.fireWeapon(*vw, start, camDir);
             } else if (vw->ammo == 0 && vw->canReload()) vw->beginReload();
         }
@@ -794,9 +794,9 @@ void PlayerController::applyToPawn(World& world, float dt) {
             if (!noRecoil) pawn_->notifyFired();   // per-shot skeletal recoil (TnRecoiler)
             // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
             // camera's crosshair ray nearest the pawn. Instant-hit / beam traces run from there along the aim for the weapon range
-            // [CONF RE, script TransGame.TnPlayerPawn]. Projectiles aim at that trace's hit point; they still leave from the pawn
-            // eye (actor + BaseEyeHeight), not the weapon's muzzle socket (GetMuzzleLoc), which is not loaded for most robot
-            // weapons [PARTIAL].
+            // [CONF RE, script TransGame.TnPlayerPawn]. Projectiles: Weapon.ProjectileFire spawns at RealStartLoc = GetMuzzleLoc()
+            // (the held weapon mesh's MuzzleFlash socket) aimed at that trace's hit point [CONF]; without a posed socket (mid
+            // switch, no mesh) the pawn eye + 1.5 m stands in [fallback].
             core::Vec3 eye = pawn_->actorLocation() + core::Vec3{0, pawn_->robotParams().eyeHeight, 0};   // BaseEyeHeight above the actor
             core::Vec3 camDir = core::forwardFromYawPitch(camYaw_, camPitch_);
             core::Vec3 camPos = cameraPos();
@@ -807,7 +807,11 @@ void PlayerController::applyToPawn(World& world, float dt) {
             if (world.collision() && world.collision()->segmentHit(start, aimPoint, th))
                 aimPoint = start + camDir * (range * th);
             if (w.beam()) world.fireRepairBeam(w, start, camDir);
-            else if (w.projectile()) world.fireWeapon(w, eye, core::normalize(aimPoint - eye));
+            else if (w.projectile()) {
+                core::Vec3 muzzle;
+                if (world.heldWeaponMuzzle(muzzle)) world.fireWeapon(w, muzzle, core::normalize(aimPoint - muzzle));
+                else { const core::Vec3 d = core::normalize(aimPoint - eye); world.fireWeapon(w, eye + d * 1.5f, d); }
+            }
             // NumShotsToFire traces per shot (shotgun pellets), each with its own spread sample [CONF data; HIGH: one ammo per shot].
             else for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) world.fireHitscan(start, camDir);
         } else if (w.ammo == 0 && w.canReload()) {

@@ -39,9 +39,10 @@ template <class R> void fxPrewarm(R&, const render::MeshData&, long) {}
 
 void World::load(render::IRenderer& renderer) {
     repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
+    heldWeaponMuzzleHook = [this](core::Vec3& out) { return heldWeaponMuzzleImpl(out); };
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
         if (w.projectile()) {
-            spawnProjectile(o + d * 1.5f, d * w.projSpeed, w, localPlayer_);
+            spawnProjectile(o, d * w.projSpeed, w, localPlayer_);   // Spawn at RealStartLoc (callers pass the muzzle)
             // Fire sends (locked, target): SetTarget(locked ? target : none) [CONF TnWeaponHoming].
             if (w.projHoming && locked_ && lockTarget_ >= 0) projectiles_.back().target = lockTarget_;
         }
@@ -771,6 +772,15 @@ void World::gameplayRamContacts() {
 bool World::notifyRamHit(const void* target, const core::Vec3& pos) {
     if (!nitro_.registerRamHit(target)) return false;
     cues_.play("VEH_TRUCK_RAM_IMPACT", pos, core::length(pos - listenerPos_));   // RamSound Auto_Ram_Impact
+    return true;
+}
+
+bool World::heldWeaponMuzzleImpl(core::Vec3& out) const {
+    const Weapon& w = player_.pawn().weapon();
+    if (shownWeapon_ != (w.def ? w.def->id : "IonBlaster")) return false;
+    core::Mat4 ms;
+    if (!weaponSocketWorld("MuzzleFlash", ms)) return false;
+    out = {ms.m[12], ms.m[13], ms.m[14]};
     return true;
 }
 
