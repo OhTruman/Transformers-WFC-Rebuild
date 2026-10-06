@@ -109,7 +109,7 @@ public:
     void ensureWeaponAudio(const std::string& weaponClass);
     const std::string& firingWeaponClass(bool vehicleForm) const;
     // One shot (instant hit or projectile launch) of the weapon actually fired.
-    int onWeaponFired(const std::string& weaponClass, bool lowAmmo, bool vehicleForm, const core::Vec3& muzzle);
+    int onWeaponFired(const std::string& weaponClass, bool lowAmmo, bool vehicleForm, const core::Vec3& muzzle, int fireMode = 0);
     // Projectiles (key = Gameplay's projectile identity): flight loop from spawn, explosion on Explode.
     void onProjectileSpawned(int key, const std::string& weaponClass, const core::Vec3& pos);
     void onProjectileMoved(int key, const core::Vec3& pos);
@@ -126,6 +126,13 @@ public:
     // The local player killed a pawn: the kill-confirm sound (victim form / character chassis "Car2", "Jet4", "Tank3").
     void onLocalKilledPawn(bool headshot, bool victimRobotForm, const std::string& victimChassisId);
     void onTransformFailed();                          // the local PressTransform was refused
+    void onDodgeStarted();                             // the local dodge began: Nav_Boost_* notifies (charged-jump footstep)
+    // The held charge weapon's state (0 idle, 1 charging, 2..4 levels) every tick, and a fizzle (released before level 1).
+    void setChargeWeaponAudio(const std::string& weaponClass, int state);
+    void onChargeFizzle(const std::string& weaponClass);
+    // The local roller mine every tick (alive, age s, position) and its explosion.
+    void setRollerMineAudio(bool alive, float t, const core::Vec3& pos);
+    void onRollerMineExploded(const core::Vec3& pos);
     // Drain, every tick while the local Drain buff runs: targets this tick (HealSound), and each victim (DamageSound).
     void onDrainTick(int targets);
     void onDrainVictimTick(const core::Vec3& victimPos);

@@ -47,6 +47,11 @@ public:
     // Advance one simulation step and append the cue names (SoundCues table names) to play, attached
     // to the pawn, to `out`. Call after the pawn's animation update.
     void tick(const Character& pc, float dt, std::vector<const char*>& out);
+    // TnAbilityDodge: the dodge plays Nav_Boost_F/B/L/R (stance variants), whose only notify is SoundEvents_Footsteps.
+    // FS_DEFAULT_JUMP_CHARGED @0 resolved through the character's sound-event set (TnPawn.FindSoundCue) [CONF RE pass 5
+    // s12 addendum + data: every variant authors the same notify]. Gameplay does not play that clip, so the dodge's start
+    // fires the clip's notifies here.
+    void dodgeStarted(std::vector<const char*>& out) { clipOneShot("Nav_Boost_F", out); }
 
     // The character whose clips / sound set drive the foley (default: CharacterAudio::defaultProfile()).
     void setProfile(const CharacterAudioProfile* p) { profile_ = p; }

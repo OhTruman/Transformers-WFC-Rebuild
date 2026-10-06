@@ -3,6 +3,25 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08k (2026-10-06) - Plasma Cannon charge sounds, roller mine, dodge footstep
+- **TnChargeWeapon** (`WeaponAudio::chargeState` / `chargeFizzle`; fire modes in `fire`), per Gameplay 24l's mapping + RE's EWeaponEvent enum [CONF]:
+  * charging -> WP_Looping CHARGE_SHOT; level 2 -> WP_LoopingSecondary CHARGE_LP_02; level 3 -> WP_LoopingTertiary CHARGE_LP_03;
+  * release -> all loops fade 0.25 s; the shot plays WP_Fire / FireSecondary / FireTertiary by level (SHOOT_CHARGE_SHOT / _02 / _03);
+  * released before level 1 -> WP_NoAmmoFire (22) SHOOT_DRY_FIRE_PLASMA_01.
+- **Roller mine** (AbilityAudio::rollerMine, TnRollerMine / TnRollerMineAbility defaults, RE s12 addendum / s13):
+  * ROLLER_MINE_LP at spawn; KAMIKAZE_FUSE_START at 3 s (ArmSound); ROLLER_MINE_FUSE_BUILD at 8.5 s;
+  * ROLLER_MINE_EXPL on destruction; a silent stop on owner death / kill-Z.
+- **Dodge:** FS_DEFAULT_JUMP_CHARGED through the body's sound-event set (Nav_Boost_* notify; Gameplay plays no dodge clip),
+  e.g. BL_FS_SML_BOT / BL_FS_LRG_BOT.FS_JUMP_CHARGED.
+- **Glue:** `docs/handoff/SYSTEMS_M08K_charge_roller_dodge_glue.patch`, after Gameplay 24l + agents/systems + the M08i glue.
+  * It reads Weapon charge state / fizzle and roller_ every tick, the dodge edge, and explodeRollerMine.
+  * The shot's level comes from the fire hook's Weapon copy (projClass = mode); its chargeShotLevel is copied before Gameplay sets it.
+- **Validation:** a test tree of 08h + agents/gameplay c804fe0 (one World.cpp conflict resolved locally) + agents/systems + M08i/M08k glue.
+  * WFC_CHARGETEST with audio: fizzle -> dry fire, L3 -> _03, L1 -> SHOT, L2 -> _02, L3 -> _03.
+  * Car6 TDM roller mine: LP -> arm -> buildup -> EXPL at 10 s.
+  * Car2 / Truck dodge: FS_JUMP_CHARGED per body.
+  * 0 missing cues, 0 leaks. Suite 680 / 0; movie probe OK; lifecycle 40 / 0; wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS M08j (2026-10-06) - level-start warming (frontend title frame), abandoned-prefetch leak
 - **Problem:** Frontend measured 43-55 ms of audio.levelStart on the title's first visible frame (boot and every return). It was the
   title level's eager cue waves decoding synchronously (56-61 ms here; parse < 1 ms). The music decode then landed on the next frame

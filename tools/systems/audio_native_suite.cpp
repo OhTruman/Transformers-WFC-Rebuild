@@ -2172,11 +2172,67 @@ static void testLevelWarm() {
     delete a;
 }
 
+// TnChargeWeapon (Plasma Cannon) charge loops / shot level / fizzle, and the roller mine timeline (M08k).
+static void testChargeAndRoller() {
+    std::printf("[charge weapon, roller mine]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    const std::string pc = "TransContent.TnWeaponPlasmaCannon", rr = "TransContent.TnWeaponRepairRay";
+    game::CharacterAudio::loadWeaponCues(cues, pc);
+    game::CharacterAudio::loadWeaponCues(cues, rr);
+    game::CharacterAudio::loadAbilityCues(cues);
+    game::WeaponAudio wa;
+    const game::SoundCues::Emitter at{Vec3{0, 0, 0}, game::SoundCues::kWorld, {0, 0, 0}, ""};
+    auto active = [&](const char* q) { return cues.activeInstances(q); };
+    auto settle = [&](float s) { for (float t = 0; t < s; t += 1.0f / 30.0f) cues.tick(1.0f / 30.0f); };
+    // Idle -> idle on another weapon (the per-tick glue for a non-charge weapon): nothing, not the Repair Ray's LoopingTail.
+    const int n0 = rec.n;
+    wa.chargeState(cues, rr, 0, at); wa.chargeState(cues, pc, 0, at); wa.chargeState(cues, rr, 0, at);
+    CHECK(rec.n == n0, "idle on any weapon plays nothing (%d voices)", rec.n - n0);
+    wa.chargeState(cues, pc, 1, at);
+    CHECK(active("BL_WPN_GUN_PLASMA_CANNON.CHARGE_SHOT") == 1, "-> charging: WP_Looping CHARGE_SHOT");
+    wa.chargeState(cues, pc, 2, at);
+    CHECK(wa.chargeLoops(cues) == 1, "-> level 1: no sound change");
+    wa.chargeState(cues, pc, 3, at); settle(0.4f);
+    CHECK(active("BL_WPN_GUN_PLASMA_CANNON.CHARGE_SHOT") == 0 && active("BL_WPN_GUN_PLASMA_CANNON.CHARGE_LP_02") == 1,
+          "-> level 2: stop 9 (0.25 s fade), play 10 CHARGE_LP_02");
+    wa.chargeState(cues, pc, 4, at); settle(0.4f);
+    CHECK(active("BL_WPN_GUN_PLASMA_CANNON.CHARGE_LP_02") == 0 && active("BL_WPN_GUN_PLASMA_CANNON.CHARGE_LP_03") == 1,
+          "-> level 3: stop 10, play 11 CHARGE_LP_03");
+    wa.chargeState(cues, pc, 0, at); settle(0.4f);
+    CHECK(wa.chargeLoops(cues) == 0, "-> idle: every charge loop stops (no LoopingTail authored)");
+    const struct { int mode; const char* cue; } lv[] = {{0, "BL_WPN_GUN_PLASMA_CANNON.SHOOT_CHARGE_SHOT"},
+        {1, "BL_WPN_GUN_PLASMA_CANNON.SHOOT_CHARGE_SHOT_02"}, {2, "BL_WPN_GUN_PLASMA_CANNON.SHOOT_CHARGE_SHOT_03"}};
+    bool lvOk = true;
+    for (const auto& l : lv) lvOk = lvOk && wa.fire(cues, pc, false, at, 0.0f, l.mode) >= 0 && active(l.cue) >= 1;
+    CHECK(lvOk, "FireCharge mode 0 / 1 / 2: SHOOT_CHARGE_SHOT / _02 / _03");
+    CHECK(wa.chargeFizzle(cues, pc, at) >= 0 && active("BL_WPN_FOLEY.SHOOT_DRY_FIRE_PLASMA_01") == 1,
+          "released before level 1: WP_NoAmmoFire (22) SHOOT_DRY_FIRE_PLASMA_01");
+    wa.chargeState(cues, pc, 1, at); wa.stopAll(cues); settle(0.1f);
+    CHECK(wa.chargeLoops(cues) == 0 && active("BL_WPN_GUN_PLASMA_CANNON.CHARGE_SHOT") == 0, "stopAll stops a charge");
+    cues.stopAll();
+
+    // Roller mine: loop from spawn, ArmSound at 3 s, buildup at 8.5 s, explosion stops the loop.
+    game::AbilityAudio aa;
+    const Vec3 mp{10, 0, 0};
+    aa.rollerMine(cues, true, 0.0f, mp, 10.0f);
+    CHECK(active("BL_WPN_MINE.ROLLER_MINE_LP") == 1, "spawn: ROLLER_MINE_LP");
+    aa.rollerMine(cues, true, 2.9f, mp, 10.0f); aa.rollerMine(cues, true, 3.05f, mp, 10.0f); aa.rollerMine(cues, true, 3.2f, mp, 10.0f);
+    CHECK(active("BL_WPN_GRENADE.KAMIKAZE_FUSE_START") == 1, "armed at 3 s: KAMIKAZE_FUSE_START once");
+    aa.rollerMine(cues, true, 8.6f, mp, 10.0f); aa.rollerMine(cues, true, 9.0f, mp, 10.0f);
+    CHECK(active("BL_WPN_MINE.ROLLER_MINE_FUSE_BUILD") == 1, "fuse <= 1.5 s: ROLLER_MINE_FUSE_BUILD once");
+    aa.rollerMineExploded(cues, mp, 10.0f); aa.rollerMine(cues, false, 0.0f, mp, 10.0f); settle(0.1f);
+    CHECK(active("BL_WPN_MINE.ROLLER_MINE_LP") == 0 && active("BL_WPN_MINE.ROLLER_MINE_EXPL") == 1, "destroyed: loop stops, ROLLER_MINE_EXPL");
+    aa.rollerMine(cues, true, 0.0f, mp, 10.0f); aa.rollerMine(cues, false, 0.0f, mp, 10.0f); settle(0.1f);
+    CHECK(active("BL_WPN_MINE.ROLLER_MINE_LP") == 0 && active("BL_WPN_MINE.ROLLER_MINE_EXPL") <= 1,
+          "removed without exploding (owner death / kill-Z): loop stops, nothing else");
+}
+
 int main() {
     for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // authored levels
     testSoundGroups();
     testAbilityAudio();
     testLevelWarm();
+    testChargeAndRoller();
     testCountdownAndGrenades();
     testWeaponAudio();
     testLocalizedWaves();

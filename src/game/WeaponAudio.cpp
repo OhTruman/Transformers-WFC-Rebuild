@@ -3,10 +3,14 @@
 
 namespace game {
 
-int WeaponAudio::fire(SoundCues& cues, const std::string& cls, bool lowAmmo, const SoundCues::Emitter& em, float ownDist) {
+int WeaponAudio::fire(SoundCues& cues, const std::string& cls, bool lowAmmo, const SoundCues::Emitter& em, float ownDist,
+                      int fireMode) {
     if (CharacterAudio::weaponIsBeam(cls)) return -1;              // the beam's loops carry its sound
-    const std::string* q = &CharacterAudio::weaponCue(cls, lowAmmo ? "WP_LowAmmoFire" : "WP_Fire");
-    if (q->empty() && lowAmmo) q = &CharacterAudio::weaponCue(cls, "WP_Fire");
+    static const char* const kFire[3] = {"WP_Fire", "WP_FireSecondary", "WP_FireTertiary"};
+    static const char* const kLow[3] = {"WP_LowAmmoFire", "WP_LowAmmoFireSecondary", "WP_LowAmmoFireTertiary"};
+    const int m = fireMode < 0 || fireMode > 2 ? 0 : fireMode;
+    const std::string* q = &CharacterAudio::weaponCue(cls, lowAmmo ? kLow[m] : kFire[m]);
+    if (q->empty() && lowAmmo) q = &CharacterAudio::weaponCue(cls, kFire[m]);
     if (q->empty()) return -1;
     return cues.play(q->c_str(), em, ownDist);
 }
@@ -83,7 +87,57 @@ void WeaponAudio::projectileRemoved(SoundCues& cues, int key) {
     flight_.erase(it);
 }
 
+namespace { const char* const kChargeLoops[3] = {"WP_Looping", "WP_LoopingSecondary", "WP_LoopingTertiary"}; }
+
+void WeaponAudio::stopChargeLoop(SoundCues& cues, int slot) {
+    if (charge_[slot] < 0) return;
+    float fi, fo;
+    CharacterAudio::weaponEventFades(chargeClass_, kChargeLoops[slot], fi, fo);
+    cues.stop(charge_[slot], fo);
+    charge_[slot] = -1;
+}
+
+void WeaponAudio::chargeState(SoundCues& cues, const std::string& cls, int state, const SoundCues::Emitter& em) {
+    if (state == chargeState_ && cls == chargeClass_) return;
+    if (state == 0 && chargeState_ == 0) { chargeClass_ = cls; return; }    // idle -> idle (another weapon held): nothing
+    if (!chargeClass_.empty() && cls != chargeClass_ && chargeState_ != 0) chargeState(cues, chargeClass_, 0, em);   // swapped
+    chargeClass_ = cls;
+    chargeState_ = state;
+    auto start = [&](int slot) {
+        const std::string& q = CharacterAudio::weaponCue(cls, kChargeLoops[slot]);
+        if (q.empty() || (charge_[slot] >= 0 && cues.playing(charge_[slot]))) return;
+        float fi, fo;
+        CharacterAudio::weaponEventFades(cls, kChargeLoops[slot], fi, fo);
+        charge_[slot] = cues.play(q.c_str(), em, 0.0f);
+        if (charge_[slot] >= 0 && fi > 0.0f) cues.fadeIn(charge_[slot], fi);
+    };
+    switch (state) {
+    case 1: start(0); break;                                          // Charging.BeginState: PlayWeaponEvent(9)
+    case 2: break;                                                    // level 1: muzzle flash only
+    case 3: stopChargeLoop(cues, 0); start(1); break;                 // AllWeaponMeshesStopSoundEvent(9) + 10
+    case 4: stopChargeLoop(cues, 1); start(2); break;                 // stop 10, play 11
+    default: {                                                        // Charging.EndState
+        for (int s = 0; s < 3; ++s) stopChargeLoop(cues, s);
+        const std::string& tail = CharacterAudio::weaponCue(cls, "WP_LoopingTail");
+        if (!tail.empty()) cues.play(tail.c_str(), em, 0.0f);
+    }
+    }
+}
+
+int WeaponAudio::chargeFizzle(SoundCues& cues, const std::string& cls, const SoundCues::Emitter& em) {
+    const std::string& q = CharacterAudio::weaponCue(cls, "WP_NoAmmoFire");
+    return q.empty() ? -1 : cues.play(q.c_str(), em, 0.0f);
+}
+
+int WeaponAudio::chargeLoops(const SoundCues& cues) const {
+    int n = 0;
+    for (int id : charge_) if (id >= 0 && cues.playing(id)) ++n;
+    return n;
+}
+
 void WeaponAudio::stopAll(SoundCues& cues) {
+    for (int& id : charge_) { if (id >= 0) cues.stop(id, 0.0f); id = -1; }
+    chargeState_ = 0; chargeClass_.clear();
     for (auto& kv : flight_) cues.stop(kv.second.instance, 0.0f);
     flight_.clear();
     for (int* id : {&beamLoop_, &beamHeal_, &beamDamage_}) { if (*id >= 0) cues.stop(*id, 0.0f); *id = -1; }

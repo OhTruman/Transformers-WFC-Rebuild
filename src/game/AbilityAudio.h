@@ -52,6 +52,13 @@ public:
     // TransformFailedSound, local, at the pawn [RE pass 5 s13].
     int transformFailed(SoundCues& cues, const SoundCues::Emitter& pawn);
 
+    // TnRollerMine (the local owner's, TnRollerMineAbility) [RE pass 5 s12 addendum + s13, CONF]: spawn -> _IdleLoopingSound
+    // (loops with the actor); ArmTime 3.0 s -> ArmSound; fuse <= 1.5 s left (t 8.5 of the 10 s fuse) -> _BuildupSound once;
+    // destroyed -> loop stops + _ExplosionSound at the mine. Removed otherwise (owner death: FadingOut, kill-Z): loop stops,
+    // nothing else. Every tick with Gameplay's state; `exploded` on the destruction tick.
+    void rollerMine(SoundCues& cues, bool alive, float t, const core::Vec3& pos, float listenerDist);
+    void rollerMineExploded(SoundCues& cues, const core::Vec3& pos, float listenerDist);
+
     void stopAll(SoundCues& cues);                   // level unload / match restart: loops stop, nothing else plays
     int liveLoops(const SoundCues& cues) const;      // buff sounds still playing (diagnostics)
     static std::string abilityClass(const std::string& id);   // "Barrier" -> "TnAbilityBarrier"
@@ -61,6 +68,7 @@ private:
     Live& slot(int key, const std::string& buff);
     std::vector<Live> live_;
     int hoverState_ = 0, hoverLoop_ = -1;
+    bool rollerAlive_ = false; float rollerT_ = 0.0f; int rollerLoop_ = -1;
 };
 
 } // namespace game

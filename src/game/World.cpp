@@ -1119,13 +1119,13 @@ void World::setPlayerVehicleWeaponAudio(const std::string& weaponClass) {
     ensureWeaponAudio(weaponClass);
 }
 
-int World::onWeaponFired(const std::string& weaponClass, bool lowAmmo, bool vehicleForm, const core::Vec3& muzzle) {
+int World::onWeaponFired(const std::string& weaponClass, bool lowAmmo, bool vehicleForm, const core::Vec3& muzzle, int fireMode) {
     // TnWeapon.PlayFiringSound for any fire type: the robot weapon from its MuzzleFlash socket; a vehicle weapon is the
     // vehicle's (owner-attached at the pawn's audio root) [HIGH: PlaySound on the weapon's owner].
     ensureWeaponAudio(weaponClass);
     SoundCues::Emitter e = vehicleForm ? atPawn({0, 1.4725f, 0}) : atWeapon("MuzzleFlash");
     if (!vehicleForm) e.pos = muzzle;
-    return weaponAudio_.fire(cues_, weaponClass, lowAmmo, e, core::length(muzzle - player_.pawn().position()));
+    return weaponAudio_.fire(cues_, weaponClass, lowAmmo, e, core::length(muzzle - player_.pawn().position()), fireMode);
 }
 
 void World::onProjectileSpawned(int key, const std::string& weaponClass, const core::Vec3& pos) {
@@ -1164,6 +1164,22 @@ void World::onLocalKilledPawn(bool headshot, bool robot, const std::string& chas
 }
 
 void World::onTransformFailed() { abilityAudio_.transformFailed(cues_, atPawn()); }
+
+void World::setChargeWeaponAudio(const std::string& cls, int state) { weaponAudio_.chargeState(cues_, cls, state, atWeapon("MuzzleFlash")); }
+
+void World::onChargeFizzle(const std::string& cls) { weaponAudio_.chargeFizzle(cues_, cls, atWeapon("MuzzleFlash")); }
+
+void World::setRollerMineAudio(bool alive, float t, const core::Vec3& pos) {
+    abilityAudio_.rollerMine(cues_, alive, t, pos, core::length(pos - listenerPos_));
+}
+
+void World::onRollerMineExploded(const core::Vec3& pos) { abilityAudio_.rollerMineExploded(cues_, pos, core::length(pos - listenerPos_)); }
+
+void World::onDodgeStarted() {
+    std::vector<const char*> out;
+    robotFoley_.dodgeStarted(out);
+    for (const char* c : out) cues_.play(c, atPawn(), 0.0f);
+}
 
 void World::setLocalHoverAudio(int hoverState) { abilityAudio_.hoverState(cues_, hoverState, atPawn(), 0.0f); }
 

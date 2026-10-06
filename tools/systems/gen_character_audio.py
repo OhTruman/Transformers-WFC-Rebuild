@@ -319,9 +319,10 @@ for (path,) in c.execute("select path from types where path like 'TransGame.TnBu
 
 # Gameplay-class sounds Systems plays on Gameplay's events (every authored *Sound field, resolved down the chain):
 # TnPlayerController (AbilitiesJammedSound, TransformFailedSound, Killed*Sound, DeathSound), TnAcrobaticsManager
-# (_HoverLoopSound / _HoverCooldownSound), TnRollerMine (_IdleLoopingSound / _BuildupSound / _ExplosionSound) [CONF data].
+# (_HoverLoopSound / _HoverCooldownSound), TnRollerMine (_IdleLoopingSound / _BuildupSound / _ExplosionSound),
+# TnRollerMineAbility (ArmSound) [CONF data].
 class_sounds = {}
-for path in ('TransGame.TnPlayerController', 'TransGame.TnAcrobaticsManager', 'TransGame.TnRollerMine'):
+for path in ('TransGame.TnPlayerController', 'TransGame.TnAcrobaticsManager', 'TransGame.TnRollerMine', 'TransGame.TnRollerMineAbility'):
     chain, t = [], path
     while t:
         chain.append(t); t = type_super(t)
