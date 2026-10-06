@@ -1628,6 +1628,32 @@ int Pipeline::upload(const MeshData& m) {
                 lo = std::min(lo, vi); hi = std::max(hi, vi);
             }
             const VertexLM& v = vit->second;
+            // M62: the export duplicated vertices (_WFC_SRCVERT carries each vertex's cooked index): samples are
+            // re-ordered into this section's glTF vertex order, so the shader's (gl_VertexID - base) fetch is exact
+            bool remap = m.srcVert.size() == m.vertexCount() && hi < m.srcVert.size();
+            for (uint32_t k = lo; remap && k <= hi; ++k) if (m.srcVert[k] >= (uint32_t)v.count) remap = false;
+            if (remap) {
+                const int n = (int)(hi - lo + 1);
+                std::vector<float> rgb((size_t)n * 3 * 3);
+                for (int r = 0; r < 3; ++r)
+                    for (int j = 0; j < n; ++j)
+                        for (int c = 0; c < 3; ++c)
+                            rgb[((size_t)r * n + j) * 3 + c] = v.rgb[((size_t)r * v.count + m.srcVert[lo + (uint32_t)j]) * 3 + c];
+                glGenTextures(1, &d.vlmTex);
+                glBindTexture(GL_TEXTURE_2D, d.vlmTex);
+                glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB32F, n, 3, 0, GL_RGB, GL_FLOAT, rgb.data());
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+                glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+                glBindTexture(GL_TEXTURE_2D, 0);
+                d.vlmBase = (int)lo;
+                for (int k = 0; k < 3; ++k)
+                    for (int c = 0; c < 3; ++c) d.lmScale[k][c] = v.scale[k][c];
+                lm = true;
+                ++nLM;
+                ++vlmRemapped_;
+                LOG_INFO("wfc: vertex lightmap %s: section of %d vertices bound through _WFC_SRCVERT (%d cooked samples)",
+                         key.c_str(), n, v.count);
+            }
             int cum = 0, total = 0;
             {
                 const auto& rs = vlmRanges[key];
@@ -1647,6 +1673,7 @@ int Pipeline::upload(const MeshData& m) {
                 LOG_WARN("wfc: vertex lightmap %s: %d samples exceed GL_MAX_TEXTURE_SIZE %d; not bound", key.c_str(), v.count, maxTex);
                 cum = -2;
             }
+            if (remap) cum = -3;                                // bound above
             if (cum >= 0) {
                 glGenTextures(1, &d.vlmTex);
                 glBindTexture(GL_TEXTURE_2D, d.vlmTex);

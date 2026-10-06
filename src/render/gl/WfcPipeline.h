@@ -441,7 +441,14 @@ public:
         std::vector<float> v;
         void eval(float t, uint32_t& rng, float out[3]) const;
     };
-    struct FxModule { std::string name; std::map<std::string, FxDist> dists; int flagA = 1, flagB = 1; };
+    struct FxModule {
+        std::string name; std::map<std::string, FxDist> dists; int flagA = 1, flagB = 1;
+        // M63 PMI_LocationEmitter / PMI_LocationEmitterDirect: the source emitter (by name, in this system instance)
+        std::string sourceEmitter;
+        int selection = 0;                // 0 Random, 1 Sequential
+        bool inheritVelocity = false, inheritRotation = false;
+        float inheritVelocityScale = 1.0f, inheritRotationScale = 1.0f;   // CDO 1 / 1
+    };
     struct FxBurst { int count, countLow; float time; };
     struct FxLod {
         std::string material, meshGltf;
@@ -459,6 +466,16 @@ public:
             FxDist range, rangeScale, speed, tangent, scale;
         } noise;
         FxDist sourceStrength, targetStrength;   // Beam2 tangent strengths (UU; CDO 25): noise curve tangents
+        struct BeamEnd {                  // M60 ParticleModuleBeamSource / Target (RE pass 5 s11, native resolvers)
+            int method = 0;               // 0 Default, 1 UserSet, 2 Emitter, 3 Particle, 4 Actor
+            int tangentMethod = 0;        // 0 Direct, 1 UserSet, 2 Distribution, 3 Emitter
+            bool named = false, absolute = false, lock = false, lockTangent = false;
+            FxDist position, tangent;
+        } beamSrc, beamTgt;
+        bool beamDistance = false;        // BeamMethod Distance: target = source + X * Distance
+        float textureTile = 1.0f, textureTileDistance = 0.0f;   // M61 Trail2 TextureTile (CDO 1); the distance is exported but neither fill reads it (RE s13)
+        bool tilePerParticle = false;     // Trail2 bTilePerParticle
+        FxDist distance;
         struct BeamSine { float amp = 0, period = 1, speed = 0, phase = 0, dir[3] = {0, 0, 0}; };
         std::vector<BeamSine> sines;      // ParticleModuleBeamSineWave (WFC addition; render fill CONFIRMED, RE 9i)
         std::string sizeParam;            // SizeMultiplyLife by instance parameter (HoverFX "Size"); "" = none
@@ -484,6 +501,8 @@ private:
         int subImage = 0;
         int noiseCount = 0;               // Beam2 noise points (count + 1 offsets, UE units, beam space)
         float noiseTimer = 0.0f;          // seconds since the noise points were last re-drawn
+        bool beamInit = false;            // Beam2 ends resolved (UE world units; tangents x strength)
+        float beamSrc[3] = {0, 0, 0}, beamTgt[3] = {0, 0, 0}, beamSrcT[3] = {0, 0, 0}, beamTgtT[3] = {0, 0, 0};
         std::vector<float> noiseCur, noiseNext;
     };
     struct FxEmitterRT {
@@ -493,6 +512,7 @@ private:
         float dynParam[4] = {1, 1, 1, 1}; bool hasDyn = false;
         std::vector<std::array<float, 4>> trail;   // Trail2: recent source positions (UE) + age (s), newest last
         int forceSpawn = 0;                        // Trail2: particles owed by source movement (spawn per unit)
+        int locSequence = 0;                       // LocationEmitter Sequential selection counter
     };
     struct FxInstance {
         std::string component, owner, ownerClass, system, role, requiredRule;
@@ -508,6 +528,7 @@ private:
     };
     int nextFxId_ = 1;
     int progCacheHits_ = 0;
+    int vlmRemapped_ = 0;             // vertex-lightmap sections bound through _WFC_SRCVERT (M62)
     bool prewarmDone_ = false, prewarmPending_ = false;
     float worldRadius_ = 0.0f;
     std::map<std::string, FxSystem> fxSystems_;

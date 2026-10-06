@@ -190,6 +190,8 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
                 readVec2(doc, prim["attributes"]["TEXCOORD_0"].asInt(-1), uv);
             if (prim["attributes"].has("TEXCOORD_1"))
                 readVec2(doc, prim["attributes"]["TEXCOORD_1"].asInt(-1), uv1);   // lightmap UV
+            std::vector<uint32_t> srcv;                    // cooked vertex index (vertex-lightmap samples)
+            if (prim["attributes"].has("_WFC_SRCVERT")) readIndices(doc, prim["attributes"]["_WFC_SRCVERT"].asInt(-1), srcv);
             if (pos.empty()) continue;
 
             std::vector<uint32_t> idx;
@@ -198,6 +200,10 @@ void bakeNode(const GltfDoc& doc, const Json& nodes, const Json& meshes, int nod
 
             uint32_t base = (uint32_t)out.vertexCount();
             uint32_t indexStart = (uint32_t)out.indices.size();
+            if (!srcv.empty() || !out.srcVert.empty()) {
+                out.srcVert.resize(base, UINT32_MAX);
+                for (size_t i = 0; i < pos.size(); ++i) out.srcVert.push_back(i < srcv.size() ? srcv[i] : UINT32_MAX);
+            }
             // Normals transform by the inverse-transpose of the node's linear part (non-uniform and mirrored
             // instance scale, e.g. StaticMeshCollectionActor components): cofactor matrix * sign(det).
             const float* L = world.m;

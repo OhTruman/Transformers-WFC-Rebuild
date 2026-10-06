@@ -172,6 +172,9 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     const std::string td = L["type_data"].asString();
                     lod.typeData = td == "mesh" ? 1 : td == "trail2" ? 2 : td == "beam2" ? 3 : 0;
                     const assets::Json& bt = L["beam_trail"];
+                    lod.textureTile = std::max(1.0f, bt["TextureTile"].asFloat(1.0f));
+                    lod.textureTileDistance = bt["TextureTileDistance"].asFloat(0.0f);
+                    lod.tilePerParticle = bt["bTilePerParticle"].asBool(false);
                     if (lod.typeData == 3) {
                         lod.maxBeams = std::max(0, bt["MaxBeamCount"].asInt(1));
                         const std::string tm = bt["TaperMethod"].asString();
@@ -211,6 +214,27 @@ bool Pipeline::loadMapFx(const std::string& path) {
                         };
                         strength("source", lod.sourceStrength);
                         strength("target", lod.targetStrength);
+                        auto end = [&](const char* k, FxLod::BeamEnd& E) {
+                            E.position.kind = 0; E.position.comps = 3; E.position.v = {0.0f, 0.0f, 0.0f};
+                            E.tangent.kind = 0; E.tangent.comps = 3; E.tangent.v = {1.0f, 0.0f, 0.0f};
+                            if (!bm.isObject() || !bm[k].isObject()) return;     // no module: the component (Default (0,0,0))
+                            const assets::Json& j = bm[k];
+                            const std::string m = j["method"].asString(), tm = j["tangent_method"].asString();
+                            E.method = m == "PEB2STM_UserSet" ? 1 : m == "PEB2STM_Emitter" ? 2 : m == "PEB2STM_Particle" ? 3 :
+                                       m == "PEB2STM_Actor" ? 4 : 0;
+                            E.tangentMethod = tm == "PEB2STTM_UserSet" ? 1 : tm == "PEB2STTM_Distribution" ? 2 :
+                                              tm == "PEB2STTM_Emitter" ? 3 : 0;
+                            E.named = j["name"].isString() && !j["name"].asString().empty() && j["name"].asString() != "None";
+                            E.absolute = j["absolute"].asBool(false);
+                            E.lock = j["lock"].asBool(false);
+                            E.lockTangent = j["lock_tangent"].asBool(false);
+                            if (j["position"].isObject()) E.position = parseDist(j["position"], 3);
+                            if (j["tangent"].isObject()) E.tangent = parseDist(j["tangent"], 3);
+                        };
+                        end("source", lod.beamSrc);
+                        end("target", lod.beamTgt);
+                        lod.beamDistance = bt["BeamMethod"].asString() == "PEB2M_Distance";
+                        if (bt["distance"].isObject()) lod.distance = parseDist(bt["distance"], 1);
                         if (bm.isObject() && bm["sine_waves"].isArray())
                             for (size_t w = 0; w < bm["sine_waves"].size(); ++w) {
                                 const assets::Json& sw = bm["sine_waves"][w];
@@ -253,6 +277,15 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     mod.name = ms[m]["module"].asString();
                     mod.flagA = ms[m]["raw_flags"][0].asInt(1);
                     mod.flagB = ms[m]["raw_flags"][1].asInt(1);
+                    const assets::Json& le = ms[m]["location_emitter"];
+                    if (le.isObject()) {             // M63 (decoded from the LOD stream by build_map_fx)
+                        mod.sourceEmitter = le["emitter"].asString();
+                        mod.selection = le["selection"].asString() == "ELESM_Sequential" ? 1 : 0;
+                        mod.inheritVelocity = le["inherit_velocity"].asBool(false);
+                        mod.inheritVelocityScale = le["inherit_velocity_scale"].asFloat(1.0f);
+                        mod.inheritRotation = le["inherit_rotation"].asBool(false);
+                        mod.inheritRotationScale = le["inherit_rotation_scale"].asFloat(1.0f);
+                    }
                     const assets::Json& d = ms[m]["dists"];
                     for (const auto& dv : d.obj) {
                         bool vec = dv.second["kind"].asString().rfind("vector", 0) == 0;
@@ -463,6 +496,48 @@ void Pipeline::tickMapFx(float dt) {
                         if (ia != m.dists.end()) { ia->second.eval(q.relTime, in.rng, as); q.color[3] *= as[0]; }
                     }
                 }
+                if (L.typeData == 3) {
+                    // M60 beam ends (RE pass 5 s11: ResolveSourceData 0x8302F320 / ResolveTargetData 0x8302F738, CONFIRMED),
+                    // at spawn and every tick unless locked. Particle methods never read a particle (BeamMethod Target):
+                    // they take the Default path. Emitter source = the component origin; Emitter target needs a name,
+                    // else the distribution. Default: the distribution at EmitterTime through the component's
+                    // LocalToWorld (raw world if bAbsolute); a named Default target first reads the instance parameter
+                    // (our segment end point). UserSet: the SetBeam*Point array (our segment end point = target[0]),
+                    // empty -> the distribution. Tangents: Direct / Emitter = component X axis; Distribution = raw;
+                    // UserSet empty = distribution rotated (unless bAbsolute); times strength.
+                    auto xform = [&](const float* v, bool point, float* o) {
+                        for (int c = 0; c < 3; ++c) o[c] = v[0] * in.R[0][c] + v[1] * in.R[1][c] + v[2] * in.R[2][c] + (point ? in.T[c] : 0.0f);
+                    };
+                    auto distPath = [&](const FxLod::BeamEnd& E, float* o) {
+                        float v[3]; E.position.eval(rt.time, in.rng, v);
+                        if (E.absolute) std::copy(v, v + 3, o); else xform(v, true, o);
+                    };
+                    auto resolvePos = [&](const FxLod::BeamEnd& E, bool target, float* o) {
+                        if (!target && E.method == 2) { std::copy(in.T, in.T + 3, o); return; }
+                        if (target && E.method == 2 && E.named) { std::copy(in.T, in.T + 3, o); return; }   // emitter Location (H)
+                        if (target && in.hasTarget && (E.method == 1 || (E.method == 0 && E.named))) { std::copy(in.target, in.target + 3, o); return; }
+                        distPath(E, o);
+                    };
+                    auto resolveTan = [&](const FxLod::BeamEnd& E, const FxDist& strength, float* o) {
+                        float t[3], s[1];
+                        if (E.tangentMethod == 0 || E.tangentMethod == 3) { for (int c = 0; c < 3; ++c) t[c] = in.R[0][c]; }
+                        else {
+                            float v[3]; E.tangent.eval(q.relTime, in.rng, v);
+                            if (E.tangentMethod == 2 || E.absolute) std::copy(v, v + 3, t); else xform(v, false, t);
+                        }
+                        strength.eval(q.relTime, in.rng, s);
+                        for (int c = 0; c < 3; ++c) o[c] = t[c] * s[0];
+                    };
+                    if (!q.beamInit || !L.beamSrc.lock) resolvePos(L.beamSrc, false, q.beamSrc);
+                    if (!q.beamInit || !L.beamSrc.lockTangent) resolveTan(L.beamSrc, L.sourceStrength, q.beamSrcT);
+                    if (L.beamDistance) {
+                        float d[1]; L.distance.eval(q.relTime, in.rng, d);
+                        float xl = std::sqrt(in.R[0][0] * in.R[0][0] + in.R[0][1] * in.R[0][1] + in.R[0][2] * in.R[0][2]);
+                        for (int c = 0; c < 3; ++c) q.beamTgt[c] = q.beamSrc[c] + (xl > 0 ? in.R[0][c] / xl : 0.0f) * d[0];
+                    } else if (!q.beamInit || !L.beamTgt.lock) resolvePos(L.beamTgt, true, q.beamTgt);
+                    if (!q.beamInit || !L.beamTgt.lockTangent) resolveTan(L.beamTgt, L.targetStrength, q.beamTgtT);
+                    q.beamInit = true;
+                }
                 if (L.typeData == 3 && L.noise.on) {
                     // M56 Beam2 noise points (RE pass 5 s9h, native UParticleModuleBeamNoise Spawn 0x8301F6F8 / Update
                     // 0x8301F928, CONFIRMED): N = Frequency, or int(appSRand * (Frequency - LowRange) + LowRange) when
@@ -569,6 +644,26 @@ void Pipeline::tickMapFx(float dt) {
                         evalDist(m, "StartLocation", efrac, in.rng, v3);
                         toWorldDir(v3, w3);
                         for (int c = 0; c < 3; ++c) q.pos[c] += w3[c];
+                    } else if ((m.name == "PMI_LocationEmitter" || m.name == "PMI_LocationEmitterDirect") &&
+                               !m.sourceEmitter.empty()) {
+                        // M63: a live particle of the named emitter in this instance (Random / Sequential); its position,
+                        // and with bInheritSourceVelocity its velocity x scale. Direct: the particle with this index,
+                        // re-placed every tick (update below). No live source particle: the component (pending RE)
+                        const FxParticle* sp = nullptr;
+                        for (size_t e2 = 0; e2 < sys.emitters.size() && !sp; ++e2) {
+                            if (sys.emitters[e2].name != m.sourceEmitter) continue;
+                            const auto& src = in.emitters[e2].parts;
+                            if (src.empty()) break;
+                            size_t idx;
+                            if (m.name == "PMI_LocationEmitterDirect") idx = rt.parts.size() % src.size();
+                            else if (m.selection == 1) idx = (size_t)(rt.locSequence++) % src.size();
+                            else { in.rng = in.rng * 1664525u + 1013904223u; idx = (size_t)((in.rng >> 8) % (uint32_t)src.size()); }
+                            sp = &src[idx];
+                        }
+                        if (sp) {
+                            std::copy(sp->pos, sp->pos + 3, q.pos);
+                            if (m.inheritVelocity) for (int c = 0; c < 3; ++c) q.baseVel[c] += sp->vel[c] * m.inheritVelocityScale;
+                        }
                     } else if (m.name == "PMI_LocationPrimitiveSphere") {   // [PARTIAL] sampling rule
                         float rad[1], vs[1], off[3], d[3];
                         evalDist(m, "StartRadius", efrac, in.rng, rad);
@@ -1066,8 +1161,9 @@ void Pipeline::drawMapPresentation() {
                     if (sl < 1e-4f) return;
                     side = side * (1.0f / sl);
                     Sprite s;
-                    s.c[0] = a - side * (w0 * 0.5f); s.c[1] = b - side * (w1 * 0.5f);
-                    s.c[2] = b + side * (w1 * 0.5f); s.c[3] = a + side * (w0 * 0.5f);
+                    // half-width = Size (RE s13 addendum 2: Xenos beam / trail VS, offset (2V - 1) Size cross(view, dir))
+                    s.c[0] = a - side * w0; s.c[1] = b - side * w1;
+                    s.c[2] = b + side * w1; s.c[3] = a + side * w0;
                     const float uv[4][2] = {{u0, 1}, {u1, 1}, {u1, 0}, {u0, 0}};
                     std::memcpy(s.uv, uv, sizeof(uv));
                     for (int k = 0; k < 4; ++k) s.color[k] = 0.5f * (col0[k] + col1[k]);
@@ -1076,6 +1172,11 @@ void Pipeline::drawMapPresentation() {
                 // M56: a connected camera-facing strip (UE3 beam / trail vertex pairs are shared between segments):
                 // each point's side uses the averaged direction of its neighbouring segments, so kinks stay joined
                 struct SP { core::Vec3 p; float w; float col[4]; float u; };
+                // M61 texture layout (RE pass 5 s13, CONFIRMED CPU writes): U along the ribbon, V across (0 / 1 per vertex
+                // pair; which world side is V 0 is in the Xenon vertex shader: UNKNOWN, convention kept). Beams: U = r
+                // (TextureTile not applied). Trails: U by cumulative distance from the head, x TextureTile, clamped
+                static constexpr bool kAlongV = false;
+                float tile = 1.0f;
                 auto strip = [&](const std::vector<SP>& v) {
                     const size_t n = v.size();
                     if (n < 2) return;
@@ -1089,17 +1190,25 @@ void Pipeline::drawMapPresentation() {
                     for (size_t i = 0; i + 1 < n; ++i) {
                         if (core::length(side[i]) < 1e-6f || core::length(side[i + 1]) < 1e-6f) continue;
                         Sprite s;
-                        s.c[0] = v[i].p - side[i] * (v[i].w * 0.5f); s.c[1] = v[i + 1].p - side[i + 1] * (v[i + 1].w * 0.5f);
-                        s.c[2] = v[i + 1].p + side[i + 1] * (v[i + 1].w * 0.5f); s.c[3] = v[i].p + side[i] * (v[i].w * 0.5f);
-                        const float uv[4][2] = {{v[i].u, 1}, {v[i + 1].u, 1}, {v[i + 1].u, 0}, {v[i].u, 0}};
+                        // half-width = Size (the ribbon VS offsets each vertex pair by (2V - 1) x Size; RE s13 add. 2, HIGH)
+                        s.c[0] = v[i].p - side[i] * v[i].w; s.c[1] = v[i + 1].p - side[i + 1] * v[i + 1].w;
+                        s.c[2] = v[i + 1].p + side[i + 1] * v[i + 1].w; s.c[3] = v[i].p + side[i] * v[i].w;
+                        // along-ribbon coordinate (tiled) and across (0 / 1); kAlongV swaps them (M61)
+                        float ua = v[i].u * tile, ub = v[i + 1].u * tile;
+                        float uv[4][2] = {{ua, 1}, {ub, 1}, {ub, 0}, {ua, 0}};
+                        if (kAlongV) for (auto& c : uv) std::swap(c[0], c[1]);
                         std::memcpy(s.uv, uv, sizeof(uv));
                         for (int k = 0; k < 4; ++k) s.color[k] = 0.5f * (v[i].col[k] + v[i + 1].col[k]);
                         sp.push_back(s);
                     }
                 };
-                if (in.hasTarget) {
-                    const float src[3] = {in.T[0], in.T[1], in.T[2]};   // beam / tracer source = the component
-                    core::Vec3 a = ueToGltf(src), b = ueToGltf(in.target);
+                if (in.hasTarget || L.typeData == 3) {
+                  for (const FxParticle& qq : rt.parts) {
+                    // beam: this particle's resolved ends (M60); a tracer trail spawned along a segment: the segment
+                    const bool beamEnds = L.typeData == 3 && qq.beamInit;
+                    const float src[3] = {in.T[0], in.T[1], in.T[2]};
+                    core::Vec3 a = beamEnds ? ueToGltf(qq.beamSrc) : ueToGltf(src);
+                    core::Vec3 b = beamEnds ? ueToGltf(qq.beamTgt) : ueToGltf(in.target);
                     // Beam fill (M55 / M56; RE pass 5 s9i, native 0x830298E8). Points along source -> target: noise points
                     // (N steps, NoiseTessellation cubic sub-steps; tangents HIGH), else InterpolationPoints steps.
                     // Width = size * TaperFactor(r) * TaperScale(r) (CONFIRMED). Noise offsets are rotated by the
@@ -1111,32 +1220,41 @@ void Pipeline::drawMapPresentation() {
                         for (int c = 0; c < 3; ++c) w3[c] = o[0] * in.R[0][c] + o[1] * in.R[1][c] + o[2] * in.R[2][c];
                         return core::Vec3{w3[0] * 0.01f, w3[2] * 0.01f, w3[1] * 0.01f};
                     };
-                    // beam frame (CONFIRMED): the quaternion rotating UE +Z onto the beam direction (axis cross(Z, dir),
-                    // angle acos(dir.z)); local X / Y are across the beam, Z along it
-                    float sineM[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
-                    {
-                        float du[3] = {in.target[0] - in.T[0], in.target[1] - in.T[1], in.target[2] - in.T[2]};
+                    // sine frame (CONFIRMED): the quaternion rotating UE +Z onto dir = normalize(lerp(srcTangent x strength,
+                    // tgtTangent x strength, r)); local X / Y across the beam, Z along it (rows = images of the axes)
+                    auto frameAt = [&](float r, float M3[3][3]) {
+                        float du[3];
+                        for (int c = 0; c < 3; ++c)
+                            du[c] = beamEnds ? qq.beamSrcT[c] + (qq.beamTgtT[c] - qq.beamSrcT[c]) * r
+                                             : (in.target[c] - in.T[c]);
                         float dl = std::sqrt(du[0] * du[0] + du[1] * du[1] + du[2] * du[2]);
-                        if (dl > 1e-4f) {
-                            for (float& c : du) c /= dl;
-                            float ax[3] = {-du[1], du[0], 0.0f};            // cross((0,0,1), dir)
-                            float al = std::sqrt(ax[0] * ax[0] + ax[1] * ax[1]);
-                            float ang = std::acos(std::max(-1.0f, std::min(1.0f, du[2])));
-                            if (al > 1e-6f) {
-                                ax[0] /= al; ax[1] /= al;
-                                float cs = std::cos(ang), sn = std::sin(ang), t1 = 1.0f - cs;
-                                // rows: image of the local X / Y / Z axes (UE3 TransformNormal, row vectors)
-                                float R[3][3] = {{cs + ax[0] * ax[0] * t1, ax[0] * ax[1] * t1 - ax[2] * sn, ax[0] * ax[2] * t1 + ax[1] * sn},
-                                                 {ax[1] * ax[0] * t1 + ax[2] * sn, cs + ax[1] * ax[1] * t1, ax[1] * ax[2] * t1 - ax[0] * sn},
-                                                 {ax[2] * ax[0] * t1 - ax[1] * sn, ax[2] * ax[1] * t1 + ax[0] * sn, cs + ax[2] * ax[2] * t1}};
-                                for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) sineM[r][c] = R[c][r];
-                            } else if (du[2] < 0.0f) {
-                                sineM[1][1] = -1.0f; sineM[2][2] = -1.0f;   // pointing down: 180 degrees about X
-                            }
+                        for (int i = 0; i < 3; ++i) for (int c = 0; c < 3; ++c) M3[i][c] = i == c ? 1.0f : 0.0f;
+                        if (dl <= 1e-6f) return;
+                        for (float& c : du) c /= dl;
+                        float ax[3] = {-du[1], du[0], 0.0f};            // cross((0,0,1), dir)
+                        float al = std::sqrt(ax[0] * ax[0] + ax[1] * ax[1]);
+                        float ang = std::acos(std::max(-1.0f, std::min(1.0f, du[2])));
+                        if (al > 1e-6f) {
+                            ax[0] /= al; ax[1] /= al;
+                            float cs = std::cos(ang), sn = std::sin(ang), t1 = 1.0f - cs;
+                            float R[3][3] = {{cs + ax[0] * ax[0] * t1, ax[0] * ax[1] * t1 - ax[2] * sn, ax[0] * ax[2] * t1 + ax[1] * sn},
+                                             {ax[1] * ax[0] * t1 + ax[2] * sn, cs + ax[1] * ax[1] * t1, ax[1] * ax[2] * t1 - ax[0] * sn},
+                                             {ax[2] * ax[0] * t1 - ax[1] * sn, ax[2] * ax[1] * t1 + ax[0] * sn, cs + ax[2] * ax[2] * t1}};
+                            for (int i = 0; i < 3; ++i) for (int c = 0; c < 3; ++c) M3[i][c] = R[c][i];
+                        } else if (du[2] < 0.0f) {
+                            M3[1][1] = -1.0f; M3[2][2] = -1.0f;
                         }
-                    }
-                    const bool shaped = L.taperMethod != 0 || L.noise.on || !L.sines.empty();
-                    for (const FxParticle& q : rt.parts) {
+                    };
+                    // base path (RE 9i, HIGH stock CubicInterp): source -> target with the payload tangents x strengths
+                    auto basePath = [&](float r) {
+                        if (!beamEnds) return a + (b - a) * r;
+                        core::Vec3 m0 = ueToGltf(qq.beamSrcT), m1 = ueToGltf(qq.beamTgtT);
+                        float r2 = r * r, r3 = r2 * r;
+                        return a * (2 * r3 - 3 * r2 + 1) + m0 * (r3 - 2 * r2 + r) + b * (-2 * r3 + 3 * r2) + m1 * (r3 - r2);
+                    };
+                    const bool shaped = L.typeData == 3 || L.taperMethod != 0 || L.noise.on || !L.sines.empty();
+                    {
+                        const FxParticle& q = qq;
                         float w = q.size[0] * sizeScale[0] * 0.01f;
                         if (shaped) {
                             struct BP { core::Vec3 p; float r; };
@@ -1162,7 +1280,7 @@ void Pipeline::drawMapPresentation() {
                                         float ov[3] = {o[0] * noiseScale * rs[0], o[1] * noiseScale * rs[0], o[2] * noiseScale * rs[0]};
                                         off = compVec(ov);
                                     }
-                                    K[(size_t)i] = a + (b - a) * r + off;
+                                    K[(size_t)i] = basePath(r) + off;
                                 }
                                 // tangents (native fill, RE 9j CONFIRMED): T_i = normalize(N_{i+1} - N_{i-1}) *
                                 // lerp(SourceStrength, TargetStrength, r_i) (UU); NoiseTension / NoiseTangentStrength
@@ -1188,7 +1306,7 @@ void Pipeline::drawMapPresentation() {
                                 pts.push_back({K[(size_t)n], 1.0f});
                             } else {
                                 const int n = std::max(std::max(L.interpPoints, 1), L.sines.empty() ? 1 : 32);
-                                for (int i = 0; i <= n; ++i) { float r = (float)i / (float)n; pts.push_back({a + (b - a) * r, r}); }
+                                for (int i = 0; i <= n; ++i) { float r = (float)i / (float)n; pts.push_back({basePath(r), r}); }
                             }
                             if (!L.sines.empty()) {
                                 // BeamSineWave (WFC addition; native 0x83029618, RE 9i CONFIRMED) at every point:
@@ -1203,7 +1321,8 @@ void Pipeline::drawMapPresentation() {
                                         for (int c = 0; c < 3; ++c) o[c] += s.dir[c] * v;
                                     }
                                     float fade = std::min(6.0f * bp.r, 1.0f) * std::min(6.0f * (1.0f - bp.r), 1.0f);
-                                    float w3[3];
+                                    float sineM[3][3], w3[3];
+                                    frameAt(bp.r, sineM);
                                     for (int c = 0; c < 3; ++c) w3[c] = (o[0] * sineM[0][c] + o[1] * sineM[1][c] + o[2] * sineM[2][c]) * fade;
                                     bp.p = bp.p + core::Vec3{w3[0] * 0.01f, w3[2] * 0.01f, w3[1] * 0.01f};
                                 }
@@ -1219,6 +1338,7 @@ void Pipeline::drawMapPresentation() {
                             std::vector<SP> sv;
                             for (const BP& bp : pts)
                                 sv.push_back({bp.p, w * taperAt(bp.r), {q.color[0], q.color[1], q.color[2], q.color[3]}, bp.r});
+                            tile = 1.0f;     // the beam fill never applies TextureTile: U = r, 0 .. 1 (RE s13, CONFIRMED)
                             strip(sv);
                             continue;
                         }
@@ -1229,6 +1349,7 @@ void Pipeline::drawMapPresentation() {
                                      q.size[0], q.size[1], q.size[2], q.color[0], q.color[1], q.color[2], q.color[3], core::length(b - a));
                         quad(a, b, w, w, q.color, q.color, 0.0f, 1.0f);
                     }
+                  }
                 } else if (L.typeData == 2 && rt.trail.size() >= 2 && !rt.parts.empty()) {
                     const FxParticle& q = rt.parts.back();
                     float w = q.size[0] * sizeScale[0] * 0.01f;
@@ -1256,14 +1377,32 @@ void Pipeline::drawMapPresentation() {
                         };
                         for (int s = 0; s < T; ++s) {
                             float ta = (float)s / (float)T, fa = f0 + (f1 - f0) * ta;
+                            // the along coordinate starts (0) at the trail head, the newest point at the source: the
+                            // authored trail textures fade from U 0 to U 1 (iontrail_01 149 -> 7, RingsTrail 72 -> 8 by
+                            // quarter) [HIGH, data]. bTilePerParticle: the texture spans each segment; else the whole trail
+                            const float fromHead = (float)(n - 1) - ((float)k + ta);
                             sv.push_back({s == 0 ? P[k] : at(ta), w * fa, {q.color[0], q.color[1], q.color[2], q.color[3] * fa},
-                                          ((float)k + ta) / (float)(n - 1)});
+                                          L.tilePerParticle ? fromHead : fromHead / (float)(n - 1)});
                         }
                     }
                     {
                         float fl = 1.0f - std::min(rt.trail[n - 1][3] / life, 1.0f);
-                        sv.push_back({P[n - 1], w * fl, {q.color[0], q.color[1], q.color[2], q.color[3] * fl}, 1.0f});
+                        sv.push_back({P[n - 1], w * fl, {q.color[0], q.color[1], q.color[2], q.color[3] * fl}, 0.0f});
                     }
+                    // Trail2 fill (0x8301A700): U from 0 at the head (newest, HIGH), proportional to the cumulative distance:
+                    // U += SegmentLength x TextureTile / TotalLength, clamped to [0, TextureTile]; bTilePerParticle keeps
+                    // 0 .. Tile per segment (set above)
+                    if (!L.tilePerParticle && sv.size() >= 2) {
+                        float total = 0.0f;
+                        for (size_t i = 0; i + 1 < sv.size(); ++i) total += core::length(sv[i + 1].p - sv[i].p);
+                        float cum = 0.0f;
+                        sv.back().u = 0.0f;
+                        for (size_t i = sv.size() - 1; i-- > 0;) {
+                            cum += core::length(sv[i + 1].p - sv[i].p);
+                            sv[i].u = total > 1e-6f ? std::min(cum / total, 1.0f) : 0.0f;
+                        }
+                    }
+                    tile = L.textureTile;
                     strip(sv);
                 }
                 static const bool ribbonLog = std::getenv("WFC_FXTEST") != nullptr;
