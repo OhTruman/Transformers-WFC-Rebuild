@@ -330,6 +330,9 @@ public:
     int projectileFxSpawned_ = 0, projectileFxExplosions_ = 0;   // diagnostics (WFC_PROJFXTEST)
     // TnGrenadeThrower: G in robot form -> toss after TossDelay 0.4 s.
     void startLocalGrenadeToss();
+    void releaseGrenade(Character& gp, int player, const Weapon& gb, const core::Vec3& target);
+    void startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw);
+    void tickMeleeFor(Character& pc, int self, float dt);
     struct BarrierState {
         bool alive = false;
         core::Vec3 pos{0, 0, 0}; float yaw = 0.0f;

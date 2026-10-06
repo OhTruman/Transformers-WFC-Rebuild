@@ -4282,12 +4282,12 @@ void Application::runBotTest() {
             }
             suicides += ev.type == T::Suicide; envDeaths += ev.type == T::EnvironmentDeath; spawns += ev.type == T::Spawn;
         }
-        int hitsAll = 0, noPaths = 0, shots = 0, stucks = 0, repaths = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0, movers = 0;
+        int rushes = 0, melees = 0, grenades = 0, hitsAll = 0, noPaths = 0, shots = 0, stucks = 0, repaths = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0, movers = 0;
         for (const game::BotBrain& b : world_.botBrains()) {
-            hitsAll += b.hits; noPaths += b.noPaths; shots += b.shots; stucks += b.stucks; repaths += b.repaths; jumps += b.jumps; transforms += b.transforms; switches += b.switches; reloads += b.reloads;
+            rushes += b.rushes; melees += b.melees; grenades += b.grenades; hitsAll += b.hits; noPaths += b.noPaths; shots += b.shots; stucks += b.stucks; repaths += b.repaths; jumps += b.jumps; transforms += b.transforms; switches += b.switches; reloads += b.reloads;
             movers += travelled[b.player] > 40.0f;
         }
-        LOG_INFO("BOTTEST phase %d: hitscan hits %d, no-path searches %d", phase + 1, hitsAll, noPaths);
+        LOG_INFO("BOTTEST phase %d: hitscan hits %d, no-path searches %d, melee rushes %d attacks %d, grenades %d", phase + 1, hitsAll, noPaths, rushes, melees, grenades);
         LOG_INFO("BOTTEST phase %d: shots %d, bot kills %d (of the human %d), bot deaths %d, suicides %d, env deaths %d, spawns %d", phase + 1, shots,
                  botKills, botKillsOfHuman, botDeaths, suicides, envDeaths, spawns);
         LOG_INFO("BOTTEST phase %d: movers %d / %d, repaths %d, stuck events %d, jumps %d, transforms %d, weapon switches %d, reloads %d, longest idle %.1f s (player %d)",
@@ -4300,6 +4300,7 @@ void Application::runBotTest() {
         check(worstStill < 20.0f, "no bot idle / stuck out of combat for 20 s");
         check(shots > 50 && botKills >= 3 && botDeaths >= 3, "bots fight: shots, kills and deaths");
         check(envDeaths <= bots, "few environment deaths (" + std::to_string(envDeaths) + ")");
+        if (phase == 1) check(melees >= 1 && grenades >= 3, "bots use melee (" + std::to_string(melees) + ") and grenades (" + std::to_string(grenades) + ")");
         check(world_.botMsAverage() < 0.5 && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.5 ms, max < 6 ms)");
         // Let the match run out: it completes and the next one starts clean.
         for (int i = 0; i < (int)(30.0f / dt) && world_.match().state() != game::Match::State::MatchOver; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }

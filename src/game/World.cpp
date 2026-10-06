@@ -2286,44 +2286,7 @@ void World::tickAbilityEffects(float dt) {
         Character& gp = player_.pawn();
         const Weapon* gb = grenadeBag(gp);
         if (grenadeTossDelay_ < 0.0f && gb && !localDead_ && gp.moveForm() == Form::Robot) {
-            // TnGrenadeThrower.SpawnGrenade at MeleeSocket_RightHand.
-            core::Vec3 src = gp.actorLocation() + core::Vec3{0, gp.robotParams().eyeHeight, 0};
-            const SocketDef& sd = gp.chassis().rightHand;
-            core::Mat4 bm;
-            if (sd.valid && gp.boneWorld(sd.bone, bm)) { core::Mat4 w = bm * sd.local; src = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
-            const WeaponDef& d = *gb->def;
-            // SuggestTossVelocity(target, src, TossStrength): the lower ballistic arc at that speed under world gravity
-            // (native; exact solve here, 45 deg when out of reach) [PROV].
-            core::Vec3 to = grenadeTarget_ - src;
-            float hd = std::hypot(to.x, to.z), dy = to.y, S = d.tossStrength, g = core::config::kGravity;
-            float disc = S * S * S * S - g * (g * hd * hd + 2.0f * dy * S * S);
-            float ang = disc >= 0.0f && hd > 1e-3f ? std::atan((S * S - std::sqrt(disc)) / (g * hd)) : 0.7853982f;
-            core::Vec3 hdir = hd > 1e-3f ? core::Vec3{to.x / hd, 0, to.z / hd} : core::forwardFromYawPitch(gp.yaw(), 0.0f);
-            core::Vec3 vel = hdir * (S * std::cos(ang)) + core::Vec3{0, S * std::sin(ang), 0};
-            // AdjustTossVelocity: aim pitch (src -> target) <= LowPitchDegrees.Max -> speed lerps toward LowPitchSpeed at .Min.
-            const float aimPitch = std::atan2(dy, std::max(hd, 1e-3f)) * 57.29578f;
-            if (d.lowPitchMin != d.lowPitchMax && aimPitch <= d.lowPitchMax) {
-                float np = core::clampf((aimPitch - d.lowPitchMin) / (d.lowPitchMax - d.lowPitchMin), 0.0f, 1.0f);
-                float sp = core::length(vel);
-                vel = core::normalize(vel) * (d.lowPitchSpeed + (sp - d.lowPitchSpeed) * np);
-            }
-            // Grenade.Init: x Lerp(SpeedScaleAtMinPitch, SpeedScaleAtMaxPitch, pct(launch pitch, MinPitch, MaxPitch)).
-            const float launchPitch = std::atan2(vel.y, std::hypot(vel.x, vel.z)) * 57.29578f;
-            float lp = core::clampf((launchPitch - d.minPitch) / (d.maxPitch - d.minPitch), 0.0f, 1.0f);
-            vel = vel * (d.speedScaleMinPitch + (d.speedScaleMaxPitch - d.speedScaleMinPitch) * lp);
-            Projectile pr{src, vel, d.projDamage, d.projRadiusM, 1e9f, d.projDamageType ? d.projDamageType : "", localPlayer_};
-            pr.grenade = true; pr.explodeOnPawn = d.explodeOnPawn; pr.gravityScale = d.gravityScale; pr.bounce = d.bounce;
-            pr.fuseMin = d.fuseMin; pr.fuseMax = d.fuseMax;
-            pr.visual = projectileVisualFor(d.id);
-            pr.yaw0 = std::atan2(-vel.x, -vel.z);
-            pr.pitch0 = std::atan2(vel.y, std::hypot(vel.x, vel.z));
-            // RotationRate (Pitch -100000 rotator units/s, the TnProjectileDataGrenadeLauncher default these grenades' data
-            // inherit) [CONF authored]; the tumble sign in mesh space follows the vehicle pitch convention [HIGH].
-            const std::string gid = d.id;
-            if (gid == "FlakGrenades" || gid == "FlashBangs" || gid == "HealGrenades") pr.spinRate = -100000.0f * 6.2831853f / 65536.0f;
-            projectiles_.push_back(pr);
-            projectileFxStart(projectiles_.back());
-            LOG_INFO("grenade %s: |v| %.1f m/s pitch %.1f deg (aim %.1f)", d.id, core::length(vel), launchPitch, aimPitch);
+            releaseGrenade(gp, localPlayer_, *gb, grenadeTarget_);
         }
     }
     if (pc.shockwaveDelay_ >= 0.0f) {
@@ -2359,8 +2322,14 @@ const Sweep kWhirlSweeps[] = {{0.9f, 0.4f, true, {450, 450, 200}}, {1.6f, 0.4f, 
 }
 
 void World::startLocalMelee(bool whirlwind) {
-    Character& pc = player_.pawn();
-    if (localPlayerDead() || pc.moveForm() != Form::Robot || pc.isTransforming() || pc.isMeleeing()) return;
+    if (localPlayerDead()) return;
+    startMeleeFor(player_.pawn(), localPlayer_, whirlwind, player_.controller().viewYaw());
+}
+
+// TnMeleeAttack start for any participant pawn: the attack chooser, its action, and the melee-assist lunge toward an enemy in the
+// picker cone about viewYaw.
+void World::startMeleeFor(Character& pc, int self, bool whirlwind, float viewYaw) {
+    if (pc.moveForm() != Form::Robot || pc.isTransforming() || pc.isMeleeing()) return;
     if (!whirlwind && pc.weapon().reloading()) return;
     pc.meleeState_ = whirlwind ? 2 : 1;
     pc.meleeT_ = 0.0f; pc.meleeSweep_ = -1; pc.meleeHit_.clear();
@@ -2404,11 +2373,13 @@ void World::startLocalMelee(bool whirlwind) {
     // clamp(4 deg, atan(3.5 m / d), atan(4.5 m / d)) about the view direction) -> AttackDash lunge toward it (yaw only).
     if (!matchActive_) return;
     const core::Vec3 eye = pc.actorLocation();
-    const core::Vec3 fwd = core::forwardFromYawPitch(player_.controller().viewYaw(), 0.0f);
+    const core::Vec3 fwd = core::forwardFromYawPitch(viewYaw, 0.0f);
     float best = 1e9f;
-    for (MatchOpponent* o : opponents_) {
-        if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
-        core::Vec3 d = o->pawn().actorLocation() - eye; d.y = 0.0f;
+    for (size_t vp = 0; vp < match_.players().size(); ++vp) {
+        if ((int)vp == self || match_.sameTeam((int)vp, self)) continue;
+        const Character* vc = participantPawn((int)vp);
+        if (!vc) continue;
+        core::Vec3 d = vc->actorLocation() - eye; d.y = 0.0f;
         float dist = core::length(d);
         if (dist > 20.0f || dist < 1e-3f) continue;
         float half = std::max(4.0f * 0.0174533f, std::min(std::atan(4.5f / dist), std::max(std::atan(3.5f / dist), 4.0f * 0.0174533f)));
@@ -2418,8 +2389,11 @@ void World::startLocalMelee(bool whirlwind) {
     if (best < 1e9f) { pc.lungeRemain_ = 0.25f; pc.setYaw(std::atan2(-pc.lungeDir_.x, -pc.lungeDir_.z)); }
 }
 
-void World::tickLocalMelee(float dt) {
-    Character& pc = player_.pawn();
+void World::tickLocalMelee(float dt) { tickMeleeFor(player_.pawn(), localPlayer_, dt); }
+
+// The melee sweeps of any participant pawn: box checks against every other live participant (teammates excluded), damage with the
+// attacker as instigator, momentum.
+void World::tickMeleeFor(Character& pc, int self, float dt) {
     if (!pc.isMeleeing()) return;
     pc.meleeT_ += dt;
     const bool whirl = pc.meleeState_ == 2;
@@ -2447,21 +2421,24 @@ void World::tickLocalMelee(float dt) {
             pc.meleeHitRoller_ = true;
         }
         const char* type = whirl ? "TransGame.TnDamageTypeWhirlwind" : pc.meleePoke_ ? "TransGame.TnDamageTypePoke" : "TransGame.TnDamageTypeMelee";
-        for (MatchOpponent* o : opponents_) {
-            if (!o->spawned() || std::find(pc.meleeHit_.begin(), pc.meleeHit_.end(), o->matchPlayer()) != pc.meleeHit_.end()) continue;
-            const Character& v = o->pawn();
+        for (size_t vpi = 0; vpi < match_.players().size(); ++vpi) {
+            const int vp = (int)vpi;
+            if (vp == self || (match_.settings().teamGame && match_.sameTeam(vp, self))) continue;
+            const Character* vptr = participantPawn(vp);
+            if (!vptr || std::find(pc.meleeHit_.begin(), pc.meleeHit_.end(), vp) != pc.meleeHit_.end()) continue;
+            const Character& v = *vptr;
             const core::Vec3 c = v.actorLocation();
             const float r = v.cylinderRadius(v.moveForm()), hh = v.cylinderHalfHeight(v.moveForm());
             // MultiPointCheck of the box against the victim cylinder (as a box), then a clear trace attacker -> victim.
             if (std::fabs(c.x - at.x) > ex.x + r || std::fabs(c.z - at.z) > ex.z + r || std::fabs(c.y - at.y) > ex.y + hh) continue;
             float t;
             if (line && line->segmentHit(pc.actorLocation(), c, t)) continue;
-            pc.meleeHit_.push_back(o->matchPlayer()); ++pc.meleeHitCount_;
-            applyMatchDamage(o->matchPlayer(), localPlayer_, damage, false, type);
+            pc.meleeHit_.push_back(vp); ++pc.meleeHitCount_;
+            applyMatchDamage(vp, self, damage, false, type);
             // Momentum = normal(victim - attacker) x Impulse (WeaponAttack 30000, flag / bomb 80000, Whirlwind 2000) [CONF].
             const float impulse = whirl ? 2000.0f : pc.meleeCarrier_ ? 80000.0f : pc.meleePoke_ ? 200000.0f : 30000.0f;
             core::Vec3 dir = c - pc.actorLocation();
-            if (core::length(dir) > 1e-4f) applyKnockback(o->matchPlayer(), core::normalize(dir) * impulse, type);
+            if (core::length(dir) > 1e-4f) applyKnockback(vp, core::normalize(dir) * impulse, type);
         }
     }
     if (pc.meleeT_ >= pc.meleeLen_) { pc.meleeState_ = 0; pc.meleeSweep_ = -1; }
@@ -2527,6 +2504,48 @@ const Weapon* World::grenadeBag(const Character& c) const {
 // TnPlayerController.PlayerWalking.TossGrenade -> TnGrenadeBag.TossGrenade (CanToss: ammo, FireInterval 1.5 s) ->
 // TnGrenadeThrower: target = the view trace from TargetTraceRange.Min 1000 to .Max 10000 UU (hit or end); GrenadeThrow
 // upper-body anim; spawn after TossDelay 0.4 s [CONF script + authored].
+// TnGrenadeThrower.SpawnGrenade for any participant pawn: the toss toward target (the release after TossDelay).
+void World::releaseGrenade(Character& gp, int player, const Weapon& gb, const core::Vec3& target) {
+        // TnGrenadeThrower.SpawnGrenade at MeleeSocket_RightHand.
+        core::Vec3 src = gp.actorLocation() + core::Vec3{0, gp.robotParams().eyeHeight, 0};
+        const SocketDef& sd = gp.chassis().rightHand;
+        core::Mat4 bm;
+        if (sd.valid && gp.boneWorld(sd.bone, bm)) { core::Mat4 w = bm * sd.local; src = core::Vec3{w.m[12], w.m[13], w.m[14]}; }
+        const WeaponDef& d = *gb.def;
+        // SuggestTossVelocity(target, src, TossStrength): the lower ballistic arc at that speed under world gravity
+        // (native; exact solve here, 45 deg when out of reach) [PROV].
+        core::Vec3 to = target - src;
+        float hd = std::hypot(to.x, to.z), dy = to.y, S = d.tossStrength, g = core::config::kGravity;
+        float disc = S * S * S * S - g * (g * hd * hd + 2.0f * dy * S * S);
+        float ang = disc >= 0.0f && hd > 1e-3f ? std::atan((S * S - std::sqrt(disc)) / (g * hd)) : 0.7853982f;
+        core::Vec3 hdir = hd > 1e-3f ? core::Vec3{to.x / hd, 0, to.z / hd} : core::forwardFromYawPitch(gp.yaw(), 0.0f);
+        core::Vec3 vel = hdir * (S * std::cos(ang)) + core::Vec3{0, S * std::sin(ang), 0};
+        // AdjustTossVelocity: aim pitch (src -> target) <= LowPitchDegrees.Max -> speed lerps toward LowPitchSpeed at .Min.
+        const float aimPitch = std::atan2(dy, std::max(hd, 1e-3f)) * 57.29578f;
+        if (d.lowPitchMin != d.lowPitchMax && aimPitch <= d.lowPitchMax) {
+            float np = core::clampf((aimPitch - d.lowPitchMin) / (d.lowPitchMax - d.lowPitchMin), 0.0f, 1.0f);
+            float sp = core::length(vel);
+            vel = core::normalize(vel) * (d.lowPitchSpeed + (sp - d.lowPitchSpeed) * np);
+        }
+        // Grenade.Init: x Lerp(SpeedScaleAtMinPitch, SpeedScaleAtMaxPitch, pct(launch pitch, MinPitch, MaxPitch)).
+        const float launchPitch = std::atan2(vel.y, std::hypot(vel.x, vel.z)) * 57.29578f;
+        float lp = core::clampf((launchPitch - d.minPitch) / (d.maxPitch - d.minPitch), 0.0f, 1.0f);
+        vel = vel * (d.speedScaleMinPitch + (d.speedScaleMaxPitch - d.speedScaleMinPitch) * lp);
+        Projectile pr{src, vel, d.projDamage, d.projRadiusM, 1e9f, d.projDamageType ? d.projDamageType : "", player};
+        pr.grenade = true; pr.explodeOnPawn = d.explodeOnPawn; pr.gravityScale = d.gravityScale; pr.bounce = d.bounce;
+        pr.fuseMin = d.fuseMin; pr.fuseMax = d.fuseMax;
+        pr.visual = projectileVisualFor(d.id);
+        pr.yaw0 = std::atan2(-vel.x, -vel.z);
+        pr.pitch0 = std::atan2(vel.y, std::hypot(vel.x, vel.z));
+        // RotationRate (Pitch -100000 rotator units/s, the TnProjectileDataGrenadeLauncher default these grenades' data
+        // inherit) [CONF authored]; the tumble sign in mesh space follows the vehicle pitch convention [HIGH].
+        const std::string gid = d.id;
+        if (gid == "FlakGrenades" || gid == "FlashBangs" || gid == "HealGrenades") pr.spinRate = -100000.0f * 6.2831853f / 65536.0f;
+        projectiles_.push_back(pr);
+        projectileFxStart(projectiles_.back());
+        LOG_INFO("grenade %s: |v| %.1f m/s pitch %.1f deg (aim %.1f)", d.id, core::length(vel), launchPitch, aimPitch);
+}
+
 void World::startLocalGrenadeToss() {
     Character& pc = player_.pawn();
     if (localDead_ || pc.moveForm() != Form::Robot || pc.isTransforming() || pc.isMeleeing() || grenadeTossDelay_ >= 0.0f) return;

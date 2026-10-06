@@ -368,6 +368,36 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
                 pc.requestWeaponSwitch(dir); ++b.switches; b.switchHold = 0.0f;
             }
         } else b.switchHold = 0.0f;
+        // Grenade toss (TnGrenadeThrower through the shared release): at a visible enemy 8-30 m away now and then, from the bag's
+        // reserve, at most every 6 s (the bag's FireInterval if longer). Heal grenades are not thrown at enemies [PARTIAL: bots do
+        // not heal]. Decision rate by skill (PC ADAPTATION).
+        if (visible && b.grenadeCooldown <= 0.0f && b.grenadeDelay < 0.0f && !pc.isMeleeing() && pc.carryingHeavy_ == 0) {
+            const Character* tp = participantPawn(b.target);
+            Weapon* bag = nullptr;
+            for (Weapon& w : pc.inventoryMutable()) if (w.grenade()) { bag = &w; break; }
+            const float d = tp ? core::length(tp->position() - pc.position()) : 0.0f;
+            static const float kChance[3] = {0.05f, 0.09f, 0.14f};
+            if (tp && bag && bag->reserve > 0 && std::string(bag->def->id) != "HealGrenades" && d >= 8.0f && d <= 30.0f &&
+                b.frand() < kChance[std::clamp(b.difficulty, 0, 2)]) {
+                bag->reserve -= 1;
+                b.grenadeCooldown = std::max(6.0f, bag->fireInterval);
+                b.grenadeDelay = 0.4f;
+                b.grenadeTarget = tp->position() + tp->velocity() * 1.0f;
+                pc.playAction("GrenadeThrow", true);
+                pc.exposeSelf();
+                ++b.grenades;
+            }
+        }
+        // Melee rush (PC ADAPTATION): an enemy within 20 m (the melee-assist pick range), now and then by skill or when out of ammo
+        // (melee cannot start mid-reload).
+        if (visible && std::getenv("WFC_BOTDIST")) if (const Character* tp = participantPawn(b.target)) { static int h[8] = {}; static int n = 0; h[(int)aiRangeBand(core::length(tp->position() - pc.position()))]++; if (++n % 400 == 0) LOG_INFO("BOTDIST bands touch %d striking %d close %d medium %d far %d retreated %d out %d", h[1], h[2], h[3], h[4], h[5], h[6], h[7]); }
+        if (visible && now >= b.rushUntil && b.meleeCooldown <= 0.0f && pc.carryingHeavy_ == 0)
+            if (const Character* tp = participantPawn(b.target)) {
+                const float d = core::length(tp->position() - pc.position());
+                static const float kRush[3] = {0.08f, 0.15f, 0.22f};
+                if (d <= 20.0f && !pc.weapon().reloading() && ((pc.weapon().ammo == 0 && pc.weapon().reserve == 0) || b.frand() < kRush[std::clamp(b.difficulty, 0, 2)]))
+                    { b.rushUntil = now + 3.0f; ++b.rushes; }
+            }
         // Opportunistic reload out of combat.
         Weapon& cw = pc.weapon();
         if (!visible && cw.ammo < cw.magSize / 2 && cw.canReload()) { cw.beginReload(); ++b.reloads; }
@@ -406,7 +436,10 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
     const AiWeaponData& ad = aiWeaponData(pc.weapon().def ? pc.weapon().def->id : "", pc.weapon().magSize);
     const bool inBand = visible && tdist <= aiRangeMaxM(ad.desired) && tdist >= aiRangeMinM(ad.desired) * 0.7f;
     const bool tooClose = visible && tdist < aiRangeMinM(ad.desired) * 0.7f;
-    if (b.mission || (!inBand && !tooClose)) {
+    const bool rushing = visible && !b.mission && match_.matchTime() < b.rushUntil && tdist > 1e-3f;
+    if (rushing) {
+        moveDir = core::normalize(core::Vec3{toT.x, 0, toT.z});   // melee rush: straight at the target
+    } else if (b.mission || (!inBand && !tooClose)) {
         // Path following.
         while (b.wp < b.path.size() && hdist(b.path[b.wp].pos, pos) < (vehicle ? 2.5f : 1.2f) && b.path[b.wp].action != 1) { ++b.wp; b.bestDist = 1e9f; }
         // Look-ahead: skip a corner when the one after it is directly walkable (one check per step); vehicles carry momentum
@@ -508,7 +541,17 @@ void World::botAimAndFire(MatchOpponent& o, BotBrain& b, float dt) {
     if (pc.moveForm() == Form::Vehicle) w->tick(dt);   // the robot weapon ticks in tickBots
     const bool usable = pc.moveForm() == Form::Vehicle ? !pc.isTransforming() : (pc.weaponUsable() && !pc.isMeleeing() && pc.carryingHeavy_ == 0);
     if (usable && w->ammo == 0 && w->canReload()) { w->beginReload(); ++b.reloads; }
-    if (!t || !usable) return;
+    if (!t || pc.isMeleeing()) return;
+    // Melee (the shared TnMeleeAttack path, assist lunge included): an enemy within Striking range in front of the robot.
+    if (pc.moveForm() == Form::Robot && b.reactionLeft <= 0.0f && b.meleeCooldown <= 0.0f && pc.carryingHeavy_ == 0) {
+        const core::Vec3 to = targetable(*t) - pc.actorLocation();
+        const float d = std::sqrt(to.x * to.x + to.z * to.z);
+        if (d <= 7.0f && std::fabs(wrapPi(yawOf(to) - b.yaw)) < 0.6f) {   // the assist lunge closes the rest
+            startMeleeFor(pc, o.matchPlayer(), false, b.yaw);
+            if (pc.isMeleeing()) { ++b.melees; b.meleeCooldown = b.frange(1.2f, 2.0f) + (2 - b.difficulty) * 0.5f; return; }
+        }
+    }
+    if (!usable || match_.matchTime() < b.rushUntil) return;   // a melee rush holds fire (a reload would block the strike)
     if (b.reactionLeft > 0.0f) { b.reactionLeft -= dt; return; }
     // Burst pacing from the AI weapon data for the target's CenterPointRange band [CONF RE]; the skill scales it.
     const float dist = core::length(targetable(*t) - eye);
@@ -544,9 +587,11 @@ void World::tickBots(float dt) {
         if (!b.wasSpawned) {   // a fresh spawn: reset the brain (the pawn faces the start's yaw)
             const int keepPlayer = b.player, keepDiff = b.difficulty; const unsigned keepRng = b.rng;
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
+            const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes;
             b = BotBrain{};
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
+            b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru;
             b.wasSpawned = true; b.yaw = pc.yaw();
         }
         b.life += dt;
@@ -575,6 +620,10 @@ void World::tickBots(float dt) {
             if (ok) { pc.beginTransform(); ++b.transforms; b.wantRepath = true; }
             b.transformCooldown = 2.0f;
         }
+        b.meleeCooldown -= dt; b.grenadeCooldown -= dt;
+        tickMeleeFor(pc, b.player, dt);
+        if (b.grenadeDelay >= 0.0f && (b.grenadeDelay -= dt) < 0.0f && pc.moveForm() == Form::Robot)
+            for (Weapon& w : pc.inventoryMutable()) if (w.grenade()) { releaseGrenade(pc, b.player, w, b.grenadeTarget); break; }
         // Robot weapon state (the local pawn's ticks in PlayerController::applyToPawn).
         if (pc.moveForm() == Form::Robot) {
             pc.tickSpreadModifier(dt);
