@@ -275,7 +275,20 @@ public:
         // Grenade (TnProjectileGrenadeBase): gravity scale, bounce, fuse (starts on the first impact), resting, explode on pawn.
         bool grenade = false, explodeOnPawn = false, resting = false;
         float gravityScale = 1.0f, bounce = 1.0f, fuseMin = 0.0f, fuseMax = 0.0f;
+        int visual = -1;     // projVisuals_ index (the firing weapon's authored projectile_visual)
+        int fxHandle = -1;   // live FlightEffect particle system (renderer handle), -1 = none
     };
+    // weapon.json projectiles[0].projectile_visual: FlightEffect (the projectile's visible body + trail), ExplosionEffect
+    // (EmitterPool.SpawnEmitter at HitLocation, rotator(HitNormal)), and the class-default static mesh where one exists
+    // (the thrown grenades) [CONF AssetTools + RE projectile_effect_bindings].
+    struct ProjectileVisual { std::string weapon, flight, explosion; render::MeshHandle body = render::kInvalidMesh; };
+    std::vector<ProjectileVisual> projVisuals_;
+    void loadProjectileVisuals(const std::string& root, const std::function<void(std::vector<render::Material>&)>& resolveTextures);
+    int projectileVisualFor(const char* weaponId) const;
+    void projectileFxStart(Projectile& p);
+    void projectileFxMove(const Projectile& p);
+    void projectileFxEnd(Projectile& p, const core::Vec3& at, const core::Vec3& normal, bool explode);
+    int projectileFxSpawned_ = 0, projectileFxExplosions_ = 0;   // diagnostics (WFC_PROJFXTEST)
     // TnGrenadeThrower: G in robot form -> toss after TossDelay 0.4 s.
     void startLocalGrenadeToss();
     struct BarrierState {
@@ -468,6 +481,12 @@ public:
     void qaTeleportToStart(int index);                                       // authored player start #index (wraps)
     void qaSetNoclip(bool on);                                               // UFO camera-relative flight, no collision / gravity
     void qaSetGodMode(bool on);                                              // the local pawn ignores damage
+    // Projectile FX diagnostics: renderer has the particle API, FlightEffects spawned, ExplosionEffects spawned, live projectiles.
+    static bool projectileFxApi();
+    int projectileFxSpawned() const { return projectileFxSpawned_; }
+    int projectileFxExplosions() const { return projectileFxExplosions_; }
+    size_t liveProjectiles() const { return projectiles_.size(); }
+    const std::string& projectileFlightTemplate(size_t i) const { static const std::string none; return i < projectiles_.size() && projectiles_[i].visual >= 0 ? projVisuals_[(size_t)projectiles_[i].visual].flight : none; }
     bool qaNoclip() const { return qaNoclip_; }
     bool qaGodMode() const { return qaGod_; }
     std::string qaStatus() const;                                            // map / mode / body / form / weapon / position

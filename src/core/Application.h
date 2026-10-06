@@ -42,6 +42,7 @@ private:
     void runTransformVisibilityTest();
     void runFineAimTest();
     void runQaToolTest();
+    void runProjectileFxTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

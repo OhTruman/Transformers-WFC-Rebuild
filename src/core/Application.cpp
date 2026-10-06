@@ -147,7 +147,8 @@ bool Application::init() {
     if (std::getenv("WFC_VSOCKET")) { runVehicleSocketProbe(); return false; } // vehicle weapon socket vs hull, playtest M10
     if (std::getenv("WFC_XFORMVIS")) { runTransformVisibilityTest(); return false; } // per-chassis transform mesh handoff, playtest M10
     if (std::getenv("WFC_FINEAIMTEST")) { runFineAimTest(); return false; }   // per-weapon fine aim camera, playtest M10
-    if (std::getenv("WFC_QATEST")) { runQaToolTest(); return false; }        // DEV / QA TOOLING self-test (needs WFC_QA=1)   // measurements only
+    if (std::getenv("WFC_QATEST")) { runQaToolTest(); return false; }        // DEV / QA TOOLING self-test (needs WFC_QA=1)
+    if (std::getenv("WFC_PROJFXTEST")) { runProjectileFxTest(); return false; }   // projectile FlightEffect / ExplosionEffect binding   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -3545,6 +3546,39 @@ void Application::runQaToolTest() {
     LOG_INFO("QATEST status: %s", world_.qaStatus().c_str());
     check(!world_.qaStatus().empty(), "status line");
     LOG_INFO("QATEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_PROJFXTEST: every simulated projectile weapon resolves its authored FlightEffect / ExplosionEffect (weapon.json
+// projectiles[0].projectile_visual) and each projectile reaches its end (impact or expiry) inside the run.
+void Application::runProjectileFxTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("PROJFX %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    LOG_INFO("PROJFX renderer particle API: %s", game::World::projectileFxApi() ? "present" : "absent (box fallback; FX calls compiled out)");
+    game::Character& pc = world_.player().pawn();
+    int bound = 0, total = 0;
+    for (int i = 0; i < game::weaponDefCount(); ++i) {
+        const game::WeaponDef& d = game::weaponDefAt(i);
+        game::Weapon w = game::Weapon::fromDef(d);
+        if (!(w.fireType == game::WeaponFire::Projectile && w.projSpeed > 0.0f)) continue;
+        ++total;
+        const size_t before = world_.liveProjectiles();
+        const core::Vec3 o = pc.actorLocation() + core::Vec3{0, 2.0f, 0};
+        const core::Vec3 dir = core::forwardFromYawPitch(pc.yaw(), -0.3f);
+        world_.spawnProjectile(o, dir * w.projSpeed, w, world_.localMatchPlayer());
+        const std::string tpl = world_.liveProjectiles() > before ? world_.projectileFlightTemplate(world_.liveProjectiles() - 1) : "";
+        if (!tpl.empty()) ++bound;
+        run(0.05f);
+        LOG_INFO("PROJFX %-22s flight %s", d.id, tpl.empty() ? "(none)" : tpl.c_str());
+    }
+    run(12.0f);
+    check(total > 0 && bound == total, "fired projectile weapons bind a FlightEffect: " + std::to_string(bound) + "/" + std::to_string(total));
+    check(world_.liveProjectiles() == 0, "all projectiles ended (impact / expiry) within 12 s: " + std::to_string(world_.liveProjectiles()) + " left");
+    if (game::World::projectileFxApi())
+        check(world_.projectileFxSpawned() == total && world_.projectileFxExplosions() > 0,
+              "renderer FX: " + std::to_string(world_.projectileFxSpawned()) + " flight, " + std::to_string(world_.projectileFxExplosions()) + " explosions");
+    LOG_INFO("PROJFX SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

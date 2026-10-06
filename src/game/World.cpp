@@ -108,6 +108,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         // The socket itself is the chassis' WeaponSocket_Primary (applyChassisToLocalPawn).
         LOG_INFO("weapon: Ion Blaster loaded");
     }
+    loadProjectileVisuals(root, resolveTextures);
 
     // Collision: the authored per-trace worlds (AssetTools PHYSICS_STREETS): collision_pawn.glb blocks pawn and
     // vehicle movement (BSP + 71 BlockingVolumes + 4 TnForcedDirVolumes + authored simple hulls), and
@@ -1434,8 +1435,18 @@ void World::draw(render::IRenderer& r) const {
     }
     for (const auto& a : actors_) if (a->alive()) a->draw(r);
     if (!localPlayerDead()) player_.draw(r);
-    // Projectiles: a small box marker until Rendering draws the authored projectile meshes / trails [PROV presentation].
-    for (const Projectile& p : projectiles_) r.drawBox(p.pos, core::Vec3{0.25f, 0.25f, 0.25f}, core::Vec3{1.0f, 0.6f, 0.2f});
+    // Projectiles: the authored FlightEffect is the body (a renderer particle system, projectileFxStart); the thrown grenades
+    // also draw their class-default static mesh. The box marker remains only when nothing authored can be shown (renderer
+    // without the particle API, or a template missing from this map's FX data) [fallback, not original].
+    for (const Projectile& p : projectiles_) {
+        const ProjectileVisual* v = p.visual >= 0 ? &projVisuals_[(size_t)p.visual] : nullptr;
+        if (v && v->body != render::kInvalidMesh) {
+            const float yaw = std::atan2(-p.vel.x, -p.vel.z);
+            r.drawMesh(v->body, core::Mat4::translate(p.pos) * core::Mat4::rotateY(yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
+        } else if (p.fxHandle < 0) {
+            r.drawBox(p.pos, core::Vec3{0.25f, 0.25f, 0.25f}, core::Vec3{1.0f, 0.6f, 0.2f});
+        }
+    }
 
     // Ion Blaster mesh held at the weapon socket (robot form only).
     if (localPlayerDead()) { /* no pawn: no weapon / pawn effects (PendingMatch, dead) */ }
@@ -1676,6 +1687,8 @@ void World::spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const 
         p.homingForce = w.homingForce; p.closingDist = w.closingDistM; p.closingForce = w.closingForce;
         p.closingTime = w.closingTime; p.maxSpeed = w.projMaxSpeed; p.lockRobots = w.lockRobots;
     }
+    projectiles_.back().visual = projectileVisualFor(w.def ? w.def->id : nullptr);
+    projectileFxStart(projectiles_.back());
 }
 
 void World::radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type) {
@@ -1760,7 +1773,11 @@ void World::tickProjectiles(float dt) {
                     p.vel = (p.vel - n * (2.0f * core::dot(p.vel, n))) * p.bounce;
                     if (core::dot(p.vel, p.vel) < 500.0f * 1e-4f) { p.resting = true; p.vel = {0, 0, 0}; }
                 };
-                if (hitPawn && p.explodeOnPawn) { radiusDamage(p.pos, p.damage, p.radius, p.instigator, p.damageType); projectiles_.erase(projectiles_.begin() + (long)i); continue; }
+                if (hitPawn && p.explodeOnPawn) {
+                    radiusDamage(p.pos, p.damage, p.radius, p.instigator, p.damageType);
+                    projectileFxEnd(p, p.pos, sl > 1e-5f ? seg * (-1.0f / sl) : core::Vec3{0, 1, 0}, true);
+                    projectiles_.erase(projectiles_.begin() + (long)i); continue;
+                }
                 if (hitPawn) {
                     core::Vec3 n = core::normalize(core::Vec3{-seg.x, 0.0f, -seg.z});
                     impact(n);
@@ -1773,15 +1790,22 @@ void World::tickProjectiles(float dt) {
                 } else p.pos = nx;
             }
             p.life -= dt;
-            if (p.life <= 0.0f) { radiusDamage(p.pos + core::Vec3{0, 0.1f, 0}, p.damage, p.radius, p.instigator, p.damageType); projectiles_.erase(projectiles_.begin() + (long)i); continue; }
+            if (p.life <= 0.0f) {
+                radiusDamage(p.pos + core::Vec3{0, 0.1f, 0}, p.damage, p.radius, p.instigator, p.damageType);
+                projectileFxEnd(p, p.pos, core::Vec3{0, 1, 0}, true);   // fuse: resting on the floor [PROV normal]
+                projectiles_.erase(projectiles_.begin() + (long)i); continue;
+            }
+            projectileFxMove(p);
             ++i;
             continue;
         }
         core::Vec3 next = p.pos + p.vel * dt;
         float best = 1.0f; bool hit = false;
         float t;
-        if (lineWorld && lineWorld->segmentHit(p.pos, next, t)) { best = t; hit = true; }
+        core::Vec3 hitN{0, 0, 0};
+        if (lineWorld && lineWorld->segmentHit(p.pos, next, t, hitN)) { best = t; hit = true; }
         core::Vec3 d = next - p.pos; float len = core::length(d);
+        const float worldBest = best;
         bool barrierHit = false;
         if (len > 1e-5f) { float tb; if (barrierRayHit(p.pos, d * (1.0f / len), len, tb) && tb / len < best) { best = tb / len; hit = true; barrierHit = true; } }
         if (len > 1e-5f) {
@@ -1805,10 +1829,15 @@ void World::tickProjectiles(float dt) {
             core::Vec3 at = p.pos + d * best;
             if (hit || closingExpired) radiusDamage(at, p.damage, p.radius, p.instigator, p.damageType);
             if (barrierHit && barrier_.alive && barrier_.health > 0.0f) {}   // radiusDamage reached the barrier
+            // HitNormal: the world surface's normal; a pawn / barrier hit (or no normal) faces back along the flight.
+            const bool worldHit = hit && best == worldBest && core::dot(hitN, hitN) > 0.5f;
+            const core::Vec3 n = worldHit ? hitN : (len > 1e-5f ? d * (-1.0f / len) : core::Vec3{0, 1, 0});
+            projectileFxEnd(p, at, n, hit || closingExpired);   // LifeSpan expiry: Destroyed, no explosion
             projectiles_.erase(projectiles_.begin() + (long)i);
             continue;
         }
         p.pos = next;
+        projectileFxMove(p);
         ++i;
     }
 }
@@ -2014,7 +2043,9 @@ void World::tickAbilityEffects(float dt) {
             Projectile pr{src, vel, d.projDamage, d.projRadiusM, 1e9f, d.projDamageType ? d.projDamageType : "", localPlayer_};
             pr.grenade = true; pr.explodeOnPawn = d.explodeOnPawn; pr.gravityScale = d.gravityScale; pr.bounce = d.bounce;
             pr.fuseMin = d.fuseMin; pr.fuseMax = d.fuseMax;
+            pr.visual = projectileVisualFor(d.id);
             projectiles_.push_back(pr);
+            projectileFxStart(projectiles_.back());
             LOG_INFO("grenade %s: |v| %.1f m/s pitch %.1f deg (aim %.1f)", d.id, core::length(vel), launchPitch, aimPitch);
         }
     }
@@ -2907,6 +2938,102 @@ std::string World::qaStatus() const {
                   pc.form() == Form::Vehicle ? "vehicle" : "robot", pc.weapon().def ? pc.weapon().def->provider : "-",
                   pc.position().x, pc.position().y, pc.position().z, (int)qaNoclip_, (int)qaGod_);
     return b;
+}
+
+// ---- Projectile FX (Rendering's particle API, agents/rendering 38c9ecf+: spawnParticleEffect / setParticleEffectTransform /
+// stopParticleEffect). Detected at compile time so this file builds against a renderer interface without it. ----
+namespace {
+template <class R>
+auto fxSpawn(R& r, const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int)
+    -> decltype(r.spawnParticleEffect(t, p, f, u), int()) { return r.spawnParticleEffect(t, p, f, u); }
+template <class R> int fxSpawn(R&, const std::string&, const core::Vec3&, const core::Vec3&, const core::Vec3&, long) { return -1; }
+template <class R>
+auto fxMove(R& r, int h, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int)
+    -> decltype(r.setParticleEffectTransform(h, p, f, u), void()) { r.setParticleEffectTransform(h, p, f, u); }
+template <class R> void fxMove(R&, int, const core::Vec3&, const core::Vec3&, const core::Vec3&, long) {}
+template <class R> auto fxStop(R& r, int h, int) -> decltype(r.stopParticleEffect(h), void()) { r.stopParticleEffect(h); }
+template <class R> void fxStop(R&, int, long) {}
+template <class R> constexpr auto fxApi(int) -> decltype(std::declval<R&>().spawnParticleEffect(std::string(), core::Vec3{}, core::Vec3{}, core::Vec3{}), bool()) { return true; }
+template <class R> constexpr bool fxApi(long) { return false; }
+// UE3 rotator(dir) as a (forward, up) frame: up = world up unless the direction is near vertical.
+void fxFrame(const core::Vec3& dirIn, core::Vec3& f, core::Vec3& u) {
+    const float l = core::length(dirIn);
+    f = l > 1e-5f ? dirIn * (1.0f / l) : core::Vec3{0, 0, -1};
+    const core::Vec3 ref = std::fabs(f.y) > 0.99f ? core::Vec3{0, 0, -1} : core::Vec3{0, 1, 0};
+    const core::Vec3 rgt = core::normalize(core::cross(f, ref));
+    u = core::normalize(core::cross(rgt, f));
+}
+}  // namespace
+
+bool World::projectileFxApi() { return fxApi<render::IRenderer>(0); }
+
+void World::loadProjectileVisuals(const std::string& root, const std::function<void(std::vector<render::Material>&)>& resolveTextures) {
+    projVisuals_.clear();
+    int meshes = 0;
+    for (int i = 0; i < weaponDefCount(); ++i) {
+        const WeaponDef& d = weaponDefAt(i);
+        if (!d.id || projectileVisualFor(d.id) >= 0) continue;
+        // The folder is the provider id; try the class id first (most match), then the provider; the file must be this class.
+        std::string txt; assets::Json j; bool found = false;
+        for (const char* dir : {d.id, d.provider}) {
+            if (!dir || !*dir || !readTextFile(root + "/Weapons/" + dir + "/weapon.json", txt) || !assets::Json::parse(txt, j)) continue;
+            const std::string cls = j["class"].asString();
+            if (cls.size() >= std::strlen(d.id) && cls.compare(cls.size() - std::strlen(d.id), std::string::npos, d.id) == 0) { found = true; break; }
+        }
+        if (!found) continue;
+        const assets::Json& ps = j["projectiles"];
+        if (ps.size() == 0) continue;
+        // The first projectile class (PlasmaCannon: Charge1; the charge levels are not simulated) [PARTIAL for PlasmaCannon].
+        const assets::Json& v = ps[(size_t)0]["projectile_visual"];
+        ProjectileVisual pv;
+        pv.weapon = d.id;
+        pv.flight = v["flight_effect"]["template"].asString();
+        pv.explosion = v["explosion_effect"]["template"].asString();
+        const std::string gltf = ps[(size_t)0]["body_mesh"]["gltf"].asString();
+        if (!gltf.empty() && renderer_) {
+            render::MeshData md;
+            if (assets::loadGlb(root + "/../" + gltf, md)) {
+                resolveTextures(md.mats);
+                pv.body = renderer_->uploadMesh(md);
+                if (pv.body != render::kInvalidMesh) ++meshes;
+            }
+        }
+        if (pv.flight.empty() && pv.explosion.empty() && pv.body == render::kInvalidMesh) continue;
+        projVisuals_.push_back(pv);
+    }
+    LOG_INFO("projectile visuals: %zu weapons (%d body meshes), renderer particle API %s", projVisuals_.size(), meshes,
+             projectileFxApi() ? "present" : "absent (box marker fallback)");
+}
+
+int World::projectileVisualFor(const char* weaponId) const {
+    if (!weaponId) return -1;
+    for (size_t i = 0; i < projVisuals_.size(); ++i) if (projVisuals_[i].weapon == weaponId) return (int)i;
+    return -1;
+}
+
+void World::projectileFxStart(Projectile& p) {
+    p.fxHandle = -1;
+    if (!renderer_ || p.visual < 0 || projVisuals_[(size_t)p.visual].flight.empty()) return;
+    core::Vec3 f, u; fxFrame(p.vel, f, u);
+    p.fxHandle = fxSpawn(*renderer_, projVisuals_[(size_t)p.visual].flight, p.pos, f, u, 0);
+    if (p.fxHandle >= 0) ++projectileFxSpawned_;
+}
+
+void World::projectileFxMove(const Projectile& p) {
+    if (!renderer_ || p.fxHandle < 0) return;
+    core::Vec3 f, u;
+    // A resting grenade keeps its last orientation (zero velocity).
+    if (core::dot(p.vel, p.vel) < 1e-8f) return;
+    fxFrame(p.vel, f, u);
+    fxMove(*renderer_, p.fxHandle, p.pos, f, u, 0);
+}
+
+void World::projectileFxEnd(Projectile& p, const core::Vec3& at, const core::Vec3& normal, bool explode) {
+    if (!renderer_) return;
+    if (p.fxHandle >= 0) { fxStop(*renderer_, p.fxHandle, 0); p.fxHandle = -1; }   // trails finish their lifetime
+    if (!explode || p.visual < 0 || projVisuals_[(size_t)p.visual].explosion.empty()) return;
+    core::Vec3 f, u; fxFrame(normal, f, u);
+    if (fxSpawn(*renderer_, projVisuals_[(size_t)p.visual].explosion, at, f, u, 0) >= 0) ++projectileFxExplosions_;
 }
 
 } // namespace game

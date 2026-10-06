@@ -184,6 +184,25 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - Map / mode / class / lobby: Frontend drives the real lobby flow.
 - WFC_QATEST 7/7 with the gate; without it, every call is refused.
 
+### Projectile visuals [CONFIRMED ORIGINAL bindings: AssetTools weapon.json projectile_visual, RE projectile_effect_bindings]
+- Was: every projectile drew as an orange box marker.
+- Now each projectile carries its weapon's authored visual (projectiles[0].projectile_visual), resolved by class id, else provider
+  folder, and accepted only when the file's class matches. Lifecycle:
+  - spawn: spawnParticleEffect(FlightEffect, pos, forward = velocity, up);
+  - each tick: setParticleEffectTransform;
+  - impact / fuse: stopParticleEffect (trails finish), then the ExplosionEffect at the hit location, oriented by the hit normal
+    (EmitterPool.SpawnEmitter(ExplosionEffect, HitLocation, rotator(HitNormal)));
+  - LifeSpan expiry: no explosion.
+- FlightEffect is the body (no static mesh) for all but the thrown grenades. Flak / Flashbang / Heal also draw their class-default
+  WEP_Grenade_*_STAT mesh.
+- Renderer API from agents/rendering (38c9ecf+), detected at compile time: on a tree without it, the FX calls compile out and the
+  box marker stays as a non-original fallback. It also stays when a template is missing from the map's FX data.
+- PARTIAL: PlasmaCannon uses Charge1 visuals (charge levels not simulated); grenade mesh orientation follows the velocity yaw
+  (spin not recovered); the fuse explosion normal is assumed up.
+- WFC_PROJFXTEST 2/2: 11/11 projectile weapons bind a FlightEffect (15 weapons with visuals incl. grenades, 3 body meshes), all
+  projectiles end within 12 s. A standalone check (work/pass23/fxcheck) confirms the detection calls spawn / move / stop with
+  Rendering's exact signatures.
+
 ### Vehicle weapon origin [CONFIRMED ORIGINAL socket data]
 - WFC_VSOCKET: WeaponSocket_Primary sits on each chassis' left gun bone (L_GunRobo01_XT) or the tank cannon (C_Cannon_XB),
   inside the vehicle hull; Starscream's is under the wing, 0.8 m below the physics box.
