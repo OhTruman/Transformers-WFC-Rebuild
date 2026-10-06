@@ -460,6 +460,9 @@ Application::MatchExit Application::runMatch() {
             break;
         }
         ++frame;
+        // [Rendering M09] PC ADAPTATION: presented-frame limiter slot, before the frame's clock read and input pump
+        // (lowest latency; the simulation's fixed step is unaffected). No-op when the limit is 0 (unlimited).
+        if (renderer_) renderer_->waitFrameSlot();
         double now = nowSeconds();
         double realDt = now - last;
         last = now;

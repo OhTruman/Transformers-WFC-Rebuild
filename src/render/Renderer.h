@@ -369,6 +369,13 @@ public:
         (void)material; (void)location; (void)dir; (void)width; (void)height; (void)thickness; (void)rollDeg; (void)lifetime;
         return -1;
     }
+    // Presented-frame limiter (PC adaptation; M09). hz <= 0 = unlimited (default; WFC_FRAMELIMIT=hz overrides for
+    // tests). Paces presentation only - the fixed-step simulation, physics and animation are unchanged. For the lowest
+    // latency the main loop calls waitFrameSlot() at the top of each frame (before input); when it does not,
+    // endFrame waits instead. High-resolution waitable timer + ~1 ms spin, deadline-scheduled (no catch-up bursts).
+    virtual void setFrameLimit(float hz) { (void)hz; }
+    virtual float frameLimit() const { return 0.0f; }
+    virtual void waitFrameSlot() {}
     // M76 weapon impact decal (HmWeaponMesh.CreateImpactEffects / TnProjectileMesh explosion; RE pass 5 s12 add. 29).
     // glTF metres; `weaponClass` is the script class (e.g. "TnWeaponAssaultRifle"). The renderer resolves the hit
     // surface's PhysicalMaterial from the world geometry's material and applies the cooked tables (impact_decals.json):
@@ -386,6 +393,11 @@ public:
     virtual int spawnParticleEffectSegment(const std::string& tpl, const core::Vec3& start, const core::Vec3& end,
                                            const float* colorRGBA = nullptr) {
         (void)tpl; (void)start; (void)end; (void)colorRGBA; return -1;
+    }
+    // Move both ends of a live segment effect (a sustained beam: the repair ray's Tracer_RepairBeam_FX follows its
+    // muzzle and target every frame): re-placed at start with +X towards end, end kept as the beam target.
+    virtual bool setParticleEffectSegment(int handle, const core::Vec3& start, const core::Vec3& end) {
+        (void)handle; (void)start; (void)end; return false;
     }
     // Move a live effect (a muzzle flash following its socket; local-space emitters follow, world-space ones keep
     // their spawned particles where they are).

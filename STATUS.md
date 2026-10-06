@@ -3398,6 +3398,11 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE 09 (2026-10-06)
+- FPS limiter core (PC ADAPTATION; setFrameLimit / waitFrameSlot), pacing measurement (WFC_PACINGLOG): the high-fps choppiness is the missing sim-to-render interpolation (Gameplay fixing).
+- Freeze evidence: stall watchdog with minidumps; non-finite draw guards. Impact decals (M76); repair-beam segment updates.
+- Waiting on others: render interpolation, repair-beam call, jet particles (Gameplay); Debris stray-object positions (Experimental); dark-shadow original values (RE).
+
 ## RENDERING M75 (2026-10-06)
 - Loading-screen warm-up draw of the world (first match frame: world part 21 -> 3 ms). The larger first-frame cost is the player character's materials, already prewarmed in the player flow (Gameplay startLocalMatch); only direct-boot test runs pay it.
 

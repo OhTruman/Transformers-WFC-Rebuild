@@ -18,6 +18,7 @@
 #include "render/Renderer.h"
 #include "render/gl/WfcPipeline.h"
 #include "render/gl/RenderWatchdog.h"
+#include "render/FrameLimiter.h"
 #include "platform/Image.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -62,6 +63,7 @@ public:
     }
     bool init() override {
         watchdog::start();                    // stall diagnostics: a freeze logs its phase and writes a minidump
+        if (const char* fl = std::getenv("WFC_FRAMELIMIT")) { limiter_.setLimit((float)std::atof(fl)); limitFromEnv_ = true; }
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
         glEnable(GL_CULL_FACE);
@@ -226,6 +228,8 @@ public:
         watchdog::phase("endFrame: post / composite");
         if (wfc_.active()) wfc_.endFrame();
         glx::gpuTimerEnd();
+        if (!slotWaited_) { watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot
+        slotWaited_ = false;
         { static int frames = 0; watchdog::frameDone(++frames);
           if (frames == 60 && std::getenv("WFC_HANGTEST")) {   // diagnostics: a 7 s stall to exercise the watchdog
               watchdog::phase("WFC_HANGTEST stall");
@@ -1041,6 +1045,12 @@ public:
         float tgt[3] = {b.x * 100.0f, b.z * 100.0f, b.y * 100.0f};
         return wfc_.spawnFx(tpl, R, T, color, tgt);
     }
+    bool setParticleEffectSegment(int h, const core::Vec3& a, const core::Vec3& b) override {
+        float R[3][3], T[3];
+        if (!wfc_.active() || !fxRows(a, b - a, core::Vec3{0, 1, 0}, R, T)) return false;
+        const float tgt[3] = {b.x * 100.0f, b.z * 100.0f, b.y * 100.0f};
+        return wfc_.setFxTransform(h, R, T) && wfc_.setFxTarget(h, tgt);
+    }
     bool setParticleEffectTransform(int h, const core::Vec3& pos, const core::Vec3& fwd, const core::Vec3& up) override {
         float R[3][3], T[3];
         return wfc_.active() && fxRows(pos, fwd, up, R, T) && wfc_.setFxTransform(h, R, T);
@@ -1058,6 +1068,15 @@ public:
     void setMapClock(float t) override { wfc_.setMapClock(t); }
     void setDestructibleState(const std::string& a, int s) override { wfc_.setDestructibleState(a, s); }
 
+    FrameLimiter limiter_;
+    bool limitFromEnv_ = false, slotWaited_ = false;
+    void setFrameLimit(float hz) override {
+        if (limitFromEnv_) return;                 // a test override wins
+        if (hz != limiter_.limit()) LOG_INFO("renderer: frame limit %s", hz > 0 ? std::to_string((int)hz).c_str() : "off");
+        limiter_.setLimit(hz);
+    }
+    float frameLimit() const override { return limiter_.limit(); }
+    void waitFrameSlot() override { watchdog::phase("frame limiter"); limiter_.wait(); slotWaited_ = true; }
     // M73 decal receivers: compact copy (positions + triangle indices) of the authored world geometry - the full CPU
     // world mesh is dropped after upload - with a ground-plane (x, z) grid of triangles for the box query
     struct DecalReceivers {

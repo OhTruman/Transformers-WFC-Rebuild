@@ -295,6 +295,10 @@ private:
     const std::vector<std::pair<std::string, std::array<float, 4>>>* drawParams_ = nullptr;   // per-draw runtime params
     std::map<int, std::vector<std::pair<std::string, std::array<float, 4>>>> ownerParams_;   // M70 by draw owner
     std::map<int, float> ownerDefrag_;                    // M74 energy death by draw owner
+    struct BeastVolume { float loc[3], scale[3]; int n[3]; int priority; std::vector<float> sh; };
+    std::vector<BeastVolume> beast_;                      // M09 Beast probe grids (beast_probes.json)
+    // the probes' ambient cube at a UE point, glTF face order (+X, -X, +Y up, -Y, +Z, -Z); false outside every volume
+    bool beastAmbient(const core::Vec3& ueP, core::Vec3 cube[6]) const;
     bool warmup_ = false;                                 // M75: warm-up draw in progress (no frustum culling)
     std::map<std::string, std::string> energyDeath_;      // M74 lower-case mesh package -> Defrag instance
     bool inDynamicDraw_ = false;
@@ -472,6 +476,7 @@ public:
     // Matinee material parameters on a MaterialInstanceActor's MIC (material_instance_actors.json); held until changed
     bool setMaterialParam(const std::string& actor, const std::string& param, const float v[4]);
     bool setFxTransform(int id, const float R[3][3], const float T[3]);
+    bool setFxTarget(int id, const float target[3]);   // segment end (beam target), UE units
     void stopFx(int id);
     bool setFxParam(int id, const std::string& name, const float v[4]);
     int liveFx() const;

@@ -46,6 +46,17 @@ std::string readFile(const std::string& p) {
 void evalDist(const Pipeline::FxModule& m, const char* name, float t, uint32_t& rng, float* out) {
     auto it = m.dists.find(name);
     if (it != m.dists.end()) { it->second.eval(t, rng, out); return; }
+    // pstream labels LocationPrimitiveSphere's two float distributions DynamicParams[0] / [1] (as SubUVDirect's):
+    // serialization order, base class first - [0] = VelocityScale (ParticleModuleLocationPrimitiveBase), [1] =
+    // StartRadius (the sphere's own) [HIGH: matches every MP value pair, e.g. AR sparks 30 / U(2,5), smoke 0.5 / 5]
+    if (m.name == "PMI_LocationPrimitiveSphere") {
+        const char* alias = std::strcmp(name, "VelocityScale") == 0 ? "DynamicParams[0].ParamValue"
+                          : std::strcmp(name, "StartRadius") == 0 ? "DynamicParams[1].ParamValue" : nullptr;
+        if (alias) {
+            auto al = m.dists.find(alias);
+            if (al != m.dists.end()) { al->second.eval(t, rng, out); return; }
+        }
+    }
     out[0] = out[1] = out[2] = 0.0f;
     static std::set<std::string> logged;
     std::string key = m.name + "." + name;
@@ -922,6 +933,12 @@ bool Pipeline::setFxTransform(int id, const float R[3][3], const float T[3]) {
             std::copy(T, T + 3, in.T);
             return true;
         }
+    return false;
+}
+
+bool Pipeline::setFxTarget(int id, const float target[3]) {
+    for (FxInstance& in : fxInstances_)
+        if (in.transient && in.id == id) { in.hasTarget = true; std::copy(target, target + 3, in.target); return true; }
     return false;
 }
 

@@ -715,6 +715,23 @@ bool Pipeline::load(const std::string& mapName) {
         mats_[kv.first] = std::move(s);
     }
 
+    {   // M09 Beast light-probe grids (beast_probes.py; RE MILESTONE03 lightvis add. 2)
+        assets::Json B;
+        std::string bj = readText(dataDir_ + "/beast_probes.json");
+        if (!bj.empty() && assets::Json::parse(bj, B))
+            for (const assets::Json& v : B["volumes"].arr) {
+                BeastVolume bv;
+                for (int i = 0; i < 3; ++i) {
+                    bv.loc[i] = v["location"][(size_t)i].asFloat(); bv.scale[i] = v["scale"][(size_t)i].asFloat(1.0f);
+                    bv.n[i] = v["points"][(size_t)i].asInt(1);
+                }
+                bv.priority = v["priority"].asInt(0);
+                bv.sh.reserve(v["sh"].size());
+                for (const assets::Json& f : v["sh"].arr) bv.sh.push_back((float)f.asDouble());
+                if (bv.sh.size() == (size_t)bv.n[0] * bv.n[1] * bv.n[2] * 27) beast_.push_back(std::move(bv));
+            }
+        if (!beast_.empty()) LOG_INFO("wfc: %zu Beast light-probe volume(s)", beast_.size());
+    }
     {   // M74 energy-death instances by form-mesh package (build_materials energy_death.json)
         assets::Json E;
         std::string ej = readText(dataDir_ + "/energy_death.json");
@@ -1013,6 +1030,8 @@ bool Pipeline::load(const std::string& mapName) {
             decalMesh_ = upload(dec);
             if (decalMesh_ >= 0) meshes_[(size_t)decalMesh_].decal = true;
         }
+        else if (std::ifstream(dataDir_ + "/decals.glb").good())   // written empty: the map authors no DecalActors (Debris)
+            LOG_INFO("wfc: decals.glb has no decals (none authored on this map)");
         else LOG_WARN("wfc: decals.glb missing; static decals not drawn");
     }
     if (const char* cc = std::getenv("WFC_CHARCOLORS")) {   // verification: "pr,pg,pb;sr,sg,sb;er,eg,eb"
@@ -2112,8 +2131,20 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
     ActiveTexture(GL_TEXTURE0);
 }
 
+// AMD stability guard (M09): non-finite transforms / vertices are skipped and reported, never submitted (a NaN / INF
+// position or matrix yields undefined primitives - one suspect for the RX 7900 XTX resets / freezes).
+static bool finiteMat(const core::Mat4& m) {
+    for (float v : m.m) if (!std::isfinite(v)) return false;
+    return true;
+}
+static void reportNonFinite(const char* what, const std::string& detail) {
+    static int n = 0;
+    if (n++ < 20) LOG_ERROR("render guard: non-finite %s (%s) - draw skipped", what, detail.c_str());
+}
+
 void Pipeline::draw(int id, const core::Mat4& model) {
     if (id < 0 || (size_t)id >= meshes_.size()) return;
+    if (!finiteMat(model)) { reportNonFinite("model matrix", "mesh " + std::to_string(id)); return; }
     GpuMesh& g = meshes_[(size_t)id];
     drawSubs(g, model, !g.world);
     if (g.drawsBsp && bspMesh_ >= 0 && bspMesh_ != id) drawSubs(meshes_[(size_t)bspMesh_], model, false);
@@ -2240,6 +2271,55 @@ void Pipeline::updateRuntimeDecals() {
     }
 }
 
+// Beast probe ambient (RE CONFIRMED: volume pick 0x82CCB228, trilinear lookup 0x82FC6DB8, SH -> cube 0x82CBE520):
+// enabled volumes containing the point (max |local| <= 1, local = (P - Location) / DrawScale3D); the highest
+// Priority wins, equal priorities averaged. Grid g = (N - 1)(local + 1) / 2 per axis (EdgePolicy 0), 8 corners.
+// Face = dot(SH_rgb, B(dir)) / |B(dir)|^2 (plain radiance, no cosine convolution), stock UE3 L2 basis.
+bool Pipeline::beastAmbient(const core::Vec3& P, core::Vec3 cube[6]) const {
+    if (beast_.empty()) return false;
+    static const float kB[6][9] = {      // basis at +X, -X, +Y, -Y, +Z, -Z (UE axes)
+        {0.282095f, 0, 0, -0.488603f, 0, 0, -0.315392f, 0, 0.546274f},
+        {0.282095f, 0, 0, 0.488603f, 0, 0, -0.315392f, 0, 0.546274f},
+        {0.282095f, -0.488603f, 0, 0, 0, 0, -0.315392f, 0, -0.546274f},
+        {0.282095f, 0.488603f, 0, 0, 0, 0, -0.315392f, 0, -0.546274f},
+        {0.282095f, 0, 0.488603f, 0, 0, 0, 0.630784f, 0, 0},
+        {0.282095f, 0, -0.488603f, 0, 0, 0, 0.630784f, 0, 0}};
+    const float p[3] = {P.x, P.y, P.z};
+    int best = -0x7fffffff, count = 0;
+    float sh[27] = {};
+    for (const BeastVolume& v : beast_) {
+        float local[3]; bool in = true;
+        for (int a = 0; a < 3; ++a) { local[a] = (p[a] - v.loc[a]) / v.scale[a]; in &= std::fabs(local[a]) <= 1.0f; }
+        if (!in || v.priority < best) continue;
+        if (v.priority > best) { best = v.priority; count = 0; std::fill(sh, sh + 27, 0.0f); }
+        int i0[3], i1[3]; float f[3];
+        for (int a = 0; a < 3; ++a) {
+            const float g = (float)(v.n[a] - 1) * (local[a] + 1.0f) * 0.5f;
+            i0[a] = std::max(0, (int)std::floor(g)); i1[a] = std::min(i0[a] + 1, v.n[a] - 1);
+            f[a] = std::min(std::max(g - (float)i0[a], 0.0f), 1.0f);
+        }
+        for (int c = 0; c < 8; ++c) {
+            const int x = (c & 1) ? i1[0] : i0[0], y = (c & 2) ? i1[1] : i0[1], z = (c & 4) ? i1[2] : i0[2];
+            const float w = ((c & 1) ? f[0] : 1 - f[0]) * ((c & 2) ? f[1] : 1 - f[1]) * ((c & 4) ? f[2] : 1 - f[2]);
+            const float* s = &v.sh[(((size_t)z * v.n[1] + y) * v.n[0] + x) * 27];
+            for (int k = 0; k < 27; ++k) sh[k] += w * s[k];
+        }
+        ++count;
+    }
+    if (count == 0) return false;
+    float ue[6][3];
+    for (int fc = 0; fc < 6; ++fc) {
+        float nb = 0; for (int k = 0; k < 9; ++k) nb += kB[fc][k] * kB[fc][k];
+        for (int ch = 0; ch < 3; ++ch) {
+            float d = 0; for (int k = 0; k < 9; ++k) d += sh[ch * 9 + k] * kB[fc][k];
+            ue[fc][ch] = d / nb / (float)count;
+        }
+    }
+    const int toGltf[6] = {0, 1, 4, 5, 2, 3};   // UE +X,-X,+Y,-Y,+Z,-Z -> glTF faces (+Y up = UE +Z)
+    for (int fc = 0; fc < 6; ++fc) cube[toGltf[fc]] = {ue[fc][0], ue[fc][1], ue[fc][2]};
+    return true;
+}
+
 const std::string* Pipeline::energyDeathFor(const std::string& material) const {
     if (energyDeath_.empty() || material.empty()) return nullptr;
     std::string pkg = material.substr(0, material.find('.'));
@@ -2280,6 +2360,15 @@ void Pipeline::prewarmDynamic(const MeshData& m) {
 
 void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
     if (m.empty()) return;
+    if (!finiteMat(model)) {
+        reportNonFinite("dynamic model matrix", m.mats.empty() ? std::string("?") : m.mats[0].wfcName);
+        return;
+    }
+    for (float v : m.positions)
+        if (!std::isfinite(v)) {
+            reportNonFinite("dynamic vertex position", m.mats.empty() ? std::string("?") : m.mats[0].wfcName);
+            return;
+        }
     std::vector<float> v;
     auto tb0 = std::chrono::steady_clock::now();
     buildVertices(m, v);
@@ -2564,6 +2653,12 @@ void Pipeline::prewarmPlacedFx() {
 
 bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
     if (!material || !sp || n == 0) return false;
+    for (size_t i = 0; i < n; ++i)
+        for (const core::Vec3& c : sp[i].c)
+            if (!std::isfinite(c.x) || !std::isfinite(c.y) || !std::isfinite(c.z)) {
+                reportNonFinite("sprite corner", material);
+                return false;
+            }
     static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
     if (deferTrans_ && !flushingTrans_ && !immediateTrans) {
         if (spriteProg_.count(material) && spriteProg_[material] < 0) return false;   // known fallback material
