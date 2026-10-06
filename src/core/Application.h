@@ -97,6 +97,10 @@ private:
     void runClassChangeTest();
     void runEventTest();
     void runPacingTest();
+    void runBotTest();
+    void runBotNavTest();
+    void runXpTest();
+    void runBotObjectiveTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

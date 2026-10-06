@@ -26,6 +26,7 @@
 #include <string>
 
 #include <chrono>
+#include <set>
 #include "core/Time.h"
 
 #include <cmath>
@@ -190,6 +191,10 @@ bool Application::init() {
     if (std::getenv("WFC_CLASSCHANGETEST")) { runClassChangeTest(); return false; } // mid-match class change -> suicide -> respawn
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
+    if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
+    if (std::getenv("WFC_BOTNAVTEST")) { runBotNavTest(); return false; }           // bot nav data + path corridor validity
+    if (std::getenv("WFC_XPTEST")) { runXpTest(); return false; }                   // XP / stat award producer
+    if (std::getenv("WFC_BOTOBJTEST")) { runBotObjectiveTest(); return false; }     // bots in KOTH / DOM / CTF / EXT
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -4696,6 +4701,324 @@ void Application::runPacingTest() {
             }
     }
     LOG_INFO("PACING SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_BOTTEST: offline bots (PC ADAPTATION) in TDM on the loaded map. Phase 1: the human (idle, god mode off) + 3 friendly + 4 enemy
+// bots for WFC_BOTTEST_SECS (default 120) s; phase 2: a second match with 7 friendly + 8 enemy HARD bots. Checks: the roster, spawns,
+// movement over the nav mesh, combat (bot shots, bot kills recorded as events), deaths / respawns, no permanently stuck bot,
+// match completion with a winner and the per-step AI cost.
+void Application::runBotTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("BOTTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    const float secs = std::getenv("WFC_BOTTEST_SECS") ? (float)std::atof(std::getenv("WFC_BOTTEST_SECS")) : 120.0f;
+    using T = game::GameplayEventType;
+    for (int phase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0; phase < 2; ++phase) {
+        const std::string url = world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=" + std::to_string((int)secs + 15) +
+                                (phase == 0 ? "?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1" : "?BotsFriendly=7?BotsEnemy=8?BotDifficulty=2");
+        game::MatchLaunch L; game::MatchLaunch::fromURL(url, L);
+        check(L.bots.friendly == (phase == 0 ? 3 : 7) && L.bots.enemy == (phase == 0 ? 4 : 8), "URL bot options parsed");
+        if (!world_.launchMatch(L)) { check(false, "launch"); continue; }
+        const int me = world_.localMatchPlayer();
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        world_.match().selectCharacter(me, cs);
+        const auto& ps = world_.match().players();
+        int bots = 0, friendly = 0, enemy = 0, levels = 0;
+        std::vector<std::string> names; std::set<std::string> classes[2];
+        for (size_t i = 0; i < ps.size(); ++i) if (ps[i].kind == game::ParticipantKind::Bot) {
+            ++bots; (world_.match().sameTeam((int)i, me) ? friendly : enemy)++; levels += ps[i].level > 0;
+            names.push_back(ps[i].name); classes[ps[i].team == 1 ? 1 : 0].insert(game::specialtyName(ps[i].selection.specialty));
+        }
+        std::sort(names.begin(), names.end());
+        const bool unique = std::adjacent_find(names.begin(), names.end()) == names.end();
+        check(bots == (phase == 0 ? 7 : 15) && friendly == (phase == 0 ? 3 : 7) && enemy == (phase == 0 ? 4 : 8) && levels == bots && unique,
+              "roster: " + std::to_string(friendly) + " friendly + " + std::to_string(enemy) + " enemy bots, unique names, levels");
+        check(classes[0].size() >= 3 && classes[1].size() >= 3, "class spread per team (>= 3 of 4 classes each)");
+        world_.resetBotTiming();
+        const size_t ev0 = world_.match().gameplayEvents().size();
+        std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
+        int maxAlive = 0; double worstStep = 0.0;
+        platform::InputFrame idle;
+        const int steps = (int)((secs + 10.0f) / dt);
+        for (int i = 0; i < steps && world_.match().state() != game::Match::State::MatchOver; ++i) {
+            const auto t0 = std::chrono::steady_clock::now();
+            world_.handleInput(idle, dt); world_.tick(dt);
+            if (i > 60 * 12) worstStep = std::max(worstStep, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+            int alive = 0;
+            for (const game::MatchOpponent* o : world_.matchOpponents()) {
+                if (!o->spawned()) { lastPos.erase(o->matchPlayer()); stillFor[o->matchPlayer()] = 0.0f; continue; }
+                ++alive;
+                const core::Vec3 p = o->pawn().position();
+                auto it = lastPos.find(o->matchPlayer());
+                if (it != lastPos.end()) {
+                    const float d = core::length(p - it->second);
+                    travelled[o->matchPlayer()] += d;
+                    const game::BotBrain* b = world_.botBrain(o->matchPlayer());
+                    const bool fighting = b && b->target >= 0;
+                    float& sf = stillFor[o->matchPlayer()];
+                    sf = (d < 0.02f && !fighting) ? sf + dt : 0.0f;
+                    if (sf > 15.0f && sf - dt <= 15.0f && b) {
+                        const game::Character& pw = o->pawn();
+                        LOG_INFO("BOTTEST idle 15 s: %s p%d pos (%.1f %.1f %.1f) cell %d form %s xf %d goal %s (%.1f %.1f %.1f) path %zu wp %zu stuckLvl %d noPaths %d target %d ground %d wantVeh %d",
+                                 ps[(size_t)b->player].name.c_str(), b->player, p.x, p.y, p.z, world_.botNav().findCell(p, 0.0f), game::formName(pw.moveForm()),
+                                 (int)pw.isTransforming(), game::botGoalName(b->goal.kind), b->goal.pos.x, b->goal.pos.y, b->goal.pos.z, b->path.size(), b->wp,
+                                 b->stuckLevel, b->noPaths, b->target, (int)pw.onGround(), (int)b->wantVehicle);
+                        for (size_t k = b->wp; k < b->path.size() && k < b->wp + 3; ++k)
+                            LOG_INFO("BOTTEST   wp %zu (%.1f %.1f %.1f) action %d cell %d", k, b->path[k].pos.x, b->path[k].pos.y, b->path[k].pos.z, b->path[k].action, b->path[k].cell);
+                    }
+                    if (sf > worstStill) { worstStill = sf; worstStillBot = o->matchPlayer(); }
+                }
+                lastPos[o->matchPlayer()] = p;
+            }
+            maxAlive = std::max(maxAlive, alive);
+            if (i % (60 * 30) == 0 && i > 0) {
+                int kills = 0; for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) kills += world_.match().gameplayEvents()[e].type == T::Kill;
+                LOG_INFO("BOTTEST t=%.0f s: alive %d, kills %d, team scores %d / %d, AI %.3f ms avg %.2f max", i * dt, alive, kills,
+                         world_.match().teamScore(0), world_.match().teamScore(1), world_.botMsAverage(), world_.botMsMax());
+            }
+        }
+        // Results.
+        int botKills = 0, botDeaths = 0, botKillsOfHuman = 0, suicides = 0, envDeaths = 0, spawns = 0;
+        for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) {
+            const auto& ev = world_.match().gameplayEvents()[e];
+            if (ev.type == T::Kill) {
+                const bool ib = ev.instigator >= 0 && ps[(size_t)ev.instigator].kind == game::ParticipantKind::Bot;
+                botKills += ib; botDeaths += ps[(size_t)ev.victim].kind == game::ParticipantKind::Bot;
+                botKillsOfHuman += ib && ev.victim == me;
+            }
+            suicides += ev.type == T::Suicide; envDeaths += ev.type == T::EnvironmentDeath; spawns += ev.type == T::Spawn;
+        }
+        int rushes = 0, melees = 0, grenades = 0, hitsAll = 0, noPaths = 0, shots = 0, stucks = 0, repaths = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0, movers = 0;
+        for (const game::BotBrain& b : world_.botBrains()) {
+            rushes += b.rushes; melees += b.melees; grenades += b.grenades; hitsAll += b.hits; noPaths += b.noPaths; shots += b.shots; stucks += b.stucks; repaths += b.repaths; jumps += b.jumps; transforms += b.transforms; switches += b.switches; reloads += b.reloads;
+            movers += travelled[b.player] > 40.0f;
+        }
+        LOG_INFO("BOTTEST phase %d: hitscan hits %d, no-path searches %d, melee rushes %d attacks %d, grenades %d", phase + 1, hitsAll, noPaths, rushes, melees, grenades);
+        LOG_INFO("BOTTEST phase %d: shots %d, bot kills %d (of the human %d), bot deaths %d, suicides %d, env deaths %d, spawns %d", phase + 1, shots,
+                 botKills, botKillsOfHuman, botDeaths, suicides, envDeaths, spawns);
+        LOG_INFO("BOTTEST phase %d: movers %d / %d, repaths %d, stuck events %d, jumps %d, transforms %d, weapon switches %d, reloads %d, longest idle %.1f s (player %d)",
+                 phase + 1, movers, bots, repaths, stucks, jumps, transforms, switches, reloads, worstStill, worstStillBot);
+        LOG_INFO("BOTTEST phase %d: AI %.3f ms / step avg, %.2f ms max; worst whole step %.2f ms; state %d; scores %d / %d", phase + 1, world_.botMsAverage(),
+                 world_.botMsMax(), worstStep, (int)world_.match().state(), world_.match().teamScore(0), world_.match().teamScore(1));
+        check(world_.botNav().valid(), "nav data loaded for " + world_.mapName());
+        check(maxAlive == bots, "every bot spawned (" + std::to_string(maxAlive) + ")");
+        check(movers >= bots * 3 / 4, "bots move around the map (" + std::to_string(movers) + " / " + std::to_string(bots) + " travelled > 40 m)");
+        check(worstStill < 20.0f, "no bot idle / stuck out of combat for 20 s");
+        check(shots > 50 && botKills >= 3 && botDeaths >= 3, "bots fight: shots, kills and deaths");
+        check(envDeaths <= bots, "few environment deaths (" + std::to_string(envDeaths) + ")");
+        if (phase == 1) check(melees >= 1 && grenades >= 3, "bots use melee (" + std::to_string(melees) + ") and grenades (" + std::to_string(grenades) + ")");
+        check(world_.botMsAverage() < 0.5 && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.5 ms, max < 6 ms)");
+        // Let the match run out: it completes and the next one starts clean.
+        for (int i = 0; i < (int)(30.0f / dt) && world_.match().state() != game::Match::State::MatchOver; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+        check(world_.match().state() == game::Match::State::MatchOver, "match completed");
+        int ends = 0; for (const auto& e : world_.match().gameplayEvents()) ends += e.type == T::MatchEnd;
+        check(ends == 1, "one MatchEnd record");
+    }
+    LOG_INFO("BOTTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_BOTNAVTEST: the loaded map's bot nav (AssetTools bot_nav.json). Every anchor finds a cell; paths between anchor pairs
+// (robot radius 1.75 and 2.0) exist and each straight segment of the string-pulled corridor stays on connected cells (or is a
+// jump / drop link); the A* cost per search.
+void Application::runBotNavTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("BOTNAV %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    if (!world_.ensureBotNav()) { check(false, "nav data for " + world_.mapName()); LOG_INFO("BOTNAV SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
+    const game::BotNav& nav = world_.botNav();
+    int onNav = 0;
+    for (const auto& a : nav.anchors()) onNav += nav.findCell(a.pos, 6.0f) >= 0;
+    check(onNav >= (int)nav.anchors().size() * 95 / 100, "anchors on the nav: " + std::to_string(onNav) + " / " + std::to_string(nav.anchors().size()));
+    for (float radius : {1.75f, 2.0f}) {
+        game::BotNav::Agent ag; ag.radius = radius;
+        int pairs = 0, found = 0, segs = 0, badSegs = 0, worstExp = 0; double worstMs = 0, totalMs = 0;
+        unsigned h = 12345;
+        const auto& as = nav.anchors();
+        for (int k = 0; k < 200 && !as.empty(); ++k) {
+            h = h * 1664525U + 1013904223U; const auto& A = as[(h >> 8) % as.size()];
+            h = h * 1664525U + 1013904223U; const auto& B = as[(h >> 8) % as.size()];
+            if (&A == &B) continue;
+            ++pairs;
+            std::vector<game::BotNav::Waypoint> path; int exp = 0;
+            const auto t0 = std::chrono::steady_clock::now();
+            const bool ok = nav.findPath(A.pos, B.pos, ag, path, &exp);
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            worstMs = std::max(worstMs, ms); totalMs += ms; worstExp = std::max(worstExp, exp);
+            if (!ok) { if (fails < 40) LOG_INFO("BOTNAV no path %s -> %s", A.actor.c_str(), B.actor.c_str()); continue; }
+            ++found;
+            core::Vec3 prev = A.pos;
+            for (const auto& w : path) {
+                ++segs;
+                if (w.action == 0 && !nav.directWalkable(prev, w.pos, ag)) {
+                    ++badSegs;
+                    if (badSegs <= 6) LOG_INFO("BOTNAV r%.2f off-mesh segment (%.1f %.1f %.1f) -> (%.1f %.1f %.1f) in %s -> %s", radius, prev.x, prev.y, prev.z, w.pos.x, w.pos.y, w.pos.z, A.actor.c_str(), B.actor.c_str());
+                }
+                prev = w.pos;
+            }
+        }
+        LOG_INFO("BOTNAV r%.2f: %d / %d paths, %d segments (%d not straight-walkable), A* %.2f ms avg %.2f ms max, %d cells expanded max", radius, found, pairs,
+                 segs, badSegs, totalMs / std::max(1, pairs), worstMs, worstExp);
+        check(found >= pairs * 95 / 100, "paths between anchors (radius " + std::to_string(radius).substr(0, 4) + ")");
+        check(badSegs * 50 <= segs, "corridor segments stay on the mesh (<= 2 %)");
+        check(worstMs < 8.0, "A* under 8 ms");
+    }
+    LOG_INFO("BOTNAV SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_XPTEST: the XP / stat award feed from scripted TDM and DM kills (applyMatchDamage through the real kill path).
+void Application::runXpTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("XPTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { world_.handleInput(idle, dt); world_.tick(dt); } };
+    std::vector<game::XpAward> got; std::vector<game::StatAward> stats;
+    auto drain = [&]() { for (auto& a : world_.drainXpAwards()) got.push_back(a); for (auto& s : world_.drainStatAwards()) stats.push_back(s); };
+    auto has = [&](int p, const char* id, long xp) { for (auto& a : got) if (a.player == p && a.eventId == id && (xp < 0 || a.xp == xp)) return true; return false; };
+    auto txnOf = [&](int p, const char* id) { for (auto& a : got) if (a.player == p && a.eventId == id) return a.transactionId; return -1; };
+    auto statSum = [&](int p, int id) { long n = 0; for (auto& s : stats) if (s.player == p && s.statId == id) n += s.amount; return n; };
+    for (int mode = 0; mode < 2; ++mode) {
+        got.clear(); stats.clear();
+        game::MatchLaunch L;
+        game::MatchLaunch::fromURL(world_.mapName() + (mode == 0 ? "_BASE_m?GameModeTag=TDM?TimeLimit=60" : "_BASE_m?GameModeTag=DM?TimeLimit=60"), L);
+        world_.launchMatch(L);
+        const int me = world_.localMatchPlayer();
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        world_.match().selectCharacter(me, cs);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 4; ++i) ops.push_back(world_.addMatchOpponent("XP" + std::to_string(i + mode * 4), false));
+        run(11.0f); drain(); got.clear(); stats.clear();
+        game::MatchOpponent* E = nullptr; game::MatchOpponent* E2 = nullptr; game::MatchOpponent* F = nullptr;
+        for (auto* o : ops) {
+            if (!o->spawned()) continue;
+            if (mode == 0 && world_.match().sameTeam(o->matchPlayer(), me)) { if (!F) F = o; }
+            else if (!E) E = o; else if (!E2) E2 = o;
+        }
+        if (!E || !E2) { check(false, "opponents spawned"); continue; }
+        const char* AR = "TransGame.TnDamageTypeAssaultRifle";
+        auto kill = [&](int killer, game::MatchOpponent* v) { world_.applyMatchDamage(v->matchPlayer(), killer, 99999.0f, false, AR); run(0.05f); drain(); };
+        if (mode == 0) {
+            // 1) first kill: Kill + FirstKill in one transaction; the victim's FirstDeath; an assist; the kills stat.
+            if (F) world_.applyMatchDamage(E->matchPlayer(), F->matchPlayer(), 0.6f * E->health().max, false, AR);
+            kill(me, E);
+            check(has(me, "Kill", 50) && has(me, "FirstKill", 100) && txnOf(me, "Kill") == txnOf(me, "FirstKill"), "Kill 50 + First Blood 100 in one transaction");
+            check(has(E->matchPlayer(), "FirstDeath", 75), "victim: Rough Start (FirstDeath) 75");
+            check(!F || has(F->matchPlayer(), "Assist", 25), "teammate damage > 50 % HealthMax: Assist 25");
+            check(statSum(me, game::AwardProducer::challengeStatId("CHALLENGE_BASIC_KILLS")) == 1, "basic kills stat +1");
+            // 2) a second kill within 3 s: Double Kill.
+            kill(me, E2);
+            check(has(me, "MultiKill2", 100), "Double Kill (2 kills <= 3 s apart) 100");
+            // 3) third kill (E again): 3 Kill Streak with the reward in extra data; Beat Down (same enemy twice in a row).
+            run(6.0f); drain();
+            if (E->spawned()) kill(me, E);
+            bool streakExtra = false;
+            for (auto& a : got) if (a.player == me && a.eventId == "KillStreak3" && a.extra.rfind("Killstreak,", 0) == 0) streakExtra = true;
+            check(has(me, "KillStreak3", 100) && streakExtra, "3 Kill Streak 100 with extra Killstreak,<id>");
+            check(has(me, "KillDomination2", 20), "Beat Down: the same enemy twice in a row (20)");
+            // 4) E kills me (ending my streak of 3), then I kill E: Payback.
+            run(6.0f); drain();
+            if (E->spawned()) world_.applyMatchDamage(me, E->matchPlayer(), 99999.0f, false, AR);
+            run(0.05f); drain();
+            check(has(E->matchPlayer(), "EndKillStreak", 75), "Funkiller: ending a streak of 3 (75)");
+            run(7.0f); drain();
+            if (E->spawned() && !world_.localPlayerDead()) kill(me, E);
+            check(has(me, "KillPayback", 50), "Payback: killing whoever last killed you (50)");
+            // 5) match end: GameWin to the winning PRI's team, GameLose to the rest.
+            run(60.0f); drain();
+            int wins = 0, loses = 0;
+            for (auto& a : got) { wins += a.eventId == "GameWin"; loses += a.eventId == "GameLose"; }
+            check(wins >= 1 && loses >= 1 && wins + loses == (int)world_.match().players().size(), "match end: GameWin / GameLose to every player");
+            check(has(me, "GameWin", 300) || has(me, "GameLose", 150), "the local player gets GameWin 300 or GameLose 150");
+        } else {
+            kill(me, E);
+            check(has(me, "Kill", 25), "DM: Kill uses DeathmatchXpAmount 25");
+            kill(me, E2);
+            check(has(me, "MultiKill2", 50), "DM: Double Kill 50");
+            run(60.0f); drain();
+            bool any = false;
+            for (auto& a : got) any |= a.eventId == "GameWin" || a.eventId == "GameLose";
+            check(!any, "DM: no GameWin / GameLose XP");
+        }
+        long total = 0;
+        for (auto& a : got) if (a.player == me) total += a.xp;
+        LOG_INFO("XPTEST %s: %zu awards, %zu stats, local XP this match %ld", mode == 0 ? "TDM" : "DM", got.size(), stats.size(), total);
+    }
+    LOG_INFO("XPTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_BOTOBJTEST: bots play the objective modes (KOTH, DOM, CTF, EXT; or WFC_BOTOBJTEST_MODES=KOTH,DOM...) with the human idle:
+// 5 friendly + 6 enemy MEDIUM bots for WFC_BOTOBJTEST_SECS (default 150) s each. Checks the objective events the bots cause
+// (zone holds, node captures, flag / bomb pickups, captures / plants), goal kinds in use and no bot stuck out of combat.
+void Application::runBotObjectiveTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("BOTOBJ %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    const float secs = std::getenv("WFC_BOTOBJTEST_SECS") ? (float)std::atof(std::getenv("WFC_BOTOBJTEST_SECS")) : 150.0f;
+    std::string modes = std::getenv("WFC_BOTOBJTEST_MODES") ? std::getenv("WFC_BOTOBJTEST_MODES") : "KOTH,DOM,CTF,EXT";
+    using T = game::GameplayEventType;
+    size_t p0 = 0;
+    while (p0 < modes.size()) {
+        size_t p1 = modes.find(',', p0); if (p1 == std::string::npos) p1 = modes.size();
+        const std::string mode = modes.substr(p0, p1 - p0); p0 = p1 + 1;
+        game::MatchLaunch L;
+        game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=" + mode + "?TimeLimit=" + std::to_string((int)secs + 30) +
+                                   "?BotsFriendly=5?BotsEnemy=6?BotDifficulty=1", L);
+        if (!world_.launchMatch(L)) { check(false, mode + ": launch"); continue; }
+        const int me = world_.localMatchPlayer();
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        world_.match().selectCharacter(me, cs);
+        world_.qaSetGodMode(true);   // the idle human does not feed the enemy (QA; no effect without WFC_QA)
+        const size_t ev0 = world_.match().gameplayEvents().size();
+        std::map<std::string, int> goalKinds; std::map<int, core::Vec3> lastPos; std::map<int, float> stillFor; float worstStill = 0.0f;
+        platform::InputFrame idle;
+        for (int i = 0; i < (int)((secs + 10.0f) / dt); ++i) {
+            if (world_.match().state() == game::Match::State::MatchOver) break;
+            world_.handleInput(idle, dt); world_.tick(dt);
+            if (i % 30 == 0)
+                for (const game::BotBrain& b : world_.botBrains()) if (b.wasSpawned) goalKinds[game::botGoalName(b.goal.kind)]++;
+            for (const game::MatchOpponent* o : world_.matchOpponents()) {
+                if (!o->spawned()) { lastPos.erase(o->matchPlayer()); stillFor[o->matchPlayer()] = 0.0f; continue; }
+                const core::Vec3 p = o->pawn().position();
+                auto it = lastPos.find(o->matchPlayer());
+                if (it != lastPos.end()) {
+                    const game::BotBrain* b = world_.botBrain(o->matchPlayer());
+                    // Standing on a held / defended point or fighting is not idling.
+                    const bool busy = b && (b->target >= 0 || ((b->goal.kind == game::BotGoalKind::Hold || b->goal.kind == game::BotGoalKind::Defend ||
+                                       b->goal.kind == game::BotGoalKind::Capture || b->goal.kind == game::BotGoalKind::Contest || b->goal.kind == game::BotGoalKind::Return ||
+                                       b->goal.kind == game::BotGoalKind::Support) && core::length(p - b->goal.pos) < 12.0f));
+                    float& sf = stillFor[o->matchPlayer()];
+                    sf = (core::length(p - it->second) < 0.02f && !busy) ? sf + dt : 0.0f;
+                    if (sf > 15.0f && sf - dt <= 15.0f && b)
+                        LOG_INFO("BOTOBJ idle 15 s: p%d pos (%.1f %.1f %.1f) cell %d %s goal %s (%.1f %.1f %.1f) d %.1f path %zu wp %zu mission %d target %d stuck %d noPaths %d",
+                                 b->player, p.x, p.y, p.z, world_.botNav().findCell(p, 0.0f), game::formName(o->pawn().moveForm()), game::botGoalName(b->goal.kind),
+                                 b->goal.pos.x, b->goal.pos.y, b->goal.pos.z, core::length(p - b->goal.pos), b->path.size(), b->wp, (int)b->mission, b->target, b->stuckLevel, b->noPaths);
+                    worstStill = std::max(worstStill, sf);
+                }
+                lastPos[o->matchPlayer()] = p;
+            }
+        }
+        std::map<std::string, int> obj; int kills = 0;
+        for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) {
+            const auto& ev = world_.match().gameplayEvents()[e];
+            if (ev.type == T::Objective) obj[ev.objective]++;
+            kills += ev.type == T::Kill;
+        }
+        std::string objs, kinds;
+        for (auto& kv : obj) objs += kv.first + " " + std::to_string(kv.second) + ", ";
+        for (auto& kv : goalKinds) kinds += kv.first + " " + std::to_string(kv.second) + ", ";
+        LOG_INFO("BOTOBJ %s: kills %d; objective events: %s", mode.c_str(), kills, objs.c_str());
+        LOG_INFO("BOTOBJ %s: goal samples: %s longest idle %.1f s; team scores %d / %d; AI %.3f ms avg", mode.c_str(), kinds.c_str(), worstStill,
+                 world_.match().teamScore(0), world_.match().teamScore(1), world_.botMsAverage());
+        if (mode == "KOTH") check(obj["ZoneHold"] >= 1 && (world_.match().teamScore(0) + world_.match().teamScore(1)) > 0, "KOTH: bots hold the active zone and score");
+        if (mode == "DOM") check(obj["NodeCapture"] >= 2, "DOM: bots capture nodes");
+        if (mode == "CTF") check(obj["FlagTaken"] >= 1, "CTF: bots take the Code of Power");
+        if (mode == "EXT") check(obj["BombTaken"] >= 1, "EXT: bots take the bomb");
+        if (mode == "CTF") LOG_INFO("BOTOBJ CTF captures %d returns %d", obj["FlagCapture"], obj["FlagReturn"]);
+        if (mode == "EXT") LOG_INFO("BOTOBJ EXT plants %d detonations %d defuses %d", obj["BombPlant"], obj["BombDetonate"], obj["BombDefuse"]);
+        check(kills >= 5, mode + ": bots fight (" + std::to_string(kills) + " kills)");
+        check(worstStill < 20.0f, mode + ": no bot idle away from its objective for 20 s");
+        world_.qaSetGodMode(false);
+    }
+    LOG_INFO("BOTOBJ SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

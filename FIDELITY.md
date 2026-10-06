@@ -3457,6 +3457,83 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   - strafe + turn: 0.25-0.26, the 60 Hz sim path's own curvature.
 - PARTIAL: attached FX positions (muzzle flash, vehicle FX sockets) are still sim-step positions.
 
+### Offline multiplayer bots (25c) [PC ADAPTATION on original rules / data; details: docs/handoffs/GAMEPLAY_BOTS.md]
+- The original versus game had no bots. Here bots are ordinary Match participants (ParticipantKind::Bot): launched by the
+  Frontend's Private Match Bot Settings (?BotsFriendly ?BotsEnemy ?BotDifficulty) and clamped to MatchSettings::maxPerTeam 8 /
+  maxPlayers 16 (PC ADAPTATION; original MaxPlayers 10).
+- Identities: generated names, the class spread per team, legal MP class presets, a displayed level.
+- Movement, weapons (clip / reserve / refire / reload / spread), damage, kills, respawns and events all use the same code as
+  the player.
+- Navigation: AssetTools bot_nav.json for any map (A* + funnel corridors, jump / drop links, a vehicle layer).
+- CONFIRMED pieces (RE addendum 7):
+  - TnAiController.RangeSet bands;
+  - the BurstRanges band mapping and values;
+  - DesiredFiringRange;
+  - aim at TargetableLocation with inaccuracy from spread + bursts.
+- PC ADAPTATION: difficulty dimensions (reaction, turn rate, aim error, FOV, sight, memory, strafe, burst / pause scale), team
+  callouts, hunt roaming, form choice.
+- WFC_BOTTEST 24/24, 120 s per match:
+  - human + 7 bots: 18 bot kills, longest idle 5.7 s, AI 0.07 ms per step;
+  - 7 v 8 HARD: 54 kills, 1602 shots, 14 stuck events (all recovered), longest idle 5.9 s, AI 0.20 ms avg / 4.1 ms max per step.
+- WFC_BOTNAVTEST 7/7 (Streets: 123/123 anchors, 196/200 anchor-pair paths, 99.4 % straight-walkable corridor segments, A* 0.8 ms).
+- PARTIAL:
+  - bot melee / grenades / abilities;
+  - objective-mode goals (interface only);
+  - jet flight;
+  - vehicle boost;
+  - Repair Ray healing by bots;
+  - bots' held weapon meshes / FX (World::participantShots() exposes their shots).
+
+### XP / stat award producer (25d) [CONF RE MP_PROGRESSION_SCORING_AI §2 / §6 + notes/data; tables generated: tools/gen/progression_table.js]
+- AwardProducer reads the event record by serial and raises the original XP events as World::drainXpAwards() (Frontend
+  contract: player, transactionId, xp, announcement, description, extra).
+- Award amount = GlobalXpMultiplier × (DeathmatchXpAmount when >= 0 in non-team games, else XpAmount).
+- One transaction per kill: Kill first, then the TnKillAwardManager rules in order.
+- Rules implemented:
+  - Killstreak 3 / 5 / 7 with "Killstreak,<id>";
+  - killer / victim-defensive / victim-offensive buff checks (offensive: only a known debuffer; PARTIAL while debuff instigators
+    are not tracked);
+  - damage-type kills; first kill / first death;
+  - killer low health (< 50 HP); long range (> 8000 UU);
+  - flag carrier (CTF) / bomb carrier (EXT) / zone (KOTH) / node (DOM) kills;
+  - multikill (<= 3.0 s, exact 2 / 3 / 4); domination 2 / 3 / 4, payback, payback-after-domination;
+  - end kill streak (victim streak > 2); class melee kills; kill after death; hover-melee.
+- Also: Assist (> 0.5) / WeakAssist (> 0.25); objective XP (capture / return / plant / detonate / defuse / node capture /
+  ZoneHold tiers by points / 10); GameWin / GameLose (team games only, winning PRI's team quirk).
+- Stats (World::drainStatAwards: player, StatPropertyId, amount, ReportGameStat update type):
+  - the rule StatIds; basic kills / vehicle kills / assists / first kill / first death;
+  - fine-aim on / off; higher level; lifetime (PROV: seconds alive, match max);
+  - Prime killstreak per specialty (single match / total, highest);
+  - TnKillAwardRuleSpecialtySpecific per-class weapon / form / buff kills.
+- CanGainXp is applied by Frontend's profile (PC / OFFLINE ADAPTATION default earns offline; WFC_ORIGINAL_XP_RULE = original).
+- Awards for bots are a PC ADAPTATION (MatchSettings::botVictimsScore).
+- PARTIAL:
+  - headshot / backstab / downed (not simulated);
+  - heal XP (heal grenade, repair-ray low health);
+  - sentry / mine kill XP given in addition to Kill [PROV].
+- WFC_XPTEST 14/14 (TDM: First Blood + Kill in one transaction, FirstDeath, Assist, kills stat, Double Kill, 3 Kill Streak + extra,
+  Beat Down, Funkiller, Payback, GameWin / GameLose; DM: Kill 25, Double Kill 50, no win / lose XP). WFC_XPLOG logs each award.
+
+### Bots in the objective modes (25e) [PC ADAPTATION on the shared goal layer]
+- World::botModeGoal fills the shared BotGoal layer per mode, with fixed per-bot roles (objective player / hunter):
+  - KOTH: Hold the active zone.
+  - DOM: Contest a node the enemy is taking, Capture the nearest node not held, else Defend (the team spreads over nodes).
+  - CTF single flag, by the round's attacking team:
+    - attackers Retrieve the live flag, carry it to the active capture point (Capture), or escort the carrier (Support);
+    - defenders Attack the carrier, Return a dropped flag (standing on it), or Defend home.
+  - EXT: Retrieve the bomb, carry it to the nearest enemy plant point (Attack), Contest (defuse) an enemy plant, Defend our own,
+    or Support our carrier.
+- Errands (carrying, defusing, returning, standing on a point) are missions: the bot keeps its route and fights on the move.
+  Carriers are the preferred targets.
+- An unreachable objective falls back to hunting for 10 s.
+- A* returns a partial path to the reachable cell nearest the goal (<= 30 m) instead of failing.
+- WFC_BOTOBJTEST 12/12 (Streets, 5 v 6 MEDIUM, 150 s each):
+  - KOTH: zone holds 11, scores 87 / 10;
+  - DOM: node captures 11;
+  - CTF: flag taken 18, capture 1, return 1;
+  - EXT: bomb taken 12, plants 2, detonations 2;
+  - kills in every mode; longest idle <= 8.1 s.
+
 ### QA live character swap [DEV / QA TOOLING, not original]
 - World::qaSetCharacter(selection): preloadSelections, then Match::selectCharacter, then the QA suicide; the normal respawn wave
   applies it.

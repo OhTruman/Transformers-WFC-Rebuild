@@ -46,11 +46,12 @@ public:
         pawn_.updateAnimation(dt);
     }
     // Collision cylinder of the current form (robot: ROBODEF radius / height; vehicle: CalculateCylinderBounds).
-    bool rayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const {
-        if (!spawned_) return false;
-        const Form f = pawn_.moveForm();
-        const float r = pawn_.cylinderRadius(f), hh = pawn_.cylinderHalfHeight(f);
-        const core::Vec3 c = pawn_.actorLocation();
+    bool rayHit(const core::Vec3& o, const core::Vec3& d, float range, float& t) const { return spawned_ && pawnRayHit(pawn_, o, d, range, t); }
+    // Ray (unit d) against any pawn's collision cylinder of its current form; t = distance to the entry point.
+    static bool pawnRayHit(const Character& p, const core::Vec3& o, const core::Vec3& d, float range, float& t) {
+        const Form f = p.moveForm();
+        const float r = p.cylinderRadius(f), hh = p.cylinderHalfHeight(f);
+        const core::Vec3 c = p.actorLocation();
         float ox = o.x - c.x, oz = o.z - c.z;
         float a = d.x * d.x + d.z * d.z, b = 2.0f * (ox * d.x + oz * d.z), cc = ox * ox + oz * oz - r * r;
         float tt;
