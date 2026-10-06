@@ -702,18 +702,33 @@ void FrontendRuntime::stopMovieAudio() {
     movieAudioPlaying_ = false;
 }
 
+void FrontendRuntime::releaseVideo() {
+    if (video_ && videoLoops_) { parkedUnderlay_ = std::move(video_); parkedName_ = videoName_; }
+    video_.reset();
+}
+
 bool FrontendRuntime::openVideo(const std::string& name, bool loop) {
     stopMovieAudio();
-    video_.reset();
+    releaseVideo();
     videoName_ = name;
     videoLoops_ = loop;
     std::string path = Catalog::defaultExtractedRoot() + "/movies/" + name + ".mkv";
-    std::unique_ptr<platform::IMoviePlayer> p(movieFactory_ && !std::getenv("WFC_NO_VIDEO") ? movieFactory_() : nullptr);
-    if (!p || !p->open(path)) {
-        FlowTrace::emit("movie.unavailable", {{"movie", name}, {"file", path}, {"decoder", FlowTrace::boolean(p != nullptr)}});
-        return false;
+    std::unique_ptr<platform::IMoviePlayer> p;
+    const bool reused = loop && parkedUnderlay_ && parkedName_ == name;
+    if (reused) {   // from its first frame again; decoded now so the last loading screen's final frame is not shown
+        p = std::move(parkedUnderlay_);
+        parkedName_.clear();
+        p->restart();
+        p->advance(0.0);
+    } else {
+        p.reset(movieFactory_ && !std::getenv("WFC_NO_VIDEO") ? movieFactory_() : nullptr);
+        if (!p || !p->open(path)) {
+            FlowTrace::emit("movie.unavailable", {{"movie", name}, {"file", path}, {"decoder", FlowTrace::boolean(p != nullptr)}});
+            return false;
+        }
     }
-    FlowTrace::emit("movie.open", {{"movie", name}, {"seconds", std::to_string(p->duration())}, {"loop", FlowTrace::boolean(loop)}});
+    FlowTrace::emit("movie.open", {{"movie", name}, {"seconds", std::to_string(p->duration())}, {"loop", FlowTrace::boolean(loop)},
+                                   {"reused", FlowTrace::boolean(reused)}});
     // SeqAct_MoviePlayer movies carry their audio; the loading underlays have none (AssetTools video_audio probe).
     videoPath_ = path;
     movieAudioWanted_ = !loop && audio_;
@@ -751,7 +766,7 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
     if (bootHold) want = bootUnderlay_;   // the startup movie, full screen, until the logos start
     fullScreenMovie_ = !m.empty() || bootHold;
     if (want != videoName_) {
-        if (want.empty()) { stopMovieAudio(); video_.reset(); videoName_.clear(); }
+        if (want.empty()) { stopMovieAudio(); releaseVideo(); videoName_.clear(); }
         else if (!openVideo(want, m.empty()) && !m.empty()) { stopped(m); videoName_.clear(); }
     }
     if (!video_) return;

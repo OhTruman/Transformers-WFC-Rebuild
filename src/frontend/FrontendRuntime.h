@@ -174,6 +174,7 @@ private:
     void runNativeShims();
     void updateMoviePlayer(float dt, const platform::InputFrame& in);
     bool openVideo(const std::string& name, bool loop);
+    void releaseVideo();   // a looping underlay is parked for the next loading screen; other movies are destroyed
     void stopMovieAudio();
 
     Catalog catalog_;
@@ -214,6 +215,10 @@ private:
     std::function<platform::IMoviePlayer*()> movieFactory_;
     std::unique_ptr<platform::IMoviePlayer> video_;   // SeqAct_MoviePlayer movie or the loading underlay
     std::string videoName_;
+    // The last loading underlay's decoder, kept between loading screens: reopening it (Media Foundation reader +
+    // H.264 decoder) cost 31-34 ms on the frame each travel began [PC ADAPTATION].
+    std::unique_ptr<platform::IMoviePlayer> parkedUnderlay_;
+    std::string parkedName_;
     std::string underlayFor_, underlay_;   // loading Bink name -> localized file
     bool videoLoops_ = false;
     bool videoFramed_ = false;

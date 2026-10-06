@@ -284,8 +284,8 @@ void Application::attachPresenter() {
     frontend_->sceneLoadWrapper = [this](const std::function<void()>& load) {
         core::setLoadYield([this](double dt) {
             platform::InputFrame in;
-            window_->pump(in);
-            frontend_->updateLoading((float)std::min(dt, 0.1));
+            { core::prof::Scope prof("yield.pump"); window_->pump(in); }
+            { core::prof::Scope prof("+yield.update"); frontend_->updateLoading((float)std::min(dt, 0.1)); }
             drawFrontendFrame();
         });
         setRendererYield(renderer_, true);
