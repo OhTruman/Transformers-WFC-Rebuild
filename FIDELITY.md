@@ -17,6 +17,13 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONES 65-66 — FIXED-AXIS RIBBONS, SPRITE LOCK-AXIS / VELOCITY MODES (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Beam2 / Trail2 BillboardSettings | Direction other than CameraFacing offsets along a fixed axis (component row or world), Alignment side scales | RE s13 addendum 3 (HIGH, emulated shader) | HIGH | M65; authored on 4 templates, none in MP data; geometry checked numerically |
+| Sprite LockAxisFlags | Emitter-level in WFC; local-space LODs use component rows, else world axes; lock 1-6 fixed plane + in-plane rotation; ROTATE_* turn about the axis, rotation ignored | RE s15 + addenda (CPU CONFIRMED, world formulas HIGH) | HIGH | M66: 178 MP emitters; ground burst rings lie flat (VISUALLY VERIFIED) |
+| Sprite PSA_Velocity | Width along cross(camera - particle, D); length Size.y, V 0 leading; rotation ignored; stationary / view-aligned collapse | RE s15 | HIGH | M66: width axis was mirrored; stationary fallback removed |
+
 ## MILESTONES 63-64 — RIBBON WIDTH, LOCATIONEMITTER / PARTICLE TRAILS; MOLTEN PERFORMANCE (2026-10-06)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

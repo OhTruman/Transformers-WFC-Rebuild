@@ -602,6 +602,10 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING M65-M66 (2026-10-06)
+- Fixed-axis beam / trail ribbons (BillboardSettings), unused by current MP data.
+- Sprite lock-axis modes and velocity alignment per RE s15: muzzle flashes face down the barrel, explosion / impact rings lie flat, velocity sprites orient by camera-to-particle.
+
 ## RENDERING M63-M64 (2026-10-06)
 - Beams and trails draw at their authored width (they were half width).
 - LocationEmitter / Direct and particle-placed Trail2 chains per RE s14: shell casings, tracers and debris effects place their particles on their source emitters.
