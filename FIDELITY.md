@@ -27,8 +27,9 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
   inherit multiplicatively [HIGH, FMOD ChannelGroup].
 * **Rebuild:** a device-global per-group scale multiplied into every cue whose category is in the group's subtree. Equivalent to the
   replace because all five listed categories' config Volume is 1.0 (gen_mixer.py asserts it).
-* **Not traced** [HIGH]: whether mixer presets ramp the same fader as the group volume. They stay a separate factor here (a preset on
-  SFX_WET_VEH_ENGINE multiplies with the SFX group; no global preset in our tables targets a group category).
+* **Mixer presets vs. the slider** [CONF path, RE b2d6bd8 pass 5 §10 addendum; HIGH audible]: EnableMixerPreset (0x82772778) and the
+  tree re-evaluation (0x8276A868) blend presets into each node's DSP preset slots and never write the group fader, so preset volume and
+  the slider multiply - as applied here, on every category including SFX_DRY / DX_* / MUSIC_DRY.
 * **Movies:** GetMovieVolume's 'SFX' class volume is the same group value; a running movie follows a slider change.
 
 ---
