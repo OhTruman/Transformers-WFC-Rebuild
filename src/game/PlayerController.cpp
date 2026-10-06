@@ -792,21 +792,24 @@ void PlayerController::applyToPawn(World& world, float dt) {
             w.onFired();
             static const bool noRecoil = std::getenv("WFC_NORECOIL") != nullptr;   // A/B diagnostic
             if (!noRecoil) pawn_->notifyFired();   // per-shot skeletal recoil (TnRecoiler)
-            // Aim through the crosshair: trace the camera ray to find the aimed point, then fire
-            // from the pawn eye toward it (the camera is offset over the shoulder).
+            // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
+            // camera's crosshair ray nearest the pawn. Instant-hit / beam traces run from there along the aim for the weapon range
+            // [CONF RE, script TransGame.TnPlayerPawn]. Projectiles aim at that trace's hit point; they still leave from the pawn
+            // eye (actor + BaseEyeHeight), not the weapon's muzzle socket (GetMuzzleLoc), which is not loaded for most robot
+            // weapons [PARTIAL].
             core::Vec3 eye = pawn_->actorLocation() + core::Vec3{0, pawn_->robotParams().eyeHeight, 0};   // BaseEyeHeight above the actor
             core::Vec3 camDir = core::forwardFromYawPitch(camYaw_, camPitch_);
             core::Vec3 camPos = cameraPos();
+            const core::Vec3 start = camPos + camDir * core::dot(pawn_->actorLocation() - camPos, camDir);
             float range = pawn_->weapon().rangeM;
-            core::Vec3 aimPoint = camPos + camDir * range;
+            core::Vec3 aimPoint = start + camDir * range;
             float th;
-            if (world.collision() && world.collision()->segmentHit(camPos, aimPoint, th))
-                aimPoint = camPos + camDir * (range * th);
-            core::Vec3 dir = core::normalize(aimPoint - eye);
-            if (w.beam()) world.fireRepairBeam(w, eye, dir);
-            else if (w.projectile()) world.fireWeapon(w, eye, dir);
+            if (world.collision() && world.collision()->segmentHit(start, aimPoint, th))
+                aimPoint = start + camDir * (range * th);
+            if (w.beam()) world.fireRepairBeam(w, start, camDir);
+            else if (w.projectile()) world.fireWeapon(w, eye, core::normalize(aimPoint - eye));
             // NumShotsToFire traces per shot (shotgun pellets), each with its own spread sample [CONF data; HIGH: one ammo per shot].
-            else for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) world.fireHitscan(eye, dir);
+            else for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) world.fireHitscan(start, camDir);
         } else if (w.ammo == 0 && w.canReload()) {
             w.beginReload();
         }

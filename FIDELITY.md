@@ -184,6 +184,19 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - Map / mode / class / lobby: Frontend drives the real lobby flow.
 - WFC_QATEST 7/7 with the gate; without it, every call is refused.
 
+### Weapon start trace (all forms) [CONFIRMED ORIGINAL: script TransGame.TnPlayerPawn.GetWeaponStartTraceLocation, RE]
+- Original: the start trace is ViewLoc + ProjectOnTo(Pawn.Location - ViewLoc, view direction), i.e. the point on the third-person
+  camera's crosshair ray nearest the pawn, in robot, vehicle and plane form. Instant-hit and beam traces run from there along the
+  aim for the weapon range. Fallbacks: no controller → HmPawn.GetPawnViewLocation; AI pawns have their own override.
+- Was: robot shots traced from actor + BaseEyeHeight toward the camera-ray hit point.
+- Now:
+  - robot hitscan and Repair Ray traces start at the projected point along the view direction;
+  - projectiles aim at that trace's hit point;
+  - the vehicle MG uses the same start (24f).
+- Presentation: the hitscan tracer and the Repair Ray ribbon still start at the muzzle.
+- PARTIAL: robot projectiles leave from the pawn eye, not the weapon mesh's muzzle socket (GetMuzzleLoc). Only the Ion Blaster
+  mesh is loaded for robot weapons.
+
 ### Projectile visuals [CONFIRMED ORIGINAL bindings: AssetTools weapon.json projectile_visual, RE projectile_effect_bindings]
 - Was: every projectile drew as an orange box marker.
 - Now each projectile carries its weapon's authored visual (projectiles[0].projectile_visual), resolved by class id, else provider

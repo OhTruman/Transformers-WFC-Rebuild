@@ -2909,7 +2909,13 @@ void World::fireRepairBeamImpl(const Weapon& w, const core::Vec3& origin, const 
     MatchOpponent* hit = nullptr;
     for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(origin, dir, best, th) && th < best) { best = th; hit = o; } }
     repairBeam_.active = true; repairBeam_.time = tickSecs * 1.5f;
-    repairBeam_.start = origin; repairBeam_.end = origin + dir * best; repairBeam_.target = hit ? hit->matchPlayer() : -1;
+    // Ribbon start = the muzzle (as the hitscan tracer); the damage trace itself starts on the crosshair ray (origin).
+    core::Vec3 muzzle = origin;
+    { core::Mat4 ms;
+      if (weaponSocketWorld("MuzzleFlash", ms)) muzzle = {ms.m[12], ms.m[13], ms.m[14]};
+      else if (player_.pawn().hasWeapon())
+          muzzle = core::transformPoint(player_.pawn().weaponWorld(), core::Vec3{core::config::kMuzzleLocalX, core::config::kMuzzleLocalY, core::config::kMuzzleLocalZ}); }
+    repairBeam_.start = muzzle; repairBeam_.end = origin + dir * best; repairBeam_.target = hit ? hit->matchPlayer() : -1;
     repairBeam_.healing = false;
     if (!hit || !matchActive_) return;
     if (match_.sameTeam(hit->matchPlayer(), localPlayer_)) {
