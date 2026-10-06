@@ -766,12 +766,48 @@ void Character::updateWeaponSocket() {
     weaponValid_ = true;
 }
 
+void Character::beginStep() {
+    prevPos_ = pos_; havePrev_ = true;
+    prevPoseP_ = poseBuf_.positions; prevPoseN_ = poseBuf_.normals;
+    prevPartnerP_ = partnerBuf_.positions; prevPartnerN_ = partnerBuf_.normals;
+}
+
+core::Vec3 Character::renderOffset() const {
+    if (!havePrev_ || renderAlpha_ >= 1.0f) return {0, 0, 0};
+    const core::Vec3 d = prevPos_ - pos_;
+    if (core::dot(d, d) > 25.0f) return {0, 0, 0};   // a spawn / teleport this step: no interpolation across it
+    return d * (1.0f - renderAlpha_);
+}
+
+// The skinned pose between the previous and the current step (mesh-local vertices; the same layout only - a model swap
+// this step, e.g. the transformation's form swap, draws the current pose).
+const render::MeshData& Character::blendedPose(const render::MeshData& cur, const std::vector<float>& prevP, const std::vector<float>& prevN,
+                                               render::MeshData& scratch) const {
+    if (renderAlpha_ >= 1.0f || prevP.size() != cur.positions.size() || cur.positions.empty()) return cur;
+    if (scratch.indices.size() != cur.indices.size() || scratch.positions.size() != cur.positions.size() || scratch.subs.size() != cur.subs.size() ||
+        scratch.mats.size() != cur.mats.size() || (!cur.mats.empty() && scratch.mats[0].tex != cur.mats[0].tex)) {
+        scratch = cur;   // the topology / materials of this model (once per model change)
+    } else {
+        scratch.subs = cur.subs; scratch.mats = cur.mats; scratch.boundsMin = cur.boundsMin; scratch.boundsMax = cur.boundsMax;
+    }
+    const float a = renderAlpha_;
+    for (size_t i = 0; i < cur.positions.size(); ++i) scratch.positions[i] = prevP[i] + (cur.positions[i] - prevP[i]) * a;
+    if (prevN.size() == cur.normals.size()) {
+        scratch.normals.resize(cur.normals.size());
+        for (size_t i = 0; i < cur.normals.size(); ++i) scratch.normals[i] = prevN[i] + (cur.normals[i] - prevN[i]) * a;
+    } else scratch.normals = cur.normals;
+    return scratch;
+}
+
 void Character::draw(render::IRenderer& r) const {
     const assets::SkinnedModel* mdl = currentModel();
     if (mdl && mdl->valid() && !poseBuf_.empty()) {
-        r.drawDynamicMesh(poseBuf_, meshMatrix(form_), color_);
-        if (partnerVisible_ && !partnerBuf_.empty()) r.drawDynamicMesh(partnerBuf_, meshMatrix(partnerForm()), color_);
-        if (armVisible_ && !armBuf_.empty()) r.drawDynamicMesh(armBuf_, armWorld_, color_);
+        // Presentation interpolation: the whole pawn (body, transformation partner, arm) shifted by one rigid offset.
+        const core::Mat4 off = core::Mat4::translate(renderOffset());
+        r.drawDynamicMesh(blendedPose(poseBuf_, prevPoseP_, prevPoseN_, lerpBody_), off * meshMatrix(form_), color_);
+        if (partnerVisible_ && !partnerBuf_.empty())
+            r.drawDynamicMesh(blendedPose(partnerBuf_, prevPartnerP_, prevPartnerN_, lerpPartner_), off * meshMatrix(partnerForm()), color_);
+        if (armVisible_ && !armBuf_.empty()) r.drawDynamicMesh(armBuf_, off * armWorld_, color_);
         return;
     }
     // Fallback graybox.

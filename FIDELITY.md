@@ -130,6 +130,24 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - Forward / back input is ignored and there is no flip; otherwise silently refused (no cooldown).
 - Fix: Flying rolled without the strafe gate.
 
+### Presentation interpolation (25b) [PC ADAPTATION]
+- Original: one variable tick per rendered frame, no interpolation (RE 8d6dc8c, HIGH).
+- The rebuild keeps a fixed 60 Hz simulation (deterministic physics and the 30 Hz per-call factors). The old render loop drew
+  the raw latest step: at high refresh rates strafing presented a new position on only ~1 in 2.4 (144 Hz) or 1 in 4 (240 Hz)
+  frames (Rendering WFC_PACINGLOG: "hundreds of FPS but choppy").
+- Now each pawn remembers its state at the start of every step (Character::beginStep), and each frame presents lerp(previous,
+  current, FixedStepClock::alpha()):
+  - the actor position, as one rigid offset for body, transformation partner, arm and held weapon;
+  - the camera (render camera = sim camera + the pawn offset);
+  - the skinned pose (mesh-local vertices between the two steps, same layout only; a form swap draws the new pose).
+- Heading keeps the per-frame presentation yaw (24a).
+- Simulation, physics, animation timing and the start trace are untouched (alpha is presentation-only), so the frame limiter
+  only paces presentation. A teleport (> 5 m in a step) snaps. WFC_NOINTERP=1 is the A/B switch.
+- WFC_PACINGTEST 4/4 (60 Hz sim, render frames simulated):
+  - strafing at 144 / 240 Hz: repeated frames 58.5 % / 75 % (raw) → 0 %; displacement variation 1.19 / 1.73 → 0.00;
+  - strafe + turn: 0.25-0.26, the 60 Hz sim path's own curvature.
+- PARTIAL: attached FX positions (muzzle flash, vehicle FX sockets) are still sim-step positions.
+
 ### QA live character swap [DEV / QA TOOLING, not original]
 - World::qaSetCharacter(selection): preloadSelections, then Match::selectCharacter, then the QA suicide; the normal respawn wave
   applies it.

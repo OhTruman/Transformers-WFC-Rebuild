@@ -51,6 +51,7 @@ private:
     void runPreloadTest();
     void runClassChangeTest();
     void runEventTest();
+    void runPacingTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

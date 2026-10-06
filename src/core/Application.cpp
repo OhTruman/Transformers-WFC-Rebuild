@@ -18,6 +18,7 @@
 #include <string>
 
 #include <chrono>
+#include "core/Time.h"
 
 #include <cmath>
 #include <cstdio>
@@ -157,6 +158,7 @@ bool Application::init() {
     if (std::getenv("WFC_PRELOADTEST")) { runPreloadTest(); return false; }        // World::preloadSelections (saved custom characters)
     if (std::getenv("WFC_CLASSCHANGETEST")) { runClassChangeTest(); return false; } // mid-match class change -> suicide -> respawn
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
+    if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -341,7 +343,9 @@ void Application::run() {
                          : n.type == game::HudNotify::Type::FineAim ? ("NotifyFineAimChanged(" + std::to_string(n.aimType) + ")").c_str()
                          : ("NotifyCurrentWeaponChanged(" + std::string(n.weaponClass) + ")").c_str());
 
-        // Camera + render.
+        // Camera + render. Presentation interpolation between the last two fixed steps [PC ADAPTATION].
+        static const bool noInterp = std::getenv("WFC_NOINTERP") != nullptr;   // A/B diagnostic
+        world_.setRenderAlpha(noInterp ? 1.0f : clock_.alpha());
         world_.player().controller().updateCamera(camera_);
         camera_.aspect = (float)window_->width() / (float)(window_->height() > 0 ? window_->height() : 1);
         world_.player().controller().setViewAspect(camera_.aspect);
@@ -4136,6 +4140,56 @@ void Application::runEventTest() {
         check(streaks <= 1, "killstreak earned at most once per reward (count " + std::to_string(streaks) + ")");
     }
     LOG_INFO("EVENTTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_PACINGTEST: presented camera / pawn positions per rendered frame at 60 / 144 / 240 Hz with a 60 Hz fixed-step sim, strafing
+// and strafing + turning, with and without presentation interpolation. A smooth presentation moves every frame by about
+// speed / Hz: report the share of frames that repeat the previous position and the coefficient of variation of the per-frame
+// displacement (no rendering; the loop mirrors Application::run's handleInput / clock / tick / camera order).
+void Application::runPacingTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("PACING %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    game::PlayerController& ctl = world_.player().controller();
+    game::Character& pc = world_.player().pawn();
+    for (int turn = 0; turn < 2; ++turn) {
+        double baseCv = -1.0;   // the 60 Hz presentation (one frame per step): the sim path's own variation
+        for (double hz : {60.0, 144.0, 240.0})
+            for (int interp = 0; interp < 2; ++interp) {
+                core::FixedStepClock clock(60.0);
+                const double frameDt = 1.0 / hz;
+                // settle on the spawn
+                world_.teleportToStart(0);
+                for (int i = 0; i < 120; ++i) { platform::InputFrame in; world_.handleInput(in, 1.0f / 60.0f); world_.tick(1.0f / 60.0f); }
+                core::Vec3 prevCam{0, 0, 0}, prevPawn{0, 0, 0}; bool havePrev = false;
+                std::vector<double> dc, dp;
+                const int frames = (int)(hz * 3.0);
+                for (int f = 0; f < frames; ++f) {
+                    platform::InputFrame in; in.down[(int)platform::Button::Right] = true;
+                    if (turn) ctl.setCameraYaw(ctl.camYaw() + 1.5f * (float)frameDt);
+                    world_.handleInput(in, (float)frameDt);
+                    const int steps = clock.tick(frameDt);
+                    for (int k = 0; k < steps; ++k) world_.tick(clock.stepSeconds());
+                    world_.setRenderAlpha(interp ? clock.alpha() : 1.0f);
+                    render::Camera cam; ctl.updateCamera(cam);
+                    const core::Vec3 pp = pc.position() + pc.renderOffset();
+                    if (havePrev && f > hz * 0.5) { dc.push_back(core::length(cam.pos - prevCam)); dp.push_back(core::length(pp - prevPawn)); }
+                    prevCam = cam.pos; prevPawn = pp; havePrev = true;
+                }
+                world_.setRenderAlpha(1.0f);
+                auto stats = [](const std::vector<double>& v, double& still, double& cv) {
+                    double m = 0; int z = 0; for (double x : v) { m += x; z += x < 1e-5; }
+                    m /= std::max<size_t>(1, v.size()); double var = 0; for (double x : v) var += (x - m) * (x - m);
+                    var /= std::max<size_t>(1, v.size()); still = (double)z / std::max<size_t>(1, v.size()); cv = m > 0 ? std::sqrt(var) / m : 0;
+                };
+                double sc, cc, sp, cp; stats(dc, sc, cc); stats(dp, sp, cp);
+                LOG_INFO("PACING %s @%3.0f Hz %s: camera repeats %4.1f%% of frames, cv %.2f | pawn repeats %4.1f%%, cv %.2f",
+                         turn ? "strafe+turn" : "strafe     ", hz, interp ? "interp" : "raw   ", sc * 100, cc, sp * 100, cp);
+                if (interp && hz == 60.0) baseCv = cp;
+                if (interp && hz > 60.0)
+                    check(sc < 0.02 && sp < 0.02 && cp <= baseCv + 0.05, std::string(turn ? "strafe+turn" : "strafe") + " @" + std::to_string((int)hz) + " Hz: pawn and camera move every frame, as evenly as the 60 Hz sim path");
+            }
+    }
+    LOG_INFO("PACING SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

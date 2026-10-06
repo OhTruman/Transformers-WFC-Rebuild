@@ -285,6 +285,10 @@ public:
     const Character* participantPawn(int player) const;   // the live pawn of a match player, or null
     Match::KillContext killContext(int instigator, int victim, const std::string& damageType) const;
     void recordSpawnEvent(int player);
+public:
+    // Presentation interpolation (Character::beginStep / setRenderAlpha) for every match pawn; Application passes
+    // FixedStepClock::alpha() each rendered frame. Harnesses that never call it present the current step (alpha 1).
+    void setRenderAlpha(float a);
     uint32_t eventLogSerial_ = 0;   // WFC_EVENTLOG: last serial logged
     // Front-end entry: map + mode + settings. Applies the mode's authored world state, resets the map as a fresh level
     // load, and starts the match. False (and nothing changes) for a map that is not loaded or an unsupported mode.
