@@ -11,7 +11,7 @@
 #
 #   .\tools\fidelity\frame-pacing.ps1 -Root work\ab\<target> -OutDir <dir> [-Limits 0,60,144,240] [-Seconds 15] [-ReportOnly]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Limits = @("0", "60", "144", "240"), [int]$Seconds = 15,
-      [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$NoInterp, [switch]$ReportOnly)   # -NoInterp: WFC_NOINTERP A/B (09a+): render alpha forced to 1
+      [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$NoInterp, [double]$Turn = 0, [switch]$ReportOnly)   # -NoInterp: WFC_NOINTERP A/B (09a+): render alpha forced to 1
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Limits = @($Limits | ForEach-Object { "$_" -split "," } | Where-Object { $_ -ne "" } | ForEach-Object { [int]$_ })   # "0,60" from bash arrives as one string
@@ -33,8 +33,11 @@ foreach ($lim in $Limits) {
                "call:Online.BeginLobbyExitCountdown", "wait:level=Match", "${cs}wait:ui=InGame", "wait:t=$Seconds", "quit") -join ";"
         $e = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $s; WFC_FLOWLOG = (Join-Path $d "flow.jsonl"); WFC_FLOW_TIMEOUT = "300";
                 WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_PERFLOG = "1"; WFC_CAMLOG = "1"; WFC_PACINGLOG = "600";
-                WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_FPS_LIMIT = "$lim" }
+                WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150"; WFC_FPS_LIMIT = "$lim" }   # periodic jump: keeps the pawn from pinning on geometry (more moving windows)
         if ($NoInterp) { $e.WFC_NOINTERP = "1" }
+        # -Turn <rad/s>: strafe + turn for Rendering's PACINGLOG yaw-rate spread (p10 / p90 around the input rate). The
+        # "camera unchanged" count is meaningful only WITHOUT a turn (see below), so use separate -Turn runs for the yaw rate.
+        if ($Turn -gt 0) { $e.WFC_AUTOTURN = "$Turn" }
         # NO scripted turn: WFC_AUTOTURN rotates the camera every RENDER frame, which changes the pawn's projection on every
         # frame regardless of the 60 Hz simulation and hides the tick-stepping this measures (2026-10-06 harness defect).
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
@@ -58,9 +61,15 @@ foreach ($lim in $Limits) {
     # WFC_CAMLOG reads Application::camera_, which is NOT the rendered camera in frontend-launched matches (depth 0, constant):
     # the camera metric comes from Rendering's WFC_PACINGLOG (presented frames, per-frame camera change) when the build has it
     $camlogValid = @($camv | Where-Object { [Math]::Abs([double](($_ -split ' ')[2])) -gt 0.01 }).Count -gt ($camv.Count / 2)
-    $pu = 0; $pc = 0; $yaw = @()
+    $pu = 0; $pc = 0; $yaw = @(); $win = @()
     foreach ($pl in $pacing) { $mm = [regex]::Match($pl, 'camera unchanged on (\d+), changed on (\d+); yaw rate on change p10 ([\d.-]+) p50 ([\d.-]+) p90 ([\d.-]+)')
-        if ($mm.Success) { $pu += [int]$mm.Groups[1].Value; $pc += [int]$mm.Groups[2].Value; $yaw += "p10 $($mm.Groups[3].Value) p50 $($mm.Groups[4].Value) p90 $($mm.Groups[5].Value)" } }
+        if ($mm.Success) { $pu += [int]$mm.Groups[1].Value; $pc += [int]$mm.Groups[2].Value; $yaw += "p10 $($mm.Groups[3].Value) p50 $($mm.Groups[4].Value) p90 $($mm.Groups[5].Value)"
+            $win += [Math]::Round([int]$mm.Groups[2].Value / [Math]::Max(1.0, [int]$mm.Groups[1].Value + [int]$mm.Groups[2].Value), 3) } }
+    # Windows where the pawn stands still (stuck on geometry, lobby frames) change nothing with or without interpolation, so
+    # the verdict uses the MOVING windows only: the best window's changed fraction vs the no-interpolation ceiling 60 / fps
+    # (2026-10-06 harness defect: averaging the stationary windows in read as "stale camera").
+    $bestWin = if ($win.Count) { ($win | Measure-Object -Maximum).Maximum } else { $null }
+    $movingWins = @($win | Where-Object { $_ -gt 0.02 }).Count
     $staleFrac = if ($pu + $pc -gt 0) { [Math]::Round($pu / ($pu + $pc), 3) } else { $null }   # CAMLOG is never used for the verdict (not the rendered camera in frontend-launched matches; scripted turn moves it every frame)
     $staleSrc = if ($pu + $pc -gt 0) { "PACINGLOG" } elseif ($camlogValid) { "CAMLOG" } else { "none" }
     $p50 = Pct $ftv 0.50; $p95 = Pct $ftv 0.95; $p99 = Pct $ftv 0.99; $mx = if ($ftv.Count) { ($ftv | Measure-Object -Maximum).Maximum } else { $null }
@@ -68,7 +77,7 @@ foreach ($lim in $Limits) {
     $runSet = @($runs | Group-Object | Sort-Object { [int]$_.Name } | ForEach-Object { "$($_.Name)x$($_.Count)" })
     $expectStale = if ($fps -and $fps -gt 60) { [Math]::Round(1 - 60 / $fps, 2) } else { 0 }
     $row = [pscustomobject][ordered]@{ limit = $lim; frames = $ftv.Count; fps = $fps; p50_ms = $p50; p95_ms = $p95; p99_ms = $p99; max_ms = $mx; stale_camera_frac = $staleFrac; camera_source = $staleSrc
-        no_interp_expect = $expectStale; frames_per_cam_state = (($runSet | Select-Object -First 6) -join " "); pacing_log = (($pacing | Select-Object -Last 1)) }
+        no_interp_expect = $expectStale; best_moving_window_changed = $bestWin; moving_windows = $movingWins; windows_changed = ($win -join " "); frames_per_cam_state = (($runSet | Select-Object -First 6) -join " "); pacing_log = (($pacing | Select-Object -Last 1)) }
     $rows.Add($row)
     # limiter accuracy: the mean frame time should be the cap's period (+- 10 %)
     if ($lim -gt 0 -and $mean) { $want = 1000.0 / $lim
@@ -78,7 +87,9 @@ foreach ($lim in $Limits) {
     # camera judder: with render interpolation every rendered frame shows a new camera; without it ~(1 - 60/fps) repeat
     if ($staleFrac -eq $null) { Res "limit_$lim.camera_updates_every_frame" "UNKNOWN" "no valid camera measurement: this build has no WFC_PACINGLOG (Rendering 43bcb50+) and WFC_CAMLOG is not the rendered camera in frontend-launched matches" "Experimental" }
     else {
-        Res "limit_$lim.camera_updates_every_frame" $(if ($fps -le 62) { "INFO" } elseif ($staleFrac -le 0.05) { "PASS" } else { "FAIL" }) ("stale camera on {0:P1} of presented frames at {1} fps (source {4}; no-interpolation expectation {2:P0}); {3}" -f $staleFrac, $fps, $expectStale, $(if ($yaw.Count) { "yaw rate on change " + $yaw[-1] } else { "frames per camera state " + (($runSet | Select-Object -First 6) -join " ") }), $staleSrc) "Gameplay/Rendering"
+        $ceil = if ($fps -gt 0) { [Math]::Min(1.0, 60.0 / $fps) } else { 1.0 }
+        $camSt = if ($fps -le 62) { "INFO" } elseif ($movingWins -eq 0) { "UNKNOWN" } elseif ($bestWin -ge 0.95) { "PASS" } elseif ($bestWin -le $ceil * 1.2) { "FAIL" } else { "PARTIAL" }
+        Res "limit_$lim.camera_updates_every_frame" $camSt ("best moving 600-frame window: camera changed on {0:P1} of frames at {1} fps (no-interpolation ceiling 60/fps = {2:P0}); {3} moving windows of {4} (stationary windows excluded); per window: {5}; all frames incl. stationary: stale {6:P1}; {7}" -f $bestWin, $fps, $ceil, $movingWins, $win.Count, ($win -join " "), $staleFrac, $(if ($yaw.Count) { "last yaw rate on change " + $yaw[-1] } else { "" })) "Gameplay/Rendering"
     }
 }
 Write-WfcCsv $rows (Join-Path $OutDir "pacing.csv")

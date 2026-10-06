@@ -53,7 +53,12 @@ foreach ($r in $runs) {
     $lines = @([IO.File]::ReadLines($lg)); $clean = [bool]($lines | Where-Object { $_ -match 'Shutdown complete' } | Select-Object -First 1)
     $spawns = @($lines | Where-Object { $_ -match '\] MATCH spawn player=(\d+) team=(-?\d+)' } | ForEach-Object { $m = [regex]::Match($_, 'player=(\d+) team=(-?\d+)'); [pscustomobject]@{ p = [int]$m.Groups[1].Value; team = [int]$m.Groups[2].Value } })
     $players = @($spawns | Group-Object p | ForEach-Object { [pscustomobject]@{ p = [int]$_.Name; team = $_.Group[0].team } })
-    $kills = @($lines | Where-Object { $_ -match '\] MATCH kill ' }).Count
+    $kl = @($lines | Where-Object { $_ -match '\] MATCH kill ' } | ForEach-Object { $m = [regex]::Match($_, 'killer=(-?\d+) victim=(-?\d+) killer_team=(-?\d+) victim_team=(-?\d+) weapon=(\S*)')
+        if ($m.Success) { [pscustomobject]@{ k = [int]$m.Groups[1].Value; v = [int]$m.Groups[2].Value; kt = [int]$m.Groups[3].Value; vt = [int]$m.Groups[4].Value; w = $m.Groups[5].Value } } })
+    $kills = $kl.Count
+    $suicides = @($kl | Where-Object { $_.k -eq $_.v -or $_.k -lt 0 }).Count
+    $teamKills = if ($r.mode -eq "DM") { 0 } else { @($kl | Where-Object { $_.k -ne $_.v -and $_.k -ge 0 -and $_.kt -eq $_.vt }).Count }
+    $loadedMb = @(Flow-Ev (Read-FlowLog (Join-Path $d "flow.jsonl")) "match.loaded" | ForEach-Object { [double]$_.privateMB })[0]
     $F = Read-FlowLog (Join-Path $d "flow.jsonl"); $feed = @(Flow-Ev $F "hud.killFeed").Count
     $bl = @($lines | Where-Object { $_ -match '\] BOTLOG ' } | ForEach-Object { $m = [regex]::Match($_, 'BOTLOG (\S+) p(\d+) \(([-\d.]+) ([-\d.]+) ([-\d.]+)\) cell (-?\d+) \S+ goal (\S+) .* tgt (-?\d+) .* stuck (\d+) .* shots (\d+) hits (\d+) nopath (\d+)')
         if ($m.Success) { [pscustomobject]@{ p = [int]$m.Groups[2].Value; x = [double]$m.Groups[3].Value; y = [double]$m.Groups[4].Value; z = [double]$m.Groups[5].Value; cell = [int]$m.Groups[6].Value
@@ -73,7 +78,7 @@ foreach ($r in $runs) {
     $offMesh = ($nav | Measure-Object offMesh -Sum).Sum
     $shotsT = ($nav | Measure-Object shots -Sum).Sum; $hitsT = ($nav | Measure-Object hits -Sum).Sum; $acc = if ($shotsT) { [Math]::Round($hitsT / $shotsT, 3) } else { $null }
     $rows.Add([pscustomobject][ordered]@{ run = $tag; spawned = "$($players.Count)/$want"; teams = $teamOk; kills = $kills; kill_feed = $feed; bots_logged = $nav.Count
-        median_bot_path_m = $(if ($nav.Count) { ($nav | ForEach-Object { $_.dist } | Sort-Object)[[int]($nav.Count / 2)] }); stuck_or_idle_bots = $stuckBots.Count; broken_bots = $broken.Count; off_mesh_samples = $offMesh; accuracy = $acc; difficulty = $diff; nopath_max = $noPathMax; frame_ms = $frameMs; clean_exit = $clean })
+        median_bot_path_m = $(if ($nav.Count) { ($nav | ForEach-Object { $_.dist } | Sort-Object)[[int]($nav.Count / 2)] }); stuck_or_idle_bots = $stuckBots.Count; broken_bots = $broken.Count; off_mesh_samples = $offMesh; accuracy = $acc; difficulty = $diff; nopath_max = $noPathMax; frame_ms = $frameMs; loaded_mb = $loadedMb; suicides = $suicides; team_kills = $teamKills; clean_exit = $clean })
     Res "$tag.spawned" $(if ($players.Count -eq $want -and $teamOk) { "PASS" } elseif ($players.Count) { "FAIL" } else { "UNKNOWN" }) ("distinct spawned players {0} of {1} (local + {2} friendly + {3} enemy); team split correct {4}" -f $players.Count, $want, $r.f, $r.e, $teamOk) "Gameplay"
     if ($r.e -ge 1) { Res "$tag.combat" $(if ($kills -gt 0) { "PASS" } else { "FAIL" }) ("{0} kills in {1} s of play" -f $kills, $Seconds) "Gameplay" }
     $navSt = if (-not $nav.Count) { "UNKNOWN" } elseif ($broken.Count) { "FAIL" } elseif ($stuckBots.Count) { "PARTIAL" } else { "PASS" }
@@ -81,6 +86,8 @@ foreach ($r in $runs) {
     Res "$tag.navigation" $navSt ("{0} bots logged; median path {1} m; BROKEN (no displacement >= 20 s, no target, Roam / Attack / Retrieve goal): {4}; struggling (stuck >= 2 on > 25 % of samples) or idle (< 10 m): {2}; max no-path {3}; off-mesh samples {5}{6}" -f $nav.Count, $rows[-1].median_bot_path_m, $(if ($stuckBots.Count) { ($stuckBots | ForEach-Object { "p$($_.p) $($_.dist) m stuck $($_.stuckFrac)" }) -join ", " } else { "none" }), $noPathMax, $(if ($broken.Count) { ($broken | ForEach-Object { "p$($_.p) $($_.frozenS) s" }) -join ", " } else { "none" }), $offMesh, $(if ($r.weaker) { "; Debris expected weaker (flight-only islands)" } else { "" })) "Gameplay"
     if ($kills -gt 0) { Res "$tag.kill_feed" $(if ($feed -eq $kills) { "PASS" } else { "FAIL" }) ("kill-feed lines {0} vs kills {1}" -f $feed, $kills) "Frontend" }
     Res "$tag.frame_time" $(if ($frameMs -eq $null) { "UNKNOWN" } elseif ($frameMs -gt 16.7) { "PARTIAL" } else { "INFO" }) ("mean frame {0} ms with {1} players" -f $frameMs, $want) "Gameplay/Rendering"
+    if ($kills -gt 0) { Res "$tag.suicides" $(if (($suicides + $teamKills) / [double]$kills -gt 0.25) { "PARTIAL" } else { "INFO" }) ("suicides / environment deaths {0}, team kills {1} of {2} kills (weapons: {3})" -f $suicides, $teamKills, $kills, ((@($kl | Group-Object w | Sort-Object Count -Descending | ForEach-Object { "$($_.Name) $($_.Count)" })) -join ", ")) "Gameplay" }
+    Res "$tag.memory" "INFO" ("privateMB at match loaded: {0} with {1} players" -f $loadedMb, $want) "Gameplay/Rendering/Systems"
     Res "$tag.clean_exit" $(if ($clean) { "PASS" } else { "FAIL" }) ("shutdown complete {0}" -f $clean) "Integration"
 }
 $easy = @($rows | Where-Object { $_.run -like "*_d0" })[0]; $hard = @($rows | Where-Object { $_.run -like "*_d2" })[0]
@@ -89,5 +96,5 @@ if ($easy -and $hard -and $easy.accuracy -ne $null -and $hard.accuracy -ne $null
 Res "known_partial" "INFO" "not flagged (Gameplay, known PARTIAL): bots never hold vehicle form in combat, jets stay robots, bot abilities unused" "Gameplay"
 Write-WfcCsv $rows (Join-Path $OutDir "bots.csv")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
-Write-M07Matrix $rows @("run", "spawned", "teams", "kills", "kill_feed", "bots_logged", "median_bot_path_m", "broken_bots", "stuck_or_idle_bots", "nopath_max", "off_mesh_samples", "accuracy", "frame_ms", "clean_exit") (Join-Path $OutDir "BOTS.md") "Bot matrix" @("build: ``$sha`` ($Config); difficulty $Difficulty; $Seconds s per run; frontend-launched private matches with Bot Settings in the run's profile.")
+Write-M07Matrix $rows @("run", "spawned", "teams", "kills", "kill_feed", "bots_logged", "median_bot_path_m", "broken_bots", "stuck_or_idle_bots", "nopath_max", "off_mesh_samples", "accuracy", "suicides", "team_kills", "frame_ms", "loaded_mb", "clean_exit") (Join-Path $OutDir "BOTS.md") "Bot matrix" @("build: ``$sha`` ($Config); difficulty $Difficulty; $Seconds s per run; frontend-launched private matches with Bot Settings in the run's profile.")
 "BOT MATRIX: " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
