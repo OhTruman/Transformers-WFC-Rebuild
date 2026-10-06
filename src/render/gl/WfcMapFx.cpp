@@ -1142,8 +1142,9 @@ void Pipeline::drawMapPresentation() {
                 // M56: a connected camera-facing strip (UE3 beam / trail vertex pairs are shared between segments):
                 // each point's side uses the averaged direction of its neighbouring segments, so kinks stay joined
                 struct SP { core::Vec3 p; float w; float col[4]; float u; };
-                // M61 texture tiling: the along-ribbon coordinate spans 0 .. tiles; Beam2 tiles = length /
-                // TextureTileDistance when set, else TextureTile; Trail2 = TextureTile (per segment with bTilePerParticle)
+                // M61 texture layout (RE pass 5 s13, CONFIRMED CPU writes): U along the ribbon, V across (0 / 1 per vertex
+                // pair; which world side is V 0 is in the Xenon vertex shader: UNKNOWN, convention kept). Beams: U = r
+                // (TextureTile not applied). Trails: U by cumulative distance from the head, x TextureTile, clamped
                 static constexpr bool kAlongV = false;
                 float tile = 1.0f;
                 auto strip = [&](const std::vector<SP>& v) {
@@ -1306,7 +1307,7 @@ void Pipeline::drawMapPresentation() {
                             std::vector<SP> sv;
                             for (const BP& bp : pts)
                                 sv.push_back({bp.p, w * taperAt(bp.r), {q.color[0], q.color[1], q.color[2], q.color[3]}, bp.r});
-                            tile = L.textureTileDistance > 0.0f ? lenM * 100.0f / L.textureTileDistance : L.textureTile;
+                            tile = 1.0f;     // the beam fill never applies TextureTile: U = r, 0 .. 1 (RE s13, CONFIRMED)
                             strip(sv);
                             continue;
                         }
@@ -1356,6 +1357,19 @@ void Pipeline::drawMapPresentation() {
                     {
                         float fl = 1.0f - std::min(rt.trail[n - 1][3] / life, 1.0f);
                         sv.push_back({P[n - 1], w * fl, {q.color[0], q.color[1], q.color[2], q.color[3] * fl}, 0.0f});
+                    }
+                    // Trail2 fill (0x8301A700): U from 0 at the head (newest, HIGH), proportional to the cumulative distance:
+                    // U += SegmentLength x TextureTile / TotalLength, clamped to [0, TextureTile]; bTilePerParticle keeps
+                    // 0 .. Tile per segment (set above)
+                    if (!L.tilePerParticle && sv.size() >= 2) {
+                        float total = 0.0f;
+                        for (size_t i = 0; i + 1 < sv.size(); ++i) total += core::length(sv[i + 1].p - sv[i].p);
+                        float cum = 0.0f;
+                        sv.back().u = 0.0f;
+                        for (size_t i = sv.size() - 1; i-- > 0;) {
+                            cum += core::length(sv[i + 1].p - sv[i].p);
+                            sv[i].u = total > 1e-6f ? std::min(cum / total, 1.0f) : 0.0f;
+                        }
                     }
                     tile = L.textureTile;
                     strip(sv);
