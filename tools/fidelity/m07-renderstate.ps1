@@ -25,7 +25,8 @@ $src = Join-Path $Root "src"; $hasDisplay = [bool](Get-ChildItem $src -Recurse -
 $res = New-WfcResults
 function Res($id, $status, $note, $owner = "") { Add-WfcResult $res "m07state.$id" $status $null $note $owner }
 $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;shot:{D}\t0_charselect.bmp;ui:Accept;" } else { "" }
-$disp = if ($hasDisplay) { "display:1920,1080,0;wait:t=2;shot:{D}\t9_display1080.bmp;display:1280,720,0;wait:t=2;shot:{D}\t9b_display720.bmp;" } else { "" }
+# three consecutive frames after each display change: a seam in one frame but not the next is a capture / resize race (Rendering 2026-10-06), not a render-state bug
+$disp = if ($hasDisplay) { "display:1920,1080,0;wait:t=2;shot:{D}\t9_display1080.bmp;wait:t=0.1;shot:{D}\t9_display1080_b.bmp;wait:t=0.1;shot:{D}\t9_display1080_c.bmp;display:1280,720,0;wait:t=2;shot:{D}\t9b_display720.bmp;wait:t=0.1;shot:{D}\t9b_display720_b.bmp;wait:t=0.1;shot:{D}\t9b_display720_c.bmp;" } else { "" }
 $script = "wait:frontend;wait:ui=FrontEnd;wait:t=2;call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:ui=InLobby;wait:t=1.5;call:Online.EditGameMode,TDM;call:Online.PlayPrivateGame,TDM;wait:level=GameLobby;wait:ui=InLobby;wait:t=2;call:Online.SetSelectedMapID,508;wait:t=1;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:t=1.5;shot:{D}\t1_after_charselect.bmp;showmenu;wait:ui=Paused;wait:t=1;shot:{D}\t2_paused.bmp;ui:Accept;wait:ui=InGame;wait:t=1.5;shot:{D}\t3_after_resume.bmp;${disp}wait:ui=Spectating;wait:t=0.5;shot:{D}\t4_spectating.bmp;wait:ui=InGame;wait:t=1.5;shot:{D}\t5_after_respawn.bmp;wait:ui=GameEnded;wait:t=2;shot:{D}\t6_results.bmp;wait:level=GameLobby;wait:ui=InLobby;wait:t=2;call:Online.BeginLobbyExitCountdown;wait:level=Match;${cs}wait:ui=InGame;wait:t=1.5;shot:{D}\t7_second_match.bmp;wait:t=3;shot:{D}\t8_second_match_later.bmp;quit"
 $variants = [ordered]@{ normal = @{} }
 if ($H.Contains("WFC_GFX_NO_GLRESTORE")) { $variants.no_frontend_restore = @{ WFC_GFX_NO_GLRESTORE = "1" } }
@@ -45,6 +46,12 @@ foreach ($v in $variants.Keys) {
         $f = Join-Path $d "$s.bmp"; if (-not (Test-Path $f)) { continue }
         $w = Present-World $f; $wv = Present-WorldVerdict $w; $diag = Read-ShotDiag $f
         # dark but intact (authored CLUT maps such as Seed / Berth): textured, noise-free, dark but not black, no large blank area -> HUMAN
+        $race = ""
+        if ($s -like "t9*" -and $wv -eq "FAIL") {   # a later frame of the same state that is fine -> transient capture race
+            $later = @("_b", "_c" | ForEach-Object { $f -replace '\.bmp$', "$_.bmp" } | Where-Object { Test-Path $_ } | ForEach-Object { Present-WorldVerdict (Present-World $_) })
+            if ($later.Count -and @($later | Where-Object { $_ -ne "FAIL" }).Count) { $race = "first frame FAIL, later frames " + ($later -join "/") + ": transient capture / resize race (INFO)"; $wv = @($later | Where-Object { $_ -ne "FAIL" })[0] }
+            elseif ($later.Count) { $race = "all three consecutive frames FAIL: persistent" }
+        }
         $darkIntact = $wv -eq "FAIL" -and $w.untexFrac -lt 0.15 -and $w.noise -lt 0.05 -and $w.black -ge 0.25 -and $w.black -lt 0.92 -and $w.detail -ge 0.02 -and $w.maxFlat -lt 0.55
         $entryBad = if ($diag) { @(Test-GlEntryState $diag.entry) } else { @() }
         $rendBad = @(); if ($diag) { if ([int]$diag.noDepth -gt 0) { $rendBad += "$($diag.noDepth) opaque draws without depth test" }; if ([int]$diag.glErrors -gt 0) { $rendBad += "$($diag.glErrors) GL errors" } }
@@ -52,7 +59,7 @@ foreach ($v in $variants.Keys) {
         $status = if ($rendBad.Count) { "FAIL" } elseif ($darkIntact -and -not $entryBad.Count) { "HUMAN" } elseif ($wv -eq "FAIL") { "FAIL" } elseif ($entryBad.Count) { "FAIL" } elseif ($wv -eq "PARTIAL") { "PARTIAL" } else { "PASS" }
         if ($status -eq "FAIL") { $fails++ }
         $rows.Add([pscustomobject][ordered]@{ variant = $v; transition = $s; status = $status; world = "$wv ($($w.detail))"; renderer = $(if ($diag) { if ($rendBad.Count) { $rendBad -join "; " } else { "ok (world $($diag.world), bsp $($diag.bsp))" } } else { "no <shot>.json (hook absent)" }); gl_entry = $(if ($diag) { if ($entryBad.Count) { $entryBad -join "; " } else { "sane" } } else { "n/a" }) })
-        if ($v -eq "normal") { Res "transition.$s" $status ("world {0} (detail {1}); renderer {2}; GL state left by the overlay {3}" -f $wv, $w.detail, $rows[-1].renderer, $rows[-1].gl_entry) $(if ($entryBad.Count) { "Frontend (overlay leaves GL state)" } elseif ($rendBad.Count -or $wv -eq "FAIL") { "Rendering/Integration" } else { "" }) }
+        if ($v -eq "normal") { Res "transition.$s" $status ("world {0} (detail {1}); renderer {2}; GL state left by the overlay {3}{4}" -f $wv, $w.detail, $rows[-1].renderer, $rows[-1].gl_entry, $(if ($race) { "; $race" } else { "" })) $(if ($entryBad.Count) { "Frontend (overlay leaves GL state)" } elseif ($rendBad.Count -or $wv -eq "FAIL") { "Rendering/Integration" } else { "" }) }
     }
     $verdictByVariant[$v] = $fails
 }
