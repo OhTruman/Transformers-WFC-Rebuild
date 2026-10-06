@@ -132,6 +132,7 @@ void World::load(render::IRenderer& renderer) {
     //                        [&renderer](int h, auto& p, auto& f, auto& u) { return renderer.setParticleEffectTransform(h, p, f, u); },
     //                        [&renderer](int h, auto& n, const float* v) { return renderer.setParticleEffectParam(h, n, v); },
     //                        [&renderer](int h) { renderer.stopParticleEffect(h); }});
+    Character::clearRigCache();   // rigs point at models of the previous load
     repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
     heldWeaponMuzzleHook = [this](core::Vec3& out) { return heldWeaponMuzzleImpl(out); };
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {

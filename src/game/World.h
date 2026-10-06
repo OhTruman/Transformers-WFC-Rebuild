@@ -696,6 +696,7 @@ private:
     int botSearchOwner_ = -1;          // the bot whose path search is in progress (BotNav time-sliced search)
     bool botSearchVehicle_ = false;
     void botPathFailed(BotBrain& b, bool vehicle);
+    bool botTryAbility(MatchOpponent& o, BotBrain& b, const char* id);   // TnAbilityManager.TriggerAbility rules for a bot's slot
     double botMsAccum_ = 0.0, botMsMax_ = 0.0; long botTicks_ = 0;
     std::vector<ParticipantShot> participantShots_;
     void addBotBrain(int player, int difficulty);

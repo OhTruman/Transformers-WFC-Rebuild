@@ -101,6 +101,8 @@ struct BotBrain {
     float meleeCooldown = 0.0f;                          // between melee attacks
     float rushUntil = 0.0f;                              // closing in for a melee attack
     int healTarget = -1;                                 // a wounded teammate this bot repairs with the Repair Ray
+    int pendingDodge = 0;                                // TnAcrobaticsManager dodge request for the next step (1 left, 2 right)
+    bool pendingHover = false;                           // PlayerController.Hover request for the next step
     float grenadeCooldown = 0.0f, grenadeDelay = -1.0f;  // TnGrenadeThrower: TossDelay 0.4 s, then the release
     core::Vec3 grenadeTarget{0, 0, 0};
     float transformCooldown = 0.0f;
@@ -111,7 +113,7 @@ struct BotBrain {
     float noVehicleUntil = 0.0f;
     // Diagnostics
     unsigned rng = 1;
-    int heals = 0, rushes = 0, melees = 0, grenades = 0, hits = 0, noPaths = 0, shots = 0, repaths = 0, stucks = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0;
+    int abilities = 0, heals = 0, rushes = 0, melees = 0, grenades = 0, hits = 0, noPaths = 0, shots = 0, repaths = 0, stucks = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0;
     float frand() { rng = rng * 1664525U + 1013904223U; return (float)((rng >> 8) & 0xFFFFFF) / 16777216.0f; }
     float frange(float a, float b) { return a + (b - a) * frand(); }
 };

@@ -608,6 +608,12 @@ private:
         int cannon = -1;                         // C_Cannon_XB (VEH_Tank_ANIMTREE WeaponPrimary)
     } vehicleRig_;
     void buildRobotRig(const assets::SkinnedModel& mdl);
+    void buildRobotRigUncached(const assets::SkinnedModel& mdl);
+public:
+    // The robot rig (aim-offset bake, masks, clip indices) is model data: built once per model and shared by every pawn with that
+    // body (15 bots spawning baked it 15x in one frame). World clears it when the models it points to are released.
+    static void clearRigCache();
+private:
     void buildVehicleRig(const assets::SkinnedModel& mdl);
 
     float aimPitch_ = 0.0f, aimPitchN_ = 0.0f, aimYawN_ = 0.0f, aimW_ = 0.0f;
