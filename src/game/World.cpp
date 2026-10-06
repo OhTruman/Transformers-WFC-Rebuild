@@ -21,6 +21,7 @@
 #include <chrono>
 #include <cstring>
 #include <fstream>
+#include <array>
 #include <map>
 #include <sstream>
 
@@ -1089,9 +1090,9 @@ void World::tickVehicleBoost(float dt) {
             fi.formEnded = fxPrevShown_ && !shown;
             fxPrevShown_ = shown;
             fi.normJumpRemaining = vs.jumpBoost / core::config::kDriveJumpBoostTime;
-            const int lp = localPlayer_;
-            const int team = (lp >= 0 && (size_t)lp < match_.players().size()) ? match_.players()[(size_t)lp].team : -1;
-            if (!teamEnergon(team == 255 ? -1 : team, fi.energon)) fi.energon[0] = fi.energon[1] = fi.energon[2] = 1.0f;
+            // [integration 09a] The FX EnergonColor is the character's own (RE b0d9b22): customization energon (the selection has
+            // none) else the chassis material default (character.json energon_default). Never the team colour.
+            if (!chassisEnergonDefault(localChassis_, fi.energon)) fi.energon[0] = fi.energon[1] = fi.energon[2] = 1.0f;
             fi.body = pc.meshMatrix(Form::Vehicle);
             fi.velocity = v;
             fi.gravity = {0.0f, -core::config::kGravity, 0.0f};   // [HIGH: the rigid body uses the pawn gravity]
@@ -2157,16 +2158,14 @@ void World::draw(render::IRenderer& r) const {
     for (const auto& a : actors_) {
         if (!a->alive()) continue;
         // [integration M08] Each participant pawn is its own character instance for TnCharacterApplier (draw owner 100 +
-        // match player): its team's EnergonColor; no customization paint (participants carry none: material defaults).
+        // match player). [integration 09a] No customization paint and no energon override: participants carry none, so the
+        // chassis material defaults draw (energon is never team-tinted, RE b0d9b22).
         // The local pawn stays owner 0 (colours from the selection at spawn).
         int owner = 0;
         for (const MatchOpponent* o : opponents_)
             if (o == a.get()) {
                 owner = 100 + o->matchPlayer();
                 render::CharacterColors cc;
-                const int p = o->matchPlayer();
-                const int team = (p >= 0 && (size_t)p < match_.players().size()) ? match_.players()[(size_t)p].team : -1;
-                if (teamEnergon(team == 255 ? -1 : team, cc.energon)) cc.energon[3] = 1.0f;
                 r.setDrawOwner(owner);
                 r.setCharacterColors(cc);
             }
@@ -2422,6 +2421,29 @@ std::vector<std::string> World::applyCharacterTo(Character& pc, const CharacterS
     return refused;
 }
 
+bool World::chassisEnergonDefault(const std::string& chassis, float out[3]) const {
+    // [integration 09a] The robot mesh material's authored EnergonColor default (AssetTools energon_default, RE b0d9b22),
+    // per chassis, read once. Missing: logged loudly (the FX then draws white, a visible defect, not a guess).
+    static std::map<std::string, std::array<float, 4>> cache;   // [3] = 1 when found
+    auto it = cache.find(chassis);
+    if (it == cache.end()) {
+        std::array<float, 4> v{0, 0, 0, 0};
+        std::string txt;
+        assets::Json j;
+        if (!chassis.empty() && readTextFile(assetRoot() + "/Characters/" + chassis + "/character.json", txt) && assets::Json::parse(txt, j) &&
+            j.has("energon_default")) {
+            const assets::Json& e = j["energon_default"];
+            v = {e["R"].asFloat(), e["G"].asFloat(), e["B"].asFloat(), 1.0f};
+        } else LOG_ERROR("chassis %s: energon_default missing in its character.json export (vehicle FX colour unset)", chassis.c_str());
+        it = cache.emplace(chassis, v).first;
+    }
+    if (it->second[3] == 0.0f) return false;
+    for (int k = 0; k < 3; ++k) out[k] = it->second[k];
+    return true;
+}
+
+// Kamikaze-mine fallback ONLY (RE b0d9b22: the team EnergonColor class defaults are used for a mine with no instigator
+// pawn, never for bodies or vehicle FX).
 bool World::teamEnergon(int team, float out[3]) const {
     // The values are class defaults (identical in every chassis export); read once from the first chassis this world
     // loaded. Keys as AssetTools vs_roster_export writes them.

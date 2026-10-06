@@ -885,9 +885,10 @@ void Application::routeMatchToFrontend(float dt) {
             if (e.player == me && renderer_) {
                 // [integration M07] TnCharacterApplier on the spawned pawn: the selection's colours for the faction it
                 // spawned as (Cust_Color_A / Cust_COLOR_B; black = the material's own paint, as in the preview). The
-                // match pawn is draw owner 0. [integration M08] EnergonColor = the team's colour, as TnCharacterApplier pushes
-                // it (TnFactionTeamAutobots / TnFactionTeamDecepticons / neutral TnTeamInfo class defaults, CONFIRMED values from
-                // the AssetTools chassis export via World::teamEnergon; FLinearColor). Missing data: logged, material default kept.
+                // match pawn is draw owner 0. [integration 09a] EnergonColor is the CHARACTER's own, never the team's (RE b0d9b22
+                // CONFIRMED: TnCharacterApplier.ExtractColors = CD.EnergonColor if set, else the robot mesh material default). The
+                // selection carries no energon, so it is left unset (RGB 0): the renderer draws the chassis material's authored
+                // EnergonColor (AssetTools energon_default 0.843 / 0.302 / 0.029 on every MP chassis). Replaces the M08 team tint.
                 const game::MatchPlayer& mp = match.players()[(size_t)me];
                 // The faction the body resolved for (TnGame.GetResolvedCharacterFaction: the team; FFA forces 1 = Decepticon) -
                 // not the team, which FFA does not have (a Deathmatch Leader spawns Soundwave and takes the Decepticon paint).
@@ -897,7 +898,6 @@ void Application::routeMatchToFrontend(float dt) {
                 const game::CharacterColor* src[2] = {&mp.selection.primary[f], &mp.selection.secondary[f]};
                 float* dst[2] = {cc.primary, cc.secondary};
                 for (int k = 0; k < 2; ++k) { dst[k][0] = lin(src[k]->r); dst[k][1] = lin(src[k]->g); dst[k][2] = lin(src[k]->b); dst[k][3] = 1.0f; }
-                if (world_.teamEnergon(teamOf(me), cc.energon)) cc.energon[3] = 1.0f;   // -1 (FFA): the neutral TnTeamInfo colour
                 renderer_->setDrawOwner(0);
                 renderer_->setCharacterColors(cc);
                 frontend::FlowTrace::emit("match.pawnBody", {{"chassis", mp.chassis}, {"faction", std::to_string(f)},
