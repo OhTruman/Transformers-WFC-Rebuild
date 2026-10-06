@@ -134,6 +134,11 @@ def system_runtime(name, s):
                 lod['beam_trail']['TextureTile'] = td.get('TextureTile', 1)
                 lod['beam_trail']['TextureTileDistance'] = td.get('TextureTileDistance', 0.0)
                 lod['beam_trail']['bTilePerParticle'] = bool(td.get('bTilePerParticle', False))
+                # M65 WFC BillboardSettings {Direction, Alignment} (RE pass 5 s13 addendum 3; authored on 4 templates,
+                # Direction only): the ribbon side axis; default camera facing / centred
+                bs = td.get('BillboardSettings') or {}
+                lod['beam_trail']['billboard'] = {'direction': bs.get('Direction', 'BD_CameraFacing'),
+                                                  'alignment': bs.get('Alignment', 'BA_Centered')}
                 lod['beam_trail']['modules'] = L.get('beam_modules')         # M56: noise / sine waves / source / target
                 # M60: BeamMethod (CDO PEB2M_Target) and Distance (CDO constant 25) for the Distance method
                 lod['beam_trail']['BeamMethod'] = td.get('BeamMethod', 'PEB2M_Target')
@@ -351,6 +356,8 @@ def library(mapname):
         work += [(p.object_path(i + 1), pkn) for i, e in enumerate(p.exports) if p.class_name(e) == 'ParticleSystem']
     # the class FX packages are seekfree stubs on Xenon: pstream resolves the template to the package that holds it
     work += [(t, None) for ts in class_templates().values() for t in sorted(ts)]
+    # diagnostics / test data: WFC_FXLIB_EXTRA="tpl;tpl" adds named templates (e.g. effects no shipped data references yet)
+    work += [(t, None) for t in (os.environ.get('WFC_FXLIB_EXTRA') or '').split(';') if t.strip()]
     repos = {}
     for t, hint in work:
         if t in out: continue

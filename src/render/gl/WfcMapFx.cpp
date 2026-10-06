@@ -173,6 +173,13 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     lod.typeData = td == "mesh" ? 1 : td == "trail2" ? 2 : td == "beam2" ? 3 : 0;
                     const assets::Json& bt = L["beam_trail"];
                     lod.textureTile = std::max(1.0f, bt["TextureTile"].asFloat(1.0f));
+                    {
+                        const std::string dir = bt["billboard"]["direction"].asString(), al = bt["billboard"]["alignment"].asString();
+                        const char* axes[6] = {"LocalX", "LocalY", "LocalZ", "WorldX", "WorldY", "WorldZ"};
+                        for (int k = 0; k < 6; ++k) if (dir.find(axes[k]) != std::string::npos) lod.billboardAxis = k;
+                        if (al.find("Positive") != std::string::npos) { lod.sideScale[0] = 0.0f; lod.sideScale[1] = 2.0f; }
+                        else if (al.find("Negative") != std::string::npos) { lod.sideScale[0] = 2.0f; lod.sideScale[1] = 0.0f; }
+                    }
                     lod.textureTileDistance = bt["TextureTileDistance"].asFloat(0.0f);
                     lod.tilePerParticle = bt["bTilePerParticle"].asBool(false);
                     if (lod.typeData == 3) {
@@ -1201,6 +1208,27 @@ void Pipeline::drawMapPresentation() {
                 // target with that particle's width / colour; a trail on a moving source draws one ribbon through its
                 // recent path, fading with age, at the newest particle's width / colour.
                 std::vector<Sprite> sp;
+                // M65 BillboardSettings: a fixed side axis (component LocalToWorld row, normalized, or a world axis)
+                // instead of cross(view, dir); offset = (2V - 1) x Size x sideScale x axis (RE s13 addendum 3, HIGH).
+                // fixedSide = the V0 direction (our corners put V1 at p - side); scales applied per side
+                core::Vec3 fixedSide{0, 0, 0};
+                if (L.billboardAxis >= 0) {
+                    float a[3] = {0, 0, 0};
+                    if (L.billboardAxis < 3) { for (int c = 0; c < 3; ++c) a[c] = in.R[L.billboardAxis][c]; }
+                    else a[L.billboardAxis - 3] = 1.0f;
+                    core::Vec3 g = ueToGltf(a);
+                    float gl = core::length(g);
+                    if (gl > 1e-6f) fixedSide = g * (-1.0f / gl);
+                }
+                const bool fixedAxis = core::length(fixedSide) > 0.0f;
+                if (fixedAxis && std::getenv("WFC_FXTEST")) {
+                    static std::set<std::string> logged;
+                    if (logged.insert(in.system + "/" + sys.emitters[e].name).second)
+                        LOG_INFO("FXTEST billboard %s/%s axis %d side (%.3f %.3f %.3f) component R%d (%.3f %.3f %.3f) scales %.1f/%.1f",
+                                 in.system.c_str(), sys.emitters[e].name.c_str(), L.billboardAxis, fixedSide.x, fixedSide.y,
+                                 fixedSide.z, L.billboardAxis % 3, in.R[L.billboardAxis % 3][0], in.R[L.billboardAxis % 3][1],
+                                 in.R[L.billboardAxis % 3][2], L.sideScale[0], L.sideScale[1]);
+                }
                 auto quad = [&](const core::Vec3& a, const core::Vec3& b, float w0, float w1, const float* col0,
                                 const float* col1, float u0, float u1) {
                     core::Vec3 d = b - a;
@@ -1208,7 +1236,7 @@ void Pipeline::drawMapPresentation() {
                     if (l < 1e-4f) return;
                     core::Vec3 mid = (a + b) * 0.5f;
                     // sprite corner order: x (u) along the ribbon, y (v) across it, facing the camera
-                    core::Vec3 side = core::cross(core::normalize(camPos_ - mid), d * (1.0f / l));
+                    core::Vec3 side = fixedAxis ? fixedSide : core::cross(core::normalize(camPos_ - mid), d * (1.0f / l));
                     float sl = core::length(side);
                     if (sl < 1e-4f) return;
                     side = side * (1.0f / sl);
@@ -1234,6 +1262,7 @@ void Pipeline::drawMapPresentation() {
                     if (n < 2) return;
                     std::vector<core::Vec3> side(n);
                     for (size_t i = 0; i < n; ++i) {
+                        if (fixedAxis) { side[i] = fixedSide; continue; }
                         core::Vec3 d = v[std::min(i + 1, n - 1)].p - v[i == 0 ? 0 : i - 1].p;
                         core::Vec3 sd = core::cross(core::normalize(camPos_ - v[i].p), d);
                         float sl = core::length(sd);
@@ -1243,8 +1272,9 @@ void Pipeline::drawMapPresentation() {
                         if (core::length(side[i]) < 1e-6f || core::length(side[i + 1]) < 1e-6f) continue;
                         Sprite s;
                         // half-width = Size (the ribbon VS offsets each vertex pair by (2V - 1) x Size; RE s13 add. 2, HIGH)
-                        s.c[0] = v[i].p - side[i] * v[i].w; s.c[1] = v[i + 1].p - side[i + 1] * v[i + 1].w;
-                        s.c[2] = v[i + 1].p + side[i + 1] * v[i + 1].w; s.c[3] = v[i].p + side[i] * v[i].w;
+                        const float s1 = L.sideScale[1], s0 = L.sideScale[0];   // V1 corners (c0, c1), V0 corners (c2, c3)
+                        s.c[0] = v[i].p - side[i] * (v[i].w * s1); s.c[1] = v[i + 1].p - side[i + 1] * (v[i + 1].w * s1);
+                        s.c[2] = v[i + 1].p + side[i + 1] * (v[i + 1].w * s0); s.c[3] = v[i].p + side[i] * (v[i].w * s0);
                         // along-ribbon coordinate (tiled) and across (0 / 1); kAlongV swaps them (M61)
                         float ua = v[i].u * tile, ub = v[i + 1].u * tile;
                         float uv[4][2] = {{ua, 1}, {ub, 1}, {ub, 0}, {ua, 0}};

@@ -477,6 +477,8 @@ public:
         bool tilePerParticle = false;     // Trail2 bTilePerParticle
         bool particleTrail = false;       // M63 Trail2 placed by LocationEmitter: one chain through its own particles
         int trailCap = 0;                 // Trail2: MaxTrailCount x MaxParticleInTrailCount (spawn cap; RE s14)
+        int billboardAxis = -1;           // M65 BillboardSettings.Direction: -1 camera facing, 0..2 local X/Y/Z, 3..5 world
+        float sideScale[2] = {1, 1};      // Alignment: V0 / V1 side scales (Centered 1/1, Positive 0/2, Negative 2/0)
         FxDist distance;
         struct BeamSine { float amp = 0, period = 1, speed = 0, phase = 0, dir[3] = {0, 0, 0}; };
         std::vector<BeamSine> sines;      // ParticleModuleBeamSineWave (WFC addition; render fill CONFIRMED, RE 9i)
