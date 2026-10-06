@@ -3,6 +3,15 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08r (2026-10-06) - opponent spawn hitch (my M08d glue ran for every pawn)
+- My M08d glue in World::applyCharacterTo (preloadWeaponAudio + setPlayerVehicleWeaponAudio) runs for EVERY pawn, opponents included, because
+  Gameplay applies characters to participants through it. Two effects of an opponent's spawn:
+  * a synchronous decode of its weapon cues on the spawn frame (reproduced: 78.6 ms for the first Truck opponent; Integration measured 67 ms);
+  * the local player's loadout weapon classes and vehicle-weapon class were overwritten with the opponent's. Mostly masked, since shots use
+    the fired weapon's own class, but wrong.
+- **Fix:** the glue runs for the local pawn only. `docs/handoff/SYSTEMS_M08R_opponent_spawn_audio_glue.patch` (one hunk, against 08n 1b9344f).
+  Opponents fire no weapon sounds in the rebuild; if they ever do, onWeaponFired's ensureWeaponAudio loads on first use.
+
 ## SYSTEMS M08q (2026-10-06) - no main-thread decode for large streamed music (match final-stretch hitch)
 - **Problem** (Integration 08n): the first final-stretch music of each match decoded synchronously in World::tick.
   * DM_FINALSTRETCH_LP is 248 MB of waves: 686 ms, then 159-190 ms in later matches.
