@@ -95,8 +95,41 @@ public:
         return true;
     }
 
+    // Diagnostics (WFC_PACINGLOG=N): presentation pacing over N-frame windows - frame interval percentiles and how the
+    // camera the caller hands in changes per frame (yaw / position). A fixed-step simulation rendered without
+    // interpolation shows as many frames with no change followed by a jump (steps of the tick, not of the frame).
+    struct Pacing { std::chrono::steady_clock::time_point last; bool has = false; float yaw = 0; core::Vec3 pos{0, 0, 0};
+                    std::vector<double> dt, dyaw, dpos; } pacing_;
+    void pacingSample(const Camera& c) {
+        static const long every = std::getenv("WFC_PACINGLOG") ? std::atol(std::getenv("WFC_PACINGLOG")) : 0;
+        if (every <= 0) return;
+        const auto now = std::chrono::steady_clock::now();
+        if (pacing_.has) {
+            pacing_.dt.push_back(std::chrono::duration<double, std::milli>(now - pacing_.last).count());
+            pacing_.dyaw.push_back(std::fabs(c.yaw - pacing_.yaw));
+            pacing_.dpos.push_back(core::length(c.pos - pacing_.pos));
+        }
+        pacing_.last = now; pacing_.yaw = c.yaw; pacing_.pos = c.pos; pacing_.has = true;
+        if ((long)pacing_.dt.size() < every) return;
+        auto pct = [](std::vector<double> v, double q) { std::sort(v.begin(), v.end()); return v[std::min(v.size() - 1, (size_t)(q * v.size()))]; };
+        size_t still = 0, moved = 0; double sumYaw = 0, sumDt = 0;
+        for (size_t i = 0; i < pacing_.dt.size(); ++i) {
+            const bool chg = pacing_.dyaw[i] > 1e-6 || pacing_.dpos[i] > 1e-5;
+            (chg ? moved : still)++; sumYaw += pacing_.dyaw[i]; sumDt += pacing_.dt[i];
+        }
+        std::vector<double> rate;   // camera yaw rate on the frames that changed (rad/s): uneven = stepped
+        for (size_t i = 0; i < pacing_.dt.size(); ++i) if (pacing_.dyaw[i] > 1e-6) rate.push_back(pacing_.dyaw[i] / (pacing_.dt[i] / 1000.0));
+        LOG_INFO("PACING %zu frames: interval p50 %.2f p95 %.2f p99 %.2f max %.2f ms (%.0f fps); camera unchanged on %zu, changed on "
+                 "%zu; yaw rate on change p10 %.2f p50 %.2f p90 %.2f rad/s, mean over time %.2f rad/s",
+                 pacing_.dt.size(), pct(pacing_.dt, 0.5), pct(pacing_.dt, 0.95), pct(pacing_.dt, 0.99), pct(pacing_.dt, 1.0),
+                 1000.0 * pacing_.dt.size() / std::max(sumDt, 1e-3), still, moved,
+                 rate.empty() ? 0.0 : pct(rate, 0.1), rate.empty() ? 0.0 : pct(rate, 0.5), rate.empty() ? 0.0 : pct(rate, 0.9),
+                 sumYaw / std::max(sumDt / 1000.0, 1e-6));
+        pacing_.dt.clear(); pacing_.dyaw.clear(); pacing_.dpos.clear();
+    }
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
+        pacingSample(camIn);
         if (const char* dt = std::getenv("WFC_DECALTEST")) {   // diagnostics: death scorch under x,y,z (glTF m)
             static int frames = 0;
             if (++frames == 20) {
