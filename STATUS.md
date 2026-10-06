@@ -602,6 +602,9 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING M68 (2026-10-06)
+- Sprite octagon / best-fit polygon modes: octagon puffs no longer show their corner triangles; best-fit sprites draw their authored polygons.
+
 ## RENDERING M67 (2026-10-06)
 - Sprite flipbooks per RE s16: frames update every tick, random frames re-pick on schedule, blended flipbooks cross-fade between cells.
 

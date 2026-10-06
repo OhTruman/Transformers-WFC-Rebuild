@@ -17,6 +17,11 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 68 — SPRITE OCTAGON / BESTFIT POLYGONS (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Sprite render modes | Quad (quad list), Octagon (8 verts, corners trimmed), BestFit (authored 3-12 vertex polygon, last with Time <= age); corners expand like quad corners, UV = (cell + corner) x cellSize | RE pass 5 s17 + addenda (fill, index lists, draw path) | CONFIRMED | M68: fan-triangulated polygons through the quad corner transform |
+
 ## MILESTONE 67 — SPRITE SUBUV (2026-10-06)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|
