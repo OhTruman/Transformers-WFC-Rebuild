@@ -17,6 +17,13 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 67 — SPRITE SUBUV (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| SubUV update | Every tick for every live particle; Linear(_Blend) from the SubImageIndex curve with frac interp; Random(_Blend) re-picks on RandomImageTime (lifetime fraction, default 0 = every tick); second cell = next, wrapping | RE pass 5 s16 (update runner 0x1F) | CONFIRMED | M67 (was: Random picked once at spawn, no blending) |
+| SubUV blend | The fill writes both cells + interp; ParticleSubUV lerps the two samples | RE s16 (shader lerp HIGH) | HIGH | M67: sprite attribute 6 + matc ParticleSubUV mix |
+| SubUVDirect / Select | Direct UV = (pos + size x corner) x scale (texel units HIGH); Select unused in MP | RE s16 | PARTIAL | not applied (10 MP LODs) |
+
 ## MILESTONES 65-66 — FIXED-AXIS RIBBONS, SPRITE LOCK-AXIS / VELOCITY MODES (2026-10-06)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

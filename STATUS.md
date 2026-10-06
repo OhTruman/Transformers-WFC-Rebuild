@@ -602,6 +602,9 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING M67 (2026-10-06)
+- Sprite flipbooks per RE s16: frames update every tick, random frames re-pick on schedule, blended flipbooks cross-fade between cells.
+
 ## RENDERING M65-M66 (2026-10-06)
 - Fixed-axis beam / trail ribbons (BillboardSettings), unused by current MP data.
 - Sprite lock-axis modes and velocity alignment per RE s15: muzzle flashes face down the barrel, explosion / impact rings lie flat, velocity sprites orient by camera-to-particle.
