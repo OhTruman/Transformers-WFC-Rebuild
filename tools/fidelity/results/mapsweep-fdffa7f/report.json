@@ -1,11 +1,11 @@
 ﻿{
     "summary":  {
                     "pass":  6,
-                    "fail":  2,
+                    "fail":  0,
                     "known":  0,
                     "info":  0,
                     "skip":  0,
-                    "human":  0,
+                    "human":  2,
                     "unknown":  0,
                     "waiting":  0,
                     "partial":  2
@@ -13,15 +13,15 @@
     "results":  [
                     {
                         "id":  "mapsweep.MP_IAC_Seed",
-                        "status":  "FAIL",
+                        "status":  "HUMAN",
                         "owner":  "Rendering",
-                        "note":  "STRUCTURAL DEFECT: world FAIL (0.039); draws world 57 / BSP 9, materials 36, noProgram 0, glErr 0, glDebug 0, gpu 1.2 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                        "note":  "PLAYABLE - DARK (HUMAN CHECK): world FAIL (0.039); draws world 57 / BSP 9, materials 36, noProgram 0, glErr 0, glDebug 0, gpu 1.2 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
                     },
                     {
                         "id":  "mapsweep.MP_IAC_Berth",
-                        "status":  "FAIL",
+                        "status":  "HUMAN",
                         "owner":  "Rendering",
-                        "note":  "STRUCTURAL DEFECT: world FAIL (0.049); draws world 29 / BSP 0, materials 22, noProgram 0, glErr 0, glDebug 0, gpu 0.2 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                        "note":  "PLAYABLE - DARK (HUMAN CHECK): world FAIL (0.049); draws world 29 / BSP 0, materials 22, noProgram 0, glErr 0, glDebug 0, gpu 0.2 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
                     },
                     {
                         "id":  "mapsweep.MP_UND_Complex",

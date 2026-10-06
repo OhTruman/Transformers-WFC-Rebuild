@@ -56,8 +56,11 @@ foreach ($m in $Maps) {
     $path = if ($vcLast -match 'path=(\S+)') { $Matches[1] } else { "?" }
     $ws = @(Get-ChildItem $d -Filter *.bmp -ErrorAction SilentlyContinue | Sort-Object Name | ForEach-Object { Present-World $_.FullName } | Where-Object { $_ })
     $wv = Present-WorldSetVerdict $ws
+    # dark but intact: every frame textured (untextured < 0.15), noise-free, and dark (black >= 0.25) - with the original-material path drawing
+    $dark = $ws.Count -and -not @($ws | Where-Object { $_.untexFrac -ge 0.15 -or $_.noise -ge 0.05 -or $_.black -lt 0.25 -or $_.black -ge 0.92 -or $_.detail -lt 0.02 }).Count -and $path -eq "original" -and -not $noProg
     $cls = if (-not $clean -or $oob -or $fbInc) { "STRUCTURAL DEFECT" }
            elseif ($missing.Count -or $legacy) { "BLOCKED BY MISSING SOURCE DATA" }
+           elseif ($wv -eq "FAIL" -and $dark) { "PLAYABLE - DARK (HUMAN CHECK)" }   # textured, no noise, just dark: brightness vs the original is a human / reference question
            elseif ($wv -eq "FAIL") { "STRUCTURAL DEFECT" }
            elseif ($matFb.Count -or $ptFb.Count -or $decode -or $vlm -or $wv -eq "PARTIAL" -or ($glErr -gt 0)) { "PLAYABLE WITH VISUAL DEFECTS" }
            else { "PLAYABLE" }
@@ -66,7 +69,7 @@ foreach ($m in $Maps) {
         material_fallbacks = ($matFb -join ","); particle_fallbacks = ($ptFb -join ","); ribbons_not_drawn = $ribbon; legacy = $legacy; out_of_bounds = $oob; fb_incomplete = $fbInc; decode_failed = $decode; lightmaps_absent_in_source = ($lmMissing -join ","); no_decals = $noDecals; vlm_unbound = $vlm; missing = ($missing -join ",")
         warn_types = (($wl | Select-Object -First 6 | ForEach-Object { "$($_.Count)x $($_.Name)" }) -join " | ") }
     $rows.Add($row)
-    $st = switch ($cls) { "PLAYABLE" { "PASS" } "PLAYABLE WITH VISUAL DEFECTS" { "PARTIAL" } default { "FAIL" } }
+    $st = switch ($cls) { "PLAYABLE" { "PASS" } "PLAYABLE WITH VISUAL DEFECTS" { "PARTIAL" } "PLAYABLE - DARK (HUMAN CHECK)" { "HUMAN" } default { "FAIL" } }
     Res "$m" $st ("{0}: world {1} ({2}); draws world {3} / BSP {4}, materials {5}, noProgram {6}, glErr {7}, glDebug {8}, gpu {9} ms; material fallbacks {10}; particle fallbacks {11}; ribbons not drawn {12}; legacy {13}; out-of-bounds {14}; clean exit {15}" -f $cls, $wv, $row.world_detail, $world, $bsp, $mats, $noProg, $glErr, $glDbg, $gpuMed, $(if ($matFb.Count) { $matFb -join "," } else { 0 }), $(if ($ptFb.Count) { $ptFb -join "," } else { 0 }), $ribbon, $legacy, $oob, $clean) $(if ($cls -eq "PLAYABLE") { "" } else { "Rendering" })
 }
 Write-WfcCsv $rows (Join-Path $OutDir "mapsweep.csv")

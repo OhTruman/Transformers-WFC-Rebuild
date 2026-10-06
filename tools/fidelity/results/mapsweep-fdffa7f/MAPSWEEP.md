@@ -6,8 +6,8 @@ One lockstep direct boot per map (600 frames). The world verdict uses the frames
 
 | map | class | world_verdict | world_detail | world_draws | materials | noProgram | glErr | glDebug | gpu_ms | material_fallbacks | particle_fallbacks | ribbons_not_drawn | legacy | out_of_bounds | clean_exit |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| MP_IAC_Seed | STRUCTURAL DEFECT | FAIL | 0.039 | 57 | 36 | 0 | 0 | 0 | 1.2 |  |  | 0 | 0 | 0 | True |
-| MP_IAC_Berth | STRUCTURAL DEFECT | FAIL | 0.049 | 29 | 22 | 0 | 0 | 0 | 0.2 |  |  | 0 | 0 | 0 | True |
+| MP_IAC_Seed | PLAYABLE - DARK (HUMAN CHECK) | FAIL | 0.039 | 57 | 36 | 0 | 0 | 0 | 1.2 |  |  | 0 | 0 | 0 | True |
+| MP_IAC_Berth | PLAYABLE - DARK (HUMAN CHECK) | FAIL | 0.049 | 29 | 22 | 0 | 0 | 0 | 0.2 |  |  | 0 | 0 | 0 | True |
 | MP_UND_Complex | PLAYABLE | PASS | 0.337 | 46 | 33 | 0 | 0 | 0 | 0.5 |  |  | 0 | 0 | 0 | True |
 | MP_IAC_Rust | PLAYABLE | PASS | 0.244 | 132 | 58 | 0 | 0 | 0 | 0.6 |  |  | 0 | 0 | 0 | True |
 | MP_ESC_BrokenHope | PLAYABLE | PASS | 0.373 | 548 | 92 | 0 | 0 | 0 | 1 |  |  | 0 | 0 | 0 | True |
@@ -18,24 +18,30 @@ One lockstep direct boot per map (600 frames). The world verdict uses the frames
 | MP_UND_Gorge | PLAYABLE WITH VISUAL DEFECTS | PASS | 0.358 | 286 | 47 | 0 | 0 | 0 | 1.2 |  |  | 0 | 0 | 0 | True |
 
 ## Findings (Experimental, 2026-10-05)
-- **Seed and Berth: world FAIL is UNCONFIRMED.**
-  - The frames show complete geometry but very dark (median luma 9-12), and the verdict rests on one frame
-    (frame 200). The renderer's own VISUALCHECK passes at frames 120 / 240 / 360.
-  - An A/B on M08b 175a634 (same sweep) is queued to decide between "authentic dark spot at the default start" and
-    "M08c lighting / exposure change".
-  - The sweep now captures several frames per map (`-ShotFrom/-ShotTo/-ShotStep`).
-- **GPU frame-time spikes:** one warning each on Seed (569 ms), Berth (383 ms) and Rust (345 ms) (Rendering M45 TDR
-  watch; the reset limit is about 2,000 ms). These are single spikes; the frame-time median is 0.2-2.4 ms.
+- **All 10 maps:** 0 original-material build fallbacks, 0 particle-material fallbacks, 0 Trail2 / Beam2, 0 LEGACY
+  RENDERER, 0 out-of-bounds draws, glErr 0, glDebug 0, clean exit. **No compile fallbacks on any map.**
+- **Seed and Berth: PLAYABLE - DARK (HUMAN CHECK).** The geometry is complete and textured, but very dark (black
+  0.53-0.84 of the world region, median luma 11) in every captured view.
+  - **A/B, identical sweep and start** (`ab_seed_berth_06b_vs_08c.jpg`, frame 320; left 06b 681fd29, right M08c):
+    - M08b 175a634 and M08c fdffa7f are **identical**, so this is not an M08c change.
+    - Against 06b, at the same draws (Seed 1444, Berth 571): Seed luma 15 → 11, black 0.26 → 0.40; Berth luma
+      18 → 11, black 0.00 → 0.37.
+    - But 06b's Berth wall was a **flat untextured slab** (the sweep FAILs it), and M08c draws it as detailed
+      machinery. 06b's bright red robot was the old Optimus fallback body.
+  - So M08b+ is more complete **and** darker. The darkening came between 681fd29 and 175a634: Rendering M20 / M21
+    (lightmap records, FColor channel order), M24 (vertex lightmaps on every map) and M25 (PostProcessVolume grades).
+  - Whether the original is this dark is **UNKNOWN** without a reference: human check, plus a question to Rendering.
 - **Debris:** three lightmaps referenced by the render data (`LightMapTexture2D_4181 / _5690 / _587`) are absent from
-  the AssetTools export (99 source lightmaps vs 569 in the render data, none of these in `lightmaps.json`), so those
-  surfaces have no baked light: **source-data gap** (AssetTools / Rendering). `decals.glb` is empty: 0 decals in the
-  source, which is authentic.
-- **Gorge:** 4 vertex lightmaps are not bound (sample count ≠ vertex count, e.g. 1576 samples vs 322 / 1294 vertices
-  on StaticMeshActor_15751 / _6134) (Rendering / AssetTools).
-- **Ambient reverb zones "not in the mixer"** (Systems): Complex, Rust, BrokenHope (11), Remnant (59), Debris, Molten
-  (40+). The zone's reverb preset is missing, so those rooms play with the default reverb.
-- **Map FX `PMI_LocationPrimitiveSphere`** has no decoded VelocityScale / StartRadius (Seed, Berth, Gorge), so a
-  default is used (Rendering, PARTIAL).
-- **All 10 maps:** 0 original-material build fallbacks, 0 particle-material fallbacks, 0 Trail2 / Beam2 occurrences,
-  0 LEGACY RENDERER, 0 out-of-bounds draws, glErr 0, glDebug 0, clean exit. This answers the audit's UNKNOWN:
-  **no compile fallbacks on any map**.
+  the AssetTools export (99 source lightmaps vs 569 in the render data), so those surfaces have no baked light:
+  **source-data gap**. `decals.glb` is empty because the source has 0 decals (authentic).
+- **Gorge:** 4 vertex lightmaps are not bound (sample count ≠ vertex count, e.g. 1576 samples vs 322 / 1294 vertices,
+  StaticMeshActor_15751 / _6134).
+- **GPU frame-time spikes:** one warning each on Seed (569 ms), Berth (383 ms) and Rust (345 ms) (TDR watch; the
+  limit is about 2,000 ms; the median is 0.2-2.4 ms).
+- **Ambient reverb zones "not in the mixer"** (Systems): Complex, Rust, BrokenHope, Remnant, Debris, Molten. The
+  zone's reverb preset is missing, so those rooms play with the default reverb.
+- **Map FX `PMI_LocationPrimitiveSphere`:** VelocityScale / StartRadius not decoded, so a default is used (Seed,
+  Berth, Gorge; Rendering, PARTIAL).
+- **Sweep rule (negative-controlled):** a FAIL that is textured, noise-free and dark but not black (0.25 ≤ black
+  < 0.92, detail ≥ 0.02) is "PLAYABLE - DARK (HUMAN CHECK)". The M06b lost-world frames (black 0.08-0.16) and 06b
+  Berth's flat slab still FAIL.
