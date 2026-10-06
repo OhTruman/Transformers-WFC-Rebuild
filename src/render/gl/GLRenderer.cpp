@@ -9,6 +9,7 @@
 #include <map>
 #include <fstream>
 #include <random>
+#include <thread>
 #include <array>
 #include <windows.h>
 #endif
@@ -16,6 +17,7 @@
 
 #include "render/Renderer.h"
 #include "render/gl/WfcPipeline.h"
+#include "render/gl/RenderWatchdog.h"
 #include "platform/Image.h"
 #include "core/Config.h"
 #include "core/Log.h"
@@ -54,8 +56,12 @@ namespace {
 
 class GLRenderer final : public IRenderer {
 public:
-    ~GLRenderer() override { wfc::Pipeline::clearProgramCache(); }   // M54: cached programs belong to this context
+    ~GLRenderer() override {
+        watchdog::stop();
+        wfc::Pipeline::clearProgramCache();   // M54: cached programs belong to this context
+    }
     bool init() override {
+        watchdog::start();                    // stall diagnostics: a freeze logs its phase and writes a minidump
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
         glEnable(GL_CULL_FACE);
@@ -128,6 +134,7 @@ public:
         pacing_.dt.clear(); pacing_.dyaw.clear(); pacing_.dpos.clear();
     }
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
+        watchdog::phase("beginFrame");
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
         pacingSample(camIn);
         if (const char* dt = std::getenv("WFC_DECALTEST")) {   // diagnostics: death scorch under x,y,z (glTF m)
@@ -214,8 +221,17 @@ public:
 
     void endFrame() override {
         if (glx::GetGraphicsResetStatus) glx::pollResetStatus();   // M43: a lost context is logged (once)
-        if (wfc_.active()) { wfc_.drawMapPresentation(); wfc_.endFrame(); }
+        watchdog::phase("endFrame: map presentation");
+        if (wfc_.active()) wfc_.drawMapPresentation();
+        watchdog::phase("endFrame: post / composite");
+        if (wfc_.active()) wfc_.endFrame();
         glx::gpuTimerEnd();
+        { static int frames = 0; watchdog::frameDone(++frames);
+          if (frames == 60 && std::getenv("WFC_HANGTEST")) {   // diagnostics: a 7 s stall to exercise the watchdog
+              watchdog::phase("WFC_HANGTEST stall");
+              std::this_thread::sleep_for(std::chrono::seconds(7));
+          } }
+        watchdog::phase("after endFrame (buffer swap / game update)");
         if (std::getenv("WFC_FRAMELOG") && wfc_.active()) {   // M50 diagnostics: per-frame GPU time + draw counts
             RenderDiagnostics d = renderDiagnostics();
             LOG_INFO("FRAME %d gpu=%.2fms (cpu %.2fms) draws=%d world=%d bsp=%d dyn=%d fx=%d opaque=%d transl=%d culled=%d cam=%.1f,%.1f,%.1f yaw=%.2f pitch=%.2f",
@@ -238,6 +254,7 @@ public:
     }
 
     void drawScreenTriangles(const ScreenBatch& b) override {
+        watchdog::phase("drawScreenTriangles");
         if (b.verts.empty()) return;
         if (inFrame_) screenQueue_.push_back(b); else drawScreenNow(b);
     }
@@ -494,6 +511,7 @@ public:
     // Handles uploaded before the unload stay in range but become empty (no GPU mesh, CPU copy dropped): stale
     // handles draw nothing; owners re-upload for the next level.
     bool drawMaterialTile(const MaterialTile& t) override {
+        watchdog::phase("drawMaterialTile");
         if (!wfc_.active() || !wfc_.hasMaterial(t.material)) return false;
         wfc_.drawMaterialTile(t);
         return true;
@@ -932,6 +950,7 @@ public:
     }
 
     bool loadMapRenderData(const std::string& mapName) override {
+        watchdog::phase("loadMapRenderData");
         // one map's render data at a time: a new load releases the previous map (level travel, frontend scenes)
         if (wfc_.active() || sceneMesh_ != kInvalidMesh) {
             unloadMapRenderData();
@@ -1282,6 +1301,7 @@ public:
     }
 
     MeshHandle uploadMesh(const MeshData& mesh) override {
+        watchdog::phase("uploadMesh");
         if (mesh.empty()) return kInvalidMesh;
         addDecalReceivers(mesh);
         if (recv_.dirty && mesh.vertexCount() > 100000) buildDecalGrid();   // the world: under the loading screen
@@ -1328,6 +1348,7 @@ public:
     }
 
     void drawMesh(MeshHandle h, const core::Mat4& model, const core::Vec3& color) override {
+        watchdog::phase("drawMesh");
         if (h < 0 || (size_t)h >= meshes_.size()) return;
         if (wfc_.active() && gpu_[(size_t)h] >= 0) { wfc_.draw(gpu_[(size_t)h], model); glLoadMatrixf(view_.m); return; }
         drawMeshArrays(meshes_[(size_t)h], model, color);
@@ -1352,6 +1373,7 @@ public:
     std::set<std::string> prewarmKeys_;
 
     void drawDynamicMesh(const MeshData& m, const core::Mat4& model, const core::Vec3& color) override {
+        watchdog::phase("drawDynamicMesh");
         if (m.empty()) return;
         if (wfc_.active()) { wfc_.drawDynamic(m, model); glLoadMatrixf(view_.m); return; }
         drawMeshArrays(m, model, color);
@@ -1438,6 +1460,7 @@ public:
     }
 
     void drawParticles(const ParticleBatch& b) override {
+        watchdog::phase("drawParticles");
         if (!b.p || b.n == 0) return;
         glLoadMatrixf(view_.m);
         // Camera basis from the view matrix (rows of the rotation part).
