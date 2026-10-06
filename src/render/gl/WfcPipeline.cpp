@@ -1186,11 +1186,16 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         cached->second.lastUse = ++gProgUse;
         ++progCacheHits_;
     } else {
+        const auto tc0 = std::chrono::steady_clock::now();
         GLuint f = compile(GL_FRAGMENT_SHADER, fs, key);
         if (!vsShared || !f) return -1;
         id = link(vsShared, f, key);
         DeleteShader(f);
         if (!id) return -1;
+        static const bool stats = std::getenv("WFC_RENDERSTATS") != nullptr;
+        if (stats && frameNo_ > 0)            // diagnostics: a program compiled after the load (a hitch on that frame)
+            LOG_INFO("wfc program built: frame %d %s %.1f ms", frameNo_, key.c_str(),
+                     std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tc0).count());
         auto ins = gProgCache.emplace(fs, CachedProg{id, ++gProgUse}).first;
         gProgCacheById[id] = &ins->first;
     }
