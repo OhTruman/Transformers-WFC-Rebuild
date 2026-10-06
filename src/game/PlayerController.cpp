@@ -769,19 +769,19 @@ void PlayerController::applyToPawn(World& world, float dt) {
                 core::Vec3 camDir = core::forwardFromYawPitch(viewYaw_, viewPitch_);
                 core::Vec3 camPos = cameraPos();
                 float range = vw->rangeM > 0.0f ? vw->rangeM : 300.0f;
-                core::Vec3 aimPoint = camPos + camDir * range;
+                // TnPlayerPawn.GetWeaponStartTraceLocation: ViewLoc + ProjectOnTo(Location - ViewLoc, view dir) - the point on the
+                // camera's crosshair ray nearest the pawn (every form). The trace runs from there along the aim for the weapon
+                // range; projectiles aim at its hit point [CONF RE, script TransGame.TnPlayerPawn].
+                const core::Vec3 start = camPos + camDir * core::dot(pawn_->actorLocation() - camPos, camDir);
+                core::Vec3 aimPoint = start + camDir * range;
                 float th;
-                if (world.collision() && world.collision()->segmentHit(camPos, aimPoint, th)) aimPoint = camPos + camDir * (range * th);
-                // Projectile: RealStartLoc = GetMuzzleLoc() at the shot's socket, aimed at the camera-trace hit point. Instant
-                // hit: the damage trace starts at the pawn's weapon start-trace location, not the socket [CONF RE pass 5 9g];
-                // taken as the pawn view location (actor + BaseEyeHeight) [HIGH: GetPawnViewLocation; vehicle eye height PROV].
+                if (world.collision() && world.collision()->segmentHit(start, aimPoint, th)) aimPoint = start + camDir * (range * th);
+                // Projectile: RealStartLoc = GetMuzzleLoc() at the shot's socket, aimed at the start-trace hit point. Instant hit:
+                // the damage trace starts at the start-trace location, not the socket; only the flash / tracer alternate
+                // [CONF RE pass 5 9g + TnPlayerPawn].
                 core::Vec3 dir = core::normalize(aimPoint - origin);
                 if (vw->projectile()) world.fireWeapon(*vw, origin + dir * 1.5f, dir);
-                else if (vw->simulated()) {
-                    const core::Vec3 start = pawn_->actorLocation() + core::Vec3{0, pawn_->robotParams().eyeHeight, 0};
-                    const core::Vec3 tdir = core::normalize(aimPoint - start);
-                    for (int k = 0; k < std::max(1, vw->shots); ++k) world.fireWeapon(*vw, start, tdir);
-                }
+                else if (vw->simulated()) for (int k = 0; k < std::max(1, vw->shots); ++k) world.fireWeapon(*vw, start, camDir);
             } else if (vw->ammo == 0 && vw->canReload()) vw->beginReload();
         }
     }

@@ -212,8 +212,8 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   the flash at CurrentSocket, then HmWeaponMesh.ChangeSocket advances it ((i + 1) % N) once per shot.
   - Projectiles spawn at the shot's socket (Weapon.ProjectileFire RealStartLoc = GetMuzzleLoc() before the advance) and aim at
     the camera-trace hit point.
-  - Instant-hit MG: the damage trace starts at the pawn's start-trace location (here actor + BaseEyeHeight: HIGH; vehicle eye
-    height PROV); only the flash / tracer alternate.
+  - Instant-hit MG: the damage trace starts at TnPlayerPawn.GetWeaponStartTraceLocation = the point on the camera's crosshair
+    ray nearest the pawn (ViewLoc + ProjectOnTo(Location - ViewLoc, view dir)), along the aim; only the flash / tracer alternate.
 - Chassis without Primary2 (the tanks) and weapons not in the list stay on Primary.
 - HudState vehicleShotSerial / vehicleShotSocket / vehicleShotMuzzle let the flash / tracer glue follow the socket.
 - WFC_MUZZLETEST 5/5. Sockets 0,1,0,1… with the muzzle alternating sides: Car2 ±0.5 m, Car4 ±0.71, Jet4 ±1.4, Truck3 ±1.21;
