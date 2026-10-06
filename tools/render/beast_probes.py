@@ -15,14 +15,44 @@ import struct
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ue3obj import Repo, map_packages  # noqa: E402
+from ue3obj import Repo, map_packages, VS_MAPS  # noqa: E402
 
 
 def _ref(v):
     return (v or {}).get('ref') if isinstance(v, dict) else None
 
 
+def _num(v, d=0.0):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return d
+
+
+def from_assettools(mapname):
+    """AssetTools' extraction (ExtractedAssets/.../<map>/light_probes.json, same RE spec) - the authoritative export
+    when present; identical to the direct cooked read (max |diff| 5e-8 on Debris)."""
+    f = os.path.join(VS_MAPS, mapname, 'light_probes.json')
+    if not os.path.exists(f):
+        return None
+    vols = []
+    for v in json.load(open(f, encoding='utf-8')).get('volumes') or []:
+        if not v.get('render_source') or str(v.get('bEnabled', 'True')) in ('False', 'false'):
+            continue
+        b = v['box']
+        loc = v['Location']; s3 = v['DrawScale3D']; ds = _num(v.get('DrawScale'), 1.0)
+        vols.append({'volume': v['volume'], 'box': v['render_source'], 'priority': int(_num(v.get('Priority'))),
+                     'location': [_num(loc['X']), _num(loc['Y']), _num(loc['Z'])],
+                     'scale': [_num(s3['X']) * ds, _num(s3['Y']) * ds, _num(s3['Z']) * ds],
+                     'points': [int(_num(b['PointsX'])), int(_num(b['PointsY'])), int(_num(b['PointsZ']))],
+                     'sh': [round(x, 7) for p in b['sh_rgb_planar_L2'] for x in p]})
+    return vols
+
+
 def build(mapname):
+    at = from_assettools(mapname)
+    if at is not None:
+        return at
     repo = Repo(map_packages(mapname)[0])
     vols = []
     for k in repo.index:
