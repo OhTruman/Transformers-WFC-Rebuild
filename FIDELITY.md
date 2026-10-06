@@ -17,6 +17,22 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## INTEGRATION MILESTONE 09a — CLASSIFICATION (2026-10-06)
+| Item | Mark | Notes |
+|---|---|---|
+| Energon colour = the character's own (CD.EnergonColor else the robot material default), never team | CONFIRMED ORIGINAL (RE b0d9b22) | the M08 team tint was an integration deviation, now reverted; team EnergonColor class defaults are a kamikaze-mine fallback only |
+| Fixed 60 Hz sim + render interpolation | PC ADAPTATION | the original ran one variable tick per frame without interpolation (RE 8d6dc8c HIGH); presentation-only |
+| Frame Rate Limit setting / limiter | PC ADAPTATION | the original Xenon smoothed 15-30 fps (AssetTools b3d7f97); no PC cap known |
+| Beast light probes on Orbital Debris | CONFIRMED ORIGINAL (RE 13fd546) | only Debris ships probe data; Berth / Gorge / Complex near-black is authentic |
+| Near-black shadowed characters on probe-less maps | CONFIRMED ORIGINAL | no ambient floor in the original |
+| Jet BoostFx for the whole Flying state | CONFIRMED ORIGINAL | stops at death early (original persists until gib): minor PARTIAL |
+| Mid-match Change Character applies on respawn | CONFIRMED ORIGINAL ("Selected character used on respawn"; no suicide) | |
+| Loading-screen warm-up draw, match-load audio / body / weapon preloads | PC ADAPTATION (load scheduling) | no gameplay change |
+| GFx text drop shadows | CONFIRMED data (authored DropShadowFilter) | human visual check |
+| Robust GL context, stall watchdog, non-finite guards | PC ADAPTATION (diagnostics / hardening) | the AMD freeze is not claimed fixed; the music-unload wait was the likely cause |
+
+---
+
 ## INTEGRATION MILESTONE 08n — CLASSIFICATION (2026-10-06)
 Integrated through 08h-08n. Labels describe the integrated build; lane sections below hold the evidence. Automated checks are not human visual confirmation.
 

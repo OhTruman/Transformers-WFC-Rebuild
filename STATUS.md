@@ -3,6 +3,55 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 09a = M09 MILESTONE A (2026-10-06): FPS limiter, smooth high-refresh presentation, playtest fixes — branch `integration/milestone-09a`
+
+On 08o (03fde67). The first human-playtest checkpoint of milestone 09 (lanes coordinated autonomously by Integration).
+
+| lane | head | merged |
+|---|---|---|
+| agents/rendering | 2be3b87 | M72 cross-map material fallbacks; M73 death-scorch decals; M74 energy-death Defrag; M75 loading-screen warm-up draw (user-approved); M76 impact decals; WFC_PACINGLOG; **FPS limiter core** (FrameLimiter: waitable timer + spin, deadline-scheduled; setFrameLimit / waitFrameSlot; PC ADAPTATION); setParticleEffectSegment; non-finite draw guards; impact-sphere spawn fix; Beast light probes (Orbital Debris only, RE CONFIRMED); RandomSeed materials (the Debris "untextured head" wreck sections); HiddenGame sections skipped (Seed / Berth / Rust); fallback-material warning; **render-thread stall watchdog** (armed by the first renderer frame; notePresentedFrame) |
+| agents/gameplay | 9e85ab2 | 24s shared AnimSets + participant preload; 25a authoritative event record, Repair Ray beam presentation, HUD follows the held (vehicle) weapon, killstreak leak fix, QA live swap API; **25b render interpolation** (fixed 60 Hz sim untouched; alpha presentation; PC ADAPTATION of the original variable tick) |
+| agents/systems | 6dc3b5c | **music-unload freeze fix** (unload no longer waits for in-flight worker decodes; one decode at a time; waits > 5 ms logged); robust GL context attempt (falls back on the user's driver); FPS-cap sim-invariance sweep |
+| agents/frontend | d8918c7 (+ 693f051 cherry-picked) | **Frame Rate Limit setting** (30 … 1000, Unlimited, Custom; [PCSettings] FrameLimit; PC ADAPTATION); F10 QA panel fixed; **mid-match Change Character respawns the new class**; GFx text drop shadows (authored filters); notePresentedFrame per frontend present |
+| agents/experimental | 4e71519 | tools/fidelity refresh (user-approved exception) |
+
+Not in A (held for the B + C milestone): Gameplay 5151374+ (bots, awards, objective-mode bots, melee / grenades), Frontend 7ceeaf4+ (Bot Settings, progression UI, bot scoreboard), Systems M09b / M09c (bot / selection audio).
+
+**Integration changes:**
+- **Energon is the character's own, never the team's.** RE b0d9b22 CONFIRMED; reverts the M08 team tint. Bodies leave energon unset, so the chassis material draws (orange 0.843 / 0.302 / 0.029 on all 33 chassis). Vehicle FX read character.json energon_default. This also fixes the white jet trail (modulate trail x Decepticon energon B 1.5).
+- Match-load preload of the character / loadout cue sets. Each match's first spawn had decoded them on the spawn frame (160-207 + 31-87 ms); spawns are now 0.6-0.7 ms.
+- Interpolation offset applied inside the integration DrawWeapon scope.
+- Static_asserts for the segment API and notePresentedFrame.
+- Direct-boot entries: EVENT / CLASSCHANGE / PACING tests.
+- Render data: full regeneration plus targeted Seed / Berth / Rust.
+
+**Validation:**
+- Builds and suites:
+  - clean Debug / Release; frontend 79 / 0;
+  - harness 342 / 0 / 8; audio 723 / 0;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520.
+- Gameplay tests: PACING 4 / 4, EVENT 16, CLASSCHANGE 22, QATEST 8, RMUZZLE 4, CHARGE 9, MUZZLE 5, PROJFX 3, FINEAIM 3, SWITCH 32, SCORE 9, XFORMVIS 16, VEHPHYS 27, PRELOAD 1.
+- release_path_check PASS.
+- **Interpolation:** strafing at 144 / 240 Hz, pawn repeated frames 58.5 % / 75 % → 0 %; displacement cv 1.25 / 1.81 → 0.26 / 0.25.
+- **FPS limiter (Systems sweep, real render data):** 60 → 60.0; 144 → 144.0; 240 → 230-239 (scene ceiling). Sim / clock / cooldown / movement unchanged at every cap.
+- 4-map representative frontend flow (Streets / Berth / Molten / Debris, four classes, weapon switching, transform, boost, vehicle fire, pause, return to lobby):
+  - 0 long GPU frames, 0 GL errors, 0 resets, 0 watchdog lines, 0 leaks, 0 timeouts, 0 render-guard hits;
+  - local spawns 0.6-0.7 ms, opponent 0.0 ms;
+  - final-stretch music decodes on the worker.
+
+**Human checks for this playtest:**
+- the frame limit (setting + feel);
+- camera smoothness at high refresh;
+- energon trims (orange default) and the jet boost / trail look;
+- the Repair Ray beam;
+- the vehicle-form HUD;
+- Debris wreck props textured and lit;
+- Seed / Berth / Rust missing grey helpers;
+- the GFx text shadows;
+- whether the freeze recurs (the watchdog now writes wfc_hang_*.dmp if it does).
+
 ## PENDING HANDOFFS FOR LANES WITHOUT A RUNNING SESSION (recorded by Integration, 2026-10-06)
 
 **For Frontend** (routed from RE-Workspace 5914bfa, notes/MP_PROGRESSION_SCORING_AI_2026-10-06.md; tables in notes/data/mp_*.json):
