@@ -79,6 +79,11 @@ private:
     static int effectiveBlend(const gfx::DisplayObject* d);
     int samples_ = 8;
     int level_ = 0;          // mask nesting level
+    // Text drop shadows: glyph coverage rendered offscreen, box-blurred (two passes) and composited tinted.
+    unsigned shBlurProg_ = 0, shCompProg_ = 0, shFbo_[2] = {}, shTex_[2] = {}, shStencil_ = 0;
+    int shW_ = 0, shH_ = 0;
+    void drawTextShadow(const std::vector<gfx::Player::RenderItem>& items, size_t at, float alpha);
+    void drawGlyphCoverage(const gfx::Player::RenderItem& it, const gfx::Matrix& m);
     bool inMask_ = false;
     std::map<std::pair<const gfx::ShapeDef*, bool>, Cached> shapes_;
     struct Tex { unsigned id = 0; int w = 0, h = 0; };

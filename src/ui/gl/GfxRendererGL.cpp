@@ -77,6 +77,51 @@ varying vec2 vUv;
 void main() { gl_FragColor = texture2D(uTex, vUv); }
 )";
 
+// Text drop shadow passes. Blur: one axis of a box filter over the coverage texture (Flash DropShadowFilter,
+// quality 1: a single box of blurX x blurY pixels), in texel space of the bound target. Composite: the blurred coverage
+// as alpha (x strength, clamped; x shadowAlpha) in the shadow colour, premultiplied.
+const char* kShBlurVS = R"(#version 120
+attribute vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+)";
+const char* kShBlurFS = R"(#version 120
+uniform sampler2D uTex;
+uniform vec2 uTexSize, uDir;
+uniform float uWidth;
+void main() {
+    vec2 p = gl_FragCoord.xy;
+    int n = int(max(1.0, floor(uWidth + 0.5)));
+    float sum = 0.0;
+    for (int k = 0; k < 64; ++k) {
+        if (k >= n) break;
+        float o = float(k) - float(n - 1) * 0.5;
+        sum += texture2D(uTex, (p + uDir * o) / uTexSize).a;
+    }
+    float a = sum / float(n);
+    gl_FragColor = vec4(a, a, a, a);
+}
+)";
+const char* kShCompVS = R"(#version 120
+attribute vec2 aPos;
+uniform vec2 uView, uOrigin, uSize, uTexSize;
+varying vec2 vUv;
+void main() {
+    vec2 px = uOrigin + aPos * uSize;
+    vUv = vec2(aPos.x * uSize.x, (1.0 - aPos.y) * uSize.y) / uTexSize;
+    gl_Position = vec4(px.x / uView.x * 2.0 - 1.0, 1.0 - px.y / uView.y * 2.0, 0.0, 1.0);
+}
+)";
+const char* kShCompFS = R"(#version 120
+uniform sampler2D uTex;
+uniform vec4 uColor;
+uniform float uStrength;
+varying vec2 vUv;
+void main() {
+    float a = min(1.0, texture2D(uTex, vUv).a * uStrength) * uColor.a;
+    gl_FragColor = vec4(uColor.rgb * a, a);
+}
+)";
+
 unsigned compile(GLenum type, const char* src) {
     GLuint s = glx::CreateShader(type);
     glx::ShaderSource(s, 1, &src, nullptr);
@@ -115,6 +160,9 @@ bool GfxRendererGL::init() {
     prog_ = link(kVS, kFS);
     compProg_ = link(kCompVS, kCompFS);
     if (!prog_ || !compProg_) return false;
+    shBlurProg_ = link(kShBlurVS, kShBlurFS);
+    shCompProg_ = link(kShCompVS, kShCompFS);
+    if (!shBlurProg_ || !shCompProg_) LOG_WARN("GFX renderer: text shadow shaders unavailable; text shadows off");
     uView_ = glx::GetUniformLocation(prog_, "uView");
     uWorld_ = glx::GetUniformLocation(prog_, "uW0");
     uFillInv_ = glx::GetUniformLocation(prog_, "uF0");
@@ -611,7 +659,9 @@ void GfxRendererGL::fullscreen() {
 void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, float alpha) {
     if (!ok_) return;
     using RI = gfx::Player::RenderItem;
-    for (const RI& it : items) {
+    for (size_t idx = 0; idx < items.size(); ++idx) {
+        const RI& it = items[idx];
+        if (it.type == RI::TextShadow) { if (!inMask_) drawTextShadow(items, idx, alpha); continue; }
         if (it.owner && !inMask_) applyBlend(effectiveBlend(it.owner));
         else if (inMask_) applyBlend(0);
         switch (it.type) {
@@ -709,6 +759,137 @@ void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, floa
     }
     glStencilMask(0xFF);
     glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+}
+
+void GfxRendererGL::drawGlyphCoverage(const gfx::Player::RenderItem& it, const gfx::Matrix& m) {
+    const Cached& c = cache(it.shape, true);
+    gfx::FillStyle white;
+    white.color = gfx::RGBA{255, 255, 255, 255};
+    for (const Mesh& mesh : c.fills) {
+        setFill(white, m, gfx::CXForm{}, 1.0f, 0);
+        stencilWinding(mesh.fan, m);
+        cover(mesh.bx0, mesh.by0, mesh.bx1, mesh.by1, m, false);
+    }
+}
+
+void GfxRendererGL::drawTextShadow(const std::vector<gfx::Player::RenderItem>& items, size_t at, float alpha) {
+    // Scaleform TextField shadow (shadowColor / shadowAlpha / shadowAngle / shadowDistance / shadowBlurX / shadowBlurY /
+    // shadowStrength): a DropShadowFilter on the field's glyphs, drawn under them. Units are stage pixels scaled by the
+    // field's world transform (twips -> pixels: x 20).
+    if (!shBlurProg_ || !shCompProg_) return;
+    const gfx::Player::RenderItem& sh = items[at];
+    const auto* tf = static_cast<const gfx::TextField*>(sh.owner);
+    const float sx = std::sqrt(sh.m.a * sh.m.a + sh.m.b * sh.m.b) * 20.0f, sy = std::sqrt(sh.m.c * sh.m.c + sh.m.d * sh.m.d) * 20.0f;
+    const float bw = std::max(1.0f, tf->shadowBlurX * sx), bh = std::max(1.0f, tf->shadowBlurY * sy);
+    const float rad = tf->shadowAngle * 3.14159265f / 180.0f;
+    const float dx = std::cos(rad) * tf->shadowDistance * sx, dy = std::sin(rad) * tf->shadowDistance * sy;
+    // Screen box of the glyphs, grown by the blur.
+    float x0 = 1e9f, y0 = 1e9f, x1 = -1e9f, y1 = -1e9f;
+    const size_t end = std::min(items.size(), at + 1 + (size_t)sh.count);
+    for (size_t i = at + 1; i < end; ++i) {
+        const auto& g = items[i];
+        if (g.type != gfx::Player::RenderItem::Glyph || !g.shape) continue;
+        // Glyph outlines carry no bounds of their own: the tessellated fills' boxes.
+        for (const Mesh& mesh : cache(g.shape, true).fills)
+            for (int k = 0; k < 4; ++k) {
+                float px = (k & 1) ? mesh.bx1 : mesh.bx0, py = (k & 2) ? mesh.by1 : mesh.by0;
+                float X = g.m.a * px + g.m.c * py + g.m.tx, Y = g.m.b * px + g.m.d * py + g.m.ty;
+                x0 = std::min(x0, X); y0 = std::min(y0, Y); x1 = std::max(x1, X); y1 = std::max(y1, Y);
+            }
+    }
+    if (x1 <= x0 || y1 <= y0) return;
+    x0 = std::floor(x0 - bw * 0.5f - 2); y0 = std::floor(y0 - bh * 0.5f - 2);
+    x1 = std::ceil(x1 + bw * 0.5f + 2); y1 = std::ceil(y1 + bh * 0.5f + 2);
+    if (x1 + dx < 0 || y1 + dy < 0 || x0 + dx > w_ || y0 + dy > h_) return;
+    const int W = std::min((int)(x1 - x0), 4096), H = std::min((int)(y1 - y0), 4096);
+    if (W <= 0 || H <= 0) return;
+    // Offscreen targets (grow-only): [0] coverage + stencil, [1] the horizontal pass.
+    if (W > shW_ || H > shH_) {
+        const int nw = std::max(W, shW_), nh = std::max(H, shH_);
+        if (shFbo_[0]) { glx::DeleteFramebuffers(2, shFbo_); glDeleteTextures(2, shTex_); glx::DeleteRenderbuffers(1, &shStencil_); }
+        glx::GenFramebuffers(2, shFbo_);
+        glGenTextures(2, shTex_);
+        glx::GenRenderbuffers(1, &shStencil_);
+        glx::BindRenderbuffer(GL_RENDERBUFFER, shStencil_);
+        glx::RenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, nw, nh);
+        for (int k = 0; k < 2; ++k) {
+            glBindTexture(GL_TEXTURE_2D, shTex_[k]);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, nw, nh, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glx::BindFramebuffer(GL_FRAMEBUFFER, shFbo_[k]);
+            glx::FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, shTex_[k], 0);
+            if (k == 0) glx::FramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, shStencil_);
+        }
+        shW_ = nw; shH_ = nh;
+    }
+    // 1. Glyph coverage (white) into [0], translated so the box starts at the origin.
+    glx::BindFramebuffer(GL_FRAMEBUFFER, shFbo_[0]);
+    glViewport(0, 0, W, H);
+    glDisable(GL_STENCIL_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glClearColor(0, 0, 0, 0);
+    glStencilMask(0xFF);
+    glClear(GL_COLOR_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    glEnable(GL_STENCIL_TEST);
+    if (glBlendEq) glBlendEq(kFuncAdd);
+    glEnable(GL_BLEND);
+    glx::BlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    glx::UseProgram(prog_);
+    glx::Uniform2f(uView_, (float)W, (float)H);
+    const int savedLevel = level_;
+    level_ = 0;
+    const gfx::Matrix toBox{1, 0, 0, 1, -x0, -y0};
+    for (size_t i = at + 1; i < end; ++i)
+        if (items[i].type == gfx::Player::RenderItem::Glyph && items[i].shape) drawGlyphCoverage(items[i], toBox * items[i].m);
+    level_ = savedLevel;
+    glDisable(GL_STENCIL_TEST);
+    glDisable(GL_BLEND);
+    // 2. Box blur: horizontal [0] -> [1], vertical [1] -> [0].
+    glx::UseProgram(shBlurProg_);
+    glx::Uniform1i(glx::GetUniformLocation(shBlurProg_, "uTex"), 0);
+    glx::Uniform2f(glx::GetUniformLocation(shBlurProg_, "uTexSize"), (float)shW_, (float)shH_);
+    const float quad[] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
+    for (int pass = 0; pass < 2; ++pass) {
+        glx::BindFramebuffer(GL_FRAMEBUFFER, shFbo_[pass == 0 ? 1 : 0]);
+        glViewport(0, 0, W, H);
+        glBindTexture(GL_TEXTURE_2D, shTex_[pass == 0 ? 0 : 1]);
+        glx::Uniform2f(glx::GetUniformLocation(shBlurProg_, "uDir"), pass == 0 ? 1.0f : 0.0f, pass == 0 ? 0.0f : 1.0f);
+        glx::Uniform1f(glx::GetUniformLocation(shBlurProg_, "uWidth"), std::min(64.0f, pass == 0 ? bw : bh));
+        glx::BufferData(GL_ARRAY_BUFFER, sizeof quad, quad, GL_STREAM_DRAW);
+        glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+    }
+    // 3. Composite into the movie target under the current mask, offset by distance / angle.
+    glx::BindFramebuffer(GL_FRAMEBUFFER, msFbo_);
+    glViewport(0, 0, w_, h_);
+    glEnable(GL_STENCIL_TEST);
+    glEnable(GL_BLEND);
+    glx::BlendFuncSeparate(GL_ONE, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
+    curBlend_ = -1;
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
+    glStencilMask(0);
+    glx::UseProgram(shCompProg_);
+    glBindTexture(GL_TEXTURE_2D, shTex_[0]);
+    glx::Uniform1i(glx::GetUniformLocation(shCompProg_, "uTex"), 0);
+    glx::Uniform2f(glx::GetUniformLocation(shCompProg_, "uView"), (float)w_, (float)h_);
+    glx::Uniform2f(glx::GetUniformLocation(shCompProg_, "uOrigin"), x0 + dx, y0 + dy);
+    glx::Uniform2f(glx::GetUniformLocation(shCompProg_, "uSize"), (float)W, (float)H);
+    glx::Uniform2f(glx::GetUniformLocation(shCompProg_, "uTexSize"), (float)shW_, (float)shH_);
+    const uint32_t col = tf->shadowColor;
+    const float a = std::clamp(tf->shadowAlpha, 0.0f, 1.0f) * std::clamp(sh.cx.ma + sh.cx.aa / 255.0f, 0.0f, 1.0f) * alpha;
+    glx::Uniform4f(glx::GetUniformLocation(shCompProg_, "uColor"), ((col >> 16) & 0xFF) / 255.0f, ((col >> 8) & 0xFF) / 255.0f, (col & 0xFF) / 255.0f, a);
+    glx::Uniform1f(glx::GetUniformLocation(shCompProg_, "uStrength"), std::max(0.0f, tf->shadowStrength));
+    const float unit[] = {0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1};
+    glx::BufferData(GL_ARRAY_BUFFER, sizeof unit, unit, GL_STREAM_DRAW);
+    glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    // Back to the movie program.
+    glx::UseProgram(prog_);
+    glx::Uniform2f(uView_, (float)w_, (float)h_);
 }
 
 } // namespace ui
