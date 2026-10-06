@@ -11,7 +11,7 @@
 #
 #   .\tools\fidelity\frame-pacing.ps1 -Root work\ab\<target> -OutDir <dir> [-Limits 0,60,144,240] [-Seconds 15] [-ReportOnly]
 param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [string[]]$Limits = @("0", "60", "144", "240"), [int]$Seconds = 15,
-      [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$NoInterp, [switch]$ReportOnly)   # -NoInterp: WFC_NOINTERP A/B (09a+): render alpha forced to 1
+      [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$NoInterp, [double]$Turn = 0, [switch]$ReportOnly)   # -NoInterp: WFC_NOINTERP A/B (09a+): render alpha forced to 1
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Limits = @($Limits | ForEach-Object { "$_" -split "," } | Where-Object { $_ -ne "" } | ForEach-Object { [int]$_ })   # "0,60" from bash arrives as one string
@@ -35,6 +35,9 @@ foreach ($lim in $Limits) {
                 WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_PERFLOG = "1"; WFC_CAMLOG = "1"; WFC_PACINGLOG = "600";
                 WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_FPS_LIMIT = "$lim" }
         if ($NoInterp) { $e.WFC_NOINTERP = "1" }
+        # -Turn <rad/s>: strafe + turn for Rendering's PACINGLOG yaw-rate spread (p10 / p90 around the input rate). The
+        # "camera unchanged" count is meaningful only WITHOUT a turn (see below), so use separate -Turn runs for the yaw rate.
+        if ($Turn -gt 0) { $e.WFC_AUTOTURN = "$Turn" }
         # NO scripted turn: WFC_AUTOTURN rotates the camera every RENDER frame, which changes the pawn's projection on every
         # frame regardless of the 60 Hz simulation and hides the tick-stepping this measures (2026-10-06 harness defect).
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
