@@ -980,9 +980,16 @@ void Application::driveLifecycleTest(float dt) {
     // either side is dead. Uses only Gameplay's match API; no rule is reimplemented here.
     if (lifecycleGoal_ <= 0 || world_.match().state() != game::Match::State::InProgress || world_.matchOpponents().empty()) return;
     if ((lifecycleT_ += dt) < 2.5f) return;
-    game::MatchOpponent* opp = world_.matchOpponents()[0];
+    // The target: an opponent on the other team (bots may also be MatchOpponents, teammates included; FFA: any).
     const int me = world_.localMatchPlayer();
-    if (world_.localPlayerDead() || !opp->spawned()) return;
+    const auto& players = world_.match().players();
+    const int myTeam = me >= 0 && me < (int)players.size() ? players[(size_t)me].team : -1;
+    game::MatchOpponent* opp = nullptr;
+    for (game::MatchOpponent* o : world_.matchOpponents()) {
+        const int t = o->matchPlayer() >= 0 && o->matchPlayer() < (int)players.size() ? players[(size_t)o->matchPlayer()].team : -1;
+        if (myTeam < 0 || myTeam == 255 || t != myTeam) { opp = o; break; }
+    }
+    if (!opp || world_.localPlayerDead() || !opp->spawned()) return;
     lifecycleT_ = 0.0f;
     const bool killOpponent = (lifecycleStep_++ % 2) == 0;
     if (killOpponent) world_.applyMatchDamage(opp->matchPlayer(), me, 100000.0f, false);
