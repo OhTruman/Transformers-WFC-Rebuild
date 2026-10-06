@@ -459,6 +459,14 @@ public:
             FxDist range, rangeScale, speed, tangent, scale;
         } noise;
         FxDist sourceStrength, targetStrength;   // Beam2 tangent strengths (UU; CDO 25): noise curve tangents
+        struct BeamEnd {                  // M60 ParticleModuleBeamSource / Target (RE pass 5 s11, native resolvers)
+            int method = 0;               // 0 Default, 1 UserSet, 2 Emitter, 3 Particle, 4 Actor
+            int tangentMethod = 0;        // 0 Direct, 1 UserSet, 2 Distribution, 3 Emitter
+            bool named = false, absolute = false, lock = false, lockTangent = false;
+            FxDist position, tangent;
+        } beamSrc, beamTgt;
+        bool beamDistance = false;        // BeamMethod Distance: target = source + X * Distance
+        FxDist distance;
         struct BeamSine { float amp = 0, period = 1, speed = 0, phase = 0, dir[3] = {0, 0, 0}; };
         std::vector<BeamSine> sines;      // ParticleModuleBeamSineWave (WFC addition; render fill CONFIRMED, RE 9i)
         std::string sizeParam;            // SizeMultiplyLife by instance parameter (HoverFX "Size"); "" = none
@@ -484,6 +492,8 @@ private:
         int subImage = 0;
         int noiseCount = 0;               // Beam2 noise points (count + 1 offsets, UE units, beam space)
         float noiseTimer = 0.0f;          // seconds since the noise points were last re-drawn
+        bool beamInit = false;            // Beam2 ends resolved (UE world units; tangents x strength)
+        float beamSrc[3] = {0, 0, 0}, beamTgt[3] = {0, 0, 0}, beamSrcT[3] = {0, 0, 0}, beamTgtT[3] = {0, 0, 0};
         std::vector<float> noiseCur, noiseNext;
     };
     struct FxEmitterRT {

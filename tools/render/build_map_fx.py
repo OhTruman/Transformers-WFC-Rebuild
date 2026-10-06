@@ -130,6 +130,9 @@ def system_runtime(name, s):
                 lod['beam_trail']['taper_scale'] = tagged_dist(td.get('TaperScale'), [1.0])
                 lod['beam_trail']['TessellationStrength'] = td.get('TessellationStrength', 1.0)
                 lod['beam_trail']['modules'] = L.get('beam_modules')         # M56: noise / sine waves / source / target
+                # M60: BeamMethod (CDO PEB2M_Target) and Distance (CDO constant 25) for the Distance method
+                lod['beam_trail']['BeamMethod'] = td.get('BeamMethod', 'PEB2M_Target')
+                lod['beam_trail']['distance'] = tagged_dist(td.get('Distance'), [25.0])
             if td.get('Mesh'):
                 lod['mesh'] = {'object': td['Mesh'], 'gltf': mesh_gltf(td['Mesh']),
                                'override_material': bool(td.get('bOverrideMaterial', False))}
@@ -197,7 +200,7 @@ def raw_dist(d, default_values):
         return {'kind': 'float constant', 'values': default_values}
     vals = []
     for x in d['LookupTable']:
-        if x is None: return {'kind': 'float constant', 'values': default_values}
+        if x is None: x = 0       # unparsed stub entries: zero (RE pass 5 s11: the Squib Target (0, 0, 0))
         vals.append(_st.unpack('<f', _st.pack('<i', x))[0] if isinstance(x, int) else float(x))
     t = d.get('Type')
     if t is None:                                  # constant: no type byte cooked (1 float or a vector of 3)
@@ -242,13 +245,21 @@ def beam_modules(R, p, t, blob, mods):
                               'speed': float(f.get('Speed', 0.0)), 'phase': float(f.get('PhaseOffset', 0.0)),
                               'direction': [float(c) for c in (f.get('Direction') or [0.0, 0.0, 0.0])]})
             out['sine_waves'] = waves
-        elif cls == 'ParticleModuleBeamSource':
-            # SourceStrength / TargetStrength: Engine.Default__ParticleModuleBeamSource / Target constant 25 (UU)
-            out['source'] = {'method': o.get('SourceMethod', 'PEB2STM_Default'), 'name': o.get('SourceName'),
-                             'strength': raw_dist(o.get('SourceStrength'), [25.0])}
-        elif cls == 'ParticleModuleBeamTarget':
-            out['target'] = {'method': o.get('TargetMethod', 'PEB2STM_Default'), 'name': o.get('TargetName'),
-                             'strength': raw_dist(o.get('TargetStrength'), [25.0])}
+        elif cls in ('ParticleModuleBeamSource', 'ParticleModuleBeamTarget'):
+            # M60: every authored Source / Target property; defaults = Engine.Default__ParticleModuleBeamSource /
+            # Target (Source / Target (50, 50, 50), tangent (1, 0, 0), strength 25, Target LockRadius 10)
+            k = 'Source' if cls.endswith('Source') else 'Target'
+            out[k.lower()] = {
+                'method': o.get(k + 'Method', 'PEB2STM_Default'), 'name': o.get(k + 'Name'),
+                'position': raw_dist(o.get(k), [50.0, 50.0, 50.0]),
+                'absolute': bool(o.get('b' + k + 'Absolute', False)),
+                'tangent_method': o.get(k + 'TangentMethod', 'PEB2STTM_Direct'),
+                'tangent': raw_dist(o.get(k + 'Tangent'), [1.0, 0.0, 0.0]),
+                'strength': raw_dist(o.get(k + 'Strength'), [25.0]),
+                'lock': bool(o.get('bLock' + k, False)), 'lock_tangent': bool(o.get('bLock' + k + 'Tangent', False)),
+                'lock_strength': bool(o.get('bLock' + k + 'Strength', False)),
+                'lock_radius': float(o.get('LockRadius', 10.0)),
+                'props_seen': sorted(o.keys())}
     return out
 
 
