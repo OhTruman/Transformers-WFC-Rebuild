@@ -1356,7 +1356,15 @@ static const char* gameplayEventName(GameplayEventType t) {
     return "?";
 }
 
+void World::setRenderAlpha(float a) {
+    player_.pawn().setRenderAlpha(a);
+    for (MatchOpponent* o : opponents_) o->pawn().setRenderAlpha(a);
+}
+
 void World::tick(float dt) {
+    // Presentation interpolation: remember each pawn's state at the start of the step.
+    player_.pawn().beginStep();
+    for (MatchOpponent* o : opponents_) o->pawn().beginStep();
     // WFC_EVENTLOG (diagnostics): each authoritative gameplay event once, with its main context.
     {
         static const bool evlog = std::getenv("WFC_EVENTLOG") != nullptr;
@@ -2193,12 +2201,13 @@ void World::draw(render::IRenderer& r) const {
             const Weapon& hw = player_.pawn().weapon();
             const bool glow = hw.charge() && hw.chargeGlow() > 0.0f;
             if (glow) { const float g = hw.chargeGlow(); const float rgba[4] = {g, g, g, 1.0f}; fxSetDrawParam(r, "Overheat", rgba, 0); }
-            r.drawDynamicMesh(weaponAnim_.pose(), player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
+            r.drawDynamicMesh(weaponAnim_.pose(), core::Mat4::translate(player_.pawn().renderOffset()) * player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
             if (glow) fxClearDrawParam(r, "Overheat", 0);
         }
         else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
-            r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
+            r.drawMesh(weaponMesh_, core::Mat4::translate(player_.pawn().renderOffset()) * player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
     }
+
     // Repair Ray beam: spawn the looping tracer when the beam starts, move its source / target every frame, stop on release.
     {
         const bool on = repairBeam_.active && repairBeam_.time > 0.0f;

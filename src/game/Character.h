@@ -116,6 +116,13 @@ public:
     // Presentation-only yaw added to the drawn body between 60 Hz simulation steps (set per render frame by the controller):
     // keeps the body coherent with the per-frame camera during fast turns. Never read by the simulation.
     void setDrawYawOffset(float o) { drawYawOffset_ = o; }
+    // Presentation interpolation [PC ADAPTATION: the original ran one variable tick per rendered frame (RE 8d6dc8c); the rebuild
+    // keeps a fixed 60 Hz simulation and presents lerp(previous step, current step, alpha)]. Never read by the simulation.
+    // beginStep() at the start of each sim step; setRenderAlpha(FixedStepClock::alpha()) before drawing.
+    void beginStep();
+    void setRenderAlpha(float a) { renderAlpha_ = a < 0.0f ? 0.0f : (a > 1.0f ? 1.0f : a); }
+    float renderAlpha() const { return renderAlpha_; }
+    core::Vec3 renderOffset() const;   // interpolated actor position - current (zero at alpha 1 / after a teleport)
     float drawYawOffset() const { return drawYawOffset_; }
     bool partnerShown() const { return partnerVisible_; }
     bool meshShown(Form f) const { return meshVisible(f, animTime_); }   // diagnostics: is this form's mesh drawn now
@@ -536,6 +543,14 @@ private:
     float animTime_ = 0.0f;
     std::string animName_ = "-";
     render::MeshData poseBuf_;
+    // Presentation interpolation state (beginStep / setRenderAlpha).
+    core::Vec3 prevPos_{0, 0, 0};
+    bool havePrev_ = false;
+    float renderAlpha_ = 1.0f;
+    std::vector<float> prevPoseP_, prevPoseN_, prevPartnerP_, prevPartnerN_;
+    mutable render::MeshData lerpBody_, lerpPartner_;
+    const render::MeshData& blendedPose(const render::MeshData& cur, const std::vector<float>& prevP, const std::vector<float>& prevN,
+                                        render::MeshData& scratch) const;
     std::vector<core::Mat4> animScratch_;   // per-node model-space matrices of the final pose
 
     enum class Transition { None, Outgoing, Incoming };

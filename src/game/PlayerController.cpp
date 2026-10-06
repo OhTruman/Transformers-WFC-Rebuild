@@ -876,7 +876,7 @@ void PlayerController::updateCamera(render::Camera& cam) const {
     if (!pawn_) return;
     namespace cfg = core::config;
     if (spectating_) { cam.pos = specPos_; cam.yaw = specYaw_; cam.pitch = specPitch_; cam.fovXDeg = specFov_ > 0.0f ? specFov_ : fovCur_; return; }
-    cam.pos = cameraPos();
+    cam.pos = cameraPos() + pawn_->renderOffset();   // presentation interpolation (the sim camera / start trace are unchanged)
     cam.yaw = viewYaw_;
     cam.pitch = viewPitch_;
     // TnWiggler3CameraBehavior (vehicle strategies): small rotation wiggle at 12 Hz, full above
