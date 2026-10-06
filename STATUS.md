@@ -3,6 +3,24 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08d (2026-10-05) — vehicle / weapon / projectile / beam audio by identity — branch `integration/milestone-08d`
+
+- On 08c (fdffa7f): Systems 234576b, plus the Systems integration glue patch on 08c's World / PlayerController. The Systems branch's own World copy predates 08c, so the 08c World was kept.
+- Vehicle-form audio for every chassis (no longer gated on the Optimus FX).
+- The fired weapon's own fire / impact / hit sounds (robot or vehicle weapon).
+- Projectile spawn / flight / explosion audio; loadout weapon cues preloaded; Repair Ray / beam loops.
+
+| check | result |
+|---|---|
+| Debug / Release clean | exit 0 / 0 |
+| Frontend / harness | 79 / 0; 191 / 0 |
+| TDM / modes / CTF | 43 / 21 / 12 |
+| Weapons / participants / chassis | 19 / 21 / 13 |
+| Transform / chaos | 0 / 1520; 0 / 0 / 0 |
+| Audio suite | 617 / 0 |
+| 4-match frontend soak | correct bodies / weapons / factions; audio back to the 36.5 MB baseline after every match; 0 timeouts |
+| release_path_check | PASS |
+
 ## INTEGRATION MILESTONE 08c (2026-10-05) — human-playtest rendering, AMD stability, Gameplay Pass 23 — branch `integration/milestone-08c`
 
 On top of 08b (cb51fc1). Same executable paths; render data regenerated (Standard + 10 MP maps: weapon materials, Trail2 /
