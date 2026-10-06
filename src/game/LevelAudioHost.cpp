@@ -9,13 +9,22 @@ bool LevelAudioHost::load(const std::string& level, const std::string& manifestP
     if (!audio_) return false;
     if (!level_.empty()) unload();
     const std::string path = manifestPath.empty() ? root_ + "/Maps/" + level + "/audio.json" : manifestPath;
+    cues_.waitWarm(level);                              // a prefetch's worker decodes for this level: done -> cache hits
     const bool ok = ambient_.load(path, root_ + "/../content/", cues_, audio_, level);
+    cues_.releaseWarmExcept(level);                     // other prefetched levels that never loaded: no orphan samples
+    for (const auto& pm : prefetchedMusic_) {          // ... and no music pinned for them forever
+        if (pm.first != level) cues_.unpin(pm.second.c_str());
+        else levelPinnedMusic_.push_back(pm.second);    // this level's: pinned until played or the level unloads
+    }
+    prefetchedMusic_.clear();
     level_ = ok ? level : std::string();
     match_.setAnnouncerEvents(ambient_.announcerEvents());
     return ok;
 }
 
 void LevelAudioHost::unload() {
+    for (const std::string& m : levelPinnedMusic_) cues_.unpin(m.c_str());   // prefetched but never played: releasable
+    levelPinnedMusic_.clear();
     music_.onOwnerDestroyed();                 // the level's WorldInfo music player goes with the level
     match_.setAnnouncerEvents({});             // ... and its announcer
     cues_.stopAll();                           // every instance (UI, Kismet, impacts...) - hard stop, queues dropped
@@ -65,8 +74,13 @@ bool LevelAudioHost::startMovieAudio(const std::string& path, int languageSlot) 
 
 
 bool LevelAudioHost::prefetch(const std::string& level) {
+    if (!audio_) return false;
+    // The level's eager waves (frontend title: ~55 ms of decode at level start) and its music, both on workers.
+    const int warmed = AmbientAudio::warmLevel(root_ + "/Maps/" + level + "/audio.json", root_ + "/../content/", cues_, level);
     MusicTrack t;
-    return audio_ && AmbientAudio::levelMusicTrack(level, t) && cues_.prefetch(t.cue.c_str());
+    const bool music = AmbientAudio::levelMusicTrack(level, t) && cues_.prefetch(t.cue.c_str());
+    if (music) prefetchedMusic_.push_back({level, t.cue});
+    return music || warmed > 0;
 }
 
 LevelAudioHost::State LevelAudioHost::state() const {

@@ -2063,6 +2063,42 @@ camdis.txt, pcdis.txt via work/pass11/ue3dis.py) and authored data (VEH_SHARED_p
   - ram collision;
   - wheel/tire steering.
 
+## SYSTEMS M08j (2026-10-06) - level-start warming (frontend title frame), abandoned-prefetch leak
+- **Problem:** Frontend measured 43-55 ms of audio.levelStart on the title's first visible frame (boot and every return). It was the
+  title level's eager cue waves decoding synchronously (56-61 ms here; parse < 1 ms). The music decode then landed on the next frame
+  (~110 ms) when nothing had prefetched it.
+- **Fix:** `prefetchLevel` (which Frontend already calls at boot and at every travel start) now also decodes the level's eager waves on a
+  worker (`AmbientAudio::warmLevel` -> `SoundCues::warmCueWaves`). `LevelAudioHost::load` waits for that level's warm, loads (cache
+  hits), then releases other levels' unadopted warm samples. Win32Audio::load keeps one copy when a worker and the main thread decode
+  the same file.
+- **Measured** (real device, probe): UI_FrontEnd_m level start 50 -> 0.5 ms, the next tick 109 -> 0.02 ms; UI_PartyLobby_m 4.8 -> 0.3 ms;
+  prefetch call < 1 ms, loading ticks < 0.2 ms; PCM per level unchanged.
+- **Leak fixed** (since 8df544b): a prefetched level that never loaded, or that unloaded before its music played, kept its music pinned
+  (~83-140 MB). Prefetched music is now unpinned when another level loads, or when its own level unloads. Back to the 36.5 MB base.
+- Validation: suite 666 / 0 (new [level-start warming]); movie probe OK; lifecycle 40 / 0; slider probe OK; wfc_fidelity 194 / 0 / 19.
+  The 08g frontend boot -> party lobby -> title shows no audio scope in the frame hitches.
+
+## SYSTEMS M08i (2026-10-06) - ability / buff / hover / kill-confirm / transform-failed sounds
+- New `AbilityAudio` (Systems owns the sound lifecycle; Gameplay owns abilities, buffs and their timers), data from the class defaults
+  (gen_character_audio.py: `abilities`, `buffs`, `class_sounds`; 29+ cues, 0 missing). RE pass 5 s12 / s12 addendum / s13.
+- **OnTriggerSound** on a successful trigger, at the pawn, heard by everyone: Barrier, Drain, SpawnAmmoCrate, TransformDisruptor,
+  AbilityJammer, AoeHeal, DecoyTrap, Disguise, HardLock. The other abilities author none (their audio is anim notifies / buffs / actors).
+- **Buffs:** Apply = a sound attached to the buffed pawn (loops for _LP cues) until the buff ends; Unapply stops it and plays the
+  Unapply one-shot; death stops it silently. Only the buffed local player hears them, except Cloak (everyone; Autobot / Decepticon
+  cues by the buffed pawn's team). Wired: Cloak, Warcry, HardLocked, TransformDisruptor on the local pawn.
+- **Drain:** DRAIN_HEAL per tick on the drainer while it has targets; DRAIN_DAMAGE per tick at each victim.
+- **Hover** (TnAcrobaticsManager): HOVER_JUMP_LIFT loop from JumpingToHover through Hovering, 0.5 s fade, HOVER_JUMP_LAND when Hovering ends.
+- **AbilitiesJammedSound** on a press refused while jammed; **TransformFailedSound** on a refused transform (Disruptor buff, already
+  transforming, no room); **kill confirm** for the killer, 2D: headshot > robot > Jet > Car > other vehicle (by the victim's character class).
+- Glue against 08g/08h: `docs/handoff/SYSTEMS_M08I_ability_audio_glue.patch` (PlayerController audio pulses + World::tickAbilityAudio,
+  drain per victim, PlayerKilled kill confirm). Dry-run applies to 08h after the agents/systems merge.
+- Validation: suite 662 / 0 (new [ability / buff sounds]); 08g in game: Tank Drain + hover lift / land, Truck5 Warcry + ammo crate,
+  Car5 cloak (Autobot loop), Car4 Barrier, 0 missing cues, 0 leaks; movie probe OK; lifecycle 40 / 0; wfc_fidelity 194 / 0 / 19.
+- Not yet: headshot state (Gameplay has none - the headshot kill confirm is unreachable); the kill confirm was not heard in a live
+  kill (the kill harnesses run without audio); ability anim notifies (Shockwave SHIELD_PUSH, Warcry chest hit, sentry, guided
+  missile, whirlwind, cloak activate) need Gameplay to play those animations; roller mine / sentry actor sounds; Dodge charged footstep;
+  HealthOnBlock (listen-server only); shields are campaign-only.
+
 ## SYSTEMS M08h (2026-10-05) - vehicle muzzle flash / tracer at the alternating socket (glue against 08g)
 - `docs/handoff/SYSTEMS_M08H_vehicle_muzzle_glue.patch` (World.cpp / World.h, against integration/milestone-08g 4f080a2).
 - A vehicle shot draws the FIRED vehicle weapon's MuzzleFlash template at the shot's socket (Gameplay noteVehicleShot:

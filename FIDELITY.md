@@ -537,6 +537,34 @@ AssetTools FRONTEND.md + manifests/frontend_*.json (cc9773e). Full table: `docs/
 
 
 
+
+## SYSTEMS M08i - ABILITY / BUFF SOUNDS (2026-10-06, agents/systems)
+* **OnTriggerSound** [CONF RE pass 5 s12]:
+  * TnAbility.ServerTriggerAbility plays it after the trigger succeeds: OwnerPawn.PlaySound, replicated to everyone including the owner, positional.
+  * Subclasses call the base last, so their early-outs are silent. LocalTriggerAbility plays nothing.
+  * A refused press is silent, except when abilities are jammed: TnPlayerController.AbilitiesJammedSound [s12 addendum].
+* **TnBuff** [CONF]:
+  * Apply: if CanPlaySounds, CreateAudioComponent(ApplySound), attached; re-apply doesn't restart it.
+  * Unapply: stop, then PlaySound(UnapplySound, bNotReplicated).
+  * Owner death: stop with no unapply.
+  * CanPlaySounds = !OnlyPlaySoundOnLocalPlayer || the local player's pawn. The default is True; only TnBuffCloak sets False.
+  * Cloak cues are chosen by the buffed pawn's team.
+* **Drain** [CONF; per-frame tick HIGH]:
+  * TnBuffDrainSource.HealSound: every tick on the drainer's machine while it has ≥1 target.
+  * TnBuffDrainTarget.DamageSound: every tick at the victim.
+  * Both cues are MaxConcurrentPlayCount 6, KillFarthest.
+* **Hover** (TnAcrobaticsManager) [CONF]: _HoverLoopSound from JumpingToHover into Hovering; a 0.5 s fade on leaving; _HoverCooldownSound when Hovering ends.
+* **Kill confirm** [CONF RE s13]:
+  * NotifyCausedDamage fatal → TellClientToPlayKilledPawnSound → ClientPlaySound: the killer only, 2D [HIGH].
+  * Precedence: WasLastHitHeadshot > robot form > CharacterType SoldierJet > SoldierCar > Vehicle.
+* **TransformFailedSound** [CONF]: PressTransform plays it (local, at the pawn) with TnBuffTransformDisruptor, or when Transform() fails (already transforming, disabled, no room).
+* DeathSound is campaign-only (OnCampaignGameOver), so it isn't wired.
+* **Deviations:**
+  * No headshot state, so the headshot confirm is unreachable.
+  * Ability animation sound notifies aren't played (Gameplay doesn't play those animations).
+
+---
+
 ## SYSTEMS M08g - PROFILE VOLUME SLIDERS (2026-10-05, agents/systems)
 * **Script** [CONF]: HmPlayerController.UpdateLocalCacheOfProfileSettings -> SetAudioGroupVolume('Dialog', GetDialogVolume()),
   ('SFX', GetFxVolume()), ('MUSIC', GetMusicVolume()); Get* = HmProfileSettings.GetNormalizedPropertyValue = FClamp(slider / 100, 0, 1).

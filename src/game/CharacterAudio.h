@@ -136,6 +136,13 @@ struct WeaponProjectile {
 // A weapon class's WP_Fire presentation templates (WEPMESH MuzzleFlashes / TracerTemplates, DefaultSquib) [CONF data].
 struct WeaponFxTemplates { std::string muzzle, tracer, squib; };
 
+// A buff class's sounds (TnBuff ApplySound / UnapplySound, TnBuffCloak team variants, TnBuffDrainSource.HealSound,
+// TnBuffDrainTarget.DamageSound, TnBuffHealthOnBlock.ActivationSound), resolved down the class chain [CONF data].
+struct BuffSounds {
+    std::string apply, unapply, autobotApply, autobotUnapply, decepticonApply, decepticonUnapply, heal, damage, activation;
+    bool onlyLocal = true;   // TnBuff.OnlyPlaySoundOnLocalPlayer (default True; TnBuffCloak False)
+};
+
 class CharacterAudio {
 public:
     static const CharacterAudioProfile* find(const std::string& keyOrName);   // roster chassis key or display name
@@ -157,6 +164,15 @@ public:
     static const WeaponFxTemplates* weaponFx(const std::string& weaponClass);
     static const WeaponProjectile* weaponProjectile(const std::string& weaponClass);   // nullptr: instant hit
     static bool weaponIsBeam(const std::string& weaponClass);                         // TnWeaponBeam (Repair Ray)
+    // TnAbility.OnTriggerSound by ability class name ("TnAbilityBarrier"; "" if none authored).
+    static const std::string& abilityTriggerSound(const std::string& abilityClass);
+    static const BuffSounds* buffSounds(const std::string& buffClass);               // "TnBuffCloak"; nullptr: none
+    // An authored *Sound field of a Gameplay class Systems voices: TnPlayerController (AbilitiesJammedSound,
+    // TransformFailedSound, Killed*Sound, DeathSound), TnAcrobaticsManager (_HoverLoopSound / _HoverCooldownSound),
+    // TnRollerMine (_IdleLoopingSound / _BuildupSound / _ExplosionSound). "" if none.
+    static const std::string& classSound(const std::string& cls, const std::string& field);
+    // Load every ability / buff cue the cue table does not have yet (level-owned, like the weapon cues).
+    static int loadAbilityCues(SoundCues& cues);
     // An event's LoopingFadeInTime / LoopingFadeOutTime (WeaponSounds) [CONF data]; 0 / 0 if not authored.
     static void weaponEventFades(const std::string& weaponClass, const std::string& event, float& fadeIn, float& fadeOut);
     // Load the victim's hit / block cues for that weapon (level-owned). Returns the number added.

@@ -137,8 +137,22 @@ public:
     // are decoded on a worker (the device's sample cache is warmed) and adopted by the next tick (cache hits) - the
     // frame that asks no longer blocks on the decode (37-94 ms frontend hitch). Otherwise decoded now.
     bool prefetch(const char* cue);
-    ~SoundCues() { for (Warm& w : warming_) if (w.done.valid()) w.done.wait(); }   // inline: every build links it
+    ~SoundCues() {                                     // inline: every build links it
+        for (Warm& w : warming_) if (w.done.valid()) w.done.wait();
+        for (LevelWarm& w : levelWarm_) if (w.done.valid()) w.done.wait();
+    }
     int warmingPrefetches() const { return (int)warming_.size(); }
+    // Level-start warming (frontend frame budget): decode the eager (non-streamed, non-localized) waves of a manifest cue
+    // bank for an upcoming level `tag` on a worker, so the level's addCues finds them in the device cache. Thread-safe
+    // backends only (else 0). Returns the number of waves queued.
+    int warmCueWaves(const assets::Json& cues, const std::string& contentRoot, const std::string& tag);
+    void waitWarm(const std::string& tag);             // before loading `tag`: its warm decodes are finished
+    // After loading `keep`: forget its warm records (adopted) and release every other tag's warmed samples no cue owns
+    // (a prefetched level that never loaded). Returns the samples released.
+    int releaseWarmExcept(const std::string& keep);
+    int warmLevels() const { return (int)levelWarm_.size(); }
+    // Drop a prefetch pin (the prefetching level was abandoned): the normal idle-stream release frees it.
+    void unpin(const char* cue);
     // Diagnostics: a streamed cue's waves are resident (decoded) right now.
     bool wavesResident(const char* cue) const;
     size_t cueCount() const { return cues_.size(); }
@@ -235,6 +249,8 @@ private:
     // Prefetch warming (worker decodes; adopted on the main thread). Every load / release / unload path drains first.
     struct Warm { size_t cue; std::future<void> done; };
     std::vector<Warm> warming_;
+    struct LevelWarm { std::string tag; std::vector<std::string> paths; std::future<void> done; };
+    std::vector<LevelWarm> levelWarm_;
     void adoptWarm(bool wait, long onlyCue = -1);
 };
 

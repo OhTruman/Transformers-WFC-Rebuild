@@ -1,0 +1,152 @@
+diff -ru --strip-trailing-cr a/src/game/PlayerController.cpp b/src/game/PlayerController.cpp
+--- a/src/game/PlayerController.cpp	2026-10-06 00:06:18.294055100 -0500
++++ b/src/game/PlayerController.cpp	2026-10-06 00:06:18.294556900 -0500
+@@ -170,6 +170,7 @@
+ 
+     // Transform activates immediately on press; StartTransform refuses while already transforming.
+     // Transforming to the vehicle ends fine aim [CONF RE] (the wish is dropped, not just paused).
++    if (transforming && in.wasPressed(Button::Transform) && pawn_) ++transformFailedCount_;   // [Systems M08i] Transform() fails
+     if (!transforming && in.wasPressed(Button::Transform) && pawn_) {
+         if (pawn_->moveForm() == Form::Robot) fineAimWanted_ = false;
+         tryBeginTransform();
+@@ -628,7 +629,7 @@
+ 
+ bool PlayerController::tryBeginTransform() {
+     if (!pawn_) return false;
+-    if (pawn_->transformDisruptRemain_ > 0.0f) return false;   // TnBuffTransformDisruptor: transforming disabled
++    if (pawn_->transformDisruptRemain_ > 0.0f) { ++transformFailedCount_; return false; }   // TnBuffTransformDisruptor: transforming disabled
+     if (pawn_->moveForm() == Form::Vehicle && col_) {
+         // Target = robot: its 4 m cylinder must fit (vehicle actor -> floor below).
+         core::Vec3 a = pawn_->actorLocation();
+@@ -638,6 +639,7 @@
+         core::Vec3 spot;
+         if (!findRobotSpot(col_, feet, spot, pawn_)) {
+             ++cantTransformCount_;                       // NotifyCantTransform + TransformFailedSound; no transform
++            ++transformFailedCount_;                     // [Systems M08i]
+             return false;
+         }
+         core::Vec3 shift{spot.x - feet.x, 0.0f, spot.z - feet.z};
+@@ -675,6 +677,7 @@
+     }
+     if (wantAbility_ >= 0) {
+         Character::AbilitySlot& a = pawn_->abilities_[wantAbility_];
++        if (pawn_->jammedRemain_ > 0.0f && !a.id.empty()) ++abilitiesJammedCount_;   // [Systems M08i] AbilitiesJammedSound
+         bool can = pawn_->moveForm() == Form::Robot && !pawn_->isTransforming() && !pawn_->weapon().reloading() && !pawn_->isDodging() &&
+                    pawn_->jammedRemain_ <= 0.0f;   // TnBuffAbilityJammed (derived): abilities blocked [CONF RE §K]
+         // TnAbilityWhirlwind.LocalTriggerAbility fails (no cooldown) unless StartMeleeAttack(MELEE_Whirlwind) starts: the melee
+@@ -692,7 +695,7 @@
+                 if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
+                 if (a.id == "Drain") pawn_->drainRemain_ = 7.0f;                                    // AddSelfBuff(TnBuffDrainSource)
+                 if (a.id == "Hover") { step.hoverRequest = true; pawn_->hoverRequested_ = true; }   // PlayerController.Hover
+-                a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_;
++                a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_; lastTriggeredAbility_ = a.id;
+             } else if (a.id != lastRefusedAbility_) {
+                 LOG_WARN("ability %s (slot %d) is not implemented in the rebuild [PARTIAL]", a.id.c_str(), wantAbility_);
+                 lastRefusedAbility_ = a.id;
+diff -ru --strip-trailing-cr a/src/game/PlayerController.h b/src/game/PlayerController.h
+--- a/src/game/PlayerController.h	2026-10-06 00:06:18.293052100 -0500
++++ b/src/game/PlayerController.h	2026-10-06 00:06:18.293553000 -0500
+@@ -83,6 +83,12 @@
+     // collision at once and slides the robot meshes back over 0.5 s. After a vehicle->robot transform,
+     // InRobotForm.BeginState MoveToSafeLocation; failing that, ForceIntoForm(vehicle).
+     int cantTransformCount() const { return cantTransformCount_; }      // pulses for the HUD / Systems
++    // [Systems M08i] audio pulses: successful ability triggers (+ the id), presses refused because abilities are jammed,
++    // and refused transforms (Disruptor buff / already transforming / no room: TransformFailedSound).
++    int abilityTriggerCount() const { return abilityTriggers_; }
++    const std::string& lastTriggeredAbility() const { return lastTriggeredAbility_; }
++    int abilitiesJammedCount() const { return abilitiesJammedCount_; }
++    int transformFailedCount() const { return transformFailedCount_; }
+     int forcedVehicleCount() const { return forcedVehicleCount_; }
+     bool tryBeginTransform();
+     // LocalProfile look settings (Frontend owns the values) [CONF RE TARGETED_PASS3 G2]: CameraSensitivity 0-100 (default
+@@ -195,6 +201,8 @@
+     int wantAbility_ = -1, abilityTriggers_ = 0;
+     float abilityStickFwd_ = 0.0f, abilityStickRight_ = 0.0f;
+     std::string lastRefusedAbility_;
++    std::string lastTriggeredAbility_;                 // [Systems M08i]
++    int abilitiesJammedCount_ = 0, transformFailedCount_ = 0;
+     bool invertY_[2] = {false, false};
+     bool invertCar_ = false, invertPlane_ = false, invertTank_ = false;
+     bool wasTransforming_ = false;
+diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-06 00:06:18.284020500 -0500
++++ b/src/game/World.cpp	2026-10-06 00:06:18.284522400 -0500
+@@ -1313,6 +1313,7 @@
+         if (deferredKillstreak_ && lp.moveForm() == Form::Robot && !lp.isTransforming()) { deferredKillstreak_ = false; triggerLocalKillstreak(); }
+     }
+     tickAbilityEffects(dt);
++    tickAbilityAudio();                        // [Systems M08i]
+     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
+     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
+     if (matchActive_) tickMatch(dt);
+@@ -1892,6 +1893,11 @@
+                     }
+                 break;
+             case MatchEvent::Type::PlayerKilled:
++                if (e.other == localPlayer_ && e.player != localPlayer_)   // [Systems M08i] the killer's kill confirm
++                    for (MatchOpponent* o : opponents_)
++                        if (o->matchPlayer() == e.player) {
++                            onLocalKilledPawn(false, o->pawn().moveForm() == Form::Robot, o->pawn().chassis().id);   // no headshot state yet
++                        }
+                 if (e.player == localPlayer_) localDead_ = true;
+                 for (MatchOpponent* o : opponents_) if (o->matchPlayer() == e.player) o->despawn();
+                 break;
+@@ -2650,8 +2656,10 @@
+                 if (line && line->segmentHit(pc.actorLocation(), o->pawn().actorLocation(), t)) continue;
+                 ++targets;
+                 applyMatchDamage(o->matchPlayer(), localPlayer_, 25.0f * dt, false, "TransGame.TnDamageTypeDrain");
++                onDrainVictimTick(o->pawn().actorLocation());   // [Systems M08i] TnBuffDrainTarget.DamageSound
+             }
+         if (targets > 0 && !localDead_) pc.health().heal(Health::HealType::AddHealthToAll, 35.0f * dt * targets);
++        if (!localDead_) onDrainTick(targets);          // [Systems M08i] TnBuffDrainSource.HealSound (>= 1 target)
+     }
+     tickLocalMelee(dt);
+     tickHomingLock(dt);
+@@ -3600,6 +3608,34 @@
+ 
+ void World::onTransformFailed() { abilityAudio_.transformFailed(cues_, atPawn()); }
+ 
++// [Systems M08i glue] Gameplay's ability / buff / hover state -> Systems' AbilityAudio (RE pass 5 s12 / s13).
++void World::tickAbilityAudio() {
++    const PlayerController& ctl = player_.controller();
++    Character& p = player_.pawn();
++    if (ctl.abilityTriggerCount() != abilityAudioSerial_) {
++        abilityAudioSerial_ = ctl.abilityTriggerCount();
++        if (!localDead_) onAbilityTriggered(ctl.lastTriggeredAbility());   // ServerTriggerAbility returns if dead
++    }
++    if (ctl.abilitiesJammedCount() != jammedAudioSerial_) { jammedAudioSerial_ = ctl.abilitiesJammedCount(); onAbilitiesJammed(); }
++    if (ctl.transformFailedCount() != transformFailAudioSerial_) {
++        transformFailAudioSerial_ = ctl.transformFailedCount();
++        onTransformFailed();
++    }
++    if (localDead_ != abilityAudioDead_) {                          // death: loops stop, no Unapply / land
++        abilityAudioDead_ = localDead_;
++        if (localDead_) onLocalPawnBuffsLost();
++    }
++    if (localDead_) return;
++    // The buffed pawn's team picks the cloak cues (no team: Autobot 0).
++    const int team = matchActive_ && localPlayer_ >= 0 && match_.players()[(size_t)localPlayer_].team <= 1
++                         ? match_.players()[(size_t)localPlayer_].team : 0;
++    setLocalBuffAudio("TnBuffCloak", p.cloakRemain_ > 0.0f, team);
++    setLocalBuffAudio("TnBuffWarcryBase", p.warcryRemain_ > 0.0f, team);
++    setLocalBuffAudio("TnBuffHardLocked", p.hardLockedRemain_ > 0.0f, team);
++    setLocalBuffAudio("TnBuffTransformDisruptor", p.transformDisruptRemain_ > 0.0f, team);
++    setLocalHoverAudio(p.hoverState_);
++}
++
+ void World::setLocalHoverAudio(int hoverState) { abilityAudio_.hoverState(cues_, hoverState, atPawn(), 0.0f); }
+ 
+ void World::onDrainTick(int targets) { abilityAudio_.drainSourceTick(cues_, atPawn(), 0.0f, true, targets); }
+diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-06 00:06:18.292048200 -0500
++++ b/src/game/World.h	2026-10-06 00:06:18.292550100 -0500
+@@ -284,6 +284,9 @@
+     // Drain, every tick while the local Drain buff runs: targets this tick (HealSound), and each victim (DamageSound).
+     void onDrainTick(int targets);
+     void onDrainVictimTick(const core::Vec3& victimPos);
++    void tickAbilityAudio();                           // [Systems M08i glue] Gameplay state -> ability / buff sounds
++    int abilityAudioSerial_ = 0, jammedAudioSerial_ = 0, transformFailAudioSerial_ = 0;
++    bool abilityAudioDead_ = false;
+     void onProjectileRemoved(int key);
+     // World hit / grenade bounce (fuseStarted: the grenade's first impact).
+     void onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted);
