@@ -129,6 +129,7 @@ def system_runtime(name, s):
                 lod['beam_trail']['taper_factor'] = tagged_dist(td.get('TaperFactor'), [1.0])
                 lod['beam_trail']['taper_scale'] = tagged_dist(td.get('TaperScale'), [1.0])
                 lod['beam_trail']['TessellationStrength'] = td.get('TessellationStrength', 1.0)
+                lod['beam_trail']['modules'] = L.get('beam_modules')         # M56: noise / sine waves / source / target
             if td.get('Mesh'):
                 lod['mesh'] = {'object': td['Mesh'], 'gltf': mesh_gltf(td['Mesh']),
                                'override_material': bool(td.get('bOverrideMaterial', False))}
@@ -182,6 +183,72 @@ def default_color(tail, nrec):
     return None
 
 
+RAW_KIND = {1: 'float constant', 2: 'float constant curve', 3: 'float uniform', 4: 'float uniform curve',
+            7: 'vector constant', 8: 'vector constant curve', 9: 'vector uniform', 10: 'vector uniform curve'}
+
+
+def raw_dist(d, default_values):
+    """Tagged FRawDistribution read from the cooked object (ue3obj): the LookupTable holds float bit patterns.
+    -> runtime distribution ([min, max, start time, time scale] + samples for curves, as FxDist)."""
+    import struct as _st
+    if isinstance(d, list):                        # tagged struct: [{name, type, value}, ...]
+        d = {x.get('name'): x.get('value') for x in d if isinstance(x, dict)}
+    if not isinstance(d, dict) or not d.get('LookupTable'):
+        return {'kind': 'float constant', 'values': default_values}
+    vals = []
+    for x in d['LookupTable']:
+        if x is None: return {'kind': 'float constant', 'values': default_values}
+        vals.append(_st.unpack('<f', _st.pack('<i', x))[0] if isinstance(x, int) else float(x))
+    t = d.get('Type')
+    if t is None:                                  # constant: no type byte cooked (1 float or a vector of 3)
+        return {'kind': 'vector constant' if len(vals) == 3 else 'float constant', 'values': vals}
+    return {'kind': RAW_KIND.get(t, 'float constant'), 'values': vals}
+
+
+def beam_modules(R, p, t, blob, mods):
+    """M56: the Beam2 modules a LOD uses (cooked LODs keep no Modules array: the LOD's serialized bytes reference each
+    module's export index, big-endian int32; exactly one hit required, as the M47 Size scan). RE pass 5 addendum: beam
+    LODs reference Source + Target (+ Noise / SineWave)."""
+    import struct as _st
+    out = {}
+    for k, path, cls in mods:
+        if blob.count(_st.pack('>i', k + 1)) != 1: continue
+        o = R.obj(path.lower()) or {}
+        if cls == 'ParticleModuleBeamNoise':
+            out['noise'] = {
+                'low_freq': bool(o.get('bLowFreq_Enabled', False)), 'frequency': int(o.get('Frequency', 0)),
+                'frequency_low': int(o.get('Frequency_LowRange', 0)),
+                # defaults: Engine.Default__ParticleModuleBeamNoise (cooked CDO): NoiseRange / NoiseSpeed 50,
+                # NoiseTangentStrength 250, NoiseRangeScale 1, NoiseLockRadius 1, NoiseTension 0.5, NoiseTessellation 1
+                'range': raw_dist(o.get('NoiseRange'), [50.0, 50.0, 50.0]),
+                'range_scale': raw_dist(o.get('NoiseRangeScale'), [1.0]),
+                'speed': raw_dist(o.get('NoiseSpeed'), [50.0, 50.0, 50.0]),
+                'lock_time': float(o.get('NoiseLockTime', 0.0)), 'lock_radius': float(o.get('NoiseLockRadius', 1.0)),
+                'tension': float(o.get('NoiseTension', 0.5)), 'tessellation': int(o.get('NoiseTessellation', 1)),
+                'frequency_distance': float(o.get('FrequencyDistance', 0.0)),
+                'tangent_strength': raw_dist(o.get('NoiseTangentStrength'), [250.0]),
+                'apply_scale': bool(o.get('bApplyNoiseScale', False)),
+                'scale': raw_dist(o.get('NoiseScale'), [1.0]),
+                'smooth': bool(o.get('bSmooth', False)), 'oscillate': bool(o.get('bOscillate', False)),
+                'use_noise_tangents': bool(o.get('bUseNoiseTangents', False)),
+                'target_noise': bool(o.get('bTargetNoise', False)),
+                'nr_scale_emitter_time': bool(o.get('bNRScaleEmitterTime', False)),
+                'props_seen': sorted(o.keys())}
+        elif cls == 'ParticleModuleBeamSineWave':
+            waves = []
+            for w in o.get('SineWaves') or []:
+                f = {x['name']: x['value'] for x in w} if isinstance(w, list) else dict(w)
+                waves.append({'amplitude': float(f.get('Amplitude', 0.0)), 'period': float(f.get('Period', 1.0)),
+                              'speed': float(f.get('Speed', 0.0)), 'phase': float(f.get('PhaseOffset', 0.0)),
+                              'direction': [float(c) for c in (f.get('Direction') or [0.0, 0.0, 0.0])]})
+            out['sine_waves'] = waves
+        elif cls == 'ParticleModuleBeamSource':
+            out['source'] = {'method': o.get('SourceMethod', 'PEB2STM_Default'), 'name': o.get('SourceName')}
+        elif cls == 'ParticleModuleBeamTarget':
+            out['target'] = {'method': o.get('TargetMethod', 'PEB2STM_Default'), 'name': o.get('TargetName')}
+    return out
+
+
 def class_templates():
     """M51: ParticleSystem templates the shipped weapon / character data references (FlightEffect, muzzle, impact,
     vehicle FX, abilities) -> {package: {template}}. The original loads them with the class's own FX package
@@ -233,6 +300,18 @@ def library(mapname):
         # shared _9193 is in all 7 level-0 LODs and no level-1 LOD) [HIGH]
         import struct as _st
         pidx = {p.object_path(k + 1).lower(): k for k, _e in enumerate(p.exports)}
+        bmods = [(k, p.object_path(k + 1), p.class_name(e2)) for k, e2 in enumerate(p.exports)
+                 if p.class_name(e2) in ('ParticleModuleBeamNoise', 'ParticleModuleBeamSineWave', 'ParticleModuleBeamSource',
+                                         'ParticleModuleBeamTarget')
+                 and p.object_path(k + 1).lower().startswith(t.lower() + '.')]
+        if bmods:
+            for e in s['emitters']:
+                for L in e['lods']:
+                    li = pidx.get(L['lod'].lower())
+                    if li is None: continue
+                    ex = p.exports[li]
+                    bm = beam_modules(_R([pk]), p, t, p.data[ex['serial_offset']:ex['serial_offset'] + ex['serial_size']], bmods)
+                    if bm: L['beam_modules'] = bm
         mods = []
         for i2, e2 in enumerate(p.exports):
             path2 = p.object_path(i2 + 1)
