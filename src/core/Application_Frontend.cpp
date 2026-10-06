@@ -737,9 +737,32 @@ template <class CS> void fillFullSelection(CS& cs, const frontend::GameFlow::Sel
 }
 }
 
+namespace {
+// Gameplay's progression award feed (agreed contract: game::XpAward {player, transactionId, xp, announcement,
+// description, extra}, game::StatAward {player, statId, amount, updateType}; World::drainXpAwards / drainStatAwards).
+// Detected; the frontend applies the local player's awards to the profile's progression.
+template <class W, class = void> struct HasAwardFeed : std::false_type {};
+template <class W>
+struct HasAwardFeed<W, std::void_t<decltype(std::declval<W&>().drainXpAwards()), decltype(std::declval<W&>().drainStatAwards())>>
+    : std::true_type {};
+template <class W> void forwardAwards(W& w, frontend::FrontendRuntime& rt, int me) {
+    if constexpr (HasAwardFeed<W>::value) {
+        for (const auto& a : w.drainXpAwards()) {
+            if (a.player != me) continue;
+            frontend::FrontendRuntime::XpEvent e;
+            e.transactionId = a.transactionId; e.xp = a.xp; e.announcement = a.announcement; e.description = a.description; e.extra = a.extra;
+            rt.progressionXp(e);
+        }
+        for (const auto& st : w.drainStatAwards())
+            if (st.player == me) rt.progressionStat(st.statId, st.amount, st.updateType);
+    } else { (void)w; (void)rt; (void)me; }
+}
+}
+
 void Application::routeMatchToFrontend(float dt) {
     frontend::GameFlow& flow = frontend_->flow();
     const int me = world_.localMatchPlayer();
+    forwardAwards(world_, *frontend_, me);
     // [integration M06] Customize.SelectCharacter -> TnPlayerController.SelectCharacter -> PRI._SelectedCharacter:
     // the frontend's selection becomes Gameplay's CharacterSelection (type, specialty, iconic chassis UniqueId).
     // Every pick is forwarded, also mid-match (Change Character): the original uses the new selection on the next
