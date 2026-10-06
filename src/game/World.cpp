@@ -17,6 +17,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -89,6 +90,10 @@ template <class R> auto fxSetDrawParam(R& r, const char* n, const float* v, int)
 template <class R> void fxSetDrawParam(R&, const char*, const float*, long) {}
 template <class R> auto fxClearDrawParam(R& r, const char* n, int) -> decltype(r.clearDrawMaterialParam(std::string(n)), void()) { r.clearDrawMaterialParam(std::string(n)); }
 template <class R> void fxClearDrawParam(R&, const char*, long) {}
+
+// WFC_SPAWNPROF: millisecond timings of the spawn path / slow World steps (diagnostics, no behaviour change).
+static bool spawnProf() { static const bool on = std::getenv("WFC_SPAWNPROF") != nullptr; return on; }
+static double profNowMs() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 
 void World::load(render::IRenderer& renderer) {
     if (std::getenv("WFC_VFX_FAKE") && *std::getenv("WFC_VFX_FAKE")) { VehicleFxDriver::Runtime fr; bindFakeVehicleFxRuntime(fr); setVehicleFxRuntime(fr); }
@@ -541,6 +546,7 @@ void World::buildGraybox() {
 }
 
 void World::handleInput(const platform::InputFrame& in, float dt) {
+    struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::handleInput %.1f ms", ms); } } profScope;
     player_.controller().handleInput(in, dt);   // Dash (Shift) is latched by PlayerController
     if (in.wasPressed(platform::Button::DebugNextStart)) teleportToStart(startCursor_ + 1);   // test spawn cycling
     if (in.wasPressed(platform::Button::DebugPrevStart)) teleportToStart(startCursor_ - 1);
@@ -1181,6 +1187,7 @@ const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
     if (ok) {
         if (d.animGltf && *d.animGltf) assets::loadAnimationsByName(ext + d.animGltf, *m);
         resolveModelTextures(*m);
+        if (renderer_) { render::MeshData md; md.subs = m->subs; md.mats = m->mats; fxPrewarm(*renderer_, md, 0); }
     } else LOG_ERROR("weapon %s: mesh %s unavailable", d.id, d.meshGltf ? d.meshGltf : "-");
     const assets::SkinnedModel* raw = ok ? m.get() : nullptr;
     weaponModels_[d.id] = std::move(m);
@@ -1188,10 +1195,31 @@ const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
 }
 
 // The weapon mesh drawn at the socket is the ACTIVE inventory weapon's (no other weapon may be shown in its place).
+double World::profileWeaponModelLoad(const WeaponDef& d) { const double t0 = profNowMs(); weaponModelFor(d); return profNowMs() - t0; }
+
+void World::preloadSelections(const std::vector<CharacterSelection>& selections) {
+    const int fa = localPlayer_ >= 0 ? match_.faction(localPlayer_) : 0;
+    for (const CharacterSelection& sel : selections) {
+        const ChassisAssets* ca = chassisAssets(resolveChassis(sel, fa));
+        if (sel.type == 0 && !sel.weapons.empty()) preloadHeldWeaponModels(sel.weapons);
+        else if (ca) preloadHeldWeaponModels(ca->def.iconicWeapons);
+    }
+}
+
+void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
+    for (const std::string& n : weapons) {
+        const WeaponDef* d = findWeaponDef(n);
+        // Only weapons that can be the held weapon (primary / heavy) and draw a mesh; the Ion Blaster uses the boot model.
+        if (!d || (d->typeCode != 0 && d->typeCode != 1) || !d->meshGltf || !*d->meshGltf || std::string(d->id) == "IonBlaster") continue;
+        weaponModelFor(*d);
+    }
+}
+
 void World::syncShownWeapon() {
     const Weapon& w = player_.pawn().weapon();
     std::string id = w.def ? w.def->id : "IonBlaster";
     if (id == shownWeapon_) return;
+    struct ProfScope { const std::string& id; double t0 = profNowMs(); ~ProfScope() { if (spawnProf()) LOG_INFO("SPAWNPROF syncShownWeapon %s: %.1f ms", id.c_str(), profNowMs() - t0); } } profScope{id};
     shownWeapon_ = id;
     // [integration M08] Systems' weapon audio (WP_Fire, reload / equip / impact) follows the equipped weapon; the
     // CharacterAudio weapon table is keyed by the TnWeapon class (was the Ion Blaster's for every weapon).
@@ -1299,6 +1327,7 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
 }
 
 void World::tick(float dt) {
+    struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::tick %.1f ms", ms); } } profScope;
     // Cache (and prewarm) each participant's body as soon as its selection exists - during the countdown for everyone present,
     // and for bots / joiners / class or team changes before their next spawn wave - instead of at the spawn itself (a first
     // cache costs the glb load + renderer prewarm, ~130-165 ms). Only bodies that can appear in this match are loaded (Pass 24h
@@ -1308,6 +1337,16 @@ void World::tick(float dt) {
             const MatchPlayer& mp = match_.players()[p];
             if (mp.hasSelectedCharacter) chassisAssets(resolveChassis(mp.selection, match_.faction((int)p)));
         }
+    // The local player's selected weapons (only the local pawn draws a held weapon mesh): custom list, else the iconic preset.
+    if (matchActive_ && localPlayer_ >= 0 && (size_t)localPlayer_ < match_.players().size()) {
+        const MatchPlayer& lp = match_.players()[(size_t)localPlayer_];
+        if (lp.hasSelectedCharacter) {
+            std::vector<std::string> want = lp.selection.weapons;
+            if (lp.selection.type != 0 || want.empty())
+                if (const ChassisAssets* ca = chassisAssets(resolveChassis(lp.selection, match_.faction(localPlayer_)))) want = ca->def.iconicWeapons;
+            if (want != preloadedSelection_) { preloadedSelection_ = want; preloadHeldWeaponModels(want); }
+        }
+    }
     pickupEvents_.clear();
     matchEvents_.clear();
     destructibleEvents_.clear();
@@ -1537,7 +1576,10 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
     // Load scheduling only, not original behaviour.
     if (localPlayer_ >= 0) {
         const int fa = match_.faction(localPlayer_);
-        for (int sp = 0; sp < 4; ++sp) chassisAssets(defaultChassis((Specialty)sp, fa));
+        for (int sp = 0; sp < 4; ++sp) {
+            chassisAssets(defaultChassis((Specialty)sp, fa));
+            preloadHeldWeaponModels(classPresetWeapons(specialtyName((Specialty)sp)));   // its preset weapons too
+        }
     }
 }
 
@@ -1905,8 +1947,12 @@ void World::tickMatch(float dt) {
                     // TnPawn.PostBeginPlay -> ApplyTransformer(chassis), then SetPlayerDefaults -> ApplyCharacter ->
                     // ApplySpecialty (StartingForm forced to robot) [CONF script, RE TARGETED_PASS3 §A].
                     MatchPlayer& mp = match_.playerMutable(localPlayer_);
+                    const double tp0 = profNowMs();
                     applyChassisToLocalPawn(mp.chassis);
+                    const double tp1 = profNowMs();
                     pc.respawnReset();   // a fresh pawn: robot form, no fold, HealthMax, default inventory
+                    const double tp2 = profNowMs();
+                    double tp3 = tp2;
                     {
                         const ChassisAssets* ca = chassisAssets(mp.chassis);
                         mp.specialty = mp.selection.type == 0 ? specialtyName(mp.selection.specialty)
@@ -1915,6 +1961,7 @@ void World::tickMatch(float dt) {
                             pc.setSpecialty(sd->id, sd->speedMultiplier, sd->segments, sd->overshield);
                         else pc.clearSpecialty();
                         loadoutRefused_ = applyLoadout(&mp.selection);
+                        tp3 = profNowMs();
                         mp.healthMax = pc.health().max;
                     }
                     core::Vec3 p = st.pos;
@@ -1924,6 +1971,8 @@ void World::tickMatch(float dt) {
                     player_.controller().setCameraYaw(st.yaw);
                     localDead_ = false;
                     player_.controller().clearSpectatorView();
+                    if (spawnProf()) LOG_INFO("SPAWNPROF local spawn: chassis apply %.1f ms, respawnReset %.1f ms, specialty+loadout %.1f ms, rest %.1f ms (%s)",
+                                              tp1 - tp0, tp2 - tp1, tp3 - tp2, profNowMs() - tp3, mp.chassis.c_str());
                     LOG_INFO("match: local player spawned at %s (%s team %d)", st.actor.c_str(), st.cluster.c_str(),
                              match_.players()[(size_t)localPlayer_].team);
                 }

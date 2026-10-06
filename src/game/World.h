@@ -640,6 +640,17 @@ private:
     std::vector<std::string> loadoutRefused_;
     unsigned seenWeaponChange_ = 0;
     const assets::SkinnedModel* weaponModelFor(const WeaponDef& d);
+    // Load (and prewarm) the held-weapon models of these provider / class ids ahead of their first equip: the first time a
+    // weapon becomes the held weapon its model loads on that frame (3-38 ms, HeavyMG 107 ms; WFC_WEAPONLOADPROF).
+    void preloadHeldWeaponModels(const std::vector<std::string>& weapons);
+public:
+    // Preload (cache + prewarm) the bodies and held-weapon models these selections would spawn with for the local player's
+    // faction - for Frontend's match loading step with the player's saved custom (CaC) characters, so picking one in the lobby
+    // does not load on that frame. Safe to call any time after the match launched; already-cached entries cost nothing.
+    // Load scheduling only, not original behaviour.
+    void preloadSelections(const std::vector<CharacterSelection>& selections);
+private:
+    std::vector<std::string> preloadedSelection_;   // the local selection's weapons last preloaded
     void syncShownWeapon();
     std::string localChassis_;
     std::vector<HazardVolume> hazards_;
@@ -688,6 +699,7 @@ public:
     int projectileFxSpawned() const { return projectileFxSpawned_; }
     int projectileFxExplosions() const { return projectileFxExplosions_; }
     size_t liveProjectiles() const { return projectiles_.size(); }
+    double profileWeaponModelLoad(const WeaponDef& d);   // diagnostics (WFC_SPAWNPROF): first-use load time of a weapon model, ms
     core::Vec3 projectilePos(size_t i) const { return i < projectiles_.size() ? projectiles_[i].pos : core::Vec3{0, 0, 0}; }
     core::Vec3 projectileVel(size_t i) const { return i < projectiles_.size() ? projectiles_[i].vel : core::Vec3{0, 0, 0}; }
     float projectileDamage(size_t i) const { return i < projectiles_.size() ? projectiles_[i].damage : 0.0f; }

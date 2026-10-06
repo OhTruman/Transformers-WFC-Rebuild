@@ -131,4 +131,8 @@ core::Mat4 ueSocketToGltf(const float locUE[3], const int rotUE[3]);
 // export is missing or incomplete; nothing falls back to another chassis.
 bool loadChassisDef(const std::string& verticalSliceRoot, const std::string& id, ChassisDef& def);
 
+// TR_MPPlayerCharacterData_p.<Class>_PCD_MP WeaponTypes for a specialty ("Leader" / "Scientist" / "Scout" / "Soldier"), from
+// the roster package's default_four_classes (MP presets) [CONF authored]. Empty when the package is unavailable.
+std::vector<std::string> classPresetWeapons(const std::string& specialty);
+
 } // namespace game

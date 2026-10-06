@@ -133,6 +133,15 @@ core::Mat4 ueSocketToGltf(const float locUE[3], const int rotUE[3]) {
     return core::mat4FromArray(m);
 }
 
+std::vector<std::string> classPresetWeapons(const std::string& specialty) {
+    std::vector<std::string> out;
+    const assets::Json* r = rosterPackage();
+    if (!r) return out;
+    const assets::Json& w = (*r)["default_four_classes (MP presets)"][specialty]["weapons"];
+    for (size_t i = 0; i < w.size(); ++i) out.push_back(w[i].asString());
+    return out;
+}
+
 bool loadChassisDef(const std::string& vsRoot, const std::string& id, ChassisDef& d) {
     d = ChassisDef{};
     d.id = id;
