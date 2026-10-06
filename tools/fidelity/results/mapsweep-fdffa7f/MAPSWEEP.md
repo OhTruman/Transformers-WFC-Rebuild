@@ -31,15 +31,30 @@ One lockstep direct boot per map (600 frames). The world verdict uses the frames
   - So M08b+ is more complete **and** darker. The darkening came between 681fd29 and 175a634: Rendering M20 / M21
     (lightmap records, FColor channel order), M24 (vertex lightmaps on every map) and M25 (PostProcessVolume grades).
   - Whether the original is this dark is **UNKNOWN** without a reference: human check, plus a question to Rendering.
+  - **Rendering's answer (2026-10-05): authored, HIGH confidence.** Each map's colour-correction LUT has been applied
+    since M25; 06b applied none.
+    - Measured by toggle at this start:
+      - Seed median 12 / black 0.33, and 24 / 0.04 with `WFC_NOCLUT`;
+      - Berth 9 / 0.54, and 23 / 0.10 with `WFC_NOCLUT`.
+    - The LUTs are contrast S-curves:
+      - Seed `ENV_Cluts_p.desaturation40_CLR` 33 → 18, 99 → 82, 230 → 241;
+      - Berth `ENV_Cluts_p.clut_mp40` 33 → 21;
+      - Streets `MP_Streets_CLUT` 33 → 37.
+    - The order (grade, gamma, then the LUT in display space, SRGB false) matches UE3.
+  - **Remaining human check:** the original level thumbnails are brighter (luma 27 / 37), but they are composed beauty
+    shots, not the spawn view. Comparing against original footage at the spawn would settle it.
 - **Debris: FIXED.** AssetTools 4d7a423 exports the destructible-mesh lightmaps (`lightmaps_destructibles.json`;
   vs_lightmap had joined only props.json components). Debris render data was regenerated and re-swept on fdffa7f:
   **PLAYABLE**, 0 decode failures, world 0.45-0.54. The original note follows. Debris: three lightmaps referenced by
   the render data (`LightMapTexture2D_4181 / _5690 / _587`) are absent from
   the AssetTools export (99 source lightmaps vs 569 in the render data), so those surfaces have no baked light:
   **source-data gap**. `decals.glb` is empty because the source has 0 decals (authentic).
-- **Gorge:** 4 vertex lightmaps are not bound (sample count ≠ vertex count, e.g. 1576 samples vs 322 / 1294 vertices,
+- **Gorge (Rendering, 2026-10-05): export issue.** 1,576 cooked samples vs 1,616 glTF vertices: about 40 vertices
+  are duplicated across the mesh's two sections. Rendering has asked AssetTools for a per-vertex cooked index in
+  world.glb. Original note: 4 vertex lightmaps are not bound (sample count ≠ vertex count, e.g. 1576 samples vs 322 / 1294 vertices,
   StaticMeshActor_15751 / _6134).
-- **GPU frame-time spikes:** one warning each on Seed (569 ms), Berth (383 ms) and Rust (345 ms) (TDR watch; the
+- **GPU frame-time spikes: first-draw stall.** Each falls in the first 120 frames after "World: loaded"; Rendering
+  removed it in M54 / M58 / M59 (agents/rendering 16af6ae+). Re-check on 08h. Original note: one warning each on Seed (569 ms), Berth (383 ms) and Rust (345 ms) (TDR watch; the
   limit is about 2,000 ms; the median is 0.2-2.4 ms).
 - **RETRACTED: ambient reverb "not in the mixer".** Systems aa15569: the warning came from AssetTools' flattened
   zone list (it stops at SeqAct_Delay / ActivateRemoteEvent links). Every MP map runs its zones through the generated
