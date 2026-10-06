@@ -17,6 +17,12 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONE 72 — MATERIALS COOKED INTO OTHER MAPS' PACKAGES (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| "no master material" failures | DES_IAC_WallPanelSign_p / DES_IAC_Omega_Cover_p are stub packages; their MICs live in MP_IAC_Streets_ART_m / MP_ESC_BrokenHope_Base_m. Broken Hope / Remnant lack ~50 roster-chassis MICs cooked into other maps | ue3obj package lookups | CONFIRMED | M72: the other MP maps' packages are low-priority fallbacks for missing / stub materials; every map compiles all its materials except the RandomSeed wrecked-soldier prop |
+| Remnant / Broken Hope characters | chassis drew the glTF fallback (white / cyan lights, flat) | before / after capture | VISUALLY VERIFIED | original material and energon glow |
+
 ## MILESTONES 69-70 — CAC PREVIEW ANIMATION CACHE, WEAPON MATERIAL PARAMETERS (2026-10-06)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

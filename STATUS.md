@@ -602,6 +602,9 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING M72 (2026-10-06)
+- Every map now compiles all its materials (except one RandomSeed prop): Broken Hope and Remnant characters use their original materials instead of the fallback.
+
 ## RENDERING M69-M70 (2026-10-06)
 - Create-a-Character: class picks no longer freeze (shared AnimSet cache + lobby-load preparation).
 - Weapon material parameters per player (Plasma Cannon charge glow) for Gameplay to drive.
