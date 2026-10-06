@@ -3513,6 +3513,15 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   - UpdateTurn: Δω = axisAngle × (0.05, 0.05, 1) / dt − ω, then × (ShouldUpright ? (1,1,1) : (0,0,1)).
   - Grounded and upright: only yaw is replaced; pitch / roll ω carries over (springs, UpdateRoll; RB damping 0 while hovering).
   - Airborne / inverted: pitch / roll ω = 0.05 × error / dt, a 5 % per tick pull (it was a one-step snap).
+  - Rate (24n) [CONFIRMED ORIGINAL: RE pass 4 A4 addendum 59eac82]. The hover / plane sims run once per game tick:
+    - TnVehicleForm.OnUpdate → DoUpdate(PredictNextPhysicsUpdateTime), with PhysX TimeStep 1/60 × 2 substeps;
+    - Xenon bSmoothFrameRate caps the game at 30 Hz.
+  - So every per-call factor applies per 1/30 s. On the rebuild's 60 Hz step they become k = 1 − (1 − rate)^(dt × 30):
+    - the hover car / truck / tank 0.05 pull (k = 0.0253; ×0.95 per 1/30 s, Experimental upright ratio);
+    - the jet TurnRate (0.1, 0.5, 0.5) servo (was normalised to 60 Hz: twice the original rate);
+    - the jet RLerp(…, 0.1) lean.
+  - The jet heading jitter (HEADJIT) rises to 0.57 / 0.84 / 0.19° per frame at 60 / 144 / 240 Hz: the slower, authentic servo lag.
+  - UNKNOWN: the PC frame cap (only Xenon configs in the dump).
   - Was (Pass 23, from the earlier A4 text): pitch / roll ω replaced every step, so a 0.25 m riser gave 0.47°.
   - Now the hover jump keeps its authored JumpAngularSpeed nose-up kick (5.7° car / 7.6° truck / 3.8° tank) and levels in the air.
   - WFC_RISERTEST on a real Streets kerb (0.15 m by ground height; the bevelled lip reads about 0.07 m to the probes), at 15 m/s:
