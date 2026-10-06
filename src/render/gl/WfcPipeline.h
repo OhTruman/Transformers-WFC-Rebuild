@@ -142,6 +142,8 @@ public:
     void prewarmMaterials();                          // M54: effect / weapon materials, yielding (map loads)
     void requestMaterialPrewarm() { prewarmPending_ = true; }   // run at the end of the world mesh upload
     void skipMaterialPrewarm() { prewarmDone_ = true; prewarmPending_ = false; }   // frontend scenes
+    void prewarmPlacedFx();                           // M58: the placed particle components (frontend scenes)
+    int spriteProgram(const std::string& material);  // particle material program (cached; -1 = fallback)
     void setLoadYield(std::function<void()> y) { loadYield_ = std::move(y); }
     void yieldLoad() { if (loadYield_ && !inLoadYield_) { inLoadYield_ = true; loadYield_(); inLoadYield_ = false; } }
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile): queued, drawn after post onto the back buffer.
@@ -449,6 +451,16 @@ public:
         int taperMethod = 0, interpPoints = 0;   // Beam2: PEBTM_None / Full / Partial; InterpolationPoints
         FxDist taperFactor, taperScale;           // Beam2: evaluated along the beam (0 source .. 1 target)
         int tessFactor = 1; float tessStrength = 1.0f;   // Trail2: Hermite steps per segment, tangent scale
+        struct BeamNoise {                // ParticleModuleBeamNoise (M56; CDO defaults from Engine.xxx)
+            bool on = false, applyScale = false, oscillate = false, targetNoise = false, nrEmitterTime = false,
+                 smooth = false;
+            int freq = 0, freqLow = 0, tessellation = 1;
+            float lockRadius = 1.0f, frequencyDistance = 0.0f, lockTime = 0.0f;
+            FxDist range, rangeScale, speed, tangent, scale;
+        } noise;
+        FxDist sourceStrength, targetStrength;   // Beam2 tangent strengths (UU; CDO 25): noise curve tangents
+        struct BeamSine { float amp = 0, period = 1, speed = 0, phase = 0, dir[3] = {0, 0, 0}; };
+        std::vector<BeamSine> sines;      // ParticleModuleBeamSineWave (WFC addition; render fill CONFIRMED, RE 9i)
         std::string sizeParam;            // SizeMultiplyLife by instance parameter (HoverFX "Size"); "" = none
         float sizeParamConst[3] = {1, 1, 1};
         bool velocityAligned = false;     // PSA_Velocity
@@ -470,6 +482,9 @@ private:
         float meshRot[3] = {0, 0, 0}, meshRotRate[3] = {0, 0, 0};
         float accel[3] = {0, 0, 0};       // ParticleModuleAcceleration (world / emitter space as spawned)
         int subImage = 0;
+        int noiseCount = 0;               // Beam2 noise points (count + 1 offsets, UE units, beam space)
+        float noiseTimer = 0.0f;          // seconds since the noise points were last re-drawn
+        std::vector<float> noiseCur, noiseNext;
     };
     struct FxEmitterRT {
         float time = 0, spawnFrac = 0; int loop = 0, lod = 0; bool done = false;

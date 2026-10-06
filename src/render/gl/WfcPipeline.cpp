@@ -2329,6 +2329,41 @@ bool Pipeline::drawFx(int id, const core::Mat4& model, const float color[4]) {
     return true;
 }
 
+int Pipeline::spriteProgram(const std::string& material) {
+    auto it = spriteProg_.find(material);
+    if (it == spriteProg_.end()) {
+        std::string nm = resolveName(material);
+        int prog = nm.empty() ? -1 : programFor(nm, nullptr, false);
+        if (prog >= 0 && !progs_[(size_t)prog].original) prog = -1;
+        if (prog < 0) LOG_WARN("wfc: particle material %s not compiled; textured fallback", material.c_str());
+        it = spriteProg_.emplace(material, prog).first;
+    }
+    return it->second;
+}
+
+// M58: the placed particle components' materials / meshes, resolved during the load (frontend scenes skip the
+// effect / weapon prewarm; the title's emitters compiled on their first drawn frames: Lightning_Anim_03 45 ms,
+// Lightning_02 texture 43 ms, ...)
+void Pipeline::prewarmPlacedFx() {
+    auto t0 = std::chrono::steady_clock::now(), lastYield = t0;
+    size_t progs = spriteProg_.size(), meshes = fxMeshes_.size();
+    for (const FxInstance& in : fxInstances_) {
+        auto sit = fxSystems_.find(in.system);
+        if (sit == fxSystems_.end()) continue;
+        for (const FxEmitter& em : sit->second.emitters) {
+            if (!em.renderable) continue;
+            for (const FxLod& L : em.lods) {
+                if (!L.meshGltf.empty()) fxMeshFor(L);
+                else if (!L.material.empty()) spriteProgram(L.material);
+                auto now = std::chrono::steady_clock::now();
+                if (std::chrono::duration<double, std::milli>(now - lastYield).count() >= 16.0) { yieldLoad(); lastYield = now; }
+            }
+        }
+    }
+    LOG_INFO("wfc: prewarmed placed effects: %zu sprite materials, %zu meshes in %.0f ms", spriteProg_.size() - progs,
+             fxMeshes_.size() - meshes, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+}
+
 bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, const core::Vec3& facing) {
     if (!material || !sp || n == 0) return false;
     static const bool immediateTrans = std::getenv("WFC_IMMEDIATETRANS") != nullptr || std::getenv("WFC_M05TRANS") != nullptr;
@@ -2348,15 +2383,8 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         }});
         return true;
     }
+    if (spriteProgram(material) < 0) return false;
     auto it = spriteProg_.find(material);
-    if (it == spriteProg_.end()) {
-        std::string nm = resolveName(material);
-        int prog = nm.empty() ? -1 : programFor(nm, nullptr, false);
-        if (prog >= 0 && !progs_[(size_t)prog].original) prog = -1;
-        if (prog < 0) LOG_WARN("wfc: particle material %s not compiled; textured fallback", material);
-        it = spriteProg_.emplace(material, prog).first;
-    }
-    if (it->second < 0) return false;
     if (!spriteVao_) {
         GenVertexArrays(1, &spriteVao_);
         GenBuffers(1, &spriteVbo_); GenBuffers(1, &spriteCbo_); GenBuffers(1, &spriteIbo_);

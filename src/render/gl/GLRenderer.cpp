@@ -483,6 +483,7 @@ public:
         if (!okData) return false;
         wfc_.skipMaterialPrewarm();          // M54: a menu backdrop never draws the match's weapon / effect materials
         sceneMesh_ = uploadMesh(world);
+        wfc_.prewarmPlacedFx();              // M58: its emitters' programs / textures / meshes, under the loading screen
         sceneDir_ = dir;
         LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
         return sceneMesh_ != kInvalidMesh;
