@@ -215,18 +215,21 @@ void jetStep(Character& c, const MoveIntent& in, float dt, const CollisionWorld*
         float bodyPitchDeg = std::fabs(vs.pitch) / d2r;
         float fade = core::clampf((VP.maxPitchDeg - bodyPitchDeg) / (VP.maxPitchDeg - VP.fullPitchDeg), 0.0f, 1.0f);
         lp *= fade;
-        vs.leanP += (lp - vs.leanP) * VP.extraRotLerp;
-        vs.leanY += (ly - vs.leanY) * VP.extraRotLerp;
-        vs.leanR += (lr - vs.leanR) * VP.extraRotLerp;
+        const float xl = 1.0f - std::pow(1.0f - VP.extraRotLerp, dt * 30.0f);   // RLerp(.., 0.1) per 30 Hz script tick
+        vs.leanP += (lp - vs.leanP) * xl;
+        vs.leanY += (ly - vs.leanY) * xl;
+        vs.leanR += (lr - vs.leanR) * xl;
         tgtYaw -= vs.leanY; tgtPitch += vs.leanP; tgtRoll = vs.leanR;
     }
-    // Turn: angular servo toward the target rotation; TurnRate (0.1, 0.5, 0.5) per tick [CONF]; AngularDamping 6 / 8 [PROV form].
+    // Turn: angular servo toward the target rotation; TurnRate (0.1, 0.5, 0.5) per script tick [CONF]. The sim runs once per game
+    // tick at 30 Hz (bSmoothFrameRate 30, PhysX TimeStep 1/60 x 2) [CONF RE pass 4 A4 addendum 59eac82]: per-call factors are applied
+    // as 1 - (1 - rate)^(dt x 30) so the 60 Hz rebuild step matches the original per 1/30 s. AngularDamping 6 / 8 [PROV form].
     float dyaw = std::remainder(tgtYaw - c.yaw(), 6.2831853f);
-    c.setYaw(c.yaw() + dyaw * (1.0f - std::pow(1.0f - 0.5f, dt * 60.0f)));
+    c.setYaw(c.yaw() + dyaw * (1.0f - std::pow(1.0f - 0.5f, dt * 30.0f)));
     vs.yawRate = -dyaw / std::max(dt, 1e-4f) * 0.5f;
-    vs.pitch += (tgtPitch - vs.pitch) * (1.0f - std::pow(1.0f - 0.5f, dt * 60.0f));
+    vs.pitch += (tgtPitch - vs.pitch) * (1.0f - std::pow(1.0f - 0.5f, dt * 30.0f));
     if (rolling) vs.roll = std::remainder(vs.roll - vs.angVel.x * dt, 6.2831853f);
-    else vs.roll += (std::remainder(tgtRoll, 6.2831853f) - std::remainder(vs.roll, 6.2831853f)) * (1.0f - std::pow(1.0f - 0.1f, dt * 60.0f));
+    else vs.roll += (std::remainder(tgtRoll, 6.2831853f) - std::remainder(vs.roll, 6.2831853f)) * (1.0f - std::pow(1.0f - 0.1f, dt * 30.0f));
     vs.pitch = core::clampf(vs.pitch, -1.4f, 1.4f);
     // Integrate.
     v = v + accel * dt;
@@ -469,12 +472,15 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         // steps (spring torques, UpdateRoll; RB angular damping 0 while hovering). Airborne / inverted: pitch / roll w is SET to
         // 0.05 x error / dt (a 5 % per tick pull). The correction lands at step start, the spring forces integrate over the step.
         // Tank (TnHoverTankSimulation [CONF RE C2]): only yaw while stable on the ground, else pitch / roll at TurnRate 0.05.
+        // The 0.05 pull is per call of Update, i.e. per 30 Hz game tick (x0.95 per 1/30 s) [CONF RE 59eac82]: per rebuild step
+        // k = 1 - 0.95^(dt x 30) (0.0253 at 60 Hz).
+        const float k30 = 1.0f - std::pow(0.95f, dt * 30.0f);
         if (tank) {
-            if (!(!unstable && vs.onTheGround)) { vs.angVel.x = 0.05f * vs.roll / dt; vs.angVel.y = 0.05f * vs.pitch / dt; }
+            if (!(!unstable && vs.onTheGround)) { vs.angVel.x = k30 * vs.roll / dt; vs.angVel.y = k30 * vs.pitch / dt; }
         } else {
             if (contacts == 0 || B.z.y < 0.01f) {          // ShouldUpright
-                vs.angVel.x = 0.05f * vs.roll / dt;
-                vs.angVel.y = 0.05f * vs.pitch / dt;
+                vs.angVel.x = k30 * vs.roll / dt;
+                vs.angVel.y = k30 * vs.pitch / dt;
             }
         }
         comAbove = rest;
