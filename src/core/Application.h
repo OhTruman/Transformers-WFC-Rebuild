@@ -56,6 +56,7 @@ private:
     std::map<int, float> deathAt_;
     bool selectionSent_ = false;   // the frontend's character selection reached Gameplay this match
     // DEBUG-ONLY QA panel (WFC_QA=1, F10; NOT ORIGINAL): see qaTick in Application_Frontend.cpp.
+    int appliedFrameLimit_ = -1;   // [PCSettings] FrameLimit last handed to the limiter
     void qaTick(const platform::InputFrame& in);
     std::unique_ptr<platform::QaPanel> qa_;
     platform::QaRequest qaLast_;

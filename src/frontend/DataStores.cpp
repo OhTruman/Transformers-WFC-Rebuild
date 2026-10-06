@@ -56,6 +56,8 @@ std::string DataStores::read(const std::string& markup, bool* known) {
     // GRI.GoalScore = PointsToWin (TnMultiplayerGame.InitGame). Hud_GFX reads it once when it loads and falls back to 10
     // when it is not > 0, which fills the TDM (40) / DM (20) team bars at 10 points [Hud_GFX AS, Experimental audit P1-2].
     if (markup == "<CurrentGame:GoalScore>") return std::to_string(inMatch ? flow_.currentMatch().goalScore : (L.settings && L.settings->pointsToWin > 0 ? L.settings->pointsToWin : 0));
+    // PC ADAPTATION: the frame-rate limit entry the frontend adds to the PC graphics menu (Hz, 0 = unlimited).
+    if (markup == "<PCSettings:FrameLimit>") return std::to_string(flow_.profile().display.frameLimit);
     if (markup.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && markup.size() > 31) {
         std::string field = markup.substr(30, markup.size() - 31);
         if (LocalProfile::isOriginalField(field)) return flow_.profile().get(field);
@@ -265,6 +267,11 @@ BridgeValue DataStores::call(const std::string& fn, const std::vector<std::strin
         return BridgeValue(v == "1" || v == "true" || v == "True");
     }
     // <OnlinePlayerData:ProfileData.Field>: the local profile (LocalProfile; original fields and defaults).
+    if (fn == "WriteValue" && m == "<PCSettings:FrameLimit>") {   // applied (and saved) by Game.ApplyProfileSettings
+        flow_.profile().display.frameLimit = std::max(0, std::atoi(arg(1).c_str()));
+        FlowTrace::emit("settings.frameLimit", {{"hz", std::to_string(flow_.profile().display.frameLimit)}, {"provenance", "PC ADAPTATION"}});
+        return {};
+    }
     if (fn == "WriteValue" && m.rfind("<OnlinePlayerData:ProfileData.", 0) == 0 && m.size() > 31) {
         flow_.profile().set(m.substr(30, m.size() - 31), arg(1));
         return {};

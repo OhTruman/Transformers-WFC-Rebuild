@@ -48,6 +48,20 @@ struct HasMatchTextureRelease<R, std::void_t<decltype(std::declval<R&>().setText
     : std::true_type {};
 constexpr bool kRendererReleasesMatchTextures = HasMatchTextureRelease<render::IRenderer>::value;
 
+// Rendering M09 (agents/rendering 73fd427): IRenderer::setFrameLimit(hz) paces presentation (0 = unlimited); the main
+// loop calls waitFrameSlot. Detected; without it the window's own limiter (Win32Window::setFrameLimit) is used.
+template <class R, class = void> struct HasRendererFrameLimit : std::false_type {};
+template <class R>
+struct HasRendererFrameLimit<R, std::void_t<decltype(std::declval<R&>().setFrameLimit(1.0f)), decltype(std::declval<R&>().waitFrameSlot())>>
+    : std::true_type {};
+template <class R> const char* applyFrameLimit(R* r, platform::IWindow* w, int hz) {
+    if constexpr (HasRendererFrameLimit<R>::value) {
+        if (r) { r->setFrameLimit((float)hz); if (w) w->setFrameLimit(0); return "renderer"; }
+    }
+    if (w) w->setFrameLimit(hz);
+    return "window";
+}
+
 // Rendering 50f0742: preparePreviewBody parses a body's AnimSets into the shared cache and prewarms its materials without
 // creating a body; loadContentMesh + prewarmDynamicMesh compile a mesh's materials. Detected.
 template <class R, class = void> struct HasPreparePreviewBody : std::false_type {};
@@ -210,10 +224,12 @@ void Application::attachPresenter() {
         const auto& d = frontend_->flow().profile().display;
         if (d.fullscreen || d.width != window_->width() || d.height != window_->height()) window_->setDisplayMode(d.width, d.height, d.fullscreen);
         window_->setVSync(d.vsync);
-        // PC EXTENSION frame cap: [PCSettings] FrameLimit (e.g. 30 / 60 / 120 / 144 / 165 / 240; 0 = none), or WFC_FPS_LIMIT.
+        // PC ADAPTATION frame-rate limit: [PCSettings] FrameLimit (Hz, 0 = unlimited, the default; the PC graphics menu's
+        // Frame Rate Limit entry), or WFC_FPS_LIMIT for tests. Presentation only: the simulation's fixed step is unaffected.
         int cap = d.frameLimit;
-        if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::atoi(e);
-        if (cap > 0) window_->setFrameLimit(cap);
+        if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::max(0, std::atoi(e));
+        const char* by = applyFrameLimit(renderer_, window_, cap);
+        frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
@@ -221,6 +237,11 @@ void Application::attachPresenter() {
     applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
         applyGamma(renderer_, p.getInt("GammaSetting"));
+        if (p.display.frameLimit != appliedFrameLimit_) {   // the Frame Rate Limit selector applies on every step
+            appliedFrameLimit_ = p.display.frameLimit;
+            const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_);
+            frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(appliedFrameLimit_)}, {"by", by}, {"when", "apply"}});
+        }
         if (applyLookSettings(world_.player().controller(), p))
             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});
         frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},

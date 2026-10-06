@@ -307,6 +307,9 @@ public:
     std::set<int> keysDown;
     int lastKeyCode = 0, lastAscii = 0;
     std::vector<std::unique_ptr<DisplayObject>> graveyard;   // removed instances (script objects may still refer)
+    // Host hook: MovieClip.attachMovie(linkage, name, depth, initObj) calls it with the init object before the clip is
+    // created (the frontend adds its PC-adaptation entries to a menu's build array there).
+    std::function<void(const std::string& linkage, avm1::Object* initObj)> attachHook;
     std::string movieName;                    // diagnostics
 
     // Rendering traversal.
