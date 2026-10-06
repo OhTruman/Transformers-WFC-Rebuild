@@ -3760,6 +3760,15 @@ void World::setOvershieldAudio(float os) { abilityAudio_.overshield(cues_, os, a
 
 void World::onDodgeHitWall() { abilityAudio_.dodgeHitWall(cues_, atPawn()); }
 
+void World::onGrenadeToss(const std::string& cls, bool refused) {
+    ensureWeaponAudio(cls);
+    weaponAudio_.weaponEvent(cues_, cls, refused ? "WP_NoAmmoFire" : "WP_Fire", atPawn());
+}
+
+void World::onPawnDeath(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos) {
+    abilityAudio_.pawnDeath(cues_, chassisId, vehicleForm, damageType, pos, core::length(pos - listenerPos_));
+}
+
 void World::onLocalKillstreakActivated(const std::string& id, int team) {
     levelAudio_.match().killstreakActivated(id, MatchAudio::StreakRole::Self, team);
 }

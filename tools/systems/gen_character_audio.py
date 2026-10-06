@@ -347,6 +347,24 @@ sws = {e['WeaponEventType']: e['WeaponSound'] for e in (swm.get('WeaponEventSoun
 if swm.get('DefaultImpactSound'): sws['DefaultImpactSound'] = swm['DefaultImpactSound']
 class_sounds['TnWeaponDefaultSentryAbility'] = sws
 for k in ('TnGuidedMissile', 'TnWeaponDefaultSentryAbility'): all_cues |= set(class_sounds[k].values())
+# Deaths (RE pass 5 s12 addendum 12): robot form plays a sound only through the TnDeathTypeMelee entries' TnDeathModifierPlaySound
+# (SharedRobotDeaths / HoloBruteRobotDeaths); vehicle form plays the chassis' _Blueprint.DeathSound (profiles vehicle_death_sound).
+# The melee death entry is chosen by the damage type's DamageDeathType (resolved down the class chain): every damage type
+# whose DamageDeathType is TnDeathTypeMelee (TnDamageTypePoke overrides it with TnDeathTypePoke) [CONF data].
+_shared = json.loads(c.execute("select props from objects where opath='TR_Deaths_p.SharedRobotDeaths'").fetchone()[0])
+for _e in _shared.get('Deaths') or []:
+    if 'TransGame.TnDeathTypeMelee' in (_e.get('Types') or []):
+        for _m in _e.get('Modifiers') or []:
+            _, _mp = props(_m)
+            if _mp.get('Sound'): class_sounds.setdefault('TnDeathTypeMelee', {})['DeathSound'] = _mp['Sound']; all_cues.add(_mp['Sound'])
+melee_damage_types = []
+for (_p,) in c.execute("select path from types where path like 'TransGame.TnDamageType%' or path like 'TransContent.TnDamageType%'"):
+    _t, _ddt = _p, None
+    while _t and _ddt is None:
+        _, _dp = props(_t.replace('TransGame.', 'TransGame.Default__').replace('TransContent.', 'TransContent.Default__'))
+        _ddt = _dp.get('DamageDeathType')
+        _t = type_super(_t)
+    if _ddt == 'TransGame.TnDeathTypeMelee': melee_damage_types.append(_p)
 # The sentry's destructible (Sentry_DSYS; the Rocket / Repair variants author the same): its Destroyed state's
 # HmSoundDestructionEffectFactory cue (TerminateSoundOnExitState false) [CONF data, RE pass 5 s12 addendum 4].
 _ds = c.execute("select props from objects where opath like 'WEP_SentryAbility_p.Sentry_DSYS.%' and class='HmSoundDestructionEffectFactory'").fetchone()
@@ -368,10 +386,12 @@ for q in sorted(x for x in all_cues if x):
     if d: cues[q] = d
     else: missing.append(q)
 doc = {'map': '__characters__', 'source': 'Systems tools/systems/gen_character_audio.py (AssetTools roster_package / mp_weapons / authored.db)',
-       'profiles': profiles, 'weapons': wpn, 'abilities': abilities, 'buffs': buffs, 'class_sounds': class_sounds, 'cues': cues}
+       'profiles': profiles, 'weapons': wpn, 'abilities': abilities, 'buffs': buffs, 'class_sounds': class_sounds,
+       'melee_damage_types': sorted(melee_damage_types), 'cues': cues}
 print('profiles %d, weapons %d, cues %d (missing %d: %s)' % (len(profiles), len(wpn), len(cues), len(missing), missing[:6]))
 print('abilities with a trigger sound %d: %s' % (len(abilities), sorted(abilities)))
 print('class sounds: %s' % class_sounds)
+print('melee damage types %d: %s' % (len(melee_damage_types), sorted(x.split('.')[-1] for x in melee_damage_types)))
 print('buffs with sounds %d: %s' % (len(buffs), {k: (sorted(x for x in v if x != 'only_local'), v['only_local']) for k, v in sorted(buffs.items())}))
 print('hit effects: %d entries; weapons with an effect %d / %d; no effect: %s' % (len(HIT_EFFECTS), sum(1 for w in wpn.values() if w['hit_effect']),
       len(wpn), sorted(k.split('.')[-1] for k, w in wpn.items() if not w['hit_effect'])))

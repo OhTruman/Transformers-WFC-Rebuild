@@ -52,6 +52,9 @@ public:
     // Released before level 1 (FireCharge state 1): PlayWeaponEvent(22 = WP_NoAmmoFire; Plasma: the dry-fire cue).
     int chargeFizzle(SoundCues& cues, const std::string& weaponClass, const SoundCues::Emitter& emitter);
     int chargeLoops(const SoundCues& cues) const;
+    // HmWeaponMesh.PlaySoundEvent(event): the weapon's WeaponEventSounds cue as an audio component at the sound owner
+    // (TnGrenadeBag.PerformToss: WP_Fire; PlayDryFireSound: WP_NoAmmoFire) [CONF RE pass 5 s12 addendum 13]. Local.
+    int weaponEvent(SoundCues& cues, const std::string& weaponClass, const char* event, const SoundCues::Emitter& emitter);
     int flightLoops() const { return (int)flight_.size(); }
 
     void stopAll(SoundCues& cues);

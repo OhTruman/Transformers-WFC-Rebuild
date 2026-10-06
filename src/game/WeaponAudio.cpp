@@ -124,6 +124,11 @@ void WeaponAudio::chargeState(SoundCues& cues, const std::string& cls, int state
     }
 }
 
+int WeaponAudio::weaponEvent(SoundCues& cues, const std::string& cls, const char* ev, const SoundCues::Emitter& em) {
+    const std::string& q = CharacterAudio::weaponCue(cls, ev);
+    return q.empty() ? -1 : cues.play(q.c_str(), em, 0.0f);
+}
+
 int WeaponAudio::chargeFizzle(SoundCues& cues, const std::string& cls, const SoundCues::Emitter& em) {
     const std::string& q = CharacterAudio::weaponCue(cls, "WP_NoAmmoFire");
     return q.empty() ? -1 : cues.play(q.c_str(), em, 0.0f);

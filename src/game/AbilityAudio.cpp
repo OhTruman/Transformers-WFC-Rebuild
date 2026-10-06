@@ -188,6 +188,20 @@ int AbilityAudio::dodgeHitWall(SoundCues& cues, const SoundCues::Emitter& pawn) 
     return q.empty() ? -1 : cues.play(q.c_str(), pawn, 0.0f);
 }
 
+int AbilityAudio::pawnDeath(SoundCues& cues, const std::string& chassis, bool vehicleForm, const std::string& damageType,
+                            const core::Vec3& pos, float dist) {
+    std::string q;
+    if (vehicleForm) {
+        const CharacterAudioProfile* p = CharacterAudio::find(chassis);
+        if (p) q = p->vehicleDeath;
+    } else if (CharacterAudio::isMeleeDamageType(damageType)) {
+        q = CharacterAudio::classSound("TnDeathTypeMelee", "DeathSound");
+    }
+    if (q.empty()) return -1;
+    if (!cues.hasCue(q.c_str()) && CharacterAudio::find(chassis)) CharacterAudio::loadCues(cues, *CharacterAudio::find(chassis));
+    return cues.play(q.c_str(), pos, dist);
+}
+
 void AbilityAudio::stopAll(SoundCues& cues) {
     overshield_ = 0.0f;
     for (int* id : {&barrierLoop_, &sentryLoop_}) { if (*id >= 0) cues.stop(*id, 0.0f); *id = -1; }

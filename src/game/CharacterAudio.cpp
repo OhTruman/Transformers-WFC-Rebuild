@@ -1,4 +1,5 @@
 #include "game/CharacterAudio.h"
+#include <set>
 #include "game/SoundCues.h"
 #include "assets/Json.h"
 #include "core/Config.h"
@@ -25,6 +26,7 @@ struct Db {
     std::map<std::string, std::string> abilityTrigger;
     std::map<std::string, BuffSounds> buffs;
     std::map<std::string, std::map<std::string, std::string>> classSounds;
+    std::set<std::string> meleeDamageTypes;
 };
 
 const Db& db() {
@@ -152,6 +154,7 @@ const Db& db() {
         }
     }
     for (const auto& kv : d.doc["abilities"].obj) d.abilityTrigger[kv.first] = kv.second["trigger"].asString();
+    for (size_t i = 0; i < d.doc["melee_damage_types"].size(); ++i) d.meleeDamageTypes.insert(d.doc["melee_damage_types"][i].asString());
     for (const auto& kv : d.doc["class_sounds"].obj)
         for (const auto& f : kv.second.obj) d.classSounds[kv.first][f.first] = f.second.asString();
     for (const auto& kv : d.doc["buffs"].obj) {
@@ -271,6 +274,8 @@ const std::string& CharacterAudio::classSound(const std::string& cls, const std:
     auto f = it->second.find(field);
     return f == it->second.end() ? empty() : f->second;
 }
+
+bool CharacterAudio::isMeleeDamageType(const std::string& dt) { return db().meleeDamageTypes.count(dt) != 0; }
 
 const BuffSounds* CharacterAudio::buffSounds(const std::string& cls) {
     const Db& d = db();
