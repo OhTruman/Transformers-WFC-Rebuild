@@ -152,6 +152,9 @@ public:
     bool active() const { return active_; }
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
     void setCharacterColors(const CharacterColors& c) { charColorsBy_[drawOwner_] = c; }
+    // M73 runtime decals (spawnDecal): projected geometry built by the caller; expiry on the map clock, cap 50
+    int addRuntimeDecal(MeshData&& mesh, float lifetime);
+    size_t runtimeDecalCount() const { return rtDecals_.size(); }
     // M70 per-owner runtime material parameters for dynamic draws (held weapon SetMaterialParameter)
     void setDrawMaterialParam(const std::string& name, const float v[4]) {
         auto& L = ownerParams_[drawOwner_];
@@ -306,6 +309,11 @@ private:
     int bspMesh_ = -1;            // BSP rebuilt from the cooked vertex buffer with its lightmaps
     std::vector<float> bspTris_;  // level BSP triangles in UE units (x, y, z per vertex, 3 vertices per triangle) for traces
     int decalMesh_ = -1;          // static decals from their cooked receiver geometry
+    struct RuntimeDecal { float born = 0, life = 0; MeshData mesh; };
+    std::vector<RuntimeDecal> rtDecals_;   // M73, oldest first
+    bool rtDecalsDirty_ = false;
+    int rtDecalMesh_ = -1;                 // merged GPU mesh of rtDecals_ (rebuilt on change)
+    void updateRuntimeDecals();
     bool active_ = false;
     std::string dataDir_;
     IRenderer::VisibilityQuery vis_;

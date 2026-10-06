@@ -96,6 +96,16 @@ public:
 
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
+        if (const char* dt = std::getenv("WFC_DECALTEST")) {   // diagnostics: death scorch under x,y,z (glTF m)
+            static int frames = 0;
+            if (++frames == 20) {
+                core::Vec3 p{0, 0, 0}; std::sscanf(dt, "%f,%f,%f", &p.x, &p.y, &p.z);
+                core::Vec3 hit, n;
+                if (!traceDownReceivers(p, 3.0f, hit, n)) LOG_INFO("decal test: nothing within 300 UU below");
+                else if (n.y < 0.5f) LOG_INFO("decal test: glancing surface (N.down %.2f)", n.y);
+                else spawnDecal("FX_Decals_p.DeathDecal_MAT", hit, {0, -1, 0}, 8.75f, 8.75f, 3.0f, 37.0f, 30.0f);
+            }
+        }
         if (visualCheckOn()) glEntry_ = captureGlState();   // what the previous user of the context left bound
         // The 3D frame owns its GL state. The draws set blend / depth writes / culling per material, but depth TEST,
         // depth func, scissor, stencil, colour mask and polygon mode were only set once in init(). M11 root cause:
@@ -628,6 +638,7 @@ public:
         renderDataRequested_ = false;
         sceneSampled_ = false;
         wfc_.release();
+        recv_ = DecalReceivers{};
         for (size_t i = 0; i < meshes_.size(); ++i) { meshes_[i] = MeshData{}; gpu_[i] = -1; }
         // M28: textures uploaded since the previous unload are match-owned (Frontend persistent-renderer soak: +60..105
         // live textures per match, never released, when the renderer outlives the match)
@@ -973,8 +984,172 @@ public:
     void setMapClock(float t) override { wfc_.setMapClock(t); }
     void setDestructibleState(const std::string& a, int s) override { wfc_.setDestructibleState(a, s); }
 
+    // M73 decal receivers: compact copy (positions + triangle indices) of the authored world geometry - the full CPU
+    // world mesh is dropped after upload - with a ground-plane (x, z) grid of triangles for the box query
+    struct DecalReceivers {
+        std::vector<float> pos;          // glTF metres
+        std::vector<uint32_t> tri;       // 3 indices per triangle
+        float cell = 8.0f, minX = 0, minZ = 0; int nx = 0, nz = 0;
+        std::vector<uint32_t> start, list;   // CSR grid
+        std::vector<uint32_t> big;           // triangles over more than 64 cells (terrain, domes): every query
+        std::vector<uint32_t> stamp; uint32_t epoch = 0;
+        bool dirty = false;
+    } recv_;
+    void addDecalReceivers(const MeshData& m) {
+        if (m.subs.empty() || m.subs[0].component.empty()) return;            // authored world meshes only
+        const uint32_t base = (uint32_t)(recv_.pos.size() / 3);
+        recv_.pos.insert(recv_.pos.end(), m.positions.begin(), m.positions.end());
+        for (const SubMesh& sm : m.subs) {
+            const std::string mat = sm.material >= 0 && (size_t)sm.material < m.mats.size() ? m.mats[(size_t)sm.material].wfcName : "";
+            if (mat.find("Invisible") != std::string::npos) continue;      // collision-only brushes are not drawn
+            for (uint32_t k = sm.indexOffset; k + 2 < sm.indexOffset + sm.indexCount && k + 2 < m.indices.size(); k += 3)
+                for (int j = 0; j < 3; ++j) recv_.tri.push_back(base + m.indices[k + j]);
+        }
+        recv_.dirty = true;
+    }
+    void buildDecalGrid() {
+        recv_.dirty = false;
+        const auto tg0 = std::chrono::steady_clock::now();
+        const size_t nt = recv_.tri.size() / 3;
+        float mnx = 1e30f, mnz = 1e30f, mxx = -1e30f, mxz = -1e30f;
+        for (size_t i = 0; i + 2 < recv_.pos.size(); i += 3) {
+            mnx = std::min(mnx, recv_.pos[i]); mxx = std::max(mxx, recv_.pos[i]);
+            mnz = std::min(mnz, recv_.pos[i + 2]); mxz = std::max(mxz, recv_.pos[i + 2]);
+        }
+        if (nt == 0 || mnx > mxx) { recv_.nx = recv_.nz = 0; return; }
+        recv_.minX = mnx; recv_.minZ = mnz;
+        recv_.nx = std::max(1, (int)std::ceil((mxx - mnx) / recv_.cell) + 1);
+        recv_.nz = std::max(1, (int)std::ceil((mxz - mnz) / recv_.cell) + 1);
+        auto range = [&](size_t t, int& x0, int& x1, int& z0, int& z1) {
+            float a = 1e30f, b = -1e30f, c = 1e30f, d = -1e30f;
+            for (int j = 0; j < 3; ++j) {
+                const float* p = &recv_.pos[(size_t)recv_.tri[t * 3 + j] * 3];
+                a = std::min(a, p[0]); b = std::max(b, p[0]); c = std::min(c, p[2]); d = std::max(d, p[2]);
+            }
+            x0 = std::clamp((int)((a - recv_.minX) / recv_.cell), 0, recv_.nx - 1); x1 = std::clamp((int)((b - recv_.minX) / recv_.cell), 0, recv_.nx - 1);
+            z0 = std::clamp((int)((c - recv_.minZ) / recv_.cell), 0, recv_.nz - 1); z1 = std::clamp((int)((d - recv_.minZ) / recv_.cell), 0, recv_.nz - 1);
+        };
+        std::vector<uint32_t> count((size_t)recv_.nx * recv_.nz + 1, 0);
+        recv_.big.clear();
+        auto isBig = [&](int x0, int x1, int z0, int z1) { return (int64_t)(x1 - x0 + 1) * (z1 - z0 + 1) > 64; };
+        for (size_t t = 0; t < nt; ++t) {
+            int x0, x1, z0, z1; range(t, x0, x1, z0, z1);
+            if (isBig(x0, x1, z0, z1)) { recv_.big.push_back((uint32_t)t); continue; }
+            for (int z = z0; z <= z1; ++z) for (int x = x0; x <= x1; ++x) ++count[(size_t)z * recv_.nx + x + 1];
+        }
+        for (size_t i = 1; i < count.size(); ++i) count[i] += count[i - 1];
+        recv_.start = count;
+        recv_.list.assign(count.back(), 0);
+        std::vector<uint32_t> fill(count.begin(), count.end() - 1);
+        for (size_t t = 0; t < nt; ++t) {
+            int x0, x1, z0, z1; range(t, x0, x1, z0, z1);
+            if (isBig(x0, x1, z0, z1)) continue;
+            for (int z = z0; z <= z1; ++z) for (int x = x0; x <= x1; ++x) recv_.list[fill[(size_t)z * recv_.nx + x]++] = (uint32_t)t;
+        }
+        recv_.stamp.assign(nt, 0); recv_.epoch = 0;
+        LOG_INFO("decal receivers: %zu triangles (%zu large), %dx%d cells (%.1f MB, %.0f ms)", nt, recv_.big.size(), recv_.nx, recv_.nz,
+                 (recv_.pos.size() * 4 + recv_.tri.size() * 4 + recv_.list.size() * 4 + recv_.start.size() * 4) / 1048576.0,
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tg0).count());
+    }
+    template <class F> void forDecalTriangles(float x0, float x1, float z0, float z1, F&& f) {
+        if (recv_.dirty) buildDecalGrid();
+        if (recv_.nx == 0) return;
+        if (++recv_.epoch == 0) { std::fill(recv_.stamp.begin(), recv_.stamp.end(), 0); recv_.epoch = 1; }
+        const int cx0 = std::clamp((int)((x0 - recv_.minX) / recv_.cell), 0, recv_.nx - 1), cx1 = std::clamp((int)((x1 - recv_.minX) / recv_.cell), 0, recv_.nx - 1);
+        const int cz0 = std::clamp((int)((z0 - recv_.minZ) / recv_.cell), 0, recv_.nz - 1), cz1 = std::clamp((int)((z1 - recv_.minZ) / recv_.cell), 0, recv_.nz - 1);
+        auto visit = [&](uint32_t t) {
+            if (recv_.stamp[t] == recv_.epoch) return;
+            recv_.stamp[t] = recv_.epoch;
+            const float* a = &recv_.pos[(size_t)recv_.tri[t * 3] * 3];
+            const float* b = &recv_.pos[(size_t)recv_.tri[t * 3 + 1] * 3];
+            const float* c2 = &recv_.pos[(size_t)recv_.tri[t * 3 + 2] * 3];
+            f(core::Vec3{a[0], a[1], a[2]}, core::Vec3{b[0], b[1], b[2]}, core::Vec3{c2[0], c2[1], c2[2]});
+        };
+        for (uint32_t t : recv_.big) visit(t);
+        for (int z = cz0; z <= cz1; ++z)
+            for (int x = cx0; x <= cx1; ++x) {
+                const size_t c = (size_t)z * recv_.nx + x;
+                for (uint32_t i = recv_.start[c]; i < recv_.start[c + 1]; ++i) visit(recv_.list[i]);
+            }
+    }
+    // Diagnostics: first receiver hit straight down from p (WFC_DECALTEST)
+    bool traceDownReceivers(const core::Vec3& p, float maxDist, core::Vec3& hit, core::Vec3& n) {
+        float best = maxDist; bool ok = false;
+        const core::Vec3 d{0, -1, 0};
+        forDecalTriangles(p.x - 0.01f, p.x + 0.01f, p.z - 0.01f, p.z + 0.01f, [&](core::Vec3 A, core::Vec3 B, core::Vec3 C) {
+            core::Vec3 e1 = B - A, e2 = C - A, pv = core::cross(d, e2);
+            float det = core::dot(e1, pv);
+            if (std::fabs(det) < 1e-9f) return;
+            float inv = 1.0f / det; core::Vec3 tv = p - A;
+            float u = core::dot(tv, pv) * inv; if (u < 0 || u > 1) return;
+            core::Vec3 qv = core::cross(tv, e1);
+            float v = core::dot(d, qv) * inv; if (v < 0 || u + v > 1) return;
+            float t = core::dot(e2, qv) * inv; if (t <= 0 || t >= best) return;
+            best = t; ok = true; hit = p + d * t;
+            n = core::normalize(core::cross(e1, e2)); if (n.y < 0) n = n * -1.0f;
+        });
+        return ok;
+    }
+    int spawnDecal(const std::string& material, const core::Vec3& L, const core::Vec3& dirIn, float w, float h,
+                   float thick, float rollDeg, float lifetime) override {
+        if (!wfc_.active() || w <= 0 || h <= 0 || thick <= 0) return -1;
+        const core::Vec3 D = core::normalize(dirIn);
+        const core::Vec3 ref = std::fabs(D.y) < 0.99f ? core::Vec3{0, 1, 0} : core::Vec3{1, 0, 0};
+        const core::Vec3 T0 = core::normalize(core::cross(ref, D)), B0 = core::cross(D, T0);
+        const float r = rollDeg * 3.14159265f / 180.0f, cr = std::cos(r), sr = std::sin(r);
+        const core::Vec3 T = T0 * cr + B0 * sr, B = B0 * cr - T0 * sr;
+        const float hw = w * 0.5f, hh = h * 0.5f, ht = thick * 0.5f;
+        const float rad = std::sqrt(hw * hw + hh * hh + ht * ht);
+        MeshData m;
+        struct V { float s, t, d; };
+        forDecalTriangles(L.x - rad, L.x + rad, L.z - rad, L.z + rad, [&](core::Vec3 A, core::Vec3 Bv, core::Vec3 C) {
+            core::Vec3 n = core::cross(Bv - A, C - A);
+            if (core::dot(n, D) >= 0) return;                 // faces away from the projector (no back faces)
+            std::vector<V> poly;
+            for (const core::Vec3& P : {A, Bv, C}) { core::Vec3 q = P - L; poly.push_back({core::dot(q, T), core::dot(q, B), core::dot(q, D)}); }
+            // clip to the decal box (bNoClip false): s in [-hw, hw], t in [-hh, hh], d in [-ht, ht]
+            for (int plane = 0; plane < 6 && !poly.empty(); ++plane) {
+                const int ax = plane / 2; const float sg = (plane & 1) ? -1.0f : 1.0f;
+                const float lim = ax == 0 ? hw : ax == 1 ? hh : ht;
+                auto dist = [&](const V& v) { return lim - sg * (ax == 0 ? v.s : ax == 1 ? v.t : v.d); };
+                std::vector<V> out;
+                for (size_t i = 0; i < poly.size(); ++i) {
+                    const V& a = poly[i]; const V& b = poly[(i + 1) % poly.size()];
+                    const float da = dist(a), db = dist(b);
+                    if (da >= 0) out.push_back(a);
+                    if ((da >= 0) != (db >= 0)) {
+                        const float k = da / (da - db);
+                        out.push_back({a.s + (b.s - a.s) * k, a.t + (b.t - a.t) * k, a.d + (b.d - a.d) * k});
+                    }
+                }
+                poly.swap(out);
+            }
+            if (poly.size() < 3) return;
+            const core::Vec3 nn = core::normalize(n);
+            const uint32_t base = (uint32_t)m.vertexCount();
+            for (const V& v : poly) {
+                const core::Vec3 P = L + T * v.s + B * v.t + D * v.d;
+                m.positions.insert(m.positions.end(), {P.x, P.y, P.z});
+                m.normals.insert(m.normals.end(), {nn.x, nn.y, nn.z});
+                m.uv.insert(m.uv.end(), {0.5f - v.s / w, 0.5f - v.t / h});   // original decal VS (TileX / Y 1, offset 0)
+            }
+            for (uint32_t i = 1; i + 1 < poly.size(); ++i) m.indices.insert(m.indices.end(), {base, base + i, base + i + 1});
+        });
+        if (m.empty()) return -1;
+        Material mat; mat.wfcName = material; mat.sourceName = material.substr(material.rfind('.') + 1);
+        m.mats.push_back(mat);
+        SubMesh s; s.indexOffset = 0; s.indexCount = (uint32_t)m.indices.size(); s.material = 0; m.subs.push_back(s);
+        const size_t tris = m.indices.size() / 3;
+        const int id = wfc_.addRuntimeDecal(std::move(m), lifetime);
+        LOG_INFO("decal %s at (%.2f %.2f %.2f) %.2fx%.2f m: %zu triangles, %zu live", material.c_str(), L.x, L.y, L.z, w, h,
+                 tris, wfc_.runtimeDecalCount());
+        return id;
+    }
+
     MeshHandle uploadMesh(const MeshData& mesh) override {
         if (mesh.empty()) return kInvalidMesh;
+        addDecalReceivers(mesh);
+        if (recv_.dirty && mesh.vertexCount() > 100000) buildDecalGrid();   // the world: under the loading screen
         const int gpu = wfc_.active() ? wfc_.upload(mesh) : -1;
         // CPU copy for the GL 1.1 client-array fallback and WFC_PICK. A large world mesh owned by the shader path is
         // never drawn from it: dropping it saves ~150 MB per Streets load (M11 memory high-water). Small meshes keep

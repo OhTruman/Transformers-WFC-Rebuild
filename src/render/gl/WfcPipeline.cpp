@@ -2107,6 +2107,69 @@ void Pipeline::draw(int id, const core::Mat4& model) {
         drawSubs(meshes_[(size_t)decalMesh_], model, false);
         glDisable(GL_POLYGON_OFFSET_FILL);
     }
+    if (g.drawsBsp && !rtDecals_.empty()) {
+        updateRuntimeDecals();
+        if (rtDecalMesh_ >= 0 && !rtDecals_.empty()) {   // M73: the same bias as the static decals [HIGH]
+            glEnable(GL_POLYGON_OFFSET_FILL);
+            glPolygonOffset(-1.0f, -4.0f);
+            drawSubs(meshes_[(size_t)rtDecalMesh_], model, false);
+            glDisable(GL_POLYGON_OFFSET_FILL);
+        }
+    }
+}
+
+int Pipeline::addRuntimeDecal(MeshData&& mesh, float lifetime) {
+    if (!active_ || mesh.empty()) return -1;
+    // DecalManager MaxActiveDecals 50, shared by all dynamic decals: when full the OLDEST active one is recycled
+    if (rtDecals_.size() >= 50) rtDecals_.erase(rtDecals_.begin());
+    RuntimeDecal d; d.born = time_; d.life = lifetime; d.mesh = std::move(mesh);
+    rtDecals_.push_back(std::move(d));
+    rtDecalsDirty_ = true;
+    return (int)rtDecals_.size();
+}
+
+void Pipeline::updateRuntimeDecals() {
+    // expiry at the lifetime, no fade (RE s12 add. 28: no script / material fade; stock lifetime countdown [HIGH])
+    const size_t n0 = rtDecals_.size();
+    rtDecals_.erase(std::remove_if(rtDecals_.begin(), rtDecals_.end(),
+                                   [&](const RuntimeDecal& d) { return d.life > 0 && time_ - d.born >= d.life; }),
+                    rtDecals_.end());
+    if (rtDecals_.size() != n0) rtDecalsDirty_ = true;
+    if (!rtDecalsDirty_) return;
+    rtDecalsDirty_ = false;
+    MeshData all;
+    std::map<std::string, int> matIdx;
+    for (const RuntimeDecal& d : rtDecals_) {
+        const uint32_t base = (uint32_t)all.vertexCount();
+        all.positions.insert(all.positions.end(), d.mesh.positions.begin(), d.mesh.positions.end());
+        all.normals.insert(all.normals.end(), d.mesh.normals.begin(), d.mesh.normals.end());
+        all.uv.insert(all.uv.end(), d.mesh.uv.begin(), d.mesh.uv.end());
+        const std::string& mn = d.mesh.mats.empty() ? std::string() : d.mesh.mats[0].wfcName;
+        auto it = matIdx.find(mn);
+        if (it == matIdx.end()) { it = matIdx.emplace(mn, (int)all.mats.size()).first; all.mats.push_back(d.mesh.mats[0]); }
+        SubMesh s; s.indexOffset = (uint32_t)all.indices.size(); s.indexCount = (uint32_t)d.mesh.indices.size();
+        s.material = it->second;
+        for (uint32_t i : d.mesh.indices) all.indices.push_back(base + i);
+        all.subs.push_back(s);
+    }
+    auto drop = [&](int idx) {
+        GpuMesh& g = meshes_[(size_t)idx];
+        if (g.vao) DeleteVertexArrays(1, &g.vao);
+        if (g.vbo) DeleteBuffers(1, &g.vbo);
+        if (g.ibo) DeleteBuffers(1, &g.ibo);
+        g = GpuMesh();
+    };
+    if (all.empty()) { if (rtDecalMesh_ >= 0) drop(rtDecalMesh_); return; }
+    const int fresh = upload(all);
+    if (fresh < 0) return;
+    meshes_[(size_t)fresh].decal = true;
+    if (rtDecalMesh_ >= 0 && rtDecalMesh_ != fresh) {   // reuse the slot: the mesh list never grows per spawn
+        drop(rtDecalMesh_);
+        meshes_[(size_t)rtDecalMesh_] = std::move(meshes_[(size_t)fresh]);
+        meshes_.pop_back();
+    } else {
+        rtDecalMesh_ = fresh;
+    }
 }
 
 int Pipeline::dynamicProgram(const Material* mat) {

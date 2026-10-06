@@ -345,6 +345,23 @@ public:
                                     const core::Vec3& up, const float* colorRGBA = nullptr) {
         (void)tpl; (void)pos; (void)forward; (void)up; (void)colorRGBA; return -1;
     }
+    // M73 runtime decal (UE3 DecalManager.SpawnDecal; RE pass 5 s12 addenda 23 / 27 / 28). glTF metres: `material`
+    // (original object path, e.g. FX_Decals_p.DeathDecal_MAT) projected along `dir` onto the world geometry inside the
+    // box centred on `location` (width x height across, thickness along dir: near / far = -/+ thickness / 2),
+    // rolled by rollDeg. Receivers facing away from the projector are skipped; geometry is clipped to the box
+    // (bNoClip false). UV = 0.5 - (P - location).(tangent, binormal) / (width, height). The decal is drawn at full
+    // strength until `lifetime` seconds (map clock) pass, then removed (no fade). At most 50 live decals (the
+    // engine's MaxActiveDecals, shared by every dynamic decal): the oldest is recycled. Static world geometry only
+    // (no skeletal receivers) [PARTIAL]. Returns an id, or -1 when nothing was hit / no data.
+    // Death scorch (RE s12 add. 23, robot deaths only; the caller does the trace): line trace 300 UU straight down
+    // from the pawn origin; skip when nothing is hit or |N . down| < 0.5; then
+    // spawnDecal("FX_Decals_p.DeathDecal_MAT", hit, {0,-1,0}, s, s, 3.0, roll, 30) with s = (800 + r*150) * 0.01, r and
+    // roll random.
+    virtual int spawnDecal(const std::string& material, const core::Vec3& location, const core::Vec3& dir, float width,
+                           float height, float thickness, float rollDeg, float lifetime) {
+        (void)material; (void)location; (void)dir; (void)width; (void)height; (void)thickness; (void)rollDeg; (void)lifetime;
+        return -1;
+    }
     // Tracer / beam templates: placed at start with +X towards end; the end point is kept as the beam target.
     virtual int spawnParticleEffectSegment(const std::string& tpl, const core::Vec3& start, const core::Vec3& end,
                                            const float* colorRGBA = nullptr) {
