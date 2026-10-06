@@ -208,6 +208,14 @@ public:
     // Level Kismet triggers the frontend owns, in order ("FsCommand:<cmd>", "MovieStopped:<movie>").
     const std::vector<std::string>& kismetTriggers() const { return kismetTriggers_; }
     bool hasWatchedIntroMovie() const { return watchedIntro_; }
+    // Private Match bots (PC ADAPTATION). Team modes (GameTeamStatus 3): friendly 0..capacity-1 (the human takes a slot)
+    // and enemy 0..capacity; free-for-all (1): opponents 0..2*capacity-1; other modes: none. The per-team capacity is a
+    // PC choice (8; the original MaxPlayers=10, i.e. 5 a side) kept in one place.
+    enum class BotRows { None, FreeForAll, Teams };
+    BotRows botRows() const;
+    static int botTeamCapacity() { return 8; }
+    int botMax(const std::string& field) const;   // "friendly" / "enemy" / "difficulty"
+    void setBotSetting(const std::string& field, int value);   // clamped; saved
     LocalProfile& profile() { return profile_; }
     const LocalProfile& profile() const { return profile_; }
     std::string stateSummary() const;

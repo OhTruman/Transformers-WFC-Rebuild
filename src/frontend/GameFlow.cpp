@@ -482,6 +482,29 @@ std::string GameFlow::buildLobbyUrl(const GameSettings& gs) const {
     return u.toString();
 }
 
+GameFlow::BotRows GameFlow::botRows() const {
+    const int gts = lobby_.settings ? lobby_.settings->teamTypeValue : lobby_.gameTeamStatus;
+    return gts == 3 ? BotRows::Teams : gts == 1 ? BotRows::FreeForAll : BotRows::None;
+}
+
+int GameFlow::botMax(const std::string& field) const {
+    const int cap = botTeamCapacity();
+    if (field == "difficulty") return 2;
+    if (botRows() == BotRows::Teams) return field == "friendly" ? cap - 1 : cap;
+    if (botRows() == BotRows::FreeForAll) return field == "enemy" ? 2 * cap - 1 : 0;
+    return 0;
+}
+
+void GameFlow::setBotSetting(const std::string& field, int value) {
+    LocalProfile::Bots& b = profile_.bots;
+    int& v = field == "friendly" ? b.friendly : field == "enemy" ? b.enemy : b.difficulty;
+    v = std::clamp(value, 0, std::max(0, botMax(field)));
+    profile_.save();
+    FlowTrace::emit("lobby.bots", {{"field", field}, {"value", std::to_string(v)}, {"friendly", std::to_string(b.friendly)},
+                                   {"enemy", std::to_string(b.enemy)}, {"difficulty", std::to_string(b.difficulty)},
+                                   {"provenance", "PC ADAPTATION"}});
+}
+
 std::string GameFlow::buildMatchUrl(const GameSettings& gs) const {
     // TnOnlineGameSettingsBase.BuildURL [CONFIRMED script; the natively appended properties are HIGH]:
     //   AppendPropertiesToURL -> ?PlaylistId=-1?GamerRegion=0?PointsToWin=40 (score setting)
@@ -772,6 +795,18 @@ void GameFlow::startLevel() {
     if (!gs || !mi) { LOG_WARN("FLOW StartLevel: no settings/map"); return; }
     // GameSettings.BuildURL(MapURL); LobbyGRI.ModifyURL(MapURL): GetMapFilename() $ MapURL $ "?MapId=" $ GetMapID().
     std::string url = mi->mapFilename + buildMatchUrl(*gs) + "?MapId=" + std::to_string(mi->mapId);
+    {   // Private Match bots (PC ADAPTATION; Gameplay's MatchLaunch::fromURL reads them): only when any are configured.
+        const LocalProfile::Bots& b = profile_.bots;
+        const BotRows rows = botRows();
+        const int friendly = rows == BotRows::Teams ? std::min(b.friendly, botMax("friendly")) : 0;
+        const int enemy = rows == BotRows::None ? 0 : std::min(b.enemy, botMax("enemy"));
+        if (lobby_.playlistId < 0 && friendly + enemy > 0) {
+            url += "?BotsFriendly=" + std::to_string(friendly) + "?BotsEnemy=" + std::to_string(enemy) +
+                   "?BotDifficulty=" + std::to_string(std::clamp(b.difficulty, 0, 2));
+            FlowTrace::emit("launch.bots", {{"friendly", std::to_string(friendly)}, {"enemy", std::to_string(enemy)},
+                                            {"difficulty", std::to_string(b.difficulty)}, {"provenance", "PC ADAPTATION"}});
+        }
+    }
     match_ = MatchLaunch{};
     match_.url = Url::parse(url);
     match_.map = mi;

@@ -32,6 +32,10 @@ public:
     // PC SKU display settings (PCSettings.*).
     // frameLimit: PC EXTENSION ([PCSettings] FrameLimit, not an original setting; 0 = no cap, the default).
     struct Display { int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0; };
+    // Private Match bot settings (PC ADAPTATION, [PCSettings] BotsFriendly / BotsEnemy / BotDifficulty): AI teammates and
+    // opponents for offline private matches; difficulty 0 EASY, 1 MEDIUM, 2 HARD (the campaign's names; MP has none).
+    struct Bots { int friendly = 0, enemy = 0, difficulty = 1; };
+    Bots bots;
     Display display;
     // The local player's display name (GetPlayerAlias / PRI.PlayerName). The original took it from the signed-in
     // Xbox Live gamertag; the offline PC reconstruction has no such service: [Identity] Name in the profile file,

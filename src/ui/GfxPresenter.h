@@ -102,6 +102,8 @@ private:
     std::vector<Deferred> deferred_;
     int viewW_ = 1280, viewH_ = 720;          // last drawn window size (pointer -> stage mapping)
     int frameLimitShown_ = 0;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
+    std::map<const gfx::Player*, int> botRowsBuilt_;   // GameLobby menu: the BotRows kind its bot rows were built for
+    void syncBotRows(gfx::Player& p, frontend::GameFlow& flow);
     bool prevMouseLeft_ = false;
     gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
     std::vector<gfx::Player::RenderItem> items_;

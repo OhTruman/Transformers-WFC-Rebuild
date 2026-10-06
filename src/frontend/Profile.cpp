@@ -84,6 +84,9 @@ void LocalProfile::load() {
             else if (k == "TextureQuality") display.textureQuality = std::atoi(v.c_str());
             else if (k == "VSync") display.vsync = v == "1";
             else if (k == "FrameLimit") display.frameLimit = std::max(0, std::atoi(v.c_str()));
+            else if (k == "BotsFriendly") bots.friendly = std::max(0, std::atoi(v.c_str()));
+            else if (k == "BotsEnemy") bots.enemy = std::max(0, std::atoi(v.c_str()));
+            else if (k == "BotDifficulty") bots.difficulty = std::clamp(std::atoi(v.c_str()), 0, 2);
         } else if (section == "[ProfileData]") values_[k] = v;
     }
 }
@@ -102,7 +105,8 @@ void LocalProfile::save() const {
     }
     f << "\n[PCSettings]\nWidth=" << display.width << "\nHeight=" << display.height << "\nFullscreen=" << (display.fullscreen ? 1 : 0)
       << "\nTextureQuality=" << display.textureQuality << "\nVSync=" << (display.vsync ? 1 : 0)
-      << "\nFrameLimit=" << display.frameLimit << "\n";
+      << "\nFrameLimit=" << display.frameLimit << "\nBotsFriendly=" << bots.friendly << "\nBotsEnemy=" << bots.enemy
+      << "\nBotDifficulty=" << bots.difficulty << "\n";
 }
 
 } // namespace frontend
