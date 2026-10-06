@@ -196,6 +196,28 @@ def main():
               open(os.path.join(out, 'material_instance_actors.json'), 'w'), indent=1)
     mia_mats = {m.lower() for m in mia.values()}
     if mia: print('material instance actors: %d (runtime parameters)' % len(mia))
+    # M72: materials the world references but this map's packages don't export (e.g. DES_IAC_WallPanelSign_p's
+    # MICs: the destructible's class package is a seekfree stub; the objects are cooked into other maps' packages).
+    # The packages of the other MP maps that export them are added as fallbacks (original cooked data, not a
+    # substitute); the map's own copies still win.
+    def usable(r, n):                 # a Material, or a MIC whose cooked body names its Parent (stubs don't)
+        c = r.cls(n)
+        return c == 'Material' or (c == 'MaterialInstanceConstant' and bool((r.obj(n) or {}).get('Parent')))
+    missing = sorted(n for n in (names - {None}) | set(extra) if not usable(repo, n))
+    print('materials missing from this map: %d' % len(missing))
+    if missing:
+        ufb = []
+        for other in sorted(os.listdir(os.path.join(VS, 'Maps'))):
+            if not other.startswith('MP_') or other == mapname or not missing: continue
+            for pk in map_packages(other)[0]:
+                pr = Repo([pk])
+                found = [n for n in missing if usable(pr, n)]
+                if found:
+                    ufb.append(pk)
+                    missing = [n for n in missing if n not in found]
+        if ufb:
+            print('materials from other maps packages: %s' % ', '.join(ufb))
+            repo = Repo(list(reversed(map_packages(mapname)[0])), fallback=['TransGame.xxx', 'TR_AllShader_p.xxx'] + ufb)
     mats = sorted(names - {None}) + extra
     tr = TexResolver(repo, out)
 
