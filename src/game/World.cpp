@@ -1333,6 +1333,7 @@ void World::tick(float dt) {
         if (deferredKillstreak_ && lp.moveForm() == Form::Robot && !lp.isTransforming()) { deferredKillstreak_ = false; triggerLocalKillstreak(); }
     }
     tickAbilityEffects(dt);
+    tickAbilityAudio();                        // [Systems M08i]
     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
     if (matchActive_) tickMatch(dt);
@@ -1921,6 +1922,11 @@ void World::tickMatch(float dt) {
                     }
                 break;
             case MatchEvent::Type::PlayerKilled:
+                if (e.other == localPlayer_ && e.player != localPlayer_)   // [Systems M08i] the killer's kill confirm
+                    for (MatchOpponent* o : opponents_)
+                        if (o->matchPlayer() == e.player) {
+                            onLocalKilledPawn(false, o->pawn().moveForm() == Form::Robot, o->pawn().chassis().id);   // no headshot state yet
+                        }
                 if (e.player == localPlayer_) localDead_ = true;
                 for (MatchOpponent* o : opponents_) if (o->matchPlayer() == e.player) o->despawn();
                 break;
@@ -2686,8 +2692,10 @@ void World::tickAbilityEffects(float dt) {
                 if (line && line->segmentHit(pc.actorLocation(), o->pawn().actorLocation(), t)) continue;
                 ++targets;
                 applyMatchDamage(o->matchPlayer(), localPlayer_, 25.0f * dt, false, "TransGame.TnDamageTypeDrain");
+                onDrainVictimTick(o->pawn().actorLocation());   // [Systems M08i] TnBuffDrainTarget.DamageSound
             }
         if (targets > 0 && !localDead_) pc.health().heal(Health::HealType::AddHealthToAll, 35.0f * dt * targets);
+        if (!localDead_) onDrainTick(targets);          // [Systems M08i] TnBuffDrainSource.HealSound (>= 1 target)
     }
     tickLocalMelee(dt);
     tickHomingLock(dt);
@@ -3641,6 +3649,34 @@ void World::onLocalKilledPawn(bool headshot, bool robot, const std::string& chas
 }
 
 void World::onTransformFailed() { abilityAudio_.transformFailed(cues_, atPawn()); }
+
+// [Systems M08i glue] Gameplay's ability / buff / hover state -> Systems' AbilityAudio (RE pass 5 s12 / s13).
+void World::tickAbilityAudio() {
+    const PlayerController& ctl = player_.controller();
+    Character& p = player_.pawn();
+    if (ctl.abilityTriggerCount() != abilityAudioSerial_) {
+        abilityAudioSerial_ = ctl.abilityTriggerCount();
+        if (!localDead_) onAbilityTriggered(ctl.lastTriggeredAbility());   // ServerTriggerAbility returns if dead
+    }
+    if (ctl.abilitiesJammedCount() != jammedAudioSerial_) { jammedAudioSerial_ = ctl.abilitiesJammedCount(); onAbilitiesJammed(); }
+    if (ctl.transformFailedCount() != transformFailAudioSerial_) {
+        transformFailAudioSerial_ = ctl.transformFailedCount();
+        onTransformFailed();
+    }
+    if (localDead_ != abilityAudioDead_) {                          // death: loops stop, no Unapply / land
+        abilityAudioDead_ = localDead_;
+        if (localDead_) onLocalPawnBuffsLost();
+    }
+    if (localDead_) return;
+    // The buffed pawn's team picks the cloak cues (no team: Autobot 0).
+    const int team = matchActive_ && localPlayer_ >= 0 && match_.players()[(size_t)localPlayer_].team <= 1
+                         ? match_.players()[(size_t)localPlayer_].team : 0;
+    setLocalBuffAudio("TnBuffCloak", p.cloakRemain_ > 0.0f, team);
+    setLocalBuffAudio("TnBuffWarcryBase", p.warcryRemain_ > 0.0f, team);
+    setLocalBuffAudio("TnBuffHardLocked", p.hardLockedRemain_ > 0.0f, team);
+    setLocalBuffAudio("TnBuffTransformDisruptor", p.transformDisruptRemain_ > 0.0f, team);
+    setLocalHoverAudio(p.hoverState_);
+}
 
 void World::setLocalHoverAudio(int hoverState) { abilityAudio_.hoverState(cues_, hoverState, atPawn(), 0.0f); }
 

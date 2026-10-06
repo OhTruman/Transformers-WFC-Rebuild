@@ -83,6 +83,12 @@ public:
     // collision at once and slides the robot meshes back over 0.5 s. After a vehicle->robot transform,
     // InRobotForm.BeginState MoveToSafeLocation; failing that, ForceIntoForm(vehicle).
     int cantTransformCount() const { return cantTransformCount_; }      // pulses for the HUD / Systems
+    // [Systems M08i] audio pulses: successful ability triggers (+ the id), presses refused because abilities are jammed,
+    // and refused transforms (Disruptor buff / already transforming / no room: TransformFailedSound).
+    int abilityTriggerCount() const { return abilityTriggers_; }
+    const std::string& lastTriggeredAbility() const { return lastTriggeredAbility_; }
+    int abilitiesJammedCount() const { return abilitiesJammedCount_; }
+    int transformFailedCount() const { return transformFailedCount_; }
     int forcedVehicleCount() const { return forcedVehicleCount_; }
     bool tryBeginTransform();
     // LocalProfile look settings (Frontend owns the values) [CONF RE TARGETED_PASS3 G2]: CameraSensitivity 0-100 (default
@@ -195,6 +201,8 @@ private:
     int wantAbility_ = -1, abilityTriggers_ = 0;
     float abilityStickFwd_ = 0.0f, abilityStickRight_ = 0.0f;
     std::string lastRefusedAbility_;
+    std::string lastTriggeredAbility_;                 // [Systems M08i]
+    int abilitiesJammedCount_ = 0, transformFailedCount_ = 0;
     bool invertY_[2] = {false, false};
     bool invertCar_ = false, invertPlane_ = false, invertTank_ = false;
     bool wasTransforming_ = false;

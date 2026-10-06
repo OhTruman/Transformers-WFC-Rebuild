@@ -170,6 +170,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
 
     // Transform activates immediately on press; StartTransform refuses while already transforming.
     // Transforming to the vehicle ends fine aim [CONF RE] (the wish is dropped, not just paused).
+    if (transforming && in.wasPressed(Button::Transform) && pawn_) ++transformFailedCount_;   // [Systems M08i] Transform() fails
     if (!transforming && in.wasPressed(Button::Transform) && pawn_) {
         if (pawn_->moveForm() == Form::Robot) fineAimWanted_ = false;
         tryBeginTransform();
@@ -628,7 +629,7 @@ bool PlayerController::findRobotSpot(const CollisionWorld* col_, const core::Vec
 
 bool PlayerController::tryBeginTransform() {
     if (!pawn_) return false;
-    if (pawn_->transformDisruptRemain_ > 0.0f) return false;   // TnBuffTransformDisruptor: transforming disabled
+    if (pawn_->transformDisruptRemain_ > 0.0f) { ++transformFailedCount_; return false; }   // TnBuffTransformDisruptor: transforming disabled
     if (pawn_->moveForm() == Form::Vehicle && col_) {
         // Target = robot: its 4 m cylinder must fit (vehicle actor -> floor below).
         core::Vec3 a = pawn_->actorLocation();
@@ -638,6 +639,7 @@ bool PlayerController::tryBeginTransform() {
         core::Vec3 spot;
         if (!findRobotSpot(col_, feet, spot, pawn_)) {
             ++cantTransformCount_;                       // NotifyCantTransform + TransformFailedSound; no transform
+            ++transformFailedCount_;                     // [Systems M08i]
             return false;
         }
         core::Vec3 shift{spot.x - feet.x, 0.0f, spot.z - feet.z};
@@ -675,6 +677,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
     }
     if (wantAbility_ >= 0) {
         Character::AbilitySlot& a = pawn_->abilities_[wantAbility_];
+        if (pawn_->jammedRemain_ > 0.0f && !a.id.empty()) ++abilitiesJammedCount_;   // [Systems M08i] AbilitiesJammedSound
         bool can = pawn_->moveForm() == Form::Robot && !pawn_->isTransforming() && !pawn_->weapon().reloading() && !pawn_->isDodging() &&
                    pawn_->jammedRemain_ <= 0.0f;   // TnBuffAbilityJammed (derived): abilities blocked [CONF RE §K]
         // TnAbilityWhirlwind.LocalTriggerAbility fails (no cooldown) unless StartMeleeAttack(MELEE_Whirlwind) starts: the melee
@@ -692,7 +695,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                 if (a.id == "Cloaking") pawn_->cloakRemain_ = 20.0f;                               // AddBuff(TnBuffCloak)
                 if (a.id == "Drain") pawn_->drainRemain_ = 7.0f;                                    // AddSelfBuff(TnBuffDrainSource)
                 if (a.id == "Hover") { step.hoverRequest = true; pawn_->hoverRequested_ = true; }   // PlayerController.Hover
-                a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_;
+                a.spam = 1.0f; a.pendingCooldown = true; ++abilityTriggers_; lastTriggeredAbility_ = a.id;
             } else if (a.id != lastRefusedAbility_) {
                 LOG_WARN("ability %s (slot %d) is not implemented in the rebuild [PARTIAL]", a.id.c_str(), wantAbility_);
                 lastRefusedAbility_ = a.id;

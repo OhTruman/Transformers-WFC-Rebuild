@@ -287,6 +287,9 @@ public:
     // Drain, every tick while the local Drain buff runs: targets this tick (HealSound), and each victim (DamageSound).
     void onDrainTick(int targets);
     void onDrainVictimTick(const core::Vec3& victimPos);
+    void tickAbilityAudio();                           // [Systems M08i glue] Gameplay state -> ability / buff sounds
+    int abilityAudioSerial_ = 0, jammedAudioSerial_ = 0, transformFailAudioSerial_ = 0;
+    bool abilityAudioDead_ = false;
     void onProjectileRemoved(int key);
     // World hit / grenade bounce (fuseStarted: the grenade's first impact).
     void onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted);
