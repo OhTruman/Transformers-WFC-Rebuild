@@ -3,6 +3,23 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08l (2026-10-06) — lobby character-select hitch fixed (Gameplay 24o) — branch `integration/milestone-08l`
+
+On 08k (e467663). agents/gameplay 335ea8e (24o): at the end of startLocalMatch, under the loading screen, the local faction's four MP default bodies are cached and prewarmed. A preset class pick in the lobby no longer loads on a visible frame. The block sits after the integration lobby-team assignment. A custom CaC chassis outside the faction defaults still loads on its selection frame (Gameplay's noted gap).
+
+**Validation (targeted for a World.cpp-only change):**
+- Builds and suites:
+  - clean Debug / Release; frontend 79 / 0;
+  - harness 336 / 0 / 8; audio 700 / 0;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520.
+- Gameplay tests: RMUZZLE 4, CHARGE 9, MUZZLE 5, PROJFX 3, QATEST 7, FINEAIM 3, SWITCH 32, SCORE 9, XFORMVIS 16, VEHPHYS 27.
+- WFC_RENDERSTATS 4-match frontend soak:
+  - **0 first-use items** (08k: 25, at character select), 0 long GPU frames, 0 timeouts;
+  - only the known 53-56 ms match-start spawn frame (Gameplay, open);
+  - memory at match start 3.9-4.1 GB.
+
 ## INTEGRATION MILESTONE 08k (2026-10-06) — Plasma Cannon charge, hover handling per RE, ability-actor / kill-streak sounds, Create-a-Character freeze fix, narrowed chassis preload — branch `integration/milestone-08k`
 
 On 08j (b86d638).
