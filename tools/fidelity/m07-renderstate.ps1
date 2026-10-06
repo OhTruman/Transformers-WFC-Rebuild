@@ -44,10 +44,12 @@ foreach ($v in $variants.Keys) {
     foreach ($s in $worldShots) {
         $f = Join-Path $d "$s.bmp"; if (-not (Test-Path $f)) { continue }
         $w = Present-World $f; $wv = Present-WorldVerdict $w; $diag = Read-ShotDiag $f
+        # dark but intact (authored CLUT maps such as Seed / Berth): textured, noise-free, dark but not black, no large blank area -> HUMAN
+        $darkIntact = $wv -eq "FAIL" -and $w.untexFrac -lt 0.15 -and $w.noise -lt 0.05 -and $w.black -ge 0.25 -and $w.black -lt 0.92 -and $w.detail -ge 0.02 -and $w.maxFlat -lt 0.55
         $entryBad = if ($diag) { @(Test-GlEntryState $diag.entry) } else { @() }
         $rendBad = @(); if ($diag) { if ([int]$diag.noDepth -gt 0) { $rendBad += "$($diag.noDepth) opaque draws without depth test" }; if ([int]$diag.glErrors -gt 0) { $rendBad += "$($diag.glErrors) GL errors" } }
         if ($s -like "t9*" -and $diag) { $want = if ($s -eq "t9_display1080") { "0,0,1920,1080" } else { "0,0,1280,720" }; if ($diag.viewport -ne $want) { $rendBad += "viewport $($diag.viewport) (window $want)" } }
-        $status = if ($wv -eq "FAIL" -or $rendBad.Count) { "FAIL" } elseif ($entryBad.Count) { "FAIL" } elseif ($wv -eq "PARTIAL") { "PARTIAL" } else { "PASS" }
+        $status = if ($rendBad.Count) { "FAIL" } elseif ($darkIntact -and -not $entryBad.Count) { "HUMAN" } elseif ($wv -eq "FAIL") { "FAIL" } elseif ($entryBad.Count) { "FAIL" } elseif ($wv -eq "PARTIAL") { "PARTIAL" } else { "PASS" }
         if ($status -eq "FAIL") { $fails++ }
         $rows.Add([pscustomobject][ordered]@{ variant = $v; transition = $s; status = $status; world = "$wv ($($w.detail))"; renderer = $(if ($diag) { if ($rendBad.Count) { $rendBad -join "; " } else { "ok (world $($diag.world), bsp $($diag.bsp))" } } else { "no <shot>.json (hook absent)" }); gl_entry = $(if ($diag) { if ($entryBad.Count) { $entryBad -join "; " } else { "sane" } } else { "n/a" }) })
         if ($v -eq "normal") { Res "transition.$s" $status ("world {0} (detail {1}); renderer {2}; GL state left by the overlay {3}" -f $wv, $w.detail, $rows[-1].renderer, $rows[-1].gl_entry) $(if ($entryBad.Count) { "Frontend (overlay leaves GL state)" } elseif ($rendBad.Count -or $wv -eq "FAIL") { "Rendering/Integration" } else { "" }) }
