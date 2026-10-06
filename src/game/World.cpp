@@ -36,6 +36,11 @@ static bool readTextFile(const std::string& path, std::string& out) {
 // Rendering's IRenderer::prewarmDynamicMesh (agents/rendering M53), detected at compile time like the particle API.
 template <class R> auto fxPrewarm(R& r, const render::MeshData& md, int) -> decltype(r.prewarmDynamicMesh(md), void()) { r.prewarmDynamicMesh(md); }
 template <class R> void fxPrewarm(R&, const render::MeshData&, long) {}
+// Rendering's per-draw material parameters (agents/rendering M70), detected at compile time.
+template <class R> auto fxSetDrawParam(R& r, const char* n, const float* v, int) -> decltype(r.setDrawMaterialParam(std::string(n), v), void()) { r.setDrawMaterialParam(std::string(n), v); }
+template <class R> void fxSetDrawParam(R&, const char*, const float*, long) {}
+template <class R> auto fxClearDrawParam(R& r, const char* n, int) -> decltype(r.clearDrawMaterialParam(std::string(n)), void()) { r.clearDrawMaterialParam(std::string(n)); }
+template <class R> void fxClearDrawParam(R&, const char*, long) {}
 
 void World::load(render::IRenderer& renderer) {
     repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
@@ -1493,8 +1498,16 @@ void World::draw(render::IRenderer& r) const {
 
     // Ion Blaster mesh held at the weapon socket (robot form only).
     if (localPlayerDead()) { /* no pawn: no weapon / pawn effects (PendingMatch, dead) */ }
-    else if (weaponAnim_.valid() && player_.pawn().hasWeapon())
+    else if (weaponAnim_.valid() && player_.pawn().hasWeapon()) {
+        // TnChargeWeapon.UpdateChargeEffects -> TnWeaponMesh.SetMaterialParameter(1, MaterialGlowAmount): index 1 of the Plasma
+        // Cannon WEPMESH MaterialParameterModifiers is MPT_WeaponSpecific "Overheat" [CONF cooked data, Rendering M70]. Set for
+        // this draw only and cleared after it, whatever the current draw owner (other weapons author 0 = the default).
+        const Weapon& hw = player_.pawn().weapon();
+        const bool glow = hw.charge() && hw.chargeGlow() > 0.0f;
+        if (glow) { const float g = hw.chargeGlow(); const float rgba[4] = {g, g, g, 1.0f}; fxSetDrawParam(r, "Overheat", rgba, 0); }
         r.drawDynamicMesh(weaponAnim_.pose(), player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
+        if (glow) fxClearDrawParam(r, "Overheat", 0);
+    }
     else if (weaponMesh_ != render::kInvalidMesh && player_.pawn().hasWeapon())
         r.drawMesh(weaponMesh_, player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
 
