@@ -684,7 +684,10 @@ bool Pipeline::load(const std::string& mapName) {
 
     for (const auto& kv : M.obj) {
         const assets::Json& e = kv.second;
-        if (!e["glsl"].isString()) continue;
+        if (!e["glsl"].isString()) {      // compile error in build_materials: remembered for the draw-time warning
+            if (e["error"].isString()) matErrors_[kv.first] = e["error"].asString();
+            continue;
+        }
         MatSrc s;
         s.glsl = e["glsl"].asString();
         for (size_t k = 0; k < e["info"]["runtime_params"].size(); ++k)
@@ -1347,6 +1350,13 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
             return r;
         }
         LOG_WARN("wfc: material %s failed to build; using glTF fallback", matName.c_str());
+    } else if (!matName.empty()) {
+        // the original material did not compile offline (build_materials error) - drawn with the glTF fallback;
+        // say so once (Experimental: Debris' grey wreck sections were silent)
+        auto er = matErrors_.find(matName);
+        if (er != matErrors_.end() && warnedMatErrors_.insert(matName).second)
+            LOG_WARN("wfc: material %s has no compiled original (%s); using glTF fallback", matName.c_str(),
+                     er->second.substr(0, 160).c_str());
     }
     // glTF fallback material
     std::vector<Program::Slot> slots;
