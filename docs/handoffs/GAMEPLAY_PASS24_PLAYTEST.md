@@ -81,3 +81,40 @@ renderer API). In TDMTEST, all eight default chassis load before "match: launche
 - Experimental's vehicle checks (see their tools/fidelity): drop10 is a harness false positive (WFC_DROPTEST trace sent);
   hover_jump.pitch_kick = 0 is intended (RE pass 4 §A4); upright.* = −1 is a harness blind spot; step_025 attitude is open
   (question with RE).
+
+## Addendum 2: 24l-24m (1fa3ad9..ed08d93)
+
+Integration has 24h-24k up to 1fa3ad9 (08j). This covers the rest.
+
+| commit | change | files |
+|---|---|---|
+| ac2db5f (24l) | Plasma Cannon charge presentation state: `weaponChargeGlow` (MaterialGlowAmount 0 / 1/3 / 2/3 / 1), `weaponChargeSerial` (+1 per charge state change), `weaponChargeFizzle` (release before level 1) | Weapon.h, PlayerController.cpp, World.h/.cpp |
+| c804fe0 (24l) | `weaponChargeShotLevel` (1-3) for the level-specific fire sound | same |
+| ed08d93 (24m) | hover grounded pitch / roll per RE pass 4 A4 (corrected); suspension probes start outside walls; chassis preload narrowed to participants' bodies; charge shot level set before the shot copy (Systems' finding); WFC_RISERTEST, WFC_VEHWALLTRACE | CharacterMovement.cpp, World.cpp, PlayerController.cpp, Application.cpp/.h |
+
+### Merge notes
+- Systems M08k (agents/systems 4a84f86, charge audio) reads the 24l HudState fields; take 24l and 24m first, then Systems'
+  patches in their order.
+- CharacterMovement.cpp: the hover UpdateTurn block (the grounded branch no longer touches pitch / roll w) and the suspension
+  probe loop (the mount clamp after `mount = ...`). No other lane edits these.
+- World.cpp: the startLocalMatch 8-default preload loop is removed; World::tick now caches every participant's resolved body
+  in any match state, not only PendingMatch.
+
+### Behaviour changes to expect
+- Hover vehicles now tilt over bumps and kerbs (springs drive pitch / roll on the ground): about 1-2.5 deg crossing a 0.15 m
+  kerb at full hover speed, settling within about 1 s. The hover jump shows its authored nose-up kick and levels in the air
+  at 5 % per tick (no longer a one-step snap).
+- Glancing wall slides keep the car level: 0 deg in hover, 0-8 deg in boost (Pass 23 left 6-31 deg).
+- Memory: 2 chassis loads in TDMTEST (was 9 per match on 08i); every participant's body still loads before its spawn.
+
+### Validation (ed08d93)
+WEAPON 19, SWITCH 32, PARTICIPANT 22, TDM 43, CTF 12, SCORE 9, XFORMVIS 16, CHARGE 9, MUZZLE 5, RMUZZLE 4, PROJFX 2 (3 with
+the renderer API), FINEAIM 3, VEHPHYS 27; HEADJIT and DROPTEST unchanged. Stress: 0/760 transforms under the map on Car2 / Car4
+/ Truck3 / Tank3 / Jet4. Chaos A/B against the old behaviour:
+- Car4 ammo-crate under-floor: pre-existing (reproduced with the old behaviour).
+- Remaining stuck runs: prop pockets (horizontal blocking, level attitude), not 24m.
+
+### Open
+- Experimental's synthetic step_025 / step_050 against RE's pitch estimates (requested on this head).
+- Wall sliding friction (RE: mu 0.10-0.14 against walls) is not modelled; contacts keep all tangential speed [PARTIAL].
+- Match-start spawn frame CPU spike (52-66 ms, Integration 08i RENDERSTATS): not yet profiled.
