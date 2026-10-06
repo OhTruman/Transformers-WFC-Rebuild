@@ -81,6 +81,10 @@ static void bindFakeVehicleFxRuntime(VehicleFxDriver::Runtime& r) {
     r.stop = [](int h) { LOG_INFO("VFX stop h=%d", h); };
 }
 
+// Rendering's IRenderer::prewarmDynamicMesh (agents/rendering M53), detected at compile time like the particle API.
+template <class R> auto fxPrewarm(R& r, const render::MeshData& md, int) -> decltype(r.prewarmDynamicMesh(md), void()) { r.prewarmDynamicMesh(md); }
+template <class R> void fxPrewarm(R&, const render::MeshData&, long) {}
+
 void World::load(render::IRenderer& renderer) {
     if (std::getenv("WFC_VFX_FAKE") && *std::getenv("WFC_VFX_FAKE")) { VehicleFxDriver::Runtime fr; bindFakeVehicleFxRuntime(fr); setVehicleFxRuntime(fr); }
     else {
@@ -2086,21 +2090,20 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
             a->hasArm = true;
         }
         a->ok = true;
-        // [integration M08e] Rendering M53 / M54: prewarm the body's draw programs once per chassis load (the first
-        // robot -> vehicle transform hitched 65-166 ms compiling / linking them).
-        if (renderer_) {
-            const assets::SkinnedModel* models[3] = {&a->robot, &a->vehicle, a->hasArm ? &a->arm : nullptr};
-            for (const assets::SkinnedModel* m : models) {
-                if (!m) continue;
-                render::MeshData md; md.subs = m->subs; md.mats = m->mats;
-                renderer_->prewarmDynamicMesh(md);
-            }
-        }
     }
     if (a->ok) LOG_INFO("chassis %s (%s): robot %zu clips, vehicle %zu clips, arm %s", id.c_str(), a->def.iconic.c_str(),
                         a->robot.clips.size(), a->vehicle.clips.size(), a->hasArm ? "yes" : "no");
     else LOG_ERROR("chassis %s UNAVAILABLE: %s", id.c_str(), a->error.c_str());
     ChassisAssets* raw = a.get();
+    // Rendering M53: compile the programs / upload the textures of every form's materials now, so the first robot -> vehicle
+    // transform does not pay for them in one frame (measured 65-166 ms hitch). Once per chassis (cached; bots share it).
+    if (renderer_ && a->ok) {
+        for (const assets::SkinnedModel* m : {&a->robot, &a->vehicle, a->hasArm ? &a->arm : nullptr}) {
+            if (!m || !m->valid()) continue;
+            render::MeshData md; md.subs = m->subs; md.mats = m->mats;
+            fxPrewarm(*renderer_, md, 0);
+        }
+    }
     chassisCache_[id] = std::move(a);
     return raw;
 }
