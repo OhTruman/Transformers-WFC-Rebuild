@@ -439,6 +439,8 @@ public:
         bool overrideMaterial = false, localSpace = false, rectangle = false;
         int typeData = 0;                 // 0 sprite, 1 mesh, 2 Trail2, 3 Beam2
         int maxBeams = 0;                 // Beam2 MaxBeamCount (0 = no cap)
+        std::string sizeParam;            // SizeMultiplyLife by instance parameter (HoverFX "Size"); "" = none
+        float sizeParamConst[3] = {1, 1, 1};
         bool velocityAligned = false;     // PSA_Velocity
         int subH = 1, subV = 1, subMethod = 0;   // SubUV: 0 none, 1 linear, 2 random
         bool hasDefaultColor = false; float defaultColor[4] = {1, 1, 1, 1};   // ColorByParameter DefaultColor (linear)

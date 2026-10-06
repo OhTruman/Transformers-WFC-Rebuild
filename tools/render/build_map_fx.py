@@ -126,7 +126,7 @@ def system_runtime(name, s):
                                 'screen_alignment': req.get('ScreenAlignment', 'PSA_Square'),
                                 'subimages': [req.get('SubImages_Horizontal', 1), req.get('SubImages_Vertical', 1)]},
                    'mesh': None, 'modules': [], 'assignment_complete': L.get('assignment_complete', False),
-                   'default_color': L.get('default_color')}
+                   'default_color': L.get('default_color'), 'size_param': L.get('size_param')}
             if td.get('Mesh'):
                 lod['mesh'] = {'object': td['Mesh'], 'gltf': mesh_gltf(td['Mesh']),
                                'override_material': bool(td.get('bOverrideMaterial', False))}
@@ -202,14 +202,43 @@ def library(mapname):
             if s.get('missing_in'): continue
             import objtree
             op = objtree.package(pkn)
-            for e in s['emitters']:
-                for L in e['lods']:
-                    if not any(m['module'] == 'PMI_ColorByParameter' for m in L.get('compiled_modules', [])): continue
-                    try:
-                        tail = pstream.lod_tail(op, op._idx[L['lod'].lower()])
-                        L['default_color'] = default_color(tail, len(pstream.parse(tail)['records']))
-                    except Exception:
-                        L['default_color'] = None
+            # M46 / M47: ParticleModuleSizeMultiplyLife driven by an instance parameter (DistributionVectorParticleParameter,
+            # RE pass 4: the HoverFX 'Size'). The LODs' Modules arrays are stripped by the cook, so a LOD uses the module
+            # when its serialized bytes reference the module's export index (big-endian int32; RE raw scan: CarHover_A's
+            # shared _9193 is in all 7 level-0 LODs and no level-1 LOD) [HIGH]
+            import struct as _st
+            pidx = {p.object_path(k + 1).lower(): k for k, _e in enumerate(p.exports)}
+            mods = []
+            for i2, e2 in enumerate(p.exports):
+                path2 = p.object_path(i2 + 1)
+                if p.class_name(e2) == 'DistributionVectorParticleParameter' and path2.lower().startswith(t.lower() + '.')                         and 'sizemultiplylife' in path2.lower():
+                    d2 = _R([pk]).obj(path2.lower()) or {}
+                    mi = pidx.get(path2.rsplit('.', 1)[0].lower())
+                    if mi is not None:
+                        mods.append((_st.pack('>i', mi + 1), {'name': d2.get('ParameterName'),
+                                                              'constant': d2.get('Constant', [1.0, 1.0, 1.0])}))
+            if mods:
+                for e in s['emitters']:
+                    for L in e['lods']:
+                        li = pidx.get(L['lod'].lower())
+                        if li is None: continue
+                        ex = p.exports[li]
+                        blob = p.data[ex['serial_offset']:ex['serial_offset'] + ex['serial_size']]
+                        for pat, sp in mods:
+                            offs = [k for k in range(4, len(blob) - 3) if blob[k:k + 4] == pat]
+                            if not offs: continue
+                            # guards (RE: a raw int32 can collide with float bits / counts): exactly one hit, sitting in
+                            # an object array - preceded by its count (1..32) or by another export of this system
+                            # observed layout (all 18 Streets hits): int32 count (1) + one byte + the int32 module index
+                            prev = _st.unpack_from('>i', blob, offs[0] - 4)[0]
+                            cnt5 = _st.unpack_from('>i', blob, offs[0] - 5)[0] if offs[0] >= 5 else 0
+                            in_array = 1 <= prev <= 32 or 1 <= cnt5 <= 32 or (0 < prev <= len(p.exports) and
+                                       p.object_path(prev).lower().startswith(t.lower() + '.'))
+                            if len(offs) == 1 and in_array:
+                                L['size_param'] = sp
+                            else:
+                                print('  size param: %s %s: %d hit(s), prev int %d - not bound' % (t, L['lod'].split('.')[-1],
+                                                                                                  len(offs), prev))
             out[t] = s
     return out
 

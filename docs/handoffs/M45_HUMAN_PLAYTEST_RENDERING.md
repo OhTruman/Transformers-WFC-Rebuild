@@ -56,7 +56,7 @@ That is undefined behaviour a driver may legitimately answer with a page fault /
 - release_path_check PASS: 0 GL debug errors, 0 out-of-bounds draws, 0 long GPU frames.
 - 9-match frontend map chain (Streets, Seed, Berth, Gorge, Complex, Rust, Debris, Molten, Streets; persistent renderer), fixed build: 0 GL debug errors, 0 context resets, 0 out-of-bounds draws, 0 GPU frames over 250 ms, 0 shader failures. Private memory after unload 3.0–4.1 GB, no monotonic growth.
 - Streets visual suite: 6 / 6 PASS, Streets cameras refdiff 0.000.
-- Renderer-owned GL objects constant across matches. Live textures grow +1 per match, all in `uiTextures` (GFx side) → **Frontend**.
+- Renderer-owned GL objects constant across matches. Live textures +6 over the chain are GFx level-thumbnail textures cached once per distinct map (bounded, about +11 per session; Frontend, by design): not a leak.
 
 **Not reproduced:** no driver reset or GL error occurred here, so the human's resets remain UNKNOWN. M45 is the strongest concrete candidate.
 
