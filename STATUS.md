@@ -602,6 +602,12 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING BEAM NOISE / SINE WAVE PASS M56-M58 (2026-10-05, agents/rendering)
+- **Beam noise and BeamSineWave** are rendered per RE's decode of the native beam fill (M56 / M57). Repair / drain beams show twisting strands pinned at both ends; noisy beams are re-drawn lightning. Beams and trails are joined strips. Still open: the offset frame is HIGH (component space, from the call chain); BeamSource / Target particle / socket methods aren't applied (the component location is used).
+- **Frontend:** the title's placed emitters prewarm during the load (M58). This removes the last first-frame stall Frontend measured.
+- **Validation:** visual suite + flow 11/11 PASS; Streets references unchanged (also after AssetTools 439a8ce); 0 GL errors.
+- **Render data:** regenerate every map and frontend scene (build_map_fx beam modules, plus AssetTools 439a8ce material changes).
+
 ## RENDERING FOCUSED VISUAL-FIDELITY PASS M51-M55 (2026-10-05, agents/rendering f875640)
 - **Molten:** the floor flicker / box was RainPuddles_Mat sampling the scene with clip-space coordinates (WFC's `ScreenAlign` flag was ignored). Fixed in matc plus the UE3 screen-UV convention (M51). The "looking down" perf drop was not reproduced (GPU 0.3-0.7 ms); WFC_FRAMELOG is available to catch it.
 - **Orbital Debris:** the authored Spacedome was clipped by a 20 km far plane. The far plane now covers the world (M51) and the authored nebula + stars show.
