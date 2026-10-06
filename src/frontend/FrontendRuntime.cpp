@@ -639,14 +639,14 @@ void FrontendRuntime::updateAudio(float dt) {
         }
         frontEndMusic_ = false;
         if (lv == LevelKind::PartyLobby || lv == LevelKind::GameLobby) {
-            if (audio_) audio_->uiLevelStarted(flow_.levelMap());
+            if (audio_) { core::prof::Scope prof("audio.levelStart"); audio_->uiLevelStarted(flow_.levelMap()); }
             FlowTrace::emit("audio.uiLevel", {{"level", flow_.levelMap()}});
         }
         lastAudioLevel_ = lv;
     }
     if (lv == LevelKind::FrontEnd && flow_.frontEndStarted() && !frontEndMusic_) {
         frontEndMusic_ = true;
-        if (audio_) audio_->uiLevelStarted("UI_FrontEnd_m");
+        if (audio_) { core::prof::Scope prof("audio.levelStart"); audio_->uiLevelStarted("UI_FrontEnd_m"); }
         FlowTrace::emit("audio.uiLevel", {{"level", "UI_FrontEnd_m"}});
     }
     // Frontend-owned Kismet triggers for the level audio (fscommands other than the [FRONTEND START] one, which
@@ -757,7 +757,13 @@ void FrontendRuntime::updateMoviePlayer(float dt, const platform::InputFrame& in
     if (!video_) return;
     // A newly opened movie starts at its first frame: the long frame that opened it (e.g. a blocking scene load) is
     // not counted as playback time (the Activision logo used to start 0.25 s in).
-    video_->advance(videoFramed_ ? dt : 0.0f);
+    // The loading underlay / boot hold (no Kismet movie, no synced audio) advances at most one movie frame per update:
+    // after a blocking frame (a scene load) the decoder would otherwise decode the whole backlog at once (7 frames, 48 ms on
+    // the frame the title opens) instead of the picture pausing for the stall [PC ADAPTATION: the original Bink loading
+    // movie decodes on its own thread]. Kismet movies keep real time (their audio is synced to it).
+    float advanceBy = videoFramed_ ? dt : 0.0f;
+    if (m.empty()) advanceBy = std::min(advanceBy, 1.0f / 30.0f);
+    video_->advance(advanceBy);
     const uint8_t* px = nullptr;
     int vw = 0, vh = 0;
     uint64_t serial = 0;
@@ -834,9 +840,9 @@ void FrontendRuntime::updateScene(float dt) {
 void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     platform::InputFrame in = input;
     script_.applySynthetic(in);
-    flow_.tick(dt);
-    runNativeShims();
-    updateMoviePlayer(dt, in);
+    { core::prof::Scope prof("flow.tick"); flow_.tick(dt); }
+    { core::prof::Scope prof("shims"); runNativeShims(); }
+    { core::prof::Scope prof("movie.player"); updateMoviePlayer(dt, in); }
     // Full-screen movie mode (BeginMovieMode: UI event 12, the UI hidden) takes all input; after the movie the menus
     // see input again once the skip key is released, so the skip press does not also act on the menu [HIGH].
     bool fullScreenMovie = !flow_.kismetMovie().empty() || !flow_.scriptMovie().empty();
@@ -845,9 +851,9 @@ void FrontendRuntime::update(const platform::InputFrame& input, float dt) {
     platform::InputFrame none;
     none.mouseX = in.mouseX; none.mouseY = in.mouseY;
     if (presenter_) presenter_->update(flow_, movieInputHold_ ? none : in, dt);
-    script_.update(flow_, dt);
-    updateAudio(dt);
-    updateScene(dt);
+    { core::prof::Scope prof("script"); script_.update(flow_, dt); }
+    { core::prof::Scope prof("+audio.update"); updateAudio(dt); }
+    { core::prof::Scope prof("+scene.update"); updateScene(dt); }
 }
 
 void FrontendRuntime::updateInMatch(const platform::InputFrame& input, float dt) {
