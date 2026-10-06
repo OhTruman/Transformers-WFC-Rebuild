@@ -11,6 +11,8 @@
 #                 LastMatch<class> (Frontend semantics 2026-10-06; xp=0 awards are legitimate when CanGainXp is false)
 #   saved_A       the profile after A holds XP<class> == run A's running total
 #   reload_B      the profile is NOT changed by B's boot (no loss / reset on load): B's first award total = saved A + award
+#   handoff       Gameplay's produced awards (WFC_XPLOG "XP p<player> txn <id> ...") for the local player == the transactions
+#                 Frontend consumed (progression.xp): none lost, none invented, none doubled between the lanes
 #   saved_B       the profile after B = min(saved A + run B's XP incl. challenge XP, 355000) per class; tiers never decrease
 #
 #   .\tools\fidelity\progression-persistence.ps1 -Root work\ab\<target> -OutDir <dir> [-Bots 0] [-Goal 3] [-ReportOnly]
@@ -40,7 +42,7 @@ function RunOnce([string]$tag) {
     if (-not $ReportOnly -and -not (Test-Path $flow)) {
         if (-not (Wait-WfcGpu)) { return $false }
         $e = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $script; WFC_FLOWLOG = $flow; WFC_FLOW_TIMEOUT = "600";
-                WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2" }
+                WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2"; WFC_XPLOG = "1" }   # Gameplay's producer log (7ed5faf+)
         if ($Bots -gt 0) { $e.WFC_BOTS = "$Bots" } else { $e.WFC_LIFECYCLE = "$Goal" }
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
         $null = Invoke-WfcExe $exe $work $e "run_$tag.log" 900
@@ -75,6 +77,17 @@ else {
             $awarded = @($aw | Where-Object { [long]$_.xp -gt 0 })
             if ($tag -eq "A") { Res "awarded" $(if ($awarded.Count) { "PASS" } else { "UNKNOWN" }) ("run A: {0} XP awards totalling {1} ({2})" -f $awarded.Count, (($awarded | ForEach-Object { [long]$_.xp } | Measure-Object -Sum).Sum), ((@($aw | ForEach-Object { "$($_.transaction):$($_.xp)" }) | Select-Object -First 8) -join " ")) "Frontend/Gameplay" }
             $dup = @($aw | Group-Object transaction | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+            # producer -> consumer hand-off by transaction id (the local player = the player whose ids the consumer saw)
+            $wl = Join-Path $OutDir "wfc_$tag.log"
+            $prod = if (Test-Path $wl) { @(Select-String $wl -Pattern '\] XP p(\d+) txn (\d+) (\S+) \+(-?\d+)' | ForEach-Object { [pscustomobject]@{ p = $_.Matches[0].Groups[1].Value; txn = $_.Matches[0].Groups[2].Value; ev = $_.Matches[0].Groups[3].Value; xp = [long]$_.Matches[0].Groups[4].Value } }) } else { @() }
+            if (-not $prod.Count) { Res "handoff_$tag" "SKIP" "run ${tag}: no WFC_XPLOG producer lines (Gameplay 7ed5faf+ not in this build)" "Experimental" }
+            else {
+                $cons = @($aw | ForEach-Object { "$($_.transaction)" } | Select-Object -Unique)
+                $local = @($prod | Where-Object { $cons -contains $_.txn } | ForEach-Object { $_.p } | Select-Object -First 1)[0]
+                $mine = @($prod | Where-Object { $_.p -eq $local } | ForEach-Object { $_.txn } | Select-Object -Unique)
+                $lost = @($mine | Where-Object { $cons -notcontains $_ }); $extra = @($cons | Where-Object { $mine -notcontains $_ })
+                Res "handoff_$tag" $(if ($null -eq $local) { "FAIL" } elseif ($lost.Count -or $extra.Count) { "FAIL" } else { "PASS" }) ("run {0}: local player p{1}; produced {2} / consumed {3}; produced but not consumed {4}; consumed but not produced {5}" -f $tag, $local, $mine.Count, $cons.Count, $(if ($lost.Count) { $lost -join "," } else { "none" }), $(if ($extra.Count) { $extra -join "," } else { "none" })) "Gameplay/Frontend"
+            }
             Res "no_duplicates_$tag" $(if ($dup.Count) { "FAIL" } else { "PASS" }) ("run {0}: transaction ids awarded more than once: {1}" -f $tag, $(if ($dup.Count) { $dup -join "," } else { "none" })) "Frontend"
             if ($me.Count) { $prof = if ($tag -eq "A") { $profA } else { $profB }; $rx = RunXp $tag
                 $badM = @($rx.Keys | Where-Object { [long]$prof["LastMatch$_"] -ne $rx[$_] })
