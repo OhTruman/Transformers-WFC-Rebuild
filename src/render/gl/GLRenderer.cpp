@@ -53,6 +53,7 @@ namespace {
 
 class GLRenderer final : public IRenderer {
 public:
+    ~GLRenderer() override { wfc::Pipeline::clearProgramCache(); }   // M54: cached programs belong to this context
     bool init() override {
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(GL_LEQUAL);
@@ -476,7 +477,11 @@ public:
             LOG_WARN("frontend scene %s: world.glb missing", dir.c_str());
             return false;
         }
-        if (!loadMapRenderData(dir)) return false;
+        loadingFrontendScene_ = true;
+        bool okData = loadMapRenderData(dir);
+        loadingFrontendScene_ = false;
+        if (!okData) return false;
+        wfc_.skipMaterialPrewarm();          // M54: a menu backdrop never draws the match's weapon / effect materials
         sceneMesh_ = uploadMesh(world);
         sceneDir_ = dir;
         LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
@@ -500,6 +505,7 @@ public:
         endFrame();
     }
     void setFrontendSceneDraw(std::function<void(IRenderer&)> f) override { sceneDraw_ = std::move(f); }
+    bool loadingFrontendScene_ = false;
     int loadPreviewBody(const std::string& gl, const std::vector<std::string>& sets, const std::string& anim) override {
         auto b = std::make_unique<PreviewBody>();
         const std::string content = wfc::Pipeline::contentRoot();
@@ -541,6 +547,10 @@ public:
             }
         }
         b->clip = b->model.clipByName(resolved);
+        if (wfc_.active()) {                 // M54: its materials compile now (load), not on its first drawn frame
+            MeshData md; md.subs = b->model.subs; md.mats = b->model.mats;
+            wfc_.prewarmDynamic(md);
+        }
         if (resolved != anim) LOG_INFO("preview body %s: %s -> %s (AnimSet chooser)", gl.c_str(), anim.c_str(), resolved.c_str());
         if (b->clip < 0) LOG_WARN("preview body %s: sequence %s not in its AnimSets; reference pose", gl.c_str(), resolved.c_str());
         else LOG_INFO("preview body %s: %s (%.2f s)", gl.c_str(), resolved.c_str(), b->model.clips[(size_t)b->clip].duration);
@@ -827,6 +837,7 @@ public:
         sceneSampled_ = false;
         bool ok = wfc_.load(mapName);
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
+        if (ok && !loadingFrontendScene_) wfc_.requestMaterialPrewarm();   // M54: after the world upload, yielding
         return ok;
     }
 

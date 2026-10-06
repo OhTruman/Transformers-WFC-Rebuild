@@ -138,6 +138,10 @@ public:
     static std::string renderDataRoot();              // WFC_RENDER_DATA, else the first work/render above the exe holding data
     static std::string contentRoot();
     void release();                                   // delete every GL object, reset to the unloaded state
+    static void clearProgramCache();                  // M54: linked programs kept across loads (renderer teardown)
+    void prewarmMaterials();                          // M54: effect / weapon materials, yielding (map loads)
+    void requestMaterialPrewarm() { prewarmPending_ = true; }   // run at the end of the world mesh upload
+    void skipMaterialPrewarm() { prewarmDone_ = true; prewarmPending_ = false; }   // frontend scenes
     void setLoadYield(std::function<void()> y) { loadYield_ = std::move(y); }
     void yieldLoad() { if (loadYield_ && !inLoadYield_) { inLoadYield_ = true; loadYield_(); inLoadYield_ = false; } }
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile): queued, drawn after post onto the back buffer.
@@ -485,6 +489,8 @@ private:
         bool hasTarget = false; float target[3] = {0, 0, 0};
     };
     int nextFxId_ = 1;
+    int progCacheHits_ = 0;
+    bool prewarmDone_ = false, prewarmPending_ = false;
     float worldRadius_ = 0.0f;
     std::map<std::string, FxSystem> fxSystems_;
     std::vector<FxInstance> fxInstances_;
