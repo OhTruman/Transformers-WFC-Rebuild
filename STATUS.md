@@ -3,6 +3,37 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08e (2026-10-05) — Create a Character fix, menu hitches, per-chassis vehicle FX — branch `integration/milestone-08e`
+
+On 08d (822535f). Render data regenerated (Standard incl. every frontend scene + 10 MP maps).
+
+| lane | head | content |
+|---|---|---|
+| agents/frontend | 9068069 | 3185545: Create a Character shrink / shift after a weapon slot (an AVM1 target bug that a661851 exposed; human-reported). 5090ba0: scene first draw under the loading screen. 4f1462b: script steps through the movie bridge. e607961: frame limiter (PC extension, off by default). QA panel (debug only, WFC_QA) |
+| agents/rendering | f875640 | M51: Molten puddle box, Debris sky far plane. M52: template library from class data. M53 / M54: prewarm in the load, program cache; the first-lobby-frame stall fixed. M55: Beam2 taper / Trail2 tessellation. M46 / M47: HoverFX Size per module |
+| agents/systems | c5bbe63 | M08e: per-chassis vehicle FX (HoverFX / BoostFx / JumpFX / RamFX at each chassis' sockets, team energon colour, hover Size); the glue patch re-applied on 08c's World (supersedes 08d's) |
+
+**Integration:**
+- World::load binds VehicleFxDriver to Rendering's particle runtime, so the hand-made Optimus vehicle FX are off.
+- Each chassis' robot / vehicle / arm model is prewarmed once at chassis load (prewarmDynamicMesh).
+- The Gameplay Pass 24 addendum waits for Gameplay Pass 24.
+
+**Validation:**
+- Builds and suites:
+  - clean Debug / Release;
+  - frontend 79 / 0, harness 191 / 0;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 21, chassis 13;
+  - transform 0 / 1520, chaos 0 / 0 / 0;
+  - jitter unchanged; audio 617 / 0.
+- Map suite: 8 / 8 versus maps.
+- release_path_check PASS; visual suite 11 / 11 (Streets refdiff 0.000; lobby frames differ by the animated faction emblems).
+- 10-match frontend soak:
+  - bodies / weapons / both factions correct;
+  - vehicle FX tinted by team (violet Decepticon, red Autobot, neutral gold in DM; each chassis its own);
+  - 0 timeouts, 0 out-of-bounds draws / context resets;
+  - textures plateau at 78.
+
 ## INTEGRATION MILESTONE 08d (2026-10-05) — vehicle / weapon / projectile / beam audio by identity — branch `integration/milestone-08d`
 
 - On 08c (fdffa7f): Systems 234576b, plus the Systems integration glue patch on 08c's World / PlayerController. The Systems branch's own World copy predates 08c, so the 08c World was kept.
