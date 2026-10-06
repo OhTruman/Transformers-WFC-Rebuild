@@ -17,6 +17,14 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONES 63-64 — RIBBON WIDTH, LOCATIONEMITTER / PARTICLE TRAILS; MOLTEN PERFORMANCE (2026-10-06)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Ribbon width | Beam / trail vertex pairs are offset by (2V - 1) x Size x cross(view, dir): full width 2 x Size; we drew Size | RE s13 addendum 2 (Xenos VS emulated) | HIGH | M63: authored widths |
+| LocationEmitter / Direct | Payload decoded from the LOD tail; selection, space conversion, inheritance, born-this-frame rule, Direct re-snap per RE s14 | RE s14 (spawn / update runners) | CONFIRMED (sub-frame terms PARTIAL) | M64: Streets 57 / 59 modules bound |
+| Trail2 with LocationEmitter | One chain through the emitter's own particles in spawn order, <= 1 per tick, cap MaxTrailCount x MaxParticleInTrailCount | RE s14 | CONFIRMED | M64: shell casings trail smoke (was no ribbon) |
+| Molten "performance drop looking down" | Not reproduced on the current build: 2560x1440 look-down sweep (76 spawns x 8 views) median GPU 0.64 ms, max 2.2 ms; real-time CPU frame 1.4-1.8 ms looking down vs 2.0-2.2 forward (fewer draws); no first-use creation after load. Likely the pre-M54 / M58 first-draw stalls on the human's build | WFC_FRAMELOG, WFC_PERFLOG, WFC_RENDERSTATS | HIGH (not reproduced) | No change; WFC_FRAMELOG at the spot if it recurs |
+
 ## MILESTONES 61-62 — BEAM / TRAIL UV LAYOUT, GORGE VERTEX LIGHTMAPS (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

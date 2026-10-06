@@ -602,6 +602,11 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING M63-M64 (2026-10-06)
+- Beams and trails draw at their authored width (they were half width).
+- LocationEmitter / Direct and particle-placed Trail2 chains per RE s14: shell casings, tracers and debris effects place their particles on their source emitters.
+- Molten look-down performance: not reproduced on the current build (details in FIDELITY M63-M64).
+
 ## RENDERING M61-M62 (2026-10-05)
 - Beam / trail UV layout per RE's decode of both fills: beams were already right; trails now start at the newest point and run by distance.
 - Gorge's 4 unbound vertex-lightmap sections bind through AssetTools' _WFC_SRCVERT.
