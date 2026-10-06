@@ -152,6 +152,16 @@ public:
     bool active() const { return active_; }
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
     void setCharacterColors(const CharacterColors& c) { charColorsBy_[drawOwner_] = c; }
+    // M70 per-owner runtime material parameters for dynamic draws (held weapon SetMaterialParameter)
+    void setDrawMaterialParam(const std::string& name, const float v[4]) {
+        auto& L = ownerParams_[drawOwner_];
+        for (auto& kv : L) if (kv.first == name) { std::copy(v, v + 4, kv.second.begin()); return; }
+        L.push_back({name, {v[0], v[1], v[2], v[3]}});
+    }
+    void clearDrawMaterialParam(const std::string& name) {
+        auto& L = ownerParams_[drawOwner_];
+        L.erase(std::remove_if(L.begin(), L.end(), [&](const auto& kv) { return kv.first == name; }), L.end());
+    }
     void setDrawOwner(int o) { drawOwner_ = o < 0 ? 0 : o; }
     void setDisplayGamma(float g) { displayGamma_ = g > 0.5f && g < 5.0f ? g : 2.2f; }
     // per-frame draw counters (always on, cheap) and resource counts for IRenderer::renderDiagnostics
@@ -265,6 +275,8 @@ private:
     float displayGamma_ = 2.2f;                        // Xe-TransEngine.ini DisplayGamma / profile Brightness
     float canvasInvGamma_ = 0.0f;                      // > 0 while drawing Canvas tiles
     const std::vector<std::pair<std::string, std::array<float, 4>>>* drawParams_ = nullptr;   // per-draw runtime params
+    std::map<int, std::vector<std::pair<std::string, std::array<float, 4>>>> ownerParams_;   // M70 by draw owner
+    bool inDynamicDraw_ = false;
     std::map<std::string, std::string> miaMaterial_;   // MaterialInstanceActor (lower) -> MIC path (lower)
     std::map<std::string, std::vector<std::pair<std::string, std::array<float, 4>>>> matParams_;   // MIC -> params
     bool deferTrans_ = false, flushingTrans_ = false;

@@ -199,6 +199,17 @@ def main():
     mats = sorted(names - {None}) + extra
     tr = TexResolver(repo, out)
 
+    # M70: weapon mesh MaterialParameterModifiers (TnWeaponMesh.SetMaterialParameter(index, value) sets the named
+    # parameter on the held weapon's material, e.g. PlasmaCannon_WEPMESH [1] = MPT_WeaponSpecific 'Overheat' = the charge
+    # glow): those names are runtime parameters of WEP_ materials
+    weapon_rt = set()
+    for k in repo.index:
+        if '_wepmesh' not in k or k.count('.') != 1: continue
+        for mod in (repo.obj(k) or {}).get('MaterialParameterModifiers') or []:
+            f = {x.get('name'): x.get('value') for x in mod} if isinstance(mod, list) else dict(mod)
+            if f.get('ParameterName') and f.get('ParameterName') != 'None': weapon_rt.add(f['ParameterName'])
+    if weapon_rt: print('weapon material parameters (runtime): %s' % ', '.join(sorted(weapon_rt)))
+
     def run():
         res = {}
         for mp in mats:
@@ -209,7 +220,8 @@ def main():
                     rt = 'all'                 # Matinee-driven MIC (MaterialInstanceActor): parameters per frame
                 if mp in extra and mp.split('.')[0].upper().startswith('UI_'):
                     rt = 'all'                 # Canvas materials: parameters set per draw (MaterialInstanceDynamic)
-                mc = matc.MatCompiler(repo, mp, tr, runtime_params=rt)
+                wep_rt = weapon_rt if mp.split('.')[0].upper().startswith('WEP_') else ()
+                mc = matc.MatCompiler(repo, mp, tr, runtime_params=rt, extra_runtime=wep_rt)
                 glsl, info = mc.build()
                 res[mp] = {'glsl': glsl, 'info': info, 'error': None}
             except Exception as ex:

@@ -1024,6 +1024,8 @@ public:
     // M59: requests are remembered and replayed after every map's render data loads. Callers prewarm once per
     // model (Gameplay: once per chassis, when its assets are cached), possibly before the first map's render data is
     // loaded, and every map load resets the pipeline's programs / textures.
+    void setDrawMaterialParam(const std::string& n, const float v[4]) override { wfc_.setDrawMaterialParam(n, v); }
+    void clearDrawMaterialParam(const std::string& n) override { wfc_.clearDrawMaterialParam(n); }
     void prewarmDynamicMesh(const MeshData& m) override {
         std::string key;
         for (const Material& mt : m.mats) key += mt.wfcName + "|" + mt.sourceName + ";";

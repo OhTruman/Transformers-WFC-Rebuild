@@ -1786,6 +1786,19 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     // per-draw runtime parameters: Canvas tiles pass their own; otherwise the material's Matinee-driven values
     // (setMaterialParam on its MaterialInstanceActor); unset = authored
     const std::vector<std::pair<std::string, std::array<float, 4>>>* params = drawParams_;
+    if (!params && inDynamicDraw_ && !P.rtLoc.empty()) {   // M70: the draw owner's parameters (held weapon)
+        auto op = ownerParams_.find(drawOwner_);
+        if (op != ownerParams_.end() && !op->second.empty()) params = &op->second;
+        static std::vector<std::pair<std::string, std::array<float, 4>>> diag = [] {
+            std::vector<std::pair<std::string, std::array<float, 4>>> d;   // diagnostics: WFC_DRAWPARAM=name,value
+            if (const char* e = std::getenv("WFC_DRAWPARAM")) {
+                std::string t = e; size_t c = t.find(',');
+                if (c != std::string::npos) { float v = (float)std::atof(t.c_str() + c + 1); d.push_back({t.substr(0, c), {v, v, v, 1}}); }
+            }
+            return d;
+        }();
+        if (!params && !diag.empty()) params = &diag;
+    }
     if (!params && !P.rtLoc.empty() && !matParams_.empty()) {
         auto mp = matParams_.find(P.material);
         if (mp != matParams_.end()) params = &mp->second;
@@ -2188,7 +2201,9 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model) {
         if (const ShadowProjector* p = projectorFor(envForm_, scratch)) castCharacterShadow(g, model, *p);
     }
     dynamicMaskDraw_ = envSamples_ != nullptr;
+    inDynamicDraw_ = true;
     drawSubs(g, model, true);
+    inDynamicDraw_ = false;
     dynamicMaskDraw_ = false;
     envSamples_ = nullptr;
     envForm_ = -1;
