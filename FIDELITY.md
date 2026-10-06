@@ -17,6 +17,14 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## MILESTONES 59-60 — PREWARM REPLAY, BEAM SOURCE / TARGET METHODS (2026-10-05)
+| Item | Finding | Evidence | Mark | Rebuild |
+|---|---|---|---|---|
+| Prewarm across matches | Gameplay prewarms once per chassis when cached; each map load reset the renderer's programs / textures, and requests made before render data loaded were dropped | two-match flow, WFC_RENDERSTATS | CONFIRMED | M59: requests remembered and replayed after every map load. With Gameplay 2f258b6 (all match chassis cached at the match load): no mid-match chassis load, no first-use at transforms |
+| Beam source / target | Particle methods never read a particle (BeamMethod Target): Default path. Emitter source = component origin; Emitter target needs a name, else the distribution. Default = distribution at EmitterTime through the component LocalToWorld (raw if bAbsolute); a named Default target reads the instance parameter first. UserSet = SetBeam*Point array, empty -> distribution. Re-resolved every tick unless locked. Tangents: Direct / Emitter = component X; Distribution raw; x Strength. Distance method: source + X x Distance | RE pass 5 s11: ResolveSourceData 0x8302F320 / ResolveTargetData 0x8302F738 | CONFIRMED | M60: repair squib arcs from its Source curve into the centre; TF_Death_Buildup lightning to its Target curve; segment beams unchanged (VISUALLY VERIFIED). Base path Hermite with the tangents (stock, HIGH) |
+| Seed / Berth darker than 06b | The maps' authored ColorCorrectionTextures are contrast S-curves (Seed desaturation40: 33->18, 99->82; Berth clut_mp40: 33->21, 99->108), applied since M25 in UE3 order (grade, gamma, LUT); 06b applied none. NOCLUT: Seed median 12 -> 24, Berth 9 -> 23 | CLUT diagonal; toggles at Experimental's spawn | HIGH (human check vs original footage kept) | No change |
+| Gorge vertex lightmaps | 1576 cooked samples vs 1616 glTF vertices (two sections, ~40 duplicated at export) | renderer warning | CONFIRMED (export) | AssetTools asked for a per-vertex cooked index |
+
 ## MILESTONES 56-58 — BEAM NOISE + SINE WAVE (native beam fill), FRONTEND EMITTER PREWARM (2026-10-05)
 | Item | Finding | Evidence | Mark | Rebuild |
 |---|---|---|---|---|

@@ -602,6 +602,11 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING M59-M60 (2026-10-05)
+- M59 prewarm replay (with Gameplay 91672f1 / 2f258b6: no transform or mid-match hitch, verified over two matches).
+- M60 Beam2 source / target methods per the native resolvers: beams without a game end point now draw from their authored distributions.
+- Seed / Berth darkness is the authored per-map CLUT (HIGH); Gorge vertex lightmaps wait on an AssetTools export index.
+
 ## RENDERING BEAM NOISE / SINE WAVE PASS M56-M58 (2026-10-05, agents/rendering)
 - **Beam noise and BeamSineWave** are rendered per RE's decode of the native beam fill (M56 / M57). Repair / drain beams show twisting strands pinned at both ends; noisy beams are re-drawn lightning. Beams and trails are joined strips. Still open: the offset frame is HIGH (component space, from the call chain); BeamSource / Target particle / socket methods aren't applied (the component location is used).
 - **Frontend:** the title's placed emitters prewarm during the load (M58). This removes the last first-frame stall Frontend measured.
