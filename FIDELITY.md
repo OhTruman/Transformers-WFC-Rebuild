@@ -3427,8 +3427,12 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   - weaponChargeSerial (+1 per state change). Sounds: → 1 play event 9; → 3 stop 9, play 10; → 4 stop 10, play 11; → 0 stop
     9 / 10 / 11, play 12. Muzzle flash StartMuzzleFlash(0 / 1 / 2 / 3 / 12);
   - weaponChargeFizzle (+1 on a release before level 1: event 22).
-- PARTIAL: playing them. The glow needs a renderer material parameter for the held weapon mesh (Rendering); the event sounds
-  need a charge path in WeaponAudio (Systems). Both have been sent the contract.
+- Playback (24p):
+  - Glow: the held weapon draw sets the material scalar "Overheat" (Plasma Cannon WEPMESH MaterialParameterModifiers[1] =
+    MPT_WeaponSpecific "Overheat", cooked data) to weaponChargeGlow for that draw only, through Rendering's
+    setDrawMaterialParam / clearDrawMaterialParam (M70, compile-time detected).
+  - Sounds: Systems M08k reads the HudState serials (RE confirmed 9 / 10 / 11 / 12 = WP_Looping / LoopingSecondary /
+    LoopingTertiary / LoopingTail, 22 = WP_NoAmmoFire).
 - WFC_CHARGETEST: a 0.3 s tap fires nothing; 1.0 / 2.5 / 4.0 s holds fire 80 / 150 / 230 m/s, 115 / 140 / 179 damage, 25 / 50 / 100
   ammo (+4 drained at full charge) with the Sm / Med / Lrg trail; charge then switch = no shot.
 
