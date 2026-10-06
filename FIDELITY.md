@@ -285,6 +285,11 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   defaults], competitiveScoreEnabled 0 [HIGH: not authored]. DOM / KOTH objective countdown [PARTIAL].
 
 ### Vehicle handling [RE TARGETED_PASS4 §A CONFIRMED ORIGINAL; measured with WFC_VEHPHYS]
+- Open [HIGH / human check]: grounded pitch over small steps. A 0.25 m riser pitches the hover body about 0.5° (Experimental
+  step_025), because UpdateTurn replaces ω each step and the spring torques act only within that step. Not yet traced:
+  whether the original applies the correction before or after PhysX integrates the same tick's spring forces. Asked RE.
+- Drop recovery (WFC_DROPTEST): Car2 / Truck3 / Tank3 land at about 18 m/s, compress 0.89 / 1.03 / 1.14 m and recover over
+  about 1.5 s without overshoot (Experimental drop10 "instant" = their check catching the fall-through of the rest height).
 Human playtest: jumps too high in some situations, violent wall bounces, teetering / rolling about an odd axis, not settling.
 Each RE item was compared with the code and measured (Streets, flat run-up into a vertical wall; Sideswipe car, Optimus truck,
 Warpath tank).
