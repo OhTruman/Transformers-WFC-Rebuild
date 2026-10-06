@@ -115,6 +115,11 @@
 - While unbound, the hand-made Optimus effects stay as the fallback. Once bound, they are off, so nothing is drawn twice.
 - `WFC_VFX_FAKE=1` binds a recording stand-in that logs spawns, params and stops.
 
+**Rendering confirmation:** the calls match the current API exactly (no changes since e15862f / 3f44104). Integration must also:
+- merge Rendering's additive f875640 (Trail2 tessellation, which helps the Trails_Jet_A wing-tip trails; Beam2 taper) and aa1fb2a (class-data templates);
+- regenerate the render data with **build_map_fx**;
+- note that `Size` only scales templates whose SizeMultiplyLife module is parameter-driven, as authored.
+
 **Validated in the 08c snapshot with `WFC_VFX_FAKE`:**
 - Car2 / Jet4 / Truck3 / Tank3, cycling robot → vehicle → boost → jump → robot.
 - Each class spawns its own templates at its sockets, and spawns == stops (25/25, 39/39, 23/23, 23/23).
