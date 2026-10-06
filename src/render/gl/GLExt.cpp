@@ -1,6 +1,7 @@
 #include "render/gl/GLExt.h"
 #include "core/Log.h"
 
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <map>
@@ -92,6 +93,12 @@ bool gQActive[3] = {false, false, false};
 int gQi = 0;
 bool gBegun = false;                 // a query was begun this frame (EndQuery only then: else GL_INVALID_OPERATION)
 double gLastGpuMs = 0.0;
+double gLastCpuMs = 0.0;      // the CPU span of the frame gLastGpuMs belongs to
+// CPU time between the query's begin and end of the same frame: TIME_ELAPSED is GPU-timeline time between the two
+// markers, so it includes the GPU waiting for commands the CPU had not submitted yet (driver work inside the frame).
+// gpu ~ cpu span => a CPU-side stall inside the frame, not GPU load (no TDR risk); gpu >> cpu => real GPU work.
+std::chrono::steady_clock::time_point gQBegin[3];
+double gQCpuMs[3] = {0, 0, 0};
 }
 
 void gpuTimerBegin() {
@@ -107,23 +114,32 @@ void gpuTimerBegin() {
         unsigned long long ns = 0;
         GetQueryObjectui64v(gQ[slot], kResult, &ns);
         gLastGpuMs = (double)ns / 1.0e6;
+        gLastCpuMs = gQCpuMs[slot];
         gQActive[slot] = false;
         static int logged = 0;
         if (gLastGpuMs > 250.0 && logged++ < 50)
-            LOG_WARN("GPU frame time %.1f ms (Windows TDR resets the driver at ~2000 ms of GPU work)", gLastGpuMs);
+            LOG_WARN("GPU frame time %.1f ms, CPU %.1f ms between the same markers (%s; Windows TDR resets the driver "
+                     "at ~2000 ms of GPU work)", gLastGpuMs, gQCpuMs[slot],
+                     gLastGpuMs < gQCpuMs[slot] * 1.25 + 5.0 ? "GPU waiting on CPU submission" : "GPU work");
     }
     BeginQuery(kTimeElapsed, gQ[slot]);
+    gQBegin[slot] = std::chrono::steady_clock::now();
     gQActive[slot] = true;
     gBegun = true;
 }
 
 void gpuTimerEnd() {
-    if (EndQuery && gBegun) EndQuery(0x88BF);
+    if (EndQuery && gBegun) {
+        EndQuery(0x88BF);
+        const int slot = gQi % 3;
+        gQCpuMs[slot] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gQBegin[slot]).count();
+    }
     gBegun = false;
     ++gQi;
 }
 
 double lastGpuFrameMs() { return gLastGpuMs; }
+double lastGpuFrameCpuMs() { return gLastCpuMs; }
 
 bool load() {
     bool ok = true;

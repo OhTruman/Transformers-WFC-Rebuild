@@ -157,8 +157,8 @@ public:
         glx::gpuTimerEnd();
         if (std::getenv("WFC_FRAMELOG") && wfc_.active()) {   // M50 diagnostics: per-frame GPU time + draw counts
             RenderDiagnostics d = renderDiagnostics();
-            LOG_INFO("FRAME %d gpu=%.2fms draws=%d world=%d bsp=%d dyn=%d fx=%d opaque=%d transl=%d culled=%d cam=%.1f,%.1f,%.1f yaw=%.2f pitch=%.2f",
-                     d.frame, glx::lastGpuFrameMs(), d.draws, d.worldDraws, d.bspDraws, d.dynamicDraws, d.fxDraws, d.opaqueDraws,
+            LOG_INFO("FRAME %d gpu=%.2fms (cpu %.2fms) draws=%d world=%d bsp=%d dyn=%d fx=%d opaque=%d transl=%d culled=%d cam=%.1f,%.1f,%.1f yaw=%.2f pitch=%.2f",
+                     d.frame, glx::lastGpuFrameMs(), glx::lastGpuFrameCpuMs(), d.draws, d.worldDraws, d.bspDraws, d.dynamicDraws, d.fxDraws, d.opaqueDraws,
                      d.translucentDraws, d.culledSubs, d.camPos[0], d.camPos[1], d.camPos[2], d.camYaw, d.camPitch);
         }
         if (visualCheckOn()) {                       // GL errors raised by this frame's 3D work (first ones logged)
