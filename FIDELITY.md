@@ -130,6 +130,40 @@ provenance stays in its section.
 
 ---
 
+## FRONTEND PASS 7: PLAYTEST PRESENTATION (2026-10-05, agents/frontend)
+- **Create a Character shrink / shift after a weapon slot: fixed (runtime bug, Flash semantics CONFIRMED).** The weapon
+  menu's background registers a Stage listener (onResize: setProperty('', _width / _height, Stage size + 30)) and is
+  removed when the menu closes; the listener stays. The AVM1 VM ran a function whose defining timeline was removed with
+  the movie ROOT as its "" target, so a later onResize resized the whole movie. A removed defining timeline now stays
+  the target (the dead clip, as in Flash). Verified by clip-geometry dumps (all top-level clips identical) after
+  primary / secondary slots, the Decepticon chassis menu, a class change and leaving / reopening, at 1280x720 windowed
+  and 2560x1440 fullscreen; customize soak with weapon-slot visits in every class PASS at 2560x1440 fullscreen and
+  1920x1080 windowed (42 checks, no AS errors / collected-object uses). Note: soaks at a non-native fullscreen mode
+  (1920x1080 on a 2560x1440 desktop) are unreliable on this shared machine - another session's window takes focus and the
+  fullscreen window minimizes by design (desktop restore on focus loss), so scripted clicks land on a 0-size viewport.
+- **Menu hitches.** WFC_FRAMEPROF=<ms> logs every presented-frame gap with per-category time. The visible stall after
+  title <-> party lobby travel was the renderer's first drawn frame (effect / weapon program prewarm, 737 ms first,
+  327 ms repeat, then a driver stall). Frontend now draws the new scene once under the loading screen [PC ADAPTATION:
+  the original travels behind its loading screen]; Rendering (ba68889) moved the prewarm out of frontend scenes, keeps
+  linked programs across loads and yields finer. Remaining: audio prefetch 37-94 ms at travel start (Systems).
+- **Resolution: CONFIRMED path.** Settings Commit -> PCSettings.SetResolution(w, h, fullscreen) -> windowed client size,
+  or fullscreen = a real display-mode change to w x h (current refresh rate; desktop restored on windowed / alt-tab /
+  exit); the GL default framebuffer is the window, so rendering is at the chosen size; the UI (showAll stage, visible
+  area, vignette) lays out for it. Verified: 1280x720 / 2560x1440 fullscreen and 1600x900 windowed frames at those
+  sizes, monitor modes logged. (The fullscreen mode switch is the PC SKU behaviour reconstructed; not borderless.)
+- **Frame limiter: PC EXTENSION.** [PCSettings] FrameLimit (0 = off, the default) / WFC_FPS_LIMIT; waits after the swap;
+  no original menu row. Measured 60 -> 59, 144 -> 143, 30 -> 29 fps; match clock real-time at 30 fps.
+- **QA panel: DEBUG ONLY, NOT ORIGINAL.** WFC_QA=1 (F10): a separate tool window to launch / restart map / mode / class
+  scenarios through the normal flow; WFC_QA_LAUNCH / WFC_QA_RESTART_AFTER. Weapon override pending Gameplay.
+- **Title vignette:** unchanged since a661851 (human-confirmed); holds at 1280x720, 1600x900, 1920x1080, 2560x1440.
+- **Cancelled Accounts prompt created the account later: fixed (Flash semantics CONFIRMED).** TextPrompt_GFX's Key
+  listener outlives the prompt and submits on Enter only while Selection.getFocus() is its field; the runtime kept the
+  removed field as focus, so Accept in Extras created the typed account. Selection.getFocus now forgets a removed object
+  (136ac7a). Menu enter/leave loop (nav_stress 3 cycles + 1 match): 79 checks PASS, title state identical every cycle.
+- **Menu hitches after the owners' fixes:** Rendering ba68889 / 7b74b18 removed the lobby first-frame stall (no gap > 40 ms
+  once a menu is visible; title revisits 30-41 ms); Systems 8df544b moved the audio prefetch to a worker (~0.2 ms).
+  Remaining: two slow title draws on the first boot (Rendering looking), choppy loading-screen steps (indivisible items).
+
 ## FRONTEND: TITLE VIGNETTE / MENU BACKGROUNDS COVER THE SCREEN (2026-10-05, agents/frontend)
 - Human-confirmed: the title vignette left bright vertical strips at both sides (87.5 % of the width covered at 16:9).
 - Cause (Frontend, GFx host): the menus are authored on a 1120 x 720 stage, fitted (showAll) and centred; every menu sizes

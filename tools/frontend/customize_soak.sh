@@ -8,7 +8,7 @@ set -u
 HERE="$(cd "$(dirname "$0")/../.." && pwd)"
 RUN="${1:?run dir}"; CYC="${2:-4}"; MATCH="${3:-2}"; EXE="${4:-$HERE/build/bin/wfc_rebuild.exe}"
 mkdir -p "$RUN"; cd "$RUN"; rm -f wfc.log wfc_profile.ini wfc_characters.ini *.bmp
-[ -f "$HERE/work/camx/wfc_profile.ini" ] && cp "$HERE/work/camx/wfc_profile.ini" .
+PROF="${WFC_SOAK_PROFILE:-$HERE/work/camx/wfc_profile.ini}"; [ -f "$PROF" ] && cp "$PROF" wfc_profile.ini
 L="lobby_mc.menuAnchor_mc.menu_mc.customCharacters_mc"
 C="customTransMenuLoader_mc.customCharMenu_mc"
 O="$C.characterOverview_mc.charOverviewMenu_mc"
@@ -27,7 +27,8 @@ for ((c = 1; c <= CYC; ++c)); do
     S="$S;clickclip:$O.chassisButtonA_mc;wait:t=2.5;navcheck:$n.autobot;ui:LThumb;wait:t=1.2;navcheck:$n.vehicle;ui:LThumb;wait:t=1.2"
     # Scout: the next Autobot chassis and back (Speedster -> Runner -> Speedster): a 9th posed body, so the LRU evicts.
     if [ $k -eq 0 ]; then S="$S;ui:Right;wait:t=3;navcheck:$n.chassis2;ui:Left;wait:t=3"; fi
-    S="$S;ui:Back;wait:t=3;clickclip:$O.chassisButtonD_mc;wait:t=2.5;navcheck:$n.decepticon;ui:Back;wait:t=3;navcheck:$n.overview2"
+    S="$S;ui:Back;wait:t=3;clickclip:$O.weaponSlot2_mc;wait:t=2.5;ui:Back;wait:t=2.5;clickclip:$O.weaponSlot1_mc;wait:t=2.5;ui:Back;wait:t=4.5;navcheck:$n.weapons"
+    S="$S;clickclip:$O.chassisButtonD_mc;wait:t=2.5;navcheck:$n.decepticon;ui:Back;wait:t=3;navcheck:$n.overview2"
     if [ $k -eq $(( (c - 1) % 4 )) ]; then   # one colour edit per cycle: Color 1 picker, move, next palette, accept
       S="$S;clickclip:$O.chassisButtonA_mc;wait:t=2.5;ui:Down;wait:t=0.7;ui:Accept;wait:t=1.5;navcheck:$n.picker"
       for i in 1 2 3 4 5; do S="$S;ui:Right;wait:t=0.05;ui:Up;wait:t=0.05"; done
@@ -46,7 +47,7 @@ for ((m = 1; m <= MATCH; ++m)); do
   S="$S;showmenu;wait:t=1;call:Game.QuitToMainMenu;wait:t=1;ui:Accept;wait:level=PartyLobby;wait:t=4;navcheck:m$m.partylobby"
   S="$S;clickclip:$L;wait:t=3"
   for ((i = 0; i < k; ++i)); do S="$S;ui:Down;wait:t=0.7"; done
-  S="$S;ui:Accept;wait:t=5;navcheck:m$m.reopen.${NAMES[$k]};shot:m${m}r.bmp"
+  S="$S;ui:Accept;wait:t=7;navcheck:m$m.reopen.${NAMES[$k]};shot:m${m}r.bmp"
   S="$S;ui:Back;wait:t=3;ui:Back;wait:t=2;ui:Back;wait:t=1;ui:Accept;wait:level=FrontEnd;wait:t=2;navcheck:m$m.main"
 done
 S="$S;wait:t=2;navcheck:main.end;shot:final.bmp;quit"

@@ -904,6 +904,23 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 6. Gorge is shown disabled.
 7. A long session: private memory should plateau (about 2.8 GB in the lobby, 3.5 GB in a match).
 
+## FRONTEND PASS 7 (2026-10-05, branch `agents/frontend`): playtest presentation
+- **Create a Character shrink / shift after a weapon slot: fixed** (3185545; AVM1 removed-timeline target). Geometry
+  identical after weapon slots, faction / class change, leave / reopen (1280x720 windowed, 2560x1440 fullscreen).
+- **Menu hitches:** profiler WFC_FRAMEPROF (5090ba0); the new scene's first draw runs under the loading screen;
+  Rendering ba68889 removed the 0.7-1.2 s effect prewarm from frontend scenes. Remaining: audio prefetch 37-94 ms (Systems).
+- **Resolution:** fullscreen is a real display-mode change at the chosen size and the game renders at that size
+  (verified 1280x720 / 2560x1440 fullscreen, 1600x900 windowed); scripts drive PCSettings.* (4f1462b).
+- **Frame limiter (PC EXTENSION):** [PCSettings] FrameLimit / WFC_FPS_LIMIT, off by default (e607961).
+- **QA panel (DEBUG ONLY):** WFC_QA=1 / F10, launch / restart scenarios, Gameplay QA tools (f3bf82a, 25cc348, 9068069).
+- **Validation:** customize soak PASS at 2560x1440 fullscreen and 1920x1080 windowed (42 checks each run, weapon slots in
+  every class); nav_stress PASS; tests 79 / 0. Vignette unchanged (human-confirmed).
+- **Accounts prompt bug (136ac7a):** a cancelled Create Account prompt no longer creates the account on a later Accept
+  (Selection.getFocus forgets removed fields). nav_stress 3 cycles + 1 match PASS (79 checks, flat title state).
+- **Hitch re-profile** on Rendering 7b74b18 + Systems 8df544b: no gap > 40 ms once a menu is visible; remaining boot title
+  first draws and loading-screen steps are Rendering's.
+
+
 ## FRONTEND: one renderer across matches (2026-10-05, branch `agents/frontend`)
 - The match cleanup recreated the renderer (M06 hard reset, not original). With Rendering M28 (unloadMapRenderData also
   releases the textures a match uploaded) one renderer now serves the session: detected at compile time; renderers
