@@ -171,7 +171,21 @@ bool Pipeline::loadMapFx(const std::string& path) {
                 {
                     const std::string td = L["type_data"].asString();
                     lod.typeData = td == "mesh" ? 1 : td == "trail2" ? 2 : td == "beam2" ? 3 : 0;
-                    if (lod.typeData == 3) lod.maxBeams = std::max(0, L["beam_trail"]["MaxBeamCount"].asInt(1));
+                    const assets::Json& bt = L["beam_trail"];
+                    if (lod.typeData == 3) {
+                        lod.maxBeams = std::max(0, bt["MaxBeamCount"].asInt(1));
+                        const std::string tm = bt["TaperMethod"].asString();
+                        lod.taperMethod = tm == "PEBTM_Full" ? 1 : tm == "PEBTM_Partial" ? 2 : 0;
+                        lod.interpPoints = std::max(0, bt["InterpolationPoints"].asInt(0));
+                        if (bt["taper_factor"].isObject()) lod.taperFactor = parseDist(bt["taper_factor"], 1);
+                        if (bt["taper_scale"].isObject()) lod.taperScale = parseDist(bt["taper_scale"], 1);
+                        if (lod.taperFactor.v.empty()) { lod.taperFactor.kind = 0; lod.taperFactor.v = {1.0f}; }
+                        if (lod.taperScale.v.empty()) { lod.taperScale.kind = 0; lod.taperScale.v = {1.0f}; }
+                    }
+                    if (lod.typeData == 2) {
+                        lod.tessFactor = std::max(1, bt["TessellationFactor"].asInt(1));   // 0 -> 1 (native)
+                        lod.tessStrength = bt["TessellationStrength"].asFloat(1.0f);
+                    }
                     if (L["size_param"].isObject()) {
                         lod.sizeParam = L["size_param"]["name"].asString();
                         for (int c = 0; c < 3; ++c) lod.sizeParamConst[c] = L["size_param"]["constant"][(size_t)c].asFloat(1.0f);
@@ -951,7 +965,8 @@ void Pipeline::drawMapPresentation() {
                 for (int c = 0; c < 3; ++c) o[c] = in.T[c] + p[0] * IR[0][c] + p[1] * IR[1][c] + p[2] * IR[2][c];
             };
             if (L.typeData >= 2) {
-                // M44 Trail2 / Beam2 [PARTIAL: taper, tiling distance and noise not applied]. A beam, or a trail spawned
+                // M44 Trail2 / Beam2. M55: Beam2 taper and Trail2 tessellation (RE pass 5 s9, native) [HIGH]; noise /
+                // BeamSineWave (render formula UNKNOWN) and tiling distance not applied [PARTIAL]. A beam, or a trail spawned
                 // along a segment (tracer), draws each live particle as a camera-facing ribbon from the source to the
                 // target with that particle's width / colour; a trail on a moving source draws one ribbon through its
                 // recent path, fading with age, at the newest particle's width / colour.
@@ -978,8 +993,30 @@ void Pipeline::drawMapPresentation() {
                 if (in.hasTarget) {
                     const float src[3] = {in.T[0], in.T[1], in.T[2]};   // beam / tracer source = the component
                     core::Vec3 a = ueToGltf(src), b = ueToGltf(in.target);
+                    // taper (native TypeDataBeam2 Spawn): TaperCount = InterpolationPoints + 1 points along the beam,
+                    // TaperValues[i] = TaperFactor(r) * TaperScale(r), r = i / (count - 1); width = size * value
+                    std::vector<float> taper;
+                    if (L.taperMethod != 0) {
+                        const int cnt = std::max(L.interpPoints, 1) + 1;
+                        taper.resize((size_t)cnt);
+                        uint32_t trng = 0x9e3779b9u;
+                        for (int i = 0; i < cnt; ++i) {
+                            float r = (float)i / (float)(cnt - 1), f[3], s[3];
+                            L.taperFactor.eval(r, trng, f);
+                            L.taperScale.eval(r, trng, s);
+                            taper[(size_t)i] = f[0] * s[0];
+                        }
+                    }
                     for (const FxParticle& q : rt.parts) {
                         float w = q.size[0] * sizeScale[0] * 0.01f;
+                        if (!taper.empty()) {
+                            const size_t segs = taper.size() - 1;
+                            for (size_t i = 0; i < segs; ++i) {
+                                float r0 = (float)i / (float)segs, r1 = (float)(i + 1) / (float)segs;
+                                quad(a + (b - a) * r0, a + (b - a) * r1, w * taper[i], w * taper[i + 1], q.color, q.color, r0, r1);
+                            }
+                            continue;
+                        }
                         static const bool lg = std::getenv("WFC_FXTEST") != nullptr;
                         static int n = 0;
                         if (lg && n++ % 60 == 0)
@@ -993,15 +1030,34 @@ void Pipeline::drawMapPresentation() {
                     float life = 0.25f;
                     for (const FxParticle& p : rt.parts) if (p.oneOverLife > 0.0f) life = std::max(life, 1.0f / p.oneOverLife);
                     const size_t n = rt.trail.size();
+                    std::vector<core::Vec3> P(n);
+                    for (size_t k = 0; k < n; ++k) { float p[3] = {rt.trail[k][0], rt.trail[k][1], rt.trail[k][2]}; P[k] = ueToGltf(p); }
+                    // tessellation (native Trail2 vertex count: TessellationFactor steps per segment); stock UE3 Hermite
+                    // between trail points, tangents scaled by TessellationStrength, size / colour lerped per step
+                    const int T = std::max(1, L.tessFactor);
+                    auto tangent = [&](size_t k) {
+                        core::Vec3 d = k == 0 ? P[1] - P[0] : k + 1 == n ? P[n - 1] - P[n - 2] : (P[k + 1] - P[k - 1]) * 0.5f;
+                        return d * L.tessStrength;
+                    };
                     for (size_t k = 0; k + 1 < n; ++k) {
                         const auto& t0 = rt.trail[k];
                         const auto& t1 = rt.trail[k + 1];
                         float f0 = 1.0f - std::min(t0[3] / life, 1.0f), f1 = 1.0f - std::min(t1[3] / life, 1.0f);
-                        float c0[4] = {q.color[0], q.color[1], q.color[2], q.color[3] * f0};
-                        float c1[4] = {q.color[0], q.color[1], q.color[2], q.color[3] * f1};
-                        float p0[3] = {t0[0], t0[1], t0[2]}, p1[3] = {t1[0], t1[1], t1[2]};
-                        quad(ueToGltf(p0), ueToGltf(p1), w * f0, w * f1, c0, c1, (float)k / (float)(n - 1),
-                             (float)(k + 1) / (float)(n - 1));
+                        core::Vec3 m0 = tangent(k), m1 = tangent(k + 1);
+                        auto at = [&](float t) {
+                            float t2 = t * t, t3 = t2 * t;
+                            return P[k] * (2 * t3 - 3 * t2 + 1) + m0 * (t3 - 2 * t2 + t) + P[k + 1] * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
+                        };
+                        core::Vec3 prev = P[k];
+                        for (int s = 0; s < T; ++s) {
+                            float ta = (float)s / (float)T, tb = (float)(s + 1) / (float)T;
+                            core::Vec3 next = s + 1 == T ? P[k + 1] : at(tb);
+                            float fa = f0 + (f1 - f0) * ta, fb = f0 + (f1 - f0) * tb;
+                            float ca[4] = {q.color[0], q.color[1], q.color[2], q.color[3] * fa};
+                            float cb[4] = {q.color[0], q.color[1], q.color[2], q.color[3] * fb};
+                            quad(prev, next, w * fa, w * fb, ca, cb, ((float)k + ta) / (float)(n - 1), ((float)k + tb) / (float)(n - 1));
+                            prev = next;
+                        }
                     }
                 }
                 static const bool ribbonLog = std::getenv("WFC_FXTEST") != nullptr;

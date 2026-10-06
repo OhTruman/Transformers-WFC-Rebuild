@@ -123,6 +123,12 @@ def system_runtime(name, s):
                                 'subimages': [req.get('SubImages_Horizontal', 1), req.get('SubImages_Vertical', 1)]},
                    'mesh': None, 'modules': [], 'assignment_complete': L.get('assignment_complete', False),
                    'default_color': L.get('default_color'), 'size_param': L.get('size_param')}
+            if lod['beam_trail'] is not None:
+                # M55 (RE pass 5 s9, native TypeDataBeam2 Spawn / Trail2 vertex count): taper curves along the beam and
+                # the trail tessellation; CDO defaults TaperFactor / TaperScale 1.0, TessellationStrength 1.0
+                lod['beam_trail']['taper_factor'] = tagged_dist(td.get('TaperFactor'), [1.0])
+                lod['beam_trail']['taper_scale'] = tagged_dist(td.get('TaperScale'), [1.0])
+                lod['beam_trail']['TessellationStrength'] = td.get('TessellationStrength', 1.0)
             if td.get('Mesh'):
                 lod['mesh'] = {'object': td['Mesh'], 'gltf': mesh_gltf(td['Mesh']),
                                'override_material': bool(td.get('bOverrideMaterial', False))}

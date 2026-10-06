@@ -446,6 +446,9 @@ public:
         bool overrideMaterial = false, localSpace = false, rectangle = false;
         int typeData = 0;                 // 0 sprite, 1 mesh, 2 Trail2, 3 Beam2
         int maxBeams = 0;                 // Beam2 MaxBeamCount (0 = no cap)
+        int taperMethod = 0, interpPoints = 0;   // Beam2: PEBTM_None / Full / Partial; InterpolationPoints
+        FxDist taperFactor, taperScale;           // Beam2: evaluated along the beam (0 source .. 1 target)
+        int tessFactor = 1; float tessStrength = 1.0f;   // Trail2: Hermite steps per segment, tangent scale
         std::string sizeParam;            // SizeMultiplyLife by instance parameter (HoverFX "Size"); "" = none
         float sizeParamConst[3] = {1, 1, 1};
         bool velocityAligned = false;     // PSA_Velocity
