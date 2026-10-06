@@ -91,7 +91,10 @@ provenance stays in its section.
   (136ac7a). Menu enter/leave loop (nav_stress 3 cycles + 1 match): 79 checks PASS, title state identical every cycle.
 - **Menu hitches after the owners' fixes:** Rendering ba68889 / 7b74b18 removed the lobby first-frame stall (no gap > 40 ms
   once a menu is visible; title revisits 30-41 ms); Systems 8df544b moved the audio prefetch to a worker (~0.2 ms).
-  Remaining: two slow title draws on the first boot (Rendering looking), choppy loading-screen steps (indivisible items).
+  Boot title: Rendering 2692e46 prewarms the title's placed emitters (VIG lightning / steam) during the load; the two
+  slow first scene draws (269 / 215 ms) are gone, no scene.draw > 40 ms after the load (1920x1080 windowed,
+  WFC_FRAMEPROF=40). Remaining: one 90 ms frame as the menu opens at the end of the load (no scene draw in it) and the
+  loading-screen steps (40-150 ms, single indivisible items), so the loading animation is choppy, not frozen.
 
 ## FRONTEND: TITLE VIGNETTE / MENU BACKGROUNDS COVER THE SCREEN (2026-10-05, agents/frontend)
 - Human-confirmed: the title vignette left bright vertical strips at both sides (87.5 % of the width covered at 16:9).

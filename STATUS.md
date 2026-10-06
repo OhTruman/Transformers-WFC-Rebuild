@@ -381,8 +381,9 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
   every class); nav_stress PASS; tests 79 / 0. Vignette unchanged (human-confirmed).
 - **Accounts prompt bug (136ac7a):** a cancelled Create Account prompt no longer creates the account on a later Accept
   (Selection.getFocus forgets removed fields). nav_stress 3 cycles + 1 match PASS (79 checks, flat title state).
-- **Hitch re-profile** on Rendering 7b74b18 + Systems 8df544b: no gap > 40 ms once a menu is visible; remaining boot title
-  first draws and loading-screen steps are Rendering's.
+- **Hitch re-profile** on Rendering 7b74b18 + Systems 8df544b: no gap > 40 ms once a menu is visible. Boot title
+  first draws (269 / 215 ms) fixed by Rendering 2692e46 (placed emitters prewarmed in the load), confirmed: no scene
+  draw > 40 ms. Left: a 90 ms menu-open frame at load end and indivisible loading-screen steps.
 
 
 ## FRONTEND: one renderer across matches (2026-10-05, branch `agents/frontend`)
