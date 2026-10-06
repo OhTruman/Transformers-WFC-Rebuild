@@ -602,6 +602,21 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING FOCUSED VISUAL-FIDELITY PASS M51-M55 (2026-10-05, agents/rendering f875640)
+- **Molten:** the floor flicker / box was RainPuddles_Mat sampling the scene with clip-space coordinates (WFC's `ScreenAlign` flag was ignored). Fixed in matc plus the UE3 screen-UV convention (M51). The "looking down" perf drop was not reproduced (GPU 0.3-0.7 ms); WFC_FRAMELOG is available to catch it.
+- **Orbital Debris:** the authored Spacedome was clipped by a 20 km far plane. The far plane now covers the world (M51) and the authored nebula + stars show.
+- **Title Cybertron:** the dark craters are authored (no lightmap cooked, no Static light reaches them, emissive specks). No change.
+- **Projectiles:** renderer side ready. Class-data FX templates were added to the library (M52) and the contract was sent to Gameplay to replace the cubes (FlightEffect body, ExplosionEffect at hit).
+- **Vehicle FX:** Systems' VehicleFxDriver (agents/systems 4289b74) uses the unchanged API.
+- **Scout left-side fire:** Primary2 (right gun) is authored, but the runtime only uses Primary (Gameplay; RE tracing the alternation).
+- **Scout transform:** the frame-by-frame capture shows the authored fold, with no rendering defect.
+- **Hitches:**
+  - first transform: prewarmDynamicMesh (M53, Integration adds the call);
+  - menu / match-start: prewarm in the load, program cache across loads (M54).
+- **Beams / trails:** Beam2 taper and Trail2 tessellation per the native trace (M55).
+- **Validation:** visual suite + flow 11/11 PASS; Streets world pixels unchanged (character pose differs from the integration base); 0 GL errors.
+- **Render data:** regenerate every map and frontend scene (matc, build_map_fx).
+
 ## RENDERING HUMAN-PLAYTEST PASS M41-M45 (2026-10-05, agents/rendering) — title, weapons, effects, AMD stability
 - **Title black ships (M41):** Dynamic-channel movable actors (51 title InterpActors) are lit by the Dynamic-channel lights (SkyLight + PointLight_8444) instead of the static set. Near-black 9.9 % -> 2.5 %. No global ambient change.
 - **Title vignette strips:** owned by Frontend's GFx host (Stage.width / onResize for showAll movies; agents/frontend a661851). Verified on a merged preview at 1280x720, 1920x1080, 2560x1440 windowed and fullscreen: edge luma 40 vs 64 inside (was the brightest part).
