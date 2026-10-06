@@ -1994,6 +1994,31 @@ Left as the owners labelled them:
 - **Systems:** add `PickupPresentation.cpp` to the audio suite's documented build line.
 - **Systems/Gameplay:** nobody calls `notifyRamHit` yet (no pawn victims in the slice).
 
+## GAMEPLAY PASS 25 (2026-10-06) — events, interpolation, offline bots, XP / stat awards
+
+| item | result | provenance |
+|---|---|---|
+| Authoritative gameplay events (25a) | Match records Kill / Suicide / EnvironmentDeath / Assist / KillstreakEarned / Objective / Spawn / CharacterSelected / MatchStart / MatchEnd once each with participant snapshots + kill context; every consumer reads by serial; EVENTTEST 16/16 | CONFIRMED rules (RE), architecture |
+| Change Character | Gameplay already correct (CLASSCHANGE 22/22); the Frontend glue forwarded one pick per match, fixed by Frontend 3e17483 | CONFIRMED ORIGINAL |
+| Repair Ray | picker-6 lock-on, beam tracer segment + team / enemy squibs via Rendering's segment API | CONFIRMED ORIGINAL |
+| Vehicle weapon HUD / jet roll | held weapon's clip / reserve in vehicle form, no cooldown meter; roll only with \|strafe\| >= 0.5 | CONFIRMED ORIGINAL |
+| Presentation interpolation (25b) | lerp(prev, cur, alpha) for pawn / camera / pose; strafing 144 / 240 Hz repeated frames 58.5 / 75 % → 0 %; PACINGTEST 4/4 | PC ADAPTATION |
+| Offline bots (25c) | Bot Settings launch (?BotsFriendly / ?BotsEnemy / ?BotDifficulty), maxPlayers 16 / maxPerTeam 8, generated identities, class spread, legal presets; bots are ordinary Match participants | PC ADAPTATION (original had no MP bots) |
+| Bot navigation | AssetTools bot_nav.json on any map: A* (weighted, capped) + funnel with corridor validation, jump / drop links, vehicle layer, approach cells; BOTNAVTEST 7/7 on 9 of 10 maps (Debris: flight-only islands need the air layer) | PC ADAPTATION on CONFIRMED movement constants |
+| Bot combat | perception + LOS, target choice, RangeSet bands + AI WEPDATA BurstRanges, weapon band choice, aim easing + skill error, strafe, reload, grenades, melee rush + assist lunge, robot / vehicle travel, stuck / off-mesh recovery; BOTTEST 24/24 (+melee / grenade check) | CONFIRMED bands / bursts; behaviour PC ADAPTATION |
+| Bot objective play (25e) | shared goal layer: KOTH hold, DOM capture / contest / defend, CTF retrieve / capture / support / return / defend, EXT retrieve / plant / defuse / defend; BOTOBJTEST 12/12 | PC ADAPTATION |
+| XP / stat awards (25d) | AwardProducer from the event record: 71 XP events, kill-award rules, assists, objective XP, GameWin / GameLose quirk; challenge stats; Frontend profile applies CanGainXp and persists (verified end to end by Frontend); XPTEST 14/14 | CONFIRMED (RE tables) |
+| Melee / grenades for every participant (25f) | startMeleeFor / tickMeleeFor / releaseGrenade shared by the local player and bots | CONFIRMED mechanics |
+| Spawn spike (Milestone A) | traced to the integration glue's spawn-time audio loads (fixed by Integration 69d5335); Gameplay spawn 0.4 ms | diagnosis |
+
+Regression: WEAPON 19, SWITCH 32, TDM 43, CTF 12, SCORE 9, PARTICIPANT 22, MODEPLAY 21, CHARGE 9, EVENT 16, CLASSCHANGE 22, XP 14,
+QATEST 8, PACING 4, BOTNAV 7 (9 maps), BOTTEST 24-25, BOTOBJ 12.
+
+PARTIAL: bot abilities, Repair Ray healing / heal grenades by bots, jet flight for bots (air layer exists in AssetTools), vehicle
+boost for bots, bots' held weapon meshes / FX (participantShots() exposed), headshot / backstab / downed awards, heal XP.
+
+Handoffs: docs/handoffs/GAMEPLAY_BOTS.md (bots, launch, participant fields, presentation hooks).
+
 ## GAMEPLAY PASS 24 (2026-10-05) — human playtest fidelity II
 
 | item | result | provenance |

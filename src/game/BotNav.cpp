@@ -84,6 +84,8 @@ bool BotNav::load(const std::string& path) {
     for (size_t i = 0; i < as.size(); ++i) {
         Anchor A; A.actor = as[i]["actor"].asString(); A.kind = as[i]["kind"].asString();
         A.pos = v3(as[i]["location_gltf"]); A.cell = as[i]["cell"].asInt(-1);
+        A.approachCell = as[i]["approach_cell"].asInt(A.cell);
+        if (A.approachCell >= (int)cells_.size()) A.approachCell = -1;
         anchors_.push_back(A);
     }
     // Bucket grid.
@@ -182,44 +184,56 @@ bool BotNav::usable(int cell, const Agent& a) const {
     return true;
 }
 
-bool BotNav::findPath(const core::Vec3& from, const core::Vec3& to, const Agent& a, std::vector<Waypoint>& out, int* expanded) const {
-    out.clear();
-    int s = findCell(from, 12.0f), g = findCell(to, 12.0f);   // the start may be off the mesh (a prop top, a ledge)
-    if (s < 0 || g < 0) return false;
-    if (s == g) { out.push_back({to, 0, g}); return true; }
-    if (piece_[(size_t)s] != piece_[(size_t)g]) return false;   // not connected even through links
+bool BotNav::beginSearch(const core::Vec3& from, const core::Vec3& to, const Agent& a) const {
+    Search& S = search_;
+    S = Search{};
+    S.from = from; S.to = to; S.a = a;
+    S.s = findCell(from, 12.0f); S.g = findCell(to, 12.0f);   // the start may be off the mesh (a prop top, a ledge)
+    if (S.s < 0 || S.g < 0) return false;
+    if (S.s == S.g || piece_[(size_t)S.s] != piece_[(size_t)S.g]) { S.active = true; S.done = true; S.trivial = S.s == S.g; return S.trivial; }
     const size_t N = cells_.size();
     if (gs_.size() != N) { gs_.assign(N, 0.0f); came_.assign(N, -1); viaLink_.assign(N, -1); stamp_.assign(N, 0); closedStamp_.assign(N, 0); gen_ = 0; }
     if (++gen_ == 0) { std::fill(stamp_.begin(), stamp_.end(), 0u); std::fill(closedStamp_.begin(), closedStamp_.end(), 0u); gen_ = 1; }
-    const unsigned G = gen_;
-    // Stamped views: an entry is valid only when stamped with this search's generation.
+    S.G = gen_;
+    S.goalC = cells_[(size_t)S.g].centroid;
+    stamp_[(size_t)S.s] = S.G; gs_[(size_t)S.s] = 0.0f; came_[(size_t)S.s] = -1; viaLink_[(size_t)S.s] = -1;
+    S.heap.push_back({kSearchWeight * core::length(cells_[(size_t)S.s].centroid - S.goalC), S.s});
+    S.nearest = S.s; S.nearestD = core::length(cells_[(size_t)S.s].centroid - S.goalC);
+    S.active = true;
+    return true;
+}
+
+// Expand up to maxExpansions cells of the active search. 0 = still running, 1 = finished (finishSearch builds the result).
+int BotNav::stepSearch(int maxExpansions) const {
+    Search& S = search_;
+    if (!S.active) return 1;
+    if (S.done) return 1;
+    const unsigned G = S.G;
+    const Agent& a = S.a;
+    const int g = S.g;
     auto gsAt = [&](int c) -> float { return stamp_[(size_t)c] == G ? gs_[(size_t)c] : 1e30f; };
     auto setNode = [&](int c, float gv, int from, int link) { stamp_[(size_t)c] = G; gs_[(size_t)c] = gv; came_[(size_t)c] = from; viaLink_[(size_t)c] = link; };
     auto isClosed = [&](int c) { return closedStamp_[(size_t)c] == G; };
-    // Weighted A* (heuristic x 1.5): far fewer expansions on the fine cell mesh; routes stay within 1.5x of optimal [PC ADAPTATION].
-    const float W = 1.5f;
     using QE = std::pair<float, int>;
-    static thread_local std::vector<QE> heap;
-    heap.clear();
-    std::priority_queue<QE, std::vector<QE>, std::greater<QE>> open(std::greater<QE>(), std::move(heap));
-    const core::Vec3 goalC = cells_[(size_t)g].centroid;
-    setNode(s, 0.0f, -1, -1); open.push({W * core::length(cells_[(size_t)s].centroid - goalC), s});
-    int n = 0;
-    int nearest = s; float nearestD = core::length(cells_[(size_t)s].centroid - goalC);
-    while (!open.empty()) {
-        const int c = open.top().second; open.pop();
+    auto push = [&](float f, int c) { S.heap.push_back({f, c}); std::push_heap(S.heap.begin(), S.heap.end(), std::greater<QE>()); };
+    int budget = maxExpansions;
+    while (!S.heap.empty()) {
+        if (budget-- <= 0) return 0;
+        std::pop_heap(S.heap.begin(), S.heap.end(), std::greater<QE>());
+        const int c = S.heap.back().second; S.heap.pop_back();
         if (isClosed(c)) continue;
-        closedStamp_[(size_t)c] = G; ++n;
+        closedStamp_[(size_t)c] = G; ++S.n;
         if (c == g) break;
-        { const float d = core::length(cells_[(size_t)c].centroid - goalC); if (d < nearestD) { nearestD = d; nearest = c; } }
-        if (n > 4000) break;   // one-way (drop-only) unreachable goals would exhaust the mesh: give up, the bot picks another goal
+        { const float d = core::length(cells_[(size_t)c].centroid - S.goalC); if (d < S.nearestD) { S.nearestD = d; S.nearest = c; } }
+        if (S.n > 8000) break;   // one-way (drop-only) unreachable goals would exhaust the mesh: give up, the bot picks another goal
         const Cell& cc = cells_[(size_t)c];
         for (const Portal& p : cc.portals) {
             if (isClosed(p.to) || (!usable(p.to, a) && p.to != g)) continue;
             const core::Vec3 mid = (p.a + p.b) * 0.5f;
-            const float tight = (!a.vehicle && cells_[(size_t)p.to].clearance < a.radius) ? 1.3f : 1.0f;   // prefer roomy cells [PROV]
+            float tight = (!a.vehicle && cells_[(size_t)p.to].clearance < a.radius) ? 1.3f : 1.0f;   // prefer roomy cells [PROV]
+            if (a.avoid && std::find(a.avoid->begin(), a.avoid->end(), p.to) != a.avoid->end()) tight *= 10.0f;
             const float ng = gsAt(c) + (core::length(mid - cc.centroid) + core::length(cells_[(size_t)p.to].centroid - mid)) * tight;
-            if (ng < gsAt(p.to)) { setNode(p.to, ng, c, -1); open.push({ng + W * core::length(cells_[(size_t)p.to].centroid - goalC), p.to}); }
+            if (ng < gsAt(p.to)) { setNode(p.to, ng, c, -1); push(ng + kSearchWeight * core::length(cells_[(size_t)p.to].centroid - S.goalC), p.to); }
         }
         for (int li : cc.links) {
             const Link& l = links_[(size_t)li];
@@ -227,17 +241,41 @@ bool BotNav::findPath(const core::Vec3& from, const core::Vec3& to, const Agent&
             if (!usable(l.to, a) && l.to != g) continue;
             const float ng = gsAt(c) + core::length(l.fromPos - cc.centroid) + core::length(l.toPos - l.fromPos) * 1.5f + 3.0f +
                              core::length(cells_[(size_t)l.to].centroid - l.toPos);
-            if (ng < gsAt(l.to)) { setNode(l.to, ng, c, li); open.push({ng + W * core::length(cells_[(size_t)l.to].centroid - goalC), l.to}); }
+            if (ng < gsAt(l.to)) { setNode(l.to, ng, c, li); push(ng + kSearchWeight * core::length(cells_[(size_t)l.to].centroid - S.goalC), l.to); }
         }
     }
-    if (expanded) *expanded = n;
-    core::Vec3 endPos = to;
-    if (stamp_[(size_t)g] != G || came_[(size_t)g] < 0) {
+    S.done = true;
+    return 1;
+}
+
+bool BotNav::finishSearch(std::vector<Waypoint>& out, int* expanded) const {
+    Search& S = search_;
+    out.clear();
+    if (!S.active || !S.done) return false;
+    S.active = false;
+    if (expanded) *expanded = S.n;
+    if (S.trivial) { out.push_back({S.to, 0, S.g}); return true; }
+    if (S.G == 0) return false;   // different pieces
+    int g = S.g;
+    core::Vec3 endPos = S.to;
+    if (stamp_[(size_t)g] != S.G || came_[(size_t)g] < 0) {
         // Unreachable goal (one-way pieces, a point off the walkable set): the reachable cell nearest to it, when close enough -
         // the bot gets as near as the mesh allows instead of standing still.
-        if (nearest == s || nearestD > 30.0f) return false;
-        g = nearest; endPos = cells_[(size_t)g].centroid;
+        if (S.nearest == S.s || S.nearestD > 30.0f) return false;
+        g = S.nearest; endPos = cells_[(size_t)g].centroid;
     }
+    return buildPath(S.s, g, S.from, endPos, S.a, out);
+}
+
+bool BotNav::findPath(const core::Vec3& from, const core::Vec3& to, const Agent& a, std::vector<Waypoint>& out, int* expanded) const {
+    out.clear();
+    if (!beginSearch(from, to, a)) { search_.active = false; return false; }
+    while (stepSearch(1 << 30) == 0) {}
+    return finishSearch(out, expanded);
+}
+
+// The corridor of cells s .. g (came_ chain of the finished search) as string-pulled waypoints ending at endPos.
+bool BotNav::buildPath(int s, int g, const core::Vec3& from, const core::Vec3& endPos, const Agent& a, std::vector<Waypoint>& out) const {
     std::vector<int> chain;
     for (int c = g; c >= 0; c = came_[(size_t)c]) { chain.push_back(c); if (c == s) break; }
     std::reverse(chain.begin(), chain.end());
@@ -292,6 +330,28 @@ bool BotNav::findPath(const core::Vec3& from, const core::Vec3& to, const Agent&
         portalCell.push_back(c1);
     }
     flush(endPos, g);
+    // Multi-level corridors: a 2D string-pull can join two corners over open air (an upper walkway, the street 20 m below, another
+    // walkway). Keep a corner-to-corner segment only when it stays on connected cells; otherwise walk that stretch through the
+    // corridor's portal midpoints.
+    {
+        std::vector<Waypoint> fixed;
+        core::Vec3 prev = from;
+        size_t ci = 0;
+        for (const Waypoint& w : out) {
+            size_t cj = ci;
+            while (cj < chain.size() && chain[cj] != w.cell) ++cj;
+            if (w.action == 0 && cj < chain.size() && cj > ci + 1 && !directWalkable(prev, w.pos, a)) {
+                for (size_t k = ci + 1; k < cj; ++k) {
+                    for (const Portal& p : cells_[(size_t)chain[k - 1]].portals)
+                        if (p.to == chain[k]) { fixed.push_back({(p.a + p.b) * 0.5f, 0, chain[k]}); break; }
+                }
+            }
+            fixed.push_back(w);
+            prev = w.pos;
+            if (cj < chain.size()) ci = cj;
+        }
+        out.swap(fixed);
+    }
     // Drop the duplicate start point and points closer than 0.5 m to the previous one.
     std::vector<Waypoint> pruned;
     core::Vec3 prev = from;
@@ -301,6 +361,15 @@ bool BotNav::findPath(const core::Vec3& from, const core::Vec3& to, const Agent&
     }
     out.swap(pruned);
     return !out.empty();
+}
+
+int BotNav::approachCellNear(const core::Vec3& p) const {
+    int best = -1; float bestD = 3.0f * 3.0f;
+    for (const Anchor& an : anchors_) {
+        const float dx = an.pos.x - p.x, dz = an.pos.z - p.z, d = dx * dx + dz * dz;
+        if (d < bestD && an.approachCell >= 0) { bestD = d; best = an.approachCell; }
+    }
+    return best;
 }
 
 core::Vec3 BotNav::randomPoint(unsigned seed, const Agent& a) const {
