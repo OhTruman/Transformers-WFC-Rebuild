@@ -172,6 +172,9 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     const std::string td = L["type_data"].asString();
                     lod.typeData = td == "mesh" ? 1 : td == "trail2" ? 2 : td == "beam2" ? 3 : 0;
                     const assets::Json& bt = L["beam_trail"];
+                    lod.textureTile = std::max(1.0f, bt["TextureTile"].asFloat(1.0f));
+                    lod.textureTileDistance = bt["TextureTileDistance"].asFloat(0.0f);
+                    lod.tilePerParticle = bt["bTilePerParticle"].asBool(false);
                     if (lod.typeData == 3) {
                         lod.maxBeams = std::max(0, bt["MaxBeamCount"].asInt(1));
                         const std::string tm = bt["TaperMethod"].asString();
@@ -1139,6 +1142,10 @@ void Pipeline::drawMapPresentation() {
                 // M56: a connected camera-facing strip (UE3 beam / trail vertex pairs are shared between segments):
                 // each point's side uses the averaged direction of its neighbouring segments, so kinks stay joined
                 struct SP { core::Vec3 p; float w; float col[4]; float u; };
+                // M61 texture tiling: the along-ribbon coordinate spans 0 .. tiles; Beam2 tiles = length /
+                // TextureTileDistance when set, else TextureTile; Trail2 = TextureTile (per segment with bTilePerParticle)
+                static constexpr bool kAlongV = false;
+                float tile = 1.0f;
                 auto strip = [&](const std::vector<SP>& v) {
                     const size_t n = v.size();
                     if (n < 2) return;
@@ -1154,7 +1161,10 @@ void Pipeline::drawMapPresentation() {
                         Sprite s;
                         s.c[0] = v[i].p - side[i] * (v[i].w * 0.5f); s.c[1] = v[i + 1].p - side[i + 1] * (v[i + 1].w * 0.5f);
                         s.c[2] = v[i + 1].p + side[i + 1] * (v[i + 1].w * 0.5f); s.c[3] = v[i].p + side[i] * (v[i].w * 0.5f);
-                        const float uv[4][2] = {{v[i].u, 1}, {v[i + 1].u, 1}, {v[i + 1].u, 0}, {v[i].u, 0}};
+                        // along-ribbon coordinate (tiled) and across (0 / 1); kAlongV swaps them (M61)
+                        float ua = v[i].u * tile, ub = v[i + 1].u * tile;
+                        float uv[4][2] = {{ua, 1}, {ub, 1}, {ub, 0}, {ua, 0}};
+                        if (kAlongV) for (auto& c : uv) std::swap(c[0], c[1]);
                         std::memcpy(s.uv, uv, sizeof(uv));
                         for (int k = 0; k < 4; ++k) s.color[k] = 0.5f * (v[i].col[k] + v[i + 1].col[k]);
                         sp.push_back(s);
@@ -1296,6 +1306,7 @@ void Pipeline::drawMapPresentation() {
                             std::vector<SP> sv;
                             for (const BP& bp : pts)
                                 sv.push_back({bp.p, w * taperAt(bp.r), {q.color[0], q.color[1], q.color[2], q.color[3]}, bp.r});
+                            tile = L.textureTileDistance > 0.0f ? lenM * 100.0f / L.textureTileDistance : L.textureTile;
                             strip(sv);
                             continue;
                         }
@@ -1334,14 +1345,19 @@ void Pipeline::drawMapPresentation() {
                         };
                         for (int s = 0; s < T; ++s) {
                             float ta = (float)s / (float)T, fa = f0 + (f1 - f0) * ta;
+                            // the along coordinate starts (0) at the trail head, the newest point at the source: the
+                            // authored trail textures fade from U 0 to U 1 (iontrail_01 149 -> 7, RingsTrail 72 -> 8 by
+                            // quarter) [HIGH, data]. bTilePerParticle: the texture spans each segment; else the whole trail
+                            const float fromHead = (float)(n - 1) - ((float)k + ta);
                             sv.push_back({s == 0 ? P[k] : at(ta), w * fa, {q.color[0], q.color[1], q.color[2], q.color[3] * fa},
-                                          ((float)k + ta) / (float)(n - 1)});
+                                          L.tilePerParticle ? fromHead : fromHead / (float)(n - 1)});
                         }
                     }
                     {
                         float fl = 1.0f - std::min(rt.trail[n - 1][3] / life, 1.0f);
-                        sv.push_back({P[n - 1], w * fl, {q.color[0], q.color[1], q.color[2], q.color[3] * fl}, 1.0f});
+                        sv.push_back({P[n - 1], w * fl, {q.color[0], q.color[1], q.color[2], q.color[3] * fl}, 0.0f});
                     }
+                    tile = L.textureTile;
                     strip(sv);
                 }
                 static const bool ribbonLog = std::getenv("WFC_FXTEST") != nullptr;

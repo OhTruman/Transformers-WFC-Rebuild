@@ -129,6 +129,11 @@ def system_runtime(name, s):
                 lod['beam_trail']['taper_factor'] = tagged_dist(td.get('TaperFactor'), [1.0])
                 lod['beam_trail']['taper_scale'] = tagged_dist(td.get('TaperScale'), [1.0])
                 lod['beam_trail']['TessellationStrength'] = td.get('TessellationStrength', 1.0)
+                # M61 texture tiling (CDO: Beam2 / Trail2 TextureTile 1, TextureTileDistance 0, bTilePerParticle false;
+                # no MP effect authors any of them - 735 LODs surveyed)
+                lod['beam_trail']['TextureTile'] = td.get('TextureTile', 1)
+                lod['beam_trail']['TextureTileDistance'] = td.get('TextureTileDistance', 0.0)
+                lod['beam_trail']['bTilePerParticle'] = bool(td.get('bTilePerParticle', False))
                 lod['beam_trail']['modules'] = L.get('beam_modules')         # M56: noise / sine waves / source / target
                 # M60: BeamMethod (CDO PEB2M_Target) and Distance (CDO constant 25) for the Distance method
                 lod['beam_trail']['BeamMethod'] = td.get('BeamMethod', 'PEB2M_Target')

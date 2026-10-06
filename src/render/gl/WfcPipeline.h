@@ -466,6 +466,8 @@ public:
             FxDist position, tangent;
         } beamSrc, beamTgt;
         bool beamDistance = false;        // BeamMethod Distance: target = source + X * Distance
+        float textureTile = 1.0f, textureTileDistance = 0.0f;   // M61 Beam2 / Trail2 texture tiling (CDO 1 / 0)
+        bool tilePerParticle = false;     // Trail2 bTilePerParticle
         FxDist distance;
         struct BeamSine { float amp = 0, period = 1, speed = 0, phase = 0, dir[3] = {0, 0, 0}; };
         std::vector<BeamSine> sines;      // ParticleModuleBeamSineWave (WFC addition; render fill CONFIRMED, RE 9i)
