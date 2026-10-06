@@ -448,6 +448,17 @@ private:
             case WM_KEYDOWN:
                 if (keyPresses_.size() < 64) keyPresses_.push_back((uint16_t)wp);
                 break;
+            // F10 is a system key: Windows sends WM_SYSKEYDOWN and enters window-menu mode on its release, so it never
+            // reached keyPresses (the developer QA panel's toggle). Taken here (no auto-repeat), menu mode suppressed.
+            case WM_SYSKEYDOWN:
+                if (wp == VK_F10) {
+                    if (!(lp & (1 << 30)) && keyPresses_.size() < 64) keyPresses_.push_back((uint16_t)wp);
+                    return 0;
+                }
+                break;
+            case WM_SYSKEYUP:
+                if (wp == VK_F10) return 0;
+                break;
         }
         return DefWindowProcW(hwnd, msg, wp, lp);
     }

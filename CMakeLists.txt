@@ -5,6 +5,14 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 add_compile_definitions(WFC_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+# Development tools (the DEBUG-ONLY QA panel, F10). ON for development builds; a shipping-style build configures
+# -DWFC_DEV_TOOLS=OFF (build.ps1 -Shipping) and the panel is compiled out.
+option(WFC_DEV_TOOLS "Compile the developer QA panel (F10)" ON)
+if(WFC_DEV_TOOLS)
+    add_compile_definitions(WFC_DEV_TOOLS=1)
+else()
+    add_compile_definitions(WFC_DEV_TOOLS=0)
+endif()
 
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Debug)

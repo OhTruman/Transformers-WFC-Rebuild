@@ -2,6 +2,7 @@
 // messages are dispatched by the game window's thread-wide message pump.
 #include "platform/QaPanel.h"
 
+#if WFC_DEV_TOOLS
 #include <windows.h>
 
 #include <cstdlib>
@@ -91,6 +92,9 @@ private:
         auto* self = (Win32QaPanel*)GetWindowLongPtrW(h, GWLP_USERDATA);
         if (self && m == WM_COMMAND && HIWORD(w) == BN_CLICKED) { self->command(LOWORD(w)); return 0; }
         if (self && m == WM_CLOSE) { self->show(false); return 0; }   // closing only hides it
+        // F10 while the panel has focus hides it (otherwise the system key would open its window menu)
+        if (self && m == WM_SYSKEYDOWN && w == VK_F10) { self->show(false); return 0; }
+        if (m == WM_SYSKEYUP && w == VK_F10) return 0;
         return DefWindowProcW(h, m, w, l);
     }
     HWND hwnd_ = nullptr, status_ = nullptr;
@@ -105,3 +109,9 @@ private:
 std::unique_ptr<QaPanel> createQaPanel() { return std::make_unique<Win32QaPanel>(); }
 
 } // namespace platform
+#else   // shipping-style build: no panel
+namespace platform {
+std::unique_ptr<QaPanel> createQaPanel() { return nullptr; }
+
+} // namespace platform
+#endif   // WFC_DEV_TOOLS

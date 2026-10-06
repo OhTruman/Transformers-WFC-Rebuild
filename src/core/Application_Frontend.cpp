@@ -49,6 +49,20 @@ struct HasMatchTextureRelease<R, std::void_t<decltype(std::declval<R&>().setText
     : std::true_type {};
 constexpr bool kRendererReleasesMatchTextures = HasMatchTextureRelease<render::IRenderer>::value;
 
+// Rendering M09 (agents/rendering 73fd427): IRenderer::setFrameLimit(hz) paces presentation (0 = unlimited); the main
+// loop calls waitFrameSlot. Detected; without it the window's own limiter (Win32Window::setFrameLimit) is used.
+template <class R, class = void> struct HasRendererFrameLimit : std::false_type {};
+template <class R>
+struct HasRendererFrameLimit<R, std::void_t<decltype(std::declval<R&>().setFrameLimit(1.0f)), decltype(std::declval<R&>().waitFrameSlot())>>
+    : std::true_type {};
+template <class R> const char* applyFrameLimit(R* r, platform::IWindow* w, int hz) {
+    if constexpr (HasRendererFrameLimit<R>::value) {
+        if (r) { r->setFrameLimit((float)hz); if (w) w->setFrameLimit(0); return "renderer"; }
+    }
+    if (w) w->setFrameLimit(hz);
+    return "window";
+}
+
 // Rendering 50f0742: preparePreviewBody parses a body's AnimSets into the shared cache and prewarms its materials without
 // creating a body; loadContentMesh + prewarmDynamicMesh compile a mesh's materials. Detected.
 template <class R, class = void> struct HasPreparePreviewBody : std::false_type {};
@@ -190,7 +204,7 @@ bool Application::wantsFrontendBoot() {
                           // [integration M08] Gameplay Pass 22 harnesses (direct boot; they exit when done)
                           "WFC_WEAPONTEST", "WFC_PARTICIPANTTEST", "WFC_CTFTEST", "WFC_MAPSUITE", "WFC_MARKERTEST",
                           "WFC_VEHTEST", "WFC_FOVTEST", "WFC_SCREENTEST", "WFC_TILETEST", "WFC_MODETEST", "WFC_CHASSISTEST",
-                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST"})
+                          "WFC_CHASSIS", "WFC_SWITCHTEST", "WFC_SCORETEST", "WFC_HEIGHTTEST", "WFC_VEHPHYS", "WFC_POINTPROBE", "WFC_PROJFXTEST", "WFC_MUZZLETEST", "WFC_RMUZZLETEST", "WFC_CHARGETEST", "WFC_DROPTEST", "WFC_PRELOADTEST", "WFC_RISERTEST", "WFC_EVENTTEST", "WFC_CLASSCHANGETEST", "WFC_FINEAIMTEST", "WFC_XFORMVIS", "WFC_QATEST", "WFC_HEADJIT", "WFC_FXTEST"})
         if (std::getenv(v)) return false;
     return true;
 }
@@ -217,10 +231,12 @@ void Application::attachPresenter() {
         const auto& d = frontend_->flow().profile().display;
         if (d.fullscreen || d.width != window_->width() || d.height != window_->height()) window_->setDisplayMode(d.width, d.height, d.fullscreen);
         window_->setVSync(d.vsync);
-        // PC EXTENSION frame cap: [PCSettings] FrameLimit (e.g. 30 / 60 / 120 / 144 / 165 / 240; 0 = none), or WFC_FPS_LIMIT.
+        // PC ADAPTATION frame-rate limit: [PCSettings] FrameLimit (Hz, 0 = unlimited, the default; the PC graphics menu's
+        // Frame Rate Limit entry), or WFC_FPS_LIMIT for tests. Presentation only: the simulation's fixed step is unaffected.
         int cap = d.frameLimit;
-        if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::atoi(e);
-        if (cap > 0) window_->setFrameLimit(cap);
+        if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::max(0, std::atoi(e));
+        const char* by = applyFrameLimit(renderer_, window_, cap);
+        frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(cap)}, {"by", by}, {"when", "boot"}});
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
@@ -239,6 +255,11 @@ void Application::attachPresenter() {
 #ifdef WFC_SYSTEMS_FRONTEND_AUDIO
         game::LevelAudioHost::applyProfileVolumes(p.getInt("Music Volume"), p.getInt("FX Volume"), p.getInt("Dialogue Volume"));
 #endif
+        if (p.display.frameLimit != appliedFrameLimit_) {   // the Frame Rate Limit selector applies on every step
+            appliedFrameLimit_ = p.display.frameLimit;
+            const char* by = applyFrameLimit(renderer_, window_, appliedFrameLimit_);
+            frontend::FlowTrace::emit("display.frameLimit", {{"hz", std::to_string(appliedFrameLimit_)}, {"by", by}, {"when", "apply"}});
+        }
         if (applyLookSettings(world_.player().controller(), p))
             frontend::FlowTrace::emit("profile.lookSettings", {{"CameraSensitivity", p.get("CameraSensitivity")}, {"owner", "gameplay"}});
         frontend::FlowTrace::emit("profile.apply", {{"FXVolume", p.get("FX Volume")}, {"DialogueVolume", p.get("Dialogue Volume")},
@@ -398,10 +419,19 @@ template <class W> std::string qaTool(W& w, platform::QaRequest::Kind k, const s
 }
 
 void Application::qaTick(const platform::InputFrame& in) {
-    // DEBUG-ONLY QA panel (NOT ORIGINAL): only with WFC_QA=1. A separate tool window (F10 toggles it); its requests run
-    // the normal frontend flow (party lobby -> private game -> map -> countdown) through the script runner.
-    static const bool enabled = std::getenv("WFC_QA") != nullptr;
-    if (!enabled || !frontend_) return;
+    // DEBUG-ONLY QA panel (NOT ORIGINAL): development builds only (WFC_DEV_TOOLS; compiled out of shipping-style
+    // builds). A separate tool window, never part of the frontend menus: F10 opens / hides it; WFC_QA=1 also opens it at
+    // startup (and enables the WFC_QA_LAUNCH / WFC_QA_RESTART_AFTER shortcuts). Its requests run the normal frontend
+    // flow (party lobby -> private game -> map -> countdown) through the script runner.
+#if !WFC_DEV_TOOLS
+    (void)in;
+    return;
+#else
+    if (!frontend_) return;
+    static const bool atStartup = std::getenv("WFC_QA") != nullptr;
+    bool f10 = false;
+    for (uint16_t k : in.keyPresses) f10 = f10 || k == 0x79;   // VK_F10 (Win32Window takes it from WM_SYSKEYDOWN)
+    if (!qa_ && !atStartup && !f10) return;   // created on the first F10
     frontend::GameFlow& flow = frontend_->flow();
     if (!qa_) {
         qa_ = platform::createQaPanel();
@@ -415,11 +445,14 @@ void Application::qaTick(const platform::InputFrame& in) {
         weapons.push_back({"(class default)", ""});
         for (const std::string& w : qaWeapons(world_)) weapons.push_back({w, w});
         qa_->setOptions(maps, modes, chars, weapons);
-        qa_->show(true);
         qa_->setStatus("Debug QA panel (not original). F10 toggles.");
-        LOG_INFO("QA panel enabled (WFC_QA, debug only)");
+        LOG_INFO("QA panel created (developer build, %s)", atStartup ? "WFC_QA" : "F10");
+        if (atStartup) qa_->show(true);
     }
-    for (uint16_t k : in.keyPresses) if (k == 0x79) qa_->show(!qa_->visible());   // VK_F10
+    if (f10) {
+        qa_->show(!qa_->visible());
+        frontend::FlowTrace::emit("qa.panel", {{"visible", frontend::FlowTrace::boolean(qa_->visible())}, {"provenance", "DEBUG ONLY"}});
+    }
     platform::QaRequest r = qa_->poll();
     {   // command-line equivalents (debug only): WFC_QA_LAUNCH=MODE,MAPID,CLASS once from the title;
         // WFC_QA_RESTART_AFTER=<s>: one Restart after that long in a match
@@ -493,6 +526,7 @@ void Application::qaTick(const platform::InputFrame& in) {
                    (r.kind == platform::QaRequest::Kind::Title ? "" : r.mode + " map " + std::to_string(r.mapId) + " as " + r.character));
     frontend::FlowTrace::emit("qa.request", {{"kind", r.kind == platform::QaRequest::Kind::Title ? "title" : "launch"}, {"mode", r.mode},
                                              {"map", std::to_string(r.mapId)}, {"character", r.character}, {"provenance", "DEBUG ONLY"}});
+#endif   // WFC_DEV_TOOLS
 }
 
 void Application::shutdownFrontend() {
@@ -688,7 +722,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     // comes from the frontend's CustomTransformers selection; CheckReadySpawn waits for it [CONF].
     world_.match().requireCharacterSelection(world_.localMatchPlayer());
     preloadSavedCustomCharacters(world_, *frontend_, 0);   // [Gameplay 24r] saved CaC slots, under the match load
-    selectionSent_ = false;
+    selectionSentSerial_ = 0;
     lifecycleT_ = 0.0f; lifecycleStep_ = 0;
     frontend::FlowTrace::emit("match.gameplay", {{"map", gl.map}, {"mode", gl.modeTag}, {"goalScore", std::to_string(gl.settings.goalScore)},
                                                  {"timeLimit", std::to_string(gl.settings.timeLimit)}});
@@ -766,7 +800,9 @@ void Application::routeMatchToFrontend(float dt) {
     const int me = world_.localMatchPlayer();
     // [integration M06] Customize.SelectCharacter -> TnPlayerController.SelectCharacter -> PRI._SelectedCharacter:
     // the frontend's selection becomes Gameplay's CharacterSelection (type, specialty, iconic chassis UniqueId).
-    if (!selectionSent_ && flow.selectedCharacter().valid && me >= 0) {
+    // Every pick is forwarded, also mid-match (Change Character): the original uses the new selection on the next
+    // respawn ("Selected character used on respawn", UIText; SelectCharacter never suicides) - Gameplay applies it.
+    if (flow.selectedCharacter().valid && me >= 0 && flow.selectionSerial() != selectionSentSerial_) {
         const frontend::GameFlow::SelectedCharacter& fc = flow.selectedCharacter();
         game::CharacterSelection cs;
         cs.type = fc.type;
@@ -778,9 +814,11 @@ void Application::routeMatchToFrontend(float dt) {
         cs.customSlot = fc.name;
         fillFullSelection(cs, fc);
         world_.match().selectCharacter(me, cs);
-        selectionSent_ = true;
+        const bool repick = selectionSentSerial_ != 0;
+        selectionSentSerial_ = flow.selectionSerial();
         const int f = world_.match().faction(me) == 1 ? 1 : 0;   // [integration M08] resolved faction (FFA: Decepticon)
         frontend::FlowTrace::emit("match.characterSelected", {{"name", fc.name}, {"type", std::to_string(cs.type)}, {"specialty", sp},
+                                                            {"repick", frontend::FlowTrace::boolean(repick)},
                                                             {"faction", f == 1 ? "Decepticon" : "Autobot"},
                                                             {"chassis", game::resolveChassis(cs, f)},
                                                             {"body", fc.bodyAvailable[f] ? "available" : "MISSING"}});

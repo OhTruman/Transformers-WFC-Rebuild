@@ -289,6 +289,7 @@ void VM::installDisplayBuiltins() {
         gfx::MovieClip* mc = clipOf(self);
         if (!mc) return Value::undef();
         Object* init = arg(a, 3).isObject() ? a[3].o : nullptr;
+        if (init && vm.player()->attachHook) vm.player()->attachHook(vm.toString(arg(a, 0)), init);
         gfx::MovieClip* r = vm.player()->attachMovie(mc, vm.toString(arg(a, 0)), vm.toString(arg(a, 1)), (int)vm.toNumber(arg(a, 2)), init);
         return r ? Value(vm.player()->scriptObject(r)) : Value::undef();
     });

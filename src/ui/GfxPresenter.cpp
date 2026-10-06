@@ -509,6 +509,48 @@ void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
     }
 }
 
+namespace {
+// PC ADAPTATION: SettingsMenu_GFX's Graphics button rebuilds graphicsMenuArray (Brightness, Resolution, Fullscreen,
+// Texture Quality, VSync, Apply; writeGraphicsSettings reads listItem1..4 by index) and passes it straight to
+// attachMovie('mc_subMenu', ..., {buildArray: graphicsMenuArray}). A Frame Rate Limit item is inserted before Apply in
+// that init object (Player::attachHook), in the menu's own data-store form ({choiceArray, dataStore, hintText,
+// panelWidth, text}): the lateral selector reads its value with DataStores.ReadValue and each step writes it and calls
+// Game.ApplyProfileSettings (applied live). Not an original setting (the Xenon game ran 15-30 fps smoothed).
+constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 1000};
+void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current) {
+    if (linkage != "mc_subMenu" || !init) return;
+    gfx::avm1::VM& vm = p.vm();
+    gfx::avm1::Value a = vm.get(init, "buildArray");
+    if (!a.isObject() || a.o->kind != gfx::avm1::ObjKind::Array || a.o->elems.size() != 6) return;
+    gfx::avm1::Value last = a.o->elems.back();
+    if (!last.isObject() || vm.toString(vm.get(last.o, "text")) != "$UIText.Settings.CommitButton") return;
+    std::vector<gfx::avm1::Value> choices;
+    auto choice = [&](int hz, const std::string& label) {
+        gfx::avm1::Object* c = vm.newPlain();
+        vm.set(c, "Value", gfx::avm1::Value((double)hz));
+        vm.set(c, "FriendlyName", gfx::avm1::Value(label));
+        choices.push_back(gfx::avm1::Value(c));
+    };
+    bool listed = current == 0;
+    for (int hz : kFrameLimitChoices) {
+        if (!listed && current < hz) { choice(current, "Custom (" + std::to_string(current) + ")"); listed = true; }
+        choice(hz, std::to_string(hz));
+        listed = listed || hz == current;
+    }
+    if (!listed) choice(current, "Custom (" + std::to_string(current) + ")");
+    choice(0, "Unlimited");
+    gfx::avm1::Object* item = vm.newPlain();
+    vm.set(item, "choiceArray", gfx::avm1::Value(vm.newArray(choices)));
+    vm.set(item, "dataStore", gfx::avm1::Value(std::string("<PCSettings:FrameLimit>")));
+    vm.set(item, "hintText", gfx::avm1::Value(std::string("Limit the maximum frames per second.")));
+    vm.set(item, "panelWidth", gfx::avm1::Value(413.0));
+    vm.set(item, "text", gfx::avm1::Value(std::string("Frame Rate Limit")));
+    a.o->elems.insert(a.o->elems.end() - 1, gfx::avm1::Value(item));
+    frontend::FlowTrace::emit("settings.frameLimitItem", {{"current", std::to_string(current)}, {"choices", std::to_string(choices.size())},
+                                                          {"provenance", "PC ADAPTATION"}});
+}
+}
+
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
     core::prof::Scope prof("ui.update");
     syncMovies(flow);
@@ -560,6 +602,12 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
         for (size_t i = extras_.size(); i-- > 0;) if (extras_[i].object == o) { extras_.erase(extras_.begin() + (long)i); shapesStale_ = true; }
     deferredErase_.clear();
     for (Extra& e : extras_) e.movie->advance(dt);
+    frameLimitShown_ = flow.profile().display.frameLimit;
+    for (Open& op : movies_) {
+        gfx::Player& p = op.movie->player();
+        if (!p.attachHook)
+            p.attachHook = [this, &p](const std::string& linkage, gfx::avm1::Object* init) { addFrameLimitItem(p, linkage, init, frameLimitShown_); };
+    }
     // Deferred engine -> AS invokes (the presenter's own and the flow's, e.g. _global.MovieEnded).
     for (const auto& iv : rt_.flow().takeUiInvokes()) deferred_.push_back({iv.first, iv.second, {}});
     std::vector<Deferred> due;

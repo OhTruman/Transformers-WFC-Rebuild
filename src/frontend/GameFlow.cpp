@@ -532,6 +532,7 @@ void GameFlow::returnToGameLobby() {
 void GameFlow::selectCharacter(const SelectedCharacter& c) {
     selected_ = c;
     selected_.valid = true;
+    ++selectionSerial_;
     auto list = [](const std::vector<std::string>& v) { std::string o; for (const auto& x : v) o += (o.empty() ? "" : ",") + x; return o; };
     auto col = [](const CharacterColorSel& k) {
         char b[48];

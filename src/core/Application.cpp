@@ -475,7 +475,7 @@ Application::MatchExit Application::runMatch() {
         if (const char* hz = std::getenv("WFC_RENDERHZ")) realDt = 1.0 / std::max(1.0, std::atof(hz));
 
         if (!window_->pump(frontend_ ? pumped : input)) break;
-        if (frontend_) qaTick(pumped);   // DEBUG QA panel (WFC_QA only)
+        if (frontend_) qaTick(pumped);   // DEBUG QA panel (development builds; F10)
         if (frontend_) input = pumped;
         if (frontend_) {
             // Frontend boot: Escape / Start is "|onrelease showmenu" (Xe-TransInput.ini) -> pause UI, not quit.
