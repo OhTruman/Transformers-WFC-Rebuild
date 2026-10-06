@@ -111,7 +111,7 @@ def system_runtime(name, s):
                    'subuv_method': req.get('InterpolationMethod', 'PSUVIM_None'),
                    # M44: Beam2 / Trail2 type data (MaxBeamCount caps live beams; taper / tessellation PARTIAL)
                    'beam_trail': {k: td[k] for k in ('MaxBeamCount', 'TaperMethod', 'InterpolationPoints', 'Speed',
-                                                     'MaxParticleInTrailCount', 'TessellationFactor',
+                                                     'MaxParticleInTrailCount', 'MaxTrailCount', 'TessellationFactor',
                                                      'bEmitOnlyWhenMoving', 'bConnectToSource') if k in td}
                                  if tdc in ('ParticleModuleTypeDataBeam2', 'ParticleModuleTypeDataTrail2') else None,
                    'required': {'emitter_duration': req.get('EmitterDuration', 1.0),
@@ -148,6 +148,8 @@ def system_runtime(name, s):
                     mod['dists'][prop] = {'kind': dd['kind'], 'values': dd['values'], 'confidence': dd['confidence']}
                     if dd['confidence'] != 'CONFIRMED':
                         mod['partial'].append(prop)
+                if m['module'] in ('PMI_LocationEmitter', 'PMI_LocationEmitterDirect') and L.get('location_emitter'):
+                    mod['location_emitter'] = L['location_emitter']
                 lod['modules'].append(mod)
             lod['flag_analysis'] = flag_analysis(lod)
             # RE MILESTONE04 pickup/objective presentation §2 (HIGH): flagA == membership in the executed module
@@ -268,6 +270,57 @@ def beam_modules(R, p, t, blob, mods):
     return out
 
 
+def lod_name_list(t, fg, nnames):
+    """The LOD's name list in its native tail: u32 count + count x (FName index, number), ending at the distribution
+    groups (RE pass 5 s14: LOD+0x38 -> +0x68 at runtime). The longest consistent list."""
+    import struct as _st
+    for n in range(32, -1, -1):
+        st = fg - 4 - 8 * n
+        if st < 0: continue
+        if _st.unpack_from('>i', t, st)[0] != n: continue
+        ents = [_st.unpack_from('>ii', t, st + 4 + 8 * k) for k in range(n)]
+        if all(0 <= i < nnames and 0 <= num < 64 for i, num in ents):
+            return st, ents
+    return None, []
+
+
+def location_emitter(p, t, pr, emitter_names, self_name, direct):
+    """M63 PMI_LocationEmitter / PMI_LocationEmitterDirect payload (RE pass 5 s14, CONFIRMED layout): +0 int name index
+    into the LOD name list, +4 InheritSourceVelocityScale, +8 InheritSourceRotationScale, +C SelectionMethod (0 Random,
+    1 Sequential, else particle 0), +10 bInheritSourceVelocity, +14 bInheritSourceRotation (Direct reads only +0).
+    The source is the one name-list entry naming another emitter of this system; the payload block is located by its
+    name index and value ranges (exactly one hit, else CDO defaults). An entry naming no emitter of this system is
+    kept as 'unmatched': the native module then does nothing."""
+    import math, struct as _st
+    st, nl = lod_name_list(t, pr['float_group_offset'], len(p.names))
+    if st is None: return None
+    names = [p.names[i] for i, _ in nl]
+    cands = [k for k, nm in enumerate(names) if nm in emitter_names and nm != self_name]
+    out = {'name_list': names}
+    if len(cands) != 1:
+        out['emitter'] = None
+        out['unmatched'] = [nm for nm in names if nm not in ('Color', 'Color2', 'Color3')] or names
+        return out
+    k = cands[0]
+    out['emitter'] = names[k]
+    if direct: return out
+    lo = 35 + 17 * len(pr['records'])
+    hits = []
+    for o in range(lo, st - 23):
+        idx, a, b, sel, iv, ir = _st.unpack_from('>iffiii', t, o)
+        if idx == k and all(math.isfinite(x) and 1e-4 < abs(x) < 1e3 for x in (a, b)) and 0 <= sel <= 2 and \
+                iv in (0, 1) and ir in (0, 1):
+            hits.append((a, b, sel, iv, ir))
+    if len(hits) == 1:
+        a, b, sel, iv, ir = hits[0]
+        out.update({'inherit_velocity_scale': a, 'inherit_rotation_scale': b,
+                    'selection': ['ELESM_Random', 'ELESM_Sequential', 'ELESM_Particle0'][sel],
+                    'inherit_velocity': bool(iv), 'inherit_rotation': bool(ir), 'payload': 'decoded'})
+    else:
+        out['payload'] = '%d candidate blocks: CDO defaults (Random, no inheritance, scales 1)' % len(hits)
+    return out
+
+
 def class_templates():
     """M51: ParticleSystem templates the shipped weapon / character data references (FlightEffect, muzzle, impact,
     vehicle FX, abilities) -> {package: {template}}. The original loads them with the class's own FX package
@@ -340,6 +393,20 @@ def library(mapname):
                 if mi is not None:
                     mods.append((_st.pack('>i', mi + 1), {'name': d2.get('ParameterName'),
                                                           'constant': d2.get('Constant', [1.0, 1.0, 1.0])}))
+        # M63: LocationEmitter / Direct module payloads (source emitter, selection, inheritance)
+        en = set(e['name'] for e in s['emitters'])
+        for e in s['emitters']:
+            for L in e['lods']:
+                ids = [m['module'] for m in L.get('compiled_modules', [])]
+                if 'PMI_LocationEmitter' not in ids and 'PMI_LocationEmitterDirect' not in ids: continue
+                li = op._idx.get(L['lod'].lower())
+                if li is None: continue
+                try:
+                    tl = pstream.lod_tail(op, li); pr = pstream.parse(tl)
+                    L['location_emitter'] = location_emitter(op, tl, pr, en, e['name'],
+                                                             'PMI_LocationEmitter' not in ids)
+                except Exception as ex:
+                    print('  location emitter: %s %s: %s' % (t, e['name'], ex))
         if mods:
             for e in s['emitters']:
                 for L in e['lods']:

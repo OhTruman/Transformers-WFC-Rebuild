@@ -246,6 +246,9 @@ bool Pipeline::loadMapFx(const std::string& path) {
                             }
                     }
                     if (lod.typeData == 2) {
+                        // spawn cap = MaxTrailCount (CDO 1) x MaxParticleInTrailCount (Trail2 Spawn 0x83048E40, RE s14),
+                        // not the emitter's MaxPeakCount
+                        lod.trailCap = std::max(1, bt["MaxTrailCount"].asInt(1)) * std::max(1, bt["MaxParticleInTrailCount"].asInt(100));
                         lod.tessFactor = std::max(1, bt["TessellationFactor"].asInt(1));   // 0 -> 1 (native)
                         lod.tessStrength = bt["TessellationStrength"].asFloat(1.0f);
                     }
@@ -280,7 +283,8 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     const assets::Json& le = ms[m]["location_emitter"];
                     if (le.isObject()) {             // M63 (decoded from the LOD stream by build_map_fx)
                         mod.sourceEmitter = le["emitter"].asString();
-                        mod.selection = le["selection"].asString() == "ELESM_Sequential" ? 1 : 0;
+                        const std::string sel = le["selection"].asString();
+                        mod.selection = sel == "ELESM_Sequential" ? 1 : sel == "ELESM_Particle0" ? 2 : 0;
                         mod.inheritVelocity = le["inherit_velocity"].asBool(false);
                         mod.inheritVelocityScale = le["inherit_velocity_scale"].asFloat(1.0f);
                         mod.inheritRotation = le["inherit_rotation"].asBool(false);
@@ -291,6 +295,8 @@ bool Pipeline::loadMapFx(const std::string& path) {
                         bool vec = dv.second["kind"].asString().rfind("vector", 0) == 0;
                         mod.dists[dv.first] = parseDist(dv.second, vec ? 3 : 1);
                     }
+                    if (lod.typeData == 2 && mod.name == "PMI_LocationEmitter" && !mod.sourceEmitter.empty())
+                        lod.particleTrail = true;
                     lod.modules.push_back(std::move(mod));
                 }
                 em.lods.push_back(std::move(lod));
@@ -496,6 +502,17 @@ void Pipeline::tickMapFx(float dt) {
                         if (ia != m.dists.end()) { ia->second.eval(q.relTime, in.rng, as); q.color[3] *= as[0]; }
                     }
                 }
+                for (const FxModule& m : L.modules) {
+                    if (m.name != "PMI_LocationEmitterDirect" || m.sourceEmitter.empty() || m.flagA == 0) continue;
+                    // M63 Direct update (native update runner 0x83039A18 case 0x14): re-snap particle i to source active
+                    // particle i every tick; i >= the source count is left untouched
+                    for (size_t e2 = 0; e2 < sys.emitters.size(); ++e2) {
+                        if (sys.emitters[e2].name != m.sourceEmitter) continue;
+                        const auto& src = in.emitters[e2].parts;
+                        if (p < src.size()) { std::copy(src[p].pos, src[p].pos + 3, q.pos); std::copy(src[p].vel, src[p].vel + 3, q.vel); }
+                        break;
+                    }
+                }
                 if (L.typeData == 3) {
                     // M60 beam ends (RE pass 5 s11: ResolveSourceData 0x8302F320 / ResolveTargetData 0x8302F738, CONFIRMED),
                     // at spawn and every tick unless locked. Particle methods never read a particle (BeamMethod Target):
@@ -613,9 +630,12 @@ void Pipeline::tickMapFx(float dt) {
                 if (lo > 0 && hi > lo) { in.rng = in.rng * 1664525u + 1013904223u; spawn += lo + (int)((in.rng >> 8) % (uint32_t)(hi - lo + 1)); }
                 else spawn += hi;
             }
-            const int peak = L.maxBeams > 0 ? std::min(em.maxPeak, L.maxBeams) : em.maxPeak;   // Beam2: MaxBeamCount
+            const int peak = L.maxBeams > 0 ? std::min(em.maxPeak, L.maxBeams)              // Beam2: MaxBeamCount
+                             : L.trailCap > 0 ? L.trailCap : em.maxPeak;                    // Trail2: trail capacity
+            if (L.particleTrail) spawn = std::min(spawn, 1);   // Trail2 Spawn clamps to 1 per tick (RE s14)
             for (int s = 0; s < spawn && (int)rt.parts.size() < peak; ++s) {
                 FxParticle q;
+                q.seq = rt.spawnSeq++;
                 float origin[3] = {0, 0, 0};
                 if (!L.localSpace) std::copy(in.T, in.T + 3, origin);
                 std::copy(origin, origin + 3, q.pos);
@@ -646,23 +666,55 @@ void Pipeline::tickMapFx(float dt) {
                         for (int c = 0; c < 3; ++c) q.pos[c] += w3[c];
                     } else if ((m.name == "PMI_LocationEmitter" || m.name == "PMI_LocationEmitterDirect") &&
                                !m.sourceEmitter.empty()) {
-                        // M63: a live particle of the named emitter in this instance (Random / Sequential); its position,
-                        // and with bInheritSourceVelocity its velocity x scale. Direct: the particle with this index,
-                        // re-placed every tick (update below). No live source particle: the component (pending RE)
-                        const FxParticle* sp = nullptr;
-                        for (size_t e2 = 0; e2 < sys.emitters.size() && !sp; ++e2) {
+                        // M63 (RE pass 5 s14, native spawn runner 0x8303E288 cases 0x13 / 0x14, CONFIRMED): the source
+                        // emitter instance of this system by EmitterName. No source / no live particle: nothing (the
+                        // particle keeps its normal spawn position). Random = floor(frand x count); Sequential = a
+                        // pre-incremented counter wrapping to 0 (1, 2, .., n-1, 0); else particle 0. Direct: the same
+                        // active index (re-snapped every tick below). Position = the source particle's location through
+                        // source space -> this space; a source born this frame uses the source emitter's location.
+                        // Inherit velocity (BaseVelocity and Velocity) / rotation x scale. [PARTIAL: the sub-frame
+                        // terms - src.Velocity x S + Velocity x S are not modelled; this runtime spawns at frame time]
+                        for (size_t e2 = 0; e2 < sys.emitters.size(); ++e2) {
                             if (sys.emitters[e2].name != m.sourceEmitter) continue;
-                            const auto& src = in.emitters[e2].parts;
+                            const auto& srcRt = in.emitters[e2];
+                            const auto& src = srcRt.parts;
                             if (src.empty()) break;
-                            size_t idx;
-                            if (m.name == "PMI_LocationEmitterDirect") idx = rt.parts.size() % src.size();
-                            else if (m.selection == 1) idx = (size_t)(rt.locSequence++) % src.size();
-                            else { in.rng = in.rng * 1664525u + 1013904223u; idx = (size_t)((in.rng >> 8) % (uint32_t)src.size()); }
-                            sp = &src[idx];
-                        }
-                        if (sp) {
-                            std::copy(sp->pos, sp->pos + 3, q.pos);
-                            if (m.inheritVelocity) for (int c = 0; c < 3; ++c) q.baseVel[c] += sp->vel[c] * m.inheritVelocityScale;
+                            size_t idx = 0;
+                            if (m.name == "PMI_LocationEmitterDirect") {
+                                idx = rt.parts.size();
+                                if (idx >= src.size()) break;
+                            } else if (m.selection == 0) {
+                                in.rng = in.rng * 1664525u + 1013904223u;
+                                idx = std::min((size_t)((float)(in.rng >> 8) / 16777216.0f * (float)src.size()), src.size() - 1);
+                            } else if (m.selection == 1) {
+                                if (++rt.locSequence >= (int)src.size()) rt.locSequence = 0;
+                                idx = (size_t)rt.locSequence;
+                            }
+                            const FxParticle& sp = src[idx];
+                            const FxLod& SL = sys.emitters[e2].lods[(size_t)std::min<int>(srcRt.lod, (int)sys.emitters[e2].lods.size() - 1)];
+                            float wpos[3], wvel[3];
+                            if (sp.relTime == 0.0f) std::copy(in.T, in.T + 3, wpos);     // born this frame: emitter location
+                            else if (SL.localSpace) {
+                                for (int c = 0; c < 3; ++c) wpos[c] = sp.pos[0] * in.R[0][c] + sp.pos[1] * in.R[1][c] + sp.pos[2] * in.R[2][c] + in.T[c];
+                            } else std::copy(sp.pos, sp.pos + 3, wpos);
+                            if (SL.localSpace) for (int c = 0; c < 3; ++c) wvel[c] = sp.vel[0] * in.R[0][c] + sp.vel[1] * in.R[1][c] + sp.vel[2] * in.R[2][c];
+                            else std::copy(sp.vel, sp.vel + 3, wvel);
+                            if (L.localSpace) {                          // world -> this emitter's local space
+                                float d[3] = {wpos[0] - in.T[0], wpos[1] - in.T[1], wpos[2] - in.T[2]};
+                                for (int r = 0; r < 3; ++r) {
+                                    float l2 = in.R[r][0] * in.R[r][0] + in.R[r][1] * in.R[r][1] + in.R[r][2] * in.R[r][2];
+                                    q.pos[r] = l2 > 0 ? (d[0] * in.R[r][0] + d[1] * in.R[r][1] + d[2] * in.R[r][2]) / l2 : 0.0f;
+                                    float v = l2 > 0 ? (wvel[0] * in.R[r][0] + wvel[1] * in.R[r][1] + wvel[2] * in.R[r][2]) / l2 : 0.0f;
+                                    if (m.inheritVelocity) { q.baseVel[r] += v * m.inheritVelocityScale; }
+                                }
+                            } else {
+                                std::copy(wpos, wpos + 3, q.pos);
+                                if (m.inheritVelocity) for (int c = 0; c < 3; ++c) q.baseVel[c] += wvel[c] * m.inheritVelocityScale;
+                            }
+                            if (m.inheritRotation) q.rot += sp.rot * m.inheritRotationScale;
+                            if (m.name == "PMI_LocationEmitterDirect")
+                                for (int c = 0; c < 3; ++c) q.baseVel[c] = L.localSpace ? q.baseVel[c] : wvel[c];
+                            break;
                         }
                     } else if (m.name == "PMI_LocationPrimitiveSphere") {   // [PARTIAL] sampling rule
                         float rad[1], vs[1], off[3], d[3];
@@ -1350,6 +1402,58 @@ void Pipeline::drawMapPresentation() {
                         quad(a, b, w, w, q.color, q.color, 0.0f, 1.0f);
                     }
                   }
+                } else if (L.typeData == 2 && L.particleTrail) {
+                    // M63 Trail2 placed by LocationEmitter (RE pass 5 s14, CONFIRMED): one chain through this emitter's
+                    // own particles in spawn order (each new particle becomes the head; no per-source trails; the head
+                    // does not follow its source). Per-particle size / colour; U from the head by distance (s13).
+                    std::vector<const FxParticle*> chain;
+                    for (const FxParticle& q : rt.parts) chain.push_back(&q);
+                    std::sort(chain.begin(), chain.end(), [](const FxParticle* x, const FxParticle* y) { return x->seq < y->seq; });
+                    if (chain.size() >= 2) {
+                        auto wpos = [&](const FxParticle& q) {
+                            if (!L.localSpace) return ueToGltf(q.pos);
+                            float w3[3];
+                            for (int c = 0; c < 3; ++c) w3[c] = q.pos[0] * in.R[0][c] + q.pos[1] * in.R[1][c] + q.pos[2] * in.R[2][c] + in.T[c];
+                            return ueToGltf(w3);
+                        };
+                        const size_t n = chain.size();
+                        std::vector<core::Vec3> P(n);
+                        for (size_t k = 0; k < n; ++k) P[k] = wpos(*chain[k]);
+                        const int T = std::max(1, L.tessFactor);
+                        auto tangent = [&](size_t k) {
+                            core::Vec3 d = k == 0 ? P[1] - P[0] : k + 1 == n ? P[n - 1] - P[n - 2] : (P[k + 1] - P[k - 1]) * 0.5f;
+                            return d * L.tessStrength;
+                        };
+                        std::vector<SP> sv;
+                        for (size_t k = 0; k + 1 < n; ++k) {
+                            const FxParticle& q0 = *chain[k];
+                            const FxParticle& q1 = *chain[k + 1];
+                            core::Vec3 m0 = tangent(k), m1 = tangent(k + 1);
+                            for (int st = 0; st < T; ++st) {
+                                float ta = (float)st / (float)T, t2 = ta * ta, t3 = t2 * ta;
+                                core::Vec3 pt = st == 0 ? P[k] : P[k] * (2 * t3 - 3 * t2 + 1) + m0 * (t3 - 2 * t2 + ta) +
+                                                                 P[k + 1] * (-2 * t3 + 3 * t2) + m1 * (t3 - t2);
+                                float w = (q0.size[0] + (q1.size[0] - q0.size[0]) * ta) * sizeScale[0] * 0.01f;
+                                SP v{pt, w, {0, 0, 0, 0}, L.tilePerParticle ? (float)(n - 1) - ((float)k + ta) : 0.0f};
+                                for (int c = 0; c < 4; ++c) v.col[c] = q0.color[c] + (q1.color[c] - q0.color[c]) * ta;
+                                sv.push_back(v);
+                            }
+                        }
+                        const FxParticle& ql = *chain[n - 1];
+                        sv.push_back({P[n - 1], ql.size[0] * sizeScale[0] * 0.01f, {ql.color[0], ql.color[1], ql.color[2], ql.color[3]}, 0.0f});
+                        if (!L.tilePerParticle) {
+                            float total = 0.0f;
+                            for (size_t i = 0; i + 1 < sv.size(); ++i) total += core::length(sv[i + 1].p - sv[i].p);
+                            float cum = 0.0f;
+                            sv.back().u = 0.0f;
+                            for (size_t i = sv.size() - 1; i-- > 0;) {
+                                cum += core::length(sv[i + 1].p - sv[i].p);
+                                sv[i].u = total > 1e-6f ? std::min(cum / total, 1.0f) : 0.0f;
+                            }
+                        }
+                        tile = L.textureTile;
+                        strip(sv);
+                    }
                 } else if (L.typeData == 2 && rt.trail.size() >= 2 && !rt.parts.empty()) {
                     const FxParticle& q = rt.parts.back();
                     float w = q.size[0] * sizeScale[0] * 0.01f;
