@@ -277,6 +277,15 @@ bool Pipeline::loadMapFx(const std::string& path) {
                     mod.name = ms[m]["module"].asString();
                     mod.flagA = ms[m]["raw_flags"][0].asInt(1);
                     mod.flagB = ms[m]["raw_flags"][1].asInt(1);
+                    const assets::Json& le = ms[m]["location_emitter"];
+                    if (le.isObject()) {             // M63 (decoded from the LOD stream by build_map_fx)
+                        mod.sourceEmitter = le["emitter"].asString();
+                        mod.selection = le["selection"].asString() == "ELESM_Sequential" ? 1 : 0;
+                        mod.inheritVelocity = le["inherit_velocity"].asBool(false);
+                        mod.inheritVelocityScale = le["inherit_velocity_scale"].asFloat(1.0f);
+                        mod.inheritRotation = le["inherit_rotation"].asBool(false);
+                        mod.inheritRotationScale = le["inherit_rotation_scale"].asFloat(1.0f);
+                    }
                     const assets::Json& d = ms[m]["dists"];
                     for (const auto& dv : d.obj) {
                         bool vec = dv.second["kind"].asString().rfind("vector", 0) == 0;
@@ -635,6 +644,26 @@ void Pipeline::tickMapFx(float dt) {
                         evalDist(m, "StartLocation", efrac, in.rng, v3);
                         toWorldDir(v3, w3);
                         for (int c = 0; c < 3; ++c) q.pos[c] += w3[c];
+                    } else if ((m.name == "PMI_LocationEmitter" || m.name == "PMI_LocationEmitterDirect") &&
+                               !m.sourceEmitter.empty()) {
+                        // M63: a live particle of the named emitter in this instance (Random / Sequential); its position,
+                        // and with bInheritSourceVelocity its velocity x scale. Direct: the particle with this index,
+                        // re-placed every tick (update below). No live source particle: the component (pending RE)
+                        const FxParticle* sp = nullptr;
+                        for (size_t e2 = 0; e2 < sys.emitters.size() && !sp; ++e2) {
+                            if (sys.emitters[e2].name != m.sourceEmitter) continue;
+                            const auto& src = in.emitters[e2].parts;
+                            if (src.empty()) break;
+                            size_t idx;
+                            if (m.name == "PMI_LocationEmitterDirect") idx = rt.parts.size() % src.size();
+                            else if (m.selection == 1) idx = (size_t)(rt.locSequence++) % src.size();
+                            else { in.rng = in.rng * 1664525u + 1013904223u; idx = (size_t)((in.rng >> 8) % (uint32_t)src.size()); }
+                            sp = &src[idx];
+                        }
+                        if (sp) {
+                            std::copy(sp->pos, sp->pos + 3, q.pos);
+                            if (m.inheritVelocity) for (int c = 0; c < 3; ++c) q.baseVel[c] += sp->vel[c] * m.inheritVelocityScale;
+                        }
                     } else if (m.name == "PMI_LocationPrimitiveSphere") {   // [PARTIAL] sampling rule
                         float rad[1], vs[1], off[3], d[3];
                         evalDist(m, "StartRadius", efrac, in.rng, rad);
@@ -1132,8 +1161,9 @@ void Pipeline::drawMapPresentation() {
                     if (sl < 1e-4f) return;
                     side = side * (1.0f / sl);
                     Sprite s;
-                    s.c[0] = a - side * (w0 * 0.5f); s.c[1] = b - side * (w1 * 0.5f);
-                    s.c[2] = b + side * (w1 * 0.5f); s.c[3] = a + side * (w0 * 0.5f);
+                    // half-width = Size (RE s13 addendum 2: Xenos beam / trail VS, offset (2V - 1) Size cross(view, dir))
+                    s.c[0] = a - side * w0; s.c[1] = b - side * w1;
+                    s.c[2] = b + side * w1; s.c[3] = a + side * w0;
                     const float uv[4][2] = {{u0, 1}, {u1, 1}, {u1, 0}, {u0, 0}};
                     std::memcpy(s.uv, uv, sizeof(uv));
                     for (int k = 0; k < 4; ++k) s.color[k] = 0.5f * (col0[k] + col1[k]);
@@ -1160,8 +1190,9 @@ void Pipeline::drawMapPresentation() {
                     for (size_t i = 0; i + 1 < n; ++i) {
                         if (core::length(side[i]) < 1e-6f || core::length(side[i + 1]) < 1e-6f) continue;
                         Sprite s;
-                        s.c[0] = v[i].p - side[i] * (v[i].w * 0.5f); s.c[1] = v[i + 1].p - side[i + 1] * (v[i + 1].w * 0.5f);
-                        s.c[2] = v[i + 1].p + side[i + 1] * (v[i + 1].w * 0.5f); s.c[3] = v[i].p + side[i] * (v[i].w * 0.5f);
+                        // half-width = Size (the ribbon VS offsets each vertex pair by (2V - 1) x Size; RE s13 add. 2, HIGH)
+                        s.c[0] = v[i].p - side[i] * v[i].w; s.c[1] = v[i + 1].p - side[i + 1] * v[i + 1].w;
+                        s.c[2] = v[i + 1].p + side[i + 1] * v[i + 1].w; s.c[3] = v[i].p + side[i] * v[i].w;
                         // along-ribbon coordinate (tiled) and across (0 / 1); kAlongV swaps them (M61)
                         float ua = v[i].u * tile, ub = v[i + 1].u * tile;
                         float uv[4][2] = {{ua, 1}, {ub, 1}, {ub, 0}, {ua, 0}};

@@ -441,7 +441,14 @@ public:
         std::vector<float> v;
         void eval(float t, uint32_t& rng, float out[3]) const;
     };
-    struct FxModule { std::string name; std::map<std::string, FxDist> dists; int flagA = 1, flagB = 1; };
+    struct FxModule {
+        std::string name; std::map<std::string, FxDist> dists; int flagA = 1, flagB = 1;
+        // M63 PMI_LocationEmitter / PMI_LocationEmitterDirect: the source emitter (by name, in this system instance)
+        std::string sourceEmitter;
+        int selection = 0;                // 0 Random, 1 Sequential
+        bool inheritVelocity = false, inheritRotation = false;
+        float inheritVelocityScale = 1.0f, inheritRotationScale = 1.0f;   // CDO 1 / 1
+    };
     struct FxBurst { int count, countLow; float time; };
     struct FxLod {
         std::string material, meshGltf;
@@ -505,6 +512,7 @@ private:
         float dynParam[4] = {1, 1, 1, 1}; bool hasDyn = false;
         std::vector<std::array<float, 4>> trail;   // Trail2: recent source positions (UE) + age (s), newest last
         int forceSpawn = 0;                        // Trail2: particles owed by source movement (spawn per unit)
+        int locSequence = 0;                       // LocationEmitter Sequential selection counter
     };
     struct FxInstance {
         std::string component, owner, ownerClass, system, role, requiredRule;
