@@ -64,6 +64,8 @@ int main(int argc, char** argv) {
         CHECK(fe->cues().liveInstances() == 0 && fe->cues().mapCueCount() == 0 && fe->state().music.empty() && a->openStreams() == 0,
               "cycle %d: frontend fully released before the match", cy);
         // --- the match
+        // Orphaned worker decodes (a level unloaded mid-decode, M08q freeze fix) are released when they finish - let them settle.
+        for (int k = 0; k < 600 && (mcues.orphanDecodes() > 0 || fe->cues().orphanDecodes() > 0); ++k) { mcues.tick(dt); Sleep(10); }
         const size_t pcmBefore = a->residentBytes();
         if (cy == 0) pcmFirst = pcmBefore;
         const int linesBefore = match.match().linesPlayed();
