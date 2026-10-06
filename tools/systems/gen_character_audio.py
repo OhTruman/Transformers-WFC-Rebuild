@@ -128,7 +128,9 @@ for key, ch in roster['chassis'].items():
             'voice_set': (au.get('voice') or {}).get('object'), 'vehicle_set': (au.get('vehicle') or {}).get('object'),
             'voice': voice, 'vehicle': vehicle, 'vehicle_death_sound': au.get('vehicle_death_sound'),
             'clips': clips, 'weapons': sorted(set(loadout.values())),
-            'vehicle_component': vehicle_component((ch.get('vehicle') or {}).get('definition'))}
+            'vehicle_component': vehicle_component((ch.get('vehicle') or {}).get('definition')),
+            # roster vehicle_form: car / truck / tank / plane -> which form class drives the component
+            'vehicle_form': (ch.get('vehicle') or {}).get('vehicle_form') or ''}
     profiles[key] = prof
     all_cues |= set(voice.values()) | set(vehicle.values())
     if prof['vehicle_death_sound']: all_cues.add(prof['vehicle_death_sound'])
@@ -207,7 +209,28 @@ for cls, w in weapons.items():
             hit = {'damage_type': dts[0], 'index': i, 'hit_event': (e.get('HitSound') or '').split('.')[-1],
                    'block_event': (e.get('BlockSound') or '').split('.')[-1], 'retrigger': e.get('RetriggerTime', 0.0),
                    'causes_blood': causes_blood(dts[0])}
+    # Projectile (versus WEPDATA WeaponProjectiles[0] -> the class's Mesh = TnProjectileMesh): FlightSound / ExplosionSound /
+    # FlightEffect / ExplosionEffect (+ SecondaryFlightSound, mines) [CONF data; HmProjectile.ClientSpawnFlightEffect /
+    # SpawnExplosionEffect script].
+    vs = w.get('gameplay (versus WEPDATA = MultiplayerData, CONFIRMED)') or {}
+    projs = [x for x in (vs.get('WeaponProjectiles') or []) if x]
+    proj = None
+    if projs:
+        _, pd = props(projs[0].replace('TransContent.', 'TransContent.Default__').replace('TransGame.', 'TransGame.Default__'))
+        _, pm = props(pd.get('Mesh') or '')
+        proj = {'class': projs[0], 'mesh': pd.get('Mesh') or '', 'flight_sound': pm.get('FlightSound') or '',
+                'secondary_flight_sound': pm.get('SecondaryFlightSound') or '', 'explosion_sound': pm.get('ExplosionSound') or '',
+                'flight_effect': pm.get('FlightEffect') or '', 'explosion_effect': pm.get('ExplosionEffect') or ''}
+        for q in (proj['flight_sound'], proj['secondary_flight_sound'], proj['explosion_sound']):
+            if q: all_cues.add(q)
+    # Beam weapons (TnWeaponBeam: Repair Ray): WP_Looping while firing + per-target WP_Fire / WP_FireSecondary loops.
+    chain, t = [], cls
+    while t:
+        chain.append(t.split('.')[-1]); t = type_super(t)
+    fades = {e['WeaponEventType']: [e.get('LoopingFadeInTime') or 0.0, e.get('LoopingFadeOutTime') or 0.0]
+             for e in ((w.get('sounds') or {}).get('events') or []) if e.get('WeaponSound')}
     wpn[cls] = {'events': ev, 'pickup_sound': dp.get('PickupSound'), 'damage_types': dts, 'hit_effect': hit,
+                'projectile': proj, 'beam': 'TnWeaponBeam' in chain, 'fades': fades,
                 'anims': weapon_anims((w.get('mesh') or {}).get('weapon_mesh_template')),
                 # WEPMESH MuzzleFlashes / TracerTemplates [WP_Fire] and DefaultSquib [CONF data] (presentation, not audio:
                 # kept here so one per-class table drives the held weapon)
@@ -246,6 +269,9 @@ print('vehicle components: %d / %d chassis; classes %s' % (sum(1 for p in profil
 for k in ('Truck', 'Tank', 'Jet'):
     vc = profiles[k]['vehicle_component']
     print('  ', k, json.dumps({x: vc[x] for x in ('drive', 'reverse', 'jump_rev', 'slots', 'tunables', 'boost_oneshots')} if vc else None)[:900])
+print('projectile weapons %d: %s; beam weapons %s' % (sum(1 for w in wpn.values() if w['projectile']),
+      sorted(k.split('.')[-1] for k, w in wpn.items() if w['projectile'] and not w['projectile']['flight_sound']),
+      sorted(k.split('.')[-1] for k, w in wpn.items() if w['beam'])))
 print('weapon anims: %d / %d weapons; Ion Blaster %s' % (sum(1 for w in wpn.values() if w['anims']), len(wpn),
       {k: (v['clip'], v['length'], v['sounds']) for k, v in wpn['TransContent.TnWeaponIonBlaster']['anims'].items()}))
 for k in ('Truck', 'Car', 'Tank', 'Jet'):

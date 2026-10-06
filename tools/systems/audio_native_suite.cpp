@@ -12,6 +12,7 @@
 #include "game/LevelAudioHost.h"
 #include "game/FrontendAudioRuntime.h"
 #include "game/CharacterAudio.h"
+#include "game/WeaponAudio.h"
 #include "audio/MovieAudio.h"
 #include <algorithm>
 #include "assets/Json.h"
@@ -1875,7 +1876,59 @@ static void testLocalizedWaves() {
           game::SoundCues::localizedWave("WL_DX_X/A.wav", "FRA", content).empty(), "an int-owned copy plays as is; a FRA-owned copy never substitutes");
 }
 
+// M08d: weapon sounds by identity, projectile flight / explosion, the Repair Ray beam (WeaponAudio).
+static void testWeaponAudio() {
+    std::printf("[weapon audio: identity, projectiles, beam]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    game::LevelAudioHost host(cues);
+    host.attach(&rec, kRoot);
+    host.load("MP_IAC_Streets");
+    for (const char* c : {"TransContent.TnWeaponRepairRay", "TransContent.TnWeaponRocketLauncher", "TransContent.TnWeaponAssaultRifleVehicle"})
+        game::CharacterAudio::loadWeaponCues(cues, c);
+    game::WeaponAudio wa;
+    game::SoundCues::Emitter e; e.pos = {0, 0, 0};
+    auto step = [&](float secs) { for (int k = 0; k < (int)(secs * 60.0f); ++k) cues.tick(1.0f / 60.0f); };
+    auto live = [&](const char* q) { return cues.activeInstances(q); };
+    // identity: the vehicle rifle's own shot; a beam weapon has no per-shot sound
+    CHECK(wa.fire(cues, "TransContent.TnWeaponAssaultRifleVehicle", false, e, 1.0f) >= 0 && live("BL_WPN_GUN_NEUTRON_RIFLE.VEH_SHOOT") == 1 &&
+          wa.fire(cues, "TransContent.TnWeaponRepairRay", false, e, 1.0f) < 0, "fire by weapon identity; beam weapons: no per-shot sound");
+    // projectile: flight loop from spawn, moved, explosion + 0.25 s fade on Explode, nothing left
+    wa.projectileSpawned(cues, 7, "TransContent.TnWeaponRocketLauncher", {0, 0, 0}, 5.0f);
+    step(0.2f);
+    wa.projectileMoved(cues, 7, {0, 0, 20});
+    const bool flying = live("BL_WPN_GUN_ROCKET.TRAIL_LP") == 1 && wa.flightLoops() == 1;
+    const int ex = wa.projectileExploded(cues, 7, "TransContent.TnWeaponRocketLauncher", {0, 0, 30}, 30.0f);
+    step(0.5f);
+    CHECK(flying && ex >= 0 && live("BL_WPN_GUN_ROCKET.TRAIL_LP") == 0 && wa.flightLoops() == 0,
+          "rocket: TRAIL_LP from spawn, EXPL_IMPT_WORLD on Explode, flight loop faded out");
+    wa.projectileSpawned(cues, 8, "TransContent.TnWeaponRocketLauncher", {0, 0, 0}, 5.0f);
+    wa.projectileRemoved(cues, 8); step(0.5f);
+    CHECK(live("BL_WPN_GUN_ROCKET.TRAIL_LP") == 0 && wa.flightLoops() == 0, "projectile destroyed without exploding: flight loop stops, no explosion");
+    // beam: WP_Looping + heal loop on a teammate, damage loop on an enemy, tail on release
+    const char* RR = "TransContent.TnWeaponRepairRay";
+    wa.beam(cues, RR, true, game::WeaponAudio::BeamTarget::Friendly, e); step(0.3f);
+    const bool heal = live("BL_WPN_GUN_REPAIR_WPN.SHOOT_LP") == 1 && live("BL_WPN_GUN_REPAIR_WPN.SHOOT_HEAL_LP") == 1 &&
+                      live("BL_WPN_GUN_REPAIR_WPN.SHOOT_DMG_LP") == 0;
+    for (int k = 0; k < 10; ++k) { wa.beam(cues, RR, true, game::WeaponAudio::BeamTarget::Friendly, e); step(0.05f); }
+    const bool once = live("BL_WPN_GUN_REPAIR_WPN.SHOOT_LP") == 1 && live("BL_WPN_GUN_REPAIR_WPN.SHOOT_HEAL_LP") == 1;
+    wa.beam(cues, RR, true, game::WeaponAudio::BeamTarget::Enemy, e); step(0.5f);
+    const bool dmg = live("BL_WPN_GUN_REPAIR_WPN.SHOOT_HEAL_LP") == 0 && live("BL_WPN_GUN_REPAIR_WPN.SHOOT_DMG_LP") == 1;
+    wa.beam(cues, RR, false, game::WeaponAudio::BeamTarget::None, e);
+    const bool tail = live("BL_WPN_GUN_REPAIR_WPN.SHOOT_LAST_SHOT") == 1;
+    step(0.5f);
+    CHECK(heal && once && dmg && tail && live("BL_WPN_GUN_REPAIR_WPN.SHOOT_LP") == 0 && live("BL_WPN_GUN_REPAIR_WPN.SHOOT_DMG_LP") == 0 && !wa.beamActive(),
+          "Repair Ray: WP_Looping + heal (teammate) / damage (enemy) loops, no duplicates, LoopingTail on release (heal %d once %d dmg %d tail %d)",
+          heal, once, dmg, tail);
+    wa.beam(cues, RR, true, game::WeaponAudio::BeamTarget::Enemy, e);
+    wa.projectileSpawned(cues, 9, "TransContent.TnWeaponRocketLauncher", {0, 0, 0}, 5.0f);
+    wa.stopAll(cues); step(0.1f);
+    CHECK(live("BL_WPN_GUN_REPAIR_WPN.SHOOT_LP") == 0 && live("BL_WPN_GUN_ROCKET.TRAIL_LP") == 0 && !wa.beamActive() && wa.flightLoops() == 0,
+          "stopAll (death / class change / restart / unload): no beam or flight loop survives");
+    host.unload();
+}
+
 int main() {
+    testWeaponAudio();
     testLocalizedWaves();
     testObjectiveMessages();
     testCharacterAudio();

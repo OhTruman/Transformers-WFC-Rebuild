@@ -482,6 +482,32 @@ AssetTools FRONTEND.md + manifests/frontend_*.json (cc9773e). Full table: `docs/
 
 
 
+
+## SYSTEMS M08d — VEHICLE / WEAPON / PROJECTILE / BEAM AUDIO BY IDENTITY (2026-10-05, agents/systems)
+* **Vehicle form classes** [CONF decompiled TransGame form classes]:
+  * Every form clones its blueprint's own HmPlayerVehicleAudioComponent (TnVehicleForm.Initialize).
+  * Which component calls each form makes (Car / Truck / Tank / Plane) is ported in `VehicleFormAudio`.
+  * The jet's hover boosters are a loop: PlayHoverFx / StopHoverFx.
+  * The jet's ascend / descend are held-input Play / Stop pairs (Hovering.UpdateDashing).
+  * Car Driving.UpdateRolling plays AscendSound.
+  * The tank's special move is PlayOneEightySound.
+  * Unknowns: BoosterAmount needs the hover sim's thruster contribution (Gameplay); the tank 180 is not modelled by Gameplay.
+* **Projectiles** [CONF script HmProjectile + data TnProjectileMesh]:
+  * FlightSound is attached from spawn (ClientSpawnFlightEffect).
+  * Explode: FlightSound FadeOut 0.25, then PlaySound(ExplosionSound) at the projectile (SpawnExplosionEffect).
+  * The launch is the weapon's WP_Fire, for every fire type.
+* **Beam weapons** [CONF script TnWeaponBeam / TnWeaponRepair; HIGH EWeaponEvent indices]:
+  * While firing: WP_Looping (event 9).
+  * OnPlayFireEffects: a teammate → stop 2 / play 1 (WP_Fire = heal loop); an enemy → stop 1 / play 2 (WP_FireSecondary = damage loop); no target → stop both.
+  * StopFireEffects: stop 1 / 2 / 9, then play 12 (WP_LoopingTail).
+  * Loops use the authored LoopingFade times.
+* **Weapon identity** [CONF data]: fire, impact and victim hit sounds come from the fired weapon's class (robot or vehicle weapon). A vehicle weapon is emitted at the vehicle [HIGH: PlaySound on the owner].
+* **Language**:
+  * A cold boot → TDM resolves 282 localized waves from `_LOC/int`, 0 skipped.
+  * The native GLanguage source on PC (XGetLanguage on 360) remains `WFC_LANGUAGE` (default INT) [documented unknown: the PC OS-language mapping].
+
+---
+
 ## SYSTEMS M08c — PLAYTEST AUDIO FIXES (2026-10-05, agents/systems)
 Details are in `docs/handoff/SYSTEMS_M08C_AUDIO_HANDOFF.md`.
 

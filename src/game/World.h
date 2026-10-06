@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <map>
+#include <set>
 #include <vector>
 #include "core/Math.h"
 #include "game/Player.h"
@@ -30,6 +31,8 @@
 #include "game/LevelAudioHost.h"
 #include "game/CharacterAudio.h"
 #include "game/VehicleAudio.h"
+#include "game/VehicleFormAudio.h"
+#include "game/WeaponAudio.h"
 #include <map>
 
 namespace render { class IRenderer; }
@@ -237,6 +240,23 @@ public:
     void setPlayerCharacterAudio(const std::string& chassisKey);
     // The player's current weapon class (its WeaponSounds: WP_Fire / WP_LowAmmoFire / WP_LoopingTail / fine aim).
     void setPlayerWeaponAudio(const std::string& weaponClass);
+
+    // ---- Systems M08d hooks: Gameplay reports state / events, Systems plays ----
+    void tickVehicleAudio(float dt, const VehicleFormSignals& signals);
+    const VehicleFormEvents& vehicleEvents() const { return vehicleEvents_; }
+    void setPlayerVehicleWeaponAudio(const std::string& weaponClass);
+    // Load the cues of the loadout's weapon classes (robot + vehicle weapons, grenades) for this level.
+    void preloadWeaponAudio(const std::vector<std::string>& weaponClasses);
+    void ensureWeaponAudio(const std::string& weaponClass);
+    const std::string& firingWeaponClass(bool vehicleForm) const;
+    int onWeaponFired(const std::string& weaponClass, bool lowAmmo, bool vehicleForm, const core::Vec3& muzzle);
+    void onProjectileSpawned(int key, const std::string& weaponClass, const core::Vec3& pos);
+    void onProjectileMoved(int key, const core::Vec3& pos);
+    void onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos);
+    void onProjectileRemoved(int key);
+    void onBeamWeapon(const std::string& weaponClass, bool firing, int target);
+    const WeaponAudio& weaponAudio() const { return weaponAudio_; }
+    const VehicleAudio& vehicleAudio() const { return vehicleAudio_; }
     // Weapon equip / put-down (Gameplay): the held weapon mesh's WP_Equip / WP_PutDown animation sounds.
     void weaponAnimEvent(WeaponSoundTimeline::Event e) { weaponSounds_.play(e); }
     const char* weaponCue(const char* event) const;
@@ -350,6 +370,8 @@ public:
         bool lockRobots = false;
         // Grenade (TnProjectileGrenadeBase): gravity scale, bounce, fuse (starts on the first impact), resting, explode on pawn.
         bool grenade = false, explodeOnPawn = false, resting = false;
+        std::string weaponClass;               // [Systems M08d] the firing weapon's class (projectile sounds)
+        int audioKey = 0;
         float gravityScale = 1.0f, bounce = 1.0f, fuseMin = 0.0f, fuseMax = 0.0f;
     };
     // TnGrenadeThrower: G in robot form -> toss after TossDelay 0.4 s.
@@ -589,6 +611,15 @@ private:
     bool transformCuePlayed_ = false;
     int transformNotify_ = 0;                // next transform-clip notify to fire
     std::string weaponClass_ = "TransContent.TnWeaponIonBlaster";
+    std::string vehicleWeaponClass_;
+    std::set<std::string> weaponAudioLoaded_;      // per level (cleared with the level's cues)
+    std::vector<std::string> loadoutWeaponClasses_; // the player's loadout (robot + vehicle weapons)
+    WeaponAudio weaponAudio_;
+    VehicleFormAudio vehicleForm_;
+    VehicleFormEvents vehicleEvents_;
+    int projAudioKey_ = 0;
+    float beamSinceShot_ = 1e9f, beamInterval_ = 0.1f;   // [Systems M08d] beam weapon traces
+    std::string beamClassFiring_;
     // TnHitEffectPlayer.LastHitEffectTimes per victim (here: the damage targets) per effect entry [CONF script].
     std::map<std::pair<const void*, int>, float> lastHitEffect_;
     // The held weapon's mesh-animation sounds (reload / idle / equip / put-down notifies), by weapon class.
@@ -612,6 +643,7 @@ private:
     int jumpInst_[3] = {-1, -1, -1};
     bool hoverActive_ = false;
     bool vehiclePrevGrounded_ = true;
+    bool audioPrevGrounded_ = true;          // [Systems M08d] vehicle take-off for every chassis (audio)
     int jumpCount_ = 0;
     bool boostActive_ = false;
     VehicleNitro nitro_;         // follows Gameplay's vehicleState().nitroRemain (presentation side)

@@ -8,6 +8,7 @@
 #include "game/CharacterAudio.h"
 #include "game/OldVehicleAudio.h"
 #include "game/VehicleAudio.h"
+#include "game/VehicleFormAudio.h"
 #include <cstdio>
 #include <cstdlib>
 #include <map>
@@ -78,8 +79,63 @@ std::vector<std::string> run(VA& va, const game::CharacterAudioProfile& p, const
     return out;
 }
 
+// The previous World mapping (Gameplay state -> VehicleAudio::Input, truck-shaped) vs VehicleFormAudio on the same
+// truck-form signals, both on the current VehicleAudio: every voice event must match.
+static std::vector<std::string> runSignals(bool translator, const game::CharacterAudioProfile& p, const std::string& content) {
+    Rec rec;
+    game::SoundCues cues;
+    cues.load(&rec, content);
+    game::CharacterAudio::loadCues(cues, p);
+    game::VehicleAudio va;
+    va.setProfile(p);
+    game::VehicleFormAudio form;
+    std::srand(12345);
+    const float dt = 1.0f / 60.0f;
+    auto at = [] { game::SoundCues::Emitter e; e.pos = {0, 0, 0}; return e; };
+    std::vector<std::string> out;
+    int loadState = 0; bool prevDash = false, prevGround = true;
+    for (int f = 0; f < 60 * 24; ++f) {
+        const float t = f * dt;
+        const bool vehicle = t < 22.0f;
+        const bool ground = !((t >= 8.0f && t < 9.0f) || (t >= 18.0f && t < 20.0f));
+        const float stick = t < 9.0f ? 1.0f : t < 12.0f ? 0.0f : t < 15.0f ? -1.0f : 1.0f;
+        const float spd = t < 5.0f ? t * 8.0f : t < 9.0f ? 40.0f : t < 12.0f ? 40.0f - (t - 9.0f) * 12.0f : t < 15.0f ? -6.0f : 10.0f;
+        const bool boost = vehicle && t >= 5.0f && t < 8.0f;
+        const bool tookOff = vehicle && prevGround && !ground;
+        const bool dashing = t >= 15.0f && t < 15.3f;
+        const bool nitroStart = f == 16 * 60;
+        game::VehicleAudio::Input in;
+        if (translator) {
+            game::VehicleFormSignals s;
+            s.kind = game::VehicleFormSignals::Kind::Truck;
+            s.vehicle = vehicle; s.onGround = ground; s.boostState = boost; s.stickForward = stick;
+            s.velocity = {0, 0, spd}; s.forward = {0, 0, 1}; s.tookOff = tookOff; s.dashing = dashing; s.nitroStarted = nitroStart;
+            in = form.translate(s);
+        } else {                                   // the M08c World block
+            in.entered = vehicle; in.boosting = boost; in.onGround = ground;
+            if (!boost) loadState = stick > 0.01f ? 1 : (stick < -0.01f ? 2 : 0);
+            in.loadState = loadState; in.wheelSlip = 0.0f;
+            in.velocity = {0, 0, spd}; in.forward = {0, 0, 1}; in.ascend = tookOff;
+            in.booster = vehicle && !boost && dashing && !prevDash;
+            in.nitro = nitroStart;
+        }
+        prevDash = dashing; prevGround = ground;
+        va.tick(dt, in, cues, at);
+        cues.tick(dt);
+        for (const std::string& l : rec.log) out.push_back(std::to_string(f) + " " + l);
+        rec.log.clear();
+    }
+    return out;
+}
+
 int main(int argc, char** argv) {
     const std::string content = "F:/Transformers Rebuild/ExtractedAssets/content/";
+    {
+        const auto x = runSignals(false, game::CharacterAudio::defaultProfile(), content);
+        const auto y = runSignals(true, game::CharacterAudio::defaultProfile(), content);
+        std::printf("Optimus truck form: World mapping %zu events, VehicleFormAudio %zu -> %s\n", x.size(), y.size(), x == y ? "IDENTICAL" : "DIFFERENT");
+        if (x != y) return 1;
+    }
     const game::CharacterAudioProfile& op = game::CharacterAudio::defaultProfile();
     game::OldVehicleAudio oldVa;
     game::VehicleAudio newVa;

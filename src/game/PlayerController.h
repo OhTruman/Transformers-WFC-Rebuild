@@ -138,6 +138,10 @@ private:
     float viewYaw_ = 0.0f;        // camera rotation after the strategy's HmOrbitSmoother
     float viewPitch_ = -0.15f;
     MoveIntent intent_;
+public:
+    // [Systems M08d] read-only: the jet Hover Up / Down held inputs drive TnPlaneForm.Hovering.UpdateDashing sounds.
+    const MoveIntent& moveIntent() const { return intent_; }
+private:
     bool wantJumpLatched_ = false;
     bool wantFire_ = false;
     bool fireLatch_ = false;   // Fire pressed since the last simulation step
