@@ -492,7 +492,9 @@ public:
         loadingFrontendScene_ = false;
         if (!okData) return false;
         wfc_.skipMaterialPrewarm();          // M54: a menu backdrop never draws the match's weapon / effect materials
+        uploadingFrontendWorld_ = true;      // M75: no warm-up draw (Matinee-posed backdrop; matches only)
         sceneMesh_ = uploadMesh(world);
+        uploadingFrontendWorld_ = false;
         wfc_.prewarmPlacedFx();              // M58: its emitters' programs / textures / meshes, under the loading screen
         sceneDir_ = dir;
         LOG_INFO("frontend scene %s loaded (%zu submeshes)", dir.c_str(), world.subs.size());
@@ -518,6 +520,7 @@ public:
     void setFrontendSceneDraw(std::function<void(IRenderer&)> f) override { sceneDraw_ = std::move(f); }
     std::map<std::string, assets::AnimFile> animFileCache_;   // M69 parsed AnimSets by path (preview bodies)
     bool loadingFrontendScene_ = false;
+    bool uploadingFrontendWorld_ = false;
     const assets::AnimFile* animFile(const std::string& path) {   // M69 parsed AnimSet, cached by path
         auto cached = animFileCache_.find(path);
         if (cached == animFileCache_.end()) {
@@ -1151,6 +1154,8 @@ public:
         addDecalReceivers(mesh);
         if (recv_.dirty && mesh.vertexCount() > 100000) buildDecalGrid();   // the world: under the loading screen
         const int gpu = wfc_.active() ? wfc_.upload(mesh) : -1;
+        if (gpu >= 0 && mesh.vertexCount() > 100000 && !loadingFrontendScene_ && !uploadingFrontendWorld_)
+            wfc_.warmupWorld(gpu, vpW_, vpH_);   // M75: the driver's first-draw work, under the loading screen
         // CPU copy for the GL 1.1 client-array fallback and WFC_PICK. A large world mesh owned by the shader path is
         // never drawn from it: dropping it saves ~150 MB per Streets load (M11 memory high-water). Small meshes keep
         // theirs (drawMeshFx falls back to it when an effect material is missing).

@@ -1045,7 +1045,7 @@ struct FirstUseTimer {
     std::chrono::steady_clock::time_point t0 = std::chrono::steady_clock::now();
     ~FirstUseTimer() {
         static const bool on = std::getenv("WFC_RENDERSTATS") != nullptr;
-        if (!on || frame <= 2) return;
+        if (!on || frame <= 0) return;   // frame 0 = the load; frames 1-2 are the first presented (M75: they were hidden)
         double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         LOG_INFO("wfc first-use: frame %d %s %s %.2f ms", frame, kind, name.c_str(), ms);
     }
@@ -1938,7 +1938,7 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             const bool bakedPlacement = model.m[0] == 1.0f && model.m[5] == 1.0f && model.m[10] == 1.0f &&
                                         model.m[12] == 0.0f && model.m[13] == 0.0f && model.m[14] == 0.0f;
             static const bool noFrustum = std::getenv("WFC_NOFRUSTUMCULL") != nullptr;   // diagnostics: culling regression test
-            if (g.world && !moving && bakedPlacement && !noFrustum) {
+            if (g.world && !moving && bakedPlacement && !noFrustum && !warmup_) {
                 bool out = false;
                 for (int f = 0; f < 6 && !out; ++f) {
                     const float* pl = frustum_[f];
@@ -2127,6 +2127,56 @@ void Pipeline::draw(int id, const core::Mat4& model) {
             glDisable(GL_POLYGON_OFFSET_FILL);
         }
     }
+}
+
+// M75 (Integration 08n: the first match frame read 150-770 ms on the GPU timer, CPU span equal: the GPU waiting on
+// submission). The world's share is the driver's first-draw work over ~2,800 draws: 21-23 ms of the first frame on
+// Molten / Debris, ~3 ms after this warm-up, which costs 30-40 ms of load (~380 ms with a cold driver shader cache).
+// The rest of that frame is the player character's materials (programs + texture decode, ~160 ms) unless the caller
+// prewarms the body (prewarmDynamicMesh). The world is drawn once, unculled and hidden, right after its upload and
+// the material prewarm, while the loading screen still presents; glFinish lets the GPU-side residency complete there
+// too. Frame state (frame number, map clock, camera, counters) is saved and restored: the next frame is unchanged.
+void Pipeline::warmupWorld(int id, int w, int h) {
+    if (!active_ || id < 0 || (size_t)id >= meshes_.size() || std::getenv("WFC_NOWARMUP")) return;
+    const auto t0 = std::chrono::steady_clock::now();
+    w = w > 0 ? w : 1280; h = h > 0 ? h : 720;
+    const core::Mat4 vp = viewProj_, cp = camProj_, cv = camView_;
+    const core::Vec3 pos = camPos_;
+    const float zn = znear_, zf = zfar_;
+    const int vw = vpW_, vh = vpH_;
+    const bool defer = deferTrans_, dirty = depthDirty_, copied = sceneColorCopied_;
+    const FrameCounts counts = counts_;
+    float fr[6][4]; std::memcpy(fr, frustum_, sizeof fr);
+    vpW_ = w; vpH_ = h;
+    ensureTargets(w, h);
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    glViewport(0, 0, w, h);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    Camera cam;                                    // any view: nothing is culled and the target is never presented
+    cam.pos = {0, 0, 0}; cam.zfar = std::max(cam.zfar, worldRadius_ * 2.0f + 1000.0f);
+    camPos_ = cam.pos; znear_ = cam.znear; zfar_ = cam.zfar;
+    camProj_ = cam.proj(); camView_ = cam.view(); viewProj_ = camProj_ * camView_;
+    counts_ = FrameCounts();
+    deferTrans_ = false;                           // translucent draws immediately (no queue to flush)
+    depthDirty_ = true;
+    warmup_ = true;
+    glEnable(GL_DEPTH_TEST); glDepthMask(GL_TRUE);
+    draw(id, core::Mat4::identity());
+    warmup_ = false;
+    // the static light environments it cached were evaluated before the first frame's movers / Matinee light state:
+    // dropped, so the first frame computes them exactly as without the warm-up
+    for (GpuMesh& gm : meshes_)
+        for (Sub& sb : gm.subs) sb.envReady = false;
+    const int draws = counts_.draws;
+    glFinish();
+    viewProj_ = vp; camProj_ = cp; camView_ = cv; camPos_ = pos; znear_ = zn; zfar_ = zf;
+    vpW_ = vw; vpH_ = vh;
+    deferTrans_ = defer; depthDirty_ = dirty; sceneColorCopied_ = copied;
+    counts_ = counts;
+    std::memcpy(frustum_, fr, sizeof fr);
+    BindFramebuffer(GL_FRAMEBUFFER, 0);
+    LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms", draws, w, h,
+             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
 }
 
 int Pipeline::addRuntimeDecal(MeshData&& mesh, float lifetime) {

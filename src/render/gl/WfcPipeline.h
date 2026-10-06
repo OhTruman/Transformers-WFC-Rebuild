@@ -152,6 +152,9 @@ public:
     bool active() const { return active_; }
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
     void setCharacterColors(const CharacterColors& c) { charColorsBy_[drawOwner_] = c; }
+    // M75 loading-screen warm-up: one hidden, unculled draw of the world into the scene target (w x h) so the driver's
+    // first-draw work (state-dependent shader finalisation, texture residency) is paid under the loading screen
+    void warmupWorld(int meshId, int w, int h);
     // M74 energy death: the draw owner's dynamic materials swap to their package's Defrag instance at `defrag`
     void setDrawEnergyDeath(float defrag) {
         if (defrag < 0.0f) { ownerDefrag_.erase(drawOwner_); clearDrawMaterialParam("Defrag"); return; }
@@ -288,6 +291,7 @@ private:
     const std::vector<std::pair<std::string, std::array<float, 4>>>* drawParams_ = nullptr;   // per-draw runtime params
     std::map<int, std::vector<std::pair<std::string, std::array<float, 4>>>> ownerParams_;   // M70 by draw owner
     std::map<int, float> ownerDefrag_;                    // M74 energy death by draw owner
+    bool warmup_ = false;                                 // M75: warm-up draw in progress (no frustum culling)
     std::map<std::string, std::string> energyDeath_;      // M74 lower-case mesh package -> Defrag instance
     bool inDynamicDraw_ = false;
     std::map<std::string, std::string> miaMaterial_;   // MaterialInstanceActor (lower) -> MIC path (lower)
