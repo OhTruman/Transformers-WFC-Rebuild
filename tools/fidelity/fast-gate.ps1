@@ -43,7 +43,8 @@ foreach ($b in "build", "build-release") { $uo = Join-Path $OutDir "unit_$b.txt"
     Res "unit.$b" $(if (-not $ut) { "UNKNOWN" } elseif ($ut -match '100% tests passed') { "PASS" } else { "FAIL" }) ("ctest ({0}): {1}" -f $b, $(if ($um.Success) { $um.Value } else { "no summary" })) "Integration" }
 $X = Get-M07Expectations
 if (-not $ReportOnly) {
-    $need = @("MP_IAC_Streets", "MP_IAC_Berth", "UI_FrontEnd", "UI_PartyLobby", "UI_Lobby", "UI_CharacterCustomization")
+    # every launchable map: after a match the lobby moves on to the next map (08g: Streets -> Seed), so a FAST run can land anywhere
+    $need = @($X.maps | Where-Object { $_.launchable } | ForEach-Object { $_.runtime }) + @("UI_FrontEnd", "UI_PartyLobby", "UI_Lobby", "UI_CharacterCustomization")
     foreach ($m in @($need | Where-Object { -not (Test-Path (Join-Path $tgt "work\render\$_\materials_glsl.json")) })) { Push-Location $tgt; try { & powershell -NoProfile -ExecutionPolicy Bypass -File "tools\render\build_render_data.ps1" -Map $m *> (Join-Path $OutDir "rd_$m.log") } finally { Pop-Location } }
 }
 
@@ -101,7 +102,10 @@ if (Test-Path $mlog) {
     Res "mechanics.transform" $(if ($forms.Count -ge 2 -and $switches -ge 3) { "PASS" } elseif ($forms.Count -ge 2) { "PARTIAL" } else { "FAIL" }) ("forms seen {0}; form switches {1} (transform every 300 frames)" -f ($forms -join ","), $switches) "Gameplay"
     # weapon / map particle FX: Trail2 (ribbon) / Beam2 emitters are the KNOWN Rendering gap (WfcMapFx "not drawn yet")
     $rb = @(Grep-Log $mlog 'emitter .* is (Trail2|Beam2); not drawn yet' | ForEach-Object { $_.text -replace '^.*map fx: ', '' })
-    $fxErr = @(Grep-Log $mlog '(?i)\[(error|warn) *\].*(fx|particle|emitter)' | Where-Object { $_.text -notmatch 'Trail2|Beam2' })
+    $fxAll = @(Grep-Log $mlog '(?i)\[(error|warn) *\].*(fx|particle|emitter)' | Where-Object { $_.text -notmatch 'Trail2|Beam2' })
+    # "<module> has no decoded <field> (N used)": a declared PARTIAL decode (Rendering) - KNOWN, not a failure
+    $fxPartial = @($fxAll | Where-Object { $_.text -match 'has no decoded' }); $fxErr = @($fxAll | Where-Object { $_.text -notmatch 'has no decoded' })
+    if ($fxPartial.Count) { Res "fx.partial_decode" "KNOWN" ("particle modules with an undecoded field (declared PARTIAL, a default is used): " + ((@($fxPartial | ForEach-Object { $_.text -replace '^.*map fx: ', '' } | Select-Object -Unique)) -join " | ")) "Rendering" }
     # weapon ribbons are skipped silently (WeaponFx "Trail2 ribbons are not simulated by the runtime yet [PARTIAL]"), map
     # ribbons / beams are logged (WfcMapFx): the product's own declaration decides KNOWN, the log adds occurrences
     $decl = @(Get-ChildItem (Join-Path $tgt "src") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'Trail2 ribbons are not simulated', 'Trail2 / Beam2: not implemented' -SimpleMatch | ForEach-Object { "$($_.Filename):$($_.LineNumber)" })
@@ -141,8 +145,7 @@ foreach ($lf in $allLogs) {
     $legacy += @(Grep-Log $lf.FullName 'LEGACY RENDERER' | ForEach-Object { "$($lf.Directory.Name): " + ($_.text -replace '^\[[^\]]*\] ', '') })
     foreach ($m in @(Grep-Log $lf.FullName 'VISUALCHECK .*glDebug=(\d+)')) { $glDbg = [Math]::Max($glDbg, [int][regex]::Match($m.text, 'glDebug=(\d+)').Groups[1].Value) }
 }
-$oobCheck = [bool](Get-ChildItem (Join-Path $tgt "src
-ender") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'out of bounds (%zu indices' -SimpleMatch -List | Select-Object -First 1)
+$oobCheck = [bool](Get-ChildItem (Join-Path $tgt "src\render") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'out of bounds (%zu indices' -SimpleMatch -List | Select-Object -First 1)
 Res "render.out_of_bounds_draws" $(if ($oob.Count) { "FAIL" } elseif (-not $oobCheck) { "UNKNOWN" } else { "PASS" }) ("rejected out-of-bounds sub-mesh draws (GPU fault / driver-reset class, Rendering M45): {0}{1}{2}" -f $oob.Count, $(if ($oob.Count) { " - " + (($oob | Select-Object -Unique -First 3) -join " | ") } else { "" }), $(if (-not $oobCheck) { " - this build predates the M45 draw validation, so it cannot report them (not a PASS)" } else { "" })) "Rendering"
 Res "render.legacy_renderer" $(if ($legacy.Count) { "FAIL" } else { "PASS" }) ("LEGACY RENDERER (no original render data) errors: {0}{1}" -f $legacy.Count, $(if ($legacy.Count) { " - " + (($legacy | Select-Object -Unique -First 3) -join " | ") } else { "" })) "Rendering"
 Res "render.gl_debug" $(if ($glDbg -gt 0) { "PARTIAL" } else { "INFO" }) ("max VISUALCHECK glDebug count {0} (field present from Rendering 84ba009; 0 / absent on older builds)" -f $glDbg) "Rendering"
