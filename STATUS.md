@@ -3,6 +3,22 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08p (2026-10-06) - melee hit effects on the victim, kamikaze mines
+- **Melee / whirlwind / slam / ram hits:** the damage type's SharedHitEffectPlayer entry (exact, else nearest ancestor), resolved in the VICTIM's
+  SoundEventSet (IMPT_DMG_MELEE_HV / _LT -> BL_MELEE_IMPT.MTL_HV / MTL_LT); bCausesBlood gate; RetriggerTime per victim per entry
+  [CONF data + script, as the weapon hit effects]. Before, local melee hits on opponents made no hit sound.
+- **Kamikaze mines** (MinePooper streak; martyrdom mines use the same mesh) [RE pass 5 s12 addenda 15-17]:
+  * KAMIKAZE_FLIGHT_LP_IDLE from the throw;
+  * the first target found: KAMIKAZE_FUSE_START + the idle loop fades 0.25 s into KAMIKAZE_FLIGHT_LP_TRACKING;
+  * explosion (target / wall / shot): the loop fades + KAMIKAZE_EXPL_IMPT_WORLD;
+  * fizzle (60 s LifeSpan / owner death): the loop stops, no sound.
+  * Note for Gameplay: a mine destroyed by being shot explodes in the original (damage + sound); the rebuild removes it
+    without damage. Audio follows the original (the explosion plays).
+- **Martyrdom** (Leader ExplodeOnDeath, RE addenda 17 / 18): not simulated by Gameplay. TnProjectileMartyrdomGrenade is unused in the original.
+- **Glue:** `docs/handoff/SYSTEMS_M08P_melee_hit_mines_glue.patch` (after M08o, against 08k): the melee hit call, plus a KamikazeMine audioKey and per-tick calls.
+- **In game** (08k test tree, participant harness): 15 MTL_HV melee hits; Mine Pooper idle x3 -> found x2 (FUSE_START + tracking) -> EXPL x2.
+  0 missing cues. Suite 716 / 0; wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS M08o (2026-10-06) - grenade sounds, death sounds
 - **Grenades** (RE pass 5 s12 addendum 13 + HmProjectile):
   * Gameplay's toss built its projectile outside spawnProjectile, so grenades had no flight / fuse / bounce / explosion sound

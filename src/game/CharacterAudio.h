@@ -173,6 +173,9 @@ public:
     static const std::string& classSound(const std::string& cls, const std::string& field);
     // TnDamageTypeMelee or a subclass ("TransGame.TnDamageTypeMeleeBerzerk").
     static bool isMeleeDamageType(const std::string& damageType);
+    // The SharedHitEffectPlayer entry a damage type selects (exact, else nearest ancestor) with its bCausesBlood gate;
+    // nullptr if none. For non-weapon hits (melee, whirlwind, shoulder slam, rams).
+    static const WeaponHitEffect* damageHitEffect(const std::string& damageType);
     // Load every ability / buff cue the cue table does not have yet (level-owned, like the weapon cues).
     static int loadAbilityCues(SoundCues& cues);
     // An event's LoopingFadeInTime / LoopingFadeOutTime (WeaponSounds) [CONF data]; 0 / 0 if not authored.

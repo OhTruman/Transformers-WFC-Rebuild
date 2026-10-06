@@ -153,6 +153,12 @@ public:
     void onGrenadeToss(const std::string& grenadeClass, bool refused);
     // A pawn died at `pos` (local or not): vehicle-form death sound / robot melee-death sound.
     void onPawnDeath(const std::string& chassisId, bool vehicleForm, const std::string& damageType, const core::Vec3& pos);
+    // A non-weapon hit (melee / whirlwind / slam / ram) on pawn `victimKey` of chassis `victimChassis`: its hit effect.
+    void onPawnHitEffect(const std::string& damageType, const std::string& victimChassis, int victimKey, const core::Vec3& pos);
+    // Kamikaze mine `key` every tick (position, target found), its explosion, its silent removal (fizzle).
+    void setKamikazeMineAudio(int key, const core::Vec3& pos, bool targetFound);
+    void onKamikazeMineExploded(int key, const core::Vec3& pos);
+    void onKamikazeMineRemoved(int key);
     // Drain, every tick while the local Drain buff runs: targets this tick (HealSound), and each victim (DamageSound).
     void onDrainTick(int targets);
     void onDrainVictimTick(const core::Vec3& victimPos);

@@ -196,3 +196,7 @@ Default loudness is decided: keep 80 / 80 / 80 -> 0.8 (the original; about -1.9 
 
 `docs/handoff/SYSTEMS_M08O_grenade_death_glue.patch` (World.cpp / .h), made directly against integration/milestone-08k (e467663).
 Merge agents/systems first; the hook definitions come with it.
+
+## M08p: melee hit effects, kamikaze mines (glue)
+
+`docs/handoff/SYSTEMS_M08P_melee_hit_mines_glue.patch`, applied after the M08o patch (against 08k).
