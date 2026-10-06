@@ -838,7 +838,10 @@ public:
         sceneSampled_ = false;
         bool ok = wfc_.load(mapName);
         if (ok) glDisable(GL_FOG);   // fog is evaluated per vertex in the shader path (UE3 height fog)
-        if (ok && !loadingFrontendScene_) wfc_.requestMaterialPrewarm();   // M54: after the world upload, yielding
+        if (ok && !loadingFrontendScene_) {
+            wfc_.requestMaterialPrewarm();   // M54: after the world upload, yielding
+            for (const MeshData& r : prewarmRequests_) wfc_.prewarmDynamic(r);   // M59: replayed per map load
+        }
         return ok;
     }
 
@@ -980,7 +983,20 @@ public:
         drawMeshArrays(meshes_[(size_t)h], model, color);
     }
 
-    void prewarmDynamicMesh(const MeshData& m) override { if (wfc_.active()) wfc_.prewarmDynamic(m); }
+    // M59: requests are remembered and replayed after every map's render data loads. Callers prewarm once per
+    // model (Gameplay: once per chassis, when its assets are cached), possibly before the first map's render data is
+    // loaded, and every map load resets the pipeline's programs / textures.
+    void prewarmDynamicMesh(const MeshData& m) override {
+        std::string key;
+        for (const Material& mt : m.mats) key += mt.wfcName + "|" + mt.sourceName + ";";
+        if (!prewarmKeys_.insert(key).second) return;
+        MeshData lite;
+        lite.subs = m.subs; lite.mats = m.mats;
+        prewarmRequests_.push_back(std::move(lite));
+        if (wfc_.active() && !loadingFrontendScene_) wfc_.prewarmDynamic(prewarmRequests_.back());
+    }
+    std::vector<MeshData> prewarmRequests_;
+    std::set<std::string> prewarmKeys_;
 
     void drawDynamicMesh(const MeshData& m, const core::Mat4& model, const core::Vec3& color) override {
         if (m.empty()) return;
