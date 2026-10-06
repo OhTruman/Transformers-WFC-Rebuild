@@ -146,7 +146,8 @@ bool Application::init() {
     if (std::getenv("WFC_HEADJIT")) { runHeadingJitterTest(); return false; } // drawn heading vs camera per render frame, playtest M10
     if (std::getenv("WFC_VSOCKET")) { runVehicleSocketProbe(); return false; } // vehicle weapon socket vs hull, playtest M10
     if (std::getenv("WFC_XFORMVIS")) { runTransformVisibilityTest(); return false; } // per-chassis transform mesh handoff, playtest M10
-    if (std::getenv("WFC_FINEAIMTEST")) { runFineAimTest(); return false; }   // per-weapon fine aim camera, playtest M10   // measurements only
+    if (std::getenv("WFC_FINEAIMTEST")) { runFineAimTest(); return false; }   // per-weapon fine aim camera, playtest M10
+    if (std::getenv("WFC_QATEST")) { runQaToolTest(); return false; }        // DEV / QA TOOLING self-test (needs WFC_QA=1)   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
@@ -2271,6 +2272,51 @@ void Application::runParticipantTest() {
         check(E && turret, "Nucleon Shock Cannon: rocket turret with 10 rockets fires; a swap drops it (WT_Heavy)");
         check(E && mines, "Thermo Mine Re-Spawner: a mine every 2 s; it seeks an enemy within 20 m and detonates (125)");
     }
+    // Energon Repair Ray: teammate healed 60 HP/s, enemy damaged 60/s, 10 ammo/s [CONF TnWeaponRepair / RepairBeam_WEPDATA].
+    {
+        game::MatchLaunch LR; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", LR);
+        world_.launchMatch(LR);
+        game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Scientist; me.weapons = {"RepairRay", "BurstRifle"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), me);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 4; ++i) ops.push_back(world_.addMatchOpponent("RR" + std::to_string(i), false));
+        run(10.6f);
+        game::MatchOpponent* F = nullptr; game::MatchOpponent* E = nullptr;
+        for (auto* o : ops) if (o->spawned()) { if (world_.match().sameTeam(o->matchPlayer(), world_.localMatchPlayer())) { if (!F) F = o; } else if (!E) E = o; }
+        game::Character& lp = world_.player().pawn();
+        game::PlayerController& ctl = world_.player().controller();
+        float healed = 0, dealt = 0; int ammoUsed = 0; bool hudHeal = false; std::string wid = lp.weapon().def ? lp.weapon().def->id : "?";
+        if (F && E && wid == "RepairRay") {
+            ctl.setCameraYaw(lp.yaw());
+            if (moveToOpenLine(20.0f)) run(0.3f);
+            const core::Vec3 fwd = core::forwardFromYawPitch(ctl.camYaw(), 0.0f);
+            for (auto* o : world_.matchOpponents()) if (o != F && o != E) o->setPosition(lp.position() - fwd * 80.0f);
+            auto beamAt = [&](game::MatchOpponent* T, float secs) {
+                const core::Vec3 P = lp.position() + fwd * 10.0f;
+                for (int i = 0; i < (int)(secs * 60.0f); ++i) {
+                    T->setPosition(P);
+                    core::Vec3 d = T->pawn().actorLocation() - ctl.cameraPos();
+                    ctl.setCameraYaw(std::atan2(-d.x, -d.z)); ctl.setCameraPitch(std::atan2(d.y, std::hypot(d.x, d.z)));
+                    platform::InputFrame fire; fire.down[(int)platform::Button::Fire] = true;
+                    world_.handleInput(fire, dt); world_.tick(dt);
+                    if (world_.hudState().repairBeamHealing) hudHeal = true;
+                }
+                T->setPosition(lp.position() - fwd * 60.0f);
+            };
+            F->pawn().health().current = 50.0f;
+            const int ammo0 = lp.weapon().ammo;
+            const float f0 = F->pawn().health().current;
+            beamAt(F, 1.0f);
+            healed = F->pawn().health().current - f0;
+            ammoUsed = ammo0 - lp.weapon().ammo;
+            const float e0 = E->pawn().health().current;
+            beamAt(E, 1.0f);
+            dealt = e0 - (E->spawned() ? E->pawn().health().current : 0.0f);
+        }
+        LOG_INFO("PARTICIPANT repair ray: weapon %s, teammate +%.1f HP in 1 s, enemy -%.1f in 1 s, ammo used %d, HUD healing %d", wid.c_str(), healed, dealt, ammoUsed, (int)hudHeal);
+        check(F && E && wid == "RepairRay" && healed >= 50.0f && healed < 95.0f && dealt >= 48.0f && dealt <= 66.0f && ammoUsed >= 9 && ammoUsed <= 11 && hudHeal,
+              "Repair Ray: teammate healed 60 HP/s by the beam (+ its own regen), enemy damaged ~60/s, 10 ammo/s, HUD beam state");
+    }
     LOG_INFO("PARTICIPANT SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
@@ -3459,6 +3505,46 @@ void Application::runFineAimTest() {
               std::string(c.chassis) + " " + wid + ": fine aim FOV " + std::to_string((int)c.fov) + ", look x" + std::to_string(c.look) + ", speed x0.5, toggle off -> 80");
     }
     LOG_INFO("FINEAIM SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_QATEST (with WFC_QA=1): DEV / QA TOOLING self-test - weapon list, loadout through the real restriction path, god mode,
+// noclip, respawn wave, status line. Not a fidelity test.
+void Application::runQaToolTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("QATEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) { platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt); } };
+    check(game::World::qaEnabled(), "WFC_QA set");
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+    world_.launchMatch(L);
+    game::CharacterSelection me; me.type = 0; me.specialty = game::Specialty::Scout; me.weapons = {"Shotgun", "HeavyPistol"};
+    world_.match().selectCharacter(world_.localMatchPlayer(), me);
+    run(10.6f);
+    auto robotIds = world_.qaWeaponIds(false), vehIds = world_.qaWeaponIds(true);
+    check(robotIds.size() > 20 && !vehIds.empty(), "weapon lists: " + std::to_string(robotIds.size()) + " robot, " + std::to_string(vehIds.size()) + " vehicle");
+    auto refused = world_.qaSetLoadout({"SniperRifle", "HeavyPistol"});
+    game::Character& pc = world_.player().pawn();
+    LOG_INFO("QATEST loadout on %s: active %s, refused %zu%s", pc.chassis().id.c_str(), pc.weapon().def ? pc.weapon().def->provider : "-", refused.size(), refused.empty() ? "" : (" (" + refused[0] + ")").c_str());
+    check(pc.weapon().def != nullptr, "qaSetLoadout applies through applyLoadout (restrictions reported)");
+    world_.qaSetGodMode(true);
+    const float h0 = pc.health().current;
+    world_.applyMatchDamage(world_.localMatchPlayer(), -1, 999.0f, true, "TransGame.TnDamageTypeIonBlaster");
+    check(pc.health().current == h0, "god mode: damage ignored");
+    world_.qaSetGodMode(false);
+    world_.qaSetNoclip(true);
+    const core::Vec3 p0 = pc.position();
+    for (int i = 0; i < 60; ++i) { platform::InputFrame in; in.down[(int)platform::Button::Forward] = true; in.down[(int)platform::Button::Jump] = true; world_.handleInput(in, dt); world_.tick(dt); }
+    const float moved = core::length(pc.position() - p0);
+    check(moved > 15.0f && pc.position().y > p0.y + 5.0f, "noclip: flew " + std::to_string((int)moved) + " m in 1 s (up + forward)");
+    world_.qaSetNoclip(false);
+    world_.qaTeleportToStart(3);
+    world_.qaRespawn();
+    const bool dead = world_.localPlayerDead();
+    run(8.0f);
+    check(dead && !world_.localPlayerDead(), "qaRespawn: real death (suicide) then the normal respawn wave");
+    LOG_INFO("QATEST status: %s", world_.qaStatus().c_str());
+    check(!world_.qaStatus().empty(), "status line");
+    LOG_INFO("QATEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

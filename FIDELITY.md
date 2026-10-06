@@ -143,6 +143,47 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   (Frontend: showScope long / short / medium).
 - WFC_FINEAIMTEST 3/3: Null Ray FOV 20 / look 0.130, HeavyPistol 30 / 0.187, IonBlaster 45 / 0.500, speed ×0.50, toggle off → 80.
 
+### Energon Repair Ray [CONFIRMED ORIGINAL: TnWeaponRepair / TnWeaponBeam script, RepairBeam_WEPDATA, AssetTools 8297bdd]
+- Before: the Repair Ray was not simulated (no beam, no heal). Now it is a beam that ticks every FireInterval (0.1 s) along the aim
+  over WeaponRange 3500 UU:
+  - TnWeaponRepair.ProcessBeamHit: a teammate is healed HealthPerSecond 60 × RepairRateModifier (no buffs: ×1) × Δt, TnHealTypeRepairTeam;
+  - otherwise TnWeaponBeam.ProcessBeamHit: the hit actor takes DamagePerSecond 60 × Δt, TnDamageTypeRepairEnemy;
+  - ammo 10 / s (clip 100), HeatProperties.HeatMax 0 → no overheat in practice [HIGH].
+- HUD state: repairBeam / repairBeamHealing / start / end / target per frame, for the Beam2 ribbon (Rendering) and the
+  WP event 1 (heal loop) / event 2 (damage loop) sounds (Systems).
+- PARTIAL: PlayerTargeting.GetRepairTarget lock-on (the beam end is pulled to a picked teammate's TargetableLocation) is not
+  recovered; the beam follows the crosshair. Heal type segments: healed across segments [HIGH].
+- WFC_PARTICIPANTTEST: teammate +60 HP/s from the beam (+ the pawn's own regen when idle), enemy −54 / s, 9 ammo / s, HUD flag.
+
+### Match start countdown [CONFIRMED ORIGINAL: RE pass 5, TnMultiplayerGame]
+- Already present: PendingMatch, GRI.ResetCountdown(true, 10) → MatchAutoStartCountdown 10 s, a CountdownTick event each second
+  (PreGameCountdown <CurrentGame:CurrentCountdown>), no pawns until InProgress; then everyone spawns and the announcer plays.
+- Not restored here: GameCountdownPostProcess (active 6 s, ramp-out 3 s) is a rendering / frontend presentation effect.
+
+### Decepticon Scout (Barricade) transform look [authored data; no fallback frame]
+- The per-chassis ToggleHidden times are the authored Car4 notifies: robot hides at 0.849 s, vehicle shows at 0.705 s (R→V);
+  robot shows at 0.394 s, vehicle hides at 0.666 s (V→R). Both meshes are drawn in the overlap, as authored.
+- The graybox fallback cannot appear mid-transform: the form swap re-samples and re-skins the new mesh in the same tick
+  (Character::updateAnimation), and the partner mesh is skinned on the first tick that it is visible. XFORMVIS 16/16.
+- So the "box-like" intermediate is the authored fold of Barricade's clips, not a missing pose [HIGH; visual confirmation pending].
+
+### Jet handling values [CONFIRMED ORIGINAL authored blueprints]
+- Hover: HoverPlane_Physics accel 2500, max 1500, gravity cancelled (TnHoverPlaneSimulation always hovers: the "floaty" feel),
+  Ascend / Descend = Dash ±Z at 1000. Flying: Plane_Physics MaxSpeed 4000, accel 3000, drag 600, return to hover above crash
+  speed 3000. All read from character.json; they match RE pass 5 §4. The remaining jet heading jitter (0.4° / frame at 60 Hz)
+  is the TurnRate (0.1, 0.5, 0.5) servo itself.
+
+### Scout height [re-confirmed]
+- WFC_HEIGHTTEST Car2 / Car4: capsule 1.550 constant, root 0, scale 1, mesh origin 0; idle hips 1.51-1.54 m → jog 1.94-2.32 m.
+  This is the authored AnimSet posing; nothing changes the capsule, root or scale. Authentic, unchanged.
+
+### DEV / QA TOOLING [NOT ORIGINAL — never part of a fidelity claim]
+- World::qa* API, all no-ops unless the process starts with WFC_QA=1. It is driven by Frontend's separate Win32 QA window (F10).
+- qaWeaponIds(vehicle), qaSetLoadout(ids) through the real applyLoadout (restrictions apply, refused ids returned), qaRespawn
+  (suicide, no score → the normal respawn wave), qaTeleportToStart(i), qaSetNoclip, qaSetGodMode, qaStatus.
+- Map / mode / class / lobby: Frontend drives the real lobby flow.
+- WFC_QATEST 7/7 with the gate; without it, every call is refused.
+
 ### Vehicle weapon origin [CONFIRMED ORIGINAL socket data]
 - WFC_VSOCKET: WeaponSocket_Primary sits on each chassis' left gun bone (L_GunRobo01_XT) or the tank cannon (C_Cannon_XB),
   inside the vehicle hull; Starscream's is under the wing, 0.8 m below the physics box.

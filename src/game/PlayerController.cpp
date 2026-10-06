@@ -141,6 +141,7 @@ void PlayerController::handleInput(const platform::InputFrame& in, float dt) {
     // Edge latches persist until a simulation step consumes them [CONF RE input semantics], so a
     // press on a render frame that runs zero 60 Hz steps is not lost.
     if (in.wasPressed(Button::Jump)) wantJumpLatched_ = true;
+    wantJumpHeld_ = in.isDown(Button::Jump);
     // Tank VehicleSpecialMove = 180 quick turn [CONF RE pass 5]: on press, CanUseSpecialMove (TimeBetween180s 1.2 s) -> RecenterCamera
     // with TnQuickTurnCameraBehavior: camera yaw lerps linearly to tank yaw + 180 deg over 0.3 s; the hull follows the camera
     // through TnHoverTankSimulation.UpdateTurn (no rate cap), so it spins 180 deg in 0.3 s. Not 360, no repeat while held.
@@ -700,6 +701,15 @@ void PlayerController::applyToPawn(World& world, float dt) {
         wantAbility_ = -1;
     }
     pawn_->tickAbilities(dt);
+    if (qaNoclip_) {
+        // DEV / QA TOOLING noclip: fly along the camera at 20 m/s (Jump up, Descend down), no collision, no gravity.
+        const core::Vec3 f = core::forwardFromYawPitch(camYaw_, camPitch_), r = core::normalize(core::cross(core::forwardFromYawPitch(camYaw_, 0.0f), core::Vec3{0, 1, 0}));
+        core::Vec3 mv = f * step.moveForward + r * step.moveRight + core::Vec3{0, (intent_.ascend || wantJumpHeld_) ? 1.0f : (intent_.descend ? -1.0f : 0.0f), 0};
+        pawn_->setPosition(pawn_->position() + mv * (20.0f * dt));
+        pawn_->velocity() = {0, 0, 0};
+        wantJumpLatched_ = false; fireLatch_ = false;
+        return;
+    }
     CharacterMovement::update(*pawn_, step, dt, world.collision());
     // InRobotForm.BeginState (authority): MoveToSafeLocation; still stuck -> ForceIntoForm(vehicle) [CONF B3].
     if (wasTransforming_ && !pawn_->isTransforming() && pawn_->form() == Form::Robot && col_) {
@@ -780,7 +790,8 @@ void PlayerController::applyToPawn(World& world, float dt) {
             if (world.collision() && world.collision()->segmentHit(camPos, aimPoint, th))
                 aimPoint = camPos + camDir * (range * th);
             core::Vec3 dir = core::normalize(aimPoint - eye);
-            if (w.projectile()) world.fireWeapon(w, eye, dir);
+            if (w.beam()) world.fireRepairBeam(w, eye, dir);
+            else if (w.projectile()) world.fireWeapon(w, eye, dir);
             // NumShotsToFire traces per shot (shotgun pellets), each with its own spread sample [CONF data; HIGH: one ammo per shot].
             else for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) world.fireHitscan(eye, dir);
         } else if (w.ammo == 0 && w.canReload()) {

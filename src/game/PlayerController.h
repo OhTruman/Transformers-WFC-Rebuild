@@ -137,6 +137,10 @@ private:
     bool wantJumpLatched_ = false;
     bool wantFire_ = false;
     bool fireLatch_ = false;
+public:
+    void setQaNoclip(bool on) { qaNoclip_ = on; }   // DEV / QA TOOLING (World::qaSetNoclip)
+private:
+    bool qaNoclip_ = false, wantJumpHeld_ = false;
     struct FineAimProfile { float fov, distM, offX, offZ, look; };
     FineAimProfile fineAimProfile() const;
     float lookBlend_ = 1.0f, robotDist_ = 8.0f;   // fine-aim look speed blend; robot orbit distance

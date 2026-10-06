@@ -3,6 +3,23 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 24 (2026-10-05) — human playtest fidelity II
+
+| item | result | provenance |
+|---|---|---|
+| Fast left/right stutter | body yaw snapped at 60 Hz steps under a per-frame camera; presentation yaw between steps: 4.7° → 0.00-0.05° / frame (robot / hover) at 144 Hz | HIGH (measured cause) |
+| Transform handoff | per-chassis ToggleHidden times (were Optimus' for all); XFORMVIS 16/16; no graybox frame possible | CONFIRMED ORIGINAL |
+| Tank 180 | TnQuickTurnCameraBehavior 0.3 s, 1.2 s cooldown (replaced an instant half turn) | CONFIRMED ORIGINAL |
+| Fine aim | per-weapon FOV / orbit / look (Null Ray FOV 20, ×0.13); one stage; toggle | CONFIRMED ORIGINAL (sway PARTIAL) |
+| Repair Ray | beam: teammates +60 HP/s, enemies −60/s, 10 ammo/s; HUD beam state | CONFIRMED ORIGINAL (lock-on PARTIAL) |
+| Match countdown | PendingMatch 10 s already original; post-process belongs to Rendering / Frontend | CONFIRMED ORIGINAL |
+| Jet / Scout height / vehicle sockets | authored values; height re-measured, authentic | CONFIRMED / HIGH |
+| DEV / QA tooling | World::qa* (WFC_QA=1 only) for Frontend's QA window | NOT ORIGINAL (tooling) |
+
+Regression: WEAPON 19/19, SWITCH 32/32, SCORE 9/9, TDM 43/43, CTF 12/12, PARTICIPANT 22/22, CHASSIS 14/14, XFORMVIS 16/16,
+FINEAIM 3/3, VEHPHYS 27/27, QATEST 7/7. HEADJIT 60 / 144 / 240 Hz: robot 0.000, hover 0.004-0.05, boost 0.07-0.31, jet 0.19-0.71°/frame.
+Transforms 0/760 under the map (Car2 / Car4 / Truck3 / Tank3 / Jet4); chaos 0 KillZ (Car2 / Car4: 1 under-deck flag each, as in Pass 23).
+
 ## GAMEPLAY PASS 23 (2026-10-05) — human playtest fidelity pass
 
 | item | result | provenance |

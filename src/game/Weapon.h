@@ -19,7 +19,9 @@ struct Weapon {
     float homingForce = 0.0f, closingDistM = 0.0f, closingForce = 0.0f, closingTime = 0.0f, projMaxSpeed = 0.0f;
     float lockOnTime = 0.0f, holdLockOnTime = 0.0f; bool lockRobots = false;
     bool grenade() const { return fireType == WeaponFire::Grenade && def && def->tossStrength > 0.0f; }
-    bool simulated() const { return fireType == WeaponFire::InstantHit || (fireType == WeaponFire::Projectile && projSpeed > 0.0f); }
+    // TnWeaponRepair / TnWeaponBeam (Energon Repair Ray): a beam ticking at the fire interval [CONF script + RepairBeam_WEPDATA].
+    bool beam() const { return def && std::string(def->id) == "RepairRay"; }
+    bool simulated() const { return fireType == WeaponFire::InstantHit || (fireType == WeaponFire::Projectile && projSpeed > 0.0f) || beam(); }
     bool projectile() const { return fireType == WeaponFire::Projectile && projSpeed > 0.0f; }
     static Weapon fromDef(const WeaponDef& d) {
         Weapon w;

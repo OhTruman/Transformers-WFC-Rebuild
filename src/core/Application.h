@@ -41,6 +41,7 @@ private:
     void runVehicleSocketProbe();
     void runTransformVisibilityTest();
     void runFineAimTest();
+    void runQaToolTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

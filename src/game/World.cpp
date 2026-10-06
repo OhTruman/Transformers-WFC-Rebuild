@@ -34,6 +34,7 @@ static bool readTextFile(const std::string& path, std::string& out) {
 }
 
 void World::load(render::IRenderer& renderer) {
+    repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
         if (w.projectile()) {
             spawnProjectile(o + d * 1.5f, d * w.projSpeed, w, localPlayer_);
@@ -1065,6 +1066,7 @@ bool World::launchMatch(const MatchLaunch& l) {
 
 bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe, const std::string& damageType) {
     if (!matchActive_ || match_.state() != Match::State::InProgress || victim < 0 || (size_t)victim >= match_.players().size()) return false;
+    if (qaGod_ && victim == localPlayer_) return false;   // DEV / QA TOOLING god mode
     if (!match_.players()[(size_t)victim].alive) return false;
     // TnPlayerPawn.TakeDamage: teammates' damage is discarded except TnDamageTypeAOE (NotifyHitByFriendlyFire).
     if (instigator != victim && match_.sameTeam(instigator, victim) && !aoe) return false;
@@ -1155,6 +1157,8 @@ HudGameState World::hudState() const {
     h.hoverState = pc.hoverState_;
     h.lockTarget = lockTarget_; h.locked = locked_;
     h.barrier = barrier_.alive; h.barrierHealth = barrier_.health;
+    h.repairBeam = repairBeam_.active && repairBeam_.time > 0.0f; h.repairBeamHealing = repairBeam_.healing;
+    h.repairBeamStart = repairBeam_.start; h.repairBeamEnd = repairBeam_.end; h.repairBeamTarget = repairBeam_.target;
     if (matchActive_ && !localDead_) {
         MapState::ObjPawn op{localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, pc.form() == Form::Robot && !pc.isTransforming() && !pc.isMeleeing()};
         int ci = mapState_.pickupCandidate(op);
@@ -1948,6 +1952,8 @@ void World::tickAbilityEffects(float dt) {
     tickSentry(dt);
     tickGuidedMissile(dt);
     tickRollerMine(dt);
+    repairBeam_.time = std::max(0.0f, repairBeam_.time - dt);
+    if (repairBeam_.time <= 0.0f) repairBeam_.active = false;
     tickBuffShots(dt);
     tickKillstreakItems(dt);
     auto tickTD = [dt](Character& p) { p.transformDisruptRemain_ = std::max(0.0f, p.transformDisruptRemain_ - dt); };
@@ -2829,6 +2835,78 @@ void World::tickKillstreakItems(float dt) {
         if (boom || gone) { mines_.erase(mines_.begin() + (long)i); continue; }
         ++i;
     }
+}
+
+// Energon Repair Ray [CONF TnWeaponRepair / TnWeaponBeam script + RepairBeam_WEPDATA]: every fire interval (0.1 s) the beam
+// traces WeaponRange 3500 UU from the eye along the aim. A teammate hit is healed HealthPerSecond 60 x RepairRateModifier (no buffs:
+// x1) x interval with TnHealTypeRepairTeam (no SegmentedHealType: across segments [HIGH]); any other pawn takes DamagePerSecond 60 x
+// interval of TnDamageTypeRepairEnemy. HeatMax 0: no overheat [HIGH]. PlayerTargeting.GetRepairTarget lock-on assist (the trace is
+// redirected to a picked teammate) is not recovered: the beam follows the crosshair [PARTIAL].
+void World::fireRepairBeamImpl(const Weapon& w, const core::Vec3& origin, const core::Vec3& dirIn) {
+    const core::Vec3 dir = core::normalize(dirIn);
+    const float range = w.rangeM > 0.0f ? w.rangeM : 35.0f;
+    const float tickSecs = w.fireInterval > 0.0f ? w.fireInterval : 0.1f;
+    float best = range;
+    const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+    float t;
+    if (line && line->segmentHit(origin, origin + dir * range, t)) best = range * t;
+    MatchOpponent* hit = nullptr;
+    for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(origin, dir, best, th) && th < best) { best = th; hit = o; } }
+    repairBeam_.active = true; repairBeam_.time = tickSecs * 1.5f;
+    repairBeam_.start = origin; repairBeam_.end = origin + dir * best; repairBeam_.target = hit ? hit->matchPlayer() : -1;
+    repairBeam_.healing = false;
+    if (!hit || !matchActive_) return;
+    if (match_.sameTeam(hit->matchPlayer(), localPlayer_)) {
+        repairBeam_.healing = true;
+        hit->pawn().health().heal(Health::HealType::AddHealthToAll, 60.0f * tickSecs);   // HealDamage(RepairAmount, TnHealTypeRepairTeam)
+    } else {
+        applyMatchDamage(hit->matchPlayer(), localPlayer_, 60.0f * tickSecs, false, "TransGame.TnDamageTypeRepairEnemy");
+    }
+}
+
+// ---- DEV / QA TOOLING (not original WFC; gated by WFC_QA=1) ----
+bool World::qaEnabled() { static const bool on = std::getenv("WFC_QA") != nullptr; return on; }
+
+std::vector<std::string> World::qaWeaponIds(bool vehicle) const {
+    std::vector<std::string> out;
+    if (!qaEnabled()) return out;
+    for (int i = 0; i < weaponDefCount(); ++i) {
+        const WeaponDef& d = weaponDefAt(i);
+        if (!d.provider || !*d.provider) continue;
+        if (vehicle ? d.typeCode == 3 : (d.typeCode != 3 && d.typeCode >= 0)) out.push_back(d.provider);
+    }
+    return out;
+}
+
+std::vector<std::string> World::qaSetLoadout(const std::vector<std::string>& ids) {
+    if (!qaEnabled() || localPlayer_ < 0 || !matchActive_) return {};
+    // The local selection becomes a custom loadout (as Create a Character would make it); restrictions apply through applyLoadout.
+    CharacterSelection& sel = match_.playerMutable(localPlayer_).selection;
+    sel.type = 0;
+    sel.weapons = ids;
+    std::vector<std::string> refused = applyLoadout(&sel);
+    LOG_INFO("QA loadout: %zu weapon(s), %zu refused", ids.size(), refused.size());
+    return refused;
+}
+
+void World::qaRespawn() {
+    if (!qaEnabled() || !matchActive_) return;
+    killLocalPlayer(localPlayer_, true);   // DmgType_Suicided: no score change; the match's own respawn wave brings the pawn back
+}
+
+void World::qaTeleportToStart(int index) { if (qaEnabled()) teleportToStart(index); }
+void World::qaSetNoclip(bool on) { if (!qaEnabled()) return; qaNoclip_ = on; player_.controller().setQaNoclip(on); }
+void World::qaSetGodMode(bool on) { if (qaEnabled()) qaGod_ = on; }
+
+std::string World::qaStatus() const {
+    if (!qaEnabled()) return "";
+    const Character& pc = player_.pawn();
+    char b[384];
+    std::snprintf(b, sizeof b, "map %s | mode %s | body %s (%s) | form %s | weapon %s | pos %.1f %.1f %.1f | noclip %d god %d",
+                  mapName_.c_str(), gameModeName(matchMode_), pc.chassis().id.c_str(), pc.specialty().c_str(),
+                  pc.form() == Form::Vehicle ? "vehicle" : "robot", pc.weapon().def ? pc.weapon().def->provider : "-",
+                  pc.position().x, pc.position().y, pc.position().z, (int)qaNoclip_, (int)qaGod_);
+    return b;
 }
 
 } // namespace game

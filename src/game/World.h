@@ -82,6 +82,11 @@ struct HudGameState {
     core::Vec3 ammoBeaconPos{0, 0, 0};
     float ammoBeaconLife = 0.0f, ammoBeaconHealth = 0.0f;
     bool ammoBeaconBuff = false;                 // TnBuffAmmoBeaconIncreaseDamage on the local pawn
+    // Repair Ray beam this frame (for Rendering's RepairBeam Beam2 ribbon / Systems' beam sounds): start = muzzle, end = hit;
+    // healing = a teammate is being repaired (WP event 1), else an enemy / world hit (event 2).
+    bool repairBeam = false, repairBeamHealing = false;
+    core::Vec3 repairBeamStart{0, 0, 0}, repairBeamEnd{0, 0, 0};
+    int repairBeamTarget = -1;
     bool barrier = false;                        // the local Barrier ability's wall is up
     float barrierHealth = 0.0f;                  // BarrierHealth 1000, DegenRate 15/s
     std::string pickupPrompt;                    // TnPickupManager prompt (E): "Code Of Power" / "Bomb" / "" (refreshed 0.1 s in the original)
@@ -282,6 +287,7 @@ public:
     };
     float grenadeTossDelay_ = -1.0f, grenadeCooldown_ = 0.0f;
     BarrierState barrier_;
+    bool qaNoclip_ = false, qaGod_ = false;   // DEV / QA TOOLING
     // TnDroppedPickupAmmoBeacon (the local owner's) [CONF script + authored].
     struct AmmoBeacon { bool alive = false, landed = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f, health = 0.0f; };
     AmmoBeacon beacon_;
@@ -326,6 +332,13 @@ public:
     void spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const Weapon& w, int instigator);
     const std::vector<Projectile>& projectiles() const { return projectiles_; }
     void fireHitscanWith(const Weapon& w, const core::Vec3& origin, const core::Vec3& dirIn);
+    // Energon Repair Ray beam tick (TnWeaponRepair.ProcessBeamHit / TnWeaponBeam.ProcessBeamHit).
+    // Inline dispatch through a hook World installs at load (harnesses that stub World, e.g. tools/fidelity, still link).
+    std::function<void(const Weapon&, const core::Vec3&, const core::Vec3&)> repairBeamHook;
+    void fireRepairBeam(const Weapon& w, const core::Vec3& origin, const core::Vec3& dir) { if (repairBeamHook) repairBeamHook(w, origin, dir); }
+    void fireRepairBeamImpl(const Weapon& w, const core::Vec3& origin, const core::Vec3& dir);
+    struct RepairBeam { bool active = false, healing = false; core::Vec3 start{0, 0, 0}, end{0, 0, 0}; int target = -1; float time = 0.0f; };
+    RepairBeam repairBeam_;
     // Controller fire entry: one shot of w from origin along dir (projectile spawn or one hitscan trace). Inline dispatch
     // through a hook World installs at load, so harnesses that stub World (tools/fidelity) still link with fireHitscan.
     std::function<void(const Weapon&, const core::Vec3&, const core::Vec3&)> weaponFireHook;
@@ -443,6 +456,21 @@ private:
     int lockedClip_ = 0;
 public:
     void applyKnockback(int victim, const core::Vec3& momentumUU, const std::string& damageType);   // RE §I gated knockback
+
+    // ---- DEV / QA TOOLING - not original WFC behaviour, never part of a fidelity claim. Every call is a no-op unless the process
+    // was started with WFC_QA=1 (Frontend's QA tool window drives these). They reuse the real systems: the loadout goes through
+    // applyLoadout (provider restrictions apply), respawn through the real death / respawn wave, teleport through the authored
+    // player starts. ----
+    static bool qaEnabled();
+    std::vector<std::string> qaWeaponIds(bool vehicle = false) const;        // WeaponTable provider ids (robot or vehicle weapons)
+    std::vector<std::string> qaSetLoadout(const std::vector<std::string>& providerIds);   // returns the refused ids; kept for respawns
+    void qaRespawn();                                                         // suicide (no score) -> the normal respawn wave
+    void qaTeleportToStart(int index);                                       // authored player start #index (wraps)
+    void qaSetNoclip(bool on);                                               // UFO camera-relative flight, no collision / gravity
+    void qaSetGodMode(bool on);                                              // the local pawn ignores damage
+    bool qaNoclip() const { return qaNoclip_; }
+    bool qaGodMode() const { return qaGod_; }
+    std::string qaStatus() const;                                            // map / mode / body / form / weapon / position
     // TnAbilityBarrier / TnBarrierSpawnable (the local owner's) [CONF script + authored; RE §I3].
     const BarrierState& barrier() const { return barrier_; }
     bool ammoBeaconAlive() const { return beacon_.alive; }
