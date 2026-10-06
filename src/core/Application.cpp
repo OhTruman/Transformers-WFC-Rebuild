@@ -186,6 +186,8 @@ bool Application::init() {
     if (std::getenv("WFC_DROPTEST")) { runDropTest(); return false; }              // hover vehicle 10 m drop: per-step vertical trace
     if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step
     if (std::getenv("WFC_PRELOADTEST")) { runPreloadTest(); return false; }        // World::preloadSelections (saved custom characters)
+    if (std::getenv("WFC_CLASSCHANGETEST")) { runClassChangeTest(); return false; } // mid-match class change -> suicide -> respawn
+    if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -4084,6 +4086,28 @@ void Application::runQaToolTest() {
     const bool dead = world_.localPlayerDead();
     run(8.0f);
     check(dead && !world_.localPlayerDead(), "qaRespawn: real death (suicide) then the normal respawn wave");
+    // Live character swap: Soldier preset through the real selection path, then the normal respawn wave.
+    {
+        const auto choices = world_.qaCharacterChoices();
+        const std::string before = pc.chassis().id;
+        const game::CharacterSelection* sol = nullptr;
+        for (const auto& c : choices) if (c.specialty == game::Specialty::Soldier) sol = &c;
+        double worst = 0.0;
+        if (sol) {
+            world_.qaSetCharacter(*sol);
+            for (int i = 0; i < 60 * 9; ++i) {
+                const auto t0 = std::chrono::steady_clock::now();
+                platform::InputFrame in; world_.handleInput(in, dt); world_.tick(dt);
+                worst = std::max(worst, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+                if (!world_.localPlayerDead() && pc.specialty() == "Soldier") break;
+            }
+        }
+        const std::string held = pc.weapon().def ? pc.weapon().def->provider : "-";
+        LOG_INFO("QATEST swap: %zu choices, %s -> %s (%s), holding %s, worst tick %.1f ms", choices.size(), before.c_str(), pc.chassis().id.c_str(),
+                 pc.specialty().c_str(), held.c_str(), worst);
+        check(choices.size() == 4 && sol && pc.specialty() == "Soldier" && pc.chassis().id != before && held == sol->weapons[0] && worst < 50.0,
+              "qaSetCharacter: new body + class loadout through the respawn, no long frame");
+    }
     LOG_INFO("QATEST status: %s", world_.qaStatus().c_str());
     check(!world_.qaStatus().empty(), "status line");
     LOG_INFO("QATEST SUMMARY: %d/%d checks passed", checks - fails, checks);
@@ -4462,6 +4486,159 @@ void Application::runPreloadTest() {
     LOG_INFO("PRELOAD spawned as %s holding %s", pc.chassis().id.c_str(), pc.weapon().def ? pc.weapon().def->id : "-");
     check(pc.chassis().id == "Car", "spawned with the custom chassis (Bumblebee)");
     LOG_INFO("PRELOAD SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_CLASSCHANGETEST: the original chain - a new pick sets PRI._SelectedCharacter (Match::selectCharacter) while the old pawn
+// lives; the suicide (DmgType_Suicided) kills it; the respawn wave's RestartPlayer resolves the NEW selection for the team
+// (SetPlayerDefaults -> ApplyCharacter). Scout -> Scientist -> Leader -> Soldier -> Scout in one match, then a second match.
+void Application::runClassChangeTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("CLASSCHANGE %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) step(idle); };
+    struct Cls { const char* name; game::Specialty sp; const char* aut; const char* dec; std::vector<std::string> w; std::vector<std::string> ab; };
+    const Cls classes[] = {
+        {"Scout", game::Specialty::Scout, "Car2", "Car4", {"Shotgun", "HeavyPistol", "FlashBangs"}, {"Cloaking", "Dodge"}},
+        {"Scientist", game::Specialty::Scientist, "Jet4", "Jet", {"BurstRifle", "RepairRay", "HealGrenades"}, {"SpawnSentry", "Shockwave"}},
+        {"Leader", game::Specialty::Leader, "Truck3", "Truck4", {"IonBlaster", "GrenadeLauncher", "KamikazeMines"}, {"Warcry", "Barrier"}},
+        {"Soldier", game::Specialty::Soldier, "Tank3", "Tank2", {"AssaultRifle", "HomingRocket", "FlakGrenades"}, {"Whirlwind", "Hover"}},
+    };
+    auto sel = [&](const Cls& c) {
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = c.sp; cs.chassisByFaction[0] = c.aut; cs.chassisByFaction[1] = c.dec;
+        cs.weapons = c.w; cs.abilities = c.ab;
+        cs.primary[0].r = 200; cs.primary[0].g = 40; cs.primary[0].b = (int)c.sp * 50; cs.primary[1] = cs.primary[0];   // distinct per class
+        return cs;
+    };
+    auto verify = [&](const Cls& c, const std::string& tag) {
+        game::Character& pc = world_.player().pawn();
+        const int me = world_.localMatchPlayer();
+        const int team = world_.match().players()[(size_t)me].team;
+        const std::string want = team == 1 ? c.dec : c.aut;
+        std::vector<std::string> guns;
+        for (const auto& w : pc.inventory()) if (w.fireType != game::WeaponFire::Grenade) guns.push_back(w.def ? w.def->provider : "?");
+        const std::string a0 = pc.abilities_[0].id, a1 = pc.abilities_[1].id;
+        const auto& stored = world_.match().players()[(size_t)me].selection;
+        const bool colour = stored.primary[team == 1 ? 1 : 0].b == (int)c.sp * 50;
+        const bool robot = pc.form() == game::Form::Robot && !pc.isTransforming();
+        const bool fullHp = pc.health().current >= pc.health().max - 0.01f;
+        LOG_INFO("CLASSCHANGE %s: body %s (want %s), specialty %s, weapons %s / %s, abilities %s / %s, colour %d, robot %d, full health %d",
+                 tag.c_str(), pc.chassis().id.c_str(), want.c_str(), pc.specialty().c_str(), guns.size() > 0 ? guns[0].c_str() : "-",
+                 guns.size() > 1 ? guns[1].c_str() : "-", a0.c_str(), a1.c_str(), (int)colour, (int)robot, (int)fullHp);
+        check(!world_.localPlayerDead() && pc.chassis().id == want && pc.specialty() == c.name && guns.size() >= 2 && guns[0] == c.w[0] &&
+              guns[1] == c.w[1] && a0 == c.ab[0] && a1 == c.ab[1] && colour && robot && fullHp, tag + ": spawned as " + c.name);
+        // Vehicle form of the new body: transform and back.
+        platform::InputFrame tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+        step(tf); run(2.5f);
+        const bool veh = pc.form() == game::Form::Vehicle && pc.chassis().id == want;
+        step(tf); run(2.5f);
+        check(veh && pc.form() == game::Form::Robot, tag + ": " + want + " transforms to its vehicle and back");
+    };
+    for (int match = 0; match < 2; ++match) {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+        world_.launchMatch(L);
+        const int start = match == 0 ? 0 : 2;
+        world_.match().selectCharacter(world_.localMatchPlayer(), sel(classes[start]));
+        run(11.0f);
+        verify(classes[start], std::string("match ") + std::to_string(match + 1) + " initial");
+        const int steps = match == 0 ? 4 : 2;
+        for (int k = 1; k <= steps; ++k) {
+            const Cls& next = classes[(start + k) % 4];
+            // Change Character: the new pick replaces PRI._SelectedCharacter while the current pawn is alive ...
+            world_.match().selectCharacter(world_.localMatchPlayer(), sel(next));
+            run(0.5f);
+            const bool stillOld = world_.player().pawn().specialty() == classes[(start + k - 1) % 4].name;
+            // ... then the suicide; the respawn wave restarts the player with the new selection.
+            world_.killLocalPlayer(world_.localMatchPlayer(), true);
+            bool died = world_.localPlayerDead();
+            for (int i = 0; i < 60 * 12 && world_.localPlayerDead(); ++i) step(idle);
+            run(0.3f);
+            check(stillOld && died, std::string("change ") + std::to_string(k) + ": the pick does not swap the living pawn; the suicide kills it");
+            verify(next, std::string("match ") + std::to_string(match + 1) + " change " + std::to_string(k) + " -> " + next.name);
+        }
+    }
+    LOG_INFO("CLASSCHANGE SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_EVENTTEST: the authoritative gameplay event record (GameplayEvents.h) over a scripted TDM match: kills both ways,
+// assist, suicide, environment death, melee kill, a kill from vehicle form, a 3-kill streak, class change; one record per
+// occurrence, unique serials, counts equal to the participant stats; a second match starts a fresh record.
+void Application::runEventTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("EVENTTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto step = [&](const platform::InputFrame& in) { world_.handleInput(in, dt); world_.tick(dt); };
+    auto run = [&](float secs) { for (int i = 0; i < (int)(secs * 60.0f + 0.5f); ++i) step(idle); };
+    using T = game::GameplayEventType;
+    auto count = [&](T t) { int n = 0; for (const auto& e : world_.match().gameplayEvents()) n += e.type == t; return n; };
+    for (int match = 0; match < 2; ++match) {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM", L);
+        world_.launchMatch(L);
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier;
+        cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        const int me = world_.localMatchPlayer();
+        world_.match().selectCharacter(me, cs);
+        std::vector<game::MatchOpponent*> ops;
+        for (int i = 0; i < 4; ++i) ops.push_back(world_.addMatchOpponent("EV" + std::to_string(i), false));
+        run(11.0f);
+        check(count(T::MatchStart) == 1, "match " + std::to_string(match + 1) + ": one MatchStart");
+        game::MatchOpponent* E = nullptr; game::MatchOpponent* F = nullptr; game::MatchOpponent* E2 = nullptr;
+        for (auto* o : ops) { if (!o->spawned()) continue;
+            if (world_.match().sameTeam(o->matchPlayer(), me)) { if (!F) F = o; } else if (!E) E = o; else if (!E2) E2 = o; }
+        if (!E || !F) { check(false, "opponents of both teams spawned"); continue; }
+        auto killWith = [&](int killer, game::MatchOpponent* victim, const char* dmg) {
+            world_.applyMatchDamage(victim->matchPlayer(), killer, 99999.0f, false, dmg);
+            run(0.1f);
+        };
+        // 1) assist: the teammate damages E, then I kill E (3 kills -> killstreak), weapon context from the held weapon.
+        world_.applyMatchDamage(E->matchPlayer(), F->matchPlayer(), 60.0f, false, "TransGame.TnDamageTypeAssaultRifle");
+        killWith(me, E, "TransGame.TnDamageTypeAssaultRifle");
+        for (int i = 0; i < 2; ++i) { run(7.0f); game::MatchOpponent* v = E->spawned() ? E : (E2 && E2->spawned() ? E2 : nullptr); if (v) killWith(me, v, i == 0 ? "TransGame.TnDamageTypeMelee" : "TransGame.TnDamageTypeAssaultRifle"); }
+        // 2) a kill from vehicle form
+        run(7.0f);
+        platform::InputFrame tf; tf.pressed[(int)platform::Button::Transform] = true; tf.down[(int)platform::Button::Transform] = true;
+        step(tf); run(2.5f);
+        const bool inVeh = world_.player().pawn().form() == game::Form::Vehicle;
+        { game::MatchOpponent* v = E->spawned() ? E : (E2 && E2->spawned() ? E2 : nullptr); if (v) killWith(me, v, "TransGame.TnDamageTypeCarMachineGun"); }
+        // 3) E kills me
+        run(7.0f);
+        if (E->spawned()) world_.applyMatchDamage(me, E->matchPlayer(), 99999.0f, false, "TransGame.TnDamageTypeIonBlaster");
+        run(7.0f);
+        // 4) class change, then a suicide (applies the new class at the respawn), 5) environment death
+        game::CharacterSelection cs2 = cs; cs2.specialty = game::Specialty::Scout; cs2.weapons = {"Shotgun", "HeavyPistol", "FlashBangs"};
+        world_.match().selectCharacter(me, cs2);
+        world_.killLocalPlayer(me, true);
+        run(7.0f);
+        world_.killLocalPlayer(-1, false, "TransGame.TnDamageTypeKillZ");
+        run(7.0f);
+        const auto& ev = world_.match().gameplayEvents();
+        bool serialsOk = true; uint32_t prev = 0;
+        for (const auto& e : ev) { if (e.serial <= prev) serialsOk = false; prev = e.serial; }
+        int myKills = 0, myDeaths = 0, assists = 0, melee = 0, vehKill = 0, streaks = 0, weaponSet = 0, spawns = 0, sel = 0, sui = 0, env = 0;
+        for (const auto& e : ev) {
+            if (e.type == T::Kill && e.instigator == me) { ++myKills; if (!e.weapon.empty()) ++weaponSet; if (e.melee) ++melee; if (e.instigatorState.vehicleForm) ++vehKill; }
+            if ((e.type == T::Kill || e.type == T::Suicide || e.type == T::EnvironmentDeath) && e.victim == me) ++myDeaths;
+            if (e.type == T::Assist && e.instigator == F->matchPlayer()) ++assists;
+            if (e.type == T::KillstreakEarned && e.instigator == me) ++streaks;
+            if (e.type == T::Spawn && e.instigator == me) ++spawns;
+            if (e.type == T::CharacterSelected && e.instigator == me) ++sel;
+            if (e.type == T::Suicide && e.victim == me) ++sui;
+            if (e.type == T::EnvironmentDeath && e.victim == me) ++env;
+        }
+        const game::MatchPlayer& P = world_.match().players()[(size_t)me];
+        LOG_INFO("EVENTTEST match %d: %zu events; my kills %d (stat %d) deaths %d (stat %d) assists %d streak events %d melee %d vehicle-form kills %d (in vehicle %d) spawns %d selections %d suicide %d env %d weapon context %d",
+                 match + 1, ev.size(), myKills, P.kills, myDeaths, P.deaths, assists, streaks, melee, vehKill, (int)inVeh, spawns, sel, sui, env, weaponSet);
+        check(serialsOk, "serials unique and increasing");
+        check(myKills == P.kills && myDeaths == P.deaths, "kill / death records equal the participant stats (no double counting)");
+        check(assists == 1, "one Assist record for the teammate's damage");
+        check(melee >= 1 && vehKill >= 1 && weaponSet == myKills, "kill context: melee, vehicle form, weapon");
+        check(sui == 1 && env == 1, "suicide and environment death recorded as their own death types");
+        check(spawns >= 3 && sel >= 2, "spawn and character-selected records");
+        check(streaks <= 1, "killstreak earned at most once per reward (count " + std::to_string(streaks) + ")");
+    }
+    LOG_INFO("EVENTTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

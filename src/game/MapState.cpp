@@ -506,9 +506,11 @@ static void tickCarried(std::vector<ObjectiveObject>& objs, std::vector<MapState
             const MapState::ObjPawn* h = alivePawn(c.holder);
             if (!h) {
                 // The carrier died: TnDroppedPickup at the last location (TnWeaponFlagBase / Bomb dropped on death).
+                const int lastHolder = c.holder;
                 c.holder = -1; c.dropped = true; c.autoReturn = 30.0f; c.returnLeft = 10.0f;
                 if (c.pos.y < killZ + 1.0f) { c.dropped = false; c.pos = home.pos; }   // fell out of the world: home
                 out.messages.push_back({c.kind == 0 ? "TnFlagMessage(dropped)" : "TnBombMessage(dropped)", (int)ci});
+                out.actions.push_back({c.kind == 0 ? "FlagDropped" : "BombDropped", lastHolder, c.holderTeam});
                 continue;
             }
             c.pos = h->pos;
@@ -519,6 +521,7 @@ static void tickCarried(std::vector<ObjectiveObject>& objs, std::vector<MapState
                     if (o.activeInMode && o.cls == "TnFlagCapturePoint" && o.state == ObjectiveObject::State::Active && o.contains(h->pos)) {
                         out.objectiveScores.push_back({c.holder, 1});
                         out.messages.push_back({"TnFlagMessage(captured)", h->team});
+                        out.actions.push_back({"FlagCapture", c.holder, h->team});
                         c.holder = -1; c.holderTeam = 255; c.dropped = false; c.pos = home.pos;
                         break;
                     }
@@ -531,6 +534,7 @@ static void tickCarried(std::vector<ObjectiveObject>& objs, std::vector<MapState
                     planted.fuse = 15.0f; planted.defuse = 0.0f;                 // FuseTime 15
                     c.holder = -1; c.holderTeam = 255; c.dropped = false; c.active = false;   // the bomb is in the point
                     out.messages.push_back({"TnBombMessage(planted)", h->team});
+                    out.actions.push_back({"BombPlant", planted.planter, h->team});
                     break;
                 }
             }
@@ -545,7 +549,12 @@ static void tickCarried(std::vector<ObjectiveObject>& objs, std::vector<MapState
                 int defending = ctfAttacking == 0 ? 1 : 0, n = 0;
                 for (const auto& p : pawns) if (p.alive && p.team == defending && cylTouch(p.pos, at, kDroppedTouchR, kDroppedTouchR)) ++n;
                 c.returnLeft = n > 0 ? c.returnLeft - dt * n : std::min(10.0f, c.returnLeft + dt);
-                if (c.returnLeft <= 0.0f) { c.dropped = false; c.pos = home.pos; out.messages.push_back({"TnFlagMessage(returned)", defending}); continue; }
+                if (c.returnLeft <= 0.0f) {
+                    c.dropped = false; c.pos = home.pos; out.messages.push_back({"TnFlagMessage(returned)", defending});
+                    // FlagReturn: the defenders touching the dropped flag when it returned.
+                    for (const auto& p : pawns) if (p.alive && p.team == defending && cylTouch(p.pos, at, kDroppedTouchR, kDroppedTouchR)) out.actions.push_back({"FlagReturn", p.player, p.team});
+                    continue;
+                }
             }
             if (c.autoReturn <= 0.0f) { c.dropped = false; c.pos = home.pos; out.messages.push_back({c.kind == 0 ? "TnFlagMessage(returned)" : "TnBombMessage(returned)", -1}); continue; }
         }
@@ -559,6 +568,7 @@ static void tickCarried(std::vector<ObjectiveObject>& objs, std::vector<MapState
             c.holder = p.player; c.holderTeam = p.team; c.dropped = false; c.pos = p.pos;
             if (c.kind == 1) out.attackingTeam = p.team;                 // ObjectiveHolderChanged -> GRI.AttackingTeam
             out.messages.push_back({c.kind == 0 ? "TnFlagMessage(taken)" : "TnBombMessage(taken)", p.team});
+            out.actions.push_back({c.kind == 0 ? "FlagTaken" : "BombTaken", p.player, p.team});
             break;
         }
     }
@@ -577,12 +587,14 @@ static void tickCarried(std::vector<ObjectiveObject>& objs, std::vector<MapState
             planted.active = false;
             if (bomb) { bomb->active = true; bomb->dropped = true; bomb->pos = pt.pos; bomb->autoReturn = 30.0f; }
             out.messages.push_back({"TnBombMessage(defused)", pt.defenderTeam});
+            for (const auto& p : pawns) if (p.alive && p.team == pt.defenderTeam && pt.contains(p.pos)) out.actions.push_back({"BombDefuse", p.player, p.team});
         } else if (planted.fuse <= 0.0f) {
             planted.active = false;
             out.objectiveScores.push_back({planted.planter, 1});
             out.radiusDamage.push_back({pt.pos, 50.0f, 9999.0f, planted.planter, "TransGame.TnDamageTypeBombExplosion"});
             if (bomb) { bomb->active = true; bomb->dropped = false; bomb->holder = -1; bomb->pos = objs[(size_t)bomb->home].pos; bomb->sleep = 5.0f; }
             out.messages.push_back({"TnBombMessage(detonated)", planted.team});
+            out.actions.push_back({"BombDetonate", planted.planter, planted.team});
         }
     }
 }
@@ -619,7 +631,7 @@ void MapState::tickObjectives(float dt, const std::vector<ObjPawn>& pawns, Objec
                         int newTeam = att[0]->team;
                         o.defenderTeam = newTeam;                // SetTeam -> DefendingTeamChanged
                         o.captureTime = 0.0f; o.scoreTime = 0.0f;
-                        for (auto* p : att) out.personalScores.push_back({p->player, 2});   // AddDominationPointCapture + AddScore(2)
+                        for (auto* p : att) { out.personalScores.push_back({p->player, 2}); out.actions.push_back({"NodeCapture", p->player, p->team}); }   // AddDominationPointCapture + AddScore(2)
                         out.messages.push_back({"TnDominationMessage", (newTeam == 0 ? 0 : 1) + 10 * o.pointNumber});
                     } else if (noDefender) {
                         o.defenderTeam = 255;
@@ -639,9 +651,16 @@ void MapState::tickObjectives(float dt, const std::vector<ObjPawn>& pawns, Objec
             if (o.periodTimeLeft <= 0.0f) {
                 o.periodTimeLeft = 1.0f;
                 if (o.defenderTeam != 255 && o.defenderTeam != 254)
-                    for (const ObjPawn& p : pawns) if (p.alive && o.contains(p.pos)) out.objectiveScores.push_back({p.player, 1});
+                    for (const ObjPawn& p : pawns) if (p.alive && o.contains(p.pos)) { out.objectiveScores.push_back({p.player, 1}); ++zoneStay_[p.player]; }
             }
             kothTimeLeft_ = o.activeTimeLeft;
+            // ZoneHold: a stay ends when the player leaves the zone, dies, or the zone deactivates (points scored during it).
+            for (auto it = zoneStay_.begin(); it != zoneStay_.end();) {
+                bool inside = false; int team = 255;
+                for (const ObjPawn& p : pawns) if (p.player == it->first) { inside = p.alive && o.contains(p.pos); team = p.team; }
+                if (!inside || o.activeTimeLeft <= 0.0f) { out.actions.push_back({"ZoneHold", it->first, team, it->second}); it = zoneStay_.erase(it); }
+                else ++it;
+            }
             if (o.activeTimeLeft <= 0.0f) { activateNewKothZone(); break; }
         }
     }
@@ -678,6 +697,7 @@ void MapState::setMode(MatchMode mode) {
 }
 
 void MapState::resetForNewMatch() {
+    zoneStay_.clear();
     clock_ = 0.0f;
     for (ObjectiveObject& o : objectives_) {
         o.animClock = 0.0f; o.kothVisited = false;

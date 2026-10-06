@@ -16,6 +16,7 @@
 #pragma once
 #include "core/Math.h"
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -118,6 +119,11 @@ public:
         struct Radius { core::Vec3 pos; float radius, damage; int instigator; std::string damageType; };
         std::vector<Radius> radiusDamage;                   // HurtRadius (bomb detonation)
         int attackingTeam = -1;                             // EXT ObjectiveHolderChanged -> GRI.AttackingTeam (-1 = unchanged)
+        // Typed objective actions for the authoritative event record (Match::recordObjective): FlagTaken, FlagCapture,
+        // FlagDropped, FlagReturn, BombTaken, BombDropped, BombPlant, BombDefuse, BombDetonate, NodeCapture, ZoneHold
+        // (value = points the player scored during that zone stay, reported when they leave / die / the zone deactivates).
+        struct Action { std::string kind; int player = -1; int team = 255; int value = 0; };
+        std::vector<Action> actions;
     };
     // Carried objectives (CTF flag / EXT bomb) [CONF RE MILESTONE05_GAMEPLAY_UNKNOWNS §4, OVERNIGHT §G, PLAYTEST §3; authored
     // TnDroppedPickupFlagBase / TnBombPlantPointBase / TnGameObjectivePickupFactoryBomb defaults].
@@ -183,6 +189,7 @@ private:
     float killZ_ = -1e9f;
     std::vector<ModeVisibleActor> modeActors_;
     int kothActive_ = -1;
+    std::map<int, int> zoneStay_;   // KOTH: points per player during the current zone stay (ZoneHold XP brackets)
     float kothZoneActiveTime_ = 60.0f;     // TnKingOfTheHillZoneBase ZoneActiveTime (authored CDO)
     float kothTimeLeft_ = 0.0f;
     unsigned kothRng_ = 0x5EED1234u;

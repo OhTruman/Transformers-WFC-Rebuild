@@ -164,7 +164,10 @@ void jetStep(Character& c, const MoveIntent& in, float dt, const CollisionWorld*
     core::Vec3 accel{0, 0, 0};                    // gravity cancelled in both modes
     float tgtYaw = in.faceYaw, tgtPitch = in.viewPitch, tgtRoll = 0.0f;
     // Special move (Shift): roll. Hover: needs |stick X| >= 0.5, 0.6 s, cooldown 1.2 s; flight: 0.8 s.
-    if (in.wantDash && vs.dashCooldown <= 0.0f && vs.rollRemain <= 0.0f && (vs.flying || std::fabs(in.moveRight) >= 0.5f)) {
+    // Hovering.UpdateRolling and Flying.UpdateRolling are identical: CanUseSpecialMove + roll input + |strafe| >= 0.5;
+    // Roll(0, Sign(strafe), 0) only (forward / back ignored, no flip variant); otherwise silently refused (no cooldown,
+    // no sound) [CONF RE answer 2026-10-06]. (Flight used to roll without the strafe gate.)
+    if (in.wantDash && vs.dashCooldown <= 0.0f && vs.rollRemain <= 0.0f && std::fabs(in.moveRight) >= 0.5f) {
         vs.rollDir = in.moveRight >= 0.0f ? 1.0f : -1.0f;
         vs.rollRemain = vs.flying ? VP.flyRollTime : VP.hoverRollTime;
         vs.dashCooldown = 1.2f;

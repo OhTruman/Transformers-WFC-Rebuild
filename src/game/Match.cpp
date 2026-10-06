@@ -87,6 +87,9 @@ bool Match::loadSpawnData(const std::string& path) {
 void Match::begin(const MatchSettings& s) {
     s_ = s;
     events_.clear();
+    gevents_.clear();                 // a new match = a fresh record (serials continue: never reused within a session)
+    // AcquiredKillstreaks are cleared at ClientGameEnded [CONF]: a new match starts with none (they leaked into the next match).
+    for (MatchPlayer& p : players_) { p.objectiveScore = 0; p.bestKillStreak = 0; p.spawnTime = -1.0f; p.currentKillStreak = 0; p.acquiredKillstreaks.clear(); }
     teamScore_[0] = teamScore_[1] = 0;
     for (MatchPlayer& p : players_) { p.score = p.kills = p.deaths = 0; p.assists = 0.0f; p.alive = false; p.timeToRespawn = -1.0f; }
     tombstones_.clear();
@@ -200,22 +203,31 @@ void Match::startMatch() {
         remainingTime_ = s_.timeLimit;
     }
     emit(MatchEvent::Type::MatchStarted);
+    recordEvent(GameplayEventType::MatchStart);
     if (s_.rounds > 0) emit(MatchEvent::Type::RoundStarted, -1, attackingTeam_);
     // SpawnHelper: RespawnHelper.InitialSpawn -> Wave TimeToAllowInstantInitialSpawns -1: always immediate.
     for (size_t i = 0; i < players_.size(); ++i) restartPlayer((int)i);
 }
 
-void Match::killed(int killer, int victim, bool suicide, const std::string& damageType) {
+void Match::killed(int killer, int victim, bool suicide, const std::string& damageType, const KillContext* ctx) {
     if (state_ != State::InProgress || victim < 0 || (size_t)victim >= players_.size()) return;   // MatchOver: no-ops
     if (killer >= (int)players_.size()) killer = -1;
     MatchPlayer& V = players_[(size_t)victim];
     if (!V.alive) return;
+    // Snapshots BEFORE the streaks change (EndKillStreak tests the victim's streak; KillStreak the killer's new count).
+    const ParticipantSnapshot victimSnap = snapshot(victim);
+    const ParticipantSnapshot killerSnap = killer >= 0 ? snapshot(killer) : ParticipantSnapshot{};
+    const int scoreBefore = killer >= 0 ? players_[(size_t)killer].score : 0;
+    const int teamBefore = killer >= 0 ? teamScore(players_[(size_t)killer].team) : 0;
+    std::string streakEarned;
     V.currentKillStreak = 0;                                      // AddDeaths -> KillStreakEnded
     // TnMultiplayerGame.Killed: TnTombstone at the victim (team set) - a spawn modifier.
     tombstones_.push_back({locs_[(size_t)victim], V.team});
     const bool killedSelf = killer == victim;
     // ScoreKills(TDM|DM).ScoreKill: not for DmgType_Suicided; needs a killer; AddScore(self ? 0 : 1, self ? 0 : TeamScoreAmount).
-    if (!suicide && killer >= 0) {
+    // ShouldScoreKill: the original never scores an AI victim; botVictimsScore (PC ADAPTATION) lets bots score as players.
+    const bool victimScores = V.kind != ParticipantKind::Bot || s_.botVictimsScore;
+    if (!suicide && killer >= 0 && victimScores) {
         MatchPlayer& K = players_[(size_t)killer];
         if (!killedSelf) {
             K.score += 1;
@@ -225,14 +237,18 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
             // (no duplicates) [CONF script].
             K.currentKillStreak += 1;
             if (const KillstreakDef* ks = findKillstreak(K.specialty, K.currentKillStreak))
-                if (std::find(K.acquiredKillstreaks.begin(), K.acquiredKillstreaks.end(), ks->id) == K.acquiredKillstreaks.end())
+                if (std::find(K.acquiredKillstreaks.begin(), K.acquiredKillstreaks.end(), ks->id) == K.acquiredKillstreaks.end()) {
                     K.acquiredKillstreaks.push_back(ks->id);
+                    streakEarned = ks->id;
+                }
+            K.bestKillStreak = std::max(K.bestKillStreak, K.currentKillStreak);
         }
     }
     // TrackKillsMP.ScoreAssists: the first damager in the victim's DamageHistory that is neither killer nor victim
     // gets AddAssist(damage / HealthMax).
+    int assister = -1; float assistFrac = 0.0f;
     for (const auto& [who, dmg] : damageHistory_[(size_t)victim])
-        if (who >= 0 && who != killer && who != victim) { players_[(size_t)who].assists += dmg / V.healthMax; break; }
+        if (who >= 0 && who != killer && who != victim) { assistFrac = dmg / V.healthMax; players_[(size_t)who].assists += assistFrac; assister = who; break; }
     damageHistory_[(size_t)victim].clear();
     V.deaths += 1;                                                // PRI.AddDeaths(1)
     V.alive = false;
@@ -249,6 +265,31 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
         deathTime_[(size_t)victim] = matchTime_;
     }
     emit(MatchEvent::Type::PlayerKilled, victim, 0, suicide ? "suicide" : (killer < 0 ? "environment" : ""), killer);
+    {
+        // The authoritative death record (one per death) + the assist + an acquired killstreak.
+        const GameplayEventType t = (suicide || killedSelf) ? GameplayEventType::Suicide
+                                  : killer < 0 ? GameplayEventType::EnvironmentDeath : GameplayEventType::Kill;
+        GameplayEvent& e = recordEvent(t, killer, victim);
+        e.instigatorState = killerSnap; e.victimState = victimSnap;
+        e.damageType = suicide ? "Engine.DmgType_Suicided" : (damageType.empty() ? (killer < 0 ? "Engine.DmgType_Fell" : "") : damageType);
+        if (ctx) {
+            e.weapon = ctx->weapon; e.melee = ctx->melee; e.headshot = ctx->headshot; e.backstab = ctx->backstab;
+            e.ability = ctx->ability; e.killAfterDeath = ctx->killAfterDeath; e.distanceUU = ctx->distanceUU;
+        }
+        if (killer >= 0) {
+            e.personalScore = players_[(size_t)killer].score - scoreBefore;
+            e.teamScore = teamScore(players_[(size_t)killer].team) - teamBefore;
+        }
+        if (t == GameplayEventType::Kill && assister >= 0) {
+            GameplayEvent& a = recordEvent(GameplayEventType::Assist, assister, victim);
+            a.instigatorState = snapshot(assister); a.victimState = victimSnap;
+            a.assistFraction = assistFrac; a.damageType = e.damageType;
+        }
+        if (!streakEarned.empty()) {
+            GameplayEvent& k = recordEvent(GameplayEventType::KillstreakEarned, killer);
+            k.text = streakEarned; k.value = players_[(size_t)killer].currentKillStreak;
+        }
+    }
     if (s_.reportKills && killer >= 0 && !suicide && !killedSelf) {
         // ReportGameProgressKills.HandleProgress: NumScoresLeft = GoalScore - TeamScore (1/3/5 -> switch 5/6/7).
         const MatchPlayer& K = players_[(size_t)killer];
@@ -294,10 +335,42 @@ void Match::reportPoints(int player) {
     if (left == 25) { emit(MatchEvent::Type::PointsLeftAnnouncement, player, 3); emit(MatchEvent::Type::GameNearlyComplete); }
 }
 
+GameplayEvent& Match::recordEvent(GameplayEventType t, int instigator, int victim) {
+    GameplayEvent e;
+    e.serial = nextEventSerial_++;
+    e.type = t; e.time = matchTime_; e.instigator = instigator; e.victim = victim;
+    if (instigator >= 0 && (size_t)instigator < players_.size()) e.instigatorState = snapshot(instigator);
+    if (victim >= 0 && (size_t)victim < players_.size()) e.victimState = snapshot(victim);
+    gevents_.push_back(std::move(e));
+    return gevents_.back();
+}
+
+ParticipantSnapshot Match::snapshot(int player) const {
+    ParticipantSnapshot s;
+    if (snapshot_) s = snapshot_(player);
+    if (player < 0 || (size_t)player >= players_.size()) return s;
+    const MatchPlayer& P = players_[(size_t)player];
+    s.player = player; s.team = P.team; s.kind = P.kind; s.alive = P.alive; s.killStreak = P.currentKillStreak;
+    s.spawnTime = P.spawnTime; s.level = P.level;
+    if (s.specialty.empty()) s.specialty = P.specialty;
+    if (s.chassis.empty()) s.chassis = P.chassis;
+    return s;
+}
+
+void Match::recordObjective(const std::string& kind, int player, int team, int value) {
+    GameplayEvent& e = recordEvent(GameplayEventType::Objective, player);
+    e.objective = kind; e.value = value;
+    if (team != 255) e.instigatorState.team = team;
+    // The score each action carried (TnGameRules_ScoreObjectives / ScoreDomination; applied just before by the host).
+    if (kind == "FlagCapture" || kind == "BombDetonate") { e.personalScore = s_.objectiveIndividualScore; e.teamScore = 1; }
+    else if (kind == "NodeCapture") e.personalScore = 2;
+}
+
 void Match::scoreObjective(int player, int score) {
     if (state_ != State::InProgress || player < 0 || (size_t)player >= players_.size()) return;
     MatchPlayer& P = players_[(size_t)player];
     P.score += s_.objectiveIndividualScore;                 // Scorer.AddScore(IndividualScore, Score)
+    P.objectiveScore += s_.objectiveIndividualScore;
     if (s_.teamGame && score > 0 && (P.team == 0 || P.team == 1)) teamScore_[P.team] += score;
     reportPoints(player);
     checkScore(player, P.team);
@@ -312,6 +385,7 @@ void Match::scoreTeamObjective(int team, int amount) {
 void Match::addPersonalScore(int player, int amount) {
     if (state_ != State::InProgress || player < 0 || (size_t)player >= players_.size()) return;
     players_[(size_t)player].score += amount;
+    players_[(size_t)player].objectiveScore += amount;
 }
 
 void Match::recordDamage(int victim, int instigator, float amount) {
@@ -347,6 +421,30 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
     gameStatus_ = 5;
     stateTime_ = 0.0f;
     emit(MatchEvent::Type::MatchEnded, winnerPlayer, winner, reason);
+    {
+        GameplayEvent& e = recordEvent(GameplayEventType::MatchEnd, winnerPlayer);
+        e.value = winner; e.text = reason; e.winnerPlayer = winnerPlayer;
+        // Completion per player (stats): 0 win, 1 loss, 2 draw. Team games: by the winning team (none = draw);
+        // FFA: the winner wins, an equal top score draws [CONF RE PLAYTEST §3 / MP_PROGRESSION §1].
+        int top = -1; for (const MatchPlayer& p : players_) top = std::max(top, p.score);
+        int topCount = 0; for (const MatchPlayer& p : players_) topCount += p.score == top;
+        e.completion.resize(players_.size(), 1);
+        for (size_t i = 0; i < players_.size(); ++i) {
+            if (s_.teamGame) e.completion[i] = winner < 0 ? 2 : (players_[i].team == winner ? 0 : 1);
+            else e.completion[i] = (winnerPlayer < 0 && players_[i].score == top) ? 2 : ((int)i == winnerPlayer ? 0 : 1);
+        }
+        // GameWin XP quirk (TnVersusGame.CheckEndGame): every player on Winner.Team, where Winner is the PRI passed to EndGame
+        // - on a time-limit end GetWinningPRI (top individual score, first found), even on a team tie. DM: no win/lose XP.
+        if (s_.teamGame) {
+            int w = winnerPlayer;
+            if (w < 0) for (size_t i = 0; i < players_.size(); ++i) if (w < 0 || players_[i].score > players_[(size_t)w].score) w = (int)i;
+            e.xpWinTeam = w >= 0 ? players_[(size_t)w].team : -1;
+        }
+        // MVP (achievement 37): every PRI tied for the top personal score, more than one player (versus: both teams present).
+        int n0 = 0, n1 = 0; for (const MatchPlayer& p : players_) { n0 += p.team == 0; n1 += p.team == 1; }
+        if (players_.size() > 1 && (!s_.teamGame || (n0 > 0 && n1 > 0)))
+            for (size_t i = 0; i < players_.size(); ++i) if (players_[i].score == top) e.mvp.push_back((int)i);
+    }
     LOG_INFO("match: EndGame reason \"%s\" score %d-%d winner team %d player %d", reason.c_str(), teamScore_[0], teamScore_[1], winner, winnerPlayer);
 }
 
@@ -371,6 +469,7 @@ void Match::restartPlayer(int p) {
     P.timeToRespawn = -1.0f;
     damageHistory_[(size_t)p].clear();
     if (st >= 0) locs_[(size_t)p] = starts_[(size_t)st].pos;
+    P.spawnTime = matchTime_;
     emit(MatchEvent::Type::PlayerSpawned, p, st, st >= 0 ? starts_[(size_t)st].actor : std::string());
 }
 
