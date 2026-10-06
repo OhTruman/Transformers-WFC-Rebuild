@@ -2078,8 +2078,12 @@ int Pipeline::dynamicProgram(const Material* mat) {
 void Pipeline::prewarmDynamic(const MeshData& m) {
     auto t0 = std::chrono::steady_clock::now();
     size_t before = dynProgCache_.size();
-    for (const SubMesh& s : m.subs)
+    auto lastYield = t0;
+    for (const SubMesh& s : m.subs) {
         if (s.material >= 0 && (size_t)s.material < m.mats.size()) dynamicProgram(&m.mats[(size_t)s.material]);
+        auto now = std::chrono::steady_clock::now();     // under a loading screen: keep it presenting
+        if (std::chrono::duration<double, std::milli>(now - lastYield).count() >= 16.0) { yieldLoad(); lastYield = now; }
+    }
     if (m.subs.empty()) dynamicProgram(m.mats.empty() ? nullptr : &m.mats[0]);
     if (dynProgCache_.size() != before)
         LOG_INFO("wfc: prewarmed %zu dynamic material(s) in %.1f ms", dynProgCache_.size() - before,
