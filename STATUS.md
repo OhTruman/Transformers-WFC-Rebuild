@@ -3,6 +3,19 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08h (2026-10-05) - vehicle muzzle flash / tracer at the alternating socket (glue against 08g)
+- `docs/handoff/SYSTEMS_M08H_vehicle_muzzle_glue.patch` (World.cpp / World.h, against integration/milestone-08g 4f080a2).
+- A vehicle shot draws the FIRED vehicle weapon's MuzzleFlash template at the shot's socket (Gameplay noteVehicleShot:
+  WeaponSocket_Primary / _Primary2, socket world = posed vehicle bone x socket), once per shot; instant-hit tracers start
+  there (the damage trace still starts at the start-trace location) [CONF RE pass 5 9g]. Projectile vehicle weapons
+  (rockets, homing rockets, tank cannon) get the flash too (PlayFireEffects runs for every shot).
+- Before: no vehicle flash at all (the robot weapon socket is hidden in vehicle form), the tracer started at the
+  camera-ray start point, and the instant-hit path used the robot weapon's templates.
+- Validation on 08g: Gameplay's WFC_MUZZLETEST 5/5 (Car2 / Car4 / Jet4 / Truck3 alternate, Tank3 Primary only) with one
+  flash per shot and each weapon's own template (AssaultRifle / HomRocket / Blaster / D_MuzzleFlash_TankCannon); TDM Car2
+  60 flashes 30 / 30 and Truck3 4 / 3, 0 missing cues, 0 leaks; screenshots show left then right flash + tracer.
+- Still Rendering data: Impact_AssaultRifle_FX and CarHover_A_01_FX are not in Streets' map_fx_runtime.json (build_map_fx).
+
 ## SYSTEMS M08g (2026-10-05) - profile volume sliders (Music / FX / Dialogue)
 - **`LevelAudioHost::applyProfileVolumes(music, fx, dialog)`** (also on FrontendAudioRuntime) = HmPlayerController.UpdateLocalCacheOfProfileSettings:
   SetAudioGroupVolume('Dialog' | 'SFX' | 'MUSIC', slider / 100, clamped).

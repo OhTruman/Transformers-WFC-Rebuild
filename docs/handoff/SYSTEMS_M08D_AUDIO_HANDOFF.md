@@ -149,3 +149,9 @@ The glue patch now also wires these (all on Gameplay's existing events):
 `src/core/Application_Frontend.cpp`: the profile's Music / FX / Dialogue Volume go to `game::LevelAudioHost::applyProfileVolumes` at boot
 and in `profile().onApplied` (replaces the "pending: Systems volumes" note). Static, device-global: no runtime object needed.
 Note for playtests: at the default profile (80) all game audio is now 0.8 (about -1.9 dB) relative to before - this matches the original.
+
+## M08h: vehicle muzzle flash at the alternating socket
+
+Separate patch against integration/milestone-08g: `docs/handoff/SYSTEMS_M08H_vehicle_muzzle_glue.patch` (World.cpp / World.h,
+`git apply --ignore-whitespace` or `patch -p1 --ignore-whitespace`). Uses Gameplay's noteVehicleShot state; no Gameplay or
+Rendering change. The unused beamSinceShot_ / beamInterval_ / beamClassFiring_ members Integration noted can be deleted freely.
