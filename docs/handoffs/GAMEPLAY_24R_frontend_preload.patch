@@ -1,0 +1,58 @@
+--- a/src/core/Application_Frontend.cpp	2026-10-06 11:06:23.975512900 -0500
++++ b/src/core/Application_Frontend.cpp	2026-10-06 11:07:13.401565700 -0500
+@@ -583,6 +583,14 @@
+     }
+ }
+ 
++// [Gameplay 24r] defined after fillFullSelection below.
++namespace {
++template <class W, class FE>
++auto preloadSavedCustomCharacters(W& world, const FE& fe, int)
++    -> decltype(world.preloadSelections(std::vector<game::CharacterSelection>{}), void());
++template <class W, class FE> void preloadSavedCustomCharacters(W&, const FE&, long);
++}
++
+ bool Application::loadMatch(const frontend::MatchLaunch& m) {
+     if (!m.map) return false;
+     world_.setMapName(m.map->runtimeDir);
+@@ -658,6 +666,7 @@
+     // [integration M06] Character selection -> Gameplay (GAMEPLAY_FRONTEND_HUD_CONTRACT.md 3): the local player's body
+     // comes from the frontend's CustomTransformers selection; CheckReadySpawn waits for it [CONF].
+     world_.match().requireCharacterSelection(world_.localMatchPlayer());
++    preloadSavedCustomCharacters(world_, *frontend_, 0);   // [Gameplay 24r] saved CaC slots, under the match load
+     selectionSent_ = false;
+     lifecycleT_ = 0.0f; lifecycleStep_ = 0;
+     frontend::FlowTrace::emit("match.gameplay", {{"map", gl.map}, {"mode", gl.modeTag}, {"goalScore", std::to_string(gl.settings.goalScore)},
+@@ -701,6 +710,32 @@
+         cs.abilities = fc.abilities; cs.skills = fc.skills;
+     } else { (void)cs; (void)fc; }
+ }
++
++// [Gameplay 24r] World::preloadSelections (agents/gameplay 6a5c213): cache the player's saved custom characters' bodies and
++// held-weapon models under the match load, so picking one in the lobby does not load them on that frame (~0.5 s, Integration
++// 08k RENDERSTATS). The local faction's class presets are preloaded by Gameplay itself (24o / 24q). Detected at compile time:
++// a no-op against a World without it.
++template <class W, class FE>
++auto preloadSavedCustomCharacters(W& world, const FE& fe, int)
++    -> decltype(world.preloadSelections(std::vector<game::CharacterSelection>{}), void()) {
++    std::vector<game::CharacterSelection> saved;
++    for (const auto& c : fe.roster().customCharacters()) {
++        const frontend::GameFlow::SelectedCharacter fc = fe.selectionFor(c.name);
++        if (!fc.valid) continue;
++        game::CharacterSelection cs;
++        cs.type = fc.type;
++        const std::string sp = fc.specialty;
++        cs.specialty = sp == "Scientist" ? game::Specialty::Scientist : sp == "Scout" ? game::Specialty::Scout
++                     : sp == "Soldier" ? game::Specialty::Soldier : game::Specialty::Leader;
++        cs.chassisId = fc.chassis[0];
++        cs.customSlot = fc.name;
++        fillFullSelection(cs, fc);
++        saved.push_back(cs);
++    }
++    world.preloadSelections(saved);
++    frontend::FlowTrace::emit("match.preloadCustom", {{"count", std::to_string(saved.size())}});
++}
++template <class W, class FE> void preloadSavedCustomCharacters(W&, const FE&, long) {}
+ }
+ 
+ void Application::routeMatchToFrontend(float dt) {
