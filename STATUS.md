@@ -92,7 +92,8 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
 - **Sentry** (TnSentryPawnAbility, addenda 3 / 4):
   * SENTRY_ACTIVATE_LP from deploy; POSTDEPLOY on every EnemyAcquired;
   * each shot TnWeaponDefaultSentryAbility WP_Fire SENTRY_SHOOT, plus SENTRY_IMPT on world hits;
-  * destroyed (damage or the 30 s lifetime): the loop fades 0.25 s, then Sentry_DSYS's SENTRY_EXPL. The owner-death Kill() path is HIGH.
+  * destroyed (damage, the 30 s lifetime, or the owner's death: TnSentryPawn.Kill -> Destroyed, CONF RE addendum 5): the loop fades 0.25 s,
+    then Sentry_DSYS's SENTRY_EXPL. The 5 s / 30 s (rocket) post-death linger (addendum 6) has no sound.
 - **Not wired:**
   * TnAmmoCratePickup.PickupSound: Gameplay's SpawnAmmoCrate drops TnDroppedPickupAmmoBeacon (a damage buff, no sound); no crate pickup exists.
   * The decoy trap: not simulated by Gameplay.
