@@ -3,6 +3,24 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## PENDING HANDOFFS FOR LANES WITHOUT A RUNNING SESSION (recorded by Integration, 2026-10-06)
+
+**For Frontend** (routed from RE-Workspace 5914bfa, notes/MP_PROGRESSION_SCORING_AI_2026-10-06.md; tables in notes/data/mp_*.json):
+- The level is a number (no rank names or rank icons found). The scoreboard Level column = the sum of the four specialty levels (0-100).
+- Challenges:
+  - menu UI_GFxChallenges_p.ChallengeMenu_GFX;
+  - notify UI_GFxChallengeNotifies_p.ChallengeNotify_GFX via `_global.ChallengeUnlocked(name, desc, tier, goal, xp)`;
+  - text in mp_challenges.json (121 three-tier challenges).
+- Medal popups: TnHudDataObserverXpTransactions → (transactionId, xp, Announcement, Description, extraData "Killstreak,<id>"), grouped per kill.
+- Results: XP per specialty this match + scoreboard. Level-up broadcast text: "`p is now a level `l `s".
+- The original player list / scoreboard excludes bBot PRIs. Private matches grant no XP / challenges (CONFIRMED original).
+- UNKNOWN: GFx level-badge / medal-popup visuals.
+- The gameplay half (scoring, XP, unlocks, kill streaks) was routed to Gameplay.
+
+**For Frontend** (from Integration 08n / 08o flows): party-lobby revisits after a match prepare a preview body on a visible frame (Barricade anim sets 92 ms, Sideswipe materials 57 ms).
+
+**Open user report (08o playtest):** a game FREEZE (hang). No Windows TDR / WER record; the session log was overwritten by the next launch. Settings: windowed 2560x1440 on a 1920x1080 @ 60 Hz desktop, VSync off, FrameLimit 0. Rendering (GL waits, watchdog) and Systems (M08q worker decode) are investigating.
+
 ## INTEGRATION MILESTONE 08o (2026-10-06) — playtest build: music-start and opponent-spawn hitches fixed — branch `integration/milestone-08o`
 
 On 08n (1b9344f). User-approved small milestone before the human playtest.
