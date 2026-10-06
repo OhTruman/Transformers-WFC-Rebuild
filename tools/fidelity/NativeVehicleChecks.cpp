@@ -6,6 +6,7 @@
 // explicitly labelled "not promoted".
 #include "CheckUtil.h"
 #include "core/Config.h"
+#include "game/ChassisDef.h"
 
 #include <algorithm>
 #include <cmath>
@@ -273,6 +274,46 @@ void checkNativeVehicle(Report& r) {
             r.conf("hover_jump.pitch_kick", after.att.angVel.y - before.att.angVel.y, -1.0, 0.25, "rad/s", kP4, kGameplay,
                    "local pitch-axis angular velocity change (JumpAngularSpeed 1.0, local -Y = nose up)");
         r.info("hover_jump.apex_above_rest", apex - rest, "m", "ballistic 1200^2/(2*1940.4) = 3.71 m plus the spring push (native note)", 3.71);
+    }
+
+    // ---- JET TURN SERVO: TnHoverPlaneSimulation / TnPlaneSimulation turn toward the target rotation at TurnRate (roll 0.1,
+    // pitch 0.5, yaw 0.5) per call; the sim runs once per 30 Hz game tick [CONF RE pass 4 A4 addendum 59eac82]. So the remaining
+    // error after each 1/30 s is x0.5 (yaw, pitch) and x0.9 (roll), independent of the rebuild's 60 Hz step. Real Jet4 chassis data.
+    {
+        static game::ChassisDef jet;
+        static const bool jetOk = game::loadChassisDef(Models::assetRoot(), "Jet4", jet);
+        if (!jetOk || jet.vehicle.form != game::VehicleFormType::Jet) {
+            r.skip("jet_servo", jetOk ? "Jet4 chassis is not a Jet vehicle form in this export" : "Jet4 chassis definition unavailable (assets)");
+        } else {
+            BoxScene s; s.floor(0, 400);
+            Rig g(60, false);
+            g.pawn().setChassis(&jet);
+            vehicleOn(g, s.mesh, {0, 3.0f, 0});
+            g.idle(1.0);
+            auto& vs = g.pawn().vehicleState();
+            // ratio of the remaining error after each 1/30 s (two 60 Hz steps), averaged while the error is measurable
+            auto ratio = [&](auto err, auto kick) {
+                kick();
+                std::vector<double> e;
+                for (int k = 0; k < 16; ++k) { e.push_back(err()); g.step(platform::InputFrame{}); }
+                double acc = 0; int n = 0;
+                for (size_t k = 0; k + 2 < e.size(); k += 2) if (std::fabs(e[k]) > 1e-3) { acc += e[k + 2] / e[k]; ++n; }
+                return n ? acc / n : -1.0;
+            };
+            const float yaw0 = g.pawn().yaw();
+            const double ry = ratio([&] { return (double)std::remainder(yaw0 + 0.5f - g.pawn().yaw(), 6.2831853f); },
+                                    [&] { g.controller().setCameraYaw(yaw0 + 0.5f); });
+            r.conf("jet_servo.yaw_ratio_per_30hz", ry, 0.5, 0.03, "", "RE pass 4 A4 addendum 59eac82: TurnRate yaw 0.5 per 30 Hz script tick",
+                   kGameplay, "remaining yaw error after each 1/30 s for a 0.5 rad view step (pre-Pass-24n 60 Hz per-step application reads 0.25)");
+            g.idle(1.0);
+            const double rp = ratio([&] { return (double)(0.3f - vs.pitch); }, [&] { g.controller().setCameraPitch(0.3f); });
+            r.conf("jet_servo.pitch_ratio_per_30hz", rp, 0.5, 0.03, "", "RE pass 4 A4 addendum 59eac82: TurnRate pitch 0.5 per 30 Hz script tick",
+                   kGameplay, "remaining pitch error after each 1/30 s for a 0.3 rad view pitch step");
+            g.controller().setCameraPitch(0.0f); g.idle(1.0);
+            const double rr = ratio([&] { return (double)std::remainder(vs.roll, 6.2831853f); }, [&] { vs.roll = 0.3f; });
+            r.conf("jet_servo.roll_ratio_per_30hz", rr, 0.9, 0.03, "", "RE pass 4 A4 addendum 59eac82: TurnRate roll 0.1 per 30 Hz script tick",
+                   kGameplay, "remaining roll error after each 1/30 s (hover target roll 0) from a 0.3 rad roll");
+        }
     }
 
     // ---- Boost (Driving) jump (P4) -------------------------------------------------------------------
