@@ -246,6 +246,9 @@ public:
         velocity_ = velocity_ + dv;
     }
     // One-shot action layer (melee clips): full body or upper body over locomotion.
+    // [Systems M08l] read-only: the action layer's clip (robot model clip index, -1 none) and time, for its sound notifies.
+    int actionClipIndex() const { return actionClip_; }
+    float actionTime() const { return actionT_; }
     void playAction(const std::string& clip, bool upperBody) {
         actionClip_ = robotModel_ ? robotModel_->clipByName(clip) : -1; actionT_ = 0.0f; actionUpper_ = upperBody;
     }
@@ -254,6 +257,7 @@ public:
     float hoverRemain_ = 0.0f;
     void exposeSelf() { cloakRemain_ = 0.0f; }
     bool isDodging() const { return dodgeRemain_ > 0.0f; }
+    int dodgeWallHits_ = 0;          // [Systems M08n] +1 per Dodging.OnHitWall (HitWallSound)
     // Abilities (TnAbilityManager): CharacterData.Abilities[0] on Ability0 (Shift), [1] on Ability1 (Ctrl) [CONF bindings].
     // Versus: GetCurrentSkillDataIndex 0 (TnMultiplayerGame) -> Cooldown[0]; no resource (GetResourceRequired 0 unless
     // index 1) [CONF]. SpamPreventionTime 1.0. Only Dodge is simulated; others are reported unimplemented [PARTIAL].

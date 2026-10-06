@@ -113,7 +113,8 @@ void World::load(render::IRenderer& renderer) {
             }
             {   // [Systems M08d] PlayFiringSound for projectile weapons too (it was only on the instant-hit path)
                 const bool vehForm = player_.pawn().moveForm() == Form::Vehicle;
-                onWeaponFired(projectiles_.back().weaponClass, w.lowAmmo(), vehForm, o);
+                onWeaponFired(projectiles_.back().weaponClass, w.lowAmmo(), vehForm, o,
+                              w.charge() ? std::max(0, std::min(2, w.projClass)) : 0);   // [Systems M08k] FireCharge mode (the shot copy's projClass)
             }
             // Fire sends (locked, target): SetTarget(locked ? target : none) [CONF TnWeaponHoming].
             if (w.projHoming && locked_ && lockTarget_ >= 0) projectiles_.back().target = lockTarget_;
@@ -2586,6 +2587,7 @@ std::string World::triggerLocalKillstreak() {
         LOG_WARN("killstreak %s triggered: effect not implemented in the rebuild [PARTIAL]", id.c_str());
     }
     LOG_INFO("killstreak %s triggered", id.c_str());
+    onLocalKillstreakActivated(id, mp.team);              // [Systems M08n] TnKillstreakActivated* Self announcement
     return id;
 }
 
@@ -3249,6 +3251,7 @@ void World::tickSentry(float dt) {
                 if (line && line->segmentHit(muzzle, muzzle + dir * 300.0f, tw)) wall = 300.0f * tw;
                 MatchOpponent* hit = nullptr; float hd = wall;
                 for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(muzzle, dir, wall, th) && th < hd) { hd = th; hit = o; } }
+                onSentryShot(muzzle, !hit && wall < 300.0f, muzzle + dir * hd);   // [Systems M08m] WP_Fire + world DefaultImpactSound
                 if (hit && !match_.sameTeam(hit->matchPlayer(), localPlayer_)) {
                     float mod = hd <= 80.0f ? 1.0f : 1.0f - 0.5f * std::min(1.0f, (hd - 80.0f) / 220.0f);
                     applyMatchDamage(hit->matchPlayer(), localPlayer_, 8.0f * mod, false, "TransGame.TnDamageTypeSentry");
@@ -3304,6 +3307,7 @@ void World::startGuidedMissile() {
 void World::detonateGuidedMissile(const core::Vec3& at) {
     if (!missile_.alive) return;
     missile_.alive = false;
+    onGuidedMissileExploded(at);                       // [Systems M08m] FlightSound fade + ExplosionSound
     radiusDamage(at, 10000.0f, 45.0f, localPlayer_, "TransGame.TnDamageTypeGuidedMissile");
     LOG_INFO("guided missile detonated at (%.1f %.1f %.1f)", at.x, at.y, at.z);
 }
@@ -3369,6 +3373,7 @@ void World::tickGuidedMissile(float dt) {
 void World::explodeRollerMine() {
     if (!roller_.alive) return;
     roller_.alive = false;
+    onRollerMineExploded(roller_.pos);                 // [Systems M08k] _ExplosionSound (the loop stops)
     radiusDamage(roller_.pos, 135.0f, 15.0f, localPlayer_, "TransGame.TnDamageTypeRollerMine");
     LOG_INFO("roller sphere exploded at (%.1f %.1f %.1f) t %.2f", roller_.pos.x, roller_.pos.y, roller_.pos.z, roller_.t);
 }
@@ -3658,12 +3663,38 @@ void World::tickAbilityAudio() {
     Character& p = player_.pawn();
     if (ctl.abilityTriggerCount() != abilityAudioSerial_) {
         abilityAudioSerial_ = ctl.abilityTriggerCount();
-        if (!localDead_) onAbilityTriggered(ctl.lastTriggeredAbility());   // ServerTriggerAbility returns if dead
+        if (!localDead_) {
+            onAbilityTriggered(ctl.lastTriggeredAbility());   // ServerTriggerAbility returns if dead
+            // [Systems M08l] The ability's Skill_ animation notifies when Gameplay plays no such clip (OnTriggerAnimParams).
+            const assets::SkinnedModel* am = p.currentModel();
+            const std::string skill = "Skill_" + ctl.lastTriggeredAbility();
+            const bool playing = p.actionClipIndex() >= 0 && am && (size_t)p.actionClipIndex() < am->clips.size() && am->clips[(size_t)p.actionClipIndex()].name == skill;
+            if (!playing && (skill == "Skill_Shockwave" || skill == "Skill_Warcry" || skill == "Skill_SpawnSentry" ||
+                             skill == "Skill_TransformDisruptor")) onAbilityAnimFallback(skill);
+        }
     }
     if (ctl.abilitiesJammedCount() != jammedAudioSerial_) { jammedAudioSerial_ = ctl.abilitiesJammedCount(); onAbilitiesJammed(); }
     if (ctl.transformFailedCount() != transformFailAudioSerial_) {
         transformFailAudioSerial_ = ctl.transformFailedCount();
         onTransformFailed();
+    }
+    {   // [Systems M08k] TnChargeWeapon (Plasma Cannon) charge loops / fizzle; the local roller mine
+        const Weapon& w = p.weapon();
+        const std::string wc = w.def ? "TransContent.TnWeapon" + std::string(w.def->id) : std::string();
+        setChargeWeaponAudio(wc, w.charge() ? w.chargeState : 0);
+        if (w.charge()) {
+            if (chargeFizzleAudio_ >= 0 && (long long)w.chargeFizzle != chargeFizzleAudio_) onChargeFizzle(wc);
+            chargeFizzleAudio_ = (long long)w.chargeFizzle;
+        } else chargeFizzleAudio_ = -1;
+        setRollerMineAudio(roller_.alive, roller_.t, roller_.pos);
+        setGuidedMissileAudio(missile_.alive, missile_.pos);      // [Systems M08m]
+        setBarrierAudio(barrier_.alive, barrier_.alive && barrier_.fade >= 0.0f, barrier_.pos);
+        setSentryAudio(sentry_.alive, sentry_.target, sentry_.pos);
+    }
+    {   // [Systems M08l] the one-shot action layer's sound notifies (melee, Skill_*, whirlwind, grenade throw)
+        const assets::SkinnedModel* am = p.currentModel();
+        const bool on = !localDead_ && p.form() == Form::Robot && p.actionClipIndex() >= 0 && am && (size_t)p.actionClipIndex() < am->clips.size();
+        onActionClip(on ? am->clips[(size_t)p.actionClipIndex()].name : std::string(), p.actionTime());
     }
     if (localDead_ != abilityAudioDead_) {                          // death: loops stop, no Unapply / land
         abilityAudioDead_ = localDead_;
@@ -3678,6 +3709,10 @@ void World::tickAbilityAudio() {
     setLocalBuffAudio("TnBuffHardLocked", p.hardLockedRemain_ > 0.0f, team);
     setLocalBuffAudio("TnBuffTransformDisruptor", p.transformDisruptRemain_ > 0.0f, team);
     setLocalHoverAudio(p.hoverState_);
+    if (p.dodgeWallHits_ != dodgeWallAudio_) { dodgeWallAudio_ = p.dodgeWallHits_; if (p.form() == Form::Robot) onDodgeHitWall(); }   // [Systems M08n]
+    setOvershieldAudio(p.health().overshield());                 // [Systems M08n] OvershieldOffSound at 0
+    if (p.isDodging() && !dodgeAudio_) onDodgeStarted();      // [Systems M08k] TnAbilityDodge: Nav_Boost_* FS_DEFAULT_JUMP_CHARGED
+    dodgeAudio_ = p.isDodging();
 }
 
 void World::setChargeWeaponAudio(const std::string& cls, int state) { weaponAudio_.chargeState(cues_, cls, state, atWeapon("MuzzleFlash")); }

@@ -781,7 +781,7 @@ void update(Character& c, const MoveIntent& in, float dt, const CollisionWorld* 
     robotBlocked |= wallBlock(col, oldPos, p, v, 0.7f, 0.55f, 0.7f);
     if (robotBlocked) {
         v.x = (p.x - oldPos.x) / dt; v.z = (p.z - oldPos.z) / dt;
-        if (dodging) c.dodgeRemain_ = 0.0f;               // Dodging.OnHitWall -> Falling
+        if (dodging) { c.dodgeRemain_ = 0.0f; ++c.dodgeWallHits_; }   // Dodging.OnHitWall -> Falling (+ HitWallSound pulse)
     }
     if (dodging && c.dodgeRemain_ <= 0.0f) {
         // Dodging.EndState: Velocity = ClampLength(Velocity * (1,1,0), airborne ? MaxAirSpeed : MaxGroundSpeed).

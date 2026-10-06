@@ -325,7 +325,9 @@ public:
     void onDrainVictimTick(const core::Vec3& victimPos);
     void tickAbilityAudio();                           // [Systems M08i glue] Gameplay state -> ability / buff sounds
     int abilityAudioSerial_ = 0, jammedAudioSerial_ = 0, transformFailAudioSerial_ = 0;
-    bool abilityAudioDead_ = false;
+    bool abilityAudioDead_ = false, dodgeAudio_ = false;
+    int dodgeWallAudio_ = 0;                           // [Systems M08n] last seen Character::dodgeWallHits_
+    long long chargeFizzleAudio_ = -1;                 // [Systems M08k glue] last seen Weapon::chargeFizzle (-1: not synced)
     void onProjectileRemoved(int key);
     // World hit / grenade bounce (fuseStarted: the grenade's first impact).
     void onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted);
