@@ -388,6 +388,7 @@ public:
     }
 
     bool updateTexture(TextureHandle h, const ImageData& img) override {
+        watchdog::phase("updateTexture (movie / UI frame)");
         if (h < 0 || (size_t)h >= textures_.size() || !textures_[(size_t)h] || !img.valid()) return false;
         glBindTexture(GL_TEXTURE_2D, textures_[(size_t)h]);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -1076,6 +1077,7 @@ public:
         limiter_.setLimit(hz);
     }
     float frameLimit() const override { return limiter_.limit(); }
+    void notePresentedFrame() override { watchdog::phase("presented outside the renderer (movie / frontend)"); }
     void waitFrameSlot() override { watchdog::phase("frame limiter"); limiter_.wait(); slotWaited_ = true; }
     // M73 decal receivers: compact copy (positions + triangle indices) of the authored world geometry - the full CPU
     // world mesh is dropped after upload - with a ground-plane (x, z) grid of triangles for the box query
