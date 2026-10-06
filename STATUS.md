@@ -9,8 +9,11 @@ _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File buil
 - **Systems verification** (test copy of 08h + 73fd427, Release, Streets TDM; test-only instrumentation, not committed):
   * binding caps 15 / 20: sim / wall = 1.0000; match clock and a 30 s cooldown track sim time exactly;
   * robot speed 13.17-13.30 m and vehicle 13.56-14.19 m per sim-second, the same with and without a cap;
-  * caps 60 / 144 / 240 could not bind here (two other lanes' instances on the GPU, about 25 fps). Delivered-cap accuracy is measured by
-    Rendering (144 p50 6.95 ms) and Frontend (60 -> 59.9 ... 300 -> 302.9 fps).
+  * the first sweep ran without WFC_RENDER_DATA (legacy presentation, about 25 fps). Rerun with the real render data, Release, Streets,
+    2 s windows: cap 60 -> 60.0 fps, 144 -> 144.0, 240 -> 230-239 (the scene's natural ceiling), unlimited -> 240-260 fps.
+    * sim / wall 0.99-1.00 (window quantisation of one step); match clock and cooldown advance exactly with sim time.
+    * Robot 12.18-12.37 m and vehicle (Truck, transformed) 12.33-12.46 m per sim-second at every cap (within ±0.8%).
+    * Rendering measured the presented intervals (144 p50 6.95 ms); Frontend measured 60 -> 59.9 ... 300 -> 302.9 fps.
   * Audio does no per-rendered-frame work in a match (all of it is inside World::tick at the 60 Hz step); the frontend tick costs about 0.03 ms.
 - Camera unevenness at high FPS = FixedStepClock::alpha() unused (Gameplay is adding render interpolation), not presentation.
 - **Robust GL context** (Win32Window::upgradeToRobustContext, PC ADAPTATION, Rendering request): WGL_ARB_create_context with the same version
