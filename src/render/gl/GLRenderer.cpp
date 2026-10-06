@@ -388,6 +388,7 @@ public:
     }
 
     bool updateTexture(TextureHandle h, const ImageData& img) override {
+        watchdog::phase("updateTexture (movie / UI frame)");
         if (h < 0 || (size_t)h >= textures_.size() || !textures_[(size_t)h] || !img.valid()) return false;
         glBindTexture(GL_TEXTURE_2D, textures_[(size_t)h]);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);

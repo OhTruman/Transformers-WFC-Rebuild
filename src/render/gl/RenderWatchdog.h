@@ -8,7 +8,8 @@ namespace render::watchdog {
 // second; when nothing has progressed (no frame completed, no phase marked) for kStallSeconds it logs the last phase, the frame number and the stall
 // time, then writes one minidump with every thread's stack (wfc_hang_<pid>_<n>.dmp next to wfc.log) - a freeze then
 // leaves evidence of where the main thread (driver swap, a GL call, a game-side wait) and the worker threads were.
-// WFC_NOWATCHDOG=1 disables it. Safe to call before start(); no cost beyond two atomic stores per mark.
+// Armed by the first completed frame (boot movies before it are not stalls); a movie streaming frames through
+// IRenderer::updateTexture counts as progress. WFC_NOWATCHDOG=1 disables it. Safe to call before start(); no cost beyond two atomic stores per mark.
 void start();
 void phase(const char* where);     // static-lifetime string
 void frameDone(int frame);

@@ -21,6 +21,9 @@ std::atomic<const char*> gPhase{"(not started)"};
 std::atomic<int> gFrame{0};
 std::atomic<long long> gLastProgressMs{0};
 std::atomic<bool> gRun{false};
+// armed by the first completed renderer frame: before it, boot movies (Activision / Hasbro / High Moon logos, ~30 s)
+// present outside the renderer's frames and are not a stall (09a false dump at every boot)
+std::atomic<bool> gArmed{false};
 std::thread gThread;
 
 long long nowMs() {
@@ -54,7 +57,7 @@ void loop() {
     while (gRun.load()) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         const long long last = gLastProgressMs.load();
-        if (last == 0) continue;
+        if (last == 0 || !gArmed.load()) continue;
         const double stalled = (nowMs() - last) / 1000.0;
         if (stalled < kStallSeconds) { reported = false; continue; }
         if (reported) continue;
@@ -86,6 +89,7 @@ void phase(const char* where) {     // any mark is progress: loads mark their st
 }
 
 void frameDone(int frame) {
+    gArmed.store(true, std::memory_order_relaxed);
     gFrame.store(frame, std::memory_order_relaxed);
     gLastProgressMs.store(nowMs(), std::memory_order_relaxed);
 }
