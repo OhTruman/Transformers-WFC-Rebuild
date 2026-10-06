@@ -373,6 +373,7 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
     const bool vehicleRoom = cell >= 0 && botNav_.cells()[(size_t)cell].vehicle && now >= b.noVehicleUntil;
     const bool travel = !visible && (b.goal.kind != BotGoalKind::Attack ? goalDist > 45.0f : goalDist > 60.0f);
     b.wantVehicle = canVehicle && travel && (pc.moveForm() == Form::Vehicle ? now >= b.noVehicleUntil : vehicleRoom);
+    if (mapState_.carriedBy(b.player) >= 0) b.wantVehicle = false;   // the flag / bomb is held as the (WT_Heavy) weapon: robot form only
     // Weapon choice: the inventory weapon whose DesiredFiringRange band is nearest the target's band (switch held 0.5 s, as the
     // AI weapon picker's close / far switch delay); an empty weapon with no reserve is swapped out.
     if (pc.moveForm() == Form::Robot && !pc.isTransforming() && !pc.switchingWeapon()) {
@@ -563,8 +564,10 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
         // Off the mesh with no corridor (on a prop / ledge): head for the nearest cell and drop back onto it.
         if (b.path.empty() || b.wp >= b.path.size()) {
             if (botNav_.findCell(pos, 0.0f) < 0) {
-                const int c = botNav_.findCell(pos, 12.0f);
+                int c = botNav_.findCell(pos, 12.0f);
+                if (c < 0) c = botNav_.findCell(pos, 25.0f, 34.0f);   // high on a prop / ledge: walk off toward the floor below
                 if (c >= 0) { core::Vec3 d = botNav_.cells()[(size_t)c].centroid - pos; d.y = 0; const float l = core::length(d); if (l > 0.3f) moveDir = d * (1.0f / l); }
+                else { core::Vec3 d = b.goal.pos - pos; d.y = 0; const float l = core::length(d); if (l > 0.3f) moveDir = d * (1.0f / l); }   // no floor in reach: head for the goal
                 if ((b.offMesh += dt) > 1.5f) { b.offMesh = 0.0f; b.wantRepath = true; }
             } else b.offMesh = 0.0f;
         }
@@ -733,7 +736,7 @@ void World::tickBots(float dt) {
         // Transform toward the wanted form (cooldown 2 s; robot spot check for vehicle -> robot as the player's).
         b.transformCooldown -= dt;
         const bool isVeh = pc.moveForm() == Form::Vehicle;
-        if (b.transformCooldown <= 0.0f && !pc.isTransforming() && pc.transformDisruptRemain_ <= 0.0f && pc.carryingHeavy_ == 0 && b.wantVehicle != isVeh) {
+        if (b.transformCooldown <= 0.0f && !pc.isTransforming() && pc.transformDisruptRemain_ <= 0.0f && pc.carryingHeavy_ == 0 && (mapState_.carriedBy(b.player) < 0 || isVeh) && b.wantVehicle != isVeh) {
             bool ok = true;
             if (isVeh) {
                 const core::Vec3 a = pc.actorLocation();

@@ -35,7 +35,8 @@ public:
     int mainPieceSize() const { return mainPiece_; }
 
     // The cell under / nearest to p (within `maxDist` horizontally when p is off the mesh), or -1.
-    int findCell(const core::Vec3& p, float maxDist = 4.0f) const;
+    // maxDrop: how far below p an off-mesh lookup may find floor (a bot on a prop / ledge: up to MaxFallHeight 34 m).
+    int findCell(const core::Vec3& p, float maxDist = 4.0f, float maxDrop = 8.0f) const;
     bool usable(int cell, const Agent& a) const;
     // A* over cells + links; then a corridor string-pulled through the portals (shrunk by the agent radius). Empty on failure.
     bool findPath(const core::Vec3& from, const core::Vec3& to, const Agent& a, std::vector<Waypoint>& out, int* expanded = nullptr) const;

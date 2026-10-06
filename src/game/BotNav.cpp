@@ -143,7 +143,7 @@ float BotNav::heightAt(const Cell& c, float x, float z) const {
     return ws > 0 ? hs / ws : c.centroid.y;
 }
 
-int BotNav::findCell(const core::Vec3& p, float maxDist) const {
+int BotNav::findCell(const core::Vec3& p, float maxDist, float maxDrop) const {
     if (grid_.empty()) return -1;
     const int gx = (int)std::floor((p.x - gx0_) / gcell_), gz = (int)std::floor((p.z - gz0_) / gcell_);
     int best = -1; float bestDy = 1e9f;
@@ -159,14 +159,14 @@ int BotNav::findCell(const core::Vec3& p, float maxDist) const {
     if (best >= 0 || maxDist <= 0.0f) return best;
     // Off the mesh: the nearest cell edge point within maxDist and a plausible height.
     const int r = (int)std::ceil(maxDist / gcell_);
-    float bestD = maxDist * maxDist;
+    float bestD = maxDist * maxDist + maxDrop * maxDrop * 0.25f;
     for (int z = gz - r; z <= gz + r; ++z) for (int x = gx - r; x <= gx + r; ++x) {
         if (x < 0 || z < 0 || x >= gw_ || z >= gh_) continue;
         for (int ci : grid_[(size_t)z * (size_t)gw_ + (size_t)x]) {
             const Cell& c = cells_[(size_t)ci];
             const float cx = std::clamp(p.x, c.bmin.x, c.bmax.x), cz = std::clamp(p.z, c.bmin.z, c.bmax.z);
             const float dy = p.y - heightAt(c, cx, cz);
-            if (dy < -2.0f || dy > 8.0f) continue;
+            if (dy < -2.0f || dy > maxDrop) continue;
             const float d = (cx - p.x) * (cx - p.x) + (cz - p.z) * (cz - p.z) + dy * dy * 0.25f;
             if (d < bestD) { bestD = d; best = ci; }
         }
@@ -188,7 +188,9 @@ bool BotNav::beginSearch(const core::Vec3& from, const core::Vec3& to, const Age
     Search& S = search_;
     S = Search{};
     S.from = from; S.to = to; S.a = a;
-    S.s = findCell(from, 12.0f); S.g = findCell(to, 12.0f);   // the start may be off the mesh (a prop top, a ledge)
+    S.s = findCell(from, 12.0f);
+    if (S.s < 0) S.s = findCell(from, 25.0f, 34.0f);   // stranded on a prop / ledge: the floor it can drop to (MaxFallHeight 34 m)
+    S.g = findCell(to, 12.0f);
     if (S.s < 0 || S.g < 0) return false;
     if (S.s == S.g || piece_[(size_t)S.s] != piece_[(size_t)S.g]) { S.active = true; S.done = true; S.trivial = S.s == S.g; return S.trivial; }
     const size_t N = cells_.size();
