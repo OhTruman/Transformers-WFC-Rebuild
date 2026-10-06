@@ -85,6 +85,13 @@ provenance stays in its section.
 - **QA panel: DEBUG ONLY, NOT ORIGINAL.** WFC_QA=1 (F10): a separate tool window to launch / restart map / mode / class
   scenarios through the normal flow; WFC_QA_LAUNCH / WFC_QA_RESTART_AFTER. Weapon override pending Gameplay.
 - **Title vignette:** unchanged since a661851 (human-confirmed); holds at 1280x720, 1600x900, 1920x1080, 2560x1440.
+- **Cancelled Accounts prompt created the account later: fixed (Flash semantics CONFIRMED).** TextPrompt_GFX's Key
+  listener outlives the prompt and submits on Enter only while Selection.getFocus() is its field; the runtime kept the
+  removed field as focus, so Accept in Extras created the typed account. Selection.getFocus now forgets a removed object
+  (136ac7a). Menu enter/leave loop (nav_stress 3 cycles + 1 match): 79 checks PASS, title state identical every cycle.
+- **Menu hitches after the owners' fixes:** Rendering ba68889 / 7b74b18 removed the lobby first-frame stall (no gap > 40 ms
+  once a menu is visible; title revisits 30-41 ms); Systems 8df544b moved the audio prefetch to a worker (~0.2 ms).
+  Remaining: two slow title draws on the first boot (Rendering looking), choppy loading-screen steps (indivisible items).
 
 ## FRONTEND: TITLE VIGNETTE / MENU BACKGROUNDS COVER THE SCREEN (2026-10-05, agents/frontend)
 - Human-confirmed: the title vignette left bright vertical strips at both sides (87.5 % of the width covered at 16:9).

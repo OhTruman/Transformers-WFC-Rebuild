@@ -379,6 +379,10 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 - **QA panel (DEBUG ONLY):** WFC_QA=1 / F10, launch / restart scenarios, Gameplay QA tools (f3bf82a, 25cc348, 9068069).
 - **Validation:** customize soak PASS at 2560x1440 fullscreen and 1920x1080 windowed (42 checks each run, weapon slots in
   every class); nav_stress PASS; tests 79 / 0. Vignette unchanged (human-confirmed).
+- **Accounts prompt bug (136ac7a):** a cancelled Create Account prompt no longer creates the account on a later Accept
+  (Selection.getFocus forgets removed fields). nav_stress 3 cycles + 1 match PASS (79 checks, flat title state).
+- **Hitch re-profile** on Rendering 7b74b18 + Systems 8df544b: no gap > 40 ms once a menu is visible; remaining boot title
+  first draws and loading-screen steps are Rendering's.
 
 
 ## FRONTEND: one renderer across matches (2026-10-05, branch `agents/frontend`)
