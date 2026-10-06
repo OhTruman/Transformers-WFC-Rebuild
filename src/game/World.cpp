@@ -1,4 +1,5 @@
 #include "game/World.h"
+#include <utility>
 #include <set>
 #include "core/LoadYield.h"
 #include "game/CharacterAudio.h"
@@ -90,6 +91,13 @@ template <class R> auto fxSetDrawParam(R& r, const char* n, const float* v, int)
 template <class R> void fxSetDrawParam(R&, const char*, const float*, long) {}
 template <class R> auto fxClearDrawParam(R& r, const char* n, int) -> decltype(r.clearDrawMaterialParam(std::string(n)), void()) { r.clearDrawMaterialParam(std::string(n)); }
 template <class R> void fxClearDrawParam(R&, const char*, long) {}
+// [integration 08n] The integrated renderer must provide these: the detection above would otherwise fall back to a silent
+// no-op (missing prewarm / charge glow / effects) instead of failing the build.
+static_assert(sizeof(decltype(std::declval<render::IRenderer&>().prewarmDynamicMesh(std::declval<const render::MeshData&>()), 0)) > 0, "IRenderer::prewarmDynamicMesh");
+static_assert(sizeof(decltype(std::declval<render::IRenderer&>().setDrawMaterialParam(std::string(), nullptr), 0)) > 0, "IRenderer::setDrawMaterialParam");
+static_assert(sizeof(decltype(std::declval<render::IRenderer&>().clearDrawMaterialParam(std::string()), 0)) > 0, "IRenderer::clearDrawMaterialParam");
+static_assert(sizeof(decltype(std::declval<render::IRenderer&>().spawnParticleEffect(std::string(), core::Vec3{}, core::Vec3{}, core::Vec3{}), 0)) > 0, "IRenderer::spawnParticleEffect");
+static_assert(sizeof(decltype(std::declval<render::IRenderer&>().stopParticleEffect(0), 0)) > 0, "IRenderer::stopParticleEffect");
 
 // WFC_SPAWNPROF: millisecond timings of the spawn path / slow World steps (diagnostics, no behaviour change).
 static bool spawnProf() { static const bool on = std::getenv("WFC_SPAWNPROF") != nullptr; return on; }

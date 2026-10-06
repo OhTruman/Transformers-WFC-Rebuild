@@ -57,6 +57,8 @@ struct HasPreparePreviewBody<R, std::void_t<decltype(std::declval<R&>().prepareP
                                             decltype(std::declval<R&>().prewarmDynamicMesh(std::declval<const render::MeshData&>())),
                                             decltype(std::declval<R&>().loadContentMesh(std::string(), std::declval<render::MeshData&>()))>>
     : std::true_type {};
+// [integration 08n] fail the build, not the CaC preview prewarm, if the integrated renderer lacks this API.
+static_assert(HasPreparePreviewBody<render::IRenderer>::value, "IRenderer::preparePreviewBody / prewarmDynamicMesh / loadContentMesh");
 // The party lobby's Create a Character shows the selected character's Autobot and Decepticon (robot and vehicle):
 // the bodies of the characters in the class list (defaults + custom) are prepared during the PartyLobby load, under its
 // loading screen, so the first class pick and the first vehicle toggle do not parse / compile on a visible frame
