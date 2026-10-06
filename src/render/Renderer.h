@@ -175,6 +175,12 @@ public:
     // IdleNode.SetAnim(PreviewAnim), class defaults IdleNodeName=IdleNode, PreviewAnim=Cust_Idle (looping).
     // Returns a handle (-1 on failure); posePreviewBody fills a mesh-local posed MeshData for drawDynamicMesh (same
     // space as loadContentMesh, so actorMatrix places it). A missing sequence leaves the reference pose (logged).
+    // M69: prepare a preview body without creating it - parse its AnimSets into the renderer's cache and compile its
+    // materials. Call during a frontend scene load (under the loading screen) for the bodies a menu can show, so the
+    // first loadPreviewBody of each is cheap (CaC class pick: ~400 ms parse + ~100 ms materials otherwise).
+    virtual void preparePreviewBody(const std::string& robotGltf, const std::vector<std::string>& animSets) {
+        (void)robotGltf; (void)animSets;
+    }
     virtual int loadPreviewBody(const std::string& robotGltf, const std::vector<std::string>& animSets, const std::string& anim) {
         (void)robotGltf; (void)animSets; (void)anim; return -1;
     }

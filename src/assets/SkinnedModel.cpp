@@ -329,6 +329,73 @@ bool loadAnimationsByName(const std::string& path, SkinnedModel& m) {
     return m.clips.size() > before;
 }
 
+bool loadAnimationFile(const std::string& path, AnimFile& f) {
+    Glb g;
+    if (!openGlb(path, g)) { LOG_ERROR("anim gltf: open failed %s", path.c_str()); return false; }
+    Json root;
+    if (!Json::parse((const char*)g.json, g.jsonLen, root)) return false;
+    Doc doc; doc.root = &root; doc.bin = g.bin; doc.binLen = g.binLen;
+    const Json& nodes = root["nodes"];
+    f.nodeNames.clear();
+    for (size_t i = 0; i < nodes.size(); ++i) f.nodeNames.push_back(nodes[i]["name"].asString());
+    const Json& anims = root["animations"];
+    f.clips.clear();
+    for (size_t ai = 0; ai < anims.size(); ++ai) {
+        const Json& a = anims[ai];
+        AnimClip clip;
+        clip.name = a["name"].asString();
+        const Json& samp = a["samplers"];
+        clip.samplers.resize(samp.size());
+        for (size_t si2 = 0; si2 < samp.size(); ++si2) {
+            AnimSampler& s = clip.samplers[si2];
+            s.times = doc.floats(samp[si2]["input"].asInt(-1));
+            int outAcc = samp[si2]["output"].asInt(-1);
+            s.values = doc.floats(outAcc);
+            int cc, comps, ct; size_t st; doc.accPtr(outAcc, cc, comps, ct, st);
+            s.comps = comps;
+            std::string in = samp[si2]["interpolation"].asString();
+            s.interp = in == "STEP" ? Interp::Step : (in == "CUBICSPLINE" ? Interp::CubicSpline : Interp::Linear);
+            if (!s.times.empty()) clip.duration = std::max(clip.duration, s.times.back());
+        }
+        const Json& chans = a["channels"];
+        for (size_t ci = 0; ci < chans.size(); ++ci) {
+            const Json& c = chans[ci];
+            int n = c["target"]["node"].asInt(-1);
+            if (n < 0 || (size_t)n >= f.nodeNames.size()) continue;
+            AnimChannel ch;
+            ch.sampler = c["sampler"].asInt(-1);
+            ch.node = n;                                   // file node index (remapped by appendAnimations)
+            const std::string& p = c["target"]["path"].asString();
+            ch.path = p == "rotation" ? AnimPath::Rotation : (p == "scale" ? AnimPath::Scale : AnimPath::Translation);
+            if (ch.sampler >= 0) clip.channels.push_back(ch);
+        }
+        f.clips.push_back(std::move(clip));
+    }
+    LOG_INFO("anim gltf: %s parsed (%zu clips)", path.c_str(), f.clips.size());
+    return !f.clips.empty();
+}
+
+size_t appendAnimations(const AnimFile& f, SkinnedModel& m) {
+    std::vector<int> remap(f.nodeNames.size(), -1);   // file node -> model node (by bone name)
+    for (size_t i = 0; i < f.nodeNames.size(); ++i)
+        for (size_t k = 0; k < m.nodeNames.size(); ++k)
+            if (m.nodeNames[k] == f.nodeNames[i]) { remap[i] = (int)k; break; }
+    for (const AnimClip& src : f.clips) {
+        AnimClip clip;
+        clip.name = src.name;
+        clip.duration = src.duration;
+        clip.samplers = src.samplers;
+        for (const AnimChannel& c : src.channels)
+            if (c.node >= 0 && (size_t)c.node < remap.size() && remap[(size_t)c.node] >= 0) {
+                AnimChannel ch = c;
+                ch.node = remap[(size_t)c.node];
+                clip.channels.push_back(ch);
+            }
+        m.clips.push_back(std::move(clip));
+    }
+    return f.clips.size();
+}
+
 // ---------------- evaluation ----------------
 namespace {
 core::Quat slerp(core::Quat a, core::Quat b, float t) {
