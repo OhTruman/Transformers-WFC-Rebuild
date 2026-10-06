@@ -99,6 +99,9 @@ provenance stays in its section.
   0.6 ms), title returns 42-46 ms, Settings / Extras / Movies clean, lobby load steps 112-167 ms; the profile volumes are
   applied at boot (profile.apply owner "volumes -> Systems"). A first run with 200 / 238 ms load steps was machine load
   from other lanes (a 3-round-trip rerun matched the earlier numbers).
+  Boot title-open frame (95-105 ms): 48 ms was the boot startup movie decoding its backlog after the title load (fixed,
+  fe26688: underlay / boot-hold movies advance one frame per update, PC ADAPTATION); the remaining 43-44 ms is the
+  title's level audio start (uiLevelStarted, Systems) on the frame the menu appears. Now 53 ms.
 
 ## FRONTEND: TITLE VIGNETTE / MENU BACKGROUNDS COVER THE SCREEN (2026-10-05, agents/frontend)
 - Human-confirmed: the title vignette left bright vertical strips at both sides (87.5 % of the width covered at 16:9).

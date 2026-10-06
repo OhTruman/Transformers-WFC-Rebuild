@@ -386,6 +386,8 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
   draw > 40 ms. Left: a 90 ms menu-open frame at load end and indivisible loading-screen steps.
 - **Integration 08g re-profile:** travel start 42-47 ms (audio prefetch 0.6 ms, Systems 8df544b), title returns 42-46 ms,
   Settings / Extras / Movies clean, lobby load steps 112-167 ms; Systems 593311c volumes applied at boot.
+- **Boot title-open frame (fe26688):** 95-105 -> 53 ms; the boot movie no longer decodes its backlog (one frame per
+  update for underlays). Left: the title's level audio start (43 ms, Systems).
 
 
 ## FRONTEND: one renderer across matches (2026-10-05, branch `agents/frontend`)
