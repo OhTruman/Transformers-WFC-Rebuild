@@ -1,6 +1,6 @@
 diff -ru --strip-trailing-cr a/src/game/PlayerController.h b/src/game/PlayerController.h
 --- a/src/game/PlayerController.h	2026-10-05 19:28:44.971465500 -0500
-+++ b/src/game/PlayerController.h	2026-10-05 19:41:45.816608200 -0500
++++ b/src/game/PlayerController.h	2026-10-05 20:14:37.002641500 -0500
 @@ -138,6 +138,10 @@
      float viewYaw_ = 0.0f;        // camera rotation after the strategy's HmOrbitSmoother
      float viewPitch_ = -0.15f;
@@ -14,7 +14,7 @@ diff -ru --strip-trailing-cr a/src/game/PlayerController.h b/src/game/PlayerCont
      bool fireLatch_ = false;   // Fire pressed since the last simulation step
 diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
 --- a/src/game/World.cpp	2026-10-05 19:28:44.952902100 -0500
-+++ b/src/game/World.cpp	2026-10-05 19:44:11.083437100 -0500
++++ b/src/game/World.cpp	2026-10-05 20:14:36.987090600 -0500
 @@ -63,10 +63,38 @@
      return true;
  }
@@ -290,7 +290,43 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      pickupEvents_.clear();
      matchEvents_.clear();
      destructibleEvents_.clear();
-@@ -1996,7 +2100,20 @@
+@@ -1635,7 +1739,21 @@
+         for (auto& p : sc.personalScores) match_.addPersonalScore(p.first, p.second);
+         for (auto& p : sc.objectiveScores) match_.scoreObjective(p.first, p.second);
+         for (auto& t : sc.teamScores) match_.scoreTeamObjective(t.first, t.second);
+-        for (auto& msg : sc.messages) LOG_INFO("match: %s switch %d", msg.first.c_str(), msg.second);
++        for (auto& msg : sc.messages) {
++            LOG_INFO("match: %s switch %d", msg.first.c_str(), msg.second);
++            matchAudio().objectiveBroadcast(msg.first, msg.second);   // [Systems M08f] the message class's audio
++        }
++        {   // [Systems M08f] KOTH announcer: Active.BeginState -> ZoneChangeSound; DefendingTeamChanged -> captured / contested /
++            // neutral, not for the activation's own UpdateClaim (IgnoringTeamChangeAnnouncement) nor once the match is over.
++            const int kz = mapState_.activeKothZone();
++            const int def = kz >= 0 ? mapState_.objectives()[(size_t)kz].defenderTeam : 255;
++            if (kz >= 0 && kz != kothAudioZone_) matchAudio().kothZoneActivated(!matchActive_);
++            else if (kz >= 0 && def != kothAudioDefender_) matchAudio().kothDefenderChanged(def, false, !matchActive_);
++            kothAudioZone_ = kz; kothAudioDefender_ = def;
++            // TnGameReplicationInfoMultiplayer.OnObjectiveCountdownChange (the planted bomb's fuse)
++            const int oc = mapState_.planted().active ? (int)std::ceil(mapState_.planted().fuse) : -1;
++            if (oc != objCountdownAudio_) { objCountdownAudio_ = oc; matchAudio().objectiveCountdownChanged(oc); }
++        }
+         if (sc.attackingTeam >= 0) match_.setAttackingTeam(sc.attackingTeam);
+         // The carrier holds the heavy weapon (TnWeaponFlag1Hand MWT_Flag / TnWeaponBomb MWT_Bomb, WT_Heavy) [CONF].
+         { int ci = mapState_.carriedBy(localPlayer_); pc.carryingHeavy_ = ci >= 0 ? mapState_.carried()[(size_t)ci].kind + 1 : 0; }
+@@ -1669,8 +1787,12 @@
+             case MatchEvent::Type::RoundStarted:
+                 mapState_.roundStart(e.value);         // SingleFlagCTF.SetupRoundStart (attacking team)
+                 break;
++            case MatchEvent::Type::CountdownTick:
++                matchAudio().countdownChanged(e.value, true);   // [Systems M08f] GRI.OnCountdownChange: 10..0 ticks
++                break;
+             case MatchEvent::Type::MatchStarted: {
+                 mapState_.matchStarting();             // KOTH initial zone (MatchStarting); CTF / EXT carried objectives
++                matchAudio().kothMatchStarting();      // [Systems M08f] StartIgnoringAnnouncer(AnnouncerMatchStartHysteresisTime)
+                 // TnTeamGame.StartMatch: Reset() every pickup factory (sleeping factories return to 'Pickup').
+                 for (PickupFactory* f : pickupFactories_) f->resetToPickup(*this);
+                 // [integration M06, Systems M07 patch] TnGameRules.HandleStartGame -> the mode's game-type message
+@@ -1996,7 +2118,20 @@
          if (!wd || !allowed) { refused.push_back(n); continue; }
          robot.push_back(Weapon::fromDef(*wd));
      }
@@ -312,7 +348,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
      pc.respawnReset();
      if (mp) { mp->specialty = spec; mp->healthMax = pc.health().max; }
-@@ -2109,6 +2226,12 @@
+@@ -2109,6 +2244,12 @@
      float range = w.rangeM > 0.0f ? w.rangeM : 300.0f;
      projectiles_.push_back({pos, vel, w.projDamage, w.projRadiusM, std::max(1.0f, range / std::max(1.0f, core::length(vel))) + 1.0f,
                              w.damageType ? w.damageType : "", instigator});
@@ -325,7 +361,12 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      if (w.projHoming) {
          Projectile& p = projectiles_.back();
          p.homingForce = w.homingForce; p.closingDist = w.closingDistM; p.closingForce = w.closingForce;
-@@ -2198,7 +2321,7 @@
+@@ -2194,11 +2335,12 @@
+                         if (o->matchPlayer() != p.instigator && o->rayHit(p.pos, seg * (1.0f / sl), sl, th)) { hitPawn = true; break; }
+                     }
+                 auto impact = [&](const core::Vec3& n) {
++                    onProjectileHitWall(p.weaponClass, p.pos, p.life > 1e8f);   // [Systems M08f] FuseSound (first) + BounceSound
+                     if (p.life > 1e8f) p.life = p.fuseMin + (p.fuseMax - p.fuseMin) * (float)(std::rand() % 1000) / 999.0f;
                      p.vel = (p.vel - n * (2.0f * core::dot(p.vel, n))) * p.bounce;
                      if (core::dot(p.vel, p.vel) < 500.0f * 1e-4f) { p.resting = true; p.vel = {0, 0, 0}; }
                  };
@@ -334,7 +375,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
                  if (hitPawn) {
                      core::Vec3 n = core::normalize(core::Vec3{-seg.x, 0.0f, -seg.z});
                      impact(n);
-@@ -2211,7 +2334,8 @@
+@@ -2211,30 +2353,32 @@
                  } else p.pos = nx;
              }
              p.life -= dt;
@@ -344,10 +385,39 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
              ++i;
              continue;
          }
-@@ -2243,10 +2367,13 @@
+         core::Vec3 next = p.pos + p.vel * dt;
+         float best = 1.0f; bool hit = false;
+         float t;
+-        if (lineWorld && lineWorld->segmentHit(p.pos, next, t)) { best = t; hit = true; }
++        bool worldHit = false;
++        if (lineWorld && lineWorld->segmentHit(p.pos, next, t)) { best = t; hit = true; worldHit = true; }
+         core::Vec3 d = next - p.pos; float len = core::length(d);
+         bool barrierHit = false;
+-        if (len > 1e-5f) { float tb; if (barrierRayHit(p.pos, d * (1.0f / len), len, tb) && tb / len < best) { best = tb / len; hit = true; barrierHit = true; } }
++        if (len > 1e-5f) { float tb; if (barrierRayHit(p.pos, d * (1.0f / len), len, tb) && tb / len < best) { best = tb / len; hit = true; barrierHit = true; worldHit = false; } }
+         if (len > 1e-5f) {
+             core::Vec3 dir = d * (1.0f / len);
+             for (MatchOpponent* o : opponents_) {
+                 if (o->matchPlayer() == p.instigator) continue;
+                 float th;
+-                if (o->rayHit(p.pos, dir, len, th) && th / len < best) { best = th / len; hit = true; }
++                if (o->rayHit(p.pos, dir, len, th) && th / len < best) { best = th / len; hit = true; worldHit = false; }
+             }
+             if (matchActive_ && !localDead_ && p.instigator != localPlayer_) {
+                 const Character& pc = player_.pawn();
+                 core::Vec3 c = pc.actorLocation(); float r = pc.cylinderRadius(pc.moveForm()), hh = pc.cylinderHalfHeight(pc.moveForm());
+                 for (int k = 1; k <= 8; ++k) {   // sampled segment vs the local cylinder
+                     core::Vec3 q = p.pos + d * (k / 8.0f);
+-                    if (std::hypot(q.x - c.x, q.z - c.z) <= r && std::fabs(q.y - c.y) <= hh && k / 8.0f < best) { best = k / 8.0f; hit = true; break; }
++                    if (std::hypot(q.x - c.x, q.z - c.z) <= r && std::fabs(q.y - c.y) <= hh && k / 8.0f < best) { best = k / 8.0f; hit = true; worldHit = false; break; }
+                 }
+             }
+         }
+@@ -2243,10 +2387,14 @@
              core::Vec3 at = p.pos + d * best;
              if (hit || closingExpired) radiusDamage(at, p.damage, p.radius, p.instigator, p.damageType);
              if (barrierHit && barrier_.alive && barrier_.health > 0.0f) {}   // radiusDamage reached the barrier
++            if (worldHit) onProjectileHitWall(p.weaponClass, at, false);                         // [Systems M08f] HitWall: BounceSound
 +            if (hit || closingExpired) onProjectileExploded(p.audioKey, p.weaponClass, at);   // [Systems M08d] Explode
 +            else onProjectileRemoved(p.audioKey);                                               // LifeSpan end: destroyed
              projectiles_.erase(projectiles_.begin() + (long)i);
@@ -358,7 +428,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
          ++i;
      }
  }
-@@ -3273,4 +3400,80 @@
+@@ -3273,4 +3421,84 @@
      }
  }
  
@@ -423,6 +493,10 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
 +
 +void World::onProjectileRemoved(int key) { weaponAudio_.projectileRemoved(cues_, key); }
 +
++void World::onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted) {
++    weaponAudio_.projectileHitWall(cues_, weaponClass, pos, core::length(pos - listenerPos_), fuseStarted);
++}
++
 +void World::onBeamWeapon(const std::string& weaponClass, bool firing, int target) {
 +    weaponAudio_.beam(cues_, weaponClass, firing,
 +                      target == 1 ? WeaponAudio::BeamTarget::Friendly : target == 2 ? WeaponAudio::BeamTarget::Enemy
@@ -441,7 +515,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
  } // namespace game
 diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
 --- a/src/game/World.h	2026-10-05 19:28:44.962435500 -0500
-+++ b/src/game/World.h	2026-10-05 19:41:45.806573600 -0500
++++ b/src/game/World.h	2026-10-05 20:14:36.995624700 -0500
 @@ -4,6 +4,7 @@
  #include <memory>
  #include <string>
@@ -460,7 +534,7 @@ diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
  #include <map>
  
  namespace render { class IRenderer; }
-@@ -237,6 +241,28 @@
+@@ -237,6 +241,30 @@
      void setPlayerCharacterAudio(const std::string& chassisKey);
      // The player's current weapon class (its WeaponSounds: WP_Fire / WP_LowAmmoFire / WP_LoopingTail / fine aim).
      void setPlayerWeaponAudio(const std::string& weaponClass);
@@ -483,13 +557,15 @@ diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
 +    void onProjectileMoved(int key, const core::Vec3& pos);
 +    void onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos);
 +    void onProjectileRemoved(int key);
++    // World hit / grenade bounce (fuseStarted: the grenade's first impact).
++    void onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted);
 +    void onBeamWeapon(const std::string& weaponClass, bool firing, int target);
 +    const WeaponAudio& weaponAudio() const { return weaponAudio_; }
 +    const VehicleAudio& vehicleAudio() const { return vehicleAudio_; }
      // Weapon equip / put-down (Gameplay): the held weapon mesh's WP_Equip / WP_PutDown animation sounds.
      void weaponAnimEvent(WeaponSoundTimeline::Event e) { weaponSounds_.play(e); }
      const char* weaponCue(const char* event) const;
-@@ -350,6 +376,8 @@
+@@ -350,6 +378,8 @@
          bool lockRobots = false;
          // Grenade (TnProjectileGrenadeBase): gravity scale, bounce, fuse (starts on the first impact), resting, explode on pawn.
          bool grenade = false, explodeOnPawn = false, resting = false;
@@ -498,7 +574,7 @@ diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
          float gravityScale = 1.0f, bounce = 1.0f, fuseMin = 0.0f, fuseMax = 0.0f;
      };
      // TnGrenadeThrower: G in robot form -> toss after TossDelay 0.4 s.
-@@ -589,6 +617,18 @@
+@@ -589,6 +619,19 @@
      bool transformCuePlayed_ = false;
      int transformNotify_ = 0;                // next transform-clip notify to fire
      std::string weaponClass_ = "TransContent.TnWeaponIonBlaster";
@@ -512,12 +588,13 @@ diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
 +    bool vehicleFxData_ = false;
 +    bool fxPrevRolling_ = false, fxPrevShown_ = false;   // [Systems M08e]
 +    int projAudioKey_ = 0;
++    int kothAudioZone_ = -1, kothAudioDefender_ = 255, objCountdownAudio_ = -1;   // [Systems M08f]
 +    float beamSinceShot_ = 1e9f, beamInterval_ = 0.1f;   // [Systems M08d] beam weapon traces
 +    std::string beamClassFiring_;
      // TnHitEffectPlayer.LastHitEffectTimes per victim (here: the damage targets) per effect entry [CONF script].
      std::map<std::pair<const void*, int>, float> lastHitEffect_;
      // The held weapon's mesh-animation sounds (reload / idle / equip / put-down notifies), by weapon class.
-@@ -612,6 +652,7 @@
+@@ -612,6 +655,7 @@
      int jumpInst_[3] = {-1, -1, -1};
      bool hoverActive_ = false;
      bool vehiclePrevGrounded_ = true;

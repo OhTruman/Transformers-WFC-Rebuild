@@ -114,6 +114,8 @@ public:
     void onProjectileMoved(int key, const core::Vec3& pos);
     void onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos);
     void onProjectileRemoved(int key);
+    // World hit / grenade bounce (fuseStarted: the grenade's first impact).
+    void onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted);
     // Beam weapon (Repair Ray), every tick while held: firing, target 0 none / 1 friendly / 2 enemy.
     void onBeamWeapon(const std::string& weaponClass, bool firing, int target);
     const WeaponAudio& weaponAudio() const { return weaponAudio_; }

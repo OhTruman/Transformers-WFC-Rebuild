@@ -855,7 +855,7 @@ static void testLifecycle() {
     const Vec3 streetsSpawn{363.5f, -724.5f, -341.8f};      // a Streets spawn (DEC_ROOM_LOWER)
     struct MapCase { const char* name; std::string path; int cues, presets, emitters, zones, pools; Vec3 spot; const char* reverb; };
     const MapCase maps[2] = {
-        {"MP_IAC_Streets", streetsAudio(), 32 + 162, 10, 70, 9, 11, streetsSpawn, "REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER"},
+        {"MP_IAC_Streets", streetsAudio(), 32 + 164, 10, 70, 9, 11, streetsSpawn, "REVERB_TRANS_MP_STREETS_DEC_ROOM_LOWER"},
         {"FAKE_TEST_MAP", fake, 2, 1, 3, 1, 1, Vec3{0, -1.0f, 0}, "REVERB_FAKE_ROOM"}};
     bool allClean = true;
     for (int cycle = 0; cycle < 6; ++cycle)
@@ -898,8 +898,8 @@ static void testLifecycle() {
     const size_t oneBed = cues.liveInstances();
     amb.load(streetsAudio(), content, cues, &rec);
     cues.setListener(streetsSpawn); amb.tick(1.0f / 60.0f, streetsSpawn, streetsSpawn, cues); cues.tick(1.0f / 60.0f);
-    CHECK(cues.liveInstances() == oneBed && cues.mapCueCount() == 32 + 162 && cues.mixer().mapPresetCount() == 10,
-          "reload without unload: one bed (%zu instances, was %zu), 32 bank + 162 streamed match cues, 10 presets", cues.liveInstances(), oneBed);
+    CHECK(cues.liveInstances() == oneBed && cues.mapCueCount() == 32 + 164 && cues.mixer().mapPresetCount() == 10,
+          "reload without unload: one bed (%zu instances, was %zu), 32 bank + 164 streamed match cues, 10 presets", cues.liveInstances(), oneBed);
 
     // Match reset on the same map: player sounds stop, the bed keeps playing, the zone scene re-begins on re-touch
     // (pools restart, the reverb slot and preset ref-counts are unchanged).
@@ -1052,8 +1052,17 @@ static void testFrontend() {
         auto p0 = std::chrono::steady_clock::now();
         CHECK(rc.prefetch(lobby.cue.c_str()), "prefetch decodes a streamed track");
         const double pms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - p0).count();
-        rc.tick(1.0f / 30.0f);
-        CHECK(rc.wavesResident(lobby.cue.c_str()), "prefetched waves stay pinned until played");
+        CHECK(pms < 5.0, "prefetch does not block the asking frame (worker decode on a thread-safe backend; %.2f ms)", pms);
+        // the loading screen: frames tick while the worker decodes; the warm is adopted by a tick (no wait)
+        double worstTick = 0.0;
+        for (int k = 0; k < 120 && !rc.wavesResident(lobby.cue.c_str()); ++k) {
+            auto t = std::chrono::steady_clock::now();
+            rc.tick(1.0f / 30.0f);
+            worstTick = std::max(worstTick, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t).count());
+            std::this_thread::sleep_for(std::chrono::milliseconds(16));
+        }
+        CHECK(rc.wavesResident(lobby.cue.c_str()) && worstTick < 5.0, "prefetched waves adopted during the loading frames without a stall "
+              "(worst tick %.2f ms) and pinned until played", worstTick);
         auto q0 = std::chrono::steady_clock::now();
         rfe.music().playMusic(lobby); rfe.tick(1.0f / 30.0f);
         const double qms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - q0).count();
@@ -1467,8 +1476,8 @@ static void testMatchAudio() {
     const Vec3 L{363.5f, -724.5f, -341.8f};
     auto run = [&](float secs) { for (int k = 0; k < (int)(secs * 30.0f); ++k) stageTick(host, cues, L, L, dt, mx); };
     std::string why;
-    CHECK(host.load("MP_IAC_Streets") && host.ambient().announcerEvents().size() == 140 && cues.mapCueCount() == 32 + 162,
-          "Streets: 140 announcer events, 32 bank + 162 streamed match cues (%zu / %d)", host.ambient().announcerEvents().size(), cues.mapCueCount());
+    CHECK(host.load("MP_IAC_Streets") && host.ambient().announcerEvents().size() == 140 && cues.mapCueCount() == 32 + 164,
+          "Streets: 140 announcer events, 32 bank + 164 streamed match cues (%zu / %d)", host.ambient().announcerEvents().size(), cues.mapCueCount());
     const size_t residentBefore = rec.paths.size();
     game::MatchAudio& m = host.match();
     CHECK(game::MatchAudio::hasMessageClass("TnGameTypeMessageTDM") && m.dialogCharacter() == "DialogCharacters.OPRIME",
@@ -1529,7 +1538,7 @@ static void testMatchAudio() {
 
     // MP_UND_Gorge: the AssetTools manifest + Systems manifest through the same path (not play-ready; audio only).
     CHECK(host.load("MP_UND_Gorge") && host.ambient().emitterCount() == 15 && host.ambient().zoneCount() == 12 &&
-          cues.mixer().mapPresetCount() == 6 && cues.mapCueCount() == 13 + 18 + 162 && host.ambient().announcerEvents().size() == 140,
+          cues.mixer().mapPresetCount() == 6 && cues.mapCueCount() == 13 + 18 + 164 && host.ambient().announcerEvents().size() == 140,
           "Gorge: 15 emitters, 12 zone ops (23 touch volumes), 6 reverb presets, 13 + 157 cues, announcer (%d / %d / %d / %d)", host.ambient().emitterCount(),
           host.ambient().zoneCount(), cues.mixer().mapPresetCount(), cues.mapCueCount());
     run(3.0f);
@@ -1927,7 +1936,40 @@ static void testWeaponAudio() {
     host.unload();
 }
 
+// M08f: countdown ticks, KOTH match-start hysteresis, grenade fuse / bounce.
+static void testCountdownAndGrenades() {
+    std::printf("[countdown ticks, KOTH hysteresis, grenade fuse / bounce]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    game::LevelAudioHost host(cues);
+    host.attach(&rec, kRoot);
+    host.load("MP_IAC_Streets");
+    game::MatchAudio& m = host.match();
+    int ticks = 0;
+    for (int c = 12; c >= -1; --c) ticks += m.countdownChanged(c, true) ? 1 : 0;
+    CHECK(ticks == 11 && !m.countdownChanged(5, false) && cues.activeInstances("BL_HUD_INTERFACE.CTF_ROUND_TIMER_01") > 0,
+          "pre-match countdown: CTF_ROUND_TIMER_01 for 10..0 only (%d ticks), none when not counting down", ticks);
+    int objTicks = 0;
+    for (int c = 8; c >= -1; --c) objTicks += m.objectiveCountdownChanged(c) ? 1 : 0;
+    CHECK(objTicks == 6, "objective countdown: EXTINCTION_ROUND_TIMER_01 for 5..0 (%d), none at -1", objTicks);
+    m.kothMatchStarting();
+    const bool early = m.kothZoneActivated();
+    for (int k = 0; k < 100; ++k) { host.tick(1.0f / 30.0f, {0, 0, 0}, {0, 0, 0}); cues.tick(1.0f / 30.0f); }
+    CHECK(!early && m.kothZoneActivated(), "KOTH: hill lines ignored for AnnouncerMatchStartHysteresisTime (3 s) from the match start");
+    const char* GL = "TransContent.TnWeaponGrenadeLauncher";
+    game::CharacterAudio::loadWeaponCues(cues, GL);
+    game::WeaponAudio wa;
+    wa.projectileHitWall(cues, GL, {0, 0, 0}, 5.0f, true);
+    const bool first = cues.activeInstances("BL_WPN_GUN_GRENADE_LAUNCHER.PROJ_IMPT") == 1 &&
+                       cues.activeInstances("BL_WPN_GRENADE.GRENADE_FOLEY_SHELL_BOUNCE_HEAVY") == 1;
+    wa.projectileHitWall(cues, GL, {0, 0, 1}, 5.0f, false);
+    CHECK(first && cues.activeInstances("BL_WPN_GUN_GRENADE_LAUNCHER.PROJ_IMPT") == 1 &&
+          cues.activeInstances("BL_WPN_GRENADE.GRENADE_FOLEY_SHELL_BOUNCE_HEAVY") == 2,
+          "grenade: first impact FuseSound + BounceSound, later impacts BounceSound only");
+    host.unload();
+}
+
 int main() {
+    testCountdownAndGrenades();
     testWeaponAudio();
     testLocalizedWaves();
     testObjectiveMessages();

@@ -130,6 +130,7 @@ private:
 // and plays ExplosionSound at the projectile (SpawnExplosionEffect) [CONF script].
 struct WeaponProjectile {
     std::string projectileClass, flightSound, secondaryFlightSound, explosionSound, flightEffect, explosionEffect;
+    std::string bounceSound, fuseSound;   // HmProjectile.HitWall / TnProjectileGrenadeBase.HitThing (OnHitThing; fuse start)
 };
 
 // A weapon class's WP_Fire presentation templates (WEPMESH MuzzleFlashes / TracerTemplates, DefaultSquib) [CONF data].

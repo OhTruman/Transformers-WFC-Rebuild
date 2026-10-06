@@ -83,6 +83,8 @@ public:
     // Backends that cannot loop a region return false.
     virtual bool setLoopPoints(Sound, uint32_t /*startFrame*/, uint32_t /*endFrame*/) { return false; }
     virtual bool reportsVoices() const { return false; }   // isPlaying() is meaningful
+    // load() may be called from a worker thread concurrently with the mixer and the main thread (prefetch warming).
+    virtual bool threadSafeLoad() const { return false; }
     // Lifecycle (map unload / frontend transitions). release: forget a loaded sample (its voices stop; the
     // handle becomes invalid; loading the same path again decodes anew). stopAllVoices: hard stop of every
     // voice. activeVoices / residentBytes: diagnostics (voices sounding, decoded PCM held in memory).

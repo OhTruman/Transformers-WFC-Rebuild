@@ -336,7 +336,19 @@ for o, pr in c.execute("select opath, props from objects where opath like 'Trans
     if f: objective[cls] = f
 match_music = sorted({v for g in gametypes.values() for k, v in g.items() if k.endswith('Music')})
 match_music = sorted(set(match_music) | {v for f in objective.values() for k, v in f.items() if k.endswith('Music') and isinstance(v, str)})
-stingers = sorted({v for f in objective.values() for k, v in f.items() if isinstance(v, str) and v.startswith('BL_')})
+# Countdown ticks (TnGameReplicationInfo.OnCountdownChange / TnGameReplicationInfoMultiplayer.OnObjectiveCountdownChange)
+# and the KOTH announcer match-start hysteresis [CONF script + class defaults].
+def cdo(op):
+    r = c.execute("select props from objects where opath=?", (op,)).fetchone()
+    return json.loads(r[0]) if r else {}
+gri, grim, koth = cdo('TransGame.Default__TnGameReplicationInfo'), cdo('TransGame.Default__TnGameReplicationInfoMultiplayer'), \
+    cdo('TransGame.Default__TnKingOfTheHillZoneBase')
+countdown = {'low_tick_sound': gri.get('LowCountdownTickSound') or '', 'low_tick_threshold': gri.get('LowCountdownTickThreshold', 10),
+             'objective_tick_sound': grim.get('LowObjectiveCountdownTickSound') or '',
+             'objective_tick_threshold': grim.get('LowObjectiveCountdownTickThreshold', 5),
+             'koth_announcer_start_hysteresis': koth.get('AnnouncerMatchStartHysteresisTime', 3.0)}
+stingers = sorted({v for f in objective.values() for k, v in f.items() if isinstance(v, str) and v.startswith('BL_')} |
+                  {q for q in (countdown['low_tick_sound'], countdown['objective_tick_sound']) if q})
 # Mode tag -> the game-type message class its rules broadcast (TnOnlineGameSettings<mode>.Rules: the rule with a
 # Team / FFA GameMessageClass; TnGameRules.BroadcastGameTypeMessage picks by WorldInfo.Game.bTeamGame; DM's game class
 # is TnFreeForAllGame (FFA), SV is cooperative - both message classes are the same there).
@@ -360,7 +372,7 @@ docs.append({'map': '__match_messages__',
              'game_type_messages': gametypes, 'progress_announcement_sounds': progress,
              'versus_game_over': {k: gameover[k] for k in ('AutobotWinSound', 'DecepticonWinSound') if k in gameover},
              'announcer': {'team0_dialog_character': annc.get('Team0DialogCharacter'), 'team1_dialog_character': annc.get('Team1DialogCharacter')},
-             'progress_rules': rules, 'mode_messages': mode_messages, 'objective_messages': objective})
+             'progress_rules': rules, 'mode_messages': mode_messages, 'objective_messages': objective, 'countdown': countdown})
 print('match messages: %d game types, %d progress sounds, %d music cues' % (len(gametypes), len(progress), len(match_music)))
 
 # Every processed multiplayer map (ExtractedAssets/VerticalSlice/Maps/MP_*/audio.json): the full Kismet audio graph of

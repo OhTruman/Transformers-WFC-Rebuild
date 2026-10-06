@@ -1139,6 +1139,10 @@ void World::onProjectileExploded(int key, const std::string& weaponClass, const 
 
 void World::onProjectileRemoved(int key) { weaponAudio_.projectileRemoved(cues_, key); }
 
+void World::onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted) {
+    weaponAudio_.projectileHitWall(cues_, weaponClass, pos, core::length(pos - listenerPos_), fuseStarted);
+}
+
 void World::onBeamWeapon(const std::string& weaponClass, bool firing, int target) {
     weaponAudio_.beam(cues_, weaponClass, firing,
                       target == 1 ? WeaponAudio::BeamTarget::Friendly : target == 2 ? WeaponAudio::BeamTarget::Enemy

@@ -37,6 +37,10 @@ public:
     // Returns the explosion instance (-1: none authored).
     int projectileExploded(SoundCues& cues, int key, const std::string& weaponClass, const core::Vec3& pos, float listenerDist);
     void projectileRemoved(SoundCues& cues, int key);
+    // A projectile hit world geometry / bounced [CONF script]: HmProjectile.HitWall -> PlaySound(BounceSound);
+    // TnProjectileGrenadeBase.HitThing: the first impact starts the fuse -> PlaySound(FuseSound), then OnHitThing ->
+    // PlaySound(BounceSound) on every impact. Both at the projectile.
+    void projectileHitWall(SoundCues& cues, const std::string& weaponClass, const core::Vec3& pos, float listenerDist, bool fuseStarted);
     int flightLoops() const { return (int)flight_.size(); }
 
     void stopAll(SoundCues& cues);

@@ -3,6 +3,16 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08f (2026-10-05) — countdown ticks, objective announcer wiring, grenade sounds, prefetch hitch
+- **Pre-match countdown:** 10..0 ticks (GRI.OnCountdownChange → CTF_ROUND_TIMER_01) and the objective-countdown ticks (EXTINCTION_ROUND_TIMER_01, ≤ 5).
+  - In the 08c build: 11 ticks per match in TDM / KOTH / DOM.
+- **Objective audio from Gameplay's MapState broadcasts:** flag, bomb and domination via `MatchAudio::objectiveBroadcast`.
+  - KOTH zone moved / captured / contested / neutral come from the zone state, with the 3 s match-start hysteresis.
+  - End-of-match rules confirmed (RE S5).
+- **Grenades / projectiles:** FuseSound on the first impact and BounceSound on every impact (TnProjectileGrenadeBase); BounceSound on a world hit (HmProjectile.HitWall).
+- **Frontend `prefetchLevel` hitch:** gone. The decode runs on a worker and is adopted on a later tick: the call now takes 0.2 ms (was 37–123 ms), loading-frame ticks about 0.1 ms, PCM unchanged.
+- **Validation:** suite 622 / 0; movie probe OK; lifecycle 40 / 0; wfc_fidelity 194 / 0 / 19. The 08c TDM run has 0 missing cues, 0 leaks, and English VO (281 `_LOC/int`).
+
 ## SYSTEMS M08e (2026-10-05) — per-chassis vehicle FX through Rendering's runtime (handoff: SYSTEMS_M08D_AUDIO_HANDOFF.md §M08e)
 - `VehicleFxDriver`: each chassis's authored HoverFX / BoostFx / JumpFX / RamFX at its own sockets, per the form classes' script (energon / boost colour, hover thruster `Size`, FxAllowed from the transform notifies).
 - The hover thruster amount also drives the booster sound parameter.
