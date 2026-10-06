@@ -31,14 +31,21 @@ One lockstep direct boot per map (600 frames). The world verdict uses the frames
   - So M08b+ is more complete **and** darker. The darkening came between 681fd29 and 175a634: Rendering M20 / M21
     (lightmap records, FColor channel order), M24 (vertex lightmaps on every map) and M25 (PostProcessVolume grades).
   - Whether the original is this dark is **UNKNOWN** without a reference: human check, plus a question to Rendering.
-- **Debris:** three lightmaps referenced by the render data (`LightMapTexture2D_4181 / _5690 / _587`) are absent from
+- **Debris: FIXED.** AssetTools 4d7a423 exports the destructible-mesh lightmaps (`lightmaps_destructibles.json`;
+  vs_lightmap had joined only props.json components). Debris render data was regenerated and re-swept on fdffa7f:
+  **PLAYABLE**, 0 decode failures, world 0.45-0.54. The original note follows. Debris: three lightmaps referenced by
+  the render data (`LightMapTexture2D_4181 / _5690 / _587`) are absent from
   the AssetTools export (99 source lightmaps vs 569 in the render data), so those surfaces have no baked light:
   **source-data gap**. `decals.glb` is empty because the source has 0 decals (authentic).
 - **Gorge:** 4 vertex lightmaps are not bound (sample count ≠ vertex count, e.g. 1576 samples vs 322 / 1294 vertices,
   StaticMeshActor_15751 / _6134).
 - **GPU frame-time spikes:** one warning each on Seed (569 ms), Berth (383 ms) and Rust (345 ms) (TDR watch; the
   limit is about 2,000 ms; the median is 0.2-2.4 ms).
-- **Ambient reverb zones "not in the mixer"** (Systems): Complex, Rust, BrokenHope, Remnant, Debris, Molten. The
+- **RETRACTED: ambient reverb "not in the mixer".** Systems aa15569: the warning came from AssetTools' flattened
+  zone list (it stops at SeqAct_Delay / ActivateRemoteEvent links). Every MP map runs its zones through the generated
+  Kismet graph, which follows them. All authored REVERB_* presets activate on all 10 maps (now a Systems suite
+  check). The warning now fires only when flattened zones are in use. The original (wrong) note follows. Ambient
+  reverb zones "not in the mixer" (Systems): Complex, Rust, BrokenHope, Remnant, Debris, Molten. The
   zone's reverb preset is missing, so those rooms play with the default reverb.
 - **Map FX `PMI_LocationPrimitiveSphere`:** VelocityScale / StartRadius not decoded, so a default is used (Seed,
   Berth, Gorge; Rendering, PARTIAL).
