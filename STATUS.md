@@ -392,6 +392,7 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
   instead of per travel). Load steps: frontend share ~7.5 ms; the rest is Rendering's load work.
 - **Title level-audio start fixed by Systems 47b74c0** (confirmed with the audio.levelStart scope: no audio in any
   frame over 40 ms; boot title-open frame under 40 ms).
+- **Travel underlay prewarmed under the boot loading screen:** no travel opens it; travel-start frames <= 41 ms.
 
 
 ## FRONTEND: one renderer across matches (2026-10-05, branch `agents/frontend`)
