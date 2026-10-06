@@ -516,6 +516,7 @@ public:
     int projectileFxSpawned() const { return projectileFxSpawned_; }
     int projectileFxExplosions() const { return projectileFxExplosions_; }
     size_t liveProjectiles() const { return projectiles_.size(); }
+    double profileWeaponModelLoad(const WeaponDef& d);   // diagnostics (WFC_SPAWNPROF): first-use load time of a weapon model, ms
     core::Vec3 projectilePos(size_t i) const { return i < projectiles_.size() ? projectiles_[i].pos : core::Vec3{0, 0, 0}; }
     core::Vec3 projectileVel(size_t i) const { return i < projectiles_.size() ? projectiles_[i].vel : core::Vec3{0, 0, 0}; }
     float projectileDamage(size_t i) const { return i < projectiles_.size() ? projectiles_[i].damage : 0.0f; }

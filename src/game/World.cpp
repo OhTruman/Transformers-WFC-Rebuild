@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <chrono>
 #include <cstring>
 #include <fstream>
 #include <map>
@@ -41,6 +42,10 @@ template <class R> auto fxSetDrawParam(R& r, const char* n, const float* v, int)
 template <class R> void fxSetDrawParam(R&, const char*, const float*, long) {}
 template <class R> auto fxClearDrawParam(R& r, const char* n, int) -> decltype(r.clearDrawMaterialParam(std::string(n)), void()) { r.clearDrawMaterialParam(std::string(n)); }
 template <class R> void fxClearDrawParam(R&, const char*, long) {}
+
+// WFC_SPAWNPROF: millisecond timings of the spawn path / slow World steps (diagnostics, no behaviour change).
+static bool spawnProf() { static const bool on = std::getenv("WFC_SPAWNPROF") != nullptr; return on; }
+static double profNowMs() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 
 void World::load(render::IRenderer& renderer) {
     repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
@@ -447,6 +452,7 @@ void World::buildGraybox() {
 }
 
 void World::handleInput(const platform::InputFrame& in, float dt) {
+    struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::handleInput %.1f ms", ms); } } profScope;
     player_.controller().handleInput(in, dt);   // Dash (Shift) is latched by PlayerController
     if (in.wasPressed(platform::Button::DebugNextStart)) teleportToStart(startCursor_ + 1);   // test spawn cycling
     if (in.wasPressed(platform::Button::DebugPrevStart)) teleportToStart(startCursor_ - 1);
@@ -814,10 +820,13 @@ const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
 }
 
 // The weapon mesh drawn at the socket is the ACTIVE inventory weapon's (no other weapon may be shown in its place).
+double World::profileWeaponModelLoad(const WeaponDef& d) { const double t0 = profNowMs(); weaponModelFor(d); return profNowMs() - t0; }
+
 void World::syncShownWeapon() {
     const Weapon& w = player_.pawn().weapon();
     std::string id = w.def ? w.def->id : "IonBlaster";
     if (id == shownWeapon_) return;
+    struct ProfScope { const std::string& id; double t0 = profNowMs(); ~ProfScope() { if (spawnProf()) LOG_INFO("SPAWNPROF syncShownWeapon %s: %.1f ms", id.c_str(), profNowMs() - t0); } } profScope{id};
     shownWeapon_ = id;
     if (id == "IonBlaster") weaponAnim_.setModel(weaponModel_.valid() ? &weaponModel_ : nullptr);
     else if (const assets::SkinnedModel* m = weaponModelFor(*w.def)) weaponAnim_.setModelGeneric(m, *w.def);
@@ -895,6 +904,7 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
 }
 
 void World::tick(float dt) {
+    struct ProfScope { double t0 = profNowMs(); ~ProfScope() { const double ms = profNowMs() - t0; if (spawnProf() && ms > 8.0) LOG_INFO("SPAWNPROF World::tick %.1f ms", ms); } } profScope;
     // Cache (and prewarm) each participant's body as soon as its selection exists - during the countdown for everyone present,
     // and for bots / joiners / class or team changes before their next spawn wave - instead of at the spawn itself (a first
     // cache costs the glb load + renderer prewarm, ~130-165 ms). Only bodies that can appear in this match are loaded (Pass 24h
@@ -1378,8 +1388,12 @@ void World::tickMatch(float dt) {
                     // TnPawn.PostBeginPlay -> ApplyTransformer(chassis), then SetPlayerDefaults -> ApplyCharacter ->
                     // ApplySpecialty (StartingForm forced to robot) [CONF script, RE TARGETED_PASS3 §A].
                     MatchPlayer& mp = match_.playerMutable(localPlayer_);
+                    const double tp0 = profNowMs();
                     applyChassisToLocalPawn(mp.chassis);
+                    const double tp1 = profNowMs();
                     pc.respawnReset();   // a fresh pawn: robot form, no fold, HealthMax, default inventory
+                    const double tp2 = profNowMs();
+                    double tp3 = tp2;
                     {
                         const ChassisAssets* ca = chassisAssets(mp.chassis);
                         mp.specialty = mp.selection.type == 0 ? specialtyName(mp.selection.specialty)
@@ -1388,6 +1402,7 @@ void World::tickMatch(float dt) {
                             pc.setSpecialty(sd->id, sd->speedMultiplier, sd->segments, sd->overshield);
                         else pc.clearSpecialty();
                         loadoutRefused_ = applyLoadout(&mp.selection);
+                        tp3 = profNowMs();
                         mp.healthMax = pc.health().max;
                     }
                     core::Vec3 p = st.pos;
@@ -1397,6 +1412,8 @@ void World::tickMatch(float dt) {
                     player_.controller().setCameraYaw(st.yaw);
                     localDead_ = false;
                     player_.controller().clearSpectatorView();
+                    if (spawnProf()) LOG_INFO("SPAWNPROF local spawn: chassis apply %.1f ms, respawnReset %.1f ms, specialty+loadout %.1f ms, rest %.1f ms (%s)",
+                                              tp1 - tp0, tp2 - tp1, tp3 - tp2, profNowMs() - tp3, mp.chassis.c_str());
                     LOG_INFO("match: local player spawned at %s (%s team %d)", st.actor.c_str(), st.cluster.c_str(),
                              match_.players()[(size_t)localPlayer_].team);
                 }

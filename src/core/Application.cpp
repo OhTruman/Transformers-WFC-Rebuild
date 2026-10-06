@@ -153,7 +153,11 @@ bool Application::init() {
     if (std::getenv("WFC_RMUZZLETEST")) { runRobotMuzzleTest(); return false; }    // robot projectiles spawn at the weapon MuzzleFlash socket
     if (std::getenv("WFC_CHARGETEST")) { runChargeTest(); return false; }          // Plasma Cannon charge levels + grenade spin
     if (std::getenv("WFC_DROPTEST")) { runDropTest(); return false; }              // hover vehicle 10 m drop: per-step vertical trace
-    if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step   // measurements only
+    if (std::getenv("WFC_RISERTEST")) { runRiserTest(); return false; }            // hover pitch crossing a real 0.2-0.3 m step
+    if (std::getenv("WFC_WEAPONLOADPROF")) {   // first-use weapon model load cost per robot weapon (diagnostics)
+        double total = 0; for (int i = 0; i < game::weaponDefCount(); ++i) { const game::WeaponDef& d = game::weaponDefAt(i); if (d.typeCode < 0 || d.typeCode == 3 || !d.meshGltf || !*d.meshGltf) continue;
+            const double ms = world_.profileWeaponModelLoad(d); total += ms; LOG_INFO("WEAPONLOAD %-22s %6.1f ms", d.id, ms); }
+        LOG_INFO("WEAPONLOAD total %.1f ms", total); return false; }   // measurements only
     world_.setAudio(audio_);
     // Local versus match (launch-independent runtime; a front end will call World::startLocalMatch the same way).
     // WFC_MATCH_URL=<StartLevel URL> (the Frontend contract) or WFC_MATCH=TDM|DM (authored defaults).
