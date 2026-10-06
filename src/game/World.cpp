@@ -890,8 +890,11 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
 }
 
 void World::tick(float dt) {
-    // PendingMatch: cache each selected body (custom chassis included) during the countdown, before anyone spawns.
-    if (matchActive_ && match_.state() == Match::State::PendingMatch)
+    // Cache (and prewarm) each participant's body as soon as its selection exists - during the countdown for everyone present,
+    // and for bots / joiners / class or team changes before their next spawn wave - instead of at the spawn itself (a first
+    // cache costs the glb load + renderer prewarm, ~130-165 ms). Only bodies that can appear in this match are loaded (Pass 24h
+    // cached all eight MP defaults: ~1 GB per match, Integration 08i soak). Load scheduling only, not original behaviour.
+    if (matchActive_)
         for (size_t p = 0; p < match_.players().size(); ++p) {
             const MatchPlayer& mp = match_.players()[p];
             if (mp.hasSelectedCharacter) chassisAssets(resolveChassis(mp.selection, match_.faction((int)p)));
@@ -1014,11 +1017,6 @@ void World::startLocalMatch(const MatchSettings& s) {
         return false;
     });
     match_.begin(s);
-    // Load (and prewarm) the eight default MP bodies under the match load, not at a pawn's first spawn mid-match (a first
-    // cache costs the glb load + renderer prewarm, ~130-165 ms). The cache lives as long as this World (the frontend flow builds one
-    // per match, so each match load repeats this). Not original: load scheduling only.
-    for (int sp = 0; sp < 4; ++sp)
-        for (int fa = 0; fa < 2; ++fa) chassisAssets(defaultChassis((Specialty)sp, fa));
     if (localPlayer_ < 0) localPlayer_ = match_.addPlayer("Player");
     matchActive_ = true;
     localDead_ = true;            // PendingMatch: TrySpawnPlayer false -> nobody spawns before the start

@@ -842,9 +842,9 @@ void PlayerController::applyToPawn(World& world, float dt) {
                 if (w.chargeState >= 2) {
                     const int mode = w.chargeState - 2;
                     const Weapon::ChargeLevel& L = Weapon::chargeLevel(mode);
+                    w.chargeShotLevel = mode + 1;                  // before the copy and onFired(): the shot, its serial and the level agree
                     Weapon shot = w;
                     shot.projSpeed = L.speed; shot.projDamage = L.damage; shot.projRadiusM = L.radiusM; shot.projClass = mode;
-                    w.chargeShotLevel = mode + 1;                  // set before onFired(): the shot serial and the level change together
                     w.onFired();                                   // spread / serial / one ammo
                     w.ammo = std::max(0, w.ammo - (L.shotCost - 1));   // ConsumeAmmo(ShotCost[mode]), clamped at 0 [HIGH]
                     fireRobotShot(shot);

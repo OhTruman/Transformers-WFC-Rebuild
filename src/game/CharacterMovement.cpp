@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 
 namespace game::CharacterMovement {
@@ -372,6 +373,14 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
             float ang = 0.7853982f + 1.5707963f * (float)i;   // Normal(1,1,0) rotated by 90 deg steps
             float rx = std::cos(ang) * VP.suspMountRadius, ry = std::sin(ang) * VP.suspMountRadius;
             core::Vec3 mount = com + B.x * rx + B.y * ry;
+            // [PROV] The PhysX hull keeps the body out of walls, so a mount never sits inside one. Our hull probes can let a
+            // corner clip a wall while sliding along it at an angle; a mount inside the wall would cast its ray from inside the
+            // solid, miss the floor, and drop that corner (the car tipped onto the wall). Start such a probe just short of the
+            // face instead, on the COM side, at the same height.
+            if (col) {
+                float tw; core::Vec3 nw;
+                if (col->segmentHit(com, mount, tw, nw) && std::fabs(nw.y) < 0.5f) mount = com + (mount - com) * std::max(0.0f, tw - 0.02f);
+            }
             float t = 1.0f; core::Vec3 n{0, 1, 0};
             bool hit = col ? col->segmentHit(mount, mount + down * rest, t, n) : false;
             if (!col && down.y < -1e-4f) {        // no collision world: flat plane at groundY
@@ -454,17 +463,19 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
         c.setYaw(in.faceYaw);
         // Tank UpdateTurn [CONF RE C2]: if IsStable && OnTheGround only yaw is applied, else pitch / roll are also
         // corrected at TurnRate 0.05. Car / truck: only with no contact or upside down (ShouldUpright).
-        // TnHoverCarSimulation.UpdateTurn [CONF RE pass 4 A4]: the angular velocity is REPLACED each step by
-        // axisAngle(current -> upright-with-view-yaw) x mask / dt (correction = target / dt - omega), so pitch / roll spin
-        // never accumulates: mask (0.05, 0.05, 1) normally (weak pull, the springs set the grounded attitude), (1, 1, 1) when
-        // ShouldUpright (no contacts or up.Z < 0.01): upright in one step. Angular damping is 0 (Activate).
+        // TnHoverCarSimulation.UpdateTurn [CONF RE pass 4 A4, corrected 6bb8855]: dw = axisAngle(current -> upright with the
+        // view yaw) x (0.05, 0.05, 1) / dt - w, then x (ShouldUpright ? (1, 1, 1) : (0, 0, 1)). ShouldUpright = no suspension
+        // contact or upside down (up.Z < 0.01). Grounded and upright: only yaw is replaced; pitch / roll w carries over between
+        // steps (spring torques, UpdateRoll; RB angular damping 0 while hovering). Airborne / inverted: pitch / roll w is SET to
+        // 0.05 x error / dt (a 5 % per tick pull). The correction lands at step start, the spring forces integrate over the step.
         // Tank (TnHoverTankSimulation [CONF RE C2]): only yaw while stable on the ground, else pitch / roll at TurnRate 0.05.
         if (tank) {
             if (!(!unstable && vs.onTheGround)) { vs.angVel.x = 0.05f * vs.roll / dt; vs.angVel.y = 0.05f * vs.pitch / dt; }
         } else {
-            const float mask = (contacts == 0 || B.z.y < 0.01f) ? 1.0f : 0.05f;
-            vs.angVel.x = mask * vs.roll / dt;
-            vs.angVel.y = mask * vs.pitch / dt;
+            if (contacts == 0 || B.z.y < 0.01f) {          // ShouldUpright
+                vs.angVel.x = 0.05f * vs.roll / dt;
+                vs.angVel.y = 0.05f * vs.pitch / dt;
+            }
         }
         comAbove = rest;
         float gy; core::Vec3 gn;
