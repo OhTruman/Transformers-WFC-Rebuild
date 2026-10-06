@@ -369,6 +369,13 @@ public:
         (void)material; (void)location; (void)dir; (void)width; (void)height; (void)thickness; (void)rollDeg; (void)lifetime;
         return -1;
     }
+    // Presented-frame limiter (PC adaptation; M09). hz <= 0 = unlimited (default; WFC_FRAMELIMIT=hz overrides for
+    // tests). Paces presentation only - the fixed-step simulation, physics and animation are unchanged. For the lowest
+    // latency the main loop calls waitFrameSlot() at the top of each frame (before input); when it does not,
+    // endFrame waits instead. High-resolution waitable timer + ~1 ms spin, deadline-scheduled (no catch-up bursts).
+    virtual void setFrameLimit(float hz) { (void)hz; }
+    virtual float frameLimit() const { return 0.0f; }
+    virtual void waitFrameSlot() {}
     // M76 weapon impact decal (HmWeaponMesh.CreateImpactEffects / TnProjectileMesh explosion; RE pass 5 s12 add. 29).
     // glTF metres; `weaponClass` is the script class (e.g. "TnWeaponAssaultRifle"). The renderer resolves the hit
     // surface's PhysicalMaterial from the world geometry's material and applies the cooked tables (impact_decals.json):
