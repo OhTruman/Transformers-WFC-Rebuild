@@ -312,6 +312,7 @@ private:
         if (!pf || !SetPixelFormat(hdc_, pf, &pfd)) { LOG_ERROR("SetPixelFormat failed"); return false; }
         hglrc_ = wglCreateContext(hdc_);
         if (!hglrc_ || !wglMakeCurrent(hdc_, hglrc_)) { LOG_ERROR("wglCreateContext failed"); return false; }
+        upgradeToRobustContext();
         LOG_INFO("OpenGL: %s", (const char*)glGetString(GL_VERSION));
         return true;
     }
@@ -358,6 +359,61 @@ private:
             {"LStickRight", kPadLStickRight}};
         for (const auto& e : t) if (n == e.name) return e.m;
         return 0;
+    }
+
+    // PC ADAPTATION (RX 7900 XTX driver-reset hardening, Rendering request): recreate the context through
+    // WGL_ARB_create_context with WGL_ARB_create_context_robustness - the same GL version and the compatibility profile
+    // as the legacy context, plus robust buffer access (out-of-bounds buffer reads return 0, not undefined behaviour) and
+    // LOSE_CONTEXT_ON_RESET, so glGetGraphicsResetStatus (the renderer polls it per frame) reports a reset. Any failure
+    // keeps the legacy context. WFC_GL_LEGACY_CONTEXT=1 skips it (A/B).
+    void upgradeToRobustContext() {
+        char legacy[8] = {0};                          // Win32 env read (no new includes in this file)
+        if (GetEnvironmentVariableA("WFC_GL_LEGACY_CONTEXT", legacy, sizeof legacy) > 0 && legacy[0] && legacy[0] != '0') {
+            LOG_INFO("OpenGL context: legacy (WFC_GL_LEGACY_CONTEXT)");
+            return;
+        }
+        using GetExtStr = const char*(WINAPI*)(HDC);
+        using CreateAttribs = HGLRC(WINAPI*)(HDC, HGLRC, const int*);
+        auto getExt = (GetExtStr)(void*)wglGetProcAddress("wglGetExtensionsStringARB");
+        auto create = (CreateAttribs)(void*)wglGetProcAddress("wglCreateContextAttribsARB");
+        const char* ext = getExt ? getExt(hdc_) : nullptr;
+        auto hasExt = [](const char* list, const char* name) {   // whole-token match in the space-separated list
+            for (const char* p = list; p && *p;) {
+                const char* q = p; const char* n = name;
+                while (*n && *q == *n) { ++q; ++n; }
+                if (!*n && (*q == ' ' || *q == 0)) return true;
+                while (*p && *p != ' ') ++p;
+                while (*p == ' ') ++p;
+            }
+            return false;
+        };
+        if (!create || !ext || !hasExt(ext, "WGL_ARB_create_context_robustness")) {
+            LOG_INFO("OpenGL context: legacy (WGL_ARB_create_context_robustness unavailable: getExt %d create %d ext %d)",
+                     getExt != nullptr, create != nullptr, ext && hasExt(ext, "WGL_ARB_create_context_robustness"));
+            if (ext && GetEnvironmentVariableA("WFC_GL_EXTLOG", legacy, sizeof legacy) > 0) LOG_INFO("WGL extensions: %s", ext);
+            return;
+        }
+        GLint major = 0, minor = 0;
+        glGetIntegerv(0x821B /* GL_MAJOR_VERSION */, &major);
+        glGetIntegerv(0x821C /* GL_MINOR_VERSION */, &minor);
+        if (major <= 0) { LOG_INFO("OpenGL context: legacy (version query failed)"); return; }
+        const int attribs[] = {
+            0x2091 /* WGL_CONTEXT_MAJOR_VERSION_ARB */, major,
+            0x2092 /* WGL_CONTEXT_MINOR_VERSION_ARB */, minor,
+            0x9126 /* WGL_CONTEXT_PROFILE_MASK_ARB */, 0x00000002 /* WGL_CONTEXT_COMPATIBILITY_PROFILE_BIT_ARB */,
+            0x2094 /* WGL_CONTEXT_FLAGS_ARB */, 0x00000004 /* WGL_CONTEXT_ROBUST_ACCESS_BIT_ARB */,
+            0x8256 /* WGL_CONTEXT_RESET_NOTIFICATION_STRATEGY_ARB */, 0x8252 /* WGL_LOSE_CONTEXT_ON_RESET_ARB */,
+            0};
+        HGLRC robust = create(hdc_, nullptr, attribs);
+        if (!robust || !wglMakeCurrent(hdc_, robust)) {
+            if (robust) wglDeleteContext(robust);
+            wglMakeCurrent(hdc_, hglrc_);
+            LOG_WARN("OpenGL context: robust creation failed (GL %d.%d compatibility) - keeping the legacy context", major, minor);
+            return;
+        }
+        wglDeleteContext(hglrc_);
+        hglrc_ = robust;
+        LOG_INFO("OpenGL context: robust (GL %d.%d compatibility, ROBUST_ACCESS, LOSE_CONTEXT_ON_RESET) [PC ADAPTATION]", major, minor);
     }
 
     POINT centerScreen() const {

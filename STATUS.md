@@ -2288,6 +2288,27 @@ camdis.txt, pcdis.txt via work/pass11/ue3dis.py) and authored data (VEH_SHARED_p
   - ram collision;
   - wheel/tire steering.
 
+## SYSTEMS M09a (2026-10-06): FPS-cap sim invariance, robust GL context attempt
+- **FPS limiter:** Rendering owns it (agents/rendering 73fd427, IRenderer::setFrameLimit / waitFrameSlot); Frontend applies [PCSettings] FrameLimit
+  (agents/frontend 938a3d6). Cap > 30 is PC ADAPTATION (the original ran 15-30 fps, no vsync).
+- **Systems verification** (test copy of 08h + 73fd427, Release, Streets TDM; test-only instrumentation, not committed):
+  * binding caps 15 / 20: sim / wall = 1.0000; match clock and a 30 s cooldown track sim time exactly;
+  * robot speed 13.17-13.30 m and vehicle 13.56-14.19 m per sim-second, the same with and without a cap;
+  * the first sweep ran without WFC_RENDER_DATA (legacy presentation, about 25 fps). Rerun with the real render data, Release, Streets,
+    2 s windows: cap 60 -> 60.0 fps, 144 -> 144.0, 240 -> 230-239 (the scene's natural ceiling), unlimited -> 240-260 fps.
+    * sim / wall 0.99-1.00 (window quantisation of one step); match clock and cooldown advance exactly with sim time.
+    * Robot 12.18-12.37 m and vehicle (Truck, transformed) 12.33-12.46 m per sim-second at every cap (within ±0.8%).
+    * Rendering measured the presented intervals (144 p50 6.95 ms); Frontend measured 60 -> 59.9 ... 300 -> 302.9 fps.
+  * Audio does no per-rendered-frame work in a match (all of it is inside World::tick at the 60 Hz step); the frontend tick costs about 0.03 ms.
+- Camera unevenness at high FPS = FixedStepClock::alpha() unused (Gameplay is adding render interpolation), not presentation.
+- **Robust GL context** (Win32Window::upgradeToRobustContext, PC ADAPTATION, Rendering request): WGL_ARB_create_context with the same version
+  and compatibility profile + ROBUST_ACCESS + LOSE_CONTEXT_ON_RESET.
+  * The AMD 26.6.4 driver (RX 7900 XTX) does NOT expose WGL_ARB_create_context_robustness, so it falls back to the legacy context there
+    (logged). WFC_GL_LEGACY_CONTEXT=1 skips it; WFC_GL_EXTLOG=1 logs the WGL extension list.
+- **Progression / bot audio (RE CONFIRMED; waiting for Gameplay's ProgressionEvent header):**
+  * LevelUp -> MP_LEVEL_UP_MX_STNG; each XP popup line -> MP_REWARD_DIALOG_BOX; EXP_LEVEL_UP unused.
+  * The original gives AI kills no awards or announcer lines, so bot-driven XP / announcer audio is PC ADAPTATION.
+
 ## SYSTEMS M08s (2026-10-06) - 08o freeze audit: the main thread never waits on a worker decode
 - **Audit** (Integration's 08o "game froze" report): no deadlock found. No lock is held across a decode (Win32Audio decodes outside its mutex),
   there are no condition variables, and the worker never waits on the main thread.
