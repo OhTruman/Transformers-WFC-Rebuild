@@ -37,7 +37,7 @@ $X = Get-M07Expectations -Regenerate
 
 # ---------- 1. build + render data
 if (-not $ReportOnly -and ($Build -or -not (Test-Path (Join-Path $tgt "build-release\bin\wfc_rebuild.exe")))) {
-    Step "build $sha" { & (Join-Path $PSScriptRoot "m05\build-target.ps1") -Ref $sha -Name $Name -Jobs 4 }
+    Step "build $sha" { & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "m05\build-target.ps1") -Ref $sha -Name $Name -Jobs 4 }
 }
 $built = if (Test-Path (Join-Path $tgt "M05_TARGET.txt")) { ((Get-Content (Join-Path $tgt "M05_TARGET.txt")) | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '' } else { "" }
 if ($built -ne $sha) { throw "work\ab\$Name holds '$built', not ${sha}: rerun with -Build (never mix product revisions)" }

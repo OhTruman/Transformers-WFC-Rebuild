@@ -403,8 +403,19 @@ void checkOrientation(Report& r) {
                    "hitscan ray from the eye passes through the crosshair point (camera centre ray)");
             r.info("aim_convergence_distance", den < 1e-6f ? 0.0 : tc, "m",
                    "distance along the camera ray where the shot crosses it (0 = rays coincide)");
-            r.near("aim_origin_eye_height", s.origin.y - rig.pawn().position().y, kEyeHeight, 1e-4, "m",
-                   "PlayerController: trace starts at pawn eye (CylinderHeight+BaseEyeHeight)");
+            // TnPlayerPawn.GetWeaponStartTraceLocation [RE CONFIRMED, Gameplay 24i d2c17db]: the trace starts on the crosshair (camera)
+            // ray at the point nearest the pawn - no longer at actor + eye height (that expectation predates 24i).
+            {
+                const core::Vec3 rel = s.origin - cam.pos;
+                const float along = core::dot(rel, cf);
+                r.conf("aim_origin_on_crosshair_ray", core::length(rel - cf * along), 0.0, 0.01, "m", "RE CONFIRMED: TnPlayerPawn.GetWeaponStartTraceLocation",
+                       "Gameplay", "trace start lies on the camera centre ray (Gameplay 24i d2c17db)");
+                const core::Vec3 pawnPos = rig.pawn().position();
+                const float tNear = core::dot(pawnPos - cam.pos, cf);
+                r.conf("aim_origin_nearest_pawn", along - tNear, 0.0, 0.05, "m", "RE CONFIRMED: TnPlayerPawn.GetWeaponStartTraceLocation",
+                       "Gameplay", "trace start = the point on the camera ray nearest the pawn (difference along the ray)");
+                r.info("aim_origin_height_above_pawn", s.origin.y - pawnPos.y, "m", "informational (was the eye height 3.5 m before 24i)");
+            }
         } else {
             r.truth("aim_shot_fired", false, "a held trigger must fire");
         }
