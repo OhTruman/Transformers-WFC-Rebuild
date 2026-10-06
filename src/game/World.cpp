@@ -1526,6 +1526,14 @@ void World::startLocalMatch(const MatchSettings& s, int localTeam) {
         player_.controller().setCameraYaw(st.yaw);
         player_.controller().setSpectatorView(st.pos + core::Vec3{0, core::config::kPawnHalfHeight, 0}, st.yaw);
     }
+    // Under the match load: cache (and prewarm) the four default MP bodies of the local player's faction, so a class pick in
+    // the lobby (after this, on a visible frame) is instant. Other participants' bodies (bots, the other faction, custom
+    // chassis) cache as soon as their selection exists (World::tick). Keep this after the local team is final.
+    // Load scheduling only, not original behaviour.
+    if (localPlayer_ >= 0) {
+        const int fa = match_.faction(localPlayer_);
+        for (int sp = 0; sp < 4; ++sp) chassisAssets(defaultChassis((Specialty)sp, fa));
+    }
 }
 
 bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
