@@ -1987,11 +1987,17 @@ void World::tickMatch(float dt) {
                 for (MatchOpponent* o : opponents_)
                     if (o->matchPlayer() == e.player && e.value >= 0) {
                         MatchPlayer& op = match_.playerMutable(o->matchPlayer());
-                        if (applyChassisToPawn(o->pawn(), op.chassis)) applyCharacterTo(o->pawn(), &op.selection, &op);
+                        const double to0 = profNowMs();
+                        const bool chassisOk = applyChassisToPawn(o->pawn(), op.chassis);
+                        const double to1 = profNowMs();
+                        if (chassisOk) applyCharacterTo(o->pawn(), &op.selection, &op);
+                        const double to2 = profNowMs();
                         core::Vec3 p = match_.starts()[(size_t)e.value].pos;
                         float gy; core::Vec3 gn;
                         if (collision_.valid() && collision_.groundHeight(p.x, p.z, p.y + 0.5f, 1.0f, gy, gn)) p.y = gy;
                         o->spawnAt(p);
+                        if (spawnProf()) LOG_INFO("SPAWNPROF opponent %d spawn: chassis apply %.1f ms, character %.1f ms, place+spawnAt %.1f ms (%s)",
+                                                  o->matchPlayer(), to1 - to0, to2 - to1, profNowMs() - to2, op.chassis.c_str());
                     }
                 break;
             case MatchEvent::Type::PlayerKilled:
@@ -2222,18 +2228,21 @@ void World::resolveModelTextures(assets::SkinnedModel& m) {
 const World::ChassisAssets* World::chassisAssets(const std::string& id) {
     auto it = chassisCache_.find(id);
     if (it != chassisCache_.end()) return it->second.get();
+    struct ProfScope { const std::string& id; double t0 = profNowMs(); ~ProfScope() { if (spawnProf()) LOG_INFO("SPAWNPROF chassis load %s: %.1f ms", id.c_str(), profNowMs() - t0); } } profScope{id};
     auto a = std::make_unique<ChassisAssets>();
+    double chProf[6] = {0, 0, 0, 0, 0, 0};   // SPAWNPROF split: robot glb, vehicle glb, textures, arm, prewarm
     const std::string root = assetRoot();
     const std::string ext = root + "/../";
     if (!loadChassisDef(root, id, a->def)) {
         a->error = a->def.loadError;
-    } else if (!assets::loadSkinnedGlb(ext + a->def.robotGlb, a->robot) || !a->robot.valid()) {
+    } else if ((chProf[0] = profNowMs(), !assets::loadSkinnedGlb(ext + a->def.robotGlb, a->robot)) || (chProf[1] = profNowMs(), !a->robot.valid())) {
         a->error = "robot.glb failed to load for " + id;
-    } else if (!assets::loadSkinnedGlb(ext + a->def.vehicleGlb, a->vehicle) || !a->vehicle.valid()) {
+    } else if (!assets::loadSkinnedGlb(ext + a->def.vehicleGlb, a->vehicle) || (chProf[2] = profNowMs(), !a->vehicle.valid())) {
         a->error = "vehicle.glb failed to load for " + id;
     } else {
         resolveModelTextures(a->robot);
         resolveModelTextures(a->vehicle);
+        chProf[3] = profNowMs();
         if (!a->def.vehicle.hullFromPhysics) {
             // Hull from the vehicle mesh bind-pose bounds (glTF x = UE forward, z = UE right) [PROV until the per-chassis
             // physics assets are exported]; the Truck keeps its VH_Optimus_PHYSSYS box.
@@ -2251,6 +2260,7 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
         }
         a->ok = true;
     }
+    chProf[4] = profNowMs();
     if (a->ok) LOG_INFO("chassis %s (%s): robot %zu clips, vehicle %zu clips, arm %s", id.c_str(), a->def.iconic.c_str(),
                         a->robot.clips.size(), a->vehicle.clips.size(), a->hasArm ? "yes" : "no");
     else LOG_ERROR("chassis %s UNAVAILABLE: %s", id.c_str(), a->error.c_str());
@@ -2264,6 +2274,8 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
             fxPrewarm(*renderer_, md, 0);
         }
     }
+    if (spawnProf() && chProf[0] > 0.0) LOG_INFO("SPAWNPROF chassis %s split: robot glb %.0f ms, vehicle glb %.0f, textures %.0f, arm %.0f, prewarm %.0f",
+                                         id.c_str(), chProf[1] - chProf[0], chProf[2] - chProf[1], chProf[3] - chProf[2], chProf[4] - chProf[3], profNowMs() - chProf[4]);
     chassisCache_[id] = std::move(a);
     return raw;
 }
