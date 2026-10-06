@@ -1,0 +1,9 @@
+MP_IAC_Streets TnTeamPlayerStart_12481: direct-boot world draws median 1641 (5 samples)
+[info ] VISUALCHECK frame 480 path=original black=0.074 flat=0.083 lumaP50=18 colors=419 draws=2032 world=1641 bsp=357 materials=160 noProgram=0 -> PASS
+[info ] VISUALCHECK frame 600 path=original black=0.074 flat=0.083 lumaP50=18 colors=415 draws=2032 world=1641 bsp=357 materials=160 noProgram=0 -> PASS
+MP_IAC_Streets TnTeamPlayerStart_8835: direct-boot world draws median 1739 (5 samples)
+[info ] VISUALCHECK frame 480 path=original black=0.035 flat=0.014 lumaP50=36 colors=936 draws=2224 world=1739 bsp=451 materials=166 noProgram=0 -> PASS
+[info ] VISUALCHECK frame 600 path=original black=0.034 flat=0.016 lumaP50=36 colors=920 draws=2237 world=1739 bsp=451 materials=166 noProgram=0 -> PASS
+MP_IAC_Berth TnTeamPlayerStart_5269: direct-boot world draws median 1087 (5 samples)
+[info ] VISUALCHECK frame 480 path=original black=0.000 flat=0.403 lumaP50=24 colors=2338 draws=1379 world=1087 bsp=273 materials=130 noProgram=0 -> PASS
+[info ] VISUALCHECK frame 600 path=original black=0.000 flat=0.403 lumaP50=24 colors=2354 draws=1380 world=1087 bsp=273 materials=130 noProgram=0 -> PASS

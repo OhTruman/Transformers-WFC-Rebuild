@@ -1,0 +1,179 @@
+﻿{
+    "summary":  {
+                    "pass":  16,
+                    "fail":  0,
+                    "known":  6,
+                    "info":  5,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "map_audit.bsp.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.bsp.unknown",
+                        "status":  "INFO",
+                        "measured":  1,
+                        "note":  "1 UNKNOWN"
+                    },
+                    {
+                        "id":  "map_audit.movers.present_wrong_effect",
+                        "status":  "KNOWN",
+                        "measured":  3,
+                        "owner":  "Rendering",
+                        "note":  "3 PRESENT + WRONG EFFECT"
+                    },
+                    {
+                        "id":  "map_audit.movers.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  4,
+                        "owner":  "Rendering",
+                        "note":  "4 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.movers.unknown",
+                        "status":  "INFO",
+                        "measured":  3,
+                        "note":  "3 UNKNOWN"
+                    },
+                    {
+                        "id":  "map_audit.movers.present_rendered",
+                        "status":  "PASS",
+                        "measured":  2,
+                        "note":  "2 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.prefab_members.present_rendered",
+                        "status":  "PASS",
+                        "measured":  33,
+                        "note":  "33 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.prefab_members.unknown",
+                        "status":  "INFO",
+                        "measured":  1,
+                        "note":  "1 UNKNOWN"
+                    },
+                    {
+                        "id":  "map_audit.props.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1870,
+                        "note":  "1870 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.props.unknown",
+                        "status":  "INFO",
+                        "measured":  36,
+                        "note":  "36 UNKNOWN"
+                    },
+                    {
+                        "id":  "map_audit.prefabs.present_rendered",
+                        "status":  "PASS",
+                        "measured":  15,
+                        "note":  "15 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.prefabs.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  1,
+                        "owner":  "Systems",
+                        "note":  "1 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.decals.present_rendered",
+                        "status":  "PASS",
+                        "measured":  25,
+                        "note":  "25 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.level_emitters.present_rendered",
+                        "status":  "PASS",
+                        "measured":  8,
+                        "note":  "8 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.pickup_fx.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  37,
+                        "owner":  "Systems",
+                        "note":  "37 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.pickups.present_rendered",
+                        "status":  "PASS",
+                        "measured":  3,
+                        "note":  "3 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.pickups.present_invisible_by_design",
+                        "status":  "PASS",
+                        "measured":  2,
+                        "note":  "2 PRESENT + INVISIBLE BY DESIGN"
+                    },
+                    {
+                        "id":  "map_audit.destructibles.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.lights.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.lights.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  1,
+                        "owner":  "Rendering",
+                        "note":  "1 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.lightmaps.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.fog.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.post_process.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.reflections.unknown",
+                        "status":  "INFO",
+                        "measured":  1,
+                        "note":  "1 UNKNOWN"
+                    },
+                    {
+                        "id":  "map_audit.ambient_audio.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  30,
+                        "owner":  "Systems",
+                        "note":  "30 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.ambient_audio.present_rendered",
+                        "status":  "PASS",
+                        "measured":  40,
+                        "note":  "40 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.prefabs.declared_vs_resolved",
+                        "status":  "PASS",
+                        "measured":  16,
+                        "note":  "16 PrefabInstance actors declared; 16 resolved through member tags"
+                    }
+                ]
+}

@@ -1,0 +1,141 @@
+﻿{
+    "summary":  {
+                    "pass":  9,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  9,
+                    "skip":  0,
+                    "human":  3
+                },
+    "results":  [
+                    {
+                        "id":  "modes.base_InterpActor_3855",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "AUTHORED Kismet unhide (ScoreBombingRun, SingleFlagCTF). Change vs DM by mode: DM 0%, TDM 0%, CTF 84%, EXT 84%, DOM 0%, KOTH 0%."
+                    },
+                    {
+                        "id":  "modes.base_InterpActor_6165",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "AUTHORED Kismet unhide (ScoreBombingRun, SingleFlagCTF). Change vs DM by mode: DM 0%, TDM 0%, CTF 69%, EXT 69%, DOM 0%, KOTH 0%."
+                    },
+                    {
+                        "id":  "modes.flag_TnGameObjectivePickupFactoryFlag_3951",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "AUTHORED RequiredGameRuleClass SingleFlagCTF. Own particle effect (normal vs WFC_NOMAPFX, same mode) by mode: DM 0%, TDM 0%, CTF 3%, EXT 2%, DOM 0%, KOTH 0%. Mismatch: EXT: expected not shown, measured own effect 0.024 (change vs DM 0.772); Gameplay vis=0"
+                    },
+                    {
+                        "id":  "modes.flag_TnGameObjectivePickupFactoryFlag_9703",
+                        "status":  "HUMAN",
+                        "measured":  1,
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "AUTHORED RequiredGameRuleClass SingleFlagCTF. Own particle effect (normal vs WFC_NOMAPFX, same mode) by mode: DM 0%, TDM 0%, CTF 10%, EXT 5%, DOM 0%, KOTH 0%. Mismatch: EXT: expected not shown, measured own effect 0.048 (change vs DM 0.579); Gameplay vis=0"
+                    },
+                    {
+                        "id":  "modes.bomb_TnGameObjectivePickupFactoryBomb_7067",
+                        "status":  "HUMAN",
+                        "measured":  5,
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "AUTHORED RequiredGameRuleClass ScoreBombingRun. Own particle effect (normal vs WFC_NOMAPFX, same mode) by mode: DM 3%, TDM 3%, CTF 3%, EXT 3%, DOM 3%, KOTH 3%. Mismatch: DM: expected not shown, measured own effect 0.033 (change vs DM 0); Gameplay vis=0; TDM: expected not shown, measured own effect 0.033 (change vs DM 0); Gameplay vis=0; CTF: expected not shown, measured own effect 0.033 (change vs DM 0); Gameplay vis=0; DOM: expected not shown, measured own effect 0.033 (change vs DM 0); Gameplay vis=0; KOTH: expected not shown, measured own effect 0.033 (change vs DM 0); Gameplay vis=0"
+                    },
+                    {
+                        "id":  "modes.totem_TnDominationPoint_15247",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "RE (Gameplay FIDELITY: visible only in DOM). Change vs DM by mode: DM 0%, TDM 0%, CTF 0%, EXT 0%, DOM 45%, KOTH 0%."
+                    },
+                    {
+                        "id":  "modes.totem_TnDominationPoint_6703",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "RE (Gameplay FIDELITY: visible only in DOM). Change vs DM by mode: DM 0%, TDM 0%, CTF 0%, EXT 0%, DOM 46%, KOTH 0%."
+                    },
+                    {
+                        "id":  "modes.totem_TnDominationPoint_678",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "RE (Gameplay FIDELITY: visible only in DOM). Change vs DM by mode: DM 0%, TDM 0%, CTF 0%, EXT 0%, DOM 49%, KOTH 0%."
+                    },
+                    {
+                        "id":  "modes.koth_TnKingOfTheHillZone_11438",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "change vs DM: DM 0%, TDM 0%, CTF 0%, EXT 0%, DOM 0%, KOTH 0%; Gameplay KOTH state: KothInactive - RE (one random zone active in KOTH)"
+                    },
+                    {
+                        "id":  "modes.koth_TnKingOfTheHillZone_12369",
+                        "status":  "INFO",
+                        "measured":  0.278,
+                        "note":  "change vs DM: DM 0%, TDM 0%, CTF 0%, EXT 0%, DOM 0%, KOTH 28%; Gameplay KOTH state: Active - RE (one random zone active in KOTH)"
+                    },
+                    {
+                        "id":  "modes.koth_TnKingOfTheHillZone_14223",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "change vs DM: DM 0%, TDM 0%, CTF 0%, EXT 0%, DOM 0%, KOTH 0%; Gameplay KOTH state: KothInactive - RE (one random zone active in KOTH)"
+                    },
+                    {
+                        "id":  "modes.koth_TnKingOfTheHillZone_14647",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  "change vs DM: DM 0%, TDM 0%, CTF 0%, EXT 3%, DOM 0%, KOTH 0%; Gameplay KOTH state: KothInactive - RE (one random zone active in KOTH)"
+                    },
+                    {
+                        "id":  "modes.koth_TnKingOfTheHillZone_15196",
+                        "status":  "INFO",
+                        "measured":  0.002,
+                        "note":  "change vs DM: DM 0%, TDM 0%, CTF 0%, EXT 0%, DOM 0%, KOTH 0%; Gameplay KOTH state: KothInactive - RE (one random zone active in KOTH)"
+                    },
+                    {
+                        "id":  "modes.pickup_TnAmmoCratePickupFactory_10561",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "AUTHORED no RequiredGameRuleClass. Change vs DM by mode: DM 0%, TDM 0%, CTF 0%, EXT 0%, DOM 0%, KOTH 0%."
+                    },
+                    {
+                        "id":  "modes.pickup_TnHealthPickupFactory_13806",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "AUTHORED no RequiredGameRuleClass. Change vs DM by mode: DM 0%, TDM 0%, CTF 0%, EXT 0%, DOM 0%, KOTH 0%."
+                    },
+                    {
+                        "id":  "modes.pickup_TnOverShieldPickupFactory_6009",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "AUTHORED no RequiredGameRuleClass. Change vs DM by mode: DM 0%, TDM 0%, CTF 0%, EXT 0%, DOM 0%, KOTH 0%."
+                    },
+                    {
+                        "id":  "modes.pickup_TnAmmoCratePickupFactory_10561.own_effect",
+                        "status":  "INFO",
+                        "measured":  0.114,
+                        "note":  "own particle effect coverage by mode (normal vs no-FX): DM 11%, TDM 11%, CTF 11%, EXT 11%, DOM 11%, KOTH 11%"
+                    },
+                    {
+                        "id":  "modes.pickup_TnHealthPickupFactory_13806.own_effect",
+                        "status":  "INFO",
+                        "measured":  0.234,
+                        "note":  "own particle effect coverage by mode (normal vs no-FX): DM 23%, TDM 23%, CTF 23%, EXT 23%, DOM 23%, KOTH 23%"
+                    },
+                    {
+                        "id":  "modes.pickup_TnOverShieldPickupFactory_6009.own_effect",
+                        "status":  "INFO",
+                        "measured":  0.11,
+                        "note":  "own particle effect coverage by mode (normal vs no-FX): DM 11%, TDM 11%, CTF 11%, EXT 11%, DOM 11%, KOTH 11%"
+                    },
+                    {
+                        "id":  "modes.koth_one_active_zone",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "KOTH zones changed vs DM: 1 (koth_TnKingOfTheHillZone_12369); Gameplay state Active: 1 (koth_TnKingOfTheHillZone_12369). RE: one random zone shown + ring"
+                    },
+                    {
+                        "id":  "modes.collision_state",
+                        "status":  "INFO",
+                        "note":  "Gameplay MapState per mode (disabled factories SetCollision(false,false), totems keep collision when hidden [RE]): flag/DM: col=0 touch=0 (Disabled); flag/TDM: col=0 touch=0 (Disabled); flag/CTF: col=1 touch=1 (Active); flag/EXT: col=0 touch=0 (Disabled); flag/DOM: col=0 touch=0 (Disabled); flag/KOTH: col=0 touch=0 (Disabled); bomb/DM: col=0 touch=0 (Disabled); bomb/TDM: col=0 touch=0 (Disabled); bomb/CTF: col=0 touch=0 (Disabled); bomb/EXT: col=1 touch=1 (Active); bomb/DOM: col=0 touch=0 (Disabled); bomb/KOTH: col=0 touch=0 (Disabled); totem/DM: col=1 touch=0 (Hidden); totem/TDM: col=1 touch=0 (Hidden); totem/CTF: col=1 touch=0 (Hidden); totem/EXT: col=1 touch=0 (Hidden); totem/DOM: col=1 touch=1 (Active); totem/KOTH: col=1 touch=0 (Hidden)"
+                    }
+                ]
+}

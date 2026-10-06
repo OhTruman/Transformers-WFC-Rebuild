@@ -1,0 +1,1664 @@
+{
+ "generated_by": "tools/fidelity/m07/gen_expectations.py",
+ "sources": [
+  "F:\\Transformers Rebuild\\AssetTools\\manifests",
+  "F:\\Transformers Rebuild\\ExtractedAssets\\VerticalSlice"
+ ],
+ "maps": [
+  {
+   "runtime": "MP_IAC_Seed",
+   "base": "MP_IAC_Seed_Base_m",
+   "name": "Seed Of Corruption",
+   "ini_order": 100,
+   "mapId": 501,
+   "modes": [
+    "DM",
+    "TDM",
+    "CTF",
+    "KOTH",
+    "EXT",
+    "DOM"
+   ],
+   "cooked": true,
+   "pipeline": "OK",
+   "structure_audit": "PASS",
+   "runtime_data": true,
+   "killz_m": -15.0,
+   "actor_counts": {
+    "TnAmmoCratePickupFactory": 9,
+    "TnBombPlantPoint": 2,
+    "TnDominationPoint": 3,
+    "TnFlagCapturePoint": 2,
+    "TnForcedDirVolume": 4,
+    "TnFreeForAllPlayerStart": 22,
+    "TnGameObjectivePickupFactoryBomb": 1,
+    "TnGameObjectivePickupFactoryFlag": 2,
+    "TnHealthPickupFactory": 10,
+    "TnKingOfTheHillZone": 4,
+    "TnOverShieldPickupFactory": 2,
+    "TnSpawnCluster": 16,
+    "TnTeamPlayerStart": 80
+   },
+   "mode_objectives_present": {
+    "DM": true,
+    "TDM": true,
+    "CTF": true,
+    "KOTH": true,
+    "EXT": true,
+    "DOM": true
+   },
+   "player_starts": 102,
+   "initial_spawn_clusters": [
+    "TnSpawnCluster_10766",
+    "TnSpawnCluster_11813"
+   ],
+   "launchable": true,
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 1,
+    "DM": 1,
+    "DOM": 1,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 1
+   }
+  },
+  {
+   "runtime": "MP_IAC_Berth",
+   "base": "MP_IAC_Berth_Base_m",
+   "name": "Berth",
+   "ini_order": 101,
+   "mapId": 502,
+   "modes": [
+    "DM",
+    "TDM",
+    "CTF",
+    "KOTH",
+    "EXT",
+    "DOM"
+   ],
+   "cooked": true,
+   "pipeline": "OK",
+   "structure_audit": "PASS",
+   "runtime_data": true,
+   "killz_m": -35.0,
+   "actor_counts": {
+    "TnAmmoCratePickupFactory": 5,
+    "TnBombPlantPoint": 2,
+    "TnDominationPoint": 3,
+    "TnFlagCapturePoint": 2,
+    "TnForcedDirVolume": 1,
+    "TnFreeForAllPlayerStart": 27,
+    "TnGameObjectivePickupFactoryBomb": 1,
+    "TnGameObjectivePickupFactoryFlag": 2,
+    "TnHealthPickupFactory": 4,
+    "TnKingOfTheHillZone": 4,
+    "TnOverShieldPickupFactory": 1,
+    "TnSpawnCluster": 18,
+    "TnTeamPlayerStart": 93
+   },
+   "mode_objectives_present": {
+    "DM": true,
+    "TDM": true,
+    "CTF": true,
+    "KOTH": true,
+    "EXT": true,
+    "DOM": true
+   },
+   "player_starts": 120,
+   "initial_spawn_clusters": [
+    "TnSpawnCluster_11238",
+    "TnSpawnCluster_6473"
+   ],
+   "launchable": true,
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
+  },
+  {
+   "runtime": "MP_UND_Complex",
+   "base": "MP_UND_Complex_BASE_m",
+   "name": "Complex",
+   "ini_order": 102,
+   "mapId": 503,
+   "modes": [
+    "DM",
+    "TDM",
+    "CTF",
+    "KOTH",
+    "EXT",
+    "DOM"
+   ],
+   "cooked": true,
+   "pipeline": "OK",
+   "structure_audit": "PASS",
+   "runtime_data": true,
+   "killz_m": -25.0,
+   "actor_counts": {
+    "TnAmmoCratePickupFactory": 10,
+    "TnBombPlantPoint": 2,
+    "TnDominationPoint": 3,
+    "TnFlagCapturePoint": 2,
+    "TnForcedDirVolume": 6,
+    "TnFreeForAllPlayerStart": 26,
+    "TnGameObjectivePickupFactoryBomb": 1,
+    "TnGameObjectivePickupFactoryFlag": 2,
+    "TnHealthPickupFactory": 8,
+    "TnKingOfTheHillZone": 5,
+    "TnOverShieldPickupFactory": 2,
+    "TnSpawnCluster": 14,
+    "TnTeamPlayerStart": 70
+   },
+   "mode_objectives_present": {
+    "DM": true,
+    "TDM": true,
+    "CTF": true,
+    "KOTH": true,
+    "EXT": true,
+    "DOM": true
+   },
+   "player_starts": 96,
+   "initial_spawn_clusters": [
+    "TnSpawnCluster_12507",
+    "TnSpawnCluster_15956"
+   ],
+   "launchable": true,
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
+  },
+  {
+   "runtime": "MP_IAC_Rust",
+   "base": "MP_IAC_Rust_BASE_m",
+   "name": "Rust",
+   "ini_order": 103,
+   "mapId": 504,
+   "modes": [
+    "DM",
+    "TDM",
+    "CTF",
+    "KOTH",
+    "EXT",
+    "DOM"
+   ],
+   "cooked": true,
+   "pipeline": "OK",
+   "structure_audit": "PASS",
+   "runtime_data": true,
+   "killz_m": -5.12,
+   "actor_counts": {
+    "TnFreeForAllPlayerStart": 15,
+    "TnAmmoCratePickupFactory": 6,
+    "TnBombPlantPoint": 2,
+    "TnDominationPoint": 3,
+    "TnFlagCapturePoint": 2,
+    "TnForcedDirVolume": 5,
+    "TnGameObjectivePickupFactoryBomb": 1,
+    "TnGameObjectivePickupFactoryFlag": 2,
+    "TnHealthPickupFactory": 6,
+    "TnKingOfTheHillZone": 5,
+    "TnOverShieldPickupFactory": 2,
+    "TnSpawnCluster": 19,
+    "TnTeamPlayerStart": 95
+   },
+   "mode_objectives_present": {
+    "DM": true,
+    "TDM": true,
+    "CTF": true,
+    "KOTH": true,
+    "EXT": true,
+    "DOM": true
+   },
+   "player_starts": 109,
+   "initial_spawn_clusters": [
+    "TnSpawnCluster_10289",
+    "TnSpawnCluster_48"
+   ],
+   "launchable": true,
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 2,
+    "DM": 2,
+    "DOM": 2,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 2
+   }
+  },
+  {
+   "runtime": "MP_ESC_BrokenHope",
+   "base": "MP_ESC_BrokenHope_BASE_m",
+   "name": "Broken Hope",
+   "ini_order": 104,
+   "mapId": 505,
+   "modes": [
+    "SV"
+   ],
+   "cooked": true,
+   "pipeline": "OK",
+   "structure_audit": "PASS",
+   "runtime_data": true,
+   "killz_m": -50.0,
+   "actor_counts": {
+    "TnAmmoCratePickupFactory": 3,
+    "TnForcedDirVolume": 1,
+    "TnHealthPickupFactory": 2,
+    "TnOverShieldPickupFactory": 1,
+    "TnSurvivalSpawnPoint": 58,
+    "TnTeamPlayerStart": 4,
+    "TnWeaponPickupFactory": 17
+   },
+   "mode_objectives_present": {
+    "SV": true
+   },
+   "player_starts": 4,
+   "initial_spawn_clusters": [],
+   "launchable": true,
+   "versus_launchable": false,
+   "mode_actors_total": 0,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 0,
+    "EXT": 0,
+    "KOTH": 0
+   }
+  },
+  {
+   "runtime": "MP_ESC_Remnant",
+   "base": "MP_ESC_Remnant_BASE_m",
+   "name": "Remnant",
+   "ini_order": 105,
+   "mapId": 506,
+   "modes": [
+    "SV"
+   ],
+   "cooked": true,
+   "pipeline": "OK",
+   "structure_audit": "PASS",
+   "runtime_data": true,
+   "killz_m": 0.0,
+   "actor_counts": {
+    "TnAmmoCratePickupFactory": 6,
+    "TnHealthPickupFactory": 4,
+    "TnOverShieldPickupFactory": 2,
+    "TnPickupFactory": 1,
+    "TnSurvivalSpawnPoint": 62,
+    "TnTeamPlayerStart": 4,
+    "TnWeaponPickupFactory": 16
+   },
+   "mode_objectives_present": {
+    "SV": true
+   },
+   "player_starts": 4,
+   "initial_spawn_clusters": [],
+   "launchable": true,
+   "versus_launchable": false,
+   "mode_actors_total": 0,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 0,
+    "EXT": 0,
+    "KOTH": 0
+   }
+  },
+  {
+   "runtime": "MP_ORB_Debris",
+   "base": "MP_ORB_Debris_BASE_m",
+   "name": "Orbital Debris",
+   "ini_order": 106,
+   "mapId": 507,
+   "modes": [
+    "DM",
+    "TDM",
+    "CTF",
+    "KOTH",
+    "EXT",
+    "DOM"
+   ],
+   "cooked": true,
+   "pipeline": "OK",
+   "structure_audit": "PASS",
+   "runtime_data": true,
+   "killz_m": 100.0,
+   "actor_counts": {
+    "TnForcedDirVolume": 22,
+    "TnAmmoCratePickupFactory": 5,
+    "TnBombPlantPoint": 2,
+    "TnDominationPoint": 3,
+    "TnFlagCapturePoint": 2,
+    "TnFreeForAllPlayerStart": 10,
+    "TnGameObjectivePickupFactoryBomb": 1,
+    "TnGameObjectivePickupFactoryFlag": 2,
+    "TnHealthPickupFactory": 5,
+    "TnKingOfTheHillZone": 5,
+    "TnOverShieldPickupFactory": 1,
+    "TnSpawnCluster": 9,
+    "TnTeamPlayerStart": 40
+   },
+   "mode_objectives_present": {
+    "DM": true,
+    "TDM": true,
+    "CTF": true,
+    "KOTH": true,
+    "EXT": true,
+    "DOM": true
+   },
+   "player_starts": 50,
+   "initial_spawn_clusters": [
+    "TnSpawnCluster_1180",
+    "TnSpawnCluster_12996"
+   ],
+   "launchable": true,
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
+  },
+  {
+   "runtime": "MP_IAC_Streets",
+   "base": "MP_IAC_Streets_Base_m",
+   "name": "Streets",
+   "ini_order": 107,
+   "mapId": 508,
+   "modes": [
+    "DM",
+    "TDM",
+    "CTF",
+    "KOTH",
+    "EXT",
+    "DOM"
+   ],
+   "cooked": true,
+   "pipeline": "Streets-specific order (CLAUDE.md); generic run used as cross-check",
+   "structure_audit": "PASS",
+   "runtime_data": true,
+   "killz_m": -750.0,
+   "actor_counts": {
+    "TnAmmoCratePickupFactory": 14,
+    "TnBombPlantPoint": 2,
+    "TnDominationPoint": 3,
+    "TnFlagCapturePoint": 2,
+    "TnForcedDirVolume": 4,
+    "TnFreeForAllPlayerStart": 24,
+    "TnGameObjectivePickupFactoryBomb": 1,
+    "TnGameObjectivePickupFactoryFlag": 2,
+    "TnHealthPickupFactory": 9,
+    "TnKingOfTheHillZone": 5,
+    "TnOverShieldPickupFactory": 1,
+    "TnSpawnCluster": 12,
+    "TnTeamPlayerStart": 60
+   },
+   "mode_objectives_present": {
+    "DM": true,
+    "TDM": true,
+    "CTF": true,
+    "KOTH": true,
+    "EXT": true,
+    "DOM": true
+   },
+   "player_starts": 84,
+   "initial_spawn_clusters": [
+    "TnSpawnCluster_4159",
+    "TnSpawnCluster_7810"
+   ],
+   "launchable": true,
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
+  },
+  {
+   "runtime": "MP_KON_Molten",
+   "base": "MP_KON_Molten_Base_m",
+   "name": "Molten",
+   "ini_order": 108,
+   "mapId": 509,
+   "modes": [
+    "DM",
+    "TDM",
+    "CTF",
+    "KOTH",
+    "EXT",
+    "DOM"
+   ],
+   "cooked": true,
+   "pipeline": "OK",
+   "structure_audit": "PASS",
+   "runtime_data": true,
+   "killz_m": -15.0,
+   "actor_counts": {
+    "TnAmmoCratePickupFactory": 16,
+    "TnBombPlantPoint": 2,
+    "TnDominationPoint": 3,
+    "TnFlagCapturePoint": 2,
+    "TnForcedDirVolume": 9,
+    "TnFreeForAllPlayerStart": 16,
+    "TnGameObjectivePickupFactoryBomb": 1,
+    "TnGameObjectivePickupFactoryFlag": 2,
+    "TnHealthPickupFactory": 12,
+    "TnKingOfTheHillZone": 5,
+    "TnOverShieldPickupFactory": 1,
+    "TnSpawnCluster": 12,
+    "TnTeamPlayerStart": 60
+   },
+   "mode_objectives_present": {
+    "DM": true,
+    "TDM": true,
+    "CTF": true,
+    "KOTH": true,
+    "EXT": true,
+    "DOM": true
+   },
+   "player_starts": 76,
+   "initial_spawn_clusters": [
+    "TnSpawnCluster_15944",
+    "TnSpawnCluster_7814"
+   ],
+   "launchable": true,
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
+  },
+  {
+   "runtime": "MP_UND_Gorge",
+   "base": "MP_UND_Gorge_BASE_m",
+   "name": "Gorge",
+   "ini_order": 109,
+   "mapId": 510,
+   "modes": [
+    "DM",
+    "TDM",
+    "CTF",
+    "KOTH",
+    "EXT",
+    "DOM"
+   ],
+   "cooked": true,
+   "pipeline": "OK",
+   "structure_audit": "PASS",
+   "runtime_data": true,
+   "killz_m": -75.0,
+   "actor_counts": {
+    "TnAmmoCratePickupFactory": 7,
+    "TnBombPlantPoint": 2,
+    "TnDominationPoint": 3,
+    "TnFlagCapturePoint": 2,
+    "TnForcedDirVolume": 3,
+    "TnFreeForAllPlayerStart": 18,
+    "TnGameObjectivePickupFactoryBomb": 1,
+    "TnGameObjectivePickupFactoryFlag": 2,
+    "TnHealthPickupFactory": 7,
+    "TnKingOfTheHillZone": 7,
+    "TnOverShieldPickupFactory": 1,
+    "TnSpawnCluster": 19,
+    "TnTeamPlayerStart": 97
+   },
+   "mode_objectives_present": {
+    "DM": true,
+    "TDM": true,
+    "CTF": true,
+    "KOTH": true,
+    "EXT": true,
+    "DOM": true
+   },
+   "player_starts": 115,
+   "initial_spawn_clusters": [
+    "TnSpawnCluster_1985",
+    "TnSpawnCluster_6294"
+   ],
+   "launchable": true,
+   "versus_launchable": true,
+   "mode_actors_total": 4,
+   "mode_visible_expected": {
+    "TDM": 0,
+    "DM": 0,
+    "DOM": 0,
+    "CTF": 4,
+    "EXT": 4,
+    "KOTH": 0
+   }
+  },
+  {
+   "runtime": "MP_KON_Fortress",
+   "base": "MP_KON_Fortress_BASE_m",
+   "name": "Fortress",
+   "ini_order": 110,
+   "mapId": 512,
+   "modes": [
+    "DM",
+    "TDM",
+    "CTF",
+    "KOTH",
+    "EXT",
+    "DOM"
+   ],
+   "cooked": false,
+   "pipeline": "NOT COOKED - not shipped in this dump",
+   "structure_audit": null,
+   "runtime_data": false,
+   "launchable": false,
+   "versus_launchable": false
+  },
+  {
+   "runtime": "MP_ORB_Havoc",
+   "base": "MP_ORB_Havoc_BASE_m",
+   "name": "Havoc",
+   "ini_order": 111,
+   "mapId": 511,
+   "modes": [
+    "DM",
+    "TDM",
+    "CTF",
+    "KOTH",
+    "EXT",
+    "DOM"
+   ],
+   "cooked": false,
+   "pipeline": "NOT COOKED - not shipped in this dump",
+   "structure_audit": null,
+   "runtime_data": false,
+   "launchable": false,
+   "versus_launchable": false
+  },
+  {
+   "runtime": "MP_ESC_Tranquillity",
+   "base": "MP_ESC_Tranquillity_BASE_m",
+   "name": "Forsaken",
+   "ini_order": 112,
+   "mapId": 513,
+   "modes": [
+    "SV"
+   ],
+   "cooked": false,
+   "pipeline": "NOT COOKED - not shipped in this dump",
+   "structure_audit": null,
+   "runtime_data": false,
+   "launchable": false,
+   "versus_launchable": false
+  }
+ ],
+ "characters": [
+  {
+   "chassis": "Car",
+   "iconic": "Bumblebee",
+   "faction": "Autobot",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Runner",
+   "display_iconic": "Bumblebee"
+  },
+  {
+   "chassis": "Jet",
+   "iconic": "Starscream",
+   "faction": "Decepticon",
+   "default_class": "Scientist",
+   "vehicle_form": "jet",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Energon Seeker",
+   "display_iconic": "Starscream"
+  },
+  {
+   "chassis": "Tank",
+   "iconic": "Megatron",
+   "faction": "Decepticon",
+   "default_class": "Soldier",
+   "vehicle_form": "tank",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Destroyer",
+   "display_iconic": "Megatron"
+  },
+  {
+   "chassis": "Truck",
+   "iconic": "Optimus Prime",
+   "faction": "Autobot",
+   "default_class": "Leader",
+   "vehicle_form": "truck",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Heavy Rig",
+   "display_iconic": "Optimus Prime"
+  },
+  {
+   "chassis": "Truck7",
+   "iconic": "Optimus",
+   "faction": "Autobot",
+   "default_class": "Leader",
+   "vehicle_form": "truck",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Heavy Rig",
+   "display_iconic": "Optimus"
+  },
+  {
+   "chassis": "Car2",
+   "iconic": "Sideswipe",
+   "faction": "Autobot",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Speedster",
+   "display_iconic": "Sideswipe"
+  },
+  {
+   "chassis": "Car3",
+   "iconic": "Breakdown",
+   "faction": "Decepticon",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Racer",
+   "display_iconic": "Breakdown"
+  },
+  {
+   "chassis": "Car4",
+   "iconic": "Barricade",
+   "faction": "Decepticon",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Enforcer",
+   "display_iconic": "Barricade"
+  },
+  {
+   "chassis": "Car5",
+   "iconic": "Arcee",
+   "faction": "Autobot",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Sprinter",
+   "display_iconic": "Arcee"
+  },
+  {
+   "chassis": "Car6",
+   "iconic": "Jazz",
+   "faction": "Autobot",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Dragster",
+   "display_iconic": "Jazz"
+  },
+  {
+   "chassis": "Car7",
+   "iconic": "Deadend",
+   "faction": "Decepticon",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Tracker",
+   "display_iconic": "Deadend"
+  },
+  {
+   "chassis": "Car8",
+   "iconic": "DecepticonCarSoldier",
+   "faction": "Decepticon",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": null,
+   "display_iconic": null
+  },
+  {
+   "chassis": "Car9",
+   "iconic": "AutobotCarSoldier",
+   "faction": "Autobot",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": null,
+   "display_iconic": null
+  },
+  {
+   "chassis": "Car10",
+   "iconic": "NeutralCarSoldier",
+   "faction": "Neutral",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": null,
+   "display_iconic": null
+  },
+  {
+   "chassis": "Jet2",
+   "iconic": "Thundercracker",
+   "faction": "Decepticon",
+   "default_class": "Scientist",
+   "vehicle_form": "jet",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Seeker",
+   "display_iconic": "Thundercracker"
+  },
+  {
+   "chassis": "Jet3",
+   "iconic": "Skywarp",
+   "faction": "Decepticon",
+   "default_class": "Scientist",
+   "vehicle_form": "jet",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Seeker",
+   "display_iconic": "Skywarp"
+  },
+  {
+   "chassis": "Jet4",
+   "iconic": "AirRaid",
+   "faction": "Autobot",
+   "default_class": "Scientist",
+   "vehicle_form": "jet",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Skyraider",
+   "display_iconic": "Air Raid"
+  },
+  {
+   "chassis": "Jet5",
+   "iconic": "Jetfire",
+   "faction": "Autobot",
+   "default_class": "Scientist",
+   "vehicle_form": "jet",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Air Defender",
+   "display_iconic": "Jetfire"
+  },
+  {
+   "chassis": "Jet6",
+   "iconic": "SilverBolt",
+   "faction": "Autobot",
+   "default_class": "Scientist",
+   "vehicle_form": "jet",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Interceptor",
+   "display_iconic": "Silverbolt"
+  },
+  {
+   "chassis": "Jet7",
+   "iconic": "Shockwave",
+   "faction": "Decepticon",
+   "default_class": "Scientist",
+   "vehicle_form": "jet",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Retaliator",
+   "display_iconic": "Shockwave"
+  },
+  {
+   "chassis": "Jet8",
+   "iconic": "Slipstream",
+   "faction": "Decepticon",
+   "default_class": "Scientist",
+   "vehicle_form": "jet",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Stalker",
+   "display_iconic": "Slipstream"
+  },
+  {
+   "chassis": "Tank2",
+   "iconic": "Brawl",
+   "faction": "Decepticon",
+   "default_class": "Soldier",
+   "vehicle_form": "tank",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Crusher",
+   "display_iconic": "Brawl"
+  },
+  {
+   "chassis": "Tank3",
+   "iconic": "Warpath",
+   "faction": "Autobot",
+   "default_class": "Soldier",
+   "vehicle_form": "tank",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Defender",
+   "display_iconic": "Warpath"
+  },
+  {
+   "chassis": "Tank4",
+   "iconic": "Scattershot",
+   "faction": "Autobot",
+   "default_class": "Soldier",
+   "vehicle_form": "tank",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Protector",
+   "display_iconic": "Scattershot"
+  },
+  {
+   "chassis": "Tank5",
+   "iconic": "Demolishor",
+   "faction": "Decepticon",
+   "default_class": "Soldier",
+   "vehicle_form": "tank",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Eradicator",
+   "display_iconic": "Demolishor"
+  },
+  {
+   "chassis": "Truck2",
+   "iconic": "Ratchet",
+   "faction": "Autobot",
+   "default_class": "Leader",
+   "vehicle_form": "truck",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Medic Rig",
+   "display_iconic": "Ratchet"
+  },
+  {
+   "chassis": "Truck3",
+   "iconic": "Ironhide",
+   "faction": "Autobot",
+   "default_class": "Leader",
+   "vehicle_form": "truck",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Armored Rig",
+   "display_iconic": "Ironhide"
+  },
+  {
+   "chassis": "Truck4",
+   "iconic": "Soundwave",
+   "faction": "Decepticon",
+   "default_class": "Leader",
+   "vehicle_form": "truck",
+   "available_by_default": true,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Spy Rig",
+   "display_iconic": "Soundwave"
+  },
+  {
+   "chassis": "Truck5",
+   "iconic": "Zeta Prime",
+   "faction": "Autobot",
+   "default_class": "Leader",
+   "vehicle_form": "truck",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Elite Rig",
+   "display_iconic": "Zeta Prime"
+  },
+  {
+   "chassis": "Truck6",
+   "iconic": "Onslaught",
+   "faction": "Decepticon",
+   "default_class": "Leader",
+   "vehicle_form": "truck",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": "Tactical Rig",
+   "display_iconic": "Onslaught"
+  },
+  {
+   "chassis": "Minion1",
+   "iconic": "Frenzy",
+   "faction": "Decepticon",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": null,
+   "display_iconic": "Frenzy"
+  },
+  {
+   "chassis": "Minion2",
+   "iconic": "Rumble",
+   "faction": "Decepticon",
+   "default_class": "Scout",
+   "vehicle_form": "car",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": null,
+   "display_iconic": "Rumble"
+  },
+  {
+   "chassis": "Minion3",
+   "iconic": "Laserbeak",
+   "faction": "Decepticon",
+   "default_class": "Scout",
+   "vehicle_form": "jet",
+   "available_by_default": false,
+   "export": {
+    "robot.glb": true,
+    "vehicle.glb": true,
+    "character.json": true
+   },
+   "display_custom": null,
+   "display_iconic": "Laserbeak"
+  }
+ ],
+ "class_presets": {
+  "Leader": {
+   "Autobot": "Truck3",
+   "Decepticon": "Truck4",
+   "names": [
+    "Ironhide",
+    "Soundwave"
+   ],
+   "weapons": [
+    "IonBlaster",
+    "GrenadeLauncher",
+    "KamikazeMines"
+   ],
+   "vehicle_weapons": [
+    "RocketVehicle"
+   ],
+   "melee": [
+    "Axe",
+    "ViciousAxe"
+   ],
+   "abilities": [
+    "Warcry",
+    "Barrier"
+   ]
+  },
+  "Scientist": {
+   "Autobot": "Jet4",
+   "Decepticon": "Jet",
+   "names": [
+    "Air Raid",
+    "Starscream"
+   ],
+   "weapons": [
+    "BurstRifle",
+    "RepairRay",
+    "HealGrenades"
+   ],
+   "vehicle_weapons": [
+    "HomingRocketVehicle"
+   ],
+   "melee": [
+    "BeatDownClub",
+    "SpikedBat"
+   ],
+   "abilities": [
+    "SpawnSentry",
+    "Shockwave"
+   ]
+  },
+  "Scout": {
+   "Autobot": "Car2",
+   "Decepticon": "Car4",
+   "names": [
+    "Sideswipe",
+    "Barricade"
+   ],
+   "weapons": [
+    "Shotgun",
+    "HeavyPistol",
+    "FlashBangs"
+   ],
+   "vehicle_weapons": [
+    "AssaultRifleVehicle"
+   ],
+   "melee": [
+    "ShortSword",
+    "TortureSword"
+   ],
+   "abilities": [
+    "Cloaking",
+    "Dodge"
+   ]
+  },
+  "Soldier": {
+   "Autobot": "Tank3",
+   "Decepticon": "Tank2",
+   "names": [
+    "Warpath",
+    "Brawl"
+   ],
+   "weapons": [
+    "AssaultRifle",
+    "HomingRocket",
+    "FlakGrenades"
+   ],
+   "vehicle_weapons": [
+    "TankCannon"
+   ],
+   "melee": [
+    "Maul",
+    "Hammer"
+   ],
+   "abilities": [
+    "Whirlwind",
+    "Hover"
+   ]
+  }
+ },
+ "weapon_exports": [
+  "AssaultRifle",
+  "AssaultRifleVehicle",
+  "Axe",
+  "Bazooka",
+  "BeatDownClub",
+  "BroadSword",
+  "BurstRifle",
+  "ButterflyAxe",
+  "CeremonialStaff",
+  "EMPShotgun",
+  "FightingStaff",
+  "FlakGrenades",
+  "FlashBangs",
+  "GatlingGun",
+  "GrenadeLauncher",
+  "HalberdAxe",
+  "Hammer",
+  "HealGrenades",
+  "HeavyMG",
+  "HeavyPistol",
+  "HeavyRepairRay",
+  "HeavyRocketTurret",
+  "HomingRocket",
+  "HomingRocketVehicle",
+  "HuntingDagger",
+  "IonBlaster",
+  "KamikazeMines",
+  "LancingSpear",
+  "LongSword",
+  "Maul",
+  "MountedHeavyIonBlaster",
+  "MountedRepairRay",
+  "MountedRocketTurret",
+  "PlaneAssaultRifle",
+  "PlaneMachineGun",
+  "PlaneRocket",
+  "PlasmaCannon",
+  "Poke",
+  "ProngDagger",
+  "RepairRay",
+  "RocketTemp",
+  "RocketTurretKillStreak",
+  "RocketVehicle",
+  "SerratedBlade",
+  "ShortSword",
+  "Shotgun",
+  "SniperRifle",
+  "SpikedBat",
+  "SpikedMace",
+  "TankCannon",
+  "TortureSword",
+  "ViciousAxe",
+  "WarHammer"
+ ],
+ "modes": [
+  {
+   "tag": "TDM",
+   "class": "TnTeamGame",
+   "name": "Team Deathmatch",
+   "team": true,
+   "objective_actors": [],
+   "start_class": "TnTeamPlayerStart",
+   "maps": [
+    "MP_IAC_Seed_Base_m",
+    "MP_IAC_Berth_Base_m",
+    "MP_UND_Complex_BASE_m",
+    "MP_IAC_Rust_BASE_m",
+    "MP_ORB_Debris_BASE_m",
+    "MP_IAC_Streets_Base_m",
+    "MP_KON_Molten_Base_m",
+    "MP_UND_Gorge_BASE_m"
+   ],
+   "maps_with_runtime": [
+    "MP_IAC_Seed",
+    "MP_IAC_Berth",
+    "MP_UND_Complex",
+    "MP_IAC_Rust",
+    "MP_ORB_Debris",
+    "MP_IAC_Streets",
+    "MP_KON_Molten",
+    "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsTDM",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressKills"
+   ]
+  },
+  {
+   "tag": "DM",
+   "class": "TnFreeForAllGame",
+   "name": "Deathmatch",
+   "team": false,
+   "objective_actors": [],
+   "start_class": "TnFreeForAllPlayerStart",
+   "maps": [
+    "MP_IAC_Seed_Base_m",
+    "MP_IAC_Berth_Base_m",
+    "MP_UND_Complex_BASE_m",
+    "MP_IAC_Rust_BASE_m",
+    "MP_ORB_Debris_BASE_m",
+    "MP_IAC_Streets_Base_m",
+    "MP_KON_Molten_Base_m",
+    "MP_UND_Gorge_BASE_m"
+   ],
+   "maps_with_runtime": [
+    "MP_IAC_Seed",
+    "MP_IAC_Berth",
+    "MP_UND_Complex",
+    "MP_IAC_Rust",
+    "MP_ORB_Debris",
+    "MP_IAC_Streets",
+    "MP_KON_Molten",
+    "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsDM",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressKills"
+   ]
+  },
+  {
+   "tag": "DOM",
+   "class": "TnDOMGame",
+   "name": "Conquest",
+   "team": true,
+   "objective_actors": [
+    "TnDominationPoint"
+   ],
+   "start_class": "TnTeamPlayerStart",
+   "maps": [
+    "MP_IAC_Seed_Base_m",
+    "MP_IAC_Berth_Base_m",
+    "MP_UND_Complex_BASE_m",
+    "MP_IAC_Rust_BASE_m",
+    "MP_ORB_Debris_BASE_m",
+    "MP_IAC_Streets_Base_m",
+    "MP_KON_Molten_Base_m",
+    "MP_UND_Gorge_BASE_m"
+   ],
+   "maps_with_runtime": [
+    "MP_IAC_Seed",
+    "MP_IAC_Berth",
+    "MP_UND_Complex",
+    "MP_IAC_Rust",
+    "MP_ORB_Debris",
+    "MP_IAC_Streets",
+    "MP_KON_Molten",
+    "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreDomination",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressPoints"
+   ]
+  },
+  {
+   "tag": "CTF",
+   "class": "TnCTFGame",
+   "name": "Code of Power",
+   "team": true,
+   "objective_actors": [
+    "TnFlagCapturePoint",
+    "TnGameObjectivePickupFactoryFlag"
+   ],
+   "start_class": "TnTeamPlayerStart",
+   "maps": [
+    "MP_IAC_Seed_Base_m",
+    "MP_IAC_Berth_Base_m",
+    "MP_UND_Complex_BASE_m",
+    "MP_IAC_Rust_BASE_m",
+    "MP_ORB_Debris_BASE_m",
+    "MP_IAC_Streets_Base_m",
+    "MP_KON_Molten_Base_m",
+    "MP_UND_Gorge_BASE_m"
+   ],
+   "maps_with_runtime": [
+    "MP_IAC_Seed",
+    "MP_IAC_Berth",
+    "MP_UND_Complex",
+    "MP_IAC_Rust",
+    "MP_ORB_Debris",
+    "MP_IAC_Streets",
+    "MP_KON_Molten",
+    "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_SingleFlagCTF",
+    "TransGame.TnGameRules_ScoreFlags",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTimeCTF"
+   ]
+  },
+  {
+   "tag": "EXT",
+   "class": "TnEXTGame",
+   "name": "Countdown to Extinction",
+   "team": true,
+   "objective_actors": [
+    "TnBombPlantPoint",
+    "TnGameObjectivePickupFactoryBomb"
+   ],
+   "start_class": "TnTeamPlayerStart",
+   "maps": [
+    "MP_IAC_Seed_Base_m",
+    "MP_IAC_Berth_Base_m",
+    "MP_UND_Complex_BASE_m",
+    "MP_IAC_Rust_BASE_m",
+    "MP_ORB_Debris_BASE_m",
+    "MP_IAC_Streets_Base_m",
+    "MP_KON_Molten_Base_m",
+    "MP_UND_Gorge_BASE_m"
+   ],
+   "maps_with_runtime": [
+    "MP_IAC_Seed",
+    "MP_IAC_Berth",
+    "MP_UND_Complex",
+    "MP_IAC_Rust",
+    "MP_ORB_Debris",
+    "MP_IAC_Streets",
+    "MP_KON_Molten",
+    "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreBombingRun",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime"
+   ]
+  },
+  {
+   "tag": "KOTH",
+   "class": "TnKOTHGame",
+   "name": "Power Struggle",
+   "team": true,
+   "objective_actors": [
+    "TnKingOfTheHillZone"
+   ],
+   "start_class": "TnTeamPlayerStart",
+   "maps": [
+    "MP_IAC_Seed_Base_m",
+    "MP_IAC_Berth_Base_m",
+    "MP_UND_Complex_BASE_m",
+    "MP_IAC_Rust_BASE_m",
+    "MP_ORB_Debris_BASE_m",
+    "MP_IAC_Streets_Base_m",
+    "MP_KON_Molten_Base_m",
+    "MP_UND_Gorge_BASE_m"
+   ],
+   "maps_with_runtime": [
+    "MP_IAC_Seed",
+    "MP_IAC_Berth",
+    "MP_UND_Complex",
+    "MP_IAC_Rust",
+    "MP_ORB_Debris",
+    "MP_IAC_Streets",
+    "MP_KON_Molten",
+    "MP_UND_Gorge"
+   ],
+   "rules": [
+    "TransGame.TnGameRules_ScoreKillsMP",
+    "TransGame.TnGameRules_ScoreKingOfTheHill",
+    "TransGame.TnGameRules_TrackKillsMP",
+    "TransGame.TnGameRules_ReportGameProgressTime",
+    "TransGame.TnGameRules_ReportGameProgressPoints"
+   ]
+  }
+ ],
+ "title_matinees": [
+  {
+   "object": null,
+   "comment": null,
+   "looping": false
+  },
+  {
+   "object": null,
+   "comment": null,
+   "looping": false
+  },
+  {
+   "object": null,
+   "comment": null,
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_5517",
+   "comment": "(OLD) Orbiting Camera",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_6321",
+   "comment": "Primary Camera",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_11805",
+   "comment": "Fade In",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_2880",
+   "comment": "Camera Orbiter",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_9395",
+   "comment": null,
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_991",
+   "comment": "Black-Out",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9525",
+   "comment": "1st QTR",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_1192",
+   "comment": "2nd QTR",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_13634",
+   "comment": "3rd QTR",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_490",
+   "comment": "Plane Fly By",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_991",
+   "comment": "Fade In",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9617",
+   "comment": "Camera Director",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_991",
+   "comment": "Fade In",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9617",
+   "comment": "Camera Director",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_991",
+   "comment": "Fade In",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9617",
+   "comment": "Camera Director",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_8932",
+   "comment": "OLD - Pan to Decepticon",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_10190",
+   "comment": "OLD - Pan to Autobot",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_11020",
+   "comment": "Autobot_Fade",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_6523",
+   "comment": "Autobot_Glow",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9474",
+   "comment": "Decepticon_Fade",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_4264",
+   "comment": "Decepticon_Glow",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_7660",
+   "comment": "Customization Camera Director",
+   "looping": true
+  },
+  {
+   "object": "SeqAct_Interp_5800",
+   "comment": "SCOUT - Decepticon",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_13491",
+   "comment": "SCOUT - Autobot",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_12237",
+   "comment": "SOLDIER - Autobot",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_9919",
+   "comment": "SOLDIER - Decepticon",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_10399",
+   "comment": "SCIENTIST - Autobot",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_572",
+   "comment": "SCIENTIST - Decepticon",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_3248",
+   "comment": "LEADER - Autobot",
+   "looping": false
+  },
+  {
+   "object": "SeqAct_Interp_15345",
+   "comment": "LEADER - Decepticon",
+   "looping": false
+  }
+ ],
+ "rules": {
+  "optimus_fallback": "a selected chassis other than Optimus resolving to Characters/Optimus/* is an explicit FAIL (OPTIMUS FALLBACK)",
+  "vehicle_form_by_class": "Scout=car, Scientist=jet, Soldier=tank, Leader=truck (CONFIRMED, mp_classes.json)"
+ }
+}

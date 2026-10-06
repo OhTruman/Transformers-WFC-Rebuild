@@ -1,0 +1,5 @@
+FIRST BAD: b1fce97 (last good 0160cf1)
+b9c81bd frames 3 median world detail 0.067 -> BAD
+9cfe2c8 frames 3 median world detail 0.072 -> BAD
+b1fce97 frames 3 median world detail 0.071 -> BAD
+FIRST BAD: b1fce97 (last good: 0160cf1)

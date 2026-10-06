@@ -1,0 +1,133 @@
+﻿{
+    "summary":  {
+                    "pass":  10,
+                    "fail":  0,
+                    "known":  8,
+                    "info":  1,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "map_audit.bsp.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.movers.present_wrong_effect",
+                        "status":  "KNOWN",
+                        "measured":  12,
+                        "owner":  "Gameplay/Systems",
+                        "note":  "12 PRESENT + WRONG EFFECT"
+                    },
+                    {
+                        "id":  "map_audit.prefab_members.present_rendered",
+                        "status":  "PASS",
+                        "measured":  34,
+                        "note":  "34 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.props.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1782,
+                        "note":  "1782 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.props.present_wrong_material",
+                        "status":  "KNOWN",
+                        "measured":  124,
+                        "owner":  "Rendering",
+                        "note":  "124 PRESENT + WRONG MATERIAL"
+                    },
+                    {
+                        "id":  "map_audit.prefabs.present_rendered",
+                        "status":  "PASS",
+                        "measured":  15,
+                        "note":  "15 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.prefabs.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  1,
+                        "owner":  "Systems",
+                        "note":  "1 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.decals.present_rendered",
+                        "status":  "PASS",
+                        "measured":  25,
+                        "note":  "25 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.level_emitters.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  8,
+                        "owner":  "Systems",
+                        "note":  "8 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.pickup_fx.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  37,
+                        "owner":  "Systems",
+                        "note":  "37 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.pickups.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  5,
+                        "owner":  "Gameplay",
+                        "note":  "5 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.destructibles.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  1,
+                        "owner":  "AssetTools/RE",
+                        "note":  "1 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.lights.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.lightmaps.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.fog.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.post_process.present_rendered",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "1 PRESENT + RENDERED"
+                    },
+                    {
+                        "id":  "map_audit.reflections.unknown",
+                        "status":  "INFO",
+                        "measured":  1,
+                        "note":  "1 UNKNOWN"
+                    },
+                    {
+                        "id":  "map_audit.ambient_audio.not_instantiated",
+                        "status":  "KNOWN",
+                        "measured":  70,
+                        "owner":  "Systems",
+                        "note":  "70 NOT INSTANTIATED"
+                    },
+                    {
+                        "id":  "map_audit.prefabs.declared_vs_resolved",
+                        "status":  "PASS",
+                        "measured":  16,
+                        "note":  "16 PrefabInstance actors declared; 16 resolved through member tags"
+                    }
+                ]
+}

@@ -60,7 +60,11 @@ void checkConstants(Report& r) {
     r.conf("vehicle_boost_speed", kVehicleBoostSpeed, 3000 / 100.0, 1e-4, "m/s",
            std::string(ht) + "Driving MaxSpeed 3000 / hover dash 3000", kGameplay);
     r.conf("vehicle_dash_duration", kVehicleDashTime, 0.5, 1e-4, "s", std::string(ht) + "hover dash 0.5 s, forward only, 2 s cooldown", kGameplay);
-    r.conf("vehicle_hover_height", kVehicleHoverH, 185 / 100.0, 1e-4, "m", std::string(ht) + "SuspensionRadius=185", kGameplay);
+    // SuspensionRadius 185 is the HORIZONTAL radius of the four hover suspension probes around the COM
+    // (native M03 P1: probe offset Normal(1,1,0)*185 -> +-130.8 UU), not a ride height. The rest height
+    // is a separate quantity measured in movement.vehicle_rest_com_height.
+    r.conf("vehicle_suspension_radius", kVehicleHoverH, 185 / 100.0, 1e-4, "m",
+           "native M03 P1 (HoverTruck_Physics SuspensionRadius 185 = probe radius around the COM)", kGameplay);
     r.near("vehicle_jump_speed", kVehicleJumpSpeed, 1200 / 100.0, 1e-4, "m/s", std::string(hc) + "JumpLinearSpeed=1200");
     r.info("vehicle_turn_rate", kVehicleTurnRate, "rad/s",
            "AiMaxAngularSpeed is AI-only: the player's hover heading yaw-tracks the CAMERA every physics step "
@@ -127,7 +131,7 @@ void checkWeaponData(Report& r) {
     cmp("spread_per_shot", w.spreadPerShot, ps["ModifierChangePerShot"], 1, 1e-6, "", "PerShotSpreadModifier.ModifierChangePerShot");
     cmp("spread_cooldown", w.spreadCooldown, ps["Cooldown"], 1, 1e-6, "s", "PerShotSpreadModifier.Cooldown");
     r.info("put_down_time", g["PutDownTime"].asDouble(), "s", "authored; not yet modelled (no weapon switching)");
-    r.info("fine_aim_spread_mult", g["FineAimSpreadModifier"].asDouble(), "", "authored; not yet modelled (no ADS)");
+    r.info("fine_aim_spread_mult", g["FineAimSpreadModifier"].asDouble(), "", "authored; applied through Character::effectiveSpread (weapon.fine_aim_effective_spread)");
 
     r.near("damage_at_near", w.damageAt(50), 15.0, 1e-4, "hp", "RangeDamageModifiers: 1.0x at 5000 UU");
     r.near("damage_at_max_range", w.damageAt(300), 7.5, 1e-4, "hp", "RangeDamageModifiers: 0.5x at 30000 UU");
@@ -182,12 +186,19 @@ void checkWeaponBehaviour(Report& r) {
         Rig rig(60, false);
         rig.idle(0.1);
         while (rig.last().shots < 10) rig.step(Rig::down({Button::Fire}));
-        // [integration M05] Retired stale expectation: the linear "0.08 + 10 x 0.005" ignores the per-tick recovery
-        // RE d50e2a9 recovered (Gameplay implements it). agents/experimental replaced this check with an independent
-        // re-simulation (nativeSpread); until that harness is integrated it is reported here, not failed.
-        r.known("spread_after_10", rig.pawn().weapon().spread, ref.spreadMin + 10 * ref.spreadPerShot, 1e-4, "",
-                "PerShotSpreadModifier: 0.08 + 10 x 0.005 (linear, superseded)", "Experimental",
-                "RE d50e2a9: +0.005/shot with per-tick linear recovery over 2 s; see agents/experimental Checks.cpp");
+        // Native spread model (RE d50e2a9, Gameplay Pass 16): IncrementSpread +0.005 per shot and
+        // CooldownSpread every tick -(Max-Min)*dt/Cooldown (whole 0.08..0.18 range in 2 s). The old
+        // expectation 0.08 + 10 x 0.005 (no recovery while firing) is superseded.
+        auto nativeSpread = [&](const Rig& g) {
+            double s = ref.spreadMin; int shots = 0;
+            for (const Frame& f : g.trace()) {
+                s = std::max((double)ref.spreadMin, s - (ref.spreadMax - ref.spreadMin) * g.dt() / ref.spreadCooldown);
+                for (; shots < f.shots; ++shots) s = std::min((double)ref.spreadMax, s + ref.spreadPerShot);
+            }
+            return s;
+        };
+        r.near("spread_after_10", rig.pawn().weapon().spread, nativeSpread(rig), 0.0015, "",
+               "RE d50e2a9: +0.005/shot with per-tick linear recovery over 2 s (independent re-simulation from the shot times)");
         double tp = rig.time();
         rig.tap(Button::Reload);   // reload starts on the press (older builds) or on the tap release (WFC, RE PASS2 #5)
         rig.idle(2.0);
@@ -198,12 +209,14 @@ void checkWeaponBehaviour(Report& r) {
         r.near("manual_reload_duration", dur, ref.reloadTime, rig.dt() + 1e-6, "s", "weapon.json WeaponReloadAnimTime 1.5");
         r.near("manual_reload_reserve", rig.last().reserve, ref.reserve - 10, 0, "rnd", "only the spent 10 rounds are drawn");
         r.near("spread_after_cooldown", rig.pawn().weapon().spread, ref.spreadMin, 1e-6, "",
-               "PerShotSpreadModifier.Cooldown 2.0 s", "rebuild snaps back to Min after 2 s idle; UE3 decay curve unverified");
+               "RE d50e2a9: CooldownSpread recovers to Min (2 s covers the whole range)");
         save(rig, "weapon_manual_reload");
-        // [integration M05] Check taken from agents/experimental (RE d50e2a9): held fire nets +0.025/s, so one 50-round
-        // magazine peaks below the cap; the old "cap after 2.5 s" expectation is superseded. Max must clamp the bloom.
+        // Held fire: net +0.075 - 0.05 = +0.025/s at 15 shots/s, so the 0.18 cap arrives after ~4 s
+        // (the old "cap after 2.5 s" expectation is superseded). Compare with the independent model.
         Rig cap(60, false);
         cap.idle(0.1);
+        // Note: one 50-round magazine lasts ~3.3 s at 15 shots/s, so held fire peaks at ~0.163 and the 0.18
+        // cap is NOT reached within a magazine under the native model (it needs ~4 s of continuous fire).
         double maxSpread = 0;
         for (int i = 0; i < 6 * 60 && cap.last().ammo > 0; ++i) {
             cap.step(Rig::down({Button::Fire}));
@@ -211,6 +224,71 @@ void checkWeaponBehaviour(Report& r) {
         }
         r.truth("spread_cap", maxSpread <= ref.spreadMax + 1e-6, "PerShotSpreadModifier.Modifier.Max 0.18 clamps the bloom",
                 "max spread over one held magazine " + std::to_string(maxSpread));
+        r.near("spread_while_firing_model", cap.pawn().weapon().spread, nativeSpread(cap), 0.0015, "",
+               "RE d50e2a9 per-tick model, independent re-simulation over the whole held-fire run");
+        r.info("spread_peak_one_magazine", maxSpread, "", "held fire over one 50-round magazine (net +0.025/s; cap 0.18 needs ~4 s)",
+               ref.spreadMin + 0.025 * (ref.magSize - 1) / 15.0);
+        // Recovery: linear at (Max-Min)/Cooldown = 0.05/s (CooldownSpread), from wherever it starts.
+        double t0 = cap.time(), s0 = cap.pawn().weapon().spread;
+        double rate = (ref.spreadMax - ref.spreadMin) / ref.spreadCooldown;
+        cap.idle(2.5);
+        double tMin = firstAfter(cap, t0, [&](const Frame& f) { return f.spread <= ref.spreadMin + 1e-6; });
+        double mid = -1;
+        for (const Frame& f : cap.trace()) if (mid < 0 && f.t >= t0 + 0.5) mid = f.spread;
+        r.near("spread_recovery_time", tMin, (s0 - ref.spreadMin) / rate, 2 * cap.dt() + 1e-6, "s",
+               "RE d50e2a9: CooldownSpread recovers the whole Min..Max range in Cooldown 2.0 s (0.05/s)");
+        r.near("spread_recovery_linear", mid, std::max((double)ref.spreadMin, s0 - 0.5 * rate), 0.002, "",
+               "linear recovery: -0.025 after 0.5 s");
+        save(cap, "weapon_spread_model");
+    }
+    {   // Airborne x2 (0.25 s ramp up, 0.5 s down), fine aim x0.5, HUD notify filter 0.002 (Pass 16 accessors).
+        Rig j(60, false);
+        j.idle(0.3);
+        if (layer::effectiveSpread(j.pawn(), 0) < 0) {
+            r.skip("effective_spread", "build has no Character::effectiveSpread()");
+        } else {
+            double base = layer::effectiveSpread(j.pawn(), 0);
+            j.step(Rig::press(Button::Jump));
+            double peak = base, at025 = -1, tj = j.time();
+            for (int i = 0; i < 90; ++i) {
+                j.step(platform::InputFrame{});
+                double e = layer::effectiveSpread(j.pawn(), 0);
+                peak = std::max(peak, e);
+                if (at025 < 0 && j.time() >= tj + 0.25) at025 = e;
+            }
+            r.near("airborne_multiplier_peak", peak / base, 2.0, 0.01, "", "RE d50e2a9: TnWeaponSpreadModifier AirborneMultiplier 2.0");
+            r.near("airborne_ramp_up_025s", at025 / base, 2.0, 0.05, "",
+                   "RE d50e2a9: ramp up over 0.25 s (values CONFIRMED, linear ramp HIGH)");
+            j.idle(2.0);
+            r.near("airborne_back_after_landing", layer::effectiveSpread(j.pawn(), 0) / base, 1.0, 0.01, "", "land ramp down 0.5 s");
+            Rig fa(60, false);
+            fa.idle(0.3);
+            platform::InputFrame on; on.down[authoredBoostIndex()] = true; on.pressed[authoredBoostIndex()] = true;
+            fa.step(on);
+            fa.idle(0.5);
+            r.near("fine_aim_effective_spread", layer::effectiveSpread(fa.pawn(), 0), ref.spreadMin * 0.5, 1e-4, "",
+                   "RE d50e2a9 / TnWeaponIonBlaster FineAimSpreadModifier 0.5");
+            // HUD: NotifyWeaponSpreadChanged only when the effective spread moved by > 0.002.
+            Rig h(60, false);
+            h.idle(0.3);
+            std::vector<float> sent;
+            bool has = false;
+            for (int i = 0; i < 20; ++i) { h.step(Rig::down({Button::Fire})); has |= layer::hudSpreadNotifies(h.controller(), sent, 0); }
+            for (int i = 0; i < 150; ++i) { h.step(platform::InputFrame{}); has |= layer::hudSpreadNotifies(h.controller(), sent, 0); }
+            if (!has) {
+                r.skip("hud_spread_filter", "build has no PlayerController::hudNotifies()");
+            } else {
+                int small = 0;
+                for (size_t k = 1; k < sent.size(); ++k) small += std::fabs(sent[k] - sent[k - 1]) <= 0.002f;
+                r.truth("hud_spread_filter", sent.size() >= 2 && small == 0,
+                        "RE d50e2a9: NotifyWeaponSpreadChanged only when the spread changes by > 0.002",
+                        std::to_string(sent.size()) + " notifies, " + std::to_string(small) + " with a change <= 0.002");
+                r.near("hud_spread_settles", sent.empty() ? -1 : sent.back(), ref.spreadMin, 0.0021, "",
+                       "after recovery the HUD holds Min within the 0.002 filter");
+            }
+            r.info("hitscan_uses_effective_spread", -1, "",
+                   "World::fireHitscan cone = Character::effectiveSpread() (Gameplay Pass 16): World is not linked in the harness - code-level");
+        }
     }
     {
         Rig rig(60, false);
@@ -343,7 +421,8 @@ void checkOrientation(Report& r) {
         rig.hold(Rig::down({Button::Right}), 1.5);   // pure strafe at camera yaw 0
         auto headingErr = [](const Rig& g) {
             const Frame& f = g.last();
-            return std::fabs(core::degrees((float)std::remainder((double)f.yaw - f.camYaw, 2 * core::PI)));
+            // Native M03 P2: the frame of reference is the rendered camera yaw (after camera smoothing).
+            return std::fabs(core::degrees((float)std::remainder((double)f.yaw - f.viewYaw, 2 * core::PI)));
         };
         r.conf("vehicle_heading_follows_camera_strafe", headingErr(rig), 0.0, 1.0, "deg", hv, kGameplay,
                "heading minus camera yaw while strafing right in hover");
@@ -352,7 +431,7 @@ void checkOrientation(Report& r) {
         rig.step(turn);
         rig.hold(Rig::down({Button::Forward}), 0.1);
         r.conf("vehicle_heading_follows_camera_turn", headingErr(rig), 0.0, 1.0, "deg", hv, kGameplay,
-               "heading minus camera yaw 0.1 s after a mouse turn");
+               "heading minus rendered camera yaw 0.1 s after a mouse turn");
         save(rig, "orient_vehicle_heading");
         // Reversal manoeuvre kept as a measurement (AiMaxAngularSpeed is AI steering, not the player hover).
         Rig rev(60, false);
@@ -473,8 +552,23 @@ void checkMovement(Report& r) {
         Rig rig(60, false);
         rig.pawn().setForm(game::Form::Vehicle);
         rig.idle(0.5);
-        r.conf("vehicle_hover_height", rig.pawn().position().y - rig.pawn().groundY, 1.85, 0.01, "m",
-               "RE TARGETED_PASS2 #2 / Pass 11: VEH_SHARED_p.HoverTruck_Physics SuspensionRadius 185", kGameplay);
+        {   // Rest centre-of-mass height above flat ground (production path + collision floor, settled 3 s).
+            // Native M03 P1: implicit springs with gravity compensation -> equilibrium probe length
+            // L_eq = RestingLength - |g_RB| * (M/4) / Stiffness = 250 - 1940.4 * 625 / 10000 = 128.7 UU
+            // (probes sit on the COM plane, so L_eq is the COM height on level ground). Algorithm and
+            // constants CONFIRMED; the hover RB mass link M = 2500 is HIGH (Truck_Physics Mass).
+            Rig rc(60, false);
+            BoxScene fl; fl.floor(0, 200);
+            rc.useWorldCollision(fl.mesh);
+            rc.pawn().setForm(game::Form::Vehicle);
+            rc.idle(3.0);
+            r.conf("vehicle_rest_com_height", rc.last().comH, 2.5 - 19.404 * (2500.0 / 4.0) / 10000.0, 0.02, "m",
+                   "native M03 P1: L_eq = 250 - 1940.4*(M/4)/10000 UU (algorithm CONFIRMED, mass link M=2500 HIGH)", kGameplay,
+                   "COM height above the floor at rest; replaces the stale 1.85 m 'hover height' (185 = SuspensionRadius)");
+            if (rc.last().att.valid)
+                r.info("vehicle_rest_spring_length", rc.last().att.springMean, "m", "mean TnSpring length of the 4 probes at rest (rebuild state)",
+                       1.287);
+        }
         double t0 = rig.time();
         rig.hold(Rig::down({Button::Forward}), 2.0);
         r.near("vehicle_cruise_speed", hspeed(rig.last()), kVehicleMoveSpeed, 1e-3, "m/s", "MaxLinearSpeed 1500");
@@ -488,7 +582,7 @@ void checkMovement(Report& r) {
                          "Hovering with 0.5 s drift)";
         double t1 = rig.time();
         rig.hold(boostHeld({Button::Forward}), 2.0);   // authored boost input (FineAim button) when the build has it
-        r.conf("vehicle_boost_top_speed", hspeed(rig.last()), 30.0, 0.05, "m/s", bd, kGameplay);
+        r.info("vehicle_boost_speed_after_2s", hspeed(rig.last()), "m/s", "speed after a fixed boost window: the rise depends on the PROVISIONAL tire model; the CONFIRMED MaxSpeed 3000 cap is asserted by native_vehicle.boost.top_speed_6s", 30.0);
         r.info("vehicle_boost_rise_time",
                firstAfter(rig, t1, [](const Frame& f) { return hspeed(f) >= kVehicleBoostSpeed - 1e-3f; }), "s",
                "cruise -> boost top speed; original MaxAccel 2500 UU/s2 (low-speed extra accel PROV)", (30.0 - 15.0) / 25.0);
@@ -518,9 +612,10 @@ void checkMovement(Report& r) {
         vj.idle(2.0);
         double apex = base;
         for (const Frame& f : vj.trace()) apex = std::max(apex, (double)f.pos.y);
-        r.known("vehicle_jump_apex", apex - base, kVehicleJumpSpeed * kVehicleJumpSpeed / (2 * kVehicleGravity), 0.05, "m",
-                "JumpLinearSpeed 1200 under RB gravity -19.4 (derived)", kGameplay,
-                "vehicle jump: apex above hover height (RB jump; integration and authority PROV)");
+        r.info("vehicle_jump_apex", apex - base, "m",
+               "native M03 P4: 1200^2/(2*1940.4) = 3.71 m is the ballistic rise BEFORE the springs re-engage (a lower bound, not the "
+               "total apex); graybox path. Collision-path value: native_vehicle.hover_jump.apex_above_rest",
+               kVehicleJumpSpeed * kVehicleJumpSpeed / (2 * kVehicleGravity));
         save(vj, "move_vehicle_jump");
     }
 }

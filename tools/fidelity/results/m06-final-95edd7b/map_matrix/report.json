@@ -1,0 +1,315 @@
+﻿{
+    "summary":  {
+                    "pass":  34,
+                    "fail":  2,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  9,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  5
+                },
+    "results":  [
+                    {
+                        "id":  "maps.MP_IAC_Streets.loads",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering",
+                        "note":  "direct load: 28 views captured in 11.7 s; log errors 0, warnings 0; render data present True"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Streets.materials",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "material / shader failure lines: 0 "
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Streets.visual_metrics",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/AssetTools",
+                        "note":  "28 views over the map: mostly-black 0, magenta default material 0, flat untextured grey 0, washed out (mean \u003e 140, contrast \u003c 28) 0; median luma 32.5, contrast 20.4, saturation 0.244. Pixels cannot prove the map looks like WFC: sheet_MP_IAC_Streets.png is the human check"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Streets.chaos",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_CHAOS 20 starts x 20 s: under the map 0, KillZ 0, stuck 0. "
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Streets.xform",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_XFORMTEST: 0/76 transforms ended under the map / KillZ"
+                    },
+                    {
+                        "id":  "maps.MP_UND_Gorge.loads",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering",
+                        "note":  "direct load: 28 views captured in 11.4 s; log errors 0, warnings 4; render data present True"
+                    },
+                    {
+                        "id":  "maps.MP_UND_Gorge.materials",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "material / shader failure lines: 0 "
+                    },
+                    {
+                        "id":  "maps.MP_UND_Gorge.visual_metrics",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/AssetTools",
+                        "note":  "28 views over the map: mostly-black 11, magenta default material 0, flat untextured grey 0, washed out (mean \u003e 140, contrast \u003c 28) 0; median luma 14.8, contrast 13.1, saturation 0.189. Pixels cannot prove the map looks like WFC: sheet_MP_UND_Gorge.png is the human check"
+                    },
+                    {
+                        "id":  "maps.MP_UND_Gorge.chaos",
+                        "status":  "FAIL",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_CHAOS 20 starts x 20 s: under the map 1, KillZ 0, stuck 0. UNDER-FLOOR from TnBombPlantPoint_4905: 381 frames, worst 1.43 m at (-104.8 4.2 -206.6) blockers BSP"
+                    },
+                    {
+                        "id":  "maps.MP_UND_Gorge.xform",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_XFORMTEST: 0/76 transforms ended under the map / KillZ"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Seed.loads",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering",
+                        "note":  "direct load: 28 views captured in 8.6 s; log errors 0, warnings 7; render data present True"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Seed.materials",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "material / shader failure lines: 0 "
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Seed.visual_metrics",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/AssetTools",
+                        "note":  "28 views over the map: mostly-black 0, magenta default material 0, flat untextured grey 0, washed out (mean \u003e 140, contrast \u003c 28) 0; median luma 22.2, contrast 18.2, saturation 0.354. Pixels cannot prove the map looks like WFC: sheet_MP_IAC_Seed.png is the human check"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Seed.chaos",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_CHAOS 20 starts x 20 s: under the map 0, KillZ 0, stuck 0. "
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Seed.xform",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_XFORMTEST: 0/76 transforms ended under the map / KillZ"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Berth.loads",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering",
+                        "note":  "direct load: 28 views captured in 6.2 s; log errors 0, warnings 2; render data present True"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Berth.materials",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "material / shader failure lines: 0 "
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Berth.visual_metrics",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/AssetTools",
+                        "note":  "28 views over the map: mostly-black 0, magenta default material 0, flat untextured grey 0, washed out (mean \u003e 140, contrast \u003c 28) 0; median luma 36.2, contrast 24.7, saturation 0.559. Pixels cannot prove the map looks like WFC: sheet_MP_IAC_Berth.png is the human check"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Berth.chaos",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_CHAOS 20 starts x 20 s: under the map 0, KillZ 0, stuck 0. "
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Berth.xform",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_XFORMTEST: 0/76 transforms ended under the map / KillZ"
+                    },
+                    {
+                        "id":  "maps.MP_UND_Complex.loads",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering",
+                        "note":  "direct load: 28 views captured in 11.8 s; log errors 0, warnings 37; render data present True"
+                    },
+                    {
+                        "id":  "maps.MP_UND_Complex.materials",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "material / shader failure lines: 0 "
+                    },
+                    {
+                        "id":  "maps.MP_UND_Complex.visual_metrics",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/AssetTools",
+                        "note":  "28 views over the map: mostly-black 0, magenta default material 0, flat untextured grey 0, washed out (mean \u003e 140, contrast \u003c 28) 0; median luma 32.5, contrast 23.2, saturation 0.293. Pixels cannot prove the map looks like WFC: sheet_MP_UND_Complex.png is the human check"
+                    },
+                    {
+                        "id":  "maps.MP_UND_Complex.chaos",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_CHAOS 20 starts x 20 s: under the map 0, KillZ 0, stuck 0. "
+                    },
+                    {
+                        "id":  "maps.MP_UND_Complex.xform",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_XFORMTEST: 0/76 transforms ended under the map / KillZ"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Rust.loads",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering",
+                        "note":  "direct load: 28 views captured in 12.8 s; log errors 0, warnings 6; render data present True"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Rust.materials",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "material / shader failure lines: 0 "
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Rust.visual_metrics",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/AssetTools",
+                        "note":  "28 views over the map: mostly-black 6, magenta default material 0, flat untextured grey 0, washed out (mean \u003e 140, contrast \u003c 28) 0; median luma 21.6, contrast 29.8, saturation 0.267. Pixels cannot prove the map looks like WFC: sheet_MP_IAC_Rust.png is the human check"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Rust.chaos",
+                        "status":  "PARTIAL",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_CHAOS 20 starts x 20 s: under the map 0, KillZ 0, stuck 1. STUCK from TnAmmoCratePickupFactory_8669 at (69.9 11.6 -121.1) form VEHICLE blockers BlockingVolume_11615,StaticMeshCollectionActor_1423,StaticMeshCollectionActor_3497,StaticMeshCollectionActor_9237"
+                    },
+                    {
+                        "id":  "maps.MP_IAC_Rust.xform",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_XFORMTEST: 0/76 transforms ended under the map / KillZ"
+                    },
+                    {
+                        "id":  "maps.MP_ORB_Debris.loads",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering",
+                        "note":  "direct load: 28 views captured in 9.8 s; log errors 1, warnings 80; render data present True"
+                    },
+                    {
+                        "id":  "maps.MP_ORB_Debris.materials",
+                        "status":  "PARTIAL",
+                        "owner":  "Rendering",
+                        "note":  "material / shader failure lines: 2 shader compile failed (PROP_EnergonSigns_p.communications.Megatron_com_Mat|LM): ERROR: 0:94: \u0027*\u0027 :  wrong operand types: no operation \u0027*\u0027 exists that takes a left-hand operand of type \u0027 temp 3-component vector of float\u0027 and a right operand of type \u0027 const 2-component vector of float\u0027 (or there is no acceptable conversion) | wfc: material PROP_EnergonSigns_p.communications.Megatron_com_Mat failed to build; using glTF fallback"
+                    },
+                    {
+                        "id":  "maps.MP_ORB_Debris.visual_metrics",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/AssetTools",
+                        "note":  "28 views over the map: mostly-black 0, magenta default material 0, flat untextured grey 1, washed out (mean \u003e 140, contrast \u003c 28) 0; median luma 46.2, contrast 26.5, saturation 0.249. Pixels cannot prove the map looks like WFC: sheet_MP_ORB_Debris.png is the human check"
+                    },
+                    {
+                        "id":  "maps.MP_ORB_Debris.chaos",
+                        "status":  "PARTIAL",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_CHAOS 20 starts x 20 s: under the map 0, KillZ 0, stuck 2. STUCK from TnAmmoCratePickupFactory_904 at (98.0 113.1 -56.2) form ROBOT blockers BlockingVolume_7715,StaticMeshCollectionActor_4623,StaticMeshCollectionActor_4623,StaticMeshCollectionActor_8986,+3 | STUCK from TnFreeForAllPlayerStart_12439 at (-106.4 113.0 -38.6) form VEHICLE blockers BlockingVolume_7715,StaticMeshCollectionActor_15797,StaticMeshCollectionActor_15797,StaticMeshCollectionActor_15797,+3"
+                    },
+                    {
+                        "id":  "maps.MP_ORB_Debris.xform",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_XFORMTEST: 0/76 transforms ended under the map / KillZ"
+                    },
+                    {
+                        "id":  "maps.MP_KON_Molten.loads",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering",
+                        "note":  "direct load: 28 views captured in 11.5 s; log errors 0, warnings 150; render data present True"
+                    },
+                    {
+                        "id":  "maps.MP_KON_Molten.materials",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "material / shader failure lines: 0 "
+                    },
+                    {
+                        "id":  "maps.MP_KON_Molten.visual_metrics",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/AssetTools",
+                        "note":  "28 views over the map: mostly-black 0, magenta default material 0, flat untextured grey 0, washed out (mean \u003e 140, contrast \u003c 28) 0; median luma 25.5, contrast 19.9, saturation 0.261. Pixels cannot prove the map looks like WFC: sheet_MP_KON_Molten.png is the human check"
+                    },
+                    {
+                        "id":  "maps.MP_KON_Molten.chaos",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_CHAOS 20 starts x 20 s: under the map 0, KillZ 0, stuck 0. "
+                    },
+                    {
+                        "id":  "maps.MP_KON_Molten.xform",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_XFORMTEST: 0/76 transforms ended under the map / KillZ"
+                    },
+                    {
+                        "id":  "maps.MP_ESC_BrokenHope.loads",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering",
+                        "note":  "direct load: 28 views captured in 11.2 s; log errors 0, warnings 11; render data present True"
+                    },
+                    {
+                        "id":  "maps.MP_ESC_BrokenHope.materials",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "material / shader failure lines: 0 "
+                    },
+                    {
+                        "id":  "maps.MP_ESC_BrokenHope.visual_metrics",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/AssetTools",
+                        "note":  "28 views over the map: mostly-black 0, magenta default material 0, flat untextured grey 1, washed out (mean \u003e 140, contrast \u003c 28) 0; median luma 39.3, contrast 21.4, saturation 0.422. Pixels cannot prove the map looks like WFC: sheet_MP_ESC_BrokenHope.png is the human check"
+                    },
+                    {
+                        "id":  "maps.MP_ESC_BrokenHope.chaos",
+                        "status":  "PARTIAL",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_CHAOS 20 starts x 20 s: under the map 0, KillZ 0, stuck 1. STUCK from AirPathNode_12248 at (167.0 78.1 -142.6) form ROBOT blockers StaticMeshCollectionActor_14026,StaticMeshCollectionActor_14026,StaticMeshCollectionActor_14026"
+                    },
+                    {
+                        "id":  "maps.MP_ESC_BrokenHope.xform",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_XFORMTEST: 0/76 transforms ended under the map / KillZ"
+                    },
+                    {
+                        "id":  "maps.MP_ESC_Remnant.loads",
+                        "status":  "PASS",
+                        "owner":  "Integration/Rendering",
+                        "note":  "direct load: 28 views captured in 15.5 s; log errors 0, warnings 95; render data present True"
+                    },
+                    {
+                        "id":  "maps.MP_ESC_Remnant.materials",
+                        "status":  "PASS",
+                        "owner":  "Rendering",
+                        "note":  "material / shader failure lines: 0 "
+                    },
+                    {
+                        "id":  "maps.MP_ESC_Remnant.visual_metrics",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/AssetTools",
+                        "note":  "28 views over the map: mostly-black 0, magenta default material 0, flat untextured grey 0, washed out (mean \u003e 140, contrast \u003c 28) 0; median luma 36.2, contrast 20.1, saturation 0.227. Pixels cannot prove the map looks like WFC: sheet_MP_ESC_Remnant.png is the human check"
+                    },
+                    {
+                        "id":  "maps.MP_ESC_Remnant.chaos",
+                        "status":  "PARTIAL",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_CHAOS 20 starts x 20 s: under the map 0, KillZ 0, stuck 2. STUCK from MoverPathNode_13307 at (-2.9 57.7 4.1) form VEHICLE blockers StaticMeshCollectionActor_12213,StaticMeshCollectionActor_5756,StaticMeshCollectionActor_5756,InterpActor_13945,+1 | STUCK from MoverPathNode_5366 at (-37.2 49.9 -59.1) form VEHICLE blockers StaticMeshCollectionActor_1431,StaticMeshCollectionActor_8162,StaticMeshCollectionActor_8162,StaticMeshCollectionActor_8162,+1"
+                    },
+                    {
+                        "id":  "maps.MP_ESC_Remnant.xform",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "WFC_XFORMTEST: 0/76 transforms ended under the map / KillZ"
+                    }
+                ]
+}

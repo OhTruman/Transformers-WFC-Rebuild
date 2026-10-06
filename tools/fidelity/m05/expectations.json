@@ -1,0 +1,835 @@
+﻿{
+    "_about":  "Milestone 05 end-to-end gate expectations. Every value carries its source and confidence; the gate judges PASS/FAIL only against CONFIRMED/HIGH entries, PARTIAL/UNKNOWN entries are reported as INFO/KNOWN. Sources: RE-Workspace notes/MILESTONE05_FRONTEND_MATCH_BOOTSTRAP.md (RE f1ca8a5..85e340c, cited \u0027RE n.n\u0027), notes/MILESTONE05_FRONTEND_GAMEPLAY_BLOCKERS.md (RE 85e340c, cited \u0027BLK x\u0027), AssetTools manifests/frontend_*.json (AssetTools cc9773e..12308aa), Systems FIDELITY.md MILESTONE 05/06 (agents/systems 3d295ec), Gameplay FIDELITY PASS 20 (agents/gameplay d541c78) for rebuild-side measurements only. Superseded values are listed under retired.",
+    "boot":  {
+                 "map":  {
+                             "value":  "UI_FrontEnd_m",
+                             "src":  "RE 1.1 / frontend_flow.json [URL]",
+                             "conf":  "CONFIRMED"
+                         },
+                 "initial_loading_movie":  {
+                                               "value":  "TF_InitialStartup",
+                                               "src":  "RE 1.1 [LoadingMovie] InitialStartupFileName",
+                                               "conf":  "CONFIRMED"
+                                           },
+                 "first_launch_movies":  {
+                                             "value":  [
+                                                           "Logo_Activision",
+                                                           "Logo_Hasbro",
+                                                           "Logo_HighMoon",
+                                                           "FMV_intro"
+                                                       ],
+                                             "src":  "RE 1.2 Kismet chain (each on the previous Stopped)",
+                                             "conf":  "CONFIRMED"
+                                         },
+                 "second_launch_skips_logos":  {
+                                                   "value":  true,
+                                                   "src":  "RE 1.2: logos only until the intro has been watched once (SetHasWatchedIntroMovie); MovieLoader branch HIGH",
+                                                   "conf":  "HIGH"
+                                               },
+                 "frontend_movie":  {
+                                        "value":  "UI_GFxFrontEnd_p.FrontEnd_GFX_1",
+                                        "src":  "RE 1.4 TnUIControllerFrontEnd",
+                                        "conf":  "CONFIRMED"
+                                    },
+                 "movie_loader":  {
+                                      "value":  "UI_GFxFrontEnd_p.MovieLoader_GFX_1",
+                                      "src":  "RE 1.2",
+                                      "conf":  "CONFIRMED"
+                                  }
+             },
+    "ui_controller":  {
+                          "events":  {
+                                         "0":  "OnFrontEnd",
+                                         "1":  "OnResetFrontEnd",
+                                         "2":  "OnEnterLobby",
+                                         "3":  "OnBeginGame",
+                                         "4":  "OnSpectating",
+                                         "5":  "OnRespawn",
+                                         "6":  "OnPause",
+                                         "7":  "OnClearPause",
+                                         "8":  "OnRoundEnd",
+                                         "9":  "OnEndGame",
+                                         "10":  "OnPlayAgain",
+                                         "11":  "OnGotoMainMenu",
+                                         "12":  "OnShowHud(false)",
+                                         "13":  "OnShowHud(true)",
+                                         "15":  "OnGRIAvailable"
+                                     },
+                          "transitions":  [
+                                              [
+                                                  "NotInGame",
+                                                  "FrontEnd"
+                                              ],
+                                              [
+                                                  "FrontEnd",
+                                                  "FrontEnd"
+                                              ],
+                                              [
+                                                  "FrontEnd",
+                                                  "InLobby"
+                                              ],
+                                              [
+                                                  "WaitingOnGameStart",
+                                                  "InGame"
+                                              ],
+                                              [
+                                                  "WaitingOnGameStart",
+                                                  "Spectating"
+                                              ],
+                                              [
+                                                  "WaitingOnGameStart",
+                                                  "FrontEnd"
+                                              ],
+                                              [
+                                                  "InGame",
+                                                  "Paused"
+                                              ],
+                                              [
+                                                  "InGame",
+                                                  "WaitingOnNextRound"
+                                              ],
+                                              [
+                                                  "InGame",
+                                                  "GameEnded"
+                                              ],
+                                              [
+                                                  "InGame",
+                                                  "Spectating"
+                                              ],
+                                              [
+                                                  "InGame",
+                                                  "FrontEnd"
+                                              ],
+                                              [
+                                                  "Spectating",
+                                                  "InGame"
+                                              ],
+                                              [
+                                                  "Spectating",
+                                                  "GameEnded"
+                                              ],
+                                              [
+                                                  "Spectating",
+                                                  "PausedSpectating"
+                                              ],
+                                              [
+                                                  "Paused",
+                                                  "InGame"
+                                              ],
+                                              [
+                                                  "Paused",
+                                                  "NotInGame"
+                                              ],
+                                              [
+                                                  "PausedSpectating",
+                                                  "Spectating"
+                                              ],
+                                              [
+                                                  "PausedSpectating",
+                                                  "NotInGame"
+                                              ],
+                                              [
+                                                  "WaitingOnNextRound",
+                                                  "InGame"
+                                              ],
+                                              [
+                                                  "GameEnded",
+                                                  "WaitingOnGameStart"
+                                              ]
+                                          ],
+                          "transitions_src":  "RE 1.4 state table (a new controller is created per level/PC: a state at level begin is its StartingState)",
+                          "starting_state":  {
+                                                 "FrontEnd":  "NotInGame",
+                                                 "PartyLobby":  "InLobby",
+                                                 "GameLobby":  "InLobby",
+                                                 "Match":  "WaitingOnGameStart"
+                                             },
+                          "movie_for_state":  {
+                                                  "FrontEnd":  "UI_GFxFrontEnd_p.FrontEnd_GFX_1",
+                                                  "InLobby@PartyLobby":  "UI_GFxLobbies_p.PartyLobby_GFX_1",
+                                                  "InLobby@GameLobby":  "UI_GFxLobbies_p.GameLobby_GFX_1",
+                                                  "WaitingOnGameStart":  "UI_GFxCustomize_p.CustomTransformers_GFX_1",
+                                                  "GameStart":  "UI_GFxPreGameCountdown_p.PreGameCountdown_GFX_1",
+                                                  "Paused":  "UI_GFxPause_p.PauseMenu_GFX_1",
+                                                  "Spectating":  "UI_GFxRespawn_p.MultiplayerRespawn_GFX_1",
+                                                  "GameEnded":  "UI_GFxEndGameStats_p.EndGameStats_GFX_1"
+                                              },
+                          "hud":  {
+                                      "InGame":  true,
+                                      "Spectating":  true,
+                                      "GameEnded":  false,
+                                      "src":  "RE 1.4 / 6",
+                                      "conf":  "CONFIRMED"
+                                  },
+                          "conf":  "CONFIRMED"
+                      },
+    "travel":  {
+                   "party_lobby_url":  {
+                                           "value":  "UI_PartyLobby_m?game=TransContent.TnPartyLobbyGame?listen",
+                                           "src":  "RE 1.5 ConfirmOpenPartyLobby",
+                                           "conf":  "CONFIRMED"
+                                       },
+                   "multiplayer_gts":  {
+                                           "value":  "GTS_TeamGame",
+                                           "src":  "RE 1.5 multiplayerBtn_mc",
+                                           "conf":  "CONFIRMED"
+                                       },
+                   "game_lobby_url_keys":  {
+                                               "value":  {
+                                                             "Game":  "TransContent.TnGameLobbyGameTeam",
+                                                             "GameModeTag":  "TDM",
+                                                             "GameTeamStatus":  "3",
+                                                             "MaxPlayers":  "10",
+                                                             "IconicMode":  "0"
+                                                         },
+                                               "src":  "RE 7 timeline (UI_Lobby_m?...)",
+                                               "conf":  "CONFIRMED"
+                                           },
+                   "match_url":  {
+                                     "value":  "MP_IAC_Streets_Base_m?PlaylistId=-1?GamerRegion=0?PointsToWin=40?Game=TransContent.TnVersusGame?GameModeTag=TDM?GameTeamStatus=3?GameRules=?MaxPlayers=10?StatsWriters=?LobbyGameClassName=TransContent.TnGameLobbyGameTeam?IconicMode=0?TimeLimit=900.00?listen?MapId=508",
+                                     "src":  "RE 3.1 (native-appended part HIGH)",
+                                     "conf":  "CONFIRMED"
+                                 },
+                   "match_url_keys":  {
+                                          "value":  {
+                                                        "PointsToWin":  "40",
+                                                        "Game":  "TransContent.TnVersusGame",
+                                                        "GameModeTag":  "TDM",
+                                                        "GameTeamStatus":  "3",
+                                                        "MapId":  "508",
+                                                        "TimeLimit":  "900.00"
+                                                    },
+                                          "src":  "RE 3.1 / 5.1",
+                                          "conf":  "CONFIRMED"
+                                      },
+                   "lobby_countdown_s":  {
+                                             "value":  10,
+                                             "src":  "RE 2.4 short countdown 10 s, 1 s ticks (Frontend doc)",
+                                             "conf":  "CONFIRMED"
+                                         },
+                   "return_after_match":  {
+                                              "value":  "UI_Lobby_m",
+                                              "src":  "RE 5.7 / BLK F6 MatchOver 15 s -\u003e ReturnToGameLobby ServerTravel UI_Lobby_m?...?MapId=",
+                                              "conf":  "CONFIRMED"
+                                          },
+                   "lobby_default_map":  {
+                                             "value":  501,
+                                             "src":  "BLK C4: selector index 0 -\u003e SetSelectedMapID(list[0]) overrides the server pick; TDM list starts with Seed of Corruption 501",
+                                             "conf":  "HIGH"
+                                         },
+                   "lobby_map_after_return":  {
+                                                  "value":  501,
+                                                  "src":  "BLK C7: Host\u0027s Choice keeps the server MapId but the rebuilt lobby movie re-sends index 0",
+                                                  "conf":  "HIGH"
+                                              },
+                   "tdm_map_order":  {
+                                         "value":  [
+                                                       501,
+                                                       502,
+                                                       503,
+                                                       504,
+                                                       507,
+                                                       508,
+                                                       509,
+                                                       510
+                                                   ],
+                                         "src":  "BLK C2 TransLevels.ini order (DLC 511-512 disabled); Streets index 5 (only maps with rebuild runtime data are selectable in the rebuild)",
+                                         "conf":  "CONFIRMED"
+                                     },
+                   "map_selector_wraps":  {
+                                              "value":  true,
+                                              "src":  "BLK C3 loopNavigation true",
+                                              "conf":  "CONFIRMED"
+                                          },
+                   "mode_list_order":  {
+                                           "value":  [
+                                                         "TDM",
+                                                         "DM",
+                                                         "DOM",
+                                                         "CTF",
+                                                         "EXT",
+                                                         "KOTH"
+                                                     ],
+                                           "src":  "BLK B1",
+                                           "conf":  "HIGH"
+                                       },
+                   "mode_list_initial_focus":  {
+                                                   "value":  "TDM",
+                                                   "src":  "BLK B2",
+                                                   "conf":  "CONFIRMED"
+                                               },
+                   "host_option_defaults":  {
+                                                "value":  {
+                                                              "TeamBalancing":  "Autobalanced",
+                                                              "MapSelection":  "Host\u0027s Choice",
+                                                              "TimeLimit":  "15",
+                                                              "PointsToWin":  "40"
+                                                          },
+                                                "src":  "BLK B4",
+                                                "conf":  "CONFIRMED"
+                                            },
+                   "host_option_choices":  {
+                                               "value":  {
+                                                             "TimeLimit_s":  [
+                                                                                 600,
+                                                                                 900,
+                                                                                 1200
+                                                                             ],
+                                                             "PointsToWin":  [
+                                                                                 20,
+                                                                                 30,
+                                                                                 40,
+                                                                                 50
+                                                                             ]
+                                                         },
+                                               "src":  "BLK B4 / D1",
+                                               "conf":  "CONFIRMED"
+                                           },
+                   "menu_sounds":  {
+                                       "value":  [
+                                                     "BUTTON_UP",
+                                                     "BUTTON_DOWN",
+                                                     "BUTTON_ACCEPT",
+                                                     "BUTTON_BACK"
+                                                 ],
+                                       "src":  "BLK A4 HmMenu",
+                                       "conf":  "CONFIRMED"
+                                   },
+                   "quit_to_main_menu":  {
+                                             "value":  "UI_FrontEnd_m",
+                                             "src":  "RE 5.7 Game.QuitToMainMenu -\u003e ClientTravelToMap",
+                                             "conf":  "CONFIRMED"
+                                         }
+               },
+    "loading":  {
+                    "match_title":  {
+                                        "value":  "Team Deathmatch",
+                                        "src":  "RE 3.3 SetLevelText(FriendlyName) + frontend_modes TnTeamGame FriendlyName",
+                                        "conf":  "CONFIRMED"
+                                    },
+                    "match_message":  {
+                                          "value":  "in Streets",
+                                          "src":  "RE 3.3 \u0027in \u003cMap\u003e\u0027 + frontend_maps Streets FriendlyName",
+                                          "conf":  "CONFIRMED"
+                                      },
+                    "match_tips":  {
+                                       "value":  3,
+                                       "src":  "RE 3.3 3 x AddEngageText",
+                                       "conf":  "CONFIRMED"
+                                   },
+                    "loading_gfx":  {
+                                        "value":  "UI_GFxLoading_p.LoadScreen_GFX",
+                                        "src":  "RE 1.2 SeqAct_SetLoadingMovieFilename",
+                                        "conf":  "CONFIRMED"
+                                    },
+                    "loading_bink":  {
+                                         "value":  "TF_LoadingScreen",
+                                         "src":  "RE 1.1 DefaultFileName",
+                                         "conf":  "CONFIRMED"
+                                     },
+                    "composite_and_close_timing":  {
+                                                       "value":  null,
+                                                       "src":  "RE STILL OPEN",
+                                                       "conf":  "PARTIAL"
+                                                   }
+                },
+    "match_tdm":  {
+                      "game_class":  {
+                                         "value":  "TransContent.TnVersusGame",
+                                         "src":  "RE 5",
+                                         "conf":  "CONFIRMED"
+                                     },
+                      "goal_score":  {
+                                         "value":  40,
+                                         "src":  "RE 5.1 PointsToWin from the URL",
+                                         "conf":  "CONFIRMED"
+                                     },
+                      "time_limit_s":  {
+                                           "value":  900,
+                                           "src":  "RE 5.1 TimeLimit (seconds)",
+                                           "conf":  "CONFIRMED"
+                                       },
+                      "pending_countdown_s":  {
+                                                  "value":  10,
+                                                  "src":  "RE 5.2 MatchAutoStartCountdown",
+                                                  "conf":  "CONFIRMED"
+                                              },
+                      "no_spawn_before_start":  {
+                                                    "value":  true,
+                                                    "src":  "RE 5.2 TrySpawnPlayer false in PendingMatch",
+                                                    "conf":  "CONFIRMED"
+                                                },
+                      "teams":  {
+                                    "value":  {
+                                                  "0":  "Autobots",
+                                                  "1":  "Decepticons"
+                                              },
+                                    "src":  "RE 5.3",
+                                    "conf":  "CONFIRMED"
+                                },
+                      "pick_team":  {
+                                        "value":  "keep \u003c2 else smaller team, tie RandomInt(2)",
+                                        "src":  "RE 5.3 / BLK E3 PickTeam",
+                                        "conf":  "CONFIRMED"
+                                    },
+                      "offline_team_source":  {
+                                                  "value":  "Autobalanced offline: the lobby assigns no team (reservation only); the rebuild must PickTeam(255) every player before StartMatch",
+                                                  "src":  "BLK E2/E4",
+                                                  "conf":  "HIGH"
+                                              },
+                      "initial_spawn_immediate":  {
+                                                      "value":  true,
+                                                      "src":  "BLK E5 TimeToAllowInstantInitialSpawns -1 (spawn as soon as InProgress)",
+                                                      "conf":  "CONFIRMED"
+                                                  },
+                      "spectate_after_death_s":  {
+                                                     "value":  3.0,
+                                                     "src":  "BLK E7 MinRespawnDelay 3.0 -\u003e PlayerSpectating -\u003e UI event 4",
+                                                     "conf":  "CONFIRMED"
+                                                 },
+                      "respawn_ui_event_at_s":  {
+                                                    "value":  5.0,
+                                                    "src":  "BLK E7 RestartPlayer -\u003e UI event 5",
+                                                    "conf":  "CONFIRMED"
+                                                },
+                      "respawn_request_ignored":  {
+                                                      "value":  true,
+                                                      "src":  "BLK E7.5 Wave helper OnRequestRespawn empty",
+                                                      "conf":  "CONFIRMED"
+                                                  },
+                      "health":  {
+                                     "value":  {
+                                                   "segments":  [
+                                                                    175,
+                                                                    125,
+                                                                    125,
+                                                                    125
+                                                                ],
+                                                   "health_max":  550,
+                                                   "overshield":  550
+                                               },
+                                     "src":  "RE G 6 / BLK I",
+                                     "conf":  "CONFIRMED"
+                                 },
+                      "health_regen":  {
+                                           "value":  {
+                                                         "delay_s":  2.0,
+                                                         "rate_hp_s":  20,
+                                                         "segment_limited":  true
+                                                     },
+                                           "src":  "BLK I3 / PT 9 TnHealthRegener (robot blueprint parameters in both forms)",
+                                           "conf":  "CONFIRMED"
+                                       },
+                      "pickup_respawn_s":  {
+                                               "value":  {
+                                                             "ammo":  30,
+                                                             "health":  60,
+                                                             "overshield":  120
+                                                         },
+                                               "src":  "BLK I5 Streets instances",
+                                               "conf":  "CONFIRMED"
+                                           },
+                      "pickups_reset_at_match_start":  {
+                                                           "value":  true,
+                                                           "src":  "BLK I6 StartMatch -\u003e Reset()",
+                                                           "conf":  "CONFIRMED"
+                                                       },
+                      "assists_add_score":  {
+                                                "value":  false,
+                                                "src":  "BLK F2",
+                                                "conf":  "CONFIRMED"
+                                            },
+                      "new_match_is_level_reload":  {
+                                                        "value":  true,
+                                                        "src":  "BLK F6 ReturnToGameLobby ServerTravel then StartLevel travel",
+                                                        "conf":  "CONFIRMED"
+                                                    },
+                      "match_over_freezes_players":  {
+                                                         "value":  true,
+                                                         "src":  "BLK F4 RoundEnded bFrozen StopFiring",
+                                                         "conf":  "CONFIRMED"
+                                                     },
+                      "results_columns":  {
+                                              "value":  [
+                                                            "Level",
+                                                            "Name",
+                                                            "Score",
+                                                            "Kills",
+                                                            "Deaths"
+                                                        ],
+                                              "src":  "BLK F5",
+                                              "conf":  "CONFIRMED"
+                                          },
+                      "hud_owner":  {
+                                        "value":  "Hud_GFX (Scaleform) for health/ammo/clock/team score; Canvas for player/objective markers",
+                                        "src":  "BLK G/H",
+                                        "conf":  "CONFIRMED"
+                                    },
+                      "tdm_enemy_markers_hidden":  {
+                                                       "value":  true,
+                                                       "src":  "BLK H (no reveal buff)",
+                                                       "conf":  "CONFIRMED"
+                                                   },
+                      "spawn_class":  {
+                                          "value":  "TnTeamPlayerStart",
+                                          "src":  "RE 5.3 RatePlayerStart",
+                                          "conf":  "CONFIRMED"
+                                      },
+                      "initial_clusters":  {
+                                               "value":  {
+                                                             "Decepticons":  "TnSpawnCluster_4159",
+                                                             "Autobots":  "TnSpawnCluster_7810"
+                                                         },
+                                               "src":  "RE 5.3 Streets TDM data",
+                                               "conf":  "CONFIRMED"
+                                           },
+                      "initial_spawn_lock_s":  {
+                                                   "value":  15,
+                                                   "src":  "RE 5.3 InitialSpawnTime",
+                                                   "conf":  "CONFIRMED"
+                                               },
+                      "cluster_reevaluate_s":  {
+                                                   "value":  10,
+                                                   "src":  "RE 5.3 derived",
+                                                   "conf":  "HIGH"
+                                               },
+                      "kill_score":  {
+                                         "value":  {
+                                                       "player":  1,
+                                                       "team":  1
+                                                   },
+                                         "src":  "RE 5.5 ScoreKillsTDM",
+                                         "conf":  "CONFIRMED"
+                                     },
+                      "suicide_score":  {
+                                            "value":  {
+                                                          "player":  0,
+                                                          "team":  0,
+                                                          "death":  1
+                                                      },
+                                            "src":  "RE 5.5",
+                                            "conf":  "CONFIRMED"
+                                        },
+                      "environment_death_score":  {
+                                                      "value":  {
+                                                                    "player":  0,
+                                                                    "team":  0,
+                                                                    "death":  1
+                                                                },
+                                                      "src":  "RE 5.5",
+                                                      "conf":  "CONFIRMED"
+                                                  },
+                      "teammate_damage":  {
+                                              "value":  "discarded except TnDamageTypeAOE",
+                                              "src":  "RE 5.5 TnPlayerPawn.TakeDamage",
+                                              "conf":  "CONFIRMED"
+                                          },
+                      "respawn_delay_s":  {
+                                              "value":  5.0,
+                                              "src":  "RE 5.6 WaveRespawnTime (0 if ShouldInstantRespawn)",
+                                              "conf":  "CONFIRMED"
+                                          },
+                      "end_on_score":  {
+                                           "value":  "team score \u003e= 40 -\u003e EndGame(PRI,\u0027Score\u0027)",
+                                           "src":  "RE 5.5 CheckScore",
+                                           "conf":  "CONFIRMED"
+                                       },
+                      "end_on_time":  {
+                                          "value":  "RemainingTime \u003c= 0 -\u003e EndGame(none,\u0027\u0027)",
+                                          "src":  "RE 5.4",
+                                          "conf":  "CONFIRMED"
+                                      },
+                      "tie":  {
+                                  "value":  "equal scores -\u003e Winner none; no overtime",
+                                  "src":  "RE 5.7",
+                                  "conf":  "CONFIRMED"
+                              },
+                      "match_over_countdown_s":  {
+                                                     "value":  15,
+                                                     "src":  "RE 5.7 MatchOverCountdown",
+                                                     "conf":  "CONFIRMED"
+                                                 },
+                      "ui_events":  {
+                                        "value":  {
+                                                      "begin":  3,
+                                                      "spectating":  4,
+                                                      "respawn":  5,
+                                                      "end":  9
+                                                  },
+                                        "src":  "RE 1.4 / 5",
+                                        "conf":  "CONFIRMED"
+                                    },
+                      "announcements_time_s":  {
+                                                   "value":  [
+                                                                 120,
+                                                                 60,
+                                                                 30
+                                                             ],
+                                                   "src":  "RE 5.4 ReportGameProgressTime",
+                                                   "conf":  "CONFIRMED"
+                                               },
+                      "announcements_kills_left":  {
+                                                       "value":  [
+                                                                     5,
+                                                                     3,
+                                                                     1
+                                                                 ],
+                                                       "src":  "RE 5.5 ReportGameProgressKills",
+                                                       "conf":  "CONFIRMED"
+                                                   },
+                      "hud_clock_format":  {
+                                               "value":  "MM:SS",
+                                               "src":  "RE 6 Hud_GFX secondsToMinutesSeconds",
+                                               "conf":  "CONFIRMED"
+                                           }
+                  },
+    "audio_ownership":  {
+                            "frontend_music":  {
+                                                   "value":  "FRONTEND_MX_ORBIT_01",
+                                                   "src":  "Systems M05 frontendTrack (authored SeqAct_PlayMusic)",
+                                                   "conf":  "CONFIRMED"
+                                               },
+                            "party_lobby_music":  {
+                                                      "value":  "MP_PARTY_LOBBY_MX",
+                                                      "src":  "Systems M05",
+                                                      "conf":  "CONFIRMED"
+                                                  },
+                            "game_lobby_music":  {
+                                                     "value":  "MP_LOBBY_MX",
+                                                     "src":  "Systems M05",
+                                                     "conf":  "CONFIRMED"
+                                                 },
+                            "match_music":  {
+                                                "value":  "no FRONTEND / lobby music in a match; match music is the game-type music (playtest.match_music)",
+                                                "src":  "OV A5 supersedes \u0027Streets authors no SeqAct_PlayMusic\u0027 (true for Kismet, but TnGameTypeMessage plays GameTypeMusic)",
+                                                "conf":  "CONFIRMED"
+                                            },
+                            "frontend_medley_loops":  {
+                                                          "value":  false,
+                                                          "src":  "Systems M05: FRONTEND_MX_ORBIT_01 plays once (~380 s)",
+                                                          "conf":  "CONFIRMED"
+                                                      },
+                            "after_unload":  {
+                                                 "value":  "0 cue instances, 0 queued, 0 map cues, mixer Default, no reverb, PCM back to base",
+                                                 "src":  "Systems M05 unloadMapAudio guarantees",
+                                                 "conf":  "HIGH"
+                                             },
+                            "ui_level_kismet_audio":  {
+                                                          "value":  "UI_FrontEnd_m 21 ops / 18 cues / REVERB_TRANS_FRONT_END; each lobby: music + bed + 2 pools",
+                                                          "src":  "Systems M06 LevelAudio manifests (AssetTools frontend_audio + authored.db)",
+                                                          "conf":  "CONFIRMED"
+                                                      },
+                            "lobby_beds":  {
+                                               "value":  {
+                                                             "PartyLobby":  "MP_PARTY_LOBBY_AMB_BED_CUST_MENU",
+                                                             "GameLobby":  "MP_LOBBY_AMB_BED"
+                                                         },
+                                               "src":  "Systems M06",
+                                               "conf":  "CONFIRMED"
+                                           },
+                            "frontend_reverb":  {
+                                                    "value":  "REVERB_TRANS_FRONT_END",
+                                                    "src":  "Systems M06 / RE 1.2",
+                                                    "conf":  "CONFIRMED"
+                                                },
+                            "movie_mute_preset":  {
+                                                      "value":  "CINE_MUTE_FOR_BINK (Master 0 while a Bink plays, back over 1 s)",
+                                                      "src":  "Systems M06 MovieMixerPreset",
+                                                      "conf":  "CONFIRMED"
+                                                  },
+                            "pcm_base_mb":  {
+                                                "value":  36.5,
+                                                "src":  "Systems M06 real-backend soak: decoded PCM back to the base after every unload (rebuild measurement)",
+                                                "conf":  "HIGH"
+                                            },
+                            "peak_voices":  {
+                                                "value":  {
+                                                              "FrontEnd":  9,
+                                                              "PartyLobby":  5,
+                                                              "GameLobby":  5,
+                                                              "Match":  71
+                                                          },
+                                                "src":  "Systems M06 soak per-level peaks (rebuild measurement; flat across cycles)",
+                                                "conf":  "HIGH"
+                                            },
+                            "voices_after_unload":  {
+                                                        "value":  0,
+                                                        "src":  "Systems M06",
+                                                        "conf":  "HIGH"
+                                                    }
+                        },
+    "retired":  {
+                    "player_restart_delay_s":  {
+                                                   "was":  6.0,
+                                                   "why":  "BLK E8: PlayerRestartDelay is dead config (no such property); spectate 3.0 s / respawn 5.0 s replace it",
+                                                   "retired":  "2026-10-03"
+                                               },
+                    "return_after_match.host_map_preselected":  {
+                                                                    "was":  "host\u0027s choice preselects the same map (508)",
+                                                                    "why":  "RE 85e340c correction (BLK C7): the lobby movie re-sends selector index 0 -\u003e first compatible map",
+                                                                    "retired":  "2026-10-03"
+                                                                },
+                    "lobby_team_equals_match_team":  {
+                                                         "was":  "match.launch team = lobby FinalCountdown team",
+                                                         "why":  "BLK E2: offline Autobalanced lobby assigns no team; the team is the match PickTeam (consistency only, INFO)",
+                                                         "retired":  "2026-10-03"
+                                                     },
+                    "frontend_tests_streets_only":  {
+                                                        "was":  "only Streets selectable",
+                                                        "why":  "Frontend doc: selectable = cooked + runtime data; Gorge appeared via AssetTools (next-map pipeline)",
+                                                        "retired":  "2026-10-03"
+                                                    },
+                    "audio_ownership.match_music_none":  {
+                                                             "was":  "no music at all during the Streets match",
+                                                             "why":  "OV A5: DM_START / DM_FINALSTRETCH_LP / DM_END_* game-type music plays in versus matches (not Kismet-authored); only frontend / lobby music must be absent",
+                                                             "retired":  "2026-10-04"
+                                                         },
+                    "playtest.minimap_unknown":  {
+                                                     "was":  "UNKNOWN pending RE",
+                                                     "why":  "OV A9: CONFIRMED absent; test now asserts none is presented as original",
+                                                     "retired":  "2026-10-04"
+                                                 }
+                },
+    "playtest":  {
+                     "_src":  "RE-Workspace notes/MILESTONE05_PLAYTEST_RE.md (28debca), cited \u0027PT x\u0027; Gameplay PASS 21 (391b7f0) for rebuild-side numbers; RE notes/OVERNIGHT_2026-10-04_HUD_VEHICLE_FRONTEND_ROSTER_AI.md (1ca9c28), cited OV",
+                     "frontend_background":  {
+                                                 "value":  "live 3D level UI_FrontEnd_m (Cybertron orbit, nebulae, debris, FX, matinee cameras) under the Scaleform menus",
+                                                 "src":  "PT 5",
+                                                 "conf":  "CONFIRMED"
+                                             },
+                     "title_input":  {
+                                         "value":  "title reacts to buttonStart only (on release)",
+                                         "src":  "FrontEnd_GFX sprite 23 inputEvent (RE work/q/gfx)",
+                                         "conf":  "CONFIRMED"
+                                     },
+                     "pc_bindings":  {
+                                         "value":  "RMB = Boost (hold), Shift = Dash / Nitro, WASD = hover strafe, mouse X = camera (hover) / steering (boost); no throttle key",
+                                         "src":  "PT 1.3 (shipped PC defaults)",
+                                         "conf":  "HIGH"
+                                     },
+                     "loading_never_frozen":  {
+                                                  "value":  "the loading Bink plays on a rendering-thread movie player and keeps animating while the game thread loads; closes on CanCloseLoadingMovie",
+                                                  "src":  "PT 6",
+                                                  "conf":  "CONFIRMED names / HIGH semantics"
+                                              },
+                     "vehicle_states":  {
+                                            "value":  {
+                                                          "hover_max_ms":  15,
+                                                          "dash_ms":  30,
+                                                          "dash_s":  0.5,
+                                                          "dash_cooldown_s":  2,
+                                                          "boost_max_ms":  30,
+                                                          "nitro_speed_scale":  1.5,
+                                                          "nitro_steering_scale":  0.3,
+                                                          "nitro_s":  3,
+                                                          "nitro_cooldown_s":  8,
+                                                          "boost_exit_frontal_dot":  0.866
+                                                      },
+                                            "src":  "PT 1.2 TnCarForm / TnTruckForm, HoverTruck_Physics / Truck_Physics (UU/100)",
+                                            "conf":  "CONFIRMED"
+                                        },
+                     "ramp_behaviour":  {
+                                            "value":  "hover: 4 diagonal 250 UU suspension rays, 45 deg ground threshold, no step-up code; boost: catching on lips is original but a frontal hit (dot \u003e 0.866) exits to Hovering",
+                                            "src":  "PT 2",
+                                            "conf":  "CONFIRMED data / HIGH diagnosis"
+                                        },
+                     "bots":  {
+                                  "value":  "shipped multiplayer had no bots; any MP bot / WFC_LIFECYCLE opponent is a test or reconstruction feature",
+                                  "src":  "PT 8",
+                                  "conf":  "CONFIRMED (exhaustive absence)"
+                              },
+                     "death_presentation":  {
+                                                "value":  "death animation TotalTime 1.25-3.5 s (robot), 0.2-0.75 s (vehicle); Dead camera; spectating + respawn UI at 3.0 s; respawn 5.0 s",
+                                                "src":  "PT 9",
+                                                "conf":  "CONFIRMED"
+                                            },
+                     "scoreboard":  {
+                                        "value":  "Back / Tab toggles InGameStats_GFX with input focus (UpdatePlayerListData); force-closed when the HUD is hidden",
+                                        "src":  "PT 9",
+                                        "conf":  "CONFIRMED"
+                                    },
+                     "kill_feed":  {
+                                       "value":  {
+                                                     "delivery":  "_global.GameMessage(html) in Hud_GFX sprite 591, anchor bottomLeft (84, 626)",
+                                                     "rows":  5,
+                                                     "row_lifetime_s":  5,
+                                                     "fade_s":  1,
+                                                     "row_step_px":  22,
+                                                     "colours":  {
+                                                                     "local":  "255,255,255",
+                                                                     "teammate":  "80,181,213",
+                                                                     "enemy":  "240,60,60",
+                                                                     "neutral":  "255,147,51"
+                                                                 },
+                                                     "text":  "DamageType DeathString with weapon icon tokens, e.g. \u0027k [IonBlast] o\u0027",
+                                                     "spectating_offset_px":  160
+                                                 },
+                                       "src":  "OV A2 (Hud_GFX AS + TnDeathMessage + TnMessageTextColors). Gameplay PASS 21b\u0027s 3.0 s is Engine.LocalMessage.Lifetime, not the Hud feed row lifetime",
+                                       "conf":  "CONFIRMED"
+                                   },
+                     "point_event":  {
+                                         "value":  "kill / point transactions also reach Hud_GFX via TnHUD KillTransactionObserver -\u003e _global.PointEvent",
+                                         "src":  "AssetTools frontend_hud.json data_observers[12]",
+                                         "conf":  "CONFIRMED authored"
+                                     },
+                     "minimap":  {
+                                     "value":  "none: no minimap, radar or compass; the only spatial cues are damage-direction arrows, missile-lock warnings, Canvas objective markers with off-screen arrows and ally name tags",
+                                     "src":  "OV A9 (exhaustive absence: decompiled script, every GFx pool / export, authored.db, default.xex strings) + AssetTools 43f2679 negative search",
+                                     "conf":  "CONFIRMED"
+                                 },
+                     "pre_match_view":  {
+                                            "value":  "no pawn before the start; the controller spectates from the login start (team start of the initial cluster)",
+                                            "src":  "RE bootstrap 2 / 5.2 (CONFIRMED), stock GameInfo.Login (HIGH)",
+                                            "conf":  "CONFIRMED"
+                                        },
+                     "match_music":  {
+                                         "value":  {
+                                                       "start":  "BL_LVL_MP_MX.DM_START (TnGameTypeMessage switch 0, with GameTypeDialog + GameDescriptionDialog announcer)",
+                                                       "nearly_complete":  "DM_FINALSTRETCH_LP",
+                                                       "end":  "DM_END_AUTOBOTS_WIN / DM_END_DECEPTICONS_WIN / DM_END_TIE by winner"
+                                                   },
+                                         "src":  "OV A5",
+                                         "conf":  "CONFIRMED"
+                                     },
+                     "game_over_message":  {
+                                               "value":  "GRI.SetGameOverMessage: \u0027Your team won\u0027 / \u0027Your team lost\u0027 / \u0027Tie game\u0027 / \u0027Enemy team forfeits\u0027 shown by EndGameStats_GFX (\u003cCurrentGame:GameOverMessage\u003e); DM empty",
+                                               "src":  "OV A5",
+                                               "conf":  "CONFIRMED"
+                                           },
+                     "start_announcement":  {
+                                                "value":  "GameAnnouncement \u0027Team Deathmatch\u0027 (500% -\u003e 100% over 0.4 s, hold 4.5 s)",
+                                                "src":  "OV A4 / A5",
+                                                "conf":  "CONFIRMED"
+                                            },
+                     "backgrounds":  {
+                                         "value":  {
+                                                       "title_main":  "UI_FrontEnd_m + streamed UI_FrontEnd_capture_VIG_m",
+                                                       "party_lobby":  "UI_PartyLobby_m streaming UI_CharacterCustomization_m",
+                                                       "game_lobby":  "UI_Lobby_m streaming UI_CharacterCustomization_m",
+                                                       "loading":  "TF_LoadingScreen Bink on the render thread + LoadScreen GFx",
+                                                       "post_match":  "EndGameStats over the frozen match world"
+                                                   },
+                                         "src":  "OV D",
+                                         "conf":  "CONFIRMED"
+                                     },
+                     "hud_layout":  {
+                                        "value":  {
+                                                      "score_widget":  "mc_scoreTeam topCenter (560, 59)",
+                                                      "clock":  "countdown_mc (560, 104), MM:SS, red flash \u003c= 10 s",
+                                                      "ammo":  "topRight (1016, 64), clip bar 0xFFA033, low \u003c= 25%",
+                                                      "crosshair":  "midCenter (560, 360)",
+                                                      "kill_feed":  "(84, 626)",
+                                                      "announcements":  "(560, 166)",
+                                                      "popups":  "(560, 229)",
+                                                      "stage":  "1120x720"
+                                                  },
+                                        "src":  "OV A1",
+                                        "conf":  "CONFIRMED"
+                                    },
+                     "transform_under_overhang":  {
+                                                      "value":  "no safe spot -\u003e NotifyCantTransform + TransformFailedSound, no transform; stuck after transform -\u003e forced back to vehicle",
+                                                      "src":  "OV B3",
+                                                      "conf":  "CONFIRMED (native FindSpotAwayFromPawns world test PARTIAL)"
+                                                  }
+                 }
+}

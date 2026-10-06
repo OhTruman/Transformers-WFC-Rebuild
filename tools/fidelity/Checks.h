@@ -34,6 +34,17 @@ void checkVehicleMaterials(Report& r);
 void checkMapContent(Report& r);
 void checkInputEdges(Report& r);
 
+// Milestone-03 suites (M03Checks.cpp).
+void checkTransformTimeline(Report& r);
+void checkVehicleFeel(Report& r);
+void checkFineAimPresentation(Report& r);
+void checkTraceCost(Report& r);
+void checkTransformAnalyzer(Report& r);   // M03 pass 2: authored overlap windows, pose/camera/root flags
+void checkVehicleProfiles(Report& r);     // M03 pass 2: HOVER/BOOST/DASH/NITRO on terrain, production path
+void checkFineAimProbe(Report& r);        // M03 pass 2: full fine-aim probe
+void checkNativeVehicle(Report& r);       // native RE M03 P1-P5 assertions (gameplay Pass 14 validation)
+void checkNativeRobot(Report& r);         // native RE M03 P6-P8 (fine-aim camera, hand shrink, ram)
+
 // Compare measured metrics against values captured from the ORIGINAL game.
 void compareReference(Report& r, const std::string& path);
 

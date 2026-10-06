@@ -1,0 +1,27 @@
+[info ] WFC Rebuild starting (clean-room skeleton)
+[info ] collision: 2 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.0]
+[info ] VEHTEST rest: COM height 1.2872 m (native L_eq 1.287 m) contacts=4 pitch=-0.000 roll=0.000
+[info ] collision: 2 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.0]
+[info ] VEHTEST forward: cruise 15.00 m/s, release -> stop in 0.500 s (native 0.5 s)
+[info ] collision: 2 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.0]
+[info ] VEHTEST strafe: cruise 15.00 m/s, release -> stop in 0.500 s (native 0.5 s)
+[info ] collision: 10 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.2]
+[info ] VEHTEST bump 0.25 m @15 m/s: COM-above-ground min 1.075 max 1.575 (rest 1.287), pitch -1.8..4.0 deg, |vy| max 1.27, speed after 15.00
+[info ] collision: 10 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.5]
+[info ] VEHTEST bump 0.50 m @15 m/s: COM-above-ground min 0.863 max 1.857 (rest 1.287), pitch -3.0..8.1 deg, |vy| max 2.17, speed after 15.00
+[info ] collision: 2 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.0]
+[info ] VEHTEST drop 10 m: first-contact vy -17.14 m/s, min COM height 0.600 m, settled 1.287 m, reversals 2
+[info ] collision: 2 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.0]
+[info ] VEHTEST hover jump (standing, 0.0 m/s): vy after 12.00 m/s, apex +3.803 m over rest, max nose-up 7.6 deg, horizontal kept 0.00 m/s
+[info ] collision: 2 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.0]
+[info ] VEHTEST hover jump (moving, 15.0 m/s): vy after 12.00 m/s, apex +3.807 m over rest, max nose-up 7.6 deg, horizontal kept 15.00 m/s
+[info ] collision: 2 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.0]
+[info ] VEHTEST dash (stick right): tick1 fwd 14.91 lat 7.53 | tick2 fwd 29.82 lat 0.08 | t=0.47 s fwd 30.00 lat -0.01 vy -0.00 | exit fwd 15.00 lat -0.01
+[info ] collision: 2 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.0]
+[info ] VEHTEST drift turn t=0.15 s: yaw 90.0 deg, travel heading 0.2 deg, speed 26.89 (start 27.24)
+[info ] VEHTEST drift turn t=0.30 s: yaw 90.0 deg, travel heading 1.3 deg, speed 25.69 (start 27.24)
+[info ] VEHTEST drift turn t=0.45 s: yaw 90.0 deg, travel heading 4.6 deg, speed 23.21 (start 27.24)
+[info ] VEHTEST drift turn t=0.60 s: yaw 90.0 deg, travel heading 11.9 deg, speed 19.59 (start 27.24)
+[info ] VEHTEST drift turn t=0.75 s: yaw 90.0 deg, travel heading 22.5 deg, speed 16.42 (start 27.24)
+[info ] collision: 2 tris, grid 40x130 (cell 2.0m), bounds Y [0.0..0.0]
+[info ] VEHTEST boost jump: speed before 25.48, after: fwd 31.48 vy 13.68, pitch rate 1.80 rad/s

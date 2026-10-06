@@ -1,0 +1,51 @@
+== held_fire firing window: 2325 samples
+  100.0%  main
+  100.0%  __tmainCRTStartup
+  100.0%  [ntdll.dll]
+  100.0%  [KERNEL32.DLL]
+  100.0%  core::Application::run
+  81.3%  game::World::draw
+  81.1%  render::
+  42.2%  render::wfc::Pipeline::drawSubs
+  40.9%  render::wfc::Pipeline::draw
+  39.7%  render::wfc::Pipeline::drawDynamic
+  29.5%  game::Player::draw
+  29.5%  game::Character::draw
+  29.2%  game::CollisionWorld::segmentHit
+  28.5%  render::wfc::Pipeline::computeEnv
+  28.3%  std::__1::__function::__func<game::World::loadVerticalSlice
+  28.3%  std::__1::__function::__value_func<bool 
+  28.3%  std::__1::function<bool 
+  28.2%  std::__1::__invoke_result_impl<void, game::World::loadVerticalSlice
+  28.2%  bool std::__1::__invoke_void_return_wrapper<bool, false>::__call[abi:nqe230102]<game::World::loadVerticalSlice
+  28.2%  game::World::loadVerticalSlice
+  28.2%  bool std::__1::__invoke_r[abi:nqe230102]<bool, game::World::loadVerticalSlice
+  28.1%  game::WeaponFx::draw
+  -- segmentHit direct callers:
+  29.1%  game::CollisionWorld::segmentHit (Collision.cpp:150)
+   0.1%  game::World::loadVerticalSlice (World.cpp:159)
+== burst firing window: 273 samples
+  100.0%  main
+  100.0%  core::Application::run
+  100.0%  __tmainCRTStartup
+  100.0%  [ntdll.dll]
+  100.0%  [KERNEL32.DLL]
+  81.7%  game::World::draw
+  81.7%  render::
+  80.2%  render::wfc::Pipeline::drawDynamic
+  78.8%  render::wfc::Pipeline::programFor
+  56.4%  render::wfc::Pipeline::texture
+  52.0%  game::Player::draw
+  52.0%  game::Character::draw
+  37.0%  platform::decodeImage
+  37.0%  [KERNELBASE.dll]
+  23.1%  [atio6axx.dll]
+  22.3%  render::wfc::Pipeline::buildProgram
+  22.3%  render::wfc::
+  19.0%  std::__1::vector<unsigned char, std::__1::allocator<unsigned char>>::clear[abi:nqe230102]
+  19.0%  std::__1::vector<unsigned char, std::__1::allocator<unsigned char>>::resize[abi:nqe230102]
+  19.0%  std::__1::__split_buffer<unsigned char, std::__1::allocator<unsigned char>, std::__1::__split_buffer_pointer_layout>::__construct_at_end[abi:nqe230102]
+  19.0%  std::__1::vector<unsigned char, std::__1::allocator<unsigned char>>::__destroy_vector::operator
+  19.0%  std::__1::vector<unsigned char, std::__1::allocator<unsigned char>>::__base_destruct_at_end[abi:nqe230102]
+  -- segmentHit direct callers:
+   1.5%  game::CollisionWorld::segmentHit (Collision.cpp:150)

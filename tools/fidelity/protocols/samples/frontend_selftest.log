@@ -1,0 +1,11 @@
+[info ] SYNTHETIC VALIDATOR SELF-TEST INPUT - not product output
+[info ] FRONTEND screen=startup movie=TF_InitialStartup state=enter t=0.0
+[info ] FRONTEND screen=startup_logos movie=Logo_Activision state=enter t=5.0
+[info ] FRONTEND screen=main_menu movie=UI_GFxFrontEnd_p/FrontEnd_GFX state=enter t=12.0
+[info ] FRONTEND screen=multiplayer movie=UI_GFxLobbies_p/PartyLobby_GFX state=enter t=20.0
+[info ] FRONTEND select playlist=1 mode=TDM map=MP_IAC_Streets_Base_m
+[info ] FRONTEND load state=begin map=MP_IAC_Streets_Base_m movie=TF_LoadingScreen t=30.0
+[info ] FRONTEND screen=loading movie=TF_LoadingScreen state=enter t=30.0
+[info ] FRONTEND load state=end map=MP_IAC_Streets_Base_m movie=TF_LoadingScreen t=40.0
+[info ] FRONTEND screen=gameplay movie=UI_GFxHud_p/Hud_GFX state=enter t=40.0
+[info ] FRONTEND screen=title movie=UI_GFxFake_p/Invented_GFX state=enter t=50.0

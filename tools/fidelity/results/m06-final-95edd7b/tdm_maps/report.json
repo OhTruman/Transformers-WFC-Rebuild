@@ -1,0 +1,399 @@
+﻿{
+    "summary":  {
+                    "pass":  56,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  8,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "tdm.MP_IAC_Seed.lifecycle",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "frontend -\u003e TDM -\u003e MP_IAC_Seed -\u003e match -\u003e pause / resume -\u003e score-limit end -\u003e lobby: completed"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Seed.selection_reaches_owners",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Integration",
+                        "note":  "lobby selected mapId 501 (expected 501); frontend launch MP_IAC_Seed; Gameplay MP_IAC_Seed TDM; Systems audio level MP_IAC_Seed; render log lines naming the map 5"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Seed.match_rules",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "kills 5, deaths 5, respawn delays 4.98,4.98,4.98,4.98 s, end reason=score_limit winner=0 t=22 (gameplay reason Score); spawn TnTeamPlayerStart_15214"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Seed.return_to_lobby",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "lobby travel after the match keeps MapId 501 (selected 501)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Seed.robot_vehicle_boost",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "forms seen ROBOT/VEHICLE; boosting frames 77 (transform every 5 s, boost cycles, firing)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Seed.not_under_map",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fell out of the world (KillZ) 0; min y 4.4"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Seed.presented",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/Frontend",
+                        "note":  "in-game frame: near-black 2%, flat grey 0%; HUD movie opened 1; tdm_MP_IAC_Seed.png is the human check"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Seed.match_audio",
+                        "status":  "PASS",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "game-type music starts: BL_LVL_MP_MX.DM_START,BL_LVL_MP_MX.DM_END_AUTOBOTS_WIN; announcer lines played 0 (RE OV A5: DM_START, final stretch, DM_END_\u003cwinner\u003e)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Berth.lifecycle",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "frontend -\u003e TDM -\u003e MP_IAC_Berth -\u003e match -\u003e pause / resume -\u003e score-limit end -\u003e lobby: completed"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Berth.selection_reaches_owners",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Integration",
+                        "note":  "lobby selected mapId 502 (expected 502); frontend launch MP_IAC_Berth; Gameplay MP_IAC_Berth TDM; Systems audio level MP_IAC_Berth; render log lines naming the map 5"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Berth.match_rules",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "kills 5, deaths 5, respawn delays 4.98,4.98,4.98,4.98 s, end reason=score_limit winner=0 t=22 (gameplay reason Score); spawn TnTeamPlayerStart_11096"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Berth.return_to_lobby",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "lobby travel after the match keeps MapId 502 (selected 502)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Berth.robot_vehicle_boost",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "forms seen ROBOT/VEHICLE; boosting frames 108 (transform every 5 s, boost cycles, firing)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Berth.not_under_map",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fell out of the world (KillZ) 0; min y -11.83"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Berth.presented",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/Frontend",
+                        "note":  "in-game frame: near-black 0%, flat grey 1%; HUD movie opened 1; tdm_MP_IAC_Berth.png is the human check"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Berth.match_audio",
+                        "status":  "PASS",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "game-type music starts: BL_LVL_MP_MX.DM_START,BL_LVL_MP_MX.DM_END_AUTOBOTS_WIN; announcer lines played 0 (RE OV A5: DM_START, final stretch, DM_END_\u003cwinner\u003e)"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Complex.lifecycle",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "frontend -\u003e TDM -\u003e MP_UND_Complex -\u003e match -\u003e pause / resume -\u003e score-limit end -\u003e lobby: completed"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Complex.selection_reaches_owners",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Integration",
+                        "note":  "lobby selected mapId 503 (expected 503); frontend launch MP_UND_Complex; Gameplay MP_UND_Complex TDM; Systems audio level MP_UND_Complex; render log lines naming the map 5"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Complex.match_rules",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "kills 5, deaths 5, respawn delays 4.98,4.98,4.98,4.98 s, end reason=score_limit winner=0 t=22 (gameplay reason Score); spawn TnTeamPlayerStart_8712"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Complex.return_to_lobby",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "lobby travel after the match keeps MapId 503 (selected 503)"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Complex.robot_vehicle_boost",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "forms seen ROBOT/VEHICLE; boosting frames 83 (transform every 5 s, boost cycles, firing)"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Complex.not_under_map",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fell out of the world (KillZ) 0; min y 3.2"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Complex.presented",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/Frontend",
+                        "note":  "in-game frame: near-black 0%, flat grey 0%; HUD movie opened 1; tdm_MP_UND_Complex.png is the human check"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Complex.match_audio",
+                        "status":  "PASS",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "game-type music starts: BL_LVL_MP_MX.DM_START,BL_LVL_MP_MX.DM_END_AUTOBOTS_WIN; announcer lines played 0 (RE OV A5: DM_START, final stretch, DM_END_\u003cwinner\u003e)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Rust.lifecycle",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "frontend -\u003e TDM -\u003e MP_IAC_Rust -\u003e match -\u003e pause / resume -\u003e score-limit end -\u003e lobby: completed"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Rust.selection_reaches_owners",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Integration",
+                        "note":  "lobby selected mapId 504 (expected 504); frontend launch MP_IAC_Rust; Gameplay MP_IAC_Rust TDM; Systems audio level MP_IAC_Rust; render log lines naming the map 5"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Rust.match_rules",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "kills 5, deaths 5, respawn delays 4.98,4.98,4.98,4.98 s, end reason=score_limit winner=0 t=22 (gameplay reason Score); spawn TnTeamPlayerStart_15135"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Rust.return_to_lobby",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "lobby travel after the match keeps MapId 504 (selected 504)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Rust.robot_vehicle_boost",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "forms seen ROBOT/VEHICLE; boosting frames 97 (transform every 5 s, boost cycles, firing)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Rust.not_under_map",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fell out of the world (KillZ) 0; min y 24.88"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Rust.presented",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/Frontend",
+                        "note":  "in-game frame: near-black 2%, flat grey 0%; HUD movie opened 1; tdm_MP_IAC_Rust.png is the human check"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Rust.match_audio",
+                        "status":  "PASS",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "game-type music starts: BL_LVL_MP_MX.DM_START,BL_LVL_MP_MX.DM_END_AUTOBOTS_WIN; announcer lines played 0 (RE OV A5: DM_START, final stretch, DM_END_\u003cwinner\u003e)"
+                    },
+                    {
+                        "id":  "tdm.MP_ORB_Debris.lifecycle",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "frontend -\u003e TDM -\u003e MP_ORB_Debris -\u003e match -\u003e pause / resume -\u003e score-limit end -\u003e lobby: completed"
+                    },
+                    {
+                        "id":  "tdm.MP_ORB_Debris.selection_reaches_owners",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Integration",
+                        "note":  "lobby selected mapId 507 (expected 507); frontend launch MP_ORB_Debris; Gameplay MP_ORB_Debris TDM; Systems audio level MP_ORB_Debris; render log lines naming the map 29"
+                    },
+                    {
+                        "id":  "tdm.MP_ORB_Debris.match_rules",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "kills 5, deaths 5, respawn delays 4.98,4.98,4.98,4.98 s, end reason=score_limit winner=0 t=22 (gameplay reason Score); spawn TnTeamPlayerStart_9983"
+                    },
+                    {
+                        "id":  "tdm.MP_ORB_Debris.return_to_lobby",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "lobby travel after the match keeps MapId 507 (selected 507)"
+                    },
+                    {
+                        "id":  "tdm.MP_ORB_Debris.robot_vehicle_boost",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "forms seen ROBOT/VEHICLE; boosting frames 89 (transform every 5 s, boost cycles, firing)"
+                    },
+                    {
+                        "id":  "tdm.MP_ORB_Debris.not_under_map",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fell out of the world (KillZ) 0; min y 130.34"
+                    },
+                    {
+                        "id":  "tdm.MP_ORB_Debris.presented",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/Frontend",
+                        "note":  "in-game frame: near-black 1%, flat grey 0%; HUD movie opened 1; tdm_MP_ORB_Debris.png is the human check"
+                    },
+                    {
+                        "id":  "tdm.MP_ORB_Debris.match_audio",
+                        "status":  "PASS",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "game-type music starts: BL_LVL_MP_MX.DM_START,BL_LVL_MP_MX.DM_END_AUTOBOTS_WIN; announcer lines played 0 (RE OV A5: DM_START, final stretch, DM_END_\u003cwinner\u003e)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Streets.lifecycle",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "frontend -\u003e TDM -\u003e MP_IAC_Streets -\u003e match -\u003e pause / resume -\u003e score-limit end -\u003e lobby: completed"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Streets.selection_reaches_owners",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Integration",
+                        "note":  "lobby selected mapId 508 (expected 508); frontend launch MP_IAC_Streets; Gameplay MP_IAC_Streets TDM; Systems audio level MP_IAC_Streets; render log lines naming the map 5"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Streets.match_rules",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "kills 5, deaths 5, respawn delays 4.98,4.98,4.98,4.98 s, end reason=score_limit winner=0 t=22 (gameplay reason Score); spawn TnTeamPlayerStart_12481"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Streets.return_to_lobby",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "lobby travel after the match keeps MapId 508 (selected 508)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Streets.robot_vehicle_boost",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "forms seen ROBOT/VEHICLE; boosting frames 104 (transform every 5 s, boost cycles, firing)"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Streets.not_under_map",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fell out of the world (KillZ) 0; min y -721.7"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Streets.presented",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/Frontend",
+                        "note":  "in-game frame: near-black 6%, flat grey 0%; HUD movie opened 1; tdm_MP_IAC_Streets.png is the human check"
+                    },
+                    {
+                        "id":  "tdm.MP_IAC_Streets.match_audio",
+                        "status":  "PASS",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "game-type music starts: BL_LVL_MP_MX.DM_START,BL_LVL_MP_MX.DM_END_AUTOBOTS_WIN; announcer lines played 0 (RE OV A5: DM_START, final stretch, DM_END_\u003cwinner\u003e)"
+                    },
+                    {
+                        "id":  "tdm.MP_KON_Molten.lifecycle",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "frontend -\u003e TDM -\u003e MP_KON_Molten -\u003e match -\u003e pause / resume -\u003e score-limit end -\u003e lobby: completed"
+                    },
+                    {
+                        "id":  "tdm.MP_KON_Molten.selection_reaches_owners",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Integration",
+                        "note":  "lobby selected mapId 509 (expected 509); frontend launch MP_KON_Molten; Gameplay MP_KON_Molten TDM; Systems audio level MP_KON_Molten; render log lines naming the map 5"
+                    },
+                    {
+                        "id":  "tdm.MP_KON_Molten.match_rules",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "kills 5, deaths 5, respawn delays 4.98,4.98,4.98,4.98 s, end reason=score_limit winner=0 t=22 (gameplay reason Score); spawn TnTeamPlayerStart_701"
+                    },
+                    {
+                        "id":  "tdm.MP_KON_Molten.return_to_lobby",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "lobby travel after the match keeps MapId 509 (selected 509)"
+                    },
+                    {
+                        "id":  "tdm.MP_KON_Molten.robot_vehicle_boost",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "forms seen ROBOT/VEHICLE; boosting frames 76 (transform every 5 s, boost cycles, firing)"
+                    },
+                    {
+                        "id":  "tdm.MP_KON_Molten.not_under_map",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fell out of the world (KillZ) 0; min y -7.18"
+                    },
+                    {
+                        "id":  "tdm.MP_KON_Molten.presented",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/Frontend",
+                        "note":  "in-game frame: near-black 1%, flat grey 1%; HUD movie opened 1; tdm_MP_KON_Molten.png is the human check"
+                    },
+                    {
+                        "id":  "tdm.MP_KON_Molten.match_audio",
+                        "status":  "PASS",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "game-type music starts: BL_LVL_MP_MX.DM_START,BL_LVL_MP_MX.DM_END_AUTOBOTS_WIN; announcer lines played 0 (RE OV A5: DM_START, final stretch, DM_END_\u003cwinner\u003e)"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Gorge.lifecycle",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "frontend -\u003e TDM -\u003e MP_UND_Gorge -\u003e match -\u003e pause / resume -\u003e score-limit end -\u003e lobby: completed"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Gorge.selection_reaches_owners",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Integration",
+                        "note":  "lobby selected mapId 510 (expected 510); frontend launch MP_UND_Gorge; Gameplay MP_UND_Gorge TDM; Systems audio level MP_UND_Gorge; render log lines naming the map 5"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Gorge.match_rules",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "kills 5, deaths 5, respawn delays 4.98,4.98,4.98,4.98 s, end reason=score_limit winner=0 t=22 (gameplay reason Score); spawn TnTeamPlayerStart_3575"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Gorge.return_to_lobby",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "lobby travel after the match keeps MapId 510 (selected 510)"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Gorge.robot_vehicle_boost",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "forms seen ROBOT/VEHICLE; boosting frames 86 (transform every 5 s, boost cycles, firing)"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Gorge.not_under_map",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fell out of the world (KillZ) 0; min y -29.7"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Gorge.presented",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering/Frontend",
+                        "note":  "in-game frame: near-black 15%, flat grey 0%; HUD movie opened 1; tdm_MP_UND_Gorge.png is the human check"
+                    },
+                    {
+                        "id":  "tdm.MP_UND_Gorge.match_audio",
+                        "status":  "PASS",
+                        "owner":  "Systems/Gameplay",
+                        "note":  "game-type music starts: BL_LVL_MP_MX.DM_START,BL_LVL_MP_MX.DM_END_AUTOBOTS_WIN; announcer lines played 0 (RE OV A5: DM_START, final stretch, DM_END_\u003cwinner\u003e)"
+                    }
+                ]
+}

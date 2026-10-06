@@ -15,6 +15,7 @@ param(
     [string]$Merge = "",
     [string]$Name = "",
     [switch]$Exe,
+    [switch]$Measure,          # also build wfc_rebuild_prof / _observe / _count (-DWFC_BUILD_MEASURE=ON)
     [ValidateRange(1, 64)][int]$Jobs = 2,
     [string[]]$HarnessArgs = @()
 )
@@ -90,9 +91,9 @@ $ninjaExe = Join-Path $tc "ninja\ninja.exe"
 $env:PATH = "$clangDir;" + $env:PATH
 $build = Join-Path $dest "build"
 & $cmakeExe -S $dest -B $build -G Ninja "-DCMAKE_MAKE_PROGRAM=$ninjaExe" "-DCMAKE_BUILD_TYPE=Debug" `
-    "-DCMAKE_CXX_COMPILER=$clangDir\clang++.exe" | Out-Null
+    "-DCMAKE_CXX_COMPILER=$clangDir\clang++.exe" "-DWFC_BUILD_MEASURE=$(if ($Measure) { 'ON' } else { 'OFF' })" | Out-Null
 if ($LASTEXITCODE -ne 0) { throw "configure failed for $Ref" }
-$targets = @("wfc_fidelity") + $(if ($Exe) { @("wfc_rebuild") } else { @() })
+$targets = @("wfc_fidelity") + $(if ($Exe) { @("wfc_rebuild") } else { @() }) + $(if ($Measure) { @("wfc_rebuild_prof", "wfc_rebuild_observe", "wfc_rebuild_count") } else { @() })
 & $cmakeExe --build $build --parallel $Jobs --target @targets
 if ($LASTEXITCODE -ne 0) { throw "build failed for $Ref (harness may need updating for API changes on that ref)" }
 

@@ -1,0 +1,2484 @@
+﻿{
+    "summary":  {
+                    "pass":  192,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  168,
+                    "skip":  0
+                },
+    "results":  [
+                    {
+                        "id":  "audio_attach.stationary_transform.ran",
+                        "status":  "PASS",
+                        "measured":  58,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  0.89,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.GUNf_MVMNT_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_04.wav",
+                        "status":  "INFO",
+                        "measured":  0.87,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.FS_SERVO_BRUTE_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.MTL_CLICK_IDLE_FOLY_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.14,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.MTL_CLICK_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.AIR_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  1.11,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  1.01,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.GUNf_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.29,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.TRANS_OPTIMUS_TO_VEH_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  0.4,
+                        "unit":  "m",
+                        "note":  "cue BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.TRANS_OPTIMUS_TO_VEH.wav",
+                        "status":  "INFO",
+                        "measured":  0.29,
+                        "unit":  "m",
+                        "note":  "cue BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.MTL_CLICK_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.12,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.SERVO_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.14,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.AIR_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0.1,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.MECH_TRUCK_LAND_HEAVY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.04,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.MTL_CLICK_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.RELOAD_SERVO_MECH_05.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01|BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.FS_MTL_BOT_SMALL_AIR_05.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.AIR_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.WHSH_BOOST_FLARE_LR_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.AIR_SEMI_RELEASE_09.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.GUN_HAMMER_RATCHET_COCK.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.WHSH_BOOST_FINISH_01_LR.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.AUTO_OPTIMUS_IDLE_LR_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.stationary_transform.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.ran",
+                        "status":  "PASS",
+                        "measured":  81,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "PASS",
+                        "measured":  15.684,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 1 instance(s) follow the pawn (updated) while it moved 15.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.GUNf_MVMNT_03.wav",
+                        "status":  "PASS",
+                        "measured":  2.831,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END: 1 instance(s) follow the pawn (updated) while it moved 2.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.FS_MTL_BOT_LARGE_02.wav",
+                        "status":  "PASS",
+                        "measured":  9.505,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) follow the pawn (updated) while it moved 9.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.FS_MTL_BOT_LARGE_SERVO_05.wav",
+                        "status":  "PASS",
+                        "measured":  9.732,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_RUN_DEFAULT|BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD|BL_FS_LRG_BOT.FS_LAND_HIGH_FALL|BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01: 1 instance(s) follow the pawn (updated) while it moved 9.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.FS_MTL_BOT_LARGE_05.wav",
+                        "status":  "PASS",
+                        "measured":  9.828,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 2 instance(s) follow the pawn (updated) while it moved 9.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.FS_MTL_BOT_LARGE_SERVO_01.wav",
+                        "status":  "PASS",
+                        "measured":  9.344,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_RUN_DEFAULT|BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD|BL_FS_LRG_BOT.FS_LAND_HIGH_FALL|BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01: 1 instance(s) follow the pawn (updated) while it moved 9.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "PASS",
+                        "measured":  6.7,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) follow the pawn (updated) while it moved 6.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.GUNf_MVMNT_01.wav",
+                        "status":  "PASS",
+                        "measured":  6.474,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START: 1 instance(s) follow the pawn (updated) while it moved 6.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.TRANS_OPTIMUS_TO_VEH_SERVOS.wav",
+                        "status":  "PASS",
+                        "measured":  27.886,
+                        "unit":  "m",
+                        "note":  "cue BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) follow the pawn (updated) while it moved 27.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.TRANS_OPTIMUS_TO_VEH.wav",
+                        "status":  "PASS",
+                        "measured":  18.698,
+                        "unit":  "m",
+                        "note":  "cue BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) follow the pawn (updated) while it moved 18.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.MECH_TRUCK_LAND_HEAVY_02.wav",
+                        "status":  "PASS",
+                        "measured":  15.256,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) follow the pawn (updated) while it moved 15.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.WHSH_BOOST_FLARE_LR_03.wav",
+                        "status":  "PASS",
+                        "measured":  8.457,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) follow the pawn (updated) while it moved 8.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.AIR_SEMI_RELEASE_09.wav",
+                        "status":  "PASS",
+                        "measured":  6.322,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) follow the pawn (updated) while it moved 6.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.WHSH_BOOST_FINISH_01_LR.wav",
+                        "status":  "PASS",
+                        "measured":  4.977,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) follow the pawn (updated) while it moved 5.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  3.079,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 8 instance(s) follow the pawn (updated) while it moved 3.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  3.079,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 8 instance(s) follow the pawn (updated) while it moved 3.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.MECH_TIRE_SQUEAL_HEAVY_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0.172,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_TIRE_SQUEAL: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.moving_transform.wave.AUTO_OPTIMUS_IDLE_LR_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0.45,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 4 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.ran",
+                        "status":  "PASS",
+                        "measured":  91,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "PASS",
+                        "measured":  15.595,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 2 instance(s) follow the pawn (updated) while it moved 15.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.GUNf_MVMNT_03.wav",
+                        "status":  "PASS",
+                        "measured":  2.831,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END: 2 instance(s) follow the pawn (updated) while it moved 2.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.FS_MTL_BOT_LARGE_02.wav",
+                        "status":  "PASS",
+                        "measured":  9.505,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) follow the pawn (updated) while it moved 9.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.FS_MTL_BOT_LARGE_SERVO_05.wav",
+                        "status":  "PASS",
+                        "measured":  9.732,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_RUN_DEFAULT|BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD|BL_FS_LRG_BOT.FS_LAND_HIGH_FALL|BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01: 1 instance(s) follow the pawn (updated) while it moved 9.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.FS_MTL_BOT_LARGE_05.wav",
+                        "status":  "PASS",
+                        "measured":  9.494,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 2 instance(s) follow the pawn (updated) while it moved 9.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.FS_MTL_BOT_LARGE_SERVO_01.wav",
+                        "status":  "PASS",
+                        "measured":  9.044,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_RUN_DEFAULT|BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD|BL_FS_LRG_BOT.FS_LAND_HIGH_FALL|BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01: 1 instance(s) follow the pawn (updated) while it moved 9.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "PASS",
+                        "measured":  6.513,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 2 instance(s) follow the pawn (updated) while it moved 6.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.GUNf_MVMNT_01.wav",
+                        "status":  "PASS",
+                        "measured":  6.276,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START: 2 instance(s) follow the pawn (updated) while it moved 6.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.GUN_RIFLE_BOLT_ACTION.wav",
+                        "status":  "PASS",
+                        "measured":  5.27,
+                        "unit":  "m",
+                        "note":  "cue IDLE_02: 2 instance(s) follow the pawn (updated) while it moved 5.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_04.wav",
+                        "status":  "INFO",
+                        "measured":  0.471,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.FS_SERVO_BRUTE_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.05,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.MTL_CLICK_IDLE_FOLY_01.wav",
+                        "status":  "PASS",
+                        "measured":  2.81,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 5 instance(s) follow the pawn (updated) while it moved 2.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.MTL_CLICK_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  1.409,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 4 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.AIR_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  1.467,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 3 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.FS_MTL_BOT_LARGE_06.wav",
+                        "status":  "INFO",
+                        "measured":  1.231,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.MTL_CLICK_IDLE_FOLY_02.wav",
+                        "status":  "PASS",
+                        "measured":  3.257,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) follow the pawn (updated) while it moved 3.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.SERVO_IDLE_FOLY_02.wav",
+                        "status":  "PASS",
+                        "measured":  5.703,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) follow the pawn (updated) while it moved 5.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.AIR_IDLE_FOLY_04.wav",
+                        "status":  "PASS",
+                        "measured":  4.435,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) follow the pawn (updated) while it moved 4.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.178,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.FS_SERVO_BRUTE_02.wav",
+                        "status":  "PASS",
+                        "measured":  5.491,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) follow the pawn (updated) while it moved 5.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.MTL_CLICK_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.RELOAD_SERVO_MECH_05.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01|BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.FS_MTL_BOT_SMALL_AIR_04.wav",
+                        "status":  "INFO",
+                        "measured":  0.186,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.AIR_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.341,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.GUN_HAMMER_RATCHET_COCK.wav",
+                        "status":  "INFO",
+                        "measured":  0.333,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_03.wav",
+                        "status":  "PASS",
+                        "measured":  5.958,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) follow the pawn (updated) while it moved 6.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.robot_footsteps.wave.FS_MTL_BOT_LARGE_03.wav",
+                        "status":  "PASS",
+                        "measured":  5.476,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) follow the pawn (updated) while it moved 5.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.ran",
+                        "status":  "PASS",
+                        "measured":  61,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "PASS",
+                        "measured":  12.497,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 2 instance(s) follow the pawn (updated) while it moved 12.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.GUNf_MVMNT_03.wav",
+                        "status":  "PASS",
+                        "measured":  2.83,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END: 2 instance(s) follow the pawn (updated) while it moved 2.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.FS_MTL_BOT_LARGE_02.wav",
+                        "status":  "PASS",
+                        "measured":  10.734,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) follow the pawn (updated) while it moved 10.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.FS_MTL_BOT_LARGE_SERVO_05.wav",
+                        "status":  "PASS",
+                        "measured":  10.964,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_RUN_DEFAULT|BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD|BL_FS_LRG_BOT.FS_LAND_HIGH_FALL|BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01: 1 instance(s) follow the pawn (updated) while it moved 11.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.MTL_FOLEY_JUMP_MED_BOT_01.wav",
+                        "status":  "PASS",
+                        "measured":  7.988,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_JUMP: 1 instance(s) follow the pawn (updated) while it moved 8.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.WHSH_JET_BY_JUMPJETS.wav",
+                        "status":  "PASS",
+                        "measured":  9.03,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_JUMP: 1 instance(s) follow the pawn (updated) while it moved 9.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.FS_MTL_BOT_LARGE_LAND_04.wav",
+                        "status":  "PASS",
+                        "measured":  9.03,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_JUMP|BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD: 2 instance(s) follow the pawn (updated) while it moved 9.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "PASS",
+                        "measured":  3.09,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) follow the pawn (updated) while it moved 3.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.GUNf_MVMNT_01.wav",
+                        "status":  "PASS",
+                        "measured":  4.414,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START: 1 instance(s) follow the pawn (updated) while it moved 4.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.FS_MTL_BOT_LARGE_SERVO_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.256,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_RUN_DEFAULT|BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD|BL_FS_LRG_BOT.FS_LAND_HIGH_FALL|BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.FS_MTL_BOT_LARGE_GROAN_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.652,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD|BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.FS_MTL_BOT_LARGE_05.wav",
+                        "status":  "INFO",
+                        "measured":  0.34,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.FS_MTL_BOT_LARGE_06.wav",
+                        "status":  "INFO",
+                        "measured":  0.331,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.FS_SERVO_BRUTE_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.GUN_RIFLE_BOLT_ACTION.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.MTL_CLICK_IDLE_FOLY_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.MTL_CLICK_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.AIR_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.MTL_CLICK_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.SERVO_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.AIR_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.MTL_CLICK_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.RELOAD_SERVO_MECH_05.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01|BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.jump_land.wave.FS_MTL_BOT_SMALL_AIR_05.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.hover_move.ran",
+                        "status":  "PASS",
+                        "measured":  97,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.hover_move.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  38.857,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 19 instance(s) follow the pawn (updated) while it moved 38.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.hover_move.wave.AUTO_OPTIMUS_IDLE_LR_LP.wav",
+                        "status":  "INFO",
+                        "measured":  1.272,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 12 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.hover_move.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  38.857,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 17 instance(s) follow the pawn (updated) while it moved 38.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.hover_move.wave.MECH_TIRE_SQUEAL_HEAVY_LP.wav",
+                        "status":  "PASS",
+                        "measured":  37.236,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_TIRE_SQUEAL: 1 instance(s) follow the pawn (updated) while it moved 37.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.hover_move.wave.MECH_TANK_LAND_LIGHT_02.wav",
+                        "status":  "INFO",
+                        "measured":  1.095,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_HOVER_LAND_LIGHT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.boost.ran",
+                        "status":  "PASS",
+                        "measured":  192,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.AUTO_OPTIMUS_BOOST_START_LR.wav",
+                        "status":  "PASS",
+                        "measured":  27.643,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 6 instance(s) follow the pawn (updated) while it moved 27.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.WHSH_BOOST_FLARE_LR_03.wav",
+                        "status":  "PASS",
+                        "measured":  15.504,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START|BL_TRANSFORM.OPTIMUS_BOT2VEH: 6 instance(s) follow the pawn (updated) while it moved 15.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.SYNTH_ENGINE_ACCEL.wav",
+                        "status":  "PASS",
+                        "measured":  12.799,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START: 6 instance(s) follow the pawn (updated) while it moved 12.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.SYNTH_AIR_RELEASE_04.wav",
+                        "status":  "PASS",
+                        "measured":  2.537,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_DRIVE_JUMP_START: 6 instance(s) follow the pawn (updated) while it moved 2.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.MECH_TRUCK_LAND_HEAVY_02.wav",
+                        "status":  "PASS",
+                        "measured":  12.139,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) follow the pawn (updated) while it moved 12.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.AIR_SEMI_RELEASE_09.wav",
+                        "status":  "PASS",
+                        "measured":  26.04,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 3 instance(s) follow the pawn (updated) while it moved 26.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.SYNTH_AIR_RELEASE_08.wav",
+                        "status":  "PASS",
+                        "measured":  10.988,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 2 instance(s) follow the pawn (updated) while it moved 11.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.JET_TURBO_WHINE_LP.wav",
+                        "status":  "PASS",
+                        "measured":  26.988,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 2 instance(s) follow the pawn (updated) while it moved 27.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  26.988,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 38 instance(s) follow the pawn (updated) while it moved 27.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.MECH_OPTIMUS_TIRE_NOISE_02_LP.wav",
+                        "status":  "PASS",
+                        "measured":  26.988,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 2 instance(s) follow the pawn (updated) while it moved 27.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.AUTO_OPTIMUS_ENGINE_BOOST_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  26.833,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 2 instance(s) follow the pawn (updated) while it moved 26.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  26.833,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 38 instance(s) follow the pawn (updated) while it moved 26.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.MECH_TIRE_SQUEAL_HEAVY_LP.wav",
+                        "status":  "PASS",
+                        "measured":  23.134,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_TIRE_SQUEAL: 2 instance(s) follow the pawn (updated) while it moved 23.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.WHSH_BOOST_FINISH_01_LR.wav",
+                        "status":  "PASS",
+                        "measured":  2.319,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|BL_TRANSFORM.OPTIMUS_BOT2VEH: 5 instance(s) follow the pawn (updated) while it moved 2.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.WHSH_BOOST_FINISH_01_LSRS.wav",
+                        "status":  "INFO",
+                        "measured":  1.749,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END: 5 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.SYNTH_AIR_RELEASE_07.wav",
+                        "status":  "INFO",
+                        "measured":  1.688,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|VEH_OPTIMUS_RAM_NITRO_START: 3 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.AUTO_OPTIMUS_BOOST_END_LR.wav",
+                        "status":  "PASS",
+                        "measured":  14.271,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|VEH_OPTIMUS_RAM_BOOST_START: 5 instance(s) follow the pawn (updated) while it moved 14.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.AUTO_OPTIMUS_IDLE_LR_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0.29,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 16 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.MECH_TANK_LAND_LIGHT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.482,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_HOVER_LAND_LIGHT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.SYNTH_AIR_RELEASE_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.52,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.MECH_TRUCK_LAND_HEAVY_01.wav",
+                        "status":  "INFO",
+                        "measured":  1.123,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.boost.wave.MECH_TRUCK_LAND_HEAVY_03.wav",
+                        "status":  "PASS",
+                        "measured":  13.076,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 2 instance(s) follow the pawn (updated) while it moved 13.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.dash.ran",
+                        "status":  "PASS",
+                        "measured":  119,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  54.169,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 27 instance(s) follow the pawn (updated) while it moved 54.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.AUTO_OPTIMUS_IDLE_LR_LP.wav",
+                        "status":  "INFO",
+                        "measured":  1.278,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 14 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  54.169,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 27 instance(s) follow the pawn (updated) while it moved 54.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.MECH_TIRE_SQUEAL_HEAVY_LP.wav",
+                        "status":  "PASS",
+                        "measured":  52.354,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_TIRE_SQUEAL: 1 instance(s) follow the pawn (updated) while it moved 52.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.WHSH_BOOST_FLARE_LR_03.wav",
+                        "status":  "PASS",
+                        "measured":  26.199,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) follow the pawn (updated) while it moved 26.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.SYNTH_AIR_RELEASE_08.wav",
+                        "status":  "PASS",
+                        "measured":  17.211,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 1 instance(s) follow the pawn (updated) while it moved 17.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.AUTO_OPTIMUS_BOOST_START_LR.wav",
+                        "status":  "PASS",
+                        "measured":  31.362,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 1 instance(s) follow the pawn (updated) while it moved 31.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.MECH_TRANS_RAM_ACTIVATE.wav",
+                        "status":  "PASS",
+                        "measured":  18.422,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 1 instance(s) follow the pawn (updated) while it moved 18.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.dash.wave.AUTO_OPTIMUS_BOOST_END_LR.wav",
+                        "status":  "PASS",
+                        "measured":  21.329,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|VEH_OPTIMUS_RAM_BOOST_START: 1 instance(s) follow the pawn (updated) while it moved 21.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.ran",
+                        "status":  "PASS",
+                        "measured":  220,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.AUTO_OPTIMUS_BOOST_START_LR.wav",
+                        "status":  "PASS",
+                        "measured":  34.957,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 8 instance(s) follow the pawn (updated) while it moved 35.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.WHSH_BOOST_FLARE_LR_03.wav",
+                        "status":  "PASS",
+                        "measured":  15.504,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START|BL_TRANSFORM.OPTIMUS_BOT2VEH: 8 instance(s) follow the pawn (updated) while it moved 15.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.SYNTH_ENGINE_ACCEL.wav",
+                        "status":  "PASS",
+                        "measured":  12.799,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START: 8 instance(s) follow the pawn (updated) while it moved 12.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.SYNTH_AIR_RELEASE_04.wav",
+                        "status":  "PASS",
+                        "measured":  2.537,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_DRIVE_JUMP_START: 8 instance(s) follow the pawn (updated) while it moved 2.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.MECH_TRUCK_LAND_HEAVY_02.wav",
+                        "status":  "PASS",
+                        "measured":  22.412,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 3 instance(s) follow the pawn (updated) while it moved 22.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.AIR_SEMI_RELEASE_09.wav",
+                        "status":  "PASS",
+                        "measured":  26.04,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 5 instance(s) follow the pawn (updated) while it moved 26.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.SYNTH_AIR_RELEASE_08.wav",
+                        "status":  "PASS",
+                        "measured":  10.988,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 3 instance(s) follow the pawn (updated) while it moved 11.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.JET_TURBO_WHINE_LP.wav",
+                        "status":  "PASS",
+                        "measured":  34.335,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 2 instance(s) follow the pawn (updated) while it moved 34.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  34.335,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 39 instance(s) follow the pawn (updated) while it moved 34.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.MECH_OPTIMUS_TIRE_NOISE_02_LP.wav",
+                        "status":  "PASS",
+                        "measured":  34.335,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 2 instance(s) follow the pawn (updated) while it moved 34.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.AUTO_OPTIMUS_ENGINE_BOOST_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  34.18,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 2 instance(s) follow the pawn (updated) while it moved 34.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  34.18,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 39 instance(s) follow the pawn (updated) while it moved 34.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.MECH_TIRE_SQUEAL_HEAVY_LP.wav",
+                        "status":  "PASS",
+                        "measured":  35.492,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_TIRE_SQUEAL: 2 instance(s) follow the pawn (updated) while it moved 35.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.WHSH_BOOST_FINISH_01_LR.wav",
+                        "status":  "PASS",
+                        "measured":  2.319,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|BL_TRANSFORM.OPTIMUS_BOT2VEH: 5 instance(s) follow the pawn (updated) while it moved 2.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.WHSH_BOOST_FINISH_01_LSRS.wav",
+                        "status":  "INFO",
+                        "measured":  1.749,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END: 5 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.SYNTH_AIR_RELEASE_07.wav",
+                        "status":  "INFO",
+                        "measured":  1.688,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|VEH_OPTIMUS_RAM_NITRO_START: 3 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.AUTO_OPTIMUS_BOOST_END_LR.wav",
+                        "status":  "PASS",
+                        "measured":  14.271,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|VEH_OPTIMUS_RAM_BOOST_START: 5 instance(s) follow the pawn (updated) while it moved 14.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.AUTO_OPTIMUS_IDLE_LR_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0.29,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 16 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.MECH_TANK_LAND_LIGHT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.482,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_HOVER_LAND_LIGHT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.SYNTH_AIR_RELEASE_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.811,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END: 3 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.MECH_TRANS_RAM_ACTIVATE.wav",
+                        "status":  "INFO",
+                        "measured":  0.899,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.MECH_TRUCK_LAND_HEAVY_01.wav",
+                        "status":  "INFO",
+                        "measured":  1.123,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.MECH_TRUCK_LAND_HEAVY_03.wav",
+                        "status":  "PASS",
+                        "measured":  6.529,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) follow the pawn (updated) while it moved 6.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.RELOAD_BOLT_07.wav",
+                        "status":  "PASS",
+                        "measured":  3.977,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY|BL_HUD_INTERFACE.HEALTH_PU_AMMO: 2 instance(s) follow the pawn (updated) while it moved 4.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.nitro.wave.TRANS_NULLRAY_EQUIP_SLIDE.wav",
+                        "status":  "PASS",
+                        "measured":  4.863,
+                        "unit":  "m",
+                        "note":  "cue BL_HUD_INTERFACE.HEALTH_PU_AMMO: 1 instance(s) follow the pawn (updated) while it moved 4.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.ran",
+                        "status":  "PASS",
+                        "measured":  149,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  10.721,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 44 instance(s) follow the pawn (updated) while it moved 10.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.AUTO_OPTIMUS_IDLE_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  5.926,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 23 instance(s) follow the pawn (updated) while it moved 5.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  10.721,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 42 instance(s) follow the pawn (updated) while it moved 10.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.MECH_TIRE_SQUEAL_HEAVY_LP.wav",
+                        "status":  "PASS",
+                        "measured":  9.048,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_TIRE_SQUEAL: 2 instance(s) follow the pawn (updated) while it moved 9.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.SYNTH_AIR_RELEASE_04.wav",
+                        "status":  "PASS",
+                        "measured":  8.619,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_DRIVE_JUMP_START: 1 instance(s) follow the pawn (updated) while it moved 8.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.TANK_JUMP_LR.wav",
+                        "status":  "PASS",
+                        "measured":  9.563,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_JUMP_START: 1 instance(s) follow the pawn (updated) while it moved 9.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.AUTO_OPTIMUS_JUMP_LR.wav",
+                        "status":  "PASS",
+                        "measured":  9.563,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_JUMP_START: 1 instance(s) follow the pawn (updated) while it moved 9.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.MECH_TANK_LAND_LIGHT_01.wav",
+                        "status":  "PASS",
+                        "measured":  4.046,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_HOVER_LAND_LIGHT: 1 instance(s) follow the pawn (updated) while it moved 4.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_jump.wave.MECH_TANK_LAND_LIGHT_03.wav",
+                        "status":  "INFO",
+                        "measured":  1.67,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_HOVER_LAND_LIGHT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.ran",
+                        "status":  "PASS",
+                        "measured":  368,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_ION_BLASTER_HEAD.wav",
+                        "status":  "PASS",
+                        "measured":  6.439,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 68 instance(s) follow the pawn (updated) while it moved 6.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_SHELL_SLUG_DROP_CONCRT_03.wav",
+                        "status":  "PASS",
+                        "measured":  3.737,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 16 instance(s) follow the pawn (updated) while it moved 3.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_SHELL_SLUG_DROP_CONCRT_01.wav",
+                        "status":  "PASS",
+                        "measured":  3.734,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 16 instance(s) follow the pawn (updated) while it moved 3.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_HANDCANNON_SHOOT_LR_01.wav",
+                        "status":  "PASS",
+                        "measured":  6.466,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 67 instance(s) follow the pawn (updated) while it moved 6.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.FS_MTL_BOT_LARGE_01.wav",
+                        "status":  "PASS",
+                        "measured":  9.046,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 2 instance(s) follow the pawn (updated) while it moved 9.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_SHELL_SLUG_DROP_CONCRT_02.wav",
+                        "status":  "PASS",
+                        "measured":  5.51,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 21 instance(s) follow the pawn (updated) while it moved 5.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_SHELL_SLUG_DROP_CONCRT_04.wav",
+                        "status":  "PASS",
+                        "measured":  6.362,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 19 instance(s) follow the pawn (updated) while it moved 6.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.FS_MTL_BOT_LARGE_04.wav",
+                        "status":  "PASS",
+                        "measured":  9.041,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) follow the pawn (updated) while it moved 9.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.FS_MTL_BOT_LARGE_SERVO_04.wav",
+                        "status":  "PASS",
+                        "measured":  8.121,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_RUN_DEFAULT|BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD|BL_FS_LRG_BOT.FS_LAND_HIGH_FALL|BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01: 1 instance(s) follow the pawn (updated) while it moved 8.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.LOW_AMMO_WARNING_01.wav",
+                        "status":  "INFO",
+                        "measured":  1.521,
+                        "unit":  "m",
+                        "note":  "cue SHOOT_LOW_AMMO|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY: 6 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_03.wav",
+                        "status":  "INFO",
+                        "measured":  0.471,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.FS_SERVO_BRUTE_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.07,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_SERVO_MECH_05.wav",
+                        "status":  "INFO",
+                        "measured":  0.04,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01|BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_AIR_RELEASE_THUMP.wav",
+                        "status":  "INFO",
+                        "measured":  0.04,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_DW2_REDEEM_RELOAD_START.wav",
+                        "status":  "INFO",
+                        "measured":  0.07,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_ION_BLASTER_TAIL.wav",
+                        "status":  "INFO",
+                        "measured":  1.921,
+                        "unit":  "m",
+                        "note":  "cue SHOOT_TAIL: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_FOLEY_MG_SERVO_MTL_SYNTH_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.478,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_SYNTH_BUBBLE.wav",
+                        "status":  "INFO",
+                        "measured":  1.768,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_MTL_SCRAPE_03.wav",
+                        "status":  "INFO",
+                        "measured":  0.11,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_CLICK_IDLE_FOLY_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.418,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 3 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_CLICK_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  0.136,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 3 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.SERVO_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  1.243,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.AIR_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  1.287,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.SERVO_IDLE_FOLY_01.wav",
+                        "status":  "INFO",
+                        "measured":  1.414,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_BOLT_07.wav",
+                        "status":  "INFO",
+                        "measured":  0.462,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY|BL_HUD_INTERFACE.HEALTH_PU_AMMO: 4 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.FS_MTL_BOT_LARGE_05.wav",
+                        "status":  "INFO",
+                        "measured":  1.348,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_RIFLE_CLIP_RELOAD.wav",
+                        "status":  "INFO",
+                        "measured":  1.129,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.RELOAD_FLANGE_02.wav",
+                        "status":  "INFO",
+                        "measured":  1.3,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_CLICK_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.613,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.SERVO_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.72,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.AIR_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0.408,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.FS_MTL_BOT_LARGE_06.wav",
+                        "status":  "INFO",
+                        "measured":  0.366,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.FS_SERVO_BRUTE_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.MTL_CLICK_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.FS_MTL_BOT_SMALL_AIR_05.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.AIR_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.firing_moving.wave.GUN_HAMMER_RATCHET_COCK.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.ran",
+                        "status":  "PASS",
+                        "measured":  59,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.GUNf_MVMNT_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.FS_SERVO_BRUTE_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.MTL_CLICK_IDLE_FOLY_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 3 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.MTL_CLICK_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.AIR_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.GUNf_MVMNT_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.MTL_FOLY_FS_BOT_MVMNT_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_SCUFF_DEFAULT|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.GUNf_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.MTL_CLICK_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.SERVO_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.AIR_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.MTL_CLICK_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.RELOAD_SERVO_MECH_05.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01|BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.FS_MTL_BOT_SMALL_AIR_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.AIR_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.GUN_RIFLE_BOLT_ACTION.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.GUN_HAMMER_RATCHET_COCK.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.GUNf_MVMNT_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.fine_aim.wave.MTL_FOLY_FS_BOT_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_SCUFF_DEFAULT|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.ran",
+                        "status":  "PASS",
+                        "measured":  1080,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.GUN_ION_BLASTER_HEAD.wav",
+                        "status":  "PASS",
+                        "measured":  19.01,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 200 instance(s) follow the pawn (updated) while it moved 19.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_SHELL_SLUG_DROP_CONCRT_03.wav",
+                        "status":  "PASS",
+                        "measured":  6.998,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 60 instance(s) follow the pawn (updated) while it moved 7.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_SHELL_SLUG_DROP_CONCRT_01.wav",
+                        "status":  "PASS",
+                        "measured":  6.538,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 56 instance(s) follow the pawn (updated) while it moved 6.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.GUN_HANDCANNON_SHOOT_LR_01.wav",
+                        "status":  "PASS",
+                        "measured":  33.525,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 199 instance(s) follow the pawn (updated) while it moved 33.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_MTL_BOT_LARGE_01.wav",
+                        "status":  "PASS",
+                        "measured":  9.095,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) follow the pawn (updated) while it moved 9.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_SHELL_SLUG_DROP_CONCRT_02.wav",
+                        "status":  "PASS",
+                        "measured":  12.11,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 54 instance(s) follow the pawn (updated) while it moved 12.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_SHELL_SLUG_DROP_CONCRT_04.wav",
+                        "status":  "PASS",
+                        "measured":  6.535,
+                        "unit":  "m",
+                        "note":  "cue SHOOT|SHOOT_LOW_AMMO: 46 instance(s) follow the pawn (updated) while it moved 6.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_MTL_BOT_LARGE_04.wav",
+                        "status":  "PASS",
+                        "measured":  8.147,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 4 instance(s) follow the pawn (updated) while it moved 8.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_MTL_BOT_LARGE_02.wav",
+                        "status":  "PASS",
+                        "measured":  7.927,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 5 instance(s) follow the pawn (updated) while it moved 7.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.LOW_AMMO_WARNING_01.wav",
+                        "status":  "PASS",
+                        "measured":  5.603,
+                        "unit":  "m",
+                        "note":  "cue SHOOT_LOW_AMMO|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY: 24 instance(s) follow the pawn (updated) while it moved 5.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.RELOAD_SERVO_MECH_05.wav",
+                        "status":  "PASS",
+                        "measured":  5.364,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01|BL_FOLY_IDLES.OPTIMUS_IDLE: 11 instance(s) follow the pawn (updated) while it moved 5.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.RELOAD_AIR_RELEASE_THUMP.wav",
+                        "status":  "PASS",
+                        "measured":  7.694,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01: 3 instance(s) follow the pawn (updated) while it moved 7.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.GUN_DW2_REDEEM_RELOAD_START.wav",
+                        "status":  "PASS",
+                        "measured":  8.39,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01: 3 instance(s) follow the pawn (updated) while it moved 8.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.GUN_ION_BLASTER_TAIL.wav",
+                        "status":  "PASS",
+                        "measured":  22.641,
+                        "unit":  "m",
+                        "note":  "cue SHOOT_TAIL: 4 instance(s) follow the pawn (updated) while it moved 22.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.GUN_FOLEY_MG_SERVO_MTL_SYNTH_02.wav",
+                        "status":  "PASS",
+                        "measured":  12.565,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 3 instance(s) follow the pawn (updated) while it moved 12.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.RELOAD_SYNTH_BUBBLE.wav",
+                        "status":  "PASS",
+                        "measured":  21.279,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 3 instance(s) follow the pawn (updated) while it moved 21.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.RELOAD_MTL_SCRAPE_03.wav",
+                        "status":  "PASS",
+                        "measured":  5.595,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 3 instance(s) follow the pawn (updated) while it moved 5.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.SERVO_IDLE_FOLY_04.wav",
+                        "status":  "PASS",
+                        "measured":  10.241,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 3 instance(s) follow the pawn (updated) while it moved 10.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.SERVO_IDLE_FOLY_01.wav",
+                        "status":  "PASS",
+                        "measured":  10.242,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 3 instance(s) follow the pawn (updated) while it moved 10.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.RELOAD_BOLT_07.wav",
+                        "status":  "PASS",
+                        "measured":  3.518,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|FOLEY.SHOOT_DRY_FIRE_ELECTRICITY|BL_HUD_INTERFACE.HEALTH_PU_AMMO: 12 instance(s) follow the pawn (updated) while it moved 3.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.GUN_RIFLE_CLIP_RELOAD.wav",
+                        "status":  "PASS",
+                        "measured":  7.464,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 3 instance(s) follow the pawn (updated) while it moved 7.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.RELOAD_FLANGE_02.wav",
+                        "status":  "PASS",
+                        "measured":  10.245,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02: 3 instance(s) follow the pawn (updated) while it moved 10.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_04.wav",
+                        "status":  "PASS",
+                        "measured":  3.115,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 3 instance(s) follow the pawn (updated) while it moved 3.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_SERVO_BRUTE_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.273,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 5 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_CLICK_IDLE_FOLY_01.wav",
+                        "status":  "INFO",
+                        "measured":  1.991,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 17 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_CLICK_IDLE_FOLY_03.wav",
+                        "status":  "PASS",
+                        "measured":  2.562,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 17 instance(s) follow the pawn (updated) while it moved 2.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.091,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.AIR_IDLE_FOLY_03.wav",
+                        "status":  "PASS",
+                        "measured":  6.256,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 8 instance(s) follow the pawn (updated) while it moved 6.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_CLICK_IDLE_FOLY_02.wav",
+                        "status":  "PASS",
+                        "measured":  2.432,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 8 instance(s) follow the pawn (updated) while it moved 2.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.SERVO_IDLE_FOLY_02.wav",
+                        "status":  "PASS",
+                        "measured":  3.647,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 8 instance(s) follow the pawn (updated) while it moved 3.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.AIR_IDLE_FOLY_04.wav",
+                        "status":  "PASS",
+                        "measured":  15.687,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 8 instance(s) follow the pawn (updated) while it moved 15.7 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_CLICK_IDLE_FOLY_04.wav",
+                        "status":  "PASS",
+                        "measured":  2.1,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 8 instance(s) follow the pawn (updated) while it moved 2.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_MTL_BOT_SMALL_AIR_04.wav",
+                        "status":  "PASS",
+                        "measured":  9.776,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 5 instance(s) follow the pawn (updated) while it moved 9.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_MTL_BOT_LARGE_03.wav",
+                        "status":  "PASS",
+                        "measured":  8.618,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 4 instance(s) follow the pawn (updated) while it moved 8.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.AIR_IDLE_FOLY_02.wav",
+                        "status":  "PASS",
+                        "measured":  9.78,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 7 instance(s) follow the pawn (updated) while it moved 9.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.GUN_HAMMER_RATCHET_COCK.wav",
+                        "status":  "PASS",
+                        "measured":  8.395,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 7 instance(s) follow the pawn (updated) while it moved 8.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_03.wav",
+                        "status":  "PASS",
+                        "measured":  2.281,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) follow the pawn (updated) while it moved 2.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_SERVO_BRUTE_02.wav",
+                        "status":  "INFO",
+                        "measured":  1.185,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 4 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_MTL_BOT_SMALL_AIR_05.wav",
+                        "status":  "INFO",
+                        "measured":  1.298,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 3 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_MTL_BOT_LARGE_05.wav",
+                        "status":  "INFO",
+                        "measured":  1.96,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.292,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_MTL_BOT_LARGE_SERVO_01.wav",
+                        "status":  "PASS",
+                        "measured":  9.313,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_RUN_DEFAULT|BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD|BL_FS_LRG_BOT.FS_LAND_HIGH_FALL|BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01: 2 instance(s) follow the pawn (updated) while it moved 9.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.TRANS_ION_UNEQUIP_SERVOS.wav",
+                        "status":  "PASS",
+                        "measured":  13.858,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_02|IDLE_01|IDLE_02: 3 instance(s) follow the pawn (updated) while it moved 13.9 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.GUNf_MVMNT_03.wav",
+                        "status":  "PASS",
+                        "measured":  3.35,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_END: 3 instance(s) follow the pawn (updated) while it moved 3.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.TRANS_ION_EQUIP_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  1.772,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01: 3 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.GUNf_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.64,
+                        "unit":  "m",
+                        "note":  "cue IDLE_01|BL_WPN_GUN_PULSE_RIFLE.FINE_AIM_START: 3 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.GUN_RIFLE_BOLT_ACTION.wav",
+                        "status":  "PASS",
+                        "measured":  4.829,
+                        "unit":  "m",
+                        "note":  "cue IDLE_02: 3 instance(s) follow the pawn (updated) while it moved 4.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_MTL_BOT_LARGE_06.wav",
+                        "status":  "PASS",
+                        "measured":  2.421,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_WALK_DEFAULT|BL_FS_LRG_BOT.FS_RUN_DEFAULT: 1 instance(s) follow the pawn (updated) while it moved 2.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.sustained_fire.wave.FS_MTL_BOT_LARGE_SERVO_02.wav",
+                        "status":  "PASS",
+                        "measured":  2.421,
+                        "unit":  "m",
+                        "note":  "cue BL_FS_LRG_BOT.FS_RUN_DEFAULT|BL_FS_LRG_BOT.FS_LAND_DEFAULT|BL_FS_LRG_BOT.FS_LAND_HARD|BL_FS_LRG_BOT.FS_LAND_HIGH_FALL|BL_FS_LRG_BOT.FOLEY_FS_GROAN_SERVO_01: 1 instance(s) follow the pawn (updated) while it moved 2.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.ran",
+                        "status":  "PASS",
+                        "measured":  215,
+                        "note":  "positional instances analysed (exit 0)"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.AUTO_OPTIMUS_BOOST_START_LR.wav",
+                        "status":  "PASS",
+                        "measured":  12.041,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 4 instance(s) follow the pawn (updated) while it moved 12.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.WHSH_BOOST_FLARE_LR_03.wav",
+                        "status":  "PASS",
+                        "measured":  12.041,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START|BL_TRANSFORM.OPTIMUS_BOT2VEH: 4 instance(s) follow the pawn (updated) while it moved 12.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.SYNTH_ENGINE_ACCEL.wav",
+                        "status":  "PASS",
+                        "measured":  12.041,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START: 4 instance(s) follow the pawn (updated) while it moved 12.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.SYNTH_AIR_RELEASE_04.wav",
+                        "status":  "PASS",
+                        "measured":  2.537,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_DRIVE_JUMP_START: 4 instance(s) follow the pawn (updated) while it moved 2.5 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MECH_TRUCK_LAND_HEAVY_02.wav",
+                        "status":  "PASS",
+                        "measured":  12.142,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 2 instance(s) follow the pawn (updated) while it moved 12.1 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.AIR_SEMI_RELEASE_09.wav",
+                        "status":  "PASS",
+                        "measured":  12.241,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 2 instance(s) follow the pawn (updated) while it moved 12.2 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.SYNTH_AIR_RELEASE_08.wav",
+                        "status":  "PASS",
+                        "measured":  10.988,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_START|VEH_OPTIMUS_RAM_NITRO_START|VEH_OPTIMUS_RAM_BOOST_START: 1 instance(s) follow the pawn (updated) while it moved 11.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.JET_TURBO_WHINE_LP.wav",
+                        "status":  "PASS",
+                        "measured":  10.8,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 1 instance(s) follow the pawn (updated) while it moved 10.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.SYNTH_ENERGY_MOD_PAN_LP.wav",
+                        "status":  "PASS",
+                        "measured":  10.8,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 48 instance(s) follow the pawn (updated) while it moved 10.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MECH_OPTIMUS_TIRE_NOISE_02_LP.wav",
+                        "status":  "PASS",
+                        "measured":  10.8,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 1 instance(s) follow the pawn (updated) while it moved 10.8 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.AUTO_OPTIMUS_ENGINE_BOOST_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  10.604,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP: 1 instance(s) follow the pawn (updated) while it moved 10.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav",
+                        "status":  "PASS",
+                        "measured":  10.604,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_LOOP|VEH_OPTIMUS_DRIVE_ONLOAD|VEH_OPTIMUS_DRIVE_OFFLOAD: 48 instance(s) follow the pawn (updated) while it moved 10.6 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MECH_TIRE_SQUEAL_HEAVY_LP.wav",
+                        "status":  "PASS",
+                        "measured":  10.386,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_TIRE_SQUEAL: 1 instance(s) follow the pawn (updated) while it moved 10.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.WHSH_BOOST_FINISH_01_LR.wav",
+                        "status":  "PASS",
+                        "measured":  2.352,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|BL_TRANSFORM.OPTIMUS_BOT2VEH: 4 instance(s) follow the pawn (updated) while it moved 2.4 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.WHSH_BOOST_FINISH_01_LSRS.wav",
+                        "status":  "PASS",
+                        "measured":  2.034,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END: 4 instance(s) follow the pawn (updated) while it moved 2.0 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.SYNTH_AIR_RELEASE_07.wav",
+                        "status":  "INFO",
+                        "measured":  1.972,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|VEH_OPTIMUS_RAM_NITRO_START: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.AUTO_OPTIMUS_BOOST_END_LR.wav",
+                        "status":  "PASS",
+                        "measured":  2.252,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END|VEH_OPTIMUS_RAM_BOOST_START: 4 instance(s) follow the pawn (updated) while it moved 2.3 m"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.AUTO_OPTIMUS_IDLE_LR_LP.wav",
+                        "status":  "INFO",
+                        "measured":  0.68,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_DRIVE_OFFLOAD|VEH_OPTIMUS_DRIVE_JUMP_LOOP: 23 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MECH_TANK_LAND_LIGHT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.491,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_HOVER_LAND_LIGHT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.SYNTH_AIR_RELEASE_02.wav",
+                        "status":  "INFO",
+                        "measured":  0.622,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_BOOST_END: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MECH_TRUCK_LAND_HEAVY_01.wav",
+                        "status":  "INFO",
+                        "measured":  0.681,
+                        "unit":  "m",
+                        "note":  "cue VEH_OPTIMUS_WHEELS_LAND_LIGHT|BL_TRANSFORM.OPTIMUS_BOT2VEH: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.TRANS_OPTIMUS_TO_BOT_SERVOS.wav",
+                        "status":  "INFO",
+                        "measured":  0.382,
+                        "unit":  "m",
+                        "note":  "cue BL_TRANSFORM.OPTIMUS_VEH2BOT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MECH_IMPT_TRUCK_LIGHT_03.wav",
+                        "status":  "INFO",
+                        "measured":  0.382,
+                        "unit":  "m",
+                        "note":  "cue BL_TRANSFORM.OPTIMUS_VEH2BOT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.TRANS_OPTIMUS_TO_BOT.wav",
+                        "status":  "INFO",
+                        "measured":  0.304,
+                        "unit":  "m",
+                        "note":  "cue BL_TRANSFORM.OPTIMUS_VEH2BOT: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MTL_SYNTH_GROAN_FOLY_FS_MVMNT_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.FS_SERVO_BRUTE_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MTL_CLICK_IDLE_FOLY_01.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MTL_CLICK_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 2 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.AIR_IDLE_FOLY_03.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MTL_CLICK_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.SERVO_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.AIR_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.GUN_RIFLE_BOLT_ACTION.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue IDLE_02: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.MTL_CLICK_IDLE_FOLY_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.RELOAD_SERVO_MECH_05.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue ANIM_RELOAD_01|BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.FS_MTL_BOT_SMALL_AIR_04.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.AIR_IDLE_FOLY_02.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_attach.vehicle_exit_loops.wave.GUN_HAMMER_RATCHET_COCK.wav",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "unit":  "m",
+                        "note":  "cue BL_FOLY_IDLES.OPTIMUS_IDLE: 1 instance(s) (updated); pawn moved \u003c 2 m while they played - attachment not testable here"
+                    },
+                    {
+                        "id":  "audio_life.stationary_transform.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  35.666666666666664,
+                        "note":  "mean live voices first third 34.1, last third 35.7, max 39 over 260 frames"
+                    },
+                    {
+                        "id":  "audio_life.stationary_transform.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  33,
+                        "note":  "AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav@2.9667, AUTO_OPTIMUS_IDLE_LR_LP.wav@2.9667, SYNTH_ENERGY_MOD_PAN_LP.wav@2.9667, ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_01.wav@0, ELEC_TRANS_TV_03.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, ELEC_TRANS_TV_03.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, EMIT_SYNTH_FURNACE_LP.wav@0"
+                    },
+                    {
+                        "id":  "audio_life.moving_transform.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  36,
+                        "note":  "mean live voices first third 34.4, last third 36.0, max 46 over 320 frames"
+                    },
+                    {
+                        "id":  "audio_life.moving_transform.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  34,
+                        "note":  "AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav@4.9, AUTO_OPTIMUS_IDLE_LR_LP.wav@4.9, SYNTH_ENERGY_MOD_PAN_LP.wav@4.9, ELEC_TRANS_TV_01.wav@4.8167, ELEC_TRANS_TV_03.wav@4.8167, AMB_KAON_SMELT_DOOM_01_LsRs.wav@4.1, AMB_KAON_SMELT_DOOM_01_LR.wav@4.1, ELEC_NEON_SIGN_BUZZ_LP.wav@2.9667, AMB_SYNTH_ANTENNA_LP_01.wav@2.6833, ELEC_NEON_SIGN_BUZZ_LP.wav@2.4667, ELEC_TRANS_TV_01.wav@0.4333, ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_03.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0"
+                    },
+                    {
+                        "id":  "audio_life.robot_footsteps.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  36.6,
+                        "note":  "mean live voices first third 33.2, last third 36.6, max 41 over 420 frames"
+                    },
+                    {
+                        "id":  "audio_life.robot_footsteps.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  31,
+                        "note":  "ELEC_TRANS_TV_01.wav@5.0833, ELEC_TRANS_TV_03.wav@5.05, ELEC_NEON_SIGN_BUZZ_LP.wav@2.7167, ELEC_NEON_SIGN_BUZZ_LP.wav@2.2167, ELEC_TRANS_TV_01.wav@0.4333, ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_01.wav@0, ELEC_TRANS_TV_03.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, ELEC_TRANS_TV_03.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_TRANS_TV_03.wav@6.9333"
+                    },
+                    {
+                        "id":  "audio_life.jump_land.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  32.63,
+                        "note":  "mean live voices first third 34.3, last third 32.6, max 37 over 300 frames"
+                    },
+                    {
+                        "id":  "audio_life.jump_land.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  30,
+                        "note":  "ELEC_TRANS_TV_01.wav@0.7167, ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_01.wav@0, ELEC_TRANS_TV_03.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, ELEC_TRANS_TV_03.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0"
+                    },
+                    {
+                        "id":  "audio_life.hover_move.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  37.442857142857143,
+                        "note":  "mean live voices first third 33.6, last third 37.4, max 51 over 420 frames"
+                    },
+                    {
+                        "id":  "audio_life.hover_move.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  35,
+                        "note":  "AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav@6.6833, ELEC_TRANS_TV_01.wav@5.5667, ELEC_TRANS_TV_03.wav@5.5333, AUTO_OPTIMUS_IDLE_LR_LP.wav@6.6833, ELEC_TRANS_TV_01.wav@4.85, ELEC_TRANS_TV_03.wav@4.85, ELEC_NEON_SIGN_BUZZ_LP.wav@3.0833, ELEC_NEON_SIGN_BUZZ_LP.wav@2.5833, ELEC_TRANS_TV_01.wav@0.8167, ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_02.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, AUTO_OPTIMUS_IDLE_LR_LP.wav@6.8, SYNTH_ENERGY_MOD_PAN_LP.wav@6.8, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, SYNTH_ENERGY_MOD_PAN_LP.wav@6.6833"
+                    },
+                    {
+                        "id":  "audio_life.boost.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  42.871428571428574,
+                        "note":  "mean live voices first third 41.5, last third 42.9, max 62 over 420 frames"
+                    },
+                    {
+                        "id":  "audio_life.boost.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  38,
+                        "note":  "JET_TURBO_WHINE_LP.wav@5.5, MECH_TIRE_SQUEAL_HEAVY_LP.wav@5.8167, AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav@5.5167, SYNTH_ENERGY_MOD_PAN_LP.wav@5.5, AUTO_OPTIMUS_ENGINE_BOOST_LR_LP.wav@5.5167, AMB_KPRIS_HANGAR_LR.wav@6.8667, AMB_KPRIS_HANGAR_LsRs.wav@6.8667, ELEC_TRANS_TV_01.wav@5.9, MECH_OPTIMUS_TIRE_NOISE_02_LP.wav@5.5, ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_01.wav@0, ELEC_TRANS_TV_02.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, ELEC_TRANS_TV_03.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0"
+                    },
+                    {
+                        "id":  "audio_life.dash.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  35.585714285714289,
+                        "note":  "mean live voices first third 34.2, last third 35.6, max 56 over 420 frames"
+                    },
+                    {
+                        "id":  "audio_life.dash.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  33,
+                        "note":  "ELEC_TRANS_TV_01.wav@4.8, ELEC_TRANS_TV_03.wav@4.8, ELEC_NEON_SIGN_BUZZ_LP.wav@5.45, AMB_KAON_SMELT_DOOM_01_LsRs.wav@3.0167, AMB_KAON_SMELT_DOOM_01_LR.wav@3.0167, AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav@5.3, AMB_SYNTH_ANTENNA_LP_01.wav@2.4333, ELEC_NEON_SIGN_BUZZ_LP.wav@2.3, SYNTH_ENERGY_MOD_PAN_LP.wav@5.3, ELEC_TRANS_TV_01.wav@0.8167, ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_02.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@4.95"
+                    },
+                    {
+                        "id":  "audio_life.nitro.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  42.54375,
+                        "note":  "mean live voices first third 41.7, last third 42.5, max 64 over 480 frames"
+                    },
+                    {
+                        "id":  "audio_life.nitro.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  35,
+                        "note":  "AMB_KAON_SMELT_DOOM_01_LR.wav@7.9667, ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_01.wav@0, ELEC_TRANS_TV_02.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, ELEC_TRANS_TV_03.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@7.1167, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_TRANS_TV_01.wav@5.9, MECH_TIRE_SQUEAL_HEAVY_LP.wav@5.8167, AMB_SYNTH_ANTENNA_LP_01.wav@7.5333, ELEC_TRANS_TV_01.wav@7.15, AMB_KAON_SMELT_DOOM_01_LsRs.wav@7.9667, ELEC_TRANS_TV_03.wav@7.6833, ELEC_NEON_SIGN_BUZZ_LP.wav@7.6167"
+                    },
+                    {
+                        "id":  "audio_life.vehicle_jump.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  33,
+                        "note":  "mean live voices first third 37.4, last third 33.0, max 58 over 300 frames"
+                    },
+                    {
+                        "id":  "audio_life.vehicle_jump.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  33,
+                        "note":  "AUTO_OPTIMUS_ENGINE_MID_LR_LP.wav@2.5833, AUTO_OPTIMUS_IDLE_LR_LP.wav@2.5833, SYNTH_ENERGY_MOD_PAN_LP.wav@2.5833, ELEC_TRANS_TV_01.wav@0.7, ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_01.wav@0, ELEC_TRANS_TV_02.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, ELEC_TRANS_TV_02.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0"
+                    },
+                    {
+                        "id":  "audio_life.firing_moving.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  53.108333333333334,
+                        "note":  "mean live voices first third 51.3, last third 53.1, max 78 over 360 frames"
+                    },
+                    {
+                        "id":  "audio_life.firing_moving.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  30,
+                        "note":  "ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_03.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, ELEC_TRANS_TV_02.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@2.2167, ELEC_TRANS_TV_01.wav@0, ELEC_TRANS_TV_01.wav@5.0833, ELEC_TRANS_TV_03.wav@5.05, ELEC_NEON_SIGN_BUZZ_LP.wav@2.7167, ELEC_TRANS_TV_01.wav@0.4333"
+                    },
+                    {
+                        "id":  "audio_life.fine_aim.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  32.712643678160923,
+                        "note":  "mean live voices first third 34.4, last third 32.7, max 37 over 260 frames"
+                    },
+                    {
+                        "id":  "audio_life.fine_aim.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  30,
+                        "note":  "ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_01.wav@0, ELEC_TRANS_TV_03.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, ELEC_TRANS_TV_03.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, EMIT_SYNTH_FURNACE_LP.wav@0"
+                    },
+                    {
+                        "id":  "audio_life.sustained_fire.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  34.766666666666666,
+                        "note":  "mean live voices first third 53.9, last third 34.8, max 83 over 1800 frames"
+                    },
+                    {
+                        "id":  "audio_life.sustained_fire.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  30,
+                        "note":  "ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_03.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@10.15, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_TRANS_TV_02.wav@9.4, ELEC_TRANS_TV_01.wav@22.3667, AMB_SYNTH_ANTENNA_LP_01.wav@27.15, ELEC_TRANS_TV_03.wav@27.1333, ELEC_NEON_SIGN_BUZZ_LP.wav@27.05, ELEC_NEON_SIGN_BUZZ_LP.wav@26.55, ELEC_TRANS_TV_01.wav@4.2167"
+                    },
+                    {
+                        "id":  "audio_life.vehicle_exit_loops.no_voice_accumulation",
+                        "status":  "PASS",
+                        "measured":  33.43125,
+                        "note":  "mean live voices first third 42.0, last third 33.4, max 63 over 480 frames"
+                    },
+                    {
+                        "id":  "audio_life.vehicle_exit_loops.loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  30,
+                        "note":  "ELEC_TRANS_TV_01.wav@0.9167, ELEC_TRANS_TV_02.wav@0, BEEP_TELEM_HIGHEND_LP_08.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_02.wav@0, ELEC_TRANS_TV_01.wav@0, ELEC_TRANS_TV_02.wav@0, LIQ_DRONE_MTL_PIPE.wav@0, ELEC_TRANS_TV_03.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, AMB_UND_BOWEL_MAIN_LsRs.wav@0, AMB_UND_BOWEL_MAIN_LR.wav@0, MECH_DEFENSE_WALL_LP.wav@0, FIRE_CRACKLING_LP.wav@0, FIRE_LOW_RUMBLE_LP.wav@0, SYNTH_ENERGON_CYLINDER_LP_01.wav@0, AMB_KAON_SMELT_DOOM_02_LR.wav@0, AMB_KAON_SMELT_DOOM_02_LsRs.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, AIR_STEAM_MTL_PIPE_RESO2_LP_01.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ENERGON_GENERATOR_01.wav@0, ELEC_TELE_POLE_TRNSFMR_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0, ELEC_NEON_SIGN_BUZZ_LP.wav@0"
+                    },
+                    {
+                        "id":  "audio_life.vehicle_exit_loops.vehicle_loops_end_after_exit",
+                        "status":  "PASS",
+                        "measured":  0,
+                        "note":  "player-owned looping voices (within 5 m of the pawn) started before the V-\u003eR press and still live 4.0 s later: none"
+                    },
+                    {
+                        "id":  "audio_life.vehicle_exit_loops.player_loops_live_at_end",
+                        "status":  "INFO",
+                        "measured":  0,
+                        "note":  ""
+                    },
+                    {
+                        "id":  "audio_attach.present.robot_footsteps.BL_FS_LRG_BOT_FS__",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "robot footsteps (BL_FS_LRG_BOT, authored notifies)"
+                    },
+                    {
+                        "id":  "audio_attach.present.stationary_transform.BL_TRANSFORM_OPTIMUS_BOT2VEH",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "transform to vehicle cue (BL_TRANSFORM.OPTIMUS_BOT2VEH)"
+                    },
+                    {
+                        "id":  "audio_attach.present.jump_land.BL_FS_LRG_BOT_FS_LAND_",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "robot landing cue (BL_FS_LRG_BOT.FS_LAND_*)"
+                    },
+                    {
+                        "id":  "audio_attach.present.fine_aim._FINE_AIM_START",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "fine aim start cue (WP_StartFineAim -\u003e FINE_AIM_START)"
+                    },
+                    {
+                        "id":  "audio_attach.present.fine_aim._FINE_AIM_END",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "fine aim end cue (FINE_AIM_END)"
+                    },
+                    {
+                        "id":  "audio_attach.present.hover_move._",
+                        "status":  "PASS",
+                        "measured":  1,
+                        "note":  "vehicle loops present (any cue while hovering)"
+                    }
+                ]
+}
