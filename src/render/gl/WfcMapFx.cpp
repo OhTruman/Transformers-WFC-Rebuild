@@ -187,7 +187,9 @@ bool Pipeline::loadMapFx(const std::string& path) {
                             auto& N = lod.noise;
                             N.freq = nz["frequency"].asInt(0);
                             N.freqLow = nz["frequency_low"].asInt(0);
-                            N.on = N.freq != 0;              // native Spawn: noise points when Frequency != 0 (RE 9h)
+                            // native: Spawn draws points when Frequency != 0; the render fill applies them only with
+                            // bLowFreq_Enabled (stock UE3's noise switch) (RE 9h / 9i, CONFIRMED)
+                            N.on = N.freq != 0 && nz["low_freq"].asBool(false);
                             N.smooth = nz["smooth"].asBool(false);
                             N.lockTime = nz["lock_time"].asFloat(0.0f);
                             N.applyScale = nz["apply_scale"].asBool(false);
@@ -203,6 +205,12 @@ bool Pipeline::loadMapFx(const std::string& path) {
                             N.tangent = parseDist(nz["tangent_strength"], 1);
                             N.scale = parseDist(nz["scale"], 1);
                         }
+                        auto strength = [&](const char* k, Pipeline::FxDist& d) {
+                            if (bm.isObject() && bm[k].isObject() && bm[k]["strength"].isObject()) d = parseDist(bm[k]["strength"], 1);
+                            if (d.v.empty()) { d.kind = 0; d.v = {25.0f}; }
+                        };
+                        strength("source", lod.sourceStrength);
+                        strength("target", lod.targetStrength);
                         if (bm.isObject() && bm["sine_waves"].isArray())
                             for (size_t w = 0; w < bm["sine_waves"].size(); ++w) {
                                 const assets::Json& sw = bm["sine_waves"][w];
@@ -460,19 +468,14 @@ void Pipeline::tickMapFx(float dt) {
                     // 0x8301F928, CONFIRMED): N = Frequency, or int(appSRand * (Frequency - LowRange) + LowRange) when
                     // Frequency_LowRange > 0; N + 1 points, Point[i] = NoiseRange(i / (N + 1)) (a random vector in the
                     // range at that ratio). NoiseLockTime < 0: never refreshed; <= 1e-4: re-drawn every tick; > 0: on a
-                    // timer. bSmooth re-draws into a target the points move toward at NoiseSpeed (render-side: HIGH).
-                    // NoiseRangeScale (EmitterTime if bNRScaleEmitterTime, else RelativeTime) multiplies the points
-                    // [HIGH: stock UE3; not located natively]
+                    // timer. bSmooth re-draws into a target array; the render fill moves each point toward it by
+                    // normalize(target - current) * NoiseSpeed * (seconds since the re-draw), snapping within
+                    // NoiseLockRadius (RE 9i, CONFIRMED). NoiseRangeScale is applied by the render fill.
                     const auto& N = L.noise;
                     auto rnd = [&]() { in.rng = in.rng * 1664525u + 1013904223u; return (float)(in.rng >> 8) / 16777216.0f; };
                     auto draw = [&](std::vector<float>& dst) {
-                        float s[3];
-                        N.rangeScale.eval(N.nrEmitterTime ? rt.time : q.relTime, in.rng, s);
-                        for (int i = 0; i <= q.noiseCount; ++i) {
-                            float r[3];
-                            N.range.eval((float)i / (float)(q.noiseCount + 1), in.rng, r);
-                            for (int c = 0; c < 3; ++c) dst[(size_t)i * 3 + c] = r[c] * s[0];
-                        }
+                        for (int i = 0; i <= q.noiseCount; ++i)
+                            N.range.eval((float)i / (float)(q.noiseCount + 1), in.rng, &dst[(size_t)i * 3]);
                     };
                     if (q.noiseCount == 0) {
                         int n = std::abs(N.freq);
@@ -483,18 +486,23 @@ void Pipeline::tickMapFx(float dt) {
                         draw(q.noiseCur);
                         if (N.smooth) q.noiseNext = q.noiseCur;
                     } else {
+                        q.noiseTimer += dt;
                         bool redraw = false;
-                        if (N.lockTime >= 0.0f) {
-                            if (N.lockTime <= 1e-4f) redraw = true;
-                            else if ((q.noiseTimer += dt) > N.lockTime) { redraw = true; q.noiseTimer = 0.0f; }
-                        }
-                        if (redraw) draw(N.smooth ? q.noiseNext : q.noiseCur);
-                        if (N.smooth) {
+                        if (N.lockTime >= 0.0f && (N.lockTime <= 1e-4f || q.noiseTimer > N.lockTime)) redraw = true;
+                        if (redraw) { draw(N.smooth ? q.noiseNext : q.noiseCur); q.noiseTimer = 0.0f; }
+                        if (N.smooth && N.lockTime >= 0.0f) {
                             float sp[3];
                             N.speed.eval(q.relTime, in.rng, sp);
-                            for (size_t k = 0; k < q.noiseCur.size(); ++k) {
-                                float d = q.noiseNext[k] - q.noiseCur[k], step = std::fabs(sp[k % 3]) * dt;
-                                q.noiseCur[k] += std::fabs(d) <= step ? d : (d > 0 ? step : -step);
+                            for (int i = 0; i <= q.noiseCount; ++i) {
+                                float* cur = &q.noiseCur[(size_t)i * 3];
+                                const float* tgt = &q.noiseNext[(size_t)i * 3];
+                                float d[3] = {tgt[0] - cur[0], tgt[1] - cur[1], tgt[2] - cur[2]};
+                                float dl = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+                                float st[3] = {0, 0, 0};
+                                if (dl > 1e-6f) for (int c = 0; c < 3; ++c) st[c] = d[c] / dl * sp[c] * q.noiseTimer;
+                                float sl = std::sqrt(st[0] * st[0] + st[1] * st[1] + st[2] * st[2]);
+                                if (sl >= N.lockRadius) for (int c = 0; c < 3; ++c) cur[c] += st[c];
+                                else for (int c = 0; c < 3; ++c) cur[c] = tgt[c];
                             }
                         }
                     }
@@ -1092,26 +1100,48 @@ void Pipeline::drawMapPresentation() {
                 if (in.hasTarget) {
                     const float src[3] = {in.T[0], in.T[1], in.T[2]};   // beam / tracer source = the component
                     core::Vec3 a = ueToGltf(src), b = ueToGltf(in.target);
-                    // Beam path (M55 / M56). Points along source -> target: noise points (Frequency steps, Hermite between
-                    // them with NoiseTessellation sub-steps, tangents NoiseTangentStrength), else InterpolationPoints
-                    // steps. Width = size * TaperFactor(r) * TaperScale(r) (native, CONFIRMED). Noise offsets and sine
-                    // waves are in beam space: X along the beam, Y side, Z up (H; the Fusion muzzle authors X = 0).
-                    static const bool noSine = std::getenv("WFC_NOBEAMSINE") != nullptr;
-                    static const bool noNoise = std::getenv("WFC_NOBEAMNOISE") != nullptr;
+                    // Beam fill (M55 / M56; RE pass 5 s9i, native 0x830298E8). Points along source -> target: noise points
+                    // (N steps, NoiseTessellation cubic sub-steps; tangents HIGH), else InterpolationPoints steps.
+                    // Width = size * TaperFactor(r) * TaperScale(r) (CONFIRMED). Noise offsets are rotated by the
+                    // component's LocalToWorld (HIGH, call chain); sine waves by the beam frame (CONFIRMED).
                     const float lenM = core::length(b - a);
-                    core::Vec3 bx = lenM > 1e-4f ? (b - a) * (1.0f / lenM) : core::Vec3{1, 0, 0};
-                    core::Vec3 by = core::cross(core::Vec3{0, 1, 0}, bx);
-                    if (core::length(by) < 1e-3f) by = core::cross(core::Vec3{0, 0, 1}, bx);
-                    by = core::normalize(by);
-                    core::Vec3 bz = core::cross(bx, by);
-                    auto beamVec = [&](float x, float y, float z) { return (bx * x + by * y + bz * z) * 0.01f; };   // UU -> m
-                    const bool shaped = L.taperMethod != 0 || (L.noise.on && !noNoise) || (!L.sines.empty() && !noSine);
+                    // component space -> glTF metres (in.R rows = the component's axes in UE world space)
+                    auto compVec = [&](const float* o) {
+                        float w3[3];
+                        for (int c = 0; c < 3; ++c) w3[c] = o[0] * in.R[0][c] + o[1] * in.R[1][c] + o[2] * in.R[2][c];
+                        return core::Vec3{w3[0] * 0.01f, w3[2] * 0.01f, w3[1] * 0.01f};
+                    };
+                    // beam frame (CONFIRMED): the quaternion rotating UE +Z onto the beam direction (axis cross(Z, dir),
+                    // angle acos(dir.z)); local X / Y are across the beam, Z along it
+                    float sineM[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+                    {
+                        float du[3] = {in.target[0] - in.T[0], in.target[1] - in.T[1], in.target[2] - in.T[2]};
+                        float dl = std::sqrt(du[0] * du[0] + du[1] * du[1] + du[2] * du[2]);
+                        if (dl > 1e-4f) {
+                            for (float& c : du) c /= dl;
+                            float ax[3] = {-du[1], du[0], 0.0f};            // cross((0,0,1), dir)
+                            float al = std::sqrt(ax[0] * ax[0] + ax[1] * ax[1]);
+                            float ang = std::acos(std::max(-1.0f, std::min(1.0f, du[2])));
+                            if (al > 1e-6f) {
+                                ax[0] /= al; ax[1] /= al;
+                                float cs = std::cos(ang), sn = std::sin(ang), t1 = 1.0f - cs;
+                                // rows: image of the local X / Y / Z axes (UE3 TransformNormal, row vectors)
+                                float R[3][3] = {{cs + ax[0] * ax[0] * t1, ax[0] * ax[1] * t1 - ax[2] * sn, ax[0] * ax[2] * t1 + ax[1] * sn},
+                                                 {ax[1] * ax[0] * t1 + ax[2] * sn, cs + ax[1] * ax[1] * t1, ax[1] * ax[2] * t1 - ax[0] * sn},
+                                                 {ax[2] * ax[0] * t1 - ax[1] * sn, ax[2] * ax[1] * t1 + ax[0] * sn, cs + ax[2] * ax[2] * t1}};
+                                for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c) sineM[r][c] = R[c][r];
+                            } else if (du[2] < 0.0f) {
+                                sineM[1][1] = -1.0f; sineM[2][2] = -1.0f;   // pointing down: 180 degrees about X
+                            }
+                        }
+                    }
+                    const bool shaped = L.taperMethod != 0 || L.noise.on || !L.sines.empty();
                     for (const FxParticle& q : rt.parts) {
                         float w = q.size[0] * sizeScale[0] * 0.01f;
                         if (shaped) {
                             struct BP { core::Vec3 p; float r; };
                             std::vector<BP> pts;
-                            const bool noisy = L.noise.on && !noNoise && q.noiseCount > 0;
+                            const bool noisy = L.noise.on && q.noiseCount > 0;
                             if (noisy) {
                                 const int n = q.noiseCount, T = L.noise.tessellation;
                                 // noise scale, once per beam (native, RE 9h): 1 unless bApplyNoiseScale with
@@ -1127,16 +1157,27 @@ void Pipeline::drawMapPresentation() {
                                     core::Vec3 off{0, 0, 0};
                                     if (i > 0 && (i < n || L.noise.targetNoise)) {
                                         const float* o = &q.noiseCur[(size_t)i * 3];
-                                        off = beamVec(o[0] * noiseScale, o[1] * noiseScale, o[2] * noiseScale);
+                                        uint32_t g2 = 1; float rs[3];
+                                        L.noise.rangeScale.eval(L.noise.nrEmitterTime ? rt.time : q.relTime, g2, rs);
+                                        float ov[3] = {o[0] * noiseScale * rs[0], o[1] * noiseScale * rs[0], o[2] * noiseScale * rs[0]};
+                                        off = compVec(ov);
                                     }
                                     K[(size_t)i] = a + (b - a) * r + off;
                                 }
-                                uint32_t g = 1; float ts[3]; L.noise.tangent.eval(0.0f, g, ts);
-                                const float tStr = ts[0] * 0.01f / std::max(lenM, 1e-3f);   // UU tangent scale vs a unit step
+                                // tangents (native fill, RE 9j CONFIRMED): T_i = normalize(N_{i+1} - N_{i-1}) *
+                                // lerp(SourceStrength, TargetStrength, r_i) (UU); NoiseTension / NoiseTangentStrength
+                                // have no effect on the curve
+                                uint32_t g = 1; float ss[3], tsg[3];
+                                L.sourceStrength.eval(q.relTime, g, ss);
+                                L.targetStrength.eval(q.relTime, g, tsg);
+                                auto tan = [&](int i) {
+                                    core::Vec3 v = K[(size_t)std::min(i + 1, n)] - K[(size_t)std::max(i - 1, 0)];
+                                    float vl = core::length(v);
+                                    float r = (float)i / (float)n, st = (ss[0] + (tsg[0] - ss[0]) * r) * 0.01f;   // UU -> m
+                                    return vl > 1e-6f ? v * (st / vl) : core::Vec3{0, 0, 0};
+                                };
                                 for (int i = 0; i < n; ++i) {
-                                    core::Vec3 m0 = (K[(size_t)std::min(i + 1, n)] - K[(size_t)std::max(i - 1, 0)]) * 0.5f;
-                                    core::Vec3 m1 = (K[(size_t)std::min(i + 2, n)] - K[(size_t)i]) * 0.5f;
-                                    m0 = m0 * std::min(1.0f, tStr * (float)n); m1 = m1 * std::min(1.0f, tStr * (float)n);
+                                    core::Vec3 m0 = tan(i), m1 = tan(i + 1);
                                     for (int s = 0; s < T; ++s) {
                                         float t = (float)s / (float)T, t2 = t * t, t3 = t2 * t;
                                         core::Vec3 p = K[(size_t)i] * (2 * t3 - 3 * t2 + 1) + m0 * (t3 - 2 * t2 + t) +
@@ -1146,21 +1187,25 @@ void Pipeline::drawMapPresentation() {
                                 }
                                 pts.push_back({K[(size_t)n], 1.0f});
                             } else {
-                                const int n = std::max(std::max(L.interpPoints, 1), L.sines.empty() || noSine ? 1 : 32);
+                                const int n = std::max(std::max(L.interpPoints, 1), L.sines.empty() ? 1 : 32);
                                 for (int i = 0; i <= n; ++i) { float r = (float)i / (float)n; pts.push_back({a + (b - a) * r, r}); }
                             }
-                            if (!L.sines.empty() && !noSine) {
-                                // BeamSineWave (WFC addition) [H: no native consumer located (RE pass 5 s9e); formula
-                                // sum A * sin(2 pi (d - Speed t) / Period + Phase) * Direction, d along the beam (UU),
-                                // t emitter seconds, beam space]
+                            if (!L.sines.empty()) {
+                                // BeamSineWave (WFC addition; native 0x83029618, RE 9i CONFIRMED) at every point:
+                                // offset = sum Direction * Amplitude * sin(2 pi ((Speed * t + d) / Period + PhaseOffset)),
+                                // d = r * length (UU), t = particle age (s); rotated into the beam frame; faded by
+                                // min(6r, 1) * min(6(1 - r), 1)
+                                const float age = q.oneOverLife > 0.0f ? q.relTime / q.oneOverLife : rt.time;
                                 for (BP& bp : pts) {
-                                    float d = bp.r * lenM * 100.0f;
-                                    core::Vec3 off{0, 0, 0};
+                                    float d = bp.r * lenM * 100.0f, o[3] = {0, 0, 0};
                                     for (const auto& s : L.sines) {
-                                        float v = s.amp * std::sin(6.2831853f * (d - s.speed * rt.time) / std::max(s.period, 1e-3f) + s.phase);
-                                        off = off + beamVec(s.dir[0] * v, s.dir[1] * v, s.dir[2] * v);
+                                        float v = s.amp * std::sin(6.2831853f * ((s.speed * age + d) / std::max(s.period, 1e-3f) + s.phase));
+                                        for (int c = 0; c < 3; ++c) o[c] += s.dir[c] * v;
                                     }
-                                    bp.p = bp.p + off;
+                                    float fade = std::min(6.0f * bp.r, 1.0f) * std::min(6.0f * (1.0f - bp.r), 1.0f);
+                                    float w3[3];
+                                    for (int c = 0; c < 3; ++c) w3[c] = (o[0] * sineM[0][c] + o[1] * sineM[1][c] + o[2] * sineM[2][c]) * fade;
+                                    bp.p = bp.p + core::Vec3{w3[0] * 0.01f, w3[2] * 0.01f, w3[1] * 0.01f};
                                 }
                             }
                             uint32_t trng = 0x9e3779b9u;

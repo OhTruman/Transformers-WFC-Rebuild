@@ -456,8 +456,9 @@ public:
             float lockRadius = 1.0f, frequencyDistance = 0.0f, lockTime = 0.0f;
             FxDist range, rangeScale, speed, tangent, scale;
         } noise;
+        FxDist sourceStrength, targetStrength;   // Beam2 tangent strengths (UU; CDO 25): noise curve tangents
         struct BeamSine { float amp = 0, period = 1, speed = 0, phase = 0, dir[3] = {0, 0, 0}; };
-        std::vector<BeamSine> sines;      // ParticleModuleBeamSineWave (WFC addition; render formula H)
+        std::vector<BeamSine> sines;      // ParticleModuleBeamSineWave (WFC addition; render fill CONFIRMED, RE 9i)
         std::string sizeParam;            // SizeMultiplyLife by instance parameter (HoverFX "Size"); "" = none
         float sizeParamConst[3] = {1, 1, 1};
         bool velocityAligned = false;     // PSA_Velocity
@@ -480,7 +481,7 @@ private:
         float accel[3] = {0, 0, 0};       // ParticleModuleAcceleration (world / emitter space as spawned)
         int subImage = 0;
         int noiseCount = 0;               // Beam2 noise points (count + 1 offsets, UE units, beam space)
-        float noiseTimer = 0.0f;          // NoiseLockTime accumulator
+        float noiseTimer = 0.0f;          // seconds since the noise points were last re-drawn
         std::vector<float> noiseCur, noiseNext;
     };
     struct FxEmitterRT {

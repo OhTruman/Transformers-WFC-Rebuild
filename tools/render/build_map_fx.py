@@ -243,9 +243,12 @@ def beam_modules(R, p, t, blob, mods):
                               'direction': [float(c) for c in (f.get('Direction') or [0.0, 0.0, 0.0])]})
             out['sine_waves'] = waves
         elif cls == 'ParticleModuleBeamSource':
-            out['source'] = {'method': o.get('SourceMethod', 'PEB2STM_Default'), 'name': o.get('SourceName')}
+            # SourceStrength / TargetStrength: Engine.Default__ParticleModuleBeamSource / Target constant 25 (UU)
+            out['source'] = {'method': o.get('SourceMethod', 'PEB2STM_Default'), 'name': o.get('SourceName'),
+                             'strength': raw_dist(o.get('SourceStrength'), [25.0])}
         elif cls == 'ParticleModuleBeamTarget':
-            out['target'] = {'method': o.get('TargetMethod', 'PEB2STM_Default'), 'name': o.get('TargetName')}
+            out['target'] = {'method': o.get('TargetMethod', 'PEB2STM_Default'), 'name': o.get('TargetName'),
+                             'strength': raw_dist(o.get('TargetStrength'), [25.0])}
     return out
 
 
