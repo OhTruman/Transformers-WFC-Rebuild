@@ -393,6 +393,8 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 - **Title level-audio start fixed by Systems 47b74c0** (confirmed with the audio.levelStart scope: no audio in any
   frame over 40 ms; boot title-open frame under 40 ms).
 - **Travel underlay prewarmed under the boot loading screen:** no travel opens it; travel-start frames <= 41 ms.
+- **CaC class pick (3aac479 + rendering 50f0742):** 1393 -> 48 ms; preview bodies prepared under the PartyLobby loading
+  screen (+1.3 s on the first lobby load). Needs rendering 50f0742 (detected; no-op without it).
 
 
 ## FRONTEND: one renderer across matches (2026-10-05, branch `agents/frontend`)
