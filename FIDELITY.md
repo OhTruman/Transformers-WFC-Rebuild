@@ -148,6 +148,33 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   - strafe + turn: 0.25-0.26, the 60 Hz sim path's own curvature.
 - PARTIAL: attached FX positions (muzzle flash, vehicle FX sockets) are still sim-step positions.
 
+### Offline multiplayer bots (25c) [PC ADAPTATION on original rules / data; details: docs/handoffs/GAMEPLAY_BOTS.md]
+- The original versus game had no bots. Here bots are ordinary Match participants (ParticipantKind::Bot): launched by the
+  Frontend's Private Match Bot Settings (?BotsFriendly ?BotsEnemy ?BotDifficulty) and clamped to MatchSettings::maxPerTeam 8 /
+  maxPlayers 16 (PC ADAPTATION; original MaxPlayers 10).
+- Identities: generated names, the class spread per team, legal MP class presets, a displayed level.
+- Movement, weapons (clip / reserve / refire / reload / spread), damage, kills, respawns and events all use the same code as
+  the player.
+- Navigation: AssetTools bot_nav.json for any map (A* + funnel corridors, jump / drop links, a vehicle layer).
+- CONFIRMED pieces (RE addendum 7):
+  - TnAiController.RangeSet bands;
+  - the BurstRanges band mapping and values;
+  - DesiredFiringRange;
+  - aim at TargetableLocation with inaccuracy from spread + bursts.
+- PC ADAPTATION: difficulty dimensions (reaction, turn rate, aim error, FOV, sight, memory, strafe, burst / pause scale), team
+  callouts, hunt roaming, form choice.
+- WFC_BOTTEST 24/24, 120 s per match:
+  - human + 7 bots: 18 bot kills, longest idle 5.7 s, AI 0.07 ms per step;
+  - 7 v 8 HARD: 54 kills, 1602 shots, 14 stuck events (all recovered), longest idle 5.9 s, AI 0.20 ms avg / 4.1 ms max per step.
+- WFC_BOTNAVTEST 7/7 (Streets: 123/123 anchors, 196/200 anchor-pair paths, 99.4 % straight-walkable corridor segments, A* 0.8 ms).
+- PARTIAL:
+  - bot melee / grenades / abilities;
+  - objective-mode goals (interface only);
+  - jet flight;
+  - vehicle boost;
+  - Repair Ray healing by bots;
+  - bots' held weapon meshes / FX (World::participantShots() exposes their shots).
+
 ### QA live character swap [DEV / QA TOOLING, not original]
 - World::qaSetCharacter(selection): preloadSelections, then Match::selectCharacter, then the QA suicide; the normal respawn wave
   applies it.

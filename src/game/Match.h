@@ -42,6 +42,11 @@ struct MatchSettings {
     // ShouldScoreKill (MP): only TnPlayerController victims score; AI / bot victims never do [CONF RE]. PC ADAPTATION: offline
     // bot matches let bot victims score like players (true) so bots are full participants; false = the original rule.
     bool botVictimsScore = true;
+    // Slots. RE: TnMultiplayerGame MaxPlayers 10 (5v5) and no per-team cap. PC ADAPTATION for offline bot matches (Private Match
+    // Bot Settings: up to 7 friendly + 8 enemy beside the human): 16 total, 8 per team. Frontend reads these for its UI limits;
+    // World clamps launched bots to them.
+    int maxPlayers = 16;
+    int maxPerTeam = 8;
     static MatchSettings forMode(const std::string& tag);   // authored defaults per TnOnlineGameSettings<tag>
 };
 
@@ -124,6 +129,12 @@ public:
     bool loadSpawnData(const std::string& gameplayJson);
     void begin(const MatchSettings& s);          // InitGame + InitGameReplicationInfo + PendingMatch.BeginState
     int addPlayer(const std::string& name);      // PostLogin: team via TnTeamHandlerTwoTeams.PickTeam (team games)
+    int addPlayer(const std::string& name, int team);   // a participant with a host-chosen team (offline bots; 255 = PickTeam)
+    // Logout of the trailing participants from index n on (offline bots leave with their match; indices below n are unchanged).
+    void truncatePlayers(size_t n) {
+        if (n >= players_.size()) return;
+        players_.resize(n); locs_.resize(n); spawnAt_.resize(n); damageHistory_.resize(n); deathTime_.resize(n);
+    }
     // TnPlayerController.SelectCharacter -> ReplicateCharacterData -> PRI._SelectedCharacter (applies at the next spawn).
     void selectCharacter(int p, const CharacterSelection& s) {
         if (p < 0 || (size_t)p >= players_.size()) return;

@@ -18,6 +18,7 @@
 #include <string>
 
 #include <chrono>
+#include <set>
 #include "core/Time.h"
 
 #include <cmath>
@@ -159,6 +160,8 @@ bool Application::init() {
     if (std::getenv("WFC_CLASSCHANGETEST")) { runClassChangeTest(); return false; } // mid-match class change -> suicide -> respawn
     if (std::getenv("WFC_EVENTTEST")) { runEventTest(); return false; }             // authoritative gameplay event record
     if (std::getenv("WFC_PACINGTEST")) { runPacingTest(); return false; }           // presentation interpolation (render Hz vs 60 Hz sim)
+    if (std::getenv("WFC_BOTTEST")) { runBotTest(); return false; }                 // offline bots: TDM human + bots, then 7 v 8
+    if (std::getenv("WFC_BOTNAVTEST")) { runBotNavTest(); return false; }           // bot nav data + path corridor validity
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -4190,6 +4193,166 @@ void Application::runPacingTest() {
             }
     }
     LOG_INFO("PACING SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_BOTTEST: offline bots (PC ADAPTATION) in TDM on the loaded map. Phase 1: the human (idle, god mode off) + 3 friendly + 4 enemy
+// bots for WFC_BOTTEST_SECS (default 120) s; phase 2: a second match with 7 friendly + 8 enemy HARD bots. Checks: the roster, spawns,
+// movement over the nav mesh, combat (bot shots, bot kills recorded as events), deaths / respawns, no permanently stuck bot,
+// match completion with a winner and the per-step AI cost.
+void Application::runBotTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("BOTTEST %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    const float secs = std::getenv("WFC_BOTTEST_SECS") ? (float)std::atof(std::getenv("WFC_BOTTEST_SECS")) : 120.0f;
+    using T = game::GameplayEventType;
+    for (int phase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0; phase < 2; ++phase) {
+        const std::string url = world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=" + std::to_string((int)secs + 15) +
+                                (phase == 0 ? "?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1" : "?BotsFriendly=7?BotsEnemy=8?BotDifficulty=2");
+        game::MatchLaunch L; game::MatchLaunch::fromURL(url, L);
+        check(L.bots.friendly == (phase == 0 ? 3 : 7) && L.bots.enemy == (phase == 0 ? 4 : 8), "URL bot options parsed");
+        if (!world_.launchMatch(L)) { check(false, "launch"); continue; }
+        const int me = world_.localMatchPlayer();
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        world_.match().selectCharacter(me, cs);
+        const auto& ps = world_.match().players();
+        int bots = 0, friendly = 0, enemy = 0, levels = 0;
+        std::vector<std::string> names; std::set<std::string> classes[2];
+        for (size_t i = 0; i < ps.size(); ++i) if (ps[i].kind == game::ParticipantKind::Bot) {
+            ++bots; (world_.match().sameTeam((int)i, me) ? friendly : enemy)++; levels += ps[i].level > 0;
+            names.push_back(ps[i].name); classes[ps[i].team == 1 ? 1 : 0].insert(game::specialtyName(ps[i].selection.specialty));
+        }
+        std::sort(names.begin(), names.end());
+        const bool unique = std::adjacent_find(names.begin(), names.end()) == names.end();
+        check(bots == (phase == 0 ? 7 : 15) && friendly == (phase == 0 ? 3 : 7) && enemy == (phase == 0 ? 4 : 8) && levels == bots && unique,
+              "roster: " + std::to_string(friendly) + " friendly + " + std::to_string(enemy) + " enemy bots, unique names, levels");
+        check(classes[0].size() >= 3 && classes[1].size() >= 3, "class spread per team (>= 3 of 4 classes each)");
+        world_.resetBotTiming();
+        const size_t ev0 = world_.match().gameplayEvents().size();
+        std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
+        int maxAlive = 0; double worstStep = 0.0;
+        platform::InputFrame idle;
+        const int steps = (int)((secs + 10.0f) / dt);
+        for (int i = 0; i < steps && world_.match().state() != game::Match::State::MatchOver; ++i) {
+            const auto t0 = std::chrono::steady_clock::now();
+            world_.handleInput(idle, dt); world_.tick(dt);
+            if (i > 60 * 12) worstStep = std::max(worstStep, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count());
+            int alive = 0;
+            for (const game::MatchOpponent* o : world_.matchOpponents()) {
+                if (!o->spawned()) { lastPos.erase(o->matchPlayer()); stillFor[o->matchPlayer()] = 0.0f; continue; }
+                ++alive;
+                const core::Vec3 p = o->pawn().position();
+                auto it = lastPos.find(o->matchPlayer());
+                if (it != lastPos.end()) {
+                    const float d = core::length(p - it->second);
+                    travelled[o->matchPlayer()] += d;
+                    const game::BotBrain* b = world_.botBrain(o->matchPlayer());
+                    const bool fighting = b && b->target >= 0;
+                    float& sf = stillFor[o->matchPlayer()];
+                    sf = (d < 0.02f && !fighting) ? sf + dt : 0.0f;
+                    if (sf > 15.0f && sf - dt <= 15.0f && b) {
+                        const game::Character& pw = o->pawn();
+                        LOG_INFO("BOTTEST idle 15 s: %s p%d pos (%.1f %.1f %.1f) cell %d form %s xf %d goal %s (%.1f %.1f %.1f) path %zu wp %zu stuckLvl %d noPaths %d target %d ground %d wantVeh %d",
+                                 ps[(size_t)b->player].name.c_str(), b->player, p.x, p.y, p.z, world_.botNav().findCell(p, 0.0f), game::formName(pw.moveForm()),
+                                 (int)pw.isTransforming(), game::botGoalName(b->goal.kind), b->goal.pos.x, b->goal.pos.y, b->goal.pos.z, b->path.size(), b->wp,
+                                 b->stuckLevel, b->noPaths, b->target, (int)pw.onGround(), (int)b->wantVehicle);
+                        for (size_t k = b->wp; k < b->path.size() && k < b->wp + 3; ++k)
+                            LOG_INFO("BOTTEST   wp %zu (%.1f %.1f %.1f) action %d cell %d", k, b->path[k].pos.x, b->path[k].pos.y, b->path[k].pos.z, b->path[k].action, b->path[k].cell);
+                    }
+                    if (sf > worstStill) { worstStill = sf; worstStillBot = o->matchPlayer(); }
+                }
+                lastPos[o->matchPlayer()] = p;
+            }
+            maxAlive = std::max(maxAlive, alive);
+            if (i % (60 * 30) == 0 && i > 0) {
+                int kills = 0; for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) kills += world_.match().gameplayEvents()[e].type == T::Kill;
+                LOG_INFO("BOTTEST t=%.0f s: alive %d, kills %d, team scores %d / %d, AI %.3f ms avg %.2f max", i * dt, alive, kills,
+                         world_.match().teamScore(0), world_.match().teamScore(1), world_.botMsAverage(), world_.botMsMax());
+            }
+        }
+        // Results.
+        int botKills = 0, botDeaths = 0, botKillsOfHuman = 0, suicides = 0, envDeaths = 0, spawns = 0;
+        for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) {
+            const auto& ev = world_.match().gameplayEvents()[e];
+            if (ev.type == T::Kill) {
+                const bool ib = ev.instigator >= 0 && ps[(size_t)ev.instigator].kind == game::ParticipantKind::Bot;
+                botKills += ib; botDeaths += ps[(size_t)ev.victim].kind == game::ParticipantKind::Bot;
+                botKillsOfHuman += ib && ev.victim == me;
+            }
+            suicides += ev.type == T::Suicide; envDeaths += ev.type == T::EnvironmentDeath; spawns += ev.type == T::Spawn;
+        }
+        int hitsAll = 0, noPaths = 0, shots = 0, stucks = 0, repaths = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0, movers = 0;
+        for (const game::BotBrain& b : world_.botBrains()) {
+            hitsAll += b.hits; noPaths += b.noPaths; shots += b.shots; stucks += b.stucks; repaths += b.repaths; jumps += b.jumps; transforms += b.transforms; switches += b.switches; reloads += b.reloads;
+            movers += travelled[b.player] > 40.0f;
+        }
+        LOG_INFO("BOTTEST phase %d: hitscan hits %d, no-path searches %d", phase + 1, hitsAll, noPaths);
+        LOG_INFO("BOTTEST phase %d: shots %d, bot kills %d (of the human %d), bot deaths %d, suicides %d, env deaths %d, spawns %d", phase + 1, shots,
+                 botKills, botKillsOfHuman, botDeaths, suicides, envDeaths, spawns);
+        LOG_INFO("BOTTEST phase %d: movers %d / %d, repaths %d, stuck events %d, jumps %d, transforms %d, weapon switches %d, reloads %d, longest idle %.1f s (player %d)",
+                 phase + 1, movers, bots, repaths, stucks, jumps, transforms, switches, reloads, worstStill, worstStillBot);
+        LOG_INFO("BOTTEST phase %d: AI %.3f ms / step avg, %.2f ms max; worst whole step %.2f ms; state %d; scores %d / %d", phase + 1, world_.botMsAverage(),
+                 world_.botMsMax(), worstStep, (int)world_.match().state(), world_.match().teamScore(0), world_.match().teamScore(1));
+        check(world_.botNav().valid(), "nav data loaded for " + world_.mapName());
+        check(maxAlive == bots, "every bot spawned (" + std::to_string(maxAlive) + ")");
+        check(movers >= bots * 3 / 4, "bots move around the map (" + std::to_string(movers) + " / " + std::to_string(bots) + " travelled > 40 m)");
+        check(worstStill < 20.0f, "no bot idle / stuck out of combat for 20 s");
+        check(shots > 50 && botKills >= 3 && botDeaths >= 3, "bots fight: shots, kills and deaths");
+        check(envDeaths <= bots, "few environment deaths (" + std::to_string(envDeaths) + ")");
+        check(world_.botMsAverage() < 0.5 && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.5 ms, max < 6 ms)");
+        // Let the match run out: it completes and the next one starts clean.
+        for (int i = 0; i < (int)(30.0f / dt) && world_.match().state() != game::Match::State::MatchOver; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+        check(world_.match().state() == game::Match::State::MatchOver, "match completed");
+        int ends = 0; for (const auto& e : world_.match().gameplayEvents()) ends += e.type == T::MatchEnd;
+        check(ends == 1, "one MatchEnd record");
+    }
+    LOG_INFO("BOTTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_BOTNAVTEST: the loaded map's bot nav (AssetTools bot_nav.json). Every anchor finds a cell; paths between anchor pairs
+// (robot radius 1.75 and 2.0) exist and each straight segment of the string-pulled corridor stays on connected cells (or is a
+// jump / drop link); the A* cost per search.
+void Application::runBotNavTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("BOTNAV %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    if (!world_.ensureBotNav()) { check(false, "nav data for " + world_.mapName()); LOG_INFO("BOTNAV SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
+    const game::BotNav& nav = world_.botNav();
+    int onNav = 0;
+    for (const auto& a : nav.anchors()) onNav += nav.findCell(a.pos, 6.0f) >= 0;
+    check(onNav >= (int)nav.anchors().size() * 95 / 100, "anchors on the nav: " + std::to_string(onNav) + " / " + std::to_string(nav.anchors().size()));
+    for (float radius : {1.75f, 2.0f}) {
+        game::BotNav::Agent ag; ag.radius = radius;
+        int pairs = 0, found = 0, segs = 0, badSegs = 0, worstExp = 0; double worstMs = 0, totalMs = 0;
+        unsigned h = 12345;
+        const auto& as = nav.anchors();
+        for (int k = 0; k < 200 && !as.empty(); ++k) {
+            h = h * 1664525U + 1013904223U; const auto& A = as[(h >> 8) % as.size()];
+            h = h * 1664525U + 1013904223U; const auto& B = as[(h >> 8) % as.size()];
+            if (&A == &B) continue;
+            ++pairs;
+            std::vector<game::BotNav::Waypoint> path; int exp = 0;
+            const auto t0 = std::chrono::steady_clock::now();
+            const bool ok = nav.findPath(A.pos, B.pos, ag, path, &exp);
+            const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+            worstMs = std::max(worstMs, ms); totalMs += ms; worstExp = std::max(worstExp, exp);
+            if (!ok) { if (fails < 40) LOG_INFO("BOTNAV no path %s -> %s", A.actor.c_str(), B.actor.c_str()); continue; }
+            ++found;
+            core::Vec3 prev = A.pos;
+            for (const auto& w : path) {
+                ++segs;
+                if (w.action == 0 && !nav.directWalkable(prev, w.pos, ag)) {
+                    ++badSegs;
+                    if (badSegs <= 6) LOG_INFO("BOTNAV r%.2f off-mesh segment (%.1f %.1f %.1f) -> (%.1f %.1f %.1f) in %s -> %s", radius, prev.x, prev.y, prev.z, w.pos.x, w.pos.y, w.pos.z, A.actor.c_str(), B.actor.c_str());
+                }
+                prev = w.pos;
+            }
+        }
+        LOG_INFO("BOTNAV r%.2f: %d / %d paths, %d segments (%d not straight-walkable), A* %.2f ms avg %.2f ms max, %d cells expanded max", radius, found, pairs,
+                 segs, badSegs, totalMs / std::max(1, pairs), worstMs, worstExp);
+        check(found >= pairs * 95 / 100, "paths between anchors (radius " + std::to_string(radius).substr(0, 4) + ")");
+        check(badSegs * 50 <= segs, "corridor segments stay on the mesh (<= 2 %)");
+        check(worstMs < 8.0, "A* under 8 ms");
+    }
+    LOG_INFO("BOTNAV SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core

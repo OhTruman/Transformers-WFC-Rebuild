@@ -467,8 +467,8 @@ void World::handleInput(const platform::InputFrame& in, float dt) {
     if (in.wasPressed(platform::Button::DebugPrevStart)) teleportToStart(startCursor_ - 1);
 }
 
-static bool rayAabb(const core::Vec3& o, const core::Vec3& d, float len,
-                    const core::Vec3& bmin, const core::Vec3& bmax, float& tHit) {
+bool rayAabb(const core::Vec3& o, const core::Vec3& d, float len,
+             const core::Vec3& bmin, const core::Vec3& bmax, float& tHit) {
     float tmin = 0.0f, tmax = len;
     const float* od = &o.x; const float* dd = &d.x;
     const float* lo = &bmin.x; const float* hi = &bmax.x;
@@ -1020,6 +1020,8 @@ void World::tick(float dt) {
     if (!localPlayerDead()) {                       // dead / not yet spawned (match): no pawn simulation
         player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
     }
+    participantShots_.clear();
+    tickBots(dt);                                                       // bot participants: decisions -> intents, weapons
     for (MatchOpponent* o : opponents_) o->simulate(dt, collision());   // participants: shared movement + animation
     player_.controller().tickCameraCollision(dt);   // obstruction behaviour after the pawn moved
     gameplayRamContacts();
@@ -1162,6 +1164,10 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     // RoundsBase: GRI.Rounds = GoalScore for the round-based rule (CTF; must be even) [CONF RE §4].
     if (out.settings.rounds > 0 && opt.count("PointsToWin")) { out.settings.rounds = std::max(2, std::atoi(opt["PointsToWin"].c_str())); out.settings.goalScore = 1000000; }
     if (opt.count("TimeLimit")) out.settings.timeLimit = std::max(0, (int)std::atof(opt["TimeLimit"].c_str()));
+    // Private Match Bot Settings (Frontend contract; PC ADAPTATION). Clamped again against the slots when the bots are added.
+    if (opt.count("BotsFriendly")) out.bots.friendly = std::max(0, std::atoi(opt["BotsFriendly"].c_str()));
+    if (opt.count("BotsEnemy")) out.bots.enemy = std::max(0, std::atoi(opt["BotsEnemy"].c_str()));
+    if (opt.count("BotDifficulty")) out.bots.difficulty = std::clamp(std::atoi(opt["BotDifficulty"].c_str()), 0, 2);
     return !out.map.empty();
 }
 
@@ -1187,8 +1193,11 @@ bool World::launchMatch(const MatchLaunch& l) {
     matchMode_ = mode;
     mapState_.setMode(mode);
     resetForNewLevel();
+    removeBots();   // the previous match's bots leave with it (a new match is a fresh level in the original)
     startLocalMatch(l.settings);
-    LOG_INFO("match: launched %s %s (goal %d, time %d s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore, l.settings.timeLimit);
+    const int nb = addBots(l.bots);
+    LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
+             l.settings.timeLimit, nb, l.bots.friendly, l.bots.enemy, botDifficultyName(l.bots.difficulty));
     return true;
 }
 
@@ -1237,6 +1246,47 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         else { match_.killed(instigator, victim, false, damageType, &kc); if (opp) opp->despawn(); }
     }
     return true;
+}
+
+void World::removeBots() {
+    size_t first = match_.players().size();
+    for (size_t i = match_.players().size(); i-- > 0;) { if (match_.players()[i].kind != ParticipantKind::Bot) break; first = i; }
+    if (first == match_.players().size()) { bots_.clear(); return; }
+    for (size_t i = 0; i < opponents_.size();) {
+        if ((size_t)opponents_[i]->matchPlayer() >= first) { opponents_[i]->destroy(); opponents_.erase(opponents_.begin() + (long)i); } else ++i;
+    }
+    for (size_t i = 0; i < actors_.size();) { if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); } else ++i; }
+    match_.truncatePlayers(first);
+    bots_.clear();
+}
+
+int World::addBots(const BotLaunch& b) {
+    if (!matchActive_ || (b.friendly <= 0 && b.enemy <= 0)) return 0;
+    ensureBotNav();   // under the match load, not on a simulation step
+    botDifficulty_ = std::clamp(b.difficulty, 0, 2);
+    const MatchSettings& s = match_.settings();
+    std::vector<std::string> taken;
+    int humans = 0;
+    for (const MatchPlayer& p : match_.players()) { taken.push_back(p.name); humans += p.kind != ParticipantKind::Bot; }
+    const int humanTeam = localPlayer_ >= 0 ? match_.players()[(size_t)localPlayer_].team : 0;
+    static unsigned matchSeed = 0x5eed;
+    matchSeed = matchSeed * 1664525U + 1013904223U;
+    const std::vector<BotIdentity> ids = makeBotIdentities(b, s.teamGame, humanTeam, s.maxPerTeam, s.maxPlayers, humans, taken, matchSeed);
+    for (const BotIdentity& id : ids) {
+        const int p = match_.addPlayer(id.name, id.team);
+        MatchPlayer& mp = match_.playerMutable(p);
+        mp.kind = ParticipantKind::Bot;
+        mp.level = id.level;
+        match_.selectCharacter(p, id.selection);
+        auto o = std::make_unique<MatchOpponent>(p, mp.team, true);
+        o->pressesPickup = true;
+        addBotBrain(p, botDifficulty_);
+        opponents_.push_back(o.get());
+        actors_.push_back(std::move(o));
+        LOG_INFO("bots: %s team %d %s (%s) level %d", id.name.c_str(), mp.team, specialtyName(id.selection.specialty),
+                 resolveChassis(id.selection, match_.faction(p)).c_str(), id.level);
+    }
+    return (int)ids.size();
 }
 
 MatchOpponent* World::addMatchOpponent(const std::string& name, bool drawn) {

@@ -124,6 +124,12 @@ void Match::begin(const MatchSettings& s) {
     LOG_INFO("match: %s begin (goal %d, time limit %d s, countdown %d s)", s_.modeTag.c_str(), s_.goalScore, s_.timeLimit, countdown_);
 }
 
+int Match::addPlayer(const std::string& name, int team) {
+    const int p = addPlayer(name);
+    if (s_.teamGame && (team == 0 || team == 1)) players_[(size_t)p].team = team;
+    return p;
+}
+
 int Match::addPlayer(const std::string& name) {
     MatchPlayer p;
     p.name = name;

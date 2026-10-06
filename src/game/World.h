@@ -13,6 +13,9 @@
 #include "game/Match.h"
 #include "game/ChassisDef.h"
 #include "game/MatchOpponent.h"
+#include "game/BotRoster.h"
+#include "game/BotBrain.h"
+#include "game/BotNav.h"
 #include "game/Destructible.h"
 #include "game/SpawnPoint.h"
 #include "game/Collision.h"
@@ -36,6 +39,7 @@ struct MatchLaunch {
     std::string map = "MP_IAC_Streets";
     std::string modeTag = "TDM";
     MatchSettings settings = MatchSettings::forMode("TDM");
+    BotLaunch bots;                // ?BotsFriendly ?BotsEnemy ?BotDifficulty (PC ADAPTATION; absent = no bots)
     static bool fromURL(const std::string& url, MatchLaunch& out);
 };
 
@@ -409,6 +413,23 @@ public:
     core::Vec3 lastDamageFrom_{0, 0, 0};
     // TEST / DIAGNOSTIC: a synthetic participant with its own Match player slot (see MatchOpponent.h).
     MatchOpponent* addMatchOpponent(const std::string& name, bool drawn);
+    // Offline bot participants (PC ADAPTATION): generated identities (BotRoster) added as ParticipantKind::Bot Match players with
+    // their class selection, clamped to MatchSettings::maxPerTeam / maxPlayers. Returns the number added.
+    int addBots(const BotLaunch& b);
+    void removeBots();
+    int botDifficulty() const { return botDifficulty_; }
+    const BotBrain* botBrain(int player) const;
+    const std::vector<BotBrain>& botBrains() const { return bots_; }
+    const BotNav& botNav() const { return botNav_; }
+    bool ensureBotNav();
+    // Per-step bot cost (diagnostics; WFC_BOTTEST / perf).
+    double botMsAverage() const { return botTicks_ ? botMsAccum_ / (double)botTicks_ : 0.0; }
+    double botMsMax() const { return botMsMax_; }
+    void resetBotTiming() { botMsAccum_ = 0.0; botMsMax_ = 0.0; botTicks_ = 0; }
+    // Participant (non-local) shots this step, for presentation layers (tracers / muzzle / sounds of bots): weapon id, the trace
+    // or launch start, the end point and whether it hit something. Robot-weapon mesh FX for bots are not drawn yet [PARTIAL].
+    struct ParticipantShot { int player; std::string weapon; core::Vec3 from, to; bool impact; };
+    const std::vector<ParticipantShot>& participantShots() const { return participantShots_; }
     const std::vector<MatchOpponent*>& matchOpponents() const { return opponents_; }
     HudGameState hudState() const;
     // Per-chassis pawn resources (AssetTools Characters/<ChassisId>: robot.glb, vehicle.glb, character.json, ArmBlueprint),
@@ -459,6 +480,23 @@ private:
     MatchMode matchMode_ = MatchMode::DM;
     Match match_;
     std::vector<MatchOpponent*> opponents_;   // owned by actors_
+    int botDifficulty_ = 1;
+    std::vector<BotBrain> bots_;
+    BotNav botNav_;
+    bool botNavTried_ = false;
+    int botPathBudget_ = 0;
+    double botMsAccum_ = 0.0, botMsMax_ = 0.0; long botTicks_ = 0;
+    std::vector<ParticipantShot> participantShots_;
+    void addBotBrain(int player, int difficulty);
+    void tickBots(float dt);
+    void botThink(MatchOpponent& o, BotBrain& b);
+    void botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in);
+    void botAimAndFire(MatchOpponent& o, BotBrain& b, float dt);
+    void botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& aimPoint);
+    BotGoal botObjectiveGoal(BotBrain& b, const Character& pc);
+    core::Vec3 botEye(const Character& c) const;
+    bool botLineOfSight(const core::Vec3& from, const core::Vec3& to) const;
+    void fireHitscanAs(int instigator, const Character& shooter, const Weapon& w, const core::Vec3& origin, const core::Vec3& dir);
     mutable int pushedRulesMode_ = -1;
     void resetForNewLevel();
     std::vector<MatchEvent> matchEvents_;
