@@ -1,0 +1,45 @@
+diff -ru --strip-trailing-cr a/src/game/Character.h b/src/game/Character.h
+--- a/src/game/Character.h	2026-10-06 00:57:37.979609700 -0500
++++ b/src/game/Character.h	2026-10-06 00:57:37.980110600 -0500
+@@ -246,6 +246,9 @@
+         velocity_ = velocity_ + dv;
+     }
+     // One-shot action layer (melee clips): full body or upper body over locomotion.
++    // [Systems M08l] read-only: the action layer's clip (robot model clip index, -1 none) and time, for its sound notifies.
++    int actionClipIndex() const { return actionClip_; }
++    float actionTime() const { return actionT_; }
+     void playAction(const std::string& clip, bool upperBody) {
+         actionClip_ = robotModel_ ? robotModel_->clipByName(clip) : -1; actionT_ = 0.0f; actionUpper_ = upperBody;
+     }
+diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-06 00:57:37.981616200 -0500
++++ b/src/game/World.cpp	2026-10-06 00:57:37.982118000 -0500
+@@ -3690,7 +3690,15 @@
+     Character& p = player_.pawn();
+     if (ctl.abilityTriggerCount() != abilityAudioSerial_) {
+         abilityAudioSerial_ = ctl.abilityTriggerCount();
+-        if (!localDead_) onAbilityTriggered(ctl.lastTriggeredAbility());   // ServerTriggerAbility returns if dead
++        if (!localDead_) {
++            onAbilityTriggered(ctl.lastTriggeredAbility());   // ServerTriggerAbility returns if dead
++            // [Systems M08l] The ability's Skill_ animation notifies when Gameplay plays no such clip (OnTriggerAnimParams).
++            const assets::SkinnedModel* am = p.currentModel();
++            const std::string skill = "Skill_" + ctl.lastTriggeredAbility();
++            const bool playing = p.actionClipIndex() >= 0 && am && (size_t)p.actionClipIndex() < am->clips.size() && am->clips[(size_t)p.actionClipIndex()].name == skill;
++            if (!playing && (skill == "Skill_Shockwave" || skill == "Skill_Warcry" || skill == "Skill_SpawnSentry" ||
++                             skill == "Skill_TransformDisruptor")) onAbilityAnimFallback(skill);
++        }
+     }
+     if (ctl.abilitiesJammedCount() != jammedAudioSerial_) { jammedAudioSerial_ = ctl.abilitiesJammedCount(); onAbilitiesJammed(); }
+     if (ctl.transformFailedCount() != transformFailAudioSerial_) {
+@@ -3707,6 +3715,11 @@
+         } else chargeFizzleAudio_ = -1;
+         setRollerMineAudio(roller_.alive, roller_.t, roller_.pos);
+     }
++    {   // [Systems M08l] the one-shot action layer's sound notifies (melee, Skill_*, whirlwind, grenade throw)
++        const assets::SkinnedModel* am = p.currentModel();
++        const bool on = !localDead_ && p.form() == Form::Robot && p.actionClipIndex() >= 0 && am && (size_t)p.actionClipIndex() < am->clips.size();
++        onActionClip(on ? am->clips[(size_t)p.actionClipIndex()].name : std::string(), p.actionTime());
++    }
+     if (localDead_ != abilityAudioDead_) {                          // death: loops stop, no Unapply / land
+         abilityAudioDead_ = localDead_;
+         if (localDead_) onLocalPawnBuffsLost();

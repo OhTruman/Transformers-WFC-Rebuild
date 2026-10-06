@@ -2097,6 +2097,86 @@ camdis.txt, pcdis.txt via work/pass11/ue3dis.py) and authored data (VEH_SHARED_p
   - ram collision;
   - wheel/tire steering.
 
+## SYSTEMS M08n (2026-10-06) - kill-streak announcements, overshield off, dodge wall hit
+- **Kill streaks** (RE pass 5 s12 addendum 11, CONF):
+  * Data chain: TransCustomization.ini [<Id> TnDataProvider_Killstreak] ObjectPath -> AnnouncementMessageType (TnKillstreakActivated*)
+    -> Self / Friendly / EnemyAnnouncementSound; a role with none falls back to FactionAnnouncementSound[activator team].
+  * Everything plays through the announcer queue. `MatchAudio::killstreakActivated(id, role, team)`; `__match_messages__.killstreaks`
+    (gen_level_audio.py; UE names are case-insensitive: ini TnKillStreak* vs TnKillstreak*).
+  * The glue plays the Self line when the local player triggers a streak. Earning a streak is silent in the original.
+- **OvershieldOffSound** (TnPlayerPawn.Tick): overshield health reaching 0 (depleted or expired) -> OVERSHIELD_POWER_DOWN at the pawn.
+- **HitWallSound** (InRobotForm.HitWall during a dodge) -> MTL_DASH_WALL_IMPT at the pawn.
+- **Glue:** `docs/handoff/SYSTEMS_M08N_killstreak_overshield_glue.patch` (after M08m).
+  * A Character::dodgeWallHits_ pulse in CharacterMovement's Dodging.OnHitWall.
+  * Per-tick overshield / wall-hit reads; the Self announcement in triggerLocalKillstreak.
+- **In game** (participant harness with audio on, test tree):
+  * Live kills play the killer's KilledRobotSound. This closes M08i's "kill confirm not heard live".
+  * Orbital Recon's Self line and Improved Orbital Recon's faction fallback play. Back-to-back streaks queue / drop per the
+    announcer's single slot (the harness restarts matches rapidly).
+- Suite 700 / 0 (role routing, faction fallback, silent roles, overshield, wall hit); wfc_fidelity 194 / 0 / 19.
+
+## SYSTEMS M08m (2026-10-06) - guided missile, barrier, sentry sounds; default loudness decided
+- **Guided missile** (TnGuidedMissile.Mesh = GuidedMissile_PROJMESH): FlightSound SHOOT_TRAIL from launch, following the missile;
+  on detonation the flight fades 0.25 s and ExplosionSound EXPL_IMPT_WORLD plays (HmProjectile, as the weapon projectiles).
+- **Barrier** (TnBarrierSpawnable, RE pass 5 s12 addendum 3):
+  * BARRIER_LP from spawn until the actor goes;
+  * BARRIER_RETRACT once when health reaches 0 (damage or the DegenRate lifetime);
+  * a re-cast / owner-death removal is silent.
+- **Sentry** (TnSentryPawnAbility, addenda 3 / 4):
+  * SENTRY_ACTIVATE_LP from deploy; POSTDEPLOY on every EnemyAcquired;
+  * each shot TnWeaponDefaultSentryAbility WP_Fire SENTRY_SHOOT, plus SENTRY_IMPT on world hits;
+  * destroyed (damage or the 30 s lifetime): the loop fades 0.25 s, then Sentry_DSYS's SENTRY_EXPL. The owner-death Kill() path is HIGH.
+- **Not wired:**
+  * TnAmmoCratePickup.PickupSound: Gameplay's SpawnAmmoCrate drops TnDroppedPickupAmmoBeacon (a damage buff, no sound); no crate pickup exists.
+  * The decoy trap: not simulated by Gameplay.
+- **Data:** class_sounds gains TnBarrierSpawnable / TnSentryPawnAbility (+ the Sentry_DSYS DestroyedSound) / TnAmmoCratePickup /
+  TnGuidedMissile / TnWeaponDefaultSentryAbility. The generator lines for these came from a parallel Systems session (rebuild-systems-7b),
+  which stopped by our user's decision; this session merged its work.
+- **Glue:** `docs/handoff/SYSTEMS_M08M_ability_actors_glue.patch` (after M08l): the per-tick missile / barrier / sentry state, detonation, and sentry shots.
+- **In game** (08h + gameplay + systems test tree):
+  * Truck6 missile: SHOOT_BUILDUP -> SHOOT_TRAIL -> EXPL_IMPT_WORLD.
+  * Car4 barrier: DEPLOY -> LP -> RETRACT at ~67 s.
+  * Car7 sentry: ACTIVATE -> LP -> EXPL at 30 s.
+  * 0 missing cues, 0 leaks. Suite 691 / 0 (new [guided missile, barrier, sentry]); wfc_fidelity 194 / 0 / 19.
+- **Default loudness: decided** (our user, relayed by the parallel session). Keep the original profile defaults 80 / 80 / 80 -> 0.8 per
+  sound group (about -1.9 dB vs pre-M08g builds), as M08g ships. Closed.
+
+## SYSTEMS M08l (2026-10-06) - action-layer sound notifies: melee swings, ability animations, whirlwind
+- `RobotFoley::actionLayer`: Gameplay's one-shot action clip (playAction: Melee_*, Skill_AbilityJammer / _Barrier / _GuidedMissile /
+  _MarkTarget, Transform_Whirlwind_ROBO, GrenadeThrow) fires its authored AnimNotify_Sound / SoundEvent notifies as it plays.
+  Before, only the base locomotion clip's notifies played, so melee and the ability animations were silent.
+- Abilities Gameplay plays no animation for (Skill_Shockwave / _Warcry / _SpawnSentry / _TransformDisruptor; RE pass 5 s12 table):
+  their clip's notifies fire on the trigger (`onAbilityAnimFallback`), only while Gameplay isn't playing that clip itself.
+- Glue `docs/handoff/SYSTEMS_M08L_action_layer_glue.patch` (after M08k): read-only Character::actionClipIndex() / actionTime(), the action
+  layer every tick, the trigger fallback.
+- In game (08h + gameplay + systems test tree):
+  * Warcry: chest hits + WAR_CRY_STATE_START (anim + buff, as the original).
+  * Shockwave: SHIELD_PUSH.
+  * Whirlwind: WHIRLWIND_COMPLETE + 15 whooshes.
+  * Guided Missile: SHOOT_BUILDUP.
+  * Spawn Sentry: SENTRY_ACTIVATE.
+  * Melee: SWING_LT_02 per swing.
+  * 0 missing cues, 0 leaks. Suite 680 / 0; wfc_fidelity 194 / 0 / 19.
+
+## SYSTEMS M08k (2026-10-06) - Plasma Cannon charge sounds, roller mine, dodge footstep
+- **TnChargeWeapon** (`WeaponAudio::chargeState` / `chargeFizzle`; fire modes in `fire`), per Gameplay 24l's mapping + RE's EWeaponEvent enum [CONF]:
+  * charging -> WP_Looping CHARGE_SHOT; level 2 -> WP_LoopingSecondary CHARGE_LP_02; level 3 -> WP_LoopingTertiary CHARGE_LP_03;
+  * release -> all loops fade 0.25 s; the shot plays WP_Fire / FireSecondary / FireTertiary by level (SHOOT_CHARGE_SHOT / _02 / _03);
+  * released before level 1 -> WP_NoAmmoFire (22) SHOOT_DRY_FIRE_PLASMA_01.
+- **Roller mine** (AbilityAudio::rollerMine, TnRollerMine / TnRollerMineAbility defaults, RE s12 addendum / s13):
+  * ROLLER_MINE_LP at spawn; KAMIKAZE_FUSE_START at 3 s (ArmSound); ROLLER_MINE_FUSE_BUILD at 8.5 s;
+  * ROLLER_MINE_EXPL on destruction; a silent stop on owner death / kill-Z.
+- **Dodge:** FS_DEFAULT_JUMP_CHARGED through the body's sound-event set (Nav_Boost_* notify; Gameplay plays no dodge clip),
+  e.g. BL_FS_SML_BOT / BL_FS_LRG_BOT.FS_JUMP_CHARGED.
+- **Glue:** `docs/handoff/SYSTEMS_M08K_charge_roller_dodge_glue.patch`, after Gameplay 24l + agents/systems + the M08i glue.
+  * It reads Weapon charge state / fizzle and roller_ every tick, the dodge edge, and explodeRollerMine.
+  * The shot's level comes from the fire hook's Weapon copy (projClass = mode); its chargeShotLevel is copied before Gameplay sets it.
+- **Validation:** a test tree of 08h + agents/gameplay c804fe0 (one World.cpp conflict resolved locally) + agents/systems + M08i/M08k glue.
+  * WFC_CHARGETEST with audio: fizzle -> dry fire, L3 -> _03, L1 -> SHOT, L2 -> _02, L3 -> _03.
+  * Car6 TDM roller mine: LP -> arm -> buildup -> EXPL at 10 s.
+  * Car2 / Truck dodge: FS_JUMP_CHARGED per body.
+  * 0 missing cues, 0 leaks. Suite 680 / 0; movie probe OK; lifecycle 40 / 0; wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS M08j (2026-10-06) - level-start warming (frontend title frame), abandoned-prefetch leak
 - **Problem:** Frontend measured 43-55 ms of audio.levelStart on the title's first visible frame (boot and every return). It was the
   title level's eager cue waves decoding synchronously (56-61 ms here; parse < 1 ms). The music decode then landed on the next frame

@@ -98,7 +98,104 @@ int AbilityAudio::transformFailed(SoundCues& cues, const SoundCues::Emitter& paw
     return q.empty() ? -1 : cues.play(q.c_str(), pawn, 0.0f);
 }
 
+void AbilityAudio::rollerMine(SoundCues& cues, bool alive, float t, const core::Vec3& pos, float dist) {
+    auto snd = [](const char* f) -> const std::string& { return CharacterAudio::classSound("TnRollerMineAbility", f); };
+    if (alive && !rollerAlive_) {                                        // spawned
+        rollerT_ = 0.0f;
+        const std::string& q = snd("_IdleLoopingSound");
+        if (!q.empty()) rollerLoop_ = cues.play(q.c_str(), pos, dist);
+    }
+    if (!alive && rollerAlive_ && rollerLoop_ >= 0) { cues.stop(rollerLoop_, 0.0f); rollerLoop_ = -1; }   // removed silently
+    if (alive) {
+        if (rollerLoop_ >= 0) cues.update(rollerLoop_, pos, 0.0f);       // the loop rolls with the mine
+        if (rollerT_ < 3.0f && t >= 3.0f && !snd("ArmSound").empty()) cues.play(snd("ArmSound").c_str(), pos, dist);
+        if (rollerT_ < 8.5f && t >= 8.5f && !snd("_BuildupSound").empty()) cues.play(snd("_BuildupSound").c_str(), pos, dist);
+        rollerT_ = t;
+    }
+    rollerAlive_ = alive;
+}
+
+void AbilityAudio::rollerMineExploded(SoundCues& cues, const core::Vec3& pos, float dist) {
+    if (rollerLoop_ >= 0) { cues.stop(rollerLoop_, 0.0f); rollerLoop_ = -1; }
+    rollerAlive_ = false;
+    const std::string& q = CharacterAudio::classSound("TnRollerMineAbility", "_ExplosionSound");
+    if (!q.empty()) cues.play(q.c_str(), pos, dist);
+}
+
+void AbilityAudio::guidedMissile(SoundCues& cues, bool alive, const core::Vec3& pos, float dist) {
+    if (alive && !missileAlive_) {
+        const std::string& q = CharacterAudio::classSound("TnGuidedMissile", "FlightSound");
+        if (!q.empty()) missileLoop_ = cues.play(q.c_str(), pos, dist);
+    }
+    if (alive && missileLoop_ >= 0) cues.update(missileLoop_, pos, 0.0f);
+    if (!alive && missileLoop_ >= 0) { cues.stop(missileLoop_, 0.0f); missileLoop_ = -1; }   // gone without an explosion
+    missileAlive_ = alive;
+}
+
+void AbilityAudio::guidedMissileExploded(SoundCues& cues, const core::Vec3& pos, float dist) {
+    if (missileLoop_ >= 0) { cues.stop(missileLoop_, 0.25f); missileLoop_ = -1; }          // Explode: FadeOut(0.25)
+    missileAlive_ = false;
+    const std::string& q = CharacterAudio::classSound("TnGuidedMissile", "ExplosionSound");
+    if (!q.empty()) cues.play(q.c_str(), pos, dist);
+}
+
+void AbilityAudio::barrier(SoundCues& cues, bool alive, bool fading, const core::Vec3& pos, float dist) {
+    auto snd = [](const char* f) -> const std::string& { return CharacterAudio::classSound("TnBarrierSpawnable", f); };
+    if (alive && !barrierAlive_) {                                       // Initialize
+        barrierFading_ = false;
+        if (!snd("ActiveLoopSound").empty()) barrierLoop_ = cues.play(snd("ActiveLoopSound").c_str(), pos, dist);
+    }
+    if (alive && fading && !barrierFading_ && !snd("DestroySound").empty()) cues.play(snd("DestroySound").c_str(), pos, dist);
+    if (!alive && barrierLoop_ >= 0) { cues.stop(barrierLoop_, 0.0f); barrierLoop_ = -1; }   // the actor is gone
+    barrierAlive_ = alive;
+    barrierFading_ = alive && fading;
+}
+
+void AbilityAudio::sentry(SoundCues& cues, bool alive, int target, const core::Vec3& pos, float dist) {
+    auto snd = [](const char* f) -> const std::string& { return CharacterAudio::classSound("TnSentryPawnAbility", f); };
+    if (alive && !sentryAlive_) {                                        // deployed
+        sentryTarget_ = -1;
+        if (!snd("IdleSound").empty()) sentryLoop_ = cues.play(snd("IdleSound").c_str(), pos, dist);
+    }
+    if (alive && target >= 0 && target != sentryTarget_ && !snd("ActivateSound").empty())   // EnemyAcquired
+        cues.play(snd("ActivateSound").c_str(), pos, dist);
+    if (!alive && sentryAlive_) {                                        // Destroyed
+        if (sentryLoop_ >= 0) { cues.stop(sentryLoop_, 0.25f); sentryLoop_ = -1; }
+        if (!snd("DestroyedSound").empty()) cues.play(snd("DestroyedSound").c_str(), pos, dist);
+    }
+    sentryAlive_ = alive;
+    sentryTarget_ = alive ? target : -1;
+}
+
+void AbilityAudio::sentryShot(SoundCues& cues, const core::Vec3& muzzle, float muzzleDist, bool worldHit, const core::Vec3& hit,
+                              float hitDist) {
+    const std::string& fire = CharacterAudio::classSound("TnWeaponDefaultSentryAbility", "WP_Fire");
+    if (!fire.empty()) cues.play(fire.c_str(), muzzle, muzzleDist);
+    const std::string& impact = CharacterAudio::classSound("TnWeaponDefaultSentryAbility", "DefaultImpactSound");
+    if (worldHit && !impact.empty()) cues.play(impact.c_str(), hit, hitDist);
+}
+
+void AbilityAudio::overshield(SoundCues& cues, float os, const SoundCues::Emitter& pawn) {
+    if (overshield_ > 0.0f && os <= 0.0f) {
+        const std::string& q = CharacterAudio::classSound("TnPlayerPawn", "OvershieldOffSound");
+        if (!q.empty()) cues.play(q.c_str(), pawn, 0.0f);
+    }
+    overshield_ = os;
+}
+
+int AbilityAudio::dodgeHitWall(SoundCues& cues, const SoundCues::Emitter& pawn) {
+    const std::string& q = CharacterAudio::classSound("TnPawn", "HitWallSound");
+    return q.empty() ? -1 : cues.play(q.c_str(), pawn, 0.0f);
+}
+
 void AbilityAudio::stopAll(SoundCues& cues) {
+    overshield_ = 0.0f;
+    for (int* id : {&barrierLoop_, &sentryLoop_}) { if (*id >= 0) cues.stop(*id, 0.0f); *id = -1; }
+    barrierAlive_ = barrierFading_ = sentryAlive_ = false; sentryTarget_ = -1;
+    if (missileLoop_ >= 0) cues.stop(missileLoop_, 0.0f);
+    missileLoop_ = -1; missileAlive_ = false;
+    if (rollerLoop_ >= 0) cues.stop(rollerLoop_, 0.0f);
+    rollerLoop_ = -1; rollerAlive_ = false;
     for (Live& l : live_) if (l.inst >= 0) cues.stop(l.inst, 0.0f);
     live_.clear();
     if (hoverLoop_ >= 0) cues.stop(hoverLoop_, 0.0f);

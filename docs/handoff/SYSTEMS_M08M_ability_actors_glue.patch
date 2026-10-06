@@ -1,0 +1,29 @@
+diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-06 01:20:42.774564200 -0500
++++ b/src/game/World.cpp	2026-10-06 01:20:42.775066300 -0500
+@@ -3252,6 +3252,7 @@
+                 if (line && line->segmentHit(muzzle, muzzle + dir * 300.0f, tw)) wall = 300.0f * tw;
+                 MatchOpponent* hit = nullptr; float hd = wall;
+                 for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(muzzle, dir, wall, th) && th < hd) { hd = th; hit = o; } }
++                onSentryShot(muzzle, !hit && wall < 300.0f, muzzle + dir * hd);   // [Systems M08m] WP_Fire + world DefaultImpactSound
+                 if (hit && !match_.sameTeam(hit->matchPlayer(), localPlayer_)) {
+                     float mod = hd <= 80.0f ? 1.0f : 1.0f - 0.5f * std::min(1.0f, (hd - 80.0f) / 220.0f);
+                     applyMatchDamage(hit->matchPlayer(), localPlayer_, 8.0f * mod, false, "TransGame.TnDamageTypeSentry");
+@@ -3307,6 +3308,7 @@
+ void World::detonateGuidedMissile(const core::Vec3& at) {
+     if (!missile_.alive) return;
+     missile_.alive = false;
++    onGuidedMissileExploded(at);                       // [Systems M08m] FlightSound fade + ExplosionSound
+     radiusDamage(at, 10000.0f, 45.0f, localPlayer_, "TransGame.TnDamageTypeGuidedMissile");
+     LOG_INFO("guided missile detonated at (%.1f %.1f %.1f)", at.x, at.y, at.z);
+ }
+@@ -3734,6 +3736,9 @@
+             chargeFizzleAudio_ = (long long)w.chargeFizzle;
+         } else chargeFizzleAudio_ = -1;
+         setRollerMineAudio(roller_.alive, roller_.t, roller_.pos);
++        setGuidedMissileAudio(missile_.alive, missile_.pos);      // [Systems M08m]
++        setBarrierAudio(barrier_.alive, barrier_.alive && barrier_.fade >= 0.0f, barrier_.pos);
++        setSentryAudio(sentry_.alive, sentry_.target, sentry_.pos);
+     }
+     {   // [Systems M08l] the one-shot action layer's sound notifies (melee, Skill_*, whirlwind, grenade throw)
+         const assets::SkinnedModel* am = p.currentModel();

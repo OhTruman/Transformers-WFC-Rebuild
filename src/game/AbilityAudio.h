@@ -52,6 +52,35 @@ public:
     // TransformFailedSound, local, at the pawn [RE pass 5 s13].
     int transformFailed(SoundCues& cues, const SoundCues::Emitter& pawn);
 
+    // TnRollerMine (the local owner's, TnRollerMineAbility) [RE pass 5 s12 addendum + s13, CONF]: spawn -> _IdleLoopingSound
+    // (loops with the actor); ArmTime 3.0 s -> ArmSound; fuse <= 1.5 s left (t 8.5 of the 10 s fuse) -> _BuildupSound once;
+    // destroyed -> loop stops + _ExplosionSound at the mine. Removed otherwise (owner death: FadingOut, kill-Z): loop stops,
+    // nothing else. Every tick with Gameplay's state; `exploded` on the destruction tick.
+    void rollerMine(SoundCues& cues, bool alive, float t, const core::Vec3& pos, float listenerDist);
+    void rollerMineExploded(SoundCues& cues, const core::Vec3& pos, float listenerDist);
+
+    // TnGuidedMissile (ability / killstreak): its projectile mesh's FlightSound from launch, following the missile; on
+    // detonation the flight FadeOut(0.25) and ExplosionSound at the missile (HmProjectile, as the weapon projectiles).
+    void guidedMissile(SoundCues& cues, bool alive, const core::Vec3& pos, float listenerDist);
+    void guidedMissileExploded(SoundCues& cues, const core::Vec3& pos, float listenerDist);
+
+    // TnBarrierSpawnable [RE pass 5 s12 addendum 3, CONF]: ActiveLoopSound from spawn, at the barrier, until the actor goes;
+    // DestroySound when its health reaches 0 (damage or the DegenRate lifetime) = Gameplay's fade start; a silent removal
+    // otherwise (re-cast ForceFadeout, owner death). Every tick: alive, fading (health 0, fading out), position.
+    void barrier(SoundCues& cues, bool alive, bool fading, const core::Vec3& pos, float listenerDist);
+    // TnSentryPawnAbility [RE s12 addenda 3 / 4, CONF]: IdleSound loop from deploy, at the sentry; ActivateSound on every
+    // EnemyAcquired (the target changing to an enemy); each shot its gun's WP_Fire (TnWeaponDefaultSentryAbility), a world
+    // hit its DefaultImpactSound; destroyed (damage or the 30 s lifetime): the loop fades 0.25 s + Sentry_DSYS's
+    // SENTRY_EXPL one-shot [owner-death Kill() path HIGH]. Every tick: alive, target (-1 none), position.
+    void sentry(SoundCues& cues, bool alive, int target, const core::Vec3& pos, float listenerDist);
+    void sentryShot(SoundCues& cues, const core::Vec3& muzzle, float muzzleDist, bool worldHit, const core::Vec3& hit, float hitDist);
+
+    // TnPlayerPawn.Tick [RE pass 5 s12 addendum 11, CONF]: the overshield health reaching 0 while the overshield is up
+    // (depleted or expired) -> OvershieldOffSound at the pawn. Every tick with the local pawn's overshield health.
+    void overshield(SoundCues& cues, float overshieldHealth, const SoundCues::Emitter& pawn);
+    // InRobotForm.HitWall during a dodge -> TnPawn.HitWallSound at the pawn (no speed / angle condition).
+    int dodgeHitWall(SoundCues& cues, const SoundCues::Emitter& pawn);
+
     void stopAll(SoundCues& cues);                   // level unload / match restart: loops stop, nothing else plays
     int liveLoops(const SoundCues& cues) const;      // buff sounds still playing (diagnostics)
     static std::string abilityClass(const std::string& id);   // "Barrier" -> "TnAbilityBarrier"
@@ -61,6 +90,11 @@ private:
     Live& slot(int key, const std::string& buff);
     std::vector<Live> live_;
     int hoverState_ = 0, hoverLoop_ = -1;
+    bool rollerAlive_ = false; float rollerT_ = 0.0f; int rollerLoop_ = -1;
+    bool missileAlive_ = false; int missileLoop_ = -1;
+    bool barrierAlive_ = false, barrierFading_ = false; int barrierLoop_ = -1;
+    bool sentryAlive_ = false; int sentryTarget_ = -1, sentryLoop_ = -1;
+    float overshield_ = 0.0f;
 };
 
 } // namespace game

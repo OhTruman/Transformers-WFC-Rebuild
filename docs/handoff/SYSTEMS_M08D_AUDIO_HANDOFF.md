@@ -166,3 +166,28 @@ The patch touches four Gameplay-side files:
 * World.cpp / .h: `tickAbilityAudio()` after tickAbilityEffects, drain per-victim / per-tick calls, and the PlayerKilled kill confirm.
 
 It was dry-run against integration/milestone-08h a1388fa after applying the branch's World diff: 0 failed hunks. The snapshot test used a test-only WFC_AUTOABILITY1, which is not in the patch.
+
+## M08k: Plasma Cannon charge, roller mine, dodge (glue)
+
+`docs/handoff/SYSTEMS_M08K_charge_roller_dodge_glue.patch` (World.cpp / World.h). Order:
+1. Gameplay 24l.
+2. agents/systems.
+3. The M08i glue.
+4. This patch.
+
+**Conflict note:** merging agents/gameplay (c804fe0) into 08h conflicts once, in the weaponFireHook projectile branch. Keep Gameplay's `spawnProjectile(o, ...)` line *and* the 08h Systems blocks (vehicle muzzle flash + onWeaponFired). This patch then adds the fire-mode argument to that onWeaponFired call.
+
+## M08l: action-layer sound notifies (glue)
+
+`docs/handoff/SYSTEMS_M08L_action_layer_glue.patch`, applied after the M08k patch.
+It adds two read-only Character accessors (actionClipIndex / actionTime) and two per-tick calls in tickAbilityAudio.
+
+## M08m: guided missile, barrier, sentry (glue)
+
+`docs/handoff/SYSTEMS_M08M_ability_actors_glue.patch`, applied after M08l. It adds 3 per-tick calls in tickAbilityAudio, the onGuidedMissileExploded call in detonateGuidedMissile, and onSentryShot in tickSentry's fire.
+
+Default loudness is decided: keep 80 / 80 / 80 -> 0.8 (the original; about -1.9 dB vs pre-M08g). No change.
+
+## M08n: kill-streak announcements, overshield off, dodge wall hit (glue)
+
+`docs/handoff/SYSTEMS_M08N_killstreak_overshield_glue.patch`, applied after M08m (Character.h, CharacterMovement.cpp, World.h / .cpp).

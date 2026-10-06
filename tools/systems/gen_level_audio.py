@@ -367,12 +367,42 @@ for o, pr in c.execute("select opath, props from objects where opath like 'Trans
             cls = ffa if tag == 'DM' else team
             if cls: mode_messages[tag] = cls.split('.')[-1]
 print('mode messages', mode_messages)
+# Kill streaks: TransCustomization.ini [<Id> TnDataProvider_Killstreak] ObjectPath -> the TnKillstreak class's
+# AnnouncementMessageType (a TnKillstreakActivated* LocalMessage) -> its Self / Friendly / EnemyAnnouncementSound
+# (announcer events), each resolved down the class chain [CONF config + class defaults].
+import re as _re
+_cini = io.open('F:/Transformers Rebuild/ExtractedAssets/config/Coalesced_ini/TransGame/Config/Xenon/Cooked/TransCustomization.ini',
+                encoding='utf-8', errors='replace').read()
+def _chain_props(path):                                 # UE names are case-insensitive (ini TnKillStreak* vs TnKillstreak*)
+    out, chain, t = {}, [], path
+    while t:
+        r = c.execute('select path, super from types where path=? collate nocase', (t,)).fetchone()
+        if not r: break
+        chain.append(r[0]); t = r[1]
+    for t in reversed(chain):
+        op = t.replace('TransGame.', 'TransGame.Default__').replace('TransContent.', 'TransContent.Default__')
+        r = c.execute('select props from objects where opath=? collate nocase', (op,)).fetchone()
+        if r: out.update(json.loads(r[0]))
+    return out
+killstreaks = {}
+for m in _re.finditer(r'^\[(\w+) TnDataProvider_Killstreak\]\s*$(.*?)(?=^\[|\Z)', _cini, _re.M | _re.S):
+    body = dict(_re.findall(r'^(\w+)=(.*?)\s*$', m.group(2), _re.M))
+    cls = body.get('ObjectPath', '')
+    msg = _chain_props(cls).get('AnnouncementMessageType') if cls else None
+    snd = _chain_props(msg) if msg else {}
+    killstreaks[m.group(1)] = {'class': cls.split('.')[-1], 'message': (msg or '').split('.')[-1],
+                               'self': snd.get('SelfAnnouncementSound') or '', 'friendly': snd.get('FriendlyAnnouncementSound') or '',
+                               'enemy': snd.get('EnemyAnnouncementSound') or '',
+                               'faction': [x or '' for x in (snd.get('FactionAnnouncementSound') or [])]}
+print('killstreaks %d: %s' % (len(killstreaks), {k: (v['self'].split('.')[-1], v['friendly'].split('.')[-1], v['enemy'].split('.')[-1])
+                                                 for k, v in sorted(killstreaks.items())}))
 docs.append({'map': '__match_messages__',
              'source': 'Systems gen_level_audio.py: TransGame / TransContent message class defaults (authored.db)',
              'game_type_messages': gametypes, 'progress_announcement_sounds': progress,
              'versus_game_over': {k: gameover[k] for k in ('AutobotWinSound', 'DecepticonWinSound') if k in gameover},
              'announcer': {'team0_dialog_character': annc.get('Team0DialogCharacter'), 'team1_dialog_character': annc.get('Team1DialogCharacter')},
-             'progress_rules': rules, 'mode_messages': mode_messages, 'objective_messages': objective, 'countdown': countdown})
+             'progress_rules': rules, 'mode_messages': mode_messages, 'objective_messages': objective, 'countdown': countdown,
+             'killstreaks': killstreaks})
 print('match messages: %d game types, %d progress sounds, %d music cues' % (len(gametypes), len(progress), len(match_music)))
 
 # Every processed multiplayer map (ExtractedAssets/VerticalSlice/Maps/MP_*/audio.json): the full Kismet audio graph of

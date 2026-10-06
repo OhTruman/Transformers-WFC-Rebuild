@@ -1,0 +1,54 @@
+diff -ru --strip-trailing-cr a/src/game/Character.h b/src/game/Character.h
+--- a/src/game/Character.h	2026-10-06 01:54:17.853495000 -0500
++++ b/src/game/Character.h	2026-10-06 01:54:17.853996700 -0500
+@@ -257,6 +257,7 @@
+     float hoverRemain_ = 0.0f;
+     void exposeSelf() { cloakRemain_ = 0.0f; }
+     bool isDodging() const { return dodgeRemain_ > 0.0f; }
++    int dodgeWallHits_ = 0;          // [Systems M08n] +1 per Dodging.OnHitWall (HitWallSound)
+     // Abilities (TnAbilityManager): CharacterData.Abilities[0] on Ability0 (Shift), [1] on Ability1 (Ctrl) [CONF bindings].
+     // Versus: GetCurrentSkillDataIndex 0 (TnMultiplayerGame) -> Cooldown[0]; no resource (GetResourceRequired 0 unless
+     // index 1) [CONF]. SpamPreventionTime 1.0. Only Dodge is simulated; others are reported unimplemented [PARTIAL].
+diff -ru --strip-trailing-cr a/src/game/CharacterMovement.cpp b/src/game/CharacterMovement.cpp
+--- a/src/game/CharacterMovement.cpp	2026-10-06 01:54:17.854498400 -0500
++++ b/src/game/CharacterMovement.cpp	2026-10-06 01:54:17.854999300 -0500
+@@ -770,7 +770,7 @@
+     robotBlocked |= wallBlock(col, oldPos, p, v, 0.7f, 0.55f, 0.7f);
+     if (robotBlocked) {
+         v.x = (p.x - oldPos.x) / dt; v.z = (p.z - oldPos.z) / dt;
+-        if (dodging) c.dodgeRemain_ = 0.0f;               // Dodging.OnHitWall -> Falling
++        if (dodging) { c.dodgeRemain_ = 0.0f; ++c.dodgeWallHits_; }   // Dodging.OnHitWall -> Falling (+ HitWallSound pulse)
+     }
+     if (dodging && c.dodgeRemain_ <= 0.0f) {
+         // Dodging.EndState: Velocity = ClampLength(Velocity * (1,1,0), airborne ? MaxAirSpeed : MaxGroundSpeed).
+diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-06 01:54:17.857007100 -0500
++++ b/src/game/World.cpp	2026-10-06 01:54:17.857508000 -0500
+@@ -2589,6 +2589,7 @@
+         LOG_WARN("killstreak %s triggered: effect not implemented in the rebuild [PARTIAL]", id.c_str());
+     }
+     LOG_INFO("killstreak %s triggered", id.c_str());
++    onLocalKillstreakActivated(id, mp.team);              // [Systems M08n] TnKillstreakActivated* Self announcement
+     return id;
+ }
+ 
+@@ -3766,6 +3767,8 @@
+     setLocalBuffAudio("TnBuffHardLocked", p.hardLockedRemain_ > 0.0f, team);
+     setLocalBuffAudio("TnBuffTransformDisruptor", p.transformDisruptRemain_ > 0.0f, team);
+     setLocalHoverAudio(p.hoverState_);
++    if (p.dodgeWallHits_ != dodgeWallAudio_) { dodgeWallAudio_ = p.dodgeWallHits_; if (p.form() == Form::Robot) onDodgeHitWall(); }   // [Systems M08n]
++    setOvershieldAudio(p.health().overshield());                 // [Systems M08n] OvershieldOffSound at 0
+     if (p.isDodging() && !dodgeAudio_) onDodgeStarted();      // [Systems M08k] TnAbilityDodge: Nav_Boost_* FS_DEFAULT_JUMP_CHARGED
+     dodgeAudio_ = p.isDodging();
+ }
+diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-06 01:54:17.855504200 -0500
++++ b/src/game/World.h	2026-10-06 01:54:17.856003600 -0500
+@@ -324,6 +324,7 @@
+     void tickAbilityAudio();                           // [Systems M08i glue] Gameplay state -> ability / buff sounds
+     int abilityAudioSerial_ = 0, jammedAudioSerial_ = 0, transformFailAudioSerial_ = 0;
+     bool abilityAudioDead_ = false, dodgeAudio_ = false;
++    int dodgeWallAudio_ = 0;                           // [Systems M08n] last seen Character::dodgeWallHits_
+     long long chargeFizzleAudio_ = -1;                 // [Systems M08k glue] last seen Weapon::chargeFizzle (-1: not synced)
+     void onProjectileRemoved(int key);
+     // World hit / grenade bounce (fuseStarted: the grenade's first impact).

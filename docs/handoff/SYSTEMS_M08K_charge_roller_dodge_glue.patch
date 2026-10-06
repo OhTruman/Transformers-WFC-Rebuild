@@ -1,0 +1,60 @@
+diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
+--- a/src/game/World.cpp	2026-10-06 00:44:37.797742700 -0500
++++ b/src/game/World.cpp	2026-10-06 00:44:37.798244700 -0500
+@@ -113,7 +113,8 @@
+             }
+             {   // [Systems M08d] PlayFiringSound for projectile weapons too (it was only on the instant-hit path)
+                 const bool vehForm = player_.pawn().moveForm() == Form::Vehicle;
+-                onWeaponFired(projectiles_.back().weaponClass, w.lowAmmo(), vehForm, o);
++                onWeaponFired(projectiles_.back().weaponClass, w.lowAmmo(), vehForm, o,
++                              w.charge() ? std::max(0, std::min(2, w.projClass)) : 0);   // [Systems M08k] FireCharge mode (the shot copy's projClass)
+             }
+             // Fire sends (locked, target): SetTarget(locked ? target : none) [CONF TnWeaponHoming].
+             if (w.projHoming && locked_ && lockTarget_ >= 0) projectiles_.back().target = lockTarget_;
+@@ -3371,6 +3372,7 @@
+ void World::explodeRollerMine() {
+     if (!roller_.alive) return;
+     roller_.alive = false;
++    onRollerMineExploded(roller_.pos);                 // [Systems M08k] _ExplosionSound (the loop stops)
+     radiusDamage(roller_.pos, 135.0f, 15.0f, localPlayer_, "TransGame.TnDamageTypeRollerMine");
+     LOG_INFO("roller sphere exploded at (%.1f %.1f %.1f) t %.2f", roller_.pos.x, roller_.pos.y, roller_.pos.z, roller_.t);
+ }
+@@ -3683,6 +3685,16 @@
+         transformFailAudioSerial_ = ctl.transformFailedCount();
+         onTransformFailed();
+     }
++    {   // [Systems M08k] TnChargeWeapon (Plasma Cannon) charge loops / fizzle; the local roller mine
++        const Weapon& w = p.weapon();
++        const std::string wc = w.def ? "TransContent.TnWeapon" + std::string(w.def->id) : std::string();
++        setChargeWeaponAudio(wc, w.charge() ? w.chargeState : 0);
++        if (w.charge()) {
++            if (chargeFizzleAudio_ >= 0 && (long long)w.chargeFizzle != chargeFizzleAudio_) onChargeFizzle(wc);
++            chargeFizzleAudio_ = (long long)w.chargeFizzle;
++        } else chargeFizzleAudio_ = -1;
++        setRollerMineAudio(roller_.alive, roller_.t, roller_.pos);
++    }
+     if (localDead_ != abilityAudioDead_) {                          // death: loops stop, no Unapply / land
+         abilityAudioDead_ = localDead_;
+         if (localDead_) onLocalPawnBuffsLost();
+@@ -3696,6 +3708,8 @@
+     setLocalBuffAudio("TnBuffHardLocked", p.hardLockedRemain_ > 0.0f, team);
+     setLocalBuffAudio("TnBuffTransformDisruptor", p.transformDisruptRemain_ > 0.0f, team);
+     setLocalHoverAudio(p.hoverState_);
++    if (p.isDodging() && !dodgeAudio_) onDodgeStarted();      // [Systems M08k] TnAbilityDodge: Nav_Boost_* FS_DEFAULT_JUMP_CHARGED
++    dodgeAudio_ = p.isDodging();
+ }
+ 
+ void World::setLocalHoverAudio(int hoverState) { abilityAudio_.hoverState(cues_, hoverState, atPawn(), 0.0f); }
+diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
+--- a/src/game/World.h	2026-10-06 00:44:37.796238400 -0500
++++ b/src/game/World.h	2026-10-06 00:44:37.796739200 -0500
+@@ -307,7 +307,8 @@
+     void onDrainVictimTick(const core::Vec3& victimPos);
+     void tickAbilityAudio();                           // [Systems M08i glue] Gameplay state -> ability / buff sounds
+     int abilityAudioSerial_ = 0, jammedAudioSerial_ = 0, transformFailAudioSerial_ = 0;
+-    bool abilityAudioDead_ = false;
++    bool abilityAudioDead_ = false, dodgeAudio_ = false;
++    long long chargeFizzleAudio_ = -1;                 // [Systems M08k glue] last seen Weapon::chargeFizzle (-1: not synced)
+     void onProjectileRemoved(int key);
+     // World hit / grenade bounce (fuseStarted: the grenade's first impact).
+     void onProjectileHitWall(const std::string& weaponClass, const core::Vec3& pos, bool fuseStarted);

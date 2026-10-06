@@ -74,6 +74,14 @@ void RobotFoley::clipNotifiesTimed(const std::string& clip, float dur, bool loop
 }
 
 // A one-shot clip's notifies by authored time (landing / take-off): t = 0 now, later ones delayed.
+void RobotFoley::actionLayer(const std::string& clip, float t, std::vector<const char*>& out) {
+    if (clip.empty()) { actionClip_.clear(); actionT_ = 0.0f; return; }
+    const CharacterAudioProfile::Clip* c = profile().clip(clip);
+    const bool restart = clip != actionClip_ || t < actionT_;
+    if (c && c->length > 0.0f) clipNotifiesTimed(clip, c->length, false, restart ? 0.0f : actionT_, t, restart, out);
+    actionClip_ = clip; actionT_ = t;
+}
+
 void RobotFoley::clipOneShot(const char* clip, std::vector<const char*>& out) {
     const CharacterAudioProfile& p = profile();
     const CharacterAudioProfile::Clip* c = p.clip(clip);

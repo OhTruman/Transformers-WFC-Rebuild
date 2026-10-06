@@ -25,7 +25,10 @@ public:
     enum class BeamTarget { None, Friendly, Enemy };
 
     // One shot of `weaponClass` (instant hit or projectile launch) at `emitter`. Returns the instance or -1.
-    int fire(SoundCues& cues, const std::string& weaponClass, bool lowAmmo, const SoundCues::Emitter& emitter, float ownDist);
+    // fireMode 0 / 1 / 2 = WP_Fire / WP_FireSecondary / WP_FireTertiary (+ the LowAmmo variants); a TnChargeWeapon shot
+    // fires mode = charge level - 1 (FireCharge) [CONF script].
+    int fire(SoundCues& cues, const std::string& weaponClass, bool lowAmmo, const SoundCues::Emitter& emitter, float ownDist,
+             int fireMode = 0);
 
     // A beam weapon's state, every tick while it is held (firing = the trigger is down and the beam is up).
     void beam(SoundCues& cues, const std::string& weaponClass, bool firing, BeamTarget target, const SoundCues::Emitter& emitter);
@@ -41,6 +44,14 @@ public:
     // TnProjectileGrenadeBase.HitThing: the first impact starts the fuse -> PlaySound(FuseSound), then OnHitThing ->
     // PlaySound(BounceSound) on every impact. Both at the projectile.
     void projectileHitWall(SoundCues& cues, const std::string& weaponClass, const core::Vec3& pos, float listenerDist, bool fuseStarted);
+    // TnChargeWeapon (Plasma Cannon) charge state changes [CONF script, Gameplay 24l + RE EWeaponEvent]: state 0 idle,
+    // 1 charging, 2 / 3 / 4 = level 1 / 2 / 3. -> 1: PlayWeaponEvent(9 WP_Looping); -> 2: no sound change;
+    // -> 3: stop 9, play 10 (WP_LoopingSecondary); -> 4: stop 10, play 11 (WP_LoopingTertiary);
+    // -> 0 (Charging.EndState): stop 9 / 10 / 11 (their LoopingFadeOutTime), play 12 (WP_LoopingTail, if authored).
+    void chargeState(SoundCues& cues, const std::string& weaponClass, int state, const SoundCues::Emitter& emitter);
+    // Released before level 1 (FireCharge state 1): PlayWeaponEvent(22 = WP_NoAmmoFire; Plasma: the dry-fire cue).
+    int chargeFizzle(SoundCues& cues, const std::string& weaponClass, const SoundCues::Emitter& emitter);
+    int chargeLoops(const SoundCues& cues) const;
     int flightLoops() const { return (int)flight_.size(); }
 
     void stopAll(SoundCues& cues);
@@ -49,6 +60,10 @@ private:
     struct Flight { int instance; std::string weaponClass; };
     std::map<int, Flight> flight_;
     int beamLoop_ = -1, beamHeal_ = -1, beamDamage_ = -1;
+    int charge_[3] = {-1, -1, -1};                   // WP_Looping / WP_LoopingSecondary / WP_LoopingTertiary instances
+    int chargeState_ = 0;
+    std::string chargeClass_;
+    void stopChargeLoop(SoundCues& cues, int slot);
     std::string beamClass_;
     void stopBeamLoop(SoundCues& cues, int& id, const char* ev);
 };

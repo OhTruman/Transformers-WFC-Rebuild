@@ -279,7 +279,9 @@ public:
     void preloadWeaponAudio(const std::vector<std::string>& weaponClasses);
     void ensureWeaponAudio(const std::string& weaponClass);
     const std::string& firingWeaponClass(bool vehicleForm) const;
-    int onWeaponFired(const std::string& weaponClass, bool lowAmmo, bool vehicleForm, const core::Vec3& muzzle);
+    // One shot (instant hit or projectile launch) of the weapon actually fired.
+    int onWeaponFired(const std::string& weaponClass, bool lowAmmo, bool vehicleForm, const core::Vec3& muzzle, int fireMode = 0);
+    // Projectiles (key = Gameplay's projectile identity): flight loop from spawn, explosion on Explode.
     void onProjectileSpawned(int key, const std::string& weaponClass, const core::Vec3& pos);
     void onProjectileMoved(int key, const core::Vec3& pos);
     void onProjectileExploded(int key, const std::string& weaponClass, const core::Vec3& pos);
@@ -295,6 +297,29 @@ public:
     // The local player killed a pawn: the kill-confirm sound (victim form / character chassis "Car2", "Jet4", "Tank3").
     void onLocalKilledPawn(bool headshot, bool victimRobotForm, const std::string& victimChassisId);
     void onTransformFailed();                          // the local PressTransform was refused
+    void onDodgeStarted();                             // the local dodge began: Nav_Boost_* notifies (charged-jump footstep)
+    // The local pawn's one-shot action clip (melee / Skill_* / whirlwind / grenade throw; "" none) and its time, every tick.
+    void onActionClip(const std::string& clip, float t);
+    // An ability whose animation Gameplay does not play: that clip's notifies on trigger ("Skill_Shockwave").
+    void onAbilityAnimFallback(const std::string& clip);
+    // The held charge weapon's state (0 idle, 1 charging, 2..4 levels) every tick, and a fizzle (released before level 1).
+    void setChargeWeaponAudio(const std::string& weaponClass, int state);
+    void onChargeFizzle(const std::string& weaponClass);
+    // The local roller mine every tick (alive, age s, position) and its explosion.
+    void setRollerMineAudio(bool alive, float t, const core::Vec3& pos);
+    void onRollerMineExploded(const core::Vec3& pos);
+    // The local guided missile every tick (alive, position) and its detonation.
+    void setGuidedMissileAudio(bool alive, const core::Vec3& pos);
+    void onGuidedMissileExploded(const core::Vec3& pos);
+    // The local barrier (alive, fading = health 0) and sentry (alive, target -1 none) every tick; each sentry shot.
+    void setBarrierAudio(bool alive, bool fading, const core::Vec3& pos);
+    void setSentryAudio(bool alive, int target, const core::Vec3& pos);
+    void onSentryShot(const core::Vec3& muzzle, bool worldHit, const core::Vec3& hit);
+    // The local player activated kill streak `id` (TnDataProvider_Killstreak UniqueId): its Self announcement
+    // (team: the activator's, 0 Autobots / 1 Decepticons, for the FactionAnnouncementSound fallback).
+    void onLocalKillstreakActivated(const std::string& id, int team);
+    void setOvershieldAudio(float overshieldHealth);   // the local pawn's overshield health, every tick (alive)
+    void onDodgeHitWall();                             // the local dodge hit a wall (robot form)
     // Drain, every tick while the local Drain buff runs: targets this tick (HealSound), and each victim (DamageSound).
     void onDrainTick(int targets);
     void onDrainVictimTick(const core::Vec3& victimPos);

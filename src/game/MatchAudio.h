@@ -48,6 +48,12 @@ public:
     // TnAnnouncer.PlayEvent: an announcer event (e.g. "SoundEvents_Dialog.Announcer.MP_FlagCapturedDialog").
     // Returns false if the level's set has no cue for it.
     bool announcerEvent(const std::string& event);
+    // TnKillstreakActivated* (the streak's AnnouncementMessageType) [CONF RE pass 5 s12 addendum 11]: per receiving client,
+    // the activator hears SelfAnnouncementSound, its team (OnSameTeam) FriendlyAnnouncementSound, others EnemyAnnouncementSound;
+    // a role with none falls back to FactionAnnouncementSound[activator team] when authored, else silent. Through the
+    // announcer queue (PlayEvent). `id` = the TnDataProvider_Killstreak UniqueId ("OrbitalReconStreak").
+    enum class StreakRole { Self, Friendly, Enemy };
+    bool killstreakActivated(const std::string& id, StreakRole role, int activatorTeam);
     // TnGameTypeMessage(<class>).ClientReceive(switch): class e.g. "TnGameTypeMessageTDM"; winnerTeam -1 = none (tie);
     // localPlayerWon only for the DM message (FFA end music).
     bool gameTypeMessage(const std::string& messageClass, int sw, int winnerTeam = -1, bool localPlayerWon = false);
