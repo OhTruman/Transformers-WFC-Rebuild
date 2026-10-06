@@ -81,6 +81,13 @@ private:
     void runScoreTest();
     void runHeightTest();
     void runVehPhysTest();
+    void runHeadingJitterTest();
+    void runVehicleSocketProbe();
+    void runTransformVisibilityTest();
+    void runFineAimTest();
+    void runQaToolTest();
+    void runProjectileFxTest();
+    void runMuzzleTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

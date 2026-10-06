@@ -19,8 +19,19 @@ struct Weapon {
     float homingForce = 0.0f, closingDistM = 0.0f, closingForce = 0.0f, closingTime = 0.0f, projMaxSpeed = 0.0f;
     float lockOnTime = 0.0f, holdLockOnTime = 0.0f; bool lockRobots = false;
     bool grenade() const { return fireType == WeaponFire::Grenade && def && def->tossStrength > 0.0f; }
-    bool simulated() const { return fireType == WeaponFire::InstantHit || (fireType == WeaponFire::Projectile && projSpeed > 0.0f); }
+    // TnWeaponRepair / TnWeaponBeam (Energon Repair Ray): a beam ticking at the fire interval [CONF script + RepairBeam_WEPDATA].
+    bool beam() const { return def && std::string(def->id) == "RepairRay"; }
+    bool simulated() const { return fireType == WeaponFire::InstantHit || (fireType == WeaponFire::Projectile && projSpeed > 0.0f) || beam(); }
     bool projectile() const { return fireType == WeaponFire::Projectile && projSpeed > 0.0f; }
+    // Vehicle weapon mesh MuzzleFlashSockets = [WeaponSocket_Primary, WeaponSocket_Primary2] for these classes; HmWeaponMesh
+    // CurrentSocket advances (i + 1) % N once per shot (OnPlayFireEffects -> ChangeSocket) [CONF RE pass 5 9g, script].
+    bool alternatesMuzzle() const {
+        if (!def) return false;
+        const std::string id = def->id;
+        return id == "AssaultRifleVehicle" || id == "AssaultRiflePlane" || id == "RocketVehicle" || id == "RocketPlane" ||
+               id == "HomingRocketVehicle";
+    }
+    int muzzleSocket = 0;          // HmWeaponMesh.CurrentSocket (index into MuzzleFlashSockets)
     static Weapon fromDef(const WeaponDef& d) {
         Weapon w;
         w.def = &d; w.name = d.display; w.fireType = d.fire; w.shots = d.shots > 0 ? d.shots : 1; w.autoFire = d.autoFire;

@@ -113,7 +113,13 @@ public:
     core::Vec3 meshOrigin(Form f) const { return actorLocation() - core::Vec3{0, meshToActor(f), 0}; }
     // Model matrix of form f's mesh: yaw, plus the vehicle rigid body's pitch/roll.
     core::Mat4 meshMatrix(Form f) const;
-    bool partnerShown() const { return partnerVisible_; }   // second mesh drawn (transformation overlap)
+    // Presentation-only yaw added to the drawn body between 60 Hz simulation steps (set per render frame by the controller):
+    // keeps the body coherent with the per-frame camera during fast turns. Never read by the simulation.
+    void setDrawYawOffset(float o) { drawYawOffset_ = o; }
+    float drawYawOffset() const { return drawYawOffset_; }
+    bool partnerShown() const { return partnerVisible_; }
+    bool meshShown(Form f) const { return meshVisible(f, animTime_); }   // diagnostics: is this form's mesh drawn now
+    float transformClipTime() const { return animTime_; }   // second mesh drawn (transformation overlap)
 
     // Real skinned models per form (owned elsewhere). If unset, draws a fallback box.
     void setFormModels(const assets::SkinnedModel* robot, const assets::SkinnedModel* vehicle) {
@@ -478,6 +484,7 @@ public:
         float steer = 0.0f;           // Driving steering after sign(s)*s^2 and SteeringScale
         float yawRate = 0.0f;         // rad/s, UE sense (+ = turning right)
         float tireForce = 0.0f;       // Driving: summed lateral tire force (N, body +Y) [diagnostics]
+        unsigned quickTurnSerial = 0; // tank 180 quick turns started (audio: Tank 180)
         float rollControl = 0.0f;     // Driving: RollControl = left-stick X (StrafeRightLeft); no barrel roll (RollDuration 0)
     };
     VehicleState veh_;
@@ -585,7 +592,8 @@ private:
     void buildVehicleRig(const assets::SkinnedModel& mdl);
 
     float aimPitch_ = 0.0f, aimPitchN_ = 0.0f, aimYawN_ = 0.0f, aimW_ = 0.0f;
-    float cannonPitch_ = 0.0f;   // tank cannon pitch after the 360 deg/s lag
+    float cannonPitch_ = 0.0f;
+    float drawYawOffset_ = 0.0f;   // tank cannon pitch after the 360 deg/s lag
     // Turn in place (TnAnimTurnInPlace): legs keep their world yaw while the pawn follows the aim.
     float legYaw_ = 0.0f, lastYaw_ = 0.0f;
     bool yawInit_ = false;

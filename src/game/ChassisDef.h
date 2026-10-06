@@ -90,6 +90,7 @@ struct ChassisDef {
     std::string armGltf, armAnimGltf;         // ArmBlueprint (umodel content paths)
     SocketDef weaponPrimary, weaponSecondary; // robot WeaponSocket_Primary / _Secondary
     SocketDef vehicleWeapon;                  // vehicle WeaponSocket_Primary
+    SocketDef vehicleWeapon2;                 // vehicle WeaponSocket_Primary2 (the right gun; absent on the tanks)
     SocketDef meleeSmall, meleeLarge, positionSocket;   // robot MeleeSocket_SmallRobot / _LargeRobot / PositionSocket
     SocketDef rightHand;                                // robot MeleeSocket_RightHand (TnGrenadeThrower.TossSocket)
     RobotParams robot;
@@ -100,6 +101,12 @@ struct ChassisDef {
                          core::config::kDriveCamPitchMax, core::config::kDriveCamFov};
     CamStrategy camFly{0, 0, 0, 0, 0};   // jets: FlyingPlane strategy (zero = none)
     std::vector<std::string> iconicWeapons, iconicVehicleWeapons, allowedOnFoot, iconicAbilities;
+    // Transform mesh visibility from this chassis' TnAnimNotify_ToggleHidden notifies (character.json robot / vehicle animations)
+    // [CONF authored]: robot hidden at toVehRobotHide on Transform_ToVehicle_ROBO, vehicle unhidden at toVehVehicleShow on
+    // Transform_ToVehicle_VEH, robot unhidden at toRobotRobotShow on Transform_ToRobot_ROBO, vehicle hidden at toRobotVehicleHide on
+    // Transform_ToRobot_VEH. Defaults = the Optimus clips (the values the rebuild used for every chassis before Pass 24).
+    float toVehRobotHide = core::config::kToVehRobotHide, toVehVehicleShow = core::config::kToVehVehicleShow;
+    float toRobotRobotShow = core::config::kToRobotRobotShow, toRobotVehicleHide = core::config::kToRobotVehicleHide;
     std::string classDefaultSecondary;
     bool mpCharacter = true;                  // referenced by TnAssetReferencesMultiplayer
     bool lockedChassis = false, lockedCharacter = false;

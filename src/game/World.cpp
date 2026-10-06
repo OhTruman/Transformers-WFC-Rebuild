@@ -98,6 +98,7 @@ void World::load(render::IRenderer& renderer) {
     //                        [&renderer](int h, auto& p, auto& f, auto& u) { return renderer.setParticleEffectTransform(h, p, f, u); },
     //                        [&renderer](int h, auto& n, const float* v) { return renderer.setParticleEffectParam(h, n, v); },
     //                        [&renderer](int h) { renderer.stopParticleEffect(h); }});
+    repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
         if (w.projectile()) {
             spawnProjectile(o + d * 1.5f, d * w.projSpeed, w, localPlayer_);
@@ -188,6 +189,7 @@ bool World::loadVerticalSlice(render::IRenderer& renderer) {
         // The socket itself is the chassis' WeaponSocket_Primary (applyChassisToLocalPawn).
         LOG_INFO("weapon: Ion Blaster loaded");
     }
+    loadProjectileVisuals(root, resolveTextures);
 
     // Collision: the authored per-trace worlds (AssetTools PHYSICS_STREETS): collision_pawn.glb blocks pawn and
     // vehicle movement (BSP + 71 BlockingVolumes + 4 TnForcedDirVolumes + authored simple hulls), and
@@ -667,13 +669,6 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     // [Systems M08d] impacts / victim hit effect by the weapon actually fired (robot or vehicle weapon)
     const std::string firedCls = w.def ? "TransContent.TnWeapon" + std::string(w.def->id) : firingWeaponClass(player_.pawn().moveForm() == Form::Vehicle);
     const float hitDist = core::length(hitPoint - listenerPos_);
-    // [Systems M08d] Beam weapons (Repair Ray, TnWeaponBeam): every beam trace is one of these instant hits while the
-    // trigger is held; the hit decides the loop (TnWeaponRepair.OnPlayFireEffects: teammate -> heal, enemy -> damage).
-    if (CharacterAudio::weaponIsBeam(firedCls)) {
-        const int tgt = hitOpp ? (match_.sameTeam(hitOpp->matchPlayer(), localPlayer_) ? 1 : 2) : 0;
-        onBeamWeapon(firedCls, true, tgt);
-        beamSinceShot_ = 0.0f; beamInterval_ = w.fireInterval; beamClassFiring_ = firedCls;
-    }
     if (hitTarget) {
         const WeaponHitEffect* he = CharacterAudio::weaponHitEffect(firedCls);
         if (he && he->causesBlood) {
@@ -1057,6 +1052,8 @@ void World::tickVehicleBoost(float dt) {
             const float amount = tickVehicleEffects(dt, fi);
             if (amount >= 0.0f) s.thrusterAmount = amount;
         }
+        s.special180 = vs.quickTurnSerial != quickTurnSeen_;   // [Systems M08d / Gameplay 24b] TnTankForm PlayOneEightySound
+        quickTurnSeen_ = vs.quickTurnSerial;
         tickVehicleAudio(dt, s);
         tireSlip_ = s.boostState && tireSlipOverride_ >= 0.0f ? tireSlipOverride_ : 0.0f;
     }
@@ -1247,10 +1244,6 @@ void World::handleWeaponNotify(const WeaponNotify& n) {
 }
 
 void World::tick(float dt) {
-    // [Systems M08d] the beam ends when its traces stop (WeaponFiring.EndState -> StopBeam -> StopFireEffects).
-    beamSinceShot_ += dt;
-    if (weaponAudio_.beamActive() && (beamSinceShot_ > std::max(0.15f, 1.5f * beamInterval_) || localDead_))
-        onBeamWeapon(beamClassFiring_, false, 0);
     pickupEvents_.clear();
     matchEvents_.clear();
     destructibleEvents_.clear();
@@ -1530,6 +1523,7 @@ bool World::launchMatch(const MatchLaunch& l) {
 
 bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe, const std::string& damageType) {
     if (!matchActive_ || match_.state() != Match::State::InProgress || victim < 0 || (size_t)victim >= match_.players().size()) return false;
+    if (qaGod_ && victim == localPlayer_) return false;   // DEV / QA TOOLING god mode
     if (!match_.players()[(size_t)victim].alive) return false;
     // TnPlayerPawn.TakeDamage: teammates' damage is discarded except TnDamageTypeAOE (NotifyHitByFriendlyFire).
     if (instigator != victim && match_.sameTeam(instigator, victim) && !aoe) return false;
@@ -1620,6 +1614,9 @@ HudGameState World::hudState() const {
     h.hoverState = pc.hoverState_;
     h.lockTarget = lockTarget_; h.locked = locked_;
     h.barrier = barrier_.alive; h.barrierHealth = barrier_.health;
+    h.repairBeam = repairBeam_.active && repairBeam_.time > 0.0f; h.repairBeamHealing = repairBeam_.healing;
+    h.repairBeamStart = repairBeam_.start; h.repairBeamEnd = repairBeam_.end; h.repairBeamTarget = repairBeam_.target;
+    h.vehicleShotSerial = vehicleShotSerial_; h.vehicleShotSocket = vehicleShotSocket_; h.vehicleShotMuzzle = vehicleShotMuzzle_;
     if (matchActive_ && !localDead_) {
         MapState::ObjPawn op{localPlayer_, match_.players()[(size_t)localPlayer_].team, pc.actorLocation(), true, pc.form() == Form::Robot && !pc.isTransforming() && !pc.isMeleeing()};
         int ci = mapState_.pickupCandidate(op);
@@ -1953,8 +1950,18 @@ void World::draw(render::IRenderer& r) const {
         if (owner) r.setDrawOwner(0);
     }
     if (!localPlayerDead()) { sysprof::Scope sp(sysprof::DrawPlayer); player_.draw(r); }
-    // Projectiles: a small box marker until Rendering draws the authored projectile meshes / trails [PROV presentation].
-    for (const Projectile& p : projectiles_) r.drawBox(p.pos, core::Vec3{0.25f, 0.25f, 0.25f}, core::Vec3{1.0f, 0.6f, 0.2f});
+    // Projectiles: the authored FlightEffect is the body (a renderer particle system, projectileFxStart); the thrown grenades
+    // also draw their class-default static mesh. The box marker remains only when nothing authored can be shown (renderer
+    // without the particle API, or a template missing from this map's FX data) [fallback, not original].
+    for (const Projectile& p : projectiles_) {
+        const ProjectileVisual* v = p.visual >= 0 ? &projVisuals_[(size_t)p.visual] : nullptr;
+        if (v && v->body != render::kInvalidMesh) {
+            const float yaw = std::atan2(-p.vel.x, -p.vel.z);
+            r.drawMesh(v->body, core::Mat4::translate(p.pos) * core::Mat4::rotateY(yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
+        } else if (p.fxHandle < 0) {
+            r.drawBox(p.pos, core::Vec3{0.25f, 0.25f, 0.25f}, core::Vec3{1.0f, 0.6f, 0.2f});
+        }
+    }
 
     // Ion Blaster mesh held at the weapon socket (robot form only).
     {
@@ -2275,6 +2282,8 @@ void World::spawnProjectile(const core::Vec3& pos, const core::Vec3& vel, const 
         p.homingForce = w.homingForce; p.closingDist = w.closingDistM; p.closingForce = w.closingForce;
         p.closingTime = w.closingTime; p.maxSpeed = w.projMaxSpeed; p.lockRobots = w.lockRobots;
     }
+    projectiles_.back().visual = projectileVisualFor(w.def ? w.def->id : nullptr);
+    projectileFxStart(projectiles_.back());
 }
 
 void World::radiusDamage(const core::Vec3& at, float damage, float radius, int instigator, const std::string& type) {
@@ -2360,7 +2369,12 @@ void World::tickProjectiles(float dt) {
                     p.vel = (p.vel - n * (2.0f * core::dot(p.vel, n))) * p.bounce;
                     if (core::dot(p.vel, p.vel) < 500.0f * 1e-4f) { p.resting = true; p.vel = {0, 0, 0}; }
                 };
-                if (hitPawn && p.explodeOnPawn) { radiusDamage(p.pos, p.damage, p.radius, p.instigator, p.damageType); onProjectileExploded(p.audioKey, p.weaponClass, p.pos); projectiles_.erase(projectiles_.begin() + (long)i); continue; }
+                if (hitPawn && p.explodeOnPawn) {
+                    radiusDamage(p.pos, p.damage, p.radius, p.instigator, p.damageType);
+                    onProjectileExploded(p.audioKey, p.weaponClass, p.pos);   // [Systems M08d] Explode
+                    projectileFxEnd(p, p.pos, sl > 1e-5f ? seg * (-1.0f / sl) : core::Vec3{0, 1, 0}, true);
+                    projectiles_.erase(projectiles_.begin() + (long)i); continue;
+                }
                 if (hitPawn) {
                     core::Vec3 n = core::normalize(core::Vec3{-seg.x, 0.0f, -seg.z});
                     impact(n);
@@ -2373,8 +2387,14 @@ void World::tickProjectiles(float dt) {
                 } else p.pos = nx;
             }
             p.life -= dt;
-            if (p.life <= 0.0f) { radiusDamage(p.pos + core::Vec3{0, 0.1f, 0}, p.damage, p.radius, p.instigator, p.damageType); onProjectileExploded(p.audioKey, p.weaponClass, p.pos); projectiles_.erase(projectiles_.begin() + (long)i); continue; }
+            if (p.life <= 0.0f) {
+                radiusDamage(p.pos + core::Vec3{0, 0.1f, 0}, p.damage, p.radius, p.instigator, p.damageType);
+                onProjectileExploded(p.audioKey, p.weaponClass, p.pos);   // [Systems M08d] Explode
+                projectileFxEnd(p, p.pos, core::Vec3{0, 1, 0}, true);   // fuse: resting on the floor [PROV normal]
+                projectiles_.erase(projectiles_.begin() + (long)i); continue;
+            }
             onProjectileMoved(p.audioKey, p.pos);
+            projectileFxMove(p);
             ++i;
             continue;
         }
@@ -2382,8 +2402,10 @@ void World::tickProjectiles(float dt) {
         float best = 1.0f; bool hit = false;
         float t;
         bool worldHit = false;
-        if (lineWorld && lineWorld->segmentHit(p.pos, next, t)) { best = t; hit = true; worldHit = true; }
+        core::Vec3 hitN{0, 0, 0};
+        if (lineWorld && lineWorld->segmentHit(p.pos, next, t, hitN)) { best = t; hit = true; worldHit = true; }
         core::Vec3 d = next - p.pos; float len = core::length(d);
+        const float worldBest = best;
         bool barrierHit = false;
         if (len > 1e-5f) { float tb; if (barrierRayHit(p.pos, d * (1.0f / len), len, tb) && tb / len < best) { best = tb / len; hit = true; barrierHit = true; worldHit = false; } }
         if (len > 1e-5f) {
@@ -2410,11 +2432,16 @@ void World::tickProjectiles(float dt) {
             if (worldHit) onProjectileHitWall(p.weaponClass, at, false);                         // [Systems M08f] HitWall: BounceSound
             if (hit || closingExpired) onProjectileExploded(p.audioKey, p.weaponClass, at);   // [Systems M08d] Explode
             else onProjectileRemoved(p.audioKey);                                               // LifeSpan end: destroyed
+            // HitNormal: the world surface's normal; a pawn / barrier hit (or no normal) faces back along the flight.
+            const bool surfaceHit = hit && best == worldBest && core::dot(hitN, hitN) > 0.5f;
+            const core::Vec3 n = surfaceHit ? hitN : (len > 1e-5f ? d * (-1.0f / len) : core::Vec3{0, 1, 0});
+            projectileFxEnd(p, at, n, hit || closingExpired);   // LifeSpan expiry: Destroyed, no explosion
             projectiles_.erase(projectiles_.begin() + (long)i);
             continue;
         }
         p.pos = next;
         onProjectileMoved(p.audioKey, p.pos);
+        projectileFxMove(p);
         ++i;
     }
 }
@@ -2558,6 +2585,16 @@ void World::tickAbilityEffects(float dt) {
     tickSentry(dt);
     tickGuidedMissile(dt);
     tickRollerMine(dt);
+    repairBeam_.time = std::max(0.0f, repairBeam_.time - dt);
+    if (repairBeam_.time <= 0.0f) repairBeam_.active = false;
+    // [Systems M08d / Gameplay 24c] TnWeaponBeam / TnWeaponRepair sound state from Gameplay's beam: teammate -> heal loop
+    // (WP_Fire), enemy -> damage loop (WP_FireSecondary), no pawn -> neither; release -> WP_LoopingTail.
+    {
+        const bool firing = repairBeam_.active && repairBeam_.time > 0.0f;
+        const int target = !firing ? 0 : repairBeam_.healing ? 1 : (repairBeam_.target >= 0 ? 2 : 0);
+        if (firing || weaponAudio().beamActive())
+            onBeamWeapon("TransContent.TnWeaponRepairRay", firing, target);
+    }
     tickBuffShots(dt);
     tickKillstreakItems(dt);
     auto tickTD = [dt](Character& p) { p.transformDisruptRemain_ = std::max(0.0f, p.transformDisruptRemain_ - dt); };
@@ -2618,7 +2655,9 @@ void World::tickAbilityEffects(float dt) {
             Projectile pr{src, vel, d.projDamage, d.projRadiusM, 1e9f, d.projDamageType ? d.projDamageType : "", localPlayer_};
             pr.grenade = true; pr.explodeOnPawn = d.explodeOnPawn; pr.gravityScale = d.gravityScale; pr.bounce = d.bounce;
             pr.fuseMin = d.fuseMin; pr.fuseMax = d.fuseMax;
+            pr.visual = projectileVisualFor(d.id);
             projectiles_.push_back(pr);
+            projectileFxStart(projectiles_.back());
             LOG_INFO("grenade %s: |v| %.1f m/s pitch %.1f deg (aim %.1f)", d.id, core::length(vel), launchPitch, aimPitch);
         }
     }
@@ -3519,6 +3558,174 @@ float World::tickVehicleEffects(float dt, const VehicleFxDriver::Inputs& in) {
     if (!vehicleFxData_) vehicleFxDriver_.setData(&audioProfile().vehicleFx);
     vehicleFxData_ = true;
     return vehicleFxDriver_.tick(dt, in);
+}
+
+// Energon Repair Ray [CONF TnWeaponRepair / TnWeaponBeam script + RepairBeam_WEPDATA]: every fire interval (0.1 s) the beam
+// traces WeaponRange 3500 UU from the eye along the aim. A teammate hit is healed HealthPerSecond 60 x RepairRateModifier (no buffs:
+// x1) x interval with TnHealTypeRepairTeam (no SegmentedHealType: across segments [HIGH]); any other pawn takes DamagePerSecond 60 x
+// interval of TnDamageTypeRepairEnemy. HeatMax 0: no overheat [HIGH]. PlayerTargeting.GetRepairTarget lock-on assist (the trace is
+// redirected to a picked teammate) is not recovered: the beam follows the crosshair [PARTIAL].
+void World::fireRepairBeamImpl(const Weapon& w, const core::Vec3& origin, const core::Vec3& dirIn) {
+    const core::Vec3 dir = core::normalize(dirIn);
+    const float range = w.rangeM > 0.0f ? w.rangeM : 35.0f;
+    const float tickSecs = w.fireInterval > 0.0f ? w.fireInterval : 0.1f;
+    float best = range;
+    const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+    float t;
+    if (line && line->segmentHit(origin, origin + dir * range, t)) best = range * t;
+    MatchOpponent* hit = nullptr;
+    for (MatchOpponent* o : opponents_) { float th; if (o->rayHit(origin, dir, best, th) && th < best) { best = th; hit = o; } }
+    repairBeam_.active = true; repairBeam_.time = tickSecs * 1.5f;
+    repairBeam_.start = origin; repairBeam_.end = origin + dir * best; repairBeam_.target = hit ? hit->matchPlayer() : -1;
+    repairBeam_.healing = false;
+    if (!hit || !matchActive_) return;
+    if (match_.sameTeam(hit->matchPlayer(), localPlayer_)) {
+        repairBeam_.healing = true;
+        hit->pawn().health().heal(Health::HealType::AddHealthToAll, 60.0f * tickSecs);   // HealDamage(RepairAmount, TnHealTypeRepairTeam)
+    } else {
+        applyMatchDamage(hit->matchPlayer(), localPlayer_, 60.0f * tickSecs, false, "TransGame.TnDamageTypeRepairEnemy");
+    }
+}
+
+// ---- DEV / QA TOOLING (not original WFC; gated by WFC_QA=1) ----
+bool World::qaEnabled() { static const bool on = std::getenv("WFC_QA") != nullptr; return on; }
+
+std::vector<std::string> World::qaWeaponIds(bool vehicle) const {
+    std::vector<std::string> out;
+    if (!qaEnabled()) return out;
+    for (int i = 0; i < weaponDefCount(); ++i) {
+        const WeaponDef& d = weaponDefAt(i);
+        if (!d.provider || !*d.provider) continue;
+        if (vehicle ? d.typeCode == 3 : (d.typeCode != 3 && d.typeCode >= 0)) out.push_back(d.provider);
+    }
+    return out;
+}
+
+std::vector<std::string> World::qaSetLoadout(const std::vector<std::string>& ids) {
+    if (!qaEnabled() || localPlayer_ < 0 || !matchActive_) return {};
+    // The local selection becomes a custom loadout (as Create a Character would make it); restrictions apply through applyLoadout.
+    CharacterSelection& sel = match_.playerMutable(localPlayer_).selection;
+    sel.type = 0;
+    sel.weapons = ids;
+    std::vector<std::string> refused = applyLoadout(&sel);
+    LOG_INFO("QA loadout: %zu weapon(s), %zu refused", ids.size(), refused.size());
+    return refused;
+}
+
+void World::qaRespawn() {
+    if (!qaEnabled() || !matchActive_) return;
+    killLocalPlayer(localPlayer_, true);   // DmgType_Suicided: no score change; the match's own respawn wave brings the pawn back
+}
+
+void World::qaTeleportToStart(int index) { if (qaEnabled()) teleportToStart(index); }
+void World::qaSetNoclip(bool on) { if (!qaEnabled()) return; qaNoclip_ = on; player_.controller().setQaNoclip(on); }
+void World::qaSetGodMode(bool on) { if (qaEnabled()) qaGod_ = on; }
+
+std::string World::qaStatus() const {
+    if (!qaEnabled()) return "";
+    const Character& pc = player_.pawn();
+    char b[384];
+    std::snprintf(b, sizeof b, "map %s | mode %s | body %s (%s) | form %s | weapon %s | pos %.1f %.1f %.1f | noclip %d god %d",
+                  mapName_.c_str(), gameModeName(matchMode_), pc.chassis().id.c_str(), pc.specialty().c_str(),
+                  pc.form() == Form::Vehicle ? "vehicle" : "robot", pc.weapon().def ? pc.weapon().def->provider : "-",
+                  pc.position().x, pc.position().y, pc.position().z, (int)qaNoclip_, (int)qaGod_);
+    return b;
+}
+
+// ---- Projectile FX (Rendering's particle API, agents/rendering 38c9ecf+: spawnParticleEffect / setParticleEffectTransform /
+// stopParticleEffect). Detected at compile time so this file builds against a renderer interface without it. ----
+namespace {
+template <class R>
+auto fxSpawn(R& r, const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int)
+    -> decltype(r.spawnParticleEffect(t, p, f, u), int()) { return r.spawnParticleEffect(t, p, f, u); }
+template <class R> int fxSpawn(R&, const std::string&, const core::Vec3&, const core::Vec3&, const core::Vec3&, long) { return -1; }
+template <class R>
+auto fxMove(R& r, int h, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int)
+    -> decltype(r.setParticleEffectTransform(h, p, f, u), void()) { r.setParticleEffectTransform(h, p, f, u); }
+template <class R> void fxMove(R&, int, const core::Vec3&, const core::Vec3&, const core::Vec3&, long) {}
+template <class R> auto fxStop(R& r, int h, int) -> decltype(r.stopParticleEffect(h), void()) { r.stopParticleEffect(h); }
+template <class R> void fxStop(R&, int, long) {}
+template <class R> constexpr auto fxApi(int) -> decltype(std::declval<R&>().spawnParticleEffect(std::string(), core::Vec3{}, core::Vec3{}, core::Vec3{}), bool()) { return true; }
+template <class R> constexpr bool fxApi(long) { return false; }
+// UE3 rotator(dir) as a (forward, up) frame: up = world up unless the direction is near vertical.
+void fxFrame(const core::Vec3& dirIn, core::Vec3& f, core::Vec3& u) {
+    const float l = core::length(dirIn);
+    f = l > 1e-5f ? dirIn * (1.0f / l) : core::Vec3{0, 0, -1};
+    const core::Vec3 ref = std::fabs(f.y) > 0.99f ? core::Vec3{0, 0, -1} : core::Vec3{0, 1, 0};
+    const core::Vec3 rgt = core::normalize(core::cross(f, ref));
+    u = core::normalize(core::cross(rgt, f));
+}
+}  // namespace
+
+bool World::projectileFxApi() { return fxApi<render::IRenderer>(0); }
+
+void World::loadProjectileVisuals(const std::string& root, const std::function<void(std::vector<render::Material>&)>& resolveTextures) {
+    projVisuals_.clear();
+    int meshes = 0;
+    for (int i = 0; i < weaponDefCount(); ++i) {
+        const WeaponDef& d = weaponDefAt(i);
+        if (!d.id || projectileVisualFor(d.id) >= 0) continue;
+        // The folder is the provider id; try the class id first (most match), then the provider; the file must be this class.
+        std::string txt; assets::Json j; bool found = false;
+        for (const char* dir : {d.id, d.provider}) {
+            if (!dir || !*dir || !readTextFile(root + "/Weapons/" + dir + "/weapon.json", txt) || !assets::Json::parse(txt, j)) continue;
+            const std::string cls = j["class"].asString();
+            if (cls.size() >= std::strlen(d.id) && cls.compare(cls.size() - std::strlen(d.id), std::string::npos, d.id) == 0) { found = true; break; }
+        }
+        if (!found) continue;
+        const assets::Json& ps = j["projectiles"];
+        if (ps.size() == 0) continue;
+        // The first projectile class (PlasmaCannon: Charge1; the charge levels are not simulated) [PARTIAL for PlasmaCannon].
+        const assets::Json& v = ps[(size_t)0]["projectile_visual"];
+        ProjectileVisual pv;
+        pv.weapon = d.id;
+        pv.flight = v["flight_effect"]["template"].asString();
+        pv.explosion = v["explosion_effect"]["template"].asString();
+        const std::string gltf = ps[(size_t)0]["body_mesh"]["gltf"].asString();
+        if (!gltf.empty() && renderer_) {
+            render::MeshData md;
+            if (assets::loadGlb(root + "/../" + gltf, md)) {
+                resolveTextures(md.mats);
+                pv.body = renderer_->uploadMesh(md);
+                if (pv.body != render::kInvalidMesh) ++meshes;
+            }
+        }
+        if (pv.flight.empty() && pv.explosion.empty() && pv.body == render::kInvalidMesh) continue;
+        projVisuals_.push_back(pv);
+    }
+    LOG_INFO("projectile visuals: %zu weapons (%d body meshes), renderer particle API %s", projVisuals_.size(), meshes,
+             projectileFxApi() ? "present" : "absent (box marker fallback)");
+}
+
+int World::projectileVisualFor(const char* weaponId) const {
+    if (!weaponId) return -1;
+    for (size_t i = 0; i < projVisuals_.size(); ++i) if (projVisuals_[i].weapon == weaponId) return (int)i;
+    return -1;
+}
+
+void World::projectileFxStart(Projectile& p) {
+    p.fxHandle = -1;
+    if (!renderer_ || p.visual < 0 || projVisuals_[(size_t)p.visual].flight.empty()) return;
+    core::Vec3 f, u; fxFrame(p.vel, f, u);
+    p.fxHandle = fxSpawn(*renderer_, projVisuals_[(size_t)p.visual].flight, p.pos, f, u, 0);
+    if (p.fxHandle >= 0) ++projectileFxSpawned_;
+}
+
+void World::projectileFxMove(const Projectile& p) {
+    if (!renderer_ || p.fxHandle < 0) return;
+    core::Vec3 f, u;
+    // A resting grenade keeps its last orientation (zero velocity).
+    if (core::dot(p.vel, p.vel) < 1e-8f) return;
+    fxFrame(p.vel, f, u);
+    fxMove(*renderer_, p.fxHandle, p.pos, f, u, 0);
+}
+
+void World::projectileFxEnd(Projectile& p, const core::Vec3& at, const core::Vec3& normal, bool explode) {
+    if (!renderer_) return;
+    if (p.fxHandle >= 0) { fxStop(*renderer_, p.fxHandle, 0); p.fxHandle = -1; }   // trails finish their lifetime
+    if (!explode || p.visual < 0 || projVisuals_[(size_t)p.visual].explosion.empty()) return;
+    core::Vec3 f, u; fxFrame(normal, f, u);
+    if (fxSpawn(*renderer_, projVisuals_[(size_t)p.visual].explosion, at, f, u, 0) >= 0) ++projectileFxExplosions_;
 }
 
 } // namespace game

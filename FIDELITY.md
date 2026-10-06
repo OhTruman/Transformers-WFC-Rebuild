@@ -3200,6 +3200,152 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 24 — human playtest fidelity II (2026-10-05)
+
+### Fast-turn stutter: body orientation snapping between 60 Hz steps [measured; HIGH CONFIDENCE cause]
+- Playtest: fast left/right camera or steering motion looks stuttery, mostly in vehicle form, also on foot.
+- Measured (WFC_HEADJIT: drawn body heading vs camera yaw per render frame, 6 rad/s flicks / full-lock boost steer):
+  - 60 Hz render: ≤ 0.05°/frame.
+  - 144 Hz: 4.5–4.7°/frame (max 7°).
+  - 240 Hz: 2.8–4.6° (max 9°).
+  The camera turned every render frame while the body yaw advanced only on simulation steps. The original ticks physics and camera
+  in the same variable-length frame, so the body never lags its view.
+- Not renderer pacing, not camera position (CAMSYNC unchanged), not input quantisation.
+- Fix (presentation only; the simulation is untouched): a draw yaw added to the body mesh and its attachments between steps.
+  - View-slaved headings (robot, car / truck hover, tank) add the view yaw change since the last step.
+  - Physics-steered headings (boost Driving, jet servo TurnRate 0.5) extrapolate the last step's yaw rate.
+  - The boost camera follows the drawn heading.
+- After (mean °/frame at 144 / 240 Hz):
+
+  | scenario | 144 Hz | 240 Hz |
+  |---|---|---|
+  | robot | 0.000 | 0.000 |
+  | car hover | 0.010 | 0.004 |
+  | truck hover | 0.012 | 0.012 |
+  | boost | 0.35 | 0.07 |
+  | jet | 0.70 | 0.19 |
+
+  The jet residual also exists at 60 Hz (0.37°): the authentic TurnRate 0.5 servo lagging at flick reversals.
+
+### Transform mesh handoff per chassis [CONFIRMED ORIGINAL: TnAnimNotify_ToggleHidden in each chassis' transform clips]
+- Playtest: a short malformed / box-like stage in a Decepticon Scout robot→vehicle transform.
+- Cause: every chassis used the Optimus ToggleHidden times (robot hide 0.880, vehicle show 0.396, robot show 0.098, vehicle
+  hide 0.663). Barricade (Car4) authors 0.849 / 0.705 / 0.394 / 0.666, so its vehicle mesh appeared 0.31 s early, half-unfolded.
+  Sideswipe (0.414 / 0.351 / 0.000 / 0.279), Starscream (0.789 / 0.694 / 0.336 / 0.411) and the tanks differ too.
+- Now read per chassis from character.json (Option absent = Toggle_Unhide, Toggle_Hide explicit).
+- WFC_XFORMVIS 16/16 (Car2, Car4, Truck, Truck4, Jet, Jet4, Tank3, Tank2; both directions): the target mesh appears and the
+  source hides at the authored time (within a step), and no step draws neither mesh. Clip, pose, root, momentum and weapon
+  restore (25%) are unchanged.
+- The Scout transform has no authored particles (AssetTools: only Starscream authors Trails FX): a mesh swap plus sound, as
+  now drawn.
+
+### Tank 180 quick turn [CONFIRMED ORIGINAL: RE TARGETED_PASS5 §1]
+- Playtest: the tank special move can cause a rapid 360° manoeuvre.
+- Original: VehicleSpecialMove (Shift / RB) on press → CanUseSpecialMove (TimeBetween180s 1.2 s) → RecenterCamera.
+  TnQuickTurnCameraBehavior lerps the camera yaw linearly to tank yaw + 180° over 0.3 s; the hull follows the camera through
+  TnHoverTankSimulation.UpdateTurn, so it spins 180° in 0.3 s. Not 360°, no repeat while held.
+- The rebuild had a PROVISIONAL instant +180° jump of the view yaw. An exact ±π step is ambiguous to the yaw smoothing and the
+  hull's remainder() follow, a plausible source of the long-way spin. It is replaced by the original 0.3 s linear camera behaviour
+  (+ a quickTurnSerial for the Systems "Tank 180" sound).
+- The Soldier preset's Shift ability in ROBOT form is Whirlwind: a 5.9 s spinning melee attack, authentic, which may also be what
+  was seen.
+- VEHPHYS: 180° reached in 0.28 s; holding Shift 3 s = one turn; a press within 1.2 s is refused.
+
+### Fine aim per weapon [CONFIRMED ORIGINAL: RE pass 5 §3, AssetTools weapon.json fine_aim_camera (OverTheShoulder FOVsByPCS)]
+- PC right mouse = ToggleFineAim (toggle); pad LT hold. Ground speed ×0.5; blocked while meleeing / reloading / dodging (as before).
+- Camera rows by the held weapon's WeaponPCS (previously every weapon used the generic row):
+
+  | weapon | FOV | orbit | screen X | look yaw / pitch |
+  |---|---|---|---|---|
+  | Null Ray (SniperRifle) | 20 | 100 | 350 | 6.5 / 3.25 (×0.13) |
+  | HeavyPistol / BurstRifle | 30 | 100 | 350 | 9.375 / 4.6875 (×0.1875) |
+  | other | 45 | 800 | −50 | 25 / 12.5 (×0.5) |
+
+- One zoom stage only ("10x" is marketing text). Look speed blends over SpeedTransitionTime 0.5 s.
+- Magma Frag Launcher: fine aim remote-detonates instead of aiming. Here fine aim is refused; the launcher's grenades explode on
+  contact, so there is nothing to detonate [PARTIAL].
+- PARTIAL: scope sway wiggle (0.45° at 3 / 10 / 6 Hz), fine-aim orbit-distance smoothing (0.1 s assumed), HUD scope symbol
+  (Frontend: showScope long / short / medium).
+- WFC_FINEAIMTEST 3/3: Null Ray FOV 20 / look 0.130, HeavyPistol 30 / 0.187, IonBlaster 45 / 0.500, speed ×0.50, toggle off → 80.
+
+### Energon Repair Ray [CONFIRMED ORIGINAL: TnWeaponRepair / TnWeaponBeam script, RepairBeam_WEPDATA, AssetTools 8297bdd]
+- Before: the Repair Ray was not simulated (no beam, no heal). Now it is a beam that ticks every FireInterval (0.1 s) along the aim
+  over WeaponRange 3500 UU:
+  - TnWeaponRepair.ProcessBeamHit: a teammate is healed HealthPerSecond 60 × RepairRateModifier (no buffs: ×1) × Δt, TnHealTypeRepairTeam;
+  - otherwise TnWeaponBeam.ProcessBeamHit: the hit actor takes DamagePerSecond 60 × Δt, TnDamageTypeRepairEnemy;
+  - ammo 10 / s (clip 100), HeatProperties.HeatMax 0 → no overheat in practice [HIGH].
+- HUD state: repairBeam / repairBeamHealing / start / end / target per frame, for the Beam2 ribbon (Rendering) and the
+  WP event 1 (heal loop) / event 2 (damage loop) sounds (Systems).
+- PARTIAL: PlayerTargeting.GetRepairTarget lock-on (the beam end is pulled to a picked teammate's TargetableLocation) is not
+  recovered; the beam follows the crosshair. Heal type segments: healed across segments [HIGH].
+- WFC_PARTICIPANTTEST: teammate +60 HP/s from the beam (+ the pawn's own regen when idle), enemy −54 / s, 9 ammo / s, HUD flag.
+
+### Match start countdown [CONFIRMED ORIGINAL: RE pass 5, TnMultiplayerGame]
+- Already present: PendingMatch, GRI.ResetCountdown(true, 10) → MatchAutoStartCountdown 10 s, a CountdownTick event each second
+  (PreGameCountdown <CurrentGame:CurrentCountdown>), no pawns until InProgress; then everyone spawns and the announcer plays.
+- Not restored here: GameCountdownPostProcess (active 6 s, ramp-out 3 s) is a rendering / frontend presentation effect.
+
+### Decepticon Scout (Barricade) transform look [authored data; no fallback frame]
+- The per-chassis ToggleHidden times are the authored Car4 notifies: robot hides at 0.849 s, vehicle shows at 0.705 s (R→V);
+  robot shows at 0.394 s, vehicle hides at 0.666 s (V→R). Both meshes are drawn in the overlap, as authored.
+- The graybox fallback cannot appear mid-transform: the form swap re-samples and re-skins the new mesh in the same tick
+  (Character::updateAnimation), and the partner mesh is skinned on the first tick that it is visible. XFORMVIS 16/16.
+- So the "box-like" intermediate is the authored fold of Barricade's clips, not a missing pose [HIGH; visual confirmation pending].
+
+### Jet handling values [CONFIRMED ORIGINAL authored blueprints]
+- Hover: HoverPlane_Physics accel 2500, max 1500, gravity cancelled (TnHoverPlaneSimulation always hovers: the "floaty" feel),
+  Ascend / Descend = Dash ±Z at 1000. Flying: Plane_Physics MaxSpeed 4000, accel 3000, drag 600, return to hover above crash
+  speed 3000. All read from character.json; they match RE pass 5 §4. The remaining jet heading jitter (0.4° / frame at 60 Hz)
+  is the TurnRate (0.1, 0.5, 0.5) servo itself.
+
+### Scout height [re-confirmed]
+- WFC_HEIGHTTEST Car2 / Car4: capsule 1.550 constant, root 0, scale 1, mesh origin 0; idle hips 1.51-1.54 m → jog 1.94-2.32 m.
+  This is the authored AnimSet posing; nothing changes the capsule, root or scale. Authentic, unchanged.
+
+### DEV / QA TOOLING [NOT ORIGINAL — never part of a fidelity claim]
+- World::qa* API, all no-ops unless the process starts with WFC_QA=1. It is driven by Frontend's separate Win32 QA window (F10).
+- qaWeaponIds(vehicle), qaSetLoadout(ids) through the real applyLoadout (restrictions apply, refused ids returned), qaRespawn
+  (suicide, no score → the normal respawn wave), qaTeleportToStart(i), qaSetNoclip, qaSetGodMode, qaStatus.
+- Map / mode / class / lobby: Frontend drives the real lobby flow.
+- WFC_QATEST 7/7 with the gate; without it, every call is refused.
+
+### Projectile visuals [CONFIRMED ORIGINAL bindings: AssetTools weapon.json projectile_visual, RE projectile_effect_bindings]
+- Was: every projectile drew as an orange box marker.
+- Now each projectile carries its weapon's authored visual (projectiles[0].projectile_visual), resolved by class id, else provider
+  folder, and accepted only when the file's class matches. Lifecycle:
+  - spawn: spawnParticleEffect(FlightEffect, pos, forward = velocity, up);
+  - each tick: setParticleEffectTransform;
+  - impact / fuse: stopParticleEffect (trails finish), then the ExplosionEffect at the hit location, oriented by the hit normal
+    (EmitterPool.SpawnEmitter(ExplosionEffect, HitLocation, rotator(HitNormal)));
+  - LifeSpan expiry: no explosion.
+- FlightEffect is the body (no static mesh) for all but the thrown grenades. Flak / Flashbang / Heal also draw their class-default
+  WEP_Grenade_*_STAT mesh.
+- Renderer API from agents/rendering (38c9ecf+), detected at compile time: on a tree without it, the FX calls compile out and the
+  box marker stays as a non-original fallback. It also stays when a template is missing from the map's FX data.
+- PARTIAL: PlasmaCannon uses Charge1 visuals (charge levels not simulated); grenade mesh orientation follows the velocity yaw
+  (spin not recovered); the fuse explosion normal is assumed up.
+- WFC_PROJFXTEST 2/2: 11/11 projectile weapons bind a FlightEffect (15 weapons with visuals incl. grenades, 3 body meshes), all
+  projectiles end within 12 s. A standalone check (work/pass23/fxcheck) confirms the detection calls spawn / move / stop with
+  Rendering's exact signatures.
+
+### Vehicle weapon origin and muzzle alternation [CONFIRMED ORIGINAL: socket data + RE pass 5 §9g script]
+- WFC_VSOCKET: WeaponSocket_Primary sits on each chassis' left gun bone (L_GunRobo01_XT) or the tank cannon (C_Cannon_XB),
+  inside the vehicle hull; Starscream's is under the wing, 0.8 m below the physics box.
+- Correction: firing only from the left was NOT original. It came from using WeaponSocket_Primary alone.
+- Original: the vehicle weapon mesh's MuzzleFlashSockets = [Primary, Primary2] (Primary2 on R_GunRobo01_XT) for
+  AssaultRifleVehicle, AssaultRiflePlane, RocketVehicle, RocketPlane and HomingRocketVehicle. HmWeapon.OnPlayFireEffects plays
+  the flash at CurrentSocket, then HmWeaponMesh.ChangeSocket advances it ((i + 1) % N) once per shot.
+  - Projectiles spawn at the shot's socket (Weapon.ProjectileFire RealStartLoc = GetMuzzleLoc() before the advance) and aim at
+    the camera-trace hit point.
+  - Instant-hit MG: the damage trace starts at TnPlayerPawn.GetWeaponStartTraceLocation = the point on the camera's crosshair
+    ray nearest the pawn (ViewLoc + ProjectOnTo(Location - ViewLoc, view dir)), along the aim; only the flash / tracer alternate.
+- Chassis without Primary2 (the tanks) and weapons not in the list stay on Primary.
+- HudState vehicleShotSerial / vehicleShotSocket / vehicleShotMuzzle let the flash / tracer glue follow the socket.
+- WFC_MUZZLETEST 5/5. Sockets 0,1,0,1… with the muzzle alternating sides: Car2 ±0.5 m, Car4 ±0.71, Jet4 ±1.4, Truck3 ±1.21;
+  Tank3 on Primary only.
+- The integrated muzzle / tracer effects pick templates from the held ROBOT weapon class (Systems' weaponFx(weaponClass_)), not
+  the vehicle weapon: reported to Systems / Integration.
+
 ## PASS 23 — human playtest fidelity (2026-10-05)
 
 ### Fresh match state [CONFIRMED ORIGINAL: RE pass 4 - PRI / Team Score 0, OldPRI.Reset, TnTeamInfo zeroed on seamless travel]
