@@ -51,6 +51,9 @@ struct MeshData {
     std::vector<float> normals;        // x,y,z per vertex (parallel; may be empty)
     std::vector<float> uv;             // u,v per vertex (parallel; may be empty)
     std::vector<float> uv1;            // lightmap UV per vertex (parallel; may be empty)
+    // cooked LOD0 vertex index per vertex (glTF _WFC_SRCVERT, AssetTools a7b9ef0) where the export duplicated
+    // vertices; UINT32_MAX = not carried. Empty when no primitive carries it.
+    std::vector<uint32_t> srcVert;
     std::vector<uint32_t> indices;     // triangle list
     std::vector<SubMesh> subs;         // material slices; empty == draw all with one colour
     std::vector<Material> mats;
