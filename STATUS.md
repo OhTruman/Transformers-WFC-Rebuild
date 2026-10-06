@@ -3,6 +3,42 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08g (2026-10-05) — Gameplay Pass 24: tank 180, Repair Ray beam, projectile FX, vehicle muzzle alternation, fine-aim cameras, QA API — branch `integration/milestone-08g`
+
+On 08f (ae2df5f). Merges agents/gameplay 0f870ca (c5c992c..0f870ca), merged after Gameplay announced Pass 24 complete and pushed. The other lanes are unchanged since 08f.
+
+**Integration:**
+- World.cpp had 8 conflict hunks. Systems' projectile audio (spawn / move / explode / hit-wall / remove) and Gameplay's projectile FX (projectileFxMove / projectileFxEnd) are both kept at every site.
+- Projectiles now draw the authored FlightEffect / thrown-grenade mesh. The box remains only without an authored effect.
+- Participant team colours and the profiler draw scope are kept.
+- Systems' Gameplay-24 addendum is applied:
+  - tank quickTurnSerial → the 180 sound;
+  - the Repair Ray beam sound follows Gameplay's explicit beam state; the trace-derived block and its timeout are removed.
+- Pass 24 harnesses are on the direct-boot list.
+- Open:
+  - vehicle muzzle-flash socket glue (HudState vehicleShot*) → Systems;
+  - prewarmDynamicMesh at Character model assignment → Gameplay;
+  - robot-form instant-hit trace start → user decision.
+
+**Validation:**
+- Builds and suites:
+  - clean Debug / Release;
+  - frontend 79 / 0, harness 191 / 0;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520, chaos 0; audio 634 / 0.
+- Gameplay Pass 24 tests:
+  - PROJFX 3 / 3 (renderer particle API present: 11 flight, 11 explosions);
+  - MUZZLE 5 / 5, FINEAIM 3 / 3, XFORMVIS 16 / 16;
+  - QATEST 7 / 7 (needs WFC_QA=1);
+  - SWITCH 32 / 32, VEHPHYS 27 / 27, SCORE 9 / 9.
+- Map suite: 8 / 8 versus maps.
+- release_path_check PASS; visual suite as 08f.
+- 10-match frontend soak:
+  - selected bodies / weapons / factions;
+  - 0 long GPU frames, 0 out-of-bounds / resets, 0 timeouts;
+  - textures plateau at 78; memory 3.1–4.2 GB, flat on revisits.
+
 ## INTEGRATION MILESTONE 08f (2026-10-05) — accounts prompt fix, beam fill, match announcer / countdown audio, volume sliders — branch `integration/milestone-08f`
 
 On 08e (1168af2). Render data regenerated (every map and frontend scene; Rendering M56–M58 beam data, AssetTools 439a8ce material fixes).
