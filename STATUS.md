@@ -3,6 +3,35 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## INTEGRATION MILESTONE 08o (2026-10-06) — playtest build: music-start and opponent-spawn hitches fixed — branch `integration/milestone-08o`
+
+On 08n (1b9344f). User-approved small milestone before the human playtest.
+
+| lane | head | content |
+|---|---|---|
+| agents/systems | 705cf23 | M08q: streamed cues over 2 MB that aren't resident decode on the worker at play (match music 20-248 MB; DM_FINALSTRETCH_LP was a 159-686 ms main-thread decode); one-shots started under a fade-in from 0 or a 0 slider no longer lose their voice. M08r: SYSTEMS_M08R glue applied, so applyCharacterTo's weapon-audio glue runs only for the local pawn |
+| agents/gameplay | f864266 | WFC_SPAWNPROF covers opponent spawns and first chassis loads (diagnostics only) |
+| agents/rendering | bc3fa73 (cherry-picked as 05adea1) | first-frame "GPU frame time" diagnosis: the CPU span is printed beside the GPU query |
+
+**The M08r bug:** an opponent's spawn decoded its weapon cues on that frame (the 67 ms 08n frame) and overwrote the local player's loadout / vehicle-weapon audio classes.
+
+**Not merged:** Rendering M72 / M73 / M74 (bc9f3bd / f112bc9 / edc4816) — cross-map materials, death-scorch decals, energy-death Defrag dissolve. They need one full render-data regeneration and go into the next milestone, with the user-approved hidden warm-up draw (Rendering, in progress). bc3fa73 was taken alone because it sits on top of them.
+
+**Validation:**
+- Builds and suites:
+  - clean Debug / Release; frontend 79 / 0;
+  - harness 342 / 0 / 8; **audio 719 / 0**;
+  - TDM 43, modes 21, CTF 12;
+  - weapons 19, participants 22, chassis 14;
+  - transform 0 / 1520.
+- Gameplay tests: RMUZZLE 4, CHARGE 9, MUZZLE 5, PROJFX 3, QATEST 7, FINEAIM 3, SWITCH 32, SCORE 9, XFORMVIS 16, VEHPHYS 27, PRELOAD 1.
+- 4-map representative frontend flow (as 08n):
+  - DM_FINALSTRETCH_LP "decoding on the worker"; **no streamed decode over 20 ms**;
+  - **opponent spawns 0.0 ms** (24 spawns); local spawns 0.7 ms after the session's first (22 ms apply);
+  - **0 long GPU frames**, 0 GL errors, 0 out-of-bounds / resets, 0 leaks, 0 timeouts;
+  - bodies / weapons correct.
+- Remaining visible hitches are menu-only: party-lobby revisits prepare a preview body on a visible frame (Barricade anim sets 92 ms, Sideswipe materials 57 ms). This is Frontend's; no Frontend session is running.
+
 ## INTEGRATION MILESTONE 08n (2026-10-06) — focused synchronization for the next human playtest — branch `integration/milestone-08n`
 
 On 08m (5479010). Every lane's newest stable head was inspected; AssetTools and RE were checked read-only.
