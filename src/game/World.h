@@ -467,6 +467,10 @@ private:
     std::vector<std::string> loadoutRefused_;
     unsigned seenWeaponChange_ = 0;
     const assets::SkinnedModel* weaponModelFor(const WeaponDef& d);
+    // Load (and prewarm) the held-weapon models of these provider / class ids ahead of their first equip: the first time a
+    // weapon becomes the held weapon its model loads on that frame (3-38 ms, HeavyMG 107 ms; WFC_WEAPONLOADPROF).
+    void preloadHeldWeaponModels(const std::vector<std::string>& weapons);
+    std::vector<std::string> preloadedSelection_;   // the local selection's weapons last preloaded
     void syncShownWeapon();
     std::string localChassis_;
     std::string mapName_ = "MP_IAC_Streets";

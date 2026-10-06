@@ -813,6 +813,7 @@ const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
     if (ok) {
         if (d.animGltf && *d.animGltf) assets::loadAnimationsByName(ext + d.animGltf, *m);
         resolveModelTextures(*m);
+        if (renderer_) { render::MeshData md; md.subs = m->subs; md.mats = m->mats; fxPrewarm(*renderer_, md, 0); }
     } else LOG_ERROR("weapon %s: mesh %s unavailable", d.id, d.meshGltf ? d.meshGltf : "-");
     const assets::SkinnedModel* raw = ok ? m.get() : nullptr;
     weaponModels_[d.id] = std::move(m);
@@ -821,6 +822,15 @@ const assets::SkinnedModel* World::weaponModelFor(const WeaponDef& d) {
 
 // The weapon mesh drawn at the socket is the ACTIVE inventory weapon's (no other weapon may be shown in its place).
 double World::profileWeaponModelLoad(const WeaponDef& d) { const double t0 = profNowMs(); weaponModelFor(d); return profNowMs() - t0; }
+
+void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
+    for (const std::string& n : weapons) {
+        const WeaponDef* d = findWeaponDef(n);
+        // Only weapons that can be the held weapon (primary / heavy) and draw a mesh; the Ion Blaster uses the boot model.
+        if (!d || (d->typeCode != 0 && d->typeCode != 1) || !d->meshGltf || !*d->meshGltf || std::string(d->id) == "IonBlaster") continue;
+        weaponModelFor(*d);
+    }
+}
 
 void World::syncShownWeapon() {
     const Weapon& w = player_.pawn().weapon();
@@ -914,6 +924,16 @@ void World::tick(float dt) {
             const MatchPlayer& mp = match_.players()[p];
             if (mp.hasSelectedCharacter) chassisAssets(resolveChassis(mp.selection, match_.faction((int)p)));
         }
+    // The local player's selected weapons (only the local pawn draws a held weapon mesh): custom list, else the iconic preset.
+    if (matchActive_ && localPlayer_ >= 0 && (size_t)localPlayer_ < match_.players().size()) {
+        const MatchPlayer& lp = match_.players()[(size_t)localPlayer_];
+        if (lp.hasSelectedCharacter) {
+            std::vector<std::string> want = lp.selection.weapons;
+            if (lp.selection.type != 0 || want.empty())
+                if (const ChassisAssets* ca = chassisAssets(resolveChassis(lp.selection, match_.faction(localPlayer_)))) want = ca->def.iconicWeapons;
+            if (want != preloadedSelection_) { preloadedSelection_ = want; preloadHeldWeaponModels(want); }
+        }
+    }
     pickupEvents_.clear();
     matchEvents_.clear();
     destructibleEvents_.clear();
@@ -1054,7 +1074,10 @@ void World::startLocalMatch(const MatchSettings& s) {
     // Load scheduling only, not original behaviour.
     if (localPlayer_ >= 0) {
         const int fa = match_.faction(localPlayer_);
-        for (int sp = 0; sp < 4; ++sp) chassisAssets(defaultChassis((Specialty)sp, fa));
+        for (int sp = 0; sp < 4; ++sp) {
+            chassisAssets(defaultChassis((Specialty)sp, fa));
+            preloadHeldWeaponModels(classPresetWeapons(specialtyName((Specialty)sp)));   // its preset weapons too
+        }
     }
 }
 
