@@ -692,7 +692,7 @@ bool Application::loadMatch(const frontend::MatchLaunch& m) {
     // [integration M06] Character selection -> Gameplay (GAMEPLAY_FRONTEND_HUD_CONTRACT.md 3): the local player's body
     // comes from the frontend's CustomTransformers selection; CheckReadySpawn waits for it [CONF].
     world_.match().requireCharacterSelection(world_.localMatchPlayer());
-    selectionSent_ = false;
+    selectionSentSerial_ = 0;
     lifecycleT_ = 0.0f; lifecycleStep_ = 0;
     frontend::FlowTrace::emit("match.gameplay", {{"map", gl.map}, {"mode", gl.modeTag}, {"goalScore", std::to_string(gl.settings.goalScore)},
                                                  {"timeLimit", std::to_string(gl.settings.timeLimit)}});
@@ -742,7 +742,9 @@ void Application::routeMatchToFrontend(float dt) {
     const int me = world_.localMatchPlayer();
     // [integration M06] Customize.SelectCharacter -> TnPlayerController.SelectCharacter -> PRI._SelectedCharacter:
     // the frontend's selection becomes Gameplay's CharacterSelection (type, specialty, iconic chassis UniqueId).
-    if (!selectionSent_ && flow.selectedCharacter().valid && me >= 0) {
+    // Every pick is forwarded, also mid-match (Change Character): the original uses the new selection on the next
+    // respawn ("Selected character used on respawn", UIText; SelectCharacter never suicides) - Gameplay applies it.
+    if (flow.selectedCharacter().valid && me >= 0 && flow.selectionSerial() != selectionSentSerial_) {
         const frontend::GameFlow::SelectedCharacter& fc = flow.selectedCharacter();
         game::CharacterSelection cs;
         cs.type = fc.type;
@@ -754,9 +756,11 @@ void Application::routeMatchToFrontend(float dt) {
         cs.customSlot = fc.name;
         fillFullSelection(cs, fc);
         world_.match().selectCharacter(me, cs);
-        selectionSent_ = true;
+        const bool repick = selectionSentSerial_ != 0;
+        selectionSentSerial_ = flow.selectionSerial();
         const int f = team == 1 ? 1 : 0;
         frontend::FlowTrace::emit("match.characterSelected", {{"name", fc.name}, {"type", std::to_string(cs.type)}, {"specialty", sp},
+                                                            {"repick", frontend::FlowTrace::boolean(repick)},
                                                             {"faction", f == 1 ? "Decepticon" : "Autobot"},
                                                             {"chassis", game::resolveChassis(cs, f)},
                                                             {"body", fc.bodyAvailable[f] ? "available" : "MISSING"}});

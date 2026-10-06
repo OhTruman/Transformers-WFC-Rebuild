@@ -154,6 +154,8 @@ public:
     void selectCharacter(const SelectedCharacter& c);
     void clearSelectedCharacter();   // PRI.ClearCharacter
     const SelectedCharacter& selectedCharacter() const { return selected_; }
+    // Bumped by every Customize.SelectCharacter (also a re-pick of the same character): the match forwards each new pick.
+    uint32_t selectionSerial() const { return selectionSerial_; }
     void showMenu();                                // TnPlayerController.ShowMenu (Escape / Start release)
     // [integration] Gameplay MatchOver -> 15 s -> TnGame.ReturnToGameLobby: ServerTravel to the game lobby
     // (UI_Lobby_m?...?MapId=<map>) [RE M05 blockers F4 / F6].
@@ -275,6 +277,7 @@ private:
     MatchValues matchValues_;
     LocalProfile profile_;
     SelectedCharacter selected_;
+    uint32_t selectionSerial_ = 0;
     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;
