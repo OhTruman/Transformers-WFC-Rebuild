@@ -1,4 +1,6 @@
 #include "frontend/Profile.h"
+
+#include <algorithm>
 #include "assets/Json.h"
 #include "core/Log.h"
 #include "frontend/FlowTrace.h"
@@ -81,6 +83,7 @@ void LocalProfile::load() {
             else if (k == "Fullscreen") display.fullscreen = v == "1";
             else if (k == "TextureQuality") display.textureQuality = std::atoi(v.c_str());
             else if (k == "VSync") display.vsync = v == "1";
+            else if (k == "FrameLimit") display.frameLimit = std::max(0, std::atoi(v.c_str()));
         } else if (section == "[ProfileData]") values_[k] = v;
     }
 }
@@ -98,7 +101,8 @@ void LocalProfile::save() const {
         if (!loggedInAccount.empty()) f << "SignedIn=" << loggedInAccount << "\n";
     }
     f << "\n[PCSettings]\nWidth=" << display.width << "\nHeight=" << display.height << "\nFullscreen=" << (display.fullscreen ? 1 : 0)
-      << "\nTextureQuality=" << display.textureQuality << "\nVSync=" << (display.vsync ? 1 : 0) << "\n";
+      << "\nTextureQuality=" << display.textureQuality << "\nVSync=" << (display.vsync ? 1 : 0)
+      << "\nFrameLimit=" << display.frameLimit << "\n";
 }
 
 } // namespace frontend

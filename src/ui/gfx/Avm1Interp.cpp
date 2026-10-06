@@ -781,10 +781,14 @@ Value VM::call(const Value& fnV, const Value& self, Args& args, Object* superPro
     c.thisv = self.isNullish() ? Value::undef() : self;
     // _parent / _root / unqualified timeline calls inside a function use the timeline the function was defined on
     // (its scope), not `this`. Functions defined outside any timeline fall back to the receiving clip.
+    // A function whose defining timeline was removed keeps that (removed) timeline: its "" target operations act on the
+    // dead clip, as in Flash, not on the root. (CustomTransformers' weapon menu background registers a Stage listener
+    // that outlives it; its onResize sets _width / _height = Stage size + 30 - on the root that shrank and shifted the
+    // whole Create a Character movie after a weapon slot visit.) Only functions without a defining timeline fall back.
     c.target = fn->defTarget;
-    if ((!c.target || c.target->removed) && self.isObject() && self.o->display && self.o->display->kind == gfx::DisplayObject::Kind::Clip)
+    if (!c.target && self.isObject() && self.o->display && self.o->display->kind == gfx::DisplayObject::Kind::Clip)
         c.target = self.o->display;
-    if (c.target && c.target->removed) c.target = player_->root();
+    if (!c.target || (c.target->removed && !fn->defTarget)) c.target = player_->root();
     c.origTarget = c.target;
     c.superProto = superProto;
     c.callee = fn;

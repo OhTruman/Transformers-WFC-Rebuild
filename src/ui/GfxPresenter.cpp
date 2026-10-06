@@ -1,4 +1,5 @@
 #include "ui/GfxPresenter.h"
+#include "core/FrameProfile.h"
 #include "core/Log.h"
 #include "frontend/FlowTrace.h"
 
@@ -509,6 +510,7 @@ void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
 }
 
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
+    core::prof::Scope prof("ui.update");
     syncMovies(flow);
     syncPopup(flow);
     if (!cursor_) {
@@ -580,6 +582,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
 }
 
 void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
+    core::prof::Scope prof("ui.draw");
     (void)flow;
     if (!glReady_) { glReady_ = gl_.init(); if (!glReady_) return; }
     viewW_ = w; viewH_ = h;

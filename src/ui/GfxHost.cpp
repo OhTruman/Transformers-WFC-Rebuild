@@ -1,4 +1,5 @@
 #include "ui/GfxHost.h"
+#include "core/FrameProfile.h"
 #include "assets/Json.h"
 #include "core/Log.h"
 #include "frontend/Catalog.h"
@@ -79,6 +80,7 @@ std::string GfxLibrary::externalTexture(const std::string& resource) const {
 }
 
 bool GfxMovie::open(const GfxLibrary& lib, const frontend::Catalog* catalog, const std::string& object, ExternalCall ec, FsCommand fs) {
+    core::prof::Scope prof("movie.open");
     object_ = object;
     std::string path = lib.movieFileForObject(object);
     if (path.empty()) { LOG_WARN("GFX movie object %s has no file", object.c_str()); return false; }

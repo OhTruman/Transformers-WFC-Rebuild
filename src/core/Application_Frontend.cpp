@@ -2,6 +2,7 @@
 // The flow itself (levels, lobbies, URLs, UI controller) is src/frontend/GameFlow; this file only owns the
 // process loop: frontend frames, loading the match world the flow launches, and releasing it on return.
 #include "core/Application.h"
+#include "core/FrameProfile.h"
 #include "core/FrontendSceneGL.h"
 #include "core/LoadYield.h"
 #include "core/Log.h"
@@ -183,6 +184,10 @@ void Application::attachPresenter() {
         const auto& d = frontend_->flow().profile().display;
         if (d.fullscreen || d.width != window_->width() || d.height != window_->height()) window_->setDisplayMode(d.width, d.height, d.fullscreen);
         window_->setVSync(d.vsync);
+        // PC EXTENSION frame cap: [PCSettings] FrameLimit (e.g. 30 / 60 / 120 / 144 / 165 / 240; 0 = none), or WFC_FPS_LIMIT.
+        int cap = d.frameLimit;
+        if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::atoi(e);
+        if (cap > 0) window_->setFrameLimit(cap);
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted
@@ -292,12 +297,145 @@ void Application::attachPresenter() {
         load();
         setRendererYield(renderer_, false);
         core::setLoadYield(nullptr);
+        if (frontend_->sceneDrawable()) {   // the new scene's first (costly) draw happens under the loading screen
+            core::prof::Scope prof("scene.prewarm");
+            platform::InputFrame in;
+            window_->pump(in);
+            frontend_->prewarmSceneOnce();
+            drawFrontendFrame();
+        }
     };
     frontend_->script().displayHook = [this](int w, int h, bool full) { window_->setDisplayMode(w, h, full); };
     frontend_->script().dumpHook = [this](const std::string& m) {
         for (const std::string& o : presenter_->openMovieObjects())
             if (o.find(m) != std::string::npos) LOG_INFO("GFX DUMP %s\n%s", o.c_str(), presenter_->dumpMovie(o).c_str());
     };
+}
+
+namespace {
+// Gameplay's QA API (agents/gameplay Pass 24c: World::qaWeaponIds / qaSetLoadout / qaRespawn / qaTeleportToStart /
+// qaSetNoclip / qaSetGodMode / qaStatus; DEV / QA TOOLING, no-ops without WFC_QA), detected.
+template <class W, class = void> struct HasQaApi : std::false_type {};
+template <class W>
+struct HasQaApi<W, std::void_t<decltype(std::declval<const W&>().qaWeaponIds(false)), decltype(std::declval<W&>().qaSetLoadout({})),
+                               decltype(std::declval<W&>().qaRespawn()), decltype(std::declval<W&>().qaTeleportToStart(0)),
+                               decltype(std::declval<W&>().qaSetNoclip(true)), decltype(std::declval<W&>().qaSetGodMode(true)),
+                               decltype(std::declval<const W&>().qaStatus())>> : std::true_type {};
+template <class W> std::vector<std::string> qaWeapons(const W& w) {
+    if constexpr (HasQaApi<W>::value) return w.qaWeaponIds(false); else { (void)w; return {}; }
+}
+template <class W> std::string qaTool(W& w, platform::QaRequest::Kind k, const std::string& weapon, int& startIndex) {
+    if constexpr (HasQaApi<W>::value) {
+        using K = platform::QaRequest::Kind;
+        if (k == K::Respawn) w.qaRespawn();
+        else if (k == K::NextStart) w.qaTeleportToStart(++startIndex);
+        else if (k == K::Noclip) w.qaSetNoclip(!w.qaNoclip());
+        else if (k == K::God) w.qaSetGodMode(!w.qaGodMode());
+        else if (k == K::Launch && !weapon.empty()) {   // the chosen weapon, once in game
+            std::vector<std::string> refused = w.qaSetLoadout({weapon});
+            if (!refused.empty()) return "weapon refused by the chassis restrictions: " + weapon;
+        }
+        return w.qaStatus();
+    } else { (void)w; (void)k; (void)weapon; (void)startIndex; return "Gameplay QA API not in this build"; }
+}
+}
+
+void Application::qaTick(const platform::InputFrame& in) {
+    // DEBUG-ONLY QA panel (NOT ORIGINAL): only with WFC_QA=1. A separate tool window (F10 toggles it); its requests run
+    // the normal frontend flow (party lobby -> private game -> map -> countdown) through the script runner.
+    static const bool enabled = std::getenv("WFC_QA") != nullptr;
+    if (!enabled || !frontend_) return;
+    frontend::GameFlow& flow = frontend_->flow();
+    if (!qa_) {
+        qa_ = platform::createQaPanel();
+        if (!qa_) return;
+        std::vector<platform::QaPanel::Option> maps, modes, chars, weapons;
+        for (const auto& m : frontend_->catalog().maps())
+            if (m.mapId > 0) maps.push_back({(m.friendlyName.empty() ? m.mapFilename : m.friendlyName) + " (" + std::to_string(m.mapId) + ")",
+                                             std::to_string(m.mapId)});
+        for (const char* t : {"TDM", "DM", "CTF", "CP", "KOTH", "DOM", "EXT"}) modes.push_back({t, t});
+        for (const auto& c : frontend_->roster().customCharacters()) chars.push_back({c.name, c.name});
+        weapons.push_back({"(class default)", ""});
+        for (const std::string& w : qaWeapons(world_)) weapons.push_back({w, w});
+        qa_->setOptions(maps, modes, chars, weapons);
+        qa_->show(true);
+        qa_->setStatus("Debug QA panel (not original). F10 toggles.");
+        LOG_INFO("QA panel enabled (WFC_QA, debug only)");
+    }
+    for (uint16_t k : in.keyPresses) if (k == 0x79) qa_->show(!qa_->visible());   // VK_F10
+    platform::QaRequest r = qa_->poll();
+    {   // command-line equivalents (debug only): WFC_QA_LAUNCH=MODE,MAPID,CLASS once from the title;
+        // WFC_QA_RESTART_AFTER=<s>: one Restart after that long in a match
+        static bool launched = false, restarted = false;
+        static double matchSince = 0;
+        if (!launched && r.kind == platform::QaRequest::Kind::None && flow.level() == frontend::LevelKind::FrontEnd && flow.frontEndStarted())
+            if (const char* e = std::getenv("WFC_QA_LAUNCH")) {
+                std::string v = e;
+                size_t a = v.find(','), b = v.find(',', a + 1);
+                if (a != std::string::npos && b != std::string::npos) {
+                    r.kind = platform::QaRequest::Kind::Launch;
+                    r.mode = v.substr(0, a); r.mapId = std::atoi(v.substr(a + 1, b - a - 1).c_str()); r.character = v.substr(b + 1);
+                }
+                launched = true;
+            }
+        if (flow.level() == frontend::LevelKind::Match && flow.ui().state() == frontend::UIState::InGame) {
+            if (matchSince == 0) matchSince = nowSeconds();
+            if (const char* e = std::getenv("WFC_QA_RESTART_AFTER"))
+                if (!restarted && r.kind == platform::QaRequest::Kind::None && nowSeconds() - matchSince > std::atof(e)) {
+                    r.kind = platform::QaRequest::Kind::Restart; restarted = true;
+                }
+        } else matchSince = 0;
+    }
+    {   // the launched weapon, once the local player is in game; in-match tools
+        static bool weaponPending = false;
+        static int startIndex = 0;
+        if (r.kind == platform::QaRequest::Kind::Launch || r.kind == platform::QaRequest::Kind::Restart) weaponPending = true;
+        const bool inGame = flow.level() == frontend::LevelKind::Match && flow.ui().state() == frontend::UIState::InGame;
+        if (weaponPending && inGame && qaLast_.kind == platform::QaRequest::Kind::Launch) {
+            qa_->setStatus(qaTool(world_, platform::QaRequest::Kind::Launch, qaLast_.weapon, startIndex));
+            weaponPending = false;
+        }
+        using K = platform::QaRequest::Kind;
+        if (r.kind == K::Respawn || r.kind == K::NextStart || r.kind == K::Noclip || r.kind == K::God || r.kind == K::Dummy) {
+            if (!inGame) { qa_->setStatus("In-match tools need a running match."); return; }
+            if (r.kind == K::Dummy) { world_.addMatchOpponent("QA Dummy", true /* drawn: visible */); qa_->setStatus("Spawned a dummy opponent."); }
+            else qa_->setStatus(qaTool(world_, r.kind, std::string(), startIndex));
+            frontend::FlowTrace::emit("qa.tool", {{"kind", std::to_string((int)r.kind)}, {"provenance", "DEBUG ONLY"}});
+            return;
+        }
+    }
+    if (r.kind == platform::QaRequest::Kind::None) return;
+    if (r.kind == platform::QaRequest::Kind::Restart) {
+        if (qaLast_.kind == platform::QaRequest::Kind::None) { qa_->setStatus("Nothing launched yet."); return; }
+        r = qaLast_;
+    }
+    const frontend::LevelKind level = flow.level();
+    std::string s;
+    if (level == frontend::LevelKind::Match) {   // leave the match through its own quit route (-> party lobby)
+        flow.call("Game.QuitToMainMenu", {});
+        flow.popupButton('A');
+        s = "wait:level=PartyLobby;wait:t=1;";
+    } else if (level == frontend::LevelKind::FrontEnd) {
+        s = "call:Online.OpenPartyLobby,GTS_TeamGame;wait:level=PartyLobby;wait:t=1;";
+    } else if (level != frontend::LevelKind::PartyLobby) {
+        qa_->setStatus("Use it from the title, the party lobby or a match.");
+        return;
+    }
+    if (r.kind == platform::QaRequest::Kind::Title) {
+        s += "ui:Back;wait:t=1;ui:Accept";
+        qaCharacter_.clear();
+    } else {
+        qaLast_ = r;
+        qaLast_.kind = platform::QaRequest::Kind::Launch;
+        qaCharacter_ = r.character;
+        s += "call:Online.PlayPrivateGame," + r.mode + ";wait:level=GameLobby;wait:t=1;call:Online.SetSelectedMapID," + std::to_string(r.mapId) +
+             ";wait:t=0.3;call:Online.BeginLobbyExitCountdown";
+    }
+    frontend_->script().load(s);
+    qa_->setStatus(std::string(r.kind == platform::QaRequest::Kind::Title ? "Back to title" : "Launching ") +
+                   (r.kind == platform::QaRequest::Kind::Title ? "" : r.mode + " map " + std::to_string(r.mapId) + " as " + r.character));
+    frontend::FlowTrace::emit("qa.request", {{"kind", r.kind == platform::QaRequest::Kind::Title ? "title" : "launch"}, {"mode", r.mode},
+                                             {"map", std::to_string(r.mapId)}, {"character", r.character}, {"provenance", "DEBUG ONLY"}});
 }
 
 void Application::shutdownFrontend() {
@@ -313,7 +451,18 @@ void Application::drawFrontendFrame() {
     ui::beginScreenFrame(window_->width(), window_->height());
     frontend_->draw(window_->width(), window_->height());
     if (!pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }
-    window_->present();
+    {   core::prof::Scope prof("present"); window_->present(); }
+    {   // WFC_FRAMEPROF: the gap between two presented frames (main loop and load yields alike), with what ran in it
+        static double lastPresent = 0;
+        double t = core::prof::now();
+        if (lastPresent > 0) {
+            std::string hitch = core::prof::frameEnd(t - lastPresent);
+            if (!hitch.empty())
+                LOG_INFO("FLOW frame.hitch %s level=%s movie=%s", hitch.c_str(), frontend::levelKindName(frontend_->flow().level()),
+                         frontend_->flow().ui().openMovie().c_str());
+        } else core::prof::frameEnd(0);
+        lastPresent = t;
+    }
 }
 
 void Application::runFrontend() {
@@ -328,13 +477,19 @@ void Application::runFrontend() {
         // ---- frontend levels (and the loading screen up to the match load) ----
         bool quit = false;
         for (;;) {
-            if (!window_->pump(input)) { quit = true; break; }
+            bool pumped;
+            { core::prof::Scope prof("pump"); pumped = window_->pump(input); }
+            if (!pumped) { quit = true; break; }
+            qaTick(input);
             double now = nowSeconds();
             double dt = now - last;
             last = now;
             if (dt > 0.25) dt = 0.25;
             if (lockstep) dt = 1.0 / 60.0;
-            frontend_->update(input, (float)dt);
+            {
+                core::prof::Scope prof("+frontend.update");
+                frontend_->update(input, (float)dt);
+            }
             if (flow.quitRequested()) { quit = true; break; }
             drawFrontendFrame();
             titleTimer += dt;
@@ -369,7 +524,9 @@ void Application::runFrontend() {
         // continues to the pre-game screen [RE MILESTONE05_PLAYTEST_RE section 7, CONFIRMED]. Automation (scripted
         // frontend runs, the lifecycle driver) selects the first default character instead unless WFC_CHARSELECT=1.
         bool automated = std::getenv("WFC_FRONTEND_SCRIPT") || std::getenv("WFC_FRONTEND_AUTOPLAY") || std::getenv("WFC_LIFECYCLE");
-        if (automated && !std::getenv("WFC_CHARSELECT")) {
+        if (!qaCharacter_.empty()) {   // DEBUG QA launch: the chosen class, through the normal selection contract
+            flow.selectCharacter(frontend_->selectionFor(qaCharacter_));
+        } else if (automated && !std::getenv("WFC_CHARSELECT")) {
             // Same contract as Customize.SelectCharacter (the first custom slot), not a second derivation.
             std::string first = frontend_->roster().customCharacters().empty() ? std::string() : frontend_->roster().customCharacters().front().name;
             flow.selectCharacter(frontend_->selectionFor(first));
