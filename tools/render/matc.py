@@ -317,6 +317,14 @@ class MatCompiler:
         per = n.get('Period', 1.0)
         return ('cos(%s * %s)' % (x, glf(2 * math.pi / per)) if per > 0 else 'cos(%s)' % x), t
 
+    def x_RandomSeed(self, c, n, p, o):
+        # WFC MaterialExpressionRandomSeed: one float per mesh element (FMeshElement +0xBC, set in the material PS
+        # SetMesh 0x82E982E8); the proxy field that fills it is not identified (RE). In the MP data it only picks an
+        # atlas variant (floor(seed * K) * C + D -> a UV component, CHR_Transformer_NormSpec_Cust_E_Mat on the wrecked
+        # soldiers): 0 selects the first authored variant [PARTIAL: which variant each prop showed is UNKNOWN]
+        self.notes.append('RandomSeed = 0 (first atlas variant; seed source UNKNOWN)')
+        return '0.0', 1
+
     def x_Time(self, c, n, p, o):
         self.uses.add('time'); return 'm.time', 1
 
