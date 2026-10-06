@@ -33,6 +33,10 @@ static bool readTextFile(const std::string& path, std::string& out) {
     return true;
 }
 
+// Rendering's IRenderer::prewarmDynamicMesh (agents/rendering M53), detected at compile time like the particle API.
+template <class R> auto fxPrewarm(R& r, const render::MeshData& md, int) -> decltype(r.prewarmDynamicMesh(md), void()) { r.prewarmDynamicMesh(md); }
+template <class R> void fxPrewarm(R&, const render::MeshData&, long) {}
+
 void World::load(render::IRenderer& renderer) {
     repairBeamHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) { fireRepairBeamImpl(w, o, d); };
     weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
@@ -1552,6 +1556,15 @@ const World::ChassisAssets* World::chassisAssets(const std::string& id) {
                         a->robot.clips.size(), a->vehicle.clips.size(), a->hasArm ? "yes" : "no");
     else LOG_ERROR("chassis %s UNAVAILABLE: %s", id.c_str(), a->error.c_str());
     ChassisAssets* raw = a.get();
+    // Rendering M53: compile the programs / upload the textures of every form's materials now, so the first robot -> vehicle
+    // transform does not pay for them in one frame (measured 65-166 ms hitch). Once per chassis (cached; bots share it).
+    if (renderer_ && a->ok) {
+        for (const assets::SkinnedModel* m : {&a->robot, &a->vehicle, a->hasArm ? &a->arm : nullptr}) {
+            if (!m || !m->valid()) continue;
+            render::MeshData md; md.subs = m->subs; md.mats = m->mats;
+            fxPrewarm(*renderer_, md, 0);
+        }
+    }
     chassisCache_[id] = std::move(a);
     return raw;
 }
