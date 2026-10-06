@@ -30,7 +30,8 @@ public:
     static bool isOriginalField(const std::string& field);
 
     // PC SKU display settings (PCSettings.*).
-    struct Display { int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; };
+    // frameLimit: PC EXTENSION ([PCSettings] FrameLimit, not an original setting; 0 = no cap, the default).
+    struct Display { int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0; };
     Display display;
     // The local player's display name (GetPlayerAlias / PRI.PlayerName). The original took it from the signed-in
     // Xbox Live gamertag; the offline PC reconstruction has no such service: [Identity] Name in the profile file,

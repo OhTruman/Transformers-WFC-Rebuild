@@ -179,6 +179,10 @@ void Application::attachPresenter() {
         const auto& d = frontend_->flow().profile().display;
         if (d.fullscreen || d.width != window_->width() || d.height != window_->height()) window_->setDisplayMode(d.width, d.height, d.fullscreen);
         window_->setVSync(d.vsync);
+        // PC EXTENSION frame cap: [PCSettings] FrameLimit (e.g. 30 / 60 / 120 / 144 / 165 / 240; 0 = none), or WFC_FPS_LIMIT.
+        int cap = d.frameLimit;
+        if (const char* e = std::getenv("WFC_FPS_LIMIT")) cap = std::atoi(e);
+        if (cap > 0) window_->setFrameLimit(cap);
     }
     // Profile settings -> their runtime owners. No owner API exists yet for the volumes (Systems), the camera
     // sensitivity / invert-Y (Gameplay), vibration, subtitles or gamma (Rendering): the values are stored, persisted

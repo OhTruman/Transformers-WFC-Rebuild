@@ -4,6 +4,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
+#include <mmsystem.h>
 #include <GL/gl.h>
 #include <xinput.h>
 
@@ -11,6 +12,8 @@
 #include "core/Log.h"
 
 #include <cstdlib>
+#include <chrono>
+#include <thread>
 #include <algorithm>
 #include <string>
 #include <vector>
@@ -244,7 +247,29 @@ public:
     }
     bool vsync() const override { return vsync_; }
 
-    void present() override { SwapBuffers(hdc_); }
+    void present() override {
+        SwapBuffers(hdc_);
+        if (frameLimit_ > 0) {   // PC EXTENSION frame cap: sleep (1 ms timer resolution) then spin to the deadline
+            using clock = std::chrono::steady_clock;
+            const auto period = std::chrono::duration_cast<clock::duration>(std::chrono::duration<double>(1.0 / frameLimit_));
+            auto now = clock::now();
+            if (nextFrame_.time_since_epoch().count() == 0 || now - nextFrame_ > period) nextFrame_ = now;   // late: resync
+            nextFrame_ += period;
+            while ((now = clock::now()) < nextFrame_) {
+                auto left = nextFrame_ - now;
+                if (left > std::chrono::milliseconds(2)) Sleep((DWORD)(std::chrono::duration_cast<std::chrono::milliseconds>(left).count() - 1));
+                else std::this_thread::yield();
+            }
+        }
+    }
+    void setFrameLimit(int fps) override {
+        fps = fps < 0 ? 0 : fps;
+        if (fps > 0 && frameLimit_ == 0) timeBeginPeriod(1);
+        if (fps == 0 && frameLimit_ > 0) timeEndPeriod(1);
+        frameLimit_ = fps;
+        nextFrame_ = {};
+        LOG_INFO("window: frame limit %s (PC EXTENSION)", fps > 0 ? (std::to_string(fps) + " fps").c_str() : "off");
+    }
     int width() const override { return width_; }
     int height() const override { return height_; }
     bool focused() const override { return focused_; }
@@ -292,6 +317,8 @@ private:
     bool cursorHidden_ = false;
     bool fullscreen_ = false, vsync_ = false;
     bool modeChanged_ = false;     // the monitor runs our fullscreen mode (restore on windowed / focus loss / exit)
+    int frameLimit_ = 0;
+    std::chrono::steady_clock::time_point nextFrame_{};
     int fsW_ = 0, fsH_ = 0;
     std::wstring monitorDevice_;
     RECT windowedRect_{};

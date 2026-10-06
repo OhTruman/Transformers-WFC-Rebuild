@@ -33,12 +33,16 @@ public:
     virtual void setOsCursorHidden(bool hidden) = 0;
 
     // Display settings (the PC SKU's PCSettings): the resolutions the primary display offers (width, height),
-    // windowed size or fullscreen (borderless over the monitor), and VSync (swap interval).
+    // windowed size, or fullscreen at that resolution (the monitor is switched to it: a display mode change, restored on
+    // windowed / alt-tab / exit), and VSync (swap interval).
     struct Mode { int width, height; };
     virtual std::vector<Mode> displayModes() const = 0;
     virtual void setDisplayMode(int width, int height, bool fullscreen) = 0;
     virtual bool fullscreen() const = 0;
     virtual void setVSync(bool on) = 0;
+    // PC EXTENSION (not in the original): cap presented frames per second (0 = no cap). Waits after the swap only, so
+    // fixed-step simulation is unaffected.
+    virtual void setFrameLimit(int fps) { (void)fps; }
     virtual bool vsync() const = 0;
 };
 
