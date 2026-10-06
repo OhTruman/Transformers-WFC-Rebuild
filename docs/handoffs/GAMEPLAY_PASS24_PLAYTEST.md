@@ -172,3 +172,15 @@ Experimental on bd622aa: 306 pass / 0 fail / 8 known; jet_servo 0.5 / 0.5 / 0.9 
 
 ### Validation (6a5c213)
 WFC_PRELOADTEST: a custom Bumblebee preloaded then picked spawns in 0.6 ms, first equip 0.2 ms. No change to existing paths.
+
+### 24r caller: docs/handoffs/GAMEPLAY_24R_frontend_preload.patch
+- Patch for src/core/Application_Frontend.cpp (a Frontend / Integration file), against agents/frontend f0277ce. Apply with
+  `patch -p1 --ignore-whitespace` (LF patch, CRLF targets; the same convention as Systems' patches).
+- It calls `world.preloadSelections(savedSlots)` right after `requireCharacterSelection` in loadMatch, under the match load,
+  building each saved CaC slot's selection as the real pick does (selectionFor + fillFullSelection). FlowTrace
+  `match.preloadCustom count=N`.
+- Detected at compile time: a no-op against a World without preloadSelections.
+- Verified on an archive copy of agents/frontend in Gameplay's work/:
+  - the patch applies cleanly and the tree builds (fallback path);
+  - with a test-only public stub and the fallback overload removed, it builds too, so the real path is selected and compiles.
+- Not run in a live frontend flow.
