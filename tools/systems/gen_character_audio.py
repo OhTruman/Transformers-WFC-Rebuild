@@ -113,6 +113,47 @@ def vehicle_component(definition):
                          'speed_history': int(f(d, 'VehicleSpeedHistoryLength', 15)),
                          'tread_fade': f(d, 'TireTreadCrossfadeTime', 0.1)}}
 
+# Vehicle FX per chassis (ExtractedAssets VerticalSlice/Characters/<id>/character.json, AssetTools vs_roster_export,
+# read-only): the VEHDEF HoverFX / BoostFx / JumpFX / RamFX particle structs {template, socket}; each socket's bone,
+# relative transform (UE -> glTF, the same conversion as ChassisDef ueSocketToGltf) and RelativeScale (HoverFX Size);
+# the transform clips' TnAnimNotify_ToggleVehicleFx (FxAllowed) times [CONF data].
+import math
+CHARS = 'F:/Transformers Rebuild/ExtractedAssets/VerticalSlice/Characters/'
+def ue_socket_to_gltf(loc, rot):
+    k = 2.0 * math.pi / 65536.0
+    P, Y, Rr = rot[0] * k, rot[1] * k, rot[2] * k
+    SP, CP, SY, CY, SR, CR = math.sin(P), math.cos(P), math.sin(Y), math.cos(Y), math.sin(Rr), math.cos(Rr)
+    ax = (CP * CY, CP * SY, SP)
+    ay = (SR * SP * CY - CR * SY, SR * SP * SY + CR * CY, -SR * CP)
+    az = (-(CR * SP * CY + SR * SY), CY * SR - CR * SP * SY, CR * CP)
+    cv = lambda a: (a[0], a[2], a[1])
+    c0, c1, c2 = cv(ax), cv(az), cv(ay)
+    t = (loc[0] * 0.01, loc[2] * 0.01, loc[1] * 0.01)
+    return [round(x, 6) for x in (c0[0], c0[1], c0[2], 0, c1[0], c1[1], c1[2], 0, c2[0], c2[1], c2[2], 0, t[0], t[1], t[2], 1)]
+def vehicle_fx(key):
+    try: cj = json.load(io.open(CHARS + key + '/character.json', encoding='utf-8'))
+    except Exception: return None
+    fx = next((v for k, v in cj.items() if k.startswith('vehicle_fx')), None) or {}
+    sockets = {s['socket']: s for s in ((cj.get('vehicle') or {}).get('sockets') or []) if isinstance(s, dict) and s.get('socket')}
+    out = {'sets': {}, 'sockets': {}, 'toggle': {}}
+    for setname in ('HoverFX', 'BoostFx', 'JumpFX', 'RamFX'):
+        lst = []
+        for e in fx.get(setname) or []:
+            if not isinstance(e, dict) or not e.get('template') or not e.get('socket'): continue
+            lst.append({'template': e['template'], 'socket': e['socket']})
+            so = sockets.get(e['socket'])
+            if so and e['socket'] not in out['sockets']:
+                out['sockets'][e['socket']] = {'bone': so.get('bone') or '', 'rel': ue_socket_to_gltf(so.get('relative_location_ue') or [0, 0, 0],
+                                               so.get('relative_rotation_ue') or [0, 0, 0]), 'scale': so.get('relative_scale') or [1, 1, 1]}
+        if lst: out['sets'][setname] = lst
+    for an in ((cj.get('vehicle') or {}).get('animations') or []) + ((cj.get('robot') or {}).get('animations') or []):
+        if not isinstance(an, dict) or not an.get('name', '').startswith('Transform_'): continue
+        for n in an.get('notifies') or []:
+            if n.get('class') == 'TnAnimNotify_ToggleVehicleFx':
+                out['toggle'].setdefault(an['name'], []).append({'t': n.get('time_s') or 0.0, 'duration': an.get('duration_s') or 0.0,
+                                                                 'option': (n.get('params') or {}).get('Option') or ''})
+    return out
+
 profiles, all_cues = {}, set()
 for key, ch in roster['chassis'].items():
     au = ch.get('audio') or {}
@@ -130,7 +171,8 @@ for key, ch in roster['chassis'].items():
             'clips': clips, 'weapons': sorted(set(loadout.values())),
             'vehicle_component': vehicle_component((ch.get('vehicle') or {}).get('definition')),
             # roster vehicle_form: car / truck / tank / plane -> which form class drives the component
-            'vehicle_form': (ch.get('vehicle') or {}).get('vehicle_form') or ''}
+            'vehicle_form': (ch.get('vehicle') or {}).get('vehicle_form') or '',
+            'vehicle_fx': vehicle_fx(key)}
     profiles[key] = prof
     all_cues |= set(voice.values()) | set(vehicle.values())
     if prof['vehicle_death_sound']: all_cues.add(prof['vehicle_death_sound'])
@@ -269,6 +311,10 @@ print('vehicle components: %d / %d chassis; classes %s' % (sum(1 for p in profil
 for k in ('Truck', 'Tank', 'Jet'):
     vc = profiles[k]['vehicle_component']
     print('  ', k, json.dumps({x: vc[x] for x in ('drive', 'reverse', 'jump_rev', 'slots', 'tunables', 'boost_oneshots')} if vc else None)[:900])
+vfx = [k for k, p in profiles.items() if p['vehicle_fx'] and p['vehicle_fx']['sets']]
+print('vehicle fx: %d / %d chassis; Car2 %s; toggles Car2 %s' % (len(vfx), len(profiles),
+      {k: len(v) for k, v in (profiles.get('Car2', {}).get('vehicle_fx') or {}).get('sets', {}).items()},
+      (profiles.get('Car2', {}).get('vehicle_fx') or {}).get('toggle')))
 print('projectile weapons %d: %s; beam weapons %s' % (sum(1 for w in wpn.values() if w['projectile']),
       sorted(k.split('.')[-1] for k, w in wpn.items() if w['projectile'] and not w['projectile']['flight_sound']),
       sorted(k.split('.')[-1] for k, w in wpn.items() if w['beam'])))

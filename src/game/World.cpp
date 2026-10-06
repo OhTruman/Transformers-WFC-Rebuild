@@ -404,6 +404,24 @@ void World::fireHitscan(const core::Vec3& origin, const core::Vec3& dirIn) {
     }
 }
 
+
+// WFC_VFX_FAKE: a recording stand-in for Rendering's particle runtime (logs spawn / stop / params) so the per-chassis vehicle
+// FX driving can be checked in a build whose renderer has no spawn API yet.
+static void bindFakeVehicleFxRuntime(VehicleFxDriver::Runtime& r) {
+    static int next = 1;
+    r.spawnAt = [](const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) {
+        LOG_INFO("VFX spawn h=%d %s pos=%.2f,%.2f,%.2f fwd=%.2f,%.2f,%.2f up=%.2f,%.2f,%.2f", next, t.c_str(), p.x, p.y, p.z, f.x, f.y, f.z, u.x, u.y, u.z);
+        return next++;
+    };
+    r.setTransform = [](int, const core::Vec3&, const core::Vec3&, const core::Vec3&) { return true; };
+    r.setParam = [](int h, const std::string& n, const float* v) {
+        static int k = 0;
+        if (n == "Color" || ++k % 60 == 0) LOG_INFO("VFX param h=%d %s=%.2f,%.2f,%.2f,%.2f", h, n.c_str(), v[0], v[1], v[2], v[3]);
+        return true;
+    };
+    r.stop = [](int h) { LOG_INFO("VFX stop h=%d", h); };
+}
+
 void World::setAudio(audio::IAudio* a, bool loadSliceMap) {
     audio_ = a;
     if (!a) return;
@@ -477,6 +495,7 @@ void World::setPlayerCharacterAudio(const std::string& chassisKey) {
     if (!p) { LOG_WARN("character audio: no profile for %s (default kept)", chassisKey.c_str()); return; }
     vehicleAudio_.stopAll(cues_);           // the previous body's vehicle loops end with it (class change)
     vehicleForm_.reset();
+    vehicleFxDriver_.setData(&p->vehicleFx);   // [Systems M08e] the new body's authored vehicle effects
     audioProfile_ = p;
     robotFoley_.setProfile(p);
     vehicleAudio_.setProfile(*p);
@@ -505,6 +524,7 @@ void World::resetSystemsForMatch() {
     cues_.stopNonMapInstances();               // weapon / vehicle / foley / transform / pickup sounds (immediate)
     vehicleAudio_.stopAll(cues_);
     weaponAudio_.stopAll(cues_);
+    vehicleFxDriver_.stopAll();
     vehicleForm_.reset();
     vehicleAudio_ = VehicleAudio{};
     vehicleAudio_.setProfile(audioProfile());
@@ -665,26 +685,29 @@ void World::tickVehicleBoost(float dt) {
     }
 
     // Boost afterburners (looping while held; bKillOnDeactivate).
-    if (boost && !boostActive_) {
+    // [Systems M08e] the hand-made Optimus effects only without Rendering's runtime (VehicleFxDriver drives the authored
+    // per-chassis HoverFX / BoostFx / JumpFX / RamFX, Optimus included, when it is bound).
+    const bool handFx = !vehicleFxDriver_.bound();
+    if (boost && handFx && !boostActive_) {
         boostInst_[0] = vehicleFx_.start(VehicleFx::Boost, VehicleFx::BoostL);
         boostInst_[1] = vehicleFx_.start(VehicleFx::Boost, VehicleFx::BoostR);
-    } else if (!boost && boostActive_) {
+    } else if (!(boost && handFx) && boostActive_) {
         for (int& id : boostInst_) { vehicleFx_.deactivate(id); id = -1; }
     }
-    boostActive_ = boost;
+    boostActive_ = boost && handFx;
     // Hover thrusters on all six wheel sockets.
-    if (hover && !hoverActive_) {
+    if (hover && handFx && !hoverActive_) {
         for (int i = 0; i < 6; ++i) hoverInst_[i] = vehicleFx_.start(VehicleFx::Hover, VehicleFx::HoverLBack + i);
-    } else if (!hover && hoverActive_) {
+    } else if (!(hover && handFx) && hoverActive_) {
         for (int& id : hoverInst_) { vehicleFx_.deactivate(id); id = -1; }
     }
-    hoverActive_ = hover;
+    hoverActive_ = hover && handFx;
     // Jump boosters: one-shot burst on vehicle take-off; killed if the vehicle form ends.
     bool grounded = pc.onGround();
     bool tookOff = vehicle && vehiclePrevGrounded_ && !grounded && pc.velocity().y > 2.0f;
     bool landed = vehicle && !vehiclePrevGrounded_ && grounded;
     (void)landed;
-    if (tookOff) {
+    if (tookOff && handFx) {
         jumpInst_[0] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpC);
         jumpInst_[1] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpR);
         jumpInst_[2] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpL);
@@ -698,7 +721,7 @@ void World::tickVehicleBoost(float dt) {
     // audio and the ram-hit registry.
     VehicleNitro::Event ne = nitro_.follow(pc.vehicleState().nitroRemain > 0.0f);
     if (ne == VehicleNitro::Event::Started) {
-        ramInst_ = vehicleFx_.start(VehicleFx::Ram, VehicleFx::RamSocket);
+        if (handFx) ramInst_ = vehicleFx_.start(VehicleFx::Ram, VehicleFx::RamSocket);
         // StartNitro: RamFX, NitroForceFeedback, then PlayNitroSound (VehicleAudio below). No script calls
         // PlayCustomLoopingSound (Auto_Ram_Alert) [CONF: decompiled TransGame / HM_Engine], so it is not played.
     } else if (ne == VehicleNitro::Event::Stopped) {
@@ -726,6 +749,28 @@ void World::tickVehicleBoost(float dt) {
         s.dashing = pc.vehicleState().dashRemain > 0.0f;
         s.nitroStarted = ne == VehicleNitro::Event::Started;
         s.wheelSlip = tireSlipOverride_;          // CarSimulation.SlipAngle only Gameplay can provide (setTireSlipAngle)
+        {   // [Systems M08e] per-chassis vehicle FX when Rendering's runtime is bound (WFC_VFX_FAKE: recording stand-in)
+            static bool fake = false;
+            if (!fake && std::getenv("WFC_VFX_FAKE") && *std::getenv("WFC_VFX_FAKE")) { fake = true; VehicleFxDriver::Runtime fr; bindFakeVehicleFxRuntime(fr); setVehicleFxRuntime(fr); }
+            VehicleFxDriver::Inputs fi;
+            fi.kind = s.kind;
+            const bool shown = pc.form() == Form::Vehicle;
+            fi.fxAllowed = shown && (!pc.isTransforming() ||
+                                     (pc.moveForm() == Form::Vehicle && pc.transformProgress() >= audioProfile().vehicleFx.enableFraction));
+            fi.hovering = !boost;
+            fi.boostState = boost;
+            fi.jumpStart = tookOff;
+            fi.nitroActive = pc.vehicleState().nitroRemain > 0.0f;
+            fi.formEnded = fxPrevShown_ && !shown;
+            fxPrevShown_ = shown;
+            core::Mat4 root;
+            fi.body = pc.boneWorld("C_Reference_XR", root) ? root : core::Mat4::identity();
+            fi.velocity = v;
+            fi.gravity = {0.0f, -core::config::kGravity, 0.0f};
+            fi.boneWorld = [&pc](const std::string& b, core::Mat4& o) { return pc.boneWorld(b, o); };
+            const float amount = tickVehicleEffects(dt, fi);
+            if (amount >= 0.0f) s.thrusterAmount = amount;
+        }
         tickVehicleAudio(dt, s);
         tireSlip_ = boost && tireSlipOverride_ >= 0.0f ? tireSlipOverride_ : 0.0f;
     }
@@ -1099,6 +1144,14 @@ void World::onBeamWeapon(const std::string& weaponClass, bool firing, int target
                       target == 1 ? WeaponAudio::BeamTarget::Friendly : target == 2 ? WeaponAudio::BeamTarget::Enemy
                                                                           : WeaponAudio::BeamTarget::None,
                       atWeapon("MuzzleFlash"));
+}
+
+// ---- Systems M08e: per-chassis vehicle FX through Rendering's runtime ----
+float World::tickVehicleEffects(float dt, const VehicleFxDriver::Inputs& in) {
+    if (!vehicleFxDriver_.bound()) return -1.0f;
+    if (!vehicleFxData_) vehicleFxDriver_.setData(&audioProfile().vehicleFx);
+    vehicleFxData_ = true;
+    return vehicleFxDriver_.tick(dt, in);
 }
 
 } // namespace game

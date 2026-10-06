@@ -24,6 +24,7 @@
 #include "game/VehicleAudio.h"
 #include "game/VehicleFormAudio.h"
 #include "game/WeaponAudio.h"
+#include "game/VehicleFxDriver.h"
 #include <map>
 #include <set>
 
@@ -95,6 +96,11 @@ public:
     // ascend / descend) -> the form class's component calls; events() for vehicle FX.
     void tickVehicleAudio(float dt, const VehicleFormSignals& signals);
     const VehicleFormEvents& vehicleEvents() const { return vehicleEvents_; }
+    // Per-chassis vehicle FX (VehicleFxDriver): Rendering's particle runtime, bound by the host; then every step the
+    // vehicle state (before tickVehicleAudio: the returned hover BoosterAmount feeds VehicleFormSignals::thrusterAmount).
+    void setVehicleFxRuntime(VehicleFxDriver::Runtime r) { vehicleFxDriver_.setRuntime(std::move(r)); }
+    float tickVehicleEffects(float dt, const VehicleFxDriver::Inputs& in);
+    const VehicleFxDriver& vehicleFxDriver() const { return vehicleFxDriver_; }
     // The equipped vehicle weapon (CharacterData.VehicleWeapons) for vehicle-form fire sounds.
     void setPlayerVehicleWeaponAudio(const std::string& weaponClass);
     // Load the cues of the loadout's weapon classes (robot + vehicle weapons, grenades) for this level.
@@ -225,6 +231,9 @@ private:
     WeaponAudio weaponAudio_;
     VehicleFormAudio vehicleForm_;
     VehicleFormEvents vehicleEvents_;
+    VehicleFxDriver vehicleFxDriver_;
+    bool vehicleFxData_ = false;
+    bool fxPrevShown_ = false;   // [Systems M08e]
     // TnHitEffectPlayer.LastHitEffectTimes per victim (here: the damage targets) per effect entry [CONF script].
     std::map<std::pair<const void*, int>, float> lastHitEffect_;
     // The held weapon's mesh-animation sounds (reload / idle / equip / put-down notifies), by weapon class.

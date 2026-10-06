@@ -52,6 +52,27 @@ const Db& db() {
         }
         for (size_t i = 0; i < j["weapons"].size(); ++i) p.weapons.push_back(j["weapons"][i].asString());
         p.vehicleForm = j["vehicle_form"].asString();
+        const assets::Json& vf = j["vehicle_fx"];
+        if (vf.isObject()) {
+            VehicleFxData& x = p.vehicleFx;
+            const std::pair<const char*, std::vector<VehicleFxData::Entry>*> sets[] = {
+                {"HoverFX", &x.hover}, {"BoostFx", &x.boost}, {"JumpFX", &x.jump}, {"RamFX", &x.ram}};
+            for (const auto& st : sets)
+                for (size_t i = 0; i < vf["sets"][st.first].size(); ++i)
+                    st.second->push_back({vf["sets"][st.first][i]["template"].asString(), vf["sets"][st.first][i]["socket"].asString()});
+            for (const auto& so : vf["sockets"].obj) {
+                VehicleFxData::Socket s{};
+                s.bone = so.second["bone"].asString();
+                for (int k = 0; k < 16; ++k) s.rel[k] = so.second["rel"][(size_t)k].asFloat();
+                for (int k = 0; k < 3; ++k) s.scale[k] = so.second["scale"][(size_t)k].asFloat(1.0f);
+                x.sockets[so.first] = s;
+            }
+            const assets::Json& tv = vf["toggle"]["Transform_ToVehicle_VEH"];
+            for (size_t i = 0; i < tv.size(); ++i)
+                if (tv[i]["option"].asString() != "Toggle_DisableFx" && tv[i]["duration"].asFloat() > 0.0f)
+                    x.enableFraction = tv[i]["t"].asFloat() / tv[i]["duration"].asFloat();
+            x.valid = !x.hover.empty() || !x.boost.empty() || !x.jump.empty() || !x.ram.empty();
+        }
         const assets::Json& vc = j["vehicle_component"];
         if (vc.isObject()) {
             VehicleAudioComponentData& v = p.vehicleComponent;

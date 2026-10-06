@@ -3,6 +3,12 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08e (2026-10-05) — per-chassis vehicle FX through Rendering's runtime (handoff: SYSTEMS_M08D_AUDIO_HANDOFF.md §M08e)
+- `VehicleFxDriver`: each chassis's authored HoverFX / BoostFx / JumpFX / RamFX at its own sockets, per the form classes' script (energon / boost colour, hover thruster `Size`, FxAllowed from the transform notifies).
+- The hover thruster amount also drives the booster sound parameter.
+- 08c snapshot with a recording runtime: 4 classes, own templates, spawns == stops.
+- The hand-made Optimus effects remain only while no runtime is bound.
+
 ## SYSTEMS M08d (2026-10-05) — vehicle / weapon / projectile / beam audio by identity (handoff: docs/handoff/SYSTEMS_M08D_AUDIO_HANDOFF.md + SYSTEMS_M08D_integration_glue.patch)
 - **Silent vehicle forms (car / jet / tank)**
   - Cause: the integration World gated all vehicle audio on the Optimus-only FX gate.

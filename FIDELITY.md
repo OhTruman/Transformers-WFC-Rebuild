@@ -17,6 +17,15 @@ Legend — CONFIDENCE: **CONF**(irmed from authored data/exe) · **HI** · **MED
 
 ---
 
+## SYSTEMS M08e — PER-CHASSIS VEHICLE FX (2026-10-05, agents/systems)
+* **Source** [CONF script + data]: TnVehicleFxPlayer.Play / Stop (socket-attached, Color = EnergonColor); TnCarForm Hovering / Driving.UpdateFx, UpdateBoostFx, UpdateJumping / UpdateRolling; TnTruckForm Start / StopNitro (RamFX); TnTankForm.UpdateFx; TnPlaneForm Hovering / Flying.UpdateFx; HoverPhysics.CalculateThrusterLinear / AngularContribution; TnVehicleForm.get_FxAllowed.
+* **Data:** character.json `vehicle_fx` + `vehicle.sockets` (31 chassis).
+* **Size** [HIGH]: computed in world space. The thruster dot / triple products are frame-invariant; the angular acceleration is taken from the world body rotation.
+* **Approximations:** the vehicle rigid-body gravity is assumed to be the pawn's kGravity [HIGH]; cloaking is not wired (no Gameplay state).
+* **Verification:** driving verified with a recording runtime only; the on-screen check needs Rendering's runtime merged.
+
+---
+
 ## SYSTEMS M08d — VEHICLE / WEAPON / PROJECTILE / BEAM AUDIO BY IDENTITY (2026-10-05, agents/systems)
 * **Vehicle form classes** [CONF decompiled TransGame form classes]:
   * Every form clones its blueprint's own HmPlayerVehicleAudioComponent (TnVehicleForm.Initialize).

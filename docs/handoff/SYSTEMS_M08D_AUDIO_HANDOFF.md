@@ -90,3 +90,38 @@
 * The frontend `prefetchLevel` hitch (37–94 ms on the first loading frame; Frontend report): queued.
 * RE pass 5 extras: the 10 s countdown ticks (GRI.LowCountdownTickSound) and the grenade bounce / fuse sounds. Gameplay needs to expose those events first.
 * Truck nitro: the decompiled TnTruckForm.Driving.StartNitro calls **PlayNitroSound** (kept). RE pass 5 lists PlayRamSound; that is the ram *hit* (ClientPlayRammingSound).
+
+## M08e: per-chassis vehicle FX (VehicleFxDriver → Rendering's particle runtime)
+
+**What it does:**
+- Every chassis plays its own authored VEHDEF effects: HoverFX, BoostFx, JumpFX and RamFX (31 / 33 chassis; the minions have none).
+- Effects are attached to their vehicle sockets, with the same socket conversion as ChassisDef.
+- The form classes decide when each set plays [CONF decompiled TnCarForm / TnTruckForm / TnTankForm / TnPlaneForm / TnVehicleFxPlayer / HoverPhysics]:
+
+| Rule | Behaviour |
+|---|---|
+| `Color` | EnergonColor at Play |
+| car / truck Driving | `Color` = lerp(Energon, Yellow, NormalizedJumpTimeRemaining), alpha 100–255 |
+| HoverFX `Size` | per socket = min(1, linear + angular thruster contribution) × RelativeScale; smoothing 0.1 for car / truck, 0.3 for the plane; limits 3000 / 6 |
+| tank | HoverFX always (no Size) |
+| JumpFX | on a jump and on the car's Driving roll; stopped at OnEndPlay |
+| RamFX | during the truck's nitro |
+| `FxAllowed` | from the transform clips' ToggleVehicleFx notify (per-chassis enable fraction) |
+
+- The largest hover `Size` is the audio `BoosterAmount`, so the hover-booster sound now gets its parameter.
+
+**Integration:**
+- After merging agents/rendering (spawnParticleEffect / setParticleEffectTransform / setParticleEffectParam / stopParticleEffect), bind it in `World::load`. The exact call is in the comment there (the glue patch includes it).
+- While unbound, the hand-made Optimus effects stay as the fallback. Once bound, they are off, so nothing is drawn twice.
+- `WFC_VFX_FAKE=1` binds a recording stand-in that logs spawns, params and stops.
+
+**Validated in the 08c snapshot with `WFC_VFX_FAKE`:**
+- Car2 / Jet4 / Truck3 / Tank3, cycling robot → vehicle → boost → jump → robot.
+- Each class spawns its own templates at its sockets, and spawns == stops (25/25, 39/39, 23/23, 23/23).
+- Hover `Size` is live (anisotropic where the socket scale is); `Color` = team energon.
+- No on-screen check yet: that needs Rendering's runtime in the build.
+
+**Approximations:**
+- The vehicle rigid-body gravity is taken as the pawn's kGravity [HIGH].
+- The body frame is the vehicle mesh matrix (yaw + rigid-body pitch / roll).
+- Cloaking is not wired: Gameplay has no cloak state yet.
