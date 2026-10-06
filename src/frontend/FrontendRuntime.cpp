@@ -116,7 +116,8 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
             std::vector<std::string> p = split(st.substr(5), ',');
             std::string fn = p.empty() ? std::string() : p[0];
             p.erase(p.begin());
-            flow.call(fn, p);
+            if (bridgeHook) bridgeHook(fn, p);
+            else flow.call(fn, p);
             return;   // one action per frame (the movies issue calls from input / frame events)
         }
         if (st.rfind("fscommand:", 0) == 0) {
@@ -199,6 +200,7 @@ bool FrontendRuntime::init() {
     GameFlow::Options o;
     o.skipIntroMovies = std::getenv("WFC_SKIPINTRO") != nullptr;
     if (const char* s = std::getenv("WFC_FLOWSEED")) o.seed = (unsigned)std::strtoul(s, nullptr, 10);
+    script_.bridgeHook = [this](const std::string& fn, const std::vector<std::string>& a) { bridge("", fn, a); };
     if (const char* s = std::getenv("WFC_FRONTEND_SCRIPT")) script_.load(s);
     else if (const char* a = std::getenv("WFC_FRONTEND_AUTOPLAY")) script_.load(ScriptDriver::autoplayScript(a));
     stores_ = std::make_unique<DataStores>(flow_, catalog_);

@@ -81,6 +81,8 @@ public:
     std::function<void(const std::string& movie)> dumpHook;    // dump:<movie substring>
     std::function<void(const std::string& label)> navCheckHook;   // navcheck:<label> (navigation stress harness)
     std::function<void(int w, int h, bool fullscreen)> displayHook;   // display:<w>,<h>,<0|1> (runtime resolution change)
+    // call:<fn>,<args>: the same bridge the movies use (PCSettings.*, Customize.*, Online.*, Game.* ...); flow.call if unset.
+    std::function<void(const std::string& fn, const std::vector<std::string>& args)> bridgeHook;
     // clickclip:<clip target path>: window position of a clip's centre in the focused movie (false = not found).
     std::function<bool(const std::string& path, int& x, int& y)> clipHook;
     static std::string autoplayScript(const std::string& tagAndMap);   // "TDM,508"
