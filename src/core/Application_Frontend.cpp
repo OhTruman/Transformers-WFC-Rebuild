@@ -48,6 +48,16 @@ struct HasMatchTextureRelease<R, std::void_t<decltype(std::declval<R&>().setText
     : std::true_type {};
 constexpr bool kRendererReleasesMatchTextures = HasMatchTextureRelease<render::IRenderer>::value;
 
+// Rendering 2be3b87: IRenderer::notePresentedFrame() feeds the render-thread stall watchdog (a hang dump after 5 s
+// without progress). Frontend frames can present outside the renderer's frames: full-screen movies skip the 3D scene and
+// draw through the GFx layer's own GL upload; menus without a scene; load-yield frames. Detected.
+template <class R, class = void> struct HasNotePresented : std::false_type {};
+template <class R> struct HasNotePresented<R, std::void_t<decltype(std::declval<R&>().notePresentedFrame())>> : std::true_type {};
+template <class R> void notePresented(R* r) {
+    if constexpr (HasNotePresented<R>::value) { if (r) r->notePresentedFrame(); }
+    else { (void)r; }
+}
+
 // Gameplay agents/gameplay 5151374: MatchPlayer kind (ParticipantKind::Bot) / level / specialty and MatchSettings
 // maxPerTeam / maxPlayers. Detected.
 template <class P, class = void> struct HasParticipantInfo : std::false_type {};
@@ -567,6 +577,7 @@ void Application::drawFrontendFrame() {
     frontend_->draw(window_->width(), window_->height());
     if (!pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }
     {   core::prof::Scope prof("present"); window_->present(); }
+    notePresented(renderer_);   // every frontend present (movies, menus, load yields) is progress for the stall watchdog
     {   // WFC_FRAMEPROF: the gap between two presented frames (main loop and load yields alike), with what ran in it
         static double lastPresent = 0;
         double t = core::prof::now();
