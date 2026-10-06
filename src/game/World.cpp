@@ -892,10 +892,14 @@ std::vector<std::string> World::applyLoadout(const CharacterSelection* sel) {
         robot.push_back(Weapon::fromDef(*wd));
     }
     std::vector<std::string> veh = (sel && sel->type == 0 && !sel->vehicleWeapons.empty()) ? sel->vehicleWeapons : d.iconicVehicleWeapons;
+    const double t0 = profNowMs();
     pc.setLoadout(robot, veh);
+    const double t1 = profNowMs();
     // TnCharacterApplier.ApplyAbilities: CharacterData.Abilities (custom selection, else the iconic preset).
     pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
+    const double t2 = profNowMs();
     syncShownWeapon();
+    if (spawnProf()) LOG_INFO("SPAWNPROF applyLoadout: setLoadout %.1f ms, setAbilities %.1f ms, syncShownWeapon %.1f ms", t1 - t0, t2 - t1, profNowMs() - t2);
     return refused;
 }
 
@@ -1270,6 +1274,7 @@ void World::removeBots() {
     for (size_t i = 0; i < actors_.size();) { if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); } else ++i; }
     match_.truncatePlayers(first);
     bots_.clear();
+    botSearchOwner_ = -1;
 }
 
 int World::addBots(const BotLaunch& b) {
@@ -1835,9 +1840,12 @@ bool World::applyChassisToPawn(Character& pc, const std::string& id) {
 }
 
 bool World::applyChassisToLocalPawn(const std::string& id) {
+    const double t0 = profNowMs();
     if (!applyChassisToPawn(player_.pawn(), id)) return false;
+    const double t1 = profNowMs();
     localChassis_ = id;
     applyLoadout(nullptr);   // iconic preset WeaponTypes / VehicleWeapons
+    if (spawnProf()) LOG_INFO("SPAWNPROF applyChassisToLocalPawn %s: body %.1f ms, iconic loadout %.1f ms", id.c_str(), t1 - t0, profNowMs() - t1);
     return true;
 }
 
@@ -3264,8 +3272,12 @@ void World::qaSetCharacter(const CharacterSelection& sel) {
 }
 
 std::vector<CharacterSelection> World::qaCharacterChoices() const {
+    if (!qaEnabled()) return {};
+    return qaCharacterChoicesAlways();
+}
+
+std::vector<CharacterSelection> World::qaCharacterChoicesAlways() const {
     std::vector<CharacterSelection> out;
-    if (!qaEnabled()) return out;
     for (int sp = 0; sp < 4; ++sp) {
         CharacterSelection c; c.type = 0; c.specialty = (Specialty)sp;
         c.chassisByFaction[0] = defaultChassis(c.specialty, 0); c.chassisByFaction[1] = defaultChassis(c.specialty, 1);

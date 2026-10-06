@@ -60,7 +60,8 @@ const BotSkill& botSkill(int difficulty);
 // Objective goal layer shared by every mode (TDM uses Roam / Attack): what a bot is trying to do and where.
 enum class BotGoalKind { Roam, Attack, Defend, Capture, Hold, Contest, Retrieve, Return, Support };
 const char* botGoalName(BotGoalKind k);
-struct BotGoal { BotGoalKind kind = BotGoalKind::Roam; core::Vec3 pos{0, 0, 0}; float radius = 3.0f; int target = -1; };
+// pos: where the corridor goes (the nav approach); touch: the objective itself (flag / bomb / point) the bot must reach in person.
+struct BotGoal { BotGoalKind kind = BotGoalKind::Roam; core::Vec3 pos{0, 0, 0}; float radius = 3.0f; int target = -1; bool hasTouch = false; core::Vec3 touch{0, 0, 0}; };
 
 struct BotBrain {
     int player = -1;
@@ -86,6 +87,8 @@ struct BotBrain {
     float bestDist = 1e9f, progressTimer = 0.0f; int stuckLevel = 0;
     float offMesh = 0.0f;
     core::Vec3 stuckPos{0, 0, 0}; float stuckT = 0.0f;   // displacement-based stuck detection
+    size_t progressWp = (size_t)-1; float progressBest = 1e9f, progressT = 0.0f;   // waypoint-progress stuck detection
+    std::vector<int> avoidCells; float avoidUntil = 0.0f;   // cells where this bot got wedged (A* cost x10 for 30 s)
     float ignoreSightingsUntil = 0.0f;                  // a team sighting proved unreachable
     // Aim / fire
     float yaw = 0.0f, pitch = 0.0f;
@@ -97,6 +100,7 @@ struct BotBrain {
     float switchHold = 0.0f;
     float meleeCooldown = 0.0f;                          // between melee attacks
     float rushUntil = 0.0f;                              // closing in for a melee attack
+    int healTarget = -1;                                 // a wounded teammate this bot repairs with the Repair Ray
     float grenadeCooldown = 0.0f, grenadeDelay = -1.0f;  // TnGrenadeThrower: TossDelay 0.4 s, then the release
     core::Vec3 grenadeTarget{0, 0, 0};
     float transformCooldown = 0.0f;
@@ -107,7 +111,7 @@ struct BotBrain {
     float noVehicleUntil = 0.0f;
     // Diagnostics
     unsigned rng = 1;
-    int rushes = 0, melees = 0, grenades = 0, hits = 0, noPaths = 0, shots = 0, repaths = 0, stucks = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0;
+    int heals = 0, rushes = 0, melees = 0, grenades = 0, hits = 0, noPaths = 0, shots = 0, repaths = 0, stucks = 0, jumps = 0, transforms = 0, switches = 0, reloads = 0;
     float frand() { rng = rng * 1664525U + 1013904223U; return (float)((rng >> 8) & 0xFFFFFF) / 16777216.0f; }
     float frange(float a, float b) { return a + (b - a) * frand(); }
 };

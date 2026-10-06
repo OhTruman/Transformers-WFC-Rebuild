@@ -225,6 +225,28 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   - EXT: bomb taken 12, plants 2, detonations 2;
   - kills in every mode; longest idle <= 8.1 s.
 
+### Bot nav on all maps, time-sliced search, bot repair (25g) [PC ADAPTATION]
+- AssetTools cae2607+ data:
+  - clearance-banded cells;
+  - anchors' approach_cell: objectives / pickups / starts are reached at their two-way reachable floor (World::botSnap). KOTH zone
+    points float above the floor or sit inside hulls.
+- Funnel corridors are validated: a 2D string-pull segment that leaves the mesh (open air between two upper levels) is replaced
+  by the corridor's portal midpoints.
+- A* is time-sliced: one search at a time, <= 1500 cell expansions per step (heuristic x 2, 8000-expansion cap, partial path to the
+  nearest reachable cell). Bots keep their old corridor while a new one computes.
+- Per-step AI cost, 7 v 8 HARD:
+  - Seed: 0.19 ms avg, max 8.3 → 3.6 ms;
+  - Streets: 0.26 ms avg, 2.8 ms max.
+- WFC_BOTNAVTEST 7/7 on Streets, Seed, Berth, Complex, Rust, BrokenHope, Remnant, Molten, Gorge.
+- Debris: its flight-only islands (5 anchors) need the jet air layer (AssetTools bot_nav_air.json, not used yet) [PARTIAL].
+- Scientist bots repair teammates: a wounded teammate (< 65 %) in sight within 30 m with no enemy nearer than 20 m.
+  - They switch to the Repair Ray, close in, and run its beam ticks (RepairAmount 60 / s, the weapon's ammo and fire interval)
+    [CONF values].
+  - The beam ticks appear in participantShots().
+  - BOTTEST phase 2: 169 repair ticks.
+- Diagnostics: SPAWNPROF splits in applyChassisToLocalPawn / applyLoadout; WFC_BOOTCLASS=<Scout|Scientist|Soldier|Leader> boots a
+  class preset.
+
 ### QA live character swap [DEV / QA TOOLING, not original]
 - World::qaSetCharacter(selection): preloadSelections, then Match::selectCharacter, then the QA suicide; the normal respawn wave
   applies it.

@@ -126,6 +126,13 @@ void World::addBotBrain(int player, int difficulty) {
 // The goal of a bot without a visible enemy: shared objective layer. TDM / DM: attack the most recent enemy sighting by the
 // bot's team (callouts; PC ADAPTATION), else roam between the map's anchors (pickups and starts) on the nav mesh.
 core::Vec3 World::botSnap(const core::Vec3& p) const {
+    // An authored actor (objective, pickup, start) goes to its approach cell (AssetTools: two-way reachable floor near it).
+    const int ap = botNav_.approachCellNear(p);
+    if (ap >= 0) {
+        const BotNav::Cell& cell = botNav_.cells()[(size_t)ap];
+        const int under = botNav_.findCell(p, 0.0f);
+        return under == ap ? core::Vec3{p.x, cell.centroid.y, p.z} : cell.centroid;
+    }
     const int c = botNav_.findCell(p, 15.0f);
     if (c < 0) return p;
     const BotNav::Cell& cell = botNav_.cells()[(size_t)c];
@@ -140,7 +147,7 @@ bool World::botModeGoal(BotBrain& b, const Character& pc, BotGoal& g) {
     const int team = me.team;
     const core::Vec3 pos = pc.position();
     const unsigned role = (unsigned)b.player * 2654435761U >> 28;   // 0..15, fixed per participant
-    auto at = [&](BotGoalKind k, const core::Vec3& p, float r, bool mission) { g.kind = k; g.pos = botSnap(p); g.radius = r; b.mission = mission; return true; };
+    auto at = [&](BotGoalKind k, const core::Vec3& p, float r, bool mission) { g.kind = k; g.pos = botSnap(p); g.radius = r; b.mission = mission; g.hasTouch = true; g.touch = p; return true; };
     const auto& objs = mapState_.objectives();
     switch (matchMode_) {
         case MatchMode::KOTH: {
@@ -183,11 +190,14 @@ bool World::botModeGoal(BotBrain& b, const Character& pc, BotGoal& g) {
                         return false;
                     }
                     if (c.holder >= 0) return role < 8 ? at(BotGoalKind::Support, c.pos, 8.0f, false) : false;   // escort the carrier
-                    return at(BotGoalKind::Retrieve, c.dropped ? c.pos : objs[(size_t)c.home].pos, 1.5f, false);
+                    {   // the last 40 m to the Code of Power are an errand: push through and fight on the move
+                        const core::Vec3 fp = c.dropped ? c.pos : objs[(size_t)c.home].pos;
+                        return at(BotGoalKind::Retrieve, fp, 1.5f, hdist(fp, pos) < 40.0f);
+                    }
                 }
                 if (c.holder >= 0) { g.target = c.holder; return at(BotGoalKind::Attack, c.pos, 4.0f, false); }   // stop the carrier
                 if (c.dropped) return at(BotGoalKind::Return, c.pos, 2.0f, hdist(c.pos, pos) < 6.0f);           // stand on it to return
-                return role < 10 ? at(BotGoalKind::Defend, objs[(size_t)c.home].pos + core::Vec3{b.frange(-10, 10), 0, b.frange(-10, 10)}, 6.0f, false) : false;
+                return role < 6 ? at(BotGoalKind::Defend, objs[(size_t)c.home].pos + core::Vec3{b.frange(-10, 10), 0, b.frange(-10, 10)}, 6.0f, false) : false;
             }
             // Countdown to Extinction: the bomb.
             const MapState::Planted& pl = mapState_.planted();
@@ -314,6 +324,27 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
         if (best >= 0) { b.reactionLeft = sk.reaction * b.frange(0.8f, 1.25f); b.targetVisibleFor = 0.0f; b.burstLeft = 0; b.burstPause = 0.0f; }
         if (best >= 0 || b.target < 0 || now - b.seen[b.target].time > sk.memory) b.target = best;
     }
+    // Repair (Scientist with the Repair Ray, PC ADAPTATION): a wounded teammate (< 65 %) within 30 m in sight, no enemy closer
+    // than 20 m.
+    b.healTarget = -1;
+    {
+        int ray = -1;
+        for (size_t i = 0; i < pc.inventory().size(); ++i) if (pc.inventory()[i].beam() && (pc.inventory()[i].ammo > 0 || pc.inventory()[i].reserve > 0)) ray = (int)i;
+        bool enemyClose = false;
+        for (const Cand& c : cands) if (c.d < 20.0f && b.seen.count(c.p) && b.seen[c.p].visible) enemyClose = true;
+        if (ray >= 0 && !enemyClose && match_.settings().teamGame && pc.moveForm() == Form::Robot) {
+            float bestH = 0.65f;
+            for (size_t i = 0; i < match_.players().size(); ++i) {
+                const int p = (int)i;
+                if (p == b.player || !match_.players()[i].alive || !match_.sameTeam(p, b.player)) continue;
+                const Character* c = participantPawn(p);
+                if (!c || c->health().max <= 0.0f) continue;
+                const float frac = c->health().current / c->health().max;
+                if (frac >= bestH || core::length(c->position() - pc.position()) > 30.0f || !botLineOfSight(eye, targetable(*c))) continue;
+                bestH = frac; b.healTarget = p;
+            }
+        }
+    }
     // Goal: chase / hold against a target, else the objective layer.
     const bool visible = b.target >= 0 && b.seen[b.target].visible;
     BotGoal ng;
@@ -323,9 +354,11 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
     BotGoal og; bool haveOg = false;
     if (objectiveMode) { og = botObjectiveGoal(b, pc); haveOg = og.kind != BotGoalKind::Roam; }
     if (haveOg && b.mission) ng = og;
+    else if (b.healTarget >= 0 && participantPawn(b.healTarget)) { ng.kind = BotGoalKind::Support; ng.pos = participantPawn(b.healTarget)->position(); ng.radius = 6.0f; ng.target = b.healTarget; }
     else if (b.target >= 0) { ng.kind = BotGoalKind::Attack; ng.pos = b.seen[b.target].pos; ng.target = b.target; ng.radius = 4.0f; b.mission = false; }
     else if (haveOg) ng = og;
-    else if (!b.hasGoal || b.goal.kind == BotGoalKind::Attack || hdist(b.goal.pos, pc.position()) < b.goal.radius || now - b.goalTime > 40.0f)
+    else if (!b.hasGoal || b.goal.kind == BotGoalKind::Attack || (b.goal.kind == BotGoalKind::Support && b.healTarget < 0) ||
+             hdist(b.goal.pos, pc.position()) < b.goal.radius || now - b.goalTime > 40.0f)
         ng = botObjectiveGoal(b, pc);
     else ng = b.goal;
     if (!b.hasGoal || hdist(ng.pos, b.goal.pos) > 4.0f || ng.kind != b.goal.kind) { b.wantRepath = true; b.goalTime = now; }
@@ -345,7 +378,9 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
     if (pc.moveForm() == Form::Robot && !pc.isTransforming() && !pc.switchingWeapon()) {
         const auto& inv = pc.inventory();
         int want = pc.activeWeaponIndex();
-        if (visible) {
+        if (b.healTarget >= 0) {
+            for (size_t i = 0; i < inv.size(); ++i) if (inv[i].beam()) want = (int)i;
+        } else if (visible) {
             const AiRange band = aiRangeBand(core::length(targetable(*participantPawn(b.target)) - eye));
             int bestW = -1, bestD = 99;
             for (size_t i = 0; i < inv.size(); ++i) {
@@ -404,28 +439,32 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
     }
 }
 
+void World::botPathFailed(BotBrain& b, bool vehicle) {
+    ++b.noPaths;
+    b.path.clear(); b.wp = 0;
+    if (vehicle) { b.noVehicleUntil = match_.matchTime() + 15.0f; b.wantVehicle = false; return; }   // no vehicle corridor: walk it
+    // Unreachable goal: another.
+    if (b.goal.kind == BotGoalKind::Attack && b.target < 0) b.ignoreSightingsUntil = match_.matchTime() + 8.0f;
+    if (b.goal.kind != BotGoalKind::Attack && b.goal.kind != BotGoalKind::Roam) { b.objectiveBlockedUntil = match_.matchTime() + 10.0f; b.mission = false; }
+    if (b.target < 0) b.hasGoal = false;
+}
+
 void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
     Character& pc = o.pawn();
     const BotSkill& sk = botSkill(b.difficulty);
     const core::Vec3 pos = pc.position();
     const bool vehicle = pc.moveForm() == Form::Vehicle;
     BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle;
-    // Path upkeep (budgeted: at most two searches per step across all bots).
+    // Path upkeep: one time-sliced search at a time across all bots (tickBots steps it); the bot keeps its old corridor meanwhile.
     b.repathTimer -= dt;
     const bool chasing = b.goal.kind == BotGoalKind::Attack;
-    if ((b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid() && botPathBudget_ > 0) {
+    if ((b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid() && botSearchOwner_ < 0 && botPathBudget_ > 0) {
         --botPathBudget_;
         b.wantRepath = false; b.repathTimer = chasing ? 1.5f : 6.0f; b.vehiclePath = vehicle; ++b.repaths;
-        if (!botNav_.findPath(pos, b.goal.pos, ag, b.path)) {
-            ++b.noPaths;
-            if (vehicle) { b.noVehicleUntil = match_.matchTime() + 15.0f; b.wantVehicle = false; }   // no vehicle corridor: walk it
-            else {                                                                                   // unreachable goal: another
-                if (b.goal.kind == BotGoalKind::Attack && b.target < 0) b.ignoreSightingsUntil = match_.matchTime() + 8.0f;
-                if (b.goal.kind != BotGoalKind::Attack && b.goal.kind != BotGoalKind::Roam) { b.objectiveBlockedUntil = match_.matchTime() + 10.0f; b.mission = false; }
-                if (b.target < 0) b.hasGoal = false;
-            }
-        }
-        b.wp = 0; b.bestDist = 1e9f; b.progressTimer = 0.0f;
+        if (match_.matchTime() > b.avoidUntil) b.avoidCells.clear();
+        ag.avoid = b.avoidCells.empty() ? nullptr : &b.avoidCells;   // the search keeps the pointer: the brain outlives it
+        if (botNav_.beginSearch(pos, b.goal.pos, ag)) { botSearchOwner_ = b.player; botSearchVehicle_ = vehicle; }
+        else botPathFailed(b, vehicle);
     }
     core::Vec3 moveDir{0, 0, 0};
     bool jump = false;
@@ -455,9 +494,19 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
                 if (dl < 1.2f || (pos.y > w.pos.y - 0.5f && dl < 3.0f)) { ++b.wp; b.bestDist = 1e9f; }
             }
             if (dl > 1e-3f) moveDir = d * (1.0f / dl);
-            // Stuck: moving less than 0.75 m in 1.5 s while trying to -> jump, then repath, then a new goal (and leave vehicle form).
-            if ((b.stuckT += dt) >= 1.5f) {
-                if (hdist(pos, b.stuckPos) < 0.75f && !pc.isTransforming()) {
+            // Stuck: moving less than 0.75 m in 1.5 s, or no 0.5 m of progress toward the current corner in 3 s (jittering against a
+            // prop the nav does not know) -> jump, then repath, then avoid that spot and pick a new goal (and leave vehicle form).
+            bool noProgress = false;
+            if (b.progressWp != b.wp) { b.progressWp = b.wp; b.progressBest = dl; b.progressT = 0.0f; }
+            else if (dl < b.progressBest - 0.5f) { b.progressBest = dl; b.progressT = 0.0f; }
+            else if ((b.progressT += dt) >= 3.0f) { noProgress = true; b.progressT = 0.0f; b.progressBest = dl; }
+            if ((b.stuckT += dt) >= 1.5f || noProgress) {
+                if ((noProgress || hdist(pos, b.stuckPos) < 0.75f) && !pc.isTransforming()) {
+                    if (b.stuckLevel >= 2) {   // the wedge spot: the current corner's cell and the bot's own
+                        const int c0 = botNav_.findCell(pos, 2.0f), c1 = w.cell;
+                        for (int c : {c0, c1}) if (c >= 0 && std::find(b.avoidCells.begin(), b.avoidCells.end(), c) == b.avoidCells.end()) b.avoidCells.push_back(c);
+                        b.avoidUntil = match_.matchTime() + 30.0f;
+                    }
                     ++b.stuckLevel; ++b.stucks;
                     if (b.stuckLevel == 1) jump = true;
                     else if (b.stuckLevel == 2) { b.wantRepath = true; jump = true; }
@@ -468,6 +517,10 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
             }
         } else if (b.goal.kind != BotGoalKind::Attack) {
             b.hasGoal = b.hasGoal && hdist(b.goal.pos, pos) > b.goal.radius;   // arrived: the next think picks a new goal
+        }
+        // Corridor done next to an objective (the nav approach cell): walk the last metres onto the flag / bomb / point itself.
+        if ((b.path.empty() || b.wp >= b.path.size()) && b.goal.hasTouch && hdist(b.goal.touch, pos) > 0.6f && hdist(b.goal.touch, pos) < 15.0f) {
+            core::Vec3 d = b.goal.touch - pos; d.y = 0; moveDir = core::normalize(d);
         }
         // Off the mesh with no corridor (on a prop / ledge): head for the nearest cell and drop back onto it.
         if (b.path.empty() || b.wp >= b.path.size()) {
@@ -512,6 +565,27 @@ void World::botAimAndFire(MatchOpponent& o, BotBrain& b, float dt) {
     float wantYaw = b.yaw, wantPitch = 0.0f;
     core::Vec3 aimPoint = eye + core::forwardFromYawPitch(b.yaw, b.pitch) * 50.0f;
     Weapon* w = pc.moveForm() == Form::Vehicle ? pc.vehicleWeapon() : &pc.weapon();
+    // Repairing a teammate: aim at it and run the Repair Ray's beam ticks (TnWeaponRepair: RepairAmount 60 / s as TnHealTypeRepairTeam,
+    // the weapon's own fire interval and ammo) [CONF values; bot use PC ADAPTATION].
+    if (b.healTarget >= 0 && w && w->beam() && pc.moveForm() == Form::Robot)
+        if (const Character* mate = participantPawn(b.healTarget)) {
+            const core::Vec3 d = targetable(*mate) - eye;
+            const float maxStep = sk.turnRateDeg * 0.0174533f * dt;
+            b.yaw = wrapPi(b.yaw + core::clampf(wrapPi(yawOf(d) - b.yaw), -maxStep, maxStep));
+            b.pitch = core::clampf(b.pitch + core::clampf(pitchOf(d) - b.pitch, -maxStep, maxStep), -1.2f, 1.2f);
+            pc.setAimPitch(b.pitch);
+            const float range = w->rangeM > 0.0f ? w->rangeM : 35.0f;
+            if (pc.weaponUsable() && w->ammo == 0 && w->canReload()) { w->beginReload(); ++b.reloads; }
+            if (pc.weaponUsable() && core::length(d) <= range && std::fabs(wrapPi(yawOf(d) - b.yaw)) < 0.15f && w->canFire()) {
+                w->onFired();
+                const float tick = w->fireInterval > 0.0f ? w->fireInterval : 0.1f;
+                for (MatchOpponent* q : opponents_) if (q->matchPlayer() == b.healTarget && q->spawned()) q->pawn().health().heal(Health::HealType::AddHealthToAll, 60.0f * tick);
+                if (b.healTarget == localPlayer_ && !localDead_) player_.pawn().health().heal(Health::HealType::AddHealthToAll, 60.0f * tick);
+                participantShots_.push_back({o.matchPlayer(), w->def ? w->def->id : "RepairRay", eye, targetable(*mate), true, b.healTarget});
+                ++b.heals;
+            }
+            return;
+        }
     if (t && w) {
         core::Vec3 tp = targetable(*t);
         const float dist = core::length(tp - eye);
@@ -577,7 +651,18 @@ void World::tickBots(float dt) {
     if (bots_.empty() || !matchActive_) return;
     const auto t0 = std::chrono::steady_clock::now();
     ensureBotNav();
-    botPathBudget_ = 1;   // one A* per simulation step across all bots (the others wait a step)
+    botPathBudget_ = 1;   // at most one new search per simulation step
+    // The active search runs at most 1500 cell expansions per step (~1 ms); a long route completes over a few steps.
+    if (botSearchOwner_ >= 0 && botNav_.stepSearch(1500) == 1) {
+        std::vector<BotNav::Waypoint> path;
+        const bool ok = botNav_.finishSearch(path);
+        for (BotBrain& sb : bots_)
+            if (sb.player == botSearchOwner_) {
+                if (ok) { sb.path.swap(path); sb.wp = 0; sb.bestDist = 1e9f; sb.progressTimer = 0.0f; }
+                else botPathFailed(sb, botSearchVehicle_);
+            }
+        botSearchOwner_ = -1;
+    }
     for (BotBrain& b : bots_) {
         MatchOpponent* o = nullptr;
         for (MatchOpponent* q : opponents_) if (q->matchPlayer() == b.player) o = q;
@@ -587,11 +672,11 @@ void World::tickBots(float dt) {
         if (!b.wasSpawned) {   // a fresh spawn: reset the brain (the pawn faces the start's yaw)
             const int keepPlayer = b.player, keepDiff = b.difficulty; const unsigned keepRng = b.rng;
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
-            const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes;
+            const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals;
             b = BotBrain{};
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
-            b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru;
+            b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he;
             b.wasSpawned = true; b.yaw = pc.yaw();
         }
         b.life += dt;
@@ -635,11 +720,12 @@ void World::tickBots(float dt) {
         static const char* botlog = std::getenv("WFC_BOTLOG");   // diagnostics: each bot (or =<player>) once a second
         if (botlog && (botlog[0] < '0' || botlog[0] > '9' || std::atoi(botlog) == b.player) && ((int)(b.life * 60.0f + 0.5f)) % 60 == 0) {
             const core::Vec3 p = pc.position();
-            LOG_INFO("BOTLOG %s p%d (%.1f %.1f %.1f) cell %d %s%s goal %s d%.0f wp %zu/%zu tgt %d vis %d stuck %d in %.2f/%.2f jump %d hp %.0f ammo %d/%d shots %d hits %d nopath %d",
+            LOG_INFO("BOTLOG %s p%d (%.1f %.1f %.1f) cell %d %s%s goal %s d%.0f wp %zu/%zu tgt %d vis %d stuck %d in %.2f/%.2f jump %d hp %.0f ammo %d/%d shots %d hits %d nopath %d wpn %s heal %d/%d touch %.1f (%.1f %.1f %.1f)",
                      match_.players()[(size_t)b.player].name.c_str(), b.player, p.x, p.y, p.z, botNav_.findCell(p), pc.moveForm() == Form::Vehicle ? "VEH" : "ROB",
                      pc.isTransforming() ? "*" : "", botGoalName(b.goal.kind), hdist(b.goal.pos, p), b.wp, b.path.size(), b.target,
                      (int)(b.target >= 0 && b.seen[b.target].visible), b.stuckLevel, in.moveForward, in.moveRight, (int)in.wantJump, pc.health().current,
-                     pc.weapon().ammo, pc.weapon().reserve, b.shots, b.hits, b.noPaths);
+                     pc.weapon().ammo, pc.weapon().reserve, b.shots, b.hits, b.noPaths, pc.weapon().def ? pc.weapon().def->id : "-", b.healTarget, b.heals,
+                     b.goal.hasTouch ? core::length(b.goal.touch - p) : -1.0f, b.goal.touch.x, b.goal.touch.y, b.goal.touch.z);
         }
     }
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();

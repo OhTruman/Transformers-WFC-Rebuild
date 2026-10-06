@@ -79,15 +79,29 @@ Bots think every 0.25 s, staggered. Each decision covers:
 - **PC ADAPTATION:** difficulty (`BotSkill`: reaction, turn rate, aim error, FOV, sight, memory, strafe, burst / pause
   scale), reaction delay, team callouts, hunt roaming, form choice.
 
+### Also implemented (25e-25g)
+- **Objective modes:**
+  - KOTH: hold the zone;
+  - DOM: capture / contest / defend nodes;
+  - CTF: retrieve / capture / support / return / defend;
+  - EXT: retrieve / plant / defuse / defend.
+  Missions keep their route through combat.
+- **Melee and grenades:** both go through the shared participant paths (startMeleeFor / tickMeleeFor / releaseGrenade).
+  - Melee rush toward an enemy within 20 m, holding fire, then the strike with the assist lunge.
+  - Grenade tosses at 8-30 m.
+- **Repair:** Scientist bots heal wounded teammates with the Repair Ray.
+- **Pathfinding:** time-sliced A*, approach cells, and corridor validation.
+
 ### Not yet [PARTIAL]
-- melee, grenades and abilities for bots;
-- objective-mode goals (the interface exists; TDM / DM only);
-- jet flight;
-- vehicle boost;
-- Repair Ray healing by Scientist bots (the beam is skipped).
+- bot abilities (Warcry, Cloak, Hover, ...): the ability effects are local-player code paths;
+- heal grenades;
+- jet flight (the AssetTools air layer exists, unused);
+- vehicle boost / vehicle-form combat;
+- bots' held weapon meshes / FX.
 
 ## Tests
-- `WFC_BOTTEST` (24/24): human + 3 / 4 bots, then 7 v 8 HARD, 120 s each. Checks the roster, spawns, movement, combat,
+- `WFC_BOTTEST` (25/25 + phase-2 grenade / repair checks): human + 3 / 4 bots, then 7 v 8 HARD, 120 s each. Checks the roster, spawns, movement, combat,
   stuck time, environment deaths, AI cost, completion and MatchEnd.
-- `WFC_BOTNAVTEST` (7/7): anchors on the nav, paths between anchors for radius 1.75 / 2.0, corridors on the mesh, A* cost.
+- `WFC_BOTNAVTEST` (7/7 on 9 maps; `WFC_MAP=<map>`): anchors on the nav, paths between anchors for radius 1.75 / 2.0, corridors on the mesh, A* cost.
+- `WFC_BOTOBJTEST` (12/12): bots in KOTH / DOM / CTF / EXT (`WFC_BOTOBJTEST_MODES`, `_SECS`).
 - Diagnostics: `WFC_BOTLOG=1|<player>` traces each bot once a second.

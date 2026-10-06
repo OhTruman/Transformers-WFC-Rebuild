@@ -497,6 +497,9 @@ private:
     BotNav botNav_;
     bool botNavTried_ = false;
     int botPathBudget_ = 0;
+    int botSearchOwner_ = -1;          // the bot whose path search is in progress (BotNav time-sliced search)
+    bool botSearchVehicle_ = false;
+    void botPathFailed(BotBrain& b, bool vehicle);
     double botMsAccum_ = 0.0, botMsMax_ = 0.0; long botTicks_ = 0;
     std::vector<ParticipantShot> participantShots_;
     void addBotBrain(int player, int difficulty);
@@ -602,6 +605,7 @@ public:
     // Live character swap: the selection goes through the real PRI._SelectedCharacter path (Match::selectCharacter), then
     // qaRespawn - the next spawn applies it (body, loadout, abilities, colours, vehicle form) exactly like a normal pick.
     void qaSetCharacter(const CharacterSelection& sel);
+    std::vector<CharacterSelection> qaCharacterChoicesAlways() const;   // the four class presets (no QA gate; diagnostics / tests)
     // Choices for the swap: the four class presets (PCD_MP chassis per faction + WeaponTypes), the local faction resolved at spawn.
     std::vector<CharacterSelection> qaCharacterChoices() const;
     void qaTeleportToStart(int index);                                       // authored player start #index (wraps)
