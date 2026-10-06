@@ -32,6 +32,29 @@ struct Weapon {
                id == "HomingRocketVehicle";
     }
     int muzzleSocket = 0;          // HmWeaponMesh.CurrentSocket (index into MuzzleFlashSockets)
+    int projClass = 0;             // index into the weapon's projectile classes (WeaponProjectiles[CurrentFireMode]) for visuals
+
+    // TnChargeWeapon (Plasma Cannon): hold Fire to charge, release to fire [CONF script TransGame.TnChargeWeapon +
+    // PlasmaCannon_WEPDATA]. _ChargeState 0 idle, 1 charging (a release fires nothing), 2 / 3 / 4 = levels 1-3 -> fire mode
+    // 0 / 1 / 2 (TnProjectilePlasmaCannonCharge1 / 2 / 3). Level n is reached at ChargeDelay<n> (state -> delay mapping HIGH).
+    bool charge() const { return def && std::string(def->id) == "PlasmaCannon"; }
+    int chargeState = 0;
+    float chargeTime = 0.0f, chargeDrained = 0.0f, sinceCharge = 1e9f;
+    struct ChargeLevel { float delay; int shotCost; float speed, damage, radiusM; };
+    // ChargeDelay1-3 0.75 / 2.0 / 3.5 s; ShotCost [25, 50, 100]; Charge1-3 PROJDATA InitialSpeed 8000 / 15000 / 23000 UU/s,
+    // Damage 115 / 140 / 179, DamageRadius 1000 / 2500 / 3500 UU [CONF authored].
+    static const ChargeLevel& chargeLevel(int mode) {
+        static const ChargeLevel L[3] = {{0.75f, 25, 80.0f, 115.0f, 10.0f}, {2.0f, 50, 150.0f, 140.0f, 25.0f}, {3.5f, 100, 230.0f, 179.0f, 35.0f}};
+        return L[mode < 0 ? 0 : (mode > 2 ? 2 : mode)];
+    }
+    static constexpr float kChargeDrainRate = 10.0f;   // ChargeDrainRate: clip ammo / s while fully charged (UpdateChargeAmmo)
+    int desiredChargeState() const {                   // Charging.GetDesiredChargeState
+        for (int m = 2; m >= 0; --m) if (chargeTime >= chargeLevel(m).delay) return m + 2;
+        return 1;
+    }
+    const char* chargeHudMessage() const {             // UpdateChargeEffects: ChargingMessage / FullyChargedMessage
+        return chargeState == 1 ? "CHARGING" : (chargeState >= 2 ? "READY" : "");
+    }
     static Weapon fromDef(const WeaponDef& d) {
         Weapon w;
         w.def = &d; w.name = d.display; w.fireType = d.fire; w.shots = d.shots > 0 ? d.shots : 1; w.autoFire = d.autoFire;
@@ -85,6 +108,7 @@ struct Weapon {
     int  lowAmmoThreshold = 5;      // [CONF] IonBlaster_WEPMESH.LowAmmoThreshold (WP_LowAmmoFire)
 
     void tick(float dt) {
+        if (chargeState == 0) sinceCharge += dt;   // GetTimeSinceLastCharge
         if (sinceShot < 999.0f) sinceShot += dt;
         sinceFire += dt;
         // TnWeapon.CooldownSpread every tick [CONF native M03 runtime, RE d50e2a9]: linear recovery across

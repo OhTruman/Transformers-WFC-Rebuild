@@ -184,6 +184,40 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 - Map / mode / class / lobby: Frontend drives the real lobby flow.
 - WFC_QATEST 7/7 with the gate; without it, every call is refused.
 
+### Plasma Cannon charge [CONFIRMED ORIGINAL: script TransGame.TnChargeWeapon + PlasmaCannon_WEPDATA + Charge1-3 PROJDATA]
+- Was: every press fired a Charge1 shot for 1 ammo.
+- Now: TnChargeWeapon's states (0 idle, 1 charging, 2 / 3 / 4 = levels 1-3).
+  - Press (loaded, TimeSinceLastCharge >= FireInterval 0.15 s) → charging. Level 1/2/3 at ChargeDelay1/2/3 = 0.75 / 2.0 / 3.5 s
+    (state → delay mapping HIGH).
+  - Release in state 1: no shot. Release at level n: fire mode n-1 → TnProjectilePlasmaCannonCharge<n>.
+  - Levels:
+
+    | level | speed | damage | radius | ShotCost (clamped at 0) | trail |
+    |---|---|---|---|---|---|
+    | 1 | 8000 UU/s | 115 | 1000 UU | 25 | Trail_PlasmaCannon_Sm |
+    | 2 | 15000 UU/s | 140 | 2500 UU | 50 | Trail_PlasmaCannon_Med |
+    | 3 | 23000 UU/s | 179 | 3500 UU | 100 | Trail_PlasmaCannon_Lrg |
+
+  - Fully charged: ChargeDrainRate 10 clip ammo / s; an empty clip ends the charge (fires).
+  - Weapon switch (TryPutDown), reload, melee or overheat ends the charge with no shot; so does a transform [HIGH].
+  - After a shot an empty clip auto-reloads.
+- HUD: weaponChargeState (0-4) and weaponChargeMessage ("CHARGING" in state 1, "READY" at any level: ChargingMessage /
+  FullyChargedMessage).
+- PARTIAL: the charge material glow (MaterialGlowAmount 0 / ⅓ / ⅔ / 1) and the charge muzzle events / sounds (WP events 9-12)
+  are presentation for Rendering / Systems.
+- WFC_CHARGETEST: a 0.3 s tap fires nothing; 1.0 / 2.5 / 4.0 s holds fire 80 / 150 / 230 m/s, 115 / 140 / 179 damage, 25 / 50 / 100
+  ammo (+4 drained at full charge) with the Sm / Med / Lrg trail; charge then switch = no shot.
+
+### Grenade spin [CONFIRMED ORIGINAL: script TransGame.TnProjectileGrenadeBase + Default__TnProjectileDataGrenadeLauncher]
+- Was: thrown grenade meshes faced their velocity and did not spin.
+- Now:
+  - bRotationFollowsVelocity false: the grenade keeps its spawn rotation (throw direction).
+  - Tick adds RotationRate × dt to the mesh: Pitch −100000 rotator units/s = −549°/s, inherited by the Flak / Flashbang / Heal
+    grenade data.
+  - OnHitThing at rest zeroes RotationRate.
+- The tumble sign in mesh space follows the vehicle pitch convention [HIGH].
+- WFC_CHARGETEST: a Flashbang tumbles at −549°/s and stops at rest.
+
 ### Weapon start trace (all forms) [CONFIRMED ORIGINAL: script TransGame.TnPlayerPawn.GetWeaponStartTraceLocation, RE]
 - Original: the start trace is ViewLoc + ProjectOnTo(Pawn.Location - ViewLoc, view direction), i.e. the point on the third-person
   camera's crosshair ray nearest the pawn, in robot, vehicle and plane form. Instant-hit and beam traces run from there along the
@@ -216,8 +250,7 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   WEP_Grenade_*_STAT mesh.
 - Renderer API from agents/rendering (38c9ecf+), detected at compile time: on a tree without it, the FX calls compile out and the
   box marker stays as a non-original fallback. It also stays when a template is missing from the map's FX data.
-- PARTIAL: PlasmaCannon uses Charge1 visuals (charge levels not simulated); grenade mesh orientation follows the velocity yaw
-  (spin not recovered); the fuse explosion normal is assumed up.
+- PlasmaCannon charge levels and grenade spin: see "Plasma Cannon charge" and "Grenade spin" (24k). The fuse explosion normal is assumed up [PARTIAL].
 - WFC_PROJFXTEST 2/2: 11/11 projectile weapons bind a FlightEffect (15 weapons with visuals incl. grenades, 3 body meshes), all
   projectiles end within 12 s. A standalone check (work/pass23/fxcheck) confirms the detection calls spawn / move / stop with
   Rendering's exact signatures.

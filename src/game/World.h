@@ -89,6 +89,9 @@ struct HudGameState {
     int repairBeamTarget = -1;
     // Last vehicle-weapon shot (for the muzzle flash / tracer glue): its socket (0 = WeaponSocket_Primary, 1 = _Primary2),
     // the socket's world position, and a serial that increments once per shot.
+    // Charge weapon (Plasma Cannon) state: 0 idle, 1 charging, 2-4 charge levels 1-3; HUD message (GetHudMessage).
+    int weaponChargeState = 0;
+    std::string weaponChargeMessage;
     int vehicleShotSerial = 0, vehicleShotSocket = 0;
     core::Vec3 vehicleShotMuzzle{0, 0, 0};
     bool barrier = false;                        // the local Barrier ability's wall is up
@@ -280,6 +283,9 @@ public:
         bool grenade = false, explodeOnPawn = false, resting = false;
         float gravityScale = 1.0f, bounce = 1.0f, fuseMin = 0.0f, fuseMax = 0.0f;
         int visual = -1;     // projVisuals_ index (the firing weapon's authored projectile_visual)
+        // TnProjectileGrenadeBase: bRotationFollowsVelocity false (the actor keeps its spawn rotation); Tick adds RotationRate x
+        // dt to the mesh component's rotation; OnHitThing at rest zeroes it [CONF script + Default__TnProjectileDataGrenadeLauncher].
+        float yaw0 = 0.0f, pitch0 = 0.0f, spin = 0.0f, spinRate = 0.0f;
         int fxHandle = -1;   // live FlightEffect particle system (renderer handle), -1 = none
     };
     // weapon.json projectiles[0].projectile_visual: FlightEffect (the projectile's visible body + trail), ExplosionEffect
@@ -500,6 +506,10 @@ public:
     int projectileFxExplosions() const { return projectileFxExplosions_; }
     size_t liveProjectiles() const { return projectiles_.size(); }
     core::Vec3 projectilePos(size_t i) const { return i < projectiles_.size() ? projectiles_[i].pos : core::Vec3{0, 0, 0}; }
+    core::Vec3 projectileVel(size_t i) const { return i < projectiles_.size() ? projectiles_[i].vel : core::Vec3{0, 0, 0}; }
+    float projectileDamage(size_t i) const { return i < projectiles_.size() ? projectiles_[i].damage : 0.0f; }
+    float projectileSpin(size_t i) const { return i < projectiles_.size() ? projectiles_[i].spin : 0.0f; }
+    bool projectileResting(size_t i) const { return i < projectiles_.size() && projectiles_[i].resting; }
     const std::string& projectileFlightTemplate(size_t i) const { static const std::string none; return i < projectiles_.size() && projectiles_[i].visual >= 0 ? projVisuals_[(size_t)projectiles_[i].visual].flight : none; }
     bool qaNoclip() const { return qaNoclip_; }
     bool qaGodMode() const { return qaGod_; }
