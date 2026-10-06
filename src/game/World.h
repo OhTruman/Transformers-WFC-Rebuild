@@ -33,6 +33,7 @@
 #include "game/VehicleAudio.h"
 #include "game/VehicleFormAudio.h"
 #include "game/WeaponAudio.h"
+#include "game/VehicleFxDriver.h"
 #include <map>
 
 namespace render { class IRenderer; }
@@ -244,6 +245,11 @@ public:
     // ---- Systems M08d hooks: Gameplay reports state / events, Systems plays ----
     void tickVehicleAudio(float dt, const VehicleFormSignals& signals);
     const VehicleFormEvents& vehicleEvents() const { return vehicleEvents_; }
+    // Per-chassis vehicle FX (VehicleFxDriver): Rendering's particle runtime, bound by the host; then every step the
+    // vehicle state (before tickVehicleAudio: the returned hover BoosterAmount feeds VehicleFormSignals::thrusterAmount).
+    void setVehicleFxRuntime(VehicleFxDriver::Runtime r) { vehicleFxDriver_.setRuntime(std::move(r)); }
+    float tickVehicleEffects(float dt, const VehicleFxDriver::Inputs& in);
+    const VehicleFxDriver& vehicleFxDriver() const { return vehicleFxDriver_; }
     void setPlayerVehicleWeaponAudio(const std::string& weaponClass);
     // Load the cues of the loadout's weapon classes (robot + vehicle weapons, grenades) for this level.
     void preloadWeaponAudio(const std::vector<std::string>& weaponClasses);
@@ -617,6 +623,9 @@ private:
     WeaponAudio weaponAudio_;
     VehicleFormAudio vehicleForm_;
     VehicleFormEvents vehicleEvents_;
+    VehicleFxDriver vehicleFxDriver_;
+    bool vehicleFxData_ = false;
+    bool fxPrevRolling_ = false, fxPrevShown_ = false;   // [Systems M08e]
     int projAudioKey_ = 0;
     float beamSinceShot_ = 1e9f, beamInterval_ = 0.1f;   // [Systems M08d] beam weapon traces
     std::string beamClassFiring_;

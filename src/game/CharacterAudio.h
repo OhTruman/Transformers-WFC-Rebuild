@@ -42,6 +42,17 @@ struct VehicleAudioComponentData {
     int speedHistory = 15;
 };
 
+// The vehicle form's particle effects [CONF data: VEHDEF HoverFX / BoostFx / JumpFX / RamFX; sockets on the vehicle
+// mesh; TnAnimNotify_ToggleVehicleFx in the transform clips].
+struct VehicleFxData {
+    struct Entry { std::string templ, socket; };
+    struct Socket { std::string bone; float rel[16]; float scale[3]; };   // rel: glTF, columns X = UE +X, Y = UE +Z
+    std::vector<Entry> hover, boost, jump, ram;
+    std::map<std::string, Socket> sockets;
+    float enableFraction = 0.9f;   // Transform_ToVehicle_VEH ToggleVehicleFx (enable) time / clip length
+    bool valid = false;
+};
+
 struct CharacterAudioProfile {
     struct Notify { float t; std::string event, cue; float minWeight; };   // event (resolved via voice) or cue
     struct Clip { float length; std::vector<Notify> notifies; };
@@ -51,6 +62,7 @@ struct CharacterAudioProfile {
     std::vector<std::string> weapons;
     VehicleAudioComponentData vehicleComponent;
     std::string vehicleForm;        // roster vehicle_form: "car" / "truck" / "tank" / "jet" (which form class)
+    VehicleFxData vehicleFx;
 
     // The cue a notify plays ("" = the set has no sound for its event).
     const std::string& notifyCue(const Notify& n) const;

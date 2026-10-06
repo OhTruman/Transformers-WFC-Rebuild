@@ -1,6 +1,6 @@
 diff -ru --strip-trailing-cr a/src/game/PlayerController.h b/src/game/PlayerController.h
 --- a/src/game/PlayerController.h	2026-10-05 19:28:44.971465500 -0500
-+++ b/src/game/PlayerController.h	2026-10-05 19:28:45.023645400 -0500
++++ b/src/game/PlayerController.h	2026-10-05 19:41:45.816608200 -0500
 @@ -138,6 +138,10 @@
      float viewYaw_ = 0.0f;        // camera rotation after the strategy's HmOrbitSmoother
      float viewPitch_ = -0.15f;
@@ -14,8 +14,36 @@ diff -ru --strip-trailing-cr a/src/game/PlayerController.h b/src/game/PlayerCont
      bool fireLatch_ = false;   // Fire pressed since the last simulation step
 diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
 --- a/src/game/World.cpp	2026-10-05 19:28:44.952902100 -0500
-+++ b/src/game/World.cpp	2026-10-05 19:28:45.007591100 -0500
-@@ -67,6 +67,10 @@
++++ b/src/game/World.cpp	2026-10-05 19:44:11.083437100 -0500
+@@ -63,10 +63,38 @@
+     return true;
+ }
+ 
++
++// WFC_VFX_FAKE: a recording stand-in for Rendering's particle runtime (logs spawn / stop / params) so the per-chassis vehicle
++// FX driving can be checked in a build whose renderer has no spawn API yet.
++static void bindFakeVehicleFxRuntime(VehicleFxDriver::Runtime& r) {
++    static int next = 1;
++    r.spawnAt = [](const std::string& t, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u) {
++        LOG_INFO("VFX spawn h=%d %s pos=%.2f,%.2f,%.2f fwd=%.2f,%.2f,%.2f up=%.2f,%.2f,%.2f", next, t.c_str(), p.x, p.y, p.z, f.x, f.y, f.z, u.x, u.y, u.z);
++        return next++;
++    };
++    r.setTransform = [](int, const core::Vec3&, const core::Vec3&, const core::Vec3&) { return true; };
++    r.setParam = [](int h, const std::string& n, const float* v) {
++        static int k = 0;
++        if (n == "Color" || ++k % 60 == 0) LOG_INFO("VFX param h=%d %s=%.2f,%.2f,%.2f,%.2f", h, n.c_str(), v[0], v[1], v[2], v[3]);
++        return true;
++    };
++    r.stop = [](int h) { LOG_INFO("VFX stop h=%d", h); };
++}
++
+ void World::load(render::IRenderer& renderer) {
++    if (std::getenv("WFC_VFX_FAKE") && *std::getenv("WFC_VFX_FAKE")) { VehicleFxDriver::Runtime fr; bindFakeVehicleFxRuntime(fr); setVehicleFxRuntime(fr); }
++    // [Systems M08e] With Rendering's runtime (agents/rendering 38c9ecf / e15862f):
++    //   setVehicleFxRuntime({[&renderer](auto& t, auto& p, auto& f, auto& u) { return renderer.spawnParticleEffect(t, p, f, u); },
++    //                        [&renderer](int h, auto& p, auto& f, auto& u) { return renderer.setParticleEffectTransform(h, p, f, u); },
++    //                        [&renderer](int h, auto& n, const float* v) { return renderer.setParticleEffectParam(h, n, v); },
++    //                        [&renderer](int h) { renderer.stopParticleEffect(h); }});
      weaponFireHook = [this](const Weapon& w, const core::Vec3& o, const core::Vec3& d) {
          if (w.projectile()) {
              spawnProjectile(o + d * 1.5f, d * w.projSpeed, w, localPlayer_);
@@ -26,7 +54,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
              // Fire sends (locked, target): SetTarget(locked ? target : none) [CONF TnWeaponHoming].
              if (w.projHoming && locked_ && lockTarget_ >= 0) projectiles_.back().target = lockTarget_;
          }
-@@ -611,7 +615,13 @@
+@@ -611,7 +639,13 @@
      float ownDist = core::length(muzzle - origin);
      SoundCues::Emitter me = atWeapon("MuzzleFlash");
      me.pos = muzzle;
@@ -41,7 +69,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      burstActive_ = true; sinceShot_ = 0.0f;
      // World hit: HmWeaponMesh.CreateImpactEffects -> TnWeaponMesh.GetImpactSound: the surface's weapon-type sound (no
      // physmat authors one [CONF data]) -> PhysMaterial.ImpactSound (only special surfaces, e.g. ForceField; surfaces
-@@ -620,9 +630,18 @@
+@@ -620,9 +654,18 @@
      // weapon impact sound; the victim's TnHitEffectPlayer plays HitSound (an event in the VICTIM's SoundEventSet) if
      // the damage type bCausesBlood, at most every RetriggerTime per victim per entry [CONF script]. The damage
      // targets are stand-ins without a character: they use the default profile as the victim [PROV].
@@ -61,7 +89,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
          if (he && he->causesBlood) {
              auto key = std::make_pair((const void*)hitTarget, he->index);
              auto it = lastHitEffect_.find(key);
-@@ -633,8 +652,8 @@
+@@ -633,8 +676,8 @@
              }
          }
      } else if (dist < range - 0.01f) {
@@ -72,7 +100,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      }
  }
  
-@@ -686,6 +705,10 @@
+@@ -686,6 +729,10 @@
          CharacterAudio::loadWeaponCues(cues_, weaponClass_);
          CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), weaponClass_);   // the targets' hit sounds
          lastHitEffect_.clear();
@@ -83,16 +111,17 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      }
      return ok;
  }
-@@ -707,6 +730,8 @@
+@@ -707,6 +754,9 @@
  void World::setPlayerCharacterAudio(const std::string& chassisKey) {
      const CharacterAudioProfile* p = CharacterAudio::find(chassisKey);
      if (!p) { LOG_WARN("character audio: no profile for %s (default kept)", chassisKey.c_str()); return; }
 +    vehicleAudio_.stopAll(cues_);           // [Systems M08d] the previous body's vehicle loops end with it (class change)
 +    vehicleForm_.reset();
++    vehicleFxDriver_.setData(&p->vehicleFx);   // [Systems M08e] the new body's authored vehicle effects
      audioProfile_ = p;
      robotFoley_.setProfile(p);
      vehicleAudio_.setProfile(*p);
-@@ -726,12 +751,16 @@
+@@ -726,12 +776,17 @@
  }
  
  void World::unloadMapAudio() {
@@ -105,11 +134,58 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      cues_.stopNonMapInstances();               // weapon / vehicle / foley / transform / pickup sounds (immediate)
 +    vehicleAudio_.stopAll(cues_);              // [Systems M08d]
 +    weaponAudio_.stopAll(cues_);
++    vehicleFxDriver_.stopAll();
 +    vehicleForm_.reset();
      vehicleAudio_ = VehicleAudio{};
      vehicleAudio_.setProfile(audioProfile());
      robotFoley_ = RobotFoley{};
-@@ -942,25 +971,30 @@
+@@ -895,26 +950,29 @@
+     }
+ 
+     // Boost afterburners (looping while held; bKillOnDeactivate).
+-    if (boost && !boostActive_) {
++    // [Systems M08e] the hand-made Optimus effects only without Rendering's runtime (VehicleFxDriver drives the authored
++    // per-chassis HoverFX / BoostFx / JumpFX / RamFX, Optimus included, when it is bound).
++    const bool handFx = !vehicleFxDriver_.bound();
++    if (boost && handFx && !boostActive_) {
+         boostInst_[0] = vehicleFx_.start(VehicleFx::Boost, VehicleFx::BoostL);
+         boostInst_[1] = vehicleFx_.start(VehicleFx::Boost, VehicleFx::BoostR);
+-    } else if (!boost && boostActive_) {
++    } else if (!(boost && handFx) && boostActive_) {
+         for (int& id : boostInst_) { vehicleFx_.deactivate(id); id = -1; }
+     }
+-    boostActive_ = boost;
++    boostActive_ = boost && handFx;
+     // Hover thrusters on all six wheel sockets.
+-    if (hover && !hoverActive_) {
++    if (hover && handFx && !hoverActive_) {
+         for (int i = 0; i < 6; ++i) hoverInst_[i] = vehicleFx_.start(VehicleFx::Hover, VehicleFx::HoverLBack + i);
+-    } else if (!hover && hoverActive_) {
++    } else if (!(hover && handFx) && hoverActive_) {
+         for (int& id : hoverInst_) { vehicleFx_.deactivate(id); id = -1; }
+     }
+-    hoverActive_ = hover;
++    hoverActive_ = hover && handFx;
+     // Jump boosters: one-shot burst on vehicle take-off; killed if the vehicle form ends.
+     bool grounded = pc.onGround();
+     bool tookOff = vehicle && vehiclePrevGrounded_ && !grounded && pc.velocity().y > 2.0f;
+     bool landed = vehicle && !vehiclePrevGrounded_ && grounded;
+     (void)landed;
+-    if (tookOff) {
++    if (tookOff && handFx) {
+         jumpInst_[0] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpC);
+         jumpInst_[1] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpR);
+         jumpInst_[2] = vehicleFx_.start(VehicleFx::Jump, VehicleFx::JumpL);
+@@ -928,7 +986,7 @@
+     // audio and the ram-hit registry.
+     VehicleNitro::Event ne = nitro_.follow(pc.vehicleState().nitroRemain > 0.0f);
+     if (ne == VehicleNitro::Event::Started) {
+-        ramInst_ = vehicleFx_.start(VehicleFx::Ram, VehicleFx::RamSocket);
++        if (handFx) ramInst_ = vehicleFx_.start(VehicleFx::Ram, VehicleFx::RamSocket);
+         // StartNitro: RamFX, NitroForceFeedback, then PlayNitroSound (VehicleAudio below). No script calls
+         // PlayCustomLoopingSound (Auto_Ram_Alert) [CONF: decompiled TransGame / HM_Engine], so it is not played.
+     } else if (ne == VehicleNitro::Event::Stopped) {
+@@ -942,25 +1000,55 @@
      const core::Vec3& v = pc.velocity();
      float mph = core::length(v) * 2.23694f;
      {
@@ -154,12 +230,37 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
 +        s.ascendHeld = player_.controller().moveIntent().ascend;
 +        s.descendHeld = player_.controller().moveIntent().descend;
 +        s.wheelSlip = tireSlipOverride_;
++        {   // [Systems M08e] per-chassis vehicle FX (authored sets, Rendering's runtime); its hover BoosterAmount -> audio
++            VehicleFxDriver::Inputs fi;
++            fi.kind = s.kind;
++            const bool shown = pc.form() == Form::Vehicle && !localDead_;
++            fi.fxAllowed = shown && (!pc.isTransforming() ||
++                                     (pc.moveForm() == Form::Vehicle && pc.transformProgress() >= audioProfile().vehicleFx.enableFraction));
++            fi.hovering = !s.boostState;
++            fi.boostState = s.boostState;
++            const bool rollStart = s.kind == VehicleFormSignals::Kind::Car && s.boostState && s.rolling && !fxPrevRolling_;
++            fxPrevRolling_ = s.rolling;
++            fi.jumpStart = s.tookOff || rollStart;             // UpdateJumping / Driving.UpdateRolling: Play(JumpFX)
++            fi.nitroActive = vs.nitroRemain > 0.0f;
++            fi.formEnded = fxPrevShown_ && !shown;
++            fxPrevShown_ = shown;
++            fi.normJumpRemaining = vs.jumpBoost / core::config::kDriveJumpBoostTime;
++            const int lp = localPlayer_;
++            const int team = (lp >= 0 && (size_t)lp < match_.players().size()) ? match_.players()[(size_t)lp].team : -1;
++            if (!teamEnergon(team == 255 ? -1 : team, fi.energon)) fi.energon[0] = fi.energon[1] = fi.energon[2] = 1.0f;
++            fi.body = pc.meshMatrix(Form::Vehicle);
++            fi.velocity = v;
++            fi.gravity = {0.0f, -core::config::kGravity, 0.0f};   // [HIGH: the rigid body uses the pawn gravity]
++            fi.boneWorld = [&pc](const std::string& b, core::Mat4& o) { return pc.boneWorld(b, o); };
++            const float amount = tickVehicleEffects(dt, fi);
++            if (amount >= 0.0f) s.thrusterAmount = amount;
++        }
 +        tickVehicleAudio(dt, s);
 +        tireSlip_ = s.boostState && tireSlipOverride_ >= 0.0f ? tireSlipOverride_ : 0.0f;
      }
  
      if (std::getenv("WFC_BOOSTLOG")) {
-@@ -1083,6 +1117,18 @@
+@@ -1083,6 +1171,18 @@
      }
      std::vector<std::string> veh = (sel && sel->type == 0 && !sel->vehicleWeapons.empty()) ? sel->vehicleWeapons : d.iconicVehicleWeapons;
      pc.setLoadout(robot, veh);
@@ -178,7 +279,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      // TnCharacterApplier.ApplyAbilities: CharacterData.Abilities (custom selection, else the iconic preset).
      pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
      syncShownWeapon();
-@@ -1137,6 +1183,10 @@
+@@ -1137,6 +1237,10 @@
  }
  
  void World::tick(float dt) {
@@ -189,7 +290,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      pickupEvents_.clear();
      matchEvents_.clear();
      destructibleEvents_.clear();
-@@ -1996,7 +2046,20 @@
+@@ -1996,7 +2100,20 @@
          if (!wd || !allowed) { refused.push_back(n); continue; }
          robot.push_back(Weapon::fromDef(*wd));
      }
@@ -211,7 +312,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      pc.setAbilities((sel && sel->type == 0 && !sel->abilities.empty()) ? sel->abilities : d.iconicAbilities);
      pc.respawnReset();
      if (mp) { mp->specialty = spec; mp->healthMax = pc.health().max; }
-@@ -2109,6 +2172,12 @@
+@@ -2109,6 +2226,12 @@
      float range = w.rangeM > 0.0f ? w.rangeM : 300.0f;
      projectiles_.push_back({pos, vel, w.projDamage, w.projRadiusM, std::max(1.0f, range / std::max(1.0f, core::length(vel))) + 1.0f,
                              w.damageType ? w.damageType : "", instigator});
@@ -224,7 +325,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
      if (w.projHoming) {
          Projectile& p = projectiles_.back();
          p.homingForce = w.homingForce; p.closingDist = w.closingDistM; p.closingForce = w.closingForce;
-@@ -2198,7 +2267,7 @@
+@@ -2198,7 +2321,7 @@
                      p.vel = (p.vel - n * (2.0f * core::dot(p.vel, n))) * p.bounce;
                      if (core::dot(p.vel, p.vel) < 500.0f * 1e-4f) { p.resting = true; p.vel = {0, 0, 0}; }
                  };
@@ -233,7 +334,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
                  if (hitPawn) {
                      core::Vec3 n = core::normalize(core::Vec3{-seg.x, 0.0f, -seg.z});
                      impact(n);
-@@ -2211,7 +2280,8 @@
+@@ -2211,7 +2334,8 @@
                  } else p.pos = nx;
              }
              p.life -= dt;
@@ -243,7 +344,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
              ++i;
              continue;
          }
-@@ -2243,10 +2313,13 @@
+@@ -2243,10 +2367,13 @@
              core::Vec3 at = p.pos + d * best;
              if (hit || closingExpired) radiusDamage(at, p.damage, p.radius, p.instigator, p.damageType);
              if (barrierHit && barrier_.alive && barrier_.health > 0.0f) {}   // radiusDamage reached the barrier
@@ -257,7 +358,7 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
          ++i;
      }
  }
-@@ -3273,4 +3346,72 @@
+@@ -3273,4 +3400,80 @@
      }
  }
  
@@ -329,10 +430,18 @@ diff -ru --strip-trailing-cr a/src/game/World.cpp b/src/game/World.cpp
 +                      atWeapon("MuzzleFlash"));
 +}
 +
++// ---- Systems M08e: per-chassis vehicle FX through Rendering's runtime ----
++float World::tickVehicleEffects(float dt, const VehicleFxDriver::Inputs& in) {
++    if (!vehicleFxDriver_.bound()) return -1.0f;
++    if (!vehicleFxData_) vehicleFxDriver_.setData(&audioProfile().vehicleFx);
++    vehicleFxData_ = true;
++    return vehicleFxDriver_.tick(dt, in);
++}
++
  } // namespace game
 diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
 --- a/src/game/World.h	2026-10-05 19:28:44.962435500 -0500
-+++ b/src/game/World.h	2026-10-05 19:28:45.016620500 -0500
++++ b/src/game/World.h	2026-10-05 19:41:45.806573600 -0500
 @@ -4,6 +4,7 @@
  #include <memory>
  #include <string>
@@ -341,16 +450,17 @@ diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
  #include <vector>
  #include "core/Math.h"
  #include "game/Player.h"
-@@ -30,6 +31,8 @@
+@@ -30,6 +31,9 @@
  #include "game/LevelAudioHost.h"
  #include "game/CharacterAudio.h"
  #include "game/VehicleAudio.h"
 +#include "game/VehicleFormAudio.h"
 +#include "game/WeaponAudio.h"
++#include "game/VehicleFxDriver.h"
  #include <map>
  
  namespace render { class IRenderer; }
-@@ -237,6 +240,23 @@
+@@ -237,6 +241,28 @@
      void setPlayerCharacterAudio(const std::string& chassisKey);
      // The player's current weapon class (its WeaponSounds: WP_Fire / WP_LowAmmoFire / WP_LoopingTail / fine aim).
      void setPlayerWeaponAudio(const std::string& weaponClass);
@@ -358,6 +468,11 @@ diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
 +    // ---- Systems M08d hooks: Gameplay reports state / events, Systems plays ----
 +    void tickVehicleAudio(float dt, const VehicleFormSignals& signals);
 +    const VehicleFormEvents& vehicleEvents() const { return vehicleEvents_; }
++    // Per-chassis vehicle FX (VehicleFxDriver): Rendering's particle runtime, bound by the host; then every step the
++    // vehicle state (before tickVehicleAudio: the returned hover BoosterAmount feeds VehicleFormSignals::thrusterAmount).
++    void setVehicleFxRuntime(VehicleFxDriver::Runtime r) { vehicleFxDriver_.setRuntime(std::move(r)); }
++    float tickVehicleEffects(float dt, const VehicleFxDriver::Inputs& in);
++    const VehicleFxDriver& vehicleFxDriver() const { return vehicleFxDriver_; }
 +    void setPlayerVehicleWeaponAudio(const std::string& weaponClass);
 +    // Load the cues of the loadout's weapon classes (robot + vehicle weapons, grenades) for this level.
 +    void preloadWeaponAudio(const std::vector<std::string>& weaponClasses);
@@ -374,7 +489,7 @@ diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
      // Weapon equip / put-down (Gameplay): the held weapon mesh's WP_Equip / WP_PutDown animation sounds.
      void weaponAnimEvent(WeaponSoundTimeline::Event e) { weaponSounds_.play(e); }
      const char* weaponCue(const char* event) const;
-@@ -350,6 +370,8 @@
+@@ -350,6 +376,8 @@
          bool lockRobots = false;
          // Grenade (TnProjectileGrenadeBase): gravity scale, bounce, fuse (starts on the first impact), resting, explode on pawn.
          bool grenade = false, explodeOnPawn = false, resting = false;
@@ -383,7 +498,7 @@ diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
          float gravityScale = 1.0f, bounce = 1.0f, fuseMin = 0.0f, fuseMax = 0.0f;
      };
      // TnGrenadeThrower: G in robot form -> toss after TossDelay 0.4 s.
-@@ -589,6 +611,15 @@
+@@ -589,6 +617,18 @@
      bool transformCuePlayed_ = false;
      int transformNotify_ = 0;                // next transform-clip notify to fire
      std::string weaponClass_ = "TransContent.TnWeaponIonBlaster";
@@ -393,13 +508,16 @@ diff -ru --strip-trailing-cr a/src/game/World.h b/src/game/World.h
 +    WeaponAudio weaponAudio_;
 +    VehicleFormAudio vehicleForm_;
 +    VehicleFormEvents vehicleEvents_;
++    VehicleFxDriver vehicleFxDriver_;
++    bool vehicleFxData_ = false;
++    bool fxPrevRolling_ = false, fxPrevShown_ = false;   // [Systems M08e]
 +    int projAudioKey_ = 0;
 +    float beamSinceShot_ = 1e9f, beamInterval_ = 0.1f;   // [Systems M08d] beam weapon traces
 +    std::string beamClassFiring_;
      // TnHitEffectPlayer.LastHitEffectTimes per victim (here: the damage targets) per effect entry [CONF script].
      std::map<std::pair<const void*, int>, float> lastHitEffect_;
      // The held weapon's mesh-animation sounds (reload / idle / equip / put-down notifies), by weapon class.
-@@ -612,6 +643,7 @@
+@@ -612,6 +652,7 @@
      int jumpInst_[3] = {-1, -1, -1};
      bool hoverActive_ = false;
      bool vehiclePrevGrounded_ = true;
