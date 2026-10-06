@@ -379,6 +379,11 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 - Pending (other lanes): Gameplay bot participants + capacity (MatchSettings maxPerTeam / maxPlayers), the XP / stat
   award producer, bot presentation levels; then the launch -> receipt and real-award verification here.
 - Decisions to confirm: offline XP (PC ADAPTATION) vs the original no-XP-in-private rule; 8 per team vs original 5v5.
+- **End to end (scratch merge 08o + agents/gameplay 7ed5faf + agents/frontend):** Bot Settings 2/3/MEDIUM -> 5 bots
+  placed relative to the human team; real kill awards (Kill / First Blood / Far and Away / Payback, one transaction per
+  kill) and Game Win reach the HUD popups; XpScout 0 -> 300 -> 600 -> 1400 across restarts, last match = sum of awards,
+  no duplicates. Follow-ups: 54f8988 (TEST lifecycle driver targets an enemy), 693f051 (IRenderer::notePresentedFrame
+  for Rendering's stall watchdog). Head 693f051.
 
 ## FRONTEND PASS 7 (2026-10-05, branch `agents/frontend`): playtest presentation
 - **Create a Character shrink / shift after a weapon slot: fixed** (3185545; AVM1 removed-timeline target). Geometry
