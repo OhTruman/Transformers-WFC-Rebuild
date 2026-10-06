@@ -307,6 +307,34 @@ void Application::attachPresenter() {
     };
 }
 
+namespace {
+// Gameplay's QA API (agents/gameplay Pass 24c: World::qaWeaponIds / qaSetLoadout / qaRespawn / qaTeleportToStart /
+// qaSetNoclip / qaSetGodMode / qaStatus; DEV / QA TOOLING, no-ops without WFC_QA), detected.
+template <class W, class = void> struct HasQaApi : std::false_type {};
+template <class W>
+struct HasQaApi<W, std::void_t<decltype(std::declval<const W&>().qaWeaponIds(false)), decltype(std::declval<W&>().qaSetLoadout({})),
+                               decltype(std::declval<W&>().qaRespawn()), decltype(std::declval<W&>().qaTeleportToStart(0)),
+                               decltype(std::declval<W&>().qaSetNoclip(true)), decltype(std::declval<W&>().qaSetGodMode(true)),
+                               decltype(std::declval<const W&>().qaStatus())>> : std::true_type {};
+template <class W> std::vector<std::string> qaWeapons(const W& w) {
+    if constexpr (HasQaApi<W>::value) return w.qaWeaponIds(false); else { (void)w; return {}; }
+}
+template <class W> std::string qaTool(W& w, platform::QaRequest::Kind k, const std::string& weapon, int& startIndex) {
+    if constexpr (HasQaApi<W>::value) {
+        using K = platform::QaRequest::Kind;
+        if (k == K::Respawn) w.qaRespawn();
+        else if (k == K::NextStart) w.qaTeleportToStart(++startIndex);
+        else if (k == K::Noclip) w.qaSetNoclip(!w.qaNoclip());
+        else if (k == K::God) w.qaSetGodMode(!w.qaGodMode());
+        else if (k == K::Launch && !weapon.empty()) {   // the chosen weapon, once in game
+            std::vector<std::string> refused = w.qaSetLoadout({weapon});
+            if (!refused.empty()) return "weapon refused by the chassis restrictions: " + weapon;
+        }
+        return w.qaStatus();
+    } else { (void)w; (void)k; (void)weapon; (void)startIndex; return "Gameplay QA API not in this build"; }
+}
+}
+
 void Application::qaTick(const platform::InputFrame& in) {
     // DEBUG-ONLY QA panel (NOT ORIGINAL): only with WFC_QA=1. A separate tool window (F10 toggles it); its requests run
     // the normal frontend flow (party lobby -> private game -> map -> countdown) through the script runner.
@@ -322,9 +350,11 @@ void Application::qaTick(const platform::InputFrame& in) {
                                              std::to_string(m.mapId)});
         for (const char* t : {"TDM", "DM", "CTF", "CP", "KOTH", "DOM", "EXT"}) modes.push_back({t, t});
         for (const auto& c : frontend_->roster().customCharacters()) chars.push_back({c.name, c.name});
+        weapons.push_back({"(class default)", ""});
+        for (const std::string& w : qaWeapons(world_)) weapons.push_back({w, w});
         qa_->setOptions(maps, modes, chars, weapons);
         qa_->show(true);
-        qa_->setStatus("Debug QA panel (not original). F10 toggles. Weapon override: pending Gameplay.");
+        qa_->setStatus("Debug QA panel (not original). F10 toggles.");
         LOG_INFO("QA panel enabled (WFC_QA, debug only)");
     }
     for (uint16_t k : in.keyPresses) if (k == 0x79) qa_->show(!qa_->visible());   // VK_F10
@@ -350,6 +380,24 @@ void Application::qaTick(const platform::InputFrame& in) {
                     r.kind = platform::QaRequest::Kind::Restart; restarted = true;
                 }
         } else matchSince = 0;
+    }
+    {   // the launched weapon, once the local player is in game; in-match tools
+        static bool weaponPending = false;
+        static int startIndex = 0;
+        if (r.kind == platform::QaRequest::Kind::Launch || r.kind == platform::QaRequest::Kind::Restart) weaponPending = true;
+        const bool inGame = flow.level() == frontend::LevelKind::Match && flow.ui().state() == frontend::UIState::InGame;
+        if (weaponPending && inGame && qaLast_.kind == platform::QaRequest::Kind::Launch) {
+            qa_->setStatus(qaTool(world_, platform::QaRequest::Kind::Launch, qaLast_.weapon, startIndex));
+            weaponPending = false;
+        }
+        using K = platform::QaRequest::Kind;
+        if (r.kind == K::Respawn || r.kind == K::NextStart || r.kind == K::Noclip || r.kind == K::God || r.kind == K::Dummy) {
+            if (!inGame) { qa_->setStatus("In-match tools need a running match."); return; }
+            if (r.kind == K::Dummy) { world_.addMatchOpponent("QA Dummy", false); qa_->setStatus("Spawned a dummy opponent."); }
+            else qa_->setStatus(qaTool(world_, r.kind, std::string(), startIndex));
+            frontend::FlowTrace::emit("qa.tool", {{"kind", std::to_string((int)r.kind)}, {"provenance", "DEBUG ONLY"}});
+            return;
+        }
     }
     if (r.kind == platform::QaRequest::Kind::None) return;
     if (r.kind == platform::QaRequest::Kind::Restart) {

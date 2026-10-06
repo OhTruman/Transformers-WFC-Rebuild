@@ -9,7 +9,7 @@
 namespace platform {
 namespace {
 
-enum : int { kMaps = 101, kModes, kChars, kWeapons, kLaunch, kRestart, kTitle, kStatus };
+enum : int { kMaps = 101, kModes, kChars, kWeapons, kLaunch, kRestart, kTitle, kStatus, kRespawn, kNextStart, kNoclip, kGod, kDummy };
 
 class Win32QaPanel : public QaPanel {
 public:
@@ -22,7 +22,7 @@ public:
         wc.lpszClassName = L"WfcQaPanel";
         RegisterClassW(&wc);
         hwnd_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"WFC QA (debug only - not original)",
-                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, 40, 40, 760, 360, nullptr, nullptr, wc.hInstance, this);
+                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, 40, 40, 760, 390, nullptr, nullptr, wc.hInstance, this);
         auto label = [&](const wchar_t* t, int x) {
             CreateWindowW(L"STATIC", t, WS_CHILD | WS_VISIBLE, x, 8, 170, 18, hwnd_, nullptr, wc.hInstance, nullptr);
         };
@@ -31,12 +31,18 @@ public:
                                  (HMENU)(INT_PTR)id, wc.hInstance, nullptr);
         };
         auto button = [&](const wchar_t* t, int id, int x) {
-            CreateWindowW(L"BUTTON", t, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, x, 256, 140, 28, hwnd_, (HMENU)(INT_PTR)id, wc.hInstance, nullptr);
+            CreateWindowW(L"BUTTON", t, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, x, 252, 140, 28, hwnd_, (HMENU)(INT_PTR)id, wc.hInstance, nullptr);
         };
         label(L"Map", 8); label(L"Mode", 192); label(L"Class", 376); label(L"Weapon (Gameplay)", 560);
         lists_[0] = list(kMaps, 8); lists_[1] = list(kModes, 192); lists_[2] = list(kChars, 376); lists_[3] = list(kWeapons, 560);
         button(L"Launch", kLaunch, 8); button(L"Restart last", kRestart, 156); button(L"Back to title", kTitle, 304);
-        status_ = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 8, 292, 730, 20, hwnd_, (HMENU)(INT_PTR)kStatus, wc.hInstance, nullptr);
+        // in-match tools (Gameplay QA API; no-ops when unavailable)
+        auto small = [&](const wchar_t* t, int id, int x) {
+            CreateWindowW(L"BUTTON", t, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, x, 316, 140, 26, hwnd_, (HMENU)(INT_PTR)id, wc.hInstance, nullptr);
+        };
+        small(L"Respawn", kRespawn, 8); small(L"Next start", kNextStart, 156); small(L"Noclip on/off", kNoclip, 304);
+        small(L"God mode on/off", kGod, 452); small(L"Spawn dummy", kDummy, 600);
+        status_ = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 8, 286, 730, 26, hwnd_, (HMENU)(INT_PTR)kStatus, wc.hInstance, nullptr);
     }
     ~Win32QaPanel() override { if (hwnd_) DestroyWindow(hwnd_); }
 
@@ -62,9 +68,18 @@ private:
         return k >= 0 && (size_t)k < options_[i].size() ? options_[i][(size_t)k].value : std::string();
     }
     void command(int id) {
-        if (id != kLaunch && id != kRestart && id != kTitle) return;
         QaRequest r;
-        r.kind = id == kLaunch ? QaRequest::Kind::Launch : id == kRestart ? QaRequest::Kind::Restart : QaRequest::Kind::Title;
+        switch (id) {
+        case kLaunch: r.kind = QaRequest::Kind::Launch; break;
+        case kRestart: r.kind = QaRequest::Kind::Restart; break;
+        case kTitle: r.kind = QaRequest::Kind::Title; break;
+        case kRespawn: r.kind = QaRequest::Kind::Respawn; break;
+        case kNextStart: r.kind = QaRequest::Kind::NextStart; break;
+        case kNoclip: r.kind = QaRequest::Kind::Noclip; break;
+        case kGod: r.kind = QaRequest::Kind::God; break;
+        case kDummy: r.kind = QaRequest::Kind::Dummy; break;
+        default: return;
+        }
         r.mapId = std::atoi(selected(0).c_str());
         r.mode = selected(1);
         r.character = selected(2);
