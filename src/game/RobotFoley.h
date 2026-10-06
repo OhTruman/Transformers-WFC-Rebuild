@@ -52,6 +52,12 @@ public:
     // s12 addendum + data: every variant authors the same notify]. Gameplay does not play that clip, so the dodge's start
     // fires the clip's notifies here.
     void dodgeStarted(std::vector<const char*>& out) { clipOneShot("Nav_Boost_F", out); }
+    // The one-shot action layer (TnPawn PlayCustomAnim: melee swings, Skill_* ability animations, whirlwind, grenade
+    // throw): its authored AnimNotify_Sound / SoundEvent notifies fire as the clip plays [CONF data: the notifies are
+    // on those AnimSequences]. Every tick with Gameplay's action clip ("" none) and its time; a replay restarts it.
+    void actionLayer(const std::string& clip, float t, std::vector<const char*>& out);
+    // An ability animation Gameplay does not play (Skill_Shockwave / _Warcry / _SpawnSentry ...): its notifies on trigger.
+    void clipNotifiesOnce(const std::string& clip, std::vector<const char*>& out) { clipOneShot(clip.c_str(), out); }
 
     // The character whose clips / sound set drive the foley (default: CharacterAudio::defaultProfile()).
     void setProfile(const CharacterAudioProfile* p) { profile_ = p; }
@@ -73,6 +79,7 @@ private:
     float apexY_ = 0.0f;             // _FallBaseHeight
     float prevVy_ = 0.0f;
     std::string clip_;               // base clip last step
+    std::string actionClip_; float actionT_ = 0.0f;   // action layer last step
     float norm_ = 0.0f;              // locomotion: sync-group phase last step
     float time_ = 0.0f;              // other clips: clip time last step (s)
     bool loco_ = false;

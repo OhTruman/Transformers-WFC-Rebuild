@@ -127,6 +127,10 @@ public:
     void onLocalKilledPawn(bool headshot, bool victimRobotForm, const std::string& victimChassisId);
     void onTransformFailed();                          // the local PressTransform was refused
     void onDodgeStarted();                             // the local dodge began: Nav_Boost_* notifies (charged-jump footstep)
+    // The local pawn's one-shot action clip (melee / Skill_* / whirlwind / grenade throw; "" none) and its time, every tick.
+    void onActionClip(const std::string& clip, float t);
+    // An ability whose animation Gameplay does not play: that clip's notifies on trigger ("Skill_Shockwave").
+    void onAbilityAnimFallback(const std::string& clip);
     // The held charge weapon's state (0 idle, 1 charging, 2..4 levels) every tick, and a fizzle (released before level 1).
     void setChargeWeaponAudio(const std::string& weaponClass, int state);
     void onChargeFizzle(const std::string& weaponClass);

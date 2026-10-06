@@ -1175,6 +1175,18 @@ void World::setRollerMineAudio(bool alive, float t, const core::Vec3& pos) {
 
 void World::onRollerMineExploded(const core::Vec3& pos) { abilityAudio_.rollerMineExploded(cues_, pos, core::length(pos - listenerPos_)); }
 
+void World::onActionClip(const std::string& clip, float t) {
+    std::vector<const char*> out;
+    robotFoley_.actionLayer(clip, t, out);
+    for (const char* c : out) cues_.play(c, atPawn(), 0.0f);
+}
+
+void World::onAbilityAnimFallback(const std::string& clip) {
+    std::vector<const char*> out;
+    robotFoley_.clipNotifiesOnce(clip, out);
+    for (const char* c : out) cues_.play(c, atPawn(), 0.0f);
+}
+
 void World::onDodgeStarted() {
     std::vector<const char*> out;
     robotFoley_.dodgeStarted(out);

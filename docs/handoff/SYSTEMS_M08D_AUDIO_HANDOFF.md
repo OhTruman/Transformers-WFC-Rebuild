@@ -176,3 +176,8 @@ It was dry-run against integration/milestone-08h a1388fa after applying the bran
 4. This patch.
 
 **Conflict note:** merging agents/gameplay (c804fe0) into 08h conflicts once, in the weaponFireHook projectile branch. Keep Gameplay's `spawnProjectile(o, ...)` line *and* the 08h Systems blocks (vehicle muzzle flash + onWeaponFired). This patch then adds the fire-mode argument to that onWeaponFired call.
+
+## M08l: action-layer sound notifies (glue)
+
+`docs/handoff/SYSTEMS_M08L_action_layer_glue.patch`, applied after the M08k patch.
+It adds two read-only Character accessors (actionClipIndex / actionTime) and two per-tick calls in tickAbilityAudio.

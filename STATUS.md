@@ -3,6 +3,23 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08l (2026-10-06) - action-layer sound notifies: melee swings, ability animations, whirlwind
+- `RobotFoley::actionLayer`: Gameplay's one-shot action clip (playAction: Melee_*, Skill_AbilityJammer / _Barrier / _GuidedMissile /
+  _MarkTarget, Transform_Whirlwind_ROBO, GrenadeThrow) fires its authored AnimNotify_Sound / SoundEvent notifies as it plays.
+  Before, only the base locomotion clip's notifies played, so melee and the ability animations were silent.
+- Abilities Gameplay plays no animation for (Skill_Shockwave / _Warcry / _SpawnSentry / _TransformDisruptor; RE pass 5 s12 table):
+  their clip's notifies fire on the trigger (`onAbilityAnimFallback`), only while Gameplay isn't playing that clip itself.
+- Glue `docs/handoff/SYSTEMS_M08L_action_layer_glue.patch` (after M08k): read-only Character::actionClipIndex() / actionTime(), the action
+  layer every tick, the trigger fallback.
+- In game (08h + gameplay + systems test tree):
+  * Warcry: chest hits + WAR_CRY_STATE_START (anim + buff, as the original).
+  * Shockwave: SHIELD_PUSH.
+  * Whirlwind: WHIRLWIND_COMPLETE + 15 whooshes.
+  * Guided Missile: SHOOT_BUILDUP.
+  * Spawn Sentry: SENTRY_ACTIVATE.
+  * Melee: SWING_LT_02 per swing.
+  * 0 missing cues, 0 leaks. Suite 680 / 0; wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS M08k (2026-10-06) - Plasma Cannon charge sounds, roller mine, dodge footstep
 - **TnChargeWeapon** (`WeaponAudio::chargeState` / `chargeFizzle`; fire modes in `fire`), per Gameplay 24l's mapping + RE's EWeaponEvent enum [CONF]:
   * charging -> WP_Looping CHARGE_SHOT; level 2 -> WP_LoopingSecondary CHARGE_LP_02; level 3 -> WP_LoopingTertiary CHARGE_LP_03;
