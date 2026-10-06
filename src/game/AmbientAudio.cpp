@@ -173,7 +173,7 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
         const assets::Json& pr = presets[j["reverb_preset"].asString()];
         z.priority = pr["mixer_preset"]["Priority"].asFloat(0.0f);   // diagnostics; the mixer orders presets
         z.preset = j["reverb_preset"].asString();
-        if (!cues.mixer().hasPreset(z.preset)) LOG_WARN("ambient: zone %s preset %s not in the mixer", z.name.c_str(), z.preset.c_str());
+
         const assets::Json& pools = j["one_shot_pool"];
         for (size_t p = 0; p < pools.size(); ++p) {
             const assets::Json& q = pools[p];
@@ -191,6 +191,10 @@ bool AmbientAudio::load(const std::string& path, const std::string& contentRoot,
         if (preferManifestZones_) script_.unload();      // validation: the flattened zones instead of the graph
         else zones_.clear();
     }
+    // Flattened zones the manifest could not resolve to a preset (its flattening stops at Delay / remote-event links;
+    // the graph follows them). Only meaningful when the flattened zones are the ones in use.
+    for (const Zone& z : zones_)
+        if (!cues.mixer().hasPreset(z.preset)) LOG_WARN("ambient: zone %s preset %s not in the mixer", z.name.c_str(), z.preset.c_str());
     sceneActive_.assign(zones_.size(), 0);
     touching_.assign(zones_.size(), 0);
     level_ = name;

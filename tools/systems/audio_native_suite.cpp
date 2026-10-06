@@ -1660,7 +1660,7 @@ static void testZoneGraph() {
     std::string why;
     const char* maps[] = {"MP_ESC_BrokenHope", "MP_ESC_Remnant", "MP_IAC_Berth", "MP_IAC_Rust", "MP_IAC_Seed", "MP_IAC_Streets",
                           "MP_KON_Molten", "MP_ORB_Debris", "MP_UND_Complex", "MP_UND_Gorge"};
-    bool allOk = true;
+    bool allOk = true, allReverbs = true;
     for (int cycle = 0; cycle < 3; ++cycle)
         for (const char* mname : maps) {
             const bool ok = host.load(mname);
@@ -1685,6 +1685,16 @@ static void testZoneGraph() {
                             "%d presets, %d level cues, one-shots %d, mixer [%s]\n", mname, ok ? "ok" : "FAILED", host.ambient().emitterCount(),
                             host.ambient().zoneCount(), host.ambient().poolCount(), zp.size(), zones.size(), reverbs.size(),
                             cues.mixer().mapPresetCount(), cues.mapCueCount(), host.ambient().script().oneShots(), st.mixer.c_str());
+            // Every authored REVERB_* preset of the map is reached by some zone (Experimental sweep M08c: the flattened
+            // manifest zones of six maps name none - the graph must still activate them all).
+            int authoredReverbs = 0;
+            if (const char* mj = game::AmbientAudio::manifestJson(mname)) {
+                assets::Json sj2; assets::Json::parse(mj, sj2);
+                for (const auto& kv : sj2["reverb_presets"].obj)
+                    if (kv.first.rfind("REVERB", 0) == 0) { ++authoredReverbs; if (!reverbs.count(kv.first)) { allReverbs = false;
+                        if (cycle == 0) std::printf("  %s: reverb %s never activated\n", mname, kv.first.c_str()); } }
+            }
+            if (cycle == 0) std::printf("  %-18s reverbs reached %zu / %d authored\n", mname, reverbs.size(), authoredReverbs);
             const bool hasReverbOps = cues.mixer().mapPresetCount() > 0;
             const bool good = ok && host.ambient().emitterCount() > 0 && (!hasReverbOps || !reverbs.empty()) && entered > 0 &&
                               host.ambient().announcerEvents().size() == 140;
@@ -1696,6 +1706,7 @@ static void testZoneGraph() {
             allOk = allOk && good && base;
         }
     CHECK(allOk, "3 cycles x 10 MP maps: each loads its bed, enters zones, switches reverb, survives death / reset, unloads to the baseline");
+    CHECK(allReverbs, "every MP map: walking its zone volumes activates every authored REVERB_* preset (graph zones, not the manifest's)");
 }
 
 // M08: character audio profiles + the movie language track rule (RE 433ef9e).
