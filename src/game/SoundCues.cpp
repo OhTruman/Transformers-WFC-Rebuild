@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <mutex>
 #include <filesystem>
 #include <cmath>
 #include <cstdlib>
@@ -134,6 +135,7 @@ void SoundCues::loadWaves(size_t c, const std::string& contentRoot) {
 
 void SoundCues::load(audio::IAudio* a, const std::string& contentRoot) {
     audio_ = a;
+    if (std::find(tables().begin(), tables().end(), this) == tables().end()) tables().push_back(this);
     contentRoot_ = contentRoot;
     cues_.assign(std::begin(kCues), std::end(kCues));
     waves_.clear();
@@ -352,8 +354,73 @@ bool SoundCues::startWarm(size_t c) {
         }
     if (paths.empty()) return false;
     audio::IAudio* a = audio_;
-    warming_.push_back({c, std::async(std::launch::async, [a, paths] { for (const std::string& p : paths) a->load(p); })});
+    Warm w;
+    w.cue = c; w.paths = paths; w.name = cues_[c].name; w.bytes = waveBytes(c); w.start = std::chrono::steady_clock::now();
+    // One worker decode at a time (decodeMutex): a match's final-stretch + end music (up to ~250 MB of waves each) must not
+    // decode concurrently - peak memory, and the device lock they share.
+    w.done = std::async(std::launch::async, [a, paths] {
+        static std::mutex decodeMutex;
+        std::lock_guard<std::mutex> lk(decodeMutex);
+        for (const std::string& p : paths) a->load(p);
+    });
+    LOG_INFO("sound cues: worker decode of %s started (%.1f MB of waves)", w.name.c_str(), w.bytes / 1048576.0);
+    warming_.push_back(std::move(w));
     return true;
+}
+
+void SoundCues::timedWait(std::future<void>& f, const char* why, const std::string& what) {
+    if (!f.valid()) return;
+    if (f.wait_for(std::chrono::seconds(0)) == std::future_status::ready) { f.wait(); return; }
+    const auto t0 = std::chrono::steady_clock::now();
+    f.wait();
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    if (ms > 5.0) LOG_WARN("sound cues: main thread waited %.1f ms on the worker decode of %s (%s)", ms, what.c_str(), why);
+}
+
+bool SoundCues::pathNeeded(const std::string& path) const {
+    for (const Warm& w : warming_) for (const std::string& p : w.paths) if (p == path) return true;
+    for (const LevelWarm& w : levelWarm_) for (const std::string& p : w.paths) if (p == path) return true;
+    return false;
+}
+
+void SoundCues::orphanWarm(Warm& w) {
+    LOG_INFO("sound cues: worker decode of %s abandoned (%.0f ms in; released when it finishes, nothing waits)", w.name.c_str(),
+             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - w.start).count());
+    orphans_.push_back({w.paths, w.name, std::move(w.done)});
+}
+
+bool SoundCues::ownsSample(audio::Sound h) const {
+    for (size_t c = 0; c < waves_.size(); ++c)
+        for (const auto& ev : waves_[c]) for (audio::Sound x : ev) if (x == h) return true;
+    return false;
+}
+
+int SoundCues::processOrphans() {
+    int released = 0;
+    for (SoundCues* t : tables()) if (!t->orphans_.empty()) released += t->processOwnOrphans();
+    return released;
+}
+
+int SoundCues::processOwnOrphans() {
+    int released = 0;
+    for (size_t i = 0; i < orphans_.size();) {
+        Orphan& o = orphans_[i];
+        if (o.done.valid() && o.done.wait_for(std::chrono::seconds(0)) != std::future_status::ready) { ++i; continue; }
+        if (o.done.valid()) o.done.wait();
+        if (audio_)
+            for (const std::string& p : o.paths) {
+                bool needed = false;
+                for (const SoundCues* t : tables()) needed = needed || t->pathNeeded(p);   // a live decode / prefetch wants it
+                if (needed) continue;
+                const audio::Sound h = audio_->load(p);                     // cached: the orphan's handle, no decode
+                if (h == audio::kInvalidSound) continue;
+                bool owned = false;
+                for (const SoundCues* t : tables()) owned = owned || t->ownsSample(h);
+                if (!owned) { audio_->release(h); ++released; }
+            }
+        orphans_.erase(orphans_.begin() + (long)i);
+    }
+    return released;
 }
 
 void SoundCues::startInstance(Instance& in) {
@@ -395,14 +462,19 @@ void SoundCues::unpin(const char* cue) {
 }
 
 void SoundCues::waitWarm(const std::string& tag) {
-    for (LevelWarm& w : levelWarm_) if (w.tag == tag && w.done.valid()) w.done.wait();
+    for (LevelWarm& w : levelWarm_) if (w.tag == tag) timedWait(w.done, "level load waits for its own prefetch", tag);
 }
 
 int SoundCues::releaseWarmExcept(const std::string& keep) {
     int released = 0;
     for (size_t i = 0; i < levelWarm_.size();) {
         LevelWarm& w = levelWarm_[i];
-        if (w.done.valid()) w.done.wait();
+        if (w.tag != keep && w.done.valid() && w.done.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
+            orphans_.push_back({w.paths, w.tag, std::move(w.done)});      // still decoding: do not wait, release later
+            levelWarm_.erase(levelWarm_.begin() + (long)i);
+            continue;
+        }
+        timedWait(w.done, "releaseWarmExcept", w.tag);
         if (w.tag != keep && audio_)
             for (const std::string& p : w.paths) {
                 const audio::Sound h = audio_->load(p);                   // cached: the warmed handle, no decode
@@ -423,9 +495,11 @@ void SoundCues::adoptWarm(bool wait, long onlyCue) {
         if (onlyCue >= 0 && w.cue != (size_t)onlyCue) { ++i; continue; }
         if (!wait && w.done.wait_for(std::chrono::seconds(0)) != std::future_status::ready) { ++i; continue; }
         auto t0 = std::chrono::steady_clock::now();
-        w.done.wait();
+        timedWait(w.done, "adopt", w.name);
         auto t1 = std::chrono::steady_clock::now();
         const size_t c = w.cue;
+        LOG_INFO("sound cues: worker decode of %s ready after %.0f ms", w.name.c_str(),
+                 std::chrono::duration<double, std::milli>(t1 - w.start).count());
         warming_.erase(warming_.begin() + (long)i);
         if (c >= resident_.size() || !resident_[c]) loadWaves(c, contentRoot_);   // device cache hits: no decode here
         static const bool dbg = std::getenv("WFC_PREFETCHLOG") != nullptr;
@@ -457,7 +531,11 @@ int SoundCues::mapCueCount() const {
 }
 
 int SoundCues::unloadMapCues() {
-    adoptWarm(true);                                   // warmed samples get an owner before anything is released
+    // Finished worker decodes get an owner (adopted); unfinished ones are ORPHANED, not waited for - a level unload right
+    // after the final-stretch / end music started must not block the main thread on a 250 MB decode (08o freeze report).
+    adoptWarm(false);
+    for (Warm& w : warming_) orphanWarm(w);
+    warming_.clear();
     for (size_t i = live_.size(); i-- > 0;) {
         if (!cues_[(size_t)live_[i].cue].mapBank) continue;
         const int id = live_[i].id;
@@ -774,6 +852,7 @@ void SoundCues::stop(int id, float fade) {
 
 void SoundCues::tick(float dt) {
     if (!warming_.empty()) adoptWarm(false);
+    processOrphans();                                  // this table's and any other (unticked) table's orphaned decodes
     for (size_t i = 0; i < live_.size(); ++i) {
         Instance& in = live_[i];
         if (!in.waiting || (size_t)in.cue >= resident_.size() || !resident_[(size_t)in.cue]) continue;

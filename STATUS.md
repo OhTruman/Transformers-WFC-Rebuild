@@ -3,6 +3,23 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## SYSTEMS M08s (2026-10-06) - 08o freeze audit: the main thread never waits on a worker decode
+- **Audit** (Integration's 08o "game froze" report): no deadlock found. No lock is held across a decode (Win32Audio decodes outside its mutex),
+  there are no condition variables, and the worker never waits on the main thread.
+- **Real stall:** SoundCues::unloadMapCues called adoptWarm(true), blocking the level unload until every in-flight worker decode finished.
+  The final-stretch / end music starts near match end, at 20-248 MB each, and two decoded concurrently - so the travel after a match could block
+  for the rest of those decodes (hundreds of ms here, plausibly seconds on a slower disk or under memory pressure).
+- **Fix:**
+  * Unfinished decodes are ORPHANED at unload / releaseWarmExcept, not waited for. Any table's tick releases them when they finish, unless a
+    table owns or needs the file. Tables are registered so the frontend's orphans are released during a match.
+  * Worker decodes run one at a time, to cap peak memory.
+  * Remaining waits are timed: LOG_WARN "main thread waited N ms on the worker decode of X (why)" above 5 ms. Worker decodes log
+    start (MB) / ready (ms) / abandoned.
+- **Tests:**
+  * New suite check: a 140 MB decode, then an immediate level unload, returns at once (orphaned), and the decode is released later with the worst tick < 20 ms.
+  * Lifecycle / suite stages let deferred music start and orphans settle before their baseline checks.
+  * Suite 723 / 0; lifecycle 40 / 0; movie probe OK; wfc_fidelity 194 / 0 / 19.
+
 ## SYSTEMS M08r (2026-10-06) - opponent spawn hitch (my M08d glue ran for every pawn)
 - My M08d glue in World::applyCharacterTo (preloadWeaponAudio + setPlayerVehicleWeaponAudio) runs for EVERY pawn, opponents included, because
   Gameplay applies characters to participants through it. Two effects of an opponent's spawn:

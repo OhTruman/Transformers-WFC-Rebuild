@@ -13,6 +13,7 @@
 //   SoundParameters.Optimus_Prime_Speed (Max 120): vehicle speed in mph [MED]
 //   SoundParameters.Optimus_Prime_Tire_Squeal (Max 1.57 = pi/2): tire slip angle in radians [HI]
 #pragma once
+#include <chrono>
 #include <functional>
 #include <future>
 #include <map>
@@ -140,8 +141,11 @@ public:
     ~SoundCues() {                                     // inline: every build links it
         for (Warm& w : warming_) if (w.done.valid()) w.done.wait();
         for (LevelWarm& w : levelWarm_) if (w.done.valid()) w.done.wait();
+        for (Orphan& w : orphans_) if (w.done.valid()) w.done.wait();
+        unregisterTable(this);
     }
     int warmingPrefetches() const { return (int)warming_.size(); }
+    int orphanDecodes() const { return (int)orphans_.size(); }
     int waitingInstances() const { int n = 0; for (const Instance& in : live_) n += in.waiting ? 1 : 0; return n; }
     // Level-start warming (frontend frame budget): decode the eager (non-streamed, non-localized) waves of a manifest cue
     // bank for an upcoming level `tag` on a worker, so the level's addCues finds them in the device cache. Thread-safe
@@ -249,7 +253,27 @@ private:
     std::vector<Pending> pending_;
     int nextId_ = 0;
     // Prefetch warming (worker decodes; adopted on the main thread). Every load / release / unload path drains first.
-    struct Warm { size_t cue; std::future<void> done; };
+    struct Warm { size_t cue; std::vector<std::string> paths; std::string name; long long bytes = 0;
+                  std::chrono::steady_clock::time_point start; std::future<void> done; };
+    // Worker decodes nobody waits for any more (their level unloaded / their prefetch was abandoned): their samples are
+    // released when they finish, unless a cue owns them or a live decode needs the same file. Never waited on in play.
+    struct Orphan { std::vector<std::string> paths; std::string what; std::future<void> done; };
+    std::vector<Orphan> orphans_;
+    int processOrphans();                             // every live table's orphans (any table's tick: the frontend's
+                                                      // orphaned music is released during a match too)
+    int processOwnOrphans();
+    bool ownsSample(audio::Sound h) const;
+    // The live cue tables (main thread only): the frontend's and the match World's share the device's path cache, so an
+    // orphan is released only if NO table owns or needs that file.
+    static std::vector<SoundCues*>& tables() { static std::vector<SoundCues*> t; return t; }   // inline: every build links it
+    static void unregisterTable(SoundCues* t) {
+        auto& v = tables();
+        for (size_t i = 0; i < v.size(); ++i) if (v[i] == t) { v.erase(v.begin() + (long)i); break; }
+    }
+    void orphanWarm(Warm& w);
+    bool pathNeeded(const std::string& path) const;
+    // A main-thread wait on a worker decode (logged when > 5 ms: freeze diagnosis).
+    static void timedWait(std::future<void>& f, const char* why, const std::string& what);
     std::vector<Warm> warming_;
     struct LevelWarm { std::string tag; std::vector<std::string> paths; std::future<void> done; };
     std::vector<LevelWarm> levelWarm_;

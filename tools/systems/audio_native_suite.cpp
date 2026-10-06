@@ -1405,10 +1405,14 @@ static void testLevelLifecycle() {
                     if (!std::strcmp(sg.level, "MP_IAC_Streets") && k % 15 == 0) rc.play("SHOOT", sg.L, 0.0f);
                     if (k == 5) rh.playUiSound("BUTTON_ACCEPT");
                 }
+                // Large streamed music decodes on the worker (M08q): a stage lasts seconds in play - let its deferred music start.
+                for (int k = 0; k < 300 && rc.waitingInstances() > 0; ++k) { stageTick(rh, rc, sg.L, sg.L, dt, m, a); std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
                 std::this_thread::sleep_for(std::chrono::milliseconds(30));
                 const int during = a->activeVoices();
                 rh.unload();
                 const int after = a->activeVoices();
+                // An unload never waits for a decode (orphaned, 08o freeze): it is released when it finishes.
+                for (int k = 0; k < 600 && rc.orphanDecodes() > 0; ++k) { rc.tick(dt); std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
                 const size_t bytes = a->residentBytes();
                 const bool ok = after == 0 && bytes == baseBytes && rc.liveInstances() == 0 && rc.mapCueCount() == 0;
                 clean = clean && ok;
@@ -2203,6 +2207,26 @@ static void testLevelWarm() {
         for (int k = 0; k < 3; ++k) { host.tick(1.0f / 30.0f, Vec3{0, 0, 0}, Vec3{0, 0, 0}); cues.tick(1.0f / 30.0f); }
         CHECK(a->residentBytes() == base && cues.warmLevels() == 0, "abandoned UI_Lobby_m prefetch: nothing left resident (%.1f MB over base)",
               (a->residentBytes() - base) / 1048576.0);
+        // The 08o freeze scenario: a large streamed cue starts its worker decode, then the level unloads at once (match end ->
+        // travel). The unload must not wait for the decode; the orphaned decode is released when it finishes.
+        CHECK(host.load("UI_FrontEnd_m"), "load UI_FrontEnd_m again");
+        game::MusicTrack mt;
+        CHECK(game::AmbientAudio::levelMusicTrack("UI_FrontEnd_m", mt) && cues.play(mt.cue.c_str(), Vec3{0, 0, 0}, 0.0f) >= 0 &&
+              cues.waitingInstances() == 1, "unprefetched title music: worker decode started, the instance waits");
+        auto u0 = std::chrono::steady_clock::now();
+        host.unload();
+        const double unloadMs = ms(u0);
+        CHECK(unloadMs < 50.0 && cues.orphanDecodes() == 1, "level unload during that decode returns at once (%.1f ms; was a wait on the decode), decode orphaned",
+              unloadMs);
+        double worst = 0.0;
+        for (int k = 0; k < 600 && cues.orphanDecodes() > 0; ++k) {
+            auto t = std::chrono::steady_clock::now();
+            host.tick(1.0f / 30.0f, Vec3{0, 0, 0}, Vec3{0, 0, 0}); cues.tick(1.0f / 30.0f);
+            worst = std::max(worst, ms(t));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        CHECK(cues.orphanDecodes() == 0 && a->residentBytes() == base && worst < 20.0,
+              "the orphaned decode finishes and is released (worst tick %.1f ms; %.1f MB over base)", worst, (a->residentBytes() - base) / 1048576.0);
     }
     delete a;
 }
