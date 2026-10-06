@@ -699,7 +699,17 @@ void VM::installBuiltins() {
     method(vm, mouseObj, "removeListener", remL(&Player::mouseListeners));
     Object* selection = newPlain();
     global->setRaw("Selection", Value(selection), DontEnum);
-    method(vm, selection, "getFocus", [](VM& vm, const Value&, Args&) -> Value { return vm.get(vm.global, "__selectionFocus"); });
+    method(vm, selection, "getFocus", [](VM& vm, const Value&, Args&) -> Value {
+        // Flash clears focus when the focused object is removed: a stale path would satisfy movie code that checks
+        // Selection.getFocus() == targetPath(field) after the field is gone (TextPrompt_GFX's Enter listener outlives
+        // the prompt and submitted the account name again from Extras).
+        Value f = vm.get(vm.global, "__selectionFocus");
+        if (f.isString() && vm.player()) {
+            gfx::DisplayObject* d = vm.player()->resolveTarget(f.s, nullptr);
+            if (!d || d->removed) { vm.set(vm.global, "__selectionFocus", Value::null()); return Value::null(); }
+        }
+        return f;
+    });
     method(vm, selection, "setFocus", [](VM& vm, const Value&, Args& a) -> Value {
         // An instance or a target-path string (relative to the calling timeline, e.g. "inputText_mc.label_txt").
         Value v = arg(a, 0);
