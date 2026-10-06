@@ -281,8 +281,9 @@ bool Pipeline::loadMapFx(const std::string& path) {
                         }
                     }
                     const std::string sm = L["subuv_method"].asString();   // EParticleSubUVInterpMethod
-                    lod.subMethod = sm.find("RANDOM") != std::string::npos || sm.find("Random") != std::string::npos ? 2
-                                  : (sm.empty() || sm == "PSUVIM_None") ? 0 : 1;
+                    lod.subMethod = sm == "PSUVIM_Linear" ? 1 : sm == "PSUVIM_Linear_Blend" ? 2 : sm == "PSUVIM_Random" ? 3
+                                  : sm == "PSUVIM_Random_Blend" ? 4 : 0;
+                    lod.randomImageTime = L["random_image_time"].asFloat(0.0f);
                 }
                 if (L.has("mesh") && L["mesh"].isObject()) {
                     lod.meshGltf = L["mesh"]["gltf"].asString();
@@ -428,6 +429,33 @@ int Pipeline::fxMeshFor(const FxLod& L) {
 // ---- simulation (UE3 FParticleEmitterInstance order: kill/update, then spawn) ----
 void Pipeline::tickMapFx(float dt) {
     if (dt <= 0.0f || std::getenv("WFC_NOMAPFX")) return;
+    // M67 SubUV (RE pass 5 s16, update runner case 0x1F, CONFIRMED): every tick for every live particle (and at spawn as
+    // the first update). Cells row-major; the second cell is the next one, wrapping. Linear / Linear_Blend: f =
+    // SubImageIndex(RelativeTime), cell floor(f) clamped, interp frac(f) (Linear: 0). Random / Random_Blend: a new pick
+    // on the first update, RandomImageTime == 0, or RelativeTime - lastChange > RandomImageTime (lifetime fraction);
+    // cell floor(total x r), interp r (Random: 0); otherwise held (interp 0, second cell = the cell).
+    auto subuvStep = [&](const FxLod& L, const FxModule& m, FxParticle& q, uint32_t& rng) {
+        const int total = L.subH * L.subV;
+        if (total <= 1 || L.subMethod == 0) return;
+        if (L.subMethod <= 2) {
+            float v[3]; evalDist(m, "SubImageIndex", q.relTime, rng, v);
+            float f = std::floor(v[0]);
+            q.subImage = std::max(0, std::min((int)f, total - 1));
+            q.subInterp = L.subMethod == 2 ? v[0] - f : 0.0f;
+            q.subImage2 = (q.subImage + 1) % total;
+        } else if (!q.subInit || L.randomImageTime == 0.0f || q.relTime - q.subLastChange > L.randomImageTime) {
+            rng = rng * 1664525u + 1013904223u;
+            float r = (float)(rng >> 8) / 16777216.0f;
+            q.subImage = std::min((int)((float)total * r), total - 1);
+            q.subInterp = L.subMethod == 4 ? r : 0.0f;
+            q.subImage2 = (q.subImage + 1) % total;
+            q.subLastChange = q.relTime;
+        } else {
+            q.subInterp = 0.0f;
+            q.subImage2 = q.subImage;
+        }
+        q.subInit = true;
+    };
     auto t0 = std::chrono::steady_clock::now();
     float camUE[3] = {camPos_.x * 100.0f, camPos_.z * 100.0f, camPos_.y * 100.0f};
     for (const PickupMeshRT& pm : pickupMeshes_)          // PHYS_Rotating only while available (Pickup state)
@@ -503,9 +531,8 @@ void Pipeline::tickMapFx(float dt) {
                         auto ic = m.dists.find("ColorOverLife"), ia = m.dists.find("AlphaOverLife");
                         if (ic != m.dists.end()) { ic->second.eval(q.relTime, in.rng, cv); for (int c = 0; c < 3; ++c) q.color[c] = cv[c]; }
                         if (ia != m.dists.end()) { ia->second.eval(q.relTime, in.rng, av); q.color[3] = av[0]; }
-                    } else if (m.name == "PMI_SubUV" && L.subMethod == 1) {   // linear: image from the index curve
-                        float v[3]; evalDist(m, "SubImageIndex", q.relTime, in.rng, v);
-                        q.subImage = std::max(0, std::min((int)v[0], L.subH * L.subV - 1));
+                    } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {   // M67: every tick (RE s16)
+                        subuvStep(L, m, q, in.rng);
                     } else if (m.name == "PMI_SizeMultiplyLife") {
                         float s[3]; evalDist(m, "LifeMultiplier", q.relTime, in.rng, s);
                         for (int c = 0; c < 3; ++c) q.size[c] *= s[c];
@@ -769,10 +796,8 @@ void Pipeline::tickMapFx(float dt) {
                         evalDist(m, "Acceleration", efrac, in.rng, v3);
                         toWorldDir(v3, w3);
                         for (int c = 0; c < 3; ++c) q.accel[c] += w3[c];
-                    } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {
-                        int n = L.subH * L.subV;
-                        if (L.subMethod == 2) { in.rng = in.rng * 1664525u + 1013904223u; q.subImage = (int)((in.rng >> 8) % (uint32_t)n); }
-                        else { evalDist(m, "SubImageIndex", 0.0f, in.rng, v3); q.subImage = std::max(0, std::min((int)v3[0], n - 1)); }
+                    } else if (m.name == "PMI_SubUV" && L.subMethod != 0) {   // spawn = the first update (M67)
+                        subuvStep(L, m, q, in.rng);
                     } else if (m.name == "PMI_MeshRotationRate") {
                         evalDist(m, "StartRotationRate", efrac, in.rng, v3);
                         for (int c = 0; c < 3; ++c) q.meshRotRate[c] += v3[c] * 360.0f;
@@ -1656,10 +1681,18 @@ void Pipeline::drawMapPresentation() {
                     Sprite s;
                     s.c[0] = c - hx - hy; s.c[1] = c + hx - hy; s.c[2] = c + hx + hy; s.c[3] = c - hx + hy;
                     float uv[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
-                    if (L.subMethod != 0 && L.subH * L.subV > 1) {     // SubUV: the image's cell of the sheet
+                    if (L.subMethod != 0 && L.subH * L.subV > 1) {     // SubUV: the cell (and the blend cell) of the sheet
                         float du = 1.0f / (float)L.subH, dv = 1.0f / (float)L.subV;
                         float u0 = (float)(q.subImage % L.subH) * du, v0 = (float)(q.subImage / L.subH) * dv;
+                        float u1 = (float)(q.subImage2 % L.subH) * du, v1 = (float)(q.subImage2 / L.subH) * dv;
+                        for (int k = 0; k < 4; ++k) { s.uv2[k][0] = u1 + uv[k][0] * du; s.uv2[k][1] = v1 + uv[k][1] * dv; }
                         for (auto& t : uv) { t[0] = u0 + t[0] * du; t[1] = v0 + t[1] * dv; }
+                        s.blend = q.subInterp;
+                        if (std::getenv("WFC_FXTEST") && L.subMethod == 2) {
+                            static int nb = 0;
+                            if (nb++ < 3) LOG_INFO("FXTEST subuv %s/%s cell %d -> %d blend %.3f (%dx%d)", in.system.c_str(),
+                                                   sys.emitters[e].name.c_str(), q.subImage, q.subImage2, q.subInterp, L.subH, L.subV);
+                        }
                     }
                     std::memcpy(s.uv, uv, sizeof(uv));
                     std::copy(q.color, q.color + 4, s.color);

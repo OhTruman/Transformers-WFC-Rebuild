@@ -489,8 +489,19 @@ class MatCompiler:
         return ['m.dynParam.x', 'm.dynParam.y', 'm.dynParam.z', 'm.dynParam.w'][min(o, 3)], 1
 
     def x_ParticleSubUV(self, c, n, p, o):
+        # M67: the particle's two SubUV cells (m.uv0 = cell 1, m.subUV2.xy = cell 2) lerped by its interp
+        # (m.subUV2.z; 0 for non-blend methods and for non-sprite draws) [RE pass 5 s16: fill writes both cells + Interp]
         tex = (n.get('Texture') or {}).get('ref')
-        return self._sample2d(c, n, p, o, tex)
+        info = self._tex_info(tex)
+        if info is None:
+            self.notes.append('texture not found: %s' % tex)
+            info = {'file': None, 'object': tex}
+        slot = self.tex_slot(('2d', tex), '2d', info)
+        a = self.tmp(4, 'wfcSample2D(%d, m.uv0)' % slot)
+        b = self.tmp(4, 'wfcSample2D(%d, m.subUV2.xy)' % slot)
+        s = self.tmp(4, 'mix(%s, %s, m.subUV2.z)' % (a, b))
+        if o == 0: return '%s.rgb' % s, 3
+        return '%s.%s' % (s, 'rgba'[min(o, 4) - 1]), 1
 
     def x_BumpOffset(self, c, n, p, o):
         uv = self.input(c, n, 'Coordinate', ('m.uv0', 2))

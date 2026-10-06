@@ -196,7 +196,10 @@ public:
     // Effects shaded by their original material graphs; `color` is the particle colour (vertex colour,
     // HDR). drawFx returns false when the mesh has no compiled original material (caller falls back).
     bool drawFx(int id, const core::Mat4& model, const float color[4]);
-    struct Sprite { core::Vec3 c[4]; float uv[4][2]; float color[4]; };
+    struct Sprite {
+        core::Vec3 c[4]; float uv[4][2]; float color[4];
+        float uv2[4][2] = {{0, 0}, {0, 0}, {0, 0}, {0, 0}}; float blend = 0.0f;   // M67 second SubUV cell + interp
+    };
     bool drawSprites(const char* material, const Sprite* s, size_t n, const core::Vec3& facing);
 
 private:
@@ -485,7 +488,8 @@ public:
         std::string sizeParam;            // SizeMultiplyLife by instance parameter (HoverFX "Size"); "" = none
         float sizeParamConst[3] = {1, 1, 1};
         bool velocityAligned = false;     // PSA_Velocity
-        int subH = 1, subV = 1, subMethod = 0;   // SubUV: 0 none, 1 linear, 2 random
+        int subH = 1, subV = 1, subMethod = 0;   // SubUV: 0 none, 1 Linear, 2 Linear_Blend, 3 Random, 4 Random_Blend
+        float randomImageTime = 0.0f;     // Random re-pick interval (lifetime fraction; 0 = every tick)
         bool hasDefaultColor = false; float defaultColor[4] = {1, 1, 1, 1};   // ColorByParameter DefaultColor (linear)
         float duration = 1.0f; int loops = 0;
         FxDist spawnRate;
@@ -507,7 +511,8 @@ private:
         float rot = 0, rotRate = 0, relTime = 0, oneOverLife = 0;
         float meshRot[3] = {0, 0, 0}, meshRotRate[3] = {0, 0, 0};
         float accel[3] = {0, 0, 0};       // ParticleModuleAcceleration (world / emitter space as spawned)
-        int subImage = 0;
+        int subImage = 0, subImage2 = 0;  // SubUV cells (row-major index) and the blend interp (RE s16)
+        float subInterp = 0.0f, subLastChange = 0.0f; bool subInit = false;
         int noiseCount = 0;               // Beam2 noise points (count + 1 offsets, UE units, beam space)
         float noiseTimer = 0.0f;          // seconds since the noise points were last re-drawn
         uint32_t seq = 0;                 // spawn order within its emitter (Trail2 chains link by spawn order)
@@ -614,6 +619,7 @@ private:
     void ensureSceneColor();
     float fxColor_[4] = {1, 1, 1, 1};
     GLuint spriteVao_ = 0, spriteVbo_ = 0, spriteCbo_ = 0, spriteIbo_ = 0;
+    GLuint spriteSubBo_ = 0;          // M67 sprite second SubUV cell + blend
     std::map<std::string, int> spriteProg_;
     std::string resolveName(const std::string& name) const;
     GLuint bloomGatherProg_ = 0, blurProg_ = 0, bloomFbo_[2] = {0, 0}, bloomTex_[2] = {0, 0};

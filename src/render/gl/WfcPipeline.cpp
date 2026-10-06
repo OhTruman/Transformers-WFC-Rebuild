@@ -52,6 +52,7 @@ layout(location=2) in vec4 aTan;
 layout(location=3) in vec2 aUV0;
 layout(location=4) in vec2 aUV1;
 layout(location=5) in vec4 aColor;   // particle colour (FX draws); constant white otherwise
+layout(location=6) in vec3 aSubUV2;  // M67 sprites: second SubUV cell UV + blend; constant 0 otherwise
 uniform mat4 uViewProj;
 uniform mat4 uModel;
 uniform vec4 uShadowDepth;   // shadow caster pass: x on, y InvMaxSubjectDepth, z DepthBias
@@ -64,7 +65,7 @@ uniform vec3 uFogIn;
 uniform int uVertexLM;       // LMT_1D vertex lightmap: coefficients per vertex from uVLM (rows 0..2)
 uniform int uVLMBase;
 uniform sampler2D uVLM;
-out vec3 vPos; out vec3 vNrm; out vec4 vTan; out vec2 vUV0; out vec2 vUV1; out vec4 vFog; out vec4 vColor;
+out vec3 vPos; out vec3 vNrm; out vec4 vTan; out vec2 vUV0; out vec2 vUV1; out vec4 vFog; out vec4 vColor; out vec3 vSubUV2;
 out vec3 vVLM0; out vec3 vVLM1; out vec3 vVLM2;
 out vec2 vUV1Mat;            // raw second UV channel (material TexCoord[1]); vUV1 is the lightmap UV
 
@@ -96,6 +97,7 @@ void main() {
     vNrm = nm * aNrm;
     vTan = vec4(nm * aTan.xyz, aTan.w);
     vUV0 = aUV0;
+    vSubUV2 = aSubUV2;
     vUV1 = aUV1 * uLMCoord.xy + uLMCoord.zw;
     vUV1Mat = aUV1;
     vColor = aColor;
@@ -117,7 +119,7 @@ void main() {
 )";
 
 const char* kFSHead = R"(#version 330 compatibility
-in vec3 vPos; in vec3 vNrm; in vec4 vTan; in vec2 vUV0; in vec2 vUV1; in vec4 vFog; in vec4 vColor;
+in vec3 vPos; in vec3 vNrm; in vec4 vTan; in vec2 vUV0; in vec2 vUV1; in vec4 vFog; in vec4 vColor; in vec3 vSubUV2;
 in vec2 vUV1Mat;
 layout(location=0) out vec4 oColor;
 uniform vec3 uCamPos;
@@ -138,7 +140,7 @@ uniform sampler2D uSceneColor;   // MaterialExpressionSceneTexture: the resolved
 // Screen UVs in UE3's (D3D) convention, v down (ScreenPositionScaleBias (0.5, -0.5)); the GL scene copy is bottom-up.
 vec4 wfcSceneColor(vec2 uv) { return texture(uSceneColor, vec2(uv.x, 1.0 - uv.y)); }
 vec2 wfcScreenUV() { vec2 s = gl_FragCoord.xy / vec2(textureSize(uSceneColor, 0)); return vec2(s.x, 1.0 - s.y); }
-struct MatIn { vec2 uv0; vec2 uv1; vec4 vertexColor; vec3 worldPosUE; vec3 cameraVector; vec3 reflectionVector;
+struct MatIn { vec2 uv0; vec2 uv1; vec3 subUV2; vec4 vertexColor; vec3 worldPosUE; vec3 cameraVector; vec3 reflectionVector;
                vec3 normal; mat3 tbnUE; float time; float pixelDepth; vec4 screenPos; float sceneDepth;
                vec4 dynParam; };
 struct MatOut { vec3 Distortion; vec3 DiffuseColor; vec3 SpecularColor; float SpecularPower; vec3 Normal;
@@ -188,7 +190,7 @@ MatIn wfcBuildInput(out mat3 tbn) {
     vec3 B = cross(N, T) * (vTan.w < 0.0 ? -1.0 : 1.0);
     tbn = mat3(T, B, N);
     MatIn m;
-    m.uv0 = vUV0; m.uv1 = vUV1Mat; m.vertexColor = vColor;
+    m.uv0 = vUV0; m.uv1 = vUV1Mat; m.subUV2 = vSubUV2; m.vertexColor = vColor;
     m.worldPosUE = vPos.xzy * 100.0;                     // glTF metres -> UE units/axes
     vec3 V = normalize(uCamPos - vPos);
     m.cameraVector = vec3(dot(V, T), dot(V, B), dot(V, N));
@@ -624,7 +626,7 @@ void Pipeline::release() {
         fbo(*f);
     if (maskDepthRb_) { DeleteRenderbuffers(1, &maskDepthRb_); maskDepthRb_ = 0; }
     for (GLuint* v : {&dynVao_, &postVao_, &spriteVao_, &volVao_}) vao(*v);
-    for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_}) buf(*b);
+    for (GLuint* b : {&dynVbo_, &dynIbo_, &spriteVbo_, &spriteCbo_, &spriteIbo_, &volVbo_, &spriteSubBo_}) buf(*b);
     for (GLuint* p : {&postProg_, &bloomGatherProg_, &blurProg_, &distApplyProg_, &shadowProjProg_, &maskDepthProg_,
                       &constProg_, &maskBlurProg_})
         prog(*p);
@@ -2438,6 +2440,18 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
     BindBuffer(GL_ARRAY_BUFFER, spriteCbo_);
     BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(col.size() * sizeof(float)), col.data(), GL_STREAM_DRAW);
     EnableVertexAttribArray(5); VertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 0, (void*)0);
+    {   // M67 second SubUV cell + blend per vertex
+        std::vector<float> sub(n * 4 * 3);
+        for (size_t i = 0; i < n; ++i)
+            for (int k = 0; k < 4; ++k) {
+                float* o = &sub[(i * 4 + (size_t)k) * 3];
+                o[0] = sp[i].uv2[k][0]; o[1] = sp[i].uv2[k][1]; o[2] = sp[i].blend;
+            }
+        if (!spriteSubBo_) GenBuffers(1, &spriteSubBo_);
+        BindBuffer(GL_ARRAY_BUFFER, spriteSubBo_);
+        BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(sub.size() * sizeof(float)), sub.data(), GL_STREAM_DRAW);
+        EnableVertexAttribArray(6); VertexAttribPointer(6, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+    }
     BindBuffer(GL_ELEMENT_ARRAY_BUFFER, spriteIbo_);
     BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(idx.size() * 4), idx.data(), GL_STREAM_DRAW);
     BindVertexArray(0);

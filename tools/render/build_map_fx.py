@@ -111,6 +111,8 @@ def system_runtime(name, s):
                    'type_data': {'ParticleModuleTypeDataMesh': 'mesh', 'ParticleModuleTypeDataTrail2': 'trail2',
                                  'ParticleModuleTypeDataBeam2': 'beam2'}.get(tdc, 'sprite' if not tdc else tdc),
                    'subuv_method': req.get('InterpolationMethod', 'PSUVIM_None'),
+                   # M67 Random / Random_Blend re-pick interval, in lifetime-fraction units (RE s16); untagged -> 0
+                   'random_image_time': req.get('RandomImageTime', 0.0),
                    # M44: Beam2 / Trail2 type data (MaxBeamCount caps live beams; taper / tessellation PARTIAL)
                    'beam_trail': {k: td[k] for k in ('MaxBeamCount', 'TaperMethod', 'InterpolationPoints', 'Speed',
                                                      'MaxParticleInTrailCount', 'MaxTrailCount', 'TessellationFactor',
