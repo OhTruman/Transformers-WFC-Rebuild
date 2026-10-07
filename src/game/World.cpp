@@ -1097,6 +1097,9 @@ void World::tick(float dt) {
         for (int i = 0; i < 12; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
     }
+    // The local pawn's presentation yaw offset (set per render frame by the controller) is not simulation state: the step's
+    // meshMatrix / sockets use the simulated yaw only (the next frame's input pass sets the offset again for drawing).
+    player_.pawn().setDrawYawOffset(0.0f);
     // Presentation interpolation: remember each pawn's state at the start of the step.
     player_.pawn().beginStep();
     for (MatchOpponent* o : opponents_) o->pawn().beginStep();

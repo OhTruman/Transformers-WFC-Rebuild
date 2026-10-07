@@ -171,6 +171,8 @@ bool Application::init() {
     if (std::getenv("WFC_QABOTTEST")) { runQaBotTest(); return false; }          // F10 panel bot tools (needs WFC_QA)
     if (std::getenv("WFC_DETERMINISMTEST")) { runDeterminismTest(); return false; } // same match at 60 / 240 fps -> same events
     if (std::getenv("WFC_WEAPONAUDIT")) { runWeaponAudit(); return false; }        // WeaponDef vs AssetTools tuning_tables.json
+    if (std::getenv("WFC_VEHICLEAUDIT")) { runVehicleAudit(); return false; }      // VehicleParams vs tuning_tables.json
+    if (std::getenv("WFC_VEHFRAMETEST")) { runVehicleFrameTest(); return false; }   // the same drive at 60 / 120 / 240 fps
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -5102,6 +5104,169 @@ void Application::runWeaponAudit() {
     }
 
     LOG_INFO("WEAPONAUDIT SUMMARY: %s", mismatches == 0 ? "PASS" : "FAIL");
+}
+
+// WFC_VEHICLEAUDIT (Milestone E vehicles pass): every chassis' VehicleParams (as loaded by loadChassisDef) against AssetTools'
+// tuning_tables.json vehicles[<ChassisId>] (hover / tank / jet blueprints, car physics, flight, VEHDEF scalars). Units: UU -> m.
+void Application::runVehicleAudit() {
+    const char* mr = std::getenv("WFC_MANIFESTS");
+    const std::string path = std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/mp_content/tuning_tables.json";
+    std::ifstream f(path, std::ios::binary);
+    std::stringstream ss; ss << f.rdbuf();
+    assets::Json j;
+    if (!f || !assets::Json::parse(ss.str(), j)) { LOG_INFO("VEHICLEAUDIT FAIL cannot read %s", path.c_str()); return; }
+    const assets::Json& V = j["vehicles"];
+    const std::string vsRoot = std::getenv("WFC_ASSETS") ? std::getenv("WFC_ASSETS") : core::config::kAssetRootDefault;
+    int compared = 0, mismatches = 0, bodiesBad = 0, loadFail = 0, fields = 0;
+    for (const auto& kv : V.obj) {
+        const std::string id = kv.first;
+        game::ChassisDef d;
+        if (!game::loadChassisDef(vsRoot, id, d)) { ++loadFail; LOG_INFO("VEHICLEAUDIT %s: not loadable (%s)", id.c_str(), d.loadError.c_str()); continue; }
+        ++compared;
+        const assets::Json& v = kv.second["values"];
+        const game::VehicleParams& P = d.vehicle;
+        int bad = 0;
+        auto num = [&](const std::string& k, float& out) -> bool { if (!v.has(k)) return false; out = v[k].asFloat(); return true; };
+        // the first present key among the blueprint prefixes (car / truck hover, tank, jet hover)
+        auto pick = [&](std::initializer_list<const char*> prefixes, const char* key, float& out) -> std::string {
+            for (const char* p : prefixes) { const std::string k = std::string("vehicle_physics.") + p + ".values." + key; if (num(k, out)) return k; }
+            return std::string();
+        };
+        auto cmpKey = [&](const char* field, float mine, const std::string& key, float t, float scale) {
+            if (key.empty()) return;
+            ++fields;
+            t *= scale;
+            const float err = std::fabs(mine - t), rel = std::fabs(t) > 1e-3f ? err / std::fabs(t) : err;
+            if (rel > 0.011f && err > 1e-3f) { ++bad; LOG_INFO("VEHICLEAUDIT %s.%s rebuild %g, authored %g (%s)", id.c_str(), field, mine, t, key.c_str()); }
+        };
+        auto hov = [&](const char* field, float mine, const char* key, float scale) {
+            float t; const std::string k = pick({"HoverBlueprint", "Blueprint", "HoverVehicleBlueprint"}, key, t); cmpKey(field, mine, k, t, scale);
+        };
+        auto car = [&](const char* field, float mine, const char* key, float scale) {
+            float t; const std::string k = pick({"CarBlueprint"}, key, t); cmpKey(field, mine, k, t, scale);
+        };
+        auto fly = [&](const char* field, float mine, const char* key, float scale) {
+            float t; const std::string k = pick({"FlyingVehicleBlueprint"}, key, t); cmpKey(field, mine, k, t, scale);
+        };
+        auto scalar = [&](const char* field, float mine, const char* key) {
+            float t; const std::string k = std::string("vehicle_scalars.") + key; if (num(k, t)) cmpKey(field, mine, k, t, 1.0f);
+        };
+        const bool jet = P.form == game::VehicleFormType::Jet;
+        hov("hoverSpeed", P.hoverSpeed, "MaxLinearSpeed", 0.01f);
+        hov("hoverAccel", P.hoverAccel, "MaxLinearAcceleration", 0.01f);
+        if (!jet) {   // the jet's hover dash / drift are its own fields (RollDuration / RollLinearSpeed below)
+            hov("dashSpeed", P.dashSpeed, "DashSpeed", 0.01f);
+            hov("dashTime", P.dashTime, "DashDuration", 1.0f);
+        }
+        hov("driftDuration", P.driftDuration, "DriftDuration", 1.0f);
+        hov("jumpSpeed", P.jumpSpeed, "JumpLinearSpeed", 0.01f);
+        hov("jumpAngSpeed", P.jumpAngSpeed, "JumpAngularSpeed", 1.0f);
+        hov("suspMountRadius", P.suspMountRadius, "SuspensionRadius", 0.01f);
+        hov("suspRest", P.suspRest, "SuspensionBlueprint.RestingLength", 0.01f);
+        hov("suspStiffness", P.suspStiffness, "SuspensionBlueprint.Stiffness", 1.0f);
+        hov("suspDamping", P.suspDamping, "SuspensionBlueprint.Damping", 1.0f);
+        hov("maxBoostSpeed", P.maxBoostSpeed, "MaxBoostSpeed", 0.01f);
+        hov("recoilVelocity", P.recoilVelocity, "RecoilVelocity", 0.01f);
+        if (P.hasDriving()) {
+            car("mass", P.mass, "Mass", 1.0f);
+            car("inertiaX", P.inertiaX, "InertiaTensor.X", 1e-4f);
+            car("inertiaY", P.inertiaY, "InertiaTensor.Y", 1e-4f);
+            car("inertiaZ", P.inertiaZ, "InertiaTensor.Z", 1e-4f);
+            car("driveSpeed", P.driveSpeed, "MaxSpeed", 0.01f);
+            car("driveAccel", P.driveAccel, "MaxAcceleration", 0.01f);
+            car("driveJumpFwd", P.driveJumpFwd, "JumpLinearVelocity.X", 0.01f);
+            car("driveJumpUp", P.driveJumpUp, "JumpLinearVelocity.Z", 0.01f);
+            car("driveJumpAngVel", P.driveJumpAngVel, "JumpAngularVelocity", 1.0f);
+            car("airTurnAccel", P.airTurnAccel, "AirControlTurnAcceleration", 1.0f);
+            car("airStrafeAccel", P.airStrafeAccel, "AirControlStrafeAcceleration", 0.01f);
+            car("angularDamping", P.angularDamping, "AngularDamping", 1.0f);
+            car("rollDuration", P.rollDuration, "RollDuration", 1.0f);
+        }
+        if (jet) {
+            hov("hoverRollTime", P.hoverRollTime, "RollDuration", 1.0f);
+            hov("hoverRollSpeed", P.hoverRollSpeed, "RollLinearSpeed", 0.01f);
+            fly("flySpeed", P.flySpeed, "MaxSpeed", 0.01f);
+            fly("flyAccel", P.flyAccel, "MaxAcceleration", 0.01f);
+            fly("flyDrag", P.flyDrag, "DragCoefficient", 1.0f);
+            fly("pitchDuePitch", P.pitchDuePitch, "PitchDueToPitchValue", 1.0f);
+            fly("yawDueYaw", P.yawDueYaw, "YawDueToYawValue", 1.0f);
+            fly("rollDueYaw", P.rollDueYaw, "RollDueToYawValue", 1.0f);
+            fly("extraRotLerp", P.extraRotLerp, "ExtraRotationLerpValue", 1.0f);
+            fly("maxPitchDeg", P.maxPitchDeg, "MaxPitchValue", 1.0f);
+            fly("fullPitchDeg", P.fullPitchDeg, "FullPitchThreshold", 1.0f);
+            fly("flyRollTime", P.flyRollTime, "RollDuration", 1.0f);
+            fly("flyRollSpeed", P.flyRollSpeed, "RollLinearSpeed", 0.01f);
+            fly("flyRollAngSpeed", P.flyRollAngSpeed, "RollAngularSpeed", 1.0f);
+        }
+        scalar("damageMultiplier", P.damageMultiplier, "DamageMultiplier");
+        scalar("selfDamageMultiplier", P.selfDamageMultiplier, "SelfDamageMultiplier");
+        mismatches += bad; bodiesBad += bad > 0;
+    }
+    LOG_INFO("VEHICLEAUDIT %d chassis compared (%d fields), %d not loadable, %d field mismatches in %d chassis", compared, fields, loadFail, mismatches, bodiesBad);
+    LOG_INFO("VEHICLEAUDIT SUMMARY: %s", mismatches == 0 && compared > 0 ? "PASS" : "FAIL");
+}
+
+// WFC_VEHFRAMETEST (brief section 9 / Integration check b): a scripted drive per vehicle family gives the same trajectory whatever the
+// render frame rate. The simulation steps at 60 Hz; per-frame input (camera look, buffered intent) is delivered as 1, 2 or 4 frames per
+// step with the mouse turn split evenly (the same total per step). Max position deviation along the path and the final yaw are compared.
+void Application::runVehicleFrameTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("VEHFRAME %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    game::Character& pc = world_.player().pawn();
+    auto drive = [&](const std::string& chassis, int framesPerStep, std::vector<core::Vec3>& path, float& yaw) {
+        path.clear();
+        if (!world_.applyChassisToLocalPawn(chassis)) return false;
+        pc.respawnReset();
+        world_.teleportToStart(0);
+        world_.player().controller().setCameraYaw(pc.yaw());
+        platform::InputFrame idle;
+        for (int k = 0; k < 60; ++k) { world_.handleInput(idle, dt); world_.tick(dt); }   // settle
+        {   // transform to vehicle form
+            platform::InputFrame t; t.pressed[(int)platform::Button::Transform] = true; t.down[(int)platform::Button::Transform] = true;
+            world_.handleInput(t, dt); world_.tick(dt);
+            for (int k = 0; k < 90; ++k) { world_.handleInput(idle, dt); world_.tick(dt); }
+        }
+        const int steps = 60 * 8;
+        for (int s = 0; s < steps; ++s) {
+            for (int f = 0; f < framesPerStep; ++f) {
+                platform::InputFrame in;
+                in.down[(int)platform::Button::Forward] = true;
+                if (s >= 60 && s < 120) in.down[(int)platform::Button::Left] = true;
+                if (s >= 180 && s < 240) in.down[(int)platform::Button::Right] = true;
+                const bool edgeFrame = f == 0;   // a press: the edge on the step's first frame, the key held through that step
+                if (s == 300) { in.pressed[(int)platform::Button::Dash] = edgeFrame; in.down[(int)platform::Button::Dash] = true; }
+                if (s == 400) { in.pressed[(int)platform::Button::Jump] = edgeFrame; in.down[(int)platform::Button::Jump] = true; }
+                static const bool mouseFirst = std::getenv("WFC_VEHFRAME_MOUSEFIRST") != nullptr;   // diagnostic: whole delta on frame 0
+                if (s >= 120 && s < 180) in.mouseDX = mouseFirst ? (f == 0 ? 6.0f : 0.0f) : 6.0f / (float)framesPerStep;   // a camera turn (same total per step)
+                world_.handleInput(in, dt / (float)framesPerStep);
+            }
+            world_.tick(dt);
+            path.push_back(pc.position());
+        }
+        yaw = pc.yaw();
+        return true;
+    };
+    for (const char* ch : {"Truck", "Car2", "Tank", "Jet"}) {
+        std::vector<core::Vec3> a, a1, b2, b4; float ya = 0, ya1 = 0, y2 = 0, y4 = 0;
+        if (!drive(ch, 1, a, ya) || !drive(ch, 1, a1, ya1) || !drive(ch, 2, b2, y2) || !drive(ch, 4, b4, y4)) { check(false, std::string(ch) + ": chassis load"); continue; }
+        float dev1 = 0.0f;
+        for (size_t i = 0; i < a.size() && i < a1.size(); ++i) dev1 = std::max(dev1, core::length(a[i] - a1[i]));
+        LOG_INFO("VEHFRAME %s: control (60 fps twice) max deviation %.4f m", ch, dev1);
+        float dev2 = 0.0f, dev4 = 0.0f;
+        for (size_t i = 0; i < a.size() && i < b2.size() && i < b4.size(); ++i) {
+            dev2 = std::max(dev2, core::length(a[i] - b2[i]));
+            dev4 = std::max(dev4, core::length(a[i] - b4[i]));
+        }
+        int first4 = -1;
+        for (size_t i = 0; i < a.size() && i < b4.size(); ++i) if (core::length(a[i] - b4[i]) > 1e-3f) { first4 = (int)i; break; }
+        LOG_INFO("VEHFRAME %s: 240 fps first departs at step %d", ch, first4);
+        const float travelled = a.empty() ? 0.0f : core::length(a.back() - a.front());
+        LOG_INFO("VEHFRAME %s: travelled %.1f m; max deviation 120 fps %.4f m, 240 fps %.4f m; yaw %.4f / %.4f / %.4f", ch, travelled, dev2, dev4, ya, y2, y4);
+        check(travelled > 10.0f && dev2 < 0.01f && dev4 < 0.01f && std::fabs(ya - y2) < 1e-3f && std::fabs(ya - y4) < 1e-3f,
+              std::string(ch) + ": the same drive at 60 / 120 / 240 fps (max deviation " + std::to_string(std::max(dev2, dev4)).substr(0, 6) + " m)");
+    }
+    LOG_INFO("VEHFRAME SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core
