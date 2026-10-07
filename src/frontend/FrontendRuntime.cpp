@@ -1,4 +1,5 @@
 #include "frontend/FrontendRuntime.h"
+#include "assets/Json.h"
 #include "core/FrameProfile.h"
 #include "frontend/FlowTrace.h"
 #include "core/Config.h"
@@ -214,6 +215,14 @@ bool FrontendRuntime::init() {
         FlowTrace::emit("customize.freshProfile", {{"file", kCharactersFile}, {"colors", "random palettes"}});
     }
     roster_.loadSaved(kCharactersFile);   // the player's edits (Create a Character)
+    {   // PC ADAPTATION chassis XP unlocks (user decision): chassis id -> level of the chassis' own specialty
+        assets::Json j;
+        std::ifstream f(std::string(WFC_SOURCE_DIR) + "/data/frontend/chassis_xp_unlocks.json");
+        std::stringstream ss; ss << f.rdbuf();
+        if (f && assets::Json::parse(ss.str(), j))
+            for (const auto& [id, lv] : j["unlocks"].obj) chassisXpUnlocks_[id] = lv.asInt(0);
+        updateChassisUnlockTexts();
+    }
     // SeqVar_TnCustomizationCameraId: the preview pawn's chassis provider's CustomizationCameraId (-1 without a pawn).
     scene_.cameraIdForSlot = [this](int slot) {
         if (slot < 0 || slot > 1 || previewChassis_[slot].empty()) return -1;
@@ -461,11 +470,11 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
     // No XP progression offline (TnXpManager returns 0): nothing newly unlocked.
     if (fn == "Customize.GetNewlyUnlockedSkills" || fn == "Customize.GetNewlyUnlockedAbilities") return BridgeValue(std::string());
     if (fn == "Customize.IsChassisUnlocked") {
-        // ORIGINAL: LockedChassis chassis are locked (Car5 / Jet8 unlock on finishing a campaign; 16 others have no known
-        // unlock path - RE UNKNOWN). PC ADAPTATION default: all available (the campaign is not reconstructed); the
-        // [PCSettings] OriginalChassisLocks switch restores the original locks.
+        // ORIGINAL: LockedChassis chassis are locked (Car5 / Jet8 unlock on finishing a campaign; others have no known
+        // unlock path - RE UNKNOWN). PC ADAPTATION (user decision): they unlock at a level of their own specialty
+        // (chassis_xp_unlocks.json); [PCSettings] OriginalChassisLocks=1 restores the original locks.
         const ChassisInfo* ci = roster_.chassis(arg(0));
-        return BridgeValue(ci && (!ci->lockedChassis || !flow_.profile().originalChassisLocks));
+        return BridgeValue(ci && chassisUnlocked(*ci));
     }
     if (fn == "Customize.SelectCharacter") {
         flow_.selectCharacter(selectionFor(arg(0)));
@@ -689,8 +698,41 @@ void FrontendRuntime::updateProgression() {
     progressionLevel_ = lv;
 }
 
+int FrontendRuntime::chassisUnlockLevel(const std::string& id) const {
+    auto it = chassisXpUnlocks_.find(id);
+    return it == chassisXpUnlocks_.end() ? 0 : it->second;
+}
+
+bool FrontendRuntime::chassisUnlocked(const ChassisInfo& ci) const {
+    if (!ci.lockedChassis) return true;
+    if (flow_.profile().originalChassisLocks) return false;
+    const int need = chassisUnlockLevel(ci.id);
+    const int sp = progression::specialtyIndex(ci.specialty);
+    return need > 0 && sp >= 0 && progression::levelForXp(flow_.profile().progression.xp[(size_t)sp]) >= need;
+}
+
+void FrontendRuntime::updateChassisUnlockTexts() {
+    // The original's only lock UI is the "EXTRA" panel for Car5 (Autobot Scout, "Sprinter") and Jet8 (Decepticon
+    // Scientist, "Stalker"): "Complete the ... campaign to unlock a new chassis." With XP unlocks it states the level.
+    const bool xp = !flow_.profile().originalChassisLocks;
+    for (const auto& [key, id] : {std::pair<const char*, const char*>{"$UIText.Customization.Sprinter", "Car5"},
+                                  std::pair<const char*, const char*>{"$UIText.Customization.Stalker", "Jet8"}}) {
+        const ChassisInfo* ci = roster_.chassis(id);
+        const int need = chassisUnlockLevel(id);
+        catalog_.setKeyOverride(key, xp && ci && need > 0 ? "Unlocks at " + ci->specialty + " level " + std::to_string(need) + "." : std::string());
+    }
+}
+
 void FrontendRuntime::presentLevelUps(const std::vector<progression::LevelUp>& ups) {
     for (const progression::LevelUp& u : ups) {
+        if (!flow_.profile().originalChassisLocks)   // PC ADAPTATION: the chassis this level unlocks
+            for (const auto& [id, need] : chassisXpUnlocks_) {
+                const ChassisInfo* ci = roster_.chassis(id);
+                if (!ci || need != u.level || progression::specialtyIndex(ci->specialty) != u.specialty) continue;
+                const std::string msg = "New chassis unlocked: " + (ci->displayName.empty() ? id : ci->displayName);
+                if (presenter_) presenter_->hudCall("_global.GameMessage", {BridgeValue(msg)});
+                FlowTrace::emit("progression.chassisUnlocked", {{"chassis", id}, {"level", std::to_string(need)}, {"provenance", "PC ADAPTATION"}});
+            }
         const std::string sp = progression::specialtyName(u.specialty);
         if (presenter_) presenter_->hudCall("_global.NotifyLevelUp", {BridgeValue(u.level), BridgeValue(sp)});
         // TnPlayerLevelUpMessage "`p is now a level `l `s" (specialty level) [CONFIRMED text, RE s4].

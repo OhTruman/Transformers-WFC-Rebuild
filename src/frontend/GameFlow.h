@@ -215,13 +215,15 @@ public:
     const std::vector<std::string>& kismetTriggers() const { return kismetTriggers_; }
     bool hasWatchedIntroMovie() const { return watchedIntro_; }
     // Private Match bots (PC ADAPTATION). Player limit: ORIGINAL = MaxPlayers 10 (5 v 5) [CONFIRMED Xe-TransGame.ini], the
-    // default; EXTENDED (Custom Game) = up to 16 bots a side, bounded by Gameplay's own clamp. Team modes (GameTeamStatus
+    // default; EXTENDED (Custom Game, user: 32 v 32) = up to 31 / 32 bots a side, 63 in FFA, bounded by Gameplay's own clamp. Team modes (GameTeamStatus
     // 3): bots per faction, the human's faction one fewer at the original limit; free-for-all (1): opponents; other: none.
     enum class BotRows { None, FreeForAll, Teams };
     BotRows botRows() const;
     int humanFaction() const { return lobby_.localTeam == 1 ? 1 : 0; }   // 0 Autobots, 1 Decepticons
     // Gameplay's MatchSettings maxPerTeam / maxPlayers (players incl. the human): the extended limits never exceed them.
-    void setBotCapacity(int perTeam, int maxPlayers) { gpPerTeam_ = std::max(1, perTeam); gpMaxPlayers_ = std::max(2, maxPlayers); }
+    void setBotCapacity(int perTeam, int maxPlayers, int botsPerTeam = 0) {
+        gpPerTeam_ = std::max(1, perTeam); gpMaxPlayers_ = std::max(2, maxPlayers); gpBotsPerTeam_ = botsPerTeam > 0 ? botsPerTeam : gpPerTeam_;
+    }
     int botMax(const std::string& field) const;   // "autobot" / "decepticon" / "enemy" / "difficulty" / "extended"
     void setBotSetting(const std::string& field, int value);   // clamped; saved
     LocalProfile& profile() { return profile_; }
@@ -294,7 +296,7 @@ private:
     LocalProfile profile_;
     SelectedCharacter selected_;
     uint32_t selectionSerial_ = 0;
-    int gpPerTeam_ = 17, gpMaxPlayers_ = 33;   // Gameplay's clamp (detected); defaults = the extended target
+    int gpPerTeam_ = 32, gpMaxPlayers_ = 64, gpBotsPerTeam_ = 32;   // Gameplay clamp (detected); defaults = the extended target (32 v 32)
     int gameTeamStatus_ = 0;                          // GRI.SetGameTeamStatus (party lobby)
     std::map<std::string, std::map<std::string, int>> settingValues_;   // class -> field -> value index
     MatchLaunch match_;

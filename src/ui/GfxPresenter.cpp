@@ -585,7 +585,7 @@ std::vector<gfx::avm1::Value> botChoices(gfx::avm1::VM& vm, const std::string& f
         vm.set(c, "Value", gfx::avm1::Value((double)v));
         std::string label = std::to_string(v);
         if (field == "difficulty") label = kDiff[v];
-        else if (field == "extended") label = v ? (teams ? "EXTENDED (16 V 16)" : "EXTENDED") : (teams ? "ORIGINAL (5 V 5)" : "ORIGINAL (10)");
+        else if (field == "extended") label = v ? (teams ? "EXTENDED (32 V 32)" : "EXTENDED") : (teams ? "ORIGINAL (5 V 5)" : "ORIGINAL (10)");
         vm.set(c, "FriendlyName", gfx::avm1::Value(label));
         out.push_back(gfx::avm1::Value(c));
     }
@@ -658,7 +658,7 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
     if (!src || !invite.isObject()) return;
     struct Row { const char* name; std::string field, label, hint; };
     std::vector<Row> rows;
-    rows.push_back({kNames[0], "extended", "Player Limit", "Original: 10 players (5 v 5). Extended: a larger Custom Game."});
+    rows.push_back({kNames[0], "extended", "Player Limit", "Original: 10 players (5 v 5). Extended: up to 64 players (PC Custom Game)."});
     if (teams) {
         rows.push_back({kNames[1], "autobot", "Autobot Bots", "AI players on the Autobot team."});
         rows.push_back({kNames[2], "decepticon", "Decepticon Bots", "AI players on the Decepticon team."});

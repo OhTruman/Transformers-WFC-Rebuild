@@ -123,6 +123,8 @@ public:
     // Localization ("$UIText.LoadScreen.LoadingMap" or section/key); INT. Empty when unknown.
     std::string localize(const std::string& file, const std::string& section, const std::string& key) const;
     std::string localizeKey(const std::string& dollarKey) const;
+    // A PC ADAPTATION replacement for one localized key ("$UIText.Customization.Sprinter"); empty value removes it.
+    void setKeyOverride(const std::string& dollarKey, const std::string& text);
     // TnOnlineGameSettings<tag>.default.FriendlyName (loading title) [RE note 3.3].
     std::string modeFriendlyName(const std::string& tag) const;
     const std::vector<std::string>& engageTexts() const { return engageTexts_; }
@@ -133,6 +135,7 @@ public:
     std::string manifestRoot() const { return manifestRoot_; }
 
 private:
+    std::map<std::string, std::string> keyOverrides_;
     std::map<std::string, std::vector<Provider>> providers_;
     void loadProviders(const std::string& extractedRoot);
     void loadKeyDescriptions(const std::string& extractedRoot);

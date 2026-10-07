@@ -73,9 +73,18 @@ template <class S, class = void> struct HasMatchCapacity : std::false_type {};
 template <class S>
 struct HasMatchCapacity<S, std::void_t<decltype(std::declval<const S&>().maxPerTeam), decltype(std::declval<const S&>().maxPlayers)>>
     : std::true_type {};
-template <class S> bool readCapacity(int& perTeam, int& maxPlayers) {
-    if constexpr (HasMatchCapacity<S>::value) { const S s = S::forMode("TDM"); perTeam = s.maxPerTeam; maxPlayers = s.maxPlayers; return true; }
-    else { (void)perTeam; (void)maxPlayers; return false; }
+// Gameplay bcd5707: forMode(tag) is the original capacity; applyExtendedSlots() switches it to the extended (Custom Game)
+// limits, and maxBotsPerTeam caps the bots per side (maxPerTeam counts the human too). Detected.
+template <class S, class = void> struct HasExtendedSlots : std::false_type {};
+template <class S> struct HasExtendedSlots<S, std::void_t<decltype(std::declval<S&>().applyExtendedSlots()), decltype(std::declval<const S&>().maxBotsPerTeam)>>
+    : std::true_type {};
+template <class S> bool readCapacity(int& perTeam, int& maxPlayers, int& botsPerTeam) {
+    if constexpr (HasMatchCapacity<S>::value) {
+        S s = S::forMode("TDM");
+        if constexpr (HasExtendedSlots<S>::value) { s.applyExtendedSlots(); botsPerTeam = s.maxBotsPerTeam; }
+        perTeam = s.maxPerTeam; maxPlayers = s.maxPlayers;
+        return true;
+    } else { (void)perTeam; (void)maxPlayers; (void)botsPerTeam; return false; }
 }
 
 // Rendering M09 (agents/rendering 73fd427): IRenderer::setFrameLimit(hz) paces presentation (0 = unlimited); the main
@@ -266,10 +275,11 @@ void Application::attachPresenter() {
     // and reported here so the owners can consume LocalProfile when they add the entry points.
     applyGamma(renderer_, frontend_->flow().profile().getInt("GammaSetting"));
     {   // Bot Settings limits = Gameplay's capacity (MatchSettings maxPerTeam / maxPlayers) when it provides them
-        int perTeam = 0, maxPlayers = 0;
-        if (readCapacity<game::MatchSettings>(perTeam, maxPlayers)) {
-            frontend_->flow().setBotCapacity(perTeam, maxPlayers);
-            frontend::FlowTrace::emit("lobby.botCapacity", {{"perTeam", std::to_string(perTeam)}, {"maxPlayers", std::to_string(maxPlayers)}, {"owner", "gameplay"}});
+        int perTeam = 0, maxPlayers = 0, botsPerTeam = 0;
+        if (readCapacity<game::MatchSettings>(perTeam, maxPlayers, botsPerTeam)) {
+            frontend_->flow().setBotCapacity(perTeam, maxPlayers, botsPerTeam);
+            frontend::FlowTrace::emit("lobby.botCapacity", {{"perTeam", std::to_string(perTeam)}, {"maxPlayers", std::to_string(maxPlayers)},
+                                                            {"botsPerTeam", std::to_string(botsPerTeam)}, {"owner", "gameplay"}});
         }
     }
     frontend_->flow().profile().onApplied = [this](const frontend::LocalProfile& p) {
