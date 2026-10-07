@@ -105,9 +105,11 @@ private:
     struct PendingCall { std::string movie, fn; std::vector<frontend::BridgeValue> args; bool advanced = false; };
     std::vector<PendingCall> pendingCalls_;   // movieCall: delivered after the movie's first frame
     int frameLimitShown_ = 0;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
-    std::map<const gfx::Player*, int> botRowsBuilt_;
+    std::map<const gfx::Player*, int> botRowsBuilt_;   // GameLobby menu: the BotRows kind its bot rows were built for
     float scoreScroll_ = 0.0f;   // in-match scoreboard scroll (stage units), PC EXTENSION for extended matches
-    void scrollScoreboard(const platform::InputFrame& in, float dt);   // GameLobby menu: the BotRows kind its bot rows were built for
+    bool extendedMatch_ = false;   // more than the original 10 participants (kill feed PC EXTENSION)
+    void extendedKillFeed(const std::vector<gfx::avm1::Value>& a);
+    void scrollScoreboard(const platform::InputFrame& in, float dt);
     void syncBotRows(gfx::Player& p, frontend::GameFlow& flow);
     bool prevMouseLeft_ = false;
     gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
