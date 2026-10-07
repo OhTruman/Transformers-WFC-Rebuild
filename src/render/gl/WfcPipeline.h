@@ -345,6 +345,7 @@ private:
         // exact bounds, reduced: per joint the rigid (single influence, weight 1) vertices that can be extreme under a
         // rigid transform (hull candidates), plus every blended vertex (evaluated with the full skinPose sum)
         std::vector<std::vector<core::Vec3>> hullPts;
+        std::vector<std::vector<float>> hullSoA;          // per joint: x[n4] y[n4] z[n4], n4 = count padded to 4 (SSE2)
         std::vector<uint32_t> blended;
         size_t boundsPts = 0;
         int lastFrame = 0;
