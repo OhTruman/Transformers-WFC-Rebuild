@@ -1,0 +1,27 @@
+﻿{
+    "summary":  {
+                    "pass":  0,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  2,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "bolts.aa5a74c.captured",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering",
+                        "note":  "aa5a74c: screenshot taken; last ammo 0; judge: bolts end at the wall (after the fix) vs pass through (before)"
+                    },
+                    {
+                        "id":  "bolts.05db936.captured",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering",
+                        "note":  "05db936: screenshot taken; last ammo 0; judge: bolts end at the wall (after the fix) vs pass through (before)"
+                    }
+                ]
+}
