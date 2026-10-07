@@ -1294,7 +1294,7 @@ void Application::driveLifecycleTest(float dt) {
     lifecycleT_ = 0.0f;
     const bool killOpponent = (lifecycleStep_++ % 2) == 0;
     const int victim = killOpponent ? opp : me, killer = killOpponent ? me : opp;
-    world_.submit([victim, killer](game::World& w) { w.applyMatchDamage(victim, killer, 100000.0f, false); });
+    world_.submit([victim, killer](game::World& w) { w.applyMatchDamage(victim, killer, 100000.0f, false, "WFC.TestLifecycleDamage"); });
     frontend::FlowTrace::emit("test.lifecycle.damage", {{"victim", killOpponent ? "opponent" : "local"}});
 }
 
