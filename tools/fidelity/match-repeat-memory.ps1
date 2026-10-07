@@ -79,10 +79,12 @@ foreach ($k in @(@{ c = "unloaded_mb"; o = "Gameplay/Rendering/Systems"; t = $Gr
     $y = @($rows | Select-Object -Skip 1 | ForEach-Object { $_.($k.c) } | Where-Object { $_ -ne $null } | ForEach-Object { [double]$_ })
     if ($y.Count -lt 3) { Res $k.c "UNKNOWN" "fewer than 3 post-first-match samples" $k.o; continue }
     $sl = Slope $y; $rise = [Math]::Round($y[-1] - $y[0], 1)
-    Res $k.c $(if ($sl -gt $k.t -and $rise -gt 2 * $k.t) { "FAIL" } elseif ($sl -gt $k.t / 3 -and $rise -gt 2 * $k.t / 3) { "PARTIAL" } else { "PASS" }) ("matches 2..{0}: {1}; slope {2} MB/match, rise {3} MB (WATCH if slope > {4} and rise > {5}; GROWTH if slope > {6} and rise > {7})" -f ($y.Count + 1), (($y | ForEach-Object { [Math]::Round($_, 1) }) -join " -> "), $sl, $rise, [Math]::Round($k.t / 3, 1), [Math]::Round(2 * $k.t / 3, 1), $k.t, 2 * $k.t) $k.o
+    Res $k.c $(if ($sl -gt $k.t -and $rise -gt 2 * $k.t) { "FAIL" } elseif ($sl -gt $k.t / 3 -and $rise -gt 2 * $k.t / 3) { "PARTIAL" } else { "PASS" }) ("matches 2..{0}: {1}; slope {2} MB/match, rise {3} MB (WATCH if slope > {4} and rise > {5}; GROWTH if slope > {6} and rise > {7})" -f ($y.Count + 1), (($y | ForEach-Object { [Math]::Round($_, 1) }) -join " -> "), $sl, $rise, [Math]::Round($k.t / 3, 1), [Math]::Round(2 * $k.t / 3, 1), $k.t, (2 * $k.t))   # parenthesised: "," binds tighter than "*" $k.o
 }
 $tu = @($tx | Select-Object -Unique)
-Res "textures_released" $(if (-not $tx.Count) { "UNKNOWN" } elseif (@($tx | Select-Object -Skip 1 | Select-Object -Unique).Count -le 1) { "PASS" } else { "FAIL" }) ("match textures released per return (unloadMapRenderData): {0}" -f ($tx -join ", ")) "Rendering"
+# the per-return count varies with the match's content (characters / effects loaded): not a leak signal by itself - the GL
+# live census after unload is (a rising count = textures not released)
+Res "textures_released" $(if (-not $tx.Count) { "UNKNOWN" } else { "INFO" }) ("match textures released per return (unloadMapRenderData): {0}" -f ($tx -join ", ")) "Rendering"
 if ($cycle) {
     # mode actually played per match (MATCH init), and the per-map revisit delta of privateMB after unload
     $modesPlayed = @(if (Test-Path $lg) { Select-String $lg -Pattern '\] MATCH init mode=(\S+)' | ForEach-Object { $_.Matches[0].Groups[1].Value } })
