@@ -57,6 +57,16 @@ template <class R> void notePresented(R* r) {
     if constexpr (HasNotePresented<R>::value) { if (r) r->notePresentedFrame(); }
     else { (void)r; }
 }
+// Rendering's IRenderer::setHudScreenEffect(chain) (-1 none, 0 StaticDischarge, 1 LowHealth): the Hud_GFX post-process
+// chain slot [CONFIRMED, RE 6bbf2cb]. Applied on change; cleared whenever the frontend draws (menus have 3D scenes too).
+template <class R, class = void> struct HasHudScreenEffect : std::false_type {};
+template <class R> struct HasHudScreenEffect<R, std::void_t<decltype(std::declval<R&>().setHudScreenEffect(0))>> : std::true_type {};
+int g_appliedHudScreenEffect = -1;
+template <class R> void applyHudScreenEffect(R* r, int chain) {
+    if constexpr (HasHudScreenEffect<R>::value) {
+        if (r && chain != g_appliedHudScreenEffect) { r->setHudScreenEffect(chain); g_appliedHudScreenEffect = chain; }
+    } else { (void)r; (void)chain; }
+}
 
 // Gameplay agents/gameplay 5151374: MatchPlayer kind (ParticipantKind::Bot) / level / specialty and MatchSettings
 // maxPerTeam / maxPlayers. Detected.
@@ -589,6 +599,7 @@ void Application::drawFrontendFrame() {
     frontend_->draw(window_->width(), window_->height());
     if (!pendingShot_.empty()) { renderer_->captureScreenshot(pendingShot_.c_str()); pendingShot_.clear(); }
     {   core::prof::Scope prof("present"); window_->present(); }
+    applyHudScreenEffect(renderer_, -1);
     notePresented(renderer_);   // every frontend present (movies, menus, load yields) is progress for the stall watchdog
     {   // WFC_FRAMEPROF: the gap between two presented frames (main loop and load yields alike), with what ran in it
         static double lastPresent = 0;
@@ -828,6 +839,7 @@ void Application::routeMatchToFrontend(float dt) {
     frontend::GameFlow& flow = frontend_->flow();
     const int me = world_.localMatchPlayer();
     forwardAwards(world_, *frontend_, me);
+    applyHudScreenEffect(renderer_, frontend_->hudPostProcessChain());
     // [integration M06] Customize.SelectCharacter -> TnPlayerController.SelectCharacter -> PRI._SelectedCharacter:
     // the frontend's selection becomes Gameplay's CharacterSelection (type, specialty, iconic chassis UniqueId).
     // Every pick is forwarded, also mid-match (Change Character): the original uses the new selection on the next
