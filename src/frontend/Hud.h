@@ -9,6 +9,7 @@
 // markers) are not this movie's (Rendering / Gameplay).
 #pragma once
 #include <array>
+#include <functional>
 #include <deque>
 #include <optional>
 #include <string>
@@ -87,6 +88,9 @@ public:
     static constexpr const char* kMovie = "UI_GFxHud_p.Hud_GFX_1";
     void reset();                              // match start / end: nothing pending, everything re-sent
     void setFrame(const HudFrame& f) { frame_ = f; }
+    // ^COMMAND tokens in prompt texts (TranslateCommandsInString); a device switch re-sends the prompts on screen.
+    void setPromptTranslator(std::function<std::string(const std::string&)> t) { translate_ = std::move(t); }
+    void promptsChanged() { promptsDirty_ = true; }
     // Values the frontend derives itself (kept across setFrame): the OnAttackingTeam status from MatchValues.
     void setAttackingTeamStatus(std::optional<int> v) { attacking_ = v; }
     void addKill(const HudKill& k, int localTeam) { kills_.push_back({k, localTeam}); }
@@ -125,6 +129,8 @@ public:
 private:
     HudFrame frame_, sent_;
     std::optional<int> attacking_;
+    std::function<std::string(const std::string&)> translate_;
+    bool promptsDirty_ = false;
     std::string progressLabel_;   // the bar's last label: kept while it fades out (the observer keeps its own label)
     bool sentValid_ = false, wasOpen_ = false, wasVisible_ = false, wasSpectating_ = false;
     struct PendingKill { HudKill k; int localTeam; };

@@ -136,6 +136,9 @@ public:
     std::vector<GlyphRun> glyphs;
     float textWidth = 0, textHeight = 0;
     bool layoutDirty = true;
+    unsigned promptGen = 0;                   // Player::promptGen at the last layout (image substitutions)
+    std::string srcKey;                       // the $key the text came from (re-translated when the prompts switch)
+    bool srcHtml = false;
     // GFx shadow extension (accepted, drawn as PARTIAL drop shadow).
     float shadowAlpha = 0, shadowDistance = 0, shadowAngle = 45, shadowBlurX = 0, shadowBlurY = 0, shadowStrength = 1;
     uint32_t shadowColor = 0;
@@ -276,6 +279,11 @@ public:
     // Host configuration.
     MovieResolver resolveMovieUrl;            // "../_Shared/SharedComponents.swf" -> .gfx path
     std::function<std::string(const std::string& key)> translator;
+    // PC ADAPTATION (keyboard prompts): a Gamepad* image substitution's key text ("ENTER"), drawn in the original PC
+    // prompt style (#FF9333) instead of the glyph when non-empty. promptGen changes when the device switches: text
+    // fields with image substitutions lay out again.
+    std::function<std::string(const std::string& image)> glyphLabel;
+    const unsigned* promptGen = nullptr;
     std::function<std::string(const std::string& resource)> externalTexture;   // resource name -> PNG path
     std::string fontLibPath;                  // gfxfontlib (Fonts_EFIGS.gfx)
     std::map<std::string, std::string> fontMap;   // "$TitleFont" -> "Distilla Cyrillic Regular"

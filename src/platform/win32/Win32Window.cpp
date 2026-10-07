@@ -11,6 +11,7 @@
 #include "platform/Window.h"
 #include "core/Log.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <chrono>
 #include <thread>
@@ -131,12 +132,16 @@ public:
         pollGamepad(input);
         // Logical UI commands from the bindings (keyboard keys and pad buttons).
         uint32_t ui = 0;
+        bool keyUi = false;
         if (focused_)
             for (int i = 0; i < (int)UiKey::Count; ++i) {
-                for (int vk : uiVk_[i]) if (GetAsyncKeyState(vk) & 0x8000) ui |= 1u << i;
+                for (int vk : uiVk_[i]) if (GetAsyncKeyState(vk) & 0x8000) { ui |= 1u << i; keyUi = true; }
                 for (uint32_t m : uiPad_[i]) if (padBits_ & m) ui |= 1u << i;
             }
         input.uiDown = ui;
+        input.padActive = padBits_ != 0 || std::fabs(input.padRX) > 0.5f || std::fabs(input.padRY) > 0.5f;
+        input.keyActive = keyUi;
+        for (int i = 0; i < (int)Button::Count && !input.keyActive; ++i) input.keyActive = input.down[i];
         // Absolute pointer for the UI.
         input.mouseX = input.mouseY = -1;
         input.mouseLeft = focused_ && (GetAsyncKeyState(VK_LBUTTON) & 0x8000);
@@ -156,6 +161,11 @@ public:
         return true;
     }
 
+    void injectPad(const std::string& button, bool down) override {
+        const uint32_t m = padByName(button);
+        if (!m) { LOG_WARN("input: injectPad unknown button '%s'", button.c_str()); return; }
+        fakePad_ = down ? (fakePad_ | m) : (fakePad_ & ~m);
+    }
     void setUiBindings(const UiBindings& b) override {
         for (int i = 0; i < (int)UiKey::Count; ++i) {
             uiVk_[i].clear();
@@ -320,6 +330,7 @@ private:
     static constexpr uint32_t kPadLT = 1u << 16, kPadRT = 1u << 17, kPadLStickUp = 1u << 18, kPadLStickDown = 1u << 19,
                               kPadLStickLeft = 1u << 20, kPadLStickRight = 1u << 21;
     uint32_t padBits_ = 0;
+    uint32_t fakePad_ = 0;   // injectPad (scripted runs)
     std::vector<int> uiVk_[(int)UiKey::Count];
     std::vector<uint32_t> uiPad_[(int)UiKey::Count];
     int wheel_ = 0;
@@ -425,7 +436,7 @@ private:
 
     void pollGamepad(InputFrame& input) {
         static const bool noPad = std::getenv("WFC_NOPAD") != nullptr;   // scripted runs: ignore a real controller
-        if (noPad) return;
+        if (noPad) { padBits_ = fakePad_; return; }
         XINPUT_STATE st{};
         if (XInputGetState(0, &st) == ERROR_SUCCESS) {
             static bool logged = false;
@@ -449,8 +460,9 @@ private:
             if (input.padLY < -0.5f) padBits_ |= kPadLStickDown;
             if (input.padLX < -0.5f) padBits_ |= kPadLStickLeft;
             if (input.padLX > 0.5f) padBits_ |= kPadLStickRight;
+            padBits_ |= fakePad_;
         } else {
-            padBits_ = 0;
+            padBits_ = fakePad_;
             input.padConnected = false;
             input.padLX = input.padLY = input.padRX = input.padRY = 0.0f;
             input.padLT = 0.0f;

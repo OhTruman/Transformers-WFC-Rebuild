@@ -104,6 +104,21 @@ bool Catalog::load(const std::string& manifestRoot, const std::string& extracted
         }
     }
 
+    for (const char* file : {"TransGame", "UIText", "Engine"}) {
+        std::ifstream f(extractedRoot + "/config/Coalesced_int/TransGame/Localization/INT/" + file + "_360.int");
+        std::string line, section;
+        while (std::getline(f, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (line.empty() || line[0] == ';') continue;
+            if (line[0] == '[') { section = line.substr(1, line.find(']') - 1); continue; }
+            size_t eq = line.find('=');
+            if (eq == std::string::npos || section.empty()) continue;
+            std::string v = line.substr(eq + 1);
+            if (v.size() >= 2 && v.front() == '"' && v.back() == '"') v = v.substr(1, v.size() - 2);
+            loc360_[std::string(file) + "." + section + "." + line.substr(0, eq)] = v;
+        }
+    }
+
     loadProviders(extractedRoot);
     loadKeyDescriptions(extractedRoot);
 
@@ -433,6 +448,7 @@ const Catalog::KeyDescription* Catalog::keyDescription(const std::string& key) c
 }
 
 std::string Catalog::localize(const std::string& file, const std::string& section, const std::string& key) const {
+    if (consoleStrings_) if (auto c = loc360_.find(file + "." + section + "." + key); c != loc360_.end()) return c->second;
     auto it = loc_.find(file + "." + section + "." + key);
     return it == loc_.end() ? std::string() : it->second;
 }
@@ -445,6 +461,7 @@ void Catalog::setKeyOverride(const std::string& dollarKey, const std::string& te
 std::string Catalog::localizeKey(const std::string& dollarKey) const {
     std::string k = !dollarKey.empty() && dollarKey[0] == '$' ? dollarKey.substr(1) : dollarKey;
     if (auto o = keyOverrides_.find(k); o != keyOverrides_.end()) return o->second;
+    if (consoleStrings_) if (auto c = loc360_.find(k); c != loc360_.end()) return c->second;
     auto it = loc_.find(k);
     return it == loc_.end() ? std::string() : it->second;
 }

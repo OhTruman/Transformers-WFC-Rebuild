@@ -232,10 +232,17 @@ bool displaySetProp(VM& vm, gfx::DisplayObject* d, const std::string& key, const
     if (d->kind == gfx::DisplayObject::Kind::Text) {
         auto* tf = static_cast<gfx::TextField*>(d);
         gfx::Player* p = vm.player();
-        if (k == "text") { tf->setPlainText(p->translate(vm.toString(v))); return true; }
+        if (k == "text") {
+            const std::string raw = vm.toString(v);
+            tf->setPlainText(p->translate(raw));
+            tf->srcKey = raw.size() > 1 && raw[0] == '$' ? raw : std::string(); tf->srcHtml = false;
+            return true;
+        }
         if (k == "htmlText") {
-            std::string s = p->translate(vm.toString(v));
+            const std::string raw = vm.toString(v);
+            std::string s = p->translate(raw);
             if (tf->html) tf->setHtmlText(s); else tf->setPlainText(s);
+            tf->srcKey = raw.size() > 1 && raw[0] == '$' ? raw : std::string(); tf->srcHtml = tf->html;
             return true;
         }
         if (k == "html") { tf->html = vm.toBool(v); return true; }

@@ -123,6 +123,9 @@ public:
     // Localization ("$UIText.LoadScreen.LoadingMap" or section/key); INT. Empty when unknown.
     std::string localize(const std::string& file, const std::string& section, const std::string& key) const;
     std::string localizeKey(const std::string& dollarKey) const;
+    // Pad in use (PC ADAPTATION of the device switch): serve the console overrides; else the PC strings.
+    void setConsoleStrings(bool on) { consoleStrings_ = on; }
+    bool consoleStrings() const { return consoleStrings_; }
     // A PC ADAPTATION replacement for one localized key ("$UIText.Customization.Sprinter"); empty value removes it.
     void setKeyOverride(const std::string& dollarKey, const std::string& text);
     // TnOnlineGameSettings<tag>.default.FriendlyName (loading title) [RE note 3.3].
@@ -147,6 +150,10 @@ private:
     std::map<std::string, GameSettings> settings_;
     int defaultQuickmatchPlaylist_ = 1;
     std::map<std::string, std::string> loc_;   // "UIText.Section.Key" -> INT text
+    // The shipped console overrides (UIText_360.int, TransGame_360.int, ...): the pad's button-token strings ({x} Reload)
+    // where the base files carry the PC SKU's key text (<font color='#FF9333'>R</font> Reload) [CONFIRMED data].
+    std::map<std::string, std::string> loc360_;
+    bool consoleStrings_ = false;
     std::vector<std::string> engageTexts_;
     std::string loadingDefault_, loadingInitial_;
     std::string manifestRoot_, extractedRoot_;

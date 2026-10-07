@@ -40,6 +40,7 @@ const char* const kPopupMovie = "UI_GFxShared_p.MessagePrompt_GFX_1";   // Defau
 
 bool GfxPresenter::init() {
     if (!lib_.load(frontend::Catalog::defaultManifestRoot(), frontend::Catalog::defaultExtractedRoot())) return false;
+    installGlyphLabels();
     // $version prefix = the SKU the movies branch on (HmUtility.Platform). The version digits are UNKNOWN.
     gfx::avm1::VM::defaultVersionString = rt_.platform() + " 8,0,0,0";
     return true;
@@ -57,11 +58,12 @@ void GfxPresenter::setHud(bool open, bool visible) {
         hud_.reset(); hudVisible_ = false; return;
     }
     if (!hud_) {
-        {   // Match start: the respawn screen (opened on every death) and its imports enter the movie cache now, not on
-            // the first death's frame.
+        {   // Match start: the respawn screen (opened on every death), the scoreboard and the results screen (a 58 ms open
+            // at 32 v 32) and their imports enter the movie cache now, not on the frame they open.
             core::prof::Scope prof("gfx.preload");
             GfxMovie warm;
-            for (const char* m : {"UI_GFxRespawn_p.MultiplayerRespawn_GFX_1", "UI_GFxInGameStats_p.InGameStats_GFX_1"})
+            for (const char* m : {"UI_GFxRespawn_p.MultiplayerRespawn_GFX_1", "UI_GFxInGameStats_p.InGameStats_GFX_1",
+                                  "UI_GFxEndGameStats_p.EndGameStats_GFX_1"})
                 warm.open(lib_, &rt_.catalog(), m, nullptr, nullptr);
         }
         hud_ = std::make_unique<GfxMovie>();
@@ -87,6 +89,40 @@ void GfxPresenter::setScoreboard(bool open) {
                                 [this](GfxMovie& mv, const std::string& c, const std::string& a) { fsCommand(mv, c, a); });
     frontend::FlowTrace::emit("gfx.movie", {{"movie", "UI_GFxInGameStats_p.InGameStats_GFX_1"}, {"opened", frontend::FlowTrace::boolean(ok)}});
     if (!ok) scoreboard_.reset();
+}
+
+// Keyboard prompts in the movies' Gamepad* glyph slots (PC ADAPTATION: the PC SKU's own movies are not in the dump; the
+// text uses the original PC prompt style of TransGame_PC.int). Menus: the rebuild's UI keys (Enter = buttonA and
+// Escape = buttonB are the shipped GFxUI key codes); the HUD: the gameplay keys, in the PC mapper's texts.
+void GfxPresenter::setPadPrompts(bool pad) {
+    padPrompts_ = pad;
+    installGlyphLabels();
+    ++lib_.promptGen;
+}
+
+void GfxPresenter::installGlyphLabels() {
+    if (!lib_.glyphLabel)
+        lib_.glyphLabel = [this](const std::string& object, const std::string& image) -> std::string {
+            if (padPrompts_) return {};
+            static const std::map<std::string, std::string> menu = {
+                {"GamepadFaceButtonA", "ENTER"}, {"GamepadFaceButtonB", "ESC"}, {"GamepadFaceButtonX", "F1"},
+                {"GamepadFaceButtonY", "F2"}, {"GamepadButtonStart", "F3"}, {"GamepadButtonBack", "TAB"},
+                {"GamepadButtonLB", "PAGE UP"}, {"GamepadButtonRB", "PAGE DOWN"}, {"GamepadButtonLT", "HOME"},
+                {"GamepadButtonRT", "END"}, {"GamepadButtonL3", "F5"}, {"GamepadButtonR3", "F6"},
+                {"GamepadDpadUp", "UP"}, {"GamepadDpadDown", "DOWN"}, {"GamepadDpadLeft", "LEFT"}, {"GamepadDpadRight", "RIGHT"},
+                {"GamepadLeftStick", "ARROW KEYS"}, {"GamepadRightStick", "MOUSE"}};
+            static const std::map<std::string, std::string> hud = {
+                {"GamepadFaceButtonA", "SPACE"}, {"GamepadFaceButtonB", "G"}, {"GamepadFaceButtonX", "R"},
+                {"GamepadFaceButtonY", "MOUSE WHEEL"}, {"GamepadButtonStart", "ESC"}, {"GamepadButtonBack", "TAB"},
+                {"GamepadButtonLB", "CTRL"}, {"GamepadButtonRB", "SHIFT"}, {"GamepadButtonLT", "RIGHT MOUSE BUTTON"},
+                {"GamepadButtonRT", "LEFT MOUSE BUTTON"}, {"GamepadButtonL3", "F"}, {"GamepadButtonR3", "Q"},
+                {"GamepadDpadUp", "MOUSE WHEEL"}, {"GamepadDpadDown", "B"}, {"GamepadDpadLeft", "B"}, {"GamepadDpadRight", "B"},
+                {"GamepadLeftStick", "W, S, A, D"}, {"GamepadRightStick", "MOUSE"}};
+            const bool isHud = object.find("Hud_GFX") != std::string::npos;
+            const auto& t = isHud ? hud : menu;
+            for (const auto& [k, v] : t) if (image.find(k) != std::string::npos) return v;
+            return {};
+        };
 }
 
 bool GfxPresenter::hudStageSize(double& w, double& h) const {
