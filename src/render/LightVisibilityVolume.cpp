@@ -243,7 +243,8 @@ bool LightVisibilityVolume::queryNode(int ni, const Bounds& B, const core::Vec3&
 bool LightVisibilityVolume::query(const core::Vec3& p, std::vector<int>& lights, std::vector<float>& vis) const {
     lights.clear(); vis.clear();
     if (!decoded_ || pool_.empty() || !contains(p)) return false;
-    std::vector<Acc> acc;
+    static thread_local std::vector<Acc> acc;      // reused: one query per character light update (no allocation)
+    acc.clear();
     acc.reserve(100);
     if (!queryNode(0, Bounds{center_, rootHalf_}, p, acc)) return false;
     for (const Acc& a : acc) {

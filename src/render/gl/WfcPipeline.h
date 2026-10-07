@@ -315,7 +315,18 @@ private:
     // and sprite batches are queued during the frame and drawn by flushTranslucency().
     // a deferred sprite batch keeps its data so adjacent same-state batches can merge at flush (exact: same order)
     struct SpriteBatch { std::string mat; core::Vec3 facing; float dyn[4]; std::vector<Sprite> sprites; };
-    struct TransItem { float key; std::function<void()> fn; std::shared_ptr<SpriteBatch> sprites; };
+    // The sorted translucency queue holds plain records (300+ fps lobbies: a std::function + shared_ptr per item were
+    // heap allocations per translucent sub / sprite batch per frame). kind 0: a world / mesh sub (transSubs_[idx]);
+    // kind 1: a sprite batch (spritePool_[idx], pooled - its vectors keep their capacity across frames).
+    struct TransSub { long meshIdx; int sub; bool dynamicObject, fx; core::Mat4 mdl; float col[4], dyn[4]; };
+    struct TransItem { float key; int kind; int idx; };
+    std::vector<TransSub> transSubs_;
+    std::vector<SpriteBatch> spritePool_;
+    size_t spriteUsed_ = 0;
+    // drawSprites' upload scratch and its one-sub mesh, reused per call
+    std::vector<float> spriteV_, spriteCol_, spriteSub_;
+    std::vector<uint32_t> spriteIdx_;
+    GpuMesh spriteMesh_;
     int statSpriteBatches_ = 0, statSpriteMerged_ = 0;   // WFC_RENDERSTATS
     // GPU-spike evidence (a long GPU frame is reported 3 frames later): per-frame sprite count, total screen coverage
     // (in screens) and the materials that covered most - overdraw from effects at the camera is the usual suspect
@@ -443,6 +454,17 @@ private:
         core::Vec3 pmn{0, 0, 0}, pmx{0, 0, 0};      // prev pose bounds
     };
     std::map<const void*, PosedBuf> posed_;              // drawDynamicMeshPosed buffers (Milestone E)
+    // drawDynamic's per-mesh draw list (300+ fps lobbies: the sub list, programs, material-name strings and the
+    // light-environment form were rebuilt per call - allocations per sub per body per frame). Keyed by the MeshData;
+    // the signature (sub ranges / material indices, material-name buffers, defrag state) must match or it is rebuilt.
+    struct DynSubs {
+        GpuMesh g;
+        std::vector<uint64_t> sig;
+        int envKind = -1;          // -1 none, 0 robot, 1 vehicle
+        bool weapon = false;
+        int lastFrame = 0;
+    };
+    std::unordered_map<const MeshData*, DynSubs> dynSubs_;
     void evictPosed(bool all);
     double statFxTickMs_ = 0.0;                          // map FX simulation share of statFxMs_
     double statFxMsCum_ = 0.0, statFxTickMsCum_ = 0.0;   // never reset (WFC_SLOWFRAME deltas)

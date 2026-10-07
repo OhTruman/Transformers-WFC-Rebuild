@@ -2279,8 +2279,7 @@ void Pipeline::flushTranslucency() {
     std::stable_sort(transQueue_.begin(), transQueue_.end(),
                      [](const TransItem& a, const TransItem& b) { return a.key > b.key; });   // far -> near
     flushingTrans_ = true;
-    std::vector<TransItem> q;
-    q.swap(transQueue_);
+    std::vector<TransItem>& q = transQueue_;          // nothing is queued while flushing (flushingTrans_)
     // Adjacent sprite batches (after the far -> near sort) with the same material, dynamic parameters and facing are
     // drawn as one call with their sprites in queue order: the same primitives in the same order with the same state,
     // so the result is identical for every blend mode, with fewer draw calls (bot firefights: hundreds of
@@ -2290,19 +2289,38 @@ void Pipeline::flushTranslucency() {
         return a.mat == b.mat && a.facing.x == b.facing.x && a.facing.y == b.facing.y && a.facing.z == b.facing.z &&
                std::equal(a.dyn, a.dyn + 4, b.dyn);
     };
+    auto runItem = [&](const TransItem& it) {
+        if (it.kind == 0) {
+            const TransSub& t = transSubs_[(size_t)it.idx];
+            std::copy(t.col, t.col + 4, fxColor_);
+            std::copy(t.dyn, t.dyn + 4, dynParam_);
+            frameFx_ = t.fx;
+            drawSubs(meshes_[(size_t)t.meshIdx], t.mdl, t.dynamicObject, t.sub);
+            frameFx_ = false;
+            std::fill(fxColor_, fxColor_ + 4, 1.0f);
+            std::fill(dynParam_, dynParam_ + 4, 1.0f);
+        } else {
+            SpriteBatch& b = spritePool_[(size_t)it.idx];
+            std::copy(b.dyn, b.dyn + 4, dynParam_);
+            drawSprites(b.mat.c_str(), b.sprites.data(), b.sprites.size(), b.facing);
+            std::fill(dynParam_, dynParam_ + 4, 1.0f);
+        }
+    };
+    auto batchOf = [&](size_t i) -> SpriteBatch* { return q[i].kind == 1 ? &spritePool_[(size_t)q[i].idx] : nullptr; };
     for (size_t i = 0; i < q.size(); ++i) {
-        if (!q[i].sprites || noMerge) { q[i].fn(); continue; }
+        if (!batchOf(i) || noMerge) { runItem(q[i]); continue; }
         size_t j = i + 1;
-        while (j < q.size() && q[j].sprites && same(*q[j].sprites, *q[i].sprites)) ++j;
-        if (j == i + 1) { q[i].fn(); ++statSpriteBatches_; continue; }
-        SpriteBatch& b = *q[i].sprites;
-        for (size_t k = i + 1; k < j; ++k) b.sprites.insert(b.sprites.end(), q[k].sprites->sprites.begin(), q[k].sprites->sprites.end());
+        while (j < q.size() && batchOf(j) && same(*batchOf(j), *batchOf(i))) ++j;
+        if (j == i + 1) { runItem(q[i]); ++statSpriteBatches_; continue; }
+        SpriteBatch& b = *batchOf(i);
+        for (size_t k = i + 1; k < j; ++k) b.sprites.insert(b.sprites.end(), batchOf(k)->sprites.begin(), batchOf(k)->sprites.end());
         std::copy(b.dyn, b.dyn + 4, dynParam_);
         drawSprites(b.mat.c_str(), b.sprites.data(), b.sprites.size(), b.facing);
         std::fill(dynParam_, dynParam_ + 4, 1.0f);
         ++statSpriteBatches_; statSpriteMerged_ += (int)(j - i - 1);
         i = j - 1;
     }
+    q.clear(); transSubs_.clear(); spriteUsed_ = 0;     // capacities kept for the next frame
     flushingTrans_ = false;
 }
 
@@ -2372,17 +2390,11 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 std::copy(fxColor_, fxColor_ + 4, col);
                 std::copy(dynParam_, dynParam_ + 4, dyn);
                 const bool fx = frameFx_;
-                const core::Mat4 mdl = model;
-                const int sub = (int)si;
-                transQueue_.push_back({viewDepth(c), [this, meshIdx, mdl, dynamicObject, sub, col, dyn, fx]() {
-                    std::copy(col, col + 4, fxColor_);
-                    std::copy(dyn, dyn + 4, dynParam_);
-                    frameFx_ = fx;
-                    drawSubs(meshes_[(size_t)meshIdx], mdl, dynamicObject, sub);
-                    frameFx_ = false;
-                    std::fill(fxColor_, fxColor_ + 4, 1.0f);
-                    std::fill(dynParam_, dynParam_ + 4, 1.0f);
-                }});
+                TransSub t;
+                t.meshIdx = meshIdx; t.sub = (int)si; t.dynamicObject = dynamicObject; t.fx = fx; t.mdl = model;
+                std::copy(col, col + 4, t.col); std::copy(dyn, dyn + 4, t.dyn);
+                transSubs_.push_back(t);
+                transQueue_.push_back({viewDepth(c), 0, (int)transSubs_.size() - 1});
                 continue;
             }
             core::Mat4 subModel = model;
@@ -3837,12 +3849,55 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         std::vector<core::Vec3> v; for (auto& o : u) v.push_back({o[0], o[2], o[1]}); return v; }();
     envSamples_ = nullptr;
     envForm_ = -1;
-    bool weapon = false;
-    for (const Material& mt : m.mats) {
-        if (mt.wfcName.find("_VEH_p.") != std::string::npos) { envSamples_ = &kVehicleSamples; envForm_ = 1; break; }
-        if (mt.wfcName.find("_ROBO_p.") != std::string::npos) { envSamples_ = &kRobotSamples; envForm_ = 0; break; }
-        if (mt.wfcName.rfind("WEP_", 0) == 0) { envSamples_ = &kRobotSamples; envForm_ = 0; weapon = true; break; }
+    // the cached draw list for this mesh (built once per mesh / material set / defrag state - see DynSubs)
+    static const bool noDynCache = std::getenv("WFC_NODYNSUBCACHE") != nullptr;   // A/B: rebuild per call
+    auto od = ownerDefrag_.find(drawOwner_);
+    static const bool diagDefrag = std::getenv("WFC_DEFRAG") != nullptr;   // diagnostics: every owner
+    const bool defrag = od != ownerDefrag_.end() || diagDefrag;
+    DynSubs& ds = dynSubs_[&m];
+    ds.lastFrame = frameNo_;
+    {
+        static thread_local std::vector<uint64_t> sig;
+        sig.clear();
+        sig.push_back((uint64_t)m.subs.size() << 32 | (uint64_t)m.mats.size());
+        sig.push_back((uint64_t)m.indices.size() << 1 | (defrag ? 1u : 0u));
+        for (const SubMesh& s : m.subs) sig.push_back((uint64_t)s.indexOffset << 32 ^ (uint64_t)s.indexCount << 8 ^ (uint64_t)(uint32_t)s.material);
+        for (const Material& mt : m.mats) sig.push_back((uint64_t)(uintptr_t)mt.wfcName.data() ^ (uint64_t)mt.wfcName.size() << 48);
+        if (noDynCache || ds.sig != sig) {
+            ds.sig = sig;
+            ds.g = GpuMesh{};
+            ds.envKind = -1; ds.weapon = false;
+            for (const Material& mt : m.mats) {
+                if (mt.wfcName.find("_VEH_p.") != std::string::npos) { ds.envKind = 1; break; }
+                if (mt.wfcName.find("_ROBO_p.") != std::string::npos) { ds.envKind = 0; break; }
+                if (mt.wfcName.rfind("WEP_", 0) == 0) { ds.envKind = 0; ds.weapon = true; break; }
+            }
+            std::vector<SubMesh> subs = m.subs;
+            if (subs.empty()) { SubMesh s; s.indexOffset = 0; s.indexCount = (uint32_t)m.indices.size(); subs.push_back(s); }
+            bool complete = true;
+            for (const SubMesh& s : subs) {
+                if (!subInBounds(m, s.indexOffset, s.indexCount, "dynamic")) continue;
+                const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
+                Sub d;
+                d.first = s.indexOffset; d.count = s.indexCount;
+                d.prog = dynamicProgram(mat);
+                d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
+                if (defrag && mat) {   // M74: the form's EnergyDeathMaterial replaces the material
+                    if (const std::string* ed = energyDeathFor(mat->wfcName)) {
+                        Material dm; dm.wfcName = *ed;
+                        const int p = dynamicProgram(&dm);
+                        if (p >= 0) { d.prog = p; d.matName = *ed; }
+                    }
+                }
+                if (d.prog < 0) complete = false;
+                ds.g.subs.push_back(d);
+            }
+            if (!complete) ds.sig.clear();       // a program still missing: rebuild next call (as before)
+        }
     }
+    bool weapon = ds.weapon;
+    if (ds.envKind == 1) { envSamples_ = &kVehicleSamples; envForm_ = 1; }
+    else if (ds.envKind == 0) { envSamples_ = &kRobotSamples; envForm_ = 0; }
     if (envForm_ >= 0) envForm_ += 16 * drawOwner_;   // per character instance (owner 0: keys 0 / 1)
     if (envSamples_ && m.vertexCount() > 0) {          // world-space bounds of the posed mesh (the cull scan's bounds)
         const core::Vec3 mn = bmn, mx = bmx;
@@ -3861,28 +3916,8 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     gStats.dynEnvMs += std::chrono::duration<double, std::milli>(tEnv1 - tEnv0).count();
     if (offscreen) { envSamples_ = nullptr; envForm_ = -1; return; }   // light environment ticked above
     if (!warmup_) ownerRendered_[drawOwner_] = std::chrono::steady_clock::now();   // Mesh.LastRenderTime (markers)
-    GpuMesh g;
+    GpuMesh& g = ds.g;
     g.vao = drawVao;
-    std::vector<SubMesh> subs = m.subs;
-    if (subs.empty()) { SubMesh s; s.indexOffset = 0; s.indexCount = (uint32_t)m.indices.size(); subs.push_back(s); }
-    for (const SubMesh& s : subs) {
-        if (!subInBounds(m, s.indexOffset, s.indexCount, "dynamic")) continue;
-        const Material* mat = (s.material >= 0 && (size_t)s.material < m.mats.size()) ? &m.mats[(size_t)s.material] : nullptr;
-        Sub d;
-        d.first = s.indexOffset; d.count = s.indexCount;
-        d.prog = dynamicProgram(mat);
-        d.matName = mat ? (mat->wfcName.empty() ? resolveBySourceName(mat) : mat->wfcName) : std::string();
-        auto od = ownerDefrag_.find(drawOwner_);
-        static const bool diagDefrag = std::getenv("WFC_DEFRAG") != nullptr;   // diagnostics: every owner
-        if ((od != ownerDefrag_.end() || diagDefrag) && mat) {   // M74: the form's EnergyDeathMaterial replaces the material
-            if (const std::string* ed = energyDeathFor(mat->wfcName)) {
-                Material dm; dm.wfcName = *ed;
-                const int p = dynamicProgram(&dm);
-                if (p >= 0) { d.prog = p; d.matName = *ed; }
-            }
-        }
-        g.subs.push_back(d);
-    }
     const auto tSubs1 = std::chrono::steady_clock::now();
     gStats.dynSubsMs += std::chrono::duration<double, std::milli>(tSubs1 - tEnv1).count();
     // the owner's runtime parameters apply to its shadow caster / depth pre-pass too (M74: a dissolving Defrag body
@@ -4138,14 +4173,12 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         core::Vec3 c{0, 0, 0};
         for (size_t i = 0; i < n; ++i) c = c + (sp[i].c[0] + sp[i].c[2]) * 0.5f;
         c = c * (1.0f / (float)n);
-        auto batch = std::make_shared<SpriteBatch>();
-        batch->mat = material; batch->facing = facing; batch->sprites.assign(sp, sp + n);
-        std::copy(dynParam_, dynParam_ + 4, batch->dyn);
-        transQueue_.push_back({viewDepth(c), [this, batch]() {
-            std::copy(batch->dyn, batch->dyn + 4, dynParam_);
-            drawSprites(batch->mat.c_str(), batch->sprites.data(), batch->sprites.size(), batch->facing);
-            std::fill(dynParam_, dynParam_ + 4, 1.0f);
-        }, batch});
+        if (spriteUsed_ == spritePool_.size()) spritePool_.emplace_back();
+        SpriteBatch& batch = spritePool_[spriteUsed_];
+        batch.mat = material; batch.facing = facing; batch.sprites.assign(sp, sp + n);
+        std::copy(dynParam_, dynParam_ + 4, batch.dyn);
+        transQueue_.push_back({viewDepth(c), 1, (int)spriteUsed_});
+        ++spriteUsed_;
         return true;
     }
     if (spriteProgram(material) < 0) return false;
@@ -4175,8 +4208,10 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         GenVertexArrays(1, &spriteVao_);
         GenBuffers(1, &spriteVbo_); GenBuffers(1, &spriteCbo_); GenBuffers(1, &spriteIbo_);
     }
-    std::vector<float> v(n * 4 * 14), col(n * 4 * 4);
-    std::vector<uint32_t> idx(n * 6);
+    std::vector<float>& v = spriteV_;
+    std::vector<float>& col = spriteCol_;
+    std::vector<uint32_t>& idx = spriteIdx_;
+    v.resize(n * 4 * 14); col.resize(n * 4 * 4); idx.resize(n * 6);   // reused (every element written below)
     core::Vec3 N = core::normalize(facing);
     for (size_t i = 0; i < n; ++i) {
         const Sprite& s = sp[i];
@@ -4201,7 +4236,8 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
     BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(col.size() * sizeof(float)), col.data(), GL_STREAM_DRAW);
     EnableVertexAttribArray(5); VertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, 0, (void*)0);
     {   // M67 second SubUV cell + blend per vertex
-        std::vector<float> sub(n * 4 * 3);
+        std::vector<float>& sub = spriteSub_;
+        sub.resize(n * 4 * 3);
         for (size_t i = 0; i < n; ++i)
             for (int k = 0; k < 4; ++k) {
                 float* o = &sub[(i * 4 + (size_t)k) * 3];
@@ -4215,12 +4251,12 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
     BindBuffer(GL_ELEMENT_ARRAY_BUFFER, spriteIbo_);
     BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)(idx.size() * 4), idx.data(), GL_STREAM_DRAW);
     BindVertexArray(0);
-    GpuMesh g;
+    GpuMesh& g = spriteMesh_;                              // reused one-sub mesh
     g.vao = spriteVao_;
-    Sub d;
+    if (g.subs.empty()) g.subs.emplace_back();
+    Sub& d = g.subs[0];
     d.first = 0; d.count = (uint32_t)idx.size(); d.prog = it->second;
     d.matName = material;                                  // diagnostics (WFC_SKIPMAT)
-    g.subs.push_back(d);
     frameFx_ = true;
     drawSubs(g, core::Mat4::identity(), true);
     frameFx_ = false;
@@ -4321,6 +4357,9 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     frameNoProg_.clear();
     progSeen_.assign(progs_.size(), 0);
     if ((frameNo_ & 255) == 0 && !posed_.empty()) evictPosed(false);   // meshes no longer drawn (despawned bodies)
+    if ((frameNo_ & 255) == 64)
+        for (auto it = dynSubs_.begin(); it != dynSubs_.end();)
+            it = frameNo_ - it->second.lastFrame > 600 ? dynSubs_.erase(it) : std::next(it);
     if ((frameNo_ & 255) == 128 && (!skinInsts_.empty() || !skinModels_.empty())) evictSkin(false);
     if (frameNo_ == 2 && !prewarmDone_) prewarmMaterials();   // fallback: no world upload during the load
     gFrameStart = std::chrono::steady_clock::now();
@@ -4335,7 +4374,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     glClearColor(fogIn_.x, fogIn_.y, fogIn_.z, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     depthDirty_ = true;
-    transQueue_.clear();
+    transQueue_.clear(); transSubs_.clear(); spriteUsed_ = 0;
     deferTrans_ = true;
     distUsed_ = false;
     camPos_ = cam.pos;
