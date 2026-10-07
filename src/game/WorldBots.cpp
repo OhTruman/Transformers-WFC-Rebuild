@@ -364,14 +364,15 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
     else ng = b.goal;
     if (!b.hasGoal || hdist(ng.pos, b.goal.pos) > 4.0f || ng.kind != b.goal.kind) { b.wantRepath = true; b.goalTime = now; }
     b.goal = ng; b.hasGoal = true;
-    // Purposeful transform (cars, trucks, tanks; jets stay robots: flight steering is not modelled for bots [PARTIAL]): travel
+    // Purposeful transform (cars, trucks, tanks; jets hover-fly along the robot corridor, PC ADAPTATION): travel
     // to a far goal in vehicle form, fight in robot form.
-    const bool canVehicle = pc.vehicleParams().form != VehicleFormType::Jet;
+    const bool jet = pc.vehicleParams().form == VehicleFormType::Jet;
+    const bool canVehicle = true;
     const float goalDist = hdist(b.goal.pos, pc.position());
     // Vehicle form only where the nav's vehicle layer allows it (clearance 4.4 m / headroom 4 m) and not shortly after a failed
     // vehicle route; an existing vehicle stays one until combat or arrival.
     const int cell = botNav_.findCell(pc.position());
-    const bool vehicleRoom = cell >= 0 && botNav_.cells()[(size_t)cell].vehicle && now >= b.noVehicleUntil;
+    const bool vehicleRoom = cell >= 0 && (jet ? botNav_.cells()[(size_t)cell].headroom >= 8.0f : botNav_.cells()[(size_t)cell].vehicle) && now >= b.noVehicleUntil;
     const bool travel = !visible && (b.goal.kind != BotGoalKind::Attack ? goalDist > 45.0f : goalDist > 60.0f);
     b.wantVehicle = canVehicle && travel && (pc.moveForm() == Form::Vehicle ? now >= b.noVehicleUntil : vehicleRoom);
     // Vehicle-form combat (PC ADAPTATION): a bot already in vehicle form keeps fighting with its vehicle weapon while the enemy is
@@ -514,7 +515,8 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
     const BotSkill& sk = botSkill(b.difficulty);
     const core::Vec3 pos = pc.position();
     const bool vehicle = pc.moveForm() == Form::Vehicle;
-    BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle;
+    const bool jetForm = vehicle && pc.vehicleParams().form == VehicleFormType::Jet;
+    BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle && !jetForm;   // jets hover along the robot corridor
     // Path upkeep: one time-sliced search at a time across all bots (tickBots steps it); the bot keeps its old corridor meanwhile.
     b.repathTimer -= dt;
     const bool chasing = b.goal.kind == BotGoalKind::Attack;
@@ -614,6 +616,13 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
     in.moveForward = core::dot(moveDir, F);
     in.moveRight = core::dot(moveDir, R);
     in.viewPitch = b.pitch;
+    // Jet hover (TnPlaneSimulation Hovering: gravity cancelled, thrust in the full view frame): fly the corridor 2.5 m above its
+    // corners - yaw at the corner, view pitch at the point above it; in combat the view is the aim.
+    if (jetForm && !visible && core::length(moveDir) > 1e-3f) {
+        const core::Vec3 tgt = (b.wp < b.path.size() ? b.path[b.wp].pos : b.goal.pos) + core::Vec3{0, 2.5f, 0};
+        const core::Vec3 d = tgt - pc.actorLocation();
+        in.viewPitch = core::clampf(pitchOf(d), -0.7f, 0.7f);
+    }
     in.wantJump = jump && !vehicle;
     if (b.pendingDodge) { in.dodgeDir = b.pendingDodge; b.pendingDodge = 0; }
     if (b.pendingHover) { in.hoverRequest = true; b.pendingHover = false; }

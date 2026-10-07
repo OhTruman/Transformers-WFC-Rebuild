@@ -4243,7 +4243,7 @@ void Application::runBotTest() {
         world_.resetBotTiming();
         const size_t ev0 = world_.match().gameplayEvents().size();
         std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
-        int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0;
+        int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0;
         platform::InputFrame idle;
         const int steps = (int)((secs + 10.0f) / dt);
         for (int i = 0; i < steps && world_.match().state() != game::Match::State::MatchOver; ++i) {
@@ -4278,6 +4278,8 @@ void Application::runBotTest() {
             }
             maxAlive = std::max(maxAlive, alive);
             beamSamples += world_.participantBeamsLive() > 0;
+            for (const game::MatchOpponent* o : world_.matchOpponents())
+                jetSamples += o->spawned() && o->pawn().moveForm() == game::Form::Vehicle && o->pawn().vehicleParams().form == game::VehicleFormType::Jet;
             if (i % 600 == 0 && i > 60 * 12) { int sh, wm; world_.participantWeaponStats(sh, wm); weapShown += sh; weapMesh += wm; }
             if (i % (60 * 30) == 0 && i > 0) {
                 int kills = 0; for (size_t e = ev0; e < world_.match().gameplayEvents().size(); ++e) kills += world_.match().gameplayEvents()[e].type == T::Kill;
@@ -4317,6 +4319,7 @@ void Application::runBotTest() {
         check(envDeaths <= bots, "few environment deaths (" + std::to_string(envDeaths) + ")");
         // Melee is situational (open maps engage at range): logged above; grenades are required.
         if (phase == 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
+        if (phase == 1) check(jetSamples > 0, "jet bots fly in hover form (" + std::to_string(jetSamples) + " jet-steps)");
         if (phase == 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
         if (phase == 1) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");
         if (phase == 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
