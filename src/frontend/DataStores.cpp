@@ -235,9 +235,27 @@ bool DataStores::collection(const std::string& markup, Collection& c) {
             for (const auto& p : list)
                 for (const auto& f : p.fields)
                     if (std::find(c.columns.begin(), c.columns.end(), f.first) == c.columns.end()) c.columns.push_back(f.first);
+            // PC ADAPTATION (user decision, Milestone E): the originally unnamed LockedChassis get names - Car8 / Car9 /
+            // Car10 the campaign role name AICharacterNames.SoldierMG "Machine Gunner" (their ObjectPath is SoldierCarMG*),
+            // the minions their FriendlyIconicName - and the neutral Car10 (FactionRestriction 3, which the original picker's
+            // faction filter never matches) is listed once per faction. Inert until a body is unlocked (XP table).
+            const bool chassis = k->second == "Chassis";
+            const auto colOf = [&](const char* name) { auto it = std::find(c.columns.begin(), c.columns.end(), name); return it == c.columns.end() ? -1 : (int)(it - c.columns.begin()); };
+            const int cId = colOf("UniqueId"), cName = colOf("FriendlyName"), cFaction = colOf("FactionRestriction");
             for (const auto& p : list) {
                 std::vector<std::string> row;
                 for (const std::string& col : c.columns) row.push_back(p.get(col));
+                if (chassis && cId >= 0 && cName >= 0 && row[(size_t)cName].empty()) {
+                    const std::string& id = row[(size_t)cId];
+                    if (id == "Car8" || id == "Car9" || id == "Car10")
+                        row[(size_t)cName] = cat_.localize("TransGame", "AICharacterNames", "SoldierMG");
+                    else if (id.rfind("Minion", 0) == 0)
+                        row[(size_t)cName] = p.get("FriendlyIconicName");
+                }
+                if (chassis && cId >= 0 && cFaction >= 0 && row[(size_t)cId] == "Car10" && row[(size_t)cFaction] == "3") {
+                    for (const char* f : {"0", "1"}) { row[(size_t)cFaction] = f; c.rows.push_back(row); c.enabled.push_back(true); }
+                    continue;
+                }
                 c.rows.push_back(row);
                 c.enabled.push_back(true);
             }
