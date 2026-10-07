@@ -84,6 +84,7 @@ public:
     //   events. Owner ids and sockets are defined by the caller and resolved through setResolver().
     static constexpr int kWorld = -1;
     static constexpr int kUI = -2;
+    static constexpr int kParticipantOwnerBase = 1000;      // owner ids >= this are other participants' pawns (World)
     struct Emitter {
         core::Vec3 pos{0, 0, 0};    // initial / world position
         int owner = kWorld;
@@ -199,6 +200,7 @@ public:
     const cuedata::CueDef* instanceCue(int instance) const;
     int oldestInstance(const char* cue) const;
     size_t liveInstances() const { return live_.size(); }
+    int inaudibleSkipped() const { return inaudibleSkipped_; }   // one-shots not started: beyond their audible distance
     size_t pendingEvents() const { return pending_.size(); }
     // Diagnostics: "cue x count" for queued wave events, most first.
     std::string pendingSummary() const;
@@ -253,6 +255,7 @@ private:
     std::vector<Instance> live_;
     std::vector<Pending> pending_;
     int nextId_ = 0;
+    int inaudibleSkipped_ = 0;
     // Prefetch warming (worker decodes; adopted on the main thread). Every load / release / unload path drains first.
     struct Warm { size_t cue; std::vector<std::string> paths; std::string name; long long bytes = 0;
                   std::chrono::steady_clock::time_point start; std::future<void> done; };

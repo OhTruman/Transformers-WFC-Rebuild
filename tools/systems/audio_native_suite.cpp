@@ -448,8 +448,15 @@ static void testGain() {
     for (int i = 0; i < 3 && first + i < rec.n; ++i)
         CHECK(near(rec.v[first + i].p.volume, want[i], 1e-5f), "%s: %.6f", lab[i], rec.v[first + i].p.volume);
     CHECK(!rec.v[first].p.positional && rec.v[first].p.spatial == 1, "k2D cue plays non-positional (FMOD_2D)");
-    int f3 = rec.n; cues.play("T.3D", Vec3{100, 0, 0}, 100.0f);
-    CHECK(rec.v[f3].p.positional && rec.v[f3].p.spatial == 0, "unauthored Spatialization = k3D positional");
+    int f3 = rec.n; cues.play("T.3D", Vec3{10, 0, 0}, 10.0f);
+    CHECK(rec.n > f3 && rec.v[f3].p.positional && rec.v[f3].p.spatial == 0, "unauthored Spatialization = k3D positional");
+    // AActor::PlaySound / USoundCue::IsAudible: a positional one-shot beyond DistanceMax (unauthored: 6400 UU = 64 m) is not
+    // started at all; a 2D cue at the same place still is.
+    int skip0 = cues.inaudibleSkipped(), f4 = rec.n;
+    CHECK(cues.play("T.3D", Vec3{100, 0, 0}, 100.0f) < 0 && rec.n == f4 && cues.inaudibleSkipped() == skip0 + 1,
+          "positional one-shot beyond its audible distance: not started (%d voices)", rec.n - f4);
+    f4 = rec.n; cues.play("T.DB", Vec3{100, 0, 0}, 100.0f);
+    CHECK(rec.n - f4 == 3, "2D cue far away still plays (%d)", rec.n - f4);
     // Authored positive variation (FOLEY.SHOOT_DRY_FIRE_ELECTRICITY, -1..+1 dB): never above the 0 dB level.
     // Root -9 dB x event 0 dB x variation dBToLinear(-1..+1) -> max exactly 10^(-9/20), about half clamped.
     float mx = 0.0f, mn = 1.0f; int atMax = 0, n = 0;
@@ -798,6 +805,50 @@ static void testChannelStealing() {
     CHECK(alive == 95, "exactly one ambient channel taken (%d alive)", alive);
     for (Voice v : vs) a->stopVoice(v);
     a->stopVoice(vShot);
+    // Virtual voices: positional loops beyond their max distance hold no channel. 200 far loops + 96 audible: a new
+    // audible sound still gets a channel without stealing, the far loops stay alive, and one comes back when in range.
+    a->setListener(Vec3{0, 0, 0}, Vec3{0, 0, 1}, Vec3{1, 0, 0});
+    VoiceParams far = amb; far.positional = true; far.pos = Vec3{500, 0, 0}; far.maxDist = 64.0f; far.volume = 0.5f;
+    std::vector<Voice> farV;
+    for (int i = 0; i < 200; ++i) farV.push_back(a->playVoice(s, far));
+    auto pump = [&] { for (int i = 0; i < 6; ++i) { a->update(); std::this_thread::sleep_for(std::chrono::milliseconds(25)); } };
+    pump();
+    std::vector<Voice> near96;
+    for (int i = 0; i < 95; ++i) near96.push_back(a->playVoice(s, amb));
+    MixStats m2; a->mixStats(m2);
+    Voice vNew = a->playVoice(s, shot);
+    MixStats m3; a->mixStats(m3);
+    int farAlive = 0; for (Voice v : farV) farAlive += a->isPlaying(v) ? 1 : 0;
+    CHECK(vNew != kInvalidVoice && m3.stolenVoices == m2.stolenVoices && farAlive == 200,
+          "200 out-of-range loops are virtual: the 96th audible sound plays without stealing (%d far alive, stolen %d)",
+          farAlive, m3.stolenVoices - m2.stolenVoices);
+    pump();
+    MixStats m4; a->mixStats(m4);
+    CHECK(m4.virtualVoices == 200 && m4.voices == 96, "mixer: 96 voices mixed, 200 virtual (%d / %d)", m4.voices, m4.virtualVoices);
+    a->updateVoice(farV[0], 0.5f, 1.0f, Vec3{10, 0, 0});
+    pump();
+    MixStats m5; a->mixStats(m5);
+    CHECK(a->isPlaying(farV[0]) && m5.virtualVoices == 199, "a virtual loop back in range is mixed again (virtual %d)", m5.virtualVoices);
+    for (Voice v : farV) a->stopVoice(v);
+    for (Voice v : near96) a->stopVoice(v);
+    a->stopVoice(vNew);
+    // PC ADAPTATION: the local player's own sound (protect) gets a channel from 96 more important others, and is never
+    // the victim of a later, more important newcomer.
+    VoiceParams top = amb; top.priority = 0;
+    std::vector<Voice> tops;
+    for (int i = 0; i < 96; ++i) tops.push_back(a->playVoice(s, top));
+    VoiceParams mine = amb; mine.priority = 250; mine.protect = true;
+    Voice vMine = a->playVoice(s, mine);
+    CHECK(vMine != kInvalidVoice && a->isPlaying(vMine), "the player's own priority-250 sound plays over 96 priority-0 channels");
+    VoiceParams mine2 = mine;
+    std::vector<Voice> mines{vMine};
+    for (int i = 0; i < 95; ++i) mines.push_back(a->playVoice(s, mine2));   // now all 96 channels are the player's
+    Voice vTop = a->playVoice(s, top);
+    int minesAlive = 0; for (Voice v : mines) minesAlive += a->isPlaying(v) ? 1 : 0;
+    int topsAlive = 0; for (Voice v : tops) topsAlive += a->isPlaying(v) ? 1 : 0;
+    CHECK(vTop == kInvalidVoice && minesAlive == 96, "the player's own channels are never stolen (%d alive, tops alive %d, active %d)", minesAlive, topsAlive, a->activeVoices());
+    for (Voice v : tops) a->stopVoice(v);
+    for (Voice v : mines) a->stopVoice(v);
     delete a;
 }
 

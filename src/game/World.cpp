@@ -1592,7 +1592,8 @@ void World::tick(float dt) {
         vsig.velocity = bp.velocity();
         vsig.forward = core::forwardFromYawPitch(bp.yaw(), 0.0f);
         const float fwdSpeed = core::dot(core::Vec3{vsig.velocity.x, 0.0f, vsig.velocity.z}, vsig.forward);
-        vsig.stickForward = fwdSpeed > 0.5f ? 1.0f : (fwdSpeed < -0.5f ? -1.0f : 0.0f);   // PC ADAPTATION: bot throttle from motion
+        vsig.stickForward = fwdSpeed > 0.5f ? 1.0f : (fwdSpeed < -0.5f ? -1.0f : 0.0f);   // fallback: throttle from motion
+        if (const MoveIntent* mi = participantIntent(pl)) vsig.stickForward = mi->moveForward;   // [Systems M09g] the bot's own throttle
         vsig.dashing = vst.dashRemain > 0.0f;
         vsig.rolling = vst.rollRemain > 0.0f;
         tickParticipantBodyAudio(pl, bp.chassis().id, bp, vsig, true, dt);
@@ -1742,10 +1743,10 @@ void World::tick(float dt) {
             ambT = 0.0f;
             audio::MixStats ms;
             bool have = audio_ && audio_->mixStats(ms);
-            LOG_INFO("AMB zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d (max %d, dropped %d, stolen %d) wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block live=%zu backendVoices=%d pcm=%.1fMB map=%s script=%d pools=%d music=%d/%d tl=%.1f",
-                     levelAudio_.ambient().zoneName(), levelAudio_.ambient().activeEmitters(), levelAudio_.ambient().emitterCount(), levelAudio_.ambient().oneShotsPlayed(),
+            LOG_INFO("AMB inaudibleSkipped=%d zone=%s emitters=%d/%d oneShots=%d cues=%zu occluded=%d rays/s=%.0f pending=%zu voices=%d (max %d, dropped %d, stolen %d, virtual %d) wet=%d peak=%.1fdB gr=%.1fdB mix=%.3fms/block live=%zu backendVoices=%d pcm=%.1fMB map=%s script=%d pools=%d music=%d/%d tl=%.1f",
+                     cues_.inaudibleSkipped(), levelAudio_.ambient().zoneName(), levelAudio_.ambient().activeEmitters(), levelAudio_.ambient().emitterCount(), levelAudio_.ambient().oneShotsPlayed(),
                      cues_.liveInstances(), cues_.occludedInstances(), occlusionRays_ / 0.5f, cues_.pendingEvents(), have ? ms.voices : -1,
-                     have ? ms.peakVoices : -1, have ? ms.droppedVoices : -1, have ? ms.stolenVoices : -1, have ? ms.wetVoices : -1,
+                     have ? ms.peakVoices : -1, have ? ms.droppedVoices : -1, have ? ms.stolenVoices : -1, have ? ms.virtualVoices : -1, have ? ms.wetVoices : -1,
                      have ? ms.peakDb : -96.0f, have ? ms.gainReductionDb : 0.0f, have ? ms.mixMsPerBlock : 0.0f,
                      cues_.liveInstances(), audio_ ? audio_->activeVoices() : -1, audio_ ? audio_->residentBytes() / 1048576.0 : 0.0,
                      levelAudio_.level().c_str(), levelAudio_.ambient().script().liveSounds(), levelAudio_.state().poolsPlaying,
@@ -4292,9 +4293,17 @@ void World::setParticipantHoverAudio(int player, int hoverState, const core::Vec
 void World::tickParticipantBodyAudio(int player, const std::string& chassisKey, const Character& pc,
                                      const VehicleFormSignals& vs, bool alive, float dt) {
     if (!audio_ || levelAudio_.level().empty()) return;
-    ParticipantBody& b = participantBodies_[player];
     const CharacterAudioProfile* prof = CharacterAudio::find(chassisKey);
     const CharacterAudioProfile& p = prof ? *prof : CharacterAudio::defaultProfile();
+    // At most one new chassis cue set is registered per step (1-2 ms each; 8 at once on the first step of a 16 v 16 was an
+    // 11 ms spike). A body whose set is not registered yet stays silent for those few steps.
+    if (!participantProfiles_.count(p.key)) {
+        if (bodyCueLoadsThisStep_ >= 1) return;
+        ++bodyCueLoadsThisStep_;
+        participantProfiles_.insert(p.key);
+        CharacterAudio::loadCues(cues_, p);                       // waves warmed at match load (preloadSelectionAudio)
+    }
+    ParticipantBody& b = participantBodies_[player];
     if (b.key != p.key) {                                          // a new body (spawn / class change)
         b.vehicle.stopAll(cues_);
         b.key = p.key;
@@ -4303,7 +4312,6 @@ void World::tickParticipantBodyAudio(int player, const std::string& chassisKey, 
         b.foley = RobotFoley{};
         b.foley.setProfile(&p);
         b.form = VehicleFormAudio{};
-        if (participantProfiles_.insert(p.key).second) CharacterAudio::loadCues(cues_, p);   // warmed at match load
     }
     const core::Vec3 bodyPos = pc.position() + pc.meshOffset();
     const bool inRange = alive && core::length(bodyPos - listenerPos_) <= kParticipantBodyCullM;
@@ -4366,6 +4374,7 @@ void World::onParticipantGone(int player) {
 }
 
 void World::tickParticipantAudio(float dt) {
+    bodyCueLoadsThisStep_ = 0;
     for (size_t i = 0; i < participantNotifies_.size();) {
         ParticipantNotify& n = participantNotifies_[i];
         n.delay -= dt;
