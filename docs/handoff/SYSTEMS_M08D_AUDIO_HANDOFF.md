@@ -371,3 +371,11 @@ Checked on 09c 7d42b7b + glue, 16 v 16: friendly Ammo Matrix -> MP_AmmoMatrixOnl
 Poke / Energon bonus -> silent (no Enemy sound authored); 0 missing cues.
 Note: since Gameplay 26h (deadTicks) destroyed sentries report alive = false before removal: SENTRY_ACTIVATE_LP fades 0.25 s +
 SENTRY_EXPL (11 / 11 fades on 11ab06f + a report line; SENTRY_EXPL not started when beyond its audible distance).
+
+## 32 v 32 audio budget (measured)
+
+09c 7d42b7b + M09i, MP_IAC_Streets TDM, 63 bots (31 + 32), 3 min; the machine was shared with a CPU-heavy render-data regen,
+so these are upper bounds. Mixer 0.22 ms avg / 0.54 ms max per 21 ms block (~1-2.5 % of one core; the same as 16 v 16):
+real voices stay capped at 96 (original), virtual peak 70, live cue instances peak 135, 858 inaudible one-shots not started;
+stolen 710 / refused 156 per 3 min (quieter / lower-priority bot gunfire, the original FMOD rule); the local player's own
+sounds refused 0; 0 missing cues, 0 leaks. Audio is not a performance limit at 64 participants; no change needed.
