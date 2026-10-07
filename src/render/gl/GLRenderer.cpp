@@ -426,8 +426,10 @@ public:
         f.ok = !f.chars.empty() && !f.pages.empty();
         return f;
     }
-    static std::vector<uint32_t> utf8Decode(const std::string& s) {
-        std::vector<uint32_t> out;
+    // decoded into a reused buffer (HUD marker labels: a vector per label per frame); callers only iterate it
+    static const std::vector<uint32_t>& utf8Decode(const std::string& s) {
+        static thread_local std::vector<uint32_t> out;
+        out.clear();
         for (size_t i = 0; i < s.size();) {
             unsigned char c = (unsigned char)s[i];
             uint32_t cp = c; int n = 0;

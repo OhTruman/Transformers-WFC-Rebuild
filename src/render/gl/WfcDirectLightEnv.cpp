@@ -156,18 +156,21 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
         st.lastFullFrame = frameNo_;
     }
     const core::Vec3 origin = st.originGltf;
-    std::vector<core::Vec3> samples;              // BuildSamplePoints: origin + offset_i * extent (max 8)
+    // per-update scratch, reused (300+ fps lobbies: these were heap allocations per character per update)
+    static thread_local std::vector<core::Vec3> samples;   // BuildSamplePoints: origin + offset_i * extent (max 8)
+    samples.clear();
     for (size_t i = 0; i < offsets.size() && i < 8; ++i)
         samples.push_back(origin + core::Vec3{offsets[i].x * st.extentGltf.x, offsets[i].y * st.extentGltf.y,
                                               offsets[i].z * st.extentGltf.z});
-    std::vector<int> bakedLights;
-    std::vector<float> bakedVis;
+    static thread_local std::vector<int> bakedLights;
+    static thread_local std::vector<float> bakedVis;
     auto tq = std::chrono::steady_clock::now();
     bool hit = lvv_.valid() && lvv_.query(toUE(origin), bakedLights, bakedVis);
     statLvvMs_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - tq).count();
     ++statLvvQueries_;
     struct Ranked { int light; float score; float vis; core::Vec3 color; };
-    std::vector<Ranked> direct, overflow, shadow, shadowOverflow;
+    static thread_local std::vector<Ranked> direct, overflow, shadow, shadowOverflow;
+    direct.clear(); overflow.clear(); shadow.clear(); shadowOverflow.clear();
     LightEnv env;
     for (auto& c : env.cube) c = {0, 0, 0};
     {   // Beast probe SH at the bounds origin (0x82CCB488: zero, + sky, + probe, + overflow; no floor)
@@ -202,8 +205,8 @@ void Pipeline::doDirectLightEnvUpdate(int form, bool full) {
             if (inside) { I = intensityAt(l, origin); visTarget = 1.0f; }
             else {
                 float Imax = 0.0f;
-                std::vector<float> Is;
-                for (const core::Vec3& s : samples) { Is.push_back(intensityAt(l, s)); Imax = std::max(Imax, Is.back()); }
+                float Is[8] = {};                          // samples.size() <= 8 (BuildSamplePoints)
+                for (size_t k = 0; k < samples.size() && k < 8; ++k) { Is[k] = intensityAt(l, samples[k]); Imax = std::max(Imax, Is[k]); }
                 int n = (int)std::lround(15.0f * std::sqrt(lum(l.colorByte * Imax)) + 0.5f);
                 n = std::min(std::max(n, 1), std::max((int)samples.size(), 1));
                 auto& ls = st.lights[li];
