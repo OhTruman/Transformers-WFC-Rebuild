@@ -42,6 +42,10 @@ public:
     // Multiplayer progression ([Progression]): the original keeps it in the online stats archive (XP per specialty,
     // challenge stats / tiers); offline it lives in the local profile [PC ADAPTATION storage, original values].
     ProgressionState progression;
+    // Original chassis locks ([PCSettings] OriginalChassisLocks): the authored LockedChassis (Car5 / Jet8 via campaign
+    // completion, 16 more with no known unlock path) apply only when set; default off = every chassis available
+    // (PC ADAPTATION, pending the user's decision).
+    bool originalChassisLocks = false;
     Display display;
     // The local player's display name (GetPlayerAlias / PRI.PlayerName). The original took it from the signed-in
     // Xbox Live gamertag; the offline PC reconstruction has no such service: [Identity] Name in the profile file,
