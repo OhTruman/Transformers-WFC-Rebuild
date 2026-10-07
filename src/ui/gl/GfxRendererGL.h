@@ -37,7 +37,9 @@ public:
 
 private:
     // vbo: the fan followed by its 6-vertex cover quad, uploaded once (made on first draw; freed with the shape cache)
-    struct Mesh { std::vector<float> fan; float bx0 = 0, by0 = 0, bx1 = 0, by1 = 0; int set = 0, style = 0; mutable unsigned vbo = 0; };
+    // direct: the fan's triangles cover every filled pixel exactly once (one star-shaped loop seen from the pivot), so a
+    // solid fill can be drawn straight, without the stencil winding pass and the cover quad (same pixels).
+    struct Mesh { std::vector<float> fan; float bx0 = 0, by0 = 0, bx1 = 0, by1 = 0; int set = 0, style = 0; bool direct = false; mutable unsigned vbo = 0; };
     struct Stroke { std::vector<float> tris; int set = 0, style = 0; mutable unsigned vbo = 0; };
     struct Cached { std::vector<Mesh> fills; std::vector<Stroke> strokes; };
     const Cached& cache(const gfx::ShapeDef* s, bool glyph);
@@ -48,7 +50,7 @@ private:
     void stencilWinding(const std::vector<float>& fan, const gfx::Matrix& m);
     void stencilState();                    // the winding pass state (stencilWinding without the draw)
     void coverState(bool mask);             // the cover pass state (cover without the draw)
-    void drawMesh(const Mesh& mesh, bool mask);    // stencilWinding + cover from the mesh's buffer
+    void drawMesh(const Mesh& mesh, bool mask, bool solid = false);    // stencilWinding + cover from the mesh's buffer
     void drawStroke(const Stroke& stroke);         // drawTriangles from the stroke's buffer
     void cover(float x0, float y0, float x1, float y1, const gfx::Matrix& m, bool mask);
     void fullscreen();
