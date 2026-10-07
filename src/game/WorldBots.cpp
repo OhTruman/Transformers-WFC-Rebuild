@@ -113,6 +113,7 @@ void World::botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& 
         participantShots_.push_back({o.matchPlayer(), w.def ? w.def->id : "", muzzle, aimPoint, false, -1});
     } else if (w.simulated() && !w.beam()) {
         for (int k = 0; k < std::max(1, w.shots); ++k) fireHitscanAs(o.matchPlayer(), pc, w, eye, d);
+        b.shots += std::max(1, w.shots) - 1;   // diagnostics count every pellet trace (hits are per pellet)
     }
 }
 

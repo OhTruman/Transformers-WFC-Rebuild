@@ -1266,6 +1266,8 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     // CUSTOM-GAME EXTENSION: 16 bots per team (+ the human); off = the original 10-player slots.
     if (opt.count("BotsAutobot")) out.bots.autobot = std::max(0, std::atoi(opt["BotsAutobot"].c_str()));
     if (opt.count("BotsDecepticon")) out.bots.decepticon = std::max(0, std::atoi(opt["BotsDecepticon"].c_str()));
+    if (opt.count("BotDifficultyAutobot")) out.bots.difficultyAutobot = std::clamp(std::atoi(opt["BotDifficultyAutobot"].c_str()), 0, 2);
+    if (opt.count("BotDifficultyDecepticon")) out.bots.difficultyDecepticon = std::clamp(std::atoi(opt["BotDifficultyDecepticon"].c_str()), 0, 2);
     for (const char* k : {"ExtendedPlayers", "BotsExtended"})
         if (opt.count(k) && std::atoi(opt[k].c_str()) != 0) { out.bots.extended = true; out.settings.applyExtendedSlots(); }
     return !out.map.empty();
@@ -1393,7 +1395,8 @@ int World::addBots(const BotLaunch& launch) {
         chassisAssets(resolveChassis(id.selection, match_.faction(p)));   // the body too (glb load + renderer prewarm), not at its first spawn
         auto o = std::make_unique<MatchOpponent>(p, mp.team, true);
         o->pressesPickup = true;
-        addBotBrain(p, botDifficulty_);
+        const int perTeam = mp.team == 0 ? b.difficultyAutobot : (mp.team == 1 ? b.difficultyDecepticon : -1);
+        addBotBrain(p, perTeam >= 0 ? perTeam : botDifficulty_);
         opponents_.push_back(o.get());
         actors_.push_back(std::move(o));
         LOG_INFO("bots: %s team %d %s (%s) level %d", id.name.c_str(), mp.team, specialtyName(id.selection.specialty),

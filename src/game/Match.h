@@ -266,6 +266,7 @@ private:
     int randomInt(int n) { rng_ = rng_ * 1664525u + 1013904223u; return n > 0 ? (int)((rng_ >> 8) % (unsigned)n) : 0; }
 
     void startMatch();
+    void spawnAllInitial();   // match / round start spawns (staggered bots above 16 participants)
     void endGame(int winnerPlayer, const std::string& reason);
     void restartPlayer(int p);
     int findPlayerStart(int p);
