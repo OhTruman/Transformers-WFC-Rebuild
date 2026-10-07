@@ -337,6 +337,11 @@ private:
         size_t verts = 0, idx = 0;
         int joints = 0;                                   // highest influencing joint + 1
         std::vector<core::Vec3> jc; std::vector<float> jr;   // per joint: bind-space centre / radius of its vertices
+        // exact bounds, reduced: per joint the rigid (single influence, weight 1) vertices that can be extreme under a
+        // rigid transform (hull candidates), plus every blended vertex (evaluated with the full skinPose sum)
+        std::vector<std::vector<core::Vec3>> hullPts;
+        std::vector<uint32_t> blended;
+        size_t boundsPts = 0;
         int lastFrame = 0;
     };
     struct SkinInst { int row = -1; uint64_t serial = ~0ull; bool prev = false; core::Vec3 mn, mx, pmn, pmx; int lastFrame = 0; };
@@ -351,6 +356,7 @@ private:
     int skinMode_ = 0, skinRow_ = 0, skinBones_ = 0;      // VS: 0 off, 1 skin, 2 skin + blend with the prev palette
     float skinAlpha_ = 1.0f;
     void evictSkin(bool all);
+    void buildSkinBoundsSets(SkinModel& sm, const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights);
     int poseBlend_ = 0;                                   // vertex-shader pose blend for the current draw (attribs 7 / 8)
     float poseAlpha_ = 1.0f;
     int hudEffect_ = -1;                                  // HUD post-process chain (-1 none, 0 static discharge, 1 low health)
