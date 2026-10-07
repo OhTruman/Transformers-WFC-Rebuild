@@ -362,6 +362,7 @@ public:
     void requestAmmoBeacon(int owner);
     void generateExtraStarts();
     void separatePawns();
+    void botPathUpkeep(MatchOpponent& o, BotBrain& b, float dt);
     bool qaBotsFrozen_ = false, qaBotOverlay_ = false;   // DEV / QA TOOLING                       // pawn-vs-pawn blocking (cylinder push-out after movement)                 // extended matches: deterministic extra spawn points (Match::setGeneratedStarts)
     void damageAmmoBeaconAt(size_t idx, float amount, int instigator);
     const AmmoBeacon& localBeacon() const;
@@ -712,6 +713,18 @@ public:
     void damageAmmoBeacon(float amount, int instigator);
     const Sentry& sentry() const;   // the local player's sentry (an empty one when none)
     Character* participantPawnMutable(int player) { return const_cast<Character*>(participantPawn(player)); }
+    // match player -> its MatchOpponent (participantPawn in O(1); it was a scan per call, quadratic in big lobbies); rebuilt whenever
+    // opponents_ changes.
+    std::vector<MatchOpponent*> oppByPlayer_;
+    void rebuildOppIndex() {
+        oppByPlayer_.clear();
+        for (MatchOpponent* o : opponents_) {
+            const int p = o->matchPlayer();
+            if (p < 0) continue;
+            if ((size_t)p >= oppByPlayer_.size()) oppByPlayer_.resize((size_t)p + 1, nullptr);
+            oppByPlayer_[(size_t)p] = o;
+        }
+    }
     bool guidedMissileAlive() const { return missile_.alive; }
     const RollerMine& rollerMine() const;   // the local player's (HUD / tests)
     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }

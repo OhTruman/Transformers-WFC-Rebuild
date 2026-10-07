@@ -625,12 +625,9 @@ void skinPose(const SkinnedModel& model, const LocalPose& pose,
     for (size_t k = 0; sameTopology && k < model.subs.size(); ++k)
         sameTopology = out.subs[k].indexOffset == model.subs[k].indexOffset && out.subs[k].indexCount == model.subs[k].indexCount &&
                        out.subs[k].material == model.subs[k].material;
-    if (sameTopology && !model.indices.empty()) {   // a strided sample of the indices and UVs (another model with equal counts)
-        const size_t n = model.indices.size(), step = std::max<size_t>(1, n / 16);
-        for (size_t k = 0; sameTopology && k < n; k += step) sameTopology = out.indices[k] == model.indices[k];
-        const size_t nu = model.uv.size(), su = std::max<size_t>(1, nu / 16);
-        for (size_t k = 0; sameTopology && k < nu; k += su) sameTopology = out.uv[k] == model.uv[k];
-    }
+    // Full comparison (no allocation): a different model with equal counts must never keep stale indices (an out-of-bounds GPU fetch).
+    if (sameTopology) sameTopology = std::equal(model.indices.begin(), model.indices.end(), out.indices.begin()) &&
+                                     std::equal(model.uv.begin(), model.uv.end(), out.uv.begin());
     if (!sameTopology) { out.indices = model.indices; out.uv = model.uv; out.subs = model.subs; }
     out.mats = model.mats;                                      // small; picks up resolved texture handles
     // Bind-pose tangents skinned like the normals (no translation, renormalised; w = the bind bitangent sign), so the renderer

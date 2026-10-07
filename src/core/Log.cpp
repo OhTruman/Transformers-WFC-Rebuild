@@ -1,6 +1,7 @@
 #include "core/Log.h"
 #include <cstdarg>
 #include <cstdio>
+#include <mutex>
 
 namespace core {
 
@@ -19,6 +20,8 @@ void logMessage(LogLevel level, const char* fmt, ...) {
         case LogLevel::Warn:  tag = "[warn ]"; break;
         case LogLevel::Error: tag = "[error]"; break;
     }
+    static std::mutex m;   // simulation workers may log: whole lines, never interleaved
+    std::lock_guard<std::mutex> lk(m);
     std::FILE* streams[2] = {stdout, logFile()};
     for (std::FILE* s : streams) {
         if (!s) continue;
