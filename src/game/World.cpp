@@ -816,6 +816,7 @@ bool World::loadMapAudio(const std::string& level) {
         CharacterAudio::loadHitCues(cues_, CharacterAudio::defaultProfile(), weaponClass_);   // the targets' hit sounds
         CharacterAudio::loadAbilityCues(cues_);                                                // [Systems M08i]
         lastHitEffect_.clear(); participantHitEffect_.clear(); participantProfiles_.clear(); participantNotifies_.clear();
+        participantCloakAnim_.clear(); localCloakAnim_ = false;
         for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
         for (const std::string& c : participantWeaponClasses_) ensureWeaponAudio(c);   // [Systems M09b] the bots' weapons
         if (!selectionChassis_.empty() || !selectionWeapons_.empty()) preloadSelectionAudio({}, {});   // [Systems M09c]
@@ -4178,6 +4179,36 @@ void World::onParticipantAbility(int player, const std::string& id, const std::s
     }
 }
 
+void World::setParticipantBuffAudio(int player, const std::string& buffClass, bool active, int team, const core::Vec3& pos) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    AbilityAudio::Owner o;
+    o.key = kOwnParticipantBase + player; o.local = false; o.team = team == 1 ? 1 : 0;   // no team: Autobot (faction 0)
+    o.at.pos = pos;
+    if (participantPositionHook) o.at.owner = kOwnParticipantBase + player;
+    o.listenerDist = core::length(pos - listenerPos_);
+    abilityAudio_.setBuff(cues_, buffClass, o, active);
+    if (buffClass == "TnBuffCloak" && active != (participantCloakAnim_.count(player) != 0)) {
+        if (active) participantCloakAnim_.insert(player); else participantCloakAnim_.erase(player);
+        playCloakAnimNotifies(active, CharacterAudio::defaultProfile(), o.at, o.listenerDist);
+    }
+}
+
+void World::setParticipantHoverAudio(int player, int hoverState, const core::Vec3& pos) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    SoundCues::Emitter e;
+    e.pos = pos;
+    if (participantPositionHook) e.owner = kOwnParticipantBase + player;
+    abilityAudio_.hoverState(cues_, kOwnParticipantBase + player, hoverState, e, core::length(pos - listenerPos_));
+}
+
+void World::onParticipantGone(int player) {
+    abilityAudio_.pawnDied(cues_, kOwnParticipantBase + player);
+    participantCloakAnim_.erase(player);                              // gone: no deactivate notify
+    for (size_t i = 0; i < participantNotifies_.size();)            // its pending ability notifies too
+        if (participantNotifies_[i].player == player) { participantNotifies_[i] = participantNotifies_.back(); participantNotifies_.pop_back(); }
+        else ++i;
+}
+
 void World::tickParticipantAudio(float dt) {
     for (size_t i = 0; i < participantNotifies_.size();) {
         ParticipantNotify& n = participantNotifies_[i];
@@ -4245,9 +4276,22 @@ void World::setLocalBuffAudio(const std::string& buffClass, bool active, int tea
     AbilityAudio::Owner o;
     o.key = 0; o.local = true; o.team = team; o.at = atPawn();
     abilityAudio_.setBuff(cues_, buffClass, o, active);
+    if (buffClass == "TnBuffCloak" && active != localCloakAnim_) {
+        localCloakAnim_ = active;
+        playCloakAnimNotifies(active, audioProfile(), o.at, 0.0f);
+    }
 }
 
-void World::onLocalPawnBuffsLost() { abilityAudio_.pawnDied(cues_, 0); }
+void World::playCloakAnimNotifies(bool on, const CharacterAudioProfile& p, const SoundCues::Emitter& at, float dist) {
+    const CharacterAudioProfile::Clip* c = p.clip(on ? "Nav_CloakActivate" : "Nav_CloakDeactivate");
+    if (!c) return;                                      // PARTIAL: not in the character export yet
+    for (const CharacterAudioProfile::Notify& n : c->notifies) {
+        const std::string& cue = p.notifyCue(n);
+        if (!cue.empty()) cues_.play(cue.c_str(), at, dist);   // (their small offsets are not delayed here)
+    }
+}
+
+void World::onLocalPawnBuffsLost() { abilityAudio_.pawnDied(cues_, 0); localCloakAnim_ = false; }   // death: no deactivate notify
 
 void World::onAbilitiesJammed() { abilityAudio_.abilitiesJammed(cues_, atPawn()); }
 

@@ -2394,12 +2394,38 @@ static void testMeleeHitAndMines() {
           "fizzle (LifeSpan / owner death): the loop stops, no explosion");
 }
 
+// Participant (bot) cloak / hover loops (M09e): per-pawn keys, idempotent, gone = silent stop.
+static void testParticipantLoops() {
+    std::printf("[participant cloak / hover loops]\n");
+    Rec rec; game::SoundCues cues; cues.load(&rec, kRoot + "/../content/");
+    game::CharacterAudio::loadAbilityCues(cues);
+    game::AbilityAudio aa;
+    const game::SoundCues::Emitter at{Vec3{0, 0, 0}, game::SoundCues::kWorld, {0, 0, 0}, ""};
+    auto active = [&](const char* q) { return cues.activeInstances(q); };
+    aa.hoverState(cues, 1001, 1, at, 0.0f); aa.hoverState(cues, 1002, 1, at, 0.0f); aa.hoverState(cues, 1001, 1, at, 0.0f);
+    CHECK(active("BL_TRANS_POWER.HOVER_JUMP_LIFT") == 2, "two participants hovering: two lift loops (idempotent per tick)");
+    aa.pawnDied(cues, 1001); cues.tick(1.0f / 30.0f);
+    CHECK(active("BL_TRANS_POWER.HOVER_JUMP_LIFT") == 1 && active("BL_TRANS_POWER.HOVER_JUMP_LAND") == 0,
+          "one participant gone: only its loop stops, no land sound");
+    aa.hoverState(cues, 1002, 2, at, 0.0f); aa.hoverState(cues, 1002, 0, at, 0.0f);
+    CHECK(active("BL_TRANS_POWER.HOVER_JUMP_LAND") == 1, "the other lands normally (Hovering end -> HOVER_JUMP_LAND)");
+    game::AbilityAudio::Owner bot; bot.key = 1003; bot.local = false; bot.team = 1; bot.at = at;
+    CHECK(aa.setBuff(cues, "TnBuffCloak", bot, true) && active("BL_INTRFC_TECH_TREE.CLOAK_DECEPTICON_START_LP") == 1 &&
+          !aa.setBuff(cues, "TnBuffCloak", bot, true), "a Decepticon bot's cloak: heard by everyone, started once");
+    CHECK(!aa.setBuff(cues, "TnBuffWarcryBase", bot, true) && active("BL_TRANS_POWER.WAR_CRY_STATE_START") == 0,
+          "a bot's Warcry buff: local-player only, silent");
+    aa.stopAll(cues); for (int k = 0; k < 20; ++k) cues.tick(1.0f / 30.0f);   // the landed loop's 0.5 s fade too
+    CHECK(aa.liveLoops(cues) == 0 && active("BL_TRANS_POWER.HOVER_JUMP_LIFT") == 0 &&
+          active("BL_INTRFC_TECH_TREE.CLOAK_DECEPTICON_START_LP") == 0, "stopAll (match end / unload): every participant loop stops");
+}
+
 int main() {
     for (const char* g : {"SFX", "DIALOG", "MUSIC"}) game::SoundMixer::setGroupVolume(g, 1.0f);   // authored levels
     testSoundGroups();
     testAbilityAudio();
     testLevelWarm();
     testChargeAndRoller();
+    testParticipantLoops();
     testAbilityActors();
     testDeathAndGrenade();
     testMeleeHitAndMines();

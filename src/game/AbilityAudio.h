@@ -43,7 +43,10 @@ public:
     // TnAcrobaticsManager hover state each tick (0 none, 1 JumpingToHover, 2 Hovering) [RE pass 5 s12 addendum]: entering
     // JumpingToHover starts _HoverLoopSound attached to the pawn; it carries into Hovering; leaving fades it over 0.5 s,
     // and leaving Hovering also plays _HoverCooldownSound (HOVER_JUMP_LAND). Everyone hears it (the state replicates).
-    void hoverState(SoundCues& cues, int state, const SoundCues::Emitter& pawn, float listenerDist);
+    void hoverState(SoundCues& cues, int state, const SoundCues::Emitter& pawn, float listenerDist) { hoverState(cues, 0, state, pawn, listenerDist); }
+    // The same for any pawn `key` (0 = the local pawn; a participant's key from World): everyone hears it [CONF: the state
+    // replicates and its functions run on every machine].
+    void hoverState(SoundCues& cues, int key, int state, const SoundCues::Emitter& pawn, float listenerDist);
 
     // Kill confirm for the killer (TnPlayerController.TellClientToPlayKilledPawnSound -> ClientPlaySound: the killer only,
     // effectively 2D) [RE pass 5 s13]: headshot > victim in robot form > victim character SoldierJet (Jet*) > SoldierCar
@@ -112,7 +115,8 @@ private:
     struct Live { int key; std::string buff; bool active = false; int inst = -1; };
     Live& slot(int key, const std::string& buff);
     std::vector<Live> live_;
-    int hoverState_ = 0, hoverLoop_ = -1;
+    struct Hover { int state = 0, loop = -1; };
+    std::map<int, Hover> hover_;                     // per pawn key
     bool rollerAlive_ = false; float rollerT_ = 0.0f; int rollerLoop_ = -1;
     bool missileAlive_ = false; int missileLoop_ = -1;
     bool barrierAlive_ = false, barrierFading_ = false; int barrierLoop_ = -1;

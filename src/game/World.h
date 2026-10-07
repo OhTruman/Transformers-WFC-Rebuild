@@ -317,6 +317,14 @@ public:
     void onParticipantAbility(int player, const std::string& abilityId, const std::string& chassisKey, const core::Vec3& pos);
     // Releases the delayed participant notifies; call once per simulation step (with the participant shot loop).
     void tickParticipantAudio(float dt);
+    // [Systems M09e] Per tick, for each live participant (idempotent: sounds start / stop on a change only):
+    //   setParticipantBuffAudio(player, "TnBuffCloak", pawn.cloakRemain_ > 0, team, pos) - the cloak loop (Autobot / Decepticon
+    //   cue by the participant's team) is heard by everyone; other buff classes are local-player only (silent here);
+    //   setParticipantHoverAudio(player, pawn.hoverState_, pos) - the hover lift loop + land (0 none, 1 JumpingToHover,
+    //   2 Hovering). onParticipantGone(player) when it dies / despawns: its loops stop with no Unapply / land sound.
+    void setParticipantBuffAudio(int player, const std::string& buffClass, bool active, int team, const core::Vec3& pos);
+    void setParticipantHoverAudio(int player, int hoverState, const core::Vec3& pos);
+    void onParticipantGone(int player);
     // Optional: where participant `player`'s pawn is now (sounds follow it); without it they stay at the cast position.
     std::function<bool(int player, core::Vec3& out)> participantPositionHook;
     // [Systems M08i] Abilities / buffs (Gameplay owns them; RE pass 5 s12). A successful ability trigger ("Barrier"):
@@ -937,6 +945,13 @@ private:
     struct ParticipantNotify { float delay; std::string cue; int player; core::Vec3 pos; };
     std::vector<ParticipantNotify> participantNotifies_;          // [Systems M09d] delayed Skill_ notifies of bots
     std::set<std::string> participantProfiles_;                   // bot chassis whose cue set is registered this level
+    bool localCloakAnim_ = false;                                 // [Systems M09e] cloak on -> Nav_CloakActivate notifies
+    std::set<int> participantCloakAnim_;                          // participants whose cloak is on
+    // Nav_CloakActivate / Nav_CloakDeactivate notifies (CQC_TRANSFORM_CLOAK_*) for a pawn, if a profile carries those clips.
+    // In VERSUS they are correctly silent: the clips (AI_CQC_ROBO_ANIM*) and BL_CHR_CQC cues are cooked only into campaign /
+    // Escalation levels, never a versus map [CONFIRMED AssetTools], and gen_character_audio.py does not import
+    // notify_only_clips. Importing them for versus would be a PC ADAPTATION.
+    void playCloakAnimNotifies(bool on, const CharacterAudioProfile& p, const SoundCues::Emitter& at, float dist);
     static constexpr int kOwnParticipantBase = 1000;              // SoundCues owner id for participant `p` = base + p
     WeaponAudio weaponAudio_;
     AbilityAudio abilityAudio_;
