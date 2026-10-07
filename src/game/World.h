@@ -333,6 +333,14 @@ public:
     void tickParticipantBodyAudio(int player, const std::string& chassisKey, const Character& pawn,
                                   const VehicleFormSignals& vehicle, bool alive, float dt);
     int participantBodiesActive() const;          // diagnostics: participants inside the cull radius
+    // [Systems M09j] A participant's weapon-mesh and action-layer sounds, once per step after tickParticipantBodyAudio (same
+    // 70 m cull): the held weapon class's TnWeaponMesh event-anim notifies on each new shot / reload (reload mechanics, pump /
+    // bolt; WeaponEventAnims, as the local weapon - the fire SHOOT itself stays onParticipantFired's) and the one-shot action
+    // layer's notifies (melee swing, grenade throw; RobotFoley.actionLayer). Skill_* / Nav_Boost_F / Transform_Whirlwind_ROBO
+    // action clips are skipped: onParticipantAbility plays those (no doubles). `weaponClass` "TransContent.TnWeapon<Id>"; the
+    // serials are Weapon::shotSerial / reloadSerial; `actionClip` "" when no action plays.
+    void tickParticipantWeaponAudio(int player, const std::string& weaponClass, unsigned shotSerial, unsigned reloadSerial,
+                                    const std::string& actionClip, float actionTime, float dt);
     // Optional: where participant `player`'s pawn is now (sounds follow it); without it they stay at the cast position.
     std::function<bool(int player, core::Vec3& out)> participantPositionHook;
     // [Systems M08i] Abilities / buffs (Gameplay owns them; RE pass 5 s12). A successful ability trigger ("Barrier"):
@@ -1033,6 +1041,12 @@ private:
         VehicleAudio vehicle;
         VehicleFormAudio form;
         bool culled = true, prevTransforming = false, prevGrounded = true;
+        core::Vec3 pos{0, 0, 0};                                   // body position this step (M09j emitters)
+        std::string weaponClass;
+        WeaponSoundTimeline weaponSounds;
+        unsigned seenShot = 0, seenReload = 0;
+        long long seenNitro = -1;                                  // [M09k] last nitroSerial (-1: none seen yet)
+        bool weaponSeen = false;
         int transformNotify = 0;
         Form transformTarget = Form::Robot;
     };
