@@ -828,7 +828,9 @@ static void testChannelStealing() {
     a->updateVoice(farV[0], 0.5f, 1.0f, Vec3{10, 0, 0});
     pump();
     MixStats m5; a->mixStats(m5);
-    CHECK(a->isPlaying(farV[0]) && m5.virtualVoices == 199, "a virtual loop back in range is mixed again (virtual %d)", m5.virtualVoices);
+    CHECK(a->isPlaying(farV[0]) && m5.voices == 96 && m5.virtualVoices == 200,
+          "a virtual loop back in range is heard again; still 96 mixed, the quietest equal-priority one goes virtual (mixed %d, virtual %d)",
+          m5.voices, m5.virtualVoices);
     for (Voice v : farV) a->stopVoice(v);
     for (Voice v : near96) a->stopVoice(v);
     a->stopVoice(vNew);
@@ -849,6 +851,26 @@ static void testChannelStealing() {
     CHECK(vTop == kInvalidVoice && minesAlive == 96, "the player's own channels are never stolen (%d alive, tops alive %d, active %d)", minesAlive, topsAlive, a->activeVoices());
     for (Voice v : tops) a->stopVoice(v);
     for (Voice v : mines) a->stopVoice(v);
+    // At most 96 heard: 96 audible loops + 10 virtual ones that come back into range (taking no channel) -> 106 audible;
+    // the mixer mixes 96, the least important (priority 240 ones, not the player's own) stay virtual this block.
+    std::vector<Voice> near, back;
+    VoiceParams mid = amb; mid.priority = 128; mid.volume = 0.5f;
+    for (int i = 0; i < 95; ++i) near.push_back(a->playVoice(s, mid));
+    VoiceParams own = mid; own.protect = true; own.priority = 250;
+    near.push_back(a->playVoice(s, own));
+    VoiceParams farLow = far; farLow.priority = 240;
+    for (int i = 0; i < 10; ++i) back.push_back(a->playVoice(s, farLow));
+    pump();
+    for (Voice v : back) a->updateVoice(v, 0.5f, 1.0f, Vec3{5, 0, 0});
+    MixStats o0; a->mixStats(o0);
+    pump();
+    MixStats o1; a->mixStats(o1);
+    int backAlive = 0; for (Voice v : back) backAlive += a->isPlaying(v) ? 1 : 0;
+    CHECK(o1.voices == 96 && o1.virtualVoices == 10 && backAlive == 10 && a->isPlaying(near.back()) && o1.overflowVirtualized > o0.overflowVirtualized,
+          "106 audible: 96 mixed, the 10 least important virtual (kept alive), the player's own heard (mixed %d, virtual %d)",
+          o1.voices, o1.virtualVoices);
+    for (Voice v : near) a->stopVoice(v);
+    for (Voice v : back) a->stopVoice(v);
     delete a;
 }
 

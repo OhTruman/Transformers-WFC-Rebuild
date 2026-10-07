@@ -343,6 +343,7 @@ public:
     // unchanged.
     static constexpr int kMaxVoices = 96;
     static constexpr int kMaxLogical = 1024;                  // < 4096 (handle index bits)
+    std::vector<int> realScratch_;                            // mixBlock: the audible voices this block
     // PC ADAPTATION (32 v 32): the local player's own sounds are never the victim, and a new one takes the least important
     // other channel even when every other channel outranks it - with dozens of bots firing, the human still hears their own
     // weapon / steps / foley. At <= 16 participants the 96 channels practically never fill, so this does not apply.
@@ -657,9 +658,29 @@ private:
         int nv = 0, nw = 0;
         constexpr float k = 1.0f / 32768.0f;
         int nvirt = 0;
-        for (Voice& v : voices_) {
+        // FMOD virtual voices: at most kMaxVoices are heard. Normally freeVoice keeps it so, but a virtual voice coming back into
+        // range takes no channel; when more than kMaxVoices are audible, the least important (the player's own last, then
+        // priority, then the quietest) are virtual for this block.
+        realScratch_.clear();
+        for (int i = 0; i < (int)voices_.size(); ++i) {
+            Voice& v = voices_[(size_t)i];
             if (!v.active) continue;
             resolveGains(v);
+            if (!v.culled) realScratch_.push_back(i);
+        }
+        if ((int)realScratch_.size() > kMaxVoices) {
+            auto more = [&](int a, int b) {                       // a more important than b
+                const Voice& x = voices_[(size_t)a]; const Voice& y = voices_[(size_t)b];
+                if (x.protect != y.protect) return x.protect;
+                if (x.priority != y.priority) return x.priority < y.priority;
+                return x.gL + x.gR > y.gL + y.gR;
+            };
+            std::nth_element(realScratch_.begin(), realScratch_.begin() + kMaxVoices, realScratch_.end(), more);
+            for (size_t k = kMaxVoices; k < realScratch_.size(); ++k) voices_[(size_t)realScratch_[k]].culled = true;
+            stats_.overflowVirtualized += (int)realScratch_.size() - kMaxVoices;
+        }
+        for (Voice& v : voices_) {
+            if (!v.active) continue;
             if (v.culled) {                                   // virtual: advance the timeline only
                 ++nvirt;
                 const double frames = (double)(v.data->size() / 2);

@@ -52,6 +52,7 @@ struct MixStats { float peakDb = -96.0f; float gainReductionDb = 0.0f; int voice
                   int peakVoices = 0; int droppedVoices = 0;   // since start: most voices at once, refused starts
                   int stolenVoices = 0;                         // since start: channels taken by a more important sound
                   int virtualVoices = 0;                        // last block: playing but out of range (no channel)
+                  int overflowVirtualized = 0;                  // since start: audible voices made virtual (more than 96 audible)
                   float mixMsPerBlock = 0.0f;      // CPU cost of one 1024-frame block (~21 ms of audio)
                   float lastUpdateMs = 0.0f, lastMixMs = 0.0f; int lastUpdateBlocks = 0; int maxUpdateBlocks = 0;
                   float streamPeakDb = -96.0f; int streams = 0;   // PCM streams (movie audio): last block's peak, count
