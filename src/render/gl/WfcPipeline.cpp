@@ -44,6 +44,11 @@ void replaceAll(std::string& s, const std::string& a, const std::string& b) {
 
 float srgbToLinear(float c) { return std::pow(c, 2.2f); }   // UE3 FLinearColor(FColor) table
 
+#if __has_include("core/LoadYield.h")
+#include "core/LoadYield.h"
+#define WFC_HAS_CORE_LOADYIELD 1
+#endif
+
 // ------------------------------------------------------------------------- GLSL sources
 const char* kVS = R"(#version 330 compatibility
 layout(location=0) in vec3 aPos;
@@ -618,6 +623,7 @@ void Pipeline::clearProgramCache() {
 void Pipeline::release() {
     evictPosed(true);                                  // drawDynamicMeshPosed buffers belong to the map / context
     touchQueue_.clear();                               // its textures are deleted with the map
+    progTouchQueue_.clear();
     if (!active_ && meshes_.empty() && !fbo_) return;
     auto tex = [](GLuint& t) { if (t) { glDeleteTextures(1, &t); t = 0; } };
     auto fbo = [](GLuint& f) { if (f) { DeleteFramebuffers(1, &f); f = 0; } };
@@ -1209,7 +1215,71 @@ GLuint Pipeline::cubeTexture(const std::vector<std::string>& faces, bool srgb) {
     return id;
 }
 
+void Pipeline::loadStep(const char* where) {
+    if (loadYield_) { yieldLoad(); return; }
+#ifdef WFC_HAS_CORE_LOADYIELD
+    core::loadYield(where);
+#else
+    (void)where;
+#endif
+}
+
 void Pipeline::touchNewTextures() {
+    // opt-in (WFC_PROGWARM=1): measured on a forced-cold cache (Streets 5 v 5) it adds 3-9 s of load for no in-match
+    // gain (worst frames 39 / 44 ms with it, 40 / 42 ms without); kept for other drivers / machines
+    static const bool offP = std::getenv("WFC_PROGWARM") == nullptr;
+    if (!progTouchQueue_.empty() && (offP || !fbo_)) progTouchQueue_.clear();
+    if (!progTouchQueue_.empty()) {
+        // the driver finishes a program at its first draw, for the draw's state (render-target format, blend): each
+        // new program draws one point into the scene target (same format; cleared at the frame start, never
+        // presented as drawn here) with its own blend state
+        GLint prevFbo = 0, prevProg = 0, vp[4];
+        glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+        glGetIntegerv(GL_CURRENT_PROGRAM, &prevProg);
+        glGetIntegerv(GL_VIEWPORT, vp);
+        const GLboolean depth = glIsEnabled(GL_DEPTH_TEST), blend = glIsEnabled(GL_BLEND), cull = glIsEnabled(GL_CULL_FACE);
+        // a cold driver cache compiles here (~7 s for a whole map on the first run after a shader change): during a
+        // load it is time-sliced, the loading screen presenting every ~25 ms (the stall watchdog fires at 5 s)
+        const std::vector<int> queue = std::move(progTouchQueue_);
+        progTouchQueue_.clear();
+        auto bindTarget = [&] {
+            BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+            glViewport(0, 0, 1, 1);
+            glEnable(GL_DEPTH_TEST); glDisable(GL_CULL_FACE);
+            BindVertexArray(postVao_);
+        };
+        bindTarget();
+        const bool loading = warmup_ || queue.size() > 16;   // a load's batch (in-match stragglers are not waited on)
+        auto slice = std::chrono::steady_clock::now();
+        for (int pi : queue) {
+            if (pi < 0 || (size_t)pi >= progs_.size() || !progs_[(size_t)pi].id) continue;
+            const Program& Pg = progs_[(size_t)pi];
+            bindCommon(Pg, core::Mat4::identity());
+            switch (Pg.blend) {
+                case 2: glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); glDepthMask(GL_FALSE); break;
+                case 3: glEnable(GL_BLEND); glBlendFunc(GL_ONE, GL_ONE); glDepthMask(GL_FALSE); break;
+                case 4: glEnable(GL_BLEND); glBlendFunc(GL_DST_COLOR, GL_ZERO); glDepthMask(GL_FALSE); break;
+                default: glDisable(GL_BLEND); glDepthMask(GL_TRUE); break;
+            }
+            glDrawArrays(GL_POINTS, 0, 1);
+            ++touchedPrograms_;
+            if (loading) glFinish();                   // the driver compiles on its own thread: wait here, inside the slice
+            if (std::chrono::steady_clock::now() - slice > std::chrono::milliseconds(25)) {
+                BindVertexArray(0);
+                loadStep("Render: program warm-up");   // presents a loading frame (no-op outside a load)
+                bindTarget();
+                slice = std::chrono::steady_clock::now();
+            }
+        }
+        BindVertexArray(0);
+        glDepthMask(GL_TRUE);
+        UseProgram((GLuint)prevProg);
+        BindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFbo);
+        glViewport(vp[0], vp[1], vp[2], vp[3]);
+        if (depth) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+        if (blend) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+        if (cull) glEnable(GL_CULL_FACE);
+    }
     if (touchQueue_.empty()) return;
     static const bool off = std::getenv("WFC_NOTEXTOUCH") != nullptr;   // A/B
     if (off) { touchQueue_.clear(); return; }
@@ -1352,6 +1422,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     UseProgram(0);
     progs_.push_back(P);
     progIndex_[key] = (int)progs_.size() - 1;
+    progTouchQueue_.push_back((int)progs_.size() - 1);
     return (int)progs_.size() - 1;
 }
 
@@ -2331,7 +2402,7 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     counts_ = FrameCounts();
     deferTrans_ = false;                           // translucent draws immediately (no queue to flush)
     depthDirty_ = true;
-    touchNewTextures();                                // the load's textures, then the world
+    touchNewTextures();                                // the load's programs (time-sliced) and textures, then the world
     BindFramebuffer(GL_FRAMEBUFFER, fbo_);
     glViewport(0, 0, w, h);
     warmup_ = true;
@@ -2351,9 +2422,9 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     counts_ = counts;
     std::memcpy(frustum_, fr, sizeof fr);
     BindFramebuffer(GL_FRAMEBUFFER, 0);
-    LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms (first-use touch: %d textures so far)",
+    LOG_INFO("wfc: warm-up draw of the world: %d draws at %dx%d in %.0f ms (first-use touch: %d programs, %d textures so far)",
              draws, w, h, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count(),
-             touchedTextures_);
+             touchedPrograms_, touchedTextures_);
 }
 
 std::string Pipeline::frameRecordText(int frame) const {
