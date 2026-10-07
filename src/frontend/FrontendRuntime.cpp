@@ -220,7 +220,17 @@ bool FrontendRuntime::init() {
         std::ifstream f(std::string(WFC_SOURCE_DIR) + "/data/frontend/chassis_xp_unlocks.json");
         std::stringstream ss; ss << f.rdbuf();
         if (f && assets::Json::parse(ss.str(), j))
+        {
             for (const auto& [id, lv] : j["unlocks"].obj) chassisXpUnlocks_[id] = lv.asInt(0);
+            // TEST ONLY: "staged" entries (bodies whose gameplay support has not landed) join the table only with
+            // WFC_STAGED_CHASSIS=1, for CaC preview checks; never offered in a normal build.
+            const char* staged = std::getenv("WFC_STAGED_CHASSIS");
+            if (staged && *staged == '1')
+                for (const auto& [id, lv] : j["staged"].obj) {
+                    chassisXpUnlocks_[id] = lv.asInt(0);
+                    FlowTrace::emit("test.stagedChassis", {{"id", id}, {"level", std::to_string(lv.asInt(0))}});
+                }
+        }
         updateChassisUnlockTexts();
     }
     // SeqVar_TnCustomizationCameraId: the preview pawn's chassis provider's CustomizationCameraId (-1 without a pawn).
@@ -318,6 +328,16 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
     if (fn == "Game.GetLanguageCode") return BridgeValue("INT");
     if (fn == "Game.GetRegionCode") return BridgeValue("NA");
     if (fn == "Game.SetHasWatchedIntroMovie") { FlowTrace::emit("profile", {{"SetHasWatchedIntroMovie", "movie"}}); return {}; }
+    // Hud_GFX: the AS wrapper DeactivatePostProcessChain(x) calls the native 'DeactivePostProcessChain' (sic) and drops x;
+    // Deactivate clears the single active chain, Activate(id) replaces it [CONFIRMED, RE 6bbf2cb].
+    if (fn == "Self.DeactivePostProcessChain" || fn == "Self.DeactivatePostProcessChain" || fn == "Self.ActivatePostProcessChain") {
+        const int chain = fn == "Self.ActivatePostProcessChain" ? std::atoi(arg(0).c_str()) : -1;
+        if (chain != hudPostChain_) {
+            hudPostChain_ = chain;
+            FlowTrace::emit("hud.postProcessChain", {{"chain", chain == 0 ? "StaticDischarge" : chain == 1 ? "LowHealth" : chain < 0 ? "none" : std::to_string(chain)}, {"movie", movie}});
+        }
+        return {};
+    }
     if (fn == "Debug.ShouldDisplayBuildInfo") return BridgeValue(false);
     if (fn == "Debug.GetBuildInfo") return BridgeValue(std::string());
     if (fn.rfind("PCSettings.", 0) == 0) return pcSettings(fn, args);

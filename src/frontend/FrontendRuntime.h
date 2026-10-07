@@ -113,6 +113,9 @@ class FrontendRuntime {
 public:
     bool init();
     void setPresenter(std::unique_ptr<IMoviePresenter> p) { presenter_ = std::move(p); }
+    // Hud_GFX post-process chain [CONFIRMED, RE notes/MILESTONE_E_HUD_POSTPROCESS_CHAINS.md]: one slot, -1 none,
+    // 0 StaticDischarge (HUD scrambled), 1 LowHealth (downed warning). The renderer presents it (setHudScreenEffect).
+    int hudPostProcessChain() const { return hudPostChain_; }
     // The PC SKU's display settings (PCSettings.*): the platform window applies them.
     struct DisplayHooks {
         std::function<std::vector<std::pair<int, int>>()> modes;
@@ -264,6 +267,7 @@ public:
 private:
     uint64_t videoGen_ = 0;
     bool moviePlaying_ = false;
+    int hudPostChain_ = -1;
     std::string prefetched_;
     size_t seenFs_ = 0;
     std::unique_ptr<DataStores> stores_;
