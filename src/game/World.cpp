@@ -1551,6 +1551,17 @@ void World::tick(float dt) {
     tickAbilityEffects(dt);
     tickAbilityAudio();                        // [Systems M08i]
     tickParticipantAudio(dt);                  // [Systems M09d] bots' delayed ability notifies
+    // [integration 09c] Systems M09e glue: every participant's (bot's) stateful ability loops, change-driven / idempotent - the
+    // cloak buff loop (heard by everyone in the original, team-specific) and the hover lift loop / land; a dead or despawned
+    // participant's loops stop silently. Match end / unload go through stopAll.
+    for (MatchOpponent* o : opponents_) {
+        const int pl = o->matchPlayer();
+        if (!o->spawned()) { onParticipantGone(pl); continue; }
+        const Character& bp = o->pawn();
+        const int tm = matchActive_ && pl >= 0 && (size_t)pl < match_.players().size() ? match_.players()[(size_t)pl].team : 0;
+        setParticipantBuffAudio(pl, "TnBuffCloak", bp.cloakRemain_ > 0.0f, tm, bp.actorLocation());
+        setParticipantHoverAudio(pl, bp.hoverState_, bp.actorLocation());
+    }
     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
     if (matchActive_) tickMatch(dt);
