@@ -326,10 +326,13 @@ void Application::run() {
         int steps = clock_.tick(realDt);
         float step = clock_.stepSeconds();
         static const bool asyncStep = game::World::asyncStepEnabled();
+        static long matchSteps = -1;   // steps since the match went InProgress (WFC_SHOTMATCH)
         for (int i = 0; i < steps; ++i) {
             if (asyncStep) world_.tickPrefix(step);   // the local part; the background part runs after the draw
             else world_.tick(step);
             gameMode_.tick(world_, step);
+            if (world_.matchActive() && world_.match().state() == game::Match::State::InProgress) ++matchSteps;
+            else if (!world_.matchActive()) matchSteps = -1;
         }
         if (perfEvery > 0) {
             // Gameplay-side cost (WFC_PERFLOG=N): simulation time (movement, camera, aim, hitscan)
@@ -451,6 +454,25 @@ void Application::run() {
 
         if (smokeFrames > 0 && frame == smokeFrames)
             if (const char* shot = std::getenv("WFC_SHOT")) renderer_->captureScreenshot(shot);
+        // WFC_SHOTMATCH=<dir>,<fromStep>,<toStep>,<stride>: capture by steps since the match went InProgress (dir/m%05ld.bmp), so lockstep
+        // A/B captures name the same match moment however many frames loading took (WFC_SHOTEVERY counts frames from boot).
+        if (const char* sm = std::getenv("WFC_SHOTMATCH")) {
+            static std::string dir; static long from = 0, to = -1, stride = 1, last = -1;
+            if (to < 0) {
+                std::string v = sm; std::vector<std::string> f; size_t p = 0;
+                for (size_t q; (q = v.find(',', p)) != std::string::npos; p = q + 1) f.push_back(v.substr(p, q - p));
+                f.push_back(v.substr(p));
+                dir = f.size() > 0 ? f[0] : "."; from = f.size() > 1 ? std::atol(f[1].c_str()) : 0; to = f.size() > 2 ? std::atol(f[2].c_str()) : 0;
+                stride = f.size() > 3 ? std::max(1L, std::atol(f[3].c_str())) : 1;
+            }
+            // one file per stride bucket (a frame running several steps still captures once per crossed stride boundary; the name is
+            // the actual step: in lockstep, 1 step per frame, exactly fromStep + k x stride)
+            if (matchSteps >= from && matchSteps <= to && (matchSteps - from) / stride != last) {
+                last = (matchSteps - from) / stride;
+                char name[64]; std::snprintf(name, sizeof name, "/m%05ld.bmp", matchSteps);
+                renderer_->captureScreenshot((dir + name).c_str());
+            }
+        }
 
         window_->present();
         if (latProbe && lat.phase == 2 && lat.seen) {
