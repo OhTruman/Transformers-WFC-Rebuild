@@ -364,7 +364,8 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
         // UnlockPrimeMode: Prime on (enables the Prime challenges). The original also clears its PrimeModeStatsToClear
         // challenge stats; that list is not recovered [UNKNOWN], so no stat is cleared here.
         ProgressionState& ps = flow_.profile().progression;
-        if (progression::levelMaxed(ps) && !ps.prime) { ps.prime = true; flow_.profile().save(); }
+        // OnPrimeModeUnlocked also clears the newly unlocked list (ResetNewlyUnlockedSkills) [CONFIRMED script].
+        if (progression::levelMaxed(ps) && !ps.prime) { ps.prime = true; ps.newlyUnlocked.clear(); flow_.profile().save(); }
         FlowTrace::emit("progression.prime", {{"active", FlowTrace::boolean(ps.prime)}});
         return {};
     }
@@ -487,8 +488,29 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
     if (fn == "Customize.GetCurrentCharacter") return BridgeValue(flow_.selectedCharacter().name);
     // Default__TnCharacterCustomizationData.UnlockCharacterSlotLevels [5, 10] in the binding's "5,10," format.
     if (fn == "Customize.GetCharacterSlotUnlockLevels") return BridgeValue(std::string("5,10,"));
-    // No XP progression offline (TnXpManager returns 0): nothing newly unlocked.
-    if (fn == "Customize.GetNewlyUnlockedSkills" || fn == "Customize.GetNewlyUnlockedAbilities") return BridgeValue(std::string());
+    // TnCharacterScriptBinding.GetNewlyUnlockedSkills(Specialty, TypeFilter) / GetNewlyUnlockedAbilities(Specialty): the
+    // saved "Specialty.UniqueId" entries of that specialty whose provider is a skill of that SkillType / an ability,
+    // comma-joined; MarkSkillAsOld(SkillId, Specialty) removes "Specialty.SkillId" (CaC "new" badges) [CONFIRMED script].
+    if (fn == "Customize.GetNewlyUnlockedSkills" || fn == "Customize.GetNewlyUnlockedAbilities") {
+        const bool skills = fn == "Customize.GetNewlyUnlockedSkills";
+        const std::string prefix = arg(0) + ".";
+        std::string out;
+        for (const std::string& e : flow_.profile().progression.newlyUnlocked) {
+            if (e.rfind(prefix, 0) != 0) continue;
+            const std::string id = e.substr(prefix.size());
+            bool match = false;
+            for (const Catalog::Provider& p : catalog_.providers(skills ? "Skill" : "Ability"))
+                if (p.get("UniqueId") == id) { match = !skills || p.get("SkillType") == arg(1); break; }
+            if (match) out += (out.empty() ? "" : ",") + id;
+        }
+        return BridgeValue(out);
+    }
+    if (fn == "Customize.MarkSkillAsOld") {
+        std::vector<std::string>& nu = flow_.profile().progression.newlyUnlocked;
+        auto it = std::find(nu.begin(), nu.end(), arg(1) + "." + arg(0));
+        if (it != nu.end()) { nu.erase(it); flow_.profile().save(); FlowTrace::emit("progression.markOld", {{"id", arg(0)}, {"specialty", arg(1)}}); }
+        return {};
+    }
     if (fn == "Customize.IsChassisUnlocked") {
         // ORIGINAL: LockedChassis chassis are locked (Car5 / Jet8 unlock on finishing a campaign; others have no known
         // unlock path - RE UNKNOWN). PC ADAPTATION (user decision): they unlock at a level of their own specialty
@@ -708,6 +730,7 @@ void FrontendRuntime::updateProgression() {
     ProgressionState& ps = flow_.profile().progression;
     if (lv == LevelKind::Match) {
         ps.lastMatchXp = {};
+        unlockedThisGame_.clear();
         // ORIGINAL: CanGainXp = !IsPrivateGame() (private matches award no XP / challenge progress). PC ADAPTATION:
         // offline private matches (the only kind here, with bots) earn progression; WFC_ORIGINAL_XP_RULE=1 keeps the
         // original rule.
@@ -715,6 +738,10 @@ void FrontendRuntime::updateProgression() {
         FlowTrace::emit("progression.match", {{"begin", "1"}, {"canGainXp", FlowTrace::boolean(canGainXp_)},
                                               {"rule", std::getenv("WFC_ORIGINAL_XP_RULE") ? "original" : "PC ADAPTATION offline XP"}});
     } else if (progressionLevel_ == LevelKind::Match) {
+        // ClientWriteLeaderboardStats: AddNewlyUnlockedSkills(SkillsUnlockedThisGame), then the save.
+        for (const std::string& id : unlockedThisGame_)
+            if (std::find(ps.newlyUnlocked.begin(), ps.newlyUnlocked.end(), id) == ps.newlyUnlocked.end()) ps.newlyUnlocked.push_back(id);
+        unlockedThisGame_.clear();
         flow_.profile().save();
         std::string lm;
         for (int i = 0; i < 4; ++i) lm += (i ? "," : "") + std::to_string(ps.lastMatchXp[(size_t)i]);
@@ -760,6 +787,19 @@ void FrontendRuntime::presentLevelUps(const std::vector<progression::LevelUp>& u
                 FlowTrace::emit("progression.chassisUnlocked", {{"chassis", id}, {"level", std::to_string(need)}, {"provenance", "PC ADAPTATION"}});
             }
         const std::string sp = progression::specialtyName(u.specialty);
+        // TnPlayerController.CheckForLevelUp: for every level gained, GetSkillsForLevel (abilities, then skills, whose
+        // SpecialtyRestriction lists the specialty and LevelRestriction equals that level) -> SkillsUnlockedThisGame
+        // [CONFIRMED script]. The original prefixes the current character's specialty; the levelled one is used here
+        // (they differ only for a Prime challenge's XP to another specialty, which would badge the wrong class).
+        for (int lvl = u.from + 1; lvl <= u.level; ++lvl)
+            for (const char* kind : {"Ability", "Skill"})
+                for (const Catalog::Provider& p : catalog_.providers(kind)) {
+                    if (std::atoi(p.get("LevelRestriction").c_str()) != lvl) continue;
+                    const std::string restr = "," + p.get("SpecialtyRestriction") + ",";
+                    if (restr.find("," + sp + ",") == std::string::npos) continue;
+                    unlockedThisGame_.push_back(sp + "." + p.get("UniqueId"));
+                    FlowTrace::emit("progression.unlocked", {{"kind", kind}, {"id", p.get("UniqueId")}, {"specialty", sp}, {"level", std::to_string(lvl)}});
+                }
         if (presenter_) presenter_->hudCall("_global.NotifyLevelUp", {BridgeValue(u.level), BridgeValue(sp)});
         // TnPlayerLevelUpMessage "`p is now a level `l `s" (specialty level) [CONFIRMED text, RE s4].
         std::string msg = catalog_.localize("TransGame", "TnPlayerLevelUpMessage", "LevelUpMessage");

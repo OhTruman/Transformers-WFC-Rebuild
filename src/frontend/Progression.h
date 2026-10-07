@@ -21,6 +21,9 @@ struct ProgressionState {
     bool prime = false;                   // UnlockPrimeMode taken
     std::map<int, int> tiers;             // ChallengeId -> tiers unlocked (0..3)
     std::map<int, long> stats;            // StatPropertyId -> lifetime value (challenge counters)
+    // TnCharacterCustomizationData.NewlyUnlockedSkillIds: "Specialty.UniqueId" of the skills / abilities a level-up
+    // unlocked, added at match end, removed by MarkSkillAsOld (the CaC "new" badges) [CONFIRMED script].
+    std::vector<std::string> newlyUnlocked;
 };
 
 namespace progression {
@@ -39,7 +42,7 @@ struct ChallengeUnlock {
     bool prime = false;
     std::string name, description;             // description with `g = goal
 };
-struct LevelUp { int specialty = -1, level = 0; };
+struct LevelUp { int specialty = -1, level = 0, from = 0; };   // from: the level before
 int challengeStat(const Catalog& cat, int challengeId);   // its StatPropertyId (0 if unknown)
 
 // XP for the played specialty (capped). Returns the level-up, if any.

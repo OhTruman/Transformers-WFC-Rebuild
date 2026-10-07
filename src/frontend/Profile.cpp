@@ -97,6 +97,11 @@ void LocalProfile::load() {
             if (sp >= 0) progression.xp[(size_t)sp] = std::clamp(std::atol(v.c_str()), 0L, progression::kXpCap);
             else if (lm >= 0) progression.lastMatchXp[(size_t)lm] = std::max(0L, std::atol(v.c_str()));
             else if (k == "Prime") progression.prime = v == "1";
+            else if (k == "NewlyUnlocked") {
+                progression.newlyUnlocked.clear();
+                std::stringstream ss(v);
+                for (std::string item; std::getline(ss, item, ',');) if (!item.empty()) progression.newlyUnlocked.push_back(item);
+            }
             else if (k.rfind("Tier.", 0) == 0) progression.tiers[std::atoi(k.c_str() + 5)] = std::clamp(std::atoi(v.c_str()), 0, 3);
             else if (k.rfind("Stat.", 0) == 0) progression.stats[std::atoi(k.c_str() + 5)] = std::atol(v.c_str());
         } else if (section == "[ProfileData]") values_[k] = v;
@@ -124,6 +129,11 @@ void LocalProfile::save() const {
     for (int i = 0; i < 4; ++i) f << "Xp" << progression::specialtyName(i) << "=" << progression.xp[(size_t)i] << "\n";
     for (int i = 0; i < 4; ++i) f << "LastMatch" << progression::specialtyName(i) << "=" << progression.lastMatchXp[(size_t)i] << "\n";
     f << "Prime=" << (progression.prime ? 1 : 0) << "\n";
+    if (!progression.newlyUnlocked.empty()) {
+        f << "NewlyUnlocked=";
+        for (size_t i = 0; i < progression.newlyUnlocked.size(); ++i) f << (i ? "," : "") << progression.newlyUnlocked[i];
+        f << "\n";
+    }
     for (const auto& [id, t] : progression.tiers) if (t > 0) f << "Tier." << id << "=" << t << "\n";
     for (const auto& [id, v] : progression.stats) if (v != 0) f << "Stat." << id << "=" << v << "\n";
 }
