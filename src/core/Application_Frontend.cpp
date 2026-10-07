@@ -76,8 +76,12 @@ template <class S, class = void> struct HasMatchCapacity : std::false_type {};
 template <class S>
 struct HasMatchCapacity<S, std::void_t<decltype(std::declval<const S&>().maxPerTeam), decltype(std::declval<const S&>().maxPlayers)>>
     : std::true_type {};
+// [integration 09c] The Bot Settings EXTENDED range is the extended capacity (Gameplay 26a: the original 5 v 5 is the default and
+// applyExtendedSlots() raises it), so read the capacity after applying it; the ORIGINAL rows stay 5 / 10 on the Frontend side.
+template <class S, class = void> struct HasExtendedSlots : std::false_type {};
+template <class S> struct HasExtendedSlots<S, std::void_t<decltype(std::declval<S&>().applyExtendedSlots())>> : std::true_type {};
 template <class S> bool readCapacity(int& perTeam, int& maxPlayers) {
-    if constexpr (HasMatchCapacity<S>::value) { const S s = S::forMode("TDM"); perTeam = s.maxPerTeam; maxPlayers = s.maxPlayers; return true; }
+    if constexpr (HasMatchCapacity<S>::value) { S s = S::forMode("TDM"); if constexpr (HasExtendedSlots<S>::value) s.applyExtendedSlots(); perTeam = s.maxPerTeam; maxPlayers = s.maxPlayers; return true; }
     else { (void)perTeam; (void)maxPlayers; return false; }
 }
 
@@ -1170,6 +1174,7 @@ void Application::unloadMatch() {
 static_assert(HasRendererFrameLimit<render::IRenderer>::value, "IRenderer::setFrameLimit / waitFrameSlot");
 static_assert(HasParticipantInfo<game::MatchPlayer>::value, "MatchPlayer kind / level / specialty");
 static_assert(HasMatchCapacity<game::MatchSettings>::value, "MatchSettings maxPerTeam / maxPlayers");
+static_assert(HasExtendedSlots<game::MatchSettings>::value, "MatchSettings::applyExtendedSlots (Bot Settings EXTENDED range)");
 static_assert(core::HasQaApi<game::World>::value, "World QA API");
 static_assert(core::HasQaSwap<game::World>::value, "World::qaCharacterChoices / qaSetCharacter");
 static_assert(core::HasAwardFeed<game::World>::value, "World::drainXpAwards / drainStatAwards");
