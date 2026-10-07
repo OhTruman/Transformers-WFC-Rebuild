@@ -616,7 +616,9 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
 - HUD: post-process chains (static discharge / low health, setHudScreenEffect); objective markers per RE 7bb8ec1
   (cutoff, pulse, Tombstone fade, health-bar fill, enemy hysteresis via drawOwnerRenderAge, action labels).
 - FX: ParticleModuleCollision (bolts die at the first static hit) and SwitchableColorScaleOverLife (team channel via
-  setParticleEffectParam "Team") from AssetTools' decoded non-native modules: the Scatter Blaster "grey rods" fixed.
+  setParticleEffectParam "Team") from AssetTools' decoded non-native modules. Bolts now end at the first static hit,
+  but the thick grey streaks Frontend reported ("grey rods") are NOT fixed by this (A/B by Experimental and Rendering:
+  near-identical) - a different emitter; OPEN.
 - Content: six extra bodies' materials from campaign packages; Frenzy / Rumble preview NAV_Idle; Machine Gunner
   preview fit (PC ADAPTATION).
 
