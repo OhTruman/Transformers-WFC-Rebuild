@@ -98,6 +98,9 @@ private:
     std::map<std::string, Tex> textures_;
     std::map<std::string, unsigned> gradients_;
     // Uniform locations.
+    int uW1_ = -1, uF1_ = -1;   // the second matrix rows (looked up once, not per draw)
+    unsigned boundBuf_ = ~0u;   // the GL_ARRAY_BUFFER this renderer last bound (~0 = unknown)
+    void bindArray(unsigned buffer);
     int uView_ = -1, uWorld_ = -1, uFillInv_ = -1, uMode_ = -1, uColor_ = -1, uMul_ = -1, uAdd_ = -1, uTex_ = -1, uTexSize_ = -1, uFocal_ = -1;
 };
 

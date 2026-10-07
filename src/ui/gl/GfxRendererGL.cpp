@@ -166,6 +166,8 @@ bool GfxRendererGL::init() {
     uView_ = glx::GetUniformLocation(prog_, "uView");
     uWorld_ = glx::GetUniformLocation(prog_, "uW0");
     uFillInv_ = glx::GetUniformLocation(prog_, "uF0");
+    uW1_ = glx::GetUniformLocation(prog_, "uW1");
+    uF1_ = glx::GetUniformLocation(prog_, "uF1");
     uMode_ = glx::GetUniformLocation(prog_, "uMode");
     uColor_ = glx::GetUniformLocation(prog_, "uColor");
     uMul_ = glx::GetUniformLocation(prog_, "uMul");
@@ -361,6 +363,7 @@ void GfxRendererGL::begin(int width, int height) {
     glx::UseProgram(prog_);
     glx::BindVertexArray(vao_);
     glx::BindBuffer(GL_ARRAY_BUFFER, vbo_);
+    boundBuf_ = ~0u;   // the attribute pointer below is set fresh; the next bindArray re-binds
     glx::EnableVertexAttribArray(0);
     glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
     glx::Uniform2f(uView_, (float)width, (float)height);
@@ -375,6 +378,7 @@ void GfxRendererGL::begin(int width, int height) {
     glBindTexture(GL_TEXTURE_2D, backdropTex_);
     {
         float q[] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
+        bindArray(vbo_);   // the quad streams into the shared buffer, never a cached mesh buffer
         glx::BufferData(GL_ARRAY_BUFFER, sizeof q, q, GL_STREAM_DRAW);
         glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -425,6 +429,7 @@ void GfxRendererGL::end() {
     glDisable(GL_BLEND);   // the target holds the finished frame (backdrop included)
     float q[] = {-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1};
     glx::BindBuffer(GL_ARRAY_BUFFER, vbo_);
+    bindArray(vbo_);   // the quad streams into the shared buffer, never a cached mesh buffer
     glx::BufferData(GL_ARRAY_BUFFER, sizeof q, q, GL_STREAM_DRAW);
     glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
     glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -435,6 +440,7 @@ void GfxRendererGL::end() {
     // which a bound GL_ARRAY_BUFFER would turn into offsets into this VBO (the frontend scene drew nothing).
     glx::DisableVertexAttribArray(0);
     glx::BindBuffer(GL_ARRAY_BUFFER, 0);
+    boundBuf_ = ~0u;
     glBindTexture(GL_TEXTURE_2D, 0);
     restoreGlState();
 }
@@ -549,11 +555,10 @@ unsigned GfxRendererGL::gradientTexture(const gfx::FillStyle& fs) {
 
 void GfxRendererGL::setFill(const gfx::FillStyle& fs, const gfx::Matrix& world, const gfx::CXForm& cx, float alpha, int forceMode) {
     glx::Uniform3f(uWorld_, world.a, world.c, world.tx);
-    GLint w1 = glx::GetUniformLocation(prog_, "uW1");
-    glx::Uniform3f(w1, world.b, world.d, world.ty);
+    glx::Uniform3f(uW1_, world.b, world.d, world.ty);
     gfx::Matrix inv = fs.m.inverse();
     glx::Uniform3f(uFillInv_, inv.a, inv.c, inv.tx);
-    glx::Uniform3f(glx::GetUniformLocation(prog_, "uF1"), inv.b, inv.d, inv.ty);
+    glx::Uniform3f(uF1_, inv.b, inv.d, inv.ty);
     glx::Uniform4f(uMul_, cx.mr, cx.mg, cx.mb, cx.ma * alpha);
     glx::Uniform4f(uAdd_, cx.ar / 255.0f, cx.ag / 255.0f, cx.ab / 255.0f, cx.aa / 255.0f * alpha);
     int mode = 0;
@@ -570,9 +575,17 @@ void GfxRendererGL::setFill(const gfx::FillStyle& fs, const gfx::Matrix& world, 
     }
 }
 
+void GfxRendererGL::bindArray(unsigned buffer) {
+    if (boundBuf_ == buffer) return;
+    glx::BindBuffer(GL_ARRAY_BUFFER, buffer);
+    glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+    boundBuf_ = buffer;
+}
+
 void GfxRendererGL::drawTriangles(const std::vector<float>& v, const gfx::Matrix& m) {
     (void)m;
     if (v.empty()) return;
+    bindArray(vbo_);
     glx::BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STREAM_DRAW);
     glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
     glDrawArrays(GL_TRIANGLES, 0, (GLsizei)(v.size() / 2));
@@ -623,32 +636,28 @@ void GfxRendererGL::drawMesh(const Mesh& mesh, bool mask) {
         const float q[] = {mesh.bx0, mesh.by0, mesh.bx1, mesh.by0, mesh.bx1, mesh.by1, mesh.bx0, mesh.by0, mesh.bx1, mesh.by1, mesh.bx0, mesh.by1};
         v.insert(v.end(), q, q + 12);
         glx::GenBuffers(1, &mesh.vbo);
-        glx::BindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+        bindArray(mesh.vbo);
         glx::BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STATIC_DRAW);
     } else {
-        glx::BindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+        bindArray(mesh.vbo);
     }
-    glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
     const GLsizei nFan = (GLsizei)(mesh.fan.size() / 2);
     stencilState();
     glDrawArrays(GL_TRIANGLES, 0, nFan);
     coverState(mask);
     glDrawArrays(GL_TRIANGLES, nFan, 6);
-    glx::BindBuffer(GL_ARRAY_BUFFER, vbo_);   // streamed draws use the shared buffer
 }
 
 void GfxRendererGL::drawStroke(const Stroke& stroke) {
     if (stroke.tris.empty()) return;
     if (!stroke.vbo) {
         glx::GenBuffers(1, &stroke.vbo);
-        glx::BindBuffer(GL_ARRAY_BUFFER, stroke.vbo);
+        bindArray(stroke.vbo);
         glx::BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(stroke.tris.size() * sizeof(float)), stroke.tris.data(), GL_STATIC_DRAW);
     } else {
-        glx::BindBuffer(GL_ARRAY_BUFFER, stroke.vbo);
+        bindArray(stroke.vbo);
     }
-    glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
     glDrawArrays(GL_TRIANGLES, 0, (GLsizei)(stroke.tris.size() / 2));
-    glx::BindBuffer(GL_ARRAY_BUFFER, vbo_);
 }
 
 void GfxRendererGL::forgetShapes() {
@@ -657,6 +666,7 @@ void GfxRendererGL::forgetShapes() {
         for (const Stroke& st : c.strokes) if (st.vbo) glx::DeleteBuffers(1, &st.vbo);
     }
     shapes_.clear();
+    boundBuf_ = ~0u;
 }
 
 void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial) {
@@ -922,6 +932,7 @@ void GfxRendererGL::drawTextShadow(const std::vector<gfx::Player::RenderItem>& i
         glBindTexture(GL_TEXTURE_2D, shTex_[pass == 0 ? 0 : 1]);
         glx::Uniform2f(glx::GetUniformLocation(shBlurProg_, "uDir"), pass == 0 ? 1.0f : 0.0f, pass == 0 ? 0.0f : 1.0f);
         glx::Uniform1f(glx::GetUniformLocation(shBlurProg_, "uWidth"), std::min(64.0f, pass == 0 ? bw : bh));
+        bindArray(vbo_);   // the quad streams into the shared buffer, never a cached mesh buffer
         glx::BufferData(GL_ARRAY_BUFFER, sizeof quad, quad, GL_STREAM_DRAW);
         glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
         glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -948,6 +959,7 @@ void GfxRendererGL::drawTextShadow(const std::vector<gfx::Player::RenderItem>& i
     glx::Uniform4f(glx::GetUniformLocation(shCompProg_, "uColor"), ((col >> 16) & 0xFF) / 255.0f, ((col >> 8) & 0xFF) / 255.0f, (col & 0xFF) / 255.0f, a);
     glx::Uniform1f(glx::GetUniformLocation(shCompProg_, "uStrength"), std::max(0.0f, tf->shadowStrength));
     const float unit[] = {0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1};
+    bindArray(vbo_);   // the quad streams into the shared buffer, never a cached mesh buffer
     glx::BufferData(GL_ARRAY_BUFFER, sizeof unit, unit, GL_STREAM_DRAW);
     glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
     glDrawArrays(GL_TRIANGLES, 0, 6);

@@ -859,7 +859,7 @@ void Player::processLoads() {
 
 // ---- events ----
 
-void Player::dispatchClipEvent(MovieClip* mc, const char* methodName, uint32_t flag) {
+void Player::dispatchClipEvent(MovieClip* mc, const std::string& methodName, uint32_t flag) {
     if (!mc) return;
     for (const ClipAction& ca : mc->clipActions)
         if (ca.events & flag) vm_->runBlock(ca.code.code, 0, ca.code.code->size(), mc);
@@ -871,7 +871,7 @@ void Player::dispatchClipEvent(MovieClip* mc, const char* methodName, uint32_t f
         try {
             vm_->call(f, Value(so), a);
         } catch (const avm1::ScriptThrow& t) {
-            LOG_WARN("GFX %s threw: %s", methodName, vm_->toString(t.v).c_str());
+            LOG_WARN("GFX %s threw: %s", methodName.c_str(), vm_->toString(t.v).c_str());
         }
     }
 }
@@ -1234,11 +1234,10 @@ void Player::syncVariableText(MovieClip* mc) {
 }
 
 void Player::collectEnterFrame(MovieClip* mc, std::vector<MovieClip*>& out) {
+    // Nothing runs while collecting, so the children map is walked directly (no per-node copy).
     out.push_back(mc);
-    std::vector<DisplayObject*> kids;
-    for (auto& [d, ch] : mc->children) kids.push_back(ch.get());
-    for (DisplayObject* ch : kids)
-        if (ch->kind == DisplayObject::Kind::Clip) collectEnterFrame(static_cast<MovieClip*>(ch), out);
+    for (auto& [d, ch] : mc->children)
+        if (ch->kind == DisplayObject::Kind::Clip) collectEnterFrame(static_cast<MovieClip*>(ch.get()), out);
 }
 
 void Player::advanceClip(MovieClip* mc) {
@@ -1259,10 +1258,13 @@ void Player::advance(float dt) {
     timeMs_ += dt * 1000.0;
     // enterFrame handlers, then the timelines' new frames.
     std::vector<MovieClip*> clips;
+    clips.reserve(lastClipCount_);
     collectEnterFrame(root_, clips);
+    lastClipCount_ = clips.size();
+    static const std::string kOnEnterFrame = "onEnterFrame";   // looked up on every clip every frame: no temporary
     for (MovieClip* mc : clips) {
         if (mc->removed) continue;
-        dispatchClipEvent(mc, "onEnterFrame", EvEnterFrame);
+        dispatchClipEvent(mc, kOnEnterFrame, EvEnterFrame);
         drainActions();
     }
     advanceClip(root_);
