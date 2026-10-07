@@ -3295,17 +3295,9 @@ void World::spawnSentry(Sentry& s) {
 
 void World::tickSentry(float dt) {
     const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
-    for (Sentry& s : sentries_) {
-        if (s.delay >= 0.0f) { s.delay -= dt; if (s.delay < 0.0f) spawnSentry(s); }
-        const bool ownerAlive = s.owner >= 0 && participantPawn(s.owner) != nullptr;
-        if (s.alive) {
-            s.t += dt;
-            s.health -= 135.0f / 30.0f * dt;              // Lifetime 30
-            if (s.health <= 0.0f || !ownerAlive) { s.alive = false; s.target = -1; }   // dies with the owner
-        }
-        if (!s.alive) continue;
-        const core::Vec3 muzzle = s.pos + core::Vec3{0, 2.0f, 0};
-        // Target: the closest visible enemy of the owner's team within the pitch constraints (every participant, the local pawn too).
+    // Target: the closest visible enemy of the owner's team within the pitch constraints (every participant, the local pawn too).
+    // Candidates sorted by distance, line of sight tested nearest first (same target, fewer traces).
+    auto findTarget = [&](Sentry& s, const core::Vec3& muzzle) -> const Character* {
         s.target = -1;
         float best = 300.0f;
         const Character* tgt = nullptr;
@@ -3333,6 +3325,31 @@ void World::tickSentry(float dt) {
                 break;
             }
         }
+        (void)best;
+        return tgt;
+    };
+    // (1) serial upkeep (spawn / lifetime / owner); (2) target searches on the worker pool (read-only queries, each writes its own
+    // sentry); (3) serial aim / fire in order - a target killed earlier in this pass is searched again serially, which gives exactly
+    // the serial result (kills only remove candidates, damage moves nobody).
+    static std::vector<Sentry*> live;
+    live.clear();
+    for (Sentry& s : sentries_) {
+        if (s.delay >= 0.0f) { s.delay -= dt; if (s.delay < 0.0f) spawnSentry(s); }
+        const bool ownerAlive = s.owner >= 0 && participantPawn(s.owner) != nullptr;
+        if (s.alive) {
+            s.t += dt;
+            s.health -= 135.0f / 30.0f * dt;              // Lifetime 30
+            if (s.health <= 0.0f || !ownerAlive) { s.alive = false; s.target = -1; }   // dies with the owner
+        }
+        if (s.alive) live.push_back(&s);
+    }
+    core::WorkerPool::get().run((int)live.size(), [&](int i) { Sentry& s = *live[(size_t)i]; findTarget(s, s.pos + core::Vec3{0, 2.0f, 0}); });
+    for (Sentry* sp : live) {
+        Sentry& s = *sp;
+        if (!s.alive) continue;
+        const core::Vec3 muzzle = s.pos + core::Vec3{0, 2.0f, 0};
+        const Character* tgt = s.target >= 0 ? participantPawn(s.target) : nullptr;
+        if (s.target >= 0 && !tgt) tgt = findTarget(s, muzzle);   // killed earlier in this pass: the serial search
         float wantYaw = s.yaw, wantPitch = 0.0f;   // idle: pitch returns to 0
         if (tgt) {
             core::Vec3 d = tgt->actorLocation() - muzzle;
