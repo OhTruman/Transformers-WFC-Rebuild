@@ -68,6 +68,11 @@ foreach ($r in $runs) {
     $kills = $kl.Count
     $suicides = @($kl | Where-Object { $_.k -eq $_.v -or $_.k -lt 0 }).Count
     $teamKills = if ($r.mode -eq "DM") { 0 } else { @($kl | Where-Object { $_.k -ne $_.v -and $_.k -ge 0 -and $_.kt -eq $_.vt }).Count }
+    $abil = @($lines | Where-Object { $_ -match '\] ability (\w+)[ :]' } | ForEach-Object { [regex]::Match($_, '\] ability (\w+)').Groups[1].Value })
+    $abilSummary = (@($abil | Group-Object | Sort-Object Count -Descending | ForEach-Object { "$($_.Name) $($_.Count)" }) -join ", ")
+    $streaks = @($lines | Where-Object { $_ -match '\] killstreak \S+ triggered' }).Count
+    $flyers = @($lines | Where-Object { $_ -match '\] BOTLOG .* fly 1 ' } | ForEach-Object { [regex]::Match($_, 'BOTLOG \S+ p(\d+)').Groups[1].Value } | Select-Object -Unique).Count
+    $fellKills = @($kl | Where-Object { $_.w -match 'Fell' -and $_.k -ne $_.v -and $_.k -ge 0 }).Count
     $loadedMb = @(Flow-Ev (Read-FlowLog (Join-Path $d "flow.jsonl")) "match.loaded" | ForEach-Object { [double]$_.privateMB })[0]
     $F = Read-FlowLog (Join-Path $d "flow.jsonl"); $feed = @(Flow-Ev $F "hud.killFeed").Count
     $bl = @($lines | Where-Object { $_ -match '\] BOTLOG ' } | ForEach-Object { $m = [regex]::Match($_, 'BOTLOG (\S+) p(\d+) \(([-\d.]+) ([-\d.]+) ([-\d.]+)\) cell (-?\d+) \S+ goal (\S+) .* tgt (-?\d+) .* stuck (\d+) .* shots (\d+) hits (\d+) nopath (\d+)')
@@ -90,7 +95,7 @@ foreach ($r in $runs) {
     $rows.Add([pscustomobject][ordered]@{ run = $tag; spawned = "$($players.Count)/$want"; teams = $teamOk; kills = $kills; kill_feed = $feed; bots_logged = $nav.Count
         median_bot_path_m = $(if ($nav.Count) { ($nav | ForEach-Object { $_.dist } | Sort-Object)[[int]($nav.Count / 2)] }); stuck_or_idle_bots = $stuckBots.Count; broken_bots = $broken.Count; off_mesh_samples = $offMesh; accuracy = $acc; difficulty = $diff; nopath_max = $noPathMax; frame_ms = $frameMs; loaded_mb = $loadedMb; hard_team = $r.hardTeam
         hard_bot_kills = $(if ($null -ne $r.hardTeam) { @($kl | Where-Object { $_.k -gt 0 -and $_.v -gt 0 -and $_.k -ne $_.v -and $_.kt -eq $r.hardTeam }).Count })
-        easy_bot_kills = $(if ($null -ne $r.hardTeam) { @($kl | Where-Object { $_.k -gt 0 -and $_.v -gt 0 -and $_.k -ne $_.v -and $_.kt -ne $r.hardTeam -and $_.kt -ge 0 }).Count }); suicides = $suicides; team_kills = $teamKills; clean_exit = $clean })
+        easy_bot_kills = $(if ($null -ne $r.hardTeam) { @($kl | Where-Object { $_.k -gt 0 -and $_.v -gt 0 -and $_.k -ne $_.v -and $_.kt -ne $r.hardTeam -and $_.kt -ge 0 }).Count }); suicides = $suicides; team_kills = $teamKills; abilities = $abil.Count; killstreaks = $streaks; flying_bots = $flyers; knockoff_kills = $fellKills; clean_exit = $clean })
     Res "$tag.spawned" $(if ($players.Count -eq $want -and $teamOk) { "PASS" } elseif ($players.Count) { "FAIL" } else { "UNKNOWN" }) ("distinct spawned players {0} of {1} (local + {2} friendly + {3} enemy); team split correct {4}" -f $players.Count, $want, $r.f, $r.e, $teamOk) "Gameplay"
     # a single enemy bot can roam a large map for 60 s without meeting the scripted (wall-walking) player: no contact is not a
     # combat defect there (8c2b6e3 0v1: the bot roamed toward a goal 433 m away, never saw the player) -> INFO; >= 2 enemies must fight
@@ -101,6 +106,7 @@ foreach ($r in $runs) {
     if ($kills -gt 0) { Res "$tag.kill_feed" $(if ($feed -eq $kills) { "PASS" } else { "FAIL" }) ("kill-feed lines {0} vs kills {1}" -f $feed, $kills) "Frontend" }
     Res "$tag.frame_time" $(if ($frameMs -eq $null) { "UNKNOWN" } elseif ($frameMs -gt 16.7) { "PARTIAL" } else { "INFO" }) ("mean frame {0} ms with {1} players" -f $frameMs, $want) "Gameplay/Rendering"
     if ($kills -gt 0) { Res "$tag.suicides" $(if (($suicides + $teamKills) / [double]$kills -gt 0.25) { "PARTIAL" } else { "INFO" }) ("suicides / environment deaths {0}, team kills {1} of {2} kills (weapons: {3})" -f $suicides, $teamKills, $kills, ((@($kl | Group-Object w | Sort-Object Count -Descending | ForEach-Object { "$($_.Name) $($_.Count)" })) -join ", ")) "Gameplay" }
+    Res "$tag.features" "INFO" ("bot abilities used {0} ({1}); killstreaks triggered {2}; bots seen flying (jets) {3}; knock-off kills credited to the last hitter (DmgType_Fell) {4}" -f $abil.Count, $(if ($abilSummary) { $abilSummary } else { "none" }), $streaks, $flyers, $fellKills) "Gameplay"
     Res "$tag.memory" "INFO" ("privateMB at match loaded: {0} with {1} players" -f $loadedMb, $want) "Gameplay/Rendering/Systems"
     Res "$tag.clean_exit" $(if ($clean) { "PASS" } else { "FAIL" }) ("shutdown complete {0}" -f $clean) "Integration"
 }
@@ -115,8 +121,11 @@ if ($mix.Count -eq 2) {
     $hk = ($mix | Measure-Object hard_bot_kills -Sum).Sum; $ek = ($mix | Measure-Object easy_bot_kills -Sum).Sum
     Res "difficulty.hard_outkills_easy" $(if ($hk + $ek -lt 6) { "UNKNOWN" } elseif ($hk -gt $ek) { "PASS" } else { "FAIL" }) ("mixed teams, both sides swapped: bot-on-bot kills by HARD {0} vs EASY {1} (A: {2}/{3}, B: {4}/{5}; the scripted player's kills / deaths excluded)" -f $hk, $ek, $mix[0].hard_bot_kills, $mix[0].easy_bot_kills, $mix[1].hard_bot_kills, $mix[1].easy_bot_kills) "Gameplay"
 } elseif (-not $H.Contains("WFC_LOBBY_OPTIONS")) { Res "difficulty.hard_outkills_easy" "SKIP" "build has no WFC_LOBBY_OPTIONS (Frontend 2cf1ab1) for the per-faction difficulty test" "Experimental" }
+# across the matrix: bots must use abilities at least somewhere (Gameplay 25k-25n+: Warcry / Shockwave / Sentry / Barrier / AmmoCrate)
+$abTot = ($rows | Measure-Object abilities -Sum).Sum
+if ($rows.Count -ge 3) { Res "features.abilities_used" $(if ($abTot -gt 0) { "PASS" } else { "FAIL" }) ("bot ability uses across the matrix: {0}; killstreaks {1}; runs with flying jets {2}" -f $abTot, ($rows | Measure-Object killstreaks -Sum).Sum, @($rows | Where-Object { $_.flying_bots -gt 0 }).Count) "Gameplay" }
 Res "known_partial" "INFO" "not flagged (Gameplay, known PARTIAL): bots never hold vehicle form in combat, jets stay robots, bot abilities unused" "Gameplay"
 Write-WfcCsv $rows (Join-Path $OutDir "bots.csv")
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
-Write-M07Matrix $rows @("run", "spawned", "teams", "kills", "kill_feed", "bots_logged", "median_bot_path_m", "broken_bots", "stuck_or_idle_bots", "nopath_max", "off_mesh_samples", "accuracy", "suicides", "team_kills", "frame_ms", "loaded_mb", "clean_exit") (Join-Path $OutDir "BOTS.md") "Bot matrix" @("build: ``$sha`` ($Config); difficulty $Difficulty; $Seconds s per run; frontend-launched private matches with Bot Settings in the run's profile.")
+Write-M07Matrix $rows @("run", "spawned", "teams", "kills", "kill_feed", "bots_logged", "median_bot_path_m", "broken_bots", "stuck_or_idle_bots", "nopath_max", "off_mesh_samples", "accuracy", "suicides", "team_kills", "abilities", "killstreaks", "flying_bots", "frame_ms", "loaded_mb", "clean_exit") (Join-Path $OutDir "BOTS.md") "Bot matrix" @("build: ``$sha`` ($Config); difficulty $Difficulty; $Seconds s per run; frontend-launched private matches with Bot Settings in the run's profile.")
 "BOT MATRIX: " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
