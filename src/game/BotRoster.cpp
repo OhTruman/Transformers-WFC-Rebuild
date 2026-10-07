@@ -14,6 +14,8 @@ const char* const kBotNames[] = {
     "Yawrate", "Zerofault", "Afterburn", "Blacktop", "Crankshaft", "Downforce", "Endgame", "Fulcrum",
     "Gasket", "Halfshaft", "Idler", "Jackplate", "Keystone", "Lockring", "Magneto", "Nosecone",
     "Outrider", "Pinion", "Quench", "Ratchetjaw", "Skidplate", "Tailpipe", "Undertow", "Vortexer",
+    "Ampere", "Bearing", "Camber", "Detent", "Enginehead", "Ferrous", "Gimbal", "Hotshoe",
+    "Inductor", "Joule", "Kilowatt", "Lifter", "Mainspring", "Nacelle", "Overrun", "Pushrod",
 };
 constexpr int kNameCount = (int)(sizeof(kBotNames) / sizeof(kBotNames[0]));
 

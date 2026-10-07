@@ -583,13 +583,15 @@ Application::MatchExit Application::runMatch() {
         if (perfEvery > 0) {
             // Gameplay-side cost (WFC_PERFLOG=N): simulation time (movement, camera, aim, hitscan)
             // vs the whole frame.
-            static double simMs = 0, frameMs = 0; static long n = 0;
-            simMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - simT0).count();
+            // Steps per frame expose a fixed-step catch-up spiral (several 60 Hz steps per slow frame; FixedStepClock caps 8).
+            static double simMs = 0, frameMs = 0, simMax = 0; static long n = 0, stepSum = 0; static int stepMax = 0;
+            const double sm = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - simT0).count();
+            simMs += sm; simMax = std::max(simMax, sm); stepSum += steps; stepMax = std::max(stepMax, steps);
             frameMs += realDt * 1000.0; ++n;
             if (n == perfEvery) {
-                LOG_INFO("PERF f%ld frame=%.2fms sim=%.3fms ammo=%d", frame, frameMs / n, simMs / n,
-                         world_.player().pawn().weapon().ammo);
-                simMs = frameMs = 0; n = 0;
+                LOG_INFO("PERF f%ld frame=%.2fms sim=%.3fms (max %.2f) steps/frame %.2f (max %d) participants %zu ammo=%d", frame, frameMs / n, simMs / n,
+                         simMax, (double)stepSum / n, stepMax, world_.match().players().size(), world_.player().pawn().weapon().ammo);
+                simMs = frameMs = simMax = 0; n = 0; stepSum = 0; stepMax = 0;
             }
         }
 
@@ -4727,13 +4729,18 @@ void Application::runBotTest() {
     using T = game::GameplayEventType;
     // Phases 1-2 by default; WFC_BOTTEST_PHASE=3 runs the 16 v 16 CUSTOM-GAME EXTENSION (?ExtendedPlayers=1, 33 participants).
     const int firstPhase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0;
-    for (int phase = firstPhase; phase < (firstPhase == 2 ? 3 : 2); ++phase) {
+    for (int phase = firstPhase; phase < (firstPhase >= 2 ? firstPhase + 1 : 2); ++phase) {
         const std::string url = world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=" + std::to_string((int)secs + 15) +
                                 (phase == 0 ? "?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1" : phase == 1 ? "?BotsFriendly=7?BotsEnemy=8?BotDifficulty=2?BotsExtended=1"
-                                                                                    : "?BotsAutobot=16?BotsDecepticon=16?BotDifficulty=2?ExtendedPlayers=1");
+                                : phase == 2 ? "?BotsAutobot=16?BotsDecepticon=16?BotDifficulty=2?ExtendedPlayers=1"
+                                : phase == 3 ? "?BotsAutobot=31?BotsDecepticon=32?BotDifficulty=2?ExtendedPlayers=1"
+                                             : "?BotsEnemy=63?BotDifficulty=2?ExtendedPlayers=1");
         game::MatchLaunch L; game::MatchLaunch::fromURL(url, L);
-        const int wantF = phase == 0 ? 3 : phase == 1 ? 7 : 16, wantE = phase == 0 ? 4 : phase == 1 ? 8 : 16;
-        check(phase == 2 ? (L.bots.autobot == 16 && L.bots.decepticon == 16 && L.bots.extended && L.settings.maxPlayers == 33)
+        const int wantF = phase == 0 ? 3 : phase == 1 ? 7 : phase == 2 ? 16 : phase == 3 ? 31 : 0;
+        const int wantE = phase == 0 ? 4 : phase == 1 ? 8 : phase == 2 ? 16 : phase == 3 ? 32 : 63;
+        check(phase == 2 ? (L.bots.autobot == 16 && L.bots.decepticon == 16 && L.bots.extended && L.settings.maxPlayers == 64)
+            : phase == 3 ? (L.bots.autobot == 31 && L.bots.decepticon == 32 && L.bots.extended)
+            : phase == 4 ? (L.bots.enemy == 63 && L.bots.extended)
                          : (L.bots.friendly == wantF && L.bots.enemy == wantE), "URL bot options parsed");
         if (!world_.launchMatch(L)) { check(false, "launch"); continue; }
         const int me = world_.localMatchPlayer();
@@ -5001,8 +5008,8 @@ void Application::runXpTest() {
         check(kills >= 1 && base == 50 * kills && scaled == expect * kills, "bot match HARD: Kill XP " + std::to_string(expect) + " (base 50 x " +
               std::to_string(game::BotXpPolicy::scale(2)).substr(0, 4) + ") for " + std::to_string(kills) + " kills");
         const long killStat = statSum(me, game::AwardProducer::challengeStatId("CHALLENGE_BASIC_KILLS"));
-        const long want = (long)std::floor(kills * game::BotXpPolicy::scale(2) + 1e-9);
-        check(killStat == want, "bot match HARD: kills challenge progress " + std::to_string(killStat) + " = floor(" + std::to_string(kills) + " x 0.75)");
+        const long want = kills;   // challenge progress counts in full (user decision); only XP scales
+        check(killStat == want, "bot match HARD: kills challenge progress " + std::to_string(killStat) + " = " + std::to_string(kills) + " (unscaled)");
         (void)killed;
     }
     LOG_INFO("XPTEST SUMMARY: %d/%d checks passed", checks - fails, checks);

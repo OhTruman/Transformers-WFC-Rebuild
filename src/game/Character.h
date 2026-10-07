@@ -120,6 +120,8 @@ public:
     // keeps a fixed 60 Hz simulation and presents lerp(previous step, current step, alpha)]. Never read by the simulation.
     // beginStep() at the start of each sim step; setRenderAlpha(FixedStepClock::alpha()) before drawing.
     void beginStep();
+    // Skin the current pose's vertices if a step changed it since the last skin (draw calls it; tests that read vertices may too).
+    void ensureSkinned() const;
     void setRenderAlpha(float a) { renderAlpha_ = a < 0.0f ? 0.0f : (a > 1.0f ? 1.0f : a); }
     float renderAlpha() const { return renderAlpha_; }
     core::Vec3 renderOffset() const;   // interpolated actor position - current (zero at alpha 1 / after a teleport)
@@ -542,7 +544,14 @@ private:
     int clip_ = -1;                  // active base-layer source (clip index or kVehicleHoverKey)
     float animTime_ = 0.0f;
     std::string animName_ = "-";
-    render::MeshData poseBuf_;
+    mutable render::MeshData poseBuf_;
+    // Deferred vertex skinning (bones per step, vertices on the draw that needs them): see updateAnimation / ensureSkinned.
+    const assets::SkinnedModel* bodySkinModel_ = nullptr;
+    const assets::SkinnedModel* partnerSkinModel_ = nullptr;
+    mutable bool bodySkinDirty_ = false, partnerSkinDirty_ = false, armSkinDirty_ = false;
+    unsigned stepCounter_ = 0;
+    mutable unsigned skinnedStep_ = ~0u;
+    mutable std::vector<core::Mat4> skinGlobals_;
     // Presentation interpolation state (beginStep / setRenderAlpha).
     core::Vec3 prevPos_{0, 0, 0};
     bool havePrev_ = false;
@@ -563,7 +572,7 @@ private:
     bool partnerVisible_ = false;
     assets::LocalPose partnerPose_;
     std::vector<core::Mat4> partnerScratch_;
-    render::MeshData partnerBuf_;
+    mutable render::MeshData partnerBuf_;
     Form partnerForm() const { return form_ == Form::Robot ? Form::Vehicle : Form::Robot; }
     const assets::SkinnedModel* modelOf(Form f) const { return f == Form::Robot ? robotModel_ : vehicleModel_; }
     bool meshVisible(Form f, float clipT) const;
@@ -654,7 +663,7 @@ private:
     bool armVisible_ = false;
     assets::LocalPose armPose_;
     std::vector<core::Mat4> armScratch_;
-    render::MeshData armBuf_;
+    mutable render::MeshData armBuf_;
     core::Mat4 armWorld_ = core::Mat4::identity();
     void updateArm(float dt);
 

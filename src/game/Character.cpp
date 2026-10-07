@@ -488,7 +488,10 @@ void Character::finalizePose(const assets::SkinnedModel& mdl, float dt) {
         assets::applyMeshSpace(mdl, finalPose_, vehicleRig_.cannon, assets::quatAxisAngle({0, 0, 1}, cannonPitch_), {0, 0, 0});
     }
     if (&mdl == robotModel_) applyHandControl(mdl, finalPose_);
-    assets::skinPose(mdl, finalPose_, animScratch_, poseBuf_);
+    // Bone matrices every step (sockets, hit volumes, weapon attach); the vertex skin waits for a draw (ensureSkinned): an off-screen
+    // or culled pawn costs no skinning, and an on-screen one is skinned at most once per step.
+    assets::poseGlobals(mdl, finalPose_, animScratch_);
+    bodySkinModel_ = &mdl; bodySkinDirty_ = true;
     updateWeaponSocket();
 }
 
@@ -686,7 +689,8 @@ void Character::updatePartner(float t) {
     if (!meshVisible(partnerForm(), t)) return;
     assets::samplePose(*pm, partnerClip_, t, false, partnerPose_);
     if (pm == robotModel_) applyHandControl(*pm, partnerPose_);
-    assets::skinPose(*pm, partnerPose_, partnerScratch_, partnerBuf_);
+    assets::poseGlobals(*pm, partnerPose_, partnerScratch_);
+    partnerSkinModel_ = pm; partnerSkinDirty_ = true;
     partnerVisible_ = true;
     updateWeaponSocket();     // the robot may be this partner mesh (vehicle->robot before the vehicle hides)
 }
@@ -717,7 +721,8 @@ void Character::updateArm(float dt) {
     }
     if (clip >= 0) assets::samplePose(*armModel_, clip, armT_, false, armPose_);   // holds the last frame
     else assets::samplePose(*armModel_, 0, 0.0f, false, armPose_);
-    assets::skinPose(*armModel_, armPose_, armScratch_, armBuf_);
+    assets::poseGlobals(*armModel_, armPose_, armScratch_);
+    armSkinDirty_ = true;
     // WeaponSocket_Secondary: bone R_Arm03_Elbow_XB, relative rotation pitch 32768 (180 deg about UE Y =
     // glTF Z), no offset [CONF character.json].
     if (armBone_ >= 0 && (size_t)armBone_ < robotScratch->size()) armWorld_ = meshMatrix(Form::Robot) * (*robotScratch)[(size_t)armBone_] * armOffset_;
@@ -781,8 +786,21 @@ void Character::updateWeaponSocket() {
 
 void Character::beginStep() {
     prevPos_ = pos_; havePrev_ = true;
-    prevPoseP_ = poseBuf_.positions; prevPoseN_ = poseBuf_.normals;
-    prevPartnerP_ = partnerBuf_.positions; prevPartnerN_ = partnerBuf_.normals;
+    // The previous step's vertices exist only if that step's pose was skinned (drawn); otherwise the next frames present the
+    // current pose without the vertex blend.
+    if (skinnedStep_ == stepCounter_) {
+        prevPoseP_ = poseBuf_.positions; prevPoseN_ = poseBuf_.normals;
+        prevPartnerP_ = partnerBuf_.positions; prevPartnerN_ = partnerBuf_.normals;
+    } else { prevPoseP_.clear(); prevPoseN_.clear(); prevPartnerP_.clear(); prevPartnerN_.clear(); }
+    ++stepCounter_;
+}
+
+void Character::ensureSkinned() const {
+    bool any = false;
+    if (bodySkinDirty_ && bodySkinModel_) { assets::skinPose(*bodySkinModel_, finalPose_, skinGlobals_, poseBuf_); bodySkinDirty_ = false; any = true; }
+    if (partnerSkinDirty_ && partnerSkinModel_) { assets::skinPose(*partnerSkinModel_, partnerPose_, skinGlobals_, partnerBuf_); partnerSkinDirty_ = false; any = true; }
+    if (armSkinDirty_ && armModel_) { assets::skinPose(*armModel_, armPose_, skinGlobals_, armBuf_); armSkinDirty_ = false; any = true; }
+    if (any) skinnedStep_ = stepCounter_;
 }
 
 core::Vec3 Character::renderOffset() const {
@@ -818,6 +836,7 @@ const render::MeshData& Character::blendedPose(const render::MeshData& cur, cons
 }
 
 void Character::draw(render::IRenderer& r) const {
+    ensureSkinned();
     const assets::SkinnedModel* mdl = currentModel();
     if (mdl && mdl->valid() && !poseBuf_.empty()) {
         // Presentation interpolation: the whole pawn (body, transformation partner, arm) shifted by one rigid offset.

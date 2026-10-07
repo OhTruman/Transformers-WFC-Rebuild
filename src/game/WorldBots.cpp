@@ -777,7 +777,17 @@ void World::tickBots(float dt) {
             o->despawn();
             continue;
         }
-        if ((b.thinkTimer -= dt) <= 0.0f) { b.thinkTimer = 0.25f; botThink(*o, b); }
+        // AI level of detail (PC ADAPTATION for high bot counts): decisions at 4 Hz within 60 m of the human (or with a visible
+        // target), 2 Hz to 120 m, 1 Hz beyond; steering and aim stay per step, so combat near the player is unchanged.
+        if ((b.thinkTimer -= dt) <= 0.0f) {
+            float interval = 0.25f;
+            if (!localDead_ && b.target < 0) {
+                const float dh = core::length(pc.position() - player_.pawn().position());
+                interval = dh < 60.0f ? 0.25f : (dh < 120.0f ? 0.5f : 1.0f);
+            }
+            b.thinkTimer = interval;
+            botThink(*o, b);
+        }
         MoveIntent in;
         botSteer(*o, b, dt, in);
         // Transform toward the wanted form (cooldown 2 s; robot spot check for vehicle -> robot as the player's).
@@ -822,6 +832,22 @@ void World::tickBots(float dt) {
     }
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     botMsAccum_ += ms; botMsMax_ = std::max(botMsMax_, ms); ++botTicks_;
+    // WFC_BOTPERF=<seconds> (diagnostics, any match): participants alive, AI ms per step (avg / max over the window), path searches /
+    // failures, live projectiles.
+    static const float perfEvery = std::getenv("WFC_BOTPERF") ? (float)std::atof(std::getenv("WFC_BOTPERF")) : 0.0f;
+    if (perfEvery > 0.0f) {
+        static double winAcc = 0.0, winMax = 0.0; static long winN = 0; static float winT = 0.0f; static int lastRepaths = 0, lastNoPaths = 0;
+        winAcc += ms; winMax = std::max(winMax, ms); ++winN; winT += dt;
+        if (winT >= perfEvery) {
+            int alive = 0, repaths = 0, noPaths = 0;
+            for (const MatchPlayer& p : match_.players()) alive += p.alive;
+            for (const BotBrain& b : bots_) { repaths += b.repaths; noPaths += b.noPaths; }
+            LOG_INFO("BOTPERF t=%.0f participants %zu alive %d bots %zu | AI %.3f ms avg %.2f max per step | path searches %d no-path %d | projectiles %zu",
+                     match_.matchTime(), match_.players().size(), alive, bots_.size(), winAcc / std::max(1L, winN), winMax,
+                     repaths - lastRepaths, noPaths - lastNoPaths, projectiles_.size());
+            lastRepaths = repaths; lastNoPaths = noPaths; winAcc = winMax = 0.0; winN = 0; winT = 0.0f;
+        }
+    }
 }
 
 } // namespace game
