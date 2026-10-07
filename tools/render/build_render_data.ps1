@@ -52,8 +52,10 @@ $weapons = @((& $py (Join-Path $PSScriptRoot "weapon_materials.py")) | Where-Obj
 $fxlib = @((& $py (Join-Path $PSScriptRoot "build_map_fx.py") --list-materials $Map) | Where-Object { $_ -match '^\S+\.\S+$' })
 # Energy-death (Defrag) instances of every chassis form (energy_death_materials.json, M74)
 $defrag = @((& $py (Join-Path $PSScriptRoot "energy_death_materials.py") --list) | Where-Object { $_ -match '\S' })
+# Ability / killstreak mesh materials (AssetTools ability_assets.json; Milestone E)
+$abil = @((& $py (Join-Path $PSScriptRoot "ability_render_assets.py") --materials) | Where-Object { $_ -match '\S' })
 & $py (Join-Path $PSScriptRoot "build_materials.py") $Map $out `
-    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag
+    @chars WEP_IonBlaster_p.WEP_IonBlaster_MATINST @weapons @fx @ui @scene @fxlib @defrag @abil
 if ($LASTEXITCODE -ne 0) { throw "build_materials failed" }
 # Beast light-probe grids (character ambient SH; only Orbital Debris bakes them)
 & $py (Join-Path $PSScriptRoot "beast_probes.py") $Map $out
