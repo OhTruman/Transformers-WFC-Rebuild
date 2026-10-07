@@ -255,3 +255,33 @@ Measured (real device): spawn-frame loads cold 30-60 ms per selection -> 1.3-4.6
   - hover LIFT x5 / LAND x3;
   - Warcry / Shockwave notifies;
   - 0 missing cues, 0 leaks.
+
+## M09f - bot body audio (foley / transform / vehicle component) [audit finding #2]
+
+`World::tickParticipantBodyAudio(player, chassisKey, pawn, VehicleFormSignals, alive, dt)` once per step per live participant:
+RobotFoley from the pawn's own animation (footsteps / jump / land / idle), the Transform_To*_ROBO notifies, and a per-participant
+VehicleAudio + VehicleFormAudio at AUDIO_ROOT. Beyond 70 m from the listener (past the body cues' audible range) nothing runs and
+its vehicle loops stop (33-participant budget); `onParticipantGone` stops and forgets it. Cue sets load on first appearance
+(1-2 ms per chassis, measured). Glue (in the bot loop, next to setParticipantHoverAudio):
+
+```cpp
+const Character::VehicleState& vst = bp.vehicleState();
+const VehicleFormType ft = bp.vehicleParams().form;
+VehicleFormSignals vsig;
+vsig.kind = ft == VehicleFormType::Car ? VehicleFormSignals::Kind::Car : ft == VehicleFormType::Tank ? VehicleFormSignals::Kind::Tank
+          : ft == VehicleFormType::Jet ? VehicleFormSignals::Kind::Jet : VehicleFormSignals::Kind::Truck;
+vsig.vehicle = bp.form() == Form::Vehicle && !bp.isTransforming();
+vsig.onGround = bp.onGround();
+vsig.boostState = vsig.kind == VehicleFormSignals::Kind::Tank ? vst.tankBoost : vsig.kind == VehicleFormSignals::Kind::Jet ? vst.flying : vst.driving;
+vsig.velocity = bp.velocity();
+vsig.forward = core::forwardFromYawPitch(bp.yaw(), 0.0f);
+const float fwdSpeed = core::dot(core::Vec3{vsig.velocity.x, 0.0f, vsig.velocity.z}, vsig.forward);
+vsig.stickForward = fwdSpeed > 0.5f ? 1.0f : (fwdSpeed < -0.5f ? -1.0f : 0.0f);   // PC ADAPTATION: bot throttle from motion
+vsig.dashing = vst.dashRemain > 0.0f;
+vsig.rolling = vst.rollRemain > 0.0f;
+tickParticipantBodyAudio(pl, bp.chassis().id, bp, vsig, true, dt);
+```
+
+Measured on 09c + glue, MP_IAC_Streets TDM 8 v 8 (the 09c clamp): bot-owned BL_FS_* 102, BL_TRANSFORM 9, BL_VEH_* 18
+(were 0 / 0 / 0); 0 not-in-table, 0 LEAK; voices max 96, instances 108. Not yet: nitro / 180 / wheel slip for bots (need
+Gameplay per-pawn signals; silent, no fake), and the 70 m cull radius is a PC budget choice (PC ADAPTATION).

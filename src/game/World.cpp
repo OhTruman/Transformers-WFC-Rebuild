@@ -817,6 +817,7 @@ bool World::loadMapAudio(const std::string& level) {
         CharacterAudio::loadAbilityCues(cues_);                                                // [Systems M08i]
         lastHitEffect_.clear(); participantHitEffect_.clear(); participantProfiles_.clear(); participantNotifies_.clear();
         participantCloakAnim_.clear(); localCloakAnim_ = false;
+        participantBodies_.clear();                                // the level's cues (and their instances) went with it
         for (const std::string& c : loadoutWeaponClasses_) ensureWeaponAudio(c);   // [Systems M08d] the loadout's weapons
         for (const std::string& c : participantWeaponClasses_) ensureWeaponAudio(c);   // [Systems M09b] the bots' weapons
         if (!selectionChassis_.empty() || !selectionWeapons_.empty()) preloadSelectionAudio({}, {});   // [Systems M09c]
@@ -876,6 +877,8 @@ void World::resetSystemsForMatch() {
     vehicleAudio_.stopAll(cues_);              // [Systems M08d]
     weaponAudio_.stopAll(cues_);
     abilityAudio_.stopAll(cues_);
+    for (auto& kv : participantBodies_) kv.second.vehicle.stopAll(cues_);   // [Systems M09f]
+    participantBodies_.clear();
     vehicleFxDriver_.stopAll();
     vehicleForm_.reset();
     vehicleAudio_ = VehicleAudio{};
@@ -1561,6 +1564,22 @@ void World::tick(float dt) {
         const int tm = matchActive_ && pl >= 0 && (size_t)pl < match_.players().size() ? match_.players()[(size_t)pl].team : 0;
         setParticipantBuffAudio(pl, "TnBuffCloak", bp.cloakRemain_ > 0.0f, tm, bp.actorLocation());
         setParticipantHoverAudio(pl, bp.hoverState_, bp.actorLocation());
+        // [integration 09c] Systems M09f glue: the bot's own body audio (foley / transform notifies / vehicle component), 70 m cull.
+        const Character::VehicleState& vst = bp.vehicleState();
+        const VehicleFormType ft = bp.vehicleParams().form;
+        VehicleFormSignals vsig;
+        vsig.kind = ft == VehicleFormType::Car ? VehicleFormSignals::Kind::Car : ft == VehicleFormType::Tank ? VehicleFormSignals::Kind::Tank
+                  : ft == VehicleFormType::Jet ? VehicleFormSignals::Kind::Jet : VehicleFormSignals::Kind::Truck;
+        vsig.vehicle = bp.form() == Form::Vehicle && !bp.isTransforming();
+        vsig.onGround = bp.onGround();
+        vsig.boostState = vsig.kind == VehicleFormSignals::Kind::Tank ? vst.tankBoost : vsig.kind == VehicleFormSignals::Kind::Jet ? vst.flying : vst.driving;
+        vsig.velocity = bp.velocity();
+        vsig.forward = core::forwardFromYawPitch(bp.yaw(), 0.0f);
+        const float fwdSpeed = core::dot(core::Vec3{vsig.velocity.x, 0.0f, vsig.velocity.z}, vsig.forward);
+        vsig.stickForward = fwdSpeed > 0.5f ? 1.0f : (fwdSpeed < -0.5f ? -1.0f : 0.0f);   // PC ADAPTATION: bot throttle from motion
+        vsig.dashing = vst.dashRemain > 0.0f;
+        vsig.rolling = vst.rollRemain > 0.0f;
+        tickParticipantBodyAudio(pl, bp.chassis().id, bp, vsig, true, dt);
     }
     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt);
@@ -4224,8 +4243,76 @@ void World::setParticipantHoverAudio(int player, int hoverState, const core::Vec
     abilityAudio_.hoverState(cues_, kOwnParticipantBase + player, hoverState, e, core::length(pos - listenerPos_));
 }
 
+void World::tickParticipantBodyAudio(int player, const std::string& chassisKey, const Character& pc,
+                                     const VehicleFormSignals& vs, bool alive, float dt) {
+    if (!audio_ || levelAudio_.level().empty()) return;
+    ParticipantBody& b = participantBodies_[player];
+    const CharacterAudioProfile* prof = CharacterAudio::find(chassisKey);
+    const CharacterAudioProfile& p = prof ? *prof : CharacterAudio::defaultProfile();
+    if (b.key != p.key) {                                          // a new body (spawn / class change)
+        b.vehicle.stopAll(cues_);
+        b.key = p.key;
+        b.vehicle = VehicleAudio{};
+        b.vehicle.setProfile(p);
+        b.foley = RobotFoley{};
+        b.foley.setProfile(&p);
+        b.form = VehicleFormAudio{};
+        if (participantProfiles_.insert(p.key).second) CharacterAudio::loadCues(cues_, p);   // warmed at match load
+    }
+    const core::Vec3 bodyPos = pc.position() + pc.meshOffset();
+    const bool inRange = alive && core::length(bodyPos - listenerPos_) <= kParticipantBodyCullM;
+    if (!inRange) {
+        if (!b.culled) { b.vehicle.stopAll(cues_); b.form = VehicleFormAudio{}; b.foley = RobotFoley{}; b.foley.setProfile(&p); }
+        b.culled = true;
+        b.prevTransforming = pc.isTransforming();
+        return;
+    }
+    b.culled = false;
+    auto at = [&](const core::Vec3& up) {
+        SoundCues::Emitter e;
+        e.pos = bodyPos + up;
+        if (participantPositionHook) { e.owner = kOwnParticipantBase + player; e.offset = up; }
+        return e;
+    };
+    const float dist = core::length(bodyPos - listenerPos_);
+    // Transform notifies (Transform_ToVehicle_ROBO / Transform_ToRobot_ROBO), as the local pawn's tickCharacterAudio.
+    const bool tf = pc.isTransforming();
+    if (tf && !b.prevTransforming) { b.transformNotify = 0; b.transformTarget = pc.moveForm(); }
+    if (tf) {
+        const CharacterAudioProfile::Clip* clip = p.clip(b.transformTarget == Form::Vehicle ? "Transform_ToVehicle_ROBO" : "Transform_ToRobot_ROBO");
+        for (int i = b.transformNotify; clip && i < (int)clip->notifies.size(); ++i) {
+            const CharacterAudioProfile::Notify& n = clip->notifies[(size_t)i];
+            if (clip->length > 0.0f && pc.transformProgress() < n.t / clip->length) break;
+            const std::string& cue = p.notifyCue(n);
+            if (!cue.empty()) cues_.play(cue.c_str(), at({0, 0, 0}), dist);
+            b.transformNotify = i + 1;
+        }
+    }
+    b.prevTransforming = tf;
+    // Robot foley from the pawn's own animation.
+    std::vector<const char*> out;
+    b.foley.tick(pc, dt, out);
+    for (const char* c : out) cues_.play(c, at({0, 0, 0}), dist);
+    // Vehicle component at AUDIO_ROOT (+147.25 UU), as the local pawn.
+    VehicleFormSignals s = vs;
+    s.tookOff = s.tookOff || (s.vehicle && b.prevGrounded && !s.onGround && s.velocity.y > 2.0f);   // UpdateJumping take-off edge
+    b.prevGrounded = s.onGround;
+    const VehicleAudio::Input in = b.form.translate(s, nullptr);
+    b.vehicle.tick(dt, in, cues_, [&] { return at({0, 1.4725f, 0}); });
+}
+
+int World::participantBodiesActive() const {
+    int n = 0;
+    for (const auto& kv : participantBodies_) if (!kv.second.culled) ++n;
+    return n;
+}
+
 void World::onParticipantGone(int player) {
     abilityAudio_.pawnDied(cues_, kOwnParticipantBase + player);
+    {   // [Systems M09f] its body audio: vehicle loops stop silently; foley / transform state resets
+        auto it = participantBodies_.find(player);
+        if (it != participantBodies_.end()) { it->second.vehicle.stopAll(cues_); participantBodies_.erase(it); }
+    }
     participantCloakAnim_.erase(player);                              // gone: no deactivate notify
     for (size_t i = 0; i < participantNotifies_.size();)            // its pending ability notifies too
         if (participantNotifies_[i].player == player) { participantNotifies_[i] = participantNotifies_.back(); participantNotifies_.pop_back(); }
