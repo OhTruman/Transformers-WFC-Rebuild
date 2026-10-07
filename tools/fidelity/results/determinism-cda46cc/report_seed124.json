@@ -1,0 +1,27 @@
+﻿{
+    "summary":  {
+                    "pass":  2,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "determinism.repeatable_threaded",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "identical: 757 state / event lines"
+                    },
+                    {
+                        "id":  "determinism.threaded_matches_serial",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "identical: 757 state / event lines"
+                    }
+                ]
+}
