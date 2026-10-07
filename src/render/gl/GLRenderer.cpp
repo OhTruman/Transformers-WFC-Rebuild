@@ -135,11 +135,106 @@ public:
                  sumYaw / std::max(sumDt / 1000.0, 1e-6));
         pacing_.dt.clear(); pacing_.dyaw.clear(); pacing_.dpos.clear();
     }
+    // ---- WFC_SLOWFRAME=<ms>: one line per frame whose frame-to-frame interval exceeds <ms> (no glFinish, no stall) ----
+    // interval = this renderer beginFrame to the next one (everything: game tick, 3D, HUD / 2D, swap). render = the
+    // renderer's own span (beginFrame .. GPU-timed end); its CPU split at the GPU pass marks: world, characters + caller
+    // draws, map FX, translucency, post. outside = interval - render (game tick, GFx HUD, swap / present, audio).
+    // Counters for the frame: draws, program binds, buffer upload KB, new textures, shader compiles, map FX CPU (sim).
+    // GPU: the same frame's GPU time and pass split from the non-stalling query ring (arrives ~3 frames later; the
+    // line waits for it, at most 8 frames, else "gpu n/a").
+    struct SlowRec {
+        long idx = -1; int frame = 0; bool open = false, slow = false, done = false, gpuHave = false;
+        std::chrono::steady_clock::time_point t0;
+        double interval = 0, render = 0, mark[6] = {-1, -1, -1, -1, -1, -1}, gpu = 0, gpuPass[6] = {-1, -1, -1, -1, -1, -1};
+        int draws = 0, dyn = 0, fxDraws = 0, age = 0;
+        unsigned long long binds0 = 0, bytes0 = 0, binds = 0, bytes = 0;
+        unsigned long tex0 = 0, sh0 = 0, tex = 0, sh = 0;
+        double fx0 = 0, fxSim0 = 0, fx = 0, fxSim = 0;
+    };
+    SlowRec slowRing_[12];
+    int slowCur_ = -1;
+    double slowThr() const {
+        static const double t = std::getenv("WFC_SLOWFRAME") ? std::atof(std::getenv("WFC_SLOWFRAME")) : 0.0;
+        return t;
+    }
+    void slowFramePrint(SlowRec& s, bool gpuMissing) {
+        auto seg = [&](int k) {                      // CPU ms between the previous available mark and mark k
+            if (s.mark[k] < 0) return -1.0;
+            for (int j = k - 1; j >= 0; --j) if (s.mark[j] >= 0) return s.mark[k] - s.mark[j];
+            return -1.0;
+        };
+        char gpu[160];
+        if (s.gpuHave) std::snprintf(gpu, sizeof gpu, "gpu %.2f (world %.2f, chars %.2f, fx %.2f, transl %.2f, post %.2f)", s.gpu,
+                                     s.gpuPass[1], s.gpuPass[2], s.gpuPass[3], s.gpuPass[4], s.gpuPass[5]);
+        else std::snprintf(gpu, sizeof gpu, "gpu n/a%s", gpuMissing ? "" : "");
+        LOG_INFO("SLOWFRAME f%d interval %.2f ms: render %.2f (world %.2f, chars %.2f, fx %.2f, transl %.2f, post %.2f), "
+                 "outside %.2f; %s; draws %d (dyn %d, fx %d), program binds %llu, buffer upload %.0f KB, new textures %lu, "
+                 "shader compiles %lu, map FX cpu %.2f (sim %.2f)",
+                 s.frame, s.interval, s.render, seg(1), seg(2), seg(3), seg(4), seg(5), s.interval - s.render, gpu, s.draws,
+                 s.dyn, s.fxDraws, s.binds, s.bytes / 1024.0, s.tex, s.sh, s.fx, s.fxSim);
+        s.done = true;
+    }
+    void slowFrameBegin() {
+        if (slowThr() <= 0.0) return;
+        const auto now = std::chrono::steady_clock::now();
+        if (slowCur_ >= 0) {
+            SlowRec& p = slowRing_[slowCur_];
+            if (p.open) {
+                p.interval = std::chrono::duration<double, std::milli>(now - p.t0).count();
+                p.slow = p.interval > slowThr() && wfc_.active();
+                p.open = false;
+                p.done = !p.slow;
+            }
+        }
+        for (SlowRec& s : slowRing_)
+            if (s.slow && !s.done && ++s.age > 8) slowFramePrint(s, true);
+        slowCur_ = (slowCur_ + 1) % 12;
+        SlowRec& c = slowRing_[slowCur_];
+        if (c.slow && !c.done) slowFramePrint(c, true);
+        c = SlowRec{};
+        c.idx = glx::gpuFrameIndex();
+        c.frame = wfc_.frameNumber() + 1;
+        c.open = true;
+        c.t0 = now;
+        c.binds0 = glx::programBinds(); c.bytes0 = glx::bufferUploadBytes();
+        c.tex0 = wfc::gTexCreates; c.sh0 = wfc::gShaderCompiles;
+        c.fx0 = wfc_.fxMsTotal(); c.fxSim0 = wfc_.fxSimMsTotal();
+    }
+    void slowFrameGpu() {                            // after gpuTimerBegin: a readback may have arrived
+        if (slowThr() <= 0.0) return;
+        static long seen = 0;
+        const long reads = glx::gpuFrameReads();
+        if (reads == seen) return;
+        seen = reads;
+        const long idx = glx::lastGpuFrameIndex();
+        for (SlowRec& s : slowRing_) {
+            if (s.idx != idx || s.open) continue;
+            s.gpuHave = true;
+            s.gpu = glx::lastGpuFrameMs();
+            for (int k = 0; k < 6; ++k) s.gpuPass[k] = glx::lastGpuPassMs(k);
+            if (s.slow && !s.done) slowFramePrint(s, false);
+        }
+    }
+    void slowFrameEnd() {
+        if (slowThr() <= 0.0 || slowCur_ < 0) return;
+        SlowRec& c = slowRing_[slowCur_];
+        if (!c.open) return;
+        c.render = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - c.t0).count();
+        for (int k = 0; k < 6; ++k) c.mark[k] = glx::cpuPassMark(k);
+        const auto& fc = wfc_.lastFrameCounts();
+        c.draws = fc.draws; c.dyn = fc.dynamicDraws; c.fxDraws = fc.fxDraws;
+        c.binds = glx::programBinds() - c.binds0; c.bytes = glx::bufferUploadBytes() - c.bytes0;
+        c.tex = wfc::gTexCreates - c.tex0; c.sh = wfc::gShaderCompiles - c.sh0;
+        c.fx = wfc_.fxMsTotal() - c.fx0; c.fxSim = wfc_.fxSimMsTotal() - c.fxSim0;
+    }
+
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         watchdog::phase("beginFrame");
         glx::uniformCacheForgetCurrent();            // programs bound outside the renderer since the last frame
         if (const char* hf = std::getenv("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
+        slowFrameBegin();                            // WFC_SLOWFRAME: closes the previous frame's record
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
+        slowFrameGpu();
         {   // a new GPU time read back this frame belongs to the frame 3 renderer frames ago
             static long seen = 0;
             const long reads = glx::gpuFrameReads();
@@ -257,6 +352,7 @@ public:
         watchdog::phase("endFrame: post / composite");
         if (wfc_.active()) wfc_.endFrame();
         glx::gpuMark(glx::kPassPost);
+        slowFrameEnd();
         glx::gpuTimerEnd();
         if (!slotWaited_) { watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot
         slotWaited_ = false;

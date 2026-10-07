@@ -20,7 +20,8 @@ using namespace glx;
 
 namespace render {
 namespace wfc {
-Pipeline* gInstPipeline = nullptr;   // pending instanced character draws: flushed before any draw / blit
+Pipeline* gInstPipeline = nullptr;
+unsigned long gShaderCompiles = 0, gTexCreates = 0;   // pending instanced character draws: flushed before any draw / blit
 namespace {
 
 std::string readText(const std::string& p) {
@@ -510,6 +511,7 @@ void main() {
 )";
 
 GLuint compile(GLenum type, const std::string& src0, const std::string& tag) {
+    ++gShaderCompiles;
     GLuint s = CreateShader(type);
     // diagnostics: WFC_SHADERNONCE=<n> makes every shader source unique (a cold driver shader cache for this process,
     // as on the first run of a new build) without touching the driver's cache on disk
@@ -1218,6 +1220,7 @@ GLuint Pipeline::texture(const std::string& file, bool srgb, bool clampU, bool c
     ImageData img;
     GLuint id = 0;
     if (!file.empty() && platform::decodeImage(file, img) && img.valid()) {
+        ++gTexCreates;
         glGenTextures(1, &id);
         glBindTexture(GL_TEXTURE_2D, id);
         glPixelStorei(GL_UNPACK_ALIGNMENT, 1);

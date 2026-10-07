@@ -183,5 +183,14 @@ enum GpuPass { kPassWorld = 1, kPassCaller = 2, kPassMapFx = 3, kPassTranslucent
 void gpuMark(int k);
 double lastGpuPassMs(int k);           // increments with each new lastGpuFrameMs value (3 frames after the measured frame)
 double lastGpuFrameCpuMs();   // CPU time between the same markers (gpu ~ cpu: the GPU waited on submission)
+// WFC_SLOWFRAME support (no stalls): the index of the frame being recorded (gpuTimerBegin .. gpuTimerEnd) and of the
+// frame lastGpuFrameMs / lastGpuPassMs belong to; the CPU time from gpuTimerBegin to each pass mark of the current
+// frame (ms, -1 = not marked); cumulative program binds (UseProgram calls through the uniform cache) and buffer
+// upload bytes (BufferData / BufferSubData).
+long gpuFrameIndex();
+long lastGpuFrameIndex();
+double cpuPassMark(int k);
+unsigned long long programBinds();
+unsigned long long bufferUploadBytes();
 
 } // namespace glx

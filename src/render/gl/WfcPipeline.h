@@ -136,6 +136,9 @@ struct Program {
     float clip = 0.3333f;
 };
 
+// Cumulative shader compiles / texture creations (WFC_SLOWFRAME first-use evidence).
+extern unsigned long gShaderCompiles, gTexCreates;
+
 class Pipeline {
 public:
     bool load(const std::string& mapName);
@@ -201,6 +204,9 @@ public:
         std::vector<std::string> noProgramMats;
     };
     const FrameCounts& lastFrameCounts() const { return lastCounts_; }
+    // WFC_SLOWFRAME: cumulative map FX time (ms, total / simulation share)
+    double fxMsTotal() const { return statFxMsCum_; }
+    double fxSimMsTotal() const { return statFxTickMsCum_; }
     int frameNumber() const { return frameNo_; }
     const std::string& dataDir() const { return dataDir_; }
     size_t materialCount() const { return mats_.size(); }
@@ -434,6 +440,7 @@ private:
     std::map<const void*, PosedBuf> posed_;              // drawDynamicMeshPosed buffers (Milestone E)
     void evictPosed(bool all);
     double statFxTickMs_ = 0.0;                          // map FX simulation share of statFxMs_
+    double statFxMsCum_ = 0.0, statFxTickMsCum_ = 0.0;   // never reset (WFC_SLOWFRAME deltas)
     std::map<std::string, int> statFxSpawns_;            // runtime spawns per template (WFC_RENDERSTATS)
     int hiddenGameSkipped_ = 0;
     std::map<std::string, std::string> matErrors_;        // materials_glsl.json entries without GLSL: their error
