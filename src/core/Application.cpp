@@ -603,9 +603,10 @@ Application::MatchExit Application::runMatch() {
         // simulation point however many frames loading took (a frame budget counted from boot truncates runs at different match times).
         if (const char* ms = std::getenv("WFC_MATCH_SECONDS"))
             if (world_.matchActive() && world_.match().state() == game::Match::State::InProgress && world_.match().elapsedTime() >= (float)std::atof(ms)) {
-                LOG_INFO("WFC_MATCH_SECONDS: %.1f s of match time reached at frame %ld (step-identical end point)", world_.match().elapsedTime(), frame);
+                LOG_INFO("WFC_MATCH_SECONDS: %d s of match time reached at frame %ld (step-identical end point)", (int)world_.match().elapsedTime(), frame);
                 break;
             }
+        world_.playerBotInput(input, (float)realDt);   // WFC_PLAYERBOT: the bot brain plays the local player through its input
         // Per-frame input (camera orientation, buffered movement intent).
         world_.handleInput(input, (float)realDt);
 

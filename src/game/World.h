@@ -3,6 +3,7 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include "platform/Input.h"
 #include <thread>
 #include <string>
 #include <map>
@@ -214,6 +215,16 @@ struct Block {
     core::Vec3 center;
     core::Vec3 size;
     core::Vec3 color;
+};
+
+// The bot code's view of the pawn it drives: a participant (implicit) or the local player (WFC_PLAYERBOT).
+struct BotBody {
+    Character* pc = nullptr;
+    int player = -1;
+    BotBody(Character& c, int p) : pc(&c), player(p) {}
+    BotBody(MatchOpponent& o);   // NOLINT: implicit, every bot call site passes a participant
+    Character& pawn() const { return *pc; }
+    int matchPlayer() const { return player; }
 };
 
 class World {
@@ -630,7 +641,7 @@ public:
     void requestAmmoBeacon(int owner);
     void generateExtraStarts();
     void separatePawns();
-    void botPathUpkeep(MatchOpponent& o, BotBrain& b, float dt);
+    void botPathUpkeep(BotBody o, BotBrain& b, float dt);
     bool qaBotsFrozen_ = false, qaBotOverlay_ = false;   // DEV / QA TOOLING                       // pawn-vs-pawn blocking (cylinder push-out after movement)                 // extended matches: deterministic extra spawn points (Match::setGeneratedStarts)
     void damageAmmoBeaconAt(size_t idx, float amount, int instigator);
     const AmmoBeacon& localBeacon() const;
@@ -865,6 +876,11 @@ public:
     void joinStep();            // wait for it, publish presented(), run the deferred main-thread work
     bool stepPending() const { return remainderPending_; }
     bool stepRunning() const { return remainderRunning_; }   // main-thread code must not touch simulation state while true
+    // WFC_PLAYERBOT=<difficulty 0..2>: the bot brain drives the LOCAL player through its normal input (movement keys, camera yaw / pitch,
+    // fire, jump, boost, dash, transform): the normal controller, follow camera, weapon and HUD paths run as in play (a "real play"
+    // workload for fps rows / PGO). Call once per frame before handleInput, with no step running. Returns false when inactive.
+    bool playerBotInput(platform::InputFrame& in, float dt);
+    static int playerBotDifficulty();   // -1 = off
     static bool asyncStepEnabled();
     // Per-phase step timing (the WFC_TICKPROF slots) switched on from code, summed since the last reset (WFC_SCALETEST).
     static void setStepProfiling(bool on);
@@ -892,9 +908,12 @@ public:
     std::vector<std::function<void()>> deferredHooks_;
     template <class F> void presentHook(F&& f) { if (remainderRunning_ && !onMainThread()) deferredHooks_.push_back(std::forward<F>(f)); else f(); }
     double lastRemainderMs_ = 0.0, prefixMsAcc_ = 0.0, beginStepMsAcc_ = 0.0;
+    bool palettesPending_ = false;   // WFC_BGPALETTE: built by a finished background part, not yet published
     double prefixSecMs_[12] = {}, prefixMark_ = 0.0;   // WFC_ASYNCLOG: the local part by section   // a model needed by the background part: loaded at the join (GL)
     void preloadHeldWeaponsOfPawns();
     void ensureAbilityModels();      // barrier / sentry meshes + textures (GL): main thread, before any background part spawns one
+    BotBrain playerBot_;             // WFC_PLAYERBOT's brain for the local player
+    float playerBotTransformCd_ = 0.0f;
     void tickAbilityActors(float dt);   // every participant's ability actors: the background part
     std::vector<std::function<void(World&)>> commands_;
     size_t presentedGameplayEventCount_ = 0, presentedKillCount_ = 0;
@@ -970,7 +989,7 @@ private:
     void botPathFailed(BotBrain& b, bool vehicle);
     void applyWarcry(Character& pc, int self);      // TnAbilityWarcry for any participant
     void applyShockwave(Character& pc, int self);   // TnAbilityShockwave.Shockwave for any participant
-    bool botTryAbility(MatchOpponent& o, BotBrain& b, const char* id);   // TnAbilityManager.TriggerAbility rules for a bot's slot
+    bool botTryAbility(BotBody o, BotBrain& b, const char* id);   // TnAbilityManager.TriggerAbility rules for a bot's slot
     double botMsAccum_ = 0.0, botMsMax_ = 0.0; long botTicks_ = 0;
     std::vector<ParticipantShot> participantShots_;
     // Participants' held weapons: the player's weapon models (weaponModelFor) posed per participant, with their fire / reload
@@ -994,10 +1013,10 @@ private:
     void tickParticipantWeapons(float dt);
     void addBotBrain(int player, int difficulty);
     void tickBots(float dt);
-    void botThink(MatchOpponent& o, BotBrain& b);
-    void botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in);
-    void botAimAndFire(MatchOpponent& o, BotBrain& b, float dt);
-    void botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& aimPoint);
+    void botThink(BotBody o, BotBrain& b);
+    void botSteer(BotBody o, BotBrain& b, float dt, MoveIntent& in);
+    void botAimAndFire(BotBody o, BotBrain& b, float dt);
+    void botFire(BotBody o, BotBrain& b, Weapon& w, const core::Vec3& aimPoint);
     BotGoal botObjectiveGoal(BotBrain& b, const Character& pc);
     bool botModeGoal(BotBrain& b, const Character& pc, BotGoal& g);   // CTF / EXT / KOTH / DOM objective goals (false: none)
     core::Vec3 botSnap(const core::Vec3& p) const;                   // a point on the bot nav near p (p itself when none)

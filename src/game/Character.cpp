@@ -790,7 +790,34 @@ void Character::updateWeaponSocket() {
     weaponValid_ = true;
 }
 
+bool Character::bgPalettes() {
+    static const bool on = [] { const char* e = std::getenv("WFC_BGPALETTE"); return HasSkinnedApi<render::IRenderer>::value && e && e[0] == '1'; }();
+    return on;
+}
+
+void Character::buildNextPalettes() {
+    auto part = [](PartPalette& p, const assets::SkinnedModel* m, const std::vector<core::Mat4>& globals, bool shown) {
+        p.nextValid = false;
+        if (!shown || !m || m->joints.empty() || m->weights.empty()) return;
+        buildPalette(*m, globals, p.next); p.nextModel = m; p.nextValid = true;
+    };
+    part(palBody_, bodySkinModel_, animScratch_, true);
+    part(palPartner_, partnerSkinModel_, partnerScratch_, partnerVisible_);
+    part(palArm_, armModel_, armScratch_, armVisible_);
+}
+
+void Character::publishPalettes() {
+    for (PartPalette* p : {&palBody_, &palPartner_, &palArm_}) {
+        if (!p->nextValid) { p->prev.clear(); p->prevModel = nullptr; p->builtStep = ~0u; continue; }   // not built (culled / hidden): the draw builds it, no blend
+        const bool continuous = p->builtStep != ~0u || !p->cur.empty();
+        p->prev.swap(p->cur); p->prevModel = continuous ? p->model : nullptr;
+        p->cur.swap(p->next); p->model = p->nextModel;
+        p->nextValid = false; p->builtStep = stepCounter_; ++p->serial;
+    }
+}
+
 void Character::snapshotPalettes() {
+    if (bgPalettes()) return;   // rotated by publishPalettes at the join instead
     // The previous step's palette exists only if that step's palette was built (drawn); else the next frames draw without the blend.
     for (PartPalette* p : {&palBody_, &palPartner_, &palArm_}) {
         if (p->builtStep == stepCounter_) { p->prev.swap(p->cur); p->prevModel = p->model; p->builtStep = ~0u; }   // cur is rebuilt before its next use
@@ -875,11 +902,13 @@ void Character::draw(render::IRenderer& r) const {
         auto gpuPart = [&](PartPalette& p, const assets::SkinnedModel& m, const std::vector<core::Mat4>& globals, const core::Mat4& world,
                            const void* key, uint64_t salt) {
             if (m.joints.empty() || m.weights.empty()) return false;
-            if (p.builtStep != stepCounter_ || p.model != &m) { buildPalette(m, globals, p.cur); p.model = &m; p.builtStep = stepCounter_; ++p.serial; }
-            const bool blend = renderAlpha_ < 1.0f && p.prevModel == &m && p.prev.size() == p.cur.size();
+            // WFC_BGPALETTE: built by the background part and published at the join; the draw builds only what was not (culled / hidden)
+            const bool rebuild = bgPalettes() ? (p.builtStep == ~0u || p.model != &m) : (p.builtStep != stepCounter_ || p.model != &m);
+            if (rebuild) { buildPalette(m, globals, p.cur); p.model = &m; p.builtStep = stepCounter_; ++p.serial; }
+            const bool blend = poseAlpha_ < 1.0f && p.prevModel == &m && p.prev.size() == p.cur.size();
             render::MeshData& bind = bindMeshOf(m);
             syncMats(bind.mats, m.mats);   // resolved texture handles
-            return drawSkinnedGpu(r, bind, m.joints, m.weights, p.cur, blend ? &p.prev : nullptr, blend ? renderAlpha_ : 1.0f, world, color_, key,
+            return drawSkinnedGpu(r, bind, m.joints, m.weights, p.cur, blend ? &p.prev : nullptr, blend ? poseAlpha_ : 1.0f, world, color_, key,
                                   ((p.serial << 24) ^ prevVersion_ ^ salt), 0);
         };
         gpuBody = gpuPart(palBody_, *bodySkinModel_, animScratch_, off0 * meshMatrix(form_), &poseBuf_, 0);

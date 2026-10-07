@@ -123,10 +123,17 @@ public:
     void beginStep();
     // The pose changed after this step's palettes were built (async step: the frame between the local part and the background part
     // draws the previous pose): rebuild them at the next draw. Presentation only.
-    void invalidatePalettes() { for (PartPalette* p : {&palBody_, &palPartner_, &palArm_}) if (p->builtStep == stepCounter_) p->builtStep = ~0u; }
+    void invalidatePalettes() { if (bgPalettes()) return; for (PartPalette* p : {&palBody_, &palPartner_, &palArm_}) if (p->builtStep == stepCounter_) p->builtStep = ~0u; }
     // Skin the current pose's vertices if a step changed it since the last skin (draw calls it; tests that read vertices may too).
     void ensureSkinned() const;
-    void setRenderAlpha(float a) { renderAlpha_ = a < 0.0f ? 0.0f : (a > 1.0f ? 1.0f : a); }
+    void setRenderAlpha(float a) { renderAlpha_ = a < 0.0f ? 0.0f : (a > 1.0f ? 1.0f : a); poseAlpha_ = renderAlpha_; }
+    // The pose blend alpha alone (WFC_BGPALETTE: 1 on the frame between a step's local part and its background part, whose palettes
+    // are still the previous step's pair: shows the completed step exactly, as the reference path's rebuilt palette does).
+    void setPoseAlpha(float a) { poseAlpha_ = a < 0.0f ? 0.0f : (a > 1.0f ? 1.0f : a); }
+    // WFC_BGPALETTE (default off until the lockstep image A/B): bone palettes built by the background part, not at draw.
+    static bool bgPalettes();
+    void buildNextPalettes();    // background part, after the animation (any thread; this pawn only)
+    void publishPalettes();      // main thread, at the join: next -> cur -> prev
     float renderAlpha() const { return renderAlpha_; }
     core::Vec3 renderOffset() const;   // interpolated actor position - current (zero at alpha 1 / after a teleport)
     float drawYawOffset() const { return drawYawOffset_; }
@@ -578,6 +585,11 @@ private:
         const assets::SkinnedModel* model = nullptr, *prevModel = nullptr;
         unsigned builtStep = ~0u;
         uint64_t serial = 0;
+        // WFC_BGPALETTE: the palette the background part built after this step's animation (published at the join: next -> cur -> prev;
+        // the renderer only ever reads cur / prev, so the worker never writes a buffer a draw may still read).
+        std::vector<core::Mat4> next;
+        const assets::SkinnedModel* nextModel = nullptr;
+        bool nextValid = false;
     };
     mutable PartPalette palBody_, palPartner_, palArm_;
     void snapshotPalettes();
@@ -589,6 +601,7 @@ private:
     core::Vec3 prevPos_{0, 0, 0};
     bool havePrev_ = false;
     float renderAlpha_ = 1.0f;
+    float poseAlpha_ = 1.0f;
     std::vector<float> prevPoseP_, prevPoseN_, prevPartnerP_, prevPartnerN_;
     mutable render::MeshData lerpBody_, lerpPartner_;
     const render::MeshData& blendedPose(const render::MeshData& cur, const std::vector<float>& prevP, const std::vector<float>& prevN,

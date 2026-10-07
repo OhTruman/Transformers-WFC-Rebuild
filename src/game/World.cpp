@@ -1631,6 +1631,10 @@ static const char* gameplayEventName(GameplayEventType t) {
 void World::setRenderAlpha(float a) {
     player_.pawn().setRenderAlpha(a);
     for (MatchOpponent* o : opponents_) o->pawn().setRenderAlpha(a);
+    if (Character::bgPalettes() && remainderPending_) {   // between a local part and its background part: the completed step's pose
+        player_.pawn().setPoseAlpha(1.0f);
+        for (MatchOpponent* o : opponents_) o->pawn().setPoseAlpha(1.0f);
+    }
 }
 
 namespace {
@@ -1733,6 +1737,11 @@ void World::joinStep() {
     }
     if (remainderPending_) finishRemainder();          // not launched (catch-up step, sync mode): inline
     if (fillBack_) { publishPresented(); fillBack_ = false; }
+    if (palettesPending_) {   // main thread, no draw in flight: next -> cur -> prev
+        palettesPending_ = false;
+        player_.pawn().publishPalettes();
+        for (MatchOpponent* o : opponents_) o->pawn().publishPalettes();
+    }
     // Main-thread work the background part asked for: model loads (GL uploads), retried by the next step.
     for (const WeaponDef* d : deferredWeaponLoads_) if (d) weaponModelFor(*d);
     deferredWeaponLoads_.clear();
@@ -1760,10 +1769,41 @@ void World::publishPresented() {
 void World::finishRemainder() {
     const double t0 = profNowMs();
     stepRemainder(pendingDt_);
+    // WFC_SIMHASH (determinism diagnostics): an FNV-1a hash of every pawn's exact state and every bot's steering state per step; with
+    // WFC_SIMHASH=<step>, that step's per-pawn values too. Compare a serial (WFC_SIMTHREADS=0) and a threaded run of the same seed.
+    if (const char* sh = std::getenv("WFC_SIMHASH")) {
+        static long step = 0; ++step;
+        uint64_t h = 1469598103934665603ULL;
+        auto mix = [&](const void* p, size_t n) { const unsigned char* c = (const unsigned char*)p; for (size_t i = 0; i < n; ++i) { h ^= c[i]; h *= 1099511628211ULL; } };
+        const long detail = std::atol(sh); const char* dash = std::strchr(sh, '-'); const long detailTo = dash ? std::atol(dash + 1) : detail;
+        const bool inDetail = step >= detail && step <= detailTo && detail > 0;
+        auto pawn = [&](const Character& c, int player) {
+            const core::Vec3 p = c.position(), v = c.velocity(); const float hp = c.health().current, y = c.yaw();
+            mix(&p, sizeof p); mix(&v, sizeof v); mix(&hp, sizeof hp); mix(&y, sizeof y);
+            if (inDetail && player == localPlayer_) LOG_INFO("SIMHASH %ld local camYaw %.6f simYaw? viewYaw %.6f", step, player_.controller().camYaw(), player_.controller().viewYaw());
+            if (inDetail) LOG_INFO("SIMHASH %ld p%d pos %.6f %.6f %.6f vel %.6f %.6f %.6f hp %.4f yaw %.6f", step, player, p.x, p.y, p.z, v.x, v.y, v.z, hp, y);
+        };
+        if (!localDead_) pawn(player_.pawn(), localPlayer_);
+        for (MatchOpponent* o : opponents_) if (o->spawned()) pawn(o->pawn(), o->matchPlayer());
+        for (const BotBrain& b : bots_) {
+            mix(&b.wp, sizeof b.wp); mix(&b.yaw, sizeof b.yaw); mix(&b.pitch, sizeof b.pitch); mix(&b.target, sizeof b.target);
+            const size_t ps = b.path.size(); mix(&ps, sizeof ps);
+            if (inDetail && false) LOG_INFO("SIMHASH %ld bot p%d wp %zu/%zu yaw %.6f tgt %d", step, b.player, b.wp, b.path.size(), b.yaw, b.target);
+        }
+        LOG_INFO("SIMHASH %ld %016llx", step, (unsigned long long)h);
+    }
     fillPresented(fillBack_ ? presentedBack_ : presented_);
     // A frame may have drawn (and cached the palettes of) the poses before this part animated them.
     player_.pawn().invalidatePalettes();
     for (MatchOpponent* o : opponents_) o->pawn().invalidatePalettes();
+    if (Character::bgPalettes()) {   // the bone palettes of this step, off the main thread (pawns culled at the last draw: built at draw)
+        if (!localDead_) player_.pawn().buildNextPalettes();
+        core::WorkerPool::get().run((int)opponents_.size(), [&](int i) {
+            MatchOpponent* o = opponents_[(size_t)i];
+            if (o->spawned() && !o->culled()) o->pawn().buildNextPalettes();
+        });
+        palettesPending_ = true;
+    }
     remainderPending_ = false;
     lastRemainderMs_ = profNowMs() - t0;
 }
