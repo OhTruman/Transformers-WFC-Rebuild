@@ -45,6 +45,9 @@ public:
     virtual void stopMovieAudio() {}
 };
 
+// DEV TOOL: a text label at a window pixel (QA bot overlay names, projected from the world).
+struct WorldLabel { float x = 0, y = 0; std::string text; };
+
 class IMoviePresenter {
 public:
     virtual ~IMoviePresenter() = default;
@@ -61,6 +64,7 @@ public:
     // The in-match HUD movie (TnHUD.HudMovie): open for the match, shown per UI state; never takes key focus.
     virtual void setHud(bool open, bool visible) { (void)open; (void)visible; }
     virtual void hudCall(const std::string& fn, const std::vector<BridgeValue>& args) { (void)fn; (void)args; }
+    virtual void setWorldLabels(const std::vector<WorldLabel>& labels) { (void)labels; }   // DEV TOOL overlay text
     // A function of a notification movie (e.g. UI_GFxChallengeNotifies_p.ChallengeNotify_GFX ChallengeUnlocked): the
     // movie is opened without focus if it is not, and the call is made once it has run its first frame.
     virtual void movieCall(const std::string& movie, const std::string& fn, const std::vector<BridgeValue>& args) {
@@ -116,6 +120,7 @@ public:
     // Hud_GFX post-process chain [CONFIRMED, RE notes/MILESTONE_E_HUD_POSTPROCESS_CHAINS.md]: one slot, -1 none,
     // 0 StaticDischarge (HUD scrambled), 1 LowHealth (downed warning). The renderer presents it (setHudScreenEffect).
     int hudPostProcessChain() const { return hudPostChain_; }
+    void setWorldLabels(const std::vector<WorldLabel>& labels) { if (presenter_) presenter_->setWorldLabels(labels); }
     // The PC SKU's display settings (PCSettings.*): the platform window applies them.
     struct DisplayHooks {
         std::function<std::vector<std::pair<int, int>>()> modes;

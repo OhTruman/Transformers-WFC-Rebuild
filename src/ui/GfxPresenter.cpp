@@ -712,6 +712,45 @@ void GfxPresenter::checkKillFeed(float dt) {
     }
 }
 
+// DEV TOOL (QA bot overlay): one HUD kill-feed line clip (mc_gameMessage_default: the HUD font and shadow) per label in
+// a container on the HUD root, placed at the label's window pixel; its own 5 s fade is disabled. Removed when empty.
+void GfxPresenter::syncWorldLabels() {
+    if (!hud_) return;
+    gfx::Player& p = hud_->player();
+    gfx::avm1::VM& vm = p.vm();
+    gfx::MovieClip* root = p.root();
+    if (!root || !root->script) return;
+    gfx::avm1::Value box = vm.get(root->script, "__qaLabels_mc");
+    if (worldLabels_.empty()) {
+        if (box.isObject()) vm.callMethod(box, "removeMovieClip", {});
+        return;
+    }
+    if (!box.isObject()) box = vm.callMethod(gfx::avm1::Value(root->script), "createEmptyMovieClip", {gfx::avm1::Value("__qaLabels_mc"), gfx::avm1::Value(90000)});
+    if (!box.isObject()) return;
+    const gfx::Matrix inv = GfxRendererGL::movieMatrix(p, viewW_, viewH_).inverse();
+    size_t i = 0;
+    for (; i < worldLabels_.size(); ++i) {
+        const std::string name = "l" + std::to_string(i);
+        gfx::avm1::Value c = vm.getV(box, name);
+        if (!c.isObject()) {
+            c = vm.callMethod(box, "attachMovie", {gfx::avm1::Value("mc_gameMessage_default"), gfx::avm1::Value(name), gfx::avm1::Value((int)i + 1)});
+            if (!c.isObject()) return;
+            vm.setV(c, "fadeOut", gfx::avm1::Value(vm.newFunction([](gfx::avm1::VM&, const gfx::avm1::Value&, gfx::avm1::Args&) { return gfx::avm1::Value(); }, "fadeOut")));
+        }
+        const gfx::Point s = inv.apply({worldLabels_[i].x, worldLabels_[i].y});
+        vm.setV(c, "_x", gfx::avm1::Value((double)(s.x / 20.0f)));
+        vm.setV(c, "_y", gfx::avm1::Value((double)(s.y / 20.0f)));
+        vm.setV(c, "_alpha", gfx::avm1::Value(100.0));
+        gfx::avm1::Value txt = vm.getV(c, "message_txt");
+        if (txt.isObject()) vm.setV(txt, "htmlText", gfx::avm1::Value("<font color='#FFFF66'>" + worldLabels_[i].text + "</font>"));
+    }
+    for (;; ++i) {   // labels that went away
+        gfx::avm1::Value c = vm.getV(box, "l" + std::to_string(i));
+        if (!c.isObject()) break;
+        vm.callMethod(c, "removeMovieClip", {});
+    }
+}
+
 void GfxPresenter::deliverKeys(const platform::InputFrame& in) {
     uint32_t now = in.uiDown, changed = now ^ prevUi_;
     prevUi_ = now;
@@ -953,7 +992,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
                 if (op.object == c.movie) op.movie->invoke(c.path, {Value((double)sx), Value((double)sy)});
     }
     if (cursor_) cursor_->advance(dt);
-    if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); }
+    if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); syncWorldLabels(); }
     if (scoreboard_) { scoreboard_->advance(dt); scrollPlayerList(scoreboard_->player(), scoreScroll_, in, dt); } else scoreScroll_ = 0.0f;
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.

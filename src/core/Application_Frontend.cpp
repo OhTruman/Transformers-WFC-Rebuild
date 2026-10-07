@@ -501,6 +501,34 @@ template <class W> std::string qaBotList(const W& w) {
         return w.botBrains().empty() ? std::string("No bots in this match.") : out;
     } else { (void)w; return "Bot list: Gameplay bots not in this build."; }
 }
+// Gameplay qaBotLabels() (QaBotLabel {pos, text, player}; empty while the overlay is off) projected with the renderer's
+// frame camera (RenderDiagnostics viewProj / viewport, column-major, Gameplay world space - the space drawLine takes).
+template <class W, class = void> struct HasQaBotLabels : std::false_type {};
+template <class W> struct HasQaBotLabels<W, std::void_t<decltype(std::declval<const W&>().qaBotLabels())>> : std::true_type {};
+template <class Rn, class = void> struct HasRenderCamera : std::false_type {};
+template <class Rn> struct HasRenderCamera<Rn, std::void_t<decltype(std::declval<const Rn&>().renderDiagnostics().viewProj[0]),
+                                                            decltype(std::declval<const Rn&>().renderDiagnostics().viewport[0])>> : std::true_type {};
+template <class W, class Rn> std::vector<frontend::WorldLabel> qaLabels(const W& w, const Rn* r) {
+    std::vector<frontend::WorldLabel> out;
+    if constexpr (HasQaBotLabels<W>::value && HasRenderCamera<Rn>::value) {
+        if (!r) return out;
+        const auto labels = w.qaBotLabels();
+        if (labels.empty()) return out;
+        const auto d = r->renderDiagnostics();
+        const float* m = d.viewProj;
+        const float vw = (float)d.viewport[2], vh = (float)d.viewport[3];
+        for (const auto& l : labels) {
+            const float x = l.pos.x, y = l.pos.y, z = l.pos.z;
+            const float cx = m[0] * x + m[4] * y + m[8] * z + m[12], cy = m[1] * x + m[5] * y + m[9] * z + m[13];
+            const float cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+            if (cw <= 0.1f) continue;   // behind the camera
+            const float sx = (cx / cw * 0.5f + 0.5f) * vw + (float)d.viewport[0], sy = (1.0f - (cy / cw * 0.5f + 0.5f)) * vh;
+            if (sx < -200 || sy < -50 || sx > vw + 50 || sy > vh + 50) continue;
+            out.push_back({sx, sy, l.text});
+        }
+    } else { (void)w; (void)r; }
+    return out;
+}
 template <class W> std::string qaBotTool(W& w, platform::QaRequest::Kind k) {
     using K = platform::QaRequest::Kind;
     if (k == K::TeleportAim) {
@@ -616,6 +644,8 @@ void Application::qaTick(const platform::InputFrame& in) {
             weaponPending = false;
         }
         using K = platform::QaRequest::Kind;
+        // the bot overlay's labels (DEV TOOL), every frame in a match; nothing while the overlay is off
+        frontend_->setWorldLabels(flow.level() == frontend::LevelKind::Match ? qaLabels(world_, renderer_) : std::vector<frontend::WorldLabel>{});
         {   // the per-bot list, twice a second while the panel is open in a match
             static double nextBots = 0;
             if (qa_->visible() && nowSeconds() >= nextBots) {
