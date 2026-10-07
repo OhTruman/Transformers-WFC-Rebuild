@@ -2196,22 +2196,43 @@ void World::fillPresented() {
         buff("TnBuffAmmoBeaconIncreaseDamage", h.ammoBeaconBuff ? 1.0f : 0.0f); buff("TnBuffRollerSphere", h.rollerSlow); buff("TnBuffDrain", h.drain);
         if (!h.pickupPrompt.empty()) o.contextual.push_back(h.pickupPrompt);
         o.cantTransformCount = h.cantTransformCount;
-        // Target under the crosshair: the nearest pawn on the camera's aim ray within 300 m, not behind world geometry.
+        // Target [CONF RE e5cb5fd]: the pawn under the crosshair (nearest on the camera's aim ray within 300 m, not behind world
+        // geometry; sentries are pawns too), else the repair target. Friend if on the same team, else Enemy; None without a target.
         if (!localDead_ && matchActive_) {
             const core::Vec3 eye = player_.controller().cameraPos();
             const core::Vec3 dir = core::forwardFromYawPitch(player_.controller().camYaw(), player_.controller().camPitch());
             float wall = 300.0f, tw;
             const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
             if (line && line->segmentHit(eye, eye + dir * 300.0f, tw)) wall = 300.0f * tw;
+            const int myTeam = localPlayer_ >= 0 && (size_t)localPlayer_ < n ? p.players[(size_t)localPlayer_].team : 255;
+            const bool teamGame = match_.settings().teamGame;
+            auto friendOf = [&](int team) { return teamGame && team == myTeam; };
             float best = wall;
+            bool direct = false;
             for (MatchOpponent* op : opponents_) {
                 float th;
                 if (op->rayHit(eye, dir, best, th) && th < best) {
-                    best = th; o.target.player = op->matchPlayer();
+                    best = th; direct = true;
                     const auto& mp = match_.players()[(size_t)op->matchPlayer()];
-                    o.target.name = mp.name; o.target.team = mp.team;
+                    o.target = {};
+                    o.target.player = op->matchPlayer(); o.target.team = mp.team; o.target.name = mp.name;
                     o.target.health = op->health().max > 0.0f ? op->health().current / op->health().max : 0.0f;
                 }
+            }
+            { float ts; if (sentryRayHit(eye, dir, best, ts) && ts < best && lastSentryHit_ >= 0 && (size_t)lastSentryHit_ < sentries_.size()) {
+                const Sentry& se = sentries_[(size_t)lastSentryHit_];
+                best = ts; direct = true;
+                o.target = {}; o.target.sentry = true; o.target.team = se.owner >= 0 && (size_t)se.owner < n ? p.players[(size_t)se.owner].team : 255;
+                o.target.health = std::max(0.0f, se.health / 135.0f);   // no PRI: no name
+            } }
+            if (!direct && h.repairBeam && h.repairBeamTarget >= 0 && (size_t)h.repairBeamTarget < n) {   // the repair target
+                o.target = {}; o.target.player = h.repairBeamTarget; o.target.team = p.players[(size_t)h.repairBeamTarget].team;
+                if (const Character* rc = participantPawn(h.repairBeamTarget)) o.target.health = rc->health().max > 0.0f ? rc->health().current / rc->health().max : 0.0f;
+            }
+            if (o.target.player >= 0 || o.target.sentry) {
+                o.target.type = friendOf(o.target.team) ? 0 : 1;
+                o.target.healthType = o.target.type;
+                if (!direct) o.target.name.clear();   // the name only on a direct crosshair hit
             }
         }
         // Progress bar (TnHudDataObserver rules): DOM capture only on a node the local team does not defend, while the local pawn is

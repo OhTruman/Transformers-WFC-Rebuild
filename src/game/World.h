@@ -785,7 +785,10 @@ public:
             // the lock / homing use it); distance from the local pawn (UpdateMarker DistanceToObj).
             struct LockOn { int state = 0; int target = -1; float progress = 0.0f; core::Vec3 targetPos{0, 0, 0}; float distance = 0.0f; };
             LockOn lockOn;
-            struct Target { int player = -1; std::string name; int team = 255; float health = 0.0f; };   // under the crosshair (health 0..1)
+            // TnHudDataObserverTargetType [CONF RE e5cb5fd]: ETargetTypeForHud 0 Friend / 1 Enemy / 2 None. Target = the crosshair pawn (the
+            // rebuild has no aim assist), else the repair target; pawns only (players, AI, sentries). name = PRI.PlayerName only on a direct
+            // crosshair hit of a pawn with a PRI; healthType ETnHealthDisplayType 0 Friendly / 1 Enemy / 2 None, health -1 with None.
+            struct Target { int type = 2; int player = -1; bool sentry = false; std::string name; int team = 255; int healthType = 2; float health = -1.0f; };
             Target target;
             struct WeaponState { bool jammed = false; float spread = 0.0f; std::string message; };
             WeaponState weapon;

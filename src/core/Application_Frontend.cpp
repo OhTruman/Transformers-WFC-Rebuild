@@ -1226,8 +1226,9 @@ void Application::routeMatchToFrontend(float dt) {
         }
         if (o.grenade.ammo >= 0) { hf.grenadeAmmo = o.grenade.ammo; hf.activeGrenades = o.grenade.activeCount; }
         hf.lockOnState = o.lockOn.state;
-        hf.targetName = o.target.player >= 0 ? o.target.name : std::string();
-        if (o.target.player >= 0) hf.targetHealth = o.target.health;
+        hf.targetType = o.target.type;                  // TnHudDataObserverTargetType: 0 Friend / 1 Enemy / 2 None (RE e5cb5fd)
+        hf.targetName = o.target.name;                  // only on a direct crosshair hit of a pawn with a PRI
+        if (o.target.health >= 0.0f) hf.targetHealth = o.target.health;
         hf.weaponJammed = o.weapon.jammed; hf.weaponSpread = o.weapon.spread; hf.weaponMessage = o.weapon.message;
         // Damage indicators: the HUD rotates the ring by -PlayerYaw and each arrow by its WORLD yaw (Frontend note).
         const double viewYaw = camera_.yaw;

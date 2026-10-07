@@ -4058,6 +4058,13 @@ Remaining:
   modelled [PARTIAL].
 - **Ramps / terrain:** the probes and springs follow the authored model, but ramp launches were not measured separately
   against a capture [PARTIAL].
+  - RE e5cb5fd (2026-10-07): no launch-specific logic in the tank / hover car / car sims (no take-off clamp or max upward speed;
+    UpdateTerminalVelocity limits falling only; strafe acceleration horizontal and skipped while unstable): the generic sim is
+    the original behaviour. PARTIAL only for the missing capture.
+- **Tank glancing wall (RE e5cb5fd, script CONFIRMED):** the original also tilts. The only roll resistance is the 4 diagonal
+  springs, UpdateTurn (TurnRate 0.05 only when not IsStable on the ground, IsStable = |pitch|, |roll| < 30 deg) and UpdateRoll
+  (lean into turns); RB angular damping 0; no wall-specific code. The rebuild matches the script; the magnitude depends on the
+  PhysX hull contact [UNKNOWN].
 - WFC_VEHPHYS 26/26: settle, jump, re-jump, boost jump, held jump, and walls (hover / boost, head-on / 22°) × 3 vehicles.
 
 ### Scout body height idle vs locomotion [HIGH CONFIDENCE authentic: RE pass 4 + WFC_HEIGHTTEST measurement]
