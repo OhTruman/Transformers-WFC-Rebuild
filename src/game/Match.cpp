@@ -377,7 +377,10 @@ void Match::scoreObjective(int player, int score) {
     MatchPlayer& P = players_[(size_t)player];
     P.score += s_.objectiveIndividualScore;                 // Scorer.AddScore(IndividualScore, Score)
     P.objectiveScore += s_.objectiveIndividualScore;
-    if (s_.teamGame && score > 0 && (P.team == 0 || P.team == 1)) teamScore_[P.team] += score;
+    if (s_.teamGame && score > 0 && (P.team == 0 || P.team == 1)) {
+        teamScore_[P.team] += score;
+        LOG_INFO("MATCH score team=%d score=%d reason=objective player=%d", P.team, teamScore_[P.team], player);   // audit line (objective)
+    }
     reportPoints(player);
     checkScore(player, P.team);
 }
@@ -385,6 +388,7 @@ void Match::scoreObjective(int player, int score) {
 void Match::scoreTeamObjective(int team, int amount) {
     if (state_ != State::InProgress || (team != 0 && team != 1)) return;
     teamScore_[team] += amount;   // [HIGH: the TnTeamGame override is not in the decompiled set; RE section 3 C: +1 team / 3 s]
+    LOG_INFO("MATCH score team=%d score=%d reason=%s", team, teamScore_[team], s_.modeTag == "KOTH" ? "zone" : "node");   // audit line (objective tick)
     if (s_.goalScore > 0 && teamScore_[team] >= s_.goalScore) endGame(-1, "Score");
 }
 
@@ -506,6 +510,10 @@ int Match::findPlayerStart(int p) {
         bool ok = s_.teamGame ? (!s.ffa && s.team == P.team) : s.ffa;
         if (ok && safe((int)i)) return (int)i;
     }
+    // CUSTOM-GAME EXTENSION (33 participants): FFA maps author 10-27 FFA starts (MaxPlayers 10), so once they are all occupied any
+    // authored start serves (AssetTools spawn_capacity: 50-120 per map) [PC ADAPTATION].
+    if (!s_.teamGame && s_.extendedSlots)
+        for (size_t i = 0; i < starts_.size(); ++i) if (safe((int)i)) return (int)i;
     return -1;
 }
 

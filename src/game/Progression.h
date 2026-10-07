@@ -18,12 +18,20 @@ namespace game {
 
 class Match;
 
-struct XpAward { int player = -1; int transactionId = 0; long xp = 0; std::string announcement, description, extra; std::string eventId; };
+struct XpAward { int player = -1; int transactionId = 0; long xp = 0; std::string announcement, description, extra; std::string eventId; long baseXp = 0; };   // baseXp: before the bot-match scale
+
+// XP earned in matches with bots (USER DECISION 2026-10-06, PC ADAPTATION: the original gives none for anything involving AI): scaled by
+// the bots' difficulty, rounded per award. Challenge progress counts in full (user decision). One table; WFC_ORIGINAL_XP_RULE=1
+// (Frontend profile) = the original.
+struct BotXpPolicy {
+    static constexpr float kScale[3] = {0.25f, 0.50f, 0.75f};   // EASY, MEDIUM, HARD
+    static float scale(int difficulty) { return kScale[difficulty < 0 ? 0 : (difficulty > 2 ? 2 : difficulty)]; } };
 struct StatAward { int player = -1; int statId = 0; long amount = 0; int updateType = 0; };   // ReportGameStat: 0 add, 1 match max, 2 match add
 
 class AwardProducer {
 public:
     void reset();                                       // a new match (Match::begin)
+    void setXpScale(float s) { xpScale_ = s; }          // bot matches: BotXpPolicy::scale(difficulty); 1 without bots
     void consume(const Match& m);                       // new event records since the last call
     std::vector<XpAward> drainXp() { std::vector<XpAward> o; o.swap(xp_); return o; }
     std::vector<StatAward> drainStats() { std::vector<StatAward> o; o.swap(stats_); return o; }
@@ -35,6 +43,7 @@ public:
 
 private:
     unsigned lastSerial_ = 0;
+    float xpScale_ = 1.0f;
     int nextTxn_ = 1;
     bool firstKill_ = false, firstDeath_ = false;
     std::map<int, std::vector<float>> recentKills_;     // MultiKillDetector: kill times per killer (<= 3.0 s apart)

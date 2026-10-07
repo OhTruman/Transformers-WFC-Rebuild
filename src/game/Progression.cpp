@@ -47,7 +47,8 @@ void AwardProducer::xp(int player, int txn, const std::string& id, bool teamGame
     const XpEventRow* r = xpRow(id);
     if (!r) return;
     XpAward a;
-    a.player = player; a.transactionId = txn; a.xp = xpAmount(id, teamGame);
+    a.player = player; a.transactionId = txn; a.baseXp = xpAmount(id, teamGame);
+    a.xp = xpScale_ == 1.0f ? a.baseXp : std::lround((double)a.baseXp * xpScale_);
     a.announcement = r->announcement; a.description = r->description; a.extra = extra; a.eventId = id;
     totals_[player] += a.xp;
     if (xp_.size() >= 4096) xp_.erase(xp_.begin(), xp_.begin() + 2048);   // nobody draining (direct boot): keep the newest

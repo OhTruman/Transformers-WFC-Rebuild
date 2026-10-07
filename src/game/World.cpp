@@ -1870,8 +1870,10 @@ bool World::launchMatch(const MatchLaunch& l) {
     mapState_.setMode(mode);
     resetForNewLevel();
     removeBots();   // the previous match's bots leave with it (a new match is a fresh level in the original)
+    awards_.setXpScale(1.0f);
     startLocalMatch(l.settings, l.localTeam);   // [integration M08b] the lobby team
     const int nb = addBots(l.bots);
+    if (nb > 0) awards_.setXpScale(BotXpPolicy::scale(botDifficulty_));   // XP in bot matches by bot difficulty (user decision)
     LOG_INFO("match: launched %s %s (goal %d, time %d s, bots %d: friendly %d enemy %d %s)", l.map.c_str(), l.modeTag.c_str(), l.settings.goalScore,
              l.settings.timeLimit, nb, l.bots.friendly, l.bots.enemy, botDifficultyName(l.bots.difficulty));
     {   // [integration 09b] Systems M09b / M09c glue: every other participant's (bots') weapon cues and character cue set are
