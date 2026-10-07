@@ -1203,6 +1203,47 @@ void Application::routeMatchToFrontend(float dt) {
     }
     hf.vehicleForm = h.vehicleForm;
     hf.spectating = spectatingUi_;
+    {   // [integration 09c] Gameplay's TnHudDataObserver values (presented().hud2) -> the Hud_GFX observer callbacks (Frontend
+        // 420aa48 / 104406d). Unset fields send nothing; values are change-driven inside HudController.
+        const auto& o = pf.hud2;
+        static bool progressShown = false;
+        static std::string progressObs;
+        if (!o.progress.labelId.empty()) {
+            progressObs = "TnHudDataObserver" + o.progress.labelId;
+            hf.progressObserver = progressObs; hf.progress = o.progress.value; hf.progressName = o.progress.name;
+            progressShown = true;
+        } else if (progressShown) {                     // the bar ends: one 0, then unset
+            hf.progressObserver = progressObs; hf.progress = 0.0; progressShown = false;
+        }
+        hf.killstreakId = o.killstreakAvailable ? o.killstreakId : std::string();
+        for (size_t i = 0; i < o.abilities.size() && i < hf.abilities.size(); ++i) {
+            const auto& a = o.abilities[i];
+            frontend::HudFrame::Ability ha;
+            ha.id = a.id.empty() ? std::string("None") : a.id;
+            ha.cooldown = a.cooldownLeft;
+            ha.fraction = a.cooldownTime > 0.0f ? 1.0 - a.cooldownLeft / a.cooldownTime : 1.0;
+            hf.abilities[i] = ha;
+        }
+        if (o.grenade.ammo >= 0) { hf.grenadeAmmo = o.grenade.ammo; hf.activeGrenades = o.grenade.activeCount; }
+        hf.lockOnState = o.lockOn.state;
+        hf.targetName = o.target.player >= 0 ? o.target.name : std::string();
+        if (o.target.player >= 0) hf.targetHealth = o.target.health;
+        hf.weaponJammed = o.weapon.jammed; hf.weaponSpread = o.weapon.spread; hf.weaponMessage = o.weapon.message;
+        // Damage indicators: the HUD rotates the ring by -PlayerYaw and each arrow by its WORLD yaw (Frontend note).
+        const double viewYaw = camera_.yaw;
+        hf.playerYaw = viewYaw;
+        for (const auto& d : pf.damageTaken) frontend_->hud().damageIndicator(viewYaw + d.yaw, d.amount);
+        for (size_t i = 0; i < pf.damageCaused.size(); ++i) frontend_->hud().causedDamage();   // hit marker per hit
+        static std::vector<std::string> lastContextual;
+        if (o.contextual != lastContextual) {
+            for (const std::string& c : o.contextual)
+                if (std::find(lastContextual.begin(), lastContextual.end(), c) == lastContextual.end()) frontend_->hud().contextualCommand(0, c);
+            lastContextual = o.contextual;
+        }
+        static int lastCantTransform = 0;
+        if (o.cantTransformCount < lastCantTransform) lastCantTransform = 0;   // a new match
+        for (; lastCantTransform < o.cantTransformCount; ++lastCantTransform) frontend_->hud().cantTransform();
+    }
     frontend_->hud().setFrame(hf);
     world_.consumePresented();   // once per call: the queues above were read
 }

@@ -847,6 +847,33 @@ Application::MatchExit Application::runMatch() {
                 hm.draw(*renderer_, camera_, window_->width(), window_->height(), ms, 1.0f / 60.0f);
             }
         }
+        if (!std::getenv("WFC_MARKERTEST")) {
+            // [integration 09c] Objective / pawn markers (TnObjectiveManager -> TnHUD.UpdateObjectiveMarker -> Canvas sprites, RE
+            // 7bb8ec1): Gameplay's presented().markers copied field for field into Rendering's HudMarkers each frame.
+            const game::World::PresentedFrame& pfm = world_.presented();
+            if (!pfm.markers.empty()) {
+                static render::HudMarkers matchMarkers;
+                static bool matchMarkersLoaded = matchMarkers.load(render::wfcRenderDataRoot());
+                if (matchMarkersLoaded) {
+                    static std::vector<render::MarkerRequest> ms;
+                    ms.clear();
+                    ms.reserve(pfm.markers.size());
+                    for (const auto& m : pfm.markers) {
+                        render::MarkerRequest q;
+                        q.key = m.key; q.type = m.type; q.setup = m.setup; q.base = m.base; q.labelZ = m.labelZ; q.label = m.label;
+                        q.drawHealthBar = m.drawHealthBar; q.health = m.health; q.params = m.params; q.action = m.action;
+                        q.pulseT = m.pulseT; q.removing = m.removing; q.removedT = m.removedT; q.relation = m.relation;
+                        q.owner = m.player < 0 ? -1 : (m.player == pfm.localPlayer ? 0 : 100 + m.player);   // the pawn's draw owner
+                        ms.push_back(std::move(q));
+                    }
+                    static auto lastT = std::chrono::steady_clock::now();
+                    const auto nowT = std::chrono::steady_clock::now();
+                    const float mdt = std::min(0.1f, std::chrono::duration<float>(nowT - lastT).count());
+                    lastT = nowT;
+                    matchMarkers.draw(*renderer_, camera_, window_->width(), window_->height(), ms, mdt);
+                }
+            }
+        }
         if (std::getenv("WFC_SCREENTEST")) {            // diagnostics: 2D composition path (fade + panel)
             using RB = render::IRenderer;
             const float W = (float)window_->width(), H = (float)window_->height();
