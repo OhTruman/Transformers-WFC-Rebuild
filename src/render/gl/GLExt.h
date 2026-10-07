@@ -132,7 +132,7 @@ typedef void(APIENTRY* GLDEBUGPROCWFC)(GLenum source, GLenum type, GLuint id, GL
     X(void, BeginQuery, (GLenum, GLuint)) \
     X(void, EndQuery, (GLenum)) \
     X(void, GetQueryObjectiv, (GLuint, GLenum, GLint*)) \
-    X(void, GetQueryObjectui64v, (GLuint, GLenum, unsigned long long*))
+    X(void, GetQueryObjectui64v, (GLuint, GLenum, unsigned long long*))     X(void, QueryCounter, (GLuint, GLenum))
 
 #define WFC_GL_DECL(ret, name, args) typedef ret(APIENTRY* PFN_##name) args; extern PFN_##name name;
 WFC_GL_FUNCS(WFC_GL_DECL)
@@ -155,7 +155,13 @@ GLenum pollResetStatus();
 void gpuTimerBegin();
 void gpuTimerEnd();
 double lastGpuFrameMs();
-long gpuFrameReads();           // increments with each new lastGpuFrameMs value (3 frames after the measured frame)
+long gpuFrameReads();
+// Per-pass GPU timestamps (GL_TIMESTAMP) in the same 3-frame ring: mark k (1..5) at a pass boundary of the current
+// frame; mark 0 is the frame start. lastGpuPassMs(k) = GPU time from the previous available mark to mark k of the
+// frame lastGpuFrameMs belongs to (-1 if not marked that frame).
+enum GpuPass { kPassWorld = 1, kPassCaller = 2, kPassMapFx = 3, kPassTranslucent = 4, kPassPost = 5, kPassCount = 6 };
+void gpuMark(int k);
+double lastGpuPassMs(int k);           // increments with each new lastGpuFrameMs value (3 frames after the measured frame)
 double lastGpuFrameCpuMs();   // CPU time between the same markers (gpu ~ cpu: the GPU waited on submission)
 
 } // namespace glx

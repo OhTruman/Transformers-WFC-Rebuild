@@ -94,7 +94,10 @@ int gQi = 0;
 bool gBegun = false;                 // a query was begun this frame (EndQuery only then: else GL_INVALID_OPERATION)
 double gLastGpuMs = 0.0;
 double gLastCpuMs = 0.0;
-long gGpuReads = 0;            // readbacks so far (a new value of lastGpuFrameMs)      // the CPU span of the frame gLastGpuMs belongs to
+long gGpuReads = 0;            // readbacks so far (a new value of lastGpuFrameMs)
+GLuint gTs[3][6] = {};
+bool gTsSet[3][6] = {};
+double gPassMs[6] = {-1, -1, -1, -1, -1, -1};      // the CPU span of the frame gLastGpuMs belongs to
 // CPU time between the query's begin and end of the same frame: TIME_ELAPSED is GPU-timeline time between the two
 // markers, so it includes the GPU waiting for commands the CPU had not submitted yet (driver work inside the frame).
 // gpu ~ cpu span => a CPU-side stall inside the frame, not GPU load (no TDR risk); gpu >> cpu => real GPU work.
@@ -116,6 +119,21 @@ void gpuTimerBegin() {
         GetQueryObjectui64v(gQ[slot], kResult, &ns);
         gLastGpuMs = (double)ns / 1.0e6;
         ++gGpuReads;
+        // pass breakdown of the same frame
+        unsigned long long t[6] = {}; bool have[6] = {};
+        for (int k = 0; k < 6; ++k) {
+            gPassMs[k] = -1.0;
+            if (!gTsSet[slot][k]) continue;
+            GLint rdy = 0; GetQueryObjectiv(gTs[slot][k], kResultAvailable, &rdy);
+            if (rdy) { GetQueryObjectui64v(gTs[slot][k], kResult, &t[k]); have[k] = true; }
+            gTsSet[slot][k] = false;
+        }
+        int prev = have[0] ? 0 : -1;
+        for (int k = 1; k < 6; ++k) {
+            if (!have[k]) continue;
+            if (prev >= 0) gPassMs[k] = (double)(t[k] - t[prev]) / 1.0e6;
+            prev = k;
+        }
         gLastCpuMs = gQCpuMs[slot];
         gQActive[slot] = false;
         static int logged = 0;
@@ -126,6 +144,11 @@ void gpuTimerBegin() {
     }
     BeginQuery(kTimeElapsed, gQ[slot]);
     gQBegin[slot] = std::chrono::steady_clock::now();
+    if (QueryCounter) {
+        if (!gTs[0][0]) for (auto& row : gTs) GenQueries(6, row);
+        QueryCounter(gTs[slot][0], 0x8E28);   // GL_TIMESTAMP: frame start
+        gTsSet[slot][0] = true;
+    }
     gQActive[slot] = true;
     gBegun = true;
 }
@@ -142,6 +165,14 @@ void gpuTimerEnd() {
 
 double lastGpuFrameMs() { return gLastGpuMs; }
 double lastGpuFrameCpuMs() { return gLastCpuMs; }
+void gpuMark(int k) {
+    if (!QueryCounter || !gBegun || k <= 0 || k >= 6 || !gTs[0][0]) return;
+    const int slot = gQi % 3;
+    if (gTsSet[slot][k]) return;               // first mark of this kind per frame
+    QueryCounter(gTs[slot][k], 0x8E28);
+    gTsSet[slot][k] = true;
+}
+double lastGpuPassMs(int k) { return k >= 0 && k < 6 ? gPassMs[k] : -1.0; }
 long gpuFrameReads() { return gGpuReads; }
 
 bool load() {
