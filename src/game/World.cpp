@@ -782,6 +782,7 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
 }
 
 void World::setAudio(audio::IAudio* a, bool loadSliceMap) {
+    joinStep();   // [integration 09c] async step: no background part may play into the cue tables while they change (Systems review)
     audio_ = a;
     if (!a) return;
     const std::string base = assetRoot() + "/../content/";
@@ -827,6 +828,7 @@ void World::setAudio(audio::IAudio* a, bool loadSliceMap) {
 }
 
 bool World::loadMapAudio(const std::string& level) {
+    joinStep();   // [integration 09c] async step: no background part may play into the cue tables while they change (Systems review)
     if (!levelAudio_.level().empty()) unloadMapAudio();
     const bool ok = levelAudio_.load(level);
     if (ok) {                                                         // level-owned
@@ -886,12 +888,14 @@ int World::playPickupSound(const char* factoryClass, const core::Vec3& receiverP
 }
 
 void World::unloadMapAudio() {
+    joinStep();   // [integration 09c] async step: no background part may play into the cue tables while they change (Systems review)
     weaponAudioLoaded_.clear();                // the level's cues are released with it
     resetSystemsForMatch();                    // player-side sounds + Systems FX + queues
     levelAudio_.unload();                      // music player, every instance, level cues / samples / presets, Flush
 }
 
 void World::resetSystemsForMatch() {
+    joinStep();   // [integration 09c] async step: no background part may play into the cue tables while they change (Systems review)
     cues_.stopNonMapInstances();               // weapon / vehicle / foley / transform / pickup sounds (immediate)
     vehicleAudio_.stopAll(cues_);              // [Systems M08d]
     weaponAudio_.stopAll(cues_);
