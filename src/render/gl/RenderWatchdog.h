@@ -15,4 +15,11 @@ void phase(const char* where);     // static-lifetime string
 void frameDone(int frame);
 void stop();
 
+// Unhandled-exception report (any thread): wfc_crash_<pid>.txt in the working directory - exception code / address,
+// the render phase and frame, and the faulting thread's stack (RVAs, named from wfc_rebuild.map beside the exe when
+// present) - plus a minidump wfc_crash_<pid>.dmp with the exception context. No behaviour change otherwise: the
+// process still terminates as before. Installed first thing in main(); WFC_NOCRASHHANDLER=1 disables it,
+// WFC_CRASHTEST=1 faults right after installing (verification).
+void installCrashHandler();
+
 }  // namespace render::watchdog
