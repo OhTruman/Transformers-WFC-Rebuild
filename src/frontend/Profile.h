@@ -35,7 +35,9 @@ public:
     struct Display { int width = 1280, height = 720; bool fullscreen = false; int textureQuality = 2; bool vsync = false; int frameLimit = 0; };
     // Private Match bot settings (PC ADAPTATION, [PCSettings] BotsFriendly / BotsEnemy / BotDifficulty): AI teammates and
     // opponents for offline private matches; difficulty 0 EASY, 1 MEDIUM, 2 HARD (the campaign's names; MP has none).
-    struct Bots { int friendly = 0, enemy = 0, difficulty = 1; };
+    // Team modes: bots per faction (autobot / decepticon); free-for-all: enemy (opponents). extended: the Custom Game
+    // player limit (false = the original MaxPlayers 10, 5 v 5).
+    struct Bots { int friendly = 0, enemy = 0, difficulty = 1, autobot = 0, decepticon = 0; bool extended = false; };
     Bots bots;
     // Multiplayer progression ([Progression]): the original keeps it in the online stats archive (XP per specialty,
     // challenge stats / tiers); offline it lives in the local profile [PC ADAPTATION storage, original values].

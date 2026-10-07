@@ -534,7 +534,7 @@ namespace {
 // that init object (Player::attachHook), in the menu's own data-store form ({choiceArray, dataStore, hintText,
 // panelWidth, text}): the lateral selector reads its value with DataStores.ReadValue and each step writes it and calls
 // Game.ApplyProfileSettings (applied live). Not an original setting (the Xenon game ran 15-30 fps smoothed).
-constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 1000};
+constexpr int kFrameLimitChoices[] = {30, 60, 75, 90, 100, 120, 144, 165, 180, 200, 240, 280, 300, 360, 480, 500, 1000};
 void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Object* init, int current) {
     if (linkage != "mc_subMenu" || !init) return;
     gfx::avm1::VM& vm = p.vm();
@@ -572,9 +572,47 @@ void addFrameLimitItem(gfx::Player& p, const std::string& linkage, gfx::avm1::Ob
 // PC ADAPTATION: Private Match bot rows. GameLobby_GFX's menu (lobby_mc.menuAnchor_mc.menu_mc: Start Game, Select Map,
 // Create a Character, Teletran I, Friends List; HmMenu navigation through each row's focusUp / focusDown names) gets
 // lateral selectors below its last row, duplicated from its own Select Map selector (HmLateralSelector: text,
-// displaySelection, createSelectionData, selectionUpdated, onOver -> HintWidget.HintText). Team modes: Friendly Bots,
-// Enemy Bots, Bot Difficulty; free-for-all: Bots (opponents), Bot Difficulty; other modes: none. Rebuilt when the mode's
-// kind changes. The values are GameFlow's (persisted; sent in the launch URL).
+// displaySelection, createSelectionData, selectionUpdated, onOver -> HintWidget.HintText): Player Limit (ORIGINAL 5 v 5 /
+// EXTENDED Custom Game), then team modes Autobot Bots + Decepticon Bots, free-for-all Bots, and Bot Difficulty; other
+// modes none. Rebuilt when the mode's kind changes; when the limit or the human's faction changes only the count rows'
+// choices are refreshed in place (focus stays). The values are GameFlow's (persisted; sent in the launch URL).
+namespace {
+std::vector<gfx::avm1::Value> botChoices(gfx::avm1::VM& vm, const std::string& field, int maxV, bool teams) {
+    std::vector<gfx::avm1::Value> out;
+    static const char* kDiff[] = {"EASY", "MEDIUM", "HARD"};
+    for (int v = 0; v <= maxV; ++v) {
+        gfx::avm1::Object* c = vm.newPlain();
+        vm.set(c, "Value", gfx::avm1::Value((double)v));
+        std::string label = std::to_string(v);
+        if (field == "difficulty") label = kDiff[v];
+        else if (field == "extended") label = v ? (teams ? "EXTENDED (16 V 16)" : "EXTENDED") : (teams ? "ORIGINAL (5 V 5)" : "ORIGINAL (10)");
+        vm.set(c, "FriendlyName", gfx::avm1::Value(label));
+        out.push_back(gfx::avm1::Value(c));
+    }
+    return out;
+}
+// The hint line (lobby_mc.footer_mc.hint_mc) sits below the menu; three added rows fit above it, each further row moves it
+// down one row (23) so it never overlaps. Re-applied every frame against the y the footer's own timeline last set (the
+// footer animates in; the runtime lets a timeline move a script-changed instance, unlike Flash).
+void placeBotHint(gfx::Player& p, int rows) {
+    gfx::DisplayObject* h = p.resolveTarget("lobby_mc.footer_mc.hint_mc", p.root());
+    if (!h || !h->script) return;
+    gfx::avm1::VM& vm = p.vm();
+    const double offset = 23.0 * std::max(0, rows - 3);
+    const double cur = vm.toNumber(vm.get(h->script, "_y"));
+    gfx::avm1::Value last = vm.get(h->script, "__wfcHintSet");
+    // the timeline's y: the current one unless it is still the value this function set
+    double base = cur;
+    if (!last.isUndef() && std::fabs(vm.toNumber(last) - cur) < 0.01) base = vm.toNumber(vm.get(h->script, "__wfcHintY"));
+    vm.set(h->script, "__wfcHintY", gfx::avm1::Value(base));
+    vm.set(h->script, "_y", gfx::avm1::Value(base + offset));
+    vm.set(h->script, "__wfcHintSet", gfx::avm1::Value(vm.toNumber(vm.get(h->script, "_y"))));
+}
+int botValue(const frontend::LocalProfile::Bots& b, const std::string& f) {
+    return f == "autobot" ? b.autobot : f == "decepticon" ? b.decepticon : f == "enemy" ? b.enemy : f == "extended" ? (b.extended ? 1 : 0) : b.difficulty;
+}
+}
+
 void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
     using frontend::GameFlow;
     const int kind = (int)flow.botRows();
@@ -582,33 +620,53 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
     if (!menuD || !menuD->script) { botRowsBuilt_.erase(&p); return; }
     gfx::avm1::VM& vm = p.vm();
     gfx::avm1::Object* menu = menuD->script;
-    static const char* kNames[] = {"botFriendly_mc", "botEnemy_mc", "botDifficulty_mc"};
+    static const char* kNames[] = {"botLimit_mc", "botAutobot_mc", "botDecepticon_mc", "botEnemy_mc", "botDifficulty_mc"};
+    const bool teams = kind == (int)GameFlow::BotRows::Teams;
+    const frontend::LocalProfile::Bots& b = flow.profile().bots;
+    const int limitKey = (b.extended ? 1 : 0) * 2 + flow.humanFaction();
     auto it = botRowsBuilt_.find(&p);
-    const bool present = vm.get(menu, "botEnemy_mc").isObject() || vm.get(menu, "botDifficulty_mc").isObject();
-    if (it != botRowsBuilt_.end() && it->second == kind && (present || kind == (int)GameFlow::BotRows::None)) return;
+    const bool present = vm.get(menu, "botLimit_mc").isObject();
+    if (it != botRowsBuilt_.end() && it->second / 10 == kind && (present || kind == (int)GameFlow::BotRows::None)) {
+        placeBotHint(p, kind == (int)GameFlow::BotRows::None ? 0 : (kind == (int)GameFlow::BotRows::Teams ? 4 : 3));
+        if (it->second % 10 != limitKey) {   // limit / faction change: the count rows' ranges, in place
+            for (const char* n : {"botAutobot_mc", "botDecepticon_mc", "botEnemy_mc"}) {
+                gfx::avm1::Value r = vm.get(menu, n);
+                if (!r.isObject()) continue;
+                const std::string field = std::string(n) == "botAutobot_mc" ? "autobot" : std::string(n) == "botDecepticon_mc" ? "decepticon" : "enemy";
+                const int maxV = flow.botMax(field);
+                vm.callMethod(r, "createSelectionData", {gfx::avm1::Value(vm.newArray(botChoices(vm, field, maxV, teams)))});
+                vm.set(r.o, "currentSelectionIndex", gfx::avm1::Value((double)std::clamp(botValue(b, field), 0, maxV)));
+            }
+            it->second = kind * 10 + limitKey;
+            frontend::FlowTrace::emit("lobby.botRows", {{"refresh", "limits"}, {"extended", frontend::FlowTrace::boolean(b.extended)},
+                                                        {"humanFaction", std::to_string(flow.humanFaction())}});
+        }
+        return;
+    }
     for (const char* n : kNames) {   // a mode-kind change: the old rows go
         gfx::avm1::Value r = vm.get(menu, n);
         if (r.isObject()) vm.callMethod(r, "removeMovieClip", {});
     }
     gfx::avm1::Value invite = vm.get(menu, "invite_mc");
-    botRowsBuilt_[&p] = kind;
+    botRowsBuilt_[&p] = kind * 10 + limitKey;
     if (kind == (int)GameFlow::BotRows::None) {
         if (invite.isObject()) vm.set(invite.o, "focusDown", gfx::avm1::Value());
+        placeBotHint(p, 0);
         return;
     }
     gfx::DisplayObject* src = p.resolveTarget("selectMap_mc", menuD);
     if (!src || !invite.isObject()) return;
     struct Row { const char* name; std::string field, label, hint; };
     std::vector<Row> rows;
-    if (kind == (int)GameFlow::BotRows::Teams) {
-        rows.push_back({kNames[0], "friendly", "Friendly Bots", "AI teammates on your team."});
-        rows.push_back({kNames[1], "enemy", "Enemy Bots", "AI opponents on the other team."});
+    rows.push_back({kNames[0], "extended", "Player Limit", "Original: 10 players (5 v 5). Extended: a larger Custom Game."});
+    if (teams) {
+        rows.push_back({kNames[1], "autobot", "Autobot Bots", "AI players on the Autobot team."});
+        rows.push_back({kNames[2], "decepticon", "Decepticon Bots", "AI players on the Decepticon team."});
     } else {
-        rows.push_back({kNames[1], "enemy", "Bots", "AI opponents in the match."});
+        rows.push_back({kNames[3], "enemy", "Bots", "AI opponents in the match."});
     }
-    rows.push_back({kNames[2], "difficulty", "Bot Difficulty", "How tough the AI plays."});
+    rows.push_back({kNames[4], "difficulty", "Bot Difficulty", "How tough the AI plays."});
     const float y0 = vm.toNumber(vm.get(invite.o, "_y")) + 23.0f;
-    const frontend::LocalProfile::Bots& b = flow.profile().bots;
     std::string prev = "invite_mc";
     for (size_t i = 0; i < rows.size(); ++i) {
         const Row& row = rows[i];
@@ -629,18 +687,9 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
         gfx::avm1::Value prevObj = vm.get(menu, prev);
         if (prevObj.isObject()) vm.set(prevObj.o, "focusDown", gfx::avm1::Value(std::string(row.name)));
         prev = row.name;
-        std::vector<gfx::avm1::Value> choices;
         const int maxV = flow.botMax(row.field);
-        for (int v = 0; v <= maxV; ++v) {
-            gfx::avm1::Object* c = vm.newPlain();
-            vm.set(c, "Value", gfx::avm1::Value((double)v));
-            static const char* kDiff[] = {"EASY", "MEDIUM", "HARD"};
-            vm.set(c, "FriendlyName", gfx::avm1::Value(row.field == "difficulty" ? std::string(kDiff[v]) : std::to_string(v)));
-            choices.push_back(gfx::avm1::Value(c));
-        }
-        vm.callMethod(gfx::avm1::Value(o), "createSelectionData", {gfx::avm1::Value(vm.newArray(choices))});
-        const int cur = row.field == "friendly" ? b.friendly : row.field == "enemy" ? b.enemy : b.difficulty;
-        vm.set(o, "currentSelectionIndex", gfx::avm1::Value((double)std::clamp(cur, 0, maxV)));
+        vm.callMethod(gfx::avm1::Value(o), "createSelectionData", {gfx::avm1::Value(vm.newArray(botChoices(vm, row.field, maxV, teams)))});
+        vm.set(o, "currentSelectionIndex", gfx::avm1::Value((double)std::clamp(botValue(b, row.field), 0, maxV)));
         const std::string field = row.field, hint = row.hint;
         vm.set(o, "selectionUpdated", gfx::avm1::Value(vm.newFunction(
             [&flow, field](gfx::avm1::VM& v, const gfx::avm1::Value& self, gfx::avm1::Args&) -> gfx::avm1::Value {
@@ -655,8 +704,9 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
                 return gfx::avm1::Value();
             }, "onOver", 0)));
     }
-    frontend::FlowTrace::emit("lobby.botRows", {{"kind", kind == (int)GameFlow::BotRows::Teams ? "teams" : "ffa"},
-                                                {"rows", std::to_string(rows.size())}, {"provenance", "PC ADAPTATION"}});
+    placeBotHint(p, (int)rows.size());
+    frontend::FlowTrace::emit("lobby.botRows", {{"kind", teams ? "teams" : "ffa"}, {"rows", std::to_string(rows.size())},
+                                                {"extended", frontend::FlowTrace::boolean(b.extended)}, {"provenance", "PC ADAPTATION"}});
 }
 
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
