@@ -75,6 +75,9 @@ std::vector<BotIdentity> makeBotIdentities(const BotLaunch& b, bool teamGame, in
         // Every second Soldier (alternating by team, so a match always has some) swaps Hover for it; Whirlwind (melee) stays.
         if (c.specialty == Specialty::Soldier && c.abilities.size() == 2 && ((idx / 4 + team + (int)(seed & 1)) & 1))
             c.abilities[1] = "SpawnAmmoCrate";
+        // Every second Leader (alternating by team) carries the class-pool RollerSphere (Leader, LevelRestriction 2) in place of Warcry.
+        if (c.specialty == Specialty::Leader && c.abilities.size() == 2 && ((idx / 4 + team + 1 + (int)(seed & 1)) & 1))
+            c.abilities[0] = "RollerSphere";
         c.customSlot = specialtyName(c.specialty);
         // Displayed level: sum of four specialty levels (0-25 each) -> 1..100; harder bots read as more experienced.
         const int lo = difficulty <= 0 ? 4 : (difficulty == 1 ? 16 : 36), span = difficulty <= 0 ? 20 : (difficulty == 1 ? 34 : 50);

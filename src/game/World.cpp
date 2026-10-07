@@ -1,3 +1,4 @@
+#include "core/SimRandom.h"
 #include "game/World.h"
 #include "game/DamageTarget.h"
 #include "render/Renderer.h"
@@ -500,7 +501,7 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
         core::Vec3 up{0, 1, 0};
         core::Vec3 rt = core::normalize(core::cross(dir, up));
         core::Vec3 u2 = core::normalize(core::cross(rt, dir));
-        auto rf = [] { return (float)std::rand() / (float)RAND_MAX * 2.0f - 1.0f; };
+        auto rf = [] { return core::simRandSigned(); };   // simulation stream (not shared with FX)
         // Fine aim scales spread by the weapon's FineAimSpreadModifier (Ion Blaster 0.5) [CONF data].
         float spread = player_.pawn().effectiveSpread();   // bloom x airborne x fine aim (HmWeapon.GetSpread)
         dir = core::normalize(dir + rt * (rf() * spread) + u2 * (rf() * spread));
@@ -774,11 +775,13 @@ void World::tickEngineAudio(float dt, bool vehicle, bool boost, bool grounded, b
     if (grounded || !vehicle) airTime_ = 0.0f;
 }
 
-// Pawn blocking: UE pawns block each other (CollisionCylinder, bBlockActors) [CONF stock]; the native sweep is not reproduced, so
-// overlapping live pawns are pushed apart after movement, half each along the horizontal line between them, a push that would
-// enter world geometry being given to the other pawn [PROV: post-move cylinder push-out]. Each pawn's cylinder of its current form
-// (cylinderRadius / cylinderHalfHeight, as melee); ram damage / reactions are decided first by gameplayRamContacts. Bots yield to
-// the local player (the human moves only when the bot cannot), so a crowd never shoves or pins the human; no push enters walls.
+// Pawn blocking [CONF RE addendum 11]: robot form = the actor cylinder with collide + block actors (stock bBlockActors; allies block
+// like enemies; per-chassis CollisionRadius / Height); vehicle form = the vehicle mesh rigid body (cylinder disabled), contact by
+// physics (+ Rammed). The native sweep / rigid-body contact is not reproduced: overlaps are pushed apart after movement, a push that
+// would enter world geometry being given to the other pawn [PROV method]. Robot-robot: cylinders, half each. Robot-vehicle: the robot
+// cylinder out of the vehicle's mesh box (meshMatrix orientation, horizontal), the robot moving (the vehicle when the robot is
+// against a wall). Vehicle-vehicle: inscribed circles of the boxes [PROV]. Ram damage / reactions come first (gameplayRamContacts).
+// Bots yield to the local player (the human moves only when the bot cannot), so a crowd never shoves or pins the human.
 void World::separatePawns() {
     if (!matchActive_) return;
     struct P { Character* c; };
@@ -798,9 +801,43 @@ void World::separatePawns() {
     for (size_t i = 0; i < ps.size(); ++i)
         for (size_t j = i + 1; j < ps.size(); ++j) {
             Character& A = *ps[i].c; Character& B = *ps[j].c;
-            const float ra = A.cylinderRadius(A.moveForm()), rb = B.cylinderRadius(B.moveForm());
             const core::Vec3 pa = A.position(), pb = B.position();
             if (std::fabs(pa.y - pb.y) >= A.cylinderHalfHeight(A.moveForm()) + B.cylinderHalfHeight(B.moveForm())) continue;
+            const bool va = A.moveForm() == Form::Vehicle, vb = B.moveForm() == Form::Vehicle;
+            const bool humanA = &A == &player_.pawn();   // the local pawn is only ever ps[0]
+            if (va != vb) {   // robot cylinder vs vehicle mesh box
+                Character& V = va ? A : B; Character& Rb = va ? B : A;
+                core::Vec3 mn, mx;
+                if (!V.vehicleBoundsXZ(mn, mx)) continue;
+                const core::Mat4 m = V.meshMatrix(Form::Vehicle);
+                const core::Vec3 o{m.m[12], m.m[13], m.m[14]};
+                core::Vec3 fx{m.m[0], 0.0f, m.m[2]}, fz{m.m[8], 0.0f, m.m[10]};
+                fx = core::normalize(fx); fz = core::normalize(fz);
+                const core::Vec3 rp = Rb.position() - o;
+                const float lx = core::dot(rp, fx), lz = core::dot(rp, fz);
+                const float rr = Rb.cylinderRadius(Form::Robot);
+                const float cx = std::clamp(lx, mn.x, mx.x), cz = std::clamp(lz, mn.z, mx.z);
+                float nx = lx - cx, nz = lz - cz, dd = std::sqrt(nx * nx + nz * nz), pen;
+                if (dd > 1e-4f) { if (dd >= rr) continue; nx /= dd; nz /= dd; pen = rr - dd; }
+                else {   // centre inside the box: out through the nearest face
+                    const float ex[4] = {mx.x - lx, lx - mn.x, mx.z - lz, lz - mn.z};
+                    int k = 0; for (int q = 1; q < 4; ++q) if (ex[q] < ex[k]) k = q;
+                    nx = k == 0 ? 1.0f : k == 1 ? -1.0f : 0.0f; nz = k == 2 ? 1.0f : k == 3 ? -1.0f : 0.0f;
+                    pen = ex[k] + rr;
+                }
+                const core::Vec3 n = fx * nx + fz * nz;   // world direction from the box toward the robot
+                const bool humanIsRobot = &Rb == &player_.pawn(), humanIsVehicle = &V == &player_.pawn();
+                if (humanIsRobot) { if (!tryMove(V, n * -pen)) tryMove(Rb, n * pen); continue; }   // the bot vehicle yields to the human
+                if (humanIsVehicle) { if (!tryMove(Rb, n * pen)) tryMove(V, n * -pen); continue; }
+                if (!tryMove(Rb, n * pen)) tryMove(V, n * -pen);
+                continue;
+            }
+            auto inscribed = [](const Character& c) {
+                core::Vec3 mn, mx;
+                if (!c.vehicleBoundsXZ(mn, mx)) return c.cylinderRadius(Form::Vehicle);
+                return 0.5f * std::min(mx.x - mn.x, mx.z - mn.z);
+            };
+            const float ra = va ? inscribed(A) : A.cylinderRadius(Form::Robot), rb = vb ? inscribed(B) : B.cylinderRadius(Form::Robot);
             float dx = pb.x - pa.x, dz = pb.z - pa.z;
             float d = std::sqrt(dx * dx + dz * dz);
             const float need = ra + rb;
@@ -810,7 +847,6 @@ void World::separatePawns() {
             else n = {dx / d, 0.0f, dz / d};
             const float push = need - d;
             const core::Vec3 half = n * (push * 0.5f);
-            const bool humanA = &A == &player_.pawn();   // the local pawn is only ever ps[0]
             if (humanA) { if (!tryMove(B, half * 2.0f)) tryMove(A, half * -2.0f); continue; }
             const bool okA = tryMove(A, half * -1.0f), okB = tryMove(B, half);
             if (!okA && okB) tryMove(B, half);
@@ -1154,7 +1190,7 @@ void World::tick(float dt) {
             TickTimer tt(5);
             int every = 1;
             if (match_.players().size() > 16 && o->spawned() && !o->pawn().isTransforming()) {
-                const float d = core::length(o->pawn().position() - listenerPos_);
+                const float d = core::length(o->pawn().position() - player_.pawn().position());   // simulation state, not the camera
                 every = d < 40.0f ? 1 : (d < 100.0f ? 2 : 4);
             }
             o->simulateAnimationLod(dt, every);
@@ -1434,6 +1470,10 @@ bool World::launchMatch(const MatchLaunch& l) {
     resetForNewLevel();
     removeBots();   // the previous match's bots leave with it (a new match is a fresh level in the original)
     awards_.setXpScale(1.0f);
+    {   // simulation RNG per match: WFC_SEED (DEV / TEST) or a fixed value, so the same inputs replay the same match
+        const char* sd = std::getenv("WFC_SEED");
+        core::simRandSeed(sd ? (uint32_t)std::strtoul(sd, nullptr, 10) * 2654435761u + 1u : 0x5eed2026u);
+    }
     startLocalMatch(l.settings);
     if (l.settings.extendedSlots) generateExtraStarts(); else match_.setGeneratedStarts({});
     const int nb = addBots(l.bots);
@@ -1521,6 +1561,9 @@ int World::addBots(const BotLaunch& launch) {
     for (const MatchPlayer& p : match_.players()) { taken.push_back(p.name); humans += p.kind != ParticipantKind::Bot; }
     const int humanTeam = localPlayer_ >= 0 ? match_.players()[(size_t)localPlayer_].team : 0;
     static unsigned matchSeed = 0x5eed;
+    // WFC_SEED (DEV / TEST only): offsets every bot / spawn random source so two runs can be compared or varied; unset = unchanged.
+    // with WFC_SEED every launch uses the same identity seed (no chaining from earlier matches), so a launch replays exactly
+    if (const char* sd = std::getenv("WFC_SEED")) { const unsigned v = (unsigned)std::strtoul(sd, nullptr, 10); matchSeed = v * 2654435761u ^ 0x5eedu; std::srand(v); }
     matchSeed = matchSeed * 1664525U + 1013904223U;
     const std::vector<BotIdentity> ids = makeBotIdentities(b, s.teamGame, humanTeam, s.maxPerTeam, s.maxBotsPerTeam, s.maxPlayers, humans, taken, matchSeed);
     for (const BotIdentity& id : ids) {
@@ -1620,8 +1663,9 @@ HudGameState World::hudState() const {
     h.ammoBeaconBuff = pc.beaconDamageBuff_ > 0.0f;
     h.drain = pc.drainRemain_;
     h.kamikazeMines = (int)mines_.size(); h.tempWeaponLeft = pc.tempWeapon_ == 1 ? pc.tempWeaponRemain_ : 0.0f;
-    h.roller = roller_.alive; h.rollerArmed = roller_.alive && roller_.t >= 3.0f; h.rollerPos = roller_.pos;
-    h.rollerFuse = roller_.alive ? std::max(0.0f, 10.0f - roller_.t) : 0.0f; h.rollerHealth = roller_.health; h.rollerSlow = pc.rollerSlowRemain_;
+    { const RollerMine& lr = rollerMine();
+      h.roller = lr.alive; h.rollerArmed = lr.alive && lr.t >= 3.0f; h.rollerPos = lr.pos;
+      h.rollerFuse = lr.alive ? std::max(0.0f, 10.0f - lr.t) : 0.0f; h.rollerHealth = lr.health; h.rollerSlow = pc.rollerSlowRemain_; }
     h.guidedMissile = missile_.alive; h.guidedMissilePos = missile_.pos; h.guidedMissileFuse = missile_.life;
     { const Sentry& ls = sentry(); h.sentry = ls.alive; h.sentryHealth = ls.health; h.sentryPos = ls.pos; h.sentryTarget = ls.target; }
     h.seeEnemies = pc.seeEnemiesRemain_; h.refillOnKill = pc.refillOnKillRemain_; h.abilitiesJammed = pc.jammedRemain_; h.hardLocked = pc.hardLockedRemain_;
@@ -2003,6 +2047,7 @@ void World::draw(render::IRenderer& r) const {
         if (se.alive && !se.mesh.positions.empty())
             r.drawDynamicMesh(se.mesh, core::Mat4::translate(se.pos) * core::Mat4::rotateY(se.yaw + core::config::kMeshYawOffset), core::Vec3{1, 1, 1});
 
+    drawQaBotOverlay(r);   // DEV / QA TOOLING (off unless the panel turns it on)
     // Debug overlay (toggle with B): world bounds, player capsule, aim ray, weapon socket.
     if (core::DebugFlags::get().enabled) {
         auto wireBox = [&](core::Vec3 c, core::Vec3 half, core::Vec3 col) {
@@ -2277,9 +2322,10 @@ void World::radiusDamage(const core::Vec3& at, float damage, float radius, int i
     }
     for (Destructible* d : destructibles_)
         if (d->state() == 0) { core::Vec3 c = (d->boxMin() + d->boxMax()) * 0.5f; float k = falloff(c); if (k > 0.0f) d->applyDamage(*this, damage * k); }
-    if (roller_.alive) {
-        float dd = std::max(0.0f, core::length(roller_.pos - at) - 1.21f);
-        if (dd < radius) damageRollerMine(damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator);
+    for (size_t ri = 0; ri < rollers_.size(); ++ri) {
+        if (!rollers_[ri].alive) continue;
+        float dd = std::max(0.0f, core::length(rollers_[ri].pos - at) - 1.21f);
+        if (dd < radius) damageRollerAt(ri, damage * (1.0f - dd / std::max(radius, 1e-3f)), instigator);
     }
     for (size_t si = 0; si < sentries_.size(); ++si) {
         if (!sentries_[si].alive) continue;
@@ -2340,7 +2386,7 @@ void World::tickProjectiles(float dt) {
                         if (o->matchPlayer() != p.instigator && o->rayHit(p.pos, seg * (1.0f / sl), sl, th)) { hitPawn = true; break; }
                     }
                 auto impact = [&](const core::Vec3& n) {
-                    if (p.life > 1e8f) p.life = p.fuseMin + (p.fuseMax - p.fuseMin) * (float)(std::rand() % 1000) / 999.0f;
+                    if (p.life > 1e8f) p.life = p.fuseMin + (p.fuseMax - p.fuseMin) * (float)(core::simRandU32() % 1000) / 999.0f;
                     p.vel = (p.vel - n * (2.0f * core::dot(p.vel, n))) * p.bounce;
                     if (core::dot(p.vel, p.vel) < 500.0f * 1e-4f) { p.resting = true; p.vel = {0, 0, 0}; p.spinRate = 0.0f; }
                 };
@@ -2583,8 +2629,7 @@ void World::tickAbilityEffects(float dt) {
         buffShots_.push_back({from, dir * (jam ? 100.0f : 60.0f), jam ? 5.0f : 2.5f, 3.0f, jam ? 0 : 1});
     } else if (fx == "RollerSphere") {
         pc.playAction("Skill_AbilityJammer", false);       // OnTriggerAnimParams
-        rollerDelay_ = 0.5f;                               // SpawnDelay 0.5
-        pc.rollerAlive_ = true;
+        requestRoller(localPlayer_);                       // SpawnDelay 0.5
     } else if (fx == "GuidedMissile") {
         startGuidedMissile();
     } else if (fx == "SpawnSentry") {
@@ -2749,11 +2794,15 @@ void World::tickMeleeFor(Character& pc, int self, float dt) {
         const core::Vec3 ex{sw[active].extentUU.x * 0.01f, sw[active].extentUU.z * 0.01f, sw[active].extentUU.y * 0.01f};   // UE Z = up
         const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
         const float damage = whirl ? 85.0f : (pc.meleeCarrier_ || pc.meleePoke_) ? 9999.0f : 150.0f;
-        if (roller_.alive && !pc.meleeHitRoller_ && std::fabs(roller_.pos.x - at.x) <= ex.x + 1.21f && std::fabs(roller_.pos.z - at.z) <= ex.z + 1.21f &&
-            std::fabs(roller_.pos.y - at.y) <= ex.y + 1.21f) {
-            core::Vec3 d = roller_.pos - pc.actorLocation(); d.y = 0.0f;
-            if (core::length(d) > 1e-4f) roller_.vel = roller_.vel + core::normalize(d) * 50.0f;   // TnRollerMineAbility.MeleeImpulse 5000
-            pc.meleeHitRoller_ = true;
+        // Owner / teammate melee kicks a roller (TnRollerMineAbility.MeleeImpulse 5000), once per sweep.
+        if (!pc.meleeHitRoller_) {
+            for (RollerMine& rm : rollers_) {
+                if (!rm.alive || std::fabs(rm.pos.x - at.x) > ex.x + 1.21f || std::fabs(rm.pos.z - at.z) > ex.z + 1.21f || std::fabs(rm.pos.y - at.y) > ex.y + 1.21f) continue;
+                if (matchActive_ && self != rm.owner && !(match_.settings().teamGame && match_.sameTeam(self, rm.owner))) continue;
+                core::Vec3 d = rm.pos - pc.actorLocation(); d.y = 0.0f;
+                if (core::length(d) > 1e-4f) rm.vel = rm.vel + core::normalize(d) * 50.0f;
+                pc.meleeHitRoller_ = true;
+            }
         }
         const char* type = whirl ? "TransGame.TnDamageTypeWhirlwind" : pc.meleePoke_ ? "TransGame.TnDamageTypePoke" : "TransGame.TnDamageTypeMelee";
         for (size_t vpi = 0; vpi < match_.players().size(); ++vpi) {
@@ -3259,7 +3308,7 @@ void World::tickSentry(float dt) {
                 if (s.heat >= 100.0f) s.overheat = 2.0f;
                 core::Vec3 dir = core::forwardFromYawPitch(s.yaw, s.pitch);
                 core::Vec3 up{0, 1, 0}, rt = core::normalize(core::cross(dir, up)), u2 = core::cross(rt, dir);
-                auto rf = []() { return (float)(std::rand() % 2001 - 1000) / 1000.0f; };
+                auto rf = []() { return core::simRandSigned(); };
                 dir = core::normalize(dir + rt * (rf() * 0.1f) + u2 * (rf() * 0.1f));
                 float wall = 300.0f, tw;
                 if (line && line->segmentHit(muzzle, muzzle + dir * 300.0f, tw)) wall = 300.0f * tw;
@@ -3415,88 +3464,128 @@ void World::tickGuidedMissile(float dt) {
 // enemy pawn -> explodes: 135 / 1500 UU, no momentum (TnDamageTypeRollerMine). Owner / teammate melee kicks it: + normal
 // (horizontal) x MeleeImpulse 5000. Aura BuffRadius 1500 (visible enemies): TnBuffRollerSphere speed x0.75 (1 s robot /
 // 2 s vehicle), refreshed. Destroyed with the owner. Cooldown 60 s once gone.
-void World::explodeRollerMine() {
-    if (!roller_.alive) return;
-    roller_.alive = false;
-    radiusDamage(roller_.pos, 135.0f, 15.0f, localPlayer_, "TransGame.TnDamageTypeRollerMine");
-    LOG_INFO("roller sphere exploded at (%.1f %.1f %.1f) t %.2f", roller_.pos.x, roller_.pos.y, roller_.pos.z, roller_.t);
+void World::requestRoller(int owner) {
+    // TnAbilityRollerSphere for any participant: SpawnDelay 0.5; one per owner (the cooldown waits for it).
+    RollerMine m; m.owner = owner; m.delay = 0.5f;
+    rollers_.push_back(m);
+    if (owner == localPlayer_) player_.pawn().rollerAlive_ = true;
+    else if (Character* pc = participantPawnMutable(owner)) pc->rollerAlive_ = true;
 }
 
-void World::damageRollerMine(float amount, int instigator) {
-    if (!roller_.alive || instigator < 0 || instigator == localPlayer_) return;
-    if (matchActive_ && match_.sameTeam(instigator, localPlayer_)) return;
-    roller_.health -= amount;
-    if (roller_.health <= 0.0f) explodeRollerMine();
+const World::RollerMine& World::rollerMine() const {
+    for (const RollerMine& m : rollers_) if (m.owner == localPlayer_ && (m.alive || m.delay >= 0.0f)) return m;
+    static const RollerMine none;
+    return none;
+}
+
+void World::explodeRollerAt(size_t idx) {
+    if (idx >= rollers_.size() || !rollers_[idx].alive) return;
+    RollerMine& m = rollers_[idx];
+    m.alive = false;
+    radiusDamage(m.pos, 135.0f, 15.0f, m.owner, "TransGame.TnDamageTypeRollerMine");
+    LOG_INFO("roller sphere (p%d) exploded at (%.1f %.1f %.1f) t %.2f", m.owner, m.pos.x, m.pos.y, m.pos.z, m.t);
+}
+
+void World::explodeRollerMine() {   // the local player's (tests / input)
+    for (size_t i = 0; i < rollers_.size(); ++i) if (rollers_[i].owner == localPlayer_ && rollers_[i].alive) { explodeRollerAt(i); return; }
+}
+
+void World::damageRollerAt(size_t idx, float amount, int instigator) {
+    if (idx >= rollers_.size()) return;
+    RollerMine& m = rollers_[idx];
+    if (!m.alive || instigator < 0 || instigator == m.owner) return;
+    if (matchActive_ && match_.settings().teamGame && match_.sameTeam(instigator, m.owner)) return;
+    m.health -= amount;
+    if (m.health <= 0.0f) explodeRollerAt(idx);
+}
+
+void World::damageRollerMine(float amount, int instigator) {   // the local player's (tests)
+    for (size_t i = 0; i < rollers_.size(); ++i) if (rollers_[i].owner == localPlayer_ && rollers_[i].alive) { damageRollerAt(i, amount, instigator); return; }
 }
 
 void World::tickRollerMine(float dt) {
-    Character& pc = player_.pawn();
     auto tickBuff = [dt](Character& p) { p.rollerSlowRemain_ = std::max(0.0f, p.rollerSlowRemain_ - dt); };
-    tickBuff(pc);
+    tickBuff(player_.pawn());
     for (MatchOpponent* o : opponents_) tickBuff(o->pawn());
     const float R = 1.21f;
-    if (rollerDelay_ >= 0.0f) {
-        rollerDelay_ -= dt;
-        if (rollerDelay_ < 0.0f && !localDead_) {
-            const core::Vec3 f = core::forwardFromYawPitch(pc.yaw(), 0.0f);
-            const core::Vec3 spot = pc.actorLocation() + f * 5.0f + core::Vec3{0, 1.0f, 0};
+    const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+    for (size_t idx = 0; idx < rollers_.size(); ++idx) {
+        RollerMine& m = rollers_[idx];
+        const Character* owner = m.owner == localPlayer_ ? (localDead_ ? nullptr : &player_.pawn()) : participantPawn(m.owner);
+        if (m.delay >= 0.0f) {
+            m.delay -= dt;
+            if (m.delay < 0.0f && owner) {
+                const core::Vec3 f = core::forwardFromYawPitch(owner->yaw(), 0.0f);
+                const core::Vec3 spot = owner->actorLocation() + f * 5.0f + core::Vec3{0, 1.0f, 0};
+                float t; core::Vec3 n;
+                bool safe = collision_.valid() && !collision_.segmentHit(owner->actorLocation(), spot + f * (R * 1.1f), t, n);
+                if (safe) {
+                    m.alive = true; m.pos = spot; m.vel = f * 27.5f; m.health = 200.0f; m.t = 0.0f; m.onGround = false;
+                    LOG_INFO("ability RollerSphere (p%d): spawned", m.owner);
+                } else m.delay = 1.0f;   // SpawnLocationValidator failed: retry every 1 s
+            }
+        }
+        if (m.alive && !owner) m.alive = false;   // destroyed with the owner
+        if (m.alive) {
+            m.t += dt;
+            // Rigid body: gravity, PhysX linear damping, floor contact, wall bounce with restitution 0.3.
+            m.vel.y -= core::config::kGravity * dt;
+            m.vel = m.vel * std::max(0.0f, 1.0f - 0.6f * dt);
+            core::Vec3 next = m.pos + m.vel * dt;
+            float gy; core::Vec3 gn;
+            if (collision_.valid() && collision_.groundHeight(next.x, next.z, next.y - R + 0.3f, 0.5f, gy, gn) && next.y - R <= gy) {
+                next.y = gy + R;
+                if (m.vel.y < 0.0f) m.vel.y = -m.vel.y * 0.3f < 0.5f ? 0.0f : -m.vel.y * 0.3f;
+                m.onGround = true;
+            } else m.onGround = false;
             float t; core::Vec3 n;
-            bool safe = collision_.valid() && !collision_.segmentHit(pc.actorLocation(), spot + f * (R * 1.1f), t, n);
-            if (safe) {
-                roller_ = RollerMine{};
-                roller_.alive = true; roller_.pos = spot; roller_.vel = f * 27.5f; roller_.health = 200.0f;
-                LOG_INFO("ability RollerSphere: spawned");
-            } else rollerDelay_ = 1.0f;   // SpawnLocationValidator failed: retry every 1 s
+            const core::Vec3 c0 = m.pos + core::Vec3{0, 0.2f, 0}, c1 = next + core::Vec3{0, 0.2f, 0};
+            core::Vec3 hv{m.vel.x, 0, m.vel.z};
+            if (core::length(hv) > 1e-4f && collision_.valid() && collision_.segmentHit(c0, c1 + core::normalize(hv) * R, t, n)) {
+                core::Vec3 hn = core::normalize(core::Vec3{n.x, 0.0f, n.z});
+                if (core::length(core::Vec3{n.x, 0, n.z}) < 1e-3f) hn = core::normalize(hv) * -1.0f;
+                const float vn = core::dot(m.vel, hn);
+                if (vn < 0.0f) m.vel = m.vel - hn * (vn * 1.3f);   // reflect the normal part x restitution 0.3
+                next = m.pos;
+            }
+            m.pos = next;
+            if (m.pos.y < killZ_) m.alive = false;
         }
-    }
-    RollerMine& m = roller_;
-    if (m.alive && localDead_) m.alive = false;   // destroyed with the owner
-    if (m.alive) {
-        m.t += dt;
-        // Rigid body: gravity, PhysX linear damping, floor contact, wall bounce with restitution 0.3.
-        m.vel.y -= core::config::kGravity * dt;
-        m.vel = m.vel * std::max(0.0f, 1.0f - 0.6f * dt);
-        core::Vec3 next = m.pos + m.vel * dt;
-        float gy; core::Vec3 gn;
-        if (collision_.valid() && collision_.groundHeight(next.x, next.z, next.y - R + 0.3f, 0.5f, gy, gn) && next.y - R <= gy) {
-            next.y = gy + R;
-            if (m.vel.y < 0.0f) m.vel.y = -m.vel.y * 0.3f < 0.5f ? 0.0f : -m.vel.y * 0.3f;
-            m.onGround = true;
-        } else m.onGround = false;
-        float t; core::Vec3 n;
-        const core::Vec3 c0 = m.pos + core::Vec3{0, 0.2f, 0}, c1 = next + core::Vec3{0, 0.2f, 0};
-        core::Vec3 hv{m.vel.x, 0, m.vel.z};
-        if (core::length(hv) > 1e-4f && collision_.valid() && collision_.segmentHit(c0, c1 + core::normalize(hv) * R, t, n)) {
-            core::Vec3 hn = core::normalize(core::Vec3{n.x, 0.0f, n.z});
-            if (core::length(core::Vec3{n.x, 0, n.z}) < 1e-3f) hn = core::normalize(hv) * -1.0f;
-            const float vn = core::dot(m.vel, hn);
-            if (vn < 0.0f) m.vel = m.vel - hn * (vn * 1.3f);   // reflect the normal part x restitution 0.3
-            next = m.pos;
-        }
-        m.pos = next;
-        if (m.pos.y < killZ_) m.alive = false;
-    }
-    if (m.alive) {
-        const bool armed = m.t >= 3.0f;
-        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
-        bool boom = m.t >= 10.0f;                                  // _Fuse
-        if (matchActive_)
-            for (MatchOpponent* o : opponents_) {
-                if (!o->spawned() || match_.sameTeam(o->matchPlayer(), localPlayer_)) continue;
-                const Character& e = o->pawn();
-                const core::Vec3 d = e.actorLocation() - m.pos;
-                const float dist = core::length(d);
-                if (dist <= 15.0f) {
+        if (m.alive && matchActive_) {
+            const bool armed = m.t >= 3.0f;
+            bool boom = m.t >= 10.0f;                                  // _Fuse
+            const bool teamGame = match_.settings().teamGame;
+            for (size_t pi = 0; pi < match_.players().size(); ++pi) {   // the owner's enemies (the local pawn included)
+                const int p = (int)pi;
+                if (p == m.owner || (teamGame && match_.sameTeam(p, m.owner))) continue;
+                Character* e = participantPawnMutable(p);
+                if (!e) continue;
+                const core::Vec3 d = e->actorLocation() - m.pos;
+                if (core::length(d) <= 15.0f) {
                     float tt;
-                    if (!line || !line->segmentHit(m.pos, e.actorLocation(), tt))
-                        o->pawn().rollerSlowRemain_ = std::max(o->pawn().rollerSlowRemain_, e.moveForm() == Form::Vehicle ? 2.0f : 1.0f);
+                    if (!line || !line->segmentHit(m.pos, e->actorLocation(), tt))
+                        e->rollerSlowRemain_ = std::max(e->rollerSlowRemain_, e->moveForm() == Form::Vehicle ? 2.0f : 1.0f);
                 }
-                const float r = e.cylinderRadius(e.moveForm()), hh = e.cylinderHalfHeight(e.moveForm());
+                const float r = e->cylinderRadius(e->moveForm()), hh = e->cylinderHalfHeight(e->moveForm());
                 if (armed && std::hypot(d.x, d.z) <= r + R && std::fabs(d.y) <= hh + R) boom = true;   // RB contact
             }
-        if (boom) explodeRollerMine();
+            if (boom) explodeRollerAt(idx);
+        }
     }
-    pc.rollerAlive_ = m.alive || rollerDelay_ >= 0.0f;
+    // Ended rollers stay one step with alive=false (Systems' audio reports the end), then go.
+    for (RollerMine& m : rollers_) if (!m.alive && m.delay < 0.0f) ++m.deadTicks;
+    rollers_.erase(std::remove_if(rollers_.begin(), rollers_.end(), [](const RollerMine& m) { return m.deadTicks >= 2; }), rollers_.end());
+    for (size_t i = 0; i < match_.players().size(); ++i)
+        if (Character* pc = participantPawnMutable((int)i)) {
+            bool any = false;
+            for (const RollerMine& m : rollers_) any |= m.owner == (int)i && (m.alive || m.delay >= 0.0f);
+            pc->rollerAlive_ = any;
+        }
+    if (!matchActive_) {   // outside a match (sandbox): the local pawn's flag only
+        bool any = false;
+        for (const RollerMine& m : rollers_) any |= m.alive || m.delay >= 0.0f;
+        player_.pawn().rollerAlive_ = any;
+    }
 }
 
 int World::pickHomingTarget(bool allowRobots, float range) const {
@@ -3701,6 +3790,72 @@ std::vector<std::string> World::qaSetLoadout(const std::vector<std::string>& ids
     std::vector<std::string> refused = applyLoadout(&sel);
     LOG_INFO("QA loadout: %zu weapon(s), %zu refused", ids.size(), refused.size());
     return refused;
+}
+
+// ---- DEV / QA TOOLING (F10 panel; Frontend owns the buttons): bots ----
+void World::qaKillAllBots() {
+    if (!qaEnabled() || !matchActive_) return;
+    for (MatchOpponent* o : opponents_) {
+        const int p = o->matchPlayer();
+        if (!o->spawned() || match_.players()[(size_t)p].kind != ParticipantKind::Bot) continue;
+        const Match::KillContext kc = killContext(p, p, "Engine.DmgType_Suicided");
+        match_.killed(p, p, true, "Engine.DmgType_Suicided", &kc);   // DmgType_Suicided: no score change; the normal respawn wave
+        o->despawn();
+    }
+}
+
+void World::qaFreezeBots(bool on) { if (qaEnabled()) qaBotsFrozen_ = on; }
+void World::qaSetBotOverlay(bool on) { if (qaEnabled()) qaBotOverlay_ = on; }
+
+void World::qaTeleportToAim() {
+    if (!qaEnabled() || localPlayerDead()) return;
+    Character& pc = player_.pawn();
+    const core::Vec3 eye = pc.position() + core::Vec3{0, core::config::kCamHeight, 0};
+    const core::Vec3 dir = core::forwardFromYawPitch(player_.controller().camYaw(), player_.controller().camPitch());
+    const CollisionWorld* col = collision_.valid() ? &collision_ : nullptr;
+    float t = 1.0f;
+    const float range = 1000.0f;
+    if (!col || !col->segmentHit(eye, eye + dir * range, t)) return;   // nothing under the crosshair
+    core::Vec3 p = eye + dir * (range * t) - dir * 2.5f;                 // a pawn radius back along the ray
+    float gy; core::Vec3 gn;
+    if (col->groundHeight(p.x, p.z, p.y + 1.0f, 6.0f, gy, gn)) p.y = gy;
+    pc.setPosition(p); pc.velocity() = {0, 0, 0}; pc.groundY = p.y;
+    LOG_INFO("qa: teleported to aim (%.1f %.1f %.1f)", p.x, p.y, p.z);
+}
+
+std::vector<World::QaBotLabel> World::qaBotLabels() const {
+    std::vector<QaBotLabel> out;
+    if (!qaEnabled() || !qaBotOverlay_) return out;
+    for (const BotBrain& b : bots_) {
+        const Character* c = participantPawn(b.player);
+        if (!c) continue;
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "%s [%s] %s tgt %d wp %zu/%zu%s", match_.players()[(size_t)b.player].name.c_str(), botDifficultyName(b.difficulty),
+                      botGoalName(b.goal.kind), b.target, b.wp, b.path.size(), b.stuckLevel > 0 ? " STUCK" : "");
+        out.push_back({c->position() + core::Vec3{0, 5.0f, 0}, buf, b.player});
+    }
+    return out;
+}
+
+void World::drawQaBotOverlay(render::IRenderer& r) const {
+    if (!qaEnabled() || !qaBotOverlay_) return;
+    for (const BotBrain& b : bots_) {
+        const Character* c = participantPawn(b.player);
+        if (!c) continue;
+        const core::Vec3 head = c->position() + core::Vec3{0, 4.5f, 0};
+        if (const Character* tp = b.target >= 0 ? participantPawn(b.target) : nullptr)
+            r.drawLine(head, tp->position() + core::Vec3{0, 2.0f, 0}, {1.0f, 0.25f, 0.2f});            // line to its target
+        core::Vec3 prev = c->position() + core::Vec3{0, 0.3f, 0};
+        for (size_t k = b.wp; k < b.path.size(); ++k) {                                                   // nav path from the current waypoint
+            const core::Vec3 q = b.path[k].pos + core::Vec3{0, 0.3f, 0};
+            r.drawLine(prev, q, k == b.wp ? core::Vec3{1.0f, 1.0f, 0.2f} : core::Vec3{0.2f, 0.9f, 1.0f});
+            prev = q;
+        }
+        if (b.wp < b.path.size()) {                                                                         // current waypoint marker
+            const core::Vec3 w = b.path[b.wp].pos;
+            r.drawLine(w, w + core::Vec3{0, 3.0f, 0}, {1.0f, 1.0f, 0.2f});
+        }
+    }
 }
 
 void World::qaRespawn() {

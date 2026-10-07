@@ -151,6 +151,12 @@ public:
         const auto& a = vehicleModel_->boundsMin; const auto& b = vehicleModel_->boundsMax;
         return 0.5f * std::sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
     }
+    // Vehicle mesh bounds in mesh space (+X forward, +Z right; meshMatrix(Vehicle) places them); false without a vehicle model.
+    bool vehicleBoundsXZ(core::Vec3& mn, core::Vec3& mx) const {
+        if (!vehicleModel_) return false;
+        mn = vehicleModel_->boundsMin; mx = vehicleModel_->boundsMax;
+        return true;
+    }
     float cylinderHalfHeight(Form f) const {
         if (f == Form::Robot) return chassis().robot.halfHeight;
         return vehicleModel_ ? 0.5f * (vehicleModel_->boundsMax.y - vehicleModel_->boundsMin.y) : 1.22f;
@@ -551,6 +557,7 @@ private:
     // Pose serials for the renderer's drawDynamicMeshPosed (agents/rendering): bumped whenever a buffer's vertices change (each skin;
     // each interpolated present for the blend scratch), so unchanged poses skip the vertex build / upload.
     mutable uint64_t bodySerial_ = 0, partnerSerial_ = 0, armSerial_ = 0, lerpSerial_ = 0;
+    uint64_t prevVersion_ = 0;   // bumps whenever the previous-step snapshots change (GPU-blended draw serial)
     // Presentation interpolation state (beginStep / setRenderAlpha).
     core::Vec3 prevPos_{0, 0, 0};
     bool havePrev_ = false;

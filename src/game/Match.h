@@ -178,6 +178,7 @@ public:
     std::vector<KillFeedEntry> killFeed() const;
     const std::vector<KillFeedEntry>& killHistory() const { return killHistory_; }
     float matchTime() const { return matchTime_; }
+    int lastHitBy(int p) const { return p >= 0 && (size_t)p < lastHitBy_.size() ? lastHitBy_[(size_t)p] : -1; }
     float lastDamagedTime(int p) const { return p >= 0 && (size_t)p < lastDamagedAt_.size() ? lastDamagedAt_[(size_t)p] : -100.0f; }
     const std::string& endReason() const { return endReason_; }
     int winnerPlayer() const { return winnerPlayer_; }
@@ -238,7 +239,8 @@ private:
     std::vector<MatchPlayer> players_;
     std::vector<core::Vec3> locs_;
     std::vector<float> radii_;
-    std::vector<float> lastDamagedAt_;   // match time of each player's last recorded damage (any type; diagnostics)   // per player cylinder radius (setPlayerLocation)
+    std::vector<float> lastDamagedAt_;   // match time of each player's last recorded damage (any type; diagnostics)
+    std::vector<int> lastHitBy_;         // Pawn.LastHitBy: the last other player who damaged this life's pawn (-1 none)   // per player cylinder radius (setPlayerLocation)
     std::function<bool(const std::string&, std::string&)> chassisCheck_;
     int attackingTeam_ = 255, currentRound_ = 0;
     bool betweenRounds_ = false;

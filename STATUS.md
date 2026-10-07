@@ -3,6 +3,33 @@
 _Updated as work proceeds. Build: `powershell -ExecutionPolicy Bypass -File build.ps1`
 → `build/bin/wfc_rebuild.exe`. Fidelity audit + provenance: `FIDELITY.md`._
 
+## GAMEPLAY PASS 26 (2026-10-06 / 07) — Milestone E: original capacity, extended 32 v 32, bots in every role, spawns
+
+| item | result | provenance |
+|---|---|---|
+| Original capacity (26a) | MaxPlayers 10 (5 v 5) default; bots stop at match over / between rounds | CONFIRMED ORIGINAL (RE) |
+| Extended players (26a / 26c) | ?ExtendedPlayers=1: 32 per side incl. the human (FFA 63 bots); ?BotsAutobot / ?BotsDecepticon | CUSTOM-GAME EXTENSION (user decision) |
+| Bot-match XP (26b / 13b1187) | XP x 0.25 / 0.50 / 0.75 by bot difficulty; challenges count in full; WFC_ORIGINAL_XP_RULE=1 = none | PC ADAPTATION (user decision) |
+| 64-participant performance (26c) | lazy skinning (once per step, on draw), anim LOD / culling / AI LOD above 16; Debug tick 55 -> 6.4 ms at 64 | PC ADAPTATION (off at original counts) |
+| Six extra bodies (26d) | Car8 / 9 / 10, Frenzy, Rumble, Laserbeak (never transforms) playable with retargeted animation | PC ADAPTATION (user decision) |
+| Sentry / Barrier per owner (26e) | every participant's, bots deploy them | CONFIRMED mechanics; when = PC ADAPTATION |
+| Killstreaks for everyone (26f) | triggerKillstreakFor(player); bots trigger theirs (Omega Missile / Mine Pooper local-only) | CONFIRMED effects; PARTIAL |
+| Jet bots fly (26g) | hover travel + Flying (boost) on long clear stretches | flight model CONFIRMED; when = PC ADAPTATION |
+| Robot double jump (26h) | second press while rising / falling from a jump, > 10 UU up, not with DisallowDoubleJump weapons; bots use double_jump_up links | CONFIRMED ORIGINAL (RE addendum 10) |
+| Round-start spawns (26i) | above 16 participants one bot per step (63 in ~1 s) | PC ADAPTATION |
+| Ammo Crate per owner (26j) | every participant's; every second Soldier bot carries it | CONFIRMED mechanics; loadout = PC ADAPTATION |
+| Extended spawn fill (26k) | generated spawn points (deterministic, at launch, capsule-clear, own side), capsule-aware safety, retry instead of wave | CUSTOM-GAME EXTENSION (user request) |
+| Pawn blocking (26k / 26l) | robots block each other (allies too); robot vs vehicle mesh box; bots yield to the human | CONFIRMED rule (RE addendum 11); PROV method |
+| Knock-off credit (26l) | a fall (DmgType_Fell) credits Pawn.LastHitBy, no time window | CONFIRMED ORIGINAL (RE addendum 11) |
+| RollerSphere per owner (26l) | every participant's; every second Leader bot carries it | CONFIRMED mechanics; loadout = PC ADAPTATION |
+| QA bot tools (26l) | F10: kill all bots, freeze, overlay (paths / targets / labels), teleport to aim; WFC_SEED | DEV / QA TOOLING |
+
+Tests: WFC_SPAWNFILLTEST (per map 32v32 + FFA 64; 8 versus maps 10/10, ESC maps N/A Escalation-only), WFC_DOUBLEJUMPTEST 3/3,
+WFC_EXTRABODYTEST 38/38, WFC_QABOTTEST (needs WFC_QA), BOTTEST phases 1-5 (5 = FFA 64), XPTEST 16, BOTNAVTEST (Debris 7/7).
+
+PARTIAL: Guided Missile stays local (camera-steered; SinglePlayer ability, Omega Missile streak), vehicle-vehicle blocking uses
+inscribed circles, bots fall off Debris islands when knocked (credited to the hitter, as the original).
+
 ## GAMEPLAY PASS 25 (2026-10-06) — events, interpolation, offline bots, XP / stat awards
 
 | item | result | provenance |

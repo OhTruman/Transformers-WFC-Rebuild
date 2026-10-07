@@ -59,6 +59,8 @@ private:
     void runExtraBodyTest();
     void runDoubleJumpTest();
     void runSpawnFillTest();
+    void runQaBotTest();
+    void runDeterminismTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

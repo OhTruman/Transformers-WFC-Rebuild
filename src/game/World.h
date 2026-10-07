@@ -361,7 +361,8 @@ public:
     std::vector<AmmoBeacon> beacons_;           // one per owner (TnAbilitySpawnAmmoCrate for any participant)
     void requestAmmoBeacon(int owner);
     void generateExtraStarts();
-    void separatePawns();                       // pawn-vs-pawn blocking (cylinder push-out after movement)                 // extended matches: deterministic extra spawn points (Match::setGeneratedStarts)
+    void separatePawns();
+    bool qaBotsFrozen_ = false, qaBotOverlay_ = false;   // DEV / QA TOOLING                       // pawn-vs-pawn blocking (cylinder push-out after movement)                 // extended matches: deterministic extra spawn points (Match::setGeneratedStarts)
     void damageAmmoBeaconAt(size_t idx, float amount, int instigator);
     const AmmoBeacon& localBeacon() const;
     // TnSentryPawnAbility + TnAiSentryController (the local owner's, Default_TURRETDEF) [CONF RE §J + authored].
@@ -383,12 +384,18 @@ public:
     // TnGuidedMissile (ability / GuidedMissileStreak) [CONF RE §J3 + authored GuidedMissile_PROJDATA / GuidedMissile_STRATEGY].
     struct GuidedMissile { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float life = 0.0f; };
     GuidedMissile missile_;
-    // TnRollerMineAbility (the local owner's) [CONF authored CDOs + RE §J4; PhysX ball HIGH].
-    struct RollerMine { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float t = 0.0f, health = 0.0f; bool onGround = false; };
-    RollerMine roller_;
-    float rollerDelay_ = -1.0f;
+    // TnRollerMineAbility for any participant (one per owner) [CONF authored CDOs + RE §J4; PhysX ball HIGH].
+    struct RollerMine { bool alive = false; core::Vec3 pos{0, 0, 0}, vel{0, 0, 0}; float t = 0.0f, health = 0.0f; bool onGround = false;
+                        int owner = -1; float delay = -1.0f; int deadTicks = 0; };
+    std::vector<RollerMine> rollers_;
     void tickRollerMine(float dt);
     void explodeRollerMine();
+    void explodeRollerAt(size_t idx);
+    void damageRollerAt(size_t idx, float amount, int instigator);
+    void requestRoller(int owner);
+    const std::vector<RollerMine>& rollerMines() const { return rollers_; }   // every participant's (Rendering / Systems audio: t = age)
+    int participantRollersLive() const { int n = 0; for (const RollerMine& m : rollers_) n += m.alive && m.owner != localPlayer_; return n; }
+
     float missileDelay_ = -1.0f;
     void startGuidedMissile();
     void tickGuidedMissile(float dt);
@@ -671,6 +678,15 @@ public:
     void qaTeleportToStart(int index);                                       // authored player start #index (wraps)
     void qaSetNoclip(bool on);                                               // UFO camera-relative flight, no collision / gravity
     void qaSetGodMode(bool on);                                              // the local pawn ignores damage
+    void qaKillAllBots();                                                    // every bot dies (no score / XP), normal respawn wave
+    void qaFreezeBots(bool on);                                              // bots stop thinking / moving / firing; pawns stay, take damage
+    bool qaBotsFrozen() const { return qaBotsFrozen_; }
+    void qaSetBotOverlay(bool on);                                           // per-bot debug draw (target line, nav path, waypoint)
+    bool qaBotOverlay() const { return qaBotOverlay_; }
+    void qaTeleportToAim();                                                  // the local pawn to the point under the crosshair
+    struct QaBotLabel { core::Vec3 pos; std::string text; int player; };     // overlay labels (world position; the panel projects them)
+    std::vector<QaBotLabel> qaBotLabels() const;
+    void drawQaBotOverlay(render::IRenderer& r) const;
     // A vehicle weapon shot left this socket (PlayerController; reported in HudState for the flash / tracer).
     void noteVehicleShot(int socket, const core::Vec3& muzzle) { ++vehicleShotSerial_; vehicleShotSocket_ = socket; vehicleShotMuzzle_ = muzzle; }
     // Projectile FX diagnostics: renderer has the particle API, FlightEffects spawned, ExplosionEffects spawned, live projectiles.
@@ -697,7 +713,7 @@ public:
     const Sentry& sentry() const;   // the local player's sentry (an empty one when none)
     Character* participantPawnMutable(int player) { return const_cast<Character*>(participantPawn(player)); }
     bool guidedMissileAlive() const { return missile_.alive; }
-    const RollerMine& rollerMine() const { return roller_; }
+    const RollerMine& rollerMine() const;   // the local player's (HUD / tests)
     const std::vector<KamikazeMine>& kamikazeMines() const { return mines_; }
     void damageRollerMine(float amount, int instigator);
     core::Vec3 guidedMissilePos() const { return missile_.pos; }
