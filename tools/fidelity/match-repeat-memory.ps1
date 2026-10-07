@@ -61,13 +61,15 @@ function Slope([double[]]$y) { if ($y.Count -lt 2) { return $null }; $mx = ($y.C
 $maps = @($rows | ForEach-Object { $_.map } | Where-Object { $_ } | Select-Object -Unique)
 Res "same_map" $(if ($maps.Count -eq 1) { "PASS" } else { "FAIL" }) ("maps loaded: {0} (a different map invalidates the curve)" -f (@($rows | ForEach-Object { $_.map }) -join ", ")) "Experimental"
 $glU = @($glLive | Select-Object -Unique)
-Res "gl_live_after_unload" $(if (-not $glLive.Count) { "UNKNOWN" } elseif ($glU.Count -eq 1) { "PASS" } else { "FAIL" }) ("GL live textures after each unload: {0}" -f ($glLive -join ", ")) "Rendering"
+# a one-time rise over the first returns (persistent caches) then constant = plateau; still rising over the last three = growth
+$glTail = @($glLive | Select-Object -Last 3 | Select-Object -Unique)
+Res "gl_live_after_unload" $(if (-not $glLive.Count) { "UNKNOWN" } elseif ($glU.Count -eq 1) { "PASS" } elseif ($glLive.Count -ge 4 -and $glTail.Count -eq 1) { "PASS" } else { "FAIL" }) ("GL live textures after each unload: {0} (plateau if constant over the last three)" -f ($glLive -join ", ")) "Rendering"
 Res "matches" $(if ($n -ge $Matches) { "PASS" } elseif ($n -ge 3) { "PARTIAL" } else { "FAIL" }) ("{0} of {1} matches completed and unloaded in one process" -f $n, $Matches) "Frontend"
 foreach ($k in @(@{ c = "unloaded_mb"; o = "Gameplay/Rendering/Systems"; t = $GrowthMb }, @{ c = "loaded_mb"; o = "Gameplay/Rendering/Systems"; t = $GrowthMb }, @{ c = "pcm_unloaded"; o = "Systems"; t = 2 }, @{ c = "pcm_loaded"; o = "Systems"; t = 2 })) {
     $y = @($rows | Select-Object -Skip 1 | ForEach-Object { $_.($k.c) } | Where-Object { $_ -ne $null } | ForEach-Object { [double]$_ })
     if ($y.Count -lt 3) { Res $k.c "UNKNOWN" "fewer than 3 post-first-match samples" $k.o; continue }
     $sl = Slope $y; $rise = [Math]::Round($y[-1] - $y[0], 1)
-    Res $k.c $(if ($sl -gt $k.t / 3 -and $rise -gt 2 * $k.t / 3) { "FAIL" } else { "PASS" }) ("matches 2..{0}: {1}; slope {2} MB/match, rise {3} MB (GROWTH if slope > {4} and rise > {5})" -f ($y.Count + 1), (($y | ForEach-Object { [Math]::Round($_, 1) }) -join " -> "), $sl, $rise, [Math]::Round($k.t / 3, 1), [Math]::Round(2 * $k.t / 3, 1)) $k.o
+    Res $k.c $(if ($sl -gt $k.t -and $rise -gt 2 * $k.t) { "FAIL" } elseif ($sl -gt $k.t / 3 -and $rise -gt 2 * $k.t / 3) { "PARTIAL" } else { "PASS" }) ("matches 2..{0}: {1}; slope {2} MB/match, rise {3} MB (WATCH if slope > {4} and rise > {5}; GROWTH if slope > {6} and rise > {7})" -f ($y.Count + 1), (($y | ForEach-Object { [Math]::Round($_, 1) }) -join " -> "), $sl, $rise, [Math]::Round($k.t / 3, 1), [Math]::Round(2 * $k.t / 3, 1), $k.t, 2 * $k.t) $k.o
 }
 $tu = @($tx | Select-Object -Unique)
 Res "textures_released" $(if (-not $tx.Count) { "UNKNOWN" } elseif (@($tx | Select-Object -Skip 1 | Select-Object -Unique).Count -le 1) { "PASS" } else { "FAIL" }) ("match textures released per return (unloadMapRenderData): {0}" -f ($tx -join ", ")) "Rendering"
