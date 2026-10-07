@@ -123,7 +123,7 @@ function FlatGreyFraction([string]$bmp) {
 $script:MouseParkCache = @{}
 function Get-MousePark([string]$Root) {
     if (-not $Root) { return "wait:t=0" }
-    if (-not $script:MouseParkCache.ContainsKey($Root)) { $script:MouseParkCache[$Root] = [bool](Get-ChildItem (Join-Path $Root "srcrontend") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'rfind("mouse:"' -SimpleMatch -List | Select-Object -First 1) }
+    if (-not $script:MouseParkCache.ContainsKey($Root)) { $script:MouseParkCache[$Root] = [bool](Get-ChildItem (Join-Path $Root "src\frontend") -Recurse -Include *.cpp -ErrorAction SilentlyContinue | Select-String -Pattern 'rfind("mouse:"' -SimpleMatch -List | Select-Object -First 1) }
     if ($script:MouseParkCache[$Root]) { return "mouse:2,2" } else { return "wait:t=0" }
 }
 function Test-QuitBox([string]$Root) { return [bool](Get-ChildItem (Join-Path $Root "src") -Recurse -Include *.cpp, *.h -ErrorAction SilentlyContinue | Select-String -Pattern "TnQuitMessageBox" -SimpleMatch -List | Select-Object -First 1) }

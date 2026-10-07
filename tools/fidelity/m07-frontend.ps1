@@ -61,7 +61,7 @@ foreach ($k in $aspects.Keys) {
 $d = Join-Path $OutDir "tour"
 $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t=1.5;ui:Down;wait:t=0.6;shot:{D}\08_charselect.bmp;dump:CustomTransformers;$(Nav 'm1.charselect');ui:Accept;" } else { "" }
 $returnToParty = if ($quitBox) { "wait:t=1.5;shot:{D}\12b_quitbox.bmp;$(Nav 'm1.quitbox');ui:Accept;wait:level=PartyLobby;wait:ui=InLobby;wait:t=2;shot:{D}\13_return_party.bmp;snapshot:return_route;$(Nav 'm1.party_after');ui:Back;wait:t=1.5;shot:{D}\14b_quitbox_title.bmp;ui:Accept;wait:level=FrontEnd" } else { "wait:level=FrontEnd" }
-$tour = @("wait:frontend", (Get-MousePark $Root), "wait:ui=FrontEnd", "wait:t=3", "shot:{D}\01_title.bmp", (Nav "c1.main"), "dump:FrontEnd",
+$tour = @((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=3", "shot:{D}\01_title.bmp", (Nav "c1.main"), "dump:FrontEnd",
     "ui:Down", "wait:t=0.5", "ui:Accept", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=2.5", "shot:{D}\02_party.bmp", (Nav "c1.party"), "dump:Lobbies",
     "call:Online.EditGameMode,TDM", "wait:t=1", "shot:{D}\03_modes.bmp", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=2", "shot:{D}\05_gamelobby.bmp", (Nav "c1.gamelobby"), "dump:Lobbies",
     "call:Online.SetSelectedMapID,508", "wait:t=1", "call:Online.BeginLobbyExitCountdown", "wait:loading=1", "wait:t=1", "shot:{D}\07_loading.bmp", "wait:level=Match", $cs, "wait:ui=InGame", "wait:t=2", "shot:{D}\09_ingame.bmp", (Nav "m1.ingame"),
@@ -111,7 +111,7 @@ Res "account.name_in_party_lobby" $(if ($inParty) { "PASS" } elseif (Test-Path $
 
 # ---------------- F. title Matinee over 60 s: animated, authored tracks only, camera moving, every sample healthy
 $d3 = Join-Path $OutDir "title60"; $X = Get-M07Expectations
-RunFE $d3 ((@("wait:frontend", (Get-MousePark $Root), "wait:ui=FrontEnd") + @(1..12 | ForEach-Object { "wait:t=5;shot:$d3\t{0:D2}.bmp" -f ($_ * 5) }) + @("quit")) -join ";") @{ WFC_SKIPINTRO = "1" }
+RunFE $d3 ((@((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd") + @(1..12 | ForEach-Object { "wait:t=5;shot:$d3\t{0:D2}.bmp" -f ($_ * 5) }) + @("quit")) -join ";") @{ WFC_SKIPINTRO = "1" }
 $tf = @(Get-ChildItem $d3 -Filter "t*.bmp" -ErrorAction SilentlyContinue | Sort-Object Name)
 if ($tf.Count) {
     $verd = @($tf | ForEach-Object { Present-SceneVerdict (Present-Measure $_.FullName $script:PresentRegions.title_scene) })

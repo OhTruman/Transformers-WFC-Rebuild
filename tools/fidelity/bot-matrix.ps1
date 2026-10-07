@@ -41,7 +41,7 @@ foreach ($r in $runs) {
         if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
         "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$($r.f)`nBotsEnemy=$($r.e)`nBotDifficulty=$diff`n" | Set-Content -Encoding ASCII (Join-Path $d "wfc_profile.ini")
         $party = if ($r.mode -eq "DM") { "GTS_FreeForAllGame" } else { "GTS_TeamGame" }
-        $s = @("wait:frontend", (Get-MousePark $Root), "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,$party", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=1",
+        $s = @((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,$party", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=1",
                "call:Online.EditGameMode,$($r.mode)", "call:Online.PlayPrivateGame,$($r.mode)", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5", "call:Online.SetSelectedMapID,$($mapId[$r.map])", "wait:t=1",
                "call:Online.BeginLobbyExitCountdown", "wait:level=Match", "${cs}wait:ui=InGame", "wait:t=$Seconds", "quit") -join ";"
         $e = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $s; WFC_FLOWLOG = (Join-Path $d "flow.jsonl"); WFC_FLOW_TIMEOUT = "400";
