@@ -377,7 +377,13 @@ BridgeValue GameFlow::call(const std::string& fn, const std::vector<std::string>
     if (fn == "Online.PlayPlaylist") { playPlaylist(argi(0), arg(1) == "true" || arg(1) == "1"); return {}; }
     if (fn == "Online.SetSelectedMapID") {
         // -> TnGameLobbyGame.HostRequestMapID -> GRI.HostRequestMapID (ignored unless MapSelectionMethod 1).
-        if (level_ == LevelKind::GameLobby && lobby_.mapSelectionMethod == 1) setMapId(argi(0));
+        if (level_ == LevelKind::GameLobby && lobby_.mapSelectionMethod == 1) {
+            const bool init = selectorInit_;
+            selectorInit_ = false;
+            lobbyMapInit_ = init;
+            setMapId(argi(0));
+            lobbyMapInit_ = false;
+        }
         else FlowTrace::emit("lobby.mapRequestIgnored", {{"mapId", arg(0)}, {"method", std::to_string(lobby_.mapSelectionMethod)}});
         return {};
     }
@@ -781,6 +787,9 @@ void GameFlow::gameLobbyBegin() {
     // GRI.OnEnterLobbyFromMap(GRI.GetMapID()): MapId == -1 or Rotate or campaign -> ChooseNextMap, else SetMapId.
     int prev = levelUrl_.intOption("MapId", -1);
     lobbyMapInit_ = true;
+    // GameLobby_GFX selectMap_mc.selectionUpdated sends SetSelectedMapID when its list fills, before any input
+    // [CONFIRMED script]: that first write is the lobby's set-up too, not a map change.
+    selectorInit_ = true;
     if (prev == -1 || lobby_.mapSelectionMethod == 0) chooseNextMap(prev);
     else setMapId(prev);
     lobbyMapInit_ = false;
