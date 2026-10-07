@@ -20,3 +20,8 @@ Whether this is the correct energon-sign look or an overexposed / wrong frame is
     AnimTest3 avg RGB 14, 61, 86 -> cyan).
   => both layers are off: the base is pale, and the sign layer's colour is wrong (Rendering to check the AnimSign3 graph /
   flipbook source / the 3x energon-noise path).
+
+## Closed: the Streets sign matches
+streets_sign_noclut.jpg: with WFC_NOCLUT=1 (Streets' authored CLUT ENV_MPCLUT_p.MP_Streets_CLUT off, diagnostics only) the
+strip shows CYAN / BLUE animated glyphs and a cyan ring. The pale-pink look is the authored colour grade acting on a correct
+cyan emissive (Rendering's graph analysis), so it MATCHES - not a texture / channel bug.
