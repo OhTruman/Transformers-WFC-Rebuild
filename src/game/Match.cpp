@@ -641,11 +641,11 @@ void Match::tickRounds(float dt) {
     if (s_.singleFlagCTF && currentRound_ == s_.rounds - 1 && attackingTeam_ <= 1) {
         int lastAttacker = attackingTeam_;                        // the team attacking in the last round
         int other = 1 - lastAttacker;
-        if (teamScore_[lastAttacker] > teamScore_[other]) { endGame(-1, "Score"); return; }
+        if (teamScore_[lastAttacker] > teamScore_[other]) { endGame(-1, "Score"); return; }   // CheckMercyRule: EndGame(none, "Score") [CONF script]
     }
     if (roundTimeLeft_ > 0.0f) return;
     ++currentRound_;
-    if (currentRound_ >= s_.rounds) { endGame(-1, "Score"); return; }
+    if (currentRound_ >= s_.rounds) { endGame(-1, "Score"); return; }   // CheckEndCondition: rounds done -> EndGame(none, "Score") [CONF script]
     betweenRounds_ = true;
     betweenRoundsLeft_ = s_.timeBetweenRounds;
     if (s_.singleFlagCTF && attackingTeam_ <= 1) attackingTeam_ = 1 - attackingTeam_;
