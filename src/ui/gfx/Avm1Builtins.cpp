@@ -1,5 +1,6 @@
 // AVM1 built-in classes and global functions used by the WFC movies (SWF 8 player API subset).
 #include "ui/gfx/Avm1.h"
+#include "core/FrameProfile.h"
 #include "ui/gfx/Display.h"
 #include "core/Log.h"
 
@@ -288,6 +289,7 @@ void VM::installBuiltins() {
     };
     method(vm, arrayProto, "sort", [sortImpl](VM& vm, const Value& self, Args& a) { return sortImpl(vm, self, a, {}); });
     method(vm, arrayProto, "sortOn", [sortImpl](VM& vm, const Value& self, Args& a) {
+        core::prof::Scope prof("avm.sortOn");
         std::vector<std::string> f;
         Value fv = arg(a, 0);
         if (fv.isObject() && fv.o->kind == ObjKind::Array) for (auto& e : fv.o->elems) f.push_back(vm.toString(e));

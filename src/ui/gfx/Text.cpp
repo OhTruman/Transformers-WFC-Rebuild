@@ -1,5 +1,6 @@
 // GFx TextField content (plain / HTML subset) and layout with the movies' embedded DefineFont3 outlines.
 #include "ui/gfx/Display.h"
+#include "core/FrameProfile.h"
 #include "core/Log.h"
 
 #include <algorithm>
@@ -240,6 +241,7 @@ std::string TextField::htmlText() const {
 }
 
 void TextField::layout() {
+    core::prof::Scope prof("gfx.textLayout");
     const unsigned gen = player->promptGen ? *player->promptGen : 0u;
     if (!layoutDirty && ((imageSubs.empty() && srcKey.empty()) || promptGen == gen)) return;
     if (promptGen != gen && !srcKey.empty()) {   // the device switched: the $key's text for the new device

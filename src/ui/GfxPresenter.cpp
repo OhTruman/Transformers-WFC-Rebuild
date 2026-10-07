@@ -159,11 +159,24 @@ struct UiProf {
     double sum = 0; int n = 0;
     std::chrono::steady_clock::time_point t0;
     static bool on() { static const bool v = std::getenv("WFC_UIPROF") != nullptr; return v; }
-    void begin() { if (on()) t0 = std::chrono::steady_clock::now(); }
+    std::map<std::string, double> cats0;
+    void begin() {
+        if (!on()) return;
+        t0 = std::chrono::steady_clock::now();
+        if (core::prof::enabled()) cats0 = core::prof::frame();
+    }
     void end() {
         if (!on()) return;
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-        if (ms > 4.0) LOG_INFO("uiprof slow %s %.2f ms", name, ms);   // one frame over budget
+        if (ms > 4.0) {   // one frame over budget, with what ran in it (WFC_FRAMEPROF categories)
+            std::string cats;
+            if (core::prof::enabled())
+                for (const auto& [k, v] : core::prof::frame()) {
+                    const double d = (v - (cats0.count(k) ? cats0[k] : 0.0)) * 1000.0;
+                    if (d >= 0.5) { char b[64]; std::snprintf(b, sizeof b, " %s=%.1f", k.c_str(), d); cats += b; }
+                }
+            LOG_INFO("uiprof slow %s %.2f ms%s", name, ms, cats.c_str());
+        }
         sum += ms;
         if (++n == 300) { LOG_INFO("uiprof %s avg %.3f ms (300 frames)", name, sum / n); sum = 0; n = 0; }
     }
@@ -347,6 +360,7 @@ GfxMovie* GfxPresenter::openMovie(const std::string& object) {
 }
 
 Value GfxPresenter::bridge(GfxMovie& m, const std::string& fn, Args& a) {
+    core::prof::Scope prof("gfx.bridge");
     std::vector<std::string> sa;
     // An undefined / null argument reaches an UnrealScript string parameter as "" (not "undefined"): e.g. the
     // Customize.CommitCharacter weapon list of an unset slot.
@@ -549,6 +563,7 @@ void GfxPresenter::setColorHex(gfx::avm1::VM& vm, const Value& target, const Val
 }
 
 Value GfxPresenter::hudInterpAdd(GfxMovie& m, Args& a) {
+    core::prof::Scope prof("gfx.interpAdd");
     // HmObjectInterpolator.addInterp(target, interpTime, animType, interpCurve, overShoot, interpParams): one entry
     // per parameter; an entry for the same target + property replaces the running one (_global.addInterp).
     gfx::avm1::VM& vm = m.player().vm();
