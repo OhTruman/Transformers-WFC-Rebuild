@@ -1,0 +1,159 @@
+﻿{
+    "summary":  {
+                    "pass":  10,
+                    "fail":  6,
+                    "known":  0,
+                    "info":  4,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  4
+                },
+    "results":  [
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m1.end",
+                        "status":  "FAIL",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=(none) (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m1.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 6, off-mesh samples 31"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m1.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 2.99 / p95 13.4 / p99 16.39 / max 27.12 ms over 13068 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 0 / p99 3.94 ms; AI avg 0.855 / max 2.9 ms"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m1.audio",
+                        "status":  "PARTIAL",
+                        "owner":  "Systems",
+                        "note":  "voices max 96, dropped 18, stolen 216, mix max 0.484 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m2.end",
+                        "status":  "FAIL",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=(none) (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m2.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 5, off-mesh samples 22"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m2.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 20.84 / p95 25.12 / p99 26.58 / max 46.3 ms over 2728 frames; \u003e 33 ms: 2, \u003e 50 ms: 0; sim p50 3.74 / p99 7.22 ms; AI avg 0.868 / max 7.26 ms"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m2.target_300fps",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "1920x1080 508 p32v32: p50 20.84 / p90 24.04 / p99 26.58 ms; frames under 3.33 ms 0 %; split (RENDERSTATS run, glFinish-serialised): frame 20.66 ms = scene submit (CPU) 14.77 ms + gpu wait 1.09 ms over 16 samples. MET = p90 \u003c= 3.33 ms, PARTIAL = p50 \u003c= 3.33 ms"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.m2.audio",
+                        "status":  "PARTIAL",
+                        "owner":  "Systems",
+                        "note":  "voices max 97, dropped 378, stolen 1530, mix max 0.513 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_1920x1080.second_match_and_exit",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "2 matches started; clean exit True"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m1.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m1.end",
+                        "status":  "FAIL",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=(none) (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m1.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 6, off-mesh samples 22"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m1.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 21.75 / p95 28.6 / p99 30.83 / max 52.38 ms over 2591 frames; \u003e 33 ms: 4, \u003e 50 ms: 1; sim p50 4.25 / p99 8.91 ms; AI avg 0.908 / max 23.95 ms"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m1.audio",
+                        "status":  "PARTIAL",
+                        "owner":  "Systems",
+                        "note":  "voices max 98, dropped 610, stolen 1884, mix max 0.524 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m2.spawned",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "spawned 64 of 64 participants"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m2.end",
+                        "status":  "FAIL",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=(none) (TimeLimit 60 s)"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m2.bots",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "broken 0, struggling 0, max no-path 4, off-mesh samples 30"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m2.frame",
+                        "status":  "INFO",
+                        "owner":  "Gameplay/Rendering",
+                        "note":  "frame p50 21.6 / p95 26.57 / p99 28.44 / max 33.13 ms over 2633 frames; \u003e 33 ms: 0, \u003e 50 ms: 0; sim p50 3.92 / p99 7.65 ms; AI avg 0.841 / max 2.76 ms"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m2.target_300fps",
+                        "status":  "FAIL",
+                        "owner":  "Rendering/Gameplay",
+                        "note":  "2560x1440 508 p32v32: p50 21.6 / p90 25.36 / p99 28.44 ms; frames under 3.33 ms 0 %; split (RENDERSTATS run, glFinish-serialised): frame 20.05 ms = scene submit (CPU) 13.67 ms + gpu wait 1.26 ms over 16 samples. MET = p90 \u003c= 3.33 ms, PARTIAL = p50 \u003c= 3.33 ms"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.m2.audio",
+                        "status":  "PARTIAL",
+                        "owner":  "Systems",
+                        "note":  "voices max 98, dropped 849, stolen 2888, mix max 0.521 ms / block"
+                    },
+                    {
+                        "id":  "capacity.508_p32v32_2560x1440.second_match_and_exit",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "2 matches started; clean exit True"
+                    }
+                ]
+}
