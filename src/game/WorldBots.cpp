@@ -105,7 +105,7 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
     if (hitSentry) { float ts; if (sentryRayHit(origin, dir, range, ts)) damageSentry(w.damageAt(ts), instigator, w.damageType ? w.damageType : ""); }
     if (hitBarrier) damageBarrier(w.damageAt(dist), w.damageType ? w.damageType : "");
     if (hitPlayer >= 0) {
-        if (hitPlayer == localPlayer_) { ++damageTakenCount_; lastDamageFrom_ = origin; }
+        // (the local damage-taken count / direction are recorded once, in applyMatchDamage)
         applyMatchDamage(hitPlayer, instigator, w.damageAt(dist), false, w.damageType ? w.damageType : "");
         for (BotBrain& b : bots_) {
             if (b.player == hitPlayer) { b.lastDamageTime = match_.matchTime(); b.lastAttacker = instigator; }

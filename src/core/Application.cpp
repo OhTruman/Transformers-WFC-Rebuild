@@ -174,6 +174,7 @@ bool Application::init() {
     if (std::getenv("WFC_VEHICLEAUDIT")) { runVehicleAudit(); return false; }      // VehicleParams vs tuning_tables.json
     if (std::getenv("WFC_VEHFRAMETEST")) { runVehicleFrameTest(); return false; }   // the same drive at 60 / 120 / 240 fps
     if (const char* ss = std::getenv("WFC_STUCKSPOT")) { runStuckSpot(ss); return false; }   // what blocks a robot at a spot
+    if (std::getenv("WFC_MARKERSTEST")) { runMarkersTest(); return false; }        // presented().markers per mode (RE 7bb8ec1 rules)
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -4268,6 +4269,7 @@ void Application::runBotTest() {
               "roster: " + std::to_string(friendly) + " friendly + " + std::to_string(enemy) + " enemy bots, unique names, levels");
         if (phase != 4) check(classes[0].size() >= 3 && classes[1].size() >= 3, "class spread per team (>= 3 of 4 classes each)");   // FFA: no teams
         world_.resetBotTiming();
+        const int rollerSpawns0 = world_.participantRollerSpawns_;
         const size_t ev0 = world_.match().gameplayEvents().size();
         std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
         int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0, jetFlySamples = 0, driveSamples = 0, nitroStarts = 0, sentrySamples = 0, barrierSamples = 0, beaconSamples = 0, rollerSamples = 0;
@@ -4354,8 +4356,21 @@ void Application::runBotTest() {
         // Melee is situational (open maps engage at range): logged above; grenades are required.
         if (phase >= 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
         if (phase >= 1) check(streaks > 0, "bots trigger killstreak rewards (" + std::to_string(streaks) + ")");
+        {   // kill damage types (the frontend's kill line): every kill should carry its weapon's DamageType class
+            std::map<std::string, int> byType; int emptyKills = 0;
+            for (const game::KillFeedEntry& k : world_.match().killHistory()) {
+                if (k.messageSwitch != 0) continue;
+                ++byType[k.damageType.empty() ? std::string("<empty>") : k.damageType];
+                emptyKills += k.damageType.empty();
+            }
+            std::string s; for (const auto& kv : byType) s += " " + kv.first + "=" + std::to_string(kv.second);
+            LOG_INFO("BOTTEST kill damage types:%s", s.c_str());
+            check(emptyKills == 0, "every kill carries a damage type (" + std::to_string(emptyKills) + " without)");
+        }
         if (phase >= 1) check(beaconSamples > 0, "bots drop ammo crates (" + std::to_string(beaconSamples) + " steps)");
-        if (phase >= 1) check(rollerSamples > 0, "bots roll roller spheres (" + std::to_string(rollerSamples) + " steps)");
+        // Informational: a roller needs a RollerSphere Leader on foot with an enemy in sight 10-40 m; truck Leaders often drive, so a
+        // 120 s run may see none (it passed / failed by match luck). WFC_STUCKSPOT_BOT / PARTICIPANT cover the mechanics.
+        if (phase >= 1) LOG_INFO("BOTTEST INFO bots rolled %d roller spheres (%d live steps)", world_.participantRollerSpawns_ - rollerSpawns0, rollerSamples);
         if (phase >= 1) check(sentrySamples > 0 && barrierSamples > 0, "bots deploy sentries (" + std::to_string(sentrySamples) + " steps) and barriers (" + std::to_string(barrierSamples) + " steps)");
         if (phase >= 1) check(jetSamples > 0, "jet bots fly (" + std::to_string(jetSamples) + " jet-steps, " + std::to_string(jetFlySamples) + " in Flying)");
         if (phase >= 1) check(driveSamples > 0, "ground vehicle bots boost by the VEHDEF AI rule (" + std::to_string(driveSamples) + " boost-steps, max nitro starts per bot " + std::to_string(nitroStarts) + ")");
@@ -5328,6 +5343,33 @@ void Application::runStuckSpot(const char* spec) {
         }
         LOG_INFO("STUCKSPOT bot p%d: max %.1f m from the spot in 20 s -> %s", o->matchPlayer(), maxAway, maxAway > 10.0f ? "ESCAPED" : "STILL STUCK");
     }
+}
+
+// WFC_MARKERSTEST: presented().markers per mode with RE's display rules (7bb8ec1): DOM every node, KOTH only the active zone, CTF one
+// flag marker (and no capture point for a non-carrier), EXT the bomb + only the target plant point, TDM ally tags.
+void Application::runMarkersTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("MARKERS %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    for (const char* mode : {"TDM", "DOM", "KOTH", "CTF", "EXT"}) {
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=" + std::string(mode) + "?BotsFriendly=2?BotsEnemy=3?TimeLimit=600", L);
+        if (!world_.launchMatch(L)) { check(false, std::string(mode) + ": launch"); continue; }
+        for (int i = 0; i < 60 * 20 && (world_.match().state() != game::Match::State::InProgress || world_.localPlayerDead()); ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+        for (int i = 0; i < 60 * 3; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+        std::map<std::string, int> byType;
+        for (const auto& m : world_.presented().markers) if (!m.removing) ++byType[m.type];
+        std::string s; for (const auto& kv : byType) s += " " + kv.first.substr(21) + "=" + std::to_string(kv.second);
+        LOG_INFO("MARKERS %s:%s", mode, s.c_str());
+        auto n = [&](const char* t) { auto it = byType.find(std::string("TnObjectiveMarkerType") + t); return it == byType.end() ? 0 : it->second; };
+        const std::string md = mode;
+        if (md == "TDM") check(n("TransformerVersus") >= 2, "TDM: ally tags (" + std::to_string(n("TransformerVersus")) + ")");
+        if (md == "DOM") check(n("Domination") >= 3, "DOM: every node (" + std::to_string(n("Domination")) + ")");
+        if (md == "KOTH") check(n("KingOfTheHill") == 1, "KOTH: only the active zone (" + std::to_string(n("KingOfTheHill")) + ")");
+        if (md == "CTF") check(n("Flag") == 1 && n("FlagCapturePoint") == 0, "CTF: one flag marker, no capture point for a non-carrier");
+        if (md == "EXT") check(n("Bomb") == 1 && n("BombPlantPoint") <= 1, "EXT: the bomb + at most the target plant point (" + std::to_string(n("BombPlantPoint")) + ")");
+    }
+    LOG_INFO("MARKERS SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core
