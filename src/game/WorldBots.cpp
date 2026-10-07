@@ -114,7 +114,7 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
     }
     if (hitDes) hitDes->applyDamage(*this, w.damageAt(dist));
     const core::Vec3 hitPoint = origin + dir * dist;
-    participantShots_.push_back({instigator, w.def ? w.def->id : "", origin, hitPoint, dist < range - 0.01f, hitPlayer});
+    participantShots_.push_back({instigator, w.def ? w.def->id : "", origin, hitPoint, dist < range - 0.01f, hitPlayer, pellet_});
 }
 
 void World::botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& aimPoint) {
@@ -133,7 +133,8 @@ void World::botFire(MatchOpponent& o, BotBrain& b, Weapon& w, const core::Vec3& 
         if (w.projHoming && b.target >= 0) projectiles_.back().target = b.target;   // AI fires homing weapons at its enemy
         participantShots_.push_back({o.matchPlayer(), w.def ? w.def->id : "", muzzle, aimPoint, false, -1});
     } else if (w.simulated() && !w.beam()) {
-        for (int k = 0; k < std::max(1, w.shots); ++k) fireHitscanAs(o.matchPlayer(), pc, w, eye, d);
+        for (int k = 0; k < std::max(1, w.shots); ++k) { pellet_ = k; fireHitscanAs(o.matchPlayer(), pc, w, eye, d); }
+        pellet_ = 0;
         b.shots += std::max(1, w.shots) - 1;   // diagnostics count every pellet trace (hits are per pellet)
     }
 }

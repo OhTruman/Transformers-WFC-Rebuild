@@ -179,6 +179,7 @@ bool Application::init() {
     if (std::getenv("WFC_MARKERSTEST")) { runMarkersTest(); return false; }        // presented().markers per mode (RE 7bb8ec1 rules)
     if (std::getenv("WFC_ENGAGETEST")) { runEngageTest(); return false; }          // bots engage the local player
     if (std::getenv("WFC_ASYNCSTEPTEST")) { runAsyncStepTest(); return false; }    // async step == sync step (WFC_ASYNCSTEP=1)
+    if (std::getenv("WFC_SCALETEST")) { runScaleTest(); return false; }            // per-phase step cost vs participant count
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -5553,6 +5554,49 @@ void Application::runAsyncStepTest() {
     check(a.size() > 100, "the match produced events (" + std::to_string(a.size()) + ")");
     check(a == b, "identical event logs and final pawn states (sync vs async)");
     LOG_INFO("ASYNCSTEP SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+
+// WFC_SCALETEST: per-phase simulation cost per step vs participant count (scalability pass). The same seeded TDM at N = 10 / 20 / 32 /
+// 48 / 64 (WFC_SCALETEST_NS="10,32" to choose), synchronous whole steps, no draw: 20 s warm-up (spawns, first engagements), then
+// WFC_SCALETEST_SECS (default 30) measured. Per N: the whole step and each WFC_TICKPROF phase in ms / step, plus ms per participant,
+// so a phase growing faster than N shows as a rising per-participant cost.
+void Application::runScaleTest() {
+#ifdef _WIN32
+    if (!std::getenv("WFC_SEED")) _putenv_s("WFC_SEED", "7");
+#else
+    if (!std::getenv("WFC_SEED")) setenv("WFC_SEED", "7", 0);
+#endif
+    std::vector<int> ns = {10, 20, 32, 48, 64};
+    if (const char* e = std::getenv("WFC_SCALETEST_NS")) { ns.clear(); for (const char* p = e; *p;) { ns.push_back(std::atoi(p)); while (*p && *p != ',') ++p; if (*p) ++p; } }
+    const float secs = std::getenv("WFC_SCALETEST_SECS") ? (float)std::atof(std::getenv("WFC_SCALETEST_SECS")) : 30.0f;
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    game::World::setStepProfiling(true);
+    for (int N : ns) {
+        const int a = N / 2 - 1, d = N - 1 - a;
+        game::MatchLaunch L;
+        game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsAutobot=" + std::to_string(a) + "?BotsDecepticon=" + std::to_string(d) +
+                                   "?BotDifficulty=2?TimeLimit=900" + (N > 10 ? "?ExtendedPlayers=1" : ""), L);
+        if (!world_.launchMatch(L)) { LOG_INFO("SCALE N=%d: launch failed", N); continue; }
+        for (int i = 0; i < (int)(20.0f / dt); ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+        game::World::stepProfileReset();
+        const int steps = (int)(secs / dt);
+        const auto t0 = std::chrono::steady_clock::now();
+        for (int i = 0; i < steps; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+        const double wall = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count() / steps;
+        int alive = 0; for (const game::MatchOpponent* o : world_.matchOpponents()) alive += o->spawned();
+        std::string line;
+        for (const auto& kv : game::World::stepProfileSums()) {
+            const double ms = kv.second / steps;
+            if (ms < 0.005) continue;
+            char b[64]; std::snprintf(b, sizeof b, " %s %.3f", kv.first.c_str(), ms); line += b;
+        }
+        LOG_INFO("SCALE N=%d (%zu participants, %d bots spawned): step %.3f ms (%.4f ms / participant) |%s", N, world_.match().players().size(), alive, wall,
+                 wall / std::max<size_t>(1, world_.match().players().size()), line.c_str());
+    }
+    game::World::setStepProfiling(false);
+    LOG_INFO("SCALE done");
 }
 
 } // namespace core

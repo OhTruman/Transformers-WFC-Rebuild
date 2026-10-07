@@ -579,8 +579,8 @@ void World::fireHitscanWith(const Weapon& w, const core::Vec3& origin, const cor
     // WeaponFx reproduces the Ion Blaster's cooked particle systems only; other weapons' muzzle / tracer / squib templates
     // are exposed (HudGameState / WeaponDef) for Rendering instead of drawing the Ion Blaster's [PARTIAL].
     const bool ionFx = !w.def || std::string(w.def->id) == "IonBlaster";
-    if (ionFx && weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(ms);
-    if (ionFx) fx_.spawnTracer(muzzle, hitPoint);
+    if (ionFx && pellet_ == 0 && weaponSocketWorld("MuzzleFlash", ms)) fx_.spawnMuzzleFlash(ms);   // fire effects: pellet 0 only
+    if (ionFx && pellet_ == 0) fx_.spawnTracer(muzzle, hitPoint);
     if (dist < range - 0.01f)
         fx_.spawnImpact(hitPoint, dir * -1.0f, origin);
     if (std::getenv("WFC_MUZZLELOG") && player_.pawn().hasWeapon()) {
@@ -989,6 +989,7 @@ void World::tickParticipantWeapons(float dt) {
     // This step's participant shots: the muzzle socket of the shooter's shown weapon (else its eye frame along the shot).
     for (const ParticipantShot& s : participantShots_) {
         if (s.weapon == "RepairRay") continue;   // the beam has its own looping presentation [PARTIAL for bots]
+        // Pellets after the first: impact only (the hook gets them with s.pellet > 0; the fallback below draws muzzle / tracer only).
         core::Mat4 muzzle = core::Mat4::identity();
         bool have = false;
         if (const MatchOpponent* o = (size_t)s.player < oppByPlayer_.size() ? oppByPlayer_[(size_t)s.player] : nullptr; o && o->spawned()) {
@@ -1012,7 +1013,7 @@ void World::tickParticipantWeapons(float dt) {
                 if (tickProfOn()) tickProfAdd(25, profNowMs() - fx0);   // WFC_TICKPROF glue.shotFx
             });
         }
-        else if (partShotFx_.size() < 256) {
+        else if (s.pellet == 0 && partShotFx_.size() < 256) {
             const WeaponDef* d = findWeaponDef(s.weapon);
             partShotFx_.push_back({s.weapon, muzzle, s.to, !(d && d->projSpeed > 0.0f), fxTeamOf(s.player)});   // projectiles draw their own flight effect
         }
@@ -1126,7 +1127,9 @@ void World::setRenderAlpha(float a) {
 namespace {
 // WFC_TICKPROF (diagnostics): accumulated ms per World::tick phase, logged every 300 steps.
 struct TickProf {
-    static bool on() { static const bool o = std::getenv("WFC_TICKPROF") != nullptr; return o; }
+    static bool env() { static const bool o = std::getenv("WFC_TICKPROF") != nullptr; return o; }
+    static bool& forced() { static bool f = false; return f; }   // World::setStepProfiling (WFC_SCALETEST)
+    static bool on() { return env() || forced(); }
     double acc[27] = {}; long n = 0;
     const char* names[27] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
                              "separate", "mapstate", "TOTAL", "ab.barrier", "ab.beacon", "ab.sentry", "ab.roller", "bot.think", "bot.steer", "bot.aim",
@@ -1137,6 +1140,13 @@ struct TickProf {
 TickProf& tickProf() { static TickProf p; return p; }
 }
 bool tickProfOn() { return TickProf::on(); }
+void World::setStepProfiling(bool on) { TickProf::forced() = on; }
+void World::stepProfileReset() { for (double& a : tickProf().acc) a = 0.0; }
+std::vector<std::pair<std::string, double>> World::stepProfileSums() {
+    std::vector<std::pair<std::string, double>> v;
+    for (int i = 0; i < 27; ++i) v.push_back({tickProf().names[i], tickProf().acc[i]});
+    return v;
+}
 void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 27) tickProf().acc[slot] += ms; }
 namespace {
 struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) tickProf().acc[slot] += profNowMs() - t0; } };
@@ -1203,6 +1213,11 @@ void World::joinStep() {
             if (++n % 300 == 0) {
                 LOG_INFO("ASYNCSTEP local part %.3f ms avg (beginStep %.3f), background part %.3f ms avg, main-thread join wait %.3f ms avg", prefixMsAcc_ / 300.0,
                          beginStepMsAcc_ / 300.0, rem / 300.0, acc / 300.0);
+                static const char* secNames[12] = {"commands", "beginStep", "bodyPreload", "mapState", "listener", "localBuffs", "abilities", "regen",
+                                                   "match", "awards", "localController", "weaponPreload"};
+                std::string sec;
+                for (int i = 0; i < 12; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.3f", secNames[i], prefixSecMs_[i] / 300.0); sec += b; prefixSecMs_[i] = 0.0; }
+                LOG_INFO("ASYNCSTEP local part by section (ms / step):%s", sec.c_str());
                 acc = rem = 0.0; prefixMsAcc_ = 0.0; beginStepMsAcc_ = 0.0;
             }
         }
@@ -1253,8 +1268,11 @@ void World::preloadHeldWeaponsOfPawns() {
 
 void World::tickPrefix(float dt) {
     joinStep();
+    static const bool secLog = std::getenv("WFC_ASYNCLOG") != nullptr;
+    auto prefixMark = [&](int i) { if (!secLog) return; const double t = profNowMs(); prefixSecMs_[i] += t - prefixMark_; prefixMark_ = t; };
+    prefixMark_ = secLog ? profNowMs() : 0.0;
     struct PrefixTime { double& acc; double t0 = profNowMs(); ~PrefixTime() { acc += profNowMs() - t0; } } prefixTime{prefixMsAcc_};
-    if (TickProf::on() && ++tickProf().n % 300 == 0) {
+    if (TickProf::env() && ++tickProf().n % 300 == 0) {
         std::string line;
         for (int i = 0; i < 27; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
@@ -1265,6 +1283,7 @@ void World::tickPrefix(float dt) {
         for (auto& c : cmds) c(*this);
     }
     pendingDt_ = dt; remainderPending_ = true;   // the background part (finishRemainder) completes this step
+    prefixMark(0);
     // The local pawn's presentation yaw offset (set per render frame by the controller) is not simulation state: the step's
     // meshMatrix / sockets use the simulated yaw only (the next frame's input pass sets the offset again for drawing).
     player_.pawn().setDrawYawOffset(0.0f);
@@ -1275,6 +1294,7 @@ void World::tickPrefix(float dt) {
         core::WorkerPool::get().run((int)opponents_.size(), [&](int i) { opponents_[(size_t)i]->pawn().beginStep(); });   // each its own pawn
         beginStepMsAcc_ += profNowMs() - b0;
     }
+    prefixMark(1);
     // WFC_EVENTLOG (diagnostics): each authoritative gameplay event once, with its main context.
     {
         static const bool evlog = std::getenv("WFC_EVENTLOG") != nullptr;
@@ -1314,15 +1334,18 @@ void World::tickPrefix(float dt) {
             if (want != preloadedSelection_) { preloadedSelection_ = want; preloadHeldWeaponModels(want); }
         }
     }
+    prefixMark(2);
     pickupEvents_.clear();
     matchEvents_.clear();
     destructibleEvents_.clear();
     if (collision_.valid()) { TickTimer tt(13); mapState_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr); }
+    prefixMark(3);
     {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
         render::Camera cam;
         player_.controller().updateCamera(cam);
         listenerPos_ = cam.pos;
     }
+    prefixMark(4);
     // Health regeneration (robot blueprint HealthRegenParameters, both forms) for every live pawn.
     {
         Character& lp = player_.pawn();
@@ -1337,10 +1360,14 @@ void World::tickPrefix(float dt) {
         if (player_.controller().consumeGrenadeRequest()) startLocalGrenadeToss();
         if (deferredKillstreak_ && lp.moveForm() == Form::Robot && !lp.isTransforming()) { deferredKillstreak_ = false; triggerLocalKillstreak(); }
     }
+    prefixMark(5);
     { TickTimer tt(1); tickAbilityEffects(dt); }
+    prefixMark(6);
     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt, o->pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
+    prefixMark(7);
     if (matchActive_) { TickTimer tt(2); tickMatch(dt); }
+    prefixMark(8);
     if (matchActive_) {
         awards_.consume(match_);
         static const bool xplog = std::getenv("WFC_XPLOG") != nullptr;   // diagnostics: each award once (left undrained for the caller)
@@ -1353,10 +1380,13 @@ void World::tickPrefix(float dt) {
             xpLogged_ = awards_.pendingXp().size();
         }
     }
+    prefixMark(9);
     if (!localPlayerDead()) {                       // dead / not yet spawned (match): no pawn simulation
         player_.controller().applyToPawn(*this, dt);   // also feeds the aim pitch to the pawn
     }
+    prefixMark(10);
     if (asyncStepEnabled()) preloadHeldWeaponsOfPawns();
+    prefixMark(11);
 }
 
 // The background part of a step (after the local controller): bots, participants, weapons, FX, audio glue, projectiles, actors.
