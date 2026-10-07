@@ -38,11 +38,17 @@ $cs = if ($H.Contains("WFC_CHARSELECT")) { "wait:movie=CustomTransformers;wait:t
 $script = (@((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,GTS_TeamGame", "wait:level=PartyLobby", "wait:ui=InLobby", "wait:t=1",
             "call:Online.EditGameMode,TDM", "call:Online.PlayPrivateGame,TDM", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=1.5", "call:Online.SetSelectedMapID,508", "wait:t=1",
             "call:Online.BeginLobbyExitCountdown", "wait:level=Match", "${cs}wait:ui=InGame", "wait:ui=GameEnded", "wait:t=3", "wait:level=GameLobby", "wait:ui=InLobby", "wait:t=2", "quit") -join ";")
-function RunOnce([string]$tag) {
+# run C: the real Create a Character UI highlights a NEW item (Frontend 2026-10-07: first custom character -> overview ->
+# Down x2 -> Accept (Abilities Select) -> Down = highlight -> Customize.MarkSkillAsOld); run D: restart, idle at the title, quit
+$scriptC = (@((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=2", "call:Online.OpenPartyLobby,GTS_TeamGame", "wait:level=PartyLobby", "wait:t=3",
+             "clickclip:lobby_mc.menuAnchor_mc.menu_mc.customCharacters_mc", "wait:t=3", "ui:Accept", "wait:t=6", "ui:Down", "wait:t=0.5", "ui:Down", "wait:t=0.5", "ui:Accept", "wait:t=3",
+             "ui:Down", "wait:t=1.5", "ui:Back", "wait:t=3", "quit") -join ";")
+$scriptD = (@((Get-MousePark $Root), "wait:frontend", "wait:ui=FrontEnd", "wait:t=3", "quit") -join ";")
+function RunOnce([string]$tag, [string]$scr = $script) {
     $flow = Join-Path $OutDir "flow_$tag.jsonl"
     if (-not $ReportOnly -and -not (Test-Path $flow)) {
         if (-not (Wait-WfcGpu)) { return $false }
-        $e = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $script; WFC_FLOWLOG = $flow; WFC_FLOW_TIMEOUT = "600";
+        $e = @{ WFC_BOOT = "frontend"; WFC_SKIPINTRO = "1"; WFC_NOMOUSE = "1"; WFC_FRONTEND_SCRIPT = $scr; WFC_FLOWLOG = $flow; WFC_FLOW_TIMEOUT = "600";
                 WFC_SMOKE_FRAMES = "100000000"; WFC_LOGEVERY = "0"; WFC_AUTOWALK = "1"; WFC_AUTOTURN = "0.2"; WFC_XPLOG = "1" }   # Gameplay's producer log (7ed5faf+)
         $e.WFC_LIFECYCLE = "$Goal"   # match end at the goal; bots (if any) come from the profile Bot Settings, there is no WFC_BOTS hook
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
@@ -57,6 +63,9 @@ if (-not $ReportOnly) { if (Test-Path $ini) { Remove-Item $ini -Force }; Remove-
 if (-not $ReportOnly -and $Bots -gt 0) { $bf = [int][Math]::Floor(($Bots - 1) / 2); "[PCSettings]`nWidth=1280`nHeight=720`nFullscreen=0`nBotsFriendly=$bf`nBotsEnemy=$($Bots - $bf)`nBotDifficulty=1`n" | Set-Content -Encoding ASCII $ini }
 $okA = RunOnce "A"; $profA = ReadProg (Join-Path $OutDir "profile_after_A.ini")
 $okB = $okA -and (RunOnce "B"); $profB = ReadProg (Join-Path $OutDir "profile_after_B.ini")
+$hasNu = $okB -and "$($profB['NewlyUnlocked'])".Trim()
+$okC = $hasNu -and (RunOnce "C" $scriptC); $profC = ReadProg (Join-Path $OutDir "profile_after_C.ini")
+$okD = $okC -and (RunOnce "D" $scriptD); $profD = ReadProg (Join-Path $OutDir "profile_after_D.ini")
 
 function Awards([string]$tag) { $F = Read-FlowLog (Join-Path $OutDir "flow_$tag.jsonl"); return @(Flow-Ev $F "progression.xp") }
 function Challenges([string]$tag) { $F = Read-FlowLog (Join-Path $OutDir "flow_$tag.jsonl"); return @(Flow-Ev $F "progression.challenge") }
@@ -118,5 +127,28 @@ else {
         }
     }
 }
+# CaC "NEW" badges (Frontend d19b628 + ef33101): [Progression] NewlyUnlocked=<Class.Item>,... recorded at level-up, saved at
+# match end, removed only when the item is highlighted (MarkSkillAsOld). A / B: no duplicates; A's entries survive the restart.
+$nuA = @("$($profA['NewlyUnlocked'])" -split ',' | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+$nuB = @("$($profB['NewlyUnlocked'])" -split ',' | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+if (-not $profA.ContainsKey('NewlyUnlocked') -and -not $profB.ContainsKey('NewlyUnlocked')) {
+    Res "new_badges" "SKIP" "no [Progression] NewlyUnlocked in either profile (build without Frontend d19b628, or no level-up unlocked an item)" "Frontend" }
+else {
+    $dupNu = @(@($nuA; $nuB) | Group-Object | Where-Object { $_.Count -gt 1 -and (@($nuA | Where-Object { $_ -eq $_.Name }).Count -gt 1 -or @($nuB | Where-Object { $_ -eq $_.Name }).Count -gt 1) } | ForEach-Object { $_.Name })
+    $dupA = @($nuA | Group-Object | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name }); $dupB = @($nuB | Group-Object | Where-Object { $_.Count -gt 1 } | ForEach-Object { $_.Name })
+    Res "new_badges.no_duplicates" $(if ($dupA.Count -or $dupB.Count) { "FAIL" } else { "PASS" }) ("NewlyUnlocked after A: {0} entries, after B: {1}; listed twice: {2}" -f $nuA.Count, $nuB.Count, $(if ($dupA.Count -or $dupB.Count) { (@($dupA; $dupB) | Select-Object -Unique) -join ", " } else { "none" })) "Frontend"
+    $lostNu = @($nuA | Where-Object { $nuB -notcontains $_ })
+    Res "new_badges.survive_restart" $(if ($lostNu.Count) { "FAIL" } else { "PASS" }) ("A's NEW entries still present after the restart and match B (nothing was highlighted): {0}; missing: {1}" -f ($nuA -join ", "), $(if ($lostNu.Count) { $lostNu -join ", " } else { "none" })) "Frontend"
+}
+if ($okC) {
+    $mark = @(Select-String (Join-Path $OutDir "wfc_C.log") -Pattern 'progression\.markOld id=(\S+) specialty=(\S+)' -ErrorAction SilentlyContinue | ForEach-Object { "$($_.Matches[0].Groups[2].Value).$($_.Matches[0].Groups[1].Value)" })
+    $nuC = @("$($profC['NewlyUnlocked'])" -split ',' | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+    $nuD = @("$($profD['NewlyUnlocked'])" -split ',' | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
+    $expC = @($nuB | Where-Object { $mark -notcontains $_ })
+    $sameC = (($nuC | Sort-Object) -join ",") -eq (($expC | Sort-Object) -join ",")
+    Res "new_badges.highlight_removes_one" $(if (-not $mark.Count) { "FAIL" } elseif ($sameC) { "PASS" } else { "FAIL" }) ("highlighted (progression.markOld): {0}; NewlyUnlocked before {1} -> after {2} (expected {3})" -f $(if ($mark.Count) { $mark -join ", " } else { "NONE - the UI path did not mark an item" }), ($nuB -join ","), ($nuC -join ","), ($expC -join ",")) "Frontend"
+    if ($okD) { $sameD = (($nuD | Sort-Object) -join ",") -eq (($nuC | Sort-Object) -join ",")
+        Res "new_badges.removal_survives_restart" $(if ($sameD) { "PASS" } else { "FAIL" }) ("after a restart: NewlyUnlocked {0} (after C: {1})" -f ($nuD -join ","), ($nuC -join ",")) "Frontend" }
+} elseif ($okB -and -not $hasNu) { Res "new_badges.highlight_removes_one" "SKIP" "no NewlyUnlocked entries after B to highlight" "Frontend" }
 $sum = Write-WfcReport $res (Join-Path $OutDir "report.json")
 "PROGRESSION ($sha): " + (($sum.Keys | ForEach-Object { "$_ $($sum[$_])" }) -join " / ")
