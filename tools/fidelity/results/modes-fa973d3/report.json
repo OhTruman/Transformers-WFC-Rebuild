@@ -1,0 +1,639 @@
+﻿{
+    "summary":  {
+                    "pass":  104,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "mode.TDM.m1.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=TDM; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.TDM.m1.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "19 MATCH score lines (last: team=0 score=10); 19 kills"
+                    },
+                    {
+                        "id":  "mode.TDM.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=0 t=141s"
+                    },
+                    {
+                        "id":  "mode.TDM.m1.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.TDM.m1.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "18 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.TDM.m1.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.TDM.m1.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.TDM.m1.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.TDM.m2.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=TDM; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.TDM.m2.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "15 MATCH score lines (last: team=0 score=10); 15 kills"
+                    },
+                    {
+                        "id":  "mode.TDM.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=0 t=109s"
+                    },
+                    {
+                        "id":  "mode.TDM.m2.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.TDM.m2.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "12 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.TDM.m2.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.TDM.m2.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.TDM.m2.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.TDM.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "mode.DM.m1.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=DM; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.DM.m1.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "36 MATCH score lines (last: team=-1 player=3 score=10); 36 kills"
+                    },
+                    {
+                        "id":  "mode.DM.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=-1 t=89s"
+                    },
+                    {
+                        "id":  "mode.DM.m1.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.DM.m1.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "34 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.DM.m1.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.DM.m1.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.DM.m1.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.DM.m2.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=DM; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.DM.m2.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "41 MATCH score lines (last: team=-1 player=6 score=10); 41 kills"
+                    },
+                    {
+                        "id":  "mode.DM.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=-1 t=89s"
+                    },
+                    {
+                        "id":  "mode.DM.m2.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.DM.m2.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "40 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.DM.m2.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.DM.m2.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.DM.m2.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.DM.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "mode.DOM.m1.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=DOM; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.DOM.m1.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "80 MATCH score lines (last: team=1 score=40 reason=node); 9 kills"
+                    },
+                    {
+                        "id":  "mode.DOM.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=1 t=133s"
+                    },
+                    {
+                        "id":  "mode.DOM.m1.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.DOM.m1.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "9 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.DOM.m1.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.DOM.m1.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.DOM.m1.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.DOM.m2.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=DOM; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.DOM.m2.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "71 MATCH score lines (last: team=1 score=40 reason=node); 6 kills"
+                    },
+                    {
+                        "id":  "mode.DOM.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=1 t=129s"
+                    },
+                    {
+                        "id":  "mode.DOM.m2.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.DOM.m2.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "6 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.DOM.m2.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.DOM.m2.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.DOM.m2.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.DOM.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "mode.KOTH.m1.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=KOTH; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.KOTH.m1.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "49 MATCH score lines (last: team=1 score=40 reason=objective player=5); 9 kills"
+                    },
+                    {
+                        "id":  "mode.KOTH.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=1 t=97s"
+                    },
+                    {
+                        "id":  "mode.KOTH.m1.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.KOTH.m1.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "7 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.KOTH.m1.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.KOTH.m1.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.KOTH.m1.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.KOTH.m2.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=KOTH; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.KOTH.m2.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "54 MATCH score lines (last: team=0 score=40 reason=objective player=1); 2 kills"
+                    },
+                    {
+                        "id":  "mode.KOTH.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=0 t=55s"
+                    },
+                    {
+                        "id":  "mode.KOTH.m2.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.KOTH.m2.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "2 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.KOTH.m2.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.KOTH.m2.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.KOTH.m2.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.KOTH.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "mode.CTF.m1.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=CTF; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.CTF.m1.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "10 MATCH score lines (last: team=1 score=1 reason=objective player=5); 8 kills"
+                    },
+                    {
+                        "id":  "mode.CTF.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=-1 t=135s"
+                    },
+                    {
+                        "id":  "mode.CTF.m1.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.CTF.m1.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "8 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.CTF.m1.ctf_rounds",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "1 round ends, 1 round starts; gaps between rounds 5 s (expect 5.0); attackers swap True"
+                    },
+                    {
+                        "id":  "mode.CTF.m1.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.CTF.m1.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.CTF.m1.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.CTF.m2.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=CTF; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.CTF.m2.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "13 MATCH score lines (last: team=0 score=1); 12 kills"
+                    },
+                    {
+                        "id":  "mode.CTF.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=0 t=135s"
+                    },
+                    {
+                        "id":  "mode.CTF.m2.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.CTF.m2.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "12 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.CTF.m2.ctf_rounds",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "1 round ends, 1 round starts; gaps between rounds 5 s (expect 5.0); attackers swap True"
+                    },
+                    {
+                        "id":  "mode.CTF.m2.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.CTF.m2.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.CTF.m2.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.CTF.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    },
+                    {
+                        "id":  "mode.EXT.m1.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=EXT; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.EXT.m1.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "9 MATCH score lines (last: team=1 score=1 reason=objective player=7); 8 kills"
+                    },
+                    {
+                        "id":  "mode.EXT.m1.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=1 t=58s"
+                    },
+                    {
+                        "id":  "mode.EXT.m1.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.EXT.m1.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "4 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.EXT.m1.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.EXT.m1.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.EXT.m1.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.EXT.m2.start",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "MATCH init mode=EXT; InGame True; local player spawned True"
+                    },
+                    {
+                        "id":  "mode.EXT.m2.scoring",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "4 MATCH score lines (last: team=1 score=1 reason=objective player=5); 3 kills"
+                    },
+                    {
+                        "id":  "mode.EXT.m2.end",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "MATCH end reason=Score winner=1 t=55s"
+                    },
+                    {
+                        "id":  "mode.EXT.m2.countdown",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "match started at t=10.02 s after the pending phase (MatchAutoStartCountdown 10 s)"
+                    },
+                    {
+                        "id":  "mode.EXT.m2.respawn_wave",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "2 wave respawns; delays off 5.0 s (+-0.25): none"
+                    },
+                    {
+                        "id":  "mode.EXT.m2.results",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "GameEnded + EndGameStats movie opened: True"
+                    },
+                    {
+                        "id":  "mode.EXT.m2.saved",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "progression.match end saved=1: True"
+                    },
+                    {
+                        "id":  "mode.EXT.m2.lobby",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "match.unloaded True; back in the game lobby True"
+                    },
+                    {
+                        "id":  "mode.EXT.clean_exit",
+                        "status":  "PASS",
+                        "owner":  "Integration",
+                        "note":  "shutdown complete True"
+                    }
+                ]
+}
