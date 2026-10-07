@@ -229,6 +229,11 @@ private:
     bool canGainXp_ = false;
     void updateProgression();
     void presentLevelUps(const std::vector<progression::LevelUp>& ups);
+    // PC ADAPTATION chassis XP unlocks (data/frontend/chassis_xp_unlocks.json: chassis id -> level of its specialty).
+    std::map<std::string, int> chassisXpUnlocks_;
+    int chassisUnlockLevel(const std::string& id) const;   // 0 = not in the table
+    bool chassisUnlocked(const ChassisInfo& ci) const;
+    void updateChassisUnlockTexts();
     bool frontEndMusic_ = false;
     std::function<platform::IMoviePlayer*()> movieFactory_;
     std::unique_ptr<platform::IMoviePlayer> video_;   // SeqAct_MoviePlayer movie or the loading underlay

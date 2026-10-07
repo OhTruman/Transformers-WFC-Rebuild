@@ -1,0 +1,18 @@
+{
+  "provenance": "PC ADAPTATION (user decision, Milestone E): the originally locked chassis (LockedChassis; Car5 / Jet8 via the campaigns, others with no known unlock path) unlock at a level of their own specialty. [PCSettings] OriginalChassisLocks=1 restores the original locks.",
+  "excluded": "Car8, Car9, Car10, Minion1, Minion2, Minion3: LockedChassis without a FriendlyName (generic soldiers / minions / neutral) - not multiplayer chassis; they stay hidden.",
+  "unlocks": {
+    "Car6": 15,
+    "Car5": 20,
+    "Car7": 15,
+    "Truck7": 15,
+    "Truck5": 20,
+    "Truck6": 15,
+    "Jet2": 10,
+    "Jet3": 15,
+    "Jet7": 20,
+    "Jet8": 25,
+    "Tank4": 15,
+    "Tank5": 15
+  }
+}

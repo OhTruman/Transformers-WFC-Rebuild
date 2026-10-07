@@ -437,8 +437,14 @@ std::string Catalog::localize(const std::string& file, const std::string& sectio
     return it == loc_.end() ? std::string() : it->second;
 }
 
+void Catalog::setKeyOverride(const std::string& dollarKey, const std::string& text) {
+    std::string k = !dollarKey.empty() && dollarKey[0] == '$' ? dollarKey.substr(1) : dollarKey;
+    if (text.empty()) keyOverrides_.erase(k); else keyOverrides_[k] = text;
+}
+
 std::string Catalog::localizeKey(const std::string& dollarKey) const {
     std::string k = !dollarKey.empty() && dollarKey[0] == '$' ? dollarKey.substr(1) : dollarKey;
+    if (auto o = keyOverrides_.find(k); o != keyOverrides_.end()) return o->second;
     auto it = loc_.find(k);
     return it == loc_.end() ? std::string() : it->second;
 }

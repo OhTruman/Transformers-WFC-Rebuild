@@ -491,12 +491,14 @@ int GameFlow::botMax(const std::string& field) const {
     if (field == "difficulty") return 2;
     if (field == "extended") return 1;
     const bool ext = profile_.bots.extended;
-    // players per side incl. the human: original 5; extended min(17, Gameplay's maxPerTeam)
-    const int perSide = ext ? std::min(17, gpPerTeam_) : 5;
+    // players per side incl. the human: original 5; extended = Gameplay MatchSettings (applyExtendedSlots) only
+    const int perSide = ext ? gpPerTeam_ : 5;
     const int players = ext ? gpMaxPlayers_ : 10;
     if (botRows() == BotRows::Teams) {
-        if (field == "autobot") return perSide - (humanFaction() == 0 ? 1 : 0);
-        if (field == "decepticon") return perSide - (humanFaction() == 1 ? 1 : 0);
+        // the human's side one fewer than the side's players; never above Gameplay's maxBotsPerTeam (extended)
+        const int botCap = ext ? gpBotsPerTeam_ : 5;
+        if (field == "autobot") return std::min(botCap, perSide - (humanFaction() == 0 ? 1 : 0));
+        if (field == "decepticon") return std::min(botCap, perSide - (humanFaction() == 1 ? 1 : 0));
         return 0;
     }
     if (botRows() == BotRows::FreeForAll) return field == "enemy" ? players - 1 : 0;
@@ -549,6 +551,19 @@ std::string GameFlow::buildMatchUrl(const GameSettings& gs) const {
         size_t idx = std::min((size_t)(ti >= 0 ? ti : gs.timeLimitDefaultIndex), gs.timeLimits.size() - 1);
         char b[32]; std::snprintf(b, sizeof b, "%.2f", (double)gs.timeLimits[idx]);   // float -> string
         u.setOption("TimeLimit", b);
+    }
+    // TEST ONLY: WFC_LOBBY_OPTIONS="PointsToWin=40;TimeLimit=60" overrides host options in the match URL (short objective
+    // matches for automated audits; the Game Options menu is the player path). Logged.
+    if (const char* lo = std::getenv("WFC_LOBBY_OPTIONS")) {
+        std::string all = lo;
+        for (size_t at = 0; at <= all.size();) {
+            size_t e = all.find(';', at); if (e == std::string::npos) e = all.size();
+            std::string kv = all.substr(at, e - at); at = e + 1;
+            size_t eq = kv.find('=');
+            if (eq == std::string::npos || eq == 0) continue;
+            u.setOption(kv.substr(0, eq), kv.substr(eq + 1));
+            FlowTrace::emit("test.lobbyOption", {{"option", kv.substr(0, eq)}, {"value", kv.substr(eq + 1)}, {"provenance", "TEST ONLY"}});
+        }
     }
     if (gs.numPublicConnections + gs.numPrivateConnections > 0) u.addFlag("listen");
     std::string s = u.toString();
