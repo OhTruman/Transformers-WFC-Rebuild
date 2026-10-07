@@ -11,7 +11,7 @@
 // A small persistent worker pool for the simulation's independent per-participant work (movement, animation): run(n, f) calls f(i)
 // for every i in [0, n) across the workers and the calling thread and returns when all are done. Each f(i) must touch only its own
 // participant (plus read-only shared data), so the result does not depend on scheduling: the simulation stays deterministic.
-// WFC_SIMTHREADS=<n> sets the worker count (0 = everything on the calling thread); default: hardware threads - 2, at most 6.
+// WFC_SIMTHREADS=<n> sets the worker count (0 = everything on the calling thread); default: hardware threads - 3, at most 6.
 namespace core {
 
 class WorkerPool {
@@ -42,7 +42,10 @@ public:
 
 private:
     WorkerPool() {
-        int n = std::max(0, (int)std::thread::hardware_concurrency() - 2);
+        // Hardware threads - 3 (the main thread, the async step's sim thread - which also works its own jobs - and one left for the
+        // driver / audio), at most 6: 32 logical -> 6 (unchanged), 8 logical -> 5 (was 6: 6 + sim + main filled every core). The
+        // results do not depend on the worker count (deterministic tasks).
+        int n = std::max(0, (int)std::thread::hardware_concurrency() - 3);
         n = std::min(n, 6);
         if (const char* e = std::getenv("WFC_SIMTHREADS")) n = std::max(0, std::min(16, std::atoi(e)));
         for (int i = 0; i < n; ++i) threads_.emplace_back([this] { loop(); });
