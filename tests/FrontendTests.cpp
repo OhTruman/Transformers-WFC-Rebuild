@@ -68,6 +68,13 @@ static void testCatalog(const Catalog& c) {
     bool hasStreets = false;
     for (auto* m : tdmMaps) hasStreets |= m->mapId == 508;
     check(hasStreets && tdmMaps.size() == onDisk, "catalog.tdm_selectable_maps_match_disk", std::to_string(tdmMaps.size()));
+    {   // Escalation maps (Broken Hope 505 / Remnant 506: CompatibleGameTypes=SV only) are never offered for a versus mode.
+        bool escInVersus = false, escInSv = false;
+        for (const char* mode : {"TDM", "DM", "CTF", "KOTH", "DOM", "EXT", "CP"})
+            for (const MapInfo* m : c.compatibleMaps(mode, false)) escInVersus |= m->mapId == 505 || m->mapId == 506;
+        for (const MapInfo* m : c.compatibleMaps("SV", false)) escInSv |= m->mapId == 505 || m->mapId == 506;
+        check(!escInVersus && escInSv, "catalog.escalation_maps_sv_only");
+    }
 }
 
 static void testUIController() {

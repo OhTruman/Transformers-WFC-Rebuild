@@ -782,7 +782,16 @@ void FrontendRuntime::presentLevelUps(const std::vector<progression::LevelUp>& u
             for (const auto& [id, need] : chassisXpUnlocks_) {
                 const ChassisInfo* ci = roster_.chassis(id);
                 if (!ci || need != u.level || progression::specialtyIndex(ci->specialty) != u.specialty) continue;
-                const std::string msg = "New chassis unlocked: " + (ci->displayName.empty() ? id : ci->displayName);
+                // The chassis' FriendlyName; the extra bodies use the names the chassis list gives them (DataStores):
+                // Machine Gunner (AICharacterNames.SoldierMG) for Car8-10, FriendlyIconicName for the minions.
+                std::string name = ci->displayName;
+                for (const Catalog::Provider& p : catalog_.providers("Chassis"))
+                    if (name.empty() && p.get("UniqueId") == id) {
+                        name = p.get("FriendlyName");
+                        if (name.empty() && (id == "Car8" || id == "Car9" || id == "Car10")) name = catalog_.localize("TransGame", "AICharacterNames", "SoldierMG");
+                        if (name.empty()) name = p.get("FriendlyIconicName");
+                    }
+                const std::string msg = "New chassis unlocked: " + (name.empty() ? id : name);
                 if (presenter_) presenter_->hudCall("_global.GameMessage", {BridgeValue(msg)});
                 FlowTrace::emit("progression.chassisUnlocked", {{"chassis", id}, {"level", std::to_string(need)}, {"provenance", "PC ADAPTATION"}});
             }
