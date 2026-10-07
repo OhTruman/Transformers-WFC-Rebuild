@@ -110,6 +110,7 @@ private:
     void runVehicleAudit();
     void runVehicleFrameTest();
     void runStuckSpot(const char* spec);
+    void runMarkersTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

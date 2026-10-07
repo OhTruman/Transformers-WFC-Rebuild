@@ -1,5 +1,6 @@
 // Clean-room reconstruction — the world: owns the level, player, and dynamic actors.
 #pragma once
+#include <array>
 #include <functional>
 #include <memory>
 #include <string>
@@ -648,6 +649,7 @@ public:
     void damageRollerAt(size_t idx, float amount, int instigator);
     void requestRoller(int owner);
     const std::vector<RollerMine>& rollerMines() const { return rollers_; }   // every participant's (Rendering / Systems audio: t = age)
+    int participantRollerSpawns_ = 0;   // diagnostics: rollers spawned by participants
     int participantRollersLive() const { int n = 0; for (const RollerMine& m : rollers_) n += m.alive && m.owner != localPlayer_; return n; }
 
     float missileDelay_ = -1.0f;
@@ -767,16 +769,74 @@ public:
         std::vector<XpAward> xpAwards;
         std::vector<StatAward> statAwards;
         std::vector<KillFeedEntry> kills;               // killHistory() entries since the last consume (weapon / damage type)
+        // TnHudDataObserver* sources for the Hud_GFX callbacks (Frontend draws, Integration maps to HudFrame). Values = after the last
+        // step; the two event lists are step-ordered queues like matchEvents (cleared by consumePresented()).
+        struct HudObservers {
+            struct Progress { std::string labelId; float value = 0.0f; std::string name; };   // labelId "" = no bar
+            Progress progress;                          // DominationCapture / BombDefuseTimer / SingleFlagCTF (ReviveBuddy: no downed state)
+            int attackingTeam = -1;
+            std::string killstreakId;                   // the newest acquired reward ("" none)
+            bool killstreakAvailable = false;           // the rebuild simulates it
+            struct Ability { std::string id; float cooldownLeft = 0.0f, cooldownTime = 0.0f; bool active = false; bool implemented = false; };
+            std::vector<Ability> abilities;             // slots 0 / 1
+            struct Grenade { int ammo = -1; std::string type; int activeCount = 0; };   // ammo -1 = no bag
+            Grenade grenade;
+            // TnHudDataObserverLockOnState: 0 none, 1 locking, 2 locked. targetPos = the target's targetable location (pawn centre, as
+            // the lock / homing use it); distance from the local pawn (UpdateMarker DistanceToObj).
+            struct LockOn { int state = 0; int target = -1; float progress = 0.0f; core::Vec3 targetPos{0, 0, 0}; float distance = 0.0f; };
+            LockOn lockOn;
+            struct Target { int player = -1; std::string name; int team = 255; float health = 0.0f; };   // under the crosshair (health 0..1)
+            Target target;
+            struct WeaponState { bool jammed = false; float spread = 0.0f; std::string message; };
+            WeaponState weapon;
+            struct Buff { std::string id; float time = 0.0f; };   // local pawn buffs with time left (s)
+            std::vector<Buff> buffs;
+            bool scrambled = false;                     // HUD scramble: no source in the rebuild yet [PARTIAL]
+            float downedHealth = -1.0f;                 // -1: no downed state in versus (as the rebuild)
+            std::vector<std::string> contextual;        // contextual-command prompts (pickup)
+            float scoringMultiplier = 1.0f;
+            int cantTransformCount = 0;                 // increments per refused transform (NotifyCantTransform)
+        } hud2;
+        // Objective / pawn markers (TnObjectiveManager -> TnHUD.UpdateObjectiveMarker): the markers displayed to the local viewer this
+        // step. setup: 0 ally, 1 enemy, 2 neutral (per viewer). pos: the base world position (pawn: targetable centre; objectives: their
+        // location; carried: the carrier or the dropped / home position). health -1 = none; progress -1 = none.
+        // Field for field render::MarkerRequest (agents/rendering HudMarkers.h): the glue copies them.
+        struct Marker {
+            std::string key;                            // stable identity ("pawn:12", "obj:<actor>", "carried:0")
+            std::string type;                           // the TnObjectiveMarkerType* class
+            std::string setup;                          // "AllyMarkerSetup" / "TransformerEnemyMarkerSetup" / "MarkerSetup"
+            core::Vec3 base{0, 0, 0};                   // MarkerBase.Location (glTF metres)
+            float labelZ = -1.0f;                       // Versus pawns: CollisionHeight x 0.5; < 0 = authored
+            std::string label;                          // PRI.PlayerName / node number
+            bool drawHealthBar = false;                 // ally health bar (viewer specialty Scientist)
+            float health = 1.0f;                        // 0..1
+            std::vector<std::pair<std::string, std::array<float, 4>>> params;   // "Neutral", "Flashing", "CaptureProgress"
+            std::string action;                         // Attack / Capture / Defend / Defuse / Escort / Kill / Plant / Return / Idle [PROV]
+            float pulseT = -1.0f;
+            bool removing = false;                      // gone this step: FadeOutTime runs from removedT
+            float removedT = 0.0f;
+            int relation = -1;                          // 0 friendly, 1 enemy, 2 neutral
+            int player = -1;                            // pawn markers (the match player)
+        };
+        std::vector<Marker> markers;
+        struct DamageTaken { float yaw = 0.0f; float amount = 0.0f; int instigator = -1; core::Vec3 from{0, 0, 0}; };   // yaw relative to the view
+        struct DamageCaused { int victim = -1; float amount = 0.0f; bool killed = false; };   // hit markers
+        std::vector<DamageTaken> damageTaken;
+        std::vector<DamageCaused> damageCaused;
         unsigned steps = 0;                             // steps since the last consumePresented()
     };
     const PresentedFrame& presented() const { return presented_; }
-    void consumePresented() { presented_.matchEvents.clear(); presented_.gameplayEvents.clear(); presented_.kills.clear(); presented_.steps = 0; }
+    void consumePresented() { presented_.matchEvents.clear(); presented_.gameplayEvents.clear(); presented_.kills.clear();
+                              presented_.damageTaken.clear(); presented_.damageCaused.clear(); presented_.steps = 0; }
     // A command for the simulation: applied in submission order at the start of the next step (select a character, QA actions,
     // look settings, audio volumes / preloads, test damage). Deterministic: the same commands land at the same step boundary.
     void submit(std::function<void(World&)> command) { commands_.push_back(std::move(command)); }
     PresentedFrame presented_;
     std::vector<std::function<void(World&)>> commands_;
     size_t presentedGameplayEventCount_ = 0, presentedKillCount_ = 0;
+    std::vector<PresentedFrame::DamageTaken> pendingDamageTaken_;
+    std::vector<PresentedFrame::Marker> prevMarkers_;   // the last step's markers (removal fade)
+    std::vector<PresentedFrame::DamageCaused> pendingDamageCaused_;
     void fillPresented();
     const AwardProducer& awards() const { return awards_; }
     const std::vector<MatchOpponent*>& matchOpponents() const { return opponents_; }

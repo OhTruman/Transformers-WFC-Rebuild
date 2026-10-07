@@ -2170,6 +2170,189 @@ void World::fillPresented() {
     p.kills.insert(p.kills.end(), kh.begin() + (long)presentedKillCount_, kh.end());
     presentedKillCount_ = kh.size();
     if (p.kills.size() > 8192) p.kills.erase(p.kills.begin(), p.kills.end() - 8192L);
+    // HUD observers
+    {
+        PresentedFrame::HudObservers& o = p.hud2;
+        const HudGameState& h = p.hud;
+        o = PresentedFrame::HudObservers{};
+        o.attackingTeam = h.attackingTeamIndex >= 0 ? h.attackingTeamIndex : (h.attackingTeam <= 1 ? h.attackingTeam : -1);
+        o.killstreakId = h.killstreaks.empty() ? std::string() : h.killstreaks.back();
+        o.killstreakAvailable = !h.killstreaks.empty() && h.killstreakImplemented;
+        for (const Character::AbilitySlot& a : pc.abilities_) o.abilities.push_back({a.id, a.cooldown, a.cooldownTime, a.pendingCooldown, a.implemented});
+        o.grenade.ammo = h.grenades;
+        if (const Weapon* gb = grenadeBag(pc)) o.grenade.type = gb->def ? gb->def->id : "";
+        for (const Projectile& pr : projectiles_) o.grenade.activeCount += pr.instigator == localPlayer_ && pr.grenade;
+        o.lockOn.target = h.lockTarget; o.lockOn.progress = h.lockProgress;
+        o.lockOn.state = h.locked ? 2 : (h.lockTarget >= 0 ? 1 : 0);
+        if (const Character* lt = h.lockTarget >= 0 ? participantPawn(h.lockTarget) : nullptr) {
+            o.lockOn.targetPos = lt->actorLocation();
+            o.lockOn.distance = core::length(lt->actorLocation() - pc.actorLocation());
+        } else if (o.lockOn.state != 0) { o.lockOn.state = 0; o.lockOn.target = -1; }   // the target is gone
+        o.weapon.jammed = pc.jammedRemain_ > 0.0f; o.weapon.spread = pc.effectiveSpread(); o.weapon.message = h.weaponChargeMessage;
+        auto buff = [&](const char* id, float t) { if (t > 0.0f) o.buffs.push_back({id, t}); };
+        buff("TnBuffCloak", pc.cloakRemain_); buff("TnBuffWarcry", pc.warcryRemain_); buff("TnBuffSeeEnemyObjectiveMarkers", h.seeEnemies);
+        buff("TnBuffRefillHealthOnKill", h.refillOnKill); buff("TnBuffAbilityJammer", h.abilitiesJammed); buff("TnBuffHardLocked", h.hardLocked);
+        buff("TnBuffHealthRegenKillStreak", h.regenBuff); buff("TnBuffFastAbilityCooldown", h.fastCooldownBuff); buff("TnBuffAmmoLock", h.ammoLockBuff);
+        buff("TnBuffAmmoBeaconIncreaseDamage", h.ammoBeaconBuff ? 1.0f : 0.0f); buff("TnBuffRollerSphere", h.rollerSlow); buff("TnBuffDrain", h.drain);
+        if (!h.pickupPrompt.empty()) o.contextual.push_back(h.pickupPrompt);
+        o.cantTransformCount = h.cantTransformCount;
+        // Target under the crosshair: the nearest pawn on the camera's aim ray within 300 m, not behind world geometry.
+        if (!localDead_ && matchActive_) {
+            const core::Vec3 eye = player_.controller().cameraPos();
+            const core::Vec3 dir = core::forwardFromYawPitch(player_.controller().camYaw(), player_.controller().camPitch());
+            float wall = 300.0f, tw;
+            const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+            if (line && line->segmentHit(eye, eye + dir * 300.0f, tw)) wall = 300.0f * tw;
+            float best = wall;
+            for (MatchOpponent* op : opponents_) {
+                float th;
+                if (op->rayHit(eye, dir, best, th) && th < best) {
+                    best = th; o.target.player = op->matchPlayer();
+                    const auto& mp = match_.players()[(size_t)op->matchPlayer()];
+                    o.target.name = mp.name; o.target.team = mp.team;
+                    o.target.health = op->health().max > 0.0f ? op->health().current / op->health().max : 0.0f;
+                }
+            }
+        }
+        // Progress bar (TnHudDataObserver rules): DOM capture only on a node the local team does not defend, while the local pawn is
+        // inside it and it is being captured; bomb defuse for the defenders on the planted point; single-flag return for a defender
+        // touching the dropped flag.
+        if (!localDead_ && matchActive_ && localPlayer_ >= 0) {
+            const core::Vec3 lp = pc.actorLocation();
+            const int myTeam = p.players[(size_t)localPlayer_].team;
+            for (const ObjectiveObject& ob : mapState_.objectives()) {
+                if (!ob.activeInMode) continue;
+                if (ob.cls == "TnDominationPoint" && ob.defenderTeam != myTeam && ob.captureTime > 0.0f && ob.contains(lp)) {
+                    o.progress = {"DominationCapture", std::min(1.0f, ob.captureTime / 20.0f), ob.actor};
+                }
+            }
+            const auto& pl = mapState_.planted();
+            if (pl.active && pl.team != myTeam && pl.point >= 0 && (size_t)pl.point < mapState_.objectives().size() &&
+                mapState_.objectives()[(size_t)pl.point].contains(lp) && pl.defuse > 0.0f)
+                o.progress = {"BombDefuseTimer", std::min(1.0f, pl.defuse / 5.0f), mapState_.objectives()[(size_t)pl.point].actor};
+            if (match_.settings().singleFlagCTF && myTeam != match_.attackingTeam())
+                for (const MapState::Carried& c : mapState_.carried())
+                    if (c.kind == 0 && c.dropped && c.returnLeft < 10.0f && core::length(c.pos - lp) < 3.0f)
+                        o.progress = {"SingleFlagCTF", std::min(1.0f, 1.0f - c.returnLeft / 10.0f), ""};
+        }
+    }
+    // Markers for the local viewer [CONF RE 7bb8ec1 notes/MILESTONE_E_OBJECTIVE_MARKERS.md §4 visibility, §5 setup]. Pawn tags: the
+    // SetupEnemyMarker / cloak rules (hudState), the enemy label also hidden out of line of sight. Constant screen size, no distance
+    // fade; the 8 % safe-frame clamp / arrows belong to the drawer.
+    p.markers.clear();
+    if (matchActive_ && localPlayer_ >= 0) {
+        const int myTeam = p.players[(size_t)localPlayer_].team;
+        const int attacking = match_.attackingTeam();                         // GRI.AttackingTeam (CTF / EXT)
+        const bool scientist = p.players[(size_t)localPlayer_].specialty == "Scientist";
+        const core::Vec3 eye = player_.controller().cameraPos();
+        const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
+        auto param = [](PresentedFrame::Marker& m, const char* n, float v) { m.params.push_back({n, std::array<float, 4>{v, v, v, v}}); };
+        // TransformerVersus pawn tags
+        for (const HudGameState::Tag& t : p.hud.tags) {
+            if (!t.drawn) continue;
+            PresentedFrame::Marker m;
+            m.key = "pawn:" + std::to_string(t.player); m.type = "TnObjectiveMarkerTypeTransformerVersus";
+            m.setup = t.ally ? "AllyMarkerSetup" : "TransformerEnemyMarkerSetup"; m.relation = t.ally ? 0 : 1; m.player = t.player;
+            m.base = t.pos;
+            if (const Character* c = participantPawn(t.player)) {
+                m.base = c->actorLocation();
+                m.labelZ = c->cylinderHalfHeight(c->moveForm()) * 0.5f;      // Versus: CollisionHeight x 0.5
+                m.health = c->health().max > 0.0f ? c->health().current / c->health().max : 0.0f;   // GetNormalizedHealth
+            }
+            m.drawHealthBar = t.ally && scientist;
+            bool label = t.label;
+            float th;
+            if (label && !t.ally && line && line->segmentHit(eye, m.base, th)) label = false;   // enemy label: line of sight
+            if (label) m.label = t.name;
+            p.markers.push_back(m);
+        }
+        // Objectives
+        const auto& pl = mapState_.planted();
+        const std::string plantedActor = pl.active && pl.point >= 0 && (size_t)pl.point < mapState_.objectives().size() ? mapState_.objectives()[(size_t)pl.point].actor : std::string();
+        const bool carrying = mapState_.carriedBy(localPlayer_) >= 0;
+        for (const HudGameState::Objective& ob : p.hud.objectives) {
+            if (ob.markerType.empty()) continue;
+            PresentedFrame::Marker m;
+            m.key = "obj:" + ob.actor; m.base = ob.pos; m.setup = "MarkerSetup";
+            m.type = "TnObjectiveMarkerType" + ob.markerType;
+            if (ob.markerType == "Domination") {                               // always, every node; by the current owner
+                const int id = ob.ownerTeam == myTeam ? 0 : (ob.ownerTeam == 255 || ob.ownerTeam == 254 ? 2 : 1);
+                param(m, "TeamID", (float)id);
+                m.relation = id == 0 ? 0 : (id == 2 ? 2 : 1);
+                m.label = std::to_string(ob.pointNumber);                     // NodeID
+                if (ob.beingCaptured) param(m, "Flashing", 1.0f);
+                m.action = id == 0 ? "Defend" : "Capture";
+            } else if (ob.markerType == "KingOfTheHill") {                     // only the Active zone
+                if (!ob.active) continue;
+                const bool own = ob.ownerTeam == myTeam || ob.ownerTeam > 1;   // own or contested / neutral
+                param(m, "Neutral", own ? 1.0f : 0.0f);
+                m.relation = own ? 0 : 1;
+                m.action = ob.ownerTeam == myTeam ? "Defend" : "Capture";
+            } else if (ob.markerType == "BombPlantPoint") {
+                if (attacking != 0 && attacking != 1) continue;               // no attacking team: hidden
+                if (!plantedActor.empty()) { if (ob.actor != plantedActor) continue; }   // after a plant: the planted point, to all
+                else if (ob.ownerTeam == attacking) continue;                 // before: only the target (not the attackers' own)
+                const bool viewerAttacking = myTeam != ob.ownerTeam;           // vs the point's AUTHORED team
+                param(m, "Neutral", viewerAttacking ? 0.0f : 1.0f); param(m, "Flashing", 1.0f);
+                m.relation = viewerAttacking ? 1 : 0;
+                m.action = viewerAttacking ? (plantedActor.empty() ? "Plant" : "Defend") : (plantedActor.empty() ? "Defend" : "Defuse");
+            } else if (ob.markerType == "FlagCapturePoint") {                  // the attackers' capture point, only to the carrier
+                if (!ob.active || !carrying) continue;
+                param(m, "Neutral", 1.0f); m.relation = 0; m.action = "Capture";
+            } else continue;   // factories: their carried object's marker stands for them
+            p.markers.push_back(m);
+        }
+        // Flag / bomb: one marker following the holder (home factory / carrier / dropped pickup; none while the factory sleeps), to
+        // everyone but the carrier.
+        for (size_t i = 0; i < p.hud.carried.size(); ++i) {
+            const HudGameState::CarriedObj& c = p.hud.carried[i];
+            if (!c.active || c.holder == localPlayer_) continue;
+            if (c.holder < 0 && !c.dropped && c.sleep > 0.0f) continue;
+            PresentedFrame::Marker m;
+            const bool flag = c.kind == 0;
+            m.key = "carried:" + std::to_string(i); m.setup = "MarkerSetup";
+            m.type = flag ? "TnObjectiveMarkerTypeFlag" : "TnObjectiveMarkerTypeBomb";
+            m.base = c.pos;
+            const bool viewerAttacking = myTeam == attacking;
+            float neutral = 0.0f;
+            if (c.holder >= 0) {
+                m.player = c.holder;
+                if (const Character* hc = participantPawn(c.holder)) m.base = hc->actorLocation();
+                if (c.holderTeam == myTeam) { neutral = 1.0f; m.action = "Escort"; }
+                else {
+                    neutral = 0.0f; m.action = "Kill";
+                    const float t = std::fmod(match_.matchTime(), 2.5f);
+                    m.pulseT = t;
+                    param(m, "PingOpacity", std::pow((2.5f - t) / 2.5f, 5.0f));
+                }
+            } else if (c.dropped) {
+                neutral = 0.0f;
+                if (viewerAttacking) param(m, "Flashing", 1.0f);
+                m.action = flag ? (viewerAttacking ? "Capture" : "Return") : "Bomb";
+            } else {
+                neutral = viewerAttacking ? 0.0f : 1.0f;
+                m.action = flag ? (viewerAttacking ? "Capture" : "Defend") : "Bomb";
+            }
+            param(m, "Neutral", neutral);
+            m.relation = neutral == 1.0f ? 0 : 1;                              // label colour friendly iff Neutral == 1
+            p.markers.push_back(m);
+        }
+        // ObjectiveMarkers[16] at the original counts; extended matches list every marker (PC EXTENSION: no tag silently missing).
+        if (!match_.settings().extendedSlots && p.markers.size() > 16) p.markers.resize(16);
+    }
+    // Removal fade: a marker that disappeared is kept with removing = true for 1 s (removedT counts up).
+    for (PresentedFrame::Marker& old : prevMarkers_) {
+        bool still = false;
+        for (const PresentedFrame::Marker& m : p.markers) if (m.key == old.key) { still = true; break; }
+        if (still) continue;
+        if (!old.removing) { old.removing = true; old.removedT = 0.0f; } else old.removedT += 1.0f / 60.0f;
+        if (old.removedT < 1.0f) p.markers.push_back(old);
+    }
+    prevMarkers_ = p.markers;
+    p.damageTaken.insert(p.damageTaken.end(), pendingDamageTaken_.begin(), pendingDamageTaken_.end()); pendingDamageTaken_.clear();
+    p.damageCaused.insert(p.damageCaused.end(), pendingDamageCaused_.begin(), pendingDamageCaused_.end()); pendingDamageCaused_.clear();
+    if (p.damageTaken.size() > 1024) p.damageTaken.erase(p.damageTaken.begin(), p.damageTaken.end() - 1024L);
+    if (p.damageCaused.size() > 1024) p.damageCaused.erase(p.damageCaused.begin(), p.damageCaused.end() - 1024L);
     { auto xp = awards_.drainXp(); p.xpAwards.insert(p.xpAwards.end(), xp.begin(), xp.end()); }
     { auto st = awards_.drainStats(); p.statAwards.insert(p.statAwards.end(), st.begin(), st.end()); }
     constexpr size_t kCap = 8192;
@@ -2258,7 +2441,13 @@ bool World::applyMatchDamage(int victim, int instigator, float amount, bool aoe,
         if (victim == localPlayer_) player_.pawn().exposeSelf(); else if (opp) opp->pawn().exposeSelf();
     }
     match_.recordDamage(victim, instigator, applied);
-    if (victim == localPlayer_ && applied > 0.0f && instigator != victim) { ++damageTakenCount_; lastDamageFrom_ = match_.playerLocation(instigator); }
+    if (victim == localPlayer_ && applied > 0.0f && instigator != victim) {
+        ++damageTakenCount_; lastDamageFrom_ = match_.playerLocation(instigator);
+        const core::Vec3 d = lastDamageFrom_ - player_.pawn().position();
+        const float yawTo = std::atan2(-d.x, -d.z);
+        pendingDamageTaken_.push_back({std::remainder(yawTo - player_.controller().camYaw(), 6.2831853f), applied, instigator, lastDamageFrom_});
+    }
+    if (instigator == localPlayer_ && victim != localPlayer_ && applied > 0.0f) pendingDamageCaused_.push_back({victim, applied, h->isDead()});
     if (h->isDead() && instigator >= 0 && instigator != victim) {
         Character* kp = instigator == localPlayer_ ? (localDead_ ? nullptr : &player_.pawn()) : nullptr;
         for (MatchOpponent* o : opponents_) if (o->matchPlayer() == instigator && o->spawned()) kp = &o->pawn();
@@ -4502,6 +4691,7 @@ void World::tickRollerMine(float dt) {
                 if (safe) {
                     m.alive = true; m.pos = spot; m.vel = f * 27.5f; m.health = 200.0f; m.t = 0.0f; m.onGround = false;
                     LOG_INFO("ability RollerSphere (p%d): spawned", m.owner);
+                    if (m.owner != localPlayer_) ++participantRollerSpawns_;
                 } else m.delay = 1.0f;   // SpawnLocationValidator failed: retry every 1 s
             }
         }
