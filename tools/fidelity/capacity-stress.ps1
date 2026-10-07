@@ -44,11 +44,18 @@ $popDef = @{
     p32v32 = @{ mode = "TDM"; want = 64; opts = "ExtendedPlayers=1;BotsAutobot=32;BotsDecepticon=32" }
     ffa64  = @{ mode = "DM";  want = 64; opts = "ExtendedPlayers=1;BotsEnemy=63" }
 }
+# "rec": the map's RECOMMENDED Extended size (AssetTools, Integration 2026-10-07) - the default the user will play. N per side
+# including the human: the human's side gets N - 1 bots, the other side N (human-relative ?BotsFriendly / ?BotsEnemy; the run
+# profile has no faction keys, so these apply).
+$recPerSide = @{ "502" = 14; "504" = 12; "510" = 11; "501" = 11; "508" = 10; "507" = 10; "509" = 9; "503" = 9 }
 function Pct($v, $p) { if (-not $v.Count) { return $null }; $s = @($v | Sort-Object); return [Math]::Round($s[[Math]::Min($s.Count - 1, [int][Math]::Floor($p * $s.Count))], 2) }
 $rows = New-Object System.Collections.Generic.List[object]
 foreach ($resol in $Resolutions) { $rw = [int]($resol -split 'x')[0]; $rh = [int]($resol -split 'x')[1]   # NOT $res (the results collection)
 foreach ($map in $Maps) { foreach ($pop in $Pops) {
-    $P = $popDef[$pop]; if (-not $P) { continue }
+    $P = $popDef[$pop]
+    if ($pop -eq "rec") { $n = $recPerSide["$map"]; if (-not $n) { continue }
+        $P = @{ mode = "TDM"; want = 2 * $n; opts = "ExtendedPlayers=1;BotsFriendly=$($n - 1);BotsEnemy=$n" } }
+    if (-not $P) { continue }
     $tag = "{0}_{1}_{2}" -f $map, $pop, $resol; $d = Join-Path $OutDir $tag; New-Item -ItemType Directory -Force $d | Out-Null
     $lg = Join-Path $d "wfc.log"; $fl = Join-Path $d "flow.jsonl"
     if (-not $ReportOnly -and -not (Test-Path $lg)) {
