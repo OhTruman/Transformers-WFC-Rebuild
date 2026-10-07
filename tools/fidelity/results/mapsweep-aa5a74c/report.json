@@ -1,0 +1,69 @@
+﻿{
+    "summary":  {
+                    "pass":  6,
+                    "fail":  1,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  2,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  1
+                },
+    "results":  [
+                    {
+                        "id":  "mapsweep.MP_IAC_Seed",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering",
+                        "note":  "PLAYABLE - DARK (HUMAN CHECK): world FAIL (0.041/0.036/0.035); draws world 57 / BSP 9, materials 36, noProgram 0, glErr 0, glDebug 0, gpu 2.2 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_IAC_Berth",
+                        "status":  "HUMAN",
+                        "owner":  "Rendering",
+                        "note":  "PLAYABLE - DARK (HUMAN CHECK): world FAIL (0.051/0.042/0.035); draws world 29 / BSP 0, materials 22, noProgram 0, glErr 0, glDebug 0, gpu 0.2 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_UND_Complex",
+                        "status":  "PARTIAL",
+                        "owner":  "Rendering",
+                        "note":  "PLAYABLE WITH VISUAL DEFECTS: world PARTIAL (0.336/0.242/0.204); draws world 46 / BSP 17, materials 33, noProgram 0, glErr 0, glDebug 0, gpu 0.4 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_IAC_Rust",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.275/0.203/0.188); draws world 132 / BSP 19, materials 58, noProgram 0, glErr 0, glDebug 0, gpu 0.7 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_ESC_BrokenHope",
+                        "status":  "FAIL",
+                        "owner":  "Rendering",
+                        "note":  "BLOCKED BY MISSING SOURCE DATA: world PARTIAL (0.491/0.459/0.435); draws world 0 / BSP 0, materials 0, noProgram 0, glErr 0, glDebug 0, gpu 0 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 1; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_ESC_Remnant",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.576/0.535/0.59); draws world 155 / BSP 37, materials 58, noProgram 0, glErr 0, glDebug 0, gpu 0.8 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_ORB_Debris",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.441/0.432/0.435); draws world 47 / BSP 0, materials 22, noProgram 0, glErr 0, glDebug 0, gpu 0.2 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_IAC_Streets",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.166/0.207/0.176); draws world 78 / BSP 33, materials 41, noProgram 0, glErr 0, glDebug 0, gpu 0.5 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_KON_Molten",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.526/0.456/0.513); draws world 38 / BSP 47, materials 35, noProgram 0, glErr 0, glDebug 0, gpu 0.6 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    },
+                    {
+                        "id":  "mapsweep.MP_UND_Gorge",
+                        "status":  "PASS",
+                        "note":  "PLAYABLE: world PASS (0.359/0.303/0.288); draws world 286 / BSP 66, materials 47, noProgram 0, glErr 0, glDebug 0, gpu 1.4 ms; material fallbacks 0; particle fallbacks 0; ribbons not drawn 0; legacy 0; out-of-bounds 0; clean exit True"
+                    }
+                ]
+}
