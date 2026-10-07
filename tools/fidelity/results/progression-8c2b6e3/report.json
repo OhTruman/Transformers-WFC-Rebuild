@@ -1,0 +1,75 @@
+﻿{
+    "summary":  {
+                    "pass":  10,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  0
+                },
+    "results":  [
+                    {
+                        "id":  "progression.awarded",
+                        "status":  "PASS",
+                        "owner":  "Frontend/Gameplay",
+                        "note":  "run A: 10 XP awards totalling 800 (1:50 1:100 1:50 4:50 4:50 4:50 6:50 6:50)"
+                    },
+                    {
+                        "id":  "progression.handoff_A",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "run A: local player p0; produced 4 / consumed 4; produced but not consumed none; consumed but not produced none"
+                    },
+                    {
+                        "id":  "progression.no_duplicates_A",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "run A: awards (transaction|announcement|xp) recorded more than once: none"
+                    },
+                    {
+                        "id":  "progression.match_sum_A",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "run A per class (awards + challenge XP vs saved LastMatch): Scout 800 vs 800; match end level 1, saved 1"
+                    },
+                    {
+                        "id":  "progression.handoff_B",
+                        "status":  "PASS",
+                        "owner":  "Gameplay/Frontend",
+                        "note":  "run B: local player p0; produced 4 / consumed 4; produced but not consumed none; consumed but not produced none"
+                    },
+                    {
+                        "id":  "progression.no_duplicates_B",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "run B: awards (transaction|announcement|xp) recorded more than once: none"
+                    },
+                    {
+                        "id":  "progression.match_sum_B",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "run B per class (awards + challenge XP vs saved LastMatch): Scout 825 vs 825; match end level 2, saved 1"
+                    },
+                    {
+                        "id":  "progression.saved_A",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "profile after A: XpLeader=0 XpScientist=0 XpScout=800 XpSoldier=0; award totals Scout=800"
+                    },
+                    {
+                        "id":  "progression.reload_B",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "run B first award per class: Scout total 850 = min(A 800 + 50, 355000) (saved A + award expected)"
+                    },
+                    {
+                        "id":  "progression.saved_B",
+                        "status":  "PASS",
+                        "owner":  "Frontend",
+                        "note":  "profile after B per class (A + run B awards): Scout 1625 = 800 + 825; Soldier 0 = 0 + 0; Leader 0 = 0 + 0; Scientist 0 = 0 + 0; challenge tiers that decreased: none"
+                    }
+                ]
+}
