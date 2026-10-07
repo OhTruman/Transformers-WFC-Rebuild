@@ -748,6 +748,7 @@ public:
         std::vector<MatchPlayer> players;               // match().players() after the last step (scoreboard / results / lobby rows)
         std::vector<core::Vec3> positions;              // by match player: the pawn position (valid when present[i])
         std::vector<uint8_t> present;                   // 1 = the player has a live pawn
+        std::vector<int> faction;                       // match().faction(p): TDM the team, FFA 1 (Decepticon)
         HudGameState hud;                               // hudState() after the last step
         int localPlayer = -1;
         float localHealth = 0.0f, localHealthMax = 0.0f;
@@ -765,16 +766,17 @@ public:
         std::vector<GameplayEvent> gameplayEvents;
         std::vector<XpAward> xpAwards;
         std::vector<StatAward> statAwards;
+        std::vector<KillFeedEntry> kills;               // killHistory() entries since the last consume (weapon / damage type)
         unsigned steps = 0;                             // steps since the last consumePresented()
     };
     const PresentedFrame& presented() const { return presented_; }
-    void consumePresented() { presented_.matchEvents.clear(); presented_.gameplayEvents.clear(); presented_.steps = 0; }   // once per frame
+    void consumePresented() { presented_.matchEvents.clear(); presented_.gameplayEvents.clear(); presented_.kills.clear(); presented_.steps = 0; }
     // A command for the simulation: applied in submission order at the start of the next step (select a character, QA actions,
     // look settings, audio volumes / preloads, test damage). Deterministic: the same commands land at the same step boundary.
     void submit(std::function<void(World&)> command) { commands_.push_back(std::move(command)); }
     PresentedFrame presented_;
     std::vector<std::function<void(World&)>> commands_;
-    size_t presentedGameplayEventCount_ = 0;
+    size_t presentedGameplayEventCount_ = 0, presentedKillCount_ = 0;
     void fillPresented();
     const AwardProducer& awards() const { return awards_; }
     const std::vector<MatchOpponent*>& matchOpponents() const { return opponents_; }
