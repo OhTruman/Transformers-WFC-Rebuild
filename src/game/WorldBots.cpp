@@ -629,6 +629,13 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
         const core::Vec3 tgt = (b.wp < b.path.size() ? b.path[b.wp].pos : b.goal.pos) + core::Vec3{0, 2.5f, 0};
         const core::Vec3 d = tgt - pc.actorLocation();
         in.viewPitch = core::clampf(pitchOf(d), -0.7f, 0.7f);
+        // Flying (TnPlaneSimulation boost; PC ADAPTATION: when): a long clear stretch (> 35 m to the next corner, clear line to the
+        // point above it); back to hover within 20 m to turn the corner.
+        const float dl = core::length(d);
+        if (dl > (pc.vehicleState().flying ? 20.0f : 35.0f)) {
+            float th;
+            in.wantBoost = !(collision() && collision()->segmentHit(pc.actorLocation(), tgt, th));
+        }
     }
     in.wantJump = jump && !vehicle;
     if (b.pendingDodge) { in.dodgeDir = b.pendingDodge; b.pendingDodge = 0; }
