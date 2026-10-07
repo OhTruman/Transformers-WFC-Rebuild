@@ -604,13 +604,25 @@ gfx::MovieClip* findClip(gfx::MovieClip* c, const std::string& name, int depth =
 }
 }
 
-// PC EXTENSION (extended matches): InGameStats_GFX lays the PlayerList out at a fixed step (team header 54, entry 25;
+namespace {
+gfx::MovieClip* findNamed(gfx::MovieClip* c, const std::string& name, int depth = 0) {
+    if (!c || depth > 8) return nullptr;
+    for (auto& [d, ch] : c->children) {
+        if (ch->kind != gfx::DisplayObject::Kind::Clip || ch->removed) continue;
+        auto* mc = static_cast<gfx::MovieClip*>(ch.get());
+        if (mc->name == name) return mc;
+        if (gfx::MovieClip* r = findNamed(mc, name, depth + 1)) return r;
+    }
+    return nullptr;
+}
+}
+
+// PC EXTENSION (extended matches): InGameStats_GFX (and EndGameStats_GFX's View Scores) lays the PlayerList out at a fixed step (team header 54, entry 25;
 // PlayerList.swf) for the original 5 per team, with no scrolling (the list takes input only on consoles, for gamer
 // cards). With up to 32 per team the list runs off the screen, so when it is taller than the space above the button
 // hints, Up / Down and the mouse wheel scroll it and the rows outside that space are hidden. At the original counts it
 // fits and nothing changes.
-void GfxPresenter::scrollScoreboard(const platform::InputFrame& in, float dt) {
-    gfx::Player& p = scoreboard_->player();
+void GfxPresenter::scrollPlayerList(gfx::Player& p, float& scroll, const platform::InputFrame& in, float dt) {
     gfx::MovieClip* list = findClip(p.root(), "playerList_mc");
     if (!list || !list->script) return;
     gfx::avm1::VM& vm = p.vm();
@@ -627,7 +639,7 @@ void GfxPresenter::scrollScoreboard(const platform::InputFrame& in, float dt) {
     const float listScale = std::fabs(lm.d) > 1e-4f ? lm.d : 1.0f;
     const float top = pm.ty / 20.0f + (float)base * sy;   // world matrices are in twips
     float bottom = 720.0f - 70.0f;
-    if (gfx::DisplayObject* hints = p.resolveTarget("buttonHints_mc", p.root())) bottom = hints->worldMatrix().ty / 20.0f - 12.0f;
+    if (gfx::MovieClip* hints = findNamed(p.root(), "buttonHints_mc")) bottom = hints->worldMatrix().ty / 20.0f - 12.0f;
     float content = 0.0f;
     for (auto& [d, ch] : list->children) {
         if (ch->removed || !ch->script) continue;
@@ -641,9 +653,9 @@ void GfxPresenter::scrollScoreboard(const platform::InputFrame& in, float dt) {
     float step = 0.0f;
     if (in.uiIsDown(platform::UiKey::Down)) step += 1.0f;
     if (in.uiIsDown(platform::UiKey::Up)) step -= 1.0f;
-    scoreScroll_ += step * 420.0f * dt - in.mouseWheel * 25.0f * 3.0f * listScale;
-    scoreScroll_ = std::clamp(scoreScroll_, 0.0f, maxScroll);
-    const double y = base - scoreScroll_ / sy;
+    scroll += step * 420.0f * dt - in.mouseWheel * 25.0f * 3.0f * listScale;
+    scroll = std::clamp(scroll, 0.0f, maxScroll);
+    const double y = base - scroll / sy;
     vm.set(list->script, "_y", gfx::avm1::Value(y));
     vm.set(list->script, "__wfcScrollSet", gfx::avm1::Value(vm.toNumber(vm.get(list->script, "_y"))));
     // Rows outside [top, bottom] are hidden (no mask clip in the original layout).
@@ -942,7 +954,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     }
     if (cursor_) cursor_->advance(dt);
     if (hud_) { hud_->player().setViewport((float)viewW_, (float)viewH_); hud_->advance(dt); hudInterpUpdate(*hud_); if (extendedMatch_) checkKillFeed(dt); }
-    if (scoreboard_) { scoreboard_->advance(dt); scrollScoreboard(in, dt); } else scoreScroll_ = 0.0f;
+    if (scoreboard_) { scoreboard_->advance(dt); scrollPlayerList(scoreboard_->player(), scoreScroll_, in, dt); } else scoreScroll_ = 0.0f;
     if (loading_) { loading_->advance(dt); loadingTime_ += dt; }
     // Movies may open / close others from their scripts: iterate over a snapshot of the objects.
     std::vector<std::string> objs;
@@ -954,6 +966,12 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
     if (loading_) loading_->player().setViewport((float)viewW_, (float)viewH_);
     for (const std::string& o : objs)
         for (Open& op : movies_) if (op.object == o) { op.movie->advance(dt); break; }
+    {   // the end-of-match View Scores list scrolls like the in-match scoreboard
+        bool endStats = false;
+        for (Open& op : movies_)
+            if (op.object.find("EndGameStats_GFX") != std::string::npos) { endStats = true; scrollPlayerList(op.movie->player(), endScoreScroll_, in, dt); }
+        if (!endStats) endScoreScroll_ = 0.0f;
+    }
     // Movie-opened movies: closes requested during their own script run are applied here; advance the rest.
     for (const std::string& o : deferredErase_)
         for (size_t i = extras_.size(); i-- > 0;) if (extras_[i].object == o) { extras_.erase(extras_.begin() + (long)i); shapesStale_ = true; }

@@ -107,6 +107,7 @@ private:
     int frameLimitShown_ = 0;                 // [PCSettings] FrameLimit for the graphics menu's Frame Rate Limit entry
     std::map<const gfx::Player*, int> botRowsBuilt_;   // GameLobby menu: the BotRows kind its bot rows were built for
     float scoreScroll_ = 0.0f;   // in-match scoreboard scroll (stage units), PC EXTENSION for extended matches
+    float endScoreScroll_ = 0.0f;   // the same for the end-of-match View Scores list (EndGameStats_GFX)
     bool extendedMatch_ = false;   // more than the original 10 participants (kill feed PC EXTENSION)
     void extendedKillFeed(const std::vector<gfx::avm1::Value>& a);
     void checkKillFeed(float dt);   // reveals the entering line after the shift; asserts the 22 px step
@@ -114,7 +115,7 @@ private:
     float feedRevealIn_ = 0.0f;
     float feedMinGapLogged_ = 1e9f;
     float feedMinGapSeen_ = 1e9f;   // smallest visible-line gap measured (reported with each extended feed line)
-    void scrollScoreboard(const platform::InputFrame& in, float dt);
+    void scrollPlayerList(gfx::Player& p, float& scroll, const platform::InputFrame& in, float dt);
     void syncBotRows(gfx::Player& p, frontend::GameFlow& flow);
     bool prevMouseLeft_ = false;
     gfx::Player* mouseTarget_ = nullptr;      // movie that last received the pointer
