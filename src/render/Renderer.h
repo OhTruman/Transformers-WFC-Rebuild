@@ -80,6 +80,13 @@ public:
 
     // Draw a transient mesh (e.g. CPU-skinned each frame) without uploading/retaining it.
     virtual void drawDynamicMesh(const MeshData& mesh, const core::Mat4& model, const core::Vec3& color) = 0;
+    // Milestone E (32 v 32): drawDynamicMesh with a pose serial. The SAME MeshData object (address) is drawn every
+    // frame and poseSerial changes whenever its positions / normals / tangents change (each skin). The renderer keeps
+    // a vertex buffer per MeshData and skips the vertex build + upload while the serial is unchanged. Default: no
+    // caching (forwards to drawDynamicMesh).
+    virtual void drawDynamicMeshPosed(const MeshData& mesh, const core::Mat4& model, const core::Vec3& color, uint64_t poseSerial) {
+        (void)poseSerial; drawDynamicMesh(mesh, model, color);
+    }
     // M53: compile the shader programs and upload the textures a transient mesh's materials need, without drawing.
     // Call when a mesh that will be drawn later is loaded (e.g. a character's vehicle form at spawn), so its first
     // visible frame does not pay for them (first R->V transform: 59 ms program + 51 ms textures in one frame).
@@ -376,6 +383,10 @@ public:
     // A frame presented outside beginFrame / endFrame (a full-motion movie, a frontend-only screen): call once per
     // presented frame so the renderer's stall watchdog counts it as progress (default no-op).
     virtual void notePresentedFrame() {}
+    // HUD post-process chain (GFxMovie.ActivatePostProcessChain / DeactivePostProcessChain on Hud_GFX; RE 6bbf2cb):
+    // chain -1 = none, 0 = StaticDischargeScreenEffect, 1 = LowHealthScreenEffect. One slot, on / off instantly; drawn
+    // over the finished 3D frame, under the HUD canvas / GFx. Default no-op.
+    virtual void setHudScreenEffect(int chain) { (void)chain; }
     virtual void setFrameLimit(float hz) { (void)hz; }
     virtual float frameLimit() const { return 0.0f; }
     virtual void waitFrameSlot() {}

@@ -13,3 +13,5 @@ UI_HudMarkers_p.MPMarkerBomb_MAT
 UI_HudMarkers_p.MPMarkerCOP_MAT
 UI_HudMarkers_p.MPMarkerDominationNode_MAT
 UI_HudMarkers_p.TargetHealthBar_MAT
+UI_GFxHud_p.StaticDischargeScreenEffect_M
+UI_GFxHud_p.LowHealth.LowHealthScreenEffect_M
