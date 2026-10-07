@@ -239,6 +239,7 @@ private:
     std::vector<MatchPlayer> players_;
     std::vector<core::Vec3> locs_;
     std::vector<float> radii_;
+    bool roundRestarting_ = false;       // RestartRound SoftReset in progress (audit line reason)
     std::vector<float> lastDamagedAt_;   // match time of each player's last recorded damage (any type; diagnostics)
     std::vector<int> lastHitBy_;         // Pawn.LastHitBy: the last other player who damaged this life's pawn (-1 none)   // per player cylinder radius (setPlayerLocation)
     std::function<bool(const std::string&, std::string&)> chassisCheck_;

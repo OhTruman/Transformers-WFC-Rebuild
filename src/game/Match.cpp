@@ -211,6 +211,7 @@ void Match::startMatch() {
     }
     emit(MatchEvent::Type::MatchStarted);
     recordEvent(GameplayEventType::MatchStart);
+    LOG_INFO("MATCH start mode=%s t=%.2f goal=%d time_limit=%d rounds=%d", s_.modeTag.c_str(), matchTime_, s_.goalScore, s_.timeLimit, s_.rounds);   // audit line
     if (s_.rounds > 0) emit(MatchEvent::Type::RoundStarted, -1, attackingTeam_);
     // SpawnHelper: RespawnHelper.InitialSpawn -> Wave TimeToAllowInstantInitialSpawns -1: always immediate.
     spawnAllInitial();
@@ -483,6 +484,7 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
             for (size_t i = 0; i < players_.size(); ++i) if (players_[i].score == top) e.mvp.push_back((int)i);
     }
     LOG_INFO("match: EndGame reason \"%s\" score %d-%d winner team %d player %d", reason.c_str(), teamScore_[0], teamScore_[1], winner, winnerPlayer);
+    LOG_INFO("MATCH end reason=%s score=%d-%d winner_team=%d winner_player=%d t=%.2f", reason.c_str(), teamScore_[0], teamScore_[1], winner, winnerPlayer, matchTime_);   // audit line
 }
 
 void Match::restartPlayer(int p) {
@@ -509,6 +511,8 @@ void Match::restartPlayer(int p) {
     damageHistory_[(size_t)p].clear();
     if ((size_t)p < lastHitBy_.size()) lastHitBy_[(size_t)p] = -1;   // a new pawn
     if (st >= 0) { locs_[(size_t)p] = starts_[(size_t)st].pos; if ((size_t)p < radii_.size()) radii_[(size_t)p] = 2.0f; }
+    if (P.deaths > 0 && (size_t)p < deathTime_.size() && state_ == State::InProgress)   // audit line: respawn delay after a death
+        LOG_INFO("MATCH respawn player=%d delay_s=%.2f reason=%s t=%.2f", p, matchTime_ - deathTime_[(size_t)p], roundRestarting_ ? "round" : "wave", matchTime_);
     P.spawnTime = matchTime_;
     emit(MatchEvent::Type::PlayerSpawned, p, st, st >= 0 ? starts_[(size_t)st].actor : std::string());
 }
@@ -644,6 +648,8 @@ void Match::tickRounds(float dt) {
     betweenRoundsLeft_ = s_.timeBetweenRounds;
     if (s_.singleFlagCTF && attackingTeam_ <= 1) attackingTeam_ = 1 - attackingTeam_;
     emit(MatchEvent::Type::RoundEnded, -1, currentRound_);
+    LOG_INFO("MATCH round end n=%d score=%d-%d next_attacking=%d between_s=%.1f t=%.2f", currentRound_, teamScore_[0], teamScore_[1], attackingTeam_,
+             s_.timeBetweenRounds, matchTime_);   // audit line
 }
 
 void Match::restartRound() {
@@ -652,8 +658,11 @@ void Match::restartRound() {
     remainingTime_ = s_.timeLimit;
     // TnGame.RestartRound: SoftReset - every player respawns (no death counted).
     for (MatchPlayer& p : players_) p.alive = false;
+    roundRestarting_ = true;
     spawnAllInitial();
+    roundRestarting_ = false;
     emit(MatchEvent::Type::RoundStarted, -1, attackingTeam_);
+    LOG_INFO("MATCH round start n=%d attacking=%d time_limit=%d t=%.2f", currentRound_ + 1, attackingTeam_, s_.timeLimit, matchTime_);   // audit line
 }
 
 namespace {
