@@ -91,6 +91,18 @@ void GfxPresenter::setScoreboard(bool open) {
 
 void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
     if (!hud_) return;
+    static const bool trace = std::getenv("WFC_HUDTRACE") != nullptr;   // DEV TOOL: log every HUD call with its args
+    if (trace) {
+        std::string line = fn + "(";
+        for (size_t i = 0; i < args.size(); ++i) {
+            const frontend::BridgeValue& b = args[i];
+            if (i) line += ", ";
+            if (b.kind == frontend::BridgeValue::Kind::String) line += "'" + b.s + "'";
+            else if (b.kind == frontend::BridgeValue::Kind::Bool) line += b.b ? "true" : "false";
+            else { char n[32]; std::snprintf(n, sizeof n, "%g", b.n); line += n; }
+        }
+        LOG_INFO("HUDCALL %s)", line.c_str());
+    }
     Args a;
     for (const frontend::BridgeValue& b : args) a.push_back(toValue(hud_->player().vm(), b));
     if (fn == "_global.GameMessage" && extendedMatch_) { extendedKillFeed(a); return; }

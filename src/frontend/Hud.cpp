@@ -50,6 +50,7 @@ void HudController::reset() {
     announcements_.clear();
     rewards_.clear();
     events_.clear();
+    progressLabel_.clear();
 }
 
 std::string HudController::killMessage(const Catalog& cat, const HudKill& k, int localTeam) {
@@ -130,12 +131,13 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
         // The observers that have a source (see HudFrame): on change, or all again for a fresh movie.
         auto changed = [&](const auto& now, const auto& was) { return now && (!sentValid_ || !was || *now != *was); };
         if (changed(f.progress, sent_.progress) || (f.progress && f.progressObserver != sent_.progressObserver)) {
-            std::string label;
+            // A bar that ends without an observer (the glue sends 0) keeps the last label, so the text fades out with
+            // the bar (Hud_GFX sets description_txt on every call, the 0 call included).
             if (f.progressObserver) {
-                label = cat.localize("TransGame", *f.progressObserver, "label");
-                for (size_t at; (at = label.find("`p")) != std::string::npos;) label.replace(at, 2, f.progressName);
+                progressLabel_ = cat.localize("TransGame", *f.progressObserver, "label");
+                for (size_t at; (at = progressLabel_.find("`p")) != std::string::npos;) progressLabel_.replace(at, 2, f.progressName);
             }
-            call("NotifyProgressBarChanged", {label, *f.progress});
+            call("NotifyProgressBarChanged", {progressLabel_, *f.progress});
         }
         if (changed(f.attackingTeamStatus, sent_.attackingTeamStatus)) call("NotifyOnAttackingTeamChanged", {*f.attackingTeamStatus});
         if (changed(f.killstreakId, sent_.killstreakId)) call("NotifyKillstreakChanged", {*f.killstreakId});

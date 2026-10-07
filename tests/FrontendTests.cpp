@@ -137,6 +137,10 @@ static void testHudObservers(const Catalog& c) {
     hud.update(&p, c, true, true);
     check(p.has("_global.NotifyProgressBarChanged(Reviving Bumblebee,0.5)") && p.calls.size() == 1, "hud.progress_revive_name",
           p.calls.empty() ? "" : p.calls[0]);
+    // the bar ends without an observer: the label stays for the fade-out
+    f.progressObserver.reset(); f.progress = 0.0;
+    hud.setFrame(f); p.calls.clear(); hud.update(&p, c, true, true);
+    check(p.has("_global.NotifyProgressBarChanged(Reviving Bumblebee,0)"), "hud.progress_end_keeps_label", p.calls.empty() ? "" : p.calls[0]);
     // prompts diffed into add / remove; refused transforms per increment; conversions
     f.contextualPrompts = std::vector<std::string>{"Pick up"};
     f.cantTransformCount = 0;
