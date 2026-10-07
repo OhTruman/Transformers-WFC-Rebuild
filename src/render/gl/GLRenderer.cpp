@@ -1429,6 +1429,19 @@ public:
         drawMeshArrays(m, model, color);
     }
 
+    void drawDynamicMeshBlended(const MeshData& m, const std::vector<float>& prevP, const std::vector<float>& prevN, float alpha,
+                                const core::Mat4& model, const core::Vec3& color, uint64_t serial) override {
+        if (!wfc_.active() || alpha >= 1.0f || prevP.size() != m.positions.size()) {
+            IRenderer::drawDynamicMeshBlended(m, prevP, prevN, alpha, model, color, serial);   // posed / CPU blend
+            return;
+        }
+        watchdog::phase("drawDynamicMesh");
+        glx::gpuMark(glx::kPassWorld);
+        if (m.empty()) return;
+        wfc_.drawDynamic(m, model, &m, serial, &prevP, &prevN, alpha);
+        glLoadMatrixf(view_.m);
+    }
+
     void drawBox(const core::Vec3& center, const core::Vec3& size,
                  const core::Vec3& color, float yaw) override {
         core::Mat4 model = core::Mat4::translate(center) * core::Mat4::rotateY(yaw) *

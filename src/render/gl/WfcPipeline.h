@@ -221,7 +221,9 @@ public:
     int upload(const MeshData& m);
     void draw(int id, const core::Mat4& model);
     // cacheKey / serial (drawDynamicMeshPosed): a persistent vertex buffer per key, rebuilt only when the serial changes
-    void drawDynamic(const MeshData& m, const core::Mat4& model, const void* cacheKey = nullptr, uint64_t serial = 0);
+    // prevP / prevN (drawDynamicMeshBlended): the previous step's pose, blended in the vertex shader by alpha
+    void drawDynamic(const MeshData& m, const core::Mat4& model, const void* cacheKey = nullptr, uint64_t serial = 0,
+                     const std::vector<float>* prevP = nullptr, const std::vector<float>* prevN = nullptr, float alpha = 1.0f);
     void prewarmDynamic(const MeshData& m);   // resolve drawDynamic's programs / textures without drawing
     // Effects shaded by their original material graphs; `color` is the particle colour (vertex colour,
     // HDR). drawFx returns false when the mesh has no compiled original material (caller falls back).
@@ -312,13 +314,30 @@ private:
     // the probes' ambient cube at a UE point, glTF face order (+X, -X, +Y up, -Y, +Z, -Z); false outside every volume
     bool beastAmbient(const core::Vec3& ueP, core::Vec3 cube[6]) const;
     bool warmup_ = false;
+    // first-use residency (09c first-InGame-frame / first-death GPU spikes): every texture created is referenced once by
+    // a 1x1 off-screen draw at the next frame start (or at the end of the world warm-up), so the driver's first-use
+    // work (residency / upload) happens where the texture was created (loading screen, prewarm), not where it is seen
+    std::vector<std::pair<GLuint, bool>> touchQueue_;     // (texture, cube)
+    GLuint touchProg2D_ = 0, touchProgCube_ = 0, touchFbo_ = 0, touchTex_ = 0;
+    int touchedTextures_ = 0;
+    void touchNewTextures();
+    int poseBlend_ = 0;                                   // vertex-shader pose blend for the current draw (attribs 7 / 8)
+    float poseAlpha_ = 1.0f;
     int hudEffect_ = -1;                                  // HUD post-process chain (-1 none, 0 static discharge, 1 low health)
     GLuint screenFxVao_ = 0, screenFxVbo_ = 0, screenFxIbo_ = 0;
     void drawHudScreenEffect();
 public:
     void setHudScreenEffect(int chain) { hudEffect_ = chain < 0 ? -1 : (chain > 1 ? 1 : chain); }
 private:
-    struct PosedBuf { GLuint vao = 0, vbo = 0, ibo = 0; uint64_t serial = ~0ull; size_t verts = 0, idx = 0; int lastFrame = 0; };
+    struct PosedBuf {
+        GLuint vao = 0, vbo = 0, ibo = 0, prevVbo = 0;
+        uint64_t serial = ~0ull;
+        size_t verts = 0, idx = 0;
+        int lastFrame = 0;
+        bool blended = false;                       // the buffer holds raw cur normals + a prev-pose stream (attribs 7 / 8)
+        core::Vec3 mn{0, 0, 0}, mx{0, 0, 0};        // cur pose bounds (cached per serial; no per-frame vertex scans)
+        core::Vec3 pmn{0, 0, 0}, pmx{0, 0, 0};      // prev pose bounds
+    };
     std::map<const void*, PosedBuf> posed_;              // drawDynamicMeshPosed buffers (Milestone E)
     void evictPosed(bool all);
     double statFxTickMs_ = 0.0;                          // map FX simulation share of statFxMs_
@@ -336,7 +355,7 @@ public:
     void flushTranslucency();
 private:
     void ensureTargets(int w, int h);
-    static void buildVertices(const MeshData& m, std::vector<float>& v);
+    static void buildVertices(const MeshData& m, std::vector<float>& v, bool rawNormals = false);
 
     // Authored post-process (map TnWorldInfo.DefaultPostProcessSettings over Default__WorldInfo).
     struct Post {
