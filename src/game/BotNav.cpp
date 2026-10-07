@@ -71,7 +71,11 @@ bool BotNav::load(const std::string& path) {
         Link L;
         L.from = l["from_cell"].asInt(-1); L.to = l["to_cell"].asInt(-1);
         if (L.from < 0 || L.to < 0 || (size_t)L.from >= cells_.size() || (size_t)L.to >= cells_.size()) continue;
-        L.jump = l["kind"].asString() == "jump_up";
+        const std::string kind = l["kind"].asString();
+        // double_jump_up (AssetTools: JumpHeight + DoubleJumpHeight) needs a double jump the rebuild's movement does not have (MP use
+        // unconfirmed): not a usable link [PARTIAL]. Unknown kinds are skipped too (never mistaken for a drop).
+        if (kind != "jump_up" && kind != "drop_down") continue;
+        L.jump = kind == "jump_up";
         L.robot = L.vehicle = false;
         const assets::Json& fm = l["forms"];
         for (size_t k = 0; k < fm.size(); ++k) { L.robot |= fm[k].asString() == "robot"; L.vehicle |= fm[k].asString() == "vehicle"; }

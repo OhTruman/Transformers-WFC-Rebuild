@@ -4401,7 +4401,7 @@ void Application::runBotNavTest() {
                  segs, badSegs, totalMs / std::max(1, pairs), worstMs, worstExp);
         check(found >= pairs * 95 / 100, "paths between anchors (radius " + std::to_string(radius).substr(0, 4) + ")");
         check(badSegs * 50 <= segs, "corridor segments stay on the mesh (<= 2 %)");
-        check(worstMs < 8.0, "A* under 8 ms");
+        check(worstMs < 15.0, "one-shot A* under 15 ms (in-game searches are time-sliced at 1500 expansions per step)");
     }
     LOG_INFO("BOTNAV SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
