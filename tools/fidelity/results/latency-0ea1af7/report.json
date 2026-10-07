@@ -1,0 +1,51 @@
+﻿{
+    "summary":  {
+                    "pass":  5,
+                    "fail":  0,
+                    "known":  0,
+                    "info":  0,
+                    "skip":  0,
+                    "human":  0,
+                    "unknown":  0,
+                    "waiting":  0,
+                    "partial":  1
+                },
+    "results":  [
+                    {
+                        "id":  "latency.fire_async0",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fire async=0: 50 probes, avg 4.42 frames (max 9), input-\u003epresent avg 8.04 ms (max 16.39; bound one step + 2 frames = 20.3 ms); timeouts 0"
+                    },
+                    {
+                        "id":  "latency.fire_async1",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fire async=1: 50 probes, avg 3.38 frames (max 9), input-\u003epresent avg 6.62 ms (max 18.85; bound one step + 2 frames = 20.6 ms); timeouts 0"
+                    },
+                    {
+                        "id":  "latency.move_async0",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "move async=0: 129 probes, avg 5.16 frames (max 10), input-\u003epresent avg 9.29 ms (max 18.78; bound one step + 2 frames = 20.3 ms); timeouts 0"
+                    },
+                    {
+                        "id":  "latency.move_async1",
+                        "status":  "PARTIAL",
+                        "owner":  "Gameplay",
+                        "note":  "move async=1: 146 probes, avg 4.6 frames (max 10), input-\u003epresent avg 9.96 ms (max 27.38; bound one step + 2 frames = 21.0 ms); timeouts 0"
+                    },
+                    {
+                        "id":  "latency.fire.async_vs_sync",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "fire: async avg 6.62 ms / 3.38 frames vs sync 8.04 ms / 4.42 frames (PASS if async \u003c= sync x 1.25 + 0.5 ms)"
+                    },
+                    {
+                        "id":  "latency.move.async_vs_sync",
+                        "status":  "PASS",
+                        "owner":  "Gameplay",
+                        "note":  "move: async avg 9.96 ms / 4.6 frames vs sync 9.29 ms / 5.16 frames (PASS if async \u003c= sync x 1.25 + 0.5 ms)"
+                    }
+                ]
+}
