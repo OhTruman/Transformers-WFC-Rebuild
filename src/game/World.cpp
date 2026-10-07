@@ -1509,6 +1509,8 @@ void World::fillPresented() {
     const size_t n = p.players.size();
     p.positions.assign(n, core::Vec3{0, 0, 0});
     p.present.assign(n, 0);
+    p.faction.assign(n, 255);
+    for (size_t i = 0; i < n; ++i) p.faction[i] = match_.faction((int)i);
     for (size_t i = 0; i < n; ++i)
         if (const Character* c = participantPawn((int)i)) { p.positions[i] = c->position(); p.present[i] = 1; }
     p.hud = hudState();
@@ -1531,6 +1533,11 @@ void World::fillPresented() {
     if (presentedGameplayEventCount_ > ge.size()) presentedGameplayEventCount_ = 0;   // a new match restarted the record
     p.gameplayEvents.insert(p.gameplayEvents.end(), ge.begin() + (long)presentedGameplayEventCount_, ge.end());
     presentedGameplayEventCount_ = ge.size();
+    const auto& kh = match_.killHistory();
+    if (presentedKillCount_ > kh.size()) presentedKillCount_ = 0;   // a new match
+    p.kills.insert(p.kills.end(), kh.begin() + (long)presentedKillCount_, kh.end());
+    presentedKillCount_ = kh.size();
+    if (p.kills.size() > 8192) p.kills.erase(p.kills.begin(), p.kills.end() - 8192L);
     { auto xp = awards_.drainXp(); p.xpAwards.insert(p.xpAwards.end(), xp.begin(), xp.end()); }
     { auto st = awards_.drainStats(); p.statAwards.insert(p.statAwards.end(), st.begin(), st.end()); }
     constexpr size_t kCap = 8192;
