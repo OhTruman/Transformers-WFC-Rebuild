@@ -31,13 +31,14 @@ public:
     size_t cachedShapes() const { return shapes_.size(); }
     // The tessellation cache is keyed by ShapeDef address: when a movie (and its definitions) is destroyed, a later
     // allocation can reuse an address, so the cache is dropped (stale glyphs / an opaque vignette otherwise).
-    void forgetShapes() { shapes_.clear(); }
+    void forgetShapes();
     size_t textures() const { return textures_.size(); }
     void ownedNames(GlCensus::Owned& o) const;   // GL objects of the UI renderer (kept across level travel)
 
 private:
-    struct Mesh { std::vector<float> fan; float bx0 = 0, by0 = 0, bx1 = 0, by1 = 0; int set = 0, style = 0; };
-    struct Stroke { std::vector<float> tris; int set = 0, style = 0; };
+    // vbo: the fan followed by its 6-vertex cover quad, uploaded once (made on first draw; freed with the shape cache)
+    struct Mesh { std::vector<float> fan; float bx0 = 0, by0 = 0, bx1 = 0, by1 = 0; int set = 0, style = 0; mutable unsigned vbo = 0; };
+    struct Stroke { std::vector<float> tris; int set = 0, style = 0; mutable unsigned vbo = 0; };
     struct Cached { std::vector<Mesh> fills; std::vector<Stroke> strokes; };
     const Cached& cache(const gfx::ShapeDef* s, bool glyph);
     unsigned texture(const std::string& path, int& w, int& h);
@@ -45,6 +46,10 @@ private:
     void setFill(const gfx::FillStyle& fs, const gfx::Matrix& world, const gfx::CXForm& cx, float alpha, int mode = -1);
     void drawTriangles(const std::vector<float>& v, const gfx::Matrix& m);
     void stencilWinding(const std::vector<float>& fan, const gfx::Matrix& m);
+    void stencilState();                    // the winding pass state (stencilWinding without the draw)
+    void coverState(bool mask);             // the cover pass state (cover without the draw)
+    void drawMesh(const Mesh& mesh, bool mask);    // stencilWinding + cover from the mesh's buffer
+    void drawStroke(const Stroke& stroke);         // drawTriangles from the stroke's buffer
     void cover(float x0, float y0, float x1, float y1, const gfx::Matrix& m, bool mask);
     void fullscreen();
 

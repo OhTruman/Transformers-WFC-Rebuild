@@ -190,6 +190,10 @@ void GfxRendererGL::ownedNames(GlCensus::Owned& o) const {
     if (video_.id) o.textures.insert(video_.id);
     if (backdropTex_) o.textures.insert(backdropTex_);
     if (vbo_) o.buffers.insert(vbo_);
+    for (const auto& [k, c] : shapes_) {
+        for (const Mesh& m : c.fills) if (m.vbo) o.buffers.insert(m.vbo);
+        for (const Stroke& st : c.strokes) if (st.vbo) o.buffers.insert(st.vbo);
+    }
     if (vao_) o.vertexArrays.insert(vao_);
     for (unsigned f : {msFbo_, resFbo_}) if (f) o.framebuffers.insert(f);
     for (unsigned r : {msColor_, msDepth_}) if (r) o.renderbuffers.insert(r);
@@ -574,19 +578,21 @@ void GfxRendererGL::drawTriangles(const std::vector<float>& v, const gfx::Matrix
     glDrawArrays(GL_TRIANGLES, 0, (GLsizei)(v.size() / 2));
 }
 
-void GfxRendererGL::stencilWinding(const std::vector<float>& fan, const gfx::Matrix& m) {
+void GfxRendererGL::stencilState() {
     // Winding count in the low nibble, only where the mask level (high nibble) equals the current level.
     glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
     glStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
     glStencilMask(0x0F);
     glx::StencilOpSeparate(GL_FRONT, GL_KEEP, GL_KEEP, GL_INCR_WRAP);
     glx::StencilOpSeparate(GL_BACK, GL_KEEP, GL_KEEP, GL_DECR_WRAP);
+}
+
+void GfxRendererGL::stencilWinding(const std::vector<float>& fan, const gfx::Matrix& m) {
+    stencilState();
     drawTriangles(fan, m);
 }
 
-void GfxRendererGL::cover(float x0, float y0, float x1, float y1, const gfx::Matrix& m, bool mask) {
-    float q[] = {x0, y0, x1, y0, x1, y1, x0, y0, x1, y1, x0, y1};
-    std::vector<float> v(q, q + 12);
+void GfxRendererGL::coverState(bool mask) {
     if (mask) {
         // Pixels with a nonzero winding become mask level + 1 (low nibble cleared).
         glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
@@ -599,7 +605,58 @@ void GfxRendererGL::cover(float x0, float y0, float x1, float y1, const gfx::Mat
         glStencilMask(0x0F);
         glStencilOp(GL_KEEP, GL_KEEP, GL_ZERO);
     }
+}
+
+void GfxRendererGL::cover(float x0, float y0, float x1, float y1, const gfx::Matrix& m, bool mask) {
+    float q[] = {x0, y0, x1, y0, x1, y1, x0, y0, x1, y1, x0, y1};
+    std::vector<float> v(q, q + 12);
+    coverState(mask);
     drawTriangles(v, m);
+}
+
+// Cached shapes draw from their own buffers: the same vertices, state and draw order as stencilWinding + cover /
+// drawTriangles, without re-uploading the geometry every frame (it was two glBufferData per fill per frame).
+void GfxRendererGL::drawMesh(const Mesh& mesh, bool mask) {
+    if (mesh.fan.empty()) return;
+    if (!mesh.vbo) {
+        std::vector<float> v(mesh.fan);
+        const float q[] = {mesh.bx0, mesh.by0, mesh.bx1, mesh.by0, mesh.bx1, mesh.by1, mesh.bx0, mesh.by0, mesh.bx1, mesh.by1, mesh.bx0, mesh.by1};
+        v.insert(v.end(), q, q + 12);
+        glx::GenBuffers(1, &mesh.vbo);
+        glx::BindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+        glx::BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(v.size() * sizeof(float)), v.data(), GL_STATIC_DRAW);
+    } else {
+        glx::BindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+    }
+    glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+    const GLsizei nFan = (GLsizei)(mesh.fan.size() / 2);
+    stencilState();
+    glDrawArrays(GL_TRIANGLES, 0, nFan);
+    coverState(mask);
+    glDrawArrays(GL_TRIANGLES, nFan, 6);
+    glx::BindBuffer(GL_ARRAY_BUFFER, vbo_);   // streamed draws use the shared buffer
+}
+
+void GfxRendererGL::drawStroke(const Stroke& stroke) {
+    if (stroke.tris.empty()) return;
+    if (!stroke.vbo) {
+        glx::GenBuffers(1, &stroke.vbo);
+        glx::BindBuffer(GL_ARRAY_BUFFER, stroke.vbo);
+        glx::BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(stroke.tris.size() * sizeof(float)), stroke.tris.data(), GL_STATIC_DRAW);
+    } else {
+        glx::BindBuffer(GL_ARRAY_BUFFER, stroke.vbo);
+    }
+    glx::VertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glDrawArrays(GL_TRIANGLES, 0, (GLsizei)(stroke.tris.size() / 2));
+    glx::BindBuffer(GL_ARRAY_BUFFER, vbo_);
+}
+
+void GfxRendererGL::forgetShapes() {
+    for (auto& [k, c] : shapes_) {
+        for (const Mesh& m : c.fills) if (m.vbo) glx::DeleteBuffers(1, &m.vbo);
+        for (const Stroke& st : c.strokes) if (st.vbo) glx::DeleteBuffers(1, &st.vbo);
+    }
+    shapes_.clear();
 }
 
 void GfxRendererGL::drawVideo(const uint8_t* rgba, int w, int h, uint64_t serial) {
@@ -742,8 +799,7 @@ void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, floa
                 glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, rep ? GL_REPEAT : GL_CLAMP_TO_EDGE);
                 glx::Uniform2f(uTexSize_, (float)tw, (float)th);
             }
-            stencilWinding(m.fan, it.m);
-            cover(m.bx0, m.by0, m.bx1, m.by1, it.m, inMask_);
+            drawMesh(m, inMask_);
         }
         if (!inMask_) {
             for (const Stroke& s : c.strokes) {
@@ -754,7 +810,7 @@ void GfxRendererGL::draw(const std::vector<gfx::Player::RenderItem>& items, floa
                 glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
                 glStencilFunc(GL_EQUAL, level_ << 4, 0xF0);
                 glStencilMask(0);
-                drawTriangles(s.tris, it.m);
+                drawStroke(s);
             }
         }
     }
@@ -793,8 +849,7 @@ void GfxRendererGL::drawGlyphCoverage(const gfx::Player::RenderItem& it, const g
     white.color = gfx::RGBA{255, 255, 255, 255};
     for (const Mesh& mesh : c.fills) {
         setFill(white, m, gfx::CXForm{}, 1.0f, 0);
-        stencilWinding(mesh.fan, m);
-        cover(mesh.bx0, mesh.by0, mesh.bx1, mesh.by1, m, false);
+        drawMesh(mesh, false);
     }
 }
 

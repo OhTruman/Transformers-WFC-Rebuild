@@ -4,6 +4,7 @@
 #include "frontend/FlowTrace.h"
 
 #include <algorithm>
+#include <chrono>
 #include <map>
 #include <cctype>
 #include <cmath>
@@ -97,6 +98,21 @@ void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::Br
 }
 
 namespace {
+// WFC_UIPROF=1 (diagnostics): average CPU ms of the presenter's update and draw, logged every 300 frames.
+struct UiProf {
+    const char* name;
+    double sum = 0; int n = 0;
+    std::chrono::steady_clock::time_point t0;
+    static bool on() { static const bool v = std::getenv("WFC_UIPROF") != nullptr; return v; }
+    void begin() { if (on()) t0 = std::chrono::steady_clock::now(); }
+    void end() {
+        if (!on()) return;
+        sum += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        if (++n == 300) { LOG_INFO("uiprof %s avg %.3f ms (300 frames)", name, sum / n); sum = 0; n = 0; }
+    }
+};
+UiProf g_uiUpdate{"update"}, g_uiDraw{"draw"};
+struct UiProfScope { UiProf& p; explicit UiProfScope(UiProf& q) : p(q) { p.begin(); } ~UiProfScope() { p.end(); } };
 // Kill feed lines in extended matches (PC EXTENSION, user decision): one constant to tune.
 constexpr int kExtendedFeedLines = 6;
 gfx::MovieClip* findFeedManager(gfx::avm1::VM& vm, gfx::MovieClip* c, int depth = 0) {
@@ -976,6 +992,7 @@ void GfxPresenter::syncBotRows(gfx::Player& p, frontend::GameFlow& flow) {
 void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& in, float dt) {
     extendedMatch_ = flow.matchValues().players.size() > 10;
     core::prof::Scope prof("ui.update");
+    UiProfScope uiProf(g_uiUpdate);
     syncMovies(flow);
     syncPopup(flow);
     if (!cursor_) {
@@ -1073,6 +1090,7 @@ void GfxPresenter::update(frontend::GameFlow& flow, const platform::InputFrame& 
 
 void GfxPresenter::draw(const frontend::GameFlow& flow, int w, int h) {
     core::prof::Scope prof("ui.draw");
+    UiProfScope uiProf(g_uiDraw);
     (void)flow;
     if (!glReady_) { glReady_ = gl_.init(); if (!glReady_) return; }
     viewW_ = w; viewH_ = h;

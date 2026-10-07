@@ -780,8 +780,10 @@ void GameFlow::gameLobbyBegin() {
                                        {"private", FlowTrace::boolean(isPrivate)}, {"mapSelectionMethod", std::to_string(lobby_.mapSelectionMethod)}});
     // GRI.OnEnterLobbyFromMap(GRI.GetMapID()): MapId == -1 or Rotate or campaign -> ChooseNextMap, else SetMapId.
     int prev = levelUrl_.intOption("MapId", -1);
+    lobbyMapInit_ = true;
     if (prev == -1 || lobby_.mapSelectionMethod == 0) chooseNextMap(prev);
     else setMapId(prev);
+    lobbyMapInit_ = false;
     // Private: LobbyStatus 3 ("Waiting for host to start game"); public: 1 ("Finding `p more players").
     lobby_.lobbyStatus = isPrivate ? 3 : 1;
     if (!isPrivate) FlowTrace::emit("gamelobby.autostart", {{"requiredPlayers", std::to_string(lobby_.numRequiredPlayers)},
@@ -813,12 +815,14 @@ void GameFlow::chooseNextMap(int prevMapId) {
 
 void GameFlow::setMapId(int id) {
     const MapInfo* mi = cat_->mapById(id);
+    const bool changed = id != lobby_.mapId;
     lobby_.mapId = id;
     // UpdatePrestreaming(): GameEngine.UpdateMapPrestreaming(ConvertMapIdToMapFilename(id)), bHighPriorityLoading.
     lobby_.prestreamMap = mi ? mi->mapFilename : "";
     // Map-aware Extended counts: a map change applies the recommendation, unless the counts were edited since the
     // last change (they are kept once; the flag is consumed).
-    if (level_ == LevelKind::GameLobby) {
+    // Only a real change counts: not the lobby's own initial pick, not a write of the same map.
+    if (level_ == LevelKind::GameLobby && changed && !lobbyMapInit_) {
         if (profile_.bots.editedSinceMap) { profile_.bots.editedSinceMap = false; profile_.save(); }
         else applyRecommendedBots("map");
     }
