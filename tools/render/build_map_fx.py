@@ -163,7 +163,13 @@ def system_runtime(name, s):
                 lod['mesh'] = {'object': td['Mesh'], 'gltf': mesh_gltf(td['Mesh']),
                                'override_material': bool(td.get('bOverrideMaterial', False))}
             for m in L.get('compiled_modules', []):
-                mod = {'module': m['module'], 'dists': {}, 'partial': [], 'raw_flags': m.get('raw_flags', [1, 1])}
+                mname = m['module']
+                # AssetTools names non-native slots by their module object; only the classes the runtime implements
+                # from those properties take the new name - the rest stay PMI_Unknown as before (a slot renamed to an
+                # implemented class without its curves, e.g. Lifetime / SizeMultiplyLife, would evaluate to 0)
+                if m.get('module_enum') == 'PMI_Unknown' and mname not in ('PMI_Collision', 'PMI_SwitchableColorScaleOverLife'):
+                    mname = 'PMI_Unknown'
+                mod = {'module': mname, 'dists': {}, 'partial': [], 'raw_flags': m.get('raw_flags', [1, 1])}
                 for i, dd in enumerate(m['distributions']):
                     prop = dd['property'] or ('DynamicParams[%d].ParamValue' % i)
                     mod['dists'][prop] = {'kind': dd['kind'], 'values': dd['values'], 'confidence': dd['confidence']}
@@ -173,7 +179,7 @@ def system_runtime(name, s):
                     mod['location_emitter'] = L['location_emitter']
                 if m.get('props'):   # non-curve properties of decoded WFC / UE3 modules (AssetTools: Collision, Switchable...)
                     mod['props'] = m['props']
-                mp = m.get('module_properties (authored, defaults filled)')
+                mp = m.get('module_properties (authored, defaults filled)') if mname != 'PMI_Unknown' else None
                 if mp:   # modules without a native ModuleId (AssetTools pstream: object index per slot)
                     props = {}
                     for k, v in mp.items():

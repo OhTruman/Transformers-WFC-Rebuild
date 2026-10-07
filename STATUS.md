@@ -3636,6 +3636,24 @@ Ghidra/ReVa is live with `default.xex`; pawn/vehicle CDOs read from cooked packa
   native-serialized + 360-tiled textures — path documented in FIDELITY.md, #1 remaining visual gap.
 - Fidelity table + provenance: `FIDELITY.md`.
 
+## RENDERING MILESTONE E (2026-10-07) — 300+ fps work, HUD / markers / FX fidelity
+- Performance (all verified image-identical by lockstep A/B except world MDI; see FIDELITY.md "RENDER SUBMISSION"):
+  GPU skinning (IRenderer::drawSkinnedMesh, exact skinned bounds via hull + SSE2, bitwise), GPU pose blend,
+  redundant-uniform cache, bindCommon per-program-object constant skip, string-work caches, world MDI per
+  (program, lightmap page) bucket (default on; WFC_MDI=0). Instanced characters opt-in (no gain: ~1.4 per draw).
+  Streets fixed cam: 10 v 10 frame median 7.03 -> 5.43 ms; 32 v 32 ~11.8 ms (bound elsewhere after MDI; profiling).
+- Diagnostics: WFC_FIXEDCAM, WFC_RENDERSTATS (hitch lines, uniform / skin / instancing / dynamic splits),
+  WFC_BATCHSTATS, WFC_SHADERNONCE (forced-cold shader cache), WFC_SKINBOUNDSCHECK, in-process sampling profiler
+  (scratch only).
+- Cold start: first run after a shader-source change compiles every program in the driver (Streets load 24-31 s vs
+  10 s warm); opt-in time-sliced program warm-up (WFC_PROGWARM=1) - no in-match gain measured, so off.
+- HUD: post-process chains (static discharge / low health, setHudScreenEffect); objective markers per RE 7bb8ec1
+  (cutoff, pulse, Tombstone fade, health-bar fill, enemy hysteresis via drawOwnerRenderAge, action labels).
+- FX: ParticleModuleCollision (bolts die at the first static hit) and SwitchableColorScaleOverLife (team channel via
+  setParticleEffectParam "Team") from AssetTools' decoded non-native modules: the Scatter Blaster "grey rods" fixed.
+- Content: six extra bodies' materials from campaign packages; Frenzy / Rumble preview NAV_Idle; Machine Gunner
+  preview fit (PC ADAPTATION).
+
 ## RENDERING MILESTONE 09 (2026-10-06)
 - FPS limiter core (PC ADAPTATION; setFrameLimit / waitFrameSlot), pacing measurement (WFC_PACINGLOG): the high-fps choppiness is the missing sim-to-render interpolation (Gameplay fixing).
 - Freeze evidence: stall watchdog with minidumps; non-finite draw guards. Impact decals (M76); repair-beam segment updates.
