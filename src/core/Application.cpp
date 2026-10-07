@@ -252,6 +252,19 @@ void Application::run() {
         if (std::getenv("WFC_AUTOSTRAFE")) input.down[(int)platform::Button::Right] = true;
         if (std::getenv("WFC_AUTOBACK")) input.down[(int)platform::Button::Back] = true;
         if (std::getenv("WFC_AUTOFIRE")) input.down[(int)platform::Button::Fire] = true;
+        // WFC_LATENCYPROBE=fire|move: input-to-photon of the local action (A/B for WFC_ASYNCSTEP). Every ~1.5 s (after 90 idle frames) it
+        // holds Fire (or Forward) from this frame's input sample until the first frame whose draw shows the effect (a new shot serial /
+        // the pawn moved > 1 cm), then logs the time from the input sample to that frame's present. Not timed against other lanes' runs.
+        static const char* latProbe = std::getenv("WFC_LATENCYPROBE");
+        static const bool latFire = latProbe && latProbe[0] == 'f';
+        struct LatProbe { int phase = 0, idle = 0; long pressFrame = 0; double tIn = 0.0; unsigned base = 0; core::Vec3 basePos{0, 0, 0}; bool seen = false;
+                          double sumMs = 0.0, maxMs = 0.0; long n = 0, sumFrames = 0; };
+        static LatProbe lat;
+        if (latProbe && lat.phase == 1) {   // armed at the last frame's check point: press from this input sample
+            lat.phase = 2; lat.tIn = now; lat.pressFrame = frame; lat.seen = false;
+        }
+        if (latProbe && lat.phase == 2) input.down[(int)(latFire ? platform::Button::Fire : platform::Button::Forward)] = true;
+        if (latProbe && lat.phase == 0 && lat.idle == 45 && latFire) input.pressed[(int)platform::Button::Reload] = true;   // keep a clip
         if (const char* s = std::getenv("WFC_AUTOBOOST")) if (frame >= std::atol(s)) input.down[(int)platform::Button::FineAim] = true;   // vehicle Boost (RMB held) from frame N
         if (const char* s = std::getenv("WFC_AUTODASH")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
         if (const char* s = std::getenv("WFC_AUTODASH2")) if (frame == std::atol(s)) input.pressed[(int)platform::Button::Dash] = true;
@@ -411,6 +424,18 @@ void Application::run() {
             LOG_INFO("FACE f%ld pawnYaw=%.2f camYaw=%.2f face.toCam=%.2f", frame, pw.yaw(), camera_.yaw,
                      core::dot(face, toCam));
         }
+        if (latProbe && world_.matchActive() && !world_.localPlayerDead() && !world_.stepRunning()) {   // state this frame draws
+            const game::Character& lp = world_.player().pawn();
+            if (lat.phase == 0) {
+                lat.base = lp.weapon().shotSerial; lat.basePos = lp.position();
+                if (++lat.idle >= 90 && (!latFire || (lp.weapon().ammo > 0 && !lp.weapon().reloading()))) { lat.phase = 1; lat.idle = 0; }
+            } else if (lat.phase == 2 && !lat.seen) {
+                const bool fired = lp.weapon().shotSerial != lat.base;
+                const core::Vec3 d = lp.position() - lat.basePos;
+                if (latFire ? fired : core::dot(d, d) > 1e-4f) lat.seen = true;
+                else if (frame - lat.pressFrame > 240) { LOG_INFO("LATENCY %s timeout", latProbe); lat.phase = 0; }
+            }
+        }
         renderer_->beginFrame(camera_, window_->width(), window_->height());
         world_.draw(*renderer_);
         world_.launchStep();   // the step's background part overlaps endFrame / present / HUD (joined at the next frame start)
@@ -420,6 +445,14 @@ void Application::run() {
             if (const char* shot = std::getenv("WFC_SHOT")) renderer_->captureScreenshot(shot);
 
         window_->present();
+        if (latProbe && lat.phase == 2 && lat.seen) {
+            const double ms = (nowSeconds() - lat.tIn) * 1000.0;
+            const long frames = frame - lat.pressFrame + 1;
+            lat.sumMs += ms; lat.maxMs = std::max(lat.maxMs, ms); lat.sumFrames += frames; ++lat.n;
+            LOG_INFO("LATENCY %s input->present %.2f ms (%ld frames incl. the input frame) async=%d | avg %.2f ms, max %.2f, avg frames %.2f over %ld",
+                     latProbe, ms, frames, (int)game::World::asyncStepEnabled(), lat.sumMs / lat.n, lat.maxMs, (double)lat.sumFrames / lat.n, lat.n);
+            lat.phase = 0;
+        }
         if (audio_) {
             core::Vec3 fwd = core::forwardFromYawPitch(camera_.yaw, camera_.pitch);
             core::Vec3 right = core::normalize(core::cross(fwd, core::Vec3{0, 1, 0}));
