@@ -935,6 +935,8 @@ void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
 
 void World::tickParticipantWeapons(float dt) {
     // Held weapon views follow each participant's active robot weapon (model swap on a switch, fire / reload event anims).
+    static std::vector<ParticipantWeaponView*> ticking;
+    ticking.clear();
     for (MatchOpponent* o : opponents_) {
         if (!o->spawned()) continue;
         ParticipantWeaponView& v = partWeapons_[o->matchPlayer()];
@@ -949,16 +951,19 @@ void World::tickParticipantWeapons(float dt) {
         }
         if (w.reloadSerial != v.seenReload) { v.seenReload = w.reloadSerial; v.anim.play(WeaponMesh::Event::Reload); }
         if (w.shotSerial != v.seenShot) { v.seenShot = w.shotSerial; v.anim.play(WeaponMesh::Event::Fire); }
-        std::vector<WeaponNotify> notifies;   // participant weapon notifies (shells / magazines) are not presented [PARTIAL]
-        v.anim.tick(dt, notifies);
+        ticking.push_back(&v);
     }
+    // The weapon pose ticks are independent per participant: on the worker pool (map entries created above, serially).
+    core::WorkerPool::get().run((int)ticking.size(), [&](int i) {
+        std::vector<WeaponNotify> notifies;   // participant weapon notifies (shells / magazines) are not presented [PARTIAL]
+        ticking[(size_t)i]->anim.tick(dt, notifies);
+    });
     // This step's participant shots: the muzzle socket of the shooter's shown weapon (else its eye frame along the shot).
     for (const ParticipantShot& s : participantShots_) {
         if (s.weapon == "RepairRay") continue;   // the beam has its own looping presentation [PARTIAL for bots]
         core::Mat4 muzzle = core::Mat4::identity();
         bool have = false;
-        for (const MatchOpponent* o : opponents_) {
-            if (o->matchPlayer() != s.player || !o->spawned()) continue;
+        if (const MatchOpponent* o = (size_t)s.player < oppByPlayer_.size() ? oppByPlayer_[(size_t)s.player] : nullptr; o && o->spawned()) {
             auto it = partWeapons_.find(s.player);
             core::Mat4 local;
             if (o->pawn().hasWeapon() && it != partWeapons_.end() && it->second.anim.valid() && it->second.anim.socketLocal("MuzzleFlash", local)) {

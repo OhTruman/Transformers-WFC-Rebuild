@@ -716,6 +716,8 @@ public:
     // match player -> its MatchOpponent (participantPawn in O(1); it was a scan per call, quadratic in big lobbies); rebuilt whenever
     // opponents_ changes.
     std::vector<MatchOpponent*> oppByPlayer_;
+    // The participant of a match player in O(1) (nullptr for the local player / none): for glue that maps players to their actors.
+    MatchOpponent* opponentByPlayer(int player) const { return player >= 0 && (size_t)player < oppByPlayer_.size() ? oppByPlayer_[(size_t)player] : nullptr; }
     void rebuildOppIndex() {
         oppByPlayer_.clear();
         for (MatchOpponent* o : opponents_) {
