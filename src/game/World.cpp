@@ -1379,8 +1379,13 @@ void World::preloadHeldWeaponModels(const std::vector<std::string>& weapons) {
     }
 }
 
+bool tickProfOn();
+void tickProfAdd(int slot, double ms);   // WFC_TICKPROF (defined below)
+
 void World::tickParticipantWeapons(float dt) {
     // Held weapon views follow each participant's active robot weapon (model swap on a switch, fire / reload event anims).
+    static std::vector<ParticipantWeaponView*> ticking;
+    ticking.clear();
     for (MatchOpponent* o : opponents_) {
         if (!o->spawned()) continue;
         ParticipantWeaponView& v = partWeapons_[o->matchPlayer()];
@@ -1395,16 +1400,19 @@ void World::tickParticipantWeapons(float dt) {
         }
         if (w.reloadSerial != v.seenReload) { v.seenReload = w.reloadSerial; v.anim.play(WeaponMesh::Event::Reload); }
         if (w.shotSerial != v.seenShot) { v.seenShot = w.shotSerial; v.anim.play(WeaponMesh::Event::Fire); }
-        std::vector<WeaponNotify> notifies;   // participant weapon notifies (shells / magazines) are not presented [PARTIAL]
-        v.anim.tick(dt, notifies);
+        ticking.push_back(&v);
     }
+    // The weapon pose ticks are independent per participant: on the worker pool (map entries created above, serially).
+    core::WorkerPool::get().run((int)ticking.size(), [&](int i) {
+        std::vector<WeaponNotify> notifies;   // participant weapon notifies (shells / magazines) are not presented [PARTIAL]
+        ticking[(size_t)i]->anim.tick(dt, notifies);
+    });
     // This step's participant shots: the muzzle socket of the shooter's shown weapon (else its eye frame along the shot).
     for (const ParticipantShot& s : participantShots_) {
         if (s.weapon == "RepairRay") continue;   // the beam has its own looping presentation [PARTIAL for bots]
         core::Mat4 muzzle = core::Mat4::identity();
         bool have = false;
-        for (const MatchOpponent* o : opponents_) {
-            if (o->matchPlayer() != s.player || !o->spawned()) continue;
+        if (const MatchOpponent* o = (size_t)s.player < oppByPlayer_.size() ? oppByPlayer_[(size_t)s.player] : nullptr; o && o->spawned()) {
             auto it = partWeapons_.find(s.player);
             core::Mat4 local;
             if (o->pawn().hasWeapon() && it != partWeapons_.end() && it->second.anim.valid() && it->second.anim.socketLocal("MuzzleFlash", local)) {
@@ -1418,7 +1426,11 @@ void World::tickParticipantWeapons(float dt) {
             muzzle.m[0] = f.x; muzzle.m[1] = f.y; muzzle.m[2] = f.z; muzzle.m[4] = up.x; muzzle.m[5] = up.y; muzzle.m[6] = up.z;
             muzzle.m[8] = rt.x; muzzle.m[9] = rt.y; muzzle.m[10] = rt.z; muzzle.m[12] = s.from.x; muzzle.m[13] = s.from.y; muzzle.m[14] = s.from.z;
         }
-        if (participantShotFxHook) participantShotFxHook(s, muzzle);
+        if (participantShotFxHook) {
+            const double fx0 = tickProfOn() ? profNowMs() : 0.0;
+            participantShotFxHook(s, muzzle);
+            if (tickProfOn()) tickProfAdd(25, profNowMs() - fx0);   // WFC_TICKPROF glue.shotFx
+        }
         else if (partShotFx_.size() < 256) {
             const WeaponDef* d = findWeaponDef(s.weapon);
             partShotFx_.push_back({s.weapon, muzzle, s.to, !(d && d->projSpeed > 0.0f)});   // projectiles draw their own flight effect
@@ -1561,14 +1573,17 @@ namespace {
 // WFC_TICKPROF (diagnostics): accumulated ms per World::tick phase, logged every 300 steps.
 struct TickProf {
     static bool on() { static const bool o = std::getenv("WFC_TICKPROF") != nullptr; return o; }
-    double acc[22] = {}; long n = 0;
-    const char* names[22] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
-                             "separate", "mapstate", "TOTAL", "ab.barrier", "ab.beacon", "ab.sentry", "ab.roller", "bot.think", "bot.steer", "bot.aim"};
+    double acc[27] = {}; long n = 0;
+    const char* names[27] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
+                             "separate", "mapstate", "TOTAL", "ab.barrier", "ab.beacon", "ab.sentry", "ab.roller", "bot.think", "bot.steer", "bot.aim",
+                             // integration glue blocks (wrapped with TickTimer at merge): 22 ability audio, 23 participant notifies,
+                             // 24 participant audio loop (buff / hover / body / weapon), 25 participant shot FX hook, 26 character audio + cues
+                             "glue.abilityAudio", "glue.partNotify", "glue.partAudio", "glue.shotFx", "glue.charAudio+cues"};
 };
 TickProf& tickProf() { static TickProf p; return p; }
 }
 bool tickProfOn() { return TickProf::on(); }
-void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 22) tickProf().acc[slot] += ms; }
+void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 27) tickProf().acc[slot] += ms; }
 namespace {
 struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) tickProf().acc[slot] += profNowMs() - t0; } };
 }
@@ -1576,7 +1591,7 @@ struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf:
 void World::tick(float dt) {
     if (TickProf::on() && ++tickProf().n % 300 == 0) {
         std::string line;
-        for (int i = 0; i < 22; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
+        for (int i = 0; i < 27; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
     }
     TickTimer tickTotal(14);   // WFC_TICKPROF: the whole step
@@ -1659,11 +1674,12 @@ void World::tick(float dt) {
         if (deferredKillstreak_ && lp.moveForm() == Form::Robot && !lp.isTransforming()) { deferredKillstreak_ = false; triggerLocalKillstreak(); }
     }
     { TickTimer tt(1); tickAbilityEffects(dt); }
-    tickAbilityAudio();                        // [Systems M08i]
-    tickParticipantAudio(dt);                  // [Systems M09d] bots' delayed ability notifies
+    { TickTimer tt(22); tickAbilityAudio(); }   // [Systems M08i]
+    { TickTimer tt(23); tickParticipantAudio(dt); }   // [Systems M09d] bots' delayed ability notifies
     // [integration 09c] Systems M09e glue: every participant's (bot's) stateful ability loops, change-driven / idempotent - the
     // cloak buff loop (heard by everyone in the original, team-specific) and the hover lift loop / land; a dead or despawned
     // participant's loops stop silently. Match end / unload go through stopAll.
+    { TickTimer tt24(24);   // [integration 09c] WFC_TICKPROF glue.partAudio
     for (MatchOpponent* o : opponents_) {
         const int pl = o->matchPlayer();
         if (!o->spawned()) { onParticipantGone(pl); continue; }
@@ -1698,6 +1714,7 @@ void World::tick(float dt) {
             const std::string aclip = bp.form() == Form::Robot && am && ai >= 0 && (size_t)ai < am->clips.size() ? am->clips[(size_t)ai].name : std::string();
             tickParticipantWeaponAudio(pl, wcls, bw.shotSerial, bw.reloadSerial, aclip, bp.actionTime(), dt);
         }
+    }
     }
     if (!localPlayerDead()) player_.pawn().health().tickRegen(dt, player_.pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
     for (MatchOpponent* o : opponents_) if (o->spawned()) o->health().tickRegen(dt, o->pawn().regenBuffRemain_ > 0.0f ? 2.0f : 1.0f);
@@ -1784,7 +1801,7 @@ void World::tick(float dt) {
         fx_.tick(dt, have ? &ms : nullptr, collision_.valid() ? &collision_ : nullptr);
     }
     // Event-driven audio via edge detection on pawn state.
-    {
+    {   TickTimer tt26(26);   // [integration 09c] WFC_TICKPROF glue.localAudio (character audio, cues, level audio)
         core::Vec3 pp = player_.pawn().position();
         tickCharacterAudio(dt);
         // WP_LoopingTail: the SHOOT_TAIL cue when a burst ends (trigger released / mag empty).
@@ -4120,17 +4137,9 @@ void World::spawnSentry(Sentry& s) {
 
 void World::tickSentry(float dt) {
     const CollisionWorld* line = weaponCollision_.valid() ? &weaponCollision_ : (collision_.valid() ? &collision_ : nullptr);
-    for (Sentry& s : sentries_) {
-        if (s.delay >= 0.0f) { s.delay -= dt; if (s.delay < 0.0f) spawnSentry(s); }
-        const bool ownerAlive = s.owner >= 0 && participantPawn(s.owner) != nullptr;
-        if (s.alive) {
-            s.t += dt;
-            s.health -= 135.0f / 30.0f * dt;              // Lifetime 30
-            if (s.health <= 0.0f || !ownerAlive) { s.alive = false; s.target = -1; }   // dies with the owner
-        }
-        if (!s.alive) continue;
-        const core::Vec3 muzzle = s.pos + core::Vec3{0, 2.0f, 0};
-        // Target: the closest visible enemy of the owner's team within the pitch constraints (every participant, the local pawn too).
+    // Target: the closest visible enemy of the owner's team within the pitch constraints (every participant, the local pawn too).
+    // Candidates sorted by distance, line of sight tested nearest first (same target, fewer traces).
+    auto findTarget = [&](Sentry& s, const core::Vec3& muzzle) -> const Character* {
         s.target = -1;
         float best = 300.0f;
         const Character* tgt = nullptr;
@@ -4158,6 +4167,31 @@ void World::tickSentry(float dt) {
                 break;
             }
         }
+        (void)best;
+        return tgt;
+    };
+    // (1) serial upkeep (spawn / lifetime / owner); (2) target searches on the worker pool (read-only queries, each writes its own
+    // sentry); (3) serial aim / fire in order - a target killed earlier in this pass is searched again serially, which gives exactly
+    // the serial result (kills only remove candidates, damage moves nobody).
+    static std::vector<Sentry*> live;
+    live.clear();
+    for (Sentry& s : sentries_) {
+        if (s.delay >= 0.0f) { s.delay -= dt; if (s.delay < 0.0f) spawnSentry(s); }
+        const bool ownerAlive = s.owner >= 0 && participantPawn(s.owner) != nullptr;
+        if (s.alive) {
+            s.t += dt;
+            s.health -= 135.0f / 30.0f * dt;              // Lifetime 30
+            if (s.health <= 0.0f || !ownerAlive) { s.alive = false; s.target = -1; }   // dies with the owner
+        }
+        if (s.alive) live.push_back(&s);
+    }
+    core::WorkerPool::get().run((int)live.size(), [&](int i) { Sentry& s = *live[(size_t)i]; findTarget(s, s.pos + core::Vec3{0, 2.0f, 0}); });
+    for (Sentry* sp : live) {
+        Sentry& s = *sp;
+        if (!s.alive) continue;
+        const core::Vec3 muzzle = s.pos + core::Vec3{0, 2.0f, 0};
+        const Character* tgt = s.target >= 0 ? participantPawn(s.target) : nullptr;
+        if (s.target >= 0 && !tgt) tgt = findTarget(s, muzzle);   // killed earlier in this pass: the serial search
         float wantYaw = s.yaw, wantPitch = 0.0f;   // idle: pitch returns to 0
         if (tgt) {
             core::Vec3 d = tgt->actorLocation() - muzzle;

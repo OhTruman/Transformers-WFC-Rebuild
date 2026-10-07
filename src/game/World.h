@@ -705,9 +705,9 @@ public:
     const BotNav& botNav() const { return botNav_; }
     // The MoveIntent a participant pawn simulated this step (bots: the AI's throttle / strafe / boost / steer, same meaning as the local
     // controller's input), or null. For presentation consumers (Systems engine / boost audio).
-    const MoveIntent* participantIntent(int player) const {
-        for (const MatchOpponent* o : opponents_) if (o->matchPlayer() == player && o->spawned()) return &o->intent();
-        return nullptr;
+    const MoveIntent* participantIntent(int player) const {   // O(1) via the player -> opponent index
+        const MatchOpponent* o = opponentByPlayer(player);
+        return o && o->spawned() ? &o->intent() : nullptr;
     }
     bool ensureBotNav();
     // Per-step bot cost (diagnostics; WFC_BOTTEST / perf).
@@ -973,6 +973,8 @@ public:
     // match player -> its MatchOpponent (participantPawn in O(1); it was a scan per call, quadratic in big lobbies); rebuilt whenever
     // opponents_ changes.
     std::vector<MatchOpponent*> oppByPlayer_;
+    // The participant of a match player in O(1) (nullptr for the local player / none): for glue that maps players to their actors.
+    MatchOpponent* opponentByPlayer(int player) const { return player >= 0 && (size_t)player < oppByPlayer_.size() ? oppByPlayer_[(size_t)player] : nullptr; }
     void rebuildOppIndex() {
         oppByPlayer_.clear();
         for (MatchOpponent* o : opponents_) {
