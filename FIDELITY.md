@@ -85,6 +85,22 @@ provenance stays in its section.
   overlapping text after the bot-row hint fix; ultrawide Resolution row showed 800x600 (fixed: the current size is
   listed). Results XP counts up to the earned value (verified over time).
 - Frame Rate Limit list gains 500. TEST ONLY: WFC_LOBBY_OPTIONS overrides host options for automated mode audits.
+- **Kill / death hitches** (a4f44ed): text-shadow offscreen targets are sized once per framebuffer (a kill-feed line
+  scaling past the screen width reallocated them ~9 times mid-frame), and parsed GFx movies are cached per process with
+  the respawn / scoreboard movies preloaded at HUD open (each death re-parsed three movies). 0 spikes on kills / deaths.
+- **HUD screen effects** (bad4502, 078c7ce; CONFIRMED, RE 6bbf2cb): Hud_GFX Activate / DeactivePostProcessChain drive
+  Rendering's setHudScreenEffect (0 StaticDischarge, 1 LowHealth, one slot), cleared on every menu frame.
+- **Team pick** (444e68d, PC ADAPTATION): PickTeam counts the Private Match bots - the host joins the side with fewer.
+- **Scoreboards in extended matches** (444e68d, 1c725a9; PC EXTENSION): the PlayerList (fixed 5-per-team layout, no PC
+  input) scrolls with Up / Down / wheel in the in-match scoreboard and in View Scores when it does not fit above the
+  button hints; rows outside are hidden. Unchanged at the original counts.
+- **Kill feed in extended matches** (7ee3399, d957c1d; PC EXTENSION, user decision): up to 6 lines (kExtendedFeedLines),
+  the original 5 s fade, a line pushed past the 6th removed at once (original: 5 + 1 s overflow fades); lines are put on
+  their 22 px slot before each shift and the entering line waits for the shift, so none overlap (hud.killFeedOverlap
+  assertion). 5 v 5 untouched.
+- **Extra bodies** (e0f48d0, cb82af5, 34b2f50): Car8 / Car9 / Car10 / Frenzy / Rumble / Laserbeak unlock at Scout levels
+  10 / 15 / 20 / 25 / 25 / 25 (user decision; AssetTools retargeted animation, Gameplay 1ca3bf5 params, Rendering
+  aa5ded7 materials). 64-participant UI check at 1280x720: lobby, HUD, kill feed, scoreboard, results, View Scores - nothing cut off.
 
 ## FRONTEND MILESTONE 09: FPS LIMIT, BOT SETTINGS, PROGRESSION, PLAYTEST DEFECTS (2026-10-06, agents/frontend)
 

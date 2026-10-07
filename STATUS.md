@@ -373,8 +373,9 @@ Repeated **8 times** (pre-fix exe) and **6 times** (final exe) with no restart, 
 - Head after the docs commit. 9544080 in-match UI sounds; 94bf7b1 / 2cf1ab1 extended Bot Settings (ORIGINAL 5 v 5 default,
   EXTENDED 32 v 32 from Gameplay's capacity); f5d82e4 / 2cf1ab1 CaC unlocks (levels; chassis via XP table, 6 unnamed
   bodies hidden: no MP animation); resolution-list fix for ultrawide; UI audit at 5 resolutions. Details in FIDELITY.md.
-- Pending: Gameplay's 32 v 32 head (then launch -> receipt and a 64-participant scoreboard / lobby / results / kill-feed
-  check at 1280x720); the map-name label stays on the human check list.
+- Since: a4f44ed kill / death hitches; 078c7ce HUD screen effects; 34b2f50 six extra bodies unlock; 444e68d team pick +
+  scoreboard scroll; d957c1d kill feed 6 lines (user); 1c725a9 View Scores scroll. 32 v 32 launch -> receipt verified
+  (64 participants); the 64-participant UI check at 1280x720 is complete. Remaining: the map-name label (human check).
 
 ## FRONTEND MILESTONE 09 (2026-10-06, branch `agents/frontend`)
 
