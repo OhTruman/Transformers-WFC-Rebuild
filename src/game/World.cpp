@@ -1820,6 +1820,11 @@ bool MatchLaunch::fromURL(const std::string& url, MatchLaunch& out) {
     if (opt.count("BotsFriendly")) out.bots.friendly = std::max(0, std::atoi(opt["BotsFriendly"].c_str()));
     if (opt.count("BotsEnemy")) out.bots.enemy = std::max(0, std::atoi(opt["BotsEnemy"].c_str()));
     if (opt.count("BotDifficulty")) out.bots.difficulty = std::clamp(std::atoi(opt["BotDifficulty"].c_str()), 0, 2);
+    // CUSTOM-GAME EXTENSION: 16 bots per team (+ the human); off = the original 10-player slots.
+    if (opt.count("BotsAutobot")) out.bots.autobot = std::max(0, std::atoi(opt["BotsAutobot"].c_str()));
+    if (opt.count("BotsDecepticon")) out.bots.decepticon = std::max(0, std::atoi(opt["BotsDecepticon"].c_str()));
+    for (const char* k : {"ExtendedPlayers", "BotsExtended"})
+        if (opt.count(k) && std::atoi(opt[k].c_str()) != 0) { out.bots.extended = true; out.settings.applyExtendedSlots(); }
     return !out.map.empty();
 }
 
@@ -1932,7 +1937,14 @@ void World::removeBots() {
     for (auto& kv : partBeams_) kv.second.time = 0.0f;   // stopped at the next draw
 }
 
-int World::addBots(const BotLaunch& b) {
+int World::addBots(const BotLaunch& launch) {
+    // Per-faction counts (team modes) become friendly / enemy relative to the human's team (team 0 Autobots, 1 Decepticons).
+    BotLaunch b = launch;
+    if (match_.settings().teamGame && (b.autobot >= 0 || b.decepticon >= 0) && localPlayer_ >= 0) {
+        const bool humanAutobot = match_.players()[(size_t)localPlayer_].team != 1;
+        const int a = std::max(0, b.autobot), d = std::max(0, b.decepticon);
+        b.friendly = humanAutobot ? a : d; b.enemy = humanAutobot ? d : a;
+    }
     if (!matchActive_ || (b.friendly <= 0 && b.enemy <= 0)) return 0;
     ensureBotNav();   // under the match load, not on a simulation step
     botDifficulty_ = std::clamp(b.difficulty, 0, 2);
@@ -1943,7 +1955,7 @@ int World::addBots(const BotLaunch& b) {
     const int humanTeam = localPlayer_ >= 0 ? match_.players()[(size_t)localPlayer_].team : 0;
     static unsigned matchSeed = 0x5eed;
     matchSeed = matchSeed * 1664525U + 1013904223U;
-    const std::vector<BotIdentity> ids = makeBotIdentities(b, s.teamGame, humanTeam, s.maxPerTeam, s.maxPlayers, humans, taken, matchSeed);
+    const std::vector<BotIdentity> ids = makeBotIdentities(b, s.teamGame, humanTeam, s.maxPerTeam, s.maxBotsPerTeam, s.maxPlayers, humans, taken, matchSeed);
     for (const BotIdentity& id : ids) {
         const int p = match_.addPlayer(id.name, id.team);
         MatchPlayer& mp = match_.playerMutable(p);

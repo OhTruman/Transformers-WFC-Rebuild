@@ -4725,11 +4725,16 @@ void Application::runBotTest() {
     const float dt = 1.0f / 60.0f;
     const float secs = std::getenv("WFC_BOTTEST_SECS") ? (float)std::atof(std::getenv("WFC_BOTTEST_SECS")) : 120.0f;
     using T = game::GameplayEventType;
-    for (int phase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0; phase < 2; ++phase) {
+    // Phases 1-2 by default; WFC_BOTTEST_PHASE=3 runs the 16 v 16 CUSTOM-GAME EXTENSION (?ExtendedPlayers=1, 33 participants).
+    const int firstPhase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0;
+    for (int phase = firstPhase; phase < (firstPhase == 2 ? 3 : 2); ++phase) {
         const std::string url = world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=" + std::to_string((int)secs + 15) +
-                                (phase == 0 ? "?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1" : "?BotsFriendly=7?BotsEnemy=8?BotDifficulty=2");
+                                (phase == 0 ? "?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1" : phase == 1 ? "?BotsFriendly=7?BotsEnemy=8?BotDifficulty=2?BotsExtended=1"
+                                                                                    : "?BotsAutobot=16?BotsDecepticon=16?BotDifficulty=2?ExtendedPlayers=1");
         game::MatchLaunch L; game::MatchLaunch::fromURL(url, L);
-        check(L.bots.friendly == (phase == 0 ? 3 : 7) && L.bots.enemy == (phase == 0 ? 4 : 8), "URL bot options parsed");
+        const int wantF = phase == 0 ? 3 : phase == 1 ? 7 : 16, wantE = phase == 0 ? 4 : phase == 1 ? 8 : 16;
+        check(phase == 2 ? (L.bots.autobot == 16 && L.bots.decepticon == 16 && L.bots.extended && L.settings.maxPlayers == 33)
+                         : (L.bots.friendly == wantF && L.bots.enemy == wantE), "URL bot options parsed");
         if (!world_.launchMatch(L)) { check(false, "launch"); continue; }
         const int me = world_.localMatchPlayer();
         game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
@@ -4743,7 +4748,7 @@ void Application::runBotTest() {
         }
         std::sort(names.begin(), names.end());
         const bool unique = std::adjacent_find(names.begin(), names.end()) == names.end();
-        check(bots == (phase == 0 ? 7 : 15) && friendly == (phase == 0 ? 3 : 7) && enemy == (phase == 0 ? 4 : 8) && levels == bots && unique,
+        check(bots == wantF + wantE && friendly == wantF && enemy == wantE && levels == bots && unique,
               "roster: " + std::to_string(friendly) + " friendly + " + std::to_string(enemy) + " enemy bots, unique names, levels");
         check(classes[0].size() >= 3 && classes[1].size() >= 3, "class spread per team (>= 3 of 4 classes each)");
         world_.resetBotTiming();
@@ -4824,15 +4829,23 @@ void Application::runBotTest() {
         check(shots > 50 && botKills >= 3 && botDeaths >= 3, "bots fight: shots, kills and deaths");
         check(envDeaths <= bots, "few environment deaths (" + std::to_string(envDeaths) + ")");
         // Melee is situational (open maps engage at range): logged above; grenades are required.
-        if (phase == 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
-        if (phase == 1) check(jetSamples > 0, "jet bots fly in hover form (" + std::to_string(jetSamples) + " jet-steps)");
-        if (phase == 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
-        if (phase == 1) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");
-        if (phase == 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
-        check(world_.botMsAverage() < 0.5 && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.5 ms, max < 6 ms)");
+        if (phase >= 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
+        if (phase >= 1) check(jetSamples > 0, "jet bots fly in hover form (" + std::to_string(jetSamples) + " jet-steps)");
+        if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
+        if (phase >= 1) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");
+        if (phase >= 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
+        check(world_.botMsAverage() < 0.04 * bots && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.04 ms per bot, max < 6 ms)");
         // Let the match run out: it completes and the next one starts clean.
         for (int i = 0; i < (int)(30.0f / dt) && world_.match().state() != game::Match::State::MatchOver; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
         check(world_.match().state() == game::Match::State::MatchOver, "match completed");
+        {   // MatchOver stops play: no bot shots, no kills afterwards (RE end state).
+            int shots0 = 0; for (const game::BotBrain& b : world_.botBrains()) shots0 += b.shots;
+            const size_t ev1 = world_.match().gameplayEvents().size();
+            for (int i = 0; i < (int)(5.0f / dt) && world_.match().state() == game::Match::State::MatchOver; ++i) { world_.handleInput(idle, dt); world_.tick(dt); }
+            int shots1 = 0; for (const game::BotBrain& b : world_.botBrains()) shots1 += b.shots;
+            int kills = 0; for (size_t e = ev1; e < world_.match().gameplayEvents().size(); ++e) kills += world_.match().gameplayEvents()[e].type == T::Kill;
+            check(shots1 == shots0 && kills == 0, "match over: bots stop (shots +" + std::to_string(shots1 - shots0) + ", kills +" + std::to_string(kills) + ")");
+        }
         int ends = 0; for (const auto& e : world_.match().gameplayEvents()) ends += e.type == T::MatchEnd;
         check(ends == 1, "one MatchEnd record");
     }
@@ -4985,7 +4998,7 @@ void Application::runBotObjectiveTest() {
         const std::string mode = modes.substr(p0, p1 - p0); p0 = p1 + 1;
         game::MatchLaunch L;
         game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=" + mode + "?TimeLimit=" + std::to_string((int)secs + 30) +
-                                   "?BotsFriendly=5?BotsEnemy=6?BotDifficulty=1", L);
+                                   "?BotsFriendly=5?BotsEnemy=6?BotDifficulty=1?BotsExtended=1", L);
         if (!world_.launchMatch(L)) { check(false, mode + ": launch"); continue; }
         const int me = world_.localMatchPlayer();
         game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
