@@ -341,6 +341,7 @@ void Application::attachPresenter() {
     if (audio_) { g_frontendAudio = std::make_unique<SystemsFrontendAudio>(audio_); frontend_->setAudio(g_frontendAudio.get()); }
 #endif
     frontend_->script().keyHook = [this](int code, bool down) { if (presenter_) presenter_->injectKey(code, down); };
+    frontend_->script().padHook = [this](const std::string& b, bool down) { window_->injectPad(b, down); };   // pad:<button> (DEV TOOL)
     frontend_->script().shotHook = [this](const std::string& f) { pendingShot_ = f; };
     frontend_->script().clipHook = [this](const std::string& path, int& x, int& y) {
         return presenter_ && presenter_->clipWindowCenter(path, x, y);
