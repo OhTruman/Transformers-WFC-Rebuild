@@ -69,7 +69,7 @@ for ($i = 0; $i -lt [Math]::Max($ld.Count, $n); $i++) {
 function Slope([double[]]$y) { if ($y.Count -lt 2) { return $null }; $mx = ($y.Count - 1) / 2.0; $my = ($y | Measure-Object -Average).Average; $num = 0.0; $den = 0.0
     for ($i = 0; $i -lt $y.Count; $i++) { $num += ($i - $mx) * ($y[$i] - $my); $den += ($i - $mx) * ($i - $mx) }; return [Math]::Round($num / $den, 2) }
 $maps = @($rows | ForEach-Object { $_.map } | Where-Object { $_ } | Select-Object -Unique)
-Res "same_map" $(if ($maps.Count -eq 1) { "PASS" } else { "FAIL" }) ("maps loaded: {0} (a different map invalidates the curve)" -f (@($rows | ForEach-Object { $_.map }) -join ", ")) "Experimental"
+if (-not $cycle) { Res "same_map" $(if ($maps.Count -eq 1) { "PASS" } else { "FAIL" }) ("maps loaded: {0} (a different map invalidates the curve)" -f (@($rows | ForEach-Object { $_.map }) -join ", ")) "Experimental" }   # map cycles: cycle.maps_played instead
 $glU = @($glLive | Select-Object -Unique)
 # a one-time rise over the first returns (persistent caches) then constant = plateau; still rising over the last three = growth
 $glTail = @($glLive | Select-Object -Last 3 | Select-Object -Unique)
@@ -79,7 +79,8 @@ foreach ($k in @(@{ c = "unloaded_mb"; o = "Gameplay/Rendering/Systems"; t = $Gr
     $y = @($rows | Select-Object -Skip 1 | ForEach-Object { $_.($k.c) } | Where-Object { $_ -ne $null } | ForEach-Object { [double]$_ })
     if ($y.Count -lt 3) { Res $k.c "UNKNOWN" "fewer than 3 post-first-match samples" $k.o; continue }
     $sl = Slope $y; $rise = [Math]::Round($y[-1] - $y[0], 1)
-    Res $k.c $(if ($sl -gt $k.t -and $rise -gt 2 * $k.t) { "FAIL" } elseif ($sl -gt $k.t / 3 -and $rise -gt 2 * $k.t / 3) { "PARTIAL" } else { "PASS" }) ("matches 2..{0}: {1}; slope {2} MB/match, rise {3} MB (WATCH if slope > {4} and rise > {5}; GROWTH if slope > {6} and rise > {7})" -f ($y.Count + 1), (($y | ForEach-Object { [Math]::Round($_, 1) }) -join " -> "), $sl, $rise, [Math]::Round($k.t / 3, 1), [Math]::Round(2 * $k.t / 3, 1), $k.t, (2 * $k.t))   # parenthesised: "," binds tighter than "*" $k.o
+    # map cycles: the series mixes map sizes, so the slope is INFO (cycle.revisit_growth is the leak verdict there)
+    Res $k.c $(if ($cycle) { "INFO" } elseif ($sl -gt $k.t -and $rise -gt 2 * $k.t) { "FAIL" } elseif ($sl -gt $k.t / 3 -and $rise -gt 2 * $k.t / 3) { "PARTIAL" } else { "PASS" }) ("matches 2..{0}: {1}; slope {2} MB/match, rise {3} MB (WATCH if slope > {4} and rise > {5}; GROWTH if slope > {6} and rise > {7})" -f ($y.Count + 1), (($y | ForEach-Object { [Math]::Round($_, 1) }) -join " -> "), $sl, $rise, [Math]::Round($k.t / 3, 1), [Math]::Round(2 * $k.t / 3, 1), $k.t, (2 * $k.t))   # parenthesised: "," binds tighter than "*" $k.o
 }
 $tu = @($tx | Select-Object -Unique)
 # the per-return count varies with the match's content (characters / effects loaded): not a leak signal by itself - the GL
