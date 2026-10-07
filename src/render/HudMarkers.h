@@ -24,6 +24,13 @@ struct MarkerRequest {
     bool drawHealthBar = false; // ally health bar (viewer specialty Scientist)
     float health = 1.0f;        // 0..1 for the health bar material
     std::vector<std::pair<std::string, std::array<float, 4>>> params;   // extra material params (Neutral, Flashing...)
+    // Inputs for the authored fields still being implemented (RE semantics pending; accepted and ignored until then):
+    std::string action;         // label key: "Attack" / "Capture" / "Defend" / "Defuse" / "Escort" / "Kill" / "Plant" /
+                                // "Return" / "Idle" / "DownedEnemy" -> the type's authored <action>Label
+    float pulseT = -1.0f;       // seconds since the marker's pulse started (PulseFrequency / PulseExpPower); < 0 none
+    bool removing = false;      // the objective is gone: FadeOutTime runs from removedT
+    float removedT = 0.0f;      // seconds since removal
+    int relation = -1;          // -1 from the setup, 0 friendly, 1 enemy, 2 neutral (Friendly / Enemy / NeutralLabelColor)
 };
 
 class HudMarkers {
