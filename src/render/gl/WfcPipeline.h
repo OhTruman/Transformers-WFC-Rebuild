@@ -284,7 +284,10 @@ private:
     // UE3 translucency pass: every translucent primitive is drawn after all opaque geometry, sorted back to front
     // by the view-space depth of its bounds origin (FTranslucentPrimSet). Translucent subs of persistent meshes
     // and sprite batches are queued during the frame and drawn by flushTranslucency().
-    struct TransItem { float key; std::function<void()> fn; };
+    // a deferred sprite batch keeps its data so adjacent same-state batches can merge at flush (exact: same order)
+    struct SpriteBatch { std::string mat; core::Vec3 facing; float dyn[4]; std::vector<Sprite> sprites; };
+    struct TransItem { float key; std::function<void()> fn; std::shared_ptr<SpriteBatch> sprites; };
+    int statSpriteBatches_ = 0, statSpriteMerged_ = 0;   // WFC_RENDERSTATS
     std::vector<TransItem> transQueue_;
     std::function<void()> loadYield_;
     bool inLoadYield_ = false;
@@ -300,6 +303,8 @@ private:
     // the probes' ambient cube at a UE point, glTF face order (+X, -X, +Y up, -Y, +Z, -Z); false outside every volume
     bool beastAmbient(const core::Vec3& ueP, core::Vec3 cube[6]) const;
     bool warmup_ = false;
+    double statFxTickMs_ = 0.0;                          // map FX simulation share of statFxMs_
+    std::map<std::string, int> statFxSpawns_;            // runtime spawns per template (WFC_RENDERSTATS)
     int hiddenGameSkipped_ = 0;
     std::map<std::string, std::string> matErrors_;        // materials_glsl.json entries without GLSL: their error
     std::set<std::string> warnedMatErrors_;                                 // M75: warm-up draw in progress (no frustum culling)

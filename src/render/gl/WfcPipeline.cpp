@@ -1902,7 +1902,28 @@ void Pipeline::flushTranslucency() {
     flushingTrans_ = true;
     std::vector<TransItem> q;
     q.swap(transQueue_);
-    for (TransItem& t : q) t.fn();
+    // Adjacent sprite batches (after the far -> near sort) with the same material, dynamic parameters and facing are
+    // drawn as one call with their sprites in queue order: the same primitives in the same order with the same state,
+    // so the result is identical for every blend mode, with fewer draw calls (bot firefights: hundreds of
+    // per-emitter batches). WFC_NOSPRITEMERGE=1 = A/B.
+    static const bool noMerge = std::getenv("WFC_NOSPRITEMERGE") != nullptr;
+    auto same = [](const SpriteBatch& a, const SpriteBatch& b) {
+        return a.mat == b.mat && a.facing.x == b.facing.x && a.facing.y == b.facing.y && a.facing.z == b.facing.z &&
+               std::equal(a.dyn, a.dyn + 4, b.dyn);
+    };
+    for (size_t i = 0; i < q.size(); ++i) {
+        if (!q[i].sprites || noMerge) { q[i].fn(); continue; }
+        size_t j = i + 1;
+        while (j < q.size() && q[j].sprites && same(*q[j].sprites, *q[i].sprites)) ++j;
+        if (j == i + 1) { q[i].fn(); ++statSpriteBatches_; continue; }
+        SpriteBatch& b = *q[i].sprites;
+        for (size_t k = i + 1; k < j; ++k) b.sprites.insert(b.sprites.end(), q[k].sprites->sprites.begin(), q[k].sprites->sprites.end());
+        std::copy(b.dyn, b.dyn + 4, dynParam_);
+        drawSprites(b.mat.c_str(), b.sprites.data(), b.sprites.size(), b.facing);
+        std::fill(dynParam_, dynParam_ + 4, 1.0f);
+        ++statSpriteBatches_; statSpriteMerged_ += (int)(j - i - 1);
+        i = j - 1;
+    }
     flushingTrans_ = false;
 }
 
@@ -2719,15 +2740,14 @@ bool Pipeline::drawSprites(const char* material, const Sprite* sp, size_t n, con
         core::Vec3 c{0, 0, 0};
         for (size_t i = 0; i < n; ++i) c = c + (sp[i].c[0] + sp[i].c[2]) * 0.5f;
         c = c * (1.0f / (float)n);
-        std::vector<Sprite> copy(sp, sp + n);
-        std::string mat = material;
-        float dyn[4];
-        std::copy(dynParam_, dynParam_ + 4, dyn);
-        transQueue_.push_back({viewDepth(c), [this, copy, mat, facing, dyn]() {
-            std::copy(dyn, dyn + 4, dynParam_);
-            drawSprites(mat.c_str(), copy.data(), copy.size(), facing);
+        auto batch = std::make_shared<SpriteBatch>();
+        batch->mat = material; batch->facing = facing; batch->sprites.assign(sp, sp + n);
+        std::copy(dynParam_, dynParam_ + 4, batch->dyn);
+        transQueue_.push_back({viewDepth(c), [this, batch]() {
+            std::copy(batch->dyn, batch->dyn + 4, dynParam_);
+            drawSprites(batch->mat.c_str(), batch->sprites.data(), batch->sprites.size(), batch->facing);
             std::fill(dynParam_, dynParam_ + 4, 1.0f);
-        }});
+        }, batch});
         return true;
     }
     if (spriteProgram(material) < 0) return false;
@@ -2980,9 +3000,23 @@ void Pipeline::endFrame() {
                      statVisCalls_ / 120.0);
             LOG_INFO("wfc: ShadowMask per frame: %.2f projections, %.2f gated", statShadowProj_ / 120.0, statShadowGated_ / 120.0);
             statShadowProj_ = statShadowGated_ = 0;
-            LOG_INFO("wfc: map FX per frame: %.3f ms, %.1f sprites, %.1f mesh particles", statFxMs_ / 120.0,
+            LOG_INFO("wfc: map FX per frame: %.3f ms (simulation %.3f, draw %.3f), %.1f sprites, %.1f mesh particles",
+                     statFxMs_ / 120.0, statFxTickMs_ / 120.0, (statFxMs_ - statFxTickMs_) / 120.0,
                      statFxSprites_ / 120.0, statFxMeshes_ / 120.0);
-            statFxMs_ = 0.0; statFxSprites_ = statFxMeshes_ = 0;
+            {
+                std::vector<std::pair<int, std::string>> top;
+                for (const auto& kv : statFxSpawns_) top.push_back({kv.second, kv.first});
+                std::sort(top.rbegin(), top.rend());
+                std::string list;
+                for (size_t i = 0; i < top.size() && i < 5; ++i)
+                    list += (i ? ", " : "") + top[i].second.substr(top[i].second.rfind('.') + 1) + " x" + std::to_string(top[i].first);
+                LOG_INFO("wfc: map FX instances live %zu; runtime spawns in 120 frames: %s; sprite draws %.1f (%.1f batches "
+                     "merged into them) per frame", fxInstances_.size(), list.empty() ? "none" : list.c_str(),
+                     statSpriteBatches_ / 120.0, statSpriteMerged_ / 120.0);
+            statSpriteBatches_ = statSpriteMerged_ = 0;
+                statFxSpawns_.clear();
+            }
+            statFxMs_ = 0.0; statFxTickMs_ = 0.0; statFxSprites_ = statFxMeshes_ = 0;
             statEnvCalls_ = statVisCalls_ = statLvvQueries_ = 0; statLvvMs_ = 0.0; statUpdateMs_ = 0.0;
             LOG_INFO("wfc: avg frame %.2f ms (%.0f fps); scene submit %.2f ms, gpu wait %.2f ms; per frame: %.1f draws, "
                      "%.1f light envs (%.2f ms), %.1f visibility traces",
