@@ -72,7 +72,7 @@ core::Vec3 robotCalcVelocity(const Character& c, const core::Vec3& wish, const c
 // radius out made the next, slower step creep forward, flipping Idle/Moving for a frame or two when
 // stopping against a wall.) [PROV collision model: no capsule sweep]
 bool wallBlock(const CollisionWorld* col, const core::Vec3& oldPos, core::Vec3& p, core::Vec3& v, float probeR,
-               float probeY = core::config::kPawnHalfHeight, float skipNy = 2.0f, core::Vec3* firstHitN = nullptr) {
+               float probeY = core::config::kPawnHalfHeight, float skipNy = 2.0f, core::Vec3* firstHitN = nullptr, float friction = 0.0f) {
     if (!col) return false;
     // probeY: probe height above oldPos (robot: capsule centre ~2 m). skipNy: hits on faces with |n.y| > skipNy
     // (floors, ramps) are passed through - the ground / suspension code owns those. firstHitN: the first blocking
@@ -104,7 +104,14 @@ bool wallBlock(const CollisionWorld* col, const core::Vec3& oldPos, core::Vec3& 
         nh = nh * (1.0f / nl);
         if (core::dot(nh, dn) > 0.0f) nh = nh * -1.0f;                  // face against the motion
         float vn = v.x * nh.x + v.z * nh.z;
-        if (vn < 0.0f) { v.x -= nh.x * vn; v.z -= nh.z * vn; }
+        if (vn < 0.0f) {
+            v.x -= nh.x * vn; v.z -= nh.z * vn;
+            if (friction > 0.0f) {   // Coulomb: the contact impulse's friction takes up to mu x |dv_n| of the sliding speed
+                core::Vec3 vt{v.x, 0.0f, v.z};
+                const float st = core::length(vt);
+                if (st > 1e-4f) { const float k = std::max(0.0f, st - friction * -vn) / st; v.x *= k; v.z *= k; }
+            }
+        }
         core::Vec3 rest = dn * (dist - allowed);
         move = rest - nh * core::dot(rest, nh);                          // remainder along the wall
         if (core::dot(move, move0) <= 0.0f) { move = {0, 0, 0}; break; } // wedged (corner): no back-slide
@@ -621,11 +628,15 @@ void vehicleStep(Character& c, const MoveIntent& in, float dt, const CollisionWo
     // RB box contact]
     const float probes[3] = {vs.driving ? 0.45f : VP.hullBottom + 0.15f, 0.5f * (VP.hullBottom + VP.hullTop), VP.hullTop - 0.1f};
     bool hullBlocked = false;
+    // Wall sliding friction [CONF RE pass 4 A5 addenda: NxMaterial friction combine MULTIPLY]: car / truck PHYSMAT mu 0.2 x ENV
+    // concrete / metal 0.5 = 0.10 (0.14 on the engine default material; the per-face material is not resolved: the ENV value)
+    // [PARTIAL: tank / jet PHYSMAT not recovered -> no friction].
+    const float wallMu = VP.hasDriving() ? 0.10f : 0.0f;
     core::Vec3 hitN{0, 0, 0};
     float hitH = 0.0f;
     for (float h : probes) {
         core::Vec3 n{0, 0, 0};
-        if (wallBlock(col, oldPos, p, v, std::max(hullReach, VP.hullHalfWidth), h, 0.5f, &n)) { if (!hullBlocked) { hitN = n; hitH = h; } hullBlocked = true; }
+        if (wallBlock(col, oldPos, p, v, std::max(hullReach, VP.hullHalfWidth), h, 0.5f, &n, wallMu)) { if (!hullBlocked) { hitN = n; hitH = h; } hullBlocked = true; }
     }
     if (hullBlocked && vs.driving) {
         // Driving.OnRigidBodyCollision: a frontal hit drops back to Hovering when the contact normal . forward >
