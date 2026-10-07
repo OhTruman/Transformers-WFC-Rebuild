@@ -1555,6 +1555,7 @@ void World::tick(float dt) {
     tickBots(dt);                                                       // bot participants: decisions -> intents, weapons
     for (MatchOpponent* o : opponents_) o->simulate(dt, collision());   // participants: shared movement + animation
     tickParticipantWeapons(dt);
+    for (auto& kv : partBeams_) kv.second.time = std::max(0.0f, kv.second.time - dt);
     player_.controller().tickCameraCollision(dt);   // obstruction behaviour after the pawn moved
     gameplayRamContacts();
     if (const char* ap = std::getenv("WFC_AIMPITCH"))     // diagnostic: force the aim pitch (rad)
@@ -1898,6 +1899,7 @@ void World::removeBots() {
     match_.truncatePlayers(first);
     bots_.clear();
     botSearchOwner_ = -1;
+    for (auto& kv : partBeams_) kv.second.time = 0.0f;   // stopped at the next draw
 }
 
 int World::addBots(const BotLaunch& b) {
@@ -2416,6 +2418,14 @@ void World::draw(render::IRenderer& r) const {
         }
     }
     partShotFx_.clear();
+    // Participants' Repair Ray beams: the player's looping tracer (FX_RepairBeam_p.FX.Tracer_RepairBeam_FX) per healing bot.
+    for (const auto& kv : partBeams_) {
+        const ParticipantBeam& pb = kv.second;
+        const bool on = pb.time > 0.0f;
+        if (on && pb.fx < 0) pb.fx = fxSpawnSegment(r, "FX_RepairBeam_p.FX.Tracer_RepairBeam_FX", pb.start, pb.end, 0);
+        else if (on) fxSetSegment(r, pb.fx, pb.start, pb.end, 0);
+        else if (pb.fx >= 0) { fxStopEffect(r, pb.fx, 0); pb.fx = -1; }
+    }
 
     // Repair Ray beam: spawn the looping tracer when the beam starts, move its source / target every frame, stop on release.
     {
