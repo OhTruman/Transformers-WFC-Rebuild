@@ -495,6 +495,7 @@ bool World::botTryAbility(MatchOpponent& o, BotBrain& b, const char* id) {
         else if (a.id == "Shockwave") pc.shockwaveDelay_ = 0.25f;           // Delay 0.25 -> Shockwave()
         else return false;
         a.spam = 1.0f; a.pendingCooldown = true; ++b.abilities;
+        if (participantAbilityHook) participantAbilityHook(o.matchPlayer(), a.id, pc.chassis().id, pc.actorLocation());
         return true;
     }
     return false;

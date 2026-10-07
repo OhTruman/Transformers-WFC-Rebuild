@@ -439,6 +439,9 @@ public:
     // integration glue points it at the player's per-weapon authored FX lookup. Unset: the WeaponDef's authored MuzzleFlash /
     // Tracer templates are spawned by name through the renderer particle API; a weapon with no template draws nothing (logged once).
     std::function<void(const ParticipantShot&, const core::Mat4&)> participantShotFxHook;
+    // A participant (bot) triggered an ability: (match player, ability id, chassis id, caster position). Presentation hook for
+    // the trigger sound / Skill_<id> notifies (Systems World::onParticipantAbility, bound by the integration glue).
+    std::function<void(int, const std::string&, const std::string&, const core::Vec3&)> participantAbilityHook;
     // Diagnostics: spawned participants with a weapon shown (robot form) and how many of them have a posed weapon mesh.
     void participantWeaponStats(int& shown, int& withMesh) const {
         shown = withMesh = 0;
