@@ -115,6 +115,7 @@ public:
 private:
     HudFrame frame_, sent_;
     std::optional<int> attacking_;
+    std::string progressLabel_;   // the bar's last label: kept while it fades out (the observer keeps its own label)
     bool sentValid_ = false, wasOpen_ = false, wasVisible_ = false, wasSpectating_ = false;
     struct PendingKill { HudKill k; int localTeam; };
     std::vector<PendingKill> kills_;
