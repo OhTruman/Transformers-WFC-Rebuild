@@ -10,7 +10,8 @@
 namespace platform {
 namespace {
 
-enum : int { kMaps = 101, kModes, kChars, kWeapons, kLaunch, kRestart, kTitle, kStatus, kRespawn, kNextStart, kNoclip, kGod, kDummy, kSwap };
+enum : int { kMaps = 101, kModes, kChars, kWeapons, kLaunch, kRestart, kTitle, kStatus, kRespawn, kNextStart, kNoclip, kGod, kDummy, kSwap,
+             kBotOverlay, kFreezeBots, kKillBots, kTeleportAim, kBotList };
 
 class Win32QaPanel : public QaPanel {
 public:
@@ -23,7 +24,7 @@ public:
         wc.lpszClassName = L"WfcQaPanel";
         RegisterClassW(&wc);
         hwnd_ = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST, wc.lpszClassName, L"WFC QA (debug only - not original)",
-                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, 40, 40, 760, 420, nullptr, nullptr, wc.hInstance, this);
+                                WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, 40, 40, 760, 640, nullptr, nullptr, wc.hInstance, this);
         auto label = [&](const wchar_t* t, int x) {
             CreateWindowW(L"STATIC", t, WS_CHILD | WS_VISIBLE, x, 8, 170, 18, hwnd_, nullptr, wc.hInstance, nullptr);
         };
@@ -46,6 +47,18 @@ public:
         // live character swap (Gameplay World::qaSetCharacter): the class picked in the character list
         CreateWindowW(L"BUTTON", L"Swap to selected character", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 8, 348, 290, 26, hwnd_,
                       (HMENU)(INT_PTR)kSwap, wc.hInstance, nullptr);
+        CreateWindowW(L"BUTTON", L"Teleport to aim point", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, 304, 348, 290, 26, hwnd_,
+                      (HMENU)(INT_PTR)kTeleportAim, wc.hInstance, nullptr);
+        // bot debugging (DEV TOOL; Gameplay World qa* bot calls, no-ops when unavailable)
+        CreateWindowW(L"STATIC", L"Bots (DEV TOOL)", WS_CHILD | WS_VISIBLE, 8, 386, 200, 18, hwnd_, nullptr, wc.hInstance, nullptr);
+        auto botButton = [&](const wchar_t* t, int id, int x) {
+            CreateWindowW(L"BUTTON", t, WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON, x, 406, 180, 26, hwnd_, (HMENU)(INT_PTR)id, wc.hInstance, nullptr);
+        };
+        botButton(L"Bot overlay on/off", kBotOverlay, 8); botButton(L"Freeze bots on/off", kFreezeBots, 196);
+        botButton(L"Kill all bots", kKillBots, 384);
+        botList_ = CreateWindowW(L"EDIT", L"", WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL,
+                                 8, 438, 730, 160, hwnd_, (HMENU)(INT_PTR)kBotList, wc.hInstance, nullptr);
+        SendMessageW(botList_, WM_SETFONT, (WPARAM)GetStockObject(ANSI_FIXED_FONT), TRUE);
         status_ = CreateWindowW(L"STATIC", L"", WS_CHILD | WS_VISIBLE, 8, 286, 730, 26, hwnd_, (HMENU)(INT_PTR)kStatus, wc.hInstance, nullptr);
     }
     ~Win32QaPanel() override { if (hwnd_) DestroyWindow(hwnd_); }
@@ -64,6 +77,24 @@ public:
     bool visible() const override { return visible_; }
     void setStatus(const std::string& text) override { SetWindowTextW(status_, widen(text).c_str()); }
     QaRequest poll() override { QaRequest r = pending_; pending_ = QaRequest{}; return r; }
+    void setMaps(const std::vector<Option>& maps) override {
+        const std::string keep = selected(0);
+        options_[0] = maps;
+        SendMessageW(lists_[0], LB_RESETCONTENT, 0, 0);
+        int sel = 0;
+        for (size_t i = 0; i < maps.size(); ++i) {
+            SendMessageW(lists_[0], LB_ADDSTRING, 0, (LPARAM)widen(maps[i].label).c_str());
+            if (maps[i].value == keep) sel = (int)i;
+        }
+        if (!maps.empty()) SendMessageW(lists_[0], LB_SETCURSEL, (WPARAM)sel, 0);
+    }
+    void setBots(const std::string& text) override {
+        if (text == botText_) return;   // unchanged: keep the scroll position
+        botText_ = text;
+        std::wstring w;
+        for (char c : text) { if (c == '\n') w += L'\r'; w += (wchar_t)(unsigned char)c; }   // the edit control wants CRLF
+        SetWindowTextW(botList_, w.c_str());
+    }
 
 private:
     static std::wstring widen(const std::string& s) { return std::wstring(s.begin(), s.end()); }
@@ -83,6 +114,10 @@ private:
         case kGod: r.kind = QaRequest::Kind::God; break;
         case kDummy: r.kind = QaRequest::Kind::Dummy; break;
         case kSwap: r.kind = QaRequest::Kind::SwapCharacter; break;
+        case kBotOverlay: r.kind = QaRequest::Kind::BotOverlay; break;
+        case kFreezeBots: r.kind = QaRequest::Kind::FreezeBots; break;
+        case kKillBots: r.kind = QaRequest::Kind::KillBots; break;
+        case kTeleportAim: r.kind = QaRequest::Kind::TeleportAim; break;
         default: return;
         }
         r.mapId = std::atoi(selected(0).c_str());
@@ -95,13 +130,21 @@ private:
         if (m == WM_NCCREATE) SetWindowLongPtrW(h, GWLP_USERDATA, (LONG_PTR)((CREATESTRUCTW*)l)->lpCreateParams);
         auto* self = (Win32QaPanel*)GetWindowLongPtrW(h, GWLP_USERDATA);
         if (self && m == WM_COMMAND && HIWORD(w) == BN_CLICKED) { self->command(LOWORD(w)); return 0; }
+        if (self && m == WM_COMMAND && HIWORD(w) == LBN_SELCHANGE && LOWORD(w) == kModes) {   // the map list follows the mode
+            QaRequest r;
+            r.kind = QaRequest::Kind::ModeChanged;
+            r.mode = self->selected(1);
+            self->pending_ = r;
+            return 0;
+        }
         if (self && m == WM_CLOSE) { self->show(false); return 0; }   // closing only hides it
         // F10 while the panel has focus hides it (otherwise the system key would open its window menu)
         if (self && m == WM_SYSKEYDOWN && w == VK_F10) { self->show(false); return 0; }
         if (m == WM_SYSKEYUP && w == VK_F10) return 0;
         return DefWindowProcW(h, m, w, l);
     }
-    HWND hwnd_ = nullptr, status_ = nullptr;
+    HWND hwnd_ = nullptr, status_ = nullptr, botList_ = nullptr;
+    std::string botText_;
     HWND lists_[4] = {};
     std::vector<Option> options_[4];
     QaRequest pending_;

@@ -453,6 +453,46 @@ template <class W> std::string qaSwap(W& w, const std::string& name) {
         return "No class preset named '" + name + "' (custom slots: use Choose Character).";
     } else { (void)w; (void)name; return "Gameplay QA character swap not in this build"; }
 }
+// Bot debugging for the QA panel (DEV TOOL). Gameplay: World::botBrains() (read for the per-bot list) and the qa bot
+// tools qaKillAllBots / qaFreezeBots / qaSetBotOverlay / qaTeleportToAim (requested; detected, no-ops until present).
+template <class W, class = void> struct HasBotBrains : std::false_type {};
+template <class W> struct HasBotBrains<W, std::void_t<decltype(std::declval<const W&>().botBrains())>> : std::true_type {};
+template <class W, class = void> struct HasQaBotTools : std::false_type {};
+template <class W>
+struct HasQaBotTools<W, std::void_t<decltype(std::declval<W&>().qaKillAllBots()), decltype(std::declval<W&>().qaFreezeBots(true)),
+                                    decltype(std::declval<const W&>().qaBotsFrozen()), decltype(std::declval<W&>().qaSetBotOverlay(true)),
+                                    decltype(std::declval<const W&>().qaBotOverlay())>> : std::true_type {};
+template <class W, class = void> struct HasQaTeleportAim : std::false_type {};
+template <class W> struct HasQaTeleportAim<W, std::void_t<decltype(std::declval<W&>().qaTeleportToAim())>> : std::true_type {};
+template <class W> std::string qaBotList(const W& w) {
+    if constexpr (HasBotBrains<W>::value) {
+        const auto& players = w.match().players();
+        auto name = [&](int i) { return i >= 0 && (size_t)i < players.size() ? players[(size_t)i].name : std::string("-"); };
+        std::string out = "bot              team diff goal      target           path    stuck" + std::string("\n");
+        char line[256];
+        for (const auto& b : w.botBrains()) {
+            const int team = b.player >= 0 && (size_t)b.player < players.size() ? (int)players[(size_t)b.player].team : -1;
+            std::snprintf(line, sizeof line, "%-16.16s %4d %4d %-9.9s %-16.16s %3zu/%-3zu %5d", name(b.player).c_str(), team, b.difficulty,
+                          b.hasGoal ? botGoalName(b.goal.kind) : "-", name(b.target).c_str(), b.wp, b.path.size(), b.stuckLevel);
+            out += line;
+            out += '\n';
+        }
+        return w.botBrains().empty() ? std::string("No bots in this match.") : out;
+    } else { (void)w; return "Bot list: Gameplay bots not in this build."; }
+}
+template <class W> std::string qaBotTool(W& w, platform::QaRequest::Kind k) {
+    using K = platform::QaRequest::Kind;
+    if (k == K::TeleportAim) {
+        if constexpr (HasQaTeleportAim<W>::value) { w.qaTeleportToAim(); return "Teleported to the aim point."; }
+        else { (void)w; return "Teleport to aim: Gameplay QA call not in this build (requested)."; }
+    }
+    if constexpr (HasQaBotTools<W>::value) {
+        if (k == K::KillBots) { w.qaKillAllBots(); return "Killed all bots (no score; they respawn)."; }
+        if (k == K::FreezeBots) { w.qaFreezeBots(!w.qaBotsFrozen()); return w.qaBotsFrozen() ? "Bots frozen." : "Bots unfrozen."; }
+        if (k == K::BotOverlay) { w.qaSetBotOverlay(!w.qaBotOverlay()); return w.qaBotOverlay() ? "Bot overlay on." : "Bot overlay off."; }
+        return std::string();
+    } else { (void)w; (void)k; return "Bot tools: Gameplay QA calls not in this build (requested)."; }
+}
 template <class W> std::vector<std::string> qaWeapons(const W& w) {
     if constexpr (HasQaApi<W>::value) return w.qaWeaponIds(false); else { (void)w; return {}; }
 }
@@ -491,9 +531,10 @@ void Application::qaTick(const platform::InputFrame& in) {
         qa_ = platform::createQaPanel();
         if (!qa_) return;
         std::vector<platform::QaPanel::Option> maps, modes, chars, weapons;
-        for (const auto& m : frontend_->catalog().maps())
-            if (m.mapId > 0) maps.push_back({(m.friendlyName.empty() ? m.mapFilename : m.friendlyName) + " (" + std::to_string(m.mapId) + ")",
-                                             std::to_string(m.mapId)});
+        // Only the maps the original map data allows for the selected mode (CompatibleGameTypes, the Private Match rule).
+        for (const auto* m : frontend_->catalog().compatibleMaps("TDM", false))
+            if (m->mapId > 0) maps.push_back({(m->friendlyName.empty() ? m->mapFilename : m->friendlyName) + " (" + std::to_string(m->mapId) + ")",
+                                              std::to_string(m->mapId)});
         for (const char* t : {"TDM", "DM", "CTF", "CP", "KOTH", "DOM", "EXT"}) modes.push_back({t, t});
         for (const auto& c : frontend_->roster().customCharacters()) chars.push_back({c.name, c.name});
         weapons.push_back({"(class default)", ""});
@@ -508,6 +549,20 @@ void Application::qaTick(const platform::InputFrame& in) {
         frontend::FlowTrace::emit("qa.panel", {{"visible", frontend::FlowTrace::boolean(qa_->visible())}, {"provenance", "DEBUG ONLY"}});
     }
     platform::QaRequest r = qa_->poll();
+    if (r.kind == platform::QaRequest::Kind::ModeChanged) {
+        std::vector<platform::QaPanel::Option> maps;
+        for (const auto* m : frontend_->catalog().compatibleMaps(r.mode, false))
+            if (m->mapId > 0) maps.push_back({(m->friendlyName.empty() ? m->mapFilename : m->friendlyName) + " (" + std::to_string(m->mapId) + ")",
+                                              std::to_string(m->mapId)});
+        qa_->setMaps(maps);
+        qa_->setStatus(std::to_string(maps.size()) + " maps support " + r.mode + ".");
+        return;
+    }
+    if (r.kind == platform::QaRequest::Kind::Launch) {   // never an invalid map / mode pair
+        const frontend::MapInfo* m = nullptr;
+        for (const auto& mi : frontend_->catalog().maps()) if (mi.mapId == r.mapId) m = &mi;
+        if (!m || !m->compatibleWith(r.mode)) { qa_->setStatus("That map does not support " + r.mode + " (original map data)."); return; }
+    }
     {   // command-line equivalents (debug only): WFC_QA_LAUNCH=MODE,MAPID,CLASS once from the title;
         // WFC_QA_RESTART_AFTER=<s>: one Restart after that long in a match
         static bool launched = false, restarted = false;
@@ -540,10 +595,19 @@ void Application::qaTick(const platform::InputFrame& in) {
             weaponPending = false;
         }
         using K = platform::QaRequest::Kind;
+        {   // the per-bot list, twice a second while the panel is open in a match
+            static double nextBots = 0;
+            if (qa_->visible() && nowSeconds() >= nextBots) {
+                nextBots = nowSeconds() + 0.5;
+                qa_->setBots(flow.level() == frontend::LevelKind::Match ? qaBotList(world_) : std::string("Bots: not in a match."));
+            }
+        }
         if (r.kind == K::Respawn || r.kind == K::NextStart || r.kind == K::Noclip || r.kind == K::God || r.kind == K::Dummy ||
-            r.kind == K::SwapCharacter) {
+            r.kind == K::SwapCharacter || r.kind == K::BotOverlay || r.kind == K::FreezeBots || r.kind == K::KillBots || r.kind == K::TeleportAim) {
             if (!inGame) { qa_->setStatus("In-match tools need a running match."); return; }
             if (r.kind == K::Dummy) { world_.addMatchOpponent("QA Dummy", true /* drawn: visible */); qa_->setStatus("Spawned a dummy opponent."); }
+            else if (r.kind == K::BotOverlay || r.kind == K::FreezeBots || r.kind == K::KillBots || r.kind == K::TeleportAim)
+                qa_->setStatus(qaBotTool(world_, r.kind));
             else if (r.kind == K::SwapCharacter) qa_->setStatus(qaSwap(world_, r.character));
             else qa_->setStatus(qaTool(world_, r.kind, std::string(), startIndex));
             frontend::FlowTrace::emit("qa.tool", {{"kind", std::to_string((int)r.kind)}, {"provenance", "DEBUG ONLY"}});
