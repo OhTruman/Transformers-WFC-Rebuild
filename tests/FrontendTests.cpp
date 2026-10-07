@@ -148,7 +148,9 @@ static void testHudObservers(const Catalog& c) {
           p.count("_global.NotifyCantTransform") == 2, "hud.prompts_and_cant_transform");
     check(HudController::grenadeTypeFor("") == 0 && HudController::grenadeTypeFor("GrenadeLauncher") == 1 &&
           HudController::grenadeTypeFor("KamikazeMine") == 3 && HudController::targetTypeFor(-1, 255, 0) == 2 &&
-          HudController::targetTypeFor(3, 0, 0) == 0 && HudController::targetTypeFor(3, 1, 0) == 1 && HudController::hudYaw(0.5) == -0.5,
+          HudController::targetTypeFor(3, 0, 0) == 0 && HudController::targetTypeFor(3, 1, 0) == 1 && HudController::hudYaw(0.5) == -0.5 &&
+          HudController::abilityIconId("Barrier") == "TnAbilityBarrier" && HudController::abilityIconId("TnAbilityHover") == "TnAbilityHover" &&
+          HudController::abilityIconId("") == "None",
           "hud.conversions");
 }
 

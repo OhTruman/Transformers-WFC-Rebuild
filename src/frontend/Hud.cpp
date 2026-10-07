@@ -28,6 +28,12 @@ std::string escape(const std::string& s) {
 }
 } // namespace
 
+std::string HudController::abilityIconId(const std::string& id) {
+    if (id.empty() || id == "None") return "None";
+    if (id.rfind("TnAbility", 0) == 0 || id.rfind("Team", 0) == 0) return id;
+    return "TnAbility" + id;
+}
+
 int HudController::grenadeTypeFor(const std::string& id) {
     if (id.empty()) return 0;
     auto has = [&](const char* k) { return id.find(k) != std::string::npos; };
@@ -139,7 +145,7 @@ void HudController::update(IMoviePresenter* p, const Catalog& cat, bool open, bo
             const auto& a = f.abilities[(size_t)i];
             const auto& w = sent_.abilities[(size_t)i];
             if (!a) continue;
-            if (!sentValid_ || !w || a->id != w->id) call(kAbilityChanged[i], {a->id});
+            if (!sentValid_ || !w || a->id != w->id) call(kAbilityChanged[i], {abilityIconId(a->id)});
             if (!sentValid_ || !w || a->cooldown != w->cooldown || a->fraction != w->fraction) call(kAbilityCooldown[i], {a->cooldown, a->fraction});
         }
         if (changed(f.grenadeAmmo, sent_.grenadeAmmo) || changed(f.grenadeType, sent_.grenadeType))

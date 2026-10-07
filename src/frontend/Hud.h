@@ -97,6 +97,9 @@ public:
     // mc_grenadeIcon GrenadeType: 1 Frag, 2 Flashbang, 3 KMine, 4 Heal (0 none) [CONFIRMED Hud_GFX sprite 376]; from the
     // grenade weapon id [PROV name match; versus bags are frag].
     static int grenadeTypeFor(const std::string& id);
+    // SetAbilityIcon loads the bitmap export named by the ability class (TnAbilityBarrier, ...; 'None' empty): the
+    // rebuild's short ids ("Barrier") get the TnAbility prefix [CONFIRMED Hud_GFX exports].
+    static std::string abilityIconId(const std::string& id);
     // NotifyTargetTypeChanged: 0 friendly (blue crosshair), 1 enemy (red), else white [CONFIRMED Hud_GFX].
     static int targetTypeFor(int targetPlayer, int targetTeam, int myTeam) {
         return targetPlayer < 0 || targetTeam < 0 || targetTeam == 255 ? 2 : targetTeam == myTeam ? 0 : 1;
