@@ -481,3 +481,5 @@ Sub-profile (09c 28aec2e, 63 bots, steady state, ms per 60 Hz step): SoundCues u
 Suite 744 / 0 (no checks while out of range, an immediate check on entry, the 0.25 s interval again in range).
 Note for Integration: participantPositionHook searches opponents_ linearly per call (the resolver calls it per attached
 instance per step); indexing it by player would make it O(1).
+Measured after M09m (same scratch build before / after, 32 v 32, clean machine, ms per step): occlusion rays 0.050 -> 0.013,
+SoundCues update 0.092 -> 0.050, per-bot 0.040 -> 0.036; all audio in the step ~0.145 -> ~0.091 ms.
