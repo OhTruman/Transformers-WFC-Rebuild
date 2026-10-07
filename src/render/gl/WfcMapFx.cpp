@@ -478,6 +478,8 @@ int Pipeline::fxMeshFor(const FxLod& L) {
 
 // ---- simulation (UE3 FParticleEmitterInstance order: kill/update, then spawn) ----
 void Pipeline::tickMapFx(float dt) {
+    statLiveParticles_ = 0;
+    for (const FxInstance& fi : fxInstances_) for (const FxEmitterRT& e : fi.emitters) statLiveParticles_ += e.parts.size();
     if (dt <= 0.0f || std::getenv("WFC_NOMAPFX")) return;
     // M67 SubUV (RE pass 5 s16, update runner case 0x1F, CONFIRMED): every tick for every live particle (and at spawn as
     // the first update). Cells row-major; the second cell is the next one, wrapping. Linear / Linear_Blend: f =
@@ -752,6 +754,15 @@ void Pipeline::tickMapFx(float dt) {
             const int peak = L.maxBeams > 0 ? std::min(em.maxPeak, L.maxBeams)              // Beam2: MaxBeamCount
                              : L.trailCap > 0 ? L.trailCap : em.maxPeak;                    // Trail2: trail capacity
             if (L.particleTrail) spawn = std::min(spawn, 1);   // Trail2 Spawn clamps to 1 per tick (RE s14)
+            {   // AMD stability: a global live-particle budget across every effect (authored peaks are per emitter)
+                constexpr size_t kMaxLive = 250000;
+                if (statLiveParticles_ >= kMaxLive) {
+                    static std::set<std::string> warned;
+                    if (spawn > 0 && warned.insert(in.system).second)
+                        LOG_WARN("fx guard: %zu live particles - %s spawns skipped", statLiveParticles_, in.system.c_str());
+                    spawn = 0;
+                }
+            }
             for (int s = 0; s < spawn && (int)rt.parts.size() < peak; ++s) {
                 FxParticle q;
                 q.seq = rt.spawnSeq++;
@@ -931,9 +942,18 @@ void Pipeline::tickMapFx(float dt) {
             }
         }
     }
-    // runtime effects: released once nothing will spawn again and every particle has died
+    // runtime effects: released once nothing will spawn again and every particle has died - or, guard, 30 s after
+    // they stopped spawning even with immortal particles left (Lifetime 0 particles must not pin instances forever)
+    for (FxInstance& in : fxInstances_)
+        if (in.transient && (!in.active || std::all_of(in.emitters.begin(), in.emitters.end(), [](const FxEmitterRT& e) { return e.done; })))
+            in.idleTime += dt;
     fxInstances_.erase(std::remove_if(fxInstances_.begin(), fxInstances_.end(), [](const FxInstance& in) {
         if (!in.transient) return false;
+        if (in.idleTime > 30.0f) {
+            static std::set<std::string> warned;
+            if (warned.insert(in.system).second) LOG_WARN("fx guard: %s released with live particles after 30 s idle", in.system.c_str());
+            return true;
+        }
         for (const FxEmitterRT& rt : in.emitters)
             if (!rt.parts.empty() || (in.active && !rt.done)) return false;
         return true;
@@ -946,6 +966,16 @@ void Pipeline::tickMapFx(float dt) {
 
 // ---- runtime particle effects (template library) ----
 int Pipeline::spawnFx(const std::string& tpl, const float R[3][3], const float T[3], const float* color, const float* target) {
+    // AMD stability (Milestone E): a hard budget on runtime effect instances (an immortal-particle template keeps its
+    // instance alive; the list must never grow without bound)
+    constexpr size_t kMaxTransient = 4096;
+    size_t transient = 0;
+    for (const FxInstance& fi : fxInstances_) transient += fi.transient ? 1 : 0;
+    if (transient >= kMaxTransient) {
+        static std::set<std::string> warned;
+        if (warned.insert(tpl).second) LOG_WARN("fx guard: %zu runtime effect instances live - %s not spawned", transient, tpl.c_str());
+        return -1;
+    }
     auto it = fxSystems_.find(tpl);
     if (it == fxSystems_.end()) {
         static std::set<std::string> logged;

@@ -735,8 +735,10 @@ private:
         std::vector<FxEmitterRT> emitters;
         int id = 0; bool transient = false;   // runtime spawned (spawnFx), released when finished / at unload
         bool hasTarget = false; float target[3] = {0, 0, 0};
+        float idleTime = 0.0f;                // runtime instance: seconds since it stopped spawning (guard release)
     };
     int nextFxId_ = 1;
+    size_t statLiveParticles_ = 0;    // live map-FX particles at the start of the tick (global budget guard)
     int progCacheHits_ = 0;
     int vlmRemapped_ = 0;             // vertex-lightmap sections bound through _WFC_SRCVERT (M62)
     bool prewarmDone_ = false, prewarmPending_ = false;
