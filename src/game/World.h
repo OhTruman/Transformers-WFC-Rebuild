@@ -579,6 +579,7 @@ public:
     // background part runs they are queued and replayed in order at the join (the renderer is main-thread only); else immediate.
     struct FxOp { int kind = 0; int vid = -1; std::string tmpl; core::Vec3 p{0, 0, 0}, f{0, 0, 0}, u{0, 0, 0}; int team = -1; bool explosion = false; };
     std::vector<FxOp> fxOps_;
+    int pellet_ = 0;
     std::map<int, int> fxReal_;
     int fxNextVid_ = 0;
     int fxStepSpawn(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int team, bool explosion);
@@ -731,7 +732,12 @@ public:
     void resetBotTiming() { botMsAccum_ = 0.0; botMsMax_ = 0.0; botTicks_ = 0; }
     // Participant (non-local) shots this step, for presentation layers (tracers / muzzle / sounds of bots): weapon id, the trace
     // or launch start, the end point and whether it hit something. Robot-weapon mesh FX for bots are not drawn yet [PARTIAL].
-    struct ParticipantShot { int player; std::string weapon; core::Vec3 from, to; bool impact; int hitPlayer = -1; };   // hitPlayer: pawn hit (-1 world / none)
+    // hitPlayer: pawn hit (-1 world / none). pellet: index within one fire event (NumShotsToFire): stock Weapon.InstantFire plays the fire
+    // effects (muzzle flash + tracer toward that hit) for pellet 0 only; every pellet plays its impact [CONF RE 9a776fb TARGETED_PASS5].
+    struct ParticipantShot { int player; std::string weapon; core::Vec3 from, to; bool impact; int hitPlayer = -1; int pellet = 0; };
+    // The pellet index of the hitscan traces being fired (set by the NumShotsToFire loops, 0 otherwise).
+    void setPelletIndex(int k) { pellet_ = k; }
+    int pelletIndex() const { return pellet_; }
     const std::vector<ParticipantShot>& participantShots() const { return participantShots_; }
     // Participant shot presentation (muzzle flash / tracer / impact of bots' weapons). When set, called once per participant shot
     // with the shooter's MuzzleFlash socket world matrix (X = barrel forward; the eye frame when no weapon mesh is shown); the
@@ -857,6 +863,10 @@ public:
     bool stepPending() const { return remainderPending_; }
     bool stepRunning() const { return remainderRunning_; }   // main-thread code must not touch simulation state while true
     static bool asyncStepEnabled();
+    // Per-phase step timing (the WFC_TICKPROF slots) switched on from code, summed since the last reset (WFC_SCALETEST).
+    static void setStepProfiling(bool on);
+    static void stepProfileReset();
+    static std::vector<std::pair<std::string, double>> stepProfileSums();
     void consumePresented() { presented_.matchEvents.clear(); presented_.gameplayEvents.clear(); presented_.kills.clear();
                               presented_.damageTaken.clear(); presented_.damageCaused.clear(); presented_.steps = 0; }
     // A command for the simulation: applied in submission order at the start of the next step (select a character, QA actions,
@@ -878,7 +888,8 @@ public:
     // in order: on the sim thread they would race the renderer / Systems. Presentation only.
     std::vector<std::function<void()>> deferredHooks_;
     template <class F> void presentHook(F&& f) { if (remainderRunning_ && !onMainThread()) deferredHooks_.push_back(std::forward<F>(f)); else f(); }
-    double lastRemainderMs_ = 0.0, prefixMsAcc_ = 0.0, beginStepMsAcc_ = 0.0;   // a model needed by the background part: loaded at the join (GL)
+    double lastRemainderMs_ = 0.0, prefixMsAcc_ = 0.0, beginStepMsAcc_ = 0.0;
+    double prefixSecMs_[12] = {}, prefixMark_ = 0.0;   // WFC_ASYNCLOG: the local part by section   // a model needed by the background part: loaded at the join (GL)
     void preloadHeldWeaponsOfPawns();
     std::vector<std::function<void(World&)>> commands_;
     size_t presentedGameplayEventCount_ = 0, presentedKillCount_ = 0;

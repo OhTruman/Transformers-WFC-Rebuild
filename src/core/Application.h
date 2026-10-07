@@ -113,6 +113,7 @@ private:
     void runMarkersTest();
     void runEngageTest();
     void runAsyncStepTest();
+    void runScaleTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

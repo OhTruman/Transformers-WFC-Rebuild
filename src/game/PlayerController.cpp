@@ -828,7 +828,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                 // [CONF RE pass 5 9g + TnPlayerPawn].
                 core::Vec3 dir = core::normalize(aimPoint - origin);
                 if (vw->projectile()) world.fireWeapon(*vw, origin, dir);
-                else if (vw->simulated()) for (int k = 0; k < std::max(1, vw->shots); ++k) world.fireWeapon(*vw, start, camDir);
+                else if (vw->simulated()) { for (int k = 0; k < std::max(1, vw->shots); ++k) { world.setPelletIndex(k); world.fireWeapon(*vw, start, camDir); } world.setPelletIndex(0); }
             } else if (vw->ammo == 0 && vw->canReload()) vw->beginReload();
         }
     }
@@ -859,7 +859,7 @@ void PlayerController::applyToPawn(World& world, float dt) {
                 else { const core::Vec3 d = core::normalize(aimPoint - eye); world.fireWeapon(w, eye + d * 1.5f, d); }
             }
             // NumShotsToFire traces per shot (shotgun pellets), each with its own spread sample [CONF data; HIGH: one ammo per shot].
-            else for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) world.fireHitscan(start, camDir);
+            else { for (int k = 0; k < std::max(1, pawn_->weapon().shots); ++k) { world.setPelletIndex(k); world.fireHitscan(start, camDir); } world.setPelletIndex(0); }
     };
     if (w.charge()) {
         // TnChargeWeapon. Active.BeginFire: loaded and TimeSinceLastCharge >= FireInterval -> Charging (state 1). Charging.Tick:
