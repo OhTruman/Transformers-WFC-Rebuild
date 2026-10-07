@@ -1,5 +1,6 @@
 #include "render/gl/WfcPipeline.h"
 #include "core/LoadYield.h"
+#include <tuple>
 
 #include <emmintrin.h>
 #include "core/Config.h"
@@ -20,6 +21,7 @@ using namespace glx;
 
 namespace render {
 namespace wfc {
+Pipeline* gInstPipeline = nullptr;   // pending instanced character draws: flushed before any draw / blit
 namespace {
 
 std::string readText(const std::string& p) {
@@ -51,6 +53,12 @@ float srgbToLinear(float c) { return std::pow(c, 2.2f); }   // UE3 FLinearColor(
 #include "core/LoadYield.h"
 #define WFC_HAS_CORE_LOADYIELD 1
 #endif
+
+// every draw / blit below first flushes pending instanced character draws (no pending draw can be observed)
+static inline void wfcInstFlushHook() { if (gInstPipeline) gInstPipeline->flushInstances(); }
+#define glDrawElements(...) (wfcInstFlushHook(), ::glDrawElements(__VA_ARGS__))
+#define glDrawArrays(...) (wfcInstFlushHook(), ::glDrawArrays(__VA_ARGS__))
+#define BlitFramebuffer(...) (wfcInstFlushHook(), glx::BlitFramebuffer(__VA_ARGS__))
 
 // ------------------------------------------------------------------------- GLSL sources
 const char* kVS = R"(#version 330 compatibility
@@ -664,6 +672,8 @@ void Pipeline::clearProgramCache() {
 void Pipeline::release() {
     evictPosed(true);                                  // drawDynamicMeshPosed buffers belong to the map / context
     evictSkin(true);
+    instGroups_.clear(); instGroupIndex_.clear();
+    if (gInstPipeline == this) gInstPipeline = nullptr;
     touchQueue_.clear();                               // its textures are deleted with the map
     progTouchQueue_.clear();
     if (!active_ && meshes_.empty() && !fbo_) return;
@@ -1410,6 +1420,60 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
 
     static GLuint vsShared = 0;
     if (!vsShared) vsShared = compile(GL_VERTEX_SHADER, kVS, "world.vs");
+    GLuint vsUse = vsShared;
+    int instRt = 0;
+    if (instBuild_) {   // instanced character variant: per-instance uniforms become globals loaded from the instance row
+        static GLuint vsInst = 0;
+        if (!vsInst) {
+            std::string vs = kVS;
+            bool ok = true;
+            auto sub = [&](const std::string& a, const std::string& b) { if (vs.find(a) == std::string::npos) ok = false; else replaceAll(vs, a, b); };
+            sub("uniform mat4 uModel;", "mat4 uModel;");
+            sub("uniform int uSkin;", "int uSkin;");
+            sub("uniform int uSkinRow, uSkinBones;", "int uSkinRow, uSkinBones;");
+            sub("uniform float uSkinAlpha;", "float uSkinAlpha;");
+            sub("void main() {", "void wfcVSBody() {");
+            vs += "uniform sampler2D uInstTex;\nuniform int uInstBase;\nflat out int vInstRow;\n"
+                  "void main() {\n    vInstRow = uInstBase + gl_InstanceID;\n"
+                  "    uModel = mat4(texelFetch(uInstTex, ivec2(0, vInstRow), 0), texelFetch(uInstTex, ivec2(1, vInstRow), 0),\n"
+                  "                  texelFetch(uInstTex, ivec2(2, vInstRow), 0), texelFetch(uInstTex, ivec2(3, vInstRow), 0));\n"
+                  "    vec4 sk = texelFetch(uInstTex, ivec2(4, vInstRow), 0);\n"
+                  "    uSkin = int(sk.x + 0.5); uSkinRow = int(sk.y + 0.5); uSkinAlpha = sk.z; uSkinBones = int(sk.w + 0.5);\n"
+                  "    wfcVSBody();\n}\n";
+            vsInst = ok ? compile(GL_VERTEX_SHADER, vs, "world_inst.vs") : 0;
+            if (!vsInst) LOG_WARN("wfc: instanced vertex shader unavailable (instancing off)");
+        }
+        if (!vsInst) return -1;
+        vsUse = vsInst;
+        bool ok = true;
+        auto sub = [&](const std::string& a, const std::string& b) { if (fs.find(a) == std::string::npos) ok = false; else replaceAll(fs, a, b); };
+        sub("uniform vec3 uAmb[6];", "vec3 uAmb[6];");
+        sub("uniform int uNumLights;", "int uNumLights;");
+        sub("uniform vec4 uLPos[3];", "vec4 uLPos[3];");
+        sub("uniform vec4 uLDir[3];", "vec4 uLDir[3];");
+        sub("uniform vec4 uLCol[3];", "vec4 uLCol[3];");
+        sub("uniform vec4 uLSpot[3];", "vec4 uLSpot[3];");
+        sub("uniform vec3 uDLAC;", "vec3 uDLAC;");
+        sub("uniform vec4 uDynParam;", "vec4 uDynParam;");
+        std::vector<std::string> rts = rtParams;
+        std::sort(rts.begin(), rts.end());
+        for (const std::string& n : rts) sub("uniform vec4 uRT_" + n + "; uniform int uRTSet_" + n + ";", "vec4 uRT_" + n + "; int uRTSet_" + n + ";");
+        if (fs.find("void main()") == std::string::npos || 25 + 2 * (int)rts.size() > kInstW) ok = false;
+        if (!ok) return -1;
+        replaceAll(fs, "void main()", "void wfcMainBody()");
+        std::string ld = "flat in int vInstRow;\nuniform sampler2D uInstTex;\n"
+                         "vec4 wfcI(int k) { return texelFetch(uInstTex, ivec2(k, vInstRow), 0); }\n"
+                         "void main() {\n    for (int i = 0; i < 6; ++i) uAmb[i] = wfcI(5 + i).xyz;\n"
+                         "    vec4 t = wfcI(11); uNumLights = int(t.x + 0.5); uDLAC = t.yzw;\n"
+                         "    for (int i = 0; i < 3; ++i) { uLPos[i] = wfcI(12 + i); uLDir[i] = wfcI(15 + i); uLCol[i] = wfcI(18 + i); uLSpot[i] = wfcI(21 + i); }\n"
+                         "    uDynParam = wfcI(24);\n";
+        for (size_t i = 0; i < rts.size(); ++i)
+            ld += "    uRT_" + rts[i] + " = wfcI(" + std::to_string(25 + 2 * i) + "); uRTSet_" + rts[i] + " = int(wfcI(" +
+                  std::to_string(26 + 2 * i) + ").x + 0.5);\n";
+        ld += "    wfcMainBody();\n}\n";
+        fs += ld;
+        instRt = (int)rts.size();
+    }
     GLuint id = 0;
     auto cached = gProgCache.find(fs);
     if (cached != gProgCache.end()) {
@@ -1419,10 +1483,11 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     } else {
         const auto tc0 = std::chrono::steady_clock::now();
         GLuint f = compile(GL_FRAGMENT_SHADER, fs, key);
-        if (!vsShared || !f) return -1;
-        id = link(vsShared, f, key);
+        if (!vsUse || !f) return -1;
+        id = link(vsUse, f, key);
         DeleteShader(f);
         if (!id) return -1;
+        if (id < commonKeyById_.size()) commonKeyById_[id].valid = false;   // a new (or recycled) program object
         static const bool stats = std::getenv("WFC_RENDERSTATS") != nullptr;
         if (stats && frameNo_ > 0)            // diagnostics: a program compiled after the load (a hitch on that frame)
             LOG_INFO("wfc program built: frame %d %s %.1f ms", frameNo_, key.c_str(),
@@ -1468,7 +1533,9 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
     Uniform1i(U("uSceneColor"), 16);
     Uniform1i(U("uVLM"), 11);
     Uniform1i(U("uShadowMask"), 10);
+    if (instBuild_) { Uniform1i(U("uInstTex"), 19); Uniform1i(U("uBoneTex"), 18); }
     UseProgram(0);
+    P.instRtCount = instRt;
     progs_.push_back(P);
     progIndex_[key] = (int)progs_.size() - 1;
     progTouchQueue_.push_back((int)progs_.size() - 1);
@@ -1559,6 +1626,17 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
                 mainOverride_ = nullptr;
                 if (sf >= 0) { progs_[(size_t)sf].original = true; progs_[(size_t)r].screenProg = sf; }
             }
+            // opt-in: measured at 32 v 32 (Streets, fixed cam) pixel-identical but no frame-time gain - only same-chassis
+            // bodies can share a draw (~1.4 instances per draw) and the flush state save / restore eats the saving
+            static const bool noInst = std::getenv("WFC_INSTANCING") == nullptr || std::getenv("WFC_NOINSTANCING") != nullptr;
+            if (instWanted_ && !noInst && !lightmapped && s.blend <= 1 && progs_[(size_t)r].distProg < 0 &&
+                !progs_[(size_t)r].sceneDepth && !progs_[(size_t)r].sceneColor && DrawElementsInstanced) {
+                instBuild_ = true;
+                int in = buildProgram(key + "|INST", s.glsl, slots, s.cube, s.blend, s.twoSided, s.lit, s.clip, false, s.rtParams);
+                instBuild_ = false;
+                if (in >= 0) { progs_[(size_t)in].original = true; progs_[(size_t)in].material = progs_[(size_t)r].material;
+                               progs_[(size_t)r].instProg = in; }
+            }
             if (!lightmapped && s.blend <= 1) {          // caster variant for projected shadows
                 mainOverride_ = kFSMainShadow;
                 int sh = buildProgram(key + "|SHADOW", s.glsl, slots, s.cube, s.blend, s.twoSided, false, s.clip, false, s.rtParams);
@@ -1622,7 +1700,8 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
 namespace {
 struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0, dynBuildMs = 0, dynUploadMs = 0, dynTotalMs = 0, dynShadowMs = 0; int dynCalls = 0, dynCulled = 0, dynReused = 0;
                      double skinMs = 0, skinBoundsMs = 0; int skinCalls = 0, skinUploads = 0;
-                     double dynEnvMs = 0, dynSubsMs = 0, dynDrawMs = 0; } gStats;
+                     double dynEnvMs = 0, dynSubsMs = 0, dynDrawMs = 0;
+                     int instQueued = 0, instDraws = 0, instRejected = 0; } gStats;
 std::chrono::steady_clock::time_point gFrameStart;
 }
 
@@ -2040,17 +2119,45 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
     UniformMatrix4fv(P.uViewProj, 1, GL_FALSE, viewProj_.m);
     UniformMatrix4fv(P.uModel, 1, GL_FALSE, model.m);
     Uniform3f(P.uCamPos, camPos_.x, camPos_.y, camPos_.z);
-    Uniform1f(P.uTime, time_);
-    Uniform1i(P.uTwoSided, P.twoSided ? 1 : 0);
-    Uniform1i(P.uMasked, P.blend == 1 ? 1 : 0);
-    Uniform1f(P.uClip, P.clip);
-    Uniform1i(P.uLit, P.lit ? 1 : 0);
-    Uniform1i(uloc(P, "uBlend"), P.blend);
+    // the uniforms only bindCommon writes: set when their inputs differ from what this program object last received
+    static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
+    static const int legacyTrans = std::getenv("WFC_M05TRANS") ? 1 : 0;
+    static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
+    static const bool noSkip = std::getenv("WFC_NOCOMMONSKIP") != nullptr;   // A/B
+    const float key[34] = {time_, P.twoSided ? 1.0f : 0.0f, P.blend == 1 ? 1.0f : 0.0f, P.clip, P.lit ? 1.0f : 0.0f, (float)P.blend,
+                           dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3], (float)poseBlend_, poseAlpha_, dsls,
+                           maskTexelOffset_[0], maskTexelOffset_[1], znear_, zfar_, (float)std::max(vpW_, 1), (float)std::max(vpH_, 1),
+                           P.sceneDepth ? 1.0f : 0.0f, canvasInvGamma_, (float)legacyTrans, (float)dbg, fogOn_ ? 1.0f : 0.0f,
+                           fogMaxH_, fogScale_, fogStart_, fogExt_, fogIn_.x, fogIn_.y, fogIn_.z, 0, 0, 0};
+    if (P.id >= commonKeyById_.size()) commonKeyById_.resize((size_t)P.id + 256);
+    CommonKey& ck = commonKeyById_[P.id];
+    const bool setCommon = noSkip || !ck.valid || std::memcmp(key, ck.v, sizeof key) != 0;
+    if (setCommon) { std::memcpy(ck.v, key, sizeof key); ck.valid = true; }
+    if (setCommon) {
+        Uniform1f(P.uTime, time_);
+        Uniform1i(P.uTwoSided, P.twoSided ? 1 : 0);
+        Uniform1i(P.uMasked, P.blend == 1 ? 1 : 0);
+        Uniform1f(P.uClip, P.clip);
+        Uniform1i(P.uLit, P.lit ? 1 : 0);
+        Uniform1i(uloc(P, "uBlend"), P.blend);
+        Uniform4f(uloc(P, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
+        Uniform1i(uloc(P, "uPoseBlend"), poseBlend_);
+        Uniform1f(uloc(P, "uPoseAlpha"), poseAlpha_);
+        Uniform1f(uloc(P, "uDSLS"), dsls);
+        Uniform2f(uloc(P, "uShadowMaskTexelOffset"), maskTexelOffset_[0], maskTexelOffset_[1]);
+        Uniform2f(uloc(P, "uNearFar"), znear_, zfar_);
+        Uniform2f(uloc(P, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
+        Uniform1i(uloc(P, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
+        Uniform1f(uloc(P, "uCanvasInvGamma"), canvasInvGamma_);
+        Uniform1i(uloc(P, "uLegacyTrans"), legacyTrans);
+        Uniform1i(uloc(P, "uDebug"), dbg);
+        Uniform1i(P.uFogOn, fogOn_ ? 1 : 0);
+        Uniform1f(P.uFogMaxH, fogMaxH_); Uniform1f(P.uFogScale, fogScale_);
+        Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
+        Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
+    }
     Uniform1i(uloc(P, "uVertexLM"), 0);
     Uniform4f(uloc(P, "uShadowDepth"), 0.0f, 0.0f, 0.0f, 0.0f);
-    Uniform4f(uloc(P, "uDynParam"), dynParam_[0], dynParam_[1], dynParam_[2], dynParam_[3]);
-    Uniform1i(uloc(P, "uPoseBlend"), poseBlend_);
-    Uniform1f(uloc(P, "uPoseAlpha"), poseAlpha_);
     Uniform1i(uloc(P, "uSkin"), skinMode_);
     if (skinMode_) {
         Uniform1i(uloc(P, "uSkinRow"), skinRow_);
@@ -2059,17 +2166,10 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         Uniform1i(uloc(P, "uBoneTex"), 18);
     }
     {   // shadow-mask inputs (neutral mask = 1 unless a mask is bound for this draw)
-        static const float dsls = std::getenv("WFC_DSLS") ? std::min(std::max((float)std::atof(std::getenv("WFC_DSLS")), 0.0f), 1.0f) : 0.0f;
-        Uniform1f(uloc(P, "uDSLS"), dsls);
         Uniform3f(uloc(P, "uDLAC"), 0.0f, 0.0f, 0.0f);   // set per environment in drawSubs
         ActiveTexture(GL_TEXTURE0 + 10);
         glBindTexture(GL_TEXTURE_2D, shadowMaskTexFor(dynamicMaskDraw_));
-        Uniform2f(uloc(P, "uShadowMaskTexelOffset"), maskTexelOffset_[0], maskTexelOffset_[1]);
     }
-    Uniform2f(uloc(P, "uNearFar"), znear_, zfar_);
-    Uniform2f(uloc(P, "uViewport"), (float)std::max(vpW_, 1), (float)std::max(vpH_, 1));
-    Uniform1i(uloc(P, "uHasSceneDepth"), P.sceneDepth ? 1 : 0);
-    Uniform1f(uloc(P, "uCanvasInvGamma"), canvasInvGamma_);
     // per-draw runtime parameters: Canvas tiles pass their own; otherwise the material's Matinee-driven values
     // (setMaterialParam on its MaterialInstanceActor); unset = authored
     const std::vector<std::pair<std::string, std::array<float, 4>>>* params = drawParams_;
@@ -2097,17 +2197,9 @@ void Pipeline::bindCommon(const Program& P, const core::Mat4& model) {
         if (kv.second.second >= 0) Uniform1i(kv.second.second, v ? 1 : 0);
         if (v && kv.second.first >= 0) Uniform4f(kv.second.first, (*v)[0], (*v)[1], (*v)[2], (*v)[3]);
     }
-    static const int legacyTrans = std::getenv("WFC_M05TRANS") ? 1 : 0;
-    Uniform1i(uloc(P, "uLegacyTrans"), legacyTrans);
     if (P.sceneDepth) { ensureSceneDepth(); ActiveTexture(GL_TEXTURE0 + 12); glBindTexture(GL_TEXTURE_2D, depthCopyTex_); }
     if (P.sceneColor) { ensureSceneColor(); ActiveTexture(GL_TEXTURE0 + 16); glBindTexture(GL_TEXTURE_2D, sceneCopyTex_); }
     VertexAttrib4f(5, fxColor_[0], fxColor_[1], fxColor_[2], fxColor_[3]);   // current value when unbound
-    static const int dbg = std::getenv("WFC_LIGHTINGONLY") ? 1 : std::getenv("WFC_ALBEDO") ? 2 : 0;
-    Uniform1i(uloc(P, "uDebug"), dbg);
-    Uniform1i(P.uFogOn, fogOn_ ? 1 : 0);
-    Uniform1f(P.uFogMaxH, fogMaxH_); Uniform1f(P.uFogScale, fogScale_);
-    Uniform1f(P.uFogStart, fogStart_); Uniform1f(P.uFogExt, fogExt_);
-    Uniform3f(P.uFogIn, fogIn_.x, fogIn_.y, fogIn_.z);
     for (const Program::Slot& s : P.slots) {
         ActiveTexture(GL_TEXTURE0 + s.unit);
         glBindTexture(s.cube ? GL_TEXTURE_CUBE_MAP : GL_TEXTURE_2D, s.tex);
@@ -2363,7 +2455,14 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
                 if (dlacOverride) { float v = (float)std::atof(dlacOverride); Uniform3f(uloc(P, "uDLAC"), v, v, v); }
                 else Uniform3f(uloc(P, "uDLAC"), env->dlac[0], env->dlac[1], env->dlac[2]);
             }
-            glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+            const bool queued = dynamicObject && skinMode_ != 0 && P.instProg >= 0 && !trans && P.distProg < 0 && !g.decal &&
+                                !frameFx_ && !reportFrame && s.vlmTex == 0 && s.lmTex[0] < 0 && dynamicMaskDraw_ &&
+                                fxColor_[0] == 1.0f && fxColor_[1] == 1.0f && fxColor_[2] == 1.0f && fxColor_[3] == 1.0f &&
+                                queueInstance(P, s.first, s.count, g.vao);
+            if (!queued) {
+                if (dynamicObject && skinMode_ != 0) ++gStats.instRejected;
+                glDrawElements(GL_TRIANGLES, (GLsizei)s.count, GL_UNSIGNED_INT, (void*)(size_t)(s.first * 4));
+            }
             ++gStats.draws;
             ++counts_.draws;
             if (meshIdx >= 0 && meshIdx == bspMesh_) ++counts_.bspDraws;
@@ -2485,6 +2584,51 @@ void Pipeline::warmupWorld(int id, int w, int h) {
     for (GpuMesh& gm : meshes_)
         for (Sub& sb : gm.subs) sb.envReady = false;
     const int draws = counts_.draws;
+    if (std::getenv("WFC_BATCHSTATS")) {   // diagnostics: how far static batching could merge the world's draws
+        int total = 0, trans = 0, movers = 0, vlm = 0, lm = 0, litEnv = 0, unlit = 0, decals = 0, noProg = 0;
+        std::set<std::tuple<int, int, int, int>> bucketTex;                 // program + lightmap page textures
+        std::set<std::string> bucketExact;                                 // + every per-draw constant
+        std::set<int> bucketProg;                                          // program only (lightmap pages in an array)
+        int runsTex = 0, runsProg = 0;                                     // consecutive same-bucket runs (draw order kept)
+        std::tuple<int, int, int, int> lastTex{-2, -2, -2, -2}; int lastProg = -2; GLint depthFunc = 0;
+        glGetIntegerv(GL_DEPTH_FUNC, &depthFunc);
+        for (size_t mi = 0; mi < meshes_.size(); ++mi) {
+            const GpuMesh& gm = meshes_[mi];
+            const bool worldish = gm.world || (long)mi == bspMesh_ || (long)mi == decalMesh_;
+            if (!worldish) continue;
+            for (const Sub& sb : gm.subs) {
+                ++total;
+                if (sb.prog < 0) { ++noProg; continue; }
+                const Program& Pg = progs_[(size_t)sb.prog];
+                if (gm.decal || (long)mi == decalMesh_) { ++decals; continue; }
+                if (Pg.blend >= 2) { ++trans; continue; }
+                if (!sb.actor.empty()) { ++movers; continue; }
+                if (sb.vlmTex) { ++vlm; }
+                else if (sb.lmTex[0] >= 0) ++lm;
+                else if (Pg.lit && !sb.noLights) ++litEnv;
+                else ++unlit;
+                bucketTex.insert({sb.prog, sb.lmTex[0], sb.lmTex[1], sb.lmTex[2]});
+                bucketProg.insert(sb.prog);
+                const std::tuple<int, int, int, int> tk{sb.prog, sb.lmTex[0], sb.lmTex[1], sb.lmTex[2]};
+                if (tk != lastTex) { ++runsTex; lastTex = tk; }
+                if (sb.prog != lastProg) { ++runsProg; lastProg = sb.prog; }
+                char buf[512];
+                std::snprintf(buf, sizeof buf, "%d|%d,%d,%d|%u|%.6g,%.6g,%.6g,%.6g|%.6g,%.6g,%.6g|%d|%s", sb.prog, sb.lmTex[0], sb.lmTex[1],
+                              sb.lmTex[2], sb.vlmTex, sb.lmCoord[0], sb.lmCoord[1], sb.lmCoord[2], sb.lmCoord[3], sb.lmScale[0][0],
+                              sb.lmScale[1][0], sb.lmScale[2][0], sb.noLights ? 1 : 0,
+                              (Pg.lit && sb.lmTex[0] < 0 && !sb.vlmTex) ? (std::to_string((long long)(sb.bmin.x * 10)) + "," +
+                                                                           std::to_string((long long)(sb.bmin.z * 10))).c_str() : "");
+                bucketExact.insert(buf);
+            }
+        }
+        LOG_INFO("wfc batch stats: %d world subs = %d translucent (sorted, kept), %d movers (kept), %d decals (kept), %d no program; "
+                 "mergeable %d (lightmapped %d, vertex-lightmapped %d, lit by a static light env %d, unlit %d); buckets: "
+                 "program only %zu, program + lightmap page %zu, every per-draw constant identical %zu",
+                 total, trans, movers, decals, noProg, lm + vlm + litEnv + unlit, lm, vlm, litEnv, unlit, bucketProg.size(), bucketTex.size(),
+                 bucketExact.size());
+        LOG_INFO("wfc batch stats: in draw order, consecutive runs: same program %d, same program + lightmap page %d (depth func 0x%x)",
+                 runsProg, runsTex, (unsigned)depthFunc);
+    }
     touchNewTextures();                                // anything the world draw created
     glFinish();
     viewProj_ = vp; camProj_ = cp; camView_ = cv; camPos_ = pos; znear_ = zn; zfar_ = zf;
@@ -2647,8 +2791,12 @@ int Pipeline::dynamicProgram(const Material* mat) {
 int Pipeline::dynamicProgramUncached(const Material* mat) {
     std::string mk = materialKey(mat);
     auto it = dynProgCache_.find(mk);
-    if (it == dynProgCache_.end())
-        it = dynProgCache_.emplace(mk, programFor(mat ? mat->wfcName : std::string(), mat, false)).first;
+    if (it == dynProgCache_.end()) {
+        instWanted_ = true;                            // dynamic (character / weapon) programs get the instanced variant
+        const int p = programFor(mat ? mat->wfcName : std::string(), mat, false);
+        instWanted_ = false;
+        it = dynProgCache_.emplace(mk, p).first;
+    }
     return it->second;
 }
 
@@ -3066,6 +3214,151 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
     skinDraw_ = nullptr;
     skinMode_ = 0;
     return true;
+}
+
+bool Pipeline::queueInstance(const Program& P, uint32_t first, uint32_t count, GLuint vao) {
+    if (instCursor_ >= kInstRows || inInstFlush_) return false;
+    const Program& I = progs_[(size_t)P.instProg];
+    float row[kInstW * 4] = {};
+    auto get = [&](GLint loc, float* dst, unsigned words, bool isInt) {
+        if (loc < 0) return true;                                  // not used by this program: stays 0
+        uint32_t tmp[24];
+        const int g = glx::uniformCacheGet(P.id, loc, tmp, words);
+        if (g < 0) return false;
+        if (g == 0) { for (unsigned k = 0; k < words; ++k) dst[k] = 0.0f; return true; }   // GL default
+        for (unsigned k = 0; k < words; ++k) {
+            if (isInt) { int32_t v; std::memcpy(&v, &tmp[k], 4); dst[k] = (float)v; }
+            else std::memcpy(&dst[k], &tmp[k], 4);
+        }
+        return true;
+    };
+    float amb[18], lpos[12], ldir[12], lcol[12], lspot[12], dlac[3], dyn[4], nl[1], sk[4];
+    if (!get(P.uModel, &row[0], 16, false) || !get(P.uAmb, amb, 18, false) || !get(P.uNumLights, nl, 1, true) ||
+        !get(P.uLPos, lpos, 12, false) || !get(P.uLDir, ldir, 12, false) || !get(P.uLCol, lcol, 12, false) ||
+        !get(P.uLSpot, lspot, 12, false) || !get(uloc(P, "uDLAC"), dlac, 3, false) || !get(uloc(P, "uDynParam"), dyn, 4, false) ||
+        !get(uloc(P, "uSkin"), &sk[0], 1, true) || !get(uloc(P, "uSkinRow"), &sk[1], 1, true) ||
+        !get(uloc(P, "uSkinAlpha"), &sk[2], 1, false) || !get(uloc(P, "uSkinBones"), &sk[3], 1, true))
+        return false;
+    std::memcpy(&row[4 * 4], sk, sizeof sk);
+    for (int i = 0; i < 6; ++i) { row[(5 + i) * 4] = amb[i * 3]; row[(5 + i) * 4 + 1] = amb[i * 3 + 1]; row[(5 + i) * 4 + 2] = amb[i * 3 + 2]; }
+    row[11 * 4] = nl[0]; row[11 * 4 + 1] = dlac[0]; row[11 * 4 + 2] = dlac[1]; row[11 * 4 + 3] = dlac[2];
+    std::memcpy(&row[12 * 4], lpos, sizeof lpos); std::memcpy(&row[15 * 4], ldir, sizeof ldir);
+    std::memcpy(&row[18 * 4], lcol, sizeof lcol); std::memcpy(&row[21 * 4], lspot, sizeof lspot);
+    std::memcpy(&row[24 * 4], dyn, sizeof dyn);
+    int k = 0;
+    for (const auto& kv : P.rtLoc) {                               // std::map: sorted by name, as the shader's layout
+        if (k >= I.instRtCount) return false;
+        float set1[1];
+        if (!get(kv.second.first, &row[(25 + 2 * k) * 4], 4, false) || !get(kv.second.second, set1, 1, true)) return false;
+        row[(26 + 2 * k) * 4] = set1[0];
+        ++k;
+    }
+    if (k != I.instRtCount) return false;
+    const auto key = std::make_tuple(P.instProg, vao, first, count);
+    auto gi = instGroupIndex_.find(key);
+    if (gi == instGroupIndex_.end()) {
+        InstGroup gr;
+        gr.instProg = P.instProg; gr.vao = vao; gr.first = first; gr.count = count;
+        float vp[16], cp[3];
+        if (!get(P.uViewProj, vp, 16, false) || !get(P.uCamPos, cp, 3, false)) return false;
+        std::memcpy(gr.viewProj, vp, sizeof vp); std::memcpy(gr.camPos, cp, sizeof cp);
+        glGetIntegerv(GL_DEPTH_FUNC, &gr.depthFunc);
+        gi = instGroupIndex_.emplace(key, instGroups_.size()).first;
+        instGroups_.push_back(std::move(gr));
+    }
+    InstGroup& gr = instGroups_[gi->second];
+    ++gStats.instQueued;
+    gr.rows.insert(gr.rows.end(), row, row + kInstW * 4);
+    ++gr.n;
+    ++instCursor_;
+    return true;
+}
+
+void Pipeline::flushInstances() {
+    if (instGroups_.empty() || inInstFlush_) return;
+    inInstFlush_ = true;
+    if (!instTex_) {
+        glGenTextures(1, &instTex_);
+        glBindTexture(GL_TEXTURE_2D, instTex_);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, kInstW, kInstRows, 0, GL_RGBA, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+    // the caller's state (a flush can come from inside any pass)
+    GLint fb = 0, prog = 0, vao = 0, vp[4], active = 0, df = 0, bsrc = 0, bdst = 0, bsa = 0, bda = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &fb); glGetIntegerv(GL_CURRENT_PROGRAM, &prog);
+    glGetIntegerv(0x85B5 /*GL_VERTEX_ARRAY_BINDING*/, &vao); glGetIntegerv(GL_VIEWPORT, vp);
+    glGetIntegerv(0x84E0 /*GL_ACTIVE_TEXTURE*/, &active); glGetIntegerv(GL_DEPTH_FUNC, &df);
+    glGetIntegerv(0x80C9 /*GL_BLEND_SRC_RGB*/, &bsrc); glGetIntegerv(0x80C8 /*GL_BLEND_DST_RGB*/, &bdst);
+    glGetIntegerv(0x80CB /*GL_BLEND_SRC_ALPHA*/, &bsa); glGetIntegerv(0x80CA /*GL_BLEND_DST_ALPHA*/, &bda);
+    GLboolean dmask = GL_TRUE, cmask[4] = {GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE};
+    glGetBooleanv(GL_DEPTH_WRITEMASK, &dmask); glGetBooleanv(GL_COLOR_WRITEMASK, cmask);
+    const GLboolean blendOn = glIsEnabled(GL_BLEND), depthOn = glIsEnabled(GL_DEPTH_TEST), cullOn = glIsEnabled(GL_CULL_FACE),
+                    stencilOn = glIsEnabled(GL_STENCIL_TEST), polyOn = glIsEnabled(GL_POLYGON_OFFSET_FILL);
+    GLint tex2d[20], texCube[20];
+    for (int u = 0; u < 20; ++u) {
+        ActiveTexture(GL_TEXTURE0 + u);
+        glGetIntegerv(GL_TEXTURE_BINDING_2D, &tex2d[u]); glGetIntegerv(0x8514 /*GL_TEXTURE_BINDING_CUBE_MAP*/, &texCube[u]);
+    }
+    // rows of this flush, uploaded once
+    int total = 0;
+    for (const InstGroup& gr : instGroups_) total += gr.n;
+    const int base0 = instCursor_ - total;
+    {
+        std::vector<float> all;
+        all.reserve((size_t)total * kInstW * 4);
+        for (const InstGroup& gr : instGroups_) all.insert(all.end(), gr.rows.begin(), gr.rows.end());
+        glBindTexture(GL_TEXTURE_2D, instTex_);
+        glTexSubImage2D(GL_TEXTURE_2D, 0, 0, base0, kInstW, total, GL_RGBA, GL_FLOAT, all.data());
+    }
+    BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+    glViewport(0, 0, vpW_, vpH_);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDisable(GL_STENCIL_TEST); glDisable(GL_POLYGON_OFFSET_FILL); glEnable(GL_DEPTH_TEST);
+    const bool keepMask = dynamicMaskDraw_, keepDyn = inDynamicDraw_;
+    dynamicMaskDraw_ = true; inDynamicDraw_ = false;
+    int skinModeKeep = skinMode_; skinMode_ = 0;               // per instance (row); bindCommon must not set uSkin
+    int base = base0;
+    for (const InstGroup& gr : instGroups_) {
+        const Program& I = progs_[(size_t)gr.instProg];
+        BindVertexArray(gr.vao);
+        bindCommon(I, core::Mat4::identity());
+        UniformMatrix4fv(I.uViewProj, 1, GL_FALSE, gr.viewProj);
+        Uniform3f(I.uCamPos, gr.camPos[0], gr.camPos[1], gr.camPos[2]);
+        Uniform1i(uloc(I, "uInstBase"), base);
+        Uniform4f(I.uLMCoord, 1, 1, 0, 0);                     // drawSubs' lit dynamic value
+        Uniform1i(uloc(I, "uDecalClip"), 0);
+        ActiveTexture(GL_TEXTURE0 + 19); glBindTexture(GL_TEXTURE_2D, instTex_);
+        ActiveTexture(GL_TEXTURE0 + 18); glBindTexture(GL_TEXTURE_2D, skinTex_);
+        static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
+        if (I.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
+        glDisable(GL_BLEND); glDepthMask(GL_TRUE);              // opaque / masked only
+        glDepthFunc((GLenum)gr.depthFunc);
+        DrawElementsInstanced(GL_TRIANGLES, (GLsizei)gr.count, GL_UNSIGNED_INT, (void*)(size_t)(gr.first * 4), gr.n);
+        ++gStats.instDraws;
+        base += gr.n;
+    }
+    skinMode_ = skinModeKeep;
+    dynamicMaskDraw_ = keepMask; inDynamicDraw_ = keepDyn;
+    instGroups_.clear(); instGroupIndex_.clear();
+    // restore
+    for (int u = 0; u < 20; ++u) {
+        ActiveTexture(GL_TEXTURE0 + u);
+        glBindTexture(GL_TEXTURE_2D, (GLuint)tex2d[u]); glBindTexture(GL_TEXTURE_CUBE_MAP, (GLuint)texCube[u]);
+    }
+    ActiveTexture((GLenum)active);
+    BindFramebuffer(GL_FRAMEBUFFER, (GLuint)fb);
+    glViewport(vp[0], vp[1], vp[2], vp[3]);
+    UseProgram((GLuint)prog);
+    BindVertexArray((GLuint)vao);
+    glDepthFunc((GLenum)df); glDepthMask(dmask); glColorMask(cmask[0], cmask[1], cmask[2], cmask[3]);
+    BlendFuncSeparate((GLenum)bsrc, (GLenum)bdst, (GLenum)bsa, (GLenum)bda);
+    if (blendOn) glEnable(GL_BLEND); else glDisable(GL_BLEND);
+    if (depthOn) glEnable(GL_DEPTH_TEST); else glDisable(GL_DEPTH_TEST);
+    if (cullOn) glEnable(GL_CULL_FACE); else glDisable(GL_CULL_FACE);
+    if (stencilOn) glEnable(GL_STENCIL_TEST); else glDisable(GL_STENCIL_TEST);
+    if (polyOn) glEnable(GL_POLYGON_OFFSET_FILL); else glDisable(GL_POLYGON_OFFSET_FILL);
+    inInstFlush_ = false;
 }
 
 void Pipeline::evictSkin(bool all) {
@@ -3679,6 +3972,9 @@ void Pipeline::ensureTargets(int w, int h) {
 }
 
 void Pipeline::beginFrame(const Camera& cam, int w, int h) {
+    flushInstances();
+    instCursor_ = 0;
+    gInstPipeline = this;
     touchNewTextures();                                // textures created since the last frame (loads, prewarms)
     ++frameNo_;
     {   // WFC_RENDERSTATS: frame intervals over WFC_HITCH_MS (default 20) are logged by frame number, next to the
@@ -3822,6 +4118,9 @@ void Pipeline::endFrame() {
             }
             LOG_INFO("wfc: dynamic draw split per frame: light env %.2f ms, sub setup %.2f ms, drawSubs %.2f ms (shadow %.2f)",
                      gStats.dynEnvMs / 120.0, gStats.dynSubsMs / 120.0, gStats.dynDrawMs / 120.0, gStats.dynShadowMs / 120.0);
+            if (gStats.instQueued || gStats.instRejected)
+                LOG_INFO("wfc: instanced character subs per frame: %.1f queued in %.1f instanced draws, %.1f drawn singly",
+                         gStats.instQueued / 120.0, gStats.instDraws / 120.0, gStats.instRejected / 120.0);
             if (gStats.skinCalls)
                 LOG_INFO("wfc: GPU-skinned draws: %.1f calls, %.2f ms per frame (incl. the dynamic draw), palette uploads %.1f "
                          "(exact bounds + upload %.2f ms)", gStats.skinCalls / 120.0, gStats.skinMs / 120.0,

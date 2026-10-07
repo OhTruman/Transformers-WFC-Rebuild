@@ -171,6 +171,26 @@ def system_runtime(name, s):
                         mod['partial'].append(prop)
                 if m['module'] in ('PMI_LocationEmitter', 'PMI_LocationEmitterDirect') and L.get('location_emitter'):
                     mod['location_emitter'] = L['location_emitter']
+                if m.get('props'):   # non-curve properties of decoded WFC / UE3 modules (AssetTools: Collision, Switchable...)
+                    mod['props'] = m['props']
+                mp = m.get('module_properties (authored, defaults filled)')
+                if mp:   # modules without a native ModuleId (AssetTools pstream: object index per slot)
+                    props = {}
+                    for k, v in mp.items():
+                        if isinstance(v, dict) and 'LookupTable' in v:
+                            lut, ch, ne = v['LookupTable'], max(1, int(v.get('LookupTableChunkSize') or 1)), int(v.get('LookupTableNumElements') or 1)
+                            # UE3 FRawDistribution: a bare constant (len == chunk), else 4 header floats (min, max,
+                            # time scale, bias) then the entries; single-element tables are constants [HIGH]
+                            vals = lut[:ch] if len(lut) == ch else lut[4:4 + ch]
+                            if len(vals) < ch: continue
+                            mod['dists'][k] = {'kind': ('vector constant' if ch == 3 else 'float constant'), 'values': vals,
+                                               'confidence': 'CONFIRMED' if ne == 1 else 'PARTIAL'}
+                            if ne != 1: mod['partial'].append(k + ' (lookup curve: first entry)')
+                        elif isinstance(v, str):
+                            props[k] = v.split(' (')[0]
+                        elif isinstance(v, (int, float, bool)):
+                            props[k] = v
+                    if props: mod['props'] = props
                 lod['modules'].append(mod)
             lod['flag_analysis'] = flag_analysis(lod)
             # RE MILESTONE04 pickup/objective presentation §2 (HIGH): flagA == membership in the executed module

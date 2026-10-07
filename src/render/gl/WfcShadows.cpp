@@ -41,6 +41,13 @@ namespace wfc {
 
 using namespace glx;
 
+// pending instanced character draws are flushed before any draw / blit here (WfcPipeline.cpp)
+extern Pipeline* gInstPipeline;
+static inline void wfcInstFlushHook() { if (gInstPipeline) gInstPipeline->flushInstances(); }
+#define glDrawElements(...) (wfcInstFlushHook(), ::glDrawElements(__VA_ARGS__))
+#define glDrawArrays(...) (wfcInstFlushHook(), ::glDrawArrays(__VA_ARGS__))
+#define BlitFramebuffer(...) (wfcInstFlushHook(), glx::BlitFramebuffer(__VA_ARGS__))
+
 GLuint compileShader(GLenum type, const std::string& src, const std::string& tag);
 GLuint linkProgram(GLuint vs, GLuint fs, const std::string& tag);
 

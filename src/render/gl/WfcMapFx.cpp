@@ -334,6 +334,28 @@ bool Pipeline::loadMapFx(const std::string& path) {
                         bool vec = dv.second["kind"].asString().rfind("vector", 0) == 0;
                         mod.dists[dv.first] = parseDist(dv.second, vec ? 3 : 1);
                     }
+                    // WFC ParticleModuleSwitchableColorScaleOverLife (AssetTools: ColorScaleOverLifeA / B, AlphaScale-
+                    // OverLifeA / B, ChannelSwitch; PMC_A selects A): ColorScaleOverLife on the selected channel [HIGH:
+                    // what flips the switch at runtime is native, not traced]
+                    if (mod.name == "PMI_SwitchableColorScaleOverLife") {
+                        const std::string ch = ms[m]["props"]["ChannelSwitch"].asString();
+                        const std::string sfx = ch == "PMC_B" ? "B" : "A";
+                        std::map<std::string, FxDist> nd;
+                        auto c = mod.dists.find("ColorScaleOverLife" + sfx), a = mod.dists.find("AlphaScaleOverLife" + sfx);
+                        if (c != mod.dists.end()) nd["ColorScaleOverLife"] = c->second;
+                        if (a != mod.dists.end()) nd["AlphaScaleOverLife"] = a->second;
+                        mod.dists = nd;
+                        mod.name = "PMI_ColorScaleOverLife";
+                    }
+                    // ParticleModuleCollision (AssetTools): MaxCollisions 0 with the default EPCC_Kill completion kills
+                    // the particle on its first hit (stock UE3 UsedMaxCollisions, HIGH). Other settings: not reproduced.
+                    if (mod.name == "PMI_Collision") {
+                        const std::string opt = ms[m]["props"]["CollisionCompletionOption"].asString();
+                        float mc = 0.0f;
+                        auto it = mod.dists.find("MaxCollisions");
+                        if (it != mod.dists.end()) { uint32_t rng = 1; it->second.eval(0.0f, rng, &mc); }
+                        mod.killOnHit = mc < 0.5f && (opt.empty() || opt == "EPCC_Kill");
+                    }
                     if (lod.typeData == 2 && mod.name == "PMI_LocationEmitter" && !mod.sourceEmitter.empty())
                         lod.particleTrail = true;
                     lod.modules.push_back(std::move(mod));
@@ -549,6 +571,8 @@ void Pipeline::tickMapFx(float dt) {
                 }
             }
             // update / kill
+            bool killOnHit = false;                           // ParticleModuleCollision (world-space particles)
+            if (!L.localSpace) for (const FxModule& m : L.modules) killOnHit |= m.flagA != 0 && m.killOnHit;
             for (size_t p = 0; p < rt.parts.size();) {
                 FxParticle& q = rt.parts[p];
                 q.relTime += dt * q.oneOverLife;
@@ -680,6 +704,11 @@ void Pipeline::tickMapFx(float dt) {
                             }
                         }
                     }
+                }
+                if (killOnHit && vis_) {   // ParticleModuleCollision (EPCC_Kill, MaxCollisions 0): the first static hit
+                    float np[3];
+                    for (int c = 0; c < 3; ++c) np[c] = q.pos[c] + q.vel[c] * dt;
+                    if (vis_(ueToGltf(q.pos), ueToGltf(np))) { rt.parts[p] = rt.parts.back(); rt.parts.pop_back(); continue; }
                 }
                 for (int c = 0; c < 3; ++c) q.pos[c] += q.vel[c] * dt;
                 q.rot += q.rotRate * dt;

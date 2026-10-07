@@ -9,6 +9,7 @@
 //  * UE3 per-vertex height fog, linear-light HDR target, DisplayGamma 2.2 resolve.
 #pragma once
 #include <array>
+#include <tuple>
 #include <chrono>
 #include <map>
 #include <memory>
@@ -128,6 +129,9 @@ struct Program {
     int distProg = -1;            // distortion-accumulate variant (material Distortion connected)
     int shadowProg = -1;          // shadow-depth variant (opaque/masked: depth, masked clip)
     int screenProg = -1;          // HUD post-process chain variant (EmissiveColor x ScreenAlpha, full screen)
+    int instProg = -1;            // instanced character variant (per-instance uniforms from the instance texture)
+
+    int instRtCount = 0;          // runtime params laid out in the instance row (sorted by name)
     float clip = 0.3333f;
 };
 
@@ -364,6 +368,28 @@ private:
     float skinAlpha_ = 1.0f;
     void evictSkin(bool all);
     void buildSkinBoundsSets(SkinModel& sm, const MeshData& bind, const std::vector<uint16_t>& joints, const std::vector<float>& weights);
+    // Instanced character draws (300+ fps lobbies): an opaque GPU-skinned character sub is queued with the exact
+    // per-draw uniform values its own draw would have used (read back from the GL uniform cache), and drawn with the
+    // other instances of the same program / mesh range in one instanced draw. Any other draw / blit / scene copy
+    // flushes the queue first (flushInstancesHook), so nothing can observe a pending character. WFC_NOINSTANCING=1.
+    struct InstGroup { int instProg; GLuint vao; uint32_t first, count; float viewProj[16]; float camPos[3]; GLint depthFunc;
+                       std::vector<float> rows; int n = 0; };
+    std::vector<InstGroup> instGroups_;
+    std::map<std::tuple<int, GLuint, uint32_t, uint32_t>, size_t> instGroupIndex_;
+    GLuint instTex_ = 0;
+    int instCursor_ = 0;
+    bool inInstFlush_ = false, instWanted_ = false, instBuild_ = false;
+    static constexpr int kInstW = 64, kInstRows = 4096;
+    bool queueInstance(const Program& P, uint32_t first, uint32_t count, GLuint vao);
+public:
+    void flushInstances();
+private:
+    // bindCommon: per GL PROGRAM OBJECT (several Program entries can share one object - identical source, different
+    // clip / blend uniforms), the inputs of the uniforms only bindCommon writes as last set on it; the block is skipped
+    // while they are unchanged (GL keeps uniforms per program object: the skip cannot change a draw). Invalidated when
+    // a program is linked (recycled names start from defaults).
+    struct CommonKey { float v[34]; bool valid = false; };
+    std::vector<CommonKey> commonKeyById_;
     int poseBlend_ = 0;                                   // vertex-shader pose blend for the current draw (attribs 7 / 8)
     float poseAlpha_ = 1.0f;
     int hudEffect_ = -1;
@@ -595,6 +621,7 @@ public:
         int selection = 0;                // 0 Random, 1 Sequential, 2 particle 0
         bool inheritVelocity = false, inheritRotation = false;
         float inheritVelocityScale = 1.0f, inheritRotationScale = 1.0f;   // CDO 1 / 1
+        bool killOnHit = false;           // PMI_Collision: MaxCollisions 0 + EPCC_Kill (AssetTools authored.db)
     };
     struct FxBurst { int count, countLow; float time; };
     struct FxLod {

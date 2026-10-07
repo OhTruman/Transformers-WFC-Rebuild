@@ -136,6 +136,7 @@ typedef void(APIENTRY* GLDEBUGPROCWFC)(GLenum source, GLenum type, GLuint id, GL
     X(void, DebugMessageCallback, (GLDEBUGPROCWFC, const void*)) \
     X(void, DebugMessageControl, (GLenum, GLenum, GLenum, GLsizei, const GLuint*, GLboolean)) \
     X(GLenum, GetGraphicsResetStatus, (void)) \
+    X(void, DrawElementsInstanced, (GLenum, GLsizei, GLenum, const void*, GLsizei)) \
     X(void, GenQueries, (GLsizei, GLuint*)) \
     X(void, DeleteQueries, (GLsizei, const GLuint*)) \
     X(void, BeginQuery, (GLenum, GLuint)) \
@@ -154,6 +155,10 @@ bool load();
 // components may bind programs through their own loaders); counters since the last call.
 void uniformCacheForgetCurrent();
 void uniformCacheStats(unsigned long long& sent, unsigned long long& skipped);
+// The value program `prog` holds at `loc` as last set through the cache: 1 = copied (`words` 32-bit words),
+// 0 = never set since link (GL default 0), -1 = unknown (cache off / size mismatch).
+int uniformCacheGet(GLuint prog, GLint loc, void* out, unsigned words);
+bool uniformCacheActive();
 
 // M43 stability diagnostics (always on): driver debug output (errors / undefined behaviour / high severity, rate
 // limited, WFC_GLDEBUG=all for every message, WFC_GLDEBUG=sync for synchronous call stacks) and the context reset

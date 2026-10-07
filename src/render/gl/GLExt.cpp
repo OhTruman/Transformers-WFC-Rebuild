@@ -257,6 +257,16 @@ void installUniformCache() {
 }  // namespace
 
 void uniformCacheForgetCurrent() { gUCurKnown = false; }
+bool uniformCacheActive() { return UseProgram == cUseProgram; }
+int uniformCacheGet(GLuint prog, GLint loc, void* out, unsigned words) {
+    if (!uniformCacheActive() || loc < 0) return -1;
+    if (prog >= gUCache.size() || (size_t)loc >= gUCache[prog].size()) return 0;
+    const UEntry& e = gUCache[prog][(size_t)loc];
+    if (e.n == 0) return 0;
+    if (e.n != words) return -1;
+    std::memcpy(out, e.bits, words * 4);
+    return 1;
+}
 void uniformCacheStats(unsigned long long& sent, unsigned long long& skipped) { sent = gUSent; skipped = gUSkipped; gUSent = gUSkipped = 0; }
 
 bool load() {
