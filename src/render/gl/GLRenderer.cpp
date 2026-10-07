@@ -144,9 +144,13 @@ public:
             if (reads != seen) {
                 seen = reads;
                 static int logged = 0;
-                if (glx::lastGpuFrameMs() > 50.0 && wfc_.active() && logged++ < 40)
-                    LOG_WARN("GPU frame spike %.1f ms (cpu %.1f ms) at frame %d: %s", glx::lastGpuFrameMs(),
-                             glx::lastGpuFrameCpuMs(), wfc_.frameNumber() - 2, wfc_.frameRecordText(wfc_.frameNumber() - 2).c_str());
+                static const double thr = std::getenv("WFC_GPUSPIKE_MS") ? std::atof(std::getenv("WFC_GPUSPIKE_MS")) : 50.0;
+                if (glx::lastGpuFrameMs() > thr && wfc_.active() && logged++ < 40)
+                    LOG_WARN("GPU frame spike %.1f ms (cpu %.1f ms) at frame %d: passes world %.1f, characters+caller %.1f, "
+                             "map FX %.1f, translucency %.1f, post %.1f ms; %s", glx::lastGpuFrameMs(), glx::lastGpuFrameCpuMs(),
+                             wfc_.frameNumber() - 2, glx::lastGpuPassMs(glx::kPassWorld), glx::lastGpuPassMs(glx::kPassCaller),
+                             glx::lastGpuPassMs(glx::kPassMapFx), glx::lastGpuPassMs(glx::kPassTranslucent),
+                             glx::lastGpuPassMs(glx::kPassPost), wfc_.frameRecordText(wfc_.frameNumber() - 2).c_str());
             }
         }
         pacingSample(camIn);
@@ -234,10 +238,13 @@ public:
 
     void endFrame() override {
         if (glx::GetGraphicsResetStatus) glx::pollResetStatus();   // M43: a lost context is logged (once)
+        glx::gpuMark(glx::kPassWorld);       // no dynamic draw this frame: the world ends here
+        glx::gpuMark(glx::kPassCaller);
         watchdog::phase("endFrame: map presentation");
         if (wfc_.active()) wfc_.drawMapPresentation();
         watchdog::phase("endFrame: post / composite");
         if (wfc_.active()) wfc_.endFrame();
+        glx::gpuMark(glx::kPassPost);
         glx::gpuTimerEnd();
         if (!slotWaited_) { watchdog::phase("frame limiter"); limiter_.wait(); }   // the loop did not call waitFrameSlot
         slotWaited_ = false;
@@ -1406,6 +1413,7 @@ public:
 
     void drawDynamicMesh(const MeshData& m, const core::Mat4& model, const core::Vec3& color) override {
         watchdog::phase("drawDynamicMesh");
+        glx::gpuMark(glx::kPassWorld);       // first character / dynamic draw: the world before it
         if (m.empty()) return;
         if (wfc_.active()) { wfc_.drawDynamic(m, model); glLoadMatrixf(view_.m); return; }
         drawMeshArrays(m, model, color);

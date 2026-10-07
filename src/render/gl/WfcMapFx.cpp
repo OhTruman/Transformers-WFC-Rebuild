@@ -1805,7 +1805,9 @@ void Pipeline::drawMapPresentation() {
         }
     }
     statFxSprites_ += sprites; statFxMeshes_ += meshes;
+    glx::gpuMark(glx::kPassMapFx);
     flushTranslucency();                               // all opaque drawn: the sorted translucency pass
+    glx::gpuMark(glx::kPassTranslucent);
     statFxMs_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
 }
 
