@@ -248,7 +248,7 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
     std::string streakEarned;
     V.currentKillStreak = 0;                                      // AddDeaths -> KillStreakEnded
     // TnMultiplayerGame.Killed: TnTombstone at the victim (team set) - a spawn modifier.
-    tombstones_.push_back({locs_[(size_t)victim], V.team});
+    tombstones_.push_back({locs_[(size_t)victim], V.team, matchTime_, ++tombstoneSerial_});
     const bool killedSelf = killer == victim;
     // ScoreKills(TDM|DM).ScoreKill: not for DmgType_Suicided; needs a killer; AddScore(self ? 0 : 1, self ? 0 : TeamScoreAmount).
     // ShouldScoreKill: the original never scores an AI victim; botVictimsScore (PC ADAPTATION) lets bots score as players.
@@ -577,6 +577,8 @@ int Match::findPlayerStart(int p) {
 // each faction scores every cluster (TDM is FactionNeutral: all clusters) and switches when TopScore - CurrentScore
 // >= EarlyCutoffScoreDifference 5 or its Uptime >= ActiveClusterTime 10 s.
 void Match::updateClusters(float dt) {
+    // TnTombstone LifeSpan 8 s: expired tombstones stop modifying spawns (and their markers go).
+    tombstones_.erase(std::remove_if(tombstones_.begin(), tombstones_.end(), [this](const Tombstone& t) { return matchTime_ - t.time >= kTombstoneLifeSpan; }), tombstones_.end());
     clusterClock_ += dt;
     uptime_[0] += dt; uptime_[1] += dt;
     sinceUpdate_ += dt;

@@ -816,10 +816,12 @@ public:
             std::vector<std::pair<std::string, std::array<float, 4>>> params;   // "Neutral", "Flashing", "CaptureProgress"
             std::string action;                         // Attack / Capture / Defend / Defuse / Escort / Kill / Plant / Return / Idle [PROV]
             float pulseT = -1.0f;
-            bool removing = false;                      // gone this step: FadeOutTime runs from removedT
+            bool removing = false;                      // (no generic removal fade in the original, RE: always false; Tombstone uses lifeSpan)
             float removedT = 0.0f;
+            float lifeSpan = -1.0f;                     // Tombstone: seconds left (FadeOutTime via LifeSpan); -1 none
             int relation = -1;                          // 0 friendly, 1 enemy, 2 neutral
             int player = -1;                            // pawn markers (the match player)
+            int owner = -1;                             // draw owner (the pawn's match player): TransformerHealthBar / EnemyMarkerHysterisis
         };
         std::vector<Marker> markers;
         struct DamageTaken { float yaw = 0.0f; float amount = 0.0f; int instigator = -1; core::Vec3 from{0, 0, 0}; };   // yaw relative to the view

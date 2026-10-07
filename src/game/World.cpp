@@ -2274,6 +2274,7 @@ void World::fillPresented() {
             PresentedFrame::Marker m;
             m.key = "pawn:" + std::to_string(t.player); m.type = "TnObjectiveMarkerTypeTransformerVersus";
             m.setup = t.ally ? "AllyMarkerSetup" : "TransformerEnemyMarkerSetup"; m.relation = t.ally ? 0 : 1; m.player = t.player;
+            m.owner = 100 + t.player;   // the draw owner World::draw passes to IRenderer::setDrawOwner for participants
             m.base = t.pos;
             if (const Character* c = participantPawn(t.player)) {
                 m.base = c->actorLocation();
@@ -2358,17 +2359,29 @@ void World::fillPresented() {
             m.relation = neutral == 1.0f ? 0 : 1;                              // label colour friendly iff Neutral == 1
             p.markers.push_back(m);
         }
-        // ObjectiveMarkers[16] at the original counts; extended matches list every marker (PC EXTENSION: no tag silently missing).
-        if (!match_.settings().extendedSlots && p.markers.size() > 16) p.markers.resize(16);
+        // ObjectiveMarkers[16] caps only the replicated objective markers (flag / bomb / nodes / plant points / KOTH / capture point);
+        // pawn tags and tombstones are client-local (LocalObjectiveMarkers, unbounded) [CONF RE 806f8cd].
+        {
+            int objectiveCount = 0;
+            std::vector<PresentedFrame::Marker> kept;
+            kept.reserve(p.markers.size());
+            for (PresentedFrame::Marker& mk : p.markers) {
+                const bool local = mk.type == "TnObjectiveMarkerTypeTransformerVersus";
+                if (!local && ++objectiveCount > 16) continue;
+                kept.push_back(std::move(mk));
+            }
+            p.markers.swap(kept);
+        }
+        // Tombstones: every viewer sees every one (ShouldDisplayMarker true) until LifeSpan 8 s ends; the drawer fades the last 3 s.
+        for (const auto& tb : match_.tombstones()) {
+            PresentedFrame::Marker mk;
+            mk.key = "tomb:" + std::to_string(tb.serial); mk.type = "TnObjectiveMarkerTypeTombstone"; mk.setup = "MarkerSetup";
+            mk.base = tb.pos; mk.relation = (match_.settings().teamGame && tb.team == myTeam) ? 0 : 1;
+            mk.lifeSpan = std::max(0.0f, Match::kTombstoneLifeSpan - (match_.matchTime() - tb.time));
+            p.markers.push_back(mk);
+        }
     }
-    // Removal fade: a marker that disappeared is kept with removing = true for 1 s (removedT counts up).
-    for (PresentedFrame::Marker& old : prevMarkers_) {
-        bool still = false;
-        for (const PresentedFrame::Marker& m : p.markers) if (m.key == old.key) { still = true; break; }
-        if (still) continue;
-        if (!old.removing) { old.removing = true; old.removedT = 0.0f; } else old.removedT += 1.0f / 60.0f;
-        if (old.removedT < 1.0f) p.markers.push_back(old);
-    }
+    // No generic removal fade (RE: removal is explicit by the owner; only Tombstone fades, through its lifeSpan).
     prevMarkers_ = p.markers;
     p.damageTaken.insert(p.damageTaken.end(), pendingDamageTaken_.begin(), pendingDamageTaken_.end()); pendingDamageTaken_.clear();
     p.damageCaused.insert(p.damageCaused.end(), pendingDamageCaused_.begin(), pendingDamageCaused_.end()); pendingDamageCaused_.clear();
