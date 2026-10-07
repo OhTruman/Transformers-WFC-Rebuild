@@ -246,6 +246,7 @@ struct Sample {
     std::vector<int16_t> pcm;
     int srcRate = 0;
     double loopStart = 0.0, loopEnd = -1.0;   // output frames; loopEnd exclusive, < 0: the sample end
+    bool releasing = false;                   // released while a block was mixing: freed at its end, already gone for callers
 };
 
 struct Voice {
@@ -344,6 +345,19 @@ public:
     static constexpr int kMaxVoices = 96;
     static constexpr int kMaxLogical = 1024;                  // < 4096 (handle index bits)
     std::vector<int> realScratch_;                            // mixBlock: the audible voices this block
+    struct MixJob {                                           // mixBlock: a heard voice's snapshot for the unlocked mix
+        int idx = 0, gen = 0;
+        const int16_t* pcm = nullptr; size_t frames = 0;
+        double lstart = 0.0, lend = 0.0, pos = 0.0, rate = 1.0;
+        float gL = 0.0f, gR = 0.0f;
+        bool loop = false, positional = false, wet = false, ended = false;
+    };
+    std::vector<MixJob> jobs_;
+    bool mixing_ = false;                                     // a block is being mixed outside mx_ (PCM releases wait)
+    std::vector<Sound> releaseLater_;
+    std::vector<std::vector<int16_t>> deadPcm_;               // released PCM waiting to be freed outside mx_
+    bool envPending_ = false, compPending_ = false;
+    Environment envNext_; float envFade_ = 0.0f; float compNext_[4] = {0, 0, 0, 0};
     // PC ADAPTATION (32 v 32): the local player's own sounds are never the victim, and a new one takes the least important
     // other channel even when every other channel outranks it - with dozens of bots firing, the human still hears their own
     // weapon / steps / foley. At <= 16 participants the 96 channels practically never fill, so this does not apply.
@@ -375,7 +389,7 @@ public:
         return &voices_[(size_t)best];
     }
     Voice* start(Sound s, int& index, int priority = 128, bool startsVirtual = false, bool protect = false) {
-        if (!ok_ || s < 0 || (size_t)s >= sounds_.size() || sounds_[(size_t)s].pcm.size() < 4) return nullptr;   // released / empty
+        if (!ok_ || s < 0 || (size_t)s >= sounds_.size() || sounds_[(size_t)s].pcm.size() < 4 || sounds_[(size_t)s].releasing) return nullptr;   // released / empty
         Voice* v = freeVoice(index, priority, startsVirtual, protect);
         if (!v) return nullptr;
         int gen = (v->gen + 1) & 0x7FFFF;
@@ -422,12 +436,18 @@ public:
         v.vol = volume; v.rate = pitch > 0.05f ? pitch : 0.05f; v.wpos = pos;
     }
 
-    void setEnvironment(const Environment& e, float fade) override { std::lock_guard<std::mutex> lk(mx_); env_.set(e, fade); }
+    void setEnvironment(const Environment& e, float fade) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        envNext_ = e; envFade_ = fade; envPending_ = true;      // applied by the mixer thread (env_ runs outside the lock)
+    }
     void setSmartPanPlayer(const core::Vec3& pos, bool valid) override {
         std::lock_guard<std::mutex> lk(mx_);
         ppos_ = pos; pvalid_ = valid;
     }
-    void setMasterCompressor(float t, float a, float r, float m) override { std::lock_guard<std::mutex> lk(mx_); comp_.set(t, a, r, m); }
+    void setMasterCompressor(float t, float a, float r, float m) override {
+        std::lock_guard<std::mutex> lk(mx_);
+        compNext_[0] = t; compNext_[1] = a; compNext_[2] = r; compNext_[3] = m; compPending_ = true;
+    }
     bool mixStats(MixStats& s) const override { std::lock_guard<std::mutex> lk(mx_); s = stats_; return ok_; }
 
     bool reportsVoices() const override { return ok_; }
@@ -441,12 +461,14 @@ public:
         return true;
     }
     void release(Sound s) override {
-        std::lock_guard<std::mutex> lk(mx_);
+        std::vector<int16_t> dead;                               // freed after the lock is released (declared first): freeing
+        std::lock_guard<std::mutex> lk(mx_);                     // tens of MB of music under mx_ stalled the step ~11 ms
         if (s < 0 || (size_t)s >= sounds_.size()) return;
         Sample& smp = sounds_[(size_t)s];
         for (Voice& v : voices_) if (v.active && v.sample == &smp) v.active = false;
         for (auto it = loaded_.begin(); it != loaded_.end(); ++it) if (it->second == s) { loaded_.erase(it); break; }
-        std::vector<int16_t>().swap(smp.pcm);                    // the slot stays (handles of other samples keep their index)
+        if (mixing_) { smp.releasing = true; releaseLater_.push_back(s); return; }   // the block being mixed may read its PCM
+        dead.swap(smp.pcm);                                      // the slot stays (handles of other samples keep their index)
         smp.loopStart = 0.0; smp.loopEnd = -1.0;
     }
     void stopAllVoices() override {
@@ -462,7 +484,7 @@ public:
     size_t residentBytes() const override {
         std::lock_guard<std::mutex> lk(mx_);
         size_t b = 0;
-        for (const Sample& smp : sounds_) b += smp.pcm.size() * sizeof(int16_t);
+        for (const Sample& smp : sounds_) if (!smp.releasing) b += smp.pcm.size() * sizeof(int16_t);
         return b;
     }
     bool setLoopPoints(Sound s, uint32_t start, uint32_t end) override {
@@ -565,9 +587,8 @@ private:
             if (!(hdr_[b].dwFlags & WHDR_DONE)) continue;
             ++mixed;
             {
-                std::lock_guard<std::mutex> lk(mx_);
                 LARGE_INTEGER m0, m1; QueryPerformanceCounter(&m0);
-                mixBlock(blocks_[b]);
+                mixBlock(blocks_[b]);                             // locks only to snapshot / write back (see mixBlock)
                 QueryPerformanceCounter(&m1); mixTicks += m1.QuadPart - m0.QuadPart;
             }
             hdr_[b].dwFlags &= ~WHDR_DONE;
@@ -649,9 +670,17 @@ private:
 
     // Voices -> MASTER_DRY / MASTER_WET buses (float, full scale 1.0); MASTER_WET runs the zone
     // environment; Master applies the level and the compressor, then clips to 16 bit.
+    // Three phases so game threads never wait for the per-sample work (the step's playVoice / updateVoice used to block for
+    // a whole block, 0.2-0.6 ms at 32 v 32): (A) under mx_: environment / compressor requests, gains, the 96-voice cap,
+    // virtual voices, a snapshot of every heard voice; (B) unlocked: the per-sample mix, environment, compressor (env_ / comp_
+    // are only touched by this thread); (C) under mx_: positions / ends written back (a voice stopped or restarted meanwhile -
+    // gen changed - is left alone), movie streams, stats, deferred sample releases. Same output as one locked pass.
     void mixBlock(std::vector<int16_t>& dst) {
         LARGE_INTEGER t0, t1, fq;
         QueryPerformanceCounter(&t0);
+        std::unique_lock<std::mutex> lk(mx_);
+        if (envPending_) { env_.set(envNext_, envFade_); envPending_ = false; }
+        if (compPending_) { comp_.set(compNext_[0], compNext_[1], compNext_[2], compNext_[3]); compPending_ = false; }
         updatePreferPlayer((float)kBlockFrames / kRate);
         dry_.assign(kBlockSamples, 0.0f);
         wet_.assign(kBlockSamples, 0.0f);
@@ -679,7 +708,9 @@ private:
             for (size_t k = kMaxVoices; k < realScratch_.size(); ++k) voices_[(size_t)realScratch_[k]].culled = true;
             stats_.overflowVirtualized += (int)realScratch_.size() - kMaxVoices;
         }
-        for (Voice& v : voices_) {
+        jobs_.clear();
+        for (int vi = 0; vi < (int)voices_.size(); ++vi) {
+            Voice& v = voices_[(size_t)vi];
             if (!v.active) continue;
             if (v.culled) {                                   // virtual: advance the timeline only
                 ++nvirt;
@@ -692,32 +723,39 @@ private:
                 continue;
             }
             ++nv; if (v.wet) ++nw;
-            float* bus = v.wet ? wet_.data() : dry_.data();
-            const std::vector<int16_t>& s = *v.data;
-            size_t frames = s.size() / 2;
+            MixJob jb;
+            jb.idx = vi; jb.gen = v.gen; jb.pcm = v.data->data(); jb.frames = v.data->size() / 2;
+            jb.lstart = v.sample->loopStart; jb.lend = v.sample->loopEnd > 0.0 ? v.sample->loopEnd : (double)jb.frames;
+            jb.loop = v.loop; jb.pos = v.pos; jb.rate = v.rate; jb.gL = v.gL; jb.gR = v.gR; jb.positional = v.positional; jb.wet = v.wet;
+            jobs_.push_back(jb);
+        }
+        mixing_ = true;
+        lk.unlock();
+        // (B) no lock: only this thread touches jobs_, dry_ / wet_, env_ and comp_; the PCM stays alive (releases wait for C).
+        for (MixJob& jb : jobs_) {
+            float* bus = jb.wet ? wet_.data() : dry_.data();
+            const int16_t* s = jb.pcm;
+            const bool loops = jb.loop && jb.lend - jb.lstart >= 2.0;
             for (int f = 0; f < kBlockFrames; ++f) {
                 // Loop region [loopStart, loopEnd): the FSB sample-header region (whole sample for every
                 // slice wave); the last frame interpolates into loopStart, so a period is exactly the region.
                 // Loops only when the voice was started with loop (wave event bLooping), indefinitely.
-                const double lstart = v.sample->loopStart;
-                const double lend = v.sample->loopEnd > 0.0 ? v.sample->loopEnd : (double)frames;
-                const bool loops = v.loop && lend - lstart >= 2.0;
-                if (loops && v.pos >= lend) v.pos = lstart + std::fmod(v.pos - lend, lend - lstart);
-                size_t fi = (size_t)v.pos;
+                if (loops && jb.pos >= jb.lend) jb.pos = jb.lstart + std::fmod(jb.pos - jb.lend, jb.lend - jb.lstart);
+                size_t fi = (size_t)jb.pos;
                 size_t fn = fi + 1;
-                if (loops) { if ((double)fn >= lend) fn = (size_t)lstart; }
-                else if (fn >= frames) { v.active = false; break; }
-                float u = (float)(v.pos - (double)fi);       // linear interpolation for pitch
+                if (loops) { if ((double)fn >= jb.lend) fn = (size_t)jb.lstart; }
+                else if (fn >= jb.frames) { jb.ended = true; break; }
+                float u = (float)(jb.pos - (double)fi);      // linear interpolation for pitch
                 float sl = (s[fi * 2] + (s[fn * 2] - s[fi * 2]) * u) * k;
                 float sr = (s[fi * 2 + 1] + (s[fn * 2 + 1] - s[fi * 2 + 1]) * u) * k;
-                v.pos += v.rate;
-                if (v.positional) {
+                jb.pos += jb.rate;
+                if (jb.positional) {
                     float mono = (sl + sr) * 0.5f;
-                    bus[f * 2]     += mono * v.gL;
-                    bus[f * 2 + 1] += mono * v.gR;
+                    bus[f * 2]     += mono * jb.gL;
+                    bus[f * 2 + 1] += mono * jb.gR;
                 } else {
-                    bus[f * 2]     += sl * v.gL;
-                    bus[f * 2 + 1] += sr * v.gR;
+                    bus[f * 2]     += sl * jb.gL;
+                    bus[f * 2 + 1] += sr * jb.gR;
                 }
             }
         }
@@ -725,6 +763,21 @@ private:
         for (int i = 0; i < kBlockSamples; ++i) dry_[i] += wet_[i];
         float peak = 0.0f, minGain = 1.0f;
         comp_.process(dry_.data(), kBlockFrames, peak, minGain);
+        lk.lock();                                            // (C)
+        mixing_ = false;
+        for (const MixJob& jb : jobs_) {
+            Voice& v = voices_[(size_t)jb.idx];
+            if (!v.active || v.gen != jb.gen) continue;       // stopped / restarted while mixing: its new state wins
+            v.pos = jb.pos;
+            if (jb.ended) v.active = false;
+        }
+        for (Sound r : releaseLater_)
+            if (r >= 0 && (size_t)r < sounds_.size() && sounds_[(size_t)r].releasing) {
+                Sample& smp = sounds_[(size_t)r];
+                deadPcm_.emplace_back(); deadPcm_.back().swap(smp.pcm);   // freed below, after the unlock
+                smp.loopStart = 0.0; smp.loopEnd = -1.0; smp.releasing = false;
+            }
+        releaseLater_.clear();
         stats_.peakDb = peak > 1e-6f ? 20.0f * std::log10(peak) : -96.0f;
         stats_.gainReductionDb = std::min(stats_.gainReductionDb * 0.9f, 20.0f * std::log10(minGain));
         stats_.voices = nv; stats_.wetVoices = nw; stats_.peakVoices = std::max(stats_.peakVoices, nv);
@@ -762,6 +815,7 @@ private:
         QueryPerformanceCounter(&t1); QueryPerformanceFrequency(&fq);
         float ms = (float)(1000.0 * (double)(t1.QuadPart - t0.QuadPart) / (double)fq.QuadPart);
         stats_.mixMsPerBlock += (ms - stats_.mixMsPerBlock) * 0.1f;
+        if (!deadPcm_.empty()) { std::vector<std::vector<int16_t>> dead; dead.swap(deadPcm_); lk.unlock(); }   // freed unlocked
     }
 
     HWAVEOUT wo_ = nullptr;
