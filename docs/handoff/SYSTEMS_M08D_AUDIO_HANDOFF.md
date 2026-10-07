@@ -458,3 +458,12 @@ verification. "bots" = other participants.
 Gaps found and fixed in this audit: in-match UI muted (Frontend), bot body audio (M09f), bot reload / melee swing / grenade
 throw (M09j), bot nitro / slip (M09k), voice cap > 96 (M09l), the empty-announcer log noise (CTF None).
 Not audio: the f603 round-start frame spike is Rendering's first-use world pass (DM_START plays in 0.43 ms, decoded on a worker).
+
+## Milestone E item 3 - first-use audio at 32 v 32 (no preload hitches)
+
+09c fa973d3 + Gameplay d652718 + M09j-l, Streets TDM 63 bots, 3 min, WFC_AUDIOTIME / WFC_PREFETCHLOG (the machine was shared
+with another lane's run: upper bounds). Every chassis / weapon cue set is warmed on a worker at selection (8 chassis, 17 weapon
+classes, 221-633 waves each); body cue sets register one per step (<= ~2 ms, M09g); prefetch adopts 0.08 ms max, never
+waiting. Main-thread audio per cue play: 88 plays above 0.05 ms, max 1.04 ms - all announcer / switchboard dialog lines
+decoded on first play (0.5-0.8 ms each, short dialog, below the worker-defer threshold); everything else < 0.05 ms. No frame
+after the round start correlates with audio (the 4 frames > 33 ms after f700 have sim 5-8 ms: render-side).
