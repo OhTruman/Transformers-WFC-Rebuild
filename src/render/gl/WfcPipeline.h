@@ -147,6 +147,9 @@ public:
     int spriteProgram(const std::string& material);  // particle material program (cached; -1 = fallback)
     void setLoadYield(std::function<void()> y) { loadYield_ = std::move(y); }
     void yieldLoad() { if (loadYield_ && !inLoadYield_) { inLoadYield_ = true; loadYield_(); inLoadYield_ = false; } }
+    // a loading-screen frame from anywhere in a load: the renderer's own yield (inside loadMapRenderData) or the
+    // process-wide core::loadYield when the tree has it (the world mesh upload / warm-up run outside the former)
+    void loadStep(const char* where);
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile): queued, drawn after post onto the back buffer.
     void drawMaterialTile(const IRenderer::MaterialTile& t) { uiTiles_.push_back(t); }
     bool hasMaterial(const std::string& m) const { return mats_.count(m) > 0; }
@@ -318,6 +321,8 @@ private:
     // a 1x1 off-screen draw at the next frame start (or at the end of the world warm-up), so the driver's first-use
     // work (residency / upload) happens where the texture was created (loading screen, prewarm), not where it is seen
     std::vector<std::pair<GLuint, bool>> touchQueue_;     // (texture, cube)
+    std::vector<int> progTouchQueue_;                     // programs linked since the last touch (drawn once each)
+    int touchedPrograms_ = 0;
     GLuint touchProg2D_ = 0, touchProgCube_ = 0, touchFbo_ = 0, touchTex_ = 0;
     int touchedTextures_ = 0;
     void touchNewTextures();
