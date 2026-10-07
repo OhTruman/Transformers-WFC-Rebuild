@@ -111,8 +111,8 @@ static void testHudObservers(const Catalog& c) {
     f.progressObserver = "TnHudDataObserverDominationCapture";
     f.progress = 0.25;
     f.attackingTeamStatus = HudController::attackingStatus(1, 1);
-    f.killstreakId = 3;
-    f.abilities[1] = HudFrame::Ability{7, 12.0, 0.4};
+    f.killstreakId = std::string("HealthRegenStreak");
+    f.abilities[1] = HudFrame::Ability{"TnAbilityHover", 12.0, 0.4};
     f.grenadeAmmo = 2; f.grenadeType = 1;
     hud.setFrame(f);
     hud.damageIndicator(1.5, 20.0);
@@ -122,7 +122,7 @@ static void testHudObservers(const Catalog& c) {
     check(p.has("_global.NotifyProgressBarChanged(Capturing Node,0.25)"), "hud.progress_bar_label", p.calls.empty() ? "" : p.calls[0]);
     check(p.has("_global.NotifyOnAttackingTeamChanged(1)") && HudController::attackingStatus(0, 1) == 2 && HudController::attackingStatus(-1, 1) == 0,
           "hud.attacking_team_status");
-    check(p.has("_global.NotifyKillstreakChanged(3)") && p.has("_global.NotifyAbilityType1Changed(7)") &&
+    check(p.has("_global.NotifyKillstreakChanged(HealthRegenStreak)") && p.has("_global.NotifyAbilityType1Changed(TnAbilityHover)") &&
           p.has("_global.NotifyAbilityType1UpdateCooldown(12,0.4)") && p.has("_global.NotifyGrenadeAmmoChanged(2,1)"), "hud.killstreak_ability_grenade");
     check(p.has("_global.NotifyDamageIndicatorAdded(1.5,20)") && p.has("_global.CausedDamage()"), "hud.damage_events");
     // unchanged: nothing re-sent; a change: only that value

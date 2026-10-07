@@ -37,14 +37,14 @@ struct HudFrame {
     bool spectating = false;
     // TnHudDataObservers without a source yet stay empty (nothing is sent); once set, each is sent on change with the
     // original callback and arguments [CONFIRMED decompiled TransGame + Hud_GFX AS].
-    struct Ability { int id = 0; double cooldown = 0; double fraction = 1; bool operator!=(const Ability& o) const { return id != o.id || cooldown != o.cooldown || fraction != o.fraction; } };
+    struct Ability { std::string id = "None"; double cooldown = 0; double fraction = 1; bool operator!=(const Ability& o) const { return id != o.id || cooldown != o.cooldown || fraction != o.fraction; } };
     std::optional<std::string> progressObserver;   // progress bar observer class (its TransGame.int label), e.g.
                                                    // "TnHudDataObserverDominationCapture"; with progressName for `p
     std::string progressName;
     std::optional<double> progress;                // 0..1 (0 hides the bar)
     std::optional<int> attackingTeamStatus;        // OnAttackingTeam: 1 attacking, 2 defending, 0 none
-    std::optional<int> killstreakId;               // Killstreak
-    std::array<std::optional<Ability>, 3> abilities;   // AbilityType0..2: id + cooldown remaining s + recharged 0..1
+    std::optional<std::string> killstreakId;       // Killstreak: the reward class (bitmap export, e.g. HealthRegenStreak)
+    std::array<std::optional<Ability>, 3> abilities;   // AbilityType0..2: class (TnAbilityHover / "None") + cooldown remaining s + recharged 0..1
     std::optional<int> grenadeAmmo, grenadeType, activeGrenades;
     std::optional<double> playerYaw;               // DamageIndicators: the view yaw in radians
     std::optional<int> lockOnState;                // LockOnState
