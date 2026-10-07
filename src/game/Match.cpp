@@ -484,7 +484,9 @@ void Match::endGame(int winnerPlayer, const std::string& reason) {
             for (size_t i = 0; i < players_.size(); ++i) if (players_[i].score == top) e.mvp.push_back((int)i);
     }
     LOG_INFO("match: EndGame reason \"%s\" score %d-%d winner team %d player %d", reason.c_str(), teamScore_[0], teamScore_[1], winner, winnerPlayer);
-    LOG_INFO("MATCH end reason=%s score=%d-%d winner_team=%d winner_player=%d t=%.2f", reason.c_str(), teamScore_[0], teamScore_[1], winner, winnerPlayer, matchTime_);   // audit line
+    // audit line; the time-limit end is the original EndGame(none, "") (empty reason), reported as Time
+    LOG_INFO("MATCH end reason=%s score=%d-%d winner_team=%d winner_player=%d t=%.2f", reason.empty() ? "Time" : reason.c_str(), teamScore_[0], teamScore_[1],
+             winner, winnerPlayer, matchTime_);
 }
 
 void Match::restartPlayer(int p) {

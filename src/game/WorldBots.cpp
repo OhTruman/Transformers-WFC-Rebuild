@@ -2,6 +2,7 @@
 // Bots are ordinary Match participants (MatchOpponent pawns): they move with CharacterMovement from a MoveIntent, fire their
 // real Weapon state (clip, reserve, refire, reload, spread) through the shared damage / kill path, transform with the pawn's
 // own transformation, and die / respawn / score through Match exactly like players.
+#include "core/WorkerPool.h"
 #include "core/SimRandom.h"
 #include "game/World.h"
 #include "game/PlayerController.h"
@@ -15,6 +16,9 @@ namespace game {
 
 bool rayAabb(const core::Vec3& o, const core::Vec3& d, float len, const core::Vec3& bmin, const core::Vec3& bmax, float& tHit);   // World.cpp
 
+bool tickProfOn();
+void tickProfAdd(int slot, double ms);   // World.cpp (WFC_TICKPROF)
+static double profMsBots() { return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
 namespace {
 float wrapPi(float a) { return std::remainder(a, 6.2831853f); }
 float yawOf(const core::Vec3& d) { return std::atan2(-d.x, -d.z); }   // forwardFromYawPitch convention
@@ -533,14 +537,14 @@ void World::botPathFailed(BotBrain& b, bool vehicle) {
     if (b.target < 0) b.hasGoal = false;
 }
 
-void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
+// Path upkeep: one time-sliced search at a time across all bots (tickBots steps it); the bot keeps its old corridor meanwhile.
+// Shared state (the search owner / budget / the nav's search buffers): runs sequentially before the parallel steering pass.
+void World::botPathUpkeep(MatchOpponent& o, BotBrain& b, float dt) {
     Character& pc = o.pawn();
-    const BotSkill& sk = botSkill(b.difficulty);
     const core::Vec3 pos = pc.position();
     const bool vehicle = pc.moveForm() == Form::Vehicle;
     const bool jetForm = vehicle && pc.vehicleParams().form == VehicleFormType::Jet;
-    BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle && !jetForm;   // jets hover along the robot corridor
-    // Path upkeep: one time-sliced search at a time across all bots (tickBots steps it); the bot keeps its old corridor meanwhile.
+    BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle && !jetForm;
     b.repathTimer -= dt;
     const bool chasing = b.goal.kind == BotGoalKind::Attack;
     if ((b.wantRepath || (chasing && b.repathTimer <= 0.0f) || b.vehiclePath != vehicle) && botNav_.valid() && botSearchOwner_ < 0 && botPathBudget_ > 0) {
@@ -551,6 +555,17 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
         if (botNav_.beginSearch(pos, b.goal.pos, ag)) { botSearchOwner_ = b.player; botSearchVehicle_ = vehicle; }
         else botPathFailed(b, vehicle);
     }
+}
+
+// Steering: reads the nav mesh / collision / other pawns, writes only this bot's brain and intent - run on the worker pool.
+void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
+    Character& pc = o.pawn();
+    const BotSkill& sk = botSkill(b.difficulty);
+    const core::Vec3 pos = pc.position();
+    const bool vehicle = pc.moveForm() == Form::Vehicle;
+    const bool jetForm = vehicle && pc.vehicleParams().form == VehicleFormType::Jet;
+    BotNav::Agent ag; ag.radius = pc.cylinderRadius(Form::Robot); ag.vehicle = vehicle && !jetForm;   // jets hover along the robot corridor
+    // (path upkeep: botPathUpkeep, sequential before the parallel steering pass)
     core::Vec3 moveDir{0, 0, 0};
     bool jump = false;
     // Combat spacing: hold the weapon's desired band while the target is visible; otherwise follow the path.
@@ -833,9 +848,14 @@ void World::tickBots(float dt) {
             }
         botSearchOwner_ = -1;
     }
+    // Three passes: (1) per bot, sequential: spawn reset, KillZ, decisions, path upkeep; (2) steering for every bot on the worker
+    // pool (each writes only its own brain / intent); (3) per bot, sequential: transform, buffs, streaks, melee, grenades, weapon,
+    // aim / fire, intent. Deterministic (fixed order of the sequential passes; independent steering).
+    struct PendingBot { MatchOpponent* o; BotBrain* b; MoveIntent in; };
+    static std::vector<PendingBot> pending;
+    pending.clear();
     for (BotBrain& b : bots_) {
-        MatchOpponent* o = nullptr;
-        for (MatchOpponent* q : opponents_) if (q->matchPlayer() == b.player) o = q;
+        MatchOpponent* o = (size_t)b.player < oppByPlayer_.size() ? oppByPlayer_[(size_t)b.player] : nullptr;
         if (!o) continue;
         Character& pc = o->pawn();
         if (!o->spawned()) { b.wasSpawned = false; continue; }
@@ -861,10 +881,24 @@ void World::tickBots(float dt) {
         // detail); steering and aim run every step.
         if ((b.thinkTimer -= dt) <= 0.0f) {
             b.thinkTimer = 0.25f;
+            const double tp0 = tickProfOn() ? profMsBots() : 0.0;
             botThink(*o, b);
+            if (tickProfOn()) tickProfAdd(19, profMsBots() - tp0);
         }
-        MoveIntent in;
-        botSteer(*o, b, dt, in);
+        botPathUpkeep(*o, b, dt);
+        pending.push_back({o, &b, MoveIntent{}});
+    }
+    {
+        const double ts0 = tickProfOn() ? profMsBots() : 0.0;
+        core::WorkerPool::get().run((int)pending.size(), [&](int i) { botSteer(*pending[(size_t)i].o, *pending[(size_t)i].b, dt, pending[(size_t)i].in); });
+        if (tickProfOn()) tickProfAdd(20, profMsBots() - ts0);
+    }
+    for (PendingBot& pb : pending) {
+        MatchOpponent* o = pb.o;
+        BotBrain& b = *pb.b;
+        Character& pc = o->pawn();
+        MoveIntent& in = pb.in;
+        if (!o->spawned()) continue;   // killed earlier in this pass
         // Transform toward the wanted form (cooldown 2 s; robot spot check for vehicle -> robot as the player's).
         b.transformCooldown -= dt;
         const bool isVeh = pc.moveForm() == Form::Vehicle;
@@ -904,7 +938,9 @@ void World::tickBots(float dt) {
             pc.tickWeaponSwitch(dt);
             pc.weapon().tick(dt);
         }
+        const double ta0 = tickProfOn() ? profMsBots() : 0.0;
         botAimAndFire(*o, b, dt);
+        if (tickProfOn()) tickProfAdd(21, profMsBots() - ta0);
         o->setIntent(in);
         static const char* botlog = std::getenv("WFC_BOTLOG");   // diagnostics: each bot (or =<player>) once a second
         if (botlog && (botlog[0] < '0' || botlog[0] > '9' || std::atoi(botlog) == b.player) && ((int)(b.life * 60.0f + 0.5f)) % 60 == 0) {

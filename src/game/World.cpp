@@ -1,3 +1,4 @@
+#include "core/WorkerPool.h"
 #include "core/SimRandom.h"
 #include "game/World.h"
 #include <utility>
@@ -1559,19 +1560,25 @@ namespace {
 // WFC_TICKPROF (diagnostics): accumulated ms per World::tick phase, logged every 300 steps.
 struct TickProf {
     static bool on() { static const bool o = std::getenv("WFC_TICKPROF") != nullptr; return o; }
-    double acc[12] = {}; long n = 0;
-    const char* names[12] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest"};
+    double acc[22] = {}; long n = 0;
+    const char* names[22] = {"pre", "abilities", "match", "bots", "oppMove", "oppAnim", "partWeapons", "pawn+camera", "weaponFx", "projectiles", "actors", "rest",
+                             "separate", "mapstate", "TOTAL", "ab.barrier", "ab.beacon", "ab.sentry", "ab.roller", "bot.think", "bot.steer", "bot.aim"};
 };
 TickProf& tickProf() { static TickProf p; return p; }
+}
+bool tickProfOn() { return TickProf::on(); }
+void tickProfAdd(int slot, double ms) { if (TickProf::on() && slot >= 0 && slot < 22) tickProf().acc[slot] += ms; }
+namespace {
 struct TickTimer { int slot; double t0; TickTimer(int s) : slot(s), t0(TickProf::on() ? profNowMs() : 0.0) {} ~TickTimer() { if (TickProf::on()) tickProf().acc[slot] += profNowMs() - t0; } };
 }
 
 void World::tick(float dt) {
     if (TickProf::on() && ++tickProf().n % 300 == 0) {
         std::string line;
-        for (int i = 0; i < 12; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
+        for (int i = 0; i < 22; ++i) { char b[48]; std::snprintf(b, sizeof b, " %s %.2f", tickProf().names[i], tickProf().acc[i] / 300.0); line += b; tickProf().acc[i] = 0.0; }
         LOG_INFO("TICKPROF ms/step (%zu participants):%s", match_.players().size(), line.c_str());
     }
+    TickTimer tickTotal(14);   // WFC_TICKPROF: the whole step
     // The local pawn's presentation yaw offset (set per render frame by the controller) is not simulation state: the step's
     // meshMatrix / sockets use the simulated yaw only (the next frame's input pass sets the offset again for drawing).
     player_.pawn().setDrawYawOffset(0.0f);
@@ -1630,7 +1637,7 @@ void World::tick(float dt) {
         last = now;
         if (++n > 1 && ms > 30.0) LOG_INFO("HITCH tick %d: %.1f ms since the previous tick", n, ms);
     }
-    if (collision_.valid()) mapState_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr);
+    if (collision_.valid()) { TickTimer tt(13); mapState_.tick(dt, collision_, weaponCollision_.valid() ? &weaponCollision_ : nullptr); }
     {   // Audio listener = camera (same pose the app hands to IAudio::setListener).
         render::Camera cam;
         player_.controller().updateCamera(cam);
@@ -1712,18 +1719,21 @@ void World::tick(float dt) {
     }
     participantShots_.clear();
     { TickTimer tt(3); tickBots(dt); }                                  // bot participants: decisions -> intents, weapons
-    for (MatchOpponent* o : opponents_) {                               // participants: shared movement + animation
-        { TickTimer tt(4); o->simulateMovement(dt, collision()); }
-        {   // Every participant animates every step (user decision: no animation level of detail at any count).
-            TickTimer tt(5);
+    {   // Participants: movement + animation (every participant animates every step; user decision). Each task touches only its own
+        // pawn and reads the static collision, so they run on the worker pool in any order with the same result (deterministic).
+        TickTimer tt(4);
+        const CollisionWorld* col = collision();
+        core::WorkerPool::get().run((int)opponents_.size(), [&](int i) {
+            MatchOpponent* o = opponents_[(size_t)i];
+            o->simulateMovement(dt, col);
             o->simulateAnimation(dt);
-        }
+        });
     }
     { TickTimer tt(6); tickParticipantWeapons(dt); }
     for (auto& kv : partBeams_) kv.second.time = std::max(0.0f, kv.second.time - dt);
     player_.controller().tickCameraCollision(dt);   // obstruction behaviour after the pawn moved
     gameplayRamContacts();
-    separatePawns();
+    { TickTimer tt(12); separatePawns(); }
     {   // Driving slip angle per pawn (Systems' tire audio for every vehicle): heading vs ground velocity while Driving on the ground.
         auto slip = [](Character& c) {
             auto& vs = c.vehicleState();
@@ -2178,7 +2188,7 @@ void World::removeBots() {
     for (size_t i = match_.players().size(); i-- > 0;) { if (match_.players()[i].kind != ParticipantKind::Bot) break; first = i; }
     if (first == match_.players().size()) { bots_.clear(); return; }
     for (size_t i = 0; i < opponents_.size();) {
-        if ((size_t)opponents_[i]->matchPlayer() >= first) { opponents_[i]->destroy(); opponents_.erase(opponents_.begin() + (long)i); } else ++i;
+        if ((size_t)opponents_[i]->matchPlayer() >= first) { opponents_[i]->destroy(); opponents_.erase(opponents_.begin() + (long)i); rebuildOppIndex(); } else ++i;
     }
     for (size_t i = 0; i < actors_.size();) { if (!actors_[i]->alive()) { actors_[i] = std::move(actors_.back()); actors_.pop_back(); } else ++i; }
     match_.truncatePlayers(first);
@@ -2224,6 +2234,7 @@ int World::addBots(const BotLaunch& launch) {
         const int perTeam = mp.team == 0 ? b.difficultyAutobot : (mp.team == 1 ? b.difficultyDecepticon : -1);
         addBotBrain(p, perTeam >= 0 ? perTeam : botDifficulty_);
         opponents_.push_back(o.get());
+        rebuildOppIndex();
         actors_.push_back(std::move(o));
         LOG_INFO("bots: %s team %d %s (%s) level %d abilities %s/%s", id.name.c_str(), mp.team, specialtyName(id.selection.specialty),
                  resolveChassis(id.selection, match_.faction(p)).c_str(), id.level,
@@ -2237,6 +2248,7 @@ MatchOpponent* World::addMatchOpponent(const std::string& name, bool drawn) {
     auto o = std::make_unique<MatchOpponent>(p, match_.players()[(size_t)p].team, drawn);
     MatchOpponent* raw = o.get();
     opponents_.push_back(raw);
+    rebuildOppIndex();
     actors_.push_back(std::move(o));
     // Cache the participant's body now (callers add opponents at match load, under the loading screen) instead of in a
     // visible World tick later. Load scheduling only, not original behaviour.
@@ -3464,11 +3476,11 @@ void World::tickAbilityEffects(float dt) {
         pc.playAction("Skill_Barrier", false);            // OnTriggerAnimParams Skill_Barrier
         requestBarrier(localPlayer_);                     // SpawnDelay 0.5 -> SpawnBarrier
     }
-    tickBarrier(dt);
-    tickAmmoBeacon(dt);
-    tickSentry(dt);
+    { TickTimer tt(15); tickBarrier(dt); }
+    { TickTimer tt(16); tickAmmoBeacon(dt); }
+    { TickTimer tt(17); tickSentry(dt); }
     tickGuidedMissile(dt);
-    tickRollerMine(dt);
+    { TickTimer tt(18); tickRollerMine(dt); }
     repairBeam_.time = std::max(0.0f, repairBeam_.time - dt);
     if (repairSquibPending_) { repairSquibDraw_ = true; repairSquibPending_ = false; }
     if (repairBeam_.time <= 0.0f) repairBeam_.active = false;
@@ -4114,7 +4126,11 @@ void World::tickSentry(float dt) {
         s.target = -1;
         float best = 300.0f;
         const Character* tgt = nullptr;
-        if (matchActive_)
+        if (matchActive_) {
+            // the closest visible enemy: candidates sorted by distance, line of sight tested nearest first (same target, fewer traces)
+            struct Cand { float dist; int p; const Character* c; };
+            static thread_local std::vector<Cand> cands;
+            cands.clear();
             for (size_t i = 0; i < match_.players().size(); ++i) {
                 const int p = (int)i;
                 if (p == s.owner || (match_.settings().teamGame && match_.sameTeam(p, s.owner))) continue;
@@ -4124,10 +4140,16 @@ void World::tickSentry(float dt) {
                 float dist = core::length(d);
                 if (dist > best || dist < 1e-3f) continue;
                 if (std::fabs(std::atan2(d.y, std::hypot(d.x, d.z))) > 45.0f * 0.0174533f) continue;
-                float tt;
-                if (line && line->segmentHit(muzzle, c->actorLocation(), tt)) continue;
-                best = dist; s.target = p; tgt = c;
+                cands.push_back({dist, p, c});
             }
+            std::sort(cands.begin(), cands.end(), [](const Cand& a, const Cand& b) { return a.dist < b.dist || (a.dist == b.dist && a.p < b.p); });
+            for (const Cand& cd : cands) {
+                float tt;
+                if (line && line->segmentHit(muzzle, cd.c->actorLocation(), tt)) continue;
+                best = cd.dist; s.target = cd.p; tgt = cd.c;
+                break;
+            }
+        }
         float wantYaw = s.yaw, wantPitch = 0.0f;   // idle: pitch returns to 0
         if (tgt) {
             core::Vec3 d = tgt->actorLocation() - muzzle;
@@ -5575,7 +5597,7 @@ std::string World::compareRobotShared(const std::string& id, bool& ok) {
 const Character* World::participantPawn(int player) const {
     if (player < 0) return nullptr;
     if (player == localPlayer_) return localDead_ ? nullptr : &player_.pawn();
-    for (const MatchOpponent* o : opponents_) if (o->matchPlayer() == player && o->spawned()) return &o->pawn();
+    if ((size_t)player < oppByPlayer_.size()) { const MatchOpponent* o = oppByPlayer_[(size_t)player]; return o && o->spawned() ? &o->pawn() : nullptr; }
     return nullptr;
 }
 

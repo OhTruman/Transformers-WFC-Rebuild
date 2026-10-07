@@ -4744,7 +4744,7 @@ void Application::runBotTest() {
     // Phases 1-2 by default; WFC_BOTTEST_PHASE=3 runs the 16 v 16 CUSTOM-GAME EXTENSION (?ExtendedPlayers=1, 33 participants).
     const int firstPhase = std::getenv("WFC_BOTTEST_PHASE") ? std::atoi(std::getenv("WFC_BOTTEST_PHASE")) - 1 : 0;
     for (int phase = firstPhase; phase < (firstPhase >= 2 ? firstPhase + 1 : 2); ++phase) {
-        const std::string url = world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=" + std::to_string((int)secs + 15) +
+        const std::string url = world_.mapName() + "_BASE_m?GameModeTag=" + (phase == 4 ? "DM" : "TDM") + "?TimeLimit=" + std::to_string((int)secs + 15) +   // phase 5: FFA 64
                                 (phase == 0 ? "?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1" : phase == 1 ? "?BotsFriendly=7?BotsEnemy=8?BotDifficulty=2?BotsExtended=1"
                                 : phase == 2 ? "?BotsAutobot=16?BotsDecepticon=16?BotDifficulty=2?ExtendedPlayers=1"
                                 : phase == 3 ? "?BotsAutobot=31?BotsDecepticon=32?BotDifficulty=2?ExtendedPlayers=1"
@@ -4771,7 +4771,7 @@ void Application::runBotTest() {
         const bool unique = std::adjacent_find(names.begin(), names.end()) == names.end();
         check(bots == wantF + wantE && friendly == wantF && enemy == wantE && levels == bots && unique,
               "roster: " + std::to_string(friendly) + " friendly + " + std::to_string(enemy) + " enemy bots, unique names, levels");
-        check(classes[0].size() >= 3 && classes[1].size() >= 3, "class spread per team (>= 3 of 4 classes each)");
+        if (phase != 4) check(classes[0].size() >= 3 && classes[1].size() >= 3, "class spread per team (>= 3 of 4 classes each)");   // FFA: no teams
         world_.resetBotTiming();
         const size_t ev0 = world_.match().gameplayEvents().size();
         std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
@@ -4865,7 +4865,7 @@ void Application::runBotTest() {
         if (phase >= 1) check(jetSamples > 0, "jet bots fly (" + std::to_string(jetSamples) + " jet-steps, " + std::to_string(jetFlySamples) + " in Flying)");
         if (phase >= 1) check(driveSamples > 0, "ground vehicle bots boost by the VEHDEF AI rule (" + std::to_string(driveSamples) + " boost-steps, max nitro starts per bot " + std::to_string(nitroStarts) + ")");
         if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
-        if (phase >= 1) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");
+        if (phase >= 1 && phase != 4) check(heals > 0, "Scientist bots repair teammates with the Repair Ray (" + std::to_string(heals) + " beam ticks)");   // FFA: no teammates
         if (phase >= 1) check(grenades >= 3, "bots toss grenades (" + std::to_string(grenades) + "; melee strikes " + std::to_string(melees) + ")");
         check(world_.botMsAverage() < 0.04 * bots && world_.botMsMax() < 6.0, "AI cost per step (avg < 0.04 ms per bot, max < 6 ms)");
         // Let the match run out: it completes and the next one starts clean.

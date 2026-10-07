@@ -1,3 +1,4 @@
+#include <mutex>
 #include "game/GpuSkin.h"
 #include <type_traits>
 #include <unordered_map>
@@ -78,11 +79,13 @@ void Character::beginTransform() {
 
 // Robot rig: the 9-pose Shooting_Aim grid (we use the F column: the body always faces the aim
 // yaw, so only pitch varies), the upper-body mask, and the clips the layers use.
-namespace { std::map<const assets::SkinnedModel*, std::shared_ptr<void>>& rigCache() { static std::map<const assets::SkinnedModel*, std::shared_ptr<void>> c; return c; } }
-void Character::clearRigCache() { rigCache().clear(); }
+namespace { std::map<const assets::SkinnedModel*, std::shared_ptr<void>>& rigCache() { static std::map<const assets::SkinnedModel*, std::shared_ptr<void>> c; return c; }
+            std::mutex& rigCacheMutex() { static std::mutex m; return m; } }   // rigs are built lazily from the animation workers
+void Character::clearRigCache() { std::lock_guard<std::mutex> lk(rigCacheMutex()); rigCache().clear(); }
 
 void Character::buildRobotRig(const assets::SkinnedModel& mdl) {
     handBone_ = mdl.nodeByName("R_Arm04_Hand_XB");          // HandSkelControl bone (Robot_ANIMTREE)
+    std::lock_guard<std::mutex> lk(rigCacheMutex());
     auto& cache = rigCache();
     if (auto it = cache.find(&mdl); it != cache.end()) { robotRig_ = *static_cast<const RobotRig*>(it->second.get()); return; }
     buildRobotRigUncached(mdl);
