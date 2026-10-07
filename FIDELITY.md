@@ -268,6 +268,18 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
   - no Ion Blaster fallback (the M08 "generic weapons" rule): a weapon with no template draws nothing and is logged once.
 - PARTIAL: the bots' Repair Ray beam visual; shell / magazine notifies on bot weapons.
 
+### Bot beam, Warcry / Shockwave, full class presets (25k-25l)
+- Healing bots show the player's Repair Ray beam (looping tracer segment per bot).
+- TnAbilityWarcry / TnAbilityShockwave run for any participant (World::applyWarcry / applyShockwave; the local ability calls them):
+  - Warcry buffs same-team pawns within 30 m, including the local player;
+  - Shockwave hurts every non-teammate in 25 m with the momentum, including the local player.
+- When bots use them (PC ADAPTATION): Leaders Warcry when fighting with a teammate within 25 m (or under 50 % health);
+  Scientists Shockwave against an enemy within 15 m.
+- Bot identities and the QA presets carry every list of the class preset (weapons, vehicle weapons, melee, abilities): bodies
+  otherwise filled the gaps with the chassis' iconic lists (e.g. a Leader on Ironhide's body had Ironhide's abilities).
+- 90 s 7 v 8: Warcry 11, Shockwave 1, 50 ability uses in all.
+- Still PARTIAL for bots: Barrier, SpawnSentry, SpawnAmmoCrate, RollerSphere, GuidedMissile (single local instances in World).
+
 ### QA live character swap [DEV / QA TOOLING, not original]
 - World::qaSetCharacter(selection): preloadSelections, then Match::selectCharacter, then the QA suicide; the normal respawn wave
   applies it.

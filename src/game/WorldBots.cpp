@@ -438,6 +438,14 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
                 botTryAbility(o, b, "Cloaking");
             if (visible && d > 15.0f && d < 50.0f && pc.onGround() && b.frand() < use * 0.3f) botTryAbility(o, b, "Hover");
             if (visible && d <= aiRangeMaxM(AiRange::Striking) && b.frand() < use) botTryAbility(o, b, "Whirlwind");
+            //  Warcry - fighting with a teammate close by (the buff level counts friendlies); Shockwave - an enemy within 15 m.
+            if (visible && b.frand() < use * 0.5f) {
+                bool mate = false;
+                for (const MatchOpponent* q : opponents_)
+                    if (q != &o && q->spawned() && match_.sameTeam(q->matchPlayer(), b.player) && core::length(q->pawn().position() - pc.position()) < 25.0f) mate = true;
+                if (mate || hpFrac < 0.5f) botTryAbility(o, b, "Warcry");
+            }
+            if (visible && d < 15.0f && b.frand() < use) botTryAbility(o, b, "Shockwave");
         }
         // Melee rush (PC ADAPTATION): an enemy within 20 m (the melee-assist pick range), now and then by skill or when out of ammo
         // (melee cannot start mid-reload).
@@ -471,6 +479,8 @@ bool World::botTryAbility(MatchOpponent& o, BotBrain& b, const char* id) {
         } else if (a.id == "Dodge") b.pendingDodge = b.frand() < 0.5f ? 1 : 2;
         else if (a.id == "Cloaking") pc.cloakRemain_ = 20.0f;                     // AddBuff(TnBuffCloak)
         else if (a.id == "Hover") { b.pendingHover = true; pc.hoverRequested_ = true; }
+        else if (a.id == "Warcry") applyWarcry(pc, o.matchPlayer());
+        else if (a.id == "Shockwave") pc.shockwaveDelay_ = 0.25f;           // Delay 0.25 -> Shockwave()
         else return false;
         a.spam = 1.0f; a.pendingCooldown = true; ++b.abilities;
         return true;
@@ -759,6 +769,7 @@ void World::tickBots(float dt) {
         }
         b.meleeCooldown -= dt; b.grenadeCooldown -= dt;
         pc.tickAbilities(dt);
+        if (pc.shockwaveDelay_ >= 0.0f && (pc.shockwaveDelay_ -= dt) < 0.0f) applyShockwave(pc, b.player);
         tickMeleeFor(pc, b.player, dt);
         if (b.grenadeDelay >= 0.0f && (b.grenadeDelay -= dt) < 0.0f && pc.moveForm() == Form::Robot)
             for (Weapon& w : pc.inventoryMutable()) if (w.grenade()) { releaseGrenade(pc, b.player, w, b.grenadeTarget); break; }

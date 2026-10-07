@@ -2269,6 +2269,43 @@ std::string World::triggerLocalKillstreak() {
 }
 
 // Ability effects for the local pawn (TnAbility*.ServerTriggerAbility) [CONF script + authored CDOs].
+// TnAbilityWarcry for any participant: GetFriendliesInRange(AoeRange 3000 UU) = same-team live pawns (FFA: the owner only);
+// BuffLevel = Clamp(count - 1, 0, 1) (+1 with TnSkillImprovedWarcry - skills not applied); BuffsToApply x level; BuffTime[0] = 15 s;
+// removes HardLocked [CONF script + authored CDOs].
+void World::applyWarcry(Character& pc, int self) {
+    std::vector<Character*> friends{&pc};
+    if (matchActive_ && match_.settings().teamGame && self >= 0) {
+        for (MatchOpponent* o : opponents_)
+            if (o->spawned() && &o->pawn() != &pc && match_.sameTeam(o->matchPlayer(), self) && core::length(o->pawn().actorLocation() - pc.actorLocation()) <= 30.0f)
+                friends.push_back(&o->pawn());
+        if (self != localPlayer_ && !localDead_ && match_.sameTeam(localPlayer_, self) && core::length(player_.pawn().actorLocation() - pc.actorLocation()) <= 30.0f)
+            friends.push_back(&player_.pawn());
+    }
+    int level = std::max(0, std::min((int)friends.size() - 1, 1));
+    const float dmg[3] = {1.1f, 1.2f, 1.3f}, taken[3] = {0.5f, 0.4f, 0.3f};
+    for (Character* p : friends) { p->warcryRemain_ = 15.0f; p->warcryDamageMul_ = dmg[level]; p->warcryTakenMul_ = taken[level]; p->hardLockedRemain_ = 0.0f; }
+    LOG_INFO("ability Warcry (p%d): %zu friendlies, buff level %d (damage x%.1f, taken x%.1f, 15 s)", self, friends.size(), level, dmg[level], taken[level]);
+}
+
+// TnAbilityShockwave.Shockwave for any participant: GetBP(index 0): Damage 65, Radius 2500 UU; HurtRadius(..., bDoFullDamage true)
+// from PositionSocket; the owner is not hurt [HIGH]; teammates are filtered by the damage rules; momentum 700000 along origin ->
+// victim [CONF].
+void World::applyShockwave(Character& pc, int self) {
+    const core::Vec3 at = pc.actorLocation();
+    LOG_INFO("ability Shockwave (p%d): 65 within 25 m", self);
+    auto hit = [&](int victim, const Character& v) {
+        if (victim == self || core::length(v.actorLocation() - at) > 25.0f) return;
+        const core::Vec3 dir = v.actorLocation() - at;
+        applyMatchDamage(victim, self, 65.0f, false, "TransGame.TnDamageTypeShockwave");
+        if (core::length(dir) > 1e-4f && !(match_.settings().teamGame && match_.sameTeam(victim, self)))
+            applyKnockback(victim, core::normalize(dir) * 700000.0f, "TransGame.TnDamageTypeShockwave");
+    };
+    for (MatchOpponent* o : opponents_) if (o->spawned()) hit(o->matchPlayer(), o->pawn());
+    if (self != localPlayer_ && !localDead_) hit(localPlayer_, player_.pawn());
+    for (Destructible* d : destructibles_)
+        if (d->state() == 0 && core::length((d->boxMin() + d->boxMax()) * 0.5f - at) <= 25.0f) d->applyDamage(*this, 65.0f);
+}
+
 void World::tickAbilityEffects(float dt) {
     Character& pc = player_.pawn();
     auto tickBuff = [dt](Character& p) {
@@ -2281,16 +2318,8 @@ void World::tickAbilityEffects(float dt) {
     pc.pendingAbilityEffect_.clear();
     const int team = matchActive_ && localPlayer_ >= 0 ? match_.players()[(size_t)localPlayer_].team : 255;
     if (fx == "Warcry") {
-        // GetFriendliesInRange(AoeRange 3000 UU): same-team pawns (FFA: the owner only); BuffLevel = Clamp(count - 1, 0, 1)
-        // (+1 with TnSkillImprovedWarcry - skills not applied); BuffsToApply x level; BuffTime[0] = 15 s; removes HardLocked.
-        std::vector<Character*> friends{&pc};
-        if (matchActive_ && match_.settings().teamGame)
-            for (MatchOpponent* o : opponents_)
-                if (o->spawned() && o->team() == team && core::length(o->pawn().actorLocation() - pc.actorLocation()) <= 30.0f) friends.push_back(&o->pawn());
-        int level = std::max(0, std::min((int)friends.size() - 1, 1));
-        const float dmg[3] = {1.1f, 1.2f, 1.3f}, taken[3] = {0.5f, 0.4f, 0.3f};
-        for (Character* p : friends) { p->warcryRemain_ = 15.0f; p->warcryDamageMul_ = dmg[level]; p->warcryTakenMul_ = taken[level]; p->hardLockedRemain_ = 0.0f; }
-        LOG_INFO("ability Warcry: %zu friendlies, buff level %d (damage x%.1f, taken x%.1f, 15 s)", friends.size(), level, dmg[level], taken[level]);
+        (void)team;
+        applyWarcry(pc, localPlayer_);
     } else if (fx == "Shockwave") {
         pc.shockwaveDelay_ = 0.25f;                       // Delay 0.25 -> Shockwave()
     } else if (fx == "Whirlwind") {
@@ -2383,21 +2412,7 @@ void World::tickAbilityEffects(float dt) {
     }
     if (pc.shockwaveDelay_ >= 0.0f) {
         pc.shockwaveDelay_ -= dt;
-        if (pc.shockwaveDelay_ < 0.0f && !localDead_) {
-            // GetBP(index 0): Damage 65, Radius 2500 UU; HurtRadius(..., bDoFullDamage true) from PositionSocket; the owner
-            // is not hurt [HIGH]; Momentum 700000 knock-back not applied [PARTIAL].
-            const core::Vec3 at = pc.actorLocation();
-            LOG_INFO("ability Shockwave: 65 within 25 m");
-            for (MatchOpponent* o : opponents_)
-                if (o->spawned() && core::length(o->pawn().actorLocation() - at) <= 25.0f) {
-                    core::Vec3 dir = o->pawn().actorLocation() - at;
-                    applyMatchDamage(o->matchPlayer(), localPlayer_, 65.0f, false, "TransGame.TnDamageTypeShockwave");
-                    // HurtRadius momentum (bDoFullDamage: scale 1) = Momentum 700000 along origin -> victim [CONF].
-                    if (core::length(dir) > 1e-4f) applyKnockback(o->matchPlayer(), core::normalize(dir) * 700000.0f, "TransGame.TnDamageTypeShockwave");
-                }
-            for (Destructible* d : destructibles_)
-                if (d->state() == 0 && core::length((d->boxMin() + d->boxMax()) * 0.5f - at) <= 25.0f) d->applyDamage(*this, 65.0f);
-        }
+        if (pc.shockwaveDelay_ < 0.0f && !localDead_) applyShockwave(pc, localPlayer_);
     }
 }
 
@@ -3365,7 +3380,10 @@ std::vector<CharacterSelection> World::qaCharacterChoicesAlways() const {
     for (int sp = 0; sp < 4; ++sp) {
         CharacterSelection c; c.type = 0; c.specialty = (Specialty)sp;
         c.chassisByFaction[0] = defaultChassis(c.specialty, 0); c.chassisByFaction[1] = defaultChassis(c.specialty, 1);
-        c.weapons = classPresetWeapons(specialtyName(c.specialty));
+        c.weapons = classPresetList(specialtyName(c.specialty), "weapons");
+        c.vehicleWeapons = classPresetList(specialtyName(c.specialty), "vehicle_weapons");
+        c.melee = classPresetList(specialtyName(c.specialty), "melee");
+        c.abilities = classPresetList(specialtyName(c.specialty), "abilities");
         c.customSlot = specialtyName(c.specialty);
         out.push_back(c);
     }

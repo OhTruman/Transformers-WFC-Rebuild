@@ -512,6 +512,8 @@ private:
     int botSearchOwner_ = -1;          // the bot whose path search is in progress (BotNav time-sliced search)
     bool botSearchVehicle_ = false;
     void botPathFailed(BotBrain& b, bool vehicle);
+    void applyWarcry(Character& pc, int self);      // TnAbilityWarcry for any participant
+    void applyShockwave(Character& pc, int self);   // TnAbilityShockwave.Shockwave for any participant
     bool botTryAbility(MatchOpponent& o, BotBrain& b, const char* id);   // TnAbilityManager.TriggerAbility rules for a bot's slot
     double botMsAccum_ = 0.0, botMsMax_ = 0.0; long botTicks_ = 0;
     std::vector<ParticipantShot> participantShots_;

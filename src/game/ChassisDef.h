@@ -140,5 +140,7 @@ bool loadChassisDef(const std::string& verticalSliceRoot, const std::string& id,
 // TR_MPPlayerCharacterData_p.<Class>_PCD_MP WeaponTypes for a specialty ("Leader" / "Scientist" / "Scout" / "Soldier"), from
 // the roster package's default_four_classes (MP presets) [CONF authored]. Empty when the package is unavailable.
 std::vector<std::string> classPresetWeapons(const std::string& specialty);
+// Any list of a class preset (TR_MPPlayerCharacterData_p.<Class>_PCD_MP via roster_package): "weapons", "vehicle_weapons", "melee", "abilities".
+std::vector<std::string> classPresetList(const std::string& specialty, const char* field);
 
 } // namespace game
