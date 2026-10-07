@@ -4473,6 +4473,32 @@ void Application::runXpTest() {
         for (auto& a : got) if (a.player == me) total += a.xp;
         LOG_INFO("XPTEST %s: %zu awards, %zu stats, local XP this match %ld", mode == 0 ? "TDM" : "DM", got.size(), stats.size(), total);
     }
+    // Bot matches (USER DECISION, PC ADAPTATION): XP and challenge counts scaled by BotXpPolicy for the bots' difficulty.
+    {
+        got.clear(); stats.clear();
+        game::MatchLaunch L;
+        game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=60?BotsFriendly=1?BotsEnemy=2?BotDifficulty=2", L);
+        world_.launchMatch(L);
+        const int me = world_.localMatchPlayer();
+        run(11.0f); drain(); got.clear(); stats.clear();
+        int killed = 0;
+        for (int round = 0; round < 4; ++round) {
+            for (const game::MatchOpponent* o : world_.matchOpponents())
+                if (o->spawned() && !world_.match().sameTeam(o->matchPlayer(), me)) {
+                    world_.applyMatchDamage(o->matchPlayer(), me, 99999.0f, false, "TransGame.TnDamageTypeAssaultRifle"); ++killed; break;
+                }
+            run(6.0f); drain();
+        }
+        long kills = 0, base = 0, scaled = 0;
+        for (auto& x : got) if (x.player == me && x.eventId == "Kill") { ++kills; base += x.baseXp; scaled += x.xp; }
+        const long expect = std::lround(50.0 * game::BotXpPolicy::scale(2));
+        check(kills >= 1 && base == 50 * kills && scaled == expect * kills, "bot match HARD: Kill XP " + std::to_string(expect) + " (base 50 x " +
+              std::to_string(game::BotXpPolicy::scale(2)).substr(0, 4) + ") for " + std::to_string(kills) + " kills");
+        const long killStat = statSum(me, game::AwardProducer::challengeStatId("CHALLENGE_BASIC_KILLS"));
+        const long want = (long)std::floor(kills * game::BotXpPolicy::scale(2) + 1e-9);
+        check(killStat == want, "bot match HARD: kills challenge progress " + std::to_string(killStat) + " = floor(" + std::to_string(kills) + " x 0.75)");
+        (void)killed;
+    }
     LOG_INFO("XPTEST SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
