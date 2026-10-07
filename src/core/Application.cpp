@@ -863,8 +863,8 @@ Application::MatchExit Application::runMatch() {
                         render::MarkerRequest q;
                         q.key = m.key; q.type = m.type; q.setup = m.setup; q.base = m.base; q.labelZ = m.labelZ; q.label = m.label;
                         q.drawHealthBar = m.drawHealthBar; q.health = m.health; q.params = m.params; q.action = m.action;
-                        q.pulseT = m.pulseT; q.removing = m.removing; q.removedT = m.removedT; q.relation = m.relation;
-                        q.owner = m.player < 0 ? -1 : (m.player == pfm.localPlayer ? 0 : 100 + m.player);   // the pawn's draw owner
+                        q.pulseT = m.pulseT; q.removing = m.removing; q.removedT = m.removedT; q.relation = m.relation; q.lifeSpan = m.lifeSpan;
+                        q.owner = m.owner >= 0 ? m.owner : (m.player < 0 ? -1 : (m.player == pfm.localPlayer ? 0 : 100 + m.player));   // the pawn's draw owner
                         ms.push_back(std::move(q));
                     }
                     static auto lastT = std::chrono::steady_clock::now();
