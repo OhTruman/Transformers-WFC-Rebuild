@@ -1,0 +1,8 @@
+﻿"shot","mesh","actor","component","ue","materials"
+"p00","esign_sinewave5_STAT","StaticMeshCollectionActor_11993","StaticMeshCollectionActor_11993.StaticMeshActor_14496_SMC","-12,608, 336, 6,560","ENV_NEU_Variation_p.fbook_sinewave5_CLR_Mat"
+"p01","esign_sinewave_STAT","StaticMeshCollectionActor_11993","StaticMeshCollectionActor_11993.StaticMeshActor_305_SMC","-10,560, 336, 6,560","ENV_NEU_Variation_p.fbook_sinewave_CLR_Mat"
+"p02","esign_sinewave2_STAT","StaticMeshCollectionActor_11993","StaticMeshCollectionActor_11993.StaticMeshActor_6616_SMC","-8,464, 352, 6,560","ENV_NEU_Variation_p.fbook_sinewave2_CLR_Mat"
+"p03","esign_sinewave5_STAT","StaticMeshCollectionActor_13856","StaticMeshCollectionActor_13856.StaticMeshActor_6609_SMC","-10,192, 336, 6,560","ENV_NEU_Variation_p.fbook_sinewave5_CLR_Mat"
+"p04","esign_sinewave2_STAT","StaticMeshCollectionActor_13856","StaticMeshCollectionActor_13856.StaticMeshActor_11457_SMC","-12,256, 352, 6,496","ENV_NEU_Variation_p.fbook_sinewave2_CLR_Mat"
+"p05","esign_d2_screen1_STAT","StaticMeshCollectionActor_13856","StaticMeshCollectionActor_13856.StaticMeshActor_11956_SMC","-8,880, 336, 6,560","ENV_NEU_Variation_p.esigns_d2_CLR_Mat ENV_NEU_Variation_p.fbook_readout2_CLR_Mat"
+"p06","esign_sinewave4_STAT","StaticMeshCollectionActor_13856","StaticMeshCollectionActor_13856.StaticMeshActor_1360_SMC","473, -6,519, 5,216","ENV_NEU_Variation_p.fbook_sinewave4_CLR_Mat"
