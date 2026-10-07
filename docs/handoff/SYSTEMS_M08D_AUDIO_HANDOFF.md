@@ -245,9 +245,11 @@ Measured (real device): spawn-frame loads cold 30-60 ms per selection -> 1.3-4.6
   - All three are idempotent and change-driven. A death stops the loops silently; match end / unload goes through stopAll.
 - Fields read: MatchOpponent::spawned() / matchPlayer() / pawn(); Character::cloakRemain_, hoverState_, actorLocation();
   Match::players()[p].team.
-- **PARTIAL:** Cloaking's activate / deactivate animation notifies (Nav_CloakActivate / Nav_CloakDeactivate:
-  CQC_TRANSFORM_CLOAK_ACTIVATE / DEACTIVATE, RE pass 5 s12 addendum) are not in the exported character clips. Only the cloak
-  buff loop / off sound plays (for the local pawn and for bots).
+- **Cloak animation sounds - correctly absent in versus (CONFIRMED, AssetTools):** Nav_CloakActivate / Nav_CloakDeactivate
+  (AI_CQC_ROBO_ANIM*, BL_CHR_CQC.CQC_TRANSFORM_CLOAK_ACTIVATE / DEACTIVATE) are cooked only into campaign levels and
+  MP_ESC_BrokenHope / Remnant (Escalation), never a versus map, so the original versus cloak plays only the buff loop / off
+  sound. AssetTools exports them as character.json "notify_only_clips"; Systems deliberately does not import them for versus
+  (it would be PC ADAPTATION). World::playCloakAnimNotifies plays them only if a profile carries them (an Escalation mode).
 - Verified (09c 49115b2 + glue, 7v8 TDM):
   - bots' cloak START_LP x16 (Autobot 8 / Decepticon 8) and OFF x13;
   - hover LIFT x5 / LAND x3;

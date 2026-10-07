@@ -318,8 +318,10 @@ private:
     std::set<std::string> participantProfiles_;                   // bot chassis whose cue set is registered this level
     bool localCloakAnim_ = false;                                 // [Systems M09e] cloak on -> Nav_CloakActivate notifies
     std::set<int> participantCloakAnim_;                          // participants whose cloak is on
-    // Nav_CloakActivate / Nav_CloakDeactivate notifies (CQC_TRANSFORM_CLOAK_*, RE pass 5 s12 addendum) for a pawn; silent
-    // while those clips are missing from the character export (PARTIAL).
+    // Nav_CloakActivate / Nav_CloakDeactivate notifies (CQC_TRANSFORM_CLOAK_*) for a pawn, if a profile carries those clips.
+    // In VERSUS they are correctly silent: the clips (AI_CQC_ROBO_ANIM*) and BL_CHR_CQC cues are cooked only into campaign /
+    // Escalation levels, never a versus map [CONFIRMED AssetTools], and gen_character_audio.py does not import
+    // notify_only_clips. Importing them for versus would be a PC ADAPTATION.
     void playCloakAnimNotifies(bool on, const CharacterAudioProfile& p, const SoundCues::Emitter& at, float dist);
     static constexpr int kOwnParticipantBase = 1000;              // SoundCues owner id for participant `p` = base + p
     WeaponAudio weaponAudio_;
