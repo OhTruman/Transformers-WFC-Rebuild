@@ -481,3 +481,15 @@ Sub-profile (09c 28aec2e, 63 bots, steady state, ms per 60 Hz step): SoundCues u
 Suite 744 / 0 (no checks while out of range, an immediate check on entry, the 0.25 s interval again in range).
 Note for Integration: participantPositionHook searches opponents_ linearly per call (the resolver calls it per attached
 instance per step); indexing it by player would make it O(1).
+Measured after M09m (same scratch build before / after, 32 v 32, clean machine, ms per step): occlusion rays 0.050 -> 0.013,
+SoundCues update 0.092 -> 0.050, per-bot 0.040 -> 0.036; all audio in the step ~0.145 -> ~0.091 ms.
+
+## M09n - sound groups thread-safe (async sim step)
+
+With the sim step on a worker (Gameplay docs/ASYNC_SIM_STEP.md), World's cue table reads the device-global sound groups
+(SoundMixer::groupScale) on the worker while the main thread sets sliders (Frontend settings) and the frontend's own cue table
+reads them. The group volumes are now atomics and the category cache inserts under a lock (unordered_map element references stay
+valid), so the volume calls stay DIRECT on the main thread - in menus too (agreed with Integration; not through World::submit).
+The device (Win32Audio) was already locked; each cue table's preset mixer is its own. Preload calls: Integration routes the
+main-thread world_.applyLoadout(...) (-> preloadWeaponAudio / setPlayerVehicleWeaponAudio) and any mid-match
+queueSelectionAudio through submit. Suite 745 / 0 (2 reader threads during 40000 slider writes: in range, last write wins).

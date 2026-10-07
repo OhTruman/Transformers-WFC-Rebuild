@@ -2,6 +2,8 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <atomic>
+#include <mutex>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -24,15 +26,19 @@ bool sameName(const std::string& a, const char* b) {         // FName comparison
     return true;
 }
 // The distinct group names, in mapping order, and their current volumes (device-global).
+// Thread-safe (the async sim step: World's cue table updates on the worker while the frontend's and the settings code run on
+// the main thread): volumes are atomics; the category cache inserts under a lock (unordered_map element references stay valid).
 struct Groups {
-    std::vector<std::string> names;
-    std::vector<float> vol;
+    static constexpr size_t kMax = 32;
+    std::vector<std::string> names;                            // fixed after construction
+    std::atomic<float> vol[kMax];
     std::unordered_map<std::string, std::vector<int>> scaleOf;  // category -> groups over it and its ancestors (cache)
+    std::mutex scaleMx;
     Groups() {
         for (const GroupCategory& g : kGroupCategories) {
             bool known = false;
             for (const std::string& n : names) known = known || n == g.group;
-            if (!known) names.push_back(g.group);
+            if (!known && names.size() < kMax) names.push_back(g.group);
         }
         reset();
     }
@@ -41,13 +47,14 @@ struct Groups {
         return -1;
     }
     void reset() {
-        vol.assign(names.size(), 1.0f);
+        for (size_t i = 0; i < kMax; ++i) vol[i].store(1.0f);
         for (const GroupDefault& d : kProfileGroupDefaults) {
             const int i = index(d.group);
-            if (i >= 0) vol[(size_t)i] = std::min(1.0f, std::max(0.0f, (float)d.slider / 100.0f));
+            if (i >= 0) vol[(size_t)i].store(std::min(1.0f, std::max(0.0f, (float)d.slider / 100.0f)));
         }
     }
     const std::vector<int>& groupsOver(const std::string& category) {
+        std::lock_guard<std::mutex> lk(scaleMx);
         auto it = scaleOf.find(category);
         if (it != scaleOf.end()) return it->second;
         std::vector<int> out;
@@ -299,15 +306,15 @@ bool SoundMixer::setGroupVolume(const std::string& group, float linear) {
     Groups& g = groups();
     const int i = g.index(group);
     if (i < 0) { LOG_WARN("mixer: SetAudioGroupVolume: unknown sound group %s", group.c_str()); return false; }
-    g.vol[(size_t)i] = std::min(1.0f, std::max(0.0f, linear));
-    if (logOn()) LOG_INFO("mixer: group %s volume %.2f", g.names[(size_t)i].c_str(), g.vol[(size_t)i]);
+    g.vol[(size_t)i].store(std::min(1.0f, std::max(0.0f, linear)));
+    if (logOn()) LOG_INFO("mixer: group %s volume %.2f", g.names[(size_t)i].c_str(), g.vol[(size_t)i].load());
     return true;
 }
 
 float SoundMixer::groupVolume(const std::string& group) {
     const Groups& g = groups();
     const int i = g.index(group);
-    return i < 0 ? 1.0f : g.vol[(size_t)i];
+    return i < 0 ? 1.0f : g.vol[(size_t)i].load();
 }
 
 void SoundMixer::resetGroupVolumes() { groups().reset(); }
@@ -320,7 +327,7 @@ int SoundMixer::profileDefaultSlider(const std::string& group) {
 float SoundMixer::groupScale(const std::string& category) {
     Groups& g = groups();
     float s = 1.0f;
-    for (int i : g.groupsOver(category)) s *= g.vol[(size_t)i];
+    for (int i : g.groupsOver(category)) s *= g.vol[(size_t)i].load(std::memory_order_relaxed);
     return s;
 }
 
