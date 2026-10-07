@@ -410,3 +410,12 @@ Verified on 09c fa973d3 + Gameplay d652718 (clean merge) + glue, 16 v 16, listen
 leaks. Grenade throw (ADD_Grenade_Throw notifies, all 33 profiles) uses the same path as the melee swing; not observed near
 the followed bot in that run. Bots never tank-180 (Gameplay: authentic to the current AI). The local pawn may switch its
 slip input to vs.slipAngle too (same quantity; Gameplay).
+
+## M09l - at most 96 heard, always (Experimental 32 v 32 report: voices max 97-98)
+
+A virtual voice coming back into range took no channel, so the audible count could pass 96 briefly. The mixer now makes the
+least important audible voices virtual for the block when more than 96 are audible (the player's own last, then priority,
+then the quietest) - FMOD virtual-voice behaviour; `MixStats::overflowVirtualized` counts it. 32 v 32 (63 bots, Streets TDM,
+3 min, fa973d3 + Gameplay d652718): voices max 96, mixer 0.20 / 0.56 ms per block, local no-channel 0, 0 missing / leaks.
+Steals / refusals at 32 v 32 are by design: the original 96-channel rule (priority, then the quietest) over 64 participants'
+sounds; the human's own are protected. Suite 741 / 0 (106 audible -> 96 mixed, own kept, the 10 least important virtual).
