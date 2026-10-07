@@ -63,11 +63,24 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
         const float spread = shooter.effectiveSpread();
         dir = core::normalize(dir + rt * (rf() * spread) + u2 * (rf() * spread));
     }
+    // The nearest target candidate first (pawn cylinders, destructible boxes, sentries, barriers: cheap), then the world trace only
+    // up to it (+ the barrier tolerance): the same first hit as tracing the whole range, without walking every grid cell to 300 m.
+    float nearest = range;
+    for (MatchOpponent* o : opponents_) {
+        if (o->matchPlayer() == instigator) continue;
+        float th; if (o->rayHit(origin, dir, range, th)) nearest = std::min(nearest, th);
+    }
+    if (matchActive_ && !localDead_ && instigator != localPlayer_) { float th; if (MatchOpponent::pawnRayHit(player_.pawn(), origin, dir, range, th)) nearest = std::min(nearest, th); }
+    for (Destructible* d : destructibles_) { float th; if (d->state() == 0 && rayAabb(origin, dir, range, d->boxMin(), d->boxMax(), th)) nearest = std::min(nearest, th); }
+    { float th; if (sentryRayHit(origin, dir, range, th)) nearest = std::min(nearest, th); }
+    { float th; if (barrierRayHit(origin, dir, range, th)) nearest = std::min(nearest, th); }
+    const float traceLen = std::min(range, nearest + 0.06f);
     float bestDist = range;
     if (collision_.valid()) {
         float t; core::Vec3 n;
         const CollisionWorld& lineWorld = weaponCollision_.valid() ? weaponCollision_ : collision_;
-        if (lineWorld.segmentHit(origin, origin + dir * range, t, n)) bestDist = range * t;
+        if (lineWorld.segmentHit(origin, origin + dir * traceLen, t, n)) bestDist = traceLen * t;
+        else if (traceLen < range) bestDist = traceLen;   // nothing in the world before the nearest target: it is hit
     }
     float targetDist = bestDist;
     int hitPlayer = -1;
@@ -83,10 +96,13 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
         float th;
         if (d->state() == 0 && rayAabb(origin, dir, range, d->boxMin(), d->boxMax(), th) && th < targetDist) { targetDist = th; hitDes = d; hitPlayer = -1; }
     }
-    { float ts; if (sentryRayHit(origin, dir, range, ts) && ts < targetDist) { targetDist = ts; hitDes = nullptr; hitPlayer = -1; damageSentry(w.damageAt(ts), instigator, w.damageType ? w.damageType : ""); } }
+    // A sentry is damaged only when it is the shot's final hit (a nearer barrier on the same ray takes the shot alone).
+    bool hitSentry = false;
+    { float ts; if (sentryRayHit(origin, dir, range, ts) && ts < targetDist) { targetDist = ts; hitDes = nullptr; hitPlayer = -1; hitSentry = true; } }
     bool hitBarrier = false;
-    { float th; if (barrierRayHit(origin, dir, range, th) && th <= targetDist + 0.05f) { targetDist = th; hitBarrier = true; hitDes = nullptr; hitPlayer = -1; } }
-    const float dist = (hitDes || hitPlayer >= 0 || hitBarrier) ? targetDist : bestDist;
+    { float th; if (barrierRayHit(origin, dir, range, th) && th <= targetDist + 0.05f) { targetDist = th; hitBarrier = true; hitDes = nullptr; hitPlayer = -1; hitSentry = false; } }
+    const float dist = (hitDes || hitPlayer >= 0 || hitBarrier || hitSentry) ? targetDist : bestDist;
+    if (hitSentry) { float ts; if (sentryRayHit(origin, dir, range, ts)) damageSentry(w.damageAt(ts), instigator, w.damageType ? w.damageType : ""); }
     if (hitBarrier) damageBarrier(w.damageAt(dist), w.damageType ? w.damageType : "");
     if (hitPlayer >= 0) {
         if (hitPlayer == localPlayer_) { ++damageTakenCount_; lastDamageFrom_ = origin; }
