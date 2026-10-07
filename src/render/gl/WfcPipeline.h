@@ -160,7 +160,10 @@ public:
     // process-wide core::loadYield when the tree has it (the world mesh upload / warm-up run outside the former)
     void loadStep(const char* where);
     // Canvas material tile (UE3 FCanvas::DrawMaterialTile): queued, drawn after post onto the back buffer.
-    void drawMaterialTile(const IRenderer::MaterialTile& t) { uiTiles_.push_back(t); }
+    void drawMaterialTile(const IRenderer::MaterialTile& t) {   // pooled: copy-assign reuses each slot's capacity
+        if (uiTileCount_ < uiTiles_.size()) uiTiles_[uiTileCount_] = t; else uiTiles_.push_back(t);
+        ++uiTileCount_;
+    }
     bool hasMaterial(const std::string& m) const { return mats_.count(m) > 0; }
     bool active() const { return active_; }
     void setVisibility(IRenderer::VisibilityQuery q) { vis_ = std::move(q); visMemo_.clear(); }
@@ -327,6 +330,14 @@ private:
     std::vector<float> spriteV_, spriteCol_, spriteSub_;
     std::vector<uint32_t> spriteIdx_;
     GpuMesh spriteMesh_;
+    // the frame sprite stream (flushTranslucency): every sprite group's vertices, uploaded once per frame
+    std::vector<float> spriteFrameV_, spriteFrameCol_, spriteFrameSub_;
+    GLuint spriteFrameVao_ = 0, spriteFrameVbo_ = 0, spriteFrameCbo_ = 0, spriteFrameSbo_ = 0, spriteFrameIbo_ = 0;
+    size_t spriteFrameIboQuads_ = 0;
+    GpuMesh spriteFrameMesh_;
+    void spriteCoverage(const char* material, const Sprite* sp, size_t n);
+    void spriteAppend(const Sprite* sp, size_t n, const core::Vec3& facing, std::vector<float>& v, std::vector<float>& col,
+                      std::vector<float>& sub);
     int statSpriteBatches_ = 0, statSpriteMerged_ = 0;   // WFC_RENDERSTATS
     // GPU-spike evidence (a long GPU frame is reported 3 frames later): per-frame sprite count, total screen coverage
     // (in screens) and the materials that covered most - overdraw from effects at the camera is the usual suspect
@@ -339,6 +350,7 @@ private:
     std::function<void()> loadYield_;
     bool inLoadYield_ = false;
     std::vector<IRenderer::MaterialTile> uiTiles_;
+    size_t uiTileCount_ = 0;                                   // tiles queued this frame (uiTiles_ is a pool)
     void drawCanvasTiles();
     float displayGamma_ = 2.2f;                        // Xe-TransEngine.ini DisplayGamma / profile Brightness
     float canvasInvGamma_ = 0.0f;                      // > 0 while drawing Canvas tiles
@@ -376,6 +388,7 @@ private:
     };
     struct SkinInst { int row = -1; uint64_t serial = ~0ull; bool prev = false; core::Vec3 mn, mx, pmn, pmx; int lastFrame = 0; };
     std::map<const void*, SkinModel> skinModels_;
+    int statSkinRebuilds_ = 0;                            // skinned-model (re)builds since the last 600-frame log
     std::map<const void*, SkinInst> skinInsts_;
     std::vector<int> freeSkinRows_;
     int skinRowsUsed_ = 0;
@@ -645,6 +658,9 @@ public:
     void setMapEffectActive(const std::string& ownerOrComponent, bool active);
     // key = owner actor, component path, or "<owner>|custom" / "<owner>|highlight"; hidden = SetHidden (no draw)
     void setMapEffectState(const std::string& key, bool active, bool hidden);
+    struct EffKey { std::string w, role, shortName; };
+    std::unordered_map<std::string, EffKey> effKeyCache_;          // setMapEffectState key parses
+    std::unordered_map<std::string, std::string> actorKeyCache_;   // setActorHidden key -> lower-case short name
     void setActiveGameRules(const std::vector<std::string>& rules);   // Gameplay's active TnGameRules classes
     void setMapClock(float t) { mapClock_ = t; hasMapClock_ = true; }  // Gameplay MapState clock
     float mapTime() const { return hasMapClock_ ? mapClock_ : time_; }

@@ -233,9 +233,14 @@ void Pipeline::updateMovers() {
 }
 
 void Pipeline::setActorHidden(const std::string& actor, bool hidden) {
-    std::string a = actor.substr(actor.rfind('.') == std::string::npos ? 0 : actor.rfind('.') + 1);   // full path or name
-    std::transform(a.begin(), a.end(), a.begin(), ::tolower);
-    actorHidden_[a] = hidden;
+    auto it = actorKeyCache_.find(actor);            // memoized lower-case short name (called per actor per frame)
+    if (it == actorKeyCache_.end()) {
+        std::string a = actor.substr(actor.rfind('.') == std::string::npos ? 0 : actor.rfind('.') + 1);   // full path or name
+        std::transform(a.begin(), a.end(), a.begin(), ::tolower);
+        it = actorKeyCache_.emplace(actor, std::move(a)).first;
+    }
+    auto h = actorHidden_.find(it->second);
+    if (h != actorHidden_.end()) h->second = hidden; else actorHidden_[it->second] = hidden;
 }
 
 bool Pipeline::actorHidden(const std::string& actorLower) const {
