@@ -89,6 +89,13 @@ void GfxPresenter::setScoreboard(bool open) {
     if (!ok) scoreboard_.reset();
 }
 
+bool GfxPresenter::hudStageSize(double& w, double& h) const {
+    if (!hud_) return false;
+    w = hud_->player().stageViewW();
+    h = hud_->player().stageViewH();
+    return w > 0 && h > 0;
+}
+
 void GfxPresenter::hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) {
     if (!hud_) return;
     static const bool trace = std::getenv("WFC_HUDTRACE") != nullptr;   // DEV TOOL: log every HUD call with its args

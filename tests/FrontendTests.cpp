@@ -81,6 +81,7 @@ static void testUrl() {
 struct RecordingPresenter : frontend::IMoviePresenter {
     std::vector<std::string> calls;
     bool runsMovie(const std::string&) const override { return true; }
+    bool hudStageSize(double& w, double& h) const override { w = 1280; h = 720; return true; }
     void update(frontend::GameFlow&, const platform::InputFrame&, float) override {}
     void draw(const frontend::GameFlow&, int, int) override {}
     void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override {
@@ -141,6 +142,18 @@ static void testHudObservers(const Catalog& c) {
     f.progressObserver.reset(); f.progress = 0.0;
     hud.setFrame(f); p.calls.clear(); hud.update(&p, c, true, true);
     check(p.has("_global.NotifyProgressBarChanged(Reviving Bumblebee,0)"), "hud.progress_end_keeps_label", p.calls.empty() ? "" : p.calls[0]);
+    // lock-on marker: stage pixels + UU, sent while up and once to remove it
+    f.lockOnMarker = HudFrame::LockOnMarker{4, 0.5, 0.25, 12.5, true, ""};
+    hud.setFrame(f); p.calls.clear(); hud.update(&p, c, true, true);
+    check(p.has("_global.StartMarkerUpdate()") && p.has("_global.UpdateMarker(4,1250,640,180,1,LockOn,)") && p.has("_global.FinishMarkerUpdate()"),
+          "hud.lockon_marker", p.calls.size() > 1 ? p.calls[1] : "");
+    p.calls.clear(); hud.update(&p, c, true, true);
+    bool quiet = p.count("_global.StartMarkerUpdate") == 0;
+    f.lockOnMarker.reset();
+    hud.setFrame(f); p.calls.clear(); hud.update(&p, c, true, true);
+    check(quiet && p.has("_global.FinishMarkerUpdate()") && p.count("_global.UpdateMarker") == 0, "hud.lockon_marker_removed");
+    p.calls.clear(); hud.update(&p, c, true, true);
+    check(p.count("_global.StartMarkerUpdate") == 0, "hud.lockon_idle_silent");
     // prompts diffed into add / remove; refused transforms per increment; conversions
     f.contextualPrompts = std::vector<std::string>{"Pick up"};
     f.cantTransformCount = 0;

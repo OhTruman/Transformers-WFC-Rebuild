@@ -35,6 +35,7 @@ public:
     void setHud(bool open, bool visible) override;
     void setScoreboard(bool open) override;
     void hudCall(const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
+    bool hudStageSize(double& w, double& h) const override;
     void setWorldLabels(const std::vector<frontend::WorldLabel>& labels) override { worldLabels_ = labels; }
     void movieCall(const std::string& movie, const std::string& fn, const std::vector<frontend::BridgeValue>& args) override;
     void advanceLoading(float dt) override {

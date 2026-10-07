@@ -48,6 +48,16 @@ struct HudFrame {
     std::optional<int> grenadeAmmo, grenadeType, activeGrenades;
     std::optional<double> playerYaw;               // DamageIndicators: the view yaw in radians
     std::optional<int> lockOnState;                // LockOnState
+    // The lock-on target marker (TnHUD UpdateObjectiveMarker -> Hud_GFX UpdateMarker 'LockOn', the only GFx marker type;
+    // objective markers are Canvas sprites): the target projected to the viewport (0..1 from the top left), its distance
+    // in metres, and whether it is in front of the camera.
+    struct LockOnMarker {
+        int id = 0; double x = 0, y = 0, distance = 0; bool inFront = true; std::string description;
+        bool operator!=(const LockOnMarker& o) const {
+            return id != o.id || x != o.x || y != o.y || distance != o.distance || inFront != o.inFront || description != o.description;
+        }
+    };
+    std::optional<LockOnMarker> lockOnMarker;
     std::optional<std::string> targetName;         // TargetName
     std::optional<int> targetType;                 // TargetType
     std::optional<double> targetHealth;            // NotifyTargetHealthChanged(TargetType, health)

@@ -65,6 +65,8 @@ public:
     virtual void setHud(bool open, bool visible) { (void)open; (void)visible; }
     virtual void hudCall(const std::string& fn, const std::vector<BridgeValue>& args) { (void)fn; (void)args; }
     virtual void setWorldLabels(const std::vector<WorldLabel>& labels) { (void)labels; }   // DEV TOOL overlay text
+    // The HUD movie's visible stage in its own units (Hud_GFX Stage.width / height): marker screen coordinates.
+    virtual bool hudStageSize(double& w, double& h) const { (void)w; (void)h; return false; }
     // A function of a notification movie (e.g. UI_GFxChallengeNotifies_p.ChallengeNotify_GFX ChallengeUnlocked): the
     // movie is opened without focus if it is not, and the call is made once it has run its first frame.
     virtual void movieCall(const std::string& movie, const std::string& fn, const std::vector<BridgeValue>& args) {
