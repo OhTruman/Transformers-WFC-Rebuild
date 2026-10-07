@@ -26,11 +26,15 @@ param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir
       [string[]]$AsyncModes = @(),
       # -PerfLog <md>: append this run's table to the running PERFORMANCE LOG (Integration's scalability brief)
       [string]$PerfLog = "", [string]$Note = "",
+      # -Exe: an exe outside <Root>\build-release (e.g. a lane's profiling build, read-only); -ExtraEnv "K=V;K=V" for the timing
+      # runs (e.g. WFC_SLOWFRAME=3.33: Rendering's per-slow-frame breakdown, classified per row below)
+      [string]$Exe = "", [string]$ExtraEnv = "",
       [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\Flow.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
 $Root = (Resolve-Path $Root).Path; New-Item -ItemType Directory -Force $OutDir | Out-Null; $OutDir = (Resolve-Path $OutDir).Path
-$exe = Join-Path $Root $(if ($Config -eq "Debug") { "build\bin\wfc_rebuild.exe" } else { "build-release\bin\wfc_rebuild.exe" })
+$exe = if ($Exe) { (Resolve-Path $Exe).Path } else { Join-Path $Root $(if ($Config -eq "Debug") { "build\bin\wfc_rebuild.exe" } else { "build-release\bin\wfc_rebuild.exe" }) }
+$extraEnvMap = @{}; foreach ($kv in @($ExtraEnv -split ';' | Where-Object { $_ -match '=' })) { $i = $kv.IndexOf('='); $extraEnvMap[$kv.Substring(0, $i).Trim()] = $kv.Substring($i + 1) }
 $H = Get-ExeHooks $exe
 $sha = if (Test-Path (Join-Path $Root "M05_TARGET.txt")) { ((Get-Content (Join-Path $Root "M05_TARGET.txt")) | Where-Object { $_ -like "sha=*" }) -replace 'sha=', '' } else { "?" }
 $Maps = @($Maps | ForEach-Object { "$_" -split ',' } | Where-Object { $_.Trim() } | ForEach-Object { $_.Trim() })
@@ -88,6 +92,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         if ($H.Contains("WFC_CHARSELECT")) { $e.WFC_CHARSELECT = "1" }
         if ($FixedCam -and $H.Contains("WFC_FIXEDCAM") -and $camDefaults["$map"]) { $e.WFC_FIXEDCAM = $camDefaults["$map"] }
         if ($asyncM -ne "") { $e.WFC_ASYNCSTEP = $asyncM; if ($asyncM -eq "1") { $e.WFC_ASYNCLOG = "1" } }
+        foreach ($k in $extraEnvMap.Keys) { $e[$k] = $extraEnvMap[$k] }
         $null = Invoke-WfcExe $exe $d $e "run.log" (2 * $TimeLimit + 900)
     }
     # CPU / GPU split: a separate ONE-match run with WFC_RENDERSTATS (glFinish per frame distorts timing, so never in the timing run)
@@ -171,6 +176,23 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             for ($i = 1; $i -lt $gg.Count; $i++) { $mv = [Math]::Sqrt([Math]::Pow($gg[$i].x - $gg[$i - 1].x, 2) + [Math]::Pow($gg[$i].z - $gg[$i - 1].z, 2))
                 if ($mv -lt 0.1 -and $gg[$i].tgt -lt 0 -and $gg[$i].goal -match '^(Roam|Attack|Retrieve)') { $run++; $fz = [Math]::Max($fz, $run) } else { $run = 0 } }
             if ($fz -ge 20) { $broken++ } elseif (@($gg | Where-Object { $_.stuck -ge 2 }).Count / [Math]::Max(1, $gg.Count) -gt 0.25) { $strug++ } }
+        # Rendering's WFC_SLOWFRAME lines: "SLOWFRAME f<n> interval <ms>: render <ms> (world, chars, fx, transl, post), outside <ms>;
+        # gpu <ms>|n/a (...); draws <n> (dyn, fx), program binds <n>, buffer upload <KB>, new textures <n>, shader compiles <n>, map FX cpu <ms> (sim <ms>)"
+        $sfBins = [ordered]@{ "shader compile" = 0; "new textures" = 0; "buffer upload > 256 KB" = 0; "GPU-bound" = 0; "outside render (sim / UI / present)" = 0; "render: world" = 0; "render: chars" = 0; "render: fx" = 0; "render: transl" = 0; "render: post" = 0 }
+        $sfN = 0
+        foreach ($sl in @($segL | Where-Object { $_.Contains('SLOWFRAME f') })) {
+            $mm = [regex]::Match($sl, 'interval ([\d.]+)[^:]*: render ([\d.]+)(?: ?ms)? \(([\d., ]+)\),? outside ([\d.]+)(?: ?ms)?; gpu (n/a|[\d.]+)')
+            if (-not $mm.Success) { continue }; $sfN++
+            $rnd = [double]$mm.Groups[2].Value; $parts = @($mm.Groups[3].Value -split ',' | ForEach-Object { [double]$_.Trim() }); $outside = [double]$mm.Groups[4].Value
+            $gpu = if ($mm.Groups[5].Value -eq "n/a") { -1.0 } else { [double]$mm.Groups[5].Value }
+            $sc = [regex]::Match($sl, 'shader compiles (\d+)'); $nt = [regex]::Match($sl, 'new textures (\d+)'); $bu = [regex]::Match($sl, 'buffer upload ([\d.]+)')
+            if ($sc.Success -and [int]$sc.Groups[1].Value -gt 0) { $sfBins["shader compile"]++ }
+            elseif ($nt.Success -and [int]$nt.Groups[1].Value -gt 0) { $sfBins["new textures"]++ }
+            elseif ($bu.Success -and [double]$bu.Groups[1].Value -gt 256) { $sfBins["buffer upload > 256 KB"]++ }
+            elseif ($gpu -gt $rnd) { $sfBins["GPU-bound"]++ }
+            elseif ($outside -gt $rnd) { $sfBins["outside render (sim / UI / present)"]++ }
+            else { $names = @("world", "chars", "fx", "transl", "post"); $mi = 0; for ($q = 1; $q -lt [Math]::Min($parts.Count, 5); $q++) { if ($parts[$q] -gt $parts[$mi]) { $mi = $q } }; $sfBins["render: $($names[$mi])"]++ }
+        }
         $asyncLines = @($segL | Where-Object { $_ -match '\] ASYNC(STEP|LOG) ' } | ForEach-Object { $_ -replace '^\[[^\]]*\]\s*', '' })
         $joinVals = @($asyncLines | ForEach-Object { $mj = [regex]::Match($_, 'join(?: wait)?[ =:]+([\d.]+)'); if ($mj.Success) { [double]$mj.Groups[1].Value } })
         $bgVals = @($asyncLines | ForEach-Object { $mb = [regex]::Match($_, 'background(?: part)?[ =:]+([\d.]+)'); if ($mb.Success) { [double]$mb.Groups[1].Value } })
@@ -190,7 +212,8 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
             loaded_mb = $(if ($k -lt $ld.Count) { [Math]::Round([double]$ld[$k].privateMB) }); unloaded_mb = $(if ($k -lt $ul.Count) { [Math]::Round([double]$ul[$k].privateMB) })
             voices_max = $voices; voices_dropped = $dropped; voices_stolen = $stolen; mix_ms_max = $mixMs
             kills = $kills; broken_bots = $broken; struggling_bots = $strug; nopath_max = ($bl | Measure-Object nopath -Maximum).Maximum; off_mesh = @($bl | Where-Object { $_.cell -lt 0 }).Count
-            end_reason = $reason
+            end_reason = $reason; slowframe_lines = $sfN
+            slowframe_bins = $(if ($sfN) { (@($sfBins.GetEnumerator() | Where-Object { $_.Value -gt 0 } | Sort-Object Value -Descending | ForEach-Object { "$($_.Key) $($_.Value) ($([Math]::Round(100.0 * $_.Value / $sfN))%)" }) -join "; ") })
             async_local_ms = $(if ($locVals.Count) { [Math]::Round(($locVals | Measure-Object -Average).Average, 3) }); async_bg_ms = $(if ($bgVals.Count) { [Math]::Round(($bgVals | Measure-Object -Average).Average, 3) })
             async_join_ms = $(if ($joinVals.Count) { [Math]::Round(($joinVals | Measure-Object -Average).Average, 3) }); async_join_max_ms = $(if ($joinVals.Count) { ($joinVals | Measure-Object -Maximum).Maximum }) }
         $rows.Add($row)
@@ -208,6 +231,7 @@ foreach ($map in $Maps) { foreach ($pop in $Pops) {
         # the original 96-channel FMOD rule (Systems): steals / refusals at 64 participants are by design; MORE than 96 heard
         # voices is the defect (fixed in agents/systems e1fa3c0, M09l)
         if ($asyncM -eq "1") { Res "$mt.async" "INFO" ("async step: local {0} / background {1} / join wait avg {2} max {3} ms ({4} lines); last: {5}" -f $row.async_local_ms, $row.async_bg_ms, $row.async_join_ms, $row.async_join_max_ms, $asyncLines.Count, $(if ($asyncLines.Count) { $asyncLines[-1] } else { "no ASYNC lines (WFC_ASYNCLOG not in this build?)" })) "Gameplay" }
+        if ($sfN) { Res "$mt.slowframes" "INFO" ("{0} SLOWFRAME lines (frames over the WFC_SLOWFRAME threshold), by cause: {1}" -f $sfN, $row.slowframe_bins) "Rendering" }
         Res "$mt.audio" $(if ($voices -gt 96) { "FAIL" } else { "INFO" }) ("voices max {0} (cap 96), dropped {1}, stolen {2} (priority culling by design), mix max {3} ms / block" -f $voices, $dropped, $stolen, $mixMs) "Systems"
     }
     Res "$tag.second_match_and_exit" $(if ($seg.Count -ge 2 -and $clean) { "PASS" } else { "FAIL" }) ("{0} matches started; clean exit {1}" -f $seg.Count, $clean) "Frontend/Gameplay"
