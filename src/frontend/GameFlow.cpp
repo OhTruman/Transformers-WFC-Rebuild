@@ -488,21 +488,36 @@ GameFlow::BotRows GameFlow::botRows() const {
 }
 
 int GameFlow::botMax(const std::string& field) const {
-    const int cap = botTeamCapacity();
     if (field == "difficulty") return 2;
-    if (botRows() == BotRows::Teams) return field == "friendly" ? cap - 1 : cap;
-    if (botRows() == BotRows::FreeForAll) return field == "enemy" ? botMaxPlayers_ - 1 : 0;
+    if (field == "extended") return 1;
+    const bool ext = profile_.bots.extended;
+    // players per side incl. the human: original 5; extended min(17, Gameplay's maxPerTeam)
+    const int perSide = ext ? std::min(17, gpPerTeam_) : 5;
+    const int players = ext ? gpMaxPlayers_ : 10;
+    if (botRows() == BotRows::Teams) {
+        if (field == "autobot") return perSide - (humanFaction() == 0 ? 1 : 0);
+        if (field == "decepticon") return perSide - (humanFaction() == 1 ? 1 : 0);
+        return 0;
+    }
+    if (botRows() == BotRows::FreeForAll) return field == "enemy" ? players - 1 : 0;
     return 0;
 }
 
 void GameFlow::setBotSetting(const std::string& field, int value) {
     LocalProfile::Bots& b = profile_.bots;
-    int& v = field == "friendly" ? b.friendly : field == "enemy" ? b.enemy : b.difficulty;
-    v = std::clamp(value, 0, std::max(0, botMax(field)));
+    if (field == "extended") b.extended = value != 0;
+    else {
+        int& v = field == "autobot" ? b.autobot : field == "decepticon" ? b.decepticon : field == "enemy" ? b.enemy : b.difficulty;
+        v = std::clamp(value, 0, std::max(0, botMax(field)));
+    }
+    // a smaller limit clamps the counts
+    b.autobot = std::min(b.autobot, std::max(0, botMax("autobot")));
+    b.decepticon = std::min(b.decepticon, std::max(0, botMax("decepticon")));
+    if (botRows() == BotRows::FreeForAll) b.enemy = std::min(b.enemy, std::max(0, botMax("enemy")));
     profile_.save();
-    FlowTrace::emit("lobby.bots", {{"field", field}, {"value", std::to_string(v)}, {"friendly", std::to_string(b.friendly)},
+    FlowTrace::emit("lobby.bots", {{"field", field}, {"autobot", std::to_string(b.autobot)}, {"decepticon", std::to_string(b.decepticon)},
                                    {"enemy", std::to_string(b.enemy)}, {"difficulty", std::to_string(b.difficulty)},
-                                   {"provenance", "PC ADAPTATION"}});
+                                   {"extended", FlowTrace::boolean(b.extended)}, {"provenance", "PC ADAPTATION"}});
 }
 
 std::string GameFlow::buildMatchUrl(const GameSettings& gs) const {
@@ -796,15 +811,21 @@ void GameFlow::startLevel() {
     // GameSettings.BuildURL(MapURL); LobbyGRI.ModifyURL(MapURL): GetMapFilename() $ MapURL $ "?MapId=" $ GetMapID().
     std::string url = mi->mapFilename + buildMatchUrl(*gs) + "?MapId=" + std::to_string(mi->mapId);
     {   // Private Match bots (PC ADAPTATION; Gameplay's MatchLaunch::fromURL reads them): only when any are configured.
+        // Team modes send the faction counts (?BotsAutobot ?BotsDecepticon) and, for parsers that predate them, the
+        // human-relative ?BotsFriendly ?BotsEnemy; ?ExtendedPlayers is the Custom Game player limit.
         const LocalProfile::Bots& b = profile_.bots;
         const BotRows rows = botRows();
-        const int friendly = rows == BotRows::Teams ? std::min(b.friendly, botMax("friendly")) : 0;
-        const int enemy = rows == BotRows::None ? 0 : std::min(b.enemy, botMax("enemy"));
+        const int au = rows == BotRows::Teams ? std::min(b.autobot, botMax("autobot")) : 0;
+        const int de = rows == BotRows::Teams ? std::min(b.decepticon, botMax("decepticon")) : 0;
+        const int friendly = rows == BotRows::Teams ? (humanFaction() == 1 ? de : au) : 0;
+        const int enemy = rows == BotRows::Teams ? (humanFaction() == 1 ? au : de) : rows == BotRows::FreeForAll ? std::min(b.enemy, botMax("enemy")) : 0;
         if (lobby_.playlistId < 0 && friendly + enemy > 0) {
+            if (rows == BotRows::Teams) url += "?BotsAutobot=" + std::to_string(au) + "?BotsDecepticon=" + std::to_string(de);
             url += "?BotsFriendly=" + std::to_string(friendly) + "?BotsEnemy=" + std::to_string(enemy) +
-                   "?BotDifficulty=" + std::to_string(std::clamp(b.difficulty, 0, 2));
-            FlowTrace::emit("launch.bots", {{"friendly", std::to_string(friendly)}, {"enemy", std::to_string(enemy)},
-                                            {"difficulty", std::to_string(b.difficulty)}, {"provenance", "PC ADAPTATION"}});
+                   "?BotDifficulty=" + std::to_string(std::clamp(b.difficulty, 0, 2)) + "?ExtendedPlayers=" + (b.extended ? "1" : "0");
+            FlowTrace::emit("launch.bots", {{"autobot", std::to_string(au)}, {"decepticon", std::to_string(de)}, {"friendly", std::to_string(friendly)},
+                                            {"enemy", std::to_string(enemy)}, {"difficulty", std::to_string(b.difficulty)},
+                                            {"extended", FlowTrace::boolean(b.extended)}, {"provenance", "PC ADAPTATION"}});
         }
     }
     match_ = MatchLaunch{};
