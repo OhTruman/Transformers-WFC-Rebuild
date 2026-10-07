@@ -5,6 +5,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <map>
+#include <cstdint>
+#include <vector>
 
 namespace glx {
 
@@ -175,6 +177,88 @@ void gpuMark(int k) {
 double lastGpuPassMs(int k) { return k >= 0 && k < 6 ? gPassMs[k] : -1.0; }
 long gpuFrameReads() { return gGpuReads; }
 
+// ---- redundant uniform elimination (300+ fps lobbies: ~2,500 draws x 40-60 uniform calls per frame, most of them
+// re-sending the frame's constants). GL keeps uniform values per program object, so a call that sets the value the
+// program already holds is a no-op: skipping it cannot change any image. The Uniform* / UseProgram / LinkProgram /
+// DeleteProgram entry points are wrapped once after load: the current program is tracked (UseProgram is always
+// forwarded), each program's last value per location is kept as raw bits, link / delete forget a program. Calls made
+// while the current program is unknown (frame boundaries: other components may bind programs through their own
+// loaders) are forwarded uncached. WFC_NOUNICACHE=1 disables the layer (A/B).
+namespace {
+struct UEntry { uint32_t n = 0; uint32_t bits[24]; };
+std::vector<std::vector<UEntry>> gUCache;   // [program][location]
+GLuint gUCur = 0;
+bool gUCurKnown = false;
+unsigned long long gUSkipped = 0, gUSent = 0;
+PFN_UseProgram realUseProgram = nullptr;
+PFN_LinkProgram realLinkProgram = nullptr;
+PFN_DeleteProgram realDeleteProgram = nullptr;
+PFN_Uniform1i realUniform1i = nullptr;
+PFN_Uniform1f realUniform1f = nullptr;
+PFN_Uniform2f realUniform2f = nullptr;
+PFN_Uniform2fv realUniform2fv = nullptr;
+PFN_Uniform3f realUniform3f = nullptr;
+PFN_Uniform4f realUniform4f = nullptr;
+PFN_Uniform1iv realUniform1iv = nullptr;
+PFN_Uniform3fv realUniform3fv = nullptr;
+PFN_Uniform4fv realUniform4fv = nullptr;
+PFN_UniformMatrix4fv realUniformMatrix4fv = nullptr;
+
+// true when the program already holds exactly these bits at `loc` (the call can be skipped); records them otherwise
+bool uSame(GLint loc, const void* data, uint32_t words) {
+    if (!gUCurKnown || gUCur == 0 || loc < 0) return false;
+    if (words > 24) {                               // too large to cache: forward and forget the location
+        if (gUCur < gUCache.size() && (size_t)loc < gUCache[gUCur].size()) gUCache[gUCur][(size_t)loc].n = 0;
+        return false;
+    }
+    if (gUCur >= gUCache.size()) gUCache.resize((size_t)gUCur + 64);
+    std::vector<UEntry>& pc = gUCache[gUCur];
+    if ((size_t)loc >= pc.size()) pc.resize((size_t)loc + 8);
+    UEntry& e = pc[(size_t)loc];
+    if (e.n == words && std::memcmp(e.bits, data, words * 4) == 0) { ++gUSkipped; return true; }
+    e.n = words;
+    std::memcpy(e.bits, data, words * 4);
+    ++gUSent;
+    return false;
+}
+void APIENTRY cUseProgram(GLuint p) { gUCur = p; gUCurKnown = true; realUseProgram(p); }
+void APIENTRY cLinkProgram(GLuint p) { if (p < gUCache.size()) gUCache[p].clear(); realLinkProgram(p); }
+void APIENTRY cDeleteProgram(GLuint p) { if (p < gUCache.size()) gUCache[p].clear(); if (p == gUCur) gUCurKnown = false; realDeleteProgram(p); }
+void APIENTRY cUniform1i(GLint l, GLint v) { if (!uSame(l, &v, 1)) realUniform1i(l, v); }
+void APIENTRY cUniform1f(GLint l, GLfloat v) { if (!uSame(l, &v, 1)) realUniform1f(l, v); }
+void APIENTRY cUniform2f(GLint l, GLfloat a, GLfloat b) { const GLfloat v[2] = {a, b}; if (!uSame(l, v, 2)) realUniform2f(l, a, b); }
+void APIENTRY cUniform3f(GLint l, GLfloat a, GLfloat b, GLfloat c) { const GLfloat v[3] = {a, b, c}; if (!uSame(l, v, 3)) realUniform3f(l, a, b, c); }
+void APIENTRY cUniform4f(GLint l, GLfloat a, GLfloat b, GLfloat c, GLfloat d) { const GLfloat v[4] = {a, b, c, d}; if (!uSame(l, v, 4)) realUniform4f(l, a, b, c, d); }
+void APIENTRY cUniform2fv(GLint l, GLsizei n, const GLfloat* v) { if (n < 0 || !uSame(l, v, (uint32_t)n * 2)) realUniform2fv(l, n, v); }
+void APIENTRY cUniform1iv(GLint l, GLsizei n, const GLint* v) { if (n < 0 || !uSame(l, v, (uint32_t)n)) realUniform1iv(l, n, v); }
+void APIENTRY cUniform3fv(GLint l, GLsizei n, const GLfloat* v) { if (n < 0 || !uSame(l, v, (uint32_t)n * 3)) realUniform3fv(l, n, v); }
+void APIENTRY cUniform4fv(GLint l, GLsizei n, const GLfloat* v) { if (n < 0 || !uSame(l, v, (uint32_t)n * 4)) realUniform4fv(l, n, v); }
+void APIENTRY cUniformMatrix4fv(GLint l, GLsizei n, GLboolean t, const GLfloat* v) {
+    if (t != GL_FALSE || n < 0 || !uSame(l, v, (uint32_t)n * 16)) realUniformMatrix4fv(l, n, t, v);
+}
+void installUniformCache() {
+    static const bool off = std::getenv("WFC_NOUNICACHE") != nullptr;
+    if (off || UseProgram == cUseProgram) return;   // disabled, or already wrapped (load() runs per renderer init)
+    realUseProgram = UseProgram; UseProgram = cUseProgram;
+    realLinkProgram = LinkProgram; LinkProgram = cLinkProgram;
+    realDeleteProgram = DeleteProgram; DeleteProgram = cDeleteProgram;
+    realUniform1i = Uniform1i; Uniform1i = cUniform1i;
+    realUniform1f = Uniform1f; Uniform1f = cUniform1f;
+    realUniform2f = Uniform2f; Uniform2f = cUniform2f;
+    realUniform2fv = Uniform2fv; Uniform2fv = cUniform2fv;
+    realUniform3f = Uniform3f; Uniform3f = cUniform3f;
+    realUniform4f = Uniform4f; Uniform4f = cUniform4f;
+    realUniform1iv = Uniform1iv; Uniform1iv = cUniform1iv;
+    realUniform3fv = Uniform3fv; Uniform3fv = cUniform3fv;
+    realUniform4fv = Uniform4fv; Uniform4fv = cUniform4fv;
+    realUniformMatrix4fv = UniformMatrix4fv; UniformMatrix4fv = cUniformMatrix4fv;
+    LOG_INFO("GL uniform cache: on (redundant uniform calls skipped; WFC_NOUNICACHE=1 disables)");
+}
+}  // namespace
+
+void uniformCacheForgetCurrent() { gUCurKnown = false; }
+void uniformCacheStats(unsigned long long& sent, unsigned long long& skipped) { sent = gUSent; skipped = gUSkipped; gUSent = gUSkipped = 0; }
+
 bool load() {
     bool ok = true;
 #define WFC_GL_LOAD(ret, name, args) \
@@ -187,6 +271,7 @@ bool load() {
 #undef WFC_GL_LOAD_OPT
     if (!GetGraphicsResetStatus) GetGraphicsResetStatus = (PFN_GetGraphicsResetStatus)getProc("glGetGraphicsResetStatusARB");
     if (!DebugMessageCallback) DebugMessageCallback = (PFN_DebugMessageCallback)getProc("glDebugMessageCallbackARB");
+    if (ok) installUniformCache();
     return ok;
 }
 

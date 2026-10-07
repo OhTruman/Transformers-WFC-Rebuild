@@ -146,7 +146,7 @@ public:
     void prewarmPlacedFx();                           // M58: the placed particle components (frontend scenes)
     int spriteProgram(const std::string& material);  // particle material program (cached; -1 = fallback)
     void setLoadYield(std::function<void()> y) { loadYield_ = std::move(y); }
-    void yieldLoad() { if (loadYield_ && !inLoadYield_) { inLoadYield_ = true; loadYield_(); inLoadYield_ = false; } }
+    void yieldLoad() { if (loadYield_ && !inLoadYield_) { inLoadYield_ = true; loadYield_(); inLoadYield_ = false; glx::uniformCacheForgetCurrent(); } }
     // a loading-screen frame from anywhere in a load: the renderer's own yield (inside loadMapRenderData) or the
     // process-wide core::loadYield when the tree has it (the world mesh upload / warm-up run outside the former)
     void loadStep(const char* where);
@@ -246,6 +246,7 @@ private:
         uint32_t first = 0, count = 0;
         int prog = -1;
         std::string matName;      // original material path (diagnostics)
+        int matKey = -1;          // interned matName (per-frame distinct-material count without hashing the string)
         std::string comp;         // source component (diagnostics: WFC_SKIPMAT "comp:<substring>")
         int lmTex[3] = {-1, -1, -1};
         float lmScale[3][3] = {};
@@ -271,6 +272,7 @@ private:
     GLuint cubeTexture(const std::vector<std::string>& faces, bool srgb);
     int programFor(const std::string& matName, const Material* gltfMat, bool lightmapped);
     std::string resolveBySourceName(const Material* m) const;
+    std::string resolveBySourceNameUncached(const Material* m) const;
     int buildProgram(const std::string& key, const std::string& body, const std::vector<Program::Slot>& slots,
                      const std::vector<bool>& slotIsCube, int blend, bool twoSided, bool lit, float clip,
                      bool lightmapped, const std::vector<std::string>& rtParams = {});
@@ -283,7 +285,10 @@ private:
                        distortion = false, dynamic = false, fx = false; };
     std::map<std::string, FrameDraw> frameDraws_;
     FrameCounts counts_, lastCounts_;
-    std::unordered_set<std::string> frameMats_;   // copies: dynamic meshes are temporaries
+    std::unordered_set<std::string> frameMats_;   // (unused per draw since the interned keys; kept for reports)
+    std::unordered_map<std::string, int> matKeys_;   // material name -> key
+    std::vector<int> matSeenFrame_;                  // key -> last frame it was drawn
+    int frameMatCount_ = 0;
     std::set<std::string> frameNoProg_;
     std::vector<char> progSeen_;
     std::vector<std::string> frameEnvs_;
@@ -502,7 +507,14 @@ private:
     // Keyed by material CONTENT, not address: dynamic meshes (the character pose buffer) reuse their
     // storage across robot/vehicle, so a pointer key handed the vehicle the robot's programs.
     std::map<std::string, int> dynProgCache_;
-    int dynamicProgram(const Material* mat);   // cached per material key (drawDynamic / prewarmDynamic)
+    // per-draw string work removed (profile: resolveBySourceName 8 %, dynamicProgram / materialKey 2.6 % of a 32 v 32
+    // frame): source-name resolution per name, and the dynamic program per Material object (validated field by field)
+    mutable std::unordered_map<std::string, std::string> srcNameCache_;
+    struct DynProgMemo { std::string wfcName, sourceName, baseColorUri, emissiveUri, normalUri, specularUri;
+                         core::Vec3 color; TextureHandle tex, emissiveTex; int prog; };
+    std::unordered_map<const Material*, DynProgMemo> dynProgMemo_;
+    int dynamicProgram(const Material* mat);
+    int dynamicProgramUncached(const Material* mat);   // cached per material key (drawDynamic / prewarmDynamic)
 
     // frame
     core::Mat4 viewProj_;
