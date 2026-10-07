@@ -642,7 +642,13 @@ BridgeValue FrontendRuntime::pcSettings(const std::string& fn, const std::vector
     if (fn == "PCSettings.GetResolutions") {
         std::string out;
         std::vector<std::pair<int, int>> modes = display_.modes ? display_.modes() : std::vector<std::pair<int, int>>{};
-        if (modes.empty()) modes.push_back({p.display.width, p.display.height});
+        // The current size is always listed (a windowed size such as 2560x1080 need not be a display mode), so the
+        // Resolution selector shows it instead of falling back to the first entry.
+        const std::pair<int, int> cur{p.display.width, p.display.height};
+        if (std::find(modes.begin(), modes.end(), cur) == modes.end()) {
+            auto at = std::find_if(modes.begin(), modes.end(), [&](const std::pair<int, int>& m) { return (long)m.first * m.second > (long)cur.first * cur.second; });
+            modes.insert(at, cur);
+        }
         for (const auto& m : modes) out += (out.empty() ? "" : ",") + std::to_string(m.first) + "x" + std::to_string(m.second);
         return BridgeValue(out);
     }
