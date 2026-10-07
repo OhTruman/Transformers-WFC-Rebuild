@@ -2013,6 +2013,9 @@ int World::addBots(const BotLaunch& launch) {
         mp.level = id.level;
         match_.selectCharacter(p, id.selection);
         preloadHeldWeaponModels(id.selection.weapons);   // under the match load, not at the bot's first shot
+        // [integration 09c] The bot's body too (robot / vehicle / arm glb + Rendering M53 program / texture prewarm), under the
+        // match load instead of at its first spawn (measured: ~180 ms frame at an opponent's first draw). Cached per chassis.
+        chassisAssets(resolveChassis(id.selection, match_.faction(p)));
         auto o = std::make_unique<MatchOpponent>(p, mp.team, true);
         o->pressesPickup = true;
         addBotBrain(p, botDifficulty_);
