@@ -8,7 +8,11 @@
 # -Config Debug as well (Gameplay saw 1 failure in 16 Debug runs on 0d308cd).
 #
 #   .\tools\fidelity\sim-determinism.ps1 -Root work\ab\<target> -OutDir <dir> [-Seeds 123,124] [-Repeats 2] [-Frames 3600] [-Bots 8] [-ExtraEnv "WFC_ASYNCSTEP=1"] [-Config Debug] [-ReportOnly]
-param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [int]$Frames = 3600, [string[]]$Seeds = @("123"), [int]$Repeats = 2,
+# Frame budgets count LOADING frames too (one presented frame per load yield, varying with caches), so identical sims can
+# start their match at different frames: runs are compared on their common PREFIX (the shorter log must equal the start of
+# the longer), with -MinLines of overlap required; with Gameplay's WFC_MATCH_SECONDS every run ends a fixed match time
+# after InProgress instead (2026-10-07: the "0 vs 124 lines" runs were prefix-identical - a harness artefact).
+param([Parameter(Mandatory)][string]$Root, [Parameter(Mandatory)][string]$OutDir, [int]$Frames = 7200, [int]$MatchSeconds = 50, [int]$MinLines = 40, [string[]]$Seeds = @("123"), [int]$Repeats = 2,
       [int]$Bots = 8, [string]$Map = "MP_IAC_Streets", [string]$ExtraEnv = "", [ValidateSet("Release", "Debug")][string]$Config = "Release", [switch]$ReportOnly)
 $ErrorActionPreference = "Continue"
 . (Join-Path $PSScriptRoot "lib\Run.ps1"); . (Join-Path $PSScriptRoot "lib\M05.ps1"); . (Join-Path $PSScriptRoot "lib\M07.ps1")
@@ -27,6 +31,7 @@ function RunOne([string]$tag, [string]$seed, [bool]$serial) {
     if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; return }
     $e = @{ WFC_BOOT = "match"; WFC_MATCH_URL = $url; WFC_LOCKSTEP = "1"; WFC_SEED = "$seed"; WFC_SMOKE_FRAMES = "$Frames"; WFC_LOGEVERY = "0"
             WFC_BOTLOG = "all"; WFC_XPLOG = "1"; WFC_NOMOUSE = "1"; WFC_AUTOWALK = "1"; WFC_AUTOSTRAFE = "1"; WFC_AUTOJUMP_EVERY = "150" }
+    if ($H.Contains("WFC_MATCH_SECONDS")) { $e.WFC_MATCH_SECONDS = "$MatchSeconds"; $e.WFC_SMOKE_FRAMES = "1000000" }
     if ($serial) { $e.WFC_SIMTHREADS = "0" } else { foreach ($k in $extra.Keys) { $e[$k] = $extra[$k] } }
     $null = Invoke-WfcExe $exe $d $e "run.log" 1800
 }
@@ -44,12 +49,13 @@ foreach ($seed in $Seeds) {
         $b = Sig "s${seed}_thr$r"; $name = "seed$seed.run$r"
         if ($null -eq $ref -or $null -eq $b) { Res $name "UNKNOWN" "a run is missing" "Experimental"; continue }
         if (-not $ref.Count -and -not $b.Count) { Res $name "UNKNOWN" "no bot activity logged in either run (bots never became active within the frame budget)" "Gameplay"; continue }
-        if (-not $ref.Count -or -not $b.Count) { Res $name "FAIL" ("bot activity differs between identical runs: serial {0} BOTLOG / XP lines vs threaded {1} - the bots did not run (or started at a different time) in one of them; a lockstep seeded run must log the same bot states" -f $ref.Count, $b.Count) "Gameplay"; $total++; $fails++; continue }
+        if (-not $ref.Count -or -not $b.Count) { Res $name "UNKNOWN" ("one run has no bot activity in its frame budget (serial {0} lines, threaded {1}): its match started too late (loading frames count) - not comparable; use WFC_MATCH_SECONDS or more -Frames" -f $ref.Count, $b.Count) "Experimental"; continue }
         $total++
         $n = [Math]::Min($ref.Count, $b.Count); $first = -1
         for ($i = 0; $i -lt $n; $i++) { if ($ref[$i] -ne $b[$i]) { $first = $i; break } }
-        if ($first -lt 0 -and $ref.Count -eq $b.Count) { Res $name "PASS" ("threaded run {0} == serial: {1} state / event lines" -f $r, $ref.Count) "Gameplay"; continue }
-        if ($first -lt 0) { $first = $n }
+        if ($first -lt 0) {   # identical over the common prefix: same sim, different match start frame / end
+            if ($n -lt $MinLines) { $total--; Res $name "UNKNOWN" ("identical over the common prefix but only {0} lines overlap (serial {1}, threaded {2}): not enough match time in one run (load frames ate the frame budget)" -f $n, $ref.Count, $b.Count) "Experimental"; continue }
+            Res $name "PASS" ("threaded run {0} == serial over {1} common state / event lines (serial {2}, threaded {3})" -f $r, $n, $ref.Count, $b.Count) "Gameplay"; continue }
         $fails++
         Res $name "FAIL" ("seed {0} run {1} ({2}) diverges from serial at line {3} of {4} / {5}:`n  serial:   {6}`n  threaded: {7}`n  log: {8}" -f $seed, $r, $(if ($ExtraEnv) { $ExtraEnv } else { "threads" }), $first, $ref.Count, $b.Count,
             $(if ($first -lt $ref.Count) { $ref[$first] } else { "(end)" }), $(if ($first -lt $b.Count) { $b[$first] } else { "(end)" }), (Join-Path $OutDir "s${seed}_thr$r\wfc.log")) "Gameplay"
