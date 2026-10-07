@@ -4044,8 +4044,8 @@ void World::damageAmmoBeaconAt(size_t idx, float amount, int instigator) {
 // then settles on the floor below [HIGH pawn falling]. Health 135 (Sentry_DSYS), drained to 0 over Lifetime 30 s; owner
 // damage ignored; melee kills it; dies with the owner; one per owner. Targeting: the closest visible enemy (SightRadius
 // 30000, 360 deg) within pitch -45..45; YawPitchControl LagDegreesPerSecond 270; fires while aimed within
-// AimedAtTargetThreshold 3 deg and closer than MaxAttackRange 6000: instant hit 8 x RangeDamageModifiers (1.0 to 8000,
-// 0.5 at 30000) every 0.12 s with PerShotSpread 0.1; heat +2 per shot to HeatMax 100, OverheatDelay 2 s (heat then
+// AimedAtTargetThreshold 3 deg and closer than MaxAttackRange 6000: instant hit 8 x RangeDamageModifiers (steps: 1.0 to 8000,
+// else 0.5) every 0.12 s with PerShotSpread 0.1; heat +2 per shot to HeatMax 100, OverheatDelay 2 s (heat then
 // reset [PROV: lose-heat rate native]). Kill credit to the owner (_KillOwner). Cooldown 60 s once the sentry is gone.
 // PARTIAL: flashbang dormancy, Rocket / Repair blueprints (skills), turret pitch on the mesh, corpse (LifeSpanAfterDeath 5).
 void World::requestSentry(int owner) {
@@ -4139,7 +4139,7 @@ void World::tickSentry(float dt) {
                 if (!localDead_ && localPlayer_ != s.owner) { float th; if (MatchOpponent::pawnRayHit(player_.pawn(), muzzle, dir, wall, th) && th < hd) { hd = th; hit = localPlayer_; } }
                 onSentryShot(muzzle, hit < 0 && wall < 300.0f, muzzle + dir * hd);   // [Systems M08m] WP_Fire + world DefaultImpactSound
                 if (hit >= 0 && !(match_.settings().teamGame && match_.sameTeam(hit, s.owner)) && hit != s.owner) {
-                    float mod = hd <= 80.0f ? 1.0f : 1.0f - 0.5f * std::min(1.0f, (hd - 80.0f) / 220.0f);
+                    const float mod = hd <= 80.0f ? 1.0f : 0.5f;   // GetRangeDamageModifier steps (1.0 to 8000 UU, else 0.5) [CONF script]
                     applyMatchDamage(hit, s.owner, 8.0f * mod, false, "TransGame.TnDamageTypeSentry");   // kill credit to the owner
                 }
             }

@@ -106,6 +106,7 @@ private:
     void runSpawnFillTest();
     void runQaBotTest();
     void runDeterminismTest();
+    void runWeaponAudit();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

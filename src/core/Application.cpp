@@ -201,6 +201,7 @@ bool Application::init() {
     if (std::getenv("WFC_SPAWNFILLTEST")) { runSpawnFillTest(); return false; }    // 32 v 32 / FFA 64 spawns (generated points)
     if (std::getenv("WFC_QABOTTEST")) { runQaBotTest(); return false; }          // F10 panel bot tools (needs WFC_QA)
     if (std::getenv("WFC_DETERMINISMTEST")) { runDeterminismTest(); return false; } // same match at 60 / 240 fps -> same events
+    if (std::getenv("WFC_WEAPONAUDIT")) { runWeaponAudit(); return false; }        // WeaponDef vs AssetTools tuning_tables.json
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -5473,6 +5474,140 @@ void Application::runDeterminismTest() {
     check(a.size() > 20, "the match produced events (" + std::to_string(a.size()) + ")");
     check(a == b, "identical event logs at 60 and 240 fps");
     LOG_INFO("DETERMINISM SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_WEAPONAUDIT (Milestone E weapons pass): every WeaponDef the rebuild uses against AssetTools' tuning_tables.json (versus
+// MultiplayerData values; <id>/weapon_mp preferred over <id>/weapon). Lists each mismatching field; PASS when none differ.
+void Application::runWeaponAudit() {
+    const char* mr = std::getenv("WFC_MANIFESTS");
+    const std::string path = std::string(mr ? mr : "F:/Transformers Rebuild/AssetTools/manifests") + "/mp_content/tuning_tables.json";
+    std::ifstream f(path, std::ios::binary);
+    std::stringstream ss; ss << f.rdbuf();
+    assets::Json j;
+    if (!f || !assets::Json::parse(ss.str(), j)) { LOG_INFO("WEAPONAUDIT FAIL cannot read %s", path.c_str()); return; }
+    const assets::Json& W = j["weapons"];
+    int compared = 0, missing = 0, mismatches = 0, weaponsBad = 0;
+    for (int i = 0; i < game::weaponDefCount(); ++i) {
+        const game::WeaponDef& d = game::weaponDefAt(i);
+        const std::string id = d.id;
+        // the rebuild's class ids vs the AssetTools weapon directories
+        static const std::map<std::string, std::string> kAlias = {{"AssaultRiflePlane", "PlaneAssaultRifle"}, {"EmpShotgun", "EMPShotgun"},
+                                                                  {"RocketPlane", "PlaneRocket"}, {"RocketLauncher", "HomingRocket"}};
+        const std::string dir = kAlias.count(id) ? kAlias.at(id) : id;
+        const assets::Json* e = nullptr;
+        if (W.has(dir + "/weapon_mp")) e = &W[dir + "/weapon_mp"];
+        else if (W.has(dir + "/weapon")) e = &W[dir + "/weapon"];
+        if (!e) { ++missing; LOG_INFO("WEAPONAUDIT %s: no tuning entry", id.c_str()); continue; }
+        const assets::Json& v = (*e)["values"];
+        ++compared;
+        int bad = 0, info = 0;
+        // Not applicable: turret weapons no MP loadout carries (type -1); grenade bags / vehicle weapons are never the held robot weapon
+        // (no equip / put-down; grenades are thrown, their range unused).
+        const bool unused = d.typeCode < 0, notHeld = d.typeCode == 3 || d.typeCode == 4;
+        auto num = [&](const char* k, float& out) -> bool {
+            if (!v.has(k)) return false;
+            const assets::Json& x = v[k];
+            out = x.size() > 0 ? x[0].asFloat() : x.asFloat();
+            return true;
+        };
+        auto cmp = [&](const char* field, float mine, const char* key, float scale = 1.0f, float tol = 0.011f) {
+            float t;
+            if (!num(key, t)) return;
+            t *= scale;
+            const float err = std::fabs(mine - t), rel = std::fabs(t) > 1e-3f ? err / std::fabs(t) : err;
+            if (rel > tol && err > 1e-3f) {
+                const bool na = unused || (notHeld && (!std::strcmp(field, "equipTime") || !std::strcmp(field, "putDownTime") || !std::strcmp(field, "rangeM")));
+                if (na) { ++info; LOG_INFO("WEAPONAUDIT info %s.%s rebuild %g, authored %g (%s; not applicable: %s)", id.c_str(), field, mine, t, key,
+                                           unused ? "turret weapon, no MP loadout" : "never the held weapon"); }
+                else { ++bad; LOG_INFO("WEAPONAUDIT %s.%s rebuild %g, authored %g (%s)", id.c_str(), field, mine, t, key); }
+            }
+        };
+        cmp("clip", (float)d.clip, "gameplay.MaxAmmoClipCount");
+        cmp("maxAmmo", (float)d.maxAmmo, "gameplay.MaxAmmoCount");
+        cmp("initialReserve", (float)d.initialReserve, "gameplay.InitialReserveAmmoCount");
+        cmp("damage", d.damage, "gameplay.InstantHitDamage");
+        cmp("shots", (float)d.shots, "gameplay.NumShotsToFire");
+        cmp("interval", d.interval, "gameplay.FireIntervalModifier.IntervalRange.Min");
+        cmp("rangeM", d.rangeM, "gameplay.WeaponRange", 0.01f);
+        // every RangeDamageModifiers point (GetRangeDamageModifier steps)
+        for (int k = 0; k < 4; ++k) {
+            const std::string rk = "gameplay.RangeDamageModifiers[" + std::to_string(k) + "].Range", mk = "gameplay.RangeDamageModifiers[" + std::to_string(k) + "].Modifier";
+            if (!v.has(rk)) { if (k < d.rangeModCount) { ++bad; LOG_INFO("WEAPONAUDIT %s.rangeMod[%d] extra point in the rebuild", id.c_str(), k); } continue; }
+            if (k >= d.rangeModCount) { ++bad; LOG_INFO("WEAPONAUDIT %s.rangeMod[%d] authored point missing in the rebuild", id.c_str(), k); continue; }
+            const std::string fr = "rangeModM[" + std::to_string(k) + "]", fm = "rangeModMul[" + std::to_string(k) + "]";
+            cmp(fr.c_str(), d.rangeModM[k], rk.c_str(), 0.01f);
+            cmp(fm.c_str(), d.rangeModMul[k], mk.c_str());
+        }
+        cmp("spreadMin", d.spreadMin, "gameplay.PerShotSpreadModifier.Modifier.Min");
+        cmp("spreadMax", d.spreadMax, "gameplay.PerShotSpreadModifier.Modifier.Max");
+        cmp("spreadPerShot", d.spreadPerShot, "gameplay.PerShotSpreadModifier.ModifierChangePerShot");
+        cmp("spreadCooldown", d.spreadCooldown, "gameplay.PerShotSpreadModifier.Cooldown");
+        cmp("fineAimSpread", d.fineAimSpread, "gameplay.FineAimSpreadModifier");
+        cmp("reloadTime", d.reloadTime, "gameplay.WeaponReloadAnimTime");
+        cmp("equipTime", d.equipTime, "gameplay.EquipTime");
+        cmp("putDownTime", d.putDownTime, "gameplay.PutDownTime");
+        cmp("heatMax", d.heatMax, "gameplay.HeatProperties.HeatMax");
+        mismatches += bad; weaponsBad += bad > 0;
+    }
+    LOG_INFO("WEAPONAUDIT %d weapons compared, %d without a tuning entry, %d field mismatches in %d weapons", compared, missing, mismatches, weaponsBad);
+    // Brief section 8: an inactive weapon's ammo must not change. Fire / reload / switch the local Soldier's weapons in a match and
+    // compare every non-active (non-grenade) weapon's clip and reserve before and after.
+    {
+        const float dt = 1.0f / 60.0f;
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?TimeLimit=600", L);
+        int inactiveBad = 0, stages = 0;
+        if (world_.launchMatch(L)) {
+            game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+            world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+            platform::InputFrame idle;
+            for (int k = 0; k < 60 * 30 && (world_.match().state() != game::Match::State::InProgress || world_.localPlayerDead()); ++k) { world_.handleInput(idle, dt); world_.tick(dt); }
+            game::Character& pc = world_.player().pawn();
+            auto snap = [&] {
+                std::vector<std::pair<int, int>> s;
+                for (const game::Weapon& w : pc.inventory()) s.push_back({w.ammo, w.reserve});
+                return s;
+            };
+            auto run = [&](float secs, platform::Button hold, bool tap) {
+                for (int k = 0; k < (int)(secs / dt); ++k) {
+                    platform::InputFrame in;
+                    in.down[(int)hold] = true; in.pressed[(int)hold] = tap ? k == 0 : true;
+                    world_.handleInput(in, dt); world_.tick(dt);
+                }
+            };
+            auto compare = [&](const std::vector<std::pair<int, int>>& before, const game::Weapon* active, const char* stage) {
+                ++stages;
+                const auto after = snap();
+                for (size_t i = 0; i < pc.inventory().size() && i < before.size(); ++i) {
+                    const game::Weapon& w = pc.inventory()[i];
+                    if (&w == active || w.grenade()) continue;
+                    if (after[i] != before[i]) {
+                        ++inactiveBad;
+                        LOG_INFO("WEAPONAUDIT inactive %s changed during %s: %d/%d -> %d/%d", w.def ? w.def->id : "?", stage, before[i].first, before[i].second,
+                                 after[i].first, after[i].second);
+                    }
+                }
+            };
+            auto b0 = snap(); const game::Weapon* a0 = &pc.weapon();
+            run(8.0f, platform::Button::Fire, false);                 // empty the clip, auto reload, keep firing
+            run(0.2f, platform::Button::Reload, true);
+            run(3.0f, platform::Button::Forward, false);
+            compare(b0, a0, "fire / reload of the active weapon");
+            auto b1 = snap();
+            run(0.1f, platform::Button::NextWeapon, true);
+            run(1.5f, platform::Button::Forward, false);               // equip time
+            const game::Weapon* a1 = &pc.weapon();
+            compare(b1, a1 == a0 ? nullptr : a1, "the switch");      // the switch itself changes nothing
+            auto b2 = snap();
+            run(5.0f, platform::Button::Fire, false);
+            compare(b2, a1, "firing the second weapon");
+            LOG_INFO("WEAPONAUDIT inactive-weapon ammo: %d stages, %d changes (switched %s -> %s)", stages, inactiveBad,
+                     a0->def ? a0->def->id : "?", a1->def ? a1->def->id : "?");
+        } else LOG_INFO("WEAPONAUDIT inactive-weapon ammo: launch failed");
+        mismatches += inactiveBad;
+        if (stages < 3) ++mismatches;
+    }
+
+    LOG_INFO("WEAPONAUDIT SUMMARY: %s", mismatches == 0 ? "PASS" : "FAIL");
 }
 
 } // namespace core

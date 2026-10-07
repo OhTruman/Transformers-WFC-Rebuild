@@ -68,7 +68,9 @@ struct Weapon {
         w.damage = d.damage; w.fireInterval = d.interval; w.magSize = d.clip; w.ammo = d.clip; w.reserveMax = d.maxAmmo;
         w.reserve = d.initialReserve; w.reloadTime = d.reloadTime; w.equipTime = d.equipTime; w.putDownTime = d.putDownTime;
         w.hitscan = d.fire == WeaponFire::InstantHit; w.rangeM = d.rangeM; w.falloffNearM = d.falloffNearM;
-        w.falloffFarMul = d.falloffFarMul; w.spreadMin = d.spreadMin; w.spreadMax = d.spreadMax; w.spreadPerShot = d.spreadPerShot;
+        w.falloffFarMul = d.falloffFarMul;
+        w.rangeModCount = d.rangeModCount;
+        for (int k = 0; k < 4; ++k) { w.rangeModM[k] = d.rangeModM[k]; w.rangeModMul[k] = d.rangeModMul[k]; } w.spreadMin = d.spreadMin; w.spreadMax = d.spreadMax; w.spreadPerShot = d.spreadPerShot;
         w.spreadCooldown = d.spreadCooldown > 0.0f ? d.spreadCooldown : 2.0f; w.spread = d.spreadMin;
         w.fineAimSpreadMult = d.fineAimSpread; w.damageType = d.damageType;
         w.projSpeed = d.projSpeed; w.projDamage = d.projDamage; w.projRadiusM = d.projRadiusM; w.projHoming = d.projHoming;
@@ -96,6 +98,7 @@ struct Weapon {
     float rangeM        = 300.0f;
     float falloffNearM  = 50.0f;    // RangeDamageModifiers[0].Range 5000 UU
     float falloffFarMul = 0.5f;     // RangeDamageModifiers[1].Modifier @30000 UU
+    int rangeModCount = 0; float rangeModM[4] = {0, 0, 0, 0}, rangeModMul[4] = {1, 1, 1, 1};   // every RangeDamageModifiers point
 
     // Per-shot spread (radians-ish bloom fraction). [CONF] PerShotSpreadModifier.
     float spreadMin     = 0.08f;    // Modifier.Min
@@ -136,13 +139,14 @@ struct Weapon {
         sinceFire = 0.0f;
         spread = spread + spreadPerShot < spreadMax ? spread + spreadPerShot : spreadMax;
     }
-    // Damage after range falloff (linear 1.0 at <=near to falloffFarMul at range).
-    float damageAt(float distM) const {
-        if (distM <= falloffNearM) return damage;
-        if (distM >= rangeM) return damage * falloffFarMul;
-        float t = (distM - falloffNearM) / (rangeM - falloffNearM);
-        return damage * (1.0f - t * (1.0f - falloffFarMul));
+    // TnWeapon.GetRangeDamageModifier [CONF decompiled script]: no points -> 1.0; the Modifier of the first point (but the last) whose
+    // Range >= the hit distance; else the last point's Modifier. Steps, no interpolation.
+    float rangeModifier(float distM) const {
+        if (rangeModCount < 1) return 1.0f;
+        for (int i = 0; i < rangeModCount - 1; ++i) if (distM <= rangeModM[i]) return rangeModMul[i];
+        return rangeModMul[rangeModCount - 1];
     }
+    float damageAt(float distM) const { return damage * rangeModifier(distM); }
 
     bool canReload() const { return !reloading() && ammo < magSize && reserve > 0; }
     void beginReload() { if (canReload()) { reloadTimer = reloadTime; ++reloadSerial; } }
