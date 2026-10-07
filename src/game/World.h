@@ -207,6 +207,13 @@ public:
     // The local player activated kill streak `id` (TnDataProvider_Killstreak UniqueId): its Self announcement
     // (team: the activator's, 0 Autobots / 1 Decepticons, for the FactionAnnouncementSound fallback).
     void onLocalKillstreakActivated(const std::string& id, int team);
+    // [Systems M09i] Another participant's killstreak (TnKillstreakActivated* per receiving client [CONF RE pass 5 s12
+    // addendum 11]): the local player hears FriendlyAnnouncementSound when OnSameTeam (a team game, same team), else
+    // EnemyAnnouncementSound (FFA: everyone else is an enemy); a role with none falls back to the activator team's
+    // FactionAnnouncementSound when authored. Through the announcer queue. The streaks' effects make no extra world sound
+    // here: their buffs are OnlyPlaySoundOnLocalPlayer (heard through the receiving local pawn's buff audio), their spawned
+    // actors (missile / mines / turret) through setAbilityActorAudio.
+    void onParticipantKillstreakActivated(const std::string& id, int activatorTeam, bool sameTeamAsLocal);
     void setOvershieldAudio(float overshieldHealth);   // the local pawn's overshield health, every tick (alive)
     void onDodgeHitWall();                             // the local dodge hit a wall (robot form)
     // TnGrenadeBag.PerformToss (local): WP_Fire on a toss, WP_NoAmmoFire on a refused one (no grenades / cooldown / heavy).

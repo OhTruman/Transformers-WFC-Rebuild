@@ -1453,6 +1453,11 @@ void World::onLocalKillstreakActivated(const std::string& id, int team) {
     levelAudio_.match().killstreakActivated(id, MatchAudio::StreakRole::Self, team);
 }
 
+void World::onParticipantKillstreakActivated(const std::string& id, int activatorTeam, bool sameTeamAsLocal) {
+    levelAudio_.match().killstreakActivated(id, sameTeamAsLocal ? MatchAudio::StreakRole::Friendly : MatchAudio::StreakRole::Enemy,
+                                            activatorTeam);
+}
+
 void World::beginAbilityActorAudio() { abilityAudio_.markActorsUnseen(); }
 
 void World::setAbilityActorAudio(AbilityActor kind, int owner, bool local, const AbilityActorState& s) {
