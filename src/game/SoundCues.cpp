@@ -657,6 +657,17 @@ int SoundCues::play(const char* name, const Emitter& em, float distM, float para
     in.dialogChar = nextDialogChar_;
     nextDialogChar_.clear();
     resolve(in);
+    // AActor::PlaySound -> USoundCue::IsAudible [UE3 engine, HIGH]: a positional one-shot beyond the cue's audible distance
+    // (DistanceMax) from the listener is not started at all - it would only hold a channel at zero gain (at 16 v 16+ those
+    // inaudible far-away bot shots / steps were most of the 96-channel pool). Loops start regardless (they may come into
+    // range while playing), as do 2D / UI sounds.
+    if (in.owner != kUI && cd.spatial != Spatial::TwoD && !cd.rootLoop && cd.distMaxUU > 0.0f) {
+        bool loops = false;
+        for (const EventDef& ev : cd.events) if (ev.loop) { loops = true; break; }
+        const core::Vec3 d = in.pos - listener_;
+        const float maxM = cd.distMaxUU * UU;
+        if (!loops && core::dot(d, d) > maxM * maxM) { ++inaudibleSkipped_; return -1; }
+    }
     // USoundCue::RegisterInstanceLimiting [CONF native 0x82E767B8]: 0 = unlimited; at the limit,
     // kKillOldest stops the oldest registered instance, kKillNewest refuses the new sound, kKillFarthest
     // walks newest -> oldest keeping the farthest (ties -> the older) of the instances at least as far
@@ -745,8 +756,14 @@ void SoundCues::launch(Instance& in, int e) {
     // [CONF native, RE d50c2a9 P1] wave.Priority = OverridePriority ? node.Priority : root.Priority; the FMOD
     // channel priority is int(255 - clamp(Priority, -1, 255)) (0 = most important).
     p.priority = (int)(255.0f - std::min(255.0f, std::max(-1.0f, ed.overridePriority ? ed.priority : cd.priority)));
+    p.protect = in.owner >= 0 && in.owner < kParticipantOwnerBase;   // attached to the local pawn / its weapon
     ref.v = audio_->playVoice(s, p);
     if (ref.v != audio::kInvalidVoice) in.voices.push_back(ref);
+    else if (in.owner >= 0 && in.owner < kParticipantOwnerBase) {     // the local player's own sound got no channel
+        static int warned = 0;
+        if (warned++ < 20) LOG_WARN("sound cues: no channel for the local player's %s ev%d (all 96 busy with more important sounds)",
+                                    cd.name.c_str(), e);
+    }
     static const bool log = std::getenv("WFC_CUELOG") != nullptr;
     if (log)
         LOG_INFO("CUE %s ev%d t=%.3f wave=%d gain=%.3f (%.1f dB, param %.2f) pitch=%.3f loop=%d voice=%d owner=%d occl=%.2f pos=%.2f,%.2f,%.2f",

@@ -264,9 +264,11 @@ struct Voice {
     int spatial = 0;              // 0 k3D, 1 k2D, 2 kSmartPan, 3 kSmartPan_PreferPlayer
     float panAtten3DDb = 0.0f;    // SmartPanAttenuation3D
     int priority = 128;           // FMOD channel priority (0 most important)
+    bool protect = false;         // the local player's own sound (PC ADAPTATION)
     float gL = 1.0f, gR = 1.0f;   // per-block resolved channel gains
     float dDist = 0.0f, dPan = 0.0f, dAtten = 1.0f;   // diagnostics of the last resolve
     bool active = false;
+    bool culled = false;          // last resolve: positional and beyond maxDist -> virtual (no channel, not mixed)
     bool loop = false;
     int gen = 0;
 };
@@ -334,17 +336,33 @@ public:
     // sound takes the channel of the least important playing voice by FMOD channel priority (larger number =
     // less important; cue voices 255 - Priority [CONF RE d50c2a9]); a newcomer less important than every
     // playing voice does not play. [HIGH, FMOD Ex internal] equal priorities: the quietest voice is taken.
+    // Virtual voices [HIGH, FMOD Ex FMOD_INIT_VOL0_BECOMES_VIRTUAL]: a positional voice beyond its max distance (culled, zero
+    // gain) holds no channel - it is not mixed, its timeline still advances, and it takes a channel again when it comes
+    // back in range. PC ADAPTATION: the logical pool grows to kMaxLogical so 32 v 32's far-away loops (map emitters,
+    // vehicle engines, projectile flights) do not crowd out audible sounds; the 96 real channels and their stealing rule are
+    // unchanged.
     static constexpr int kMaxVoices = 96;
-    Voice* freeVoice(int& index, int priority) {
-        for (int i = 0; i < (int)voices_.size(); ++i)
-            if (!voices_[(size_t)i].active) { index = i; return &voices_[(size_t)i]; }
-        if ((int)voices_.size() < kMaxVoices) {
-            voices_.push_back(Voice{}); index = (int)voices_.size() - 1; return &voices_.back();
+    static constexpr int kMaxLogical = 1024;                  // < 4096 (handle index bits)
+    // PC ADAPTATION (32 v 32): the local player's own sounds are never the victim, and a new one takes the least important
+    // other channel even when every other channel outranks it - with dozens of bots firing, the human still hears their own
+    // weapon / steps / foley. At <= 16 participants the 96 channels practically never fill, so this does not apply.
+    Voice* freeVoice(int& index, int priority, bool startsVirtual = false, bool protect = false) {
+        int real = 0, freeSlot = -1;
+        for (int i = 0; i < (int)voices_.size(); ++i) {
+            const Voice& v = voices_[(size_t)i];
+            if (!v.active) { if (freeSlot < 0) freeSlot = i; }
+            else if (!v.culled) ++real;
         }
+        if (real < kMaxVoices || startsVirtual) {             // a virtual newcomer needs a slot, never a channel
+            if (freeSlot >= 0) { index = freeSlot; return &voices_[(size_t)freeSlot]; }
+            if ((int)voices_.size() < kMaxLogical) { voices_.push_back(Voice{}); index = (int)voices_.size() - 1; return &voices_.back(); }
+        }
+        if (startsVirtual) { ++stats_.droppedVoices; return nullptr; }   // kMaxLogical slots in use
         int best = -1;
         for (int i = 0; i < (int)voices_.size(); ++i) {
             const Voice& v = voices_[(size_t)i];
-            if (v.priority < priority) continue;                       // more important than the newcomer
+            if (!v.active || v.culled || v.protect) continue;          // free / virtual (no channel) / the player's own
+            if (v.priority < priority && !protect) continue;           // more important than the newcomer
             if (best < 0 || v.priority > voices_[(size_t)best].priority ||
                 (v.priority == voices_[(size_t)best].priority && v.gL + v.gR < voices_[(size_t)best].gL + voices_[(size_t)best].gR))
                 best = i;
@@ -355,9 +373,9 @@ public:
         index = best;
         return &voices_[(size_t)best];
     }
-    Voice* start(Sound s, int& index, int priority = 128) {
+    Voice* start(Sound s, int& index, int priority = 128, bool startsVirtual = false, bool protect = false) {
         if (!ok_ || s < 0 || (size_t)s >= sounds_.size() || sounds_[(size_t)s].pcm.size() < 4) return nullptr;   // released / empty
-        Voice* v = freeVoice(index, priority);
+        Voice* v = freeVoice(index, priority, startsVirtual, protect);
         if (!v) return nullptr;
         int gen = (v->gen + 1) & 0x7FFFF;
         *v = Voice{}; v->gen = gen; v->data = &sounds_[(size_t)s].pcm; v->sample = &sounds_[(size_t)s]; v->active = true;
@@ -379,8 +397,10 @@ public:
 
     audio::Voice playVoice(Sound s, const VoiceParams& p) override {
         std::lock_guard<std::mutex> lk(mx_);
-        int i; Voice* v = start(s, i, p.priority);
+        const bool outOfRange = p.positional && std::max(core::length(p.pos - lpos_), p.minDist) > p.maxDist;   // out of range now
+        int i; Voice* v = start(s, i, p.priority, outOfRange, p.protect);
         if (!v) return kInvalidVoice;
+        v->culled = outOfRange;
         v->vol = p.volume; v->rate = p.pitch > 0.05f ? p.pitch : 0.05f;
         v->positional = p.positional; v->inverse = true; v->wpos = p.pos;
         v->refDist = p.minDist; v->maxDist = p.maxDist; v->rolloff = p.rolloff;
@@ -388,6 +408,7 @@ public:
         v->rearAttenDb = p.rearAttenDb; v->wet = p.wet; v->spatial = p.spatial; v->panAtten3DDb = p.panAtten3DDb;
         v->loop = p.loop;
         v->priority = p.priority;
+        v->protect = p.protect;
         return i | (v->gen << 12);
     }
 
@@ -589,13 +610,14 @@ private:
     // axis, scaled by the 3D amount (0 = centred / 2D, 1 = fully 3D).
     void resolveGains(Voice& v) {
         float g = v.vol * master_;
+        v.culled = false;
         if (!v.positional) { v.gL = v.gR = g; v.dPan = 0.0f; v.dAtten = 1.0f; return; }
         core::Vec3 d = v.wpos - lpos_;
         float dist = core::length(d);
         float atten;
         if (v.inverse) {
             float dc = std::max(dist, v.refDist);
-            if (dc > v.maxDist) { v.gL = v.gR = 0.0f; v.dDist = dist; v.dAtten = 0.0f; v.dPan = 0.0f; return; }   // culled
+            if (dc > v.maxDist) { v.gL = v.gR = 0.0f; v.dDist = dist; v.dAtten = 0.0f; v.dPan = 0.0f; v.culled = true; return; }   // culled
             atten = v.refDist / ((dc - v.refDist) * v.rolloff + v.refDist);
         } else {
             atten = dist <= v.refDist ? 1.0f
@@ -634,9 +656,20 @@ private:
         wet_.assign(kBlockSamples, 0.0f);
         int nv = 0, nw = 0;
         constexpr float k = 1.0f / 32768.0f;
+        int nvirt = 0;
         for (Voice& v : voices_) {
             if (!v.active) continue;
             resolveGains(v);
+            if (v.culled) {                                   // virtual: advance the timeline only
+                ++nvirt;
+                const double frames = (double)(v.data->size() / 2);
+                const double lstart = v.sample->loopStart;
+                const double lend = v.sample->loopEnd > 0.0 ? v.sample->loopEnd : frames;
+                v.pos += v.rate * kBlockFrames;
+                if (v.loop && lend - lstart >= 2.0) { if (v.pos >= lend) v.pos = lstart + std::fmod(v.pos - lend, lend - lstart); }
+                else if (v.pos + 1.0 >= frames) v.active = false;
+                continue;
+            }
             ++nv; if (v.wet) ++nw;
             float* bus = v.wet ? wet_.data() : dry_.data();
             const std::vector<int16_t>& s = *v.data;
@@ -674,6 +707,7 @@ private:
         stats_.peakDb = peak > 1e-6f ? 20.0f * std::log10(peak) : -96.0f;
         stats_.gainReductionDb = std::min(stats_.gainReductionDb * 0.9f, 20.0f * std::log10(minGain));
         stats_.voices = nv; stats_.wetVoices = nw; stats_.peakVoices = std::max(stats_.peakVoices, nv);
+        stats_.virtualVoices = nvirt;
         // Movie streams: their own output, after the game mix's Master chain [HIGH: the Bink player outputs
         // beside FMOD; MovieMixerPreset mutes the game mix, not the movie]. Level: full scale maps to the
         // rebuild's Master Default calibration (master_ stands for Master 0.708) [PROV].

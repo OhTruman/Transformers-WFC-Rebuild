@@ -285,3 +285,27 @@ tickParticipantBodyAudio(pl, bp.chassis().id, bp, vsig, true, dt);
 Measured on 09c + glue, MP_IAC_Streets TDM 8 v 8 (the 09c clamp): bot-owned BL_FS_* 102, BL_TRANSFORM 9, BL_VEH_* 18
 (were 0 / 0 / 0); 0 not-in-table, 0 LEAK; voices max 96, instances 108. Not yet: nitro / 180 / wheel slip for bots (need
 Gameplay per-pawn signals; silent, no fake), and the 70 m cull radius is a PC budget choice (PC ADAPTATION).
+
+## M09g - voice budget for 16 v 16 / 32 v 32
+
+Measured on 09c f5fa838 (+ M09f glue), Streets TDM ExtendedPlayers 15 + 16 bots, 2 min. Before: the 96-channel pool was full
+most of the time (stolen 705-781, refused 95-145 per 2 min); about 60 of the 96 channels were held by sounds beyond their
+audible distance at zero gain, and the local player's idle foley got no channel.
+
+- **Inaudible one-shots are not started** [UE3 AActor::PlaySound -> USoundCue::IsAudible, HIGH]: a positional one-shot
+  beyond its DistanceMax from the listener; loops and 2D sounds start regardless (`SoundCues::inaudibleSkipped()`).
+- **Virtual voices** [FMOD Ex VOL0_BECOMES_VIRTUAL, HIGH]: a positional voice beyond its max distance holds no channel, is not
+  mixed, keeps its timeline, and is mixed again when back in range. The 96 real channels and their stealing rule
+  (priority, then the quietest) are unchanged. PC ADAPTATION: up to 1024 logical voices (`MixStats::virtualVoices`).
+- **The local player's own sounds are protected** (PC ADAPTATION, asked by Integration for 32 v 32): never a steal victim, and a
+  new one takes the least important other channel. At <= 16 participants the pool does not fill, so 5 v 5 is unaffected.
+- **Bot body cue sets are registered at most one per step** (8 at once on the first step was an 11 ms spike; now max ~2 ms).
+- Bug fixed on the way: with the larger pool the steal loop could pick a free slot (went above 96 real).
+
+After, same run: stolen 141, refused 8, local no-channel 0, virtual peak 64, mixer avg 0.32 / max 0.53 ms per 21 ms block
+(about 1.5-2.5 % of one core), body audio avg 0.03 ms per step. Suite 736 / 0, fidelity 194 / 0 / 19.
+
+Glue update (Gameplay agents/gameplay 4b33f0b): in the M09f bot-loop glue replace the speed-derived throttle with
+`if (const MoveIntent* mi = participantIntent(pl)) vsig.stickForward = mi->moveForward;` (exact, no longer PC ADAPTATION).
+Far bots' animation advancing every 2nd / 4th step is fine: RobotFoley detects notifies between the previous and the current
+animation time.
