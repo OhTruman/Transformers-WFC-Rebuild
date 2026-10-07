@@ -146,7 +146,7 @@ void WeaponMesh::draw(render::IRenderer& r, const core::Mat4& world, const core:
     if (HasSkinnedApi<render::IRenderer>::value && !model_->joints.empty()) {
         if (paletteDirty_) { buildPalette(*model_, globals_, palette_); paletteDirty_ = false; ++paletteSerial_; }
         render::MeshData& bind = bindMeshOf(*model_);
-        bind.mats = model_->mats;
+        syncMats(bind.mats, model_->mats);
         if (drawSkinnedGpu(r, bind, model_->joints, model_->weights, palette_, nullptr, 1.0f, world, color, this, paletteSerial_, 0)) return;
     }
     r.drawDynamicMesh(pose(), world, color);

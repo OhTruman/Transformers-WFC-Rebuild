@@ -1983,7 +1983,12 @@ void World::draw(render::IRenderer& r) const {
             o->setCulled(off);
         }
     }
+    // WFC_DRAWPROF: the gameplay side of World::draw (actors incl. pawns: palette / submit; participants' weapons), ms per frame.
+    static const bool drawProf = std::getenv("WFC_DRAWPROF") != nullptr;
+    static double dpActors = 0.0, dpWeapons = 0.0; static long dpN = 0;
+    const double dp0 = drawProf ? profNowMs() : 0.0;
     for (const auto& a : actors_) if (a->alive()) a->draw(r);
+    if (drawProf) dpActors += profNowMs() - dp0;
     if (!localPlayerDead()) player_.draw(r);
     // Projectiles: the authored FlightEffect is the body (a renderer particle system, projectileFxStart); the thrown grenades
     // also draw their class-default static mesh. The box marker remains only when nothing authored can be shown (renderer
@@ -2017,11 +2022,16 @@ void World::draw(render::IRenderer& r) const {
         r.drawMesh(weaponMesh_, core::Mat4::translate(player_.pawn().renderOffset()) * player_.pawn().weaponWorld(), core::Vec3{1, 1, 1});
 
     // Participants' held weapons (robot form, weapon shown), at their pawn's interpolated weapon socket.
+    const double dpw0 = drawProf ? profNowMs() : 0.0;
     for (const MatchOpponent* o : opponents_) {
         if (!o->spawned() || o->culled() || !o->pawn().hasWeapon()) continue;
         auto it = partWeapons_.find(o->matchPlayer());
         if (it == partWeapons_.end() || !it->second.anim.valid()) continue;
         it->second.anim.draw(r, core::Mat4::translate(o->pawn().renderOffset()) * o->pawn().weaponWorld(), core::Vec3{1, 1, 1});
+    }
+    if (drawProf) {
+        dpWeapons += profNowMs() - dpw0;
+        if (++dpN % 300 == 0) { LOG_INFO("DRAWPROF ms/frame (%zu participants): actors %.2f, participant weapons %.2f", match_.players().size(), dpActors / 300.0, dpWeapons / 300.0); dpActors = dpWeapons = 0.0; }
     }
     // Participant shots without a presentation hook: the weapon's authored templates by name [CONF WEPMESH data].
     for (const PendingShotFx& s : partShotFx_) {
