@@ -289,6 +289,7 @@ private:
     Options opt_;
     std::mt19937 rng_;
     std::map<int, RecommendedPlayers> recommended_;
+    bool lobbyMapInit_ = false;   // the lobby's own initial map pick (not a map change for the bot counts)
     double clock_ = 0.0;
 
     LevelKind level_ = LevelKind::None;
