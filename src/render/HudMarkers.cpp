@@ -10,7 +10,14 @@
 //   * material params: FocusParam (Over) 1/0, OnScreenParam 1/0, RotationParam off-screen             [CONFIRMED]
 //   * label: MarkerFont, setup LabelColor, LabelOffset (canvas fractions) from the marker; drawn when focused /
 //     unfocused / off-screen per the setup flags; unfocused label alpha fades with the remaining hold   [HIGH]
-//   * label centring on its anchor                                                                     [PROV]
+//   * label centring on its anchor (DrawTextCA)                                                        [CONFIRMED]
+// RE 7bb8ec1 (notes/MILESTONE_E_OBJECTIVE_MARKERS.md), CONFIRMED from script:
+//   * DrawCutoffDistance (UU): beyond it ShouldDisplayMarker is false - the whole marker (arrow too) is hidden
+//   * pulse (enemy-carried flag / bomb): ((2.5 - t mod 2.5) / 2.5)^5 -> param PingOpacity and the label alpha
+//   * FadeOutTime: param Alpha = LifeSpan / FadeOutTime while LifeSpan < FadeOutTime (Tombstone); no generic fade
+//   * health bar: params Health (normalised) and Neutral = (FillColor == HBFC_Blue)
+//   * EnemyMarkerHysterisis: shown only while now - Mesh.LastRenderTime < it
+//   * action labels: the type's authored <action>Label; colours Friendly / Enemy / Neutral
 #include "render/HudMarkers.h"
 #include <algorithm>
 #include <cmath>
@@ -50,6 +57,18 @@ bool HudMarkers::load(const std::string& root) {
         ty.healthBarOffY = e["HealthBarOffsetFromLabel"]["Y"].asFloat(0.02f);
         std::string f = e["LabelFont"].asString();
         if (!f.empty()) ty.font = f.substr(f.rfind('.') + 1);
+        ty.drawCutoff = e["DrawCutoffDistance"].asFloat(0.0f);
+        ty.fadeOutTime = e["FadeOutTime"].asFloat(0.0f);
+        ty.fillBlue = e["FillColor"].asString() == "HBFC_Blue";
+        ty.enemyHysteresis = e["EnemyMarkerHysterisis"].asFloat(0.0f);
+        color(e["FriendlyLabelColor"], ty.friendlyColor);
+        color(e["EnemyLabelColor"], ty.enemyColor);
+        color(e["NeutralLabelColor"], ty.neutralColor);
+        for (const auto& lv : e.obj) {
+            const std::string& n = lv.first;
+            if (n.size() > 5 && n.compare(n.size() - 5, 5, "Label") == 0 && n != "DistanceLabel" && lv.second.isString())
+                ty.labels[n.substr(0, n.size() - 5)] = lv.second.asString();
+        }
         for (const auto& sv : e.obj) {
             const assets::Json& s = sv.second;
             if (!s.isObject() || !s.has("Mat")) continue;
@@ -101,6 +120,11 @@ void HudMarkers::draw(IRenderer& r, const Camera& cam, int W, int H, const std::
         if (si == ty.setups.end()) continue;
         const Setup& st = si->second;
         core::Vec3 base = mk.base + core::Vec3{0, st.zOffset * 0.01f, 0};
+        if (ty.drawCutoff > 0.0f && core::length(base - cam.pos) * 100.0f > ty.drawCutoff) continue;   // ShouldDisplayMarker
+        if (ty.enemyHysteresis > 0.0f && mk.owner >= 0) {          // Mesh.LastRenderTime
+            const float age = r.drawOwnerRenderAge(mk.owner);
+            if (age < 0.0f || age >= ty.enemyHysteresis) continue;
+        }
         float sx, sy; bool front;
         project(base, sx, sy, front);
         const bool onScreen = front && sx >= 0 && sx <= W && sy >= 0 && sy <= H;
@@ -112,6 +136,14 @@ void HudMarkers::draw(IRenderer& r, const Camera& cam, int W, int H, const std::
         if (focusNow) hold = ty.focusHysteresis;
         const bool focused = focusNow || hold > 0.0f;
         std::vector<std::pair<std::string, std::array<float, 4>>> params = mk.params;
+        float pulse = -1.0f;
+        if (mk.pulseT >= 0.0f) {
+            const float ph = (2.5f - std::fmod(mk.pulseT, 2.5f)) / 2.5f;
+            pulse = ph * ph * ph * ph * ph;
+            params.push_back({"PingOpacity", {pulse, 0, 0, 0}});
+        }
+        if (ty.fadeOutTime > 0.0f && mk.lifeSpan >= 0.0f && mk.lifeSpan < ty.fadeOutTime)
+            params.push_back({"Alpha", {mk.lifeSpan / ty.fadeOutTime, 0, 0, 0}});
         if (onScreen) {
             float size = (focused ? st.focusedSize : st.unfocusedSize) * (float)W;
             if (size > 0.0f) {
@@ -146,20 +178,28 @@ void HudMarkers::draw(IRenderer& r, const Camera& cam, int W, int H, const std::
         float labelAlpha = 1.0f;
         if (onScreen && !focusNow && focused && !st.labelUnfocused && ty.focusHysteresis > 0.0f)
             labelAlpha = std::max(0.0f, hold / ty.focusHysteresis);   // fades over the hold
-        if (drawLabel && !mk.label.empty() && onScreen) {
+        if (pulse >= 0.0f) labelAlpha *= pulse;
+        std::string label = mk.label;
+        if (label.empty() && !mk.action.empty()) {
+            auto lb = ty.labels.find(mk.action);
+            if (lb != ty.labels.end()) label = lb->second;
+        }
+        const uint8_t* lc = mk.relation == 0 ? ty.friendlyColor : mk.relation == 1 ? ty.enemyColor : mk.relation == 2 ? ty.neutralColor
+                                                                                                        : st.labelColor;
+        if (drawLabel && !label.empty() && onScreen) {
             float lz = mk.labelZ >= 0.0f ? mk.labelZ : st.labelZOffset * 0.01f;
             float lx, ly; bool lf;
             project(mk.base + core::Vec3{0, lz, 0}, lx, ly, lf);
             lx += st.labelOffX * (float)W; ly += st.labelOffY * (float)W;
             float tw = 0, th = 0;
-            r.canvasTextSize(ty.font, mk.label, tw, th);
-            uint8_t c[4] = {st.labelColor[0], st.labelColor[1], st.labelColor[2], (uint8_t)(st.labelColor[3] * labelAlpha)};
-            r.drawCanvasText(ty.font, mk.label, lx - tw * 0.5f, ly - th * 0.5f, c);
+            r.canvasTextSize(ty.font, label, tw, th);
+            uint8_t c[4] = {lc[0], lc[1], lc[2], (uint8_t)(lc[3] * labelAlpha)};
+            r.drawCanvasText(ty.font, label, lx - tw * 0.5f, ly - th * 0.5f, c);
             if (mk.drawHealthBar && !st.healthMat.empty()) {
                 IRenderer::MaterialTile hb;
                 hb.material = st.healthMat; hb.w = ty.healthBarW * W; hb.h = ty.healthBarH * W;
                 hb.x = lx - hb.w * 0.5f; hb.y = ly + ty.healthBarOffY * W - hb.h * 0.5f;
-                hb.params = {{"Health", {mk.health, 0, 0, 0}}};
+                hb.params = {{"Health", {mk.health, 0, 0, 0}}, {"Neutral", {ty.fillBlue ? 1.0f : 0.0f, 0, 0, 0}}};
                 r.drawMaterialTile(hb);
             }
         }

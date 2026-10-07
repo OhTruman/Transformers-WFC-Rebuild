@@ -3262,6 +3262,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
     const auto tEnv1 = std::chrono::steady_clock::now();
     gStats.dynEnvMs += std::chrono::duration<double, std::milli>(tEnv1 - tEnv0).count();
     if (offscreen) { envSamples_ = nullptr; envForm_ = -1; return; }   // light environment ticked above
+    if (!warmup_) ownerRendered_[drawOwner_] = std::chrono::steady_clock::now();   // Mesh.LastRenderTime (markers)
     GpuMesh g;
     g.vao = drawVao;
     std::vector<SubMesh> subs = m.subs;

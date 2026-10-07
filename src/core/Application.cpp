@@ -836,6 +836,13 @@ Application::MatchExit Application::runMatch() {
                 e.key = "enemy"; e.setup = "EnemyMarkerSetup"; e.base = p + f * 25.0f - rt * 4.0f + core::Vec3{0, 4.2f, 0};
                 e.label = "Megatron"; e.drawHealthBar = false;
                 ms.push_back(a); ms.push_back(e);
+                if (std::atoi(std::getenv("WFC_MARKERTEST")) == 2) {   // RE 7bb8ec1 rules: enemy-carried flag (Kill, pulse)
+                    static float t = 0.0f; t += 1.0f / 60.0f;
+                    render::MarkerRequest fl;
+                    fl.key = "flag"; fl.type = "TnObjectiveMarkerTypeFlag"; fl.setup = "MarkerSetup";
+                    fl.base = p + f * 18.0f + core::Vec3{0, 3.0f, 0}; fl.action = "Kill"; fl.relation = 1; fl.pulseT = t;
+                    ms.push_back(fl);
+                }
                 hm.draw(*renderer_, camera_, window_->width(), window_->height(), ms, 1.0f / 60.0f);
             }
         }

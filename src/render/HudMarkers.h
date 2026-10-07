@@ -24,6 +24,20 @@ struct MarkerRequest {
     bool drawHealthBar = false; // ally health bar (viewer specialty Scientist)
     float health = 1.0f;        // 0..1 for the health bar material
     std::vector<std::pair<std::string, std::array<float, 4>>> params;   // extra material params (Neutral, Flashing...)
+    // RE 7bb8ec1 (notes/MILESTONE_E_OBJECTIVE_MARKERS.md):
+    std::string action;         // the type's authored <action>Label as the label text when `label` is empty: "Capture" /
+                                // "Defend" / "Return" / "Escort" / "Kill" / "Bomb" / "Plant" / "Defuse" / "Revive" /
+                                // "Attack" / "Idle" / "DownedEnemy" (flag: home Capture|Defend, dropped Capture|Return,
+                                // teammate-carried Escort, enemy-carried Kill; bomb Bomb|Escort|Kill; plant point
+                                // Plant|Defuse|Defend; DOM / KOTH own Defend else Capture)
+    float pulseT = -1.0f;       // seconds since the pulse started (only while an ENEMY carries the flag / bomb); < 0 none:
+                                // pulse = ((2.5 - t mod 2.5) / 2.5)^5 -> material param PingOpacity and the label alpha
+    float lifeSpan = -1.0f;     // remaining LifeSpan (s) for FadeOutTime types (Tombstone): Alpha = LifeSpan / FadeOutTime
+    int owner = -1;             // the pawn's draw owner (IRenderer::setDrawOwner): EnemyMarkerHysterisis types show only
+                                // while that pawn's mesh was rendered within the hysteresis (Mesh.LastRenderTime)
+    int relation = -1;          // -1 the setup's LabelColor, 0 friendly, 1 enemy, 2 neutral (Friendly / Enemy / Neutral)
+    bool removing = false;      // (kept for callers; no generic fade on removal - RE)
+    float removedT = 0.0f;
 };
 
 class HudMarkers {
@@ -46,6 +60,12 @@ private:
         float focusThreshold = 0.0625f, focusHysteresis = 0.2f, autoFocusRange = 0.0f, safeFrame = 0.08f;
         float healthBarW = 0.06f, healthBarH = 0.015f, healthBarOffY = 0.02f;
         std::string font = "MarkerFont";
+        float drawCutoff = 0.0f;           // DrawCutoffDistance (UU), 0 = none: hidden beyond, arrow included
+        float fadeOutTime = 0.0f;          // FadeOutTime (s)
+        bool fillBlue = false;             // FillColor == HBFC_Blue -> health bar param Neutral = 1
+        float enemyHysteresis = 0.0f;      // EnemyMarkerHysterisis (s)
+        std::map<std::string, std::string> labels;   // action -> authored <action>Label
+        uint8_t friendlyColor[4] = {80, 181, 213, 255}, enemyColor[4] = {240, 60, 60, 255}, neutralColor[4] = {255, 255, 255, 255};
     };
     std::map<std::string, Type> types_;
     std::map<std::string, float> focusHold_;        // key -> remaining focus hold (s)

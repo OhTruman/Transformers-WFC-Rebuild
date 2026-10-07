@@ -417,6 +417,9 @@ public:
     // chain -1 = none, 0 = StaticDischargeScreenEffect, 1 = LowHealthScreenEffect. One slot, on / off instantly; drawn
     // over the finished 3D frame, under the HUD canvas / GFx. Default no-op.
     virtual void setHudScreenEffect(int chain) { (void)chain; }
+    // Seconds since a dynamic mesh of draw owner `owner` was last rendered (passed the view cull); < 0 = never.
+    // (Mesh.LastRenderTime for EnemyMarkerHysterisis markers.)
+    virtual float drawOwnerRenderAge(int owner) const { (void)owner; return -1.0f; }
     virtual void setFrameLimit(float hz) { (void)hz; }
     virtual float frameLimit() const { return 0.0f; }
     virtual void waitFrameSlot() {}
