@@ -791,6 +791,13 @@ void GameFlow::hostRequestsGameStart() {
 int GameFlow::pickTeam() {
     // TnTeamHandlerTwoTeams.PickTeam: keep a current team < 2; else the smaller team; on a tie RandomInt(2).
     // The local host is the only player: both teams are empty -> RandomInt(2) [HIGH as the offline reduction].
+    // PC ADAPTATION (Private Match bots): the bots count as team members, so the host joins the side with fewer bots - the
+    // Bot Settings limits assume the human on the Autobot side until the pick, and a full 32-bot Decepticon side would
+    // otherwise be clamped to 31 at launch when the coin put the human there.
+    if (lobby_.playlistId < 0 && botRows() == BotRows::Teams) {
+        const int au = std::min(profile_.bots.autobot, botMax("autobot")), de = std::min(profile_.bots.decepticon, botMax("decepticon"));
+        if (au != de) return au < de ? 0 : 1;
+    }
     return std::uniform_int_distribution<int>(0, 1)(rng_);
 }
 
