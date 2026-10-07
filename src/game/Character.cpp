@@ -788,6 +788,7 @@ void Character::beginStep() {
     prevPos_ = pos_; havePrev_ = true;
     // The previous step's vertices exist only if that step's pose was skinned (drawn); otherwise the next frames present the
     // current pose without the vertex blend.
+    ++prevVersion_;
     if (skinnedStep_ == stepCounter_) {
         prevPoseP_ = poseBuf_.positions; prevPoseN_ = poseBuf_.normals;
         prevPartnerP_ = partnerBuf_.positions; prevPartnerN_ = partnerBuf_.normals;
@@ -815,6 +816,15 @@ core::Vec3 Character::renderOffset() const {
 template <class R> static auto drawPosed(R& r, const render::MeshData& m, const core::Mat4& model, const core::Vec3& c, uint64_t serial, int)
     -> decltype(r.drawDynamicMeshPosed(m, model, c, serial), void()) { r.drawDynamicMeshPosed(m, model, c, serial); }
 template <class R> static void drawPosed(R& r, const render::MeshData& m, const core::Mat4& model, const core::Vec3& c, uint64_t, long) { r.drawDynamicMesh(m, model, c); }
+
+// IRenderer::drawDynamicMeshBlended (agents/rendering), compile-time detected: the renderer keeps the current and the previous
+// step's vertices per serial and blends prev + (cur - prev) * alpha in the vertex shader (the same formula as blendedPose), so an
+// interpolated frame needs no CPU blend or upload. The serial changes with either buffer (skin serial, previous-snapshot version).
+template <class R> static auto drawBlended(R& r, const render::MeshData& cur, const std::vector<float>& pp, const std::vector<float>& pn, float a,
+                                           const core::Mat4& model, const core::Vec3& c, uint64_t serial, int)
+    -> decltype(r.drawDynamicMeshBlended(cur, pp, pn, a, model, c, serial), bool()) { r.drawDynamicMeshBlended(cur, pp, pn, a, model, c, serial); return true; }
+template <class R> static bool drawBlended(R&, const render::MeshData&, const std::vector<float>&, const std::vector<float>&, float,
+                                           const core::Mat4&, const core::Vec3&, uint64_t, long) { return false; }
 
 // render::MeshData::tangents (agents/rendering), when present: carried with the pose.
 template <class M> static auto copyTangents(M& dst, const M& src, int) -> decltype(dst.tangents = src.tangents, void()) { dst.tangents = src.tangents; }
@@ -847,11 +857,19 @@ void Character::draw(render::IRenderer& r) const {
     if (mdl && mdl->valid() && !poseBuf_.empty()) {
         // Presentation interpolation: the whole pawn (body, transformation partner, arm) shifted by one rigid offset.
         const core::Mat4 off = core::Mat4::translate(renderOffset());
-        {   // the blend scratch changes every interpolated frame; the skinned buffers only when skinned
+        // A GPU blend when the renderer offers it and the previous snapshot matches this model's layout; else the CPU blend scratch
+        // (changes every interpolated frame) or the skinned buffer.
+        auto canBlend = [&](const render::MeshData& cur, const std::vector<float>& pp) {
+            return renderAlpha_ < 1.0f && !cur.positions.empty() && pp.size() == cur.positions.size();
+        };
+        if (!(canBlend(poseBuf_, prevPoseP_) &&
+              drawBlended(r, poseBuf_, prevPoseP_, prevPoseN_, renderAlpha_, off * meshMatrix(form_), color_, (bodySerial_ << 24) ^ prevVersion_, 0))) {
             const render::MeshData& b = blendedPose(poseBuf_, prevPoseP_, prevPoseN_, lerpBody_);
             drawPosed(r, b, off * meshMatrix(form_), color_, &b == &poseBuf_ ? bodySerial_ : ++lerpSerial_, 0);
         }
-        if (partnerVisible_ && !partnerBuf_.empty()) {
+        if (partnerVisible_ && !partnerBuf_.empty() &&
+            !(canBlend(partnerBuf_, prevPartnerP_) &&
+              drawBlended(r, partnerBuf_, prevPartnerP_, prevPartnerN_, renderAlpha_, off * meshMatrix(partnerForm()), color_, (partnerSerial_ << 24) ^ prevVersion_ ^ 0x5a5a000000000000ULL, 0))) {
             const render::MeshData& p = blendedPose(partnerBuf_, prevPartnerP_, prevPartnerN_, lerpPartner_);
             drawPosed(r, p, off * meshMatrix(partnerForm()), color_, &p == &partnerBuf_ ? partnerSerial_ : ++lerpSerial_, 0);
         }

@@ -3475,6 +3475,38 @@ DefaultScenePostProcess not implemented; light-env transition blending (0.5 s) n
 
 ---
 
+## PASS 26 — Milestone E: capacity, extended matches, bot roles, spawns, pawn blocking (2026-10-06 / 07, gameplay agent)
+
+CONFIRMED ORIGINAL
+- TnMultiplayerGame MaxPlayers 10 (5 v 5) is the default; the match end state stops play (bots idle) [RE].
+- Robot double jump (TnAcrobaticsManager, RE addendum 10): SharedAcrobatics JumpHeight 500 / DoubleJumpHeight 450 /
+  DoubleJumpMinHeight 10 UU; second press only in Jumping / FallingFromJump, more than 10 UU above take-off, not with GatlingGun /
+  HeavyRepairRay / HeavyRocketTurret; sets vel.Z = sqrt(2 g 450); once per airtime; skipped while melee-attacking. Bots (Jump with
+  ForceJump) use jump links with it.
+- Knock-off credit (RE addendum 11): stock Pawn.Died with bCausedByWorld damage (KillZ / DmgType_Fell) and no killer credits
+  LastHitBy (set on every damage from another controller, cleared on death), with no time window.
+- Pawn blocking (RE addendum 11): robot form = actor cylinder with collide + block actors, allies block like enemies, per-chassis
+  CollisionRadius / Height; vehicle form = mesh rigid body (cylinder disabled), physics contact + Rammed.
+- Ability / killstreak effects for every participant (Sentry, Barrier, Ammo Crate, RollerSphere, Warcry, Shockwave, team streaks)
+  follow the authored CDOs already used for the local player.
+
+CUSTOM-GAME EXTENSION / PC ADAPTATION (user decisions; off at the original counts)
+- ?ExtendedPlayers=1: 32 per side (FFA 64). Generated spawn points when the authored pool is short (deterministic at launch; walkable,
+  capsule-clear, own side, outside hazard volumes); extended spawn safety tests capsules + 1 m; no free point = retry in 0.25 s;
+  round-start bots one per step.
+- Bot-match XP x 0.25 / 0.50 / 0.75 by difficulty, challenges in full; six extra bodies playable.
+- Performance: lazy skinning, anim LOD / culling / AI LOD above 16 participants.
+- Bot decisions (when to boost, deploy, roll, drop a crate, trigger a streak) and loadout variety (Soldier Ammo Crate, Leader
+  RollerSphere from the class pools).
+
+PROVISIONAL (method)
+- Pawn blocking is a post-move push-out (robot cylinders; robot vs the vehicle's mesh box; vehicle-vehicle inscribed circles),
+  never into walls, bots yielding to the local player; the native sweep / PhysX contact is not reproduced.
+
+PARTIAL
+- Guided Missile / Omega Missile and the Mine Pooper streak stay local-only.
+- Escalation maps (BrokenHope, Remnant) have no versus layout (one side, 4 starts) and are not offered for TDM / FFA (original).
+
 ## PASS 25 — playtest cleanup + authoritative event / participant foundation (2026-10-06)
 
 ### Change Character [CONFIRMED ORIGINAL: TnPlayerController.SelectCharacter, UIText "Selected character used on respawn."]

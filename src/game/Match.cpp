@@ -1,3 +1,4 @@
+#include "core/SimRandom.h"
 #include "game/Match.h"
 #include "assets/Json.h"
 #include "core/Log.h"
@@ -205,7 +206,7 @@ void Match::startMatch() {
     if (s_.rounds > 0) {
         // RoundsBase.MatchStarting -> Active: TimeTillNextReset = TimeLimit; SingleFlagCTF: AttackingTeam = RandomInt(2).
         currentRound_ = 0; betweenRounds_ = false; roundTimeLeft_ = (float)s_.timeLimit;
-        if (s_.singleFlagCTF) attackingTeam_ = std::rand() % 2;
+        if (s_.singleFlagCTF) attackingTeam_ = (int)(core::simRandU32() % 2u);
         remainingTime_ = s_.timeLimit;
     }
     emit(MatchEvent::Type::MatchStarted);
@@ -231,6 +232,13 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
     if (killer >= (int)players_.size()) killer = -1;
     MatchPlayer& V = players_[(size_t)victim];
     if (!V.alive) return;
+    // Stock Pawn.Died: world damage (KillZDamageType / DmgType_Fell: bCausedByWorld) with no killer or the victim itself credits
+    // LastHitBy, with no time window - a knock-off is a normal kill by the last other player who hit this pawn [CONF RE addendum 11].
+    if (damageType == "Engine.DmgType_Fell" && (killer < 0 || killer == victim)) {
+        const int lh = lastHitBy(victim);
+        if (lh >= 0 && (size_t)lh < players_.size()) { killer = lh; suicide = false; }
+    }
+    if ((size_t)victim < lastHitBy_.size()) lastHitBy_[(size_t)victim] = -1;   // KilledBy clears it
     // Snapshots BEFORE the streaks change (EndKillStreak tests the victim's streak; KillStreak the killer's new count).
     const ParticipantSnapshot victimSnap = snapshot(victim);
     const ParticipantSnapshot killerSnap = killer >= 0 ? snapshot(killer) : ParticipantSnapshot{};
@@ -297,10 +305,12 @@ void Match::killed(int killer, int victim, bool suicide, const std::string& dama
             e.personalScore = players_[(size_t)killer].score - scoreBefore;
             e.teamScore = teamScore(players_[(size_t)killer].team) - teamBefore;
         }
+        // recordEvent appends to gevents_: copy what the next records need before 'e' can be invalidated by a reallocation.
+        const std::string killDamageType = e.damageType;
         if (t == GameplayEventType::Kill && assister >= 0) {
             GameplayEvent& a = recordEvent(GameplayEventType::Assist, assister, victim);
             a.instigatorState = snapshot(assister); a.victimState = victimSnap;
-            a.assistFraction = assistFrac; a.damageType = e.damageType;
+            a.assistFraction = assistFrac; a.damageType = killDamageType;
         }
         if (!streakEarned.empty()) {
             GameplayEvent& k = recordEvent(GameplayEventType::KillstreakEarned, killer);
@@ -411,6 +421,11 @@ void Match::addPersonalScore(int player, int amount) {
 
 void Match::recordDamage(int victim, int instigator, float amount) {
     if (victim >= 0) { if (lastDamagedAt_.size() <= (size_t)victim) lastDamagedAt_.resize((size_t)victim + 1, -100.0f); lastDamagedAt_[(size_t)victim] = matchTime_; }
+    // TakeDamage: LastHitBy = the instigating controller when it is another player [CONF RE addendum 11]; cleared by KilledBy / a new pawn.
+    if (victim >= 0 && instigator >= 0 && instigator != victim && amount > 0.0f) {
+        if (lastHitBy_.size() <= (size_t)victim) lastHitBy_.resize((size_t)victim + 1, -1);
+        lastHitBy_[(size_t)victim] = instigator;
+    }
     if (victim < 0 || (size_t)victim >= players_.size() || amount <= 0.0f) return;
     auto& h = damageHistory_[(size_t)victim];
     for (auto& e : h) if (e.first == instigator) { e.second += amount; return; }
@@ -492,6 +507,7 @@ void Match::restartPlayer(int p) {
     P.alive = true;
     P.timeToRespawn = -1.0f;
     damageHistory_[(size_t)p].clear();
+    if ((size_t)p < lastHitBy_.size()) lastHitBy_[(size_t)p] = -1;   // a new pawn
     if (st >= 0) { locs_[(size_t)p] = starts_[(size_t)st].pos; if ((size_t)p < radii_.size()) radii_[(size_t)p] = 2.0f; }
     P.spawnTime = matchTime_;
     emit(MatchEvent::Type::PlayerSpawned, p, st, st >= 0 ? starts_[(size_t)st].actor : std::string());

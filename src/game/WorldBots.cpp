@@ -2,6 +2,7 @@
 // Bots are ordinary Match participants (MatchOpponent pawns): they move with CharacterMovement from a MoveIntent, fire their
 // real Weapon state (clip, reserve, refire, reload, spread) through the shared damage / kill path, transform with the pawn's
 // own transformation, and die / respawn / score through Match exactly like players.
+#include "core/SimRandom.h"
 #include "game/World.h"
 #include "game/PlayerController.h"
 #include "core/Log.h"
@@ -54,7 +55,7 @@ void World::fireHitscanAs(int instigator, const Character& shooter, const Weapon
     {
         const core::Vec3 rt = core::normalize(core::cross(dir, core::Vec3{0, 1, 0}));
         const core::Vec3 u2 = core::normalize(core::cross(rt, dir));
-        auto rf = [] { return (float)std::rand() / (float)RAND_MAX * 2.0f - 1.0f; };
+        auto rf = [] { return core::simRandSigned(); };   // simulation stream (not shared with FX)
         const float spread = shooter.effectiveSpread();
         dir = core::normalize(dir + rt * (rf() * spread) + u2 * (rf() * spread));
     }
@@ -121,6 +122,7 @@ void World::addBotBrain(int player, int difficulty) {
     BotBrain b;
     b.player = player; b.difficulty = difficulty;
     b.rng = 0x9e3779b9U * (unsigned)(player + 1);
+    if (const char* sd = std::getenv("WFC_SEED")) b.rng ^= (unsigned)std::strtoul(sd, nullptr, 10) * 0x85ebca6bU;   // DEV / TEST only
     b.thinkTimer = 0.05f * (float)(bots_.size() % 5);   // staggered decisions
     bots_.push_back(b);
 }
@@ -461,6 +463,8 @@ void World::botThink(MatchOpponent& o, BotBrain& b) {
             if (visible && d < 15.0f && b.frand() < use) botTryAbility(o, b, "Shockwave");
             //  SpawnSentry - an enemy in sight 10-50 m away (the turret's MaxAttackRange is 60 m).
             if (visible && d > 10.0f && d < 50.0f && b.frand() < use * 0.4f) botTryAbility(o, b, "SpawnSentry");
+            //  RollerSphere - a visible enemy 10-40 m ahead (it rolls forward at 27.5 m/s, arms after 3 s, slows enemies within 15 m).
+            if (visible && d > 10.0f && d < 40.0f && b.frand() < use * 0.3f) botTryAbility(o, b, "RollerSphere");
             //  SpawnAmmoCrate - own reserve below 60 %, or a teammate within 15 m (the crate serves the team in range).
             {
                 const Weapon& cw = pc.weapon();
@@ -510,6 +514,7 @@ bool World::botTryAbility(MatchOpponent& o, BotBrain& b, const char* id) {
         else if (a.id == "SpawnSentry") requestSentry(o.matchPlayer());   // TnAbilitySpawnSentry (one per owner, SpawnDelay 0.2)
         else if (a.id == "Barrier") { pc.playAction("Skill_Barrier", false); requestBarrier(o.matchPlayer()); }   // SpawnDelay 0.5, in front of the pawn
         else if (a.id == "SpawnAmmoCrate") { pc.playAction("Skill_Barrier", false); requestAmmoBeacon(o.matchPlayer()); }   // OnTriggerAnim Skill_Barrier
+        else if (a.id == "RollerSphere") { pc.playAction("Skill_AbilityJammer", false); requestRoller(o.matchPlayer()); }   // OnTriggerAnimParams, SpawnDelay 0.5
         else return false;
         a.spam = 1.0f; a.pendingCooldown = true; ++b.abilities;
         if (participantAbilityHook) participantAbilityHook(o.matchPlayer(), a.id, pc.chassis().id, pc.actorLocation());
@@ -626,6 +631,32 @@ void World::botSteer(MatchOpponent& o, BotBrain& b, float dt, MoveIntent& in) {
         const core::Vec3 side = core::normalize(core::Vec3{-toT.z, 0, toT.x}) * b.strafeDir;
         if (botNav_.valid() && !botNav_.directWalkable(pos, pos + side * 2.0f, ag)) { b.strafeDir = -b.strafeDir; }
         else moveDir = moveDir + side * sk.strafe;
+    }
+    // Local avoidance (PC ADAPTATION): pawns block each other (RE addendum 11), so a pawn standing in the corridor ahead (a teammate
+    // holding a point, a pawn against a wall) is steered around instead of pushed into.
+    if (core::length(moveDir) > 1e-3f && match_.players().size() > 1) {
+        const core::Vec3 md = core::normalize(core::Vec3{moveDir.x, 0, moveDir.z});
+        const float rSelf = pc.cylinderRadius(pc.moveForm());
+        core::Vec3 push{0, 0, 0};
+        for (size_t qi = 0; qi < match_.players().size(); ++qi) {
+            if ((int)qi == b.player) continue;
+            const Character* q = participantPawn((int)qi);
+            if (!q || std::fabs(q->position().y - pos.y) > 4.0f) continue;
+            core::Vec3 d = q->position() - pos; d.y = 0.0f;
+            const float along = core::dot(d, md);
+            if (along <= 0.0f || along > 7.0f) continue;
+            const core::Vec3 lat = d - md * along;
+            const float latDist = core::length(lat);
+            const float clear = rSelf + q->cylinderRadius(q->moveForm()) + 0.5f;
+            if (latDist >= clear) continue;
+            const core::Vec3 side = latDist > 1e-3f ? lat * (-1.0f / latDist) : core::Vec3{-md.z, 0.0f, md.x};   // away from it (or left)
+            push = push + side * ((clear - latDist) / clear * (1.0f - along / 7.0f) * 2.0f);
+        }
+        if (core::length(push) > 1e-3f) {
+            core::Vec3 nd = md + push;
+            if (!botNav_.valid() || botNav_.directWalkable(pos, pos + core::normalize(nd) * 2.5f, ag)) moveDir = nd;
+            else moveDir = md - push;   // the other side
+        }
     }
     // Express the world-space move in the facing frame (MoveIntent is relative to faceYaw).
     in.faceYaw = vehicle && !visible && core::length(moveDir) > 1e-3f ? yawOf(moveDir) : b.yaw;
@@ -761,7 +792,7 @@ void World::tickBots(float dt) {
     if (bots_.empty() || !matchActive_) return;
     // MatchOver / PendingMatch / between rounds: bots do not think, move or fire (the original end state stops play: no damage,
     // no scoring, pawns idle). Their pawns get an empty intent.
-    if (match_.state() != Match::State::InProgress || match_.betweenRounds()) {
+    if (match_.state() != Match::State::InProgress || match_.betweenRounds() || qaBotsFrozen_) {   // + DEV / QA freeze
         for (MatchOpponent* o : opponents_) o->setIntent(MoveIntent{});
         return;
     }
@@ -788,11 +819,11 @@ void World::tickBots(float dt) {
         if (!b.wasSpawned) {   // a fresh spawn: reset the brain (the pawn faces the start's yaw)
             const int keepPlayer = b.player, keepDiff = b.difficulty; const unsigned keepRng = b.rng;
             int s = b.shots, rp = b.repaths, st = b.stucks, j = b.jumps, tr = b.transforms, sw = b.switches, rl = b.reloads;
-            const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities, vs = b.vehicleShots;
+            const int ml = b.melees, gr = b.grenades, hi = b.hits, np = b.noPaths, ru = b.rushes, he = b.heals, ab = b.abilities, vs = b.vehicleShots, sk = b.streaks;
             b = BotBrain{};
             b.player = keepPlayer; b.difficulty = keepDiff; b.rng = keepRng + 17U;
             b.shots = s; b.repaths = rp; b.stucks = st; b.jumps = j; b.transforms = tr; b.switches = sw; b.reloads = rl;
-            b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs;
+            b.melees = ml; b.grenades = gr; b.hits = hi; b.noPaths = np; b.rushes = ru; b.heals = he; b.abilities = ab; b.vehicleShots = vs; b.streaks = sk;
             b.wasSpawned = true; b.yaw = pc.yaw();
         }
         b.life += dt;

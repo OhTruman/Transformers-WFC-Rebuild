@@ -4,6 +4,7 @@
 #include <psapi.h>
 #endif
 #include "render/HudMarkers.h"
+#include "core/SimRandom.h"
 #include "core/Application.h"
 #include "core/Config.h"
 #include "core/Debug.h"
@@ -198,6 +199,8 @@ bool Application::init() {
     if (std::getenv("WFC_EXTRABODYTEST")) { runExtraBodyTest(); return false; }    // Car8-10 / Frenzy / Rumble / Laserbeak
     if (std::getenv("WFC_DOUBLEJUMPTEST")) { runDoubleJumpTest(); return false; }  // robot double jump (RE addendum 10)
     if (std::getenv("WFC_SPAWNFILLTEST")) { runSpawnFillTest(); return false; }    // 32 v 32 / FFA 64 spawns (generated points)
+    if (std::getenv("WFC_QABOTTEST")) { runQaBotTest(); return false; }          // F10 panel bot tools (needs WFC_QA)
+    if (std::getenv("WFC_DETERMINISMTEST")) { runDeterminismTest(); return false; } // same match at 60 / 240 fps -> same events
     if (std::getenv("WFC_ANIMSHARECHECK")) {   // robot.glb vs bodies assembled from shared AnimSets, every MP chassis
         int pass = 0, n = 0;
         for (const char* id : {"Truck", "Truck3", "Truck4", "Jet4", "Jet", "Car2", "Car4", "Tank3", "Tank2"}) {
@@ -2889,6 +2892,11 @@ void Application::runCtfExtTest() {
     {
         game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=CTF?TimeLimit=40", L);
         check(world_.launchMatch(L) && L.settings.rounds == 2, "CTF launches (rounds 2, round TimeLimit 40 via URL)");
+        {   // coverage: round 1 to the other team (AttackingTeam = RandomInt(2) from the simulation stream), so the local team attacks in
+            // round 2 and the local-carrier checks always run
+            const int want = 1 - world_.match().players()[(size_t)world_.localMatchPlayer()].team;
+            for (uint32_t sd = 1; sd < 64; ++sd) { core::simRandSeed(sd); if ((int)(core::simRandU32() % 2u) == want) { core::simRandSeed(sd); break; } }
+        }
         std::vector<game::MatchOpponent*> ops{world_.addMatchOpponent("A", false), world_.addMatchOpponent("B", false)};
         while (std::none_of(ops.begin(), ops.end(), [](game::MatchOpponent* o) { return o->team() == 0; }) ||
                std::none_of(ops.begin(), ops.end(), [](game::MatchOpponent* o) { return o->team() == 1; }))
@@ -4764,7 +4772,7 @@ void Application::runBotTest() {
         world_.resetBotTiming();
         const size_t ev0 = world_.match().gameplayEvents().size();
         std::map<int, core::Vec3> lastPos; std::map<int, float> travelled; std::map<int, float> stillFor; float worstStill = 0.0f; int worstStillBot = -1;
-        int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0, jetFlySamples = 0, sentrySamples = 0, barrierSamples = 0, beaconSamples = 0;
+        int maxAlive = 0; double worstStep = 0.0; int weapShown = 0, weapMesh = 0, beamSamples = 0, jetSamples = 0, jetFlySamples = 0, sentrySamples = 0, barrierSamples = 0, beaconSamples = 0, rollerSamples = 0;
         platform::InputFrame idle;
         const int steps = (int)((secs + 10.0f) / dt);
         for (int i = 0; i < steps && world_.match().state() != game::Match::State::MatchOver; ++i) {
@@ -4801,6 +4809,7 @@ void Application::runBotTest() {
             beamSamples += world_.participantBeamsLive() > 0;
             sentrySamples += world_.participantSentriesLive() > 0; barrierSamples += world_.participantBarriersLive() > 0;
             beaconSamples += world_.participantBeaconsLive() > 0;
+            rollerSamples += world_.participantRollersLive() > 0;
             for (const game::MatchOpponent* o : world_.matchOpponents()) {
                 const bool jet = o->spawned() && o->pawn().moveForm() == game::Form::Vehicle && o->pawn().vehicleParams().form == game::VehicleFormType::Jet;
                 jetSamples += jet; jetFlySamples += jet && o->pawn().vehicleState().flying;
@@ -4846,6 +4855,7 @@ void Application::runBotTest() {
         if (phase >= 1) check(heals == 0 || beamSamples > 0, "healing bots show the Repair Ray beam (" + std::to_string(beamSamples) + " steps)");
         if (phase >= 1) check(streaks > 0, "bots trigger killstreak rewards (" + std::to_string(streaks) + ")");
         if (phase >= 1) check(beaconSamples > 0, "bots drop ammo crates (" + std::to_string(beaconSamples) + " steps)");
+        if (phase >= 1) check(rollerSamples > 0, "bots roll roller spheres (" + std::to_string(rollerSamples) + " steps)");
         if (phase >= 1) check(sentrySamples > 0 && barrierSamples > 0, "bots deploy sentries (" + std::to_string(sentrySamples) + " steps) and barriers (" + std::to_string(barrierSamples) + " steps)");
         if (phase >= 1) check(jetSamples > 0, "jet bots fly (" + std::to_string(jetSamples) + " jet-steps, " + std::to_string(jetFlySamples) + " in Flying)");
         if (phase >= 1) check(vehicleShots > 0, "bots fight in vehicle form (" + std::to_string(vehicleShots) + " vehicle-weapon shots)");
@@ -5254,6 +5264,9 @@ void Application::runSpawnFillTest() {
             for (const game::MatchOpponent* o : world_.matchOpponents()) if (o->matchPlayer() == p) { if (!o->spawned()) return false; c = &o->pawn(); }
             if (!c) return false;
             out = c->position(); rad[(size_t)p] = c->cylinderRadius(c->moveForm()); hh[(size_t)p] = c->cylinderHalfHeight(c->moveForm());
+            // vehicles block with their mesh box (RE addendum 11): measured with the box's inscribed circle (only real penetration counts)
+            core::Vec3 bmn, bmx;
+            if (c->moveForm() == game::Form::Vehicle && c->vehicleBoundsXZ(bmn, bmx)) rad[(size_t)p] = 0.5f * std::min(bmx.x - bmn.x, bmx.z - bmn.z);
             return true;
         };
         // capsule gap: horizontal distance minus both radii while the cylinders overlap in height (negative = overlap)
@@ -5333,6 +5346,10 @@ void Application::runSpawnFillTest() {
                              e.victimState.pos.z, e.time, e.damageType.c_str(), e.weapon.c_str(), world_.killZ(), e.time - lastHurtMatch[(size_t)e.victim],
                              firstSpawnMatch[(size_t)e.victim] >= 0.0f ? e.time - firstSpawnMatch[(size_t)e.victim] : -1.0f, gen ? "GENERATED" : "authored", st, sp.x, sp.y, sp.z);
                 }
+                int fellKills = 0;
+                for (const game::GameplayEvent& e : world_.match().gameplayEvents())
+                    fellKills += e.type == game::GameplayEventType::Kill && e.damageType == "Engine.DmgType_Fell";
+                LOG_INFO("SPAWNFILL knock-offs credited to the last hitter (Kill, DmgType_Fell): %d", fellKills);
                 deaths5 = 0; kills5 = 0;
                 for (const game::MatchPlayer& mp : world_.match().players()) { deaths5 += mp.deaths; kills5 += mp.kills; }
                 break;
@@ -5350,6 +5367,112 @@ void Application::runSpawnFillTest() {
               ", weapon self-kills " + std::to_string(deaths5 - kills5 - envDeaths5 - laterFalls5 - knocked5) + ")");
     }
     LOG_INFO("SPAWNFILL SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_QABOTTEST (needs WFC_QA=1; DEV / QA TOOLING): the F10 panel's bot tools - kill all (no score, respawn wave), freeze, overlay
+// labels, teleport to aim.
+void Application::runQaBotTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("QABOT %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+    platform::InputFrame idle;
+    auto run = [&](float secs) { for (int k = 0; k < (int)(secs / dt); ++k) { world_.handleInput(idle, dt); world_.tick(dt); } };
+    check(game::World::qaEnabled(), "WFC_QA set (panel tools enabled)");
+    game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=3?BotsEnemy=4?BotDifficulty=1?TimeLimit=600", L);
+    if (!world_.launchMatch(L)) { check(false, "launch"); LOG_INFO("QABOT SUMMARY: %d/%d checks passed", checks - fails, checks); return; }
+    game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+    world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+    auto spawnedBots = [&] { int n = 0; for (const game::MatchOpponent* o : world_.matchOpponents()) n += o->spawned(); return n; };
+    auto waitAll = [&] { for (int k = 0; k < 60 * 40 && spawnedBots() < 7; ++k) { world_.handleInput(idle, dt); world_.tick(dt); } };
+    waitAll();   // the match start (pending countdown) and every bot in
+    run(2.0f);
+    // kill all
+    int scoreSum0 = 0, deaths0 = 0;
+    for (const game::MatchPlayer& p : world_.match().players()) { scoreSum0 += p.score; deaths0 += p.deaths; }
+    const int before = spawnedBots();
+    world_.qaKillAllBots();
+    int scoreSum1 = 0, deaths1 = 0;
+    for (const game::MatchPlayer& p : world_.match().players()) { scoreSum1 += p.score; deaths1 += p.deaths; }
+    check(before == 7 && spawnedBots() == 0 && scoreSum1 == scoreSum0 && deaths1 == deaths0 + 7,
+          "kill all: " + std::to_string(before) + " -> " + std::to_string(spawnedBots()) + " bots, scores unchanged, 7 deaths");
+    run(7.0f);
+    check(spawnedBots() == 7, "the respawn wave brings them back (" + std::to_string(spawnedBots()) + "/7)");
+    // freeze
+    waitAll();
+    world_.qaFreezeBots(true);
+    run(0.5f);
+    std::vector<core::Vec3> p0; int shots0 = 0;
+    for (const game::MatchOpponent* o : world_.matchOpponents()) p0.push_back(o->pawn().position());
+    for (const game::BotBrain& b : world_.botBrains()) shots0 += b.shots;
+    run(3.0f);
+    float moved = 0.0f; int shots1 = 0;
+    for (size_t k = 0; k < world_.matchOpponents().size(); ++k) {
+        const core::Vec3 d = world_.matchOpponents()[k]->pawn().position() - p0[k];
+        moved = std::max(moved, std::sqrt(d.x * d.x + d.z * d.z));
+    }
+    for (const game::BotBrain& b : world_.botBrains()) shots1 += b.shots;
+    check(world_.qaBotsFrozen() && moved < 0.5f && shots1 == shots0, "freeze: bots hold still (max " + std::to_string(moved).substr(0, 4) + " m) and do not fire");
+    world_.qaFreezeBots(false);
+    // overlay labels
+    world_.qaSetBotOverlay(true);
+    const auto labels = world_.qaBotLabels();
+    check(world_.qaBotOverlay() && labels.size() == 7 && !labels[0].text.empty(), "overlay: " + std::to_string(labels.size()) + " labels (" + (labels.empty() ? std::string("-") : labels[0].text) + ")");
+    world_.qaSetBotOverlay(false);
+    check(world_.qaBotLabels().empty(), "overlay off: no labels");
+    // teleport to aim
+    const core::Vec3 a = world_.player().pawn().position();
+    world_.qaTeleportToAim();
+    const core::Vec3 b = world_.player().pawn().position();
+    check(core::length(b - a) > 1.0f, "teleport to aim moved the pawn " + std::to_string(core::length(b - a)).substr(0, 5) + " m");
+    LOG_INFO("QABOT SUMMARY: %d/%d checks passed", checks - fails, checks);
+}
+
+// WFC_DETERMINISMTEST (brief section 10): the simulation must not depend on the render frame rate. The same seeded match runs twice in
+// one process: A = one input frame per 60 Hz step; B = four input frames per step (240 fps) with presentation-style std::rand use
+// between them (as per-frame particle / sound variation would). The gameplay event logs (type, time, instigator, victim, damage type)
+// must be identical. Uses WFC_SEED when set (else 7).
+void Application::runDeterminismTest() {
+    int checks = 0, fails = 0;
+    auto check = [&](bool ok, const std::string& what) { ++checks; if (!ok) ++fails; LOG_INFO("DETERMINISM %s %s", ok ? "PASS" : "FAIL", what.c_str()); };
+    const float dt = 1.0f / 60.0f;
+#ifdef _WIN32
+    if (!std::getenv("WFC_SEED")) _putenv_s("WFC_SEED", "7");
+#else
+    if (!std::getenv("WFC_SEED")) setenv("WFC_SEED", "7", 0);
+#endif
+    const float secs = std::getenv("WFC_DETERMINISM_SECS") ? (float)std::atof(std::getenv("WFC_DETERMINISM_SECS")) : 60.0f;
+    auto runOnce = [&](int framesPerStep, int fxRandPerFrame) {
+        std::vector<std::string> log;
+        game::MatchLaunch L; game::MatchLaunch::fromURL(world_.mapName() + "_BASE_m?GameModeTag=TDM?BotsFriendly=4?BotsEnemy=5?BotDifficulty=2?TimeLimit=600", L);
+        if (!world_.launchMatch(L)) return log;
+        game::CharacterSelection cs; cs.type = 0; cs.specialty = game::Specialty::Soldier; cs.weapons = {"AssaultRifle", "HomingRocket", "FlakGrenades"};
+        world_.match().selectCharacter(world_.localMatchPlayer(), cs);
+        platform::InputFrame idle;
+        const int steps = (int)(secs / dt);
+        for (int i = 0; i < steps; ++i) {
+            for (int f = 0; f < framesPerStep; ++f) {
+                world_.handleInput(idle, dt / (float)framesPerStep);
+                for (int k = 0; k < fxRandPerFrame; ++k) (void)std::rand();   // presentation randomness between steps
+            }
+            world_.tick(dt);
+        }
+        char buf[200];
+        for (const game::GameplayEvent& e : world_.match().gameplayEvents()) {
+            std::snprintf(buf, sizeof buf, "%d %.4f %d %d %s", (int)e.type, e.time, e.instigator, e.victim, e.damageType.c_str());
+            log.push_back(buf);
+        }
+        return log;
+    };
+    const std::vector<std::string> a = runOnce(1, 0);
+    const std::vector<std::string> b = runOnce(4, 3);
+    size_t same = 0;
+    while (same < a.size() && same < b.size() && a[same] == b[same]) ++same;
+    LOG_INFO("DETERMINISM %zu / %zu events (A 60 fps) vs %zu (B 240 fps + FX randomness); first difference at %zu", a.size(), a.size(), b.size(), same);
+    if (same < a.size() || same < b.size())
+        LOG_INFO("DETERMINISM   A: %s | B: %s", same < a.size() ? a[same].c_str() : "-", same < b.size() ? b[same].c_str() : "-");
+    check(a.size() > 20, "the match produced events (" + std::to_string(a.size()) + ")");
+    check(a == b, "identical event logs at 60 and 240 fps");
+    LOG_INFO("DETERMINISM SUMMARY: %d/%d checks passed", checks - fails, checks);
 }
 
 } // namespace core
