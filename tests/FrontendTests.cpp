@@ -5,11 +5,13 @@
 #include "frontend/FrontendRuntime.h"
 #include "frontend/FrontendScene.h"
 #include "frontend/GameFlow.h"
+#include "frontend/Profile.h"
 #include "frontend/UIController.h"
 #include "frontend/Url.h"
 #include "core/Config.h"
 
 #include <cmath>
+#include <sstream>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -22,6 +24,23 @@ static int g_fail = 0, g_pass = 0;
 static void check(bool ok, const char* name, const std::string& detail = "") {
     std::printf("%s %s%s%s\n", ok ? "PASS" : "FAIL", name, detail.empty() ? "" : "  ", detail.c_str());
     (ok ? g_pass : g_fail)++;
+}
+
+static void testProfileBotMigration() {
+    // A profile saved by 09b (8c2b6e3): only BotsFriendly / BotsEnemy under [PCSettings].
+    std::istringstream old("[PCSettings]\nWidth=1920\nHeight=1080\nBotsFriendly=3\nBotsEnemy=4\nBotDifficulty=1\n");
+    frontend::LocalProfile p;
+    const bool migrated = p.loadFrom(old);
+    check(migrated && p.bots.autobot == 3 && p.bots.decepticon == 4 && !p.bots.extended, "profile.bots_migrated_from_09b",
+          std::to_string(p.bots.autobot) + "/" + std::to_string(p.bots.decepticon));
+    std::istringstream big("[PCSettings]\nBotsFriendly=9\nBotsEnemy=9\n");
+    frontend::LocalProfile q;
+    q.loadFrom(big);
+    check(q.bots.autobot == 4 && q.bots.decepticon == 5, "profile.bots_migration_original_limits");
+    std::istringstream cur("[PCSettings]\nBotsFriendly=3\nBotsEnemy=4\nBotsAutobot=1\nBotsDecepticon=2\n");
+    frontend::LocalProfile c;
+    const bool again = c.loadFrom(cur);
+    check(!again && c.bots.autobot == 1 && c.bots.decepticon == 2, "profile.bots_current_keys_kept");
 }
 
 static void testUrl() {
@@ -284,6 +303,7 @@ int main() {
     bool ok = c.load(Catalog::defaultManifestRoot(), Catalog::defaultExtractedRoot(), vs + "/Maps");
     check(ok, "catalog.load");
     testUrl();
+    testProfileBotMigration();
     if (ok) testCatalog(c);
     testUIController();
     testSceneCamera();
