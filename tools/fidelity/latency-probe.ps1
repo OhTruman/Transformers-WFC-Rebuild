@@ -1,4 +1,4 @@
-# INPUT LATENCY (tier TARGETED; Gameplay's WFC_LATENCYPROBE). In a live direct-boot match with the local pawn alive, the probe
+# INPUT LATENCY (tier TARGETED; Gameplay's WFC_LATENCYPROBE). In a live direct-boot match (WFC_MATCH=TDM: WFC_MAP alone is a sandbox, the probe never arms) with the local pawn alive, the probe
 # holds Fire / Forward every ~1.5 s from that frame's input sample and stops at the first frame whose draw shows the effect
 # (shot serial changed / pawn moved > 1 cm), timing input sample -> that frame's present. Per kind (fire, move) and async mode
 # (WFC_ASYNCSTEP 0 / 1). Expected: 1 frame in both modes (the local action runs in the synchronous local part before the draw).
@@ -21,7 +21,7 @@ foreach ($k in $Kinds) { foreach ($a in $Async) {
     $tag = "${k}_async$a"; $d = Join-Path $OutDir $tag; New-Item -ItemType Directory -Force $d | Out-Null; $lg = Join-Path $d "wfc.log"
     if (-not $ReportOnly -and -not (Test-Path $lg)) {
         if (-not (Wait-WfcGpu)) { Res "$tag.gpu" "UNKNOWN" "GPU busy - not run" "Experimental"; continue }
-        $e = @{ WFC_BOOT = "match"; WFC_MAP = $Map; WFC_GAMEMODE = "TDM"; WFC_LATENCYPROBE = $k; WFC_ASYNCSTEP = $a; WFC_NOMOUSE = "1"; WFC_LOGEVERY = "0"
+        $e = @{ WFC_BOOT = "match"; WFC_MAP = $Map; WFC_MATCH = "TDM"; WFC_LATENCYPROBE = $k; WFC_ASYNCSTEP = $a; WFC_NOMOUSE = "1"; WFC_LOGEVERY = "0"
                 WFC_SMOKE_FRAMES = "100000000"; WFC_FPS_LIMIT = "$FpsLimit" }
         # stop after -Seconds: the probe loop runs until the smoke frame count; a frame budget at ~300 fps uncapped is generous
         $e.WFC_SMOKE_FRAMES = "$([Math]::Max(3000, $Seconds * $(if ($FpsLimit -gt 0) { $FpsLimit } else { 300 })))"
