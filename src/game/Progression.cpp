@@ -39,7 +39,7 @@ int AwardProducer::challengeStatId(const char* challenge) {
 void AwardProducer::reset() {
     // Serials are never reused, so lastSerial_ stays; per-match detectors restart.
     nextTxn_ = 1; firstKill_ = firstDeath_ = false;
-    recentKills_.clear(); dominate_.clear(); lastKiller_.clear(); totals_.clear(); statAcc_.clear();
+    recentKills_.clear(); dominate_.clear(); lastKiller_.clear(); totals_.clear();
 }
 
 void AwardProducer::xp(int player, int txn, const std::string& id, bool teamGame, const std::string& extra) {
@@ -57,13 +57,6 @@ void AwardProducer::xp(int player, int txn, const std::string& id, bool teamGame
 
 void AwardProducer::stat(int player, int statId, long amount, int updateType) {
     if (player < 0 || statId <= 0) return;
-    if (xpScale_ != 1.0f && updateType != 1) {   // bot match: scaled counts, carried fractionally per (player, stat)
-        double& acc = statAcc_[{player, statId}];
-        acc += (double)amount * xpScale_;
-        const long whole = (long)std::floor(acc + 1e-9);
-        if (whole <= 0) return;
-        acc -= (double)whole; amount = whole;
-    }
     if (stats_.size() >= 8192) stats_.erase(stats_.begin(), stats_.begin() + 4096);
     stats_.push_back({player, statId, amount, updateType});
 }

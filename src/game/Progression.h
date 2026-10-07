@@ -20,9 +20,9 @@ class Match;
 
 struct XpAward { int player = -1; int transactionId = 0; long xp = 0; std::string announcement, description, extra; std::string eventId; long baseXp = 0; };   // baseXp: before the bot-match scale
 
-// XP and challenge progress earned in matches with bots (USER DECISION 2026-10-06, PC ADAPTATION: the original gives none for anything
-// involving AI): scaled by the bots' difficulty - XP rounded per award, challenge counts accumulated fractionally (no loss, no double
-// count; match-max stats are values, not counts, and stay unscaled). One table; WFC_ORIGINAL_XP_RULE=1 (Frontend profile) = original.
+// XP earned in matches with bots (USER DECISION 2026-10-06, PC ADAPTATION: the original gives none for anything involving AI): scaled by
+// the bots' difficulty, rounded per award. Challenge progress counts in full (user decision). One table; WFC_ORIGINAL_XP_RULE=1
+// (Frontend profile) = the original.
 struct BotXpPolicy {
     static constexpr float kScale[3] = {0.25f, 0.50f, 0.75f};   // EASY, MEDIUM, HARD
     static float scale(int difficulty) { return kScale[difficulty < 0 ? 0 : (difficulty > 2 ? 2 : difficulty)]; } };
@@ -50,7 +50,6 @@ private:
     std::map<std::pair<int, int>, int> dominate_;       // (killer, victim) consecutive kills
     std::map<int, int> lastKiller_;                      // victim -> who last killed them
     std::map<int, long> totals_;
-    std::map<std::pair<int, int>, double> statAcc_;     // (player, stat) fractional challenge progress under the bot-match scale
     std::vector<XpAward> xp_;
     std::vector<StatAward> stats_;
     void xp(int player, int txn, const std::string& id, bool teamGame, const std::string& extra = std::string());
