@@ -155,6 +155,7 @@ GLenum pollResetStatus();
 void gpuTimerBegin();
 void gpuTimerEnd();
 double lastGpuFrameMs();
+long gpuFrameReads();           // increments with each new lastGpuFrameMs value (3 frames after the measured frame)
 double lastGpuFrameCpuMs();   // CPU time between the same markers (gpu ~ cpu: the GPU waited on submission)
 
 } // namespace glx
