@@ -1,4 +1,6 @@
 #include "render/gl/WfcPipeline.h"
+
+#include <emmintrin.h>
 #include "core/Config.h"
 #include "assets/Gltf.h"
 #include "assets/Json.h"
@@ -2844,6 +2846,18 @@ void Pipeline::buildSkinBoundsSets(SkinModel& sm, const MeshData& bind, const st
         }
         sm.boundsPts += out.size();
     }
+    sm.hullSoA.assign((size_t)sm.joints, {});
+    for (int j = 0; j < sm.joints; ++j) {
+        const std::vector<core::Vec3>& h = sm.hullPts[(size_t)j];
+        if (h.empty()) continue;
+        const size_t n4 = (h.size() + 3) & ~(size_t)3;       // padded with the last point (min / max unchanged)
+        std::vector<float>& v = sm.hullSoA[(size_t)j];
+        v.resize(n4 * 3);
+        for (size_t k = 0; k < n4; ++k) {
+            const core::Vec3& p = h[std::min(k, h.size() - 1)];
+            v[k] = p.x; v[n4 + k] = p.y; v[2 * n4 + k] = p.z;
+        }
+    }
     LOG_INFO("wfc gpu skin: model %s: %zu verts, %d joints; exact bounds over %zu (%zu blended + rigid hull candidates)",
              bind.mats.empty() ? "?" : bind.mats[0].wfcName.c_str(), n, sm.joints, sm.boundsPts, sm.blended.size());
 }
@@ -2947,8 +2961,35 @@ bool Pipeline::drawSkinned(const MeshData& bind, const std::vector<uint16_t>& jo
             mn = {std::min(mn.x, sp.x), std::min(mn.y, sp.y), std::min(mn.z, sp.z)};
             mx = {std::max(mx.x, sp.x), std::max(mx.y, sp.y), std::max(mx.z, sp.z)};
         };
-        for (int j = 0; j < sm.joints && j < (int)pal.size(); ++j)
-            for (const core::Vec3& p : sm.hullPts[(size_t)j]) grow(core::Vec3{0, 0, 0} + core::transformPoint(pal[(size_t)j], p) * 1.0f);
+        // rigid hull candidates, 4 at a time: core::transformPoint's exact operation order ((m0 x + m4 y) + m8 z) + m12
+        // (SSE2, no fused multiply-add), then 0 + v as skinPose's sum (-0 -> +0): the same bits as the scalar loop
+        {
+            const __m128 zero = _mm_setzero_ps();
+            __m128 lo[3] = {_mm_set1_ps(1e30f), _mm_set1_ps(1e30f), _mm_set1_ps(1e30f)};
+            __m128 hi[3] = {_mm_set1_ps(-1e30f), _mm_set1_ps(-1e30f), _mm_set1_ps(-1e30f)};
+            for (int j = 0; j < sm.joints && j < (int)pal.size(); ++j) {
+                const std::vector<float>& v = sm.hullSoA[(size_t)j];
+                if (v.empty()) continue;
+                const size_t n4 = v.size() / 3;
+                const float* M = pal[(size_t)j].m;
+                for (int r3 = 0; r3 < 3; ++r3) {
+                    const __m128 a = _mm_set1_ps(M[r3]), b = _mm_set1_ps(M[4 + r3]), c = _mm_set1_ps(M[8 + r3]), d = _mm_set1_ps(M[12 + r3]);
+                    for (size_t k = 0; k < n4; k += 4) {
+                        const __m128 x = _mm_loadu_ps(&v[k]), y = _mm_loadu_ps(&v[n4 + k]), z = _mm_loadu_ps(&v[2 * n4 + k]);
+                        __m128 t = _mm_add_ps(_mm_add_ps(_mm_add_ps(_mm_mul_ps(a, x), _mm_mul_ps(b, y)), _mm_mul_ps(c, z)), d);
+                        t = _mm_add_ps(zero, _mm_mul_ps(t, _mm_set1_ps(1.0f)));
+                        lo[r3] = _mm_min_ps(t, lo[r3]);
+                        hi[r3] = _mm_max_ps(t, hi[r3]);
+                    }
+                }
+            }
+            float l[3][4], h[3][4];
+            for (int r3 = 0; r3 < 3; ++r3) { _mm_storeu_ps(l[r3], lo[r3]); _mm_storeu_ps(h[r3], hi[r3]); }
+            for (int q = 0; q < 4; ++q) {
+                mn = {std::min(mn.x, l[0][q]), std::min(mn.y, l[1][q]), std::min(mn.z, l[2][q])};
+                mx = {std::max(mx.x, h[0][q]), std::max(mx.y, h[1][q]), std::max(mx.z, h[2][q])};
+            }
+        }
         for (uint32_t i : sm.blended) {
             const core::Vec3 p{bind.positions[i * 3], bind.positions[i * 3 + 1], bind.positions[i * 3 + 2]};
             core::Vec3 sp{0, 0, 0};
