@@ -678,6 +678,7 @@ void Pipeline::release() {
     if (gInstPipeline == this) gInstPipeline = nullptr;
     touchQueue_.clear();                               // its textures are deleted with the map
     if (mdiRowTex_) { glDeleteTextures(1, &mdiRowTex_); mdiRowTex_ = 0; }
+    if (lmArray_) { glDeleteTextures(1, &lmArray_); lmArray_ = 0; }
     for (GLuint* b : {&mdiRowVbo_, &mdiCmdBuf_}) if (*b) { DeleteBuffers(1, b); *b = 0; }
     mdiBuckets_.clear(); mdiMesh_ = -1;
     progTouchQueue_.clear();
@@ -1508,10 +1509,22 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         }
         const bool hasDLAC = fs.find("uniform vec3 uDLAC;") != std::string::npos;
         if (hasDLAC) replaceAll(fs, "uniform vec3 uDLAC;", "vec3 uDLAC;");
+        // lightmap pages from the shared array (layer per sub in row texels 1..3 .w) when the bucket says so
+        const char* kLMDecl = "uniform sampler2D uLM0; uniform sampler2D uLM1; uniform sampler2D uLM2;";
+        const bool hasLMArr = hasLMS && fs.find(kLMDecl) != std::string::npos;
+        if (hasLMArr) {
+            replaceAll(fs, kLMDecl, std::string(kLMDecl) +
+                       "\nuniform sampler2DArray uLMArr; uniform int uLMUseArr; float wfcLMLayer[3];\n"
+                       "vec4 wfcLMTex(int i, sampler2D s, vec2 uv) { return uLMUseArr != 0 ? texture(uLMArr, vec3(uv, wfcLMLayer[i])) : texture(s, uv); }");
+            replaceAll(fs, "texture(uLM0, vUV1)", "wfcLMTex(0, uLM0, vUV1)");
+            replaceAll(fs, "texture(uLM1, vUV1)", "wfcLMTex(1, uLM1, vUV1)");
+            replaceAll(fs, "texture(uLM2, vUV1)", "wfcLMTex(2, uLM2, vUV1)");
+        }
         replaceAll(fs, "void main()", "void wfcMainBody()");
         std::string ld = "flat in int vRow;\nuniform sampler2D uRowTex;\n"
                          "vec4 wfcR(int k) { return texelFetch(uRowTex, ivec2(k, vRow), 0); }\nvoid main() {\n";
         if (hasLMS) ld += "    for (int i = 0; i < 3; ++i) uLMScale[i] = wfcR(1 + i).xyz;\n";
+        if (hasLMArr) ld += "    for (int i = 0; i < 3; ++i) wfcLMLayer[i] = wfcR(1 + i).w;\n";
         if (hasEnv) ld += "    for (int i = 0; i < 6; ++i) uAmb[i] = wfcR(4 + i).xyz;\n    uNumLights = int(wfcR(10).x + 0.5);\n"
                           "    for (int i = 0; i < 3; ++i) { uLPos[i] = wfcR(11 + i); uLDir[i] = wfcR(14 + i); uLCol[i] = wfcR(17 + i); uLSpot[i] = wfcR(20 + i); }\n";
         if (hasDLAC) ld += "    uDLAC = wfcR(10).yzw;\n";
@@ -1573,6 +1586,7 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
         P.slots[k].unit = (int)k;
     }
     Uniform1i(U("uLM0"), 13); Uniform1i(U("uLM1"), 14); Uniform1i(U("uLM2"), 15);
+    Uniform1i(U("uLMArr"), 21);
     Uniform1i(U("uSceneDepth"), 12);
     Uniform1i(U("uSceneColor"), 16);
     Uniform1i(U("uVLM"), 11);
@@ -3432,6 +3446,8 @@ void Pipeline::buildMdi(int meshId) {
     if (!g.world) return;
     std::map<std::tuple<int, int, int, int>, size_t> idx;
     mdiRows_.clear(); mdiEnvFilled_.clear(); mdiBuckets_.clear();
+    buildLmArray();
+    size_t arrayed = 0;
     uint32_t row = 0;
     for (size_t si = 0; si < g.subs.size(); ++si) {
         Sub& s = g.subs[si];
@@ -3446,11 +3462,18 @@ void Pipeline::buildMdi(int meshId) {
             std::memcpy(rw, s.lmCoord, sizeof s.lmCoord);
             for (int i = 0; i < 3; ++i) for (int c = 0; c < 3; ++c) rw[(1 + i) * 4 + c] = s.lmScale[i][c];
         } else { rw[0] = 1; rw[1] = 1; rw[2] = 0; rw[3] = 0; }
+        // all three pages in the shared array, and the MDI program samples it: bucket by program alone
+        bool inArray = s.lmTex[0] >= 0 && lmArray_ && uloc(progs_[(size_t)P.mdiProg], "uLMUseArr") >= 0;
+        for (int i = 0; i < 3 && inArray; ++i)
+            inArray = (size_t)s.lmTex[i] < lmLayer_.size() && lmLayer_[(size_t)s.lmTex[i]] >= 0;
+        for (int i = 0; i < 3; ++i) rw[(1 + i) * 4 + 3] = inArray ? (float)lmLayer_[(size_t)s.lmTex[i]] : -1.0f;
+        arrayed += inArray ? 1 : 0;
         // light environments (lit, non-lightmapped): filled the first time the sub is drawn, as drawSubs does
         mdiEnvFilled_.push_back(P.lit && s.lmTex[0] < 0 ? 0 : 1);
-        const auto key = std::make_tuple(s.prog, s.lmTex[0], s.lmTex[1], s.lmTex[2]);
+        const int k0 = inArray ? -2 : s.lmTex[0], k1 = inArray ? -2 : s.lmTex[1], k2 = inArray ? -2 : s.lmTex[2];
+        const auto key = std::make_tuple(s.prog, k0, k1, k2);
         auto it = idx.find(key);
-        if (it == idx.end()) { it = idx.emplace(key, mdiBuckets_.size()).first; mdiBuckets_.push_back({s.prog, {s.lmTex[0], s.lmTex[1], s.lmTex[2]}, {}}); }
+        if (it == idx.end()) { it = idx.emplace(key, mdiBuckets_.size()).first; mdiBuckets_.push_back({s.prog, {k0, k1, k2}, {}}); }
         mdiBuckets_[it->second].subs.push_back((uint32_t)si);
     }
     if (row == 0) return;
@@ -3469,7 +3492,68 @@ void Pipeline::buildMdi(int meshId) {
     VertexAttribDivisor(11, 1);
     BindVertexArray(0);
     mdiMesh_ = meshId;
-    LOG_INFO("wfc: world MDI: %u subs in %zu buckets (program + lightmap page)", row, mdiBuckets_.size());
+    LOG_INFO("wfc: world MDI: %u subs in %zu buckets (program + lightmap page; %zu subs via the lightmap array)", row,
+             mdiBuckets_.size(), arrayed);
+}
+
+void Pipeline::buildLmArray() {
+    lmLayer_.assign(lmTextures_.size(), -1);
+    if (lmArray_ || !TexStorage3D || !CopyImageSubData || !TextureView || std::getenv("WFC_NOLMARRAY")) return;
+    constexpr GLenum kArr = 0x8C1A;                            // GL_TEXTURE_2D_ARRAY
+    constexpr GLint kSize = 256, kLevels = 9;                  // the common page size; full mip chain (GenerateMipmap)
+    GLint refFmt = 0;
+    int layers = 0;
+    for (size_t k = 0; k < lmTextures_.size(); ++k) {
+        if (!lmTextures_[k]) continue;
+        glBindTexture(GL_TEXTURE_2D, lmTextures_[k]);
+        GLint w = 0, h = 0, fmt = 0, comp = 0, w8 = 0;
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, 0x1003 /*GL_TEXTURE_INTERNAL_FORMAT*/, &fmt);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, 0x86A1 /*GL_TEXTURE_COMPRESSED*/, &comp);
+        glGetTexLevelParameteriv(GL_TEXTURE_2D, kLevels - 1, GL_TEXTURE_WIDTH, &w8);   // mip chain present
+        if (w != kSize || h != kSize || comp || w8 != 1) continue;
+        if (!refFmt) refFmt = fmt;
+        if (fmt == refFmt) lmLayer_[k] = layers++;
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+    if (layers < 2) { lmLayer_.assign(lmTextures_.size(), -1); return; }
+    glGenTextures(1, &lmArray_);
+    glBindTexture(kArr, lmArray_);
+    TexStorage3D(kArr, kLevels, (GLenum)refFmt, kSize, kSize, layers);
+    // the pages' sampler state (texture(): trilinear, clamp, 8x anisotropy)
+    auto params = [](GLenum target) {
+        glTexParameteri(target, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(target, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(target, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glTexParameterf(target, GL_TEXTURE_MAX_ANISOTROPY_EXT, 8.0f);
+    };
+    params(kArr);
+    glBindTexture(kArr, 0);
+    std::map<GLuint, GLuint> viewOf;
+    for (size_t k = 0; k < lmTextures_.size(); ++k) {
+        if (lmLayer_[k] < 0) continue;
+        for (GLint l = 0; l < kLevels; ++l)                    // exact texel copy of every level (no re-filtering)
+            CopyImageSubData(lmTextures_[k], GL_TEXTURE_2D, l, 0, 0, 0, lmArray_, kArr, l, 0, 0, lmLayer_[k],
+                             kSize >> l, kSize >> l, 1);
+        GLuint v = 0;
+        glGenTextures(1, &v);
+        TextureView(v, GL_TEXTURE_2D, lmArray_, (GLenum)refFmt, 0, kLevels, (GLuint)lmLayer_[k], 1);
+        glBindTexture(GL_TEXTURE_2D, v);
+        params(GL_TEXTURE_2D);
+        viewOf[lmTextures_[k]] = v;
+    }
+    glBindTexture(GL_TEXTURE_2D, 0);
+    // every holder of an old page name now holds its view; then the old storage goes
+    for (auto& kv : texCache_) { auto it = viewOf.find(kv.second); if (it != viewOf.end()) kv.second = it->second; }
+    for (auto& t : touchQueue_) { auto it = viewOf.find(t.first); if (it != viewOf.end()) t.first = it->second; }
+    for (const auto& kv : viewOf) {
+        for (GLuint& t : lmTextures_) if (t == kv.first) t = kv.second;
+        glDeleteTextures(1, &kv.first);
+    }
+    LOG_INFO("wfc: lightmap array: %d of %zu pages (%dx%d, format 0x%x) as views of one texture array", layers,
+             lmTextures_.size(), kSize, kSize, refFmt);
 }
 
 void Pipeline::drawMdi(GpuMesh& g) {
@@ -3524,9 +3608,23 @@ void Pipeline::drawMdi(GpuMesh& g) {
     BindBuffer(0x8F3F /*GL_DRAW_INDIRECT_BUFFER*/, mdiCmdBuf_);
     BufferData(0x8F3F, (GLsizeiptr)(cmds.size() * sizeof(Cmd)), cmds.data(), GL_STREAM_DRAW);
     BindVertexArray(g.vao);
+    // WFC_GPUBUCKETS=1 (diagnostics): every 240th frame, GPU timestamps around each bucket (read back at once - that
+    // frame stalls, the others are untouched); the costliest buckets are logged with material and draw count
+    static const bool gpuBuckets = std::getenv("WFC_GPUBUCKETS") != nullptr && QueryCounter && GetQueryObjectui64v;
+    const bool profFrame = gpuBuckets && frameNo_ % 240 == 0;
+    static std::vector<GLuint> bq;
+    std::vector<std::pair<size_t, size_t>> profMarks;     // (bucket, query index)
+    if (profFrame && bq.size() < mdiBuckets_.size() + 1) {
+        const size_t old = bq.size();
+        bq.resize(mdiBuckets_.size() + 1);
+        GenQueries((GLsizei)(bq.size() - old), &bq[old]);
+    }
+    size_t qn = 0;
+    if (profFrame) QueryCounter(bq[qn++], 0x8E28);
     for (size_t bi = 0; bi < mdiBuckets_.size(); ++bi) {
         const size_t n = ranges[bi].second - ranges[bi].first;
         if (!n) continue;
+        if (profFrame) profMarks.push_back({bi, qn});
         const MdiBucket& b = mdiBuckets_[bi];
         const Program& M = progs_[(size_t)progs_[(size_t)b.prog].mdiProg];
         bindCommon(M, core::Mat4::identity());
@@ -3535,6 +3633,7 @@ void Pipeline::drawMdi(GpuMesh& g) {
         static const bool noCull = std::getenv("WFC_NOCULL") != nullptr;
         if (M.twoSided || noCull) glDisable(GL_CULL_FACE); else glEnable(GL_CULL_FACE);
         glDisable(GL_BLEND); glDepthMask(GL_TRUE);
+        Uniform1i(uloc(M, "uLMUseArr"), b.lm[0] == -2 ? 1 : 0);
         if (b.lm[0] >= 0) {
             Uniform4f(M.uLMCoord, 1, 1, 0, 0);                 // (the VS reads the row; kept for stray readers)
             for (int i = 0; i < 3; ++i) {
@@ -3542,10 +3641,33 @@ void Pipeline::drawMdi(GpuMesh& g) {
                 glBindTexture(GL_TEXTURE_2D, lmTextures_[(size_t)b.lm[i]] ? lmTextures_[(size_t)b.lm[i]] : blackTex_);
             }
         }
+        if (lmArray_) { ActiveTexture(GL_TEXTURE0 + 21); glBindTexture(0x8C1A /*GL_TEXTURE_2D_ARRAY*/, lmArray_); }
         ActiveTexture(GL_TEXTURE0 + 20); glBindTexture(GL_TEXTURE_2D, mdiRowTex_);
         ActiveTexture(GL_TEXTURE0);
         MultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, (const void*)(ranges[bi].first * sizeof(Cmd)), (GLsizei)n, 0);
         depthDirty_ = true;
+        if (profFrame) QueryCounter(bq[qn++], 0x8E28);
+    }
+    if (profFrame && qn > 1) {
+        std::vector<unsigned long long> t(qn);
+        for (size_t k = 0; k < qn; ++k) GetQueryObjectui64v(bq[k], 0x8866 /*GL_QUERY_RESULT*/, &t[k]);
+        std::vector<std::tuple<double, size_t, size_t>> rows;   // (ms, bucket, draws)
+        for (const auto& pm : profMarks) {
+            const size_t bi = pm.first;
+            rows.push_back({(double)(t[pm.second] - t[pm.second - 1]) / 1.0e6, bi, ranges[bi].second - ranges[bi].first});
+        }
+        std::sort(rows.rbegin(), rows.rend());
+        std::string top;
+        for (size_t k = 0; k < rows.size() && k < 15; ++k) {
+            const MdiBucket& b = mdiBuckets_[std::get<1>(rows[k])];
+            const std::string& m = progs_[(size_t)b.prog].material;
+            char buf[200];
+            std::snprintf(buf, sizeof buf, "\n    %.3f ms  %3zu draws  %s%s", std::get<0>(rows[k]), std::get<2>(rows[k]),
+                          m.substr(m.size() > 70 ? m.size() - 70 : 0).c_str(), b.lm[0] == -1 ? "" : " (lightmapped)");
+            top += buf;
+        }
+        LOG_INFO("GPUBUCKETS frame %d: world MDI %.3f ms GPU over %zu buckets; top:%s", frameNo_,
+                 (double)(t[qn - 1] - t[0]) / 1.0e6, profMarks.size(), top.c_str());
     }
     BindBuffer(0x8F3F, 0);
     BindVertexArray(g.vao);                                    // drawSubs continues with this VAO

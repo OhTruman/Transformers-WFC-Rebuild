@@ -5953,6 +5953,14 @@ Every change below is image-identical to the previous path (verified by determin
   inside a bucket (culling only removes draws), so a tie always resolves the same way. Gain: Streets 10 v 10 frame
   median 7.03 -> 5.43 ms.
 
+- **Lightmap texture array (2026-10-07):** the 256x256 lightmap pages (79-97 % of the world subs per map) are layers of
+  one GL_TEXTURE_2D_ARRAY; each page's 2D texture is a texture view of its layer (same storage: every texel and mip
+  level copied exactly, same sampler state, no extra VRAM), and world MDI buckets of those subs key on the program
+  alone (Streets 464 -> 169 buckets). Shading inputs are unchanged; the merged buckets change the draw order between
+  former buckets, so the equal-depth seam tie-break differs on isolated edge pixels (lockstep A/B against
+  WFC_NOLMARRAY=1, 10 maps x 2 views: 0-190 px per view, mostly < 30 levels, max 193 on 2 px of Complex view 3;
+  crops visually identical) - the accepted seam class of the batching decision below. Gain: Streets 10 v 10 1080p
+  p50 2.5 -> 2.1 ms. WFC_NOLMARRAY=1 = previous per-page buckets.
 - **USER DECISION (2026-10-07, via Integration): batched rendering stays the DEFAULT.** Isolated seam / one-shade
   pixel differences are acceptable when not visibly noticeable in normal gameplay; strict screenshot identity is not
   bought with hundreds of fps. Kept: the previous per-draw path as the developer / fidelity REFERENCE mode
