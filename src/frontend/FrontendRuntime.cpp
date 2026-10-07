@@ -460,7 +460,13 @@ BridgeValue FrontendRuntime::customize(const std::string& fn, const std::vector<
     if (fn == "Customize.GetCharacterSlotUnlockLevels") return BridgeValue(std::string("5,10,"));
     // No XP progression offline (TnXpManager returns 0): nothing newly unlocked.
     if (fn == "Customize.GetNewlyUnlockedSkills" || fn == "Customize.GetNewlyUnlockedAbilities") return BridgeValue(std::string());
-    if (fn == "Customize.IsChassisUnlocked") { const ChassisInfo* ci = roster_.chassis(arg(0)); return BridgeValue(ci && !ci->lockedChassis); }
+    if (fn == "Customize.IsChassisUnlocked") {
+        // ORIGINAL: LockedChassis chassis are locked (Car5 / Jet8 unlock on finishing a campaign; 16 others have no known
+        // unlock path - RE UNKNOWN). PC ADAPTATION default: all available (the campaign is not reconstructed); the
+        // [PCSettings] OriginalChassisLocks switch restores the original locks.
+        const ChassisInfo* ci = roster_.chassis(arg(0));
+        return BridgeValue(ci && (!ci->lockedChassis || !flow_.profile().originalChassisLocks));
+    }
     if (fn == "Customize.SelectCharacter") {
         flow_.selectCharacter(selectionFor(arg(0)));
         return {};

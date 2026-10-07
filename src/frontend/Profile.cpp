@@ -90,6 +90,7 @@ void LocalProfile::load() {
             else if (k == "BotsAutobot") bots.autobot = std::max(0, std::atoi(v.c_str()));
             else if (k == "BotsDecepticon") bots.decepticon = std::max(0, std::atoi(v.c_str()));
             else if (k == "BotsExtended") bots.extended = v == "1";
+            else if (k == "OriginalChassisLocks") originalChassisLocks = v == "1";
         } else if (section == "[Progression]") {
             const int sp = progression::specialtyIndex(k.size() > 2 && k.rfind("Xp", 0) == 0 ? k.substr(2) : std::string());
             const int lm = progression::specialtyIndex(k.size() > 9 && k.rfind("LastMatch", 0) == 0 ? k.substr(9) : std::string());
@@ -118,7 +119,7 @@ void LocalProfile::save() const {
       << "\nTextureQuality=" << display.textureQuality << "\nVSync=" << (display.vsync ? 1 : 0)
       << "\nFrameLimit=" << display.frameLimit << "\nBotsFriendly=" << bots.friendly << "\nBotsEnemy=" << bots.enemy
       << "\nBotDifficulty=" << bots.difficulty << "\nBotsAutobot=" << bots.autobot << "\nBotsDecepticon=" << bots.decepticon
-      << "\nBotsExtended=" << (bots.extended ? 1 : 0) << "\n";
+      << "\nBotsExtended=" << (bots.extended ? 1 : 0) << "\nOriginalChassisLocks=" << (originalChassisLocks ? 1 : 0) << "\n";
     f << "\n[Progression]\n";
     for (int i = 0; i < 4; ++i) f << "Xp" << progression::specialtyName(i) << "=" << progression.xp[(size_t)i] << "\n";
     for (int i = 0; i < 4; ++i) f << "LastMatch" << progression::specialtyName(i) << "=" << progression.lastMatchXp[(size_t)i] << "\n";
