@@ -961,6 +961,7 @@ void Pipeline::tickMapFx(float dt) {
     {
         const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
         statFxMs_ += ms; statFxTickMs_ += ms;   // simulation share
+        statFxMsCum_ += ms; statFxTickMsCum_ += ms;
     }
 }
 
@@ -1879,7 +1880,10 @@ void Pipeline::drawMapPresentation() {
     glx::gpuMark(glx::kPassMapFx);
     flushTranslucency();                               // all opaque drawn: the sorted translucency pass
     glx::gpuMark(glx::kPassTranslucent);
-    statFxMs_ += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    {
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+        statFxMs_ += ms; statFxMsCum_ += ms;
+    }
 }
 
 } // namespace wfc

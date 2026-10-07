@@ -105,10 +105,17 @@ double gPassMs[6] = {-1, -1, -1, -1, -1, -1};      // the CPU span of the frame 
 // gpu ~ cpu span => a CPU-side stall inside the frame, not GPU load (no TDR risk); gpu >> cpu => real GPU work.
 std::chrono::steady_clock::time_point gQBegin[3];
 double gQCpuMs[3] = {0, 0, 0};
+long gQFrame[3] = {-1, -1, -1};                     // frame index recorded in each slot
+long gLastGpuIdx = -1;
+std::chrono::steady_clock::time_point gCpuT0;       // this frame's gpuTimerBegin
+double gCpuMark[6] = {-1, -1, -1, -1, -1, -1};
 }
 
 void gpuTimerBegin() {
     gBegun = false;
+    gCpuT0 = std::chrono::steady_clock::now();
+    for (double& m : gCpuMark) m = -1.0;
+    gCpuMark[0] = 0.0;
     if (!GenQueries || !BeginQuery || !GetQueryObjectui64v) return;
     if (!gQ[0]) GenQueries(3, gQ);
     const GLenum kTimeElapsed = 0x88BF, kResultAvailable = 0x8867, kResult = 0x8866;
@@ -137,6 +144,7 @@ void gpuTimerBegin() {
             prev = k;
         }
         gLastCpuMs = gQCpuMs[slot];
+        gLastGpuIdx = gQFrame[slot];
         gQActive[slot] = false;
         static int logged = 0;
         if (gLastGpuMs > 250.0 && logged++ < 50)
@@ -146,6 +154,7 @@ void gpuTimerBegin() {
     }
     BeginQuery(kTimeElapsed, gQ[slot]);
     gQBegin[slot] = std::chrono::steady_clock::now();
+    gQFrame[slot] = gQi;
     if (QueryCounter) {
         if (!gTs[0][0]) for (auto& row : gTs) GenQueries(6, row);
         QueryCounter(gTs[slot][0], 0x8E28);   // GL_TIMESTAMP: frame start
@@ -168,6 +177,8 @@ void gpuTimerEnd() {
 double lastGpuFrameMs() { return gLastGpuMs; }
 double lastGpuFrameCpuMs() { return gLastCpuMs; }
 void gpuMark(int k) {
+    if (k > 0 && k < 6 && gCpuMark[k] < 0.0)
+        gCpuMark[k] = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gCpuT0).count();
     if (!QueryCounter || !gBegun || k <= 0 || k >= 6 || !gTs[0][0]) return;
     const int slot = gQi % 3;
     if (gTsSet[slot][k]) return;               // first mark of this kind per frame
@@ -175,6 +186,9 @@ void gpuMark(int k) {
     gTsSet[slot][k] = true;
 }
 double lastGpuPassMs(int k) { return k >= 0 && k < 6 ? gPassMs[k] : -1.0; }
+long gpuFrameIndex() { return gQi; }
+long lastGpuFrameIndex() { return gLastGpuIdx; }
+double cpuPassMark(int k) { return k >= 0 && k < 6 ? gCpuMark[k] : -1.0; }
 long gpuFrameReads() { return gGpuReads; }
 
 // ---- redundant uniform elimination (300+ fps lobbies: ~2,500 draws x 40-60 uniform calls per frame, most of them
@@ -221,7 +235,17 @@ bool uSame(GLint loc, const void* data, uint32_t words) {
     ++gUSent;
     return false;
 }
-void APIENTRY cUseProgram(GLuint p) { gUCur = p; gUCurKnown = true; realUseProgram(p); }
+unsigned long long gProgBinds = 0, gBufBytes = 0;
+void APIENTRY cUseProgram(GLuint p) { gUCur = p; gUCurKnown = true; ++gProgBinds; realUseProgram(p); }
+PFN_BufferData realBufferData = nullptr;
+PFN_BufferSubData realBufferSubData = nullptr;
+void APIENTRY cBufferData(GLenum t, GLsizeiptr n, const void* d, GLenum u) { if (d && n > 0) gBufBytes += (unsigned long long)n; realBufferData(t, n, d, u); }
+void APIENTRY cBufferSubData(GLenum t, GLintptr o, GLsizeiptr n, const void* d) { if (n > 0) gBufBytes += (unsigned long long)n; realBufferSubData(t, o, n, d); }
+void installUploadCounters() {                      // two adds per call; always on
+    if (BufferData == cBufferData) return;
+    realBufferData = BufferData; BufferData = cBufferData;
+    realBufferSubData = BufferSubData; BufferSubData = cBufferSubData;
+}
 void APIENTRY cLinkProgram(GLuint p) { if (p < gUCache.size()) gUCache[p].clear(); realLinkProgram(p); }
 void APIENTRY cDeleteProgram(GLuint p) { if (p < gUCache.size()) gUCache[p].clear(); if (p == gUCur) gUCurKnown = false; realDeleteProgram(p); }
 void APIENTRY cUniform1i(GLint l, GLint v) { if (!uSame(l, &v, 1)) realUniform1i(l, v); }
@@ -257,6 +281,8 @@ void installUniformCache() {
 }  // namespace
 
 void uniformCacheForgetCurrent() { gUCurKnown = false; }
+unsigned long long programBinds() { return gProgBinds; }
+unsigned long long bufferUploadBytes() { return gBufBytes; }
 bool uniformCacheActive() { return UseProgram == cUseProgram; }
 int uniformCacheGet(GLuint prog, GLint loc, void* out, unsigned words) {
     if (!uniformCacheActive() || loc < 0) return -1;
@@ -281,7 +307,7 @@ bool load() {
 #undef WFC_GL_LOAD_OPT
     if (!GetGraphicsResetStatus) GetGraphicsResetStatus = (PFN_GetGraphicsResetStatus)getProc("glGetGraphicsResetStatusARB");
     if (!DebugMessageCallback) DebugMessageCallback = (PFN_DebugMessageCallback)getProc("glDebugMessageCallbackARB");
-    if (ok) installUniformCache();
+    if (ok) { installUniformCache(); installUploadCounters(); }
     return ok;
 }
 

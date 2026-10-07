@@ -5953,6 +5953,27 @@ Every change below is image-identical to the previous path (verified by determin
   inside a bucket (culling only removes draws), so a tie always resolves the same way. Gain: Streets 10 v 10 frame
   median 7.03 -> 5.43 ms.
 
+- **USER DECISION (2026-10-07, via Integration): batched rendering stays the DEFAULT.** Isolated seam / one-shade
+  pixel differences are acceptable when not visibly noticeable in normal gameplay; strict screenshot identity is not
+  bought with hundreds of fps. Kept: the previous per-draw path as the developer / fidelity REFERENCE mode
+  (WFC_MDI=0; WFC_GL33=1 forces the old GL 3.3 path), maintained and working; strict captures (lockstep A/B against
+  WFC_MDI=0) remain the tool for finding real regressions. A batching difference that becomes visible in normal play is
+  fixed for that case - batching is never reverted globally. Material and lighting correctness is never loosened for
+  speed (batching changes draw order / grouping only, never shading inputs).
+- **USER DECISION (2026-10-07, via Integration): Scatter Blaster smoke keeps its authored presentation.**
+  FX_EMPShotgun_p.FX.Trail_EMPShotgun_FX's three Trail_Smoke ribbons (Trail2, Tracer_Smoke_MAT via
+  Trail_Smoke_10_MAT_INST): Lifetime 4 s, 20 / s for 0.5 s, StartSize U(15,25) x SizeMultiplyLife, ribbon half-width =
+  Size (RE pass 5 s13 add. 2, HIGH), alpha over life ~1 from 20 % to 55 %, colour to 0.1 by 20 % -> dense dark-grey
+  smoke per shot. The per-effect presentation matches the authored data on every point checked (width, rate,
+  lifetime, alpha, colour, material, LODDistances [0, 10000]: 20 / s at LOD0, 4 / s beyond 100 m, applied by camera
+  distance). The excess density WAS real, but on the spawn side: RE 9a776fb (CONFIRMED) - WFC spawns ONE
+  Trail_EMPShotgun_FX per trigger pull (shot index 0, toward the first pellet's impact), the rebuild spawned one per
+  pellet (~13x the smoke); Gameplay fixes the fire-effect path. Changed only if RE / Rendering demonstrate a material
+  difference from original WFC (original effect / material data, original footage where available); never made
+  cleaner for visibility. Known minor difference (not the smoke density): ParameterDynamic is one value per emitter
+  here vs per particle per vertex in WFC (RE: trail fill copies 4 floats per vertex); in this material it only moves
+  the desaturation (no visible effect on grey) and the UV scroll offset - [follow-up].
+
 ## CONFIRMED ORIGINAL (authored data)
 - Streets map = three sublevels **BASE** (gameplay: 24 FFA + 60 team starts, 58 blocking
   volumes, pickups, objectives) + **ART** (visual: BSP 2460 tris, 34 StaticMeshActors,
