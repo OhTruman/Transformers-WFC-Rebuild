@@ -22,6 +22,7 @@ public:
     void run(int n, const std::function<void(int)>& f) {
         if (n <= 0) return;
         if (threads_.empty() || n == 1) { for (int i = 0; i < n; ++i) f(i); return; }
+        std::lock_guard<std::mutex> caller(callers_);      // one job at a time (the async sim thread vs anything else)
         {
             std::lock_guard<std::mutex> lk(m_);
             job_ = &f; count_ = n; next_.store(0); pending_.store((int)threads_.size()); ++generation_;
@@ -63,7 +64,7 @@ private:
         }
     }
     std::vector<std::thread> threads_;
-    std::mutex m_;
+    std::mutex m_, callers_;
     std::condition_variable cv_, doneCv_;
     const std::function<void(int)>* job_ = nullptr;
     int count_ = 0;

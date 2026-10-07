@@ -112,6 +112,7 @@ private:
     void runStuckSpot(const char* spec);
     void runMarkersTest();
     void runEngageTest();
+    void runAsyncStepTest();
 
     platform::IWindow* window_ = nullptr;
     render::IRenderer* renderer_ = nullptr;

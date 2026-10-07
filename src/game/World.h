@@ -3,6 +3,7 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include <thread>
 #include <string>
 #include <map>
 #include <set>
@@ -574,6 +575,18 @@ public:
     void projectileFxMove(const Projectile& p);
     void projectileFxEnd(Projectile& p, const core::Vec3& at, const core::Vec3& normal, bool explode);
     int projectileFxSpawned_ = 0, projectileFxExplosions_ = 0;   // diagnostics (WFC_PROJFXTEST)
+    // Renderer particle calls made by the step (projectile flight / explosion): World-side ids mapped to renderer handles. While a
+    // background part runs they are queued and replayed in order at the join (the renderer is main-thread only); else immediate.
+    struct FxOp { int kind = 0; int vid = -1; std::string tmpl; core::Vec3 p{0, 0, 0}, f{0, 0, 0}, u{0, 0, 0}; int team = -1; bool explosion = false; };
+    std::vector<FxOp> fxOps_;
+    std::map<int, int> fxReal_;
+    int fxNextVid_ = 0;
+    int fxStepSpawn(const std::string& tmpl, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u, int team, bool explosion);
+    void fxStepMove(int vid, const core::Vec3& p, const core::Vec3& f, const core::Vec3& u);
+    void fxStepStop(int vid);
+    void runFxOp(const FxOp& op);
+    bool fxLive(int vid) const { return vid >= 0 && fxReal_.count(vid) > 0; }
+    int fxTeamOf(int player) const;   // ParticleModuleSwitchableColorScaleOverLife channel: team (team game) / faction (FFA)
     // TnGrenadeThrower: G in robot form -> toss after TossDelay 0.4 s.
     void startLocalGrenadeToss();
     void releaseGrenade(Character& gp, int player, const Weapon& gb, const core::Vec3& target);
@@ -739,8 +752,9 @@ public:
     // participant, produced from the event record. Frontend applies the local player's to the profile (CanGainXp rule, current
     // specialty). Drained by the caller.
     // (legacy drains: now read the presented queues, which every step fills; see presented())
-    std::vector<XpAward> drainXpAwards() { std::vector<XpAward> v; v.swap(presented_.xpAwards); auto r = awards_.drainXp(); v.insert(v.end(), r.begin(), r.end()); return v; }
-    std::vector<StatAward> drainStatAwards() { std::vector<StatAward> v; v.swap(presented_.statAwards); auto r = awards_.drainStats(); v.insert(v.end(), r.begin(), r.end()); return v; }
+    // (awards_ is drained into presented() at the end of every step; it is touched here only while no background part runs)
+    std::vector<XpAward> drainXpAwards() { std::vector<XpAward> v; v.swap(presented_.xpAwards); if (!remainderRunning_) { auto r = awards_.drainXp(); v.insert(v.end(), r.begin(), r.end()); } return v; }
+    std::vector<StatAward> drainStatAwards() { std::vector<StatAward> v; v.swap(presented_.statAwards); if (!remainderRunning_) { auto r = awards_.drainStats(); v.insert(v.end(), r.begin(), r.end()); } return v; }
 
     // ---- Presented state / commands (docs/ASYNC_SIM_STEP.md, step 1: filled synchronously at the end of every step) ----
     // Everything the main thread reads during a frame (HUD, frontend, glue) comes from presented(); writes go through submit().
@@ -831,18 +845,47 @@ public:
         unsigned steps = 0;                             // steps since the last consumePresented()
     };
     const PresentedFrame& presented() const { return presented_; }
+    // Async step (docs/ASYNC_SIM_STEP.md step 3, variant B; WFC_ASYNCSTEP=1). A step = the local part (tickPrefix: commands, map,
+    // abilities, match, the local controller) on the main thread, then the background part (bots, participants, weapons, FX, audio
+    // glue, projectiles, actors, presented() fill). The main loop draws between the two and launches the background part after
+    // World::draw; the next frame joins it first. The order of operations is exactly tick()'s, so the simulation is identical.
+    //   frame: joinStep(); handleInput(); n x { tickPrefix(dt) }; draw; launchStep();
+    // tickPrefix finishes a pending background part inline first (catch-up steps), so any interleaving keeps tick()'s order.
+    void tickPrefix(float dt);
+    void launchStep();          // the pending background part: on the sim thread (async) or inline
+    void joinStep();            // wait for it, publish presented(), run the deferred main-thread work
+    bool stepPending() const { return remainderPending_; }
+    bool stepRunning() const { return remainderRunning_; }   // main-thread code must not touch simulation state while true
+    static bool asyncStepEnabled();
     void consumePresented() { presented_.matchEvents.clear(); presented_.gameplayEvents.clear(); presented_.kills.clear();
                               presented_.damageTaken.clear(); presented_.damageCaused.clear(); presented_.steps = 0; }
     // A command for the simulation: applied in submission order at the start of the next step (select a character, QA actions,
     // look settings, audio volumes / preloads, test damage). Deterministic: the same commands land at the same step boundary.
     void submit(std::function<void(World&)> command) { commands_.push_back(std::move(command)); }
     PresentedFrame presented_;
+    PresentedFrame presentedBack_;            // async: filled by the background part, published at joinStep
+    void publishPresented();
+    void stepRemainder(float dt);
+    void finishRemainder();                   // stepRemainder + fill + palette invalidation (any thread)
+    bool remainderPending_ = false, remainderRunning_ = false, fillBack_ = false;
+    float pendingDt_ = 0.0f;
+    struct AsyncStepThread;
+    std::shared_ptr<AsyncStepThread> asyncThread_;
+    std::thread::id mainThread_ = std::this_thread::get_id();
+    bool onMainThread() const { return std::this_thread::get_id() == mainThread_; }
+    std::vector<const WeaponDef*> deferredWeaponLoads_;
+    // Glue hooks fired by the background part (participant shot FX / abilities: renderer FX, audio) run on the main thread at the join,
+    // in order: on the sim thread they would race the renderer / Systems. Presentation only.
+    std::vector<std::function<void()>> deferredHooks_;
+    template <class F> void presentHook(F&& f) { if (remainderRunning_ && !onMainThread()) deferredHooks_.push_back(std::forward<F>(f)); else f(); }
+    double lastRemainderMs_ = 0.0, prefixMsAcc_ = 0.0, beginStepMsAcc_ = 0.0;   // a model needed by the background part: loaded at the join (GL)
+    void preloadHeldWeaponsOfPawns();
     std::vector<std::function<void(World&)>> commands_;
     size_t presentedGameplayEventCount_ = 0, presentedKillCount_ = 0;
     std::vector<PresentedFrame::DamageTaken> pendingDamageTaken_;
     std::vector<PresentedFrame::Marker> prevMarkers_;   // the last step's markers (removal fade)
     std::vector<PresentedFrame::DamageCaused> pendingDamageCaused_;
-    void fillPresented();
+    void fillPresented(PresentedFrame& p);
     const AwardProducer& awards() const { return awards_; }
     const std::vector<MatchOpponent*>& matchOpponents() const { return opponents_; }
     HudGameState hudState() const;
@@ -918,7 +961,7 @@ private:
     // event animations, drawn at each pawn's weapon socket.
     struct ParticipantWeaponView { std::string id; WeaponMesh anim; unsigned seenShot = 0, seenReload = 0; };
     std::map<int, ParticipantWeaponView> partWeapons_;
-    struct PendingShotFx { std::string weapon; core::Mat4 muzzle; core::Vec3 to; bool tracer = true; };
+    struct PendingShotFx { std::string weapon; core::Mat4 muzzle; core::Vec3 to; bool tracer = true; int team = -1; };
     mutable std::vector<PendingShotFx> partShotFx_;   // filled per step, spawned at draw (renderer particle API)
     // Participants' Repair Ray beams (the player's beam presentation per bot): source / target refreshed each beam tick, alive for
     // 1.5 fire intervals after the last tick; the looping tracer segment is spawned / moved / stopped at draw.

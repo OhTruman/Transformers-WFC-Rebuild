@@ -537,7 +537,7 @@ bool World::botTryAbility(MatchOpponent& o, BotBrain& b, const char* id) {
         else if (a.id == "RollerSphere") { pc.playAction("Skill_AbilityJammer", false); requestRoller(o.matchPlayer()); }   // OnTriggerAnimParams, SpawnDelay 0.5
         else return false;
         a.spam = 1.0f; a.pendingCooldown = true; ++b.abilities;
-        if (participantAbilityHook) participantAbilityHook(o.matchPlayer(), a.id, pc.chassis().id, pc.actorLocation());
+        if (participantAbilityHook) presentHook([this, p = o.matchPlayer(), id = std::string(a.id), ch = pc.chassis().id, at = pc.actorLocation()] { participantAbilityHook(p, id, ch, at); });
         return true;
     }
     return false;
