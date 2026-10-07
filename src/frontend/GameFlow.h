@@ -167,6 +167,7 @@ public:
     // (UI_Lobby_m?...?MapId=<map>) [RE M05 blockers F4 / F6].
     void returnToGameLobby();
     void setMatchValues(const MatchValues& v) { matchValues_ = v; }
+    void setMatchValues(MatchValues&& v) { matchValues_ = std::move(v); }   // the glue builds a fresh roster: no copy
     const MatchValues& matchValues() const { return matchValues_; }
     bool quitRequested() const { return quit_; }
     void exitNow() { quit_ = true; }   // automation: leave without the Exit Game confirmation
