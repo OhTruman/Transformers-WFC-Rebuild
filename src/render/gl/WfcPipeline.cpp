@@ -1258,6 +1258,7 @@ void Pipeline::loadStep(const char* where) {
     if (loadYield_) { yieldLoad(); return; }
 #ifdef WFC_HAS_CORE_LOADYIELD
     core::loadYield(where);
+    glx::uniformCacheForgetCurrent();                  // the loading frame may have bound other programs
 #else
     (void)where;
 #endif
@@ -1469,6 +1470,14 @@ int Pipeline::buildProgram(const std::string& key, const std::string& body, cons
 // object NAME, not its path: resolve it against the compiled original materials.
 std::string Pipeline::resolveBySourceName(const Material* m) const {
     if (!m || m->sourceName.empty()) return std::string();
+    auto hit = srcNameCache_.find(m->sourceName);
+    if (hit != srcNameCache_.end()) return hit->second;
+    std::string res = resolveBySourceNameUncached(m);
+    srcNameCache_.emplace(m->sourceName, res);
+    return res;
+}
+
+std::string Pipeline::resolveBySourceNameUncached(const Material* m) const {
     std::string want = "." + m->sourceName;
     std::transform(want.begin(), want.end(), want.begin(), ::tolower);
     for (const auto& kv : mats_) {     // first in path order; same-named MICs share their master
@@ -1603,7 +1612,8 @@ int Pipeline::programFor(const std::string& matNameIn, const Material* gm, bool 
 // ------------------------------------------------------------------------- light environment
 namespace {
 struct RenderStats { int envCalls = 0, visCalls = 0, draws = 0; double envMs = 0, renderMs = 0, gpuMs = 0, dynBuildMs = 0, dynUploadMs = 0, dynTotalMs = 0, dynShadowMs = 0; int dynCalls = 0, dynCulled = 0, dynReused = 0;
-                     double skinMs = 0, skinBoundsMs = 0; int skinCalls = 0, skinUploads = 0; } gStats;
+                     double skinMs = 0, skinBoundsMs = 0; int skinCalls = 0, skinUploads = 0;
+                     double dynEnvMs = 0, dynSubsMs = 0, dynDrawMs = 0; } gStats;
 std::chrono::steady_clock::time_point gFrameStart;
 }
 
@@ -2354,7 +2364,12 @@ void Pipeline::drawSubs(GpuMesh& g, const core::Mat4& model, bool dynamicObject,
             if (trans) ++counts_.translucent;
             else { ++counts_.opaque; if (!glIsEnabled(GL_DEPTH_TEST)) ++counts_.opaqueNoDepthTest; }
             if (s.lmTex[0] >= 0 || s.vlmTex != 0) ++counts_.lightmapped;
-            frameMats_.insert(s.matName);
+            if (s.matKey < 0) {
+                auto mk = matKeys_.emplace(s.matName, (int)matKeys_.size());
+                s.matKey = mk.first->second;
+                if ((size_t)s.matKey >= matSeenFrame_.size()) matSeenFrame_.resize((size_t)s.matKey + 1, -1);
+            }
+            if (matSeenFrame_[(size_t)s.matKey] != frameNo_) { matSeenFrame_[(size_t)s.matKey] = frameNo_; ++frameMatCount_; }
             if ((size_t)s.prog < progSeen_.size() && !progSeen_[(size_t)s.prog]) { progSeen_[(size_t)s.prog] = 1; ++counts_.programs; }
             if (reportFrame) {
                 FrameDraw& fd = frameDraws_[s.matName.empty() ? std::string("<gltf>") : s.matName];
@@ -2602,6 +2617,25 @@ const std::string* Pipeline::energyDeathFor(const std::string& material) const {
 }
 
 int Pipeline::dynamicProgram(const Material* mat) {
+    if (mat) {
+        auto mm = dynProgMemo_.find(mat);
+        if (mm != dynProgMemo_.end()) {
+            const DynProgMemo& d = mm->second;
+            if (d.tex == mat->tex && d.emissiveTex == mat->emissiveTexHandle && d.color.x == mat->color.x &&
+                d.color.y == mat->color.y && d.color.z == mat->color.z && d.wfcName == mat->wfcName &&
+                d.sourceName == mat->sourceName && d.baseColorUri == mat->baseColorUri && d.emissiveUri == mat->emissiveUri &&
+                d.normalUri == mat->normalUri && d.specularUri == mat->specularUri)
+                return d.prog;
+        }
+    }
+    const int prog = dynamicProgramUncached(mat);
+    if (mat)
+        dynProgMemo_[mat] = DynProgMemo{mat->wfcName, mat->sourceName, mat->baseColorUri, mat->emissiveUri, mat->normalUri,
+                                        mat->specularUri, mat->color, mat->tex, mat->emissiveTexHandle, prog};
+    return prog;
+}
+
+int Pipeline::dynamicProgramUncached(const Material* mat) {
     std::string mk = materialKey(mat);
     auto it = dynProgCache_.find(mk);
     if (it == dynProgCache_.end())
@@ -2685,6 +2719,75 @@ void Pipeline::drawHudScreenEffect() {
 // strictly inside (by a margin far above rounding) the hull of the set's extreme points along 26 fixed directions
 // (a subset of the true hull, so dropping its interior is safe), and every other vertex. The box over the kept
 // vertices with skinPose's own expression is bitwise the box over all of them.
+// Incremental 3D convex hull of a small point set (the extremes of a joint's rigid vertices): outward unit planes.
+// Returns false when it cannot be built reliably (degenerate input, or a validation failure: every input point must
+// lie on the inner side, within eps, of every plane) - the caller then keeps every vertex.
+static bool convexHullPlanes(const std::vector<core::Vec3>& E, float eps, std::vector<std::pair<core::Vec3, float>>& planes) {
+    planes.clear();
+    const size_t m = E.size();
+    if (m < 4) return false;
+    // initial tetrahedron: two far points, the farthest from their line, the farthest from that plane
+    size_t i0 = 0, i1 = 0;
+    for (size_t k = 1; k < m; ++k) if (E[k].x < E[i0].x) i0 = k;
+    float best = -1;
+    for (size_t k = 0; k < m; ++k) { const float d = core::length(E[k] - E[i0]); if (d > best) { best = d; i1 = k; } }
+    if (best <= eps) return false;
+    size_t i2 = 0; best = -1;
+    for (size_t k = 0; k < m; ++k) {
+        const float d = core::length(core::cross(E[k] - E[i0], E[i1] - E[i0]));
+        if (d > best) { best = d; i2 = k; }
+    }
+    if (best <= eps * core::length(E[i1] - E[i0])) return false;
+    core::Vec3 n0 = core::normalize(core::cross(E[i1] - E[i0], E[i2] - E[i0]));
+    size_t i3 = 0; best = -1;
+    for (size_t k = 0; k < m; ++k) { const float d = std::fabs(core::dot(n0, E[k] - E[i0])); if (d > best) { best = d; i3 = k; } }
+    if (best <= eps) return false;
+    struct Face { size_t a, b, c; core::Vec3 n; float d; bool alive; };
+    std::vector<Face> F;
+    const core::Vec3 centre = (E[i0] + E[i1] + E[i2] + E[i3]) * 0.25f;
+    auto addFace = [&](size_t a, size_t b, size_t c) {
+        core::Vec3 n = core::cross(E[b] - E[a], E[c] - E[a]);
+        const float len = core::length(n);
+        if (len <= 0.0f) return false;
+        n = n * (1.0f / len);
+        float d = core::dot(n, E[a]);
+        if (core::dot(n, centre) - d > 0.0f) { std::swap(b, c); n = n * -1.0f; d = -d; }   // outward
+        F.push_back({a, b, c, n, d, true});
+        return true;
+    };
+    if (!addFace(i0, i1, i2) || !addFace(i0, i1, i3) || !addFace(i0, i2, i3) || !addFace(i1, i2, i3)) return false;
+    for (size_t q = 0; q < m; ++q) {
+        if (q == i0 || q == i1 || q == i2 || q == i3) continue;
+        std::vector<size_t> vis;
+        for (size_t f = 0; f < F.size(); ++f) if (F[f].alive && core::dot(F[f].n, E[q]) - F[f].d > eps) vis.push_back(f);
+        if (vis.empty()) continue;
+        // horizon: directed edges of visible faces whose reverse edge is not on a visible face
+        std::vector<std::pair<size_t, size_t>> edges;
+        for (size_t f : vis) {
+            const size_t e[3][2] = {{F[f].a, F[f].b}, {F[f].b, F[f].c}, {F[f].c, F[f].a}};
+            for (const auto& ed : e) edges.push_back({ed[0], ed[1]});
+        }
+        std::vector<std::pair<size_t, size_t>> horizon;
+        for (const auto& ed : edges) {
+            bool rev = false;
+            for (const auto& o : edges) if (o.first == ed.second && o.second == ed.first) { rev = true; break; }
+            if (!rev) horizon.push_back(ed);
+        }
+        for (size_t f : vis) F[f].alive = false;
+        for (const auto& h : horizon) {
+            core::Vec3 n = core::cross(E[h.second] - E[h.first], E[q] - E[h.first]);
+            const float len = core::length(n);
+            if (len <= 0.0f) continue;
+            n = n * (1.0f / len);
+            F.push_back({h.first, h.second, q, n, core::dot(n, E[h.first]), true});
+        }
+    }
+    for (const Face& f : F) if (f.alive) planes.push_back({f.n, f.d});
+    for (const auto& pl : planes)                       // validation: no input point outside any plane
+        for (const core::Vec3& p : E) if (core::dot(pl.first, p) - pl.second > eps * 4.0f) { planes.clear(); return false; }
+    return planes.size() >= 4;
+}
+
 void Pipeline::buildSkinBoundsSets(SkinModel& sm, const MeshData& bind, const std::vector<uint16_t>& joints,
                                    const std::vector<float>& weights) {
     const size_t n = bind.vertexCount();
@@ -2710,7 +2813,16 @@ void Pipeline::buildSkinBoundsSets(SkinModel& sm, const MeshData& bind, const st
         if (R.size() < 48) { for (uint32_t i : R) out.push_back(P(i)); sm.boundsPts += out.size(); continue; }
         std::vector<core::Vec3> E;
         core::Vec3 lo = P(R[0]), hi = P(R[0]);
-        for (const core::Vec3& d : kDirs) {
+        static const std::vector<core::Vec3> kAllDirs = [] {   // the 26 axis / edge / corner directions + 150 Fibonacci
+            std::vector<core::Vec3> d(std::begin(kDirs), std::end(kDirs));
+            const int N = 150; const float ga = 2.39996323f;
+            for (int k = 0; k < N; ++k) {
+                const float y = 1.0f - 2.0f * ((float)k + 0.5f) / (float)N, rr = std::sqrt(std::max(0.0f, 1.0f - y * y));
+                d.push_back({std::cos(ga * (float)k) * rr, y, std::sin(ga * (float)k) * rr});
+            }
+            return d;
+        }();
+        for (const core::Vec3& d : kAllDirs) {
             uint32_t best = R[0]; float bv = -1e30f;
             for (uint32_t i : R) { const float v = core::dot(P(i), d); if (v > bv) { bv = v; best = i; } }
             const core::Vec3 p = P(best);
@@ -2723,23 +2835,7 @@ void Pipeline::buildSkinBoundsSets(SkinModel& sm, const MeshData& bind, const st
         const float ext = std::max(core::length(hi - lo), 1e-6f);
         const float eps = ext * 1e-4f;                  // interior margin (bind units); rounding is ~1e-7 of the extent
         std::vector<std::pair<core::Vec3, float>> planes;   // outward unit normal, offset
-        const size_t m = E.size();
-        for (size_t a = 0; a < m; ++a)
-            for (size_t b = a + 1; b < m; ++b)
-                for (size_t c = b + 1; c < m; ++c) {
-                    core::Vec3 nn = core::cross(E[b] - E[a], E[c] - E[a]);
-                    const float len = core::length(nn);
-                    if (len < 1e-12f) continue;
-                    nn = nn * (1.0f / len);
-                    const float d = core::dot(nn, E[a]);
-                    bool pos = false, neg = false;
-                    for (size_t q = 0; q < m && !(pos && neg); ++q) {
-                        const float s = core::dot(nn, E[q]) - d;
-                        if (s > eps) pos = true; else if (s < -eps) neg = true;
-                    }
-                    if (pos && neg) continue;
-                    if (pos) { nn = nn * -1.0f; planes.push_back({nn, -d}); } else planes.push_back({nn, d});
-                }
+        convexHullPlanes(E, eps, planes);                 // empty on failure: every vertex kept
         for (uint32_t i : R) {
             const core::Vec3 p = P(i);
             bool inside = !planes.empty();
@@ -3083,6 +3179,7 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         setupAttribs();
         BindVertexArray(0);
     }
+    const auto tEnv0 = std::chrono::steady_clock::now();
     // Which LightEnvironmentComponent draws this mesh: the Optimus robot (and its weapon, which uses the
     // owner's environment) or vehicle form, identified by the cooked packages of its materials.
     static const std::vector<core::Vec3> kRobotSamples = [] {   // UE (x,y,z) -> glTF (x,z,y)
@@ -3114,6 +3211,8 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
             tickDirectLightEnv(envForm_, c, envBoundsExtent_, core::Vec3{model.m[12], model.m[13], model.m[14]});
         }
     }
+    const auto tEnv1 = std::chrono::steady_clock::now();
+    gStats.dynEnvMs += std::chrono::duration<double, std::milli>(tEnv1 - tEnv0).count();
     if (offscreen) { envSamples_ = nullptr; envForm_ = -1; return; }   // light environment ticked above
     GpuMesh g;
     g.vao = drawVao;
@@ -3137,6 +3236,8 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         }
         g.subs.push_back(d);
     }
+    const auto tSubs1 = std::chrono::steady_clock::now();
+    gStats.dynSubsMs += std::chrono::duration<double, std::milli>(tSubs1 - tEnv1).count();
     // the owner's runtime parameters apply to its shadow caster / depth pre-pass too (M74: a dissolving Defrag body
     // must not cast or depth-write its whole silhouette)
     inDynamicDraw_ = true;
@@ -3148,7 +3249,11 @@ void Pipeline::drawDynamic(const MeshData& m, const core::Mat4& model, const voi
         gStats.dynShadowMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - ts0).count();
     }
     dynamicMaskDraw_ = envSamples_ != nullptr;
-    drawSubs(g, model, true);
+    {
+        const auto td = std::chrono::steady_clock::now();
+        drawSubs(g, model, true);
+        gStats.dynDrawMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - td).count();
+    }
     poseBlend_ = 0; poseAlpha_ = 1.0f;
     inDynamicDraw_ = false;
     dynamicMaskDraw_ = false;
@@ -3542,6 +3647,7 @@ void Pipeline::beginFrame(const Camera& cam, int w, int h) {
     counts_ = FrameCounts();
     sceneColorCopied_ = false;
     frameMats_.clear();
+    frameMatCount_ = 0;
     frameNoProg_.clear();
     progSeen_.assign(progs_.size(), 0);
     if ((frameNo_ & 255) == 0 && !posed_.empty()) evictPosed(false);   // meshes no longer drawn (despawned bodies)
@@ -3628,7 +3734,7 @@ void Pipeline::drawCanvasTiles() {
 void Pipeline::endFrame() {
     flushTranslucency();                               // nothing queued normally: drawMapPresentation flushed it
     {
-        counts_.materials = (int)frameMats_.size();
+        counts_.materials = frameMatCount_;
         counts_.noProgramMats.assign(frameNoProg_.begin(), frameNoProg_.end());
         lastCounts_ = counts_;
     }
@@ -3658,6 +3764,15 @@ void Pipeline::endFrame() {
                      "%.2f + upload %.2f + shadow %.2f + rest per frame", gStats.dynCalls / 120.0, gStats.dynCulled / 120.0,
                      gStats.dynReused / 120.0, gStats.dynTotalMs / 120.0,
                      gStats.dynBuildMs / 120.0, gStats.dynUploadMs / 120.0, gStats.dynShadowMs / 120.0);
+            {
+                unsigned long long sent = 0, skipped = 0;
+                glx::uniformCacheStats(sent, skipped);
+                if (sent + skipped)
+                    LOG_INFO("wfc: uniform calls per frame: %.0f sent, %.0f skipped as redundant (%.0f%%)", sent / 120.0,
+                             skipped / 120.0, 100.0 * (double)skipped / (double)(sent + skipped));
+            }
+            LOG_INFO("wfc: dynamic draw split per frame: light env %.2f ms, sub setup %.2f ms, drawSubs %.2f ms (shadow %.2f)",
+                     gStats.dynEnvMs / 120.0, gStats.dynSubsMs / 120.0, gStats.dynDrawMs / 120.0, gStats.dynShadowMs / 120.0);
             if (gStats.skinCalls)
                 LOG_INFO("wfc: GPU-skinned draws: %.1f calls, %.2f ms per frame (incl. the dynamic draw), palette uploads %.1f "
                          "(exact bounds + upload %.2f ms)", gStats.skinCalls / 120.0, gStats.skinMs / 120.0,

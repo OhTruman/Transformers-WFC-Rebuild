@@ -137,6 +137,7 @@ public:
     }
     void beginFrame(const Camera& camIn, int vpW, int vpH) override {
         watchdog::phase("beginFrame");
+        glx::uniformCacheForgetCurrent();            // programs bound outside the renderer since the last frame
         if (const char* hf = std::getenv("WFC_HUDFX")) wfc_.setHudScreenEffect(std::atoi(hf));   // diagnostics: force a HUD chain
         glx::gpuTimerBegin();                        // M43: GPU time of the 3D frame (long frames logged)
         {   // a new GPU time read back this frame belongs to the frame 3 renderer frames ago
@@ -247,6 +248,7 @@ public:
     }
 
     void endFrame() override {
+        struct ForgetOnExit { ~ForgetOnExit() { glx::uniformCacheForgetCurrent(); } } forgetOnExit;   // GFx / frontend draw next
         if (glx::GetGraphicsResetStatus) glx::pollResetStatus();   // M43: a lost context is logged (once)
         glx::gpuMark(glx::kPassWorld);       // no dynamic draw this frame: the world ends here
         glx::gpuMark(glx::kPassCaller);

@@ -150,6 +150,10 @@ WFC_GL_OPT_FUNCS(WFC_GL_DECL)
 
 // Load all entry points (requires a current context). Returns false if any is missing.
 bool load();
+// Redundant uniform elimination (installed by load): forget the current program at frame boundaries (other
+// components may bind programs through their own loaders); counters since the last call.
+void uniformCacheForgetCurrent();
+void uniformCacheStats(unsigned long long& sent, unsigned long long& skipped);
 
 // M43 stability diagnostics (always on): driver debug output (errors / undefined behaviour / high severity, rate
 // limited, WFC_GLDEBUG=all for every message, WFC_GLDEBUG=sync for synchronous call stacks) and the context reset
