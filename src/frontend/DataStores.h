@@ -38,6 +38,15 @@ private:
     const Catalog& cat_;
     struct Reg { std::string movie, markup, callback, last; };
     std::vector<Reg> regs_;
+    // Collections built once per frame (poll() starts a frame): a movie filling a 64-row list reads every cell, and each
+    // read rebuilt the whole collection (a 61 ms results-screen open at 32 v 32).
+    struct CachedCollection { unsigned gen = 0; bool ok = false; Collection c; };
+    std::map<std::string, CachedCollection> collCache_;
+    unsigned frameGen_ = 1;
+    const Collection& cachedCollection(const std::string& markup, bool& ok);
+public:
+    void invalidate() { ++frameGen_; }   // a state-changing call: collections rebuild on their next read
+private:
     std::map<std::string, std::string> written_;   // WriteValue of settings without a rebuild consumer (kept for read-back)
 };
 

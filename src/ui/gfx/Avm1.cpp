@@ -3,6 +3,7 @@
 #include "core/Log.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -104,6 +105,7 @@ void VM::mark(Object* o) {
 }
 
 void VM::collect(const std::vector<Object*>& extraRoots) {
+    const auto gcT0 = std::chrono::steady_clock::now();
     for (auto& o : heap_) o->marked = false;
     for (Object* r : {global, objectProto, functionProto, arrayProto, stringProto, numberProto, booleanProto, movieClipProto,
                       textFieldProto, textFormatCtor, dateProto, errorProto, objectCtor, arrayCtor, keyObj, stageObj, mouseObj})
@@ -119,7 +121,9 @@ void VM::collect(const std::vector<Object*>& extraRoots) {
         for (auto& o : heap_) if (!o->marked) { o->zombie = true; zombies_.push_back(std::move(o)); }
     }
     heap_.erase(std::remove_if(heap_.begin(), heap_.end(), [](const std::unique_ptr<Object>& o) { return !o || !o->marked; }), heap_.end());
-    if (before - heap_.size() > 10000) LOG_INFO("AVM1 gc: %zu -> %zu objects", before, heap_.size());
+    if (before - heap_.size() > 10000)
+        LOG_INFO("AVM1 gc: %zu -> %zu objects (%.2f ms)", before, heap_.size(),
+                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gcT0).count());
 }
 
 // ---------------------------------------------------------------------------------------------------------------

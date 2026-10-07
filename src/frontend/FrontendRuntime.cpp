@@ -446,6 +446,7 @@ BridgeValue FrontendRuntime::bridge(const std::string& movie, const std::string&
         else if (form == "Plane") over(kd->plane);
         return BridgeValue(d);
     }
+    if (stores_) stores_->invalidate();   // flow calls may change what the collections show
     return flow_.call(fn, args);
 }
 
