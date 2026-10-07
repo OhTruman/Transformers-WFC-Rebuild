@@ -7,6 +7,7 @@
 #include "platform/UiBindings.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdlib>
 #include <chrono>
@@ -192,6 +193,16 @@ void ScriptDriver::update(GameFlow& flow, float dt) {
         }
         if (st.rfind("shot:", 0) == 0) { if (shotHook) shotHook(st.substr(5)); return; }
         if (st.rfind("uievent:", 0) == 0) { flow.onUIEvent(std::atoi(st.c_str() + 8)); return; }
+        if (st.rfind("hudcall:", 0) == 0) {   // DEV TOOL: a HUD movie function with string / number / bool args
+            std::vector<std::string> parts;
+            std::string rest = st.substr(8);
+            for (size_t at; (at = rest.find(',')) != std::string::npos;) { parts.push_back(rest.substr(0, at)); rest = rest.substr(at + 1); }
+            parts.push_back(rest);
+            const std::string fn = parts.front();
+            parts.erase(parts.begin());
+            if (hudCallHook) hudCallHook(fn, parts);
+            continue;
+        }
         if (st.rfind("snapshot:", 0) == 0) { flow.traceSnapshot(st.c_str() + 9); continue; }
         if (st == "quit") { flow.exitNow(); return; }
         LOG_WARN("FRONTEND script: unknown step '%s'", st.c_str());
@@ -212,6 +223,16 @@ bool FrontendRuntime::init() {
     o.skipIntroMovies = std::getenv("WFC_SKIPINTRO") != nullptr;
     if (const char* s = std::getenv("WFC_FLOWSEED")) o.seed = (unsigned)std::strtoul(s, nullptr, 10);
     script_.bridgeHook = [this](const std::string& fn, const std::vector<std::string>& a) { bridge("", fn, a); };
+    script_.hudCallHook = [this](const std::string& fn, const std::vector<std::string>& a) {
+        if (!presenter_) return;
+        std::vector<BridgeValue> args;
+        for (const std::string& v : a) {
+            if (v == "true" || v == "false") args.push_back(BridgeValue(v == "true"));
+            else if (!v.empty() && (std::isdigit((unsigned char)v[0]) || v[0] == '-')) args.push_back(BridgeValue(std::atof(v.c_str())));
+            else args.push_back(BridgeValue(v));
+        }
+        presenter_->hudCall(fn, args);
+    };
     if (const char* s = std::getenv("WFC_FRONTEND_SCRIPT")) script_.load(s);
     else if (const char* a = std::getenv("WFC_FRONTEND_AUTOPLAY")) script_.load(ScriptDriver::autoplayScript(a));
     stores_ = std::make_unique<DataStores>(flow_, catalog_);

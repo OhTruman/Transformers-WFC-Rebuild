@@ -92,6 +92,7 @@ public:
     void update(GameFlow& flow, float dt);
     std::function<void(int code, bool down)> keyHook;          // key:<code>
     std::function<void(const std::string& button, bool down)> padHook;   // pad:<button> (IWindow::injectPad)
+    std::function<void(const std::string& fn, const std::vector<std::string>& args)> hudCallHook;   // hudcall:<fn>,<args>
     std::function<void(const std::string& file)> shotHook;     // shot:<file>
     std::function<void(const std::string& movie)> dumpHook;    // dump:<movie substring>
     std::function<void(const std::string& label)> navCheckHook;   // navcheck:<label> (navigation stress harness)
